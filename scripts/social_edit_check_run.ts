@@ -1,9 +1,12 @@
 /**
- * Helios Social — LIVE Editor + Fact-checker run on saved Writer drafts
- * (Tommy's OK required; --cap-usd required). A fresh draft (spec §4.2b)
- * reruns Writer → Editor → Fact-checker from the same brief, at most
- * MAX_FRESH_DRAFTS times. No Claude call starts unless CALL_RESERVE_USD
- * still fits under the total cap.
+ * Helios Social — LIVE Editor → captioner → Fact-checker → mechanical run on
+ * saved Writer drafts (Tommy's OK required; --cap-usd required), the same
+ * stages and fresh-caption rule as a live run (captionAndCheck). A fresh
+ * draft (spec §4.2b) reruns Writer → Editor → captioner → Fact-checker from
+ * the same brief, at most MAX_FRESH_DRAFTS times. No Claude call starts
+ * unless CALL_RESERVE_USD still fits under the total cap (Claude + Jev). The
+ * caption closings log lives in memory for the run (it never writes the
+ * shared log), and `final` is the caption as posted, Source line included.
  *
  *   npx tsx scripts/social_edit_check_run.ts --cap-usd 0.75 <name>=<writer.json> …
  */
@@ -24,21 +27,26 @@ async function main() {
   const { liveMessagesCreate } = await import('@/lib/social/reporter/reporter');
   const { validateBrief } = await import('@/lib/social/reporter/brief');
   const { runEditor } = await import('@/lib/social/editor/editor');
-  const { runFactCheck } = await import('@/lib/social/factcheck/factcheck');
   const { runWriter } = await import('@/lib/social/writer/writer');
   const { isWellKnownLive } = await import('@/lib/social/writer/well-known');
-  const { fillDraft } = await import('@/lib/social/writer/draft');
   const { MAX_FRESH_DRAFTS } = await import('@/lib/social/pipeline/orchestrator');
+  const { captionAndCheck, createScriptCaptionStages, scriptBrief } = await import('@/lib/social/pipeline/caption-check');
+  const { createJevAsk, createJevTally, tallied } = await import('@/lib/social/jev/client');
   const { priceAnthropicMessages } = await import('@/lib/anthropic-pricing');
 
   const live = liveMessagesCreate(newAnthropic());
+  const jevTally = createJevTally();
   let spent = 0;
+  const total = () => spent + jevTally.costUsd;
   const create: typeof live = async (params) => {
-    if (spent + CALL_RESERVE_USD > cap) throw new Error(`total cap: $${spent.toFixed(4)} spent, a call could pass $${cap}`);
+    if (total() + CALL_RESERVE_USD > cap) throw new Error(`total cap: $${total().toFixed(4)} spent, a call could pass $${cap}`);
     const res = await live(params);
     spent += Number(priceAnthropicMessages([res as any], { modelId: (params as any).model }).costUsd);
     return res;
   };
+
+  // One captioner for the run, as live: its closings log and Jev fits carry across stories and fresh drafts.
+  const tail = createScriptCaptionStages({ create, jev: tallied(createJevAsk(), jevTally) });
 
   const dir = path.join(process.cwd(), 'runs', `edit-check-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   await fsp.mkdir(dir, { recursive: true });
@@ -59,16 +67,17 @@ async function main() {
       }
       const editor = await runEditor(brief, writerDraft, { create });
       if (!editor.ok) { attempts.push({ attempt, writer, writerDraft, editor }); stop = `Editor failed: ${editor.detail}`; break; }
-      const check = await runFactCheck(brief, { submission: editor.draft, filled: editor.filled }, { create });
-      attempts.push({ attempt, writer, writerDraft, editor, check });
-      if (!check.ok) { stop = `Fact-checker failed: ${check.detail}`; break; }
-      if (check.outcome.kind === 'ok') { final = fillDraft(check.outcome.draft, brief); break; }
-      if (check.outcome.kind === 'set-aside') { stop = `set aside: ${check.outcome.why}`; break; }
-      if (attempt === MAX_FRESH_DRAFTS) stop = `unfixable-draft: ${check.outcome.why}`;
+      const seen = { captioner: tail.captioner.length, checks: tail.factCheck.length };
+      const out = await captionAndCheck(tail.stages, { storyId: name, submission: editor.draft, filled: editor.filled }, scriptBrief(name, brief));
+      const outcome = out.kind === 'ok' ? { kind: out.kind, freshCaptions: out.freshCaptions, costUsd: out.costUsd, mechanical: out.final.mechanical } : out;
+      attempts.push({ attempt, writer, writerDraft, editor, captioner: tail.captioner.slice(seen.captioner), checks: tail.factCheck.slice(seen.checks), outcome });
+      if (out.kind === 'ok') { final = out.final.filled; break; }
+      if (out.kind === 'stopped') { stop = `${out.stage} ${out.reasonCode}: ${out.detail}`; break; }
+      if (attempt === MAX_FRESH_DRAFTS) stop = `unfixable-draft: ${out.why}`;
     }
     await fsp.writeFile(path.join(dir, `${name}.json`), JSON.stringify({ writerFile: file, brief: saved.brief, attempts, final, stop }, null, 2));
     summary.push({ name, attempts: attempts.length, freshDrafts: attempts.length - 1, final: !!final, stop });
   }
-  console.log(JSON.stringify({ dir: path.relative(process.cwd(), dir), totalUsd: Number(spent.toFixed(4)), summary }, null, 2));
+  console.log(JSON.stringify({ dir: path.relative(process.cwd(), dir), totalUsd: Number(total().toFixed(4)), claudeUsd: Number(spent.toFixed(4)), jev: jevTally, summary }, null, 2));
 }
 main().then(() => process.exit(0), (e) => { console.error(e instanceof Error ? e.stack : e); process.exit(1); });

@@ -4,6 +4,8 @@ import type { CSSProperties } from 'react';
 import { Delta } from '@/components/social-hub/analytics/KpiStrip';
 import { DaySheet } from '@/components/social-hub/calendar/DaySheet';
 import { MonthGrid } from '@/components/social-hub/calendar/MonthGrid';
+import { SourceSwitch } from '@/components/social-hub/calendar/SlotEditor';
+import { WeekGrid } from '@/components/social-hub/calendar/WeekGrid';
 import { TypeToggles } from '@/components/social-hub/calendar/CalendarControls';
 import { LineupItem } from '@/components/social-hub/content/LineupItem';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
@@ -15,23 +17,110 @@ import { Menu } from '@/components/social-hub/ui/Menu';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { actionEnabled } from '@/lib/social-hub/flags';
+import type { SlotsByDate, SlotSource } from '@/lib/social-hub/slots/types';
+import { actionEnabled, SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { metricSpec } from '@/lib/social-hub/metrics';
 import { addDays, dayLabel, isDayKey, monthLabel, monthOf, nyDateOf, shiftMonth, WEEKDAY_SHORT } from '@/lib/social-hub/time';
-import { isVertical, VERTICAL_IDS } from '@/lib/social-hub/verticals';
+import { isVertical, verticalInfo, VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import { daySlots, monthModel, totalLabel, type DayCell, type DaySlot } from '@/lib/social-hub/views/calendar';
 import { displayName, plural, shortDate, whenInline } from '@/lib/social-hub/views/format';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { minuteLabel, windowRange } from '@/lib/social-hub/views/plan';
+import { mondayOf, weekLabel, weekModel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
 import type { MetricKey, Vertical } from '@/lib/social-hub/types';
 
 const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
 
 const MARK_LABEL = { posted: 'posted', scheduled: 'scheduled', failed: 'failed', missed: 'didn’t post', open: 'open slot' } as const;
 
-/** Calendar (BRIEFS.md §2): the month's shape, gaps ahead, and a day panel to act from. */
-export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDataset; base: string; params: HubParams; now: Date }) {
+/** The week view's input (the page loads it; the preview builds it from the seed). */
+export type CalendarWeek = { mode: 'week' | 'template'; monday: string; days: WeekDayInput[]; source: SlotSource; readOnly?: boolean; /** The template's Carousel windows by weekday ("Every <weekday>" LFD switch). */ templateCarousels: Record<number, string[]>; /** What switching on changes, for the confirm. */ switchFacts: SwitchFacts };
+
+/** Calendar (BRIEFS.md §2): the week's slots to edit (spec §3), or the month's shape, gaps ahead, and a day panel to act from. */
+export function CalendarScreen({ dataset, base, params, now, week, weekFailed = false }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week?: CalendarWeek | null; /** The week was asked for but its slots didn't load: say so above the month. */ weekFailed?: boolean }) {
+  if (week && calendarView(params) === 'week') return <WeekScreen dataset={dataset} base={base} params={params} now={now} week={week} />;
+  return <MonthScreen dataset={dataset} base={base} params={params} now={now} weekFailed={weekFailed} />;
+}
+
+/**
+ * Week is the default; Month when asked for, or when an older link names a
+ * month or a day (breadcrumbs, legacy routes) without a view.
+ */
+export function calendarView(params: HubParams): 'week' | 'month' {
+  if (!SOCIAL_HUB_FLAGS.views.calendarWeek || params.view === 'month') return 'month';
+  if (params.view === 'week') return 'week';
+  return params.month || params.day ? 'month' : 'week';
+}
+
+/** Week | Month, as links that keep nothing else (each view has its own params). */
+function ViewToggle({ path, view }: { path: string; view: 'week' | 'month' }) {
+  if (!SOCIAL_HUB_FLAGS.views.calendarWeek) return null;
+  return (
+    <div className="sh-pills" role="group" aria-label="View">
+      <HubLink className="sh-pill" href={path} aria-current={view === 'week' ? 'page' : undefined} history="replace">Week</HubLink>
+      <HubLink className="sh-pill" href={`${path}?view=month`} aria-current={view === 'month' ? 'page' : undefined} history="replace">Month</HubLink>
+    </div>
+  );
+}
+
+function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week: CalendarWeek }) {
+  const path = `${base}/calendar`;
+  const template = week.mode === 'template';
+  const thisMonday = mondayOf(nyDateOf(now)!);
+  const keep: HubParams = { scope: params.scope, week: params.week, type: params.type };
+  const href = (changes: Record<string, string | null>) => withParams(path, '', keep, changes);
+  const dim = isVertical(params.type) ? params.type : null;
+  const legacy = week.source === 'legacy';
+  const canEdit = actionEnabled('editSlots') && !week.readOnly;
+  const model = weekModel({ mode: week.mode, days: week.days, posts: dataset.posts, now });
+  return (
+    <>
+      <PageHead
+        title={template ? 'Weekly template' : weekLabel(week.monday)}
+        actions={
+          <>
+            <ViewToggle path={path} view="week" />
+            <div className="sh-pills" role="group" aria-label="Show">
+              <HubLink className="sh-pill" href={href({ scope: null })} aria-current={template ? undefined : 'page'} history="replace">This week</HubLink>
+              <HubLink className="sh-pill" href={href({ scope: 'template', week: null })} aria-current={template ? 'page' : undefined} history="replace">Template</HubLink>
+            </div>
+            {template ? null : (
+              <div className="sh-pills" role="group" aria-label="Week">
+                <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, -7) })} aria-label="Previous week" history="replace"><ChevronLeft size={16} aria-hidden="true" /></HubLink>
+                <HubLink className="sh-btn" href={href({ week: null })} aria-current={week.monday === thisMonday ? 'page' : undefined} history="replace">Today</HubLink>
+                <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, 7) })} aria-label="Next week" history="replace"><ChevronRight size={16} aria-hidden="true" /></HubLink>
+              </div>
+            )}
+          </>
+        }
+      />
+      <DataNotes dataset={dataset} />
+      {actionEnabled('editSlots') ? <SourceSwitch source={week.source} readOnly={week.readOnly} facts={week.switchFacts} /> : null}
+      {dim ? (
+        <p className="sh-subtle sh-week__focus">
+          Showing {verticalInfo(dim).label} first. <HubLink className="sh-link" href={href({ type: null })} history="replace">Show every type</HubLink>
+        </p>
+      ) : null}
+      <WeekGrid model={model} scope={template ? 'template' : 'date'} dim={dim} readOnly={!canEdit || legacy} templateCarousels={week.templateCarousels} />
+      <div className="sh-month__key">
+        <ul className="sh-key" aria-label="Key">
+          <li><span className="sh-week__chip sh-week__chip--key" aria-hidden="true"><span className="sh-week__dot" /></span>slot</li>
+          <li><span className="sh-week__chip sh-week__chip--key" data-origin="override" aria-hidden="true"><span className="sh-week__dot" /></span>changed for one date</li>
+          {template ? null : <li><span className="sh-week__chip sh-week__chip--key" data-booked="true" aria-hidden="true"><span className="sh-week__dot" /></span>a post is booked</li>}
+          <li><span className="sh-week__blocked" aria-hidden="true">LFD day</span>Last Few Days runs, so Carousels are off</li>
+        </ul>
+        <p className="sh-subtle">
+          {template
+            ? 'The template repeats every week. A change to one date shows on that week only.'
+            : 'Times are New York. Past windows and windows that have started can’t be changed.'}
+        </p>
+      </div>
+    </>
+  );
+}
+
+function MonthScreen({ dataset, base, params, now, weekFailed = false }: { dataset: HubDataset; base: string; params: HubParams; now: Date; weekFailed?: boolean }) {
   const path = `${base}/calendar`;
   const today = nyDateOf(now)!;
   const day = isDayKey(params.day) ? params.day : null;
@@ -40,8 +129,9 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
   const shown: Vertical[] = params.types ? params.types.split(',').filter(isVertical) : [...VERTICAL_IDS];
   const types = new Set(shown.length ? shown : VERTICAL_IDS);
   const o = offerer(dataset, now);
-  const m = monthModel(dataset.posts, month, now, metric, types, (p) => o.offer(p).state.id === 'needs_you', dataset.dayQuotas?.lfdDays ?? []);
-  const keep: HubParams = { month: params.month, types: params.types, metric: params.metric };
+  const m = monthModel(dataset.posts, month, now, metric, types, (p) => o.offer(p).state.id === 'needs_you', dataset.dayQuotas?.lfdDays ?? [], dataset.dayQuotas?.slots ?? null);
+  // Month links say view=month, so Today (no month) stays on the month instead of opening the week.
+  const keep: HubParams = { view: SOCIAL_HUB_FLAGS.views.calendarWeek ? 'month' : undefined, month: params.month, types: params.types, metric: params.metric };
   const href = (changes: Record<string, string | null>) => withParams(path, '', keep, changes);
   const metricLabel = metricSpec(metric).label.toLowerCase();
 
@@ -59,13 +149,17 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
       <PageHead
         title={monthLabel(month)}
         actions={
+          <>
+          <ViewToggle path={path} view="month" />
           <div className="sh-pills" role="group" aria-label="Month">
             <HubLink className="sh-btn sh-btn--icon" href={href({ month: shiftMonth(month, -1), day: null })} aria-label="Previous month" history="replace"><ChevronLeft size={16} aria-hidden="true" /></HubLink>
             <HubLink className="sh-btn" href={href({ month: null, day: null })} aria-current={month === today.slice(0, 7) ? 'page' : undefined} history="replace">Today</HubLink>
             <HubLink className="sh-btn sh-btn--icon" href={href({ month: shiftMonth(month, 1), day: null })} aria-label="Next month" history="replace"><ChevronRight size={16} aria-hidden="true" /></HubLink>
           </div>
+          </>
         }
       />
+      {weekFailed ? <p className="sh-note sh-note--failed" role="status">The week couldn’t load, so this is the month. Try again in a moment.</p> : null}
       <DataNotes dataset={dataset} />
 
       <dl className="sh-summary" aria-label={`${monthLabel(month)} at a glance`}>
@@ -119,7 +213,7 @@ export function CalendarScreen({ dataset, base, params, now }: { dataset: HubDat
           prevHref={href({ day: addDays(day, -1), month: null })}
           nextHref={href({ day: addDays(day, 1), month: null })}
         >
-          <DayList posts={dataset.posts} day={day} types={types} now={now} o={o} base={base} carouselOff={dataset.dayQuotas?.lfdDays ?? []} />
+          <DayList posts={dataset.posts} day={day} types={types} now={now} o={o} base={base} carouselOff={dataset.dayQuotas?.lfdDays ?? []} slots={dataset.dayQuotas?.slots ?? null} />
         </DaySheet>
       ) : null}
     </>
@@ -162,8 +256,8 @@ function Cell({ cell, href, metric }: { cell: DayCell; href: string; metric: Met
   );
 }
 
-function DayList({ posts, day, types, now, o, base, carouselOff }: { posts: HubDataset['posts']; day: string; types: ReadonlySet<Vertical>; now: Date; o: ReturnType<typeof offerer>; base: string; carouselOff: readonly number[] }) {
-  const slots = daySlots(posts, day, types, now, carouselOff);
+function DayList({ posts, day, types, now, o, base, carouselOff, slots: calendarSlots }: { posts: HubDataset['posts']; day: string; types: ReadonlySet<Vertical>; now: Date; o: ReturnType<typeof offerer>; base: string; carouselOff: readonly number[]; slots: SlotsByDate | null }) {
+  const slots = daySlots(posts, day, types, now, carouselOff, calendarSlots);
   if (slots.length === 0) return <div className="sh-empty"><strong>Nothing on this day</strong>No content was placed and no slots are open.</div>;
   return (
     <ul className="sh-list">

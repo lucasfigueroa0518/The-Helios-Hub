@@ -4,6 +4,11 @@ import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
 import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import { approveReel, reelItemId, reelsSpine } from '@/lib/reels/publish/items';
+import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
+import { slotTakenKey } from '@/lib/instagram/window';
+import { bookingFeedMode, feedModeKeys, nonSlotKeys, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
+import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
+import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { bookSlot } from '@/lib/social-hub/spine';
 import {
   chooseSlot,
@@ -39,6 +44,8 @@ export type StoredSchedule = {
   publishAt: string;
   status: ScheduleStatus;
   source: ScheduleSource;
+  /** Trial or Main feed, from the booking (weekly slot calendar); set where a note is written. */
+  feedMode?: FeedMode;
 };
 
 export type ScheduleOutcome =
@@ -84,7 +91,25 @@ export function formatPublishAt(iso: string): string {
 }
 
 function scheduleNote(schedule: StoredSchedule): string {
-  return `Scheduled for ${formatPublishAt(schedule.publishAt)} (${slotLabel(schedule.slot)}). It posts as a trial reel.`;
+  const feed = schedule.feedMode === 'main' ? ' It posts to the main feed.' : ' It posts as a trial reel.';
+  return `Scheduled for ${formatPublishAt(schedule.publishAt)} (${slotLabel(schedule.slot)}).${feed}`;
+}
+
+/** The app pool as a slot / spacing query handle. */
+const hubQ = (text: string, params?: unknown[]) => dbQuery(text, params) as Promise<{ rows: any[] }>;
+
+/**
+ * The booking's Trial / Main feed. Read on its own, not in SCHEDULE_COLUMNS:
+ * bookingFeedMode falls back to trial on a database without the feed_mode
+ * column, so the legacy path keeps working there.
+ */
+async function withFeedMode(schedule: StoredSchedule): Promise<StoredSchedule> {
+  return { ...schedule, feedMode: await bookingFeedMode(hubQ, null, 'reels', schedule.postIdeaId) };
+}
+
+async function outcome(schedule: StoredSchedule): Promise<ScheduleOutcome> {
+  const withMode = await withFeedMode(schedule);
+  return { scheduled: true, schedule: withMode, note: scheduleNote(withMode) };
 }
 
 /** Live is the switch for the nightly auto-schedule. Off until it is turned on. */
@@ -134,6 +159,17 @@ async function takenSlots(fromDate: string): Promise<Set<string>> {
   return new Set(rows.map((row) => slotKey(row.ny_date, row.slot)));
 }
 
+/** A reels `slotKey` (`date:slot`) in the shared window format (`slotTakenKey`, `date|slot`). Dates have no colon. */
+export function toTakenKey(reelsKey: string): string {
+  const at = reelsKey.indexOf(':');
+  return slotTakenKey(reelsKey.slice(0, at), reelsKey.slice(at + 1));
+}
+
+/** Template mode: every reels window that is not a slot counts as taken, in the caller's key format. */
+export function reelTaken(plan: SlotPlan, base: ReadonlySet<string>, key: (nyDate: string, slot: string) => string): Set<string> {
+  return new Set([...base, ...nonSlotKeys(plan, 'reels', POSTING_SLOTS.map((s) => s.id), key)]);
+}
+
 /**
  * Reserve the earliest window that has not ended. `throughDate` limits the
  * search to that Eastern calendar day. A reel that already has a clock time
@@ -154,20 +190,35 @@ export async function schedulePostIdea(
       const video = videoJobId ?? existing.videoJobId;
       if (video) await approveReel(video, 'user');
     }
-    return { scheduled: true, schedule: existing, note: scheduleNote(existing) };
+    return outcome(existing);
   }
   const itemId = videoJobId ? await reelItemId(videoJobId) : null;
   if (source === 'user' && videoJobId) await approveReel(videoJobId, 'user');
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    // Trial Reels are exempt from the cross-type feed spacing (D33 revises SH-47).
-    const choice = chooseSlot(now, await takenSlots(calendarDateKey(now)), uniformIndex, POSTING_TIME_ZONE, throughDate);
+    const fromDate = calendarDateKey(now);
+    // A failed slot read throws: it must not silently book by the old rules (ruling P2).
+    const plan = await slotPlan(hubQ, fromDate);
+    const takenNow = await takenSlots(fromDate);
+    let choice: { nyDate: string; slot: SlotId; publishAt: Date } | null;
+    if (!plan) {
+      // Trial Reels are exempt from the cross-type feed spacing (D33 revises SH-47).
+      choice = chooseSlot(now, takenNow, uniformIndex, POSTING_TIME_ZONE, throughDate);
+    } else {
+      // The calendar: only its slots, and Main slots space against feed posts.
+      const taken = reelTaken(plan, new Set([...takenNow].map(toTakenKey)), slotTakenKey);
+      const busy = [...(await busyFeedTimes(hubQ, now, 'reels')), ...(await ownFeedTimes(hubQ, 'reels', now))];
+      const picked = chooseByFeedMode(POSTING_SLOTS, now, taken, feedModeKeys(plan, 'reels', slotTakenKey), busy, uniformIndex, throughDate);
+      choice = picked ? { nyDate: picked.nyDate, slot: picked.slot as SlotId, publishAt: picked.publishAt } : null;
+    }
     if (!choice) {
       const note = throughDate
         ? 'No posting window is still open today.'
         : 'No posting slot is open in the next two weeks.';
       return { scheduled: false, status: 409, note };
     }
+    // Template: the mode of the slot chosen, from the plan in hand (no second read).
+    const feedMode = plan ? (slotsOn(plan, 'reels', choice.nyDate).find((s) => s.windowId === choice.slot)?.feedMode ?? null) : null;
     try {
       const booked = await bookSlot(reelsSpine, {
         vertical: 'reels',
@@ -178,13 +229,14 @@ export async function schedulePostIdea(
         publishAt: choice.publishAt,
         source,
         approved: source === 'user',
+        // Legacy books exactly as before (no feed_mode written; it reads as trial).
+        ...(feedMode ? { feedMode } : {}),
       });
-      const schedule = await scheduleById(booked.id);
-      return { scheduled: true, schedule, note: scheduleNote(schedule) };
+      return outcome(await scheduleById(booked.id));
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
       const raced = await activeSchedule(postIdeaId);
-      if (raced) return { scheduled: true, schedule: raced, note: scheduleNote(raced) };
+      if (raced) return outcome(raced);
     }
   }
   return { scheduled: false, status: 409, note: 'That slot was just taken. Try again.' };
@@ -219,7 +271,12 @@ async function selectedOnDate(postIdeaId: string, nyDate: string): Promise<boole
 export async function windowsStillOpen(now = new Date()): Promise<number> {
   const today = calendarDateKey(now);
   const taken = await takenSlots(today);
-  return POSTING_SLOTS.filter(
+  // Template mode: only today's reels slots count.
+  // A failed slot read throws: it must not silently book by the old rules (ruling P2).
+  const plan = await slotPlan(hubQ, today, 1);
+  const on = plan ? new Set(slotsOn(plan, 'reels', today).map((s) => s.windowId)) : null;
+  const slots = on ? POSTING_SLOTS.filter((slot) => on.has(slot.id)) : POSTING_SLOTS;
+  return slots.filter(
     (slot) => !taken.has(slotKey(today, slot.id)) && openMinuteRange(today, slot.id, now) != null,
   ).length;
 }

@@ -75,6 +75,8 @@ async function main(): Promise<void> {
   const { anthropicIdeaModel } = await import('@/lib/explainers/ideas/generator');
   const { anthropic } = await import('@/lib/anthropic');
   const { liveJevTransport } = await import('@/lib/reels/jev/client');
+  const { liveExplainerBuildFit } = await import('@/lib/explainers/caption');
+  const { closingsLog } = await import('@/lib/social/captions/closings-store');
 
   const db = await explainersDb();
   const query = await loadAgentQuery();
@@ -101,7 +103,13 @@ async function main(): Promise<void> {
     log('job_claimed', { jobId: job.id, topicId: job.topic_id, trigger: job.trigger, capUsd: job.spend_cap_usd });
     // A topic without a picked analogy gets the pass on this click, for this topic only (EX3-31).
     const analogy = { ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport };
-    const outcome = await runRenderJob({ db, query, store, jobsRoot, secrets, analogy, log: (event, fields) => log(event, fields) }, job);
+    // v4 captions: the build-line fit (Jev) and the explainer closings log (social captions redesign).
+    const buildFit = liveExplainerBuildFit();
+    const closings = closingsLog((text, params) => db.query(text, params), 'explainer');
+    const outcome = await runRenderJob(
+      { db, query, store, jobsRoot, secrets, analogy, buildFit, closings, log: (event, fields) => log(event, fields) },
+      job,
+    );
     log('job_finished', { jobId: job.id, ...outcome });
     return true;
   };

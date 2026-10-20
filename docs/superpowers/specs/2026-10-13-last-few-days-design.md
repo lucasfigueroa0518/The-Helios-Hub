@@ -164,14 +164,31 @@ These patterns come from the reference post, where about 10 of the 13 headlines 
 - **A story that fails** gets one rewrite (a small Claude call for that story only) and is checked again.
 - **If it fails a second time,** it is dropped and the next idea in line replaces it (§3.4).
 
-### 4.5 Caption (written by code)
+### 4.5 Caption (model-written, template fallback)
 
-1. "Do you realize what just happened in AI in the last few days? Swipe ⬅️ to catch up."
-2. One short line per story (its headline).
-3. The standard Follow Helios line.
-4. The credits block, covering sources and every photo.
+Updated 2026-10-19 (social captions redesign, `docs/superpowers/specs/2026-10-19-social-captions-design.md`).
+One Sonnet 5.5 call per post (`lib/lfd/caption-lines.ts`), written once for the stories that made the final render.
+The system prompt (instructions, the shared Helios context and caption rules) is the cached prefix; the stories, the
+recent Last Few Days closings and the build-line instruction (always false: no build line) go in the user turn. The
+reply is four fields, joined by code in this order (`composeCaption`, `lib/lfd/post.ts`):
 
-No hashtags. Hard cap `CAPTION_MAX_CHARS` (2,200).
+1. `opener`: one swipe line that previews two or three stories, at most 125 characters.
+2. `body`: two or three short prose paragraphs on the highlights, wildest first.
+3. `question`: which story caught the reader's attention.
+4. `helios_line`: one or two sentences that close the caption and name Helios once.
+5. The credits block, covering sources and every photo (code-built).
+
+At most 2 emoji (opener, after the question), never in the Helios line. No hashtags. Hard cap `CAPTION_MAX_CHARS`
+(2,200): over it, body paragraphs go from the end first. A failed call, a reply that breaks a rule, or a caption that
+cannot fit with one body paragraph ships the template caption instead (the swipe hook, one line per story headline,
+the Follow Helios line, then the credits). The run record says `caption.by` (`model` or `template`), and the
+closing is recorded in `social_hub.caption_closings` (type `lfd`) only when the model caption ships.
+
+**Prompt versions**
+
+| Prompt | File | Version | Status |
+|---|---|---|---|
+| Caption | `lib/lfd/caption-lines.ts` | `lfd-caption-v1` | draft, awaiting Lucas. Amended before it shipped (Tommy, 2026-10-20, after the first live check): the Helios line makes one concrete point in Helios's view (no build line, so never what Helios builds), never a recent closing's opening, a follow clause is rare, body paragraphs are one or two sentences with secondary details cut. |
 
 ## 5. Photos
 

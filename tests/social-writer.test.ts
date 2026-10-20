@@ -18,7 +18,7 @@ import { createWriterStage } from '@/lib/social/pipeline/writer-stage';
 import { RULES_BLOCK, WRITER_RULES, renderRulesFor } from '@/lib/social/prompts/rules-block';
 import { VOICE_BLOCK } from '@/lib/social/prompts/voice-block';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
-import { DraftValidationError, FOLLOW_LINE, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
+import { DRAFT_SCHEMA, DraftValidationError, FOLLOW_LINE, checkDraft, fillDraft, isExactExcerpt, type DraftSubmission, type VisualRequest } from '@/lib/social/writer/draft';
 import { WRITER_ADDED_RULES, WRITER_FOLLOW_RULE, WRITER_MOMENTUM_RULES, WRITER_SYSTEM, writerUserMessage } from '@/lib/social/writer/prompt';
 import { briefForWriter, runWriter } from '@/lib/social/writer/writer';
 import { checkLines } from '@/lib/social/writer/shorten';
@@ -45,7 +45,7 @@ function draft(): DraftSubmission {
       { type: 'text', headline: { text: 'Why the name matters', facts: ['B2'] }, body: { text: 'Trump signed an executive order seeking to rebrand AI as super intelligence.', facts: ['B2'] }, quote_id: null, quote_excerpt: null, number_ids: [], visual: v('thematic', 'pen and paper'), fallback_visual: v('thematic', 'signed document'), subject_ids: ['S1'], icon: 'file-text' },
     ],
     follow: FOLLOW_LINE,
-    caption: { text: 'Trump announced a Super Intelligence Force. Source: TechCrunch, October 4, 2026.', facts: ['F1'] },
+    caption: { text: '', facts: [] },
     edit_notes: ['Led with the spy chief role, not the name.'],
   };
   // alt_visuals are required (2026-10-09): two plain scenes per place, distinct from every visual and fallback here.
@@ -69,22 +69,15 @@ function errorsOf(edit: (d: DraftSubmission) => void): string[] {
 
 // ── Prompt (prompts file §2–3) ─────────────────────────────────────────
 
-test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared policy) + submit_draft line + section list + caption section', () => {
+test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared policy) + submit_draft line + section list (no caption section)', () => {
   const tested = codeBlocks('## 2. Writer')[0]!;
   const intro = tested.slice(0, tested.indexOf('\n\nRULES\n'));
   const sectionList = tested.slice(tested.indexOf('\n\nOUTPUT\n') + '\n\nOUTPUT\n'.length, tested.indexOf('\n\nBRIEF\n')).replace('/ IMAGE   (repeat)', '/ VISUAL / FALLBACK VISUAL   (repeat)').replace('FOLLOW TOPIC: …', 'FOLLOW TOPIC: the kind of story this is, 2 to 5 plain words');
-  const caption = codeBlocks('## 3. Writer')[0]!
-    .replace('${VOICE_BLOCK}', VOICE_BLOCK)
-    .replace("${renderRulesFor('caption')}", renderRulesFor('writer'))
-    .replace('the final SLIDES you were given', 'the slides you wrote')
-    .replace("that's the Writer/Editor's decision — respect it.", "that's the Writer/Editor's decision. Respect it.")
-    .replace(/^3\. Source credits, always,.*\n/m, '');
   const expected = [
     intro,
     `## Rules\n\n${WRITER_RULES}\n${WRITER_ADDED_RULES}\n${codeBlocks('**Writer prompt v2')[0]}\n${codeBlocks('**No repetition within a slide')[0]}\n${WRITER_FOLLOW_RULE}`,
     RULES_BLOCK.slice(RULES_BLOCK.indexOf('## Context policy')),
     `When you're done, call submit_draft with these sections:\n${sectionList}`,
-    caption,
   ].join('\n\n');
   assert.equal(WRITER_SYSTEM, expected);
   assert.ok(!WRITER_SYSTEM.includes('{{brief}}') && !WRITER_SYSTEM.includes('\nOUTPUT\n') && !WRITER_SYSTEM.includes('${'));
@@ -95,6 +88,28 @@ test('Writer prompt = tested intro + RULES (tested lines + 3 additions + shared 
   assert.ok(!WRITER_SYSTEM.includes('—'), 'no em dashes anywhere in the Writer prompt');
   assert.ok(!WRITER_SYSTEM.includes('Source:'), 'the Source line is built by code, not asked of the Writer');
   assert.ok(!WRITER_SYSTEM.includes('Hook pass'), 'the Hook pass is gone');
+});
+
+test('writer schema has no caption', () => {
+  assert.equal('caption' in DRAFT_SCHEMA.properties, false);
+  assert.ok(!DRAFT_SCHEMA.required.includes('caption' as never));
+  assert.doesNotMatch(WRITER_SYSTEM, /## Caption/);
+  assert.doesNotMatch(WRITER_SYSTEM, /CAPTION/);
+});
+
+test('checkDraft ignores a caption the model echoes back', () => {
+  const echoed = { ...draft(), caption: { text: 'Model wrote this.', facts: ['F1'] }, caption_read: { text: 'We think so.', facts: [] } };
+  const checked = checkDraft(echoed, briefSuperIntelligenceForce());
+  assert.deepEqual(checked.caption, { text: '', facts: [] });
+  assert.equal(checked.caption_read, undefined);
+});
+
+test('checkDraft fills an empty caption', () => {
+  const { caption: _omit, ...noCaption } = draft();
+  const checked = checkDraft(noCaption, briefSuperIntelligenceForce());
+  assert.deepEqual(checked.caption, { text: '', facts: [] });
+  // The builder's read is optional and not part of the Writer's schema.
+  assert.equal(checked.caption_read, undefined);
 });
 
 test('the brief goes in the user message as JSON, with SUBJECTS marked well_known by code', async () => {
@@ -239,7 +254,6 @@ test('runDay: the Writer stage drafts each brief; its cost lands under writer', 
           d.cover_options = d.cover_options.map((c) => ({ ...c, facts: ['F1'] }));
           d.slides[0]!.headline.facts = ['F1'];
           d.slides[0]!.body!.facts = ['F1'];
-          d.caption.facts = [];
           // The stub brief has no SUBJECTS: scenes only, and no tags.
           d.cover_options = d.cover_options.map((c) => ({ ...c, visual: v('thematic', 'office building'), fallback_visual: v('setting', 'open office'), subject_ids: [] }));
           d.slides[0]!.visual = v('thematic', 'smartphone screen');

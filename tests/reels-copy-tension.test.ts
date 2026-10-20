@@ -15,7 +15,7 @@ import { COPY_PROMPT_VERSION, COPY_SKILL, FRAMEWORK_WRITING_LOGIC } from '@/lib/
 import { BUCKET_SPEC_TEXT } from '@/lib/reels/copy/source-text.generated';
 
 test('the copy is defined as a complete thought with tension, as a hard constraint', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v27');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
   assert.match(COPY_SKILL, /HARD CONSTRAINT\. The whole on-screen copy is the hook, and it is a complete thought with tension, never a fact that stops\./);
   assert.match(COPY_SKILL, /a reversal, a contradiction, an escalation, an absurd detail, or a stake out of proportion to its cause/);
   assert.match(COPY_SKILL, /These are kinds to choose from, never a template/);
@@ -73,7 +73,8 @@ test('the tension field is required, written before the copies, and stored', () 
     viewer_stake: 'Your AI-written emails may be giving you away.',
     tension: 'People think their AI drafts read as their own, and a list of 13,000 phrases says they do not.',
     on_screen_copies: ['Line one here now', 'Line two here now'],
-    caption: 'Story.\n\nMore.',
+    caption: 'Story.\n\nHelios builds for the clinics this hits.',
+    builder_read: 'Helios builds for the clinics this hits.',
     call_to_action: 'Save this post.',
     outcome_note: '',
     hashtags: ['#AI'],
@@ -128,7 +129,7 @@ test('round 1 (v19): concrete stakes, four copies per call, and the kind of thin
   assert.match(BUCKET_SPEC_TEXT.ball_knowledge.body, /Say what kind of thing the get is in everyday words/);
   const base = {
     hook_drafts: ['a'], copy_draft: 'd', caption_draft: 'd', remaining_patterns: [], viewer_stake: 'Stake here.',
-    tension: 'Tension here.', caption: 'Story.\n\nMore.', call_to_action: 'Save this post.', outcome_note: '', hashtags: ['#AI'], sources: [],
+    tension: 'Tension here.', caption: 'Story.\n\nHelios read.', builder_read: 'Helios read.', call_to_action: 'Save this post.', outcome_note: '', hashtags: ['#AI'], sources: [],
   };
   assert.equal(parseCopyReport({ ...base, on_screen_copies: ['One a', 'Two b', 'Three c', 'Four d'] }).onScreenCopies.length, 4);
   assert.equal(parseCopyReport({ ...base, on_screen_copies: ['One a', 'Two b', 'Three c'] }).onScreenCopies.length, 3);

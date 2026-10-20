@@ -12,12 +12,14 @@ import type { Brief as ParsedBrief } from '@/lib/social/reporter/brief';
 import type { PageReadOk } from '@/lib/social/reporter/read-page';
 import type { DraftSubmission, FilledDraft } from '@/lib/social/writer/draft';
 
-/** The six stages of spec §3, plus the mechanical guarantees (§6). */
+/** The six stages of spec §3, the captioner, and the mechanical guarantees (§6). */
 export const STAGE_ORDER = [
   'jev-scoring',
   'reporter',
   'writer',
   'editor',
+  // The caption is its own stage after the Editor, checked by the Fact-checker (social-captions redesign, 2026-10-19).
+  'captioner',
   'fact-checker',
   // Mechanical text fixes and checks run before design (Tommy, 2026-10-06):
   // the render must show the fixed text. Photo and render checks run inside design.
@@ -41,6 +43,8 @@ export type ReasonCode =
   | 'refused'
   /** Fact-checker: free fixes would damage the post (spec §4.2b); not a set-aside by itself. */
   | 'needs-fresh-draft'
+  /** Fact-checker: the caption or the builder's read was cut to nothing; only the captioner reruns. Not a set-aside by itself. */
+  | 'needs-fresh-caption'
   /** Fresh-draft limit used up (spec §4.2b: 2 per story). */
   | 'unfixable-draft'
   | 'cost-cap';
@@ -60,6 +64,7 @@ export const REASON_KIND: Record<ReasonCode, SetAsideKind> = {
   // in the log are a pattern for selection, not a pipeline fault.
   refused: 'should-not-run',
   'needs-fresh-draft': 'pipeline-fault',
+  'needs-fresh-caption': 'pipeline-fault',
   'unfixable-draft': 'pipeline-fault',
   'cost-cap': 'pipeline-fault',
   'main-claim-false': 'should-not-run',

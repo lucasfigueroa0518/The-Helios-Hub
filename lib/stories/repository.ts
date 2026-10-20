@@ -49,7 +49,7 @@ export type FrameRow = {
 
 export type NewFrame = { seq: number; role: FrameRole; template?: string | null; backdrop: Backdrop; copy: FrameData; photo?: Photo | null };
 export type NewCandidate = {
-  origin: 'reels' | 'carousel' | 'catalog' | 'github' | 'generated';
+  origin: 'reels' | 'carousel' | 'catalog' | 'github' | 'generated' | 'model';
   ref: string;
   payload?: Record<string, unknown>;
   jev?: Record<string, unknown> | null;

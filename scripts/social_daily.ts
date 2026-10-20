@@ -61,6 +61,15 @@ const DEFAULT_CAP_USD = 2;
 /** Room above the cap for a story already in progress to finish (Tommy, 2026-10-14; cost-meter.ts). */
 const WIGGLE_USD = 0.5;
 
+/** A caption closings log for one run, when there is no Postgres (the file store): later posts still see earlier ones. */
+function memoryClosings(window: number): import('@/lib/social/captions/closings-store').ClosingsLog {
+  const rows: Array<import('@/lib/social/captions/build-line').RecentClosing> = [];
+  return {
+    recent: async () => rows.slice(0, window),
+    record: async (_subjectId, closing, buildLine) => void rows.unshift({ closing, buildLine, createdAt: new Date() }),
+  };
+}
+
 async function main() {
   const arg = (name: string) => {
     const i = process.argv.indexOf(name);
@@ -115,6 +124,8 @@ async function main() {
   const { finishRun, insertRun, recordShipList, storedPostFor, storyOnCalendar, upsertPost } = await import('@/lib/social/store/pg');
   const { createCostMeter } = await import('@/lib/social/pipeline/cost-meter');
   const { createLiveStages, createRunBudget } = await import('@/lib/social/pipeline/live-stages');
+  const { closingsLog } = await import('@/lib/social/captions/closings-store');
+  const { CLOSINGS_WINDOW } = await import('@/lib/social/captions/build-line');
   const { runDay } = await import('@/lib/social/pipeline/orchestrator');
   const { createSelectionStage } = await import('@/lib/social/pipeline/selection-stage');
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
@@ -189,6 +200,8 @@ async function main() {
     }),
     create: liveMessagesCreate(newAnthropic()),
     jev,
+    // The caption closings log lives in Postgres; a run on the file store keeps one in memory for the run.
+    closings: store.query ? closingsLog(store.query, 'carousel') : memoryClosings(CLOSINGS_WINDOW),
     budget,
     readPage,
     isWellKnown: isWellKnownLive,
@@ -356,6 +369,9 @@ async function main() {
     posts: result.posts.map((p) => p.title),
     setAsides: result.setAsides,
     freshDrafts: result.freshDrafts,
+    freshCaptions: result.freshCaptions,
+    // The captioner's build-line decision per run (social-captions redesign, 2026-10-19).
+    captions: [...logs.entries()].flatMap(([storyId, l]) => l.captioner.map((c) => ({ storyId, ok: c.ok, fit: c.fit, includeBuildLine: c.includeBuildLine, ...(c.jevError ? { jevError: c.jevError } : {}) }))),
     costByStage: result.costByStage,
     totalUsd: Number(budget.spent().toFixed(4)),
     // Information only (Tommy, 2026-10-06).

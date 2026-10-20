@@ -81,6 +81,9 @@ test('a trailing call to action or hashtag line is posted once, even with a labe
   assert.equal((posted.match(/#AI/g) ?? []).length, 1);
 });
 
+/** v28: every post closes on a builder's read that names Helios; v29 posts it last, after the call to action. */
+const READ = 'For a dental practice, the front desk stops retyping intake forms. Helios builds that kind of handoff.';
+
 function reportInput(caption: string, extra: Record<string, unknown> = {}) {
   return {
     hook_drafts: ['a', 'b', 'c'],
@@ -91,6 +94,7 @@ function reportInput(caption: string, extra: Record<string, unknown> = {}) {
     tension: 'A deputy chased plates and a judge threw the case out.',
     on_screen_copies: ['Strong line one here', 'Strong line two here'],
     caption,
+    builder_read: READ,
     call_to_action: 'Send this to the friend who built an app.',
     outcome_note: '',
     hashtags: ['#AI', '#Security', '#Apps'],
@@ -105,7 +109,7 @@ test('parseCopyReport repairs escaped quotes and keeps the outcome note', () => 
       outcome_note: 'The judge threw out the evidence, and the copy lands there.',
     }),
   );
-  assert.equal(call.caption, 'She called it "mass surveillance."\n\nThe ruling stands for now.');
+  assert.equal(call.caption, `She called it "mass surveillance."\n\nThe ruling stands for now.`);
   assert.equal(call.working.outcomeNote, 'The judge threw out the evidence, and the copy lands there.');
 });
 
@@ -244,7 +248,7 @@ test('earlier copies go into the uncached task block only when the idea returns'
 // ── D-238 to D-244, D-249: wording lives where it should ───────────────────
 
 test('the v17 tests stay in copy-caption-v18 and the precedence order is unchanged', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v27');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
   assert.match(COPY_SKILL, /2\. The bucket's other rules: its caption structure, its resolution, and any guardrail\./);
   assert.match(COPY_SKILL, /5\. Everything else in this skill\./);
   assert.doesNotMatch(COPY_SKILL, /Apply the framework's hook formulas/);
@@ -254,13 +258,14 @@ test('the v17 tests stay in copy-caption-v18 and the precedence order is unchang
   assert.match(COPY_SKILL, /A second figure, a before and after, a ranking, or a contest between two systems/);
   assert.match(COPY_SKILL, /If the same sentence would fit most posts about AI, it is not the stake yet/);
   assert.match(COPY_SKILL, /does not ask for a labelled paragraph per part/);
-  assert.match(COPY_SKILL, /or the framework's writing logic sends the close to Helios/);
-  assert.match(COPY_SKILL, /There is no pitch and no offer of Helios services/);
+  // v29: the Helios line carries the one Helios mention; the call to action never names Helios.
+  assert.match(COPY_SKILL, /The call to action never names Helios/);
+  assert.match(COPY_SKILL, /There is no sales pitch, no list of Helios services, and no claim about Helios clients or results/);
   assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.arousal.onScreen, /address the viewer and name what they stand to lose/);
   assert.doesNotMatch(FRAMEWORK_WRITING_LOGIC.arousal.onScreen, /The fact does the work/);
   assert.match(FRAMEWORK_WRITING_LOGIC.arousal.onScreen, /Where the source reports that cost landing on someone, show it landing/);
   assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /could end a caption about a different story/);
-  assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /ask to follow Helios for the next story like this one/);
+  assert.match(FRAMEWORK_WRITING_LOGIC.arousal.caption, /ask to follow for the next story like this one, without naming Helios/);
 });
 
 test('the bucket rules carry the tests, and The Number has three example shapes', () => {
@@ -358,5 +363,5 @@ test('the posted caption comes from a clean report unchanged', () => {
   const call = parseCopyReport(reportInput('Story.\n\nMore.'));
   const posted = postableCaption(fullCaption(publishCopy(call, 'Strong line one here')));
   assert.deepEqual(posted.problems, []);
-  assert.match(posted.caption, /^Story\.\n\nMore\.\n\nSend this to the friend who built an app\.\n\n#AI #Security #Apps$/);
+  assert.equal(posted.caption, `Story.\n\nMore.\n\nSend this to the friend who built an app.\n\n${READ}\n\n#AI #Security #Apps`);
 });

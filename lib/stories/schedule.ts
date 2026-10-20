@@ -132,14 +132,16 @@ const reportedHolds = new WeakMap<object, Set<string>>();
  * already filled (a set they generated and approved or scheduled, or placed
  * there) gets no auto set; logged once as `fill_reduced`. Any other live set
  * for the day (in the making, or the auto set itself) holds it as before
- * (one live set per series per day).
+ * (one live set per series per day). `dueOn` (template mode): the calendar
+ * says which series are due, in place of each series' own days.
  */
-export async function requestAutoSets(db: Queryable, settings: StoriesSettings, now: Date, opts: { log?: FillLog } = {}): Promise<Series[]> {
+export async function requestAutoSets(db: Queryable, settings: StoriesSettings, now: Date, opts: { log?: FillLog; dueOn?: (series: Series, nyDate: string) => boolean } = {}): Promise<Series[]> {
   const date = nyDate(now);
   const out: Series[] = [];
   for (const s of SERIES) {
     const cfg = settings.series[s];
-    if (!cfg.enabled || !cfg.auto || !isDueOn(cfg.window, date)) continue;
+    const due = opts.dueOn ? opts.dueOn(s, date) : isDueOn(cfg.window, date);
+    if (!cfg.enabled || !cfg.auto || !due) continue;
     // Too late to build and post today: skip, not post late.
     if (now > windowBounds(cfg.window, date).end) continue;
     const placed = await seriesDayPlaced(db, s, date);

@@ -96,6 +96,8 @@ type ReviewRow = {
   rank: number | null;
   caption: string | null;
   call_to_action: string | null;
+  /** v28+. The Helios line, kept in the copy row's working JSON. */
+  builder_read: string | null;
   hashtags: string[] | null;
   picked_title: string | null;
   picked_artist: string | null;
@@ -148,6 +150,7 @@ export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
             newest.rank,
             c.caption,
             c.call_to_action,
+            c.working->>'builderRead' AS builder_read,
             c.hashtags,
             song.picked_title,
             song.picked_artist,
@@ -194,6 +197,7 @@ export async function loadReviewClips(token: string): Promise<ReviewClip[]> {
       caption: fullCaption({
         caption: row.caption ?? '',
         callToAction: row.call_to_action ?? '',
+        builderRead: row.builder_read,
         hashtags: tags,
       }),
       videoSrc,

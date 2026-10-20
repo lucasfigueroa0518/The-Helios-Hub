@@ -127,7 +127,7 @@ test('homemade style (S-53): same data, Instagram-editor look; every line on a f
   assert.match(html, /hm-hl hm-box--white/);
   assert.match(html, /class="hm-pen"/);
   assert.match(html, /data-sticker="true"/);
-  assert.match(html, /🤔/);
+  assert.match(html, /class="hm-emoji" src="[^"]*emoji-1f914\.png"/); // Apple emoji image, not the font glyph
   // No logo or masthead in the homemade look.
   assert.doesNotMatch(html, /helios-logo\.png/);
   // Lines over a full-screen photo carry a box.

@@ -24,6 +24,7 @@
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
+import { appleEmoji } from './emoji';
 import { fadeAlpha } from './fades';
 import { fitText, type TextFitFailure } from './text-fit';
 import { FRAME_H, FRAME_W, MAX_JPEG_BYTES, SAFE_BOTTOM, SAFE_TOP, type Frame, type Photo } from './types';
@@ -73,7 +74,7 @@ export async function framesHtml(frames: Frame[]): Promise<string> {
     .map((f, i) => {
       const inner =
         f.style === 'homemade'
-          ? renderToStaticMarkup(React.createElement(HomemadeFrame, { frame: withUrls(f) }))
+          ? appleEmoji(renderToStaticMarkup(React.createElement(HomemadeFrame, { frame: withUrls(f) })), ORIGIN)
           : renderToStaticMarkup(React.createElement(StoryFrame, { frame: withUrls(f), logoSrc: `${ORIGIN}/__assets/helios-logo.png` }));
       return `<div class="st-host" data-frame="${i + 1}" style="width:${FRAME_W}px;height:${FRAME_H}px">${inner}</div>`;
     })

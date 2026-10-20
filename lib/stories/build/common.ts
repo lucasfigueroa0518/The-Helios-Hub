@@ -9,6 +9,7 @@ import type { OpenPool } from '@/lib/stories/pool';
 import { BACKDROPS, type Backdrop, type FrameData, type Photo, type Series } from '@/lib/stories/render/types';
 import type { NewCandidate, NewFrame } from '@/lib/stories/repository';
 import type { StoriesSettings } from '@/lib/stories/settings';
+import type { SourcePage } from '@/lib/stories/source-page';
 import type { WriterCreate } from '@/lib/stories/writer';
 
 export type BuildDeps = {
@@ -24,6 +25,8 @@ export type BuildDeps = {
   nyDate: string;
   /** The series' open ideas from stories.pool. Null only when the pool could not be read: the build then reads its sources directly. */
   pool?: OpenPool | null;
+  /** Reads a cited page (Guess the Number gates). Defaults to readSourcePage; tests stub it by URL. */
+  readSource?: (url: string, figure?: string) => Promise<SourcePage>;
 };
 
 export type BuildResult =
@@ -55,6 +58,17 @@ export async function findPhoto(photos: PhotoFinder, req: PhotoRequest, log: str
     log.push(`photo ${req.kind} "${req.query}": ${err instanceof Error ? err.message : String(err)}`);
     return null;
   }
+}
+
+/**
+ * Short ids for the writer to echo back ("s1", "s2", …), and the way back to
+ * the item. A story's key is its URL, and the model does not copy a
+ * 300-character Google News slug intact: on 2026-10-19 every story but one
+ * came back with a garbled key and was dropped before grounding.
+ */
+export function shortIds<T>(list: T[], prefix: string): { items: Array<{ id: string; item: T }>; byId: Map<string, T> } {
+  const items = list.map((item, i) => ({ id: `${prefix}${i + 1}`, item }));
+  return { items, byId: new Map(items.map((x) => [x.id, x.item])) };
 }
 
 /** Sentences in a line, skipping abbreviations (the same rule the template uses). */

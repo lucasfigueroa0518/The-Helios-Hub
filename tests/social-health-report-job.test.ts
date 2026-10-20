@@ -61,6 +61,19 @@ test('morning report: saves today, backfills missing nights once, is idempotent'
   assert.match(stored[0]!.builtAt, /^\d{4}-\d{2}-\d{2}T.*Z$/);
 });
 
+test('morning report: a multi-night backfill reads each type\'s posting state once per run', async () => {
+  const { query } = await openHubTestDb();
+  const calls = new Map<string, number>();
+  const counted = async (v: string) => { calls.set(v, (calls.get(v) ?? 0) + 1); return posting(v); };
+  const out = await runMorningReport({ q: query, explainersQ: async () => query, posting: counted as never }, NOW, 5);
+  assert.equal(out.backfilled, 4, '5 nights built');
+  assert.deepEqual([...calls.values()], [...calls.keys()].map(() => 1));
+  assert.equal(calls.size, 5, 'every type, once');
+  // A new run reads fresh state.
+  await runMorningReport({ q: query, explainersQ: async () => query, posting: counted as never }, NOW, 5);
+  assert.deepEqual([...new Set(calls.values())], [2]);
+});
+
 test('readiness: approved-as-is rate per type over 30 days', async () => {
   const { pg, query } = await openHubTestDb();
   await pg.exec(`

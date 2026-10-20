@@ -1,0 +1,206 @@
+import { addDays, nyDateOf, nyDayStart, weekdayOf } from '@/lib/social-hub/time';
+import { resolveDay } from '@/lib/social-hub/slots/resolve';
+import type { FeedMode, ResolvedSlot, TemplateRow } from '@/lib/social-hub/slots/types';
+import type { HubPost, Vertical } from '@/lib/social-hub/types';
+import { verticalInfo } from '@/lib/social-hub/verticals';
+import { SERIES_LABEL } from '@/lib/stories/render/copy';
+import { PLAN } from '@/lib/social-hub/views/plan';
+
+/** The week grid (spec §3, layout A): rows are shared time windows, columns are days. Pure. */
+
+export type WeekRow = { id: string; label: string; startMinute: number; windows: ReadonlyArray<{ vertical: Vertical; windowId: string }> };
+
+const at = (v: Vertical, id: string) => PLAN[v].find((w) => w.id === id)!.startMinute;
+
+export const ROWS: readonly WeekRow[] = [
+  { id: 'stories', label: 'Stories', startMinute: at('stories', 'morning_download'), windows: [{ vertical: 'stories', windowId: 'morning_download' }, { vertical: 'stories', windowId: 'guess_the_number' }, { vertical: 'stories', windowId: 'free_vs_paid' }] },
+  { id: 'reel-morning', label: 'Reel', startMinute: at('reels', 'morning'), windows: [{ vertical: 'reels', windowId: 'morning' }] },
+  { id: 'feed-morning', label: 'Feed', startMinute: at('carousels', 'morning'), windows: [{ vertical: 'carousels', windowId: 'morning' }, { vertical: 'last_few_days', windowId: 'morning' }] },
+  { id: 'reel-midday', label: 'Reel', startMinute: at('reels', 'midday'), windows: [{ vertical: 'reels', windowId: 'midday' }] },
+  { id: 'explainer-afternoon', label: 'Explainer', startMinute: at('explainers', 'afternoon'), windows: [{ vertical: 'explainers', windowId: 'afternoon' }] },
+  { id: 'feed-afternoon', label: 'Feed', startMinute: at('carousels', 'afternoon'), windows: [{ vertical: 'carousels', windowId: 'afternoon' }] },
+  { id: 'explainer-late', label: 'Explainer', startMinute: at('explainers', 'late'), windows: [{ vertical: 'explainers', windowId: 'late' }] },
+  { id: 'reel-evening', label: 'Reel', startMinute: at('reels', 'evening'), windows: [{ vertical: 'reels', windowId: 'evening' }] },
+];
+
+/** Stories run three series in one cell, so each chip names its series. */
+const SERIES_SHORT: Record<keyof typeof SERIES_LABEL, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
+
+/** A chip's visible name and its full name (for the aria-label). */
+export function chipNames(vertical: Vertical, windowId: string): { short: string; full: string } {
+  if (vertical === 'stories' && windowId in SERIES_LABEL) {
+    const id = windowId as keyof typeof SERIES_LABEL;
+    return { short: SERIES_SHORT[id], full: SERIES_LABEL[id] };
+  }
+  const info = verticalInfo(vertical);
+  return { short: info.short, full: info.label };
+}
+
+/** Each weekday's Carousel windows in the template ("Every <weekday>" edits change the template, not a date). */
+export function carouselsByWeekday(template: readonly TemplateRow[]): Record<number, string[]> {
+  const out: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
+  for (const r of template) if (r.vertical === 'carousels') out[r.weekday]!.push(r.windowId);
+  for (const w of Object.values(out)) w.sort((a, b) => PLAN.carousels.findIndex((p) => p.id === a) - PLAN.carousels.findIndex((p) => p.id === b));
+  return out;
+}
+
+/** What the "Switch on" confirm needs to say (ruling R8): read on the server before the switch. */
+export type SwitchFacts = {
+  /** No saved template yet: the first flip copies today's pattern in. null: the template couldn't be read, so it's unknown. */
+  templateEmpty: boolean | null;
+  /** Last Few Days' auto_run is off. */
+  lfdPaused: boolean;
+  /** The weekdays (0 = Sunday) that will have an LFD slot after the switch. */
+  lfdDays: readonly number[];
+};
+
+const WEEKDAY_PLURAL = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
+
+function listOf(words: readonly string[]): string {
+  return words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+/** The "Switch on" confirm text: what the calendar does from now on, and what changes the moment it's on. */
+export function switchOnCopy(facts: SwitchFacts): string {
+  const parts = ['From now on the calendar decides what posts when.'];
+  parts.push(
+    facts.templateEmpty == null
+      ? 'If a calendar was saved before, it comes back; otherwise today’s pattern is copied in.'
+      : facts.templateEmpty
+        ? 'Today’s pattern is copied in.'
+        : 'Your saved calendar from last time comes back, not a fresh copy of today’s settings.',
+  );
+  if (facts.lfdPaused && facts.lfdDays.length) {
+    const days = listOf([...facts.lfdDays].sort((a, b) => a - b).map((d) => WEEKDAY_PLURAL[d]!));
+    parts.push(`Last Few Days is paused, so ${days} (its days) will have no Carousels until you edit the calendar.`);
+  }
+  return parts.join(' ');
+}
+
+/** The weekdays a template gives Last Few Days. */
+export function lfdWeekdays(template: readonly TemplateRow[]): number[] {
+  return [...new Set(template.filter((r) => r.vertical === 'last_few_days').map((r) => r.weekday))].sort((a, b) => a - b);
+}
+
+/**
+ * A 409's booked posts split for Move back to ready: the ones with an action
+ * ref go to the unschedule action; one with none (a reel booked with no idea)
+ * would only 400, so the editor names it instead.
+ */
+export function splitBooked<T extends { refs: Readonly<Record<string, string>> }>(list: readonly T[]): { movable: T[]; stuck: T[] } {
+  const movable: T[] = [];
+  const stuck: T[] = [];
+  for (const b of list) (Object.keys(b.refs).length ? movable : stuck).push(b);
+  return { movable, stuck };
+}
+
+/** Move back to ready only helps when at least one booked post can go to the unschedule action; Keep it always can. */
+export const canMoveBack = (list: ReadonlyArray<{ refs: Readonly<Record<string, string>> }>): boolean => splitBooked(list).movable.length > 0;
+
+export const stuckNote = (n: number): string =>
+  `${n} post${n === 1 ? '' : 's'} couldn’t be moved here. Unschedule ${n === 1 ? 'it' : 'them'} from the post page.`;
+
+export type WeekChip = {
+  vertical: Vertical;
+  windowId: string;
+  feedMode: FeedMode | null;
+  origin: 'template' | 'override';
+  booked: HubPost | null;
+  /** This chip's own window hasn't started (rows share a time, but each window locks at its own start). */
+  editable: boolean;
+};
+
+/**
+ * What clicking a chip does: an editable chip opens the slot editor (with an
+ * "Open post" link when booked); a read-only one (past day, started window,
+ * legacy grid, preview) links straight to its booked post, or is plain text.
+ */
+export function chipAction(chip: Pick<WeekChip, 'booked'>, editable: boolean): 'edit' | 'open' | 'none' {
+  if (editable) return 'edit';
+  return chip.booked ? 'open' : 'none';
+}
+
+export type WeekCell = {
+  nyDate: string | null;
+  weekday: number;
+  rowId: string;
+  chips: WeekChip[];
+  blockedReason: string | null;
+  editable: boolean;
+  addable: Array<{ vertical: Vertical; windowId: string }>;
+};
+
+export type WeekDayInput = { nyDate: string | null; weekday: number; slots: ResolvedSlot[] };
+
+export type WeekModel = ReturnType<typeof weekModel>;
+
+/** A post in one of these holds its slot (the same set the slot writer reports as booked). */
+const HOLDS = new Set(['scheduled', 'publishing', 'published']);
+
+export function mondayOf(nyDate: string): string {
+  return addDays(nyDate, -((weekdayOf(nyDate) + 6) % 7));
+}
+
+/** The seven dates from `monday`, each resolved from a template alone (legacy view, preview). */
+export function datedWeek(template: readonly TemplateRow[], monday: string): WeekDayInput[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const nyDate = addDays(monday, i);
+    return { nyDate, weekday: weekdayOf(nyDate), slots: resolveDay(template, [], nyDate) };
+  });
+}
+
+/** The template itself, Monday first, with no dates. */
+export function templateWeek(template: readonly TemplateRow[], monday: string): WeekDayInput[] {
+  return datedWeek(template, monday).map((d) => ({ ...d, nyDate: null }));
+}
+
+/** "Oct 19 – 25", or "Oct 26 – Nov 1" across a month end. */
+export function weekLabel(monday: string): string {
+  const fmt = (d: string, month: boolean) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { ...(month ? { month: 'short' as const } : {}), day: 'numeric', timeZone: 'UTC' });
+  const sunday = addDays(monday, 6);
+  return `${fmt(monday, true)} – ${fmt(sunday, sunday.slice(5, 7) !== monday.slice(5, 7))}`;
+}
+
+export function weekModel(input: { mode: 'week' | 'template'; days: WeekDayInput[]; posts: readonly HubPost[]; now: Date }) {
+  const today = nyDateOf(input.now)!;
+  const startedAt = (nyDate: string | null, minute: number) => nyDate === today && nyDayStart(today).getTime() + minute * 60_000 <= input.now.getTime();
+  // Making a date an LFD day adds its 9:00 window, so it closes when that window starts.
+  const lfdStart = PLAN.last_few_days[0]!.startMinute;
+  const columns = input.days.map((d) => ({
+    nyDate: d.nyDate,
+    weekday: d.weekday,
+    past: d.nyDate != null && d.nyDate < today,
+    isToday: d.nyDate === today,
+    lfdOpen: input.mode === 'template' || (d.nyDate != null && d.nyDate >= today && !startedAt(d.nyDate, lfdStart)),
+  }));
+  const rows = ROWS.map((row) => ({
+    row,
+    cells: input.days.map((d): WeekCell => {
+      const inRow = (v: Vertical, id: string) => row.windows.some((w) => w.vertical === v && w.windowId === id);
+      // Each window locks at its own PLAN start, so a series moved to a later window doesn't lock with the row.
+      const open = (v: Vertical, id: string) => input.mode === 'template'
+        || (d.nyDate != null && d.nyDate >= today && !startedAt(d.nyDate, PLAN[v].find((w) => w.id === id)?.startMinute ?? row.startMinute));
+      const chips = d.slots.filter((s) => inRow(s.vertical, s.windowId)).map((s): WeekChip => ({
+        vertical: s.vertical,
+        windowId: s.windowId,
+        feedMode: s.feedMode,
+        origin: s.origin,
+        booked: d.nyDate ? input.posts.find((p) => p.vertical === s.vertical && p.nyDate === d.nyDate && p.slot?.id === s.windowId && HOLDS.has(p.status)) ?? null : null,
+        editable: open(s.vertical, s.windowId),
+      }));
+      const lfdDay = d.slots.some((s) => s.vertical === 'last_few_days');
+      const carouselDay = d.slots.some((s) => s.vertical === 'carousels');
+      // The cell is editable while any of its windows is still open.
+      const editable = row.windows.some((w) => open(w.vertical, w.windowId));
+      // The plain "+" never offers a save the writer will refuse: no Carousel on an LFD day, no LFD on a Carousel day.
+      const addable = row.windows.filter((w) =>
+        open(w.vertical, w.windowId)
+        && !chips.some((c) => c.vertical === w.vertical && c.windowId === w.windowId)
+        && !(w.vertical === 'carousels' && lfdDay)
+        && !(w.vertical === 'last_few_days' && (carouselDay || chips.length > 0)));
+      const blockedReason = chips.length === 0 && lfdDay && row.windows.some((w) => w.vertical === 'carousels') ? 'LFD day' : null;
+      return { nyDate: d.nyDate, weekday: d.weekday, rowId: row.id, chips, blockedReason, editable, addable: [...addable] };
+    }),
+  }));
+  return { columns, rows };
+}

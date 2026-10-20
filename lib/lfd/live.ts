@@ -29,6 +29,7 @@ export async function liveLfdDeps(
   const { fetchBodyLive } = await import('@/lib/social/ingest/select/enrich');
   const { checkRenderFit } = await import('@/lib/social/render/fit-check');
   const { readPage } = await import('@/lib/social/reporter/read-page');
+  const { closingsLog } = await import('@/lib/social/captions/closings-store');
 
   const now = o.now ?? new Date();
   const tally = createJevTally();
@@ -51,6 +52,7 @@ export async function liveLfdDeps(
       trigger: o.trigger,
       capUsd: o.capUsd,
       spend: () => ({ claudeUsd: budget.claudeUsd(), jevUsd: tally.costUsd }),
+      closings: closingsLog(query, 'lfd'),
       ...(o.runId ? { runId: o.runId } : {}),
     },
     spentUsd: () => budget.spent(),

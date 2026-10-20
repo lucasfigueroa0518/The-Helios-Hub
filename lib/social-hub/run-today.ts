@@ -16,6 +16,7 @@
  * (lib/content-type/run-today-live.ts) reads them and re-plans on the server
  * when the person clicks, so a stale page can't run more than today needs.
  */
+import { lfdDueOn, type LfdSettings } from '@/lib/lfd/settings';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { quotaCandidates, type QuotaCandidate } from '@/lib/social-hub/views/day-rank';
@@ -52,6 +53,31 @@ export type PlanStep = {
 };
 
 export type RunPlan = { today: string; steps: PlanStep[]; estimateUsd: number; anything: boolean };
+
+/**
+ * The Stories series due today, the way the 4 AM worker decides: enabled,
+ * and on its own days, or (template mode, `dueOn` given) with its slot today.
+ */
+export function seriesDueToday(
+  series: ReadonlyArray<{ id: string; label: string; enabled: boolean; days: readonly number[] }>,
+  today: string,
+  held: ReadonlySet<string>,
+  dueOn: ((series: string, nyDate: string) => boolean) | null,
+): RunInputs['series'] {
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return series
+    .filter((s) => s.enabled && (dueOn ? dueOn(s.id, today) : s.days.includes(weekday)))
+    .map((s) => ({ id: s.id, label: s.label, held: held.has(s.id) }));
+}
+
+/**
+ * Last Few Days for Run now: due on its days while its auto_run is on, or
+ * (template mode, `lfdDay` not null) when today has its calendar slot and
+ * auto_run is on. `anyDay`: its own button, any day.
+ */
+export function lfdDueToday(s: Pick<LfdSettings, 'autoRun' | 'days'>, today: string, anyDay: boolean, lfdDay: boolean | null): boolean {
+  return lfdDay !== null ? anyDay || (s.autoRun && lfdDay) : lfdDueOn(s, today, anyDay);
+}
 
 const label = (v: Vertical) => verticalInfo(v).label;
 const n = (x: number, one: string, many = `${one}s`) => `${x} ${x === 1 ? one : many}`;

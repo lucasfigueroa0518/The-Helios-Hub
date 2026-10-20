@@ -1,7 +1,9 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { checkAccountQuota } from '@/lib/instagram/account-gate';
-
 import { CAPTION_MAX_CHARS, stampCaption, stripEpisodePrefix } from '@/lib/explainers/caption-format';
+import { checkAccountQuota } from '@/lib/instagram/account-gate';
+import { TRIAL_GRADUATION_STRATEGY } from '@/lib/reels/config';
+import { bookingFeedMode } from '@/lib/social-hub/slots';
+import type { FeedMode } from '@/lib/social-hub/slots/types';
 
 import {
   PUBLISH_POLL_SECONDS,
@@ -103,6 +105,15 @@ export async function publishReadiness(
   return { ok: true, videoObject: job.video, caption };
 }
 
+/**
+ * The booking's Trial / Main (spec §5): Main is today's Explainer payload
+ * (shared to the feed, no trial params); a Trial slot sends trial params and
+ * leaves `share_to_feed` out, like a Text on Screen trial reel.
+ */
+export function explainerPayloadFlags(mode: FeedMode): { share_to_feed: true } | { graduation_strategy: string } {
+  return mode === 'trial' ? { graduation_strategy: TRIAL_GRADUATION_STRATEGY } : { share_to_feed: true };
+}
+
 export async function queuePublish(db: Queryable, jobId: string, trigger: PublishTrigger): Promise<Queued> {
   const ready = await publishReadiness(db, jobId);
   if (!ready.ok) return { queued: false, note: ready.note, terminal: true, ...(ready.alreadyPublished ? { alreadyPublished: true as const } : {}) };
@@ -112,7 +123,7 @@ export async function queuePublish(db: Queryable, jobId: string, trigger: Publis
     const { rows } = await db.query<{ id: string }>(
       `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
        VALUES ($1, 'explainers', $2, 'requested', $3, $4::jsonb) RETURNING id`,
-      [itemId, trigger, ready.caption, JSON.stringify({ video_object: ready.videoObject, share_to_feed: true })],
+      [itemId, trigger, ready.caption, JSON.stringify({ video_object: ready.videoObject, ...explainerPayloadFlags(await bookingFeedMode((t, p) => db.query(t, p), itemId, 'explainers')) })],
     );
     return { queued: true, id: rows[0]!.id };
   } catch (error) {
@@ -184,8 +195,12 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
   const now = deps.now ?? Date.now;
   const statusLog: Array<{ at: string; statusCode: string; status: string | null }> = [];
   try {
-    const { rows } = await db.query<{ caption: string; video_object: string; share_to_feed: boolean }>(
-      `SELECT caption, payload->>'video_object' AS video_object, coalesce((payload->>'share_to_feed')::boolean, true) AS share_to_feed
+    // A trial attempt leaves share_to_feed out (null: not sent); any other attempt without it is an older Main one (true).
+    const { rows } = await db.query<{ caption: string; video_object: string; share_to_feed: boolean | null; graduation_strategy: string | null }>(
+      `SELECT caption, payload->>'video_object' AS video_object,
+              CASE WHEN payload->>'graduation_strategy' IS NOT NULL THEN (payload->>'share_to_feed')::boolean
+                   ELSE coalesce((payload->>'share_to_feed')::boolean, true) END AS share_to_feed,
+              payload->>'graduation_strategy' AS graduation_strategy
          FROM social_hub.publish_attempts WHERE id = $1`,
       [id],
     );
@@ -213,7 +228,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
       throw new Error(`The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`);
     }
     await update(db, id, { caption });
-    const containerId = await meta.createReel({ videoUrl, caption, shareToFeed: attempt.share_to_feed });
+    const containerId = await meta.createReel({ videoUrl, caption, shareToFeed: attempt.share_to_feed, graduationStrategy: attempt.graduation_strategy ?? null });
     await update(db, id, { status: 'processing', container_id: containerId });
 
     const deadline = now() + PUBLISH_POLL_TIMEOUT_MINUTES * 60_000;

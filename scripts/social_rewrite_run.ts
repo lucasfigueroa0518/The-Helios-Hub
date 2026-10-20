@@ -1,8 +1,11 @@
 /**
- * Helios Social — LIVE Writer → Editor → Fact-checker on the briefs saved by
- * a daily run (no Reporter), with fresh drafts as in runDay. Compares the
- * new posts with the run's originals, headlines in order. --cap-usd is a
- * hard total cap (Claude); no call starts that could pass it.
+ * Helios Social — LIVE Writer → Editor → captioner → Fact-checker →
+ * mechanical on the briefs saved by a daily run (no Reporter, no design),
+ * with fresh drafts and fresh captions as in runDay (captionAndCheck).
+ * Compares the new posts with the run's originals, headlines in order, and
+ * the captions as posted (both sides through the mechanical join). --cap-usd
+ * is a hard total cap (Claude + Jev); no call starts that could pass it. The
+ * caption closings log lives in memory for the run (never the shared log).
  *
  *   npx tsx scripts/social_rewrite_run.ts --cap-usd 1.00 runs/daily-<ts>
  */
@@ -23,13 +26,18 @@ async function main() {
   const { MAX_FRESH_DRAFTS } = await import('@/lib/social/pipeline/orchestrator');
   const { runWriter } = await import('@/lib/social/writer/writer');
   const { runEditor } = await import('@/lib/social/editor/editor');
-  const { runFactCheck } = await import('@/lib/social/factcheck/factcheck');
+  const { captionAndCheck, createScriptCaptionStages, scriptBrief } = await import('@/lib/social/pipeline/caption-check');
+  const { joinAndFix } = await import('@/lib/social/pipeline/mechanical-stage');
+  const { createJevAsk, createJevTally, tallied } = await import('@/lib/social/jev/client');
   const { fillDraft } = await import('@/lib/social/writer/draft');
   const { isWellKnownLive } = await import('@/lib/social/writer/well-known');
   type FilledDraft = import('@/lib/social/writer/draft').FilledDraft;
 
-  const budget = createRunBudget({ capUsd: cap, otherSpendUsd: () => 0 });
+  const jevTally = createJevTally();
+  const budget = createRunBudget({ capUsd: cap, otherSpendUsd: () => jevTally.costUsd });
   const create = budget.guard(liveMessagesCreate(newAnthropic()));
+  // One captioner for the run, as live: its closings log and Jev fits carry across stories and fresh drafts.
+  const tail = createScriptCaptionStages({ create, jev: tallied(createJevAsk(), jevTally) });
   const run = JSON.parse(await fsp.readFile(path.join(runDir, 'run.json'), 'utf8'));
   const outDir = path.join(runDir, `rewrite-${new Date().toISOString().replace(/[:.]/g, '-')}`);
   await fsp.mkdir(outDir, { recursive: true });
@@ -38,6 +46,7 @@ async function main() {
     `COVER: ${d.cover}`,
     ...d.slides.map((s, i) => `${i + 2}. [${s.type}] ${s.headline.text}${s.body ? `\n      ${s.body.text}` : ''}${s.quote ? `\n      "${s.quote.text}" (${s.quote.speaker})` : ''}${s.numbers.length ? `\n      ${s.numbers.map((n) => n.value).join(' | ')}` : ''}`),
     `FOLLOW: ${d.follow}`,
+    `CAPTION: ${d.caption.text}`,
   ];
 
   let n = 0;
@@ -46,8 +55,9 @@ async function main() {
     n++;
     const brief = l.reporter.brief;
     const oldFc = l.factCheck.at(-1);
-    const old = oldFc?.ok && oldFc.outcome.kind === 'ok' ? fillDraft(oldFc.outcome.draft, brief) : null;
-    const costs: Record<string, number> = { writer: 0, editor: 0, 'fact-checker': 0 };
+    // The original as it posted: the mechanical stage's caption join and silent fixes.
+    const old = oldFc?.ok && oldFc.outcome.kind === 'ok' ? joinAndFix(fillDraft(oldFc.outcome.draft, brief), brief).draft : null;
+    const costs: Record<string, number> = { writer: 0, editor: 0, captioner: 0, 'fact-checker': 0 };
     const attempts: unknown[] = [];
     let final: FilledDraft | null = null;
     let stop: string | null = null;
@@ -58,20 +68,23 @@ async function main() {
       const e = await runEditor(brief, w.draft, { create });
       costs.editor! += e.costUsd;
       if (!e.ok) { stop = `editor ${e.reason}: ${e.detail}`; attempts.push({ writer: w, editor: e }); break; }
-      const f = await runFactCheck(brief, { submission: e.draft, filled: e.filled }, { create });
-      costs['fact-checker']! += f.costUsd;
-      attempts.push({ writer: w, editor: e, factCheck: f });
-      if (!f.ok) { stop = `fact-checker ${f.reason}: ${f.detail}`; break; }
-      if (f.outcome.kind === 'ok') final = fillDraft(f.outcome.draft, brief);
-      else if (f.outcome.kind === 'set-aside') stop = `set aside: ${f.outcome.why}`;
-      else if (attempt === MAX_FRESH_DRAFTS) stop = `unfixable: ${f.outcome.why}`;
+      const seen = { captioner: tail.captioner.length, checks: tail.factCheck.length };
+      const out = await captionAndCheck(tail.stages, { storyId, submission: e.draft, filled: e.filled }, scriptBrief(storyId, brief));
+      const captioner = tail.captioner.slice(seen.captioner);
+      const checks = tail.factCheck.slice(seen.checks);
+      costs.captioner! += captioner.reduce((sum, r) => sum + r.costUsd, 0);
+      costs['fact-checker']! += checks.reduce((sum, r) => sum + r.costUsd, 0);
+      attempts.push({ writer: w, editor: e, captioner, factCheck: checks.at(-1), checks, outcome: out.kind === 'ok' ? { kind: out.kind, freshCaptions: out.freshCaptions, mechanical: out.final.mechanical } : out });
+      if (out.kind === 'ok') final = out.final.filled;
+      else if (out.kind === 'stopped') stop = `${out.stage} ${out.reasonCode}: ${out.detail}`;
+      else if (attempt === MAX_FRESH_DRAFTS) stop = `unfixable: ${out.why}`;
     }
     await fsp.writeFile(path.join(outDir, `story-${n}.json`), JSON.stringify({ storyId, attempts, final, stop, costs }, null, 2));
 
     const left = old ? lines(old) : ['(no original post)'];
     const right = final ? lines(final) : [`(no new post: ${stop})`];
     let md = `# ${n}. ${brief.the_news.text.slice(0, 120)}\n\nCost: ${Object.entries(costs).map(([k, v]) => `${k} $${v.toFixed(3)}`).join(' · ')}; attempts ${attempts.length}\n\n`;
-    md += `| Before (checkpoint) | After (Writer v2 + Editor check 2) |\n|---|---|\n`;
+    md += `| Before (checkpoint) | After (Writer → Editor → captioner → Fact-checker → mechanical) |\n|---|---|\n`;
     for (let i = 0; i < Math.max(left.length, right.length); i++) md += `| ${(left[i] ?? '').replace(/\n\s*/g, '<br>').replace(/\|/g, '\\|')} | ${(right[i] ?? '').replace(/\n\s*/g, '<br>').replace(/\|/g, '\\|')} |\n`;
     const fc = (attempts.at(-1) as any)?.factCheck;
     md += `\nFact-checker: ${fc?.ok ? `${fc.flags.flags.length} flags; ${fc.outcome.kind}${fc.outcome.applied?.length ? `; ${fc.outcome.applied.join('; ')}` : ''}` : 'not reached'}\n`;
@@ -80,7 +93,7 @@ async function main() {
     await fsp.writeFile(path.join(outDir, `story-${n}.md`), md);
     console.log(`${n}. ${final ? 'ok' : stop} · $${Object.values(costs).reduce((a, b) => a + b, 0).toFixed(3)}`);
   }
-  console.log(`\nTotal $${budget.spent().toFixed(4)} of $${cap}. Out: ${outDir}`);
+  console.log(`\nTotal $${budget.spent().toFixed(4)} of $${cap} (Jev $${jevTally.costUsd.toFixed(4)}). Out: ${outDir}`);
 }
 
 main().catch((err) => {

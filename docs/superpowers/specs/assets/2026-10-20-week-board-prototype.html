@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Week Board Smoother Drag</title>
+<style>
+  :root{
+    --bg:#f7f6f3; --panel:#fff; --ink:#1d1d1b; --muted:#77736b; --line:#e6e2da; --soft:#f1eee8;
+    --accent:#c4501a; --ok:#2f7a3d;
+    --t-text:#0f8f8a; --t-expl:#4b55c8; --t-car:#3d8a3a; --t-lfd:#c2457e; --t-sto:#8b55c9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.35 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:1320px;margin:0 auto;padding:20px 16px 80px}
+  .note{background:#fff7ec;border:1px solid #f1d9b8;color:#7a4b12;padding:8px 12px;border-radius:8px;font-size:12.5px;margin-bottom:14px}
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  h1{font-size:24px;margin:0 8px 0 0;letter-spacing:-.01em}
+  .tabs{display:inline-flex;background:var(--soft);border-radius:999px;padding:3px}
+  .tabs button{border:0;background:transparent;padding:6px 14px;border-radius:999px;font:inherit;cursor:pointer;color:var(--muted)}
+  .tabs button.on{background:var(--ink);color:#fff}
+  .spacer{flex:1}
+  .nav button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}
+  .layout{display:grid;grid-template-columns:168px 1fr;gap:12px}
+  .tray{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;align-self:start;position:sticky;top:12px}
+  .tray h3{margin:0 0 2px;font-size:13px}
+  .tray p{margin:0 0 10px;color:var(--muted);font-size:12px}
+  .tray.drop-remove{outline:2px dashed var(--accent);outline-offset:3px;background:#fff4ee}
+  .tray .removehint{display:none;color:var(--accent);font-size:12px;font-weight:600;margin-top:8px}
+  .tray.drop-remove .removehint{display:block}
+  .chip{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;cursor:grab;background:#fff;user-select:none}
+  .chip:active{cursor:grabbing}
+  .chip .dot,.card .dot{width:10px;height:10px;border-radius:3px;flex:none}
+  .chip small{color:var(--muted);margin-left:auto;font-size:11px}
+  .sub{margin-left:18px}
+  .board{display:grid;grid-template-columns:repeat(7,minmax(150px,1fr));gap:8px;overflow-x:auto;padding-bottom:6px}
+  .day{background:var(--panel);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-height:520px}
+  .day.past{background:#fbfaf8}
+  .day.today{border-color:var(--ink)}
+  .dhead{padding:10px 10px 8px;border-bottom:1px solid var(--line)}
+  .dhead .name{font-weight:650}
+  .dhead .date{color:var(--muted);font-weight:400}
+  .dhead .badges{display:flex;gap:6px;margin-top:4px;min-height:18px;align-items:center}
+  .badge{font-size:10.5px;padding:1px 7px;border-radius:999px;background:var(--soft);color:var(--muted)}
+  .badge.edited{background:#fff1e8;color:var(--accent)}
+  .badge.todayb{background:var(--ink);color:#fff}
+  .reset{font-size:11px;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
+  .stack{flex:1;padding:8px;display:flex;flex-direction:column;gap:6px;position:relative}
+  .stack.over{background:#fbf8f2}
+  .ins{height:3px;border-radius:2px;background:var(--accent);margin:-2px 0;box-shadow:0 0 0 3px #f6d9c8}
+  .card{position:relative;background:color-mix(in srgb,var(--c) 7%,#fff);border:1px solid color-mix(in srgb,var(--c) 28%,#fff);border-radius:10px;padding:8px;cursor:grab;user-select:none}
+  .card.trial{border-style:dashed;border-color:color-mix(in srgb,var(--c) 60%,#fff)}
+  .card.dragging{opacity:.35}
+  .card.locked{cursor:default;opacity:.72}
+  .card .top{display:flex;align-items:center;gap:6px}
+  .card .time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:11.5px;min-width:52px}
+  .card .title{font-weight:600;font-size:13px}
+  .card .meta{display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap}
+  .card .x{position:absolute;top:4px;right:5px;border:0;background:none;color:#b3ada3;cursor:pointer;font-size:14px;line-height:1;display:none}
+  .card:hover .x{display:block}
+  .card.locked .x{display:none!important}
+  .thumb{width:100%;height:26px;border-radius:7px;margin-top:6px;background:linear-gradient(135deg,var(--c),#00000018);opacity:.85;display:flex;align-items:flex-end;padding:4px 6px;color:#fff;font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;align-items:center}
+  .st{font-size:10.5px;padding:1px 6px;border-radius:999px;background:var(--soft);color:var(--muted)}
+  .st.posted{background:#e8f4ea;color:var(--ok)}
+  .st.booked{background:#eef0ff;color:#3b44a8}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-size:11px}
+  .seg{flex:none}
+  .seg button{border:0;background:#fff;padding:2px 7px;white-space:nowrap;cursor:pointer;font:inherit;color:var(--muted)}
+  .seg button.on{background:var(--ink);color:#fff}
+  .card.locked .seg button{cursor:default}
+  .empty{color:#b3ada3;font-size:12px;text-align:center;padding:18px 4px;border:1px dashed var(--line);border-radius:10px}
+  .dfoot{border-top:1px solid var(--line);padding:6px 10px;color:var(--muted);font-size:11px;display:flex;gap:8px;flex-wrap:wrap}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 8px 28px #0003;font-size:13px;max-width:calc(100% - 32px);flex-wrap:wrap}
+  .toast button{border:1px solid #ffffff40;background:transparent;color:#fff;border-radius:8px;padding:4px 10px;font:inherit;cursor:pointer}
+  .toast button.primary{background:#fff;color:var(--ink);border-color:#fff}
+  .toast.warn{background:#7a2e12}
+  .modal-bg{position:fixed;inset:0;background:#0006;display:flex;align-items:center;justify-content:center;padding:16px}
+  .modal{background:#fff;border-radius:14px;padding:18px;max-width:380px;width:100%}
+  .modal h4{margin:0 0 6px}
+  .modal p{margin:0 0 14px;color:var(--muted)}
+  .modal .row{display:flex;gap:8px;justify-content:flex-end}
+  .modal button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;font:inherit;cursor:pointer}
+  .modal button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .shake{animation:sh .3s}
+  @keyframes sh{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .lg-card{width:22px;height:14px;border:1px solid #999;border-radius:4px;display:inline-block}
+  .lg-card.dash{border-style:dashed}
+  @media (max-width:760px){.layout{grid-template-columns:1fr}.tray{position:static}}
+
+  /* v2: calm, one-line slots */
+  .board{grid-template-columns:repeat(var(--cols),minmax(0,1fr))}
+  .day{min-height:0;border-radius:12px}
+  .day.fold{background:transparent;border-style:dashed}
+  .day.fold .stack{display:none}
+  .fold-sum{padding:10px;color:var(--muted);font-size:12px;line-height:1.5}
+  .dhead{padding:10px 10px 6px;border-bottom:0}
+  .dhead .count{color:var(--muted);font-size:11.5px;margin-left:6px;font-weight:400}
+  .dhead .badges{min-height:0;margin-top:2px}
+  .dfoot{display:none}
+  .stack{gap:2px;padding:2px 6px 8px}
+  .card{background:#fff;border:1px solid transparent;border-radius:8px;padding:6px 8px;display:flex;align-items:center;gap:7px}
+  .card:hover{background:var(--soft)}
+  .card.trial{border-style:solid;border-color:transparent}
+  .card.open{background:#fff;border-color:var(--line);box-shadow:0 2px 10px #0000000d;flex-wrap:wrap}
+  .card .time{min-width:34px;font-size:12px}
+  .card .title{font-weight:500;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .dot{width:8px;height:8px;border-radius:50%}
+  .tag{font-size:10.5px;color:var(--muted);border:1px dashed #cfc9bf;border-radius:999px;padding:0 6px;cursor:pointer;flex:none}
+  .tag.main{border-style:solid}
+  .mark{width:6px;height:6px;border-radius:50%;background:#3b44a8;flex:none}
+  .card.posted .title,.card.posted .time{color:#a8a299}
+  .detail{flex-basis:100%;display:none;padding:6px 0 2px 0;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .card.open .detail{display:flex}
+  .detail .thumb{height:auto;width:100%;padding:6px 8px;margin:0}
+  .detail button.rm{border:0;background:none;color:var(--accent);cursor:pointer;padding:0;font:inherit;text-decoration:underline}
+  .card .x{display:none!important}
+  .empty{padding:10px 4px}
+  .ins{margin:0}
+
+  /* v2b: tray as a top row */
+  .layout{grid-template-columns:1fr!important}
+  .tray{position:static;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px}
+  .tray h3{margin:0 4px 0 0}
+  .tray p{display:none}
+  .tray #chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{margin:0;padding:5px 10px;border-radius:999px}
+  .chip.sub{margin:0}
+  .chip small{margin-left:4px}
+  .tray .removehint{margin:0 0 0 auto}
+  .tag{padding:0 5px;font-size:10px}
+
+  .detail{flex-direction:column;align-items:stretch;gap:6px;color:var(--ink);font-size:12.5px;padding-top:8px;margin-top:4px;border-top:1px solid var(--line);cursor:default}
+  .card.open .detail{display:flex}
+  .d-title{font-weight:600}
+  .muted{color:var(--muted);font-weight:400}
+  .d-post{display:flex;align-items:center;gap:8px}
+  .d-post .thumb{flex:1;height:24px;margin:0;padding:0 8px}
+  .lnk{border:0;background:none;padding:0;color:var(--accent);cursor:pointer;font:inherit;text-decoration:underline;white-space:nowrap}
+  .d-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding-top:2px}
+  .d-actions select{font:inherit;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:2px 4px;background:#fff}
+  .detail .seg button{padding:3px 10px;font-size:12px}
+  .detail .seg button:disabled{cursor:default}
+
+  /* v2c: details float beside the slot */
+  .card.open{flex-wrap:nowrap;z-index:5;border-color:var(--ink)}
+  .detail{position:absolute;top:-6px;left:calc(100% + 8px);width:300px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin:0;box-shadow:0 12px 32px #0000001f;z-index:6}
+  .day.flip .detail{left:auto;right:calc(100% + 8px)}
+  .day{overflow:visible}
+  .board{overflow:visible}
+
+  /* v3: planner panels below the week */
+  .below{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+  .panel h3{margin:0;font-size:14px;display:flex;align-items:center;gap:8px}
+  .panel .count{font-size:11px;background:var(--soft);color:var(--muted);border-radius:999px;padding:0 7px;font-weight:500}
+  .panel .hint{margin:2px 0 10px;color:var(--muted);font-size:12px}
+  .ready{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px}
+  .rcard{display:flex;gap:8px;align-items:flex-start;border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:grab;background:#fff}
+  .rcard:hover{background:var(--soft)}
+  .rcard .dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none}
+  .rt{font-weight:600;font-size:13px}
+  .list{display:flex;flex-direction:column;gap:4px}
+  .item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:12.5px}
+  .item:hover{background:var(--soft)}
+  .item .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .item .it{flex:1;min-width:0}
+  .item.fail{background:#fff3f0}
+  .item.fail .it{color:#8a2c14}
+  .wi{width:16px;height:16px;border-radius:50%;background:#fff1e0;color:#b25d0b;font-weight:700;font-size:11px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+  .btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+  .btn.primary{background:var(--ink);border-color:var(--ink);color:#fff}
+  .none{color:var(--muted);font-size:12.5px;padding:6px 2px}
+  .next{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+  .nday{border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px;text-align:left;font:inherit;cursor:pointer;min-width:0}
+  .nday:hover{background:var(--soft)}
+  .nday.ed{border-color:#f0c9ad;background:#fffaf6}
+  .nd{font-weight:600;font-size:12.5px;margin-bottom:6px}
+  .ndots{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:11.5px;color:var(--muted)}
+  .ndots span{display:inline-flex;align-items:center;gap:3px}
+  .ndots .dot{width:7px;height:7px;border-radius:50%}
+  .nbad{margin-top:6px;font-size:10.5px;color:var(--accent)}
+  @media (max-width:900px){.below{grid-template-columns:1fr}.next{grid-template-columns:repeat(4,minmax(0,1fr))}}
+
+  /* v6: roomier week */
+  .wrap{max-width:1500px;padding:24px 24px 80px}
+  h1{font-size:28px}
+  .board{gap:10px}
+  .day{min-height:calc(100vh - 230px)}
+  .dhead{padding:14px 14px 10px}
+  .dhead .name{font-size:15px}
+  .dhead .count{font-size:12.5px}
+  .stack{gap:4px;padding:4px 8px 12px}
+  .card{padding:10px 10px;border-radius:10px;gap:9px;min-height:40px}
+  .card .time{font-size:13px;min-width:42px}
+  .card .title{font-size:14.5px;font-weight:550}
+  .card .dot{width:9px;height:9px}
+  .tag{font-size:11.5px;padding:1px 8px}
+  .mark{width:7px;height:7px}
+  .ins{height:4px}
+  .tray{padding:10px 14px}
+  .chip{padding:7px 12px;font-size:14px}
+  .legend{font-size:12.5px;margin-top:14px}
+  .card{gap:7px;padding:10px 8px}
+  .card .time{min-width:36px}
+  .tag{padding:1px 6px;font-size:11px}
+  .stack{padding:4px 6px 12px}
+  .board{gap:8px}
+
+  /* v7: columns are the day's timeline */
+  .dhead{height:60px;box-sizing:border-box}
+  .stack{position:relative;padding:0}
+  .stack .card{position:absolute;left:6px;right:6px}
+  .hl{position:absolute;left:0;right:0;height:0;border-top:1px dashed #ece8e1;pointer-events:none}
+  .hl.noon{border-top-style:solid;border-color:#e3ded5}
+  .gutter{position:relative}
+  .gutter .gh{height:60px}
+  .gutter .gl{position:absolute;right:6px;transform:translateY(-50%);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .gutter-box{position:relative;height:calc(100% - 60px)}
+  .stack .ins{position:absolute;left:6px;right:6px;margin:0;z-index:4}
+  .stack .empty{position:absolute;top:40%;left:8px;right:8px}
+  .day.fold .gutter-box{display:none}
+  .stack .card{min-height:0;padding:6px 8px}
+  .stack .card .title{font-size:14px}
+
+  /* v8: defined slots */
+  .day:not(.fold){background:#faf9f6}
+  .day.today{background:#fff}
+  .stack .card{background:#fff;border:1px solid color-mix(in srgb,var(--c) 32%,#e2ded6);border-radius:9px;padding:7px 9px;box-shadow:0 1px 2px #0000000f,0 1px 0 #00000008;transition:box-shadow .12s,transform .12s}
+  .stack .card:hover{background:#fff;box-shadow:0 3px 10px #00000014;transform:translateY(-1px)}
+  .stack .card .dot{width:9px;height:9px}
+  .stack .card .title{font-weight:600}
+  .stack .card.posted{background:#fbfaf8;box-shadow:none;border-color:#e6e2da}
+  .stack .card.locked{box-shadow:none}
+  .stack .card.open{box-shadow:0 0 0 2px var(--ink);transform:none}
+  .hl{border-top-color:#ebe6de}
+
+  /* v9: drop sets the time */
+  .stack .card .time{min-width:0;font-size:12px;letter-spacing:-.01em}
+  .stack .card{gap:6px}
+  .stack .ins::after{content:attr(data-time);position:absolute;right:0;top:-10px;background:var(--accent);color:#fff;font-size:11px;font-weight:600;border-radius:6px;padding:1px 6px;white-space:nowrap}
+
+  /* v10: drops snap to the type's windows, shown while dragging */
+  .band{position:absolute;left:4px;right:4px;border-radius:9px;background:color-mix(in srgb,var(--c) 10%,transparent);border:1.5px dashed color-mix(in srgb,var(--c) 45%,transparent);color:color-mix(in srgb,var(--c) 75%,#555);font-size:10.5px;font-weight:600;padding:2px 8px;display:flex;align-items:flex-end;justify-content:flex-end;pointer-events:none;z-index:0}
+  .stack .card{z-index:1}
+  .stack .ins.full{background:#b8401a}
+  .stack .ins.full::after{background:#7a2e12}
+
+  /* v11: free placement; usual windows are hints */
+  .band{opacity:.8;font-weight:500}
+  .stack .ins.outside{background:#b8820f}
+  .stack .ins.outside::after{background:#8a5e05}
+
+  /* v12: layering fix, ghost preview, magnetic snap */
+  .stack .card.open{z-index:40}
+  .day:has(.card.open){position:relative;z-index:30}
+  .board .day{position:relative;z-index:1}
+  .stack .ins{height:30px;border-radius:9px;background:color-mix(in srgb,var(--accent) 9%,#fff);border:1.5px dashed var(--accent);box-shadow:none;color:var(--accent);font-size:12.5px;font-weight:600;display:flex;align-items:center;padding:0 10px;transition:top .08s ease-out;z-index:5}
+  .stack .ins::after{top:-11px;right:6px}
+  .stack .ins.snapped{border-style:solid;background:color-mix(in srgb,var(--accent) 14%,#fff)}
+  .stack .ins.outside{background:#fff8ea;border-color:#b8820f;color:#8a5e05}
+  .stack .ins.full{background:#fff1ee;border-color:#b8401a;color:#7a2e12}
+  .card.dragging{opacity:.3}
+</style>
+</head>
+<body>
+<div class="wrap">
+    <header>
+    <h1 id="title">Oct 19 – 25</h1>
+    <div class="tabs" id="tabs">
+      <button data-tab="standard">Standard week</button>
+      <button data-tab="week" class="on">This week</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="nav"><button disabled>‹</button> <button>Today</button> <button disabled>›</button></div>
+  </header>
+  <div class="layout">
+    <aside class="tray" id="tray">
+      <h3>Drag in:</h3>
+      <p>Drag onto a day.</p>
+      <div id="chips"></div>
+      <div class="removehint">Drop here to remove</div>
+    </aside>
+    <main>
+      <div class="board" id="board"></div>
+      <div class="legend">
+        <span><span class="tag">Trial</span> / <span class="tag main">Main</span> click to switch</span>
+        <span><span class="mark"></span> a post is booked</span>
+        <span><span class="badge edited">Edited</span> differs from the standard week</span>
+        <span>Click a slot for details · drag to move · drag back onto the row above to remove</span>
+      </div>
+      <div class="below" id="below"></div>
+    </main>
+  </div>
+</div>
+<div id="toast"></div>
+<div id="modal"></div>
+<script>
+const TYPES = {
+  text:{name:'Text on Screen', c:'var(--t-text)', reel:true, mode:'trial'},
+  expl:{name:'Explainer', c:'var(--t-expl)', reel:true, mode:'main'},
+  car:{name:'Carousel', c:'var(--t-car)'},
+  lfd:{name:'Last Few Days', c:'var(--t-lfd)'},
+  sto:{name:'Story', c:'var(--t-sto)'},
+};
+const SERIES = {md:'Morning Download', gtn:'Guess the Number', fvp:'Free vs. Paid'};
+const RUN = {text:'1 AM', expl:'2 AM', car:'3 AM', lfd:'3 AM', sto:'4 AM'};
+const SHORT = {text:'Text', expl:'Explainer', car:'Carousel', lfd:'LFD', md:'Morning Dl', gtn:'Guess #', fvp:'Free/Paid'};
+const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const LONG = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const DATES = [19,20,21,22,23,24,25];
+const TODAY = 1; // Tuesday Oct 20, 10:00 AM
+const NOW_MIN = 10*60;
+const LADDER = [510,525,540,600,675,780,870,930,1020,1080,1170,1230]; // minutes
+let uid = 1;
+const WIN = {
+  text:[[525,600,'Morning'],[675,750,'Midday'],[1080,1260,'Evening']],
+  expl:[[780,870,'Afternoon'],[930,1020,'Late afternoon']],
+  car:[[540,600,'Morning'],[870,930,'Afternoon']],
+  lfd:[[540,600,'Morning']],
+  sto:[[510,600,'Morning']],
+};
+// which windows of a type are free on a day (a window holds one slot per type; Stories hold one per series)
+function freeWins(i, type, series, exceptId){
+  const day = days()[i];
+  return WIN[type].filter(([s0]) => !day.some(c => c.id!==exceptId && c.type===type && c.t===s0 && (type!=='sto' || c.series===series)));
+}
+function nearestWin(i, type, series, t, exceptId){
+  const ws = freeWins(i, type, series, exceptId).filter(([s0,e0]) => !(state.tab==='week' && i===TODAY && s0 <= NOW_MIN));
+  if (!ws.length) return null;
+  return ws.reduce((best,w) => { const d = t < w[0] ? w[0]-t : t > w[1] ? t-w[1] : 0; return !best || d < best.d ? {w, d} : best; }, null).w;
+}
+const dragType = () => !drag ? null : drag.src==='tray' ? {type:drag.type, series:drag.series, id:null} : drag.src==='ready' ? {type:READY.find(r=>r.id===drag.id)?.type, series:null, id:null} : (()=>{ const c = days()[drag.day][drag.k]; return {type:c.type, series:c.series, id:c.id}; })();
+function showBands(){
+  const dt = dragType(); if (!dt?.type) return;
+  document.querySelectorAll('.stack').forEach(stack => {
+    if (stack.closest('.fold')) return;
+    const i = Number(stack.dataset.day), H = stack.clientHeight;
+    if (dt.type==='car' && days()[i].some(c=>c.type==='lfd')) return;
+    WIN[dt.type].forEach(([s0,e0,name]) => {
+      if (state.tab==='week' && i===TODAY && s0 <= NOW_MIN) return;
+      const b = document.createElement('div'); b.className='band';
+      b.style.top = yOf(s0,H)+'px'; b.style.height = Math.max(30, yOf(e0,H)-yOf(s0,H)+30)+'px';
+      b.style.setProperty('--c', TYPES[dt.type].c); b.textContent = 'usual · ' + name.toLowerCase();
+      stack.prepend(b);
+    });
+  });
+}
+const DEF_T = {text:525, expl:780, car:540, lfd:540, sto:510};
+const mk = (type, extra={}) => ({id:uid++, type, mode: TYPES[type].reel ? (extra.mode||TYPES[type].mode) : null, series: extra.series||null, t: extra.t ?? DEF_T[type]});
+
+function standardDay(i){
+  const d = [];
+  const lfd = i===1||i===4;
+  d.push(mk('sto',{series:'md', t:510}));
+  if (i===0||i===3) d.push(mk('sto',{series:'gtn', t:510}));
+  if (i===1||i===5) d.push(mk('sto',{series:'fvp', t:510}));
+  d.push(mk('text',{t:525}));
+  d.push(mk(lfd?'lfd':'car',{t:540}));
+  d.push(mk('text',{t:675}));
+  d.push(mk('expl',{t:780}));
+  if (!lfd) d.push(mk('car',{t:870}));
+  d.push(mk('expl',{t:930}));
+  d.push(mk('text',{t:1080}));
+  return d;
+}
+const clone = (arr) => arr.map(c => ({...c, id: uid++}));
+let state = { tab:'week', standard: DAYS.map((_,i)=>standardDay(i)), week:null };
+state.week = state.standard.map(d => clone(d));
+// booked / posted sample content on This week
+state.week.forEach((d,i) => d.forEach((c,j) => {
+  if (i < TODAY) c.posted = true;
+  else if (i <= TODAY+1 && (c.type==='text'||c.type==='car'||c.type==='lfd'||c.type==='sto') && j<5) { c.booked = ['How agents pick tools','Crusoe raises $3.9B','The week in AI chips','Nvidia’s new box'][ (i+j)%4 ]; c.approved = j%2===0; }
+}));
+// one-off changes this week, so gaps have something to say
+state.week[3] = state.week[3].filter(c => c.type!=='expl');
+{ const sat = state.week[5]; const k = sat.findIndex((c,j)=> c.type==='text' && j>0); if (k>0) sat[k].mode='main'; }
+const history = [];
+const snap = () => JSON.stringify({standard:state.standard, week:state.week, ready:READY, fails:FAILS});
+const restore = (s) => { const o = JSON.parse(s); state.standard=o.standard; state.week=o.week; READY.length=0; READY.push(...o.ready); FAILS.length=0; FAILS.push(...o.fails); };
+const days = () => state.tab==='standard' ? state.standard : state.week;
+const sig = (d) => [...d].sort((x,y)=>x.t-y.t).map(c => c.type+(c.mode||'')+(c.series||'')+'@'+c.t).join(',');
+const edited = (i) => sig(state.week[i]) !== sig(state.standard[i]);
+const fmt = (m) => { const h=Math.floor(m/60), mm=String(m%60).padStart(2,'0'); return (h%12||12)+':'+mm+(h<12?' AM':' PM'); };
+function timesFor(day){ return day.map(c => c.t); }
+const byTime = () => { [state.standard, state.week].forEach(w => w.forEach(d => d.sort((a,b)=>a.t-b.t))); };
+const lockedCard = (i,k,day) => state.tab==='week' && (i<TODAY || (i===TODAY && timesFor(day)[k] <= NOW_MIN));
+
+function renderTray(){
+  const el = document.getElementById('chips'); el.innerHTML='';
+  const add = (type, label, series, sub) => {
+    const c = document.createElement('div'); c.className='chip'+(sub?' sub':''); c.draggable=true;
+    c.innerHTML = `<span class="dot" style="background:${TYPES[type].c}"></span>${label}${TYPES[type].reel?`<small>${TYPES[type].mode==='trial'?'Trial':'Main'}</small>`:''}`;
+    c.addEventListener('dragstart', e => { drag = {src:'tray', type, series}; requestAnimationFrame(showBands); e.dataTransfer.effectAllowed='copy'; e.dataTransfer.setData('text/plain','x'); });
+    c.addEventListener('dragend', clearDrag);
+    el.appendChild(c);
+  };
+  add('text','Text on Screen'); add('expl','Explainer'); add('car','Carousel'); add('lfd','Last Few Days');
+  Object.entries(SERIES).forEach(([k,v]) => add('sto', v, k, true));
+}
+
+let drag = null;
+const READY = [
+  {id:'r1', type:'expl', title:'Why GPUs cost so much', made:'Made Oct 18'},
+  {id:'r2', type:'car', title:'OpenAI’s new device, explained', made:'Made Oct 19'},
+  {id:'r3', type:'text', title:'Agents are eating SaaS', made:'Made Oct 19'},
+  {id:'r4', type:'car', title:'The 5 AI deals of the week', made:'Made Oct 20'},
+];
+const FAILS = [{id:'f1', day:1, type:'car', text:'Tue 2:30 PM Carousel didn’t post: Instagram rejected the caption.'}];
+let reopen = null;
+function renderBoard(){
+  document.getElementById('title').textContent = state.tab==='standard' ? 'Standard week' : 'Oct 19 – 25';
+  document.addEventListener('click', e => { if (!e.target.closest('.card')) document.querySelectorAll('.card.open').forEach(x=>x.classList.remove('open')); });
+document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.card.open').forEach(x=>x.classList.remove('open')); });
+document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===state.tab));
+  byTime();
+  const board = document.getElementById('board'); board.innerHTML='';
+  board.style.gridTemplateColumns = '40px ' + days().map((_,i)=> state.tab==='week'&&i<TODAY ? '78px' : 'minmax(0,1fr)').join(' ');
+  const gut = document.createElement('div'); gut.className='gutter'; gut.innerHTML='<div class="gh"></div><div class="gutter-box"></div>'; board.appendChild(gut);
+  days().forEach((day,i) => {
+    const col = document.createElement('section');
+    const isWeek = state.tab==='week';
+    col.className = 'day' + (isWeek && i<TODAY?' past':'') + (isWeek && i===TODAY?' today':'');
+    const ed = isWeek && edited(i);
+    const fold = isWeek && i<TODAY; if (fold) col.classList.add('fold');
+    if (i>=4) col.classList.add('flip');
+    col.innerHTML = `<div class="dhead"><div class="name">${isWeek?DAYS[i]:LONG[i]} ${isWeek?`<span class="date">${DATES[i]}</span>`:''}${fold?'':`<span class="count">${day.length}</span>`}</div>
+      <div class="badges">${isWeek&&i===TODAY?'<span class="badge todayb">Today</span>':''}${ed?'<span class="badge edited">Edited</span><button class="reset">Reset</button>':''}</div></div>`;
+    const stack = document.createElement('div'); stack.className='stack'; stack.dataset.day=i;
+    const times = timesFor(day);
+    if (!day.length) stack.innerHTML = '<div class="empty">Nothing posts. Drag a type here.</div>';
+    day.forEach((c,k) => {
+      const T = TYPES[c.type]; const locked = lockedCard(i,k,day);
+      const card = document.createElement('div');
+      card.className = 'card' + (c.mode==='trial'?' trial':'') + (locked?' locked':'');
+      card.style.setProperty('--c', T.c); card.draggable = !locked; card.dataset.k = k; card.dataset.t = times[k];
+      const title = c.series ? SERIES[c.series] : T.name;
+      if (c.posted) card.classList.add('posted');
+      const tag = T.reel ? `<span class="tag ${c.mode}" title="Click to switch Trial / Main">${c.mode==='trial'?'Trial':'Main'}</span>` : '';
+      const dname = isWeek ? `${DAYS[i]} Oct ${DATES[i]}` : LONG[i];
+      let status;
+      if (!isWeek) status = `<b>Every ${LONG[i]}</b>. Each week the ${RUN[c.type]} run makes this post on the day.`;
+      else if (c.posted) status = `<b>Posted</b> at ${fmt(times[k])}.`;
+      else if (c.booked && c.approved) status = `<b>Ready and approved.</b> Posts around ${fmt(times[k])}.`;
+      else if (c.booked) status = `<b>Made, waiting for your approval.</b> It won’t post until someone approves it.`;
+      else if (locked) status = `<b>Already started.</b> This window has begun, so it can’t change now.`;
+      else status = `<b>Empty for now.</b> The ${RUN[c.type]} run makes it on ${dname}.`;
+      const trialExplain = c.mode==='trial' ? 'Trial reel: shown to non-followers first; it reaches your followers only if it does well.' : 'Main feed: posted to your profile and your followers’ feed.';
+      const source = !isWeek ? '' : edited(i) ? `<div class="d-row">This day differs from the standard ${LONG[i]}. <button class="lnk" data-act="reset">Reset day</button> · <button class="lnk" data-act="every">Make this every ${LONG[i]}</button></div>` : `<div class="d-row muted">Comes from the standard week (every ${LONG[i]}).</div>`;
+      const moveOpts = DAYS.map((d,j)=> (isWeek && j<TODAY) || j===i ? '' : `<option value="${j}">${isWeek?`${d} Oct ${DATES[j]}`:LONG[j]}</option>`).join('');
+      card.innerHTML = `<span class="time">${fmt(times[k]).replace(' AM','').replace(' PM','p')}</span><span class="dot" style="background:${T.c}"></span><span class="title" title="${title}">${SHORT[c.series||c.type]}</span>${c.booked&&isWeek?'<span class="mark" title="A post is made for this slot"></span>':''}${T.reel?`<span class="tag ${c.mode}" title="Click to switch Trial / Main">${c.mode==='trial'?'Trial':'Main'}</span>`:''}
+        <div class="detail">
+          <div class="d-title">${c.series ? 'Story · '+title : title} <span class="muted">· ${dname} · around ${fmt(times[k])}</span></div>
+          <div class="d-row">${locked?'🔒 ':''}${status}</div>
+          ${isWeek && c.booked ? `<div class="d-post"><div class="thumb">${c.booked}</div><a class="lnk" href="#" onclick="return false">Open post →</a></div>` : ''}
+          ${T.reel ? `<div class="d-row"><span class="seg"><button data-m="trial" class="${c.mode==='trial'?'on':''}" ${locked?'disabled':''}>Trial</button><button data-m="main" class="${c.mode==='main'?'on':''}" ${locked?'disabled':''}>Main feed</button></span></div><div class="d-row muted">${trialExplain}</div>` : ''}
+          ${source}
+          ${locked ? '' : `<div class="d-actions"><label>Move to <select data-act="move"><option value="">pick a day</option>${moveOpts}</select></label><button class="rm">Remove</button></div>`}
+        </div>`;
+      card.querySelectorAll('.detail').forEach(d => d.addEventListener('click', ev => ev.stopPropagation()));
+      card.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', ev => { ev.stopPropagation(); if (locked || c.mode===b.dataset.m) return; const m=b.dataset.m; reopen = c.id; change(i, `${title} on ${dayLabel(i)} now posts as ${m==='trial'?'a Trial reel':'Main feed'}.`, d => { d[k].mode = m; }); }));
+      card.querySelector('[data-act="reset"]')?.addEventListener('click', () => { push(); state.week[i] = clone(state.standard[i]); render(); toast(`${dayLabel(i)} is back to the standard week.`, null, true); });
+      card.querySelector('[data-act="every"]')?.addEventListener('click', () => { state.standard[i] = state.week[i].map(x => ({type:x.type, mode:x.mode, series:x.series, t:x.t, id:uid++})); render(); toast(`Saved: every ${LONG[i]} now looks like this.`, null, true); });
+      card.querySelector('[data-act="move"]')?.addEventListener('change', ev => { const to = Number(ev.target.value); if (Number.isNaN(to) || ev.target.value==='') return; const w = [c.t]; if (c.type==='car' && days()[to].some(x=>x.type==='lfd')) { toast(`${dayLabel(to)} is a Last Few Days day, so Carousels are off.`, null, true, true); ev.target.value=''; return; } const go = () => { push(); const [cc] = days()[i].splice(k,1); if (cc.booked) { delete cc.booked; delete cc.approved; } cc.t = w[0]; days()[to].push(cc); render(); scopeToast(`${title} moved to ${dayLabel(to)}.`, [i,to]); }; if (c.booked && isWeek) bookedModal(title, go); else go(); });
+      if (reopen === c.id) card.classList.add('open');
+      card.addEventListener('click', () => { const was = card.classList.contains('open'); document.querySelectorAll('.card.open').forEach(x=>x.classList.remove('open')); if (!was) card.classList.add('open'); });
+      card.querySelector('.tag')?.addEventListener('click', ev => { ev.stopPropagation(); if (locked) return; const m = c.mode==='trial'?'main':'trial'; change(i, `${title} on ${dayLabel(i)} now posts as ${m==='trial'?'a Trial reel':'Main feed'}.`, d => { d[k].mode = m; }); });
+      card.querySelector('.rm')?.addEventListener('click', ev => { ev.stopPropagation(); removeCard(i,k); });
+      card.addEventListener('dragstart', e => { drag = {src:'card', day:i, k}; requestAnimationFrame(showBands); card.classList.add('dragging'); document.getElementById('tray').classList.add('drop-remove'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain','x'); });
+      card.addEventListener('dragend', clearDrag);
+      stack.appendChild(card);
+    });
+    stack.addEventListener('dragover', e => onOver(e, stack, i));
+    stack.addEventListener('dragleave', e => { if (!stack.contains(e.relatedTarget)) { stack.classList.remove('over'); stack.querySelector('.ins')?.remove(); } });
+    stack.addEventListener('drop', e => onDrop(e, stack, i));
+    col.appendChild(stack);
+    if (fold) { const f=document.createElement('div'); f.className='fold-sum'; f.textContent = `${day.length} posted`; col.appendChild(f); }
+    const counts = {}; day.forEach(c => { const n = c.series?'Story':TYPES[c.type].name; counts[n]=(counts[n]||0)+1; });
+    const foot = document.createElement('div'); foot.className='dfoot';
+    foot.textContent = Object.entries(counts).map(([n,v])=>`${v} ${n}`).join(' · ') || 'Empty';
+    col.appendChild(foot);
+    col.querySelector('.reset')?.addEventListener('click', () => { push(); state.week[i] = clone(state.standard[i]); render(); toast(`${dayLabel(i)} is back to the standard week.`, null, true); });
+    board.appendChild(col);
+  });
+  requestAnimationFrame(layoutStacks);
+}
+const START = 8*60, END = 21*60;
+const yOf = (t, H) => 4 + (t-START)/(END-START)*(H-40);
+function minAt(stack, clientY, i){ const H = stack.clientHeight; const y = clientY - stack.getBoundingClientRect().top; let t = START + (y-4-15)/(H-40)*(END-START); t = Math.round(t/15)*15; t = Math.max(START, Math.min(END-15, t)); if (state.tab==='week' && i===TODAY) t = Math.max(t, Math.ceil((NOW_MIN+1)/15)*15); return t; }
+function layoutStacks(){
+  let H = 0;
+  document.querySelectorAll('.stack').forEach(stack => {
+    if (stack.closest('.fold')) return;
+    H = stack.clientHeight;
+    stack.querySelectorAll('.hl').forEach(x=>x.remove());
+    for (let h=9; h<=20; h++){ const l=document.createElement('div'); l.className='hl'+(h===12?' noon':''); l.style.top = yOf(h*60,H)+15+'px'; stack.prepend(l); }
+    let bottom = -Infinity;
+    stack.querySelectorAll('.card').forEach(card => { const y = Math.max(yOf(Number(card.dataset.t),H), bottom+3); card.style.top = y+'px'; bottom = y + card.offsetHeight; });
+  });
+  const g = document.querySelector('.gutter-box'); if (!g || !H) return; g.innerHTML='';
+  for (let h=9; h<=20; h+=1){ if (h%2===1 && h!==9) continue; const lab=document.createElement('div'); lab.className='gl'; lab.style.top = yOf(h*60,H)+15+'px'; lab.textContent = (h%12||12)+(h<12?' AM':' PM'); g.appendChild(lab); }
+}
+window.addEventListener('resize', () => requestAnimationFrame(layoutStacks));
+const dayLabel = (i) => state.tab==='standard' ? `every ${LONG[i]}` : `${DAYS[i]} Oct ${DATES[i]}`;
+
+function insertIndex(e, stack){
+  const cards = [...stack.querySelectorAll('.card')];
+  for (let k=0;k<cards.length;k++){ const r = cards[k].getBoundingClientRect(); if (e.clientY < r.top + r.height/2) return k; }
+  return cards.length;
+}
+function firstEditable(i){ const day = days()[i]; let k=0; while (k<day.length && lockedCard(i,k,day)) k++; return k; }
+let lastOver = '';
+function onOver(e, stack, i){
+  if (!drag) return; e.preventDefault();
+  const sig2 = i+':'+Math.round(e.clientY/4); if (sig2===lastOver && stack.querySelector('.ins')) return; lastOver = sig2;
+  if (state.tab==='week' && i<TODAY){ stack.classList.remove('over'); return; }
+  stack.classList.add('over');
+  let idx = Math.max(insertIndex(e, stack), firstEditable(i));
+  document.querySelectorAll('.stack .ins').forEach(x => { if (x.parentElement !== stack) x.remove(); });
+  let ins = stack.querySelector('.ins');
+  if (!ins) { ins = document.createElement('div'); ins.className='ins'; stack.appendChild(ins); }
+  stack.querySelector('.empty')?.remove();
+  const dt = dragType();
+  const lfdBlock = dt?.type==='car' && days()[i].some(c=>c.type==='lfd');
+  let t = minAt(stack, e.clientY, i);
+  const near = WIN[dt.type].find(([s0]) => Math.abs(t - s0) <= 20 && !(state.tab==='week' && i===TODAY && s0 <= NOW_MIN));
+  if (near) t = near[0];
+  const usual = WIN[dt.type].some(([s0,e0]) => t>=s0 && t<=e0);
+  const key = lfdBlock ? 'lfd' : String(t);
+  if (ins.dataset.key !== key) {
+    ins.dataset.key = key;
+    ins.classList.toggle('full', lfdBlock);
+    ins.classList.toggle('outside', !lfdBlock && !usual);
+    ins.classList.toggle('snapped', !!near && !lfdBlock);
+    if (lfdBlock) { ins.style.top = (stack.clientHeight*0.4)+'px'; ins.dataset.time = 'Last Few Days day: no Carousels'; stack.dataset.t = ''; }
+    else { ins.style.top = yOf(t, stack.clientHeight)+'px'; ins.dataset.time = fmt(t) + (near ? ` · usual ${near[2].toLowerCase()}` : usual ? '' : ' · outside usual window'); stack.dataset.t = t; }
+    ins.textContent = (dt.series ? SERIES[dt.series] : TYPES[dt.type].name);
+  }
+  stack.dataset.idx = idx;
+}
+function onDrop(e, stack, i){
+  e.preventDefault(); stack.classList.remove('over'); stack.querySelector('.ins')?.remove();
+  if (!drag) return;
+  if (state.tab==='week' && i<TODAY){ toast('That day has passed.', null, true, true); clearDrag(); return; }
+  const idx = Number(stack.dataset.idx ?? days()[i].length);
+  if (stack.dataset.t === '' ) { const dt0 = dragType(); clearDrag(); if (dt0?.type==='car' && days()[i].some(c=>c.type==='lfd')) { toast(`${dayLabel(i)} is a Last Few Days day, so Carousels are off.`, null, true, true); } else { toast(`That time can’t take this post.`, null, true, true); } shake(stack); return; }
+  const T = Number(stack.dataset.t ?? 720);
+  const d = drag; clearDrag();
+  const day = days()[i];
+  if (d.src==='ready'){ const r = READY.find(x=>x.id===d.id); if (!r) return; if (r.type==='car' && day.some(c=>c.type==='lfd')){ shake(stack); toast(`${dayLabel(i)} is a Last Few Days day, so Carousels are off.`, null, true, true); return; } const slot = mk(r.type,{t:T}); slot.booked = r.title; slot.approved = false; return change(i, `“${r.title}” placed on ${dayLabel(i)} at ${fmt(T)}. It still needs approval.`, dd => { dd.splice(idx,0,slot); READY.splice(READY.indexOf(r),1); }); }
+  const incomingType = d.src==='tray' ? d.type : days()[d.day][d.k].type;
+  if (incomingType==='car' && day.some((c,j)=>c.type==='lfd' && !(d.src==='card'&&d.day===i&&d.k===j))){ shake(stack); toast(`${dayLabel(i)} is a Last Few Days day, so Carousels are off.`, null, true, true); return; }
+  if (d.src==='tray'){
+    const card = mk(d.type,{series:d.series, t:T});
+    const label = card.series ? SERIES[card.series] : TYPES[d.type].name;
+    if (d.type==='lfd' && day.some(c=>c.type==='car')){
+      const n = day.filter(c=>c.type==='car').length;
+      return confirmModal('Make this a Last Few Days day?', `Last Few Days takes over the 3 AM run, so ${dayLabel(i)}’s ${n} Carousel slot${n>1?'s':''} will be removed.`, 'Make it Last Few Days', () =>
+        change(i, `Last Few Days added to ${dayLabel(i)}. Carousels are off that day.`, dd => { const keep = dd.filter(c=>c.type!=='car'); dd.length=0; dd.push(...keep); dd.splice(Math.min(idx, dd.length),0,card); }));
+    }
+    return change(i, `${label} added to ${dayLabel(i)} at ${fmt(T)}.`, dd => { dd.push(card); });
+  }
+  // moving a card
+  const from = d.day, k = d.k; const moving = days()[from][k];
+  const label = moving.series ? SERIES[moving.series] : TYPES[moving.type].name;
+  if (from===i && moving.t===T) return;
+  const doMove = () => {
+    push();
+    const [c] = days()[from].splice(k,1);
+    let to = idx; if (from===i && k<idx) to--;
+    if (from!==i && moving.booked) delete c.booked;
+    c.t = T;
+    days()[i].push(c);
+    render();
+    const msg = from===i ? `${label} moved to ${fmt(T)} on ${dayLabel(i)}.` : `${label} moved to ${dayLabel(i)} at ${fmt(T)}.`;
+    scopeToast(msg, [from,i]);
+  };
+  if (from!==i && moving.booked && state.tab==='week') return bookedModal(label, doMove);
+  doMove();
+}
+function removeCard(i,k){
+  const c = days()[i][k]; const label = c.series ? SERIES[c.series] : TYPES[c.type].name;
+  const go = () => { push(); days()[i].splice(k,1); render(); scopeToast(`${label} removed from ${dayLabel(i)}.`, [i]); };
+  if (c.booked && state.tab==='week') return bookedModal(label, go);
+  go();
+}
+document.getElementById('tray').addEventListener('dragover', e => { if (drag?.src==='card') e.preventDefault(); });
+document.getElementById('tray').addEventListener('drop', e => { e.preventDefault(); if (drag?.src!=='card') return; const d=drag; clearDrag(); removeCard(d.day, d.k); });
+
+function change(i, msg, fn){ push(); fn(days()[i]); render(); scopeToast(msg, [i]); }
+function push(){ history.push(snap()); if (history.length>50) history.shift(); }
+function undo(){ const s = history.pop(); if (s){ restore(s); render(); toast('Undone.', null, true); } }
+
+function scopeToast(msg, dayIdxs){
+  if (state.tab==='standard'){ toast(msg + ' Every week from now on.', null); return; }
+  const futureDays = dayIdxs.filter(i => i>=TODAY);
+  const weekday = LONG[dayIdxs[dayIdxs.length-1]];
+  toast(msg + ' Just this date.', {label:`Make it every ${weekday}`, fn: () => {
+    futureDays.forEach(i => { state.standard[i] = state.week[i].map(c => ({type:c.type, mode:c.mode, series:c.series, t:c.t, id:uid++})); });
+    render(); toast(`Saved to the standard week. Today’s started slots stay as they are.`, null, true);
+  }});
+}
+let tTimer;
+function toast(msg, action, noUndo, warn){
+  const el = document.getElementById('toast');
+  el.innerHTML = `<div class="toast${warn?' warn':''}"><span>${msg}</span>${action?`<button class="primary" id="tAct">${action.label}</button>`:''}${noUndo||warn?'':'<button id="tUndo">Undo</button>'}</div>`;
+  el.querySelector('#tAct')?.addEventListener('click', () => { action.fn(); });
+  el.querySelector('#tUndo')?.addEventListener('click', undo);
+  clearTimeout(tTimer); tTimer = setTimeout(() => el.innerHTML='', 7000);
+}
+function bookedModal(label, go){
+  confirmModal('A post is booked here', `${label} already has a post waiting for this slot. Move it back to ready so tonight’s run can place it again, or keep it posting as booked.`, 'Move it back to ready', go, 'Keep it', () => toast('Kept as booked. Nothing changed.', null, true));
+}
+function confirmModal(title, body, ok, onOk, alt, onAlt){
+  const m = document.getElementById('modal');
+  m.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog" aria-modal="true"><h4>${title}</h4><p>${body}</p><div class="row"><button id="mAlt">${alt||'Cancel'}</button><button class="primary" id="mOk">${ok}</button></div></div></div>`;
+  const close = () => m.innerHTML='';
+  m.querySelector('#mOk').onclick = () => { close(); onOk(); };
+  m.querySelector('#mAlt').onclick = () => { close(); onAlt?.(); };
+  m.querySelector('#mOk').focus();
+}
+function shake(el){ el.parentElement.classList.remove('shake'); void el.offsetWidth; el.parentElement.classList.add('shake'); }
+function clearDrag(){ drag=null; lastOver=''; document.querySelectorAll('.band').forEach(x=>x.remove()); document.querySelectorAll('.dragging').forEach(x=>x.classList.remove('dragging')); document.getElementById('tray').classList.remove('drop-remove'); document.querySelectorAll('.ins').forEach(x=>x.remove()); document.querySelectorAll('.stack.over').forEach(x=>x.classList.remove('over')); }
+document.addEventListener('click', e => { if (!e.target.closest('.card')) document.querySelectorAll('.card.open').forEach(x=>x.classList.remove('open')); });
+document.addEventListener('keydown', e => { if (e.key==='Escape') document.querySelectorAll('.card.open').forEach(x=>x.classList.remove('open')); });
+document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => { state.tab=b.dataset.tab; render(); }));
+document.addEventListener('keydown', e => { if ((e.metaKey||e.ctrlKey) && e.key==='z'){ e.preventDefault(); undo(); } });
+function render(){ renderBoard(); renderBelow(); reopen = null; }
+const NEXT = [26,27,28,29,30,31,1];
+function gaps(){
+  if (state.tab!=='week') return [];
+  const out = [];
+  state.week.forEach((day,i) => {
+    if (i < TODAY) return;
+    const has = t => day.some(c=>c.type===t);
+    if (!has('expl')) out.push({text:`${DAYS[i]} Oct ${DATES[i]} has no Explainer.`, fix:'Add one', fn:()=>change(i, `Explainer added to ${dayLabel(i)}.`, d=>d.push(mk('expl')))});
+    if (!day.some(c=>c.type==='sto')) out.push({text:`${DAYS[i]} Oct ${DATES[i]} has no Stories.`, fix:'Add Morning Download', fn:()=>change(i, `Morning Download added to ${dayLabel(i)}.`, d=>d.unshift(mk('sto',{series:'md'})))});
+    const t = timesFor(day);
+    for (let a=0;a<day.length;a++) for (let b=a+1;b<day.length;b++) {
+      const feed = c => (TYPES[c.type].reel ? c.mode==='main' : c.type!=='sto');
+      if (feed(day[a]) && feed(day[b]) && Math.abs(t[a]-t[b]) < 30) { out.push({text:`${DAYS[i]}: two feed posts within 30 minutes (${fmt(t[a])} and ${fmt(t[b])}). One will be pushed later.`, fix:null}); a=day.length; break; }
+    }
+    day.forEach(c => { if (c.posted || !WIN[c.type].some(([s0,e0]) => c.t>=s0 && c.t<=e0)) { if (!c.posted) out.push({text:`${DAYS[i]}: ${c.series?SERIES[c.series]:TYPES[c.type].name} at ${fmt(c.t)} is outside its usual window.`, fix:null}); } });
+    if (day.length < state.standard[i].length) out.push({text:`${DAYS[i]} Oct ${DATES[i]} has ${state.standard[i].length - day.length} fewer slot${state.standard[i].length-day.length>1?'s':''} than a normal ${LONG[i]}.`, fix:'Reset day', fn:()=>{ push(); state.week[i]=clone(state.standard[i]); render(); toast(`${dayLabel(i)} is back to the standard week.`, null, true); }});
+  });
+  return out;
+}
+function renderBelow(){
+  const el = document.getElementById('below');
+  if (state.tab!=='week'){ el.innerHTML=''; return; }
+  const needs = [];
+  state.week.forEach((day,i)=> day.forEach((c,k)=>{ if (i>=TODAY && c.booked && !c.approved) needs.push({i,k,c}); }));
+  const g = gaps();
+  const dotOf = t => `<span class="dot" style="background:${TYPES[t].c}"></span>`;
+  el.innerHTML = `
+    <section class="panel">
+      <h3>Ready to place <span class="count">${READY.length}</span></h3>
+      <p class="hint">Made, with no slot yet. Drag one onto a day.</p>
+      <div class="ready">${READY.map(r=>`<div class="rcard" draggable="true" data-id="${r.id}">${dotOf(r.type)}<div><div class="rt">${r.title}</div><div class="muted">${TYPES[r.type].name} · ${r.made}</div></div></div>`).join('') || '<div class="none">Nothing waiting. Everything made has a slot.</div>'}</div>
+    </section>
+    <section class="panel">
+      <h3>Gaps and warnings <span class="count">${g.length}</span></h3>
+      <p class="hint">Things worth a look before the week runs.</p>
+      <div class="list">${g.map((x,j)=>`<div class="item warn"><span class="wi">!</span><span class="it">${x.text}</span>${x.fix?`<button class="btn" data-gap="${j}">${x.fix}</button>`:''}</div>`).join('') || '<div class="none">No gaps. The week looks complete.</div>'}</div>
+    </section>`;
+  el.querySelectorAll('.rcard').forEach(rc => { rc.addEventListener('dragstart', e => { drag = {src:'ready', id: rc.dataset.id}; requestAnimationFrame(showBands); rc.classList.add('dragging'); e.dataTransfer.effectAllowed='copy'; e.dataTransfer.setData('text/plain','x'); }); rc.addEventListener('dragend', clearDrag); });
+  el.querySelectorAll('[data-approve]').forEach(b => b.addEventListener('click', () => { const [i,k] = b.dataset.approve.split(':').map(Number); push(); state.week[i][k].approved = true; render(); toast(`Approved “${state.week[i][k].booked}”. It posts at its slot.`); }));
+  el.querySelectorAll('[data-retry]').forEach(b => b.addEventListener('click', () => { push(); FAILS.splice(FAILS.findIndex(f=>f.id===b.dataset.retry),1); render(); toast('Sent to post again. It goes out within the next few minutes.'); }));
+  el.querySelectorAll('[data-gap]').forEach(b => b.addEventListener('click', () => g[Number(b.dataset.gap)].fn()));
+  el.querySelectorAll('[data-next]').forEach(b => b.addEventListener('click', () => toast(`This would open the week of Oct 26 on ${LONG[Number(b.dataset.next)]}.`, null, true)));
+}
+renderTray(); render();
+</script>
+</body>
+</html>

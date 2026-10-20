@@ -2,6 +2,7 @@
 import type { Post as RenderPost, SlideCopy } from '@/lib/social/render/types';
 import { FOLLOW_LINE } from '@/lib/social/writer/draft';
 
+import type { LfdCaptionLines } from './caption-lines';
 import type { Ready } from './types';
 
 export const LFD_HOOK_LINES = ['Do you realize what', 'just happened in AI', 'in the last few days?'] as const;
@@ -14,7 +15,8 @@ export function creditsFor(ready: Ready[]): string {
   return [sources.length ? `Sources: ${sources.join(', ')}` : '', photos.length ? `Photos: ${photos.join('; ')}` : ''].filter(Boolean).join('\n');
 }
 
-export function captionFor(ready: Ready[]): string {
+/** Today's code-built caption: the fixed hook, the headlines, the Follow line and credits. */
+function templateCaption(ready: Ready[]): string {
   const hook = 'Do you realize what just happened in AI in the last few days? Swipe ⬅️ to catch up.';
   const headlines = ready.map((r) => `– ${r.copy.headline}`);
   const build = (n: number) => [hook, headlines.slice(0, n).join('\n'), FOLLOW_LINE, creditsFor(ready)].filter(Boolean).join('\n\n');
@@ -25,7 +27,28 @@ export function captionFor(ready: Ready[]): string {
   return caption;
 }
 
-export function buildPost(ready: Ready[], now: Date): RenderPost {
+/**
+ * The caption and the path that produced it: the model-written lines (caption-lines.ts) then
+ * credits, or the template when `lines` is null. Over the limit, body paragraphs go from the end
+ * first; the opener, question and Helios line stay whole. If even one body paragraph will not
+ * fit, the template ships and `by` says so (the run records the closing only for 'model').
+ */
+export function composeCaption(ready: Ready[], lines?: LfdCaptionLines | null): { caption: string; by: 'model' | 'template' } {
+  if (!lines) return { caption: templateCaption(ready), by: 'template' };
+  const paragraphs = lines.body.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const build = (n: number) => [lines.opener, paragraphs.slice(0, n).join('\n\n'), lines.question, lines.heliosLine, creditsFor(ready)].filter(Boolean).join('\n\n');
+  for (let n = paragraphs.length; n >= 1; n--) {
+    const caption = build(n);
+    if (caption.length <= CAPTION_MAX_CHARS) return { caption, by: 'model' };
+  }
+  return { caption: templateCaption(ready), by: 'template' };
+}
+
+export function captionFor(ready: Ready[], lines?: LfdCaptionLines | null): string {
+  return composeCaption(ready, lines).caption;
+}
+
+export function buildPost(ready: Ready[], now: Date, lines?: LfdCaptionLines | null): RenderPost {
   const cover: SlideCopy = {
     position: 0,
     layoutVariant: 'lfd_cover',
@@ -52,7 +75,7 @@ export function buildPost(ready: Ready[], now: Date): RenderPost {
     publishedAt: now.toISOString(),
     issueNumber: 0,
     slides: [cover, ...stories, follow],
-    caption: captionFor(ready),
+    caption: captionFor(ready, lines),
     attributionBlock: undefined,
   };
 }

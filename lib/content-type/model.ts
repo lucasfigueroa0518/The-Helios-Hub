@@ -115,7 +115,7 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
   byDay.set(today, todays.filter((c) => todayIds.has(c.post.id)));
   for (const [date, cards] of byDay) {
     if (date === today) continue;
-    const slots = capacityWindows(vertical, date, dataset.dayQuotas?.lfdDays ?? [], cards.length, today).length;
+    const slots = capacityWindows(vertical, date, dataset.dayQuotas?.lfdDays ?? [], cards.length, today, dataset.dayQuotas?.slots ?? null).length;
     const ranked = [...cards].sort((a, b) => at(a.post).localeCompare(at(b.post)) || a.post.id.localeCompare(b.post.id));
     waiting.push(...ranked.slice(slots));
     byDay.set(date, ranked.slice(0, slots));

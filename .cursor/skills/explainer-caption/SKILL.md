@@ -9,23 +9,35 @@ description: >-
 
 # Explainer caption
 
-The caption is the Instagram text under a 45-second Explainer Reel. Write a real
-social caption: a hook that stops the scroll, a body that makes the idea stick,
-and one clear ask. The video taught the concept. The caption does not walk the
-eight beats (Explainers 3.0), and it does not stop after one sentence.
+The caption is the Instagram text under a 45-second Explainer Reel (AI Brain
+Break). Write it the way the best AI tips pages do: a hook that names a problem
+the viewer already has, a short why in the viewer's world, one clear ask (save
+it, or say which option they would use first), and then the Helios line, which
+shows where the concept turns up in a real business. The Helios line is always
+the last paragraph before the hashtags. The video taught the concept. The
+caption does not walk the eight beats (Explainers 3.0), and it does not pad.
+
+Code version: `explainer-caption-v5` in `lib/explainers/caption.ts`
+(amended before it shipped, 2026-10-20: the Helios line is one concrete point,
+and a follow clause is rare). The live
+prompt also carries the shared Helios context and caption rules
+(`lib/social/captions/helios-context.ts`), the same block every Helios caption
+type uses.
 
 Code adds the opening line when the reel publishes. Do not write an episode
 number. `lib/explainers/publish/publish.ts` counts how many explainers have
 `published` and stamps `AI Brain Break Episode N:` on the way to Instagram.
 
 This follows the Trial Reels caption skill (`lib/reels/copy/skill.ts`,
-copy-caption-v27) where the two products share a rule, and changes the job of
+copy-caption-v29) where the two products share a rule, and changes the job of
 the caption because the lesson is already in the video.
 
 ## Read first
 
 The reel's title, one-sentence scope, `STORYBOARD.md`, and `SCRIPT.md`. If a
-source was attached, read that too. Those are the only facts you may use.
+source was attached, read that too. Those are the only facts you may use about
+the concept. Facts about Helios come only from the Helios context in
+`lib/social/captions/helios-context.ts`.
 
 Then read `.cursor/skills/humanizer/SKILL.md` and apply it to the draft before
 you show it.
@@ -38,22 +50,27 @@ you show it.
   still fit in that count (keep the hook under 96 characters). The hook has to
   make sense if someone never taps "more". Do not spend it on a greeting, a
   hashtag, or "In this video".
-- Short paragraphs with a blank line between them. One block is a failed caption.
-- No emoji. No URLs. Instagram does not make them clickable.
-- Helios never speaks as "we", "our", "us", or "I". Address the viewer as "you",
-  or write in the third person.
+- Short paragraphs of one or two sentences with a blank line between them. One
+  block is a failed caption. Cut a secondary detail the idea does not need.
+- At most two emoji, and none is required: usually one leads the hook (code puts
+  the episode line above it, so the emoji follows the stamp), and one follows
+  the save prompt or question. None in the Helios line or the hashtags. Code
+  rejects a third, or one in either place. No URLs; Instagram does not make
+  them clickable.
+- "We" and opinion belong only in the Helios line. Everywhere else, address
+  the viewer as "you" or write in the third person. Never "I".
 - Plain words. A reader at about a sixth-grade level gets every line on one
   read. Never talk down.
 - Every number, name, and claim comes from the reel's script, storyboard, or
   attached source. Do not add one from memory. "About 1,000" stays "about 1,000".
-- One call to action, specific to this concept. No "what do you think?", no
-  "double tap", no "comment YES", no offer of Helios services.
+- One ask, specific to this concept, right before the Helios line. No "what do
+  you think?", no "double tap", no "comment YES", no "DM us", no list of services.
 - 3 to 5 hashtags. One or two broad, the rest specific to this concept. Each
   tag needs a reason in the post.
-- The caption, the call to action, and the hashtags together stay within 2,200
+- The whole caption, the Helios line and the hashtags included, stays within 2,200
   characters.
-- The video already ends on the Helios logo. The caption does not sign off by
-  saying Helios.
+- Helios is named once, in the Helios line, in words that differ from the
+  recent closings. No client results, no invented Helios anecdotes.
 
 ## What is different
 
@@ -64,42 +81,69 @@ or send it.
 
 - Do not write the episode line. Code fills `AI Brain Break Episode N:` at
   publish time from the number of explainers already published.
-- The hook, your first paragraph, is a second way into the same idea. It is not
-  the spoken thesis copied out, and it is not a description of the frames.
-- Then write at least two body paragraphs. Use the reel's curiosity gap, its
-  analogy, its concrete example, and the place the viewer will meet this. The body before
-  hashtags must be at least 400 characters. A one-sentence caption is a failed
-  caption.
-- The call to action asks them to save it for the next time they hit this exact
-  situation, or to send it to the person who does. Name that situation from the
-  reel.
+- The hook, your first paragraph, names a problem or situation the viewer has
+  that this concept explains: a chat that forgets how it started, an answer
+  that sounds sure and is wrong. It is a second way into the same idea, not the
+  spoken thesis copied out, and not a description of the frames.
+- Then two or three short paragraphs on why. Use the reel's curiosity gap, its
+  analogy, its concrete example, and the place the viewer will meet this. The
+  body before the hashtags, the Helios line included, must be at least 200
+  characters, and three paragraphs (hook, ask, Helios line) is enough. Say the
+  idea once and well; do not pad to reach a length.
+- The ask asks them to save it for the next time they hit this exact situation,
+  or asks which of the reel's options they would use first, or both in two
+  short sentences. Name that situation from the reel.
+- The Helios line is the last paragraph before the hashtags, one or two plain
+  sentences that make one concrete point about this episode's concept for the
+  industry it names. Name the industry from the Helios context that best
+  matches this story, any of them, and not one the recent closings used, and
+  show where this episode's concept turns up in its marketing, sales or
+  operations: the moment it helps, or the moment it gets in the way. Fall back
+  to marketing or sales work in general only when none fits. Do not cycle
+  through a short list of favourite industries. It gives Helios's view: a
+  concrete call or piece of advice for that industry about this concept.
+  `include_build_line` says whether it may also say what Helios builds (code
+  sets it from a Jev fit score and a ceiling of about 1 in 3 recent explainer
+  captions); never add that on your own.
+  Do not start it the way any recent closing starts, and vary where "Helios"
+  sits in the sentence. No stock tags: "the kind of thing we think about",
+  "how we think about it", "we post more takes like this", "that's where
+  Helios comes in". Name Helios once. It ends on the point; a short
+  clause inviting the viewer to follow for the next episode is rare, never the
+  default. It adds no new fact about the concept. Code rejects a caption whose
+  paragraph before the hashtags does not name Helios.
 
 ## How to write it
 
 1. Name the one idea in a sentence, from the scope. If the script and the scope
    disagree, the script is what the video said.
-2. Draft the hook. It has to make sense with no video playing, and stay under
-   96 characters.
-3. Draft two or three short body paragraphs. Blank line between them. Pay out
-   the idea in the viewer's world.
-4. Add one save or send line, then the hashtags on their own lines after a
-   blank line.
-5. Run the humanizer pass. Cut anything that restates the video beat by beat,
+2. Draft the hook: the viewer's problem, in their words. It has to make sense
+   with no video playing, and stay under 96 characters.
+3. Draft two or three short paragraphs on why. Blank line between them. Pay
+   out the idea in the viewer's world.
+4. Add the ask: a save line, a "which would you use first" question, or both.
+5. Draft the Helios line: one business type from the Helios context, one
+   concrete point about where the concept shows up there, in Helios's view,
+   Helios named once and not where a recent closing put it. Then the hashtags after a blank
+   line.
+6. Run the humanizer pass. Cut anything that restates the video beat by beat,
    and cut a caption that is only a restatement of the thesis.
-6. Show one caption. Above it, note the character count of
+7. Show one caption. Above it, note the character count of
    `AI Brain Break Episode 1:`, the blank line, and the hook together. Do not
    put that episode line in the caption itself.
 
 ## Shape
 
 ```
-Hook. After the episode line is added, this opening stays under 125 characters.
+Hook that names the viewer's problem. After the episode line is added, this opening stays under 125 characters.
 
-What this is, in the viewer's world, with the reel's concrete example.
+Why it happens, in the viewer's world, with the reel's concrete example.
 
-The place they will meet it, or what the example shows. Enough that the idea sticks.
+One more short paragraph on why, when the idea needs it.
 
-Save this for the next time <the situation this reel is about>.
+Save this for the next time <the situation this reel is about>. Or ask which of the reel's options they would try first.
+
+The Helios line: one concrete point about where this concept shows up in one kind of business, in Helios's view, with Helios named once.
 
 #specific #specific #broad
 ```
@@ -111,19 +155,21 @@ text a model can see at once." The example in the reel is a 1,000-token window
 and a 1,200-token chat, so the oldest 200 drop.
 
 ```
-Your AI didn't forget the start of the chat. It fell off the desk.
+Your long chat with AI forgot how it started. It fell off the desk.
 
-A context window is the text a language model can see at once, measured in tokens. Think of a desk that only holds so much paper. Once the pile is taller than the desk, the oldest pages slide off the edge. Those pages are gone from what the model can use.
+A context window is the text a language model can see at once, measured in tokens. Think of a desk that only holds so much paper. Once the pile is taller than the desk, the oldest pages slide off the edge.
 
 The reel's example is a 1,000-token window and a 1,200-token chat. The first 200 tokens of that chat are no longer in view. That is why a long thread starts answering as if the opening never happened.
 
-This shows up any time a chat runs long, a PDF gets pasted in, or a project file is too big to fit. The model is not being careless. The window filled up.
-
 Save this for the next time a long chat loses the beginning.
+
+A law firm pasting a long contract into a chat feels this first. At Helios we'd split the file and hand the model one section at a time.
 
 #contextwindow #tokens #ai
 ```
 
 When this posts, code puts `AI Brain Break Episode 1:` above the hook. That
-line, the blank line, and the hook are 95 characters. The hook does not repeat
-the thesis, and it does not say Helios.
+line, the blank line, and the hook are 94 characters. The hook names the
+viewer's problem and does not repeat the thesis. Helios appears once, in the
+Helios line just before the hashtags, which picks a business type from the
+context and adds no new fact about context windows.

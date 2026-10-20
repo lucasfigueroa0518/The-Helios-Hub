@@ -12,6 +12,8 @@ import { CAPTION_MAX_CHARS, fullCaption, shortenAssembledCaption } from '@/lib/r
 import { setPublished } from '@/lib/reels/repository';
 import { createLiveMetaClient, metaConfigured, type MetaClient } from '@/lib/reels/music/meta';
 import { getSetting, publishMix, type MixSetting } from '@/lib/reels/music/store';
+import { bookingFeedMode } from '@/lib/social-hub/slots';
+import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { reelItemId } from '@/lib/reels/publish/items';
 import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { signFrameObject } from '@/lib/reels/visual/storage';
@@ -19,8 +21,9 @@ import { signFrameObject } from '@/lib/reels/visual/storage';
 /**
  * Stage 5 (D-153, D-155 to D-159, D-162, D-167). Approve (or auto-publish)
  * queues an attempt; the worker creates the Reels container with the song
- * attached by audio_id, waits for FINISHED, and publishes it as a trial reel.
- * Success also marks the post idea published (D-005, D-061).
+ * attached by audio_id, waits for FINISHED, and publishes it as a trial reel
+ * (unless its slot is Main feed). Success also marks the post idea published
+ * (D-005, D-061).
  *
  * Attempts live on the lifecycle spine (social_hub.publish_attempts, vertical
  * 'reels', D39), with the song, mix and trial settings in `payload`. One
@@ -44,6 +47,19 @@ async function shareToFeed(): Promise<boolean | null> {
   return typeof value === 'boolean' ? value : null;
 }
 
+/**
+ * The booking's Trial / Main (weekly slot calendar): trial keeps today's
+ * trial params and the OPEN-3 share_to_feed setting; main posts as a normal
+ * reel, shared to the feed, with no trial params.
+ */
+export function reelPayloadFlags(mode: FeedMode, trialShareToFeed: boolean | null): { graduation_strategy: string | null; share_to_feed: boolean | null } {
+  return mode === 'main'
+    ? { graduation_strategy: null, share_to_feed: true }
+    : { graduation_strategy: TRIAL_GRADUATION_STRATEGY, share_to_feed: trialShareToFeed };
+}
+
+const dbQueryHandle = (text: string, params?: unknown[]) => dbQuery(text, params) as Promise<{ rows: any[] }>;
+
 type PublishReel = {
   postIdeaId: string;
   pickId: string;
@@ -65,6 +81,8 @@ export async function publishReadiness(
     video_storage_path: string | null;
     caption: string | null;
     call_to_action: string | null;
+    /** v28+. The Helios line, kept in the copy row's working JSON. */
+    builder_read: string | null;
     hashtags: string[] | null;
     pick_id: string | null;
     picked_audio_id: string | null;
@@ -72,7 +90,8 @@ export async function publishReadiness(
     picked_artist: string | null;
     published: boolean;
   }>(
-    `SELECT v.post_idea_id, v.status, v.video_storage_path, c.caption, c.call_to_action, c.hashtags,
+    `SELECT v.post_idea_id, v.status, v.video_storage_path, c.caption, c.call_to_action,
+            c.working->>'builderRead' AS builder_read, c.hashtags,
             p.id AS pick_id, p.picked_audio_id, p.picked_title, p.picked_artist,
             EXISTS (SELECT 1 FROM social_hub.publish_attempts a
                       JOIN social_hub.content_items ci ON ci.id = a.content_item_id
@@ -108,6 +127,7 @@ export async function publishReadiness(
     fullCaption({
       caption: reel.caption,
       callToAction: reel.call_to_action ?? '',
+      builderRead: reel.builder_read,
       hashtags: reel.hashtags ?? [],
     }),
   );
@@ -151,8 +171,7 @@ export async function queuePublish(
     song_artist: reel.artist,
     audio_volume: mix.audioVolume,
     video_volume: mix.videoVolume,
-    graduation_strategy: TRIAL_GRADUATION_STRATEGY,
-    share_to_feed: await shareToFeed(),
+    ...reelPayloadFlags(await bookingFeedMode(dbQueryHandle, itemId, 'reels', reel.postIdeaId), await shareToFeed()),
     song_pick_id: reel.pickId,
     post_idea_id: reel.postIdeaId,
   };
@@ -241,7 +260,7 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
       audio_volume: number;
       video_volume: number;
       caption: string;
-      graduation_strategy: string;
+      graduation_strategy: string | null;
       share_to_feed: boolean | null;
     }>(
       `SELECT a.post_idea_id, v.video_storage_path, a.audio_id, a.audio_volume, a.video_volume, a.caption,

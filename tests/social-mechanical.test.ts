@@ -8,8 +8,8 @@ import test from 'node:test';
 import { briefSuperIntelligenceForce } from '@/fixtures/social/briefs';
 import { sifDraft, sifDraftHandoff } from '@/fixtures/social/drafts';
 import {
-  applySilentFixes, buildSourceLine, checkBackground, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
-  expectedSlideText, fixDashes, fixQuoteMarks, fixTrailingComma, fixWhitespace, LIMITS, quotedSpans,
+  applySilentFixes, buildSourceLine, checkBackground, citedIds, checkCaption, checkDroppedText, checkLimits, checkPhotoCredit, checkQuoteMarks, checkVoice,
+  expectedSlideText, fixDashes, fixQuoteMarks, fixTrailingComma, fixWhitespace, LIMITS, quotedSpans, stripCaptionStrays,
 } from '@/lib/social/mechanical/checks';
 import { voiceHits } from '@/lib/social/mechanical/voice-lists';
 import type { Photo } from '@/lib/social/photos/find';
@@ -217,6 +217,29 @@ test('mechanical stage: fixes applied and logged, Source line built, style failu
   assert.ok(r.value.mechanical!.fixes.some((f) => f.id === 'F1') && r.value.mechanical!.fixes.some((f) => f.id === 'F5'));
 });
 
+test('mechanical joins read before Source: news, a blank line, the read, then the code-built Source line', async () => {
+  const N = 'Trump announced a Super Intelligence Force on Sunday.';
+  const R = 'For a law firm, the rules may get looser first \u2014 Helios builds for both.';
+  const r = await createMechanicalStage()(pdraft((x) => {
+    x.caption = { text: N, facts: [] };
+    x.caption_read = { text: R, facts: ['F1'] };
+  }), pbrief());
+  assert.ok(r.ok);
+  // F1 (dash) runs on the joined caption; the read's claim tags count toward the Source line.
+  assert.equal(r.value.filled.caption.text, `${N}\n\nFor a law firm, the rules may get looser first, Helios builds for both.\n\nSource: TechCrunch and The Wall Street Journal.`);
+  assert.deepEqual(r.value.filled.caption.facts, ['F1']);
+  assert.equal(r.value.filled.caption_read, undefined, 'the read is folded into the caption');
+  assert.ok(r.value.mechanical!.fixes.some((f) => f.id === 'F1' && f.where === 'caption'));
+});
+
+test('citedIds includes the read\'s claim tags', () => {
+  const d = draft((x) => {
+    x.caption = { text: 'N', facts: [] };
+    x.caption_read = { text: 'R', facts: ['F4'] };
+  });
+  assert.ok(citedIds(d).includes('F4'));
+});
+
 test('mechanical stage: a hard failure after the Fact-checker sets the story aside (C1 over-limit, C2 malformed-output)', async () => {
   const long = await createMechanicalStage()(pdraft((x) => (x.slides[1]!.headline.text = tooLong)), pbrief());
   assert.equal(long.ok, false);
@@ -317,4 +340,20 @@ test('applySilentFixes: the follow line is built from the Writer’s clean topic
   assert.equal(named.draft.follow, 'Follow Helios for more AI stories like this.');
   const none = applySilentFixes(draft());
   assert.equal(none.draft.follow, 'Follow Helios for more AI stories like this.');
+});
+
+test('C3 caption emoji (2026-10-19): up to two pass, a third is flagged; slides keep the ban', () => {
+  assert.deepEqual(checkVoice(draft((x) => (x.caption.text = '🚨 Trump announced it.\n\nWhat would you ask first? 👇'))), []);
+  const three = checkVoice(draft((x) => (x.caption.text = '🚨 Trump announced it. 🔥\n\nWhat would you ask first? 👇')));
+  assert.deepEqual(three.map((f) => [f.where, f.detail]), [['caption', 'emoji: 3 in the caption, at most 2']]);
+  const slide = checkVoice(draft((x) => (x.slides[0]!.body!.text = 'A big step 🚀')));
+  assert.deepEqual(slide.map((f) => f.detail), ['emoji: "🚀"']);
+});
+
+test('F6 stripCaptionStrays: credit lines and trailing hashtags go, an inline hashtag keeps its word', () => {
+  assert.equal(
+    stripCaptionStrays('Firms adopt #AI tools fast. #agents #AI\n#policy\n\nSource: TechCrunch.\nPhotos: Getty.\n\nAt Helios we build them.'),
+    'Firms adopt AI tools fast.\n\nAt Helios we build them.',
+  );
+  assert.equal(stripCaptionStrays('No strays here.\n\nHelios builds.'), 'No strays here.\n\nHelios builds.');
 });

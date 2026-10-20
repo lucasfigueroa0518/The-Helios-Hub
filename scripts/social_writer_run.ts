@@ -3,6 +3,11 @@
  * required). A total cap is required: no Claude call starts unless
  * CALL_RESERVE_USD (one call's worst case) still fits under it.
  *
+ * A one-stage run, not a whole post: the Writer leaves the caption empty
+ * (the captioner writes it after the Editor). Feed its output to
+ * scripts/social_edit_check_run.ts for Editor → captioner → Fact-checker →
+ * mechanical, the rest of a live run.
+ *
  *   npx tsx scripts/social_writer_run.ts --cap-usd 0.50 <name>=<brief.json> …
  */
 import { promises as fsp } from 'node:fs';

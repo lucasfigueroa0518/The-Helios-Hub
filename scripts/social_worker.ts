@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   const { socialQuery } = await import('@/lib/social/store');
   const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
   const runs = await import('@/lib/social/overnight/runs');
-  const { carouselFill, nightStories, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
+  const { carouselFill, nightStoriesFor, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
   const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
   const { readTonightMoves } = await import('@/lib/social-hub/moves-store');
   const { ideaRef } = await import('@/lib/social-hub/views/moves');
@@ -95,6 +95,8 @@ async function main(): Promise<void> {
   const { carryOutLfdRun, withLfdTimeout } = await import('@/lib/lfd/worker');
   const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
   const { threeAmQueue } = await import('@/lib/lfd/clock');
+  const { isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
+  const { readSlotSource } = await import('@/lib/social-hub/slots/load');
   const { liveLfdDeps } = await import('@/lib/lfd/live');
   const { liveMemesForPost } = await import('@/lib/memes/lfd-post-live');
   const { claimAndPublishLfd } = await import('@/lib/lfd/publish');
@@ -193,7 +195,8 @@ async function main(): Promise<void> {
         log('fill_failed', { runId: run.id, error: errorText(error) });
         return null;
       });
-      stories = fill ? nightStories(fill, runStories) : runStories;
+      // Template mode: the day's carousel slots are the knob, so run_stories never cuts the fill.
+      stories = fill ? nightStoriesFor(fill, runStories, await readSlotSource(query)) : runStories;
       if (fill) reportFill(fill, log, { runId: run.id, runStories, stories });
       if (fill && stories < 1) {
         const note = `${quotaFilledNote(fill, 'carousel')} The run made nothing new.`;
@@ -261,7 +264,10 @@ async function main(): Promise<void> {
           log('lfd_settings_failed', { error: errorText(error) });
           return null;
         });
-        const slot = threeAmQueue(calendarDateKey(new Date()), lfd, await autoRunOn().catch(() => false));
+        // Template mode: the calendar says whether today is a Last Few Days day (null while legacy).
+        const today = calendarDateKey(new Date());
+        const plan = await slotPlan(lfdQuery, today, 1).catch(() => null);
+        const slot = threeAmQueue(today, lfd, await autoRunOn().catch(() => false), plan ? isLfdDay(plan, today) : null);
         if (slot.queue === 'last_few_days' && lfd?.runCapUsd != null) {
           const id = await lfdStore.requestRun(lfdQuery, 'scheduled', lfd.runCapUsd).catch((error) => {
             log('lfd_request_failed', { error: errorText(error) });

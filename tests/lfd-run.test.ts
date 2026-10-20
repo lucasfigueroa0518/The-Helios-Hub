@@ -28,11 +28,19 @@ type VisionStory = { headline: string; body: string; names: string[]; outlet: st
  * Writer stub: echoes every story in the material with valid copy; `bad` keys get a headline the fact check rejects.
  * Vision calls (submit_verdict) are answered by `vision` (default: the photo passes) and counted apart.
  */
-function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory, photo: string | null) => string | null } = {}) {
+function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: string[]) => boolean; vision?: (s: VisionStory, photo: string | null) => string | null; caption?: () => unknown; captionNoUsage?: boolean } = {}) {
   let calls = 0;
   const seen: VisionStory[] = [];
   const bad = new Set<string>();
+  const captionCalls: Anthropic.MessageCreateParamsNonStreaming[] = [];
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
+    // The caption call (caption-lines.ts) is the one json_schema call; it is counted apart from the writer.
+    if ((p as { output_config?: { format?: unknown } }).output_config?.format) {
+      captionCalls.push(p);
+      const reply = opts.caption ? opts.caption() : CAPTION_REPLY;
+      if (reply instanceof Error) throw reply;
+      return { id: 'c', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'end_turn', stop_sequence: null, ...(opts.captionNoUsage ? {} : { usage: { input_tokens: 500, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 3000 } }), content: [{ type: 'text', text: JSON.stringify(reply) }] } as unknown as Anthropic.Message;
+    }
     if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'submit_verdict') {
       const blocks = p.messages[0]!.content as Array<{ type: string; text?: string; source?: { data: string } }>;
       const s = JSON.parse(blocks.find((b) => b.type === 'text')!.text!) as VisionStory;
@@ -58,8 +66,15 @@ function writerStub(opts: { setup?: string; failAfter?: number; fail?: (urls: st
     }));
     return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 5, cache_read_input_tokens: 50 }, content: [{ type: 'tool_use', id: `t${calls}`, name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
   };
-  return { create, calls: () => calls, vision: () => seen };
+  return { create, calls: () => calls, vision: () => seen, captionCalls: () => captionCalls };
 }
+
+const CAPTION_REPLY = {
+  opener: '⬅️ Swipe for a new Claude Haiku and a few niche things that happened.',
+  body: 'Anthropic put out Claude Haiku 5.5 this week.\n\nA few niche things happened too.',
+  question: 'Which one caught your attention?',
+  helios_line: 'For a law firm, a faster small model means intake replies in minutes, and that is the kind of thing Helios builds.',
+};
 
 const jev = (major: (headline: string) => number): JevAsk => async (req, meta): Promise<JevResult> => {
   const usage = { input_tokens: 10, output_tokens: 0 };
@@ -625,4 +640,65 @@ test('if a lead judgment fails, the post keeps the lane order and the run record
   const run = (await d.query<{ record: { lead: { by: string; error: string } } }>(`SELECT record FROM lfd.runs`)).rows[0]!.record;
   assert.equal(run.lead.by, 'fallback');
   assert.match(run.lead.error, /jev down/);
+});
+
+test('the caption is written once by the model, ends on the Helios line, and its closing is recorded', async () => {
+  const w = writerStub();
+  const recorded: Array<[string, string, boolean]> = [];
+  const closings = { recent: async () => [{ closing: 'Last week Helios said real estate.', buildLine: false, createdAt: NOW }], record: async (id: string, c: string, b: boolean) => { recorded.push([id, c, b]); } };
+  const d = await deps({ create: w.create, closings });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(w.captionCalls().length, 1);
+  assert.match(String(w.captionCalls()[0]!.messages[0]!.content), /Last week Helios said real estate/);
+  const { rows } = await d.query<{ caption: string; render: { caption: string } }>(`SELECT caption, render FROM lfd.posts`);
+  assert.match(rows[0]!.caption, /^⬅️ Swipe for a new Claude Haiku/);
+  assert.ok(rows[0]!.caption.includes(`${CAPTION_REPLY.question}\n\n${CAPTION_REPLY.helios_line}\n\nSources:`));
+  assert.equal(rows[0]!.render.caption, rows[0]!.caption);
+  assert.doesNotMatch(rows[0]!.caption, /Do you realize what just happened/);
+  assert.deepEqual(recorded, [[res.runId, CAPTION_REPLY.helios_line, false]]);
+  const rec = (await recordOf(d, res.runId)) as unknown as { caption: { by: string; version: string; usd: number } };
+  assert.equal(rec.caption.by, 'model');
+  assert.equal(rec.caption.version, 'lfd-caption-v1');
+  assert.ok(rec.caption.usd > 0);
+});
+
+test('a failed caption call or a rejected reply ships the template caption and records no closing', async () => {
+  for (const reply of [new Error('run cap'), { ...CAPTION_REPLY, helios_line: 'No brand named here.' }]) {
+    resetSeed();
+    const recorded: string[] = [];
+    const closings = { recent: async () => { throw new Error('table missing'); }, record: async (_id: string, c: string) => { recorded.push(c); } };
+    const d = await deps({ create: writerStub({ caption: () => reply }).create, closings });
+    const res = await runLastFewDays(d);
+    assert.ok(res.ok, JSON.stringify(res));
+    const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
+    assert.match(rows[0]!.caption, /^Do you realize what just happened in AI in the last few days\?/);
+    assert.match(rows[0]!.caption, /Follow Helios/);
+    assert.deepEqual(recorded, []);
+    const rec = (await recordOf(d, res.runId)) as unknown as { caption: { by: string; reason: string } };
+    assert.equal(rec.caption.by, 'template');
+    assert.ok(rec.caption.reason);
+  }
+});
+
+test('model lines that cannot fit ship the template: telemetry says template and no closing is recorded', async () => {
+  const recorded: string[] = [];
+  const closings = { recent: async () => [], record: async (_id: string, c: string) => { recorded.push(c); } };
+  const d = await deps({ create: writerStub({ caption: () => ({ ...CAPTION_REPLY, body: 'x'.repeat(2200) }) }).create, closings });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
+  assert.match(rows[0]!.caption, /^Do you realize what just happened/);
+  assert.deepEqual(recorded, []);
+  const rec = (await recordOf(d, res.runId)) as unknown as { caption: { by: string; reason: string } };
+  assert.equal(rec.caption.by, 'template');
+  assert.match(rec.caption.reason, /did not fit/);
+});
+
+test('a caption reply with no usage does not fail the run', async () => {
+  const d = await deps({ create: writerStub({ captionNoUsage: true }).create });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
+  assert.match(rows[0]!.caption, /^⬅️ Swipe for a new Claude Haiku/);
 });

@@ -2,7 +2,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { PostingState } from '@/lib/content-type/posting';
+import { readPosting, type PostingState } from '@/lib/content-type/posting';
+import { setSlotSource } from '@/lib/social-hub/slots/write';
 import { reportExplainers } from '@/lib/social-hub/health/reporters/explainers';
 import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
 import { emptyReport, funnelFrom, publishingFor, quotaFor, withPublishing } from '@/lib/social-hub/health/reporters/shared';
@@ -25,6 +26,23 @@ test('quota: perDay for most types; enabled series that run that weekday for Sto
     { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [2] },
   ];
   assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series } as never), NIGHT), 1); // Tue: MD only (FP disabled)
+});
+
+test('quota in template mode: the night\'s own slots from the week schedule, else the derived fields', () => {
+  const day = (nyDate: string, count: number, series: string[] = []) => ({ nyDate, count, trial: 0, main: 0, series, override: false });
+  const schedule = [day('2026-10-12', 2), day(NIGHT, 1, ['guess_the_number', 'free_vs_paid'])];
+  // perDay is today's count (say 2); the night reads its own day.
+  assert.equal(quotaFor(posting({ perDay: 2, schedule }), NIGHT), 1);
+  assert.equal(quotaFor(posting({ perDay: 2, schedule }), '2026-10-20'), 2, 'outside the week: perDay');
+  assert.equal(quotaFor(posting({ type: 'last_few_days', perDay: null, days: [], schedule } as never), NIGHT), 1);
+  assert.equal(quotaFor(posting({ type: 'last_few_days', perDay: null, days: [2], schedule: [day(NIGHT, 0)] } as never), NIGHT), 0, 'no LFD slot that night');
+  const series = [
+    { id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [2] },
+    { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [] },
+    { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [] },
+  ];
+  // Tuesday's slots are GN and FP: GN counts, FP is disabled, MD has no slot that night.
+  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule } as never), NIGHT), 1);
 });
 
 test('due follows generate, not the publishing switch; a run is always due', () => {
@@ -192,4 +210,58 @@ test('carousels: no quota on a Last Few Days night while Last Few Days auto_run 
   assert.deepEqual([on.needed, on.target, on.due], [0, 0, false], 'Carousels gave the night to Last Few Days: not "did not run"');
   const wed = await reportCarousels(query, { night: '2026-10-14', posting: posting(), now: NOW });
   assert.equal(wed.needed, 1, 'a Wednesday keeps its carousel quota');
+});
+
+// ── Fix 1: each reported night is checked against its own slots, not this week's or today's ──
+
+type PoolHolder = { __outreachHubPool?: unknown };
+
+async function withAppDb<T>(fn: (db: Awaited<ReturnType<typeof openHubTestDb>>) => Promise<T>): Promise<T> {
+  const db = await openHubTestDb();
+  const holder = globalThis as PoolHolder;
+  const before = holder.__outreachHubPool;
+  holder.__outreachHubPool = { query: (text: string, params?: unknown[]) => db.pg.query(text, params as unknown[]) };
+  try {
+    return await fn(db);
+  } finally {
+    if (before === undefined) delete holder.__outreachHubPool;
+    else holder.__outreachHubPool = before;
+  }
+}
+
+const removeReels = (nyDate: string, windows: string[]) =>
+  windows.map((w) => `INSERT INTO social_hub.slot_override (ny_date, vertical, window_id, action, updated_by) VALUES ('${nyDate}', 'reels', '${w}', 'remove', 't');`).join('\n');
+
+test('template mode: a Sunday night reported on Monday uses Sunday\'s slots, not this week\'s or today\'s', async () => {
+  await withAppDb(async ({ pg, query }) => {
+    await setSlotSource(query as never, 'template', 't');
+    await pg.exec(removeReels('2026-10-18', ['midday', 'evening'])); // Sunday: 1 reels slot
+    const MON_EARLY = new Date('2026-10-19T10:00:00Z'); // Mon Oct 19, 6:00 AM New York: before the 7:30 report, so Sunday's night
+    const p = await readPosting('reels', MON_EARLY);
+    assert.equal(p.perDay, 3, 'Monday has 3');
+    assert.equal(quotaFor(p, '2026-10-18'), 1);
+    assert.equal(quotaFor(p, '2026-10-19'), 3);
+    assert.equal(p.schedule!.length, 7, 'the type page still gets this Monday–Sunday week');
+    assert.equal(p.schedule![0]!.nyDate, '2026-10-19');
+  });
+});
+
+test('template mode: a backfilled night 20 days back uses its own slots', async () => {
+  await withAppDb(async ({ pg, query }) => {
+    await setSlotSource(query as never, 'template', 't');
+    await pg.exec(removeReels('2026-09-29', ['evening'])); // Tue Sep 29: 2 reels slots
+    const p = await readPosting('reels', new Date('2026-10-19T14:00:00Z'));
+    assert.equal(quotaFor(p, '2026-09-29'), 2);
+    assert.equal(quotaFor(p, '2026-09-30'), 3);
+  });
+});
+
+test('legacy mode: no nights, the quota is posts_per_day as before', async () => {
+  await withAppDb(async ({ pg }) => {
+    await pg.exec(removeReels('2026-10-18', ['midday', 'evening'])); // ignored while legacy
+    const p = await readPosting('reels', new Date('2026-10-19T10:00:00Z'));
+    assert.equal(p.schedule, null);
+    assert.equal(p.nights, null);
+    assert.equal(quotaFor(p, '2026-10-18'), p.perDay);
+  });
 });

@@ -5,6 +5,7 @@ import {
   textArtifacts,
 } from '@/lib/reels/copy/clean-text';
 import type { BucketId } from '@/lib/reels/scoring/decide';
+import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
 
 /**
  * The writer's tool, and the checks code runs on what comes back. Checks are
@@ -89,7 +90,12 @@ export const REPORT_COPY_TOOL = {
       caption: {
         type: 'string',
         description:
-          'The final caption, ending where the bucket structure ends. Leave out the call to action and the hashtags. They are posted from their own fields, so writing them here posts them twice. This one caption pays out every on-screen copy. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, and the hashtags together must stay within 2,200 characters.',
+          'The final caption body, ending where the bucket structure ends. Leave out the call to action, the Helios line, and the hashtags. They are posted from their own fields after the caption, in that order, so writing them here posts them twice. This one caption pays out every on-screen copy. Short paragraphs, with a real blank line between them. A caption that is one block is a failed report. The caption, the call to action, the Helios line, and the hashtags together must stay within 2,200 characters.',
+      },
+      builder_read: {
+        type: 'string',
+        description:
+          'The Helios line, also called the builder\'s read. It ends the post, after the call to action and before the hashtags, and is not part of the caption field. One or two sentences: a builder\'s take on what this story changes for someone running marketing, sales, or ops at a business like the ones in the Helios context. It names Helios once.',
       },
       call_to_action: {
         type: 'string',
@@ -129,6 +135,7 @@ export const REPORT_COPY_TOOL = {
       'tension',
       'on_screen_copies',
       'caption',
+      'builder_read',
       'call_to_action',
       'outcome_note',
       'hashtags',
@@ -142,6 +149,8 @@ export type CopyCall = {
   onScreenCopies: string[];
   viewerStake: string;
   caption: string;
+  /** v28. The Helios line, the one place Helios is named. v29 posts it last, after the call to action; it is not in `caption`. */
+  builderRead: string;
   callToAction: string;
   hashtags: string[];
   sources: Array<{ name: string; url: string }>;
@@ -156,6 +165,8 @@ export type CopyCall = {
     stakeOptions?: string[];
     /** D-238. The Saga's note on whether an outcome already happened. Empty elsewhere; absent on rows before v17. */
     outcomeNote?: string;
+    /** v28. Kept here too so the JSON working column and the stored variants carry it. Absent before v28. */
+    builderRead?: string;
   };
 };
 
@@ -164,6 +175,7 @@ export type CopyReport = {
   onScreenCopy: string;
   viewerStake: string;
   caption: string;
+  builderRead: string;
   callToAction: string;
   hashtags: string[];
   sources: Array<{ name: string; url: string }>;
@@ -199,6 +211,41 @@ export const TEXT_ARTIFACT_ERROR = 'report_copy text still carries';
 
 export function isTextArtifactError(error: string | null | undefined): boolean {
   return typeof error === 'string' && error.startsWith(TEXT_ARTIFACT_ERROR);
+}
+
+/** v28. The prefix that marks a report failed for its builder's read, so the call can be retried. */
+export const BUILDER_READ_ERROR = 'report_copy builder_read';
+
+export function isBuilderReadError(error: string | null | undefined): boolean {
+  return typeof error === 'string' && error.startsWith(BUILDER_READ_ERROR);
+}
+
+function squash(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * v29. The Helios line names Helios. It posts last, after the call to action,
+ * and the call to action never names Helios, so there is no exemption.
+ */
+function checkBuilderRead(read: string): void {
+  if (!HELIOS_NAME.test(read)) {
+    throw new CopyReportError(`${BUILDER_READ_ERROR} does not name Helios. Name Helios once, lightly, in the Helios line.`);
+  }
+}
+
+/**
+ * v29. The Helios line is posted from its own field, after the call to action.
+ * A caption that also carries it (a v28 row, or a model that wrote it twice)
+ * loses that paragraph here so it posts once. The body keeps at least one paragraph.
+ */
+export function withoutBuilderRead(caption: string, read: string): string {
+  const target = squash(read);
+  if (!target) return caption;
+  const paragraphs = caption.split(/\n[ \t]*\n/);
+  const kept = paragraphs.filter((part) => squash(part) !== target);
+  if (kept.length === paragraphs.length || kept.length === 0) return caption;
+  return kept.map((part) => part.trim()).filter(Boolean).join('\n\n');
 }
 
 /** At least two paragraphs with a blank line between them. A single line break is not enough. */
@@ -250,10 +297,14 @@ export function parseCopyReport(input: unknown): CopyCall {
   if (!input || typeof input !== 'object') throw new CopyReportError('report_copy input is not an object.');
   const record = input as Record<string, unknown>;
   const callToAction = text(record, 'call_to_action', true);
+  const builderRead = text(record, 'builder_read', true);
+  const written = captionWithBreaks(stripCaptionTail(text(record, 'caption', true), callToAction, 2));
   const call: CopyCall = {
     onScreenCopies: onScreenCopies(record.on_screen_copies),
     viewerStake: text(record, 'viewer_stake', true),
-    caption: captionWithBreaks(stripCaptionTail(text(record, 'caption', true), callToAction, 2)),
+    // v29: the one-block rule reads the caption as written; the Helios line then leaves the body.
+    caption: stripCaptionTail(withoutBuilderRead(written, builderRead), callToAction, 1),
+    builderRead,
     callToAction,
     hashtags: list(record.hashtags).map((tag) => (tag.startsWith('#') ? tag : `#${tag}`)),
     sources: sourceList(record.sources),
@@ -267,22 +318,25 @@ export function parseCopyReport(input: unknown): CopyCall {
       tension: text(record, 'tension', true),
     },
   };
+  call.working.builderRead = call.builderRead;
   const leftovers = reportArtifacts(call);
   if (leftovers.length > 0) {
     throw new CopyReportError(`${TEXT_ARTIFACT_ERROR} ${leftovers.join('; ')}.`);
   }
+  checkBuilderRead(call.builderRead);
   return call;
 }
 
 /** D-246. Every artifact still in the fields that get posted or rendered, named by field. */
 export function reportArtifacts(
-  call: Pick<CopyCall, 'onScreenCopies' | 'viewerStake' | 'caption' | 'callToAction' | 'hashtags'>,
+  call: Pick<CopyCall, 'onScreenCopies' | 'viewerStake' | 'caption' | 'builderRead' | 'callToAction' | 'hashtags'>,
 ): string[] {
   const named = (field: string, found: string[]) => found.map((artifact) => `${artifact} in ${field}`);
   return [
     ...call.onScreenCopies.flatMap((copy, index) => named(`on-screen copy ${index + 1}`, textArtifacts(copy))),
     ...named('viewer stake', textArtifacts(call.viewerStake)),
     ...named('caption', captionBodyArtifacts(call.caption, call.callToAction)),
+    ...named('Helios line', textArtifacts(call.builderRead)),
     ...named('call to action', textArtifacts(call.callToAction)),
     ...named('hashtags', textArtifacts(call.hashtags.join(' '))),
   ];
@@ -297,6 +351,7 @@ export function publishCopy(call: CopyCall, onScreenCopy: string): CopyReport {
     onScreenCopy,
     viewerStake: call.viewerStake,
     caption: call.caption,
+    builderRead: call.builderRead,
     callToAction: call.callToAction,
     hashtags: call.hashtags,
     sources: call.sources,
@@ -305,21 +360,27 @@ export function publishCopy(call: CopyCall, onScreenCopy: string): CopyReport {
 }
 
 /**
- * The caption as it would be posted: body, call to action, hashtags.
- * A call to action or hashtag line already ending the body is not added again.
- * Anything over Instagram's limit is shortened here, with no model call:
- * paragraphs drop from the end, then the last remaining paragraph is cut
- * at a sentence.
+ * The caption as it would be posted: body, call to action, the Helios line
+ * (v29), hashtags. A call to action, Helios line or hashtag line already in
+ * the body is not added again; a v28 row's read, stored as the caption's last
+ * paragraph, moves after the call to action. Rows before v28 have no read.
+ * Anything over Instagram's limit is shortened here, with no model call: the
+ * call to action and the Helios line are kept, body paragraphs drop from just
+ * before them, then the last remaining paragraph is cut at a sentence.
  */
-export function fullCaption(report: Pick<CopyReport, 'caption' | 'callToAction' | 'hashtags'>): string {
+export function fullCaption(
+  report: Pick<CopyReport, 'caption' | 'callToAction' | 'hashtags'> & { builderRead?: string | null },
+): string {
   const callToAction = report.callToAction.trim();
+  const read = (report.builderRead ?? '').trim();
   const hashtags = report.hashtags.join(' ').trim();
   let body = stripTrailing(report.caption.trim(), hashtags);
   body = stripTrailing(body, callToAction);
   // D-246: a call to action or hashtag line written with different spacing or
   // a "CTA:" label is still posted once.
   body = stripCaptionTail(body, callToAction, 1);
-  return fitCaptionParts(body, callToAction, hashtags, CAPTION_MAX_CHARS);
+  body = stripCaptionTail(withoutBuilderRead(body, read), callToAction, 1);
+  return fitCaptionParts(body, joinParts([callToAction, read]), hashtags, CAPTION_MAX_CHARS);
 }
 
 /** Cut an already assembled caption down to the limit. Keeps a trailing hashtag line. */
@@ -330,7 +391,9 @@ export function shortenAssembledCaption(caption: string, limit = CAPTION_MAX_CHA
   const hashtags = paragraphs.length > 0 && /^#\S/.test(paragraphs[paragraphs.length - 1] ?? '')
     ? paragraphs.pop() ?? ''
     : '';
-  return fitCaptionParts(paragraphs.join('\n\n'), '', hashtags, limit);
+  // The body's last two paragraphs are the call to action and the Helios line (v29;
+  // the read and the call to action on v28 posts). Both are kept.
+  return fitCaptionParts(paragraphs.join('\n\n'), '', hashtags, limit, 2);
 }
 
 function stripTrailing(body: string, ending: string): string {
@@ -361,15 +424,33 @@ function cutToFit(text: string, budget: number): string {
   return slice;
 }
 
-function fitCaptionParts(body: string, callToAction: string, hashtags: string, limit: number): string {
+/**
+ * v28. The last `keep` body paragraphs are the caption's ending (the call to
+ * action and the Helios line). Paragraphs drop from just before that ending,
+ * backwards; then the opening is cut at a sentence to leave room for it. The
+ * ending is cut only when it cannot fit beside anything else.
+ */
+function fitCaptionParts(body: string, callToAction: string, hashtags: string, limit: number, keep = 0): string {
   const tails = [callToAction, hashtags].filter((part) => part.length > 0);
   const assemble = (nextBody: string, nextTails: string[]) => joinParts([nextBody, ...nextTails]);
   if (assemble(body, tails).length <= limit) return assemble(body, tails);
 
   const paragraphs = body.split(/\n[ \t]*\n/).map((part) => part.trim()).filter(Boolean);
-  while (paragraphs.length > 1 && assemble(paragraphs.join('\n\n'), tails).length > limit) paragraphs.pop();
-  body = paragraphs.join('\n\n');
+  const ending = keep > 0 && paragraphs.length > keep ? paragraphs.splice(paragraphs.length - keep) : [];
+  const withEnding = () => [...paragraphs, ...ending].join('\n\n');
+  while (paragraphs.length > 1 && assemble(withEnding(), tails).length > limit) paragraphs.pop();
+  body = withEnding();
   if (assemble(body, tails).length <= limit) return assemble(body, tails);
+
+  if (ending.length > 0) {
+    const endingText = ending.join('\n\n');
+    const roomForLead = limit - assemble(endingText, tails).length - 2;
+    if (roomForLead > 0) {
+      const lead = cutToFit(paragraphs.join('\n\n'), roomForLead);
+      const fitted = assemble(joinParts([lead, endingText]), tails);
+      if (lead && fitted.length <= limit) return fitted;
+    }
+  }
 
   const tailText = tails.join('\n\n');
   const roomForBody = tailText ? limit - tailText.length - 2 : limit;
@@ -426,6 +507,8 @@ export function checkCopy(
   const stakeWords = countWords(report.viewerStake);
   const foldChars = (report.caption.split('\n').find((line) => line.trim()) ?? '').trim().length;
   const published = `${report.onScreenCopy}\n${caption}`;
+  // v28: "we" is allowed in the Helios line (the builder's read), so only the rest is flagged.
+  const outsideRead = report.builderRead ? published.split(report.builderRead).join('\n') : published;
   const known = new Set(knownUrls.map((url) => url.trim()));
 
   return {
@@ -443,7 +526,7 @@ export function checkCopy(
       report.hashtags.length >= HASHTAG_RANGE.min && report.hashtags.length <= HASHTAG_RANGE.max,
     dashes: published.match(DASH)?.length ?? 0,
     urlsInCaption: caption.match(URL_PATTERN)?.length ?? 0,
-    firstPersonWords: [...new Set(published.match(FIRST_PERSON) ?? [])],
+    firstPersonWords: [...new Set(outsideRead.match(FIRST_PERSON) ?? [])],
     unknownSourceUrls: report.sources.map((source) => source.url).filter((url) => !known.has(url)),
     textArtifacts: [...textArtifacts(report.onScreenCopy), ...textArtifacts(caption)],
   };

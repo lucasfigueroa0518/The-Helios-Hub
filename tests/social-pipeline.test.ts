@@ -40,7 +40,7 @@ function day(stubOpts: StubOptions = {}, extra: { capUsd?: number; wiggleUsd?: n
   };
 }
 
-test('dry run: 2 posts, each through all 7 stages in order (no Hook pass since the seventh round), no set-asides', async () => {
+test('dry run: 2 posts, each through all 8 stages in order (no Hook pass since the seventh round), no set-asides', async () => {
   const calls: Array<{ stage: StageName; storyId: string }> = [];
   const { result } = day({ calls });
   const r = await result;
@@ -48,6 +48,8 @@ test('dry run: 2 posts, each through all 7 stages in order (no Hook pass since t
   assert.equal(r.posts.length, 2);
   assert.deepEqual(r.posts.map((p) => p.storyId), ['story-a', 'story-b']);
   for (const post of r.posts) assert.deepEqual(post.stages, [...STAGE_ORDER]);
+  // The captioner runs after the Editor and before the Fact-checker (social-captions redesign, 2026-10-19).
+  assert.deepEqual([...STAGE_ORDER], ['jev-scoring', 'reporter', 'writer', 'editor', 'captioner', 'fact-checker', 'mechanical', 'design']);
   assert.ok(!(STAGE_ORDER as readonly string[]).includes('hook'));
   assert.deepEqual(r.setAsides, []);
   // story-c is a backup and never runs.
@@ -109,7 +111,7 @@ test('the cost cap stops the day and logs cost-cap', async () => {
 });
 
 // Target and ceiling (Tommy, 2026-10-14). Reporter at $1.70: story-a reaches ~$2.07 at its Editor,
-// past the $2 target, with Fact-checker, mechanical and design still to go (~$2.13 done).
+// past the $2 target, with captioner, Fact-checker, mechanical and design still to go (~$2.18 done).
 test('wiggle: a story in progress past the cap finishes under the ceiling; the next story does not start', async () => {
   const calls: Array<{ stage: StageName; storyId: string }> = [];
   const { result, meter } = day({ calls, costUsd: { reporter: 1.7 } }, { capUsd: 2, wiggleUsd: 0.5 });
@@ -128,7 +130,7 @@ test('wiggle: without it the same day cuts story-a off mid-way (the old single l
   const r = await day({ costUsd: { reporter: 1.7 } }, { capUsd: 2 }).result;
   assert.equal(r.posts.length, 0);
   assert.equal(r.setAsides.at(-1)!.storyId, 'story-a');
-  assert.equal(r.setAsides.at(-1)!.stage, 'fact-checker');
+  assert.equal(r.setAsides.at(-1)!.stage, 'captioner');
 });
 
 test('wiggle: the ceiling is a hard stop mid-story, and the set-aside names it', async () => {
@@ -136,7 +138,7 @@ test('wiggle: the ceiling is a hard stop mid-story, and the set-aside names it',
   assert.equal(r.posts.length, 0);
   const cap = r.setAsides.at(-1)!;
   assert.equal(cap.reasonCode, 'cost-cap');
-  assert.equal(cap.stage, 'fact-checker');
+  assert.equal(cap.stage, 'captioner');
   assert.match(cap.detail, /ceiling \$2\.05 \(cap \$2\.00 \+ wiggle\) reached mid-story/);
 });
 

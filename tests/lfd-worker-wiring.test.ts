@@ -8,7 +8,7 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), 'utf
 
 test('the social worker runs Last Few Days in its own loop: the 3:00 slot, claims, publishing, insights', () => {
   const text = read('scripts/social_worker.ts');
-  assert.match(text, /threeAmQueue\(calendarDateKey\(new Date\(\)\), lfd, await autoRunOn\(\)/);
+  assert.match(text, /threeAmQueue\(today, lfd, await autoRunOn\(\)\.catch\(\(\) => false\), plan \? isLfdDay\(plan, today\) : null\)/);
   assert.match(text, /lfdStore\.requestRun\(lfdQuery, 'scheduled'/);
   assert.match(text, /lfdStore\.claimRun\(lfdQuery\)/);
   assert.match(text, /carryOutLfdRun\(/);

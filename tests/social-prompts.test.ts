@@ -51,16 +51,28 @@ test("RULES_BLOCK applies Tommy's review decisions (a)-(c)", () => {
   assert.ok(!/TWO background slides|more than two background slides|Two is the ceiling/.test(RULES_BLOCK), 'count trimmed from Context policy (a)');
   assert.ok(RULES_BLOCK.includes('Max 2 background slides.'), 'the tested line carries the count');
   assert.ok(RULES_BLOCK.includes('**Background slides** on "why now"'), 'definition kept (a)');
-  assert.ok(RULES_BLOCK.includes('The Fact-checker and the caption follow the same policy.'), '(b)');
+  // (b) superseded 2026-10-19: the Writer and Editor no longer write the caption, so the policy is stage-neutral.
+  assert.ok(RULES_BLOCK.includes('The Fact-checker follows the same policy. A slide clause that fits (1) or (2) is not a flag'), '(b)');
+  assert.ok(!/caption/i.test(RULES_BLOCK), 'no caption instructions reach the Writer or Editor');
   assert.ok(RULES_BLOCK.includes('## Glossing (advisory, not required)'));
 });
 
 test('renderRulesFor: the Writer and Editor are told the M7 checks C1–C5 (f); other stages get nothing', () => {
   for (const stage of ['writer', 'editor'] as const) {
     const r = renderRulesFor(stage);
-    for (const s of ['headline 15–45', 'body ≤140, together ≤168', 'Quotation marks only', 'banned words', 'No hashtags', 'At most 2 background slides']) assert.ok(r.includes(s), `${stage}: ${s}`);
+    for (const s of ['headline 15–45', 'body ≤140, together ≤168', 'Quotation marks only', 'banned words', 'At most 2 background slides']) assert.ok(r.includes(s), `${stage}: ${s}`);
+    // Caption-only lines go to the captioner (social-captions redesign, 2026-10-19): the Writer and Editor don't write it.
+    assert.ok(!/caption|hashtag/i.test(r), `${stage}: no caption rules`);
   }
+  const c = renderRulesFor('captioner');
+  for (const s of ['2,200', 'Quotation marks only', 'banned words', 'No hashtags', 'Source or Photos line', 'read names Helios']) assert.ok(c.includes(s), `captioner: ${s}`);
+  assert.ok(!/headline|background slides/.test(c), 'captioner: no slide rules');
   for (const stage of ['reporter', 'fact-checker'] as const) assert.equal(renderRulesFor(stage), '');
+});
+
+test('the shared Glossing rule no longer sends definitions to the caption', () => {
+  assert.ok(!RULES_BLOCK.includes('move the definition to the caption'));
+  assert.ok(RULES_BLOCK.includes('give the definition a dedicated slide instead of shrinking the fact.'));
 });
 
 // ── Reporter prompt (prompts file §1, tested text + marked edits) ──────

@@ -517,7 +517,7 @@ test('carousel regenerate: the run makes the stored story again from its saved b
   assert.equal(result.posts.length, 1);
   assert.equal(result.posts[0]!.storyId, 'story-a');
   assert.deepEqual(result.shipped, [{ storyId: 'story-a', reusedPostId: null }]);
-  assert.deepEqual(calls.map((x) => x.stage), ['writer', 'editor', 'fact-checker', 'mechanical', 'design'], 'no selection, no Reporter');
+  assert.deepEqual(calls.map((x) => x.stage), ['writer', 'editor', 'captioner', 'fact-checker', 'mechanical', 'design'], 'no selection, no Reporter');
   assert.equal(result.costByStage['jev-scoring'] ?? 0, 0);
   assert.equal(result.costByStage.reporter ?? 0, 0);
 });

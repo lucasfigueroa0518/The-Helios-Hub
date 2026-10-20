@@ -5,15 +5,20 @@
  *
  *   free fixes first:   swap · cut · next cover option if the chosen fails
  *   fresh draft when:   cuts leave < 5 story slides, the key slide is cut,
- *                       every cover option fails, or the caption is emptied
+ *                       or every cover option fails
+ *   fresh caption when: the caption (the news) or caption_read (the
+ *                       builder's read) is cut to nothing, or the read no
+ *                       longer names Helios; only the captioner reruns
+ *                       (social-captions redesign, 2026-10-19)
  *   set aside when:     the story's main claim is false
  */
 import type Anthropic from '@anthropic-ai/sdk';
 
+import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
 import { checkShape, type Brief, type BriefError } from '@/lib/social/reporter/brief';
 import type { DraftSubmission, FilledDraft } from '@/lib/social/writer/draft';
 
-export type FlagWhere = { part: 'cover' | 'slide' | 'caption'; number: number | null };
+export type FlagWhere = { part: 'cover' | 'slide' | 'caption' | 'caption_read'; number: number | null };
 
 export type Flag = {
   where: FlagWhere;
@@ -41,8 +46,8 @@ export const FLAGS_SCHEMA = obj({
     description: 'One per false claim. Empty when nothing is false (FLAGS: none).',
     items: obj({
       where: obj({
-        part: { type: 'string', enum: ['cover', 'slide', 'caption'] },
-        number: { type: ['integer', 'null'], description: 'Cover option 1–3 or slide number (story slides start at 2). Null for the caption.' },
+        part: { type: 'string', enum: ['cover', 'slide', 'caption', 'caption_read'] },
+        number: { type: ['integer', 'null'], description: 'Cover option 1–3 or slide number (story slides start at 2). Null for caption and caption_read.' },
       }),
       quoted_text: { type: 'string', description: 'The false text, copied exactly from that part.' },
       type: { type: 'integer', enum: [1, 2, 3, 4, 5], description: 'Always-flag type 1–5.' },
@@ -92,6 +97,7 @@ export function briefText(brief: Brief): string {
 /** The texts a flag may point into, for its part. */
 function partTexts(where: FlagWhere, draft: FilledDraft): string[] | null {
   if (where.part === 'caption') return [draft.caption.text];
+  if (where.part === 'caption_read') return draft.caption_read ? [draft.caption_read.text] : null;
   if (where.part === 'cover') {
     const c = where.number ? draft.cover_options[where.number - 1] : undefined;
     return c ? [c.text] : null;
@@ -136,6 +142,7 @@ export const MIN_STORY_SLIDES = 5;
 export type FixOutcome =
   | { kind: 'ok'; draft: DraftSubmission; applied: string[] }
   | { kind: 'fresh-draft'; why: string; applied: string[] }
+  | { kind: 'fresh-caption'; why: string; applied: string[] }
   | { kind: 'set-aside'; why: string };
 
 /** Remove `cut` from `text` and tidy what's left. Empty when nothing readable remains. */
@@ -185,6 +192,11 @@ export function applyFlags(draft: DraftSubmission, flags: FlagsSubmission, brief
       applied.push(label);
       continue;
     }
+    if (flag.where.part === 'caption_read') {
+      d.caption_read!.text = fix(d.caption_read!.text, flag);
+      applied.push(label);
+      continue;
+    }
     const i = flag.where.number! - 2;
     const s = d.slides[i]!;
     const inHeadline = s.headline.text.toLowerCase().includes(flag.quoted_text.toLowerCase());
@@ -206,7 +218,6 @@ export function applyFlags(draft: DraftSubmission, flags: FlagsSubmission, brief
     }
   }
 
-  if (!d.caption.text) return { kind: 'fresh-draft', why: 'the caption was cut to nothing', applied };
   if (dropped.has(keyIndex)) return { kind: 'fresh-draft', why: `the key slide (slide ${keyIndex + 2}) was cut`, applied };
   const remaining = d.slides.length - dropped.size;
   // Spec §4.2b: only when the cuts leave too few; a short draft as written is not the Fact-checker's to fix.
@@ -215,6 +226,12 @@ export function applyFlags(draft: DraftSubmission, flags: FlagsSubmission, brief
   const order = [d.chosen_cover, ...d.cover_options.map((_, i) => i + 1).filter((n) => n !== d.chosen_cover)];
   const cover = order.find((n) => !failedCovers.has(n));
   if (!cover) return { kind: 'fresh-draft', why: 'every cover option failed', applied };
+  // Slide problems come first: a fresh caption can't fix them. Only a part the flags emptied counts;
+  // one that was empty going in (a draft checked before the captioner runs) passes through.
+  if (draft.caption.text && !d.caption.text) return { kind: 'fresh-caption', why: 'the caption was cut to nothing', applied };
+  if (draft.caption_read?.text && !d.caption_read?.text) return { kind: 'fresh-caption', why: "the builder's read was cut to nothing", applied };
+  // Every caption ties back to Helios (spec hard requirement): a cut that removed the read's Helios mention reruns the captioner.
+  if (HELIOS_NAME.test(draft.caption_read?.text ?? '') && !HELIOS_NAME.test(d.caption_read?.text ?? '')) return { kind: 'fresh-caption', why: "the builder's read no longer names Helios", applied };
   if (cover !== d.chosen_cover) applied.push(`chosen cover ${d.chosen_cover} failed → cover option ${cover}`);
   d.chosen_cover = cover;
   d.slides = d.slides.filter((_, i) => !dropped.has(i));

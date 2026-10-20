@@ -8,6 +8,7 @@
 import { MAJOR_NEWS_BAR } from '@/lib/stories/build/morning-download';
 import { nyDateKey } from '@/lib/reels/scoring/decide';
 import type { HubQuery } from '@/lib/social-hub/db';
+import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import type { FetchedArticle } from '@/lib/social/ingest/fetch-feeds';
 import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import type { JevAsk } from '@/lib/social/jev/client';
@@ -21,7 +22,8 @@ import { grounded, REWRITE_NOTE } from './ground';
 import { leadImage } from './lead-image';
 import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
-import { buildPost } from './post';
+import { LFD_CAPTION_VERSION, writeLfdCaptionLines } from './caption-lines';
+import { buildPost, composeCaption } from './post';
 import { leadOrder } from './lead';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
 import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
@@ -53,6 +55,8 @@ export type LfdRunDeps = {
   capUsd: number;
   /** Claude and Jev spend so far (the CLI wires the run budget and Jev tally here). */
   spend: () => { claudeUsd: number; jevUsd: number };
+  /** The Last Few Days caption closings (closingsLog(query, 'lfd')): recent closings for the caption call. Absent: no closings block, nothing recorded. */
+  closings?: ClosingsLog;
   /** A run the worker already claimed (lfd.runs status running): it is adopted instead of inserting a new row. */
   runId?: string;
   /**
@@ -391,7 +395,18 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       rendered = await renderAndStore(final, false);
     }
 
-    const { render, slideObjects, fit, visionProblems } = rendered;
+    const { slideObjects, fit, visionProblems } = rendered;
+    // The caption is on no slide, so it is written once, for the stories that made the final render.
+    // Any failure ships the template caption. The call goes through d.create, so the run budget prices it.
+    const recent = d.closings ? await d.closings.recent().catch(() => []) : [];
+    const caption = await writeLfdCaptionLines(final, recent, d.create);
+    // Telemetry and the closings log follow what shipped: model lines that cannot fit fall back to the template.
+    const shipped = composeCaption(final, caption.lines);
+    record.caption = shipped.by === 'model'
+      ? { by: 'model', version: LFD_CAPTION_VERSION, usd: caption.costUsd }
+      : { by: 'template', usd: caption.costUsd, reason: caption.reason ?? 'the model caption did not fit the limit' };
+    if (shipped.by === 'model' && caption.lines) await d.closings?.record(runId, caption.lines.heliosLine, false);
+    const render = { ...rendered.render, caption: shipped.caption };
     const short = final.length < MIN_STORIES;
     const fitProblems = (fit?.problems ?? []).filter((p) => /text fit/.test(p));
     const postId = await insertPost(d.query, {

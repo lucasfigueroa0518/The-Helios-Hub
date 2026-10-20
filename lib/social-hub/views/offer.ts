@@ -33,7 +33,7 @@ export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days 
   for (let i = 0; i < days; i++) {
     const day = addDays(today, i);
     const onDay = placed.filter((p) => p.nyDate === day);
-    windowsOn(post.vertical, day, dataset.dayQuotas?.lfdDays ?? []).forEach((w, index) => {
+    windowsOn(post.vertical, day, dataset.dayQuotas?.lfdDays ?? [], dataset.dayQuotas?.slots ?? null).forEach((w, index) => {
       const closes = nyDayStart(day).getTime() + w.endMinute * 60_000;
       if (closes <= now.getTime()) return;
       const holder = post.vertical === 'stories' ? onDay[index] : onDay.find((p) => p.slot?.id === w.id);

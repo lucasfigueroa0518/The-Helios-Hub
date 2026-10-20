@@ -26,6 +26,7 @@ const CAROUSEL: Record<string, string> = {
   'service-error': 'service_5xx',
   'malformed-output': 'malformed_output',
   'needs-fresh-draft': 'needs_fresh_draft',
+  'needs-fresh-caption': 'needs_fresh_caption',
   'unfixable-draft': 'unfixable_draft',
   refused: 'refused',
   'main-claim-false': 'claim_false',
@@ -48,6 +49,7 @@ export const REASON_LABEL: Record<string, string> = {
   not_found: 'something it needed was missing',
   render_failed: 'render failed',
   needs_fresh_draft: 'needed a fresh draft',
+  needs_fresh_caption: 'needed a fresh caption',
   unfixable_draft: 'draft could not be fixed',
   claim_false: 'main claim was false',
   claim_unverifiable: "claim couldn't be verified",
@@ -57,7 +59,7 @@ export const REASON_LABEL: Record<string, string> = {
 };
 
 const STAGE: Record<string, string> = {
-  'jev-scoring': 'Scoring', reporter: 'Reporter', writer: 'Writer', editor: 'Editor', 'fact-checker': 'Fact-checker',
+  'jev-scoring': 'Scoring', reporter: 'Reporter', writer: 'Writer', editor: 'Editor', captioner: 'Captioner', 'fact-checker': 'Fact-checker',
   mechanical: 'Checks', design: 'Design', copy: 'Copy', frame: 'Frame', video: 'Video', song: 'Song', run: 'Run',
   publish: 'Publish', ideas: 'Ideas', render: 'Render', build: 'Build', report: 'Report',
 };

@@ -1,6 +1,7 @@
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
+import type { SlotsByDate } from '@/lib/social-hub/slots/types';
 import { rankIdeas } from '@/lib/social-hub/views/pools';
 import { isRejected } from '@/lib/social-hub/views/state';
 import { applyMoves, movesFor, moveTags, type IdeaAdjustment, type MoveTag } from '@/lib/social-hub/views/moves';
@@ -39,6 +40,8 @@ export type DayQuotas = {
   last_few_days?: number;
   /** The weekdays Carousels give up to Last Few Days while its auto_run is on (LFD-02); none when missing. */
   lfdDays?: readonly number[];
+  /** The calendar's slots by date (template mode), today − 7 … today + 21; null or missing while legacy. */
+  slots?: SlotsByDate | null;
 };
 
 export type RankedIdea = { idea: HubIdea; rank: number; moved: 'promoted' | 'demoted' | null; tag: MoveTag | null };
@@ -142,7 +145,7 @@ export function quotaCandidates(
   now: Date,
 ): QuotaCandidate[] {
   const today = nyDateOf(now)!;
-  const windows = capacityWindows(vertical, today, data.dayQuotas?.lfdDays ?? [], placedCount(data.posts, vertical, today), today);
+  const windows = capacityWindows(vertical, today, data.dayQuotas?.lfdDays ?? [], placedCount(data.posts, vertical, today), today, data.dayQuotas?.slots ?? null);
   if (vertical === 'stories') {
     // A Stories slot is one series' set for the day; its ideas feed the build.
     return windows.map((w) => {

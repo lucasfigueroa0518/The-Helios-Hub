@@ -63,7 +63,7 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()):
     latestQuotaSnapshot(q, now).catch(() => null),
     readAccount(q).catch((error: unknown) => ({ present: false as const, error: error instanceof Error ? error.message : String(error) })),
     readAdjustments(q, nyDateOf(now)!).catch(() => []),
-    readDayQuotas(q, explainersQ).catch(() => null),
+    readDayQuotas(q, explainersQ, now).catch(() => null),
     // Before the column exists (or if the read fails) nothing is hidden, so the hub never fails on it.
     readDeleted(q).catch(() => []),
     // SELECT only (lib/lfd/settings.ts); an unreadable lfd schema reads as off.

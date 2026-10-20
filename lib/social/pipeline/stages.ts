@@ -14,10 +14,12 @@ export type PipelineStages = {
   score(articles: IngestArticle[], now: Date): Promise<StageResult<ScoredCandidate[]>>;
   /** Research the pick into a brief (spec §4). */
   report(story: ScoredCandidate): Promise<StageResult<Brief>>;
-  /** Slides + caption + slide-type plan, one pass (spec §4, §4.3). */
+  /** Slides + slide-type plan, one pass (spec §4, §4.3). The caption is the captioner's. */
   write(brief: Brief): Promise<StageResult<Draft>>;
   /** Line editor: cut and sharpen only (spec §4.1). */
   edit(draft: Draft, brief: Brief): Promise<StageResult<Draft>>;
+  /** The caption on the finished slides: the news part and the builder's read (social-captions redesign, 2026-10-19). */
+  caption(draft: Draft, brief: Brief): Promise<StageResult<Draft>>;
   /** One pass, no loop (spec §4.2). */
   factCheck(draft: Draft, brief: Brief): Promise<StageResult<Draft>>;
   /** Plain-code guarantees on the text (spec §6): silent fixes, then checks. Runs before design. */

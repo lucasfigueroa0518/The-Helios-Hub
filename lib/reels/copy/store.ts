@@ -242,6 +242,8 @@ export type StoredCopy = {
   onScreenCopy: string | null;
   caption: string | null;
   callToAction: string | null;
+  /** v28+. The Helios line, from the working JSON; posted after the call to action from v29. */
+  builderRead: string | null;
   hashtags: string[];
   sources: Array<{ name: string; url: string }>;
   checks: CopyChecks | null;
@@ -268,6 +270,7 @@ export async function loadSlatesCopy(slateIds: string[]): Promise<Map<string, Re
     on_screen_copy: string | null;
     caption: string | null;
     call_to_action: string | null;
+    builder_read: string | null;
     hashtags: string[] | null;
     sources: Array<{ name: string; url: string }> | null;
     checks: CopyChecks | null;
@@ -276,7 +279,7 @@ export async function loadSlatesCopy(slateIds: string[]): Promise<Map<string, Re
     created_at: string;
   }>(
     `SELECT slate_id, post_idea_id, status, prompt_version, bucket, framework, on_screen_copy,
-            caption, call_to_action, hashtags, sources, checks, error, usd::text AS usd,
+            caption, call_to_action, working->>'builderRead' AS builder_read, hashtags, sources, checks, error, usd::text AS usd,
             created_at
        FROM reels.idea_copy
       WHERE slate_id = ANY($1::uuid[])`,
@@ -294,6 +297,7 @@ export async function loadSlatesCopy(slateIds: string[]): Promise<Map<string, Re
       onScreenCopy: row.on_screen_copy,
       caption: row.caption,
       callToAction: row.call_to_action,
+      builderRead: row.builder_read ?? null,
       hashtags: row.hashtags ?? [],
       sources: row.sources ?? [],
       checks: row.checks,

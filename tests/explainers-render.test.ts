@@ -21,6 +21,8 @@ import { fetchSourceText, htmlToText, resolveSource, type FetchLike } from '@/li
 import { briefMarkdown, PROJECT_INSTRUCTIONS, prepareWorkspace, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
 import { addTopics, getJob, getTopic, listArtifacts, listLintViolations, requestRender, claimNextJob } from '@/lib/explainers/repository';
 import type { AnalogyCandidate } from '@/lib/explainers/types';
+import { CaptionError, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
+import type { RecentClosing } from '@/lib/social/captions/build-line';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { DEFAULT_SETTINGS, saveSetting } from '@/lib/explainers/settings';
 import { localArtifactStore } from '@/lib/explainers/storage';
@@ -327,12 +329,13 @@ function deps(db: ExplainersDb, query: AgentQuery): RenderDeps {
         '',
         'A body paragraph that pays out the idea in the viewer\'s world, with the reel\'s example still attached.',
         '',
-        'Another paragraph for the place they will meet this next.',
-        '',
         'Save this for the next time this comes up.',
+        '',
+        'A dental practice meets this at the front desk, and Helios builds that kind of step.',
         '',
         '#one #two #three',
       ].join('\n'),
+      builderRead: 'A dental practice meets this at the front desk, and Helios builds that kind of step.',
       usd: 0,
       model: 'claude-sonnet-5-5',
       inputTokens: 0,
@@ -411,6 +414,92 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
     'heygen:tts+bgm+sfx:false',
     'anthropic:post_caption:claude-sonnet-5-5:true',
   ]);
+});
+
+/** Session A writes the plan and session B the video: the shortest run that reaches the caption. */
+function happyQuery(): AgentQuery {
+  return stubQuery({
+    [PLAN_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+      fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+      yield assistant('p1', { input_tokens: 1000, output_tokens: 100 }, 'plan');
+      yield result(0.2);
+    },
+    [BUILD_PROMPT]: async function* (o) {
+      fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
+      fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4-bytes');
+      yield assistant('b1', { input_tokens: 1000, output_tokens: 100 }, 'renders/video.mp4');
+      yield result(0.3);
+    },
+  });
+}
+
+test('job records closing and skips Jev at the ceiling', async () => {
+  const READ = 'A dental practice answering the same intake question all day meets this first, and Helios builds that kind of step.';
+  const closing = (buildLine: boolean): RecentClosing => ({ closing: 'An older read.', buildLine, createdAt: new Date() });
+  const cases: { name: string; recent: () => Promise<RecentClosing[]>; fit: () => Promise<number | null>; asked: boolean; include: boolean }[] = [
+    { name: 'at the ceiling', recent: async () => [closing(true), closing(false), closing(true)], fit: async () => 0.95, asked: false, include: false },
+    { name: 'under the ceiling, a good fit', recent: async () => [closing(false)], fit: async () => 0.95, asked: true, include: true },
+    { name: 'an unreadable log fails closed', recent: async () => { throw new Error('no table'); }, fit: async () => 0.95, asked: false, include: false },
+    { name: 'a failed fit call means no build line', recent: async () => [], fit: async () => { throw new Error('Jev down'); }, asked: true, include: false },
+    { name: 'a weak fit', recent: async () => [], fit: async () => 0.2, asked: true, include: false },
+  ];
+  for (const c of cases) {
+    const { db } = await scratchExplainersDb();
+    const job = await queuedJob(db);
+    const d = deps(db, happyQuery());
+    const fitCalls: CaptionFacts[] = [];
+    const fitSubjects: string[] = [];
+    const writeCalls: { recent: RecentClosing[]; includeBuildLine: boolean }[] = [];
+    const recorded: [string, string, boolean][] = [];
+    const stubbed = d.writeCaption!;
+    d.buildFit = async (facts, subjectId) => (fitCalls.push(facts), fitSubjects.push(subjectId), c.fit());
+    d.closings = { recent: c.recent, record: async (...row) => void recorded.push(row) };
+    d.writeCaption = async (facts, opts) => (writeCalls.push(opts), { ...(await stubbed(facts, opts)), builderRead: READ });
+
+    assert.deepEqual(await runRenderJob(d, job), { status: 'ok' }, c.name);
+    assert.equal(fitCalls.length, c.asked ? 1 : 0, `${c.name}: Jev asked`);
+    if (c.asked) assert.equal(fitCalls[0]!.title, 'What is an API?');
+    if (c.asked) assert.deepEqual(fitSubjects, [job.id], `${c.name}: Jev keyed by the job id`);
+    assert.equal(writeCalls.length, 1);
+    assert.equal(writeCalls[0]!.includeBuildLine, c.include, `${c.name}: include_build_line`);
+    if (c.name === 'an unreadable log fails closed') assert.deepEqual(writeCalls[0]!.recent, [], `${c.name}: an empty recent-closings list`);
+    assert.deepEqual(recorded, [[job.id, READ, c.include]], `${c.name}: closing recorded`);
+  }
+});
+
+test('a rejected caption is retried once with the reason, and the second request carries it', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, happyQuery());
+  const stubbed = d.writeCaption!;
+  const seen: CaptionOptions[] = [];
+  const reason = 'the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.';
+  d.writeCaption = async (facts, opts) => {
+    seen.push(opts);
+    if (seen.length === 1) throw new CaptionError(reason);
+    return stubbed(facts, opts);
+  };
+  assert.deepEqual(await runRenderJob(d, job), { status: 'ok' });
+  assert.equal(seen.length, 2);
+  assert.equal(seen[0]!.retryReason, undefined, 'the first request has no reason');
+  assert.equal(seen[1]!.retryReason, reason, 'the retry carries the rejection reason');
+});
+
+test('a transport or API failure retries without a rejection reason', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, happyQuery());
+  const stubbed = d.writeCaption!;
+  const seen: CaptionOptions[] = [];
+  d.writeCaption = async (facts, opts) => {
+    seen.push(opts);
+    if (seen.length === 1) throw new Error('529 Overloaded: the API is busy');
+    return stubbed(facts, opts);
+  };
+  assert.deepEqual(await runRenderJob(d, job), { status: 'ok' });
+  assert.equal(seen.length, 2);
+  assert.equal(seen[1]!.retryReason, undefined, 'an API error is not a caption the model wrote');
 });
 
 test('a resumed job reuses its workspace and plan: no preparation, no session A, the resume prompt', async () => {

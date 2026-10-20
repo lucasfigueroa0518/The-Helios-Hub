@@ -10,6 +10,9 @@
  *        F3 whitespace and markdown leftovers removed
  *        F4 trailing comma stripped from a displayed quote (punctuation only)
  *        F5 the caption's "Source:" line built by code (spec §6 #5)
+ *        F6 stray hashtags and model-written Source/Photos lines removed
+ *           from the caption, before F5 (the captioner's retry lets them
+ *           through; social-captions final fixes, 2026-10-19)
  *   B. Pass/fail checks (each failure carries what happens next; see
  *      FAILURE_ACTION):
  *        C1 character limits
@@ -31,11 +34,13 @@ import type { Photo } from '@/lib/social/photos/find';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { followLine, isExactExcerpt, type FilledDraft } from '@/lib/social/writer/draft';
 
+import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
+
 import { voiceHits } from './voice-lists';
 
 // ── A. Silent fixes ───────────────────────────────────────────────────
 
-export type Fix = { id: 'F1' | 'F2' | 'F3' | 'F4' | 'F5'; where: string; before: string; after: string };
+export type Fix = { id: 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6'; where: string; before: string; after: string };
 
 /** F1: em dash → comma; en dash in a range → hyphen, otherwise a comma; spaced double hyphen → comma. */
 export function fixDashes(s: string): string {
@@ -77,12 +82,13 @@ export function fixTrailingComma(s: string): string {
 const displayOutlet = (s: string) => s.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
 const nameKey = (s: string) => displayOutlet(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
 
-/** Every brief ID the final post's claim tags rest on (chosen cover, slides, quote and number IDs, caption). */
+/** Every brief ID the final post's claim tags rest on (chosen cover, slides, quote and number IDs, caption and the builder's read). */
 export function citedIds(d: FilledDraft): string[] {
   const ids = [
     ...d.cover_options[d.chosen_cover - 1]!.facts,
     ...d.slides.flatMap((s) => [...s.headline.facts, ...(s.body?.facts ?? []), ...(s.quote_id ? [s.quote_id] : []), ...s.number_ids]),
     ...d.caption.facts,
+    ...(d.caption_read?.facts ?? []),
   ];
   return [...new Set(ids)];
 }
@@ -107,6 +113,26 @@ export function buildSourceLine(d: FilledDraft, brief: Brief): string | null {
   const list = [...new Set(named)];
   const joined = list.length === 1 ? list[0]! : `${list.slice(0, -1).join(', ')} and ${list.at(-1)}`;
   return `Source: ${joined}.`;
+}
+
+const HASHTAG_RUN = /(?:^|[ \t]+)#[\p{L}_][\p{L}\p{N}_]*(?:[ \t]+#[\p{L}_][\p{L}\p{N}_]*)*[ \t]*$/gmu;
+const HASHTAG_MARK = /(^|\s)#([\p{L}_][\p{L}\p{N}_]*)/gu;
+
+/**
+ * F6: model-written Source/Photos lines go (code builds both), hashtags that
+ * end a line go, and a hashtag inside a sentence keeps its word ("#AI tools"
+ * → "AI tools"), so no meaning is cut.
+ */
+export function stripCaptionStrays(caption: string): string {
+  return caption
+    .split('\n')
+    .filter((l) => !/^\s*(Sources?|Photos?):/i.test(l))
+    .join('\n')
+    .replace(HASHTAG_RUN, '')
+    .replace(HASHTAG_MARK, '$1$2')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /** Replace any "Source:" line the Writer wrote with the code-built one. */
@@ -136,6 +162,7 @@ export function applySilentFixes(draft: FilledDraft, brief?: Brief): { draft: Fi
   });
   d.follow = all('follow', followLine(d.follow_topic));
   d.caption.text = all('caption', d.caption.text);
+  d.caption.text = fix('caption strays', d.caption.text, stripCaptionStrays, 'F6');
   if (brief) d.caption.text = fix('caption Source line', d.caption.text, (c) => withSourceLine(c, buildSourceLine(d, brief)), 'F5');
   return { draft: d, fixes };
 }
@@ -212,8 +239,8 @@ function withoutQuotes(text: string): string {
 /** C3: the voice list, on the stages' own words (quoted speech exempt). */
 export function checkVoice(d: FilledDraft): Failure[] {
   const out: Failure[] = [];
-  const scan = (where: string, text: string) => {
-    for (const h of voiceHits(withoutQuotes(text))) out.push({ id: 'C3', where, detail: `${h.kind}: "${h.match}"` });
+  const scan = (where: string, text: string, emoji = true) => {
+    for (const h of voiceHits(withoutQuotes(text), { emoji })) out.push({ id: 'C3', where, detail: `${h.kind}: "${h.match}"` });
   };
   scan('cover', d.cover);
   d.slides.forEach((s, i) => {
@@ -221,7 +248,10 @@ export function checkVoice(d: FilledDraft): Failure[] {
     if (s.body) scan(`slide ${i + 2} body`, s.body.text);
   });
   scan('follow', d.follow);
-  scan('caption', d.caption.text);
+  // The caption may carry up to two emoji (2026-10-19); the slides and the follow line keep the ban.
+  scan('caption', d.caption.text, false);
+  const emoji = countEmoji(withoutQuotes(d.caption.text));
+  if (emoji > CAPTION_EMOJI_MAX) out.push({ id: 'C3', where: 'caption', detail: `emoji: ${emoji} in the caption, at most ${CAPTION_EMOJI_MAX}` });
   return out;
 }
 
@@ -354,12 +384,15 @@ export function textChecks(d: FilledDraft, brief: Brief): Failure[] {
 export const HARD_CHECKS: ReadonlySet<CheckId> = new Set(['C1', 'C2']);
 
 /**
- * The Writer's and Editor's code check (one retry, spec §7.1): on the first
+ * The Writer's, Editor's and captioner's code check (one retry, spec §7.1): on the first
  * submission every C1–C5 failure goes back to the model; on the retry only
  * the hard ones block, so style can't sink a draft.
  */
-export function draftTextFailures(filled: FilledDraft, brief: Brief, attempt: number, stage: 'writer' | 'editor' = 'writer'): Failure[] {
+export function draftTextFailures(filled: FilledDraft, brief: Brief, attempt: number, stage: 'writer' | 'editor' | 'captioner' = 'writer'): Failure[] {
   // C8 sends the draft back to the Editor once (Tommy, 2026-10-06); the Writer is told the rule in its prompt.
-  const all = textChecks(applySilentFixes(filled, brief).draft, brief).filter((f) => f.id !== 'C8' || stage === 'editor');
+  // The captioner (2026-10-19) is held only to the caption: the slides are final and not its to fix.
+  const all = textChecks(applySilentFixes(filled, brief).draft, brief)
+    .filter((f) => f.id !== 'C8' || stage === 'editor')
+    .filter((f) => stage !== 'captioner' || f.where === 'caption');
   return attempt <= 1 ? all : all.filter((f) => HARD_CHECKS.has(f.id));
 }

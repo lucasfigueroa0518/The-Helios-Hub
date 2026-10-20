@@ -163,7 +163,12 @@ test('the skill writes for an AI-curious general reader and treats the whole cop
 
 test('the account grows an audience, and the copy has two jobs in order (D-211)', () => {
   assert.match(COPY_SKILL, /## The account's job/);
-  assert.match(COPY_SKILL, /There is no pitch and no offer of Helios services/);
+  // v28: "no sales pitch" stays; the offer ban becomes no service list and no client-result claim.
+  assert.match(COPY_SKILL, /There is no sales pitch, no list of Helios services, and no claim about Helios clients or results/);
+  assert.match(COPY_SKILL, /no sales pitch, no list of Helios services, and no claim about Helios clients or results\./);
+  // v29: the Helios line posts last, after the call to action.
+  assert.match(COPY_SKILL, /The Helios line ends the post, after the call to action and before the hashtags\./);
+  assert.match(COPY_SKILL, /Helios never speaks in the first person in the on-screen copy or in the news part of the caption/);
   assert.match(COPY_SKILL, /it is a complete thought with tension, never a fact that stops/);
   assert.match(COPY_SKILL, /A first-time viewer understands the copy on one read/);
   assert.match(COPY_SKILL, /The stake stays on screen/);
@@ -199,7 +204,7 @@ test('the writer states a viewer stake, and both copies and the caption tell one
   const properties = Object.keys(REPORT_COPY_TOOL.input_schema.properties);
   assert.ok(properties.indexOf('viewer_stake') < properties.indexOf('on_screen_copies'));
   assert.ok(REPORT_COPY_TOOL.input_schema.required.includes('viewer_stake'));
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v27');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
 });
 
 test('the pre-limit writer is preserved as a Threads candidate and stays off the reel path', () => {
@@ -397,6 +402,9 @@ test('cited URLs are shown and count as known', () => {
 const screen = 'Ninety five percent of pilots stall.\nThe model is rarely why.';
 const otherScreen = 'Enterprise pilots stall before launch.\nThe model is rarely why.';
 
+/** v28: every post closes on a builder's read that names Helios; v29 posts it last, after the call to action. */
+const READ = 'For a law firm, intake that answers itself is now a weekend job. Helios builds that kind of handoff.';
+
 const goodInput = {
   hook_drafts: ['a', 'b', 'c'],
   copy_draft: 'draft',
@@ -406,6 +414,7 @@ const goodInput = {
   tension: 'A deputy chased plates and a judge threw the case out.',
   on_screen_copies: [screen, otherScreen],
   caption: 'First line that fits the fold.\n\nMore detail, per TechCrunch.',
+  builder_read: READ,
   call_to_action: 'Send this to the person who owns your AI pilot.',
   hashtags: ['#AI', 'enterprise', '#MLOps'],
   sources: [{ name: 'TechCrunch', url: 'https://techcrunch.com/a' }],
@@ -414,26 +423,28 @@ const goodInput = {
 test('a call to action already at the end of the caption is posted once', () => {
   const call = parseCopyReport({
     ...goodInput,
-    caption: 'First line that fits the fold.\n\nSend this to the person who owns your AI pilot.',
+    caption: `First line that fits the fold.\n\n${READ}\n\nSend this to the person who owns your AI pilot.`,
     call_to_action: 'Send this to the person who owns your AI pilot.',
   });
   const posted = fullCaption(publishCopy(call, screen));
   assert.equal(posted.split('Send this to the person who owns your AI pilot.').length - 1, 1);
-  assert.match(posted, /#AI #enterprise #MLOps$/);
+  assert.equal(posted.split(READ).length - 1, 1, 'the Helios line posts once');
+  assert.ok(posted.endsWith(`Send this to the person who owns your AI pilot.\n\n${READ}\n\n#AI #enterprise #MLOps`));
 });
 
 test('an assembled caption over 2,200 characters is shortened to the limit', () => {
   const paragraph = 'This paragraph is long enough to cut. '.repeat(80).trim();
   const call = parseCopyReport({
     ...goodInput,
-    caption: [paragraph, paragraph, paragraph].join('\n\n'),
+    caption: [paragraph, paragraph, paragraph, READ].join('\n\n'),
     call_to_action: 'Send this to the person who owns your AI pilot.',
   });
   const posted = fullCaption(publishCopy(call, screen));
   assert.ok(posted.length <= 2_200);
   assert.ok(posted.length > 2_000);
   assert.match(posted, /^This paragraph is long enough to cut\./);
-  assert.match(posted, /Send this to the person who owns your AI pilot\.\n\n#AI #enterprise #MLOps$/);
+  // v29: the call to action and the Helios line (the one Helios mention) survive the cut, in that order.
+  assert.ok(posted.endsWith(`\n\nSend this to the person who owns your AI pilot.\n\n${READ}\n\n#AI #enterprise #MLOps`));
   assert.equal(posted.includes(paragraph), false);
 });
 
@@ -445,7 +456,7 @@ test('a well-formed report parses and hashtags gain a #', () => {
   assert.deepEqual(report.hashtags, ['#AI', '#enterprise', '#MLOps']);
   assert.equal(
     fullCaption(report),
-    `${goodInput.caption}\n\n${goodInput.call_to_action}\n\n#AI #enterprise #MLOps`,
+    `${goodInput.caption}\n\n${goodInput.call_to_action}\n\n${READ}\n\n#AI #enterprise #MLOps`,
   );
 });
 

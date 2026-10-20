@@ -50,6 +50,7 @@ const TOOL_KEYS = [
   'outcome_note',
   'on_screen_copies',
   'caption',
+  'builder_read',
   'call_to_action',
   'hashtags',
   'sources',

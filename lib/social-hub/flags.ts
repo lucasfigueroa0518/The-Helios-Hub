@@ -7,9 +7,9 @@
  * person turns each on, one at a time, after checking it on real data.
  */
 
-export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'refreshOnVisit';
+export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'refreshOnVisit' | 'editSlots';
 
-export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post' | 'health' | 'cost';
+export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post' | 'health' | 'cost' | 'calendarWeek';
 
 export type HubFlags = {
   actions: Readonly<Record<ActionFlag, boolean>>;
@@ -33,6 +33,8 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     unschedule: true,
     // Needs the social_hub schema applied and the worker redeployed first.
     refreshOnVisit: false,
+    // Weekly slot calendar: edit the template and single dates (spec 2026-10-14).
+    editSlots: true,
   }),
   views: Object.freeze({
     calendar: true,
@@ -41,6 +43,7 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     post: true,
     health: true,
     cost: true,
+    calendarWeek: true,
   }),
 });
 
@@ -54,6 +57,7 @@ export const ACTION_FLAGS: readonly ActionFlag[] = [
   'reschedule',
   'unschedule',
   'refreshOnVisit',
+  'editSlots',
 ];
 
 export function actionEnabled(flag: ActionFlag, flags: HubFlags = SOCIAL_HUB_FLAGS): boolean {

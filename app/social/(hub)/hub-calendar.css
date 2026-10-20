@@ -1,4 +1,4 @@
-/* Social Hub: Calendar (month grid, summary strip, day sheet). */
+/* Social Hub: Calendar (week window grid, month grid, summary strip, day sheet). */
 
 /* Five plain figures in one row, not tiles. */
 .sh-summary { display: flex; flex-wrap: wrap; gap: 8px 40px; margin: 0; }
@@ -99,3 +99,85 @@
   .sh-item__ready, .sh-item__ready-none { grid-column: 1 / -1; }
 }
 .sh-item__ready-none .sh-link, .sh-item__ready-more .sh-link { color: var(--color-text); text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- week: rows are time windows, columns are days (spec §3) */
+
+/* The grid scrolls sideways inside its own box on narrow screens; the page never does. */
+.sh-week { max-width: 100%; overflow-x: auto; background: var(--color-surface); border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); }
+.sh-week__table { min-width: 680px; }
+.sh-week__row { display: grid; grid-template-columns: minmax(5.5rem, auto) repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--sh-hairline); }
+.sh-week__row:last-child { border-bottom: 0; }
+.sh-week__head > span { display: flex; align-items: baseline; gap: 6px; padding: 8px 10px; color: var(--color-text-muted); font-size: var(--sh-fs-label); font-weight: var(--font-weight-medium); }
+.sh-week__num { color: var(--color-text); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-week__col.is-today .sh-week__num { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 4px; border-radius: var(--radius-pill); background: var(--color-text); color: var(--color-text-inverse); }
+.sh-week__time { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-right: 1px solid var(--sh-hairline); }
+.sh-week__at { font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-week__what { color: var(--color-text-muted); font-size: var(--sh-fs-label); }
+.sh-week__cell { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; min-width: 0; min-height: 44px; padding: 6px; border-right: 1px solid var(--sh-hairline); }
+.sh-week__cell:last-child { border-right: 0; }
+.sh-week__cell.is-past, .sh-week__col.is-past { opacity: 0.55; }
+
+/* A slot: the type's color as a tint, like the month marks. */
+.sh-week__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--sh-color) 14%, var(--color-surface));
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--sh-fs-label);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 150ms var(--sh-ease), opacity 150ms var(--sh-ease);
+}
+button.sh-week__chip { cursor: pointer; }
+button.sh-week__chip:hover { background: color-mix(in srgb, var(--sh-color) 24%, var(--color-surface)); }
+/* A read-only booked slot links to its post: the whole chip is the link. */
+.sh-week__chip--post:hover { background: color-mix(in srgb, var(--sh-color) 24%, var(--color-surface)); }
+.sh-week__link { display: inline-flex; align-items: center; gap: 5px; min-height: 24px; margin: 0 -8px; padding: 0 8px; color: inherit; text-decoration: none; }
+/* Inset: the chip clips overflow, so an outside ring would be cut off. */
+.sh-week__link:focus-visible { outline: 2px solid var(--sh-focus); outline-offset: -2px; border-radius: var(--radius-sm); }
+.sh-slot__post { margin: -4px 0 14px; font-size: var(--sh-fs-small); }
+.sh-week__dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-pill); background: var(--sh-color); }
+.sh-week__chip[data-origin='override'] { box-shadow: inset 0 0 0 1.5px var(--sh-focus); }
+.sh-week__chip[data-booked='true'] { box-shadow: inset 3px 0 0 var(--color-text); }
+.sh-week__chip[data-origin='override'][data-booked='true'] { box-shadow: inset 3px 0 0 var(--color-text), inset 0 0 0 1.5px var(--sh-focus); }
+.sh-week__chip[data-dimmed='true'] { opacity: 0.35; }
+.sh-week__chip--key { --sh-color: var(--color-text-muted); width: 20px; min-height: 14px; padding: 0 5px; }
+.sh-week__chip--key .sh-week__dot { width: 6px; height: 6px; }
+.sh-week__add { display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 1px dashed var(--color-border-strong); border-radius: var(--radius-sm); background: transparent; color: var(--color-text-muted); cursor: pointer; opacity: 0; transition: opacity 150ms var(--sh-ease), color 150ms var(--sh-ease); }
+.sh-week__cell:hover .sh-week__add, .sh-week__add:focus-visible { opacity: 1; }
+.sh-week__add:hover { color: var(--color-text); border-color: var(--color-text-muted); }
+@media (hover: none) { .sh-week__add { opacity: 1; } }
+.sh-week__blocked { display: inline-flex; align-items: center; min-height: 24px; padding: 0 8px; border-radius: var(--radius-sm); background: var(--color-surface-2); color: var(--color-text-subtle); font-size: var(--sh-fs-label); white-space: nowrap; }
+.sh-key .sh-week__blocked { min-height: 18px; padding: 0 6px; }
+.sh-week__focus { margin: -8px 0 0; }
+.sh-week__focus .sh-link { color: var(--color-text); text-decoration: underline; text-underline-offset: 2px; }
+
+/* The source switch: a notice before the switch, a quiet link after. */
+.sh-week__source { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.sh-week__source:not(.sh-week__source--off) { justify-content: flex-end; margin: -8px 0 0; }
+.sh-week__source--off { max-width: none; }
+.sh-week__source p { margin: 0; }
+
+/* The slot dialog */
+.sh-slot__field { margin: 0 0 14px; padding: 0; border: 0; }
+.sh-slot__field legend { margin-bottom: 6px; padding: 0; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-weight: var(--font-weight-medium); }
+.sh-slot__lfd { margin: 0 0 14px; padding-top: 12px; border-top: 1px solid var(--sh-hairline); }
+.sh-slot__lfd p { margin: 0 0 8px; }
+.sh-slot__lfd .sh-btn--quiet { margin-left: -12px; }
+.sh-slot__booked { margin: -8px 0 12px; padding-left: 18px; color: var(--color-text); }
+.sh-slot__errors { margin: 0 0 14px; padding-left: 28px; max-width: none; }
+.sh-confirm__actions .sh-btn--danger { margin-right: auto; }
+
+@media (max-width: 720px) {
+  .sh-week__time { position: sticky; left: 0; z-index: 1; background: var(--color-surface); }
+  .sh-week__head > span:first-child { position: sticky; left: 0; z-index: 1; background: var(--color-surface); }
+}

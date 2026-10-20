@@ -8,6 +8,8 @@ import { AddTopics } from '@/app/explainers/topics-view';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 import { Drawer } from '@/app/reels/ui';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
+import { ScheduleStrip } from '@/components/content-type/ScheduleStrip';
+import type { ScheduleDay } from '@/lib/content-type/posting';
 
 /**
  * The per-type generate buttons and settings panels on a content type's page.
@@ -247,6 +249,8 @@ type Posting = {
   perDay: number | null;
   maxPerDay: number | null;
   series: Array<{ id: string; label: string; enabled: boolean; generate: boolean; days: number[] }> | null;
+  /** The calendar's week for this type (template mode); null while each type sets its own cadence. */
+  schedule: ScheduleDay[] | null;
 };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -286,6 +290,8 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
   if (error) return <p className="rh-empty">{error}</p>;
   if (!data) return <p className="rh-muted">Loading…</p>;
   const noun = NOUN[type];
+  // With the calendar, when a type posts is set there: the quota and series days give way to its week, read only.
+  const calendar = data.schedule ?? null;
   return (
     <div className="rh-settings">
       {!data.live ? (
@@ -316,7 +322,8 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
       >
         Auto-publish
       </Switch>
-      {data.perDay !== null && data.maxPerDay !== null ? (
+      {calendar ? <ScheduleStrip type={type} days={calendar} /> : null}
+      {!calendar && data.perDay !== null && data.maxPerDay !== null ? (
         <div>
           <div className="rh-quota">
             <span className="rh-quota__label">Posts per day</span>
@@ -329,11 +336,11 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
       ) : null}
       {data.series ? (
         <>
-          <p className="rh-settings__note">Each series has its own days of the week. A set is made for each series on its days.</p>
+          {calendar ? null : <p className="rh-settings__note">Each series has its own days of the week. A set is made for each series on its days.</p>}
           {data.series.map((s) => (
             <div key={s.id} className="rh-series">
               <strong>{s.label}</strong>
-              <div className="rh-series__days" role="group" aria-label={`${s.label} days`}>
+              {calendar ? null : <div className="rh-series__days" role="group" aria-label={`${s.label} days`}>
                 {DAY_NAMES.map((name, d) => {
                   const on = s.days.includes(d);
                   return (
@@ -352,7 +359,7 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
                     </button>
                   );
                 })}
-              </div>
+              </div>}
               <Switch checked={s.enabled} onChange={(on) => void save({ series: { id: s.id, enabled: on } })}>Enabled</Switch>
               <Switch
                 checked={s.generate}

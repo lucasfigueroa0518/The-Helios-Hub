@@ -312,6 +312,7 @@ created on deploy). Frames are PNGs in the private Supabase bucket
    publishing is not picked again. The bench, everything not selected for
    the day, is not scheduled. The worker posts the ones that landed in a window
    as trial reels (D-207). Force post sends one immediately, still as a trial reel.
+   A Text on Screen slot set to Main feed posts as a regular reel (no trial params, shared to the feed) and is spaced like a feed post. Force post with no slot still posts as a trial reel.
 8. **Retain.** Sources older than 3 weeks are hard-deleted. Fingerprints,
    published-status rows, and Jev logs outlive them.
 

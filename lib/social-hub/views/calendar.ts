@@ -1,6 +1,7 @@
 import { formatMetricKey, metricSpec, postMetric, sumReported } from '@/lib/social-hub/metrics';
 import { addDays, monthGrid, nyDateOf, nyDayStart } from '@/lib/social-hub/time';
 import { dayPlan, windowsOn, type PlanWindow } from '@/lib/social-hub/views/plan';
+import type { SlotsByDate } from '@/lib/social-hub/slots/types';
 import { needsPerson } from '@/lib/social-hub/views/state';
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import type { HubPost, MetricKey, Vertical } from '@/lib/social-hub/types';
@@ -62,7 +63,7 @@ function markOf(post: HubPost): Mark['kind'] | null {
  * A day's count covers only content placed on it, exactly what its day sheet lists; made-and-unplaced content
  * belongs to Content's "Made, waiting for a slot", not to a day.
  */
-export function monthModel(posts: readonly HubPost[], month: string, now: Date, metric: MetricKey, types: ReadonlySet<Vertical>, actionable: (post: HubPost) => boolean = () => true, carouselOff: readonly number[] = []): MonthModel {
+export function monthModel(posts: readonly HubPost[], month: string, now: Date, metric: MetricKey, types: ReadonlySet<Vertical>, actionable: (post: HubPost) => boolean = () => true, carouselOff: readonly number[] = [], slots?: SlotsByDate | null): MonthModel {
   const today = nyDateOf(now)!;
   const shown = posts.filter((p) => types.has(p.vertical));
   const byDay = new Map<string, HubPost[]>();
@@ -81,7 +82,7 @@ export function monthModel(posts: readonly HubPost[], month: string, now: Date, 
     if (day >= today && day <= addDays(today, 1)) {
       // Open slots, today and tomorrow only: past that the nightly run fills them,
       // so rings would only repeat the predictable (critique 2026-10-08, P2-D).
-      for (const t of dayPlan(shown, day, carouselOff, today).types) {
+      for (const t of dayPlan(shown, day, carouselOff, today, slots).types) {
         if (!types.has(t.vertical)) continue;
         for (let i = 0; i < t.open.length; i++) marks.push({ vertical: t.vertical, kind: 'open' });
       }
@@ -132,13 +133,13 @@ export type DaySlot =
   | { kind: 'post'; post: HubPost; at: string | null }
   | { kind: 'open'; vertical: Vertical; window: PlanWindow; at: string };
 
-export function daySlots(posts: readonly HubPost[], day: string, types: ReadonlySet<Vertical>, now: Date, carouselOff: readonly number[] = []): DaySlot[] {
+export function daySlots(posts: readonly HubPost[], day: string, types: ReadonlySet<Vertical>, now: Date, carouselOff: readonly number[] = [], slots?: SlotsByDate | null): DaySlot[] {
   const today = nyDateOf(now)!;
   const shown = posts.filter((p) => types.has(p.vertical));
   const placed: DaySlot[] = shown
     .filter((p) => p.nyDate === day && p.status !== 'ready')
     .map((p) => ({ kind: 'post', post: p, at: p.postedAt ?? p.publishAt }));
-  const open: DaySlot[] = day < today ? [] : dayPlan(shown, day, carouselOff, today).types
+  const open: DaySlot[] = day < today ? [] : dayPlan(shown, day, carouselOff, today, slots).types
     .filter((t) => types.has(t.vertical))
     .flatMap((t) => t.open
       // A window that has already closed today isn't a slot anyone can fill.
@@ -152,8 +153,8 @@ function minuteIso(day: string, minute: number): string {
   return new Date(nyDayStart(day).getTime() + minute * 60_000).toISOString();
 }
 
-export function windowsFor(vertical: Vertical, day: string, carouselOff: readonly number[] = []): PlanWindow[] {
-  return windowsOn(vertical, day, carouselOff);
+export function windowsFor(vertical: Vertical, day: string, carouselOff: readonly number[] = [], slots?: SlotsByDate | null): PlanWindow[] {
+  return windowsOn(vertical, day, carouselOff, slots);
 }
 
 export { addDays };

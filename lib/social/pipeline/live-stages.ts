@@ -3,12 +3,13 @@
  * its offline test use the same assembly (checkpoint run, Tommy
  * 2026-10-06):
  *
- *   selection (Jev) → Reporter → Writer → Editor → Fact-checker →
- *   mechanical (text fixes + checks, M7) → design (basic photos with the
+ *   selection (Jev) → Reporter → Writer → Editor → captioner (Jev build
+ *   fit + Claude) → Fact-checker → mechanical (text fixes + checks, M7) →
+ *   design (basic photos with the
  *   stock vision check, photo credit check, render-fit and dropped-text checks)
  *
- * Every client is injected (Claude `create`, Jev, page reader, HTTP, the
- * fit check), so tests pass fakes and nothing here reaches a live service
+ * Every client is injected (Claude `create`, Jev, the caption closings log,
+ * page reader, HTTP, the fit check), so tests pass fakes and nothing here reaches a live service
  * by itself.
  *
  * Hard total cap: one RunBudget covers Claude (tokens + web search fees)
@@ -23,6 +24,7 @@ import { createSizeProbe } from '@/lib/social/photos/size';
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { PhotoBank } from '@/lib/media-library/bank';
 import type { JevAsk } from '@/lib/social/jev/client';
+import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import type { PhotoDeps } from '@/lib/social/photos/find';
 import type { UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import { createTagSheet } from '@/lib/social/photos/tag-sheet';
@@ -39,6 +41,7 @@ import type { IsWellKnown, WriterResult } from '@/lib/social/writer/writer';
 import { runWriter } from '@/lib/social/writer/writer';
 import { runEditor } from '@/lib/social/editor/editor';
 
+import { createCaptionerStage, type CaptionerRun } from './captioner-stage';
 import { createDesignStage } from './design-stage';
 import { createFactCheckStage } from './factcheck-stage';
 import { createMechanicalStage } from './mechanical-stage';
@@ -95,6 +98,7 @@ export type StoryLog = {
   reporter?: ReporterResult & { reads: Array<{ url: string; ok: boolean; chars?: number; error?: string }> };
   writer: WriterResult[];
   editor: EditorResult[];
+  captioner: CaptionerRun[];
   factCheck: Array<Awaited<ReturnType<typeof runFactCheck>>>;
   design?: PostObject;
   designFailure?: string;
@@ -104,6 +108,8 @@ export type LiveStagesDeps = {
   score: PipelineStages['score'];
   create: MessagesCreate;
   jev: JevAsk;
+  /** The carousel caption closings (closingsLog(query, 'carousel')): recent closings for the captioner and the build-line ceiling. */
+  closings: ClosingsLog;
   budget: RunBudget;
   readPage: (url: string) => Promise<PageRead>;
   isWellKnown: IsWellKnown;
@@ -137,12 +143,13 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   const logs = new Map<string, StoryLog>();
   const log = (id: string) => {
     let l = logs.get(id);
-    if (!l) logs.set(id, (l = { writer: [], editor: [], factCheck: [] }));
+    if (!l) logs.set(id, (l = { writer: [], editor: [], captioner: [], factCheck: [] }));
     return l;
   };
   const create = deps.budget.guard(deps.create);
   let reporterRuns = 0;
 
+  const caption = createCaptionerStage({ create, jev: deps.jev, closings: deps.closings, onResult: (id, r) => log(id).captioner.push(r) });
   const factCheck = createFactCheckStage({ create, onResult: (id, r) => log(id).factCheck.push(r) });
   // The photo vision check on top stock candidates (Tommy, 2026-10-06), under the same budget guard.
   const vision = createVisionCheck({ create, http: deps.http });
@@ -198,6 +205,9 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
       log(draft.storyId).editor.push(r);
       if (!r.ok) return capAware(deps.budget, { ok: false, reasonCode: r.reason, detail: r.detail, costUsd: r.costUsd });
       return { ok: true, value: { storyId: draft.storyId, submission: r.draft, filled: r.filled }, costUsd: r.costUsd };
+    },
+    async caption(draft, brief) {
+      return capAware(deps.budget, await caption(draft, brief));
     },
     async factCheck(draft, brief) {
       return capAware(deps.budget, await factCheck(draft, brief));

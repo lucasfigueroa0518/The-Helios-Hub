@@ -8,6 +8,9 @@
  * Seventh round (Lucas, 2026-10-08): the opening line "Direct, dry,
  * confident. A sharp editor, …" becomes "Confident, energetic, engaging. A
  * sharp storyteller, …"; the lists are unchanged.
+ * Social-captions redesign (2026-10-19): the sentence-length line keeps only
+ * its slide half; "In the caption, three short sentences in a row is too
+ * many" moved to the captioner's own rules (CAPTIONER_CAROUSEL_RULES).
  *
  * The derived banned-phrase lists are code checks and come back in M7 (mechanical guarantees).
  */
@@ -17,7 +20,7 @@ Write the way a person talks:
 - Use real names. "Norland Labs says," not "the company says" when you can name it.
 - Say who did what. "Norland Labs tested the software," not "the software was tested."
 - Read every line aloud in your head. If nobody would say it in a normal voice, rewrite it.
-- Vary sentence length. In the caption, three short sentences in a row is too many; on a slide, one or two short sentences is normal.
+- Vary sentence length. On a slide, one or two short sentences is normal.
 - Don't open two slides the same way.
 
 Never use:

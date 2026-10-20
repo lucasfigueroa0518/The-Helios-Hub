@@ -3,6 +3,9 @@
  * run's final drafts (photo spec §4 and the slide buckets spec, sixth round)
  * and re-render, without the Writer, Editor or Fact-checker. Words never
  * change. Used to judge the photo and layout changes on posts Tommy has seen.
+ * No captioner call: the stored final draft (news + builder's read) goes
+ * through the mechanical stage's join (joinAndFix) as a live run does, so the
+ * render carries the caption that posted, Source line included.
  *
  * Saved drafts that predate the visual requests are converted: a subject
  * IMAGE becomes person: or company: (by the subject's type), a stock scene
@@ -46,6 +49,7 @@ async function main() {
   const { layoutOf } = await import('@/lib/social/render/layout-rotation');
   const { toSlug, writeGeneratedPost } = await import('@/lib/social/render/local-store');
   const { fillDraft } = await import('@/lib/social/writer/draft');
+  const { joinAndFix } = await import('@/lib/social/pipeline/mechanical-stage');
   type Visual = import('@/lib/social/writer/draft').VisualRequest;
   type Brief = import('@/lib/social/reporter/brief').Brief;
 
@@ -105,7 +109,7 @@ async function main() {
       delete s.spread_with_next;
     }
     delete sub.concept;
-    const filled = fillDraft(sub, brief);
+    const filled = joinAndFix(fillDraft(sub, brief), brief).draft;
     const pages = l.reporter.pages ?? [];
     const storyDate = (run.selection?.winners ?? []).find((w: any) => w.id === storyId || w.representative?.url === storyId)?.publishedAt?.slice(0, 10) ?? run.startedAt.slice(0, 10);
     const photos = await photosForDraft(filled, brief, pages, { jev, http: fetch, faces: detectFacesLive, secondPhotos: createSecondPhotos(), ...(claude ?? {}) }, { storyDate });

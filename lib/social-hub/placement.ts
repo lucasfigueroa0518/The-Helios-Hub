@@ -8,7 +8,9 @@
  *     uniform over the window's minutes still ahead, so never in the past;
  *   - one item per window per day per type (the spine's unique slot index);
  *   - Carousels and Explainers keep FEED_GAP_MINUTES from every other feed
- *     post; Trial Reels and Stories are exempt (D33);
+ *     post; Trial Reels and Stories are exempt (D33). With the calendar
+ *     (template mode) the slot must be one of that day's slots, and a reel
+ *     type's slot is spaced exactly when it is a Main slot;
  *   - rejected content, content posting right now and content already
  *     posted are refused.
  *
@@ -39,6 +41,8 @@ import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
 import { carouselOffDays, readLfdSettings } from '@/lib/lfd/settings';
 import { bookSlot, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
+import { legacyFeedMode, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
+import type { FeedMode, SlotQuery } from '@/lib/social-hub/slots/types';
 import { isDayKey } from '@/lib/social-hub/time';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
@@ -121,7 +125,11 @@ async function storyWindows(query: SpineQuery): Promise<SlotWindow[]> {
   });
 }
 
-/** Each type's windows, from its own config. */
+/**
+ * Each type's windows, from its own config. Their `days` are the legacy rule:
+ * planPlacement and openSlots ignore them on a day whose calendar slots load
+ * (the slots decide), and fall back to them when that read fails.
+ */
 export async function placementRules(query: SpineQuery, vertical: SpineVertical): Promise<PlacementRules> {
   switch (vertical) {
     case 'carousels': {
@@ -165,7 +173,24 @@ function windowList(rules: PlacementRules): string {
   return each.length > 1 ? `${each.slice(0, -1).join(', ')} or ${each.at(-1)}` : each[0] ?? 'none';
 }
 
-export type Planned = { ok: true; nyDate: string; slot: string; publishAt: Date; window: SlotWindow } | { ok: false; note: string };
+/**
+ * `feedMode`: the calendar slot's Trial / Main for a reel type in template
+ * mode; null while legacy (and for other types), so bookings keep the old SQL.
+ */
+export type Planned = { ok: true; nyDate: string; slot: string; publishAt: Date; window: SlotWindow; feedMode: FeedMode | null } | { ok: false; note: string };
+
+/** The day's calendar slots, or null while legacy. A failed read falls back to legacy. */
+const daySlotPlan = (query: SpineQuery, nyDate: string): Promise<SlotPlan | null> =>
+  slotPlan(query as SlotQuery, nyDate, 1).catch(() => null);
+
+/** Template mode: a reel type's slot is spaced when it is Main (Trial reels aren't feed posts, D33). */
+function slotSpacing(plan: SlotPlan | null, rules: PlacementRules, nyDate: string, windowId: string): { onCalendar: boolean; spaced: boolean; feedMode: FeedMode | null } {
+  if (!plan) return { onCalendar: true, spaced: rules.spaced, feedMode: null };
+  const slot = slotsOn(plan, rules.vertical, nyDate).find((s) => s.windowId === windowId);
+  const reel = rules.vertical === 'reels' || rules.vertical === 'explainers';
+  const feedMode = reel ? (slot?.feedMode ?? legacyFeedMode(rules.vertical)) : null;
+  return { onCalendar: Boolean(slot), spaced: feedMode ? feedMode === 'main' : rules.spaced, feedMode };
+}
 
 /**
  * The minute this content would post at in (nyDate, slot), or why it can't go
@@ -191,7 +216,11 @@ export async function planPlacement(
   const today = calendarDateKey(now, SOCIAL_TIMEZONE);
   if (input.nyDate < today) return { ok: false, note: 'That day has passed.' };
   if (input.nyDate > addCalendarDays(today, PLACEMENT_DAYS_AHEAD)) return { ok: false, note: 'Pick a day in the next two weeks.' };
-  if (window.days && !window.days.includes(weekdayOf(input.nyDate))) {
+  const calendar = await daySlotPlan(query, input.nyDate);
+  const fit = slotSpacing(calendar, rules, input.nyDate, input.slot);
+  if (calendar) {
+    if (!fit.onCalendar) return { ok: false, note: `${window.name} isn’t a ${TYPE_NAME[input.vertical]} slot on ${WEEKDAY[weekdayOf(input.nyDate)]}, ${input.nyDate}. Add it on the calendar first.` };
+  } else if (window.days && !window.days.includes(weekdayOf(input.nyDate))) {
     return { ok: false, note: `${window.name} doesn’t post on ${WEEKDAY[weekdayOf(input.nyDate)]}s (it posts ${window.days.map((d) => WEEKDAY_SHORT[d]).join(', ')}).` };
   }
   const open = openWindowRange(window, input.nyDate, now);
@@ -207,7 +236,7 @@ export async function planPlacement(
   if (taken[0]) return { ok: false, note: 'That slot is taken.' };
 
   let busy: Date[] = [];
-  if (rules.spaced) {
+  if (fit.spaced) {
     busy = await busyFeedTimes(query, now);
     // The slot being moved doesn't space against itself.
     const own = input.moving ? busy.findIndex((b) => b.getTime() === input.moving!.publishAt.getTime()) : -1;
@@ -221,7 +250,7 @@ export async function planPlacement(
   if (!Number.isInteger(drawn) || drawn < 0 || drawn >= offsets.length) {
     throw new Error(`Slot draw returned ${drawn} for ${offsets.length} open minutes.`);
   }
-  return { ok: true, nyDate: input.nyDate, slot: input.slot, publishAt: windowMinuteInstant(window, input.nyDate, offsets[drawn]!), window };
+  return { ok: true, nyDate: input.nyDate, slot: input.slot, publishAt: windowMinuteInstant(window, input.nyDate, offsets[drawn]!), window, feedMode: fit.feedMode };
 }
 
 /** What a placement acts on: the item, and for Trial Reels the idea that owns the slot. */
@@ -312,6 +341,8 @@ export async function placeItem(query: SpineQuery, input: PlaceInput): Promise<P
       slot: plan.slot,
       publishAt: plan.publishAt,
       source: 'user',
+      // Template mode only (R3): legacy books with the old INSERT.
+      ...(plan.feedMode ? { feedMode: plan.feedMode } : {}),
     });
     return { ok: true, note: `Scheduled for ${formatPlacement(plan.publishAt)}.`, scheduleId: booked.id, publishAt: booked.publishAt };
   } catch (error) {
@@ -330,12 +361,20 @@ export async function rescheduleItem(query: SpineQuery, input: PlaceInput): Prom
   const plan = await planPlacement(query, { ...input, moving: { scheduleId: active.id, publishAt: active.publishAt } });
   if (!plan.ok) return plan;
   try {
-    const { rows } = await query(
-      `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL
-        WHERE id = $1 AND status = 'scheduled'
-        RETURNING id, publish_at`,
-      [active.id, plan.nyDate, plan.slot, plan.publishAt.toISOString()],
-    );
+    // The slot's Trial / Main moves with it in template mode only (R4); legacy runs the old UPDATE.
+    const { rows } = plan.feedMode
+      ? await query(
+          `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = $5
+            WHERE id = $1 AND status = 'scheduled'
+            RETURNING id, publish_at`,
+          [active.id, plan.nyDate, plan.slot, plan.publishAt.toISOString(), plan.feedMode],
+        )
+      : await query(
+          `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL
+            WHERE id = $1 AND status = 'scheduled'
+            RETURNING id, publish_at`,
+          [active.id, plan.nyDate, plan.slot, plan.publishAt.toISOString()],
+        );
     if (!rows[0]) return { ok: false, note: 'It started posting before it could move.' };
     return { ok: true, note: `Moved to ${formatPlacement(plan.publishAt)}.`, scheduleId: rows[0].id, publishAt: new Date(rows[0].publish_at).toISOString() };
   } catch (error) {
@@ -350,7 +389,7 @@ export type OpenSlot = {
   /** The window, e.g. "9:00–10:00 AM" (New York). */
   window: string;
   /** free: a person can place content here. taken: one item already holds it. over: the window has passed.
-   *  off: the window doesn't run that weekday. crowded: every minute left is within the feed gap of another post. */
+   *  off: the window doesn't run that weekday (with the calendar: it isn't one of that day's slots). crowded: every minute left is within the feed gap of another post. */
   state: 'free' | 'taken' | 'over' | 'off' | 'crowded';
   free: boolean;
   /** The slot holding it, when taken. */
@@ -382,18 +421,21 @@ export async function openSlots(
     const own = (await query(`SELECT publish_at FROM social_hub.schedule WHERE id = $1::uuid`, [opts.moving])).rows[0];
     if (own) movingAt = new Date(own.publish_at).getTime();
   }
-  const busy = rules.spaced ? (await busyFeedTimes(query, now)).filter((b) => b.getTime() !== movingAt) : [];
+  const calendar = await daySlotPlan(query, nyDate);
+  const fits = new Map(rules.windows.map((w) => [w.id, slotSpacing(calendar, rules, nyDate, w.id)]));
+  const busy = [...fits.values()].some((f) => f.spaced) ? (await busyFeedTimes(query, now)).filter((b) => b.getTime() !== movingAt) : [];
   const today = calendarDateKey(now, SOCIAL_TIMEZONE);
   return rules.windows.map((w): OpenSlot => {
     const held = holder.get(w.id);
+    const fit = fits.get(w.id)!;
     const base = { slot: w.id, name: w.name, window: w.label, scheduleId: held ? (held.id as string) : null, publishAt: held ? new Date(held.publish_at).toISOString() : null };
     const state = ((): OpenSlot['state'] => {
       if (held) return 'taken';
       if (nyDate < today || nyDate > addCalendarDays(today, PLACEMENT_DAYS_AHEAD)) return 'over';
-      if (w.days && !w.days.includes(weekdayOf(nyDate))) return 'off';
+      if (calendar ? !fit.onCalendar : w.days && !w.days.includes(weekdayOf(nyDate))) return 'off';
       const open = openWindowRange(w, nyDate, now);
       if (!open) return 'over';
-      return spacedOffsets((o) => windowMinuteInstant(w, nyDate, o), open.startOffset, open.count, busy).length ? 'free' : 'crowded';
+      return spacedOffsets((o) => windowMinuteInstant(w, nyDate, o), open.startOffset, open.count, fit.spaced ? busy : []).length ? 'free' : 'crowded';
     })();
     return { ...base, state, free: state === 'free' };
   });
