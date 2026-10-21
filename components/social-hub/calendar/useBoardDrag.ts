@@ -48,7 +48,7 @@ export function useBoardDrag(opts: {
   const hideGhost = useCallback(() => {
     const g = optsRef.current.ghost.current;
     if (g) g.hidden = true;
-    if (live.current) { live.current.day = null; live.current.drop = null; }
+    if (live.current) { live.current.day = null; live.current.drop = null; live.current.key = ''; }
   }, []);
 
   const end = useCallback(() => {

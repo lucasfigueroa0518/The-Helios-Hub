@@ -247,8 +247,9 @@ export function WeekBoard(props: {
       note: !sandbox && !props.canUnschedule ? 'Moving posts back to ready is turned off for now, so this slot can’t change here.' : null,
       run: async () => {
         if (!begin()) return;
-        const { error, moved } = await moveBack(list);
-        finish();
+        let r: Awaited<ReturnType<typeof moveBack>>;
+        try { r = await moveBack(list); } finally { finish(); }
+        const { error, moved } = r;
         if (moved && !sandbox) {
           const ids = new Set(list.map((b) => b.postId));
           confirmed.current = { ...confirmed.current, posts: confirmed.current.posts.filter((p) => !ids.has(p.id)) };
@@ -274,9 +275,8 @@ export function WeekBoard(props: {
       }
     }
     if (!begin()) return;
-    setState(plan.next);
-    const res = await send(plan.changes);
-    finish();
+    let res: Awaited<ReturnType<typeof send>>;
+    try { setState(plan.next); res = await send(plan.changes); } finally { finish(); }
     if (!res.ok) {
       setState(confirmed.current);
       if (res.booked) {
@@ -333,10 +333,12 @@ export function WeekBoard(props: {
     if (!begin()) return;
     const c = history.undo(tab)!;
     const snap = before.get(c);
-    if (snap) setState(snap);
-    setToast(null);
-    const res = await send(c.inverse);
-    finish();
+    let res: Awaited<ReturnType<typeof send>>;
+    try {
+      if (snap) setState(snap);
+      setToast(null);
+      res = await send(c.inverse);
+    } finally { finish(); }
     if (!res.ok) {
       history.push(c);
       setState(confirmed.current);
