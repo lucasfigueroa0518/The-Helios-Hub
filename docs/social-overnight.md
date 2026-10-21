@@ -192,6 +192,26 @@ are exempt too (D33): trial reels reach non-followers, not the follower feed,
 so they keep their own slots exactly as before and other types don't space
 around them. Update the table above when adding a window.
 
+## Template mode: times and caps (D59)
+
+With `slot_source = 'template'` each calendar slot is a start minute (8 AM to
+9 PM, 15-minute grid). The night run books the post at a random minute in
+`[slot, slot+15]` (retries may run to slot+60, never past the day) and keeps the
+30-minute feed gap for Main reels, Carousels and Last Few Days; Stories and
+Trial reels are exempt. Defaults: Text on Screen 8:45 AM, 11:15 AM, 6 PM;
+Explainers 1 PM, 3:30 PM; Carousels 9 AM, 2:30 PM; Last Few Days 9 AM Tue/Fri;
+Stories 8:30 AM.
+
+Daily caps (`social_hub.settings` `daily_caps`): Text on Screen 5, Explainers 3,
+Carousels 3, Last Few Days 1, Stories 2 per series. A day with more slots than
+the cap makes posts for the first `cap` slots by time; the rest stay empty and
+the board says "Over today's limit, so nothing is made for this slot." Stories
+run once per slot: two sets of one series on a day are two slots, and the
+second set skips items the first used. A booked slot that was moved keeps its
+post; it never posts twice. Check with
+`BEGIN READ ONLY; SELECT value FROM social_hub.settings WHERE key IN ('slot_source','daily_caps'); ROLLBACK;`.
+`legacy` mode is unchanged.
+
 ## Naming
 
 In the `social` (carousel) code, "story" means a **news story** (`story_id`,
