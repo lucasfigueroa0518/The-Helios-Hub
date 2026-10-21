@@ -422,9 +422,9 @@ test('readPosting carries this week\'s schedule in template mode, and null in le
   const monday = stories[0]!;
   assert.deepEqual(monday.series, ['guess_the_number', 'morning_download'], 'in slot order');
   assert.equal(stories.some((d) => d.override), false);
-  // The cost line's input, when the caller has the posts.
+  // The cost line's input: the route works it out from the hub's posts (costPerPost); readPosting leaves it null.
   const explainer = { vertical: 'explainers', nyDate: null, generatedAt: new Date().toISOString(), costMicros: 300_000, costItemKey: 'x' } as HubPost;
-  assert.equal((await readPosting('explainers', new Date(), { posts: [explainer] })).costPerPostMicros, 300_000);
+  assert.equal(costPerPost([explainer], 'explainers', new Date()), 300_000);
   assert.equal((await readPosting('explainers')).costPerPostMicros, null);
 });
 
