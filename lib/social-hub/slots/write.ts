@@ -346,14 +346,23 @@ const modeClash = (b: Booking, slot: ResolvedSlot) => {
   return isReelType(b.vertical) && slot.feedMode != null && mode != null && slot.feedMode !== mode;
 };
 
-/** Where a booking on (nyDate, key) goes when its slot moved: the move's target on the matching date. */
-function followTarget(follows: readonly Follow[], b: Booking): { nyDate: string; minute: number } | null {
+/** Days since Monday: the board's week runs Monday to Sunday (weekdays are 0 = Sunday). */
+const mondayIndex = (weekday: number) => (weekday + 6) % 7;
+
+/**
+ * Where a booking on (nyDate, key) goes when its slot moved: the move's target
+ * on the matching date. A Standard-week move keeps the booking in its own
+ * Monday-to-Sunday week (Sat → Sun is the next day, not six days back);
+ * `standard` marks it so a target that has already passed holds the booking
+ * where it is instead of aiming it at a past day.
+ */
+function followTarget(follows: readonly Follow[], b: Booking): { nyDate: string; minute: number; standard: boolean } | null {
   for (const f of follows) {
     if (!sameSlotKey(f.key, b.key)) continue;
     if (f.from.nyDate !== null) {
-      if (f.from.nyDate === b.nyDate) return { nyDate: f.to.nyDate!, minute: f.minute };
+      if (f.from.nyDate === b.nyDate) return { nyDate: f.to.nyDate!, minute: f.minute, standard: false };
     } else if (weekdayOf(b.nyDate) === f.from.weekday) {
-      return { nyDate: addCalendarDays(b.nyDate, f.to.weekday - f.from.weekday), minute: f.minute };
+      return { nyDate: addCalendarDays(b.nyDate, mondayIndex(f.to.weekday) - mondayIndex(f.from.weekday)), minute: f.minute, standard: true };
     }
   }
   return null;
@@ -421,9 +430,14 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
       if (modeClash(b, is)) booked.push(bookedPost(b, 'feed-mode'));
       continue;
     }
-    // A target that is past or already started (a cross-weekday template move) can't take the post: it counts as removed.
     const found = followTarget(follows, b);
     const target = found && (found.nyDate > today || (found.nyDate === today && found.minute > nowMinute)) ? found : null;
+    // A Standard-week move whose target day this week has passed (Thu → Tue on a Wednesday): this week's post
+    // keeps its slot on its own date (a date add), and the Standard week changes from the next occurrence on.
+    if (found?.standard && !target && !s.overrides.some((o) => o.nyDate === b.nyDate && sameSlotKey(o, b.key))) {
+      s.overrides.push({ nyDate: b.nyDate, ...b.key, action: 'add', feedMode: was.feedMode });
+      continue;
+    }
     const slot = target && resolveDay(s.template, s.overrides, target.nyDate).find((x) => sameSlotKey(x, { ...b.key, startMinute: target.minute }));
     if (target && slot) {
       if (MOVE_HERE.has(b.vertical)) plans.push({ b, nyDate: target.nyDate, slot });

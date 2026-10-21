@@ -339,6 +339,32 @@ test('a cross-weekday "every" move takes a booking to that weekday\'s date in th
   assert.deepEqual([row.ny_date, row.slot], ['2026-10-29', 't0720']);
 });
 
+test('a Standard-week move Sat → Sun takes Saturday bookings to the next day, in the board\'s Monday-first week (final review #2)', async () => {
+  const { pg, q } = await seeded();
+  const a = await book(pg, 'explainers', '2026-10-17', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
+  const b = await book(pg, 'explainers', '2026-10-24', 't0780', 'main', '33333333-3333-3333-3333-333333333333');
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'move', from: { weekday: 6, vertical: 'explainers', startMinute: 780, series: null }, to: { weekday: 0, startMinute: 720 } }], opts);
+  assert.equal(out.ok, true, JSON.stringify(out));
+  const ra = await scheduleRow(pg, a.scheduleId);
+  const rb = await scheduleRow(pg, b.scheduleId);
+  assert.deepEqual([ra.ny_date, ra.slot], ['2026-10-18', 't0720'], 'Sat Oct 17 → Sun Oct 18, not Sun Oct 11');
+  assert.deepEqual([rb.ny_date, rb.slot], ['2026-10-25', 't0720']);
+});
+
+test('a Standard-week move Thu → Tue on a Thursday: today\'s booking keeps its slot, next Thursday\'s moves to next Tuesday (final review #2)', async () => {
+  const { pg, q } = await seeded();
+  const today = await book(pg, 'explainers', '2026-10-15', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
+  const next = await book(pg, 'explainers', '2026-10-22', 't0780', 'main', '33333333-3333-3333-3333-333333333333');
+  const out = await applySlotChanges(q, [{ scope: 'template', op: 'move', from: { weekday: 4, vertical: 'explainers', startMinute: 780, series: null }, to: { weekday: 2, startMinute: 720 } }], opts);
+  assert.equal(out.ok, true, JSON.stringify(out));
+  const rt = await scheduleRow(pg, today.scheduleId);
+  assert.deepEqual([rt.ny_date, rt.slot, rt.status], ['2026-10-15', 't0780', 'scheduled'], 'Tue Oct 13 has passed: no Move-it-back, the post stays');
+  assert.ok((await dayOf(q, '2026-10-15', 'explainers')).includes(780), 'this Thursday keeps the 1:00 PM slot');
+  const rn = await scheduleRow(pg, next.scheduleId);
+  assert.deepEqual([rn.ny_date, rn.slot], ['2026-10-20', 't0720']);
+  assert.ok(!(await dayOf(q, '2026-10-22', 'explainers')).includes(780), 'later Thursdays follow the Standard week');
+});
+
 test('a feed-gap push stays on the slot\'s own day: nothing clears before 9 PM → 422, nothing written', async () => {
   const { pg, q } = await seeded();
   const b = await book(pg, 'explainers', '2026-10-20', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
