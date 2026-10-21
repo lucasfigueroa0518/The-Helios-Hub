@@ -59,9 +59,10 @@ import { readTemplate } from '@/lib/social-hub/slots/load';
 import { OVERRIDE_INSERT, OVERRIDE_UPSERT, overrideFor, overrideKeyWhere, type OverrideOp } from '@/lib/social-hub/slots/override';
 import { sortSlots } from '@/lib/social-hub/slots/resolve';
 import { canPlace, isLocked, type DayCtx } from '@/lib/social-hub/slots/rules';
-import { clockLabel as slotClock, DEFAULT_FEED_MODE, DRIFT, isFeedSlot, SERIES_NAME } from '@/lib/social-hub/slots/times';
+import { clockLabel, DEFAULT_FEED_MODE, DRIFT, isFeedSlot, nyMinuteOf, SERIES_NAME } from '@/lib/social-hub/slots/times';
+import { asSlotId } from '@/lib/social-hub/slots/legacy';
 import { isReelType, isStorySeries, parseSlotId, slotId, type FeedMode, type ResolvedSlot, type SlotQuery, type StorySeries } from '@/lib/social-hub/slots/types';
-import { isDayKey, nyDayStart } from '@/lib/social-hub/time';
+import { isDayKey } from '@/lib/social-hub/time';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
 /** A posting window as the picker shows it; `days` (0 = Sunday) when it doesn't run every day. */
@@ -121,13 +122,6 @@ const minuteOf = (hhmm: string) => {
   const [h, m] = hhmm.split(':').map(Number);
   return h! * 60 + m!;
 };
-
-function clockLabel(minute: number): string {
-  const h = Math.floor(minute / 60);
-  const m = minute % 60;
-  const hour = h % 12 === 0 ? 12 : h % 12;
-  return `${hour}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
-}
 
 async function storyWindows(query: SpineQuery): Promise<SlotWindow[]> {
   let override: Record<string, { window?: Partial<{ start: string; end: string; days: number[] }> }> = {};
@@ -277,7 +271,7 @@ export async function planPlacement(
 
 /** "8:45–9:00 AM", "11:45 AM–12:00 PM". */
 function minuteRange(start: number, end: number): string {
-  const [a, b] = [slotClock(start), slotClock(end)];
+  const [a, b] = [clockLabel(start), clockLabel(end)];
   const same = (start < 720) === (end < 720);
   return same ? `${a.replace(/ (AM|PM)$/, '')}–${b}` : `${a}–${b}`;
 }
@@ -286,24 +280,12 @@ function minuteRange(start: number, end: number): string {
 function slotWindow(s: ResolvedSlot): SlotWindow {
   const endMinute = s.startMinute + DRIFT;
   const id = slotId(s.startMinute, s.series);
-  return { id, label: minuteRange(s.startMinute, endMinute), startMinute: s.startMinute, endMinute, name: s.series ? SERIES_NAME[s.series].one : slotClock(s.startMinute) };
+  return { id, label: minuteRange(s.startMinute, endMinute), startMinute: s.startMinute, endMinute, name: s.series ? SERIES_NAME[s.series].one : clockLabel(s.startMinute) };
 }
 
 const driftOpen = (s: ResolvedSlot, nyDate: string, now: Date) => openWindowRange(slotWindow(s), nyDate, now) !== null;
 
-/** Minutes since New York midnight on `today`. */
-const nyMinuteOf = (now: Date, today: string) => Math.floor((now.getTime() - nyDayStart(today).getTime()) / 60_000);
 
-/**
- * A booking's slot as a free-time id: a slot id stays; a window id (or a
- * Stories series) made before the calendar reads as that window's start.
- */
-function asSlotId(rules: PlacementRules, slot: string): string | null {
-  if (parseSlotId(slot)) return slot;
-  const w = rules.windows.find((x) => x.id === slot);
-  if (!w) return null;
-  return slotId(w.startMinute, rules.vertical === 'stories' && isStorySeries(slot) ? slot : null);
-}
 
 /** The free-time slot ids of the type's bookings on a date (waiting, posting, posted), but `except`. */
 async function heldSlots(query: SpineQuery, rules: PlacementRules, nyDate: string, except: string | null): Promise<Map<string, { id: string; publish_at: string }>> {
@@ -314,7 +296,7 @@ async function heldSlots(query: SpineQuery, rules: PlacementRules, nyDate: strin
   );
   const out = new Map<string, { id: string; publish_at: string }>();
   for (const r of rows) {
-    const id = asSlotId(rules, String(r.slot));
+    const id = asSlotId(rules.vertical, String(r.slot));
     if (id && !out.has(id)) out.set(id, { id: r.id as string, publish_at: r.publish_at as string });
   }
   return out;
@@ -359,15 +341,15 @@ async function planOnCalendar(
     slot = existing;
   } else if (vertical === 'stories') {
     // A Story set's time lives in stories.sets: it takes one of the day's Stories slots, never a new one.
-    if (existing) return { ok: false, note: held.has(slotId(existing.startMinute, existing.series)) ? 'That slot is taken.' : `Today’s ${slotClock(existing.startMinute)} slot is over.` };
-    return { ok: false, note: `${slotClock(key.startMinute)} isn’t a ${key.series ? SERIES_NAME[key.series].one : 'Stories'} slot on ${WEEKDAY[weekdayOf(input.nyDate)]}, ${input.nyDate}. Add it on the calendar first.` };
+    if (existing) return { ok: false, note: held.has(slotId(existing.startMinute, existing.series)) ? 'That slot is taken.' : `Today’s ${clockLabel(existing.startMinute)} slot is over.` };
+    return { ok: false, note: `${clockLabel(key.startMinute)} isn’t a ${key.series ? SERIES_NAME[key.series].one : 'Stories'} slot on ${WEEKDAY[weekdayOf(input.nyDate)]}, ${input.nyDate}. Add it on the calendar first.` };
   } else {
     const template = await readTemplate(query as SlotQuery);
     const baseOf = (nyDate: string, k: { startMinute: number }) =>
       template.find((r) => r.weekday === weekdayOf(nyDate) && r.vertical === vertical && r.startMinute === k.startMinute && r.series === null);
     // A move takes its slot along: the slot it leaves (on its own date, not started, held by nobody else).
     const source = await movingSlot(query, rules, input.moving ?? null, input.nyDate, day, today, now);
-    const ctx: DayCtx = { nyDate: input.nyDate, weekday: weekdayOf(input.nyDate), slots: day, today, nowMinute: nyMinuteOf(now, today) };
+    const ctx: DayCtx = { nyDate: input.nyDate, weekday: weekdayOf(input.nyDate), slots: day, today, nowMinute: nyMinuteOf(now) };
     const r = canPlace(ctx, { vertical, startMinute: key.startMinute, series: null, ...(source && source.nyDate === input.nyDate ? { ignore: source.slot } : {}) });
     if (!r.ok) return { ok: false, note: r.reason };
     const feedMode = isReelType(vertical) ? (source?.slot.feedMode ?? baseOf(input.nyDate, { startMinute: r.minute })?.feedMode ?? DEFAULT_FEED_MODE[vertical]) : null;
@@ -386,7 +368,7 @@ async function planOnCalendar(
     if (own >= 0) busy.splice(own, 1);
   }
   const publishAt = driftMinute(input.nyDate, slot, now, busy, input.rng ?? uniformIndex);
-  if (!publishAt) return { ok: false, note: `Every minute left after ${slotClock(slot.startMinute)} is within ${FEED_GAP_MINUTES} minutes of another feed post.` };
+  if (!publishAt) return { ok: false, note: `Every minute left after ${clockLabel(slot.startMinute)} is within ${FEED_GAP_MINUTES} minutes of another feed post.` };
   const mode = isReelType(vertical) ? (slot.feedMode ?? legacyFeedMode(vertical)) : null;
   return { ok: true, nyDate: input.nyDate, slot: slotId(slot.startMinute, slot.series), publishAt, window: slotWindow(slot), feedMode: mode, calendar: true, slotOps };
 }
@@ -406,13 +388,13 @@ async function movingSlot(
   now: Date,
 ): Promise<{ nyDate: string; slot: ResolvedSlot } | null> {
   if (!moving?.nyDate || !moving.slot || moving.nyDate < today) return null;
-  const id = asSlotId(rules, moving.slot);
+  const id = asSlotId(rules.vertical, moving.slot);
   const key = id ? parseSlotId(id) : null;
   if (!key) return null;
   const slots = moving.nyDate === nyDate ? day : ((await daySlotPlan(query, moving.nyDate))?.byDate.get(moving.nyDate) ?? []);
   const slot = slots.find((s) => s.vertical === rules.vertical && s.startMinute === key.startMinute && s.series === key.series);
   if (!slot) return null;
-  if (isLocked({ nyDate: moving.nyDate, weekday: weekdayOf(moving.nyDate), slots: [...slots], today, nowMinute: nyMinuteOf(now, today) }, slot)) return null;
+  if (isLocked({ nyDate: moving.nyDate, weekday: weekdayOf(moving.nyDate), slots: [...slots], today, nowMinute: nyMinuteOf(now) }, slot)) return null;
   const others = await heldSlots(query, rules, moving.nyDate, moving.scheduleId);
   return others.has(slotId(slot.startMinute, slot.series)) ? null : { nyDate: moving.nyDate, slot };
 }
@@ -651,7 +633,7 @@ export async function openSlots(
     const mine = sortSlots(slotsOn(calendar, vertical, nyDate));
     const held = new Map<string, Record<string, any>>();
     for (const r of rows) {
-      const id = asSlotId(rules, String(r.slot));
+      const id = asSlotId(rules.vertical, String(r.slot));
       if (id && !held.has(id)) held.set(id, r);
     }
     const busy = mine.some(isFeedSlot) ? (await busyFeedTimes(query, now)).filter((b) => b.getTime() !== movingAt) : [];

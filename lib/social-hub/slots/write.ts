@@ -10,15 +10,12 @@ import { readCaps, readOverrides, readTemplate } from './load';
 import { resolveDay, sortSlots, validateDay } from './resolve';
 import { applyMove, applyPlace, applyRemove, canPlace, isLocked, ALREADY_STARTED, PAST_DAY, type DayCtx, type Refusal } from './rules';
 import { readSeedInputs, seedTemplate, type SeedInputs } from './seed';
-import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
-import { LFD_WINDOW } from '@/lib/lfd/config';
-import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
-import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 import { rebookSlot } from '@/lib/social-hub/placement';
 
 import { driftMinute } from './book';
+import { legacyKey } from './legacy';
 import { OVERRIDE_INSERT, OVERRIDE_UPSERT, overrideKeyWhere } from './override';
-import { DEFAULT_FEED_MODE, DEFAULT_TIMES, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
+import { DEFAULT_FEED_MODE, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
 import {
   isReelType, isSlotMinute, isStorySeries, parseSlotId, sameSlotKey, slotId, slotKeyString,
   type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type SlotQuery, type SlotSource, type StorySeries, type TemplateRow,
@@ -155,7 +152,6 @@ type State = { template: TemplateRow[]; overrides: OverrideRow[] };
 
 const keyOf = (s: Key): SlotKey => ({ vertical: s.vertical, startMinute: s.startMinute, series: s.series });
 
-export { nyMinuteOf };
 
 /** The Standard week's slots for a weekday. */
 function templateDay(t: readonly TemplateRow[], weekday: number): ResolvedSlot[] {
@@ -294,24 +290,6 @@ const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jo
 const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'reels', 'explainers']);
 
 type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string> };
-
-/**
- * A pre-cutover booking's window id as its free-time key: the window's start
- * minute from each type's window constants, Stories' series at the Stories
- * default time. Null for anything else.
- */
-const LEGACY_START: Record<Exclude<Vertical, 'stories'>, ReadonlyArray<{ id: string; startMinute: number }>> = {
-  reels: POSTING_SLOTS,
-  explainers: EXPLAINER_WINDOWS,
-  carousels: CAROUSEL_SLOTS,
-  last_few_days: [LFD_WINDOW],
-};
-
-export function legacyKey(vertical: Vertical, slot: string): { startMinute: number; series: StorySeries | null } | null {
-  if (vertical === 'stories') return isStorySeries(slot) ? { startMinute: DEFAULT_TIMES.stories[0]!, series: slot } : null;
-  const w = LEGACY_START[vertical]?.find((x) => x.id === slot);
-  return w ? { startMinute: w.startMinute, series: null } : null;
-}
 
 /** Waiting posts on these dates (free-time or legacy window slot ids), locked for this transaction. */
 async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booking[]> {

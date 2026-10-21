@@ -5,7 +5,7 @@ import { chooseSlotTime, type SlotChoice } from './book';
 import { isLfdDay, slotsWithinCap, type SlotPlan } from './index';
 import { readCaps } from './load';
 import { parseSlotId, slotId, type ResolvedSlot, type SlotQuery } from './types';
-import { legacyKey } from './write';
+import { legacyKey } from './legacy';
 
 /**
  * Template mode for the feed schedulers (Text on Screen, Explainers,

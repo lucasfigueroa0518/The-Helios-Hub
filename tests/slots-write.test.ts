@@ -13,7 +13,8 @@ import { LFD_CAROUSEL_CONFLICT } from '@/lib/social-hub/slots/resolve';
 import { ALREADY_STARTED, PAST_DAY } from '@/lib/social-hub/slots/rules';
 import { DEFAULT_SEED_INPUTS, seedTemplate, type SeedInputs } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
-import { applySlotChanges, legacyKey, parseChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
+import { legacyKey } from '@/lib/social-hub/slots/legacy';
+import { applySlotChanges, parseChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 

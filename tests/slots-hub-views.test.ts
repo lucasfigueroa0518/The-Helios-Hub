@@ -216,6 +216,28 @@ test('template: a time already passed today lands at the next 15-minute mark (Re
   assert.ok(nyMinute(open.publishAt) >= 680);
 });
 
+test('template: hub placement reads the wall clock on a DST day (Sun Nov 1, 10:00 AM EST: a 10:30 slot has not passed) (final review #6)', async () => {
+  const { query } = await openHubTestDb();
+  const q = query as never;
+  await setSlotSource(q, 'template', 't');
+  const tenAm = new Date('2026-11-01T15:00:00Z'); // 10:00 AM EST; 11 hours after New York midnight (EDT)
+  const plan = await planPlacement(q, { vertical: 'explainers', nyDate: '2026-11-01', slot: 't0630', now: tenAm, rng: first });
+  assert.ok(plan.ok, (plan as { note?: string }).note);
+  assert.equal(plan.slot, 't0630');
+  assert.equal(nyMinute(plan.publishAt), 630);
+});
+
+test('template: a window-era Stories booking holds the slot legacyKey gives it, whatever the series window says (final review #7)', async () => {
+  const { pg, query } = await openHubTestDb();
+  const q = query as never;
+  await setSlotSource(q, 'template', 't');
+  await pg.query(`INSERT INTO stories.settings (key, value) VALUES ('series', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ morning_download: { window: { start: '09:00', end: '10:30' } } })]);
+  const item = (await pg.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('stories', 'story', 'set-1') RETURNING id::text AS id`)).rows[0]!.id;
+  await pg.query(`INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES ($1, 'stories', $2, 'morning_download', '2026-10-21T12:35:00Z', 'scheduled', 'auto')`, [item, WED]);
+  const md = (await openSlots(q, 'stories', WED, { now: NOW })).filter((s) => s.slot.endsWith(':morning_download'));
+  assert.deepEqual(md.map((s) => [s.slot, s.state]), [['t0510:morning_download', 'taken']]);
+});
+
 test('template: a Main reel slot is spaced from feed posts and stores its feed mode; a Trial one is not spaced', async () => {
   const { pg, query } = await openHubTestDb();
   const q = query as never;
