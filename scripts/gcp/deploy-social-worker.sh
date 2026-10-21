@@ -73,7 +73,13 @@ fi
 echo "Deploying social workers (${UNITS}) → ${INSTANCE} (${ZONE}, project ${PROJECT})"
 
 ARCHIVE="$(mktemp -t helios-social-XXXXXX).tgz"
-trap 'rm -f "${ARCHIVE}"' EXIT
+# Remote files carry a per-deploy stamp: /tmp is shared and sticky, so a file another person's deploy left there
+# (owned by their user) can't be overwritten, and fixed names made the next person's deploy fail.
+STAMP="$(date +%Y%m%d%H%M%S)-$$"
+REMOTE_ARCHIVE="/tmp/helios-social-app-${STAMP}.tgz"
+REMOTE_ENV="/tmp/social-worker-${STAMP}.env"
+UNIT_STAGE="$(mktemp -d -t helios-social-units-XXXXXX)"
+trap 'rm -rf "${ARCHIVE}" "${UNIT_STAGE}"' EXIT
 tar -czf "${ARCHIVE}" \
   --exclude='./.git' \
   --exclude='./node_modules' \
@@ -89,23 +95,24 @@ tar -czf "${ARCHIVE}" \
   .
 
 gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
-  "${ARCHIVE}" "${INSTANCE}:/tmp/helios-social-app.tgz"
+  "${ARCHIVE}" "${INSTANCE}:${REMOTE_ARCHIVE}"
 
 UNIT_FILES=()
 for unit in ${UNITS}; do
   [[ -f "scripts/gcp/${unit}.service" ]] || { echo "Missing scripts/gcp/${unit}.service" >&2; exit 1; }
-  UNIT_FILES+=("scripts/gcp/${unit}.service")
+  cp "scripts/gcp/${unit}.service" "${UNIT_STAGE}/${STAMP}-${unit}.service"
+  UNIT_FILES+=("${UNIT_STAGE}/${STAMP}-${unit}.service")
 done
 gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" "${UNIT_FILES[@]}" "${INSTANCE}:/tmp/"
 
 if [[ -n "${ENV_FILE}" ]]; then
-  gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" "${ENV_FILE}" "${INSTANCE}:/tmp/social-worker.env"
+  gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" "${ENV_FILE}" "${INSTANCE}:${REMOTE_ENV}"
 fi
 
 gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --command="
   set -euo pipefail
-  if [[ -f /tmp/social-worker.env ]]; then
-    sudo mv /tmp/social-worker.env /opt/helios-social/worker.env
+  if [[ -f ${REMOTE_ENV} ]]; then
+    sudo mv ${REMOTE_ENV} /opt/helios-social/worker.env
     sudo chmod 600 /opt/helios-social/worker.env
   fi
   if [[ ! -f /opt/helios-social/worker.env ]]; then
@@ -124,7 +131,7 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   done
   sudo rm -rf /opt/helios-social/app
   sudo mkdir -p /opt/helios-social/app /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage \${H} \${PW}
-  sudo tar -xzf /tmp/helios-social-app.tgz -C /opt/helios-social/app --no-same-owner
+  sudo tar -xzf ${REMOTE_ARCHIVE} -C /opt/helios-social/app --no-same-owner
   sudo chown -R helios:helios /opt/helios-social/app /opt/helios-social/explainers \${H} \${PW}
   sudo chmod -R go-w /opt/helios-social/app && sudo chmod 755 /opt/helios-social/app
   AS_HELIOS=\"sudo -u helios env HOME=\${H} PLAYWRIGHT_BROWSERS_PATH=\${PW} HYPERFRAMES_NO_TELEMETRY=1\"
@@ -142,9 +149,11 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   fc-list | grep -qi 'Noto Color Emoji' || sudo apt-get install -y -qq fonts-noto-color-emoji
   (cd explainers/runtime && \${AS_HELIOS} npm ci --no-audit --no-fund && \${AS_HELIOS} npx --no-install hyperframes browser ensure || true)
   for unit in ${UNITS}; do
-    sudo cp /tmp/\${unit}.service /etc/systemd/system/\${unit}.service
+    sudo cp /tmp/${STAMP}-\${unit}.service /etc/systemd/system/\${unit}.service
   done
   sudo systemctl daemon-reload
+  # This deploy's own uploads, installed now (each deploy cleans up only its own stamped files).
+  rm -f ${REMOTE_ARCHIVE} /tmp/${STAMP}-*.service
   for unit in ${UNITS}; do
     if systemctl is-enabled --quiet \${unit}; then
       sudo systemctl restart \${unit}

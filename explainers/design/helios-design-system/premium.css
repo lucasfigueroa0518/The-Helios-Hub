@@ -1,0 +1,166 @@
+/* ==========================================================================
+   HELIOS DESIGN SYSTEM — Premium (the lit stage)
+   Cinematic lighting and depth on the dark stage: charcoal under warm light,
+   the sun's own gradient, glossy orange tiles, glass, hairlines.
+   Reference: Rally Point proposal (HELIOS/Decks/RALLY POINT PROPOSAL.pdf, pp. 1, 4, 5),
+   approved by Lucas 2026-10-20. First production use: Last Few Days slides (The Helios Hub,
+   app/social/render/preview/preview.css), light touch, 2026-10-21.
+
+   Load after colors_and_type.css. Everything is scoped under .premium so it never touches
+   editorial (white) pages. Two intensities:
+     .premium                       light: daily social formats; lighting you feel more than see
+     .premium[data-premium="full"]  full: deck titles, covers, hero moments
+   Every effect is paint (gradients, shadows, pseudo-elements): adding premium to an existing
+   layout never moves anything. Rejected, never use: paper, foil, emboss, grain, letterpress,
+   hand-drawn textures.
+   ========================================================================== */
+
+.premium {
+  /* Intensity dials (alpha of each light). */
+  --premium-glow:      0.10;   /* warm orange glow, top right */
+  --premium-lift:      0.035;  /* white lift, top left */
+  --premium-bloom:     0.06;   /* red bloom, low */
+  --premium-spot:      0.07;   /* spotlight behind the headline (.premium--spot) */
+  --premium-text-glow: 0.28;   /* glow on the lit headline line */
+  --premium-halo:      0.35;   /* orb halo */
+  --premium-corner:    0.22;   /* corner light spilling off a lifted image */
+  --premium-tile-glow: 0.28;   /* drop glow under an icon tile */
+
+  color: var(--stage-ink);
+  background:
+    radial-gradient(62% 42% at 100% 0%, rgba(var(--premium-glow-rgb), var(--premium-glow)) 0%, rgba(var(--premium-glow-rgb), 0) 72%),
+    radial-gradient(55% 38% at 0% 0%, rgba(255,255,255, var(--premium-lift)) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(70% 32% at 15% 100%, rgba(var(--premium-red-rgb), var(--premium-bloom)) 0%, rgba(var(--premium-red-rgb), 0) 72%),
+    linear-gradient(180deg, var(--stage-top) 0%, var(--stage-bottom) 100%);
+}
+.premium[data-premium="full"] {
+  --premium-glow:      0.16;
+  --premium-lift:      0.05;
+  --premium-bloom:     0.10;
+  --premium-spot:      0.12;
+  --premium-text-glow: 0.38;
+  --premium-halo:      0.55;
+  --premium-corner:    0.34;
+  --premium-tile-glow: 0.40;
+}
+
+/* A warm spotlight behind the headline, for grounds where the top is covered (a photo mosaic) or a centred title.
+   Set --premium-spot-y to where the headline sits. */
+.premium--spot {
+  background:
+    radial-gradient(58% 26% at 50% var(--premium-spot-y, 80%), rgba(var(--premium-glow-rgb), var(--premium-spot)) 0%, rgba(var(--premium-glow-rgb), 0) 72%),
+    radial-gradient(62% 42% at 100% 0%, rgba(var(--premium-glow-rgb), var(--premium-glow)) 0%, rgba(var(--premium-glow-rgb), 0) 72%),
+    radial-gradient(55% 38% at 0% 0%, rgba(255,255,255, var(--premium-lift)) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(70% 22% at 15% 100%, rgba(var(--premium-red-rgb), var(--premium-bloom)) 0%, rgba(var(--premium-red-rgb), 0) 72%),
+    linear-gradient(180deg, var(--stage-top) 0%, var(--stage-bottom) 100%);
+}
+
+/* A light beam from above (Rally Point p. 4): an absolutely positioned layer inside a positioned .premium. */
+.premium .hp-beam {
+  position: absolute; top: 0; left: 50%; width: 70%; height: 75%; transform: translateX(-50%); pointer-events: none;
+  clip-path: polygon(38% 0, 62% 0, 100% 100%, 0 100%);
+  background: linear-gradient(180deg, rgba(var(--premium-glow-rgb), calc(var(--premium-spot) * 2.4)) 0%, rgba(var(--premium-glow-rgb), 0) 100%);
+  filter: blur(24px);
+}
+
+/* ---------- Type ---------- */
+
+/* The base sheet colours every heading off-black and body grey for the white page; on the stage they turn light. */
+.premium :is(h1, h2, h3, h4, h5, h6, .font-heading) { color: var(--stage-ink); }
+.premium :is(p, .body) { color: var(--stage-ink-2); }
+
+/* Eyebrow: tracked uppercase with a short leading rule. */
+.premium .hp-eyebrow {
+  display: inline-flex; align-items: center; gap: 16px;
+  font-family: var(--font-body); font-weight: var(--weight-bold); font-size: var(--text-eyebrow);
+  letter-spacing: 0.24em; text-transform: uppercase; color: var(--stage-orange);
+}
+.premium .hp-eyebrow::before { content: ''; width: 40px; height: 2px; background: currentColor; }
+.premium .hp-eyebrow--bare::before { content: none; }
+
+/* Headline: huge, extended, white; its last word or line (.hp-lit) is lit. */
+.premium .hp-headline {
+  margin: 0; font-family: var(--font-heading); font-weight: var(--weight-bold); line-height: 0.95;
+  letter-spacing: var(--tracking-tight); text-transform: uppercase; color: var(--stage-ink);
+}
+/* Solid orange with a glow: safe everywhere, including rendered slides that run a fit or contrast check. */
+.premium .hp-lit { color: var(--stage-orange); text-shadow: 0 0 36px rgba(var(--premium-glow-rgb), var(--premium-text-glow)); }
+/* Gradient text (orange to red): web pages and decks only. Never in rendered social slides: transparent text
+   breaks render checks that read the text colour. */
+.premium .hp-lit--gradient {
+  background: linear-gradient(90deg, var(--stage-orange) 0%, var(--stage-red) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none;
+}
+.premium .hp-body { font-family: var(--font-body); font-weight: var(--weight-light); color: var(--stage-ink-2); }
+
+/* ---------- Brand accents ---------- */
+
+/* The sun mark with a halo. Always the whole mark (assets/Helios-mark.png), never a bare gradient circle. */
+.premium .hp-orb { display: inline-block; border-radius: var(--radius-pill); box-shadow: 0 0 0 1px rgba(255,255,255,0.10), 0 0 60px 6px rgba(var(--premium-glow-rgb), var(--premium-halo)); }
+.premium .hp-orb img { display: block; width: 100%; height: 100%; border-radius: var(--radius-pill); }
+
+/* A sun dot: a 6–8px divider in the sun's gradient with a small glow. A divider, never a stand-in for the logo. */
+.premium .hp-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: var(--radius-pill); flex: none;
+  background: var(--helios-sun); box-shadow: 0 0 10px 2px rgba(var(--premium-glow-rgb), 0.45);
+}
+
+/* A rule that fades toward both edges, with an optional label (and sun dots) in the middle. */
+.premium .hp-rule { display: flex; align-items: center; gap: 16px; }
+.premium .hp-rule::before, .premium .hp-rule::after { content: ''; flex: 1; height: 1px; }
+.premium .hp-rule::before { background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.34) 100%); }
+.premium .hp-rule::after { background: linear-gradient(90deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0) 100%); }
+
+/* Hairline footer: a 1px line and tracked small labels at both ends. */
+.premium .hp-footer {
+  display: flex; justify-content: space-between; align-items: center; padding-top: 24px; border-top: 1px solid var(--premium-hairline);
+  font-family: var(--font-body); font-weight: var(--weight-bold); font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--stage-ink-3);
+}
+.premium .hp-footer strong { color: var(--stage-ink); font-weight: var(--weight-bold); }
+
+/* ---------- Surfaces ---------- */
+
+/* Glossy icon tile: the orange gradient, a drop glow, a 1px top highlight. White Lucide icon inside. */
+.premium .hp-tile {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  width: 64px; height: 64px; border-radius: 18px; color: #FFFFFF; background: var(--premium-tile);
+  box-shadow: 0 10px 28px rgba(var(--premium-glow-rgb), var(--premium-tile-glow)), inset 0 1px 0 rgba(255,255,255,0.45);
+}
+.premium .hp-tile--sm { width: 48px; height: 48px; border-radius: 14px; }
+.premium .hp-tile svg { width: 50%; height: 50%; }
+
+/* Dark card with an orange glow in one corner and a faint ghost numeral (data-num="01"). */
+.premium .hp-card {
+  position: relative; overflow: hidden; border-radius: var(--radius-xl); padding: 40px;
+  background:
+    radial-gradient(60% 45% at 100% 100%, rgba(var(--premium-glow-rgb), calc(var(--premium-glow) * 1.4)) 0%, rgba(var(--premium-glow-rgb), 0) 70%),
+    linear-gradient(180deg, #1C1C1C 0%, #121212 100%);
+  border: 1px solid var(--premium-hairline);
+  box-shadow: var(--premium-shadow-lift), var(--premium-highlight);
+}
+.premium .hp-card[data-num]::after {
+  content: attr(data-num); position: absolute; top: -0.12em; right: 0.08em; pointer-events: none;
+  font-family: var(--font-heading); font-weight: var(--weight-bold); font-size: 160px; line-height: 1; letter-spacing: -0.04em;
+  color: transparent; -webkit-text-stroke: 0; background: linear-gradient(180deg, rgba(var(--premium-glow-rgb), 0.16) 0%, rgba(var(--premium-glow-rgb), 0) 80%);
+  -webkit-background-clip: text; background-clip: text;
+}
+
+/* Frosted glass pane (and the pill chip shape with .hp-glass--pill). */
+.premium .hp-glass {
+  background: var(--premium-glass); border: 1px solid var(--premium-glass-line); border-radius: var(--radius-lg);
+  box-shadow: var(--premium-glass-shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.premium .hp-glass--pill { border-radius: var(--radius-pill); }
+
+/* A lifted image or media box: deep shadow and a top highlight. .hp-lift--lit adds warm light off the top-right corner.
+   Logo plates and memes get .hp-lift only (never tinted, never lit). */
+.premium .hp-lift { position: relative; box-shadow: var(--premium-shadow-lift); }
+.premium .hp-lift::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; box-shadow: var(--premium-highlight); }
+.premium .hp-lift--lit { box-shadow: var(--premium-shadow-lift), 22px -22px 80px -34px rgba(var(--premium-glow-rgb), var(--premium-corner)); }
+
+/* The CTA on the stage: the brand pill with the orange glow. */
+.premium .hp-cta {
+  display: inline-flex; align-items: center; gap: 10px; padding: 16px 28px; border-radius: var(--radius-pill); white-space: nowrap;
+  font-family: var(--font-body); font-weight: var(--weight-bold); font-size: 16px; color: #FFFFFF; background: var(--premium-tile);
+  box-shadow: var(--shadow-cta-glow), inset 0 1px 0 rgba(255,255,255,0.40);
+}
