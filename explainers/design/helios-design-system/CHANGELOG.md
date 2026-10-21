@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-21 — dry-run fixes, examples
+
+- **Stage type:** `premium.css` now turns headings and body light inside `.premium`; the base sheet coloured every
+  `h1`–`h6` off-black, so a plain heading on the stage was invisible (found by the carousel dry run).
+- **Logo facts:** there is one logo, the circular sun mark. `assets/Helios-logo.png` is a 1200px copy of it (same file as
+  `favicon.png`), not a horizontal wordmark; no wordmark file exists. For a lockup, set the mark beside "Helios Group".
+  The website UI kit inverted the mark into a white disc in its header and footer; removed.
+- **Examples** (`examples/`): a two-slide Instagram carousel, a landing page with a Premium hero over an editorial
+  section, and a 1200×630 link-preview image, built only from this system's files.
+- `scripts/sync.sh` takes `HUB_DIR` to sync the Hub copy into a branch checkout.
+
 ## 2026-10-21 — one source of truth, facts fixed, Premium added
 
 - **This repo is now the source of truth.** Built from the `HELIOS/Helios Design System` folder (the Helios Group

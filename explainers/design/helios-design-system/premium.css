@@ -65,6 +65,10 @@
 
 /* ---------- Type ---------- */
 
+/* The base sheet colours every heading off-black and body grey for the white page; on the stage they turn light. */
+.premium :is(h1, h2, h3, h4, h5, h6, .font-heading) { color: var(--stage-ink); }
+.premium :is(p, .body) { color: var(--stage-ink-2); }
+
 /* Eyebrow: tracked uppercase with a short leading rule. */
 .premium .hp-eyebrow {
   display: inline-flex; align-items: center; gap: 16px;

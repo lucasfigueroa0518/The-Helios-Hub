@@ -18,7 +18,7 @@ Apply this skill whenever the user is making something for Helios Group (or the 
 3. **Pick the surface first**: **Editorial** (white canvas, off-black text) for the website, documents and deck content slides; **Stage** (charcoal `#161616 → #0B0B0B`, white text) for social posts, deck titles and hero moments. Never mix them in one frame.
 4. **Match the four-beat content pattern**: SHOUTED EYEBROW (green or orange, 0.18em tracking) → tight Pragmatica Extended headline → light-weight Roboto body → short verb CTA.
 5. **Restrict color**: **orange** for action only, **green** for structural metadata only (`#138510` on white, `#1BBF17` on the stage). The sun gradient (`--helios-sun`, `#FDC60F → #F48C3F → #EA3C3A`) belongs to the mark and small stage accents. No new accent colors.
-6. **Use existing assets**: real client logos in `assets/clients/`, case-study media in `assets/case-studies/`, wordmark in `assets/Helios-logo.png`, sun-mark in `assets/Helios-mark.png`.
+6. **Use existing assets**: real client logos in `assets/clients/`, case-study media in `assets/case-studies/`, the sun mark in `assets/Helios-logo.png` (1200px, small uses) and `assets/Helios-mark.png` (5000px, large uses). There is no horizontal wordmark file: for a lockup, set the mark beside "Helios Group" in Pragmatica Extended. Never recolour, invert or filter the mark.
 7. **Lucide icons only** — `lucide@0.487.0` from CDN. Specifically: `arrow-right`, `check-circle-2`, `chevron-right`, `linkedin`, `instagram`. **No emoji, no unicode glyphs as icons.**
 8. **Match motion**: opacity 0→1 + y 20→0 over 600ms ease-out, stagger `idx*0.1s`, image hover `scale(1.05)` over 1000ms, card hover `translateY(-4px)` + xl shadow. Easing is `cubic-bezier(0.16, 1, 0.3, 1)`.
 

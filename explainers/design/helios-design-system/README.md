@@ -34,14 +34,15 @@ helios-design-system/
 ├── uploads/                 ← the original source files (deck PDF, high-def mark)
 ├── scripts/sync.sh          ← copies this repo to every place that uses it
 ├── assets/
-│   ├── Helios-logo.png      ← horizontal/wordmark logo (used in header/footer)
-│   ├── Helios-mark.png      ← circular sun-mark (high-def)
+│   ├── Helios-logo.png      ← the circular sun mark, 1200px (same file as favicon.png)
+│   ├── Helios-mark.png      ← the circular sun mark, high-def (5000px)
 │   ├── favicon.png
 │   ├── clients/             ← 12 real client logos (used in social-proof ticker)
 │   └── case-studies/        ← thumbnails + media for Local Boy, The Source, FlyerStudio
 ├── fonts/
 │   └── PragmaticaExtended-Bold.otf   ← display heading font, weight 700 only
 ├── preview/                 ← design-system-tab cards (one per token group / component; 23–27 are Premium)
+├── examples/                ← finished pieces built only from this system (carousel, landing page, OG image)
 ├── ui_kits/
 │   └── website/             ← marketing-site UI kit (Hero, Header, Footer, Services, Team)
 └── slides/                  ← deck slide templates matching the pitch deck
@@ -197,7 +198,7 @@ Render with `<i data-lucide="arrow-right"></i>`.
 - **No unicode-character icons** (★, ✓, ➜) as substitutes for Lucide. Use the real icon.
 - **No PNG icon files** — all icons are SVG via Lucide.
 - The decorative dot dividers in the hero (`Content · Sales · More`) are `<span>` circles, not icons — they're 6–8px circles filled with `--helios-orange`. On the stage they may be **sun dots** (`.hp-dot`): the same 6–8px circle in the sun gradient with a small glow. A sun dot is a divider, never a stand-in for the logo.
-- Logo treatment: the wordmark `assets/Helios-logo.png` is used in the header (`h-8 md:h-10`) and footer (`h-12`). The circular sun-mark `assets/Helios-mark.png` is used at large sizes — for OG images, social, and the deck title slide.
+- Logo treatment: **there is one logo, the circular sun mark with HELIOS set inside it.** `assets/Helios-logo.png` (1200px, the same file as `favicon.png`) is for small sizes — the header (`h-8 md:h-10`), footer (`h-12`), chips; `assets/Helios-mark.png` (5000px) is for large sizes — OG images, social, the deck title slide. No horizontal wordmark file exists: where a lockup is needed, set the mark beside "Helios Group" in Pragmatica Extended. Never recolour, invert or filter the mark.
 - **Logo protection (non-negotiable):** the Helios logo (mark or wordmark) must always be **fully visible** — never bleeding off the canvas, never partially covered by other elements, never overlapped by text. Maintain a clear-space margin of at least the height of the "H" on every side. The mark is allowed to be a *dominant* visual element, but only when the entire shape is in-frame with breathing room. **Do not** use a generic gradient circle as a stand-in for the logo — a gradient orb without the wordmark is not the brand. A halo around the mark (`.hp-orb`) is fine: it surrounds the whole mark and never covers it.
 
 If a needed icon isn't in Lucide (rare), match its stroke weight (2px) and roundness — don't introduce a different icon family.
