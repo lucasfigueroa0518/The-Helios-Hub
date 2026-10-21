@@ -15,7 +15,7 @@ import { EXPLAINER_GONE, runIdeaCycle } from '@/lib/explainers/ideas/cycle';
 import { trimPool } from '@/lib/explainers/ideas/evaluate';
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import { saveSetting } from '@/lib/explainers/settings';
-import type { ScoreKey } from '@/lib/explainers/types';
+import type { IdeaScoreKey } from '@/lib/explainers/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import type { MovesQuery } from '@/lib/social-hub/moves-store';
 
@@ -24,7 +24,7 @@ import { scratchExplainersDb } from './explainers-pglite';
 const CYCLE_AT = new Date('2026-10-08T06:00:00Z'); // 2:00 AM New York
 
 /** Below the E-15 gates: generated ideas never enter the pool, so the seeded pool decides the ranking. */
-const BROAD: Record<ScoreKey, number> = { audience_fit: 4, teachability_45s: 0, analogy_potential: 4, visual_potential: 4, accuracy_under_simplification: 1, hook_strength: 3 };
+const BROAD: Record<IdeaScoreKey, number> = { audience_fit: 4, teachability_45s: 0, analogy_potential: 4, visual_potential: 4, accuracy_under_simplification: 1, hook_strength: 3, ai_focus: 2 };
 
 function stubJev(): JevTransport {
   return {
@@ -34,7 +34,7 @@ function stubJev(): JevTransport {
       for (const key of keys) {
         answers[key] = keys[0] === 'duplicate_of_existing_topic' || key.startsWith('pair_')
           ? { type: 'noul', noul: 0.1 }
-          : { type: 'score', score: BROAD[key as ScoreKey], confidence: 1 };
+          : { type: 'score', score: BROAD[key as IdeaScoreKey], confidence: 1 };
       }
       void state;
       return { model: 'jev-stub', answers, usage: { input_tokens: 10, output_tokens: 0 } } as unknown as SystemOneResult<Q>;

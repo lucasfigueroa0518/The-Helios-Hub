@@ -459,6 +459,84 @@ test('a failed generator call marks the cycle failed and keeps the pool', async 
   assert.deepEqual((await listPool(db)).map((t) => t.title), ['Primary keys']);
 });
 
+
+// ── Retrying a failed night ─────────────────────────────────────────────────
+
+import { CYCLE_RETRY_DELAY_MS, nextCycleTry } from '@/lib/explainers/ideas/retry';
+
+const NIGHT = new Date('2026-10-13T06:00:00Z'); // 2:00 AM New York
+
+test('a failed cycle may run once more, after the delay, and the failed row stays', async () => {
+  const { db } = await scratchExplainersDb();
+  await seedPool(db, [['Primary keys', GOOD]]);
+  await saveSetting(db, 'auto_render', true);
+
+  const first = await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: NIGHT });
+  assert.equal(first.status, 'failed');
+  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1`, [NIGHT]); // the table stamps real time; pin it to the test clock
+
+  const tooSoon = new Date(NIGHT.getTime() + CYCLE_RETRY_DELAY_MS - 60_000);
+  const waiting = await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: tooSoon });
+  assert.deepEqual(waiting, { status: 'skipped', reason: 'retry_wait' });
+
+  const later = new Date(NIGHT.getTime() + CYCLE_RETRY_DELAY_MS + 1000);
+  const retry = await runIdeaCycle({
+    db,
+    ideaModel: stubIdeas([[['APIs', 'Explain an API call.']]]),
+    jevTransport: stubJev({ APIs: STRONG }).transport,
+    now: later,
+  });
+  assert.equal(retry.status, 'ok');
+
+  const { rows } = await db.query<{ status: string }>('SELECT status FROM explainers.idea_cycles ORDER BY started_at');
+  assert.deepEqual(rows.map((r) => r.status).sort(), ['failed', 'ok']);
+  const again = await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: later });
+  assert.deepEqual(again, { status: 'skipped', reason: 'already_ran_today' });
+});
+
+test('a night that failed twice is not tried a third time', async () => {
+  const { db } = await scratchExplainersDb();
+  await saveSetting(db, 'auto_render', true);
+  const run = (now: Date) => runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now });
+  assert.equal((await run(NIGHT)).status, 'failed');
+  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1`, [NIGHT]);
+  const second = new Date(NIGHT.getTime() + CYCLE_RETRY_DELAY_MS + 1000);
+  assert.equal((await run(second)).status, 'failed');
+  const third = new Date(second.getTime() + 3 * CYCLE_RETRY_DELAY_MS);
+  assert.deepEqual(await run(third), { status: 'skipped', reason: 'retry_exhausted' });
+  const { rows } = await db.query('SELECT 1 FROM explainers.idea_cycles');
+  assert.equal(rows.length, 2);
+});
+
+test('a failed night that already has an auto render requested is not retried', async () => {
+  const { db } = await scratchExplainersDb();
+  await seedPool(db, [['Primary keys', GOOD]]);
+  await saveSetting(db, 'auto_render', true);
+  assert.equal((await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: NIGHT })).status, 'failed');
+  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1`, [NIGHT]);
+  const { rows: [topic] } = await db.query<{ id: string }>('SELECT id FROM explainers.topics LIMIT 1');
+  await db.query(
+    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, requested_at)
+     VALUES ($1, 'requested', 'auto', 'development', 5, 'm', 'm', $2)`,
+    [topic.id, new Date(NIGHT.getTime() + 1000)],
+  );
+  const later = new Date(NIGHT.getTime() + CYCLE_RETRY_DELAY_MS + 1000);
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: later });
+  assert.deepEqual(result, { status: 'skipped', reason: 'render_already_requested' });
+});
+
+test('the worker retries a failed or thrown night after the delay, at most twice a day', () => {
+  const now = 1_000_000;
+  assert.equal(nextCycleTry({ status: 'failed' }, 1, now), now + CYCLE_RETRY_DELAY_MS);
+  assert.equal(nextCycleTry('threw', 1, now), now + CYCLE_RETRY_DELAY_MS);
+  assert.equal(nextCycleTry({ status: 'failed' }, 2, now), null);
+  assert.equal(nextCycleTry('threw', 2, now), null);
+  assert.equal(nextCycleTry({ status: 'ok' }, 1, now), null);
+  assert.equal(nextCycleTry({ status: 'skipped', reason: 'already_ran_today' }, 1, now), null);
+  assert.equal(nextCycleTry({ status: 'skipped', reason: 'retry_exhausted' }, 1, now), null);
+  assert.equal(nextCycleTry({ status: 'skipped', reason: 'retry_wait' }, 1, now), now + CYCLE_RETRY_DELAY_MS);
+});
+
 // ── The analogy pick (Explainers 3.0, EX3-30) ───────────────────────────────
 
 const scoreRow = (v: number, overrides: Partial<AnalogyScores> = {}): AnalogyScores => ({
