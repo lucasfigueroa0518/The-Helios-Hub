@@ -4,7 +4,8 @@ import { calendarDateKey } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
 import { dailyFill, quotaFilledNote, type DailyFill } from '@/lib/social-hub/fill';
-import { nonSlotKeys, quotaFromSlots, slotPlan } from '@/lib/social-hub/slots';
+import { quotaFromSlots, slotPlan } from '@/lib/social-hub/slots';
+import { chooseTemplateSlot } from '@/lib/social-hub/slots/scheduler';
 import type { SlotSource } from '@/lib/social-hub/slots/types';
 import { approveItem, bookSlot, rejectItem } from '@/lib/social-hub/spine';
 import { datesByWeekday } from '@/lib/lfd/days';
@@ -52,7 +53,7 @@ export async function postsPerDay(query: Query): Promise<number> {
  */
 export async function carouselFill(query: Query, now = new Date()): Promise<DailyFill> {
   const day = calendarDateKey(now, SOCIAL_TIMEZONE);
-  // Template mode: the day's quota is its carousel slots; legacy keeps posts_per_day.
+  // Template mode: the day's quota is its carousel slots within the daily cap; legacy keeps posts_per_day.
   // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   return dailyFill(query, 'carousels', day, (await quotaFromSlots(query, 'carousels', day)) ?? (await postsPerDay(query)));
 }
@@ -99,20 +100,22 @@ export async function schedulePost(
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
-  // Template mode: every carousel window that is not a slot is taken. Legacy (LFD-02): while Last
-  // Few Days' auto_run is on, its days have no carousel windows.
+  // Template mode: the calendar's carousel slots within the daily cap, never on a Last Few Days
+  // day. Legacy (LFD-02): while Last Few Days' auto_run is on, its days have no carousel windows.
   // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   const plan = await slotPlan(query, calendarDateKey(now, SOCIAL_TIMEZONE));
   const off = plan ? [] : await carouselOffDays(query);
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const busy = [...(await busyFeedTimes(query, now, 'social')), ...(await ownFeedTimes(query, 'social', now))];
-    const today = calendarDateKey(now, SOCIAL_TIMEZONE);
-    const taken = await takenSlots(query, today);
-    if (plan) for (const k of nonSlotKeys(plan, 'carousels', CAROUSEL_SLOTS.map((w) => w.id), slotTakenKey)) taken.add(k);
-    else for (const day of datesByWeekday(today, 14, off, true)) for (const w of CAROUSEL_SLOTS) taken.add(slotTakenKey(day, w.id));
-    // The slots are the cadence in template mode: every open slot may take a post.
-    const perDay = plan ? CAROUSEL_SLOTS.length : await postsPerDay(query);
-    const choice = chooseCarouselSlots(now, taken, busy, perDay, rng, throughDate);
+    let choice: { nyDate: string; slot: string; publishAt: Date } | null;
+    if (plan) {
+      choice = await chooseTemplateSlot(query, plan, 'carousels', { now, busy, rng, throughDate });
+    } else {
+      const today = calendarDateKey(now, SOCIAL_TIMEZONE);
+      const taken = await takenSlots(query, today);
+      for (const day of datesByWeekday(today, 14, off, true)) for (const w of CAROUSEL_SLOTS) taken.add(slotTakenKey(day, w.id));
+      choice = chooseCarouselSlots(now, taken, busy, await postsPerDay(query), rng, throughDate);
+    }
     if (!choice) return { scheduled: false, note: throughDate ? 'Today’s carousel windows are taken or over.' : 'No carousel window is open in the next two weeks.' };
     try {
       const booked = await bookSlot(query, { vertical: 'carousels', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });

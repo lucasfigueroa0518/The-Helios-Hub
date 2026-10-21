@@ -21,14 +21,14 @@
 import { MAJOR_NEWS, MD_GROUNDING, SAME_EVENT } from '@/lib/stories/questions';
 import { MD_HEADLINES, material, type MdHeadlinesOut } from '@/lib/stories/prompts';
 import type { FrameData, Photo, StoryData } from '@/lib/stories/render/types';
-import { recentKeys, type NewCandidate } from '@/lib/stories/repository';
+import type { NewCandidate } from '@/lib/stories/repository';
 import { morningDownloadCarousel, recentPhotoUses } from '@/lib/stories/sources/carousel';
 import { dedupe, morningDownloadReels, type StoryCandidate } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
 
 import { clearsFloor, SLIDE_MIN_SHORT_SIDE } from '@/lib/social/photos/size';
 import { findSetOrEach } from '@/lib/stories/photos';
-import { nextBackdrop, openerDate, sentenceCount, shortIds, toFrames, type BuildDeps, type BuildResult } from './common';
+import { keysToAvoid, nextBackdrop, openerDate, sentenceCount, shortIds, toFrames, type BuildDeps, type BuildResult } from './common';
 
 /** major-news@2 (Lucas, 2026-10-09): the positive weights sum to 1; `speculative` takes points away. */
 export const MAJOR_NEWS_WEIGHTS = { happened: 0.3, news_kind: 0.25, blockbuster_entity: 0.2, global_relevance: 0.15, political_relevance: 0.1, speculative: -0.35 } as const;
@@ -68,7 +68,7 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
       ? { reels: async () => pooled.stories.filter((c) => c.origin === 'reels'), carousel: async () => pooled.stories.filter((c) => c.origin === 'carousel') }
       : { reels: () => morningDownloadReels(deps.sourceDb, deps.nyDate), carousel: () => morningDownloadCarousel(deps.sourceDb, deps.now) });
   const log: string[] = [];
-  const shown = await recentKeys(deps.db, 'morning_download', 3, deps.now);
+  const shown = await keysToAvoid(deps, 'morning_download', 3);
   const [reels, carousel] = await Promise.all([src.reels().catch(() => []), src.carousel().catch(() => [])]);
   let pool = dedupe([...carousel, ...reels]).filter((c) => !shown.has(c.key));
 

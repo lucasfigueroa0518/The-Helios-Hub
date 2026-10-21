@@ -188,7 +188,7 @@ closing is recorded in `social_hub.caption_closings` (type `lfd`) only when the 
 
 | Prompt | File | Version | Status |
 |---|---|---|---|
-| Caption | `lib/lfd/caption-lines.ts` | `lfd-caption-v1` | draft, awaiting Lucas. Amended before it shipped (Tommy, 2026-10-20, after the first live check): the Helios line makes one concrete point in Helios's view (no build line, so never what Helios builds), never a recent closing's opening, a follow clause is rare, body paragraphs are one or two sentences with secondary details cut. |
+| Caption | `lib/lfd/caption-lines.ts` | `lfd-caption-v2` | draft, awaiting Lucas. v2 (fix round 3, Tommy, 2026-10-20, after the live Reels check; v1 shipped 2026-10-20): the Helios line says what a business in that industry should start, stop, or watch because of the story, said in Helios's voice (no "Helios's view" label to echo), and never opens on a label or framing phrase; a reasonable industry match means the story's own business is in, or plainly close to, that industry, never an adjacent one, else marketing or sales teams in general; staged reveal phrases are banned by the shared rules. v1 notes: Amended before it shipped (Tommy, 2026-10-20, after the first live check): the Helios line makes one concrete point in Helios's view (no build line, so never what Helios builds), never a recent closing's opening, a follow clause is rare, body paragraphs are one or two sentences with secondary details cut. |
 
 ## 5. Photos
 

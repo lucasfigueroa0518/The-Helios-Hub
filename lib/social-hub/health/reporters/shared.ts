@@ -10,12 +10,18 @@ export type ReportContext = { night: string; posting: PostingState; now: Date };
 export type Reporter = (q: HubQuery, ctx: ReportContext) => Promise<NightReport>;
 
 export function quotaFor(posting: PostingState, night: string): number {
-  // Template mode: the night's own slots (the recent nights, else this week's; perDay is today's count).
+  // Template mode: the night's own slots (the recent nights, else this week's; perDay is today's count),
+  // never more than the daily limit (Stories: per series), as the overnight runs make them.
   const slots = posting.nights?.find((d) => d.nyDate === night) ?? posting.schedule?.find((d) => d.nyDate === night);
   if (slots) {
-    if (posting.type === 'last_few_days') return slots.count > 0 ? 1 : 0;
-    if (posting.type === 'stories') return (posting.series ?? []).filter((s) => s.enabled && s.generate && slots.series.includes(s.id)).length;
-    return slots.count;
+    const cap = posting.cap ?? Number.POSITIVE_INFINITY;
+    if (posting.type === 'last_few_days') return Math.min(slots.count > 0 ? 1 : 0, cap);
+    if (posting.type === 'stories') {
+      return (posting.series ?? [])
+        .filter((s) => s.enabled && s.generate)
+        .reduce((n, s) => n + Math.min(slots.series.filter((x) => x === s.id).length, cap), 0);
+    }
+    return Math.min(slots.count, cap);
   }
   // Last Few Days: one post on each of its days (spec §7.4).
   if (posting.days) return posting.days.includes(weekdayIndex(night)) ? 1 : 0;

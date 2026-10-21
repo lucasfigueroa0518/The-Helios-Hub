@@ -11,10 +11,13 @@ import type { Series } from '@/lib/stories/render/types';
 import { PLAN } from '@/lib/social-hub/views/plan';
 import { dbQuery } from '@/lib/db';
 import { readLfdSettings } from '@/lib/lfd/settings';
-import { slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
-import { readSlotSource } from '@/lib/social-hub/slots/load';
+import { slotPlan, slotsWithinCap, type SlotPlan } from '@/lib/social-hub/slots';
+import { readCaps, readSlotSource } from '@/lib/social-hub/slots/load';
 import type { ResolvedSlot, SlotQuery } from '@/lib/social-hub/slots/types';
+import { writeCaps } from '@/lib/social-hub/slots/write';
+import type { HubPost } from '@/lib/social-hub/types';
 import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
+import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
 
 /**
  * How each content type makes and posts, in the two switches a person thinks
@@ -32,7 +35,9 @@ import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
  * With the calendar (slot_source 'template') the calendar owns when: the
  * quota and series days can't be set here, `schedule` shows this week's
  * slots for the type instead, and perDay / days / series days are read from
- * those slots so older readers keep working.
+ * those slots so older readers keep working. The type's daily limit (`cap`,
+ * the hidden safety cap the overnight runs never pass; week board spec
+ * §Safety cap) is set here, a person's decision, never automatic.
  */
 export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days';
 
@@ -62,7 +67,15 @@ export type PostingState = {
    * backfill) check each night against its own day. Null while legacy.
    */
   nights: ScheduleDay[] | null;
+  /** Template mode: the daily limit, the most the overnight run makes a day (Stories: per series). Null while legacy. */
+  cap: number | null;
+  /** What one more post a night costs: the average cost of the type's posts over the last COST_DAYS days; null when unknown. */
+  costPerPostMicros: number | null;
 };
+
+/** The days costPerPost averages over. */
+export const COST_DAYS = 14;
+
 
 /** How many dates through today `nights` covers: every night the Health page can ask about (historyNights ≤ 31). */
 export const NIGHT_DAYS = 31;
@@ -73,6 +86,8 @@ export type PostingPatch = {
   autoPublish?: boolean;
   perDay?: number;
   series?: { id: string; enabled?: boolean; generate?: boolean; days?: number[] };
+  /** The daily limit (template mode), a whole number from 0 to 10 (Last Few Days 0–1). */
+  cap?: number;
 };
 
 const SERIES_LABEL: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
@@ -89,7 +104,7 @@ async function exDb() {
   return explainersDb();
 }
 
-type TypeFields = Omit<PostingState, 'schedule' | 'nights'>;
+type TypeFields = Omit<PostingState, 'schedule' | 'nights' | 'cap' | 'costPerPostMicros'>;
 
 const appQuery: SlotQuery = (text, params) => dbQuery(text, params);
 
@@ -121,7 +136,7 @@ function weekSchedule(type: ContentType, plan: SlotPlan): ScheduleDay[] {
       count: slots.length,
       trial: slots.filter((s) => s.feedMode === 'trial').length,
       main: slots.filter((s) => s.feedMode === 'main').length,
-      series: type === 'stories' ? slots.map((s) => s.windowId) : [],
+      series: type === 'stories' ? slots.map((s) => s.series!) : [],
       override: slots.some((s) => s.origin === 'override'),
     };
   });
@@ -136,22 +151,44 @@ function weekdaysWith(plan: SlotPlan, has: (s: ResolvedSlot) => boolean): number
 /**
  * Template mode (spec §4): the cadence fields come from the calendar, so
  * every reader that still uses them sees the slots. perDay is today's slot
- * count; Last Few Days' days and each Stories series' days are this week's
- * weekdays with that slot.
+ * count under the daily limit (what the night makes); Last Few Days' days
+ * and each Stories series' days are this week's weekdays with that slot.
  */
-function withCalendar(state: TypeFields, plan: SlotPlan, today: string): TypeFields {
+function withCalendar(state: TypeFields, plan: SlotPlan, today: string, cap: number): TypeFields {
   const type = state.type;
   if (type === 'last_few_days') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'last_few_days') };
   if (type === 'stories') {
-    return { ...state, series: (state.series ?? []).map((x) => ({ ...x, days: weekdaysWith(plan, (s) => s.vertical === 'stories' && s.windowId === x.id) })) };
+    return { ...state, series: (state.series ?? []).map((x) => ({ ...x, days: weekdaysWith(plan, (s) => s.vertical === 'stories' && s.series === x.id) })) };
   }
-  return { ...state, perDay: slotsOn(plan, type, today).length };
+  return { ...state, perDay: slotsWithinCap(plan, type, today, cap).made.length };
 }
 
+/**
+ * The average cost of one of the type's posts made in the last COST_DAYS
+ * days (the day it was made; its posting day only when that is unknown),
+ * each content item once (posts sharing an item share its cost). Null with
+ * none. Pure.
+ */
+export function costPerPost(posts: readonly HubPost[], type: ContentType, now: Date): number | null {
+  const today = nyDateOf(now)!;
+  const from = addDays(today, -(COST_DAYS - 1));
+  const seen = new Map<string, number>();
+  for (const p of posts) {
+    if (p.vertical !== type || p.costMicros == null) continue;
+    const day = nyDateOf(p.generatedAt) ?? p.nyDate;
+    if (!day || day < from || day > today) continue;
+    seen.set(p.costItemKey ?? p.id, p.costMicros);
+  }
+  if (!seen.size) return null;
+  return Math.round([...seen.values()].reduce((a, b) => a + b, 0) / seen.size);
+}
+
+/** costPerPostMicros is null here: the posting route works it out from the hub's posts (costPerPost). */
 export async function readPosting(type: ContentType, now = new Date()): Promise<PostingState> {
   const [state, cal] = await Promise.all([readTypePosting(type), calendarPlan(now)]);
-  if (!cal) return { ...state, schedule: null, nights: null };
-  return { ...withCalendar(state, cal.week, cal.today), schedule: weekSchedule(type, cal.week), nights: weekSchedule(type, cal.nights) };
+  if (!cal) return { ...state, schedule: null, nights: null, cap: null, costPerPostMicros: null };
+  const cap = (await readCaps(appQuery))[type];
+  return { ...withCalendar(state, cal.week, cal.today, cap), schedule: weekSchedule(type, cal.week), nights: weekSchedule(type, cal.nights), cap, costPerPostMicros: null };
 }
 
 async function readTypePosting(type: ContentType): Promise<TypeFields> {
@@ -209,14 +246,22 @@ function validate(type: ContentType, patch: PostingPatch): void {
     const { days } = patch.series;
     if (days !== undefined && (!Array.isArray(days) || days.length === 0 || !days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6))) throw new Error('Pick at least one day of the week.');
   }
+  if (patch.cap !== undefined) {
+    if (!Number.isInteger(patch.cap) || patch.cap < 0 || patch.cap > MAX_CAP) throw new Error(`A daily limit is a whole number from 0 to ${MAX_CAP}.`);
+    if (patch.cap > maxCapFor(type)) throw new Error('Last Few Days runs once a day, so its daily limit is 0 or 1.');
+  }
 }
 
 export async function writePosting(type: ContentType, patch: PostingPatch, by: string): Promise<PostingState> {
   validate(type, patch);
   // The calendar owns when in template mode; legacy keeps these controls, since they still drive the workers.
-  if ((patch.perDay !== undefined || patch.series?.days !== undefined) && (await readSlotSource(appQuery)) === 'template') {
-    throw new Error('Cadence moved to the calendar.');
+  if (patch.perDay !== undefined || patch.series?.days !== undefined || patch.cap !== undefined) {
+    const template = (await readSlotSource(appQuery)) === 'template';
+    if (template && (patch.perDay !== undefined || patch.series?.days !== undefined)) throw new Error('Cadence moved to the calendar.');
+    // The daily limit caps the calendar's slots, so it means something only once the calendar is on.
+    if (!template && patch.cap !== undefined) throw new Error('The daily limit applies once the calendar is on.');
   }
+  if (patch.cap !== undefined) await writeCaps(appQuery, { [type]: patch.cap });
   if (type === 'carousels') {
     if (patch.generate !== undefined) await setSocialSetting('auto_run', patch.generate);
     if (patch.autoPublish !== undefined) await setSocialSetting('require_approval', !patch.autoPublish);

@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import type Anthropic from '@anthropic-ai/sdk';
 
-import { LFD_CAPTION_MODEL, LFD_CAPTION_SYSTEM, writeLfdCaptionLines } from '@/lib/lfd/caption-lines';
+import { LFD_CAPTION_MODEL, LFD_CAPTION_SYSTEM, LFD_CAPTION_VERSION, writeLfdCaptionLines } from '@/lib/lfd/caption-lines';
 import type { Ready } from '@/lib/lfd/types';
 import { CAPTION_SHARED_RULES, HELIOS_CONTEXT } from '@/lib/social/captions/helios-context';
 
@@ -140,4 +140,8 @@ test('copy fix (lfd-caption-v1 amended, 2026-10-20): one concrete point, a follo
   assert.doesNotMatch(own, /may end by inviting/);
   assert.match(own, /two or three short paragraphs of one or two sentences each/);
   assert.match(own, /Usually one emoji leads it/);
+});
+
+test('lfd-caption-v2 (fix round 3, 2026-10-20): version bumped after v1 shipped', () => {
+  assert.equal(LFD_CAPTION_VERSION, 'lfd-caption-v2');
 });

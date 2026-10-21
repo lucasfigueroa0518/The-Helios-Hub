@@ -14,9 +14,9 @@ import { harnessDb } from './stories-harness';
 
 const NOW = new Date('2026-10-08T16:00:00Z');
 
-async function readySet() {
+async function readySet(slotMinute: number | null = null) {
   const { db } = await harnessDb();
-  const { set } = await generate(db, 'free_vs_paid', 'lucas@x', NOW);
+  const { set } = await generate(db, 'free_vs_paid', 'lucas@x', NOW, slotMinute);
   await claimNextRequested(db);
   await saveBuild(db, set.id, { payload: {}, frames: [{ seq: 1, role: 'intro', backdrop: 'black', copy: { role: 'intro' } }, { seq: 2, role: 'paid', backdrop: 'black', copy: { role: 'paid', tool: 'P', price: '$1', period: 'a month', tease: 't' } }], candidates: [{ origin: 'generated', ref: 'p|f', score: 0.8, chosen: true }] });
   await markReady(db, set.id, false);
@@ -67,6 +67,21 @@ test('Approve, Reject with tags, Regenerate, Publish now', async () => {
   assert.equal(again.created, true);
   assert.equal(again.set.status, 'requested');
   assert.notEqual(again.set.id, id2);
+  assert.equal(again.set.slot_minute, null, 'a legacy set stays slot-less');
+});
+
+test('Regenerate keeps the set\'s slot (R28); a legacy set regenerates before the slot_minute column exists (R12)', async () => {
+  const { db, id } = await readySet(510);
+  const again = await regenerate(db, id, 'lucas@x');
+  assert.equal(again.created, true);
+  assert.equal(again.set.slot_minute, 510);
+  assert.equal(again.set.series, 'free_vs_paid');
+
+  const { db: old, id: oldId } = await readySet();
+  await old.query(`ALTER TABLE stories.sets DROP COLUMN slot_minute CASCADE`);
+  const fresh = await regenerate(old, oldId, 'lucas@x');
+  assert.equal(fresh.created, true);
+  assert.equal(fresh.set.slot_minute, null);
 });
 
 test('Settings: auto needs confirmation; history shows completion and early exits', async () => {

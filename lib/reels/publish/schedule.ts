@@ -5,10 +5,12 @@ import { calendarDateKey } from '@/lib/reels/schedule';
 import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
 import { approveReel, reelItemId, reelsSpine } from '@/lib/reels/publish/items';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
-import { slotTakenKey } from '@/lib/instagram/window';
-import { bookingFeedMode, feedModeKeys, nonSlotKeys, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
-import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
-import type { FeedMode } from '@/lib/social-hub/slots/types';
+import { bookingFeedMode, slotPlan } from '@/lib/social-hub/slots';
+import { openWindowRange, spacedOffsets, windowMinuteInstant, type PostingWindow } from '@/lib/instagram/window';
+import { driftMinute } from '@/lib/social-hub/slots/book';
+import { chooseTemplateSlot, templateSlots } from '@/lib/social-hub/slots/scheduler';
+import { clockLabel, DAY_END, FEED_GAP } from '@/lib/social-hub/slots/times';
+import { parseSlotId, slotId, type FeedMode } from '@/lib/social-hub/slots/types';
 import { bookSlot } from '@/lib/social-hub/spine';
 import {
   chooseSlot,
@@ -90,9 +92,15 @@ export function formatPublishAt(iso: string): string {
   return `${when} ET`;
 }
 
+/** A window's label (legacy), or a free-time slot's start ("12:00 PM slot"). */
+function noteSlotLabel(slot: string): string {
+  const free = parseSlotId(slot);
+  return free ? `${clockLabel(free.startMinute)} slot` : slotLabel(slot as SlotId);
+}
+
 function scheduleNote(schedule: StoredSchedule): string {
   const feed = schedule.feedMode === 'main' ? ' It posts to the main feed.' : ' It posts as a trial reel.';
-  return `Scheduled for ${formatPublishAt(schedule.publishAt)} (${slotLabel(schedule.slot)}).${feed}`;
+  return `Scheduled for ${formatPublishAt(schedule.publishAt)} (${noteSlotLabel(schedule.slot)}).${feed}`;
 }
 
 /** The app pool as a slot / spacing query handle. */
@@ -159,17 +167,6 @@ async function takenSlots(fromDate: string): Promise<Set<string>> {
   return new Set(rows.map((row) => slotKey(row.ny_date, row.slot)));
 }
 
-/** A reels `slotKey` (`date:slot`) in the shared window format (`slotTakenKey`, `date|slot`). Dates have no colon. */
-export function toTakenKey(reelsKey: string): string {
-  const at = reelsKey.indexOf(':');
-  return slotTakenKey(reelsKey.slice(0, at), reelsKey.slice(at + 1));
-}
-
-/** Template mode: every reels window that is not a slot counts as taken, in the caller's key format. */
-export function reelTaken(plan: SlotPlan, base: ReadonlySet<string>, key: (nyDate: string, slot: string) => string): Set<string> {
-  return new Set([...base, ...nonSlotKeys(plan, 'reels', POSTING_SLOTS.map((s) => s.id), key)]);
-}
-
 /**
  * Reserve the earliest window that has not ended. `throughDate` limits the
  * search to that Eastern calendar day. A reel that already has a clock time
@@ -199,17 +196,18 @@ export async function schedulePostIdea(
     const fromDate = calendarDateKey(now);
     // A failed slot read throws: it must not silently book by the old rules (ruling P2).
     const plan = await slotPlan(hubQ, fromDate);
-    const takenNow = await takenSlots(fromDate);
     let choice: { nyDate: string; slot: SlotId; publishAt: Date } | null;
+    // Template: the mode of the slot chosen, from the plan in hand (no second read).
+    let feedMode: FeedMode | null = null;
     if (!plan) {
       // Trial Reels are exempt from the cross-type feed spacing (D33 revises SH-47).
-      choice = chooseSlot(now, takenNow, uniformIndex, POSTING_TIME_ZONE, throughDate);
+      choice = chooseSlot(now, await takenSlots(fromDate), uniformIndex, POSTING_TIME_ZONE, throughDate);
     } else {
-      // The calendar: only its slots, and Main slots space against feed posts.
-      const taken = reelTaken(plan, new Set([...takenNow].map(toTakenKey)), slotTakenKey);
+      // The calendar: its slots within the daily cap, at [slot, slot + 15]; Main slots space against feed posts.
       const busy = [...(await busyFeedTimes(hubQ, now, 'reels')), ...(await ownFeedTimes(hubQ, 'reels', now))];
-      const picked = chooseByFeedMode(POSTING_SLOTS, now, taken, feedModeKeys(plan, 'reels', slotTakenKey), busy, uniformIndex, throughDate);
+      const picked = await chooseTemplateSlot(hubQ, plan, 'reels', { now, busy, rng: uniformIndex, throughDate });
       choice = picked ? { nyDate: picked.nyDate, slot: picked.slot as SlotId, publishAt: picked.publishAt } : null;
+      feedMode = picked?.feedMode ?? null;
     }
     if (!choice) {
       const note = throughDate
@@ -217,8 +215,6 @@ export async function schedulePostIdea(
         : 'No posting slot is open in the next two weeks.';
       return { scheduled: false, status: 409, note };
     }
-    // Template: the mode of the slot chosen, from the plan in hand (no second read).
-    const feedMode = plan ? (slotsOn(plan, 'reels', choice.nyDate).find((s) => s.windowId === choice.slot)?.feedMode ?? null) : null;
     try {
       const booked = await bookSlot(reelsSpine, {
         vertical: 'reels',
@@ -270,13 +266,17 @@ async function selectedOnDate(postIdeaId: string, nyDate: string): Promise<boole
 /** How many of today's windows can still take a reel. A started window counts until it ends. */
 export async function windowsStillOpen(now = new Date()): Promise<number> {
   const today = calendarDateKey(now);
-  const taken = await takenSlots(today);
-  // Template mode: only today's reels slots count.
   // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   const plan = await slotPlan(hubQ, today, 1);
-  const on = plan ? new Set(slotsOn(plan, 'reels', today).map((s) => s.windowId)) : null;
-  const slots = on ? POSTING_SLOTS.filter((slot) => on.has(slot.id)) : POSTING_SLOTS;
-  return slots.filter(
+  if (plan) {
+    // Template mode: today's reels slots within the cap, untaken, with a drift minute still ahead.
+    const { byDate, taken } = await templateSlots(hubQ, plan, 'reels');
+    return (byDate.get(today) ?? []).filter(
+      (slot) => !taken.has(`${today}|${slotId(slot.startMinute, slot.series)}`) && driftMinute(today, slot, now, [], () => 0) != null,
+    ).length;
+  }
+  const taken = await takenSlots(today);
+  return POSTING_SLOTS.filter(
     (slot) => !taken.has(slotKey(today, slot.id)) && openMinuteRange(today, slot.id, now) != null,
   ).length;
 }
@@ -381,6 +381,36 @@ export function retryableError(error: string | null): boolean {
   return !NO_RETRY_ERROR.test(error ?? '');
 }
 
+/** Template mode (ruling R11): a free-time slot retries until its start + 60 minutes, never past the day's end. */
+export const FREE_RETRY_MINUTES = 60;
+
+/**
+ * When a failed free-time booking may post again, or null: only on its own
+ * day (NY), while now is before min(slot + FREE_RETRY_MINUTES, DAY_END). A
+ * Main-feed reel takes the first minute ahead that keeps FEED_GAP from every
+ * other feed post; a Trial reel keeps its time (it is released at once).
+ * `undefined` means "keep publish_at".
+ */
+export function freeRetryAt(nyDate: string, startMinute: number, now: Date, main: boolean, busy: readonly Date[]): Date | undefined | null {
+  if (calendarDateKey(now) !== nyDate) return null;
+  const w: PostingWindow = { id: 'retry', label: '', startMinute, endMinute: Math.min(startMinute + FREE_RETRY_MINUTES, DAY_END) };
+  const open = openWindowRange(w, nyDate, now);
+  if (!open) return null;
+  if (!main) return undefined;
+  const at = spacedOffsets((o) => windowMinuteInstant(w, nyDate, o), open.startOffset, open.count, busy, FEED_GAP);
+  return at.length ? windowMinuteInstant(w, nyDate, at[0]!) : null;
+}
+
+/** The booking's Trial / Main; null on a database without the column (no reel is Main there). */
+async function rowFeedMode(id: string): Promise<FeedMode | null> {
+  try {
+    const { rows } = await dbQuery<{ feed_mode: FeedMode | null }>(`SELECT feed_mode FROM social_hub.schedule WHERE id = $1::uuid`, [id]);
+    return rows[0]?.feed_mode ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * One bounded retry for a slot whose post failed cleanly (D41's clean failure):
  * the attempt never reached Instagram (no container, no media id), it is the
@@ -405,13 +435,30 @@ export async function retryFailedSlots(now = new Date()): Promise<number> {
   let reopened = 0;
   for (const row of rows) {
     if (!retryableError(row.error)) continue;
-    if (openMinuteRange(row.ny_date, row.slot, now) == null) continue;
+    // A free-time slot (template mode, R11): its own day, until slot + 60, a Main reel spaced from feed posts.
+    const free = parseSlotId(row.slot);
+    let retryAt: Date | undefined;
+    if (free) {
+      const main = (await rowFeedMode(row.id)) === 'main';
+      const busy = main ? [...(await busyFeedTimes(hubQ, now, 'reels')), ...(await ownFeedTimes(hubQ, 'reels', now))] : [];
+      const at = freeRetryAt(row.ny_date, free.startMinute, now, main, busy);
+      if (at === null) continue;
+      retryAt = at;
+    } else if (!POSTING_SLOTS.some((w) => w.id === row.slot) || openMinuteRange(row.ny_date, row.slot, now) == null) {
+      continue;
+    }
     try {
-      const done = await dbQuery(
-        `UPDATE social_hub.schedule SET status = 'scheduled', error = NULL, publish_attempt_id = NULL
-          WHERE id = $1::uuid AND status = 'failed'`,
-        [row.id],
-      );
+      const done = retryAt
+        ? await dbQuery(
+            `UPDATE social_hub.schedule SET status = 'scheduled', error = NULL, publish_attempt_id = NULL, publish_at = $2::timestamptz
+              WHERE id = $1::uuid AND status = 'failed'`,
+            [row.id, retryAt.toISOString()],
+          )
+        : await dbQuery(
+            `UPDATE social_hub.schedule SET status = 'scheduled', error = NULL, publish_attempt_id = NULL
+              WHERE id = $1::uuid AND status = 'failed'`,
+            [row.id],
+          );
       reopened += done.rowCount ?? 0;
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;

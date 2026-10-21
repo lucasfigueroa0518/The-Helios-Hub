@@ -14,6 +14,8 @@ import type { Queryable, StoriesDb } from '@/lib/stories/db';
 export const SCHEMA_PATH = path.join(process.cwd(), 'db', 'stories_schema.sql');
 /** The lifecycle spine every set is projected onto (D44). Self-contained, so it applies here too. */
 export const SPINE_SCHEMA_PATH = path.join(process.cwd(), 'db', 'social_hub_schema.sql');
+/** Drops the one-a-day index so a series can post twice a day (R25); run after the worker and hub deploy. */
+export const MULTI_SLOT_PATH = path.join(process.cwd(), 'db', 'stories_multi_slot.sql');
 export const DEFAULT_LOCAL_DIR = path.join(process.cwd(), '.stories-local', 'pgdata');
 
 /** A schema file minus psql meta-commands (`\set ...`), which PGlite cannot run. */
@@ -38,11 +40,16 @@ export function pgliteDb(pg: PGlite): StoriesDb {
   return { ...wrap(pg), transaction: (fn) => pg.transaction((tx) => fn(wrap(tx))) };
 }
 
-/** Open PGlite and apply the schema (idempotent). `dataDir` undefined means in-memory. */
-export async function openLocalStoriesDb(dataDir?: string): Promise<{ db: StoriesDb; pg: PGlite }> {
+/**
+ * Open PGlite and apply the schema (idempotent). `dataDir` undefined means in-memory.
+ * `multiSlot` (default true) also applies db/stories_multi_slot.sql, the go-live state;
+ * false keeps the one-a-day index, the state between the schema apply and that step.
+ */
+export async function openLocalStoriesDb(dataDir?: string, opts: { multiSlot?: boolean } = {}): Promise<{ db: StoriesDb; pg: PGlite }> {
   if (dataDir) fs.mkdirSync(dataDir, { recursive: true });
   const pg = new PGlite(dataDir);
   await pg.exec(schemaSql());
+  if (opts.multiSlot !== false) await pg.exec(schemaSql(MULTI_SLOT_PATH));
   await pg.exec(schemaSql(SPINE_SCHEMA_PATH));
   return { db: pgliteDb(pg), pg };
 }

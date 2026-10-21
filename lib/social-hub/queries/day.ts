@@ -2,7 +2,8 @@ import type { HubQuery } from '@/lib/social-hub/db';
 import type { HubPost } from '@/lib/social-hub/types';
 import { madeMoveIds, type DayQuotas, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { readLfdSettings } from '@/lib/lfd/settings';
-import { slotPlan } from '@/lib/social-hub/slots';
+import { slotPlan, slotsWithinCap } from '@/lib/social-hub/slots';
+import { readCaps } from '@/lib/social-hub/slots/load';
 import type { SlotsByDate } from '@/lib/social-hub/slots/types';
 import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -83,16 +84,18 @@ const perDay = (rows: Array<{ value: unknown }>, fallback: number, min = 0) => {
 };
 
 /**
- * With the calendar (template mode) each type's quota is today's slot count,
- * and `slots` carries today − 7 … today + 21 for the views. A failed slot read
- * falls back to the legacy settings below.
+ * With the calendar (template mode) each type's quota is today's slot count
+ * under its daily limit (what the night makes), and `slots` carries
+ * today − 7 … today + 21 for the views. A failed slot read falls back to the
+ * legacy settings below.
  */
 export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>, now = new Date()): Promise<DayQuotas> {
   const today = nyDateOf(now)!;
   const plan = await slotPlan(q, addDays(today, -7), 29).catch(() => null);
   if (plan) {
     const slots: SlotsByDate = Object.fromEntries(plan.byDate);
-    const count = (v: Vertical) => (slots[today] ?? []).filter((s) => s.vertical === v).length;
+    const caps = await readCaps(q);
+    const count = (v: Vertical) => slotsWithinCap(plan, v, today, caps[v]).made.length;
     return { reels: count('reels'), carousels: count('carousels'), explainers: count('explainers'), last_few_days: count('last_few_days'), lfdDays: [], slots };
   }
   const sql = (schema: string) => `SELECT value FROM ${schema}.settings WHERE key = 'posts_per_day'`;

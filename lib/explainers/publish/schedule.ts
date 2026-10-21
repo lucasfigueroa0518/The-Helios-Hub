@@ -3,8 +3,8 @@ import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
 import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
-import { feedModeKeys, nonSlotKeys, slotPlan, slotsOn } from '@/lib/social-hub/slots';
-import { chooseByFeedMode } from '@/lib/social-hub/slots/choose';
+import { slotPlan } from '@/lib/social-hub/slots';
+import { chooseTemplateSlot } from '@/lib/social-hub/slots/scheduler';
 import { bookSlot } from '@/lib/social-hub/spine';
 
 import { DEFAULT_POSTS_PER_DAY, EXPLAINER_WINDOWS } from './config';
@@ -70,32 +70,33 @@ export async function scheduleJob(
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const { rows: takenRows } = await db.query<{ d: string; slot: string }>(
-      `SELECT ny_date::text AS d, slot FROM social_hub.schedule
-        WHERE vertical = 'explainers' AND status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
-      [calendarDateKey(now)],
-    );
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
     const busy = [...(await busyFeedTimes(spacing, now, 'explainers')), ...(await ownFeedTimes(spacing, 'explainers', now))];
     // A failed slot read throws: it must not silently book by the old rules (ruling P2).
     const plan = await slotPlan(spacing, calendarDateKey(now));
-    const takenKeys = new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot)));
-    let choice;
+    let choice: { nyDate: string; slot: string; publishAt: Date } | null;
+    // Legacy books exactly as before (no feed_mode written; it reads as main).
+    // Template: the mode of the slot chosen, from the plan in hand (no second read).
+    let feedMode: 'trial' | 'main' | null = null;
     if (!plan) {
+      const { rows: takenRows } = await db.query<{ d: string; slot: string }>(
+        `SELECT ny_date::text AS d, slot FROM social_hub.schedule
+          WHERE vertical = 'explainers' AND status IN ('scheduled', 'publishing', 'published') AND ny_date >= $1::date`,
+        [calendarDateKey(now)],
+      );
+      const takenKeys = new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot)));
       const windows = EXPLAINER_WINDOWS.slice(0, Math.max(1, Math.min(await postsPerDay(db), EXPLAINER_WINDOWS.length)));
       choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate);
     } else {
-      // The calendar: every window that is a slot (not posts_per_day), Main slots spaced from feed posts.
-      for (const k of nonSlotKeys(plan, 'explainers', EXPLAINER_WINDOWS.map((w) => w.id), slotTakenKey)) takenKeys.add(k);
-      choice = chooseByFeedMode(EXPLAINER_WINDOWS, now, takenKeys, feedModeKeys(plan, 'explainers', slotTakenKey), busy, rng, throughDate);
+      // The calendar: its slots within the daily cap (not posts_per_day), at [slot, slot + 15]; Main slots spaced from feed posts.
+      const picked = await chooseTemplateSlot(spacing, plan, 'explainers', { now, busy, rng, throughDate });
+      choice = picked;
+      feedMode = picked?.feedMode ?? null;
     }
     if (!choice) {
       return { scheduled: false, note: throughDate ? `No explainer window is open through ${throughDate}.` : 'No explainer window is open in the next two weeks.' };
     }
     try {
-      // Legacy books exactly as before (no feed_mode written; it reads as main).
-      // Template: the mode of the slot chosen, from the plan in hand (no second read).
-      const feedMode = plan ? (slotsOn(plan, 'explainers', choice.nyDate).find((s) => s.windowId === choice.slot)?.feedMode ?? null) : null;
       const booked = await bookSlot(spineOf(db), { vertical: 'explainers', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source, ...(feedMode ? { feedMode } : {}) });
       return { scheduled: true, id: booked.id, publishAt: booked.publishAt };
     } catch (error) {

@@ -2,12 +2,14 @@
 import { addCalendarDays } from '@/lib/instagram/window';
 import type { Vertical } from '@/lib/social-hub/types';
 
-import { loadSlots, readSlotSource } from './load';
+import { bySlotTime } from './book';
+import { loadSlots, readCaps, readSlotSource } from './load';
 import type { FeedMode, ResolvedSlot, SlotQuery } from './types';
 
 /**
- * The one question every scheduler and hub view asks (spec §5): which of a
- * type's windows are slots on these dates? Null while slot_source is
+ * The one question every scheduler and hub view asks (spec §5): which free-time
+ * slots (start minutes, Stories by series) does a type have on these dates,
+ * and how many of them are within the daily cap? Null while slot_source is
  * 'legacy': the caller then runs its own code exactly as before, so legacy
  * mode is today's code, not a copy of it. SELECT only.
  */
@@ -27,26 +29,6 @@ export function slotsOn(plan: SlotPlan, vertical: Vertical, nyDate: string): Res
   return (plan.byDate.get(nyDate) ?? []).filter((s) => s.vertical === vertical);
 }
 
-/** Keys (in the caller's own key format) for every window of `vertical` that is NOT a slot, on every date in the plan. */
-export function nonSlotKeys(plan: SlotPlan, vertical: Vertical, windowIds: readonly string[], key: (nyDate: string, windowId: string) => string): Set<string> {
-  const out = new Set<string>();
-  for (const [date, slots] of plan.byDate) {
-    const on = new Set(slots.filter((s) => s.vertical === vertical).map((s) => s.windowId));
-    for (const id of windowIds) if (!on.has(id)) out.add(key(date, id));
-  }
-  return out;
-}
-
-/** A reel type's slots split by Trial / Main, in the caller's key format. */
-export function feedModeKeys(plan: SlotPlan, vertical: Vertical, key: (nyDate: string, windowId: string) => string): { trial: Set<string>; main: Set<string> } {
-  const trial = new Set<string>();
-  const main = new Set<string>();
-  for (const [date, slots] of plan.byDate) {
-    for (const s of slots) if (s.vertical === vertical) (s.feedMode === 'main' ? main : trial).add(key(date, s.windowId));
-  }
-  return { trial, main };
-}
-
 /** Decision 7 (literal): a day with a Last Few Days slot is carousel-off, paused or not. */
 export function isLfdDay(plan: SlotPlan, nyDate: string): boolean {
   return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'last_few_days');
@@ -55,14 +37,6 @@ export function isLfdDay(plan: SlotPlan, nyDate: string): boolean {
 /** Before the calendar: Text on Screen posts as trial reels, Explainers to the main feed. */
 export function legacyFeedMode(vertical: Vertical): FeedMode | null {
   return vertical === 'reels' ? 'trial' : vertical === 'explainers' ? 'main' : null;
-}
-
-/** The feed mode a new booking in (nyDate, windowId) takes. */
-export async function feedModeFor(q: SlotQuery, vertical: Vertical, nyDate: string, windowId: string): Promise<FeedMode | null> {
-  if (vertical !== 'reels' && vertical !== 'explainers') return null;
-  const plan = await slotPlan(q, nyDate, 1);
-  const slot = plan ? slotsOn(plan, vertical, nyDate).find((s) => s.windowId === windowId) : null;
-  return slot?.feedMode ?? legacyFeedMode(vertical);
 }
 
 /**
@@ -87,19 +61,36 @@ export async function bookingFeedMode(q: SlotQuery, itemId: string | null, verti
   return legacyFeedMode(vertical)!;
 }
 
-/** A type's posts for a date in template mode (its slot count); null while legacy, so the caller keeps posts_per_day. */
-export async function quotaFromSlots(q: SlotQuery, vertical: Vertical, nyDate: string): Promise<number | null> {
-  const plan = await slotPlan(q, nyDate, 1);
-  return plan ? slotsOn(plan, vertical, nyDate).length : null;
+/**
+ * A type's slots on a date split by the hidden daily cap: the first `cap` by
+ * time are made, the rest are over. Stories pass the cap per series.
+ */
+export function slotsWithinCap(plan: SlotPlan, vertical: Vertical, nyDate: string, cap: number): { made: ResolvedSlot[]; over: ResolvedSlot[] } {
+  const all = slotsOn(plan, vertical, nyDate).sort(bySlotTime);
+  if (vertical !== 'stories') return { made: all.slice(0, Math.max(0, cap)), over: all.slice(Math.max(0, cap)) };
+  const seen = new Map<string, number>();
+  const made: ResolvedSlot[] = [];
+  const over: ResolvedSlot[] = [];
+  for (const s of all) {
+    const n = seen.get(s.series ?? '') ?? 0;
+    seen.set(s.series ?? '', n + 1);
+    (n < cap ? made : over).push(s);
+  }
+  return { made, over };
 }
 
-/**
- * Template mode: whether a Stories series has its slot on `from` (the only
- * date read; any other date answers false). Null while legacy (the series'
- * own days stand).
- */
-export async function storiesDueOn(q: SlotQuery, from: string): Promise<((series: string, nyDate: string) => boolean) | null> {
-  const plan = await slotPlan(q, from, 1);
+/** A type's posts for a date in template mode (its slot count, capped); null while legacy, so the caller keeps posts_per_day. */
+export async function quotaFromSlots(q: SlotQuery, vertical: Vertical, nyDate: string): Promise<number | null> {
+  const plan = await slotPlan(q, nyDate, 1);
   if (!plan) return null;
-  return (series, nyDate) => slotsOn(plan, 'stories', nyDate).some((s) => s.windowId === series);
+  const caps = await readCaps(q);
+  return slotsWithinCap(plan, vertical, nyDate, caps[vertical]).made.length;
+}
+
+/** Template mode: the Stories slots on `nyDate` within the per-series cap; null while legacy (the series' own days stand). */
+export async function storiesSlotsOn(q: SlotQuery, nyDate: string): Promise<ResolvedSlot[] | null> {
+  const plan = await slotPlan(q, nyDate, 1);
+  if (!plan) return null;
+  const caps = await readCaps(q);
+  return slotsWithinCap(plan, 'stories', nyDate, caps.stories).made;
 }

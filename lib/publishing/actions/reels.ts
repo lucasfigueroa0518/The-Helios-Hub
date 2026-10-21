@@ -6,7 +6,7 @@ import { need, needPlacement, type ActionFn, type ContentActions } from './types
 
 type Outcome = { scheduled: boolean; note: string; status?: number };
 type Queued = { queued: boolean; note?: string; status?: number };
-type Place = (q: SpineQuery, input: PlacementTarget & Placement) => Promise<PlacementOutcome>;
+type Place = (q: SpineQuery, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 /**
  * Trial Reels (lib/reels/publish): approve the idea's slot, reject, Force post,
@@ -30,11 +30,11 @@ export function reelActions(deps: {
 }): ContentActions {
   const placement =
     (fn: Place): ActionFn =>
-    async (t, _by, input) => {
+    async (t, by, input) => {
       const at = needPlacement(input);
       const postIdeaId = need(t, 'postIdeaId');
       const itemId = t.videoJobId ? await deps.itemId(t.videoJobId) : null;
-      return fn(deps.query, { vertical: 'reels', itemId, ideaRef: postIdeaId, ...at });
+      return fn(deps.query, { vertical: 'reels', itemId, ideaRef: postIdeaId, ...at, ...(by ? { by } : {}) });
     };
   return {
     vertical: 'reels',

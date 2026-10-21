@@ -74,7 +74,7 @@ function enteredPool(e: Evaluation): boolean {
   return e.outcome === 'entered_pool' || e.outcome === 'won_head_to_head';
 }
 
-/** The day's quota: the calendar's explainers slots in template mode, else `posts_per_day`. */
+/** The day's quota: the calendar's explainers slots within the daily cap in template mode, else `posts_per_day`. */
 export async function explainersQuota(db: ExplainersDb, day: string): Promise<number> {
   // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   return (await quotaFromSlots((text, params) => db.query(text, params) as never, 'explainers', day)) ?? (await postsPerDay(db));

@@ -126,7 +126,7 @@ test('episode numbers count published explainers, not finished renders', async (
 
 test('the post caption names the viewer\'s problem and ends on the Helios line (explainer-caption-v5)', async () => {
   const { CAPTION_INSTRUCTIONS, CAPTION_VERSION, captionParams } = await import('@/lib/explainers/caption');
-  assert.equal(CAPTION_VERSION, 'explainer-caption-v5');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v6');
   assert.match(CAPTION_INSTRUCTIONS, /names a problem or situation the viewer has/);
   assert.match(CAPTION_INSTRUCTIONS, /the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags/);
   assert.match(CAPTION_INSTRUCTIONS, /which of the reel's options they would use first/);
@@ -137,9 +137,13 @@ test('the post caption names the viewer\'s problem and ends on the Helios line (
   assert.match(CAPTION_INSTRUCTIONS, /a short clause inviting the viewer to follow for the next episode is rare, never the default/);
   assert.match(CAPTION_INSTRUCTIONS, /Short paragraphs of one or two sentences with a blank line between them/);
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /just before the call to action/);
+  // Fix round 3 (explainer-caption-v6): content described without a label noun; no label opener.
+  assert.match(CAPTION_INSTRUCTIONS, /what a business in that industry should start, stop, or watch because of this concept, said in Helios's voice/);
+  assert.match(CAPTION_INSTRUCTIONS, /Do not open it with a label or framing phrase; open on the industry, the action, or the stakes/);
   assert.ok(!CAPTION_INSTRUCTIONS.includes('\u2014'), 'no em dashes');
   assert.match(CAPTION_INSTRUCTIONS, /Do not walk the eight beats in order/);
-  assert.doesNotMatch(CAPTION_INSTRUCTIONS, /catch|seven/);
+  // The retired v2 "catch" beat stays gone; the shared rules' quoted ban on "Here's the catch" (fix round 3) is not that beat.
+  assert.doesNotMatch(CAPTION_INSTRUCTIONS.replace(/"Here's the catch"/g, ''), /catch|seven/);
   assert.ok(CAPTION_INSTRUCTIONS.includes(HELIOS_CONTEXT), 'the Helios context is in the cached prefix');
   assert.ok(CAPTION_INSTRUCTIONS.includes(CAPTION_SHARED_RULES), 'the shared caption rules are in the cached prefix');
   assert.match(CAPTION_INSTRUCTIONS, /Helios line/);
@@ -243,7 +247,7 @@ test('Task 8b part 2 (v5 amended): at most two emoji, one leading the hook and o
   assert.throws(() => parseCaption(withTwo.replace('desk.', 'desk. 🔥')), /3 emoji; at most 2/);
   assert.throws(() => parseCaption(CONTEXT_WINDOW.replace("one section at a time.", 'one section at a time. 🚀')), /no emoji in the Helios line/);
   const { CAPTION_INSTRUCTIONS, CAPTION_VERSION } = await import('@/lib/explainers/caption');
-  assert.equal(CAPTION_VERSION, 'explainer-caption-v5');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v6');
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /No emoji\./);
   assert.match(CAPTION_INSTRUCTIONS, /At most two emoji, and none is required: usually one leads the hook/);
   assert.match(CAPTION_INSTRUCTIONS, /code puts the episode line above it/);

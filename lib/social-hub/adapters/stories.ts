@@ -1,5 +1,7 @@
 import { category, iso, num, text, yesNo } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { clockLabel } from '@/lib/social-hub/slots/times';
+import { isStorySeries, slotId } from '@/lib/social-hub/slots/types';
 import type { StoriesRead, StoryFrameRow, StoryInsightRow, StoryPoolRow, StorySetRow } from '@/lib/social-hub/queries/stories';
 import { nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
 import type { FactorValue, HubIdea, HubMetrics, HubPost, HubStatus, MetricSnapshot, NativeField, ScoreBreakdown, SourceRef } from '@/lib/social-hub/types';
@@ -135,9 +137,18 @@ function nativeFields(set: StorySetRow, frames: readonly StoryFrameRow[]): Nativ
     { group: 'production', label: 'Render review', value: set.flagged || frames.some((f) => f.flagged) ? 'Flagged' : 'Clean' },
     { group: 'scoring', label: 'Review', value: set.feedback_verdict ? `${set.feedback_verdict === 'approve' ? 'Approved' : 'Rejected'}${set.feedback_tags?.length ? ` · ${set.feedback_tags.map((t) => STORY_TAG_LABEL[t] ?? t).join(', ')}` : ''}` : '—' },
     { group: 'scheduling', label: 'Trigger', value: set.trigger === 'auto' ? 'Auto' : 'Click' },
-    { group: 'scheduling', label: 'Posting window', value: '8:30–10:00 AM' },
+    set.slot_minute != null
+      ? { group: 'scheduling', label: 'Posting slot', value: clockLabel(Number(set.slot_minute)) }
+      : { group: 'scheduling', label: 'Posting window', value: '8:30–10:00 AM' },
     { group: 'scheduling', label: 'Weekday', value: WEEKDAY_SHORT[weekdayOf(set.ny_date)]! },
   ];
+}
+
+/** A set booked at a free-time slot carries that slot's id (`t0510:morning_download`), so the week board finds it; a window-era set keeps the window. */
+export function storySlot(set: Pick<StorySetRow, 'series' | 'slot_minute'>, seriesLabel: string): { id: string; label: string } {
+  const m = set.slot_minute == null ? null : Number(set.slot_minute);
+  if (m != null && Number.isInteger(m) && isStorySeries(set.series)) return { id: slotId(m, set.series), label: `${seriesLabel} · ${clockLabel(m)}` };
+  return { id: 'story-window', label: 'Stories · 8:30–10:00 AM' };
 }
 
 export function storyPosts(read: StoriesRead): HubPost[] {
@@ -176,7 +187,7 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       postedAt: iso(set.published_at),
       publishAt: iso(set.publish_at),
       nyDate: set.ny_date.slice(0, 10),
-      slot: { id: 'story-window', label: 'Stories · 8:30–10:00 AM' },
+      slot: storySlot(set, series),
       permalink: null,
       pipelineHref: '/stories',
       media: {

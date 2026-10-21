@@ -9,6 +9,8 @@ import {
   num,
   nyDateFor,
   scheduleStatus,
+  slotCategory,
+  slotText,
   text,
   yesNo,
 } from '@/lib/social-hub/adapters/common';
@@ -88,7 +90,7 @@ function factorValues(row: CarouselPostRow, ctx: Context): Record<string, Factor
       empty: 'No photo record',
     },
     source: category(renderField(row, 'source'), {}, 'Unknown source'),
-    slot: category(ctx.slot, SLOT_LABEL, 'Outside a slot'),
+    slot: slotCategory(ctx.slot, SLOT_LABEL),
     approval: ctx.approvedAt ? { kind: 'category', key: 'approved', label: 'Approved' } : { kind: 'category', key: 'not_approved', label: 'Not approved' },
   };
 }
@@ -103,7 +105,7 @@ function nativeFields(row: CarouselPostRow, ctx: Context): NativeField[] {
     { group: 'production', label: 'Hook pass', value: row.hook_pass == null ? '—' : row.hook_pass ? 'On' : 'Off' },
     { group: 'production', label: 'Photo sources', value: row.photo_sources?.length ? row.photo_sources.map((s) => PHOTO_SOURCE_LABEL[s] ?? s).join(', ') : '—' },
     { group: 'production', label: 'Render checks', value: checks.length ? `${checks.length} note${checks.length === 1 ? '' : 's'}` : 'None' },
-    { group: 'scheduling', label: 'Posting slot', value: ctx.slot ? SLOT_LABEL[ctx.slot] ?? ctx.slot : '—' },
+    { group: 'scheduling', label: 'Posting slot', value: ctx.slot ? slotText(ctx.slot, SLOT_LABEL) : '—' },
     { group: 'scheduling', label: 'Approval', value: ctx.approvedAt ? 'Approved' : ctx.requireApproval ? 'Needs approval' : 'Not required' },
     { group: 'scheduling', label: 'Slug', value: row.slug },
   ];
@@ -152,7 +154,7 @@ function shell(row: CarouselPostRow, all: readonly CarouselPostRow[], ctx: Conte
     format: 'feed' as const,
     name: row.title,
     description: firstLine(row.caption),
-    slot: ctx.slot ? { id: ctx.slot, label: SLOT_LABEL[ctx.slot] ?? ctx.slot } : null,
+    slot: ctx.slot ? { id: ctx.slot, label: slotText(ctx.slot, SLOT_LABEL) } : null,
     pipelineHref: '/carousels',
     media: { kind: 'slides' as const, slides: slideOutline(row) },
     costMicros: null,

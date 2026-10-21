@@ -1,4 +1,4 @@
-import { attemptStatus, cancelNote, category, historyByMedia, iso, latest, nyDateFor, scheduleStatus, text, yesNo } from '@/lib/social-hub/adapters/common';
+import { attemptStatus, cancelNote, category, historyByMedia, iso, latest, nyDateFor, scheduleStatus, slotCategory, slotText, text, yesNo } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import type { LfdPostRow, LfdRead, LfdRunRow } from '@/lib/social-hub/queries/last-few-days';
@@ -75,7 +75,7 @@ function nativeFields(row: LfdPostRow, ctx: Context): NativeField[] {
     { group: 'production', label: 'Slides', value: row.slide_count == null ? '—' : String(row.slide_count) },
     { group: 'production', label: 'Text fit problems', value: String(listOf(row.fit_problems).length) },
     { group: 'production', label: 'Render problems', value: String(listOf(row.render_problems).length) },
-    { group: 'scheduling', label: 'Posting slot', value: ctx.slot ? SLOT_LABEL[ctx.slot] ?? ctx.slot : '—' },
+    { group: 'scheduling', label: 'Posting slot', value: ctx.slot ? slotText(ctx.slot, SLOT_LABEL) : '—' },
     { group: 'scheduling', label: 'Approval', value: ctx.approvedAt ? 'Approved' : ctx.requireApproval ? 'Needs approval' : 'Not required' },
     { group: 'scheduling', label: 'Slug', value: row.slug },
   ];
@@ -86,7 +86,7 @@ function factorValues(row: LfdPostRow, ctx: Context): Record<string, FactorValue
   return {
     stories: { kind: 'category', key: String(n), label: `${n} stories` },
     short: yesNo(row.short, ['short', 'Short post'], ['full', 'Full post']),
-    slot: category(ctx.slot, SLOT_LABEL, 'Outside a slot'),
+    slot: slotCategory(ctx.slot, SLOT_LABEL),
     approval: ctx.approvedAt ? { kind: 'category', key: 'approved', label: 'Approved' } : { kind: 'category', key: 'not_approved', label: 'Not approved' },
   };
 }
@@ -97,7 +97,7 @@ function shell(row: LfdPostRow, ctx: Context) {
     format: 'feed' as const,
     name: lfdTitle(row),
     description: text(row.caption),
-    slot: ctx.slot ? { id: ctx.slot, label: SLOT_LABEL[ctx.slot] ?? ctx.slot } : null,
+    slot: ctx.slot ? { id: ctx.slot, label: slotText(ctx.slot, SLOT_LABEL) } : null,
     pipelineHref: '/last-few-days',
     media: { kind: 'slides' as const, slides: lfdSlides(row) },
     costMicros: null,

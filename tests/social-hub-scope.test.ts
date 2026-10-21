@@ -170,12 +170,12 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
 
 /**
  * Hub controls (Lucas, 2026-10-09): the Content page's Run now and Settings,
- * and the type pages' run-progress poll, plus the Calendar's slot editor (its
- * slot writes and the unschedule it offers on a booked slot). Client components
+ * and the type pages' run-progress poll, plus the Calendar's week board (its
+ * slot writes, the unschedule it offers on a booked slot, and Ready to place's place). Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/social-hub/calendar/SlotEditor.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank)|social-hub\/(slots|actions\/unschedule))\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/social-hub/calendar/WeekBoard.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank)|social-hub\/(slots|actions\/(unschedule|place)))\b/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string): string | null {

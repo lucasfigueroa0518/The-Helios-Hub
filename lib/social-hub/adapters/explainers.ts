@@ -8,6 +8,8 @@ import {
   num,
   nyDateFor,
   scheduleStatus,
+  slotCategory,
+  slotText,
   text,
 } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
@@ -54,7 +56,7 @@ function factorValues(job: ExplainerJobRow, slot: string | null): Record<string,
   const out: Record<string, FactorValue> = {
     origin: category(job.origin, ORIGIN_LABEL),
     weighted: { kind: 'number', value: num(job.weighted_score) },
-    slot: category(slot, SLOT_LABEL, 'Outside a slot'),
+    slot: slotCategory(slot, SLOT_LABEL),
     reviewTags: { kind: 'tags', values: tags, empty: job.verdict ? 'No tags' : 'Not reviewed' },
     spend: { kind: 'number', value: num(job.spend_usd) },
   };
@@ -74,7 +76,7 @@ function nativeFields(job: ExplainerJobRow, slot: string | null): NativeField[] 
     { group: 'scoring', label: 'Weighted score', value: score(job.weighted_score, 1) },
     ...JEV_SCORES.map((s) => ({ group: 'scoring' as const, label: s.label, value: score(job[s.column]) })),
     { group: 'scoring', label: 'Review', value: job.verdict ? `${job.verdict === 'approved' ? 'Approved' : 'Rejected'}${job.tags?.length ? ` · ${job.tags.map((t) => REVIEW_TAG_LABEL[t] ?? t).join(', ')}` : ''}` : 'Not reviewed' },
-    { group: 'scheduling', label: 'Posting slot', value: slot ? SLOT_LABEL[slot] ?? slot : '—' },
+    { group: 'scheduling', label: 'Posting slot', value: slot ? slotText(slot, SLOT_LABEL) : '—' },
   ];
 }
 
@@ -106,7 +108,7 @@ function shell(b: Base): Omit<HubPost, 'id' | 'status' | 'statusNote' | 'postedA
     format: 'reel',
     name: job.title,
     description: text(job.scope),
-    slot: b.slot ? { id: b.slot, label: SLOT_LABEL[b.slot] ?? b.slot } : null,
+    slot: b.slot ? { id: b.slot, label: slotText(b.slot, SLOT_LABEL) } : null,
     pipelineHref: '/explainers/reels',
     media: job.video_artifact_id
       ? { kind: 'video', src: `/api/explainers/artifacts/${encodeURIComponent(job.video_artifact_id)}` }

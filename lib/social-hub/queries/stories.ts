@@ -16,6 +16,8 @@ export type StorySetRow = {
   style: string;
   payload: Record<string, unknown> | null;
   publish_at: string | null;
+  /** The free-time slot minute (template mode); null for a window-era set or before the column exists (R12). */
+  slot_minute?: number | null;
   flagged: boolean;
   error: string | null;
   spend_usd: number | string;
@@ -92,7 +94,7 @@ export type StoriesRead = {
  */
 export const STORY_SETS_SQL = `
 SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style, s.payload,
-       s.publish_at::text AS publish_at, s.flagged, s.error, s.spend_usd,
+       s.publish_at::text AS publish_at, (to_jsonb(s)->>'slot_minute')::int AS slot_minute, s.flagged, s.error, s.spend_usd,
        s.approved_at::text AS approved_at, s.published_at::text AS published_at,
        s.built_at::text AS built_at, s.created_at::text AS created_at,
        fb.verdict AS feedback_verdict, fb.tags AS feedback_tags,

@@ -95,4 +95,9 @@ test('posting settings refuse bad input before writing anything', async () => {
   await assert.rejects(() => writePosting('stories', { series: { id: 'free_vs_paid', days: [7] } }, 't'), /at least one day/);
   await assert.rejects(() => writePosting('carousels', { live: 'yes' as never }, 't'), /true or false/);
   await assert.rejects(() => writePosting('carousels', { autoPublish: 1 as never }, 't'), /true or false/);
+  // The daily limit: a whole number from 0 to 10; Last Few Days runs once a day.
+  await assert.rejects(() => writePosting('explainers', { cap: 11 }, 't'), /whole number from 0 to 10/);
+  await assert.rejects(() => writePosting('explainers', { cap: -1 }, 't'), /whole number from 0 to 10/);
+  await assert.rejects(() => writePosting('reels', { cap: 2.5 }, 't'), /whole number from 0 to 10/);
+  await assert.rejects(() => writePosting('last_few_days', { cap: 2 }, 't'), /once a day/);
 });

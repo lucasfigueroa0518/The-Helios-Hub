@@ -4,17 +4,19 @@
  *
  *   0. pool: the first pass after 4:00 AM refreshes stories.pool from the
  *      reels, carousel and catalog pools (lib/stories/pool.ts; reads only)
- *   1. auto series: request today's set at 4:00 AM (docs/social-overnight.md)
+ *   1. auto series: request today's set at 4:00 AM (docs/social-overnight.md);
+ *      in template mode one set per Stories slot (a series may post twice)
  *   2. build: claim one `requested` set → build, render, review → `ready`;
  *      an auto set approves itself only when require_approval is off and the
  *      review did not flag it (S-05, S-33); otherwise it waits for Approve
- *   3. schedule: each approved set gets a minute in its window (S-20)
+ *   3. schedule: each approved set gets a minute in its window (S-20), or in
+ *      [slot, slot + 15] when it has a slot
  *   4. publish: each due set posts its frames in order (S-59); on success the
  *      history (repeat checks) and Tommy's used-photo log are written (S-24)
  *      Steps 3 and 4 run only while publishing_live is on.
  *   5. insights: poll published frames every 2 hours until the final capture
  */
-import { storiesDueOn } from '@/lib/social-hub/slots';
+import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import type { StoriesDb } from '@/lib/stories/db';
 import { buildSet, type SetBuilderDeps } from '@/lib/stories/build';
 import { isFinalCapture, type StoryInsightsClient } from '@/lib/stories/publish/insights';
@@ -40,7 +42,7 @@ import {
   scheduleSet,
 } from '@/lib/stories/repository';
 import { livePoolReads, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
-import { pickPublishAt, requestAutoSets } from '@/lib/stories/schedule';
+import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings } from '@/lib/stories/settings';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
@@ -86,9 +88,9 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   // 1. Auto series.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     // Daily fill (D54): a series day someone already filled gets no auto set; logged once as fill_reduced.
-    // Template mode: the calendar's Stories slots say which series are due (null while legacy: each series' own days).
-    const dueOn = await storiesDueOn((t, p) => deps.db.query(t, p), nyDate(now)).catch(() => null);
-    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), ...(dueOn ? { dueOn } : {}) });
+    // Template mode: one set per Stories slot today, capped per series (null while legacy, or unreadable: each series' own days).
+    const slots = await storiesSlotsOn((t, p) => deps.db.query(t, p), nyDate(now)).catch(() => null);
+    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), slots });
     if (requested.length) log(`auto: requested ${requested.join(', ')}`);
   }
 
@@ -113,7 +115,8 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
 
   // 3. Schedule approved sets.
   for (const s of await listSets(deps.db, { statuses: ['approved'] })) {
-    const at = pickPublishAt(settings.series[s.series].window, s.ny_date, now);
+    // A set with a slot (template mode) books in [slot, slot + 15]; one without, in its series' window.
+    const at = pickSetPublishAt(settings.series[s.series].window, s, now);
     if (!at) continue; // window passed: the Hub offers Publish now or reject
     await scheduleSet(deps.db, s.id, at);
     out.scheduled++;

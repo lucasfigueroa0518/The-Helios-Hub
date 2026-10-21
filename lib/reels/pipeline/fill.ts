@@ -21,7 +21,7 @@ export async function reelsFill(now = new Date()): Promise<DailyFill> {
   return dailyFill(reelsSpine, 'reels', calendarDateKey(now), await reelsPerDay(now));
 }
 
-/** The day's quota: the calendar's reels slots for that day in template mode, else the `posts_per_day` row of reels.settings, else three. */
+/** The day's quota: the calendar's reels slots for that day within the daily cap in template mode, else the `posts_per_day` row of reels.settings, else three. */
 export async function reelsPerDay(now = new Date()): Promise<number> {
   // A failed slot read throws: it must not silently book by the old rules (ruling P2).
   const fromSlots = await quotaFromSlots((text, params) => dbQuery(text, params) as never, 'reels', calendarDateKey(now));

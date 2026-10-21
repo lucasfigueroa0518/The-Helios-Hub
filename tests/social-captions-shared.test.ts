@@ -62,7 +62,9 @@ test('buildLineInstruction switches on include', () => {
   assert.match(buildLineInstruction(false), /In the Helios line/);
   // Fix round 1 (controller, 2026-10-20): the build-line distinction stays. False: Helios's view, no build or service claim.
   // Fix round 2: a content description, no example shapes (they become templates and invite service claims).
-  assert.match(buildLineInstruction(false), /Helios's call for this industry about this story: something to start, stop, or watch/);
+  // Fix round 3 (Tommy, 2026-10-20, live Reels check): no label noun ("Helios's call") the model can echo as an opener.
+  assert.match(buildLineInstruction(false), /say what a business in that industry should start, stop, or watch because of this story, said in Helios's voice/);
+  assert.doesNotMatch(buildLineInstruction(false), /Helios's call|Helios's view/);
   assert.match(buildLineInstruction(false), /with no description of anything Helios builds or does for clients/);
   assert.doesNotMatch(buildLineInstruction(false), /what we would tell|in its place/);
   assert.match(buildLineInstruction(false), /No service claims/);
@@ -95,7 +97,7 @@ test('Task 8b part 2: at most two emoji, never in the Helios line; the Helios li
   assert.match(CAPTION_SHARED_RULES, /Usually one comes before the hook and one after the question or call to action/);
   assert.match(CAPTION_SHARED_RULES, /Never put one in the Helios line, the credits, the Source line or the hashtags/);
   assert.match(CAPTION_SHARED_RULES, /Name the industry from the context above that best matches this story/);
-  assert.match(CAPTION_SHARED_RULES, /only when none (fits|does)/);
+  assert.match(CAPTION_SHARED_RULES, /only when none (fits|does)|If none fits, speak to marketing or sales teams in general/);
   assert.match(CAPTION_SHARED_RULES, /inside the work Helios knows/);
   assert.equal(CAPTION_EMOJI_MAX, 2);
   assert.equal(countEmoji('No emoji here.'), 0);
@@ -136,7 +138,7 @@ const STOCK_TAGS = ['the kind of thing we think about', 'how we think about it',
 
 test("copy fix: the shared Helios line makes one concrete point as Helios's view, hands over no opener, and bans the stock tags", () => {
   assert.match(CAPTION_SHARED_RULES, /one or two plain sentences that make one concrete point about this story for the industry it names/);
-  assert.match(CAPTION_SHARED_RULES, /It gives Helios's view: a concrete call or piece of advice for that industry about this story/);
+  assert.match(CAPTION_SHARED_RULES, /It says what a business in that industry should start, stop, or watch because of this story, said in Helios's voice/);
   assert.match(CAPTION_SHARED_RULES, /The task says whether it may also say what Helios builds/);
   assert.match(CAPTION_SHARED_RULES, /Do not start it the way any recent closing starts, and vary where "Helios" sits in the sentence/);
   // Fix round 1: describe the content, never hand the model an opener.
@@ -159,7 +161,7 @@ test('copy fix: every caption prompt describes the Helios line as one concrete p
   for (const [name, text] of Object.entries({ CAPTIONER_CAROUSEL_RULES, COPY_SKILL, explainerOwn, lfdOwn, skill })) {
     const flat = text.replace(/\s+/g, ' ');
     assert.match(flat, /one concrete point/i, name);
-    assert.match(flat, /Helios's view: a concrete call or piece of advice/, name);
+    assert.match(flat, /should start, stop, or watch because of (this story|this concept|that story), said in Helios's voice/, name);
     assert.match(flat, /says whether it may also say what Helios builds/, name);
     assert.match(flat, /the way any recent closing starts/, name);
     assert.match(flat, /vary where "Helios" sits in the sentence/, name);
@@ -189,5 +191,55 @@ test('copy fix: Reels, Explainers and LFD keep paragraphs to one or two sentence
   for (const [name, text] of Object.entries({ COPY_SKILL, CAPTION_INSTRUCTIONS, LFD_CAPTION_SYSTEM })) {
     assert.match(text, /one or two sentences/, name);
     assert.match(text, /[Cc]ut (a|the) secondary (fact|detail)|cut secondary (facts|details)/, name);
+  }
+});
+
+// Fix round 3 (Tommy, 2026-10-20, after the live Reels check): the Helios line opened "Our call at
+// Helios for any ...", echoing the prompt's own "Helios's call"; a Reels caption ran 1,947 characters
+// with a staged "Here's the catch:"; a Lego story was pinned to "apparel or footwear".
+const PROMPT_TEXTS = async () => {
+  const { CAPTION_INSTRUCTIONS } = await import('@/lib/explainers/caption');
+  const { COPY_SKILL } = await import('@/lib/reels/copy/skill');
+  const { CAPTIONER_CAROUSEL_RULES } = await import('@/lib/social/captioner/prompt');
+  const { LFD_CAPTION_SYSTEM } = await import('@/lib/lfd/caption-lines');
+  const lfdOwn = LFD_CAPTION_SYSTEM.slice(LFD_CAPTION_SYSTEM.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
+  const explainerOwn = CAPTION_INSTRUCTIONS.slice(CAPTION_INSTRUCTIONS.indexOf(CAPTION_SHARED_RULES) + CAPTION_SHARED_RULES.length);
+  const skill = readFileSync('.cursor/skills/explainer-caption/SKILL.md', 'utf8');
+  return { CAPTION_SHARED_RULES, CAPTIONER_CAROUSEL_RULES, COPY_SKILL, explainerOwn, lfdOwn, skill };
+};
+
+test('fix round 3: no caption prompt names the Helios line with a label noun the model can copy', async () => {
+  for (const [name, text] of Object.entries(await PROMPT_TEXTS())) {
+    const flat = text.replace(/\s+/g, ' ');
+    // "Helios's view" / "Helios's call" may appear only inside the quoted list of banned openers.
+    const outsideBanList = flat.replace(/\("Our call"[^)]*\)|such as "Our call"[^;]*;/g, '');
+    assert.doesNotMatch(outsideBanList, /Helios's (view|call)/, name);
+  }
+  assert.doesNotMatch(buildLineInstruction(false), /Helios's (view|call)/);
+});
+
+test('fix round 3: the Helios line never opens on a label or framing phrase', async () => {
+  assert.match(
+    CAPTION_SHARED_RULES,
+    /Do not open the Helios line with a label or framing phrase, such as "Our call", "Our take", "Helios's view" or "Here's our advice"; open on the industry, the action, or the stakes\./,
+  );
+  for (const [name, text] of Object.entries(await PROMPT_TEXTS())) {
+    const flat = text.replace(/\s+/g, ' ');
+    assert.match(flat, /label or framing phrase/, name);
+    assert.match(flat, /open on the industry, the action, or the stakes/, name);
+  }
+});
+
+test('fix round 3: staged reveal and run-up phrases are banned for every format', () => {
+  assert.match(
+    CAPTION_SHARED_RULES,
+    /No staged reveal or run-up phrase, such as "Here's the catch", "Here's the thing", "The twist\?" or "Plot twist"; fold the point into a plain sentence\./,
+  );
+});
+
+test('fix round 3: a reasonable industry match never stretches to an adjacent industry', async () => {
+  const rule = /A reasonable match means (the story's own business is in, or plainly close to, that industry|the concept plainly shows up in that industry's own work); never stretch to an adjacent one\. If none fits, speak to marketing or sales teams in general\./;
+  for (const [name, text] of Object.entries(await PROMPT_TEXTS())) {
+    assert.match(text.replace(/\s+/g, ' '), rule, name);
   }
 });

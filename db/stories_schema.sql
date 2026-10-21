@@ -44,9 +44,48 @@ CREATE TABLE IF NOT EXISTS stories.sets (
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_stories_sets_live_day
-    ON stories.sets (series, ny_date)
-    WHERE status NOT IN ('rejected', 'failed', 'skipped');
+-- Free-time slots (2026-10-20): the minute of the New York day a set is booked at, so a
+-- series can run twice a day. NULL for legacy window-based sets.
+ALTER TABLE stories.sets ADD COLUMN IF NOT EXISTS slot_minute smallint;
+-- Two live-set indexes, deploy-order safe in both directions (ruling R25):
+--   uq_stories_sets_live_day  (series, ny_date)            one set a day; pre-redesign code names it in
+--                                                           ON CONFLICT (series, ny_date), so it stays here.
+--   uq_stories_sets_live_slot (series, ny_date, slot)       one set per slot; new code's target-less
+--                                                           ON CONFLICT DO NOTHING works with either.
+-- The one-a-day index is dropped later, only by db/stories_multi_slot.sql (after the worker and the hub
+-- run the new code), which marks the slot index so a re-apply here never brings the day index back.
+DO $$
+DECLARE
+    day_def text;
+BEGIN
+    SELECT indexdef INTO day_def FROM pg_indexes
+     WHERE schemaname = 'stories' AND indexname = 'uq_stories_sets_live_day';
+    -- An earlier build of this file replaced the day index with the slot key under the day name.
+    -- Keep that index under its proper name (or drop it when the slot index already exists).
+    IF day_def LIKE '%slot_minute%' THEN
+        IF EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = 'stories' AND indexname = 'uq_stories_sets_live_slot') THEN
+            DROP INDEX stories.uq_stories_sets_live_day;
+        ELSE
+            ALTER INDEX stories.uq_stories_sets_live_day RENAME TO uq_stories_sets_live_slot;
+        END IF;
+        day_def := NULL;
+    END IF;
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_stories_sets_live_slot
+        ON stories.sets (series, ny_date, (coalesce(slot_minute, -1)))
+        WHERE status NOT IN ('rejected', 'failed', 'skipped');
+    IF day_def IS NULL THEN
+        IF obj_description('stories.uq_stories_sets_live_slot'::regclass, 'pg_class') LIKE 'stories_multi_slot%' THEN
+            NULL; -- two-a-day Stories are on (db/stories_multi_slot.sql ran): the day index stays gone.
+        ELSIF EXISTS (SELECT 1 FROM stories.sets WHERE status NOT IN ('rejected', 'failed', 'skipped')
+                       GROUP BY series, ny_date HAVING count(*) > 1) THEN
+            RAISE NOTICE 'stories.sets already holds two live sets of a series on one day; uq_stories_sets_live_day is not recreated';
+        ELSE
+            CREATE UNIQUE INDEX uq_stories_sets_live_day
+                ON stories.sets (series, ny_date)
+                WHERE status NOT IN ('rejected', 'failed', 'skipped');
+        END IF;
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_stories_sets_status
     ON stories.sets (status, created_at);
 CREATE INDEX IF NOT EXISTS idx_stories_sets_publish

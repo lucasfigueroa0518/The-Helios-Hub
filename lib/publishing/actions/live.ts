@@ -107,7 +107,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       slotOf: (id) => placement.activeSlotByRef(storiesSpine, 'stories', id),
       plan: placement.planPlacement,
       // The set's move and its re-projection onto the spine commit together.
-      rescheduleSet: (id, nyDate, publishAt) => db.transaction((tx) => storiesRepo.rescheduleSet(tx, id, nyDate, publishAt)),
+      rescheduleSet: (id, nyDate, publishAt, slotMinute) => db.transaction((tx) => storiesRepo.rescheduleSet(tx, id, nyDate, publishAt, slotMinute)),
     }),
     last_few_days: lastFewDaysActions({
       query: socialQuery,

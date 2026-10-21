@@ -17,9 +17,10 @@ shows where the concept turns up in a real business. The Helios line is always
 the last paragraph before the hashtags. The video taught the concept. The
 caption does not walk the eight beats (Explainers 3.0), and it does not pad.
 
-Code version: `explainer-caption-v5` in `lib/explainers/caption.ts`
-(amended before it shipped, 2026-10-20: the Helios line is one concrete point,
-and a follow clause is rare). The live
+Code version: `explainer-caption-v6` in `lib/explainers/caption.ts`
+(fix round 3, 2026-10-20: the Helios line is described by its content, never
+opens on a label or framing phrase, and never stretches to an adjacent
+industry). The live
 prompt also carries the shared Helios context and caption rules
 (`lib/social/captions/helios-context.ts`), the same block every Helios caption
 type uses.
@@ -29,7 +30,7 @@ number. `lib/explainers/publish/publish.ts` counts how many explainers have
 `published` and stamps `AI Brain Break Episode N:` on the way to Instagram.
 
 This follows the Trial Reels caption skill (`lib/reels/copy/skill.ts`,
-copy-caption-v29) where the two products share a rule, and changes the job of
+copy-caption-v30) where the two products share a rule, and changes the job of
 the caption because the lesson is already in the video.
 
 ## Read first
@@ -98,15 +99,20 @@ or send it.
   industry it names. Name the industry from the Helios context that best
   matches this story, any of them, and not one the recent closings used, and
   show where this episode's concept turns up in its marketing, sales or
-  operations: the moment it helps, or the moment it gets in the way. Fall back
-  to marketing or sales work in general only when none fits. Do not cycle
-  through a short list of favourite industries. It gives Helios's view: a
-  concrete call or piece of advice for that industry about this concept.
+  operations: the moment it helps, or the moment it gets in the way. A
+  reasonable match means the concept plainly shows up in that industry's own
+  work; never stretch to an adjacent one. If none fits, speak to marketing or
+  sales teams in general. Do not cycle through a short list of favourite
+  industries. It says what a business in that industry should start, stop, or
+  watch because of this concept, said in Helios's voice.
   `include_build_line` says whether it may also say what Helios builds (code
   sets it from a Jev fit score and a ceiling of about 1 in 3 recent explainer
   captions); never add that on your own.
   Do not start it the way any recent closing starts, and vary where "Helios"
-  sits in the sentence. No stock tags: "the kind of thing we think about",
+  sits in the sentence. Do not open it with a label or framing phrase; open
+  on the industry, the action, or the stakes. No staged reveal or run-up
+  phrase ("Here's the catch", "Here's the thing", "The twist?", "Plot twist")
+  anywhere in the caption. No stock tags: "the kind of thing we think about",
   "how we think about it", "we post more takes like this", "that's where
   Helios comes in". Name Helios once. It ends on the point; a short
   clause inviting the viewer to follow for the next episode is rare, never the
@@ -123,7 +129,7 @@ or send it.
    out the idea in the viewer's world.
 4. Add the ask: a save line, a "which would you use first" question, or both.
 5. Draft the Helios line: one business type from the Helios context, one
-   concrete point about where the concept shows up there, in Helios's view,
+   concrete point about where the concept shows up there, said in Helios's voice,
    Helios named once and not where a recent closing put it. Then the hashtags after a blank
    line.
 6. Run the humanizer pass. Cut anything that restates the video beat by beat,
@@ -143,7 +149,7 @@ One more short paragraph on why, when the idea needs it.
 
 Save this for the next time <the situation this reel is about>. Or ask which of the reel's options they would try first.
 
-The Helios line: one concrete point about where this concept shows up in one kind of business, in Helios's view, with Helios named once.
+The Helios line: what one kind of business should start, stop, or watch because of this concept, said in Helios's voice, with Helios named once.
 
 #specific #specific #broad
 ```

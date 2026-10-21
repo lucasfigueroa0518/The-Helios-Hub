@@ -61,7 +61,7 @@ export type QuotaCandidate = {
   tag?: MoveTag | null;
   /** Stories: the series this slot is for. */
   series?: string;
-  /** Stories: the series window id (Make it's target). */
+  /** Stories: the slot's id, Make it's target (the series window id in legacy, `t0510:morning_download` in template mode). */
   seriesId?: string;
 };
 

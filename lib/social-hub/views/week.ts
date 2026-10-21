@@ -1,47 +1,22 @@
-import { addDays, nyDateOf, nyDayStart, weekdayOf } from '@/lib/social-hub/time';
+import { addDays, nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
-import type { FeedMode, ResolvedSlot, TemplateRow } from '@/lib/social-hub/slots/types';
+import { isLocked } from '@/lib/social-hub/slots/rules';
+import { clockLabel, DAY_END, DAY_START, DRIFT, FEED_GAP, isFeedSlot, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
+import { slotId, slotKeyString, type FeedMode, type ResolvedSlot, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
-import { PLAN } from '@/lib/social-hub/views/plan';
 
-/** The week grid (spec §3, layout A): rows are shared time windows, columns are days. Pure. */
+/** The week board's model (spec 2026-10-20-calendar-week-board-redesign): columns, cards, stacking, time and y. Pure. */
 
-export type WeekRow = { id: string; label: string; startMinute: number; windows: ReadonlyArray<{ vertical: Vertical; windowId: string }> };
-
-const at = (v: Vertical, id: string) => PLAN[v].find((w) => w.id === id)!.startMinute;
-
-export const ROWS: readonly WeekRow[] = [
-  { id: 'stories', label: 'Stories', startMinute: at('stories', 'morning_download'), windows: [{ vertical: 'stories', windowId: 'morning_download' }, { vertical: 'stories', windowId: 'guess_the_number' }, { vertical: 'stories', windowId: 'free_vs_paid' }] },
-  { id: 'reel-morning', label: 'Reel', startMinute: at('reels', 'morning'), windows: [{ vertical: 'reels', windowId: 'morning' }] },
-  { id: 'feed-morning', label: 'Feed', startMinute: at('carousels', 'morning'), windows: [{ vertical: 'carousels', windowId: 'morning' }, { vertical: 'last_few_days', windowId: 'morning' }] },
-  { id: 'reel-midday', label: 'Reel', startMinute: at('reels', 'midday'), windows: [{ vertical: 'reels', windowId: 'midday' }] },
-  { id: 'explainer-afternoon', label: 'Explainer', startMinute: at('explainers', 'afternoon'), windows: [{ vertical: 'explainers', windowId: 'afternoon' }] },
-  { id: 'feed-afternoon', label: 'Feed', startMinute: at('carousels', 'afternoon'), windows: [{ vertical: 'carousels', windowId: 'afternoon' }] },
-  { id: 'explainer-late', label: 'Explainer', startMinute: at('explainers', 'late'), windows: [{ vertical: 'explainers', windowId: 'late' }] },
-  { id: 'reel-evening', label: 'Reel', startMinute: at('reels', 'evening'), windows: [{ vertical: 'reels', windowId: 'evening' }] },
-];
-
-/** Stories run three series in one cell, so each chip names its series. */
+/** Stories run three series, so each chip names its series. */
 const SERIES_SHORT: Record<keyof typeof SERIES_LABEL, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
 
 /** A chip's visible name and its full name (for the aria-label). */
-export function chipNames(vertical: Vertical, windowId: string): { short: string; full: string } {
-  if (vertical === 'stories' && windowId in SERIES_LABEL) {
-    const id = windowId as keyof typeof SERIES_LABEL;
-    return { short: SERIES_SHORT[id], full: SERIES_LABEL[id] };
-  }
+export function chipNames(vertical: Vertical, series: StorySeries | null): { short: string; full: string } {
+  if (vertical === 'stories' && series) return { short: SERIES_SHORT[series], full: SERIES_LABEL[series] };
   const info = verticalInfo(vertical);
   return { short: info.short, full: info.label };
-}
-
-/** Each weekday's Carousel windows in the template ("Every <weekday>" edits change the template, not a date). */
-export function carouselsByWeekday(template: readonly TemplateRow[]): Record<number, string[]> {
-  const out: Record<number, string[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-  for (const r of template) if (r.vertical === 'carousels') out[r.weekday]!.push(r.windowId);
-  for (const w of Object.values(out)) w.sort((a, b) => PLAN.carousels.findIndex((p) => p.id === a) - PLAN.carousels.findIndex((p) => p.id === b));
-  return out;
 }
 
 /** What the "Switch on" confirm needs to say (ruling R8): read on the server before the switch. */
@@ -53,6 +28,8 @@ export type SwitchFacts = {
   /** The weekdays (0 = Sunday) that will have an LFD slot after the switch. */
   lfdDays: readonly number[];
 };
+
+export const WEEKDAY_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const WEEKDAY_PLURAL = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
 
@@ -100,39 +77,7 @@ export const canMoveBack = (list: ReadonlyArray<{ refs: Readonly<Record<string, 
 export const stuckNote = (n: number): string =>
   `${n} post${n === 1 ? '' : 's'} couldn’t be moved here. Unschedule ${n === 1 ? 'it' : 'them'} from the post page.`;
 
-export type WeekChip = {
-  vertical: Vertical;
-  windowId: string;
-  feedMode: FeedMode | null;
-  origin: 'template' | 'override';
-  booked: HubPost | null;
-  /** This chip's own window hasn't started (rows share a time, but each window locks at its own start). */
-  editable: boolean;
-};
-
-/**
- * What clicking a chip does: an editable chip opens the slot editor (with an
- * "Open post" link when booked); a read-only one (past day, started window,
- * legacy grid, preview) links straight to its booked post, or is plain text.
- */
-export function chipAction(chip: Pick<WeekChip, 'booked'>, editable: boolean): 'edit' | 'open' | 'none' {
-  if (editable) return 'edit';
-  return chip.booked ? 'open' : 'none';
-}
-
-export type WeekCell = {
-  nyDate: string | null;
-  weekday: number;
-  rowId: string;
-  chips: WeekChip[];
-  blockedReason: string | null;
-  editable: boolean;
-  addable: Array<{ vertical: Vertical; windowId: string }>;
-};
-
 export type WeekDayInput = { nyDate: string | null; weekday: number; slots: ResolvedSlot[] };
-
-export type WeekModel = ReturnType<typeof weekModel>;
 
 /** A post in one of these holds its slot (the same set the slot writer reports as booked). */
 const HOLDS = new Set(['scheduled', 'publishing', 'published']);
@@ -154,6 +99,11 @@ export function templateWeek(template: readonly TemplateRow[], monday: string): 
   return datedWeek(template, monday).map((d) => ({ ...d, nyDate: null }));
 }
 
+/** Each weekday's Standard week slots (0 = Sunday), for "Edited" and Reset day. */
+export function standardByWeekday(template: readonly TemplateRow[]): Record<number, ResolvedSlot[]> {
+  return Object.fromEntries(templateWeek(template, '2026-10-19').map((d) => [d.weekday, d.slots]));
+}
+
 /** "Oct 19 – 25", or "Oct 26 – Nov 1" across a month end. */
 export function weekLabel(monday: string): string {
   const fmt = (d: string, month: boolean) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { ...(month ? { month: 'short' as const } : {}), day: 'numeric', timeZone: 'UTC' });
@@ -161,46 +111,211 @@ export function weekLabel(monday: string): string {
   return `${fmt(monday, true)} – ${fmt(sunday, sunday.slice(5, 7) !== monday.slice(5, 7))}`;
 }
 
-export function weekModel(input: { mode: 'week' | 'template'; days: WeekDayInput[]; posts: readonly HubPost[]; now: Date }) {
+
+/* ── The board ─────────────────────────────────────────────────────────── */
+
+export type CardStatus = 'empty' | 'waiting' | 'approved' | 'posted' | 'started';
+
+export type BoardColumn = {
+  nyDate: string | null;
+  weekday: number;
+  past: boolean;
+  isToday: boolean;
+  /** A past day folds into a slim "N posted" column. */
+  folded: boolean;
+  /** The date's resolved slots differ from its standard weekday (by key, time or mode). */
+  edited: boolean;
+  /** Folded: the posts that went out. Otherwise: the day's slots. */
+  count: number;
+};
+
+/** What the board reads of a post: enough to show its slot's status (the page passes slim copies to the client). */
+export type BoardPost = Pick<HubPost, 'id' | 'vertical' | 'nyDate' | 'slot' | 'status'> & {
+  approval: Pick<HubPost['approval'], 'required' | 'approvedAt'>;
+  /** When the booking posts; the details say so when it is later than the slot's drift (spec §Backend, feed spacing). */
+  publishAt?: string | null;
+};
+
+export type BoardCard<P extends BoardPost = HubPost> = {
+  /** Unique across the week: `<day index>|<vertical>|t0780[:series]`. */
+  key: string;
+  day: number;
+  vertical: Vertical;
+  series: StorySeries | null;
+  startMinute: number;
+  feedMode: FeedMode | null;
+  origin: 'template' | 'override';
+  booked: P | null;
+  status: CardStatus;
+  statusText: string;
+  locked: boolean;
+  /** Past the type's daily cap for this day, so the run makes nothing for it. */
+  overCap: boolean;
+  outsideUsual: boolean;
+};
+
+export const STATUS_TEXT = {
+  waiting: 'Made, waiting for your approval.',
+  approved: 'Ready and approved.',
+  posted: 'Posted',
+  started: 'Already started.',
+  overCap: 'Over today’s limit, so nothing is made for this slot.',
+} as const;
+
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Wed Oct 21". */
+export function dayShortLabel(nyDate: string): string {
+  const [, m, d] = nyDate.split('-').map(Number);
+  return `${WEEKDAY_SHORT[weekdayOf(nyDate)]} ${MONTH_SHORT[m! - 1]} ${d}`;
+}
+
+const setOf = (slots: readonly ResolvedSlot[]) => new Set(slots.map((s) => `${slotKeyString(s)}|${s.feedMode ?? ''}`));
+
+function sameSlots(a: readonly ResolvedSlot[], b: readonly ResolvedSlot[]): boolean {
+  const x = setOf(a);
+  const y = setOf(b);
+  return x.size === y.size && [...x].every((k) => y.has(k));
+}
+
+const byTimeThenKey = (a: ResolvedSlot, b: ResolvedSlot) => a.startMinute - b.startMinute || slotKeyString(a).localeCompare(slotKeyString(b));
+
+export function boardModel<P extends BoardPost = HubPost>(input: {
+  mode: 'week' | 'template';
+  days: readonly WeekDayInput[];
+  posts: readonly P[];
+  now: Date;
+  /** The daily caps (readCaps on the live page, DEFAULT_CAPS on the preview). */
+  caps: Record<Vertical, number>;
+  /** Each weekday's standard slots (0 = Sunday), for "Edited". Without it no day reads as edited. */
+  standard?: Readonly<Record<number, readonly ResolvedSlot[]>>;
+}): { columns: BoardColumn[]; cards: BoardCard<P>[] } {
+  const caps = input.caps;
   const today = nyDateOf(input.now)!;
-  const startedAt = (nyDate: string | null, minute: number) => nyDate === today && nyDayStart(today).getTime() + minute * 60_000 <= input.now.getTime();
-  // Making a date an LFD day adds its 9:00 window, so it closes when that window starts.
-  const lfdStart = PLAN.last_few_days[0]!.startMinute;
-  const columns = input.days.map((d) => ({
-    nyDate: d.nyDate,
-    weekday: d.weekday,
-    past: d.nyDate != null && d.nyDate < today,
-    isToday: d.nyDate === today,
-    lfdOpen: input.mode === 'template' || (d.nyDate != null && d.nyDate >= today && !startedAt(d.nyDate, lfdStart)),
-  }));
-  const rows = ROWS.map((row) => ({
-    row,
-    cells: input.days.map((d): WeekCell => {
-      const inRow = (v: Vertical, id: string) => row.windows.some((w) => w.vertical === v && w.windowId === id);
-      // Each window locks at its own PLAN start, so a series moved to a later window doesn't lock with the row.
-      const open = (v: Vertical, id: string) => input.mode === 'template'
-        || (d.nyDate != null && d.nyDate >= today && !startedAt(d.nyDate, PLAN[v].find((w) => w.id === id)?.startMinute ?? row.startMinute));
-      const chips = d.slots.filter((s) => inRow(s.vertical, s.windowId)).map((s): WeekChip => ({
+  const nowMinute = nyMinuteOf(input.now);
+  const columns: BoardColumn[] = [];
+  const cards: BoardCard<P>[] = [];
+
+  input.days.forEach((d, day) => {
+    const dated = input.mode === 'week' && d.nyDate != null;
+    const past = dated && d.nyDate! < today;
+    const slots = [...d.slots].sort(byTimeThenKey);
+    const ctx = { nyDate: dated ? d.nyDate : null, weekday: d.weekday, slots, today, nowMinute };
+    const seen = new Map<string, number>();
+    const dayCards: BoardCard<P>[] = slots.map((s) => {
+      const capKey = s.vertical === 'stories' ? `stories|${s.series ?? ''}` : s.vertical;
+      const index = seen.get(capKey) ?? 0;
+      seen.set(capKey, index + 1);
+      const overCap = index >= Math.max(0, caps[s.vertical]);
+      const id = slotId(s.startMinute, s.series);
+      const booked = dated
+        ? input.posts.find((p) => p.vertical === s.vertical && p.nyDate === d.nyDate && p.slot?.id === id && (HOLDS.has(p.status) || p.status === 'ready')) ?? null
+        : null;
+      const timeLocked = dated && isLocked(ctx, s);
+      let status: CardStatus;
+      if (booked?.status === 'published') status = 'posted';
+      // Placing is not approving: a booked post that needs a person and has no approval yet is waiting (spec decision 16).
+      else if (booked) status = !booked.approval.approvedAt && (booked.status === 'ready' || booked.approval.required) ? 'waiting' : 'approved';
+      else status = timeLocked ? 'started' : 'empty';
+      const statusText = status === 'empty'
+        ? overCap
+          ? STATUS_TEXT.overCap
+          : d.nyDate && dated
+            ? `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(d.nyDate)}.`
+            : `Every ${WEEKDAY_LONG[d.weekday]}. Each week the ${RUN_HOUR_LABEL[s.vertical]} run makes this post on the day.`
+        : STATUS_TEXT[status];
+      return {
+        key: `${day}|${slotKeyString(s)}`,
+        day,
         vertical: s.vertical,
-        windowId: s.windowId,
+        series: s.series,
+        startMinute: s.startMinute,
         feedMode: s.feedMode,
         origin: s.origin,
-        booked: d.nyDate ? input.posts.find((p) => p.vertical === s.vertical && p.nyDate === d.nyDate && p.slot?.id === s.windowId && HOLDS.has(p.status)) ?? null : null,
-        editable: open(s.vertical, s.windowId),
-      }));
-      const lfdDay = d.slots.some((s) => s.vertical === 'last_few_days');
-      const carouselDay = d.slots.some((s) => s.vertical === 'carousels');
-      // The cell is editable while any of its windows is still open.
-      const editable = row.windows.some((w) => open(w.vertical, w.windowId));
-      // The plain "+" never offers a save the writer will refuse: no Carousel on an LFD day, no LFD on a Carousel day.
-      const addable = row.windows.filter((w) =>
-        open(w.vertical, w.windowId)
-        && !chips.some((c) => c.vertical === w.vertical && c.windowId === w.windowId)
-        && !(w.vertical === 'carousels' && lfdDay)
-        && !(w.vertical === 'last_few_days' && (carouselDay || chips.length > 0)));
-      const blockedReason = chips.length === 0 && lfdDay && row.windows.some((w) => w.vertical === 'carousels') ? 'LFD day' : null;
-      return { nyDate: d.nyDate, weekday: d.weekday, rowId: row.id, chips, blockedReason, editable, addable: [...addable] };
-    }),
-  }));
-  return { columns, rows };
+        booked,
+        status,
+        statusText,
+        locked: timeLocked || status === 'posted',
+        overCap,
+        outsideUsual: !isUsual(s.vertical, s.startMinute),
+      };
+    });
+    const standard = input.standard?.[d.weekday];
+    columns.push({
+      nyDate: d.nyDate,
+      weekday: d.weekday,
+      past,
+      isToday: dated && d.nyDate === today,
+      folded: past,
+      edited: dated && standard != null && !sameSlots(d.slots, standard),
+      count: past ? dayCards.filter((c) => c.status === 'posted').length : dayCards.length,
+    });
+    cards.push(...dayCards);
+  });
+  return { columns, cards };
+}
+
+/**
+ * The slot's details line when its post was booked later than [slot, slot + 15]:
+ * a Main-feed post pushed past another feed post's 30 minutes (book.ts), or a
+ * retry. Null when the post goes out inside the slot's drift, or has posted.
+ */
+export function laterNote(card: Pick<BoardCard<BoardPost>, 'vertical' | 'feedMode' | 'startMinute' | 'booked'>): string | null {
+  const b = card.booked;
+  if (!b?.publishAt || b.status === 'published') return null;
+  const at = new Date(b.publishAt);
+  if (Number.isNaN(at.getTime()) || nyDateOf(at) !== b.nyDate) return null;
+  const minute = nyMinuteOf(at);
+  if (minute <= card.startMinute + DRIFT) return null;
+  return isFeedSlot(card)
+    ? `Posts at ${clockLabel(minute)}, later than the slot, to keep ${FEED_GAP} minutes from another feed post.`
+    : `Posts at ${clockLabel(minute)}, later than the slot.`;
+}
+
+/* ── Time and y ────────────────────────────────────────────────────────── */
+
+/** The axis runs 8 AM to 9 PM. */
+const SPAN = DAY_END - DAY_START;
+
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/** Y (0..height) for a minute of the day, held to 8 AM–9 PM; the inverse of minuteForY. */
+export const yForMinute = (minute: number, height: number): number => ((clamp(minute, DAY_START, DAY_END) - DAY_START) / SPAN) * height;
+
+/** The raw minute at a y; the caller snaps it (snapMinute). */
+export const minuteForY = (y: number, height: number): number => DAY_START + (clamp(y, 0, height) / height) * SPAN;
+
+/**
+ * How tall a card is, in minutes of the axis: a one-line chip a bit taller
+ * than its 15-minute posting drift. The drawn card is 2px shorter, so cards
+ * one card apart keep a hairline gap.
+ */
+export const CARD_MINUTES = 30;
+
+/** A card's height in y (0..height) units, gap included. */
+export const cardHeight = (height: number): number => (CARD_MINUTES / SPAN) * height;
+
+/**
+ * Crowded cards stack full width (ruling R27). On each day, in start order
+ * (then key order, so two Stories at one minute stay put), a card's drawn top
+ * is the larger of its true y and the previous card's top plus one card
+ * height (the previous card's bottom plus the 2px gap). A pushed card pushes
+ * later ones, and a stack may run past its true times. Only the drawn y moves:
+ * each card keeps its real minute for its label, drag and every rule.
+ */
+export function stackOffsets(cards: readonly Pick<BoardCard, 'key' | 'day' | 'startMinute'>[], height: number): Map<string, number> {
+  const out = new Map<string, number>();
+  const h = cardHeight(height);
+  const byDay = new Map<number, Array<Pick<BoardCard, 'key' | 'day' | 'startMinute'>>>();
+  for (const c of cards) (byDay.get(c.day) ?? byDay.set(c.day, []).get(c.day)!).push(c);
+  for (const list of byDay.values()) {
+    list.sort((a, b) => a.startMinute - b.startMinute || a.key.localeCompare(b.key));
+    let next = -Infinity;
+    for (const c of list) {
+      const top = Math.max(yForMinute(c.startMinute, height), next);
+      out.set(c.key, top);
+      next = top + h;
+    }
+  }
+  return out;
 }

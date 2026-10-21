@@ -23,13 +23,13 @@ import type { StoriesDb } from '@/lib/stories/db';
 import { GTN_GATE, GTN_SAME_SUBJECT } from '@/lib/stories/questions';
 import { GTN_PICK, material, type GtnPickCandidate, type GtnPickMaterial, type GtnPickOut } from '@/lib/stories/prompts';
 import { GTN_FAMILIES, type Difficulty, type FrameData, type GtnFamily, type Photo } from '@/lib/stories/render/types';
-import { nyDate, recentKeys, type NewCandidate } from '@/lib/stories/repository';
+import { nyDate, type NewCandidate } from '@/lib/stories/repository';
 import { gateExcerpt, readSourcePage, type SourcePage } from '@/lib/stories/source-page';
 import { carouselNumbers, recentUsedPhotoUrls, shortlistWithoutBrief, type NumberCandidate } from '@/lib/stories/sources/carousel';
 import { theNumberIdeas, type StoryCandidate } from '@/lib/stories/sources/reels';
 import { writeStructured } from '@/lib/stories/writer';
 
-import { findPhoto, nextBackdrop, shortIds, toFrames, type BuildDeps, type BuildResult } from './common';
+import { findPhoto, keysToAvoid, nextBackdrop, shortIds, toFrames, type BuildDeps, type BuildResult } from './common';
 
 export const POOL_NUMBERS_IN = 8;
 export const UNBRIEFED_IN = 4;
@@ -125,7 +125,7 @@ export async function buildGuessTheNumber(deps: BuildDeps, sources?: GtnSources)
     unbriefed: async () => [...(await shortlistWithoutBrief(deps.sourceDb, deps.now).catch(() => [])), ...(await theNumberIdeas(deps.sourceDb, deps.nyDate).catch(() => []))],
   };
   const log: string[] = [];
-  const shown = await recentKeys(deps.db, 'guess_the_number', 30, deps.now);
+  const shown = await keysToAvoid(deps, 'guess_the_number', 30);
   const numbers = (await src.numbers().catch(() => [])).filter((n) => !shown.has(n.storyKey)).slice(0, POOL_NUMBERS_IN);
   const stories = (await src.unbriefed().catch(() => [])).filter((s) => !shown.has(s.key)).slice(0, UNBRIEFED_IN);
   // The writer sees short ids, never the story keys (shortIds).

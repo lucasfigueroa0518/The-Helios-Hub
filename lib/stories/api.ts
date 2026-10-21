@@ -17,7 +17,8 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
-import { approvalNote as approvalNoteFor, pickPublishAt } from '@/lib/stories/schedule';
+import { storiesSlotsOn } from '@/lib/social-hub/slots';
+import { approvalNote as approvalNoteFor, openStorySlots, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
 import { SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
@@ -70,12 +71,39 @@ export async function setDetail(db: Queryable, id: string) {
   return { ...got, candidates, costs, feedback };
 }
 
-/** Generate (S-05): Lucas's click is the approval boundary for the build's live calls. */
-export async function generate(db: Queryable, series: unknown, by: string, now = new Date()): Promise<{ set: StorySet; created: boolean }> {
+/**
+ * Generate (S-05): Lucas's click is the approval boundary for the build's live calls.
+ * `slotMinute`: template mode's Run now asks for one of today's open Stories slots (lib/stories/schedule.ts openStorySlots).
+ */
+export async function generate(db: Queryable, series: unknown, by: string, now = new Date(), slotMinute: number | null = null): Promise<{ set: StorySet; created: boolean }> {
   if (!isSeries(series)) throw new ApiError(400, 'Unknown series.');
   const settings = await loadSettings(db);
   if (!settings.series[series].enabled) throw new ApiError(409, 'This series is turned off in Settings.');
-  return requestSet(db, { series, nyDate: nyDate(now), trigger: 'click', style: settings.series[series].style, requestedBy: by });
+  return requestSet(db, { series, nyDate: nyDate(now), trigger: 'click', style: settings.series[series].style, requestedBy: by, slotMinute });
+}
+
+export const NO_OPEN_SLOT = 'No open Stories slot today.';
+
+/**
+ * The slot a person's Generate fills (R15, one Stories behaviour everywhere):
+ * null while legacy (a set with no slot, as before); in template mode the
+ * series' first open Stories slot today (openStorySlots, the slots the 4 AM
+ * worker would still request), or 'none' when every slot has its set. The
+ * type page's Generate and Run now both ask here. SELECT only.
+ */
+export async function openSlotMinute(db: Queryable, series: Series, now = new Date()): Promise<number | null | 'none'> {
+  const slots = await storiesSlotsOn((text, params) => db.query(text, params), nyDate(now)).catch(() => null);
+  if (!slots) return null;
+  const next = (await openStorySlots(db, slots, now)).get(series)?.open[0];
+  return next ? next.startMinute : 'none';
+}
+
+/** Generate as a person's click (the type page's button): into the series' first open slot in template mode. */
+export async function generateNow(db: Queryable, series: unknown, by: string, now = new Date()): Promise<{ set: StorySet; created: boolean }> {
+  if (!isSeries(series)) throw new ApiError(400, 'Unknown series.');
+  const minute = await openSlotMinute(db, series, now);
+  if (minute === 'none') throw new ApiError(409, NO_OPEN_SLOT);
+  return generate(db, series, by, now, minute);
 }
 
 const guard = async <T>(fn: () => Promise<T>): Promise<T> => {
@@ -104,8 +132,9 @@ export async function approve(db: Queryable, id: string, now = new Date()): Prom
   try {
     const settings = await loadSettings(db);
     const window = settings.series[set.series].window;
-    approvalNote = approvalNoteFor(window, set.ny_date, now, settings.publishingLive);
-    const minute = settings.publishingLive && set.ny_date === nyDate(now) ? pickPublishAt(window, set.ny_date, now) : null;
+    // A set with a slot (template mode) posts in [slot, slot + 15]; one without, in its series' window.
+    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, settings.publishingLive);
+    const minute = settings.publishingLive && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
     if (minute) {
       out = await scheduleSet(db, id, minute);
       approvalNote = `Approved. It posts at ${NY_TIME.format(minute)}.`;
@@ -122,12 +151,17 @@ export function reject(db: StoriesDb, id: string, body: { tags?: unknown; note?:
   return guard(() => rejectSet(db, id, { tags, note, by }));
 }
 
-/** Regenerate: reject this set (kept as feedback) and ask for a new one for the same day. */
+/**
+ * Regenerate: reject this set (kept as feedback) and ask for a new one for the
+ * same day and, in template mode, the same slot (R28; R15: one Stories
+ * behaviour everywhere). getSet reads slot_minute through the row (R12), so a
+ * legacy set (null, or no column yet) asks exactly as before.
+ */
 export async function regenerate(db: StoriesDb, id: string, by: string) {
   const got = await getSet(db, id);
   if (!got) throw new ApiError(404, 'No such set.');
   await guard(() => rejectSet(db, id, { note: 'regenerated', by }));
-  return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by });
+  return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by, slotMinute: got.set.slot_minute ?? null });
 }
 
 /** Publish now: approve if needed, and post at the next minute (the worker is the clock). */

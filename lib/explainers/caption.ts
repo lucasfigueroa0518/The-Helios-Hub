@@ -56,7 +56,11 @@ export {
 // makes one concrete point in Helios's view (what Helios builds only under include_build_line; fix
 // round 1), never a generic "how we think about it" tag or a recent closing's opening; a follow clause is rare; paragraphs are one or two sentences; usually one emoji
 // leads the hook and one follows the ask.
-export const CAPTION_VERSION = 'explainer-caption-v5';
+// v6 (fix round 3, Tommy, 2026-10-20, after the live Reels check; v5 shipped 2026-10-20): the Helios
+// line says what a business in that industry should start, stop, or watch because of this concept,
+// said in Helios's voice (no "Helios's view" label to echo), never opens on a label or framing phrase;
+// a reasonable industry match never stretches to an adjacent one; staged reveal phrases are banned (shared rules).
+export const CAPTION_VERSION = 'explainer-caption-v6';
 
 export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished Helios Explainer Reel, an AI Brain Break episode that teaches one AI concept. This is the post text under the video, the job a strong tips caption does on any AI page: name a problem the viewer already has, make the idea stick, and give them a reason to save it or to say which option they would use first.
 
@@ -74,7 +78,7 @@ HARD CONSTRAINTS. Every one is required.
 3. Short paragraphs of one or two sentences with a blank line between them, in this order: the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags. One block is a failed caption. The body before the hashtags, the Helios line included, is at least ${CAPTION_MIN_BODY_CHARS} characters. Say the idea once and well. Do not pad to reach a length.
 4. The paragraphs on why make the idea useful in the viewer's world. Use the reel's curiosity gap, analogy, example, and the place they will meet this. Do not walk the eight beats in order, and do not stop after one restatement of the thesis. Cut a secondary detail the idea does not need rather than add a sentence.
 5. Then one short paragraph that asks for one thing, specific to this concept: save it for a named situation from the reel, or a short question such as which of the reel's options they would use first. It can do both in two short sentences. No "what do you think?", no "double tap", no "comment YES", no "DM us", and no list of services.
-6. The Helios line is the last paragraph before the hashtags, one or two plain sentences that make one concrete point about this episode's concept for the industry it names. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, and show where this episode's concept turns up in its marketing, sales or operations, at the moment the concept helps or the moment it gets in the way. Fall back to marketing or sales work in general only when no industry fits. It gives Helios's view: a concrete call or piece of advice for that industry about this concept, kept inside the work Helios knows. The task says whether it may also say what Helios builds. Do not start it the way any recent closing starts, vary where "Helios" sits in the sentence, and use no stock tag from the shared rules. Name Helios once, here and nowhere else, in words that differ from the recent closings the task shows you. It may say "we" and give an opinion. It ends on the point; a short clause inviting the viewer to follow for the next episode is rare, never the default. Everything it says about Helios comes from the Helios context, and it adds no new fact about the concept.
+6. The Helios line is the last paragraph before the hashtags, one or two plain sentences that make one concrete point about this episode's concept for the industry it names. Name the industry from the Helios context that best matches this story, any of them, and not one the recent closings used, and show where this episode's concept turns up in its marketing, sales or operations, at the moment the concept helps or the moment it gets in the way. A reasonable match means the concept plainly shows up in that industry's own work; never stretch to an adjacent one. If none fits, speak to marketing or sales teams in general. It says what a business in that industry should start, stop, or watch because of this concept, said in Helios's voice, kept inside the work Helios knows. The task says whether it may also say what Helios builds. Do not start it the way any recent closing starts, vary where "Helios" sits in the sentence, and use no stock tag from the shared rules. Do not open it with a label or framing phrase; open on the industry, the action, or the stakes. Name Helios once, here and nowhere else, in words that differ from the recent closings the task shows you. It may say "we" and give an opinion. It ends on the point; a short clause inviting the viewer to follow for the next episode is rare, never the default. Everything it says about Helios comes from the Helios context, and it adds no new fact about the concept.
 7. 3 to 5 hashtags, only at the end. One or two broad, the rest specific to this concept. Each tag needs a reason in the post.
 8. At most two emoji, and none is required: usually one leads the hook (code puts the episode line above it), and one follows the save prompt or question. None in the Helios line or the hashtags. No URLs. Never "I". Outside the Helios line, address the viewer as "you" or write in the third person.
 9. Every number, name, and claim about the concept comes from the title, scope, script, storyboard, or source in the user message. Do not add one.
@@ -90,7 +94,7 @@ One more short paragraph on why, when the idea needs it.
 
 Save this for the next time <the situation this reel is about>. Or ask which of the reel's options they would try first.
 
-The Helios line: one concrete point about where this concept shows up in one kind of business, in Helios's view, with Helios named once.
+The Helios line: what one kind of business should start, stop, or watch because of this concept, said in Helios's voice, with Helios named once.
 
 #specific #specific #broad`;
 

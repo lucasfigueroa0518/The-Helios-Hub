@@ -39,7 +39,13 @@ test('the schema is additive, idempotent, and creates only social_hub objects', 
   // The only rows written are the account settings' defaults, which never overwrite a value someone set.
   const seeds = body.match(/INSERT INTO social_hub\.settings [^;]*;/g) ?? [];
   for (const seed of seeds) assert.match(seed, /ON CONFLICT \(key\) DO NOTHING;$/, seed);
-  const rest = seeds.reduce((t, seed) => t.replace(seed, ''), body).replace(/\bON DELETE CASCADE\b/gi, '');
+  // The one exception: the slot tables' one-time reshape (free-time slots), which empties them only while
+  // they still have the old window_id column, before slot_source can be 'template'.
+  // Anchored: neither gap may cross an `END $$;`, so only the block guarded by column_name = 'window_id' matches.
+  const reshapes = body.match(/DO \$\$\s*BEGIN\s*IF EXISTS \(SELECT 1 FROM information_schema\.columns(?:(?!END \$\$;)[\s\S])*?column_name = 'window_id'\)(?:(?!END \$\$;)[\s\S])*?END \$\$;/g) ?? [];
+  assert.equal(reshapes.length, 1, 'one guarded slot reshape');
+  for (const r of reshapes) for (const d of r.match(/DELETE FROM \S+/g) ?? []) assert.match(d, /^DELETE FROM social_hub\.slot_(template|override);?$/, d);
+  const rest = [...seeds, ...reshapes].reduce((t, s) => t.replace(s, ''), body).replace(/\bON DELETE CASCADE\b/gi, '');
   assert.doesNotMatch(rest, /\b(INSERT|UPDATE|DELETE|DROP TABLE|DROP SCHEMA)\b/i, 'no other data written, nothing dropped');
   // The spine swaps its own CHECKs as content types join (D36); nothing outside social_hub is altered.
   for (const m of body.matchAll(/\bALTER\s+TABLE\s+(\S+)/gi)) assert.match(m[1]!, /^social_hub\./, m[0]);

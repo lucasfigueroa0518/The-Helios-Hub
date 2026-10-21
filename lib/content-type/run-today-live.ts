@@ -13,15 +13,17 @@ import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings
 import { pendingRun, requestRun } from '@/lib/reels/repository';
 import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
-import { isLfdDay, slotPlan, storiesDueOn } from '@/lib/social-hub/slots';
+import { isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
 import { lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
-import { generate as requestStorySet } from '@/lib/stories/api';
+import { generate as requestStorySet, openSlotMinute } from '@/lib/stories/api';
 import { liveStoriesDb } from '@/lib/stories/db';
+import type { Series } from '@/lib/stories/render/types';
+import { openStorySlots } from '@/lib/stories/schedule';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
 import { queueManualLfdRun } from '@/lib/lfd/manual';
 import { readLfdSettings } from '@/lib/lfd/settings';
@@ -56,10 +58,10 @@ async function liveLfd(today: string, anyDay: boolean): Promise<{ day: RunInputs
 export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
   const lfd = await liveLfd(today, opts.lfdAnyDay === true);
-  const [dataset, stories, dueOn, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
+  const [dataset, stories, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
     loadDataset(liveHubQuery, now),
     readPosting('stories', now),
-    storiesDueOn(liveHubQuery, today).catch(() => null),
+    storiesSlotsOn(liveHubQuery, today).catch(() => null),
     pendingRun(),
     dbQuery<{ post_idea_id: string }>(`SELECT post_idea_id::text FROM reels.finish_requests WHERE status = 'active'`),
     dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM reels.score_slates WHERE ny_date = $1::date`, [today]),
@@ -75,8 +77,12 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } =
   const quotas = dataset.dayQuotas ?? DEFAULT_DAY_QUOTAS;
   // A type's quota is its posts per day, never more than its windows today (the candidates use the same rule).
   const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
-  // Stories: each series due today by its own settings, or (template mode) by its slot today, as the 4 AM worker decides.
-  const series = seriesDueToday(stories.series ?? [], today, new Set(sets.rows.map((r) => r.series)), dueOn);
+  // Stories: each series due today by its own settings, or (template mode) a series while it has an
+  // open slot today (capped, not passed, not held), the slots the 4 AM worker would still request.
+  const open = storySlots ? await openStorySlots(liveStoriesDb, storySlots, now).catch(() => null) : null;
+  const dueOn = open ? (id: string) => (open.get(id as Series)?.open.length ?? 0) > 0 : null;
+  const held = open ? new Set<string>() : new Set(sets.rows.map((r) => r.series));
+  const series = seriesDueToday(stories.series ?? [], today, held, dueOn);
   return planFrom({
     today,
     reels: { ...day('reels'), slateToday: Number(slate.rows[0]?.n ?? 0) > 0 },
@@ -96,6 +102,27 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } =
 }
 
 export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: boolean; note: string };
+
+/**
+ * Run now's Stories Generate: a set per series, the type's own Generate
+ * (lib/stories/api.ts generate, one per series and slot). In template mode
+ * the set is for the series' first open Stories slot today (openStorySlots,
+ * the slots the 4 AM worker would still request), so a second open slot
+ * isn't "Already requested"; a series with no open slot makes nothing.
+ * Legacy: one set per series a day, as before. Returns the series that got a
+ * new set.
+ */
+export async function requestStorySets(series: readonly string[], by: string, now: Date): Promise<string[]> {
+  const made: string[] = [];
+  for (const s of series) {
+    // The same slot choice as the type page's Generate (lib/stories/api.ts openSlotMinute, R15).
+    const slotMinute = await openSlotMinute(liveStoriesDb, s as Series, now);
+    if (slotMinute === 'none') continue;
+    const { created } = await requestStorySet(liveStoriesDb, s, by, now, slotMinute);
+    if (created) made.push(s);
+  }
+  return made;
+}
 
 /**
  * Re-plan on the server, then start what today still needs. `only`: a type's
@@ -146,11 +173,7 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
         const out = await queueManualLfdRun(liveHubQuery);
         done(out.ok, out.note);
       } else if (step.action === 'story_sets') {
-        const made: string[] = [];
-        for (const series of step.targets) {
-          const { created } = await requestStorySet(liveStoriesDb, series, by, now);
-          if (created) made.push(series);
-        }
+        const made = await requestStorySets(step.targets, by, now);
         done(made.length > 0, made.length ? `${made.length} set${made.length === 1 ? '' : 's'} requested. The Stories worker builds them in order.` : 'Already requested.');
       }
     } catch (error) {

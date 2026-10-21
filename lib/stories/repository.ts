@@ -22,6 +22,8 @@ export type StorySet = {
   style: Style;
   payload: Record<string, unknown>;
   publish_at: string | null;
+  /** Template mode: the Stories slot (minute of the New York day) this set fills; null for a legacy or hand-made set. */
+  slot_minute: number | null;
   flagged: boolean;
   error: string | null;
   spend_usd: number;
@@ -58,7 +60,14 @@ export type NewCandidate = {
   reason?: string | null;
 };
 
-const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, flagged, error,
+/**
+ * `stories.sets.slot_minute` read through the row's JSON, so every query
+ * still runs on a database where db/stories_schema.sql has not added the
+ * column yet (ruling R12: code may deploy first); there it reads null.
+ */
+export const SLOT_MINUTE_SQL = `(to_jsonb(sets)->>'slot_minute')::smallint`;
+
+const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, flagged, error,
   spend_usd::float8 AS spend_usd, created_at, updated_at`;
 const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, review, flagged,
   ig_container_id, ig_media_id, published_at`;
@@ -100,25 +109,45 @@ const runMode = process.env.HELIOS_RUN_MODE === 'development' ? 'development' : 
 
 /**
  * Ask for a set (Generate, or the scheduler for an auto series). One live set
- * per series per day: a second request returns the existing one, `created: false`.
+ * per series per day and slot (`slotMinute`, template mode; null is the
+ * series' one set of the day): a second request returns the existing one,
+ * `created: false`. Before db/stories_multi_slot.sql runs, the one-a-day index
+ * refuses a second slot's set: the day's live set comes back, `created: false`.
  */
 export async function requestSet(
   db: Queryable,
-  input: { series: Series; nyDate: string; trigger: 'click' | 'auto'; style: Style; requestedBy?: string },
+  input: { series: Series; nyDate: string; trigger: 'click' | 'auto'; style: Style; requestedBy?: string; slotMinute?: number | null },
 ): Promise<{ set: StorySet; created: boolean }> {
+  const slotMinute = input.slotMinute ?? null;
+  // The column is named only for a slot set (template mode), so a legacy request runs before the schema has it (R12).
+  const params: unknown[] = [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode];
   const { rows } = await db.query<StorySet>(
-    `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (series, ny_date) WHERE status NOT IN ('rejected', 'failed', 'skipped') DO NOTHING
-     RETURNING ${SET_COLS}`,
-    [input.series, input.nyDate, input.trigger, input.style, input.requestedBy ?? null, runMode],
+    slotMinute === null
+      ? `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT DO NOTHING
+         RETURNING ${SET_COLS}`
+      : `INSERT INTO stories.sets (series, ny_date, trigger, style, requested_by, mode, slot_minute)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT DO NOTHING
+         RETURNING ${SET_COLS}`,
+    slotMinute === null ? params : [...params, slotMinute],
   );
   if (rows[0]) return { set: rows[0], created: true };
   const existing = await db.query<StorySet>(
-    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND status NOT IN ('rejected', 'failed', 'skipped')`,
+    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND coalesce(${SLOT_MINUTE_SQL}, -1) = coalesce($3::smallint, -1)
+        AND status NOT IN ('rejected', 'failed', 'skipped')`,
+    [input.series, input.nyDate, slotMinute],
+  );
+  if (existing.rows[0]) return { set: existing.rows[0], created: false };
+  // Until db/stories_multi_slot.sql drops the one-a-day index (R25), the day's live set holds every slot back.
+  const day = await db.query<StorySet>(
+    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND status NOT IN ('rejected', 'failed', 'skipped')
+      ORDER BY created_at LIMIT 1`,
     [input.series, input.nyDate],
   );
-  return { set: existing.rows[0]!, created: false };
+  if (!day.rows[0]) throw new Error(`stories.sets refused a ${input.series} set for ${input.nyDate} with no live set in the way`);
+  return { set: day.rows[0], created: false };
 }
 
 /** The worker takes the oldest requested set (skipping any another worker holds). */
@@ -244,9 +273,13 @@ export const scheduleSet = (db: Queryable, setId: string, publishAt: Date) => mo
  * Schedule here / move, D50). Its day moves with it, so the series' one
  * live set per day still holds (a clash is the unique index's 23505).
  * Never a set that is posting or posted. Re-projected like every move.
+ * `slotMinute` (template mode, R15): the calendar slot it now sits in, so
+ * the set's slot stays its time's; the column is named only then (R12).
  */
-export const rescheduleSet = (db: Queryable, setId: string, nyDate: string, publishAt: Date) =>
-  move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5', [nyDate, publishAt.toISOString()]);
+export const rescheduleSet = (db: Queryable, setId: string, nyDate: string, publishAt: Date, slotMinute: number | null = null) =>
+  slotMinute === null
+    ? move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5', [nyDate, publishAt.toISOString()])
+    : move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5, slot_minute = $6', [nyDate, publishAt.toISOString(), slotMinute]);
 
 /** Scheduled sets whose minute has come, oldest first. */
 export async function dueSets(db: Queryable, now: Date = new Date()): Promise<StorySet[]> {
@@ -280,6 +313,23 @@ export async function recentKeys(db: Queryable, series: Series, days: number, no
   const { rows } = await db.query<{ key: string }>(
     `SELECT DISTINCT key FROM stories.history WHERE series = $1 AND shown_at > $2::timestamptz - make_interval(days => $3)`,
     [series, now.toISOString(), days],
+  );
+  return new Set(rows.map((r) => r.key));
+}
+
+/**
+ * Keys other live sets of this series hold on the same New York date (their
+ * build's `payload.historyKeys`), so two sets of one day never repeat a story
+ * before either has posted (ruling R13). Rejected, failed and skipped sets
+ * free their keys.
+ */
+export async function sameDayKeys(db: Queryable, series: Series, nyDate: string, exceptSetId: string): Promise<Set<string>> {
+  const { rows } = await db.query<{ key: string }>(
+    `SELECT DISTINCT k.key FROM stories.sets s
+       CROSS JOIN LATERAL jsonb_array_elements_text(
+         CASE WHEN jsonb_typeof(s.payload->'historyKeys') = 'array' THEN s.payload->'historyKeys' ELSE '[]'::jsonb END) AS k(key)
+      WHERE s.series = $1 AND s.ny_date = $2::date AND s.id <> $3::uuid AND s.status NOT IN ('rejected', 'failed', 'skipped')`,
+    [series, nyDate, exceptSetId],
   );
   return new Set(rows.map((r) => r.key));
 }

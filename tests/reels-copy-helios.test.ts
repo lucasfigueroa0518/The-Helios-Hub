@@ -9,6 +9,7 @@
  * database writes are recorders.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type Anthropic from '@anthropic-ai/sdk';
@@ -69,7 +70,7 @@ function reportInput(extra: Record<string, unknown> = {}) {
 // ── v29 pins ────────────────────────────────────────────────────────────────
 
 test('v29 pins: the version, the Helios context and the shared rules in the cached prefix', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v30');
   const statics = copyStaticSystem();
   assert.ok(statics.includes(HELIOS_CONTEXT));
   assert.ok(statics.includes(CAPTION_SHARED_RULES));
@@ -501,7 +502,7 @@ test('publishReadiness posts a stored v29 row (and a v28 row) as body, call to a
 });
 
 test('Task 8b part 2 (v29 amended): at most two emoji, none in the Helios line; the line prefers a named industry', () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v30');
   assert.doesNotMatch(COPY_SKILL, /No emoji\./);
   assert.match(COPY_SKILL, /At most two emoji, and none is required: usually one leads the caption's first line and one ends the call to action/);
   assert.match(COPY_SKILL, /Never put one in the Helios line or the hashtags/);
@@ -523,10 +524,23 @@ test('fix round 1: the publishReadiness test leaves no test pool behind', () => 
 });
 
 test("copy fix (v29 amended, 2026-10-20): the Helios line is one concrete point in Helios's view; a follow clause is rare", () => {
-  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v29');
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v30');
   assert.match(COPY_SKILL, /one or two plain sentences that make one concrete point about this story for the industry it names/);
   assert.match(COPY_SKILL, /It ends on the point/);
   assert.match(COPY_SKILL, /a short follow clause may close it now and then, never by default/);
   assert.doesNotMatch(COPY_SKILL, /the line may end by inviting the viewer to follow Helios/);
   assert.match(COPY_SKILL, /Keep each paragraph to one or two sentences, and cut a secondary fact no part needs/);
+});
+
+// Fix round 3 (copy-caption-v30, Tommy, 2026-10-20): the live Reels check posted a 1,947-character,
+// 11-paragraph Saga caption with a staged "Here's the catch:".
+test('copy-caption-v30: the caption body is capped, the cap beats the bucket, and staged reveals are banned', () => {
+  assert.equal(COPY_PROMPT_VERSION, 'copy-caption-v30');
+  assert.match(COPY_SKILL, /Keep the caption, before the call to action, the Helios line, and the hashtags, to about 1,000 to 1,200 characters and at most about 7 short paragraphs\./);
+  assert.match(COPY_SKILL, /Keep the story's beats and cut secondary details to get there/);
+  assert.match(COPY_SKILL, /The caption length cap in the Caption section wins over any bucket caption structure that asks for more/);
+  assert.match(COPY_SKILL, /No staged reveal or run-up phrase, such as "Here's the catch", "Here's the thing", "The twist\?" or "Plot twist"/);
+  assert.match(COPY_SKILL, /Check that the caption, before the call to action, is about 1,000 to 1,200 characters and at most about 7 paragraphs/);
+  const plan = readFileSync('planning/Trial Reels/BUILD_PLAN.md', 'utf8');
+  assert.ok(plan.includes(`\`${COPY_PROMPT_VERSION}\``), 'registry row for the current version');
 });
