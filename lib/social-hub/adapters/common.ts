@@ -1,3 +1,5 @@
+import { clockLabel, SERIES_NAME } from '@/lib/social-hub/slots/times';
+import { parseSlotId } from '@/lib/social-hub/slots/types';
 import { nyDateOf } from '@/lib/social-hub/time';
 import type { FactorValue, HubMetrics, HubStatus, MetricSnapshot } from '@/lib/social-hub/types';
 
@@ -84,6 +86,24 @@ export function cancelNote(error: string | null): string {
   const note = text(error);
   if (!note) return 'Cancelled';
   return /approv/i.test(note) ? CANCELLED_UNAPPROVED : note;
+}
+
+/**
+ * A booking's slot for people: a legacy window id by its type's label, a
+ * free-time id (`t0675`, `t0510:morning_download`) by its clock time
+ * ("11:15 AM", "Morning Download · 8:30 AM"), anything else as stored.
+ */
+export function slotText(id: string, legacy: Record<string, string> = {}): string {
+  if (legacy[id]) return legacy[id]!;
+  const parsed = parseSlotId(id);
+  if (!parsed) return id;
+  return parsed.series ? `${SERIES_NAME[parsed.series].one} · ${clockLabel(parsed.startMinute)}` : clockLabel(parsed.startMinute);
+}
+
+/** The slot factor (posts grouped by slot), labelled as slotText reads it. */
+export function slotCategory(id: string | null | undefined, legacy: Record<string, string>): FactorValue {
+  if (!id) return { kind: 'category', key: 'unknown', label: 'Outside a slot' };
+  return { kind: 'category', key: id, label: slotText(id, legacy) };
 }
 
 export function category(key: string | null | undefined, labels: Record<string, string>, empty = 'Unknown'): FactorValue {

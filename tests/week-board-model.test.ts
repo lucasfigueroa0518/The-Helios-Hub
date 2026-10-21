@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createHistory, type Command } from '@/components/social-hub/calendar/history';
+import { reelPosts } from '@/lib/social-hub/adapters/reels';
+import { storyPosts } from '@/lib/social-hub/adapters/stories';
+import type { ReelAttemptRow, ReelsRead } from '@/lib/social-hub/queries/reels';
+import type { StoriesRead, StorySetRow } from '@/lib/social-hub/queries/stories';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
@@ -33,6 +37,53 @@ test('an empty Wed explainer says which run makes it and on which day', () => {
   assert.equal(c.status, 'empty');
   assert.equal(c.statusText, 'Empty for now. The 2 AM run makes it on Wed Oct 21.');
   assert.equal(c.locked, false);
+});
+
+/* Real adapter rows, not hand-built BoardPosts (final review #3): what the board gets on the live page. */
+const storySet = (o: Partial<StorySetRow> = {}): StorySetRow => ({
+  set_id: 's1', series: 'morning_download', ny_date: '2026-10-21', status: 'approved', trigger: 'auto', style: 'polished', payload: {},
+  publish_at: '2026-10-21T12:35:00Z', slot_minute: 510, flagged: false, error: null, spend_usd: 0, approved_at: '2026-10-20T13:00:00Z',
+  published_at: null, built_at: '2026-10-20T09:00:00Z', created_at: '2026-10-20T08:00:00Z', feedback_verdict: null, feedback_tags: null, chosen_origins: null, ...o,
+});
+const storiesRead = (sets: StorySetRow[]): StoriesRead => ({ sets, frames: [], insights: [], pool: [] });
+const reelAttempt = (o: Partial<ReelAttemptRow> = {}): ReelAttemptRow => ({
+  attempt_id: 'a1', status: 'published', trigger: 'auto', media_id: null, post_idea_id: 'idea-1', video_job_id: null,
+  requested_at: '2026-10-19T15:15:00Z', finished_at: '2026-10-19T15:20:00Z', permalink: null, error: null, caption: null,
+  song_title: null, song_artist: null, graduation_strategy: null, motion_prompt: null, video_storage_path: null, video_finished_at: null,
+  video_slate_id: null, visual_render: null, audio_type: null, genre: null, schedule_id: 'sch-1', schedule_slot: 't0675',
+  schedule_publish_at: '2026-10-19T15:20:00Z', approved_at: '2026-10-19T02:00:00Z', chosen_framework: null, chosen_bucket: null,
+  blockbuster: null, net: null, origin: null, on_screen_copy: 'Copy', full_story_below: null, headline: 'Headline', ...o,
+});
+const reelsRead = (attempts: ReelAttemptRow[]): ReelsRead => ({ attempts, schedules: [], made: [], insights: [], ideas: [], sources: [], requireApproval: false });
+
+test('adapter → board: a Stories set booked at 8:30 AM shows on its Morning Download card, with its status', () => {
+  const posts = storyPosts(storiesRead([storySet()]));
+  assert.equal(posts[0]!.slot?.id, 't0510:morning_download');
+  const m = boardModel({ mode: 'week', days: week(), posts, now: NOW, caps: DEFAULT_CAPS });
+  const c = m.cards.find((x) => x.day === 2 && x.vertical === 'stories' && x.series === 'morning_download' && x.startMinute === 510)!;
+  assert.equal(c.booked?.id, posts[0]!.id);
+  assert.equal(c.status, 'approved');
+  const waiting = storyPosts(storiesRead([storySet({ status: 'ready', approved_at: null })]));
+  const w = boardModel({ mode: 'week', days: week(), posts: waiting, now: NOW, caps: DEFAULT_CAPS }).cards.find((x) => x.day === 2 && x.vertical === 'stories' && x.startMinute === 510)!;
+  assert.equal(w.status, 'waiting');
+});
+
+test('adapter → board: a window-era Stories set (no slot minute) keeps its window id', () => {
+  assert.equal(storyPosts(storiesRead([storySet({ slot_minute: null })]))[0]!.slot?.id, 'story-window');
+  assert.equal(storyPosts(storiesRead([storySet({ slot_minute: undefined })]))[0]!.slot?.id, 'story-window');
+});
+
+test('adapter → board: a posted reel booked at 11:15 AM reads "Posted" and counts on its folded past day', () => {
+  const posts = reelPosts(reelsRead([reelAttempt()]));
+  assert.equal(posts[0]!.slot?.id, 't0675');
+  assert.equal(posts[0]!.slot?.label, '11:15 AM');
+  const m = boardModel({ mode: 'week', days: week(), posts, now: NOW, caps: DEFAULT_CAPS });
+  const c = m.cards.find((x) => x.day === 0 && x.vertical === 'reels' && x.startMinute === 675)!;
+  assert.equal(c.status, 'posted');
+  assert.equal(c.statusText, 'Posted');
+  assert.equal(m.columns[0]!.count, 1, 'Mon folds to "1 posted"');
+  const legacy = reelPosts(reelsRead([reelAttempt({ schedule_slot: 'midday' })]));
+  assert.equal(legacy[0]!.slot?.id, 'midday', 'a window booking reads as before');
 });
 
 test('a posted card is locked with status posted', () => {
@@ -337,7 +388,8 @@ test('make it every: a removal of a slot the Standard week lacks has nothing to 
 });
 
 test('booked hits: removing or flipping a booked slot asks; moving a booked Story cannot', () => {
-  const s = state([booked({ slotId: 't0780' }), booked({ id: 'r1', vertical: 'reels', slotId: 't0525' }), booked({ id: 's1', vertical: 'stories', slotId: 't0510:morning_download' })]);
+  const [set] = storyPosts(storiesRead([storySet()]));
+  const s = state([booked({ slotId: 't0780' }), booked({ id: 'r1', vertical: 'reels', slotId: 't0525' }), set!]);
   const rm = planEdit(s, { op: 'remove', day: WED, key: key('explainers', 780) }, CLOCK);
   assert.ok(rm.ok);
   assert.deepEqual(bookedHits(s, rm.next).map((h) => [h.post.id, h.why]), [['b1', 'removed']]);
@@ -346,7 +398,7 @@ test('booked hits: removing or flipping a booked slot asks; moving a booked Stor
   assert.deepEqual(bookedHits(s, flip.next).map((h) => [h.post.id, h.why]), [['r1', 'feed-mode']]);
   const story = planEdit(s, { op: 'move', day: WED, key: key('stories', 510, 'morning_download'), to: WED, minute: 720 }, CLOCK);
   assert.ok(story.ok);
-  assert.deepEqual(bookedHits(s, story.next).map((h) => [h.post.id, h.why]), [['s1', 'cannot-move']]);
+  assert.deepEqual(bookedHits(s, story.next).map((h) => [h.post.id, h.why]), [[set!.id, 'cannot-move']]);
 });
 
 test('reset day: only unlocked keys go back to the standard week; the inverse rebuilds the day', () => {

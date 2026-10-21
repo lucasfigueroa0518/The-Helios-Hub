@@ -8,10 +8,13 @@ import {
   num,
   nyDateFor,
   scheduleStatus,
+  slotCategory,
+  slotText,
   text,
   yesNo,
 } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { parseSlotId } from '@/lib/social-hub/slots/types';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import { reelItem } from '@/lib/social-hub/queries/costs';
 import type { ReelAttemptRow, ReelIdeaRow, ReelMadeRow, ReelScheduleRow, ReelsRead } from '@/lib/social-hub/queries/reels';
@@ -35,6 +38,16 @@ export const BUCKET_LABEL: Record<string, string> = {
   the_callout: 'The Callout',
 };
 export const SLOT_NAME: Record<string, string> = { morning: 'Morning', midday: 'Midday', evening: 'Evening', unscheduled: 'Outside a slot' };
+const WINDOW_CAPTION: Record<string, string> = Object.fromEntries((['morning', 'midday', 'evening'] as const).map((w) => [w, slotCaption(w)]));
+
+/** A free-time booking keeps its own id (`t0675`); a window booking or a force post with no row reads as before. */
+function reelSlot(stored: string | null | undefined, finishedAt: Date): string {
+  return stored && parseSlotId(stored) ? stored : resolveSlot(stored, finishedAt);
+}
+
+/** "Midday · 11:15 AM–12:30 PM" for a window, "11:15 AM" for a free time. */
+const reelSlotLabel = (slot: string) => (slot === 'unscheduled' ? 'Outside a slot' : slotText(slot, WINDOW_CAPTION));
+
 const AUDIO_LABEL: Record<string, string> = { music: 'Music', original_sound: 'Original sound' };
 const COLOR_LABEL: Record<string, string> = { noir: 'Noir', paper: 'Paper', orange: 'Orange', green: 'Green' };
 const HOOK_LABEL: Record<string, string> = {
@@ -86,7 +99,7 @@ export function reelFactorValues(f: ReelFacts): Record<string, FactorValue> {
     psychology: category(f.framework, FRAMEWORK_LABEL),
     bucket: category(f.bucket, BUCKET_LABEL),
     blockbuster: yesNo(f.blockbuster, ['yes', 'Blockbuster'], ['no', 'Not a blockbuster']),
-    slot: category(f.slot, SLOT_NAME, 'Outside a slot'),
+    slot: slotCategory(f.slot, SLOT_NAME),
     audio: category(f.audioType, AUDIO_LABEL),
     genre: genre ? { kind: 'category', key: genre, label: genre } : { kind: 'category', key: 'unknown', label: 'Unknown' },
     color: category(f.color, COLOR_LABEL),
@@ -122,7 +135,7 @@ function nativeFields(f: ReelFacts, extra: { songTitle: string | null; songArtis
     { group: 'production', label: 'Song', value: [extra.songTitle, extra.songArtist].filter(Boolean).join(' · ') || '—' },
     { group: 'production', label: 'Song genre', value: f.genre?.trim() || '—' },
     { group: 'scoring', label: 'Net score', value: f.net == null ? '—' : f.net.toFixed(2) },
-    { group: 'scheduling', label: 'Posting slot', value: f.slot === 'unscheduled' ? 'Outside a slot' : slotCaption(f.slot as never) },
+    { group: 'scheduling', label: 'Posting slot', value: reelSlotLabel(f.slot) },
     { group: 'scheduling', label: 'Graduation', value: graduation },
   ];
   if (extra.trigger) fields.push({ group: 'scheduling', label: 'Trigger', value: extra.trigger === 'force' ? 'Force post' : extra.trigger === 'approve' ? 'Approved' : 'Auto' });
@@ -136,7 +149,7 @@ function videoSrc(videoJobId: string | null, storagePath: string | null): string
 function attemptPost(row: ReelAttemptRow, history: Map<string, import('@/lib/social-hub/types').MetricSnapshot[]>, requireApproval: boolean): HubPost {
   const finishedAt = iso(row.finished_at);
   const at = finishedAt ?? iso(row.requested_at)!;
-  const slot = resolveSlot(row.schedule_slot, new Date(at));
+  const slot = reelSlot(row.schedule_slot, new Date(at));
   const motion = parseMotionFactors(row.motion_prompt);
   const blockbusterNum = num(row.blockbuster);
   const facts: ReelFacts = {
@@ -169,7 +182,7 @@ function attemptPost(row: ReelAttemptRow, history: Map<string, import('@/lib/soc
     postedAt: status === 'published' ? finishedAt : null,
     publishAt: iso(row.schedule_publish_at),
     nyDate: nyDateFor(status === 'published' ? finishedAt : null, row.schedule_publish_at, row.requested_at),
-    slot: { id: slot, label: slot === 'unscheduled' ? 'Outside a slot' : slotCaption(slot as never) },
+    slot: { id: slot, label: reelSlotLabel(slot) },
     permalink: row.permalink,
     pipelineHref: '/reels',
     media: { kind: 'video', src: videoSrc(row.video_job_id, row.video_storage_path) },
@@ -228,7 +241,7 @@ function schedulePost(row: ReelScheduleRow, requireApproval: boolean): HubPost {
     postedAt: null,
     publishAt: iso(row.publish_at),
     nyDate: row.ny_date.slice(0, 10),
-    slot: { id: slot, label: slotCaption(slot as never) },
+    slot: { id: slot, label: reelSlotLabel(slot) },
     permalink: null,
     pipelineHref: '/reels',
     media: { kind: 'video', src: videoSrc(row.video_job_id, row.video_storage_path) },
