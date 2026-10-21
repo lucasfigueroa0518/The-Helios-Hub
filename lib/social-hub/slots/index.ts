@@ -7,8 +7,9 @@ import { loadSlots, readCaps, readSlotSource } from './load';
 import type { FeedMode, ResolvedSlot, SlotQuery } from './types';
 
 /**
- * The one question every scheduler and hub view asks (spec §5): which of a
- * type's windows are slots on these dates? Null while slot_source is
+ * The one question every scheduler and hub view asks (spec §5): which free-time
+ * slots (start minutes, Stories by series) does a type have on these dates,
+ * and how many of them are within the daily cap? Null while slot_source is
  * 'legacy': the caller then runs its own code exactly as before, so legacy
  * mode is today's code, not a copy of it. SELECT only.
  */

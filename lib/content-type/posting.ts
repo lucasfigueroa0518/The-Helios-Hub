@@ -76,7 +76,6 @@ export type PostingState = {
 /** The days costPerPost averages over. */
 export const COST_DAYS = 14;
 
-export { MAX_CAP, maxCapFor };
 
 /** How many dates through today `nights` covers: every night the Health page can ask about (historyNights ≤ 31). */
 export const NIGHT_DAYS = 31;
@@ -184,13 +183,12 @@ export function costPerPost(posts: readonly HubPost[], type: ContentType, now: D
   return Math.round([...seen.values()].reduce((a, b) => a + b, 0) / seen.size);
 }
 
-/** `posts`: the hub's posts (with their costs), when the caller has them, for costPerPostMicros. */
-export async function readPosting(type: ContentType, now = new Date(), opts: { posts?: readonly HubPost[] | null } = {}): Promise<PostingState> {
+/** costPerPostMicros is null here: the posting route works it out from the hub's posts (costPerPost). */
+export async function readPosting(type: ContentType, now = new Date()): Promise<PostingState> {
   const [state, cal] = await Promise.all([readTypePosting(type), calendarPlan(now)]);
-  const costPerPostMicros = opts.posts ? costPerPost(opts.posts, type, now) : null;
-  if (!cal) return { ...state, schedule: null, nights: null, cap: null, costPerPostMicros };
+  if (!cal) return { ...state, schedule: null, nights: null, cap: null, costPerPostMicros: null };
   const cap = (await readCaps(appQuery))[type];
-  return { ...withCalendar(state, cal.week, cal.today, cap), schedule: weekSchedule(type, cal.week), nights: weekSchedule(type, cal.nights), cap, costPerPostMicros };
+  return { ...withCalendar(state, cal.week, cal.today, cap), schedule: weekSchedule(type, cal.week), nights: weekSchedule(type, cal.nights), cap, costPerPostMicros: null };
 }
 
 async function readTypePosting(type: ContentType): Promise<TypeFields> {

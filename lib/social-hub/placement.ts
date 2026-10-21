@@ -1,6 +1,7 @@
 /**
  * Placing content on the calendar from the hub (Schedule here / move, D50).
- * Every type's own rules, checked in one place, against the lifecycle spine:
+ * Every type's own rules, checked in one place, against the lifecycle spine.
+ * Legacy mode (slot_source 'legacy', the windows before the calendar):
  *
  *   - the slot is one of the type's windows (the values schedule_slot_check
  *     allows), on a day that window runs (Stories' series days);
