@@ -4,8 +4,9 @@ import type { CSSProperties } from 'react';
 import { Delta } from '@/components/social-hub/analytics/KpiStrip';
 import { DaySheet } from '@/components/social-hub/calendar/DaySheet';
 import { MonthGrid } from '@/components/social-hub/calendar/MonthGrid';
-import { SourceSwitch } from '@/components/social-hub/calendar/SlotEditor';
-import { WeekGrid } from '@/components/social-hub/calendar/WeekGrid';
+import { SourceSwitch, WeekBoard, type ReadyItem } from '@/components/social-hub/calendar/WeekBoard';
+import type { SlimPost } from '@/components/social-hub/calendar/SlotCard';
+import { thumbOf } from '@/components/social-hub/ui/Thumb';
 import { TypeToggles } from '@/components/social-hub/calendar/CalendarControls';
 import { LineupItem } from '@/components/social-hub/content/LineupItem';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
@@ -17,7 +18,8 @@ import { Menu } from '@/components/social-hub/ui/Menu';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import type { SlotsByDate, SlotSource } from '@/lib/social-hub/slots/types';
+import { contentRefs } from '@/lib/social-hub/house';
+import { isStorySeries, type ResolvedSlot, type SlotsByDate, type SlotSource } from '@/lib/social-hub/slots/types';
 import { actionEnabled, SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { metricSpec } from '@/lib/social-hub/metrics';
@@ -27,15 +29,31 @@ import { daySlots, monthModel, totalLabel, type DayCell, type DaySlot } from '@/
 import { displayName, plural, shortDate, whenInline } from '@/lib/social-hub/views/format';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { minuteLabel, windowRange } from '@/lib/social-hub/views/plan';
-import { boardModel, mondayOf, weekLabel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
-import type { MetricKey, Vertical } from '@/lib/social-hub/types';
+import { mondayOf, weekLabel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
+import type { HubPost, MetricKey, Vertical } from '@/lib/social-hub/types';
+import { needsGroups } from '@/lib/social-hub/views/today';
 
 const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
 
 const MARK_LABEL = { posted: 'posted', scheduled: 'scheduled', failed: 'failed', missed: 'didn’t post', open: 'open slot' } as const;
 
 /** The week view's input (the page loads it; the preview builds it from the seed). */
-export type CalendarWeek = { mode: 'week' | 'template'; monday: string; days: WeekDayInput[]; source: SlotSource; readOnly?: boolean; /** The template's Carousel windows by weekday ("Every <weekday>" LFD switch). */ templateCarousels: Record<number, string[]>; /** What switching on changes, for the confirm. */ switchFacts: SwitchFacts };
+export type CalendarWeek = {
+  mode: 'week' | 'template';
+  monday: string;
+  days: WeekDayInput[];
+  source: SlotSource;
+  /** No edits and no switch (a read that can't be trusted to write back). */
+  readOnly?: boolean;
+  /** The preview: the board edits on screen only and sends nothing. */
+  sandbox?: boolean;
+  /** Each weekday's Standard week slots (0 = Sunday), for "Edited" and Reset day. */
+  standard: Record<number, ResolvedSlot[]>;
+  /** The daily caps (readCaps; DEFAULT_CAPS on the preview). */
+  caps: Record<Vertical, number>;
+  /** What switching on changes, for the confirm. */
+  switchFacts: SwitchFacts;
+};
 
 /** Calendar (BRIEFS.md §2): the week's slots to edit (spec §3), or the month's shape, gaps ahead, and a day panel to act from. */
 export function CalendarScreen({ dataset, base, params, now, week, weekFailed = false }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week?: CalendarWeek | null; /** The week was asked for but its slots didn't load: say so above the month. */ weekFailed?: boolean }) {
@@ -64,6 +82,25 @@ function ViewToggle({ path, view }: { path: string; view: 'week' | 'month' }) {
   );
 }
 
+/** Hold-the-slot statuses the board shows on a card (plus a placed post still waiting as ready). */
+const ON_BOARD = new Set(['scheduled', 'publishing', 'published', 'ready']);
+
+/** A post as the board needs it: small enough to send to the client. */
+function slim(p: HubPost): SlimPost {
+  const refs = Object.fromEntries(Object.entries(contentRefs(p)).filter((e): e is [string, string] => typeof e[1] === 'string'));
+  return { id: p.id, vertical: p.vertical, nyDate: p.nyDate, slot: p.slot, status: p.status, approval: { required: p.approval.required, approvedAt: p.approval.approvedAt }, name: displayName(p), refs, thumb: thumbOf(p.media).src };
+}
+
+/** Ready to place (decision 16): made, approved or not, with no slot (the Content page's "Made, waiting for a slot"). */
+function readyItems(posts: readonly HubPost[], now: Date): ReadyItem[] {
+  const unplaced = needsGroups(posts, now).find((g) => g.id === 'unplaced')?.posts ?? [];
+  return unplaced.map((p) => {
+    const f = p.factorValues.series;
+    const key = f && f.kind === 'category' ? f.key : null;
+    return { ...slim(p), series: p.vertical === 'stories' && isStorySeries(key) ? key : null, made: p.generatedAt ? `Made ${shortDate(p.generatedAt)}` : 'Made' };
+  }).filter((r) => r.vertical !== 'stories' || r.series !== null);
+}
+
 function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week: CalendarWeek }) {
   const path = `${base}/calendar`;
   const template = week.mode === 'template';
@@ -72,18 +109,20 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
   const href = (changes: Record<string, string | null>) => withParams(path, '', keep, changes);
   const dim = isVertical(params.type) ? params.type : null;
   const legacy = week.source === 'legacy';
-  const canEdit = actionEnabled('editSlots') && !week.readOnly;
-  const model = boardModel({ mode: week.mode, days: week.days, posts: dataset.posts, now });
+  const editable = actionEnabled('editSlots') && !week.readOnly && !legacy;
+  const dates = new Set(week.days.map((d) => d.nyDate).filter(Boolean));
+  const posts = template ? [] : dataset.posts.filter((p) => p.nyDate && dates.has(p.nyDate) && p.slot && ON_BOARD.has(p.status)).map(slim);
+  const ready = template || !editable || !actionEnabled('reschedule') ? [] : readyItems(dataset.posts, now);
   return (
     <>
       <PageHead
-        title={template ? 'Weekly template' : weekLabel(week.monday)}
+        title={template ? 'Standard week' : weekLabel(week.monday)}
         actions={
           <>
             <ViewToggle path={path} view="week" />
             <div className="sh-pills" role="group" aria-label="Show">
+              <HubLink className="sh-pill" href={href({ scope: 'template', week: null })} aria-current={template ? 'page' : undefined} history="replace">Standard week</HubLink>
               <HubLink className="sh-pill" href={href({ scope: null })} aria-current={template ? undefined : 'page'} history="replace">This week</HubLink>
-              <HubLink className="sh-pill" href={href({ scope: 'template', week: null })} aria-current={template ? 'page' : undefined} history="replace">Template</HubLink>
             </div>
             {template ? null : (
               <div className="sh-pills" role="group" aria-label="Week">
@@ -96,26 +135,25 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
         }
       />
       <DataNotes dataset={dataset} />
-      {actionEnabled('editSlots') ? <SourceSwitch source={week.source} readOnly={week.readOnly} facts={week.switchFacts} /> : null}
+      {actionEnabled('editSlots') ? <SourceSwitch source={week.source} readOnly={week.readOnly || week.sandbox} facts={week.switchFacts} /> : null}
       {dim ? (
         <p className="sh-subtle sh-week__focus">
           Showing {verticalInfo(dim).label} first. <HubLink className="sh-link" href={href({ type: null })} history="replace">Show every type</HubLink>
         </p>
       ) : null}
-      <WeekGrid model={model} scope={template ? 'template' : 'date'} dim={dim} readOnly={!canEdit || legacy} templateCarousels={week.templateCarousels} />
-      <div className="sh-month__key">
-        <ul className="sh-key" aria-label="Key">
-          <li><span className="sh-week__chip sh-week__chip--key" aria-hidden="true"><span className="sh-week__dot" /></span>slot</li>
-          <li><span className="sh-week__chip sh-week__chip--key" data-origin="override" aria-hidden="true"><span className="sh-week__dot" /></span>changed for one date</li>
-          {template ? null : <li><span className="sh-week__chip sh-week__chip--key" data-booked="true" aria-hidden="true"><span className="sh-week__dot" /></span>a post is booked</li>}
-          <li><span className="sh-week__blocked" aria-hidden="true">LFD day</span>Last Few Days runs, so Carousels are off</li>
-        </ul>
-        <p className="sh-subtle">
-          {template
-            ? 'The template repeats every week. A change to one date shows on that week only.'
-            : 'Times are New York. Past windows and windows that have started can’t be changed.'}
-        </p>
-      </div>
+      {template ? <p className="sh-subtle sh-week__focus">The standard week repeats every week. A change on This week shows on that date only.</p> : null}
+      <WeekBoard
+        mode={week.mode}
+        days={week.days}
+        standard={week.standard}
+        caps={week.caps}
+        posts={posts}
+        ready={ready}
+        now={now.toISOString()}
+        editable={editable}
+        sandbox={week.sandbox === true}
+        dim={dim}
+      />
     </>
   );
 }

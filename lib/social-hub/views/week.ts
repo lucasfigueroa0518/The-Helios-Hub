@@ -1,7 +1,7 @@
 import { addDays, nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { isLocked } from '@/lib/social-hub/slots/rules';
-import { DAY_END, DAY_START, DEFAULT_CAPS, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
+import { DAY_END, DAY_START, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
 import { slotId, slotKeyString, type FeedMode, type ResolvedSlot, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -19,13 +19,6 @@ export function chipNames(vertical: Vertical, series: StorySeries | null): { sho
   return { short: info.short, full: info.label };
 }
 
-/** Each weekday's Carousel slot ids (`t0540`…) in the template, earliest first ("Every <weekday>" edits change the template, not a date). */
-export function carouselsByWeekday(template: readonly TemplateRow[]): Record<number, string[]> {
-  const out: Record<number, number[]> = { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] };
-  for (const r of template) if (r.vertical === 'carousels') out[r.weekday]!.push(r.startMinute);
-  return Object.fromEntries(Object.entries(out).map(([d, m]) => [d, m.sort((x, y) => x - y).map((x) => slotId(x, null))]));
-}
-
 /** What the "Switch on" confirm needs to say (ruling R8): read on the server before the switch. */
 export type SwitchFacts = {
   /** No saved template yet: the first flip copies today's pattern in. null: the template couldn't be read, so it's unknown. */
@@ -35,6 +28,8 @@ export type SwitchFacts = {
   /** The weekdays (0 = Sunday) that will have an LFD slot after the switch. */
   lfdDays: readonly number[];
 };
+
+export const WEEKDAY_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const WEEKDAY_PLURAL = ['Sundays', 'Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays'];
 
@@ -104,6 +99,11 @@ export function templateWeek(template: readonly TemplateRow[], monday: string): 
   return datedWeek(template, monday).map((d) => ({ ...d, nyDate: null }));
 }
 
+/** Each weekday's Standard week slots (0 = Sunday), for "Edited" and Reset day. */
+export function standardByWeekday(template: readonly TemplateRow[]): Record<number, ResolvedSlot[]> {
+  return Object.fromEntries(templateWeek(template, '2026-10-19').map((d) => [d.weekday, d.slots]));
+}
+
 /** "Oct 19 – 25", or "Oct 26 – Nov 1" across a month end. */
 export function weekLabel(monday: string): string {
   const fmt = (d: string, month: boolean) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { ...(month ? { month: 'short' as const } : {}), day: 'numeric', timeZone: 'UTC' });
@@ -129,7 +129,10 @@ export type BoardColumn = {
   count: number;
 };
 
-export type BoardCard = {
+/** What the board reads of a post: enough to show its slot's status (the page passes slim copies to the client). */
+export type BoardPost = Pick<HubPost, 'id' | 'vertical' | 'nyDate' | 'slot' | 'status'> & { approval: Pick<HubPost['approval'], 'required' | 'approvedAt'> };
+
+export type BoardCard<P extends BoardPost = HubPost> = {
   /** Unique across the week: `<day index>|<vertical>|t0780[:series]`. */
   key: string;
   day: number;
@@ -138,7 +141,7 @@ export type BoardCard = {
   startMinute: number;
   feedMode: FeedMode | null;
   origin: 'template' | 'override';
-  booked: HubPost | null;
+  booked: P | null;
   status: CardStatus;
   statusText: string;
   locked: boolean;
@@ -173,20 +176,21 @@ function sameSlots(a: readonly ResolvedSlot[], b: readonly ResolvedSlot[]): bool
 
 const byTimeThenKey = (a: ResolvedSlot, b: ResolvedSlot) => a.startMinute - b.startMinute || slotKeyString(a).localeCompare(slotKeyString(b));
 
-export function boardModel(input: {
+export function boardModel<P extends BoardPost = HubPost>(input: {
   mode: 'week' | 'template';
-  days: WeekDayInput[];
-  posts: readonly HubPost[];
+  days: readonly WeekDayInput[];
+  posts: readonly P[];
   now: Date;
-  caps?: Record<Vertical, number>;
+  /** The daily caps (readCaps on the live page, DEFAULT_CAPS on the preview). */
+  caps: Record<Vertical, number>;
   /** Each weekday's standard slots (0 = Sunday), for "Edited". Without it no day reads as edited. */
   standard?: Readonly<Record<number, readonly ResolvedSlot[]>>;
-}): { columns: BoardColumn[]; cards: BoardCard[] } {
-  const caps = input.caps ?? DEFAULT_CAPS;
+}): { columns: BoardColumn[]; cards: BoardCard<P>[] } {
+  const caps = input.caps;
   const today = nyDateOf(input.now)!;
   const nowMinute = nyMinuteOf(input.now);
   const columns: BoardColumn[] = [];
-  const cards: BoardCard[] = [];
+  const cards: BoardCard<P>[] = [];
 
   input.days.forEach((d, day) => {
     const dated = input.mode === 'week' && d.nyDate != null;
@@ -194,7 +198,7 @@ export function boardModel(input: {
     const slots = [...d.slots].sort(byTimeThenKey);
     const ctx = { nyDate: dated ? d.nyDate : null, weekday: d.weekday, slots, today, nowMinute };
     const seen = new Map<string, number>();
-    const dayCards: BoardCard[] = slots.map((s) => {
+    const dayCards: BoardCard<P>[] = slots.map((s) => {
       const capKey = s.vertical === 'stories' ? `stories|${s.series ?? ''}` : s.vertical;
       const index = seen.get(capKey) ?? 0;
       seen.set(capKey, index + 1);
@@ -206,12 +210,15 @@ export function boardModel(input: {
       const timeLocked = dated && isLocked(ctx, s);
       let status: CardStatus;
       if (booked?.status === 'published') status = 'posted';
-      else if (booked) status = booked.status === 'ready' && !booked.approval.approvedAt ? 'waiting' : 'approved';
+      // Placing is not approving: a booked post that needs a person and has no approval yet is waiting (spec decision 16).
+      else if (booked) status = !booked.approval.approvedAt && (booked.status === 'ready' || booked.approval.required) ? 'waiting' : 'approved';
       else status = timeLocked ? 'started' : 'empty';
       const statusText = status === 'empty'
         ? overCap
           ? STATUS_TEXT.overCap
-          : `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it ${d.nyDate && dated ? `on ${dayShortLabel(d.nyDate)}` : `every ${WEEKDAY_SHORT[d.weekday]}`}.`
+          : d.nyDate && dated
+            ? `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(d.nyDate)}.`
+            : `Every ${WEEKDAY_LONG[d.weekday]}. Each week the ${RUN_HOUR_LABEL[s.vertical]} run makes this post on the day.`
         : STATUS_TEXT[status];
       return {
         key: `${day}|${slotKeyString(s)}`,
@@ -266,8 +273,10 @@ export const CARD_MINUTES = 30;
 
 /**
  * Side-by-side lanes (spec Must handle 5). Cards on one day whose
- * [start, start + CARD_MINUTES) ranges overlap, transitively, form a cluster;
- * the cluster's cards take lanes 0..of-1 in start order (then key order).
+ * [start, start + CARD_MINUTES) ranges overlap, transitively, form a cluster.
+ * In start order (then key order) each card takes the first lane that is free
+ * by its start, so a card goes under one that has ended instead of narrowing
+ * every card in the cluster; `of` is the lanes the cluster uses.
  */
 export function lanes(cards: readonly Pick<BoardCard, 'key' | 'day' | 'startMinute'>[]): Map<string, { lane: number; of: number }> {
   const out = new Map<string, { lane: number; of: number }>();
@@ -275,12 +284,16 @@ export function lanes(cards: readonly Pick<BoardCard, 'key' | 'day' | 'startMinu
   for (const c of cards) (byDay.get(c.day) ?? byDay.set(c.day, []).get(c.day)!).push(c);
   for (const list of byDay.values()) {
     list.sort((a, b) => a.startMinute - b.startMinute || a.key.localeCompare(b.key));
-    let cluster: typeof list = [];
+    let cluster: Array<{ key: string; lane: number }> = [];
+    let ends: number[] = [];
     let end = -Infinity;
-    const flush = () => cluster.forEach((c, i) => out.set(c.key, { lane: i, of: cluster.length }));
+    const flush = () => cluster.forEach((c) => out.set(c.key, { lane: c.lane, of: ends.length }));
     for (const c of list) {
-      if (cluster.length && c.startMinute >= end) { flush(); cluster = []; }
-      cluster.push(c);
+      if (cluster.length && c.startMinute >= end) { flush(); cluster = []; ends = []; }
+      let lane = ends.findIndex((e) => e <= c.startMinute);
+      if (lane < 0) { lane = ends.length; ends.push(0); }
+      ends[lane] = c.startMinute + CARD_MINUTES;
+      cluster.push({ key: c.key, lane });
       end = Math.max(end, c.startMinute + CARD_MINUTES);
     }
     flush();

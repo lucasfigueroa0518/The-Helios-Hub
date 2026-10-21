@@ -4,7 +4,7 @@ import test from 'node:test';
 
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
-import { canMoveBack, carouselsByWeekday, chipNames, datedWeek, lfdWeekdays, mondayOf, splitBooked, stuckNote, switchOnCopy, templateWeek, weekLabel } from '@/lib/social-hub/views/week';
+import { canMoveBack, chipNames, datedWeek, lfdWeekdays, mondayOf, splitBooked, stuckNote, switchOnCopy, templateWeek, weekLabel } from '@/lib/social-hub/views/week';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
@@ -33,12 +33,6 @@ test('each Stories chip names its series; other types use their short name', () 
   assert.deepEqual(chipNames('stories', 'guess_the_number'), { short: 'Guess #', full: 'Guess the Number' });
   assert.deepEqual(chipNames('stories', 'free_vs_paid'), { short: 'Free/Paid', full: 'Free vs. Paid' });
   assert.deepEqual(chipNames('reels', null), { short: 'Text', full: 'Text on Screen' });
-});
-
-test('carouselsByWeekday reads the template, not a date', () => {
-  const by = carouselsByWeekday(tpl);
-  assert.deepEqual(by[1], ['t0540', 't0870']); // Monday
-  assert.deepEqual(by[2], []); // Tuesday is an LFD day
 });
 
 test('the Switch on confirm says what changes the moment it is on (ruling R8)', () => {

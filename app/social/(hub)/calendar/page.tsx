@@ -8,11 +8,11 @@ import { liveHubQuery } from '@/lib/social-hub/db';
 import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type HubParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { loadForPage } from '@/lib/social-hub/live';
-import { loadSlots, readSlotSource, readTemplate } from '@/lib/social-hub/slots/load';
+import { loadSlots, readCaps, readSlotSource, readTemplate } from '@/lib/social-hub/slots/load';
 import { readSeedInputs, seedTemplate } from '@/lib/social-hub/slots/seed';
 import type { SlotQuery } from '@/lib/social-hub/slots/types';
 import { addDays, isDayKey, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
-import { carouselsByWeekday, datedWeek, lfdWeekdays, mondayOf, templateWeek } from '@/lib/social-hub/views/week';
+import { datedWeek, lfdWeekdays, mondayOf, standardByWeekday, templateWeek } from '@/lib/social-hub/views/week';
 import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -35,19 +35,20 @@ async function loadWeek(params: HubParams, now: Date): Promise<CalendarWeek> {
   const source = await readSlotSource(q);
   const monday = mondayOf(isDayKey(params.week) ? params.week : nyDateOf(now)!);
   // In legacy mode an unreadable template is null (unknown), so the confirm doesn't promise "copied in" on a guess.
-  const [read, paused] = await Promise.all([source === 'template' ? readTemplate(q) : readTemplate(q).catch(() => null), lfdPaused()]);
+  const [read, paused, caps] = await Promise.all([source === 'template' ? readTemplate(q) : readTemplate(q).catch(() => null), lfdPaused(), readCaps(q)]);
   const saved = read ?? [];
   // Legacy shows today's pattern; switching on brings back a saved template, or copies today's pattern into an empty one.
   const shown = source === 'template' ? saved : seedTemplate(await readSeedInputs(q));
-  const templateCarousels = carouselsByWeekday(shown);
+  const standard = standardByWeekday(shown);
   const switchFacts = { templateEmpty: read ? read.length === 0 : null, lfdPaused: paused, lfdDays: lfdWeekdays(saved.length ? saved : shown) };
-  if (params.scope === 'template') return { mode: 'template', monday, days: templateWeek(shown, monday), source, templateCarousels, switchFacts };
+  const common = { monday, source, standard, caps, switchFacts };
+  if (params.scope === 'template') return { mode: 'template', days: templateWeek(shown, monday), ...common };
   if (source === 'template') {
     const map = await loadSlots(q, monday, addDays(monday, 6));
-    return { mode: 'week', monday, days: [...map].map(([nyDate, slots]) => ({ nyDate, weekday: weekdayOf(nyDate), slots })), source, templateCarousels, switchFacts };
+    return { mode: 'week', days: [...map].map(([nyDate, slots]) => ({ nyDate, weekday: weekdayOf(nyDate), slots })), ...common };
   }
   // Legacy: show today's pattern so the view isn't empty before the switch; editing waits for it.
-  return { mode: 'week', monday, days: datedWeek(shown, monday), source, templateCarousels, switchFacts };
+  return { mode: 'week', days: datedWeek(shown, monday), ...common };
 }
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
