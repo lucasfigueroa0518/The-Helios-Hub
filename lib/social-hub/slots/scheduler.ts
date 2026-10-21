@@ -12,7 +12,9 @@ import { legacyKey } from './write';
  * Carousels, Last Few Days; week board spec): what a type may still book.
  * Only the first `cap` slots of a date by time are bookable (the hidden daily
  * cap; the rest are never booked, so the overnight fill never makes them).
- * A date that already holds `cap` of the type's posts books nothing more. A
+ * A date that already holds `cap` of the type's posts books nothing more; a
+ * post a person put in an over-cap slot doesn't count, so the within-cap
+ * slots are still made in time order (spec §Safety cap). A
  * Carousel never books on a Last Few Days day (Decision 7). Existing
  * bookings are taken as `${nyDate}|${slotId}`; a pre-cutover booking's
  * window id reads as its window's start minute (legacyKey), so it blocks the
@@ -37,18 +39,22 @@ export async function templateSlots(q: SlotQuery, plan: SlotPlan, vertical: Feed
     [vertical, plan.from, plan.to],
   );
   const taken = new Set<string>();
-  const perDay = new Map<string, number>();
-  for (const r of rows) {
+  const keys = rows.map((r) => {
     const nyDate = String(r.ny_date).slice(0, 10);
-    perDay.set(nyDate, (perDay.get(nyDate) ?? 0) + 1);
     const key = parseSlotId(String(r.slot)) ?? legacyKey(vertical, String(r.slot));
-    if (key) taken.add(`${nyDate}|${slotId(key.startMinute, key.series)}`);
-  }
+    const id = key ? slotId(key.startMinute, key.series) : null;
+    if (id) taken.add(`${nyDate}|${id}`);
+    return { nyDate, id };
+  });
   const byDate = new Map<string, ResolvedSlot[]>();
   for (const nyDate of plan.byDate.keys()) {
     if (vertical === 'carousels' && isLfdDay(plan, nyDate)) continue;
-    if ((perDay.get(nyDate) ?? 0) >= cap) continue;
-    byDate.set(nyDate, slotsWithinCap(plan, vertical, nyDate, cap).made);
+    const { made, over } = slotsWithinCap(plan, vertical, nyDate, cap);
+    // A post a person put in an over-cap slot is theirs, not the run's: it never starves a within-cap slot (spec §Safety cap).
+    const overIds = new Set(over.map((x) => slotId(x.startMinute, x.series)));
+    const counted = keys.filter((k) => k.nyDate === nyDate && !(k.id && overIds.has(k.id))).length;
+    if (counted >= cap) continue;
+    byDate.set(nyDate, made);
   }
   return { byDate, taken };
 }

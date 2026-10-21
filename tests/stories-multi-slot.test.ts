@@ -69,6 +69,15 @@ test('template: two Morning Download slots → two sets (slot_minute 510 and 900
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots }), [], 'one live set per slot');
 });
 
+test('template: a person\'s set in the over-cap slot never starves a within-cap slot (final review #8)', async () => {
+  const { db } = await harnessDb();
+  const q = await templateDay(db);
+  await requestSet(db, { series: 'morning_download', nyDate: THU, trigger: 'click', style: 'polished', slotMinute: 1200 });
+  const slots = await storiesSlotsOn(q, THU);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_1AM, { slots }), ['morning_download', 'morning_download']);
+  assert.deepEqual(await minutesOf(db), [510, 900, 1200]);
+});
+
 test('template: a slot whose time has passed gets no set', async () => {
   const { db } = await harnessDb();
   const q = await templateDay(db);

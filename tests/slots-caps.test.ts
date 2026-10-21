@@ -191,6 +191,19 @@ test('explainers template: 4 slots on Wednesday make 3 (the cap); the 4th is nev
   assert.deepEqual((await rowsOf(q, 'explainers')).at(-1)!.d, '2026-10-22');
 });
 
+test('explainers template: a person\'s post in an over-cap slot never starves a within-cap slot (final review #8)', async () => {
+  const { db, q, jobs } = await explainersDb(3);
+  await setSlotSource(q, 'template', 't');
+  // 11:00, 1:00, 3:30 are within the cap of 3; 7:00 PM is over it, and a person put a post there.
+  assert.equal((await applySlotChanges(q, [add('explainers', 660), add('explainers', 1140)], opts)).ok, true);
+  const item = (await db.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('explainers', 'reel', 'placed') RETURNING id`)).rows[0]!.id;
+  await db.query(`INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source) VALUES ($1, 'explainers', $2, 't1140', '2026-10-21T23:05:00Z', 'scheduled', 'user')`, [item, WED]);
+  const { byDate } = await templateSlots(q, (await slotPlan(q, '2026-10-20'))!, 'explainers');
+  assert.deepEqual(byDate.get(WED)!.map((s) => s.startMinute), [660, 780, 930]);
+  for (const job of jobs) assert.ok((await scheduleJob(db, job, 'auto', LATE_TUESDAY, WED, first)).scheduled);
+  assert.deepEqual((await rowsOf(q, 'explainers')).map((r) => r.slot), ['t0660', 't0780', 't0930', 't1140'], 'the run still makes its 3');
+});
+
 test('explainers template: a day already holding cap posts books nothing more there', async () => {
   const { db, q, jobs } = await explainersDb(1);
   await setSlotSource(q, 'template', 't');

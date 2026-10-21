@@ -257,7 +257,8 @@ export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot
       `SELECT ${SLOT_MINUTE_SQL} AS m FROM stories.sets WHERE series = $1 AND ny_date = $2::date AND status NOT IN ('rejected', 'failed', 'skipped')`,
       [s, date],
     );
-    const minutes = new Set(rows.flatMap((r) => (r.m === null ? [] : [Number(r.m)])));
+    // A set at an over-cap minute (a person put it there) is theirs, not the run's: it never starves a within-cap slot.
+    const minutes = new Set(rows.flatMap((r) => (r.m === null ? [] : [Number(r.m)])).filter((m) => mine.some((x) => x.startMinute === m)));
     const looseSets = rows.filter((r) => r.m === null).length;
     // The spine is a projection (D44): a placement under the series name counts like a set without a slot.
     const spine = await userPlaced((text, params) => db.query(text, params), 'stories', date, { slot: s }).catch(() => 0);
