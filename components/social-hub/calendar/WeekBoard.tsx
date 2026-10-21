@@ -16,7 +16,7 @@ import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import {
-  boardModel, dayShortLabel, lanes, splitBooked, stuckNote, switchOnCopy, yForMinute,
+  boardModel, dayShortLabel, splitBooked, stackOffsets, stuckNote, switchOnCopy, yForMinute,
   type BoardCard, type SwitchFacts, type WeekDayInput,
 } from '@/lib/social-hub/views/week';
 import {
@@ -91,9 +91,6 @@ const TRAY: Array<{ vertical: Vertical; series: StorySeries | null; label: strin
   { vertical: 'stories', series: 'free_vs_paid', label: SERIES_NAME.free_vs_paid.one },
 ];
 
-/** The narrowest lane card that keeps its short name whole ("Morning Dl" at 12px). */
-const LANE_MIN = 86;
-
 const HOURS = Array.from({ length: 12 }, (_, i) => (9 + i) * 60);
 const AXIS = 21 * 60 - 8 * 60;
 const pct = (m: number) => `${(yForMinute(m, AXIS) / AXIS) * 100}%`;
@@ -148,7 +145,7 @@ export function WeekBoard(props: {
     () => boardModel({ mode, days: state.days, posts: state.posts, now, caps, standard: mode === 'week' ? state.standard : undefined }),
     [mode, state, now, caps],
   );
-  const laneOf = useMemo(() => lanes(model.cards), [model.cards]);
+  const topOf = useMemo(() => stackOffsets(model.cards, AXIS), [model.cards]);
   const byDay = useMemo(() => model.columns.map((_, i) => model.cards.filter((c) => c.day === i)), [model]);
 
   const [toast, setToast] = useState<Toast | null>(null);
@@ -460,9 +457,10 @@ export function WeekBoard(props: {
 
   // ── Layout ──
 
-  // An open day grows with its widest cluster so each lane keeps a short name whole (fix round 2, A).
-  const widest = model.columns.map((_, i) => Math.max(1, ...byDay[i]!.map((c) => laneOf.get(c.key)?.of ?? 1)));
-  const cols = model.columns.map((c, i) => (c.folded ? '76px' : `minmax(max(var(--sh-col-min), ${widest[i]! * LANE_MIN + 8}px), 1fr)`)).join(' ');
+  const cols = model.columns.map((c) => (c.folded ? '76px' : 'minmax(var(--sh-col-min), 1fr)')).join(' ');
+  // A crowded stack can run past 9 PM (R27). Each day keeps one card of room below the axis (an 8:45 PM card);
+  // a card drawn lower than 9 PM grows every day by the rest, so nothing clips. The axis (and minuteForY) is unchanged.
+  const overrun = Math.max(0, ...[...topOf.values()].map((t) => t - AXIS)) / AXIS;
   const when = (day: number) => dayName(state, day);
   const dayOptions = model.columns.flatMap((c, i) => (c.folded ? [] : [{ day: i, label: mode === 'week' && c.nyDate ? dayShortLabel(c.nyDate) : WEEKDAY_LONG[c.weekday]! }]));
   const openCard = open ? model.cards.find((c) => c.key === open.key) ?? null : null;
@@ -552,7 +550,7 @@ export function WeekBoard(props: {
       ) : null}
 
       <div className="sh-board__scroll">
-        <div ref={grid} className="sh-board__grid" style={{ gridTemplateColumns: `44px ${cols}` } as CSSProperties} role="group" aria-label={mode === 'template' ? 'Standard week' : 'This week'}>
+        <div ref={grid} className="sh-board__grid" style={{ gridTemplateColumns: `44px ${cols}`, '--sh-stack-over': overrun } as CSSProperties} role="group" aria-label={mode === 'template' ? 'Standard week' : 'This week'}>
           <div className="sh-board__gutter" aria-hidden="true">
             <div className="sh-board__dhead" />
             <div className="sh-board__axis sh-board__axis--gutter">
@@ -599,7 +597,7 @@ export function WeekBoard(props: {
                     <SlotCard
                       key={card.key}
                       card={card}
-                      lane={laneOf.get(card.key) ?? { lane: 0, of: 1 }}
+                      top={topOf.get(card.key) ?? yForMinute(card.startMinute, AXIS)}
                       when={when(i)}
                       editable={editable}
                       dimmed={props.dim !== null && props.dim !== card.vertical}

@@ -8,7 +8,7 @@ import { Menu } from '@/components/social-hub/ui/Menu';
 import { typeStyle } from '@/components/social-hub/ui/marks';
 import { clockLabel, GRID, LAST_START, DAY_START } from '@/lib/social-hub/slots/times';
 import type { FeedMode } from '@/lib/social-hub/slots/types';
-import { chipNames, CARD_MINUTES, laterNote, yForMinute, type BoardCard, type BoardColumn, type BoardPost } from '@/lib/social-hub/views/week';
+import { chipNames, CARD_MINUTES, laterNote, type BoardCard, type BoardColumn, type BoardPost } from '@/lib/social-hub/views/week';
 import { WEEKDAY_LONG } from '@/lib/social-hub/views/week-edit';
 
 /**
@@ -43,9 +43,10 @@ export function cardLabel(card: BoardCard<SlimPost>, when: string): string {
   ].filter(Boolean).join(', ');
 }
 
-export function SlotCard({ card, lane, when, editable, dimmed, faded, open, dragProps, onOpen, onFlip }: {
+export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragProps, onOpen, onFlip }: {
   card: BoardCard<SlimPost>;
-  lane: { lane: number; of: number };
+  /** The drawn y in axis minutes (stackOffsets): its true time, or lower when a crowded stack pushed it. */
+  top: number;
   /** "Wed Oct 21" or "every Wednesday", for the spoken label. */
   when: string;
   editable: boolean;
@@ -58,20 +59,18 @@ export function SlotCard({ card, lane, when, editable, dimmed, faded, open, drag
   onFlip: () => void;
 }) {
   const names = chipNames(card.vertical, card.series);
-  const top = (yForMinute(card.startMinute, AXIS) / AXIS) * 100;
-  const narrow = lane.of > 1;
   const style: CSSProperties = {
     ...typeStyle(card.vertical),
-    top: `${top}%`,
-    // 2px short so back-to-back cards in one lane (8:30, 9:00) keep a hairline gap.
+    top: `${(top / AXIS) * 100}%`,
+    // 2px short so stacked or back-to-back cards (8:30, 9:00) keep a hairline gap.
     height: `calc(${(CARD_MINUTES / AXIS) * 100}% - 2px)`,
-    left: `calc(${lane.lane} * (100% - 8px) / ${lane.of} + 4px)`,
-    width: `calc((100% - 8px) / ${lane.of} - ${lane.of > 1 ? 2 : 0}px)`,
+    left: '4px',
+    right: '4px',
   };
   const canFlip = editable && !card.locked && card.feedMode != null;
   return (
     <div
-      className={`sh-board__card${narrow ? ' is-narrow' : ''}`}
+      className="sh-board__card"
       style={style}
       data-status={card.status}
       data-locked={card.locked ? 'true' : undefined}
@@ -104,7 +103,7 @@ export function SlotCard({ card, lane, when, editable, dimmed, faded, open, drag
         {card.locked && card.status !== 'posted' ? <Lock size={11} className="sh-board__lock" aria-hidden="true" /> : null}
       </div>
       {/* No tag on a locked card: it can't flip, and the lock needs the room (Trial / Main stays in the label and panel). */}
-      {card.feedMode && !narrow && !card.locked ? (
+      {card.feedMode && !card.locked ? (
         <button
           type="button"
           className="sh-board__tag"

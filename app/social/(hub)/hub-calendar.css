@@ -119,8 +119,8 @@
   /* The axis (8 AM–9 PM) fills the window; a card is 30 minutes of it, about 34–40px. */
   --sh-axis-h: clamp(860px, calc(100vh - 200px), 1040px);
   --sh-card-h: calc(var(--sh-axis-h) * 30 / 780);
-  /* An open day never gets narrower than its widest one-line card (8:45 · Explainer · Main) or a
-     two-lane card's short name ("Morning Dl"); below that the board scrolls sideways (fix round 1, #2). */
+  /* An open day never gets narrower than its widest one-line card (8:45 · Explainer · Main);
+     below that the board scrolls sideways (fix round 1, #2). */
   --sh-col-min: 184px;
   --sh-board-warn: #8a5e05;
   --sh-board-warn-wash: #fff8ea;
@@ -153,7 +153,7 @@
 .sh-board__scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; }
 .sh-board__grid { position: relative; display: grid; gap: 6px; min-width: min-content; }
 
-.sh-board__day { position: relative; display: flex; flex-direction: column; min-width: 0; padding-bottom: var(--sh-card-h); border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-surface-2) 55%, var(--color-surface)); }
+.sh-board__day { position: relative; display: flex; flex-direction: column; min-width: 0; padding-bottom: calc(var(--sh-card-h) + var(--sh-axis-h) * var(--sh-stack-over, 0)); border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-surface-2) 55%, var(--color-surface)); }
 .sh-board__day.is-today { border-color: var(--color-text); background: var(--color-surface); }
 .sh-board__day.is-folded { padding-bottom: 0; border-style: dashed; background: transparent; }
 .sh-board__dhead { display: flex; flex-direction: column; justify-content: center; gap: 2px; height: 56px; padding: 0 12px; }
@@ -216,17 +216,6 @@
 .sh-board__tag:disabled { cursor: default; }
 .sh-board__tag:focus-visible { outline: 2px solid var(--sh-focus); outline-offset: 1px; }
 .sh-board__tag--key { cursor: default; margin: 0; }
-/* Cards that share a time stack time over name, so neither is cut. */
-.sh-board__card.is-narrow .sh-board__open { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0 4px 0 5px; }
-.sh-board__card.is-narrow .sh-board__time { font-size: 11px; line-height: 1.2; }
-.sh-board__card.is-narrow .sh-board__name { gap: 3px; max-width: 100%; }
-.sh-board__card.is-narrow .sh-board__short { font-size: var(--sh-fs-label); line-height: 1.25; letter-spacing: -0.01em; }
-.sh-board__card.is-narrow .sh-board__dot { width: 7px; height: 7px; }
-.sh-board__card.is-narrow .sh-board__mark { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; }
-/* Side by side, the card is two lines (time over name): the lock sits in the top corner, not on a third line that spills into the card below. */
-.sh-board__card.is-narrow .sh-board__lock { position: absolute; top: 4px; right: 4px; }
-.sh-board__card.is-narrow[data-locked='true'] .sh-board__mark { right: 18px; }
-
 /* The ghost: one element, moved by transform; dashed where it would land, solid on a usual start. */
 .sh-board__ghost { position: absolute; top: 0; left: 0; z-index: 6; display: flex; align-items: center; padding: 0 10px; border: 1.5px dashed var(--sh-focus); border-radius: 9px; background: color-mix(in srgb, var(--sh-focus) 8%, var(--color-surface)); color: var(--sh-focus); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); pointer-events: none; transition: transform 70ms ease-out; will-change: transform; }
 .sh-board__ghost[hidden] { display: none; }

@@ -13,7 +13,7 @@ import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
-import { boardModel, lanes, laterNote, minuteForY, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
+import { boardModel, cardHeight, laterNote, minuteForY, stackOffsets, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
 import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, readyMinutes, readyTakenAt, dropKey, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
@@ -182,25 +182,43 @@ test('outsideUsual flags a time away from the usual windows', () => {
   assert.deepEqual(m.cards.filter((c) => c.day === 2).map((c) => c.outsideUsual), [true, false]);
 });
 
-test('cards at 510/525/540 cluster side by side; 540 takes the lane 510 has left; a far card is alone', () => {
-  const cards = [510, 525, 540, 900].map((startMinute) => ({ key: `2|reels|${startMinute}`, day: 2, startMinute }));
-  const l = lanes(cards);
-  assert.deepEqual([510, 525, 540].map((m) => l.get(`2|reels|${m}`)), [{ lane: 0, of: 2 }, { lane: 1, of: 2 }, { lane: 0, of: 2 }]);
-  assert.deepEqual(l.get('2|reels|900'), { lane: 0, of: 1 });
+/** Tops rounded to 1e-6: y is a float. */
+const near = (n: number | undefined) => Math.round(n! * 1e6) / 1e6;
+
+test('stack: 510/510/525/540 stack in time order, tops never go up and never overlap', () => {
+  const H = 780; // one unit per minute
+  const cards = [540, 525, 510, 510].map((startMinute, i) => ({ key: `2|reels|${startMinute}|${i}`, day: 2, startMinute }));
+  const tops = stackOffsets(cards, H);
+  const order = [...cards].sort((a, b) => a.startMinute - b.startMinute || a.key.localeCompare(b.key)).map((c) => near(tops.get(c.key)));
+  assert.deepEqual(order, [30, 60, 90, 120], 'four rows from 8:30 down');
+  for (let i = 1; i < order.length; i++) assert.ok(order[i]! >= near(order[i - 1]! + cardHeight(H)), `row ${i} clears row ${i - 1}`);
 });
 
-test('lanes: three cards at one minute need three lanes', () => {
-  const l = lanes([510, 510, 510].map((startMinute, i) => ({ key: `k${i}`, day: 1, startMinute })));
-  assert.deepEqual(['k0', 'k1', 'k2'].map((k) => l.get(k)), [{ lane: 0, of: 3 }, { lane: 1, of: 3 }, { lane: 2, of: 3 }]);
+test('stack: a lone card keeps its true top', () => {
+  const tops = stackOffsets([{ key: 'a', day: 1, startMinute: 900 }, { key: 'b', day: 1, startMinute: 510 }], 780);
+  assert.equal(tops.get('a'), yForMinute(900, 780));
+  assert.equal(tops.get('b'), yForMinute(510, 780));
 });
 
-test('lanes: days are separate, and equal times break ties by key', () => {
-  const l = lanes([
-    { key: 'b', day: 1, startMinute: 600 }, { key: 'a', day: 1, startMinute: 600 }, { key: 'c', day: 2, startMinute: 600 },
-  ]);
-  assert.deepEqual(l.get('a'), { lane: 0, of: 2 });
-  assert.deepEqual(l.get('b'), { lane: 1, of: 2 });
-  assert.deepEqual(l.get('c'), { lane: 0, of: 1 });
+test('stack: a pushed card pushes the next; a card past the stack is left alone; days are separate', () => {
+  const tops = stackOffsets([
+    { key: 'a', day: 1, startMinute: 510 }, { key: 'b', day: 1, startMinute: 530 }, { key: 'c', day: 1, startMinute: 560 },
+    { key: 'd', day: 1, startMinute: 600 }, { key: 'e', day: 2, startMinute: 530 },
+  ], 780);
+  assert.deepEqual(['a', 'b', 'c', 'd'].map((k) => near(tops.get(k))), [30, 60, 90, 120], 'b pushed to 60, which pushes c to 90, which reaches d');
+  assert.equal(near(tops.get('e')), 50, 'another day is not pushed');
+});
+
+test('stack: Stories at one minute in different series stack in stable key order', () => {
+  const cards = [
+    { key: '1|stories|t0510:morning_download', day: 1, startMinute: 510 },
+    { key: '1|stories|t0510:free_vs_paid', day: 1, startMinute: 510 },
+  ];
+  for (const list of [cards, [...cards].reverse()]) {
+    const tops = stackOffsets(list, 780);
+    assert.equal(near(tops.get('1|stories|t0510:free_vs_paid')), 30);
+    assert.equal(near(tops.get('1|stories|t0510:morning_download')), 60);
+  }
 });
 
 test('time and y round-trip over 8 AM to 9 PM', () => {
@@ -209,15 +227,6 @@ test('time and y round-trip over 8 AM to 9 PM', () => {
     assert.equal(yForMinute(480, H), 0);
     assert.equal(yForMinute(1260, H), H);
   }
-});
-
-test('lanes: Stories at one minute in different series split the width, in key order', () => {
-  const l = lanes([
-    { key: '1|stories|t0510:morning_download', day: 1, startMinute: 510 },
-    { key: '1|stories|t0510:free_vs_paid', day: 1, startMinute: 510 },
-  ]);
-  assert.deepEqual(l.get('1|stories|t0510:free_vs_paid'), { lane: 0, of: 2 });
-  assert.deepEqual(l.get('1|stories|t0510:morning_download'), { lane: 1, of: 2 });
 });
 
 test('y and minute are held to the 8 AM-9 PM axis', () => {

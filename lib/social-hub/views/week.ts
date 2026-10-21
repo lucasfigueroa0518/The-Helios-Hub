@@ -7,7 +7,7 @@ import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
-/** The week board's model (spec 2026-10-20-calendar-week-board-redesign): columns, cards, lanes, time and y. Pure. */
+/** The week board's model (spec 2026-10-20-calendar-week-board-redesign): columns, cards, stacking, time and y. Pure. */
 
 /** Stories run three series, so each chip names its series. */
 const SERIES_SHORT: Record<keyof typeof SERIES_LABEL, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
@@ -286,38 +286,36 @@ export const yForMinute = (minute: number, height: number): number => ((clamp(mi
 export const minuteForY = (y: number, height: number): number => DAY_START + (clamp(y, 0, height) / height) * SPAN;
 
 /**
- * How tall a card is, in minutes of the axis. A card is a one-line chip a bit
- * taller than its 15-minute posting drift, so cards 15 minutes apart still
- * touch and share the width instead of sitting on top of each other.
+ * How tall a card is, in minutes of the axis: a one-line chip a bit taller
+ * than its 15-minute posting drift. The drawn card is 2px shorter, so cards
+ * one card apart keep a hairline gap.
  */
 export const CARD_MINUTES = 30;
 
+/** A card's height in y (0..height) units, gap included. */
+export const cardHeight = (height: number): number => (CARD_MINUTES / SPAN) * height;
+
 /**
- * Side-by-side lanes (spec Must handle 5). Cards on one day whose
- * [start, start + CARD_MINUTES) ranges overlap, transitively, form a cluster.
- * In start order (then key order) each card takes the first lane that is free
- * by its start, so a card goes under one that has ended instead of narrowing
- * every card in the cluster; `of` is the lanes the cluster uses.
+ * Crowded cards stack full width (ruling R27). On each day, in start order
+ * (then key order, so two Stories at one minute stay put), a card's drawn top
+ * is the larger of its true y and the previous card's top plus one card
+ * height (the previous card's bottom plus the 2px gap). A pushed card pushes
+ * later ones, and a stack may run past its true times. Only the drawn y moves:
+ * each card keeps its real minute for its label, drag and every rule.
  */
-export function lanes(cards: readonly Pick<BoardCard, 'key' | 'day' | 'startMinute'>[]): Map<string, { lane: number; of: number }> {
-  const out = new Map<string, { lane: number; of: number }>();
+export function stackOffsets(cards: readonly Pick<BoardCard, 'key' | 'day' | 'startMinute'>[], height: number): Map<string, number> {
+  const out = new Map<string, number>();
+  const h = cardHeight(height);
   const byDay = new Map<number, Array<Pick<BoardCard, 'key' | 'day' | 'startMinute'>>>();
   for (const c of cards) (byDay.get(c.day) ?? byDay.set(c.day, []).get(c.day)!).push(c);
   for (const list of byDay.values()) {
     list.sort((a, b) => a.startMinute - b.startMinute || a.key.localeCompare(b.key));
-    let cluster: Array<{ key: string; lane: number }> = [];
-    let ends: number[] = [];
-    let end = -Infinity;
-    const flush = () => cluster.forEach((c) => out.set(c.key, { lane: c.lane, of: ends.length }));
+    let next = -Infinity;
     for (const c of list) {
-      if (cluster.length && c.startMinute >= end) { flush(); cluster = []; ends = []; }
-      let lane = ends.findIndex((e) => e <= c.startMinute);
-      if (lane < 0) { lane = ends.length; ends.push(0); }
-      ends[lane] = c.startMinute + CARD_MINUTES;
-      cluster.push({ key: c.key, lane });
-      end = Math.max(end, c.startMinute + CARD_MINUTES);
+      const top = Math.max(yForMinute(c.startMinute, height), next);
+      out.set(c.key, top);
+      next = top + h;
     }
-    flush();
   }
   return out;
 }
