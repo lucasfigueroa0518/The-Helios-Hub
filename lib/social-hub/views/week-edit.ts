@@ -52,6 +52,24 @@ export type Plan<P extends BoardPost = BoardPost> = {
 /** A post that holds its slot until it posts (the slot writer's booked set). */
 const HOLDING = new Set(['scheduled', 'publishing', 'ready']);
 
+/** A post in one of these keeps another post out of its slot: waiting, posting or posted. */
+export const holdsSlot = (status: BoardPost['status']): boolean => HOLDING.has(status) || status === 'published';
+
+/** Whether another post already holds a time on this date for a Ready post (one rule for the ghost and for Place). */
+export function readyTakenAt(state: BoardState<BoardPost>, item: Pick<BoardPost, 'id' | 'vertical'>, series: StorySeries | null, nyDate: string | null): (minute: number) => boolean {
+  return (m) => state.posts.some((p) => p.id !== item.id && p.vertical === item.vertical && p.nyDate === nyDate && p.slot?.id === slotId(m, series) && holdsSlot(p.status));
+}
+
+/**
+ * What a dragover's preview depends on: the day, and the snapped minute or
+ * the usual start the hysteresis holds. The board re-runs dropState only when
+ * this changes (dropState's own snap and hold, as one key).
+ */
+export function dropKey(day: number, raw: number, vertical: Vertical, prev: Pick<Drop, 'minute' | 'snappedTo'> | null): string {
+  if (prev?.snappedTo && Math.abs(raw - prev.minute) <= 10) return `${day}|h${prev.minute}`;
+  return `${day}|${snapMinute(raw, vertical).minute}`;
+}
+
 export const nameOf = (k: { vertical: Vertical; series: StorySeries | null }): string => (k.series ? SERIES_NAME[k.series].one : TYPE_NAME[k.vertical].one);
 
 const keyOf = (s: SlotKey): SlotKey => ({ vertical: s.vertical, startMinute: s.startMinute, series: s.series });
@@ -152,6 +170,8 @@ export function dropState(input: {
     } else {
       const r = canPlace(ctx, { vertical, startMinute: snap.minute, series });
       if (!r.ok) return refused(r.reason);
+      // A booking kept at that time after its slot left the calendar still holds it (the place action's rule).
+      if (input.ready.taken(r.minute)) return refused(TAKEN);
       minute = r.minute;
     }
   } else {
@@ -297,7 +317,8 @@ export function everyFor(state: BoardState<BoardPost>, edit: Edit, clock: Clock)
   if (!e) return null;
   const r = planEdit(t, e, clock);
   if (!r.ok || r.noop) return null;
-  const touched = [...new Set([edit.day, edit.op === 'move' ? edit.to : edit.day])];
+  // The days the saved change touches: a move that became a place on the target names only the target.
+  const touched = [...new Set([e.day, e.op === 'move' ? e.to : e.day])];
   const standard: Record<number, readonly ResolvedSlot[]> = { ...state.standard };
   for (const i of touched) standard[t.days[i]!.weekday] = r.next.days[i]!.slots;
   const names = touched.map((i) => WEEKDAY_LONG[state.days[i]!.weekday]).join(' and ');
@@ -383,7 +404,7 @@ export function planReady<P extends BoardPost>(
   if (state.mode !== 'week') return { ok: false, reason: 'A post needs a real date. Place it on This week.' };
   const ctx = dayCtx(state, day, clock);
   const nyDate = ctx.nyDate!;
-  const taken = (m: number) => state.posts.some((p) => p.id !== post.id && p.vertical === post.vertical && p.nyDate === nyDate && p.slot?.id === slotId(m, series) && (HOLDING.has(p.status) || p.status === 'published'));
+  const taken = readyTakenAt(state, post, series, nyDate);
   const d = dropState({ ctx, vertical: post.vertical, series, raw: minute, caps: { reels: 99, explainers: 99, carousels: 99, last_few_days: 99, stories: 99 }, ready: { taken } });
   if (d.tone === 'refused' || d.tone === 'confirm') return { ok: false, reason: d.reason ?? TAKEN };
   const at = d.minute;

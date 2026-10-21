@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent, type RefObjec
 import type { SlotKey, StorySeries } from '@/lib/social-hub/slots/types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { CARD_MINUTES, minuteForY, yForMinute } from '@/lib/social-hub/views/week';
-import type { Drop } from '@/lib/social-hub/views/week-edit';
+import { dropKey, type Drop } from '@/lib/social-hub/views/week-edit';
 
 /**
  * Native HTML5 drag for the week board (spec decisions 6–8). One ghost
@@ -24,7 +24,7 @@ export type DragSource =
 export const sourceVertical = (s: DragSource): Vertical => (s.kind === 'card' ? s.key.vertical : s.vertical);
 export const sourceSeries = (s: DragSource): StorySeries | null => (s.kind === 'card' ? s.key.series : s.series);
 
-type Live = { source: DragSource; day: number | null; raw: number; drop: Drop | null; frame: number | null };
+type Live = { source: DragSource; day: number | null; raw: number; key: string; drop: Drop | null; frame: number | null };
 
 const CARD_FRACTION = CARD_MINUTES / (21 * 60 - 8 * 60);
 
@@ -67,10 +67,11 @@ export function useBoardDrag(opts: {
     const away = (e: Event) => {
       if (!(e.target instanceof Element) || !e.target.closest('[data-board-axis]')) hideGhost();
     };
-    const scrolled = () => { rects.current.clear(); gridRect.current = null; };
+    const scrolled = () => { rects.current.clear(); gridRect.current = null; if (live.current) live.current.key = ''; };
     document.addEventListener('dragover', away);
     window.addEventListener('scroll', scrolled, true);
-    return () => { document.removeEventListener('dragover', away); window.removeEventListener('scroll', scrolled, true); };
+    window.addEventListener('resize', scrolled);
+    return () => { document.removeEventListener('dragover', away); window.removeEventListener('scroll', scrolled, true); window.removeEventListener('resize', scrolled); };
   }, [dragging, hideGhost]);
 
   const paint = useCallback((day: number, axis: HTMLElement, drop: Drop) => {
@@ -102,7 +103,7 @@ export function useBoardDrag(opts: {
     onDragStart: (e: DragEvent<HTMLElement>) => {
       // A drag that starts on a control inside the card (the Trial / Main tag) is not a drag.
       if (e.target instanceof Element && e.target.closest('button, select, a, input') && e.target !== e.currentTarget) { e.preventDefault(); return; }
-      live.current = { source, day: null, raw: -1, drop: null, frame: null };
+      live.current = { source, day: null, raw: -1, key: '', drop: null, frame: null };
       e.dataTransfer.effectAllowed = source.kind === 'card' ? 'move' : 'copy';
       e.dataTransfer.setData('text/plain', source.label);
       // Render after the browser has taken its drag image: changing the dragged node now can cancel the drag.
@@ -125,7 +126,12 @@ export function useBoardDrag(opts: {
       const raw = Math.round(minuteForY(e.clientY - r.top - (r.height * CARD_FRACTION) / 2, r.height));
       if (st.day === day && st.raw === raw) return;
       st.raw = raw;
-      const drop = optsRef.current.preview(st.source, day, raw, st.day === day ? st.drop : null);
+      // The preview (snap + rules) runs only when the snapped minute, the hold or the day changes.
+      const prev = st.day === day ? st.drop : null;
+      const key = dropKey(day, raw, sourceVertical(st.source), prev);
+      if (key === st.key) return;
+      st.key = key;
+      const drop = optsRef.current.preview(st.source, day, raw, prev);
       if (!drop) { hideGhost(); return; }
       const same = st.day === day && st.drop && st.drop.minute === drop.minute && st.drop.tone === drop.tone && st.drop.tag === drop.tag;
       st.day = day;

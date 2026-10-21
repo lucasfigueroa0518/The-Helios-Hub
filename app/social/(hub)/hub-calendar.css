@@ -131,6 +131,8 @@
 }
 .sh-board[data-busy='true'] .sh-board__grid { cursor: progress; }
 .sh-board__sandbox { max-width: none; }
+.sh-board__saving { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--color-text-muted); font-size: var(--sh-fs-small); }
+.sh-board[data-busy='true'] .sh-board__chip, .sh-board[data-busy='true'] .sh-board__card, .sh-board[data-busy='true'] .sh-board__rcard { cursor: progress; }
 
 /* The drag row */
 .sh-board__tray { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 10px 14px; border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); background: var(--color-surface); transition: background 150ms var(--sh-ease), outline-color 150ms var(--sh-ease); outline: 2px dashed transparent; outline-offset: 3px; }

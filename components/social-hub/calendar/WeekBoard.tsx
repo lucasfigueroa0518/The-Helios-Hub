@@ -20,7 +20,7 @@ import {
   type BoardCard, type SwitchFacts, type WeekDayInput,
 } from '@/lib/social-hub/views/week';
 import {
-  bookedHits, clockOf, dayCtx, dayName, defaultPlaceMinute, dropState, everyFor, nameOf, openMinutes, planCopyDay, readyMinutes, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
+  bookedHits, clockOf, readyTakenAt, dayCtx, dayName, defaultPlaceMinute, dropState, everyFor, nameOf, openMinutes, planCopyDay, readyMinutes, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
   type BoardState, type Drop, type Edit, type Every, type Hit,
 } from '@/lib/social-hub/views/week-edit';
 
@@ -42,11 +42,14 @@ const PLACE = '/api/social-hub/actions/place';
 
 const OFFLINE = 'Couldn’t reach the hub. Check your connection and try again.';
 
+/** " 2 posts already went back to Ready to place." after a half-done Move it back to ready. */
+const movedNote = (n: number) => (n ? ` ${n} post${n === 1 ? '' : 's'} already went back to Ready to place.` : '');
+
 export type ReadyItem = SlimPost & { series: StorySeries | null; made: string };
 
 type Booked = { postId: string | null; vertical: Vertical; refs: Record<string, string>; label: string; why: Hit['why'] };
 
-type Ask = { title: string; body: string; ok: string; cancel: string; run: () => void | Promise<void>; canOk?: boolean };
+type Ask = { title: string; body: string; ok: string; cancel: string; run: () => void | Promise<void>; canOk?: boolean; /** Why OK is off, shown in the dialog. */ note?: string | null };
 
 type Toast = { id: number; text: string; warn?: boolean; command?: Command; every?: Every | null };
 
@@ -99,6 +102,10 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 export function WeekBoard(props: {
   mode: 'week' | 'template';
+  /** The week shown (its Monday): undo only reaches edits made on this week. */
+  monday: string;
+  /** The unschedule action is on, so "Move it back to ready" can work. */
+  canUnschedule: boolean;
   days: WeekDayInput[];
   standard: Record<number, ResolvedSlot[]>;
   caps: Record<Vertical, number>;
@@ -113,7 +120,7 @@ export function WeekBoard(props: {
 }) {
   const router = useRouter();
   const { mode, caps, editable, sandbox } = props;
-  const tab: Tab = mode === 'template' ? 'standard' : 'week';
+  const tab: Tab = mode === 'template' ? 'standard' : `week:${props.monday}`;
 
   // The server's board; a fresh one (after a save refreshes the page) replaces what's on screen.
   const base = useMemo<BoardState<SlimPost>>(() => ({ mode, days: props.days, standard: props.standard, posts: props.posts }), [mode, props.days, props.standard, props.posts]);
@@ -121,7 +128,9 @@ export function WeekBoard(props: {
   const [state, setState] = useState(base);
   const [ready, setReady] = useState(props.ready);
   const [seenReady, setSeenReady] = useState(props.ready);
-  if (seen !== base) { setSeen(base); setState(base); }
+  // The board the server last confirmed: a failed save goes back to it, never to another edit's optimistic view.
+  const confirmed = useRef(base);
+  if (seen !== base) { setSeen(base); setState(base); confirmed.current = base; }
   if (seenReady !== props.ready) { setSeenReady(props.ready); setReady(props.ready); }
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -152,6 +161,17 @@ export function WeekBoard(props: {
 
   const say = useCallback((t: Omit<Toast, 'id'>) => setToast({ ...t, id: ++toastId.current }), []);
   const warn = useCallback((text: string) => say({ text, warn: true }), [say]);
+
+  // One save at a time: while one is in flight, other edits wait for it (the board shows Saving…).
+  const flight = useRef(false);
+  const begin = useCallback((): boolean => {
+    if (flight.current) { say({ text: 'Still saving the last change. Try again in a moment.' }); return false; }
+    flight.current = true;
+    setBusy(true);
+    return true;
+  }, [say]);
+  const finish = useCallback(() => { flight.current = false; setBusy(false); }, []);
+  const saving = () => { if (flight.current) say({ text: 'Still saving the last change. Try again in a moment.' }); return flight.current; };
 
   useEffect(() => {
     if (!toast) return;
@@ -190,26 +210,27 @@ export function WeekBoard(props: {
   }, [sandbox]);
 
   /** Booked posts back to ready (the unschedule action); null when they all went. On the preview they join Ready to place. */
-  const moveBack = useCallback(async (list: Booked[]): Promise<string | null> => {
+  const moveBack = useCallback(async (list: Booked[]): Promise<{ error: string | null; moved: number }> => {
     if (sandbox) {
       const ids = new Set(list.map((b) => b.postId));
       const moved = stateRef.current.posts.filter((p) => ids.has(p.id));
       setState((s) => ({ ...s, posts: s.posts.filter((p) => !ids.has(p.id)) }));
       setReady((r) => [...r, ...moved.map((p) => ({ ...p, nyDate: null, slot: null, status: 'ready' as const, approval: { ...p.approval, approvedAt: null }, series: p.slot?.id.split(':')[1] as StorySeries ?? null, made: 'Back from the calendar' }))]);
-      return null;
+      return { error: null, moved: moved.length };
     }
     const { movable, stuck } = splitBooked(list);
     let moved = 0;
     for (const b of movable) {
       try {
         const { status, out } = await post(UNSCHEDULE, { vertical: b.vertical, refs: b.refs });
-        if (status < 200 || status >= 300) return `${typeof out.note === 'string' ? out.note : 'That post couldn’t move back to ready.'}${moved ? ` ${plural(moved, 'post')} already moved back.` : ''}`;
+        if (status < 200 || status >= 300) return { error: `${typeof out.note === 'string' ? out.note : 'That post couldn’t move back to ready.'}${movedNote(moved)}`, moved };
       } catch {
-        return OFFLINE;
+        return { error: `${OFFLINE}${movedNote(moved)}`, moved };
       }
       moved += 1;
     }
-    return stuck.length ? stuckNote(stuck.length) : null;
+    // A post with no action ref can't be unscheduled here: the change isn't sent, and the note says which moved.
+    return { error: stuck.length ? `${stuckNote(stuck.length)} The slot didn’t change.${movedNote(moved)}` : null, moved };
   }, [sandbox]);
 
   const askBooked = useCallback((list: Booked[], then: () => void) => {
@@ -222,16 +243,21 @@ export function WeekBoard(props: {
         : `${list.map((b) => b.label).join('; ')}. Move ${n === 1 ? 'it' : 'them'} back to ready so ${n === 1 ? 'it goes' : 'they go'} back to Ready to place (${n === 1 ? 'its' : 'their'} approval is withdrawn), or keep ${n === 1 ? 'it' : 'them'} posting as booked.`,
       ok: 'Move it back to ready',
       cancel: 'Keep it',
-      canOk: splitBooked(list).movable.length > 0 || sandbox,
+      canOk: sandbox || (props.canUnschedule && splitBooked(list).movable.length > 0),
+      note: !sandbox && !props.canUnschedule ? 'Moving posts back to ready is turned off for now, so this slot can’t change here.' : null,
       run: async () => {
-        setBusy(true);
-        const err = await moveBack(list);
-        setBusy(false);
-        if (err) { warn(err); if (!sandbox) router.refresh(); return; }
+        if (!begin()) return;
+        const { error, moved } = await moveBack(list);
+        finish();
+        if (moved && !sandbox) {
+          const ids = new Set(list.map((b) => b.postId));
+          confirmed.current = { ...confirmed.current, posts: confirmed.current.posts.filter((p) => !ids.has(p.id)) };
+        }
+        if (error) { warn(error); if (!sandbox) router.refresh(); return; }
         then();
       },
     });
-  }, [moveBack, router, sandbox, warn]);
+  }, [begin, finish, moveBack, props.canUnschedule, router, sandbox, warn]);
 
   type Commit = { label: string; changes: Command['changes']; inverse: Command['inverse']; next: BoardState<SlimPost> };
   type CommitOpts = { every?: Every | null; text?: string; undoable?: boolean; checked?: boolean; moved?: number; reopen?: string };
@@ -247,20 +273,21 @@ export function WeekBoard(props: {
         return;
       }
     }
+    if (!begin()) return;
     setState(plan.next);
-    setBusy(true);
     const res = await send(plan.changes);
-    setBusy(false);
+    finish();
     if (!res.ok) {
-      setState(was);
+      setState(confirmed.current);
       if (res.booked) {
         askBooked(res.booked, () => void commit(plan, { ...o, checked: true, undoable: false, moved: (o.moved ?? 0) + res.booked!.length }));
         return;
       }
-      warn(res.reason ?? 'That didn’t save.');
+      warn(`${res.reason ?? 'That didn’t save.'}${movedNote(o.moved ?? 0)}`);
       if (o.moved && !sandbox) router.refresh();
       return;
     }
+    confirmed.current = plan.next;
     if (!sandbox) router.refresh();
     const command: Command = { label: plan.label, changes: plan.changes, inverse: plan.inverse, tab, undoable: o.undoable !== false };
     history.push(command);
@@ -268,9 +295,10 @@ export function WeekBoard(props: {
     const moved = o.moved ? ` ${plural(o.moved, 'post')} went back to Ready to place and ${o.moved === 1 ? 'needs' : 'need'} approval again.` : '';
     say({ text: `${o.text ?? toastText(plan.label, mode)}${moved}`, command, every: o.every ?? null });
     if (o.reopen) setReopen(o.reopen);
-  }, [askBooked, mode, router, sandbox, say, send, tab, warn]);
+  }, [askBooked, begin, finish, mode, router, sandbox, say, send, tab, warn]);
 
   const doEdit = useCallback((edit: Edit, o: { reopen?: boolean } = {}) => {
+    if (saving()) return;
     const s = stateRef.current;
     const p = planEdit(s, edit, clock);
     if (!p.ok) {
@@ -295,29 +323,30 @@ export function WeekBoard(props: {
   }, [clock, commit, warn]);
 
   const runEvery = useCallback((every: Every) => {
+    if (saving()) return;
     const s = stateRef.current;
     void commit({ label: every.label, changes: every.changes, inverse: every.inverse, next: { ...s, standard: every.standard } }, { text: `${every.label}.`, checked: true });
   }, [commit]);
 
   const undo = useCallback(async () => {
-    const c = history.undo(tab);
-    if (!c) return;
-    const now = stateRef.current;
+    if (saving() || !history.canUndo(tab)) return;
+    if (!begin()) return;
+    const c = history.undo(tab)!;
     const snap = before.get(c);
     if (snap) setState(snap);
     setToast(null);
-    setBusy(true);
     const res = await send(c.inverse);
-    setBusy(false);
+    finish();
     if (!res.ok) {
       history.push(c);
-      setState(now);
+      setState(confirmed.current);
       warn(res.booked ? 'Undo would leave a booked post without its slot, so nothing changed.' : res.reason ?? 'Undo didn’t go through.');
       return;
     }
+    if (snap) confirmed.current = snap;
     if (!sandbox) router.refresh();
     say({ text: `Undone: ${c.label}.` });
-  }, [router, sandbox, say, send, tab, warn]);
+  }, [begin, finish, router, sandbox, say, send, tab, warn]);
 
   // Cmd/Ctrl+Z undoes the tab's last change (not while a dialog or a field has focus).
   useEffect(() => {
@@ -334,6 +363,7 @@ export function WeekBoard(props: {
   }, [editable, tab, undo]);
 
   const doReset = useCallback((day: number) => {
+    if (saving()) return;
     const p = planReset(stateRef.current, day, clock);
     if (!p.ok) { warn(p.reason); return; }
     if (p.noop) { say({ text: `${dayName(stateRef.current, day)} already matches the standard week.` }); return; }
@@ -341,6 +371,7 @@ export function WeekBoard(props: {
   }, [clock, commit, say, warn]);
 
   const doCopyDay = useCallback((day: number) => {
+    if (saving()) return;
     const s = stateRef.current;
     const p = planCopyDay(s, day);
     if (!p.ok) { warn(p.reason); return; }
@@ -348,39 +379,41 @@ export function WeekBoard(props: {
     void commit({ label: p.label, changes: p.changes, inverse: p.inverse, next: { ...s, standard: p.standard } }, { text: `${p.label}.`, checked: true });
   }, [commit, warn]);
 
-  const readyTaken = useCallback((s: BoardState<SlimPost>, item: ReadyItem, nyDate: string | null) => (m: number) =>
-    s.posts.some((p) => p.id !== item.id && p.vertical === item.vertical && p.nyDate === nyDate && p.slot?.id === slotId(m, item.series) && p.status !== 'failed' && p.status !== 'cancelled'), []);
+  const readyTaken = (st: BoardState<SlimPost>, item: ReadyItem, nyDate: string | null) => readyTakenAt(st, item, item.series, nyDate);
 
   const placeReady = useCallback(async (item: ReadyItem, day: number, minute: number) => {
+    if (saving()) return;
     const s = stateRef.current;
     const r = planReady(s, item, item.series, day, minute, clock);
     if (!r.ok) { warn(r.reason); return; }
     const readyWas = ready;
+    if (!begin()) return;
     setState(r.next);
     setReady((x) => x.filter((y) => y.id !== item.id));
-    if (!sandbox) {
-      setBusy(true);
+    if (sandbox) finish();
+    else {
       try {
         const { status, out } = await post(PLACE, { vertical: item.vertical, refs: item.refs, nyDate: s.days[day]!.nyDate, slot: r.slot });
         if (status < 200 || status >= 300 || out.ok === false) {
-          setState(s);
+          setState(confirmed.current);
           setReady(readyWas);
           warn(typeof out.note === 'string' ? out.note : 'That post couldn’t be placed.');
           return;
         }
       } catch {
-        setState(s);
+        setState(confirmed.current);
         setReady(readyWas);
         warn(OFFLINE);
         return;
       } finally {
-        setBusy(false);
+        finish();
       }
       router.refresh();
     }
+    confirmed.current = r.next;
     history.push({ label: r.label, changes: [], inverse: [], tab, undoable: false });
     say({ text: r.label });
-  }, [clock, ready, router, sandbox, say, tab, warn]);
+  }, [begin, clock, finish, ready, router, sandbox, say, tab, warn]);
 
   // ── Drag ──
 
@@ -401,7 +434,7 @@ export function WeekBoard(props: {
       return dropState({ ctx, vertical, series, raw, caps, prev, ready: { taken: readyTaken(s, item, ctx.nyDate) } });
     }
     return dropState({ ctx, vertical, series, raw, caps, prev, ignore: source.kind === 'card' && source.day === day ? source.key : null });
-  }, [caps, clock, model.columns, ready, readyTaken]);
+  }, [caps, clock, model.columns, ready]);
 
   const onDrop = useCallback((source: DragSource, day: number, drop: Drop | null) => {
     if (!drop) return;
@@ -486,6 +519,7 @@ export function WeekBoard(props: {
 
   return (
     <div className="sh-board" data-dragging={drag.dragging ? 'true' : undefined} data-busy={busy ? 'true' : undefined}>
+      {busy ? <p className="sh-board__saving" role="status"><Loader size={14} className="sh-board__spin" aria-hidden="true" />Saving… other changes wait for this one.</p> : null}
       {sandbox ? <p className="sh-note sh-board__sandbox">Preview: changes stay on this screen and nothing is saved.</p> : null}
       {editable ? (
         <div className="sh-board__tray" data-remove={drag.dragging?.kind === 'card' ? 'true' : undefined} data-over={drag.overRow ? 'true' : undefined} {...drag.rowProps}>
@@ -502,7 +536,7 @@ export function WeekBoard(props: {
                   style={typeStyle(t.vertical)}
                   title="Drag onto a day, or click to pick a day and time"
                   aria-haspopup="dialog"
-                  {...drag.sourceProps({ kind: 'type', vertical: t.vertical, series: t.series, label: t.label })}
+                  {...drag.sourceProps({ kind: 'type', vertical: t.vertical, series: t.series, label: t.label }, !busy)}
                   onClick={(e) => addPick(e.currentTarget, t)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addPick(e.currentTarget, t); } }}
                 >
@@ -569,7 +603,7 @@ export function WeekBoard(props: {
                       dimmed={props.dim !== null && props.dim !== card.vertical}
                       faded={drag.dragging?.kind === 'card' && drag.dragging.cardKey === card.key}
                       open={open?.key === card.key}
-                      dragProps={drag.sourceProps({ kind: 'card', day: i, key: { vertical: card.vertical, startMinute: card.startMinute, series: card.series }, cardKey: card.key, label: chipLabel(card) }, editable && !card.locked)}
+                      dragProps={drag.sourceProps({ kind: 'card', day: i, key: { vertical: card.vertical, startMinute: card.startMinute, series: card.series }, cardKey: card.key, label: chipLabel(card) }, editable && !card.locked && !busy)}
                       onOpen={(anchor) => setOpen((o) => (o?.key === card.key ? null : { key: card.key, anchor }))}
                       onFlip={() => card.feedMode && doEdit({ op: 'mode', day: i, key: { vertical: card.vertical, startMinute: card.startMinute, series: card.series }, feedMode: card.feedMode === 'trial' ? 'main' : 'trial' })}
                     />
@@ -602,7 +636,7 @@ export function WeekBoard(props: {
               {ready.length ? (
                 <ul className="sh-board__ready">
                   {ready.map((r) => (
-                    <li key={r.id} className="sh-board__rcard" style={typeStyle(r.vertical)} {...drag.sourceProps({ kind: 'ready', id: r.id, vertical: r.vertical, series: r.series, label: r.name })}>
+                    <li key={r.id} className="sh-board__rcard" style={typeStyle(r.vertical)} {...drag.sourceProps({ kind: 'ready', id: r.id, vertical: r.vertical, series: r.series, label: r.name }, !busy)}>
                       <span className="sh-board__dot" aria-hidden="true" />
                       <span className="sh-board__rmain">
                         <span className="sh-board__rname">{r.name}</span>
@@ -746,6 +780,7 @@ function Confirm({ ask, busy, onClose }: { ask: Ask | null; busy: boolean; onClo
         <>
           <h2 id={titleId}>{ask.title}</h2>
           <p>{ask.body}</p>
+          {ask.note ? <p className="sh-note" role="note">{ask.note}</p> : null}
           <div className="sh-confirm__actions">
             <button type="button" className="sh-btn" onClick={() => dialog.current?.close()}>{ask.cancel}</button>
             <button

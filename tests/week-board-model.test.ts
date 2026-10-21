@@ -10,7 +10,7 @@ import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
 import { boardModel, lanes, minuteForY, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
-import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, readyMinutes, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
+import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, readyMinutes, readyTakenAt, dropKey, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const NOW = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York
@@ -436,4 +436,52 @@ test('place picker: a Ready Story is offered only its series’ open slots on th
   assert.deepEqual(readyMinutes(wed, 'explainers', null), openMinutes(wed), 'other types take any open time');
   const off = dropState({ ctx: wed, vertical: 'stories', series: 'morning_download', raw: 720, caps: DEFAULT_CAPS, ready: { taken: () => false } });
   assert.equal(off.reason, '12:00 PM isn’t a Morning Download slot.');
+});
+
+/* ── Fix round 3 (review) ── */
+
+test('make it every: a cross-day move whose source the Standard week lacks names only the target day', () => {
+  const s = state();
+  s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }));
+  const e = everyFor(s, { op: 'move', day: WED, key: key('explainers', 1020), to: 3, minute: 720 }, CLOCK);
+  assert.ok(e);
+  assert.equal(e.button, 'Make it every Thursday');
+  assert.deepEqual(Object.keys(e.standard).filter((k) => e.standard[Number(k)] !== s.standard[Number(k)]), ['4']);
+});
+
+test('ready: the ghost and Place share one rule for a taken slot', () => {
+  const at = (status: BoardPost['status']) => state([booked({ id: 'x', status, slotId: 't0720' })]);
+  const item = { id: 'n1', vertical: 'explainers' as const, nyDate: null, status: 'ready' as const, slot: null, approval: { required: true, approvedAt: null }, name: 'N' };
+  for (const status of ['scheduled', 'publishing', 'published', 'ready'] as const) {
+    assert.equal(readyTakenAt(at(status), item, null, '2026-10-21')(720), true, status);
+    const r = planReady(at(status), item, null, WED, 720, CLOCK);
+    assert.ok(!r.ok, status);
+  }
+  for (const status of ['failed', 'cancelled', 'skipped'] as const) {
+    assert.equal(readyTakenAt(at(status), item, null, '2026-10-21')(720), false, status);
+  }
+});
+
+test('drag: the preview runs again only when the day, the snapped minute or the hold changes', () => {
+  const held = { minute: 780, snappedTo: 'Afternoon' };
+  assert.equal(dropKey(2, 790, 'explainers', held), dropKey(2, 788, 'explainers', held), 'same snap, still held');
+  assert.notEqual(dropKey(2, 790, 'explainers', held), dropKey(2, 791, 'explainers', held), 'the hold lets go past 10 minutes');
+  assert.equal(dropKey(2, 721, 'explainers', null), dropKey(2, 724, 'explainers', null));
+  assert.notEqual(dropKey(2, 721, 'explainers', null), dropKey(3, 721, 'explainers', null));
+});
+
+test('reset day leaves a posted slot as it is', () => {
+  const s = state([booked({ id: 'p1', vertical: 'explainers', nyDate: '2026-10-21', status: 'published', slotId: 't1020' })]);
+  s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }));
+  const r = planReset(s, WED, CLOCK);
+  assert.ok(r.ok && r.noop, 'the posted override is not reset');
+  assert.ok(r.ok && r.next.days[WED]!.slots.some((x) => x.startMinute === 1020));
+});
+
+test('reset day that deletes a booked override slot asks first', () => {
+  const s = state([booked({ id: 'b9', vertical: 'explainers', nyDate: '2026-10-21', status: 'scheduled', slotId: 't1020' })]);
+  s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }));
+  const r = planReset(s, WED, CLOCK);
+  assert.ok(r.ok && !r.noop);
+  assert.deepEqual(bookedHits(s, r.next).map((h) => [h.post.id, h.why]), [['b9', 'removed']]);
 });

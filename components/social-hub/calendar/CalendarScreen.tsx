@@ -144,6 +144,8 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
       {template ? <p className="sh-subtle sh-week__focus">The standard week repeats every week. A change on This week shows on that date only.</p> : null}
       <WeekBoard
         mode={week.mode}
+        monday={week.monday}
+        canUnschedule={actionEnabled('unschedule')}
         days={week.days}
         standard={week.standard}
         caps={week.caps}

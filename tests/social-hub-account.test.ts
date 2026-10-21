@@ -41,7 +41,8 @@ test('the schema is additive, idempotent, and creates only social_hub objects', 
   for (const seed of seeds) assert.match(seed, /ON CONFLICT \(key\) DO NOTHING;$/, seed);
   // The one exception: the slot tables' one-time reshape (free-time slots), which empties them only while
   // they still have the old window_id column, before slot_source can be 'template'.
-  const reshapes = body.match(/DO \$\$\s*BEGIN\s*IF EXISTS \(SELECT 1 FROM information_schema\.columns[\s\S]*?column_name = 'window_id'\)[\s\S]*?END \$\$;/g) ?? [];
+  // Anchored: neither gap may cross an `END $$;`, so only the block guarded by column_name = 'window_id' matches.
+  const reshapes = body.match(/DO \$\$\s*BEGIN\s*IF EXISTS \(SELECT 1 FROM information_schema\.columns(?:(?!END \$\$;)[\s\S])*?column_name = 'window_id'\)(?:(?!END \$\$;)[\s\S])*?END \$\$;/g) ?? [];
   assert.equal(reshapes.length, 1, 'one guarded slot reshape');
   for (const r of reshapes) for (const d of r.match(/DELETE FROM \S+/g) ?? []) assert.match(d, /^DELETE FROM social_hub\.slot_(template|override);?$/, d);
   const rest = [...seeds, ...reshapes].reduce((t, s) => t.replace(s, ''), body).replace(/\bON DELETE CASCADE\b/gi, '');
