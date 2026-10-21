@@ -165,7 +165,7 @@
 .sh-board__badge--today { background: var(--color-text); color: var(--color-text-inverse); }
 .sh-board__badge--edited { background: var(--sh-needs-wash); color: var(--sh-needs-ink); }
 .sh-board__lnk { padding: 0; border: 0; background: none; color: var(--sh-needs-ink); font: inherit; font-size: var(--sh-fs-label); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.sh-board__fold { margin: 0; padding: 0 12px; color: var(--color-text-muted); font-size: var(--sh-fs-small); }
+.sh-board__fold { margin: 0; padding: 0 12px; color: var(--color-text-muted); font-size: var(--sh-fs-small); white-space: nowrap; }
 
 /* A day's timeline: hour lines, hint bands, the now line and the cards, all placed by time. */
 .sh-board__axis { position: relative; height: var(--sh-axis-h); }
@@ -223,6 +223,9 @@
 .sh-board__card.is-narrow .sh-board__short { font-size: var(--sh-fs-label); line-height: 1.25; letter-spacing: -0.01em; }
 .sh-board__card.is-narrow .sh-board__dot { width: 7px; height: 7px; }
 .sh-board__card.is-narrow .sh-board__mark { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; }
+/* Side by side, the card is two lines (time over name): the lock sits in the top corner, not on a third line that spills into the card below. */
+.sh-board__card.is-narrow .sh-board__lock { position: absolute; top: 4px; right: 4px; }
+.sh-board__card.is-narrow[data-locked='true'] .sh-board__mark { right: 18px; }
 
 /* The ghost: one element, moved by transform; dashed where it would land, solid on a usual start. */
 .sh-board__ghost { position: absolute; top: 0; left: 0; z-index: 6; display: flex; align-items: center; padding: 0 10px; border: 1.5px dashed var(--sh-focus); border-radius: 9px; background: color-mix(in srgb, var(--sh-focus) 8%, var(--color-surface)); color: var(--sh-focus); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); pointer-events: none; transition: transform 70ms ease-out; will-change: transform; }

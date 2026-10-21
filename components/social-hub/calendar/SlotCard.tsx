@@ -63,7 +63,8 @@ export function SlotCard({ card, lane, when, editable, dimmed, faded, open, drag
   const style: CSSProperties = {
     ...typeStyle(card.vertical),
     top: `${top}%`,
-    height: `${(CARD_MINUTES / AXIS) * 100}%`,
+    // 2px short so back-to-back cards in one lane (8:30, 9:00) keep a hairline gap.
+    height: `calc(${(CARD_MINUTES / AXIS) * 100}% - 2px)`,
     left: `calc(${lane.lane} * (100% - 8px) / ${lane.of} + 4px)`,
     width: `calc((100% - 8px) / ${lane.of} - ${lane.of > 1 ? 2 : 0}px)`,
   };
