@@ -119,6 +119,9 @@
   /* The axis (8 AM–9 PM) fills the window; a card is 30 minutes of it, about 34–40px. */
   --sh-axis-h: clamp(860px, calc(100vh - 200px), 1040px);
   --sh-card-h: calc(var(--sh-axis-h) * 30 / 780);
+  /* An open day never gets narrower than its widest one-line card (8:45 · Explainer · Main) or a
+     two-lane card's short name ("Morning Dl"); below that the board scrolls sideways (fix round 1, #2). */
+  --sh-col-min: 184px;
   --sh-board-warn: #8a5e05;
   --sh-board-warn-wash: #fff8ea;
   display: flex;
@@ -146,7 +149,7 @@
 
 /* The board scrolls sideways inside itself; the page never does. */
 .sh-board__scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; }
-.sh-board__grid { position: relative; display: grid; gap: 8px; min-width: min-content; }
+.sh-board__grid { position: relative; display: grid; gap: 6px; min-width: min-content; }
 
 .sh-board__day { position: relative; display: flex; flex-direction: column; min-width: 0; padding-bottom: var(--sh-card-h); border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-surface-2) 55%, var(--color-surface)); }
 .sh-board__day.is-today { border-color: var(--color-text); background: var(--color-surface); }
@@ -212,10 +215,10 @@
 .sh-board__tag:focus-visible { outline: 2px solid var(--sh-focus); outline-offset: 1px; }
 .sh-board__tag--key { cursor: default; margin: 0; }
 /* Cards that share a time stack time over name, so neither is cut. */
-.sh-board__card.is-narrow .sh-board__open { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0 6px; }
+.sh-board__card.is-narrow .sh-board__open { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0 4px 0 5px; }
 .sh-board__card.is-narrow .sh-board__time { font-size: 11px; line-height: 1.2; }
-.sh-board__card.is-narrow .sh-board__name { gap: 4px; }
-.sh-board__card.is-narrow .sh-board__short { font-size: var(--sh-fs-label); line-height: 1.25; }
+.sh-board__card.is-narrow .sh-board__name { gap: 3px; max-width: 100%; }
+.sh-board__card.is-narrow .sh-board__short { font-size: var(--sh-fs-label); line-height: 1.25; letter-spacing: -0.01em; }
 .sh-board__card.is-narrow .sh-board__dot { width: 7px; height: 7px; }
 .sh-board__card.is-narrow .sh-board__mark { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; }
 
@@ -270,7 +273,11 @@
 .sh-board__key .sh-board__mark { display: inline-block; }
 
 /* The toast */
-.sh-board__toasts { position: fixed; left: 50%; bottom: 20px; z-index: var(--z-overlay); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); }
+/* Clicks pass through the toast to the board (only its buttons take them), and it moves to the top
+   while a details panel or picker is open so it never covers one (fix round 1, #4 and #5). */
+.sh-board__toasts { position: fixed; left: 50%; bottom: 20px; z-index: var(--z-overlay); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
+.sh-board__toasts.is-top { top: 72px; bottom: auto; }
+.sh-board__toast button { pointer-events: auto; }
 .sh-board__toast { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-text); color: var(--color-text-inverse); box-shadow: var(--sh-overlay); font-size: var(--sh-fs-small); }
 .sh-board__toast.is-warn { background: var(--sh-failed-ink); }
 .sh-board__toast button { min-height: 28px; padding: 0 10px; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; cursor: pointer; }

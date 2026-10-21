@@ -126,7 +126,8 @@ export function SlotCard({ card, lane, when, editable, dimmed, faded, open, drag
  */
 export function useFloating(anchor: HTMLElement | null, flip: boolean, width = 320) {
   const ref = useRef<HTMLDivElement>(null);
-  const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' });
+  // Transparent, not hidden, until placed: a visibility-hidden panel can't take focus (fix round 1, #3).
+  const [style, setStyle] = useState<CSSProperties>({ opacity: 0 });
   useLayoutEffect(() => {
     if (!anchor) return;
     let frame = 0;
@@ -175,7 +176,7 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, anchor: HTMLEleme
     return () => { document.removeEventListener('keydown', key); document.removeEventListener('pointerdown', down); };
   }, [ref, anchor]);
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+    ref.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus({ preventScroll: true });
   }, [ref, anchor]);
 }
 
@@ -183,8 +184,10 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, anchor: HTMLEleme
 export const TIME_OPTIONS: number[] = Array.from({ length: (LAST_START - DAY_START) / GRID + 1 }, (_, i) => DAY_START + i * GRID);
 
 /** Day and time as hub menus (DESIGN.md: no native selects): the keyboard and touch path for everything a drag does. */
-export function DayTimePicker({ dayLabel, days, day, minute, onDay, onMinute }: {
+export function DayTimePicker({ dayLabel, days, day, minute, onDay, onMinute, times = TIME_OPTIONS }: {
   dayLabel: string;
+  /** The times the chosen day can still take (openMinutes); every mark by default. */
+  times?: readonly number[];
   days: Array<{ day: number; label: string }>;
   day: number;
   minute: number;
@@ -194,7 +197,7 @@ export function DayTimePicker({ dayLabel, days, day, minute, onDay, onMinute }: 
   return (
     <>
       <Menu label={dayLabel} value={String(day)} align="left" options={days.map((d) => ({ value: String(d.day), label: d.label }))} onSelect={(v) => onDay(Number(v))} />
-      <Menu label="Time" value={String(minute)} align="left" options={TIME_OPTIONS.map((m) => ({ value: String(m), label: clockLabel(m) }))} onSelect={(v) => onMinute(Number(v))} />
+      <Menu label="Time" value={String(minute)} align="left" options={times.map((m) => ({ value: String(m), label: clockLabel(m) }))} onSelect={(v) => onMinute(Number(v))} />
     </>
   );
 }
@@ -217,7 +220,7 @@ export function Floating({ anchor, flip, label, onClose, children, width }: { an
   );
 }
 
-export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptions, onClose, onMode, onMove, onRemove, onReset, onCopyDay }: {
+export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptions, timesFor, onClose, onMode, onMove, onRemove, onReset, onCopyDay }: {
   card: BoardCard<SlimPost>;
   column: BoardColumn;
   mode: 'week' | 'template';
@@ -226,6 +229,8 @@ export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptio
   editable: boolean;
   /** Days a card can move to: index and label. */
   dayOptions: Array<{ day: number; label: string }>;
+  /** The start times a day can still take. */
+  timesFor: (day: number) => number[];
   onClose: (refocus: boolean) => void;
   onMode: (m: FeedMode) => void;
   onMove: (to: number, minute: number) => void;
@@ -279,7 +284,15 @@ export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptio
       ) : <p className="sh-board__source sh-muted">Part of the Standard week. Each week’s {weekday} starts from it.</p>}
       {canEdit ? (
         <div className="sh-board__move">
-          <DayTimePicker dayLabel="Move to" days={dayOptions} day={to} minute={minute} onDay={setTo} onMinute={setMinute} />
+          <DayTimePicker
+            dayLabel="Move to"
+            days={dayOptions}
+            day={to}
+            minute={minute}
+            times={timesFor(to)}
+            onDay={(d) => { setTo(d); const open = timesFor(d); if (!open.includes(minute) && open.length) setMinute(open[0]!); }}
+            onMinute={setMinute}
+          />
           <button type="button" className="sh-btn" disabled={to === card.day && minute === card.startMinute} onClick={() => onMove(to, minute)}>Move</button>
         </div>
       ) : null}

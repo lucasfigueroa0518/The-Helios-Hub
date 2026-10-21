@@ -9,7 +9,7 @@ import { DayTimePicker, Floating, SlotCard, SlotPanel, type SlimPost } from '@/c
 import { sourceSeries, sourceVertical, useBoardDrag, type DragSource } from '@/components/social-hub/calendar/useBoardDrag';
 import { typeStyle } from '@/components/social-hub/ui/marks';
 import { gapsFor, PAST_DAY } from '@/lib/social-hub/slots/rules';
-import { clockLabel, DEFAULT_TIMES, SERIES_NAME, USUAL } from '@/lib/social-hub/slots/times';
+import { clockLabel, SERIES_NAME, USUAL } from '@/lib/social-hub/slots/times';
 import { slotId, type ResolvedSlot, type SlotSource, type StorySeries } from '@/lib/social-hub/slots/types';
 import type { BookedPost } from '@/lib/social-hub/slots/write';
 import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
@@ -20,7 +20,7 @@ import {
   type BoardCard, type SwitchFacts, type WeekDayInput,
 } from '@/lib/social-hub/views/week';
 import {
-  bookedHits, clockOf, dayCtx, dayName, dropState, everyFor, nameOf, planCopyDay, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
+  bookedHits, clockOf, dayCtx, dayName, defaultPlaceMinute, dropState, everyFor, nameOf, openMinutes, planCopyDay, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
   type BoardState, type Drop, type Edit, type Every, type Hit,
 } from '@/lib/social-hub/views/week-edit';
 
@@ -50,7 +50,16 @@ type Ask = { title: string; body: string; ok: string; cancel: string; run: () =>
 
 type Toast = { id: number; text: string; warn?: boolean; command?: Command; every?: Every | null };
 
-type Pick = { anchor: HTMLElement; title: string; action: string; vertical: Vertical; series: StorySeries | null; run: (day: number, minute: number) => void };
+type Pick = {
+  anchor: HTMLElement;
+  title: string;
+  action: string;
+  vertical: Vertical;
+  series: StorySeries | null;
+  /** Why this day and time can't take it, shown in the picker; null when it can. */
+  check: (day: number, minute: number) => string | null;
+  run: (day: number, minute: number) => void;
+};
 
 /** Module scope: undo survives switching between This week and Standard week. */
 const history = createHistory();
@@ -408,7 +417,7 @@ export function WeekBoard(props: {
 
   // ── Layout ──
 
-  const cols = model.columns.map((c) => (c.folded ? '76px' : 'minmax(150px, 1fr)')).join(' ');
+  const cols = model.columns.map((c) => (c.folded ? '76px' : 'minmax(var(--sh-col-min), 1fr)')).join(' ');
   const when = (day: number) => dayName(state, day);
   const dayOptions = model.columns.flatMap((c, i) => (c.folded ? [] : [{ day: i, label: mode === 'week' && c.nyDate ? dayShortLabel(c.nyDate) : WEEKDAY_LONG[c.weekday]! }]));
   const openCard = open ? model.cards.find((c) => c.key === open.key) ?? null : null;
@@ -430,10 +439,26 @@ export function WeekBoard(props: {
     return f.op === 'place' ? `Add ${nameOf(f)}` : f.op === 'move' ? `Move to ${clockLabel(f.toMinute)}` : 'Remove';
   };
 
-  const firstOpenDay = model.columns.findIndex((c) => !c.folded);
   const openPick = (anchor: HTMLElement, p: Omit<Pick, 'anchor'>) => setPick({ anchor, ...p });
   const addPick = (anchor: HTMLElement, t: (typeof TRAY)[number]) =>
-    openPick(anchor, { title: `Add ${t.label}`, action: 'Add', vertical: t.vertical, series: t.series, run: (day, minute) => doEdit({ op: 'place', day, vertical: t.vertical, series: t.series, minute }) });
+    openPick(anchor, {
+      title: `Add ${t.label}`, action: 'Add', vertical: t.vertical, series: t.series,
+      check: (day, minute) => {
+        const p = planEdit(stateRef.current, { op: 'place', day, vertical: t.vertical, series: t.series, minute }, clock);
+        return p.ok || p.confirm ? null : p.reason;
+      },
+      run: (day, minute) => doEdit({ op: 'place', day, vertical: t.vertical, series: t.series, minute }),
+    });
+  const readyPick = (anchor: HTMLElement, r: ReadyItem) =>
+    openPick(anchor, {
+      title: `Place “${r.name}”`, action: 'Place', vertical: r.vertical, series: r.series,
+      check: (day, minute) => {
+        const p = planReady(stateRef.current, r, r.series, day, minute, clock);
+        return p.ok ? null : p.reason;
+      },
+      run: (day, minute) => void placeReady(r, day, minute),
+    });
+  const timesFor = (day: number) => openMinutes(dayCtx(stateRef.current, day, clock));
   /** A gap's text names its day ("Wed has no Explainer."; "Wed: Explainer at 12:00 PM is outside its usual window."). */
   const gapText = (g: (typeof gaps)[number]) => {
     const short = WEEKDAY_SHORT[state.days[g.day]!.weekday]!;
@@ -568,7 +593,7 @@ export function WeekBoard(props: {
                         type="button"
                         className="sh-btn sh-btn--quiet"
                         data-pick=""
-                        onClick={(e) => openPick(e.currentTarget, { title: `Place “${r.name}”`, action: 'Place', vertical: r.vertical, series: r.series, run: (day, minute) => void placeReady(r, day, minute) })}
+                        onClick={(e) => readyPick(e.currentTarget, r)}
                       >
                         Place…
                       </button>
@@ -606,6 +631,7 @@ export function WeekBoard(props: {
           flip={openCard.day >= 4}
           editable={editable}
           dayOptions={dayOptions}
+          timesFor={timesFor}
           onClose={() => setOpen(null)}
           onMode={(m) => doEdit({ op: 'mode', day: openCard.day, key: cardKey(openCard), feedMode: m })}
           onMove={(to, minute) => doEdit({ op: 'move', day: openCard.day, key: cardKey(openCard), to, minute }, { reopen: true })}
@@ -619,14 +645,15 @@ export function WeekBoard(props: {
         <PlacePicker
           pick={pick}
           dayOptions={dayOptions}
-          defaultDay={firstOpenDay < 0 ? 0 : firstOpenDay}
+          timesFor={timesFor}
+          defaultFor={(day) => defaultPlaceMinute(dayCtx(stateRef.current, day, clock), pick.vertical)}
           onClose={() => setPick(null)}
         />
       ) : null}
 
       <Confirm ask={ask} busy={busy} onClose={() => setAsk(null)} />
 
-      <div className="sh-board__toasts" aria-live="polite">
+      <div className={`sh-board__toasts${open || pick ? ' is-top' : ''}`} aria-live="polite">
         {toast ? (
           <div className={`sh-board__toast${toast.warn ? ' is-warn' : ''}`} role={toast.warn ? 'alert' : 'status'}>
             <span>{toast.text}</span>
@@ -648,15 +675,42 @@ function chipLabel(c: BoardCard<SlimPost>): string {
 }
 
 /** The keyboard and touch path for the drag row and Ready to place: a day and a time, then Add / Place. */
-function PlacePicker({ pick, dayOptions, defaultDay, onClose }: { pick: Pick; dayOptions: Array<{ day: number; label: string }>; defaultDay: number; onClose: () => void }) {
-  const [day, setDay] = useState(dayOptions.some((d) => d.day === defaultDay) ? defaultDay : dayOptions[0]?.day ?? 0);
-  const [minute, setMinute] = useState(DEFAULT_TIMES[pick.vertical][0] ?? 540);
+function PlacePicker({ pick, dayOptions, timesFor, defaultFor, onClose }: {
+  pick: Pick;
+  dayOptions: Array<{ day: number; label: string }>;
+  timesFor: (day: number) => number[];
+  defaultFor: (day: number) => number | null;
+  onClose: () => void;
+}) {
+  // The first day with time left (today after 8:45 PM has none), at its first open time.
+  const first = dayOptions.find((d) => defaultFor(d.day) !== null)?.day ?? dayOptions[0]?.day ?? 0;
+  const [day, setDay] = useState(first);
+  const [minute, setMinute] = useState<number | null>(() => defaultFor(first));
+  const [why, setWhy] = useState<string | null>(null);
+  const times = timesFor(day);
+  const go = () => {
+    if (minute === null) return;
+    const reason = pick.check(day, minute);
+    if (reason) { setWhy(reason); return; }
+    onClose();
+    pick.run(day, minute);
+  };
   return (
     <Floating anchor={pick.anchor} flip={false} label={pick.title} onClose={onClose} width={300}>
       <div className="sh-board__move">
-        <DayTimePicker dayLabel="Day" days={dayOptions} day={day} minute={minute} onDay={setDay} onMinute={setMinute} />
-        <button type="button" className="sh-btn sh-btn--primary" disabled={!dayOptions.length} onClick={() => { onClose(); pick.run(day, minute); }}>{pick.action}</button>
+        <DayTimePicker
+          dayLabel="Day"
+          days={dayOptions}
+          day={day}
+          minute={minute ?? times[0] ?? 0}
+          times={times}
+          onDay={(d) => { setDay(d); setWhy(null); setMinute((m) => (m !== null && timesFor(d).includes(m) ? m : defaultFor(d))); }}
+          onMinute={(m) => { setMinute(m); setWhy(null); }}
+        />
+        <button type="button" className="sh-btn sh-btn--primary" disabled={minute === null || !times.length} onClick={go}>{pick.action}</button>
       </div>
+      {!times.length ? <p className="sh-subtle">No time left on this day. Pick another day.</p> : null}
+      {why ? <p className="sh-note sh-note--failed" role="alert">{why}</p> : null}
     </Floating>
   );
 }

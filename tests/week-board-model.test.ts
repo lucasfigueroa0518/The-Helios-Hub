@@ -10,7 +10,7 @@ import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
 import { boardModel, lanes, minuteForY, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
-import { bookedHits, dayCtx, dropState, everyFor, planCopyDay, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
+import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const NOW = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York
@@ -404,4 +404,25 @@ test('a Standard week card says which run makes it each week (the approved proto
   const m = boardModel({ mode: 'template', days, posts: [], now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!;
   assert.equal(c.statusText, 'Every Wednesday. Each week the 2 AM run makes this post on the day.');
+});
+
+test('place picker: today offers only times after now and defaults to the next open mark', () => {
+  const s = state();
+  const today = dayCtx(s, 1, { today: '2026-10-20', nowMinute: 900 }); // Tue 3:00 PM
+  const open = openMinutes(today);
+  assert.equal(open[0], 915);
+  assert.equal(open[open.length - 1], 1245);
+  assert.equal(defaultPlaceMinute(today, 'stories'), 915);
+  assert.equal(defaultPlaceMinute(dayCtx(s, 1, { today: '2026-10-20', nowMinute: 1250 }), 'reels'), null, 'no time left today');
+});
+
+test('place picker: another day defaults to the type’s usual start; a past day has no times', () => {
+  const s = state();
+  const wed = dayCtx(s, WED, { today: '2026-10-20', nowMinute: 900 });
+  assert.equal(openMinutes(wed)[0], 480);
+  assert.equal(defaultPlaceMinute(wed, 'explainers'), 780);
+  assert.equal(defaultPlaceMinute(wed, 'stories'), 510);
+  assert.deepEqual(openMinutes(dayCtx(s, 0, { today: '2026-10-20', nowMinute: 900 })), []);
+  const t: BoardState = { mode: 'template', days: week().map((d) => ({ ...d, nyDate: null })), standard: standardOf(), posts: [] };
+  assert.equal(defaultPlaceMinute(dayCtx(t, 1, { today: '2026-10-20', nowMinute: 900 }), 'carousels'), 540, 'the Standard week has no now');
 });

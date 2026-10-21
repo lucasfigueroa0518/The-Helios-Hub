@@ -1,6 +1,6 @@
 import { sortSlots } from '@/lib/social-hub/slots/resolve';
 import { ALREADY_STARTED, applyMove, applyPlace, applyRemove, canPlace, isLocked, PAST_DAY, type DayCtx, type Refusal } from '@/lib/social-hub/slots/rules';
-import { clockLabel, DEFAULT_FEED_MODE, isUsual, nyMinuteOf, SERIES_NAME, snapMinute, TYPE_NAME } from '@/lib/social-hub/slots/times';
+import { clockLabel, DAY_START, DEFAULT_FEED_MODE, GRID, isUsual, LAST_START, nextOpenMinute, nyMinuteOf, SERIES_NAME, snapMinute, TYPE_NAME, USUAL } from '@/lib/social-hub/slots/times';
 import { isReelType, parseSlotId, sameSlotKey, slotId, type FeedMode, type ResolvedSlot, type SlotKey, type StorySeries } from '@/lib/social-hub/slots/types';
 import type { SlotChange } from '@/lib/social-hub/slots/write';
 import { nyDateOf } from '@/lib/social-hub/time';
@@ -419,4 +419,25 @@ export function planCopyDay(state: BoardState<BoardPost>, day: number): (Omit<Pl
   const standard: Record<number, readonly ResolvedSlot[]> = { ...state.standard, [weekday]: date.map((s) => ({ ...s, origin: 'template' as const })) };
   if (!changes.length) return { ok: true, noop: true, minute: null, label: '', changes: [], inverse: [], standard: state.standard as Record<number, readonly ResolvedSlot[]> };
   return { ok: true, noop: false, minute: null, label: `Saved: every ${WEEKDAY_LONG[weekday]} now looks like ${dayShortLabel(d.nyDate)}`, changes, inverse, standard };
+}
+
+/**
+ * The start times a day can still take, on the 15-minute grid from 8:00 AM to
+ * 8:45 PM: today only after now (a slot at now has started), none on a past
+ * day. The place picker's Time menu.
+ */
+export function openMinutes(ctx: DayCtx): number[] {
+  if (ctx.nyDate !== null && ctx.nyDate < ctx.today) return [];
+  const from = ctx.nyDate !== null && ctx.nyDate === ctx.today ? Math.max(DAY_START, nextOpenMinute(ctx.nowMinute)) : DAY_START;
+  const out: number[] = [];
+  for (let m = from; m <= LAST_START; m += GRID) out.push(m);
+  return out;
+}
+
+/** The picker's first time: today the next open mark; another day the type's first usual start, else its first open time. Null when the day has none. */
+export function defaultPlaceMinute(ctx: DayCtx, vertical: Vertical): number | null {
+  const open = openMinutes(ctx);
+  if (!open.length) return null;
+  if (ctx.nyDate !== null && ctx.nyDate === ctx.today) return open[0]!;
+  return USUAL[vertical].map((w) => w.start).find((m) => open.includes(m)) ?? open[0]!;
 }
