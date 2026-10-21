@@ -111,7 +111,8 @@ const runMode = process.env.HELIOS_RUN_MODE === 'development' ? 'development' : 
  * Ask for a set (Generate, or the scheduler for an auto series). One live set
  * per series per day and slot (`slotMinute`, template mode; null is the
  * series' one set of the day): a second request returns the existing one,
- * `created: false`.
+ * `created: false`. Before db/stories_multi_slot.sql runs, the one-a-day index
+ * refuses a second slot's set: the day's live set comes back, `created: false`.
  */
 export async function requestSet(
   db: Queryable,
@@ -138,7 +139,15 @@ export async function requestSet(
         AND status NOT IN ('rejected', 'failed', 'skipped')`,
     [input.series, input.nyDate, slotMinute],
   );
-  return { set: existing.rows[0]!, created: false };
+  if (existing.rows[0]) return { set: existing.rows[0], created: false };
+  // Until db/stories_multi_slot.sql drops the one-a-day index (R25), the day's live set holds every slot back.
+  const day = await db.query<StorySet>(
+    `SELECT ${SET_COLS} FROM stories.sets WHERE series = $1 AND ny_date = $2 AND status NOT IN ('rejected', 'failed', 'skipped')
+      ORDER BY created_at LIMIT 1`,
+    [input.series, input.nyDate],
+  );
+  if (!day.rows[0]) throw new Error(`stories.sets refused a ${input.series} set for ${input.nyDate} with no live set in the way`);
+  return { set: day.rows[0], created: false };
 }
 
 /** The worker takes the oldest requested set (skipping any another worker holds). */

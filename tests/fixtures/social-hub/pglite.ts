@@ -25,11 +25,13 @@ const ACCOUNT_TABLES = ['account_insights_daily', 'account_demographics_daily', 
 /**
  * The lifecycle spine (social_hub content_items … media_insights) is always
  * there: Carousels live on it (D36). `withHubSchema: false` leaves out only
- * the account tables.
+ * the account tables. `storiesMultiSlot: false` keeps the one-a-day Stories index.
  */
-export async function openHubTestDb(opts: { withHubSchema?: boolean } = {}): Promise<{ pg: PGlite; query: HubQuery }> {
+export async function openHubTestDb(opts: { withHubSchema?: boolean; storiesMultiSlot?: boolean } = {}): Promise<{ pg: PGlite; query: HubQuery }> {
   const pg = new PGlite({ extensions: { pg_trgm } });
   for (const schema of SCHEMAS) await pg.exec(schemaSql(`${schema}_schema.sql`));
+  // The go-live state: two-a-day Stories (db/stories_multi_slot.sql, R25). false = the state before that step.
+  if (opts.storiesMultiSlot !== false) await pg.exec(schemaSql('stories_multi_slot.sql'));
   await pg.exec(schemaSql('social_hub_schema.sql'));
   if (!opts.withHubSchema) {
     for (const table of ACCOUNT_TABLES) await pg.exec(`DROP TABLE social_hub.${table}`);

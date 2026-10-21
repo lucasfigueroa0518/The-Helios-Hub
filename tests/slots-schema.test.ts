@@ -60,9 +60,9 @@ test('stories.sets: two live sets of a series on one day need different slot min
     `INSERT INTO stories.sets (series, ny_date, trigger, style, slot_minute) VALUES ('morning_download', '2026-10-21', 'auto', 'polished', $1)`, [minute]);
   await set(510);
   await set(900);
-  await assert.rejects(set(510), /uq_stories_sets_live_day/);
+  await assert.rejects(set(510), /uq_stories_sets_live_slot/);
   await set(null);
-  await assert.rejects(set(null), /uq_stories_sets_live_day/);
+  await assert.rejects(set(null), /uq_stories_sets_live_slot/);
 });
 
 test('daily_caps starts at the agreed numbers', async () => {
@@ -98,7 +98,7 @@ test('both schema files apply twice (idempotent), keeping rows', async () => {
   const { pg } = await openHubTestDb();
   const { readFileSync } = await import('node:fs');
   await pg.query(`${TPL} (2, 'explainers', 720, NULL, 'main')`);
-  for (const f of ['db/social_hub_schema.sql', 'db/stories_schema.sql']) {
+  for (const f of ['db/social_hub_schema.sql', 'db/stories_schema.sql', 'db/stories_multi_slot.sql']) {
     const sql = readFileSync(f, 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('\\')).join('\n');
     await pg.exec(sql);
   }
