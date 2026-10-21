@@ -1054,24 +1054,48 @@
 .helios-slide--lfd_story {
   --lfd-margin: 48px;
   --lfd-muted: rgba(255, 255, 255, 0.66);
+  /* Helios Premium (approved 2026-10-21, light touch): charcoal under warm light. Lighting, depth and accents only;
+     every effect is paint (shadows, gradients, absolutely positioned pseudo-elements), never geometry. */
   background:
-    linear-gradient(118deg, rgba(255,255,255,0) 28%, rgba(255,255,255,0.05) 40%, rgba(255,255,255,0) 52%),
-    linear-gradient(118deg, rgba(255,255,255,0) 56%, rgba(255,255,255,0.035) 63%, rgba(255,255,255,0) 70%),
-    radial-gradient(90% 60% at 100% 0%, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 70%),
-    #0A0A0A;
+    radial-gradient(62% 42% at 100% 0%, rgba(255,106,42,0.10) 0%, rgba(255,106,42,0) 72%),
+    radial-gradient(55% 38% at 0% 0%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(70% 32% at 15% 100%, rgba(232,65,59,0.06) 0%, rgba(232,65,59,0) 72%),
+    linear-gradient(180deg, #161616 0%, #0B0B0B 100%);
   color: #FFFFFF;
+}
+/* The cover's visible ground is its copy area, so its light is a warm spotlight behind the hook. */
+.helios-slide--lfd_cover {
+  background:
+    radial-gradient(58% 26% at 50% 80%, rgba(255,106,42,0.07) 0%, rgba(255,106,42,0) 72%),
+    radial-gradient(62% 42% at 100% 0%, rgba(255,106,42,0.10) 0%, rgba(255,106,42,0) 72%),
+    radial-gradient(55% 38% at 0% 0%, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0) 70%),
+    radial-gradient(70% 22% at 15% 100%, rgba(232,65,59,0.06) 0%, rgba(232,65,59,0) 72%),
+    linear-gradient(180deg, #161616 0%, #0B0B0B 100%);
 }
 .helios-slide--lfd_cover .helios-slide__well,
 .helios-slide--lfd_story .helios-slide__well { position: absolute; inset: 0; padding: 0; }
 .lfd-img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; }
-.lfd-swipe { position: absolute; right: var(--lfd-margin); bottom: var(--lfd-margin); width: 48px; height: 48px; color: #FF5E1A; }
-.lfd-hl { color: #FF5E1A; }
+/* Swipe: a glossy orange icon tile in the arrow's old box; the white arrow sits inside its padding. */
+.lfd-swipe {
+  position: absolute; right: var(--lfd-margin); bottom: var(--lfd-margin); width: 48px; height: 48px;
+  box-sizing: border-box; padding: 10px; border-radius: 14px; color: #FFFFFF;
+  background: linear-gradient(160deg, #FF7A2E 0%, #F0552A 55%, #E8413B 100%);
+  box-shadow: 0 8px 22px rgba(255,94,26,0.28), inset 0 1px 0 rgba(255,255,255,0.45);
+}
+.lfd-hl { color: #FF5E1A; text-shadow: 0 0 22px rgba(255,94,26,0.25); }
 .lfd-name { color: #1BBF17; }
 
 .lfd-cover { position: absolute; inset: 0; display: flex; flex-direction: column; }
-.lfd-cover .lfd-swipe { width: 64px; height: 64px; }
+.lfd-cover .lfd-swipe { width: 64px; height: 64px; padding: 14px; border-radius: 18px; }
 .lfd-mosaic { flex: none; height: 742px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); gap: 6px; }
 .lfd-tile { position: relative; overflow: hidden; background: #1A1A1A; }
+/* A hairline inner edge and top highlight on each photo tile; the bottom row fades into the copy area. Logo tiles stay clean. */
+.lfd-tile::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12), inset 0 0 0 1px rgba(255,255,255,0.05);
+  background: linear-gradient(0deg, rgba(17,17,17,calc(0.55 * var(--lfd-tile-fade, 0))) 0px, rgba(17,17,17,0) 120px);
+}
+.lfd-tile:has(.lfd-logo-plate)::after { content: none; }
 /* Short posts (fewer than 4 stories): simple mosaics so the cover never has empty grid cells. */
 .lfd-mosaic[data-count="1"] .lfd-tile:nth-child(1) { grid-column: 1 / 13; grid-row: 1 / 11; }
 .lfd-mosaic[data-count="2"] .lfd-tile:nth-child(1) { grid-column: 1 / 8;  grid-row: 1 / 11; }
@@ -1094,17 +1118,41 @@
 .lfd-mosaic[data-count="6"] .lfd-tile:nth-child(4) { grid-column: 1 / 4;  grid-row: 7 / 11; }
 .lfd-mosaic[data-count="6"] .lfd-tile:nth-child(5) { grid-column: 4 / 9;  grid-row: 7 / 11; }
 .lfd-mosaic[data-count="6"] .lfd-tile:nth-child(6) { grid-column: 9 / 13; grid-row: 7 / 11; }
+/* The tiles on the mosaic's bottom edge, per layout above: these get the fade. */
+.lfd-mosaic[data-count="1"] .lfd-tile:nth-child(1),
+.lfd-mosaic[data-count="2"] .lfd-tile:nth-child(-n+2),
+.lfd-mosaic[data-count="3"] .lfd-tile:is(:nth-child(1), :nth-child(3)),
+.lfd-mosaic[data-count="4"] .lfd-tile:is(:nth-child(1), :nth-child(3), :nth-child(4)),
+.lfd-mosaic[data-count="5"] .lfd-tile:nth-child(n+4),
+.lfd-mosaic[data-count="6"] .lfd-tile:nth-child(n+4) { --lfd-tile-fade: 1; }
 .lfd-brand-rule { flex: none; display: flex; align-items: center; gap: 32px; padding: 40px var(--lfd-margin) 0; }
-.lfd-brand-rule::before, .lfd-brand-rule::after { content: ''; flex: 1; height: 2px; background: rgba(255,255,255,0.32); }
-.lfd-brand-rule span { font-family: var(--font-heading); font-weight: 700; font-size: 26px; line-height: 26px; letter-spacing: 0.02em; }
+.lfd-brand-rule::before, .lfd-brand-rule::after { content: ''; flex: 1; height: 2px; }
+.lfd-brand-rule::before { background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.34) 100%); }
+.lfd-brand-rule::after { background: linear-gradient(90deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0) 100%); }
+.lfd-brand-rule span { position: relative; font-family: var(--font-heading); font-weight: 700; font-size: 26px; line-height: 26px; letter-spacing: 0.02em; }
+/* A small glowing sun orb in the middle of each 32px gap beside HELIOS. */
+.lfd-brand-rule span::before, .lfd-brand-rule span::after {
+  content: ''; position: absolute; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 9999px;
+  background: linear-gradient(180deg, #FFC21A 0%, #FF8A35 45%, #E8413B 100%);
+  box-shadow: 0 0 10px 2px rgba(255,106,42,0.45);
+}
+.lfd-brand-rule span::before { left: -19px; }
+.lfd-brand-rule span::after { right: -19px; }
 .lfd-cover-copy { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 var(--lfd-margin) 112px; text-align: center; }
 .lfd-hook { margin: 0; font-family: var(--font-heading); font-weight: 700; font-size: 72px; line-height: 70px; letter-spacing: -0.03em; text-transform: uppercase; }
 .lfd-hook span { display: block; white-space: nowrap; }
-.lfd-kicker { margin: 28px 0 0; font-family: var(--font-body); font-weight: 700; font-size: 22px; line-height: 26px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--lfd-muted); }
+/* The last line in solid orange with a glow; never transparent gradient text. */
+.lfd-hook span:last-child { color: #FF6A2A; text-shadow: 0 0 36px rgba(255,94,26,0.28); }
+.lfd-kicker { margin: 28px 0 0; font-family: var(--font-body); font-weight: 700; font-size: 22px; line-height: 26px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--lfd-muted); }
 
 .lfd-story { position: absolute; inset: 0; font-family: var(--font-body); }
-.lfd-chip { position: absolute; top: 48px; right: var(--lfd-margin); height: 60px; display: flex; align-items: center; gap: 14px; padding: 0 24px 0 8px; border-radius: 9999px; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }
-.lfd-chip img { display: block; width: 44px; height: 44px; border-radius: 9999px; object-fit: contain; background: #0A0A0A; }
+/* Frosted glass with a top highlight; the sun orb gets a halo. */
+.lfd-chip {
+  position: absolute; top: 48px; right: var(--lfd-margin); height: 60px; display: flex; align-items: center; gap: 14px; padding: 0 24px 0 8px; border-radius: 9999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 100%); border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.22); backdrop-filter: blur(14px);
+}
+.lfd-chip img { display: block; width: 44px; height: 44px; border-radius: 9999px; object-fit: contain; background: #0A0A0A; box-shadow: 0 0 18px 2px rgba(255,106,42,0.35); }
 .lfd-chip span { font-weight: 700; font-size: 24px; line-height: 28px; }
 .lfd-story-body { position: absolute; top: 140px; left: var(--lfd-margin); right: var(--lfd-margin); bottom: 140px; display: flex; flex-direction: column; gap: 48px; }
 .lfd-text { flex: none; }
@@ -1112,12 +1160,15 @@
 .lfd-headline { margin: 0; font-family: var(--font-heading); font-weight: 700; font-size: 42px; line-height: 50px; letter-spacing: -0.02em; max-height: 100px; overflow-wrap: normal; word-break: normal; }
 .lfd-clip { display: block; overflow-x: visible; overflow-y: clip; } /* Pragmatica's tall content box overflows the last line by ~4px; fitText reads that as scrollHeight, so clip it (ink stays inside the 50px line) */
 .lfd-body { margin: 20px 0 0; font-weight: 400; font-size: 31px; line-height: 42px; max-height: 126px; color: var(--lfd-muted); overflow-wrap: normal; word-break: normal; }
-.lfd-media { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; background: #161616; border-radius: 24px; }
+.lfd-media { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; background: #161616; border-radius: 24px; box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8), 0 8px 18px rgba(0,0,0,0.35); }
+/* A photo also catches a faint orange light off its top-right corner; logo plates and memes never do. */
+.lfd-media:not(:has(.lfd-logo-plate, .lfd-meme)) { box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8), 0 8px 18px rgba(0,0,0,0.35), 22px -22px 80px -34px rgba(255,106,42,0.22); }
 /* A logo (photo spec §4, mirrors .helios-logo-region): whole on a light plate, never cropped. In the story media box and the cover tiles. */
 .lfd-logo-plate { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 48px; box-sizing: border-box; background: #F4F2ED; }
 .lfd-tile .lfd-logo-plate { padding: 28px; }
 .lfd-logo { display: block; width: 100%; height: 100%; object-fit: contain; object-position: 50% 50%; }
 .lfd-media::after { content: ''; position: absolute; inset: 0; border-radius: 24px; border: 1px solid rgba(255,255,255,0.10); pointer-events: none; }
+.lfd-media:not(:has(.lfd-logo-plate, .lfd-meme))::after { box-shadow: inset 0 1px 0 rgba(255,255,255,0.20); }
 /* A meme (the meme lab's LFD simulation): whole, never cropped, on the meme's own white. */
 .lfd-meme { display: block; width: 100%; height: 100%; object-fit: contain; object-position: 50% 50%; }
 .lfd-meme-plate { position: absolute; inset: 0; background: #FFFFFF; }
@@ -1126,8 +1177,9 @@
 .lfd-cover--meme .lfd-cover-meme { flex: none; display: flex; justify-content: center; align-items: flex-start; }
 .lfd-cover--meme .lfd-cover-meme .lfd-meme { flex: none; object-fit: fill; }
 .lfd-cover--meme[data-meme-fit="card"] .lfd-cover-meme { box-sizing: border-box; padding-top: var(--lfd-margin); align-items: center; }
-.lfd-cover--meme[data-meme-fit="card"] .lfd-cover-meme .lfd-meme { border-radius: 24px; }
-.lfd-cover--meme .lfd-swipe { width: 56px; height: 56px; }
+.lfd-cover--meme[data-meme-fit="card"] .lfd-cover-meme .lfd-meme { border-radius: 24px; box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8), 0 8px 18px rgba(0,0,0,0.35); }
+.lfd-cover--meme[data-meme-fit="bleed"] .lfd-cover-meme .lfd-meme { box-shadow: 0 18px 40px -10px rgba(0,0,0,0.7); }
+.lfd-cover--meme .lfd-swipe { width: 56px; height: 56px; padding: 12px; border-radius: 16px; }
 .lfd-cover--meme[data-copy="m"] .lfd-brand-rule { padding-top: 32px; }
 .lfd-cover--meme[data-copy="m"] .lfd-cover-copy { padding: 0 96px 72px; }
 .lfd-cover--meme[data-copy="m"] .lfd-hook { font-size: 60px; line-height: 60px; }
@@ -1137,6 +1189,6 @@
 .lfd-cover--meme[data-copy="s"] .lfd-hook { font-size: 48px; line-height: 50px; }
 .lfd-cover--meme[data-copy="s"] .lfd-kicker { margin-top: 16px; font-size: 18px; }
 .lfd-story-body--meme { justify-content: center; }
-.lfd-media--meme { flex: 0 1 auto; width: 100%; aspect-ratio: var(--meme-aspect); min-height: 0; background: none; border-radius: 0; overflow: visible; container-type: size; display: flex; align-items: center; justify-content: center; }
+.lfd-media--meme { flex: 0 1 auto; width: 100%; aspect-ratio: var(--meme-aspect); min-height: 0; background: none; border-radius: 0; overflow: visible; container-type: size; display: flex; align-items: center; justify-content: center; box-shadow: none; }
 .lfd-media--meme::after { content: none; }
-.lfd-media--meme .lfd-meme { flex: none; width: min(100cqw, 100cqh * var(--meme-aspect)); height: min(100cqh, 100cqw / var(--meme-aspect)); border-radius: 24px; object-fit: fill; }
+.lfd-media--meme .lfd-meme { flex: none; width: min(100cqw, 100cqh * var(--meme-aspect)); height: min(100cqh, 100cqw / var(--meme-aspect)); border-radius: 24px; object-fit: fill; box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8), 0 8px 18px rgba(0,0,0,0.35); }
