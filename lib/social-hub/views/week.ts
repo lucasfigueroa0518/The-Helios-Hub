@@ -1,7 +1,7 @@
 import { addDays, nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/time';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { isLocked } from '@/lib/social-hub/slots/rules';
-import { DAY_END, DAY_START, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
+import { clockLabel, DAY_END, DAY_START, DRIFT, FEED_GAP, isFeedSlot, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
 import { slotId, slotKeyString, type FeedMode, type ResolvedSlot, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -130,7 +130,11 @@ export type BoardColumn = {
 };
 
 /** What the board reads of a post: enough to show its slot's status (the page passes slim copies to the client). */
-export type BoardPost = Pick<HubPost, 'id' | 'vertical' | 'nyDate' | 'slot' | 'status'> & { approval: Pick<HubPost['approval'], 'required' | 'approvedAt'> };
+export type BoardPost = Pick<HubPost, 'id' | 'vertical' | 'nyDate' | 'slot' | 'status'> & {
+  approval: Pick<HubPost['approval'], 'required' | 'approvedAt'>;
+  /** When the booking posts; the details say so when it is later than the slot's drift (spec §Backend, feed spacing). */
+  publishAt?: string | null;
+};
 
 export type BoardCard<P extends BoardPost = HubPost> = {
   /** Unique across the week: `<day index>|<vertical>|t0780[:series]`. */
@@ -249,6 +253,23 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
     cards.push(...dayCards);
   });
   return { columns, cards };
+}
+
+/**
+ * The slot's details line when its post was booked later than [slot, slot + 15]:
+ * a Main-feed post pushed past another feed post's 30 minutes (book.ts), or a
+ * retry. Null when the post goes out inside the slot's drift, or has posted.
+ */
+export function laterNote(card: Pick<BoardCard<BoardPost>, 'vertical' | 'feedMode' | 'startMinute' | 'booked'>): string | null {
+  const b = card.booked;
+  if (!b?.publishAt || b.status === 'published') return null;
+  const at = new Date(b.publishAt);
+  if (Number.isNaN(at.getTime()) || nyDateOf(at) !== b.nyDate) return null;
+  const minute = nyMinuteOf(at);
+  if (minute <= card.startMinute + DRIFT) return null;
+  return isFeedSlot(card)
+    ? `Posts at ${clockLabel(minute)}, later than the slot, to keep ${FEED_GAP} minutes from another feed post.`
+    : `Posts at ${clockLabel(minute)}, later than the slot.`;
 }
 
 /* ── Time and y ────────────────────────────────────────────────────────── */

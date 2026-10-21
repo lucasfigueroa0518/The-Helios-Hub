@@ -8,7 +8,7 @@ import { Menu } from '@/components/social-hub/ui/Menu';
 import { typeStyle } from '@/components/social-hub/ui/marks';
 import { clockLabel, GRID, LAST_START, DAY_START } from '@/lib/social-hub/slots/times';
 import type { FeedMode } from '@/lib/social-hub/slots/types';
-import { chipNames, CARD_MINUTES, yForMinute, type BoardCard, type BoardColumn, type BoardPost } from '@/lib/social-hub/views/week';
+import { chipNames, CARD_MINUTES, laterNote, yForMinute, type BoardCard, type BoardColumn, type BoardPost } from '@/lib/social-hub/views/week';
 import { WEEKDAY_LONG } from '@/lib/social-hub/views/week-edit';
 
 /**
@@ -249,10 +249,12 @@ export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptio
   const [minute, setMinute] = useState(card.startMinute);
   const canEdit = editable && !card.locked;
   const what = card.vertical === 'stories' ? `Story · ${names.full}` : names.full;
+  const later = laterNote(card);
   return (
     <Floating anchor={anchor} flip={flip} label={what} onClose={onClose}>
       <p className="sh-board__when">{when} · {clockLabel(card.startMinute)}</p>
       <p className="sh-board__status">{card.locked && card.status !== 'posted' ? <Lock size={12} aria-hidden="true" /> : null}<strong>{card.statusText}</strong></p>
+      {later ? <p className="sh-subtle">{later}</p> : null}
       {card.booked ? (
         <div className="sh-board__post">
           {card.booked.thumb ? <img src={card.booked.thumb} alt="" width={36} height={36} /> : <span className="sh-board__thumb" style={typeStyle(card.vertical)} aria-hidden="true" />}

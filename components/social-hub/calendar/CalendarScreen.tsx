@@ -88,7 +88,7 @@ const ON_BOARD = new Set(['scheduled', 'publishing', 'published', 'ready']);
 /** A post as the board needs it: small enough to send to the client. */
 function slim(p: HubPost): SlimPost {
   const refs = Object.fromEntries(Object.entries(contentRefs(p)).filter((e): e is [string, string] => typeof e[1] === 'string'));
-  return { id: p.id, vertical: p.vertical, nyDate: p.nyDate, slot: p.slot, status: p.status, approval: { required: p.approval.required, approvedAt: p.approval.approvedAt }, name: displayName(p), refs, thumb: thumbOf(p.media).src };
+  return { id: p.id, vertical: p.vertical, nyDate: p.nyDate, slot: p.slot, status: p.status, publishAt: p.publishAt, approval: { required: p.approval.required, approvedAt: p.approval.approvedAt }, name: displayName(p), refs, thumb: thumbOf(p.media).src };
 }
 
 /** Ready to place (decision 16): made, approved or not, with no slot (the Content page's "Made, waiting for a slot"). */

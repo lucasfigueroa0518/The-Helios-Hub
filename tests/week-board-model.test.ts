@@ -13,7 +13,7 @@ import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
-import { boardModel, lanes, minuteForY, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
+import { boardModel, lanes, laterNote, minuteForY, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
 import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, readyMinutes, readyTakenAt, dropKey, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
@@ -84,6 +84,19 @@ test('adapter → board: a posted reel booked at 11:15 AM reads "Posted" and cou
   assert.equal(m.columns[0]!.count, 1, 'Mon folds to "1 posted"');
   const legacy = reelPosts(reelsRead([reelAttempt({ schedule_slot: 'midday' })]));
   assert.equal(legacy[0]!.slot?.id, 'midday', 'a window booking reads as before');
+});
+
+test('the details say when the feed gap pushed a post past its slot (spec §Backend, final review #4)', () => {
+  const at = (publishAt: string, status: HubPost['status'] = 'scheduled') => {
+    const m = boardModel({ mode: 'week', days: week(), posts: [post({ slotId: 't0780', publishAt, status })], now: NOW, caps: DEFAULT_CAPS });
+    return laterNote(m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!);
+  };
+  assert.equal(at('2026-10-21T17:52:00Z'), 'Posts at 1:52 PM, later than the slot, to keep 30 minutes from another feed post.');
+  assert.equal(at('2026-10-21T17:15:00Z'), null, '1:15 PM is inside [1:00, 1:15]');
+  assert.equal(at('2026-10-21T17:52:00Z', 'published'), null, 'a posted post says Posted');
+  const story = storyPosts(storiesRead([storySet({ publish_at: '2026-10-21T13:10:00Z' })]));
+  const m = boardModel({ mode: 'week', days: week(), posts: story, now: NOW, caps: DEFAULT_CAPS });
+  assert.equal(laterNote(m.cards.find((x) => x.day === 2 && x.vertical === 'stories' && x.startMinute === 510)!), 'Posts at 9:10 AM, later than the slot.');
 });
 
 test('a posted card is locked with status posted', () => {
