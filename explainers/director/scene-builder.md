@@ -40,7 +40,10 @@ role accessories, `handAt`), `props.js` and `props/` (the prop library: `propNam
   `critter(x, y, { arms, mood, wear, look, s, flip, body })`. Never draw a person, a figure built
   from solids, or a body part, and never make a hand an entity: the critter is the one who holds,
   writes, reaches or feels. Give it its role with `wear` (a grad cap for a student, a chef hat, a
-  headset, glasses) and its feeling with `mood`. A held thing is drawn at `handAt(...)`. Write a
+  headset, glasses) and its feeling with `mood`. Nothing it wears covers or crowds its eyes or
+  mouth (EX3-103, HARD CONSTRAINT): roles come only from `wear`, which the kit draws clear of the
+  face; never a mask, blindfold, hood, visor, sunglasses or a scarf over the mouth (glasses are the
+  one thing worn over the eyes). A held thing is drawn at `handAt(...)`. Write a
   function per critter that takes its pose (`arms`, `mood`, `look`, walk phase) so frames can act.
   Every critter passes its entity id as `who` (`critter(x, y, { …, who: 'hire' })`; a group's
   members `who: 'walkers-1'`, `'walkers-2'`…), so the try can check that no critter is drawn

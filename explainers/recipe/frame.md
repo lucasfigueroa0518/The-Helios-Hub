@@ -71,7 +71,7 @@ components:
     typography: "{typography.label} or {typography.dimension}"
     description: "A short label pinned to the object it names: a number, a status, a name, a real term. 5 words or fewer. Shown as the voice names it. A dimension label runs along an isometric axis with a green dimension line that draws itself out."
   critter:
-    description: "THE cast (EX3-77): every character is a critter from the kit's cast.js, never a person, a figure built from solids, or a body part. A critter does whatever someone does in the analogy: it holds, writes, reaches, feels its way, points, carries, sits, walks. Poses (arms), moods (brows, eyes, mouth), and role accessories (wear: cap, chef hat, grad cap, glasses, headset, apron, backpack…) tell its role. handAt() puts a prop in its hand. Orange when it is the focal. Its gaze points at the read."
+    description: "THE cast (EX3-77): every character is a critter from the kit's cast.js, never a person, a figure built from solids, or a body part. A critter does whatever someone does in the analogy: it holds, writes, reaches, feels its way, points, carries, sits, walks. Poses (arms), moods (brows, eyes, mouth), and role accessories (wear: cap, chef hat, grad cap, glasses, headset, apron, backpack…) tell its role. Nothing a critter wears covers or crowds its eyes or mouth (EX3-103, HARD CONSTRAINT): use wear as the kit draws it, and never add a mask, blindfold, hood, visor, sunglasses, a scarf over the mouth or anything else on the face; glasses are the one thing worn over the eyes. handAt() puts a prop in its hand. Orange when it is the focal. Its gaze points at the read."
   prop:
     description: "An everyday object from the kit's prop library (props.js, EX3-78): drawn once, approved, with its states (a switch on or off, a door open or closed) and an orange focal part. prop(name, x, y, { s, state, focal, flip }). A scene uses the library's prop whenever the library has the thing."
   shot:
@@ -636,6 +636,8 @@ label, `textWidth()` and `typeset()` from `cards.js` give real widths.
 **Critters and props.** `critter(x, y, { arms, mood, wear, look, s, flip, body, who })` and
 `handAt(x, y, sameOptions)` from `cast.js`; `walk(t)` for a walk cycle; `prop(name, x, y, { s,
 state, focal, flip })` from `props.js`. A held prop is drawn at `handAt(...).r` after the critter.
+Accessories come only from `wear`, drawn by the kit clear of the face (`FACE_KEEPOUT`); a frame
+never draws its own clothing or headgear over a critter's eyes or mouth (EX3-103).
 
 **What the try checks:** frame 1's hook (`01-hook.js`) keeps its contract: it exports `hero`,
 draws it (`data-who`), leaves it out on `hideHero`, and draws no title card;
