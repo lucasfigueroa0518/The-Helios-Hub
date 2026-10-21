@@ -148,7 +148,7 @@ export function dropState(input: {
       if (input.ready.taken(snap.minute)) return refused(TAKEN);
       minute = snap.minute;
     } else if (vertical === 'stories') {
-      return refused(`${clockLabel(snap.minute)} isn’t a ${series ? SERIES_NAME[series].one : 'Stories'} slot. Drop it on one.`);
+      return refused(`${clockLabel(snap.minute)} isn’t a ${series ? SERIES_NAME[series].one : 'Stories'} slot.`);
     } else {
       const r = canPlace(ctx, { vertical, startMinute: snap.minute, series });
       if (!r.ok) return refused(r.reason);
@@ -440,4 +440,15 @@ export function defaultPlaceMinute(ctx: DayCtx, vertical: Vertical): number | nu
   if (!open.length) return null;
   if (ctx.nyDate !== null && ctx.nyDate === ctx.today) return open[0]!;
   return USUAL[vertical].map((w) => w.start).find((m) => open.includes(m)) ?? open[0]!;
+}
+
+/**
+ * The times a Ready to place post can take on a day: a Story only its
+ * series' open Stories slots (a set never adds a slot); anything else every
+ * open time (openMinutes).
+ */
+export function readyMinutes(ctx: DayCtx, vertical: Vertical, series: StorySeries | null): number[] {
+  const open = openMinutes(ctx);
+  if (vertical !== 'stories') return open;
+  return ctx.slots.filter((s) => s.vertical === 'stories' && s.series === series && open.includes(s.startMinute)).map((s) => s.startMinute).sort((a, b) => a - b);
 }

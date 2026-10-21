@@ -10,7 +10,7 @@ import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
 import { boardModel, lanes, minuteForY, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
-import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
+import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, readyMinutes, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const NOW = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York
@@ -425,4 +425,15 @@ test('place picker: another day defaults to the type’s usual start; a past day
   assert.deepEqual(openMinutes(dayCtx(s, 0, { today: '2026-10-20', nowMinute: 900 })), []);
   const t: BoardState = { mode: 'template', days: week().map((d) => ({ ...d, nyDate: null })), standard: standardOf(), posts: [] };
   assert.equal(defaultPlaceMinute(dayCtx(t, 1, { today: '2026-10-20', nowMinute: 900 }), 'carousels'), 540, 'the Standard week has no now');
+});
+
+test('place picker: a Ready Story is offered only its series’ open slots on the day', () => {
+  const s = state();
+  const wed = dayCtx(s, WED, CLOCK);
+  assert.deepEqual(readyMinutes(wed, 'stories', 'morning_download'), [510]);
+  assert.deepEqual(readyMinutes(wed, 'stories', 'free_vs_paid'), [], 'no Free vs. Paid on Wednesday');
+  assert.deepEqual(readyMinutes(dayCtx(s, 1, CLOCK), 'stories', 'morning_download'), [], 'today’s 8:30 has started');
+  assert.deepEqual(readyMinutes(wed, 'explainers', null), openMinutes(wed), 'other types take any open time');
+  const off = dropState({ ctx: wed, vertical: 'stories', series: 'morning_download', raw: 720, caps: DEFAULT_CAPS, ready: { taken: () => false } });
+  assert.equal(off.reason, '12:00 PM isn’t a Morning Download slot.');
 });

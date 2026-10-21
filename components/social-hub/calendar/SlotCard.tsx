@@ -102,7 +102,8 @@ export function SlotCard({ card, lane, when, editable, dimmed, faded, open, drag
         {card.booked ? <span className="sh-board__mark" aria-hidden="true" title="A post is booked for this slot" /> : null}
         {card.locked && card.status !== 'posted' ? <Lock size={11} className="sh-board__lock" aria-hidden="true" /> : null}
       </div>
-      {card.feedMode && !narrow ? (
+      {/* No tag on a locked card: it can't flip, and the lock needs the room (Trial / Main stays in the label and panel). */}
+      {card.feedMode && !narrow && !card.locked ? (
         <button
           type="button"
           className="sh-board__tag"

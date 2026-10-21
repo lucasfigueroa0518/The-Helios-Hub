@@ -20,7 +20,7 @@ import {
   type BoardCard, type SwitchFacts, type WeekDayInput,
 } from '@/lib/social-hub/views/week';
 import {
-  bookedHits, clockOf, dayCtx, dayName, defaultPlaceMinute, dropState, everyFor, nameOf, openMinutes, planCopyDay, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
+  bookedHits, clockOf, dayCtx, dayName, defaultPlaceMinute, dropState, everyFor, nameOf, openMinutes, planCopyDay, readyMinutes, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
   type BoardState, type Drop, type Edit, type Every, type Hit,
 } from '@/lib/social-hub/views/week-edit';
 
@@ -56,6 +56,11 @@ type Pick = {
   action: string;
   vertical: Vertical;
   series: StorySeries | null;
+  /** The times a day offers this pick, and its first choice (null: none). */
+  times: (day: number) => number[];
+  first: (day: number) => number | null;
+  /** What the picker says when a day offers no time. */
+  none: (day: number) => string;
   /** Why this day and time can't take it, shown in the picker; null when it can. */
   check: (day: number, minute: number) => string | null;
   run: (day: number, minute: number) => void;
@@ -82,6 +87,9 @@ const TRAY: Array<{ vertical: Vertical; series: StorySeries | null; label: strin
   { vertical: 'stories', series: 'guess_the_number', label: SERIES_NAME.guess_the_number.one },
   { vertical: 'stories', series: 'free_vs_paid', label: SERIES_NAME.free_vs_paid.one },
 ];
+
+/** The narrowest lane card that keeps its short name whole ("Morning Dl" at 12px). */
+const LANE_MIN = 86;
 
 const HOURS = Array.from({ length: 12 }, (_, i) => (9 + i) * 60);
 const AXIS = 21 * 60 - 8 * 60;
@@ -417,7 +425,9 @@ export function WeekBoard(props: {
 
   // ── Layout ──
 
-  const cols = model.columns.map((c) => (c.folded ? '76px' : 'minmax(var(--sh-col-min), 1fr)')).join(' ');
+  // An open day grows with its widest cluster so each lane keeps a short name whole (fix round 2, A).
+  const widest = model.columns.map((_, i) => Math.max(1, ...byDay[i]!.map((c) => laneOf.get(c.key)?.of ?? 1)));
+  const cols = model.columns.map((c, i) => (c.folded ? '76px' : `minmax(max(var(--sh-col-min), ${widest[i]! * LANE_MIN + 8}px), 1fr)`)).join(' ');
   const when = (day: number) => dayName(state, day);
   const dayOptions = model.columns.flatMap((c, i) => (c.folded ? [] : [{ day: i, label: mode === 'week' && c.nyDate ? dayShortLabel(c.nyDate) : WEEKDAY_LONG[c.weekday]! }]));
   const openCard = open ? model.cards.find((c) => c.key === open.key) ?? null : null;
@@ -440,9 +450,13 @@ export function WeekBoard(props: {
   };
 
   const openPick = (anchor: HTMLElement, p: Omit<Pick, 'anchor'>) => setPick({ anchor, ...p });
+  const timesFor = (day: number) => openMinutes(dayCtx(stateRef.current, day, clock));
   const addPick = (anchor: HTMLElement, t: (typeof TRAY)[number]) =>
     openPick(anchor, {
       title: `Add ${t.label}`, action: 'Add', vertical: t.vertical, series: t.series,
+      times: timesFor,
+      first: (day) => defaultPlaceMinute(dayCtx(stateRef.current, day, clock), t.vertical),
+      none: () => 'No time left on this day. Pick another day.',
       check: (day, minute) => {
         const p = planEdit(stateRef.current, { op: 'place', day, vertical: t.vertical, series: t.series, minute }, clock);
         return p.ok || p.confirm ? null : p.reason;
@@ -452,13 +466,18 @@ export function WeekBoard(props: {
   const readyPick = (anchor: HTMLElement, r: ReadyItem) =>
     openPick(anchor, {
       title: `Place “${r.name}”`, action: 'Place', vertical: r.vertical, series: r.series,
+      times: (day) => readyMinutes(dayCtx(stateRef.current, day, clock), r.vertical, r.series),
+      first: (day) => (r.series
+        ? readyMinutes(dayCtx(stateRef.current, day, clock), r.vertical, r.series)[0] ?? null
+        : defaultPlaceMinute(dayCtx(stateRef.current, day, clock), r.vertical)),
+      none: (day) => (r.series ? `No open ${SERIES_NAME[r.series].one} slot on ${dayName(stateRef.current, day)}.` : 'No time left on this day. Pick another day.'),
       check: (day, minute) => {
         const p = planReady(stateRef.current, r, r.series, day, minute, clock);
         return p.ok ? null : p.reason;
       },
       run: (day, minute) => void placeReady(r, day, minute),
     });
-  const timesFor = (day: number) => openMinutes(dayCtx(stateRef.current, day, clock));
+
   /** A gap's text names its day ("Wed has no Explainer."; "Wed: Explainer at 12:00 PM is outside its usual window."). */
   const gapText = (g: (typeof gaps)[number]) => {
     const short = WEEKDAY_SHORT[state.days[g.day]!.weekday]!;
@@ -645,8 +664,6 @@ export function WeekBoard(props: {
         <PlacePicker
           pick={pick}
           dayOptions={dayOptions}
-          timesFor={timesFor}
-          defaultFor={(day) => defaultPlaceMinute(dayCtx(stateRef.current, day, clock), pick.vertical)}
           onClose={() => setPick(null)}
         />
       ) : null}
@@ -675,19 +692,17 @@ function chipLabel(c: BoardCard<SlimPost>): string {
 }
 
 /** The keyboard and touch path for the drag row and Ready to place: a day and a time, then Add / Place. */
-function PlacePicker({ pick, dayOptions, timesFor, defaultFor, onClose }: {
+function PlacePicker({ pick, dayOptions, onClose }: {
   pick: Pick;
   dayOptions: Array<{ day: number; label: string }>;
-  timesFor: (day: number) => number[];
-  defaultFor: (day: number) => number | null;
   onClose: () => void;
 }) {
-  // The first day with time left (today after 8:45 PM has none), at its first open time.
-  const first = dayOptions.find((d) => defaultFor(d.day) !== null)?.day ?? dayOptions[0]?.day ?? 0;
-  const [day, setDay] = useState(first);
-  const [minute, setMinute] = useState<number | null>(() => defaultFor(first));
+  // The first day this pick has a time on (today after 8:45 PM has none; a Story needs its series' slot).
+  const start = dayOptions.find((d) => pick.first(d.day) !== null)?.day ?? dayOptions[0]?.day ?? 0;
+  const [day, setDay] = useState(start);
+  const [minute, setMinute] = useState<number | null>(() => pick.first(start));
   const [why, setWhy] = useState<string | null>(null);
-  const times = timesFor(day);
+  const times = pick.times(day);
   const go = () => {
     if (minute === null) return;
     const reason = pick.check(day, minute);
@@ -704,12 +719,12 @@ function PlacePicker({ pick, dayOptions, timesFor, defaultFor, onClose }: {
           day={day}
           minute={minute ?? times[0] ?? 0}
           times={times}
-          onDay={(d) => { setDay(d); setWhy(null); setMinute((m) => (m !== null && timesFor(d).includes(m) ? m : defaultFor(d))); }}
+          onDay={(d) => { setDay(d); setWhy(null); setMinute((m) => (m !== null && pick.times(d).includes(m) ? m : pick.first(d))); }}
           onMinute={(m) => { setMinute(m); setWhy(null); }}
         />
-        <button type="button" className="sh-btn sh-btn--primary" disabled={minute === null || !times.length} onClick={go}>{pick.action}</button>
+        <button type="button" className="sh-btn sh-btn--primary" disabled={minute === null || !times.includes(minute)} onClick={go}>{pick.action}</button>
       </div>
-      {!times.length ? <p className="sh-subtle">No time left on this day. Pick another day.</p> : null}
+      {!times.length ? <p className="sh-subtle">{pick.none(day)}</p> : null}
       {why ? <p className="sh-note sh-note--failed" role="alert">{why}</p> : null}
     </Floating>
   );
