@@ -18,11 +18,18 @@
 :root {
   /* ---------- BRAND ACCENTS ---------- */
   --helios-orange:      #FF5E1A;   /* Primary CTA / brand accent */
-  --helios-orange-soft: #FF8A4F;   /* Logo gradient top */
-  --helios-orange-hot:  #E63946;   /* Logo gradient bottom (red-orange) */
+  --helios-orange-soft: #FF8A4F;   /* Website accent (hero text gradient). Not the logo: see --helios-sun-* */
+  --helios-orange-hot:  #E63946;   /* Website accent (hero text gradient). Not the logo: see --helios-sun-* */
   --helios-orange-glow: rgba(255, 94, 26, 0.30);
-  --helios-green:       #138510;   /* Secondary — eyebrows, tags, "Partner Focus" */
+  --helios-green:       #138510;   /* Secondary — eyebrows, tags, "Partner Focus" (on white) */
   --helios-green-tint:  rgba(19, 133, 16, 0.10);
+  --helios-green-on-dark: #1BBF17; /* Helios green on a dark ground: #138510 is ~3.6:1 on #0A0A0A, this is ~7:1 */
+
+  /* ---------- SUN (the mark's own gradient, sampled from assets/Helios-mark.png) ---------- */
+  --helios-sun-top:    #FDC60F;   /* yellow, top edge */
+  --helios-sun-mid:    #F48C3F;   /* orange, ~35% down */
+  --helios-sun-bottom: #EA3C3A;   /* red, solid from ~62% down */
+  --helios-sun: linear-gradient(180deg, var(--helios-sun-top) 0%, var(--helios-sun-mid) 35%, var(--helios-sun-bottom) 62%, var(--helios-sun-bottom) 100%);
 
   /* ---------- NEUTRALS (Tailwind neutral scale, anchored) ---------- */
   --neutral-0:    #FFFFFF;   /* page background */
@@ -141,6 +148,26 @@
   --duration-base:    300ms;
   --duration-slow:    700ms;
   --duration-slower:  1000ms;   /* image hover scale */
+
+  /* ---------- STAGE (the dark surface: social, deck titles, premium) ---------- */
+  --stage-top:     #161616;   /* charcoal, top of the ground */
+  --stage-bottom:  #0B0B0B;   /* charcoal, bottom of the ground */
+  --stage-ink:     #FFFFFF;
+  --stage-ink-2:   rgba(255,255,255,0.66);
+  --stage-ink-3:   rgba(255,255,255,0.45);
+  --stage-orange:  #FF6A2A;   /* Helios orange lifted for the dark ground: lit headline line, eyebrows */
+  --stage-red:     #E8413B;   /* the hot end of the stage gradient */
+
+  /* ---------- PREMIUM (lighting and depth on the stage; recipes in premium.css) ---------- */
+  --premium-glow-rgb:   255, 106, 42;   /* warm light, used as rgba(var(--premium-glow-rgb), a) */
+  --premium-red-rgb:    232, 65, 59;    /* low red bloom */
+  --premium-highlight:  inset 0 1px 0 rgba(255,255,255,0.20);   /* 1px top highlight on lit surfaces */
+  --premium-hairline:   rgba(255,255,255,0.10);
+  --premium-shadow-lift: 0 30px 60px -20px rgba(0,0,0,0.80), 0 8px 18px rgba(0,0,0,0.35);
+  --premium-glass:      linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 100%);
+  --premium-glass-line: rgba(255,255,255,0.16);
+  --premium-glass-shadow: 0 12px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.22);
+  --premium-tile:       linear-gradient(160deg, #FF7A2E 0%, #F0552A 55%, #E8413B 100%);   /* glossy icon tile */
 }
 
 /* ==========================================================================
