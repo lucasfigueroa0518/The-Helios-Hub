@@ -25,7 +25,6 @@
     "social:worker": "tsx scripts/social_worker.ts",
     "db:explainers": "node scripts/apply_explainers_schema.js",
     "db:stories": "node scripts/apply_stories_schema.js",
-    "db:stories:multi-slot": "node scripts/apply_stories_multi_slot.js",
     "explainers:fixture": "tsx scripts/explainers_fixture.ts",
     "explainers:db": "tsx scripts/explainers_local_db.ts",
     "explainers:worker": "tsx scripts/explainers_worker.ts",
