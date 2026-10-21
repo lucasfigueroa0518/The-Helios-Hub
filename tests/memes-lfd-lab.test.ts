@@ -243,8 +243,11 @@ test('odds rows: one regime and one tagger version; a partly graded slate counts
 
 test('a declared equivalent regime counts as the same evidence; others do not', async () => {
   const e = EQUIVALENT_REGIMES[0]!;
-  assert.deepEqual(evidenceRegimes(e.regime).sort(), [e.regime, e.sameAs].sort());
-  assert.deepEqual(evidenceRegimes(e.sameAs).sort(), [e.regime, e.sameAs].sort());
+  // The declared regimes form one chain (ME-138, ME-142), so each counts the whole chain, transitively.
+  const chain = [...new Set(EQUIVALENT_REGIMES.flatMap((x) => [x.regime, x.sameAs]))].sort();
+  assert.deepEqual(evidenceRegimes(e.regime).sort(), chain);
+  assert.deepEqual(evidenceRegimes(e.sameAs).sort(), chain);
+  assert.deepEqual(evidenceRegimes(EQUIVALENT_REGIMES.at(-1)!.sameAs).sort(), chain);
   assert.deepEqual(evidenceRegimes('other'), ['other']);
   assert.equal(regimeId(), e.regime, 'the current code is the declared layout-only regime');
   const { db } = await openLocalMemesDb();

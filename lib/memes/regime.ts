@@ -85,6 +85,11 @@ export function runRegime(run: { pipeline: string; requestedAt: string; shape: R
  */
 export const EQUIVALENT_REGIMES: ReadonlyArray<{ regime: string; sameAs: string; note: string }> = [
   {
+    regime: 'b434c119a1e0',
+    sameAs: 'fd22b427977c',
+    note: 'The shared voice block lost its caption-only line ("In the caption, three short sentences in a row is too many"), which the meme writer prompt carries; nothing else moved (Lucas, 2026-10-21; ME-142).',
+  },
+  {
     regime: 'fd22b427977c',
     sameAs: '3af2b639964f',
     note: 'v5 with the Monkey Puppet and Evil Kermit boxes moved (Lucas, 2026-10-19); writing, judging and picking unchanged (ME-138).',
