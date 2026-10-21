@@ -151,12 +151,17 @@ export function reject(db: StoriesDb, id: string, body: { tags?: unknown; note?:
   return guard(() => rejectSet(db, id, { tags, note, by }));
 }
 
-/** Regenerate: reject this set (kept as feedback) and ask for a new one for the same day. */
+/**
+ * Regenerate: reject this set (kept as feedback) and ask for a new one for the
+ * same day and, in template mode, the same slot (R28; R15: one Stories
+ * behaviour everywhere). getSet reads slot_minute through the row (R12), so a
+ * legacy set (null, or no column yet) asks exactly as before.
+ */
 export async function regenerate(db: StoriesDb, id: string, by: string) {
   const got = await getSet(db, id);
   if (!got) throw new ApiError(404, 'No such set.');
   await guard(() => rejectSet(db, id, { note: 'regenerated', by }));
-  return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by });
+  return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by, slotMinute: got.set.slot_minute ?? null });
 }
 
 /** Publish now: approve if needed, and post at the next minute (the worker is the clock). */
