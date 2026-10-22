@@ -221,10 +221,9 @@ export function Floating({ anchor, flip, label, onClose, children, width }: { an
   );
 }
 
-export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptions, timesFor, onClose, onMode, onMove, onRemove, onReset, onCopyDay }: {
+export function SlotPanel({ card, column, anchor, flip, editable, dayOptions, timesFor, onClose, onMode, onMove, onRemove, onReset }: {
   card: BoardCard<SlimPost>;
   column: BoardColumn;
-  mode: 'week' | 'template';
   anchor: HTMLElement;
   flip: boolean;
   editable: boolean;
@@ -237,13 +236,9 @@ export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptio
   onMove: (to: number, minute: number) => void;
   onRemove: () => void;
   onReset: () => void;
-  onCopyDay: () => void;
 }) {
   const names = chipNames(card.vertical, card.series);
-  const weekday = WEEKDAY_LONG[column.weekday]!;
-  const when = mode === 'week' && column.nyDate
-    ? new Date(`${column.nyDate}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-    : `Every ${weekday}`;
+  const when = new Date(`${column.nyDate}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
   const [to, setTo] = useState(card.day);
   const [minute, setMinute] = useState(card.startMinute);
   const canEdit = editable && !card.locked;
@@ -277,14 +272,12 @@ export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptio
           </p>
         </div>
       ) : null}
-      {mode === 'week' ? (
-        column.edited ? (
-          <p className="sh-board__source">
-            This day differs from the standard {weekday}.{' '}
-            {editable ? <><button type="button" className="sh-board__lnk" onClick={onReset}>Reset day</button> · <button type="button" className="sh-board__lnk" onClick={onCopyDay}>Make this every {weekday}</button></> : null}
-          </p>
-        ) : <p className="sh-board__source sh-muted">Comes from the standard week (every {weekday}).</p>
-      ) : <p className="sh-board__source sh-muted">Part of the Standard week. Each week’s {weekday} starts from it.</p>}
+      {card.mine ? (
+        <p className="sh-board__source">
+          You changed this slot for this date.{' '}
+          {editable ? <button type="button" className="sh-board__lnk" onClick={onReset}>Reset day</button> : null}
+        </p>
+      ) : <p className="sh-board__source sh-muted">Comes from the schedule (every {WEEKDAY_LONG[column.weekday]}).</p>}
       {canEdit ? (
         <div className="sh-board__move">
           <DayTimePicker

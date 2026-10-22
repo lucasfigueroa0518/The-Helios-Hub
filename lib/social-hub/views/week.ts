@@ -2,7 +2,7 @@ import { addDays, nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/ti
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { isLocked } from '@/lib/social-hub/slots/rules';
 import { clockLabel, DAY_END, DAY_START, DRIFT, FEED_GAP, isFeedSlot, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
-import { slotId, slotKeyString, type FeedMode, type ResolvedSlot, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
+import { sameSlotKey, slotId, slotKeyString, type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
@@ -77,7 +77,13 @@ export const canMoveBack = (list: ReadonlyArray<{ refs: Readonly<Record<string, 
 export const stuckNote = (n: number): string =>
   `${n} post${n === 1 ? '' : 's'} couldn’t be moved here. Unschedule ${n === 1 ? 'it' : 'them'} from the post page.`;
 
-export type WeekDayInput = { nyDate: string | null; weekday: number; slots: ResolvedSlot[] };
+export type WeekDayInput = {
+  nyDate: string;
+  weekday: number;
+  slots: ResolvedSlot[];
+  /** The keys the person set on this date (slot_override.set_by 'person'): "Edited" and Reset day follow these, not a comparison with the schedule. */
+  personKeys: SlotKey[];
+};
 
 /** A post in one of these holds its slot (the same set the slot writer reports as booked). */
 const HOLDS = new Set(['scheduled', 'publishing', 'published']);
@@ -86,22 +92,25 @@ export function mondayOf(nyDate: string): string {
   return addDays(nyDate, -((weekdayOf(nyDate) + 6) % 7));
 }
 
-/** The seven dates from `monday`, each resolved from a template alone (legacy view, preview). */
-export function datedWeek(template: readonly TemplateRow[], monday: string): WeekDayInput[] {
+/** The seven dates from `monday`, each resolved from a template and the dates' overrides; a person's overrides are its person keys. */
+export function weekFromOverrides(template: readonly TemplateRow[], overrides: readonly OverrideRow[], monday: string): WeekDayInput[] {
   return Array.from({ length: 7 }, (_, i) => {
     const nyDate = addDays(monday, i);
-    return { nyDate, weekday: weekdayOf(nyDate), slots: resolveDay(template, [], nyDate) };
+    const personKeys = overrides
+      .filter((o) => o.nyDate === nyDate && o.setBy === 'person')
+      .map((o) => ({ vertical: o.vertical, startMinute: o.startMinute, series: o.series }));
+    return { nyDate, weekday: weekdayOf(nyDate), slots: resolveDay(template, overrides, nyDate), personKeys };
   });
 }
 
-/** The template itself, Monday first, with no dates. */
-export function templateWeek(template: readonly TemplateRow[], monday: string): WeekDayInput[] {
-  return datedWeek(template, monday).map((d) => ({ ...d, nyDate: null }));
+/** The seven dates from `monday`, each resolved from a template alone (legacy view, preview). */
+export function datedWeek(template: readonly TemplateRow[], monday: string): WeekDayInput[] {
+  return weekFromOverrides(template, [], monday);
 }
 
-/** Each weekday's Standard week slots (0 = Sunday), for "Edited" and Reset day. */
+/** Each weekday's standing slots (0 = Sunday), for Reset day and Gaps. */
 export function standardByWeekday(template: readonly TemplateRow[]): Record<number, ResolvedSlot[]> {
-  return Object.fromEntries(templateWeek(template, '2026-10-19').map((d) => [d.weekday, d.slots]));
+  return Object.fromEntries(datedWeek(template, '2026-10-19').map((d) => [d.weekday, d.slots]));
 }
 
 /** "Oct 19 – 25", or "Oct 26 – Nov 1" across a month end. */
@@ -117,13 +126,13 @@ export function weekLabel(monday: string): string {
 export type CardStatus = 'empty' | 'waiting' | 'approved' | 'posted' | 'started';
 
 export type BoardColumn = {
-  nyDate: string | null;
+  nyDate: string;
   weekday: number;
   past: boolean;
   isToday: boolean;
   /** A past day folds into a slim "N posted" column. */
   folded: boolean;
-  /** The date's resolved slots differ from its standard weekday (by key, time or mode). */
+  /** The person edited this date (it has a person override); a system pin doesn't count. */
   edited: boolean;
   /** Folded: the posts that went out. Otherwise: the day's slots. */
   count: number;
@@ -152,6 +161,8 @@ export type BoardCard<P extends BoardPost = HubPost> = {
   /** Past the type's daily cap for this day, so the run makes nothing for it. */
   overCap: boolean;
   outsideUsual: boolean;
+  /** The person set this slot on this date (one of the day's person keys). */
+  mine: boolean;
 };
 
 export const STATUS_TEXT = {
@@ -170,25 +181,14 @@ export function dayShortLabel(nyDate: string): string {
   return `${WEEKDAY_SHORT[weekdayOf(nyDate)]} ${MONTH_SHORT[m! - 1]} ${d}`;
 }
 
-const setOf = (slots: readonly ResolvedSlot[]) => new Set(slots.map((s) => `${slotKeyString(s)}|${s.feedMode ?? ''}`));
-
-function sameSlots(a: readonly ResolvedSlot[], b: readonly ResolvedSlot[]): boolean {
-  const x = setOf(a);
-  const y = setOf(b);
-  return x.size === y.size && [...x].every((k) => y.has(k));
-}
-
 const byTimeThenKey = (a: ResolvedSlot, b: ResolvedSlot) => a.startMinute - b.startMinute || slotKeyString(a).localeCompare(slotKeyString(b));
 
 export function boardModel<P extends BoardPost = HubPost>(input: {
-  mode: 'week' | 'template';
   days: readonly WeekDayInput[];
   posts: readonly P[];
   now: Date;
   /** The daily caps (readCaps on the live page, DEFAULT_CAPS on the preview). */
   caps: Record<Vertical, number>;
-  /** Each weekday's standard slots (0 = Sunday), for "Edited". Without it no day reads as edited. */
-  standard?: Readonly<Record<number, readonly ResolvedSlot[]>>;
 }): { columns: BoardColumn[]; cards: BoardCard<P>[] } {
   const caps = input.caps;
   const today = nyDateOf(input.now)!;
@@ -197,10 +197,9 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
   const cards: BoardCard<P>[] = [];
 
   input.days.forEach((d, day) => {
-    const dated = input.mode === 'week' && d.nyDate != null;
-    const past = dated && d.nyDate! < today;
+    const past = d.nyDate < today;
     const slots = [...d.slots].sort(byTimeThenKey);
-    const ctx = { nyDate: dated ? d.nyDate : null, weekday: d.weekday, slots, today, nowMinute };
+    const ctx = { nyDate: d.nyDate, weekday: d.weekday, slots, today, nowMinute };
     const seen = new Map<string, number>();
     const dayCards: BoardCard<P>[] = slots.map((s) => {
       const capKey = s.vertical === 'stories' ? `stories|${s.series ?? ''}` : s.vertical;
@@ -208,10 +207,8 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
       seen.set(capKey, index + 1);
       const overCap = index >= Math.max(0, caps[s.vertical]);
       const id = slotId(s.startMinute, s.series);
-      const booked = dated
-        ? input.posts.find((p) => p.vertical === s.vertical && p.nyDate === d.nyDate && p.slot?.id === id && (HOLDS.has(p.status) || p.status === 'ready')) ?? null
-        : null;
-      const timeLocked = dated && isLocked(ctx, s);
+      const booked = input.posts.find((p) => p.vertical === s.vertical && p.nyDate === d.nyDate && p.slot?.id === id && (HOLDS.has(p.status) || p.status === 'ready')) ?? null;
+      const timeLocked = isLocked(ctx, s);
       let status: CardStatus;
       if (booked?.status === 'published') status = 'posted';
       // Placing is not approving: a booked post that needs a person and has no approval yet is waiting (spec decision 16).
@@ -220,9 +217,7 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
       const statusText = status === 'empty'
         ? overCap
           ? STATUS_TEXT.overCap
-          : d.nyDate && dated
-            ? `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(d.nyDate)}.`
-            : `Every ${WEEKDAY_LONG[d.weekday]}. Each week the ${RUN_HOUR_LABEL[s.vertical]} run makes this post on the day.`
+          : `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(d.nyDate)}.`
         : STATUS_TEXT[status];
       return {
         key: `${day}|${slotKeyString(s)}`,
@@ -238,16 +233,16 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
         locked: timeLocked || status === 'posted',
         overCap,
         outsideUsual: !isUsual(s.vertical, s.startMinute),
+        mine: d.personKeys.some((k) => sameSlotKey(k, s)),
       };
     });
-    const standard = input.standard?.[d.weekday];
     columns.push({
       nyDate: d.nyDate,
       weekday: d.weekday,
       past,
-      isToday: dated && d.nyDate === today,
+      isToday: d.nyDate === today,
       folded: past,
-      edited: dated && standard != null && !sameSlots(d.slots, standard),
+      edited: d.personKeys.length > 0,
       count: past ? dayCards.filter((c) => c.status === 'posted').length : dayCards.length,
     });
     cards.push(...dayCards);

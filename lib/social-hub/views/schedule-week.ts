@@ -17,8 +17,8 @@ import type { WeekDayInput } from '@/lib/social-hub/views/week';
  *  - After an LFD / Carousels confirm, the other type's routine slots come
  *    off the confirmed weekdays; where it has a hand-set slot, the saved type
  *    skips that date.
- * The Standard week (no dates) is the template itself: each entry's slots
- * are replaced outright. Pure: no React, no clock of its own.
+ * The board's standing week (scheduleStandardDay) is the template itself:
+ * each entry's slots are replaced outright. Pure: no React, no clock of its own.
  */
 
 type EntryKey = Pick<ScheduleEntry, 'vertical' | 'series'>;
@@ -38,17 +38,16 @@ const isEntry = (k: EntryKey, e: EntryKey) => k.vertical === e.vertical && k.ser
 const rowsOf = (t: readonly TemplateRow[], e: EntryKey, weekday: number) => t.filter((r) => r.weekday === weekday && isEntry(r, e));
 const asSlot = (r: TemplateRow): ResolvedSlot => ({ vertical: r.vertical, startMinute: r.startMinute, series: r.series, feedMode: r.feedMode, origin: 'template' });
 
-/** One weekday of the Standard week after the change: the entries' slots replaced, the cleared type off its days. */
+/** One weekday of the standing week after the change: the entries' slots replaced, the cleared type off its days. */
 export function scheduleStandardDay(slots: readonly ResolvedSlot[], weekday: number, c: ScheduleChange): ResolvedSlot[] {
   const cleared = c.clear && c.clear.days.includes(weekday) ? c.clear.entry : null;
   const kept = slots.filter((s) => !c.entries.some((e) => isEntry(s, e)) && !(cleared && isEntry(s, cleared)));
   return sortSlots([...kept, ...c.entries.flatMap((e) => rowsOf(c.after, e, weekday).map(asSlot))]);
 }
 
-/** The board's days after the change. `clock` is the board's (today and now); the Standard week ignores it. */
+/** The board's days after the change. `clock` is the board's (today and now). */
 export function scheduleDays(days: readonly WeekDayInput[], c: ScheduleChange, clock: { today: string; nowMinute: number }): WeekDayInput[] {
   return days.map((d) => {
-    if (!d.nyDate) return { ...d, slots: scheduleStandardDay(d.slots, d.weekday, c) };
     if (d.nyDate < clock.today) return d;
     const started = (m: number) => d.nyDate === clock.today && m <= clock.nowMinute;
     let slots = [...d.slots];

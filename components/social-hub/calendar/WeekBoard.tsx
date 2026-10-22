@@ -22,8 +22,8 @@ import {
   type BoardCard, type SwitchFacts, type WeekDayInput,
 } from '@/lib/social-hub/views/week';
 import {
-  bookedHits, clockOf, readyTakenAt, dayCtx, dayName, defaultPlaceMinute, dropState, everyFor, nameOf, openMinutes, planCopyDay, readyMinutes, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
-  type BoardState, type Drop, type Edit, type Every, type Hit,
+  bookedHits, clockOf, readyTakenAt, dayCtx, dayName, defaultPlaceMinute, dropState, nameOf, openMinutes, readyMinutes, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
+  type BoardState, type Drop, type Edit, type Hit,
 } from '@/lib/social-hub/views/week-edit';
 
 /**
@@ -53,7 +53,7 @@ type Booked = { postId: string | null; vertical: Vertical; refs: Record<string, 
 
 type Ask = { title: string; body: string; ok: string; cancel: string; run: () => void | Promise<void>; canOk?: boolean; /** Why OK is off, shown in the dialog. */ note?: string | null };
 
-type Toast = { id: number; text: string; warn?: boolean; command?: Command; every?: Every | null };
+type Toast = { id: number; text: string; warn?: boolean; command?: Command };
 
 type Pick = {
   anchor: HTMLElement;
@@ -71,7 +71,7 @@ type Pick = {
   run: (day: number, minute: number) => void;
 };
 
-/** Module scope: undo survives switching between This week and Standard week. */
+/** Module scope: undo survives moving between weeks and coming back. */
 const history = createHistory();
 /** The board as it was before each command, to show the undo at once. */
 const before = new WeakMap<Command, BoardState<SlimPost>>();
@@ -100,7 +100,6 @@ const hourLabel = (m: number) => { const h = m / 60; return `${h % 12 || 12} ${h
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 export function WeekBoard(props: {
-  mode: 'week' | 'template';
   /** The week shown (its Monday): undo only reaches edits made on this week. */
   monday: string;
   /** The unschedule action is on, so "Move it back to ready" can work. */
@@ -120,11 +119,11 @@ export function WeekBoard(props: {
   scheduleChanges?: readonly ScheduleChange[];
 }) {
   const router = useRouter();
-  const { mode, caps, editable, sandbox } = props;
-  const tab: Tab = mode === 'template' ? 'standard' : `week:${props.monday}`;
+  const { caps, editable, sandbox } = props;
+  const tab: Tab = `week:${props.monday}`;
 
   // The server's board; a fresh one (after a save refreshes the page) replaces what's on screen.
-  const base = useMemo<BoardState<SlimPost>>(() => ({ mode, days: props.days, standard: props.standard, posts: props.posts }), [mode, props.days, props.standard, props.posts]);
+  const base = useMemo<BoardState<SlimPost>>(() => ({ days: props.days, standard: props.standard, posts: props.posts }), [props.days, props.standard, props.posts]);
   const [seen, setSeen] = useState(base);
   const [state, setState] = useState(base);
   const [ready, setReady] = useState(props.ready);
@@ -162,8 +161,8 @@ export function WeekBoard(props: {
   }, [props.scheduleChanges, sandbox, clock, base]);
 
   const model = useMemo(
-    () => boardModel({ mode, days: state.days, posts: state.posts, now, caps, standard: mode === 'week' ? state.standard : undefined }),
-    [mode, state, now, caps],
+    () => boardModel({ days: state.days, posts: state.posts, now, caps }),
+    [state, now, caps],
   );
   const topOf = useMemo(() => stackOffsets(model.cards, AXIS), [model.cards]);
   const byDay = useMemo(() => model.columns.map((_, i) => model.cards.filter((c) => c.day === i)), [model]);
@@ -278,7 +277,7 @@ export function WeekBoard(props: {
   }, [begin, finish, moveBack, props.canUnschedule, router, sandbox, warn]);
 
   type Commit = { label: string; changes: Command['changes']; inverse: Command['inverse']; next: BoardState<SlimPost> };
-  type CommitOpts = { every?: Every | null; text?: string; undoable?: boolean; checked?: boolean; moved?: number; reopen?: string };
+  type CommitOpts = { text?: string; undoable?: boolean; checked?: boolean; moved?: number; reopen?: string };
 
   const commit = useCallback(async (plan: Commit, o: CommitOpts = {}): Promise<void> => {
     const was = stateRef.current;
@@ -310,9 +309,9 @@ export function WeekBoard(props: {
     history.push(command);
     before.set(command, was);
     const moved = o.moved ? ` ${plural(o.moved, 'post')} went back to Ready to place and ${o.moved === 1 ? 'needs' : 'need'} approval again.` : '';
-    say({ text: `${o.text ?? toastText(plan.label, mode)}${moved}`, command, every: o.every ?? null });
+    say({ text: `${o.text ?? toastText(plan.label)}${moved}`, command });
     if (o.reopen) setReopen(o.reopen);
-  }, [askBooked, begin, finish, mode, router, sandbox, say, send, tab, warn]);
+  }, [askBooked, begin, finish, router, sandbox, say, send, tab, warn]);
 
   const doEdit = useCallback((edit: Edit, o: { reopen?: boolean } = {}) => {
     if (saving()) return;
@@ -333,17 +332,9 @@ export function WeekBoard(props: {
       return;
     }
     if (p.noop) return;
-    const landed = edit.op === 'place' || edit.op === 'move' ? { ...edit, minute: p.minute! } : edit;
-    const every = everyFor(s, landed, clock);
     const key = edit.op === 'move' ? `${edit.to}|${edit.key.vertical}|${slotId(p.minute!, edit.key.series)}` : undefined;
-    void commit(p, { every, reopen: o.reopen ? key : undefined });
+    void commit(p, { reopen: o.reopen ? key : undefined });
   }, [clock, commit, warn]);
-
-  const runEvery = useCallback((every: Every) => {
-    if (saving()) return;
-    const s = stateRef.current;
-    void commit({ label: every.label, changes: every.changes, inverse: every.inverse, next: { ...s, standard: every.standard } }, { text: `${every.label}.`, checked: true });
-  }, [commit]);
 
   const undo = useCallback(async () => {
     if (saving() || !history.canUndo(tab)) return;
@@ -385,18 +376,9 @@ export function WeekBoard(props: {
     if (saving()) return;
     const p = planReset(stateRef.current, day, clock);
     if (!p.ok) { warn(p.reason); return; }
-    if (p.noop) { say({ text: `${dayName(stateRef.current, day)} already matches the standard week.` }); return; }
+    if (p.noop) { say({ text: `${dayName(stateRef.current, day)} has no changes of yours to reset.` }); return; }
     void commit(p, { text: `${p.label}.` });
   }, [clock, commit, say, warn]);
-
-  const doCopyDay = useCallback((day: number) => {
-    if (saving()) return;
-    const s = stateRef.current;
-    const p = planCopyDay(s, day);
-    if (!p.ok) { warn(p.reason); return; }
-    if (p.noop) return;
-    void commit({ label: p.label, changes: p.changes, inverse: p.inverse, next: { ...s, standard: p.standard } }, { text: `${p.label}.`, checked: true });
-  }, [commit, warn]);
 
   const readyTaken = (st: BoardState<SlimPost>, item: ReadyItem, nyDate: string | null) => readyTakenAt(st, item, item.series, nyDate);
 
@@ -482,7 +464,7 @@ export function WeekBoard(props: {
   // a card drawn lower than 9 PM grows every day by the rest, so nothing clips. The axis (and minuteForY) is unchanged.
   const overrun = Math.max(0, ...[...topOf.values()].map((t) => t - AXIS)) / AXIS;
   const when = (day: number) => dayName(state, day);
-  const dayOptions = model.columns.flatMap((c, i) => (c.folded ? [] : [{ day: i, label: mode === 'week' && c.nyDate ? dayShortLabel(c.nyDate) : WEEKDAY_LONG[c.weekday]! }]));
+  const dayOptions = model.columns.flatMap((c, i) => (c.folded ? [] : [{ day: i, label: dayShortLabel(c.nyDate) }]));
   const openCard = open ? model.cards.find((c) => c.key === open.key) ?? null : null;
 
   const gaps = useMemo(() => {
@@ -570,7 +552,7 @@ export function WeekBoard(props: {
       ) : null}
 
       <div className="sh-board__scroll">
-        <div ref={grid} className="sh-board__grid" style={{ gridTemplateColumns: `44px ${cols}`, '--sh-stack-over': overrun } as CSSProperties} role="group" aria-label={mode === 'template' ? 'Standard week' : 'This week'}>
+        <div ref={grid} className="sh-board__grid" style={{ gridTemplateColumns: `44px ${cols}`, '--sh-stack-over': overrun } as CSSProperties} role="group" aria-label="This week">
           <div className="sh-board__gutter" aria-hidden="true">
             <div className="sh-board__dhead" />
             <div className="sh-board__axis sh-board__axis--gutter">
@@ -579,8 +561,8 @@ export function WeekBoard(props: {
           </div>
           {model.columns.map((c, i) => {
             const cards = byDay[i]!;
-            const label = mode === 'week' && c.nyDate ? `${WEEKDAY_SHORT[c.weekday]} ${Number(c.nyDate.slice(8))}` : WEEKDAY_LONG[c.weekday];
-            const spoken = mode === 'week' && c.nyDate ? `${WEEKDAY_LONG[c.weekday]} ${dayShortLabel(c.nyDate).slice(4)}` : `Every ${WEEKDAY_LONG[c.weekday]}`;
+            const label = `${WEEKDAY_SHORT[c.weekday]} ${Number(c.nyDate.slice(8))}`;
+            const spoken = `${WEEKDAY_LONG[c.weekday]} ${dayShortLabel(c.nyDate).slice(4)}`;
             if (c.folded) {
               return (
                 <section key={i} className="sh-board__day is-folded" aria-label={`${spoken}, past: ${c.count} posted`}>
@@ -641,41 +623,39 @@ export function WeekBoard(props: {
 
       <ul className="sh-key sh-board__key" aria-label="Key">
         <li><span className="sh-board__tag sh-board__tag--key" data-mode="trial">Trial</span> / <span className="sh-board__tag sh-board__tag--key" data-mode="main">Main</span> click to switch</li>
-        {mode === 'week' ? <li><span className="sh-board__mark" aria-hidden="true" />a post is booked</li> : null}
-        {mode === 'week' ? <li><span className="sh-board__badge sh-board__badge--edited">Edited</span>differs from the standard week</li> : null}
+        <li><span className="sh-board__mark" aria-hidden="true" />a post is booked</li>
+        <li><span className="sh-board__badge sh-board__badge--edited">Edited</span>you changed this date</li>
         <li>{editable ? 'Click a slot for details · drag to move · drag back onto the row above to remove' : 'Click a slot for details'}</li>
         <li>Times are New York.</li>
       </ul>
 
       {editable ? (
         <div className="sh-board__below">
-          {mode === 'week' ? (
-            <section className="sh-panel sh-board__section" aria-labelledby="sh-board-ready">
-              <h2 className="sh-title" id="sh-board-ready">Ready to place <span className="sh-count">{ready.length}</span></h2>
-              <p className="sh-subtle">Made, with no slot yet. Drag one onto a day and time.</p>
-              {ready.length ? (
-                <ul className="sh-board__ready">
-                  {ready.map((r) => (
-                    <li key={r.id} className="sh-board__rcard" style={typeStyle(r.vertical)} {...drag.sourceProps({ kind: 'ready', id: r.id, vertical: r.vertical, series: r.series, label: r.name }, !busy)}>
-                      <span className="sh-board__dot" aria-hidden="true" />
-                      <span className="sh-board__rmain">
-                        <span className="sh-board__rname">{r.name}</span>
-                        <span className="sh-subtle">{r.series ? SERIES_NAME[r.series].one : verticalInfo(r.vertical).label} · {r.made}</span>
-                      </span>
-                      <button
-                        type="button"
-                        className="sh-btn sh-btn--quiet"
-                        data-pick=""
-                        onClick={(e) => readyPick(e.currentTarget, r)}
-                      >
-                        Place…
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : <p className="sh-board__none">Nothing waiting. Everything made has a slot.</p>}
-            </section>
-          ) : null}
+          <section className="sh-panel sh-board__section" aria-labelledby="sh-board-ready">
+            <h2 className="sh-title" id="sh-board-ready">Ready to place <span className="sh-count">{ready.length}</span></h2>
+            <p className="sh-subtle">Made, with no slot yet. Drag one onto a day and time.</p>
+            {ready.length ? (
+              <ul className="sh-board__ready">
+                {ready.map((r) => (
+                  <li key={r.id} className="sh-board__rcard" style={typeStyle(r.vertical)} {...drag.sourceProps({ kind: 'ready', id: r.id, vertical: r.vertical, series: r.series, label: r.name }, !busy)}>
+                    <span className="sh-board__dot" aria-hidden="true" />
+                    <span className="sh-board__rmain">
+                      <span className="sh-board__rname">{r.name}</span>
+                      <span className="sh-subtle">{r.series ? SERIES_NAME[r.series].one : verticalInfo(r.vertical).label} · {r.made}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="sh-btn sh-btn--quiet"
+                      data-pick=""
+                      onClick={(e) => readyPick(e.currentTarget, r)}
+                    >
+                      Place…
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="sh-board__none">Nothing waiting. Everything made has a slot.</p>}
+          </section>
           <section className="sh-panel sh-board__section" aria-labelledby="sh-board-gaps">
             <h2 className="sh-title" id="sh-board-gaps">Gaps and warnings <span className="sh-count">{gaps.length}</span></h2>
             <p className="sh-subtle">Things worth a look before the week runs.</p>
@@ -699,7 +679,6 @@ export function WeekBoard(props: {
           key={`${openCard.key}|${openCard.feedMode ?? ''}`}
           card={openCard}
           column={model.columns[openCard.day]!}
-          mode={mode}
           anchor={open.anchor}
           flip={openCard.day >= 4}
           editable={editable}
@@ -710,7 +689,6 @@ export function WeekBoard(props: {
           onMove={(to, minute) => doEdit({ op: 'move', day: openCard.day, key: cardKey(openCard), to, minute }, { reopen: true })}
           onRemove={() => { setOpen(null); doEdit({ op: 'remove', day: openCard.day, key: cardKey(openCard) }); }}
           onReset={() => { setOpen(null); doReset(openCard.day); }}
-          onCopyDay={() => doCopyDay(openCard.day)}
         />
       ) : null}
 
@@ -728,7 +706,6 @@ export function WeekBoard(props: {
         {toast ? (
           <div className={`sh-board__toast${toast.warn ? ' is-warn' : ''}`} role={toast.warn ? 'alert' : 'status'}>
             <span>{toast.text}</span>
-            {toast.every ? <button type="button" className="sh-board__toast-primary" onClick={() => { const e = toast.every!; setToast(null); runEvery(e); }}>{toast.every.button}</button> : null}
             {toast.command && toast.command.undoable && history.peek(tab) === toast.command ? <button type="button" onClick={() => void undo()}>Undo</button> : null}
             {busy ? <Loader size={14} className="sh-board__spin" aria-label="Saving" /> : null}
           </div>

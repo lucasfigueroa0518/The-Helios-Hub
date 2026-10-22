@@ -172,7 +172,7 @@ test('LFD and Carousels never raise each other\'s feed warning (fix round 1, B2)
 
 test('the sandbox board: past days and today\'s started slots stay, ties hold, board edits are kept', async () => {
   const { scheduleDays, scheduleStandardDay } = await import('@/lib/social-hub/views/schedule-week');
-  const { datedWeek, templateWeek } = await import('@/lib/social-hub/views/week');
+  const { datedWeek } = await import('@/lib/social-hub/views/week');
   const C = E('Carousels');
   const before = all.flatMap((d) => [row(d, 'carousels', 540), row(d, 'carousels', 870), row(d, 'explainers', 780, 'main')]);
   const after = replaceSchedule(before, sched('Carousels', [690, 1080], all), null);
@@ -190,9 +190,7 @@ test('the sandbox board: past days and today\'s started slots stay, ties hold, b
   // Today with one started slot: 9:00 started stays and ties 11:30; 2:30 (not started at 10:00) moves to 6:00.
   const morning = scheduleDays(datedWeek(before, '2026-10-05'), change, { today: '2026-10-08', nowMinute: 600 });
   assert.deepEqual(morning[3]!.slots.filter((s) => s.vertical === 'carousels').map((s) => s.startMinute), [540, 1080]);
-  // The Standard week is the template: replaced outright.
-  const std = scheduleDays(templateWeek(before, '2026-10-05'), change, { today: '2026-10-08', nowMinute: 900 });
-  assert.deepEqual(std[3]!.slots.filter((s) => s.vertical === 'carousels').map((s) => s.startMinute), [690, 1080]);
+  // The board's standing week (for Gaps and Reset) is the template: replaced outright.
   assert.deepEqual(scheduleStandardDay(week[0]!.slots, 1, change).filter((s) => s.vertical === 'carousels').map((s) => s.startMinute), [690, 1080]);
 });
 

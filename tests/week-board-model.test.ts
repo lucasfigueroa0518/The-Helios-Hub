@@ -1,5 +1,6 @@
 /** The week board's model and its undo history (spec 2026-10-20-calendar-week-board-redesign). Pure, offline. */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createHistory, type Command } from '@/components/social-hub/calendar/history';
@@ -10,21 +11,23 @@ import type { StoriesRead, StorySetRow } from '@/lib/social-hub/queries/stories'
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
-import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
+import type { ResolvedSlot, SlotKey } from '@/lib/social-hub/slots/types';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 import type { HubPost } from '@/lib/social-hub/types';
 import { boardModel, cardHeight, laterNote, minuteForY, stackOffsets, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
-import { bookedHits, dayCtx, defaultPlaceMinute, dropState, everyFor, openMinutes, planCopyDay, readyMinutes, readyTakenAt, dropKey, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
+import * as weekEdit from '@/lib/social-hub/views/week-edit';
+import { bookedHits, dayCtx, defaultPlaceMinute, dropState, openMinutes, readyMinutes, readyTakenAt, dropKey, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const NOW = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York
 const MON = '2026-10-19';
 const week = () => Array.from({ length: 7 }, (_, i) => {
   const nyDate = addDays(MON, i);
-  return { nyDate, weekday: weekdayOf(nyDate), slots: resolveDay(tpl, [], nyDate) };
+  return { nyDate, weekday: weekdayOf(nyDate), slots: resolveDay(tpl, [], nyDate), personKeys: [] as SlotKey[] };
 });
 const slot = (vertical: ResolvedSlot['vertical'], startMinute: number, extra: Partial<ResolvedSlot> = {}): ResolvedSlot =>
   ({ vertical, startMinute, series: null, feedMode: null, origin: 'template', ...extra });
+const key = (vertical: ResolvedSlot['vertical'], startMinute: number, series: ResolvedSlot['series'] = null): SlotKey => ({ vertical, startMinute, series });
 const standardOf = () => Object.fromEntries(Array.from({ length: 7 }, (_, i) => [weekdayOf(addDays(MON, i)), resolveDay(tpl, [], addDays(MON, i))]));
 const post = (o: Partial<HubPost> & { slotId: string }): HubPost => ({
   id: 'p', vertical: 'explainers', nyDate: '2026-10-21', status: 'scheduled', slot: { id: o.slotId, label: '' },
@@ -32,7 +35,7 @@ const post = (o: Partial<HubPost> & { slotId: string }): HubPost => ({
 }) as unknown as HubPost;
 
 test('an empty Wed explainer says which run makes it and on which day', () => {
-  const m = boardModel({ mode: 'week', days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!;
   assert.equal(c.status, 'empty');
   assert.equal(c.statusText, 'Empty for now. The 2 AM run makes it on Wed Oct 21.');
@@ -59,12 +62,12 @@ const reelsRead = (attempts: ReelAttemptRow[]): ReelsRead => ({ attempts, schedu
 test('adapter → board: a Stories set booked at 8:30 AM shows on its Morning Download card, with its status', () => {
   const posts = storyPosts(storiesRead([storySet()]));
   assert.equal(posts[0]!.slot?.id, 't0510:morning_download');
-  const m = boardModel({ mode: 'week', days: week(), posts, now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts, now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 2 && x.vertical === 'stories' && x.series === 'morning_download' && x.startMinute === 510)!;
   assert.equal(c.booked?.id, posts[0]!.id);
   assert.equal(c.status, 'approved');
   const waiting = storyPosts(storiesRead([storySet({ status: 'ready', approved_at: null })]));
-  const w = boardModel({ mode: 'week', days: week(), posts: waiting, now: NOW, caps: DEFAULT_CAPS }).cards.find((x) => x.day === 2 && x.vertical === 'stories' && x.startMinute === 510)!;
+  const w = boardModel({ days: week(), posts: waiting, now: NOW, caps: DEFAULT_CAPS }).cards.find((x) => x.day === 2 && x.vertical === 'stories' && x.startMinute === 510)!;
   assert.equal(w.status, 'waiting');
 });
 
@@ -77,7 +80,7 @@ test('adapter → board: a posted reel booked at 11:15 AM reads "Posted" and cou
   const posts = reelPosts(reelsRead([reelAttempt()]));
   assert.equal(posts[0]!.slot?.id, 't0675');
   assert.equal(posts[0]!.slot?.label, '11:15 AM');
-  const m = boardModel({ mode: 'week', days: week(), posts, now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts, now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 0 && x.vertical === 'reels' && x.startMinute === 675)!;
   assert.equal(c.status, 'posted');
   assert.equal(c.statusText, 'Posted');
@@ -88,19 +91,19 @@ test('adapter → board: a posted reel booked at 11:15 AM reads "Posted" and cou
 
 test('the details say when the feed gap pushed a post past its slot (spec §Backend, final review #4)', () => {
   const at = (publishAt: string, status: HubPost['status'] = 'scheduled') => {
-    const m = boardModel({ mode: 'week', days: week(), posts: [post({ slotId: 't0780', publishAt, status })], now: NOW, caps: DEFAULT_CAPS });
+    const m = boardModel({ days: week(), posts: [post({ slotId: 't0780', publishAt, status })], now: NOW, caps: DEFAULT_CAPS });
     return laterNote(m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!);
   };
   assert.equal(at('2026-10-21T17:52:00Z'), 'Posts at 1:52 PM, later than the slot, to keep 30 minutes from another feed post.');
   assert.equal(at('2026-10-21T17:15:00Z'), null, '1:15 PM is inside [1:00, 1:15]');
   assert.equal(at('2026-10-21T17:52:00Z', 'published'), null, 'a posted post says Posted');
   const story = storyPosts(storiesRead([storySet({ publish_at: '2026-10-21T13:10:00Z' })]));
-  const m = boardModel({ mode: 'week', days: week(), posts: story, now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts: story, now: NOW, caps: DEFAULT_CAPS });
   assert.equal(laterNote(m.cards.find((x) => x.day === 2 && x.vertical === 'stories' && x.startMinute === 510)!), 'Posts at 9:10 AM, later than the slot.');
 });
 
 test('a posted card is locked with status posted', () => {
-  const m = boardModel({ mode: 'week', days: week(), posts: [post({ slotId: 't0780', status: 'published' })], now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts: [post({ slotId: 't0780', status: 'published' })], now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!;
   assert.equal(c.status, 'posted');
   assert.equal(c.statusText, 'Posted');
@@ -111,14 +114,14 @@ test('a posted card is locked with status posted', () => {
 test('waiting and approved posts read as such', () => {
   const waiting = post({ slotId: 't0780', status: 'ready', approval: { required: true, approvedAt: null, note: null } });
   const approved = post({ id: 'q', slotId: 't0930' });
-  const m = boardModel({ mode: 'week', days: week(), posts: [waiting, approved], now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts: [waiting, approved], now: NOW, caps: DEFAULT_CAPS });
   const at = (min: number) => m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === min)!;
   assert.equal(at(780).statusText, 'Made, waiting for your approval.');
   assert.equal(at(930).statusText, 'Ready and approved.');
 });
 
 test('today\'s 9:00 card at 10:00 has started and is locked', () => {
-  const m = boardModel({ mode: 'week', days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 1 && x.vertical === 'last_few_days' && x.startMinute === 540)!;
   assert.equal(c.status, 'started');
   assert.equal(c.statusText, 'Already started.');
@@ -127,58 +130,55 @@ test('today\'s 9:00 card at 10:00 has started and is locked', () => {
   assert.equal(later.locked, false);
 });
 
-test('past days fold; today does not; template mode never folds', () => {
-  const m = boardModel({ mode: 'week', days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
+test('past days fold; today does not', () => {
+  const m = boardModel({ days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
   assert.deepEqual(m.columns.map((c) => c.folded), [true, false, false, false, false, false, false]);
   assert.equal(m.columns[0]!.past, true);
   assert.equal(m.columns[1]!.isToday, true);
-  const days = week().map((d) => ({ ...d, nyDate: null }));
-  const t = boardModel({ mode: 'template', days, posts: [], now: NOW, caps: DEFAULT_CAPS });
-  assert.ok(t.columns.every((c) => !c.folded && !c.edited));
-  assert.ok(t.cards.every((c) => !c.locked));
 });
 
 test('a folded column counts the posts that went out', () => {
   const monExplainer = post({ slotId: 't0780', nyDate: MON, status: 'published' });
-  const m = boardModel({ mode: 'week', days: week(), posts: [monExplainer], now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: week(), posts: [monExplainer], now: NOW, caps: DEFAULT_CAPS });
   assert.equal(m.columns[0]!.count, 1);
   assert.equal(m.columns[2]!.count, m.cards.filter((c) => c.day === 2).length);
 });
 
-test('edited is true only when the date differs from its standard weekday by key, time or mode', () => {
-  const standard = standardOf();
-  const same = boardModel({ mode: 'week', days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS, standard });
-  assert.ok(same.columns.every((c) => !c.edited));
-  const edit = (f: (s: ResolvedSlot[]) => ResolvedSlot[]) => {
-    const days = week();
-    days[2]!.slots = f(days[2]!.slots);
-    return boardModel({ mode: 'week', days, posts: [], now: NOW, caps: DEFAULT_CAPS, standard }).columns[2]!.edited;
-  };
-  assert.equal(edit((s) => [...s].reverse()), false, 'order alone is not an edit');
-  assert.equal(edit((s) => [...s, slot('explainers', 1000)]), true, 'extra key');
-  assert.equal(edit((s) => s.map((x) => (x.vertical === 'explainers' && x.startMinute === 780 ? { ...x, startMinute: 795 } : x))), true, 'time');
-  assert.equal(edit((s) => s.map((x) => (x.vertical === 'explainers' && x.startMinute === 780 ? { ...x, feedMode: x.feedMode === 'main' ? 'trial' : 'main' } : x))), true, 'mode');
-  assert.equal(edit((s) => s.map((x) => ({ ...x, origin: 'override' as const }))), false, 'origin alone is not an edit');
+test('edited is true only when the date has a person\'s own edit; a system pin or a differing slot alone does not mark it', () => {
+  const plain = boardModel({ days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
+  assert.ok(plain.columns.every((c) => !c.edited));
+  const days = week();
+  // A system pin (today's started slot held, an override the system wrote): the slots differ, but nobody edited the date.
+  days[2]!.slots = [...days[2]!.slots, slot('explainers', 1000, { feedMode: 'main', origin: 'override' })];
+  assert.equal(boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).columns[2]!.edited, false, 'system override');
+  // A person's pin back at the standard time: the slots match, but the person set it.
+  const pinned = week();
+  pinned[3]!.personKeys = [key('explainers', 780)];
+  const m = boardModel({ days: pinned, posts: [], now: NOW, caps: DEFAULT_CAPS });
+  assert.equal(m.columns[3]!.edited, true, 'person pin');
+  assert.equal(m.columns[2]!.edited, false);
+  assert.equal(m.cards.find((c) => c.day === 3 && c.vertical === 'explainers' && c.startMinute === 780)!.mine, true, 'the card says it is theirs');
+  assert.ok(m.cards.filter((c) => c.day !== 3).every((c) => !c.mine));
 });
 
 test('a 4th explainer is over the daily cap; each Stories series counts on its own', () => {
   const days = week();
   days[2]!.slots = [slot('explainers', 780), slot('explainers', 840), slot('explainers', 930), slot('explainers', 1000)];
-  const m = boardModel({ mode: 'week', days, posts: [], now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS });
   assert.deepEqual(m.cards.filter((c) => c.day === 2).map((c) => c.overCap), [false, false, false, true]);
   assert.equal(m.cards.find((c) => c.day === 2 && c.overCap)!.statusText, 'Over today’s limit, so nothing is made for this slot.');
   days[3]!.slots = [
     slot('stories', 510, { series: 'morning_download' }), slot('stories', 540, { series: 'guess_the_number' }),
     slot('stories', 600, { series: 'morning_download' }), slot('stories', 630, { series: 'morning_download' }),
   ];
-  const s = boardModel({ mode: 'week', days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 3);
+  const s = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 3);
   assert.deepEqual(s.map((c) => c.overCap), [false, false, false, true]);
 });
 
 test('outsideUsual flags a time away from the usual windows', () => {
   const days = week();
   days[2]!.slots = [slot('explainers', 780), slot('explainers', 660)];
-  const m = boardModel({ mode: 'week', days, posts: [], now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS });
   assert.deepEqual(m.cards.filter((c) => c.day === 2).map((c) => c.outsideUsual), [true, false]);
 });
 
@@ -239,8 +239,8 @@ test('y and minute are held to the 8 AM-9 PM axis', () => {
 test('now is New York wall-clock, so DST days lock the right cards', () => {
   // Fall back Sun Nov 1 2026: 10:00 EST = 15:00Z. Spring forward Sun Mar 14 2027: 10:00 EDT = 14:00Z.
   for (const [date, iso] of [['2026-11-01', '2026-11-01T15:00:00Z'], ['2027-03-14', '2027-03-14T14:00:00Z']] as const) {
-    const days = [{ nyDate: date, weekday: 0, slots: [slot('carousels', 540), slot('carousels', 660)] }];
-    const m = boardModel({ mode: 'week', days, posts: [], now: new Date(iso), caps: DEFAULT_CAPS });
+    const days = [{ nyDate: date, weekday: 0, slots: [slot('carousels', 540), slot('carousels', 660)], personKeys: [] }];
+    const m = boardModel({ days, posts: [], now: new Date(iso), caps: DEFAULT_CAPS });
     const nine = m.cards.find((c) => c.startMinute === 540)!;
     const eleven = m.cards.find((c) => c.startMinute === 660)!;
     assert.equal(nine.status, 'started', date);
@@ -280,8 +280,7 @@ test('history: a non-undoable command blocks older undos until a newer command e
 
 const CLOCK = { today: '2026-10-20', nowMinute: 600 }; // Tue Oct 20, 10:00 AM
 const WED = 2; // day index of Wed Oct 21
-const state = (posts: BoardPost[] = []): BoardState => ({ mode: 'week', days: week(), standard: standardOf(), posts });
-const key = (vertical: ResolvedSlot['vertical'], startMinute: number, series: ResolvedSlot['series'] = null) => ({ vertical, startMinute, series });
+const state = (posts: BoardPost[] = []): BoardState => ({ days: week(), standard: standardOf(), posts });
 const booked = (o: Partial<BoardPost> & { slotId: string }): BoardPost => ({
   id: 'b1', vertical: 'explainers', nyDate: '2026-10-21', status: 'scheduled', slot: { id: o.slotId, label: '' }, approval: { required: true, approvedAt: null }, ...o,
 });
@@ -384,31 +383,6 @@ test('plan: Trial / Main flip is a put with the new mode; the inverse restores t
   assert.equal(p.label, 'Text on Screen on Wed Oct 21 now posts to the main feed');
 });
 
-test('plan: the Standard week tab writes the template', () => {
-  const t: BoardState = { mode: 'template', days: week().map((d) => ({ ...d, nyDate: null })), standard: standardOf(), posts: [] };
-  const p = planEdit(t, { op: 'remove', day: WED, key: key('explainers', 930) }, CLOCK);
-  assert.ok(p.ok);
-  assert.deepEqual(p.changes, [{ scope: 'template', op: 'delete', weekday: 3, vertical: 'explainers', startMinute: 930, series: null }]);
-  assert.equal(p.label, 'Explainer removed from every Wednesday');
-});
-
-test('make it every: a move between days applies both halves to the Standard week', () => {
-  const s = state();
-  const edit = { op: 'move' as const, day: WED, key: key('explainers', 930), to: 3, minute: 720 };
-  const e = everyFor(s, edit, CLOCK);
-  assert.ok(e);
-  assert.deepEqual(e.changes, [{ scope: 'template', op: 'move', from: { weekday: 3, vertical: 'explainers', startMinute: 930, series: null }, to: { weekday: 4, startMinute: 720 } }]);
-  assert.equal(e.button, 'Make it every Wednesday and Thursday');
-  assert.ok(e.standard[4]!.some((x) => x.vertical === 'explainers' && x.startMinute === 720));
-});
-
-test('make it every: a removal of a slot the Standard week lacks has nothing to save', () => {
-  const s = state();
-  s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }));
-  assert.equal(everyFor(s, { op: 'remove', day: WED, key: key('explainers', 1020) }, CLOCK), null);
-  assert.equal(everyFor(s, { op: 'remove', day: WED, key: key('explainers', 930) }, CLOCK)?.button, 'Make it every Wednesday');
-});
-
 test('booked hits: removing or flipping a booked slot asks; moving a booked Story cannot', () => {
   const [set] = storyPosts(storiesRead([storySet()]));
   const s = state([booked({ slotId: 't0780' }), booked({ id: 'r1', vertical: 'reels', slotId: 't0525' }), set!]);
@@ -423,16 +397,59 @@ test('booked hits: removing or flipping a booked slot asks; moving a booked Stor
   assert.deepEqual(bookedHits(s, story.next).map((h) => [h.post.id, h.why]), [[set!.id, 'cannot-move']]);
 });
 
-test('reset day: only unlocked keys go back to the standard week; the inverse rebuilds the day', () => {
+test('reset day: only the person\'s own keys go back to the schedule; system pins and locked keys stay; the inverse rebuilds them', () => {
   const s = state();
-  // Today (Tue): the started 9:00 LFD was removed (stays removed), an extra 1:30 PM Explainer was added.
-  s.days[1]!.slots = s.days[1]!.slots.filter((x) => x.vertical !== 'last_few_days').concat(slot('explainers', 810, { feedMode: 'main', origin: 'override' }));
-  const r = planReset(s, 1, CLOCK);
+  // Wed: the person moved the 3:30 PM Explainer to 5:00 PM (a remove + an add, both theirs); the system pinned an extra 7 PM Explainer.
+  s.days[WED]!.slots = s.days[WED]!.slots.filter((x) => !(x.vertical === 'explainers' && x.startMinute === 930))
+    .concat(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }), slot('explainers', 1140, { feedMode: 'main', origin: 'override' }));
+  s.days[WED]!.personKeys = [key('explainers', 930), key('explainers', 1020)];
+  const r = planReset(s, WED, CLOCK);
   assert.ok(r.ok && !r.noop);
-  assert.deepEqual(r.changes, [{ scope: 'date', op: 'delete', nyDate: '2026-10-20', vertical: 'explainers', startMinute: 810, series: null }]);
-  assert.deepEqual(r.inverse, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', action: 'add', vertical: 'explainers', startMinute: 810, series: null, feedMode: 'main' }]);
-  assert.ok(!r.next.days[1]!.slots.some((x) => x.vertical === 'last_few_days'), 'the started LFD stays as it was');
-  assert.equal(r.label, 'Tue Oct 20 is back to the standard week');
+  assert.deepEqual(r.changes, [
+    { scope: 'date', op: 'delete', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 1020, series: null },
+    { scope: 'date', op: 'delete', nyDate: '2026-10-21', vertical: 'explainers', startMinute: 930, series: null },
+  ]);
+  assert.deepEqual(r.inverse, [
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', action: 'remove', vertical: 'explainers', startMinute: 930, series: null },
+    { scope: 'date', op: 'put', nyDate: '2026-10-21', action: 'add', vertical: 'explainers', startMinute: 1020, series: null, feedMode: 'main' },
+  ]);
+  const after = r.next.days[WED]!;
+  assert.ok(after.slots.some((x) => x.vertical === 'explainers' && x.startMinute === 930), 'the scheduled 3:30 PM is back');
+  assert.ok(!after.slots.some((x) => x.startMinute === 1020), 'the person\'s 5:00 PM is gone');
+  assert.ok(after.slots.some((x) => x.startMinute === 1140), 'the system pin stays');
+  assert.deepEqual(after.personKeys, []);
+  assert.equal(r.label, 'Wed Oct 21 is back to its schedule');
+  assert.ok(r.ok && planReset(r.next, WED, CLOCK).ok && (planReset(r.next, WED, CLOCK) as { noop: boolean }).noop, 'nothing of theirs is left');
+
+  // Today: the person removed the 9:00 LFD, which has started: it stays removed and stays theirs.
+  const t = state();
+  t.days[1]!.slots = t.days[1]!.slots.filter((x) => x.vertical !== 'last_few_days');
+  t.days[1]!.personKeys = [key('last_few_days', 540)];
+  const today = planReset(t, 1, CLOCK);
+  assert.ok(today.ok && today.noop, 'a started key is never reset');
+});
+
+test('reset day: a date with only system pins has nothing to reset, even though it differs from the schedule', () => {
+  const s = state();
+  s.days[WED]!.slots.push(slot('explainers', 1140, { feedMode: 'main', origin: 'override' }));
+  const r = planReset(s, WED, CLOCK);
+  assert.ok(r.ok && r.noop);
+});
+
+test('board edits mark their keys as the person\'s, so the date reads Edited', () => {
+  const s = state();
+  const moved = planEdit(s, { op: 'move', day: WED, key: key('explainers', 930), to: 3, minute: 720 }, CLOCK);
+  assert.ok(moved.ok);
+  assert.deepEqual(moved.next.days[WED]!.personKeys, [key('explainers', 930)]);
+  assert.deepEqual(moved.next.days[3]!.personKeys, [key('explainers', 720)]);
+  const m = boardModel({ days: moved.next.days, posts: [], now: NOW, caps: DEFAULT_CAPS });
+  assert.deepEqual(m.columns.map((c) => c.edited), [false, false, true, true, false, false, false]);
+  const flip = planEdit(moved.next, { op: 'mode', day: 3, key: key('explainers', 720), feedMode: 'trial' }, CLOCK);
+  assert.ok(flip.ok);
+  assert.deepEqual(flip.next.days[3]!.personKeys, [key('explainers', 720)], 'a key is marked once');
+  const r = planReady(s, { id: 'n1', vertical: 'explainers', nyDate: null, status: 'ready', slot: null, approval: { required: true, approvedAt: null }, name: 'N' }, null, 4, 720, CLOCK);
+  assert.ok(r.ok);
+  assert.deepEqual(r.next.days[4]!.personKeys, [key('explainers', 720)], 'a placement is the person\'s');
 });
 
 test('ready: a placed post books the slot, still needing approval', () => {
@@ -440,30 +457,20 @@ test('ready: a placed post books the slot, still needing approval', () => {
   assert.ok(r.ok);
   assert.equal(r.slot, 't0720');
   assert.equal(r.label, '“Why GPUs cost so much” placed on Wed Oct 21 at 12:00 PM. It still needs approval.');
-  const m = boardModel({ mode: 'week', days: r.next.days, posts: r.next.posts, now: NOW, caps: DEFAULT_CAPS });
+  const m = boardModel({ days: r.next.days, posts: r.next.posts, now: NOW, caps: DEFAULT_CAPS });
   assert.equal(m.cards.find((c) => c.day === WED && c.startMinute === 720)!.status, 'waiting');
 });
 
-test('toast copy: a date edit is just this date; a Standard week edit is every week', () => {
-  assert.equal(toastText('Explainer moved to 12:00 PM on Wed Oct 21', 'week'), 'Explainer moved to 12:00 PM on Wed Oct 21. Just this date.');
-  assert.equal(toastText('Explainer removed from every Wednesday', 'template'), 'Explainer removed from every Wednesday. Every week from now on.');
-});
-
-test('make this every weekday (details panel): the Standard week takes the whole date, and undo restores it', () => {
-  const s = state();
-  s.days[WED]!.slots = s.days[WED]!.slots.filter((x) => !(x.vertical === 'explainers' && x.startMinute === 930)).concat(slot('explainers', 720, { feedMode: 'main', origin: 'override' }));
-  const p = planCopyDay(s, WED);
-  assert.ok(p.ok && !p.noop);
-  assert.deepEqual(p.changes, [
-    { scope: 'template', op: 'delete', weekday: 3, vertical: 'explainers', startMinute: 930, series: null },
-    { scope: 'template', op: 'put', weekday: 3, vertical: 'explainers', startMinute: 720, series: null, feedMode: 'main' },
-  ]);
-  assert.deepEqual(p.inverse, [
-    { scope: 'template', op: 'delete', weekday: 3, vertical: 'explainers', startMinute: 720, series: null },
-    { scope: 'template', op: 'put', weekday: 3, vertical: 'explainers', startMinute: 930, series: null, feedMode: 'main' },
-  ]);
-  assert.equal(p.label, 'Saved: every Wednesday now looks like Wed Oct 21');
-  assert.ok(p.ok && planCopyDay({ ...s, standard: p.standard }, WED).ok && (planCopyDay({ ...s, standard: p.standard }, WED) as { noop: boolean }).noop);
+test('toast copy: a board edit is just this date, and no edit offers "Make it every" (schedules replace it)', () => {
+  assert.equal(toastText('Explainer moved to 12:00 PM on Wed Oct 21'), 'Explainer moved to 12:00 PM on Wed Oct 21. Just this date.');
+  assert.equal('everyFor' in weekEdit, false, 'no "Make it every" plan');
+  assert.equal('planCopyDay' in weekEdit, false, 'no Copy day plan');
+  const board = readFileSync('components/social-hub/calendar/WeekBoard.tsx', 'utf8');
+  const card = readFileSync('components/social-hub/calendar/SlotCard.tsx', 'utf8');
+  for (const src of [board, card]) {
+    assert.ok(!/Make (it|this) every/.test(src), 'no Make it every button');
+    assert.ok(!/Standard week/.test(src), 'no Standard week tab copy');
+  }
 });
 
 test('standardByWeekday keys each weekday (0 = Sunday) to its template slots', () => {
@@ -471,13 +478,6 @@ test('standardByWeekday keys each weekday (0 = Sunday) to its template slots', (
   assert.deepEqual(Object.keys(by).map(Number).sort(), [0, 1, 2, 3, 4, 5, 6]);
   assert.ok(by[2]!.some((s) => s.vertical === 'last_few_days'), 'Tuesday is an LFD day');
   assert.ok(!by[1]!.some((s) => s.vertical === 'last_few_days'));
-});
-
-test('a Standard week card says which run makes it each week (the approved prototype copy)', () => {
-  const days = week().map((d) => ({ ...d, nyDate: null }));
-  const m = boardModel({ mode: 'template', days, posts: [], now: NOW, caps: DEFAULT_CAPS });
-  const c = m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!;
-  assert.equal(c.statusText, 'Every Wednesday. Each week the 2 AM run makes this post on the day.');
 });
 
 test('place picker: today offers only times after now and defaults to the next open mark', () => {
@@ -497,8 +497,6 @@ test('place picker: another day defaults to the type’s usual start; a past day
   assert.equal(defaultPlaceMinute(wed, 'explainers'), 780);
   assert.equal(defaultPlaceMinute(wed, 'stories'), 510);
   assert.deepEqual(openMinutes(dayCtx(s, 0, { today: '2026-10-20', nowMinute: 900 })), []);
-  const t: BoardState = { mode: 'template', days: week().map((d) => ({ ...d, nyDate: null })), standard: standardOf(), posts: [] };
-  assert.equal(defaultPlaceMinute(dayCtx(t, 1, { today: '2026-10-20', nowMinute: 900 }), 'carousels'), 540, 'the Standard week has no now');
 });
 
 test('place picker: a Ready Story is offered only its series’ open slots on the day', () => {
@@ -513,15 +511,6 @@ test('place picker: a Ready Story is offered only its series’ open slots on th
 });
 
 /* ── Fix round 3 (review) ── */
-
-test('make it every: a cross-day move whose source the Standard week lacks names only the target day', () => {
-  const s = state();
-  s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }));
-  const e = everyFor(s, { op: 'move', day: WED, key: key('explainers', 1020), to: 3, minute: 720 }, CLOCK);
-  assert.ok(e);
-  assert.equal(e.button, 'Make it every Thursday');
-  assert.deepEqual(Object.keys(e.standard).filter((k) => e.standard[Number(k)] !== s.standard[Number(k)]), ['4']);
-});
 
 test('ready: the ghost and Place share one rule for a taken slot', () => {
   const at = (status: BoardPost['status']) => state([booked({ id: 'x', status, slotId: 't0720' })]);
@@ -547,6 +536,7 @@ test('drag: the preview runs again only when the day, the snapped minute or the 
 test('reset day leaves a posted slot as it is', () => {
   const s = state([booked({ id: 'p1', vertical: 'explainers', nyDate: '2026-10-21', status: 'published', slotId: 't1020' })]);
   s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }));
+  s.days[WED]!.personKeys = [key('explainers', 1020)];
   const r = planReset(s, WED, CLOCK);
   assert.ok(r.ok && r.noop, 'the posted override is not reset');
   assert.ok(r.ok && r.next.days[WED]!.slots.some((x) => x.startMinute === 1020));
@@ -555,6 +545,7 @@ test('reset day leaves a posted slot as it is', () => {
 test('reset day that deletes a booked override slot asks first', () => {
   const s = state([booked({ id: 'b9', vertical: 'explainers', nyDate: '2026-10-21', status: 'scheduled', slotId: 't1020' })]);
   s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main', origin: 'override' }));
+  s.days[WED]!.personKeys = [key('explainers', 1020)];
   const r = planReset(s, WED, CLOCK);
   assert.ok(r.ok && !r.noop);
   assert.deepEqual(bookedHits(s, r.next).map((h) => [h.post.id, h.why]), [['b9', 'removed']]);

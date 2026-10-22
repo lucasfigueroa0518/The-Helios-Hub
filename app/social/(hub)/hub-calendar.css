@@ -278,8 +278,6 @@
 .sh-board__toast.is-warn { background: var(--sh-failed-ink); }
 .sh-board__toast button { min-height: 28px; padding: 0 10px; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .sh-board__toast button:hover { background: rgba(255, 255, 255, 0.12); }
-.sh-board__toast .sh-board__toast-primary { border-color: var(--color-text-inverse); background: var(--color-text-inverse); color: var(--color-text); }
-.sh-board__toast .sh-board__toast-primary:hover { background: var(--color-surface-hover); }
 .sh-board__spin { animation: sh-board-spin 1s linear infinite; }
 @keyframes sh-board-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .sh-board__spin { animation: none; } }

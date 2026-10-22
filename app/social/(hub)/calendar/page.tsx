@@ -6,14 +6,14 @@ import { calendarView, CalendarScreen, type CalendarWeek } from '@/components/so
 import { readLfdSettings } from '@/lib/lfd/settings';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
-import { HUB_BASE, toParams, type HubParams, type RawSearchParams } from '@/lib/social-hub/links';
+import { HUB_BASE, toParams, withParams, type HubParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { loadForPage } from '@/lib/social-hub/live';
-import { loadSlots, readCaps, readSlotSource, readTemplate } from '@/lib/social-hub/slots/load';
+import { readCaps, readOverrides, readSlotSource, readTemplate } from '@/lib/social-hub/slots/load';
 import { SCHEDULE_ENTRIES, scheduleFromTemplate } from '@/lib/social-hub/slots/schedule';
 import { readSeedInputs, seedTemplate } from '@/lib/social-hub/slots/seed';
 import type { SlotQuery } from '@/lib/social-hub/slots/types';
-import { addDays, isDayKey, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
-import { datedWeek, lfdWeekdays, mondayOf, standardByWeekday, templateWeek } from '@/lib/social-hub/views/week';
+import { addDays, isDayKey, nyDateOf } from '@/lib/social-hub/time';
+import { datedWeek, lfdWeekdays, mondayOf, standardByWeekday, weekFromOverrides } from '@/lib/social-hub/views/week';
 import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -45,13 +45,13 @@ async function loadWeek(params: HubParams, now: Date): Promise<CalendarWeek> {
   // Each type's schedule from the template the board shows (today's pattern before the switch, where the form is read-only).
   const schedules = SCHEDULE_ENTRIES.map((e) => scheduleFromTemplate(shown, e));
   const common = { monday, source, standard, caps, switchFacts, schedules };
-  if (params.scope === 'template') return { mode: 'template', days: templateWeek(shown, monday), ...common };
   if (source === 'template') {
-    const map = await loadSlots(q, monday, addDays(monday, 6));
-    return { mode: 'week', days: [...map].map(([nyDate, slots]) => ({ nyDate, weekday: weekdayOf(nyDate), slots })), ...common };
+    // The overrides' set_by marks the person's own edits: "Edited" and Reset day follow them.
+    const overrides = await readOverrides(q, monday, addDays(monday, 6));
+    return { days: weekFromOverrides(saved, overrides, monday), ...common };
   }
   // Legacy: show today's pattern so the view isn't empty before the switch; editing waits for it.
-  return { mode: 'week', days: datedWeek(shown, monday), ...common };
+  return { days: datedWeek(shown, monday), ...common };
 }
 
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
@@ -59,6 +59,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
   const session = await getSession();
   if (!session) redirect('/');
   const params = toParams(await searchParams);
+  // Old links to the removed standing-week tab (?scope=template; Schedules replace it) open the week.
+  if (params.scope === 'template') redirect(withParams(`${HUB_BASE}/calendar`, '', params, { scope: null }));
   const now = new Date();
   const wantsWeek = calendarView(params) === 'week';
   const [loaded, week] = await Promise.all([
