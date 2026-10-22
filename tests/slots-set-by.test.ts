@@ -243,3 +243,21 @@ test('old code still works without the new columns', async () => {
   await db.transaction((tx) => rescheduleSet(tx, SET, WED, new Date('2026-10-21T13:00:00Z'), 540, 'person'));
   assert.equal((await getSet(db, SET))!.set.slotBy, 'system');
 });
+
+test('undo of a Reset puts a person pin at the standard time and mode back as person (final review M2)', async () => {
+  const { pg, q } = await seeded();
+  const by = { by: 'tommy@example.com', now: THU_10AM };
+  const reel = { vertical: 'reels' as const, series: null };
+  await applySlotChanges(q, [{ scope: 'date', op: 'move', from: { nyDate: FRI, ...reel, startMinute: 525 }, to: { nyDate: FRI, startMinute: 600 } }], by);
+  await applySlotChanges(q, [{ scope: 'date', op: 'move', from: { nyDate: FRI, ...reel, startMinute: 600 }, to: { nyDate: FRI, startMinute: 525 } }], by);
+  const pin = (await pg.query<{ feed_mode: string | null }>(`SELECT feed_mode FROM social_hub.slot_override WHERE ny_date = $1::date AND vertical = 'reels' AND start_minute = 525`, [FRI])).rows[0]!;
+  // Reset: the pin goes, the date reads from the schedule again.
+  assert.equal((await applySlotChanges(q, [{ scope: 'date', op: 'delete', nyDate: FRI, ...reel, startMinute: 525 }], by)).ok, true);
+  assert.deepEqual(await overrideSetBy(pg, FRI, 'reels', 525), []);
+  // Undo of the Reset (planReset's inverse): an add at the standard time and mode brings the person's pin back.
+  const undo = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: FRI, ...reel, startMinute: 525, action: 'add', feedMode: pin.feed_mode as 'trial' | 'main' }], by);
+  assert.equal(undo.ok, true);
+  assert.deepEqual(await overrideSetBy(pg, FRI, 'reels', 525), [{ action: 'add', set_by: 'person' }]);
+  // Untouched Standard-week slots on that date still get no pin.
+  assert.deepEqual(await overrideSetBy(pg, FRI, 'reels', 675), []);
+});

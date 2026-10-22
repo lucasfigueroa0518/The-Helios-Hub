@@ -306,10 +306,32 @@ export function bookedHits<P extends BoardPost>(before: BoardState<P>, after: Bo
 }
 
 /**
+ * The person's removals of a routine slot that stay because a hand-set slot of
+ * the same type has started (or posted) in its place: a schedule save tied
+ * them one for one (schedule-write.ts), so deleting one would bring the
+ * routine slot back next to the started one, a post more than the schedule.
+ * Paired in time order, as the save pairs times.
+ */
+function keptTies(personKeys: readonly SlotKey[], stays: (k: SlotKey) => boolean, slots: readonly ResolvedSlot[], std: readonly ResolvedSlot[]): SlotKey[] {
+  const type = (k: SlotKey) => `${k.vertical}|${k.series ?? ''}`;
+  const has = (list: readonly SlotKey[], k: SlotKey) => list.some((x) => sameSlotKey(x, k));
+  const partners = new Map<string, number>();
+  for (const k of personKeys) if (stays(k) && has(slots, k) && !has(std, k)) partners.set(type(k), (partners.get(type(k)) ?? 0) + 1);
+  const out: SlotKey[] = [];
+  for (const k of [...personKeys].sort((a, b) => a.startMinute - b.startMinute)) {
+    const n = partners.get(type(k)) ?? 0;
+    if (!n || stays(k) || has(slots, k) || !has(std, k)) continue;
+    partners.set(type(k), n - 1);
+    out.push(k);
+  }
+  return out;
+}
+
+/**
  * Reset day (spec 2026-10-21 §3): the date's own edits go, one `delete` per
  * key the person set, so those keys go back to the schedule. A system pin
  * (today's started slot held, a pin a schedule save wrote) stays, and so does
- * a key that has started or posted. Deletes that take a slot off go first,
+ * a key that has started or posted, and a tie to one that has (keptTies). Deletes that take a slot off go first,
  * so a slot coming back never meets the one it replaced halfway (Last Few
  * Days and Carousels). The inverse puts the person's edits back, in reverse.
  */
@@ -322,9 +344,12 @@ export function planReset<P extends BoardPost>(state: BoardState<P>, day: number
   const kept: SlotKey[] = [];
   const off: Array<{ key: SlotKey; cur: ResolvedSlot | undefined }> = [];
   const back: Array<{ key: SlotKey; cur: ResolvedSlot | undefined }> = [];
+  const personKeys = state.days[day]!.personKeys;
+  const stays = (key: SlotKey) => isLocked(ctx, key) || posted.has(`${key.vertical}|${slotId(key.startMinute, key.series)}`);
+  const ties = keptTies(personKeys, stays, ctx.slots, std);
   let slots = [...ctx.slots];
-  for (const key of state.days[day]!.personKeys) {
-    if (isLocked(ctx, key) || posted.has(`${key.vertical}|${slotId(key.startMinute, key.series)}`)) { kept.push(key); continue; }
+  for (const key of personKeys) {
+    if (stays(key) || ties.some((t) => sameSlotKey(t, key))) { kept.push(key); continue; }
     const cur = ctx.slots.find((s) => sameSlotKey(s, key));
     const base = std.find((s) => sameSlotKey(s, key));
     (cur && !base ? off : back).push({ key, cur });

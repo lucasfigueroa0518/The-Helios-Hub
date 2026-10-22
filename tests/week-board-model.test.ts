@@ -655,3 +655,22 @@ test('select: a new week clears the selection and leaves select mode; Undo and r
   const afterUndo = weekEdit.syncSelection({ ...sel0, picked: ['2|reels|t0525', '3|carousels|t0690'] }, MON, cards);
   assert.deepEqual(afterUndo, { monday: MON, on: true, picked: ['2|reels|t0525'] });
 });
+
+/** Tue Oct 20 (today, now 10:00 AM): the schedule moved the 8:45 reel to 11:30, and a person-held 9:30 reel kept its time, tied to the 11:30. */
+const tiedToday = (day: number) => {
+  const s = state();
+  const weekday = s.days[day]!.weekday;
+  s.standard = { ...s.standard, [weekday]: s.standard[weekday]!.filter((x) => !(x.vertical === 'reels' && x.startMinute === 525)).concat(slot('reels', 690, { feedMode: 'trial' })) };
+  s.days[day]!.slots = s.days[day]!.slots.filter((x) => !(x.vertical === 'reels' && x.startMinute === 525)).concat(slot('reels', 570, { feedMode: 'trial', origin: 'override' }));
+  s.days[day]!.personKeys = [key('reels', 570), key('reels', 690)];
+  return s;
+};
+
+test('reset day never deletes a tie whose hand-set partner has already started today', () => {
+  const r = planReset(tiedToday(1), 1, CLOCK);
+  assert.ok(r.ok && r.noop, 'the 9:30 has started, so its 11:30 tie stays: no second reel today');
+  // Before the partner starts, Reset takes both back to the schedule.
+  const early = planReset(tiedToday(1), 1, { today: '2026-10-20', nowMinute: 500 });
+  assert.ok(early.ok && !early.noop);
+  assert.deepEqual(early.changes.map((c) => (c as { startMinute: number }).startMinute).sort(), [570, 690]);
+});

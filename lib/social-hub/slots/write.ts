@@ -180,10 +180,12 @@ function setTemplateDay(s: State, weekday: number, slots: readonly ResolvedSlot[
  * A date's overrides become exactly the difference between its slots and the
  * Standard week's, with one exception: a person's slot at the Standard week's
  * own time and Trial / Main is kept as an 'add' pin (so a schedule save leaves
- * it alone) when this edit changed that key, or when a person pinned it
- * before. A row whose action and feed mode don't change keeps its mark.
+ * it alone) when this edit changed that key, when the edit is a person's
+ * add on that key (`added`: an Undo of a Reset putting their pin back), or
+ * when a person pinned it before. A row whose action and feed mode don't
+ * change keeps its mark.
  */
-function setDateDay(s: State, nyDate: string, slots: readonly ResolvedSlot[], setBy: SetBy = 'person'): void {
+function setDateDay(s: State, nyDate: string, slots: readonly ResolvedSlot[], setBy: SetBy = 'person', added?: SlotKey): void {
   const base = resolveDay(s.template, [], nyDate);
   const was = resolveDay(s.template, s.overrides, nyDate);
   const old = s.overrides.filter((o) => o.nyDate === nyDate);
@@ -205,7 +207,7 @@ function setDateDay(s: State, nyDate: string, slots: readonly ResolvedSlot[], se
     }
     const prev = old.find((o) => sameSlotKey(o, x));
     const pinned = prev?.setBy === 'person' && prev.action === 'add' && prev.feedMode === x.feedMode;
-    if (pinned || (setBy === 'person' && changed(x))) rows.push({ nyDate, ...keyOf(x), action: 'add', feedMode: x.feedMode, setBy: pinned ? 'person' : setBy });
+    if (pinned || (setBy === 'person' && (changed(x) || (added !== undefined && sameSlotKey(added, x))))) rows.push({ nyDate, ...keyOf(x), action: 'add', feedMode: x.feedMode, setBy: pinned ? 'person' : setBy });
   }
   s.overrides = [...s.overrides.filter((o) => o.nyDate !== nyDate), ...rows];
 }
@@ -249,7 +251,9 @@ function applyOne(s: State, c: SlotChange, today: string, nowMinute: number): Ap
   if (c.op === 'put' && (c.scope === 'template' || c.action === 'add')) {
     if (has) {
       if (ctx.nyDate !== null && (ctx.nyDate < today || isLocked(ctx, has))) return { ok: false, reason: ctx.nyDate < today ? PAST_DAY : ALREADY_STARTED };
-      write(ctx, withMode(ctx.slots, key, c.feedMode));
+      // A date add on a key the day has is the person's: kept as their pin even at the Standard week's own time and mode.
+      if (ctx.nyDate === null) write(ctx, withMode(ctx.slots, key, c.feedMode));
+      else setDateDay(s, ctx.nyDate, withMode(ctx.slots, key, c.feedMode), 'person', key);
       return ok(key.startMinute);
     }
     const r = applyPlace(ctx, { ...key, feedMode: c.feedMode ?? null }, clear);
