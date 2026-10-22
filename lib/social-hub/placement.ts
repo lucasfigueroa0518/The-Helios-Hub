@@ -57,12 +57,13 @@ import { bookSlotStatement, type SpineQuery, type SpineVertical } from '@/lib/so
 import { legacyFeedMode, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
 import { driftMinute } from '@/lib/social-hub/slots/book';
 import { readTemplate } from '@/lib/social-hub/slots/load';
-import { OVERRIDE_INSERT, OVERRIDE_UPSERT, overrideFor, overrideKeyWhere, type OverrideOp } from '@/lib/social-hub/slots/override';
+import { markColumns } from '@/lib/social-hub/slots/columns';
+import { OVERRIDE_INSERT, OVERRIDE_INSERT_SET_BY, OVERRIDE_UPSERT, OVERRIDE_UPSERT_SET_BY, overrideFor, overrideKeyWhere, type OverrideOp } from '@/lib/social-hub/slots/override';
 import { sortSlots } from '@/lib/social-hub/slots/resolve';
 import { canPlace, isLocked, type DayCtx } from '@/lib/social-hub/slots/rules';
 import { clockLabel, DEFAULT_FEED_MODE, DRIFT, isFeedSlot, nyMinuteOf, SERIES_NAME } from '@/lib/social-hub/slots/times';
 import { asSlotId } from '@/lib/social-hub/slots/legacy';
-import { isReelType, isStorySeries, parseSlotId, slotId, type FeedMode, type ResolvedSlot, type SlotQuery, type StorySeries } from '@/lib/social-hub/slots/types';
+import { isReelType, isStorySeries, parseSlotId, slotId, type FeedMode, type ResolvedSlot, type SetBy, type SlotQuery, type StorySeries } from '@/lib/social-hub/slots/types';
 import { isDayKey } from '@/lib/social-hub/time';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
@@ -357,8 +358,9 @@ async function planOnCalendar(
     slot = { vertical, startMinute: r.minute, series: null, feedMode, origin: 'override' };
     // A booking kept at that time after its slot left the calendar still holds it.
     if (held.has(slotId(slot.startMinute, null))) return { ok: false, note: 'That slot is taken.' };
-    slotOps.push(overrideFor(input.nyDate, slot, baseOf(input.nyDate, slot), { feedMode }));
-    if (source) slotOps.push(overrideFor(source.nyDate, source.slot, baseOf(source.nyDate, source.slot), null));
+    // A placement is a person's: its slot is kept even at the Standard week's own time (set_by 'person').
+    slotOps.push(overrideFor(input.nyDate, slot, baseOf(input.nyDate, slot), { feedMode }, 'person'));
+    if (source) slotOps.push(overrideFor(source.nyDate, source.slot, baseOf(source.nyDate, source.slot), null, 'person'));
   }
 
   let busy: Date[] = [];
@@ -410,11 +412,16 @@ async function movingSlot(
 async function withSlotOps(query: SpineQuery | SlotQuery, main: { text: string; params: unknown[] }, ops: readonly OverrideOp[], by: string): Promise<any[]> {
   const run = query as SlotQuery;
   if (!ops.length) return (await run(main.text, main.params)).rows;
+  // The "set by" mark only where the column exists (R3).
+  const withMark = ops.some((o) => o.op === 'upsert') && (await markColumns(run)).overrideSetBy;
   const params = [...main.params];
   const parts = [`main AS (${main.text})`];
   ops.forEach((o, i) => {
     const n = params.length + 1;
-    if (o.op === 'upsert') {
+    if (o.op === 'upsert' && withMark) {
+      params.push(o.nyDate, o.vertical, o.startMinute, o.series, o.action, o.feedMode, by, o.setBy);
+      parts.push(`o${i} AS (${OVERRIDE_INSERT_SET_BY} SELECT $${n}::date, $${n + 1}::text, $${n + 2}::smallint, $${n + 3}::text, $${n + 4}::text, $${n + 5}::text, $${n + 6}::text, now(), $${n + 7}::text FROM main ${OVERRIDE_UPSERT_SET_BY} RETURNING 1)`);
+    } else if (o.op === 'upsert') {
       params.push(o.nyDate, o.vertical, o.startMinute, o.series, o.action, o.feedMode, by);
       parts.push(`o${i} AS (${OVERRIDE_INSERT} SELECT $${n}::date, $${n + 1}::text, $${n + 2}::smallint, $${n + 3}::text, $${n + 4}::text, $${n + 5}::text, $${n + 6}::text, now() FROM main ${OVERRIDE_UPSERT} RETURNING 1)`);
     } else {
@@ -434,20 +441,24 @@ export type Rebooked = { ok: true; id: string; publishAt: string } | { ok: false
  * Main moves with it, other types keep theirs. `taken`: another booking holds
  * that slot (the unique index); `started`: it began posting first. `ops`:
  * calendar overrides written in the same statement (withSlotOps).
+ * `slotBy`: the booking's new mark (schedule.slot_by; a person's reschedule
+ * or drag makes it 'person'); omitted, the mark stays. Written only where the
+ * column exists (R3).
  */
 export async function rebookSlot(
   query: SpineQuery | SlotQuery,
   b: { scheduleId: string; nyDate: string; slot: string; publishAt: Date; feedMode: FeedMode | null },
-  opts: { ops?: readonly OverrideOp[]; by?: string } = {},
+  opts: { ops?: readonly OverrideOp[]; by?: string; slotBy?: SetBy } = {},
 ): Promise<Rebooked> {
+  const mark = opts.slotBy && (await markColumns(query as SlotQuery)).scheduleSlotBy ? opts.slotBy : null;
   try {
     const rows = await withSlotOps(
       query,
       {
-        text: `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = coalesce($5, feed_mode)
+        text: `UPDATE social_hub.schedule SET ny_date = $2::date, slot = $3, publish_at = $4::timestamptz, error = NULL, feed_mode = coalesce($5, feed_mode)${mark ? ', slot_by = $6' : ''}
         WHERE id = $1::uuid AND status = 'scheduled'
         RETURNING id, publish_at`,
-        params: [b.scheduleId, b.nyDate, b.slot, b.publishAt.toISOString(), b.feedMode],
+        params: [b.scheduleId, b.nyDate, b.slot, b.publishAt.toISOString(), b.feedMode, ...(mark ? [mark] : [])],
       },
       opts.ops ?? [],
       opts.by ?? 'placement',
@@ -549,6 +560,8 @@ export async function placeItem(query: SpineQuery, input: PlaceInput): Promise<P
       source: 'user',
       // Template mode only (R3): legacy books with the old INSERT.
       ...(plan.feedMode ? { feedMode: plan.feedMode } : {}),
+      // A person's booking (template mode, where the column exists): a schedule save never moves it.
+      ...(plan.calendar && (await markColumns(query as SlotQuery)).scheduleSlotBy ? { slotBy: 'person' as const } : {}),
     });
     // The booking and a new slot at its time land together (R16).
     const [booked] = await withSlotOps(query, statement, plan.slotOps ?? [], input.by ?? 'placement');
@@ -570,7 +583,12 @@ export async function rescheduleItem(query: SpineQuery, input: PlaceInput): Prom
   if (!plan.ok) return plan;
   if (plan.calendar) {
     // Template mode: the one booking-move UPDATE, with its slot moving along in the same statement (R16).
-    const moved = await rebookSlot(query, { scheduleId: active.id, nyDate: plan.nyDate, slot: plan.slot, publishAt: plan.publishAt, feedMode: plan.feedMode }, { ops: plan.slotOps ?? [], by: input.by ?? 'placement' });
+    // A person moved it: the booking becomes theirs (slot_by 'person'), so a schedule save leaves it alone.
+    const moved = await rebookSlot(
+      query,
+      { scheduleId: active.id, nyDate: plan.nyDate, slot: plan.slot, publishAt: plan.publishAt, feedMode: plan.feedMode },
+      { ops: plan.slotOps ?? [], by: input.by ?? 'placement', slotBy: 'person' },
+    );
     if (!moved.ok) return { ok: false, note: moved.why === 'taken' ? 'That slot is taken.' : 'It started posting before it could move.' };
     return { ok: true, note: `Moved to ${formatPlacement(plan.publishAt)}.`, scheduleId: moved.id, publishAt: moved.publishAt };
   }

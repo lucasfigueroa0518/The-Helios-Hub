@@ -18,7 +18,16 @@ export const isStorySeries = (v: unknown): v is StorySeries => typeof v === 'str
 
 export type TemplateRow = { weekday: number; vertical: Vertical; startMinute: number; series: StorySeries | null; feedMode: FeedMode | null };
 
-export type OverrideRow = { nyDate: string; vertical: Vertical; startMinute: number; series: StorySeries | null; action: 'add' | 'remove'; feedMode: FeedMode | null };
+/**
+ * Who set a date edit or a booking: a person (board, batch, placement,
+ * reschedule, drags) or the system (pins the calendar writes itself, the
+ * overnight run's bookings). A row with no mark is the system's.
+ */
+export type SetBy = 'person' | 'system';
+
+export const isSetBy = (v: unknown): v is SetBy => v === 'person' || v === 'system';
+
+export type OverrideRow = { nyDate: string; vertical: Vertical; startMinute: number; series: StorySeries | null; action: 'add' | 'remove'; feedMode: FeedMode | null; setBy: SetBy };
 
 export type ResolvedSlot = {
   vertical: Vertical;

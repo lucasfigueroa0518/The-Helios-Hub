@@ -436,7 +436,7 @@ test('"Every Tuesday" removing a slot started today: the template changes, today
   const out = await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 2, vertical: 'reels', startMinute: 525, series: null }], tue);
   assert.equal(out.ok, true);
   assert.equal((await readTemplate(q)).some((r) => r.weekday === 2 && r.vertical === 'reels' && r.startMinute === 525), false);
-  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'reels', startMinute: 525, series: null, action: 'add', feedMode: 'trial' }]);
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'reels', startMinute: 525, series: null, action: 'add', feedMode: 'trial', setBy: 'system' }]);
   assert.deepEqual(await dayOf(q, '2026-10-20', 'reels'), [525, 675, 1080]);
   assert.deepEqual(await dayOf(q, '2026-10-27', 'reels'), [675, 1080]);
 });
@@ -445,7 +445,7 @@ test('"Every Tuesday" adding a slot at a time already started today writes a rem
   const { q } = await seeded();
   const out = await applySlotChanges(q, [{ scope: 'template', op: 'put', weekday: 2, vertical: 'reels', startMinute: 600, series: null, feedMode: 'main' }], tue);
   assert.equal(out.ok, true);
-  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'reels', startMinute: 600, series: null, action: 'remove', feedMode: null }]);
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'reels', startMinute: 600, series: null, action: 'remove', feedMode: null, setBy: 'system' }]);
   assert.deepEqual(await dayOf(q, '2026-10-27', 'reels'), [525, 600, 675, 1080]);
 });
 

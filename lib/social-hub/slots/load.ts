@@ -27,12 +27,14 @@ export async function readTemplate(q: SlotQuery): Promise<TemplateRow[]> {
 
 export async function readOverrides(q: SlotQuery, from: string, to: string): Promise<OverrideRow[]> {
   const { rows } = await q(
-    `SELECT ny_date::text AS ny_date, vertical, start_minute, series, action, feed_mode FROM social_hub.slot_override
+    // set_by through the row's JSON: null (the system's) on a database without the column yet (R12).
+    `SELECT ny_date::text AS ny_date, vertical, start_minute, series, action, feed_mode, to_jsonb(o)->>'set_by' AS set_by FROM social_hub.slot_override o
       WHERE ny_date BETWEEN $1::date AND $2::date`,
     [from, to],
   );
   return rows.map((r) => ({
     nyDate: String(r.ny_date).slice(0, 10), vertical: r.vertical, startMinute: Number(r.start_minute), series: seriesOf(r.series), action: r.action, feedMode: r.feed_mode ?? null,
+    setBy: r.set_by === 'person' ? 'person' : 'system',
   }));
 }
 

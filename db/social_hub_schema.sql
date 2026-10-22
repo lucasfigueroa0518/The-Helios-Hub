@@ -499,6 +499,13 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_feed_mode_check CHECK (
     feed_mode IS NULL OR (vertical IN ('reels', 'explainers') AND feed_mode IN ('trial', 'main'))
 );
 
+-- Who set a date edit or a booking (calendar type schedules, 2026-10-21): 'person' (board,
+-- batch, placement, reschedule, drags) or 'system' (pins the calendar writes itself). A
+-- schedule save moves only the system's bookings. NULL reads as 'system'; a booking with
+-- source 'user' reads as 'person'. Additive, safe in either deploy order (R3).
+ALTER TABLE social_hub.slot_override ADD COLUMN IF NOT EXISTS set_by text CHECK (set_by IN ('person','system'));
+ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS slot_by text CHECK (slot_by IN ('person','system'));
+
 -- Who decides cadence: 'legacy' (each type's settings, as before) or 'template' (the calendar).
 INSERT INTO social_hub.settings (key, value) VALUES ('slot_source', '"legacy"'::jsonb) ON CONFLICT (key) DO NOTHING;
 

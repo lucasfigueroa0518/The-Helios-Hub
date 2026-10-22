@@ -7,6 +7,7 @@
  *   requested → building → ready → approved → scheduled → publishing → published
  *                   ↘ failed / skipped     ↘ rejected            ↘ failed
  */
+import type { SetBy } from '@/lib/social-hub/slots/types';
 import type { Queryable, StoriesDb } from '@/lib/stories/db';
 import type { Backdrop, FrameData, FrameRole, Photo, Series, Style } from '@/lib/stories/render/types';
 import { projectSet } from '@/lib/stories/spine';
@@ -24,6 +25,8 @@ export type StorySet = {
   publish_at: string | null;
   /** Template mode: the Stories slot (minute of the New York day) this set fills; null for a legacy or hand-made set. */
   slot_minute: number | null;
+  /** Who set its day and minute: 'person' once a person moved it (stories.sets.slot_by), else 'system'. */
+  slotBy: SetBy;
   flagged: boolean;
   error: string | null;
   spend_usd: number;
@@ -67,7 +70,10 @@ export type NewCandidate = {
  */
 export const SLOT_MINUTE_SQL = `(to_jsonb(sets)->>'slot_minute')::smallint`;
 
-const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, flagged, error,
+/** `stories.sets.slot_by` the same way (R12): 'system' where the column is missing or empty. */
+export const SLOT_BY_SQL = `CASE WHEN to_jsonb(sets)->>'slot_by' = 'person' THEN 'person' ELSE 'system' END`;
+
+const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, ${SLOT_BY_SQL} AS "slotBy", flagged, error,
   spend_usd::float8 AS spend_usd, created_at, updated_at`;
 const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, review, flagged,
   ig_container_id, ig_media_id, published_at`;
@@ -275,11 +281,37 @@ export const scheduleSet = (db: Queryable, setId: string, publishAt: Date) => mo
  * Never a set that is posting or posted. Re-projected like every move.
  * `slotMinute` (template mode, R15): the calendar slot it now sits in, so
  * the set's slot stays its time's; the column is named only then (R12).
+ * `slotBy`: who moved it ('person' from the hub's place / move), so a
+ * schedule save leaves a person's set alone; written only where
+ * stories.sets.slot_by exists (R3), and omitted the mark stays.
  */
-export const rescheduleSet = (db: Queryable, setId: string, nyDate: string, publishAt: Date, slotMinute: number | null = null) =>
-  slotMinute === null
-    ? move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5', [nyDate, publishAt.toISOString()])
-    : move(db, setId, ['approved', 'scheduled'], 'scheduled', 'ny_date = $4::date, publish_at = $5, slot_minute = $6', [nyDate, publishAt.toISOString(), slotMinute]);
+export async function rescheduleSet(db: Queryable, setId: string, nyDate: string, publishAt: Date, slotMinute: number | null = null, slotBy?: SetBy): Promise<StorySet> {
+  const sets = ['ny_date = $4::date', 'publish_at = $5'];
+  const params: unknown[] = [nyDate, publishAt.toISOString()];
+  if (slotMinute !== null) {
+    params.push(slotMinute);
+    sets.push(`slot_minute = $${params.length + 3}`);
+  }
+  if (slotBy && (await hasSlotByColumn(db))) {
+    params.push(slotBy);
+    sets.push(`slot_by = $${params.length + 3}`);
+  }
+  return move(db, setId, ['approved', 'scheduled'], 'scheduled', sets.join(', '), params);
+}
+
+const slotByColumn = new WeakMap<object, Promise<boolean>>();
+
+/** Whether stories.sets.slot_by exists yet (cached per handle). SELECT only. */
+function hasSlotByColumn(db: Queryable): Promise<boolean> {
+  const hit = slotByColumn.get(db);
+  if (hit) return hit;
+  const read = db
+    .query<{ n: number }>(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema = 'stories' AND table_name = 'sets' AND column_name = 'slot_by'`)
+    .then(({ rows }) => Number(rows[0]?.n ?? 0) > 0);
+  slotByColumn.set(db, read);
+  read.catch(() => slotByColumn.delete(db));
+  return read;
+}
 
 /** Scheduled sets whose minute has come, oldest first. */
 export async function dueSets(db: Queryable, now: Date = new Date()): Promise<StorySet[]> {

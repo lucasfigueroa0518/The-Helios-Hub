@@ -105,6 +105,8 @@ export async function bookSlot(
     approved?: boolean;
     /** Reels and Explainers: Trial or Main for this slot (weekly slot calendar); null while on the legacy schedule. */
     feedMode?: 'trial' | 'main' | null;
+    /** Who set it (schedule.slot_by); only where the column exists (R3). Omitted, the INSERT doesn't name it. */
+    slotBy?: 'person' | 'system' | null;
   },
 ): Promise<{ id: string; publishAt: string }> {
   const { text, params } = bookSlotStatement(slot);
@@ -117,17 +119,19 @@ export async function bookSlot(
  * one statement with other writes (placement.ts: a booking and its calendar slot).
  */
 export function bookSlotStatement(slot: Parameters<typeof bookSlot>[1]): { text: string; params: unknown[] } {
-  // With no feed mode the INSERT is the old one, so a database without the column still books.
-  const base = [slot.itemId, slot.vertical, slot.ideaRef ?? null, slot.nyDate, slot.slot, slot.publishAt.toISOString(), slot.source, slot.approved === true];
-  return slot.feedMode
-    ? {
-        text: `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, approved_at, feed_mode)
-         VALUES ($1, $2, $3, $4::date, $5, $6::timestamptz, 'scheduled', $7, CASE WHEN $8::boolean THEN now() END, $9) RETURNING id, publish_at`,
-        params: [...base, slot.feedMode],
-      }
-    : {
-        text: `INSERT INTO social_hub.schedule (content_item_id, vertical, idea_ref, ny_date, slot, publish_at, status, source, approved_at)
-         VALUES ($1, $2, $3, $4::date, $5, $6::timestamptz, 'scheduled', $7, CASE WHEN $8::boolean THEN now() END) RETURNING id, publish_at`,
-        params: base,
-      };
+  // With no feed mode (or mark) the INSERT is the old one, so a database without the column still books.
+  const params: unknown[] = [slot.itemId, slot.vertical, slot.ideaRef ?? null, slot.nyDate, slot.slot, slot.publishAt.toISOString(), slot.source, slot.approved === true];
+  const cols = ['content_item_id', 'vertical', 'idea_ref', 'ny_date', 'slot', 'publish_at', 'status', 'source', 'approved_at'];
+  const values = ['$1', '$2', '$3', '$4::date', '$5', '$6::timestamptz', `'scheduled'`, '$7', 'CASE WHEN $8::boolean THEN now() END'];
+  for (const [col, value] of [['feed_mode', slot.feedMode], ['slot_by', slot.slotBy]] as const) {
+    if (!value) continue;
+    params.push(value);
+    cols.push(col);
+    values.push(`$${params.length}`);
+  }
+  return {
+    text: `INSERT INTO social_hub.schedule (${cols.join(', ')})
+         VALUES (${values.join(', ')}) RETURNING id, publish_at`,
+    params,
+  };
 }

@@ -43,9 +43,9 @@ const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const slotsFor = (dates: string[], overrides = [] as OverrideRow[]): SlotsByDate =>
   Object.fromEntries(dates.map((d) => [d, resolveDay(tpl, overrides, d)]));
 const remove = (nyDate: string, vertical: OverrideRow['vertical'], startMinute: number, series: OverrideRow['series'] = null): OverrideRow =>
-  ({ nyDate, vertical, startMinute, series, action: 'remove', feedMode: null });
+  ({ nyDate, vertical, startMinute, series, action: 'remove', feedMode: null, setBy: 'system' });
 const add = (nyDate: string, vertical: OverrideRow['vertical'], startMinute: number, feedMode: OverrideRow['feedMode'] = null, series: OverrideRow['series'] = null): OverrideRow =>
-  ({ nyDate, vertical, startMinute, series, action: 'add', feedMode });
+  ({ nyDate, vertical, startMinute, series, action: 'add', feedMode, setBy: 'system' });
 
 // ── Views: a type's windows are that day's slot times ──
 
@@ -543,7 +543,7 @@ test('template: the booking and its calendar slot land together; a failed overri
   assert.equal((await pg.query(`SELECT 1 FROM social_hub.schedule WHERE content_item_id = $1`, [fresh])).rows.length, 0, 'no booking without its slot');
 });
 
-test('template: placing into a Standard-week time the date removed brings it back with the Standard week\'s Trial / Main, as no override', async () => {
+test('template: placing into a Standard-week time the date removed brings it back with the Standard week\'s Trial / Main, as a person\'s pin', async () => {
   const { pg, query } = await openHubTestDb();
   const q = query as never;
   await setSlotSource(q, 'template', 't');
@@ -553,7 +553,11 @@ test('template: placing into a Standard-week time the date removed brings it bac
   const placed = await placeItem(q, { vertical: 'explainers', itemId: item, nyDate: WED, slot: 't0780', now: NOW });
   assert.ok(placed.ok, placed.note);
   assert.deepEqual(await slotsOf(q, WED, 'explainers'), [[780, 'trial'], [930, 'main']]);
-  assert.equal((await pg.query(`SELECT 1 FROM social_hub.slot_override WHERE ny_date = $1 AND vertical = 'explainers'`, [WED])).rows.length, 0, 'the date matches its Standard week again');
+  // The date matches its Standard week again, but a person put it there: an 'add' pin a schedule save leaves alone.
+  assert.deepEqual(
+    (await pg.query(`SELECT start_minute, action, feed_mode, set_by FROM social_hub.slot_override WHERE ny_date = $1 AND vertical = 'explainers'`, [WED])).rows,
+    [{ start_minute: 780, action: 'add', feed_mode: 'trial', set_by: 'person' }],
+  );
   assert.equal((await pg.query<{ feed_mode: string }>(`SELECT feed_mode FROM social_hub.schedule WHERE content_item_id = $1`, [item])).rows[0]!.feed_mode, 'trial');
 });
 
