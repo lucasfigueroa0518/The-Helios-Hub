@@ -628,3 +628,30 @@ test('history: a batch command undoes as its inverse chunks, last chunk first', 
   assert.deepEqual(undoChunks(h.undo('t')!).map((x) => x.map((y) => (y as { startMinute: number }).startMinute)), [[2], [1]]);
   assert.deepEqual(undoChunks({ ...c, chunks: undefined, inverseChunks: undefined, inverse: [a] }), [[a]]);
 });
+
+// ── Final fix wave (final review I1, I2, M1) ──
+
+test('batch: Set time at a minute already passed today skips that card with a reason and never moves it elsewhere', () => {
+  const s = state();
+  const b = weekEdit.planBatch(s, [sel(1, key('reels', 675)), sel(WED, key('reels', 675))], { op: 'time', minute: 585 }, CLOCK);
+  assert.deepEqual(b.skipped, [{ day: 1, key: key('reels', 675), reason: weekEdit.TIME_PASSED }]);
+  assert.equal(weekEdit.TIME_PASSED, 'That time has passed today.');
+  assert.ok(b.next.days[1]!.slots.some((x) => x.vertical === 'reels' && x.startMinute === 675), 'today\'s card stays where it was');
+  assert.ok(!b.next.days[1]!.slots.some((x) => x.vertical === 'reels' && x.startMinute === 615), 'never snapped to the next open time');
+  assert.equal(b.chunks.flat().length, 1, 'only Wed moves');
+  assert.equal(b.label, '1 slot moved to 9:45 AM');
+  // A picked minute at now has passed too; a card whose own minute it is would otherwise snap back silently.
+  const atNow = weekEdit.planBatch(s, [sel(1, key('reels', 675))], { op: 'time', minute: 600 }, CLOCK);
+  assert.deepEqual(atNow.skipped.map((x) => x.reason), [weekEdit.TIME_PASSED]);
+  assert.equal(weekEdit.batchToast(atNow), 'Nothing changed. 1 skipped: That time has passed today.');
+});
+
+test('select: a new week clears the selection and leaves select mode; Undo and refresh keep only cards still on the board', () => {
+  const cards = [{ key: '2|reels|t0525' }, { key: '3|carousels|t0540' }];
+  const sel0 = { monday: MON, on: true, picked: ['2|reels|t0525', '3|carousels|t0540'] };
+  assert.equal(weekEdit.syncSelection(sel0, MON, cards), sel0, 'nothing changed: the same selection');
+  assert.deepEqual(weekEdit.syncSelection(sel0, '2026-10-26', cards), { monday: '2026-10-26', on: false, picked: [] });
+  // After Cmd+Z the 11:30 card went back to 9:00: its key is gone, so it can't come back selected later.
+  const afterUndo = weekEdit.syncSelection({ ...sel0, picked: ['2|reels|t0525', '3|carousels|t0690'] }, MON, cards);
+  assert.deepEqual(afterUndo, { monday: MON, on: true, picked: ['2|reels|t0525'] });
+});

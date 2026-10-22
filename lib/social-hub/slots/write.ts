@@ -18,7 +18,7 @@ import { legacyKey } from './legacy';
 import { OVERRIDE_INSERT, OVERRIDE_INSERT_SET_BY, OVERRIDE_UPSERT, OVERRIDE_UPSERT_SET_BY, overrideKeyWhere } from './override';
 import { DEFAULT_FEED_MODE, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
 import {
-  isReelType, isSlotMinute, isStorySeries, parseSlotId, sameSlotKey, slotId, slotKeyString,
+  isReelType, isSlotMinute, isStorySeries, MAX_CHANGES, parseSlotId, sameSlotKey, slotId, slotKeyString,
   type FeedMode, type OverrideRow, type ResolvedSlot, type SetBy, type SlotKey, type SlotQuery, type SlotSource, type StorySeries, type TemplateRow,
 } from './types';
 
@@ -92,7 +92,7 @@ export type ApplyOpts = {
 
 // ── Parsing ──
 
-const MAX_CHANGES = 20;
+export { MAX_CHANGES };
 const isMode = (m: unknown): m is FeedMode | null | undefined => m === undefined || m === null || m === 'trial' || m === 'main';
 const isWeekday = (d: unknown): d is number => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6;
 

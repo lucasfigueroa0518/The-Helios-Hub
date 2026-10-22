@@ -72,6 +72,9 @@ export type SlotSource = 'legacy' | 'template';
 export type SlotQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
 /** Only reels can be trial reels on Instagram: Text on Screen and Explainers. */
+/** The most slot changes one call to the slot writer takes (write.ts re-exports it; here so the board can use it without server code). */
+export const MAX_CHANGES = 20;
+
 export const REEL_TYPES: readonly Vertical[] = ['reels', 'explainers'];
 
 export const isReelType = (v: Vertical): boolean => REEL_TYPES.includes(v);

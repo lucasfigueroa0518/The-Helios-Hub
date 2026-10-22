@@ -23,7 +23,7 @@ import {
   type BoardCard, type SwitchFacts, type WeekDayInput,
 } from '@/lib/social-hub/views/week';
 import {
-  batchToast, bookedHits, clockOf, readyTakenAt, dayCtx, dayName, defaultPlaceMinute, dropState, nameOf, openMinutes, readyMinutes, planBatch, planEdit, planReady, planReset, TAKEN, toastText, WEEKDAY_LONG,
+  batchToast, bookedHits, clockOf, readyTakenAt, dayCtx, dayName, defaultPlaceMinute, dropState, nameOf, openMinutes, readyMinutes, planBatch, planEdit, planReady, planReset, syncSelection, TAKEN, toastText, WEEKDAY_LONG, type Selection,
   type BatchAction, type BoardState, type Drop, type Edit, type Hit,
 } from '@/lib/social-hub/views/week-edit';
 
@@ -174,9 +174,16 @@ export function WeekBoard(props: {
   const [open, setOpen] = useState<{ key: string; anchor: HTMLElement } | null>(null);
   const [reopen, setReopen] = useState<string | null>(null);
   const [pick, setPick] = useState<Pick | null>(null);
-  // Select mode (spec 2026-10-21 §2): the selected cards' keys.
-  const [selecting, setSelecting] = useState(false);
-  const [picked, setPicked] = useState<string[]>([]);
+  // Select mode (spec 2026-10-21 §2): the week it is on, and the selected cards' keys.
+  const [selection, setSelection] = useState<Selection>(() => ({ monday: props.monday, on: false, picked: [] }));
+  // A new week clears it and leaves select mode; an Undo or a refresh drops keys whose card left the board.
+  const synced = syncSelection(selection, props.monday, model.cards);
+  if (synced !== selection) setSelection(synced);
+  const selecting = synced.on;
+  const picked = synced.picked;
+  const setPicked = useCallback((f: readonly string[] | ((p: readonly string[]) => readonly string[])) => {
+    setSelection((s) => ({ ...s, picked: typeof f === 'function' ? f(s.picked) : f }));
+  }, []);
   const toastId = useRef(0);
 
   const say = useCallback((t: Omit<Toast, 'id'>) => setToast({ ...t, id: ++toastId.current }), []);
@@ -426,12 +433,12 @@ export function WeekBoard(props: {
   // ── Select mode ──
 
   const chosen = useMemo(() => model.cards.filter((c) => picked.includes(c.key)), [model.cards, picked]);
-  const leaveSelect = useCallback(() => { setSelecting(false); setPicked([]); }, []);
+  const leaveSelect = useCallback(() => { setSelection((s) => ({ ...s, on: false, picked: [] })); }, []);
   const toggleSelect = () => {
     if (selecting) { leaveSelect(); return; }
     setOpen(null);
     setPick(null);
-    setSelecting(true);
+    setSelection((s) => ({ ...s, on: true }));
   };
   const toggleCard = (card: BoardCard<SlimPost>) => {
     // A locked card can't be selected: say why, as its details would.
@@ -463,7 +470,7 @@ export function WeekBoard(props: {
       { label: b.label, changes: b.chunks.flat(), inverse: [...b.inverse].reverse().flat(), chunks: b.chunks, inverseChunks: b.inverse, next: b.next },
       { text: batchToast(b), done: () => setPicked([]) },
     );
-  }, [chosen, clock, commit, say, warn]);
+  }, [chosen, clock, commit, say, setPicked, warn]);
 
   const readyTaken = (st: BoardState<SlimPost>, item: ReadyItem, nyDate: string | null) => readyTakenAt(st, item, item.series, nyDate);
 

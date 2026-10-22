@@ -1,7 +1,7 @@
 import { sortSlots } from '@/lib/social-hub/slots/resolve';
 import { ALREADY_STARTED, applyMove, applyPlace, applyRemove, canPlace, isLocked, PAST_DAY, type DayCtx, type Refusal } from '@/lib/social-hub/slots/rules';
 import { clockLabel, DAY_START, DEFAULT_FEED_MODE, GRID, isUsual, LAST_START, nextOpenMinute, nyMinuteOf, SERIES_NAME, snapMinute, TYPE_NAME, USUAL } from '@/lib/social-hub/slots/times';
-import { isReelType, parseSlotId, sameSlotKey, slotId, type FeedMode, type ResolvedSlot, type SlotKey, type StorySeries } from '@/lib/social-hub/slots/types';
+import { isReelType, MAX_CHANGES, parseSlotId, sameSlotKey, slotId, type FeedMode, type ResolvedSlot, type SlotKey, type StorySeries } from '@/lib/social-hub/slots/types';
 import type { SlotChange } from '@/lib/social-hub/slots/write';
 import { nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -407,10 +407,11 @@ export function readyMinutes(ctx: DayCtx, vertical: Vertical, series: StorySerie
 /** One action for every selected card. */
 export type BatchAction = { op: 'time'; minute: number } | { op: 'mode'; feedMode: FeedMode } | { op: 'remove' };
 
-/** The slot writer takes at most 20 changes a call (MAX_CHANGES in slots/write.ts): a batch is sent as saves of this size. */
-export const CHUNK = 20;
+/** Set time's skip when the picked minute has passed today: the time is exact, so the card never moves to another one. */
+export const TIME_PASSED = 'That time has passed today.';
 
-export function chunked<T>(list: readonly T[], size = CHUNK): T[][] {
+/** A batch is sent as saves of at most MAX_CHANGES (the slot writer's per-call limit). */
+export function chunked<T>(list: readonly T[], size = MAX_CHANGES): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
   return out;
@@ -418,7 +419,7 @@ export function chunked<T>(list: readonly T[], size = CHUNK): T[][] {
 
 export type Batch<P extends BoardPost = BoardPost> = {
   label: string;
-  /** The changes as saves of at most 20, sent in order. */
+  /** The changes as saves of at most MAX_CHANGES, sent in order. */
   chunks: SlotChange[][];
   /** `inverse[i]` undoes `chunks[i]`; undo sends them last chunk first. */
   inverse: SlotChange[][];
@@ -437,7 +438,8 @@ const nOf = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
  * follows the single-edit rules exactly: a locked card, a duplicate minute or
  * a Trial / Main on a type that has none is skipped with its reason, and the
  * rest still applies. Set time keeps each card on its date at the exact
- * minute picked (no snap). Every change is a date change (the slot writer
+ * minute picked (no snap): a minute already passed today skips that card
+ * (TIME_PASSED) rather than moving it to the next open time. Every change is a date change (the slot writer
  * marks it the person's).
  */
 export function planBatch<P extends BoardPost>(state: BoardState<P>, keys: ReadonlyArray<{ day: number; key: SlotKey }>, action: BatchAction, clock: Clock): Batch<P> {
@@ -450,11 +452,17 @@ export function planBatch<P extends BoardPost>(state: BoardState<P>, keys: Reado
       skipped.push({ key, day, reason: `No Trial / Main for ${key.series ? SERIES_NAME[key.series].many : TYPE_NAME[key.vertical].many}.` });
       continue;
     }
+    if (action.op === 'time' && state.days[day]!.nyDate === clock.today && action.minute <= clock.nowMinute) {
+      skipped.push({ key, day, reason: TIME_PASSED });
+      continue;
+    }
     const edit: Edit = action.op === 'time'
       ? { op: 'move', day, key, to: day, minute: action.minute }
       : action.op === 'mode' ? { op: 'mode', day, key, feedMode: action.feedMode } : { op: 'remove', day, key };
     const p = planEdit(cur, edit, clock);
     if (!p.ok) { skipped.push({ key, day, reason: p.reason }); continue; }
+    // The rules never land Set time elsewhere once the passed-minute check is done; if they ever did, skip rather than misreport.
+    if (action.op === 'time' && p.minute !== action.minute) { skipped.push({ key, day, reason: TIME_PASSED }); continue; }
     if (p.noop) continue;
     cur = p.next;
     changes.push(p.changes);
@@ -467,7 +475,7 @@ export function planBatch<P extends BoardPost>(state: BoardState<P>, keys: Reado
   while (at < changes.length) {
     let size = 0;
     let end = at;
-    while (end < changes.length && size + Math.max(changes[end]!.length, inverses[end]!.length) <= CHUNK) { size += Math.max(changes[end]!.length, inverses[end]!.length); end++; }
+    while (end < changes.length && size + Math.max(changes[end]!.length, inverses[end]!.length) <= MAX_CHANGES) { size += Math.max(changes[end]!.length, inverses[end]!.length); end++; }
     if (end === at) end = at + 1;
     chunks.push(changes.slice(at, end).flat());
     inverse.push(inverses.slice(at, end).reverse().flat());
@@ -479,6 +487,23 @@ export function planBatch<P extends BoardPost>(state: BoardState<P>, keys: Reado
       : action.op === 'mode' ? `${nOf(n, 'slot')} now post${n === 1 ? 's' : ''} ${action.feedMode === 'trial' ? (n === 1 ? 'as a Trial reel' : 'as Trial reels') : 'to the main feed'}`
         : `${nOf(n, 'slot')} removed`;
   return { label, chunks, inverse, next: cur, skipped, booked: bookedHits(state, cur) };
+}
+
+/** Select mode's state: the week it belongs to, whether it is on, and the selected cards' keys. */
+export type Selection = { monday: string; on: boolean; picked: readonly string[] };
+
+/**
+ * The selection that still applies to the board on screen. A new week clears
+ * it and leaves select mode (card keys are day index and slot, so they would
+ * name next week's dates). Otherwise only keys of cards still on the board
+ * stay (an Undo or a refresh can take a selected card away, and its key must
+ * not come back selected on another card later). The same object when
+ * nothing changes.
+ */
+export function syncSelection(sel: Selection, monday: string, cards: ReadonlyArray<{ key: string }>): Selection {
+  if (sel.monday !== monday) return { monday, on: false, picked: [] };
+  const live = sel.picked.filter((k) => cards.some((c) => c.key === k));
+  return live.length === sel.picked.length ? sel : { ...sel, picked: live };
 }
 
 /** The batch toast: what was done ("3 slots moved to 11:30 AM. Just these dates.") and each skipped part ("1 skipped: No Trial / Main for Carousels."). */
