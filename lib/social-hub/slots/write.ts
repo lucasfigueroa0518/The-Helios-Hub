@@ -156,7 +156,8 @@ export function parseChanges(body: unknown): SlotChange[] | string {
 
 // ── The in-memory state ──
 
-type State = { template: TemplateRow[]; overrides: OverrideRow[] };
+/** The template and the overrides, in memory (also schedule-write.ts's before and after). */
+export type State = { template: TemplateRow[]; overrides: OverrideRow[] };
 
 const keyOf = (s: Key): SlotKey => ({ vertical: s.vertical, startMinute: s.startMinute, series: s.series });
 
@@ -297,7 +298,7 @@ function applyOne(s: State, c: SlotChange, today: string, nowMinute: number): Ap
  * such key pins what today resolved to before (add with its feed mode, or
  * remove). A key with an override today is already pinned.
  */
-function holdStartedToday(before: State, s: State, today: string, nowMinute: number): void {
+export function holdStartedToday(before: State, s: State, today: string, nowMinute: number): void {
   const was = resolveDay(before.template, before.overrides, today);
   const now = resolveDay(s.template, s.overrides, today);
   const keys = new Map<string, SlotKey>();
@@ -351,7 +352,7 @@ export async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promis
 /** A booking made before the cutover has no feed_mode: it posts as its type always did. */
 const modeOf = (b: Booking): FeedMode | null => b.feedMode ?? DEFAULT_FEED_MODE[b.vertical];
 
-const modeClash = (b: Booking, slot: ResolvedSlot) => {
+export const modeClash = (b: Booking, slot: ResolvedSlot) => {
   const mode = modeOf(b);
   return isReelType(b.vertical) && slot.feedMode != null && mode != null && slot.feedMode !== mode;
 };
@@ -381,16 +382,16 @@ function followTarget(follows: readonly Follow[], b: Booking): { nyDate: string;
 /** `byPerson`: a date move carries it, so the booking becomes the person's; a Standard-week move keeps its mark. */
 type Plan = { b: Booking; nyDate: string; slot: ResolvedSlot; byPerson: boolean };
 
-const TAKEN = 'That slot is taken.';
+export const TAKEN = 'That slot is taken.';
 
-const bookedPost = (b: Booking, why: BookedPost['why']): BookedPost => ({
+export const bookedPost = (b: Booking, why: BookedPost['why']): BookedPost => ({
   scheduleId: b.id, vertical: b.vertical, nyDate: b.nyDate, slot: b.slot, feedMode: b.feedMode, publishAt: b.publishAt.toISOString(), refs: b.refs, why,
 });
 
 // ── Apply ──
 
 /** Where bookings can sit: the next two weeks, plus every date a change touched. */
-function bookedDates(today: string, extra: Iterable<string>): string[] {
+export function bookedDates(today: string, extra: Iterable<string>): string[] {
   const out = new Set<string>();
   for (const d of extra) if (d >= today) out.add(d);
   for (let i = 0; i < 14; i += 1) out.add(addCalendarDays(today, i));
@@ -508,7 +509,7 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
 }
 
 /** Write only what changed: deleted rows go, new or changed rows are upserted, untouched rows keep their updated_by. */
-async function writeDiff(q: SlotQuery, before: State, s: State, by: string): Promise<void> {
+export async function writeDiff(q: SlotQuery, before: State, s: State, by: string): Promise<void> {
   const tOld = new Map(before.template.map((r) => [rowKey(r.weekday, r), r]));
   const tNew = new Map(s.template.map((r) => [rowKey(r.weekday, r), r]));
   for (const [k, r] of tOld) {

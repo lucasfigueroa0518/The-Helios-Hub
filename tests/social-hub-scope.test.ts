@@ -224,14 +224,36 @@ test('action handlers stay pure: their pipeline calls come in as dependencies', 
   }
 });
 
+/**
+ * Flagged write routes outside actions/ that, like the action routes, reach
+ * each type's own functions: the schedule save sends posts back to Ready
+ * through liveContentActions' unschedule and moves Stories sets through the
+ * Stories repo's rescheduleSet (calendar type schedules, Task 3). The lib
+ * code they call (slots/schedule-write.ts) is still scanned as read code.
+ */
+const WRITE_ROUTES = new Set(['app/api/social-hub/slots/schedule/route.ts']);
+
 test('hub read code never reaches a network module or a foreign write; only flagged action routes may', () => {
   const offenders: string[] = [];
   for (const file of HUB_FILES) {
-    if (file.startsWith(ACTIONS_DIR)) continue;
+    if (file.startsWith(ACTIONS_DIR) || WRITE_ROUTES.has(file)) continue;
     const reason = networkReach(file);
     if (reason) offenders.push(reason);
   }
   assert.deepEqual(offenders, []);
+});
+
+test('the flagged write routes check editSlots and a session before they write', () => {
+  for (const file of WRITE_ROUTES) {
+    assert.ok(HUB_FILES.includes(file), `${file} exists`);
+    const text = code(readFileSync(path.join(ROOT, file), 'utf8'));
+    const post = text.slice(text.indexOf('export async function POST'));
+    const gate = post.indexOf("actionEnabled('editSlots')");
+    const session = post.indexOf('getSession()');
+    const work = post.indexOf('saveSchedule(');
+    assert.ok(session >= 0 && gate > session && work > gate, `${file} checks the session and the editSlots flag before saving`);
+    assert.equal(sqlWriteTargets(text).length, 0, `${file} writes no SQL itself`);
+  }
 });
 
 test('every action route checks its flag before doing anything', () => {
