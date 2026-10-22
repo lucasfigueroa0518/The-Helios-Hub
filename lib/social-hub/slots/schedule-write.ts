@@ -12,7 +12,7 @@ import { resolveDay, validateDay } from './resolve';
 import { checkSchedule, confirmLines, pairTimes, SCHEDULE_ENTRIES, scheduleFromTemplate, templateRowsFor, type ScheduleConfirm, type ScheduleEntry, type TypeSchedule } from './schedule';
 import { DEFAULT_FEED_MODE, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
 import {
-  isReelType, sameSlotKey, slotId, slotKeyString,
+  isReelType, parseSlotId, sameSlotKey, slotId, slotKeyString,
   type FeedMode, type OverrideRow, type ResolvedSlot, type SetBy, type SlotKey, type SlotQuery, type TemplateRow,
 } from './types';
 import {
@@ -454,11 +454,26 @@ export async function saveSchedule(body: unknown, deps: SaveDeps): Promise<SaveR
   try {
     const out = await deps.transaction((tx) => applyScheduleSave(tx, plan, { by: deps.by, now: deps.now, rng: deps.rng, rescheduleSet: deps.rescheduleSet }));
     if (!out.ok) return notSaved(out.error);
-    return { status: 200, body: { ok: true, moved: out.moved, toReady: out.toReady, inverse: out.inverse, inverseOther: out.inverseOther, lfdSkips: out.lfdSkips } };
+    return { status: 200, body: { ok: true, moved: out.moved, toReady: out.toReady, toReadyByType: toReadyByType(plan.toReady, plan.schedule.entry), inverse: out.inverse, inverseOther: out.inverseOther, lfdSkips: out.lfdSkips } };
   } catch (error) {
     if (error instanceof ScheduleConflict) return notSaved(error.message);
     throw error;
   }
+}
+
+/**
+ * The posts a save sent back to Ready to place, counted per schedule entry
+ * ("2 Carousels" after a Last Few Days confirm): the saved entry first, then
+ * any other, in SCHEDULE_ENTRIES order. Entries with none are left out.
+ */
+export function toReadyByType(posts: readonly BookedPost[], saved: EntryKey): Array<{ label: string; count: number }> {
+  const counts = new Map<ScheduleEntry, number>();
+  for (const p of posts) {
+    const e = entryOf({ vertical: p.vertical, series: parseSlotId(p.slot)?.series ?? null });
+    if (e) counts.set(e, (counts.get(e) ?? 0) + 1);
+  }
+  const order = [...SCHEDULE_ENTRIES].sort((a, b) => Number(isEntry(b, saved)) - Number(isEntry(a, saved)));
+  return order.filter((e) => counts.has(e)).map((e) => ({ label: e.label, count: counts.get(e)! }));
 }
 
 /** GET's body: every entry's schedule as the template holds it (merged when its days differ), the caps, and which source is live. */

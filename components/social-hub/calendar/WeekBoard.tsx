@@ -7,8 +7,10 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSPrope
 import { createHistory, type Command, type Tab } from '@/components/social-hub/calendar/history';
 import { DayTimePicker, Floating, SlotCard, SlotPanel, type SlimPost } from '@/components/social-hub/calendar/SlotCard';
 import { sourceSeries, sourceVertical, useBoardDrag, type DragSource } from '@/components/social-hub/calendar/useBoardDrag';
+import { ToastSlot } from '@/components/social-hub/calendar/toast-slot';
 import { typeStyle } from '@/components/social-hub/ui/marks';
 import { gapsFor, PAST_DAY } from '@/lib/social-hub/slots/rules';
+import { scheduleDays, scheduleStandardDay, type ScheduleChange } from '@/lib/social-hub/views/schedule-week';
 import { clockLabel, SERIES_NAME, USUAL } from '@/lib/social-hub/slots/times';
 import { slotId, type ResolvedSlot, type SlotSource, type StorySeries } from '@/lib/social-hub/slots/types';
 import type { BookedPost } from '@/lib/social-hub/slots/write';
@@ -114,6 +116,8 @@ export function WeekBoard(props: {
   /** The preview: edits stay on screen and nothing is sent. */
   sandbox: boolean;
   dim: Vertical | null;
+  /** The preview: its Schedules saves, oldest first, each applied once to the week on screen (schedule-sandbox.tsx). */
+  scheduleChanges?: readonly ScheduleChange[];
 }) {
   const router = useRouter();
   const { mode, caps, editable, sandbox } = props;
@@ -127,7 +131,9 @@ export function WeekBoard(props: {
   const [seenReady, setSeenReady] = useState(props.ready);
   // The board the server last confirmed: a failed save goes back to it, never to another edit's optimistic view.
   const confirmed = useRef(base);
-  if (seen !== base) { setSeen(base); setState(base); confirmed.current = base; }
+  // The preview's Schedules saves replay over a fresh board (applied: the last one already on screen).
+  const applied = useRef(0);
+  if (seen !== base) { setSeen(base); setState(base); confirmed.current = base; applied.current = 0; }
   if (seenReady !== props.ready) { setSeenReady(props.ready); setReady(props.ready); }
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -140,6 +146,20 @@ export function WeekBoard(props: {
     return () => clearInterval(t);
   }, [sandbox]);
   const clock = useMemo(() => clockOf(now), [now]);
+
+  // The preview's Schedules saves: change the week on screen as the server would, keeping board edits.
+  useEffect(() => {
+    const pending = (props.scheduleChanges ?? []).filter((c) => c.id > applied.current);
+    if (!sandbox || !pending.length) return;
+    applied.current = pending[pending.length - 1]!.id;
+    const next = (s: BoardState<SlimPost>): BoardState<SlimPost> => pending.reduce((b, c) => ({
+      ...b,
+      days: scheduleDays(b.days, c, clock),
+      standard: Object.fromEntries(Object.entries(b.standard).map(([w, slots]) => [w, scheduleStandardDay(slots, Number(w), c)])),
+    }), s);
+    setState(next);
+    confirmed.current = next(confirmed.current);
+  }, [props.scheduleChanges, sandbox, clock, base]);
 
   const model = useMemo(
     () => boardModel({ mode, days: state.days, posts: state.posts, now, caps, standard: mode === 'week' ? state.standard : undefined }),
@@ -704,7 +724,7 @@ export function WeekBoard(props: {
 
       <Confirm ask={ask} busy={busy} onClose={() => setAsk(null)} />
 
-      <div className={`sh-board__toasts${open || pick ? ' is-top' : ''}`} aria-live="polite">
+      <ToastSlot top={Boolean(open || pick)}>
         {toast ? (
           <div className={`sh-board__toast${toast.warn ? ' is-warn' : ''}`} role={toast.warn ? 'alert' : 'status'}>
             <span>{toast.text}</span>
@@ -713,7 +733,7 @@ export function WeekBoard(props: {
             {busy ? <Loader size={14} className="sh-board__spin" aria-label="Saving" /> : null}
           </div>
         ) : null}
-      </div>
+      </ToastSlot>
     </div>
   );
 }

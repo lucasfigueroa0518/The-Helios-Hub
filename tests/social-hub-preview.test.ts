@@ -57,8 +57,10 @@ function reach(start: string, stop: (file: string) => boolean = () => false): Se
 
 test('the Calendar preview renders the Schedules dropdown and imports no database code', async () => {
   const page = 'app/social/(hub)/preview/calendar/page.tsx';
-  // The fixture dataset is the preview's data (it runs the real adapters offline); everything else the page reaches is checked.
-  const reached = reach(page, (f) => f.startsWith('tests/fixtures/'));
+  // The fixture dataset is the preview's data: it runs the real adapters offline, and through lib/social-hub/dataset →
+  // queries/costs → lib/reels/insights it already reached lib/db.ts before this page had a Schedules dropdown. Only that
+  // one file is not followed; everything else the page reaches is checked.
+  const reached = reach(page, (f) => f === 'tests/fixtures/social-hub/preview-dataset.ts');
   assert.ok(reached.has('components/social-hub/calendar/SchedulesMenu.tsx'), 'the page reaches the Schedules dropdown');
   for (const db of ['lib/db.ts', 'lib/social-hub/db.ts', 'lib/social-hub/slots/load.ts', 'lib/social-hub/slots/schedule-write.ts', 'lib/social-hub/live.ts']) {
     assert.ok(!reached.has(db), `the preview must not import ${db}`);

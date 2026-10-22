@@ -94,12 +94,23 @@ test('the form: days run Monday first, Add a time stops at the cap (Last Few Day
   assert.equal(canAddTime(sched('Last Few Days', [], [2]), 1), true);
 });
 
-test('the form: a new time is the first free mark an hour after the last one, else the first free mark', () => {
-  assert.equal(nextTime([]), 540);
-  assert.equal(nextTime([{ minute: 690, feedMode: null }]), 750);
-  assert.equal(nextTime([{ minute: 690, feedMode: null }, { minute: 750, feedMode: null }]), 810);
-  assert.equal(nextTime([{ minute: 1230, feedMode: null }]), 480);
-  assert.equal(nextTime([{ minute: 480, feedMode: null }, { minute: 1245, feedMode: null }]), 495);
+test('the form: a new time adds no warning or error, inside the usual window when it can (fix round 1, B3)', () => {
+  const ex = [sched('Explainers', [780, 930], all, 'main')];
+  // Carousels 9:00 / 2:30 against Explainers Main 1:00 / 3:30: not 3:30 PM (the old pick, a feed warning), and 30 minutes from 9:00.
+  const car = sched('Carousels', [540, 870], all);
+  const m = nextTime(car, { cap: 3, others: ex });
+  assert.notEqual(m, 930);
+  assert.equal(m, 570, 'the first clean mark in the Carousels morning window');
+  const r = checkSchedule({ ...car, times: [...car.times, { minute: m, feedMode: null }] }, { cap: 3, others: ex });
+  assert.deepEqual([r.errors, r.warnings], [[], []]);
+  // Empty: the usual window's start.
+  assert.equal(nextTime(sched('Carousels', [], all), { cap: 3, others: [] }), 540);
+  // Both usual windows full of conflicts: falls outside them, still clean.
+  const busy = [sched('Explainers', [540, 570, 870, 900], all, 'main')];
+  const out = nextTime(sched('Carousels', [], all), { cap: 3, others: busy });
+  assert.deepEqual(checkSchedule(sched('Carousels', [out], all), { cap: 3, others: busy }).warnings, []);
+  // Trial reels never warn against feed times.
+  assert.equal(nextTime(sched('Text on Screen', [], all, 'trial'), { cap: 5, others: ex }), 525);
 });
 
 test('the form: unresolved merge problems block like errors; warnings and confirms pass through', () => {
@@ -126,8 +137,13 @@ test('replaceSchedule: swaps one entry\'s rows; a Last Few Days confirm takes Ca
 });
 
 test('toasts: saved, back to Ready, and undone', () => {
-  assert.equal(savedToast('Carousels', 0), 'Carousels schedule saved. Every week from now on.');
-  assert.equal(savedToast('Carousels', 2), 'Carousels schedule saved. Every week from now on. 2 Carousels went back to Ready to place.');
+  assert.equal(savedToast('Carousels', []), 'Carousels schedule saved. Every week from now on.');
+  assert.equal(savedToast('Carousels', [{ label: 'Carousels', count: 2 }]), 'Carousels schedule saved. Every week from now on. 2 Carousels went back to Ready to place.');
+  // After a Last Few Days confirm, each type is counted under its own name.
+  assert.equal(
+    savedToast('Last Few Days', [{ label: 'Last Few Days', count: 1 }, { label: 'Carousels', count: 2 }, { label: 'Explainers', count: 0 }]),
+    'Last Few Days schedule saved. Every week from now on. 1 Last Few Days went back to Ready to place. 2 Carousels went back to Ready to place.',
+  );
   assert.equal(undoneToast('Carousels', 0), 'Undone: Carousels schedule.');
   assert.equal(undoneToast('Carousels', 2), 'Undone: Carousels schedule. Posts that went back to Ready to place stay there.');
 });
@@ -139,4 +155,61 @@ test('confirm lines: LFD / Carousels days both ways, and the empty schedule', ()
     'Wednesday becomes a Carousels day. Last Few Days comes off Wednesday.',
   ]);
   assert.deepEqual(confirmLines({ kind: 'empty' }, 'Carousels'), ['Carousels will stop posting.']);
+});
+
+test('LFD and Carousels never raise each other\'s feed warning (fix round 1, B2)', () => {
+  const lfd = checkSchedule(sched('Last Few Days', [540], [2, 3, 5]), { cap: 1, others: [sched('Carousels', [540], [0, 1, 3, 4, 6])] });
+  assert.deepEqual(lfd.warnings, []);
+  assert.equal(lfd.confirm?.kind, 'lfd-carousels');
+  const car = checkSchedule(sched('Carousels', [555], [0, 1, 2, 3]), { cap: 3, others: [sched('Last Few Days', [540], [2, 5])] });
+  assert.deepEqual(car.warnings, []);
+  // Each still warns against another feed type.
+  const ex = checkSchedule(sched('Last Few Days', [540], [2]), { cap: 1, others: [sched('Explainers', [555], all, 'main')] });
+  assert.equal(ex.warnings.length, 1);
+});
+
+// ── The preview board after a Schedules save (fix round 1, B1) ──
+
+test('the sandbox board: past days and today\'s started slots stay, ties hold, board edits are kept', async () => {
+  const { scheduleDays, scheduleStandardDay } = await import('@/lib/social-hub/views/schedule-week');
+  const { datedWeek, templateWeek } = await import('@/lib/social-hub/views/week');
+  const C = E('Carousels');
+  const before = all.flatMap((d) => [row(d, 'carousels', 540), row(d, 'carousels', 870), row(d, 'explainers', 780, 'main')]);
+  const after = replaceSchedule(before, sched('Carousels', [690, 1080], all), null);
+  const change = { id: 1, before, after, entries: [C], clear: null };
+  const week = datedWeek(before, '2026-10-05');
+  // A board edit on Fri Oct 9: the 9:00 Carousel moved to 10:00 (hand-set).
+  week[4] = { ...week[4]!, slots: [...week[4]!.slots.filter((s) => !(s.vertical === 'carousels' && s.startMinute === 540)), { vertical: 'carousels', startMinute: 600, series: null, feedMode: null, origin: 'override' }] };
+  const out = scheduleDays(week, change, { today: '2026-10-08', nowMinute: 900 });
+  const car = (i: number) => out[i]!.slots.filter((s) => s.vertical === 'carousels').map((s) => s.startMinute);
+  assert.deepEqual(car(2), [540, 870], 'Wed (past) untouched');
+  assert.deepEqual(car(3), [540, 870], 'Thu (today, both started) keeps them and gains nothing (P7)');
+  assert.deepEqual(car(4), [600, 1080], 'Fri keeps the hand-set 10:00; its 9:00 tie stops 11:30; 2:30 follows to 6:00');
+  assert.deepEqual(car(5), [690, 1080], 'Sat follows the schedule');
+  assert.ok(out[5]!.slots.some((s) => s.vertical === 'explainers'), 'other types untouched');
+  // Today with one started slot: 9:00 started stays and ties 11:30; 2:30 (not started at 10:00) moves to 6:00.
+  const morning = scheduleDays(datedWeek(before, '2026-10-05'), change, { today: '2026-10-08', nowMinute: 600 });
+  assert.deepEqual(morning[3]!.slots.filter((s) => s.vertical === 'carousels').map((s) => s.startMinute), [540, 1080]);
+  // The Standard week is the template: replaced outright.
+  const std = scheduleDays(templateWeek(before, '2026-10-05'), change, { today: '2026-10-08', nowMinute: 900 });
+  assert.deepEqual(std[3]!.slots.filter((s) => s.vertical === 'carousels').map((s) => s.startMinute), [690, 1080]);
+  assert.deepEqual(scheduleStandardDay(week[0]!.slots, 1, change).filter((s) => s.vertical === 'carousels').map((s) => s.startMinute), [690, 1080]);
+});
+
+test('the sandbox board: an LFD confirm takes routine Carousels off; a hand-set Carousel stays and LFD skips the date', async () => {
+  const { scheduleDays } = await import('@/lib/social-hub/views/schedule-week');
+  const { datedWeek } = await import('@/lib/social-hub/views/week');
+  const before = [...[0, 1, 3, 4, 6].map((d) => row(d, 'carousels', 570)), ...[2, 5].map((d) => row(d, 'last_few_days', 540))];
+  const after = replaceSchedule(before, sched('Last Few Days', [540], [2, 3, 5]), { kind: 'lfd-carousels', days: [3] });
+  const change = { id: 1, before, after, entries: [E('Last Few Days')], clear: { entry: E('Carousels'), days: [3] } };
+  const clock = { today: '2026-10-05', nowMinute: 480 };
+  const kinds = (d: { slots: Array<{ vertical: string; startMinute: number }> }) => d.slots.map((s) => `${s.vertical}@${s.startMinute}`);
+  const out = scheduleDays(datedWeek(before, '2026-10-05'), change, clock);
+  assert.deepEqual(kinds(out[2]!), ['last_few_days@540'], 'Wed Oct 7 becomes a Last Few Days day');
+  const week = datedWeek(before, '2026-10-05');
+  week[2] = { ...week[2]!, slots: [{ vertical: 'carousels', startMinute: 600, series: null, feedMode: null, origin: 'override' }] };
+  assert.deepEqual(kinds(scheduleDays(week, change, clock)[2]!), ['carousels@600'], 'the hand-set Carousel stays; LFD skips');
+  // Undo: both entries set back from the saved template.
+  const undo = { id: 2, before: after, after: before, entries: [E('Last Few Days'), E('Carousels')], clear: null };
+  assert.deepEqual(kinds(scheduleDays(out, undo, clock)[2]!), ['carousels@570']);
 });

@@ -6,10 +6,11 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { ScheduleForm, type SaveOutcome } from '@/components/social-hub/calendar/ScheduleForm';
 import { useScheduleSandbox } from '@/components/social-hub/calendar/schedule-sandbox';
+import { ToastSlot } from '@/components/social-hub/calendar/toast-slot';
 import { typeStyle } from '@/components/social-hub/ui/marks';
 import {
   checkSchedule, confirmLines, replaceSchedule, savedToast, SCHEDULE_ENTRIES, scheduleFromTemplate, undoneToast,
-  type ScheduleConfirm, type ScheduleEntry, type ScheduleView, type TypeSchedule,
+  type BackToReady, type ScheduleConfirm, type ScheduleEntry, type ScheduleView, type TypeSchedule,
 } from '@/lib/social-hub/slots/schedule';
 import type { TemplateRow } from '@/lib/social-hub/slots/types';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -27,8 +28,10 @@ import type { Vertical } from '@/lib/social-hub/types';
 const SCHEDULE = '/api/social-hub/slots/schedule';
 
 const OFFLINE = 'Couldn’t reach the hub. Check your connection and try again.';
-/** The board's legacy notice (SourceSwitch). */
+/** Why the form is read-only: the board's legacy notice (SourceSwitch), or the other reasons saving is off. */
 const LEGACY_NOTE = 'The calendar is showing today’s settings. It starts deciding when you switch it on.';
+const OFF_NOTE = 'Editing schedules is turned off for now, so this is read-only.';
+const UNREAD_NOTE = 'The calendar couldn’t be read in full just now, so this is read-only. Refresh to try again.';
 
 type Toast = { id: number; text: string; warn?: boolean; undo?: Undo };
 
@@ -39,7 +42,7 @@ type Toast = { id: number; text: string; warn?: boolean; undo?: Undo };
  */
 type Undo =
   | { kind: 'live'; label: string; toReady: number; inverse: TypeSchedule; inverseOther: TypeSchedule | null }
-  | { kind: 'sandbox'; label: string; template: TemplateRow[] };
+  | { kind: 'sandbox'; label: string; template: TemplateRow[]; entries: ScheduleEntry[] };
 
 async function post(body: unknown): Promise<{ status: number; out: Record<string, unknown> }> {
   const res = await fetch(SCHEDULE, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -50,7 +53,7 @@ const sameEntry = (a: Pick<ScheduleEntry, 'vertical' | 'series'>, b: Pick<Schedu
   a.vertical === b.vertical && a.series === b.series;
 const entryKey = (e: ScheduleEntry) => `${e.vertical}:${e.series ?? ''}`;
 
-export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = false, onSaved }: {
+export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = false, readOnlyReason = null, onSaved }: {
   /** Every entry's schedule as the page read it (merged when its days differ). */
   schedules: ScheduleView[];
   caps: Record<Vertical, number>;
@@ -60,6 +63,8 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
   sandbox: boolean;
   /** The switch is off: the form is read-only with the board's notice. */
   legacy?: boolean;
+  /** Why saving is off when it isn't the switch: the editSlots flag, or a week read that can't be trusted. */
+  readOnlyReason?: 'off' | 'unread' | null;
   /** After a save went through (on screen or on the server). */
   onSaved?: (schedule: TypeSchedule) => void;
 }) {
@@ -110,9 +115,10 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
       const ask: ScheduleConfirm | { kind: 'empty' } | null = check.empty ? { kind: 'empty' } : check.confirm;
       if (ask && !confirm) return { kind: 'confirm', lines: confirmLines(ask, label) };
       const was = box.template;
-      box.setTemplate(replaceSchedule(was, s, check.confirm));
+      const other = check.confirm ? SCHEDULE_ENTRIES.find((e) => e.vertical === (check.confirm!.kind === 'lfd-carousels' ? 'carousels' : 'last_few_days'))! : null;
+      box.apply(replaceSchedule(was, s, check.confirm), [s.entry], other ? { entry: other, days: check.confirm!.days } : null);
       setOpen(null);
-      say({ text: savedToast(label, 0), undo: { kind: 'sandbox', label, template: was } });
+      say({ text: savedToast(label, []), undo: { kind: 'sandbox', label, template: was, entries: other ? [s.entry, other] : [s.entry] } });
       onSaved?.(s);
       return { kind: 'saved' };
     }
@@ -128,9 +134,10 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
     const { status, out } = res;
     if (status === 200) {
       const toReady = typeof out.toReady === 'number' ? out.toReady : 0;
+      const byType = Array.isArray(out.toReadyByType) ? (out.toReadyByType as BackToReady[]) : toReady ? [{ label, count: toReady }] : [];
       setOpen(null);
       router.refresh();
-      say({ text: savedToast(label, toReady), undo: { kind: 'live', label, toReady, inverse: out.inverse as TypeSchedule, inverseOther: (out.inverseOther as TypeSchedule | null) ?? null } });
+      say({ text: savedToast(label, byType), undo: { kind: 'live', label, toReady, inverse: out.inverse as TypeSchedule, inverseOther: (out.inverseOther as TypeSchedule | null) ?? null } });
       onSaved?.(s);
       return { kind: 'saved' };
     }
@@ -144,7 +151,7 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
   const undo = useCallback(async (u: Undo) => {
     setToast(null);
     if (u.kind === 'sandbox') {
-      box?.setTemplate(u.template);
+      box?.apply(u.template, u.entries, null);
       say({ text: undoneToast(u.label, 0) });
       return;
     }
@@ -152,18 +159,28 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
     setBusy(true);
     try {
       // The saved entry first, then the other type's lost days (LFD / Carousels), in that order.
-      for (const s of u.inverseOther ? [u.inverse, u.inverseOther] : [u.inverse]) {
-        const { status, out } = await post({ schedule: s, confirm: true });
-        if (status !== 200) {
-          const why = Array.isArray(out.errors) ? (out.errors as string[]).join(' ') : typeof out.error === 'string' ? out.error : 'Undo didn’t go through.';
-          router.refresh();
-          say({ text: why, warn: true });
+      const steps = u.inverseOther ? [u.inverse, u.inverseOther] : [u.inverse];
+      let done = 0;
+      // A second step that fails leaves the first restored: say so, so the half-done state isn't a surprise.
+      const half = () => (done ? `${u.inverse.entry.label} schedule was restored; ${steps[done]!.entry.label} wasn’t. ` : '');
+      for (const s of steps) {
+        let res: Awaited<ReturnType<typeof post>>;
+        try {
+          res = await post({ schedule: s, confirm: true });
+        } catch {
+          if (done) router.refresh();
+          say({ text: `${half()}${OFFLINE}`, warn: true });
           return;
         }
+        if (res.status !== 200) {
+          const { out } = res;
+          const why = Array.isArray(out.errors) ? (out.errors as string[]).join(' ') : typeof out.error === 'string' ? out.error : 'Undo didn’t go through.';
+          router.refresh();
+          say({ text: `${half()}${why}`, warn: true });
+          return;
+        }
+        done += 1;
       }
-    } catch {
-      say({ text: OFFLINE, warn: true });
-      return;
     } finally {
       setBusy(false);
     }
@@ -226,7 +243,7 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
           others={others}
           cap={caps[open.entry.vertical]}
           editable={editable}
-          note={legacy ? LEGACY_NOTE : null}
+          note={editable ? null : legacy ? LEGACY_NOTE : readOnlyReason === 'unread' ? UNREAD_NOTE : OFF_NOTE}
           busy={busy}
           anchor={open.anchor}
           onClose={() => setOpen(null)}
@@ -234,7 +251,8 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
         />
       ) : null}
 
-      <div className={`sh-board__toasts${entry ? ' is-top' : ''}`} aria-live="polite">
+      {/* The week page's one toast place (toast-slot.tsx): stacked with the board's, never on top of it. */}
+      <ToastSlot top={open !== null}>
         {toast ? (
           <div className={`sh-board__toast${toast.warn ? ' is-warn' : ''}`} role={toast.warn ? 'alert' : 'status'}>
             <span>{toast.text}</span>
@@ -242,7 +260,7 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
             {busy ? <Loader size={14} className="sh-board__spin" aria-label="Saving" /> : null}
           </div>
         ) : null}
-      </div>
+      </ToastSlot>
     </>
   );
 }

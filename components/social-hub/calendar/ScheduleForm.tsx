@@ -25,6 +25,8 @@ const MERGED = 'This schedule had different times on different days. They’re m
 
 const modeWord = (m: FeedMode) => (m === 'trial' ? 'Trial' : 'Main');
 
+type Row = ScheduleTime & { id: number };
+
 export function ScheduleForm({ view, others, cap, editable, note, busy, anchor, onClose, onSave }: {
   view: ScheduleView;
   /** Every other entry's schedule, for the feed warning and the LFD / Carousels confirm. */
@@ -42,7 +44,9 @@ export function ScheduleForm({ view, others, cap, editable, note, busy, anchor, 
   const { entry } = view.schedule;
   const label = entry.label;
   const reel = isReelType(entry.vertical);
-  const [times, setTimes] = useState<ScheduleTime[]>(view.schedule.times);
+  // Each row keeps a stable id, so a row's open time menu stays with it when another row is removed.
+  const ids = useRef(0);
+  const [times, setTimes] = useState<Row[]>(() => view.schedule.times.map((t) => ({ ...t, id: ++ids.current })));
   const [days, setDays] = useState<number[]>(view.schedule.days);
   // Merge problems ("1:00 PM is Trial on some days…") hold until that time is settled: its Trial / Main picked, moved or removed.
   const [problems, setProblems] = useState<string[]>(view.problems);
@@ -50,7 +54,7 @@ export function ScheduleForm({ view, others, cap, editable, note, busy, anchor, 
   const [ask, setAsk] = useState<string[] | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  const draft: TypeSchedule = { entry, times: [...times].sort((a, b) => a.minute - b.minute), days: [...days].sort((a, b) => a - b) };
+  const draft: TypeSchedule = { entry, times: [...times].sort((a, b) => a.minute - b.minute).map(({ minute, feedMode }) => ({ minute, feedMode })), days: [...days].sort((a, b) => a - b) };
   const check = formErrors(draft, { cap, others, problems });
   const errors = [...check.errors, ...server.filter((e) => !check.errors.includes(e))];
   const canAdd = canAddTime(draft, cap);
@@ -61,7 +65,7 @@ export function ScheduleForm({ view, others, cap, editable, note, busy, anchor, 
   const setTime = (i: number, minute: number) => edit(() => { settle(times[i]!.minute); setTimes((t) => t.map((x, j) => (j === i ? { ...x, minute } : x))); });
   const setMode = (i: number, feedMode: FeedMode) => edit(() => { settle(times[i]!.minute); setTimes((t) => t.map((x, j) => (j === i ? { ...x, feedMode } : x))); });
   const remove = (i: number) => edit(() => { settle(times[i]!.minute); setTimes((t) => t.filter((_, j) => j !== i)); });
-  const add = () => edit(() => setTimes((t) => [...t, { minute: nextTime(t), feedMode: reel ? DEFAULT_FEED_MODE[entry.vertical] : null }]));
+  const add = () => edit(() => setTimes((t) => [...t, { minute: nextTime(draft, { cap, others }), feedMode: reel ? DEFAULT_FEED_MODE[entry.vertical] : null, id: ++ids.current }]));
   const toggleDay = (d: number) => edit(() => setDays((x) => (x.includes(d) ? x.filter((y) => y !== d) : [...x, d])));
 
   const run = async (confirm: boolean) => {
@@ -84,7 +88,7 @@ export function ScheduleForm({ view, others, cap, editable, note, busy, anchor, 
           {times.length ? (
             <ul className="sh-sched__times">
               {times.map((t, i) => (
-                <li key={i} className="sh-sched__time" data-problem={problemAt(t.minute) ? 'true' : undefined}>
+                <li key={t.id} className="sh-sched__time" data-problem={problemAt(t.minute) ? 'true' : undefined}>
                   {editable ? (
                     <Menu label="Time" value={String(t.minute)} align="left" options={TIME_OPTIONS.map((m) => ({ value: String(m), label: clockLabel(m) }))} onSelect={(v) => setTime(i, Number(v))} />
                   ) : <span className="sh-sched__clock">{clockLabel(t.minute)}</span>}

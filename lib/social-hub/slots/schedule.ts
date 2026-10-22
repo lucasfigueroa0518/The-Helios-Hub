@@ -2,7 +2,7 @@
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { LFD_ONCE, OFF_GRID, OUTSIDE_DAY } from './rules';
-import { clockLabel, DAY_START, DEFAULT_FEED_MODE, FEED_GAP, GRID, isFeedSlot, LAST_START } from './times';
+import { clockLabel, DAY_START, DEFAULT_FEED_MODE, FEED_GAP, GRID, isFeedSlot, isUsual, LAST_START } from './times';
 import { isReelType, isSlotMinute, type FeedMode, type StorySeries, type TemplateRow } from './types';
 
 /**
@@ -86,6 +86,8 @@ export function templateRowsFor(s: TypeSchedule): TemplateRow[] {
 }
 
 
+const LFD_PAIR = new Set<Vertical>(['last_few_days', 'carousels']);
+
 export type ScheduleConfirm = { kind: 'lfd-carousels' | 'carousels-lfd'; days: number[] };
 
 export function checkSchedule(
@@ -116,6 +118,8 @@ export function checkSchedule(
     if (!isFeedSlot({ vertical: s.entry.vertical, feedMode: t.feedMode })) continue;
     for (const o of ctx.others) {
       if (sameEntry(o.entry, s.entry)) continue;
+      // Last Few Days and Carousels never post on the same day (a shared day is a confirm that takes one off).
+      if (LFD_PAIR.has(s.entry.vertical) && LFD_PAIR.has(o.entry.vertical)) continue;
       if (!o.days.some((d) => s.days.includes(d))) continue;
       for (const ot of o.times) {
         if (!isFeedSlot({ vertical: o.entry.vertical, feedMode: ot.feedMode })) continue;
@@ -152,13 +156,34 @@ export function canAddTime(s: TypeSchedule, cap: number): boolean {
   return s.times.length < most;
 }
 
-/** The time "Add a time" starts at: the first free mark an hour after the last time, else the first free mark of the day (9 AM when empty). */
-export function nextTime(times: readonly ScheduleTime[]): number {
-  if (!times.length) return 540;
-  const taken = new Set(times.map((t) => t.minute));
+/**
+ * The time "Add a time" starts at: the first mark that adds no error and no
+ * warning and keeps 30 minutes from this type's own feed times, inside the
+ * type's usual windows when one has room, else anywhere in the day. When no
+ * mark is clean: the first free mark an hour after the last time, else the
+ * first free mark of the day.
+ */
+export function nextTime(s: TypeSchedule, ctx: { cap: number; others: readonly TypeSchedule[] }): number {
+  const { vertical } = s.entry;
+  const feedMode = isReelType(vertical) ? DEFAULT_FEED_MODE[vertical] : null;
+  const taken = new Set(s.times.map((t) => t.minute));
+  const base = checkSchedule(s, ctx);
+  const feed = isFeedSlot({ vertical, feedMode });
+  const clean = (m: number) => {
+    if (taken.has(m)) return false;
+    if (feed && s.times.some((t) => isFeedSlot({ vertical, feedMode: t.feedMode }) && Math.abs(t.minute - m) < FEED_GAP)) return false;
+    const r = checkSchedule({ ...s, times: [...s.times, { minute: m, feedMode }] }, { ...ctx, cap: Math.max(ctx.cap, s.times.length + 1) });
+    return r.errors.length <= base.errors.length && r.warnings.length <= base.warnings.length;
+  };
+  const grid: number[] = [];
+  for (let m = DAY_START; m <= LAST_START; m += GRID) grid.push(m);
+  const usual = grid.filter((m) => isUsual(vertical, m));
+  const found = usual.find(clean) ?? grid.find(clean);
+  if (found !== undefined) return found;
+  if (!taken.size) return 540;
   const last = Math.max(...taken);
   for (let m = last + 60; m <= LAST_START; m += GRID) if (!taken.has(m)) return m;
-  for (let m = DAY_START; m <= LAST_START; m += GRID) if (!taken.has(m)) return m;
+  for (const m of grid) if (!taken.has(m)) return m;
   return DAY_START;
 }
 
@@ -198,10 +223,13 @@ export function confirmLines(c: ScheduleConfirm | { kind: 'empty' }, label: stri
   );
 }
 
-/** "Carousels schedule saved. Every week from now on." plus how many went back to Ready to place. */
-export function savedToast(label: string, toReady: number): string {
-  const back = toReady > 0 ? ` ${toReady} ${label} went back to Ready to place.` : '';
-  return `${label} schedule saved. Every week from now on.${back}`;
+/** How many of one type a save sent back to Ready to place (the route's `toReadyByType`). */
+export type BackToReady = { label: string; count: number };
+
+/** "Carousels schedule saved. Every week from now on." plus, per type, how many went back to Ready to place. */
+export function savedToast(label: string, back: readonly BackToReady[]): string {
+  const parts = back.filter((b) => b.count > 0).map((b) => ` ${b.count} ${b.label} went back to Ready to place.`).join('');
+  return `${label} schedule saved. Every week from now on.${parts}`;
 }
 
 /** After Undo: posts the save sent back to Ready to place don't come back. */

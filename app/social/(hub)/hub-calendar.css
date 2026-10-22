@@ -271,6 +271,8 @@
    while a details panel or picker is open so it never covers one (fix round 1, #4 and #5). */
 .sh-board__toasts { position: fixed; left: 50%; bottom: 20px; z-index: var(--z-overlay); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
 .sh-board__toasts.is-top { top: 72px; bottom: auto; }
+/* The week page's shared toast place: the board's and the Schedules toast stack here instead of overlapping. */
+.sh-toast-host { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .sh-board__toast button { pointer-events: auto; }
 .sh-board__toast { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-text); color: var(--color-text-inverse); box-shadow: var(--sh-overlay); font-size: var(--sh-fs-small); }
 .sh-board__toast.is-warn { background: var(--sh-failed-ink); }

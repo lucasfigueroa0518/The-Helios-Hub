@@ -201,8 +201,27 @@ test('the save sends removed-time posts back first, then saves', async () => {
   assert.equal(out.status, 200, JSON.stringify(out.body));
   assert.deepEqual(sent, [wed]);
   assert.equal(out.body.toReady, 1);
+  assert.deepEqual(out.body.toReadyByType, [{ label: 'Carousels', count: 1 }]);
   assert.equal(out.body.moved, 0);
   assert.deepEqual(await minutesOn(q, WED, 'carousels'), [1080]);
+});
+
+test('a Last Few Days confirm counts the Carousels it sent back to Ready under Carousels', async () => {
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[570, null]], NOT_LFD_DAYS);
+  await useTimes(pg, 'last_few_days', null, [[540, null]], [2, 5]);
+  const wed = await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0570', publishAt: '2026-10-28T13:35:00Z' });
+  const sent: string[] = [];
+  const out = await saveSchedule(body(sched('last_few_days', [540], [2, 3, 5]), true), deps(pg, q, {
+    unschedule: async (p) => {
+      sent.push(p.scheduleId);
+      await pg.query(`UPDATE social_hub.schedule SET status = 'cancelled' WHERE id = $1`, [p.scheduleId]);
+      return { ok: true, note: 'Unscheduled.' };
+    },
+  }));
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.deepEqual(sent, [wed]);
+  assert.deepEqual(out.body.toReadyByType, [{ label: 'Carousels', count: 1 }]);
 });
 
 test('a started slot today is untouched', async () => {

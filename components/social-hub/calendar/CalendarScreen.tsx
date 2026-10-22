@@ -7,6 +7,7 @@ import { MonthGrid } from '@/components/social-hub/calendar/MonthGrid';
 import { SourceSwitch, WeekBoard, type ReadyItem } from '@/components/social-hub/calendar/WeekBoard';
 import { SandboxWeekBoard, ScheduleSandbox } from '@/components/social-hub/calendar/schedule-sandbox';
 import { SchedulesMenu } from '@/components/social-hub/calendar/SchedulesMenu';
+import { ToastHosts } from '@/components/social-hub/calendar/toast-slot';
 import type { SlimPost } from '@/components/social-hub/calendar/SlotCard';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 import { TypeToggles } from '@/components/social-hub/calendar/CalendarControls';
@@ -142,7 +143,7 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
         actions={
           <>
             <ViewToggle path={path} view="week" />
-            {week.schedules ? <SchedulesMenu schedules={week.schedules} caps={week.caps} editable={editable} sandbox={sandbox} legacy={legacy} /> : null}
+            {week.schedules ? <SchedulesMenu schedules={week.schedules} caps={week.caps} editable={editable} sandbox={sandbox} legacy={legacy} readOnlyReason={!actionEnabled('editSlots') ? 'off' : week.readOnly ? 'unread' : null} /> : null}
             <div className="sh-pills" role="group" aria-label="Show">
               <HubLink className="sh-pill" href={href({ scope: 'template', week: null })} aria-current={template ? 'page' : undefined} history="replace">Standard week</HubLink>
               <HubLink className="sh-pill" href={href({ scope: null })} aria-current={template ? undefined : 'page'} history="replace">This week</HubLink>
@@ -166,6 +167,7 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
       ) : null}
       {template ? <p className="sh-subtle sh-week__focus">The standard week repeats every week. A change on This week shows on that date only.</p> : null}
       {sandbox && week.template ? <SandboxWeekBoard {...boardProps} /> : <WeekBoard {...boardProps} />}
+      <ToastHosts />
     </>
   );
   // The preview holds its standing week on screen, so a Schedules save there moves the board's cards.
