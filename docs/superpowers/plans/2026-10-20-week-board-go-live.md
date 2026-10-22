@@ -15,6 +15,7 @@ Run these in order; Tommy runs every step. You can stop after any step: until st
 - [ ] Merge PR #13 when ready. That merge is what deploys the hub on Vercel (step 3).
 
 ## 2. Apply both schema files
+The apply also adds `slot_override.set_by`, `schedule.slot_by` and `stories.sets.slot_by` (type schedules, D60). **Apply the schema first, then redeploy the social worker (step 3).** A worker started before the apply caches "no column" until it restarts.
 - [ ] `node scripts/apply_social_hub_schema.js --apply`
 - [ ] `node scripts/apply_stories_schema.js`. This one has no `--apply` flag; running it applies.
 - [ ] Read-only check:
@@ -24,6 +25,7 @@ Run these in order; Tommy runs every step. You can stop after any step: until st
   - Expect two indexes, `uq_stories_sets_live_day` and `uq_stories_sets_live_slot`.
   - Expect `slot_source` = `"legacy"`.
   - Expect `daily_caps` = `{"reels":5,"explainers":3,"carousels":3,"last_few_days":1,"stories":2}`.
+- Optional read-only check for the new columns: `psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SELECT table_schema, table_name, column_name FROM information_schema.columns WHERE column_name IN ('set_by','slot_by') AND table_schema IN ('social_hub','stories'); ROLLBACK;"` lists three rows.
 - This step is safe with the code that's live now. The old Stories index is kept on purpose.
 
 ## 3. Deploy the new code
@@ -54,6 +56,9 @@ Run these in order; Tommy runs every step. You can stop after any step: until st
 - [ ] **A booked post:** try Remove. It should ask "Move it back to ready" / "Keep it"; choose Keep.
 - [ ] **A booked Story:** try moving it. It should say it can't move here.
 - [ ] Make a second edit while "Saving…" shows. It should say "Still saving the last change."
+- [ ] **Schedules:** change a type's schedule (for example move one Carousel time). Confirm system bookings moved to the new time while a hand-set post stayed.
+- [ ] **Batch Remove:** Select a booked post and Remove. It should ask once ("Move it back to ready" / "Keep it").
+- [ ] **Batch Set time:** Select two or three cards and Set time. Confirm they all take the picked time.
 - [ ] **Type page:** the "Daily limit" row shows. Change one limit and change it back.
 - [ ] **Next morning:** posts went out at their slot times (within 15 minutes, later if the 30-minute feed gap pushed them).
 
