@@ -217,6 +217,16 @@
 .sh-board__tag:focus-visible { outline: 2px solid var(--sh-focus); outline-offset: 1px; }
 .sh-board__tag--key { cursor: default; margin: 0; }
 /* The ghost: one element, moved by transform; dashed where it would land, solid on a usual start. */
+/* Select mode (spec 2026-10-21 §2): the toggle, the actions bar, and the selected cards' check. */
+.sh-board__selectbar { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.sh-board__select { gap: 6px; }
+.sh-board__select[aria-pressed='true'] { border-color: var(--color-text); background: var(--color-surface-2); }
+.sh-board__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.sh-board__selcount { font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-board__card[data-selecting='true'] { cursor: pointer; }
+.sh-board__card[data-selecting='true'][data-locked='true'] { cursor: not-allowed; }
+.sh-board__card[data-selected='true'] { z-index: 3; box-shadow: 0 0 0 2px var(--sh-focus); background: color-mix(in srgb, var(--sh-focus) 10%, var(--color-surface)); }
+.sh-board__check { flex: none; margin-right: -2px; color: var(--sh-focus); }
 .sh-board__ghost { position: absolute; top: 0; left: 0; z-index: 6; display: flex; align-items: center; padding: 0 10px; border: 1.5px dashed var(--sh-focus); border-radius: 9px; background: color-mix(in srgb, var(--sh-focus) 8%, var(--color-surface)); color: var(--sh-focus); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); pointer-events: none; transition: transform 70ms ease-out; will-change: transform; }
 .sh-board__ghost[hidden] { display: none; }
 .sh-board__ghost[data-snapped='true'] { border-style: solid; background: color-mix(in srgb, var(--sh-focus) 13%, var(--color-surface)); }
@@ -307,4 +317,5 @@
   .sh-board__panel .sh-menu__list { top: auto; bottom: calc(100% + 6px); max-height: 50vh; }
   .sh-board__tray { padding: 8px 10px; }
   .sh-board__chip { min-height: 40px; }
+  .sh-board__actions .sh-menu__list { max-height: 50vh; }
 }

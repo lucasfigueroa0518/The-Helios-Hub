@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { createHistory, type Command } from '@/components/social-hub/calendar/history';
+import { createHistory, undoChunks, type Command } from '@/components/social-hub/calendar/history';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
 import { storyPosts } from '@/lib/social-hub/adapters/stories';
 import type { ReelAttemptRow, ReelsRead } from '@/lib/social-hub/queries/reels';
@@ -549,4 +549,82 @@ test('reset day that deletes a booked override slot asks first', () => {
   const r = planReset(s, WED, CLOCK);
   assert.ok(r.ok && !r.noop);
   assert.deepEqual(bookedHits(s, r.next).map((h) => [h.post.id, h.why]), [['b9', 'removed']]);
+});
+
+// ── Batch select (spec 2026-10-21 §2) ──
+
+const SAT = 5;
+const THU = 3;
+const sel = (day: number, k: SlotKey) => ({ day, key: k });
+type DateMove = { from: { nyDate: string; vertical: string; startMinute: number; series: null }; to: { nyDate: string; startMinute: number } };
+
+test('batch: Set time 11:30 on three Carousels sends three date moves and shows 11:30 on each', () => {
+  const s = state();
+  const b = weekEdit.planBatch(s, [sel(WED, key('carousels', 540)), sel(THU, key('carousels', 540)), sel(SAT, key('carousels', 540))], { op: 'time', minute: 690 }, CLOCK);
+  assert.deepEqual(b.skipped, []);
+  assert.equal(b.chunks.length, 1);
+  assert.equal(b.chunks[0]!.length, 3);
+  assert.ok(b.chunks.flat().every((c) => c.scope === 'date' && c.op === 'move'));
+  for (const d of [WED, THU, SAT]) {
+    assert.ok(b.next.days[d]!.slots.some((x) => x.vertical === 'carousels' && x.startMinute === 690));
+    assert.ok(!b.next.days[d]!.slots.some((x) => x.vertical === 'carousels' && x.startMinute === 540));
+    assert.ok(b.next.days[d]!.personKeys.some((k) => k.vertical === 'carousels' && k.startMinute === 690), 'the date reads Edited');
+  }
+  assert.equal(b.label, '3 slots moved to 11:30 AM');
+  // Undo: the inverse chunks, sent last chunk first, move each card back, newest first.
+  const back = [...b.inverse].reverse().flat();
+  assert.deepEqual(back, b.chunks.flat().map((c) => {
+    const m = c as unknown as DateMove;
+    return { scope: 'date', op: 'move', from: { nyDate: m.to.nyDate, vertical: m.from.vertical, startMinute: m.to.startMinute, series: m.from.series }, to: { nyDate: m.from.nyDate, startMinute: m.from.startMinute } };
+  }).reverse());
+});
+
+test('batch: Trial / Main on a mixed selection changes the reel and skips the Carousel, saying why', () => {
+  const b = weekEdit.planBatch(state(), [sel(WED, key('reels', 525)), sel(WED, key('carousels', 540))], { op: 'mode', feedMode: 'main' }, CLOCK);
+  assert.equal(b.chunks.flat().length, 1);
+  assert.equal((b.chunks[0]![0] as { feedMode: string }).feedMode, 'main');
+  assert.deepEqual(b.skipped.map((x) => x.reason), ['No Trial / Main for Carousels.']);
+  assert.equal(b.next.days[WED]!.slots.find((x) => x.vertical === 'reels' && x.startMinute === 525)!.feedMode, 'main');
+  assert.equal(weekEdit.batchToast(b), '1 slot now posts to the main feed. Just these dates. 1 skipped: No Trial / Main for Carousels.');
+});
+
+test('batch: Remove with a booked card lists it in booked', () => {
+  const s = state([booked({ slotId: 't0780' })]);
+  const b = weekEdit.planBatch(s, [sel(WED, key('explainers', 780)), sel(WED, key('carousels', 540))], { op: 'remove' }, CLOCK);
+  assert.equal(b.chunks.flat().length, 2);
+  assert.deepEqual(b.booked.map((h) => [h.post.id, h.why]), [['b1', 'removed']]);
+  assert.equal(b.label, '2 slots removed');
+});
+
+test('batch: a locked card is skipped as already started', () => {
+  const b = weekEdit.planBatch(state(), [sel(1, key('reels', 525)), sel(WED, key('reels', 525))], { op: 'remove' }, CLOCK);
+  assert.deepEqual(b.skipped, [{ day: 1, key: key('reels', 525), reason: 'Already started.' }]);
+  assert.equal(b.chunks.flat().length, 1);
+});
+
+test('batch: Set time keeps each card on its date; a duplicate minute is skipped with the rules\' reason', () => {
+  const b = weekEdit.planBatch(state(), [sel(WED, key('carousels', 540)), sel(WED, key('carousels', 870))], { op: 'time', minute: 690 }, CLOCK);
+  assert.equal(b.chunks.flat().length, 1);
+  assert.deepEqual(b.skipped.map((x) => [x.key.startMinute, x.reason]), [[870, 'Carousel already has a slot at 11:30 AM.']]);
+  const m = b.chunks[0]![0] as unknown as DateMove;
+  assert.equal(m.from.nyDate, m.to.nyDate);
+});
+
+test('batch: 25 changes go as a save of 20 and a save of 5', () => {
+  const s = state();
+  const keys = [2, 3, 4, 5, 6].flatMap((d) => s.days[d]!.slots.map((x) => sel(d, key(x.vertical, x.startMinute, x.series)))).slice(0, 25);
+  assert.equal(keys.length, 25);
+  const b = weekEdit.planBatch(s, keys, { op: 'remove' }, CLOCK);
+  assert.deepEqual(b.chunks.map((c) => c.length), [20, 5]);
+  assert.deepEqual(b.inverse.map((c) => c.length), [20, 5]);
+  assert.deepEqual(weekEdit.chunked([1, 2, 3], 2), [[1, 2], [3]]);
+});
+
+test('history: a batch command undoes as its inverse chunks, last chunk first', () => {
+  const h = createHistory();
+  const a = { scope: 'date', op: 'delete', nyDate: '2026-10-21', vertical: 'carousels', startMinute: 540, series: null } as const;
+  const c: Command = { label: 'x', changes: [], inverse: [], chunks: [[a], [a]], inverseChunks: [[{ ...a, startMinute: 1 }], [{ ...a, startMinute: 2 }]], tab: 't', undoable: true };
+  h.push(c);
+  assert.deepEqual(undoChunks(h.undo('t')!).map((x) => x.map((y) => (y as { startMinute: number }).startMinute)), [[2], [1]]);
+  assert.deepEqual(undoChunks({ ...c, chunks: undefined, inverseChunks: undefined, inverse: [a] }), [[a]]);
 });

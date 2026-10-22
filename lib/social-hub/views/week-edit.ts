@@ -401,3 +401,90 @@ export function readyMinutes(ctx: DayCtx, vertical: Vertical, series: StorySerie
   if (vertical !== 'stories') return open;
   return ctx.slots.filter((s) => s.vertical === 'stories' && s.series === series && open.includes(s.startMinute)).map((s) => s.startMinute).sort((a, b) => a - b);
 }
+
+// ── Batch select (spec 2026-10-21 §2) ──
+
+/** One action for every selected card. */
+export type BatchAction = { op: 'time'; minute: number } | { op: 'mode'; feedMode: FeedMode } | { op: 'remove' };
+
+/** The slot writer takes at most 20 changes a call (MAX_CHANGES in slots/write.ts): a batch is sent as saves of this size. */
+export const CHUNK = 20;
+
+export function chunked<T>(list: readonly T[], size = CHUNK): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+export type Batch<P extends BoardPost = BoardPost> = {
+  label: string;
+  /** The changes as saves of at most 20, sent in order. */
+  chunks: SlotChange[][];
+  /** `inverse[i]` undoes `chunks[i]`; undo sends them last chunk first. */
+  inverse: SlotChange[][];
+  next: BoardState<P>;
+  /** Cards the rules turned away; the rest of the batch still goes. */
+  skipped: Array<{ key: SlotKey; day: number; reason: string }>;
+  /** Waiting posts the batch would leave without their slot (one ask for all of them). */
+  booked: Hit<P>[];
+};
+
+const nOf = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/**
+ * The same action on several cards, each on its own date. Every card goes
+ * through planEdit, on the board as the cards before it left it, so a batch
+ * follows the single-edit rules exactly: a locked card, a duplicate minute or
+ * a Trial / Main on a type that has none is skipped with its reason, and the
+ * rest still applies. Set time keeps each card on its date at the exact
+ * minute picked (no snap). Every change is a date change (the slot writer
+ * marks it the person's).
+ */
+export function planBatch<P extends BoardPost>(state: BoardState<P>, keys: ReadonlyArray<{ day: number; key: SlotKey }>, action: BatchAction, clock: Clock): Batch<P> {
+  let cur = state;
+  const changes: SlotChange[][] = [];
+  const inverses: SlotChange[][] = [];
+  const skipped: Batch<P>['skipped'] = [];
+  for (const { day, key } of keys) {
+    if (action.op === 'mode' && !isReelType(key.vertical)) {
+      skipped.push({ key, day, reason: `No Trial / Main for ${key.series ? SERIES_NAME[key.series].many : TYPE_NAME[key.vertical].many}.` });
+      continue;
+    }
+    const edit: Edit = action.op === 'time'
+      ? { op: 'move', day, key, to: day, minute: action.minute }
+      : action.op === 'mode' ? { op: 'mode', day, key, feedMode: action.feedMode } : { op: 'remove', day, key };
+    const p = planEdit(cur, edit, clock);
+    if (!p.ok) { skipped.push({ key, day, reason: p.reason }); continue; }
+    if (p.noop) continue;
+    cur = p.next;
+    changes.push(p.changes);
+    inverses.push(p.inverse);
+  }
+  // Chunk by edit so an edit's changes and its inverse stay in the same save; each chunk's inverse runs newest edit first.
+  const chunks: SlotChange[][] = [];
+  const inverse: SlotChange[][] = [];
+  let at = 0;
+  while (at < changes.length) {
+    let size = 0;
+    let end = at;
+    while (end < changes.length && size + Math.max(changes[end]!.length, inverses[end]!.length) <= CHUNK) { size += Math.max(changes[end]!.length, inverses[end]!.length); end++; }
+    if (end === at) end = at + 1;
+    chunks.push(changes.slice(at, end).flat());
+    inverse.push(inverses.slice(at, end).reverse().flat());
+    at = end;
+  }
+  const n = changes.length;
+  const label = !n ? ''
+    : action.op === 'time' ? `${nOf(n, 'slot')} moved to ${clockLabel(action.minute)}`
+      : action.op === 'mode' ? `${nOf(n, 'slot')} now post${n === 1 ? 's' : ''} ${action.feedMode === 'trial' ? (n === 1 ? 'as a Trial reel' : 'as Trial reels') : 'to the main feed'}`
+        : `${nOf(n, 'slot')} removed`;
+  return { label, chunks, inverse, next: cur, skipped, booked: bookedHits(state, cur) };
+}
+
+/** The batch toast: what was done ("3 slots moved to 11:30 AM. Just these dates.") and each skipped part ("1 skipped: No Trial / Main for Carousels."). */
+export function batchToast(b: Pick<Batch, 'label' | 'skipped'>): string {
+  const by = new Map<string, number>();
+  for (const s of b.skipped) by.set(s.reason, (by.get(s.reason) ?? 0) + 1);
+  const skipped = [...by].map(([reason, n]) => `${n} skipped: ${reason}`);
+  return [b.label ? `${b.label}. Just these dates.` : 'Nothing changed.', ...skipped].join(' ');
+}

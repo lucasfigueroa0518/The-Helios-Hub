@@ -16,7 +16,19 @@ export type Command = {
   tab: Tab;
   /** False for an edit that unscheduled a booking: sending the inverse wouldn't bring the booking back. */
   undoable: boolean;
+  /**
+   * A batch (spec 2026-10-21 §2): its changes as the saves that carry them,
+   * at most 20 each (the slot writer's per-call limit), sent in order.
+   * `inverseChunks[i]` undoes `chunks[i]`. One batch is one command.
+   */
+  chunks?: SlotChange[][];
+  inverseChunks?: SlotChange[][];
 };
+
+/** The saves that undo a command, in the order to send them: a batch's inverse chunks last chunk first, else its one inverse. */
+export function undoChunks(c: Command): SlotChange[][] {
+  return c.inverseChunks ? [...c.inverseChunks].reverse() : [c.inverse];
+}
 
 export function createHistory() {
   const stack: Command[] = [];
