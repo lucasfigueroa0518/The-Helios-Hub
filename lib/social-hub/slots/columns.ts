@@ -2,35 +2,50 @@
 import type { SlotQuery } from './types';
 
 /**
- * Whether the "set by" columns exist yet (social_hub.slot_override.set_by,
- * social_hub.schedule.slot_by). Code may reach a database before
- * db/social_hub_schema.sql adds them (ruling R3/R12), so writes name a column
- * only when it is there. Reads never need this: they go through
- * `to_jsonb(row)->>'col'`, which is null on a missing column.
+ * Whether a column exists yet. Code may reach a database before a schema file
+ * adds it (ruling R3/R12), so writes name a new column only when it is there.
+ * Reads never need this: they go through `to_jsonb(row)->>'col'`, which is
+ * null on a missing column.
  *
- * Cached per query handle (one information_schema read per handle; a route's
- * transaction reads it once). SELECT only.
+ * Cached per query handle and column (one information_schema read each; a
+ * route's request or a transaction gets a fresh handle). SELECT only. Takes a
+ * bare query function (SlotQuery, SpineQuery) or a `{ query }` handle
+ * (the Stories Queryable).
  */
-export type MarkColumns = { overrideSetBy: boolean; scheduleSlotBy: boolean };
+type Handle = SlotQuery | { query: (text: string, params?: unknown[]) => Promise<{ rows: any[] }> };
 
-const cache = new WeakMap<object, Promise<MarkColumns>>();
+const cache = new WeakMap<object, Map<string, Promise<boolean>>>();
 
-export function markColumns(q: SlotQuery): Promise<MarkColumns> {
-  const hit = cache.get(q);
+export function hasColumn(h: Handle, schema: string, table: string, column: string): Promise<boolean> {
+  let byCol = cache.get(h);
+  if (!byCol) cache.set(h, (byCol = new Map()));
+  const key = `${schema}.${table}.${column}`;
+  const hit = byCol.get(key);
   if (hit) return hit;
-  const read = q(
-    `SELECT table_name, column_name FROM information_schema.columns
-      WHERE table_schema = 'social_hub'
-        AND ((table_name = 'slot_override' AND column_name = 'set_by') OR (table_name = 'schedule' AND column_name = 'slot_by'))`,
-  ).then(({ rows }) => ({
-    overrideSetBy: rows.some((r) => r.table_name === 'slot_override'),
-    scheduleSlotBy: rows.some((r) => r.table_name === 'schedule'),
-  }));
-  cache.set(q, read);
-  read.catch(() => cache.delete(q));
+  const run = typeof h === 'function' ? h : h.query.bind(h);
+  const read = run(
+    `SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`,
+    [schema, table, column],
+  ).then(({ rows }) => Number(rows[0]?.n ?? 0) > 0);
+  byCol.set(key, read);
+  read.catch(() => byCol!.delete(key));
   return read;
 }
 
-/** A schedule row's mark: the person's when they set it (slot_by) or placed it (source 'user'), else the system's. */
-export const SLOT_BY_SQL = (alias: string) =>
-  `CASE WHEN (to_jsonb(${alias})->>'slot_by') = 'person' OR ${alias}.source = 'user' THEN 'person' ELSE 'system' END`;
+/** The "set by" columns of the hub's tables: social_hub.slot_override.set_by, social_hub.schedule.slot_by. */
+export type MarkColumns = { overrideSetBy: boolean; scheduleSlotBy: boolean };
+
+export async function markColumns(q: Handle): Promise<MarkColumns> {
+  // One after the other: a transaction's handle runs one statement at a time.
+  const overrideSetBy = await hasColumn(q, 'social_hub', 'slot_override', 'set_by');
+  const scheduleSlotBy = await hasColumn(q, 'social_hub', 'schedule', 'slot_by');
+  return { overrideSetBy, scheduleSlotBy };
+}
+
+/**
+ * A schedule row's mark, through the row's JSON (R12): its slot_by when set
+ * (a person's move, or the Stories projection mirroring stories.sets.slot_by),
+ * else the person's when they placed it (source 'user'), else the system's.
+ */
+export const SCHEDULE_SLOT_BY_SQL = (alias: string) =>
+  `coalesce(to_jsonb(${alias})->>'slot_by', CASE WHEN ${alias}.source = 'user' THEN 'person' ELSE 'system' END)`;

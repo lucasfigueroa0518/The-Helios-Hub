@@ -25,8 +25,6 @@ export type TemplateRow = { weekday: number; vertical: Vertical; startMinute: nu
  */
 export type SetBy = 'person' | 'system';
 
-export const isSetBy = (v: unknown): v is SetBy => v === 'person' || v === 'system';
-
 export type OverrideRow = { nyDate: string; vertical: Vertical; startMinute: number; series: StorySeries | null; action: 'add' | 'remove'; feedMode: FeedMode | null; setBy: SetBy };
 
 export type ResolvedSlot = {

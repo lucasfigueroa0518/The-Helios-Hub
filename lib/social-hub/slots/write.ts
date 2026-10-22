@@ -13,7 +13,7 @@ import { readSeedInputs, seedTemplate, type SeedInputs } from './seed';
 import { rebookSlot } from '@/lib/social-hub/placement';
 
 import { driftMinute } from './book';
-import { markColumns, SLOT_BY_SQL } from './columns';
+import { markColumns, SCHEDULE_SLOT_BY_SQL } from './columns';
 import { legacyKey } from './legacy';
 import { OVERRIDE_INSERT, OVERRIDE_INSERT_SET_BY, OVERRIDE_UPSERT, OVERRIDE_UPSERT_SET_BY, overrideKeyWhere } from './override';
 import { DEFAULT_FEED_MODE, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
@@ -319,14 +319,14 @@ const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jo
 /** Types whose booking is the social_hub.schedule row (placement.rescheduleItem); Stories' minute lives in stories.sets. */
 const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'reels', 'explainers']);
 
-/** `slotBy`: the person's when they set it (schedule.slot_by) or placed it (source 'user'), else the system's. */
+/** `slotBy`: schedule.slot_by when set (Stories: mirrored from stories.sets.slot_by by projectSet), else the person's when they placed it (source 'user'), else the system's. */
 export type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string>; slotBy: SetBy };
 
 /** Waiting posts on these dates (free-time or legacy window slot ids), locked for this transaction. */
 export async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booking[]> {
   if (!dates.length) return [];
   const { rows } = await q(
-    `SELECT s.id::text AS id, s.vertical, s.ny_date::text AS ny_date, s.slot, s.feed_mode, s.publish_at, s.idea_ref, ci.native_ref, ${SLOT_BY_SQL('s')} AS slot_by
+    `SELECT s.id::text AS id, s.vertical, s.ny_date::text AS ny_date, s.slot, s.feed_mode, s.publish_at, s.idea_ref, ci.native_ref, ${SCHEDULE_SLOT_BY_SQL('s')} AS slot_by
        FROM social_hub.schedule s LEFT JOIN social_hub.content_items ci ON ci.id = s.content_item_id
       WHERE s.status = 'scheduled' AND s.ny_date = ANY($1::date[])
       ORDER BY s.publish_at

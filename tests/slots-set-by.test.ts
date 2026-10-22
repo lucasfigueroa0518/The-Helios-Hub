@@ -14,7 +14,7 @@ import { readOverrides } from '@/lib/social-hub/slots/load';
 import { overrideFor } from '@/lib/social-hub/slots/override';
 import { applySlotChanges, bookingsOn, setSlotSource } from '@/lib/social-hub/slots/write';
 import { pgliteDb } from '@/lib/stories/local-db';
-import { getSet, rescheduleSet } from '@/lib/stories/repository';
+import { getSet, rescheduleSet, scheduleSet } from '@/lib/stories/repository';
 
 import { scratchExplainersDb } from './explainers-pglite';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
@@ -171,6 +171,41 @@ test('stories reschedule by a person marks the set', async () => {
   assert.equal(got.slotBy, 'person');
   assert.equal(got.slot_minute, 540);
   assert.equal((await pg.query<{ slot_by: string }>(`SELECT slot_by FROM stories.sets WHERE id = $1`, [SET])).rows[0]!.slot_by, 'person');
+});
+
+test('an earlier person pin survives an edit to another slot on the same date', async () => {
+  const { pg, q } = await seeded();
+  const by = { by: 'tommy@example.com', now: THU_10AM };
+  await applySlotChanges(q, [{ scope: 'date', op: 'move', from: { nyDate: FRI, vertical: 'reels', startMinute: 525, series: null }, to: { nyDate: FRI, startMinute: 600 } }], by);
+  await applySlotChanges(q, [{ scope: 'date', op: 'move', from: { nyDate: FRI, vertical: 'reels', startMinute: 600, series: null }, to: { nyDate: FRI, startMinute: 525 } }], by);
+  assert.deepEqual(await overrideSetBy(pg, FRI, 'reels', 525), [{ action: 'add', set_by: 'person' }]);
+  const out = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: FRI, vertical: 'explainers', startMinute: 1020, series: null, action: 'add', feedMode: 'main' }], by);
+  assert.equal(out.ok, true);
+  assert.deepEqual(await overrideSetBy(pg, FRI, 'reels', 525), [{ action: 'add', set_by: 'person' }]);
+  assert.deepEqual(await overrideSetBy(pg, FRI, 'explainers', 1020), [{ action: 'add', set_by: 'person' }]);
+});
+
+test('Stories bookings carry their set\'s mark: a person\'s move of an overnight set is person, untouched sets are system', async () => {
+  const { pg, query } = await openHubTestDb();
+  const q = query as never;
+  const db = pgliteDb(pg);
+  const MOVED = '70000000-0000-4000-8000-000000000003';
+  const AUTO = '70000000-0000-4000-8000-000000000004';
+  const CLICK = '70000000-0000-4000-8000-000000000005';
+  const insert = (id: string, series: string, trigger: string) =>
+    pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at, slot_minute) VALUES ($1, $2, $3, 'approved', $4, 'polished', now(), 510)`, [id, series, WED, trigger]);
+  await insert(MOVED, 'morning_download', 'auto');
+  await insert(AUTO, 'guess_the_number', 'auto');
+  await insert(CLICK, 'free_vs_paid', 'click');
+  await db.transaction((tx) => scheduleSet(tx, AUTO, new Date('2026-10-21T12:30:00Z')));
+  await db.transaction((tx) => scheduleSet(tx, CLICK, new Date('2026-10-21T12:30:00Z')));
+  await db.transaction((tx) => scheduleSet(tx, MOVED, new Date('2026-10-21T12:30:00Z')));
+  const markOf = async (series: string) => (await bookingsOn(q, [WED])).find((b) => b.key.series === series)?.slotBy;
+  assert.equal(await markOf('morning_download'), 'system');
+  await db.transaction((tx) => rescheduleSet(tx, MOVED, WED, new Date('2026-10-21T13:00:00Z'), 540, 'person'));
+  assert.equal(await markOf('morning_download'), 'person', 'a person moved the overnight set');
+  assert.equal(await markOf('guess_the_number'), 'system', 'an untouched overnight set');
+  assert.equal(await markOf('free_vs_paid'), 'system', 'a click-made set booked into its slot: the set says system, so does its booking');
 });
 
 test('old code still works without the new columns', async () => {

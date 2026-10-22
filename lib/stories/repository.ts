@@ -7,6 +7,7 @@
  *   requested → building → ready → approved → scheduled → publishing → published
  *                   ↘ failed / skipped     ↘ rejected            ↘ failed
  */
+import { hasColumn } from '@/lib/social-hub/slots/columns';
 import type { SetBy } from '@/lib/social-hub/slots/types';
 import type { Queryable, StoriesDb } from '@/lib/stories/db';
 import type { Backdrop, FrameData, FrameRole, Photo, Series, Style } from '@/lib/stories/render/types';
@@ -71,9 +72,9 @@ export type NewCandidate = {
 export const SLOT_MINUTE_SQL = `(to_jsonb(sets)->>'slot_minute')::smallint`;
 
 /** `stories.sets.slot_by` the same way (R12): 'system' where the column is missing or empty. */
-export const SLOT_BY_SQL = `CASE WHEN to_jsonb(sets)->>'slot_by' = 'person' THEN 'person' ELSE 'system' END`;
+export const SET_SLOT_BY_SQL = `CASE WHEN to_jsonb(sets)->>'slot_by' = 'person' THEN 'person' ELSE 'system' END`;
 
-const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, ${SLOT_BY_SQL} AS "slotBy", flagged, error,
+const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, ${SET_SLOT_BY_SQL} AS "slotBy", flagged, error,
   spend_usd::float8 AS spend_usd, created_at, updated_at`;
 const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, review, flagged,
   ig_container_id, ig_media_id, published_at`;
@@ -292,25 +293,11 @@ export async function rescheduleSet(db: Queryable, setId: string, nyDate: string
     params.push(slotMinute);
     sets.push(`slot_minute = $${params.length + 3}`);
   }
-  if (slotBy && (await hasSlotByColumn(db))) {
+  if (slotBy && (await hasColumn(db, 'stories', 'sets', 'slot_by'))) {
     params.push(slotBy);
     sets.push(`slot_by = $${params.length + 3}`);
   }
   return move(db, setId, ['approved', 'scheduled'], 'scheduled', sets.join(', '), params);
-}
-
-const slotByColumn = new WeakMap<object, Promise<boolean>>();
-
-/** Whether stories.sets.slot_by exists yet (cached per handle). SELECT only. */
-function hasSlotByColumn(db: Queryable): Promise<boolean> {
-  const hit = slotByColumn.get(db);
-  if (hit) return hit;
-  const read = db
-    .query<{ n: number }>(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_schema = 'stories' AND table_name = 'sets' AND column_name = 'slot_by'`)
-    .then(({ rows }) => Number(rows[0]?.n ?? 0) > 0);
-  slotByColumn.set(db, read);
-  read.catch(() => slotByColumn.delete(db));
-  return read;
 }
 
 /** Scheduled sets whose minute has come, oldest first. */
