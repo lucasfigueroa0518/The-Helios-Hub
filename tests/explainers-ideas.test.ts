@@ -167,12 +167,12 @@ function stubIdeas(
   };
 }
 
-async function seedPool(db: ExplainersDb, entries: [string, Scores][]) {
+async function seedPool(db: ExplainersDb, entries: [string, Scores][], origin: 'manual' | 'seeded' = 'manual') {
   const scores = Object.fromEntries(entries);
   const { transport } = stubJev(scores);
   return addAndEvaluateTopics(
     { db, jevTransport: transport, ideaModel: stubIdeas() },
-    entries.map(([title]) => ({ title, origin: 'manual' as const })),
+    entries.map(([title]) => ({ title, origin })),
   );
 }
 
@@ -377,11 +377,19 @@ test('duplicate of a recently rendered topic is rejected without scoring', async
 test('the pool is trimmed to pool_size', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'pool_size', 2);
-  await seedPool(db, [['A', STRONG], ['B', GOOD], ['C', { ...GOOD, hook_strength: 1 }]]);
+  // A person's own topics (origin manual) are never cut; machine topics are.
+  await seedPool(db, [['A', STRONG], ['B', GOOD], ['C', { ...GOOD, hook_strength: 1 }]], 'seeded');
   assert.deepEqual((await listPool(db)).map((t) => t.title), ['A', 'B']);
   const [cut] = await listTopics(db, ['displaced']);
   assert.equal(cut.title, 'C');
   assert.equal(cut.reject_reason, 'Below the pool cut.');
+});
+
+test('the pool never cuts a person’s own topics, and a pool_size above the standard’s 30 is held to 30', async () => {
+  const { db } = await scratchExplainersDb();
+  await saveSetting(db, 'pool_size', 2);
+  await seedPool(db, [['A', STRONG], ['B', GOOD], ['C', { ...GOOD, hook_strength: 1 }]]);
+  assert.deepEqual((await listPool(db)).map((t) => t.title), ['A', 'B', 'C'], 'all three are manual: none is cut');
 });
 
 // ── The daily cycle ─────────────────────────────────────────────────────────

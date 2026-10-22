@@ -174,8 +174,8 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
  * slot writes, the unschedule it offers on a booked slot, and Ready to place's place). Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/social-hub/calendar/WeekBoard.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank)|social-hub\/(slots|actions\/(unschedule|place)))\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place)))\b/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string): string | null {

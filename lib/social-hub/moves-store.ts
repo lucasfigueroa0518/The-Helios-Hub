@@ -17,8 +17,8 @@ import { NO_MOVES, tonightMoves, type IdeaAdjustment, type TonightMoves } from '
 export type MovesQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
 type Row = {
-  id: string; vertical: Vertical; idea_id: string; ny_date: string; kind: 'promote' | 'demote'; created_at: string;
-  skip_reason?: string | null; skipped_at?: string | null;
+  id: string; vertical: Vertical; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string;
+  skip_reason?: string | null; skipped_at?: string | null; sort_key?: number | string | null;
 };
 
 const COLS = `id::text AS id, vertical, idea_id, ny_date::text AS ny_date, kind,
@@ -31,17 +31,21 @@ export async function readMoves(q: MovesQuery, vertical: Vertical): Promise<Idea
     q(`SELECT ${cols} FROM social_hub.idea_adjustments WHERE vertical = $1 AND consumed_at IS NULL ORDER BY created_at, id`, [vertical]);
   let rows: Row[];
   try {
-    rows = (await select(COLS + SKIP_COLS)).rows;
+    rows = (await select(COLS + SKIP_COLS + ', sort_key')).rows;
   } catch {
     try {
-      rows = (await select(COLS)).rows; // the skip columns are not applied yet
+      rows = (await select(COLS + SKIP_COLS)).rows; // the sort_key column is not applied yet
     } catch {
-      return [];
+      try {
+        rows = (await select(COLS)).rows; // the skip columns are not applied yet
+      } catch {
+        return [];
+      }
     }
   }
   return rows.map((r) => ({
     id: r.id, vertical: r.vertical, ideaId: r.idea_id, nyDate: String(r.ny_date).slice(0, 10), kind: r.kind, createdAt: r.created_at,
-    skipReason: r.skip_reason ?? null, skippedAt: r.skipped_at ?? null,
+    skipReason: r.skip_reason ?? null, skippedAt: r.skipped_at ?? null, sortKey: r.sort_key == null ? null : Number(r.sort_key),
   }));
 }
 
@@ -53,7 +57,7 @@ export async function readTonightMoves(q: MovesQuery, vertical: Vertical): Promi
 
 /** The moves with a skip marked on an idea's promote, in memory, so a re-pick in the same run steps past it. */
 export function withSkip(moves: readonly IdeaAdjustment[], ideaId: string, reason: string): IdeaAdjustment[] {
-  return moves.map((m) => (m.ideaId === ideaId && m.kind === 'promote' ? { ...m, skipReason: reason, skippedAt: new Date().toISOString() } : m));
+  return moves.map((m) => (m.ideaId === ideaId && (m.kind === 'promote' || m.kind === 'pin') ? { ...m, skipReason: reason, skippedAt: new Date().toISOString() } : m));
 }
 
 /** The night made the idea: every active move on it is used up (as the hub's consumeMoves does). */
@@ -71,7 +75,7 @@ export async function recordPromoteSkip(q: MovesQuery, vertical: Vertical, ideaI
   try {
     await q(
       `UPDATE social_hub.idea_adjustments SET skip_reason = $3, skipped_at = now()
-        WHERE vertical = $1 AND idea_id = $2 AND kind = 'promote' AND consumed_at IS NULL`,
+        WHERE vertical = $1 AND idea_id = $2 AND kind IN ('promote', 'pin') AND consumed_at IS NULL`,
       [vertical, ideaId, reason.slice(0, 500)],
     );
     return true;

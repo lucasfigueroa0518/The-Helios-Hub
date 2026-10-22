@@ -376,6 +376,14 @@ CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_active
 ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS skip_reason text;
 ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS skipped_at timestamptz;
 
+-- Idea pool standard (spec 2026-10-21-idea-pool-standard-design): a person's Pin, drag (place) and
+-- Archive are rows here too. `place` carries sort_key, where the drop left the idea in the queue
+-- (lib/social-hub/queue.ts); an archive row is permanent (consumed_at stays NULL) and hides its idea.
+ALTER TABLE social_hub.idea_adjustments DROP CONSTRAINT IF EXISTS idea_adjustments_kind_check;
+ALTER TABLE social_hub.idea_adjustments ADD CONSTRAINT idea_adjustments_kind_check
+    CHECK (kind IN ('promote', 'demote', 'pin', 'place', 'archive'));
+ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS sort_key double precision;
+
 -- Health tab (spec 2026-10-13 §4.3): the 07:30 morning report, one row per night.
 CREATE TABLE IF NOT EXISTS social_hub.health_reports (
     night       date PRIMARY KEY,

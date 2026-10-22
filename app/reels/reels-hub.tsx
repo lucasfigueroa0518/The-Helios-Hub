@@ -343,7 +343,7 @@ function isPostingReel(reel: Reel): boolean {
 
 /* ------------------------------------------------------------------- hub */
 
-export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview; reviewPath?: string }) {
+export function ReelsHub({ initial, archived = [], reviewPath = '' }: { initial: ReelsOverview; /** Post idea ids a person archived: left out of the page (idea pool standard, 2026-10-21). */ archived?: string[]; reviewPath?: string }) {
   const [data, setData] = useState<ReelsOverview>(initial);
   const [dayId, setDayId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -491,7 +491,7 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
     }
   }
 
-  const reels = view ? view.slate.scores.map((score) => reelFor(view, score)) : [];
+  const reels = view ? view.slate.scores.filter((score) => !archived.includes(score.postIdeaId)).map((score) => reelFor(view, score)) : [];
   const ranked = [...reels].sort((a, b) => (a.score.rank ?? 999) - (b.score.rank ?? 999));
   const top = ranked.filter((reel) => reel.score.selected);
   const rest = view?.isCurrent ? ranked.filter((reel) => !reel.score.selected) : [];
@@ -645,7 +645,8 @@ export function ReelsHub({ initial, reviewPath = '' }: { initial: ReelsOverview;
                   The bench <span>{rest.length}</span>
                 </h3>
                 <p className="rh-muted">
-                  Depth and rotation. These do not go out, and they do not get a slot.
+                  Depth and rotation. These do not go out, and they do not get a slot.{' '}
+                  <a href="/social/content/pools/reels">Pin, drag or archive ideas</a> to steer what the next run makes.
                 </p>
                 <ul className="rh-rest__list">
                   {rest.map((reel) => (

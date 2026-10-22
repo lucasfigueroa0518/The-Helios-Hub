@@ -56,15 +56,18 @@ test('a bench idea matches a waiting post by its idea id, with or without a pref
   assert.ok(model.bench.some((b) => b.card?.post.id === post.id && b.idea.id.endsWith(post.idea!.id)));
 });
 
-test('an explainer the night made today fills today\'s card on the type page, not the bench (2026-10-13)', () => {
+test('an explainer made today for a top-of-the-queue idea fills today\'s card, not the bench; for a lower idea it waits on the bench (pool standard, 2026-10-21)', () => {
   const dataset = previewDataset();
   const found = dataset.posts.find((p) => p.vertical === 'explainers' && !p.nyDate && p.idea && (p.status === 'ready' || p.status === 'scheduled'));
   if (!found) return;
   const post = { ...found, status: 'ready' as const, generatedAt: FIXTURE_NOW.toISOString(), media: { kind: 'video' as const, src: '/video.mp4' } };
-  const model = typeHubModel({ ...dataset, posts: dataset.posts.map((p) => (p.id === post.id ? post : p)) }, 'explainers', FIXTURE_NOW);
-  const today = model.days.find((d) => d.date === model.today)!;
-  assert.ok(today.cards.some((c) => c.post.id === post.id), 'it is on today\'s card');
-  assert.ok(!model.bench.some((b) => b.card?.post.id === post.id), 'and not also waiting on the bench');
+  const posts = dataset.posts.map((p) => (p.id === post.id ? post : p));
+  const idea = dataset.ideas.find((i) => i.vertical === 'explainers' && i.id.endsWith(`:${post.idea!.id}`));
+  if (!idea) return;
+  const pin = { id: 'pin', vertical: 'explainers' as const, ideaId: idea.id, nyDate: '2026-10-08', kind: 'pin' as const, createdAt: '2026-10-08T01:00:00.000Z' };
+  const top = typeHubModel({ ...dataset, posts, adjustments: [pin] }, 'explainers', FIXTURE_NOW);
+  assert.ok(top.days.find((d) => d.date === top.today)!.cards.some((c) => c.post.id === post.id), 'pinned to the top: it is on today\'s card');
+  assert.ok(!top.bench.some((b) => b.card?.post.id === post.id && b.rank > top.slots.length), 'and not stranded below the quota');
 });
 
 test('type pages: Text on Screen keeps /reels; the others live at /<type>, or under the preview base', () => {

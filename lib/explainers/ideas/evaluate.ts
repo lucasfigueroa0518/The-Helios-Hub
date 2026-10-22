@@ -11,6 +11,7 @@ import {
   PAIR_KEYS,
 } from '@/lib/explainers/jev/questions/duplicate';
 import { IDEA_SCORING, IDEA_SCORING_FIELDS } from '@/lib/explainers/jev/questions/idea-scoring';
+import { POOL_CAP, capOverflow } from '@/lib/social-hub/queue';
 import { getTopic, listPool, listRecentlyRendered } from '@/lib/explainers/repository';
 import { failedGates, weightedScore, type TopicScores } from '@/lib/explainers/scoring';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
@@ -26,6 +27,8 @@ export type EvaluateDeps = {
   /** Writes the analogy candidates for a topic that makes the pool (EX3-30). Without it, the render picks one. */
   ideaModel?: IdeaModel;
   ideaCycleId?: string | null;
+  /** Topics a person archived: the machine must not bring them back, so they count as history (pool standard, 2026-10-21). */
+  extraHistory?: readonly TopicRow[];
 };
 
 export type TopicRef = { topic_title: string; topic_scope: string | null };
@@ -258,7 +261,7 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
   if (!candidate.scope) throw new Error(`topic ${topicId} has no scope`);
 
   const pool = (await listPool(deps.db)).filter((t) => t.id !== topicId);
-  const rendered = await listRecentlyRendered(deps.db, deps.settings.dedupe_lookback_days, deps.now);
+  const rendered = [...(await listRecentlyRendered(deps.db, deps.settings.dedupe_lookback_days, deps.now)), ...(deps.extraHistory ?? [])];
 
   let match: TopicRow | null = null;
   if (await duplicatesHistory(deps, candidate, [...pool, ...rendered])) {
@@ -322,10 +325,17 @@ async function pickAnalogyFor(deps: EvaluateDeps, topic: TopicRow): Promise<void
   );
 }
 
-/** Keep the best `poolSize`; displace the rest (E-16 step 7). Returns how many. */
-export async function trimPool(db: ExplainersDb, poolSize: number): Promise<number> {
+/**
+ * Hold the pool to its size, never above the pool standard's cap of 30 (E-16 step 7). The lowest-scored topics
+ * the rule allows are displaced; a person's own topics (origin `manual`), `exempt` topics (pinned or dragged ones)
+ * are never cut, so a pool full of them stays over the size. Returns how many were displaced.
+ */
+export async function trimPool(db: ExplainersDb, poolSize: number, exempt: string | ReadonlySet<string> | null = null): Promise<number> {
+  const keep = typeof exempt === 'string' ? new Set([exempt]) : exempt ?? new Set<string>();
   const pool = await listPool(db);
-  const cut = pool.slice(poolSize);
+  const queued = pool.map((t, i) => ({ item: { id: t.id, score: t.weighted_score }, rank: i + 1, pinned: false, placed: false, effective: t.weighted_score }));
+  const origin = new Map(pool.map((t) => [t.id, t.origin]));
+  const cut = capOverflow(queued, Math.min(poolSize, POOL_CAP), (q) => keep.has(q.item.id) || origin.get(q.item.id) === 'manual');
   for (const topic of cut) {
     await db.query(
       `UPDATE explainers.topics

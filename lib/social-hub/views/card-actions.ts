@@ -18,6 +18,9 @@ const APPROVE = new Set<PostPlan['action']>(['approveCarousel', 'approveTrialRee
 const NEEDS: ReadonlySet<StateId> = new Set(['needs_you', 'slot_booked', 'ready', 'approved']);
 const BOOKED: ReadonlySet<StateId> = new Set(['scheduled', 'late']);
 
+/** A type on the idea queue (pool standard, 2026-10-21): Approve, Regenerate, Archive, and nothing else on the card. */
+const QUEUE_GRID: PostPlan['action'][] = ['hardRegenerate', 'archive'];
+
 const GRID: Record<'needs' | 'booked' | 'failed', PostPlan['action'][]> = {
   needs: ['place', 'reschedule', 'hardPublish', 'hardRegenerate', 'reject'],
   booked: ['reschedule', 'unschedule', 'hardPublish', 'reject'],
@@ -31,16 +34,18 @@ const LABEL: Partial<Record<PostPlan['action'], string>> = {
   hardPublish: 'Post now',
   hardRegenerate: 'Regenerate',
   reject: 'Reject',
+  archive: 'Archive',
 };
 
 const TITLE: Partial<Record<PostPlan['action'], string>> = {
   hardPublish: 'Post now?',
   hardRegenerate: 'Make a new version?',
   reject: 'Reject this post?',
+  archive: 'Archive this post?',
 };
 
 /** Only what posts live, can't be undone here, or spends money asks first. */
-const ASKS = new Set<PostPlan['action']>(['hardPublish', 'hardRegenerate', 'reject']);
+const ASKS = new Set<PostPlan['action']>(['hardPublish', 'hardRegenerate', 'reject', 'archive']);
 
 export function cardActions(state: PostState, plans: readonly ActionPlan[], enabled: Readonly<Record<ActionFlag, boolean>>, slots?: SlotChoice[]): CardActions {
   const group = NEEDS.has(state.id) ? 'needs' : BOOKED.has(state.id) ? 'booked' : state.id === 'failed' ? 'failed' : null;
@@ -51,7 +56,7 @@ export function cardActions(state: PostState, plans: readonly ActionPlan[], enab
     label,
     plan: ASKS.has(plan.action) ? plan : { ...plan, confirm: undefined },
     disabled: plan.disabled,
-    danger: plan.action === 'reject',
+    danger: plan.action === 'reject' || plan.action === 'archive',
     confirmTitle: TITLE[plan.action] ?? null,
     ...(plan.pick === 'slot' && slots ? { slots } : {}),
   });
@@ -63,7 +68,8 @@ export function cardActions(state: PostState, plans: readonly ActionPlan[], enab
     const p = usable.find((x) => APPROVE.has(x.action));
     primary = p ? offered(p, 'Approve') : null;
   }
-  const grid = GRID[group]
+  const queue = usable.some((p) => p.action === 'archive');
+  const grid = (queue ? QUEUE_GRID : GRID[group])
     .filter((a) => !(group === 'failed' && a === 'hardPublish'))
     .flatMap((a) => {
       const p = usable.find((x) => x.action === a);

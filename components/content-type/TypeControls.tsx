@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Plus, Settings } from 'lucide-react';
 
 import { AddTopics } from '@/app/explainers/topics-view';
+import { GenerateConfirm } from '@/components/content-type/GenerateConfirm';
+import type { GenerateOutcome } from '@/lib/content-type/queue-client';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 import { Drawer } from '@/app/reels/ui';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
@@ -179,29 +181,26 @@ export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 
 
 // ── Explainers: generate from a bench idea ──────────────────────────────────
 
+/** Generate one explainer topic. The cap question comes back as `ask: 'over_cap'`; the progress strip is told a render was queued. */
+export async function explainerGenerate(ideaId: string, overrideCaps: boolean): Promise<GenerateOutcome> {
+  const topicId = ideaId.replace(/^explainers:topic:/, '');
+  const res = await fetch(`/api/explainers/topics/${topicId}/generate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ overrideCaps }) });
+  const json = (await res.json().catch(() => ({}))) as { error?: string; ask?: string; costUsd?: number };
+  if (res.ok) {
+    window.dispatchEvent(new Event(PROGRESS_EVENT));
+    return { ok: true };
+  }
+  if (json.ask === 'over_cap') return { ok: false, ask: 'over_cap', message: json.error ?? 'A daily cap is used up.', costUsd: json.costUsd ?? 0 };
+  return { ok: false, message: json.error ?? `Request failed (${res.status})` };
+}
+
 export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: string }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  const topicId = ideaId.replace(/^explainers:topic:/, '');
-  async function generate() {
-    if (!confirm(`Render "${title}"? This makes live model, voice and video calls for this one reel.`)) return;
-    setBusy(true);
-    try {
-      await call(`/api/explainers/topics/${topicId}/generate`, {});
-      window.dispatchEvent(new Event(PROGRESS_EVENT));
-      setNote('Render queued.');
-      void refreshHubPage(router);
-    } catch (e) {
-      setNote(msg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [asking, setAsking] = useState(false);
   return (
     <>
-      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" disabled={busy} onClick={generate}>Generate</button>
-      {note ? <span className="rh-muted"> {note}</span> : null}
+      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" onClick={() => setAsking(true)}>Generate</button>
+      {asking ? <GenerateConfirm generate={explainerGenerate} ideaId={ideaId} title={title} reason="click" onDone={() => { setAsking(false); void refreshHubPage(router); }} /> : null}
     </>
   );
 }

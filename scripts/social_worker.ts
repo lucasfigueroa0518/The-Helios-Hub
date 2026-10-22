@@ -77,6 +77,8 @@ async function main(): Promise<void> {
   const { carouselFill, nightStoriesFor, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
   const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
   const { readTonightMoves } = await import('@/lib/social-hub/moves-store');
+  const { finishNightPlacements } = await import('@/lib/social-hub/queue-store');
+  const { QUEUE_LIVE } = await import('@/lib/social-hub/queue');
   const { ideaRef } = await import('@/lib/social-hub/views/moves');
   const { claimAndPublish } = await import('@/lib/social/overnight/publish');
   const { createLiveCarouselClient, metaConfigured } = await import('@/lib/social/overnight/meta');
@@ -148,7 +150,7 @@ async function main(): Promise<void> {
     capUsd: number,
     rerunPostId?: string,
     storyIds: readonly string[] = [],
-    moves: { promoteId: string | null; demoteIds: readonly string[] } = { promoteId: null, demoteIds: [] },
+    moves: { pinIds: readonly string[]; demoteIds: readonly string[]; archiveIds: readonly string[]; placed: ReadonlyArray<readonly [string, number]> } = { pinIds: [], demoteIds: [], archiveIds: [], placed: [] },
   ): Promise<{ code: number | null; tail: string }> {
     return new Promise((resolve) => {
       const tsx = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
@@ -156,8 +158,10 @@ async function main(): Promise<void> {
         'scripts/social_daily.ts', '--run-id', runId, '--stories', String(stories), '--cap-usd', String(capUsd),
         ...(rerunPostId ? ['--rerun-post', rerunPostId] : []),
         ...storyIds.flatMap((id) => ['--story-id', id]),
-        ...(moves.promoteId ? ['--promote-id', moves.promoteId] : []),
+        ...moves.pinIds.flatMap((id) => ['--pin-id', id]),
         ...moves.demoteIds.flatMap((id) => ['--demote-id', id]),
+        ...moves.archiveIds.flatMap((id) => ['--archive-id', id]),
+        ...moves.placed.flatMap(([id, key]) => ['--place-id', `${id}=${key}`]),
       ];
       const child = spawn(tsx, args, {
         cwd: process.cwd(),
@@ -183,7 +187,7 @@ async function main(): Promise<void> {
   async function carryOutRun(run: { id: string; capUsd: number; storyIds?: string[]; trigger?: string }, rerun?: { requestId: string; postId: string }): Promise<void> {
     const pinned = run.storyIds ?? [];
     let stories = pinned.length || 1;
-    let moves: { promoteId: string | null; demoteIds: string[] } = { promoteId: null, demoteIds: [] };
+    let moves: { pinIds: string[]; demoteIds: string[]; archiveIds: string[]; placed: Array<readonly [string, number]> } = { pinIds: [], demoteIds: [], archiveIds: [], placed: [] };
     if (!rerun && pinned.length) {
       log('run_pinned', { runId: run.id, storyIds: pinned });
     } else if (!rerun) {
@@ -206,8 +210,13 @@ async function main(): Promise<void> {
       // Shared queue: the 3 AM run makes tonight's carousel promote first and sinks demoted stories (a failed read: no moves).
       if (run.trigger === 'scheduled') {
         const tonight = await readTonightMoves(query, 'carousels');
-        moves = { promoteId: tonight.promote ? ideaRef(tonight.promote.ideaId) : null, demoteIds: [...tonight.demoted].map(ideaRef) };
-        if (moves.promoteId || moves.demoteIds.length) log('run_moves', { runId: run.id, ...moves });
+        moves = {
+          pinIds: tonight.pins.map((pin) => ideaRef(pin.ideaId)),
+          demoteIds: [...tonight.demoted].map(ideaRef),
+          archiveIds: [...tonight.archived].map(ideaRef),
+          placed: [...tonight.placed].map(([id, key]) => [ideaRef(id), key] as const),
+        };
+        if (moves.pinIds.length || moves.demoteIds.length || moves.archiveIds.length || moves.placed.length) log('run_moves', { runId: run.id, ...moves });
       }
     }
     log('run_started', { runId: run.id, stories, capUsd: run.capUsd, ...(rerun ? { rerunOf: rerun.postId, rerunRequest: rerun.requestId } : {}) });
@@ -216,6 +225,8 @@ async function main(): Promise<void> {
     await runs.failRun(query, run.id, `The daily script exited (${code}) before finishing the run. ${tail}`);
     const status = (await query(`SELECT status FROM social.runs WHERE id = $1`, [run.id])).rows[0]?.status;
     log('run_complete', { runId: run.id, exitCode: code, status });
+    // The scheduled night ran to a finish: hand placements are used up and the stories compete by score again (a run that died keeps them).
+    if (!rerun && !pinned.length && run.trigger === 'scheduled' && code === 0 && status !== 'failed' && QUEUE_LIVE.has('carousels')) await finishNightPlacements(query, 'carousels');
 
     for (const post of await runs.postsMissingSlides(query, run.id)) {
       try {

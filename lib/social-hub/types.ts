@@ -167,6 +167,8 @@ export type HubIdea = {
   detail: string | null;
   /** Stories: which series this idea belongs to. */
   group?: string | null;
+  /** A person typed this idea in (the seeding spec's origin `manual`): the pool never trims it. */
+  yours?: boolean;
   /** A render that is queued, running, or whose latest try failed. */
   run?: {
     state: 'queued' | 'running' | 'failed';

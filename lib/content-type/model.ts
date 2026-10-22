@@ -4,7 +4,7 @@ import { capacityWindows } from '@/lib/social-hub/views/plan';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { offerer, type Offer } from '@/lib/social-hub/views/offer';
 import { poolSummary } from '@/lib/social-hub/views/pools';
-import { dayRanking, quotaCandidates } from '@/lib/social-hub/views/day-rank';
+import { dayRanking, ideaOwns, quotaCandidates } from '@/lib/social-hub/views/day-rank';
 import type { MoveTag } from '@/lib/social-hub/views/moves';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 
@@ -36,7 +36,13 @@ export type TypeBenchItem = {
   tag?: MoveTag | null;
   /** One of today's quota candidates: the day is filled with it. */
   inQuota?: boolean;
+  /** A person's hand on it (pool standard, 2026-10-21): pinned to the top, or dragged to where it sits. */
+  pinned?: boolean;
+  placed?: boolean;
 };
+
+/** One of today's quota slots, filled from the top of the queue: the idea and its post, or an open slot waiting to be made. */
+export type TypeSlot = { rank: number | null; idea: HubIdea | null; card: TypeCard | null; locked: boolean };
 
 /** What a post actually has to show: rendered slides, rendered story frames, or a video file. */
 export type MadeKind = 'slides' | 'frames' | 'video';
@@ -61,6 +67,10 @@ export type TypeHubModel = {
   days: TypeDay[];
   bench: TypeBenchItem[];
   benchTotal: number;
+  /** Every made version of an idea with more than one, newest first (the post detail's version toggle; the newest is the current one). Keyed by the post's idea id. */
+  versions: Record<string, TypeCard[]>;
+  /** Today's quota slots in queue order (Stories and Last Few Days keep their own cards). */
+  slots: TypeSlot[];
   scoreLabel: string | null;
   lastRefill: string | null;
   poolOpen: number;
@@ -96,10 +106,12 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
   const byDay = new Map<string, TypeCard[]>([[today, []]]);
   // Made but not on a day yet: not part of any day. It waits on the bench with its idea.
   const waiting: TypeCard[] = [];
+  const madeVersions = new Map<string, TypeCard[]>();
   for (const post of dataset.posts) {
     if (post.vertical !== vertical) continue;
     const t = thumbOf(post.media);
     const card: TypeCard = { post, offer: o.offer(post), thumb: t.src, remote: t.remote, count: t.count };
+    if (post.idea?.id && madeKind(post)) madeVersions.set(post.idea.id, [...(madeVersions.get(post.idea.id) ?? []), card]);
     if (!fillsQuota(post) || !post.nyDate || post.nyDate < earliest) {
       if (post.nyDate && post.nyDate < earliest) continue;
       waiting.push(card);
@@ -128,9 +140,22 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
   const open = ranking.map((r) => r.idea);
   const movedOf = new Map(ranking.map((r) => [r.idea.id, r.moved]));
   const tagOf = new Map(ranking.map((r) => [r.idea.id, r.tag]));
+  const handOf = new Map(ranking.map((r) => [r.idea.id, { pinned: r.pinned, placed: r.placed }]));
   const quotaIdeas = new Set(candidates.flatMap((c) => (c.idea ? [c.idea.id] : [])));
   // Skipped, failed, still generating, or empty: not content waiting on a person. It gets no row and no chip.
-  const ready = waiting.filter(benchable);
+  // An archived idea takes its made content off the bench with it (pool standard, 2026-10-21), and an older version of an idea
+  // that has a newer one is history, shown in the post's version toggle, not a row of its own.
+  const archived = new Set((dataset.adjustments ?? []).filter((a) => a.vertical === vertical && a.kind === 'archive').map((a) => a.ideaId));
+  const archivedIdeas = dataset.ideas.filter((i) => i.vertical === vertical && archived.has(i.id));
+  const newest = new Map<string, string>();
+  for (const c of waiting.filter(benchable)) {
+    const key = c.post.idea?.id;
+    if (key && (newest.get(key) ?? '') < (c.post.generatedAt ?? '')) newest.set(key, c.post.generatedAt ?? '');
+  }
+  const ready = waiting.filter(benchable)
+    .filter((c) => !archivedIdeas.some((i) => ideaOwns(i, c.post)))
+    .filter((c) => !c.post.idea?.id || (c.post.generatedAt ?? '') >= (newest.get(c.post.idea.id) ?? ''))
+    .sort((a, b) => (b.post.generatedAt ?? '').localeCompare(a.post.generatedAt ?? '') || a.post.id.localeCompare(b.post.id));
   // Match each waiting post to its idea (a post names its idea by the bare id; an idea's id may carry a prefix).
   const matched = new Set<string>();
   const forIdea = (idea: HubIdea) => {
@@ -140,6 +165,7 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
   };
   const row = (idea: HubIdea, rank: number, card: TypeCard | null): TypeBenchItem => ({
     idea, rank, card, made: card ? madeKind(card.post) : null, moved: movedOf.get(idea.id) ?? null, tag: tagOf.get(idea.id) ?? null, inQuota: quotaIdeas.has(idea.id),
+    pinned: handOf.get(idea.id)?.pinned ?? false, placed: handOf.get(idea.id)?.placed ?? false,
   });
   const rows: TypeBenchItem[] = vertical === 'stories' ? bySeries(open).map(({ idea, rank }) => row(idea, rank, forIdea(idea))) : open.slice(0, 50).map((idea, i) => row(idea, i + 1, forIdea(idea)));
   // Content whose idea is no longer open still needs a person: keep it on the bench under its own name.
@@ -155,6 +181,8 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     days,
     bench: rows,
     benchTotal: rows.length,
+    versions: Object.fromEntries([...madeVersions].filter(([, cards]) => cards.length > 1).map(([id, cards]) => [id, cards.sort((a, b) => (b.post.generatedAt ?? '').localeCompare(a.post.generatedAt ?? '') || a.post.id.localeCompare(b.post.id))])),
+    slots: slotsOf(candidates, days.find((d) => d.date === today)?.cards ?? [], vertical),
     scoreLabel: summary.scoreLabel ?? null,
     lastRefill: summary.lastRefill ?? null,
     poolOpen: summary.open,
@@ -180,4 +208,15 @@ function bySeries(open: readonly HubIdea[]): Array<{ idea: HubIdea; rank: number
   const out: Array<{ idea: HubIdea; rank: number }> = [];
   for (let i = 0; lists.some((l) => i < l.length); i++) for (const l of lists) if (l[i]) out.push({ idea: l[i]!, rank: i + 1 });
   return out;
+}
+
+/** Today's quota slots for a type with an idea queue: each candidate's idea with its card if it has content, else an open slot. */
+function slotsOf(candidates: ReturnType<typeof quotaCandidates>, todays: readonly TypeCard[], vertical: Vertical): TypeSlot[] {
+  if (vertical === 'stories' || vertical === 'last_few_days') return [];
+  return candidates.map((c) => ({
+    rank: c.rank,
+    idea: c.idea,
+    card: c.post ? todays.find((t) => t.post.id === c.post!.id) ?? null : null,
+    locked: c.locked,
+  }));
 }

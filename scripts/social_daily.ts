@@ -111,8 +111,18 @@ async function main() {
     return i > 0 ? process.argv[i + 1] : undefined;
   })();
   const demoteIds = process.argv.flatMap((a, i) => (a === '--demote-id' && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
-  if ((promoteId || demoteIds.length) && (!runIdArg || rerunPostArg || pinnedIds.length)) {
-    throw new Error('--promote-id and --demote-id need a --run-id and cannot be combined with --rerun-post or --story-id');
+  // --pin-id / --archive-id / --place-id <story-id>=<key> (repeatable): the idea pool standard's night (2026-10-21). The pins
+  // go ahead of the fresh candidates in the order given; archived stories are never made; a placed story sorts at its key.
+  const flagValues = (flag: string) => process.argv.flatMap((a, i) => (a === flag && process.argv[i + 1] ? [process.argv[i + 1]!] : []));
+  const pinIds = [...flagValues('--pin-id'), ...(promoteId && !flagValues('--pin-id').includes(promoteId) ? [promoteId] : [])];
+  const archiveIds = flagValues('--archive-id');
+  const placedKeys = new Map(flagValues('--place-id').flatMap((v) => {
+    const at = v.lastIndexOf('=');
+    const key = Number(v.slice(at + 1));
+    return at > 0 && Number.isFinite(key) ? [[v.slice(0, at), key] as const] : [];
+  }));
+  if ((pinIds.length || demoteIds.length || archiveIds.length || placedKeys.size) && (!runIdArg || rerunPostArg || pinnedIds.length)) {
+    throw new Error('--pin-id, --promote-id, --demote-id, --archive-id and --place-id need a --run-id and cannot be combined with --rerun-post or --story-id');
   }
 
   const { newAnthropic } = await import('@/lib/anthropic-client');
@@ -159,8 +169,9 @@ async function main() {
   const pinnedLib = pinnedIds.length ? await import('@/lib/social/overnight/pinned') : null;
   const pinned = pinnedLib ? await pinnedLib.loadPinnedCandidates(store.query!, pinnedIds) : null;
   // Tonight's promote: its newest shortlist entry. Already posted or not found: skipped, with why on the move.
-  const promoteLib = promoteId || demoteIds.length ? await import('@/lib/social/overnight/promote') : null;
-  const promoted = promoteLib && promoteId ? await promoteLib.pickPromoted(store.query!, promoteId) : null;
+  const promoteLib = pinIds.length || demoteIds.length || archiveIds.length || placedKeys.size ? await import('@/lib/social/overnight/promote') : null;
+  const promoted = promoteLib && pinIds.length ? await promoteLib.pickPins(store.query!, pinIds) : [];
+  const archivedUrls = promoteLib && archiveIds.length ? await promoteLib.loadArchivedUrls(store.query!, archiveIds) : new Set<string>();
   // A rerun reads no feeds: its one story is the stored post's. Neither does a run of named stories.
   const ownArticles = rerun || pinned ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
   // The reels ingest's sources (Hacker News, papers, GitHub Trending, vendor notes, more outlets) join the pool;
@@ -252,7 +263,7 @@ async function main() {
       : pinned && pinnedLib
         ? pinnedLib.pinnedStages(stages, pinned)
         : promoteLib
-          ? promoteLib.promotedStages(stages, promoted, new Set(demoteIds))
+          ? promoteLib.promotedStages(stages, promoted, new Set(demoteIds), { archived: new Set(archiveIds), archivedUrls, placed: placedKeys })
           : stages,
     // The meter stops the day between stages: no new story past the cap, a story in progress stops at the ceiling.
     // Only the Claude-call guard keeps a per-call reserve.
@@ -268,7 +279,7 @@ async function main() {
   });
 
   // Shared queue: a promote the run shipped is used; one it didn't is skipped with why (it stays promoted).
-  if (promoteLib && promoted) await promoteLib.settlePromote(store.query!, promoted.id, result);
+  if (promoteLib && promoted.length) await promoteLib.settlePins(store.query!, promoted.map((p) => p.id), result);
 
   // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
   // A PREVIEW run doesn't count (Tommy, 2026-10-06: not the acceptance batch).

@@ -18,6 +18,7 @@
  * keep each source's own rank. Each row carries its breakdown for the hub.
  */
 import type { Queryable } from '@/lib/stories/db';
+import { POOL_CAP, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import type { ScoreBreakdown } from '@/lib/social-hub/types';
 import { morningDownloadScore, rankBreakdown } from '@/lib/stories/md-score';
 import type { Series } from '@/lib/stories/render/types';
@@ -153,6 +154,8 @@ const originLabel = (o: string) => ({ reels: 'Text on Screen', carousel: 'Carous
  *   2. anything stories.history has shown is used
  *   3. a fully read series drops its unused rows the refresh did not return
  *   4. any unused row past its series' freshness window drops
+ *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21): the lowest-scored go, never one a
+ *      person pinned or dragged; ideas a person archived do not count
  */
 export async function writePool(db: Queryable, gathered: { items: PoolItem[]; refreshed: Series[] }, now: Date): Promise<{ upserted: number; dropped: number }> {
   const { items, refreshed } = gathered;
@@ -185,8 +188,35 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
       [series, cutoff, keys],
     );
     dropped += rows.length;
+    dropped += await capSeries(db, series);
   }
   return { upserted: items.length, dropped };
+}
+
+/** Hold one series to the pool standard's cap. Never throws: a database without the moves table keeps its pool as it is. */
+async function capSeries(db: Queryable, series: Series): Promise<number> {
+  if (!QUEUE_LIVE.has('stories')) return 0;
+  try {
+    const { rows } = await db.query<{ id: string }>(
+      `DELETE FROM stories.pool p
+        WHERE p.series = $1 AND p.used_at IS NULL
+          AND p.id IN (
+            SELECT r.id FROM (
+              SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
+                FROM stories.pool p2
+               WHERE p2.series = $1 AND p2.used_at IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = 'stories' AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)
+            ) r WHERE r.n > $2)
+          AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
+                           WHERE a.vertical = 'stories' AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
+                             AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)
+        RETURNING p.id`,
+      [series, POOL_CAP],
+    );
+    return rows.length;
+  } catch {
+    return 0;
+  }
 }
 
 export async function refreshStoryPool(db: Queryable, reads: PoolReads, now: Date): Promise<{ upserted: number; dropped: number; errors: string[] }> {
@@ -224,19 +254,35 @@ export async function refreshPoolIfDue(db: Queryable, reads: () => PoolReads, no
   return refreshStoryPool(db, source, now);
 }
 
-export type OpenPool = { stories: StoryCandidate[]; numbers: NumberCandidate[]; unbriefed: StoryCandidate[]; leads: ToolLead[] };
+/** A pool entry's key and score, parallel to the lists of an OpenPool (the pool standard's order needs both). */
+export type PoolMeta = { key: string; score: number | null };
+
+export type OpenPool = {
+  stories: StoryCandidate[]; numbers: NumberCandidate[]; unbriefed: StoryCandidate[]; leads: ToolLead[];
+  /** Each list's entries' pool key and score, in the same order (set by openPool; a pool built by hand may omit it). */
+  meta?: { stories: PoolMeta[]; numbers: PoolMeta[]; unbriefed: PoolMeta[]; leads: PoolMeta[] };
+};
 
 /** One series' open ideas, best first: what its build chooses from. */
 export async function openPool(db: Queryable, series: Series): Promise<OpenPool> {
-  const { rows } = await db.query<{ payload: PoolItem['payload'] }>(
-    `SELECT payload FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST, title`,
+  const { rows } = await db.query<{ key: string; score: string | number | null; payload: PoolItem['payload'] }>(
+    `SELECT key, score, payload FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST, title`,
     [series],
   );
-  const out: OpenPool = { stories: [], numbers: [], unbriefed: [], leads: [] };
-  for (const { payload: p } of rows) {
-    if (p?.kind === 'story' && p.story) (series === 'guess_the_number' ? out.unbriefed : out.stories).push(p.story);
-    else if (p?.kind === 'number' && p.number) out.numbers.push(p.number);
-    else if (p?.kind === 'lead' && p.lead) out.leads.push(p.lead);
+  const out: OpenPool = { stories: [], numbers: [], unbriefed: [], leads: [], meta: { stories: [], numbers: [], unbriefed: [], leads: [] } };
+  for (const { key, score, payload: p } of rows) {
+    const meta: PoolMeta = { key, score: score == null ? null : Number(score) };
+    if (p?.kind === 'story' && p.story) {
+      const list = series === 'guess_the_number' ? 'unbriefed' : 'stories';
+      out[list].push(p.story);
+      out.meta![list].push(meta);
+    } else if (p?.kind === 'number' && p.number) {
+      out.numbers.push(p.number);
+      out.meta!.numbers.push(meta);
+    } else if (p?.kind === 'lead' && p.lead) {
+      out.leads.push(p.lead);
+      out.meta!.leads.push(meta);
+    }
   }
   return out;
 }

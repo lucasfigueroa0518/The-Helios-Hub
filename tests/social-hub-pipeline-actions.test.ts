@@ -70,6 +70,9 @@ test('explainer hard publish: an unreviewed render is recorded approved; a rejec
 
 test('explainer hard regenerate: a rendered topic can render again; a cap refusal restores the topic', async () => {
   const { pg, explainers } = await db();
+  // A topic that went out is done (idea pool standard, 2026-10-21): the fixture's topic 1 was posted, so it is refused until that is undone here.
+  assert.deepEqual(await requestRerender(explainers as never, { topicId: IDS.topic1, settings: DEFAULT_SETTINGS }), { ok: false, reason: 'topic_published' });
+  await pg.exec(`UPDATE social_hub.publish_attempts SET status = 'failed' WHERE content_item_id IN (SELECT id FROM social_hub.content_items WHERE vertical = 'explainers' AND idea_ref = '${IDS.topic1}')`);
   const ok = await requestRerender(explainers as never, { topicId: IDS.topic1, settings: DEFAULT_SETTINGS });
   assert.equal(ok.ok, true);
   assert.equal((await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs WHERE topic_id = '${IDS.topic1}' AND status = 'requested'`)).rows[0]!.n, 1);

@@ -19,6 +19,8 @@ import { reelClosings, shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } f
 import { placedIdeas, reusableVideos } from '@/lib/reels/pipeline/fill';
 import { putOnSlate, reelsMovesQuery, REEL_SKIP } from '@/lib/reels/pipeline/promote';
 import { markPromoteUsed, readMoves, recordPromoteSkip, withSkip } from '@/lib/social-hub/moves-store';
+import { QUEUE_LIVE } from '@/lib/social-hub/queue';
+import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { ideaRef, NO_MOVES, tonightMoves, type TonightMoves } from '@/lib/social-hub/views/moves';
 import { requestFinish } from '@/lib/reels/visual/finish';
 import { dbQuery } from '@/lib/db';
@@ -79,20 +81,21 @@ export async function generatePassingReels(input: {
   const nyDate = rows[0]?.ny_date;
   if (!nyDate) throw new Error('That slate does not exist.');
 
-  // Shared queue (nightly run only): tonight's Promote goes first, Demotes go last. An older promoted idea joins
-  // tonight's slate from its stored scores (no re-scoring). A promote that can't be made (gone, held out, placed
-  // by a person, no scores) steps aside in the same run, with why on the move, and the next promote is picked.
-  // A failed read is no moves: the night runs as before.
+  // Shared queue (nightly run only): tonight's pins go first, in the order pinned (idea pool standard, 2026-10-21; before it,
+  // one Promote and the Demotes last). An older pinned idea joins tonight's slate from its stored scores (no re-scoring).
+  // A pin that can't be made (gone, held out, placed by a person, no scores) steps aside in the same run, with why on the
+  // move, and the rest stay. A failed read is no moves: the night runs as before.
+  const queued = QUEUE_LIVE.has('reels');
   let moveList = input.dailyFill ? await readMoves(reelsMovesQuery, 'reels') : [];
   let tonight: TonightMoves = moveList.length ? tonightMoves(moveList, 'reels') : NO_MOVES;
-  const stepAside = async (reason: string) => {
-    const ideaId = tonight.promote!.ideaId;
+  const stepAside = async (ideaId: string, reason: string) => {
     await recordPromoteSkip(reelsMovesQuery, 'reels', ideaId, reason);
     moveList = withSkip(moveList, ideaId, reason);
     tonight = tonightMoves(moveList, 'reels');
-    console.info(`[reels] promote ${ideaRef(ideaId)} stepped aside (${reason})`);
+    console.info(`[reels] pin ${ideaRef(ideaId)} stepped aside (${reason})`);
   };
-  let promoteId: string | null = null;
+  const pinOf = (postIdeaId: string) => tonight.pins.find((pin) => ideaRef(pin.ideaId) === postIdeaId)!;
+  let pinIds: string[] = [];
   let slotIdeas: Awaited<ReturnType<typeof loadSlotIdeas>>;
   let locks: Awaited<ReturnType<typeof locksForSlate>>;
   let penalties: Awaited<ReturnType<typeof loadDayPenalties>>;
@@ -100,9 +103,13 @@ export async function generatePassingReels(input: {
   let held: ReturnType<typeof holdOutReasons>;
   let placed: Set<string>;
   for (;;) {
-    promoteId = tonight.promote ? ideaRef(tonight.promote.ideaId) : null;
-    if (promoteId && !(await putOnSlate(input.slateId, promoteId))) {
-      await stepAside(REEL_SKIP.gone);
+    pinIds = tonight.pins.map((pin) => ideaRef(pin.ideaId));
+    let off: string | null = null;
+    for (const id of pinIds) {
+      if (!(await putOnSlate(input.slateId, id))) { off = id; break; }
+    }
+    if (off) {
+      await stepAside(pinOf(off).ideaId, REEL_SKIP.gone);
       continue;
     }
     let published: Awaited<ReturnType<typeof loadPublishedStoryKeys>>;
@@ -121,26 +128,29 @@ export async function generatePassingReels(input: {
     held = holdOutReasons(targets.values(), published, wideMisses);
     // Daily fill (D54/D55): a person's placement isn't made again; a finished, unposted carryover video is reused.
     placed = input.dailyFill ? await placedIdeas(slotIdeas.map((idea) => idea.id)) : new Set<string>();
-    if (promoteId) {
-      const reason = !slotIdeas.some((idea) => idea.id === promoteId)
+    let blocked: { id: string; reason: string } | null = null;
+    for (const id of pinIds) {
+      const reason = !slotIdeas.some((idea) => idea.id === id)
         ? REEL_SKIP.gone
-        : held.has(promoteId)
-          ? REEL_SKIP[held.get(promoteId)!]
-          : placed.has(promoteId)
+        : held.has(id)
+          ? REEL_SKIP[held.get(id)!]
+          : placed.has(id)
             ? REEL_SKIP.placed
             : null;
-      if (reason) {
-        await stepAside(reason);
-        continue;
-      }
+      if (reason) { blocked = { id, reason }; break; }
+    }
+    if (blocked) {
+      await stepAside(pinOf(blocked.id).ideaId, blocked.reason);
+      continue;
     }
     break;
   }
+  const archived = new Set([...tonight.archived].map(ideaRef));
   const heldOut = [...held].map(([postIdeaId, reason]) => ({ postIdeaId, reason }));
   if (heldOut.length > 0) {
     console.info(`[reels] held out of tonight's slots: ${heldOut.map((row) => `${row.postIdeaId} (${row.reason})`).join(', ')}`);
   }
-  const ideas = slotIdeas.filter((idea) => !held.has(idea.id) && !placed.has(idea.id));
+  const ideas = slotIdeas.filter((idea) => !held.has(idea.id) && !placed.has(idea.id) && !archived.has(idea.id));
   const reusable = input.dailyFill ? await reusableVideos(input.slateId, ideas.map((idea) => idea.id)) : new Map<string, string>();
   if (placed.size > 0) console.info(`[reels] placed by a person, not made again tonight: ${[...placed].join(', ')}`);
   const outcomes = new Map<string, IdeaCopyOutcome>();
@@ -171,7 +181,9 @@ export async function generatePassingReels(input: {
     },
     onPenalty: (idea, penalty) => saveDayPenalty(input.slateId, nyDate, idea.id, penalty),
     reusable: new Set(reusable.keys()),
-    moves: { promote: promoteId, demoted: new Set([...tonight.demoted].map(ideaRef)) },
+    moves: queued
+      ? { promote: pinIds[0] ?? null, demoted: new Set<string>(), pins: pinIds, placed: new Map([...tonight.placed].map(([id, key]) => [ideaRef(id), key] as const)), archived }
+      : { promote: pinIds[0] ?? null, demoted: new Set([...tonight.demoted].map(ideaRef)) },
     onFallback: async (idea, line) => {
       penalties.delete(idea.id);
       await clearDayPenalty(input.slateId, nyDate, idea.id);
@@ -191,15 +203,20 @@ export async function generatePassingReels(input: {
     },
   });
 
-  if (tonight.promote && promoteId) {
-    const made = filled.some((slot) => slot.postIdeaId === promoteId);
-    const tried = outcomes.get(promoteId);
+  for (const pin of tonight.pins) {
+    const id = ideaRef(pin.ideaId);
+    const made = filled.some((slot) => slot.postIdeaId === id);
+    const tried = outcomes.get(id);
     // Never attempted (slots already locked/full) is transient: no skip, so it is tried again next night.
     // A copy that missed or couldn't be written is a lasting skip.
     const why = !tried ? REEL_SKIP.full : tried.judged ? REEL_SKIP.missed : REEL_SKIP.notWritten;
-    if (made) await markPromoteUsed(reelsMovesQuery, 'reels', tonight.promote.ideaId);
-    else if (tried) await recordPromoteSkip(reelsMovesQuery, 'reels', tonight.promote.ideaId, why);
-    console.info(`[reels] tonight's promote ${promoteId}: ${made ? 'made' : `skipped (${why})`}`);
+    if (made) await markPromoteUsed(reelsMovesQuery, 'reels', pin.ideaId);
+    else if (tried) await recordPromoteSkip(reelsMovesQuery, 'reels', pin.ideaId, why);
+    console.info(`[reels] tonight's pin ${id}: ${made ? 'made' : `skipped (${why})`}`);
+  }
+  // The night ran and made its picks: hand placements are used up and the ideas compete by score again.
+  if (queued && input.dailyFill) {
+    await finishNightPlacements(reelsMovesQuery, 'reels');
   }
 
   await selectFilledIdeas(

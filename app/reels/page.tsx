@@ -5,6 +5,9 @@ import { beginInsightsRefresh } from '@/lib/reels/media-insights/schedule-refres
 import { loadReelsOverview } from '@/lib/reels/overview';
 import { ensureReviewToken } from '@/lib/reels/review';
 import { getSession } from '@/lib/session';
+import { reelsMovesQuery } from '@/lib/reels/pipeline/promote';
+import { readMoves } from '@/lib/social-hub/moves-store';
+import { ideaRef } from '@/lib/social-hub/views/moves';
 
 import './reels.css';
 
@@ -19,13 +22,16 @@ export default async function ReelsPage() {
   const session = await getSession();
   if (!session) redirect('/');
   // Independent reads: run them together rather than one after another.
-  const [, initial, reviewToken] = await Promise.all([
+  const [, initial, reviewToken, moves] = await Promise.all([
     beginInsightsRefresh().catch(() => undefined),
     loadReelsOverview().catch((error) => ({
       error: error instanceof Error ? error.message : String(error),
     })),
     ensureReviewToken().catch(() => null),
+    // Ideas a person archived (idea pool standard): the page leaves them out. A failed read shows everything.
+    readMoves(reelsMovesQuery, 'reels').catch(() => []),
   ]);
+  const archived = moves.filter((m) => m.kind === 'archive').map((m) => ideaRef(m.ideaId));
 
   if ('error' in initial) {
     return (
@@ -43,5 +49,5 @@ export default async function ReelsPage() {
     );
   }
 
-  return <ReelsHub initial={initial} reviewPath={`/watch/${reviewToken ?? await ensureReviewToken()}`} />;
+  return <ReelsHub initial={initial} archived={archived} reviewPath={`/watch/${reviewToken ?? await ensureReviewToken()}`} />;
 }
