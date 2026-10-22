@@ -282,6 +282,26 @@
 @keyframes sh-board-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .sh-board__spin { animation: none; } }
 
+/* The Schedules dropdown and form (calendar type schedules, Task 4): the board's panel, list and toast, with its own rows. */
+.sh-sched-menu .sh-menu__item .sh-board__dot { margin-right: 2px; }
+.sh-sched { display: flex; flex-direction: column; gap: 12px; }
+.sh-sched p { margin: 0; }
+.sh-sched__field { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.sh-sched__legend { padding: 0; margin-bottom: 6px; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); }
+.sh-sched__times { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sh-sched__time { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 4px 4px 0; border-radius: var(--radius-sm); }
+.sh-sched__time[data-problem='true'] { box-shadow: inset 3px 0 0 var(--sh-failed-ink); padding-left: 8px; background: var(--sh-failed-wash); }
+.sh-sched__clock { min-width: 84px; font-variant-numeric: tabular-nums; font-weight: var(--font-weight-medium); }
+.sh-sched__remove { margin-left: auto; }
+.sh-sched__add { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.sh-sched__add .sh-btn { gap: 6px; }
+.sh-sched__days { flex-wrap: wrap; }
+.sh-sched__msgs { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); list-style: none; }
+.sh-sched__msgs--error { background: var(--sh-failed-wash); color: var(--sh-failed-ink); }
+.sh-sched__msgs--warn { background: var(--color-surface-hover); color: var(--color-text); }
+.sh-sched__foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; border-top: 1px solid var(--sh-hairline); }
+.sh-sched__foot .sh-btn--primary { gap: 6px; }
+
 @media (max-width: 640px) {
   .sh-board__panel { left: 12px; right: 12px; bottom: 12px; }
   .sh-board__panel .sh-menu__list { top: auto; bottom: calc(100% + 6px); max-height: 50vh; }

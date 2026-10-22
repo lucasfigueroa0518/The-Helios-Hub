@@ -2,7 +2,7 @@
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { LFD_ONCE, OFF_GRID, OUTSIDE_DAY } from './rules';
-import { clockLabel, DAY_START, DEFAULT_FEED_MODE, FEED_GAP, isFeedSlot, LAST_START } from './times';
+import { clockLabel, DAY_START, DEFAULT_FEED_MODE, FEED_GAP, GRID, isFeedSlot, LAST_START } from './times';
 import { isReelType, isSlotMinute, type FeedMode, type StorySeries, type TemplateRow } from './types';
 
 /**
@@ -31,10 +31,13 @@ export type TypeSchedule = { entry: ScheduleEntry; times: ScheduleTime[]; days: 
 const sameEntry = (a: Pick<ScheduleEntry, 'vertical' | 'series'>, b: Pick<ScheduleEntry, 'vertical' | 'series'>) =>
   a.vertical === b.vertical && a.series === b.series;
 
+/** One entry's schedule as the page hands it to the Schedules form. */
+export type ScheduleView = { schedule: TypeSchedule; merged: boolean; problems: string[] };
+
 export function scheduleFromTemplate(
   template: readonly TemplateRow[],
   entry: ScheduleEntry,
-): { schedule: TypeSchedule; merged: boolean; problems: string[] } {
+): ScheduleView {
   const rows = template.filter((r) => sameEntry(r, entry));
   const byDay = new Map<number, Set<number>>();
   const modes = new Map<number, Set<FeedMode | null>>();
@@ -117,7 +120,8 @@ export function checkSchedule(
       for (const ot of o.times) {
         if (!isFeedSlot({ vertical: o.entry.vertical, feedMode: ot.feedMode })) continue;
         if (Math.abs(ot.minute - t.minute) >= FEED_GAP) continue;
-        add(warnings, `${o.entry.label} post at ${clockLabel(ot.minute)} too. One of them will go out around ${clockLabel(ot.minute + FEED_GAP)}.`);
+        // The later of the two goes out FEED_GAP after the earlier one (ruling P6).
+        add(warnings, `${o.entry.label} post at ${clockLabel(ot.minute)} too. One of them will go out around ${clockLabel(Math.min(t.minute, ot.minute) + FEED_GAP)}.`);
       }
     }
   }
@@ -135,6 +139,74 @@ export function checkSchedule(
   }
 
   return { errors, warnings, confirm, empty: false };
+}
+
+// ── The Schedules form (Calendar header): pure helpers the client form and the preview sandbox share ──
+
+/** The day chips' order: Monday first (days are 0 = Sunday). */
+export const DAY_ORDER: readonly number[] = [1, 2, 3, 4, 5, 6, 0];
+
+/** "Add a time" stays on below the type's daily cap; Last Few Days takes one time whatever its cap. */
+export function canAddTime(s: TypeSchedule, cap: number): boolean {
+  const most = s.entry.vertical === 'last_few_days' ? Math.min(1, cap) : cap;
+  return s.times.length < most;
+}
+
+/** The time "Add a time" starts at: the first free mark an hour after the last time, else the first free mark of the day (9 AM when empty). */
+export function nextTime(times: readonly ScheduleTime[]): number {
+  if (!times.length) return 540;
+  const taken = new Set(times.map((t) => t.minute));
+  const last = Math.max(...taken);
+  for (let m = last + 60; m <= LAST_START; m += GRID) if (!taken.has(m)) return m;
+  for (let m = DAY_START; m <= LAST_START; m += GRID) if (!taken.has(m)) return m;
+  return DAY_START;
+}
+
+/** The form's checks: checkSchedule plus any merge problem the person hasn't settled yet (those block Save too). */
+export function formErrors(
+  s: TypeSchedule,
+  ctx: { cap: number; others: readonly TypeSchedule[]; problems: readonly string[] },
+): ReturnType<typeof checkSchedule> {
+  const r = checkSchedule(s, ctx);
+  return { ...r, errors: [...ctx.problems.filter((p) => !r.errors.includes(p)), ...r.errors] };
+}
+
+/**
+ * The standing week after one entry's save, as the server writes it: the
+ * entry's rows replaced, and after an LFD / Carousels confirm the other
+ * type loses the confirmed days. The preview sandbox recomputes its board
+ * from this.
+ */
+export function replaceSchedule(template: readonly TemplateRow[], s: TypeSchedule, confirm: ScheduleConfirm | null): TemplateRow[] {
+  const other: Vertical | null = confirm ? (confirm.kind === 'lfd-carousels' ? 'carousels' : 'last_few_days') : null;
+  const clear = new Set(confirm?.days ?? []);
+  return [
+    ...template.filter((r) => !sameEntry(r, s.entry) && !(other && r.vertical === other && clear.has(r.weekday))),
+    ...templateRowsFor(s),
+  ];
+}
+
+const WEEKDAY_NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+/** What a save asks before it goes ahead: each day LFD / Carousels trade, or that the type stops posting. The server's 422 and the sandbox say the same. */
+export function confirmLines(c: ScheduleConfirm | { kind: 'empty' }, label: string): string[] {
+  if (c.kind === 'empty') return [`${label} will stop posting.`];
+  return c.days.map((d) =>
+    c.kind === 'lfd-carousels'
+      ? `${WEEKDAY_NAME[d]} becomes a Last Few Days day. Carousels come off ${WEEKDAY_NAME[d]}.`
+      : `${WEEKDAY_NAME[d]} becomes a Carousels day. Last Few Days comes off ${WEEKDAY_NAME[d]}.`,
+  );
+}
+
+/** "Carousels schedule saved. Every week from now on." plus how many went back to Ready to place. */
+export function savedToast(label: string, toReady: number): string {
+  const back = toReady > 0 ? ` ${toReady} ${label} went back to Ready to place.` : '';
+  return `${label} schedule saved. Every week from now on.${back}`;
+}
+
+/** After Undo: posts the save sent back to Ready to place don't come back. */
+export function undoneToast(label: string, toReady: number): string {
+  return `Undone: ${label} schedule.${toReady > 0 ? ' Posts that went back to Ready to place stay there.' : ''}`;
 }
 
 /**

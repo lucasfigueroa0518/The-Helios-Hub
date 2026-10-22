@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { checkSchedule, pairTimes, SCHEDULE_ENTRIES, scheduleFromTemplate, templateRowsFor, type TypeSchedule } from '@/lib/social-hub/slots/schedule';
+import {
+  canAddTime, checkSchedule, confirmLines, DAY_ORDER, formErrors, nextTime, pairTimes, replaceSchedule, savedToast, SCHEDULE_ENTRIES, scheduleFromTemplate, templateRowsFor, undoneToast,
+  type TypeSchedule,
+} from '@/lib/social-hub/slots/schedule';
 import { LFD_ONCE, OFF_GRID, OUTSIDE_DAY } from '@/lib/social-hub/slots/rules';
 import type { FeedMode, TemplateRow } from '@/lib/social-hub/slots/types';
 
@@ -71,4 +74,69 @@ test('pairTimes', () => {
   assert.deepEqual([...pairTimes([570, 1080], [690, 1080])], [[1080, 1080], [570, 690]]);
   assert.deepEqual([...pairTimes([570, 720], [720, 900])], [[720, 720], [570, 900]]);
   assert.deepEqual([...pairTimes([570, 720], [720])], [[720, 720], [570, null]]);
+});
+
+test('feed warning: the later post goes out 30 minutes after the earlier one (ruling P6)', () => {
+  // The other post is earlier: 11:30 AM + 30 = 12:00 PM.
+  const later = checkSchedule(sched('Carousels', [700], all), { cap: 3, others: [sched('Explainers', [690], all, 'main')] });
+  assert.deepEqual(later.warnings, ['Explainers post at 11:30 AM too. One of them will go out around 12:00 PM.']);
+  // The other post is later: this one goes at 11:30 AM, so the other slips to 12:00 PM, not 12:10 PM.
+  const earlier = checkSchedule(sched('Carousels', [690], all), { cap: 3, others: [sched('Explainers', [700], all, 'main')] });
+  assert.deepEqual(earlier.warnings, ['Explainers post at 11:40 AM too. One of them will go out around 12:00 PM.']);
+});
+
+test('the form: days run Monday first, Add a time stops at the cap (Last Few Days at one)', () => {
+  assert.deepEqual(DAY_ORDER, [1, 2, 3, 4, 5, 6, 0]);
+  assert.equal(canAddTime(sched('Carousels', [540, 690], all), 3), true);
+  assert.equal(canAddTime(sched('Carousels', [540, 690, 900], all), 3), false);
+  assert.equal(canAddTime(sched('Last Few Days', [540], [2]), 1), false);
+  assert.equal(canAddTime(sched('Last Few Days', [540], [2]), 3), false, 'Last Few Days takes one time whatever its cap');
+  assert.equal(canAddTime(sched('Last Few Days', [], [2]), 1), true);
+});
+
+test('the form: a new time is the first free mark an hour after the last one, else the first free mark', () => {
+  assert.equal(nextTime([]), 540);
+  assert.equal(nextTime([{ minute: 690, feedMode: null }]), 750);
+  assert.equal(nextTime([{ minute: 690, feedMode: null }, { minute: 750, feedMode: null }]), 810);
+  assert.equal(nextTime([{ minute: 1230, feedMode: null }]), 480);
+  assert.equal(nextTime([{ minute: 480, feedMode: null }, { minute: 1245, feedMode: null }]), 495);
+});
+
+test('the form: unresolved merge problems block like errors; warnings and confirms pass through', () => {
+  const s = sched('Explainers', [780], all, 'main');
+  const f = formErrors(s, { cap: 3, others: [], problems: ['1:00 PM is Trial on some days and Main on others. Pick one.'] });
+  assert.deepEqual(f.errors, ['1:00 PM is Trial on some days and Main on others. Pick one.']);
+  const ok = formErrors(sched('Carousels', [690], all), { cap: 3, others: [sched('Explainers', [690], all, 'main')], problems: [] });
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.warnings.length, 1);
+  const empty = formErrors(sched('Carousels', [], all), { cap: 3, others: [], problems: [] });
+  assert.equal(empty.empty, true);
+});
+
+test('replaceSchedule: swaps one entry\'s rows; a Last Few Days confirm takes Carousels off those days', () => {
+  const t = [row(1, 'carousels', 570), row(3, 'carousels', 570), row(3, 'explainers', 780, 'main'), row(2, 'last_few_days', 540)];
+  const car = replaceSchedule(t, sched('Carousels', [690, 1080], [1, 3]), null);
+  assert.deepEqual(car.filter((r) => r.vertical === 'carousels').map((r) => `${r.weekday}|${r.startMinute}`).sort(), ['1|1080', '1|690', '3|1080', '3|690']);
+  assert.equal(car.filter((r) => r.vertical !== 'carousels').length, 2, 'other types untouched');
+  const lfd = replaceSchedule(t, sched('Last Few Days', [540], [2, 3]), { kind: 'lfd-carousels', days: [3] });
+  assert.deepEqual(lfd.filter((r) => r.vertical === 'carousels').map((r) => r.weekday), [1]);
+  assert.deepEqual(lfd.filter((r) => r.vertical === 'last_few_days').map((r) => r.weekday), [2, 3]);
+  const back = replaceSchedule(t, sched('Carousels', [570], [1, 2, 3]), { kind: 'carousels-lfd', days: [2] });
+  assert.deepEqual(back.filter((r) => r.vertical === 'last_few_days'), []);
+});
+
+test('toasts: saved, back to Ready, and undone', () => {
+  assert.equal(savedToast('Carousels', 0), 'Carousels schedule saved. Every week from now on.');
+  assert.equal(savedToast('Carousels', 2), 'Carousels schedule saved. Every week from now on. 2 Carousels went back to Ready to place.');
+  assert.equal(undoneToast('Carousels', 0), 'Undone: Carousels schedule.');
+  assert.equal(undoneToast('Carousels', 2), 'Undone: Carousels schedule. Posts that went back to Ready to place stay there.');
+});
+
+test('confirm lines: LFD / Carousels days both ways, and the empty schedule', () => {
+  assert.deepEqual(confirmLines({ kind: 'lfd-carousels', days: [3] }, 'Last Few Days'), ['Wednesday becomes a Last Few Days day. Carousels come off Wednesday.']);
+  assert.deepEqual(confirmLines({ kind: 'carousels-lfd', days: [0, 3] }, 'Carousels'), [
+    'Sunday becomes a Carousels day. Last Few Days comes off Sunday.',
+    'Wednesday becomes a Carousels day. Last Few Days comes off Wednesday.',
+  ]);
+  assert.deepEqual(confirmLines({ kind: 'empty' }, 'Carousels'), ['Carousels will stop posting.']);
 });

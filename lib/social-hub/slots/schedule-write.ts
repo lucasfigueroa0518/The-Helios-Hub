@@ -9,7 +9,7 @@ import { driftMinute } from './book';
 import { readCaps, readOverrides, readSlotSource, readTemplate } from './load';
 import type { OverrideOp } from './override';
 import { resolveDay, validateDay } from './resolve';
-import { checkSchedule, pairTimes, SCHEDULE_ENTRIES, scheduleFromTemplate, templateRowsFor, type ScheduleConfirm, type ScheduleEntry, type TypeSchedule } from './schedule';
+import { checkSchedule, confirmLines, pairTimes, SCHEDULE_ENTRIES, scheduleFromTemplate, templateRowsFor, type ScheduleConfirm, type ScheduleEntry, type TypeSchedule } from './schedule';
 import { DEFAULT_FEED_MODE, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
 import {
   isReelType, sameSlotKey, slotId, slotKeyString,
@@ -106,15 +106,6 @@ const LFD = entryOf({ vertical: 'last_few_days', series: null })!;
 const CAROUSELS = entryOf({ vertical: 'carousels', series: null })!;
 
 const rowKey = (head: string | number, k: SlotKey) => `${head}|${slotKeyString(k)}`;
-
-function confirmLines(c: SaveConfirm, label: string): string[] {
-  if (c.kind === 'empty') return [`${label} will stop posting.`];
-  return c.days.map((d) =>
-    c.kind === 'lfd-carousels'
-      ? `${WEEKDAY[d]} becomes a Last Few Days day. Carousels come off ${WEEKDAY[d]}.`
-      : `${WEEKDAY[d]} becomes a Carousels day. Last Few Days comes off ${WEEKDAY[d]}.`,
-  );
-}
 
 /** Sorted, de-duplicated days; times sorted, with Trial / Main only on reel types (null there takes the type's default). */
 function normalized(s: TypeSchedule, entry: ScheduleEntry): TypeSchedule {

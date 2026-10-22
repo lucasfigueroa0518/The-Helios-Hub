@@ -9,6 +9,7 @@ import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type HubParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { loadForPage } from '@/lib/social-hub/live';
 import { loadSlots, readCaps, readSlotSource, readTemplate } from '@/lib/social-hub/slots/load';
+import { SCHEDULE_ENTRIES, scheduleFromTemplate } from '@/lib/social-hub/slots/schedule';
 import { readSeedInputs, seedTemplate } from '@/lib/social-hub/slots/seed';
 import type { SlotQuery } from '@/lib/social-hub/slots/types';
 import { addDays, isDayKey, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
@@ -41,7 +42,9 @@ async function loadWeek(params: HubParams, now: Date): Promise<CalendarWeek> {
   const shown = source === 'template' ? saved : seedTemplate(await readSeedInputs(q));
   const standard = standardByWeekday(shown);
   const switchFacts = { templateEmpty: read ? read.length === 0 : null, lfdPaused: paused, lfdDays: lfdWeekdays(saved.length ? saved : shown) };
-  const common = { monday, source, standard, caps, switchFacts };
+  // Each type's schedule from the template the board shows (today's pattern before the switch, where the form is read-only).
+  const schedules = SCHEDULE_ENTRIES.map((e) => scheduleFromTemplate(shown, e));
+  const common = { monday, source, standard, caps, switchFacts, schedules };
   if (params.scope === 'template') return { mode: 'template', days: templateWeek(shown, monday), ...common };
   if (source === 'template') {
     const map = await loadSlots(q, monday, addDays(monday, 6));
