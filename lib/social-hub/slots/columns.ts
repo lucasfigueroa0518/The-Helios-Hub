@@ -7,8 +7,13 @@ import type { SlotQuery } from './types';
  * Reads never need this: they go through `to_jsonb(row)->>'col'`, which is
  * null on a missing column.
  *
- * Cached per query handle and column (one information_schema read each; a
- * route's request or a transaction gets a fresh handle). SELECT only. Takes a
+ * Cached per query handle and column (one information_schema read each).
+ * A route's request or a transaction gets a fresh handle, but some handles
+ * are module-level (`reelsSpine` in lib/reels/publish/items.ts, `liveStoriesDb`
+ * in lib/stories/db.ts), so on those the answer lasts the whole process: a
+ * warm Vercel instance or worker that read "no column" keeps writing no mark
+ * until it restarts. Restart or redeploy the worker (and redeploy the hub)
+ * after a schema apply that adds a column. SELECT only. Takes a
  * bare query function (SlotQuery, SpineQuery) or a `{ query }` handle
  * (the Stories Queryable).
  */

@@ -2,6 +2,8 @@
 
 Run these in order; Tommy runs every step. You can stop after any step: until step 6 everything stays in `legacy` mode, so the hub and the overnight run behave exactly as they do today.
 
+**Don't switch on (step 6) before the step 2 schema apply.**
+
 ## 0. Before you start
 - [ ] **Read-only check that the slot tables are empty.** The schema reshape empties them once.
   ```
@@ -11,11 +13,11 @@ Run these in order; Tommy runs every step. You can stop after any step: until st
   - If either count isn't 0, stop and tell Claude before applying anything.
 
 ## 1. Get the code to GitHub (your call)
-- [ ] Push `unify-social-hub`. The local branch is 35 commits ahead of GitHub, and the push also adds other sessions' work on this branch to PR #13.
-- [ ] Merge PR #13 when ready. That merge is what deploys the hub on Vercel (step 3).
+- [ ] Push `unify-social-hub`. PR #15 is merged; the branch's commits since then (type schedules and batch select, plus other sessions' work on this branch) aren't in any PR yet.
+- [ ] Open a **new PR** from `unify-social-hub` to `main` (Tommy opens it, or approves Claude opening it), and merge it when ready. That merge is what deploys the hub on Vercel (step 3).
 
 ## 2. Apply both schema files
-The apply also adds `slot_override.set_by`, `schedule.slot_by` and `stories.sets.slot_by` (type schedules, D60). **Apply the schema first, then redeploy the social worker (step 3).** A worker started before the apply caches "no column" until it restarts.
+The apply also adds `slot_override.set_by`, `schedule.slot_by` and `stories.sets.slot_by` (type schedules, D60). **Apply the schema first, then restart or redeploy the social worker (step 3).** Some code checks for these columns once per process (`lib/social-hub/slots/columns.ts`), so a worker started before the apply keeps writing no marks until it restarts. The same goes for a warm Vercel instance: if the hub served Stories or calendar writes between the step 1 merge and this apply, redeploy the hub after this step too (Vercel → Redeploy).
 - [ ] `node scripts/apply_social_hub_schema.js --apply`
 - [ ] `node scripts/apply_stories_schema.js`. This one has no `--apply` flag; running it applies.
 - [ ] Read-only check:
@@ -29,7 +31,7 @@ The apply also adds `slot_override.set_by`, `schedule.slot_by` and `stories.sets
 - This step is safe with the code that's live now. The old Stories index is kept on purpose.
 
 ## 3. Deploy the new code
-- [ ] **Social worker:** `./scripts/gcp/deploy-social-worker.sh`.
+- [ ] **Social worker:** `./scripts/gcp/deploy-social-worker.sh`. Run it after step 2, never before: it is also the restart that picks up the new columns.
 - [ ] **Hub:** the Vercel deploy from the merge in step 1. It serves the Calendar and `/api/stories/*`.
 - The orchestration VM (`deploy-worker-code.sh`) doesn't need a redeploy for this: no outreach worker code changed.
 
@@ -41,6 +43,7 @@ The apply also adds `slot_override.set_by`, `schedule.slot_by` and `stories.sets
 
 ## 5. Look before switching on
 - [ ] Open `/social/calendar` → Week. It should look like today, read-only, with the switch notice.
+- [ ] Open the **Schedules** dropdown. It opens read-only, with the notice "The calendar is showing today’s settings. It starts deciding when you switch it on." The **Select** button isn't shown on the board.
 
 ## 6. Switch on
 - [ ] Click the switch on the Calendar (sets `slot_source = 'template'`). The board fills with the default week:
@@ -51,14 +54,17 @@ The apply also adds `slot_override.set_by`, `schedule.slot_by` and `stories.sets
   - Stories: 8:30 AM.
 
 ## 7. Live checks right after switch-on (about 5 minutes)
-- [ ] Drag an Explainer onto a day at 12:00 PM. Expect the toast, then "Make it every…" and Undo.
+- [ ] Drag an Explainer onto a day at 12:00 PM. Expect the toast "Explainer moved to … Just this date." with Undo.
 - [ ] Flip a Trial/Main tag, then Undo it.
 - [ ] **A booked post:** try Remove. It should ask "Move it back to ready" / "Keep it"; choose Keep.
 - [ ] **A booked Story:** try moving it. It should say it can't move here.
 - [ ] Make a second edit while "Saving…" shows. It should say "Still saving the last change."
 - [ ] **Schedules:** change a type's schedule (for example move one Carousel time). Confirm system bookings moved to the new time while a hand-set post stayed.
+- [ ] **Schedules Undo:** click Undo on that save's toast. The schedule goes back to its old times, and the bookings that moved go back with it.
+- [ ] **Stories schedule:** change the Morning Download time in Schedules. A booked Morning Download set (one the overnight run made) moves with its time; a set you placed or moved by hand stays.
 - [ ] **Batch Remove:** Select a booked post and Remove. It should ask once ("Move it back to ready" / "Keep it").
-- [ ] **Batch Set time:** Select two or three cards and Set time. Confirm they all take the picked time.
+- [ ] **Batch Set time:** Select two or three cards and Set time. Confirm they all take the picked time. A card today whose picked time has already passed is skipped ("That time has passed today."), never moved to another time.
+- [ ] **Batch select and the week:** with cards selected, go to the next week. Select mode turns off and nothing is selected.
 - [ ] **Type page:** the "Daily limit" row shows. Change one limit and change it back.
 - [ ] **Next morning:** posts went out at their slot times (within 15 minutes, later if the 30-minute feed gap pushed them).
 
