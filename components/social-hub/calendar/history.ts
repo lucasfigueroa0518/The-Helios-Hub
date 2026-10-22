@@ -6,7 +6,7 @@ import type { SlotChange } from '@/lib/social-hub/slots/write';
  * the tab where the edit happened. Pure: no React.
  */
 
-/** Where an edit happened: 'standard', or 'week:<monday>' so undo only reaches the week on screen. */
+/** Where an edit happened: 'week:<monday>', so undo only reaches the week on screen. */
 export type Tab = string;
 
 export type Command = {

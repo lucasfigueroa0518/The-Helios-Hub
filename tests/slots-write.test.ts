@@ -182,9 +182,9 @@ test('a date reset (op delete) brings the standard slot back', async () => {
   assert.deepEqual(await readOverrides(q, '2026-10-21', '2026-10-21'), []);
 });
 
-// ── "Make it every <weekday>" applies only that change ──
+// ── A server template change (scope 'template') applies only that change ──
 
-test('"Make it every Tuesday" (template put) applies only that slot, not the whole edited day', async () => {
+test('a template put for Tuesday applies only that slot, not the whole edited day', async () => {
   const { q } = await seeded();
   // Tue Oct 20 is edited: its 6:00 PM reel is removed for that date only.
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', startMinute: 1080, series: null, action: 'remove' }], opts);
@@ -197,7 +197,7 @@ test('"Make it every Tuesday" (template put) applies only that slot, not the who
   assert.deepEqual((await readOverrides(q, '2026-10-20', '2026-10-20')).map((o) => [o.vertical, o.startMinute, o.action]), [['reels', 1080, 'remove']]);
 });
 
-test('"Make it every Tuesday" for a move (template move) moves only that slot', async () => {
+test('a template move on Tuesday moves only that slot', async () => {
   const { q } = await seeded();
   const before = (await readTemplate(q)).filter((r) => r.weekday === 2 && r.vertical !== 'explainers').length;
   const out = await applySlotChanges(q, [{ scope: 'template', op: 'move', from: { weekday: 2, vertical: 'explainers', startMinute: 780, series: null }, to: { weekday: 2, startMinute: 720 } }], opts);
@@ -261,7 +261,7 @@ test('a cross-day move of a booked Carousel Tue → Thu reschedules it to Thu', 
   assert.deepEqual(await dayOf(q, '2026-10-22', 'carousels'), [540, 870, 900]);
 });
 
-test('a "Make it every Tuesday" move takes the upcoming Tuesdays\' booked posts with it', async () => {
+test('a template move on Tuesday takes the upcoming Tuesdays\' booked posts with it', async () => {
   const { pg, q } = await seeded();
   const b = await book(pg, 'explainers', '2026-10-27', 't0780', 'main', '22222222-2222-2222-2222-222222222222');
   const out = await applySlotChanges(q, [{ scope: 'template', op: 'move', from: { weekday: 2, vertical: 'explainers', startMinute: 780, series: null }, to: { weekday: 2, startMinute: 720 } }], opts);

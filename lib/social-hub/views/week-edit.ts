@@ -74,7 +74,10 @@ export const nameOf = (k: { vertical: Vertical; series: StorySeries | null }): s
 
 const keyOf = (s: SlotKey): SlotKey => ({ vertical: s.vertical, startMinute: s.startMinute, series: s.series });
 
-export function dayCtx(state: BoardState<BoardPost>, day: number, clock: Clock): DayCtx {
+/** A board day's rules context: always a real date (only the template has none). */
+export type DateCtx = DayCtx & { nyDate: string };
+
+export function dayCtx(state: BoardState<BoardPost>, day: number, clock: Clock): DateCtx {
   const d = state.days[day]!;
   return { nyDate: d.nyDate, weekday: d.weekday, slots: [...d.slots], today: clock.today, nowMinute: clock.nowMinute };
 }
@@ -140,7 +143,7 @@ export const TAKEN = 'That slot is taken.';
  * time, and a Story only ever goes into one of its series' slots.
  */
 export function dropState(input: {
-  ctx: DayCtx;
+  ctx: DateCtx;
   vertical: Vertical;
   series: StorySeries | null;
   raw: number;
@@ -158,7 +161,7 @@ export function dropState(input: {
   if (input.ready) {
     const existing = ctx.slots.find((s) => sameSlotKey(s, { vertical, startMinute: snap.minute, series }));
     if (existing) {
-      if (ctx.nyDate !== null && ctx.nyDate < ctx.today) return refused(PAST_DAY);
+      if (ctx.nyDate < ctx.today) return refused(PAST_DAY);
       if (isLocked(ctx, existing)) return refused(ALREADY_STARTED);
       if (input.ready.taken(snap.minute)) return refused(TAKEN);
       minute = snap.minute;
@@ -263,7 +266,7 @@ export function planEdit<P extends BoardPost>(state: BoardState<P>, edit: Edit, 
   const slot = ctx.slots.find((s) => sameSlotKey(s, edit.key));
   if (!slot) return { ok: false, reason: 'That slot isn’t on this day.' };
   if (!isReelType(slot.vertical)) return { ok: false, reason: 'Only reels post as Trial or Main feed.' };
-  if (ctx.nyDate !== null && ctx.nyDate < ctx.today) return { ok: false, reason: PAST_DAY };
+  if (ctx.nyDate < ctx.today) return { ok: false, reason: PAST_DAY };
   if (isLocked(ctx, slot)) return { ok: false, reason: ALREADY_STARTED };
   if (slot.feedMode === edit.feedMode) return noop(state, slot.startMinute);
   set(edit.day, ctx.slots.map((s) => (sameSlotKey(s, edit.key) ? { ...s, feedMode: edit.feedMode } : s)), [edit.key]);
@@ -400,19 +403,19 @@ export function planReady<P extends BoardPost>(
  * 8:45 PM: today only after now (a slot at now has started), none on a past
  * day. The place picker's Time menu.
  */
-export function openMinutes(ctx: DayCtx): number[] {
-  if (ctx.nyDate !== null && ctx.nyDate < ctx.today) return [];
-  const from = ctx.nyDate !== null && ctx.nyDate === ctx.today ? Math.max(DAY_START, nextOpenMinute(ctx.nowMinute)) : DAY_START;
+export function openMinutes(ctx: DateCtx): number[] {
+  if (ctx.nyDate < ctx.today) return [];
+  const from = ctx.nyDate === ctx.today ? Math.max(DAY_START, nextOpenMinute(ctx.nowMinute)) : DAY_START;
   const out: number[] = [];
   for (let m = from; m <= LAST_START; m += GRID) out.push(m);
   return out;
 }
 
 /** The picker's first time: today the next open mark; another day the type's first usual start, else its first open time. Null when the day has none. */
-export function defaultPlaceMinute(ctx: DayCtx, vertical: Vertical): number | null {
+export function defaultPlaceMinute(ctx: DateCtx, vertical: Vertical): number | null {
   const open = openMinutes(ctx);
   if (!open.length) return null;
-  if (ctx.nyDate !== null && ctx.nyDate === ctx.today) return open[0]!;
+  if (ctx.nyDate === ctx.today) return open[0]!;
   return USUAL[vertical].map((w) => w.start).find((m) => open.includes(m)) ?? open[0]!;
 }
 
@@ -421,7 +424,7 @@ export function defaultPlaceMinute(ctx: DayCtx, vertical: Vertical): number | nu
  * series' open Stories slots (a set never adds a slot); anything else every
  * open time (openMinutes).
  */
-export function readyMinutes(ctx: DayCtx, vertical: Vertical, series: StorySeries | null): number[] {
+export function readyMinutes(ctx: DateCtx, vertical: Vertical, series: StorySeries | null): number[] {
   const open = openMinutes(ctx);
   if (vertical !== 'stories') return open;
   return ctx.slots.filter((s) => s.vertical === 'stories' && s.series === series && open.includes(s.startMinute)).map((s) => s.startMinute).sort((a, b) => a - b);
@@ -464,8 +467,8 @@ const nOf = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
  * a Trial / Main on a type that has none is skipped with its reason, and the
  * rest still applies. Set time keeps each card on its date at the exact
  * minute picked (no snap): a minute already passed today skips that card
- * (TIME_PASSED) rather than moving it to the next open time. Every change is a date change (the slot writer
- * marks it the person's).
+ * (TIME_PASSED) rather than moving it to the next open time. Every change
+ * is a date change (the slot writer marks it the person's).
  */
 export function planBatch<P extends BoardPost>(state: BoardState<P>, keys: ReadonlyArray<{ day: number; key: SlotKey }>, action: BatchAction, clock: Clock): Batch<P> {
   let cur = state;

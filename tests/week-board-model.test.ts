@@ -256,10 +256,10 @@ test('history: undo is scoped to the tab', () => {
   const h = createHistory();
   const w = cmd('week edit', 'week');
   h.push(w);
-  h.push(cmd('standard edit', 'standard'));
+  h.push(cmd('next week edit', 'week:2026-10-26'));
   assert.equal(h.undo('week'), w);
   assert.equal(h.canUndo('week'), false);
-  assert.equal(h.canUndo('standard'), true);
+  assert.equal(h.canUndo('week:2026-10-26'), true);
   assert.equal(h.undo('week'), null);
 });
 
