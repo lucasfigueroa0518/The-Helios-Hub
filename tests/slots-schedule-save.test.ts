@@ -16,7 +16,9 @@ import type { FeedMode, SlotQuery, StorySeries } from '@/lib/social-hub/slots/ty
 import { applySlotChanges, setSlotSource } from '@/lib/social-hub/slots/write';
 import type { Vertical } from '@/lib/social-hub/types';
 import { pgliteDb } from '@/lib/stories/local-db';
-import { rescheduleSet, scheduleSet } from '@/lib/stories/repository';
+import { rescheduleSet, scheduleSet, unscheduleSet } from '@/lib/stories/repository';
+import { unscheduleJob } from '@/lib/explainers/publish/schedule';
+import { unscheduleItem } from '@/lib/social/overnight/schedule';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -56,7 +58,7 @@ async function useTimes(pg: Pg, vertical: Vertical, series: StorySeries | null, 
 async function book(pg: Pg, o: { vertical: Vertical; nyDate: string; slot: string; publishAt: string; source?: 'auto' | 'user'; feedMode?: FeedMode | null; slotBy?: 'person' | 'system' | null; ref?: string }) {
   const format = o.vertical === 'carousels' || o.vertical === 'last_few_days' ? 'feed' : 'reel';
   const item = (await pg.query<{ id: string }>(
-    `INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ($1, $2, gen_random_uuid()::text) RETURNING id::text AS id`, [o.vertical, format],
+    `INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ($1, $2, coalesce($3::text, gen_random_uuid()::text)) RETURNING id::text AS id`, [o.vertical, format, o.ref ?? null],
   )).rows[0]!.id;
   const { rows } = await pg.query<{ id: string }>(
     `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, feed_mode, slot_by)
@@ -212,7 +214,30 @@ test('a started slot today is untouched', async () => {
   assert.deepEqual(plan.toReady, []);
   assert.equal((await row(pg, id)).slot, 't0570');
   assert.ok((await overrideRows(pg, WED, 'carousels')).some((r) => r.start_minute === 570 && r.action === 'add' && r.set_by === 'system'));
-  assert.ok((await minutesOn(q, WED, 'carousels')).includes(570));
+  // The started 570 already went out today: its new time doesn't also run today (ruling P7).
+  assert.deepEqual(await minutesOn(q, WED, 'carousels'), [570]);
+  assert.deepEqual(await overrideRows(pg, WED, 'carousels'), [{ start_minute: 570, action: 'add', set_by: 'system' }, { start_minute: 690, action: 'remove', set_by: 'system' }]);
+  assert.deepEqual(await minutesOn(q, THU, 'carousels'), [690]);
+});
+
+test('a second save the same day still gives today no extra slot', async () => {
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[570, null]], NOT_LFD_DAYS);
+  await save(pg, q, sched('carousels', [690], NOT_LFD_DAYS), WED_10AM);
+  await save(pg, q, sched('carousels', [720], NOT_LFD_DAYS), WED_10AM);
+  assert.deepEqual(await minutesOn(q, WED, 'carousels'), [570]);
+  assert.deepEqual(await minutesOn(q, THU, 'carousels'), [720]);
+});
+
+test('a person post held only by a system pin is hand-set: it stays, and the save works', async () => {
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[570, null]], NOT_LFD_DAYS);
+  // A Standard-week move whose target day had passed pins the post's slot as the system's (write.ts).
+  await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode, updated_by, set_by) VALUES ($1::date, 'carousels', 600, NULL, 'add', NULL, 'test', 'system')`, [WED]);
+  const id = await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0600', publishAt: '2026-10-28T14:05:00Z', slotBy: 'person' });
+  await save(pg, q, sched('carousels', [690], NOT_LFD_DAYS), SUN_10AM);
+  assert.equal((await row(pg, id)).slot, 't0600');
+  assert.ok((await minutesOn(q, WED, 'carousels')).includes(600));
 });
 
 test('today\'s unstarted slot follows', async () => {
@@ -269,6 +294,33 @@ test('with the confirm, Carousels come off that day but a person-placed Carousel
   assert.deepEqual(await minutesOn(q, NEXT_WED, 'last_few_days'), [540]);
 });
 
+test('a later Last Few Days save doesn\'t list a skip that was already there', async () => {
+  const { pg, q } = await seeded();
+  await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0540', publishAt: '2026-10-28T13:05:00Z', source: 'user' });
+  await save(pg, q, sched('last_few_days', [540], [2, 3, 5]), SUN_10AM, { confirm: true });
+  const { plan } = await save(pg, q, sched('last_few_days', [540], [2, 3, 5]), SUN_10AM);
+  assert.deepEqual(plan.lfdSkips, []);
+  assert.deepEqual(await minutesOn(q, WED, 'last_few_days'), []);
+  assert.deepEqual(await overrideRows(pg, WED, 'last_few_days'), [{ start_minute: 540, action: 'remove', set_by: 'system' }]);
+});
+
+test('a person-held Stories set is untouched', async () => {
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'stories', 'morning_download', [[510, null]], EVERY_DAY);
+  const db = pgliteDb(pg);
+  const SET = '70000000-0000-4000-8000-000000000012';
+  await pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at, slot_minute) VALUES ($1, 'morning_download', $2, 'approved', 'auto', 'polished', now(), 510)`, [SET, WED]);
+  await db.transaction((tx) => scheduleSet(tx, SET, new Date('2026-10-28T12:35:00Z')));
+  await db.transaction((tx) => rescheduleSet(tx, SET, WED, new Date('2026-10-28T12:40:00Z'), 510, 'person'));
+  const calls: unknown[] = [];
+  await save(pg, q, sched('stories', [600], EVERY_DAY, 'morning_download'), SUN_10AM, { rescheduleSet: async (...a) => { calls.push(a); } });
+  assert.equal(calls.length, 0);
+  const booking = (await pg.query<{ slot: string; publish_at: string }>(`SELECT slot, publish_at FROM social_hub.schedule WHERE vertical = 'stories'`)).rows[0]!;
+  assert.equal(booking.slot, 't0510:morning_download');
+  assert.equal(new Date(booking.publish_at).toISOString(), '2026-10-28T12:40:00.000Z');
+  assert.deepEqual(await minutesOn(q, WED, 'stories'), [510]);
+});
+
 test('stories system sets move with their series', async () => {
   const { pg, q } = await seeded();
   await useTimes(pg, 'stories', 'morning_download', [[510, null]], EVERY_DAY);
@@ -304,6 +356,78 @@ test('undo restores', async () => {
   const m = nyMinuteOf(new Date(r.publish_at));
   assert.ok(m >= 570 && m <= 585, `publish minute ${m}`);
   assert.deepEqual(await minutesOn(q, WED, 'carousels'), [570]);
+});
+
+test('undo after a save that tied a person\'s post restores the schedule and keeps the post', async () => {
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[570, null]], NOT_LFD_DAYS);
+  const person = await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0570', publishAt: '2026-10-28T13:35:00Z', slotBy: 'person' });
+  const sys = await book(pg, { vertical: 'carousels', nyDate: THU, slot: 't0570', publishAt: '2026-10-29T13:35:00Z' });
+  const { out } = await save(pg, q, sched('carousels', [690], NOT_LFD_DAYS), SUN_10AM);
+  assert.ok(out.ok);
+  assert.deepEqual(await overrideRows(pg, WED, 'carousels'), [{ start_minute: 570, action: 'add', set_by: 'person' }, { start_minute: 690, action: 'remove', set_by: 'person' }]);
+  await save(pg, q, out.inverse, SUN_10AM);
+  assert.deepEqual(await minutesOn(q, WED, 'carousels'), [570]);
+  assert.deepEqual(await minutesOn(q, THU, 'carousels'), [570]);
+  assert.equal((await row(pg, person)).slot, 't0570');
+  assert.equal(new Date((await row(pg, person)).publish_at).toISOString(), '2026-10-28T13:35:00.000Z');
+  assert.equal((await row(pg, sys)).slot, 't0570');
+});
+
+test('a booking that appears between plan and apply refuses the save (409)', async () => {
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[570, null], [1080, null]], NOT_LFD_DAYS);
+  const plan = await planScheduleSave(q, sched('carousels', [1080], NOT_LFD_DAYS), { now: SUN_10AM });
+  assert.ok(plan.ok && plan.toReady.length === 0);
+  await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0570', publishAt: '2026-10-28T13:35:00Z' });
+  const out = await pg.transaction((tx) => applyScheduleSave(asQuery(tx), plan, { by: BY, now: SUN_10AM, rng: first, rescheduleSet: storiesReschedule }));
+  assert.equal(out.ok, false);
+  assert.ok(!out.ok && out.status === 409 && /changed while saving/.test(out.error), JSON.stringify(out));
+  assert.deepEqual(await minutesOn(q, THU, 'carousels'), [570, 1080]);
+});
+
+// Each type's real unschedule cancels its social_hub.schedule row before returning, so the apply's re-plan
+// sees the post as gone (Reels' unscheduleIdea runs on the live pool, so it is checked by reading, not here).
+test('real unschedules: Carousels and Last Few Days (unscheduleItem), Explainers, Stories all clear before the apply', async () => {
+  const { pg, q } = await seeded();
+  const sq = { query: async (t: string, p?: unknown[]) => ({ rows: (await pg.query(t, p as unknown[])).rows as any[] }) };
+  const itemOf = async (id: string) => (await pg.query<{ c: string }>(`SELECT content_item_id::text AS c FROM social_hub.schedule WHERE id = $1`, [id])).rows[0]!.c;
+
+  await useTimes(pg, 'carousels', null, [[570, null], [1080, null]], NOT_LFD_DAYS);
+  const carousel = await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0570', publishAt: '2026-10-28T13:35:00Z' });
+  const c = await saveSchedule(body(sched('carousels', [1080], NOT_LFD_DAYS)), deps(pg, q, { unschedule: async (p) => unscheduleItem(q as never, await itemOf(p.scheduleId)) }));
+  assert.equal(c.status, 200, JSON.stringify(c.body));
+  assert.equal((await row(pg, carousel)).status, 'cancelled');
+
+  const lfd = await book(pg, { vertical: 'last_few_days', nyDate: '2026-10-30', slot: 't0540', publishAt: '2026-10-30T13:05:00Z' });
+  const l = await saveSchedule(body(sched('last_few_days', [540], [2])), deps(pg, q, { unschedule: async (p) => unscheduleItem(q as never, await itemOf(p.scheduleId)) }));
+  assert.equal(l.status, 200, JSON.stringify(l.body));
+  assert.equal((await row(pg, lfd)).status, 'cancelled');
+
+  await useTimes(pg, 'explainers', null, [[780, 'main'], [930, 'main']], EVERY_DAY);
+  const { rows: t } = await pg.query<{ id: string }>(`INSERT INTO explainers.topics (title, origin, status) VALUES ('What is an API?', 'manual', 'rendered') RETURNING id`);
+  const { rows: j } = await pg.query<{ id: string }>(
+    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, finished_at)
+     VALUES ($1, 'ok', 'click', 'development', 5, 'm', 'm', now()) RETURNING id`, [t[0]!.id],
+  );
+  const job = j[0]!.id;
+  const explainer = await book(pg, { vertical: 'explainers', nyDate: WED, slot: 't0780', publishAt: '2026-10-28T17:05:00Z', feedMode: 'main', ref: job });
+  const e = await saveSchedule(body(sched('explainers', [[930, 'main']], EVERY_DAY)), deps(pg, q, { unschedule: (p) => unscheduleJob(sq as never, p.refs.jobId!) }));
+  assert.equal(e.status, 200, JSON.stringify(e.body));
+  assert.equal((await row(pg, explainer)).status, 'cancelled');
+
+  await useTimes(pg, 'stories', 'morning_download', [[510, null], [600, null]], EVERY_DAY);
+  const db = pgliteDb(pg);
+  const SET = '70000000-0000-4000-8000-000000000013';
+  await pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at, slot_minute) VALUES ($1, 'morning_download', $2, 'approved', 'auto', 'polished', now(), 510)`, [SET, WED]);
+  await db.transaction((tx) => scheduleSet(tx, SET, new Date('2026-10-28T12:35:00Z')));
+  const st = await saveSchedule(body(sched('stories', [600], EVERY_DAY, 'morning_download')), deps(pg, q, {
+    unschedule: (p) => db.transaction((tx) => unscheduleSet(tx, p.refs.setId!)),
+  }));
+  // 510 pairs with nothing left over here (600 was already there), so the set goes back to Ready.
+  assert.equal(st.status, 200, JSON.stringify(st.body));
+  assert.equal(st.body.toReady, 1);
+  assert.equal((await pg.query<{ status: string }>(`SELECT status FROM social_hub.schedule WHERE vertical = 'stories'`)).rows[0]!.status, 'cancelled');
 });
 
 test('over cap is refused', async () => {

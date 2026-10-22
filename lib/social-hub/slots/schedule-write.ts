@@ -174,14 +174,21 @@ export async function planScheduleSave(q: SlotQuery, input: TypeSchedule, opts: 
 
   const dates = bookedDates(today, overrides.map((o) => o.nyDate));
   const bookings = (await bookingsOn(q, dates)).filter((b) => affected(b.key));
+
   const personBooking = (nyDate: string, k: SlotKey) => bookings.some((b) => b.slotBy === 'person' && b.nyDate === nyDate && sameSlotKey(b.key, k));
   const rowAt = (nyDate: string, k: SlotKey) => after.overrides.find((o) => o.nyDate === nyDate && sameSlotKey(o, k));
   const personHeld = (nyDate: string, k: SlotKey) => rowAt(nyDate, k)?.setBy === 'person' || personBooking(nyDate, k);
   const put = (r: OverrideRow) => { after.overrides = [...after.overrides.filter((o) => !(o.nyDate === r.nyDate && sameSlotKey(o, r))), r]; };
   const drop = (nyDate: string, k: SlotKey) => { after.overrides = after.overrides.filter((o) => !(o.nyDate === nyDate && sameSlotKey(o, k))); };
 
-  // ── The system's own date pins for this entry go (today's started ones stay).
-  after.overrides = after.overrides.filter((o) => !(isEntry(o, entry) && o.setBy === 'system' && !started(o.nyDate, o.startMinute)));
+  // ── The system's own date pins for this entry go, except: today's started ones, today's ties (a 'remove'
+  // a started slot put on the time it moved to; it moves on below with its time's pair), and a pin that holds a
+  // person's post (a Standard-week move whose target day had passed keeps the booking where it is).
+  after.overrides = after.overrides.filter((o) => {
+    if (!isEntry(o, entry) || o.setBy !== 'system') return true;
+    if (started(o.nyDate, o.startMinute) || (o.nyDate === today && o.action === 'remove')) return true;
+    return o.action === 'add' && personBooking(o.nyDate, o);
+  });
 
   // ── Hand-set slots keep their time, tied to the routine slot they replaced.
   for (const nyDate of dates) {
@@ -202,6 +209,14 @@ export async function planScheduleSave(q: SlotQuery, input: TypeSchedule, opts: 
           }
           continue;
         }
+        if (own?.setBy === 'system' && own.action === 'remove' && nyDate === today) {
+          // Today's tie moves with its time, as a person's removal does.
+          if (tied && tied.startMinute > nowMinute && !personHeld(nyDate, tied)) {
+            drop(nyDate, key);
+            put({ nyDate, ...tied, action: 'remove', feedMode: null, setBy: 'system' });
+          }
+          continue;
+        }
         const held = (own?.setBy === 'person' && own.action === 'add') || personBooking(nyDate, key);
         const slot = was.find((x) => sameSlotKey(x, key));
         if (!held || !slot || started(nyDate, m)) continue;
@@ -216,6 +231,20 @@ export async function planScheduleSave(q: SlotQuery, input: TypeSchedule, opts: 
 
   holdStartedToday(before, after, today, nowMinute);
 
+  // ── A slot that started today already went (or is going) out: its time's new minute doesn't also run today.
+  const todayWeekday = weekdayOf(today);
+  if (s.days.includes(todayWeekday)) {
+    const wasToday = resolveDay(template, overrides, today);
+    for (const r of template) {
+      if (r.weekday !== todayWeekday || !isEntry(r, entry) || r.startMinute > nowMinute) continue;
+      const to = pair.get(r.startMinute) ?? null;
+      if (to === null || to === r.startMinute || to <= nowMinute || !wasToday.some((x) => sameSlotKey(x, r))) continue;
+      const tied: SlotKey = { vertical: r.vertical, startMinute: to, series: r.series };
+      if (rowAt(today, tied) || personHeld(today, tied)) continue;
+      put({ nyDate: today, ...tied, action: 'remove', feedMode: null, setBy: 'system' });
+    }
+  }
+
   // ── Last Few Days and Carousels: the saved type skips a date where the other is hand-set.
   const lfdSkips: string[] = [];
   if (entry === LFD || entry === CAROUSELS) {
@@ -225,12 +254,19 @@ export async function planScheduleSave(q: SlotQuery, input: TypeSchedule, opts: 
       const mine = day.filter((x) => isEntry(x, entry));
       if (!mine.length || !day.some((x) => isEntry(x, rival) && personHeld(nyDate, x))) continue;
       const base = resolveDay(after.template, [], nyDate);
+      let created = false; // Only skips this save makes are listed; one already in place isn't news.
       for (const x of mine) {
         if (personHeld(nyDate, x) || started(nyDate, x.startMinute)) continue;
-        if (base.some((b) => sameSlotKey(b, x))) put({ nyDate, ...x, action: 'remove', feedMode: null, setBy: 'system' });
-        else drop(nyDate, x);
+        const was = overrides.find((o) => o.nyDate === nyDate && sameSlotKey(o, x));
+        if (base.some((b) => sameSlotKey(b, x))) {
+          put({ nyDate, ...x, action: 'remove', feedMode: null, setBy: 'system' });
+          if (!(was?.action === 'remove' && was.setBy === 'system')) created = true;
+        } else {
+          drop(nyDate, x);
+          created = true;
+        }
       }
-      lfdSkips.push(dayLabel(nyDate));
+      if (created) lfdSkips.push(dayLabel(nyDate));
     }
   }
 
