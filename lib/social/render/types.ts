@@ -60,7 +60,110 @@ export type LayoutVariant =
   | 'story_beat'
   | 'data_block'
   | 'lfd_cover'
-  | 'lfd_story';
+  | 'lfd_story'
+  | AeLayoutVariant;
+
+/**
+ * AI Events This Week (lib/ai-events, planning/AI Events/DECISIONS.md AE-13/14): four looks, each
+ * with a cover, a city slide and a closing CTA slide. Drawn by lib/social/render/ai-events.
+ */
+export type AeLook = 'spotlight' | 'glass' | 'daylight' | 'orb';
+export type AeRole = 'cover' | 'city' | 'rank' | 'tease' | 'cta';
+export type AeLayoutVariant = `ae_${AeLook}_${AeRole}`;
+
+/** The Lucide icon an event row shows, chosen by code from the event's format (lib/ai-events/post.ts). */
+export type AeIcon = 'calendar' | 'users' | 'mic' | 'code' | 'presentation' | 'utensils' | 'ticket' | 'graduation';
+
+/** A city's top pick (AE-24): "TUE · 6:30 PM", the title, "Hosted by …" and the venue. No badge. */
+export type AeEventRow = { when: string; title: string; host?: string; place?: string; icon: AeIcon; image?: string };
+
+/** How a rank slide sets its event: the poster over the text, the poster on its own blurred light, or type only. */
+export type AeRankLayout = 'poster' | 'ambient' | 'type';
+
+/**
+ * The rank slide's outlined numeral (AE-33): `ghost` one huge numeral behind the poster, running off
+ * the right edge; `panorama` (the default) each numeral straddles a seam, so each slide runs into the next.
+ */
+export type AeRankTreat = 'ghost' | 'panorama';
+
+/** An honorable mention, teased under the top pick (AE-25): the day ("WED", "TUE–THU") and the title. */
+export type AeMention = { day: string; title: string };
+
+/** Everything an AI Events slide draws; built by code (lib/ai-events/post.ts), never by a model. */
+export type AeSlide =
+  | {
+      look: AeLook;
+      role: 'cover';
+      /** The hook (lib/ai-events/hooks.ts): `lead` in white, `lit` on its own last line. */
+      lead: string;
+      lit: string;
+      /** "OCT 26–NOV 1". */
+      week: string;
+      /** The cities with picks, in post order, drawn as one quiet line ("Miami · Boston · NYC · SF"). */
+      cities: Array<{ label: string; short: string; picks: number }>;
+      /** "Free AI Events Calendar · Link in bio". */
+      cta: string;
+    }
+  | {
+      look: AeLook;
+      role: 'city';
+      /** The city's label ("Boston", "SF Bay Area"), the slide's lit headline. */
+      city: string;
+      /** "TOP PICK". */
+      label: string;
+      /** The city's highest-ranked pick. */
+      pick: AeEventRow;
+      /** "ALSO THIS WEEK". */
+      mentionsLabel: string;
+      /** Up to 2 more picks, in time order. */
+      mentions: AeMention[];
+      /** "+5 more Boston events on our free calendar", or "Full calendar" when there are none. */
+      more: string;
+      /** "Link in bio". */
+      cta: string;
+    }
+  | {
+      look: AeLook;
+      /**
+       * A ranked spotlight (AE-29): no card and no label, only the rank ("#2"), the event's poster when
+       * it has one, and the event set large. Without a poster every layout draws as `type`.
+       */
+      role: 'rank';
+      rank: number;
+      pick: AeEventRow;
+      layout: AeRankLayout;
+      treat?: AeRankTreat[];
+      /** The next rank slide's rank, for the panorama's seam numeral; absent on the last rank slide. */
+      next?: number;
+    }
+  | {
+      look: AeLook;
+      /** The tease (AE-29): "Want to see the full list? →" over the locked #1 card. */
+      role: 'tease';
+      lead: string;
+      lit: string;
+      /** "#1". */
+      rank: string;
+      /** "MIAMI'S #1 THIS WEEK". */
+      label: string;
+      /** "Revealed on our free calendar · Link in bio". */
+      cta: string;
+    }
+  | {
+      look: AeLook;
+      role: 'cta';
+      /** "FREE TOOL". */
+      eyebrow: string;
+      lead: string;
+      lit: string;
+      /** "heliosgroup.ai". */
+      site: string;
+      line: string;
+      /** "Link in bio". */
+      cta: string;
+      /** "@heliosgroup.ai". */
+      handle: string;
+    };
 
 /**
  * Design v1 keeps only cover composition codes (C1/C2/C3) and F1 as active.
@@ -134,6 +237,8 @@ export type SlideCopy = {
   };
   /** Last Few Days story slide (spec §6). `headline` has no dash; the slide adds "– ". */
   lfdStory?: { setup: string; headline: string; highlight: string; names: string[]; body: string };
+  /** AI Events This Week (AeSlide): the slide's copy and look; layoutVariant is `ae_{look}_{role}`. */
+  aiEvents?: AeSlide;
 
   /**
    * Primary display line. Cover uses this as the 3–4-line uppercase headline;

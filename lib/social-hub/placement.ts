@@ -53,6 +53,8 @@ import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
 import { carouselOffDays, readLfdSettings } from '@/lib/lfd/settings';
+import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW, DEFAULT_AI_EVENTS_DAYS } from '@/lib/ai-events/config';
+import { readAiEventsSettings } from '@/lib/ai-events/settings';
 import { bookSlotStatement, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
 import { legacyFeedMode, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
 import { driftMinute } from '@/lib/social-hub/slots/book';
@@ -89,6 +91,7 @@ const TYPE_NAME: Record<SpineVertical, string> = {
   reels: 'Text on Screen',
   stories: 'Stories',
   last_few_days: 'Last Few Days posts',
+  ai_events: 'AI Events posts',
 };
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
@@ -157,6 +160,18 @@ export async function placementRules(query: SpineQuery, vertical: SpineVertical)
       // One 9:00–10:00 AM window on its days (spec §7.4); a feed post, so spaced.
       const days = await readLfdSettings(query).then((s) => s.days).catch(() => [...DEFAULT_LFD_DAYS]);
       return { vertical, spaced: true, windows: [{ ...LFD_WINDOW, name: 'Morning', days }] };
+    }
+    case 'ai_events': {
+      // Miami 6:00–7:00 PM and Boston 7:00–8:00 PM on its days (Sunday, AE-29); feed posts, so spaced.
+      const days = await readAiEventsSettings(query).then((s) => s.days).catch(() => [...DEFAULT_AI_EVENTS_DAYS]);
+      return {
+        vertical,
+        spaced: true,
+        windows: [
+          { ...AI_EVENTS_WINDOW, name: 'Evening', days },
+          { ...AI_EVENTS_NIGHT_WINDOW, name: 'Night', days },
+        ],
+      };
     }
     case 'explainers':
       return { vertical, spaced: true, windows: named(EXPLAINER_WINDOWS, { afternoon: 'Afternoon', late: 'Late afternoon' }) };
@@ -522,6 +537,26 @@ export async function itemRefusal(query: SpineQuery, target: PlacementTarget): P
   return rows[0].status === 'published' ? 'It has already posted.' : 'It is posting right now. Wait for that try to finish.';
 }
 
+/**
+ * AI Events: a post lists one week's events (the Monday after its Sunday, ai_events.posts.ny_date,
+ * through the Sunday after), so it never goes out after its own Sunday: by then its week has
+ * started. The engine books only its own Sunday too (lib/ai-events/schedule.ts throughDate).
+ * Null when the date is fine or the post can't be read (the other checks still stand).
+ */
+export async function aiEventsDateRefusal(query: SpineQuery, target: PlacementTarget, nyDate: string): Promise<string | null> {
+  if (target.vertical !== 'ai_events' || !target.itemId) return null;
+  const { rows } = await query(
+    `SELECT p.ny_date::text AS ny_date FROM social_hub.content_items ci JOIN ai_events.posts p ON p.id::text = ci.native_ref
+      WHERE ci.id = $1::uuid`,
+    [target.itemId],
+  ).catch(() => ({ rows: [] as any[] }));
+  const own = rows[0]?.ny_date ? String(rows[0].ny_date).slice(0, 10) : null;
+  if (!own || nyDate <= own) return null;
+  return `This AI Events post is for the week after ${formatDay(own)}, so it can’t post after that day. Generate makes the post for a later week.`;
+}
+
+const formatDay = (nyDate: string) => new Date(`${nyDate}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
 /** `by`: who placed it, recorded on a calendar slot the placement adds (template mode). */
 type PlaceInput = PlacementTarget & Placement & { now?: Date; rng?: (count: number) => number; rules?: PlacementRules; by?: string };
 
@@ -538,6 +573,8 @@ export async function placeItem(query: SpineQuery, input: PlaceInput): Promise<P
   }
   const plan = await planPlacement(query, input);
   if (!plan.ok) return plan;
+  const late = await aiEventsDateRefusal(query, input, plan.nyDate);
+  if (late) return { ok: false, note: late };
   try {
     const statement = bookSlotStatement({
       vertical: input.vertical,
@@ -568,6 +605,8 @@ export async function rescheduleItem(query: SpineQuery, input: PlaceInput): Prom
   if (refusal) return { ok: false, note: refusal };
   const plan = await planPlacement(query, { ...input, moving: { scheduleId: active.id, publishAt: active.publishAt, nyDate: active.nyDate, slot: active.slot } });
   if (!plan.ok) return plan;
+  const late = await aiEventsDateRefusal(query, input, plan.nyDate);
+  if (late) return { ok: false, note: late };
   if (plan.calendar) {
     // Template mode: the one booking-move UPDATE, with its slot moving along in the same statement (R16).
     const moved = await rebookSlot(query, { scheduleId: active.id, nyDate: plan.nyDate, slot: plan.slot, publishAt: plan.publishAt, feedMode: plan.feedMode }, { ops: plan.slotOps ?? [], by: input.by ?? 'placement' });

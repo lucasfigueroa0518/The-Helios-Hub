@@ -16,6 +16,7 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 | Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; `posts_per_day` less what people placed, up to `daily_render_cap` = 2 renders; see Daily fill) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
 | Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on; not on Last Few Days days while its `auto_run` is on, LFD-02; see the template-mode paragraph below); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM (none on Last Few Days days while its `auto_run` is on) | 5:30 | built |
 | Last Few Days | `lfd` | `helios-social` (the same process as Carousels; no unit of its own) | 3:00 on its days (`lfd.settings.days`, Tue/Fri), only with `lfd.settings.auto_run` on, in the carousel run's place; a manual run from the hub's "Make Last Few Days now" on any day | 9:00–10:00 AM on its days | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
+| AI Events This Week | `ai_events` | `helios-social` (the same process; no unit of its own) | 12:00 PM on its days (`ai_events.settings.days`, Sunday), only with `ai_events.settings.auto_run` on: ranks the coming week's events (Jev `event-pick@1`, capped at `run_cap_usd`) and renders a ranked carousel each for Miami and Boston; a manual run from the hub's Generate or Rebuild post on any day | Sunday: Miami 6:00–7:00 PM, Boston 7:00–8:00 PM | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
@@ -24,6 +25,17 @@ instead of a systemd unit of its own (step 3 of "Adding a content type" does not
 time, so its 3:00 run can never overlap a carousel run, and "one type per hour" holds because it takes the carousel run's
 slot on its days. Engine `lib/lfd`, schema `lfd`; its posts are spine items (`vertical 'last_few_days'`). A human-only CLI
 run stays available (`npx tsx scripts/lfd_run.ts --live`, Tommy).
+
+AI Events This Week (`planning/AI Events/DECISIONS.md`) also runs inside `helios-social`. Its clock is 12:00 PM, after the
+networking ingest's 9:00 AM Sunday refresh on `helios-orch-worker` and hours from every other run, so "one type per hour"
+holds; its runs are claimed after Last Few Days' in the same loop, under the same 30-minute timeout. Engine `lib/ai-events`,
+schema `ai_events`; its posts are spine items (`vertical 'ai_events'`). A run ranks the coming Monday to Sunday per city
+(the weekly pool, `ai_events.pool`; events already scored are never asked again, AE-05), renders one ranked post per
+city for Miami and Boston (cover, #2 to #4, the locked #1 tease, the closing slide; AE-29) with a drawn look, books Miami
+in the Sunday 6:00–7:00 PM window and Boston in 7:00–8:00 PM only while `publishing_live` is on, and republishes the public
+calendar snapshot. It makes no Claude calls. A Rebuild post run re-renders both from the cached scores and keeps their
+looks. A slot more than 60 minutes late is cancelled, never posted late. The human one-shot is
+`npx tsx scripts/ai_events_once.ts` (it carries out a run queued from the hub; Lucas only).
 
 While `social_hub.settings.slot_source` is `template`, each run fills that date's calendar slots instead of `posts_per_day`, Last Few Days runs on dates with an LFD slot, and Stories series post on dates with their slot. `legacy` is the old behavior. In template mode a day with an LFD slot never runs Carousels, even with Last Few Days paused: the 3 AM run queues nothing and logs why.
 
@@ -52,6 +64,7 @@ placements cut the count.
 | Explainers | Pool topics and topics with an approved (or, with `require_approval` off, unreviewed), unposted render rank together (pool order). The top `quota − placed` are taken: a render is placed (`scheduleJob`, while publishing is live) instead of rendered again; a pool topic is rendered, at most `daily_render_cap`, under the spend caps. Nothing left: the cycle is skipped before any idea call. |
 | Carousels | The 3 AM run makes `min(run_stories, quota − placed)` stories and schedules at most that many (`scheduleRunPosts`). A stored finished post that ranks in ships without spend (D37). A story whose post already holds a slot is passed over. Nothing left: the run is `skipped` (`stop_reason` `quota-filled`) and makes nothing. |
 | Last Few Days | One post on each of its days. A post a person placed for that day means the 3:00 run is skipped (`stop_reason` `quota-filled: …`). A manual run from the hub is never skipped. |
+| AI Events This Week | Two posts a week, Miami and Boston. The Sunday 12:00 run makes only the cities with no post yet; when both have one (a person ran Generate before noon) it is skipped (`stop_reason` `post-exists: …`); Rebuild post re-renders them instead. |
 | IG Stories | A series' day that a person filled (a set they generated that is approved, scheduled or posted for that day, or their slot for it on the spine) gets no auto set. |
 
 ## The contract

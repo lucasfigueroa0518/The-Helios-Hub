@@ -12,15 +12,18 @@ import test from 'node:test';
 import type { EntryType, Questions, SystemOneResult } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
-import type { IdeaModel } from '@/lib/explainers/ideas/generator';
+import { NO_ANALOGY_REASON } from '@/lib/explainers/ideas/analogy';
+import { GAP_BELOW_BAR_REASON } from '@/lib/explainers/ideas/gap';
+import { ANALOGY_WRITER_VERSION, GAP_WRITER_VERSION, type AnalogyRequest, type GapRequest, type IdeaModel } from '@/lib/explainers/ideas/generator';
 import { runAgentSession, scrubbedEnv, sessionOptions, UNSANDBOXED_HYPERFRAMES, type AgentMessage, type AgentQuery } from '@/lib/explainers/render/agent';
-import { runRenderJob, BUILD_PROMPT, PLAN_PROMPT, RESUME_PROMPT, repairPrompt, repairProjectAssembly, type RenderDeps } from '@/lib/explainers/render/job';
+import { runRenderJob, BUILD_PROMPT, PLAN_PROMPT, RESUME_PROMPT, repairPrompt, repairProjectAssembly, storyboardHero, type RenderDeps } from '@/lib/explainers/render/job';
+import { FINDINGS_FILE, FIX_PROMPT, scriptLine, storyboardGapQuestion } from '@/lib/explainers/render/understanding';
 import { SpendMeter } from '@/lib/explainers/render/meter';
 import { checkBash, checkToolCall, insideDir } from '@/lib/explainers/render/policy';
 import { fetchSourceText, htmlToText, resolveSource, type FetchLike } from '@/lib/explainers/render/source';
-import { briefMarkdown, PROJECT_INSTRUCTIONS, prepareWorkspace, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
+import { briefMarkdown, openerLineFor, PROJECT_INSTRUCTIONS, prepareWorkspace, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
 import { addTopics, getJob, getTopic, listArtifacts, listLintViolations, requestRender, claimNextJob } from '@/lib/explainers/repository';
-import type { AnalogyCandidate } from '@/lib/explainers/types';
+import type { AnalogyCandidate, GapCandidate, GapNote } from '@/lib/explainers/types';
 import { CaptionError, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
 import type { RecentClosing } from '@/lib/social/captions/build-line';
 import type { JevTransport } from '@/lib/reels/jev/runner';
@@ -212,6 +215,16 @@ test('the agent gets a scrubbed environment, web tools, project settings only, a
   assert.ok(UNSANDBOXED_HYPERFRAMES.every((rule) => rule.endsWith(' *')));
   assert.deepEqual(options.sandbox.filesystem.allowWrite, [JOB, '/jobs/abc/home']);
   assert.equal(options.agents['frame-worker'].model, 'claude-sonnet-5-5');
+  // The first-time viewer plays the stranger for the gap and the whole reel on Sonnet (EX3-108); the picture check stays on Haiku.
+  assert.equal(options.agents['first-viewer'].model, 'claude-sonnet-5-5');
+  assert.equal(options.agents['picture-checker'].model, 'claude-haiku-5-5');
+  assert.deepEqual(options.agents['first-viewer'].tools, ['Read', 'SubagentHandback']);
+  const viewer = options.agents['first-viewer'].prompt as string;
+  assert.match(viewer, /## Beat 1" to "## Beat 8/);
+  assert.match(viewer, /whether a reasonable person could reach a different answer/);
+  assert.match(viewer, /Quote marks, symbols and spelling are invisible to you/);
+  assert.match(viewer, /"example_ambiguous": false/);
+  assert.match(viewer, /"keep_watching": 1, "confused": \["\.\.\."\]\}/, 'the gap test keeps its JSON');
   assert.equal(options.maxBudgetUsd, 5);
 });
 
@@ -273,24 +286,76 @@ test('the policy hook denies and logs, and the cap aborts a runaway session', as
 const goodStoryboard = fs.readFileSync(path.join(process.cwd(), 'explainers', 'lint', 'fixtures', 'good', 'STORYBOARD.md'), 'utf8');
 const script = ['# SCRIPT', '', '**Voice:** HeyGen', '', '## Line 1 — Opener (Frame 1)', '', "    In the next 30 seconds, you'll learn an AI concept.", ''].join('\n');
 
-const CANDIDATE = (scene: string): AnalogyCandidate => ({
-  scene,
-  elements: [{ name: 'mailbox', stands_for: 'the webhook URL' }, { name: 'flag', stands_for: 'the notification' }],
-  process: 'A letter drops in and the flag pops up.',
-  payoff: 'The flag snaps up.',
-  visual: 'The flag moves.',
-  hook: 'The carrier sprints up and the flag slams up.',
-  steps: [
-    { analogy: 'the letter is sent', technical: 'event fires' },
-    { analogy: 'the letter drops in', technical: 'payload delivered' },
-    { analogy: 'the flag snaps up', technical: 'your app updates' },
+/** A named analogy (analogy-writer-v8, EX3-123) that passes the code checks. */
+const CANDIDATE = (name: string): AnalogyCandidate => ({
+  name,
+  explanation: 'A letter drops in and the flag pops up. You never walk out to look.',
+  mapping: [
+    { analogy: 'the mailbox', concept: 'the webhook URL' },
+    { analogy: 'the flag popping up', concept: 'the notification' },
+    { analogy: 'walking over to look', concept: 'polling' },
   ],
 });
 
-/** A pool topic whose analogy the idea phase already picked (EX3-30). */
-async function withAnalogy(db: ExplainersDb, topicId: string) {
-  const note = { version: 'analogy-writer-v3', candidates: [CANDIDATE('a mailbox with a flag')], scores: [], totals: [80], pick: 0, picked_at: new Date().toISOString() };
-  await db.query(`UPDATE explainers.topics SET jev_notes = jsonb_build_object('analogy', $2::jsonb) WHERE id = $1`, [topicId, JSON.stringify(note)]);
+/** A gap line that passes the gap writer's code checks for CANDIDATE (EX3-120). */
+const GAP = (end: string): GapCandidate => ({
+  line: `You tap pay on your phone, and a second later the shop's app says the order is confirmed. Nobody pressed refresh. So how does the app find out ${end}?`,
+  question: `So how does the app find out ${end}?`,
+  way_in: 'everyday mystery',
+  why_it_pulls: 'Everyone has seen it.',
+});
+
+/** The gap note the idea phase picked for an analogy (EX3-120), keyed by its name (gap-writer-v2). */
+const gapNote = (name: string): GapNote => ({
+  version: GAP_WRITER_VERSION,
+  analogy_name: name,
+  passes: [{ candidates: [GAP('so fast')], checks: [[]], scores: [{ pull: 3, clarity: 3, closable: 3 }], totals: [75], false_claim: [0.1], misses: [[]] }],
+  pick: { pass: 0, index: 0 },
+  picked_at: new Date().toISOString(),
+});
+
+/** A pool topic whose analogy and curiosity gap the idea phase already picked (EX3-30, EX3-120). */
+async function withAnalogy(db: ExplainersDb, topicId: string, { gap = true } = {}) {
+  const tried = { analogy: CANDIDATE('A mailbox with a flag'), gates: { false_mapping: 0.1, is_the_system: 0.1, real_names: 0.1 }, misses: [] };
+  const note = { version: ANALOGY_WRITER_VERSION, golden_hidden: [], candidates: [tried, tried], pick: 0, pick_reason: 'same', picked_at: new Date().toISOString() };
+  const notes = gap ? { analogy: note, gap: gapNote('A mailbox with a flag') } : { analogy: note };
+  await db.query(`UPDATE explainers.topics SET jev_notes = $2::jsonb WHERE id = $1`, [topicId, JSON.stringify(notes)]);
+}
+
+type StubJevOptions = {
+  /** p(fail) for every gate of a candidate, by the analogy text Jev reads (its name first); default 0.1. */
+  gates?: (analogy: string) => number;
+  /** p(a over b); default 0.5. */
+  compare?: (a: string, b: string) => number;
+  /** The understanding test's answers (EX3-133), by key; default 0.9 (they match). */
+  understanding?: (key: string, state: Record<string, unknown>) => number;
+};
+
+/**
+ * Jev for the analogy, gap and understanding passes: every gap scoring question gets `score(line)`;
+ * the golden match says no example matches; gates, comparison and understanding follow `options`;
+ * the false-claim gate says no. Every call is recorded.
+ */
+function analogyJev(score: (line: string) => number, options: StubJevOptions = {}): JevTransport & { calls: { keys: string[]; state: Record<string, unknown> }[] } {
+  const calls: { keys: string[]; state: Record<string, unknown> }[] = [];
+  return {
+    calls,
+    async systemOne<const Q extends Questions>(state: EntryType, questions: Q) {
+      const s = state as Record<string, unknown>;
+      const keys = Object.keys(questions);
+      calls.push({ keys, state: s });
+      const answers: Record<string, unknown> = {};
+      for (const key of keys) {
+        const noul = (p: number) => ({ type: 'noul', noul: p });
+        if (key === 'same_concept' || key === 'false_claim') answers[key] = noul(0.1);
+        else if (key === 'false_mapping' || key === 'is_the_system' || key === 'real_names') answers[key] = noul(options.gates?.(String(s.analogy)) ?? 0.1);
+        else if (key === 'a_over_b') answers[key] = noul(options.compare?.(String(s.a), String(s.b)) ?? 0.5);
+        else if (key === 'mechanism_match' || key === 'example_match' || key === 'gap_answered') answers[key] = noul(options.understanding?.(key, s) ?? 0.9);
+        else answers[key] = { type: 'score', score: score(String(s.candidate)), confidence: 1 };
+      }
+      return { model: 'jev-stub', answers, usage: { input_tokens: 1_000, output_tokens: 0 } } as unknown as SystemOneResult<Q>;
+    },
+  };
 }
 
 function fakePrepare(jobsRoot: string, jobId: string) {
@@ -302,10 +367,10 @@ function fakePrepare(jobsRoot: string, jobId: string) {
   return ws;
 }
 
-async function queuedJob(db: ExplainersDb, { analogy = true } = {}) {
+async function queuedJob(db: ExplainersDb, { analogy = true, gap = true } = {}) {
   const [topic] = await addTopics(db, [{ title: 'What is an API?', scope: 'Explain an API call.', origin: 'manual' }]);
   await db.query(`UPDATE explainers.topics SET status = 'pool' WHERE id = $1`, [topic.id]);
-  if (analogy) await withAnalogy(db, topic.id);
+  if (analogy) await withAnalogy(db, topic.id, { gap });
   await saveSetting(db, 'voice_id', 'voice-123');
   const req = await requestRender(db, { topicId: topic.id, trigger: 'click', settings: { ...DEFAULT_SETTINGS, voice_id: 'voice-123' } });
   assert.ok(req.ok);
@@ -323,6 +388,7 @@ function deps(db: ExplainersDb, query: AgentQuery): RenderDeps {
     prepare: ({ jobsRoot, jobId }: { jobsRoot: string; jobId: string }) => fakePrepare(jobsRoot, jobId),
     hyperframesLint: () => [{ source: 'hyperframes' as const, rule: 'studio_missing_editable_id', frame: 2, severity: 'warning' as const, detail: 'no id' }],
     boundsCheck: () => [],
+    harvest: () => ({ added: [], skipped: [] }),
     writeCaption: async () => ({
       text: [
         'The hook stays under the preview limit.',
@@ -357,6 +423,9 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
         fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
         fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
         fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'gap-check.json'), JSON.stringify({ meant_question: 'How?', answers: { keep_watching: 5, confused: [] }, pass: true }));
+        // The reel test failed twice; this worker has no Jev to judge it (EX3-133).
+        const failed = { answers: { example_ambiguous: true, other_reading: 'the fish was tired' }, pass: false, why: 'the example reads two ways' };
+        fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'comprehension-check.json'), JSON.stringify({ meant: { example_answer: 'the cat' }, ...failed, second: failed }));
         yield assistant('p1', { input_tokens: 50_000, output_tokens: 5_000 }, 'thesis, analogy, numbers');
         yield result(0.2);
       },
@@ -376,8 +445,17 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
     seen,
   );
   const d = deps(db, query);
+  const harvested: { projectDir: string; jobId: string; topic: string }[] = [];
+  d.harvest = (input) => {
+    harvested.push(input);
+    return { added: [{ name: 'surgical scalpel', file: 'x.js' }], skipped: [] };
+  };
   const outcome = await runRenderJob(d, job);
   assert.deepEqual(outcome, { status: 'ok' });
+  // The reel's verified new drawings go to the bank once its video is kept (EX3-114).
+  assert.equal(harvested.length, 1);
+  assert.equal(harvested[0].jobId, job.id);
+  assert.match(harvested[0].projectDir, new RegExp(`${job.id}`));
   assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT, BUILD_PROMPT]);
   assert.equal(seen[1].options.maxBudgetUsd, 7.8, 'session B gets what session A left of the $8 cap');
 
@@ -393,6 +471,10 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
   // The first-time-viewer test's verdict is kept (EX3-101).
   const gapReport = (await listArtifacts(db, job.id)).find((a) => a.kind === 'lint_report' && /"phase": "gap_check"/.test(a.content ?? ''));
   assert.match(gapReport?.content ?? '', /"keep_watching": 5/);
+  // The reel test's answers are kept; without Jev the worker cannot judge them and the build goes on (EX3-133).
+  const reelReport = (await listArtifacts(db, job.id)).find((a) => a.kind === 'lint_report' && /"phase": "understanding"/.test(a.content ?? ''));
+  assert.match(reelReport?.content ?? '', /"other_reading": "the fish was tired"/);
+  assert.match(reelReport?.content ?? '', /"verdict": null/);
   const caption = (await listArtifacts(db, job.id)).find((a) => a.kind === 'post_caption');
   assert.match(caption?.content ?? '', /^The hook stays under the preview limit/);
   assert.doesNotMatch(caption?.content ?? '', /Episode \d/i);
@@ -682,8 +764,8 @@ test('no voice id or a planless session A fails cleanly', async () => {
 
 test('the workspace holds the project, pinned skills, director, recipe, preset, and assets', () => {
   const jobsRoot = tmp();
-  const topic = { id: 't', title: 'What is an API?', scope: 'Explain an API call.', source_url: null, source_text: 'An API is...' } as never;
-  const ws = prepareWorkspace({ jobsRoot, jobId: 'job-1', topic, sourceText: 'An API is...', analogy: CANDIDATE('a mailbox with a flag') });
+  const topic = { id: 't', title: 'What is an API?', scope: 'Explain an API call.', source_url: null, source_text: 'An API is...', jev_notes: { ai_focus: 1.5 } } as never;
+  const ws = prepareWorkspace({ jobsRoot, jobId: 'job-1', topic, sourceText: 'An API is...', analogy: CANDIDATE('A mailbox with a flag'), gap: gapNote('A mailbox with a flag') });
   const p = (...parts: string[]) => path.join(ws.projectDir, ...parts);
   for (const f of [
     'hyperframes.json', 'BRIEF.md', 'frame.md', 'source.txt', 'capture/extracted/visible-text.txt', 'capture/extracted/tokens.json',
@@ -694,9 +776,13 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
     'assets/kit/core.js', 'assets/kit/draw.js', 'assets/kit/motion.js', 'assets/kit/try.mjs', 'assets/kit/mount.mjs', 'assets/kit/opener-sfx.mjs',
     'assets/sfx/riser.mp3', 'assets/sfx/impact-bass-1.mp3', 'assets/world', 'assets/frames',
     'node_modules/.bin/hyperframes',
+    // The asset bank and its catalog, in the build's kit and the plan lint's (EX3-113, EX3-114).
+    'assets/kit/props/tags.js', 'assets/kit/props/catalog.mjs', 'assets/kit/props/bank/index.js', 'assets/kit/props/CATALOG.md',
+    '.helios-lint/world-kit/props/CATALOG.md',
   ]) {
     assert.ok(fs.existsSync(p(f)), `missing ${f}`);
   }
+  assert.match(fs.readFileSync(p('assets/kit/props/CATALOG.md'), 'utf8'), /## shelf\n- is: a home wooden bookcase/);
   // Pre-made icons are not the vocabulary any more (EX3-41); the 1.0 look's skills are left out (EX3-05).
   for (const f of ['assets/icons', '.claude/skills/hyperframes-animation', '.claude/skills/hyperframes-creative', '.claude/skills/faceless-explainer/references/cut-catalog.md']) {
     assert.ok(!fs.existsSync(p(f)), `should not exist: ${f}`);
@@ -710,7 +796,7 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
     assert.equal(fs.readFileSync(p('.claude/skills', f), 'utf8'), fs.readFileSync(path.join(overrides, f), 'utf8'), f);
   }
   assert.ok(!fs.existsSync(p('.claude/skills/faceless-explainer/scripts/audio.test.mjs')), 'upstream tests are not copied');
-  assert.match(fs.readFileSync(p('frame.md'), 'utf8'), /version: helios-explainer-v6/);
+  assert.match(fs.readFileSync(p('frame.md'), 'utf8'), /version: helios-explainer-v10/);
   assert.match(fs.readFileSync(p('.hyperframes/caption-skin.html'), 'utf8'), /var DARK = \[\];/);
   assert.match(fs.readFileSync(p('.hyperframes/caption-skin.html'), 'utf8'), /var QUIET = \[\];/);
   // The 3.1 kit and the sound library: two opener sounds copied, the library linked (EX3-63, EX3-75).
@@ -726,15 +812,23 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
   }
   const brief = fs.readFileSync(p('BRIEF.md'), 'utf8');
   assert.match(brief, /flow: automation\nstoryboard: no/);
-  assert.match(brief, /## Analogy\n\n[^\n]*picked[\s\S]*Scene: a mailbox with a flag\n[\s\S]*- mailbox — stands for the webhook URL/);
+  // The named analogy (EX3-123): its name, its explanation, and the mapping table the director stages from.
+  assert.match(brief, /## Analogy\n\nThe analogy the idea phase picked \(two writers, Jev's pick\)\. Stage the anchor scene from it; never swap in another\.\n\nName: A mailbox with a flag\n\nA letter drops in and the flag pops up\. You never walk out to look\.\n\n\| Analogy \| Concept \|\n\|---\|---\|\n\| the mailbox \| the webhook URL \|\n\| the flag popping up \| the notification \|\n\| walking over to look \| polling \|\n\nThe reel shows the first three or four rows\./);
+  assert.doesNotMatch(brief, /Scene:|Elements:|Actor:|Hook \(|Steps \(/);
+  // The opener's facts (EX3-130): an ai_focus under 2.5 is a tech concept.
+  assert.match(brief, /## Opener line\n\nIn the next minute, this ___ will teach you a tech concept\.\n/);
   assert.match(brief, /fixed eight-beat structure/);
   assert.match(brief, /^length: 60s$/m);
   assert.doesNotMatch(brief, /45/);
-  assert.match(brief, /Hook \(the opener's moment, clear on its own\): The carrier sprints up/);
   assert.match(brief, /## Term\n\n/);
-  assert.match(brief, /1\. the letter is sent — event fires/);
   assert.doesNotMatch(brief, /No web research/);
+  // The picked curiosity gap, said word for word in frame 2 (EX3-120).
+  assert.match(brief, /## Curiosity gap\n\nSay this line in frame 2, word for word[^\n]*\n\n> You tap pay on your phone[^\n]*so fast\?\n\n- gap_question: So how does the app find out so fast\?/);
+  assert.doesNotMatch(brief, /acted by critters/);
   assert.match(briefMarkdown({ title: 'X', scope: null, source_url: null, source_text: null }), /No source is attached/);
+  assert.equal(openerLineFor({ jev_notes: { ai_focus: 2.5 } }), 'In the next minute, this ___ will teach you an AI concept.');
+  assert.equal(openerLineFor({ jev_notes: { ai_focus: 2.49 } }), 'In the next minute, this ___ will teach you a tech concept.');
+  assert.equal(openerLineFor({ jev_notes: {} }), 'In the next minute, this ___ will teach you an AI concept.', 'no ai_focus keeps the AI line');
   assert.match(briefMarkdown({ title: 'X', scope: null, source_url: null, source_text: 'notes' }), /Its facts win and nothing in the reel may contradict it/);
 
   // Leak test (EX3-05): nothing the job's agents can read still carries the old direction.
@@ -757,32 +851,32 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
   assert.deepEqual(leaks, []);
 });
 
-test("a topic with no picked analogy gets the pass as the render's first stage (EX3-31)", async () => {
-  const { db } = await scratchExplainersDb();
-  const job = await queuedJob(db, { analogy: false });
-  const ideaModel = {
-    async propose() {
+/** An idea model whose analogy writer returns `names` in turn (the last one repeats) and records each request. */
+function analogyModel(names: string[], requests: AnalogyRequest[] = []): IdeaModel {
+  return {
+    async propose(): Promise<never> {
       throw new Error('not used');
     },
-    async writeScopes() {
+    async writeScopes(): Promise<never> {
       throw new Error('not used');
     },
-    async writeAnalogies() {
-      return {
-        candidates: [CANDIDATE('a doorbell'), CANDIDATE('a mailbox with a flag'), CANDIDATE('a pager')],
-        usage: { input_tokens: 1_000, output_tokens: 500 },
-        model: 'claude-sonnet-5-5',
-      };
+    async writeAnalogy(request: AnalogyRequest) {
+      requests.push(request);
+      return { candidate: CANDIDATE(names[Math.min(requests.length, names.length) - 1]), usage: { input_tokens: 1_000, output_tokens: 500 }, model: 'claude-opus-5-5' };
     },
-  } as IdeaModel;
-  const jevTransport: JevTransport = {
-    async systemOne<const Q extends Questions>(state: EntryType, questions: Q) {
-      const scene = (state as { candidate: AnalogyCandidate }).candidate.scene;
-      const answers: Record<string, unknown> = {};
-      for (const key of Object.keys(questions)) answers[key] = { type: 'score', score: scene === 'a mailbox with a flag' ? 4 : 2, confidence: 1 };
-      return { model: 'jev-stub', answers, usage: { input_tokens: 1_000, output_tokens: 0 } } as unknown as SystemOneResult<Q>;
+    async writeGaps() {
+      return { candidates: [GAP('so fast'), GAP('at all'), GAP('in time')], usage: { input_tokens: 100, output_tokens: 50 }, model: 'claude-sonnet-5-5' };
     },
   };
+}
+
+test("a topic with no picked analogy gets the pass as the render's first stage (EX3-31, EX3-123)", async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db, { analogy: false });
+  const requests: AnalogyRequest[] = [];
+  const ideaModel = analogyModel(['A doorbell', 'A mailbox with a flag'], requests);
+  // Jev prefers the mailbox in both orders.
+  const jevTransport = analogyJev((line) => (line.startsWith('You tap') ? 4 : 2), { compare: (a) => (a.startsWith('A mailbox') ? 0.8 : 0.3) });
   let brief = '';
   const query = stubQuery({
     [PLAN_PROMPT]: async function* () {
@@ -792,29 +886,291 @@ test("a topic with no picked analogy gets the pass as the render's first stage (
   const d = deps(db, query);
   d.analogy = { ideaModel, jevTransport };
   d.prepare = (input) => {
-    brief = briefMarkdown(input.topic, input.analogy ?? null);
+    brief = briefMarkdown(input.topic, input.analogy ?? null, input.gap ?? null);
     return fakePrepare(input.jobsRoot, input.jobId);
   };
   const outcome = await runRenderJob(d, job);
-  assert.equal(outcome.status, 'failed'); // the stub plan writes nothing; the analogy stage is what is under test
-  assert.match(brief, /Scene: a mailbox with a flag/);
+  assert.equal(outcome.status, 'failed'); // the stub plan writes nothing; the analogy and gap stages are what is under test
+  assert.doesNotMatch(outcome.status === 'failed' ? outcome.error : '', /gap|analogy/i);
+  assert.equal(requests.length, 2, 'two writer calls');
+  assert.deepEqual(requests.map((r) => r.model), ['claude-opus-5-5', 'claude-opus-5-5'], 'analogy_model, not the idea model');
+  assert.match(brief, /## Analogy\n\n[^\n]*Jev's pick[^\n]*\n\nName: A mailbox with a flag\n\nA letter drops in/);
+  // The gap is written right after, for the picked analogy (EX3-120).
+  assert.match(brief, /## Curiosity gap\n\nSay this line in frame 2, word for word[^\n]*\n\n> You tap pay on your phone/);
   const topic = await getTopic(db, job.topic_id);
-  assert.equal((topic?.jev_notes as { analogy: { pick: number } }).analogy.pick, 1);
-  const { rows } = await db.query<{ component: string; vendor: string }>(
-    `SELECT component, vendor FROM explainers.cost_events WHERE job_id = $1 ORDER BY created_at`,
+  const note = (topic?.jev_notes as { analogy: { pick: number; pick_reason: string } }).analogy;
+  assert.equal(note.pick, 1);
+  assert.equal(note.pick_reason, 'compared');
+  const { rows } = await db.query<{ component: string; vendor: string; n: number }>(
+    `SELECT vendor, component, count(*)::int AS n FROM explainers.cost_events WHERE job_id = $1 AND component LIKE 'analogy%' GROUP BY vendor, component ORDER BY component`,
     [job.id],
   );
-  assert.deepEqual(rows.slice(0, 4).map((r) => `${r.vendor}:${r.component}`), [
-    'anthropic:analogy_writer',
-    'jev:analogy_scoring',
-    'jev:analogy_scoring',
-    'jev:analogy_scoring',
+  assert.deepEqual(rows.map((r) => `${r.vendor}:${r.component}:${r.n}`), [
+    'jev:analogy_compare:2',
+    'jev:analogy_gates:2',
+    'jev:analogy_golden_match:13',
+    'anthropic:analogy_writer:2',
   ]);
 
   const { db: db2 } = await scratchExplainersDb();
   const job2 = await queuedJob(db2, { analogy: false });
   const none = await runRenderJob(deps(db2, query), job2);
   assert.match(none.status === 'failed' ? none.error : '', /no picked analogy/);
+});
+
+test('nothing passes in three writer calls: the render fails before planning, and the topic stays (EX3-125)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db, { analogy: false });
+  const requests: AnalogyRequest[] = [];
+  let planned = false;
+  const query = stubQuery({
+    [PLAN_PROMPT]: async function* () {
+      planned = true;
+      yield result(0.1);
+    },
+  });
+  const d = deps(db, query);
+  d.analogy = { ideaModel: analogyModel(['A doorbell', 'A pager', 'A bell'], requests), jevTransport: analogyJev(() => 3, { gates: () => 0.8 }) };
+  const outcome = await runRenderJob(d, job);
+  assert.equal(outcome.status, 'failed');
+  assert.equal(outcome.status === 'failed' ? outcome.error : '', NO_ANALOGY_REASON);
+  assert.equal(planned, false, 'no session A without an analogy');
+  assert.equal(requests.length, 3, 'two calls and a third');
+  const topic = await getTopic(db, job.topic_id);
+  assert.notEqual(topic?.status, 'rejected');
+  assert.equal(topic?.reject_reason ?? null, null);
+  const note = (topic?.jev_notes as { analogy: { below_bar?: boolean } }).analogy;
+  assert.equal(note.below_bar, true);
+});
+
+test('a topic with an analogy but no current gap gets the gap stage; none can be picked: the render fails and the topic stays (EX3-120)', async () => {
+  const gapModel = (requests: GapRequest[], lines: GapCandidate[]) =>
+    ({
+      async propose(): Promise<never> {
+        throw new Error('not used');
+      },
+      async writeScopes(): Promise<never> {
+        throw new Error('not used');
+      },
+      async writeAnalogy(): Promise<never> {
+        throw new Error('not used');
+      },
+      async writeGaps(request: GapRequest) {
+        requests.push(request);
+        return { candidates: lines, usage: { input_tokens: 100, output_tokens: 50 }, model: 'claude-sonnet-5-5' };
+      },
+    }) as IdeaModel;
+  const query = stubQuery({
+    [PLAN_PROMPT]: async function* () {
+      yield result(0.1);
+    },
+  });
+
+  // Picked: BRIEF.md carries it.
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db, { gap: false });
+  const requests: GapRequest[] = [];
+  const d = deps(db, query);
+  d.analogy = { ideaModel: gapModel(requests, [GAP('so fast'), GAP('at all'), GAP('in time')]), jevTransport: analogyJev((line) => (line.endsWith('at all?') ? 4 : 3)) };
+  let gapPicked: GapNote | null = null;
+  d.prepare = (input) => {
+    gapPicked = input.gap ?? null;
+    return fakePrepare(input.jobsRoot, input.jobId);
+  };
+  await runRenderJob(d, job);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].analogy.name, 'A mailbox with a flag');
+  assert.ok(gapPicked && 'pick' in gapPicked);
+  assert.deepEqual((gapPicked as Extract<GapNote, { pick: unknown }>).pick, { pass: 0, index: 1 });
+  const { rows } = await db.query<{ component: string }>(`SELECT component FROM explainers.cost_events WHERE job_id = $1 AND component LIKE 'gap%' ORDER BY created_at`, [job.id]);
+  assert.deepEqual(rows.map((r) => r.component).slice(0, 3), ['gap_writer', 'gap_scoring', 'gap_gate']);
+
+  // A current gap: no gap stage.
+  const { db: dbCurrent } = await scratchExplainersDb();
+  const current = await queuedJob(dbCurrent);
+  const none: GapRequest[] = [];
+  const dCurrent = deps(dbCurrent, query);
+  dCurrent.analogy = { ideaModel: gapModel(none, []), jevTransport: analogyJev(() => 3) };
+  await runRenderJob(dCurrent, current);
+  assert.equal(none.length, 0, 'the idea phase already picked it');
+
+  // None can be picked in two passes: the render fails before planning; the topic stays in the pool.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2, { gap: false });
+  const requests2: GapRequest[] = [];
+  let planned = false;
+  const d2 = deps(
+    db2,
+    stubQuery({
+      [PLAN_PROMPT]: async function* () {
+        planned = true;
+        yield result(0.1);
+      },
+    }),
+  );
+  d2.analogy = { ideaModel: gapModel(requests2, [GAP('so fast'), GAP('at all'), GAP('in time')]), jevTransport: analogyJev(() => 1) };
+  const outcome = await runRenderJob(d2, job2);
+  assert.equal(outcome.status === 'failed' ? outcome.error : '', GAP_BELOW_BAR_REASON);
+  assert.equal(planned, false);
+  assert.equal(requests2.length, 2);
+  assert.ok(requests2[1].retry);
+  const kept = await getTopic(db2, job2.topic_id);
+  assert.notEqual(kept?.status, 'rejected');
+  assert.equal(kept?.reject_reason ?? null, null);
+});
+
+// ── The understanding test (EX3-133) and the opener after the plan (EX3-128) ──
+
+const fullScript = [
+  '# SCRIPT', '', '**Voice:** HeyGen', '',
+  '## Line 1 — Opener (Frame 1)', '', '    In the next minute, this little shop will teach you a tech concept.', '',
+  '## Line 7 — Payoff (Frame 7)', '', '    The store sends the app a message the moment it happens.', '    So you never have to ask.', '',
+].join('\n');
+
+test('the understanding test reads the plan: the gap question, frame 7\'s line, the hero', () => {
+  assert.equal(storyboardGapQuestion(goodStoryboard), 'So how does the app know the moment it happens?');
+  assert.equal(scriptLine(fullScript, 7), 'The store sends the app a message the moment it happens. So you never have to ask.');
+  assert.equal(scriptLine(fullScript, 5), null);
+  assert.equal(storyboardHero(goodStoryboard), 'critter');
+  assert.equal(storyboardHero(goodStoryboard.replace('- hero: carrier — critter', '- hero: mailbox flag — object')), 'object');
+  assert.equal(storyboardHero('no anchor block'), 'critter');
+});
+
+/** A comprehension-check.json as the director writes it (SKILL.md step 5b). */
+const comprehension = (answers: Record<string, unknown>) =>
+  JSON.stringify({ meant: { term_in_plain_words: 'the app is told the moment it happens', example_answer: 'the order shows as paid' }, answers, pass: true, why: '' });
+const viewer = (overrides: Record<string, unknown> = {}) => ({
+  beats: [{ beat: 4, same_characters: true, confused: [] }, { beat: 6, same_characters: true, confused: ['the word payload'] }],
+  concept_in_my_words: 'the app is told right away',
+  example_answer: 'the order shows as paid',
+  example_ambiguous: false,
+  other_reading: '',
+  example_is_the_scene: false,
+  confused_overall: [],
+  ...overrides,
+});
+
+function understandingQuery(seen: { prompt: string; options: Record<string, any> }[], fix: (cwd: string) => void, hero = '- hero: carrier — critter'): AgentQuery {
+  return stubQuery(
+    {
+      [PLAN_PROMPT]: async function* (o) {
+        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard.replace('- hero: carrier — critter', hero));
+        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), fullScript);
+        fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
+        fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer({ concept_in_my_words: 'a shop that sells mail', example_ambiguous: true, other_reading: 'the order failed', beats: [{ beat: 4, same_characters: false, confused: [] }] })));
+        yield assistant('p1', { input_tokens: 1000, output_tokens: 100 }, 'plan');
+        yield result(0.2);
+      },
+      [FIX_PROMPT]: async function* (o) {
+        assert.ok(!fs.existsSync(path.join(o.cwd, 'assets', 'opener.json')), 'the opener is drawn after the plan, and after any fix');
+        fix(o.cwd);
+        yield assistant('f1', { input_tokens: 1000, output_tokens: 100 }, 'fixed');
+        yield result(0.4);
+      },
+      [BUILD_PROMPT]: async function* (o) {
+        fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
+        fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4-bytes');
+        yield assistant('b1', { input_tokens: 1000, output_tokens: 100 }, 'renders/video.mp4');
+        yield result(0.3);
+      },
+    },
+    seen,
+  );
+}
+
+/** Jev that matches only the explanation and example the fix wrote. */
+const understandingJev = () =>
+  analogyJev(() => 3, {
+    understanding: (key, state) =>
+      key === 'mechanism_match' ? (state.viewer_explanation === 'a shop that sells mail' ? 0.1 : 0.9) : 0.9,
+  });
+
+test('a serious misunderstanding gets one fix session before the build; fixed, the reel is not flagged (EX3-133)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const seen: { prompt: string; options: Record<string, any> }[] = [];
+  let findings: { blocking: { kind: string }[]; minor: string[] } | null = null;
+  const d = deps(
+    db,
+    understandingQuery(seen, (cwd) => {
+      findings = JSON.parse(fs.readFileSync(path.join(cwd, FINDINGS_FILE), 'utf8'));
+      assert.ok(!fs.existsSync(path.join(cwd, '.hyperframes', 'comprehension-check.json')), 'the old answers are cleared, so the fix must test again');
+      fs.writeFileSync(path.join(cwd, 'SCRIPT.md'), fullScript.replace('So you never have to ask.', 'So the app never has to ask.'));
+      fs.writeFileSync(path.join(cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer()));
+    }),
+  );
+  const jev = understandingJev();
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: jev };
+  const outcome = await runRenderJob(d, job);
+  assert.deepEqual(outcome, { status: 'ok' });
+  assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT, FIX_PROMPT, BUILD_PROMPT]);
+  assert.deepEqual(findings!.blocking.map((f) => f.kind), ['mechanism', 'example_ambiguous', 'character_changed']);
+  // Code read the stranger's raw answers; Jev judged the mechanism, the example, and the gap against frame 7.
+  const asked = jev.calls.filter((c) => c.keys.includes('mechanism_match') || c.keys.includes('gap_answered'));
+  assert.deepEqual(asked.map((c) => c.keys.join('+')), ['mechanism_match+example_match', 'gap_answered', 'mechanism_match+example_match', 'gap_answered']);
+  assert.equal(asked[1].state.payoff, 'The store sends the app a message the moment it happens. So you never have to ask.');
+  assert.equal(asked[1].state.question, 'So how does the app know the moment it happens?');
+  assert.equal(asked[3].state.payoff, 'The store sends the app a message the moment it happens. So the app never has to ask.', 'the second test reads the fixed script');
+  const rules = (await listLintViolations(db, job.id)).map((v) => v.rule);
+  assert.ok(!rules.includes('understanding_flag'));
+  const reports = (await listArtifacts(db, job.id)).filter((a) => a.kind === 'lint_report' && /"phase": "understanding"/.test(a.content ?? ''));
+  assert.deepEqual(reports.map((r) => JSON.parse(r.content!).attempt), ['first', 'after_fix']);
+  assert.match(reports[1].content!, /Beat 6: the word payload/, 'minor confusion is recorded, never blocking');
+  const scripts = (await listArtifacts(db, job.id)).filter((a) => a.kind === 'script');
+  assert.match(scripts.at(-1)!.content ?? '', /So the app never has to ask\./, 'the fixed plan is the latest artifact');
+  const { rows } = await db.query<{ component: string }>(`SELECT component FROM explainers.cost_events WHERE job_id = $1 AND vendor = 'anthropic' ORDER BY created_at`, [job.id]);
+  assert.deepEqual(rows.map((r) => r.component.split(':')[0]), ['session_a', 'session_fix', 'session_b', 'post_caption']);
+});
+
+test('still serious after the fix: the build goes on and the reel is flagged; no fix when nothing is serious (EX3-133)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const seen: { prompt: string; options: Record<string, any> }[] = [];
+  const d = deps(
+    db,
+    understandingQuery(seen, (cwd) => {
+      fs.writeFileSync(path.join(cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer({ concept_in_my_words: 'a shop that sells mail' })));
+    }),
+  );
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: understandingJev() };
+  const outcome = await runRenderJob(d, job);
+  assert.deepEqual(outcome, { status: 'ok' }, 'a flag never stops the build');
+  assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT, FIX_PROMPT, BUILD_PROMPT], 'one fix session, never two');
+  const flags = (await listLintViolations(db, job.id)).filter((v) => v.rule === 'understanding_flag');
+  assert.equal(flags.length, 1);
+  assert.equal(flags[0].severity, 'error');
+  assert.match(flags[0].detail, /^mechanism: The viewer explained it as: "a shop that sells mail"/);
+
+  // Nothing serious: minor confusion is recorded and no fix session runs.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  const seen2: { prompt: string; options: Record<string, any> }[] = [];
+  const query2 = stubQuery(
+    {
+      [PLAN_PROMPT]: async function* (o) {
+        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard.replace('- hero: carrier — critter', '- hero: mailbox flag — object'));
+        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), fullScript);
+        fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
+        fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer()));
+        yield result(0.2);
+      },
+      [BUILD_PROMPT]: async function* (o) {
+        fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
+        fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4-bytes');
+        yield result(0.3);
+      },
+    },
+    seen2,
+  );
+  const d2 = deps(db2, query2);
+  d2.analogy = { ideaModel: analogyModel(['unused']), jevTransport: understandingJev() };
+  assert.deepEqual(await runRenderJob(d2, job2), { status: 'ok' });
+  assert.deepEqual(seen2.map((s) => s.prompt), [PLAN_PROMPT, BUILD_PROMPT]);
+  assert.equal((await listLintViolations(db2, job2.id)).filter((v) => v.rule === 'understanding_flag').length, 0);
+  // The storyboard's object hero draws from the openers that never touch the hero (EX3-111, EX3-128).
+  const choice = JSON.parse(fs.readFileSync(path.join(workspacePaths(d2.jobsRoot, job2.id).projectDir, 'assets', 'opener.json'), 'utf8'));
+  assert.equal(choice.hero, 'object');
+  assert.ok(['paper-rip', 'typewriter', 'big-bang', 'balloon-pop', 'block-drop', 'unboxing', 'paper-plane'].includes(choice.key), choice.key);
 });
 
 test('a build that stopped after the scene modules is finished by the worker, with no model', { skip: spawnSyncOk('ffmpeg') ? false : 'ffmpeg is not installed' }, () => {

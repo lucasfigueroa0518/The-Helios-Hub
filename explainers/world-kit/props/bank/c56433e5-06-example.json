@@ -1,0 +1,38 @@
+{
+ "file": "c56433e5-06-example.js",
+ "job": "c56433e5-10b1-4a9f-abdc-9af6d3adae79",
+ "topic": "What is model routing, and why not use one AI for everything?",
+ "added_at": "2026-10-26T16:22:10.152Z",
+ "from": "assets/frames/06-example.props.js",
+ "props": {
+  "store support chat window": {
+   "source_name": "store support chat window",
+   "tags": {
+    "is": "an upright chat window for a shop: a striped shop awning across the top, an empty message area, and a message-entry bar with a send dot at the bottom",
+    "setting": [
+     "online shop",
+     "customer support",
+     "phone or laptop screen",
+     "chat app"
+    ],
+    "material": "flat paper, ink print",
+    "parts": [
+     "striped scalloped awning header",
+     "tall message area",
+     "message entry bar",
+     "round send dot"
+    ],
+    "not": [
+     "phone",
+     "laptop",
+     "speech bubble",
+     "email inbox",
+     "window of a house",
+     "shop front with door"
+    ]
+   },
+   "meant": "store support chat window",
+   "seen": "chat-screen graphic with striped awning"
+  }
+ }
+}

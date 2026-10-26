@@ -52,7 +52,7 @@ at the 1→2 cut is the one place a harder punch belongs.
 - Reveal each piece **on the word that names it** (`assets/timing/<frame id>.json`); never put
   the whole frame on screen at t=0.
 - One read at a time: a read element steps back (dims, shrinks, or leaves) before the next leads.
-- Labels arrive as the voice names them (frame 5: on their "because") and step back before the
+- Labels arrive as the voice names them (frame 4: as each part's real job is named) and step back before the
   next words.
 - The voice is tight (0.2s between lines at most), so the picture keeps pace: the payoff lands on
   its word and the frame is resolved by `voice_end`. Stillness beats bad motion.

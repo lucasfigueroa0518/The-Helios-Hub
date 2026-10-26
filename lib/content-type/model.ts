@@ -1,5 +1,5 @@
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { nyDateOf } from '@/lib/social-hub/time';
+import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows } from '@/lib/social-hub/views/plan';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { offerer, type Offer } from '@/lib/social-hub/views/offer';
@@ -7,6 +7,8 @@ import { poolSummary } from '@/lib/social-hub/views/pools';
 import { dayRanking, quotaCandidates } from '@/lib/social-hub/views/day-rank';
 import type { MoveTag } from '@/lib/social-hub/views/moves';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
+import { AI_EVENTS_CITY_TABS, weekLabel } from '@/lib/social-hub/adapters/ai-events';
+import { SCORE_MAX as EVENT_SCORE_MAX } from '@/lib/networking/pick/score';
 
 /**
  * A content type's page model (the Text on Screen format): the days that
@@ -36,6 +38,8 @@ export type TypeBenchItem = {
   tag?: MoveTag | null;
   /** One of today's quota candidates: the day is filled with it. */
   inQuota?: boolean;
+  /** The row's chip when the type names its states its own way (AI Events: In the post, Pinned, Gated, Excluded). */
+  chip?: string | null;
 };
 
 /** What a post actually has to show: rendered slides, rendered story frames, or a video file. */
@@ -64,6 +68,12 @@ export type TypeHubModel = {
   scoreLabel: string | null;
   lastRefill: string | null;
   poolOpen: number;
+  /** The bench's tabs, in order (Stories: its series; AI Events: its cities). Empty: no tabs. */
+  groups: readonly string[];
+  /** The top of the type's score scale, for a score bar on each row; null: no bar. */
+  scoreMax: number | null;
+  /** AI Events: the week the pool shows, and whether Pin / Exclude still change it (only the coming week's post can). */
+  poolWeek?: { label: string; editable: boolean } | null;
 };
 
 /** How many days back the strip reaches; later days with scheduled posts always show. */
@@ -141,13 +151,21 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
   const row = (idea: HubIdea, rank: number, card: TypeCard | null): TypeBenchItem => ({
     idea, rank, card, made: card ? madeKind(card.post) : null, moved: movedOf.get(idea.id) ?? null, tag: tagOf.get(idea.id) ?? null, inQuota: quotaIdeas.has(idea.id),
   });
-  const rows: TypeBenchItem[] = vertical === 'stories' ? bySeries(open).map(({ idea, rank }) => row(idea, rank, forIdea(idea))) : open.slice(0, 50).map((idea, i) => row(idea, i + 1, forIdea(idea)));
+  const rows: TypeBenchItem[] = vertical === 'stories'
+    ? bySeries(open).map(({ idea, rank }) => row(idea, rank, forIdea(idea)))
+    : vertical === 'ai_events'
+      // The week's whole pool, retired events included (their gate or exclude is the point), ranked within each city.
+      ? byCity(dataset.ideas.filter((i) => i.vertical === 'ai_events')).map(({ idea, rank }) => ({ ...row(idea, rank, null), chip: eventChip(idea) }))
+      : open.slice(0, 50).map((idea, i) => row(idea, i + 1, forIdea(idea)));
   // Content whose idea is no longer open still needs a person: keep it on the bench under its own name.
   for (const card of ready) {
     if (matched.has(card.post.id)) continue;
-    const group = card.post.idea?.label ?? null;
-    const rank = vertical === 'stories' ? rows.filter((r) => r.idea.group === group).length + 1 : rows.length + 1;
-    rows.push(row({ id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group }, rank, card));
+    // AI Events: the week's post leads the bench, outside the city tabs (rank 0 shows no number).
+    const group = vertical === 'ai_events' ? null : card.post.idea?.label ?? null;
+    const rank = vertical === 'ai_events' ? 0 : vertical === 'stories' ? rows.filter((r) => r.idea.group === group).length + 1 : rows.length + 1;
+    const item = row({ id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group }, rank, card);
+    if (vertical === 'ai_events') rows.unshift(item);
+    else rows.push(item);
   }
   return {
     vertical,
@@ -158,7 +176,53 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     scoreLabel: summary.scoreLabel ?? null,
     lastRefill: summary.lastRefill ?? null,
     poolOpen: summary.open,
+    groups: vertical === 'stories' ? STORY_SERIES : vertical === 'ai_events' ? AI_EVENTS_CITY_TABS : [],
+    scoreMax: vertical === 'ai_events' ? EVENT_SCORE_MAX : null,
+    ...(vertical === 'ai_events'
+      ? { poolWeek: dataset.aiEventsWeek ? { label: weekLabel(dataset.aiEventsWeek.startDate, dataset.aiEventsWeek.endDate), editable: dataset.aiEventsWeek.editable } : null }
+      : {}),
   };
+}
+
+export const AI_EVENTS_NO_REVIEW_POST = 'No post for the coming week is waiting for review. Generate makes one first.';
+
+/**
+ * Why Rebuild post can't run now, or null. It rebuilds the coming week's post (lib/ai-events/pool.ts
+ * queueRebuild), so it needs that week's post, made and not yet out: one the hub shows as ready or
+ * scheduled for the Sunday before the shown week, while that week is still the coming one.
+ */
+export function aiEventsRebuildRefusal(dataset: Pick<HubDataset, 'posts' | 'aiEventsWeek'>): string | null {
+  const week = dataset.aiEventsWeek;
+  if (!week?.editable) return AI_EVENTS_NO_REVIEW_POST;
+  const sunday = `ai_events:${addDays(week.startDate, -1)}`;
+  const waiting = dataset.posts.some((p) => p.vertical === 'ai_events' && (p.status === 'ready' || p.status === 'scheduled') && p.idea?.id === sunday);
+  return waiting ? null : AI_EVENTS_NO_REVIEW_POST;
+}
+
+/** AI Events' bench order within a city: the picks (in the post), the rest by score, then the retired. */
+const EVENT_TIER: Record<string, number> = { content_ready: 0, idea_only: 1, retired: 2 };
+
+/**
+ * AI Events: one list, city by city in post order (AE-02), each city ranked on
+ * its own (a city's scores mean nothing against another's), rank within the city.
+ */
+export function byCity(ideas: readonly HubIdea[]): Array<{ idea: HubIdea; rank: number }> {
+  const order = [...AI_EVENTS_CITY_TABS, ...new Set(ideas.map((i) => i.group ?? 'Other').filter((g) => !AI_EVENTS_CITY_TABS.includes(g)))];
+  return order.flatMap((city) =>
+    ideas
+      .filter((i) => (i.group ?? 'Other') === city)
+      .sort((a, b) => (EVENT_TIER[a.state] ?? 3) - (EVENT_TIER[b.state] ?? 3) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title))
+      .map((idea, i) => ({ idea, rank: i + 1 })),
+  );
+}
+
+/** An AI Events row's chip: in the post, pinned, excluded, gated out, out of the candidates, or waiting. */
+export function eventChip(idea: HubIdea): string {
+  if (idea.hold === 'excluded') return 'Excluded';
+  if (idea.state === 'content_ready') return idea.hold === 'pinned' ? 'In the post · pinned' : 'In the post';
+  if (idea.hold === 'pinned') return 'Pinned';
+  if (idea.state === 'retired') return idea.detail?.includes('Gated out:') ? 'Gated out' : 'Out';
+  return 'In the pool';
 }
 
 /** Per series, at most this many open ideas reach the bench. */

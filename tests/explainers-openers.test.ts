@@ -93,14 +93,14 @@ import { scope, el } from '../kit/draw.js';
 import { frame } from '../kit/motion.js';
 import { critter } from '../kit/cast.js';
 export const shots = [{ at: 0, kind: 'medium', on: [540, 1000] }];
-export const hero = { at: [420, 1300], s: 1.3, who: 'hero', critter: { wear: ['cap'] } };
+export const hero = { at: [420, 1300], s: 1.3, who: 'hero', critter: { body: 'orange', wear: ['cap'] } };
 export default {
   ground: 'paper',
   shots,
   draw(t, { hideHero = false, heroPose = {} } = {}) {
     scope('f01h-', 'paper');
     const parts = [el('rect', { x: 600, y: 1100, width: 200, height: 200, fill: '#FF5E1A' })];
-    if (!hideHero) parts.push(critter(420, 1300, { s: 1.3, wear: ['cap'], who: 'hero', mood: t > 1 ? 'happy' : 'worried', ...heroPose }));
+    if (!hideHero) parts.push(critter(420, 1300, { s: 1.3, body: 'orange', wear: ['cap'], who: 'hero', mood: t > 1 ? 'happy' : 'worried', ...heroPose }));
     return frame(t, {}, parts.join(''));
   },
 };
@@ -158,6 +158,27 @@ for (const key of OPENER_KEYS) {
     assert.ok(titles.every((x) => !x), `${key}: the title card (with the term) is up before the break`);
   });
 }
+
+test('an object-led reel: the hook needs no critter hero, and its openers never touch one (EX3-111)', async () => {
+  const { OBJECT_HERO_OPENERS, OPENER_KEYS } = await import('../explainers/world-kit/openers/bank.js');
+  assert.deepEqual([...OBJECT_HERO_OPENERS].sort(), ['balloon-pop', 'big-bang', 'block-drop', 'paper-plane', 'paper-rip', 'typewriter', 'unboxing']);
+  for (const key of OBJECT_HERO_OPENERS) {
+    assert.ok(OPENER_KEYS.includes(key), key);
+    const src = fs.readFileSync(path.join(KIT, 'openers', `${key}.js`), 'utf8');
+    assert.doesNotMatch(src, /heroAt|heroCritter/, `${key} uses the hero`);
+  }
+  const root = project('paper-rip');
+  fs.writeFileSync(path.join(root, CHOICE), JSON.stringify({ key: 'paper-rip', name: 'Paper Rip', hero: 'object' }));
+  writeOpener(root, { number: 1, id: '01-opener' });
+  // A hook with no hero export and no critter at all passes.
+  fs.writeFileSync(path.join(root, 'assets', 'frames', `${HOOK_ID}.js`), HOOK.replace(/export const hero = .*\n/, '').replace(/if \(!hideHero\) parts\.push\(critter\([^\n]*\n/, ''));
+  const r = spawnSync(process.execPath, ['assets/kit/try.mjs', 'frame', '01-opener'], { cwd: root, encoding: 'utf8' });
+  assert.doesNotMatch(r.stdout, /must export `hero|hero "|does not draw its hero/, r.stdout);
+  assert.equal(r.status, 0, r.stdout);
+  // The same hook in a critter-led reel still needs its hero.
+  fs.writeFileSync(path.join(root, CHOICE), JSON.stringify({ key: 'paper-rip' }));
+  assert.match(spawnSync(process.execPath, ['assets/kit/try.mjs', 'frame', '01-opener'], { cwd: root, encoding: 'utf8' }).stdout, /must export `hero/);
+});
 
 test("try.mjs holds the hook to its contract: a hero, hidden on hideHero, no title card", () => {
   const root = project('paper-rip');
@@ -260,6 +281,20 @@ test('a render job draws an opener none of the last 8 reels used, records it, an
     assert.equal(JSON.parse(fs.readFileSync(path.join(ws, OPENER_CHOICE), 'utf8')).key, key);
   }
   assert.ok(picks.size > 1, 'the pick is random');
+  // An object-led reel draws only from the openers that never touch the hero (EX3-111), still never one
+  // of the last 8, and the choice file says so.
+  const { OBJECT_HERO_OPENERS } = await import('../explainers/world-kit/openers/bank.js');
+  const objectJob = await newJob('ok');
+  const objectWs = tmp();
+  for (const r of [0, 0.5, 0.99]) {
+    await db.query('UPDATE explainers.jobs SET opener = NULL WHERE id = $1', [objectJob]);
+    const recent = await recentOpeners(db, objectJob, 8);
+    const key = await assignOpener(db, objectJob, objectWs, { random: () => r, hero: 'object' });
+    assert.ok(key && OBJECT_HERO_OPENERS.includes(key), `${key} touches the hero`);
+    assert.ok(!recent.includes(key!) || OBJECT_HERO_OPENERS.every((k) => recent.includes(k)), `${key} was used in the last 8`);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(objectWs, OPENER_CHOICE), 'utf8')), { key, name: openerByKey(key!)!.name, hero: 'object' });
+  }
+  assert.equal(JSON.parse(fs.readFileSync(path.join(ws, OPENER_CHOICE), 'utf8')).hero, 'critter');
   // a resumed job keeps the opener it drew
   const kept = (await getJob(db, id))!.opener;
   assert.equal(await assignOpener(db, id, ws, { resuming: true, random: () => 0 }), kept);

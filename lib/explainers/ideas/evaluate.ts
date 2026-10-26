@@ -1,7 +1,8 @@
 import type { Questions } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { chooseAnalogySafely } from '@/lib/explainers/ideas/analogy';
+import { chooseAnalogySafely, topicAnalogy } from '@/lib/explainers/ideas/analogy';
+import { chooseGapSafely } from '@/lib/explainers/ideas/gap';
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import type { ExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
@@ -200,6 +201,7 @@ export type Evaluation =
   | { outcome: 'rejected_history_duplicate' }
   | { outcome: 'rejected_gates'; gates: ScoreKey[]; score: number }
   | { outcome: 'entered_pool'; score: number }
+  /** It cleared the gates, but no analogy cleared the quality bar in three tries, so it was dropped (EX3-104). */
   | { outcome: 'won_head_to_head'; score: number; displacedId: string }
   | { outcome: 'lost_head_to_head'; score: number; winnerId: string };
 
@@ -249,7 +251,9 @@ async function setStatus(
  * E-15 processing order for one proposed topic: duplicate logic, the six
  * scores, the gates, then the E-16 head-to-head if it duplicates a pool topic.
  * A topic that makes the pool then gets its analogy picked (EX3-30); a failed
- * pick is recorded on the topic and never changes the evaluation.
+ * pick is recorded on the topic and never changes the evaluation. A pick whose
+ * passes all fall below the quality bar drops the topic (EX3-104): it is
+ * rejected, and a duplicate it would have displaced stays.
  */
 export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promise<Evaluation> {
   const candidate = await getTopic(deps.db, topicId);
@@ -290,12 +294,12 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
 
   const scored = { ...candidate, ...scores, weighted_score: score };
   if (challengerWins(scored, match)) {
+    await pickAnalogyFor(deps, candidate);
     await setStatus(deps, match.id, 'displaced', {
       reason: 'Lost a duplicate head-to-head.',
       duplicateOf: topicId,
     });
     await setStatus(deps, topicId, 'pool');
-    await pickAnalogyFor(deps, candidate);
     return { outcome: 'won_head_to_head', score, displacedId: match.id };
   }
   await setStatus(deps, topicId, 'displaced', {
@@ -305,21 +309,17 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
   return { outcome: 'lost_head_to_head', score, winnerId: match.id };
 }
 
+/**
+ * The topic's analogy, then its curiosity gap (EX3-120). Neither ever keeps a topic out of the pool
+ * (EX3-125; supersedes EX3-104's drop): a pass with no pick, or a failed one, is written again by the
+ * topic's render.
+ */
 async function pickAnalogyFor(deps: EvaluateDeps, topic: TopicRow): Promise<void> {
   if (!deps.ideaModel) return;
-  await chooseAnalogySafely(
-    {
-      db: deps.db,
-      jev: deps.jev,
-      ideaModel: deps.ideaModel,
-      model: deps.settings.idea_model,
-      mode: deps.settings.mode,
-      themeBrief: deps.themeBrief,
-      ideaCycleId: deps.ideaCycleId ?? null,
-      now: deps.now,
-    },
-    topic,
-  );
+  const shared = { db: deps.db, jev: deps.jev, ideaModel: deps.ideaModel, mode: deps.settings.mode, ideaCycleId: deps.ideaCycleId ?? null, now: deps.now };
+  const note = await chooseAnalogySafely({ ...shared, model: deps.settings.analogy_model }, topic);
+  const analogy = topicAnalogy({ jev_notes: { analogy: note } });
+  if (analogy) await chooseGapSafely({ ...shared, model: deps.settings.idea_model, themeBrief: deps.themeBrief }, topic, analogy);
 }
 
 /** Keep the best `poolSize`; displace the rest (E-16 step 7). `keep` (tonight's promoted topic, shared queue) is never cut. Returns how many. */

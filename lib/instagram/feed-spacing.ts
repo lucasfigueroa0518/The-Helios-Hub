@@ -9,10 +9,13 @@
  */
 export type SpacingQuery = (text: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
 
-/** Feed-posting types by their schema: `social` is Carousels, `lfd` is Last Few Days, `reels` is Text on Screen on a Main-feed slot. */
-export type FeedSchema = 'explainers' | 'social' | 'lfd' | 'reels';
+/**
+ * Feed-posting types by their schema: `social` is Carousels, `lfd` is Last Few Days, `ai_events` is
+ * AI Events This Week, `reels` is Text on Screen on a Main-feed slot.
+ */
+export type FeedSchema = 'explainers' | 'social' | 'lfd' | 'ai_events' | 'reels';
 
-const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social', 'lfd', 'reels'];
+const FEED_SCHEMAS: readonly FeedSchema[] = ['explainers', 'social', 'lfd', 'ai_events', 'reels'];
 
 const ACTIVE = `status IN ('scheduled', 'publishing', 'published')
    AND publish_at >= $1::timestamptz AND publish_at < $2::timestamptz`;
@@ -22,6 +25,7 @@ const BOOKED: Record<FeedSchema, string> = {
   explainers: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'explainers' AND coalesce(feed_mode, 'main') = 'main' AND ${ACTIVE}`,
   social: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'carousels' AND ${ACTIVE}`,
   lfd: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'last_few_days' AND ${ACTIVE}`,
+  ai_events: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'ai_events' AND ${ACTIVE}`,
   reels: `SELECT publish_at FROM social_hub.schedule WHERE vertical = 'reels' AND feed_mode = 'main' AND ${ACTIVE}`,
 };
 

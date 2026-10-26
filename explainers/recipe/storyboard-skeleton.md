@@ -10,15 +10,15 @@ music: none
 
 ## Anchor scene
 
-<fill in from BRIEF.md's picked analogy: metaphor, setting, ground, hook, steps (3–5, each "<analogy action> — <technical step name>"), entities (at most 4: id — what it is — stands for — how it is built — beats; the actor is a critter with its role accessories; an everyday object names its library prop, e.g. "prop: light switch"; never a person or a body part), states, layout. See story-design.md.>
+<fill in: BRIEF.md's named analogy, staged (EX3-128): metaphor (one scene that shows its defining trait), setting, ground, hook (the picked one from ## Hook), `- hero: <entity id> — critter | object` (your call, EX3-110; exactly this line), steps (3–5, each "<analogy action> — <technical step name>"), entities (at most 4, from the mapping's top rows: id — what it is — stands for — how it is built — beats; when the hero is an object the objects act and no critter does their work; a critter has its role accessories and its `look: <orange|ink|paper>, wear <accessories or none>`, its look for the whole reel: a critter hero is the one orange critter, and with an object hero no critter is orange (EX3-107); the hero shows only in frames 1, 4, 5 and a frame-7 callback (EX3-132); every object is a `new drawing: <the specific thing, as a stranger names it in this setting>`, or, only on an exact fit, `prop: <bank name> (exact: <its is line>, in <this setting>)` from assets/kit/props/CATALOG.md (EX3-112); never a person or a body part), states (both states of a two-state analogy), layout. See story-design.md § Staging the analogy.>
 
 ## Hook
 
-<fill in: three hook candidates for frame 1 (the analogy's own hook is one), each rated 1–5 on standalone clarity (a viewer with no context knows what they are looking at within 1 second) and thumb-stop, then the pick and why. See story-design.md.>
+<fill in: three hook candidates for frame 1, all yours (the analogy brings none), each a moment in the anchor scene with the hero in it, rated 1–5 on standalone clarity (a viewer with no context knows what they are looking at within 1 second) and thumb-stop, then the pick and why. See story-design.md.>
 
 ## Curiosity gap
 
-<fill in: three candidate gaps, each a tiny story in the hook's scene (goal, obstacle, twist, the viewer's own question, a promise), rated on clarity, pull, relevance and closable (1–5), then the pick and why, and closed_by. See story-design.md.>
+<fill in: BRIEF.md's ## Curiosity gap block, copied as it is (the "> " line is the picked gap, word for word; EX3-120), then "- closed_by: frame 7, <the moment the payoff's answer lands>". See story-design.md.>
 
 ## Frame 1 — Series opener
 
@@ -30,11 +30,11 @@ music: none
 - type: hook
 - scene: <fill in: one line, what is drawn and what moves>
 - engagement: Open loop + visual hook + audio ramp
-- voiceover: "In the next 30 seconds, this <fill in: 1–3 words naming what the hook shows> will teach you an AI concept."
+- voiceover: "<fill in: BRIEF.md's ## Opener line, its ___ filled with 1–3 words naming what the hook shows>"
 - anchor: scene
 - shots: <fill in: usually one shot (kind — subject); two if the frame runs past 6s>
 
-<fill in: the picked hook, in motion at frame 0 and clear on its own, and its critter (the hero the bank's opener will cut out, circle or zoom into). The opener, "AI BRAIN BREAK" and the title card are code's (EX3-102). The line is the opener template; its slot names what the hook shows ("this little shop", "this soggy forecaster").>
+<fill in: the picked hook, in motion at frame 0 and clear on its own, and its hero (a critter the bank's opener may cut out, circle or zoom into, or, in an object-led reel, its focal object, EX3-111). The opener, "AI BRAIN BREAK" and the title card are code's (EX3-102). The line is BRIEF.md's opener line (EX3-130); its slot names what the hook shows.>
 
 ## Frame 2 — Curiosity gap
 
@@ -46,11 +46,11 @@ music: none
 - type: pain_point
 - scene: <fill in: one line, what is drawn and what moves>
 - engagement: Attention reset + curiosity gap
-- anchor: scene
+- anchor: own
 - gap_question: <fill in: the question exactly as the voiceover asks it>
 - shots: <fill in: 2–3 shots (kind — subject — on "the word the cut lands on"); each subject is what the voice names while it is on screen; none the hook's framing>
 
-<fill in: the gap as a tiny story in the hook's scene (story-design.md § 2), 18–36 words: the goal (who wants what); the obstacle; the twist or stakes; the viewer's own question about how it plays out; then a promise naming something in the viewer's life ("Stick around: it's the same reason chatbots make things up."). No term, no "same spot", plain roles. Reset (punch-in, color change, in-frame zoom-through, or a cut effect).>
+<fill in: the voiceover is BRIEF.md's picked gap, word for word (story-design.md § 2, EX3-120); never rewrite it. Its own simple picture of the technology it talks about, never the hero: the hook's staging (where things sit, how they move) with the real thing in the analogy's place (EX3-131), the surprising moment visible, the question landing on a held shot. Reset (punch-in, color change, in-frame zoom-through, or a cut effect).>
 
 ## Frame 3 — Define the term
 
@@ -64,9 +64,9 @@ music: none
 - engagement: Grounding definition
 - anchor: own
 
-<fill in: definition of the term (what it is, what it does, when or why; it equals the voiceover) and part_of_speech; the kit's dictionary card in the top half, a visual of the definition below.>
+<fill in: definition of the term (what it is, what it does, when or why; it equals the voiceover) and part_of_speech; the kit's dictionary card in the top half, a visual of the definition below, never the hero.>
 
-## Frame 4 — Everyday analogy
+## Frame 4 — The analogy plays
 
 - duration: 12s
 - hold: 0.15s
@@ -75,26 +75,26 @@ music: none
 - src: compositions/frames/04-analogy.html
 - type: feature_showcase
 - scene: <fill in: one line, what is drawn and what moves>
-- engagement: Scene setting + analogy anchor + anticipation
+- engagement: Analogy anchor + progressive disclosure + anticipation
 - anchor: scene
 - shots: <fill in: the one wide establishing shot first, then closer shots for the steps (kind — subject — on "cue word"), each subject what the voice names then, a cut every 2.5–4s>
 
-<fill in: continue the scene the viewer has already seen ("Here's what the hire does:", "Watch the forecaster:", "Back on the lawn:"; never "Picture…" or "Imagine…"), introduce each new element by name and job as it arrives, then play the steps to the payoff.>
+<fill in: continue the scene the viewer has already seen (never "Picture…" or "Imagine…"; a two-state analogy may open on its "without" state); name each part with its real job as it appears, then play the steps, building toward the answer to frame 2's question without giving it (EX3-128).>
 
-## Frame 5 — Map the analogy
+## Frame 5 — Why it works, where it breaks
 
 - duration: 10s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/05-map.html
+- src: compositions/frames/05-why.html
 - type: feature_showcase
 - scene: <fill in: one line, what is drawn and what moves>
-- engagement: Cached understanding + progressive disclosure
+- engagement: Cached understanding + boundary
 - anchor: scene
-- shots: <fill in: a shot per mapped pair (close, medium or insert on the object the voice names), not frame 4's framing>
+- shots: <fill in: a shot on the trait doing its job, then one on the limit (close, medium or insert on the object the voice names), not frame 4's framing>
 
-<fill in: "the X is the Y, because …" for each pair (at least two), each landing on its object; never a list.>
+<fill in: why the analogy works (its defining trait doing its job, and why that is the concept's job), then its one limit or trade-off in its own sentence (EX3-128); each lands on its object; never a list.>
 
 ## Frame 6 — Tiny real example
 
@@ -107,25 +107,25 @@ music: none
 - scene: <fill in: one line, what is drawn and what moves>
 - engagement: Worked example + progress tracker
 - anchor: own
-- example_steps: <fill in: 3–5 of the example's own concrete steps, in order, each 4 words or fewer, separated by " → ">
-- shots: <fill in: an insert of each step's real thing (kind — subject — on "cue word"); at most one cut back to the anchor scene>
+- example_steps: <fill in: the example's own concrete steps, exactly as many as the anchor scene's steps, step N doing step N's job (EX3-129), in order, each 4 words or fewer, separated by " → ">
+- shots: <fill in: an insert of each step's real thing (kind — subject — on "cue word"); never the anchor scene or the hero>
 
-<fill in: "Here's a real example:", real values, walked through the example_steps in order; the step tracker shows them, an insert illustrates each.>
+<fill in: "Here's a real example:", real values, walked through the example_steps in order; the step tracker shows the anchor steps' technical names, lighting one per example step, and an insert illustrates each.>
 
-## Frame 7 — Real world
+## Frame 7 — The payoff
 
 - duration: 6s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/07-real-world.html
+- src: compositions/frames/07-payoff.html
 - type: benefit_highlight
 - scene: <fill in: one line, what is drawn and what moves>
-- engagement: Recognition
+- engagement: Payoff + callback + distillation
 - anchor: own
-- shots: <fill in: two shots when it runs past 6s>
+- shots: <fill in: two shots when it runs past 6s; at most one a callback to the anchor scene>
 
-<fill in: open with a transition ("Another example would be…", "In everyday life, you meet … when…"); one place the viewer meets this (at most two), a new drawn scene with critters and props on a new ground.>
+<fill in: the answer to frame 2's question in real terms, then a one-line takeaway (EX3-128); it may call back to the analogy in a word or one shot, where the hero may show. closed_by points here.>
 
 ## Frame 8 — Close
 

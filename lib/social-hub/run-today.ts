@@ -11,11 +11,14 @@
  *                    carousels are kept); with no ranked story it picks from fresh news
  *   Explainers       a render for each missing topic
  *   Stories          today's set for each series due today that has none
+ *   Last Few Days    today's post, on its days
+ *   AI Events        the coming week's carousel, on its day (Sunday); no model but Jev
  *
  * `planFrom` decides from plain inputs (tested offline); the live layer
  * (lib/content-type/run-today-live.ts) reads them and re-plans on the server
  * when the person clicks, so a stale page can't run more than today needs.
  */
+import { aiEventsDueOn, type AiEventsSettings } from '@/lib/ai-events/settings';
 import { lfdDueOn, type LfdSettings } from '@/lib/lfd/settings';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -34,8 +37,10 @@ export type RunInputs = {
   series: Array<{ id: string; label: string; held: boolean }>;
   /** Last Few Days: due today (its days; any day from its own button) and whether today's post exists. Missing: no step. */
   lastFewDays?: { due: boolean; made: boolean };
-  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean };
-  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number };
+  /** AI Events: due today (its day; any day from its own button) and whether the coming week's post exists. Missing: no step. */
+  aiEvents?: { due: boolean; made: boolean };
+  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean; aiEventsRun?: boolean };
+  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number; aiEventsCap?: number };
 };
 
 export type PlanStep = {
@@ -44,7 +49,7 @@ export type PlanStep = {
   quota: number;
   held: number;
   needed: number;
-  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run';
+  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run' | 'ai_events_run';
   /** Idea refs (reel post ideas, explainer topics) or Stories series ids to act on. */
   targets: string[];
   note: string;
@@ -77,6 +82,15 @@ export function seriesDueToday(
  */
 export function lfdDueToday(s: Pick<LfdSettings, 'autoRun' | 'days'>, today: string, anyDay: boolean, lfdDay: boolean | null): boolean {
   return lfdDay !== null ? anyDay || (s.autoRun && lfdDay) : lfdDueOn(s, today, anyDay);
+}
+
+/**
+ * AI Events for Run now, the same rule: due on its day (Sunday) while its
+ * auto_run is on, or (template mode, `calendarDay` not null) when today has
+ * its calendar slot and auto_run is on. `anyDay`: its own Generate, any day.
+ */
+export function aiEventsDueToday(s: Pick<AiEventsSettings, 'autoRun' | 'days'>, today: string, anyDay: boolean, calendarDay: boolean | null): boolean {
+  return calendarDay !== null ? anyDay || (s.autoRun && calendarDay) : aiEventsDueOn(s, today, anyDay);
 }
 
 const label = (v: Vertical) => verticalInfo(v).label;
@@ -142,6 +156,15 @@ export function planFrom(i: RunInputs): RunPlan {
     else steps.push({ ...base, action: 'lfd_run', targets: [], note: 'Makes today’s Last Few Days post: 5–6 stories, written, fact-checked and photographed. It waits for your approval.', estimateUsd: i.cost.lfdCap ?? 1 });
   }
 
+  if (i.aiEvents) {
+    const d = i.aiEvents;
+    const base = { vertical: 'ai_events' as const, label: label('ai_events'), quota: d.due ? 1 : 0, held: d.made ? 1 : 0, needed: d.due && !d.made ? 1 : 0 };
+    if (!d.due) steps.push({ ...base, action: 'none', targets: [], note: 'AI Events posts on Sundays; today isn’t one. Generate on its page makes one anyway.', estimateUsd: 0 });
+    else if (d.made) steps.push({ ...base, action: 'none', targets: [], note: 'The coming week’s post is made. Rebuild post on its page re-renders it.', estimateUsd: 0 });
+    else if (i.inFlight.aiEventsRun) steps.push({ ...base, action: 'none', targets: [], note: 'An AI Events run is already queued or running.', estimateUsd: 0 });
+    else steps.push({ ...base, action: 'ai_events_run', targets: [], note: 'Ranks the coming week’s events in Miami, Boston, NYC and SF and renders the carousel. It waits for your approval.', estimateUsd: i.cost.aiEventsCap ?? 0.5 });
+  }
+
   const estimateUsd = Number(steps.reduce((s, x) => s + x.estimateUsd, 0).toFixed(2));
   return { today: i.today, steps, estimateUsd, anything: steps.some((s) => s.action !== 'none') };
 }
@@ -166,7 +189,7 @@ export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanS
   return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
 }
 
-const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days'];
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events'];
 const TARGET_MAX = 2048;
 
 /**

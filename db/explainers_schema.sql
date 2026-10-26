@@ -268,11 +268,12 @@ INSERT INTO explainers.settings (key, value) VALUES
     ('orchestrator_model',   '"claude-sonnet-5-5"'::jsonb),
     ('frame_worker_model',   '"claude-sonnet-5-5"'::jsonb),
     ('idea_model',           '"claude-sonnet-5-5"'::jsonb),
+    ('analogy_model',        '"claude-opus-5-5"'::jsonb),
     ('music_enabled',        'true'::jsonb),
     ('sfx_enabled',          'true'::jsonb),
-    -- Explainers 3.1 (EX3-34): a new database starts on v3. An existing one keeps its stored
-    -- version until Lucas flips it (see the theme brief v3 note below).
-    ('theme_brief_version',  '"v3"'::jsonb)
+    -- Explainers 3.9 (EX3-123): a new database starts on v4. An existing one keeps its stored
+    -- version until Lucas flips it (see the theme brief v4 note below).
+    ('theme_brief_version',  '"v4"'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- E-14 theme brief v1, copied verbatim from planning/Explainer Reels/KICKOFF_DECISIONS.md.
@@ -381,6 +382,55 @@ The goal is not to cover technology news. The goal is to build durable technical
 Topic areas may include: AI and LLM fundamentals; agents and agentic systems; context windows and memory; RAG, embeddings, and vector search; MCP and APIs; databases, SQL, schemas, tables, keys, and relationships; frontend and backend systems; HTTP and web infrastructure; authentication and authorization; Git, GitHub, branches, and repositories; local, preview, and production environments; cloud computing, workers, cron jobs, and deployment; integrations, webhooks, backfills, and secrets; programming languages; frameworks and libraries; runtimes and package managers; state management; UI/UX concepts; software architecture; data flow; orchestration and workflows; model routing; tokenization; and other foundational computer-science concepts that help people understand how technology actually works.
 
 Scope every idea aggressively. One reel should teach one complete thought. A topic is suitable only if it can be explained accurately in about a minute with one curiosity gap, one plain definition, one everyday analogy that can carry the whole reel as a single scene, one tiny real example, and one real-world application. Broad concepts are allowed only when the objective is to explain what the concept is and how its major pieces fit together. Do not cram several lessons into one reel.
+
+Use a plain-spoken, authoritative tone. Teach the underlying mechanism, not just a definition. Avoid hype, jargon for its own sake, and claims that oversimplify a concept into something inaccurate.
+
+Do not generate: AI news, model-release commentary, “best AI tools” content, product roundups, consumer-tech news, prompt hacks, speculative AGI content, future-of-work predictions, trend commentary, or content whose primary purpose is opinion rather than teaching durable knowledge.
+
+Deduplication: Treat two ideas as duplicates when the viewer would learn essentially the same core concept or leave with the same primary takeaway, even if the title, hook, analogy, or example differs. Compare against all available queued, rendered, and previously published topics. A new topic may revisit the same broad domain only when it teaches a materially different concept or layer of understanding.
+
+10 good example topics
+1. What actually happens when you call an API? — One mechanism, easy analogy, clear request/response example.
+2. What is a context window? — Foundational AI concept with one clean mental model.
+3. Why does a database need a primary key? — Extremely specific and can use one tiny table example.
+4. What is a webhook? — Single integration concept with a strong real-world analogy.
+5. What does “running locally” actually mean? — Common phrase that nontechnical operators hear constantly.
+6. What is a Git branch? — One concept, visual, and directly useful for understanding software teams.
+7. How does vector search find similar ideas instead of matching words? — One RAG mechanism with high visual potential.
+8. What is authentication vs. authorization? — A narrow comparison that fits naturally into one thought.
+9. What does React actually do? — A framework/language-adjacent topic framed around its fundamental role rather than a tutorial.
+10. Why do AI agents need tools? — Explains one building block of agentic systems rather than trying to explain all of agents.
+
+10 bad example topics
+1. Everything you need to know about AI agents — Far too broad for one thought.
+2. APIs, MCPs, webhooks, and integrations explained — Four separate lessons combined.
+3. The 10 best AI tools for business owners — Tool roundup, not durable education.
+4. What Claude 6 means for the future of work — Model news plus speculation.
+5. Will AI replace software engineers? — Future-of-work opinion rather than technical education.
+6. 5 prompts that will make you 10× more productive — Prompt-hack content.
+7. The new iPhone's AI features explained — Consumer-tech/product news.
+8. Learn Python in 45 seconds — Impossible scope and implicitly a tutorial.
+9. How to build a full RAG application — Multi-stage implementation tutorial rather than one concept.
+10. AI is about to change everything — Hype without a concrete learning objective.$brief$)
+ON CONFLICT (version) DO NOTHING;
+
+-- Explainers 3.9 theme brief v4 (EX3-123), copied verbatim from planning/Explainer Reels/DECISIONS.md:
+-- v3 with the reel shape's analogy as a well-known one whose defining trait is the concept, not
+-- a single everyday scene. An existing database switches to it only when Lucas says so:
+--   UPDATE explainers.settings SET value = '"v4"'::jsonb, updated_at = now() WHERE key = 'theme_brief_version';
+INSERT INTO explainers.theme_briefs (version, body) VALUES ('v4', $brief$**Explainer Reels — Idea Generation Theme Brief**
+
+Generate educational topics for short, one-minute Explainer Reels that help a broad business audience understand how modern software, computer science, and AI systems work. The audience ranges from nontechnical business owners and operators to technically curious professionals. Assume intelligence, but do not assume technical vocabulary or prior engineering knowledge.
+
+Prefer beginner concepts. The more beginner a concept is, the more people it reaches, because more viewers can enter it with no prior knowledge. Between two equally valuable ideas, propose the more beginner one.
+
+Skew toward AI. Most topics should teach how artificial intelligence works: how models, tokens, context, prompts, agents, tools, retrieval, training, and evaluation fit together. Computer-science and tech concepts remain part of the curriculum, and they matter most when they help someone understand AI.
+
+The goal is not to cover technology news. The goal is to build durable technical literacy over time, so that following the page feels like taking a practical curriculum in modern technology.
+
+Topic areas may include: AI and LLM fundamentals; agents and agentic systems; context windows and memory; RAG, embeddings, and vector search; MCP and APIs; databases, SQL, schemas, tables, keys, and relationships; frontend and backend systems; HTTP and web infrastructure; authentication and authorization; Git, GitHub, branches, and repositories; local, preview, and production environments; cloud computing, workers, cron jobs, and deployment; integrations, webhooks, backfills, and secrets; programming languages; frameworks and libraries; runtimes and package managers; state management; UI/UX concepts; software architecture; data flow; orchestration and workflows; model routing; tokenization; and other foundational computer-science concepts that help people understand how technology actually works.
+
+Scope every idea aggressively. One reel should teach one complete thought. A topic is suitable only if it can be explained accurately in about a minute with one curiosity gap, one plain definition, one well-known analogy whose defining trait is the concept, that can carry the reel, one tiny real example, and one real-world application. Broad concepts are allowed only when the objective is to explain what the concept is and how its major pieces fit together. Do not cram several lessons into one reel.
 
 Use a plain-spoken, authoritative tone. Teach the underlying mechanism, not just a definition. Avoid hype, jargon for its own sake, and claims that oversimplify a concept into something inaccurate.
 

@@ -15,7 +15,7 @@ import type { Vertical } from '@/lib/social-hub/types';
  */
 export type Parsed = { vertical: Vertical; target: ActionTarget; input?: ActionInput };
 
-const VERTICALS: readonly Vertical[] = ['carousels', 'explainers', 'reels', 'stories', 'last_few_days'];
+const VERTICALS: readonly Vertical[] = ['carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'];
 
 /** The longest review note a hub action carries. */
 export const NOTE_MAX_CHARS = 500;

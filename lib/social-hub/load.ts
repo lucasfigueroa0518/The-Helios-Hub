@@ -2,6 +2,7 @@ import { explainersHubQuery, liveHubQuery, type HubQuery } from '@/lib/social-hu
 import { buildDataset, type HubDataset, type VerticalReads } from '@/lib/social-hub/dataset';
 import { readCarousels } from '@/lib/social-hub/queries/carousels';
 import { readLastFewDays } from '@/lib/social-hub/queries/last-few-days';
+import { readAiEvents } from '@/lib/social-hub/queries/ai-events';
 import { readAccount } from '@/lib/social-hub/queries/account';
 import { readCosts } from '@/lib/social-hub/queries/costs';
 import { readExplainers } from '@/lib/social-hub/queries/explainers';
@@ -39,25 +40,26 @@ function explainersShareMain(q: HubQuery): boolean {
  * database of their own get their own spine read there. Each type's own
  * queries read only its content. A failing schema degrades to an error note.
  */
-export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q)): Promise<VerticalReads> {
+export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q), now = new Date()): Promise<VerticalReads> {
   const shared = explainersShareMain(q);
-  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days'] : ['carousels', 'reels', 'last_few_days']);
+  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events'] : ['carousels', 'reels', 'last_few_days', 'ai_events']);
   mainSpine.catch(() => undefined); // each reader reports the failure itself
   const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
-  const [reels, explainers, carousels, stories, lastFewDays] = await Promise.all([
+  const [reels, explainers, carousels, stories, lastFewDays, aiEvents] = await Promise.all([
     settle(mainSpine.then((spine) => readReels(q, spine))),
     settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
     settle(mainSpine.then((spine) => readCarousels(q, spine))),
     settle(readStories(q)),
     settle(mainSpine.then((spine) => readLastFewDays(q, spine))),
+    settle(mainSpine.then((spine) => readAiEvents(q, spine, now))),
   ]);
-  return { reels, explainers, carousels, stories, last_few_days: lastFewDays };
+  return { reels, explainers, carousels, stories, last_few_days: lastFewDays, ai_events: aiEvents };
 }
 
 export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date()): Promise<HubDataset> {
   const explainersQ = explainersHandle(q);
   const [reads, costs, quota, snapshot, account, adjustments, dayQuotas, deleted, lfdPublishingLive, rejected] = await Promise.all([
-    readAll(q, explainersQ),
+    readAll(q, explainersQ, now),
     settle(readCosts(q, explainersQ)),
     readLatestQuota(q).catch(() => null),
     latestQuotaSnapshot(q, now).catch(() => null),

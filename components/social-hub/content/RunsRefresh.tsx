@@ -32,6 +32,7 @@ export function RunsRefresh({ active, known }: { active: boolean; known: string 
       stories: json.all?.stories ?? [],
       explainers: json.all?.explainers ?? [],
       last_few_days: json.all?.last_few_days ?? [],
+      ai_events: json.all?.ai_events ?? [],
     });
     if (next !== known) await refreshHubPage(router);
   };

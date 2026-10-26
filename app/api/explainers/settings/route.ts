@@ -27,6 +27,7 @@ const EDITABLE = new Set<SettingKey>([
   'orchestrator_model',
   'frame_worker_model',
   'idea_model',
+  'analogy_model',
   'music_enabled',
   'sfx_enabled',
 ]);

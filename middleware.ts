@@ -35,6 +35,11 @@ function isPublicPath(pathname: string): boolean {
     process.env.NODE_ENV === 'development'
     && (pathname === '/memes' || pathname.startsWith('/memes/') || pathname.startsWith('/api/memes'))
   ) return true;
+  // Local Real Case lab (planning/Real Case Reels RC-10), the same rule. Production requires a session.
+  if (
+    process.env.NODE_ENV === 'development'
+    && (pathname === '/real-case' || pathname.startsWith('/real-case/') || pathname.startsWith('/api/real-case'))
+  ) return true;
   return false;
 }
 
@@ -65,8 +70,12 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/carousels/')
     || pathname === '/last-few-days'
     || pathname.startsWith('/last-few-days/')
+    || pathname === '/ai-events'
+    || pathname.startsWith('/ai-events/')
     || pathname === '/memes'
     || pathname.startsWith('/memes/')
+    || pathname === '/real-case'
+    || pathname.startsWith('/real-case/')
     // Social Hub pages (the carousel render preview at /social/render stays as it was).
     || pathname === '/social'
     || (pathname.startsWith('/social/') && !pathname.startsWith('/social/render')
@@ -125,6 +134,8 @@ export const config = {
     '/social/:path*',
     '/memes',
     '/memes/:path*',
+    '/real-case',
+    '/real-case/:path*',
     '/d/:path*',
     '/watch/:path*',
     '/api/:path*',

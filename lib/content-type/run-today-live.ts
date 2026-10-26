@@ -13,9 +13,9 @@ import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings
 import { pendingRun, requestRun } from '@/lib/reels/repository';
 import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
-import { isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
+import { isAiEventsDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
-import { lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
+import { aiEventsDueToday, lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
@@ -27,6 +27,10 @@ import { openStorySlots } from '@/lib/stories/schedule';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
 import { queueManualLfdRun } from '@/lib/lfd/manual';
 import { readLfdSettings } from '@/lib/lfd/settings';
+import { DEFAULT_AI_EVENTS_RUN_CAP_USD } from '@/lib/ai-events/config';
+import { queueManualAiEventsRun } from '@/lib/ai-events/manual';
+import { readAiEventsSettings } from '@/lib/ai-events/settings';
+import { comingWeek } from '@/lib/networking/pick/week';
 
 /** Typical spend, for the confirm line: a reels night ran $1.40–2.80 this month; one reel (copy, frame, video, song) about $1. */
 const REELS_NIGHT_USD = 2.5;
@@ -54,10 +58,36 @@ async function liveLfd(today: string, anyDay: boolean): Promise<{ day: RunInputs
   }
 }
 
-/** `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button). */
-export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } = {}): Promise<RunPlan> {
+/**
+ * AI Events for Run now: due on its day (Sunday) while its auto_run is on (any day from its own
+ * Generate; in template mode its days are the calendar's AI Events slots), made when the coming
+ * week already has a post that wasn't rejected (for Generate: one already published, since
+ * Generate re-ranks and re-renders a post still in review), in flight when a run is queued or
+ * running. Unreadable (schema not applied): no step.
+ */
+async function liveAiEvents(today: string, anyDay: boolean, now: Date): Promise<{ day: RunInputs['aiEvents']; inFlight: boolean; cap: number }> {
+  try {
+    const [s, plan, made, flight] = await Promise.all([
+      readAiEventsSettings(liveHubQuery),
+      slotPlan(liveHubQuery, today, 1).catch(() => null),
+      dbQuery<{ status: string }>(`SELECT status FROM ai_events.posts WHERE week_key = $1 AND status <> 'rejected'`, [comingWeek(now).weekKey]),
+      dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM ai_events.runs WHERE status IN ('requested', 'running')`),
+    ]);
+    const due = aiEventsDueToday(s, today, anyDay, plan ? isAiEventsDay(plan, today) : null);
+    const has = made.rows.some((r) => (anyDay ? r.status === 'published' : true));
+    return { day: { due, made: has }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? DEFAULT_AI_EVENTS_RUN_CAP_USD };
+  } catch {
+    return { day: undefined, inFlight: false, cap: DEFAULT_AI_EVENTS_RUN_CAP_USD };
+  }
+}
+
+/**
+ * `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button).
+ * `aiEventsAnyDay`: the same for AI Events' Generate.
+ */
+export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
-  const lfd = await liveLfd(today, opts.lfdAnyDay === true);
+  const [lfd, aiEvents] = await Promise.all([liveLfd(today, opts.lfdAnyDay === true), liveAiEvents(today, opts.aiEventsAnyDay === true, now)]);
   const [dataset, stories, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
     loadDataset(liveHubQuery, now),
     readPosting('stories', now),
@@ -90,14 +120,16 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean } =
     explainers: day('explainers'),
     series,
     ...(lfd.day ? { lastFewDays: lfd.day } : {}),
+    ...(aiEvents.day ? { aiEvents: aiEvents.day } : {}),
     inFlight: {
       reelsRun: Boolean(reelsPending),
       reelsBuilding: building.rows.map((r) => r.post_idea_id),
       carouselRun: Number(carouselRuns.rows[0]?.n ?? 0) > 0,
       explainerTopics: jobs.rows.map((r) => r.topic_id),
       lfdRun: lfd.inFlight,
+      aiEventsRun: aiEvents.inFlight,
     },
-    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap },
+    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap },
   });
 }
 
@@ -131,7 +163,7 @@ export async function requestStorySets(series: readonly string[], by: string, no
  * runs just that card.
  */
 export async function runToday(by: string, now = new Date(), only?: Vertical, target?: string): Promise<{ plan: RunPlan; results: StepResult[] }> {
-  const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days' });
+  const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days', aiEventsAnyDay: only === 'ai_events' });
   const results: StepResult[] = [];
   for (const step of stepsFor(plan, only, target)) {
     if (step.action === 'none') continue;
@@ -171,6 +203,10 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
       } else if (step.action === 'lfd_run') {
         // The click approves this run's spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
         const out = await queueManualLfdRun(liveHubQuery);
+        done(out.ok, out.note);
+      } else if (step.action === 'ai_events_run') {
+        // The click approves this run's Jev spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
+        const out = await queueManualAiEventsRun(liveHubQuery, by);
         done(out.ok, out.note);
       } else if (step.action === 'story_sets') {
         const made = await requestStorySets(step.targets, by, now);

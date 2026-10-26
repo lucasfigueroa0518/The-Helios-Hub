@@ -30,7 +30,7 @@ Read `BRIEF.md` (the topic, its term, the learning objective, the picked analogy
 Read `references/story-design.md`, `../hyperframes/references/storyboard-format.md`,
 `../hyperframes/references/script-format.md`, `frame.md`, and the recipe skeleton
 `.media/recipes/helios-explainer/storyboard-skeleton.md`. Write `STORYBOARD.md` (the anchor scene
-from the picked analogy, the hook candidates and pick, the curiosity-gap candidates and pick, the
+staging the named analogy, the hook candidates and pick, the curiosity gap BRIEF.md picked (copied, said word for word), the
 eight frames with their shots) and `SCRIPT.md` (one spoken line per frame).
 
 **Gate:** `STORYBOARD.md` and `SCRIPT.md` exist and pass story-design.md's final checklist.
@@ -140,18 +140,33 @@ A `picture-checker` agent, which knows nothing of the storyboard, looks instead.
 
    ```json
    [{ "tile": 1, "frame": 1, "at": 0.5, "meant": "a critter in a dark room feeling for the light switch",
-      "seen": "<the checker's words>", "pass": false, "fix": "the switch reads as a white box: use prop('light switch')" }]
+      "seen": "<the checker's words>", "pass": false, "fix": "the switch reads as a white box: redraw it with its toggle and plate" }]
    ```
 
+   Then add one row per new drawing (every `NEW_PROPS` name in `assets/world/new-props.js` and
+   `assets/frames/*.props.js`, EX3-114) under `"assets"`, in the same file, which becomes
+   `{ "tiles": [ …the rows above… ], "assets": [ … ] }`:
+
+   ```json
+   { "name": "surgical scalpel", "file": "assets/world/new-props.js", "meant": "a surgeon's scalpel",
+     "seen": "<the checker's words for it>", "pass": true }
+   ```
+
+   An asset passes only when the checker names it as specifically as it was meant. A passing
+   asset joins the asset bank after the render (EX3-114), so never pass a near-miss.
+
    A tile **fails** when: an entity you meant is missing from its words or called an "unclear
-   shape" or something else; the hook tile does not name the situation; something it calls cut off
+   shape" or something else, **or named less specifically than meant** (a "knife" for a scalpel,
+   "shelves" for supermarket shelving, "a table" for a reception desk, EX3-112); **the tile is busy**
+   (EX3-117): the checker names more than three things in it, or calls it busy, cluttered or
+   crowded; the hook tile does not name the situation; something it calls cut off
    or too small is readable or the focal; or it looks like the tile before it (the same subject in
    the same framing). Also fail any frame where the scene spans less than 60% of the safe-area
    width, or the title card, dictionary card, labels or tracker are not readable (you may Read the
    same contact sheets).
 4. **Fix each failing frame once:** dispatch that frame's worker (or the scene builder, when an
-   entity's drawing is the problem) with the finding; a library prop replaces a weak drawing of
-   the same thing. Re-mount. Snapshot only the failed moments to `.hyperframes/check-2`, dispatch
+   entity's drawing is the problem) with the finding: redraw it to its specific name; a bank asset
+   replaces it only on an exact fit (EX3-112). Re-mount. Snapshot only the failed moments to `.hyperframes/check-2`, dispatch
    the checker once more on those sheets, and record the second verdicts in the same file.
 
 Then render without asking:

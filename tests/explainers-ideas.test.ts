@@ -3,12 +3,15 @@
  * answers; the real runner, question sets, SQL, and pool logic all run.
  */
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import test from 'node:test';
 
 import type { EntryType, Questions, SystemOneResult } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { analogyMarkdown, analogyTotal, pickAnalogy, topicAnalogy } from '@/lib/explainers/ideas/analogy';
+import { analogyCheckProblems, analogyMarkdown, ANALOGY_GATE_MAX, compareScore, gateMisses, GOLDEN_HIDE_AT, normalizeAnalogyName, sameAnalogy, sentenceCount, topicAnalogy } from '@/lib/explainers/ideas/analogy';
+import { chooseGap, gapCheckProblems, gapMarkdown, gapMisses, gapTotal, MAX_GAP_PASSES, pickGap, topicGap, topicGapNote } from '@/lib/explainers/ideas/gap';
 import { addAndEvaluateTopics, runIdeaCycle } from '@/lib/explainers/ideas/cycle';
 import {
   batchesOfFive,
@@ -16,10 +19,18 @@ import {
   scoringCalls,
 } from '@/lib/explainers/ideas/evaluate';
 import {
-  ANALOGIES_SCHEMA,
-  ANALOGY_ASK,
-  ANALOGY_LADDER,
+  ANALOGY_CALLS,
+  ANALOGY_SCHEMA,
   ANALOGY_WRITER_INSTRUCTIONS,
+  analogyWriterSystem,
+  GOLDEN_ANALOGIES,
+  goldenExample,
+  GAPS_SCHEMA,
+  GAP_WRITER_INSTRUCTIONS,
+  GAP_WRITER_VERSION,
+  gapWriterParams,
+  gapWriterUserMessage,
+  parseGaps,
   ANALOGY_WRITER_VERSION,
   IDEAS_SCHEMA,
   IDEA_GENERATOR_INSTRUCTIONS,
@@ -30,18 +41,22 @@ import {
   SCOPE_WRITER_INSTRUCTIONS,
   TERM_RULE,
   analogyWriterParams,
+  analogyWriterUserMessage,
+  anthropicIdeaModel,
   ideaGeneratorParams,
-  parseAnalogies,
+  parseAnalogy,
   scopeWriterParams,
   structuredJson,
   parseIdeas,
   parseScopes,
+  type AnalogyRequest,
+  type GapRequest,
   type IdeaModel,
 } from '@/lib/explainers/ideas/generator';
 import { getTopic, listPool, listTopics } from '@/lib/explainers/repository';
 import { weightedScore } from '@/lib/explainers/scoring';
 import { saveSetting } from '@/lib/explainers/settings';
-import { ANALOGY_KEYS, type AnalogyCandidate, type AnalogyNote, type AnalogyScores, type IdeaScoreKey } from '@/lib/explainers/types';
+import { GAP_KEYS, type AnalogyCandidate, type AnalogyNote, type GapCandidate, type GapNote, type GapScores, type IdeaScoreKey } from '@/lib/explainers/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 
 import { scratchExplainersDb } from './explainers-pglite';
@@ -62,30 +77,43 @@ const BROAD: Scores = { ...STRONG, teachability_45s: 0, accuracy_under_simplific
 
 type Call = { set: string; keys: string[]; state: Record<string, unknown> };
 
-/** A candidate analogy for `title`, numbered 1 to 3. */
-const candidate = (title: string, n: number): AnalogyCandidate => ({
-  scene: `${title} scene ${n}`,
-  elements: [{ name: `thing ${n}`, stands_for: 'the real part' }, { name: 'other', stands_for: 'another part' }],
-  process: 'It happens in order.',
-  payoff: 'It lands.',
-  visual: 'It moves.',
-  rung: ((n % 3) + 1) as 1 | 2 | 3,
-  invented_rules: [],
-  actor: n === 2 ? 'a student' : 'none',
-  hook: `It is already moving ${n}.`,
-  steps: [
-    { analogy: 'first thing', technical: 'event fires' },
-    { analogy: 'second thing', technical: 'request sent' },
-    { analogy: 'third thing', technical: 'app updates' },
+/** A named analogy that passes the code checks; `n` is the writer call that wrote it (1, 2, 3). */
+const candidate = (n: number): AnalogyCandidate => ({
+  name: `Thing ${n}`,
+  explanation: `Thing ${n} rings when something happens. Nobody has to keep checking.`,
+  mapping: [
+    { analogy: `thing ${n}`, concept: 'the real part' },
+    { analogy: 'other', concept: 'another part' },
+    { analogy: 'the bell', concept: 'the signal' },
   ],
 });
 
+/** A gap candidate that passes the code checks: 26 words, ends on its question, no term, nothing from the analogy. */
+const gapLine = (n: number, attempt = 1): GapCandidate => ({
+  line: `You open an app every morning and it already shows the stories you like best before you even search${attempt > 1 ? ' again' : ''}. How does it know what you want ${n}?`,
+  question: `How does it know what you want ${n}?`,
+  way_in: 'everyday mystery',
+  why_it_pulls: 'Everyone has felt it.',
+});
+
+type JevAnswers = {
+  /** p(the golden example teaches the topic's concept); default 0.1. */
+  golden?: (concept: string, title: string) => number;
+  /** The three gates' p per candidate, by the analogy text Jev reads (its name is the first line); default all 0.1. */
+  gates?: (analogy: string) => Partial<Record<'false_mapping' | 'is_the_system' | 'real_names', number>>;
+  /** p(a is more repeatable than b), by the two analogy texts; default 0.5. */
+  compare?: (a: string, b: string) => number;
+  gap?: (line: string) => number;
+  falseClaim?: (line: string) => number;
+};
+
 /**
  * Canned Jev. `scores` by topic title; `same` says whether two titles teach the
- * same takeaway (order-free); `analogy` scores a candidate analogy by its scene
- * (default 3 on every question). Every call is recorded for assertions.
+ * same takeaway (order-free); `answers` sets the analogy and gap verdicts. Every
+ * call is recorded for assertions.
  */
-function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], analogy: (scene: string) => number = () => 3) {
+function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], verdicts: JevAnswers = {}) {
+  const { golden = () => 0.1, gates = (): ReturnType<NonNullable<JevAnswers['gates']>> => ({}), compare = () => 0.5, gap = () => 3, falseClaim = () => 0.1 } = verdicts;
   const calls: Call[] = [];
   const isSame = (a: string, b: string) =>
     same.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
@@ -97,14 +125,30 @@ function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], 
         ? 'pairs'
         : keys[0] === 'duplicate_of_existing_topic'
           ? 'gate'
-          : (ANALOGY_KEYS as readonly string[]).includes(keys[0])
-            ? 'analogy'
-            : 'scoring';
+          : keys[0] === 'same_concept'
+            ? 'golden'
+            : keys[0] === 'false_mapping'
+              ? 'analogy_gates'
+              : keys[0] === 'a_over_b'
+                ? 'compare'
+            : keys[0] === 'false_claim'
+              ? 'gap_gate'
+              : (GAP_KEYS as readonly string[]).includes(keys[0])
+                ? 'gap'
+                : 'scoring';
       calls.push({ set: setId, keys, state: s });
       const answers: Record<string, unknown> = {};
       for (const key of keys) {
-        if (setId === 'analogy') {
-          answers[key] = { type: 'score', score: analogy((s.candidate as AnalogyCandidate).scene), confidence: 1 };
+        if (setId === 'golden') {
+          answers[key] = { type: 'noul', noul: golden(s.example_concept as string, s.topic_title as string) };
+        } else if (setId === 'analogy_gates') {
+          answers[key] = { type: 'noul', noul: gates(s.analogy as string)[key as 'false_mapping'] ?? 0.1 };
+        } else if (setId === 'compare') {
+          answers[key] = { type: 'noul', noul: compare(s.a as string, s.b as string) };
+        } else if (setId === 'gap') {
+          answers[key] = { type: 'score', score: gap(s.candidate as string), confidence: 1 };
+        } else if (setId === 'gap_gate') {
+          answers[key] = { type: 'noul', noul: falseClaim(s.candidate as string) };
         } else if (setId === 'scoring') {
           const title = s.topic_title as string;
           answers[key] = { type: 'score', score: scores[title][key as IdeaScoreKey], confidence: 1 };
@@ -129,19 +173,29 @@ function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], 
 
 function stubIdeas(
   batches: [string, string][][] = [],
-): IdeaModel & { requests: unknown[]; scopeRequests: string[][]; analogyRequests: string[] } {
+): IdeaModel & { requests: unknown[]; scopeRequests: string[][]; analogyRequests: string[]; analogyCalls: AnalogyRequest[]; gapCalls: GapRequest[] } {
   const requests: unknown[] = [];
   const scopeRequests: string[][] = [];
   const analogyRequests: string[] = [];
+  const analogyCalls: AnalogyRequest[] = [];
+  const gapCalls: GapRequest[] = [];
   return {
     requests,
     scopeRequests,
     analogyRequests,
-    async writeAnalogies(request) {
-      analogyRequests.push(request.title);
+    analogyCalls,
+    gapCalls,
+    async writeAnalogy(request) {
+      analogyRequests.push(request.term);
+      analogyCalls.push(request);
+      const n = analogyCalls.filter((c) => c.term === request.term).length;
+      return { candidate: candidate(n), usage: { input_tokens: 300, output_tokens: 200 }, model: 'claude-opus-5-5' };
+    },
+    async writeGaps(request) {
+      gapCalls.push(request);
       return {
-        candidates: [1, 2, 3].map((n) => candidate(request.title, n)),
-        usage: { input_tokens: 300, output_tokens: 200 },
+        candidates: [1, 2, 3].map((n) => gapLine(n, request.retry ? 2 : 1)),
+        usage: { input_tokens: 200, output_tokens: 100 },
         model: 'claude-sonnet-5-5',
       };
     },
@@ -313,11 +367,16 @@ test('Jev logs and costs land in the explainers tables', async () => {
       WHERE vendor = 'jev' GROUP BY component ORDER BY component`,
   );
   // First topic: 2 scoring calls (empty history, no gate). Second: 1 gate + 2 scoring.
-  // Both made the pool, so each also had its 3 candidate analogies scored (EX3-30).
-  assert.equal(logs[0].n, 11);
+  // Both made the pool, so each also had its 13 golden examples matched, its 2 named analogies gated
+  // and compared both ways (EX3-123, EX3-124), then its 3 curiosity gaps scored and gated (EX3-120).
+  assert.equal(logs[0].n, 51);
   assert.deepEqual(costs, [
-    { component: 'analogy_scoring', n: 6 },
+    { component: 'analogy_compare', n: 4 },
+    { component: 'analogy_gates', n: 4 },
+    { component: 'analogy_golden_match', n: 26 },
     { component: 'duplicate_gate', n: 1 },
+    { component: 'gap_gate', n: 6 },
+    { component: 'gap_scoring', n: 6 },
     { component: 'idea_scoring', n: 4 },
   ]);
 });
@@ -338,7 +397,12 @@ test('duplicate of a pool topic: Stage 2 finds it in batches of five, the better
   assert.equal(result.evaluation.outcome, 'won_head_to_head');
   assert.deepEqual(
     calls.map((c) => [c.set, c.keys.length]),
-    [['gate', 1], ['pairs', 5], ['pairs', 2], ['scoring', 1], ['scoring', 6], ['analogy', 7], ['analogy', 7], ['analogy', 7]],
+    [
+      ['gate', 1], ['pairs', 5], ['pairs', 2], ['scoring', 1], ['scoring', 6],
+      ...Array.from({ length: 13 }, () => ['golden', 1]),
+      ['analogy_gates', 3], ['analogy_gates', 3], ['compare', 1], ['compare', 1],
+      ...Array.from({ length: 3 }, () => [['gap', 3], ['gap_gate', 1]]).flat(),
+    ],
   );
   const loser = (await listTopics(db, ['displaced']))[0];
   assert.equal(loser.title, 'Topic 6');
@@ -537,91 +601,304 @@ test('the worker retries a failed or thrown night after the delay, at most twice
   assert.equal(nextCycleTry({ status: 'skipped', reason: 'retry_wait' }, 1, now), now + CYCLE_RETRY_DELAY_MS);
 });
 
-// ── The analogy pick (Explainers 3.0, EX3-30) ───────────────────────────────
+// ── The analogy writer v8 and Jev's pick (Explainers 3.9, EX3-123, EX3-124, EX3-125) ──
 
-const scoreRow = (v: number, overrides: Partial<AnalogyScores> = {}): AnalogyScores => ({
-  simplicity: v,
-  reach: v,
-  mapping_fidelity: v,
-  visual_strength: v,
-  visual_payoff: v,
-  familiarity: v,
-  hook_clarity: v,
-  ...overrides,
+const registerText = () => fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
+
+test('analogy writer v8 is the golden-set prompt, with the no-real-names line and JSON output (EX3-123)', () => {
+  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v8');
+  assert.equal(ANALOGY_CALLS, 2);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /^You write the analogy at the heart of a one-minute "AI Brain Break" reel/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend\./);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- Its name is the whole picture\./);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It is one idea, not a scene\./);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- That thing's single defining trait is the concept's defining trait\./);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It shows the concept doing its job\. Its limits, if any, are for later in the reel\./);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It names no real company, store or product, no real person, and no character from a film, show or book\./);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /They show the standard, not a template/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Return JSON matching the schema: name, explanation \(two or three sentences\), and mapping \(three to six rows, most important first/);
+  // The staged-scene writer's machinery is gone.
+  assert.doesNotMatch(ANALOGY_WRITER_INSTRUCTIONS, /\bhook\b|critter|HARD CONSTRAINTS|candidates as JSON|<theme_brief>/);
+  assert.deepEqual([...ANALOGY_SCHEMA.required], ['name', 'explanation', 'mapping']);
+  assert.deepEqual([...ANALOGY_SCHEMA.properties.mapping.items.required], ['analogy', 'concept']);
 });
 
-test('the analogy pick: equal sevenths, then fidelity, familiarity, hook clarity, reach…; invented rules lose (EX3-85)', () => {
-  assert.equal(analogyTotal(scoreRow(4)), 100);
-  assert.equal(analogyTotal(scoreRow(2)), 50);
-  assert.equal(pickAnalogy([scoreRow(2), scoreRow(3), scoreRow(2.5)]), 1);
-  // Same total: the more faithful mapping wins.
-  assert.equal(pickAnalogy([scoreRow(3, { mapping_fidelity: 2, reach: 4 }), scoreRow(3, { mapping_fidelity: 4, reach: 2 })]), 1);
-  // Same total and fidelity: the more familiar analogy wins, then the clearer hook.
-  assert.equal(pickAnalogy([scoreRow(3, { familiarity: 2, reach: 4 }), scoreRow(3, { familiarity: 4, reach: 2 })]), 1);
-  assert.equal(pickAnalogy([scoreRow(3, { hook_clarity: 2, reach: 4 }), scoreRow(3, { hook_clarity: 4, reach: 2 })]), 1);
-  // A perfect tie keeps the earlier candidate.
-  assert.equal(pickAnalogy([scoreRow(3), scoreRow(3)]), 0);
-  // A candidate that needs an invented rule loses to a finished one, whatever its score…
-  assert.equal(pickAnalogy([scoreRow(4), scoreRow(2)], [{ invented_rules: ['the jar knows which words follow'] }, { invented_rules: [] }]), 1);
-  // …unless every candidate needs one.
-  assert.equal(pickAnalogy([scoreRow(4), scoreRow(2)], [{ invented_rules: ['x'] }, { invented_rules: ['y'] }]), 0);
+test("the golden set is Lucas's thirteen, verbatim, and the register holds the same block (EX3-123)", () => {
+  assert.equal(GOLDEN_ANALOGIES.length, 13);
+  assert.deepEqual(GOLDEN_ANALOGIES.map((g) => g.name), [
+    'LEGO bricks', 'Pins on a map of meaning', 'The open-book exam', 'The improv actor', 'The forged note in the mail', 'The triage nurse',
+    'Medical residency', 'The restaurant buzzer', 'The student ID number', 'The alternate timeline', 'The hotel', 'The club bouncer', 'The DJ',
+  ]);
+  const block = /### Golden analogies \(analogy-writer-v8\)\n[\s\S]*?```\n([\s\S]+?)\n```/.exec(registerText());
+  assert.ok(block, 'the register has the golden set block');
+  assert.equal(block![1], GOLDEN_ANALOGIES.map(goldenExample).join('\n\n'));
+  // Every example is in the prompt when Jev hides none.
+  const system = analogyWriterSystem([]);
+  for (const g of GOLDEN_ANALOGIES) assert.ok(system.includes(goldenExample(g)), g.name);
+  assert.ok(!system.includes('{EXAMPLES}'));
 });
 
-test('analogy writer output must be exactly three complete, distinct candidates', () => {
-  const three = [1, 2, 3].map((n) => candidate('T', n));
-  assert.equal(parseAnalogies({ candidates: three }).length, 3);
-  assert.throws(() => parseAnalogies({ candidates: three.slice(0, 2) }), /exactly 3/);
-  assert.throws(() => parseAnalogies({ candidates: [three[0], three[0], three[2]] }), /repeated/);
-  assert.throws(() => parseAnalogies({ candidates: [{ ...three[0], payoff: ' ' }, three[1], three[2]] }), /missing a field/);
-  assert.throws(() => parseAnalogies({ candidates: [{ ...three[0], elements: [{ name: 'x', stands_for: '' }] }, three[1], three[2]] }), /stands for/);
-  // v2 (EX3-66): at most four elements, a hook, and 3–5 steps with both labels.
-  const five = [1, 2, 3, 4, 5].map((i) => ({ name: `e${i}`, stands_for: 'a part' }));
-  assert.throws(() => parseAnalogies({ candidates: [{ ...three[0], elements: five }, three[1], three[2]] }), /at most 4/);
-  assert.throws(() => parseAnalogies({ candidates: [{ ...three[0], hook: '' }, three[1], three[2]] }), /hook/);
-  assert.throws(() => parseAnalogies({ candidates: [{ ...three[0], steps: three[0].steps!.slice(0, 2) }, three[1], three[2]] }), /3 to 5 steps/);
-  assert.throws(
-    () => parseAnalogies({ candidates: [{ ...three[0], steps: [...three[0].steps!.slice(0, 2), { analogy: 'x', technical: '' }] }, three[1], three[2]] }),
-    /technical name/,
+test('hiding: a golden example Jev matched is left out of the prompt, the others stay', () => {
+  const system = analogyWriterSystem(['webhook', 'RAG']);
+  assert.ok(!system.includes('The restaurant buzzer'));
+  assert.ok(!system.includes('The open-book exam'));
+  assert.ok(system.includes('The club bouncer'));
+  assert.equal(GOLDEN_HIDE_AT, 0.5);
+});
+
+test('the analogy writer is Opus-ready: structured output, the cached golden prompt, the concept in the user message', () => {
+  const params = analogyWriterParams({ model: 'claude-opus-5-5', term: 'webhook', scope: 'Explain webhooks.', hidden: [] });
+  assert.equal(params.model, 'claude-opus-5-5');
+  assert.equal('tools' in params, false);
+  assert.deepEqual(params.output_config.format.schema, ANALOGY_SCHEMA);
+  const system = params.system as { text: string; cache_control?: unknown }[];
+  assert.equal(system.length, 1);
+  assert.ok(system[0].cache_control, 'the golden prompt carries the breakpoint');
+  assert.equal(system[0].text, analogyWriterSystem([]));
+  assert.ok(!system[0].text.includes('Explain webhooks'));
+  assert.equal(params.messages[0].content, 'Concept: webhook\nLearning objective: Explain webhooks.');
+  assert.equal(analogyWriterUserMessage('RAG', 'Explain RAG.'), 'Concept: RAG\nLearning objective: Explain RAG.');
+});
+
+test('the writer reply: a name, an explanation and a mapping, or the call fails', async () => {
+  const reply = { name: ' The restaurant buzzer ', explanation: 'It buzzes. You stop asking.', mapping: [{ analogy: ' the buzzer ', concept: 'the webhook call' }] };
+  assert.deepEqual(parseAnalogy(reply), { name: 'The restaurant buzzer', explanation: 'It buzzes. You stop asking.', mapping: [{ analogy: 'the buzzer', concept: 'the webhook call' }] });
+  assert.throws(() => parseAnalogy({ candidates: [] }), /a name, an explanation and a mapping/);
+  const calls: unknown[] = [];
+  const client = {
+    messages: {
+      create: async (params: unknown) => {
+        calls.push(params);
+        return { content: [{ type: 'text', text: JSON.stringify(candidate(1)) }], stop_reason: 'end_turn', usage: { input_tokens: 100, output_tokens: 50 }, model: 'claude-opus-5-5' };
+      },
+    },
+  };
+  const out = await anthropicIdeaModel(client as never).writeAnalogy({ model: 'claude-opus-5-5', term: 'webhook', scope: 'Explain webhooks.', hidden: [] });
+  assert.equal(calls.length, 1);
+  assert.equal(out.candidate.name, 'Thing 1');
+});
+
+test('the code checks: two or three sentences, three to six rows, the term never in the name or the analogy side', () => {
+  assert.equal(sentenceCount('Without it, you ask the host "is my table ready?" every two minutes. With it, the buzzer goes off.'), 2);
+  assert.equal(sentenceCount('One. Two. Three. Four.'), 4);
+  assert.deepEqual(analogyCheckProblems(candidate(1), 'webhook'), []);
+  assert.match(analogyCheckProblems({ ...candidate(1), explanation: 'Just one.' }, 'webhook').join(), /1 sentences \(2 or 3\)/);
+  assert.match(analogyCheckProblems({ ...candidate(1), explanation: 'One. Two. Three. Four.' }, 'webhook').join(), /4 sentences/);
+  assert.match(analogyCheckProblems({ ...candidate(1), mapping: candidate(1).mapping.slice(0, 2) }, 'webhook').join(), /2 rows \(3 to 6\)/);
+  assert.match(analogyCheckProblems({ ...candidate(1), mapping: [...candidate(1).mapping, { analogy: 'x', concept: '' }] }, 'webhook').join(), /missing a side/);
+  assert.match(analogyCheckProblems({ ...candidate(1), name: 'The webhook bell' }, 'webhook').join(), /its name says the term "webhook"/);
+  assert.match(analogyCheckProblems({ ...candidate(1), mapping: [{ analogy: 'the webhook bell', concept: 'x' }, ...candidate(1).mapping] }, 'webhook').join(), /analogy side says the term/);
+  // The concept side may name the real thing.
+  assert.deepEqual(analogyCheckProblems({ ...candidate(1), mapping: [{ analogy: 'the bell', concept: 'the webhook call' }, ...candidate(1).mapping] }, 'webhook'), []);
+});
+
+test('the pick rules: names match loosely, gates fail at 0.5, the swapped-order score is the mean of both readings', () => {
+  assert.equal(normalizeAnalogyName('The Restaurant Buzzer!'), 'restaurant buzzer');
+  assert.equal(sameAnalogy({ name: 'The restaurant buzzer' }, { name: 'restaurant buzzer' }), true);
+  assert.equal(sameAnalogy({ name: 'The restaurant buzzer' }, { name: 'The club bouncer' }), false);
+  assert.equal(ANALOGY_GATE_MAX, 0.5);
+  assert.deepEqual(gateMisses({ false_mapping: 0.1, is_the_system: 0.2, real_names: 0.3 }), []);
+  assert.deepEqual(gateMisses({ false_mapping: 0.5, is_the_system: 0.2, real_names: 0.9 }), [
+    'its mapping teaches something false or misleading',
+    'it names a real brand, person or character',
+  ]);
+  // A over B 0.8, B over A 0.4: A scores 0.7 and wins.
+  assert.equal(compareScore(0.8, 0.4), 0.7);
+  // Position bias cancels: Jev says "yes, the first" both times, so neither wins outright.
+  assert.equal(compareScore(0.7, 0.7), 0.5);
+  assert.equal(compareScore(0.2, 0.9), 0.15);
+});
+
+const noteOf = async (db: ExplainersDb, id: string) =>
+  ((await getTopic(db, id))?.jev_notes as { analogy: Extract<AnalogyNote, { candidates: unknown }> }).analogy;
+
+test("a topic that makes the pool gets its named analogy from two Opus calls and Jev's pick, then its curiosity gap", async () => {
+  const { db } = await scratchExplainersDb();
+  const ideas = stubIdeas();
+  // Jev prefers the second analogy in both orders.
+  const { transport, calls } = stubJev(
+    { Webhooks: STRONG, 'Everything about agents': BROAD },
+    [],
+    { golden: (concept, title) => (concept === 'webhook' && title === 'Webhooks' ? 0.92 : 0.05), compare: (a) => (a.startsWith('Thing 2') ? 0.8 : 0.3) },
   );
-  assert.deepEqual(parseAnalogies({ candidates: three })[0].steps?.map((st) => st.technical), ['event fires', 'request sent', 'app updates']);
-  // v3 (EX3-85): the rung, the invented rules (a list, kept), and the actor.
-  assert.throws(() => parseAnalogies({ candidates: [{ ...three[0], rung: 4 }, three[1], three[2]] }), /rung/);
-  assert.throws(() => parseAnalogies({ candidates: [{ ...three[0], invented_rules: undefined }, three[1], three[2]] }), /invented_rules/);
-  const parsed = parseAnalogies({ candidates: [{ ...three[0], invented_rules: ['a rule', ' '] }, three[1], { ...three[2], actor: '' }] });
-  assert.deepEqual(parsed[0].invented_rules, ['a rule']);
-  assert.equal(parsed[1].actor, 'a student');
-  assert.equal(parsed[2].actor, 'none');
-});
+  const results = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: ideas }, [
+    { title: 'Webhooks', origin: 'manual' },
+    { title: 'Everything about agents', origin: 'manual' },
+  ]);
+  assert.deepEqual(results.map((r) => r.evaluation.outcome), ['entered_pool', 'rejected_gates']);
+  assert.deepEqual(ideas.analogyRequests, ['webhooks', 'webhooks'], 'two calls; rejected topics get no analogy spend');
+  assert.deepEqual(ideas.analogyCalls.map((c) => c.model), ['claude-opus-5-5', 'claude-opus-5-5'], 'analogy_model, Opus by default');
+  assert.deepEqual(ideas.analogyCalls[0].hidden, ['webhook'], 'Jev hid the golden example that teaches this concept');
+  assert.equal(calls.filter((c) => c.set === 'golden').length, 13, 'one golden match per example');
 
-test("analogy writer v3 asks in Lucas's words, climbs the ladder, casts critters, judges the hook alone (EX3-66, EX3-85)", () => {
-  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v3');
+  const webhooks = (await getTopic(db, results[0].topicId))!;
+  const note = await noteOf(db, results[0].topicId);
+  assert.ok('pick' in note);
+  assert.equal(note.version, 'analogy-writer-v8');
+  assert.deepEqual(note.golden_hidden, ['webhook']);
+  assert.equal(note.candidates.length, 2);
+  assert.equal(note.pick, 1);
+  assert.equal(note.pick_reason, 'compared');
+  assert.deepEqual(note.comparison, { first_over_second: 0.3, second_over_first: 0.8, first_score: 0.25 });
+  assert.equal(note.third, undefined, 'no third call when both pass');
+  assert.equal(topicAnalogy(webhooks)?.name, 'Thing 2');
+  // The comparison ran in both orders, and Jev never saw the golden set.
+  const compares = calls.filter((c) => c.set === 'compare');
+  assert.deepEqual(compares.map((c) => [String(c.state.a).split('\n')[0], String(c.state.b).split('\n')[0]]), [['Thing 1', 'Thing 2'], ['Thing 2', 'Thing 1']]);
+  for (const c of calls.filter((x) => x.set === 'analogy_gates' || x.set === 'compare')) {
+    assert.doesNotMatch(JSON.stringify(c.state), /restaurant buzzer|LEGO|open-book/i);
+  }
+
   assert.equal(
-    ANALOGY_ASK,
-    'The simplest physical or conceptual metaphor that carries the mechanism. Start from basic elements, situations, objects that are universally understandable or part of everyday life. Use an everyday place only if it requires 3 or fewer recognizable parts for the viewer to understand the everyday place.',
+    analogyMarkdown(topicAnalogy(webhooks)!),
+    'Name: Thing 2\n\nThing 2 rings when something happens. Nobody has to keep checking.\n\n| Analogy | Concept |\n|---|---|\n| thing 2 | the real part |\n| other | another part |\n| the bell | the signal |\n\nThe reel shows the first three or four rows.',
   );
-  assert.ok(ANALOGY_WRITER_INSTRUCTIONS.includes(`What to write: ${ANALOGY_ASK}`));
-  // No example scenes to copy (v1 named waiting in a line, sending a letter, ordering food).
-  assert.doesNotMatch(ANALOGY_WRITER_INSTRUCTIONS, /waiting in a line|sending a letter|ordering food|restaurant|mailbox|chef/i);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /At most 4 elements/);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /not a default/);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /technical \(the real step's name/);
-  assert.doesNotMatch(ANALOGY_WRITER_INSTRUCTIONS, /45/);
-  // The ladder with zero invented rules, critters only, and the standalone hook (Lucas, 2026-10-13).
-  assert.ok(ANALOGY_WRITER_INSTRUCTIONS.includes(ANALOGY_LADDER));
-  assert.match(ANALOGY_LADDER, /Rung 1: one object or physical effect\. Rung 2: one everyday action by one character, with at most 3 objects\. Rung 3: a familiar everyday situation/);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /invented_rules: .* It must be empty/);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Anyone who acts in the scene is a critter/);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /never a person's body part/);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /knows what they are looking at within one second/);
-  // No example scenes, and no hand anywhere as something to draw (example pollution, Lucas).
-  assert.doesNotMatch(ANALOGY_WRITER_INSTRUCTIONS, /jar|word-card|light switch|dark room/i);
-  const item = (ANALOGIES_SCHEMA.properties.candidates.items as { required: readonly string[] }).required;
-  assert.deepEqual([...item], ['scene', 'elements', 'process', 'payoff', 'visual', 'rung', 'invented_rules', 'actor', 'hook', 'steps']);
+  // ai_focus is stored in jev_notes and counted in the weighted score (EX3-73).
+  assert.equal((webhooks.jev_notes as { ai_focus?: number }).ai_focus, 2);
+  assert.equal(Number(webhooks.weighted_score), weightedScore(STRONG));
+
+  // An analogy from an older writer is picked again at render time (EX3-31).
+  const old = { ...webhooks, jev_notes: { ...webhooks.jev_notes, analogy: { ...note, version: 'analogy-writer-v7' } } };
+  assert.equal(topicAnalogy(old), null);
+  assert.equal(topicAnalogy((await getTopic(db, results[1].topicId))!), null);
+
+  const { rows } = await db.query<{ vendor: string; component: string; n: number }>(
+    `SELECT vendor, component, count(*)::int AS n FROM explainers.cost_events
+      WHERE component LIKE 'analogy%' GROUP BY vendor, component ORDER BY component`,
+  );
+  assert.deepEqual(rows, [
+    { vendor: 'jev', component: 'analogy_compare', n: 2 },
+    { vendor: 'jev', component: 'analogy_gates', n: 2 },
+    { vendor: 'jev', component: 'analogy_golden_match', n: 13 },
+    { vendor: 'anthropic', component: 'analogy_writer', n: 2 },
+  ]);
+
+  // The curiosity gap is written for the picked analogy right away (EX3-120), on the idea model.
+  assert.equal(ideas.gapCalls.length, 1);
+  assert.equal(ideas.gapCalls[0].analogy.name, 'Thing 2');
+  assert.equal(ideas.gapCalls[0].model, 'claude-sonnet-5-5');
+  assert.equal(ideas.gapCalls[0].term, 'webhooks');
+  assert.equal(topicGap(webhooks, topicAnalogy(webhooks))?.question, 'How does it know what you want 1?', 'a tie keeps the first');
+  const gapNote = (webhooks.jev_notes as { gap: GapNote }).gap;
+  assert.equal(gapNote.version, GAP_WRITER_VERSION);
+  assert.equal(gapNote.analogy_name, 'Thing 2');
+  // A gap written for another analogy is written again.
+  assert.equal(topicGap(webhooks, { name: 'Another thing' }), null);
+});
+
+test('both calls write the same analogy: it is taken, with no comparison (Lucas: "Accept")', async () => {
+  const { db } = await scratchExplainersDb();
+  const ideas = stubIdeas();
+  ideas.writeAnalogy = async (request) => {
+    ideas.analogyCalls.push(request);
+    return { candidate: { ...candidate(1), name: ideas.analogyCalls.length === 1 ? 'The Bell' : 'bell' }, usage: { input_tokens: 1, output_tokens: 1 }, model: 'claude-opus-5-5' };
+  };
+  const { transport, calls } = stubJev({ Webhooks: STRONG });
+  const [result] = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: ideas }, [{ title: 'Webhooks', origin: 'manual' }]);
+  const note = await noteOf(db, result.topicId);
+  assert.ok('pick' in note);
+  assert.equal(note.pick, 0);
+  assert.equal(note.pick_reason, 'same');
+  assert.equal(calls.filter((c) => c.set === 'compare').length, 0);
+});
+
+test('one candidate passes: it wins; a gate or a code check fails the other', async () => {
+  const { db } = await scratchExplainersDb();
+  const ideas = stubIdeas();
+  const { transport, calls } = stubJev({ Webhooks: STRONG }, [], { gates: (a) => (a.startsWith('Thing 1') ? { real_names: 0.85 } : {}) });
+  const [result] = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: ideas }, [{ title: 'Webhooks', origin: 'manual' }]);
+  const note = await noteOf(db, result.topicId);
+  assert.ok('pick' in note);
+  assert.equal(note.pick, 1);
+  assert.equal(note.pick_reason, 'only_pass');
+  assert.deepEqual(note.candidates[0].misses, ['it names a real brand, person or character']);
+  assert.equal(note.candidates[0].gates?.real_names, 0.85);
+  assert.equal(calls.filter((c) => c.set === 'compare').length, 0);
+
+  // A candidate that breaks a code check never reaches Jev.
+  const { db: db2 } = await scratchExplainersDb();
+  const ideas2 = stubIdeas();
+  ideas2.writeAnalogy = async (request) => {
+    ideas2.analogyCalls.push(request);
+    const c = candidate(ideas2.analogyCalls.length);
+    return { candidate: ideas2.analogyCalls.length === 1 ? { ...c, explanation: 'Only one sentence here' } : c, usage: { input_tokens: 1, output_tokens: 1 }, model: 'claude-opus-5-5' };
+  };
+  const jev2 = stubJev({ Webhooks: STRONG });
+  const [r2] = await addAndEvaluateTopics({ db: db2, jevTransport: jev2.transport, ideaModel: ideas2 }, [{ title: 'Webhooks', origin: 'manual' }]);
+  const n2 = await noteOf(db2, r2.topicId);
+  assert.ok('pick' in n2);
+  assert.equal(n2.pick, 1);
+  assert.equal(n2.candidates[0].gates, null);
+  assert.match(n2.candidates[0].misses.join(), /1 sentences/);
+  assert.equal(jev2.calls.filter((c) => c.set === 'analogy_gates').length, 1);
+});
+
+test('neither passes: a third call; it passes, it wins', async () => {
+  const { db } = await scratchExplainersDb();
+  const ideas = stubIdeas();
+  const { transport } = stubJev({ Webhooks: STRONG }, [], { gates: (a) => (a.startsWith('Thing 3') ? {} : { false_mapping: 0.7 }) });
+  const [result] = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: ideas }, [{ title: 'Webhooks', origin: 'manual' }]);
+  assert.equal(ideas.analogyCalls.length, 3);
+  assert.deepEqual(ideas.analogyCalls[2].hidden, ideas.analogyCalls[0].hidden, 'the third call sees the same examples');
+  const note = await noteOf(db, result.topicId);
+  assert.ok('pick' in note);
+  assert.equal(note.pick, 2);
+  assert.equal(note.pick_reason, 'third');
+  assert.equal(note.third?.analogy?.name, 'Thing 3');
+  assert.equal(topicAnalogy((await getTopic(db, result.topicId))!)?.name, 'Thing 3');
+});
+
+test('nothing passes in three calls: no pick, and the topic stays in the pool (EX3-125, supersedes EX3-104)', async () => {
+  const { db } = await scratchExplainersDb();
+  const ideas = stubIdeas();
+  const { transport } = stubJev({ Webhooks: STRONG }, [], { gates: () => ({ is_the_system: 0.9 }) });
+  const [result] = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: ideas }, [{ title: 'Webhooks', origin: 'manual' }]);
+  assert.equal(result.evaluation.outcome, 'entered_pool');
+  assert.equal(ideas.analogyCalls.length, 3);
+  const topic = (await getTopic(db, result.topicId))!;
+  assert.equal(topic.status, 'pool');
+  assert.equal(topic.reject_reason, null);
+  assert.equal(topicAnalogy(topic), null, 'the render tries again');
+  const note = await noteOf(db, result.topicId);
+  assert.ok('below_bar' in note && note.below_bar);
+  assert.deepEqual(note.third?.misses, ['it is the real system at work, not a comparison']);
+  assert.equal(ideas.gapCalls.length, 0, 'no gap without an analogy');
+});
+
+test('a writer call that fails is a failed candidate; a failed pass is recorded and never changes the evaluation', async () => {
+  const { db } = await scratchExplainersDb();
+  const ideas = stubIdeas();
+  ideas.writeAnalogy = async (request) => {
+    ideas.analogyCalls.push(request);
+    if (ideas.analogyCalls.length === 1) throw new Error('analogy writer: the reply was not valid JSON');
+    return { candidate: candidate(2), usage: { input_tokens: 1, output_tokens: 1 }, model: 'claude-opus-5-5' };
+  };
+  const [result] = await addAndEvaluateTopics({ db, jevTransport: stubJev({ Webhooks: STRONG }).transport, ideaModel: ideas }, [{ title: 'Webhooks', origin: 'manual' }]);
+  const note = await noteOf(db, result.topicId);
+  assert.ok('pick' in note);
+  assert.equal(note.pick, 1);
+  assert.equal(note.candidates[0].analogy, null);
+  assert.match(note.candidates[0].misses.join(), /could not be used: analogy writer: the reply was not valid JSON/);
+
+  // Jev failing mid-pass: the error is recorded on the topic, and it still makes the pool.
+  const { db: db2 } = await scratchExplainersDb();
+  const jev = stubJev({ Webhooks: STRONG });
+  const failing: JevTransport = {
+    async systemOne(state, questions) {
+      if ('same_concept' in questions) throw new Error('Jev is down');
+      return jev.transport.systemOne(state, questions);
+    },
+  };
+  const [r2] = await addAndEvaluateTopics({ db: db2, jevTransport: failing, ideaModel: stubIdeas() }, [{ title: 'Webhooks', origin: 'manual' }]);
+  assert.equal(r2.evaluation.outcome, 'entered_pool');
+  const topic = (await getTopic(db2, r2.topicId))!;
+  assert.match(((topic.jev_notes as { analogy: { error?: string } }).analogy.error ?? ''), /Jev is down/);
+  assert.equal(topicAnalogy(topic), null, 'the render runs the pass again (EX3-31)');
 });
 
 test('the idea generator skews to AI and still asks for CS or tech (EX3-73); both write the term (EX3-86)', () => {
-  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v4');
-  assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v4');
+  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v5');
+  assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v5');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) assert.ok(prompt.includes(TERM_RULE));
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Exactly 2 of the 3 ideas teach an AI concept/);
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /The other idea teaches a computer-science or tech concept/);
@@ -631,79 +908,141 @@ test('the idea generator skews to AI and still asks for CS or tech (EX3-73); bot
   }
 });
 
-test('the analogy writer caches its stable prefix and keeps the topic out of it', () => {
-  const params = analogyWriterParams({ model: 'claude-sonnet-5-5', themeBrief: 'BRIEF', title: 'Webhooks', scope: 'Explain webhooks.' });
-  assert.equal('tools' in params, false);
-  assert.deepEqual(params.output_config.format.schema, ANALOGIES_SCHEMA);
-  const system = params.system as { text: string; cache_control?: unknown }[];
-  assert.ok(system[0].cache_control);
-  assert.ok(system[0].text.startsWith(ANALOGY_WRITER_INSTRUCTIONS));
-  assert.ok(!system[0].text.includes('Webhooks'));
-  assert.match(params.messages[0].content as string, /Topic: Webhooks\nLearning objective: Explain webhooks\./);
-});
-
 test('the generator and scope writer ask for the eight-beat shape, with no technical caveat (EX3-35)', () => {
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) {
     assert.ok(prompt.includes(REEL_SHAPE));
     assert.doesNotMatch(prompt, /caveat|technical insight/);
   }
+  // 3.9 (EX3-123): a well-known analogy whose defining trait is the concept, not a single everyday scene.
+  assert.match(REEL_SHAPE, /one well-known analogy whose defining trait is the concept, that can carry the reel/);
+  assert.doesNotMatch(REEL_SHAPE, /single scene|everyday analogy/);
 });
 
-test('a topic that makes the pool gets its analogy picked from three Jev-scored candidates', async () => {
-  const { db } = await scratchExplainersDb();
-  const ideas = stubIdeas();
-  const { transport } = stubJev(
-    { Webhooks: STRONG, 'Everything about agents': BROAD },
-    [],
-    (scene) => (scene.endsWith('scene 2') ? 4 : 2),
-  );
-  const results = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: ideas }, [
-    { title: 'Webhooks', origin: 'manual' },
-    { title: 'Everything about agents', origin: 'manual' },
-  ]);
-  assert.deepEqual(results.map((r) => r.evaluation.outcome), ['entered_pool', 'rejected_gates']);
-  assert.deepEqual(ideas.analogyRequests, ['Webhooks'], 'rejected topics get no analogy spend');
+// ── The curiosity gap writer (EX3-120) ──────────────────────────────────────
 
-  const webhooks = await getTopic(db, results[0].topicId);
-  const note = (webhooks?.jev_notes as { analogy: AnalogyNote & { pick: number; totals: number[] } }).analogy;
-  assert.equal(note.version, 'analogy-writer-v3');
-  assert.equal(note.pick, 1);
-  assert.deepEqual(note.totals, [50, 100, 50]);
-  assert.equal((webhooks as { term?: string | null }).term, 'webhooks', 'the scope writer wrote its term');
-  assert.equal(topicAnalogy(webhooks!)?.scene, 'Webhooks scene 2');
-  assert.match(analogyMarkdown(topicAnalogy(webhooks!)!), /^Scene: Webhooks scene 2\n\nElements:\n- thing 2 — stands for the real part/);
-  assert.match(analogyMarkdown(topicAnalogy(webhooks!)!), /Rung: 3 \(a familiar everyday situation\)\n\nActor: a critter: a student\n\nHook \(the opener's moment, clear on its own\): It is already moving 2\.\n\nSteps \(what happens in the scene — the real step\):\n1\. first thing — event fires\n2\. second thing — request sent\n3\. third thing — app updates$/);
-  // ai_focus is stored in jev_notes and counted in the weighted score (EX3-73).
-  assert.equal((webhooks?.jev_notes as { ai_focus?: number }).ai_focus, 2);
-  assert.equal(Number(webhooks?.weighted_score), weightedScore(STRONG));
+const gapScores = (v: number, overrides: Partial<GapScores> = {}): GapScores => ({ pull: v, clarity: v, closable: v, ...overrides });
+const pickedAnalogy = candidate(2);
 
-  // An analogy from an older writer is picked again at render time (EX3-31, 3.1).
-  const old = { ...webhooks!, jev_notes: { ...webhooks!.jev_notes, analogy: { ...note, version: 'analogy-writer-v2' } } };
-  assert.equal(topicAnalogy(old), null);
-  assert.equal(topicAnalogy((await getTopic(db, results[1].topicId))!), null);
-
-  const { rows } = await db.query<{ vendor: string; component: string; n: number }>(
-    `SELECT vendor, component, count(*)::int AS n FROM explainers.cost_events
-      WHERE component LIKE 'analogy%' GROUP BY vendor, component ORDER BY component`,
-  );
-  assert.deepEqual(rows, [
-    { vendor: 'jev', component: 'analogy_scoring', n: 3 },
-    { vendor: 'anthropic', component: 'analogy_writer', n: 1 },
-  ].sort((a, b) => a.component.localeCompare(b.component)));
+test('gap writer v2 writes for the most pull, with ways in, and keeps only the hard rules (EX3-120, EX3-123)', () => {
+  assert.equal(GAP_WRITER_VERSION, 'gap-writer-v2');
+  assert.match(GAP_WRITER_INSTRUCTIONS, /Nothing from the analogy appears in the line: not its name, and none of its parts, characters, places or actions\./);
+  assert.doesNotMatch(GAP_WRITER_INSTRUCTIONS, /analogy's scene|analogy's process/);
+  assert.match(GAP_WRITER_INSTRUCTIONS, /Your goal is engagement\. Write the opening question with the most pull for this topic/);
+  assert.match(GAP_WRITER_INSTRUCTIONS, /- The everyday mystery:.*\n- The contradiction:.*\n- The stakes:.*\n- The impossible-seeming number:.*\n- The belief that's wrong:.*\n- The "you did this today":/);
+  assert.match(GAP_WRITER_INSTRUCTIONS, /Jev scores your 3 candidates on pull, clarity, whether the analogy answers the question, and accuracy/);
+  for (const rule of [/2\. About the real technology, never the analogy\./, /3\. True\./, /4\. End on the question\./, /5\. No term and no jargon/, /6\. 18 to 36 words/, /7\. The analogy can answer it/]) {
+    assert.match(GAP_WRITER_INSTRUCTIONS, rule);
+  }
+  // The old formula and its whitelist are gone.
+  assert.doesNotMatch(GAP_WRITER_INSTRUCTIONS, /named as they name it|relevance/);
+  const item = (GAPS_SCHEMA.properties.candidates.items as { required: readonly string[] }).required;
+  assert.deepEqual([...item], ['line', 'question', 'way_in', 'why_it_pulls']);
 });
 
-test('a failed analogy pass is recorded on the topic and never changes the evaluation', async () => {
+test('the gap writer caches its stable prefix; the topic, term and analogy go in the user message', () => {
+  const request = { model: 'claude-sonnet-5-5', themeBrief: 'BRIEF', title: 'Webhooks', scope: 'Explain webhooks.', term: 'webhook', analogy: pickedAnalogy };
+  const params = gapWriterParams(request);
+  assert.deepEqual(params.output_config.format.schema, GAPS_SCHEMA);
+  const system = params.system as { text: string; cache_control?: unknown }[];
+  assert.ok(system[0].cache_control);
+  assert.ok(system[0].text.startsWith(GAP_WRITER_INSTRUCTIONS));
+  assert.ok(!system[0].text.includes('Webhooks'));
+  const message = gapWriterUserMessage(request);
+  assert.match(message, /^Topic: Webhooks\nLearning objective: Explain webhooks\.\nTerm \(never say it\): webhook\n/);
+  assert.match(message, /Name: Thing 2\nThing 2 rings when something happens\. Nobody has to keep checking\.\n- thing 2: the real part\n- other: another part\n- the bell: the signal\n/);
+  assert.ok(message.endsWith('Write exactly 3 candidates.'));
+  const retry = gapWriterUserMessage({ ...request, retry: { previous: [{ line: 'A line?', misses: ['pull 1 of 4, under 3'] }] } });
+  assert.match(retry, /Earlier candidates could not be picked:\n- "A line\?" \(pull 1 of 4, under 3\)/);
+  assert.deepEqual(gapWriterParams({ ...request, retry: { previous: [] } }).system, params.system);
+});
+
+test('gap writer output must be exactly three non-empty, distinct candidates', () => {
+  const three = [1, 2, 3].map((n) => gapLine(n));
+  assert.equal(parseGaps({ candidates: three }).length, 3);
+  assert.throws(() => parseGaps({ candidates: three.slice(0, 2) }), /exactly 3/);
+  assert.throws(() => parseGaps({ candidates: [three[0], three[0], three[2]] }), /repeated/);
+  assert.throws(() => parseGaps({ candidates: [{ ...three[0], question: ' ' }, three[1], three[2]] }), /missing a field/);
+});
+
+test('the gap code checks: its question last, no toss, no term, 18–36 words, nothing from the analogy', () => {
+  const input = { term: 'webhook', analogy: pickedAnalogy };
+  assert.deepEqual(gapCheckProblems(gapLine(1), input), []);
+  const line = (text: string, question = 'How does it know?') => ({ ...gapLine(1), line: text, question });
+  const base = 'You open an app every morning and it already shows the stories you like best before you even search.';
+  assert.match(gapCheckProblems(line(`${base} How does it know? Stick around.`), input).join(), /does not end on its question/);
+  assert.match(gapCheckProblems(line(`${base} Here's why it matters, how does it know?`, "Here's why it matters, how does it know?"), input).join(), /tosses to the next beat/);
+  assert.match(gapCheckProblems(line(`${base} How does a webhook know?`, 'How does a webhook know?'), input).join(), /says the term "webhook"/);
+  assert.match(gapCheckProblems(line('How does it know?'), input).join(), /4 words \(18 to 36\)/);
+  assert.match(gapCheckProblems(line(`${base} How does the bell know?`, 'How does the bell know?'), input).join(), /names the analogy's world \(bell\)/);
+  assert.match(gapCheckProblems(line(`${base} How does it know?`, 'Why?'), input).join(), /its question is not the last sentence/);
+  // A word the real thing shares with the analogy is not the analogy's world (the DNS reel: a
+  // "numbered page" stands for a "numeric IP address").
+  const dns = { term: 'DNS', topic: 'What is DNS and how does a website name find its server?', analogy: { name: 'The cookbook index', mapping: [{ analogy: 'the numbered page with the recipe', concept: 'the web server at the numeric IP address' }, { analogy: 'the cookbook index', concept: 'the DNS lookup system' }] } };
+  const numbers = line('You typed a website\'s name today, yet the internet only finds websites by number. So how does a name you can remember get turned into the right number?', 'So how does a name you can remember get turned into the right number?');
+  assert.deepEqual(gapCheckProblems(numbers, dns), []);
+  assert.match(gapCheckProblems(line(`${base} So who keeps the cookbook?`, 'So who keeps the cookbook?'), dns).join(), /names the analogy's world \(cookbook\)/);
+  // Mapping rows are phrases: their pronouns and time words are not the analogy's world (the cache reel's live run).
+  const fridge = { term: 'cache', analogy: { name: 'The kitchen fridge', mapping: [{ analogy: 'An empty shelf, so you go to the store and restock', concept: 'a cache miss' }, { analogy: 'Grabbing it from the fridge in seconds', concept: 'a cache hit' }] } };
+  const second = line('The second time you open a website, it loads almost instantly, even though nothing about your internet changed. So where is your device finding the page so fast?', 'So where is your device finding the page so fast?');
+  assert.deepEqual(gapCheckProblems(second, fridge), []);
+  assert.match(gapCheckProblems(line(`${base} So what is in the fridge?`, 'So what is in the fridge?'), fridge).join(), /names the analogy's world \(fridge\)/);
+});
+
+test('the gap pick: pull weighs most; clarity and closable at least 3; a false claim is never picked', () => {
+  assert.equal(gapTotal(gapScores(4)), 100);
+  assert.equal(gapTotal(gapScores(2, { pull: 4 })), 75);
+  assert.equal(pickGap([gapScores(3), gapScores(3, { pull: 4 }), gapScores(3.5)]), 1);
+  // Same total: the one with more pull wins.
+  assert.equal(pickGap([gapScores(3, { pull: 2, clarity: 4, closable: 4 }), gapScores(3, { pull: 4, clarity: 2, closable: 2 })]), 1);
+  assert.equal(pickGap([gapScores(3), gapScores(3)]), 0);
+  assert.deepEqual(gapMisses(gapScores(3), 0.1), []);
+  assert.deepEqual(gapMisses(gapScores(4, { clarity: 2.9 }), 0.1), ['clarity 2.9 of 4, under 3']);
+  assert.deepEqual(gapMisses(gapScores(4), 0.6), ['may state something untrue']);
+});
+
+test('chooseGap: Jev scores the lines that pass the code checks, code picks the most pull, BRIEF.md gets the pick', async () => {
   const { db } = await scratchExplainersDb();
+  const [seeded] = await seedPool(db, [['Webhooks', STRONG]]);
   const ideas = stubIdeas();
-  ideas.writeAnalogies = async () => {
-    throw new Error('analogy writer must return exactly 3 candidates');
+  ideas.writeGaps = async (request) => {
+    ideas.gapCalls.push(request);
+    return { candidates: [{ ...gapLine(1), line: 'Too short? How?', question: 'How?' }, gapLine(2), gapLine(3)], usage: { input_tokens: 1, output_tokens: 1 }, model: 'claude-sonnet-5-5' };
   };
-  const [result] = await addAndEvaluateTopics({ db, jevTransport: stubJev({ Webhooks: STRONG }).transport, ideaModel: ideas }, [
-    { title: 'Webhooks', origin: 'manual' },
-  ]);
-  assert.equal(result.evaluation.outcome, 'entered_pool');
-  const topic = await getTopic(db, result.topicId);
-  const note = (topic?.jev_notes as { analogy: { error?: string } }).analogy;
-  assert.match(note.error ?? '', /exactly 3/);
-  assert.equal(topicAnalogy(topic!), null, 'the render runs the pass again (EX3-31)');
+  const { transport, calls } = stubJev({}, [], { gap: (line) => (line.endsWith('want 3?') ? 4 : 3) });
+  const topic = (await getTopic(db, seeded.topicId))!;
+  const note = await chooseGap(
+    { db, jev: new (await import('@/lib/explainers/jev/runner')).RecordingExplainersJevRunner(transport, db, { mode: 'development' }), ideaModel: ideas, model: 'm', mode: 'development', themeBrief: 'BRIEF' },
+    topic,
+    pickedAnalogy,
+  );
+  assert.ok('pick' in note);
+  assert.deepEqual(note.pick, { pass: 0, index: 2 }, 'the most pull among the checked lines');
+  assert.equal(note.passes[0].scores[0], null, 'a line that fails the code checks never reaches Jev');
+  assert.match(note.passes[0].misses[0].join(), /words/);
+  assert.equal(calls.filter((c) => c.set === 'gap').length, 2);
+  const md = gapMarkdown(note);
+  assert.match(md, /^Say this line in frame 2, word for word \(written by the gap writer, picked by Jev, EX3-120\):\n\n> You open an app .* How does it know what you want 3\?\n\n- gap_question: How does it know what you want 3\?\n- way in: everyday mystery\n- score: 100 of 100\n/);
+  assert.match(md, /The other candidates \(for reference only; never use them\):\n- "Too short\? How\?" \(not scored; .*words/);
+  const stored = (await getTopic(db, seeded.topicId))!;
+  assert.equal(topicGapNote(stored, pickedAnalogy)?.version, GAP_WRITER_VERSION);
+});
+
+test('no gap can be picked: one retry told why, then below the bar; the topic stays (EX3-120)', async () => {
+  const { db } = await scratchExplainersDb();
+  const [seeded] = await seedPool(db, [['Webhooks', STRONG]]);
+  const ideas = stubIdeas();
+  const { transport } = stubJev({}, [], { gap: () => 1 });
+  const { RecordingExplainersJevRunner } = await import('@/lib/explainers/jev/runner');
+  const note = await chooseGap(
+    { db, jev: new RecordingExplainersJevRunner(transport, db, { mode: 'development' }), ideaModel: ideas, model: 'm', mode: 'development', themeBrief: 'BRIEF' },
+    (await getTopic(db, seeded.topicId))!,
+    pickedAnalogy,
+  );
+  assert.equal(MAX_GAP_PASSES, 2);
+  assert.ok('below_bar' in note && note.below_bar);
+  assert.equal(ideas.gapCalls.length, 1 + 1, 'the seed pass is not counted here; one call and one retry');
+  assert.match(JSON.stringify(ideas.gapCalls[1].retry?.previous[0].misses), /pull 1 of 4, under|clarity 1 of 4, under 3/);
+  const topic = (await getTopic(db, seeded.topicId))!;
+  assert.equal(topic.status, 'pool');
+  assert.equal(topicGap(topic, pickedAnalogy), null);
 });

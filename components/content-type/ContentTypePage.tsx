@@ -2,8 +2,10 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { SettingsForm } from '@/app/explainers/settings/settings-form';
+import { RebuildPostButton } from '@/components/content-type/AiEventsPoolButtons';
 import {
   AddTopicsButton,
+  AiEventsRunButton,
   CarouselRunButton,
   LfdRunButton,
   LiveToggle,
@@ -17,7 +19,7 @@ import { RunProgressProvider } from '@/components/content-type/run-progress';
 import { TypeHub } from '@/components/content-type/TypeHub';
 import { LoadError } from '@/components/social-hub/LoadError';
 import { readPosting } from '@/lib/content-type/posting';
-import { typeHubModel } from '@/lib/content-type/model';
+import { aiEventsRebuildRefusal, typeHubModel } from '@/lib/content-type/model';
 import { explainersDb } from '@/lib/explainers/connection';
 import { loadSettingsView } from '@/lib/explainers/overview';
 import { loadForPage } from '@/lib/social-hub/live';
@@ -36,16 +38,17 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 /** The types this page draws (Text on Screen has its own app page). */
 type PageVertical = Exclude<Vertical, 'reels'>;
 
-const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days' };
+const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days', ai_events: 'AI Events This Week' };
 const BENCH_NOTE: Record<PageVertical, string> = {
   last_few_days: 'The latest run’s queue: the stories in its post, the ones it dropped and why, and what was next in line. Major headlines lead; Text on Screen ideas fill the rest.',
   carousels: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels.',
   stories: 'Ideas drawn from the other pools. A set is built for each series that is due.',
   explainers: 'Topics waiting to be rendered, best score first. Generate renders one reel.',
+  ai_events: 'The week’s ranked events, city by city: the top 3 per city go into the carousel. Gated and excluded events stay listed with the reason. Open a row to see where its score comes from.',
 };
 
 /**
- * A content type's page (Carousels, Stories, Explainers) in the Text on
+ * A content type's page (Carousels, Stories, Explainers, Last Few Days, AI Events) in the Text on
  * Screen format: title and the Live switch up top, a row of days, that day's
  * posts, and the bench. The generate buttons, Live and settings write, so they
  * are built here, outside the read-only hub code.
@@ -76,6 +79,15 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
   } else if (vertical === 'last_few_days') {
     generate = <LfdRunButton />;
     settings = <PostingSettings type="last_few_days" />;
+  } else if (vertical === 'ai_events') {
+    // Rebuild post re-renders the coming week's post from the pool; with none waiting there is nothing to rebuild.
+    generate = (
+      <>
+        <AiEventsRunButton />
+        <RebuildPostButton disabled={aiEventsRebuildRefusal(loaded)} />
+      </>
+    );
+    settings = <PostingSettings type="ai_events" />;
   } else {
     generate = <AddTopicsButton />;
     const view = explainersView!;

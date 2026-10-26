@@ -75,7 +75,7 @@ export function offerer(dataset: HubDataset, now: Date, flags: HubFlags = SOCIAL
 
   function build(post: HubPost): Offer {
       const state = postState(post, now);
-      const plans = actionsFor(post, { quota, typicalCostLabel: label(post.vertical), lfdPublishingLive: dataset.lfdPublishingLive === true });
+      const plans = actionsFor(post, { quota, typicalCostLabel: label(post.vertical), lfdPublishingLive: dataset.lfdPublishingLive === true, aiEventsPublishingLive: dataset.aiEventsPublishingLive === true });
       const slots = plans.some((p) => p.kind === 'post' && p.pick === 'slot') ? slotChoices(dataset, post, now) : undefined;
       const menu = actionMenu(post, state, plans, enabled, slots);
       const card = cardActions(state, plans, enabled, slots);

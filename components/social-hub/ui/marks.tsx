@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import {
   ClockAlert,
   Ban,
+  CalendarDays,
   Check,
   CircleCheck,
   CircleDashed,
@@ -31,6 +32,7 @@ export const TYPE_ICON: Record<Vertical, LucideIcon> = {
   carousels: GalleryHorizontal,
   stories: Sparkles,
   last_few_days: Newspaper,
+  ai_events: CalendarDays,
 };
 
 const STATE_ICON: Record<StateIcon, LucideIcon> = {

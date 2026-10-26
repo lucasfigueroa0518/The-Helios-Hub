@@ -1,8 +1,11 @@
 import { METRO_PROFILES } from '@/lib/networking/cities';
 import { fetchJson } from '@/lib/networking/http';
-import type { AdapterFetchResult, CandidateEvent } from '@/lib/networking/types';
+import { METROS, type AdapterFetchResult, type CandidateEvent, type Metro } from '@/lib/networking/types';
 
 const GDG_SEARCH = 'https://gdg.community.dev/api/search/event/';
+const GDG_HOST = 'gdg.community.dev';
+const PAGE_SIZE = 100;
+const MAX_PAGES = 5;
 
 type BevyEvent = {
   id?: number | string;
@@ -17,12 +20,15 @@ type BevyEvent = {
   venue_city?: string;
   chapter_city?: string;
   chapter_title?: string;
+  chapter_url?: string;
   audience_type?: string;
   _geoloc?: { lat?: number; lng?: number };
 };
 
 type BevySearchResponse = {
   results?: BevyEvent[];
+  links?: { next?: string | null };
+  count?: number;
 };
 
 export function normalizeBevyEvent(raw: BevyEvent): CandidateEvent | null {
@@ -45,36 +51,63 @@ export function normalizeBevyEvent(raw: BevyEvent): CandidateEvent | null {
     lng: raw._geoloc?.lng,
     isOnline,
     hostName: raw.chapter_title,
+    organizerName: raw.chapter_title || undefined,
+    organizerKind: raw.chapter_title ? 'gdg_chapter' : undefined,
+    organizerUrl: raw.chapter_url || undefined,
+    descriptionSource: raw.description_short ? 'bevy' : undefined,
     trusted: true,
   };
 }
 
-async function searchMetro(metro: 'boston' | 'miami'): Promise<CandidateEvent[]> {
+/** Follow `links.next` only while it stays on the GDG API host. */
+function nextPage(next: string | null | undefined): string | null {
+  if (!next) return null;
+  try {
+    return new URL(next).hostname === GDG_HOST ? next : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The search honours `latitude`/`longitude` but ignores `lat`/`lng`, every date filter and
+ * ordering, so results mix past and future events. Page through and keep the future ones.
+ */
+export async function searchBevyMetro(metro: Metro, now = new Date()): Promise<CandidateEvent[]> {
   const profile = METRO_PROFILES[metro];
-  const start = new Date();
-  const end = new Date(start.getTime() + 90 * 24 * 60 * 60 * 1000);
-  const url = new URL(GDG_SEARCH);
-  url.searchParams.set('start_date', start.toISOString().slice(0, 10));
-  url.searchParams.set('end_date', end.toISOString().slice(0, 10));
-  url.searchParams.set('query', '');
-  url.searchParams.set('lat', String(profile.center.lat));
-  url.searchParams.set('lng', String(profile.center.lng));
-  const { ok, json } = await fetchJson<BevySearchResponse>(url.toString(), {
-    headers: { Accept: 'application/json; version=2024-01-01' },
-  });
-  if (!ok || !json?.results) return [];
-  return json.results
-    .map(normalizeBevyEvent)
-    .filter((event): event is CandidateEvent => Boolean(event));
+  const first = new URL(GDG_SEARCH);
+  first.searchParams.set('latitude', String(profile.center.lat));
+  first.searchParams.set('longitude', String(profile.center.lng));
+  first.searchParams.set('page_size', String(PAGE_SIZE));
+  const cutoff = now.getTime() - 60 * 60 * 1000;
+  const events: CandidateEvent[] = [];
+  let next: string | null = first.toString();
+  for (let page = 0; next && page < MAX_PAGES; page += 1) {
+    const { ok, status, json } = await fetchJson<BevySearchResponse>(next, {
+      headers: { Accept: 'application/json; version=2024-01-01' },
+    });
+    if (!ok || !json?.results) {
+      if (page === 0) throw new Error(`Bevy search HTTP ${status}`);
+      break;
+    }
+    for (const raw of json.results) {
+      const start = raw.start_date_iso ? Date.parse(raw.start_date_iso) : Number.NaN;
+      if (!Number.isFinite(start) || start < cutoff) continue;
+      const event = normalizeBevyEvent(raw);
+      if (event) events.push(event);
+    }
+    next = nextPage(json.links?.next);
+  }
+  return events;
 }
 
 export async function fetchBevyEvents(): Promise<AdapterFetchResult> {
   const seen = new Set<string>();
   const events: CandidateEvent[] = [];
   const errors: string[] = [];
-  for (const metro of ['boston', 'miami'] as const) {
+  for (const metro of METROS) {
     try {
-      for (const event of await searchMetro(metro)) {
+      for (const event of await searchBevyMetro(metro)) {
         if (seen.has(event.sourceEventId)) continue;
         seen.add(event.sourceEventId);
         events.push(event);
