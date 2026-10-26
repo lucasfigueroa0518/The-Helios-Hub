@@ -10,6 +10,21 @@
 //   glowSign(text, x, y, { color })          a lit sign: the words with a halo
 //   level(t, keys)                           a light level over time, eased between keys
 //
+// hx-4.1, physically motivated light (for lens.js perspective scenes; world in cm, z up):
+//   irradiance(light, p, n)                  how much a point light reaches a point (cos, falloff,
+//                                            and only through its aperture: a fridge lights
+//                                            nothing its own body hides)
+//   spill(P, light)                          the pool a light throws on the floor through its
+//                                            aperture: fanning out, falling off with distance
+//   castShadow(footprint, light, { height }) the shadow polygon on the floor, pointing away
+//   veil(svg, { level }) · wash(svg, { color, level })   darken / warm a drawn thing's silhouette
+//
+// THE RULE: every light has a visible or stated source. A pool, a rim, a glow or a warm face is
+// drawn only where a named light (the open fridge, the window, the lamp) reaches it, in that
+// light's color, falling off with distance from it. Nothing is lit by "the scene"; in a dark
+// scene everything a light does not reach stays dark (a faint moonlight rim at most, and only
+// with a window or moon in the shot).
+//
 // Every color comes from the palette by name (`warm`, `cool`, `hot`, or any TOKENS key). Every
 // function returns an SVG string and is a pure function of its arguments and frame time; filter
 // and gradient ids go through id() and are named from their content, so they never collide.
@@ -33,10 +48,18 @@ export function hashId(s) {
 /** A Gaussian blur filter of `sd` px: `{ defs, url }`. `box` [x, y, w, h] in user space keeps a
  *  wide blur from being cut at the element's bounding box (frame space by default). */
 export function blurDef(sd, { box = [-400, -400, 1880, 2720], name = 'blur' } = {}) {
-  const key = `${name}-${hashId(`${n2(sd)}|${box.join(',')}`)}`;
+  // box 'bbox': the filter region follows the blurred thing (its box and half again round it),
+  // far cheaper than a frame-sized region for a small thing (a shadow, a blurred critter)
+  // box 'frame': the frame and a margin (for a shape that runs far off screen: a floor pool, a
+  // long shadow; a region the size of its projection would be enormous and slow)
+  if (box === 'frame') box = [-120, -120, 1320, 2160];
+  const local = box === 'bbox';
+  const key = `${name}-${hashId(`${n2(sd)}|${local ? 'bbox' : box.join(',')}`)}`;
   const fid = id(key);
-  const defs = el('filter', { id: fid, filterUnits: 'userSpaceOnUse', x: box[0], y: box[1], width: box[2], height: box[3], 'color-interpolation-filters': 'sRGB' },
-    el('feGaussianBlur', { stdDeviation: n2(sd) }));
+  const region = local
+    ? { x: '-50%', y: '-50%', width: '200%', height: '200%' }
+    : { filterUnits: 'userSpaceOnUse', x: box[0], y: box[1], width: box[2], height: box[3] };
+  const defs = el('filter', { id: fid, ...region, 'color-interpolation-filters': 'sRGB' }, el('feGaussianBlur', { stdDeviation: n2(sd) }));
   return { defs, url: `url(#${fid})`, id: fid };
 }
 
@@ -54,8 +77,10 @@ export function lightColor(name) {
 /** The key light: one direction for the kit, toward the top right (core.LIGHT when it lands). */
 export const KEY = (core.LIGHT && core.LIGHT.key) || [0.62, -0.78];
 
-/** Lights add on dark grounds (screen); on paper they lay a soft tint over the drawing. */
-const blend = () => (isDark() ? { style: 'mix-blend-mode:screen' } : {});
+/** No blend modes, ever (hx-4.1): a mix-blend-mode makes HyperFrames fall back to slow
+ *  screenshot capture. Light is drawn with plain alpha (a light color over the dark reads as
+ *  light), and a lit drawing is lit with one filter (lit()). */
+const blend = () => ({});
 
 /**
  * A soft wedge of light cast on a surface: from the source edge `from` ([[x, y], [x, y]], e.g. the
@@ -70,12 +95,12 @@ export function lightWedge({ from, to, level: lv = 1, color = 'warm', blur = 8, 
   const a = [(from[0][0] + from[1][0]) / 2, (from[0][1] + from[1][1]) / 2];
   const b = [(to[0][0] + to[1][0]) / 2, (to[0][1] + to[1][1]) / 2];
   const pts = [from[0], from[1], to[1], to[0]].map((p) => `${n2(p[0])},${n2(p[1])}`).join(' ');
-  const k = clamp01(lv) * (isDark() ? 1 : 0.7);
+  const k = clamp01(lv) * (isDark() ? 0.8 : 0.6);
   const gid = id(`wedge-${hashId(pts + c + n2(k))}`);
   const grad = el('linearGradient', { id: gid, gradientUnits: 'userSpaceOnUse', x1: n2(a[0]), y1: n2(a[1]), x2: n2(b[0]), y2: n2(b[1]) }, [
-    el('stop', { offset: 0, 'stop-color': core0, 'stop-opacity': n2(0.95 * k) }),
-    el('stop', { offset: 0.22, 'stop-color': c, 'stop-opacity': n2(0.75 * k) }),
-    el('stop', { offset: 0.65, 'stop-color': c, 'stop-opacity': n2(0.28 * k) }),
+    el('stop', { offset: 0, 'stop-color': core0, 'stop-opacity': n2(0.8 * k) }),
+    el('stop', { offset: 0.25, 'stop-color': c, 'stop-opacity': n2(0.6 * k) }),
+    el('stop', { offset: 0.65, 'stop-color': c, 'stop-opacity': n2(0.2 * k) }),
     el('stop', { offset: 1, 'stop-color': c, 'stop-opacity': 0 }),
   ].join(''));
   const f = blurDef(blur, { name: 'wedgeblur' });
@@ -117,7 +142,7 @@ export function rim(shape, { side = 'key', color, width = 6, level: lv = 1, soft
     el('feFlood', { 'flood-color': c, result: 'col' }),
     el('feComposite', { in: 'col', in2: 'inside', operator: 'in' }),
   ].join(''));
-  const body = shape.trim().startsWith('<') ? g({ filter: `url(#${fid})` }, shape) : el('path', { d: shape, fill: T.ink, filter: `url(#${fid})` });
+  const body = shape.trim().startsWith('<') ? g({ filter: `url(#${fid})` }, untag(shape)) : el('path', { d: shape, fill: T.ink, filter: `url(#${fid})` });
   return g({ 'data-k': 'light', 'data-light': 'rim', opacity: n2(clamp01(lv)), ...blend() }, [el('defs', {}, filter), body]);
 }
 
@@ -166,13 +191,12 @@ export function glint(clipD, u, { angle = 22, width = 0.18, strength = 0.85, col
   const b = bboxOf(clipD);
   if (![b.x, b.y, b.w, b.h].every(Number.isFinite) || b.w <= 0) return '';
   const bw = width > 1 ? width : Math.max(4, b.w * width);
-  const lean = Math.tan((angle * Math.PI) / 180) * b.h;
-  // From fully off the left edge to fully off the right edge.
-  const x0 = b.x - bw - Math.max(0, lean);
-  const x1 = b.x + b.w + Math.max(0, -lean) + bw * 0.5;
-  const cx = x0 + (x1 - x0) * u;
-  const band = (x, w, o) => el('path', {
-    d: `M ${n2(x + lean)} ${n2(b.y - 2)} L ${n2(x + lean + w)} ${n2(b.y - 2)} L ${n2(x + w)} ${n2(b.y + b.h + 2)} L ${n2(x)} ${n2(b.y + b.h + 2)} Z`,
+  const lean = Math.tan((angle * Math.PI) / 180) * (b.h + 4);
+  // The band's centre at mid-height runs from fully off the left edge to fully off the right.
+  const reach = bw * 1.6 + Math.abs(lean) / 2;
+  const cx = b.x - reach + (b.w + 2 * reach) * u;
+  const band = (c, w, o) => el('path', {
+    d: `M ${n2(c - w / 2 + lean / 2)} ${n2(b.y - 2)} L ${n2(c + w / 2 + lean / 2)} ${n2(b.y - 2)} L ${n2(c + w / 2 - lean / 2)} ${n2(b.y + b.h + 2)} L ${n2(c - w / 2 - lean / 2)} ${n2(b.y + b.h + 2)} Z`,
     fill: lightColor(color),
     opacity: n2(o * strength),
   });
@@ -221,4 +245,248 @@ export function level(t, keys) {
     }
   }
   return ks[ks.length - 1].v;
+}
+
+// ── hx-4.1: physically motivated light ────────────────────────────────────────────────────
+
+/** Small 3D vector helpers (world cm, z up), shared with lens.js. */
+export const V3 = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, k) => [a[0] * k, a[1] * k, a[2] * k],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  len: (a) => Math.hypot(a[0], a[1], a[2]),
+  norm: (a) => {
+    const l = Math.hypot(a[0], a[1], a[2]) || 1;
+    return [a[0] / l, a[1] / l, a[2] / l];
+  },
+  lerp: (a, b, u) => [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u],
+};
+const { add, sub, mul, dot, cross, norm, len } = V3;
+
+/** Strip cast tags from an overlay copy of a drawing (a rim, a veil, a lens): it is the same
+ *  critter, never a second one for try's cast check. */
+export const untag = (svg) => String(svg).replace(/ data-(who|look)="[^"]*"/g, '');
+
+/**
+ * Does the segment from the light at L to the point p pass through the aperture (four coplanar
+ * world points: a fridge's opening, the gap a door leaves, a window)? A point on the light's own
+ * side of the aperture plane is never reached through it.
+ */
+export function throughAperture(L, p, quad) {
+  const [a, b, , d] = quad;
+  const n = cross(sub(b, a), sub(d, a));
+  const den = dot(n, sub(p, L));
+  if (Math.abs(den) < 1e-9) return false;
+  const t = dot(n, sub(a, L)) / den;
+  if (!(t > 0 && t <= 1 + 1e-9)) return false;
+  const hit = add(L, mul(sub(p, L), t));
+  const inTri = (x, y, z) => {
+    const s1 = dot(cross(sub(y, x), sub(hit, x)), n);
+    const s2 = dot(cross(sub(z, y), sub(hit, y)), n);
+    const s3 = dot(cross(sub(x, z), sub(hit, z)), n);
+    return (s1 >= -1e-6 && s2 >= -1e-6 && s3 >= -1e-6) || (s1 <= 1e-6 && s2 <= 1e-6 && s3 <= 1e-6);
+  };
+  return inTri(quad[0], quad[1], quad[2]) || inTri(quad[0], quad[2], quad[3]);
+}
+
+/**
+ * How much a point light reaches the point p on a surface with normal n (omit n for a thing that
+ * faces the light, like a critter's lit side): level × cos × 1 / (1 + (d / reach)²), and 0 where
+ * the light's aperture does not let it through. A light: { pos, level, reach, color, aperture? }.
+ */
+export function irradiance(light, p, n = null) {
+  if (!light || !(light.level > 0)) return 0;
+  const v = sub(light.pos, p);
+  const d = len(v);
+  if (d < 1e-6) return light.level;
+  const w = mul(v, 1 / d);
+  const cos = n ? dot(norm(n), w) : 1;
+  if (cos <= 0) return 0;
+  if (light.aperture && !throughAperture(light.pos, p, light.aperture)) return 0;
+  return light.level * cos / (1 + (d / (light.reach ?? 300)) ** 2);
+}
+
+/** Where the ray from L through q meets the floor z = fz, or null when it never comes down. */
+function floorHit(L, q, fz) {
+  const dz = q[2] - L[2];
+  if (dz >= -1e-6) return null;
+  const t = (fz - L[2]) / dz;
+  return add(L, mul(sub(q, L), t));
+}
+
+/**
+ * The shadow a thing casts on the floor (z = 0) from a light, as a world polygon pointing away
+ * from it: `footprint` is the thing's floor outline (world points, or { x, y, r } for a round
+ * one), `light` a point light { pos } or a direction { dir } (toward the light), `height` the
+ * thing's height in cm. The polygon is the hull of the footprint and its top's shadow, never
+ * longer than maxLength × height from the thing (a light low behind a thing would otherwise throw
+ * a streak across the whole floor).
+ */
+export function castShadow(footprint, light, { height = 72, reach, maxLength = 2.4, fz = 0 } = {}) {
+  // a shadow never runs off across the room: at most maxLength × the thing's height (and reach)
+  reach = Math.min(reach ?? Infinity, height * maxLength);
+  const pts = Array.isArray(footprint)
+    ? footprint.map((p) => [p[0], p[1], p[2] ?? fz])
+    : Array.from({ length: 16 }, (_, i) => [footprint.x + footprint.r * Math.cos((i / 16) * 2 * Math.PI), footprint.y + footprint.r * Math.sin((i / 16) * 2 * Math.PI), fz]);
+  const tops = pts.map((p) => {
+    const top = [p[0], p[1], p[2] + height];
+    if (light.dir) {
+      const d = norm(light.dir);
+      if (d[2] <= 1e-6) return add(p, mul([-d[0], -d[1], 0], reach));
+      return add(p, mul([-d[0], -d[1], 0], height / d[2]));
+    }
+    if (light.pos[2] <= top[2] + 1e-6) {
+      // the light is as low as the top: the shadow runs off to the reach
+      const h = norm([p[0] - light.pos[0], p[1] - light.pos[1], 0]);
+      return add(p, mul(h, reach));
+    }
+    const hit = floorHit(light.pos, top, fz);
+    const off = sub(hit, p);
+    return len(off) > reach ? add(p, mul(norm(off), reach)) : hit;
+  });
+  return hull2([...pts, ...tops]).map((q) => [q[0], q[1], fz]);
+}
+
+/** The convex hull of points by x, y (monotone chain), counter-clockwise. */
+function hull2(points) {
+  const ps = points.map((p) => [p[0], p[1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (ps.length < 3) return ps;
+  const crossZ = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [];
+  for (const p of ps) {
+    while (lower.length >= 2 && crossZ(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = ps.length - 1; i >= 0; i--) {
+    const p = ps[i];
+    while (upper.length >= 2 && crossZ(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+/**
+ * The floor pool of a point light shining through its aperture, through the lens P (lens.js):
+ * the aperture projected from the light onto the floor (it fans out from the opening), filled
+ * with the light's color falling off with distance as the light does (sampled along its centre
+ * line, perspective-correct), with soft edges. Returns { svg, poly } (poly: the world polygon).
+ * The aperture's lower edge comes first: [bottom a, bottom b, top b, top a].
+ */
+export function spill(P, light, { fz = 0, reach, soft = 0.035, samples = 7 } = {}) {
+  if (!light || !(light.level > 0.002) || !light.aperture) return { svg: '', poly: [] };
+  const L = light.pos;
+  const far = reach ?? (light.reach ?? 300) * 1.8;
+  const [a0, b0, b1, a1] = light.aperture;
+  const onFloor = (q) => {
+    const hit = floorHit(L, q, fz);
+    const base = [L[0], L[1], fz];
+    if (hit && len(sub(hit, base)) <= far) return hit;
+    const h = norm([q[0] - L[0], q[1] - L[1], 0]);
+    return add(base, mul(h, far));
+  };
+  const poly = [onFloor(a0), onFloor(b0), onFloor(b1), onFloor(a1)];
+  const scr = poly.map((q) => P(...q));
+  if (scr.some((q) => !Number.isFinite(q[0]) || !Number.isFinite(q[1]))) return { svg: '', poly };
+  const near = V3.lerp(poly[0], poly[1], 0.5);
+  const farMid = V3.lerp(poly[2], poly[3], 0.5);
+  const sn = P(...near);
+  const sf = P(...farMid);
+  const c = lightColor(light.color ?? 'warm');
+  const hot = lightColor('hot');
+  const I0 = irradiance({ ...light, aperture: null }, near, [0, 0, 1]) || 1e-6;
+  const stops = [];
+  for (let i = 0; i < samples; i++) {
+    const u = i / (samples - 1);
+    const w = V3.lerp(near, farMid, u);
+    const s = P(...w);
+    const k = Math.hypot(s[0] - sn[0], s[1] - sn[1]) / (Math.hypot(sf[0] - sn[0], sf[1] - sn[1]) || 1);
+    const I = Math.min(1, irradiance({ ...light, aperture: null }, w, [0, 0, 1]) / I0) * (1 - u * u);
+    stops.push(el('stop', { offset: n2(Math.min(1, k)), 'stop-color': i === 0 ? core.mixHex(c, hot, 0.35) : c, 'stop-opacity': n2(Math.min(1, light.level) * 0.9 * I) }));
+  }
+  const pts = scr.map((q) => `${n2(q[0])},${n2(q[1])}`).join(' ');
+  const gid = id(`spill-${hashId(pts + c + n2(light.level))}`);
+  const size = Math.max(...scr.map((q) => q[1])) - Math.min(...scr.map((q) => q[1])) + Math.max(...scr.map((q) => q[0])) - Math.min(...scr.map((q) => q[0]));
+  const span = (k) => Math.max(...scr.map((q) => q[k])) - Math.min(...scr.map((q) => q[k]));
+  const f = blurDef(Math.min(50, Math.max(3, Math.min(size, 2400) * soft)), { name: 'spillblur', box: span(0) > 1400 || span(1) > 2400 ? 'frame' : 'bbox' });
+  const grad = el('linearGradient', { id: gid, gradientUnits: 'userSpaceOnUse', x1: n2(sn[0]), y1: n2(sn[1]), x2: n2(sf[0]), y2: n2(sf[1]) }, stops.join(''));
+  const svg = g({ 'data-k': 'light', 'data-light': 'spill', ...blend() }, [el('defs', {}, grad + f.defs), el('polygon', { points: pts, fill: `url(#${gid})`, filter: f.url })]);
+  return { svg, poly };
+}
+
+/** A filter that floods `color` into a drawing's silhouette at `level` (its id from content). */
+function floodFilter(name, color, k) {
+  const fid = id(`${name}-${hashId(`${color}|${n2(k)}`)}`);
+  return {
+    url: `url(#${fid})`,
+    defs: el('filter', { id: fid, x: '-5%', y: '-5%', width: '110%', height: '110%', 'color-interpolation-filters': 'sRGB' }, [
+      el('feFlood', { 'flood-color': color, 'flood-opacity': n2(k), result: 'c' }),
+      el('feComposite', { in: 'c', in2: 'SourceAlpha', operator: 'in' }),
+    ].join('')),
+  };
+}
+
+/** Darken a drawn thing where no light reaches it: its silhouette under the ground's darkness at
+ *  `level` 0..1 (a night veil). Draw right after it. */
+export function veil(svg, { level: lv = 0.6, color } = {}) {
+  if (!(lv > 0.005)) return '';
+  const c = color ? lightColor(color) : isDark() ? (T['stage-bottom'] ?? T.ink) : T['shadow-warm'] ?? T.ink;
+  const f = floodFilter('veil', c, clamp01(lv));
+  return g({ 'data-k': 'light', 'data-light': 'veil' }, [el('defs', {}, f.defs), g({ filter: f.url }, untag(svg))]);
+}
+
+/** Warm (or cool) a drawn thing where a light reaches it: its silhouette washed with the light's
+ *  color at `level`, as an overlay drawn right after it (and after its veil). Kept for older
+ *  callers; to light a drawing, prefer lit(), which costs one drawing and keeps its detail. No
+ *  blend mode (the old `mode` option is ignored). */
+export function wash(svg, { color = 'warm', level: lv = 0.5 } = {}) {
+  if (!(lv > 0.005)) return '';
+  const f = floodFilter('wash', lightColor(color), clamp01(lv) * 0.45);
+  return g({ 'data-k': 'light', 'data-light': 'wash' }, [el('defs', {}, f.defs), g({ filter: f.url }, untag(svg))]);
+}
+
+const rgb01 = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+
+/**
+ * Light a drawing with ONE filter on ONE copy of it (hx-4.1; the cheap way to light a critter):
+ * `gain` is how much light reaches it (1 = the studio light it was drawn for, below 1 darker,
+ * never brighter than `max`), `tint` and `tintLevel` color that light (a warm fridge, a cool
+ * moon) the way light colors a surface (a black limb stays black, white goes warm), and `rims` are
+ * bright bands on the sides facing lights: [{ side, color, width, level, soft }] (as rim()).
+ * Returns the drawing wrapped in the filtered group; its cast tags stay (it is the one critter).
+ */
+export function lit(svg, { gain = 1, tint = null, tintLevel = 0, rims = [], max = 1.15 } = {}) {
+  const g0 = Math.max(0, Math.min(max, gain));
+  const tc = tint ? rgb01(lightColor(tint)) : [1, 1, 1];
+  const w = tint ? clamp01(tintLevel) : 0;
+  // per channel: the light reaching it, colored by the tint, times the drawing's own color
+  const ch = tc.map((c) => n2(Math.min(max, g0 * (1 - w) + g0 * w * c + w * 0.25 * c)));
+  const rimList = (rims ?? []).filter((r) => r && r.level > 0.005);
+  if (g0 > 0.985 && g0 < 1.015 && !w && !rimList.length) return svg;
+  const key = hashId(`${ch.join(',')}|${rimList.map((r) => `${r.color}${n2(r.width ?? 6)}${n2(r.level)}${JSON.stringify(r.side)}`).join(';')}`);
+  const fid = id(`lit-${key}`);
+  const prims = [el('feColorMatrix', { in: 'SourceGraphic', type: 'matrix', values: `${ch[0]} 0 0 0 0  0 ${ch[1]} 0 0 0  0 0 ${ch[2]} 0 0  0 0 0 1 0`, result: 'lit' })];
+  const merge = ['lit'];
+  rimList.forEach((r, i) => {
+    const [ux, uy] = sideVec(r.side ?? 'key');
+    const width = r.width ?? 6;
+    // the band: the silhouette minus itself moved away from the light. No blur: a blur over a
+    // whole close-up critter costs tens of ms a frame; two offsets (full and half strength) give
+    // the band a soft inner edge for almost nothing.
+    prims.push(
+      el('feOffset', { in: 'SourceAlpha', dx: n2(-ux * width), dy: n2(-uy * width), result: `m${i}` }),
+      el('feComposite', { in: 'SourceAlpha', in2: `m${i}`, operator: 'out', result: `b${i}` }),
+      el('feOffset', { in: 'SourceAlpha', dx: n2(-ux * width * 0.5), dy: n2(-uy * width * 0.5), result: `h${i}` }),
+      el('feComposite', { in: 'SourceAlpha', in2: `h${i}`, operator: 'out', result: `k${i}` }),
+      el('feComposite', { in: `b${i}`, in2: `k${i}`, operator: 'arithmetic', k1: 0, k2: 0.45, k3: 0.55, k4: 0, result: `i${i}` }),
+      el('feFlood', { 'flood-color': lightColor(r.color ?? 'warm'), 'flood-opacity': n2(clamp01(r.level)), result: `c${i}` }),
+      el('feComposite', { in: `c${i}`, in2: `i${i}`, operator: 'in', result: `r${i}` }),
+    );
+    merge.push(`r${i}`);
+  });
+  prims.push(el('feMerge', {}, merge.map((m) => el('feMergeNode', { in: m })).join('')));
+  const filter = el('filter', { id: fid, x: '-8%', y: '-8%', width: '116%', height: '116%', 'color-interpolation-filters': 'sRGB' }, prims.join(''));
+  return g({ 'data-k': 'lit' }, [el('defs', {}, filter), g({ filter: `url(#${fid})` }, svg)]);
 }

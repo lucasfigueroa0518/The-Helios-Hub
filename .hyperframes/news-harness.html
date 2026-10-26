@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000}#w{position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden}</style></head>
+<body><div id="w"></div><script type="module">
+import * as nk from '../assets/kit/components/index.js';
+nk.installKit(document, { fonts: '../assets/fonts/' });
+window.__load = async (id, ctx) => {
+  const host = document.getElementById('w');
+  host.innerHTML = '';
+  const mod = (await import('../assets/frames/' + id + '.js?v=' + Math.random().toString(36).slice(2))).default;
+  if (!mod || typeof mod.build !== 'function' || typeof mod.render !== 'function') throw new Error('the default export must be { ground, build(root, ctx), render(t) }');
+  await Promise.all(["700 40px \"Pragmatica Extended\"","400 40px Roboto","700 40px Roboto","400 40px \"Gochi Hand\""].map((f) => document.fonts.load(f).catch(() => null)));
+  mod.build(host, Object.assign(ctx, { nk, assets: '../assets/' }));
+  await Promise.all([...host.querySelectorAll('img')].map((img) => img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; })));
+  if (ctx.sting) { const { buildSting } = await import('../assets/kit/sting.js'); window.__sting = buildSting(host, nk, { at: ctx.sting.at }); } else window.__sting = null;
+  window.__render = (t) => { mod.render(t); if (window.__sting) window.__sting.render(t); };
+  return { ground: mod.ground ?? null };
+};
+window.__ready = true;
+</script></body></html>

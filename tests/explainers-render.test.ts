@@ -15,13 +15,13 @@ import type { ExplainersDb } from '@/lib/explainers/db';
 import { NO_ANALOGY_REASON } from '@/lib/explainers/ideas/analogy';
 import { GAP_BELOW_BAR_REASON } from '@/lib/explainers/ideas/gap';
 import { ANALOGY_WRITER_VERSION, GAP_WRITER_VERSION, type AnalogyRequest, type GapRequest, type IdeaModel } from '@/lib/explainers/ideas/generator';
-import { runAgentSession, scrubbedEnv, sessionOptions, UNSANDBOXED_HYPERFRAMES, type AgentMessage, type AgentQuery } from '@/lib/explainers/render/agent';
-import { runRenderJob, BUILD_PROMPT, PLAN_PROMPT, RESUME_PROMPT, repairPrompt, repairProjectAssembly, storyboardHero, type RenderDeps } from '@/lib/explainers/render/job';
+import { PICTURE_CHECK_FILE, runAgentSession, scrubbedEnv, sessionOptions, UNSANDBOXED_HYPERFRAMES, type AgentMessage, type AgentQuery } from '@/lib/explainers/render/agent';
+import { frameModulesWritten, runRenderJob, BUILD_PROMPT, PLAN_PROMPT, RESUME_PROMPT, repairPrompt, repairProjectAssembly, storyboardHero, type RenderDeps } from '@/lib/explainers/render/job';
 import { FINDINGS_FILE, FIX_PROMPT, scriptLine, storyboardGapQuestion } from '@/lib/explainers/render/understanding';
 import { SpendMeter } from '@/lib/explainers/render/meter';
 import { checkBash, checkToolCall, insideDir } from '@/lib/explainers/render/policy';
 import { fetchSourceText, htmlToText, resolveSource, type FetchLike } from '@/lib/explainers/render/source';
-import { briefMarkdown, openerLineFor, PROJECT_INSTRUCTIONS, prepareWorkspace, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
+import { briefMarkdown, isExplainers41, kitImportClosure, KIT_41_ENTRIES, KIT_VERSION, openerLineFor, PRINCIPLES_PATH, PROJECT_INSTRUCTIONS, prepareWorkspace, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
 import { addTopics, getJob, getTopic, listArtifacts, listLintViolations, requestRender, claimNextJob } from '@/lib/explainers/repository';
 import type { AnalogyCandidate, GapCandidate, GapNote } from '@/lib/explainers/types';
 import { CaptionError, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
@@ -215,9 +215,13 @@ test('the agent gets a scrubbed environment, web tools, project settings only, a
   assert.ok(UNSANDBOXED_HYPERFRAMES.every((rule) => rule.endsWith(' *')));
   assert.deepEqual(options.sandbox.filesystem.allowWrite, [JOB, '/jobs/abc/home']);
   assert.equal(options.agents['frame-worker'].model, 'claude-sonnet-5-5');
-  // The first-time viewer plays the stranger for the gap and the whole reel on Sonnet (EX3-108); the picture check stays on Haiku.
+  // The first-time viewer plays the stranger for the gap and the whole reel on Sonnet (EX3-108); a
+  // session that names no picture-check model (Real Case) keeps the legacy Haiku check.
   assert.equal(options.agents['first-viewer'].model, 'claude-sonnet-5-5');
   assert.equal(options.agents['picture-checker'].model, 'claude-haiku-5-5');
+  // Explainers 4.1 roles fall back to the frame worker's model when the session names none.
+  for (const a of ['frame-worker-scene', 'frame-worker-tech']) assert.equal(options.agents[a].model, 'claude-sonnet-5-5', a);
+  assert.ok(!options.agents['frame-worker'].tools.includes('Bash'), 'the legacy frame worker runs no commands');
   assert.deepEqual(options.agents['first-viewer'].tools, ['Read', 'SubagentHandback']);
   const viewer = options.agents['first-viewer'].prompt as string;
   assert.match(viewer, /## Beat 1" to "## Beat 8/);
@@ -329,6 +333,8 @@ type StubJevOptions = {
   compare?: (a: string, b: string) => number;
   /** The understanding test's answers (EX3-133), by key; default 0.9 (they match). */
   understanding?: (key: string, state: Record<string, unknown>) => number;
+  /** The definition check's p(same part) (Explainers 4.1), by state; default 0.9 (they agree). */
+  definition?: (state: Record<string, unknown>) => number;
 };
 
 /**
@@ -351,6 +357,7 @@ function analogyJev(score: (line: string) => number, options: StubJevOptions = {
         else if (key === 'false_mapping' || key === 'is_the_system' || key === 'real_names') answers[key] = noul(options.gates?.(String(s.analogy)) ?? 0.1);
         else if (key === 'a_over_b') answers[key] = noul(options.compare?.(String(s.a), String(s.b)) ?? 0.5);
         else if (key === 'mechanism_match' || key === 'example_match' || key === 'gap_answered') answers[key] = noul(options.understanding?.(key, s) ?? 0.9);
+        else if (key === 'same_part') answers[key] = noul(options.definition?.(s) ?? 0.9);
         else answers[key] = { type: 'score', score: score(String(s.candidate)), confidence: 1 };
       }
       return { model: 'jev-stub', answers, usage: { input_tokens: 1_000, output_tokens: 0 } } as unknown as SystemOneResult<Q>;
@@ -640,6 +647,77 @@ test('the spend cap kills the run and keeps what it produced', async () => {
   assert.ok(kinds.includes('brief') && kinds.includes('transcript_log'));
 });
 
+test('a cap in session B keeps the reel when every frame is written: the worker renders it and the cap is recorded (hx-4)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  let rendered = 0;
+  const query = stubQuery({
+    [PLAN_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+      fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+      yield assistant('p1', { input_tokens: 1_000, output_tokens: 100 }, 'planned');
+      yield result(0.1);
+    },
+    [BUILD_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'index.html'), '<html></html>');
+      fs.writeFileSync(path.join(o.cwd, 'audio_meta.json'), '{"voices":[]}');
+      const modules = path.join(o.cwd, 'assets', 'frames');
+      const frames = path.join(o.cwd, 'compositions', 'frames');
+      fs.mkdirSync(modules, { recursive: true });
+      fs.mkdirSync(frames, { recursive: true });
+      for (let n = 1; n <= 8; n += 1) {
+        fs.writeFileSync(path.join(modules, `0${n}-beat.js`), 'export default {}');
+        fs.writeFileSync(path.join(frames, `0${n}-beat.html`), '<template></template>');
+      }
+      yield assistant('b1', { input_tokens: 3_000_000, output_tokens: 300_000 }, 'expensive');
+      if ((o.abortController as AbortController).signal.aborted) throw new Error('aborted');
+      yield result(9);
+    },
+  });
+  const d = deps(db, query);
+  d.repairAssembly = () => [];
+  d.renderVideo = (projectDir) => {
+    rendered += 1;
+    fs.mkdirSync(path.join(projectDir, 'renders'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, 'renders', 'video.mp4'), 'worker-mp4');
+  };
+  const outcome = await runRenderJob(d, job);
+  assert.deepEqual(outcome, { status: 'ok' });
+  assert.equal(rendered, 1, 'the worker rendered the written frames');
+  const rules = (await listLintViolations(db, job.id)).map((v) => v.rule);
+  assert.ok(rules.includes('spend_cap'), 'the cap is recorded on the reel');
+
+  // Frames missing: the cap still fails the job, as before.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  const query2 = stubQuery({
+    [PLAN_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+      fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+      yield result(0.1);
+    },
+    [BUILD_PROMPT]: async function* (o) {
+      yield assistant('b1', { input_tokens: 3_000_000, output_tokens: 300_000 }, 'expensive');
+      if ((o.abortController as AbortController).signal.aborted) throw new Error('aborted');
+      yield result(9);
+    },
+  });
+  const failed = await runRenderJob(deps(db2, query2), job2);
+  assert.equal(failed.status === 'failed' && failed.capped, true);
+});
+
+test('salvage counts only frames\' own modules, never code\'s opener or a frame\'s new props', () => {
+  const dir = tmp();
+  const frames = path.join(dir, 'assets', 'frames');
+  fs.mkdirSync(frames, { recursive: true });
+  fs.writeFileSync(path.join(frames, '01-opener.js'), '');
+  for (const n of [2, 3, 4, 5, 6, 7]) fs.writeFileSync(path.join(frames, `0${n}-beat.js`), '');
+  fs.writeFileSync(path.join(frames, '01-hook.props.js'), '');
+  assert.equal(frameModulesWritten(dir), false, 'the hook itself is missing');
+  fs.writeFileSync(path.join(frames, '01-hook.js'), '');
+  assert.equal(frameModulesWritten(dir), true);
+});
+
 test('an assembled project with no MP4 is rendered by the worker, not left as a success', async () => {
   const { db } = await scratchExplainersDb();
   const job = await queuedJob(db);
@@ -796,7 +874,17 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
     assert.equal(fs.readFileSync(p('.claude/skills', f), 'utf8'), fs.readFileSync(path.join(overrides, f), 'utf8'), f);
   }
   assert.ok(!fs.existsSync(p('.claude/skills/faceless-explainer/scripts/audio.test.mjs')), 'upstream tests are not copied');
-  assert.match(fs.readFileSync(p('frame.md'), 'utf8'), /version: helios-explainer-v10/);
+  // Explainers 4.1 (DOCS): the design truth is helios-explainer-v12.
+  assert.match(fs.readFileSync(p('frame.md'), 'utf8'), /version: helios-explainer-v12/);
+  // Explainers 4.1: the job is marked 4.1 (try.mjs makes the 4.1 checks errors), the principles sit with
+  // the recipe, and the set, explanation, self-review and check modules are pinned with all they import.
+  assert.equal(fs.readFileSync(p('assets/kit/VERSION'), 'utf8'), `${KIT_VERSION}\n`);
+  assert.equal(fs.readFileSync(p('.helios-lint/world-kit/VERSION'), 'utf8'), `${KIT_VERSION}\n`);
+  assert.ok(isExplainers41(ws.projectDir));
+  assert.equal(fs.readFileSync(p(PRINCIPLES_PATH), 'utf8'), fs.readFileSync(path.join(process.cwd(), 'explainers', 'recipe', 'principles.md'), 'utf8'));
+  const pinned = kitImportClosure(p('assets/kit'), KIT_41_ENTRIES);
+  assert.deepEqual(pinned.missing, []);
+  for (const f of ['set.js', 'explain.js', 'snap.mjs', 'lens.js', 'glass.js', 'cast.js', 'shots.js', 'bounds.mjs', 'frames.mjs', 'mount.mjs']) assert.ok(pinned.files.includes(f), `pinned ${f}`);
   assert.match(fs.readFileSync(p('.hyperframes/caption-skin.html'), 'utf8'), /var DARK = \[\];/);
   assert.match(fs.readFileSync(p('.hyperframes/caption-skin.html'), 'utf8'), /var QUIET = \[\];/);
   // The 3.1 kit and the sound library: two opener sounds copied, the library linked (EX3-63, EX3-75).
@@ -1171,6 +1259,126 @@ test('still serious after the fix: the build goes on and the reel is flagged; no
   const choice = JSON.parse(fs.readFileSync(path.join(workspacePaths(d2.jobsRoot, job2.id).projectDir, 'assets', 'opener.json'), 'utf8'));
   assert.equal(choice.hero, 'object');
   assert.ok(['paper-rip', 'typewriter', 'big-bang', 'balloon-pop', 'block-drop', 'unboxing', 'paper-plane'].includes(choice.key), choice.key);
+});
+
+// ── The definition check (Explainers 4.1) ──
+
+const defScript = (line3: string) =>
+  [fullScript, '## Line 3 — Define (Frame 3)', '', `    ${line3}`, '', '## Line 4 — Analogy (Frame 4)', '', '    The mailbox at the curb is where letters land.', ''].join('\n');
+
+/** Plan with a frame 3 line and no reel test; the fix rewrites frame 3 with `fixed`. */
+function definitionQuery(seen: { prompt: string; options: Record<string, any> }[], line3: string, fixed: string | null): AgentQuery {
+  return stubQuery(
+    {
+      [PLAN_PROMPT]: async function* (o) {
+        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), defScript(line3));
+        yield result(0.2);
+      },
+      [FIX_PROMPT]: async function* (o) {
+        const findings = JSON.parse(fs.readFileSync(path.join(o.cwd, FINDINGS_FILE), 'utf8'));
+        assert.deepEqual(findings.blocking.map((f: { kind: string }) => f.kind), ['definition_mapping']);
+        if (fixed) fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), defScript(fixed));
+        yield result(0.1);
+      },
+      [BUILD_PROMPT]: async function* (o) {
+        fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
+        fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4-bytes');
+        yield result(0.3);
+      },
+    },
+    seen,
+  );
+}
+
+/** Jev that says the definition names another part when it calls the term the notification. */
+const definitionJev = () => analogyJev(() => 3, { definition: (state) => (/notification/.test(String(state.definition_line)) ? 0.1 : 0.9) });
+
+test('a definition that names another part of the analogy blocks: one fix session, even with no reel test (Explainers 4.1)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const seen: { prompt: string; options: Record<string, any> }[] = [];
+  const d = deps(db, definitionQuery(seen, 'A webhook is the notification the app gets.', 'A webhook is the web address another app sends its news to.'));
+  const jev = definitionJev();
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: jev };
+  assert.deepEqual(await runRenderJob(d, job), { status: 'ok' });
+  assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT, FIX_PROMPT, BUILD_PROMPT]);
+  const asked = jev.calls.filter((c) => c.keys.includes('same_part'));
+  assert.equal(asked.length, 2, 'judged after the plan and again after the fix');
+  assert.equal(asked[0].state.definition_line, 'A webhook is the notification the app gets.');
+  assert.match(String(asked[0].state.definition_card), /^A webhook is a message one app sends/);
+  assert.equal(asked[0].state.term_row, 'the mailbox = the webhook URL');
+  assert.equal(asked[0].state.mapping, 'the mailbox = the webhook URL\nthe flag popping up = the notification\nwalking over to look = polling');
+  assert.equal(asked[0].state.analogy_lines, 'The mailbox at the curb is where letters land.');
+  assert.ok(!(await listLintViolations(db, job.id)).some((v) => v.rule === 'understanding_flag'));
+
+  // Not fixed: the build goes on, flagged on frame 3.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  const d2 = deps(db2, definitionQuery([], 'A webhook is the notification the app gets.', null));
+  d2.analogy = { ideaModel: analogyModel(['unused']), jevTransport: definitionJev() };
+  assert.deepEqual(await runRenderJob(d2, job2), { status: 'ok' });
+  const flags = (await listLintViolations(db2, job2.id)).filter((v) => v.rule === 'understanding_flag');
+  assert.equal(flags.length, 1);
+  assert.equal(flags[0].frame, 3);
+  assert.match(flags[0].detail, /^definition_mapping: Frame 3 defines "What is an API\?" as "A webhook is the notification the app gets\.", but in the analogy's mapping "the mailbox" stands for the webhook URL/);
+});
+
+// ── The picture check is required in a 4.1 job (Explainers 4.1) ──
+
+test('collect flags a 4.1 reel with no picture check, and records what the stranger could not follow', async () => {
+  const build = (check: unknown) =>
+    stubQuery({
+      [PLAN_PROMPT]: async function* (o) {
+        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+        yield result(0.2);
+      },
+      [BUILD_PROMPT]: async function* (o) {
+        fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
+        fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4-bytes');
+        if (check !== undefined) {
+          fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
+          fs.writeFileSync(path.join(o.cwd, PICTURE_CHECK_FILE), JSON.stringify(check));
+        }
+        yield result(0.3);
+      },
+    });
+  const as41 = (d: RenderDeps) => {
+    d.prepare = ((input: { jobsRoot: string; jobId: string }) => {
+      const ws = fakePrepare(input.jobsRoot, input.jobId);
+      fs.mkdirSync(path.join(ws.projectDir, 'assets', 'kit'), { recursive: true });
+      fs.writeFileSync(path.join(ws.projectDir, 'assets', 'kit', 'VERSION'), `${KIT_VERSION}\n`);
+      return ws;
+    }) as never;
+    return d;
+  };
+  // A 4.1 job without the check: rendered, and flagged.
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  assert.deepEqual(await runRenderJob(as41(deps(db, build(undefined))), job), { status: 'ok' });
+  const missing = (await listLintViolations(db, job.id)).filter((v) => v.rule === 'picture_check_missing');
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].severity, 'error');
+  // A legacy job without it: as before, nothing.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  assert.deepEqual(await runRenderJob(deps(db2, build(undefined)), job2), { status: 'ok' });
+  assert.equal((await listLintViolations(db2, job2.id)).filter((v) => /^picture_check/.test(v.rule)).length, 0);
+  // A 4.1 job with the check: what failed is recorded per frame, as warnings.
+  const { db: db3 } = await scratchExplainersDb();
+  const job3 = await queuedJob(db3);
+  const check = [
+    { frame: '04-analogy', stills: ['0.15s', '3.10s'], named_character: 'the orange critter in the white coat', action: 'walks to a door and back', matches_line: 'no', why: 'the line says it goes to the store', jump_cuts: [{ between: ['3.10s', '4.20s'], why: 'the same view, closer' }], floating: ['a mug beside the body'], faceless: [], cut_off: [], crowded: '', tech_moves: 'not_tech' },
+    { frame: '06-example', stills: ['0.15s'], named_character: 'cannot tell', action: 'cards appear', matches_line: 'partly', jump_cuts: [], floating: [], faceless: [], cut_off: [], crowded: '', tech_moves: 'only_labels' },
+    { frame: '05-why', stills: ['0.15s'], named_character: 'the nurse', action: 'sorts', matches_line: 'yes', jump_cuts: [], floating: [], faceless: [], cut_off: [], crowded: '', tech_moves: 'not_tech' },
+  ];
+  assert.deepEqual(await runRenderJob(as41(deps(db3, build(check))), job3), { status: 'ok' });
+  const found = (await listLintViolations(db3, job3.id)).filter((v) => /^picture_check/.test(v.rule));
+  assert.deepEqual(found.map((v) => [v.rule, v.frame, v.severity]), [['picture_check', 4, 'warning'], ['picture_check', 6, 'warning']]);
+  assert.match(found[0].detail, /the picture does not show the line \(the line says it goes to the store\); a jump cut between 3\.10s and 4\.20s \(the same view, closer\); floating: a mug beside the body/);
+  assert.match(found[1].detail, /only labels the idea/);
+  assert.match(found[1].detail, /cannot tell who the named character is/);
 });
 
 test('a build that stopped after the scene modules is finished by the worker, with no model', { skip: spawnSyncOk('ffmpeg') ? false : 'ffmpeg is not installed' }, () => {

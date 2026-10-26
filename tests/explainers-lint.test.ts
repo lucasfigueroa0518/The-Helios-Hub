@@ -17,13 +17,32 @@ import {
   shotWindows,
   stem,
   subjectSpoken,
+  CLOSER_SHOTS,
   countWords,
+  CRITTER_CM,
+  stripComments,
+  entitySizeProblems,
   eventsFromDir,
+  GLASS_FRAMES,
+  GROUNDS,
+  groundProblem,
+  lookLineProblems,
+  MAX_EXAGGERATE,
+  parseSize,
+  RETIRED_GROUNDS,
   jargonCandidates,
   lintStoryboard,
   parseScript,
   quotedSpans,
   section,
+  anchorEntities,
+  castCritters,
+  FRAME7_ANCHORS,
+  MAX_SHOT_CRITTERS,
+  OVERSTATE_RE,
+  sceneShotProblems,
+  TECHNIQUE_IDS,
+  TRIP_RE,
 } from '../explainers/lint/lint-storyboard.mjs';
 
 const dir = path.join(process.cwd(), 'explainers', 'lint');
@@ -40,8 +59,8 @@ test('the beat sheet is eight beats of about a minute in the planned order (EX3-
   // Beat 6 illustrates the example itself (EX3-87).
   // Beat 2 asks about the real thing, in its own picture (EX3-115).
   assert.deepEqual(BEAT_SHEET.map((b) => b.anchor), ['scene', 'own', 'own', 'scene', 'scene', 'own', 'own', null]);
-  // At most 0.2s after each line (EX3-79); the close is voiceless, 2.5s, no hold (EX3-95).
-  assert.deepEqual(BEAT_SHEET.map((b) => b.hold), [0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, null]);
+  // The hold after each line is pace.mjs's HOLD, 0.15s (EX3-79); the close is voiceless, 2.5s, no hold (EX3-95).
+  assert.deepEqual(BEAT_SHEET.map((b) => b.hold), [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, null]);
   assert.equal(BEAT_SHEET[7].seconds, 2.5);
   assert.equal(BEAT_SHEET[7].words, null);
   assert.deepEqual(BEAT_SHEET.map((b) => b.shots), [1, 2, 0, 2, 2, 2, 1, 0]);
@@ -75,7 +94,7 @@ test('the recipe skeleton passes the structural checks', () => {
   const skeleton = fs.readFileSync(path.join(process.cwd(), 'explainers', 'recipe', 'storyboard-skeleton.md'), 'utf8');
   const { violations } = lintStoryboard({ storyboard: skeleton });
   // The skeleton has no content yet: only content checks may fire.
-  const content = ['voiceover_words', 'visual_missing', 'anchor_scene', 'hook', 'curiosity_gap', 'term', 'concept', 'ground', 'attention_reset', 'definition', 'shots', 'example_steps', 'opener_line', 'gap_question', 'shot_cue'];
+  const content = ['voiceover_words', 'visual_missing', 'anchor_scene', 'hook', 'curiosity_gap', 'term', 'concept', 'ground', 'attention_reset', 'definition', 'shots', 'example_steps', 'opener_line', 'gap_question', 'shot_cue', 'technique', 'term_part'];
   const structural = (violations as Violation[]).filter((v) => !content.includes(v.rule));
   assert.deepEqual(structural, []);
 });
@@ -88,6 +107,8 @@ test('a storyboard that breaks the plan reports each rule', () => {
     'anchor_scene@-', // no steps
     'anchor_scene@-', // a hand is an entity (EX3-77)
     'anchor_scene@-', // no hero (EX3-110)
+    'anchor_scene@-', // no set (frame.md § The set)
+    'anchor_scene@-', // no beyond (EX4-151)
     'attention_reset@2',
     'beat_type@2',
     'blueprint@3',
@@ -96,6 +117,7 @@ test('a storyboard that breaks the plan reports each rule', () => {
     'definition@3', // no part of speech
     'emoji@3',
     'engagement_technique@1',
+    'entity_size@-', // neither entity has its real size (hx-4)
     'exclamation_mark@1',
     'first_transition@1',
     'frame_count@-',
@@ -111,7 +133,10 @@ test('a storyboard that breaks the plan reports each rule', () => {
     'sfx_retired@2',
     'shots@1',
     'shots@2',
+    'technique@2', // the tech beats name their technique (EX4-154)
+    'technique@3',
     'term@-',
+    'term_part@3', // the definition's part of the analogy (EX4-152)
     'total_duration@-',
     'transition_kind@1',
     'transition_kind@2',
@@ -229,7 +254,7 @@ test('3.1–3.9 writing rules: no scene restart, the gap story, the dictionary c
   assert.deepEqual(rules(lintStoryboard({ storyboard: good, brief: brief(picked) }).violations as Violation[]), []);
   assert.deepEqual(rules(lintStoryboard({ storyboard: good, brief: brief('Something else entirely. Why?') }).violations as Violation[]), ['gap_pick@2']);
   assert.deepEqual(flagged(swap('- engagement: Brand close\n', '- engagement: Brand close\n- voiceover: "Apps that tell you."\n')), ['close_voiceover@8']);
-  assert.deepEqual(flagged(swap('medium — the empty post where the mailbox stood — on "mailbox"', 'ots — past the carrier to the mailbox — on "mailbox"')), ['shot_kind@5']);
+  assert.deepEqual(flagged(swap('insert — the empty post where the mailbox stood — on "mailbox"', 'ots — past the carrier to the mailbox — on "mailbox"')), ['shot_kind@5']);
   assert.deepEqual(flagged(swap('close — the phone buzzing — on "phone"', 'close — the critter at the window — on "phone"')), ['shot_subject@2']);
   assert.deepEqual(flagged(swap('- part_of_speech: noun\n', '')), ['definition@3']);
   assert.deepEqual(flagged(swap('- definition: "A webhook is a message one app sends', '- definition: "A webhook is a note one app sends')), ['definition@3']);
@@ -237,7 +262,7 @@ test('3.1–3.9 writing rules: no scene restart, the gap story, the dictionary c
   assert.deepEqual(flagged(swap('- hold: 0.15s', '- hold: 0.6s')), ['hold@1']);
   assert.deepEqual(flagged(swap('term: webhook\n', 'term: event stream\n')), ['concept@-', 'definition_term@3']);
   assert.deepEqual(flagged(swap('## Hook\n', '## Hooks\n')), ['hook@-']);
-  assert.deepEqual(flagged(swap('- shots: close — the phone buzzing — on "phone"; insert — the payment message — on "payment"', '- shots: close — the phone buzzing')), ['shots@2']);
+  assert.deepEqual(flagged(swap('- shots: close — the phone buzzing — on "phone"; close — the payment message — on "payment"', '- shots: close — the phone buzzing')), ['shots@2']);
   assert.deepEqual(flagged(swap('- example_steps: order 4821 ships → store sends message → message lands → order screen updates', '- example_steps: payment → done')), ['example_steps@6', 'example_steps_match@6']);
   assert.deepEqual(flagged(swap('  - carrier — a mail carrier critter — stands for', '  - carrier — a mail carrier man — stands for')), ['anchor_scene@-']);
   assert.deepEqual(flagged(swap('- transition_in: cut\n- status: outline\n- src: compositions/frames/04', '- transition_in: zoom-through\n- status: outline\n- src: compositions/frames/04')), ['transition_kind@4']);
@@ -289,13 +314,237 @@ test('the example walks the same steps as the anchor scene (EX3-129)', () => {
 test('orange is counted on the anchor block only (EX3-107, EX3-132)', () => {
   const good = fixture('good');
   // A frame's own orange critter (frame 7's scene line) is not the anchor's count.
-  const frameOrange = good.replace('- scene: A paper phone on a counter lights', '- scene: A shopper critter, look: orange, wear cap, at a paper phone on a counter lights');
+  const frameOrange = good.replace('- scene: A glass phone lights', '- scene: A shopper critter, look: orange, outfit a rain jacket, holds a glass phone that lights');
   assert.deepEqual((lintStoryboard({ storyboard: frameOrange }).violations as Violation[]).filter((v) => v.rule === 'anchor_scene'), []);
   // A second orange critter in the anchor block is.
-  const twoOrange = good.replace(/  - letter — [^\n]*\n/, '  - clerk — a store clerk critter — stands for the store — a critter at a till, look: orange, wear apron — beats 4\n');
+  const twoOrange = good.replace(/  - letter — [^\n]*\n/, '  - clerk — a store clerk critter — stands for the store — a critter at a till, look: orange, outfit a teal shop apron over a white tee, a name tag — beats 4\n');
   const found = (lintStoryboard({ storyboard: twoOrange }).violations as Violation[]).filter((v) => v.rule === 'anchor_scene');
   assert.equal(found.length, 1);
   assert.match(found[0].detail, /2 orange critters; the hero .* frames 1, 4, 5 and a frame-7 callback/);
+});
+
+test('grounds are paper, stage, and white for the close; night and forest are retired (hx-4)', () => {
+  assert.deepEqual(GROUNDS, ['paper', 'stage', 'white']);
+  assert.deepEqual(RETIRED_GROUNDS, { night: 'stage', forest: 'stage' });
+  assert.deepEqual(GLASS_FRAMES, [2, 3, 6]);
+  assert.equal(groundProblem('paper'), null);
+  assert.equal(groundProblem('Stage'), null);
+  assert.match(groundProblem('night')!, /retired in 4\.0: use "stage"/);
+  assert.match(groundProblem('blue')!, /one of paper, stage, white/);
+  const good = fixture('good');
+  const ground = (frame: number, to: string) => {
+    const block = new RegExp(`(## Frame ${frame} [^]*?- ground: )\\w+`);
+    assert.ok(block.test(good), `frame ${frame}`);
+    return (lintStoryboard({ storyboard: good.replace(block, `$1${to}`) }).violations as Violation[]).filter((v) => v.rule === 'ground');
+  };
+  // A retired ground is an error with the fix.
+  for (const old of ['night', 'forest']) {
+    const v = ground(4, old);
+    assert.deepEqual(v.map((x) => `${x.frame}:${x.severity}`), ['4:error']);
+    assert.match(v[0].detail, /use "stage" \(the premium lit stage\)/);
+  }
+  // The stage is a ground of the analogy's world.
+  assert.deepEqual(ground(4, 'stage'), []);
+  assert.deepEqual(ground(7, 'stage'), []);
+  // The real-tech frames are glass on paper: another ground there is a warning.
+  for (const n of GLASS_FRAMES) assert.deepEqual(ground(n, 'stage').map((x) => `${x.frame}:${x.severity}`), [`${n}:warning`]);
+  // The anchor block's ground: paper or stage.
+  const anchorGround = (to: string) => (lintStoryboard({ storyboard: good.replace('- ground: paper\n- hook:', `- ground: ${to}\n- hook:`) }).violations as Violation[]).filter((v) => v.rule === 'anchor_scene');
+  assert.deepEqual(anchorGround('stage'), []);
+  assert.match(anchorGround('forest')[0].detail, /retired in 4\.0/);
+  assert.match(anchorGround('white')[0].detail, /the close's/);
+});
+
+test('every anchor entity has its real size in cm; exaggeration is capped at 1.5× (hx-4)', () => {
+  assert.equal(MAX_EXAGGERATE, 1.5);
+  assert.equal(CRITTER_CM, 72);
+  assert.deepEqual(parseSize('a fridge — size: 70 × 70 × 180 cm — beats 4'), { dims: [70, 70, 180], unit: 'cm', exaggerate: null });
+  assert.deepEqual(parseSize('size: 26cm (exaggerate 1.2×)'), { dims: [26], unit: 'cm', exaggerate: 1.2 });
+  assert.equal(parseSize('a fridge — beats 4'), null);
+  const good = fixture('good');
+  const sizes = (from: string, to: string) => {
+    assert.ok(good.includes(from), from);
+    return (lintStoryboard({ storyboard: good.replace(from, to) }).violations as Violation[]).filter((v) => v.rule === 'entity_size');
+  };
+  assert.deepEqual(sizes('size: 20 cm', 'size: 20 cm'), []);
+  // Missing on an object: an error naming it. A critter is the ruler and needs none.
+  const missing = sizes(' — size: 20 cm', '');
+  assert.deepEqual(missing.map((v) => v.severity), ['error']);
+  assert.match(missing[0].detail, /1 entity has no real size \(flag\): give each "size: <n> cm"/);
+  assert.equal(good.split('\n').find((l) => l.includes('carrier — '))?.includes('size:'), false, 'the critter line has no size');
+  assert.match(sizes('size: 20 cm', 'size: 0.2 m')[0].detail, /write its size in cm/);
+  assert.match(sizes('size: 20 cm', 'size: big')[0].detail, /not a number/);
+  assert.match(sizes('(exaggerate 1.3×)', '(exaggerate 3×)')[0].detail, /exaggerated 3×: at most 1\.5×/);
+  assert.deepEqual(entitySizeProblems(null), []);
+});
+
+test("a critter's look is its body and an outfit drawn for its role; stock wear only on an exact match (hx-4, EX3-103)", () => {
+  assert.deepEqual(lookLineProblems('a nurse critter, look: ink, outfit teal scrubs with a V-neck, a stethoscope, an ID badge — beats 4'), []);
+  assert.deepEqual(lookLineProblems('a diner critter, look: paper, outfit none — beats 4'), []);
+  assert.deepEqual(lookLineProblems('a chef critter, look: paper, outfit a white chef coat, wear chef-hat (exact: a chef\'s toque is the chef\'s own) — beats 4'), []);
+  assert.deepEqual(lookLineProblems('look: ink, wear none'), []);
+  assert.deepEqual(lookLineProblems('a nurse critter — beats 4'), [], 'no look line: the anchor check reports it');
+  const one = (line: string) => {
+    const found = lookLineProblems(line);
+    assert.equal(found.length, 1, `${line}: ${found.join(' | ')}`);
+    return found[0];
+  };
+  // The triage nurse in a baseball cap: stock wear with no exact reason.
+  assert.match(one('a nurse critter, look: orange, wear cap — beats 4'), /"wear cap" is the stock list, used only on an exact match/);
+  assert.match(one('a nurse critter, look: ink — beats 4'), /has no outfit/);
+  assert.match(one('a nurse critter, look: ink, outfit — beats 4'), /outfit is empty/);
+  assert.match(one('a guard critter, look: ink, outfit an orange vest — beats 4'), /never an outfit color/);
+  assert.match(one('a surgeon critter, look: paper, outfit green scrubs, a surgical mask — beats 4'), /"mask" covers a critter's eyes or mouth/);
+  assert.match(one('a skier critter, look: paper, outfit a puffer jacket, a scarf over the mouth — beats 4'), /covers a critter's eyes or mouth/);
+  assert.deepEqual(lookLineProblems('a student critter, look: paper, outfit a lilac hoodie, glasses, a scarf — beats 4'), [], 'a hoodie, glasses and a scarf at the neck are fine');
+  // In the storyboard: an anchor_scene error.
+  const LINE = "look: orange, outfit a mail carrier's uniform: blue shirt and shorts, a mailbag across the body, a name badge";
+  const found = (lintStoryboard({ storyboard: fixture('good').replace(LINE, 'look: orange, wear backpack') }).violations as Violation[]).filter((v) => v.rule === 'anchor_scene');
+  assert.deepEqual(found.map((v) => v.severity), ['error']);
+  assert.match(found[0].detail, /"wear backpack" is the stock list/);
+  // A frame's own critter line is not the anchor block's.
+  const frameLine = fixture('good').replace('- scene: A glass phone lights', '- scene: A shopper critter, look: paper, wear cap, holds a glass phone that lights');
+  assert.deepEqual((lintStoryboard({ storyboard: frameLine }).violations as Violation[]).filter((v) => v.rule === 'anchor_scene'), []);
+});
+
+test('the place reads first: a set, beat 5 opens on a medium, closer shots are punctuation (frame.md § The set, § Shots)', () => {
+  const good = fixture('good');
+  const swap = (from: string, to: string) => {
+    assert.ok(good.includes(from), from);
+    return lintStoryboard({ storyboard: good.replace(from, to) }).violations as Violation[];
+  };
+  // The anchor block names its set.
+  const noSet = swap(good.split('\n').find((l) => l.startsWith('- set: '))! + '\n', '');
+  assert.deepEqual(rules(noSet), ['anchor_scene@-']);
+  assert.match(noSet[0].detail, /no set/);
+  // Beat 5 opens on a medium that shows the place.
+  const FIVE = '- shots: medium — the letter pushing the flag up — on "flag"';
+  const five = lintStoryboard({ storyboard: good.replace(FIVE, '- shots: insert — the letter pushing the flag up — on "flag"').replace('; insert — the empty post', '; medium — the empty post') }).violations as Violation[];
+  assert.deepEqual(five.map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['shots@5:warning']);
+  assert.match(five[0].detail, /beat 5 opens on a insert shot; open on a medium/);
+  // Most of the analogy is wide or medium.
+  assert.deepEqual(CLOSER_SHOTS, ['close', 'insert', 'reaction']);
+  const closer = swap('medium — the carrier and the letter — on "carrier"', 'close — the carrier and the letter — on "carrier"');
+  assert.deepEqual(closer.map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['shots@4:warning']);
+  assert.match(closer[0].detail, /2 of 3 shots are close, insert or reaction/);
+  // A frame opens on a new picture: the same kind on the same subject is flagged, the same kind alone is not.
+  const same = swap(FIVE, '- shots: close — the flag — on "flag" — cast: flag — angle: low beside the post; medium — the letter');
+  assert.ok(same.some((v) => v.rule === 'shots' && v.frame === 5 && /opens on the close shot of "the flag" that frame 4 ended on/.test(v.detail)), JSON.stringify(same));
+  const FOUR = good.split('\n').find((l) => l.startsWith('- shots: wide — the drive and the mailbox'))!;
+  const [w, m, c] = FOUR.replace('- shots: ', '').split('; ');
+  const kindOnly = swap(FOUR, `- shots: ${w}; ${c}; ${m}`);
+  assert.ok(!kindOnly.some((v) => /that frame 4 ended on/.test(v.detail)), 'frame 4 ends on a medium of the carrier, frame 5 opens on a medium of the letter: a new picture');
+});
+
+test('4.1 shots: each scene shot names its cast (at most 3 critters, a crowd is one) and its angle; no jump cuts (EX4-146, EX4-148)', () => {
+  const parsed = parseShots('medium — the carrier and the letter — on "carrier" — cast: carrier, letter and mailbox — angle: low from the drive, left of the wide; insert — the empty post — cast: none — angle: high above it');
+  assert.deepEqual(parsed.map((x) => [x.kind, x.subject, x.cue, x.cast, x.angle]), [
+    ['medium', 'the carrier and the letter', 'carrier', ['carrier', 'letter', 'mailbox'], 'low from the drive, left of the wide'],
+    ['insert', 'the empty post', null, [], 'high above it'],
+  ]);
+  // A shot line without the 4.1 fields parses as before (Real Case reuses parseShots).
+  assert.deepEqual(parseShots('close — the screen — on "screen"').map((x) => [x.subject, x.cast, x.angle]), [['the screen', null, null]]);
+  assert.equal(MAX_SHOT_CRITTERS, 3);
+  const block = '## Anchor scene\n\n- entities:\n  - a — a cook critter — stands for x — look: orange, outfit y\n  - b — a clerk critter — stands for y — look: ink, outfit z\n  - c — a guard critter — stands for z — look: paper, outfit w\n  - d — a porter critter — stands for w — look: ink, outfit v\n  - crowd — a crowd of shoppers, critters all doing one thing — stands for v\n  - box — a box — stands for u\n';
+  const ents = anchorEntities(block.replace('## Anchor scene\n\n', ''));
+  assert.deepEqual([...ents.keys()], ['a', 'b', 'c', 'd', 'crowd', 'box']);
+  assert.deepEqual(castCritters(['a', 'crowd', 'box', 'b'], ents), ['a', 'crowd', 'b'], 'a crowd counts once; an object not at all');
+  const problems = (line: string) => sceneShotProblems(parseShots(line), ents).map(([sev, rule]: string[]) => `${rule}:${sev}`);
+  assert.deepEqual(problems('medium — a — cast: a, crowd, box — angle: low left'), []);
+  assert.deepEqual(problems('medium — a — cast: a, b, c, d — angle: low left'), ['shot_cast:error']);
+  assert.deepEqual(problems('medium — a — angle: low left'), ['shot_cast:error']);
+  assert.deepEqual(problems('medium — a — cast: a'), ['shot_angle:error']);
+  // The same subject from the same angle is a jump cut, whatever the kind; a new angle or subject is a cut.
+  assert.deepEqual(problems('medium — the cook — cast: a — angle: eye level, front; close — the cook — cast: a — angle: Eye level, front'), ['shot_jump:error']);
+  assert.deepEqual(problems('medium — the cook — cast: a — angle: eye level, front; close — the cook — cast: a — angle: low from the right side'), []);
+  assert.deepEqual(problems('medium — the cook — cast: a — angle: eye level, front; close — the box — cast: box — angle: eye level, front'), []);
+
+  // In the storyboard: the scene frames (1, 4, 5, and 7 with anchor: scene) need both.
+  const good = fixture('good');
+  const flagged = (storyboard: string) => rules(lintStoryboard({ storyboard }).violations as Violation[]);
+  assert.deepEqual(flagged(good.replace(' — cast: carrier, mailbox, letter — angle: low at the drive\'s edge, the mailbox ahead and the house behind', '')), ['shot_angle@1', 'shot_cast@1']);
+  assert.deepEqual(flagged(good.replace('— cast: flag, mailbox — angle: from the mailbox\'s side, level with the flag', '— cast: flag, mailbox — angle: low from the drive, 40 degrees left of the wide').replace('close — the flag — on "flag"', 'close — the carrier and the letter — on "flag"')), ['shot_jump@4', 'shot_subject@4']);
+  // Tech frames' crop shots need neither.
+  assert.ok(!flagged(good).some((r) => /^shot_(cast|angle)@[2367]/.test(r)));
+});
+
+test('4.1 frame 7 is glass (anchor: own, with a technique) or a callback (anchor: scene, with cast and angle) (EX4-153)', () => {
+  assert.deepEqual(FRAME7_ANCHORS, ['own', 'scene']);
+  const good = fixture('good');
+  const flagged = (storyboard: string) => rules(lintStoryboard({ storyboard }).violations as Violation[]);
+  const SEVEN = good.slice(good.indexOf('## Frame 7'));
+  const seven = (from: string, to: string) => {
+    assert.ok(SEVEN.includes(from), from);
+    return good.replace(SEVEN, SEVEN.replace(from, to));
+  };
+  const tech = SEVEN.split('\n').find((l) => l.startsWith('- technique: '))! + '\n';
+  assert.deepEqual(flagged(seven(tech, '')), ['technique@7']);
+  assert.deepEqual(flagged(seven('- anchor: own', '- anchor: hybrid')), ['anchor@7']);
+  // A callback needs no technique, but its shots carry their cast and angle.
+  const callback = seven('- anchor: own\n' + tech, '- anchor: scene\n');
+  assert.deepEqual(flagged(callback), ['shot_angle@7', 'shot_angle@7', 'shot_cast@7', 'shot_cast@7']);
+  const shots = SEVEN.split('\n').find((l) => l.startsWith('- shots: '))!;
+  const placed = callback.replace(shots, '- shots: medium — the store\'s letter landing in the mailbox — at 0s — cast: carrier, flag, mailbox — angle: low from the street; close — the flag — on "flag" — cast: flag, mailbox — angle: beside the post, level with the flag');
+  assert.deepEqual(flagged(placed), []);
+});
+
+test('4.1 the tech beats name their technique; the definition names its part and overstates nothing (EX4-152, EX4-154)', async () => {
+  await import('../explainers/world-kit/try.mjs'); // the kit's CDN stub, as the kit tests load it
+  const kit = await import('../explainers/world-kit/explain.js');
+  assert.deepEqual(TECHNIQUE_IDS, [...kit.TECHNIQUE_IDS], 'the lint knows the kit\'s techniques');
+  const good = fixture('good');
+  const swap = (from: string, to: string) => {
+    assert.ok(good.includes(from), from);
+    return lintStoryboard({ storyboard: good.replace(from, to) }).violations as Violation[];
+  };
+  const TECH2 = good.split('\n').find((l) => l.startsWith('- technique: process — the payment message'))!;
+  assert.deepEqual(rules(swap(TECH2, '- technique: cards — a card per step')), ['technique@2']);
+  assert.match(swap(TECH2, '- technique: cards — a card per step')[0].detail, /not one of process, before-after/);
+  assert.deepEqual(rules(swap(TECH2, '- technique: process')), ['technique@2']);
+  assert.match(swap(TECH2, '- technique: process')[0].detail, /gives no reason/);
+  assert.deepEqual(rules(swap(TECH2 + '\n', '')), ['technique@2']);
+  // term_part: required; an unknown part is a warning.
+  assert.deepEqual(rules(swap('- term_part: letter — the letter the carrier drops in\n', '')), ['term_part@3']);
+  const unknown = swap('- term_part: letter — the letter', '- term_part: envelope — the envelope');
+  assert.deepEqual(unknown.map((v) => `${v.rule}:${v.severity}`), ['term_part:warning']);
+  // An absolute claim the mechanism does not guarantee: a warning.
+  for (const word of ['always', 'never', 'every', 'the smallest', 'the fastest', 'the best']) assert.ok(OVERSTATE_RE.test(`it ${word} works`), word);
+  assert.ok(!OVERSTATE_RE.test('A webhook is a message one app sends to another app.'));
+  const DEF = 'A webhook is a message one app sends to another app\'s web address the moment an event happens, like a payment going through.';
+  const OVER = 'A webhook is the fastest message one app sends to another app\'s web address the moment an event happens, like a payment going through.';
+  const over = lintStoryboard({ storyboard: good.replaceAll(DEF, OVER) }).violations as Violation[];
+  assert.deepEqual(over.map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['definition_overstated@3:warning']);
+});
+
+test('4.1 the place beyond, trips shown, and the named hero as the clear subject (EX4-146, EX4-151)', () => {
+  const good = fixture('good');
+  const lint = (storyboard: string) => lintStoryboard({ storyboard }).violations as Violation[];
+  const BEYOND = good.split('\n').find((l) => l.startsWith('- beyond: '))!;
+  const noBeyond = lint(good.replace(BEYOND + '\n', ''));
+  assert.deepEqual(rules(noBeyond), ['anchor_scene@-']);
+  assert.match(noBeyond[0].detail, /no beyond/);
+  // A trip the voice describes, shown nowhere: a warning naming it.
+  assert.equal(TRIP_RE.exec('Then the carrier heads back to the depot.')?.[1], 'depot');
+  assert.equal(TRIP_RE.exec('nobody walks out to check'), null);
+  const LINE4 = "When it drops in, the flag snaps up on its own.";
+  const TRIP = 'Then the carrier heads back to the depot, and the flag snaps up.';
+  const trip = lint(good.replace(LINE4, TRIP));
+  assert.deepEqual(trip.map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['trip_shown@4:warning']);
+  assert.match(trip[0].detail, /show the trip/);
+  // Shown when the beyond names it (seen or its own set), or a shot frames it.
+  assert.deepEqual(lint(good.replace(LINE4, TRIP).replace(BEYOND, '- beyond: the post depot, its own set for the trip back')), []);
+  // The voice first names the hero over a shot on something else: a warning.
+  const hero = lint(good.replace('medium — the carrier and the letter — on "carrier"', 'medium — the letter in the bag — on "carrier"'));
+  assert.ok(hero.some((v) => v.rule === 'hero_subject' && v.frame === 4 && v.severity === 'warning'), JSON.stringify(hero));
+  // An object hero has no such check.
+  const objectLed = good.replace('- hero: carrier — critter', '- hero: flag — object').replace('look: orange, outfit', 'look: ink, outfit');
+  assert.ok(!lint(objectLed.replace('medium — the carrier and the letter — on "carrier"', 'medium — the letter in the bag — on "carrier"')).some((v) => v.rule === 'hero_subject'));
+});
+
+test("a frame module's comments are never on screen (narration and emoji checks skip them)", () => {
+  assert.equal(stripComments("a(); // the router reads it\n/* 🚀 */ b('https://x.y');").trim(), "a(); \n  b('https://x.y');");
+  const frameSource = new Map([[6, "// 2 · but if the mailbox is gone, the letter has nowhere to land\nparts.push(stamp()); /* 📦 */"]]);
+  assert.deepEqual(lintStoryboard({ storyboard: fixture('good'), frameSource }).violations, []);
 });
 
 test('quoted spans: real quotes only, never an apostrophe inside a word', () => {
@@ -335,12 +584,12 @@ test('the example never reuses the scene (EX3-105)', () => {
 });
 
 test("every critter's look is declared, and the hero is the one orange critter (EX3-107)", () => {
-  const LINE = 'a critter with a bag, look: orange, wear backpack';
+  const LINE = "a critter with a bag, look: orange, outfit a mail carrier's uniform: blue shirt and shorts, a mailbag across the body, a name badge";
   const anchor = (to: string) =>
     (lintStoryboard({ storyboard: fixture('good').replace(LINE, to) }).violations as Violation[]).filter((v) => v.rule === 'anchor_scene').map((v) => v.detail);
   assert.deepEqual(anchor(LINE), []);
   assert.match(anchor('a critter with a bag')[0], /a critter has no look/);
-  assert.match(anchor('a critter with a bag, look: ink, wear backpack')[0], /0 orange critters; the hero/);
+  assert.match(anchor("a critter with a bag, look: ink, outfit a mail carrier's uniform")[0], /0 orange critters; the hero/);
 });
 
 test('the anchor block names its hero, critter or object; with an object hero no critter is orange (EX3-110, EX3-107)', () => {
@@ -349,8 +598,26 @@ test('the anchor block names its hero, critter or object; with an object hero no
   assert.match(anchor('- hero: carrier — critter\n', '')[0], /no hero/);
   // An object hero: the critter must not be orange.
   assert.match(anchor('- hero: carrier — critter', '- hero: flag — object')[0], /1 orange critter\(s\) with an object hero/);
-  const objectLed = fixture('good').replace('- hero: carrier — critter', '- hero: flag — object').replace('look: orange, wear backpack', 'look: ink, wear backpack');
+  const objectLed = fixture('good').replace('- hero: carrier — critter', '- hero: flag — object').replace('look: orange, outfit', 'look: ink, outfit');
   assert.deepEqual((lintStoryboard({ storyboard: objectLed }).violations as Violation[]).filter((v) => v.rule === 'anchor_scene'), []);
+});
+
+test('an actor outside the mapping may be one more entity; a paired term defines both sides (EX4-158, EX4-159)', () => {
+  const good = fixture('good');
+  const lint = (storyboard: string) => lintStoryboard({ storyboard }).violations as Violation[];
+  // A fifth entity from the mapping is too many; an actor outside it is allowed, one only.
+  const FIFTH = '  - porch — the porch steps — stands for the house — painted wooden steps — size: 120 × 90 × 50 cm — beats 4';
+  const five = lint(good.replace('  - carrier — a mail carrier critter', `${FIFTH}\n  - carrier — a mail carrier critter`));
+  assert.ok(five.some((v) => v.rule === 'anchor_scene' && /5 entities from the mapping; at most 4/.test(v.detail)), JSON.stringify(five));
+  const actor = lint(good.replace('  - carrier — a mail carrier critter — stands for the other app sending the event', `${FIFTH}\n  - carrier — a mail carrier critter — stands for the actor: the other app that sends the event`));
+  assert.ok(!actor.some((v) => v.rule === 'anchor_scene' && /entities from the mapping/.test(v.detail)), JSON.stringify(actor));
+  // Paired terms: both sides in the definition, both parts in term_part.
+  const DEF = "A webhook is a message one app sends to another app's web address the moment an event happens, like a payment going through.";
+  const paired = good.replace('term: webhook\n', 'term: webhook vs polling\n').replace('concept: webhook\n', 'concept: webhook vs polling\n');
+  const rulesOf = (sb: string) => rules(lint(sb)).filter((r) => /^(definition_term|term_part)/.test(r));
+  assert.deepEqual(rulesOf(paired), ['definition_term@3', 'term_part@3']);
+  const both = paired.replaceAll(DEF, "A webhook is a message one app sends the moment an event happens, while polling is an app asking again and again.").replace('- term_part: letter — the letter the carrier drops in', '- term_part: letter — the letter the carrier drops in; mailbox — the walk out to check the mailbox');
+  assert.deepEqual(rulesOf(both), []);
 });
 
 test('a reused asset fits exactly: in the catalog, with its exact reason, and never one of its stand-ins (EX3-112, EX3-113)', () => {
@@ -434,4 +701,67 @@ test('the CLI writes JSON and exits 0 even with violations', () => {
   assert.equal(parsed.frames, 3);
   assert.ok(parsed.violations.length > 0);
   assert.equal(spawnSync(process.execPath, [path.join(dir, 'lint-storyboard.mjs')]).status, 2);
+});
+
+// ── try.mjs's hx-4 world checks (the build-time side of the rules above) ─────────────────────
+
+test('try.mjs: grounds and their aliases, the scale ledger, and outfits clear of the face (hx-4)', async () => {
+  const { resolveGround, sizeLedgerProblems, outfitProblems, castShapeProblems, elementBoxes, MAX_EXAGGERATE: TRY_MAX } = await import('../explainers/world-kit/try.mjs');
+  const kit = await import('../explainers/world-kit/cast.js');
+  // Grounds: night and forest are read as the stage.
+  assert.equal(resolveGround('paper'), 'paper');
+  assert.equal(resolveGround('night'), 'stage');
+  assert.equal(resolveGround('Forest'), 'stage');
+  assert.equal(resolveGround('blue'), null);
+  // The ledger: an older kit (no space.js) checks only a ledger that is there.
+  assert.equal(TRY_MAX, MAX_EXAGGERATE);
+  assert.deepEqual(sizeLedgerProblems({ ENTITIES: { fridge: 'x' } }, null), []);
+  const world = { ENTITIES: { fridge: 'the cache', nurse: 'the router' }, CAST: { nurse: { body: 'orange' } }, SIZES: { fridge: { w: 70, d: 70, h: 180 } } };
+  assert.deepEqual(sizeLedgerProblems(world, null), []);
+  assert.match(sizeLedgerProblems({ ...world, SIZES: {} }, null)[0], /no entry for the entity "fridge"/);
+  assert.match(sizeLedgerProblems({ ...world, SIZES: { fridge: { w: 70, d: 70, h: 180, exaggerate: 2 } } }, null)[0], /exaggerate is 2: at most 1\.5×/);
+  assert.match(sizeLedgerProblems({ ...world, SIZES: { fridge: { w: 70, h: 180 } } }, null)[0], /must be \{ w, d, h \}/);
+  // With the hx-4 kit (space.js): SIZES and DRAWN are required, and scaleProblems runs.
+  const calls: unknown[] = [];
+  const space = { scaleProblems: (sizes: unknown, drawn: unknown) => (calls.push([sizes, drawn]), ['from space']) };
+  assert.match(sizeLedgerProblems({ ENTITIES: {} }, space)[0], /must export SIZES/);
+  const found = sizeLedgerProblems(world, space);
+  assert.ok(found.some((e: string) => /must export DRAWN/.test(e)), found.join('\n'));
+  assert.ok(found.includes('from space'));
+  assert.deepEqual(sizeLedgerProblems({ ...world, DRAWN: { critterS: 1, fridge: 355 } }, space), ['from space']);
+  assert.deepEqual(calls.at(-1), [world.SIZES, { critterS: 1, fridge: 355 }]);
+  // The real space.js: a fridge drawn at its size next to a critter at scale 1 passes; at twice it fails.
+  const realSpace = await import('../explainers/world-kit/space.js');
+  const fridgePx = (180 / realSpace.CRITTER_CM) * realSpace.CRITTER_PX;
+  assert.deepEqual(sizeLedgerProblems({ ...world, DRAWN: { critterS: 1, fridge: fridgePx } }, realSpace), []);
+  assert.equal(sizeLedgerProblems({ ...world, DRAWN: { critterS: 1, fridge: fridgePx * 2 } }, realSpace).length, 1);
+  // CAST takes { body, outfit }.
+  assert.deepEqual(castShapeProblems({ nurse: { body: 'orange', outfit: { top: { kind: 'scrubs', color: 'blue' } } } }), []);
+  assert.match(castShapeProblems({ nurse: { body: 'ink', outfit: 'scrubs' } })[0], /outfit must be an object/);
+  assert.match(castShapeProblems(undefined)[0], /CAST = \{ <critter id>: \{ body, outfit \} \}/);
+  // Outfits through cast.js: its kinds, nothing over the face, never orange.
+  const nurse = { top: { kind: 'scrubs', color: 'blue', neck: 'v' }, pants: 'blue', shoes: 'paper', items: ['stethoscope', 'badge', 'fob-watch'] };
+  assert.deepEqual(outfitProblems({ nurse: { body: 'orange', outfit: nurse } }, kit), []);
+  const one = (outfit: object) => outfitProblems({ x: { body: 'ink', outfit } }, kit);
+  assert.match(one({ ...nurse, head: { kind: 'visor' } })[0], /"visor" covers the eyes or mouth/);
+  assert.match(one({ ...nurse, items: ['surgical-mask'] })[0], /covers the eyes or mouth/);
+  assert.match(one({ ...nurse, head: { kind: 'baseball-cap' } })[0], /head\.kind "baseball-cap" must be one of .*drawn once with custom/);
+  assert.match(one({ ...nurse, items: ['mailbag'] })[0], /item "mailbag" must be one of/);
+  assert.match(one({ ...nurse, top: { kind: 'vest', color: 'orange' } })[0], /never an outfit color/);
+  // A custom garment, drawn on the critter by the kit: never over the face (the kit would clip it away).
+  assert.deepEqual(one({ ...nurse, custom: () => '<path d="M -60 -20 L 60 -20 L 60 20 L -60 20 Z" fill="#000"/>' }), []);
+  assert.match(one({ ...nurse, custom: () => '<rect x="-40" y="-130" width="80" height="40"/>' })[0], /custom draws a piece over the face \(the eyes\)/);
+  assert.match(one({ ...nurse, custom: () => '<rect width="NaN"/>' })[0], /custom: the SVG contains "NaN"/);
+  assert.match(one({ ...nurse, custom: () => { throw new Error('boom'); } })[0], /custom threw: boom/);
+  // No two critters on screen look alike.
+  const { twinProblems } = await import('../explainers/world-kit/try.mjs');
+  const draw = (who: string, outfit: object | null) => kit.critter(0, 0, { who, body: 'paper', outfit });
+  const gown = (color: string) => ({ top: { kind: 'dress', color } });
+  assert.deepEqual(twinProblems([{ t: 0, svg: draw('patients-1', gown('blue')) + draw('patients-2', gown('lilac')) }]), []);
+  const twins = twinProblems([{ t: 0.5, svg: draw('patients-1', gown('blue')) + draw('patients-2', gown('blue')) }, { t: 1, svg: draw('patients-1', gown('blue')) + draw('patients-2', gown('blue')) }]);
+  assert.equal(twins.length, 1, 'reported once');
+  assert.match(twins[0], /"patients-1" and "patients-2" look alike at 0\.50s/);
+  // An older kit (no normalizeOutfit): only the face and orange checks.
+  assert.deepEqual(outfitProblems({ x: { body: 'ink', outfit: { head: { kind: 'baseball-cap' } } } }, null), []);
+  assert.deepEqual(elementBoxes('<circle cx="10" cy="20" r="5"/><path d="m 0 0 l 5 5"/><rect x="1" y="2" width="3" height="4" transform="rotate(4)"/>'), [{ x0: 5, y0: 15, x1: 15, y1: 25 }]);
 });

@@ -37,5 +37,5 @@ export default function draw(t, ctx) {
   const jolt = k !== undefined ? 6 * (1 - seg(t, k, k + 0.05, (x) => x)) : 0;
   if (t < dropAt) return defs() + g({ transform: `translate(0 ${jolt.toFixed(1)})` }, page(t, keys));
   const u = seg(t, dropAt, zipEnd, E.in);
-  return scene(ctx, t - dropAt) + defs() + g({ transform: `translate(0 ${(-2100 * u).toFixed(1)})` }, page(t, keys)) + title(ctx, t, zipEnd);
+  return scene(ctx, t - dropAt) + defs() + g({ transform: `translate(0 ${(-2100 * u).toFixed(1)})` }, page(t, keys)) + title(ctx, t, ctx.M.titleAt);
 }

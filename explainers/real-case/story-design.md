@@ -1,242 +1,299 @@
-# Story design — Helios Real Case Reel (real-case-v1)
+# Story design — Helios AI News Explained (news-story-v1)
 
-> The Real Case story design (planning/Real Case Reels/DECISIONS.md, RC-01 to RC-19). A job installs
-> it as `.claude/skills/faceless-explainer/references/story-design.md`. Use it in Step 3 to write
-> `STORYBOARD.md` and `SCRIPT.md`. Every rule here is mandatory.
+> The AI News Explained story design (planning/Real Case Reels/FORMAT.md, DECISIONS.md RC-26 to
+> RC-44). A job installs it as `.claude/skills/faceless-explainer/references/story-design.md`. Use it
+> in Step 3 to write `STORYBOARD.md` and `SCRIPT.md`. Every rule here is mandatory.
 
-A Real Case Reel teaches one AI, software, or computer-science concept (the story's **term**) in about
-a minute, through one true event. It opens on the event, makes the viewer need to know why it happened,
-names the concept, walks the concept's steps using the event's own items, shows the step that explains
-the outcome, then the fix or the limit, and ends on the puzzle's answer and one rule the viewer keeps.
-The goal is understanding on the first watch, carried by a story the viewer wants to hear to the end.
-
-**One world.** The event is the world the whole reel lives in. The concept is never shown in a
-separate, made-up scene: its steps play out on the event's own things.
+An AI News Explained reel tells one recent, true AI news story in about a minute, as a story. The story
+is the star: who wanted what, what happened, what it cost. Inside it, the reel reveals what was
+actually going on in the technology: one concept (the story's **term**), named once and explained
+through this event. The viewer leaves knowing what happened, why it happened, and one thing to keep.
 
 ## Read first
 
-1. `BRIEF.md`: the **term** (`## Term`), the story's **facts** (`## Facts`: numbered `c1`, `c2`… each a
-   fact you may state), the beat material (`## Story`), the **key item** the story turns on, and its
-   polarity (failure, success or mystery).
-2. `frame.md`: the visual system. Story and picture are planned together.
+1. `BRIEF.md`: the **term** (`## Term`), the story's **facts** (`## Facts`, numbered `c1`, `c2`…,
+   each with the act it serves), the **players** (`## Players`, each with how it can be shown: a banked
+   logo, a banked cutout, or neither), the **artifacts** (`## Artifacts`,
+   numbered `a1`, `a2`…, each with its exact words), the **timeline** (`## Timeline`), and the act
+   material (`## Story`).
+2. `frame.md`: the visual system and the news kit. Story and picture are planned together.
 
 ## The facts (HARD CONSTRAINT)
 
-The voiceover tells a true event, so every fact about it is one of BRIEF.md's facts.
+The reel tells a true event, so every fact about it is one of BRIEF.md's facts.
 
-- **Every fact about the event comes from `## Facts`**: who, what, when, numbers, quotes, causes,
-  outcomes, the fix. Say it as plainly as the fact states it, never stronger: no added number, date,
-  cause, motive, superlative, or consequence. List the ids each frame uses in its `claims:` field.
+- **Every fact about the event comes from `## Facts`**: who, what, when, where, numbers, causes,
+  outcomes, what happened since. Say it as plainly as the fact states it, never stronger: no added
+  number, date, cause, motive, superlative, or consequence. List the ids each frame uses in its
+  `claims:` field.
 - **Tell it straight.** No attribution phrasing: never "according to", "X says", "reportedly",
-  "reporters found". A fact is stated as a fact, because it is one. A detail the facts do not state is
-  left out, never hedged in.
+  "reports say". A fact is stated as a fact, because it is one. A detail the facts do not state is left
+  out, never hedged in.
+- **Artifacts are shown word for word.** An artifact on screen (a post, a reply, a statement, a
+  headline, a filing) shows exactly its words from `## Artifacts`, or a shorter run of them cut at
+  word boundaries with `…`; never reworded. The voice may read an artifact's words exactly, as part of
+  the event ("The reply: …").
+- **Names.** Organizations, products and the public figures listed in `## Players` are named, in voice
+  and on screen. A private person is never named: they go by their role, as `## Players` writes it.
 - **General explanation is yours**: how the concept works may come from general knowledge, and must be
-  accurate. Never present it as something the event's organization said or did.
-- **Numbers** are numerals, exactly as the fact gives them (an amount, a year, a duration, written as
-  the fact writes it). Never invent statistics, dates, counts, or quotes.
-- **No person's name** in a voiceover, label or scene: people are named by their role in the event (a customer,
-  an employee). Organizations, products, courts and public bodies may be named.
-- **No logos** (frame.md V-17): an organization's name appears on screen only as a plain label in the
-  reel's lettering, as the voice says it; never a logo, a brand mark, brand colors, or a copy of a
-  product's screen.
+  accurate. Never present it as something a player said or did.
+- **Numbers** are numerals, exactly as the fact gives them. Dates as the fact gives them (a day, or a
+  month). Never invent statistics, dates, counts, or quotes.
+- **How players appear** (`## Players` says which applies): a company with a banked logo shows its
+  real logo, from the kit's logo bank, never redrawn, recoloured or cropped; a person with a banked
+  cutout shows their real photo cutout, from the kit's cutout bank; anyone else is the kit's faceless
+  silhouette, or a company's name in the reel's lettering. Never any other photo of a person, and never a
+  copy of a product's screens: an artifact is recreated in the kit's style.
+- **Common objects come from code.** A common object the story mentions (a phone, a car, a map, a
+  suitcase, a padlock) is a real photo cutout on the board and the newspaper, and a marker drawing on
+  the whiteboard: name it in `## Case file`'s `objects:` plainly, as a shop would label it ("padlock",
+  "paper map"), with the acts it appears in; code makes both versions before the build.
 - **Never research the event.** Web search may help you check how the concept works; it never adds a
   fact about the event.
 
-## Storytelling first (RC-05)
+## The storytelling (what makes it work)
 
-Plain-spoken and authoritative, in short sentences with full stops, one idea each. The event is told
-like a story worth hearing: a concrete moment, rising stakes, the strange outcome, the reveal. Past tense
-for the event, present tense for how the concept works. No hype words, no exclamation marks, no emoji,
-no rhetorical filler, no "not X, but Y", no toss to the next beat.
+- **A narrator telling a story to a smart friend.** Short sentences with full stops, one beat each,
+  each one moving the story forward. Concrete over abstract: the date, the place, the product, the
+  number, the exact words on the screen.
+- **Present tense for the moment** where it adds drama (the moment told as it unfolds), past tense for
+  background and what happened since; present tense for how the concept works.
+- **Momentum.** Every sentence earns the next one. Stakes before the moment; the moment before the
+  fallout; the fallout before the reveal. Never explain before the viewer wants the explanation.
+- **The reveal is the payoff, not a lecture.** It answers the question the story raised, in this
+  event's own terms: what the system saw, what it did, and why that produced what everyone saw.
+- Plain-spoken and authoritative. No hype words, no exclamation marks, no emoji, no rhetorical filler
+  ("Let's dive in", "Here's the thing", "Imagine…"), no "not X, but Y", no toss to the next act ("But
+  that's not all").
 
-## The eight beats (fixed order, fixed `type`)
+## Showing it: the case board (HARD CONSTRAINT)
 
-| # | Nominal | Beat | `type` | Default `engagement` | Words | `hold` | Anchor |
-|---|---|---|---|---|---|---|---|
-| 1 | 5s | The incident: the event in one line, under the opener | `hook` | Open loop + visual hook + audio ramp | 10–16 | 0.15s | scene |
-| 2 | 9s | The puzzle: the strange detail, then the question | `pain_point` | Attention reset + curiosity gap | 18–30 | 0.15s | scene |
-| 3 | 5s | Name it: the dictionary card | `product_intro` | Grounding definition | 8–16 | 0.15s | own (the card) |
-| 4 | 13s | Walk it: the concept's steps, on the event's own items | `feature_showcase` | Worked example + progress tracker | 32–44 | 0.15s | scene |
-| 5 | 8s | The click: the step that explains the outcome | `feature_showcase` | State change + payoff | 18–28 | 0.15s | scene |
-| 6 | 8s | The other side: the fix, or the limit | `social_proof` | Cached understanding + boundary | 18–28 | 0.15s | scene |
-| 7 | 6s | The takeaway: the puzzle answered, one rule to keep | `benefit_highlight` | Payoff + distillation | 12–22 | 0.15s | own |
-| 8 | 2.5s | The close (code's): the logo and "AI BRAIN BREAK", no voice | `branding` | Brand close | none | none | — |
+The reel looks like a true-crime documentary, told across three scenes (frame.md). **Every reel uses
+all three**, each at least once in frames 1 to 7; a frame's `ground:` names its scene:
 
-Do not add, drop, merge, or reorder beats. Each frame's `duration` is its voice plus its `hold` (code sets
-both from the real voice; write the nominal values); the close is a fixed 2.5s. About 165–180 spoken
-words in all. Never cut a fact's meaning to save words, and never pad.
+- `board` — the **bulletin board**: cork, push pins and red cord tying the evidence together. It suits
+  the evidence of the moment: artifacts, objects, players.
+- `newspaper` — the **newspaper**: a real newspaper page is the surface; marker markups circle,
+  underline and connect its headlines, photos and lines. It suits the setup and the fallout: the
+  launch, the numbers, the reaction as the press told it (only the facts, in print).
+- `whiteboard` — the **whiteboard**: everything drawn in dry-erase marker, stroke by stroke (people
+  as line sketches, objects as line drawings, short handwritten notes, arrows and circles connecting
+  them); only the verbatim artifact and a printed logo are paper, held by a magnet. It suits working
+  out the mechanism in the reveal.
 
-### 1 · The incident (the hook)
+Pick each frame's scene for what it shows best; a scene change is also an attention reset.
 
-- **Voiceover:** the event in one line of 10–16 words, from BRIEF.md's incident: who, when, and the
-  outcome that makes a stranger look twice. It is the first thing the viewer hears, so it carries the
-  surprise, not the background.
-- **Picture: the hook** (`## Hook`): the event's key moment in motion at frame 0, in the story world,
-  clear on its own within one second. The key item is in it.
-- **The opener is the bank's** (code): an animated intro over your hook shows "AI BRAIN BREAK", then the
-  title card writes "today's brain break:" and the term. Captions are quiet in this frame; the title
-  card is the text. Plan the hook and the line; never the opener's text, sound or timing.
+- **One thing at a time.** Each shot gives one item the viewer's full attention: a clipping, a photo, an
+  artifact, a tag. The camera moves from item to item, along the cords, instead of showing a frame's
+  evidence all at once. A frame's items arrive one per shot.
+- **The evidence explains, never boxes of words.** Show what happened with the objects, the artifacts,
+  where the red cord runs, the order things arrive, a date on a tag, a marker circle. Never a card or
+  tile whose words stand for a step or a concept. A short typed tag may name an item or a date, as on a
+  real case board.
+- **Real paper.** Headlines and statements appear as clippings, printouts or notices, in their own words
+  (artifacts) or as the facts state them.
 
-### The 1→2 break
+## Understood on the first watch (HARD CONSTRAINT)
 
-Beat 2 opens on a sound hit and a **visual attention reset**, declared in its `reset:`: a camera
-punch-in, a color change (the ground flips paper → night or forest), an in-frame zoom-through, or a
-visual effect on the cut. It stays in the story world.
+A stranger watches once, on a phone, with no context. Every rule here exists because a first-time
+viewer got lost without it.
 
-### 2 · The puzzle
+- **Shots follow the voice.** What is on screen is what the voice is naming at that moment.
+- **Only what is on screen.** Never refer to something the viewer has not seen or heard: a player is
+  named and shown before "they" or "it" stands for them.
+- **Plain roles and plain words.** A player is named with what they are ("Harbor City Transit, the
+  city's bus and train agency") the first time. One new technical word at a time, said in plain words
+  the first time; never two in one sentence.
+- **The question is the viewer's own.** Act 4's question is the one a stranger would ask after the
+  fallout, in their words, about what they just saw; never a question about a mechanism they have not
+  met. The reveal closes exactly that question.
+- **The reveal replays the moment.** Act 5 shows the moment's own artifact or picture again, now with
+  the mechanism drawn over it, so the viewer maps the concept onto what they already saw.
+- **The payoff is in real terms.** Act 7 is true to the reveal and useful to someone who uses or builds
+  with AI; never a slogan.
+- **Length follows understanding.** Never drop a step the viewer needs to save a second; never pad.
 
-The rest of what happened, the one detail that makes it strange, and the question the concept answers.
-The line ends on that question, said as the viewer would ask it. It is a real
-question, about the real technology, that the reel answers in beat 5 and states plainly in beat 7.
-Write it in `gap_question:`, and in `## Puzzle`. Never name the term here: beat 3 does.
+## The eight acts (fixed order, fixed `type`)
 
-### 3 · Name it: the dictionary card
+| # | Nominal | Act | `type` | Words | `hold` |
+|---|---|---|---|---|---|
+| 1 | 5s | Cold open: the most striking moment, then the code-built AI NEWS EXPLAINED sting | `cold_open` | 10–18 | 1.2s (the sting) |
+| 2 | 9s | Setup: when, where, who, what they wanted, what was at stake | `setup` | 22–34 | 0.15s |
+| 3 | 9s | The moment: it plays out, with the real artifact on screen | `moment` | 22–34 | 0.15s |
+| 4 | 6s | Fallout: what it cost or changed, then the question the reveal answers | `fallout` | 14–24 | 0.15s |
+| 5 | 12s | What actually happened: the concept, named once, explained through this event | `reveal` | 30–42 | 0.15s |
+| 6 | 6s | Since then: what happened next, where it stands now | `since` | 14–24 | 0.15s |
+| 7 | 4s | For you: the one line the viewer keeps | `for_you` | 8–16 | 0.15s |
+| 8 | 2.5s | The close (code's): the Helios logo and AI NEWS EXPLAINED, no voice | `branding` | none | none |
 
-The term as a dictionary entry: the headword (the term, exactly), its part of speech (`part_of_speech:`),
-and the definition (`definition:`), filling in as it is spoken and staying. A visual of what it says sits
-below. **The voiceover is the definition, word for word**, one sentence of 16 words or fewer that starts
-"A <term> is…", "An <term> is…" or "<Term> is…": what it is (its category) and what it does, in words the
-viewer already uses. The detail comes later, on the event's own things.
+Do not add, drop, merge, or reorder acts. Each frame's `duration` is its voice plus its `hold` (code
+sets both from the real voice; write the nominal values); the close is a fixed 2.5s. About 140–200
+spoken words in all. Never cut a fact's meaning to save words, and never pad.
 
-- Good: it names the category and the job, in words a stranger already uses.
-- Bad: a vague phrase ("a thing that", "some data", "when something happens") or a second technical term.
+### 1 · Cold open (engineered to stop the scroll)
 
-### 4 · Walk it: the steps, on the event's own items
+The viewer decides in the first second and a half. The cold open is built for that second, and tested.
 
-The concept's steps (the anchor scene's `steps`, 3 or 4), in order, each **named as it plays** and shown
-with the event's own thing: "Step one, <step>: <what it was in this event>." The step tracker shows the
-step names and lights each on its cue. Open on the one wide establishing shot of the story world, then
-closer shots, one step at a time. Build toward the outcome without stating why yet. At most two new
-technical words beyond the term, each said in plain words the first time.
+- **The line** (10–18 words, the voice starts on frame 0): the single most surprising specific of the
+  story, about a player the viewer knows, ending on the turn. Lead with the strongest word: the player,
+  the number, or the outcome. It opens a loop: the viewer knows exactly what happened and needs to know
+  how or why. **Never** background, a date or a place first ("In March…", "Last week…"), a question
+  ("Have you ever…?"), a framing line ("This is the story of…", "Here's how…"), a superlative the facts
+  don't state, or the term.
+- **The picture** (in motion on frame 0): the story's most striking thing, readable within one second:
+  the key artifact with the key detail marked, the key number circled, or the player's cutout or logo
+  against it. One focal point, at most 7 words on screen besides the artifact, and a pattern break on
+  frame 0 (a slam, a punch-in, a mark drawing on). Never a title, a logo sting, or a calm build first.
+- **Three candidates, three different hooks** (`## Cold open`): pick three of these kinds, one each:
+  the number (a striking figure and what it cost), the irony (it did the opposite of its job), the
+  artifact (the real words, damning on their own), the player (a known name in an unlikely spot), the
+  stakes (who got hurt or what was risked). Score each 1–5 on **clarity** (a stranger knows what they
+  are looking at within one second), **thumb-stop** (they stop), and **open loop** (they need the rest).
+  Pick the best total with clarity and open loop at 4 or more.
+- **The sting is code's**: after the line, AI NEWS EXPLAINED slams in over the frame (the `hold`).
+  Plan the line and the picture; never the sting's text, sound or timing.
 
-### 5 · The click
+### 2 · Setup
 
-The step that explains the outcome, said and shown: the moment in the walk where the event's outcome was
-produced, and why that step produced it. Replay that step on the key item, in close or insert shots, and
-let the cause visibly lead to the outcome. This is the answer to the puzzle; make it land on one clear
-sentence.
+Rewind to the start: when and where (a date or place stamp is on screen), who is involved (the players,
+by name and role), what they wanted, and what was at stake. Opens on an attention reset from the sting
+(a new item, close). One player per shot, shown as `## Players` allows (logo, cutout, or silhouette), with
+a typed tag naming each the first time.
 
-### 6 · The other side
+### 3 · The moment
 
-For a **failure**, the fix: what changed, at which step, as the facts state it. For a **success**, the
-limit or the trade-off of the step that made it work. For a **mystery**, what is known and what is still
-open. Show it on the same story world, at the step it touches. This is the second look at the
-mechanism: the viewer sees the same step from the other side.
+The event plays out, in order, as a scene: who did what, and what appeared. The key artifact is
+recreated on screen and builds in as the voice reaches it; the detail someone noticed is marked (an
+underline, a circle, a highlight in the key color) on the word it lives in. This is the reel's richest
+picture.
 
-### 7 · The takeaway
+### 4 · Fallout
 
-First the puzzle's answer in one plain sentence, in real terms; then one rule a business viewer can use
-in their own work. It may call back to the key item in one shot. `closed_by` points here.
+What it cost or changed: the numbers (the figure in print, circled on its word), the reactions, the
+decisions, from the facts. It ends on **the question** the reveal answers, in the story's own words and
+as the viewer would ask it: why the technology did what it did. Write it in `question:` and in
+`## Question`. Never name the term here: act 5 does.
+
+### 5 · What actually happened
+
+The reveal. It opens by bringing back the moment's own artifact (on the whiteboard, by default), then
+answers act 4's question through the concept's mechanism, shown with the evidence: what the system had (the item it
+learned from or read, held up and tagged), what it did, and why that produced what everyone saw. A cord
+or a marker arrow runs from the outcome back to its cause; what the system never saw sits apart,
+unconnected. **Name the term once, exactly as `## Term` writes it**, as
+the voice reaches it; the term and its meaning (`term_card:`, 14 words or fewer, plain words) are
+written in marker on the whiteboard, or shown as a dictionary clipping on the board or newspaper. At most two new technical words beyond the term, each
+said in plain words the first time. The cause gets the marker circle in the key color.
+
+### 6 · Since then
+
+What happened next and where it stands now, from the facts: the fix, the response, the ruling, the
+open question. A newer clipping or printout is pinned over the old evidence, dated.
+
+### 7 · For you
+
+One line the viewer keeps: what this means for anyone who uses or builds with AI. General advice, true
+to the reveal, said plainly. Not a summary of the story.
 
 ### 8 · The close
 
-Built by code: a white screen, the Helios logo animating in, and "AI BRAIN BREAK" writing itself beneath
-it, 2.5s, no voiceover. Copy the skeleton's frame 8 block as it is; write no line for it in `SCRIPT.md`.
+Built by code: the Helios logo and AI NEWS EXPLAINED, 2.5s, no voiceover. Copy the skeleton's frame 8
+block as it is; write no line for it in `SCRIPT.md`.
 
-## `## Anchor scene`: the story world (write it before the frames)
+## `## Case file` (write it before the frames)
 
-The story world is the event's setting and its things, drawn once and reused by frames 1, 2, 4, 5 and 6
-(frame 7 may call back to it in one shot).
+What the reel shows, decided once, reused by every frame.
 
 ```md
-## Anchor scene
+## Case file
 
-- metaphor: <the event's world in one line: where it happened and what is in it>
-- setting: table | scene
-- ground: paper | night | forest
-- hook: <the event's key moment, in motion at frame 0>
-- hero: <the key item's entity id> — object
-- steps:
-  - <the step's name, 4 words or fewer> — <what it was in this event>
-  - … (3 or 4 steps, in order; the step tracker prints the names)
-- entities:
-  - <id> — <what it is in the event> — <critter (role, wear), look: ink|paper, wear <…> | new drawing: <the specific thing, as a stranger names it> — how it is built | prop: <bank name> (exact: <its is line>, in <this setting>)> — beats <n, n>
-- states: <variable>: <start> → <how each beat changes it>; …
-- layout: <where things sit, one line>
+- when: <the event date as the facts give it> · where: <the place, or "online", or none>
+- key artifact: <artifact id> — <why it is the picture of the story>
+- key detail: <the exact words or number the reel marks in the key color> — <artifact id or fact id>
+- players:
+  - <name as ## Players writes it> — <kind> — <shown as: logo | cutout | silhouette (<pose>) | name card> — acts <n, n>
+- artifacts:
+  - <artifact id> — <kind> — shown in acts <n, n> — <the words shown: all, or the run cut with …>
+- numbers:
+  - <the number as the fact gives it> — <fact id> — <shown as: headline | clipping | stamp | note> — act <n>
+- objects:
+  - <a common object the story mentions, named plainly as a shop would label it> — acts <n, n>
+- mechanism: <the reveal's chain of evidence, 2 to 4 links joined with →, each 4 words or fewer — the cause marked "(cause)">
 ```
 
-- **The hero is the key item**, always an object: the thing the outcome turns on. It carries the orange
-  in every frame it appears in. **No critter is orange.**
-- **At most 4 entities** (a group of identical things counts as one), each one of the event's real
-  things, each readable at phone size without a label. Never a logo or a product's real screen: a
-  generic, drawn thing, named as a stranger names it.
-- **Objects can act; critters are the only characters.** When someone in the event acts, that someone is a
-  critter named by role, in ink or paper; never a person, a figure, or a
-  body part.
-- **Every object is drawn to fit**: a `new drawing:` named as specifically as a stranger names it is the
-  default; a bank asset (`assets/kit/props/CATALOG.md`) only on an exact fit, with an `exact:` reason.
-- Every number or outcome the scene shows is a state, and comes from the facts.
+- **The key detail** is the one thing the reel marks in the key color; it appears in acts 1, 3 and 5.
+- **Players** are named only as `## Players` names them, and shown only as it allows: `logo` only for
+  a company `## Players` marks "logo banked", `cutout` only for a person it marks "cutout banked";
+  any other person is a `silhouette` (a faceless figure from the kit), any other company a `name card`.
+  At most 4 players on screen across the reel.
+- **Artifacts** come only from `## Artifacts`, word for word. At most 3 artifacts across the reel.
+- **Objects** are common things the story mentions, never a proper noun (a logo or a person has its own
+  bank). At most 5 across the reel, or `none`.
+- **The mechanism** is planned here and shown as evidence on the board in act 5, never as boxes of words.
+- Every number shown comes from a fact.
 
-## `## Hook` (write it before the frames)
+## `## Cold open` (write it before the frames)
 
 ```md
-## Hook
+## Cold open
 
-1. <the anchor scene's hook> — clarity 4/5, thumb-stop 4/5
-2. <another moment of the event> — clarity 5/5, thumb-stop 3/5
-3. <another> — clarity 3/5, thumb-stop 4/5
-- pick: 1 — <one line on why a stranger gets it at once>
+1. <hook kind>: "<the line>" — <the picture on frame 0> — clarity 4/5, thumb-stop 4/5, open loop 5/5
+2. <another kind>: "<the line>" — <the picture> — clarity 5/5, thumb-stop 3/5, open loop 4/5
+3. <another kind>: "<the line>" — <the picture> — clarity 3/5, thumb-stop 5/5, open loop 4/5
+- pick: 1 — <one line on why a stranger stops and needs the rest>
 ```
 
-**Clarity** (standalone): a viewer with no context knows what they are looking at within one second.
-**Thumb-stop:** it makes them stay. Clarity wins ties; a hook below 4 on clarity is never picked.
+Hook kinds: number, irony, artifact, player, stakes; three different ones. **Clarity** (standalone): a
+viewer with no context knows what they are looking at within one second. **Thumb-stop:** it makes them
+stop. **Open loop:** they need to know how or why. Pick the best total; a candidate below 4 on clarity
+or open loop is never picked.
 
-## `## Puzzle` (write it before the frames)
+## `## Question` (write it before the frames)
 
 ```md
-## Puzzle
+## Question
 
-- question: <the question beat 2 ends on, word for word>
-- answer: <the click, in one sentence>
-- closed_by: <the frame and moment that answers it, e.g. "frame 7: the answer line">
+- question: <the question act 4 ends on, word for word>
+- answer: <the reveal, in one sentence>
+- closed_by: <the frame and moment that answers it, e.g. "frame 5: the cause marked in the key color">
 ```
 
 ## Frame fields
 
 Every frame block keeps the recipe skeleton's `duration`, `hold`, `transition_in`, `src`, `type`, and
-`engagement`, and fills:
+`ground`, and fills:
 
-- `scene`: a one-line picture idea (what is drawn and what moves), not composition detail;
+- `scene`: a one-line picture idea (what is on screen and what moves), not composition detail;
 - `voiceover`: the spoken line;
-- `claims`: the fact ids the voiceover and the frame's labels use (`c1, c3`), or `none`; frames 1, 2, 4,
-  5, 6 and 7;
-- `beat`: the target feeling (curiosity, intrigue, recognition, clarity, satisfaction);
-- `engagement`: a named technique (catalog below), never "explain the idea";
-- `ground`: paper, night, or forest (frame 8: white);
-- `hold`: the skeleton's value (0.15s); never longer; the close has none;
-- `shots:` (frames 1, 2, 4, 5, 6, 7): the frame's shots in order, one per sub-bullet,
+- `claims`: the fact ids the voiceover and the frame's on-screen words use (`c1, c3`); frames 1 to 6
+  always have some; frame 7 may say `none`;
+- `artifacts`: the artifact ids the frame shows, or `none`;
+- `beat`: the target feeling (intrigue, tension, surprise, clarity, satisfaction);
+- `shots:` (frames 1 to 7): the frame's shots in order, one per sub-bullet,
   `<kind> — <subject> — on "<cue word>"` (frame.md § Shots). **The subject is what the voice is naming
-  while the shot is on screen.** Kinds: wide, medium, close, insert, reaction. Frames over 6s cut between
-  at least two; no two consecutive shots, and no frame's first shot and the previous frame's last, are
-  the same picture; the one `wide` establishing shot opens frame 4;
-- frame 2: `reset:` and `gap_question:` (the puzzle's question, word for word); frame 3: `definition:`
-  and `part_of_speech:`.
+  while the shot is on screen.** Kinds: wide, medium, close, insert. Frames over 6s cut between at least
+  two; no two consecutive shots, and no frame's first shot and the previous frame's last, are the same
+  picture;
+- frame 2: `stamp:` (the date and place as shown on a typed card, from the facts); frame 4: `question:`
+  (word for word); frame 5: `term_card:` (the term's meaning for the dictionary clipping, 14 words or
+  fewer).
 
-Under the bullets, two prose lines: `narrativeRole:` (the frame's job in the viewer's understanding) and
-`keyMessage:` (the one thing the viewer understands after it).
-
-## Engagement catalog
-
-| Family | Techniques |
-|---|---|
-| **Open and hold** | Open loop · Visual hook · Audio ramp · Attention reset · Curiosity gap · Anticipation |
-| **Ground** | Grounding definition · Scene setting · Recognition · Concretization |
-| **Build understanding** | Worked example · Progress tracker · Cached understanding · State change · Progressive disclosure · Boundary |
-| **Land** | Payoff · Callback · Distillation |
+Under the bullets, two prose lines: `narrativeRole:` (the frame's job in the story) and `keyMessage:`
+(the one thing the viewer knows after it).
 
 ## Transitions
 
-Only `cut`. A push through an object into the next framing is built inside the frames, never as a
-transition.
+Only `cut`. A push into a detail, or a move along the cord from one item to the next, is built inside the
+frames, never as a transition.
 
 ## Script rules
 
 - `SCRIPT.md` uses the exact `script-format.md` shape: one `## Line N — <label> (Frame N)` heading per
   frame, and the spoken words in a block indented four spaces beneath it. Frames 1 to 7 are spoken; the
   close is not.
-- **Every word is said out loud**: no quoted words, no symbols (`= / & # @ < > → *`), no code tokens, no
-  file names; write them as a person says them.
-- Word ranges per beat (the table above). Never two new terms in one sentence.
+- **Every word is said out loud**: no symbols (`= / & # @ < > → *`), no code tokens, no file names, no
+  handles or URLs; write them as a person says them. Never put a single word or two in quotation marks.
+- Word ranges per act (the table above). Never two new terms in one sentence.
 
 ## Music and sound
 
@@ -246,19 +303,16 @@ the frame workers design each frame's sound events.
 ## Final checklist
 
 - Frontmatter `term:` is BRIEF.md's term; `concept:` equals it; `music: none`.
-- `## Anchor scene` is the story world: a `hook`, 3 or 4 `steps` (name — what it was in this event), a
-  `hero:` line naming the key item as an `object`, at most 4 entities, no orange critter, no person or
-  body part, no logo.
-- `## Hook` has three candidates rated on clarity and thumb-stop, and a pick at 4+ clarity.
-- `## Puzzle` has the question, the answer and `closed_by`.
-- Eight frames in order, each with `type`, `engagement`, `ground`, `scene`, and (frames 1–7) `hold`,
-  `voiceover`, `beat`; frames 1, 2, 4, 5, 6 and 7 have `claims:` and `shots:`.
-- Every fact about the event in a voiceover is in a fact its frame's `claims:` names, said no stronger;
-  no attribution phrasing; no person's name.
-- Frame 2 ends on its question (`gap_question:`, word for word) and has `reset:`; frame 3's voiceover is
-  its `definition:`, 16 words or fewer, starting "A/An <term> is" or "<Term> is"; frame 4 opens on the
-  wide shot and names each step as it plays; frame 5 says why the outcome happened; frame 7 answers the
-  puzzle and gives one rule.
+- `## Case file` has when/where, the key artifact, the key detail, the players (at most 4), the
+  artifacts (at most 3, from `## Artifacts`), the numbers (each with its fact), and the mechanism.
+- `## Cold open` has three candidates rated on clarity and thumb-stop, and a pick at 4+ clarity.
+- `## Question` has the question, the answer and `closed_by`.
+- Eight frames in order, each with `type`, `ground`, `scene`, and (frames 1–7) `hold`, `voiceover`,
+  `beat`, `claims`, `artifacts`, `shots:`.
+- Every fact about the event in a voiceover or on screen is in a fact its frame's `claims:` names, said
+  no stronger; no attribution phrasing; no private person named; artifacts word for word.
+- Frame 2 has `stamp:`; frame 4 ends on its `question:`, word for word; frame 5 names the term once,
+  exactly, and has `term_card:`; frame 7 is one line for the viewer.
 - Frame 8 is the skeleton's close, unchanged, with no voiceover and no line in `SCRIPT.md`.
-- Word ranges kept; no `!`, no emoji; every `transition_in` is `cut`; no `sfx:` lines; the Real Case lint
-  shows no errors.
+- Word ranges kept; no `!`, no emoji; every `transition_in` is `cut`; no `sfx:` lines; the lint shows no
+  errors.

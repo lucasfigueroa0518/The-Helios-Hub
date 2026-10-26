@@ -267,6 +267,12 @@ INSERT INTO explainers.settings (key, value) VALUES
     ('voice_id',             'null'::jsonb),
     ('orchestrator_model',   '"claude-sonnet-5-5"'::jsonb),
     ('frame_worker_model',   '"claude-sonnet-5-5"'::jsonb),
+    -- Explainers 4.1: Opus for the scene builder and the analogy's frames; Sonnet for the tech frames
+    -- and the picture check (vision).
+    ('scene_builder_model',  '"claude-opus-5-5"'::jsonb),
+    ('scene_frame_model',    '"claude-opus-5-5"'::jsonb),
+    ('tech_frame_model',     '"claude-sonnet-5-5"'::jsonb),
+    ('picture_check_model',  '"claude-sonnet-5-5"'::jsonb),
     ('idea_model',           '"claude-sonnet-5-5"'::jsonb),
     ('analogy_model',        '"claude-opus-5-5"'::jsonb),
     ('music_enabled',        'true'::jsonb),

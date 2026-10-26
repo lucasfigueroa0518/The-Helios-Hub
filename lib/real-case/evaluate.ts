@@ -17,17 +17,19 @@ import {
   listRecentlyMadeStories,
   listStories,
   saveStoryCheck,
+  saveStoryMaterial,
   saveStoryScores,
   setStoryStatus,
   storyScores,
 } from '@/lib/real-case/repository';
-import { compareStories, storyBarMisses, storyTotal } from '@/lib/real-case/scoring';
+import { compareStories, freshness, storyBarMisses, storyTotal } from '@/lib/real-case/scoring';
 import { checkStoryClaims, fetchPage, type PageFetcher } from '@/lib/real-case/source-check';
-import { STORY_SCORE_KEYS, type StoryRow, type StoryScores } from '@/lib/real-case/types';
+import { CLAIM_ACTS, JEV_SCORE_KEYS, type ClaimAct, type NewsStory, type StoryRow, type StoryScores } from '@/lib/real-case/types';
 
 /**
- * One scouted story, end to end (RC-13), cheapest step first: the source check (code, free), the gates
- * and the scores (one Jev call each), the bar (code), then the duplicate checks (Jev), and the pool.
+ * One scouted story, end to end (RC-13, RC-27), cheapest step first: the source check (code, free),
+ * the acts its verified facts cover (code), the gates and the scores (one Jev call each), freshness and
+ * the bar (code), then the duplicate checks (Jev), and the pool.
  */
 
 export type EvaluateStoryDeps = {
@@ -35,11 +37,14 @@ export type EvaluateStoryDeps = {
   jev: RealCaseJevRunner;
   fetcher?: PageFetcher;
   lookbackDays: number;
+  /** The news window (RC-27), for freshness. */
+  windowDays: number;
   now?: Date;
 };
 
 export type StoryEvaluation =
   | { outcome: 'source_failed'; failedCore: string[] }
+  | { outcome: 'uncovered'; acts: ClaimAct[] }
   | { outcome: 'gated'; gates: string[] }
   | { outcome: 'below_bar'; score: number; misses: string[] }
   | { outcome: 'recent_lesson'; score: number }
@@ -54,16 +59,55 @@ export function enteredPool(e: StoryEvaluation): boolean {
 
 /** What every story question sees: the term, the story, and only the facts that passed the source check. */
 export function storyState(story: Pick<StoryRow, 'term' | 'title' | 'summary' | 'polarity' | 'story' | 'claims'>) {
+  const { artifacts, ...rest } = story.story;
   return {
     term: story.term,
-    story: { title: story.title, summary: story.summary, polarity: story.polarity, ...story.story },
+    story: {
+      title: story.title,
+      summary: story.summary,
+      polarity: story.polarity,
+      ...rest,
+      artifacts: (artifacts ?? []).map((a) => ({ kind: a.kind, speaker: a.speaker, text: a.text })),
+    },
     facts: story.claims.filter((c) => c.check?.status === 'verified').map((c) => c.text),
   };
 }
 
+/**
+ * The act material rebuilt from the verified claims alone: each act is its own claims' text, the cold
+ * open is the moment's first core claim, the timeline keeps verified entries in their claim's
+ * words, and the cast keeps only players a verified claim names. Place, artifacts (verbatim in
+ * excerpts) and the "for you" line are kept. Used when
+ * the scout's prose added details its claims don't support (the acts_beyond_facts gate).
+ */
+export function factsOnlyMaterial(story: Pick<StoryRow, 'story' | 'claims'>): NewsStory {
+  const verified = story.claims.filter((c) => c.check?.status === 'verified');
+  const of = (act: ClaimAct) => verified.filter((c) => c.act === act).map((c) => c.text).join(' ');
+  const moment = verified.filter((c) => c.act === 'moment');
+  const text = new Map(verified.map((c) => [c.id, c.text]));
+  const said = verified.map((c) => c.text.toLowerCase()).join(' ');
+  const named = story.story.cast.filter((p) => said.includes(p.name.toLowerCase()));
+  return {
+    ...story.story,
+    cast: named.length ? named : story.story.cast.slice(0, 1),
+    cold_open: (moment.find((c) => c.core) ?? moment[0])?.text ?? story.story.cold_open,
+    setup: of('setup'),
+    moment: of('moment'),
+    fallout: of('fallout'),
+    reveal: of('reveal'),
+    since: of('since'),
+    timeline: story.story.timeline.filter((t) => text.has(t.claim_id)).map((t) => ({ ...t, what: text.get(t.claim_id)! })),
+  };
+}
+
 /** The short form the duplicate checks compare. */
-export function storyRef(story: Pick<StoryRow, 'term' | 'title' | 'summary'>) {
-  return { term: story.term, title: story.title, summary: story.summary };
+export function storyRef(story: Pick<StoryRow, 'term' | 'title' | 'summary' | 'event_date'>) {
+  return { term: story.term, title: story.title, summary: story.summary, event_date: story.event_date };
+}
+
+/** The acts (RC-31) with no verified claim: a reel can't tell an act its facts don't cover. */
+export function uncoveredActs(claims: StoryRow['claims']): ClaimAct[] {
+  return CLAIM_ACTS.filter((act) => !claims.some((c) => c.act === act && c.check?.status === 'verified'));
 }
 
 function subset<Q extends Questions>(questions: Q, keys: readonly string[]): Questions {
@@ -75,8 +119,8 @@ function subset<Q extends Questions>(questions: Q, keys: readonly string[]): Que
 async function askScores(deps: EvaluateStoryDeps, story: StoryRow): Promise<StoryScores> {
   const result = await deps.jev.ask({ component: 'story_scoring', state: storyState(story), set: STORY_SCORING, questions: STORY_SCORING.questions, storyId: story.id });
   const answers = result.answers as Record<string, { score?: number }>;
-  const scores = {} as StoryScores;
-  for (const key of STORY_SCORE_KEYS) {
+  const scores = { freshness: story.event_date ? freshness(story.event_date, deps.windowDays, deps.now) : 0 } as StoryScores;
+  for (const key of JEV_SCORE_KEYS) {
     const value = answers[key]?.score;
     if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Jev returned no ${key} score for a story`);
     scores[key] = Math.min(4, Math.max(0, value));
@@ -133,8 +177,21 @@ export async function evaluateStory(deps: EvaluateStoryDeps, storyId: string): P
   if ((await saveStoryCheck(db, story.id, check)) === 'rejected') return { outcome: 'source_failed', failedCore: check.failedCore };
   story = (await getStory(db, story.id))!;
 
-  // 2 · The gates.
-  const gates = await askGates(deps, story);
+  // 1b · Every act has a verified fact (code).
+  const uncovered = uncoveredActs(story.claims);
+  if (uncovered.length) {
+    await setStoryStatus(db, story.id, 'rejected', { reason: `No verified fact for ${uncovered.join(', ')}.` });
+    return { outcome: 'uncovered', acts: uncovered };
+  }
+
+  // 2 · The gates. When the scout's prose was the only fault, the acts are rebuilt from the
+  // verified claims and the gates asked once more.
+  let gates = await askGates(deps, story);
+  if (gates.length === 1 && gates[0] === 'acts_beyond_facts') {
+    await saveStoryMaterial(db, story.id, factsOnlyMaterial(story), { acts_rebuilt_from_claims: true });
+    story = (await getStory(db, story.id))!;
+    gates = await askGates(deps, story);
+  }
   if (gates.length) {
     await setStoryStatus(db, story.id, 'rejected', { reason: `Failed gate: ${gates.map((g) => g.replace(/_/g, ' ')).join(', ')}.` });
     return { outcome: 'gated', gates };
@@ -177,7 +234,7 @@ export async function evaluateStory(deps: EvaluateStoryDeps, storyId: string): P
     await setStoryStatus(db, story.id, 'rejected', { reason: 'Same event as a story already made or being made.', duplicateOf: match.id });
     return { outcome: 'already_made', score: total, matchId: match.id };
   }
-  const incumbent = storyScores(match);
+  const incumbent = storyScores(match, { windowDays: deps.windowDays, now: deps.now });
   if (incumbent && compareStories(scores, incumbent) > 0) {
     await setStoryStatus(db, match.id, 'displaced', { reason: 'A stronger telling of the same event entered the pool.', duplicateOf: story.id });
     await setStoryStatus(db, story.id, 'pool');

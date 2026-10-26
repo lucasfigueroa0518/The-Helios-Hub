@@ -5,6 +5,7 @@
 // magnifier instead of drawing them huge.
 //
 //   scene({ ppcm, origin, P })        cm → screen on the iso floor: { at, size, depth, s, critterS, … }
+//   plane(at, origin, u, v)           lay flat art (a sign, a label) on any world face, in cm
 //   sizes(SIZES)                      validate the world's scale ledger; scaleOf(id, px) helpers
 //   scaleProblems(SIZES, drawn)       entities drawn off their real size (relative to the critter)
 //   depthSort(items)                  [{ at: [x, y, z], svg }] joined back to front
@@ -294,7 +295,9 @@ export function magnifier({ from, at, r = 220, zoom = 4, draw, label = true } = 
   defs.push(sh.defs);
   out.push(el('circle', { cx: n2(at[0]), cy: n2(at[1] + r * 0.09), r: n2(r), fill: T.ink, opacity: dark ? 0.45 : 0.18, filter: sh.url }));
   const ctx = { zoom, from, at, r, lw: (px) => px / zoom };
-  const inner = typeof draw === 'function' ? draw(ctx) : draw ?? '';
+  // The lens is a view of the scene, not a second cast: its copy carries no cast tags, so try's
+  // cast check never counts a magnified critter twice.
+  const inner = String(typeof draw === 'function' ? draw(ctx) : draw ?? '').replace(/ data-(who|look)="[^"]*"/g, '');
   const sheen = id(`lenssheen-${key}`);
   defs.push(el('radialGradient', { id: sheen, cx: 0.3, cy: 0.22, r: 0.75 }, [
     el('stop', { offset: 0, 'stop-color': T.canvas, 'stop-opacity': dark ? 0.16 : 0.5 }),

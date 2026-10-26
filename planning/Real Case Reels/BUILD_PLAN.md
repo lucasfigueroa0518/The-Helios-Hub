@@ -6,17 +6,20 @@ no commits to main, no deploys, no Supabase apply until a run validates it.
 
 ## The rebuild: N1–N6 (RC-26, 2026-10-26)
 
+**Handoff (2026-10-26):** the remaining work (N4c → N6) is specified for another agent in
+`CURSOR_BUILD_PROMPT.md`.
+
 The first live reel showed the format had been built as an analogy Explainer with true captions. N1–N6
 rebuild it as AI News Explained, keeping the machinery that worked (the pool, source check, Jev, jobs,
 spend caps, fact gate, worker, lab) and replacing what made it an Explainer. Internal names stay
 `real_case`. No file under `lib/explainers/`, or under `explainers/` outside `explainers/real-case/`, is
 edited.
 
-### N1 · Register and spec
+### N1 · Register and spec — done 2026-10-26
 - RC-26 to RC-32, `FORMAT.md`, this plan.
 - **Accept:** Lucas's four calls recorded; superseded entries marked.
 
-### N2 · News scout, fact sheet, story scoring
+### N2 · News scout, fact sheet, story scoring — built 2026-10-26 (stubbed tests)
 - The scout searches AI news from the last 90 days and returns, per story: the event date, a timeline,
   the cast, the moment, fallout, the reveal, since then, artifacts (verbatim text) and claims covering
   every act; the closest Explainer topic is a label only.
@@ -25,21 +28,49 @@ edited.
 - The pool: event date, expiry at 90 days, `searches_per_night` under the ~$1 cap.
 - **Accept:** stubbed tests of parsing, expiry, scoring and a cycle; explainers suite unchanged.
 
-### N3 · The writing
+### N3 · The writing — built 2026-10-26; prompts await Lucas
 - Director, story design, workflow, skeleton, frame-worker role, scene builder and brief for the eight
   acts; the lint for acts and artifacts; the fact gate accepts faithful paraphrase; the understanding
   test asks this format's questions.
 - **Accept:** lint tests on good and bad fixtures; `prompts-for-review.md` regenerated; **Lucas approves
   the prompts.**
+- Built: `story-design.md`, `storyboard-skeleton.md`, `director/SKILL.md` (plan, fix, facts phases),
+  `render/brief.ts`, the lint and its fictional fixture (Harbor City Transit), the fact check
+  (`news-fact-check-v1`: judges meaning, not wording), and this format's first viewer and understanding
+  judge (`render/agents.ts`, `render/understanding.ts`), swapped in through a wrapped `query`. The first
+  build's regex patch of the Explainer frame.md is removed (it broke on Explainer 4.0).
 
-### N4 · The look
+### N4 · The look (RC-33, RC-34, RC-37)
+
+- **N4a · Direction stills** for Lucas, before the kit is built (as Explainer 4.0 was approved). Round 1
+  (premium Helios) was rejected as too glossy; round 2 is the true-crime case board
+  (`.explainers-local/previews/ai-news-truecrime/`, RC-39 to RC-42).
+- **N4b · The cutout bank:** built 2026-10-26: 18 of 18 (15 from Commons, 3 photos Lucas supplied),
+  `scripts/real_case_cutout_bank.ts`, approved by Lucas 2026-10-26. Object cutouts (RC-41):
+  `scripts/real_case_object_cutouts.ts` searches the Hub's stock lane and cuts out locally; stock hits
+  are noisy, so the kit needs an automatic pick (a cheap vision check on the cutout sheet).
+  The original plan for this step: a licensed Commons portrait per blue-chip person (Wikidata P18 on a pinned
+  QID, licence checked, credited), background removed on this Mac (macOS Vision), reviewed by Lucas on a
+  contact sheet. Logos come from the existing logo bank.
+- **N4c · The kit and the engine forks** (below): the three scenes (RC-44), their motion and sound as
+  `SCENES.md` specifies (RC-46), measured marker connectors, Gochi Hand for dry-erase notes.
+
+Finding (2026-10-26): the Explainer render engine is bound to its look. `pace.mjs` inserts an opener
+from the bank and speeds up frame 1's voice; frame 8 is hard-wired to the AI BRAIN BREAK `close.js`;
+`mount.mjs` only knows paper/stage/white grounds; `try.mjs` requires the title card and the dictionary
+card; `music.mjs` bans cinematic and electronic beds; and `repairProjectAssembly` runs the repo's world
+kit, not the job's copy. So the news kit carries its own forks of the engine scripts (pace, mount,
+frames, music, sting sound, try, bounds; sound.mjs unchanged) under `explainers/real-case/kit/`, the job
+gets that kit as `assets/kit/`, and this route passes its own `repairAssembly`. The frame worker's
+prompt is swapped the same way as the first viewer's.
+
 - The `ai-news` preset (frame.md, caption skin) and the news kit (artifacts, stamps, chart, timeline,
   term card, lower-third, silhouettes, sting, close); the workspace builds frame.md from this preset.
 - **Accept:** a kit preview renders every component; the job workspace has no world kit, critter or
   AI BRAIN BREAK reference; screenshot to Lucas.
 
 ### N5 · Sound and voice
-- Its own narrator voice (Lucas picks from samples), music styles and history, sfx list, sting sound.
+- The Lucas Figueroa voice (RC-38, the Explainer voice id); its own music styles and history, sfx list, sting sound.
 - **Accept:** a dry workspace names this format's voice, music and sounds.
 
 ### N6 · Lab and the first live reel

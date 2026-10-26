@@ -22,7 +22,10 @@ export type HarvestResult = {
 type FoundProp = { file: string; name: string; tags: Record<string, unknown> | null; ok: boolean };
 type AssetRow = { name?: unknown; file?: unknown; meant?: unknown; seen?: unknown; pass?: unknown };
 
-/** The picture check's asset rows, whichever shape the file has (`{ tiles, assets }`, or tiles only). */
+/**
+ * The picture check's asset rows, whichever shape the file has: 4.1's `{ frames, assets }`, 3.x's
+ * `{ tiles, assets }`, or a bare array (no rows).
+ */
 export function verifiedAssets(projectDir: string): Map<string, AssetRow> {
   const out = new Map<string, AssetRow>();
   try {

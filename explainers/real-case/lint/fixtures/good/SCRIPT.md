@@ -1,31 +1,33 @@
-# Script
+# SCRIPT — the trip assistant that sent riders to a closed station
 
 **Voice:** HeyGen
 
-## Line 1 — The incident (Frame 1)
+---
 
-    In June 2025, a bakery's website kept selling sourdough at its old price of $4.
+## Line 1 — Cold open (Frame 1)
 
-## Line 2 — The puzzle (Frame 2)
+    A city's new transit assistant sent about 2,300 riders to a station that was already closed.
 
-    The price had already gone up. Still, 1,200 orders went through at $4. So why would a website keep showing a price that no longer exists?
+## Line 2 — Setup (Frame 2)
 
-## Line 3 — Name it (Frame 3)
+    September 14, 2026. Harbor City Transit adds an AI trip assistant to its app. It should mean fewer calls to the help line. Riders ask, and it plans the trip.
 
-    Caching is keeping a saved copy of something so it can be served faster.
+## Line 3 — The moment (Frame 3)
 
-## Line 4 — Walk it (Frame 4)
+    That weekend, riders ask for directions. The answer looks perfect: take the Blue Line to Pier Street station, then walk two blocks east. Pier Street closed in March.
 
-    Step one, request: a customer opens the sourdough page. Step two, check the copy: the site finds a saved page. Step three, serve the copy. Step four, refresh: each copy lasts 24 hours.
+## Line 4 — Fallout (Frame 4)
 
-## Line 5 — The click (Frame 5)
+    About 2,300 riders walk up to a closed station. Two days in, the assistant goes dark. So why would it send anyone there?
 
-    The saved copy was made before the price changed. So for a day, every customer got the copy, and the copy still said $4.
+## Line 5 — What actually happened (Frame 5)
 
-## Line 6 — The other side (Frame 6)
+    The assistant learned its routes from data collected before the station closed. Nothing told it the map had changed. That's called a knowledge cutoff: a model only knows the world up to the day its data was gathered.
 
-    The bakery fixed it at the refresh step. Now it clears the saved copy whenever a price changes, so the next customer gets the new page.
+## Line 6 — Since then (Frame 6)
 
-## Line 7 — The takeaway (Frame 7)
+    September 20. The assistant comes back, now connected to the agency's live service alerts. A closed station is news it can read.
 
-    A cache is only as fresh as its last copy. When something changes, clear the saved copy.
+## Line 7 — For you (Frame 7)
+
+    Before you trust an AI's answer, ask how fresh its information is.

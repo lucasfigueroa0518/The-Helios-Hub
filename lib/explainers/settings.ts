@@ -21,7 +21,16 @@ export type ExplainersSettings = {
   voice_name: string;
   voice_id: string | null;
   orchestrator_model: string;
+  /** The legacy frame worker's model (`frame-worker`; Real Case's frame workers use it). */
   frame_worker_model: string;
+  /** Explainers 4.1: the scene builder (world.js, identity.js, the set). */
+  scene_builder_model: string;
+  /** Explainers 4.1: the analogy world's frame workers (1, 4, 5, and 7 as a callback). */
+  scene_frame_model: string;
+  /** Explainers 4.1: the real tech's frame workers (2, 3, 6, and 7 in glass). */
+  tech_frame_model: string;
+  /** Explainers 4.1: the required picture check, with vision over the shot sequences. */
+  picture_check_model: string;
   idea_model: string;
   /** The analogy writer's model (EX3-123): Opus, separate from the idea model. */
   analogy_model: string;
@@ -47,6 +56,12 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   voice_id: null,
   orchestrator_model: 'claude-sonnet-5-5',
   frame_worker_model: 'claude-sonnet-5-5',
+  // Explainers 4.1 (plan Phase 5): Opus draws the world and the analogy's frames; the tech frames and
+  // the picture check (vision over the shot stills, off Haiku) run on Sonnet.
+  scene_builder_model: 'claude-opus-5-5',
+  scene_frame_model: 'claude-opus-5-5',
+  tech_frame_model: 'claude-sonnet-5-5',
+  picture_check_model: 'claude-sonnet-5-5',
   idea_model: 'claude-sonnet-5-5',
   // Explainers 3.9 (EX3-123; Lucas, 2026-10-25: "Opus").
   analogy_model: 'claude-opus-5-5',
@@ -102,6 +117,10 @@ const PARSERS: { [K in SettingKey]: Parser<K> } = {
   voice_id: (value) => (value === null ? null : text('voice_id')(value)),
   orchestrator_model: text('orchestrator_model'),
   frame_worker_model: text('frame_worker_model'),
+  scene_builder_model: text('scene_builder_model'),
+  scene_frame_model: text('scene_frame_model'),
+  tech_frame_model: text('tech_frame_model'),
+  picture_check_model: text('picture_check_model'),
   idea_model: text('idea_model'),
   analogy_model: text('analogy_model'),
   music_enabled: bool('music_enabled'),

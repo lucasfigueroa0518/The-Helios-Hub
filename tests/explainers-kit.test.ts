@@ -90,10 +90,12 @@ test('the calm camera refuses big zooms, roll past 3°, and tilt (V-7)', () => {
   assert.throws(() => HX.validateLegs([{ at: 0, dur: 1, to: { zoom: 1.5 }, polarity: 'glide' }], 2), /within 1.2/);
 });
 
-test('colors are palette tokens; the grounds are paper, night, forest, and white for the close', () => {
+test('colors are palette tokens; the grounds are paper, stage, and white for the close; night and forest read as stage (hx-4)', () => {
   assert.equal(HX.tok('paper'), '#F3F0EA');
   assert.throws(() => HX.mix('orange', '#00FF00', 0.5), /unknown token/);
-  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'night', 'forest', 'white']);
+  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'stage', 'white']);
+  assert.equal(HX.groundOf('night').name, 'stage');
+  assert.equal(HX.groundOf('forest').name, 'stage');
   assert.equal(HX.GROUNDS.white.fill, '#FFFFFF');
 });
 
@@ -105,12 +107,12 @@ test('kit code draws only in palette colors (V-T1, V-16)', () => {
   }
 });
 
-test('the isometric projection and the stop-motion clock (V-2, V-15)', () => {
+test('the isometric projection, and motion is smooth: no stop-motion clock (V-2, V-15, hx-4)', () => {
   const P = HX.iso(500, 400, 2);
   assert.deepEqual(P(0, 0, 0), [500, 400]);
   assert.deepEqual(P(0, 0, 10), [500, 380]);
-  assert.equal(HX.onTwos(0.066), 0, 'a pose holds for two 30 fps frames');
-  assert.equal(HX.boilSeed(0.05), HX.boilSeed(0.65), 'six drawings, then it repeats');
+  assert.equal(HX.onTwos(0.066), 0.066, 'no poses held on twos: motion is smooth');
+  assert.equal(HX.boilSeed(0.05), HX.boilSeed(0.65), 'no boil: the seed never changes');
 });
 
 test('frame.md carries the kit palette, and the recipe copy matches the preset', () => {
@@ -292,7 +294,7 @@ test('handwrite draws Hershey Sans strokes that reveal in order and measure thei
   const { handwrite, handwriteWidth, scope } = await import('../explainers/world-kit/draw.js');
   scope('t-', 'paper');
   assert.ok(Object.keys(HERSHEY_SANS).length >= 90, 'printable ASCII');
-  assert.equal(handwrite('hello', 100, 500, 60, 0), '<g data-k="text" data-text="hello" filter="url(#t-wobble)"></g>', 'tagged for bounds.mjs (EX3-92)');
+  assert.equal(handwrite('hello', 100, 500, 60, 0), '<g data-k="text" data-text="hello"></g>', 'tagged for bounds.mjs (EX3-92), with no wobble (hx-4)');
   const half = handwrite('hello', 100, 500, 60, 0.5, { role: 'title' });
   const full = handwrite('hello', 100, 500, 60, 1, { role: 'title' });
   assert.match(full, /data-role="title"/);
@@ -612,10 +614,10 @@ test('textBox sizes its shape around the measured text, wraps long text, and tag
   // The box is centred on (x, y) and wider than the text by its padding on both sides.
   assert.ok(Math.abs(short.box.x + short.box.w / 2 - 518) < 0.01 && Math.abs(short.box.y + short.box.h / 2 - 1180) < 0.01);
   assert.ok(short.box.w >= handwriteWidth('happy to help!', 30) + 56 - 0.01, `${short.box.w}`);
-  // Long text wraps (at most two lines) or shrinks, never wider than maxW.
+  // Long text wraps onto more lines, never wider than maxW and never under 30 px (hx-4: readable at phone size).
   const long = textBox('your order ships tomorrow morning from our main warehouse', 540, 900, { kind: 'speech', size: 34, maxW: 420 });
   assert.ok(long.box.w <= 420 + 0.01, `${long.box.w}`);
-  assert.equal((long.svg.match(/data-k="text"/g) ?? []).length, 2, 'two lines');
+  assert.ok((long.svg.match(/data-k="text"/g) ?? []).length >= 3, 'it wraps rather than shrinking');
   const typed = textBox('refund policy?', 540, 900, { kind: 'screen', hand: false });
   assert.match(typed.svg, /<text data-k="text"[^>]*text-anchor="middle"[^>]*>refund policy\?<\/text>/);
   assert.throws(() => textBox('x', 0, 0, { kind: 'cloud' }), /textBox kind "cloud"/);

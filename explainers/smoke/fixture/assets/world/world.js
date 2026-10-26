@@ -25,6 +25,22 @@ export const CAST = {
   hero: { body: 'orange', wear: ['cap'] },
 };
 
+/**
+ * Every entity's real size in cm (hx-4 scale ledger): a critter is 72 cm, the ruler. The writer is
+ * a critter, so it has no entry.
+ */
+export const SIZES = {
+  sheet: { w: 21, d: 29.7, h: 0.1 },
+  ink: { w: 18, d: 24, h: 0.1 },
+  coins: { w: 2.4, d: 2.4, h: 2, exaggerate: 1.5 },
+};
+
+/**
+ * The scene at rest as drawn, for the try's scale check. This smoke scene is a tabletop close-up
+ * that only exercises the pipeline, so it measures nothing but the critter.
+ */
+export const DRAWN = { critterS: 0.8 };
+
 export const LAYOUT = {
   sheet: { w: 380, d: 520 },
   coins: { x: 687, y: 1338, rx: 64, h: 13 },

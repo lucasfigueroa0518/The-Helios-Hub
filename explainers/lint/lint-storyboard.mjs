@@ -1,9 +1,11 @@
 #!/usr/bin/env node
-// lint-storyboard.mjs — deterministic checks on an Explainer Reel's plan (Explainers 4.0, hx-4:
-// planning/Explainer Reels/DECISIONS.md EX3-10 to EX3-24, EX3-60 to EX3-132, and the visual
-// system's grounds, sizes and outfits, planning/Explainer Reels/VISUAL_SYSTEM_4.md). No model, no
-// judgment: it reports structure against the fixed eight-beat sheet. Violations are recorded and
-// the render continues (E-07, EX3-06).
+// lint-storyboard.mjs — deterministic checks on an Explainer Reel's plan (Explainers 4.1:
+// planning/Explainer Reels/DECISIONS.md EX3-10 to EX3-24, EX3-60 to EX3-132, the visual system's
+// grounds, sizes and outfits (planning/Explainer Reels/VISUAL_SYSTEM_4.md), and 4.1's plan rules,
+// EX4-145 to EX4-154: the place beyond, each shot's cast and angle, the cut rule, the named hero,
+// trips shown, the definition's part, the tech beats' techniques). No model, no judgment: it
+// reports structure against the fixed eight-beat sheet. Violations are recorded and the render
+// continues (E-07, EX3-06).
 //
 //   node lint-storyboard.mjs --storyboard STORYBOARD.md [--script SCRIPT.md]
 //                            [--frames-dir assets/frames] [--audio-meta audio_meta.json]
@@ -21,20 +23,21 @@ import { hasOpenerSfx } from '../world-kit/opener-sfx.mjs';
 import { catalogEntries } from '../world-kit/props/catalog.mjs';
 
 /**
- * The fixed beat sheet (EX3-10; 3.2: EX3-79, EX3-83, EX3-87; 3.3: EX3-95, EX3-96): order,
+ * The fixed beat sheet (EX3-10; 3.2: EX3-79, EX3-83, EX3-87; 3.3: EX3-95, EX3-96; 4.1: the hold is
+ * pace.mjs's HOLD, 0.15s, and the opener's nominal length is its line's, about 4.5s): order,
  * storyboard `type`, nominal seconds, anchor rule (`scene`, `own`, or none), the voiceover word
  * range, the longest hold after the voice, and the fewest shots (frames 3 and 8 have no shot
  * list). The close (frame 8) is voiceless and code's: 2.5s, no words, no hold. 3.9 (EX3-128):
  * beat 5 is why the analogy works, then where it breaks; beat 7 is the payoff.
  */
 export const BEAT_SHEET = [
-  { beat: 'series opener', type: 'hook', seconds: 3.5, anchor: 'scene', words: null, hold: 0.2, shots: 1 },
-  { beat: 'curiosity gap', type: 'pain_point', seconds: 9, anchor: 'own', words: [18, 36], hold: 0.2, shots: 2 },
-  { beat: 'define', type: 'product_intro', seconds: 7, anchor: 'own', words: [12, 26], hold: 0.2, shots: 0 },
-  { beat: 'everyday analogy', type: 'feature_showcase', seconds: 12, anchor: 'scene', words: [20, 36], hold: 0.2, shots: 2 },
-  { beat: 'why it works, where it breaks', type: 'feature_showcase', seconds: 10, anchor: 'scene', words: [18, 34], hold: 0.2, shots: 2 },
-  { beat: 'tiny real example', type: 'social_proof', seconds: 10, anchor: 'own', words: [18, 32], hold: 0.2, shots: 2 },
-  { beat: 'the payoff', type: 'benefit_highlight', seconds: 6, anchor: 'own', words: [12, 26], hold: 0.2, shots: 1 },
+  { beat: 'series opener', type: 'hook', seconds: 4.5, anchor: 'scene', words: null, hold: 0.15, shots: 1 },
+  { beat: 'curiosity gap', type: 'pain_point', seconds: 9, anchor: 'own', words: [18, 36], hold: 0.15, shots: 2 },
+  { beat: 'define', type: 'product_intro', seconds: 7, anchor: 'own', words: [12, 26], hold: 0.15, shots: 0 },
+  { beat: 'everyday analogy', type: 'feature_showcase', seconds: 12, anchor: 'scene', words: [20, 36], hold: 0.15, shots: 2 },
+  { beat: 'why it works, where it breaks', type: 'feature_showcase', seconds: 10, anchor: 'scene', words: [18, 34], hold: 0.15, shots: 2 },
+  { beat: 'tiny real example', type: 'social_proof', seconds: 10, anchor: 'own', words: [18, 32], hold: 0.15, shots: 2 },
+  { beat: 'the payoff', type: 'benefit_highlight', seconds: 6, anchor: 'own', words: [12, 26], hold: 0.15, shots: 1 },
   { beat: 'close', type: 'branding', seconds: 2.5, anchor: null, words: null, hold: null, shots: 0, voiceless: true },
 ];
 
@@ -71,6 +74,12 @@ export const TERM_MAX_WORDS = 4;
  *  `reverse` are read so they can be flagged (removed in 3.3, EX3-90). */
 export const SHOT_KIND_RE = /\b(wide|medium|close(?:-up)?|insert|cutaway|reaction|ots|over[- ]the[- ]shoulder|reverse)\b/gi;
 export const REMOVED_SHOTS = new Set(['ots', 'reverse']);
+/** The closer shot kinds: punctuation in the analogy's frames, never most of them (frame.md § Shots). */
+export const CLOSER_SHOTS = ['close', 'insert', 'reaction'];
+/** A frame module's source without its comments (nothing in a comment is drawn). Leaves `://` in strings alone. */
+export function stripComments(source) {
+  return String(source ?? '').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:\\])\/\/[^\n]*/g, '$1');
+}
 /** Frames whose shot subjects must be spoken in their window (EX3-91). Frame 1's line is the
  *  opener's; its hook is judged on its own. */
 export const SUBJECT_FRAMES = [2, 4, 5, 6, 7];
@@ -81,6 +90,10 @@ export const PERSON_RE = /\b(hands?|fingers?|fingertips?|palms?|fists?|arms?|per
 /** Frame 6's example steps (EX3-87): as many as the anchor scene's steps, step N mirroring step N (EX3-129). */
 export const EXAMPLE_STEPS_RANGE = [3, 5];
 export const MAX_ENTITIES = 4;
+/** An actor outside the mapping, when the director casts one, is written "stands for the actor: …"; one at most, beside the 4 (EX4-158). */
+export const ACTOR_RE = /stands for the actor\b/i;
+/** A paired term ("X vs Y"): frame 3 defines both, and term_part names both parts (EX4-159). */
+export const TERM_PAIR_RE = /\s+(?:vs\.?|versus)\s+/i;
 export const STEPS_RANGE = [3, 5];
 export const TRANSITIONS = ['cut'];
 /** The grounds (hx-4, VISUAL_SYSTEM_4.md): the paper studio sweep, the premium lit stage, white for the close. */
@@ -89,7 +102,24 @@ export const GROUNDS = ['paper', 'stage', 'white'];
 export const RETIRED_GROUNDS = { night: 'stage', forest: 'stage' };
 /** The real-tech frames (hx-4): glass and gloss on the paper studio ground. */
 export const GLASS_FRAMES = [2, 3, 6];
-/** Story exaggeration of a real size is capped (hx-4, still 01): SIZES' `exaggerate` at most this. */
+/**
+ * The techniques a tech beat picks from (4.1, EX4-154; principles.md § 6): explain.js TECHNIQUE_IDS,
+ * kept equal by the lint test (the lint never loads the drawing kit).
+ */
+export const TECHNIQUE_IDS = ['process', 'before-after', 'comparison', 'transformation', 'scale', 'structure', 'timeline', 'cause-effect', 'product', 'match-cut'];
+/** Frames that name their `technique:`; frame 7 does too when it is built in glass (`anchor: own`). */
+export const TECHNIQUE_FRAMES = [2, 3, 6];
+/** Frame 7 is built in glass (`own`) or as a callback to the analogy world (`scene`) (EX4-153). */
+export const FRAME7_ANCHORS = ['own', 'scene'];
+/** The frames shot through the analogy world's camera, whose shots name a cast and an angle (frame 7 when `anchor: scene`). */
+export const SCENE_SHOT_FRAMES = [1, 4, 5];
+/** At most this many critters in one shot; a crowd is one subject (principles.md § 3, EX4-146). */
+export const MAX_SHOT_CRITTERS = 3;
+/** Absolute words a definition says only when the mechanism guarantees them (EX4-152): a warning. */
+export const OVERSTATE_RE = /\b(always|never|every(?:thing|one)?|smallest|largest|biggest|cheapest|fastest|slowest|best|worst|perfect(?:ly)?|guarantee[sd]?)\b/i;
+/** A trip the voice describes (EX4-151): a going verb, "to the" (or a/an/its…), and the destination's word (group 1). */
+export const TRIP_RE = /\b(?:go(?:es)?|going|went|head(?:s|ed)?|walk(?:s|ed)?|run(?:s)?|ran|drive(?:s)?|drove|travel(?:s|ed)?|hurr(?:y|ies|ied)|rush(?:es|ed)?|dash(?:es|ed)?|trip|off)\s+(?:back\s+)?(?:out\s+)?to\s+(?:the|a|an|its|his|her|their|our|your)\s+([a-z][a-z'-]+)/i;
+/** Story exaggeration of a real size is capped (hx-4, still 01): SIZES' `exaggerate` at most this, bigger or smaller. */
 export const MAX_EXAGGERATE = 1.5;
 /** A critter is the scene's ruler (core.js CRITTER_CM): it needs no size of its own. */
 export const CRITTER_CM = 72;
@@ -270,6 +300,10 @@ function anchorProblems(block) {
   const out = [];
   if (!/^-\s*metaphor:\s*\S/im.test(block)) out.push(['error', 'no metaphor']);
   if (!/^-\s*hook:\s*\S/im.test(block)) out.push(['error', "no hook (the opener's moment in this world)"]);
+  // The set makes the place read (frame.md V-4, the set and the cast): its room, fixtures and signs.
+  if (!/^-\s*set:\s*\S/im.test(block)) out.push(['error', 'no set ("- set: <the place, its 3–5 tells, its walls and openings, its density>": a place a stranger recognizes in one second, principles.md § 1)']);
+  // Every place the story goes to exists (EX4-151): the place beyond, or none.
+  if (!/^-\s*beyond:\s*\S/im.test(block)) out.push(['error', 'no beyond ("- beyond: <every other place the story goes to and how it is shown, or none>": a trip the voice describes is shown, EX4-151)']);
   const steps = subItems(block, 'steps');
   if (steps === null) out.push(['error', 'no steps']);
   else {
@@ -279,7 +313,10 @@ function anchorProblems(block) {
   }
   const entities = block.split(/\r?\n/).filter((l) => /^\s+-\s+\S/.test(l) && /stands for/i.test(l));
   if (entities.length < 2) out.push(['error', `${entities.length} entities with "stands for"; at least 2`]);
-  if (entities.length > MAX_ENTITIES) out.push(['error', `${entities.length} entities; at most ${MAX_ENTITIES}`]);
+  const actors = entities.filter((l) => ACTOR_RE.test(l));
+  const mapped = entities.length - actors.length;
+  if (mapped > MAX_ENTITIES) out.push(['error', `${mapped} entities from the mapping; at most ${MAX_ENTITIES} (an actor outside the mapping, "stands for the actor: …", may be one more, EX4-158)`]);
+  if (actors.length > 1) out.push(['error', `${actors.length} actors outside the mapping; at most one (EX4-158)`]);
   for (const line of entities) {
     const what = line.split(/stands for/i)[0];
     const m = PERSON_RE.exec(what);
@@ -335,8 +372,8 @@ export function entitySizeProblems(block) {
     }
     if (!size.dims.length || !size.dims.every((n) => n > 0)) out.push(['error', `"${id}": its size is not a number ("size: 26 cm", or "size: 70 × 70 × 180 cm")`]);
     else if (size.unit !== 'cm') out.push(['error', `"${id}": write its size in cm ("size: ${size.dims.join(' × ')} cm"): the scale ledger is in centimetres`]);
-    if (size.exaggerate !== null && !(size.exaggerate > 0 && size.exaggerate <= MAX_EXAGGERATE)) {
-      out.push(['error', `"${id}" is exaggerated ${size.exaggerate}×: at most ${MAX_EXAGGERATE}×; show a tiny thing through a magnifier or an insert shot instead`]);
+    if (size.exaggerate !== null && !(size.exaggerate <= MAX_EXAGGERATE + 1e-9 && size.exaggerate >= 1 / MAX_EXAGGERATE - 1e-9)) {
+      out.push(['error', `"${id}" is exaggerated ${size.exaggerate}×: at most ${MAX_EXAGGERATE}× bigger or smaller; show a tiny thing through a magnifier or an insert shot instead`]);
     }
   }
   if (missing.length) {
@@ -408,13 +445,21 @@ function shotsText(block) {
   return [line[1], ...items].join('\n').trim();
 }
 
+/** A shot line without its 4.1 tagged parts (cast, angle, place), whose words are never a kind or a subject. */
+const untagged = (text) => String(text ?? '').replace(/\s*[—–]\s+(?:cast|angle|place)\s*:[^—–;\n]*/gi, '');
+
 /** The shots a `shots:` text names, in order (the kinds only). */
 export function shotKinds(text) {
-  return [...String(text ?? '').matchAll(SHOT_KIND_RE)].map((m) => m[1].toLowerCase().replace(/^close-up$/, 'close').replace(/^cutaway$/, 'insert').replace(/^over[- ]the[- ]shoulder$/, 'ots'));
+  return [...untagged(text).matchAll(SHOT_KIND_RE)].map((m) => m[1].toLowerCase().replace(/^close-up$/, 'close').replace(/^cutaway$/, 'insert').replace(/^over[- ]the[- ]shoulder$/, 'ots'));
 }
 
 /** Words that never make a shot subject match: framing words and fillers. */
 const SUBJECT_STOP = new Set(['a', 'an', 'the', 'of', 'on', 'in', 'to', 'at', 'and', 'or', 'with', 'its', 'it', 'is', 'as', 'by', 'from', 'into', 'over', 'under', 'one', 'two', 'big', 'small', 'alone', 'whole', 'shot', 'face', 'faces', 'label', 'labels', 'close', 'wide', 'medium', 'insert', 'reaction', 'view', 'beside', 'behind', 'their', 'his', 'her', 'this', 'that', 'there', 'here', 'just', 'still', 'then', 'now', 'all', 'up', 'down', 'out', 'off', 'again', 'new', 'old']);
+
+/** A shot's subject as a set of content stems (the same-picture checks). */
+export function subjectKeyOf(shot) {
+  return [...new Set(String(shot?.subject ?? '').split(/[\s,]+/).map(stem).filter((w) => w && !SUBJECT_STOP.has(w)))].sort().join(' ');
+}
 
 /** A crude stem: lowercase, no possessive, no plural or -ing/-ed ending. */
 export function stem(word) {
@@ -429,8 +474,10 @@ export function stem(word) {
 }
 
 /**
- * The shots of a `shots:` text: [{ kind, subject, cue }]. A shot reads
- * "<kind> — <subject> — on \"<cue>\"" (one per sub-bullet, or `;`-separated on one line).
+ * The shots of a `shots:` text: [{ kind, subject, cue, cast, angle, place }]. A shot reads
+ * "<kind> — <subject> — on \"<cue>\" — cast: <ids> — angle: <where the camera stands>" (one per
+ * sub-bullet, or `;`-separated on one line). `cast` is a list of entity ids ([] for "none", null
+ * when the shot names no cast); `angle` and `place` are null when absent (4.1, EX4-146, EX4-148).
  */
 export function parseShots(text) {
   return String(text ?? '')
@@ -441,10 +488,56 @@ export function parseShots(text) {
       const kind = shotKinds(line)[0] ?? null;
       const parts = line.split(/\s+[—–]\s+|\s+--?\s+/).map((x) => x.trim());
       const cueM = /\bon\s+["“']([^"”']+)["”']/i.exec(line);
-      const subject = parts.slice(1).filter((p) => !/^(on|at)\s+/i.test(p) && !/^\d/.test(p)).join(' ');
-      return { kind, subject, cue: cueM ? cueM[1].trim() : null };
+      const tagged = (key) => {
+        const part = parts.find((p) => new RegExp(`^${key}\\s*:`, 'i').test(p));
+        return part === undefined ? null : part.replace(/^\w+\s*:\s*/, '').trim();
+      };
+      const castText = tagged('cast');
+      const cast = castText === null ? null : /^none\b/i.test(castText) ? [] : castText.split(/\s*,\s*|\s+and\s+/).map((x) => x.trim()).filter(Boolean);
+      const subject = parts.slice(1).filter((p) => !/^(on|at)\s+/i.test(p) && !/^\d/.test(p) && !/^(cast|angle|place)\s*:/i.test(p)).join(' ');
+      return { kind, subject, cue: cueM ? cueM[1].trim() : null, cast, angle: tagged('angle') || null, place: tagged('place') || null };
     })
     .filter((x) => x.kind);
+}
+
+/** The anchor block's entities: id → { critter } (its "what it is" or its build names a critter), from its "stands for" lines. */
+export function anchorEntities(block) {
+  const map = new Map();
+  for (const line of String(block ?? '').split(/\r?\n/)) {
+    if (!/^\s+-\s+\S/.test(line) || !/stands for/i.test(line)) continue;
+    const id = line.replace(/^\s+-\s+/, '').split(/\s+[—–]\s+/)[0].trim();
+    const [, what = ''] = line.replace(/^\s+-\s+/, '').split(/\s+[—–]\s+/);
+    map.set(id, { critter: /\bcritters?\b/i.test(`${what} ${line.split(/stands for/i)[1] ?? ''}`) });
+  }
+  return map;
+}
+
+/** The critters a shot's cast holds (EX4-146): each listed critter id once; a crowd's one id counts once. */
+export function castCritters(cast, entities) {
+  return (cast ?? []).filter((id) => entities.get(id)?.critter || entities.get(id.replace(/-\d+$/, ''))?.critter);
+}
+
+/**
+ * Problems with one frame's shots on the analogy's camera (4.1, EX4-146, EX4-148): each shot names its
+ * `cast:` (at most MAX_SHOT_CRITTERS critters) and its `angle:`; a cut to the same subject from the same
+ * angle is a jump cut. Returns [severity, rule, detail] triples.
+ */
+export function sceneShotProblems(shots, entities) {
+  const out = [];
+  shots.forEach((shot, k) => {
+    const name = `shot ${k + 1} (${shot.kind} — ${shot.subject || '?'})`;
+    if (shot.cast === null) out.push(['error', 'shot_cast', `${name} names no cast ("— cast: <entity ids, or none>"): plan who is on screen, at most ${MAX_SHOT_CRITTERS} critters (EX4-146)`]);
+    else {
+      const critters = castCritters(shot.cast, entities);
+      if (critters.length > MAX_SHOT_CRITTERS) out.push(['error', 'shot_cast', `${name} holds ${critters.length} critters (${critters.join(', ')}): at most ${MAX_SHOT_CRITTERS}; the rest go off screen, and a crowd is one entity (EX4-146)`]);
+    }
+    if (!shot.angle) out.push(['error', 'shot_angle', `${name} names no angle ("— angle: <where the camera stands>"): every cut changes the subject or the angle (EX4-148)`]);
+    const prev = shots[k - 1];
+    if (prev && prev.angle && shot.angle && subjectKeyOf(prev) && subjectKeyOf(prev) === subjectKeyOf(shot) && normalize(prev.angle) === normalize(shot.angle)) {
+      out.push(['error', 'shot_jump', `shots ${k} and ${k + 1} frame "${shot.subject}" from the same angle ("${shot.angle}"): a jump cut; cut to a new subject or a clearly new angle (about 30° around it, or a change of height), EX4-148`]);
+    }
+  });
+  return out;
 }
 
 /**
@@ -649,9 +742,10 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
   for (const [severity, p] of entitySizeProblems(section(storyboard, 'Anchor scene'))) out.push(violation('entity_size', null, severity, p));
   for (const [severity, p] of hookProblems(section(storyboard, 'Hook'))) out.push(violation('hook', null, severity, p));
   for (const [severity, p] of gapProblems(section(storyboard, 'Curiosity gap'))) out.push(violation('curiosity_gap', null, severity, p));
-  const term = String(globals?.extra?.term ?? '').trim();
+  const termRaw = String(globals?.extra?.term ?? '').trim();
+  const term = /^<fill/.test(termRaw) ? '' : termRaw; // the skeleton's placeholder is no term
   const concept = String(globals?.extra?.concept ?? '').trim();
-  if (!term || /^<fill/.test(term)) out.push(violation('term', null, 'error', 'no term: in the frontmatter (BRIEF.md\'s term, EX3-86)'));
+  if (!term) out.push(violation('term', null, 'error', 'no term: in the frontmatter (BRIEF.md\'s term, EX3-86)'));
   else if (countWords(term) > TERM_MAX_WORDS) out.push(violation('term', null, 'error', `term "${term}" is ${countWords(term)} words; at most ${TERM_MAX_WORDS}`));
   if (!concept || /^<fill/.test(concept)) out.push(violation('concept', null, 'error', 'no concept: in the frontmatter'));
   else if (term && normalize(concept) !== normalize(term)) out.push(violation('concept', null, 'warning', `concept "${concept}" differs from the term "${term}"`));
@@ -663,6 +757,12 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
   const pickedGap = briefGapLine(brief);
   const pickedOpener = briefOpenerLine(brief);
   const anchorSteps = subItems(section(storyboard, 'Anchor scene'), 'steps');
+  const anchorBlock = section(storyboard, 'Anchor scene');
+  const entities = anchorEntities(anchorBlock);
+  const hero = /^-\s*hero:\s*([\w-]+)\s*[—–-]+\s*(critter|object)\b/im.exec(anchorBlock ?? '');
+  const beyondLine = /^-\s*beyond:\s*(.*\S)/im.exec(anchorBlock ?? '')?.[1] ?? '';
+  // The first frame after the hook whose voice names a critter hero has it as a shot's subject (EX4-146).
+  let heroNamed = !hero || hero[2].toLowerCase() !== 'critter';
 
   // Frame count and total duration.
   if (frames.length !== BEAT_SHEET.length) {
@@ -718,20 +818,51 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
     if (sheet?.shots) {
       const text = shotsText(blocks.get(n));
       const kinds = shotKinds(text);
-      shotsByFrame.set(n, kinds);
+      shotsByFrame.set(n, parseShots(text));
       if (!text) out.push(violation('shots', n, 'error', 'no shots: (the frame\'s shot list, frame.md § Shots)'));
       else if (kinds.length < sheet.shots) out.push(violation('shots', n, 'error', `${kinds.length} shot(s); beat ${i + 1} cuts between at least ${sheet.shots}`));
       if (i !== 3 && kinds.includes('wide')) out.push(violation('shots', n, 'warning', 'a wide shot outside beat 4; the establishing shot is used once'));
       if (i === 3 && kinds[0] !== 'wide') out.push(violation('shots', n, 'warning', 'beat 4 opens on the wide establishing shot'));
+      // The place reads first (frame.md § Shots): beat 5 opens on a medium, and the analogy's
+      // frames spend most of their shots wide or medium; closer shots are punctuation.
+      if (i === 4 && kinds.length && kinds[0] !== 'medium') out.push(violation('shots', n, 'warning', `beat 5 opens on a ${kinds[0]} shot; open on a medium that shows the place, then cut closer`));
+      if ((i === 3 || i === 4) && kinds.length >= 2 && kinds.filter((k) => CLOSER_SHOTS.includes(k)).length * 2 > kinds.length) {
+        out.push(violation('shots', n, 'warning', `${kinds.filter((k) => CLOSER_SHOTS.includes(k)).length} of ${kinds.length} shots are close, insert or reaction: most of the analogy is wide or medium, so the place reads; closer shots are punctuation`));
+      }
       for (const k of new Set(kinds.filter((x) => REMOVED_SHOTS.has(x)))) {
         out.push(violation('shot_kind', n, 'error', `a ${k} shot: removed in 3.3 (a shot is only a camera; ${k === 'ots' ? 'over-the-shoulder drew a second copy of a critter' : 'mirroring makes every critter jump sides'}), EX3-90`));
       }
+      // The analogy's camera (4.1): each shot names its cast and angle; no jump cuts (EX4-146, EX4-148).
+      const sceneShots = SCENE_SHOT_FRAMES.includes(n) || (i === 6 && field('anchor').toLowerCase() === 'scene');
+      if (sceneShots && text && !/<fill in/.test(text)) {
+        for (const [severity, rule, detail] of sceneShotProblems(parseShots(text), entities)) out.push(violation(rule, n, severity, detail));
+      }
       // The shot's subject is what the voice is naming during it (EX3-91).
-      if (SUBJECT_FRAMES.includes(n) && text && voiceFor(frame, i).trim()) {
+      if (SUBJECT_FRAMES.includes(n) && text && voiceFor(frame, i).trim() && !/<fill in/.test(voiceFor(frame, i))) {
         for (const { shot, window } of shotWindows(parseShots(text), voiceFor(frame, i))) {
           if (window === null) out.push(violation('shot_cue', n, 'warning', `the ${shot.kind} shot's cue "${shot.cue}" is not in the voiceover`));
           else if (!subjectSpoken(shot.subject, window, aliases)) {
             out.push(violation('shot_subject', n, SUBJECT_ERROR_FRAMES.includes(n) ? 'error' : 'warning', `the ${shot.kind} shot on "${shot.subject}" plays while the voice says "${window}": frame what the voice is naming (EX3-91)`));
+          }
+        }
+      }
+      // The named hero is the clear subject when the voice first names it (EX4-146; principles.md § 3).
+      if (sceneShots && !heroNamed && n > 1 && text && voiceFor(frame, i).trim() && !/<fill in/.test(voiceFor(frame, i))) {
+        const named = (shotWindows(parseShots(text), voiceFor(frame, i)) ?? []).find(({ window }) => window !== null && subjectSpoken(hero[1], window, aliases));
+        if (named) {
+          heroNamed = true;
+          if (!subjectSpoken(named.shot.subject, [hero[1], ...(aliases.get(stem(hero[1])) ?? [])].join(' '))) {
+            out.push(violation('hero_subject', n, 'warning', `the voice first names the hero ("${hero[1]}") over the ${named.shot.kind} shot on "${named.shot.subject}": make the hero that shot's clear subject, alone or lit and acting while anyone else is still (EX4-146)`));
+          }
+        }
+      }
+      // Every trip the voice describes is shown (EX4-151): its destination is a shot's, or the anchor block's beyond.
+      if (sceneShots && text && !/<fill in/.test(voiceFor(frame, i))) {
+        const shown = new Set([...parseShots(text).flatMap((x) => [x.subject, x.angle ?? '', x.place ?? '']), /^none\b/i.test(beyondLine) ? '' : beyondLine].join(' ').split(/[^\p{L}\p{N}'-]+/u).map(stem).filter(Boolean));
+        for (const m of stripQuotes(voiceFor(frame, i)).matchAll(new RegExp(TRIP_RE.source, 'gi'))) {
+          const where = stem(m[1]);
+          if (where && !SUBJECT_STOP.has(where) && !shown.has(where)) {
+            out.push(violation('trip_shown', n, 'warning', `the voice says "${m[0]}", but no shot and no beyond: shows the ${m[1]}: show the trip (a cut to the destination, or a time cut where the character comes back changed), EX4-151`));
           }
         }
       }
@@ -762,7 +893,19 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
     // Anchor (EX3-10; 3.2): the scene on beats 1, 2, 4, 5; own visuals on 3, 6 and 7.
     const anchor = field('anchor').toLowerCase();
     if (sheet?.anchor === 'scene' && anchor !== 'scene') out.push(violation('anchor', n, 'error', `anchor "${anchor || 'missing'}"; beat ${i + 1} shows the anchor scene`));
-    if (sheet?.anchor === 'own' && anchor !== 'own') out.push(violation('anchor', n, 'error', `anchor "${anchor || 'missing'}"; beat ${i + 1} has its own visuals`));
+    if (i === 6) {
+      // Frame 7 is built in glass (own) or as a callback to the analogy world (scene), EX4-153.
+      if (!FRAME7_ANCHORS.includes(anchor)) out.push(violation('anchor', n, 'error', `anchor "${anchor || 'missing'}"; beat 7 is built in glass ("own") or as a callback to the analogy world ("scene")`));
+    } else if (sheet?.anchor === 'own' && anchor !== 'own') out.push(violation('anchor', n, 'error', `anchor "${anchor || 'missing'}"; beat ${i + 1} has its own visuals`));
+    // The tech beats name their technique (EX4-154): frames 2, 3, 6, and 7 when built in glass.
+    if (TECHNIQUE_FRAMES.includes(n) || (i === 6 && anchor === 'own')) {
+      const raw = field('technique');
+      const m = /^([a-z-]+)\s*(?:[—–]|--?)\s*(\S.*)$/i.exec(raw);
+      const id = (m?.[1] ?? raw.split(/\s+/)[0] ?? '').toLowerCase();
+      if (!raw || /^<fill/.test(raw)) out.push(violation('technique', n, 'error', `no technique ("- technique: <id> — <why this idea is best shown this way>", one of ${TECHNIQUE_IDS.join(', ')}; EX4-154)`));
+      else if (!TECHNIQUE_IDS.includes(id)) out.push(violation('technique', n, 'error', `technique "${id}" is not one of ${TECHNIQUE_IDS.join(', ')} (a card is never the technique; EX4-154)`));
+      else if (!m) out.push(violation('technique', n, 'error', `technique "${id}" gives no reason ("- technique: ${id} — <why this idea is best shown this way>")`));
+    }
     if (i === 1 && !field('reset')) out.push(violation('attention_reset', n, 'error', 'no reset: the 1→2 cut needs an attention reset'));
 
     const vo = voiceFor(frame, i);
@@ -797,12 +940,31 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
       if (!definition) out.push(violation('definition', n, 'error', 'no definition: (the dictionary card)'));
       else if (normalize(definition) !== normalize(vo)) out.push(violation('definition', n, 'error', 'the definition is not the voiceover word for word'));
       if (!field('part_of_speech')) out.push(violation('definition', n, 'error', 'no part_of_speech: (the dictionary card)'));
-      if (term && definition && !normalize(definition).includes(normalize(term))) {
-        out.push(violation('definition_term', n, 'error', `the definition does not define the term "${term}" (EX3-86)`));
+      // A paired term ("X vs Y") is defined side by side: each side is named (EX4-159).
+      const sides = TERM_PAIR_RE.test(term) ? term.split(TERM_PAIR_RE) : [term];
+      const missingSide = sides.find((x) => x && !normalize(definition).includes(normalize(x)));
+      if (term && definition && missingSide !== undefined) {
+        out.push(violation('definition_term', n, 'error', sides.length > 1 ? `the definition does not define "${missingSide}": a paired term defines both sides (EX4-159)` : `the definition does not define the term "${term}" (EX3-86)`));
       }
       if (/\b(when something happens|some data|a thing that|something that|stuff)\b/i.test(vo)) {
         out.push(violation('definition_vague', n, 'warning', 'vague phrase in the definition; name the trigger and the receiver'));
       }
+      // The definition names the part the analogy calls the term (EX4-152), and overstates nothing.
+      const part = stripQuotes(field('term_part'));
+      if (!part || /^<fill/.test(part)) out.push(violation('term_part', n, 'error', 'no term_part ("- term_part: <the anchor entity the analogy calls the term> — <what it is in the analogy>": the definition names that same thing, EX4-152, EX4-159)'));
+      else {
+        // One part per term; a paired term lists both, separated by ";" (EX4-159).
+        const parts = part.split(/\s*;\s*/).filter(Boolean);
+        if (TERM_PAIR_RE.test(term) && parts.length < 2) out.push(violation('term_part', n, 'error', `the paired term "${term}" needs both parts ("- term_part: <entity> — <…>; <entity> — <…>", EX4-159)`));
+        for (const one of parts) {
+          const partId = one.split(/\s+[—–-]+\s+|\s+/)[0].replace(/[,.]+$/, '');
+          if (entities.size && !entities.has(partId)) {
+            out.push(violation('term_part', n, 'warning', `term_part "${partId}" is not an anchor entity: name the entity the analogy calls the term; when no mapping row's concept is the term itself (a whole system), add the entity that is the whole and name it (EX4-159)`));
+          }
+        }
+      }
+      const overstated = OVERSTATE_RE.exec(definition || vo);
+      if (overstated) out.push(violation('definition_overstated', n, 'warning', `the definition says "${overstated[0]}": claim no more than the mechanism does, unless it guarantees it (EX4-152)`));
     }
     // Beat 2 is the curiosity gap BRIEF.md picked (EX3-120: written by the gap writer for the most
     // pull, picked by Jev), word for word; about the real thing, never the analogy's world (EX3-115);
@@ -876,13 +1038,16 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
     out.push(violation('example_reuses_scene', n, severity, p));
   }
 
-  // No two consecutive scene frames meet on the same picture (EX3-83): a frame's first shot kind
-  // differs from the previous frame's last when both name one.
+  // No two consecutive scene frames meet on the same picture (EX3-83): a frame's first shot is
+  // not the previous frame's last one, the same kind on the same subject.
+  const subjectKey = (shot) => [...new Set(String(shot?.subject ?? '').split(/[\s,]+/).map(stem).filter((w) => w && !SUBJECT_STOP.has(w)))].sort().join(' ');
   for (let n = 2; n <= BEAT_SHEET.length; n++) {
     const prev = shotsByFrame.get(n - 1);
     const cur = shotsByFrame.get(n);
-    if (prev?.length && cur?.length && prev[prev.length - 1] === cur[0] && cur[0] !== 'insert') {
-      out.push(violation('shots', n, 'warning', `opens on a ${cur[0]} shot, the shot frame ${n - 1} ended on; check it is a different picture`));
+    const a = prev?.[prev.length - 1];
+    const b = cur?.[0];
+    if (a && b && a.kind === b.kind && subjectKey(a) && subjectKey(a) === subjectKey(b)) {
+      out.push(violation('shots', n, 'warning', `opens on the ${b.kind} shot of "${b.subject}" that frame ${n - 1} ended on: open on a new picture`));
     }
   }
 
@@ -891,7 +1056,8 @@ export function lintStoryboard({ storyboard, script = null, brief = null, frameS
   if (term && frameSource.has(3) && !normalize(frameSource.get(3)).includes(normalize(term))) {
     out.push(violation('headword_term', 3, 'error', `frame 3's dictionary card does not show the term "${term}"`));
   }
-  for (const [n, source] of frameSource) {
+  for (const [n, raw] of frameSource) {
+    const source = stripComments(raw); // comments are never drawn
     if (EMOJI_RE.test(source)) out.push(violation('emoji', n, 'error', 'emoji in a frame module'));
     const text = normalize(String(source).replace(/\\(.)/g, '$1')); // JS string escapes, e.g. app\'s
     for (const s of narration) {

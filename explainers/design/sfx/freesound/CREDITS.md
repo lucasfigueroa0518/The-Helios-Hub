@@ -227,3 +227,12 @@ sustained beds (the longest continuous stretch, up to 10s) by the Explainers 3.1
 | typewriter | [Typewriter BELL.wav](https://freesound.org/people/mincedbeats/sounds/433596/) | mincedbeats |
 | typewriter | [OLD_Typewriter_ALL.wav](https://freesound.org/people/Spring_Tide/sounds/259498/) | Spring_Tide |
 | typewriter | [Typing on a typewriter](https://freesound.org/people/videog/sounds/240839/) | videog |
+| magnet | [Magnet on refrigerator.wav](https://freesound.org/people/SpliceSound/sounds/260129/) | SpliceSound |
+| magnet | [magnets clicking together.wav](https://freesound.org/people/Eneasz/sounds/176918/) | Eneasz |
+| magnet | [11 Magnet on whiteboard.wav](https://freesound.org/people/15FPanska_Hecl_Filip/sounds/461145/) | 15FPanska_Hecl_Filip |
+| magnet | [Putting magnets on a fridge Added a low shelf.wav](https://freesound.org/people/GH0STY_XD/sounds/594451/) | GH0STY_XD |
+| cord-taut | [ROPE_GOES_TIGHT.WAV](https://freesound.org/people/dansotak/sounds/137711/) | dansotak |
+| cord-taut | [rope twist,old rope being twisted in hands, tightaning rope.recorded on  H6Zoom XY capsule](https://freesound.org/people/Rinaldobowles56/sounds/708114/) | Rinaldobowles56 |
+| cord-taut | [Rope - leash - medium - stretched - tighten - whoosh.wav](https://freesound.org/people/ValentinPetiteau/sounds/624485/) | ValentinPetiteau |
+| whiteboard-squeak | [marker-whiteboard-squeak01](https://freesound.org/people/newagesoup/sounds/335956/) | newagesoup |
+| whiteboard-squeak | [short squeaky sharpie edding pen.wav](https://freesound.org/people/swantje14/sounds/544843/) | swantje14 |

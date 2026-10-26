@@ -1,8 +1,8 @@
-# Motion language — Helios Explainer Reel (Explainers 3.3)
+# Motion language — Helios Explainer Reel (Explainers 4.1)
 
 > Helios replacement for the vendored `motion-language.md` (DECISIONS.md EX3-05). The motion
-> vocabulary for Step 4 shot lines and Step 5 scene code. `frame.md` (V-6 to V-9, V-15) is the
-> law; this is how to speak it. Every rule here is mandatory.
+> vocabulary for Step 4 shot lines and Step 5 scene code. `principles.md` and `frame.md` (§ Shots,
+> § Motion, § Light) are the law; this is how to speak it. Every rule here is mandatory.
 
 ## Motion has a job
 
@@ -15,9 +15,9 @@ Every motion is one of four kinds. Name the kind in the Scene line when it is no
 | **State-driven** | a rule visibly produces a consequence | each finished line drops a coin |
 | **Camera** | it carries attention to what matters next | a slow push onto the object about to change |
 
-Decorative motion is forbidden: idle floating, random particles, wiggles with no cause, a slow
-pan to keep a dead frame alive. The boil (the line wobble at 10 fps), drawn things on twos, and a
-critter's blinks and glances are the drawing's life, not decoration.
+Decorative motion is forbidden: idle floating, random particles, wiggles with no cause, light that
+pulses for nothing, a slow pan to keep a dead frame alive. A critter's blinks, breath and glances
+are its life, not decoration. Motion is smooth at the full frame rate: no boil, no drawing on twos.
 
 ## Polarity: the speed curve of every move
 
@@ -27,25 +27,58 @@ the meaning.
 | Polarity | Shape | Use it for |
 |---|---|---|
 | `slam` | fast in, hard stop | arrivals, landings, impacts, verdicts |
-| `snap` | instant, tiny overshoot | state flips, switches, counters |
+| `snap` | instant, tiny overshoot | state flips of world objects, switches, counters |
 | `ramp-up` | slow start, accelerating | build-ups that end in an impact; the opener into the cut |
 | `glide` | slow, fast, slow | repositioning, release after a peak |
-| `spring` | overshoot and settle | objects with weight, physical bounces |
+| `spring` | overshoot and settle | world objects with weight, physical bounces |
 | `reverse` | goes, then pulls back | false starts, refusals, rejections |
 | `drift` | near-constant, slow | a tension hold only |
 
-Anticipation comes before every big action (a lift before the slam, a wind-up before the
-shove). Things with weight squash on impact and overshoot. A speed ramp (`makeWarp`) slows the
-one consequential instant when it serves the moment.
+A world move with no stronger meaning eases in and out (`E.world`), and so does the lens moving
+through the room. Titles, UI (the glass frames) and the camera's 2D framing (a shot's crop, its
+push, a punch) take the brand ease-out (`E.ui`) and never overshoot or bounce. A speed ramp
+(`makeWarp`) slows the one consequential instant when it serves the moment.
+
+## The principles (every world move)
+
+| Principle | How | Kit |
+|---|---|---|
+| **Anticipation** | a lift before the slam, a wind-up before the shove, a crouch before the jump | a small reverse move first |
+| **Squash and stretch** | squash on impact, stretch at speed, the volume kept (sx·sy = 1); never on rigid things | `squash(u)`, a critter's `squash` |
+| **Follow-through** | what hangs from a mover (a lanyard, a towel, a tie, a sign) swings on and settles after it stops; parts never all stop on one frame | `follow(t, stopAt)` |
+| **Arcs** | thrown, falling and jumping things travel on arcs, never straight lines | `arcPath(p0, p1, lift, u)` |
+| **Eased timing** | every move eases; linear only for handwriting and a `drift` | `E`, `seg` |
+| **Smear** | one stretched frame along the path of a move faster than about 4 frames | `smear(from, to, u)` |
+
+## Light moves too
+
+Light is motion with a job, and every light has a source in the shot or stated (frame.md § Light):
+a door's wedge sweeps the floor as it opens
+(`lightWedge`), a screen or sign wakes (`glow`, `glowSign`), a glint crosses the glossy thing as it
+lands or becomes the focal (`glint`, once), the room dims as tension builds and lifts as the answer
+lands (`level`). The key light itself never moves. Name each light change in the Scene line with
+what motivates it.
+
+## Acting is motion too
+
+A critter moves because it wants something (principles.md § 2, EX4-150): the eyes turn to the
+target first, then the hands go; the body leans into effort and away from fear; a carried thing
+pulls the body over it. Write the intent and its target, and the rig (`act`, `actAt`) solves the
+arms, the lean and the gaze; never animate an arm by hand. A pose that does nothing is wrong.
 
 ## The camera
 
-Calm and motivated: a drift or a slow push or pull in every frame; at most one sharp `punch` per
-beat, on its key moment; ≤1.2× zoom per move; roll within 3°; no tilt. Framing changes come from
-cuts between shots (`shots.js`: wide, medium, close, insert, reaction), inside a frame and
-between frames, never from swinging the camera. A shot is only a camera: it never hides, adds or
-mirrors anything in the scene (EX3-90). The attention reset
-at the 1→2 cut is the one place a harder punch belongs.
+Calm and motivated (frame.md § Shots). In the analogy's frames each shot has its own camera,
+standing in the place: closeness comes from where it stands, never from a crop on top. **Within a
+shot, at most one motivated move**: a `push` as tension builds, a `pull` to reveal, a `pan` to
+follow a turn, a `follow` travelling with a walker; otherwise the camera is still. The hook's camera
+stays still. **Every cut changes what the viewer learns**: a new subject, or the same subject from
+a clearly new angle (about 30° around it, or a clear change of height), judged by the picture;
+never a cut to a closer copy of the same view. Depth of field only by intent (an insert, a reveal,
+a rack focus from one read to the next); never blur what the voice names. Roll within 3°; at most
+one sharp punch per beat, and the attention reset at the 1→2 cut is the one place a harder punch
+belongs. The isometric camera (an overview, a diagram) has no parallax and no focus. Tech frames
+are flat: a modest crop per shot at most, and the same cut rule.
 
 ## Reveals and holds
 
@@ -72,9 +105,11 @@ continuous action (writing, erasing, rustling, cutting) is one `foley` event wit
 whole length. Sound is part of the motion design, not decoration: a move without its sound reads
 as weightless.
 
-## The two failure modes
+## The failure modes
 
 - **Slideshow:** everything dumped in the first quarter, then frozen; or the scene replaced by
   lists, grids, or cards.
+- **Weightless:** things slide in straight lines at constant speed, stop dead, and never squash,
+  overshoot or settle.
 - **Screensaver:** everything floating independently with no cause.
 - **Silent film:** objects land, pages turn and pens write with no sound.

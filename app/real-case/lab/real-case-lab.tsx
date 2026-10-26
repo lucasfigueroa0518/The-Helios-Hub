@@ -1,19 +1,30 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { LabData, LabStory } from '@/lib/real-case/lab';
 
-type Tab = 'pool' | 'topics' | 'renders' | 'dropped';
+type Tab = 'pool' | 'searches' | 'renders' | 'dropped';
 
 const SCORE_LABELS: Record<string, string> = {
-  recognition: 'Recognition',
-  tension: 'Tension',
-  illumination: 'Illumination',
-  mechanism_fit: 'Mechanism fit',
-  tellable: 'Tellable',
+  stakes: 'Stakes',
+  turn: 'Turn',
+  scene: 'Scene',
+  reveal: 'Reveal',
+  artifacts: 'Artifacts',
+  players: 'Players',
+  freshness: 'Freshness',
 };
-const OUTCOME_LABEL: Record<string, string> = { found: 'Found', weak: 'Weak', none: 'No story', failed: 'Failed', running: 'Searching…' };
+const ACTS: [keyof LabStory['story'], string][] = [
+  ['cold_open', 'Cold open'],
+  ['setup', 'Setup'],
+  ['moment', 'The moment'],
+  ['fallout', 'Fallout'],
+  ['reveal', 'What actually happened'],
+  ['since', 'Since then'],
+  ['for_you', 'For you'],
+];
+const OUTCOME_LABEL: Record<string, string> = { found: 'Found', weak: 'None cleared the bar', none: 'No story', failed: 'Failed', running: 'Searching…' };
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const when = (iso: string | null) => {
@@ -46,8 +57,8 @@ function StoryCard({ story, onMake, busy }: { story: LabStory; onMake?: (s: LabS
         <span className="rc-story-title">
           {story.title}
           <span className="rc-meta">
-            {story.term} · {story.polarity}
-            {story.topic ? ` · from “${story.topic}”` : ''}
+            {story.eventDate ?? 'undated'} · {story.term} · {story.polarity}
+            {story.topic ? ` · near “${story.topic}”` : ''}
           </span>
         </span>
         <span className={`rc-chip ${story.status === 'rendered' ? 'ok' : story.status === 'promoted' ? 'live' : 'quiet'}`}>{story.status}</span>
@@ -66,22 +77,52 @@ function StoryCard({ story, onMake, busy }: { story: LabStory; onMake?: (s: LabS
             </dl>
           )}
           {story.rejectReason && <p className="rc-error">{story.rejectReason}</p>}
-          <h4>Beats</h4>
-          <ol className="rc-beats">
-            <li><b>Incident.</b> {story.story.incident}</li>
-            <li><b>Puzzle.</b> {story.story.puzzle}</li>
-            <li>
-              <b>Steps.</b> {story.story.steps.map((s) => `${s.step} (${s.in_story})`).join(' → ')}
-            </li>
-            <li><b>Click.</b> {story.story.click}</li>
-            <li><b>Other side.</b> {story.story.other_side}</li>
-            <li><b>Takeaway.</b> {story.story.takeaway}</li>
-          </ol>
+          {Array.isArray(story.story.cast) ? (
+            <>
+              <h4>Acts</h4>
+              <ol className="rc-beats">
+                {ACTS.map(([key, label]) => (
+                  <li key={key}><b>{label}.</b> {String(story.story[key] ?? '')}</li>
+                ))}
+              </ol>
+              <h4>Players</h4>
+              <ul className="rc-beats">
+                {story.story.cast.map((m, i) => {
+                  const art = story.banked[i];
+                  return (
+                    <li key={i} className="rc-player">
+                      {art ? <img className={`rc-thumb ${art.kind}`} src={`/api/real-case/bank/${art.kind}/${art.id}`} alt="" /> : <span className="rc-thumb none" aria-hidden="true" />}
+                      <span><b>{m.name}</b> ({m.kind.replace(/_/g, ' ')}): {m.role}{art ? <span className="rc-meta"> · {art.kind} banked</span> : null}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <h4>Timeline</h4>
+              <ul className="rc-beats">
+                {story.story.timeline.map((t, i) => <li key={i}><b>{t.date}</b> {t.what} <span className="rc-fact-id">{t.claim_id}</span></li>)}
+              </ul>
+              {story.story.artifacts.length > 0 && (
+                <>
+                  <h4>Artifacts</h4>
+                  <ul className="rc-artifacts">
+                    {story.story.artifacts.map((a) => (
+                      <li key={a.id}>
+                        <span className="rc-meta">{a.kind} · {a.speaker} · {a.claim_id}</span>
+                        <blockquote>{a.text}</blockquote>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          ) : (
+            <p className="rc-note">A story from the first build (no acts).</p>
+          )}
           <h4>Facts</h4>
           <ul className="rc-facts">
             {story.facts.map((f) => (
               <li key={f.id}>
-                <span className="rc-fact-id">{f.id}{f.core ? '*' : ''}</span>
+                <span className="rc-fact-id">{f.id}{f.core ? '*' : ''}{f.act ? <span className="rc-meta">{f.act}</span> : null}</span>
                 <span>
                   {f.text}{' '}
                   {f.source && (
@@ -141,23 +182,23 @@ export function RealCaseLab() {
     return () => clearInterval(t);
   }, [running, load]);
 
-  const find = async (topicId: string, title: string) => {
-    if (!window.confirm(`Search the web for stories about “${title}”?\n\nThis runs one live search: Sonnet with web search, then Jev. Estimated $0.30–0.70.`)) return;
-    setBusy(topicId);
-    setNotice(`Searching “${title}”… this can take a minute or two.`);
-    const r = await post('/api/real-case/find', { topicId });
+  const find = async () => {
+    if (!window.confirm(`Search recent AI news for stories?\n\nThis runs one live search: Sonnet with web search over the last ${data?.settings.news_window_days ?? 90} days, then the source check and Jev. Estimated $0.50–1.00.`)) return;
+    setBusy('find');
+    setNotice('Searching the news… this can take a few minutes.');
+    const r = await post('/api/real-case/find', {});
     setBusy(null);
     if (!r.ok) setNotice(`Search failed: ${r.error}`);
     else {
-      const result = r.data as { status: string; topics?: { outcome: string; evaluations: unknown[]; usd: number; error?: string }[]; usd?: number };
-      const t = result.topics?.[0];
-      setNotice(t ? `“${title}”: ${OUTCOME_LABEL[t.outcome] ?? t.outcome}, ${t.evaluations.length} stories checked, ${usd(result.usd ?? 0)} spent.${t.error ? ` ${t.error}` : ''}` : `“${title}”: ${result.status}.`);
+      const result = r.data as { status: string; searches?: { outcome: string; evaluations: unknown[]; usd: number; error?: string }[]; usd?: number };
+      const t = result.searches?.[0];
+      setNotice(t ? `${OUTCOME_LABEL[t.outcome] ?? t.outcome}: ${t.evaluations.length} stories checked, ${usd(result.usd ?? 0)} spent.${t.error ? ` ${t.error}` : ''}` : `Search: ${result.status}.`);
     }
     await load();
   };
 
   const make = async (story: LabStory) => {
-    if (!window.confirm(`Make a reel from “${story.title}”?\n\nThe Real Case worker renders it (npm run real-case:worker). A render costs about $6–8, capped at ${usd(data?.settings.per_reel_cap_usd ?? 8)}.`)) return;
+    if (!window.confirm(`Make a reel from “${story.title}”?\n\nThe worker renders it (npm run real-case:worker). A render costs about $6–8, capped at ${usd(data?.settings.per_reel_cap_usd ?? 8)}.`)) return;
     setBusy(story.id);
     const r = await post('/api/real-case/make', { storyId: story.id });
     setBusy(null);
@@ -169,30 +210,28 @@ export function RealCaseLab() {
   const toggleAuto = async () => {
     if (!data) return;
     const next = !data.settings.auto_scout;
-    if (next && !window.confirm(`Turn on the nightly story search?\n\nEvery night at 2:30 AM New York, the worker searches ${data.settings.topics_per_night} topics, stopping at ${usd(data.settings.nightly_cap_usd)} of spend.`)) return;
+    if (next && !window.confirm(`Turn on the nightly news search?\n\nEvery night at 2:30 AM New York, the worker runs ${data.settings.searches_per_night} news search${data.settings.searches_per_night === 1 ? '' : 'es'}, stopping at ${usd(data.settings.nightly_cap_usd)} of spend.`)) return;
     const r = await post('/api/real-case/settings', { key: 'auto_scout', value: next });
     if (!r.ok) setNotice(`Could not change it: ${r.error}`);
     await load();
   };
 
-  const seeds = useMemo(() => {
-    const q = filter.trim().toLowerCase();
-    return (data?.seeds ?? []).filter((s) => !q || s.title.toLowerCase().includes(q) || (s.term ?? '').toLowerCase().includes(q));
-  }, [data, filter]);
-
   return (
     <main className="rc">
       <header className="rc-head">
-        <h1>Real Case lab</h1>
-        <p className="rc-sub">True stories, found from the Explainer topics, checked against their sources and scored by Jev. Local only; nothing publishes.</p>
+        <h1>AI News Explained lab</h1>
+        <p className="rc-sub">Recent AI news stories, checked against their sources and scored by Jev. Local only; nothing publishes.</p>
         {data && (
           <div className="rc-bar">
             <span>Spent today: <b>{usd(data.spendTodayUsd)}</b></span>
             <span>Pool: <b>{data.pool.filter((s) => s.status === 'pool').length}</b> of {data.settings.pool_size}</span>
             <label className="rc-toggle">
               <input type="checkbox" checked={data.settings.auto_scout} onChange={() => void toggleAuto()} />
-              Nightly search ({data.settings.topics_per_night} topics, {usd(data.settings.nightly_cap_usd)} cap)
+              Nightly search ({data.settings.searches_per_night}, {usd(data.settings.nightly_cap_usd)} cap)
             </label>
+            <button type="button" className="rc-primary" disabled={busy !== null} onClick={() => void find()}>
+              {busy === 'find' ? 'Searching…' : 'Find stories'}
+            </button>
           </div>
         )}
       </header>
@@ -200,9 +239,9 @@ export function RealCaseLab() {
       {notice && <p className="rc-notice" role="status">{notice}</p>}
 
       <nav className="rc-tabs" aria-label="Lab sections">
-        {(['pool', 'topics', 'renders', 'dropped'] as Tab[]).map((t) => (
+        {(['pool', 'searches', 'renders', 'dropped'] as Tab[]).map((t) => (
           <button key={t} type="button" className={tab === t ? 'on' : ''} onClick={() => setTab(t)} aria-pressed={tab === t}>
-            {t === 'pool' ? 'Story pool' : t === 'topics' ? 'Topics' : t === 'renders' ? 'Renders' : 'Dropped'}
+            {t === 'pool' ? 'Story pool' : t === 'searches' ? 'Searches' : t === 'renders' ? 'Renders' : 'Dropped'}
           </button>
         ))}
       </nav>
@@ -213,51 +252,30 @@ export function RealCaseLab() {
         <section className="rc-card">
           <h2>Story pool</h2>
           {data.pool.length === 0 ? (
-            <p className="rc-note">No stories yet. Open Topics and search one.</p>
+            <p className="rc-note">No stories yet. Click Find stories to search the news.</p>
           ) : (
             <ul className="rc-list">{data.pool.map((s) => <StoryCard key={s.id} story={s} onMake={make} busy={busy !== null} />)}</ul>
           )}
         </section>
       )}
 
-      {data && tab === 'topics' && (
-        <div className="rc-grid">
-          <section className="rc-card">
-            <h2>Search a topic</h2>
-            <p className="rc-note">Every Explainer topic not searched in the last {data.settings.scout_cooldown_days} days, best Explainer score first.</p>
-            <input className="rc-search" placeholder="Filter topics" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter topics" />
-            <ul className="rc-list">
-              {seeds.map((s) => (
-                <li key={s.id} className="rc-row">
-                  <span>
-                    {s.title}
-                    <span className="rc-meta">{s.term ?? '—'} · {s.status}{s.weighted_score !== null ? ` · ${Math.round(s.weighted_score)}` : ''}</span>
-                  </span>
-                  <button type="button" disabled={busy !== null} onClick={() => void find(s.id, s.title)}>
-                    {busy === s.id ? 'Searching…' : 'Find stories'}
-                  </button>
-                </li>
-              ))}
-              {seeds.length === 0 && <li className="rc-note">No topics to search.</li>}
-            </ul>
-          </section>
-          <section className="rc-card">
-            <h2>Searched</h2>
-            <ul className="rc-list">
-              {data.scouts.map((s) => (
-                <li key={s.id} className="rc-row">
-                  <span>
-                    {s.topic_title}
-                    <span className="rc-meta">{when(s.scouted_at)} · {s.stories_found} found{s.best_score !== null ? ` · best ${Math.round(s.best_score)}` : ''}</span>
-                    {s.error && <span className="rc-meta rc-bad">{s.error}</span>}
-                  </span>
-                  <span className={`rc-chip ${s.outcome === 'found' ? 'ok' : s.outcome === 'failed' ? 'bad' : 'quiet'}`}>{OUTCOME_LABEL[s.outcome] ?? s.outcome}</span>
-                </li>
-              ))}
-              {data.scouts.length === 0 && <li className="rc-note">Nothing searched yet.</li>}
-            </ul>
-          </section>
-        </div>
+      {data && tab === 'searches' && (
+        <section className="rc-card">
+          <h2>Searches</h2>
+          <ul className="rc-list">
+            {data.scouts.map((s) => (
+              <li key={s.id} className="rc-row">
+                <span>
+                  {s.topic_title}
+                  <span className="rc-meta">{when(s.scouted_at)} · {s.stories_found} found{s.best_score !== null ? ` · best ${Math.round(s.best_score)}` : ''}</span>
+                  {s.error && <span className="rc-meta rc-bad">{s.error}</span>}
+                </span>
+                <span className={`rc-chip ${s.outcome === 'found' ? 'ok' : s.outcome === 'failed' ? 'bad' : 'quiet'}`}>{OUTCOME_LABEL[s.outcome] ?? s.outcome}</span>
+              </li>
+            ))}
+            {data.scouts.length === 0 && <li className="rc-note">Nothing searched yet.</li>}
+          </ul>
+        </section>
       )}
 
       {data && tab === 'renders' && (
@@ -291,7 +309,7 @@ export function RealCaseLab() {
       {data && tab === 'dropped' && (
         <section className="rc-card">
           <h2>Dropped stories</h2>
-          <p className="rc-note">Failed a source check, a gate, the bar, or lost to a stronger telling of the same event.</p>
+          <p className="rc-note">Failed a source check, a gate or the bar, lost to a stronger telling of the same event, or aged out of the news window.</p>
           <ul className="rc-list">{data.others.map((s) => <StoryCard key={s.id} story={s} busy={busy !== null} />)}</ul>
           {data.others.length === 0 && <p className="rc-note">None.</p>}
         </section>

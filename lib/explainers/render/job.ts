@@ -8,11 +8,11 @@ import { chooseGap, GAP_BELOW_BAR_REASON, gapBelowBar, topicGap, topicGapNote } 
 import { harvestNewProps, type HarvestResult } from '@/lib/explainers/render/bank';
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
-import { runAgentSession, type AgentQuery, type SessionResult } from '@/lib/explainers/render/agent';
+import { PICTURE_CHECK_FILE, runAgentSession, type AgentQuery, type SessionResult } from '@/lib/explainers/render/agent';
 import { SpendMeter } from '@/lib/explainers/render/meter';
-import { checkUnderstanding, FINDINGS_FILE, FIX_PROMPT, type ComprehensionCheck, type UnderstandingVerdict } from '@/lib/explainers/render/understanding';
+import { checkDefinitionMapping, checkUnderstanding, FINDINGS_FILE, FIX_PROMPT, type ComprehensionCheck, type UnderstandingVerdict } from '@/lib/explainers/render/understanding';
 import { resolveSource, type FetchLike } from '@/lib/explainers/render/source';
-import { HYPERFRAMES_BIN, HYPERFRAMES_ENV, prepareWorkspace, recordMusicChoice, workspacePaths, type Workspace } from '@/lib/explainers/render/workspace';
+import { HYPERFRAMES_BIN, HYPERFRAMES_ENV, isExplainers41, prepareWorkspace, recordMusicChoice, workspacePaths, type Workspace } from '@/lib/explainers/render/workspace';
 import {
   addArtifact,
   addLintViolations,
@@ -247,6 +247,16 @@ export function missingFrameNumbers(projectDir: string): number[] {
   return BEAT_NUMBERS.filter((n) => !present.has(n));
 }
 
+/** True when every voiced frame (1–7) has its scene module in assets/frames, so the worker can mount and render them. */
+export function frameModulesWritten(projectDir: string): boolean {
+  const dir = path.join(projectDir, 'assets', 'frames');
+  if (!fs.existsSync(dir)) return false;
+  // A frame's own module: NN-<name>.js. Not code's opener (01-opener.js) and not a frame's new props (*.props.js).
+  const own = fs.readdirSync(dir).filter((f) => /^\d+-[^.]+\.js$/.test(f) && f !== '01-opener.js');
+  const have = new Set(own.map((f) => Number(/^(\d+)/.exec(f)?.[1])));
+  return [1, 2, 3, 4, 5, 6, 7].every((n) => have.has(n));
+}
+
 /** Init writes a placeholder index.html. A reel is assembled only once all eight frames exist. */
 function projectAssembled(projectDir: string): boolean {
   return fileReady(path.join(projectDir, 'index.html')) && missingFrameNumbers(projectDir).length === 0;
@@ -258,14 +268,17 @@ function projectAssembled(projectDir: string): boolean {
  * bind 127.0.0.1 and left no MP4. This runs the pinned CLI in the worker,
  * outside the agent sandbox. Throws when no video is written.
  */
+/** hx-4's soft-3D and lens frames render several times slower than 3.x's flat frames (pre-mortem). */
+export const RENDER_TIMEOUT_MS = 30 * 60 * 1000;
+
 export function renderProjectVideo(projectDir: string): void {
   const out = path.join(projectDir, 'renders', 'video.mp4');
   if (fileReady(out)) return;
   fs.mkdirSync(path.dirname(out), { recursive: true });
   const res = spawnSync(
     HYPERFRAMES_BIN,
-    ['render', '--quality', 'high', '--workers', '1', '--output', 'renders/video.mp4'],
-    { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: 10 * 60 * 1000 },
+    ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'],
+    { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: RENDER_TIMEOUT_MS },
   );
   if (res.error) throw new Error(`hyperframes render failed to start: ${res.error.message}`);
   if (res.status !== 0 || !fileReady(out)) {
@@ -453,6 +466,46 @@ async function recordSessionCost(db: ExplainersDb, job: JobRow, mode: Mode, phas
   }
 }
 
+/**
+ * What the picture check (EX3-84, Explainers 4.1) leaves on the reel: an error when a 4.1 job has no
+ * readable .hyperframes/picture-check.json (nobody looked at the shot sequences before render; the
+ * reel still renders, flagged), and a warning per frame where the stranger could not follow: the
+ * picture does not match the line, a cut felt like a jump, something floats, has no face or is cut
+ * off, or a tech frame only labels the idea. `frame` is the storyboard number when the id starts with it.
+ */
+export function pictureCheckViolations(check: unknown, { required }: { required: boolean }): LintViolation[] {
+  const entries = Array.isArray(check) ? check : Array.isArray((check as { frames?: unknown })?.frames) ? (check as { frames: unknown[] }).frames : null;
+  if (!entries) {
+    return required
+      ? [{ source: 'storyboard', rule: 'picture_check_missing', frame: null, severity: 'error', detail: `No readable ${PICTURE_CHECK_FILE}: the picture check did not run, so nobody looked at the shot sequences before render.` }]
+      : [];
+  }
+  const out: LintViolation[] = [];
+  const list = (v: unknown) => (Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).filter(Boolean) : []);
+  for (const raw of entries) {
+    if (!raw || typeof raw !== 'object') continue;
+    const e = raw as Record<string, unknown>;
+    const id = String(e.frame ?? e.tile ?? '?');
+    const n = Number(/^0*(\d+)/.exec(id)?.[1]);
+    const said: string[] = [];
+    if (e.matches_line === 'no') said.push(`the picture does not show the line${e.why ? ` (${String(e.why)})` : ''}`);
+    const jumps = Array.isArray(e.jump_cuts) ? e.jump_cuts : [];
+    for (const j of jumps) {
+      const jj = j as { between?: unknown; why?: unknown };
+      said.push(`a jump cut${Array.isArray(jj.between) ? ` between ${jj.between.join(' and ')}` : ''}${jj.why ? ` (${String(jj.why)})` : ''}`);
+    }
+    for (const [key, what] of [['floating', 'floating'], ['faceless', 'faceless'], ['cut_off', 'cut off']] as const) {
+      const items = list(e[key]);
+      if (items.length) said.push(`${what}: ${items.join('; ')}`);
+    }
+    if (e.tech_moves === 'only_labels') said.push('the tech beat only labels the idea, it does not show it moving');
+    if (typeof e.named_character === 'string' && /^cannot tell/i.test(e.named_character.trim())) said.push('a stranger cannot tell who the named character is');
+    if (!said.length) continue;
+    out.push({ source: 'storyboard', rule: 'picture_check', frame: Number.isFinite(n) && n > 0 ? n : null, severity: 'warning', detail: `${id}: ${said.join('; ')}` });
+  }
+  return out;
+}
+
 /** The reel test's verdict as recorded on the job. */
 function understandingReport(attempt: 'first' | 'after_fix', comprehension: unknown, verdict: UnderstandingVerdict | null): string {
   return JSON.stringify({ phase: 'understanding', attempt, verdict, comprehension }, null, 2);
@@ -477,24 +530,39 @@ async function understandingTest(
 ): Promise<{ storyboard: string; script: string }> {
   const file = path.join(projectDir, '.hyperframes', 'comprehension-check.json');
   const first = readJson(file) as ComprehensionCheck | null;
-  if (!first) {
-    log('comprehension_check_missing', { jobId: job.id });
-    return { storyboard, script };
-  }
+  if (!first) log('comprehension_check_missing', { jobId: job.id });
   if (!deps.analogy) {
-    await keepText('lint_report', understandingReport('first', first, null));
+    if (first) await keepText('lint_report', understandingReport('first', first, null));
     log('understanding_skipped', { jobId: job.id, reason: 'no Jev transport' });
     return { storyboard, script };
   }
   const jev = new RecordingExplainersJevRunner(deps.analogy.jevTransport, deps.db, { mode: job.mode, jobId: job.id });
-  const judge = (comprehension: ComprehensionCheck | null, board: string, words: string) =>
-    checkUnderstanding({ jev, topicId: topic.id, term: topic.term ?? topic.title, comprehension, storyboard: board, script: words });
+  const term = topic.term ?? topic.title;
+  const mapping = topicAnalogy(topic)?.mapping ?? null;
+  // The stranger's answers when the reel test ran, and (Explainers 4.1) frame 3's definition against
+  // the analogy's mapping, which needs only the plan: a mismatch is one more blocking finding.
+  const judge = async (comprehension: ComprehensionCheck | null, board: string, words: string): Promise<UnderstandingVerdict | null> => {
+    const verdict = comprehension ? await checkUnderstanding({ jev, topicId: topic.id, term, comprehension, storyboard: board, script: words }) : null;
+    let definition: Awaited<ReturnType<typeof checkDefinitionMapping>> = null;
+    try {
+      definition = await checkDefinitionMapping({ jev, topicId: topic.id, term, storyboard: board, script: words, mapping });
+    } catch (error) {
+      // A failed Jev call never blocks the reel on this check; it is recorded.
+      log('definition_check_failed', { jobId: job.id, error: error instanceof Error ? error.message : String(error) });
+    }
+    if (!definition) return verdict;
+    const out: UnderstandingVerdict = verdict ?? { blocking: [], minor: [], jev: {} };
+    out.jev.definition_same_part = definition.p;
+    if (definition.finding) out.blocking.push(definition.finding);
+    return out;
+  };
 
   const verdict = await judge(first, storyboard, script);
   await keepText('lint_report', understandingReport('first', first, verdict));
   if (!verdict || verdict.blocking.length === 0) return { storyboard, script };
 
   log('understanding_blocking', { jobId: job.id, kinds: verdict.blocking.map((f) => f.kind) });
+  fs.mkdirSync(path.dirname(path.join(projectDir, FINDINGS_FILE)), { recursive: true });
   fs.writeFileSync(path.join(projectDir, FINDINGS_FILE), `${JSON.stringify({ blocking: verdict.blocking, minor: verdict.minor }, null, 2)}\n`);
   fs.rmSync(file, { force: true });
   await stage('session_fix');
@@ -507,7 +575,8 @@ async function understandingTest(
   if (board !== storyboard) await keepText('storyboard', board);
   if (words !== script) await keepText('script', words);
   const again = readJson(file) as ComprehensionCheck | null;
-  const second = again ? await judge(again, board, words) : null;
+  // With no reel test before the fix (only the definition check ran), the fix is judged again the same way.
+  const second = again || !first ? await judge(again, board, words) : null;
   await keepText('lint_report', understandingReport('after_fix', again, second));
   const remaining = second ? second.blocking : verdict.blocking;
   if (remaining.length) {
@@ -633,6 +702,12 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
         tmpDir: ws!.tmpDir,
         model: job.orchestrator_model,
         frameWorkerModel: job.frame_worker_model,
+        // Explainers 4.1 roles (settings): Opus for the world and the analogy's frames, Sonnet for the
+        // tech frames and the picture check.
+        sceneBuilderModel: settings.scene_builder_model,
+        sceneFrameModel: settings.scene_frame_model,
+        techFrameModel: settings.tech_frame_model,
+        pictureCheckModel: settings.picture_check_model,
         meter,
         secrets: { ...deps.secrets, voiceId: settings.voice_id! },
         log: transcript,
@@ -692,14 +767,24 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     let b = await session(resuming ? `${RESUME_PROMPT}${deps.resumeNote ? ` ${deps.resumeNote}` : ''}` : BUILD_PROMPT);
     await stage('session_b_done', { sessionBId: b.sessionId ?? undefined });
     await recordSessionCost(db, job, job.mode, 'session_b', b);
-    if (b.capped) throw new RenderFailure(`Spend cap $${job.spend_cap_usd.toFixed(2)} reached in session B.`, true);
+    // A cap in session B keeps the reel when the frames are written and the voice exists: the worker
+    // assembles and renders them with no model (hx-4 pre-mortem: a capped job used to throw away every
+    // finished frame). The cap is recorded on the reel; nothing else is spent.
+    const salvage = b.capped && frameModulesWritten(ws.projectDir) && fileReady(path.join(ws.projectDir, 'audio_meta.json'));
+    if (b.capped && !salvage) throw new RenderFailure(`Spend cap $${job.spend_cap_usd.toFixed(2)} reached in session B.`, true);
+    if (salvage) {
+      log('capped_salvage', { jobId: job.id });
+      await addLintViolations(db, job.id, [
+        { source: 'storyboard', rule: 'spend_cap', frame: null, severity: 'warning', detail: `Session B reached the $${job.spend_cap_usd.toFixed(2)} cap; the worker assembled and rendered the frames already written.` },
+      ]);
+    }
 
     // A successful session can still stop with beats unwritten and no MP4 (the
     // server reel: the auto classifier refused frames 2 and 6, and the model
     // waited). One repair, then the worker render below. No third session.
     const videoPath = path.join(ws.projectDir, 'renders', 'video.mp4');
     const missing = missingFrameNumbers(ws.projectDir);
-    if (!fileReady(videoPath) && missing.length > 0 && b.subtype === 'success' && !b.isError) {
+    if (!salvage && !fileReady(videoPath) && missing.length > 0 && b.subtype === 'success' && !b.isError) {
       await stage('repair');
       log('repair_frames', { jobId: job.id, missing });
       b = await session(repairPrompt(missing));
@@ -738,9 +823,14 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     const bounds = (deps.boundsCheck ?? runBoundsCheck)(ws.projectDir);
     await addLintViolations(db, job.id, [...onScreen, ...hyperframes, ...bounds]);
     await keepText('lint_report', JSON.stringify({ phase: 'final', storyboard: final, hyperframes, bounds }, null, 2));
-    // The blind picture check (EX3-84): per tile, what was meant, what a stranger saw, the verdict.
-    const pictureCheck = readJson(path.join(ws.projectDir, '.hyperframes', 'picture-check.json'));
+    // The blind picture check (EX3-84; Explainers 4.1: required, over each frame's shot stills).
+    const pictureCheck = readJson(path.join(ws.projectDir, PICTURE_CHECK_FILE));
     await keepText('lint_report', JSON.stringify({ phase: 'picture_check', verdicts: pictureCheck ?? null }, null, 2));
+    const pictureFindings = pictureCheckViolations(pictureCheck, { required: isExplainers41(ws.projectDir) });
+    if (pictureFindings.length) {
+      if (pictureFindings.some((v) => v.rule === 'picture_check_missing')) log('picture_check_missing', { jobId: job.id });
+      await addLintViolations(db, job.id, pictureFindings);
+    }
 
     if (projectAssembled(ws.projectDir) && !fileReady(video)) {
       await stage('render');

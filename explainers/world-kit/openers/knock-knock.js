@@ -1,5 +1,6 @@
 // Knock Knock: the hook's critter pops up huge against the screen, knocks twice on the glass,
-// points up as "AI BRAIN BREAK" writes itself, then ducks away to show its scene.
+// points up as "AI BRAIN BREAK" writes itself, then ducks away to show its scene; the wordmark
+// lifts away and the title card with the term lands in its place (EX3-102).
 import { T, g, el, defs, seg, lerp, E, scene, heroCritter, title, wordmark, shake, shaken, shock } from './common.js';
 
 const S = 7.4;
@@ -17,7 +18,7 @@ function crack(x, y, u) {
 }
 
 export default function draw(t, ctx) {
-  const { knocks, point, writeAt, duck, voiceAt, voice } = ctx.M;
+  const { knocks, point, writeAt, duck } = ctx.M;
   const knock = knocks.find((k) => t >= k - 0.08 && t < k + 0.12);
   const offset = knocks.reduce((acc, k) => { const [a, b] = shake(t, k, 18, 0.2); return [acc[0] + a, acc[1] + b]; }, [0, 0]);
   // the critter: up from below, a lean in on each knock, then down and away
@@ -32,10 +33,16 @@ export default function draw(t, ctx) {
     parts.push(g({ transform: `translate(${(540 + offset[0]).toFixed(1)} ${(y + offset[1]).toFixed(1)}) scale(${lean.toFixed(3)}) translate(-540 0)` }, heroCritter(ctx, 540, 0, S, pose)));
   }
   knocks.forEach((k) => parts.push(crack(830, 1420, seg(t, k, k + 0.35, (x) => x))));
+  const { titleAt } = ctx.M;
   if (t >= writeAt[0]) {
-    const hold = 1 - seg(t, voiceAt + voice - 0.3, voiceAt + voice + 0.1, (x) => x);
-    parts.push(g({ opacity: hold.toFixed(3) }, wordmark(540, 420, 92, seg(t, writeAt[0], writeAt[1], (x) => x), { color: t < duck[1] ? T['paper-lit'] : T.ink, plate: t >= duck[1] })));
+    // the wordmark holds over the duck, then lifts away as the title card slides into the band
+    const gone = seg(t, titleAt - 0.05, titleAt + 0.2, E.in);
+    if (gone < 1) {
+      const lift = g({ transform: `translate(540 420) scale(${lerp(1, 0.4, gone).toFixed(3)}) translate(-540 -420)`, opacity: (1 - gone).toFixed(3) }, wordmark(540, 420, 92, seg(t, writeAt[0], writeAt[1], (x) => x), { color: t < duck[1] ? T['paper-lit'] : T.ink, plate: t >= duck[1] }));
+      parts.push(lift);
+    }
   }
   parts.push(shock(760, 300, seg(t, point, point + 0.3, (x) => x), 2));
+  parts.push(title(ctx, t, titleAt));
   return parts.join('');
 }

@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { ANALOGY_COMPARE, ANALOGY_COMPARE_FIELDS, ANALOGY_GATE_FIELDS, ANALOGY_GATES, GOLDEN_MATCH, GOLDEN_MATCH_FIELDS } from '@/lib/explainers/jev/questions/analogy-check';
+import { DEFINITION_CHECK, DEFINITION_CHECK_FIELDS } from '@/lib/explainers/jev/questions/definition-check';
 import { DUPLICATE_GATE, DUPLICATE_JUDGE } from '@/lib/explainers/jev/questions/duplicate';
 import { IDEA_SCORING, IDEA_SCORING_FIELDS } from '@/lib/explainers/jev/questions/idea-scoring';
 import { GAP_GATE, GAP_SCORING, GAP_SCORING_FIELDS } from '@/lib/explainers/jev/questions/gap-scoring';
@@ -156,6 +157,27 @@ test('the understanding test matches the register verbatim (EX3-133)', () => {
     assert.equal(instructions.question, c.question, c.key);
     assert.equal(instructions.judge, c.judge, c.key);
     assert.deepEqual([...UNDERSTANDING_FIELDS[key]], c.fields, c.key);
+  }
+});
+
+test('the definition check matches the register verbatim (Explainers 4.1)', (t) => {
+  assert.equal(DEFINITION_CHECK.version, 'explainers-definition-check-v1');
+  assert.deepEqual(Object.keys(DEFINITION_CHECK.questions), ['same_part']);
+  // DECISIONS.md is the docs builder's; the code's text waits for it in
+  // .explainers-local/4.1-phase2/PIPELINE-NOTES.md ("Definition check v1"). Once the register has the
+  // section, the comparison is strict.
+  if (!register.includes('### Definition check v1')) {
+    t.diagnostic('planning/Explainer Reels/DECISIONS.md has no "### Definition check v1" yet');
+    return;
+  }
+  const checks = noulBlocks('**D1 — Same part', '**End of the definition check**', 'D');
+  assert.deepEqual(checks.map((c) => c.key), Object.keys(DEFINITION_CHECK.questions));
+  for (const c of checks) {
+    const key = c.key as keyof typeof DEFINITION_CHECK.questions;
+    const instructions = DEFINITION_CHECK.questions[key].instructions as { question: string; judge: string };
+    assert.equal(instructions.question, c.question, c.key);
+    assert.equal(instructions.judge, c.judge, c.key);
+    assert.deepEqual([...DEFINITION_CHECK_FIELDS], c.fields, c.key);
   }
 });
 

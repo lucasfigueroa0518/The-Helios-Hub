@@ -37,6 +37,9 @@ export const HYPERFRAMES_BIN = path.join(RUNTIME_DIR, 'node_modules', '.bin', 'h
 /** Where a job keeps its copy of the storyboard lint (EX3-91), relative to the project. */
 export const LINT_DIR = '.helios-lint';
 
+/** Where a job keeps the 4.1 director's principles, relative to the project (with the recipe). */
+export const PRINCIPLES_PATH = path.join('.media', 'recipes', 'helios-explainer', 'principles.md');
+
 export const HYPERFRAMES_ENV = {
   HYPERFRAMES_SKIP_SKILLS: '1',
   HYPERFRAMES_NO_TELEMETRY: '1',
@@ -67,6 +70,76 @@ export const EXCLUDED_SKILL_FILES = ['faceless-explainer/references/cut-catalog.
 /** The world kit, the opener sounds, and the sound library (EX3-50, EX3-24, EX3-63, EX3-75). */
 export const WORLD_KIT_DIR = path.join(EXPLAINERS_DIR, 'world-kit');
 export const SFX_DIR = path.join(EXPLAINERS_DIR, 'design', 'sfx');
+/**
+ * Explainers 4.1 (recipe/principles.md). How a job is recognised as 4.1: its kit carries the marker
+ * file `assets/kit/VERSION` whose first line is KIT_VERSION. prepareWorkspace writes it (and the
+ * same marker into the lint's copy of the kit); try.mjs `kitVersion()` reads it next to itself and
+ * turns the 4.1 checks into errors (warnings in a job prepared before 4.1, which has no marker).
+ * A marker, not "set.js and principles.md exist", because a resumed older job keeps its own kit
+ * and recipe, and a kit copy that merely contains the new modules says nothing about how the job
+ * was planned.
+ */
+export const KIT_VERSION = '4.1';
+export const KIT_VERSION_FILE = 'VERSION';
+
+/** The 4.1 kit entry points a job must carry, with everything they import (pinned, transitively). */
+export const KIT_41_ENTRIES = ['set.js', 'explain.js', 'snap.mjs', 'try.mjs'];
+
+/** The kit generation a job's project was prepared with: its assets/kit/VERSION, or null. */
+export function jobKitVersion(projectDir: string): string | null {
+  try {
+    return fs.readFileSync(path.join(projectDir, 'assets', 'kit', KIT_VERSION_FILE), 'utf8').split('\n')[0].trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when the job at `projectDir` was prepared as an Explainers 4.1 job. */
+export function isExplainers41(projectDir: string): boolean {
+  const m = /^(\d+)\.(\d+)/.exec(jobKitVersion(projectDir) ?? '');
+  return Boolean(m) && (Number(m![1]) > 4 || (Number(m![1]) === 4 && Number(m![2]) >= 1));
+}
+
+/**
+ * The kit files `entries` load, followed through every relative import (static `import … from
+ * './x.js'`, `export … from`, bare `import './x'`, and literal `import('./x')`), relative to
+ * `kitDir`. Returns { files, missing } (kit-relative paths).
+ */
+export function kitImportClosure(kitDir: string, entries: readonly string[]): { files: string[]; missing: string[] } {
+  const files = new Set<string>();
+  const missing = new Set<string>();
+  const queue = [...entries];
+  while (queue.length) {
+    const rel = path.normalize(queue.shift()!);
+    if (files.has(rel) || missing.has(rel)) continue;
+    const abs = path.join(kitDir, rel);
+    if (!fs.existsSync(abs)) {
+      missing.add(rel);
+      continue;
+    }
+    files.add(rel);
+    // Code only: comments and template literals (mount.mjs writes HTML with imports in it) are dropped.
+    const src = fs
+      .readFileSync(abs, 'utf8')
+      // whole-line `//` comments first (one may hold a glob like props/*.js), then block comments
+      // that open a line (doc comments)
+      .replace(/^\s*\/\/.*$/gm, '')
+      .replace(/^\s*\/\*[\s\S]*?\*\//gm, '')
+      .replace(/`(?:\\[\s\S]|\$\{(?:[^{}]|\{[^{}]*\})*\}|[^\\`])*`/g, '``');
+    const specifiers = [
+      ...src.matchAll(/^\s*(?:import|export)\b[^'";]*?\bfrom\s*['"](\.{1,2}\/[^'"]+)['"]/gm),
+      ...src.matchAll(/^\s*import\s*['"](\.{1,2}\/[^'"]+)['"]/gm),
+      ...src.matchAll(/\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g),
+    ].map((m) => m[1]);
+    for (const spec of specifiers) {
+      const target = path.normalize(path.join(path.dirname(rel), spec));
+      if (target.startsWith('..')) continue; // outside the kit (a frame's own module): not the kit's to pin
+      queue.push(target);
+    }
+  }
+  return { files: [...files].sort(), missing: [...missing].sort() };
+}
+
 /** The two opener sounds a job copies into assets/sfx; the rest of SFX_DIR is linked. */
 export const OPENER_SOUNDS = ['riser.mp3', 'impact-bass-1.mp3'];
 
@@ -239,6 +312,7 @@ export function prepareWorkspace(input: {
   copyDir(path.join(EXPLAINERS_DIR, 'lint'), path.join(lintDir, 'lint'), (src) => !src.includes(`${path.sep}fixtures`));
   copyDir(path.join(EXPLAINERS_DIR, 'hyperframes-skills', 'faceless-explainer', 'scripts', 'lib'), path.join(lintDir, 'hyperframes-skills', 'faceless-explainer', 'scripts', 'lib'));
   copyDir(WORLD_KIT_DIR, path.join(lintDir, 'world-kit'));
+  fs.writeFileSync(path.join(lintDir, 'world-kit', KIT_VERSION_FILE), `${KIT_VERSION}\n`);
   // The asset bank (EX3-113, EX3-114): kept outside the app on the worker VM, so deploys never wipe
   // it, and copied into both kits; the job's catalog is written fresh from the tags and the bank.
   const bank = bankDir();
@@ -248,6 +322,12 @@ export function prepareWorkspace(input: {
     }
     fs.writeFileSync(path.join(kit, 'props', 'CATALOG.md'), catalogMarkdown(catalogEntries(bank)));
   }
+  // Explainers 4.1: the set, explanation, self-review and check modules and everything they import
+  // are in the job's kit, checked once the asset bank is in (a missing one would silently turn a
+  // check off), and the marker says the job is 4.1 (see KIT_VERSION).
+  const pinned = kitImportClosure(path.join(ws.projectDir, 'assets', 'kit'), KIT_41_ENTRIES);
+  if (pinned.missing.length) throw new Error(`The job's kit is missing ${pinned.missing.join(', ')} (imported by ${KIT_41_ENTRIES.join(', ')}).`);
+  fs.writeFileSync(path.join(ws.projectDir, 'assets', 'kit', KIT_VERSION_FILE), `${KIT_VERSION}\n`);
   fs.mkdirSync(path.join(ws.projectDir, 'assets', 'sfx'), { recursive: true });
   for (const file of OPENER_SOUNDS) fs.copyFileSync(path.join(SFX_DIR, file), path.join(ws.projectDir, 'assets', 'sfx', file));
   fs.symlinkSync(SFX_DIR, path.join(ws.projectDir, 'assets', 'sfx-library'), 'dir');
@@ -294,6 +374,10 @@ export function prepareWorkspace(input: {
 
   // The recipe, in the project tier only (HYPERFRAMES_MEDIA_HOME keeps ~/.media out).
   copyDir(path.join(EXPLAINERS_DIR, 'recipe'), path.join(ws.projectDir, '.media', 'recipes', 'helios-explainer'));
+  // The 4.1 principles sit with the other recipe docs (frame.md, story design); every role reads
+  // them first. The copy above carries them; this makes their absence a failed job, never a silent one.
+  const principles = path.join(ws.projectDir, PRINCIPLES_PATH);
+  if (!fs.existsSync(principles)) fs.copyFileSync(path.join(EXPLAINERS_DIR, 'recipe', 'principles.md'), principles);
   return ws;
 }
 

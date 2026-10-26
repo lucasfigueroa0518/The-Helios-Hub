@@ -23530,5 +23530,381 @@
   "peakDb": 0,
   "meanDb": -21.5,
   "source": "https://freesound.org/people/videog/sounds/240839/"
+ },
+ {
+  "id": "freesound/magnet/260129-1",
+  "file": "freesound/magnet/260129-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.48,
+  "peakDb": -0.2,
+  "meanDb": -25.6,
+  "source": "https://freesound.org/people/SpliceSound/sounds/260129/"
+ },
+ {
+  "id": "freesound/magnet/260129-2",
+  "file": "freesound/magnet/260129-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.34,
+  "peakDb": -0.5,
+  "meanDb": -26.4,
+  "source": "https://freesound.org/people/SpliceSound/sounds/260129/"
+ },
+ {
+  "id": "freesound/magnet/260129-3",
+  "file": "freesound/magnet/260129-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.35,
+  "peakDb": -0.3,
+  "meanDb": -25.6,
+  "source": "https://freesound.org/people/SpliceSound/sounds/260129/"
+ },
+ {
+  "id": "freesound/magnet/176918-1",
+  "file": "freesound/magnet/176918-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.2,
+  "peakDb": 0,
+  "meanDb": -17,
+  "source": "https://freesound.org/people/Eneasz/sounds/176918/"
+ },
+ {
+  "id": "freesound/magnet/176918-2",
+  "file": "freesound/magnet/176918-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.19,
+  "peakDb": 0,
+  "meanDb": -20.8,
+  "source": "https://freesound.org/people/Eneasz/sounds/176918/"
+ },
+ {
+  "id": "freesound/magnet/176918-3",
+  "file": "freesound/magnet/176918-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.2,
+  "peakDb": 0,
+  "meanDb": -19.7,
+  "source": "https://freesound.org/people/Eneasz/sounds/176918/"
+ },
+ {
+  "id": "freesound/magnet/461145-1",
+  "file": "freesound/magnet/461145-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.33,
+  "peakDb": -44.5,
+  "meanDb": -54.3,
+  "source": "https://freesound.org/people/15FPanska_Hecl_Filip/sounds/461145/"
+ },
+ {
+  "id": "freesound/magnet/461145-3",
+  "file": "freesound/magnet/461145-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.83,
+  "peakDb": -6.1,
+  "meanDb": -35.8,
+  "source": "https://freesound.org/people/15FPanska_Hecl_Filip/sounds/461145/"
+ },
+ {
+  "id": "freesound/magnet/594451-1",
+  "file": "freesound/magnet/594451-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/magnet",
+  "tags": [
+   "magnet",
+   "clack",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.25,
+  "peakDb": -11,
+  "meanDb": -36.4,
+  "source": "https://freesound.org/people/GH0STY_XD/sounds/594451/"
+ },
+ {
+  "id": "freesound/cord-taut/137711-1",
+  "file": "freesound/cord-taut/137711-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.46,
+  "peakDb": -30,
+  "meanDb": -42.1,
+  "source": "https://freesound.org/people/dansotak/sounds/137711/"
+ },
+ {
+  "id": "freesound/cord-taut/137711-2",
+  "file": "freesound/cord-taut/137711-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.4,
+  "peakDb": -29.6,
+  "meanDb": -41.6,
+  "source": "https://freesound.org/people/dansotak/sounds/137711/"
+ },
+ {
+  "id": "freesound/cord-taut/137711-3",
+  "file": "freesound/cord-taut/137711-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.83,
+  "peakDb": -16.9,
+  "meanDb": -29.8,
+  "source": "https://freesound.org/people/dansotak/sounds/137711/"
+ },
+ {
+  "id": "freesound/cord-taut/708114-1",
+  "file": "freesound/cord-taut/708114-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 3,
+  "peakDb": -20.7,
+  "meanDb": -40.3,
+  "source": "https://freesound.org/people/Rinaldobowles56/sounds/708114/"
+ },
+ {
+  "id": "freesound/cord-taut/708114-2",
+  "file": "freesound/cord-taut/708114-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.6,
+  "peakDb": -26.3,
+  "meanDb": -39.6,
+  "source": "https://freesound.org/people/Rinaldobowles56/sounds/708114/"
+ },
+ {
+  "id": "freesound/cord-taut/624485-1",
+  "file": "freesound/cord-taut/624485-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.31,
+  "peakDb": -2,
+  "meanDb": -21.1,
+  "source": "https://freesound.org/people/ValentinPetiteau/sounds/624485/"
+ },
+ {
+  "id": "freesound/cord-taut/624485-2",
+  "file": "freesound/cord-taut/624485-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.37,
+  "peakDb": -4.9,
+  "meanDb": -26.4,
+  "source": "https://freesound.org/people/ValentinPetiteau/sounds/624485/"
+ },
+ {
+  "id": "freesound/cord-taut/624485-3",
+  "file": "freesound/cord-taut/624485-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/cord-taut",
+  "tags": [
+   "cord",
+   "rope",
+   "taut",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.34,
+  "peakDb": -1.2,
+  "meanDb": -19.7,
+  "source": "https://freesound.org/people/ValentinPetiteau/sounds/624485/"
+ },
+ {
+  "id": "freesound/whiteboard-squeak/335956-1",
+  "file": "freesound/whiteboard-squeak/335956-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/whiteboard-squeak",
+  "tags": [
+   "squeak",
+   "dryerase",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 2.38,
+  "peakDb": -7.8,
+  "meanDb": -33.5,
+  "source": "https://freesound.org/people/newagesoup/sounds/335956/"
+ },
+ {
+  "id": "freesound/whiteboard-squeak/335956-2",
+  "file": "freesound/whiteboard-squeak/335956-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/whiteboard-squeak",
+  "tags": [
+   "squeak",
+   "dryerase",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.22,
+  "peakDb": -26.3,
+  "meanDb": -42,
+  "source": "https://freesound.org/people/newagesoup/sounds/335956/"
+ },
+ {
+  "id": "freesound/whiteboard-squeak/335956-3",
+  "file": "freesound/whiteboard-squeak/335956-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/whiteboard-squeak",
+  "tags": [
+   "squeak",
+   "dryerase",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.73,
+  "peakDb": -22.8,
+  "meanDb": -40,
+  "source": "https://freesound.org/people/newagesoup/sounds/335956/"
+ },
+ {
+  "id": "freesound/whiteboard-squeak/544843-1",
+  "file": "freesound/whiteboard-squeak/544843-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/whiteboard-squeak",
+  "tags": [
+   "squeak",
+   "dryerase",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.31,
+  "peakDb": -20.9,
+  "meanDb": -39.4,
+  "source": "https://freesound.org/people/swantje14/sounds/544843/"
+ },
+ {
+  "id": "freesound/whiteboard-squeak/544843-2",
+  "file": "freesound/whiteboard-squeak/544843-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/whiteboard-squeak",
+  "tags": [
+   "squeak",
+   "dryerase",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.34,
+  "peakDb": -22,
+  "meanDb": -39.2,
+  "source": "https://freesound.org/people/swantje14/sounds/544843/"
+ },
+ {
+  "id": "freesound/whiteboard-squeak/544843-3",
+  "file": "freesound/whiteboard-squeak/544843-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/whiteboard-squeak",
+  "tags": [
+   "squeak",
+   "dryerase",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.23,
+  "peakDb": -20.4,
+  "meanDb": -38.7,
+  "source": "https://freesound.org/people/swantje14/sounds/544843/"
  }
 ]

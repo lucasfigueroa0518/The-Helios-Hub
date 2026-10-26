@@ -1,12 +1,11 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { runAgentSession, type AgentQuery, type SessionResult } from '@/lib/explainers/render/agent';
-import { missingFrameNumbers, renderProjectVideo, repairProjectAssembly, runBoundsCheck, runHyperframesLint } from '@/lib/explainers/render/job';
+import { missingFrameNumbers, renderProjectVideo, runBoundsCheck, runHyperframesLint } from '@/lib/explainers/render/job';
 import { SpendMeter } from '@/lib/explainers/render/meter';
-import { checkUnderstanding, FINDINGS_FILE, type ComprehensionCheck } from '@/lib/explainers/render/understanding';
-import { recordMusicChoice, type Workspace } from '@/lib/explainers/render/workspace';
-import type { ExplainersJevRunner } from '@/lib/explainers/jev/runner';
+import type { Workspace } from '@/lib/explainers/render/workspace';
 import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings';
 import type { ArtifactStore } from '@/lib/explainers/storage';
 import type { LintViolation } from '@/lib/explainers/types';
@@ -15,12 +14,12 @@ import {
   addRealCaseArtifact,
   addRealCaseJobFlag,
   finishRealCaseJob,
-  recentRealCaseOpeners,
-  setRealCaseJobOpener,
   setRealCaseJobStage,
   type RealCaseArtifactKind,
   type RealCaseJob,
 } from '@/lib/real-case/jobs';
+import type { PrepResult } from '@/lib/real-case/objects/prepare';
+import { withAgentOverrides } from '@/lib/real-case/render/agents';
 import { verifiedFacts } from '@/lib/real-case/render/brief';
 import {
   cutSentences,
@@ -28,23 +27,25 @@ import {
   lintFindings,
   MAX_FACT_ROUNDS,
   modelFindings,
+  parseArtifactWords,
   parseFacts,
+  parsePlayers,
   planFrames,
   type FactChecker,
   type FactFinding,
 } from '@/lib/real-case/render/fact-check';
-import { prepareRealCaseWorkspace, type PrepareRealCase } from '@/lib/real-case/render/workspace';
+import { checkNewsUnderstanding, FINDINGS_FILE, type NewsComprehensionCheck } from '@/lib/real-case/render/understanding';
+import { prepareRealCaseWorkspace, recordRealCaseMusicChoice, type PrepareRealCase } from '@/lib/real-case/render/workspace';
 import { getStory, recordRealCaseCost } from '@/lib/real-case/repository';
 import { loadRealCaseSettings } from '@/lib/real-case/settings';
 import type { StoryRow } from '@/lib/real-case/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { lintRealCase } from '../../../explainers/real-case/lint/lint-real-case.mjs';
-import { HISTORY as OPENER_HISTORY, OBJECT_HERO_OPENERS, openerByKey, pickOpener } from '../../../explainers/world-kit/openers/bank.js';
 
 /**
  * One Real Case render (M5): workspace (the Explainer one + the Real Case overlay) → session A (plan)
  * → the understanding test (one fix session for serious misunderstandings) → the fact-check gate
- * (rewrite rounds, then the cut) → the opener → the checkpoint lint → session B (build and render) →
+ * (rewrite rounds, then the cut) → the checkpoint lint → session B (build and render) →
  * collect. Every artifact a stage produced is kept, even when a later stage fails. Retry is Lucas's
  * click. Everything is written to this route's own tables (RC-01).
  */
@@ -76,6 +77,8 @@ export type RealCaseRenderDeps = {
   boundsCheck?: (projectDir: string) => LintViolation[];
   renderVideo?: (projectDir: string) => void;
   repairAssembly?: (projectDir: string) => string[];
+  /** Object prep from the final plan (RC-52): cutouts, drawings, sketches into assets/objects/. Absent: skipped. */
+  objects?: (projectDir: string, storyboard: string) => Promise<PrepResult>;
   random?: () => number;
   log?: (event: string, fields?: Record<string, unknown>) => void;
 };
@@ -98,14 +101,15 @@ function readJson(file: string): unknown {
   }
 }
 
-/** Frame 1's opener: an object-led reel draws from the openers that never touch a critter hero. */
-export async function assignRealCaseOpener(db: RealCaseRenderDeps['db'], jobId: string, projectDir: string, random: () => number = Math.random): Promise<string> {
-  const key = pickOpener(await recentRealCaseOpeners(db, jobId, OPENER_HISTORY), { rand: random, pool: OBJECT_HERO_OPENERS }) as string;
-  await setRealCaseJobOpener(db, jobId, key);
-  const file = path.join(projectDir, 'assets', 'opener.json');
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ key, name: openerByKey(key)?.name ?? key, hero: 'object' }, null, 1)}\n`);
-  return key;
+/** The news kit's assembly (assets/kit/assemble.mjs): pace, mount, music, sound, captions, index. */
+export function repairRealCaseAssembly(projectDir: string): string[] {
+  const res = spawnSync('node', [path.join(projectDir, 'assets', 'kit', 'assemble.mjs')], { cwd: projectDir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  try {
+    const out = JSON.parse(res.stdout) as { done: string[]; errors: string[] };
+    return [...out.done, ...out.errors.map((e) => `failed: ${e}`)];
+  } catch {
+    return [`assembly failed: ${(res.stderr || res.stdout || '').trim().slice(-400)}`];
+  }
 }
 
 export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob): Promise<RealCaseRenderOutcome> {
@@ -168,7 +172,7 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
     const meter = new SpendMeter(job.spend_cap_usd, job.spend_usd);
     const session = (prompt: string) =>
       runAgentSession({
-        query: deps.query,
+        query: withAgentOverrides(deps.query),
         prompt,
         projectDir,
         homeDir: ws!.homeDir,
@@ -202,13 +206,23 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
     // The fact-check gate (RC-06): rewrite rounds, then the cut. Truth before audio.
     ({ storyboard, script } = await factGate());
 
-    // Frame 1's opener (an object-led reel).
-    const opener = await assignRealCaseOpener(db, job.id, projectDir, deps.random);
-    log('opener', { jobId: job.id, opener });
-
     // Checkpoint: the Real Case lint on the final plan, recorded.
     await stage('checkpoint');
     await keepText('lint_report', JSON.stringify({ phase: 'checkpoint', ...lintRealCase({ storyboard, script, brief }) }, null, 2));
+
+    // Objects (RC-52): the case file's objects and whiteboard sketches, before the frames are built.
+    if (deps.objects) {
+      await stage('objects');
+      const objects = await deps.objects(projectDir, storyboard);
+      if (objects.usd.vision > 0) await recordRealCaseCost(db, { jobId: job.id, storyId: job.story_id, mode: job.mode, vendor: 'anthropic', component: 'objects:pick', usd: objects.usd.vision });
+      if (objects.usd.drawing > 0) await recordRealCaseCost(db, { jobId: job.id, storyId: job.story_id, mode: job.mode, vendor: 'openai', component: 'objects:images', usd: objects.usd.drawing });
+      await keepText('lint_report', JSON.stringify({ phase: 'objects', placed: objects.placed, flags: objects.flags, usd: objects.usd }, null, 2));
+      if (objects.flags.length) log('object_flags', { jobId: job.id, flags: objects.flags });
+      meter.settleSession(objects.usd.vision + objects.usd.drawing);
+      if (meter.overCap) throw new RenderFailure(`Spend cap $${job.spend_cap_usd.toFixed(2)} reached in objects.`, true);
+    } else {
+      log('objects_skipped', { jobId: job.id });
+    }
 
     // Session B: build and render.
     let b = await runPhase('session_b', RC_BUILD_PROMPT);
@@ -228,7 +242,7 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
     await keep('captions', path.join(projectDir, 'caption_groups.json'), 'caption_groups.json');
     await keep('contact_sheet', path.join(projectDir, 'snapshots', 'contact-sheet.jpg'), 'contact-sheet.jpg');
     if (!fileReady(videoPath)) {
-      const repaired = (deps.repairAssembly ?? repairProjectAssembly)(projectDir);
+      const repaired = (deps.repairAssembly ?? repairRealCaseAssembly)(projectDir);
       if (repaired.length) log('assembly_repaired', { jobId: job.id, steps: repaired });
     }
     const hyperframes = (deps.hyperframesLint ?? runHyperframesLint)(projectDir);
@@ -248,7 +262,7 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
       const stillMissing = missingFrameNumbers(projectDir);
       throw new RenderFailure(`Session B ended without a video (${b.subtype}${b.errors.length ? `: ${b.errors.join('; ')}` : ''}).${stillMissing.length ? ` Missing frames ${stillMissing.join(', ')}.` : ''}`);
     }
-    const track = recordMusicChoice(deps.jobsRoot, projectDir);
+    const track = recordRealCaseMusicChoice(deps.jobsRoot, projectDir);
     if (track) log('music', { jobId: job.id, track });
 
     await finishRealCaseJob(db, job.id, { status: 'ok' });
@@ -259,7 +273,7 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
 
     async function understandingTest(): Promise<{ storyboard: string; script: string }> {
       const file = path.join(projectDir, '.hyperframes', 'comprehension-check.json');
-      const first = readJson(file) as ComprehensionCheck | null;
+      const first = readJson(file) as NewsComprehensionCheck | null;
       if (!first) {
         log('comprehension_check_missing', { jobId: job.id });
         return { storyboard, script };
@@ -268,18 +282,9 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
         await keepText('lint_report', JSON.stringify({ phase: 'understanding', attempt: 'first', verdict: null, comprehension: first }, null, 2));
         return { storyboard, script };
       }
-      const runner = new RecordingRealCaseJevRunner(deps.jevTransport, db, { mode: job.mode, jobId: job.id });
-      // The Explainer test's questions, on this route's ledger: the topic id it logs is the story's.
-      const jev = {
-        ask: (r: { component: string; state: unknown; set: unknown; questions: unknown }) =>
-          runner.ask({ component: r.component, state: r.state as never, set: r.set as never, questions: r.questions as never, storyId: story!.id }),
-        get callCount() {
-          return runner.callCount;
-        },
-        usd: 0,
-      } as unknown as ExplainersJevRunner;
-      const judge = (c: ComprehensionCheck | null, board: string, words: string) =>
-        checkUnderstanding({ jev, topicId: story!.id, term: story!.term, comprehension: c, storyboard: board, script: words });
+      const jev = new RecordingRealCaseJevRunner(deps.jevTransport, db, { mode: job.mode, jobId: job.id });
+      const judge = (c: NewsComprehensionCheck | null, board: string, words: string) =>
+        checkNewsUnderstanding({ jev, storyId: story!.id, comprehension: c, storyboard: board, script: words });
       const verdict = await judge(first, storyboard, script);
       await keepText('lint_report', JSON.stringify({ phase: 'understanding', attempt: 'first', verdict, comprehension: first }, null, 2));
       if (!verdict || verdict.blocking.length === 0) return { storyboard, script };
@@ -290,7 +295,7 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
       const fixed = plan();
       if (fixed.storyboard !== storyboard) await keepText('storyboard', fixed.storyboard);
       if (fixed.script !== script) await keepText('script', fixed.script);
-      const again = readJson(file) as ComprehensionCheck | null;
+      const again = readJson(file) as NewsComprehensionCheck | null;
       const second = again ? await judge(again, fixed.storyboard, fixed.script) : null;
       await keepText('lint_report', JSON.stringify({ phase: 'understanding', attempt: 'after_fix', verdict: second, comprehension: again }, null, 2));
       for (const f of second ? second.blocking : verdict.blocking) await addRealCaseJobFlag(db, job.id, 'understanding', `${f.kind}: ${f.detail}`);
@@ -303,7 +308,7 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
       let words = script;
       const check = async (round: number): Promise<FactFinding[]> => {
         await stage(`fact_check_${round}`);
-        const response = await deps.factChecker.check({ model: settings.fact_check_model, term: story!.term, facts, frames: planFrames(board, words) });
+        const response = await deps.factChecker.check({ model: settings.fact_check_model, term: story!.term, facts, players: parsePlayers(brief), artifacts: parseArtifactWords(brief), frames: planFrames(board, words) });
         await recordRealCaseCost(db, {
           jobId: job.id,
           storyId: job.story_id,
@@ -316,6 +321,7 @@ export async function runRealCaseJob(deps: RealCaseRenderDeps, job: RealCaseJob)
           cacheWriteTokens: response.usage.cache_creation_input_tokens ?? 0,
           usd: response.usd,
         });
+        meter.settleSession(response.usd ?? 0);
         const findings = [...lintFindings(board, words, brief), ...modelFindings(response.sentences)];
         await keepText('fact_check', JSON.stringify({ round, findings, sentences: response.sentences }, null, 2));
         return findings;

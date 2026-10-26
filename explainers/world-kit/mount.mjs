@@ -9,7 +9,7 @@
 //
 // It also fills the caption skin's dark-ground windows (`var DARK = [];` in
 // .hyperframes/caption-skin.html) from the storyboard's grounds and durations, so captions turn
-// light on night and forest, and its quiet windows (`var QUIET = [];`): the opener's title card
+// light on the stage (hx-4's one dark ground; `night` and `forest` are its old names), and its quiet windows (`var QUIET = [];`): the opener's title card
 // (all of frame 1) and the dictionary card (all of frame 3), where captions step
 // aside (EX3-44, EX3-45). Run it after pace.mjs and before `captions.mjs build`. The voiceless
 // close (frame 8) is the kit's close.js: this writes its module and sound events (EX3-95).
@@ -24,9 +24,14 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { HOOK_ID, isBankOpener, isClose, projectFrames, seconds, writeClose, writeOpener } from './frames.mjs';
+import { GROUNDS, GROUND_ALIASES } from './core.js';
 
-export const GROUND_NAMES = ['paper', 'night', 'forest', 'white'];
-const DARK_GROUNDS = new Set(['night', 'forest']);
+/** The grounds (hx-4): paper (the studio sweep), stage (the premium lit stage), white (the close). */
+export const GROUND_NAMES = Object.keys(GROUNDS);
+/** Retired names that still mount, drawn as the stage (lint flags them in a storyboard). */
+export { GROUND_ALIASES };
+const groundKey = (name) => GROUND_ALIASES[name] ?? name;
+const DARK_GROUNDS = new Set(GROUND_NAMES.filter((n) => GROUNDS[n].dark));
 
 const GSAP = 'https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js';
 export const FONTS = `
@@ -43,7 +48,8 @@ export const domKey = (id) => `f${id.replace(/[^a-zA-Z0-9]/g, '_')}`;
 export function frameHtml(id, duration, ground = 'paper') {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) throw new Error(`mount: frame id ${id} must be lowercase letters, digits, dashes`);
   if (!(duration > 0)) throw new Error(`mount: frame ${id} needs a positive duration`);
-  if (!GROUND_NAMES.includes(ground)) throw new Error(`mount: frame ${id} ground "${ground}" must be ${GROUND_NAMES.join(', ')}`);
+  // an old name (night, forest) mounts as written; the kit draws it as the stage
+  if (!GROUND_NAMES.includes(groundKey(ground))) throw new Error(`mount: frame ${id} ground "${ground}" must be ${GROUND_NAMES.join(', ')}`);
   const key = domKey(id);
   return `<template>
   <div id="root" data-composition-id="${id}" data-width="1080" data-height="1920" data-start="0" data-duration="${duration}">
@@ -128,7 +134,7 @@ export function darkWindows(frames) {
   let at = 0;
   for (const f of frames) {
     const dur = f.duration > 0 ? f.duration : 0;
-    if (DARK_GROUNDS.has(frameGround(f))) {
+    if (DARK_GROUNDS.has(groundKey(frameGround(f)))) {
       const last = out[out.length - 1];
       if (last && Math.abs(last[1] - at) < 1e-6) last[1] = round(at + dur);
       else out.push([round(at), round(at + dur)]);

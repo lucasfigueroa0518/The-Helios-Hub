@@ -1,7 +1,9 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { EXPLAINERS_DIR, LINT_DIR, prepareWorkspace, type Workspace } from '@/lib/explainers/render/workspace';
+import { EXPLAINERS_DIR, LINT_DIR, prepareWorkspace, type MusicHistory, type Workspace } from '@/lib/explainers/render/workspace';
+import { bankingFor, loadCutouts } from '@/lib/real-case/bank';
 import type { TopicRow } from '@/lib/explainers/types';
 import { realCaseBriefMarkdown } from '@/lib/real-case/render/brief';
 import type { StoryRow } from '@/lib/real-case/types';
@@ -16,16 +18,19 @@ import type { StoryRow } from '@/lib/real-case/types';
  *   BRIEF.md, capture/extracted/visible-text.txt   the story and its checked facts
  *   CLAUDE.md, AGENTS.md                            point at the Real Case director
  *   .claude/skills/helios-real-case-director/       the director (its SKILL.md)
- *   .claude/skills/helios-explainer-director/       the Explainer director's SKILL.md removed; its folder
- *                                                    keeps only scene-builder.md, the Real Case one, at the
- *                                                    path the scene builder's agent prompt names (agent.ts)
+ *   .claude/skills/helios-explainer-director/       removed: this format has no scene builder (its agent
+ *                                                    is dropped in agents.ts)
  *   faceless-explainer SKILL.md, story-design.md,   the workflow, the beats, the shot method and the
  *   visual-design.md, sub-agents/frame-worker.md,   frame workers' role, for the eight Real Case beats
  *   hyperframes/references/frame-worker-core.md
- *   the recipe's storyboard-skeleton.md             the eight Real Case frames
- *   frame.md                                        the story world, the focal and the frame treatments
- *                                                    (realCaseFrameMd)
+ *   the recipe's storyboard-skeleton.md             the eight acts (RC-31)
+ *   frame.md, .hyperframes/caption-skin.html        built from this format's `ai-news` preset (D4)
  *   .helios-lint/real-case/lint/                    the Real Case lint, beside the Explainer one it reuses
+ *
+ * The render engine (N4c-2, RC-47): assets/kit is this format's news kit (explainers/real-case/kit),
+ * never the world kit. The Explainer opener bank, opener.json, opener sounds and assets/world go;
+ * the dry-erase font, the Helios mark, and the story's banked logos and approved cutouts
+ * (assets/bank/, with credits.json) come in; music-avoid.json is this format's own rotation.
  */
 
 export const REAL_CASE_DIR = path.join(EXPLAINERS_DIR, 'real-case');
@@ -40,7 +45,6 @@ export const REAL_CASE_PROJECT_INSTRUCTIONS = [
 /** Overlay files: [source under explainers/real-case, destination under the project]. */
 export const OVERLAY_FILES: [string, string][] = [
   ['director/SKILL.md', '.claude/skills/helios-real-case-director/SKILL.md'],
-  ['director/scene-builder.md', '.claude/skills/helios-explainer-director/scene-builder.md'],
   ['workflow.md', '.claude/skills/faceless-explainer/SKILL.md'],
   ['story-design.md', '.claude/skills/faceless-explainer/references/story-design.md'],
   ['visual-design.md', '.claude/skills/faceless-explainer/references/visual-design.md'],
@@ -49,75 +53,6 @@ export const OVERLAY_FILES: [string, string][] = [
   ['storyboard-skeleton.md', '.media/recipes/helios-explainer/storyboard-skeleton.md'],
 ];
 
-// ── frame.md ────────────────────────────────────────────────────────────────
-
-/** Replace a `## ` section (its heading through the line before the next `## `) with `body`. */
-export function replaceSection(md: string, heading: string, body: string): string {
-  const start = md.indexOf(`\n${heading}\n`);
-  if (start < 0) throw new Error(`frame.md has no section "${heading}"`);
-  const after = start + heading.length + 2;
-  const next = md.indexOf('\n## ', after);
-  const end = next < 0 ? md.length : next;
-  return `${md.slice(0, start + 1)}${body.trim()}\n${md.slice(end)}`;
-}
-
-/** Replace the span from `fromHeading` up to (not including) `toHeading`. */
-function replaceSpan(md: string, fromHeading: string, toHeading: string, body: string): string {
-  const start = md.indexOf(`\n${fromHeading}\n`);
-  const end = md.indexOf(`\n${toHeading}\n`);
-  if (start < 0 || end < 0 || end < start) throw new Error(`frame.md has no span "${fromHeading}" … "${toHeading}"`);
-  return `${md.slice(0, start + 1)}${body.trim()}\n${md.slice(end)}`;
-}
-
-/** Exact edits to frame.md's lines that name the analogy's beats; each must match exactly once. */
-const FRAME_EDITS: [RegExp, string][] = [
-  [/except the hero critter, which keeps its orange wherever it appears: frames 1, 4, 5 and a frame-7 callback; frames 2, 3 and 6 never show it \(EX3-107, EX3-132\)\./,
-    'except the key item, an object, which keeps its orange wherever it appears; no critter is ever orange.'],
-  [/A critter does whatever someone does in the analogy:/, 'A critter does whatever someone does in the event:'],
-  [/the hero is the one orange critter, shown only in frames 1, 4, 5 and a frame-7 callback \(EX3-132\), and no critter is ever redrawn in another color\./,
-    'no critter is ever orange (the key item, an object, carries the orange), and no critter is ever redrawn in another color.'],
-  [/^(\s*description: )"Frame 6 only\..*"$/m,
-    '$1"Frame 4 only. A numbered path or timeline drawn in the style along one edge of the safe area (a hand-drawn ink line with paper tabs or circles). Its stops are the story world\'s steps (world.js STEPS, the `technical` names), 4 words or fewer each, Roboto 700 or Pragmatica label size. Stops light (the current one in green, done ones ink, upcoming ones at 25%) on their voice cue while the step plays on the event\'s own thing."'],
-  [/every reel's analogy is its(\s+)own world/, "every reel's story is its$1own world"],
-  [/Never pick an analogy because a piece already exists\./, 'Never stage a story around a piece because it already exists.'],
-  [/real brands or logos other than Helios,/,
-    "logos, brand marks, brand colors or copies of a real product's screens (an organization's name appears only as a plain label in the reel's lettering, as the voice says it),"],
-  [/The anchor scene returns in beats 1, 4 and 5 \(and frame 7's callback\), so the picture must change:/,
-    "The story world returns in beats 1, 2, 4, 5 and 6 (and frame 7's callback), so the picture must change:"],
-  [/Beats 1, 4 and 5 each use at least one shot kind the others don't\./, "Beats 2, 4, 5 and 6 each use at least one shot kind the beat before it doesn't."],
-  [/or the real job of\s+the part frame 4 is naming\)/, 'or the step frame 4 is naming)'],
-  [/Lead with the hero, then its context;/, 'Lead with the focal, then its context;'],
-  [/supporting elements move less, slower and later than the hero\./, 'supporting elements move less, slower and later than the focal.'],
-  [/\(frame 4: as each part's real job is named\)/, '(frame 4: as each step is named)'],
-  [/and the step tracker's stops \(frame 6\)\./, "and the step tracker's stops (frame 4)."],
-  [/compositions\/frames\/04-analogy\.html → 04-analogy/, 'compositions/frames/04-walk.html → 04-walk'],
-  [/the\s+hook keeps its contract \(`hero`, `hideHero`, `heroPose`, no text\)\./, 'the hook keeps its contract (no `hero` export in an object-led reel, no text).'],
-  [/- \*\*Example:\*\* the step tracker shows the anchor steps' technical names, each lit with an insert of the example step's real thing; no hero\./,
-    "- **Walk:** frame 4's step tracker shows the story world's steps, each lit as the step plays on the event's own thing."],
-  [/- \*\*Hero:\*\* only in frames 1, 4, 5 and a frame-7 callback; never in frames 2, 3 or 6\./,
-    '- **Key item:** the one object that keeps its orange wherever it appears; no critter is orange.'],
-];
-
-/**
- * The job's frame.md for this format: the story world, the focal rule and the eight frame treatments
- * replace the analogy's, and the lines that name the analogy's beats are rewritten. Throws when the
- * preset no longer has a section or a line this expects, so a change on the Explainer side is caught
- * by the tests instead of shipping a frame.md that contradicts itself.
- */
-export function realCaseFrameMd(frameMd: string, dir: string = REAL_CASE_DIR): string {
-  const part = (name: string) => fs.readFileSync(path.join(dir, 'frame', name), 'utf8');
-  let md = frameMd;
-  md = replaceSection(md, '## The anchor scene (V-1)', part('story-world.md'));
-  md = replaceSection(md, '## Focal (V-5) · HARD CONSTRAINT', part('focal.md'));
-  md = replaceSpan(md, '## Frame Treatments', '## Writing a frame (the frame-module contract)', part('frame-treatments.md'));
-  for (const [find, replacement] of FRAME_EDITS) {
-    const count = (md.match(new RegExp(find.source, find.flags.includes('g') ? find.flags : `${find.flags}g`)) ?? []).length;
-    if (count !== 1) throw new Error(`frame.md: expected one match for ${find}, found ${count}`);
-    md = md.replace(find, replacement);
-  }
-  return md;
-}
-
 // ── The overlay ─────────────────────────────────────────────────────────────
 
 function copyDir(from: string, to: string, filter: (src: string) => boolean = () => true): void {
@@ -125,7 +60,12 @@ function copyDir(from: string, to: string, filter: (src: string) => boolean = ()
 }
 
 /** Lay the Real Case files over a prepared Explainer workspace (deterministic, no model). */
-export function applyRealCaseOverlay(projectDir: string, story: StoryRow, dir: string = REAL_CASE_DIR): void {
+export function applyRealCaseOverlay(
+  projectDir: string,
+  story: StoryRow,
+  dir: string = REAL_CASE_DIR,
+  { buildFrame = runBuildFrame, musicHistory = null }: { buildFrame?: (projectDir: string, presetDir: string) => void; musicHistory?: MusicHistory | null } = {},
+): void {
   const write = (rel: string, content: string) => {
     const file = path.join(projectDir, rel);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -138,10 +78,95 @@ export function applyRealCaseOverlay(projectDir: string, story: StoryRow, dir: s
   fs.rmSync(path.join(projectDir, '.claude', 'skills', 'helios-explainer-director'), { recursive: true, force: true });
   for (const [from, to] of OVERLAY_FILES) write(to, fs.readFileSync(path.join(dir, from), 'utf8'));
 
-  const frameFile = path.join(projectDir, 'frame.md');
-  write('frame.md', realCaseFrameMd(fs.readFileSync(frameFile, 'utf8'), dir));
-
   copyDir(path.join(dir, 'lint'), path.join(projectDir, LINT_DIR, 'real-case', 'lint'), (src) => !src.includes(`${path.sep}fixtures`));
+
+  applyNewsKit(projectDir, story, { dir, buildFrame, musicHistory });
+}
+
+/** Files of the news kit a job never gets (the gallery and the texture baker are repo tools). */
+const KIT_EXCLUDE = /(^|[\\/])(gallery\.(html|mjs)|bake-textures\.mjs)$/;
+/** The Explainer opener sounds prepareWorkspace copies into assets/sfx. */
+const EXPLAINER_OPENER_SOUNDS = ['riser.mp3', 'impact-bass-1.mp3'];
+
+/** This format's music rotation, beside the jobs folder's Explainer one but never shared with it. */
+export function realCaseMusicHistoryPath(jobsRoot: string): string {
+  return path.join(path.dirname(path.resolve(jobsRoot)), 'real-case-music-history.json');
+}
+
+export function readRealCaseMusicHistory(jobsRoot: string): MusicHistory {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(realCaseMusicHistoryPath(jobsRoot), 'utf8')) as Partial<MusicHistory>;
+    return { used: Number(parsed.used) || 0, recent: Array.isArray(parsed.recent) ? parsed.recent.map(String).slice(-10) : [] };
+  } catch {
+    return { used: 0, recent: [] };
+  }
+}
+
+/** After a reel is made: count its bed (assets/bgm/choice.json) in this format's rotation. */
+export function recordRealCaseMusicChoice(jobsRoot: string, projectDir: string): string | null {
+  let id: string | undefined;
+  try {
+    id = (JSON.parse(fs.readFileSync(path.join(projectDir, 'assets', 'bgm', 'choice.json'), 'utf8')) as { id?: string }).id;
+  } catch {
+    return null;
+  }
+  if (!id) return null;
+  const history = readRealCaseMusicHistory(jobsRoot);
+  fs.writeFileSync(realCaseMusicHistoryPath(jobsRoot), `${JSON.stringify({ used: history.used + 1, recent: [...history.recent, id].slice(-10) }, null, 1)}\n`);
+  return id;
+}
+
+/**
+ * The render engine half of the overlay: the news kit in place of the world kit, the opener bank and
+ * its files gone, frame.md from the `ai-news` preset, fonts, the Helios mark, the story's banked art.
+ */
+export function applyNewsKit(
+  projectDir: string,
+  story: StoryRow,
+  { dir = REAL_CASE_DIR, buildFrame = runBuildFrame, musicHistory = null }: { dir?: string; buildFrame?: (projectDir: string, presetDir: string) => void; musicHistory?: MusicHistory | null } = {},
+): void {
+  const assets = path.join(projectDir, 'assets');
+  fs.rmSync(path.join(assets, 'kit'), { recursive: true, force: true });
+  fs.rmSync(path.join(assets, 'world'), { recursive: true, force: true });
+  fs.rmSync(path.join(assets, 'opener.json'), { force: true });
+  for (const f of EXPLAINER_OPENER_SOUNDS) fs.rmSync(path.join(assets, 'sfx', f), { force: true });
+  copyDir(path.join(dir, 'kit'), path.join(assets, 'kit'), (src) => !KIT_EXCLUDE.test(src));
+  fs.mkdirSync(path.join(assets, 'frames'), { recursive: true });
+
+  fs.mkdirSync(path.join(assets, 'fonts'), { recursive: true });
+  for (const f of fs.readdirSync(path.join(dir, 'design', 'fonts'))) {
+    if (/\.(ttf|otf|woff2?)$/.test(f)) fs.copyFileSync(path.join(dir, 'design', 'fonts', f), path.join(assets, 'fonts', f));
+  }
+  fs.copyFileSync(path.join(EXPLAINERS_DIR, 'design', 'helios-design-system', 'assets', 'Helios-mark.png'), path.join(assets, 'Helios-mark.png'));
+
+  // The story's banked art (RC-33, RC-34): logos and approved cutouts, each with its credit.
+  const bank = path.join(assets, 'bank');
+  fs.rmSync(bank, { recursive: true, force: true });
+  fs.mkdirSync(path.join(bank, 'logos'), { recursive: true });
+  fs.mkdirSync(path.join(bank, 'cutouts'), { recursive: true });
+  const credits: { player: string; kind: 'logo' | 'cutout'; file: string; credit: string }[] = [];
+  const repo = path.resolve(EXPLAINERS_DIR, '..');
+  const cutouts = loadCutouts(repo);
+  for (const member of story.story?.cast ?? []) {
+    const b = bankingFor(member, cutouts);
+    for (const [kind, art] of [['logo', b.logo], ['cutout', b.cutout]] as const) {
+      if (!art) continue;
+      const rel = path.join(kind === 'logo' ? 'logos' : 'cutouts', `${art.id}.png`);
+      fs.copyFileSync(path.join(repo, art.file), path.join(bank, rel));
+      credits.push({ player: member.name, kind, file: `assets/bank/${rel.split(path.sep).join('/')}`, credit: art.credit });
+    }
+  }
+  fs.writeFileSync(path.join(bank, 'credits.json'), `${JSON.stringify(credits, null, 1)}\n`);
+
+  if (musicHistory) fs.writeFileSync(path.join(projectDir, 'music-avoid.json'), `${JSON.stringify(musicHistory)}\n`);
+  buildFrame(projectDir, path.join(dir, 'presets'));
+}
+
+/** frame.md and the caption skin from the `ai-news` preset, with the faceless skill's build-frame. */
+function runBuildFrame(projectDir: string, presetDir: string): void {
+  const script = path.join(EXPLAINERS_DIR, 'hyperframes-skills', 'faceless-explainer', 'scripts', 'build-frame.mjs');
+  const res = spawnSync('node', [script, '--preset', 'ai-news', '--preset-dir', presetDir, '--hyperframes', '.'], { cwd: projectDir, encoding: 'utf8' });
+  if (res.status !== 0) throw new Error(`build-frame (ai-news) failed: ${(res.stderr || res.stdout).slice(-600)}`);
 }
 
 /** The topic shape `prepareWorkspace` needs, from a story (its BRIEF.md is replaced by the overlay). */
@@ -162,6 +187,6 @@ export type PrepareRealCase = (input: { jobsRoot: string; jobId: string; story: 
 /** The real one: the Explainer workspace, then the overlay. */
 export const prepareRealCaseWorkspace: PrepareRealCase = ({ jobsRoot, jobId, story }) => {
   const ws = prepareWorkspace({ jobsRoot, jobId, topic: workspaceTopic(story), sourceText: null, analogy: null, gap: null });
-  applyRealCaseOverlay(ws.projectDir, story);
+  applyRealCaseOverlay(ws.projectDir, story, REAL_CASE_DIR, { musicHistory: readRealCaseMusicHistory(jobsRoot) });
   return ws;
 };

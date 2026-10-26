@@ -1,20 +1,20 @@
 # AI News Explained — the format
 
-Decisions: `DECISIONS.md` RC-26 to RC-32. This spec is what the prompts, the lint, the preset and the
+Decisions: `DECISIONS.md` RC-26 to RC-44. This spec is what the prompts, the lint, the preset and the
 kit implement.
 
 ## What it is
 
 A recent (≤ 90 days), true AI news story, told as a story. The story is the star; the viewer comes away
 knowing what happened, why it happened (the concept), and one thing to keep. It sits beside Explainer
-Reels (analogy-led, paper world, critters) and must not feel like one: different structure, look, sound
-and voice.
+Reels (analogy-led, paper world, critters) and must not feel like one: a different structure, look and sound,
+told in the same Lucas voice.
 
 ## The arc (about 60s)
 
 | # | Act | Its job | Words |
 |---|-----|---------|-------|
-| 1 | Cold open | The most striking moment of the story, stated so a stranger stops scrolling. The AI NEWS EXPLAINED sting (code) follows the line. | 10–18 |
+| 1 | Cold open | Engineered to stop the scroll (RC-35): the most surprising specific about a known player, moving on frame 0, an open loop; tested on a stranger. The AI NEWS EXPLAINED sting (code) follows the line. | 10–18 |
 | 2 | Setup | When, where, who, what they wanted, what was at stake. A date or place stamp is on screen. | 22–34 |
 | 3 | The moment | The event played out, with its real artifact recreated (the post, the reply, the filing, the statement); the detail someone noticed. | 22–34 |
 | 4 | Fallout | What it cost or changed: numbers, reactions, headlines. | 14–24 |
@@ -37,24 +37,32 @@ About 150–210 spoken words at 180–200 wpm; pauses ≤ 0.2s.
   screen appears word for word in its source.
 - Private individuals are never named; they go by their role.
 
-## Look: newsroom case file
+## Look: true-crime documentary (RC-39 to RC-42)
 
-- Ground: dark graphite with fine grain; type off-white; one red accent for the thing that matters now.
-- Type: a condensed bold headline face; a mono face for stamps, labels and timestamps; a plain sans for
-  artifact body text.
-- The story is told through **recreated artifacts** (posts, chat replies, headlines, statements,
-  filings, documents), **stamps** (date, place), **numbers** (big figures, a chart), **timelines**, and
-  **simple faceless silhouettes** with a name or role lower-third. Highlighter, circle and redaction
-  marks point at the detail that matters.
-- No real logos, photos or copies of a product's screens: artifacts are drawn in the reel's own style
-  with their verbatim text.
-- Camera: push into a detail, whip cut between artifacts, highlight-then-zoom. Every move has a job.
+- **Three scenes, all in every reel (RC-44):** the **bulletin board** (cork, push pins, red cord), the
+  **whiteboard** (items held by magnets, marker arrows, circles and short handwritten notes; default for
+  the reveal), and the **newspaper** (a newsprint page as the surface, marker markups circling and
+  connecting its headlines, photos and lines; suits setup and fallout).
+- **The case board:** a cork bulletin board under a warm practical lamp, vignette and film grain.
+  Evidence is pinned with real push pins and tied with red cord: real newspaper clippings (newsprint,
+  grain, halftone photos, column and headline design, torn edges, tape), printouts of posts and
+  statements, typed notices and index cards, manila evidence tags, Polaroids.
+- **Players:** a blue-chip person as a Polaroid of their banked photo cutout; a company as its banked
+  logo printed and pinned; anyone else a faceless silhouette; private people never shown or named.
+- **Objects:** a common object the story mentions is a real stock photo, cut out and pinned (RC-41).
+- **One thing at a time (RC-40):** each shot gives one item full attention; the camera moves along the
+  cords from item to item.
+- **No boxes of words (RC-42):** the evidence explains: where the cord runs, dates on tags, what the
+  system never saw pinned apart, a marker circle on the cause. The term is a dictionary clipping.
+- **Accent:** the Helios orange marker for the one key detail; the cord is red. Pragmatica Extended for
+  captions and the AI NEWS EXPLAINED stamp; newspaper serifs and typewriter type on the evidence.
+- Direction stills: `.explainers-local/previews/ai-news-truecrime/`.
 
 ## Sound and voice
 
-- Its own narrator voice (documentary/news register), separate from Explainer Reels.
-- Music: a tense, low news/documentary bed, its own rotation.
-- Sound effects: teletype, shutter, whoosh, low hit, data blip, highlighter, paper slide for documents.
+- The narrator is the Lucas Figueroa voice (HeyGen, the same voice Explainer Reels uses; RC-38).
+- Music: its own rotation, picked by code. Sound effects: every visible motion has a sound (pins, card
+  slides, stamps, marker strokes, whooshes, low hits on reveals), from the shared library.
 - The sting has its own sound.
 
 ## The pool

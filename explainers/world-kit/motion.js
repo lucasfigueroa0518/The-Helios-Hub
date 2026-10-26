@@ -2,11 +2,11 @@
 // into. 4.0 (approved stills 13 and 15): motion is smooth everywhere (no twos, no boil, no grid);
 // world moves ease in and out and things move with weight (anticipation, volume-preserving squash
 // and stretch, follow-through, arcs, one smear frame on a fast move), while titles, UI and the
-// camera keep the brand ease-out with no bounce. A frame may be drawn in depth layers (bg, mid,
-// fg) that move at different speeds under the camera, with depth of field.
+// camera keep the brand ease-out with no bounce. Depth (parallax, depth of field) comes from a
+// perspective camera moving through the world (lens.js), never from layers at speeds of their own.
 
 import { POLARITY, clamp, cam, camAt, cameraTransform, onTwos } from './core.js';
-import { defs, ground, el, g, id, scope } from './draw.js';
+import { defs, ground, g, scope } from './draw.js';
 import { seamed } from './seams.js';
 
 /** Kept for old frames: core's onTwos returns t in 4.0 (smooth motion everywhere). */
@@ -134,60 +134,79 @@ export function underlay(prefix, groundName = 'paper') {
   return defs() + ground(groundName);
 }
 
-/** How fast each depth layer moves with the camera (approved still 13). */
+/**
+ * Depth (hx-4.1, after Lucas's review of the first depth demo): depth is made by a perspective
+ * camera moving through a 3D world (lens.js), where parallax and depth of field come from each
+ * thing's real distance. The isometric camera is orthographic: it has no near or far, so a
+ * layer moving at its own speed or blurred "for depth" over an iso scene is physically
+ * meaningless, and frame() refuses it (depthProblems says why). The constants and helpers below
+ * are kept so older code compiles; nothing in the kit uses fixed-speed layers any more.
+ */
 export const PARALLAX = { bg: 0.35, mid: 1, fg: 1.8 };
-/** Depth of field: px of blur per layer step behind the focus, and in front of it. */
+/** Kept for older callers; depth of field is per object in lens.js (dofBlur). */
 export const DOF = { behind: 2.4, front: 12 };
 const DEPTHS = { bg: 0, mid: 1, fg: 2 };
 
-/** The camera a layer sees: its motion (pan, and zoom geometrically) scaled by k; roll is the
- *  whole picture's, so every layer rolls alike. */
+/** Kept for older callers (fixed-speed parallax is no longer drawn). */
 export function layerCamera(c, k) {
   return { ...c, x: c.x * k, y: c.y * k, zoom: Math.pow(c.zoom, k) };
 }
 
-/** The blur (px) of a layer at depth d (bg 0, mid 1, fg 2) with focus f (a layer name or a depth;
- *  animate a number for a rack focus). */
+/** Kept for older callers (layer blur is no longer drawn; see lens.js dofBlur). */
 export function blurOf(layer, focus = 'mid') {
   const d = DEPTHS[layer];
   const f = typeof focus === 'number' ? focus : DEPTHS[focus] ?? 1;
   return d < f ? (f - d) * DOF.behind : (d - f) * DOF.front;
 }
 
+const LAYERS = ['bg', 'mid', 'fg'];
 const isLayered = (parts) => typeof parts === 'object' && parts !== null && !Array.isArray(parts);
 const joinParts = (p) => (Array.isArray(p) ? p.join('') : p ?? '');
 
 /**
+ * The depth rules for a frame, as error strings (frame() throws the first; try.mjs can report
+ * them): on the isometric camera (no `lens`) there are no depth layers and no focus; in a
+ * perspective shot (`lens`, a lens.js camera) the parts may come as { bg, mid, fg } only as a
+ * stack (bg: a flat backdrop seen through a window or opening, drawn through the lens; mid: the
+ * room; fg: anything drawn over it), never at speeds of their own.
+ */
+export function depthProblems({ lens = null, focus } = {}, parts) {
+  const out = [];
+  const lensed = !!lens || (isLayered(parts) && /data-lensed="/.test(LAYERS.map((k) => joinParts(parts[k])).join('')));
+  if (!lensed) {
+    if (isLayered(parts)) out.push('an isometric frame has no near or far (the iso camera is orthographic): no { bg, mid, fg } parallax layers. Draw depth with a lens.js perspective camera moving through the world');
+    if (focus !== undefined && focus !== null && focus !== 'mid') out.push('an isometric frame has no depth of field (the iso camera is orthographic): no focus. Use lens.js render({ focus }) in a perspective shot');
+  }
+  if (isLayered(parts)) {
+    const unknown = Object.keys(parts).filter((k) => !LAYERS.includes(k));
+    if (unknown.length) out.push(`frame: layered parts are { bg, mid, fg }; "${unknown.join('", "')}" is not a depth layer`);
+  }
+  return out;
+}
+
+/**
  * The world frame at shot time t: the camera, then the parts. Call scope() before drawing the
  * parts, then pass them here.
- *   camera: { x, y, zoom, rot } now, or { start, legs } to follow V-7 legs (validated upstream)
+ *   camera: { x, y, zoom, rot } now, or { start, legs } to follow V-7 legs (validated upstream):
+ *           the 2D framing of the picture (on a perspective shot it only crops, like a zoom)
  *   pivot:  [cx, cy], the point zoom and roll turn around
- *   focus:  the layer in focus ('bg' | 'mid' | 'fg', or a depth 0..2), for layered parts
- * `parts` is an SVG string or a list of them (one layer), or `{ bg, mid, fg }`: depth layers that
- * move at PARALLAX × the camera's motion, the ones out of focus blurred (depth of field). `seam`
- * (seams.js) wraps the whole world. No grid, no boil (4.0); `cell` and `oy` are accepted and
- * ignored, for old frames.
+ *   lens:   the lens.js camera when the parts were drawn through one (a perspective shot); a
+ *           picture made by lens.js render() is recognised without it
+ * `parts` is an SVG string or a list of them; in a perspective shot it may be { bg, mid, fg },
+ * stacked in that order under the same framing. Depth comes from the lens (lens.js render:
+ * distance order and depth of field), never from layers. `seam` (seams.js) wraps the whole
+ * world. No grid, no boil (4.0); `cell` and `oy` are accepted and ignored, for old frames.
  */
-export function frame(t, { camera = {}, pivot = [540, 960], focus = 'mid' } = {}, parts, seam = null) {
+export function frame(t, opts = {}, parts, seam = null) {
+  const { camera = {}, pivot = [540, 960] } = opts;
+  const problems = depthProblems(opts, parts);
+  if (problems.length) throw new Error(`frame: ${problems[0]}`);
   const c = camera.legs ? camAt(camera.start, camera.legs, t) : cam(camera);
-  if (!isLayered(parts)) {
-    const world = g({ transform: cameraTransform(c, pivot[0], pivot[1]) }, parts);
-    return defs() + seamed(seam, world);
-  }
-  const unknown = Object.keys(parts).filter((k) => !(k in PARALLAX));
-  if (unknown.length) throw new Error(`frame: layered parts are { bg, mid, fg }; "${unknown.join('", "')}" is not a depth layer`);
-  const filters = [];
-  const layers = ['bg', 'mid', 'fg'].map((name) => {
-    const inner = joinParts(parts[name]);
-    if (!inner) return '';
-    const lc = layerCamera(c, PARALLAX[name]);
-    const moved = g({ transform: cameraTransform(lc, pivot[0], pivot[1]) }, inner);
-    const sd = Math.round(blurOf(name, focus) * 10) / 10;
-    if (sd < 0.1) return g({ 'data-layer': name }, moved);
-    // The blur sits outside the camera transform, so it is in screen px at any zoom.
-    const fid = id(`dof-${name}-${String(sd).replace('.', '_')}`);
-    filters.push(el('filter', { id: fid, filterUnits: 'userSpaceOnUse', x: -300, y: -300, width: 1680, height: 2520, 'color-interpolation-filters': 'sRGB' }, el('feGaussianBlur', { stdDeviation: sd })));
-    return g({ 'data-layer': name, 'data-blur': sd, filter: `url(#${fid})` }, moved);
-  });
-  return defs() + (filters.length ? el('defs', {}, filters.join('')) : '') + seamed(seam, layers.join(''));
+  const inner = isLayered(parts) ? LAYERS.map((name) => (parts[name] ? g({ 'data-layer': name }, joinParts(parts[name])) : '')).join('') : parts;
+  // a lens shot records its 2D framing (zoom, x, y, pivot), so the framing check can map the
+  // boxes its critters and focal carry to the final screen (lens.js framedBoxes)
+  const lensed = !!opts.lens || /data-lensed="/.test(isLayered(parts) ? LAYERS.map((k) => joinParts(parts[k])).join('') : joinParts(parts));
+  const tag = lensed ? { 'data-lens': [c.zoom, c.x, c.y, pivot[0], pivot[1]].map((v) => Number(v.toFixed(4))).join(' ') } : {};
+  const world = g({ ...tag, transform: cameraTransform(c, pivot[0], pivot[1]) }, inner);
+  return defs() + seamed(seam, world);
 }

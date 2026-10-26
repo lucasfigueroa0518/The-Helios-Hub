@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 
 import type { Queryable } from '@/lib/explainers/db';
+import { bankingFor, loadCutouts, type BankedCutout } from '@/lib/real-case/bank';
 import { listRealCaseJobs } from '@/lib/real-case/jobs';
-import { listLatestScouts, listStories, nyDate, pickSeedTopics, storyScores } from '@/lib/real-case/repository';
+import { listLatestScouts, listStories, nyDate, storyScores } from '@/lib/real-case/repository';
 import { ensureRealCaseSchema } from '@/lib/real-case/schema';
 import { storyBarMisses } from '@/lib/real-case/scoring';
 import { loadRealCaseSettings } from '@/lib/real-case/settings';
 import type { StoryRow } from '@/lib/real-case/types';
 
-/** The Real Case lab (RC-10): what the page shows, and the session rule its routes share. */
+/** The AI News Explained lab (RC-10): what the page shows, and the session rule its routes share. */
 
 export class LabError extends Error {
   constructor(message: string, readonly status = 400) {
@@ -46,18 +47,22 @@ export type LabStory = {
   summary: string;
   polarity: string;
   status: string;
+  /** The event date (RC-27); null on the first build's stories. */
+  eventDate: string | null;
   topic: string | null;
   score: number | null;
   scores: Record<string, number> | null;
   misses: string[];
   rejectReason: string | null;
   story: StoryRow['story'];
-  facts: { id: string; text: string; core: boolean; check: string; via: string | null; detail: string | null; source: { url: string; publisher: string } | null }[];
+  /** Each player's banked art, for the thumbnails (RC-33, RC-34); null when it has none. */
+  banked: ({ kind: 'logo' | 'cutout'; id: string } | null)[];
+  facts: { id: string; text: string; act: string | null; core: boolean; check: string; via: string | null; detail: string | null; source: { url: string; publisher: string } | null }[];
   createdAt: string;
 };
 
-function labStory(s: StoryRow, topics: Map<string, string>): LabStory {
-  const scores = storyScores(s);
+function labStory(s: StoryRow, topics: Map<string, string>, fresh: { windowDays: number; now: Date }, cutouts: readonly BankedCutout[]): LabStory {
+  const scores = storyScores(s, fresh);
   return {
     id: s.id,
     title: s.title,
@@ -65,17 +70,23 @@ function labStory(s: StoryRow, topics: Map<string, string>): LabStory {
     summary: s.summary,
     polarity: s.polarity,
     status: s.status,
-    topic: topics.get(s.topic_id) ?? null,
+    eventDate: s.event_date,
+    topic: s.topic_id ? (topics.get(s.topic_id) ?? null) : null,
     score: s.weighted_score,
     scores,
     misses: scores ? storyBarMisses(scores) : [],
     rejectReason: s.reject_reason,
     story: s.story,
+    banked: (Array.isArray(s.story?.cast) ? s.story.cast : []).map((m) => {
+      const b = bankingFor(m, cutouts);
+      return b.cutout ? { kind: 'cutout', id: b.cutout.id } : b.logo ? { kind: 'logo', id: b.logo.id } : null;
+    }),
     facts: s.claims.map((c) => {
       const src = s.sources.find((x) => x.id === c.source_id);
       return {
         id: c.id,
         text: c.text,
+        act: c.act ?? null,
         core: c.core,
         check: c.check?.status ?? 'unchecked',
         via: c.check?.via ?? null,
@@ -89,11 +100,13 @@ function labStory(s: StoryRow, topics: Map<string, string>): LabStory {
 
 export async function labData(db: Queryable, now: Date = new Date()) {
   const settings = await loadRealCaseSettings(db);
+  const fresh = { windowDays: settings.news_window_days, now };
   const stories = await listStories(db, ['pool', 'promoted', 'rendered'], 200);
-  const others = await listStories(db, ['rejected', 'displaced'], 60);
+  const others = await listStories(db, ['rejected', 'displaced', 'archived'], 60);
   const { rows: topicRows } = await db.query<{ id: string; title: string }>('SELECT id, title FROM explainers.topics');
   const topics = new Map(topicRows.map((t) => [t.id, t.title]));
   const jobs = await listRealCaseJobs(db, 30);
+  const cutouts = loadCutouts();
   const { rows: videos } = await db.query<{ job_id: string; id: string }>(
     `SELECT job_id, id FROM real_case.artifacts WHERE kind = 'video' AND job_id = ANY($1::uuid[])`,
     [jobs.map((j) => j.id)],
@@ -106,10 +119,9 @@ export async function labData(db: Queryable, now: Date = new Date()) {
   return {
     settings,
     spendTodayUsd: Number(spend[0]?.usd ?? 0),
-    pool: stories.map((s) => labStory(s, topics)),
-    others: others.map((s) => labStory(s, topics)),
-    scouts: await listLatestScouts(db, 60),
-    seeds: await pickSeedTopics(db, { limit: 60, cooldownDays: settings.scout_cooldown_days, now }),
+    pool: stories.map((s) => labStory(s, topics, fresh, cutouts)),
+    others: others.map((s) => labStory(s, topics, fresh, cutouts)),
+    scouts: await listLatestScouts(db, 30),
     jobs: jobs.map((j) => ({
       id: j.id,
       storyId: j.story_id,

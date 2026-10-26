@@ -1,6 +1,6 @@
 // Balloon Pop: an orange balloon with "AI BRAIN BREAK" on it inflates in wobbly gulps until it
 // fills the screen, then POPS into paper confetti, and the hook is right there behind it.
-import { T, g, el, ref, defs, seg, lerp, E, scene, title, wordmark, fill, shake, shaken, burst } from './common.js';
+import { T, g, el, defs, seg, lerp, E, scene, title, wordmark, fill, shake, shaken, burst, softShape, gloss } from './common.js';
 
 // confetti: paper bits flung out from the middle
 const BITS = Array.from({ length: 46 }, (_, i) => {
@@ -21,13 +21,16 @@ function balloon(s, wob) {
   const rx = 400 * s * (1 + 0.04 * wob);
   const ry = 470 * s * (1 - 0.04 * wob);
   const cy = 960 - 40 * s;
-  const hx = 540 - rx * 0.42;
+  const hx = 540 + rx * 0.42;
+  const skin = `M ${(540 - rx).toFixed(1)} ${cy.toFixed(1)} A ${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${(540 + rx).toFixed(1)} ${cy.toFixed(1)} A ${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${(540 - rx).toFixed(1)} ${cy.toFixed(1)} Z`;
   const hy = cy - ry * 0.48;
   return [
-    el('path', { d: `M 540 ${(cy + ry + 30).toFixed(1)} q -40 140 10 260 t -10 300`, fill: 'none', stroke: T.ink, 'stroke-width': 5 }),
-    el('path', { d: `M ${540 - 28 * s} ${(cy + ry + 34 * s).toFixed(1)} L 540 ${(cy + ry - 6).toFixed(1)} L ${540 + 28 * s} ${(cy + ry + 34 * s).toFixed(1)} Z`, fill: T['orange-dark'], stroke: T.ink, 'stroke-width': 5, 'stroke-linejoin': 'round' }),
-    el('ellipse', { cx: 540, cy: cy.toFixed(1), rx: rx.toFixed(1), ry: ry.toFixed(1), fill: T.orange, stroke: T.ink, 'stroke-width': 7, filter: ref('wobble') }),
-    el('ellipse', { cx: hx.toFixed(1), cy: hy.toFixed(1), rx: (rx * 0.13).toFixed(1), ry: (ry * 0.2).toFixed(1), fill: T['paper-lit'], opacity: 0.55, transform: `rotate(-28 ${hx.toFixed(1)} ${hy.toFixed(1)})` }),
+    el('path', { d: `M 540 ${(cy + ry + 30).toFixed(1)} q -40 140 10 260 t -10 300`, fill: 'none', stroke: T['text-tertiary'], 'stroke-width': 3.5, 'stroke-linecap': 'round' }),
+    softShape(`M ${540 - 28 * s} ${(cy + ry + 34 * s).toFixed(1)} L 540 ${(cy + ry - 6).toFixed(1)} L ${540 + 28 * s} ${(cy + ry + 34 * s).toFixed(1)} Z`, T['orange-shade'], { form: 0.5 }),
+    // a glossy rubber volume lit from the top right, with its window highlight
+    softShape(skin, T.orange),
+    gloss(skin, { strength: 0.7 }),
+    el('ellipse', { cx: hx.toFixed(1), cy: hy.toFixed(1), rx: (rx * 0.11).toFixed(1), ry: (ry * 0.17).toFixed(1), fill: T.canvas, opacity: 0.6, transform: `rotate(28 ${hx.toFixed(1)} ${hy.toFixed(1)})` }),
     // the print stretches with the rubber
     g({ transform: `translate(540 ${cy.toFixed(1)}) scale(${(s * 0.95).toFixed(3)}) translate(-540 -960)` }, wordmark(540, 960, 118, 1, { color: T['paper-lit'] })),
   ].join('');
@@ -46,7 +49,7 @@ export default function draw(t, ctx) {
     if (k > 0.5) return;
     const x = 540 + Math.cos(sh.a) * sh.v * k;
     const y = 960 + Math.sin(sh.a) * sh.v * k + 1400 * k * k;
-    parts.push(el('path', { d: 'M -60 -20 Q 0 -60 70 -10 Q 20 30 -50 40 Z', fill: T.orange, stroke: T.ink, 'stroke-width': 4, transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(sh.spin * k).toFixed(1)}) scale(${(1.3 - k).toFixed(3)})` }));
+    parts.push(el('path', { d: 'M -60 -20 Q 0 -60 70 -10 Q 20 30 -50 40 Z', fill: T['orange-shade'], transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(sh.spin * k).toFixed(1)}) scale(${(1.3 - k).toFixed(3)})` }));
   });
   // confetti: out fast, then drifting down
   BITS.forEach((b) => {
@@ -55,10 +58,10 @@ export default function draw(t, ctx) {
     const y = 960 + b.vy * drag + 420 * k * k;
     if (y > 2050) return;
     const flip = Math.abs(Math.cos(k * 9 + b.spin));
-    parts.push(el('rect', { x: (-b.w / 2).toFixed(1), y: (-b.h / 2).toFixed(1), width: b.w, height: b.h, fill: b.c, stroke: b.c === T['paper-lit'] ? T.ink : 'none', 'stroke-width': 3, transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(b.spin * k).toFixed(1)}) scale(1 ${flip.toFixed(3)})` }));
+    parts.push(el('rect', { x: (-b.w / 2).toFixed(1), y: (-b.h / 2).toFixed(1), width: b.w, height: b.h, fill: b.c, stroke: b.c === T['paper-lit'] ? T['paper-shade'] : 'none', 'stroke-width': 2, transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${(b.spin * k).toFixed(1)}) scale(1 ${flip.toFixed(3)})` }));
   });
   parts.push(fill(T['paper-lit'], 0.85 * (1 - seg(t, POP, POP + 0.08, (x) => x))));
   parts.push(burst(540, 960, seg(t, POP, POP + 0.4, (x) => x), 5));
-  parts.push(title(ctx, t, POP + 0.25));
+  parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

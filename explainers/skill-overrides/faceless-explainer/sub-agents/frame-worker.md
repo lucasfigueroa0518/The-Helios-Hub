@@ -1,138 +1,121 @@
-# Frame worker — Helios Explainer Reel delta (Explainers 3.3)
+# Frame worker — Helios Explainer Reel delta (Explainers 4.1)
 
-> Helios replacement for the vendored faceless-explainer delta (DECISIONS.md EX3-05). Read it
-> with the shared contract above as one role.
+> Helios replacement for the vendored faceless-explainer delta (DECISIONS.md EX3-05). Read it with
+> the shared contract above as one role. principles.md wins over every rule here.
 
-## The cast and the objects (HARD CONSTRAINTS)
+## Your reading list (short; read only your kind's)
 
-- **Objects can act; critters are the only characters** (EX3-77, EX3-109). Anyone who does
-  something is a critter (`cast.js` or the world's critter function); objects that act on their
-  own need no one beside them. Never draw a person, a figure built from solids, or a body part. A
-  critter holds the thing (`handAt`), writes, reaches, feels its way, points, reacts (`mood`).
-- **One thing to look at** (EX3-117, HARD CONSTRAINT). Every shot frames one thing on a clear
-  ground, with at least half the frame empty; at most three readable things on screen at once; no
-  set dressing, no background props, no crowd. Whatever else the moment needs sits small or faded,
-  or is cut out of the shot.
-- **Draw to fit; reuse only an exact fit** (EX3-112). A bank asset (`props/CATALOG.md`) is drawn
-  with `prop(name, x, y, { s, state, focal })` only when its tags say it is exactly the thing your
-  frame shows, in its setting; never the nearest thing as a stand-in. Anything else is drawn new.
-- **Text from the kit** (EX3-80, EX3-92). The title card is `titleCard()`, the dictionary card is
-  `dictionaryCard()`, and any text inside a shape (a speech or chat bubble, a note, a sign, a
-  screen) is `textBox(text, x, y, { kind, size, maxW, focal, progress, scale })`, which sizes the
-  shape around the measured text and returns `{ svg, box }`. Never place text in a shape by hand,
-  and never let text reach the frame edge: `bounds.mjs` measures every piece of text every 0.2s
-  and sends anything cut off, outside its box, or in a keep-out back to you.
-- **Critters keep their ids** (EX3-90). The world's critters carry `who:`; any critter you add
-  passes its own `who: '<name>'` to `critter()`. A critter is drawn once at any moment, and
-  never disappears from the scene mid-frame unless the story has it leave.
+- **Every frame:** `.media/recipes/helios-explainer/principles.md` (all of it), your packet, your
+  timing file, and in `frame.md`: § The frame, § Colors, § Grounds, § Typography, § The look, § Focal,
+  § One read at a time, § Words in the world, § Sound, § Timing data, your frame's treatment,
+  § Writing a frame, § The build checks and § Look at your own work.
+- **Scene frames** (1, 4, 5, 7 with `anchor: scene`): `frame.md` § The world, § The set, § The cast,
+  § Shots, § Show what the voice says, § Light, § Motion, § The anchor scene; `world.js`'s exports
+  (`ROOM`, `SETS`, `LIGHTS`, `LENS`, `CAST`, `LAYOUT`, `SIZES`, `STATES`, `STEPS`, `ENTITIES`); the
+  header comments of `lens.js`, `shots.js`, `cast.js` (`act`, `actAt`, `GESTURES`, `PROPS`, `MOODS`),
+  `light.js` and `motion.js`.
+- **Tech frames** (2, 3, 6, 7 with `anchor: own`): `frame.md` § Real-tech frames, § Shots (its last
+  paragraph: crop shots and the cut rule) and § Motion; `assets/world/identity.js`; the header
+  comments of `explain.js` (`TECHNIQUES` and the primitives you use), `glass.js` and `cards.js`, with
+  `scope` and `T` from `draw.js` and `frame`, `seg`, `E` from `motion.js`.
 
-## The anchor scene
+## Acting (scene frames) · HARD CONSTRAINT
 
-The reel revolves around one staged analogy (frame.md, "The anchor scene"). If your frame shows
-it (`anchor: scene`: frames 1, 4 and 5; frame 7 may call back to it in one shot):
+Every pose is an action with a target (EX4-150; Lucas on the 4.0 reels: "weird critter poses",
+and a held thing floating near the body). A critter of the world is drawn by its `LENS` function, and you give it
+an intent with world targets in cm: `{ intent: { reach, point, hold, carry, inspect, lookAt,
+recoil, effort, walk, mood } }` for one moment, or `{ keys: [{ at, blend?, …intent }], t }` for a
+performance (`actAt`: the eyes lead the hands). Never hand-place arm coordinates. A carried thing
+is in a hand (`hold`) every frame; put one thing down before picking up the next. Faces are whole;
+moods set only the face. A critter you add yourself (someone acting on the real thing) acts through
+`act`/`actAt` the same way, in an outfit drawn for its role, never orange, never the hero's look.
 
-- draw every entity with its `world.js` function, at its `LAYOUT` position, in the state your Scene
-  lines name; start in the state the previous scene frame ended in;
-- change the scene only through `STATES`' rules, one visible step at a time;
-- show it in your storyboard `shots:` (frame.md § Shots): export them as `shots`, draw with
-  `shotFrame(t, shots, draw)`, cut on the words the storyboard names (their times are in your
-  timing file), aim each shot with `on:` at the world's `SUBJECTS` entry for the shot's subject,
-  so what the voice names is centred. Never open on the framing the previous frame ended on;
-  never change what the entities look like.
-- **A shot is only a camera** (EX3-90): `draw` returns the same scene in every shot, with every
-  entity in it; never skip a critter or object because of the shot kind, never add a second copy
-  of one, never mirror the scene. An insert is a tight camera (zoom 2.2 or more) on one object;
-  the rest falls out of frame by itself. When the voice names a critter doing something, it is
-  in view doing it.
+## Shots (scene frames) · HARD CONSTRAINT
 
-## Frame 1 (HARD CONSTRAINT: write `assets/frames/01-hook.js`, never `01-opener.js`)
+Your storyboard `shots:` give each shot's kind, subject, cast and angle. Export them as camera
+shots `{ at, kind, camera: { pos, target, fov }, subject, cast, move?, focus?, place? }` (frame.md
+§ Shots), each camera passed through world.js's `fit(camera, place)` so the ceiling fits, and draw
+with `shotFrame(t, shots, (shot, local, i, { P }) => …)`:
 
-Frame 1 is the bank's opener (EX3-102): code wrote `01-opener.js`, which plays the opener named
-in `assets/opener.json` over **your hook**. You write only the hook, `assets/frames/01-hook.js`,
-to the contract in frame.md § 1:
+- each cut changes what the viewer learns: a new subject, or the same subject from ≥ 30° around it
+  (or ≥ 15° of height); judge it by the picture: if two shots look alike at a glance, it is a jump;
+- at most one motivated move (`push`, `pull`, `pan`, `follow`); the camera is the only reframing;
+- draw only the shot's cast (`render(P, { shot })`), at most 3 critters, never overlapping; a
+  critter left out is out of that camera's view, never deleted from a spot it sees;
+- when the voice first names the hero, the hero is the clear subject: alone, or lit, centred and
+  acting while anyone else is still;
+- the hero reads on screen, critter or object: big enough, clearly the subject of the shots the
+  voice gives it, doing the voiced action;
+- when the voice names a small prop, the plan's `insert` (or a `magnifier()`) makes it read: the
+  prop is the subject, the critter partly in frame with its face whole or its head out of frame;
+- sharp everywhere unless `focus` has a reason (`insert`, `reveal`, `rack`); never blur what the
+  voice names;
+- labels through `labelFor(id, text, { P, shot, at, height, u })`, anchored to their entity in
+  world space, never in screen space;
+- three layers (the set's foreground piece, the action, the background) in every shot but an
+  insert; a shot set in another place passes its `place` to `ROOM`.
 
-- the storyboard's picked **hook** (`## Hook`), already moving at t=0 (first visible change by
-  0.3s), clear on its own, building (`ramp-up`), under `shotFrame(t, shots, draw)`; never a slow
-  pan over a still scene;
-- `export const hero = { at, s, who, critter }`: the hook's critter (the anchor block's `hero:`), `at` its feet on the page (the world's `LAYOUT` spot, before any
-  camera), `s` the scale it is drawn at, `who` its world id, `critter` the `critter()` options
-  that make it itself (`wear`, `body`);
-- `draw(t, { hideHero = false, heroPose = {} } = {})`: leave the hero out when `hideHero` is
-  true, and pass `heroPose` last into its options (`look`, `arms`, `mood`), so an opener can cut
-  it out, zoom into its eye or make it look at the viewer;
-- no title card, no text, no events file: the opener draws "AI BRAIN BREAK" and the title card,
-  and its stem is the frame's sound.
+With the real timing you may split or merge shots so each runs 1.5–4.5s, keeping their subjects,
+casts and angles in order. Never open on the picture the previous frame ended on. If the moment
+needs a pose or a state the world's functions lack, never edit `world.js`: say so in your last
+message (which entity, which pose); the orchestrator asks the scene builder for it.
 
-Try it with `node assets/kit/try.mjs frame 01-opener` (the opener over your hook).
+## Show what the voice says (every frame) · HARD CONSTRAINT
 
-## The hero (HARD CONSTRAINT, EX3-132)
+Every voiced action happens on screen, in order, on its words, and every result is visible
+(EX4-151). A trip is a cut to the destination (world.js `SETS`, or seen through an opening) or a
+time cut (the door closes, time passes, the critter returns changed, carrying what it went for);
+walking to a door and back is not a trip. Labels follow the storyboard's mapping exactly and sit on
+the entity they name in that shot.
 
-The hero (the anchor block's `hero:`; CAST's orange critter in a critter-led reel) appears only in
-frames 1, 4 and 5 and in a frame-7 callback shot. Frames 2, 3 and 6 never draw it, a copy of it,
-or a critter in its look; `try.mjs` errors when they do.
+## Tech frames: design before building · HARD CONSTRAINT
 
-## Frame 2
+1. Name the mechanism in one sentence (what moves, where, what changes); read your storyboard's
+   `technique:` and make the module's first line `// technique: <id> — <reason>` (frame.md
+   § Real-tech frames; frame 3 too, for the visual below its card).
+2. Import `identity.js` and draw every concept through it (`reg.node`, `reg.chip`, `reg.icon`, or
+   a primitive that takes the registry); emphasis by `emph` and `dim`, never a recolor.
+3. Build the tech-frame anatomy (frame.md § Real-tech frames, EX4-160): the mechanism's parts laid
+   across the safe area; real content on everything that travels or is shown; each step a visible
+   change on its words that stays; a readout that changes and lands on the beat's answer; a held
+   end state that shows what changed and by how much. Never a blank device, an empty card, a lone
+   icon, or a tracker or labels standing in for the mechanism.
+4. Read text ≥ 34px, everything read inside the safe area (`placeInSafe`, `safeProblems`); at the
+   held end the content fills the safe area. Draw `glassGround()` once before `shotFrame(...)`.
 
-Its own picture of the real thing (`anchor: own`), in its `shots:`, each centred on what the voice
-names while it is on screen. It echoes the hook (EX3-131): the same staging as `01-hook.js` (where
-things sit, how they move), with the real thing in the analogy's place. Its `reset:` lands in the
-first 0.3s: a camera punch-in (`punch`, `slam`), a ground flip to night or forest, the second half
-of an in-frame zoom-through (`seams.js` `zoomThroughIn`), or a cut effect (`shock()` marks, a
-one-frame palette flash).
+## Frame by frame
 
-## Frame 3
-
-`const card = dictionaryCard(t, { headword: <the term>, pos: <part_of_speech>, words: WORDS })`,
-where `WORDS` is your timing file's words (the definition is the voiceover), copied into a
-constant. Draw `card.svg` after the visual. Below the card (from `card.bottom + 40` to y 1600), a
-drawn visual of what the definition says (the real thing, with critters and props when someone
-acts, never the hero), revealed on its key words.
-Sounds: `paper slide` as the card lands, a soft `pen writing` or `typewriter key` with `dur`
-under the fill-in, each arrival in the visual.
-
-## Frame 4
-
-Open on the reel's one **establishing shot** (`wide`; on the "without" state when the analogy has
-two): each part arrives on the word that names it, and its real job lands as a label pinned to it
-as the voice names that job (a critter may glance at or wave to the camera); then the closer shots
-play each of the anchor scene's `steps` as a visible state change on its cue, building toward the
-answer.
-
-## Frame 5
-
-Why it works, then where it breaks (EX3-128), on the scene, in close, medium or insert shots (not
-frame 4's framing): first the defining trait doing its job, the object that carries it pulsing on
-the word that names why; then the one limit or trade-off made visible in the scene, on the word
-that names it. Never a list.
-
-## Frame 6
-
-The **example, illustrated** (EX3-87, EX3-129): the **step tracker** (frame.md `step-tracker`)
-along one edge, its stops the anchor steps' technical names (world.js `STEPS`), in order,
-numbered, each lighting (green) on its cue, done stops ink, upcoming ones 25%; and for each stop
-an `insert` shot of the matching `example_steps` entry's real thing drawn in the style. Never the
-anchor scene or the hero. Real values as labels where the example has them. A `tick` per stop.
-
-## Frame 7
-
-The payoff (EX3-128): the real thing doing what the answer to frame 2's question says, on a
-ground different from frame 6's, built from objects drawn for it and critters when someone acts,
-in at least two shots when it runs past 6s. At most one callback shot of the anchor scene, drawn
-with `world.js`, where the hero may show in its orange.
+- **Frame 1** (scene): its storyboard `src` is `01-opener` (timing `assets/timing/01-opener.json`);
+  write only `assets/frames/01-hook.js` (snap id `01-hook`) to frame.md § 1's contract (`shots`,
+  `hero`, `draw(t, { hideHero, heroPose })`, a camera shot with no move, no text, no events file):
+  the picked hook, moving at frame 0, clear on its own. The orchestrator runs `try.mjs` on the
+  opener over your hook.
+- **Frame 2** (tech): its own picture of the real thing, by technique, echoing the hook's staging
+  (EX3-131, EX4-161: its motion or its subject, in glass's own layout); its `reset:` lands in the
+  first 0.3s. Never the hero.
+- **Frame 3** (tech): `dictionaryCard(t, { headword, pos, words: WORDS })` drawn after the visual;
+  below it, the definition's mechanism by technique, revealed on its key words, showing the thing
+  the storyboard's `term_part:` names (EX4-152, EX4-159). The card writes its first word as it
+  appears.
+- **Frame 4** (scene): start the scene from its start state (the hook was a flash-forward); open on
+  the wide (the place, who is where); each part on its word with its
+  real job as an anchored label; the hero the clear subject when named; each step a visible action
+  and its result on its cue.
+- **Frame 5** (scene): a medium from a new angle; the trait doing its job (a glint on the why),
+  then its one limit made visible.
+- **Frame 6** (tech): `stepTracker()` in screen space after `shotFrame(...)`, a guide beside the
+  picture; one shot per stop of the example's real thing, by technique and with the anatomy (its
+  real values, a readout that changes), lit on its cue. Never the anchor scene or the hero.
+- **Frame 7**: the answer working, resolved, in the warmest light; never the opening tension
+  again (EX4-153). `anchor: own` is a tech frame (by technique); `anchor: scene` is a scene frame
+  showing the analogy's result resolved, the hero in its orange.
+- **Frame 8**: the kit's; no worker builds it.
 
 ## New objects
 
-If your frame needs an object the world doesn't have, and no bank asset is exactly it, draw it
-new: name it as specifically as a stranger names it in this setting, write it in
-`assets/frames/<frame_id>.props.js` as `export const NEW_PROPS = { '<specific name>': { tags, size,
-states, draw } }` (the tags `is`, `setting`, `material`, `parts` and `not`, as in
-`assets/world/new-props.js`; it joins the bank once the picture check names it, EX3-114), import
-only from `../kit/` (never `../kit/props.js`), and draw it with `propFrom()`. Draw it in the paper
-style (frame.md V-4): boxy things from the kit's solids, organic ones as ink contours with flat
-fills (`props/kit.js`), silhouette first, detail printed in `T.ink` on its faces, three flat
-tones, an outline, grain, a contact shadow. Never a realistic drawing, never an icon standing in
-for the object, never a list or a card of text.
-
-## Frame 8
-
-The close is the kit's (`close.js`, EX3-95), written by code. No worker builds it.
+An object the world lacks and no bank asset exactly is: draw it new, named as specifically as a
+stranger names it here, its signature parts drawn. Through the camera, a function in your module
+returning `{ id, at, svg }` from lens solids at its real size, joined to `render`'s items; on the
+isometric camera or in a glass frame, `NEW_PROPS` in `assets/frames/<frame id>.props.js` with full
+tags (EX3-114), drawn with `propFrom()`. Never an icon standing in for an object, never a card of
+text.

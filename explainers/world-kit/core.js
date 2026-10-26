@@ -55,6 +55,12 @@ export const TOKENS = {
   'lilac-lit': '#D992E9',
   'lilac-shade': '#A662CC',
   'lilac-dark': '#7947A6',
+  // Red (4.1), from the status-error / stage-red family: for the things that are red in the real
+  // place (a tomato, a fire extinguisher, a stop sign), never a ground and never the hero's accent.
+  red: '#E5484D',
+  'red-lit': '#F8695E',
+  'red-shade': '#CC2D3E',
+  'red-dark': '#97112B',
   night: '#171717',
   // The Helios premium stage (premium.css): charcoal under a warm glow, a red bloom low.
   'stage-top': '#161616',
@@ -75,7 +81,7 @@ export const TOKENS = {
 };
 
 /** The palette colors that have a 4-step ramp, by name. */
-export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac'];
+export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac', 'red'];
 
 /** A palette color's ramp: { lit, base, shade, dark }. */
 export function ramp(name) {
@@ -96,6 +102,41 @@ export function mixHex(a, b, t) {
     const l = toLin(v / 255) * (1 - k) + toLin(B[i] / 255) * k;
     return Math.round(Math.min(1, Math.max(0, toGam(l))) * 255).toString(16).padStart(2, '0');
   }).join('').toUpperCase();
+}
+
+/** Names a tone may also go by: `white` is the canvas (the outfits palette says white). */
+export const TONE_ALIASES = { white: 'canvas' };
+const HEX6 = /^#[0-9A-Fa-f]{6}$/;
+/** Every color name a tone may use: the ramp names, the palette tokens and the aliases. */
+export const toneNames = () => [...new Set([...PALETTE, ...Object.keys(TOKENS), ...Object.keys(TONE_ALIASES)])];
+
+/**
+ * The one tone resolver (4.1): what every lens/draw solid and every set piece is painted from.
+ * Accepts a ramp name ('teal', 'red'; returned as is, so the solid uses the palette's own ramp), a
+ * palette token ('ink-lit', 'green-shade', 'yellow-lit'; its hex), `{ mix: [a, b, k] }` of two
+ * tones (k = share of b, default 0.5; mixed in linear light, as hex) or a '#RRGGBB' hex already
+ * mixed from the palette. Anything else THROWS with the allowed names: a color that silently
+ * rendered white or paper was the 4.1 Phase 1 bug. set.js tone() is this, with paper for nothing.
+ * @param {string | { mix: [any, any, number?] }} v
+ * @returns {string} a PALETTE ramp name or a hex
+ */
+export function resolveTone(v) {
+  if (typeof v === 'string') {
+    if (PALETTE.includes(v)) return v;
+    const name = TONE_ALIASES[v] ?? v;
+    if (TOKENS[name]) return TOKENS[name];
+    if (HEX6.test(v)) return v.toUpperCase();
+  } else if (v && typeof v === 'object' && Array.isArray(v.mix)) {
+    const [a, b, k = 0.5] = v.mix;
+    return mixHex(toneHex(a), toneHex(b), k);
+  }
+  const shown = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
+  throw new Error(`HX: unknown color ${shown}. A tone is a palette name (${PALETTE.join(', ')}), a palette token (${Object.keys(TOKENS).filter((k) => !PALETTE.includes(k)).join(', ')}), { mix: [a, b, k] } or a palette hex.`);
+}
+/** A tone as one hex: a ramp name gives its base. */
+export function toneHex(v) {
+  const t = resolveTone(v);
+  return HEX6.test(t) ? t : TOKENS[t];
 }
 
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -410,7 +451,8 @@ export const FPS_BOIL = 10;
 /** Smooth motion: returns t unchanged (it used to hold each pose for two frames). */
 export const onTwos = (t) => t;
 /** A constant seed (there is no boil any more). */
-export const boilSeed = () => 4;
+/** No boil in hx-4: the seed never changes (kept for old callers, which pass t). */
+export const boilSeed = (_t = 0) => 4;
 
 // ── The isometric projection (V-2) ────────────────────────────────────────────────────────
 export const ISO_COS = Math.cos(Math.PI / 6);

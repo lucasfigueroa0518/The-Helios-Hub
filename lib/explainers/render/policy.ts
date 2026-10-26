@@ -38,16 +38,51 @@ export const SESSION_TOOLS = [
   'WebFetch',
 ];
 
-/** Tools a frame worker may use: read its packet, frame.md, the world and the kit, write its one module, hand the report back. */
+/**
+ * Tools the legacy frame worker may use (`frame-worker`, which Real Case's frame worker still is):
+ * read its packet, frame.md, the world and the kit, write its one module, hand the report back.
+ */
 export const FRAME_WORKER_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'SubagentHandback'];
 
-/** The scene builder: the same reach, writing assets/world/world.js. */
-export const SCENE_BUILDER_TOOLS = FRAME_WORKER_TOOLS;
+/**
+ * Explainers 4.1: the scene builder and the scene and tech frame workers have the same reach plus
+ * Bash, and their Bash is SNAP_COMMAND only (checkToolCall): they look at stills of their own work.
+ */
+export const SELF_REVIEW_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'SubagentHandback'];
+
+/** The scene builder: writes assets/world/world.js and identity.js, and snaps its set. */
+export const SCENE_BUILDER_TOOLS = SELF_REVIEW_TOOLS;
+
+/**
+ * The one command the scene builder and the frame workers may run (Explainers 4.1, principles.md
+ * §7): `node assets/kit/snap.mjs world`, or `node assets/kit/snap.mjs <frame-id> <t1,t2,…>` with
+ * up to six times in seconds. Nothing before or after it: no `cd`, no chaining, no redirect, no
+ * other script. snap.mjs itself caps three calls per frame.
+ */
+export const SNAP_COMMAND = /^node assets\/kit\/snap\.mjs (?:world|(?!world |sequences )[a-z0-9][a-z0-9-]{0,40} \d{1,3}(?:\.\d{1,3})?(?:,\d{1,3}(?:\.\d{1,3})?){0,5})$/;
+
+/** Subagents whose Bash is SNAP_COMMAND and nothing else. */
+export const SNAP_ONLY_AGENTS = new Set(['scene-builder', 'frame-worker-scene', 'frame-worker-tech']);
+/** Subagents that only look: Read (and hand back), nothing else, whatever their tool list says. */
+export const READ_ONLY_AGENTS = new Set(['picture-checker', 'first-viewer']);
+/** Subagents with no Bash at all (the legacy frame worker, which Real Case uses). */
+export const NO_BASH_AGENTS = new Set(['frame-worker']);
 
 const PATH_KEYS = ['file_path', 'path', 'notebook_path'];
 
-/** Inside the project but never writable by the file tools: the pinned skills, the CLI install, the world kit, the lint. */
-const READ_ONLY_DIRS = ['.claude', 'node_modules', '.media', '.helios-lint', path.join('assets', 'kit')];
+/**
+ * Inside the project but never writable by the file tools: the pinned skills, the CLI install, the
+ * world kit, the lint, and the stills (snap.mjs writes them and its per-frame counters through Bash).
+ */
+const READ_ONLY_DIRS = [
+  '.claude',
+  'node_modules',
+  '.media',
+  '.helios-lint',
+  path.join('assets', 'kit'),
+  path.join('.hyperframes', 'snaps'),
+  path.join('.hyperframes', 'sequences'),
+];
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
 
 /** True when `target` resolves inside `root` (symlink-free lexical check). */
@@ -192,11 +227,26 @@ export function checkBash(command: string, jobDir: string, cwd = jobDir): Policy
   return allow;
 }
 
-/** The one gate every tool call passes. */
-export function checkToolCall(toolName: string, input: Record<string, unknown>, jobDir: string): PolicyDecision {
+/** The self-review command check for a snap-only subagent (SNAP_COMMAND). */
+export function checkSnapCommand(command: string): PolicyDecision {
+  return SNAP_COMMAND.test(command)
+    ? allow
+    : deny('only `node assets/kit/snap.mjs <frame-id> <t1,t2,…>` (up to 6 times) or `node assets/kit/snap.mjs world` may run, exactly, with nothing before or after it');
+}
+
+/**
+ * The one gate every tool call passes. `agentType` is the subagent's type when the call comes from
+ * a subagent (the hook's agent_type, present with agent_id); the main thread passes none.
+ */
+export function checkToolCall(toolName: string, input: Record<string, unknown>, jobDir: string, agentType?: string): PolicyDecision {
   if (!SESSION_TOOLS.includes(toolName)) return deny(`tool ${toolName} is not available`);
+  if (agentType && READ_ONLY_AGENTS.has(agentType) && toolName !== 'Read' && toolName !== 'SubagentHandback') {
+    return deny(`${agentType} may only Read`);
+  }
   if (toolName === 'Bash') {
     const command = typeof input.command === 'string' ? input.command : '';
+    if (agentType && NO_BASH_AGENTS.has(agentType)) return deny(`${agentType} runs no commands`);
+    if (agentType && SNAP_ONLY_AGENTS.has(agentType)) return checkSnapCommand(command);
     return checkBash(command, jobDir);
   }
   for (const key of PATH_KEYS) {

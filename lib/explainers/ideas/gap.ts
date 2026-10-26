@@ -5,7 +5,7 @@ import type { ExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import { GAP_GATE, GAP_SCORING } from '@/lib/explainers/jev/questions/gap-scoring';
 import { recordCost } from '@/lib/explainers/repository';
 import { GAP_KEYS, type AnalogyCandidate, type GapCandidate, type GapKey, type GapNote, type GapPass, type GapScores, type Mode, type TopicRow } from '@/lib/explainers/types';
-import { countWords, stem, TOSS_RE } from '../../../explainers/lint/lint-storyboard.mjs';
+import { countWords, quotedSpans, stem, TOSS_RE } from '../../../explainers/lint/lint-storyboard.mjs';
 
 /**
  * The curiosity gap is written for the most pull and picked by Jev (Explainers 3.8, EX3-120; Lucas,
@@ -58,7 +58,9 @@ function words(text: string, skip: Set<string>): Set<string> {
 /**
  * The hard rules code can check before any Jev spend (gap writer constraints 2, 4, 5, 6): ends on its
  * question, no toss, no term, the word range, and nothing from the analogy: its name or the analogy
- * side of its mapping (gap-writer-v2). Empty when it passes.
+ * side of its mapping (gap-writer-v2); and no quotation marks (Explainers 4.1 round 2: the line is
+ * said word for word, and a listener cannot hear quotes, EX3-106, so the voice lint refuses them).
+ * Empty when it passes.
  */
 export function gapCheckProblems(candidate: GapCandidate, input: { term: string; analogy: Pick<AnalogyCandidate, 'name' | 'mapping'>; topic?: string }): string[] {
   const out: string[] = [];
@@ -68,6 +70,8 @@ export function gapCheckProblems(candidate: GapCandidate, input: { term: string;
   else if (last.trim().replace(/[^\p{L}\p{N}?]+/gu, ' ').toLowerCase() !== candidate.question.trim().replace(/["”’']+$/, '').replace(/[^\p{L}\p{N}?]+/gu, ' ').toLowerCase()) {
     out.push('its question is not the last sentence of the line');
   }
+  const quoted = quotedSpans(line);
+  if (quoted.length) out.push(`puts words in quotation marks (${quoted.map((q) => `"${q}"`).join(', ')}): the line is said word for word, so say the words with no quotes`);
   const toss = TOSS_RE.exec(line);
   if (toss) out.push(`tosses to the next beat ("${toss[0]}")`);
   const term = input.term.trim().toLowerCase();

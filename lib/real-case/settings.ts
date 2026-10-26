@@ -1,18 +1,19 @@
 import type { Queryable } from '@/lib/explainers/db';
 import type { Mode } from '@/lib/real-case/types';
 
-/** Settings for this route only (RC-11). Defaults match the seed rows in db/real_case_schema.sql. */
+/** Settings for this route only (RC-11, RC-27). Defaults match the seed rows in db/real_case_schema.sql. */
 export type RealCaseSettings = {
   mode: Mode;
-  /** Off means no nightly story cycle. Lucas's Find stories click still runs one topic. */
+  /** Off means no nightly story cycle. Lucas's Find stories click still runs one search. */
   auto_scout: boolean;
-  topics_per_night: number;
-  /** The nightly cycle stops starting new topics once its spend reaches this. */
+  /** News searches a night (RC-27). */
+  searches_per_night: number;
+  /** The nightly cycle stops starting new searches once its spend reaches this. */
   nightly_cap_usd: number;
-  stories_per_topic: number;
+  stories_per_search: number;
   pool_size: number;
-  /** A topic searched within this many days is not searched again (found, weak or none). */
-  scout_cooldown_days: number;
+  /** A story's event is at most this many days old; older stories leave the pool (RC-27). */
+  news_window_days: number;
   dedupe_lookback_days: number;
   scout_model: string;
   /** The render (M5): its own cap per reel, and the models its sessions run on. */
@@ -28,11 +29,11 @@ export type RealCaseSettingKey = keyof RealCaseSettings;
 export const DEFAULT_REAL_CASE_SETTINGS: RealCaseSettings = {
   mode: 'development',
   auto_scout: false,
-  topics_per_night: 3,
+  searches_per_night: 1,
   nightly_cap_usd: 1,
-  stories_per_topic: 3,
+  stories_per_search: 3,
   pool_size: 25,
-  scout_cooldown_days: 30,
+  news_window_days: 90,
   dedupe_lookback_days: 45,
   scout_model: 'claude-sonnet-5-5',
   per_reel_cap_usd: 8,
@@ -53,12 +54,12 @@ const integer = (key: string, min: number) => (value: unknown) =>
 const PARSERS: { [K in RealCaseSettingKey]: (value: unknown) => RealCaseSettings[K] } = {
   mode: (value) => (value === 'development' || value === 'production' ? value : fail('mode', 'development or production', value)),
   auto_scout: (value) => (typeof value === 'boolean' ? value : fail('auto_scout', 'a boolean', value)),
-  topics_per_night: integer('topics_per_night', 0),
+  searches_per_night: integer('searches_per_night', 0),
   nightly_cap_usd: (value) =>
     typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : fail('nightly_cap_usd', 'a number >= 0', value),
-  stories_per_topic: integer('stories_per_topic', 1),
+  stories_per_search: integer('stories_per_search', 1),
   pool_size: integer('pool_size', 1),
-  scout_cooldown_days: integer('scout_cooldown_days', 0),
+  news_window_days: integer('news_window_days', 1),
   dedupe_lookback_days: integer('dedupe_lookback_days', 0),
   scout_model: model('scout_model'),
   per_reel_cap_usd: (value) =>

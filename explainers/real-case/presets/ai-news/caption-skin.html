@@ -1,0 +1,197 @@
+<!--
+  AI News Explained — caption skin (explainers/real-case/presets/ai-news), forked from the Helios
+  Explainer skin: same paging, typewriter timing and timeline contract (captions.mjs fills GROUPS /
+  DURATION; assets/kit/mount.mjs fills DARK and QUIET). The look is the approved stills': big
+  lowercase Pragmatica Extended at 62px in the band under Instagram's header; dark ink on the
+  whiteboard and the newspaper, warm white with a soft shadow on the cork board (DARK windows);
+  hidden during the sting and the close (QUIET windows).
+-->
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+<!-- captions.mjs injects the project's :root tokens here -->
+<style data-brand-tokens></style>
+
+<style>
+  #captions-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .caption-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+  }
+  /* The caption band: under Instagram's Reels header (top 250px of 1080×1920), above the
+     picture, inside the side margins (x 96–940). Hardcoded on purpose. */
+  .caption-stage {
+    position: absolute;
+    left: 96px;
+    width: 844px;
+    top: 292px;
+    height: 250px;
+  }
+  .caption-group {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    opacity: 0;
+  }
+  .caption-line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.04em 0.26em;
+    font-family: var(--font-display, "Pragmatica Extended"), Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    font-size: 62px;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    text-transform: lowercase;
+    color: #17150F;
+  }
+  .caption-stage.on-dark .caption-line {
+    color: #fbf6ec;
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.7), 0 0 2px rgba(0, 0, 0, 0.9);
+  }
+  .caption-stage.is-quiet {
+    visibility: hidden;
+  }
+  .caption-word {
+    display: inline-block;
+  }
+  .caption-char {
+    opacity: 0;
+  }
+  .caption-word.cap-num {
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+
+<div
+  id="captions-root"
+  data-composition-id="captions"
+  data-timeline-locked
+  data-start="0"
+  data-duration="0"
+  data-fps="30"
+  data-width="0"
+  data-height="0"
+>
+  <div class="caption-layer" aria-hidden="true">
+    <div id="caption-stage" class="caption-stage"></div>
+  </div>
+</div>
+
+<script>
+  // captions.mjs injects the engine's scene-aware groups + real duration here.
+  var GROUPS = [];
+  var DURATION = 0;
+  // mount.mjs injects the dark-ground windows here: [[start, end], …] in seconds.
+  var DARK = [];
+  // mount.mjs injects the quiet windows here (the sting and the close).
+  var QUIET = [];
+
+  (function () {
+    var MAX_WORDS = 7;
+    var MAX_CHARS = 40; // two lines of about 20 characters at 62px in 844px
+    var HOLD_AFTER = 1.2;
+    // A word types across its spoken span; one this short (or with no span) types at this pace.
+    var MIN_CHAR = 0.025;
+    var SENTENCE_END = /[.?!]["')\]]*$/;
+
+    // Re-page the engine's groups: one flat word list, then pages.
+    var words = [];
+    GROUPS.forEach(function (group) {
+      (group.words || []).forEach(function (w) {
+        words.push({ text: String(w.text), start: Number(w.start), end: Number(w.end), frame: group.frame });
+      });
+    });
+    words.sort(function (a, b) { return a.start - b.start; });
+    var pages = [];
+    var page = null;
+    words.forEach(function (w, i) {
+      var prev = i > 0 ? words[i - 1] : null;
+      var chars = page ? page.chars + 1 + w.text.length : w.text.length;
+      var newPage = !page
+        || w.frame !== page.frame
+        || page.words.length >= MAX_WORDS
+        || chars > MAX_CHARS
+        || (prev && SENTENCE_END.test(prev.text))
+        || (prev && w.start - prev.end > 0.8);
+      if (newPage) {
+        page = { frame: w.frame, words: [], chars: w.text.length };
+        pages.push(page);
+      } else {
+        page.chars = chars;
+      }
+      page.words.push(w);
+    });
+
+    var stage = document.getElementById("caption-stage");
+    pages.forEach(function (pg, p) {
+      var pageEl = document.createElement("div");
+      pageEl.className = "caption-group";
+      pageEl.id = "caption-group-" + p;
+      var line = document.createElement("div");
+      line.className = "caption-line";
+      pg.words.forEach(function (w, i) {
+        var span = document.createElement("span");
+        span.className = /\d/.test(w.text) ? "caption-word cap-num" : "caption-word";
+        span.id = "caption-word-" + p + "-" + i;
+        // One span per letter, laid out from the start (hidden), so typing never reflows the line.
+        Array.from(w.text).forEach(function (ch, k) {
+          var c = document.createElement("span");
+          c.className = "caption-char";
+          c.id = "caption-char-" + p + "-" + i + "-" + k;
+          c.textContent = ch;
+          span.appendChild(c);
+        });
+        line.appendChild(span);
+      });
+      pageEl.appendChild(line);
+      stage.appendChild(pageEl);
+    });
+
+    window.__timelines = window.__timelines || {};
+    var tl = gsap.timeline({ paused: true });
+
+    // Ground-aware color and quiet windows, by seek-safe class sets.
+    var marks = [];
+    DARK.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    QUIET.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    marks = marks.filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return a - b; });
+    var inside = function (wins, t) { return wins.some(function (w) { return t >= Number(w[0]) && t < Number(w[1]); }); };
+    [0].concat(marks).forEach(function (t) {
+      var cls = "caption-stage" + (inside(DARK, t) ? " on-dark" : "") + (inside(QUIET, t) ? " is-quiet" : "");
+      tl.set(stage, { className: cls }, Math.max(0, t));
+    });
+
+    pages.forEach(function (pg, p) {
+      var pageEl = document.getElementById("caption-group-" + p);
+      var next = pages[p + 1];
+      var start = Math.max(0, pg.words[0].start);
+      var lastEnd = pg.words[pg.words.length - 1].end;
+      var end = Math.min(next ? next.words[0].start : DURATION, lastEnd + HOLD_AFTER);
+      if (end <= start) end = start + 0.01;
+      tl.set(pageEl, { opacity: 1 }, start);
+      tl.set(pageEl, { opacity: 0 }, end);
+      pg.words.forEach(function (w, i) {
+        var letters = Array.from(w.text);
+        var at = Math.max(start, w.start);
+        var span = Math.max(letters.length * MIN_CHAR, Math.max(0, w.end - at));
+        letters.forEach(function (ch, k) {
+          var el = document.getElementById("caption-char-" + p + "-" + i + "-" + k);
+          tl.set(el, { opacity: 0 }, start);
+          tl.set(el, { opacity: 1 }, at + (span * k) / letters.length);
+        });
+      });
+    });
+
+    // full-span anchor so the sub-comp timeline spans the whole video
+    tl.to({}, { duration: DURATION }, 0);
+    window.__timelines["captions"] = tl;
+  })();
+</script>

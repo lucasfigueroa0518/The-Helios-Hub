@@ -10,7 +10,8 @@
   Visual (EX3-45, from Explainer 2.0 X-36; paging from 3.1): big lowercase Pragmatica Extended
   Bold, top-left of the caption band (y 250–570), no plate. The engine's small groups are
   re-paged here into readable pages: up to 7 words on two lines, broken at sentence ends, never
-  across a frame. A page stays until the next one starts or 1.2s after its last word; pages
+  across a frame. Two lines is a hard clamp: each page is measured with the bundled font metrics
+  and a page that would need a third line is split into two pages. A page stays until the next one starts or 1.2s after its last word; pages
   switch instantly. Typewriter (EX3-98, Lucas 2026-10-13): each word types in letter by letter
   across the time it is spoken (its voice start to its end), so the letters keep pace with the
   voice; no fade, no rise. Ink on
@@ -141,6 +142,43 @@
       }
       page.words.push(w);
     });
+
+    // Hard clamp: a page is at most MAX_LINES lines at 74px in the 844px band. Widths come from the
+    // bundled Pragmatica Extended Bold metrics (per 1000px, lowercase as drawn), so the check does
+    // not depend on the font having loaded; a page that would wrap to a third line is re-paged.
+    var MAX_LINES = 2;
+    var BAND_W = 844;
+    var FONT_PX = 74;
+    var TRACK = -0.02 * FONT_PX;
+    var GAP = 0.26 * FONT_PX;
+    var ADV = {"0":755,"1":755,"2":755,"3":755,"4":755,"5":755,"6":755,"7":755,"8":755,"9":755,"a":708,"b":737,"c":690,"d":739,"e":721,"f":443,"g":724,"h":709,"i":302,"j":310,"k":652,"l":302,"m":1071,"n":709,"o":740,"p":735,"q":737,"r":472,"s":625,"t":438,"u":706,"v":598,"w":893,"x":655,"y":599,"z":575,".":396,",":396,"?":701,"!":407,"'":294,"\"":544,"-":569,":":396,";":402,"%":1096,"$":755,"&":826,"(":454,")":454,"/":532};
+    var wordPx = function (text) {
+      return Array.from(String(text).toLowerCase()).reduce(function (n, ch) {
+        return n + ((ADV[ch] || 760) * FONT_PX) / 1000 + TRACK;
+      }, 0);
+    };
+    var lineCount = function (list) {
+      var lines = 0;
+      var x = 0;
+      list.forEach(function (w) {
+        var px = wordPx(w.text);
+        if (lines === 0 || x + GAP + px > BAND_W) { lines += 1; x = px; } else { x += GAP + px; }
+      });
+      return lines;
+    };
+    var clamped = [];
+    pages.forEach(function (pg) {
+      var rest = pg.words.slice();
+      while (rest.length) {
+        var n = rest.length;
+        while (n > 1 && lineCount(rest.slice(0, n)) > MAX_LINES) n -= 1;
+        // Split a long page into balanced halves rather than a full page and a one-word orphan.
+        if (n < rest.length && rest.length - n === 1 && n > 2) n -= 1;
+        clamped.push({ frame: pg.frame, words: rest.slice(0, n) });
+        rest = rest.slice(n);
+      }
+    });
+    pages = clamped;
 
     var stage = document.getElementById("caption-stage");
     pages.forEach(function (pg, p) {

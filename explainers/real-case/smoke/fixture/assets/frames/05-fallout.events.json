@@ -1,0 +1,18 @@
+[
+ {
+  "t": 0.85,
+  "kind": "foley",
+  "what": "marker cap"
+ },
+ {
+  "t": 1.0,
+  "kind": "foley",
+  "what": "felt marker writing paper",
+  "dur": 3.0
+ },
+ {
+  "t": 4.1,
+  "kind": "foley",
+  "what": "pen cap"
+ }
+]
