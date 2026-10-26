@@ -66,6 +66,8 @@ export type CarouselIdeaRow = {
   answers?: Record<string, number> | null;
   passes?: number | null;
   run_started_at: string | null;
+  /** A person's own seeded story (design 2026-10-25-carousels-seeding). */
+  yours?: boolean;
   post_count: number;
   last_post_at: string | null;
   published: boolean;
@@ -114,14 +116,22 @@ SELECT c->>'id' AS story_id,
        c->>'probSum' AS score,
        (c->>'outletCount')::int AS outlet_count,
        c->'answers' AS answers, (c->>'passes')::int AS passes,
-       latest.started_at::text AS run_started_at,
+       latest_c.started_at::text AS run_started_at,
+       jsonb_exists(c, 'seed') AS yours,
        (SELECT count(*)::int FROM social.posts p WHERE p.story_id = c->>'id' AND p.origin = 'pipeline') AS post_count,
        (SELECT max(p.created_at)::text FROM social.posts p WHERE p.story_id = c->>'id' AND p.origin = 'pipeline') AS last_post_at,
        EXISTS (SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
                 WHERE ci.vertical = 'carousels' AND ci.idea_ref = c->>'id' AND a.status = 'published') AS published,
        EXISTS (SELECT 1 FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
                 WHERE ci.vertical = 'carousels' AND ci.idea_ref = c->>'id' AND s.status IN ('scheduled', 'publishing')) AS scheduled
-  FROM latest, jsonb_array_elements(latest.record->'selection'->'shortlist') c`;
+  FROM (
+    SELECT c, latest.started_at FROM latest, jsonb_array_elements(latest.record->'selection'->'shortlist') c
+    UNION ALL
+    -- A person's seeded stories (design 2026-10-25-carousels-seeding): theirs until they expire after a week.
+    SELECT c, (c->'seed'->>'addedAt')::timestamptz AS started_at
+      FROM social.settings s, jsonb_array_elements(s.value) c
+     WHERE s.key = 'carousel_seeds' AND jsonb_typeof(s.value) = 'array' AND (c->'seed'->>'expiresAt')::timestamptz > now()
+  ) latest_c(c, started_at)`;
 
 export const CAROUSEL_REQUIRE_APPROVAL_SQL = `SELECT value FROM social.settings WHERE key = 'require_approval'`;
 

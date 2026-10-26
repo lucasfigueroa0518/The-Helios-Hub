@@ -355,6 +355,7 @@ export function carouselIdeas(rows: readonly CarouselIdeaRow[]): HubIdea[] {
       versionCount: row.post_count,
       generatedAt: iso(row.last_post_at),
       createdAt: iso(row.run_started_at),
-      detail: row.outlet_count != null ? `${row.outlet_count} outlet${row.outlet_count === 1 ? '' : 's'}` : null,
+      detail: row.yours ? 'You pasted this link' : row.outlet_count != null ? `${row.outlet_count} outlet${row.outlet_count === 1 ? '' : 's'}` : null,
+      yours: row.yours === true,
     }));
 }

@@ -5,6 +5,7 @@ import { SettingsForm } from '@/app/explainers/settings/settings-form';
 import {
   AddTopicsButton,
   CarouselRunButton,
+  CarouselSeedButton,
   LfdRunButton,
   LiveToggle,
   PostingSettings,
@@ -69,7 +70,7 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
   let generate: ReactNode;
   let settings: ReactNode;
   if (vertical === 'carousels') {
-    generate = <CarouselRunButton />;
+    generate = <><CarouselRunButton /><CarouselSeedButton /></>;
     settings = <PostingSettings type="carousels" />;
   } else if (vertical === 'stories') {
     generate = <><StoriesGenerate /><StorySeedButton /></>;

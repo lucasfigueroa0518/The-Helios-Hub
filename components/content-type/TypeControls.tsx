@@ -205,6 +205,61 @@ export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: st
   );
 }
 
+// ── Carousels: seed a story ─────────────────────────────────────────────────
+
+/**
+ * Carousels: paste a story's link (design 2026-10-25-carousels-seeding). The page is read with a plain web request and the
+ * story is scored once (one Jev call, a fraction of a cent); this click is the approval for it. Nothing is made: pin it or
+ * Run now to make it. A seed waits a week.
+ */
+export function CarouselSeedButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [headline, setHeadline] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await call<{ title: string; score: number; status: string }>('/api/carousels/seed', { url, headline });
+      setNote(`“${out.title}” is in the queue, scored ${out.score.toFixed(1)} of 5.5${out.status === 'qualified' ? '' : ' (below the bar the night uses, so it only runs if you pin it)'}. Nothing was made.`);
+      setOpen(false);
+      setUrl('');
+      setHeadline('');
+      void refreshHubPage(router);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
+        <Plus size={15} /> Seed an idea
+      </button>
+      {open ? (
+        <Drawer label="Seed a story" onClose={() => setOpen(false)}>
+          <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+            <h2 className="rh-detail__archetype">Seed a story</h2>
+            <input className="helios-field-input" placeholder="Link to the story" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link to the story" />
+            <input className="helios-field-input" placeholder="Headline (optional)" value={headline} onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />
+            <div className="ex-actions">
+              <button type="submit" className="rh-btn rh-btn--primary" disabled={busy || !url.trim()}>{busy ? 'Reading and scoring…' : 'Add and score'}</button>
+            </div>
+            <p className="rh-muted">Reads the page and scores the story once, a fraction of a cent. Nothing is made; pin it or Run now to make it. It waits a week.</p>
+            {error ? <p className="rh-note rh-note--bad">{error}</p> : null}
+          </form>
+        </Drawer>
+      ) : null}
+      {note ? <p className="rh-toast" role="status">{note}</p> : null}
+    </>
+  );
+}
+
 // ── Stories: seed an idea ───────────────────────────────────────────────────
 
 type SeedFields = Record<string, string>;
