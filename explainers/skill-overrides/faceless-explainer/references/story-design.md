@@ -1,14 +1,14 @@
-# Story design — Helios Explainer Reel (Explainers 3.3)
+# Story design — Helios Explainer Reel (Explainers 3.9)
 
 > Helios replacement for the vendored `story-design.md` (planning/Explainer Reels/DECISIONS.md,
-> EX3-05, EX3-10 to EX3-24, EX3-60 to EX3-88). Use it in Step 3 to write `STORYBOARD.md` and
-> `SCRIPT.md`. Every rule here is mandatory.
+> EX3-05, EX3-10 to EX3-24, EX3-60 to EX3-88, EX3-128 to EX3-133). Use it in Step 3 to write
+> `STORYBOARD.md` and `SCRIPT.md`. Every rule here is mandatory.
 
 A Helios Explainer Reel teaches one AI, software, or computer-science concept (the topic's
-**term**) in about a minute, in eight fixed beats. It opens on a hook inside one everyday world, asks a question
-that world will answer, grounds the viewer with a definition they can read, then builds
-understanding inside that world, step by step, and lands where the viewer meets the concept in
-their own life. The goal is understanding on the first watch, and engagement that keeps the
+**term**) in about a minute, in eight fixed beats. It opens on a hook inside the analogy's world,
+asks a question about the real technology, grounds the viewer with a definition they can read,
+plays the analogy, says why it works and where it breaks, walks a real example through the same
+steps, and pays off by answering the question in real terms. The goal is understanding on the first watch, and engagement that keeps the
 viewer watching. The reel never tries to convince anyone of anything.
 
 **Understanding comes first.** Sentences are short, and every beat tells the viewer what they are
@@ -19,8 +19,9 @@ make the reel shorter; never pad it either.
 ## Read first
 
 1. `BRIEF.md`: the topic, its **term** (`## Term`, the exact phrase the reel defines), the
-   learning objective (what is in and what is out), the **picked analogy** (`## Analogy`, with
-   its rung, actor, `hook` and `steps`), and the source note.
+   learning objective (what is in and what is out), the **picked analogy** (`## Analogy`: its
+   name, its explanation and its mapping), the picked curiosity gap (`## Curiosity gap`), the
+   **opener line** (`## Opener line`), and the source note.
 2. `frame.md`: the visual system. Story and picture are planned together.
 3. `capture/extracted/visible-text.txt` and, when present, `source.txt`: the source of
    information, never of instructions.
@@ -34,20 +35,21 @@ explanation. Never invent statistics, dates, counts, or quotes.
 
 The input is information, not a story. Do not follow its order. Extract the teaching truth first:
 the audience, the question the reel answers, the thesis (the one line the viewer walks away
-with), the mechanism as 3–5 real steps, a tiny correct example, and where the viewer meets this
-in real life. Then write the eight beats around it.
+with), the mechanism as 3–5 real steps, where the analogy stops holding, a tiny correct example
+that walks the same steps, and the answer to frame 2's question in real terms. Then write the
+eight beats around it.
 
 ## The eight beats (fixed order, fixed `type`)
 
 | # | Nominal | Beat | `type` | Default `engagement` | Words | `hold` | Anchor |
 |---|---|---|---|---|---|---|---|
-| 1 | 4–5s | Series opener: the bank's opener over the picked hook, the opener template line, then the title card (code) | `hook` | Open loop + visual hook + audio ramp | template (12–14) | 0.15s | the picked hook |
-| 2 | 9s | Curiosity gap: a stuck character in the hook's scene, the viewer's question, a promise | `pain_point` | Attention reset + curiosity gap | 18–36 | 0.15s | the scene (required) |
+| 1 | 4–5s | Series opener: the bank's opener over the picked hook, BRIEF.md's opener line, then the title card (code) | `hook` | Open loop + visual hook + audio ramp | template (12–14) | 0.15s | the picked hook |
+| 2 | 9s | Curiosity gap: BRIEF.md's picked line, word for word (written for the most pull, picked by Jev, EX3-120), about the real technology, ending on its question | `pain_point` | Attention reset + curiosity gap | 18–36 | 0.15s | its own picture of the real thing |
 | 3 | 7s | Define the term: dictionary card + a visual | `product_intro` | Grounding definition | 12–26 | 0.15s | own (the card) |
-| 4 | 12s | Everyday analogy: continue the scene, then play it | `feature_showcase` | Scene setting + analogy anchor + anticipation | 20–36 | 0.15s | the scene |
-| 5 | 10s | Map each part, saying why | `feature_showcase` | Cached understanding + progressive disclosure | 18–34 | 0.15s | the scene (required) |
-| 6 | 10s | Tiny real example, illustrated, with the step tracker | `social_proof` | Worked example + progress tracker | 18–32 | 0.15s | own (the example's things; one cut back to the scene allowed) |
-| 7 | 6s | Meet it in the real world, after a transition | `benefit_highlight` | Recognition | 12–26 | 0.15s | a new drawn scene |
+| 4 | 12s | The analogy plays, each part named with its real job as it appears, building toward the answer | `feature_showcase` | Analogy anchor + progressive disclosure + anticipation | 20–36 | 0.15s | the scene |
+| 5 | 10s | Why it works, then where it breaks | `feature_showcase` | Cached understanding + boundary | 18–34 | 0.15s | the scene (required) |
+| 6 | 10s | Tiny real example, walking the same steps, with the step tracker | `social_proof` | Worked example + progress tracker | 18–32 | 0.15s | own (the example's things; never the hero) |
+| 7 | 6s | The payoff: frame 2's question answered in real terms, then a one-line takeaway | `benefit_highlight` | Payoff + callback + distillation | 12–26 | 0.15s | own (the real thing; one callback to the scene allowed) |
 | 8 | 2.5s | The close (code's): the logo and "AI BRAIN BREAK", no voice | `branding` | Brand close | none | none | — |
 
 Do not add, drop, merge, or reorder beats. Each frame's `duration` is its voice plus its `hold`
@@ -56,16 +58,19 @@ words; a reel past 65s only draws a warning.
 
 ### 1 · Series opener
 
-- **Voiceover: the opener template** (EX3-96): `In the next 30 seconds, this ___ will teach you
-  an AI concept.` The slot is 1–3 words naming what the hook shows, as a stranger sees it ("this
-  little shop", "this soggy forecaster", "this park lawn"), so from the first second the viewer
-  knows the scene is the lesson.
+- **Voiceover: BRIEF.md's `## Opener line`** (EX3-96, EX3-130), its slot filled. Code picks one
+  of two lines from how much the topic is about AI and writes it there:
+  `In the next minute, this ___ will teach you an AI concept.`
+  `In the next minute, this ___ will teach you a tech concept.`
+  Say the one BRIEF.md gives, never the other. The slot is 1–3 words naming what the hook shows,
+  as a stranger sees it, so from the first second the viewer knows the scene is the lesson.
 - **Picture: the hook** you pick under `## Hook` (below): a moment in the anchor world, already
   in motion at frame 0, that raises a question the reel answers. It is not the payoff and it is
   not a pan. It is **judged on its own** (EX3-88): the viewer meets it with no context at all, so
   in one second they must know what they are looking at (a familiar situation, recognizable
-  critters and props) and see something worth a second look (a problem, a surprise, a near-miss).
+  objects, and critters when someone acts) and see something worth a second look (a problem, a surprise, a near-miss).
   A hook that is niche, strange, or needs the analogy explained first fails, however clever.
+  The storyboard's hero is in it.
 - **The opener is the bank's** (EX3-102, placed by code): an animated intro drawn at random
   (never one of the last 8 reels'), an audio and visual pattern break built over your hook. It
   shows "AI BRAIN BREAK" first, then the title card writes "today's brain break:" and the term
@@ -80,59 +85,38 @@ camera punch-in, a color change (the ground flips paper → night or forest), an
 zoom-through out of the hook, or a visual effect on the cut (shock marks, a palette flash). Choose
 the reset that best suits the gap.
 
-### 2 · Curiosity gap: a stuck character, the viewer's question, a promise (EX3-101)
+### 2 · Curiosity gap: the picked line, about the real thing (EX3-101, EX3-115, EX3-120)
 
 **What a curiosity gap is.** The viewer understands exactly what they are missing and wants it.
-It is never confusion. A first-time viewer gets curious only about something they can see and
-feel: someone wants something, something is in the way, and they cannot predict how it ends. If
-they are still working out *what they are looking at*, they never reach *what they want to know*.
-The question must be **the viewer's** question (about the outcome, or the "why" of what they just
-watched), never the writer's (a mechanism question only someone who knows the concept would ask:
-"how does it know when to stop?", "how do you change the lawn itself?").
+It is never confusion. The hook (frame 1) showed the analogy's moment; frame 2 **cuts to the real
+technology the reel teaches** and opens the question the rest of the reel closes. The analogy comes
+back in frame 4 and builds toward the answer; frame 7, the payoff, gives it.
 
-The line tells one tiny story **in the hook's scene**, in this order (18–36 words):
+**The line is already written.** A gap writer wrote three lines for the most pull, each a
+different way in (an everyday mystery, a contradiction, the stakes, a surprising number, a belief
+that's wrong, a moment from the viewer's own day); Jev scored them on pull, clarity, whether the
+analogy answers them, and accuracy; code picked one (EX3-120; Lucas, 2026-10-22: "the curiosity
+gap writer should now write 3 candidates that jev then picks"). It is in BRIEF.md's
+`## Curiosity gap`, on its `> ` line. **Frame 2's voiceover is that line, word for word**: never
+rewrite, trim, or add to it. It already ends on its question, with no toss and no term.
 
-1. **The goal:** who wants what, in plain words, about what is on screen ("A tourist asks the
-   helper for Elm Street.").
-2. **The obstacle:** why that is not simple, something visible ("The helper has never heard of it").
-3. **The twist or stakes:** what goes wrong or what is surprising ("but points left anyway, totally
-   sure. Wrong way.").
-4. **The viewer's own question**, short and natural, about how this plays out ("Why would it
-   answer at all?").
-5. **The promise:** why the answer matters to *their* life, naming something they already know
-   ("Stick around: it's the same reason chatbots make things up.").
-
-Hard rules:
-- **One world.** The story stays in the hook's scene. The AI appears only in the promise, as
-  relevance; never as a mapping claim ("…is in the same spot").
-- **No term, no jargon.** The title card shows the term and frame 3 says it next; the gap never
-  answers itself with a label ("That's RAG." answers the question with a word).
-- **Only what is on screen.** Every thing the voice names is visible and was in the hook.
-  Characters are plain roles (the helper, the new hire, the shopper), never "critter".
-- **The loop closes explicitly.** Frame 4's last sentence answers the gap's question in its own
-  words ("That's how the room knows when to stop: …"), and frame 6's real example shows the
-  promised real-life case doing it.
-- **The picture tells the same story:** the goal visible (the target marked), the obstacle
-  visible, the twist on screen, and the question landing on a held shot of the stuck moment.
-- Write `gap_question:` (the question exactly as spoken) in frame 2's fields.
-
-Examples (the 3.3 lines rewritten):
-- "A shopper asks for something sour. Not one label in the store says 'sour'. So how will the
-  stocker find it? Watch: it's the same trick that lets search find what you mean, not just what
-  you typed."
-- "This little thermostat has one job: get the room to the red mark. No one's there to watch it.
-  So how does it get it just right, not too cold, not too hot? Watch closely: AI agents finish
-  whole tasks the very same way."
-
-- **Pick the best gap.** Before writing the beat, write three candidate gaps under
-  `## Curiosity gap`. Rate each from 1 to 5 on **clarity** (a stranger can say the problem back),
-  **pull** (they want to see how it ends), **relevance** (the promise touches their life) and
-  **closable** (the analogy answers it in beat 4). Pick the strongest; write one line on why, and
-  `closed_by:` (the frame and moment that answers it).
+What is yours:
+- **Its own picture**, simple and clear (`anchor: own`): the technology the line talks about, as
+  the viewer sees it, the surprising moment visible, and the question landing on a held shot of
+  it, with plenty of empty space around it. Never the analogy's scene, and never the hero.
+- **It echoes the hook** (EX3-131). Frame 2's `scene` repeats frame 1's hook staging, where
+  things sit and how they move, with the real thing in the analogy's place, so the viewer sees
+  the two are one idea before anyone says so. The reset on the cut changes the camera, so its
+  shots never repeat the hook's framing.
+- **The loop closes explicitly in frame 7** (EX3-128): the payoff answers the gap's question in
+  real terms, and frame 6's real example shows the case the gap asked about.
+- Write `gap_question:` (the line's question, as picked) in frame 2's fields, and copy BRIEF.md's
+  `## Curiosity gap` block into the storyboard with `closed_by:` (frame 7, and the moment its
+  answer lands).
 - **The first-time-viewer test** (the director runs it after the plan): a stranger reading only
-  the opener, the hook and the gap must be able to say what is happening, what the character wants
-  and what is in the way, the question you meant, and what they expect to learn, and want to keep
-  watching (4 or 5 of 5), with nothing confusing. A gap that fails is rewritten.
+  the opener, the hook and the gap says what is happening, what is puzzling about it, the question,
+  and what they expect to learn, and whether they would keep watching. It is recorded; the line is
+  never rewritten. When the hook or the picture confused them, fix those.
 
 ### 3 · Define the term: the dictionary card
 
@@ -156,42 +140,48 @@ with the trigger and the receiver named. No vague phrases: never "when something
   happens, like a payment going through."
 - Bad: "A webhook is a message you get when something happens."
 
-### 4 · Everyday analogy: continue the scene, then play it
+### 4 · The analogy plays (EX3-128)
 
-The analogy is already chosen: `BRIEF.md` `## Analogy` holds the candidate the idea phase picked
-(three candidates, scored by Jev). **Build the reel's anchor scene from it. Do not swap in
-another analogy.** You may sharpen how it is staged, never what it is.
+The analogy is already chosen and staged (§ Staging the analogy, below). Frame 4 plays it.
 
 - **Continue the scene; never restart it.** The viewer has watched this world since the first
-  second, so the first sentence picks it back up: "Here's what the hire does:", "Watch the
-  forecaster:", "Back on the lawn:". Never "Picture…", "Imagine…" or "Let's say…" (EX3-97).
-- **Introduce every new element by name and job before it acts**, one short clause each, in the
-  order it appears on screen ("A shelf of binders holds the shop's rules."). Whoever acts is a
-  critter: say its role ("the hire", "a student"), never a hand.
-- **Then play the process**, following the anchor scene's `steps` (analogy side), to its payoff.
+  second, so the first sentence picks it back up. Never "Picture…", "Imagine…" or "Let's say…"
+  (EX3-97). A two-state analogy may open on its "without" state, then play the "with" state.
+- **Name each part with its real job as it appears**, one short clause each, in the order it
+  appears on screen: the analogy's part and the concept's part it stands for, together, so the
+  viewer never has to translate later. Whoever or whatever acts is named by its role or what it
+  is; a critter is never a hand, and an object acting on its own needs no one beside it.
+- **Then play the steps** (the anchor scene's `steps`, analogy side), **building toward the
+  answer** to frame 2's question without announcing it. Frame 7 says it.
 
-### 5 · Map, saying why
+### 5 · Why it works, then where it breaks (EX3-128)
 
-Each pair is "**the X is the Y, because** the shared job": "The chef is the model, because it
-writes the instructions." One pair per sentence; at least two pairs, so at least two "because".
+Two moves, on the scene, in this order:
+
+1. **Why it works:** the analogy's defining trait doing its job, and why that is the concept's
+   job too.
+2. **Where it breaks:** its one limit or trade-off, in its own sentence: the one place the
+   analogy stops holding, or the one thing the real mechanism gives up for that trait. One, never
+   a list.
+
 Each lands on the scene's object as it is spoken. **Never a list, a node grid, or a slideshow.**
 
-### 6 · Tiny real example, illustrated, with the step tracker
+### 6 · Tiny real example, walking the same steps (EX3-129)
 
-Frame it ("Here's a real example:"), use real values, and narrate it as 3–5 concrete steps, in
-order ("First…, then…, finally…"). Write those steps as `example_steps:` (each 4 words or fewer:
-"search flights → read prices → pick cheapest → book"): the step tracker shows them, and each gets
-an insert shot of its real thing (a search box, a price list, a ticket). The steps may follow the
-analogy's steps or not; either way the picture shows the example itself (EX3-87), and one cut back
-to the anchor scene may show it lining up with what the viewer learned. This is where the
-learning gets real.
+Frame it ("Here's a real example:"), use real values, and narrate it as concrete steps, in order
+("First…, then…, finally…"). It walks **the same steps as the anchor scene**: exactly as many
+`example_steps:` as the anchor scene has `steps`, and example step N does what anchor step N
+does, in the real system (each 4 words or fewer, separated by " → "). The step tracker shows the
+anchor steps' technical names, lighting one per example step; each example step gets an insert
+shot of its real thing. The picture shows the example itself (EX3-87), never the anchor scene and
+never the hero (EX3-132). This is where the learning gets real.
 
-### 7 · Meet it in the real world
+### 7 · The payoff (EX3-128)
 
-The line **opens with a transition** that breaks it into its own thing: "Another example would
-be…", "In everyday life, you meet ___ when…", "In real life…", "Outside our ___, …", "Every time
-you…", "Next time you…". Then one place the viewer meets the concept in their life (at most
-two), illustrated as a new drawn scene with a visible break (a new ground), never only named.
+Frame 2 asked a question; frame 7 answers it **in real terms**: the real technology and what it
+does, in plain words. Then one line the viewer can take away. Only after the answer may it call
+back to the analogy, in a word or one shot of the anchor scene, where the hero may show in its
+orange (EX3-132). `closed_by:` points here.
 
 ### 8 · The close
 
@@ -201,39 +191,64 @@ frame 8 block as it is; write no line for it in `SCRIPT.md`.
 
 ## `## Anchor scene` (write it before the frames)
 
-Directly under the frontmatter, write the anchor scene once, built from the picked analogy:
+Directly under the frontmatter, write the anchor scene once: BRIEF.md's named analogy, staged.
 
 ```md
 ## Anchor scene
 
-- metaphor: <the everyday scene in one line>
+- metaphor: <the staged scene in one line>
 - setting: table | scene
 - ground: paper | night | forest
-- hook: <BRIEF.md's hook for this world, in motion at frame 0>
+- hook: <the picked hook (## Hook), in motion at frame 0>
+- hero: <entity id> — critter | object
 - steps:
   - <what happens in the scene> — <the real technical step's name, 4 words or fewer>
   - … (3 to 5 steps, in order)
 - entities:
-  - <id> — <what it is> — stands for <the real component> — <critter (role, wear) | prop: <library name> | new drawing: how it is built> — beats <n, n>
+  - <id> — <what it is> — stands for <the real component> — <critter (role, wear), look: <orange|ink|paper>, wear <…> | new drawing: <the specific thing, as a stranger names it here> — how it is built | prop: <bank name> (exact: <its is line>, in <this setting>)> — beats <n, n>
 - states: <variable>: <start> → <how each beat changes it>; …
 - layout: <where things sit on the table, one line>
 ```
 
-At most 4 entities (a group of identical things counts as one): the analogy was picked for
-simplicity. Each stands for one real component and must read at phone size without a label.
-**The actor is a critter** (EX3-77): never a person, a figure, or a body part; a hand is never an
-entity. Everyday objects name their library prop (frame.md V-4 lists them). Every number or
-outcome the scene shows is a state.
+### Staging the analogy (EX3-128)
+
+BRIEF.md's `## Analogy` is a named idea (its name, two or three sentences, and a mapping table of
+what each part stands for), not a scene. You stage it:
+
+- **One scene that shows the analogy's defining trait**: what its name makes a viewer picture, at
+  the moment that trait does its job. Nothing the analogy does not need.
+- **The hero** is your call, written exactly as `- hero: <entity id> — critter` (when someone's
+  action carries the analogy) or `- hero: <entity id> — object` (when the objects act on their
+  own). The worker reads this line to draw the opener.
+- **3–5 `steps`**, in order, each `<what happens in the scene> — <the real step's technical
+  name>`.
+- **At most 4 entities**, taken from the mapping's top rows (a group of identical things counts
+  as one), each standing for its row's concept side.
+- **All three hook candidates** (`## Hook`): the analogy brings none.
+- **Two states.** When the analogy is a contrast (without it and with it, before and after),
+  both states are this one scene (`states:`), and frame 4 may open on the "without" state.
+
+Stage it; never swap it. Its setting, its hero, its steps' wording and how it moves are yours;
+what it is, and what each part stands for, are not.
+
+Each entity stands for one real component and must read at phone size without a label.
+**Objects can act; critters are the only characters** (EX3-77, EX3-109): when the storyboard's
+hero is an object, the objects are the actors and no critter is added to do their work; whoever
+does act is a critter, never a person, a figure, or a body part, and a hand is never an entity. **Every object
+is drawn to fit** (EX3-112): a `new drawing:` named as specifically as a stranger names it in this
+setting is the default; a bank asset (`assets/kit/props/CATALOG.md`) is named only when its tags
+say it is exactly this thing, in this setting, with an `exact:` reason. Every number or outcome
+the scene shows is a state.
 
 ## `## Hook` (write it before the frames)
 
 ```md
 ## Hook
 
-1. <BRIEF.md's hook> — clarity 3/5, thumb-stop 4/5
-2. <another opening moment in this world> — clarity 5/5, thumb-stop 4/5
-3. <another> — clarity 4/5, thumb-stop 3/5
-- pick: 2 — <one line on why a stranger gets it at once>
+1. <an opening moment in the anchor scene, the hero in it> — clarity <1–5>/5, thumb-stop <1–5>/5
+2. <another> — clarity <1–5>/5, thumb-stop <1–5>/5
+3. <another> — clarity <1–5>/5, thumb-stop <1–5>/5
+- pick: <n> — <one line on why a stranger gets it at once>
 ```
 
 **Clarity** (standalone): a viewer with no context knows what they are looking at within one
@@ -245,11 +260,8 @@ picked.
 ```md
 ## Curiosity gap
 
-1. <candidate gap: goal, obstacle, twist, question, promise> — clarity 5/5, pull 4/5, relevance 4/5, closable 5/5
-2. <candidate gap> — clarity 4/5, pull 5/5, relevance 3/5, closable 4/5
-3. <candidate gap> — clarity 3/5, pull 4/5, relevance 5/5, closable 3/5
-- pick: 2 — <one line on why>
-- closed_by: <the frame and moment that answers it, e.g. "frame 4: the courier rings the bell">
+<BRIEF.md's ## Curiosity gap block, copied as it is: the "> " line (the picked gap), its gap_question, way in and score, and the other candidates>
+- closed_by: frame 7, <the moment the payoff's answer lands>
 ```
 
 ## Frame fields
@@ -271,8 +283,9 @@ Every frame block keeps the recipe skeleton's `duration`, `hold`, `transition_in
   spoken between its cue and the next cut. Kinds: wide, medium, close, insert, reaction. Frames
   over 6s cut between at least two; no two consecutive shots, and no frame's first shot and the
   previous frame's last, are the same picture; the one `wide` establishing shot opens frame 4;
-- frame 2: `anchor: scene` and `reset:`; frame 3: `definition:` and `part_of_speech:`, and
-  `anchor: own`; frame 5: `anchor: scene`; frame 6: `example_steps:` and `anchor: own`.
+- frame 2: `anchor: own` and `reset:`; frame 3: `definition:` and `part_of_speech:`, and
+  `anchor: own`; frame 5: `anchor: scene`; frame 6: `example_steps:` and `anchor: own`; frame 7:
+  `anchor: own`.
 
 Under the bullets, two prose lines: `narrativeRole:` (the frame's job in the viewer's
 understanding) and `keyMessage:` (the one thing the viewer understands after it).
@@ -286,7 +299,7 @@ are active ("Analogy anchor + anticipation").
 |---|---|
 | **Open and hold** | Open loop · Visual hook · Audio ramp · Attention reset · Curiosity gap · Anticipation |
 | **Ground** | Grounding definition · Scene setting · Recognition (the viewer's own life) · Concretization |
-| **Build understanding** | Analogy anchor · Cached understanding (reuse the scene) · Progressive disclosure · State change (a rule visibly produces a consequence) · Worked example · Progress tracker |
+| **Build understanding** | Analogy anchor · Cached understanding (reuse the scene) · Progressive disclosure · State change (a rule visibly produces a consequence) · Boundary (where the analogy stops holding) · Worked example · Progress tracker |
 | **Land** | Payoff · Callback · Distillation |
 
 When no catalog technique fits, name a new one and say how it works. Never name a technique for
@@ -320,26 +333,32 @@ driving indie, or hip-hop instrumental) after pacing. Never write a music mood. 
 ## Final checklist
 
 - Frontmatter `term:` is `BRIEF.md`'s term; `concept:` equals it; `music: none`.
-- `## Anchor scene` is built from `BRIEF.md`'s picked analogy, with a `hook`, 3–5 `steps` (each
-  with its technical name), and at most 4 entities, each standing for one real component; the
-  actor is a critter; no person, figure, or body part; everyday objects name their prop.
-- `## Hook` has three candidates rated on clarity and thumb-stop, and a pick at 4+ clarity.
-- `## Curiosity gap` has three candidates rated on clarity, pull, relevance and closable, a pick with a
-  reason, and `closed_by:`.
+- `## Anchor scene` stages `BRIEF.md`'s named analogy, with the picked `hook`, 3–5 `steps` (each
+  with its technical name), a `- hero: <id> — critter | object` line, and at most 4 entities from
+  the mapping's top rows, each standing for one real component; whoever acts is a critter or an
+  object; no person, figure, or body part; every object a specific new drawing or a `prop:` with
+  its `exact:` reason.
+- `## Hook` has three candidates of yours rated on clarity and thumb-stop, and a pick at 4+
+  clarity.
+- `## Curiosity gap` is BRIEF.md's block, copied, with `closed_by:` at frame 7.
 - Eight frames in order, each with `type`, `engagement`, `ground`, `scene`, and (frames 1–7)
   `hold`, `voiceover`,
   `beat`.
-- Frame 1 says the opener template, its slot naming what the hook shows.
-- Frame 2 is the gap story in the hook's scene (goal, obstacle, twist, the viewer's question, a
-  promise), with `reset:` and `gap_question:`, no term and no "same spot"; it passed the
-  first-time-viewer test; frame 3 has `definition:` (equal to its
-  voiceover, defining the term) and `part_of_speech:`; frames 2 and 5 are `anchor: scene`.
+- Frame 1 says BRIEF.md's opener line, its slot naming what the hook shows.
+- Frame 2's voiceover is BRIEF.md's picked gap, word for word, in its own picture (`anchor: own`)
+  that echoes the hook's staging with the real thing, with `reset:` and `gap_question:`; the
+  first-time-viewer test ran; no voiceover says "critter" (characters are named by their role,
+  EX3-121); frame 3 has `definition:` (equal to its voiceover, defining the term) and
+  `part_of_speech:`; frame 5 is `anchor: scene`.
 - Frames 1, 2, 4, 5, 6 and 7 have `shots:`, each subject spoken while it is on screen, and no
-  picture repeats.
-- Frame 4 continues the scene (never "Picture…") and introduces each new element before it acts.
-- Frame 5 says "because" for each pair (at least two); no lists, grids, or slideshows.
-- Frame 6 is framed as a real example, has 3–5 `example_steps`, and walks them in order.
-- Frame 7 opens with a transition and is a new drawn scene, one scenario (at most two).
+  picture repeats. The hero shows only in frames 1, 4, 5 and a frame-7 callback (EX3-132).
+- Frame 4 continues the scene (never "Picture…"), names each part with its real job as it
+  appears, and builds toward the answer without giving it.
+- Frame 5 says why the analogy works, then its one limit or trade-off; no lists, grids, or
+  slideshows.
+- Frame 6 is framed as a real example, has as many `example_steps` as the anchor scene has
+  `steps`, step N doing step N's job, and walks them in order.
+- Frame 7 answers frame 2's question in real terms, then gives a one-line takeaway.
 - Frame 8 is the skeleton's close, unchanged, with no voiceover and no line in `SCRIPT.md`; the
   storyboard lint shows no errors.
 - Word ranges kept; short sentences; no `!`, no emoji; every `transition_in` is `cut`; no `sfx:`

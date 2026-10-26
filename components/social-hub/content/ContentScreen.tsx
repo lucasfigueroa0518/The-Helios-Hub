@@ -25,7 +25,7 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
  * going out today, then how full the tank is.
  */
 export function ContentScreen({ dataset, base, now, libraries, progress, misses, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; misses?: RunMisses; controls?: boolean }) {
-  const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [], last_few_days: [] };
+  const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [], last_few_days: [], ai_events: [] };
   const inFlight = Object.values(runs).some((items) => items.length > 0);
   const summary = runningSummary(runs);
   const m = contentModel(dataset, now);

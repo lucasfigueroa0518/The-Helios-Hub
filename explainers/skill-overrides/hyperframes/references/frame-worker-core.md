@@ -25,14 +25,16 @@ design. Other workers build the other frames at the same time. You never touch t
    `onPlane`, `shadow`, `stroke`, `inkLines`, `handwrite`, `handwriteWidth`, `drawLine`, `ring`,
    `shock`, `icon`, `grid`, `scope`, `line`, `TONES`, `T`), `motion.js` (`frame`, `twos`, `seg`,
    `E`, `lerp`, `arch`), `shots.js` (`shotFrame`, `SHOT_KINDS`, `validateShots`), `cast.js` (the
-   critter cast: `critter`, `handAt`, `walk`, `ARM_POSES`, `MOODS`, `WEAR`), `props.js` (the prop
-   library: `prop`, `propNames`, `PROPS`), `cards.js` (`titleCard`, `dictionaryCard`, `textBox`,
+   critter cast: `critter`, `handAt`, `walk`, `ARM_POSES`, `MOODS`, `WEAR`), `props.js` (the asset
+   bank: `prop`, `propFrom`, `PROPS`; `props/CATALOG.md` holds every asset's tags), `cards.js` (`titleCard`, `dictionaryCard`, `textBox`,
    `textWidth`, `typeset`), `examples.js`, `seams.js` (zoom-through halves), `mark.js`.
 
 The `voiceover` is a **timing reference only**: reveal each piece on the word that names it (its
 time is in your timing file). Never render narration as text; the caption track shows the spoken
 words (frame 3's dictionary card is the one exception, frame.md § 3). Never draw a person or a
-body part: whoever acts is a critter. An everyday object the prop library has is that prop.
+body part: whoever acts is a critter, and objects can act on their own. An object is drawn to fit
+the scene; a bank asset is used only when its tags say it is exactly that thing, in that setting
+(EX3-112).
 
 ## What you write
 
@@ -119,11 +121,16 @@ fall):
 1. **Read** the packet, `frame.md`, your timing file, `world.js`, and the kit files you will use.
 2. **Plan** the phases of `t` from the Scene lines and the word times: what is on screen, what
    moves, on which curve, and what each moment sounds like.
-3. **Write** the module. Reuse `world.js` entities for the scene; use library props and critters
-   for anything else; draw a new object only when neither has it (frame.md V-4).
+3. **Write** the module. Reuse `world.js` entities for the scene; anything else is a critter or an
+   object drawn for this frame (frame.md V-4), written in `assets/frames/<frame_id>.props.js` as
+   `NEW_PROPS` with full tags (EX3-114) and drawn with `propFrom()`; a bank asset only on an exact
+   fit (EX3-112).
 4. **Write** the events file from the same times.
-5. **Self-check** before you stop: one orange focal; only kit colors; no person or body part;
-   library props for everyday things; shots as planned and never a repeated picture; every
+5. **Self-check** before you stop: one orange focal; the hero only in frames 1, 4, 5 and a
+   frame-7 callback (EX3-132); only kit colors; no person or body part;
+   every object the exact thing for this setting (a new drawing, or a bank asset only on an exact fit);
+   one thing to look at per shot, at most three readable things on screen, at least half the frame
+   empty, no set dressing (EX3-117); shots as planned and never a repeated picture; every
    critter drawn in every shot, once, with its `who`; text in shapes through `textBox()`; every number
    from `STATES` or the script; nothing readable in the keep-outs; one read at a time; the scene
    fills the frame; `draw(t)` returns a string at t = 0, mid-frame, and the end, with no `NaN` or

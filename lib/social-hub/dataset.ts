@@ -3,7 +3,9 @@ import { explainerIdeas, explainerPosts } from '@/lib/social-hub/adapters/explai
 import { reelIdeas, reelPosts } from '@/lib/social-hub/adapters/reels';
 import { storyIdeas, storyPosts } from '@/lib/social-hub/adapters/stories';
 import { lfdIdeas, lfdPosts } from '@/lib/social-hub/adapters/last-few-days';
+import { aiEventsIdeas, aiEventsPosts } from '@/lib/social-hub/adapters/ai-events';
 import type { LfdRead } from '@/lib/social-hub/queries/last-few-days';
+import type { AiEventsRead, AiEventsWeek } from '@/lib/social-hub/queries/ai-events';
 import type { DayQuotas, IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import type { CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
@@ -22,6 +24,8 @@ export type VerticalReads = {
   stories: StoriesRead | Error;
   /** Optional: a caller that reads only the first four types (older fixtures) shows no Last Few Days posts. */
   last_few_days?: LfdRead | Error;
+  /** Optional the same way: a caller that leaves it out shows no AI Events posts or pool. */
+  ai_events?: AiEventsRead | Error;
 };
 
 export type HubDataset = {
@@ -44,6 +48,10 @@ export type HubDataset = {
   dayQuotas?: DayQuotas | null;
   /** lfd.settings publishing_live (false when unreadable): Last Few Days offers Hard publish only while it is on. */
   lfdPublishingLive?: boolean;
+  /** ai_events.settings publishing_live (false when unreadable): AI Events offers Hard publish only while it is on. */
+  aiEventsPublishingLive?: boolean;
+  /** The week the AI Events pool shows, and whether Pin / Exclude still change it; null when unread. */
+  aiEventsWeek?: AiEventsWeek | null;
   loadedAt: string;
 };
 
@@ -70,10 +78,15 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
       if (!r) return { posts: [], ideas: [] };
       return r instanceof Error ? r : { posts: lfdPosts(r), ideas: lfdIdeas(r.latestRun, r.seeds) };
     }
+    case 'ai_events': {
+      const r = reads.ai_events;
+      if (!r) return { posts: [], ideas: [] };
+      return r instanceof Error ? r : { posts: aiEventsPosts(r), ideas: aiEventsIdeas(r) };
+    }
   }
 }
 
-const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days'];
+const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events'];
 
 export function buildDataset(
   reads: VerticalReads,
@@ -110,7 +123,12 @@ export function buildDataset(
   }
   const costed = cost ? withCosts(posts, cost) : posts;
   costed.sort((a, b) => (b.postedAt ?? b.publishAt ?? '').localeCompare(a.postedAt ?? a.publishAt ?? '') || a.id.localeCompare(b.id));
-  return { posts: costed, ideas, sources: dedupeSources(costed), errors, cost, costNotes, latestQuota, account, loadedAt: now.toISOString() };
+  const ai = reads.ai_events && !(reads.ai_events instanceof Error) ? reads.ai_events : null;
+  return {
+    posts: costed, ideas, sources: dedupeSources(costed), errors, cost, costNotes, latestQuota, account,
+    ...(ai ? { aiEventsWeek: ai.week, aiEventsPublishingLive: ai.publishingLive } : {}),
+    loadedAt: now.toISOString(),
+  };
 }
 
 export function findPost(dataset: HubDataset, id: string): HubPost | null {

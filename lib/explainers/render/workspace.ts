@@ -4,7 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { analogyMarkdown } from '@/lib/explainers/ideas/analogy';
-import type { AnalogyCandidate, TopicRow } from '@/lib/explainers/types';
+import { gapMarkdown } from '@/lib/explainers/ideas/gap';
+import { topicAiFocus } from '@/lib/explainers/scoring';
+import type { AnalogyCandidate, GapNote, TopicRow } from '@/lib/explainers/types';
+import { OPENER_TEMPLATES } from '../../../explainers/lint/lint-storyboard.mjs';
+import { bankDir, catalogEntries, catalogMarkdown } from '../../../explainers/world-kit/props/catalog.mjs';
 
 /**
  * One render's scratch workspace (BUILD_PLAN §5). Everything the agent may
@@ -96,11 +100,26 @@ function copyDir(from: string, to: string, filter?: (src: string) => boolean): v
   fs.cpSync(from, to, { recursive: true, filter: filter ?? (() => true) });
 }
 
-/** BRIEF.md for an autonomous Helios run (brief-format.md), with the term (EX3-86) and the picked analogy (EX3-15). */
+/** An AI concept at this ai_focus or more (of 4); below it, a tech concept (EX3-130). */
+export const AI_CONCEPT_MIN = 2.5;
+
+/**
+ * Frame 1's opener line, slot unfilled (EX3-130; Lucas's gap-analysis decision 1: "Fix the facts"):
+ * "In the next minute", and "an AI concept" only when the topic is one. A topic scored before idea
+ * scoring v3 has no ai_focus and keeps the AI line.
+ */
+export function openerLineFor(topic: { jev_notes?: Record<string, unknown> | null }): string {
+  const focus = topicAiFocus({ jev_notes: topic.jev_notes ?? {} });
+  return focus !== null && focus < AI_CONCEPT_MIN ? OPENER_TEMPLATES.tech : OPENER_TEMPLATES.ai;
+}
+
+/** BRIEF.md for an autonomous Helios run (brief-format.md), with the term (EX3-86), the opener line (EX3-130), the picked analogy (EX3-15, EX3-123) and the picked curiosity gap (EX3-120). */
 export function briefMarkdown(
-  topic: Pick<TopicRow, 'title' | 'scope' | 'source_url' | 'source_text'> & { term?: string | null },
+  topic: Pick<TopicRow, 'title' | 'scope' | 'source_url' | 'source_text'> & { term?: string | null; jev_notes?: Record<string, unknown> | null },
   analogy: AnalogyCandidate | null = null,
+  gap: GapNote | null = null,
 ): string {
+  const gapBody = gap ? gapMarkdown(gap) : '';
   const message = (topic.scope ?? topic.title).replace(/"/g, "'");
   const hasSource = Boolean(topic.source_text || topic.source_url);
   return [
@@ -124,7 +143,7 @@ export function briefMarkdown(
     '',
     `Learning objective: ${topic.scope ?? topic.title}`,
     '',
-    'Plain-spoken, authoritative, no hype. A Helios Explainer Reel of about a minute in the fixed eight-beat structure, built around one anchor scene acted by critters, so a first-time viewer understands it.',
+    'Plain-spoken, authoritative, no hype. A Helios Explainer Reel of about a minute in the fixed eight-beat structure, built around one anchor scene, so a first-time viewer understands it.',
     '',
     '## Term',
     '',
@@ -132,12 +151,17 @@ export function briefMarkdown(
       ? `${topic.term.trim()}\n\nThe reel defines exactly this term: the title card writes it, the dictionary card's headword is it, and the definition defines it, not a broader concept it belongs to and not a narrower part of it.`
       : "No term was recorded for this topic: take the exact name of the concept the title asks about, and define that, not a broader or narrower one.",
     '',
+    '## Opener line',
+    '',
+    openerLineFor(topic),
+    '',
     '## Analogy',
     '',
     analogy
-      ? `The analogy the idea phase picked (three candidates, scored by Jev). Build the anchor scene from it; do not swap in another.\n\n${analogyMarkdown(analogy)}`
+      ? `The analogy the idea phase picked (two writers, Jev's pick). Stage the anchor scene from it; never swap in another.\n\n${analogyMarkdown(analogy)}`
       : 'No analogy was picked for this topic.',
     '',
+    ...(gapBody ? ['## Curiosity gap', '', gapBody, ''] : []),
     '## Notes',
     '',
     hasSource
@@ -177,6 +201,7 @@ export function prepareWorkspace(input: {
   topic: TopicRow;
   sourceText: string | null;
   analogy?: AnalogyCandidate | null;
+  gap?: GapNote | null;
 }): Workspace {
   const ws = workspacePaths(input.jobsRoot, input.jobId);
   fs.rmSync(ws.jobDir, { recursive: true, force: true });
@@ -214,6 +239,15 @@ export function prepareWorkspace(input: {
   copyDir(path.join(EXPLAINERS_DIR, 'lint'), path.join(lintDir, 'lint'), (src) => !src.includes(`${path.sep}fixtures`));
   copyDir(path.join(EXPLAINERS_DIR, 'hyperframes-skills', 'faceless-explainer', 'scripts', 'lib'), path.join(lintDir, 'hyperframes-skills', 'faceless-explainer', 'scripts', 'lib'));
   copyDir(WORLD_KIT_DIR, path.join(lintDir, 'world-kit'));
+  // The asset bank (EX3-113, EX3-114): kept outside the app on the worker VM, so deploys never wipe
+  // it, and copied into both kits; the job's catalog is written fresh from the tags and the bank.
+  const bank = bankDir();
+  for (const kit of [path.join(ws.projectDir, 'assets', 'kit'), path.join(lintDir, 'world-kit')]) {
+    if (path.resolve(bank) !== path.resolve(path.join(WORLD_KIT_DIR, 'props', 'bank')) && fs.existsSync(bank)) {
+      copyDir(bank, path.join(kit, 'props', 'bank'));
+    }
+    fs.writeFileSync(path.join(kit, 'props', 'CATALOG.md'), catalogMarkdown(catalogEntries(bank)));
+  }
   fs.mkdirSync(path.join(ws.projectDir, 'assets', 'sfx'), { recursive: true });
   for (const file of OPENER_SOUNDS) fs.copyFileSync(path.join(SFX_DIR, file), path.join(ws.projectDir, 'assets', 'sfx', file));
   fs.symlinkSync(SFX_DIR, path.join(ws.projectDir, 'assets', 'sfx-library'), 'dir');
@@ -225,7 +259,7 @@ export function prepareWorkspace(input: {
   fs.writeFileSync(path.join(ws.projectDir, 'music-avoid.json'), `${JSON.stringify(readMusicHistory(input.jobsRoot))}\n`);
 
   // Brief, source, and the synthetic capture package (faceless Step 1).
-  fs.writeFileSync(path.join(ws.projectDir, 'BRIEF.md'), briefMarkdown(input.topic, input.analogy ?? null));
+  fs.writeFileSync(path.join(ws.projectDir, 'BRIEF.md'), briefMarkdown(input.topic, input.analogy ?? null, input.gap ?? null));
   if (input.sourceText) fs.writeFileSync(path.join(ws.projectDir, 'source.txt'), input.sourceText);
   const extracted = path.join(ws.projectDir, 'capture', 'extracted');
   fs.mkdirSync(extracted, { recursive: true });

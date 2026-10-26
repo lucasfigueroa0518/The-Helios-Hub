@@ -53,30 +53,32 @@ Scene 2 (1.4–3.0s): …
   scene's entities by their ids, the state they start in (the state the previous scene frame
   ended in), and the state they end in. They never redraw an entity differently.
 - **Cast and objects:** characters are critters, named with their pose and mood ("the student
-  critter, arms: reach, mood: worried"); everyday objects are library props by name ("prop: light
-  switch, state on"); a new object is described as a construction (frame.md V-4). Never a person,
-  a figure, or a hand.
-- **Labels** (the real terms, numbers, names) land as the voice names them (frame 5: as their
-  "because" is spoken), 5 words or fewer, pinned to their object; say in which window.
+  critter, arms: reach, mood: worried"); objects can act on their own (EX3-109); every object is
+  named as specifically as a stranger names it in its setting and described as a construction
+  (frame.md V-4), and a bank asset is named ("prop: light switch, state on") only on an exact fit
+  (EX3-112). Never a person, a figure, or a hand.
+- **Labels** (the real terms, numbers, names) land as the voice names them (frame 4: as each
+  part's real job is named), 5 words or fewer, pinned to their object; say in which window.
 - **Frame 1:** the picked hook (`## Hook`), in motion from Scene 1 (first change by 0.3s), clear
   on its own, building (`ramp-up`); the bank's opener (code, EX3-102) breaks in over it and draws
   "AI BRAIN BREAK" and the title card (frame.md § 1). Describe the hook only. Never a slow pan over
   a still scene.
-- **Frame 2:** the anchor scene in new shots, each centred on what the voice names (the problem's
-  actor, then whatever the AI line and the question are about); its `reset:` lands in the first
-  0.3s.
+- **Frame 2:** its own picture of the real thing (`anchor: own`), never the hero: the hook's
+  staging (where things sit, how they move) with the real thing in the analogy's place (EX3-131),
+  in shots each centred on what the voice names; its `reset:` lands in the first 0.3s.
 - **Frame 3:** the kit's dictionary card in the top half, filling in on the voice; below it, the
-  visual of the definition (critters and props), revealed on the definition's key words.
-- **Frame 4:** Scene 1 is the reel's one **establishing shot** (`wide`, the setting named by the
-  voice); then one window per element as the voice introduces it; then closer shots, one window
-  per step, to the payoff.
-- **Frame 5:** one window and one shot per "because" pair: the label lands on its object, the
-  action pulses.
-- **Frame 6:** the step tracker (its edge, its stops from `example_steps`) and one window per
-  step: an insert of that step's real thing while its stop lights; at most one cut back to the
-  anchor scene.
-- **Frame 7:** a new ground and a new setting, matching the line's transition, with critters and
-  props.
+  visual of the definition (the real thing, never the hero), revealed on the definition's key
+  words.
+- **Frame 4:** Scene 1 is the reel's one **establishing shot** (`wide`; on the "without" state
+  when the analogy has two); then one window per part as the voice names it with its real job,
+  its label landing; then closer shots, one window per step, building toward the answer.
+- **Frame 5:** one window for why the analogy works (the trait doing its job), then one for its
+  limit or trade-off, made visible in the scene.
+- **Frame 6:** the step tracker (its edge, its stops the anchor steps' technical names) and one
+  window per example step: an insert of that step's real thing while its stop lights; never the
+  anchor scene or the hero (EX3-132).
+- **Frame 7:** the payoff: the real thing doing what the answer says, on a ground different from
+  frame 6's; at most one callback shot of the anchor scene, where the hero may show.
 - **Frame 8:** the close is the kit's (`close.js`): no Scene lines to write beyond the skeleton's.
 
 ## One video direction, written once
@@ -84,13 +86,14 @@ Scene 2 (1.4–3.0s): …
 Write a `## Video direction` block once, under `## Anchor scene`, so every frame inherits it and
 the per-frame lines carry only the delta:
 
-- **palette and grounds:** which frames are paper, night, forest; the one orange focal per beat;
-  green for labels; status colors only as signals;
+- **palette and grounds:** which frames are paper, night, forest; the one orange focal per beat
+  (the hero's orange only in frames 1, 4, 5 and a frame-7 callback, EX3-132); green for labels;
+  status colors only as signals;
 - **motion grammar:** motion has a job (semantic, anticipatory, state-driven, camera); named
   polarities; anticipation before big actions; squash and overshoot with weight; on twos with the
   boil; reveals on voice cues; holds read still;
 - **the tension curve:** which frames crowd, which isolate, which open; where the scene's payoff
-  lands (beat 4) and where the attention reset sits (the 1→2 cut);
+  lands (beat 7, the payoff) and where the attention reset sits (the 1→2 cut);
 - **negative list:** slides, lists, node grids, headlines, narration on screen, decorative motion,
   gradients and glow, a busy frame, a camera that never stops.
 
@@ -111,8 +114,9 @@ the per-frame lines carry only the delta:
 - `## Video direction` exists once; per-frame lines are deltas.
 - Every frame has `focal`, `eye`, `space`, `camera`, `sounds`, and time-coded Scene lines paced
   to the voice, each naming its shot.
-- Frame 1 is the hook (the bank's opener and its text are code's); frame 3 has the card and
-  its visual; frame 4 opens on the one establishing shot; frame 6 illustrates each example step.
+- Frame 1 is the hook (the bank's opener and its text are code's); frame 2 echoes its staging
+  with the real thing; frame 3 has the card and its visual; frame 4 opens on the one
+  establishing shot; frame 6 illustrates each example step; no hero in frames 2, 3 and 6.
 - No `sfx:` lines (retired; sound moments go in `sounds:`).
 - Anchored frames use the scene's entity ids and carry its state forward.
 - Critters for every character; props by library name; new objects described as constructions.

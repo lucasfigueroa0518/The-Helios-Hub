@@ -1,25 +1,32 @@
-// The Explainers world kit, core (hx-3, from Explainer 2.0; Explainers 3.0 adds the white ground): the style-independent math every shot stands on.
+// The Explainers world kit, core (hx-4, visual system 4.0; from Explainer 2.0): the style-independent math every shot stands on.
 // No DOM and no imports, so it runs in the browser and in Node tests alike.
 //
-//   palette tokens (V-T1) · polarity curves (V-8) · speed ramps (V-9) · the calm camera (V-7,
-//   X-20) · the state ledger (V-1) · seeded randomness and the stop-motion clock (V-15) · the
-//   isometric projection (V-2)
+//   palette tokens and their 4-step ramps (V-T1, still 06) · the grounds (paper studio sweep,
+//   the premium stage, white) · the one light · the critter ruler (CRITTER_CM, PX_PER_CM) ·
+//   polarity curves (V-8) · speed ramps (V-9) · the calm camera (V-7, X-20) · the state ledger
+//   (V-1) · seeded randomness · the isometric projection (V-2)
 //
 // Determinism (E2-06): a shot has ONE clock. A single tween drives wall time; speed ramps warp
 // it into content time; everything on screen is a pure function of content time.
 
-export const VERSION = 'hx-3';
+export const VERSION = 'hx-4';
 export const FRAME = { w: 1080, h: 1920, safe: { x0: 96, x1: 940, y0: 570, y1: 1600 } };
 
-// ── Palette (V-T1) ────────────────────────────────────────────────────────────────────────
+// ── Palette (V-T1; hx-4 widens it, still 06) ──────────────────────────────────────────────
+// Every color is a ramp: lit, base, shade, dark (OKLCH: lit +0.07 L, shade −0.07 L, dark −0.19 L;
+// warmer in the light, cooler in the shade). Orange stays the hero's.
 export const TOKENS = {
   paper: '#F3F0EA',
   'paper-lit': '#FBFAF6',
   'paper-shade': '#E2DACB',
   'paper-dark': '#CFC5B3',
+  /** The studio sweep's low end (the paper ground, hx-4). */
+  'paper-sweep': '#EFE9DF',
   canvas: '#FFFFFF',
   ink: '#171717',
   'ink-lit': '#2B2926',
+  'ink-shade': '#0C0C0C',
+  'ink-dark': '#040404',
   'text-secondary': '#525252',
   'text-tertiary': '#737373',
   orange: '#FF5E1A',
@@ -28,13 +35,68 @@ export const TOKENS = {
   'orange-dark': '#C8430F',
   'orange-text': '#CC4E19',
   green: '#138510',
+  'green-lit': '#479830',
+  'green-shade': '#096E07',
+  'green-dark': '#004800',
+  // The four colors the brand already owns (still 06): sun yellow, royal blue, reels teal, stories lilac.
+  yellow: '#FDC60F',
+  'yellow-lit': '#FEDE78',
+  'yellow-shade': '#ECA811',
+  'yellow-dark': '#C47910',
+  blue: '#4169E1',
+  'blue-lit': '#4E88F1',
+  'blue-shade': '#3753CB',
+  'blue-dark': '#2B329F',
+  teal: '#14B8C4',
+  'teal-lit': '#4ACFD2',
+  'teal-shade': '#009EAE',
+  'teal-dark': '#0A7788',
+  lilac: '#C377E0',
+  'lilac-lit': '#D992E9',
+  'lilac-shade': '#A662CC',
+  'lilac-dark': '#7947A6',
   night: '#171717',
+  // The Helios premium stage (premium.css): charcoal under a warm glow, a red bloom low.
+  'stage-top': '#161616',
+  'stage-bottom': '#0B0B0B',
+  'stage-orange': '#FF6A2A',
+  'stage-red': '#E8413B',
+  // The sun gradient of the logo.
+  'sun-top': '#FDC60F',
+  'sun-mid': '#F48C3F',
+  'sun-bottom': '#EA3C3A',
+  /** The warm umber every soft shadow and occlusion is drawn in (never grey, never black). */
+  'shadow-warm': '#3B2A16',
   // Status colors (X-24): universal meaning only, on the signal itself, never a ground.
   'status-error': '#E5484D',
   'status-success': '#30C463',
   'status-warning': '#F5B014',
   'status-info': '#3E8BF0',
 };
+
+/** The palette colors that have a 4-step ramp, by name. */
+export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac'];
+
+/** A palette color's ramp: { lit, base, shade, dark }. */
+export function ramp(name) {
+  if (!PALETTE.includes(name)) throw new Error(`HX: no ramp "${name}". Ramps: ${PALETTE.join(', ')}.`);
+  return { lit: TOKENS[`${name}-lit`], base: TOKENS[name], shade: TOKENS[`${name}-shade`], dark: TOKENS[`${name}-dark`] };
+}
+
+const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const toLin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toGam = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+/** Two hex colors mixed in linear light (t = share of b), as hex: the tints and falloffs a soft
+ *  volume needs between the steps of one ramp. Inputs are palette hexes. */
+export function mixHex(a, b, t) {
+  const A = hexRgb(a);
+  const B = hexRgb(b);
+  const k = Math.min(1, Math.max(0, t));
+  return '#' + A.map((v, i) => {
+    const l = toLin(v / 255) * (1 - k) + toLin(B[i] / 255) * k;
+    return Math.round(Math.min(1, Math.max(0, toGam(l))) * 255).toString(16).padStart(2, '0');
+  }).join('').toUpperCase();
+}
 
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
@@ -55,14 +117,39 @@ export function alpha(a, opacity) {
   return `color-mix(in oklab, ${tok(a)} ${p}%, transparent)`;
 }
 
-/** The three grounds (V-14). Forest is green mixed 30% into night, written out as hex. */
+/** The grounds (hx-4): `paper` the warm studio sweep (default), `stage` the Helios premium lit
+ *  stage (the one dark ground), `white` the close only. `fill` is the ground's flat color (the
+ *  caption band wash and anything that needs one color); ground() in draw.js paints the light. */
 export const GROUNDS = {
   paper: { fill: TOKENS.paper, dark: false },
-  night: { fill: TOKENS.night, dark: true },
-  forest: { fill: '#163815', dark: true },
+  stage: { fill: TOKENS['stage-top'], dark: true },
   // Explainers 3.0: the close is a white screen with only the logo (EX3-19). No grid, no grain.
   white: { fill: TOKENS.canvas, dark: false },
 };
+/** Grounds 4.0 retired, drawn as the stage so old projects still render (a storyboard naming
+ *  them is a lint error). */
+export const GROUND_ALIASES = { night: 'stage', forest: 'stage' };
+
+/** A ground by name, aliases resolved: { name, fill, dark }. Throws on an unknown name. */
+export function groundOf(name = 'paper') {
+  const key = GROUND_ALIASES[name] ?? name;
+  const gr = GROUNDS[key];
+  if (!gr) throw new Error(`HX: ground must be ${Object.keys(GROUNDS).join(', ')} (got "${name}").`);
+  return { name: key, ...gr };
+}
+
+// ── The one light (hx-4, stills 07/08) ────────────────────────────────────────────────────
+/** key: the screen direction the key light comes FROM (toward the top right); ambient: the
+ *  share of light a face turned away still gets; bounce: the warm light the floor throws back up. */
+export const LIGHT = { key: [0.62, -0.78], ambient: 0.42, bounce: 0.16 };
+
+// ── The ruler (hx-4, still 01) ────────────────────────────────────────────────────────────
+/** A critter's real height in cm: the ruler every world entity is sized against. */
+export const CRITTER_CM = 72;
+/** A critter's drawn height at s = 1 in px, feet (y 0) to the top of its body (y −142, cast.js). */
+export const CRITTER_PX = 142;
+/** Screen px per cm at scale 1. */
+export const PX_PER_CM = CRITTER_PX / CRITTER_CM;
 
 // ── Polarity: the speed curve of a move (V-8) ─────────────────────────────────────────────
 function backOut(s, x) {
@@ -302,7 +389,7 @@ export function ledgerValue(start, changes, t) {
   return v;
 }
 
-// ── Seeded randomness and the stop-motion clock (V-15) ────────────────────────────────────
+// ── Seeded randomness; the old stop-motion clock (V-15, retired in hx-4) ──────────────────
 export function rng(seed) {
   let a = seed >>> 0;
   return () => {
@@ -314,13 +401,16 @@ export function rng(seed) {
   };
 }
 
-/** Drawn things move on twos: a new pose 15 times a second. */
+// hx-4 drops the boil and the on-twos pose clock: everything moves smoothly. The names stay
+// exported so older scene code keeps working.
+/** The old pose rate; mark.js still rounds its landing cue to it. */
 export const FPS_CAST = 15;
-/** The line wobble redraws 10 times a second. */
+/** The old wobble rate (no wobble is drawn any more). */
 export const FPS_BOIL = 10;
-export const onTwos = (t) => Math.floor(t * FPS_CAST + 1e-6) / FPS_CAST;
-/** The wobble seed at time t: cycles through six drawings so the line boils. */
-export const boilSeed = (t) => 4 + (Math.floor(t * FPS_BOIL + 1e-6) % 6);
+/** Smooth motion: returns t unchanged (it used to hold each pose for two frames). */
+export const onTwos = (t) => t;
+/** A constant seed (there is no boil any more). */
+export const boilSeed = () => 4;
 
 // ── The isometric projection (V-2) ────────────────────────────────────────────────────────
 export const ISO_COS = Math.cos(Math.PI / 6);

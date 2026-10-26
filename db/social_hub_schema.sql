@@ -177,7 +177,8 @@ CREATE TABLE IF NOT EXISTS social_hub.schedule (
 );
 -- Each type's windows (Carousels: morning 9:00–10:00, afternoon 2:30–3:30;
 -- Explainers: afternoon 1:00–2:30, late 3:30–5:00; Last Few Days: morning
--- 9:00–10:00 on its days, lfd.settings.days).
+-- 9:00–10:00 on its days, lfd.settings.days; AI Events: evening 6:00–7:00 PM
+-- on its days, ai_events.settings.days).
 ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
 ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
@@ -185,6 +186,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
     OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
+    OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
 );
 CREATE INDEX IF NOT EXISTS idx_social_hub_schedule_due
     ON social_hub.schedule (publish_at) WHERE status = 'scheduled';
@@ -225,7 +227,7 @@ CREATE TABLE IF NOT EXISTS social_hub.publish_attempts (
 );
 ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
 ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
-    (vertical IN ('carousels', 'explainers', 'last_few_days') AND trigger IN ('approve', 'auto', 'force'))
+    (vertical IN ('carousels', 'explainers', 'last_few_days', 'ai_events') AND trigger IN ('approve', 'auto', 'force'))
     OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
     OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
 );
@@ -295,6 +297,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
     OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
+    OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
 );
 -- One active slot per Trial Reels idea (the old idx_reels_posting_schedule_idea).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_schedule_reels_idea
@@ -306,7 +309,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_social_hub_schedule_reels_idea
 -- mix_test posts the same reel at another mix on purpose (publish_once skips it).
 ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
 ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
-    (vertical IN ('carousels', 'explainers', 'last_few_days') AND trigger IN ('approve', 'auto', 'force'))
+    (vertical IN ('carousels', 'explainers', 'last_few_days', 'ai_events') AND trigger IN ('approve', 'auto', 'force'))
     OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
     OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
 );
@@ -332,10 +335,11 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
     OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
+    OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
 );
 ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
 ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
-    (vertical IN ('carousels', 'explainers', 'last_few_days') AND trigger IN ('approve', 'auto', 'force'))
+    (vertical IN ('carousels', 'explainers', 'last_few_days', 'ai_events') AND trigger IN ('approve', 'auto', 'force'))
     OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
     OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
 );
@@ -348,7 +352,7 @@ ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_
 -- The day's quota goes to the top of the adjusted ranking.
 CREATE TABLE IF NOT EXISTS social_hub.idea_adjustments (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    vertical    text NOT NULL CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days')),
+    vertical    text NOT NULL CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events')),
     idea_id     text NOT NULL CHECK (length(btrim(idea_id)) > 0),
     ny_date     date NOT NULL,
     kind        text NOT NULL CHECK (kind IN ('promote', 'demote')),
@@ -359,11 +363,12 @@ CREATE TABLE IF NOT EXISTS social_hub.idea_adjustments (
 CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_day
     ON social_hub.idea_adjustments (ny_date, vertical, created_at);
 
--- Last Few Days joins the spine (spec 2026-10-13-last-few-days-design §7.2). The
--- inline CHECK above only shapes a new table; an existing one is widened here (D45).
+-- Last Few Days joins the spine (spec 2026-10-13-last-few-days-design §7.2), then
+-- AI Events This Week (planning/AI Events/DECISIONS.md AE-01). The inline CHECK
+-- above only shapes a new table; an existing one is widened here (D45).
 ALTER TABLE social_hub.idea_adjustments DROP CONSTRAINT IF EXISTS idea_adjustments_vertical_check;
 ALTER TABLE social_hub.idea_adjustments ADD CONSTRAINT idea_adjustments_vertical_check
-    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'));
 
 -- Content page Phase B (B8, 2026-10-14): a move steers until it is used, not until midnight.
 -- ny_date stays the day it was made. The hub sets consumed_at when it loads (lib/social-hub/queries/day.ts).
@@ -489,6 +494,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
     OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
+    OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
     OR slot ~ '^t[0-9]{4}(:[a-z_]+)?$'
 );
 
@@ -509,9 +515,10 @@ ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS slot_by text CHECK (slo
 -- Who decides cadence: 'legacy' (each type's settings, as before) or 'template' (the calendar).
 INSERT INTO social_hub.settings (key, value) VALUES ('slot_source', '"legacy"'::jsonb) ON CONFLICT (key) DO NOTHING;
 
--- Daily caps per type (calendar week board): the most a day may book.
+-- Daily caps per type (calendar week board): the most a day may book. AI Events: 2, Miami and
+-- Boston (AE-29); DEFAULT_CAPS covers a stored row that predates the ai_events key.
 INSERT INTO social_hub.settings (key, value) VALUES
-    ('daily_caps', '{"reels":5,"explainers":3,"carousels":3,"last_few_days":1,"stories":2}'::jsonb)
+    ('daily_caps', '{"reels":5,"explainers":3,"carousels":3,"last_few_days":1,"stories":2,"ai_events":2}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- Every caption type logs its closing paragraph here; it feeds recent-closings and the

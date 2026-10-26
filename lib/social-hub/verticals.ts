@@ -19,6 +19,7 @@ export const VERTICALS: readonly VerticalInfo[] = [
   { id: 'carousels', label: 'Carousels', short: 'Carousel', format: 'feed', colorVar: '--sh-v-carousels', href: '/carousels', reviewHref: '/social' },
   { id: 'stories', label: 'IG Stories', short: 'Story', format: 'story', colorVar: '--sh-v-stories', href: '/stories', reviewHref: '/stories' },
   { id: 'last_few_days', label: 'Last Few Days', short: 'LFD', format: 'feed', colorVar: '--sh-v-last_few_days', href: '/last-few-days', reviewHref: '/last-few-days' },
+  { id: 'ai_events', label: 'AI Events This Week', short: 'AI Events', format: 'feed', colorVar: '--sh-v-ai_events', href: '/ai-events', reviewHref: '/ai-events' },
 ];
 
 export const VERTICAL_IDS: readonly Vertical[] = VERTICALS.map((v) => v.id);
@@ -46,9 +47,9 @@ export function isVertical(value: unknown): value is Vertical {
 }
 
 /** The content types that have a page of their own (their idea pool, posts and settings): all of them. */
-export const TYPE_PAGE_IDS: readonly Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days'];
+export const TYPE_PAGE_IDS: readonly Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events'];
 
-/** A content type's own page (its `href`): /reels, /carousels, /stories, /explainers and /last-few-days. */
+/** A content type's own page (its `href`): /reels, /carousels, /stories, /explainers, /last-few-days and /ai-events. */
 export function typeHref(vertical: Vertical, base = '/social'): string {
   // The fixture preview has its own mirror of the hub-hosted pages; Text on Screen is a separate app page.
   return base === '/social/preview' && vertical !== 'reels' ? `${base}/type/${vertical}` : verticalInfo(vertical).href;

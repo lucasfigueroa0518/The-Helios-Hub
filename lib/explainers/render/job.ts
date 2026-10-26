@@ -3,11 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { chooseAnalogy, topicAnalogy } from '@/lib/explainers/ideas/analogy';
+import { analogyBelowBar, chooseAnalogy, NO_ANALOGY_REASON, topicAnalogy } from '@/lib/explainers/ideas/analogy';
+import { chooseGap, GAP_BELOW_BAR_REASON, gapBelowBar, topicGap, topicGapNote } from '@/lib/explainers/ideas/gap';
+import { harvestNewProps, type HarvestResult } from '@/lib/explainers/render/bank';
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import { runAgentSession, type AgentQuery, type SessionResult } from '@/lib/explainers/render/agent';
 import { SpendMeter } from '@/lib/explainers/render/meter';
+import { checkUnderstanding, FINDINGS_FILE, FIX_PROMPT, type ComprehensionCheck, type UnderstandingVerdict } from '@/lib/explainers/render/understanding';
 import { resolveSource, type FetchLike } from '@/lib/explainers/render/source';
 import { HYPERFRAMES_BIN, HYPERFRAMES_ENV, prepareWorkspace, recordMusicChoice, workspacePaths, type Workspace } from '@/lib/explainers/render/workspace';
 import {
@@ -31,7 +34,7 @@ import type { JevTransport } from '@/lib/reels/jev/runner';
 import { eventsFromDir, lintStoryboard } from '../../../explainers/lint/lint-storyboard.mjs';
 import { mountFrames } from '../../../explainers/world-kit/mount.mjs';
 import { hasOpenerSfx, placeOpenerSfx } from '../../../explainers/world-kit/opener-sfx.mjs';
-import { HISTORY as OPENER_HISTORY, openerByKey, pickOpener } from '../../../explainers/world-kit/openers/bank.js';
+import { HISTORY as OPENER_HISTORY, OBJECT_HERO_OPENERS, openerByKey, pickOpener } from '../../../explainers/world-kit/openers/bank.js';
 import { pace } from '../../../explainers/world-kit/pace.mjs';
 import { OUT as EVENTS_TRACK, placeSound } from '../../../explainers/world-kit/sound.mjs';
 
@@ -77,6 +80,8 @@ export type RenderDeps = {
    * `index.html` is assembled, the worker renders it. No extra model call.
    */
   renderVideo?: (projectDir: string) => void;
+  /** Adds the reel's verified new drawings to the asset bank (EX3-114); tests stub it. */
+  harvest?: (input: { projectDir: string; jobId: string; topic: string }) => HarvestResult;
   /** Swappable for tests. The real one calls Sonnet. A finished video always gets one. */
   writeCaption?: (facts: CaptionFacts, opts: CaptionOptions) => Promise<CaptionDraft>;
   /**
@@ -110,17 +115,30 @@ export type RenderDeps = {
 export const OPENER_CHOICE = path.join('assets', 'opener.json');
 
 /**
+ * The hero's kind from STORYBOARD.md's `## Anchor scene` (`hero: <entity id> — critter | object`):
+ * the director stages the analogy and picks the hero (EX3-128). A storyboard without one: critter.
+ */
+export function storyboardHero(storyboard: string): 'critter' | 'object' {
+  const m = /^\s*-?\s*hero:.*?\b(critter|object)\b[^\n]*$/im.exec(storyboard);
+  return m?.[1]?.toLowerCase() === 'object' ? 'object' : 'critter';
+}
+
+/**
  * Frame 1's opener for this job (EX3-102): the one it already drew, or a random one of the bank
  * that none of the last HISTORY reels used, recorded on the job and written to assets/opener.json
  * for pace, the frame and the sound. A job resumed from before the bank (its worker's own frame 1
- * built, no choice file) keeps that frame and draws none: null.
+ * built, no choice file) keeps that frame and draws none: null. An object-led reel (the storyboard's
+ * hero is an object, EX3-111, EX3-128) draws only from the openers that never touch the hero, and the
+ * choice file says `"hero": "object"`. Drawn after the plan, which names the hero; pace.mjs reads the
+ * choice in the build.
  */
 export async function assignOpener(
   db: ExplainersDb,
   jobId: string,
   projectDir: string,
-  { resuming = false, random = Math.random }: { resuming?: boolean; random?: () => number } = {},
+  { resuming = false, random = Math.random, hero = 'critter' }: { resuming?: boolean; random?: () => number; hero?: 'critter' | 'object' } = {},
 ): Promise<string | null> {
+  const pool = hero === 'object' ? OBJECT_HERO_OPENERS : undefined;
   const file = path.join(projectDir, OPENER_CHOICE);
   const onFile = (): string | null => {
     try {
@@ -135,17 +153,17 @@ export async function assignOpener(
     const legacy = resuming && !fs.existsSync(file) && fs.existsSync(path.join(projectDir, 'assets', 'frames', '01-opener.js'));
     if (legacy) return null;
     try {
-      key = pickOpener(await recentOpeners(db, jobId, OPENER_HISTORY), { rand: random }) as string;
+      key = pickOpener(await recentOpeners(db, jobId, OPENER_HISTORY), { rand: random, ...(pool ? { pool } : {}) }) as string;
       await setJobOpener(db, jobId, key);
     } catch (error) {
       // A database without the `opener` column yet (db/explainers_schema.sql, EX3-102): the reel
       // still gets an opener, drawn without the history, and the render goes on.
       if ((error as { code?: string })?.code !== '42703') throw error;
-      key = pickOpener([], { rand: random }) as string;
+      key = pickOpener([], { rand: random, ...(pool ? { pool } : {}) }) as string;
     }
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ key, name: openerByKey(key)?.name ?? key }, null, 1)}\n`);
+  fs.writeFileSync(file, `${JSON.stringify({ key, name: openerByKey(key)?.name ?? key, hero }, null, 1)}\n`);
   return key;
 }
 
@@ -435,6 +453,80 @@ async function recordSessionCost(db: ExplainersDb, job: JobRow, mode: Mode, phas
   }
 }
 
+/** The reel test's verdict as recorded on the job. */
+function understandingReport(attempt: 'first' | 'after_fix', comprehension: unknown, verdict: UnderstandingVerdict | null): string {
+  return JSON.stringify({ phase: 'understanding', attempt, verdict, comprehension }, null, 2);
+}
+
+/**
+ * The blocking understanding test (EX3-133), right after the plan. Returns the plan as it stands
+ * after any fix. Without Jev (no analogy deps) or without the reel test's answers it records what it
+ * has and lets the build go on.
+ */
+async function understandingTest(
+  deps: RenderDeps,
+  job: JobRow,
+  topic: TopicRow,
+  projectDir: string,
+  storyboard: string,
+  script: string,
+  session: (prompt: string) => Promise<SessionResult>,
+  keepText: (kind: ArtifactKind, content: string | null) => Promise<void>,
+  stage: (name: string) => Promise<void>,
+  log: (event: string, fields?: Record<string, unknown>) => void,
+): Promise<{ storyboard: string; script: string }> {
+  const file = path.join(projectDir, '.hyperframes', 'comprehension-check.json');
+  const first = readJson(file) as ComprehensionCheck | null;
+  if (!first) {
+    log('comprehension_check_missing', { jobId: job.id });
+    return { storyboard, script };
+  }
+  if (!deps.analogy) {
+    await keepText('lint_report', understandingReport('first', first, null));
+    log('understanding_skipped', { jobId: job.id, reason: 'no Jev transport' });
+    return { storyboard, script };
+  }
+  const jev = new RecordingExplainersJevRunner(deps.analogy.jevTransport, deps.db, { mode: job.mode, jobId: job.id });
+  const judge = (comprehension: ComprehensionCheck | null, board: string, words: string) =>
+    checkUnderstanding({ jev, topicId: topic.id, term: topic.term ?? topic.title, comprehension, storyboard: board, script: words });
+
+  const verdict = await judge(first, storyboard, script);
+  await keepText('lint_report', understandingReport('first', first, verdict));
+  if (!verdict || verdict.blocking.length === 0) return { storyboard, script };
+
+  log('understanding_blocking', { jobId: job.id, kinds: verdict.blocking.map((f) => f.kind) });
+  fs.writeFileSync(path.join(projectDir, FINDINGS_FILE), `${JSON.stringify({ blocking: verdict.blocking, minor: verdict.minor }, null, 2)}\n`);
+  fs.rmSync(file, { force: true });
+  await stage('session_fix');
+  const fix = await session(FIX_PROMPT);
+  await recordSessionCost(deps.db, job, job.mode, 'session_fix', fix);
+  if (fix.capped) throw new RenderFailure(`Spend cap $${job.spend_cap_usd.toFixed(2)} reached in the fix session.`, true);
+
+  const board = read(path.join(projectDir, 'STORYBOARD.md')) || storyboard;
+  const words = read(path.join(projectDir, 'SCRIPT.md')) || script;
+  if (board !== storyboard) await keepText('storyboard', board);
+  if (words !== script) await keepText('script', words);
+  const again = readJson(file) as ComprehensionCheck | null;
+  const second = again ? await judge(again, board, words) : null;
+  await keepText('lint_report', understandingReport('after_fix', again, second));
+  const remaining = second ? second.blocking : verdict.blocking;
+  if (remaining.length) {
+    log('understanding_flag', { jobId: job.id, kinds: remaining.map((f) => f.kind) });
+    await addLintViolations(
+      deps.db,
+      job.id,
+      remaining.map((f) => ({
+        source: 'storyboard' as const,
+        rule: 'understanding_flag',
+        frame: f.beats?.length === 1 ? f.beats[0] : null,
+        severity: 'error' as const,
+        detail: `${f.kind}: ${f.detail}${second ? '' : ' (the fix session wrote no new reel test)'}`,
+      })),
+    );
+  }
+  return { storyboard: board, script: words };
+}
+
 /**
  * One render: source → analogy (only when the topic has none, EX3-31) →
  * workspace → session A (plan) → checkpoint (lint, no LLM) → session B (build
@@ -474,13 +566,33 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     });
     await keepText('source', sourceText);
 
-    // The idea phase picks every pool topic's analogy (EX3-30). A topic from before 3.0, or one
-    // whose pass failed, gets the same pass here, for this one topic, on this click (EX3-31).
+    // The idea phase picks every pool topic's analogy (EX3-30). A topic from before 3.9, or one
+    // whose pass failed or picked nothing, gets the same pass here, for this one topic, on this click
+    // (EX3-31). Nothing passes in three writer calls: the render fails, and the topic stays in the
+    // pool for the next render (EX3-125; supersedes EX3-104's drop).
     if (!topicAnalogy(topic)) {
       await stage('analogy');
       if (!deps.analogy) throw new RenderFailure('This topic has no picked analogy, and this worker has no analogy writer.');
       const jev = new RecordingExplainersJevRunner(deps.analogy.jevTransport, db, { mode: job.mode, jobId: job.id });
-      await chooseAnalogy(
+      const note = await chooseAnalogy(
+        { db, jev, ideaModel: deps.analogy.ideaModel, model: settings.analogy_model, mode: job.mode, jobId: job.id },
+        topic,
+      ).catch((error: unknown) => {
+        throw new RenderFailure(`Analogy: ${error instanceof Error ? error.message : String(error)}`);
+      });
+      if (analogyBelowBar(note)) throw new RenderFailure(NO_ANALOGY_REASON);
+      topic = (await getTopic(db, job.topic_id)) as TopicRow;
+    }
+
+    // The curiosity gap (EX3-120): written for the most pull, scored by Jev, picked by code, and said
+    // word for word in frame 2. Picked in the idea phase with the analogy; written here when the topic
+    // has none for its current analogy. None can be picked: the render fails, and the topic stays.
+    const pickedAnalogy = topicAnalogy(topic);
+    if (pickedAnalogy && !topicGap(topic, pickedAnalogy)) {
+      await stage('gap');
+      if (!deps.analogy) throw new RenderFailure('This topic has no picked curiosity gap, and this worker has no gap writer.');
+      const jev = new RecordingExplainersJevRunner(deps.analogy.jevTransport, db, { mode: job.mode, jobId: job.id });
+      const note = await chooseGap(
         {
           db,
           jev,
@@ -491,9 +603,11 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
           jobId: job.id,
         },
         topic,
+        pickedAnalogy,
       ).catch((error: unknown) => {
-        throw new RenderFailure(`Analogy: ${error instanceof Error ? error.message : String(error)}`);
+        throw new RenderFailure(`Curiosity gap: ${error instanceof Error ? error.message : String(error)}`);
       });
+      if (gapBelowBar(note)) throw new RenderFailure(GAP_BELOW_BAR_REASON);
       topic = (await getTopic(db, job.topic_id)) as TopicRow;
     }
 
@@ -504,13 +618,9 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       ws = existing;
       log('resume', { jobId: job.id });
     } else {
-      ws = (deps.prepare ?? prepareWorkspace)({ jobsRoot: deps.jobsRoot, jobId: job.id, topic, sourceText, analogy: topicAnalogy(topic) });
+      ws = (deps.prepare ?? prepareWorkspace)({ jobsRoot: deps.jobsRoot, jobId: job.id, topic, sourceText, analogy: topicAnalogy(topic), gap: topicGapNote(topic, topicAnalogy(topic)) });
       await keepText('brief', read(path.join(ws.projectDir, 'BRIEF.md')));
     }
-
-    // Frame 1's opener, drawn from the bank before anything is built (EX3-102).
-    const opener = await assignOpener(db, job.id, ws.projectDir, { resuming, random: deps.random });
-    log('opener', { jobId: job.id, opener });
 
     // The analogy pass, when it ran, is already on the job's spend.
     const meter = new SpendMeter(job.spend_cap_usd, (await getJob(db, job.id))?.spend_usd ?? job.spend_usd);
@@ -551,6 +661,20 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       script = written;
     }
 
+    // The understanding test (EX3-133): code reads the stranger's raw answers from the reel test, and
+    // Jev judges the mechanism and the example. Serious misunderstandings get one fix session before
+    // audio; still serious after it, the build goes on with the reel flagged. Minor confusion is
+    // recorded only. A resumed job's plan was tested before it stopped.
+    if (!resuming) {
+      const fixed = await understandingTest(deps, job, topic, ws.projectDir, storyboard, script, session, keepText, stage, log);
+      storyboard = fixed.storyboard;
+      script = fixed.script;
+    }
+
+    // Frame 1's opener, drawn from the bank once the plan names the hero (EX3-102, EX3-128).
+    const opener = await assignOpener(db, job.id, ws.projectDir, { resuming, random: deps.random, hero: storyboardHero(storyboard) });
+    log('opener', { jobId: job.id, opener });
+
     // The first-time-viewer test of the curiosity gap (EX3-101): what a stranger understood.
     const gapCheck = readJson(path.join(ws.projectDir, '.hyperframes', 'gap-check.json'));
     if (gapCheck) await keepText('lint_report', JSON.stringify({ phase: 'gap_check', verdict: gapCheck }, null, 2));
@@ -559,7 +683,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     // Checkpoint: deterministic lint, recorded, never blocking in version one (E-07).
     // The reviewer layers from E-11 plug in here after run one.
     await stage('checkpoint');
-    const checkpoint = lintStoryboard({ storyboard, script });
+    const checkpoint = lintStoryboard({ storyboard, script, brief: read(path.join(ws.projectDir, 'BRIEF.md')) });
     await addLintViolations(db, job.id, checkpoint.violations as LintViolation[]);
     await keepText('lint_report', JSON.stringify({ phase: 'checkpoint', ...checkpoint }, null, 2));
 
@@ -601,6 +725,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     const final = lintStoryboard({
       storyboard: read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard,
       script: read(path.join(ws.projectDir, 'SCRIPT.md')) ?? script,
+      brief: read(path.join(ws.projectDir, 'BRIEF.md')),
       frameSource: frameModulesByNumber(ws.projectDir),
       audioMeta: readJson(path.join(ws.projectDir, 'audio_meta.json')),
       frameEvents: eventsFromDir(path.join(ws.projectDir, 'assets', 'frames')),
@@ -637,10 +762,19 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     const track = recordMusicChoice(deps.jobsRoot, ws.projectDir);
     if (track) log('music', { jobId: job.id, track });
 
+    // The asset bank grows (EX3-114): the reel's new drawings the picture check named exactly. Never blocks.
+    try {
+      const harvest = (deps.harvest ?? harvestNewProps)({ projectDir: ws.projectDir, jobId: job.id, topic: topic.title });
+      if (harvest.added.length || harvest.skipped.length) log('bank_harvest', { jobId: job.id, ...harvest });
+    } catch (error) {
+      log('bank_harvest_failed', { jobId: job.id, error: error instanceof Error ? error.message : String(error) });
+    }
+
     await stage('caption');
     const facts: CaptionFacts = {
       title: topic.title,
       scope: topic.scope,
+      analogy: topicAnalogy(topic)?.name ?? null,
       storyboard: read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard,
       script: read(path.join(ws.projectDir, 'SCRIPT.md')) ?? script,
       source: topic.source_text,

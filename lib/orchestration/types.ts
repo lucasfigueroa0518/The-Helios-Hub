@@ -25,6 +25,7 @@ export const WORK_KINDS = [
   'anthropic.cost_sync',
   'auto.cycle',
   'networking.weekly_ingest',
+  'networking.event_details',
   'seo.gsc_daily_sync',
   'system.reconcile',
   'smartlead.lane_ensure',
@@ -108,6 +109,7 @@ export type WorkPayloadMap = {
   'anthropic.cost_sync': { reason?: string };
   'auto.cycle': { campaignId: string; ownerId: string };
   'networking.weekly_ingest': { reason?: string };
+  'networking.event_details': { reason?: string; ingestRunId?: string; weekKey?: string };
   'seo.gsc_daily_sync': { reason?: string };
   'system.reconcile': { reason?: string };
   'smartlead.lane_ensure': { campaignId: string; identitySlug: IdentitySlug };

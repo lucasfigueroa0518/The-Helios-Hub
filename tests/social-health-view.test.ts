@@ -24,7 +24,7 @@ test('headline names the type that failed and how often', () => {
 
 test('rows: one per type plus publisher, labels from VERTICALS, 14 blocks each', () => {
   const m = healthModel({ ...previewHealth(), windowNights: 14 });
-  assert.deepEqual(m.rows.map((r) => r.label), ['Text on Screen', 'Explainer Reels', 'Carousels', 'IG Stories', 'Last Few Days', 'Publisher']);
+  assert.deepEqual(m.rows.map((r) => r.label), ['Text on Screen', 'Explainer Reels', 'Carousels', 'IG Stories', 'Last Few Days', 'AI Events This Week', 'Publisher']);
   assert.ok(m.rows.every((r) => r.blocks.length === 14));
   const car = m.rows[2]!;
   assert.equal(car.blocks.at(-1)!.tone, 'failed');

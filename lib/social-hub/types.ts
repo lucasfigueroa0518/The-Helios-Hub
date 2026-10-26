@@ -3,7 +3,7 @@
  * its own rows to `HubPost`; native metadata stays per vertical (SH-04).
  */
 
-export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories' | 'last_few_days';
+export type Vertical = 'reels' | 'explainers' | 'carousels' | 'stories' | 'last_few_days' | 'ai_events';
 
 export type Format = 'reel' | 'feed' | 'story';
 
@@ -165,10 +165,14 @@ export type HubIdea = {
   generatedAt: string | null;
   createdAt: string | null;
   detail: string | null;
-  /** Stories: which series this idea belongs to. */
+  /** Stories: which series this idea belongs to. AI Events: which city. */
   group?: string | null;
   /** A person typed this idea in (the seeding spec's origin `manual`): the pool never trims it. */
   yours?: boolean;
+  /** AI Events: a person's pin or exclude on the event for its week (Pin / Exclude / Clear). */
+  hold?: 'pinned' | 'excluded' | null;
+  /** An outside page for the idea (AI Events: the event's RSVP page). */
+  link?: string | null;
   /** A render that is queued, running, or whose latest try failed. */
   run?: {
     state: 'queued' | 'running' | 'failed';

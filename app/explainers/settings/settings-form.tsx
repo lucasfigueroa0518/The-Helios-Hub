@@ -27,6 +27,7 @@ const FIELDS: Field[] = [
   { key: 'orchestrator_model', label: 'Orchestrator model', help: 'E-18.', kind: 'text' },
   { key: 'frame_worker_model', label: 'Frame worker model', help: 'E-18.', kind: 'text' },
   { key: 'idea_model', label: 'Idea generator model', help: 'E-16.', kind: 'text' },
+  { key: 'analogy_model', label: 'Analogy writer model', help: 'EX3-123: two calls per topic, a third when neither passes.', kind: 'text' },
   { key: 'music_enabled', label: 'Background music', help: 'E-20.', kind: 'bool' },
   { key: 'sfx_enabled', label: 'Sound effects', help: 'E-20.', kind: 'bool' },
 ];

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// lint-storyboard.mjs — deterministic checks on an Explainer Reel's plan (Explainers 3.3,
-// planning/Explainer Reels/DECISIONS.md EX3-10 to EX3-24, EX3-60 to EX3-101). No model, no
+// lint-storyboard.mjs — deterministic checks on an Explainer Reel's plan (Explainers 4.0, hx-4:
+// planning/Explainer Reels/DECISIONS.md EX3-10 to EX3-24, EX3-60 to EX3-132, and the visual
+// system's grounds, sizes and outfits, planning/Explainer Reels/VISUAL_SYSTEM_4.md). No model, no
 // judgment: it reports structure against the fixed eight-beat sheet. Violations are recorded and
 // the render continues (E-07, EX3-06).
 //
@@ -12,42 +13,55 @@
 // exit 2 on a usage or read error.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseStoryboard } from '../hyperframes-skills/faceless-explainer/scripts/lib/storyboard.mjs';
 import { hasOpenerSfx } from '../world-kit/opener-sfx.mjs';
+import { catalogEntries } from '../world-kit/props/catalog.mjs';
 
 /**
  * The fixed beat sheet (EX3-10; 3.2: EX3-79, EX3-83, EX3-87; 3.3: EX3-95, EX3-96): order,
  * storyboard `type`, nominal seconds, anchor rule (`scene`, `own`, or none), the voiceover word
  * range, the longest hold after the voice, and the fewest shots (frames 3 and 8 have no shot
- * list). The close (frame 8) is voiceless and code's: 2.5s, no words, no hold.
+ * list). The close (frame 8) is voiceless and code's: 2.5s, no words, no hold. 3.9 (EX3-128):
+ * beat 5 is why the analogy works, then where it breaks; beat 7 is the payoff.
  */
 export const BEAT_SHEET = [
   { beat: 'series opener', type: 'hook', seconds: 3.5, anchor: 'scene', words: null, hold: 0.2, shots: 1 },
-  { beat: 'curiosity gap', type: 'pain_point', seconds: 9, anchor: 'scene', words: [18, 36], hold: 0.2, shots: 2 },
+  { beat: 'curiosity gap', type: 'pain_point', seconds: 9, anchor: 'own', words: [18, 36], hold: 0.2, shots: 2 },
   { beat: 'define', type: 'product_intro', seconds: 7, anchor: 'own', words: [12, 26], hold: 0.2, shots: 0 },
   { beat: 'everyday analogy', type: 'feature_showcase', seconds: 12, anchor: 'scene', words: [20, 36], hold: 0.2, shots: 2 },
-  { beat: 'map the analogy', type: 'feature_showcase', seconds: 10, anchor: 'scene', words: [18, 34], hold: 0.2, shots: 2 },
+  { beat: 'why it works, where it breaks', type: 'feature_showcase', seconds: 10, anchor: 'scene', words: [18, 34], hold: 0.2, shots: 2 },
   { beat: 'tiny real example', type: 'social_proof', seconds: 10, anchor: 'own', words: [18, 32], hold: 0.2, shots: 2 },
-  { beat: 'real world', type: 'benefit_highlight', seconds: 6, anchor: 'own', words: [12, 26], hold: 0.2, shots: 1 },
+  { beat: 'the payoff', type: 'benefit_highlight', seconds: 6, anchor: 'own', words: [12, 26], hold: 0.2, shots: 1 },
   { beat: 'close', type: 'branding', seconds: 2.5, anchor: null, words: null, hold: null, shots: 0, voiceless: true },
 ];
 
-/** The series opener's line (EX3-96, Option 4): the template, its slot naming what the hook
- *  shows in 1–3 words ("this little shop", "this soggy forecaster"). */
-export const OPENER_TEMPLATE = 'In the next 30 seconds, this ___ will teach you an AI concept.';
-export const OPENER_RE = /^in the next 30 seconds,? this (.+?) will teach you an ai concept\.?$/i;
+/** The series opener's line (EX3-96; 3.9, EX3-130: "the next minute", and an AI or a tech concept).
+ *  Code picks the kind from the topic's ai_focus score and writes the exact line into BRIEF.md's
+ *  `## Opener line`; the slot names what the hook shows in 1–3 words. */
+export const OPENER_TEMPLATES = {
+  ai: 'In the next minute, this ___ will teach you an AI concept.',
+  tech: 'In the next minute, this ___ will teach you a tech concept.',
+};
+/** Either variant; group 1 is the slot, group 2 the kind ("an ai" or "a tech"). */
+export const OPENER_RE = /^in the next minute,? this (.+?) will teach you (an ai|a tech) concept\.?$/i;
 export const OPENER_SLOT_WORDS = [1, 3];
-/** The 3.2 fixed line, kept for the old plans' tests. */
-export const OPENER_LINE = "In the next 30 seconds, you'll learn an AI concept.";
-/** Frame 2's promise ties the answer to something in the viewer's life (EX3-101): an AI, a
- *  chatbot, an app, search, a phone… */
+/** The opener kind a line uses: 'ai', 'tech', or null when it is neither template. */
+export function openerKind(line) {
+  const m = OPENER_RE.exec(String(line ?? '').trim().replace(/[‘’]/g, "'"));
+  return m ? (/ai/i.test(m[2]) ? 'ai' : 'tech') : null;
+}
+/** Words for the real technology a viewer meets (an AI, a chatbot, an app, search, a phone…). The
+ *  example-reuse check skips them. Frame 2 no longer has to say one (gap_real removed, EX3-120). */
 export const PROMISE_WORD_RE = /\b(ai|a\.i\.|models?|chatbots?|assistants?|agents?|llms?|chatgpt|siri|alexa|apps?|search(?:es)?|phones?|websites?|software|computers?|online|internet|emails?|feeds?)\b/i;
+/** A toss to the next beat (EX3-116; Lucas, 2026-10-22: "That makes it feel like we're going to
+ *  commercial break"): the gap ends on the viewer's question and the definition answers it. */
+export const TOSS_RE = /\b(stick around|stay tuned|keep watching|stay with me|hang (?:on|tight)|wait for it|let'?s find out|find out (?:how|why|what)|here'?s (?:the thing|why|how)|but first|watch closely|don'?t go anywhere|before we (?:get|go))\b/i;
 /** Frame 2 never claims a parallel the viewer cannot check yet (EX3-101). */
 export const SAME_SPOT_RE = /\b(same spot|same boat|same position|same situation|same problem)\b/i;
-/** Words that never make a question's key words (the frame 4 callback check). */
+/** Words that never make a question's key words (the frame 7 payoff check). */
 const QUESTION_STOP = new Set(['so', 'how', 'why', 'what', 'when', 'who', 'which', 'does', 'do', 'did', 'can', 'could', 'would', 'will', 'is', 'are', 'it', 'its', 'you', 'your', 'they', 'the', 'a', 'an', 'to', 'of', 'at', 'all', 'just', 'get', 'that', 'this', 'there', 'be', 'not', 'too', 'and', 'or', 'with', 'without', 'anyway', 'even']);
 
 /** The reel usually runs 50–65s; outside it is a warning, never an error: words are never cut for length (EX3-79). */
@@ -64,20 +78,87 @@ export const SUBJECT_FRAMES = [2, 4, 5, 6, 7];
 export const SUBJECT_ERROR_FRAMES = [2, 4, 5];
 /** People and body parts never appear (EX3-77): critters act. */
 export const PERSON_RE = /\b(hands?|fingers?|fingertips?|palms?|fists?|arms?|person|people|humans?|man|woman|men|women|boy|girl|child|kid|figure)\b/i;
-/** Frame 6's example steps (EX3-87). */
+/** Frame 6's example steps (EX3-87): as many as the anchor scene's steps, step N mirroring step N (EX3-129). */
 export const EXAMPLE_STEPS_RANGE = [3, 5];
 export const MAX_ENTITIES = 4;
 export const STEPS_RANGE = [3, 5];
 export const TRANSITIONS = ['cut'];
-export const GROUNDS = ['paper', 'night', 'forest', 'white'];
+/** The grounds (hx-4, VISUAL_SYSTEM_4.md): the paper studio sweep, the premium lit stage, white for the close. */
+export const GROUNDS = ['paper', 'stage', 'white'];
+/** Grounds retired in 4.0, and what replaces them (the kit still draws them as `stage` for old projects). */
+export const RETIRED_GROUNDS = { night: 'stage', forest: 'stage' };
+/** The real-tech frames (hx-4): glass and gloss on the paper studio ground. */
+export const GLASS_FRAMES = [2, 3, 6];
+/** Story exaggeration of a real size is capped (hx-4, still 01): SIZES' `exaggerate` at most this. */
+export const MAX_EXAGGERATE = 1.5;
+/** A critter is the scene's ruler (core.js CRITTER_CM): it needs no size of its own. */
+export const CRITTER_CM = 72;
+/** Things worn over a critter's eyes or mouth (EX3-103): never part of a look; glasses are the one exception. */
+export const FACE_COVER_RE = /\b(masks?|blindfolds?|hoods?|visors?|sunglasses|balaclavas?|veils?|goggles|eye ?patch(?:es)?|face ?shields?)\b|\bscarf\s+(?:over|across|covering)\s+(?:the\s+|its\s+)?(?:mouth|face)\b/i;
+
+/**
+ * An entity line's real size (hx-4, still 01): `size: 26 cm`, or `size: 70 × 70 × 180 cm`, with an
+ * optional story exaggeration `(exaggerate 1.3×)`. Returns null when the line has no `size:`, else
+ * { dims: [cm…], unit, exaggerate } (unit is null when the size names none).
+ */
+export function parseSize(line) {
+  const m = /\bsize:\s*([^—–;\n]*)/i.exec(String(line ?? ''));
+  if (!m) return null;
+  const text = m[1];
+  const dims = /^\s*(\d+(?:\.\d+)?)(?:\s*[×x*]\s*(\d+(?:\.\d+)?))?(?:\s*[×x*]\s*(\d+(?:\.\d+)?))?\s*(cm|mm|m)?\b/i.exec(text);
+  const ex = /exaggerat\w*\s*(\d+(?:\.\d+)?)/i.exec(text);
+  return {
+    dims: dims ? dims.slice(1, 4).filter(Boolean).map(Number) : [],
+    unit: dims?.[4]?.toLowerCase() ?? null,
+    exaggerate: ex ? Number(ex[1]) : null,
+  };
+}
+
+/**
+ * A critter's look line (EX3-107, hx-4): `look: <orange|ink|paper>, outfit <the role's outfit>`. The
+ * stock `wear` list is accepted only with its exact-match reason, `wear <items> (exact: <why each is
+ * exactly the role's own>)`, or as `wear none`. Returns the problems, as strings.
+ */
+export function lookLineProblems(line) {
+  const text = String(line ?? '');
+  const look = /\blook:\s*(orange|ink|paper)\b([^—–\n]*)/i.exec(text);
+  if (!look) return [];
+  const rest = look[2];
+  const out = [];
+  const outfitM = /\boutfit\b\s*:?\s*(.*?)(?=\bwear\b|$)/i.exec(rest);
+  const wearM = /\bwear\b\s*:?\s*(.*)$/i.exec(rest);
+  const outfit = outfitM ? outfitM[1].replace(/[\s,;.]+$/, '').trim() : null;
+  const wear = wearM ? wearM[1].trim() : null;
+  const short = text.trim().replace(/^-\s*/, '').slice(0, 60);
+  if (outfit === null && wear === null) {
+    out.push(`a critter has no outfit ("look: <orange|ink|paper>, outfit <its role's outfit, drawn for this reel>"): ${short}`);
+  }
+  if (outfit !== null && !/[\p{L}]/u.test(outfit)) out.push(`a critter's outfit is empty: name the outfit drawn for its role, or "outfit none": ${short}`);
+  if (outfit && /\borange\b/i.test(outfit)) out.push(`an outfit is orange ("${outfit}"): orange is the hero's body and the focal, never an outfit color`);
+  if (wear !== null && !/^none\b/i.test(wear) && !/\(\s*exact:/i.test(wear)) {
+    out.push(`"wear ${wear.replace(/[\s,;.]+$/, '')}" is the stock list, used only on an exact match: draw the role's outfit ("outfit <…>"), or say why each stock item is exactly the role's own ("wear <items> (exact: <why>)")`);
+  }
+  const cover = FACE_COVER_RE.exec(rest);
+  if (cover) out.push(`"${cover[0]}" covers a critter's eyes or mouth: nothing worn ever does, glasses excepted (EX3-103)`);
+  return out;
+}
+
+/** A ground word's problem, or null: one of GROUNDS; night and forest are retired (hx-4). */
+export function groundProblem(ground) {
+  const g = String(ground ?? '').trim().toLowerCase();
+  if (RETIRED_GROUNDS[g]) return `ground "${g}" is retired in 4.0: use "${RETIRED_GROUNDS[g]}" (the premium lit stage) for a dark, tense or night scene, or "paper" (the studio sweep)`;
+  if (!GROUNDS.includes(g)) return `ground "${g}"; one of ${GROUNDS.join(', ')}`;
+  return null;
+}
 
 /** Beat 4 continues the scene the viewer has seen (EX3-97): it never opens by setting it again. */
 export const SCENE_SETTING_RE = /^(let's say|let us say|picture|imagine|let's look at|let us look at|think of|say you)\b/i;
-/** Beat 7 opens with a transition (EX3-18). */
-export const REAL_WORLD_TRANSITION_RE =
-  /^(another example|in everyday life|in real life|in daily life|outside (our|the|this)|every time you|next time|you meet|you'll meet|you will meet|you've met|you have met|you see this|you'll see this)\b/i;
-/** Beat 5 says why: at least this many "because" (EX3-16). */
-export const MIN_BECAUSE = 2;
+/**
+ * Beat 5 ends on where the analogy breaks (EX3-128): its one limit or trade-off. A heuristic, so a
+ * warning: some sentence of frame 5 carries a word that marks a limit ("but", "except", "only",
+ * "unless", "however", "though", "can't", "won't", "breaks", "limit", "trade-off", "downside").
+ */
+export const LIMIT_CUE_RE = /\b(but|except|only|unless|however|though|although|can'?t|cannot|won'?t|doesn'?t work|breaks?|limits?|limited|limitation|trade-?offs?|downside)\b/i;
 /** Sound events (EX3-63): per frame on these beats, and per reel. */
 export const EVENT_FRAMES = [1, 2, 4, 5, 6, 7];
 export const MIN_EVENTS_PER_FRAME = 4;
@@ -205,6 +286,97 @@ function anchorProblems(block) {
     if (m && !/critter/i.test(what)) out.push(['error', `an entity is a person or a body part ("${m[0]}"); whoever acts is a critter (EX3-77)`]);
   }
   if (/^-\s*peak:/im.test(block) && !/^-\s*hook:/im.test(block)) out.push(['warning', 'peak is retired; the opener shows the hook']);
+  // The hero the hook follows (EX3-110): a critter, or an object when the objects act.
+  const hero = /^-\s*hero:\s*([\w-]+)\s*[—–-]+\s*(critter|object)\b/im.exec(block);
+  if (!hero) out.push(['error', 'no hero ("- hero: <entity id> — critter | object": the one the hook follows, EX3-110)']);
+  // Each critter's look is fixed for the reel (EX3-107): `look: <orange|ink|paper>, outfit <…>`. A
+  // critter hero is the one orange critter; with an object hero no critter is orange. Orange is
+  // counted on this block's entity lines only (EX3-132): a frame's own critters (frame 7's callback,
+  // a frame 3 visual) are never the count.
+  const critters = entities.filter((line) => /\bcritter\b/i.test(line.split(/stands for/i)[1] ?? line));
+  const looks = critters.map((line) => /\blook:\s*(orange|ink|paper)\b/i.exec(line)?.[1]?.toLowerCase() ?? null);
+  critters.forEach((line, i) => {
+    if (!looks[i]) out.push(['error', `a critter has no look ("look: <orange|ink|paper>, outfit <its role's outfit>"): ${line.trim().slice(0, 60)} (EX3-107)`]);
+    // Outfits are drawn for the role; the stock wear only on an exact match (hx-4, still 03).
+    for (const p of lookLineProblems(line)) out.push(['error', `${p} (EX3-107, hx-4)`]);
+  });
+  // The anchor scene's ground: paper or stage (white is the close's).
+  const ground = /^-\s*ground:\s*([\w-]+)/im.exec(block)?.[1];
+  if (ground) {
+    const p = groundProblem(ground) ?? (ground.toLowerCase() === 'white' ? 'ground "white" is the close\'s; the anchor scene is paper or stage' : null);
+    if (p) out.push(['error', p]);
+  }
+  const orange = looks.filter((l) => l === 'orange').length;
+  if (hero?.[2].toLowerCase() === 'object') {
+    if (orange > 0) out.push(['error', `${orange} orange critter(s) with an object hero: the hero object carries the orange, no critter does (EX3-107)`]);
+  } else if (critters.length && looks.every(Boolean) && orange !== 1) {
+    out.push(['error', `${orange} orange critters; the hero (the hook's critter) is the one orange critter, shown only in frames 1, 4, 5 and a frame-7 callback (EX3-107, EX3-132)`]);
+  }
+  return out;
+}
+
+/**
+ * Every anchor entity's real size (hx-4, still 01; Lucas, 2026-10-26: sizes were "preposterous"):
+ * each entity line that is not a critter carries `size: <n> cm` (a critter is the 72 cm ruler), and
+ * a story exaggeration is at most MAX_EXAGGERATE.
+ */
+export function entitySizeProblems(block) {
+  const out = [];
+  if (!block) return out;
+  const entities = block.split(/\r?\n/).filter((l) => /^\s+-\s+\S/.test(l) && /stands for/i.test(l));
+  const missing = [];
+  for (const line of entities) {
+    const id = line.replace(/^\s+-\s+/, '').split(/\s+[—–]\s+/)[0].trim();
+    const critter = /\bcritter\b/i.test(line.split(/stands for/i)[1] ?? line);
+    const size = parseSize(line);
+    if (!size) {
+      if (!critter) missing.push(id);
+      continue;
+    }
+    if (!size.dims.length || !size.dims.every((n) => n > 0)) out.push(['error', `"${id}": its size is not a number ("size: 26 cm", or "size: 70 × 70 × 180 cm")`]);
+    else if (size.unit !== 'cm') out.push(['error', `"${id}": write its size in cm ("size: ${size.dims.join(' × ')} cm"): the scale ledger is in centimetres`]);
+    if (size.exaggerate !== null && !(size.exaggerate > 0 && size.exaggerate <= MAX_EXAGGERATE)) {
+      out.push(['error', `"${id}" is exaggerated ${size.exaggerate}×: at most ${MAX_EXAGGERATE}×; show a tiny thing through a magnifier or an insert shot instead`]);
+    }
+  }
+  if (missing.length) {
+    out.push(['error', `${missing.length} entit${missing.length === 1 ? 'y has' : 'ies have'} no real size (${missing.join(', ')}): give each "size: <n> cm", its real size; a critter is ${CRITTER_CM} cm, the ruler (hx-4)`]);
+  }
+  return out;
+}
+
+/**
+ * Reused assets fit exactly (EX3-112, EX3-113; Lucas, 2026-10-22: "I never want this stand-in look").
+ * Every `prop: <name>` in the anchor block names a catalog asset, gives its `(exact: …)` reason, and
+ * nothing on its line is a thing the asset's tags say it is never a stand-in for (the model-routing
+ * reel's "prop: table (the desk)": a desk is in the table's `not` list).
+ */
+export function propFitProblems(block, entries = catalogEntries()) {
+  const out = [];
+  if (!block) return out;
+  const byName = new Map(entries.map((e) => [e.name.toLowerCase(), e]));
+  const names = [...byName.keys()].sort((a, b) => b.length - a.length);
+  for (const line of block.split(/\r?\n/)) {
+    for (const m of line.matchAll(/\bprop:\s*([^(—–,;\n]+?)\s*(\((?:[^()]|\([^()]*\))*\))?(?=\s*(?:[—–,;]|$|\s-\s))/gi)) {
+      const said = m[1].trim().toLowerCase();
+      const name = names.find((n) => said === n || said.startsWith(`${n} `)) ?? null;
+      if (!name) {
+        out.push(['error', `"prop: ${m[1].trim()}" is not in the asset bank (assets/kit/props/CATALOG.md): draw it new, as this scene's own (EX3-112)`]);
+        continue;
+      }
+      const paren = m[2] ?? '';
+      if (!/^\(\s*exact:/i.test(paren)) {
+        out.push(['error', `"prop: ${name}" has no "(exact: <its is line>, in <this setting>)": reuse an asset only when it is exactly the thing; otherwise draw it new (EX3-112)`]);
+      }
+      const rest = ` ${line.replace(/\(\s*exact:[^)]*\)/gi, ' ').toLowerCase()} `;
+      for (const term of byName.get(name).tags?.not ?? []) {
+        if (new RegExp(`[^a-z]${String(term).toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}s?[^a-z]`).test(rest)) {
+          out.push(['error', `"prop: ${name}" stands in for "${term}", which its tags rule out (${byName.get(name).tags.is}): draw the ${term} new (EX3-112)`]);
+          break;
+        }
+      }
+    }
+  }
   return out;
 }
 
@@ -312,6 +484,93 @@ export function subjectSpoken(subject, window, aliases = new Map()) {
 }
 
 /** Entity aliases from `## Anchor scene`: an entity id's stem → the content words of what it is. */
+/**
+ * Quoted spans in spoken text: a quote opens after a space, a dash or the line's start and closes
+ * before a space or punctuation, so an apostrophe inside a word (it's, the cat's) never counts.
+ */
+export function quotedSpans(text) {
+  const out = [];
+  const re = /(^|[\s(—–:,])(["“‘'])(.+?)(["”’'])(?=$|[\s).,;:!?—–])/g;
+  for (const m of String(text ?? '').matchAll(re)) out.push(m[3].trim());
+  return out;
+}
+
+/** Quoted words a listener cannot hear as quoted (EX3-106): at most this many words. */
+export const SPOKEN_QUOTE_MAX_WORDS = 3;
+/** Symbols the voice reads badly or not at all (EX3-106). */
+export const UNSAYABLE_SYMBOL_RE = /->|→|[=\/&#@<>{}[\]*]/;
+/** Code-like tokens the voice cannot say: camelCase and snake_case (EX3-106). */
+export const CODE_TOKEN_RE = /\b([a-z]+[A-Z][A-Za-z]*|[A-Za-z]+_[A-Za-z_]+)\b/;
+/** A dotted name (file.ext, example.com): read as "dot", which a listener may not follow. */
+export const DOTTED_RE = /\b[A-Za-z]+\.[A-Za-z]{2,}\b/;
+
+/**
+ * Words that can't be said out loud (EX3-106; Lucas, 2026-10-21): a listener cannot hear quote
+ * marks, so a quoted word or two sounds like ordinary speech (the attention reels said "it" 16
+ * times, the quoted word and the pronoun mixed); symbols and code tokens are read badly or skipped.
+ */
+export function unsayableProblems(voices) {
+  const out = [];
+  const all = [...voices.values()].join(' ');
+  for (const [n, text] of voices) {
+    for (const span of new Set(quotedSpans(text).map((q) => q.replace(/[.,;:!?]+$/, '')))) {
+      if (countWords(span) > SPOKEN_QUOTE_MAX_WORDS) continue;
+      const word = span.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+      const bare = word && countWords(word) === 1
+        ? (all.match(new RegExp(`(^|[^\\p{L}"“‘'])${word}(?![\\p{L}"”’'])`, 'giu')) ?? []).length
+        : 0;
+      out.push([n, 'error', `the voice quotes "${span}", but a listener cannot hear quote marks${bare > 1 ? `, and "${word}" is also said ${bare} times as an ordinary word` : ''}: say it without naming the word, or show the word on screen (EX3-106)`]);
+    }
+    const symbol = UNSAYABLE_SYMBOL_RE.exec(text);
+    if (symbol) out.push([n, 'error', `the voice has "${symbol[0]}", which the voice reads badly or skips: write it as words (EX3-106)`]);
+    const code = CODE_TOKEN_RE.exec(text);
+    if (code) out.push([n, 'error', `the voice has the code token "${code[0]}": say it in plain words (EX3-106)`]);
+    const dotted = DOTTED_RE.exec(text);
+    if (dotted) out.push([n, 'warning', `the voice has "${dotted[0]}", read with a "dot": say it the way a person would (EX3-106)`]);
+  }
+  return out;
+}
+
+/** Words that never count as shared material between the scene and the example. */
+const MATERIAL_STOP = new Set([...SUBJECT_STOP, ...QUESTION_STOP, 'for', 'but', 'not', 'then', 'here', 'real', 'example', 'word', 'thing', 'every', 'each', 'some', 'other', 'others', 'one', 'first', 'next', 'then', 'now', 'because', 'means', 'mean', 'say', 'said', 'has', 'have', 'had', 'was', 'were', 'been', 'being', 'out', 'up', 'down', 'back', 'than', 'more', 'most', 'less', 'only', 'same', 'new', 'like', 'into', 'about', 'him', 'them', 'she', 'he', 'they', 'we', 'our', 'us', 'me', 'my', 'i']);
+
+/** Content words by stem, each with the first way it was written. */
+function materialWords(text, skip) {
+  const out = new Map();
+  for (const raw of String(text ?? '').split(/[^\p{L}\p{N}'’]+/u)) {
+    const w = stem(raw);
+    if (w.length >= 3 && !MATERIAL_STOP.has(w) && !skip.has(w) && !PROMISE_WORD_RE.test(w) && !out.has(w)) out.set(w, raw.toLowerCase());
+  }
+  return out;
+}
+
+/**
+ * The example is never the analogy (EX3-105; Lucas, 2026-10-21). Frame 6 is the real system; the
+ * anchor scene (frames 1, 4, 5) is a different world (frame 2 is the real thing too, EX3-115). An error when the example's quoted
+ * material (its sentence, its values) shares two or more content words with what the scene's
+ * frames say (the attention reels' party talked about a cat and a fish, and the example was "the
+ * cat ignored the fish because it was tired"). A warning when frame 6 names an anchor entity.
+ * Verbs a mapping naturally shares (asks, reads, answers) are not counted: only quoted material
+ * is. The comprehension check judges the rest (EX3-108).
+ */
+export function exampleReuseProblems(voices, exampleSteps, anchorBlock, term) {
+  const out = [];
+  const voice = voices.get(6) ?? '';
+  if (!voice.trim()) return out;
+  const skip = new Set(String(term ?? '').split(/\s+/).map(stem));
+  const spoken = materialWords(voice, skip);
+  for (const [id] of entityAliases(anchorBlock)) {
+    if (id && id.length >= 3 && spoken.has(id)) out.push([6, 'warning', `frame 6 names the anchor scene's "${id}": the example is the real thing, a different world from the scene (EX3-105)`]);
+  }
+  const exampleWords = materialWords(quotedSpans(voice).join(' '), skip);
+  const scene = materialWords([1, 4, 5].map((n) => voices.get(n) ?? '').join(' '), skip);
+  const shared = [...exampleWords.keys()].filter((w) => scene.has(w));
+  if (shared.length >= 2) {
+    out.push([6, 'error', `frame 6's example reuses the scene's material (${shared.map((w) => exampleWords.get(w)).join(', ')}): the analogy and the example are never the same thing; give the example its own real values (EX3-105)`]);
+  }
+  return out;
+}
+
 function entityAliases(anchor) {
   const map = new Map();
   for (const line of String(anchor ?? '').split(/\r?\n/)) {
@@ -323,17 +582,40 @@ function entityAliases(anchor) {
   return map;
 }
 
-/** Problems with the `## Curiosity gap` block (EX3-13, 3.1). */
+/**
+ * Problems with the `## Curiosity gap` block (EX3-13; 3.8, EX3-120): BRIEF.md's picked gap, copied
+ * (the `> ` line), and `closed_by:`. The gap writer wrote the candidates and Jev picked; the director
+ * never rewrites it.
+ */
 function gapProblems(block) {
-  if (block === null) return [['error', 'no ## Curiosity gap block']];
+  if (block === null) return [['error', 'no ## Curiosity gap block (copy BRIEF.md\'s)']];
   const out = [];
-  const candidates = block.split(/\r?\n/).filter((l) => /^\s*\d+[.)]\s+\S/.test(l));
-  if (candidates.length < 3) out.push(['error', `${candidates.length} candidate gaps; 3 needed`]);
-  const unrated = candidates.filter((l) => !/closable/i.test(l));
-  if (candidates.length && unrated.length) out.push(['warning', `${unrated.length} candidate(s) not rated on closable`]);
-  if (!/^-\s*pick:\s*\S/im.test(block)) out.push(['error', 'no pick']);
-  if (!/^-\s*closed_by:\s*\S/im.test(block)) out.push(['error', 'no closed_by (where the reel answers the gap)']);
+  if (!/^>\s*\S/m.test(block)) out.push(['error', 'no picked gap: copy BRIEF.md\'s ## Curiosity gap block, its "> " line word for word (EX3-120)']);
+  const closedBy = /^-\s*closed_by:\s*(.*\S)/im.exec(block);
+  if (!closedBy) out.push(['error', 'no closed_by (where the reel answers the gap: frame 7, the payoff)']);
+  else if (!/\b(frame|beat)\s*7\b/i.test(closedBy[1])) out.push(['error', `closed_by "${closedBy[1]}" is not frame 7: the payoff answers the gap (EX3-128)`]);
   return out;
+}
+
+/**
+ * BRIEF.md's opener line (EX3-130): the template line in its `## Opener line` section, its slot
+ * still "___" ("In the next minute, this ___ will teach you an AI concept."); null when it has none.
+ */
+export function briefOpenerLine(brief) {
+  const block = brief ? section(brief, 'Opener line') : null;
+  if (!block) return null;
+  for (const raw of block.split(/\r?\n/)) {
+    const line = raw.trim().replace(/^>\s*/, '').replace(/^[`"“]+|[`"”]+$/g, '').trim();
+    if (openerKind(line)) return line;
+  }
+  return null;
+}
+
+/** BRIEF.md's picked curiosity gap (EX3-120): the first `> ` line of its `## Curiosity gap`; null when it has none. */
+export function briefGapLine(brief) {
+  const block = brief ? section(brief, 'Curiosity gap') : null;
+  const m = block ? /^>\s*(.+)$/m.exec(block) : null;
+  return m ? m[1].trim() : null;
 }
 
 const stripQuotes = (s) => String(s ?? '').trim().replace(/^["“']|["”']$/g, '').trim();
@@ -343,14 +625,16 @@ const seconds = (s) => {
 };
 
 /**
- * @param {{ storyboard: string, script?: string | null, frameSource?: Map<number, string>, audioMeta?: unknown,
+ * @param {{ storyboard: string, script?: string | null, brief?: string | null, frameSource?: Map<number, string>, audioMeta?: unknown,
  *           frameEvents?: Map<number, unknown[]> | null, eventsTrack?: boolean | null }} input
+ *   brief: BRIEF.md; frame 2 must say its picked curiosity gap word for word (EX3-120), and frame 1
+ *   the variant of its `## Opener line` (EX3-130).
  *   frameSource: the frame scene modules (assets/frames/NN-*.js) by frame number.
  *   audioMeta: audio_meta.json, parsed; the opener's sounds are checked only when given.
  *   frameEvents: each frame's sound events (assets/frames/NN-*.events.json), checked when given.
  *   eventsTrack: whether assets/sfx/events.wav exists, checked when given.
  */
-export function lintStoryboard({ storyboard, script = null, frameSource = new Map(), audioMeta = undefined, frameEvents = null, eventsTrack = null }) {
+export function lintStoryboard({ storyboard, script = null, brief = null, frameSource = new Map(), audioMeta = undefined, frameEvents = null, eventsTrack = null, catalog = catalogEntries() }) {
   const out = [];
   const { frames, globals } = parseStoryboard(storyboard);
   const scriptLines = script ? parseScript(script) : null;
@@ -361,6 +645,8 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
 
   // The plan's three blocks, the term, and the music.
   for (const [severity, p] of anchorProblems(section(storyboard, 'Anchor scene'))) out.push(violation('anchor_scene', null, severity, p));
+  for (const [severity, p] of propFitProblems(section(storyboard, 'Anchor scene'), catalog)) out.push(violation('prop_fit', null, severity, p));
+  for (const [severity, p] of entitySizeProblems(section(storyboard, 'Anchor scene'))) out.push(violation('entity_size', null, severity, p));
   for (const [severity, p] of hookProblems(section(storyboard, 'Hook'))) out.push(violation('hook', null, severity, p));
   for (const [severity, p] of gapProblems(section(storyboard, 'Curiosity gap'))) out.push(violation('curiosity_gap', null, severity, p));
   const term = String(globals?.extra?.term ?? '').trim();
@@ -374,6 +660,9 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
   const blocks = frameBlocks(storyboard);
   const shotsByFrame = new Map();
   const aliases = entityAliases(section(storyboard, 'Anchor scene'));
+  const pickedGap = briefGapLine(brief);
+  const pickedOpener = briefOpenerLine(brief);
+  const anchorSteps = subItems(section(storyboard, 'Anchor scene'), 'steps');
 
   // Frame count and total duration.
   if (frames.length !== BEAT_SHEET.length) {
@@ -401,7 +690,7 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
 
   // Narration sentences, for the on-screen repeat check below.
   const narration = new Set();
-  // Frame 2's question, for frame 4's callback check (EX3-101).
+  // Frame 2's question, for the payoff's check (frame 7, EX3-128).
   let gapQuestion = '';
 
   frames.forEach((frame, i) => {
@@ -454,15 +743,21 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
       else if (steps.length < EXAMPLE_STEPS_RANGE[0] || steps.length > EXAMPLE_STEPS_RANGE[1]) {
         out.push(violation('example_steps', n, 'error', `${steps.length} example steps; ${EXAMPLE_STEPS_RANGE[0]} to ${EXAMPLE_STEPS_RANGE[1]}`));
       }
+      // The example walks the same steps as the analogy (EX3-129): one example step per anchor step.
+      if (steps.length && anchorSteps?.length && steps.length !== anchorSteps.length) {
+        out.push(violation('example_steps_match', n, 'error', `${steps.length} example steps for the anchor scene's ${anchorSteps.length} steps: the example walks the same steps, step N doing step N's job (EX3-129)`));
+      }
     }
     if (!String(frame.scene ?? '').trim()) out.push(violation('visual_missing', n, 'error', 'no scene: the frame names no visual'));
 
-    // Ground (EX3-42): one of the four; white only on the last frame, which must be white.
+    // Ground (EX3-42, hx-4): paper, stage, or white (the last frame only, which must be white);
+    // night and forest are retired. The real-tech frames are glass on paper (a warning).
     const ground = field('ground').toLowerCase();
     if (!ground) out.push(violation('ground', n, 'error', 'no ground'));
-    else if (!GROUNDS.includes(ground)) out.push(violation('ground', n, 'error', `ground "${ground}"; one of ${GROUNDS.join(', ')}`));
+    else if (groundProblem(ground)) out.push(violation('ground', n, 'error', groundProblem(ground)));
     else if (i === BEAT_SHEET.length - 1 && ground !== 'white') out.push(violation('ground', n, 'error', 'the last frame is white'));
     else if (i < BEAT_SHEET.length - 1 && ground === 'white') out.push(violation('ground', n, 'error', 'only the last frame is white'));
+    else if (GLASS_FRAMES.includes(n) && ground !== 'paper') out.push(violation('ground', n, 'warning', `frame ${n} shows the real thing in glass and gloss, on the paper studio ground: ground "paper" (frame.md § Real-tech frames)`));
 
     // Anchor (EX3-10; 3.2): the scene on beats 1, 2, 4, 5; own visuals on 3, 6 and 7.
     const anchor = field('anchor').toLowerCase();
@@ -472,10 +767,15 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
 
     const vo = voiceFor(frame, i);
     if (i === 0) {
-      // The opener points at the scene (EX3-96): the template, its slot naming what the hook shows.
+      // The opener points at the scene (EX3-96, EX3-130): a template, its slot naming what the hook
+      // shows; the variant BRIEF.md's `## Opener line` gives, when it gives one.
       const m = OPENER_RE.exec(stripQuotes(vo).replace(/[‘’]/g, "'"));
-      if (!m) out.push(violation('opener_line', n, 'error', `frame 1 says "${vo}"; the line is "${OPENER_TEMPLATE}"`));
+      const wanted = pickedOpener ? [pickedOpener] : Object.values(OPENER_TEMPLATES);
+      if (!m) out.push(violation('opener_line', n, 'error', `frame 1 says "${vo}"; the line is ${wanted.map((x) => `"${x}"`).join(' or ')}`));
       else {
+        if (pickedOpener && openerKind(stripQuotes(vo)) !== openerKind(pickedOpener)) {
+          out.push(violation('opener_line', n, 'error', `frame 1 says "${vo}", but BRIEF.md's opener line is "${pickedOpener}": say that line with its slot filled (EX3-130)`));
+        }
         const slot = countWords(m[1]);
         if (slot < OPENER_SLOT_WORDS[0] || slot > OPENER_SLOT_WORDS[1]) out.push(violation('opener_line', n, 'error', `the opener's slot "${m[1]}" is ${slot} words; ${OPENER_SLOT_WORDS[0]} to ${OPENER_SLOT_WORDS[1]}`));
         const anchorWords = new Set(String(section(storyboard, 'Anchor scene') ?? '').split(/[\s,.;:()]+/).map(stem));
@@ -504,45 +804,46 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
         out.push(violation('definition_vague', n, 'warning', 'vague phrase in the definition; name the trigger and the receiver'));
       }
     }
-    // Beat 2 is a tiny story a stranger can follow (EX3-101): a goal, what's in the way, the
-    // viewer's own question, then a promise tying the answer to their life. No term, no "same spot".
+    // Beat 2 is the curiosity gap BRIEF.md picked (EX3-120: written by the gap writer for the most
+    // pull, picked by Jev), word for word; about the real thing, never the analogy's world (EX3-115);
+    // no toss after its question (EX3-116), no term.
     if (i === 1 && vo) {
       const plain = stripQuotes(vo);
       const said = sentences2(plain);
       const qAt = said.map((x) => /\?["')\]]*$/.test(x)).lastIndexOf(true);
+      if (pickedGap && normalize(plain) !== normalize(stripQuotes(pickedGap))) out.push(violation('gap_pick', n, 'error', `frame 2 is not BRIEF.md's picked curiosity gap word for word ("${pickedGap}"): say it as picked (EX3-120)`));
       if (term && normalize(plain).includes(normalize(term))) out.push(violation('gap_term', n, 'error', `the gap says the term "${term}": it never answers itself with a label (the title card and frame 3 name it)`));
-      if (SAME_SPOT_RE.test(plain)) out.push(violation('gap_same_spot', n, 'error', 'the gap claims a parallel ("the same spot"): keep it in the scene; tie it to the viewer in the promise'));
-      if (qAt < 0) out.push(violation('gap_question', n, 'error', "the gap asks no question: end the story on the viewer's own question"));
-      else if (!said.slice(qAt + 1).some((x) => PROMISE_WORD_RE.test(x))) {
-        out.push(violation('gap_promise', n, 'error', 'no promise after the question: one sentence on why the answer matters to the viewer, naming something they know ("it\'s the same reason chatbots make things up")'));
-      }
-      if (/\bcritters?\b/i.test(plain)) out.push(violation('gap_plain_roles', n, 'warning', 'the gap says "critter": name characters by plain roles (the helper, the new hire)'));
+      if (SAME_SPOT_RE.test(plain)) out.push(violation('gap_same_spot', n, 'error', 'the gap claims a parallel ("the same spot"): ask about the real thing itself'));
+      const spokenStems = new Set(normalize(plain).split(' ').map(stem));
+      const named = [...aliases.keys()].filter((id) => id.length >= 3 && spokenStems.has(id));
+      if (named.length) out.push(violation('gap_scene', n, 'error', `the gap names the anchor scene's ${named.map((x) => `"${x}"`).join(', ')}: it is about the real technology, never the analogy's world (EX3-115)`));
+      if (qAt < 0) out.push(violation('gap_question', n, 'error', "the gap asks no question: end on the viewer's own question"));
+      else if (qAt < said.length - 1) out.push(violation('gap_toss', n, 'error', `the gap goes on after its question ("${said.slice(qAt + 1).join(' ')}"): end on the question; the definition answers it (EX3-116)`));
       const declared = stripQuotes(field('gap_question'));
       if (declared && !normalize(plain).includes(normalize(declared))) out.push(violation('gap_question', n, 'error', 'gap_question: is not the question the voiceover asks'));
       gapQuestion = qAt >= 0 ? said[qAt] : '';
     }
-    // Beat 4's last sentence answers the gap's question in its own words (EX3-101).
-    if (i === 3 && vo && gapQuestion) {
+    // No toss into or out of the gap (EX3-116).
+    if ((i === 1 || i === 2) && vo && TOSS_RE.test(stripQuotes(vo)) && !out.some((v) => v.rule === 'gap_toss' && v.frame === n)) {
+      out.push(violation('gap_toss', n, 'error', `"${TOSS_RE.exec(stripQuotes(vo))[0]}" tosses to the next beat like a commercial break: end the gap on the question and let the definition answer it (EX3-116)`));
+    }
+    // Beat 7, the payoff, answers the gap's question in real terms (EX3-101, EX3-128). Its key
+    // words are a hint, not proof, so a miss is a warning (an error forced circular lines).
+    if (i === 6 && vo && gapQuestion) {
       const keys = (x) => normalize(x).split(' ').map(stem).filter((w) => w && !QUESTION_STOP.has(w));
       const wanted = new Set(keys(gapQuestion));
-      const last = sentences2(stripQuotes(vo)).pop() ?? '';
-      const hit = keys(last).filter((w) => wanted.has(w)).length;
+      const hit = new Set(keys(stripQuotes(vo)).filter((w) => wanted.has(w))).size;
       if (wanted.size && hit < Math.min(2, wanted.size)) {
-        out.push(violation('gap_closed', n, 'error', `frame 4's last sentence ("${last}") does not answer the gap's question ("${gapQuestion}") in its words: close the loop explicitly`));
+        out.push(violation('gap_closed', n, 'warning', `the payoff ("${stripQuotes(vo)}") shares few words with the gap's question ("${gapQuestion}"): check that it answers it in real terms (EX3-128)`));
       }
     }
     // Beat 4 continues the scene the viewer has seen (EX3-97): no "Picture…" restart.
     if (i === 3 && vo && SCENE_SETTING_RE.test(stripQuotes(vo))) {
       out.push(violation('scene_setting', n, 'error', 'beat 4 restarts the scene ("Picture…", "Imagine…", "Let\'s say…"); continue it ("Here\'s what the hire does:", "Watch the forecaster:", "Back on the lawn:")'));
     }
-    // Beat 5 says why (EX3-16).
-    if (i === 4 && vo) {
-      const because = (vo.match(/\bbecause\b/gi) ?? []).length;
-      if (because < MIN_BECAUSE) out.push(violation('map_because', n, 'error', `${because} "because"; each mapped pair says why (at least ${MIN_BECAUSE})`));
-    }
-    // Beat 7 opens with a transition (EX3-18).
-    if (i === 6 && vo && !REAL_WORLD_TRANSITION_RE.test(stripQuotes(vo))) {
-      out.push(violation('real_world_transition', n, 'error', 'beat 7 does not open with a transition ("Another example would be…", "In everyday life, you meet…")'));
+    // Beat 5: why it works, then where it breaks (EX3-128). No limit word anywhere is a warning.
+    if (i === 4 && vo && !sentences2(stripQuotes(vo)).some((x) => LIMIT_CUE_RE.test(x))) {
+      out.push(violation('beat5_limit', n, 'warning', "frame 5 names no limit or trade-off: after why the analogy works, say where it breaks (EX3-128)"));
     }
     for (const s of sentences(vo)) narration.add(s);
     if (i === 1) {
@@ -558,6 +859,22 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
     }
     if (EMOJI_RE.test(copy)) out.push(violation('emoji', n, 'error', 'emoji in voiceover or on-screen copy'));
   });
+
+  // What the voice says, by frame: words a listener can't hear as written (EX3-106), and an
+  // example that reuses the scene (EX3-105).
+  const voices = new Map(frames.map((f, i) => [f.number ?? i + 1, voiceFor(f, i)]).filter(([n, v]) => n <= 7 && String(v).trim() && !/<fill in/.test(String(v))));
+  for (const [n, severity, p] of unsayableProblems(voices)) out.push(violation('unsayable', n, severity, p));
+  // "Critter" is the drawing style's word, never said (EX3-121; Lucas, 2026-10-22: "sometimes the
+  // vo/caption calls them 'critters'. That's incorrect"): characters are named by their role.
+  for (const [n, v] of voices) {
+    const said = /\bcritters?\b/i.exec(stripQuotes(v));
+    if (said) out.push(violation('said_critter', n, 'error', `the voice says "${said[0]}": name each character by its role in the scene (the waiter, the searcher); "critter" is never said or shown (EX3-121)`));
+  }
+  const exampleFrame = frames[5];
+  const exampleSteps = exampleFrame ? String(exampleFrame.extra?.example_steps ?? '') : '';
+  for (const [n, severity, p] of exampleReuseProblems(voices, exampleSteps, section(storyboard, 'Anchor scene'), term)) {
+    out.push(violation('example_reuses_scene', n, severity, p));
+  }
 
   // No two consecutive scene frames meet on the same picture (EX3-83): a frame's first shot kind
   // differs from the previous frame's last when both name one.
@@ -642,15 +959,18 @@ function main(argv) {
   };
   const storyboardPath = flag('storyboard');
   if (!storyboardPath) {
-    console.error('usage: lint-storyboard.mjs --storyboard STORYBOARD.md [--script SCRIPT.md] [--frames-dir dir] [--audio-meta file] [--events-track file] [--out file]');
+    console.error('usage: lint-storyboard.mjs --storyboard STORYBOARD.md [--script SCRIPT.md] [--brief BRIEF.md] [--frames-dir dir] [--audio-meta file] [--events-track file] [--out file]');
     process.exit(2);
   }
   try {
     const scriptPath = flag('script');
     const metaPath = flag('audio-meta');
+    // BRIEF.md's picked curiosity gap (EX3-120): --brief, or the BRIEF.md beside the storyboard.
+    const briefPath = flag('brief') ?? resolve(dirname(resolve(storyboardPath)), 'BRIEF.md');
     const result = lintStoryboard({
       storyboard: readFileSync(resolve(storyboardPath), 'utf8'),
       script: scriptPath && existsSync(scriptPath) ? readFileSync(resolve(scriptPath), 'utf8') : null,
+      brief: existsSync(resolve(briefPath)) ? readFileSync(resolve(briefPath), 'utf8') : null,
       frameSource: modulesFromDir(flag('frames-dir')),
       audioMeta: metaPath && existsSync(metaPath) ? JSON.parse(readFileSync(resolve(metaPath), 'utf8')) : undefined,
       frameEvents: flag('frames-dir') ? eventsFromDir(flag('frames-dir')) : null,

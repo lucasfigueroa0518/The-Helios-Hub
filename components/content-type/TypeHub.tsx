@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, ExternalLink, Film, GalleryHorizontal, ImageIcon, Layers } from 'lucide-react';
 
 import { Drawer, Section } from '@/app/reels/ui';
+import { PoolButtons } from '@/components/content-type/AiEventsPoolButtons';
 import { BackToHub } from '@/components/content-type/BackToHub';
 import { GenerateConfirm } from '@/components/content-type/GenerateConfirm';
 import { PoolQueue } from '@/components/content-type/PoolQueue';
@@ -12,7 +13,7 @@ import { QueueControls } from '@/components/content-type/QueueControls';
 import { RankButtons } from '@/components/content-type/RankButtons';
 import { useRunProgress } from '@/components/content-type/run-progress';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
-import { MADE_LABEL, STORY_SERIES, type MadeKind, type TypeBenchItem, type TypeCard, type TypeHubModel } from '@/lib/content-type/model';
+import { MADE_LABEL, type MadeKind, type TypeBenchItem, type TypeCard, type TypeHubModel } from '@/lib/content-type/model';
 import type { ProgressItem } from '@/lib/content-type/progress';
 import type { GenerateIdea } from '@/lib/content-type/queue-client';
 import { runStatusText, type RunSnapshot } from '@/lib/content-type/run-status';
@@ -75,10 +76,12 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   const [versionId, setVersionId] = useState<string | null>(null);
   const [askPin, setAskPin] = useState<{ id: string; title: string } | null>(null);
   const queueLive = QUEUE_LIVE.has(model.vertical);
-  // Stories: the bench narrowed to one series. Filtering only hides rows; the pool is the same.
+  // Stories (by series) and AI Events (by city): the bench narrowed to one group. Filtering only hides rows; the pool is the same.
   const [series, setSeries] = useState<string | null>(null);
-  const seriesTabs = model.vertical === 'stories' ? STORY_SERIES.map((name) => ({ name, n: bench.filter((b) => b.idea.group === name).length })) : [];
+  const seriesTabs = model.groups.map((name) => ({ name, n: bench.filter((b) => b.idea.group === name).length }));
   const shown = series ? bench.filter((b) => b.idea.group === series) : bench;
+  const events = model.vertical === 'ai_events';
+  const groupNoun = events ? 'cities' : 'series';
   const list = useRef<HTMLDivElement>(null);
   const day = days.find((d) => d.date === dayId) ?? days.find((d) => d.date === today) ?? days.at(-1)!;
   const index = days.indexOf(day);
@@ -117,7 +120,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
     const isOpen = item.idea.state === 'idea_only' || item.idea.state === 'content_ready';
     return (
       <div className={`rh-row${queueLive ? ' rh-row--queue' : ''}${item.pinned ? ' is-pinned' : ''}`} role="button" tabIndex={0} onClick={openRow} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); } }}>
-        <span className="rh-row__rank">{item.rank}</span>
+        <span className="rh-row__rank">{item.rank > 0 ? item.rank : null}</span>
         {queueLive ? <span className="rh-row__grip-cell">{handle}</span> : null}
         <span className="rh-row__main">
           <span className="rh-row__headline">{item.idea.title}</span>
@@ -128,6 +131,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
               {item.idea.detail}
             </span>
           ) : null}
+          {events && item.idea.breakdown?.parts.length ? <RowWhy idea={item.idea} /> : null}
         </span>
         <span className="rh-row__pills">
           {made && MadeIcon && item.card ? (
@@ -135,12 +139,14 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
               <MadeIcon size={11} /> {MADE_LABEL[made]}
             </span>
           ) : (
-            <span className="rh-chip">{IDEA_STATE_LABEL[item.idea.state]}</span>
+            <span className={`rh-chip${item.chip === 'Excluded' || item.chip === 'Gated out' ? ' ae-chip--out' : ''}`}>{item.chip ?? IDEA_STATE_LABEL[item.idea.state]}</span>
           )}
           {item.inQuota ? <span className="rh-chip rh-chip--quota" title="One of today’s quota candidates">Today</span> : null}
           {item.idea.yours ? <span className="rh-chip" title="You typed this idea in">Yours</span> : null}
           {item.tag ? <span className={`rh-chip${item.tag.kind === 'pinned' ? ' rh-chip--pinned' : ''}`}>{item.tag.text}</span> : null}
-          {isOpen ? (
+          {events ? (
+            !item.card ? <PoolButtons ideaId={item.idea.id} hold={item.idea.hold} editable={model.poolWeek?.editable ?? true} compact /> : null
+          ) : isOpen ? (
             queueLive
               ? <QueueControls vertical={model.vertical} ideaId={item.idea.id} pinned={item.pinned === true} title={item.idea.title} compact onPinned={() => { if (!item.card && generate) setAskPin({ id: item.idea.id, title: item.idea.title }); }} />
               : ARCHIVE_ONLY.has(model.vertical)
@@ -149,7 +155,12 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
           ) : null}
           {benchAction && !item.card ? <span onClick={(e) => e.stopPropagation()}>{benchAction(item)}</span> : null}
         </span>
-        <span className="rh-row__score" title={item.idea.breakdown ? 'Open to see where the score comes from' : undefined}>{item.idea.score == null ? '—' : formatScore(item.idea.score)}</span>
+        <span className="rh-row__score" title={item.idea.breakdown ? 'Open to see where the score comes from' : undefined}>
+          {item.idea.score == null ? (item.card ? null : '—') : formatScore(item.idea.score)}
+          {model.scoreMax && item.idea.score != null ? (
+            <span className="ae-pool__bar" aria-hidden="true"><span style={{ width: `${Math.max(4, Math.min(100, (item.idea.score / model.scoreMax) * 100))}%` }} /></span>
+          ) : null}
+        </span>
         <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
       </div>
     );
@@ -201,7 +212,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
         </section>
 
         {day.cards.length === 0 && openSlots.length === 0 ? (
-          <p className="rh-empty">{day.date > today ? `Nothing is scheduled for this day.` : `No ${info.label.toLowerCase()} posts on this day.`}</p>
+          <p className="rh-empty">{day.date > today ? `Nothing is scheduled for this day.` : `No ${events ? 'AI Events' : info.label.toLowerCase()} posts on this day.`}</p>
         ) : (
           <div className="rh-top">
             {day.cards.map((card) => {
@@ -217,10 +228,16 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
 
         <section className="rh-rest">
           <h3 className="rh-rest__title">The bench <span>{series ? shown.length : model.benchTotal}</span></h3>
-          <p className="rh-muted">{benchNote ?? (seriesTabs.length ? 'Ideas waiting for the next generation, best first within each series.' : 'Ideas waiting for the next generation, best first.')}</p>
+          <p className="rh-muted">{benchNote ?? (events ? 'The week’s ranked events, best first within each city.' : seriesTabs.length ? 'Ideas waiting for the next generation, best first within each series.' : 'Ideas waiting for the next generation, best first.')}</p>
+          {events && model.poolWeek ? (
+            <p className="rh-muted ae-pool__week">
+              Week of {model.poolWeek.label}.{' '}
+              {model.poolWeek.editable ? 'Pin or exclude events, then Rebuild post.' : 'This week’s post is out; next week’s pool fills Sunday at 12:00 PM, and pins and excludes open then.'}
+            </p>
+          ) : null}
           {seriesTabs.length ? (
-            <div className="segmented rh-bench-filter" role="group" aria-label="Series">
-              <button type="button" className={`segmented__item${series == null ? ' segmented__item--active' : ''}`} aria-pressed={series == null} onClick={() => setSeries(null)}>All series <span className="rh-bench-filter__n">{bench.length}</span></button>
+            <div className="segmented rh-bench-filter" role="group" aria-label={events ? 'Cities' : 'Series'}>
+              <button type="button" className={`segmented__item${series == null ? ' segmented__item--active' : ''}`} aria-pressed={series == null} onClick={() => setSeries(null)}>All {groupNoun} <span className="rh-bench-filter__n">{bench.length}</span></button>
               {seriesTabs.map((t) => (
                 <button key={t.name} type="button" className={`segmented__item${series === t.name ? ' segmented__item--active' : ''}`} aria-pressed={series === t.name} onClick={() => setSeries(t.name)}>
                   {t.name} <span className="rh-bench-filter__n">{t.n}</span>
@@ -229,7 +246,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             </div>
           ) : null}
           {shown.length === 0 ? (
-            <p className="rh-empty">{series ? `No ${series} ideas in the pool until its next refill.` : 'The pool is empty until its next refill.'}</p>
+            <p className="rh-empty">{series ? (events ? `No ${series} events in this week’s pool.` : `No ${series} ideas in the pool until its next refill.`) : events ? 'The pool is empty until the Sunday run ranks the coming week.' : 'The pool is empty until its next refill.'}</p>
           ) : (
             queueLive ? (
               <PoolQueue
@@ -266,7 +283,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
               })}
             </div>
           ) : null}
-          <PostDetail card={open} idea={bench.find((b) => b.card?.post.id === open.post.id)?.idea ?? null} run={runForPost(open.post, bench, live)} now={now} fullPostBase={fullPostBase} fromPath={`/${model.vertical}`} />
+          <PostDetail card={open} idea={bench.find((b) => b.card?.post.id === open.post.id)?.idea ?? null} run={runForPost(open.post, bench, live)} now={now} fullPostBase={fullPostBase} fromPath={info.href} />
         </Drawer>
       ) : null}
       {idea ? (
@@ -275,10 +292,13 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             <h2 className="rh-detail__title">{idea.idea.title}</h2>
             {ideaStatus ? <p className={`rh-run-status${ideaRun?.state === 'failed' ? ' is-failed' : ''}`}>{ideaStatus}</p> : null}
             {ideaRun?.state === 'failed' && ideaRun.error ? <p className="rh-muted">{ideaRun.error}</p> : null}
-            <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]}{idea.idea.group ? ` · ${idea.idea.group}` : ''} · ranked {idea.rank} of {idea.idea.group ? bench.filter((b) => b.idea.group === idea.idea.group).length : model.benchTotal}{idea.idea.score != null ? ` · ${idea.idea.scoreLabel || model.scoreLabel || 'score'} ${formatScore(idea.idea.score)}` : ''}</p>
+            <p className="rh-muted">{idea.chip ?? IDEA_STATE_LABEL[idea.idea.state]}{idea.idea.group ? ` · ${idea.idea.group}` : ''} · ranked {idea.rank} of {idea.idea.group ? bench.filter((b) => b.idea.group === idea.idea.group).length : model.benchTotal}{idea.idea.score != null ? ` · ${idea.idea.scoreLabel || model.scoreLabel || 'score'} ${formatScore(idea.idea.score)}` : ''}</p>
             {idea.idea.detail ? <p>{idea.idea.detail}</p> : null}
-            {idea.idea.createdAt ? <p className="rh-muted">Added {shortDate(idea.idea.createdAt)}</p> : null}
-            {idea.idea.state === 'idea_only' || idea.idea.state === 'content_ready' ? <div style={{ marginTop: 12 }}>{queueLive ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={idea.pinned === true} title={idea.idea.title} onPinned={() => { if (!idea.card && generate) setAskPin({ id: idea.idea.id, title: idea.idea.title }); }} /> : ARCHIVE_ONLY.has(model.vertical) ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={false} title={idea.idea.title} archiveOnly /> : <RankButtons vertical={model.vertical} ideaId={idea.idea.id} />}</div> : null}
+            {idea.idea.createdAt ? <p className="rh-muted">{events ? 'Ranked' : 'Added'} {shortDate(idea.idea.createdAt)}</p> : null}
+            {idea.idea.link ? <p><a className="rh-btn" href={idea.idea.link} target="_blank" rel="noreferrer">Open the listing <ExternalLink size={14} /></a></p> : null}
+            {events
+              ? <div style={{ marginTop: 12 }}><PoolButtons ideaId={idea.idea.id} hold={idea.idea.hold} editable={model.poolWeek?.editable ?? true} /></div>
+              : idea.idea.state === 'idea_only' || idea.idea.state === 'content_ready' ? <div style={{ marginTop: 12 }}>{queueLive ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={idea.pinned === true} title={idea.idea.title} onPinned={() => { if (!idea.card && generate) setAskPin({ id: idea.idea.id, title: idea.idea.title }); }} /> : ARCHIVE_ONLY.has(model.vertical) ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={false} title={idea.idea.title} archiveOnly /> : <RankButtons vertical={model.vertical} ideaId={idea.idea.id} />}</div> : null}
             {benchAction ? <div style={{ marginTop: 12 }}>{benchAction(idea)}</div> : null}
             <ScoreSection idea={idea.idea} />
           </div>
@@ -295,6 +315,26 @@ function formatPoints(n: number | null): string {
   if (n == null) return '—';
   const digits = Math.abs(n) >= 10 ? 1 : 2;
   return n > 0 ? `+${n.toFixed(digits)}` : n < 0 ? `−${Math.abs(n).toFixed(digits)}` : n.toFixed(digits);
+}
+
+/** Where one row's score comes from, folded under its title (the pool page's ScoreWhy, in the bench's own style). */
+function RowWhy({ idea }: { idea: HubIdea }) {
+  const b = idea.breakdown!;
+  return (
+    <details className="ae-why" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+      <summary>Where the score comes from</summary>
+      <ul className="ae-why__parts">
+        {b.parts.map((part, i) => (
+          <li key={`${i}:${part.label}`} className={part.points == null ? 'is-note' : part.points < 0 ? 'is-minus' : undefined}>
+            <span className="ae-why__label">{part.label}</span>
+            <span className="ae-why__detail">{part.detail ?? ''}</span>
+            <span className="ae-why__points">{formatPoints(part.points)}</span>
+          </li>
+        ))}
+      </ul>
+      {b.note ? <p className="rh-muted">{b.note}</p> : null}
+    </details>
+  );
 }
 
 /** Where an idea's score comes from: the rule, then each part with the answer behind it. */

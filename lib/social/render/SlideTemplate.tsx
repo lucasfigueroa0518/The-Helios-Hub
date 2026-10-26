@@ -8,6 +8,7 @@ import { lfdCoverMemeBox } from '@/lib/social/render/lfd-meme-box';
 import { fitText } from '@/lib/social/render/text-fit';
 import type { Post, SlideCanvas, SlideCopy } from '@/lib/social/render/types';
 
+import { AiEventsSlide, isAiEventsKind } from './ai-events';
 import { Fit, IconBackground, PhotoCredit, focusStyle } from './drafts/blocks';
 import { CoverSlidePremium } from './drafts/cover';
 import { FollowSlidePremium } from './drafts/follow';
@@ -95,7 +96,9 @@ export function SlideTemplate({ post, position, canvas: canvasProp }: SlideTempl
   if (textFromImage) kind = 'text';
   const fullBleed = kind === 'image' || kind === 'spread' || (kind === 'cover' && scenePhoto);
   const lfd = kind === 'lfd_cover' || kind === 'lfd_story';
-  const showWordmark = kind !== 'cover' && kind !== 'follow' && !fullBleed && !lfd;
+  // AI Events This Week (ai-events/): each slide is one full-bleed frame with its own chrome.
+  const ae = isAiEventsKind(kind);
+  const showWordmark = kind !== 'cover' && kind !== 'follow' && !fullBleed && !lfd && !ae;
   // A subject photo that cannot go full bleed becomes a text slide with the photo on top; the legacy `title` is the headline when there is none.
   const textSlide = { ...slide, headline: slide.headline ?? slide.title, ...(textFromImage ? { photoPlacement: 'top' as const } : {}) };
 
@@ -109,7 +112,7 @@ export function SlideTemplate({ post, position, canvas: canvasProp }: SlideTempl
       role="img"
       aria-label={slide.altText}
     >
-      {!slide.photoUrl && kind !== 'cover' && kind !== 'follow' && !lfd && <IconBackground slide={slide} />}
+      {!slide.photoUrl && kind !== 'cover' && kind !== 'follow' && !lfd && !ae && <IconBackground slide={slide} />}
       {showWordmark && (
         <div className="helios-masthead helios-masthead--minimal" aria-hidden="true">
           <div className="helios-masthead__wordmark">HELIOS</div>
@@ -127,8 +130,9 @@ export function SlideTemplate({ post, position, canvas: canvasProp }: SlideTempl
         {kind === 'follow' && <FollowSlidePremium slide={slide} />}
         {kind === 'lfd_cover' && <LfdCoverSlide slide={slide} />}
         {kind === 'lfd_story' && <LfdStorySlide slide={slide} />}
+        {ae && <AiEventsSlide slide={slide} />}
       </div>
-      {slide.photoUrl && kind !== 'follow' && !lfd && <PhotoCredit credit={slide.photoCredit} />}
+      {slide.photoUrl && kind !== 'follow' && !lfd && !ae && <PhotoCredit credit={slide.photoCredit} />}
     </div>
   );
 }

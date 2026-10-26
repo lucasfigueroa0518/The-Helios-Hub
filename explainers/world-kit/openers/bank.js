@@ -105,6 +105,13 @@ export const OPENERS = [
 
 export const OPENER_KEYS = OPENERS.map((o) => o.key);
 
+/**
+ * The openers an object-led reel draws from (EX3-111; Lucas, 2026-10-22): the seven that never cut
+ * out, freeze on, or zoom into the hook's critter (Eye Zoom-Out, Knock Knock, Record Scratch and
+ * Scissors do), so they work over a hook whose hero is an object.
+ */
+export const OBJECT_HERO_OPENERS = ['paper-rip', 'typewriter', 'big-bang', 'balloon-pop', 'block-drop', 'unboxing', 'paper-plane'];
+
 /** The bank entry for `key`, or null. */
 export const openerByKey = (key) => OPENERS.find((o) => o.key === key) ?? null;
 

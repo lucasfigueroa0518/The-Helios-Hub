@@ -104,17 +104,36 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
     );
     return rows.map((r) => ({ id: r.id, label: 'Last Few Days run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs }) as ProgressItem);
   }
+  if (type === 'ai_events') {
+    const { rows } = await dbQuery(
+      `SELECT id::text, kind, status, requested_at::text AS requested_at, started_at::text AS started_at
+         FROM ai_events.runs WHERE status IN ('requested', 'running') ORDER BY requested_at`,
+    );
+    if (!rows.length) return [];
+    // A rebuild re-renders from cached scores, so it times against other rebuilds; a build against builds.
+    const out: ProgressItem[] = [];
+    for (const r of rows) {
+      const secs = await typical(
+        `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM ai_events.runs
+          WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
+        [r.kind],
+      );
+      out.push({ id: r.id, label: r.kind === 'rebuild' ? 'AI Events rebuild' : 'AI Events run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
+    }
+    return out;
+  }
   return [];
 }
 
 export type AllProgress = Record<'carousels' | 'stories' | 'explainers', ProgressItem[]> & {
   /** Optional, so a progress map built for the first three types (tests/social-hub-run-for.test.ts) still holds; missing reads as none. */
   last_few_days?: ProgressItem[];
+  ai_events?: ProgressItem[];
 };
 
 /** Every type's runs in flight, for the Content page's cards and tiles. A type that cannot be read shows nothing in flight. */
 export async function readAllProgress(): Promise<AllProgress> {
   const one = (t: ContentType) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
-  const [carousels, stories, explainers, lastFewDays] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days')]);
-  return { carousels, stories, explainers, last_few_days: lastFewDays };
+  const [carousels, stories, explainers, lastFewDays, aiEvents] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events')]);
+  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents };
 }

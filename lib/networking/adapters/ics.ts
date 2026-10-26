@@ -78,7 +78,8 @@ export function parseIcsEvents(raw: string): IcsEvent[] {
 
 export function icsEventToCandidate(
   event: IcsEvent,
-  options: { feedUrl: string; name: string; metro: Metro },
+  /** `metro` is the feed's own metro; a one-off URL import has none and relies on LOCATION. */
+  options: { feedUrl: string; name: string; metro?: Metro },
 ): CandidateEvent | null {
   if (!event.summary || !event.dtstart) return null;
   const startAt = parseIcsDate(event.dtstart, event.tzid);
@@ -95,7 +96,7 @@ export function icsEventToCandidate(
     timezone: event.tzid,
     venueName: event.location,
     address: event.location,
-    city: event.location || METRO_PROFILES[options.metro].label,
+    city: event.location || (options.metro ? METRO_PROFILES[options.metro].label : undefined),
     isOnline: false,
     hostName: options.name,
     trusted: true,

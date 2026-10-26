@@ -1,20 +1,24 @@
-// The Explainers world kit, drawing (hx-3, from Explainer 2.0): the style primitives of "Cast on grid" (X-34).
-// The kit is a style, not a catalog (X-39): these are the parts every new object is built from
-// (VISUAL V-2 to V-4, V-15). Finished pieces built from them live in examples.js.
+// The Explainers world kit, drawing (hx-4, visual system 4.0: Soft 3D, still 08): the style
+// primitives every object is built from. The kit is a style, not a catalog (X-39): these are the
+// parts every new object is built from. Finished pieces built from them live in examples.js.
 //
-//   the hand: a boiling line wobble, riso stipple, paper grain, freehand ink (perfect-freehand)
-//   solids:   isometric boxes with three flat tones and an ink outline; drawing laid flat on an
-//             iso plane; contact shadows
+//   solids:   soft volumes lit from the top right (core LIGHT): per-face gradients, rounded edges
+//             with a bright edge highlight, no ink outline, a soft contact shadow and ambient
+//             occlusion where they meet the surface below, gloss on glossy things
+//   shapes:   softShape(): an organic filled shape with a soft form shadow and a lit edge
 //   marks:    handwriting that writes itself, lines that draw themselves out, pulse rings,
-//             shock marks, line icons
-//   grounds:  paper with a fading grid, night, forest; on dark grounds every outline and limb
-//             swaps to light-on-dark by itself (V-3)
+//             shock marks, line icons (line() is their color: ink on paper, light on the stage)
+//   grounds:  paper (a warm studio sweep), stage (the Helios premium lit stage), white (the
+//             close). No grid, no grain, no wobble, no stipple: those exports stay as no-ops or
+//             smooth versions so older scene code keeps working.
 //
-// Every color comes from the core palette (V-T1). Every function returns an SVG string and is a
-// pure function of its arguments, so a frame is a pure function of time (E2-06).
+// Every color comes from the core palette (V-T1) and its ramps; tints between two palette colors
+// are mixed by core mixHex. Every function returns an SVG string and is a pure function of its
+// arguments, so a frame is a pure function of time (E2-06). Def ids are hashed from their content,
+// so a def drawn twice is the same def and ids never depend on draw order.
 
 import { getStroke } from 'https://cdn.jsdelivr.net/npm/perfect-freehand@1.2.3/+esm';
-import { TOKENS as T, GROUNDS, FRAME, rng, isoPlane } from './core.js';
+import { TOKENS as T, GROUNDS, FRAME, rng, isoPlane, groundOf, mixHex } from './core.js';
 import { HERSHEY_CAP, HERSHEY_SANS } from './hershey-sans.js';
 
 export { T };
@@ -25,23 +29,23 @@ export const H = FRAME.h;
 let PFX = '';
 let DARK = false;
 let GROUND_NAME = 'paper';
-let gradientCount = 0;
 
 /** Call first in every shot draw: scopes SVG ids to the shot (several shots share one
- *  document) and sets the ground, which picks light-on-dark drawing on night and forest. */
+ *  document) and sets the ground (`paper`, `stage`, `white`; `night` and `forest` draw as the
+ *  stage), which picks light-on-dark marks and rim light on the stage. */
 export function scope(prefix, ground = 'paper') {
-  if (!GROUNDS[ground]) throw new Error(`HX: ground must be ${Object.keys(GROUNDS).join(', ')} (V-14).`);
+  const gr = groundOf(ground);
   PFX = prefix;
-  DARK = GROUNDS[ground].dark;
-  GROUND_NAME = ground;
-  gradientCount = 0;
+  DARK = gr.dark;
+  GROUND_NAME = gr.name;
 }
 export const id = (name) => PFX + name;
 export const ref = (name) => `url(#${PFX}${name})`;
 export const isDark = () => DARK;
-/** The ground of the shot being drawn (the last scope() call). */
+/** The ground of the shot being drawn (the last scope() call), aliases resolved. */
 export const groundName = () => GROUND_NAME;
-/** The line color for the current ground: ink on paper, paper-lit on dark grounds (V-3). */
+/** The color for the few line marks that remain (icons, handwriting, ticks): ink on paper,
+ *  paper-lit on the stage (V-3). Solids never take an outline. */
 export const line = () => (DARK ? T['paper-lit'] : T.ink);
 
 const attrs = (o) =>
@@ -52,91 +56,122 @@ const attrs = (o) =>
 export const el = (tag, o = {}, inner = '') => `<${tag} ${attrs(o)}>${inner}</${tag}>`;
 export const g = (o, inner) => el('g', o, Array.isArray(inner) ? inner.join('') : inner);
 
-// ── The hand: filters ─────────────────────────────────────────────────────────────────────
-// wobble: a slight hand tremor on linework; its seed steps at 10 fps in motion, so lines boil.
-// stipple: dissolves a soft gradient into grain, for riso shading on flat faces.
-// grain: the ground's own fibre (dark on paper, light on dark grounds).
-export function defs({ wobble = 3, wobbleSeed = 4 } = {}) {
+/** A def id from its content (FNV-1a): the same def always gets the same id. */
+function hid(kind, content) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < content.length; i++) {
+    h ^= content.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${PFX}${kind}${(h >>> 0).toString(36)}`;
+}
+const f1 = (v) => (Math.round(v * 10) / 10).toString();
+const isHex = (c) => typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c);
+const lum = (c) => (isHex(c) ? [1, 3, 5].reduce((a, i, k) => a + parseInt(c.slice(i, i + 2), 16) * [0.2126, 0.7152, 0.0722][k], 0) : 0);
+
+/** A linear gradient def and its paint: stops [[offset, color, opacity?], …], in the shape's box. */
+function lin(stops, x1 = 0, y1 = 0, x2 = 0, y2 = 1) {
+  const inner = stops.map(([o, c, a = 1]) => el('stop', { offset: o, 'stop-color': c, 'stop-opacity': a === 1 ? undefined : +a.toFixed(3) })).join('');
+  const gid = hid('l', `${x1},${y1},${x2},${y2}|${inner}`);
+  return { def: el('linearGradient', { id: gid, x1, y1, x2, y2 }, inner), paint: `url(#${gid})` };
+}
+/** A radial gradient def and its paint, in the shape's box. */
+function rad(stops, cx = 0.5, cy = 0.5, r = 0.5, extra = {}) {
+  const inner = stops.map(([o, c, a = 1]) => el('stop', { offset: o, 'stop-color': c, 'stop-opacity': a === 1 ? undefined : +a.toFixed(3) })).join('');
+  const gid = hid('r', `${cx},${cy},${r},${JSON.stringify(extra)}|${inner}`);
+  return { def: el('radialGradient', { id: gid, cx, cy, r, ...extra }, inner), paint: `url(#${gid})` };
+}
+/** A clip path def from inner SVG, and its reference. */
+function clipOf(inner) {
+  const cid = hid('c', inner);
+  return { def: el('clipPath', { id: cid }, inner), paint: `url(#${cid})` };
+}
+const defsOf = (...list) => el('defs', {}, list.map((x) => x.def).join(''));
+
+// ── Filters ───────────────────────────────────────────────────────────────────────────────
+// soft-shadow: a wide blur for cast shadows · ao: a tight blur for occlusion where things meet
+// · glow: a lit thing's bloom over itself · blur-bg / blur-fg: depth of field for the parallax
+// layers · soft-edge: the form shadow and lit edge inside a soft shape. No wobble, no grain, no
+// stipple (hx-4). The options of the old signature are accepted and ignored.
+export function defs(_old = {}) {
+  const blur = (fid, sd, pad = '-60%', size = '220%') =>
+    el('filter', { id: id(fid), x: pad, y: pad, width: size, height: size, 'color-interpolation-filters': 'sRGB' }, el('feGaussianBlur', { stdDeviation: sd }));
   return el('defs', {}, [
-    el('filter', { id: id('wobble'), x: '-5%', y: '-5%', width: '110%', height: '110%' }, [
-      el('feTurbulence', { type: 'fractalNoise', baseFrequency: '0.022', numOctaves: 2, seed: wobbleSeed, result: 'n' }),
-      el('feDisplacementMap', { in: 'SourceGraphic', in2: 'n', scale: wobble, xChannelSelector: 'R', yChannelSelector: 'G' }),
+    blur('soft-shadow', 9, '-80%', '260%'),
+    blur('ao', 3.2, '-80%', '260%'),
+    blur('soft-edge', 2.2, '-20%', '140%'),
+    blur('blur-bg', 5),
+    blur('blur-fg', 9),
+    el('filter', { id: id('glow'), x: '-60%', y: '-60%', width: '220%', height: '220%', 'color-interpolation-filters': 'sRGB' }, [
+      el('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: 10, result: 'b' }),
+      el('feMerge', {}, el('feMergeNode', { in: 'b' }) + el('feMergeNode', { in: 'SourceGraphic' })),
     ].join('')),
-    stippleFilter(id('stipple'), 1.1, 7),
-    stippleFilter(id('stipple-fine'), 1.7, 9),
-    el('filter', { id: id('grain'), x: 0, y: 0, width: '100%', height: '100%' }, [
-      el('feTurbulence', { type: 'fractalNoise', baseFrequency: '0.9', numOctaves: 3, seed: 11, result: 'n' }),
-      DARK
-        ? el('feColorMatrix', { in: 'n', type: 'matrix', values: '0 0 0 0 0.98  0 0 0 0 0.98  0 0 0 0 0.96  0.9 0.9 0.9 0 -1.25' })
-        : el('feColorMatrix', { in: 'n', type: 'matrix', values: '0 0 0 0 0.09  0 0 0 0 0.09  0 0 0 0 0.09  0.9 0.9 0.9 0 -1.2' }),
+    // shared gradients: a specular band (gloss) and a soft contact shadow, in the shape's box
+    el('linearGradient', { id: id('spec'), x1: 0.95, y1: 0, x2: 0.25, y2: 0.8 }, [
+      el('stop', { offset: 0, 'stop-color': T.canvas, 'stop-opacity': 0.6 }),
+      el('stop', { offset: 0.34, 'stop-color': T.canvas, 'stop-opacity': 0.14 }),
+      el('stop', { offset: 0.35, 'stop-color': T.canvas, 'stop-opacity': 0 }),
+    ].join('')),
+    el('radialGradient', { id: id('contact'), cx: 0.5, cy: 0.5, r: 0.5 }, [
+      el('stop', { offset: 0, 'stop-color': T['shadow-warm'], 'stop-opacity': 0.34 }),
+      el('stop', { offset: 0.5, 'stop-color': T['shadow-warm'], 'stop-opacity': 0.18 }),
+      el('stop', { offset: 1, 'stop-color': T['shadow-warm'], 'stop-opacity': 0 }),
     ].join('')),
   ].join(''));
 }
 
-function stippleFilter(fid, freq, seed) {
-  return el('filter', { id: fid, x: '-10%', y: '-10%', width: '120%', height: '120%', 'color-interpolation-filters': 'sRGB' }, [
-    el('feTurbulence', { type: 'fractalNoise', baseFrequency: freq, numOctaves: 2, seed, result: 'n' }),
-    el('feColorMatrix', { in: 'n', type: 'matrix', values: '0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  1.6 0 0 0 -0.3', result: 'na' }),
-    el('feComposite', { in: 'SourceAlpha', in2: 'na', operator: 'arithmetic', k1: 0, k2: 1, k3: -1, k4: 0, result: 'd' }),
-    el('feComponentTransfer', { in: 'd', result: 'm' }, el('feFuncA', { type: 'discrete', tableValues: '0 1' })),
-    el('feComposite', { in: 'SourceGraphic', in2: 'm', operator: 'in' }),
-  ].join(''));
+/** Smooth shading (hx-4; it used to be riso stipple): `shape` filled with `color`, fading from
+ *  `from` to `to` opacity along the given direction. Same signature as before; `fine` is ignored. */
+export function stippleShade(shapeTag, shapeAttrs, color, { x1 = 0, y1 = 0, x2 = 0, y2 = 1, from = 0, to = 1 } = {}) {
+  const k = 0.75; // a smooth gradient reads stronger than grain did
+  const gr = lin([[0, color, from * k], [1, color, to * k]], x1, y1, x2, y2);
+  return defsOf(gr) + el(shapeTag, { ...shapeAttrs, fill: gr.paint });
 }
 
-/** Riso shading: `shape` filled with `color`, fading from `from` to `to` opacity along the given
- *  direction, dissolved into grain. Never a smooth gradient (V-3). */
-export function stippleShade(shapeTag, shapeAttrs, color, { x1 = 0, y1 = 0, x2 = 0, y2 = 1, from = 0, to = 1, fine = false } = {}) {
-  const gid = `${PFX}sg${++gradientCount}`;
-  return [
-    el('linearGradient', { id: gid, x1, y1, x2, y2 }, [
-      el('stop', { offset: 0, 'stop-color': color, 'stop-opacity': from }),
-      el('stop', { offset: 1, 'stop-color': color, 'stop-opacity': to }),
-    ].join('')),
-    el(shapeTag, { ...shapeAttrs, fill: `url(#${gid})`, filter: ref(fine ? 'stipple-fine' : 'stipple') }),
-  ].join('');
+// ── Grounds ───────────────────────────────────────────────────────────────────────────────
+/** An elliptical radial glow over the whole frame: centre (fx, fy) and radii (rx, ry) as shares
+ *  of the frame, fading from `alpha` to 0 by `end`. */
+function frameGlow(color, alpha, fx, fy, rx, ry, end = 0.72) {
+  const gr = rad([[0, color, alpha], [end * 0.55, color, alpha * 0.45], [end, color, 0]], 0, 0, 1, { gradientTransform: `translate(${fx} ${fy}) scale(${rx} ${ry})` });
+  return defsOf(gr) + el('rect', { x: 0, y: 0, width: W, height: H, fill: gr.paint });
 }
 
-// ── Grounds (V-14) ────────────────────────────────────────────────────────────────────────
-/** The ground fill and its grain. Draw once, under the world. */
+/** The ground: `paper` the warm studio sweep (light top, a soft floor falloff low, a faint warm
+ *  key-light bloom top right), `stage` the Helios premium lit stage (charcoal under a warm glow top
+ *  right, a white lift top left, a red bloom low, a warm pool where the scene stands), `white` the
+ *  close. Draw once, under the world. `night` and `forest` draw the stage. */
 export function ground(name = 'paper') {
-  if (name === 'white') return el('rect', { x: 0, y: 0, width: W, height: H, fill: GROUNDS.white.fill });
+  const gr = groundOf(name);
+  if (gr.name === 'white') return el('rect', { x: 0, y: 0, width: W, height: H, fill: GROUNDS.white.fill });
+  if (gr.name === 'stage') {
+    const base = lin([[0, T['stage-top']], [1, T['stage-bottom']]]);
+    return [
+      defsOf(base),
+      el('rect', { x: 0, y: 0, width: W, height: H, fill: base.paint }),
+      frameGlow(T['stage-orange'], 0.17, 1, 0, 0.66, 0.44),
+      frameGlow(T.canvas, 0.05, 0, 0, 0.55, 0.38, 0.7),
+      frameGlow(T['stage-red'], 0.1, 0.15, 1, 0.7, 0.3),
+      frameGlow(T['stage-orange'], 0.07, 0.5, 0.64, 0.62, 0.2, 0.9),
+    ].join('');
+  }
+  const sweep = lin([[0, T['paper-lit']], [0.42, mixHex(T['paper-lit'], T.paper, 0.55)], [0.74, T.paper], [1, T['paper-sweep']]]);
   return [
-    el('rect', { x: 0, y: 0, width: W, height: H, fill: GROUNDS[name].fill }),
-    el('rect', { x: 0, y: 0, width: W, height: H, filter: ref('grain'), opacity: GROUNDS[name].dark ? 0.22 : 0.3 }),
+    defsOf(sweep),
+    el('rect', { x: 0, y: 0, width: W, height: H, fill: sweep.paint }),
+    frameGlow(T.canvas, 0.7, 0.98, 0.02, 0.75, 0.42, 0.85),
+    frameGlow(T['yellow-lit'], 0.06, 1, 0, 0.6, 0.34),
+    // the floor falls off toward the bottom corners
+    frameGlow(T['shadow-warm'], 0.05, 0, 1, 0.55, 0.3, 0.9),
+    frameGlow(T['shadow-warm'], 0.035, 1, 1, 0.5, 0.26, 0.9),
   ].join('');
 }
 
-/** The drafting table's grid, fading out toward the top and bottom. Scale `cell` with the
- *  camera distance so distance reads (V-2). `rot` rolls the lines about `pivot` (a camera roll);
- *  they then run past the frame edge so the roll never shows a corner. The fade and vignette stay
- *  on the frame. */
-export function grid({ cell = 72, top = 560, bottom = 1560, ox = 0, oy = 0, rot = 0, pivot = [W / 2, H / 2] } = {}) {
-  const pad = rot ? Math.ceil(240 / cell) * cell : 0;
-  const lines = [];
-  for (let x = (ox % cell) - pad; x <= W + pad; x += cell) lines.push(el('line', { x1: x, y1: -pad, x2: x, y2: H + pad }));
-  for (let y = (oy % cell) - pad; y <= H + pad; y += cell) lines.push(el('line', { x1: -pad, y1: y, x2: W + pad, y2: y }));
-  const rolled = rot ? [g({ transform: `rotate(${(-rot).toFixed(4)} ${pivot[0]} ${pivot[1]})` }, lines)] : lines;
-  const edge = DARK ? T.night : T['paper-shade'];
-  return [
-    el('linearGradient', { id: id('gridfade'), x1: 0, y1: 0, x2: 0, y2: 1 }, [
-      el('stop', { offset: 0, 'stop-color': T.canvas, 'stop-opacity': 0 }),
-      el('stop', { offset: (top / H).toFixed(3), 'stop-color': T.canvas, 'stop-opacity': 1 }),
-      el('stop', { offset: (bottom / H).toFixed(3), 'stop-color': T.canvas, 'stop-opacity': 1 }),
-      el('stop', { offset: 1, 'stop-color': T.canvas, 'stop-opacity': 0 }),
-    ].join('')),
-    el('mask', { id: id('gridmask') }, el('rect', { x: 0, y: 0, width: W, height: H, fill: ref('gridfade') })),
-    el('linearGradient', { id: id('vignette'), x1: 0, y1: 0, x2: 0, y2: 1 }, [
-      el('stop', { offset: 0, 'stop-color': edge, 'stop-opacity': DARK ? 0.6 : 1 }),
-      el('stop', { offset: 0.2, 'stop-color': edge, 'stop-opacity': 0 }),
-      el('stop', { offset: 0.8, 'stop-color': edge, 'stop-opacity': 0 }),
-      el('stop', { offset: 1, 'stop-color': edge, 'stop-opacity': DARK ? 0.6 : 1 }),
-    ].join('')),
-    el('rect', { x: 0, y: 0, width: W, height: H, fill: ref('vignette') }),
-    g({ mask: ref('gridmask'), stroke: DARK ? T.paper : T.ink, 'stroke-width': 1.6, opacity: DARK ? 0.07 : 0.085 }, rolled),
-  ].join('');
+/** hx-4 has no drafting grid: always ''. The signature stays for older callers. */
+export function grid(_o = {}) {
+  return '';
 }
 
-// ── Freehand ink ──────────────────────────────────────────────────────────────────────────
+// ── Freehand ink (marks only) ─────────────────────────────────────────────────────────────
 export function freehand(points, opts = {}) {
   const s = getStroke(points, {
     size: 9,
@@ -164,7 +199,7 @@ export function freehand(points, opts = {}) {
 /** A freehand ink stroke through points, as an SVG path. */
 export const stroke = (points, { color = line(), ...opts } = {}) => el('path', { d: freehand(points, opts), fill: color });
 
-// ── Handwriting (Explainers 3.1, EX3-61; Hershey Sans in 3.2, EX3-81) ──────────────────────────────────────────────────
+// ── Handwriting (Explainers 3.1, EX3-61; Hershey Sans in 3.2, EX3-81) ──────────────────────
 /** Width of `text` in px at cap height `size`, in Hershey Sans. */
 export function handwriteWidth(text, size) {
   const k = size / HERSHEY_CAP;
@@ -173,9 +208,9 @@ export function handwriteWidth(text, size) {
 
 /**
  * Real handwriting that writes itself: Hershey Sans single strokes (plain print, never cursive)
- * drawn as an even, round-capped pen line under the kit's wobble. The baseline starts at (x, y) (or is centred on x with align 'center'); `size`
- * is the cap height in px; `progress` 0..1 reveals the strokes in writing order, by length.
- * Returns an SVG group tagged with `role` (frame 1's title uses 'title').
+ * drawn as an even, round-capped pen line. The baseline starts at (x, y) (or is centred on x with
+ * align 'center'); `size` is the cap height in px; `progress` 0..1 reveals the strokes in writing
+ * order, by length. Returns an SVG group tagged with `role` (frame 1's title uses 'title').
  * @param {string} text
  * @param {number} x
  * @param {number} y
@@ -195,8 +230,7 @@ export function handwrite(text, x, y, size, progress = 1, { color = line(), weig
   const lengthOf = (pts) => pts.slice(1).reduce((n, p, i) => n + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
   const total = strokes.reduce((n, s) => n + lengthOf(s), 0);
   let budget = Math.max(0, Math.min(1, progress)) * total;
-  // A pen's even, round-capped line (EX3-81): readable at any size, and a stroke can never cancel
-  // its own ink the way a filled freehand outline did. The wobble filter keeps it hand-drawn.
+  // A pen's even, round-capped line (EX3-81): readable at any size.
   const pen = { fill: 'none', stroke: color, 'stroke-width': Math.max(2, size * 0.08 * weight).toFixed(2), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
   const path = (pts) => el('path', { ...pen, d: `M ${pts.map(([px, py]) => `${px.toFixed(1)} ${py.toFixed(1)}`).join(' L ')}` });
   const out = [];
@@ -226,10 +260,10 @@ export function handwrite(text, x, y, size, progress = 1, { color = line(), weig
     budget = 0;
   }
   // data-k/data-text let bounds.mjs find and name every piece of handwriting (EX3-92).
-  return g({ 'data-role': role, 'data-k': 'text', 'data-text': String(text).replace(/[<>&"]/g, ''), filter: ref('wobble') }, out);
+  return g({ 'data-role': role, 'data-k': 'text', 'data-text': String(text).replace(/[<>&"]/g, '') }, out);
 }
 
-/** A hand-drawn line between points with a little bow. */
+/** A line between points with a little bow. */
 export function handLine(pts, bow = 6, seed = 3) {
   const r = rng(seed);
   const out = [];
@@ -298,19 +332,96 @@ export function inkLines(spec, p, { color = line(), size = 3.8, height = 20 } = 
   return { svg: out.join(''), tip };
 }
 
-// ── Solids (V-2, V-3) ─────────────────────────────────────────────────────────────────────
-/** The three flat tones of each material: lit top, mid left face, dark right face. */
+// ── Tones: every palette color as the faces of a soft volume ──────────────────────────────
+// Each entry is an array [top, left, right] (so `tones[0]`, `tones[1]`, `tones[2]` keep working
+// in older props) carrying the named keys too: top (the lit top face), left (the face turned away
+// from the light, lower left), right (the face toward it, lower right), and the ramp: lit, base,
+// shade, dark. The light comes from the top right (core LIGHT), so right is lighter than left.
+function tonesFrom({ top, left, right, lit, base, shade, dark }) {
+  return Object.assign([top, left, right], { top, left, right, lit, base, shade, dark });
+}
+function rampTones(name) {
+  const lit = T[`${name}-lit`];
+  const base = T[name];
+  const shade = T[`${name}-shade`];
+  const dark = T[`${name}-dark`];
+  return tonesFrom({ top: lit, left: shade, right: base, lit, base, shade, dark });
+}
+const INK_TOP = mixHex(T['ink-lit'], T['paper-lit'], 0.12);
 export const TONES = {
-  paper: [T['paper-lit'], T['paper-shade'], T['paper-dark']],
-  orange: [T['orange-lit'], T['orange-shade'], T['orange-dark']],
-  ink: [T['ink-lit'], T.ink, T.ink],
+  paper: rampTones('paper'),
+  // ink volumes are lifted a touch so their faces read as a volume, not a hole
+  ink: tonesFrom({ top: INK_TOP, left: T.ink, right: mixHex(T['ink-lit'], T['paper-lit'], 0.05), lit: INK_TOP, base: T['ink-lit'], shade: T.ink, dark: T['ink-dark'] }),
+  orange: rampTones('orange'),
+  green: rampTones('green'),
+  yellow: rampTones('yellow'),
+  blue: rampTones('blue'),
+  teal: rampTones('teal'),
+  lilac: rampTones('lilac'),
 };
 
+/**
+ * Any tones value as named faces: a TONES entry, a palette name ('teal'), one hex (a ramp is
+ * mixed from it), or an older [top, mid, dark] array (its lighter side tone goes on the lit
+ * right face, so every box takes the one light).
+ */
+export function tonesOf(tones) {
+  if (tones && typeof tones === 'object' && tones.top && tones.left && tones.right) return tones;
+  if (typeof tones === 'string' && TONES[tones]) return TONES[tones];
+  if (isHex(tones)) {
+    const lit = mixHex(tones, T.canvas, 0.22);
+    const shade = mixHex(tones, T.ink, 0.16);
+    return tonesFrom({ top: lit, left: shade, right: tones, lit, base: tones, shade, dark: mixHex(tones, T.ink, 0.4) });
+  }
+  if (Array.isArray(tones) && tones.length >= 3) {
+    const [top, a, b] = tones;
+    const [right, left] = lum(a) >= lum(b) ? [a, b] : [b, a];
+    const dark = isHex(left) ? mixHex(left, T.ink, 0.3) : left;
+    return tonesFrom({ top, left, right, lit: top, base: right, shade: left, dark });
+  }
+  return TONES.paper;
+}
+
+/** A tint toward white (k 0..1), for hex colors; other paints pass through. */
+const lift = (c, k) => (isHex(c) ? mixHex(c, T.canvas, k) : c);
+/** A tint toward a darker color (k 0..1), for hex colors. */
+const sink = (c, to, k) => (isHex(c) && isHex(to) ? mixHex(c, to, k) : c);
+
+// ── Solids (soft volumes) ─────────────────────────────────────────────────────────────────
 const poly = (pts) => pts.map((p) => p.map((v) => v.toFixed(1)).join(',')).join(' ');
 
-/** An isometric box: three flat tones, riso grain on the side faces, an outline in the
- *  ground's line color. Returns the SVG and the screen corners of its top face. */
-export function isoBox(P, x, y, z, w, d, h, tones = TONES.paper, { sw = 3.5, grain = true, outline = true } = {}) {
+/** A closed path through screen points with every corner rounded by r px (clamped per corner). */
+export function roundedPath(pts, r) {
+  const n = pts.length;
+  if (!(r > 0) || n < 3) return `M ${pts.map((p) => `${f1(p[0])} ${f1(p[1])}`).join(' L ')} Z`;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    const a = pts[(i + n - 1) % n];
+    const b = pts[(i + 1) % n];
+    const la = Math.hypot(a[0] - p[0], a[1] - p[1]) || 1;
+    const lb = Math.hypot(b[0] - p[0], b[1] - p[1]) || 1;
+    const k = Math.min(r, la * 0.45, lb * 0.45);
+    const p0 = [p[0] + ((a[0] - p[0]) / la) * k, p[1] + ((a[1] - p[1]) / la) * k];
+    const p1 = [p[0] + ((b[0] - p[0]) / lb) * k, p[1] + ((b[1] - p[1]) / lb) * k];
+    out.push(`${i ? 'L' : 'M'} ${f1(p0[0])} ${f1(p0[1])} Q ${f1(p[0])} ${f1(p[1])} ${f1(p1[0])} ${f1(p1[1])}`);
+  }
+  return out.join(' ') + ' Z';
+}
+
+/**
+ * An isometric box as a soft volume: per-face gradients from the one light (top brightest, the
+ * right face lit, the left face in shade, each falling off toward the floor), rounded silhouette
+ * corners, a bright highlight on the lit edges, soft occlusion where it meets the surface below
+ * and, standing on the floor (z = 0), a soft cast shadow thrown to the lower left. On the stage a
+ * warm rim light runs along its lit edges.
+ * Returns the SVG and the screen corners of its top face, left face and right face (as before).
+ * Options: radius (px), gloss (a specular band on the top and a sheen on the lit face), outline
+ * (an ink outline, off by default), ao and shadow (set false to skip them). `sw` and `grain` are
+ * accepted and ignored.
+ */
+export function isoBox(P, x, y, z, w, d, h, tones = TONES.paper, { radius = 6, gloss: glossy = false, outline = false, sw = 3.5, ao = true, shadow: cast = z === 0 } = {}) {
+  const tn = tonesOf(tones);
   const A = P(x, y, z + h);
   const B = P(x + w, y, z + h);
   const Cc = P(x + w, y + d, z + h);
@@ -321,43 +432,160 @@ export function isoBox(P, x, y, z, w, d, h, tones = TONES.paper, { sw = 3.5, gra
   const top = [A, B, Cc, D];
   const right = [B, Cc, C0, B0];
   const left = [D, Cc, C0, D0];
-  const parts = [
-    el('polygon', { points: poly(top), fill: tones[0] }),
-    el('polygon', { points: poly(left), fill: tones[1] }),
-    el('polygon', { points: poly(right), fill: tones[2] }),
-  ];
-  if (grain && h > 0) {
-    parts.push(stippleShade('polygon', { points: poly(left) }, T.ink, { from: 0, to: 0.22, fine: true }));
-    parts.push(stippleShade('polygon', { points: poly(right) }, T.ink, { x1: 1, y1: 0, x2: 0, y2: 1, from: 0.05, to: 0.32, fine: true }));
+  const parts = [];
+  const edge = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
+  const minEdge = Math.min(edge(A, B), edge(B, Cc), h > 0 ? edge(Cc, C0) : Infinity);
+  const r = Math.max(0, Math.min(radius, minEdge * 0.3));
+  const hw = Math.max(1.4, Math.min(5, r * 0.55, minEdge * 0.08));
+  // under it: the cast shadow on the floor (to the lower left, away from the light), then occlusion
+  if (cast && h > 0 && w > 0 && d > 0) {
+    const reach = Math.min(h * 0.55, 60);
+    const sh = [P(x, y, z), P(x + w, y, z), P(x + w, y + d + reach, z), P(x - reach * 0.15, y + d + reach, z)];
+    parts.push(el('polygon', { points: poly(sh), fill: DARK ? T.ink : T['shadow-warm'], opacity: DARK ? 0.55 : 0.16, filter: ref('soft-shadow') }));
   }
+  if (ao && h > 0) {
+    const wAO = Math.max(4, Math.min(16, minEdge * 0.16));
+    parts.push(el('polyline', { points: poly([D0, C0, B0]), fill: 'none', stroke: DARK ? T.ink : T['shadow-warm'], 'stroke-width': wAO.toFixed(1), 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: DARK ? 0.7 : 0.3, transform: `translate(0 ${(wAO * 0.25).toFixed(1)})`, filter: ref('ao') }));
+  }
+  const silhouette = h > 0 ? [A, B, B0, C0, D0, D] : top;
+  const clip = clipOf(el('path', { d: roundedPath(silhouette, r) }));
+  // the face paints: the top lit toward the back right, the sides falling off toward the floor
+  const topG = lin([[0, lift(tn.top, DARK ? 0.12 : 0.3)], [1, tn.top]], 1, 0, 0.1, 1);
+  const leftBase = DARK ? sink(tn.left, T['stage-bottom'], 0.3) : tn.left;
+  const rightBase = DARK ? sink(tn.right, T['stage-orange'], 0.05) : tn.right;
+  const leftG = lin([[0, leftBase], [1, sink(leftBase, tn.dark, 0.55)]]);
+  const rightG = lin([[0, lift(rightBase, 0.08)], [0.55, rightBase], [1, sink(rightBase, tn.shade, 0.6)]]);
+  const inner = [];
+  const extra = [];
+  if (h > 0) {
+    inner.push(el('path', { d: roundedPath(silhouette, r), fill: tn.left }));
+    inner.push(el('polygon', { points: poly(left), fill: leftG.paint }));
+    inner.push(el('polygon', { points: poly(right), fill: rightG.paint }));
+  }
+  inner.push(el('polygon', { points: poly(top), fill: topG.paint }));
+  if (glossy) {
+    inner.push(gloss(`M ${poly(top).replace(/ /g, ' L ').replace(/,/g, ' ')} Z`, { strength: 1 }));
+    if (h > 0) inner.push(el('polygon', { points: poly(right), fill: lin([[0, T.canvas, 0], [0.62, T.canvas, 0], [0.74, T.canvas, 0.22], [0.86, T.canvas, 0]], 0, 0, 1, 0).paint }));
+  }
+  // the rounded edges catch the light: the top's front rim, and the vertical edge between sides
+  if (h > 0) {
+    inner.push(el('polyline', { points: poly([D, Cc, B]), fill: 'none', stroke: lift(tn.top, 0.6), 'stroke-width': hw.toFixed(1), 'stroke-linejoin': 'round', opacity: DARK ? 0.55 : 0.9 }));
+    inner.push(el('line', { x1: f1(Cc[0]), y1: f1(Cc[1]), x2: f1(C0[0]), y2: f1(C0[1]), stroke: lift(tn.right, 0.45), 'stroke-width': (hw * 0.7).toFixed(1), opacity: DARK ? 0.35 : 0.6 }));
+    // the side faces darken where they meet the floor (occlusion inside the volume)
+    const foot = lin([[0, T['shadow-warm'], 0], [0.7, T['shadow-warm'], 0], [1, T['shadow-warm'], DARK ? 0.35 : 0.14]]);
+    inner.push(el('polygon', { points: poly([D, Cc, B, B0, C0, D0]), fill: foot.paint }));
+    extra.push(foot);
+  }
+  if (DARK) {
+    // the warm key light rims the lit edges on the stage
+    inner.push(el('polyline', { points: poly(h > 0 ? [A, B, B0] : [A, B, Cc]), fill: 'none', stroke: T['stage-orange'], 'stroke-width': Math.max(1.6, hw * 0.8).toFixed(1), 'stroke-linejoin': 'round', opacity: 0.55 }));
+  }
+  parts.push(defsOf(clip, topG, leftG, rightG, ...extra), g({ 'clip-path': clip.paint }, inner));
   if (outline) {
     const o = { fill: 'none', stroke: line(), 'stroke-width': sw, 'stroke-linejoin': 'round' };
-    parts.push(el('polygon', { ...o, points: poly([A, B, B0, C0, D0, D]) }));
-    parts.push(el('polyline', { ...o, points: poly([D, Cc, B]) }));
-    parts.push(el('line', { ...o, x1: Cc[0], y1: Cc[1], x2: C0[0], y2: C0[1] }));
+    parts.push(el('polygon', { ...o, points: poly(silhouette) }));
+    if (h > 0) {
+      parts.push(el('polyline', { ...o, points: poly([D, Cc, B]) }));
+      parts.push(el('line', { ...o, x1: Cc[0], y1: Cc[1], x2: C0[0], y2: C0[1] }));
+    }
   }
   return { svg: parts.join(''), top, left, right };
 }
 
-/** An isometric disc or cylinder (a coin, a knob, a pot, a wheel lying flat), centered at
- *  screen (cx, cy) on its top face; rx in screen px, h its height in screen px. */
-export function isoDisc(cx, cy, rx, h, tones = TONES.paper, { sw = 2.5, rings = 1 } = {}) {
+/**
+ * An isometric disc or cylinder (a coin, a knob, a pot, a wheel lying flat), centered at screen
+ * (cx, cy) on its top face; rx in screen px, h its height in screen px. A soft volume: the side
+ * lit from the right with a specular stripe, the top lit toward the back right with a bright front
+ * rim, `rings` soft grooves on the top, occlusion under it. Options: rings, gloss, outline;
+ * `sw` is the outline weight when outline is on.
+ */
+export function isoDisc(cx, cy, rx, h, tones = TONES.paper, { sw = 2.5, rings = 1, gloss: glossy = false, outline = false, ao = true } = {}) {
+  const tn = tonesOf(tones);
   const ry = rx * 0.577;
   const parts = [];
-  if (h > 0) parts.push(el('path', { d: `M ${cx - rx} ${cy} L ${cx - rx} ${cy + h} A ${rx} ${ry} 0 0 0 ${cx + rx} ${cy + h} L ${cx + rx} ${cy} Z`, fill: tones[2], stroke: line(), 'stroke-width': sw, 'stroke-linejoin': 'round' }));
-  parts.push(el('ellipse', { cx, cy, rx, ry, fill: tones[0], stroke: line(), 'stroke-width': sw }));
+  const list = [];
+  if (ao) {
+    const by = cy + Math.max(0, h);
+    parts.push(el('ellipse', { cx: f1(cx - rx * 0.06), cy: f1(by + ry * 0.12), rx: f1(rx * 1.04), ry: f1(ry * 1.1), fill: DARK ? T.ink : T['shadow-warm'], opacity: DARK ? 0.6 : h > 0 ? 0.26 : 0.18, filter: ref('ao') }));
+  }
+  if (h > 0) {
+    const sideBase = DARK ? sink(tn.left, T['stage-bottom'], 0.25) : tn.left;
+    const side = lin([[0, sink(sideBase, tn.dark, 0.45)], [0.32, sideBase], [0.68, tn.right], [0.84, lift(tn.right, glossy ? 0.4 : 0.18)], [1, sink(tn.right, tn.shade, 0.5)]], 0, 0, 1, 0);
+    list.push(side);
+    const d = `M ${f1(cx - rx)} ${f1(cy)} L ${f1(cx - rx)} ${f1(cy + h)} A ${f1(rx)} ${f1(ry)} 0 0 0 ${f1(cx + rx)} ${f1(cy + h)} L ${f1(cx + rx)} ${f1(cy)} Z`;
+    parts.push(el('path', { d, fill: side.paint }));
+    // the side darkens toward the floor
+    const foot = lin([[0, T['shadow-warm'], 0], [0.6, T['shadow-warm'], 0], [1, T['shadow-warm'], DARK ? 0.3 : 0.12]]);
+    list.push(foot);
+    parts.push(el('path', { d, fill: foot.paint }));
+  }
+  const topG = rad([[0, lift(tn.top, DARK ? 0.12 : 0.32)], [0.7, tn.top], [1, sink(tn.top, tn.right, 0.5)]], 0.66, 0.28, 0.8);
+  list.push(topG);
+  parts.push(el('ellipse', { cx: f1(cx), cy: f1(cy), rx: f1(rx), ry: f1(ry), fill: topG.paint }));
   for (let i = 1; i <= rings; i++) {
     const k = 1 - i * 0.32;
-    parts.push(el('ellipse', { cx, cy, rx: rx * k, ry: ry * k, fill: 'none', stroke: line(), 'stroke-width': sw * 0.7, opacity: 0.55 }));
+    if (k <= 0.05) break;
+    parts.push(el('ellipse', { cx: f1(cx), cy: f1(cy), rx: f1(rx * k), ry: f1(ry * k), fill: 'none', stroke: sink(tn.top, tn.shade, 0.7), 'stroke-width': Math.max(1.2, rx * 0.03).toFixed(1), opacity: 0.7 }));
+    parts.push(el('path', { d: `M ${f1(cx - rx * k)} ${f1(cy + 1.4)} A ${f1(rx * k)} ${f1(ry * k)} 0 0 0 ${f1(cx + rx * k)} ${f1(cy + 1.4)}`, fill: 'none', stroke: lift(tn.top, 0.7), 'stroke-width': Math.max(1, rx * 0.022).toFixed(1), opacity: 0.8 }));
   }
-  return parts.join('');
+  if (glossy) parts.push(gloss(`M ${f1(cx - rx)} ${f1(cy)} A ${f1(rx)} ${f1(ry)} 0 1 0 ${f1(cx + rx)} ${f1(cy)} A ${f1(rx)} ${f1(ry)} 0 1 0 ${f1(cx - rx)} ${f1(cy)} Z`, { strength: 0.9 }));
+  if (h > 0) {
+    // the rounded front rim of the top catches the light
+    parts.push(el('path', { d: `M ${f1(cx - rx * 0.97)} ${f1(cy + ry * 0.08)} A ${f1(rx)} ${f1(ry)} 0 0 0 ${f1(cx + rx * 0.97)} ${f1(cy + ry * 0.08)}`, fill: 'none', stroke: lift(tn.top, 0.62), 'stroke-width': Math.max(1.4, Math.min(4, rx * 0.045)).toFixed(1), 'stroke-linecap': 'round', opacity: DARK ? 0.5 : 0.9 }));
+  }
+  if (DARK) parts.push(el('path', { d: `M ${f1(cx + rx * 0.2)} ${f1(cy - ry)} A ${f1(rx)} ${f1(ry)} 0 0 1 ${f1(cx + rx)} ${f1(cy)}${h > 0 ? ` L ${f1(cx + rx)} ${f1(cy + h)}` : ''}`, fill: 'none', stroke: T['stage-orange'], 'stroke-width': 2, opacity: 0.55 }));
+  if (outline) {
+    if (h > 0) parts.push(el('path', { d: `M ${cx - rx} ${cy} L ${cx - rx} ${cy + h} A ${rx} ${ry} 0 0 0 ${cx + rx} ${cy + h} L ${cx + rx} ${cy}`, fill: 'none', stroke: line(), 'stroke-width': sw, 'stroke-linejoin': 'round' }));
+    parts.push(el('ellipse', { cx, cy, rx, ry, fill: 'none', stroke: line(), 'stroke-width': sw }));
+  }
+  return defsOf(...list) + parts.join('');
+}
+
+/**
+ * A specular highlight over a shape (path d): a soft-edged band of light across its top-right
+ * part, in the shape's own box. strength 0..1.
+ */
+export function gloss(shapeD, { strength = 1 } = {}) {
+  const s = Math.max(0, Math.min(1, strength));
+  const gr = lin([[0, T.canvas, 0.62 * s], [0.3, T.canvas, 0.2 * s], [0.31, T.canvas, 0.06 * s], [0.5, T.canvas, 0]], 0.95, 0, 0.3, 0.75);
+  return defsOf(gr) + el('path', { d: shapeD, fill: gr.paint });
+}
+
+/**
+ * An organic filled shape (path d) as a soft volume: the fill as a gradient lit from the top
+ * right, a soft form shadow inside its lower-left edge and a lit rim inside its top-right edge.
+ * No ink stroke. A fill that is not a palette hex (a gradient, 'none') is drawn flat.
+ */
+export function softShape(d, fill = T['paper-lit'], { gloss: glossy = false, form = 1 } = {}) {
+  if (!isHex(fill)) return el('path', { d, fill });
+  const dark = lum(fill) < 70;
+  const hi = mixHex(fill, T.canvas, dark ? 0.16 : 0.3);
+  const lo = mixHex(fill, dark ? T['ink-dark'] : T['shadow-warm'], dark ? 0.35 : 0.2);
+  const body = lin([[0, hi], [0.5, fill], [1, lo]], 0.85, 0.05, 0.15, 0.95);
+  const clip = clipOf(el('path', { d }));
+  const out = [defsOf(body, clip), el('path', { d, fill: body.paint })];
+  if (form > 0) {
+    out.push(g({ 'clip-path': clip.paint }, [
+      el('path', { d, fill: 'none', stroke: mixHex(fill, dark ? T['ink-dark'] : T['shadow-warm'], 0.55), 'stroke-width': 7, opacity: (0.42 * form).toFixed(2), transform: 'translate(2.5 -3)', filter: ref('soft-edge') }),
+      el('path', { d, fill: 'none', stroke: mixHex(fill, T.canvas, 0.7), 'stroke-width': 4, opacity: ((dark ? 0.35 : 0.75) * form).toFixed(2), transform: 'translate(-1.8 2.2)', filter: ref('soft-edge') }),
+    ]));
+  }
+  if (glossy) out.push(gloss(d, { strength: 0.8 }));
+  if (DARK) out.push(g({ 'clip-path': clip.paint }, el('path', { d, fill: 'none', stroke: T['stage-orange'], 'stroke-width': 3, opacity: 0.45, transform: 'translate(-1.5 1.5)' })));
+  return out.join('');
 }
 
 /** Lay flat 2D drawing on an iso plane (see core isoPlane). */
 export const onPlane = (P, s, x, y, z, inner) => g({ transform: isoPlane(P, s, x, y, z) }, inner);
 
-/** A flat contact shadow: an ink ellipse under a thing (V-3). */
-export const shadow = (cx, cy, rx, ry, opacity = 0.12) => el('ellipse', { cx, cy, rx, ry, fill: DARK ? T.canvas : T.ink, opacity: DARK ? opacity * 0.5 : opacity });
+/** A soft contact shadow under a thing: a warm, blurred-edge ellipse (a radial falloff, no
+ *  filter needed). `opacity` is the old flat shadow's; the soft one peaks a little darker. */
+export function shadow(cx, cy, rx, ry, opacity = 0.12) {
+  const a = Math.min(0.9, opacity * (DARK ? 4.5 : 2.4));
+  const color = DARK ? T['ink-dark'] : T['shadow-warm'];
+  const gr = rad([[0, color, a], [0.45, color, a * 0.62], [0.78, color, a * 0.18], [1, color, 0]]);
+  return defsOf(gr) + el('ellipse', { cx: f1(cx), cy: f1(cy), rx: f1(rx * 1.18), ry: f1(ry * 1.28), fill: gr.paint });
+}
 
 // ── Marks ─────────────────────────────────────────────────────────────────────────────────
 /** A line that draws itself out (reference 1), optionally with a dot at its tip; p 0..1. */
@@ -375,12 +603,12 @@ export function ring(P, s, x, y, z, r0, r1, u, { color = line() } = {}) {
   return g({ transform: isoPlane(P, s, x, y, z), opacity: (1 - u) * 0.8 }, el('circle', { cx: 0, cy: 0, r, fill: 'none', stroke: color, 'stroke-width': 6 / s }));
 }
 
-/** Cartoon shock marks: three short ink strokes that pop out and fade (u: 0..1). */
+/** Cartoon shock marks: three short tapered strokes that pop out and fade (u: 0..1). */
 export function shock(x, y, u, scale = 1, rays = [[-0.95, -0.55], [-0.35, -1], [0.35, -1.05]]) {
   if (u <= 0 || u >= 1) return '';
   const grow = Math.min(1, u / 0.25);
   const fade = 1 - Math.max(0, (u - 0.7) / 0.3);
-  return g({ filter: ref('wobble'), opacity: fade }, rays.map(([dx, dy]) => {
+  return g({ opacity: fade }, rays.map(([dx, dy]) => {
     const x0 = x + dx * 26 * scale;
     const y0 = y + dy * 26 * scale;
     return stroke([[x0, y0], [x0 + dx * 34 * scale * grow, y0 + dy * 34 * scale * grow]], { size: 7 * scale, thinning: 0.5, start: { taper: 2 }, end: { taper: 8 } });

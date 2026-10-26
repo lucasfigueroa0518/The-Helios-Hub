@@ -126,7 +126,7 @@ test('episode numbers count published explainers, not finished renders', async (
 
 test('the post caption names the viewer\'s problem and ends on the Helios line (explainer-caption-v5)', async () => {
   const { CAPTION_INSTRUCTIONS, CAPTION_VERSION, captionParams } = await import('@/lib/explainers/caption');
-  assert.equal(CAPTION_VERSION, 'explainer-caption-v6');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v8');
   assert.match(CAPTION_INSTRUCTIONS, /names a problem or situation the viewer has/);
   assert.match(CAPTION_INSTRUCTIONS, /the hook, two or three short paragraphs on why, the save prompt or question, the Helios line, then the hashtags/);
   assert.match(CAPTION_INSTRUCTIONS, /which of the reel's options they would use first/);
@@ -163,6 +163,13 @@ test('the post caption names the viewer\'s problem and ends on the Helios line (
   assert.ok(user.includes(buildLineInstruction(true)));
   const schema = params.output_config.format.schema as { required: string[] };
   assert.deepEqual(schema.required, ['caption', 'builder_read']);
+
+  // v8 (3.9, EX3-123): the analogy's name is a fact in the user message, and the caption names it.
+  assert.match(CAPTION_INSTRUCTIONS, /Name the analogy by its name; it is the phrase viewers repeat\./);
+  assert.doesNotMatch(user, /Analogy:/, 'no analogy line when the reel has none');
+  const named = String(captionParams({ ...facts, analogy: 'The open-book exam' }, 'm', { recent: [], includeBuildLine: false }).messages[0]!.content);
+  assert.match(named, /Scope: What a model can see\.\nAnalogy: The open-book exam\n/);
+  assert.doesNotMatch(JSON.stringify(captionParams({ ...facts, analogy: 'The open-book exam' }, 'm', { recent: [], includeBuildLine: false }).system), /open-book/);
 
   const empty = String(captionParams(facts, 'm', { recent: [], includeBuildLine: false }).messages[0]!.content);
   assert.doesNotMatch(empty, /Recent captions ended like this/);
@@ -247,10 +254,18 @@ test('Task 8b part 2 (v5 amended): at most two emoji, one leading the hook and o
   assert.throws(() => parseCaption(withTwo.replace('desk.', 'desk. 🔥')), /3 emoji; at most 2/);
   assert.throws(() => parseCaption(CONTEXT_WINDOW.replace("one section at a time.", 'one section at a time. 🚀')), /no emoji in the Helios line/);
   const { CAPTION_INSTRUCTIONS, CAPTION_VERSION } = await import('@/lib/explainers/caption');
-  assert.equal(CAPTION_VERSION, 'explainer-caption-v6');
+  assert.equal(CAPTION_VERSION, 'explainer-caption-v8');
   assert.doesNotMatch(CAPTION_INSTRUCTIONS, /No emoji\./);
   assert.match(CAPTION_INSTRUCTIONS, /At most two emoji, and none is required: usually one leads the hook/);
   assert.match(CAPTION_INSTRUCTIONS, /code puts the episode line above it/);
   assert.match(CAPTION_INSTRUCTIONS, /None in the Helios line or the hashtags/);
   assert.match(CAPTION_INSTRUCTIONS, /the industry from the Helios context that best matches this story/);
+});
+
+test('the post caption never says "critter" (explainer-caption-v7, EX3-121)', async () => {
+  const { CAPTION_INSTRUCTIONS, checkNoCritter } = await import('@/lib/explainers/caption');
+  assert.match(CAPTION_INSTRUCTIONS, /never call it a "critter"/);
+  assert.throws(() => checkNoCritter('The hungry critter plates one slice.'), /says "critter"/);
+  assert.throws(() => checkNoCritter('Two Critters wait.'), /Critters/);
+  assert.doesNotThrow(() => checkNoCritter('The searcher plates one slice.'));
 });

@@ -23,6 +23,8 @@ export type ExplainersSettings = {
   orchestrator_model: string;
   frame_worker_model: string;
   idea_model: string;
+  /** The analogy writer's model (EX3-123): Opus, separate from the idea model. */
+  analogy_model: string;
   music_enabled: boolean;
   sfx_enabled: boolean;
   theme_brief_version: string;
@@ -46,10 +48,12 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   orchestrator_model: 'claude-sonnet-5-5',
   frame_worker_model: 'claude-sonnet-5-5',
   idea_model: 'claude-sonnet-5-5',
+  // Explainers 3.9 (EX3-123; Lucas, 2026-10-25: "Opus").
+  analogy_model: 'claude-opus-5-5',
   music_enabled: true,
   sfx_enabled: true,
-  // Explainers 3.1 (EX3-34). An existing database keeps its stored version until Lucas flips it.
-  theme_brief_version: 'v3',
+  // Explainers 3.9 (EX3-123). An existing database keeps its stored version until Lucas flips it.
+  theme_brief_version: 'v4',
 };
 
 type Parser<K extends SettingKey> = (value: unknown) => ExplainersSettings[K];
@@ -99,6 +103,7 @@ const PARSERS: { [K in SettingKey]: Parser<K> } = {
   orchestrator_model: text('orchestrator_model'),
   frame_worker_model: text('frame_worker_model'),
   idea_model: text('idea_model'),
+  analogy_model: text('analogy_model'),
   music_enabled: bool('music_enabled'),
   sfx_enabled: bool('sfx_enabled'),
   theme_brief_version: text('theme_brief_version'),

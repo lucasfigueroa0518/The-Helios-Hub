@@ -34,6 +34,8 @@ const SLIDE_W = 1080;
 const SLIDE_H = 1350;
 /** Sub-pixel rounding allowance. */
 const TOLERANCE_PX = 1;
+/** The design system's Premium recipes, from the Hub's synced copy (never edited here). */
+export const PREMIUM_CSS = 'explainers/design/helios-design-system/premium.css';
 
 export type FitViolation = {
   /** 1-based, cover = slide 1. */
@@ -72,11 +74,13 @@ async function slideHtml(post: Post): Promise<string> {
   (globalThis as { React?: unknown }).React = React;
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { SlideTemplate } = await import('./SlideTemplate');
-  // preview.css, then the slide designs' own CSS (drafts/index.css lists them, in order).
+  // preview.css, the design system's Premium recipes (synced copy; scoped under .premium), then the slide
+  // designs' own CSS (drafts/index.css lists them, in order).
   const draftsDir = path.join(process.cwd(), 'lib/social/render/drafts');
   const draftFiles = [...(await fsp.readFile(path.join(draftsDir, 'index.css'), 'utf8')).matchAll(/@import\s+['"]\.\/([^'"]+)['"]/g)].map((m) => m[1]!);
   const css = [
     await fsp.readFile(path.join(process.cwd(), 'app/social/render/preview/preview.css'), 'utf8'),
+    await fsp.readFile(path.join(process.cwd(), PREMIUM_CSS), 'utf8'),
     ...(await Promise.all(draftFiles.map((f) => fsp.readFile(path.join(draftsDir, f), 'utf8')))),
   ].join('\n');
   const slides = post.slides
@@ -294,6 +298,8 @@ window.__faces = (async () => {
           if (el.matches('img.helios-photo, .helios-backdrop__shade, .helios-cover, .helios-image, .helios-frame__blur, .helios-v2-image__fade, .helios-v2-image__scrim')) return;
           // Icon backgrounds run off the edge by design (photo spec §5) and carry no text.
           if (el.closest('.helios-icon-bg')) return;
+          // The AI Events rank slide's ghost numerals run off the edge and across the seam into the next slide (aria-hidden, never read).
+          if (el.closest('.ae-bleed')) return;
           if (Object.values(over).some((v) => v > tol)) {
             violations.push({ slide, element: `${el.tagName.toLowerCase()}.${[...el.classList].join('.')}`, text: (el.textContent ?? '').trim().slice(0, 80), over: Object.fromEntries(Object.entries(over).map(([k, v]) => [k, Math.round(v)])) as R });
           }

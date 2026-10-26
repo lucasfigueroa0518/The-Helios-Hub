@@ -14,7 +14,8 @@
 //   shotAt(t, shots)               the shot on screen at frame time t, and the time inside it
 //   shotCamera(shot, local)        that shot's camera (centering its subject, with its push)
 //   shotFrame(t, shots, draw, o)   the whole frame: frame() with the active shot's camera;
-//                                  draw(shot, local) returns the scene's parts
+//                                  draw(shot, local) returns the scene's parts (or its
+//                                  depth layers { bg, mid, fg }, hx-4)
 //   validateShots(shots, dur)      the rules, as error strings (try.mjs and lint call it)
 //
 // A shot: { at, kind, on: [x, y], zoom?, push? }. `on` is the subject's screen point in the
@@ -94,18 +95,23 @@ export function shotCamera(shot, local = 0, length = 3, pivot = [540, 960]) {
   return { x: sx - cx - (SUBJECT_AT[0] - cx) / zoom, y: sy - cy - (SUBJECT_AT[1] - cy) / zoom, zoom, rot: 0, tilt: 0 };
 }
 
+/** The depth layers a scene may be drawn in (motion.js frame()). */
+const LAYERS = ['bg', 'mid', 'fg'];
+
 /**
- * The frame at time t under its shot list. `draw(shot, local, i)` returns the scene's parts: the
- * same scene in every shot (EX3-90), framed by the active shot's camera. A shot never adds a
- * foreground layer or hides what is in view.
- * `o` passes through to frame() (pivot, cell, oy); `seam` as frame().
+ * The frame at time t under its shot list. `draw(shot, local, i)` returns the scene's parts (an SVG
+ * string, a list, or the depth layers { bg, mid, fg }): the same scene in every shot (EX3-90),
+ * framed by the active shot's camera. A shot never adds a layer or hides what is in view.
+ * `o` passes through to frame() (pivot, focus); `seam` as frame().
  */
 export function shotFrame(t, shots, draw, o = {}, seam = null) {
   const { i, shot, local, length } = shotAt(t, shots);
   const camera = shotCamera(shot, local, length, o.pivot ?? [540, 960]);
   const parts = draw(shot, local, i);
-  if (typeof parts === 'object' && parts !== null && !Array.isArray(parts)) {
-    throw new Error('shotFrame: draw() returns the scene only (an SVG string or an array of parts); a shot never adds a foreground layer (EX3-90)');
+  // 4.0 (hx-4): the scene may come in its depth layers { bg, mid, fg } (the same layers in every
+  // shot); frame() moves them with parallax. Anything else is a layer the shot added.
+  if (typeof parts === 'object' && parts !== null && !Array.isArray(parts) && Object.keys(parts).some((k) => !LAYERS.includes(k))) {
+    throw new Error('shotFrame: draw() returns the scene only (an SVG string, an array of parts, or its depth layers { bg, mid, fg }); a shot never adds a foreground layer (EX3-90)');
   }
   const wash = camera.zoom > WASH_ZOOM ? bandWash() : '';
   return frame(t, { ...o, camera }, parts, seam) + wash;

@@ -99,6 +99,35 @@ export function LfdRunButton() {
   );
 }
 
+// ── AI Events This Week ─────────────────────────────────────────────────────
+
+/** Generate: rank the coming week's events (Jev, about $0.02) and render the carousel; the post waits for approval. */
+export function AiEventsRunButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  async function run() {
+    if (!confirm('Generate this week’s AI Events post? It ranks the coming week’s events in Miami, Boston, NYC and SF with live Jev calls (about $0.02; capped by the run cap in Settings, $0.50 by default) and renders the carousel. No Claude calls. The post waits for your approval.')) return;
+    setBusy(true);
+    try {
+      const out = await call<{ queued: boolean; note?: string }>('/api/ai-events/run', {});
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
+      setNote(out.queued ? (out.note ?? 'Run queued.') : (out.note ?? 'A run is already queued.'));
+      void refreshHubPage(router);
+    } catch (e) {
+      setNote(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <button type="button" className="rh-btn rh-btn--primary" disabled={busy} onClick={run}>Generate</button>
+      <Note text={note} />
+    </div>
+  );
+}
+
 // ── Stories ─────────────────────────────────────────────────────────────────
 
 const SERIES_LABEL: Record<string, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
@@ -136,7 +165,7 @@ export function StoriesGenerate() {
 // ── Header: the Live switch, shared by every type ───────────────────────────
 
 /** Live: while on, the type schedules and posts on its own. Turning it on asks first. */
-export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 'explainers' | 'last_few_days'; initial: boolean }) {
+export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 'explainers' | 'last_few_days' | 'ai_events'; initial: boolean }) {
   const router = useRouter();
   const [on, setOn] = useState(initial);
   const [asking, setAsking] = useState(false);
@@ -378,7 +407,7 @@ export function AddTopicsButton() {
 // ── Settings: generate, auto-publish and the daily quota, the same on every type ──
 
 type Posting = {
-  type: 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days';
+  type: 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events';
   live: boolean;
   generate: boolean | null;
   autoPublish: boolean;
@@ -394,7 +423,7 @@ type Posting = {
 };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const NOUN: Record<Posting['type'], string> = { reels: 'reels', carousels: 'carousels', explainers: 'explainers', stories: 'story sets', last_few_days: 'Last Few Days posts' };
+const NOUN: Record<Posting['type'], string> = { reels: 'reels', carousels: 'carousels', explainers: 'explainers', stories: 'story sets', last_few_days: 'Last Few Days posts', ai_events: 'AI Events posts' };
 
 function Switch({ checked, onChange, children, hint }: { checked: boolean; onChange: (on: boolean) => void; children: ReactNode; hint?: string }) {
   return (
@@ -464,13 +493,21 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
           onChange={(on) => {
             const ask = type === 'last_few_days'
               ? 'Make Last Few Days posts on Tuesdays and Fridays at 3:00 AM? Each run makes live model and web calls (up to the run cap).'
-              : `Make ${noun} every morning? Each run makes live model and web calls.`;
+              : type === 'ai_events'
+                ? 'Make the AI Events post every Sunday at 12:00 PM? Each run ranks the coming week’s events with live Jev calls (about $0.02, up to the run cap). No Claude calls.'
+                : `Make ${noun} every morning? Each run makes live model and web calls.`;
             if (on && !confirm(ask)) return;
             void save({ generate: on });
           }}
-          hint={type === 'last_few_days' ? 'Makes a Last Few Days post at 3:00 AM on its days (Tuesday and Friday), in place of that day’s carousel run.' : `Makes ${noun} every morning to fill the day's quota.`}
+          hint={
+            type === 'last_few_days'
+              ? 'Makes a Last Few Days post at 3:00 AM on its days (Tuesday and Friday), in place of that day’s carousel run.'
+              : type === 'ai_events'
+                ? 'Ranks the coming week’s events and renders the carousel at 12:00 PM on Sundays, for the 6:00–7:00 PM slot. It waits for your approval unless auto-publish is on.'
+                : `Makes ${noun} every morning to fill the day's quota.`
+          }
         >
-          {type === 'last_few_days' ? 'Generate on its days' : 'Generate every morning'}
+          {type === 'last_few_days' ? 'Generate on its days' : type === 'ai_events' ? 'Generate on Sundays' : 'Generate every morning'}
         </Switch>
       ) : null}
       <Switch

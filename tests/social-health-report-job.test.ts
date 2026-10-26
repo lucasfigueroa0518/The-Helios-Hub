@@ -22,7 +22,7 @@ test('a reporter that throws does not break the night: that type reads as unknow
   const exp = night.reports.find((r) => r.vertical === 'explainers')!;
   assert.match(exp.reportError ?? '', /unreachable/);
   assert.equal(night.verdict.types.find((t) => t.vertical === 'explainers')!.tone, 'short');
-  assert.equal(night.reports.length, 5);
+  assert.equal(night.reports.length, 6);
 });
 
 test('failures on a type that met its target are downgraded to warnings', async () => {
@@ -68,7 +68,7 @@ test('morning report: a multi-night backfill reads each type\'s posting state on
   const out = await runMorningReport({ q: query, explainersQ: async () => query, posting: counted as never }, NOW, 5);
   assert.equal(out.backfilled, 4, '5 nights built');
   assert.deepEqual([...calls.values()], [...calls.keys()].map(() => 1));
-  assert.equal(calls.size, 5, 'every type, once');
+  assert.equal(calls.size, 6, 'every type, once');
   // A new run reads fresh state.
   await runMorningReport({ q: query, explainersQ: async () => query, posting: counted as never }, NOW, 5);
   assert.deepEqual([...new Set(calls.values())], [2]);

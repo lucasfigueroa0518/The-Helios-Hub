@@ -7,8 +7,9 @@ import { klingClipUsdSql } from '@/lib/reels/insights';
  * sources: reels.cost_events (+ Kling clips, priced exactly as Trial Reels
  * cost analytics prices them), explainers.cost_events, carousel run costs
  * (social.runs.total_usd split by the run record's per-story costs),
- * stories.cost_events, and Last Few Days runs (lfd.runs Claude and Jev spend,
- * on the post each run made). Denormalized totals (jobs.spend_usd, sets.spend_usd)
+ * stories.cost_events, Last Few Days runs (lfd.runs Claude and Jev spend,
+ * on the post each run made), and AI Events runs (ai_events.runs Jev spend,
+ * on the week's post). Denormalized totals (jobs.spend_usd, sets.spend_usd)
  * are never added; they are only checked against the rows (`agreement`).
  */
 
@@ -39,6 +40,8 @@ export type CostReads = {
   storySets: Array<{ set_id: string; ny_date: string; spend_usd: string }>;
   /** Last Few Days runs with the post each made (null: it made none). Optional: older callers build reads without it. */
   lfdRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
+  /** AI Events runs with the week's post (null: it made none). Optional the same way. */
+  aiEventsRuns?: Array<{ id: string; jev_usd: string; ny_date: string; post_id: string | null }>;
 };
 
 /** Trial Reels activities whose spend belongs to one post idea (lib/reels/analytics/rollups.ts). */
@@ -87,6 +90,14 @@ export const COST_SQL = {
                    ${day('COALESCE(r.started_at, r.requested_at)')} AS ny_date,
                    (SELECT p.id::text FROM lfd.posts p WHERE p.run_id = r.id ORDER BY p.created_at DESC LIMIT 1) AS post_id
               FROM lfd.runs r WHERE r.status IN ('ok', 'partial', 'failed')`,
+  // A rebuild re-renders the week's post in place (its run_id moves to the newest run), so a run's post is the
+  // one it last rendered, else the week's post that wasn't rejected.
+  aiEventsRuns: `SELECT r.id::text AS id, r.jev_usd::text AS jev_usd,
+                        ${day('COALESCE(r.started_at, r.requested_at)')} AS ny_date,
+                        (SELECT p.id::text FROM ai_events.posts p
+                          WHERE p.run_id = r.id OR (r.week_key IS NOT NULL AND p.week_key = r.week_key)
+                          ORDER BY (p.run_id = r.id) DESC NULLS LAST, (p.status <> 'rejected') DESC, p.created_at DESC LIMIT 1) AS post_id
+                   FROM ai_events.runs r WHERE r.status IN ('ok', 'partial', 'failed', 'skipped')`,
 } as const;
 
 const EXPLAINER_KEYS = new Set<keyof typeof COST_SQL>(['explainerEvents', 'explainerRendered']);
@@ -104,7 +115,7 @@ export async function readCosts(q: HubQuery, explainersQ: Promise<HubQuery> | Hu
   });
   const results = await Promise.all(keys.map((key) => {
     // A database without the lfd schema reads as no Last Few Days spend, never as a cost-read failure.
-    if (key === 'lfdRuns') return q(COST_SQL[key]).catch(() => ({ rows: [] }));
+    if (key === 'lfdRuns' || key === 'aiEventsRuns') return q(COST_SQL[key]).catch(() => ({ rows: [] }));
     if (!EXPLAINER_KEYS.has(key)) return q(COST_SQL[key]);
     return eq ? eq(COST_SQL[key]) : Promise.resolve({ rows: [] });
   }));
@@ -215,6 +226,14 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
     const jev = toMicros(run.jev_usd);
     if (claude > 0) rows.push({ id: `${pool}:claude`, vertical: 'last_few_days', nyDate: run.ny_date, micros: claude, target, label: 'writing and rewrites', vendor: 'anthropic', mode: 'production' });
     if (jev > 0) rows.push({ id: `${pool}:jev`, vertical: 'last_few_days', nyDate: run.ny_date, micros: jev, target, label: 'story picking and fact check (jev)', vendor: 'jev', mode: 'production' });
+  }
+  // ── AI Events: a run's Jev ranking spend belongs to the week's post; a run with no post stays unattributed. No Claude.
+  for (const run of r.aiEventsRuns ?? []) {
+    const pool = `ai_events:run:${run.id}`;
+    const target: LedgerRow['target'] = run.post_id ? { kind: 'item', item: `ai_events:${run.post_id}` } : { kind: 'pool', pool };
+    if (!run.post_id) pools.push({ key: pool, items: [] });
+    const jev = toMicros(run.jev_usd);
+    if (jev > 0) rows.push({ id: `${pool}:jev`, vertical: 'ai_events', nyDate: run.ny_date, micros: jev, target, label: 'event ranking (jev)', vendor: 'jev', mode: 'production' });
   }
   return { rows, pools };
 }

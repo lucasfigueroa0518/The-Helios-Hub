@@ -10,7 +10,14 @@ const CITY_SLUGS = {
 } as const;
 const CATEGORIES = ['science--tech', 'tech', 'business--professional', 'networking'] as const;
 
-const JSONLD_RE = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
+/** Any attribute order: event pages and Luma add `data-next-head` / `data-cfasync` to the tag. */
+const JSONLD_RE = /<script\b[^>]*\btype="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/g;
+
+/** "Event", "SocialEvent", "BusinessEvent" or a type list holding one (Eventbrite event pages say "SocialEvent"). */
+function isEventType(type: unknown): boolean {
+  const types = Array.isArray(type) ? type : [type];
+  return types.some((t) => typeof t === 'string' && /Event$/.test(t));
+}
 
 type EbLocation = {
   name?: string;
@@ -45,14 +52,14 @@ export function parseJsonLdEvents(html: string): EbEvent[] {
   while ((match = JSONLD_RE.exec(html)) !== null) {
     try {
       const parsed = JSON.parse(match[1]) as {
-        '@type'?: string;
-        itemListElement?: Array<{ item?: EbEvent & { '@type'?: string } }>;
+        '@type'?: string | string[];
+        itemListElement?: Array<{ item?: EbEvent & { '@type'?: string | string[] } }>;
       };
       if (parsed?.['@type'] === 'ItemList' && Array.isArray(parsed.itemListElement)) {
         for (const item of parsed.itemListElement) {
-          if (item?.item?.['@type'] === 'Event') events.push(item.item);
+          if (item?.item && isEventType(item.item['@type'])) events.push(item.item);
         }
-      } else if (parsed?.['@type'] === 'Event') {
+      } else if (parsed && isEventType(parsed['@type'])) {
         events.push(parsed as EbEvent);
       }
     } catch {
@@ -98,6 +105,7 @@ export function normalizeEventbriteEvent(raw: EbEvent, cityFallback: string): Ca
     venueName: cleaned.name || undefined,
     address: cleaned.address || undefined,
     city: raw.location?.address?.addressLocality || cityFallback,
+    region: raw.location?.address?.addressRegion || undefined,
     isOnline: isOnline && !isHybrid,
     isHybrid,
     hostName: raw.organizer?.name,
@@ -108,8 +116,8 @@ export function normalizeEventbriteEvent(raw: EbEvent, cityFallback: string): Ca
 
 async function fetchCityCategory(citySlug: string, category: string, cityFallback: string) {
   const url = `${BASE_URL}${citySlug}/${category}/`;
-  const { ok, text } = await fetchText(url);
-  if (!ok) throw new Error(`Eventbrite HTTP ${url}`);
+  const { ok, status, text } = await fetchText(url);
+  if (!ok) throw new Error(`Eventbrite HTTP ${status} ${url}`);
   return parseJsonLdEvents(text)
     .map((raw) => normalizeEventbriteEvent(raw, cityFallback))
     .filter((event): event is CandidateEvent => Boolean(event));

@@ -17,6 +17,8 @@ export const WINDOWS: Record<Vertical, { first: [number, number]; lastEnd: [numb
   explainers: { first: [13, 0], lastEnd: [17, 0] },
   // lib/lfd/config.ts LFD_WINDOW (9:00–10:00 AM, Tue/Fri).
   last_few_days: { first: [9, 0], lastEnd: [10, 0] },
+  // lib/ai-events/config.ts AI_EVENTS_WINDOW (6:00–7:00 PM, Sunday).
+  ai_events: { first: [18, 0], lastEnd: [19, 0] },
 };
 
 /** When the type's last window closes today; null once it has. Stories: 10 AM, after which a set is never scheduled. */

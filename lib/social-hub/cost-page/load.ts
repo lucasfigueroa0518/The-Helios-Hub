@@ -15,6 +15,7 @@ import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import { MONTHLY_WATCH_USD } from '@/lib/reels/config';
 import { DEFAULT_RUN_CAP_USD } from '@/lib/social/overnight/config';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
+import { DEFAULT_AI_EVENTS_RUN_CAP_USD } from '@/lib/ai-events/config';
 
 export { parseCostParams } from '@/lib/social-hub/cost-page/params';
 export type { CostParams, CostRange } from '@/lib/social-hub/cost-page/params';
@@ -42,15 +43,18 @@ async function settingNumber(q: HubQuery | null, sql: string): Promise<number | 
 /** Each type's monthly watch. Types with only a daily cap use cap × days in the month of `to`. */
 async function watches(eq: HubQuery | null, to: string): Promise<Record<Vertical, number>> {
   const days = new Date(Date.UTC(Number(to.slice(0, 4)), Number(to.slice(5, 7)), 0)).getUTCDate();
-  const [stories, explainersCap, runCap, lfdCap] = await Promise.all([
+  const [stories, explainersCap, runCap, lfdCap, aiEventsCap] = await Promise.all([
     settingNumber(liveHubQuery, `SELECT value FROM stories.settings WHERE key = 'monthly_watch_usd'`),
     settingNumber(eq, `SELECT value FROM explainers.settings WHERE key = 'daily_spend_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM social.settings WHERE key = 'run_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM lfd.settings WHERE key = 'run_cap_usd'`),
+    settingNumber(liveHubQuery, `SELECT value FROM ai_events.settings WHERE key = 'run_cap_usd'`),
   ]);
   return {
     // Two posts a week: its cap for each one this month can hold.
     last_few_days: (lfdCap ?? DEFAULT_LFD_RUN_CAP_USD) * Math.ceil((days * 2) / 7),
+    // One post a week: its cap for each Sunday this month can hold.
+    ai_events: (aiEventsCap ?? DEFAULT_AI_EVENTS_RUN_CAP_USD) * Math.ceil(days / 7),
     reels: MONTHLY_WATCH_USD,
     stories: stories ?? STORIES_WATCH_USD,
     explainers: (explainersCap ?? EXPLAINERS_DAILY_CAP_USD) * days,

@@ -12,7 +12,7 @@ export { metaConfigured, type ContainerStatus, type PublishingLimit } from '@/li
  */
 export interface CarouselMetaClient extends InstagramContainerOps {
   createImageItem(imageUrl: string): Promise<string>;
-  createCarousel(children: string[], caption: string): Promise<string>;
+  createCarousel(children: string[], caption: string, locationId?: string): Promise<string>;
 }
 
 export function createLiveCarouselClient(fetchImpl: typeof fetch = fetch): CarouselMetaClient {
@@ -24,8 +24,13 @@ export function createLiveCarouselClient(fetchImpl: typeof fetch = fetch): Carou
       if (!body.id) throw new Error('Meta created no carousel item id.');
       return body.id;
     },
-    async createCarousel(children, caption) {
-      const body = await call<{ id?: string }>('POST', `/${igUserId}/media`, { media_type: 'CAROUSEL', children: children.join(','), caption });
+    async createCarousel(children, caption, locationId) {
+      const body = await call<{ id?: string }>('POST', `/${igUserId}/media`, {
+        media_type: 'CAROUSEL',
+        children: children.join(','),
+        caption,
+        ...(locationId ? { location_id: locationId } : {}),
+      });
       if (!body.id) throw new Error('Meta created no carousel container id.');
       return body.id;
     },

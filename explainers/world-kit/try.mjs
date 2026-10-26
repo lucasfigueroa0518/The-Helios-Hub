@@ -15,12 +15,19 @@
 // Every critter carries its world id
 // (critter({ who }), data-who), so the cast is checked (EX3-90): no critter drawn twice at one
 // moment, and none that vanishes mid-frame and comes back (a shot is a camera, never an edit).
+// Every critter's look (body, wear, wearColor; data-look) matches world.js's CAST in every frame,
+// the hook's hero is CAST's one orange critter, and a critter outside CAST (frames 3, 6 and 7) is
+// never orange and never copies the hero (EX3-107). The hero shows only in the analogy's frames
+// (1, 4, 5 and a frame-7 callback): frames 2, 3 and 6 never draw it (EX3-132). In an object-led reel (assets/opener.json says
+// "hero": "object", EX3-111) the hook follows its focal object and exports no critter hero.
+// `try.mjs props` checks the scene's own new drawings (assets/world/new-props.js and
+// assets/frames/*.props.js, NEW_PROPS, EX3-114): each draws in every state and carries full tags.
 //
 // Prints JSON { ok, errors[] } and exits 1 on any error. Freehand ink is stubbed here (the browser
 // loads it from the CDN), so strokes look plain in this check; everything else is the real code.
 
 import * as nodeModule from 'node:module';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -89,6 +96,111 @@ export function castProblems(samples) {
   return errors;
 }
 
+/** The critters' world ids and looks in an SVG: [{ who, look }]. */
+function drawnCritters(svg) {
+  const out = [];
+  for (const m of String(svg).matchAll(/<g\b[^>]*\bdata-who="([^"]+)"[^>]*>/g)) {
+    out.push({ who: m[1], look: /\bdata-look="([^"]*)"/.exec(m[0])?.[1] ?? null });
+  }
+  return out;
+}
+
+/**
+ * Look problems (EX3-107; Lucas, 2026-10-21: "Character looks should be locked across frames"):
+ * a CAST critter drawn with another body, wear or wear color; or a critter outside CAST that is
+ * orange or wears the hero's look. `cast` is world.js's CAST; `keyOf` is cast.js's lookKey.
+ */
+export function lookProblems(samples, cast, keyOf) {
+  const errors = [];
+  const reported = new Set();
+  const expected = new Map(Object.entries(cast).map(([id, look]) => [id, keyOf(look)]));
+  const hero = Object.entries(cast).find(([, look]) => (look?.body ?? 'ink') === 'orange');
+  const heroKey = hero ? keyOf(hero[1]) : null;
+  for (const { t, svg } of samples) {
+    for (const { who, look } of drawnCritters(svg)) {
+      if (look === null || reported.has(who)) continue;
+      const id = expected.has(who) ? who : who.replace(/-\d+$/, '');
+      if (expected.has(id)) {
+        if (look !== expected.get(id)) {
+          reported.add(who);
+          errors.push(`the critter "${who}" is drawn as ${look} at ${t.toFixed(2)}s, but CAST says ${expected.get(id)}: a critter's body and wear never change during the reel (EX3-107)`);
+        }
+      } else if (look.startsWith('orange|')) {
+        reported.add(who);
+        errors.push(`the critter "${who}" is orange at ${t.toFixed(2)}s: only the hero is an orange critter (EX3-107)`);
+      } else if (heroKey && look === heroKey) {
+        reported.add(who);
+        errors.push(`the critter "${who}" wears the hero's look (${look}) at ${t.toFixed(2)}s: give it a look of its own (EX3-107)`);
+      }
+    }
+  }
+  return errors;
+}
+
+/** Frames that never show the hero (EX3-132): the gap, the definition and the example are the real thing. */
+export const NO_HERO_FRAMES = [2, 3, 6];
+
+/**
+ * The hero in a frame that never shows it (EX3-132; Lucas, 2026-10-25: the hero's orange only in
+ * the analogy frames): CAST's orange critter drawn in frames 2, 3 or 6, by its id or by its look.
+ */
+export function heroFrameProblems(samples, cast, keyOf, frameNumber) {
+  if (!NO_HERO_FRAMES.includes(frameNumber)) return [];
+  const hero = Object.entries(cast ?? {}).find(([, look]) => look?.body === 'orange');
+  if (!hero) return [];
+  const [heroId, heroLook] = hero;
+  const heroKey = keyOf(heroLook);
+  for (const { t, svg } of samples) {
+    for (const { who, look } of drawnCritters(svg)) {
+      if (who === heroId || who.replace(/-\d+$/, '') === heroId || look === heroKey) {
+        return [`the hero "${heroId}" is drawn in frame ${frameNumber} at ${t.toFixed(2)}s (as "${who}"): frames 2, 3 and 6 show the real thing, never the hero; it appears only in frames 1, 4, 5 and a frame-7 callback (EX3-132)`];
+      }
+    }
+  }
+  return [];
+}
+
+/** Problems with world.js's CAST itself: every critter's look, at most one orange (the hero). */
+export function castShapeProblems(cast) {
+  if (!cast || typeof cast !== 'object' || Array.isArray(cast)) {
+    return ['world.js must export CAST = { <critter id>: { body, wear, wearColor } }: every critter\'s look for the whole reel (EX3-107)'];
+  }
+  const errors = [];
+  for (const [id, look] of Object.entries(cast)) {
+    if (!['ink', 'paper', 'orange'].includes(look?.body ?? 'ink')) errors.push(`CAST.${id}.body "${look?.body}" must be ink, paper or orange`);
+    if (look?.wear !== undefined && !Array.isArray(look.wear)) errors.push(`CAST.${id}.wear must be a list`);
+  }
+  const orange = Object.entries(cast).filter(([, look]) => look?.body === 'orange').map(([id]) => id);
+  if (orange.length > 1) errors.push(`CAST has ${orange.length} orange critters (${orange.join(', ')}): only the hero is orange (EX3-107)`);
+  return errors;
+}
+
+/** world.js's CAST, or null when the project has no world (a frame with its own picture only). */
+async function loadCast(root) {
+  const file = join(root, 'assets', 'world', 'world.js');
+  if (!existsSync(file)) return null;
+  try {
+    const cast = (await import(pathToFileURL(file).href)).CAST;
+    return castShapeProblems(cast).length ? null : cast;
+  } catch {
+    return null; // tryWorld reports the load error
+  }
+}
+
+/** No crowds (EX3-117; Lucas, 2026-10-22: "give the viewer one thing to look at at a time"). */
+export const MAX_CRITTERS_AT_ONCE = 4;
+
+/** A crowd on screen: more than MAX_CRITTERS_AT_ONCE critters at one moment (reported once per frame). */
+export function crowdProblems(samples) {
+  for (const { t, svg } of samples) {
+    const n = new Set(drawnCritters(svg).map((c) => c.who)).size;
+    if (n > MAX_CRITTERS_AT_ONCE) {
+      return [`${n} critters on screen at ${t.toFixed(2)}s: at most ${MAX_CRITTERS_AT_ONCE}, never a crowd; give the viewer one thing to look at (EX3-117)`];
+    }
+  }
+  return [];
+}
+
 /** A critter missing this long and then back has vanished (not a one-sample blink). */
 const VANISH = 0.2;
 
@@ -100,10 +212,72 @@ async function tryWorld(root) {
   if (!existsSync(file)) return ['assets/world/world.js does not exist'];
   try {
     const mod = await import(pathToFileURL(file).href);
-    return Object.keys(mod).length ? [] : ['world.js exports nothing'];
+    if (!Object.keys(mod).length) return ['world.js exports nothing'];
+    return castShapeProblems(mod.CAST);
   } catch (e) {
     return [`world.js failed to load: ${e?.message ?? e}`];
   }
+}
+
+/** The hook's hero kind from assets/opener.json (EX3-111): 'object' in an object-led reel, else 'critter'. */
+export function openerHero(root) {
+  try {
+    return JSON.parse(readFileSync(join(root, 'assets', 'opener.json'), 'utf8'))?.hero === 'object' ? 'object' : 'critter';
+  } catch {
+    return 'critter';
+  }
+}
+
+/** The files a scene's own new drawings live in (EX3-114). */
+export function newPropFiles(root) {
+  const out = [];
+  if (existsSync(join(root, 'assets', 'world', 'new-props.js'))) out.push(join('assets', 'world', 'new-props.js'));
+  const frames = join(root, 'assets', 'frames');
+  if (existsSync(frames)) for (const f of readdirSync(frames).sort()) if (f.endsWith('.props.js')) out.push(join('assets', 'frames', f));
+  return out;
+}
+
+/**
+ * The scene's own new drawings (EX3-114): every NEW_PROPS entry loads, has states and a size, draws
+ * a clean SVG in each state, and carries full tags (props/tags.js TAG_FIELDS). Returns the problems
+ * and what was found, for the bank's harvest.
+ */
+export async function tryProps(root) {
+  const { tagProblems } = await import('./props/tags.js');
+  const { propFrom } = await import('./props.js');
+  const errors = [];
+  const props = [];
+  for (const file of newPropFiles(root)) {
+    let defs;
+    try {
+      defs = (await import(pathToFileURL(join(root, file)).href)).NEW_PROPS;
+    } catch (e) {
+      errors.push(`${file} failed to load: ${e?.message ?? e}`);
+      continue;
+    }
+    if (!defs || typeof defs !== 'object') {
+      errors.push(`${file} must export NEW_PROPS = { '<specific name>': { tags, size, states, draw } } (EX3-114)`);
+      continue;
+    }
+    for (const [name, def] of Object.entries(defs)) {
+      const problems = [...tagProblems(name, def?.tags)];
+      if (!Array.isArray(def?.states) || !def.states.length) problems.push(`asset "${name}" needs states (a list, e.g. ['default'])`);
+      if (!Array.isArray(def?.size) || def.size.length !== 2 || !def.size.every(Number.isFinite)) problems.push(`asset "${name}" needs size: [w, h]`);
+      if (typeof def?.draw !== 'function') problems.push(`asset "${name}" needs draw({ state, focal })`);
+      else {
+        for (const state of Array.isArray(def.states) ? def.states : []) {
+          try {
+            for (const p of frameProblems(propFrom(defs, name, 540, 960, { state }))) problems.push(`asset "${name}" (${state}): ${p}`);
+          } catch (e) {
+            problems.push(`asset "${name}" (${state}) threw: ${e?.message ?? e}`);
+          }
+        }
+      }
+      props.push({ file, name, tags: def?.tags ?? null, ok: problems.length === 0 });
+      errors.push(...problems.map((p) => `${file}: ${p}`));
+    }
+  }
+  return { errors, props };
 }
 
 /** The hook contract (EX3-102): what the bank's openers need from 01-hook.js. */
@@ -119,9 +293,33 @@ async function tryHook(root, duration) {
   const scene = mod.default;
   if (typeof scene?.draw !== 'function') return [`${HOOK_ID}.js needs \`export default { ground, shots, draw(t, { hideHero, heroPose }) { … } }\``];
   const errors = [];
+  // An object-led reel's hook follows its focal object: no critter hero, and its openers never use one (EX3-111).
+  if (openerHero(root) === 'object') {
+    for (const t of [0, duration / 2]) {
+      try {
+        if (String(scene.draw(t)).includes('data-role="title"')) errors.push(`${HOOK_ID}.js draws a title card; the opener draws it (draw the hook only)`);
+      } catch (e) {
+        errors.push(`${HOOK_ID}.js draw(${t.toFixed(2)}) threw: ${e?.message ?? e}`);
+        break;
+      }
+    }
+    return errors;
+  }
   const hero = mod.hero ?? scene.hero;
   const ok = hero && Array.isArray(hero.at) && hero.at.length === 2 && hero.at.every(Number.isFinite) && Number(hero.s) > 0 && typeof hero.who === 'string' && hero.who;
   if (!ok) errors.push(`${HOOK_ID}.js must export \`hero = { at: [x, y], s, who, critter: { wear, body } }\`: the hook's critter, its feet on the 1080x1920 page before any shot's camera (its LAYOUT spot), its scale, its world id`);
+  // The hero is CAST's orange critter, drawn the same way in the opener as everywhere (EX3-107).
+  const cast = await loadCast(root);
+  const { lookKey } = await import('./cast.js');
+  if (ok && cast) {
+    const declared = cast[hero.who];
+    if (!declared) errors.push(`the hero "${hero.who}" is not in world.js's CAST (EX3-107)`);
+    else {
+      if (declared.body !== 'orange') errors.push(`the hero "${hero.who}" is ${declared.body ?? 'ink'} in CAST: a critter hero is the one orange critter (EX3-107)`);
+      if (lookKey(hero.critter ?? {}) !== lookKey(declared)) errors.push(`${HOOK_ID}.js's hero.critter (${lookKey(hero.critter ?? {})}) differs from CAST.${hero.who} (${lookKey(declared)}) (EX3-107)`);
+    }
+  }
+  const drawn = [];
   for (const t of [0, duration / 2]) {
     let svg = '';
     let hidden = '';
@@ -132,11 +330,13 @@ async function tryHook(root, duration) {
       errors.push(`${HOOK_ID}.js draw(${t.toFixed(2)}) threw: ${e?.message ?? e}`);
       break;
     }
+    drawn.push({ t, svg });
     if (svg.includes('data-role="title"')) errors.push(`${HOOK_ID}.js draws a title card; the opener draws it (draw the hook only)`);
     if (ok && !svg.includes(`data-who="${hero.who}"`)) errors.push(`${HOOK_ID}.js draw(${t.toFixed(2)}) does not draw its hero (data-who="${hero.who}")`);
     if (ok && hidden.includes(`data-who="${hero.who}"`)) errors.push(`${HOOK_ID}.js draw(${t.toFixed(2)}, { hideHero: true }) still draws its hero`);
     if (errors.length) break;
   }
+  if (cast) errors.push(...lookProblems(drawn, cast, lookKey));
   return errors;
 }
 
@@ -217,12 +417,20 @@ async function tryFrame(root, id) {
     if (errors.length >= 8) break;
   }
   errors.push(...castProblems(samples));
+  errors.push(...crowdProblems(samples));
+  const cast = await loadCast(root);
+  if (cast) {
+    const { lookKey } = await import('./cast.js');
+    errors.push(...lookProblems(samples, cast, lookKey));
+    errors.push(...heroFrameProblems(samples, cast, lookKey, entry.number));
+  }
   return errors;
 }
 
 async function tryAll(root) {
   const errors = [];
   if (existsSync(join(root, 'assets', 'world', 'world.js'))) errors.push(...(await tryWorld(root)).map((e) => `world: ${e}`));
+  errors.push(...(await tryProps(root)).errors.map((e) => `props: ${e}`));
   for (const f of projectFrames(root)) {
     if (!existsSync(join(root, 'assets', 'frames', `${f.id}.js`))) {
       errors.push(`${f.id}: assets/frames/${f.id}.js does not exist`);
@@ -239,7 +447,12 @@ export async function tryPart(root, what, id) {
     what === 'world' ? await tryWorld(root)
     : what === 'frame' && id ? await tryFrame(root, id)
     : what === 'all' ? await tryAll(root)
-    : ['usage: try.mjs world | try.mjs frame <id> | try.mjs all'];
+    : what === 'props' ? null
+    : ['usage: try.mjs world | try.mjs frame <id> | try.mjs props | try.mjs all'];
+  if (errors === null) {
+    const found = await tryProps(root);
+    return { ok: found.errors.length === 0, errors: found.errors, props: found.props };
+  }
   return { ok: errors.length === 0, errors };
 }
 

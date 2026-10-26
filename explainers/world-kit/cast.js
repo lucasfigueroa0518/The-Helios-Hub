@@ -246,11 +246,22 @@ export function wearDrawing(wear, { body = 'ink', wearColor = null } = {}) {
  *   sq (squash > 0, stretch < 0), s (scale), flip (face left)
  *   who:    the critter's world id (world.js entity id; a group's members "<id>-1", "<id>-2"…),
  *           written as data-who so try.mjs can check that no critter is drawn twice at once or
- *           vanishes mid-frame (EX3-90)
+ *           vanishes mid-frame (EX3-90). Its look (body, wear, wearColor) is written as data-look
+ *           so try.mjs can check it is the same in every frame, as world.js's CAST says (EX3-107)
  * @param {number} x
  * @param {number} y
  * @param {Record<string, any>} [opts]
  */
+/**
+ * A critter's look, the part that never changes during a reel (EX3-107): its body and its role
+ * accessories. Pose, mood, scale and gaze change; this does not. `body|wear+wear|wearColor`.
+ * @param {{ body?: string, wear?: string[] | string, wearColor?: string | null }} [look]
+ * @returns {string}
+ */
+export function lookKey({ body = 'ink', wear = [], wearColor = null } = {}) {
+  return `${body}|${[].concat(wear ?? []).map(String).sort().join('+')}|${wearColor ?? ''}`;
+}
+
 export function critter(x, y, opts = {}) {
   const o = { ...(MOODS[opts.mood] ?? {}), ...opts };
   const { body = 'ink', s = 1, look = [0, 0], lid = 0, lidTilt = 0, mouth = null, brows = null, tilt = 0, arms = 'down', legs = 'stand', flip = false, sq = 0, pr = 0.5, wear = [], wearColor = null, who = null } = o;
@@ -304,7 +315,7 @@ export function critter(x, y, opts = {}) {
   ['l', 'r'].forEach((side, i) => { if (front.includes(side)) parts.push(drawArm(armPaths[i], true)); });
   const sx = s * (1 + sq) * (flip ? -1 : 1);
   const sy = s * (1 - sq);
-  return g({ ...(who ? { 'data-who': String(who) } : {}), transform: `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${tilt.toFixed(2)}) scale(${sx.toFixed(4)} ${sy.toFixed(4)})`, filter: ref('wobble') }, parts);
+  return g({ ...(who ? { 'data-who': String(who), 'data-look': lookKey({ body, wear, wearColor }) } : {}), transform: `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${tilt.toFixed(2)}) scale(${sx.toFixed(4)} ${sy.toFixed(4)})`, filter: ref('wobble') }, parts);
 }
 
 /**

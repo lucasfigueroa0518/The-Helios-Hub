@@ -1,4 +1,5 @@
-// The Explainers world kit, cards (Explainers 3.2, EX3-80): every piece of on-screen text a reel has,
+// The Explainers world kit, cards (Explainers 3.2, EX3-80; glass and gloss in hx-4, still 10): every
+// piece of on-screen text a reel has,
 // as kit components, so no frame worker lays out text by hand (the 3.1 definition card guessed
 // each word's width and spaced words unevenly).
 //
@@ -16,10 +17,18 @@
 //
 // Text is set as one <text> per line with a <tspan> per word, so the browser spaces the words
 // with the font's own metrics; widths here only decide where lines break.
+//
+// hx-4 (visual system 4.0): the cards are frosted glass and gloss (glass.js) instead of paper with
+// an ink outline: a translucent white panel, a hairline, a 1px top highlight and a soft long shadow;
+// focal bubbles and signs are glossy solid panels; screens are a graphite bezel with a sheen. They
+// slide on the brand ease-out. Layout, timing and every data-* attribute are unchanged.
 
-import { T, el, g, ref, line, isDark, handwrite, handwriteWidth } from './draw.js';
+import { T, el, g, isDark, handwrite, handwriteWidth } from './draw.js';
 import { seg, E, clamp01 } from './motion.js';
 import { METRICS } from './metrics.js';
+import { easeUI, glassPanel, glossPanel, screenPanel, roundRect, ramp } from './glass.js';
+
+const ink = () => (isDark() ? T['paper-lit'] : T.ink);
 
 const FAMILY = { 'roboto-400': 'Roboto', 'roboto-500': 'Roboto', 'roboto-700': 'Roboto', 'pragmatica-700': "'Pragmatica Extended'" };
 
@@ -67,7 +76,7 @@ function textLine(words, x, y, size, face, fill, opacities, extra = {}) {
 const escapeXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /**
- * Frame 3's dictionary card (EX3-69): a paper card in the top half that slides in, shows the
+ * Frame 3's dictionary card (EX3-69): a frosted glass card in the top half that slides in, shows the
  * headword (the topic's term) and its part of speech, then fills in the definition word by word
  * on the voice's word times and stays. Captions are quiet for the frame (the card replaces
  * them). Returns the card group (data-role="definition") and its bottom edge, so the visual
@@ -77,7 +86,7 @@ const escapeXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').
  *           inAt?: number, x?: number, y?: number, w?: number, size?: number, tilt?: number }} o
  * @returns {{ svg: string, bottom: number }}
  */
-export function dictionaryCard(t, { headword, pos = 'noun', words, inAt = 0, x = 104, y = 270, w = 872, size = 42, tilt = -1.2 }) {
+export function dictionaryCard(t, { headword, pos = 'noun', words, inAt = 0, x = 104, y = 270, w = 872, size = 42, tilt = 0 }) {
   const pad = 48;
   const headSize = Math.min(76, (w - pad * 2) / Math.max(1, textWidth(headword, 1, 'pragmatica-700')));
   const texts = words.map((wd) => String(wd.text).trim()).filter(Boolean);
@@ -88,19 +97,29 @@ export function dictionaryCard(t, { headword, pos = 'noun', words, inAt = 0, x =
   const rule = top + 70;
   const defTop = rule + 26 + size; // the definition's first baseline
   const h = defTop - y + (lines.length - 1) * lineH + pad;
-  const slide = seg(t, inAt, inAt + 0.35, E.out);
+  const slide = seg(t, inAt, inAt + 0.35, easeUI);
   const dy = (1 - slide) * 90;
+  // The part of speech as a tinted chip under the headword (green, the brand's second colour).
+  const posText = pos.toUpperCase();
+  const posSize = 22;
+  const chipH = 38;
+  const chipW = textWidth(posText, posSize, 'roboto-700') + posText.length * posSize * 0.18 + 36 - posSize * 0.18;
+  const chipY = top + 17;
+  const posOp = seg(t, inAt + 0.25, inAt + 0.4, E.linear);
+  const G = ramp('green');
   const parts = [
-    el('rect', { x: x + 10, y: y + 16, width: w, height: h, rx: 14, fill: T.ink, opacity: 0.13 }),
-    g({ filter: ref('wobble') }, el('rect', { x, y, width: w, height: h, rx: 14, fill: T['paper-lit'], stroke: line(), 'stroke-width': 4 })),
-    textLine([headword], x + pad, top, headSize, 'pragmatica-700', T.ink, [seg(t, inAt + 0.15, inAt + 0.3, E.linear)]),
-    textLine([pos.toUpperCase()], x + pad, top + 44, 28, 'roboto-700', T.green, [seg(t, inAt + 0.25, inAt + 0.4, E.linear)], { 'letter-spacing': '0.18em' }),
-    g({ filter: ref('wobble'), opacity: (seg(t, inAt + 0.25, inAt + 0.4, E.linear) * 0.6).toFixed(3) }, el('line', { x1: x + pad, y1: rule, x2: x + w - pad, y2: rule, stroke: line(), 'stroke-width': 2.5, 'stroke-linecap': 'round' })),
+    glassPanel(x, y, w, h, 32, { strength: 1.12 }),
+    textLine([headword], x + pad, top, headSize, 'pragmatica-700', ink(), [seg(t, inAt + 0.15, inAt + 0.3, E.linear)]),
+    g({ opacity: posOp.toFixed(3) }, [
+      el('path', { d: roundRect(x + pad, chipY, chipW, chipH, chipH / 2), fill: G.base, 'fill-opacity': 0.1, stroke: G.base, 'stroke-opacity': 0.35, 'stroke-width': 1 }),
+      textLine([posText], x + pad + 18, chipY + chipH / 2 + posSize * 0.36, posSize, 'roboto-700', G.text, [1], { 'letter-spacing': '0.18em' }),
+    ]),
+    el('rect', { x: x + pad, y: (rule - 0.75).toFixed(1), width: w - pad * 2, height: 1.5, fill: ink(), opacity: (posOp * (isDark() ? 0.16 : 0.1)).toFixed(3) }),
   ];
   lines.forEach((ln, li) => {
     const ws = ln.words.map((i) => texts[i]);
     const ops = ln.words.map((i) => seg(t, times[i] ?? 0, (times[i] ?? 0) + 0.12, E.linear));
-    if (ops.some((o) => o > 0)) parts.push(textLine(ws, x + pad, defTop + li * lineH, size, 'roboto-500', T.ink, ops));
+    if (ops.some((o) => o > 0)) parts.push(textLine(ws, x + pad, defTop + li * lineH, size, 'roboto-500', ink(), ops));
   });
   const rot = tilt + (1 - slide) * 1.0;
   const cx = x + w / 2;
@@ -118,7 +137,7 @@ export const TITLE_LANDS = 0.25;
 export const TITLE_BAND = { x: 150, y: 250, w: 780, h: 280 };
 
 /**
- * Frame 1's title card (EX3-61, EX3-79, EX3-93): a paper note card in the top band that starts
+ * Frame 1's title card (EX3-61, EX3-79, EX3-93): a frosted glass card in the top band that starts
  * sliding in on the reel's first frame, lands by TITLE_LANDS, and writes itself while the opener
  * line plays, "today's brain break:" in ink and the term in orange beneath it, finished by `to`
  * (the line's end). The hook keeps playing below, undimmed. Returns the group
@@ -126,11 +145,11 @@ export const TITLE_BAND = { x: 150, y: 250, w: 780, h: 280 };
  * @param {number} t
  * @param {{ term: string, from?: number, to: number, band?: typeof TITLE_BAND, tilt?: number }} o
  */
-export function titleCard(t, { term, from = TITLE_LANDS, to, band = TITLE_BAND, tilt = -1.6 }) {
+export function titleCard(t, { term, from = TITLE_LANDS, to, band = TITLE_BAND, tilt = 0 }) {
   from = Math.min(Number.isFinite(from) ? from : TITLE_LANDS, TITLE_LANDS);
   const { x, y, w } = band;
   let { h } = band;
-  const slide = seg(t, 0, Math.max(0.12, from), E.out);
+  const slide = seg(t, 0, Math.max(0.12, from), easeUI);
   if (slide <= 0) return '';
   const kicker = "today's brain break:";
   const kSize = Math.min(54, ((w - 80) * 0.95 * 662) / Math.max(1, handwriteWidth(kicker, 662)));
@@ -153,9 +172,8 @@ export function titleCard(t, { term, from = TITLE_LANDS, to, band = TITLE_BAND, 
   const pk = seg(t, from, mid, E.linear);
   const dy = (1 - slide) * -120;
   const parts = [
-    el('rect', { x: x + 10, y: y + 14, width: w, height: h, rx: 12, fill: T.ink, opacity: 0.14 }),
-    g({ filter: ref('wobble') }, el('rect', { x, y, width: w, height: h, rx: 12, fill: T['paper-lit'], stroke: line(), 'stroke-width': 4 })),
-    handwrite(kicker, x + w / 2, y + 40 + kSize, kSize, pk, { align: 'center', color: T.ink }),
+    glassPanel(x, y, w, h, 32, { strength: 1.12 }),
+    handwrite(kicker, x + w / 2, y + 40 + kSize, kSize, pk, { align: 'center', color: ink() }),
   ];
   termLines.forEach((str, i) => {
     const span = (to - mid) / termLines.length;
@@ -171,8 +189,10 @@ export function titleCard(t, { term, from = TITLE_LANDS, to, band = TITLE_BAND, 
 export const BOX_KINDS = ['speech', 'chat', 'note', 'sign', 'screen'];
 
 /**
- * Text inside a shape, the shape sized around the text: a speech bubble (round, tail below), a
- * chat bubble (tail at a bottom corner), a note card, a sign board, or a screen (dark, light text).
+ * Text inside a shape, the shape sized around the text: a speech bubble (frosted glass, tail
+ * below), a chat bubble (its tight corner on the `tail` side: light glass on the left, the dark sent
+ * bubble on the right), a note card (glass), a sign board (glossy graphite), or a screen (a dark
+ * display, light text). `focal` makes the box the glossy orange tile with light text.
  * The text is measured (Hershey Sans for handwriting, Roboto otherwise), wrapped onto at most
  * `lines` lines, and shrunk only if a word still cannot fit `maxW`; the box is that text plus
  * padding, centred on (x, y). Nothing about the text is placed by hand, so it cannot leave its
@@ -206,24 +226,39 @@ export function textBox(text, x, y, o = {}) {
   const h = rows.length * lineH - (lineH - size) + padY * 2 + (hand ? size * 0.25 : size * 0.2);
   const bx = x - w / 2;
   const by = y - h / 2;
-  const fill = o.fill ?? (kind === 'screen' ? T.ink : focal ? T.orange : T['paper-lit']);
-  const color = o.color ?? (kind === 'screen' ? T['paper-lit'] : T.ink);
-  const edge = kind === 'screen' ? T.ink : isDark() ? T.ink : line();
+  // The surface (hx-4): light glass for speech, chat (the reply side) and notes; the dark sent
+  // bubble for a chat with its corner on the right; glossy panels for signs and focal boxes; a
+  // graphite screen. o.fill (a CSS colour) still paints a solid box.
+  const dark = isDark();
+  const r = kind === 'note' ? 18 : kind === 'sign' ? 14 : kind === 'screen' ? 22 : kind === 'chat' ? 24 : 30;
+  const glossy = focal ? 'orange' : kind === 'sign' || (kind === 'chat' && tail === 'right') ? 'ink' : null;
+  const color = o.color ?? (glossy || kind === 'screen' ? T['paper-lit'] : ink());
+  let path = null;
+  if (kind === 'speech' && tail !== 'none') {
+    // One outline for the body and its tail, so the glass has no seam.
+    const left = tail === 'left';
+    const tx = Math.max(bx + r + 14, Math.min(bx + w - r - 14, left ? bx + Math.min(56, w * 0.22) : bx + w - Math.min(56, w * 0.22)));
+    const tip = [tx + (left ? -18 : 18), by + h + 34];
+    const [a1, a2] = left ? [tx + 16, tx - 12] : [tx - 16, tx + 12];
+    const R_ = Math.min(r, w / 2, h / 2);
+    const bottom = left
+      ? `H ${a1.toFixed(1)} Q ${(tx + 2).toFixed(1)} ${(by + h + 14).toFixed(1)} ${tip[0].toFixed(1)} ${tip[1].toFixed(1)} Q ${(tx - 4).toFixed(1)} ${(by + h + 10).toFixed(1)} ${a2.toFixed(1)} ${(by + h).toFixed(1)}`
+      : `H ${a2.toFixed(1)} Q ${(tx + 4).toFixed(1)} ${(by + h + 10).toFixed(1)} ${tip[0].toFixed(1)} ${tip[1].toFixed(1)} Q ${(tx - 2).toFixed(1)} ${(by + h + 14).toFixed(1)} ${a1.toFixed(1)} ${(by + h).toFixed(1)}`;
+    path = [
+      `M ${(bx + R_).toFixed(1)} ${by.toFixed(1)}`, `H ${(bx + w - R_).toFixed(1)}`, `A ${R_} ${R_} 0 0 1 ${(bx + w).toFixed(1)} ${(by + R_).toFixed(1)}`,
+      `V ${(by + h - R_).toFixed(1)}`, `A ${R_} ${R_} 0 0 1 ${(bx + w - R_).toFixed(1)} ${(by + h).toFixed(1)}`, bottom,
+      `H ${(bx + R_).toFixed(1)}`, `A ${R_} ${R_} 0 0 1 ${bx.toFixed(1)} ${(by + h - R_).toFixed(1)}`, `V ${(by + R_).toFixed(1)}`, `A ${R_} ${R_} 0 0 1 ${(bx + R_).toFixed(1)} ${by.toFixed(1)}`, 'Z',
+    ].join(' ');
+  }
+  // A chat bubble's tail is its one tight corner, on the speaker's side.
+  const corners = kind === 'chat' && tail !== 'none' ? (tail === 'left' ? [r, r, r, 7] : [r, r, 7, r]) : r;
+  if (kind === 'chat') path = roundRect(bx, by, w, h, corners);
   const shape = [];
-  shape.push(el('rect', { x: bx + 8, y: by + 10, width: w, height: h, rx: kind === 'note' || kind === 'sign' ? 8 : 22, fill: T.ink, opacity: 0.16 }));
-  if ((kind === 'speech' || kind === 'chat') && tail !== 'none') {
-    const left = tail === 'left';
-    const tx = left ? bx + Math.min(56, w * 0.22) : bx + w - Math.min(56, w * 0.22);
-    const tip = kind === 'speech' ? [tx + (left ? -18 : 18), by + h + 34] : [left ? bx - 6 : bx + w + 6, by + h + 12];
-    shape.push(el('polygon', { points: `${(tx - 16).toFixed(1)},${(by + h - 6).toFixed(1)} ${(tx + 16).toFixed(1)},${(by + h - 6).toFixed(1)} ${tip[0].toFixed(1)},${tip[1].toFixed(1)}`, fill, stroke: edge, 'stroke-width': 4, 'stroke-linejoin': 'round' }));
-  }
-  shape.push(el('rect', { 'data-k': 'shape', x: bx.toFixed(1), y: by.toFixed(1), width: w.toFixed(1), height: h.toFixed(1), rx: kind === 'note' || kind === 'sign' ? 8 : kind === 'chat' ? 20 : 30, fill, stroke: edge, 'stroke-width': 4 }));
-  // Cover the tail's join so the bubble reads as one shape.
-  if ((kind === 'speech' || kind === 'chat') && tail !== 'none') {
-    const left = tail === 'left';
-    const tx = left ? bx + Math.min(56, w * 0.22) : bx + w - Math.min(56, w * 0.22);
-    shape.push(el('rect', { x: (tx - 13).toFixed(1), y: (by + h - 9).toFixed(1), width: 26, height: 7, fill }));
-  }
+  if (o.fill) shape.push(glassPanel(bx, by, w, h, r, { fill: o.fill, path }));
+  else if (kind === 'screen') shape.push(screenPanel(bx, by, w, h, r));
+  else if (glossy) shape.push(glossPanel(bx, by, w, h, r, { color: glossy, path }));
+  else shape.push(glassPanel(bx, by, w, h, r, { path, strength: dark ? 1 : 1.18 }));
+  shape.push(el('rect', { 'data-k': 'shape', x: bx.toFixed(1), y: by.toFixed(1), width: w.toFixed(1), height: h.toFixed(1), rx: r, fill: 'none' }));
   const top = by + padY + size; // first baseline
   const body = rows.map((r, i) => {
     const ly = top + i * lineH;
@@ -236,7 +271,7 @@ export function textBox(text, x, y, o = {}) {
   });
   const transform = `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${tilt}) scale(${Math.max(0.001, scale).toFixed(3)}) translate(${(-x).toFixed(1)} ${(-y).toFixed(1)})`;
   return {
-    svg: g({ 'data-k': 'textbox', transform }, [g({ filter: ref('wobble') }, shape), ...body]),
+    svg: g({ 'data-k': 'textbox', transform }, [g({}, shape), ...body]),
     box: { x: bx, y: by, w, h },
   };
 }

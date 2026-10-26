@@ -54,14 +54,14 @@ const FRAME_WORKER_PROMPT = [
   'Your dispatch message names your role file (.hyperframes/frame-packets/_role.md) and your frame packet.',
   'Read both first, then frame.md, assets/world/world.js, and the kit in assets/kit/, and follow them exactly.',
   'A shot is only a camera: draw the same scene, with every critter, in every shot. Text inside a shape is textBox().',
-  'Write only your assigned assets/frames/<frame_id>.js and its .events.json. Never write compositions, never edit STORYBOARD.md or world.js, never run commands, never ask questions.',
+  'Write only your assigned assets/frames/<frame_id>.js, its .events.json, and, when the frame draws an object of its own, its .props.js (NEW_PROPS, EX3-114). Never write compositions, never edit STORYBOARD.md or world.js, never run commands, never ask questions.',
 ].join(' ');
 
 export const SCENE_BUILDER_AGENT = 'scene-builder';
 const SCENE_BUILDER_PROMPT = [
   "You are the scene builder for one Helios Explainer Reel (Explainers 3.3): you draw the reel's anchor scene once.",
   'Read .claude/skills/helios-explainer-director/scene-builder.md first and follow it exactly.',
-  'Write only assets/world/world.js. Never edit STORYBOARD.md, never write frames, never run commands, never ask questions.',
+  'Write only assets/world/world.js and assets/world/new-props.js (every object drawn new, NEW_PROPS with full tags, EX3-114). Never edit STORYBOARD.md, never write frames, never run commands, never ask questions.',
 ].join(' ');
 
 /**
@@ -83,18 +83,24 @@ const PICTURE_CHECKER_PROMPT = [
 ].join(' ');
 
 /**
- * The first-time-viewer test (EX3-101): a subagent with no context reads only what a viewer has
- * met by the end of beat 2 (the opener line, the hook's picture, the gap's picture and line) and
- * says what it understood and whether it wants to keep watching. A gap that confuses a stranger
- * is rewritten. Cheapest model, Read only, like the picture check.
+ * The first-time-viewer tests (EX3-101, EX3-108): a subagent with no context reads only what a
+ * viewer meets, and says what it understood. Two files: the gap test (the first seconds, beats
+ * 1–2) and the reel test (the whole reel, beat by beat, Lucas 2026-10-21: "The comprehension check
+ * needs to be more intelligently instructed and it should cover beats 3-8. That should also check
+ * that the example's answer is unambiguous to a person"). Sonnet 5.5 plays the stranger (Lucas's
+ * pick, 2026-10-21): Haiku passed both attention reels' gap tests. Read only.
  */
 export const FIRST_VIEWER_AGENT = 'first-viewer';
-const FIRST_VIEWER_PROMPT = [
-  'You are a first-time viewer scrolling short videos. You have seen only what the file your dispatch message names describes: the first seconds of one video (what was on screen and what the voice said).',
-  'You know nothing else about the video. Never guess what it is about beyond what is there.',
-  'Answer honestly, as a busy stranger would: (1) what is happening; (2) what the character wants and what is in the way; (3) what question you are left with; (4) what you expect to learn;',
-  '(5) would you keep watching, 1 to 5; (6) anything that confused you or that you could not picture (words you did not understand, things you could not tell why you were shown).',
-  'Reply with JSON only: {"happening": "...", "want": "...", "obstacle": "...", "question": "...", "expect_to_learn": "...", "keep_watching": 1, "confused": ["..."]}.',
+export const FIRST_VIEWER_MODEL = 'claude-sonnet-5-5';
+export const FIRST_VIEWER_PROMPT = [
+  'You are a first-time viewer scrolling short videos on your phone: smart and curious, but not technical, and in a hurry.',
+  'You have met only what the file your dispatch message names describes: what was on screen and what the voice said, in order. You know nothing else about the video.',
+  'Read it once, in order, the way the video plays, and answer honestly as that stranger. Never use knowledge the file did not give you to fill a gap, and never be polite about confusion: if a line only makes sense once you already know the answer, it confused you.',
+  'You hear the voice; you do not read it. Quote marks, symbols and spelling are invisible to you, so a word the voice only means as a word (a quoted "it") sounds like an ordinary word, and you report that as confusing.',
+  'If the file holds only the first seconds (no "## Beat 3" heading), reply with JSON only: {"happening": "...", "puzzle": "...", "question": "...", "expect_to_learn": "...", "keep_watching": 1, "confused": ["..."]}: what is happening; what is puzzling about it, the thing you cannot explain; the question you are left with; what you expect to learn; would you keep watching, 1 to 5; anything that confused you or that you could not picture, or anything that sounded like a commercial-break toss ("stick around").',
+  'If the file holds the whole video ("## Beat 1" to "## Beat 8"), answer beat by beat, then about the whole. For each beat: what you see and hear; what you think it means; what you just learned; who is who, and whether each character is the same one as before (same look, same role); anything confusing, or any word you could not follow by ear.',
+  'Then: the concept explained in your own words, as you would to a friend; the worked example (the beat that says it is a real example): the answer it reaches, whether a reasonable person could reach a different answer from the same example and which one, and whether the example is a different thing from the opening scene or the same story retold; would you keep watching to the end, 1 to 5.',
+  'Reply with JSON only: {"beats": [{"beat": 1, "see_and_hear": "...", "means": "...", "learned": "...", "characters": "...", "same_characters": true, "confused": ["..."]}], "concept_in_my_words": "...", "example_answer": "...", "example_ambiguous": false, "other_reading": "", "example_is_the_scene": false, "keep_watching": 1, "confused_overall": ["..."]}.',
 ].join(' ');
 
 export type SessionResult = {
@@ -182,7 +188,7 @@ export function sessionOptions(input: SessionInput, abort: AbortController, onDe
     skills: 'all',
     agents: {
       [SCENE_BUILDER_AGENT]: {
-        description: "Draws the reel's anchor scene once, as assets/world/world.js, from STORYBOARD.md's ## Anchor scene.",
+        description: "Draws the reel's anchor scene once, as assets/world/world.js and its new objects in assets/world/new-props.js, from STORYBOARD.md's ## Anchor scene.",
         prompt: SCENE_BUILDER_PROMPT,
         tools: SCENE_BUILDER_TOOLS,
         model: input.frameWorkerModel,
@@ -203,7 +209,7 @@ export function sessionOptions(input: SessionInput, abort: AbortController, onDe
         description: "First-time-viewer test of the curiosity gap: says what a stranger understood from the reel's first seconds and whether they would keep watching.",
         prompt: FIRST_VIEWER_PROMPT,
         tools: PICTURE_CHECKER_TOOLS,
-        model: PICTURE_CHECKER_MODEL,
+        model: FIRST_VIEWER_MODEL,
       },
     },
     hooks: { PreToolUse: [{ hooks: [policyHook] }] },

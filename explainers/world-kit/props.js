@@ -1,12 +1,15 @@
-// The Explainers world kit, props (Explainers 3.2, EX3-78): a vetted library of everyday objects
-// drawn once in the paper-and-ink style and approved on a contact sheet. A scene uses a prop when
-// the library has the thing; it never draws its own version of one. A prop is never a reason to
-// pick an analogy (V-16).
+// The Explainers world kit, props (Explainers 3.2, EX3-78; 3.6, EX3-112 to EX3-114): the asset bank,
+// objects drawn in the paper-and-ink style, each tagged with exactly what it is (props/tags.js,
+// props/CATALOG.md). A scene reuses an asset only when its tags say it is exactly the thing the
+// scene shows, in the scene's setting, at the scene's level of detail. Otherwise the scene draws
+// its own, which is the usual case (EX3-112), and every new drawing the blind picture check names
+// exactly joins the bank (props/bank, EX3-114). An asset is never a reason to pick an analogy (V-16).
 //
-//   prop(name, x, y, { s, state, focal, flip })   the prop standing with its base center at
+//   prop(name, x, y, { s, state, focal, flip })   the asset standing with its base center at
 //                                                  screen (x, y), scale s (1 = library size)
-//   PROPS                                          name → { states, size: [w, h], draw }
-//   propNames()                                    every prop name, sorted
+//   propFrom(defs, name, x, y, o)                 the same for a scene's own NEW_PROPS
+//   PROPS                                          name → { states, size: [w, h], draw, tags }
+//   propNames()                                    every asset name, sorted
 //
 // Each prop is drawn about its own origin (base center, world z = 0) with the kit's isometric
 // projection, so props share one light, one outline weight and one grain. Organic things are
@@ -16,6 +19,8 @@
 import { el, g, ref, line, TONES, T, shadow, isoDisc, P0, box, RX, top, face, accent, accentFill } from './props/kit.js';
 
 export * from './props/kit.js';
+import { TAGS } from './props/tags.js';
+import { BANK } from './props/bank/index.js';
 
 // ── Reference props (the batches follow this style) ──────────────────────────────────────
 const CORE = {
@@ -127,7 +132,12 @@ import { BATCH_A } from './props/batch-a.js';
 import { BATCH_B } from './props/batch-b.js';
 import { BATCH_C } from './props/batch-c.js';
 
-export const PROPS = { ...CORE, ...BATCH_A, ...BATCH_B, ...BATCH_C };
+const LIBRARY = { ...CORE, ...BATCH_A, ...BATCH_B, ...BATCH_C };
+/** Every asset with its tags: the library (tags from props/tags.js), then the bank (tags in its files). */
+export const PROPS = {
+  ...Object.fromEntries(Object.entries(LIBRARY).map(([name, p]) => [name, { ...p, tags: TAGS[name] }])),
+  ...BANK,
+};
 
 export const propNames = () => Object.keys(PROPS).sort();
 
@@ -138,9 +148,23 @@ export const propNames = () => Object.keys(PROPS).sort();
  * @param {number} y
  * @param {{ s?: number, state?: string, focal?: boolean, flip?: boolean }} [o]
  */
-export function prop(name, x, y, { s = 1, state, focal = false, flip = false } = {}) {
-  const p = PROPS[name];
-  if (!p) throw new Error(`HX: no prop "${name}" in the library; draw it as a new prop (FRAME.md § props).`);
+export function prop(name, x, y, o = {}) {
+  if (!PROPS[name]) throw new Error(`HX: no asset "${name}" in the bank; draw it new, as this scene's own (FRAME.md V-4, EX3-112).`);
+  return propFrom(PROPS, name, x, y, o);
+}
+
+/**
+ * Draw an asset from `defs` (the bank's PROPS, or a scene's own NEW_PROPS, EX3-114) standing with its
+ * base center at screen (x, y): the same placement, scale, states and wobble as the bank's.
+ * @param {Record<string, { states: string[], draw: (o: { state: string, focal: boolean }) => string[] }>} defs
+ * @param {string} name
+ * @param {number} x
+ * @param {number} y
+ * @param {{ s?: number, state?: string, focal?: boolean, flip?: boolean }} [o]
+ */
+export function propFrom(defs, name, x, y, { s = 1, state, focal = false, flip = false } = {}) {
+  const p = defs[name];
+  if (!p) throw new Error(`HX: no asset "${name}"`);
   const st = state ?? p.states[0];
   if (!p.states.includes(st)) throw new Error(`HX: prop "${name}" has states ${p.states.join(', ')}; got "${st}".`);
   const parts = p.draw({ state: st, focal });

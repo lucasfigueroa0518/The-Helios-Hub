@@ -8,8 +8,8 @@ import type { Vertical } from '@/lib/social-hub/types';
 import { FIXTURE_NOW } from './preview-dataset';
 
 const LAST = '2026-10-08';
-/** The fixture's four original types; Last Few Days has no stored nights here (its row reads as "didn't run"). */
-const QUOTA: Record<Exclude<Vertical, 'last_few_days'>, number> = { reels: 3, explainers: 2, carousels: 1, stories: 1 };
+/** The fixture's four original types; Last Few Days and AI Events have no stored nights here (their rows read as "didn't run"). */
+const QUOTA: Record<Exclude<Vertical, 'last_few_days' | 'ai_events'>, number> = { reels: 3, explainers: 2, carousels: 1, stories: 1 };
 
 function report(v: keyof typeof QUOTA, night: string): NightReport {
   const q = QUOTA[v];

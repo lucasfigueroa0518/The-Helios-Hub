@@ -16,6 +16,15 @@ export const ENTITIES = {
   writer: 'the model reading the prompt (a critter writing with a pen)',
 };
 
+/**
+ * Every critter's look for the whole reel (EX3-107): try.mjs holds each frame to it. The hook's
+ * hero (the opener tests' stub) is the one orange critter; the writer keeps its ink body.
+ */
+export const CAST = {
+  writer: { body: 'ink', wear: [] },
+  hero: { body: 'orange', wear: ['cap'] },
+};
+
 export const LAYOUT = {
   sheet: { w: 380, d: 520 },
   coins: { x: 687, y: 1338, rx: 64, h: 13 },

@@ -123,7 +123,7 @@ test('the Content model leads with what needs a person and orders today by time'
 
 test('pools come in the fixed type order and rank within a type only', () => {
   const pools = poolSummaries(d.ideas);
-  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days']);
+  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events']);
   for (const p of pools) {
     const scores = p.next.map((i) => i.score ?? -Infinity);
     assert.deepEqual(scores, [...scores].sort((a, b) => b - a));

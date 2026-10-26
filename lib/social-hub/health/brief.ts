@@ -10,6 +10,7 @@ const FILES: Record<Vertical, string[]> = {
   carousels: ['lib/social/pipeline/', 'lib/social/writer/prompt.ts'],
   stories: ['lib/stories/build/'],
   last_few_days: ['lib/lfd/run.ts', 'lib/lfd/'],
+  ai_events: ['lib/ai-events/run.ts', 'lib/networking/pick/rank.ts', 'lib/networking/public-snapshot.ts', 'lib/ai-events/'],
 };
 
 export function briefFor(p: Problem): string {
