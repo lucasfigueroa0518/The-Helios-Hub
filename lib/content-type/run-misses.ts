@@ -14,6 +14,7 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
  *   Stories     today's set was skipped, or failed while being built     → that series' card
  *   Reels       the idea's finish request failed today                   → that idea's card
  *   Carousels   today's latest daily run failed                          → every empty carousel card
+ *   AI Events   today's latest build failed                              → its empty card
  *
  * A Stories set that failed after it had a minute failed while posting: it was
  * made, so it is not a run that didn't finish.
@@ -21,7 +22,7 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
 export type RunMiss = { key: string | null; title: string; detail: string | null };
 export type RunMisses = Record<Vertical, RunMiss[]>;
 
-export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], last_few_days: [] };
+export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], last_few_days: [], ai_events: [] };
 export const MISS_TITLE = 'Run didn’t finish';
 
 const DETAIL_MAX = 140;
@@ -36,7 +37,7 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
   const today = nyDateOf(now)!;
   // A type whose tables can't be read shows no line; the card keeps "Not made yet".
   const read = <T,>(p: Promise<{ rows: T[] }>): Promise<T[]> => p.then((r) => r.rows).catch(() => [] as T[]);
-  const [explainers, stories, reels, carousels] = await Promise.all([
+  const [explainers, stories, reels, carousels, aiEvents] = await Promise.all([
     read(q<{ key: string; reason: string | null }>(
       `SELECT j.topic_id::text AS key, j.error AS reason
          FROM explainers.jobs j
@@ -67,6 +68,14 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
         LIMIT 1`,
       [today],
     )),
+    read(q<{ status: string; trigger: string; reason: string | null }>(
+      `SELECT status, trigger, error AS reason
+         FROM ai_events.runs
+        WHERE kind = 'build' AND (requested_at AT TIME ZONE 'America/New_York')::date = $1::date
+        ORDER BY requested_at DESC
+        LIMIT 1`,
+      [today],
+    )),
   ]);
   return {
     explainers: explainers.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
@@ -84,6 +93,13 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
       })),
     // Last Few Days has no "run didn't finish" line yet (its runs live in lfd.runs); an empty card keeps "Not made yet".
     last_few_days: [],
+    ai_events: aiEvents
+      .filter((r) => r.status === 'failed')
+      .map((r) => ({
+        key: null,
+        title: r.trigger === 'scheduled' ? 'The Sunday AI Events run didn’t finish' : 'The AI Events run didn’t finish',
+        detail: short(r.reason),
+      })),
   };
 }
 
@@ -91,7 +107,7 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
 export function missFor(c: QuotaCandidate, misses: RunMisses, run: ProgressItem | null): RunMiss | null {
   if (c.post || run) return null;
   const list = misses[c.vertical] ?? [];
-  if (c.vertical === 'carousels') return list[0] ?? null;
+  if (c.vertical === 'carousels' || c.vertical === 'ai_events') return list[0] ?? null;
   if (c.vertical === 'stories') return c.seriesId ? list.find((m) => m.key === c.seriesId) ?? null : null;
   const ideaId = c.idea?.id;
   if (!ideaId) return null;

@@ -4,8 +4,8 @@ import type { Vertical } from '@/lib/social-hub/types';
 
 import { FIXTURE_NOW, previewDataset } from './preview-dataset';
 
-/** The fixture's four original types (its numbers are pinned by the cost tests); Last Few Days has no spend here. */
-const DAILY: Record<Exclude<Vertical, 'last_few_days'>, number> = { reels: 4.6, explainers: 3.5, carousels: 1.9, stories: 0.7 };
+/** The fixture's four original types (its numbers are pinned by the cost tests); Last Few Days and AI Events have no spend here. */
+const DAILY: Record<Exclude<Vertical, 'last_few_days' | 'ai_events'>, number> = { reels: 4.6, explainers: 3.5, carousels: 1.9, stories: 0.7 };
 
 export function previewCost(): CostInput {
   const rows: CostRow[] = [];
@@ -21,7 +21,7 @@ export function previewCost(): CostInput {
   rows.push({ nyDate: '2026-10-05', vertical: 'reels', vendor: 'claude', stage: 'writing', micros: 2_000_000, mode: 'development', unknown: false, runId: null });
   return {
     rows, from: '2026-10-01', to: '2026-10-08', now: FIXTURE_NOW, vertical: null, mode: 'production',
-    watchUsd: { reels: 100, explainers: 310, carousels: 62, stories: 25, last_few_days: 9 },
+    watchUsd: { reels: 100, explainers: 310, carousels: 62, stories: 25, last_few_days: 9, ai_events: 2.5 },
     posts: previewDataset().posts,
     waste: { rejected: 8_900_000, failed: 6_600_000, expired: 3_900_000, selection: 11_200_000, spend: 142_000_000 },
     prevWastePct: 21,

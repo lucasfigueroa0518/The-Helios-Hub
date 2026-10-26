@@ -27,7 +27,7 @@ export function useRunProgress(): ProgressItem[] {
  * read the same list, so a stage change shows up in the row and the sidebar
  * without waiting for the cached dataset.
  */
-export function RunProgressProvider({ type, children }: { type: 'carousels' | 'stories' | 'explainers' | 'last_few_days'; children: ReactNode }) {
+export function RunProgressProvider({ type, children }: { type: 'carousels' | 'stories' | 'explainers' | 'last_few_days' | 'ai_events'; children: ReactNode }) {
   const router = useRouter();
   const [items, setItems] = useState<ProgressItem[]>([]);
   const had = useRef(0);

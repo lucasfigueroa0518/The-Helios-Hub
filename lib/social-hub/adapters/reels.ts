@@ -364,7 +364,26 @@ export function reelBreakdown(row: ReelIdeaRow): ScoreBreakdown | null {
   return { formula: 'Psychology + ½ × bucket fit + 2 × value + blockbuster bonus.', parts };
 }
 
+/**
+ * The last run's picks lead the queue, made ones first, then by rank (Lucas, 2026-10-26). An idea ranked above the
+ * lowest pick that the run passed over says so. Only the newest slate counts: a seed's older score is no pick.
+ */
+function runResult(rows: readonly ReelIdeaRow[]): { pick: Map<string, number>; skip: Map<string, string> } {
+  const latest = rows.filter((r) => r.on_latest !== false);
+  const picks = latest
+    .filter((r) => r.selected)
+    .sort((a, b) => Number(b.made_on_latest === true) - Number(a.made_on_latest === true) || (a.rank ?? Infinity) - (b.rank ?? Infinity));
+  const lowest = Math.max(...picks.map((r) => r.rank ?? -Infinity));
+  const skip = new Map<string, string>();
+  for (const r of latest) {
+    if (r.selected || r.yours || r.rank == null || r.rank >= lowest) continue;
+    skip.set(r.post_idea_id, r.copy_missed ? 'Skipped: copy didn’t pass' : 'Skipped by the last run');
+  }
+  return { pick: new Map(picks.map((r, i) => [r.post_idea_id, i])), skip };
+}
+
 export function reelIdeas(rows: readonly ReelIdeaRow[]): HubIdea[] {
+  const run = runResult(rows);
   return rows.map((row) => ({
     id: `reels:idea:${row.post_idea_id}`,
     vertical: 'reels',
@@ -385,5 +404,7 @@ export function reelIdeas(rows: readonly ReelIdeaRow[]): HubIdea[] {
           .filter(Boolean)
           .join(' · ') || null,
     yours: row.yours === true,
+    runPick: run.pick.get(row.post_idea_id) ?? null,
+    runSkip: run.skip.get(row.post_idea_id) ?? null,
   }));
 }

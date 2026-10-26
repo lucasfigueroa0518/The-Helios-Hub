@@ -69,6 +69,19 @@ ORG_MAILBOX_VERIFY_CONCURRENCY=3
 
 Full template: [`scripts/gcp/worker.env.example`](../scripts/gcp/worker.env.example).
 
+For the networking ingest's public calendar snapshot (AI Events, `planning/AI Events/HANDOFF.md`),
+the `networking.event_details` job also needs:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...     # Storage upload to the public-feeds bucket
+SUPABASE_SERVICE_ROLE_KEY=...    # server-only; never logged or sent to a browser
+VERCEL_DEPLOY_HOOK_URL=...       # optional: rebuilds heliosgroup.ai when the snapshot changes
+                                 # (at most hourly); unset = skipped and logged. No quotes.
+```
+
+Without the first two the snapshot step reports an error in the job result; the ingest and the
+detail fetches still succeed.
+
 ## One-time setup (your Mac)
 
 `gcloud` is not installed in this workspace yet — install it on your machine first.

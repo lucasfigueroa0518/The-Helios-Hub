@@ -43,7 +43,7 @@ const RH: QueueClasses = { list: 'rh-rest__list rh-rest__list--queue', zone: 'rh
 
 export type QueueRow = { id: string; pinned: boolean; hasContent: boolean; title: string };
 
-export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, renderRow }: {
+export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, renderRow, onOrder }: {
   vertical: string;
   rows: QueueRow[];
   /** Today's quota: the first N places are the day's slots. */
@@ -55,6 +55,8 @@ export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, re
   /** Class names for the page's own design system (the Social Hub pages use `sh-`); the defaults are the type pages' `rh-`. */
   classes?: Partial<QueueClasses>;
   renderRow: (id: string, handle: ReactNode) => ReactNode;
+  /** The list's order as the person sees it, on every change (a drop, before the server answers): the page's top follows it. */
+  onOrder?: (ids: string[]) => void;
 }) {
   const router = useRouter();
   const cls = { ...RH, ...classes };
@@ -66,7 +68,10 @@ export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, re
   const [asking, setAsking] = useState<QueueRow | null>(null);
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
   useEffect(() => setOrder(ids), [ids]);
-  const pinnedCount = order.filter((id) => byId.get(id)?.pinned).length;
+  // Until the effect above catches up with a fresh read, show only rows that still exist (new ones at the end).
+  const live = useMemo(() => [...order.filter((id) => byId.has(id)), ...ids.filter((id) => !order.includes(id))], [order, ids, byId]);
+  useEffect(() => onOrder?.(live), [live, onOrder]);
+  const pinnedCount = live.filter((id) => byId.get(id)?.pinned).length;
 
   const sensors = useSensors(
     useSensor(RowPointerSensor, { activationConstraint: HOLD }),
@@ -81,7 +86,7 @@ export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, re
     const active = String(e.active.id);
     const over = e.over ? String(e.over.id) : null;
     if (over === 'pin-zone') return setWillPin(true);
-    const at = over ? order.indexOf(over) : -1;
+    const at = over ? live.indexOf(over) : -1;
     setWillPin(at >= 0 && at < pinnedCount && !byId.get(active)?.pinned);
   }
 
@@ -91,10 +96,10 @@ export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, re
     const active = String(e.active.id);
     const over = e.over ? String(e.over.id) : null;
     if (!over || active === over) return;
-    const from = order.indexOf(active);
+    const from = live.indexOf(active);
     const wasPinned = byId.get(active)?.pinned === true;
     const toZone = over === 'pin-zone';
-    const next = toZone ? [active, ...order.filter((id) => id !== active)] : arrayMove(order, from, order.indexOf(over));
+    const next = toZone ? [active, ...live.filter((id) => id !== active)] : arrayMove(live, from, live.indexOf(over));
     const to = next.indexOf(active);
     const nowPinned = toZone || to < pinnedCount;
     setOrder(next);
@@ -116,15 +121,15 @@ export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, re
   }
 
   if (!enabled) {
-    return <ul className={cls.list.replace(' rh-rest__list--queue', '')}>{order.map((id) => <li key={id}>{renderRow(id, null)}</li>)}</ul>;
+    return <ul className={cls.list.replace(' rh-rest__list--queue', '')}>{live.map((id) => <li key={id}>{renderRow(id, null)}</li>)}</ul>;
   }
   return (
     <>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDragging(null); setWillPin(false); }}>
+      <DndContext id={`queue-${vertical}`} sensors={sensors} collisionDetection={closestCenter} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd} onDragCancel={() => { setDragging(null); setWillPin(false); }}>
         {dragging ? <PinZone active={willPin} className={cls.zone} /> : null}
-        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+        <SortableContext items={live} strategy={verticalListSortingStrategy}>
           <ul className={cls.list}>
-            {order.map((id) => (
+            {live.map((id) => (
               <SortableRow key={id} id={id} pinned={byId.get(id)?.pinned === true} title={byId.get(id)?.title ?? ''} grip={cls.grip} renderRow={renderRow} />
             ))}
           </ul>

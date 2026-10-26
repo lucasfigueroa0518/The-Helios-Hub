@@ -383,7 +383,7 @@ export function planReady<P extends BoardPost>(
   const ctx = dayCtx(state, day, clock);
   const nyDate = state.days[day]!.nyDate;
   const taken = readyTakenAt(state, post, series, nyDate);
-  const d = dropState({ ctx, vertical: post.vertical, series, raw: minute, caps: { reels: 99, explainers: 99, carousels: 99, last_few_days: 99, stories: 99 }, ready: { taken } });
+  const d = dropState({ ctx, vertical: post.vertical, series, raw: minute, caps: { reels: 99, explainers: 99, carousels: 99, last_few_days: 99, stories: 99, ai_events: 99 }, ready: { taken } });
   if (d.tone === 'refused' || d.tone === 'confirm') return { ok: false, reason: d.reason ?? TAKEN };
   const at = d.minute;
   const key: SlotKey = { vertical: post.vertical, startMinute: at, series };

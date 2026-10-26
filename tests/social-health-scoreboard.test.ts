@@ -8,7 +8,7 @@ import { nightVerdict } from '@/lib/social-hub/health/verdict';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { postState } from '@/lib/social-hub/views/state';
 
-const label = (v: Vertical) => ({ reels: 'Text on Screen', explainers: 'Explainers', carousels: 'Carousels', stories: 'IG Stories', last_few_days: 'Last Few Days' })[v];
+const label = (v: Vertical) => ({ reels: 'Text on Screen', explainers: 'Explainers', carousels: 'Carousels', stories: 'IG Stories', last_few_days: 'Last Few Days', ai_events: 'AI Events' })[v];
 
 const report = (vertical: Vertical, night: string, over: Partial<NightReport> = {}): NightReport => ({
   vertical, night, due: true, ran: true, target: 1, made: 1, needed: 1, ready: 1, scheduledYesterday: 1, postedYesterday: 1,

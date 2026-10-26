@@ -3,12 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-import { FIXTURES } from '@/fixtures/social/example-post';
+import { AI_EVENTS_FIXTURES } from '@/fixtures/social/ai-events-posts';
+import { FIXTURES as EXAMPLE_FIXTURES } from '@/fixtures/social/example-post';
 import { SlideTemplate } from '@/lib/social/render/SlideTemplate';
 import type { Post } from '@/lib/social/render/types';
 
 import './preview.css';
+import '@/explainers/design/helios-design-system/premium.css';
 import '@/lib/social/render/drafts/index.css';
+
+/** Every fixture the route can show: the example posts, then AI Events This Week (ae-{look}, ae-{look}-min). */
+const FIXTURES: Record<string, Post> = { ...EXAMPLE_FIXTURES, ...AI_EVENTS_FIXTURES };
 
 /**
  * Slide preview route. Used by developers to eyeball a slide layout, and

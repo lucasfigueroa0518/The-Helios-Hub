@@ -11,9 +11,9 @@ import { parseSlotId, slotId } from '@/lib/social-hub/slots/types';
 test('constants carry the spec values', () => {
   assert.equal(GRID, 15); assert.equal(MAGNET, 20); assert.equal(DRIFT, 15); assert.equal(FEED_GAP, 30);
   assert.equal(DAY_START, 480); assert.equal(LAST_START, 1245);
-  assert.deepEqual(DEFAULT_TIMES, { reels: [525, 675, 1080], explainers: [780, 930], carousels: [540, 870], last_few_days: [540], stories: [510] });
-  assert.deepEqual(DEFAULT_CAPS, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2 });
-  assert.deepEqual(RUN_HOUR_LABEL, { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM' });
+  assert.deepEqual(DEFAULT_TIMES, { reels: [525, 675, 1080], explainers: [780, 930], carousels: [540, 870], last_few_days: [540], stories: [510], ai_events: [1080, 1140] });
+  assert.deepEqual(DEFAULT_CAPS, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2 });
+  assert.deepEqual(RUN_HOUR_LABEL, { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM' });
   assert.deepEqual(USUAL.reels.map((w) => [w.start, w.end]), [[525, 600], [675, 750], [1080, 1260]]);
   assert.deepEqual(USUAL.explainers.map((w) => [w.start, w.end]), [[780, 870], [930, 1020]]);
   assert.deepEqual(USUAL.carousels.map((w) => [w.start, w.end]), [[540, 600], [870, 930]]);

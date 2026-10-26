@@ -319,10 +319,10 @@ export function holdStartedToday(before: State, s: State, today: string, nowMinu
 
 // ── Bookings ──
 
-const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', stories: 'setId', reels: 'postIdeaId' };
+const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', stories: 'setId', reels: 'postIdeaId' };
 
 /** Types whose booking is the social_hub.schedule row (placement.rescheduleItem); Stories' minute lives in stories.sets. */
-const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'reels', 'explainers']);
+const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'ai_events', 'reels', 'explainers']);
 
 /** `slotBy`: schedule.slot_by when set (Stories: mirrored from stories.sets.slot_by by projectSet), else the person's when they placed it (source 'user'), else the system's. */
 export type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string>; slotBy: SetBy };
@@ -351,6 +351,15 @@ export async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promis
     });
   }
   return out;
+}
+
+/** Whether `nyDate` is after the AI Events post's own Sunday (ai_events.posts.ny_date): its week has started by then. SELECT only. */
+async function aiEventsPastOwnSunday(q: SlotQuery, b: Booking, nyDate: string): Promise<boolean> {
+  const postId = b.vertical === 'ai_events' ? b.refs.aiEventsPostId : undefined;
+  if (!postId) return false;
+  const { rows } = await q(`SELECT ny_date::text AS ny_date FROM ai_events.posts WHERE id::text = $1`, [postId]);
+  const own = rows[0]?.ny_date ? String(rows[0].ny_date).slice(0, 10) : null;
+  return own !== null && nyDate > own;
 }
 
 /** A booking made before the cutover has no feed_mode: it posts as its type always did. */
@@ -456,7 +465,9 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
     }
     const slot = target && resolveDay(s.template, s.overrides, target.nyDate).find((x) => sameSlotKey(x, { ...b.key, startMinute: target.minute }));
     if (target && slot) {
-      if (MOVE_HERE.has(b.vertical)) plans.push({ b, nyDate: target.nyDate, slot, byPerson: !target.standard });
+      // An AI Events post never follows its slot past its own Sunday (placement.aiEventsDateRefusal): it is left without one.
+      if (MOVE_HERE.has(b.vertical) && (await aiEventsPastOwnSunday(q, b, target.nyDate))) booked.push(bookedPost(b, 'removed'));
+      else if (MOVE_HERE.has(b.vertical)) plans.push({ b, nyDate: target.nyDate, slot, byPerson: !target.standard });
       else booked.push(bookedPost(b, 'cannot-move'));
       continue;
     }

@@ -55,13 +55,15 @@ export const REASON_LABEL: Record<string, string> = {
   claim_unverifiable: "claim couldn't be verified",
   reporter_error: "couldn't read this type's data",
   did_not_run: "didn't run",
+  no_picks: 'no event cleared the bar, so there was no post',
+  snapshot_stale: 'the public events calendar has not been republished in over 8 days',
   other: 'unrecognized error',
 };
 
 const STAGE: Record<string, string> = {
   'jev-scoring': 'Scoring', reporter: 'Reporter', writer: 'Writer', editor: 'Editor', captioner: 'Captioner', 'fact-checker': 'Fact-checker',
   mechanical: 'Checks', design: 'Design', copy: 'Copy', frame: 'Frame', video: 'Video', song: 'Song', run: 'Run',
-  publish: 'Publish', ideas: 'Ideas', render: 'Render', build: 'Build', report: 'Report',
+  publish: 'Publish', ideas: 'Ideas', render: 'Render', build: 'Build', report: 'Report', snapshot: 'Calendar snapshot',
 };
 export function stageLabel(stage: string): string {
   if (STAGE[stage]) return STAGE[stage]!;

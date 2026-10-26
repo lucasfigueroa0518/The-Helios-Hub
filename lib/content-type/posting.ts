@@ -11,6 +11,7 @@ import type { Series } from '@/lib/stories/render/types';
 import { PLAN } from '@/lib/social-hub/views/plan';
 import { dbQuery } from '@/lib/db';
 import { readLfdSettings } from '@/lib/lfd/settings';
+import { readAiEventsSettings } from '@/lib/ai-events/settings';
 import { slotPlan, slotsWithinCap, type SlotPlan } from '@/lib/social-hub/slots';
 import { readCaps, readSlotSource } from '@/lib/social-hub/slots/load';
 import type { ResolvedSlot, SlotQuery } from '@/lib/social-hub/slots/types';
@@ -39,9 +40,9 @@ import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
  * the hidden safety cap the overnight runs never pass; week board spec
  * §Safety cap) is set here, a person's decision, never automatic.
  */
-export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days';
+export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events';
 
-export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days'];
+export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events'];
 export const isPostingType = (v: unknown): v is ContentType => POSTING_TYPES.includes(v as ContentType);
 
 /** One day of a type's week on the calendar: its slot count, Trial / Main split (reel types), Stories' series, and whether a date override touched it. */
@@ -57,7 +58,7 @@ export type PostingState = {
   perDay: number | null;
   maxPerDay: number | null;
   series: SeriesState[] | null;
-  /** Last Few Days: the weekdays it posts once (0 = Sunday). Absent for the other types. */
+  /** Last Few Days and AI Events: the weekdays it posts once (0 = Sunday). Absent for the other types. */
   days?: number[] | null;
   /** Template mode: this Monday–Sunday week's slots for the type. Null while legacy (the controls above decide). */
   schedule: ScheduleDay[] | null;
@@ -86,7 +87,7 @@ export type PostingPatch = {
   autoPublish?: boolean;
   perDay?: number;
   series?: { id: string; enabled?: boolean; generate?: boolean; days?: number[] };
-  /** The daily limit (template mode), a whole number from 0 to 10 (Last Few Days 0–1). */
+  /** The daily limit (template mode), a whole number from 0 to 10 (Last Few Days and AI Events 0–1). */
   cap?: number;
 };
 
@@ -151,12 +152,14 @@ function weekdaysWith(plan: SlotPlan, has: (s: ResolvedSlot) => boolean): number
 /**
  * Template mode (spec §4): the cadence fields come from the calendar, so
  * every reader that still uses them sees the slots. perDay is today's slot
- * count under the daily limit (what the night makes); Last Few Days' days
- * and each Stories series' days are this week's weekdays with that slot.
+ * count under the daily limit (what the night makes); Last Few Days' and AI
+ * Events' days and each Stories series' days are this week's weekdays with
+ * that slot.
  */
 function withCalendar(state: TypeFields, plan: SlotPlan, today: string, cap: number): TypeFields {
   const type = state.type;
   if (type === 'last_few_days') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'last_few_days') };
+  if (type === 'ai_events') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'ai_events') };
   if (type === 'stories') {
     return { ...state, series: (state.series ?? []).map((x) => ({ ...x, days: weekdaysWith(plan, (s) => s.vertical === 'stories' && s.series === x.id) })) };
   }
@@ -213,6 +216,11 @@ async function readTypePosting(type: ContentType): Promise<TypeFields> {
     // One post on each of its days (spec §7.4): no per-day quota to set.
     return { type, live: s.publishingLive, generate: s.autoRun, autoPublish: !s.requireApproval, perDay: null, maxPerDay: null, series: null, days: s.days };
   }
+  if (type === 'ai_events') {
+    const s = await readAiEventsSettings((text, params) => dbQuery(text, params));
+    // Two carousels on each of its days, Miami and Boston (Sunday, AE-29): no per-day quota to set.
+    return { type, live: s.publishingLive, generate: s.autoRun, autoPublish: !s.requireApproval, perDay: null, maxPerDay: null, series: null, days: s.days };
+  }
   const s = await loadStories(liveStoriesDb);
   return {
     type,
@@ -238,6 +246,7 @@ function validate(type: ContentType, patch: PostingPatch): void {
   if (patch.perDay !== undefined) {
     if (type === 'stories') throw new Error('Stories have no daily quota; each series has its own days.');
     if (type === 'last_few_days') throw new Error('Last Few Days has no daily quota; it posts once on each of its days.');
+    if (type === 'ai_events') throw new Error('AI Events has no daily quota; it posts Miami and Boston on each of its days.');
     quota(patch, type === 'carousels' ? carouselCfg.CAROUSEL_SLOTS.length : type === 'explainers' ? EXPLAINER_WINDOWS.length : windows('reels'), type === 'explainers' ? 1 : 0);
   }
   if (patch.series) {
@@ -248,7 +257,9 @@ function validate(type: ContentType, patch: PostingPatch): void {
   }
   if (patch.cap !== undefined) {
     if (!Number.isInteger(patch.cap) || patch.cap < 0 || patch.cap > MAX_CAP) throw new Error(`A daily limit is a whole number from 0 to ${MAX_CAP}.`);
-    if (patch.cap > maxCapFor(type)) throw new Error('Last Few Days runs once a day, so its daily limit is 0 or 1.');
+    if (patch.cap > maxCapFor(type)) {
+      throw new Error(type === 'ai_events' ? 'AI Events posts Miami and Boston, so its daily limit is 0 to 2.' : 'Last Few Days runs once a day, so its daily limit is 0 or 1.');
+    }
   }
 }
 
@@ -302,6 +313,16 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
     const set = (key: string, value: unknown) =>
       dbQuery(
         `INSERT INTO lfd.settings (key, value, updated_at) VALUES ($1, $2::jsonb, now())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [key, JSON.stringify(value)],
+      );
+    if (patch.generate !== undefined) await set('auto_run', patch.generate);
+    if (patch.autoPublish !== undefined) await set('require_approval', !patch.autoPublish);
+    if (patch.live !== undefined) await set('publishing_live', patch.live);
+  } else if (type === 'ai_events') {
+    const set = (key: string, value: unknown) =>
+      dbQuery(
+        `INSERT INTO ai_events.settings (key, value, updated_at) VALUES ($1, $2::jsonb, now())
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
         [key, JSON.stringify(value)],
       );

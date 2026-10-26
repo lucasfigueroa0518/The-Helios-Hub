@@ -74,6 +74,14 @@ export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
     { id: 'slot', label: 'Posting slot' },
     { id: 'approval', label: 'Approval' },
   ],
+  ai_events: [
+    { id: 'cities', label: 'Cities' },
+    { id: 'events', label: 'Event count' },
+    { id: 'look', label: 'Look' },
+    { id: 'hook', label: 'Hook' },
+    { id: 'slot', label: 'Posting slot' },
+    { id: 'approval', label: 'Approval' },
+  ],
 };
 
 /** Factors on offer: shared ones always; a vertical's native ones only when it alone is in view. */

@@ -812,20 +812,24 @@ async function handleReconcile(
     // Keep reconcile resilient.
   }
 
+  // Networking ingest: Sunday from 09:00 America/New_York (AE-08), once per ISO week. The
+  // worker clock is UTC, so the decision reads New York time explicitly.
   let networkingWeeklyEnqueued = 0;
   try {
-    const { isoWeekKey } = await import('@/lib/networking/ingest');
-    const weekKey = isoWeekKey(new Date());
-    await enqueueWorkBatch([
-      child(
-        'networking.weekly_ingest',
-        { reason: 'scheduled' },
-        weekKey,
-        'networking',
-        { maxAttempts: 2, priority: -6 },
-      ),
-    ]);
-    networkingWeeklyEnqueued = 1;
+    const { weeklyIngestDecision } = await import('@/lib/networking/schedule');
+    const decision = weeklyIngestDecision(new Date());
+    if (decision.due) {
+      await enqueueWorkBatch([
+        child(
+          'networking.weekly_ingest',
+          { reason: 'scheduled' },
+          decision.dedupeKey,
+          'networking',
+          { maxAttempts: 2, priority: -6 },
+        ),
+      ]);
+      networkingWeeklyEnqueued = 1;
+    }
   } catch {
     // Keep reconcile resilient.
   }
@@ -979,10 +983,52 @@ async function handleNetworkingWeeklyIngest(
 ): Promise<WorkHandlerResult> {
   const { runWeeklyIngest } = await import('@/lib/networking/ingest');
   const result = await runWeeklyIngest();
+  // Detail fetches run as their own job (own lease), once per successful ingest run.
   return {
+    children: [
+      child(
+        'networking.event_details',
+        { reason: job.payload.reason ?? 'scheduled', ingestRunId: result.runId, weekKey: result.weekKey },
+        `ingest:${result.runId}`,
+        'networking',
+        { maxAttempts: 2, priority: -6 },
+      ),
+    ],
     result: {
       reason: job.payload.reason ?? null,
       ...result,
+    },
+  };
+}
+
+async function handleNetworkingEventDetails(
+  job: OrchestrationJob<'networking.event_details'>,
+): Promise<WorkHandlerResult> {
+  const { runEventDetails } = await import('@/lib/networking/details');
+  const result = await runEventDetails();
+  // Public calendar snapshot (M3) with the fresh descriptions. Best effort: a storage or
+  // deploy-hook problem is logged and reported, never a failed details job.
+  let snapshot: Record<string, unknown>;
+  try {
+    const { publishSnapshot } = await import('@/lib/networking/public-snapshot');
+    const published = await publishSnapshot({ reason: 'networking.event_details' });
+    snapshot = {
+      events: published.events,
+      picks: published.picks,
+      changed: published.changed,
+      hook: published.hook.fired ? (published.hook.ok ? 'fired' : 'failed') : `skipped:${published.hook.reason}`,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(JSON.stringify({ ts: new Date().toISOString(), level: 'warn', component: 'networking-snapshot', message: 'snapshot publish failed', error: message }));
+    snapshot = { error: message.slice(0, 300) };
+  }
+  return {
+    result: {
+      reason: job.payload.reason ?? null,
+      ingestRunId: job.payload.ingestRunId ?? null,
+      ...result,
+      snapshot,
     },
   };
 }
@@ -1027,6 +1073,7 @@ const HANDLERS: Record<WorkKind, Handler> = {
   'anthropic.cost_sync': handleAnthropicCostSync as Handler,
   'auto.cycle': handleAutoCycle as Handler,
   'networking.weekly_ingest': handleNetworkingWeeklyIngest as Handler,
+  'networking.event_details': handleNetworkingEventDetails as Handler,
   'seo.gsc_daily_sync': handleSeoGscDailySync as Handler,
   'system.reconcile': handleReconcile as Handler,
   'smartlead.lane_ensure': handleSmartleadLaneEnsure as Handler,

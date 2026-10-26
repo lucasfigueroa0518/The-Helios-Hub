@@ -44,6 +44,9 @@ const TITLE: Partial<Record<PostPlan['action'], string>> = {
   archive: 'Archive this post?',
 };
 
+/** AI Events' regenerate is Rebuild post (AE-04): the same post re-rendered from the week's pool. */
+const rebuilds = (plan: PostPlan) => plan.action === 'hardRegenerate' && plan.body.vertical === 'ai_events';
+
 /** Only what posts live, can't be undone here, or spends money asks first. */
 const ASKS = new Set<PostPlan['action']>(['hardPublish', 'hardRegenerate', 'reject', 'archive']);
 
@@ -57,7 +60,7 @@ export function cardActions(state: PostState, plans: readonly ActionPlan[], enab
     plan: ASKS.has(plan.action) ? plan : { ...plan, confirm: undefined },
     disabled: plan.disabled,
     danger: plan.action === 'reject' || plan.action === 'archive',
-    confirmTitle: TITLE[plan.action] ?? null,
+    confirmTitle: rebuilds(plan) ? 'Rebuild this post?' : TITLE[plan.action] ?? null,
     ...(plan.pick === 'slot' && slots ? { slots } : {}),
   });
   let primary: OfferedAction | null = null;
@@ -74,7 +77,7 @@ export function cardActions(state: PostState, plans: readonly ActionPlan[], enab
     .flatMap((a) => {
       const p = usable.find((x) => x.action === a);
       // On a failed card, placing it again is a Reschedule (B7).
-      return p ? [offered(p, group === 'failed' && a === 'place' ? 'Reschedule' : LABEL[a]!)] : [];
+      return p ? [offered(p, group === 'failed' && a === 'place' ? 'Reschedule' : rebuilds(p) ? 'Rebuild post' : LABEL[a]!)] : [];
     });
   return { primary, grid };
 }

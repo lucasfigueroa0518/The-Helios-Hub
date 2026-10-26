@@ -1,3 +1,6 @@
+import { inferAccess } from '@/lib/networking/access';
+import { METRO_PROFILES } from '@/lib/networking/cities';
+import { mergeSignalCopies } from '@/lib/networking/signals';
 import type { ClassifiedEvent } from '@/lib/networking/types';
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -55,7 +58,8 @@ function listingKey(event: ClassifiedEvent): string {
 
 function localDateKey(event: ClassifiedEvent): string {
   const start = event.startAt;
-  const tz = event.timezone;
+  // A UTC date would put a 5 PM PT Meetup copy on the next day, away from its Luma twin.
+  const tz = event.timezone || METRO_PROFILES[event.metro]?.timezone;
   try {
     if (tz) {
       const parts = new Intl.DateTimeFormat('en-US', {
@@ -75,25 +79,35 @@ function localDateKey(event: ClassifiedEvent): string {
   return `${event.metro}:${start.toISOString().slice(0, 10)}`;
 }
 
+export type DedupedListing = {
+  source: string;
+  sourceEventId: string;
+  url: string;
+  /** Trimmed upstream payload for `event_listings.raw`. */
+  raw?: Record<string, unknown>;
+};
+
 export type DedupedEvent = ClassifiedEvent & {
   canonicalUrl: string;
-  listings: Array<{ source: string; sourceEventId: string; url: string }>;
+  listings: DedupedListing[];
 };
+
+function listingOf(event: ClassifiedEvent): DedupedListing {
+  return { source: event.source, sourceEventId: event.sourceEventId, url: event.url, raw: event.raw };
+}
 
 export function deduplicate(events: ClassifiedEvent[]): DedupedEvent[] {
   const unique: DedupedEvent[] = [];
   const byListing = new Map<string, DedupedEvent>();
+  // Every source copy of a merged event, so its signals can be chosen per field afterwards.
+  const copies = new Map<DedupedEvent, ClassifiedEvent[]>();
 
   for (const incoming of events) {
     const key = listingKey(incoming);
     const existingById = byListing.get(key);
     if (existingById) {
       if (!existingById.listings.some((l) => l.url === incoming.url) && incoming.url) {
-        existingById.listings.push({
-          source: incoming.source,
-          sourceEventId: incoming.sourceEventId,
-          url: incoming.url,
-        });
+        existingById.listings.push(listingOf(incoming));
       }
       continue;
     }
@@ -112,7 +126,6 @@ export function deduplicate(events: ClassifiedEvent[]): DedupedEvent[] {
     if (merged) {
       merged.canonicalUrl = pickMoreSpecificUrl(merged.url, incoming.url);
       merged.url = merged.canonicalUrl;
-      if (!merged.description && incoming.description) merged.description = incoming.description;
       if (!merged.lat && incoming.lat != null) {
         merged.lat = incoming.lat;
         merged.lng = incoming.lng;
@@ -121,11 +134,8 @@ export function deduplicate(events: ClassifiedEvent[]): DedupedEvent[] {
         merged.industries = [...new Set([...merged.industries, ...incoming.industries])];
       }
       if (merged.bucket !== incoming.bucket) merged.bucket = 'both';
-      merged.listings.push({
-        source: incoming.source,
-        sourceEventId: incoming.sourceEventId,
-        url: incoming.url,
-      });
+      merged.listings.push(listingOf(incoming));
+      copies.get(merged)?.push(incoming);
       byListing.set(key, merged);
       continue;
     }
@@ -133,17 +143,22 @@ export function deduplicate(events: ClassifiedEvent[]): DedupedEvent[] {
     const created: DedupedEvent = {
       ...incoming,
       canonicalUrl: incoming.url,
-      listings: [
-        {
-          source: incoming.source,
-          sourceEventId: incoming.sourceEventId,
-          url: incoming.url,
-        },
-      ],
+      listings: [listingOf(incoming)],
     };
     unique.push(created);
+    copies.set(created, [incoming]);
     byListing.set(key, created);
   }
 
+  // Signals come from the best source per field (Luma > Eventbrite > Meetup), the description
+  // from the longest copy; access is read again from the merged price. A single-copy event
+  // keeps its own values.
+  for (const [event, group] of copies) {
+    if (group.length < 2) continue;
+    mergeSignalCopies(event, group);
+    const access = inferAccess(event);
+    event.access = access.access;
+    event.accessEvidence = access.evidence;
+  }
   return unique;
 }

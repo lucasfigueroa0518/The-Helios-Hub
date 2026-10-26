@@ -23,6 +23,7 @@ const KINDS: Record<Vertical, readonly HubIdKind[]> = {
   carousels: ['content', 'attempt', 'schedule', 'post'],
   stories: ['content', 'set'],
   last_few_days: ['content', 'attempt', 'schedule', 'post'],
+  ai_events: ['content', 'attempt', 'schedule', 'post'],
 };
 
 export function hubId(vertical: Vertical, kind: HubIdKind, ref: string): string {

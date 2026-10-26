@@ -77,11 +77,12 @@ function labelFor(state: PostState['id'], plan: PostPlan, vertical: HubPost['ver
     case 'approveTrialReel':
     case 'approveContent':
       if (state === 'slot_booked') return 'Approve slot';
-      return (vertical === 'carousels' || vertical === 'last_few_days') && state === 'ready' ? 'Approve and schedule' : 'Approve';
+      return (vertical === 'carousels' || vertical === 'last_few_days' || vertical === 'ai_events') && state === 'ready' ? 'Approve and schedule' : 'Approve';
     case 'hardPublish':
       return state === 'failed' ? 'Try again' : 'Publish now';
     case 'hardRegenerate':
-      return 'Regenerate';
+      // AI Events re-renders the same post from the week's pool (AE-04).
+      return vertical === 'ai_events' ? 'Rebuild post' : 'Regenerate';
     case 'reject':
       return 'Reject';
     case 'archive':
@@ -126,7 +127,7 @@ export function actionMenu(post: HubPost, state: PostState, plans: readonly Acti
       plan,
       disabled: isOff ? OFF : plan.disabled,
       danger: plan.action === 'reject' || plan.action === 'archive',
-      confirmTitle: TITLE[plan.action] ?? null,
+      confirmTitle: plan.action === 'hardRegenerate' && post.vertical === 'ai_events' ? 'Rebuild this post?' : TITLE[plan.action] ?? null,
       ...(plan.pick === 'slot' && slots ? { slots } : {}),
     };
     if (isOff) continue;

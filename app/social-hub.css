@@ -11,6 +11,8 @@
   --sh-v-carousels: #138510;
   --sh-v-stories: #c377e0;
   --sh-v-last_few_days: #e0529c;
+  /* AI Events This Week: dark goldenrod, clear of Signal Orange and the other type hues. */
+  --sh-v-ai_events: #b8860b;
 
   /* State: only Needs you and Failed carry color (The Quiet State Rule). */
   --sh-needs-ink: #b8410c;

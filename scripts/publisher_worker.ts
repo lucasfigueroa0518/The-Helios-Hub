@@ -13,10 +13,13 @@
  *            can be compared with what the type workers actually did.
  *   live   – posts; the type workers stand down from releasing and posting.
  * Each type's own publishing_live still decides whether that type posts at all.
- * No Claude, no Jev: Instagram Graph and Supabase only.
+ * No Claude, no Jev: Instagram Graph and Supabase only, plus the website's deploy hook
+ * (VERCEL_DEPLOY_HOOK_URL, when set) after an AI Events post refreshes the public calendar.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+
+import type { HubQuery } from '@/lib/social-hub/db';
 
 function loadEnvFile(envPath: string): void {
   if (!fs.existsSync(envPath)) return;
@@ -48,6 +51,8 @@ async function main(): Promise<void> {
   const { signArtifact } = await import('@/lib/explainers/storage');
   const { carouselsDriver } = await import('@/lib/publishing/drivers/carousels');
   const { lastFewDaysDriver } = await import('@/lib/publishing/drivers/last-few-days');
+  const { aiEventsDriver } = await import('@/lib/publishing/drivers/ai-events');
+  const { liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { explainersDriver } = await import('@/lib/publishing/drivers/explainers');
   const { reelsDriver } = await import('@/lib/publishing/drivers/reels');
   const { createLiveMetaClient } = await import('@/lib/reels/music/meta');
@@ -60,6 +65,8 @@ async function main(): Promise<void> {
   const drivers: PublishDriver[] = [
     carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
     lastFewDaysDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
+    // A published AI Events post publishes the public calendar snapshot again (plan M3/M4).
+    aiEventsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token, snapshot: liveAiEventsSnapshot(query as unknown as HubQuery), log }),
     reelsDriver({ meta: createLiveMetaClient }),
   ];
 

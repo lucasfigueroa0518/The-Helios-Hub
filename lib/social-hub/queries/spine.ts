@@ -98,6 +98,7 @@ const METRICS: Record<Vertical, readonly string[]> = {
   reels: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'reposts', 'total_interactions', 'avg_watch_time_ms', 'total_watch_time_ms', 'skip_rate'],
   stories: ['views', 'reach', 'shares', 'follows', 'profile_visits', 'total_interactions'],
   last_few_days: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'],
+  ai_events: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'],
 };
 
 export async function readSpine(q: HubQuery, verticals: readonly Vertical[]): Promise<SpineRead> {

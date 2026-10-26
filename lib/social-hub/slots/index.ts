@@ -34,6 +34,11 @@ export function isLfdDay(plan: SlotPlan, nyDate: string): boolean {
   return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'last_few_days');
 }
 
+/** Template mode: whether the calendar has an AI Events slot on `nyDate` (the Sunday noon clock asks it, AE-08). */
+export function isAiEventsDay(plan: SlotPlan, nyDate: string): boolean {
+  return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'ai_events');
+}
+
 /** Before the calendar: Text on Screen posts as trial reels, Explainers to the main feed. */
 export function legacyFeedMode(vertical: Vertical): FeedMode | null {
   return vertical === 'reels' ? 'trial' : vertical === 'explainers' ? 'main' : null;

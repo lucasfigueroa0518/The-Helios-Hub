@@ -1,8 +1,9 @@
 import { parseJsonLdEvents, normalizeEventbriteEvent } from '@/lib/networking/adapters/eventbrite';
 import { parseIcsEvents, icsEventToCandidate } from '@/lib/networking/adapters/ics';
-import { normalizeLumaEvent } from '@/lib/networking/adapters/luma';
-import { parseNextData, extractMeetupEventsFromApollo, normalizeMeetupEvent } from '@/lib/networking/adapters/meetup';
+import { lumaEventDetail, normalizeLumaEvent, type LumaEventDetailResponse } from '@/lib/networking/adapters/luma';
+import { apolloStateOf, extractMeetupEventsFromApollo, normalizeMeetupEvent } from '@/lib/networking/adapters/meetup';
 import { fetchJson, fetchText } from '@/lib/networking/http';
+import { mergeSourceTags } from '@/lib/networking/signals';
 import type { CandidateEvent } from '@/lib/networking/types';
 
 function hostOf(url: string): string {
@@ -20,11 +21,22 @@ export async function importEventFromUrl(rawUrl: string): Promise<CandidateEvent
 
   if (host.includes('luma.com') || host.includes('lu.ma')) {
     const slug = new URL(url).pathname.replace(/^\//, '').split('/')[0];
-    const { json } = await fetchJson<{ event?: { api_id?: string }; entries?: never } & {
-      event?: Record<string, unknown>;
-    }>(`https://api.luma.com/event/get?event_api_id=${encodeURIComponent(slug)}`, {
-      headers: { Origin: 'https://luma.com', Referer: url },
-    });
+    const { json } = await fetchJson<LumaEventDetailResponse>(
+      `https://api.luma.com/event/get?event_api_id=${encodeURIComponent(slug)}`,
+      { headers: { Origin: 'https://luma.com', Referer: url } },
+    );
+    // event/get answers like a discover entry (hosts, calendar, ticket_info) plus the full description.
+    const fromApi = json?.event ? normalizeLumaEvent(json, { trusted: true }) : null;
+    if (fromApi && json) {
+      const detail = lumaEventDetail(json);
+      if (detail.description) {
+        fromApi.description = detail.description;
+        fromApi.descriptionSource = 'luma_event_get';
+      }
+      fromApi.capacity = detail.capacity;
+      fromApi.sourceTags = mergeSourceTags(fromApi.sourceTags, detail.sourceTags);
+      return fromApi;
+    }
     const { text } = await fetchText(url, {
       headers: { Origin: 'https://luma.com', Referer: url },
     });
@@ -38,24 +50,13 @@ export async function importEventFromUrl(rawUrl: string): Promise<CandidateEvent
         return eb;
       }
     }
-    const apiEvent = (json as { event?: Record<string, unknown> } | null)?.event;
-    if (apiEvent) {
-      const candidate = normalizeLumaEvent(
-        { event: apiEvent as never },
-        { trusted: true },
-      );
-      if (candidate) return candidate;
-    }
     throw new Error('Could not parse Luma event');
   }
 
   if (host.includes('meetup.com')) {
     const { ok, text } = await fetchText(url);
     if (!ok) throw new Error('Meetup page was not reachable');
-    const nextData = parseNextData(text);
-    const apollo = (
-      nextData?.props as { pageProps?: { __APOLLO_STATE__?: Record<string, unknown> } } | undefined
-    )?.pageProps?.__APOLLO_STATE__;
+    const apollo = apolloStateOf(text);
     if (apollo) {
       const events = extractMeetupEventsFromApollo(apollo)
         .map((raw) => normalizeMeetupEvent(raw, { cityFallback: '', trusted: true }))
@@ -86,7 +87,7 @@ export async function importEventFromUrl(rawUrl: string): Promise<CandidateEvent
     if (ok && /BEGIN:VEVENT/.test(text)) {
       const parsed = parseIcsEvents(text)[0];
       const candidate = parsed
-        ? icsEventToCandidate(parsed, { feedUrl: url, name: host, metro: 'boston' })
+        ? icsEventToCandidate(parsed, { feedUrl: url, name: host })
         : null;
       if (candidate) {
         candidate.trusted = true;
