@@ -10,6 +10,7 @@ import {
   PostingSettings,
   SettingsButton,
   StoriesGenerate,
+  StorySeedButton,
 } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
 import { GenerationProgress } from '@/components/content-type/GenerationProgress';
@@ -39,9 +40,9 @@ type PageVertical = Exclude<Vertical, 'reels'>;
 const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days' };
 const BENCH_NOTE: Record<PageVertical, string> = {
   last_few_days: 'The latest run’s queue: the stories in its post, the ones it dropped and why, and what was next in line. Major headlines lead; Text on Screen ideas fill the rest.',
-  carousels: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels.',
-  stories: 'Ideas drawn from the other pools. A set is built for each series that is due.',
-  explainers: 'Topics waiting to be rendered, best score first. Generate renders one reel.',
+  carousels: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels. Hold and drag any story to move it.',
+  stories: 'Ideas drawn from the other pools. A set is built for each series that is due. Pick a series, then hold and drag an idea to move it.',
+  explainers: 'Topics waiting to be rendered, best score first. Generate renders one reel. Hold and drag any topic to move it.',
 };
 
 /**
@@ -71,7 +72,7 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
     generate = <CarouselRunButton />;
     settings = <PostingSettings type="carousels" />;
   } else if (vertical === 'stories') {
-    generate = <StoriesGenerate />;
+    generate = <><StoriesGenerate /><StorySeedButton /></>;
     settings = <PostingSettings type="stories" />;
   } else if (vertical === 'last_few_days') {
     generate = <LfdRunButton />;

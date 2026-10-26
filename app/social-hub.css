@@ -486,3 +486,5 @@ p.sh-subtle { max-width: 75ch; }
   .sh-queue__row { grid-template-columns: 22px 24px minmax(0, 1fr); }
   .sh-queue__score, .sh-queue__row > :last-child { grid-column: 3; justify-self: start; align-items: flex-start; }
 }
+.sh-queue li { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.sh-queue li.is-dragging, .sh-queue li.is-dragging * { cursor: grabbing; }

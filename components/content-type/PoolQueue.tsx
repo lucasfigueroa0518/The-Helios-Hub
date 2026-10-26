@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useDroppable, useSensor, useSensors, type DragEndEvent, type DragOverEvent, type DragStartEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -18,6 +18,25 @@ import type { GenerateIdea } from '@/lib/content-type/queue-client';
  * neighbours (lib/content-type/idea-queue.ts), so a stale page can never write a wrong number.
  * An idea with nothing made that lands in today's top slots asks "Generate this now?" before anything is spent.
  */
+
+/**
+ * Press and hold anywhere on a row to pick it up. A quick click still opens the row, and the row's own buttons (Pin, Archive,
+ * Generate) and links never start a drag.
+ */
+class RowPointerSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: ({ nativeEvent }: { nativeEvent: PointerEvent }) => {
+        const target = nativeEvent.target as HTMLElement | null;
+        return !target?.closest('button:not([data-grip]), a, input, select, textarea, summary, [data-no-drag]');
+      },
+    },
+  ];
+}
+
+/** How long a press must last before it picks the row up, and how far a finger or mouse may wander meanwhile. */
+const HOLD = { delay: 180, tolerance: 8 };
 
 export type QueueClasses = { list: string; zone: string; grip: string };
 const RH: QueueClasses = { list: 'rh-rest__list rh-rest__list--queue', zone: 'rh-pinzone', grip: 'rh-row__grip' };
@@ -50,7 +69,7 @@ export function PoolQueue({ vertical, rows, topN, enabled, generate, classes, re
   const pinnedCount = order.filter((id) => byId.get(id)?.pinned).length;
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(RowPointerSensor, { activationConstraint: HOLD }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -129,23 +148,41 @@ function PinZone({ active, className }: { active: boolean; className: string }) 
 function SortableRow({ id, pinned, title, grip, renderRow }: { id: string; pinned: boolean; title: string; grip: string; renderRow: (id: string, handle: ReactNode) => ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id });
   const style: CSSProperties = { transform: CSS.Translate.toString(transform), transition, position: 'relative', zIndex: isDragging ? 2 : undefined };
+  // A drag ends with a click on the row it started on; that click must not open the row.
+  const droppedAt = useRef(0);
+  useEffect(() => {
+    if (!isDragging) return undefined;
+    return () => { droppedAt.current = Date.now(); };
+  }, [isDragging]);
+  const { onKeyDown, ...pointer } = (listeners ?? {}) as Record<string, (event: never) => void>;
   const handle = (
     <button
       type="button"
       ref={setActivatorNodeRef}
+      data-grip=""
       className={grip}
-      style={{ touchAction: 'none' }}
-      aria-label={`Move ${title}. Space to pick up, arrow keys to move, space to drop.`}
-      title={pinned ? 'Drag to reorder the pins, or below them to unpin' : 'Drag to move in the queue'}
+      aria-label={`Move ${title}. Space to pick up, arrow keys to move, space to drop. Or press and hold the row.`}
+      title={pinned ? 'Hold anywhere on the row to reorder the pins, or drag below them to unpin' : 'Hold anywhere on the row and drag to move it in the queue'}
       onClick={(e) => e.stopPropagation()}
+      onKeyDown={onKeyDown as never}
       {...attributes}
-      {...listeners}
     >
       <GripVertical size={16} />
     </button>
   );
   return (
-    <li ref={setNodeRef} style={style} className={isDragging ? 'rh-queue-item is-dragging' : 'rh-queue-item'}>
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={isDragging ? 'rh-queue-item is-dragging' : 'rh-queue-item'}
+      {...(pointer as object)}
+      onClickCapture={(e) => {
+        if (Date.now() - droppedAt.current < 300) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      }}
+    >
       {renderRow(id, handle)}
     </li>
   );

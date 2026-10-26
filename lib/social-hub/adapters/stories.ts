@@ -244,7 +244,8 @@ export function storyIdeas(rows: readonly StoryPoolRow[]): HubIdea[] {
       versionCount: 0,
       generatedAt: null,
       createdAt: iso(row.refreshed_at),
-      detail: [ORIGIN_LABEL[row.origin] ?? row.origin, row.source && row.source !== (ORIGIN_LABEL[row.origin] ?? row.origin) ? row.source : null].filter(Boolean).join(' · '),
+      detail: row.key.startsWith('seed:') ? 'You typed this in' : [ORIGIN_LABEL[row.origin] ?? row.origin, row.source && row.source !== (ORIGIN_LABEL[row.origin] ?? row.origin) ? row.source : null].filter(Boolean).join(' · '),
+      yours: row.key.startsWith('seed:'),
       group: SERIES[row.series] ?? row.series,
     };
   });

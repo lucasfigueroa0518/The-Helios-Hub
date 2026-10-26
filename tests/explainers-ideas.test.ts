@@ -167,7 +167,7 @@ function stubIdeas(
   };
 }
 
-async function seedPool(db: ExplainersDb, entries: [string, Scores][], origin: 'manual' | 'seeded' = 'manual') {
+async function seedPool(db: ExplainersDb, entries: [string, Scores][], origin: 'manual' | 'seeded' = 'seeded') {
   const scores = Object.fromEntries(entries);
   const { transport } = stubJev(scores);
   return addAndEvaluateTopics(
@@ -333,7 +333,7 @@ test('duplicate of a pool topic: Stage 2 finds it in batches of five, the better
   // "Topic 6 again" duplicates Topic 6, ranked 7th, so it sits in the second batch.
   const { transport, calls } = stubJev({ 'Topic 6 again': STRONG }, [['Topic 6 again', 'Topic 6']]);
   const [result] = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: stubIdeas() }, [
-    { title: 'Topic 6 again', origin: 'manual' },
+    { title: 'Topic 6 again', origin: 'seeded' },
   ]);
   assert.equal(result.evaluation.outcome, 'won_head_to_head');
   assert.deepEqual(
@@ -347,7 +347,7 @@ test('duplicate of a pool topic: Stage 2 finds it in batches of five, the better
   // A weaker duplicate of the top topic loses and is displaced.
   const weak = stubJev({ 'Topic 0 redux': GOOD }, [['Topic 0 redux', 'Topic 0']]);
   const [lost] = await addAndEvaluateTopics({ db, jevTransport: weak.transport, ideaModel: stubIdeas() }, [
-    { title: 'Topic 0 redux', origin: 'manual' },
+    { title: 'Topic 0 redux', origin: 'seeded' },
   ]);
   assert.equal(lost.evaluation.outcome, 'lost_head_to_head');
   assert.equal(weak.calls.filter((c) => c.set === 'pairs').length, 1, 'stops at the first batch with a match');
@@ -360,7 +360,7 @@ test('duplicate of a recently rendered topic is rejected without scoring', async
 
   const { transport, calls } = stubJev({}, [['Webhooks again', 'Webhooks']]);
   const [result] = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: stubIdeas() }, [
-    { title: 'Webhooks again', origin: 'manual' },
+    { title: 'Webhooks again', origin: 'seeded' },
   ]);
   assert.equal(result.evaluation.outcome, 'rejected_history_duplicate');
   assert.deepEqual(calls.map((c) => c.set), ['gate']);
@@ -369,7 +369,7 @@ test('duplicate of a recently rendered topic is rejected without scoring', async
   await db.query(`UPDATE explainers.topics SET rendered_at = now() - interval '46 days' WHERE title = 'Webhooks'`);
   const later = stubJev({ 'Webhooks, later': STRONG }, [['Webhooks, later', 'Webhooks']]);
   const [ok] = await addAndEvaluateTopics({ db, jevTransport: later.transport, ideaModel: stubIdeas() }, [
-    { title: 'Webhooks, later', origin: 'manual' },
+    { title: 'Webhooks, later', origin: 'seeded' },
   ]);
   assert.equal(ok.evaluation.outcome, 'entered_pool');
 });
@@ -378,7 +378,7 @@ test('the pool is trimmed to pool_size', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'pool_size', 2);
   // A person's own topics (origin manual) are never cut; machine topics are.
-  await seedPool(db, [['A', STRONG], ['B', GOOD], ['C', { ...GOOD, hook_strength: 1 }]], 'seeded');
+  await seedPool(db, [['A', STRONG], ['B', GOOD], ['C', { ...GOOD, hook_strength: 1 }]]);
   assert.deepEqual((await listPool(db)).map((t) => t.title), ['A', 'B']);
   const [cut] = await listTopics(db, ['displaced']);
   assert.equal(cut.title, 'C');
@@ -388,7 +388,7 @@ test('the pool is trimmed to pool_size', async () => {
 test('the pool never cuts a person’s own topics, and a pool_size above the standard’s 30 is held to 30', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'pool_size', 2);
-  await seedPool(db, [['A', STRONG], ['B', GOOD], ['C', { ...GOOD, hook_strength: 1 }]]);
+  await seedPool(db, [['A', STRONG], ['B', GOOD], ['C', { ...GOOD, hook_strength: 1 }]], 'manual');
   assert.deepEqual((await listPool(db)).map((t) => t.title), ['A', 'B', 'C'], 'all three are manual: none is cut');
 });
 
@@ -588,8 +588,8 @@ test('a topic that makes the pool gets its analogy picked from three Jev-scored 
     (scene) => (scene.endsWith('scene 2') ? 4 : 2),
   );
   const results = await addAndEvaluateTopics({ db, jevTransport: transport, ideaModel: ideas }, [
-    { title: 'Webhooks', origin: 'manual' },
-    { title: 'Everything about agents', origin: 'manual' },
+    { title: 'Webhooks', origin: 'seeded' },
+    { title: 'Everything about agents', origin: 'seeded' },
   ]);
   assert.deepEqual(results.map((r) => r.evaluation.outcome), ['entered_pool', 'rejected_gates']);
   assert.deepEqual(ideas.analogyRequests, ['Webhooks'], 'rejected topics get no analogy spend');
@@ -629,7 +629,7 @@ test('a failed analogy pass is recorded on the topic and never changes the evalu
     throw new Error('analogy writer must return exactly 3 candidates');
   };
   const [result] = await addAndEvaluateTopics({ db, jevTransport: stubJev({ Webhooks: STRONG }).transport, ideaModel: ideas }, [
-    { title: 'Webhooks', origin: 'manual' },
+    { title: 'Webhooks', origin: 'seeded' },
   ]);
   assert.equal(result.evaluation.outcome, 'entered_pool');
   const topic = await getTopic(db, result.topicId);

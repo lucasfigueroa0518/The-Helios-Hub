@@ -1,6 +1,8 @@
 'use client';
 
 import { BackToHub } from '@/components/content-type/BackToHub';
+import { PoolQueue } from '@/components/content-type/PoolQueue';
+import { QueueControls } from '@/components/content-type/QueueControls';
 import { PostingSettings, SettingsButton } from '@/components/content-type/TypeControls';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
@@ -19,6 +21,8 @@ import {
 
 import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
+import { capQueued, queueOrder } from '@/lib/social-hub/queue';
+import { ideaRef, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 import { ENTERTAINMENT_BOOST, NET_BUCKET_WEIGHT, NET_VALUE_WEIGHT } from '@/lib/reels/config';
 import type { StoredCopyJob } from '@/lib/reels/copy/jobs';
 import { fullCaption } from '@/lib/reels/copy/report';
@@ -343,7 +347,7 @@ function isPostingReel(reel: Reel): boolean {
 
 /* ------------------------------------------------------------------- hub */
 
-export function ReelsHub({ initial, archived = [], reviewPath = '' }: { initial: ReelsOverview; /** Post idea ids a person archived: left out of the page (idea pool standard, 2026-10-21). */ archived?: string[]; reviewPath?: string }) {
+export function ReelsHub({ initial, moves = [], reviewPath = '' }: { initial: ReelsOverview; /** What a person did to the idea queue: pins, drags, archives (idea pool standard, 2026-10-21). */ moves?: IdeaAdjustment[]; reviewPath?: string }) {
   const [data, setData] = useState<ReelsOverview>(initial);
   const [dayId, setDayId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -491,10 +495,14 @@ export function ReelsHub({ initial, archived = [], reviewPath = '' }: { initial:
     }
   }
 
-  const reels = view ? view.slate.scores.filter((score) => !archived.includes(score.postIdeaId)).map((score) => reelFor(view, score)) : [];
+  const archived = useMemo(() => new Set(moves.filter((m) => m.kind === 'archive').map((m) => ideaRef(m.ideaId))), [moves]);
+  const reels = view ? view.slate.scores.filter((score) => !archived.has(score.postIdeaId)).map((score) => reelFor(view, score)) : [];
   const ranked = [...reels].sort((a, b) => (a.score.rank ?? 999) - (b.score.rank ?? 999));
   const top = ranked.filter((reel) => reel.score.selected);
-  const rest = view?.isCurrent ? ranked.filter((reel) => !reel.score.selected) : [];
+  // The bench in the queue's order: pins first, a dragged idea at its place, never more than 30 (pinned and dragged ones aside).
+  const rest = view?.isCurrent
+    ? capQueued(queueOrder(ranked.filter((reel) => !reel.score.selected).map((reel) => ({ id: `reels:idea:${reel.score.postIdeaId}`, score: reel.score.net, reel })), moves))
+    : [];
   const open = reels.find((reel) => reel.score.postIdeaId === openId) ?? null;
   const today = todayInNewYork();
 
@@ -645,16 +653,18 @@ export function ReelsHub({ initial, archived = [], reviewPath = '' }: { initial:
                   The bench <span>{rest.length}</span>
                 </h3>
                 <p className="rh-muted">
-                  Depth and rotation. These do not go out, and they do not get a slot.{' '}
-                  <a href="/social/content/pools/reels">Pin, drag or archive ideas</a> to steer what the next run makes.
+                  Depth and rotation. These do not go out until the next run picks them. Hold and drag any idea to move it, pin it to make it first, or archive it to hide it for good.
                 </p>
-                <ul className="rh-rest__list">
-                  {rest.map((reel) => (
-                    <li key={reel.score.postIdeaId}>
-                      <RestRow reel={reel} onOpen={() => setOpenId(reel.score.postIdeaId)} />
-                    </li>
-                  ))}
-                </ul>
+                <PoolQueue
+                  vertical="reels"
+                  topN={0}
+                  enabled
+                  rows={rest.map((q) => ({ id: q.item.id, pinned: q.pinned, hasContent: false, title: q.item.reel.score.headlines[0] ?? 'Untitled idea' }))}
+                  renderRow={(id, handle) => {
+                    const q = rest.find((r) => r.item.id === id)!;
+                    return <RestRow reel={q.item.reel} ideaId={id} rank={q.rank} pinned={q.pinned} placed={q.placed} handle={handle} onOpen={() => setOpenId(q.item.reel.score.postIdeaId)} />;
+                  }}
+                />
               </section>
             )}
           </>
@@ -838,26 +848,30 @@ const PHASE_CHIP: Record<ReelPhase, string> = {
   blocked: 'No reel',
 };
 
-function RestRow({ reel, onOpen }: { reel: Reel; onOpen: () => void }) {
+function RestRow({ reel, ideaId, rank, pinned, placed, handle, onOpen }: { reel: Reel; ideaId: string; rank: number; pinned: boolean; placed: boolean; handle: ReactNode; onOpen: () => void }) {
   const { archetype, category } = labels(reel.score);
+  const title = reel.score.headlines[0] ?? 'Untitled idea';
   return (
-    <button type="button" className="rh-row" onClick={onOpen}>
-      <span className="rh-row__rank">{reel.score.rank ?? '—'}</span>
+    <div className={`rh-row rh-row--queue${pinned ? ' is-pinned' : ''}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(); } }}>
+      <span className="rh-row__rank">{rank}</span>
+      <span className="rh-row__grip-cell">{handle}</span>
       <span className="rh-row__main">
-        <span className="rh-row__headline">{reel.score.headlines[0] ?? 'Untitled idea'}</span>
+        <span className="rh-row__headline">{title}</span>
         <span className="rh-row__labels">
           {archetype ? `${archetype} · ${category ?? '—'}` : 'No framework cleared 0.60'}
         </span>
       </span>
-        <span className="rh-row__pills">
-          <Pills score={reel.score} />
-          <span className={`rh-chip rh-chip--${reel.phase}`}>
+      <span className="rh-row__pills">
+        <Pills score={reel.score} />
+        {pinned ? <span className="rh-chip rh-chip--pinned">Pinned</span> : placed ? <span className="rh-chip">Placed</span> : null}
+        <span className={`rh-chip rh-chip--${reel.phase}`}>
           {reel.phase === 'working' && <Loader2 size={11} className="rh-spin" />} {PHASE_CHIP[reel.phase]}
         </span>
+        <QueueControls vertical="reels" ideaId={ideaId} pinned={pinned} title={title} compact />
       </span>
       <span className="rh-row__score">{score2(reel.score.net)}</span>
       <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
-    </button>
+    </div>
   );
 }
 

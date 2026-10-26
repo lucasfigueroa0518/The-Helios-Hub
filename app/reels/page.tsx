@@ -7,9 +7,9 @@ import { ensureReviewToken } from '@/lib/reels/review';
 import { getSession } from '@/lib/session';
 import { reelsMovesQuery } from '@/lib/reels/pipeline/promote';
 import { readMoves } from '@/lib/social-hub/moves-store';
-import { ideaRef } from '@/lib/social-hub/views/moves';
 
 import './reels.css';
+import '@/components/content-type/type-hub.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,10 +28,9 @@ export default async function ReelsPage() {
       error: error instanceof Error ? error.message : String(error),
     })),
     ensureReviewToken().catch(() => null),
-    // Ideas a person archived (idea pool standard): the page leaves them out. A failed read shows everything.
+    // What a person did to the queue (idea pool standard): pins, drags, archives. A failed read shows the bench as the night ranked it.
     readMoves(reelsMovesQuery, 'reels').catch(() => []),
   ]);
-  const archived = moves.filter((m) => m.kind === 'archive').map((m) => ideaRef(m.ideaId));
 
   if ('error' in initial) {
     return (
@@ -49,5 +48,5 @@ export default async function ReelsPage() {
     );
   }
 
-  return <ReelsHub initial={initial} archived={archived} reviewPath={`/watch/${reviewToken ?? await ensureReviewToken()}`} />;
+  return <ReelsHub initial={initial} moves={moves} reviewPath={`/watch/${reviewToken ?? await ensureReviewToken()}`} />;
 }

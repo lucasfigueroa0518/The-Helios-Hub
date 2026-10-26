@@ -198,11 +198,18 @@ export function challengerWins(challenger: Ranked, incumbent: Ranked): boolean {
 
 // ── One candidate, end to end ───────────────────────────────────────────────
 
+/**
+ * What a typed-in idea (origin `manual`, a "seed") would have been refused for, had a machine proposed it. A seed is
+ * never refused (idea seeding spec, 2026-10-21): it is scored for ranking and these flags say what to know about it.
+ * `below_gate` also makes it manual-only for the night (see fillCandidates) unless a person pins it.
+ */
+export type SeedFlag = 'history_duplicate' | 'near_pool_topic' | 'below_gate';
+
 export type Evaluation =
   | { outcome: 'not_proposed' }
   | { outcome: 'rejected_history_duplicate' }
   | { outcome: 'rejected_gates'; gates: ScoreKey[]; score: number }
-  | { outcome: 'entered_pool'; score: number }
+  | { outcome: 'entered_pool'; score: number; flags?: SeedFlag[] }
   | { outcome: 'won_head_to_head'; score: number; displacedId: string }
   | { outcome: 'lost_head_to_head'; score: number; winnerId: string };
 
@@ -263,6 +270,8 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
   const pool = (await listPool(deps.db)).filter((t) => t.id !== topicId);
   const rendered = [...(await listRecentlyRendered(deps.db, deps.settings.dedupe_lookback_days, deps.now)), ...(deps.extraHistory ?? [])];
 
+  if (candidate.origin === 'manual') return evaluateSeed(deps, candidate, pool, rendered);
+
   let match: TopicRow | null = null;
   if (await duplicatesHistory(deps, candidate, [...pool, ...rendered])) {
     const matches = await findPoolMatches(deps, candidate, pool);
@@ -306,6 +315,31 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
     duplicateOf: match.id,
   });
   return { outcome: 'lost_head_to_head', score, winnerId: match.id };
+}
+
+/**
+ * A seed: scored for display and ranking only. It is never rejected for a duplicate or a gate, never loses a head-to-head,
+ * and displaces nothing; what it would have been refused for comes back as flags (and is kept on the topic for the night).
+ */
+async function evaluateSeed(deps: EvaluateDeps, candidate: TopicRow, pool: readonly TopicRow[], rendered: readonly TopicRow[]): Promise<Evaluation> {
+  const flags: SeedFlag[] = [];
+  if (await duplicatesHistory(deps, candidate, [...pool, ...rendered])) {
+    const matches = await findPoolMatches(deps, candidate, [...pool]);
+    flags.push(matches.length > 0 ? 'near_pool_topic' : 'history_duplicate');
+  }
+  const scores = await scoreTopic(deps, candidate);
+  const score = weightedScore(scores);
+  await saveScores(deps, candidate.id, scores, score);
+  if (failedGates(scores).length > 0) flags.push('below_gate');
+  await deps.db.query(
+    `UPDATE explainers.topics
+        SET status = 'pool', reject_reason = NULL, duplicate_of = NULL,
+            jev_notes = COALESCE(jev_notes, '{}'::jsonb) || jsonb_build_object('seed_flags', $2::jsonb), updated_at = now()
+      WHERE id = $1`,
+    [candidate.id, JSON.stringify(flags)],
+  );
+  await pickAnalogyFor(deps, candidate);
+  return { outcome: 'entered_pool', score, flags };
 }
 
 async function pickAnalogyFor(deps: EvaluateDeps, topic: TopicRow): Promise<void> {

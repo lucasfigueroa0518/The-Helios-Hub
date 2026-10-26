@@ -154,6 +154,7 @@ const originLabel = (o: string) => ({ reels: 'Text on Screen', carousel: 'Carous
  *   2. anything stories.history has shown is used
  *   3. a fully read series drops its unused rows the refresh did not return
  *   4. any unused row past its series' freshness window drops
+ *      (a person's own seeds, keyed `seed:`, are never dropped by 3, 4 or 5)
  *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21): the lowest-scored go, never one a
  *      person pinned or dragged; ideas a person archived do not count
  */
@@ -183,6 +184,7 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
     const { rows } = await db.query<{ id: string }>(
       `DELETE FROM stories.pool
         WHERE series = $1 AND used_at IS NULL
+          AND key NOT LIKE 'seed:%'
           AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))
         RETURNING id`,
       [series, cutoff, keys],
@@ -199,7 +201,7 @@ async function capSeries(db: Queryable, series: Series): Promise<number> {
   try {
     const { rows } = await db.query<{ id: string }>(
       `DELETE FROM stories.pool p
-        WHERE p.series = $1 AND p.used_at IS NULL
+        WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
           AND p.id IN (
             SELECT r.id FROM (
               SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
@@ -309,7 +311,7 @@ export function leadKeysForPair(leads: readonly ToolLead[], pair: { paid_tool?: 
       const host = hostOf(l.url);
       return names.some((n) => name.includes(n)) || (host != null && hosts.includes(host));
     })
-    .map((l) => storyKey(l.url));
+    .map((l) => (l.ref.startsWith('seed:') ? l.ref : storyKey(l.url)));
 }
 
 function hostOf(url: string): string | null {

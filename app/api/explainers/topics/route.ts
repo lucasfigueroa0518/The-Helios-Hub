@@ -4,7 +4,7 @@ import { anthropic } from '@/lib/anthropic';
 import { explainersDb } from '@/lib/explainers/connection';
 import { addAndEvaluateTopics, type HandTopic } from '@/lib/explainers/ideas/cycle';
 import { anthropicIdeaModel } from '@/lib/explainers/ideas/generator';
-import { parseTopicList } from '@/lib/explainers/repository';
+import { MAX_OPEN_SEEDS, openSeedCount, parseTopicList } from '@/lib/explainers/repository';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 import { getSession } from '@/lib/session';
 
@@ -61,8 +61,13 @@ export async function POST(request: Request) {
   }
 
   try {
+    const db = await explainersDb();
+    // A seed is never trimmed, so the pool holds only so many at once.
+    if (topics.some((t) => t.origin === 'manual') && (await openSeedCount(db)) >= MAX_OPEN_SEEDS) {
+      return NextResponse.json({ error: `You have ${MAX_OPEN_SEEDS} seeded ideas waiting; make or remove one first.` }, { status: 409 });
+    }
     const results = await addAndEvaluateTopics(
-      { db: await explainersDb(), jevTransport: liveJevTransport, ideaModel: anthropicIdeaModel(anthropic) },
+      { db, jevTransport: liveJevTransport, ideaModel: anthropicIdeaModel(anthropic) },
       topics,
     );
     return NextResponse.json({ results });

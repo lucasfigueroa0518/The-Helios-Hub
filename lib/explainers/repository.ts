@@ -233,6 +233,14 @@ export async function productionSpendForDay(db: Queryable, day: string): Promise
   return num(rows[0].usd);
 }
 
+/** How many typed-in ideas (seeds) may wait in the pool at once; the 11th is refused with a plain message. */
+export const MAX_OPEN_SEEDS = 10;
+
+export async function openSeedCount(db: Queryable): Promise<number> {
+  const { rows } = await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM explainers.topics WHERE origin = 'manual' AND status = 'pool'`);
+  return Number(rows[0]?.n ?? 0);
+}
+
 /** A topic with a post that went out is done: Generate is for what has not been published. */
 async function topicPublished(db: Queryable, topicId: string): Promise<boolean> {
   const { rows } = await db.query(

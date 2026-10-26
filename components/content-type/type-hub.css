@@ -86,3 +86,6 @@
 .rh-reel__media--empty { display: grid; place-items: center; width: 100%; border: 1.5px dashed var(--rh-line-strong, var(--rh-line)); border-radius: 18px; background: var(--rh-bg); color: var(--rh-muted); cursor: pointer; }
 .rh-reel--empty .rh-reel__meta { display: flex; gap: 12px; align-items: center; }
 .rh-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 44px 12px 0; }
+/* Hold anywhere on a queue row to move it: no text selection while pressing, a grabbing hand while moving. */
+.rh-queue-item { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.rh-queue-item.is-dragging, .rh-queue-item.is-dragging * { cursor: grabbing; }

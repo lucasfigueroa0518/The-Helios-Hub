@@ -99,7 +99,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
       ) : null}
       <DataNotes dataset={dataset} />
       <p className="sh-note">
-        {HOW[vertical]}
+        {HOW[vertical]}{QUEUE_LIVE.has(vertical) && vertical !== 'stories' ? ' Hold and drag any idea to move it.' : ''}
         {ideas.length > 1 && !stateVaries ? ` All ${ideas.length} are ${ALL_ARE[ideas[0]!.state]}.` : ''}
         {ideas.length > 1 && !addedVaries && addedOf(ideas[0]!) !== '—' ? ` All added ${addedOf(ideas[0]!).replace(/^(Today|Tomorrow|Yesterday)/, (w) => w.toLowerCase())}.` : ''}
       </p>
