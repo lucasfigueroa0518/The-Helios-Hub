@@ -1,0 +1,73 @@
+/**
+ * Layout samples: one fill per template, at realistic line lengths, so the
+ * renderer and its checks can be exercised and reviewed without a model.
+ * They are not claims about anyone; nothing here is ever published.
+ */
+import type { MemeFill, SlotFill } from './fill';
+
+const t = (slot: string, text: string): SlotFill => ({ slot, kind: 'text', text, factIds: [] });
+const e = (slot: string, playerId: string): SlotFill => ({ slot, kind: 'entity', playerId });
+const v = (slot: string, situationId: string, text: string): SlotFill => ({ slot, kind: 'viewer', situationId, text });
+
+export const SAMPLE_FILLS: readonly MemeFill[] = [
+  { templateId: 'drake', fills: [t('rejected', 'Learning every new setting'), t('preferred', 'Using the one I already know')] },
+  { templateId: 'two-buttons', fills: [e('left-button', 'openai'), e('right-button', 'anthropic'), v('chooser', 'AS-05', 'Me, deciding which one to use this week')] },
+  { templateId: 'distracted-boyfriend', fills: [e('new-thing', 'google'), v('tempted', 'AS-13', 'Me'), t('current-thing', 'My 400 saved chats')] },
+  { templateId: 'uno-draw-25', fills: [t('obvious-thing', 'Cancel one subscription'), v('refuser', 'AS-02', 'Me')] },
+  { templateId: 'left-exit-12', fills: [t('sensible-way', 'Finish the project'), t('tempting-exit', 'Try the new model'), v('swerver', 'AS-19', 'Me')] },
+  { templateId: 'anakin-padme', fills: [e('speaker', 'openai'), t('announcement', 'We updated the model'), t('hope', 'Same answers as before')] },
+  { templateId: 'epic-handshake', fills: [e('left-arm', 'microsoft'), e('right-arm', 'nvidia'), t('clasp', 'More data centers')] },
+  { templateId: 'grus-plan', fills: [t('step-1', 'Read the AI memo'), t('step-2', 'Open the new tool'), t('flaw', 'It needs a login nobody has')] },
+  { templateId: 'running-away-balloon', fills: [v('wanter', 'AS-11', 'Me'), t('want', 'The new feature'), t('holder', 'Rolling out gradually')] },
+  { templateId: 'disaster-girl', fills: [t('mess', 'The free app you used daily'), e('culprit', 'perplexity')] },
+  { templateId: 'waiting-skeleton', fills: [v('wait', 'AS-11', 'Me waiting for the feature in my country'), t('still', 'New date: next year')] },
+  { templateId: 'x-everywhere', fills: [t('thing', 'Agents'), v('noticer', 'AS-15', 'Me')] },
+  { templateId: 'trade-offer', fills: [t('i-receive', 'Your chat history'), t('you-receive', 'Better answers'), e('offerer', 'meta')] },
+  { templateId: 'woman-yelling-at-cat', fills: [v('complaint', 'AS-04', 'Me, hitting the new limit by lunch'), e('reply', 'openai')] },
+  { templateId: 'marked-safe-from', fills: [t('dodged', 'Another rename')] },
+  { templateId: 'ancient-aliens', fills: [t('setup', 'Why did every app add a chatbot this week?'), t('explanation', 'Agents')] },
+  { templateId: 'bike-fall', fills: [t('goal', 'Simplify the app'), e('rider', 'xai'), t('self-move', 'Removes the model picker'), t('outcome', 'Brings it back in days')] },
+  { templateId: 'mocking-spongebob', fills: [t('claim', 'It just works out of the box')] },
+  { templateId: 'is-this-a-pigeon', fills: [v('mislabeler', 'AS-16', 'Me'), t('thing', 'A new model name'), t('question', 'the good one')] },
+  { templateId: 'you-guys-getting-paid', fills: [t('setup', 'They raised another round'), t('reveal', 'billions')] },
+  { templateId: 'one-does-not-simply', fills: [t('hard-thing', 'Export all your chats')] },
+  { templateId: 'buff-doge-cheems', fills: [t('strong', 'Free plan last year'), t('strong-caption', 'Ask me anything, all day'), t('weak', 'Free plan now'), t('weak-caption', 'You have 3 questions left')] },
+  { templateId: 'same-picture', fills: [e('left-picture', 'google'), e('right-picture', 'openai'), v('pam', 'AS-16', 'Me')] },
+  { templateId: 'zero-days-without', fills: [t('event', 'a new "best model ever"'), e('culprit', 'openai')] },
+  { templateId: 'squidward-window', fills: [v('watcher', 'AS-11', 'Me'), t('enjoyers', 'People with the new feature')] },
+  { templateId: 'expanding-brain', fills: [t('take-1', 'Pay for one AI app'), t('take-2', 'Pay for three AI apps'), t('take-3', 'Pay for a bundle of every AI app'), t('take-4', 'The bundle now includes your phone plan')] },
+  { templateId: 'trophy', fills: [t('missing', 'launch in Europe'), e('speaker', 'google')] },
+  { templateId: 'absolute-cinema', fills: [t('cinema', 'A 40-minute keynote for one new button')] },
+  { templateId: 'oprah-you-get-a', fills: [e('giver', 'openai'), t('gift', 'a usage limit')] },
+  { templateId: 'tuxedo-pooh', fills: [t('casual', 'A chatbot that remembers things'), t('fancy', 'Persistent contextual memory layer')] },
+  { templateId: 'megamind-peeking', fills: [e('asker', 'openai'), t('missing', 'Plus')] },
+  { templateId: 'pawn-stars', fills: [t('ask', 'Users: an off switch for ads'), e('lowballer', 'openai'), t('offer', 'fewer ads on weekends')] },
+  { templateId: 'this-is-fine', fills: [t('fire', 'Three outages this week'), e('sitter', 'microsoft')] },
+  { templateId: 'thinking-about', fills: [t('worry', "I bet it's planning to replace us all"), e('thinker', 'openai'), t('thought', "How many r's are in strawberry? Two. Final answer.")] },
+  { templateId: 'bell-curve', fills: [t('simple', 'Just use the one you like'), t('overthought', 'Benchmark all nine models on my own tasks first')] },
+  { templateId: 'they-dont-know', fills: [t('secret', 'the free tier ends on Friday'), v('knower', 'AS-07', 'Me')] },
+  { templateId: 'two-guys-bus', fills: [v('stuck', 'AS-11', 'Me, still waiting'), t('view', 'Everyone with the new voice mode')] },
+  { templateId: 'imagination-spongebob', fills: [t('dull', 'A chatbot inside a spreadsheet'), t('imagined', 'The future of work'), e('pitcher', 'microsoft')] },
+  { templateId: 'monkey-puppet', fills: [t('fact', 'The new plan costs twice as much'), e('looker', 'perplexity')] },
+  { templateId: 'clown-makeup', fills: [e('clown', 'openai'), t('step-1', 'One subscription is fine'), t('step-2', 'Two is fine if I use both'), t('step-3', 'A third one for images'), t('step-4', 'A fourth one that bundles the other three')] },
+  { templateId: 'roll-safe', fills: [t('premise', "Can't fail the safety report"), t('twist', 'if you stop publishing it'), e('dodger', 'meta')] },
+  { templateId: 'friendship-ended', fills: [e('ended', 'google'), e('new-friend', 'anthropic'), e('speaker', 'apple')] },
+  { templateId: 'hide-the-pain', fills: [t('setup', 'Spent billions on the new model'), t('pain', 'Users switched back to the old one'), e('smiler', 'openai')] },
+  { templateId: 'spiderman-triple', fills: [e('left', 'openai'), e('middle', 'google'), e('right', 'anthropic'), t('caption', 'Deep research mode')] },
+  { templateId: 'where-monkey', fills: [v('asker', 'AS-11', 'Me, one minute after the keynote'), t('missing', 'feature')] },
+  { templateId: 'boardroom', fills: [e('boss', 'openai'), t('question', 'How do we make the free plan pay for itself?'), t('idea-1', 'Add ads'), t('idea-2', 'Add limits'), t('rejected', 'Make the model cheaper to run')] },
+  { templateId: 'types-of-headaches', fills: [t('worst', 'Reading the new pricing page')] },
+  { templateId: 'evil-kermit', fills: [t('good', 'Keep the free plan free'), t('inner', 'Put ads in it'), e('kermit', 'google')] },
+  { templateId: 'three-headed-dragon', fills: [t('set', 'Companies with AI models'), e('head-left', 'google'), e('head-middle', 'meta'), t('head-right', 'A soda brand')] },
+  { templateId: 'flex-tape', fills: [t('leak', 'The model makes things up'), t('patch', '"Check important info" in tiny grey text'), e('patcher', 'openai')] },
+  { templateId: 'all-my-homies-hate', fills: [t('hated', 'surprise price changes')] },
+  { templateId: 'sleeping-shaq', fills: [e('sleeper', 'apple'), t('missed', 'Every rival ships a new model'), t('wakes', 'Someone mentions a new emoji')] },
+  { templateId: 'laughing-leo', fills: [t('claim', 'Them: this model is basically AGI'), e('laugher', 'anthropic')] },
+  { templateId: 'bad-luck-brian', fills: [t('setup', 'Finally pays for Pro'), t('outcome', 'Price drops next week'), e('unlucky', 'apple')] },
+  { templateId: 'something-of-a-scientist', fills: [t('act', 'Adds a homework solver to search'), e('claimer', 'google'), t('field', 'math teacher')] },
+  { templateId: 'inhaling-seagull', fills: [t('inhale', "It's announced"), t('build', "It's rolling out"), t('wind-up', "It's on my friend's phone"), t('yell', 'NOT ON MINE'), e('yeller', 'anthropic')] },
+  { templateId: 'scooby-mask', fills: [t('disguise', 'A brand-new AI company'), e('unmasked', 'xai'), v('revealer', 'AS-16', 'Me')] },
+  { templateId: 'no-yes', fills: [t('no', 'We will never put ads in the app'), t('yes', 'Introducing sponsored answers'), e('chooser', 'openai')] },
+  { templateId: 'panik-kalm-panik', fills: [t('panik', 'The app logs you out'), t('kalm', 'Your chats are saved'), t('panik-again', 'Only on the paid plan')] },
+  { templateId: 'surprised-pikachu', fills: [t('obvious', 'Raises prices three times in a year. People cancel.'), e('surprised', 'meta')] },
+];

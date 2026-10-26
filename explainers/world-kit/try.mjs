@@ -9,7 +9,10 @@
 // draw the title card (cards.js titleCard(), data-role="title", EX3-61/79) and frame 3 the
 // dictionary card (cards.js dictionaryCard(), data-role="definition", EX3-14/80). Every scene
 // frame longer than 6s exports its `shots` (shots.js), and they must pass validateShots (EX3-83).
-// The title card is already animating at t = 0.15s (EX3-93). Every critter carries its world id
+// The title card is already animating at t = 0.15s (EX3-93). When the job chose an opener from
+// the bank (EX3-102), frame 1 is the bank's and the worker's part is the hook, 01-hook.js: it must
+// export its critter (`hero`), hide it on `hideHero`, and draw no title card (the opener does).
+// Every critter carries its world id
 // (critter({ who }), data-who), so the cast is checked (EX3-90): no critter drawn twice at one
 // moment, and none that vanishes mid-frame and comes back (a shot is a camera, never an edit).
 //
@@ -21,7 +24,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { projectFrames } from './frames.mjs';
+import { HOOK_ID, isBankOpener, projectFrames } from './frames.mjs';
 import { eventProblems } from './sound.mjs';
 
 /** Frames whose pictures are scenes (not the dictionary card or the logo): they cut between shots. */
@@ -103,12 +106,50 @@ async function tryWorld(root) {
   }
 }
 
+/** The hook contract (EX3-102): what the bank's openers need from 01-hook.js. */
+async function tryHook(root, duration) {
+  const file = join(root, 'assets', 'frames', `${HOOK_ID}.js`);
+  if (!existsSync(file)) return [`assets/frames/${HOOK_ID}.js does not exist (frame 1's hook: the frame worker writes it; 01-opener.js is code's)`];
+  let mod;
+  try {
+    mod = await import(pathToFileURL(file).href);
+  } catch (e) {
+    return [`${HOOK_ID}.js failed to load: ${e?.message ?? e}`];
+  }
+  const scene = mod.default;
+  if (typeof scene?.draw !== 'function') return [`${HOOK_ID}.js needs \`export default { ground, shots, draw(t, { hideHero, heroPose }) { … } }\``];
+  const errors = [];
+  const hero = mod.hero ?? scene.hero;
+  const ok = hero && Array.isArray(hero.at) && hero.at.length === 2 && hero.at.every(Number.isFinite) && Number(hero.s) > 0 && typeof hero.who === 'string' && hero.who;
+  if (!ok) errors.push(`${HOOK_ID}.js must export \`hero = { at: [x, y], s, who, critter: { wear, body } }\`: the hook's critter, its feet on the 1080x1920 page before any shot's camera (its LAYOUT spot), its scale, its world id`);
+  for (const t of [0, duration / 2]) {
+    let svg = '';
+    let hidden = '';
+    try {
+      svg = String(scene.draw(t));
+      hidden = String(scene.draw(t, { hideHero: true, heroPose: { look: [0.5, 0] } }));
+    } catch (e) {
+      errors.push(`${HOOK_ID}.js draw(${t.toFixed(2)}) threw: ${e?.message ?? e}`);
+      break;
+    }
+    if (svg.includes('data-role="title"')) errors.push(`${HOOK_ID}.js draws a title card; the opener draws it (draw the hook only)`);
+    if (ok && !svg.includes(`data-who="${hero.who}"`)) errors.push(`${HOOK_ID}.js draw(${t.toFixed(2)}) does not draw its hero (data-who="${hero.who}")`);
+    if (ok && hidden.includes(`data-who="${hero.who}"`)) errors.push(`${HOOK_ID}.js draw(${t.toFixed(2)}, { hideHero: true }) still draws its hero`);
+    if (errors.length) break;
+  }
+  return errors;
+}
+
 async function tryFrame(root, id) {
   const file = join(root, 'assets', 'frames', `${id}.js`);
   if (!existsSync(file)) return [`assets/frames/${id}.js does not exist`];
   const entry = projectFrames(root).find((f) => f.id === id);
   if (!entry) return [`STORYBOARD.md has no frame whose src is compositions/frames/${id}.html`];
   if (!(entry.duration > 0)) return [`STORYBOARD.md gives frame ${id} no duration`];
+  // frame 1 over a hook that is not written yet: say so, not the import error (EX3-102)
+  if (isBankOpener(root, entry) && !existsSync(join(root, 'assets', 'frames', `${HOOK_ID}.js`))) {
+    return [`assets/frames/${HOOK_ID}.js does not exist (frame 1's hook: the frame worker writes it; ${id}.js is code's)`];
+  }
   let scene;
   try {
     scene = (await import(pathToFileURL(file).href)).default;
@@ -133,14 +174,17 @@ async function tryFrame(root, id) {
       errors.push(`${id}.events.json is not valid JSON: ${e?.message ?? e}`);
     }
   }
-  if (entry.number === 1) {
+  const bank = isBankOpener(root, entry);
+  if (bank) errors.push(...(await tryHook(root, entry.duration)));
+  if (entry.number === 1 && !bank) {
     try {
       if (!String(scene.draw(0.15)).includes('data-role="title"')) errors.push('frame 1: the title card starts animating at 0s (titleCard() with no `from`); at t=0.15 it is not drawn');
     } catch {
       // draw errors are reported by the sampling below
     }
   }
-  const role = entry.number === 1 ? 'title' : entry.number === 3 ? 'definition' : null;
+  // The bank's openers place the title card themselves, some after the line (EX3-102).
+  const role = entry.number === 1 && !bank ? 'title' : entry.number === 3 ? 'definition' : null;
   if (role) {
     const late = Math.max(0, entry.duration - 0.3);
     try {

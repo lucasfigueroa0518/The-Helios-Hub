@@ -8,7 +8,8 @@
 // and readable text in the keep-outs (the caption band y < 570, the bottom y > 1600, the right
 // edge x > 940), except the cards that live there (the title and dictionary cards). The 3.2
 // fine-tuning reel's "happy to help!" ran out of its bubble and off the screen, and the picture
-// check never photographed it; this looks at every moment.
+// check never photographed it; this looks at every moment. Frame 1 from the opener bank
+// (EX3-102) is skipped: code drew it, and its letters leave the frame on purpose.
 //
 // Frames are drawn in Node (try.mjs's hooks stub the CDN ink) and measured in the headless Chrome
 // HyperFrames already downloads, through the project's puppeteer-core (HyperFrames' runtime) or
@@ -23,7 +24,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import { projectFrames } from './frames.mjs';
+import { isBankOpener, projectFrames } from './frames.mjs';
 import { FONTS } from './mount.mjs';
 import './try.mjs'; // registers the hooks that let frame modules load in Node
 
@@ -197,6 +198,9 @@ export async function checkBounds(root, only = null) {
     for (const f of projectFrames(root).filter((x) => !only || x.id === only)) {
       const file = join(root, 'assets', 'frames', `${f.id}.js`);
       if (!f.id || !existsSync(file) || !(f.duration > 0)) continue;
+      // Frame 1 from the bank (EX3-102) is code's art: its letters fly off-screen on purpose, and
+      // its hook carries no text. Nothing in it goes back to a worker.
+      if (isBankOpener(root, f)) continue;
       let scene;
       try {
         scene = (await import(`${pathToFileURL(file).href}?bounds`)).default;

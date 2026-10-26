@@ -2,6 +2,7 @@ import type { ExplainersDb } from '@/lib/explainers/db';
 import { evaluateTopic, topicRef, trimPool, type Evaluation } from '@/lib/explainers/ideas/evaluate';
 import { getTopic } from '@/lib/explainers/repository';
 import { ideaUsd, type IdeaModel } from '@/lib/explainers/ideas/generator';
+import { cycleRetryGate } from '@/lib/explainers/ideas/retry';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
   addTopics,
@@ -22,7 +23,7 @@ import { quotaFromSlots } from '@/lib/social-hub/slots';
 import { consoleFillLog, dailyFillOrQuota, reportFill, type DailyFill, type FillLog } from '@/lib/social-hub/fill';
 import { markPromoteUsed, readMoves, recordPromoteSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
-import type { IdeaAdjustment } from '@/lib/social-hub/views/moves';
+import { tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 export type IdeaCycleDeps = {
   db: ExplainersDb;
@@ -31,7 +32,16 @@ export type IdeaCycleDeps = {
   now?: Date;
   /** Where the daily fill's `fill_reduced` line goes (default: a JSON line on stdout). */
   log?: FillLog;
+  /**
+   * The main database, where the hub records Promote / Demote
+   * (social_hub.idea_adjustments; Spec correction 1: the explainers handle may
+   * be a database of its own). Absent or failing: no moves, as before.
+   */
+  moves?: MovesQuery;
 };
+
+/** Why tonight's promoted topic wasn't made: it is no longer a pool topic or a placeable render. */
+export const EXPLAINER_GONE = 'It isn’t in the explainers pool any more (rendered, posted or cut).';
 
 /** A surviving render the night placed instead of rendering its topic again (daily fill, D54). */
 export type Allocation = {
@@ -42,7 +52,7 @@ export type Allocation = {
 };
 
 export type IdeaCycleResult =
-  | { status: 'skipped'; reason: 'auto_render_off' | 'daily_spend_cap' | 'already_ran_today' }
+  | { status: 'skipped'; reason: 'auto_render_off' | 'daily_spend_cap' | 'already_ran_today' | 'retry_wait' | 'retry_exhausted' | 'render_already_requested' }
   | { status: 'skipped'; reason: 'quota_filled'; fill: DailyFill }
   | {
       status: 'ok';
@@ -78,8 +88,8 @@ const topicOfIdea = (ideaId: string) => ideaId.replace(/^explainers:topic:/, '')
 const ideaOfTopic = (topicId: string) => `explainers:topic:${topicId}`;
 
 /** What a person did to the pool, read once per run. A failed read is no moves: the night runs as it did before them. */
-async function readPoolMoves(db: ExplainersDb): Promise<IdeaAdjustment[]> {
-  return readMoves(movesQuery(db), 'explainers');
+async function readPoolMoves(q: MovesQuery): Promise<IdeaAdjustment[]> {
+  return readMoves(q, 'explainers');
 }
 
 /** Topics a person pinned or dragged: the pool trim never cuts them. */
@@ -91,15 +101,6 @@ async function archivedTopics(db: ExplainersDb, moves: readonly IdeaAdjustment[]
   const found = await Promise.all(moves.filter((m) => m.kind === 'archive').map((m) => getTopic(db, topicOfIdea(m.ideaId)).catch(() => null)));
   return found.filter((t): t is NonNullable<typeof t> => t != null);
 }
-
-const SKIP_NOTE: Record<string, string> = {
-  daily_render_cap: 'Today’s render cap was used up.',
-  daily_spend_cap: 'Today’s spend cap was used up.',
-  already_in_flight: 'It is already being made.',
-  topic_not_renderable: 'It can’t be rendered.',
-  topic_published: 'It has already been posted.',
-  topic_not_found: 'It is no longer in the pool.',
-};
 
 /**
  * E-16 daily lifecycle. Runs only while auto_render is on (A-5, A-7): generate
@@ -118,6 +119,9 @@ const SKIP_NOTE: Record<string, string> = {
  */
 export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult> {
   const { db } = deps;
+  // Where the hub records Promote / Pin / Drag / Archive: the main database when the worker passes it (the explainers handle may be
+  // a database of its own), else this one. A read that fails is no moves, so the night runs as before.
+  const movesQ: MovesQuery = deps.moves ?? movesQuery(db);
   const settings = await loadSettings(db);
   if (!settings.auto_render) return { status: 'skipped', reason: 'auto_render_off' };
 
@@ -137,6 +141,10 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     return { status: 'skipped', reason: 'daily_spend_cap' };
   }
 
+  // A failed night may run once more (bounded, delayed; see retry.ts). Failed rows stay as history.
+  const gate = await cycleRetryGate(db, day, deps.now);
+  if (!gate.run) return { status: 'skipped', reason: gate.reason };
+
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO explainers.idea_cycles (status, mode, ny_date)
      VALUES ('running', $1, $2::date)
@@ -148,7 +156,7 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   if (!cycleId) return { status: 'skipped', reason: 'already_ran_today' };
 
   try {
-    const moves = await readPoolMoves(db);
+    const moves = await readPoolMoves(movesQ);
     const archived = await archivedTopics(db, moves);
     const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);
     const pool = await listPool(db);
@@ -202,9 +210,16 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     // Daily fill (D54): the top `quota − placed` candidates, fresh topics and surviving renders ranked together.
     // A surviving render is placed, not rendered again; at most `daily_render_cap` pool topics are rendered
     // (SH-49: two a day), and requestRender still enforces both caps.
-    const chosen = (await fillCandidates(db, await requireApproval(db), moves)).slice(0, fill.making);
+    const approvalNeeded = await requireApproval(db);
+    const candidates = await fillCandidates(db, approvalNeeded, moves);
+    // A pin that can no longer be made (not a pool topic or a placeable render any more) steps aside with why on the move; the
+    // rest of the queue goes on. Never blocks the night.
+    const makeable = new Set(candidates.map((c) => ideaOfTopic(c.topicId)));
+    for (const pin of tonightMoves(moves, 'explainers').pins) {
+      if (!makeable.has(pin.ideaId)) await recordPromoteSkip(movesQ, 'explainers', pin.ideaId, EXPLAINER_GONE);
+    }
+    const chosen = candidates.slice(0, fill.making);
     const handMoved = new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => m.ideaId));
-    const movesQ = movesQuery(db);
     const renderCap = Math.max(1, settings.daily_render_cap);
     const live = await publishingLive(db);
     const renders: string[] = [];
@@ -231,7 +246,9 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
       if (!requested.ok) capped = true;
       if (handMoved.has(ideaOfTopic(candidate.topicId))) {
         if (requested.ok) await markPromoteUsed(movesQ, 'explainers', ideaOfTopic(candidate.topicId));
-        else await recordPromoteSkip(movesQ, 'explainers', ideaOfTopic(candidate.topicId), SKIP_NOTE[requested.reason] ?? 'It could not be made tonight.');
+        // A render that doesn't start caps the night, so no other topic is tried. That is transient: no skip is
+        // recorded, so the pin stays active for next night.
+        else console.info(`[explainers] ${candidate.topicId} not rendered tonight (${requested.reason.replace(/_/g, ' ')}); kept for next night`);
       }
     }
     // The night ran with auto-render on and made its picks: hand placements are used up and the ideas compete by score
@@ -312,6 +329,6 @@ export async function addAndEvaluateTopics(
     const evaluation = await evaluateTopic({ db, jev, settings, themeBrief, now: deps.now, ideaModel: deps.ideaModel }, topic.id);
     results.push({ topicId: topic.id, title: topic.title, scope: topic.scope!, evaluation });
   }
-  await trimPool(db, settings.pool_size, heldTopicIds(await readPoolMoves(db)));
+  await trimPool(db, settings.pool_size, heldTopicIds(await readPoolMoves(movesQuery(db))));
   return results;
 }

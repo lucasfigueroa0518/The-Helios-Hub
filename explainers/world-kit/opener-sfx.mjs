@@ -1,6 +1,9 @@
-// The opener's sound (EX3-11, EX3-12, EX3-24). Deterministic, no model.
+// The opener's sound (EX3-11, EX3-12, EX3-24, EX3-102). Deterministic, no model.
 //
-// A riser builds under the series opener and crests exactly on the 1→2 cut; a hit lands on the
+// When the job drew an opener from the bank (assets/opener.json, EX3-102), frame 1's sound is the
+// opener's own (openers/sound.mjs: its stem, and the bed held back until its drop) and the hit
+// still lands on the 1→2 cut. A job from before the bank keeps the old pair: a riser builds under
+// the series opener and crests exactly on the 1→2 cut; a hit lands on the
 // cut. Both are host sounds in audio_meta.json, hung on frame 1 so frame 2 keeps its own looked-up
 // cues, and every later audio pass keeps them. Run it after `audio.mjs sync-durations`, when
 // frame 1's real length is in STORYBOARD.md.
@@ -17,6 +20,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { projectFrames } from './frames.mjs';
+import { chosenOpener, hasOpenerStem, placeOpener } from './openers/sound.mjs';
 
 export const OPENER_SFX = {
   riserSource: 'assets/sfx/riser.mp3',
@@ -38,10 +42,11 @@ export function openerEntries(opener) {
   ];
 }
 
-/** True when audio_meta.json already carries both opener sounds. */
+/** True when audio_meta.json already carries the opener's sounds: the bank opener's stem and the
+ *  cut's hit, or (before the bank) the riser and the hit. */
 export function hasOpenerSfx(meta) {
   const roles = new Set((meta?.sfx ?? []).filter((s) => s?.source === 'host').map((s) => s.role));
-  return roles.has('opener-riser') && roles.has('opener-hit');
+  return roles.has('opener-hit') && (roles.has('opener-riser') || hasOpenerStem(meta));
 }
 
 /** `meta` with the opener entries in place of any earlier ones. */
@@ -69,8 +74,25 @@ export function cutRiser(root, opener, ffmpeg = 'ffmpeg') {
   }
 }
 
+/** The bank opener's sound (its stem, the bed's drop) and the hit on the 1→2 cut. */
+function placeBankOpener(root, ffmpeg) {
+  const placed = placeOpener(root, { ffmpeg });
+  if (!placed.ok && !placed.sfx.length) return placed;
+  const first = projectFrames(root)[0];
+  if (!first || !(first.duration > 0)) return { ...placed, ok: false, errors: [...placed.errors, 'STORYBOARD.md has no frame 1 with a duration'] };
+  const errors = [...placed.errors];
+  if (!existsSync(join(root, OPENER_SFX.hit))) errors.push(`${OPENER_SFX.hit} is missing`);
+  const metaFile = join(root, 'audio_meta.json');
+  const meta = JSON.parse(readFileSync(metaFile, 'utf8'));
+  const hit = openerEntries(first.duration).find((e) => e.role === 'opener-hit');
+  meta.sfx = [...(meta.sfx ?? []).filter((s) => !(s?.source === 'host' && s.role === 'opener-hit')), hit];
+  writeFileSync(metaFile, `${JSON.stringify(meta, null, 2)}\n`);
+  return { ...placed, ok: errors.length === 0, errors, sfx: [...placed.sfx, hit] };
+}
+
 /** Write the opener sounds into the project at `root`. */
 export function placeOpenerSfx(root, { ffmpeg = 'ffmpeg' } = {}) {
+  if (chosenOpener(root)) return placeBankOpener(root, ffmpeg);
   const errors = [];
   const first = projectFrames(root)[0];
   if (!first || !(first.duration > 0)) return { ok: false, errors: ['STORYBOARD.md has no frame 1 with a duration'], sfx: [] };

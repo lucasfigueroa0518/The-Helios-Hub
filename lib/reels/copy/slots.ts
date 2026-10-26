@@ -99,7 +99,7 @@ export function orderedForSlots(ideas: readonly SlotIdea[], penaltyOf: (id: stri
   // Shared queue: tonight's promoted idea first, demoted ideas last; the rest keep net − penalty order.
   if (!moves) return ordered;
   if (moves.pins || moves.placed || moves.archived) {
-    return orderForNight(ordered, (idea) => idea.id, (idea) => idea.net - penaltyOf(idea.id), { pins: moves.pins ?? [], placed: moves.placed ?? new Map(), archived: moves.archived ?? new Set() });
+    return orderForNight(ordered, (idea) => idea.id, (idea) => idea.net - penaltyOf(idea.id), { pins: moves.pins ?? [], placed: moves.placed ?? new Map(), archived: moves.archived ?? new Set(), demoted: moves.demoted });
   }
   return orderTonight(ordered, (idea) => idea.id, new Set(moves.promote ? [moves.promote] : []), moves.demoted);
 }

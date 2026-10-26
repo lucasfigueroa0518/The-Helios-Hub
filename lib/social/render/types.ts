@@ -127,7 +127,11 @@ export type SlideCopy = {
   layoutVariant: LayoutVariant;
 
   /** Last Few Days cover (spec §6): the story photos for the mosaic, rank order; story 1 takes the large tile. */
-  lfdCover?: { photos: Array<{ url: string; kind?: 'person' | 'scene' | 'logo'; focus?: { x: number; y: number } }> };
+  lfdCover?: {
+    photos: Array<{ url: string; kind?: 'person' | 'scene' | 'logo'; focus?: { x: number; y: number } }>;
+    /** A meme as the whole cover, the hook banner below it (the meme lab's LFD simulation; photos are then not drawn). */
+    meme?: { url: string; aspect?: number };
+  };
   /** Last Few Days story slide (spec §6). `headline` has no dash; the slide adds "– ". */
   lfdStory?: { setup: string; headline: string; highlight: string; names: string[]; body: string };
 
@@ -269,9 +273,12 @@ export type SlideCopy = {
    * What the photo may show (layout rule 3, Tommy 2026-10-06): `subject` (a
    * person or organization photo, or an article photo that may show people)
    * only goes in its own region; `scene` (stock, starter set) may sit full
-   * bleed under text. Unset means scene.
+   * bleed under text. Unset means scene. `meme` (Last Few Days story slides in the meme lab's
+   * simulation): a finished meme, fit whole into the photo box, never cropped.
    */
-  photoKind?: 'subject' | 'scene' | 'logo';
+  photoKind?: 'subject' | 'scene' | 'logo' | 'meme';
+  /** A meme's width / height (LFD posts): its slide box takes the meme's own shape instead of a fixed box. */
+  photoAspect?: number;
 
   /**
    * Logo cover card (spec §5.1 (b)): the plate behind the logo, chosen by

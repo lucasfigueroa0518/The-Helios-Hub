@@ -1,5 +1,6 @@
 // The frames of an Explainers 3.0 reel, read from STORYBOARD.md (EX3-52). No DOM, no imports
-// beyond Node, so try.mjs, mount.mjs, opener-sfx.mjs and the worker share one reading.
+// beyond Node (and the opener bank's plain data), so try.mjs, mount.mjs, opener-sfx.mjs and the
+// worker share one reading.
 //
 // A frame block is `## Frame N — Name` followed by `- key: value` lines. The frame id is the
 // basename of its `src` (compositions/frames/04-analogy.html → 04-analogy); its scene module is
@@ -9,6 +10,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { CLOSE_EVENTS } from './close-timing.js';
+import { openerByKey } from './openers/bank.js';
+import { chosenOpener, openerLine } from './openers/sound.mjs';
 
 /** `- key: value` fields of one frame block, keys lowercased. */
 export function blockFields(block) {
@@ -65,4 +68,48 @@ export function writeClose(root, f) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${f.id}.js`), CLOSE_MODULE);
   writeFileSync(join(dir, `${f.id}.events.json`), `${JSON.stringify(CLOSE_EVENTS, null, 1)}\n`);
+}
+
+/** The opener is frame 1 (EX3-102): the bank's opener over the worker's hook. */
+export const OPENER_FRAME = 1;
+/** The hook's scene module, which the frame worker writes for frame 1. */
+export const HOOK_ID = '01-hook';
+
+/** The storyboard's `term:` (its front matter), or ''. */
+export function storyboardTerm(root) {
+  const file = join(root, 'STORYBOARD.md');
+  if (!existsSync(file)) return '';
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(readFileSync(file, 'utf8'));
+  return (/^term:\s*(.+)$/m.exec(fm?.[1] ?? '')?.[1] ?? '').trim().replace(/^["']|["']$/g, '');
+}
+
+/** True when frame 1 is the bank's (the job chose an opener: assets/opener.json). */
+export const isBankOpener = (root, f) => Boolean(f) && f.number === OPENER_FRAME && Boolean(chosenOpener(root));
+
+/**
+ * Write frame 1's module (one call into the bank, with the line's length and word times baked in)
+ * and its sound events (none: the opener's stem carries its sound) for storyboard frame `f`.
+ * Returns the opener's key, or null when the job chose none (frame 1 is then the worker's own).
+ */
+export function writeOpener(root, f) {
+  const key = chosenOpener(root);
+  if (!key || !f?.id) return null;
+  const metaFile = join(root, 'audio_meta.json');
+  const line = existsSync(metaFile) ? openerLine(JSON.parse(readFileSync(metaFile, 'utf8'))) : null;
+  const voice = line?.voice > 0 ? line.voice : 3.8;
+  const words = (line?.words ?? []).map((w) => ({ text: String(w.text ?? '').trim(), start: w.start, end: w.end }));
+  const dir = join(root, 'assets', 'frames');
+  mkdirSync(dir, { recursive: true });
+  const module = [
+    `// Frame 1 (EX3-102): the bank's "${openerByKey(key).name}" opener over the hook (${HOOK_ID}.js).`,
+    '// Written by code from assets/opener.json; never edit. The frame worker writes only the hook.',
+    `import * as hook from './${HOOK_ID}.js';`,
+    "import { openerFrame } from '../kit/openers/index.js';",
+    '',
+    `export default openerFrame(${JSON.stringify(key)}, { hook, voice: ${voice}, words: ${JSON.stringify(words)}, term: ${JSON.stringify(storyboardTerm(root))} });`,
+    '',
+  ].join('\n');
+  writeFileSync(join(dir, `${f.id}.js`), module);
+  writeFileSync(join(dir, `${f.id}.events.json`), '[]\n');
+  return key;
 }

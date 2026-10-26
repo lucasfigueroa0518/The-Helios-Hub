@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Wear sheet</title><style>
+body{margin:0;background:#E2DACB;font-family:Helvetica,Arial,sans-serif}
+h2{margin:18px 14px 4px;font-size:22px;color:#171717}
+.grid{display:grid;grid-template-columns:repeat(6,300px);gap:10px;padding:8px 14px}
+.cell{background:#F3F0EA;border-radius:6px;overflow:hidden}
+.cell h4{margin:6px 8px 0;font-size:14px;color:#171717}
+svg{display:block}
+</style></head><body><div id="root"></div>
+<script type="module">
+// Every role accessory, alone, on the widest faces (EX3-103): nothing a critter wears covers or
+// crowds its eyes or mouth. ?zone=1 outlines the face keep-outs; ?only=apron,scarf picks items.
+import { scope, defs, el } from '../../world-kit/draw.js';
+import { critter, WEAR, FACE_KEEPOUT } from '../../world-kit/cast.js';
+const q = new URLSearchParams(location.search);
+const zone = q.get('zone') === '1';
+const only = q.get('only') ? q.get('only').split(',') : null;
+let n = 0;
+const S = 1.3;
+const keepouts = (x, y) => !zone || !FACE_KEEPOUT ? '' : FACE_KEEPOUT.map((b) => el('rect', { x: x + b.x * S, y: y + b.y * S, width: b.w * S, height: b.h * S, fill: 'none', stroke: '#2a9d8f', 'stroke-width': 2, 'stroke-dasharray': '6 4' })).join('');
+const cell = (label, o, dark = false) => {
+  scope(`w${++n}-`, dark ? 'night' : 'paper');
+  return `<div class="cell"><h4>${label}</h4><svg width="300" height="330" viewBox="0 0 300 330" style="background:${dark ? '#171717' : '#F3F0EA'}">${defs()}${critter(150, 300, { s: S, ...o })}${keepouts(150, 300)}</svg></div>`;
+};
+const section = (title, cells) => `<h2>${title}</h2><div class="grid">${cells.join('')}</div>`;
+const html = [];
+for (const [mood, extra] of [['surprised', {}], ['proud', {}], ['focused', {}]]) {
+  html.push(section(`${mood}`, (only ?? WEAR).map((w) => cell(`${w}`, { wear: [w], mood, ...extra }))));
+}
+html.push(section('paper / orange / dark', (only ?? WEAR).map((w, i) => cell(w, { wear: [w], mood: 'happy', body: ['paper', 'orange', 'ink'][i % 3], mouth: 'grin' }, i % 3 === 2))));
+document.getElementById('root').innerHTML = html.join('');
+document.body.dataset.done = '1';
+</script></body></html>

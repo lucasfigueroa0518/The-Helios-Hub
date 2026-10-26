@@ -122,7 +122,7 @@ test('an archived topic is never made, and its title is history the proposer is 
   assert.notEqual((await run(db)).status, 'failed');
 });
 
-test('a pinned topic the night cannot make is skipped with why, and the next is made', async () => {
+test('a pin whose render cannot start tonight (a cap) is transient: no skip recorded, the pin stays for next night', async () => {
   const db = await explainersOn();
   await saveSetting(db, 'mode', 'production');
   await saveSetting(db, 'daily_render_cap', 0);
@@ -132,7 +132,8 @@ test('a pinned topic the night cannot make is skipped with why, and the next is 
   assert.equal(okOrWhy(result), 'ok');
   const rows = await readMoves(q(db), 'explainers');
   assert.equal(rows.length, 1);
-  assert.match(rows[0]!.skipReason ?? '', /render cap/);
+  assert.equal(rows[0]!.skipReason, null, 'no skip is recorded, so the pin stays active');
+  assert.equal(rows[0]!.kind, 'pin');
 });
 
 test('the pool never passes 30, never cuts a person’s own or a pinned topic, and a pool_size above 30 is held to 30', async () => {
@@ -141,9 +142,9 @@ test('the pool never passes 30, never cuts a person’s own or a pinned topic, a
   const mine = await topic(db, 'Mine', 1, 'manual');
   const pinned = await topic(db, 'Pinned', 2);
   const cut = await trimPool(db, 99, pinned);
-  assert.equal(cut, 4, '34 pool topics + 2 protected = 34 - 30');
+  assert.equal(cut, 2, 'ranked past the first 30 and not protected: T30 and T31; the manual and pinned ones are kept past the line');
   assert.equal(await statusOf(db, mine), 'pool');
   assert.equal(await statusOf(db, pinned), 'pool');
   const left = (await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM explainers.topics WHERE status = 'pool'`)).rows[0]!.n;
-  assert.equal(Number(left), 30);
+  assert.equal(Number(left), 32, '30 inside the cap + 2 protected below it');
 });

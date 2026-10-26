@@ -100,6 +100,7 @@ async function main(): Promise<void> {
   const { isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
   const { readSlotSource } = await import('@/lib/social-hub/slots/load');
   const { liveLfdDeps } = await import('@/lib/lfd/live');
+  const { liveMemesForPost } = await import('@/lib/memes/lfd-post-live');
   const { claimAndPublishLfd } = await import('@/lib/lfd/publish');
   const { releaseDueLfd } = await import('@/lib/lfd/schedule');
   const query = await socialQuery();
@@ -368,6 +369,8 @@ async function main(): Promise<void> {
               now: () => new Date(),
               log,
               engine: (run, capUsd) => liveLfdDeps(lfdQuery, { capUsd, trigger: run.trigger, runId: run.id }).then((r) => r.deps),
+              // Memes in the post (lib/memes/lfd-post.ts), while lfd.settings.memes is on.
+              memes: liveMemesForPost(lfdQuery, log),
             },
             lfdClaimed,
           ).catch((error) => ({ runId: lfdClaimed.id, status: 'failed' as const, note: errorText(error) })),

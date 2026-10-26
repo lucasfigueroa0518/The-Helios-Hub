@@ -584,7 +584,7 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
 
   // The opener's riser and hit (EX3-24), once audio exists.
   if (audioMeta !== undefined && audioMeta !== null && !hasOpenerSfx(audioMeta)) {
-    out.push(violation('opener_sfx', 1, 'error', "the opener's riser and hit are not in audio_meta.json"));
+    out.push(violation('opener_sfx', 1, 'error', "the opener's sounds (the bank opener's stem, or the riser, and the hit on the cut) are not in audio_meta.json"));
   }
 
   // Sound events (EX3-63), once frames are built: enough per frame and per reel, and the mix.
@@ -595,7 +595,9 @@ export function lintStoryboard({ storyboard, script = null, frameSource = new Ma
       const list = frameEvents.get(n);
       const count = Array.isArray(list) ? list.length : 0;
       total += count;
-      if (EVENT_FRAMES.includes(n) && count < MIN_EVENTS_PER_FRAME) {
+      // a bank opener's frame 1 sounds through its stem, not events (EX3-102)
+      const stem = n === 1 && (audioMeta?.sfx ?? []).some((x) => x?.role === 'opener-stem');
+      if (EVENT_FRAMES.includes(n) && count < MIN_EVENTS_PER_FRAME && !stem) {
         out.push(violation('sound_events', n, 'warning', `${count} sound events; at least ${MIN_EVENTS_PER_FRAME}`));
       }
     }

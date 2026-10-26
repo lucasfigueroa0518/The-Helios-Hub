@@ -45,12 +45,12 @@ test('a pin that misses is tried once and sinks; the next pin still leads', asyn
   assert.deepEqual(tried, ['low', 'saga', 'gen2'], 'one attempt on the pin that missed, then the next pin, then the best general idea');
 });
 
-test('a dragged idea sorts by its key; an archived idea is never in the order; a demote means nothing on the queue', () => {
+test('a dragged idea sorts by its key; an archived idea is never in the order; an old demote still sinks its idea', () => {
   const ideas = base();
   const order = (moves: Parameters<typeof orderedForSlots>[2]) => orderedForSlots(ideas, () => 0, moves).map((i) => i.id);
   assert.deepEqual(order({ ...none, pins: [], placed: new Map([['low', 4.5]]), archived: new Set() }), ['know', 'low', 'saga']);
   assert.deepEqual(order({ ...none, pins: [], placed: new Map(), archived: new Set(['know']) }), ['saga', 'low']);
-  assert.deepEqual(order({ promote: null, demoted: new Set(['know']), pins: [], placed: new Map(), archived: new Set() }), ['know', 'saga', 'low']);
+  assert.deepEqual(order({ promote: null, demoted: new Set(['know']), pins: [], placed: new Map(), archived: new Set() }), ['saga', 'low', 'know']);
 });
 
 // ── The nightly generation (PGlite) ─────────────────────────────────────────

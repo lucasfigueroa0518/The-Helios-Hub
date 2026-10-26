@@ -16,7 +16,9 @@ import {
   finishJob,
   getJob,
   getTopic,
+  recentOpeners,
   recordCost,
+  setJobOpener,
   setJobStage,
 } from '@/lib/explainers/repository';
 import { loadSettings, loadThemeBrief } from '@/lib/explainers/settings';
@@ -29,6 +31,7 @@ import type { JevTransport } from '@/lib/reels/jev/runner';
 import { eventsFromDir, lintStoryboard } from '../../../explainers/lint/lint-storyboard.mjs';
 import { mountFrames } from '../../../explainers/world-kit/mount.mjs';
 import { hasOpenerSfx, placeOpenerSfx } from '../../../explainers/world-kit/opener-sfx.mjs';
+import { HISTORY as OPENER_HISTORY, openerByKey, pickOpener } from '../../../explainers/world-kit/openers/bank.js';
 import { pace } from '../../../explainers/world-kit/pace.mjs';
 import { OUT as EVENTS_TRACK, placeSound } from '../../../explainers/world-kit/sound.mjs';
 
@@ -98,8 +101,53 @@ export type RenderDeps = {
   resume?: boolean;
   /** Extra resume instructions (e.g. frames to rebuild), appended to RESUME_PROMPT. */
   resumeNote?: string;
+  /** Swappable for tests: the random draw of the opener (Math.random's shape). */
+  random?: () => number;
   log?: (event: string, fields?: Record<string, unknown>) => void;
 };
+
+/** Where a job's workspace names its opener (openers/sound.mjs CHOICE). */
+export const OPENER_CHOICE = path.join('assets', 'opener.json');
+
+/**
+ * Frame 1's opener for this job (EX3-102): the one it already drew, or a random one of the bank
+ * that none of the last HISTORY reels used, recorded on the job and written to assets/opener.json
+ * for pace, the frame and the sound. A job resumed from before the bank (its worker's own frame 1
+ * built, no choice file) keeps that frame and draws none: null.
+ */
+export async function assignOpener(
+  db: ExplainersDb,
+  jobId: string,
+  projectDir: string,
+  { resuming = false, random = Math.random }: { resuming?: boolean; random?: () => number } = {},
+): Promise<string | null> {
+  const file = path.join(projectDir, OPENER_CHOICE);
+  const onFile = (): string | null => {
+    try {
+      const k = JSON.parse(fs.readFileSync(file, 'utf8'))?.key;
+      return openerByKey(k) ? k : null;
+    } catch {
+      return null;
+    }
+  };
+  let key = (await getJob(db, jobId))?.opener ?? (resuming ? onFile() : null);
+  if (!key || !openerByKey(key)) {
+    const legacy = resuming && !fs.existsSync(file) && fs.existsSync(path.join(projectDir, 'assets', 'frames', '01-opener.js'));
+    if (legacy) return null;
+    try {
+      key = pickOpener(await recentOpeners(db, jobId, OPENER_HISTORY), { rand: random }) as string;
+      await setJobOpener(db, jobId, key);
+    } catch (error) {
+      // A database without the `opener` column yet (db/explainers_schema.sql, EX3-102): the reel
+      // still gets an opener, drawn without the history, and the render goes on.
+      if ((error as { code?: string })?.code !== '42703') throw error;
+      key = pickOpener([], { rand: random }) as string;
+    }
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify({ key, name: openerByKey(key)?.name ?? key }, null, 1)}\n`);
+  return key;
+}
 
 export type RenderOutcome = { status: 'ok' } | { status: 'failed'; error: string; capped: boolean };
 
@@ -349,7 +397,8 @@ function frameModulesByNumber(projectDir: string): Map<number, string> {
   if (!fs.existsSync(dir)) return map;
   for (const file of fs.readdirSync(dir).sort()) {
     const n = /^(\d+)/.exec(file)?.[1];
-    if (n && file.endsWith('.js')) map.set(Number(n), fs.readFileSync(path.join(dir, file), 'utf8'));
+    // frame 1 has two: the worker's hook (01-hook.js) and the bank's opener over it (EX3-102)
+    if (n && file.endsWith('.js')) map.set(Number(n), `${map.get(Number(n)) ?? ''}${fs.readFileSync(path.join(dir, file), 'utf8')}`);
   }
   return map;
 }
@@ -458,6 +507,10 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       ws = (deps.prepare ?? prepareWorkspace)({ jobsRoot: deps.jobsRoot, jobId: job.id, topic, sourceText, analogy: topicAnalogy(topic) });
       await keepText('brief', read(path.join(ws.projectDir, 'BRIEF.md')));
     }
+
+    // Frame 1's opener, drawn from the bank before anything is built (EX3-102).
+    const opener = await assignOpener(db, job.id, ws.projectDir, { resuming, random: deps.random });
+    log('opener', { jobId: job.id, opener });
 
     // The analogy pass, when it ran, is already on the job's spend.
     const meter = new SpendMeter(job.spend_cap_usd, (await getJob(db, job.id))?.spend_usd ?? job.spend_usd);

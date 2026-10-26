@@ -9,6 +9,8 @@ test('lfd schema seeds settings that ship off', async () => {
   assert.deepEqual(Object.fromEntries(rows.map((r) => [r.key, r.value])), {
     auto_run: false,
     days: [2, 5],
+    memes: true,
+    memes_cap_usd: 1,
     publishing_live: false,
     require_approval: true,
     run_cap_usd: 1,

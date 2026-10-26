@@ -59,8 +59,8 @@ Scene 2 (1.4–3.0s): …
 - **Labels** (the real terms, numbers, names) land as the voice names them (frame 5: as their
   "because" is spoken), 5 words or fewer, pinned to their object; say in which window.
 - **Frame 1:** the picked hook (`## Hook`), in motion from Scene 1 (first change by 0.3s), clear
-  on its own, building with the riser (`ramp-up`); the title card slides in from the first frame
-  and writes itself in the top band by the end of the line (frame.md § 1). Never a slow pan over
+  on its own, building (`ramp-up`); the bank's opener (code, EX3-102) breaks in over it and draws
+  "AI BRAIN BREAK" and the title card (frame.md § 1). Describe the hook only. Never a slow pan over
   a still scene.
 - **Frame 2:** the anchor scene in new shots, each centred on what the voice names (the problem's
   actor, then whatever the AI line and the question are about); its `reset:` lands in the first
@@ -111,7 +111,7 @@ the per-frame lines carry only the delta:
 - `## Video direction` exists once; per-frame lines are deltas.
 - Every frame has `focal`, `eye`, `space`, `camera`, `sounds`, and time-coded Scene lines paced
   to the voice, each naming its shot.
-- Frame 1 opens on the hook with the title card writing in the top band; frame 3 has the card and
+- Frame 1 is the hook (the bank's opener and its text are code's); frame 3 has the card and
   its visual; frame 4 opens on the one establishing shot; frame 6 illustrates each example step.
 - No `sfx:` lines (retired; sound moments go in `sounds:`).
 - Anchored frames use the scene's entity ids and carry its state forward.

@@ -163,7 +163,7 @@ export async function inQueueOrder(db: SetBuilderDeps['db'], series: string, poo
     rows.map((r) => ({ id: r.idea_id, vertical: 'stories' as const, ideaId: r.idea_id.slice(prefix.length), nyDate: '', kind: r.kind, createdAt: r.created_at, sortKey: r.sort_key == null ? null : Number(r.sort_key), skipReason: r.skip_reason })),
     'stories',
   );
-  const ids = { pins: night.pins.map((p) => p.ideaId), placed: night.placed, archived: night.archived };
+  const ids = { pins: night.pins.map((p) => p.ideaId), placed: night.placed, archived: night.archived, demoted: night.demoted };
   const reorder = <T,>(list: T[], meta: Array<{ key: string; score: number | null }>) =>
     orderForNight(list.map((x, i) => ({ x, ...meta[i]! })), (e) => e.key, (e) => e.score, ids).map((e) => e.x);
   return {

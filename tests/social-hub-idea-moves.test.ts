@@ -80,7 +80,7 @@ test('the Stories build before the consumed_at column exists: today’s moves, a
   assert.deepEqual(await activeStoryMoves(db, 'free_vs_paid', now), [{ ideaId: 'today', kind: 'promote' }]);
 });
 
-test('workers read a type’s active moves: its pins in the order pinned (Reels is on the queue, so a demote means nothing); used moves and other types are left out', async () => {
+test('workers read a type’s active moves: its pins in the order pinned and its demoted ideas; used moves and other types are left out', async () => {
   const { query: q } = await openHubTestDb();
   await addMove(q, 'reels', 'reels:idea:a', YESTERDAY, 'promote', '2026-10-13T15:00:00Z');
   await addMove(q, 'reels', 'reels:idea:b', TODAY, 'promote', '2026-10-14T13:00:00Z');
@@ -91,7 +91,7 @@ test('workers read a type’s active moves: its pins in the order pinned (Reels 
   const tonight = await readTonightMoves(q, 'reels');
   assert.equal(tonight.promote?.ideaId, 'reels:idea:a');
   assert.deepEqual(tonight.pins.map((p) => p.ideaId), ['reels:idea:a', 'reels:idea:b']);
-  assert.deepEqual([...tonight.demoted], []);
+  assert.deepEqual([...tonight.demoted], ['reels:idea:c']);
 });
 
 test('a skip is written on the idea’s promote and keeps it active (the hub reads why); used marks every active move of the idea', async () => {

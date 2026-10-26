@@ -9,6 +9,7 @@
 //   walk(t, o)             a walk cycle: { legs, bob, arms } to pass back into critter()
 //   MOODS                  named expressions (confident, confused, panicked, proud, sly…)
 //   ARM_POSES, WEAR        the arm presets and the role accessories
+//   FACE_KEEPOUT           the eye and mouth zones nothing worn may enter (EX3-103)
 
 import { T, el, g, ref, isDark, line, stippleShade } from './draw.js';
 
@@ -44,7 +45,7 @@ export const ARM_POSES = {
   carry: { arms: [[-60, -104, -70, -160], [60, -104, 70, -160]] },
   /** one arm stretched out to the right, feeling or reaching for something */
   reach: { arms: [[-62, -86, -80, -54], [62, -94, 156, -98]] },
-  /** both arms out in front, feeling the way (in the dark, blindfolded) */
+  /** both arms out in front, feeling the way (in the dark) */
   feel: { arms: [[-62, -94, 118, -92], [62, -94, 162, -104]] },
   /** pointing up and to the right at something */
   point: { arms: [[-62, -86, -80, -54], [62, -98, 144, -142]] },
@@ -122,7 +123,26 @@ function browPaths(kind, cy, gap, face) {
 // What makes one critter "the student" and another "the chef". Drawn in paper on an ink body
 // (ink on a paper or orange body) so they always read. `wearColor: 'orange'` makes the
 // accessory the focal accent instead of the body.
+//
+// HARD CONSTRAINT (EX3-103, Lucas): nothing a critter wears covers or crowds its eyes or mouth.
+// Every accessory stays outside FACE_KEEPOUT, so there is clear body showing between it and the
+// face: hats sit above the brows, the headset mic stops at the cheek, the backpack strap runs
+// along the body's edge, and the scarf, bowtie and apron sit at the base, below the mouth.
+// Glasses are the one exception: they are worn over the eyes, as glasses are.
+// tests/explainers-kit.test.ts measures every accessory against these zones.
 export const WEAR = ['cap', 'tophat', 'chef', 'gradcap', 'glasses', 'headset', 'apron', 'backpack', 'bowtie', 'scarf'];
+/** The accessories that are allowed over the eyes. */
+export const WEAR_ON_EYES = ['glasses'];
+
+// The face, relative to the feet at scale 1 (body top BY): eyes r 16 at (±25, BY + 44), brows
+// about BY + 9…19, the mouth within ±24 (with the look shift) and BY + 76…95.
+const BY = -142;
+/** The keep-outs around the face, relative to the feet at scale 1: the eyes and their brows with
+ *  about 10px clear around them, and the mouth (every shape, any look) with 8px. */
+export const FACE_KEEPOUT = [
+  { part: 'eyes', x: -51, y: BY + 8, w: 102, h: 62 },
+  { part: 'mouth', x: -32, y: BY + 68, w: 64, h: 35 },
+];
 
 function wearBehind(items, ctx) {
   const out = [];
@@ -137,20 +157,24 @@ function wearFront(items, ctx, by) {
   const { acc, edge, face } = ctx;
   const sw = { stroke: edge, 'stroke-width': 4, 'stroke-linejoin': 'round' };
   const out = [];
+  // The base, below the mouth: a waist apron hanging over the tops of the legs, a scarf wrapped
+  // round the bottom of the body with its tail down one side, a small bowtie at the hem.
   if (items.includes('apron')) {
-    out.push(el('path', { d: `M -40 ${by + 70} L 40 ${by + 70} L 46 ${by + 112} L -46 ${by + 112} Z`, fill: acc, ...sw }));
-    out.push(el('path', { d: `M -30 ${by + 70} L -18 ${by + 58} M 30 ${by + 70} L 18 ${by + 58}`, fill: 'none', ...sw }));
-    out.push(el('rect', { x: -16, y: by + 84, width: 32, height: 16, rx: 3, fill: 'none', ...sw, 'stroke-width': 3 }));
+    out.push(el('path', { d: `M -42 ${by + 109} L 42 ${by + 109} L 46 ${by + 136} Q 0 ${by + 142} -46 ${by + 136} Z`, fill: acc, ...sw }));
+    out.push(el('rect', { x: -14, y: by + 116, width: 28, height: 12, rx: 3, fill: 'none', ...sw, 'stroke-width': 3 }));
+    out.push(el('rect', { x: -52, y: by + 105, width: 104, height: 8, rx: 4, fill: acc, ...sw, 'stroke-width': 3 }));
   }
   if (items.includes('scarf')) {
-    out.push(el('path', { d: `M -66 ${by + 62} Q 0 ${by + 76} 66 ${by + 62} L 66 ${by + 76} Q 0 ${by + 90} -66 ${by + 76} Z`, fill: acc, ...sw }));
-    out.push(el('path', { d: `M 30 ${by + 76} L 40 ${by + 112} L 56 ${by + 108} L 48 ${by + 74}`, fill: acc, ...sw }));
+    out.push(el('path', { d: `M 26 ${by + 114} L 34 ${by + 150} L 52 ${by + 146} L 46 ${by + 110} Z`, fill: acc, ...sw }));
+    out.push(el('path', { d: `M 33 ${by + 142} L 51 ${by + 138}`, fill: 'none', ...sw, 'stroke-width': 3 }));
+    out.push(el('path', { d: `M -62 ${by + 100} Q 0 ${by + 116} 62 ${by + 100} L 62 ${by + 114} Q 0 ${by + 130} -62 ${by + 114} Z`, fill: acc, ...sw }));
   }
   if (items.includes('bowtie')) {
-    out.push(el('path', { d: `M 0 ${by + 100} L -20 ${by + 90} L -20 ${by + 110} Z M 0 ${by + 100} L 20 ${by + 90} L 20 ${by + 110} Z`, fill: acc, ...sw, 'stroke-width': 3 }));
+    out.push(el('path', { d: `M 0 ${by + 112} L -24 ${by + 105} L -24 ${by + 119} Z M 0 ${by + 112} L 24 ${by + 105} L 24 ${by + 119} Z`, fill: acc, ...sw, 'stroke-width': 3 }));
+    out.push(el('circle', { cx: 0, cy: by + 112, r: 5.5, fill: acc, ...sw, 'stroke-width': 2.5 }));
   }
   if (items.includes('backpack')) {
-    out.push(el('path', { d: `M -50 ${by + 2} Q -58 ${by + 50} -46 ${by + 96}`, fill: 'none', stroke: acc, 'stroke-width': 9, 'stroke-linecap': 'round' }));
+    out.push(el('path', { d: `M -57 ${by + 20} Q -64 ${by + 58} -56 ${by + 100}`, fill: 'none', stroke: acc, 'stroke-width': 9, 'stroke-linecap': 'round' }));
   }
   if (items.includes('glasses')) {
     const gy = by + 44;
@@ -159,20 +183,22 @@ function wearFront(items, ctx, by) {
     out.push(el('path', { d: `M -5 ${gy - 2} Q 0 ${gy - 6} 5 ${gy - 2}`, fill: 'none', stroke: face === T.canvas ? T['paper-lit'] : T.ink, 'stroke-width': 4 }));
   }
   if (items.includes('headset')) {
+    // the mic sits out at the cheek, clear of the mouth
     out.push(el('path', { d: `M -70 ${by + 40} Q -70 ${by - 26} 0 ${by - 26} Q 70 ${by - 26} 70 ${by + 40}`, fill: 'none', stroke: acc, 'stroke-width': 8, 'stroke-linecap': 'round' }));
     out.push(el('rect', { x: 58, y: by + 28, width: 22, height: 34, rx: 8, fill: acc, ...sw, 'stroke-width': 3 }));
-    out.push(el('path', { d: `M 70 ${by + 60} Q 64 ${by + 90} 24 ${by + 88}`, fill: 'none', stroke: acc, 'stroke-width': 5, 'stroke-linecap': 'round' }));
-    out.push(el('circle', { cx: 22, cy: by + 88, r: 6, fill: acc, ...sw, 'stroke-width': 2.5 }));
+    out.push(el('path', { d: `M 68 ${by + 60} Q 66 ${by + 84} 50 ${by + 86}`, fill: 'none', stroke: acc, 'stroke-width': 5, 'stroke-linecap': 'round' }));
+    out.push(el('circle', { cx: 45, cy: by + 86, r: 6, fill: acc, ...sw, 'stroke-width': 2.5 }));
   }
+  // Hats sit on the crown, above the brows.
   if (items.includes('cap')) {
-    out.push(el('path', { d: `M -58 ${by + 4} Q -56 ${by - 44} 0 ${by - 46} Q 56 ${by - 44} 58 ${by + 4} Z`, fill: acc, ...sw }));
-    out.push(el('path', { d: `M 20 ${by + 2} L 104 ${by + 6} Q 106 ${by + 16} 92 ${by + 16} L 20 ${by + 14} Z`, fill: acc, ...sw }));
-    out.push(el('circle', { cx: 0, cy: by - 46, r: 6, fill: acc, ...sw, 'stroke-width': 3 }));
+    out.push(el('path', { d: `M -56 ${by + 2} Q -54 ${by - 46} 0 ${by - 48} Q 54 ${by - 46} 56 ${by + 2} Z`, fill: acc, ...sw }));
+    out.push(el('path', { d: `M 22 ${by - 2} L 104 ${by - 6} Q 108 ${by + 2} 96 ${by + 4} L 22 ${by + 4} Z`, fill: acc, ...sw }));
+    out.push(el('circle', { cx: 0, cy: by - 48, r: 6, fill: acc, ...sw, 'stroke-width': 3 }));
   }
   if (items.includes('tophat')) {
-    out.push(el('rect', { x: -80, y: by - 10, width: 160, height: 16, rx: 6, fill: acc, ...sw }));
-    out.push(el('rect', { x: -48, y: by - 100, width: 96, height: 92, rx: 4, fill: acc, ...sw }));
-    out.push(el('rect', { x: -48, y: by - 34, width: 96, height: 14, fill: face === T.canvas ? T.orange : T['paper-shade'], ...sw, 'stroke-width': 3 }));
+    out.push(el('rect', { x: -80, y: by - 14, width: 160, height: 16, rx: 6, fill: acc, ...sw }));
+    out.push(el('rect', { x: -48, y: by - 104, width: 96, height: 92, rx: 4, fill: acc, ...sw }));
+    out.push(el('rect', { x: -48, y: by - 38, width: 96, height: 14, fill: face === T.canvas ? T.orange : T['paper-shade'], ...sw, 'stroke-width': 3 }));
   }
   if (items.includes('chef')) {
     out.push(el('rect', { x: -46, y: by - 34, width: 92, height: 38, rx: 4, fill: T['paper-lit'], ...sw }));
@@ -187,6 +213,22 @@ function wearFront(items, ctx, by) {
   return out;
 }
 
+/** The colors a critter's accessories are drawn in, from its body and wearColor. */
+function wearContext(body, wearColor) {
+  const fill = body === 'orange' ? T.orange : body === 'paper' || isDark() ? T['paper-lit'] : T.ink;
+  const light = fill !== T.ink;
+  const acc = wearColor === 'orange' ? T.orange : light ? T.ink : T['paper-lit'];
+  // an ink accessory on a dark ground gets a paper edge, so what hangs past the body still reads
+  return { acc, edge: acc === T.ink && isDark() ? T['paper-lit'] : T.ink, face: light ? T.ink : T.canvas };
+}
+
+/** Just the accessories, as critter() draws them on a critter at the origin at scale 1 (for the
+ *  face keep-out test and sheets): { behind, front } SVG strings. */
+export function wearDrawing(wear, { body = 'ink', wearColor = null } = {}) {
+  const ctx = wearContext(body, wearColor);
+  return { behind: wearBehind(wear, ctx).join(''), front: wearFront(wear, ctx, BY).join('') };
+}
+
 // ── The critter ───────────────────────────────────────────────────────────────────────────
 /**
  * A critter: a soft block body on two stubby legs, a face, arms. (x, y) is the feet.
@@ -198,7 +240,8 @@ function wearFront(items, ctx, by) {
  *   legs:   a preset (stand, kick, hop, sit, tiptoe) or { l, r } rotations in degrees (walk())
  *   brows:  flat, up, high, worried, angry, raised (one up)
  *   mouth:  o, flat, smile, grin, smirk, frown, wobble, grit
- *   wear:   role accessories, any of WEAR; wearColor 'orange' makes them the focal accent
+ *   wear:   role accessories, any of WEAR; wearColor 'orange' makes them the focal accent.
+ *           None covers or crowds the eyes or mouth (FACE_KEEPOUT, EX3-103); glasses sit on the eyes
  *   look, lid, lidTilt, pr (pupil size), tilt (degrees, about the feet),
  *   sq (squash > 0, stretch < 0), s (scale), flip (face left)
  *   who:    the critter's world id (world.js entity id; a group's members "<id>-1", "<id>-2"…),
@@ -218,7 +261,7 @@ export function critter(x, y, opts = {}) {
   const face = light ? T.ink : T.canvas;
   const bw = 132;
   const bh = 112;
-  const by = -30 - bh;
+  const by = BY;
   const parts = [];
   const LEGS = { stand: [0, 0], kick: [-20, 28], hop: [8, -8], sit: [-78, -70], tiptoe: [0, 0] };
   const legRot = typeof legs === 'object' ? [legs.l, legs.r] : LEGS[legs] ?? LEGS.stand;
@@ -228,11 +271,7 @@ export function critter(x, y, opts = {}) {
   // edge so it never melts into paper objects behind it.
   const cut = light && !orange;
   const edge = cut ? { stroke: T.ink, 'stroke-width': 3.5 } : {};
-  const ctx = {
-    acc: wearColor === 'orange' ? T.orange : light ? T.ink : T['paper-lit'],
-    edge: light ? T.ink : T.ink,
-    face,
-  };
+  const ctx = wearContext(body, wearColor);
   parts.push(...wearBehind(wear, ctx));
   legPose.forEach(([lx, ly, rot]) => parts.push(el('rect', { x: lx - 10, y: ly, width: 20, height: legLen, rx: 9, fill: limb, ...edge, transform: `rotate(${rot} ${lx} ${ly})` })));
   const pose = typeof arms === 'object' ? null : ARM_POSES[arms] ?? ARM_POSES.down;

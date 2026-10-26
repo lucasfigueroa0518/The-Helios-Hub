@@ -13,7 +13,7 @@ import { lfdItemId } from './items';
 import { runLastFewDays, type LfdRunDeps } from './run';
 import { scheduleLfdPost } from './schedule';
 import { readLfdSettings } from './settings';
-import { failRun, finishRun, type ClaimedRun } from './store';
+import { failRun, finishRun, recordMemesSpend, type ClaimedRun } from './store';
 
 export type LfdLog = (message: string, fields?: Record<string, unknown>) => void;
 
@@ -25,7 +25,15 @@ export type CarryOutDeps = {
   engine: (run: ClaimedRun, capUsd: number) => Promise<LfdRunDeps>;
   /** The engine itself (tests pass a stub). */
   run?: (deps: LfdRunDeps) => ReturnType<typeof runLastFewDays>;
+  /**
+   * Memes for the finished post (lib/memes/lfd-post.ts), while lfd.settings.memes is on. It never fails the run:
+   * an error or a timeout leaves the post as the engine made it.
+   */
+  memes?: (postId: string, o: { capUsd: number; deps: LfdRunDeps }) => Promise<{ placed: number; gated: number; costUsd: number; skipped?: string }>;
 };
+
+/** The meme stage's own time limit: it must leave the 30-minute run timeout room. */
+export const LFD_MEMES_TIMEOUT_MS = 12 * 60_000;
 
 export type CarryOutResult = { runId: string; status: 'ok' | 'partial' | 'failed' | 'skipped'; postId?: string; scheduled?: string | null; note?: string };
 
@@ -64,6 +72,16 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
     }
     // A run that finished after the worker timed it out: its row stays failed (lib/lfd/store.ts finishRun).
     if (res.recorded === false) w.log('lfd_run_finish_ignored', { runId: claimed.id, status: res.short ? 'partial' : 'ok', postId: res.postId });
+    // Memes go in before the post is placed, so what gets scheduled is the final post.
+    if (w.memes && settings.memes && res.recorded !== false) {
+      const out = await withLfdTimeout(
+        w.memes(res.postId, { capUsd: settings.memesCapUsd, deps }).catch((error) => ({ placed: 0, gated: 0, costUsd: 0, skipped: `error: ${errorText(error)}` })),
+        LFD_MEMES_TIMEOUT_MS,
+        () => ({ placed: 0, gated: 0, costUsd: 0, skipped: 'timed out' }),
+      );
+      w.log('lfd_memes_result', { runId: claimed.id, postId: res.postId, ...out });
+      if (out.costUsd > 0) await recordMemesSpend(w.query, claimed.id, out).catch((error) => w.log('lfd_memes_spend_failed', { runId: claimed.id, error: errorText(error) }));
+    }
     await lfdItemId(w.query, res.postId);
     let scheduled: string | null = null;
     if (settings.publishingLive) {

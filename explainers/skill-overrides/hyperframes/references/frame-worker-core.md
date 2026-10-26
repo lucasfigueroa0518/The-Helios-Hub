@@ -42,6 +42,9 @@ Exactly two files, where the frame id is the basename of your storyboard `src`
 1. `assets/frames/<frame id>.js`, the scene module;
 2. `assets/frames/<frame id>.events.json`, its sound events (below).
 
+**Frame 1 is the exception** (EX3-102): one file, `assets/frames/01-hook.js` (the hook, to the
+contract in frame.md § 1 and the delta's "Frame 1"); `01-opener.js` and its events are code's.
+
 The module follows frame.md's frame-module contract:
 
 - an ES module importing only from `../kit/*.js` and `../world/world.js`;
@@ -52,8 +55,9 @@ The module follows frame.md's frame-module contract:
   randomness without a seed, no clocks, no state kept between calls, no DOM access;
 - it calls `scope('f<NN>-', ground)` first (NN = your frame number, two digits), then returns
   `shotFrame(t, shots, draw)` (or `frame(t, { camera, … }, parts)` for a one-shot frame; the last
-  frame draws on white without `frame()`); frame 1 adds `titleCard(…)` and frame 3
-  `dictionaryCard(…).svg` after it.
+  frame draws on white without `frame()`); frame 3 adds `dictionaryCard(…).svg` after it.
+  Frame 1's worker writes the hook, `01-hook.js`, to its contract (frame.md § 1, EX3-102): code
+  writes `01-opener.js` (the bank's opener over the hook), and the opener draws the title card.
 
 Copy the word times you need into constants at the top of the module (`const SHEET_AT = 3.8; //
 "sheet"`): the module never reads files.
@@ -87,7 +91,7 @@ fall):
 - Every visible moment of motion has its event: each arrival, landing, object set down or picked
   up, footstep, label or number landing, stroke of writing, page or card moving, state flip, and
   the payoff. At least 4 on frames 1, 2, 4, 5, 6 and 7. Never a sound for nothing on screen.
-- Do not declare the opener's riser or the hit on the 1→2 cut (code places them).
+- Do not declare the opener's sound or the hit on the 1→2 cut (code places them, EX3-102).
 - `t` is from 0 to your frame's `duration`.
 
 ## Constraints

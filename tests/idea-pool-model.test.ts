@@ -89,9 +89,9 @@ test('the page shows at most 30 open ideas; pinned, dragged, yours and made idea
   const pin: IdeaAdjustment = { id: 'p', vertical: 'reels', ideaId: 'reels:idea:036', nyDate: '2026-10-08', kind: 'pin', createdAt: '2026-10-08T01:00:00.000Z' };
   const place: IdeaAdjustment = { id: 'q', vertical: 'reels', ideaId: 'reels:idea:035', nyDate: '2026-10-08', kind: 'place', createdAt: '2026-10-08T02:00:00.000Z', sortKey: 10 };
   const shown = poolList(ideas, 'reels', 'open', [pin, place]).map((i) => i.title);
-  assert.equal(shown.length, 30, 'a pin and a placement take two places in the 30 they already count toward');
+  assert.equal(shown.length, 31, 'the pin is inside the 30; the dragged idea (key 10) sits past the line and is kept');
   assert.ok(shown.includes('Idea 36') && shown.includes('Idea 35'));
   const protectedAll = ideas.map((i, n) => (n >= 30 ? { ...i, yours: true } : n === 29 ? { ...i, hasContent: true, state: 'content_ready' as const } : i));
-  assert.equal(poolList(protectedAll, 'reels', 'open').length, 30 + 0, '30 unprotected-or-protected slots: protected ideas displace the lowest unprotected ones, never each other');
+  assert.equal(poolList(protectedAll, 'reels', 'open').length, 36, 'the first 30, and the six of yours below the line: protected ideas are kept, and push nothing out');
   assert.equal(poolList(ideas, 'reels', 'all').length, 36, 'Everything shows every idea');
 });

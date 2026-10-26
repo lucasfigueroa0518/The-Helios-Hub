@@ -70,6 +70,7 @@ Lucas Head Shot.jpg
 # Explainer Reels local database (PGlite), until a run validates the product
 .explainers-local/
 .stories-local/
+.memes-local/
 exports/stories/m1/
 exports/stories/m1-homemade/*/
 !exports/stories/m1-homemade/sheets/
@@ -77,3 +78,9 @@ explainers/smoke/.out/
 
 # Brainstorming companion mockups (superpowers)
 .superpowers/
+
+# Explainer review renders and intro previews: large videos, kept on disk only (GitHub refuses files over 100 MB).
+planning/Explainer Reels/3.2 review/
+planning/Explainer Reels/3.3 review/
+planning/Explainer Reels/intros/**/*.mp4
+explainers/design/intros/.out/

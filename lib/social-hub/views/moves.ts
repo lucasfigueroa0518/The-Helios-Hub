@@ -111,12 +111,16 @@ export function tonightMoves<M extends Move & { sortKey?: number | null }>(moves
   const archived = new Set(mine.filter((m) => m.kind === 'archive').map((m) => m.ideaId));
   // An idea's latest pin row, in the order those rows were made (the order pinned); a skipped pin steps aside for the night.
   const lastPin = new Map<string, M>();
-  for (const m of mine) if (m.kind === 'pin' || m.kind === 'promote') { lastPin.delete(m.ideaId); lastPin.set(m.ideaId, m); }
+  const demoted = new Set<string>();
+  for (const m of mine) {
+    if (m.kind === 'pin' || m.kind === 'promote') { lastPin.delete(m.ideaId); lastPin.set(m.ideaId, m); demoted.delete(m.ideaId); }
+    else if (m.kind === 'demote') { lastPin.delete(m.ideaId); demoted.add(m.ideaId); }
+  }
   const pinned = new Set(lastPin.keys());
   const pins = [...lastPin.values()].filter((m) => m.skipReason == null && !archived.has(m.ideaId));
   const placed = new Map<string, number>();
   for (const m of mine) if (m.kind === 'place' && m.sortKey != null && !pinned.has(m.ideaId) && !archived.has(m.ideaId)) placed.set(m.ideaId, m.sortKey);
-  return { promote: pins[0] ?? null, demoted: new Set<string>(), pins, archived, placed };
+  return { promote: pins[0] ?? null, demoted: new Set([...demoted].filter((id) => !archived.has(id))), pins, archived, placed };
 }
 
 /** Stable: the promoted first, then everything not demoted, then the demoted, each in the order given. */

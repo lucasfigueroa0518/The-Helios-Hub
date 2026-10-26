@@ -59,6 +59,11 @@ export type LfdRunDeps = {
   closings?: ClosingsLog;
   /** A run the worker already claimed (lfd.runs status running): it is adopted instead of inserting a new row. */
   runId?: string;
+  /**
+   * A replay (the meme lab's LFD simulation only): `now` is a past moment, and every read that means
+   * "up to now" (previous posts, carousel runs) stops there. Never set by the worker or the CLI.
+   */
+  replay?: boolean;
 };
 
 /** Window start as an instant: midnight NY after `after` is close enough for "runs finished since". */
@@ -68,8 +73,9 @@ function windowStartIso(w: LfdWindow): string {
 
 async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: ReadonlyMap<string, number> = new Map()) {
   const reels = withoutUsed(await reelsLane(d.query, w), used);
-  const carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w)), used);
-  const last = await lastCarouselRunAt(d.query);
+  const until = d.replay ? d.now.toISOString() : undefined;
+  const carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w), until), used);
+  const last = await lastCarouselRunAt(d.query, until);
   const since = new Date(last ?? windowStartIso(w));
   let feedError: string | undefined;
   const fresh = await freshFeedLane(d.fetchFeeds, since, d.now).catch((err: unknown) => {
@@ -177,7 +183,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
   };
   const run: LfdRunDeps = { ...d, jev, readPage };
   try {
-    const previous = await previousPosts(d.query, PREVIOUS_POSTS);
+    const previous = await previousPosts(d.query, PREVIOUS_POSTS, d.replay ? nyDate : undefined);
     const used = usedIdeaIds(previous);
     let window = windowFor(nyDate, previous[0]?.nyDate ?? null);
     let pools = await gather(run, window, used);

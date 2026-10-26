@@ -31,9 +31,11 @@ test('pins go first, in the order pinned, whatever their score', () => {
   assert.deepEqual(q.map((x) => x.pinned), [true, true, false, false, false]);
 });
 
-test('an old Promote row reads as a pin; Demote is ignored', () => {
+test('an old Promote row reads as a pin; an old Demote row sinks its idea (the latest of an idea’s rows wins)', () => {
   const q = queueOrder(pool, [move('c', 'promote'), move('a', 'demote')]);
-  assert.deepEqual(ids(q), ['c', 'a', 'b', 'd', 'e']);
+  assert.deepEqual(ids(q), ['c', 'b', 'd', 'e', 'a']);
+  assert.deepEqual(ids(queueOrder(pool, [move('a', 'demote'), move('a', 'pin')])), ['a', 'b', 'c', 'd', 'e'], 'pinned after being demoted');
+  assert.deepEqual(ids(queueOrder(pool, [move('a', 'pin'), move('a', 'demote')])), ['b', 'c', 'd', 'e', 'a'], 'demoted after being pinned');
 });
 
 test('a placement key sorts the idea among the others, not above them all', () => {
@@ -105,7 +107,7 @@ test('capOverflow: drops the lowest unprotected, never a protected one', () => {
   const protectedIds = new Set(['i32']);
   const dropped = capOverflow(queued, POOL_CAP, (q) => q.pinned || q.placed || protectedIds.has(q.item.id));
   assert.equal(POOL_CAP, 30);
-  assert.deepEqual(dropped.map((d) => d.id), ['i31', 'i30', 'i29', 'i28']);
+  assert.deepEqual(dropped.map((d) => d.id), ['i29', 'i30', 'i31'], 'the pin leads (rank 1), so i0 to i28 hold the other places; i32 is protected, past the line');
 });
 
 test('capOverflow: nothing to drop at or under the cap, and protected ideas may push the pool past it', () => {
@@ -129,7 +131,7 @@ test('orderForNight: archived dropped, pins lead in pin order, placed ideas slot
   assert.equal(order(night(), [idea('x', 5), idea('y', 5)]), 'xy', 'the worker’s order is not re-sorted');
 });
 
-test('tonightMoves on a queue type: ordered pins (a skipped one steps aside), archived, placed; demote means nothing', async () => {
+test('tonightMoves on a queue type: ordered pins (a skipped one steps aside), archived, placed, and the demoted', async () => {
   const { tonightMoves } = await import('@/lib/social-hub/views/moves');
   const m = [
     move('explainers:topic:a', 'pin'), move('explainers:topic:b', 'promote'), move('explainers:topic:c', 'pin', { skipReason: 'nope' }),
@@ -141,7 +143,7 @@ test('tonightMoves on a queue type: ordered pins (a skipped one steps aside), ar
   assert.equal(t.promote?.ideaId, 'explainers:topic:a');
   assert.deepEqual([...t.archived], ['explainers:topic:e']);
   assert.deepEqual([...t.placed], [['explainers:topic:d', 70]], 'a placement on a pinned idea is ignored');
-  assert.equal(t.demoted.size, 0);
+  assert.deepEqual([...t.demoted], ['explainers:topic:f']);
   const legacy = tonightMoves([{ ...move('reels:idea:x', 'promote'), vertical: 'reels' }], 'reels');
   assert.equal(legacy.pins.length, 1, 'a type not on the queue keeps its single promote');
 });

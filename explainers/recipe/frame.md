@@ -9,7 +9,8 @@ description: >
   style. Scenes cut between shots. No photos, stock footage, rendered 3D, people, body parts, or
   pre-made illustration. Every moment of motion has a sound. Decisions:
   planning/Explainer Reels/DECISIONS.md (EX3-40 to EX3-47; 3.1: EX3-60 to EX3-75; 3.2: EX3-76 to
-  EX3-88; 3.3: EX3-89 to EX3-98), adopted from Explainer 2.0's approved style.
+  EX3-88; 3.3: EX3-89 to EX3-98; 3.4: EX3-102, the opener bank), adopted from Explainer 2.0's
+  approved style.
 unit: the frame — 1080×1920 (9:16); every scene is SVG in frame pixels
 principle: one idea per beat · one read at a time · orange marks the one thing to look at · the picture explains
 
@@ -70,13 +71,13 @@ components:
     typography: "{typography.label} or {typography.dimension}"
     description: "A short label pinned to the object it names: a number, a status, a name, a real term. 5 words or fewer. Shown as the voice names it. A dimension label runs along an isometric axis with a green dimension line that draws itself out."
   critter:
-    description: "THE cast (EX3-77): every character is a critter from the kit's cast.js, never a person, a figure built from solids, or a body part. A critter does whatever someone does in the analogy: it holds, writes, reaches, feels its way, points, carries, sits, walks. Poses (arms), moods (brows, eyes, mouth), and role accessories (wear: cap, chef hat, grad cap, glasses, headset, apron, backpack…) tell its role. handAt() puts a prop in its hand. Orange when it is the focal. Its gaze points at the read."
+    description: "THE cast (EX3-77): every character is a critter from the kit's cast.js, never a person, a figure built from solids, or a body part. A critter does whatever someone does in the analogy: it holds, writes, reaches, feels its way, points, carries, sits, walks. Poses (arms), moods (brows, eyes, mouth), and role accessories (wear: cap, chef hat, grad cap, glasses, headset, apron, backpack…) tell its role. Nothing a critter wears covers or crowds its eyes or mouth (EX3-103, HARD CONSTRAINT): use wear as the kit draws it, and never add a mask, blindfold, hood, visor, sunglasses, a scarf over the mouth or anything else on the face; glasses are the one thing worn over the eyes. handAt() puts a prop in its hand. Orange when it is the focal. Its gaze points at the read."
   prop:
     description: "An everyday object from the kit's prop library (props.js, EX3-78): drawn once, approved, with its states (a switch on or off, a door open or closed) and an orange focal part. prop(name, x, y, { s, state, focal, flip }). A scene uses the library's prop whenever the library has the thing."
   shot:
     description: "A camera on the scene (shots.js, EX3-83, EX3-90): wide, medium, close, insert (a tight camera on one object), reaction (a critter's face). A scene frame lists its shots and hard-cuts between them on voice cues; every shot shows the same scene with everyone in it, centred on what the voice names."
   title-card:
-    description: "Frame 1 only (EX3-80): the kit's titleCard(). A paper note card in the top band (y 250–530, where captions would be) slides in from the first frame (landing by 0.25s, EX3-93) and writes 'today's brain break:' in ink, then the term in orange beneath, larger, in Hershey Sans print handwriting, finished by the end of the opener line. The hook keeps playing below, undimmed. Its group carries data-role=\"title\". Captions are quiet for all of frame 1."
+    description: "Frame 1 only (EX3-80), drawn by the bank's opener (EX3-102) once its break is over, never by a frame worker: the kit's titleCard(). A paper note card in the top band (y 250–530, where captions would be) slides in and writes 'today's brain break:' in ink, then the term in orange beneath, larger, in Hershey Sans print handwriting, finished by the end of the opener line. The hook keeps playing below, undimmed. Its group carries data-role=\"title\". Captions are quiet for all of frame 1."
   dictionary-card:
     description: "Frame 3 only (EX3-80): the kit's dictionaryCard(). The top half (from about y 270): a paper dictionary entry, its headword the topic's term (Pragmatica Extended), its part of speech in Roboto 700 caps, green, then the definition in Roboto 500 laid out from measured font widths, filling in word by word on its voice times and staying. Its group carries data-role=\"definition\"; it returns its bottom edge. Below it: a drawn visual of what the definition says, revealed with its key words. Captions are quiet for the frame."
   step-tracker:
@@ -431,7 +432,7 @@ rarer words weigh more, and a description no word of which is known is dropped. 
 
 `assets/kit/sound.mjs` turns the events into one premixed track (`assets/sfx/events.wav`):
 it picks and rotates sounds, level-matches them, and keeps them under the voice. The opener's
-riser and the hit on the 1→2 cut are placed separately by `opener-sfx.mjs`; do not declare them.
+sound and the hit on the 1→2 cut are placed separately by `opener-sfx.mjs`; do not declare them.
 
 ## Timing data (EX3-60, EX3-79)
 
@@ -449,7 +450,39 @@ the voice; nothing waits for a pause.
 > never chased by cutting words. Each frame is its voice plus a 0.15s `hold`. Each treatment names
 > its ground, focal, shots, the move that carries the beat, and its sounds.
 
-### 1 · Series opener (about 3.5s · `hook` · cut in)
+### 1 · Series opener (about 4–5s · `hook` · cut in)
+
+**The opener is the bank's** (EX3-102). Every reel draws one animated intro at random from the
+opener bank (`assets/kit/openers/`: Paper Rip, Record Scratch Freeze, Typewriter, Big Bang, Knock
+Knock, Eye Zoom-Out, Balloon Pop, Block Drop, Unboxing, Paper Plane, Scissors Cut-Out), never one
+of the last 8 reels' openers; `assets/opener.json` names it. Each opener is an audio and visual
+pattern break built over **this reel's hook**: it rips a sheet off the hook, freezes it and
+circles its critter, zooms out of its critter's eye, cuts its critter out of a page… The first
+text it shows is "AI BRAIN BREAK" alone (never the term); the title card with the term follows
+its break. Code writes `assets/frames/01-opener.js` (`pace.mjs`, `mount.mjs`); never edit it. The
+opener's wait before its line is silence at the head of frame 1's voice (`pace.mjs`), and its
+sound is its own stem (`opener-sfx.mjs`).
+
+**The frame worker writes the hook only: `assets/frames/01-hook.js`**, to this contract:
+
+```js
+export const shots = [ /* one shot, as any scene frame */ ];
+/** The hook's critter: its feet on the page (the world's LAYOUT spot, before any shot's camera),
+ *  its scale (as drawn), its world id, its look (the critter() options that make it itself). */
+export const hero = { at: LAYOUT.thermostat.at, s: 1.3, who: 'thermostat', critter: { wear: ['scarf', 'cap'] } };
+export default {
+  ground: 'paper',
+  shots,
+  draw(t, { hideHero = false, heroPose = {} } = {}) {
+    // the hook in motion under shotFrame(); the hero is left out when hideHero is true, and
+    // heroPose (look, arms, mood) is passed last into the hero's critter options
+  },
+};
+```
+
+No title card and no text in the hook (the opener draws them), no events file (the opener's
+stem is the frame's sound). The hook is the critter-led scene the storyboard picked, and every
+opener drops the viewer straight into it, so it must still read with no context.
 
 **Hook shot** (EX3-62, EX3-88): the storyboard's picked hook, **already moving at frame 0**, its
 first visible change by 0.3s, and **clear on its own**: a viewer with no context knows what they
@@ -457,15 +490,12 @@ are looking at within 1 second (a familiar situation, recognizable critters and 
 problem or surprise). It is usually a critter moment: a reaction that grows out of the setting.
 It raises a question; it is not the payoff, never a slow pan over a still scene, and never niche
 or strange for its own sake. **Ground** the anchor scene's. **Shots** one, or two if the frame
-runs past 6s. **Move** the hook builds with the riser (`ramp-up`); the camera may push in with it.
+runs past 6s. **Move** the hook builds (`ramp-up`); the camera may push in with it.
 
-**Title card** (EX3-80, EX3-93): `titleCard(t, { term, to: VOICE_END - 0.1 })` from `cards.js`,
-drawn after `frame()`: it starts sliding into the top band on the first frame, lands by 0.25s and
-writes itself while the line plays; the hook keeps playing below. Nothing else is written.
-Captions are quiet for the frame.
+**Title card** (EX3-80): the opener's. Captions are quiet for the frame.
 
-**Sounds:** the hook's motion (each landing, each step); `paper slide` as the card arrives; a
-`pen writing` or `marker writing` foley with `dur` under each handwritten line.
+**Sounds:** the opener's stem (its break, its foley) and the bed coming in on its drop; the
+worker declares none.
 
 ### The 1→2 cut: the attention reset (mandatory)
 
@@ -606,8 +636,11 @@ label, `textWidth()` and `typeset()` from `cards.js` give real widths.
 **Critters and props.** `critter(x, y, { arms, mood, wear, look, s, flip, body, who })` and
 `handAt(x, y, sameOptions)` from `cast.js`; `walk(t)` for a walk cycle; `prop(name, x, y, { s,
 state, focal, flip })` from `props.js`. A held prop is drawn at `handAt(...).r` after the critter.
+Accessories come only from `wear`, drawn by the kit clear of the face (`FACE_KEEPOUT`); a frame
+never draws its own clothing or headgear over a critter's eyes or mouth (EX3-103).
 
-**What the try checks:** frame 1 draws the title card (`data-role="title"`), already at 0.15s;
+**What the try checks:** frame 1's hook (`01-hook.js`) keeps its contract: it exports `hero`,
+draws it (`data-who`), leaves it out on `hideHero`, and draws no title card;
 frame 3 draws the dictionary card (`data-role="definition"`); every scene frame longer than 6s
 exports `shots` that pass the shot rules; no critter is drawn twice at one moment or vanishes
 mid-frame; every frame has a valid events file. **`bounds.mjs`** then measures every piece of text
@@ -634,8 +667,8 @@ storyboard, or `STATES`; with a source, nothing on screen contradicts it.
 - **Continuity:** a scene frame starts in the state the last scene frame ended in.
 - **Close:** the kit's, last frame only.
 - **Fabrication:** every number traces to the script, storyboard, or states.
-- **Opener:** the hook moves at frame 0 and reads on its own; the title card animates from the
-  first frame and writes itself during the line.
+- **Opener:** the bank's (EX3-102), over a hook that moves at frame 0 and reads on its own; the
+  hook keeps its contract (`hero`, `hideHero`, `heroPose`, no text).
 - **Define:** `dictionaryCard()` fills in on the voice and stays; a visual sits below it.
 - **Shots:** a camera only (never hide, add or mirror); centred on what the voice names; no two
   consecutive shots the same picture; frames over 6s cut between at least two.

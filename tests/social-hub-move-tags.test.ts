@@ -52,14 +52,14 @@ test('Stories: one Tonight per series', () => {
 
 test('the ranking and Today’s candidates carry the tag', () => {
   const ranked = dayRanking(IDEAS, 'reels', MOVES, NOW);
-  assert.deepEqual(ranked.map((r) => [r.idea.title, r.tag?.text ?? null]), [['Idea 3', 'Pinned'], ['Idea 4', 'Pinned'], ['Idea 1', null], ['Idea 2', null]]);
+  assert.deepEqual(ranked.map((r) => [r.idea.title, r.tag?.text ?? null]), [['Idea 3', 'Pinned'], ['Idea 4', 'Pinned'], ['Idea 2', null], ['Idea 1', 'Demoted']]);
   const cards = quotaCandidates({ posts: [], ideas: IDEAS, adjustments: MOVES, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } }, 'reels', NOW);
   assert.deepEqual(cards.map((c) => [c.idea?.title, c.tag?.text ?? null]), [['Idea 3', 'Pinned'], ['Idea 4', 'Pinned']]);
 });
 
-test('the pool puts pinned ideas first, in the order pinned; a Demote row changes nothing; otherwise score order', () => {
+test('the pool puts pinned ideas first, in the order pinned, an old Demote row last; otherwise score order', () => {
   assert.deepEqual(poolList(IDEAS, 'reels', 'open').map((i) => i.title), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4']);
-  assert.deepEqual(poolList(IDEAS, 'reels', 'open', MOVES).map((i) => i.title), ['Idea 3', 'Idea 4', 'Idea 1', 'Idea 2']);
+  assert.deepEqual(poolList(IDEAS, 'reels', 'open', MOVES).map((i) => i.title), ['Idea 3', 'Idea 4', 'Idea 2', 'Idea 1']);
 });
 
 test('an older promote whose idea is gone does not hold Tonight; the newer present promote is Tonight', () => {

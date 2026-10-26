@@ -35,6 +35,9 @@ INSERT INTO lfd.settings (key, value) VALUES ('publishing_live', 'false'::jsonb)
 INSERT INTO lfd.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
 INSERT INTO lfd.settings (key, value) VALUES ('days', '[2, 5]'::jsonb) ON CONFLICT (key) DO NOTHING;
 INSERT INTO lfd.settings (key, value) VALUES ('run_cap_usd', '1'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- Memes in the post (lib/memes/lfd-post.ts, planning/Memes/DECISIONS.md ME-140): on, with their own spend cap.
+INSERT INTO lfd.settings (key, value) VALUES ('memes', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;
+INSERT INTO lfd.settings (key, value) VALUES ('memes_cap_usd', '1'::jsonb) ON CONFLICT (key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS lfd.posts (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -1,0 +1,144 @@
+WRITER keys [
+  'ok',
+  'draft',
+  'filled',
+  'raw',
+  'costUsd',
+  'turns',
+  'draftRetries',
+  'retryErrors',
+  'turnUsage',
+  'visualsDropped'
+] retries 1 [
+  "draft invalid: slide 5.subject_ids: S5 (Gemini agent) isn't named on this slide; remove the tag (never change the slide's words to fit a tag); slide 6.subject_ids: S5 (Gemini agent) isn't named on this slide; remove the tag (never change the slide's words to fit a tag); slide 7.fallback_visual: company: Google Cloud isn't tagged on this slide; ask only for a subject the slide names, or ask for a thematic, setting, product or event visual (never change the slide's words to fit a photo); slide 8.subject_ids: S5 (Gemini agent) isn't named on this slide; remove the tag (never change the slide's words to fit a tag)"
+] dropped []
+
+==== WRITER
+COVER 1 (chosen): Google Cloud launches Gemini agent, an AI that does tasks for employees across work apps  [company: Google Cloud]
+COVER 2: Google Cloud's new Gemini agent works across company apps, starting with enterprise  [product: Gemini agent]
+COVER 3: Google Cloud's Gemini agent can be given its own work email and calendar  [thematic: email inbox screen]
+
+-- SLIDE 2 (text)    [product: Gemini agent]
+  H: Google's new agent is built to do the work, not just answer
+  B: Announced at Gemini at Work 2026, Google calls it a single, universal agent for work. It answers questions, makes images and media, and writes and runs code. It's in private preview for enterprises.
+
+-- SLIDE 3 (quote) Q1   [person: Thomas Kurian]
+  H: Google Cloud's CEO says you hand it goals, not steps
+
+-- SLIDE 4 (text)    [thematic: network cables ports]
+  H: It plugs into the tools companies already use
+  B: It connects to Microsoft 365, Slack, Jira, Snowflake and more. Google says it runs Gemini and Anthropic's Claude models today. Analyst Holger Mueller says the open approach stands out.
+
+-- SLIDE 5 (text)    [setting: open plan office]
+  H: It can get its own email address, calendar and audit trail
+  B: Google says the agent can be set up as a coworker with its own Workspace account. Every action is logged under the agent, not a person. It runs in the cloud, so work can go on after the laptop closes.
+
+-- SLIDE 6 (text)    [thematic: server racks data center]
+  H: A spend cap pauses the agent when the budget runs out
+  B: If a project hits its real-time cap, its agent stops until an admin resumes it, Google says. The exact consumption model for agent usage hasn't been given yet, so the price is still unclear.
+
+-- SLIDE 7 (text)    [event: AI product launch stage]
+  H: Rivals have launched agents of their own
+  B: CBS reports Meta introduced Muse in September and OpenAI introduced Dots in late September. Google says it starts with businesses because they let it solve harder security, scale and performance problems first.
+
+-- SLIDE 8 (text)    [thematic: magnifying glass document]
+  H: So far, only Google has described what it can do
+  B: No independent hands-on reviews were found. The Verge reports private preview; Constellation Research expects general availability around end of October or early November. Consumers get it later, with no date.
+
+FOLLOW: Follow Helios Group for the next update on the Gemini agent, including the pricing Google hasn't given yet.
+CAPTION:
+Google Cloud has announced the Gemini agent, an AI agent that Google says can take on tasks for employees across their work apps. It is in private preview for enterprise customers inside the Gemini Enterprise app, with consumers to follow later.
+
+An AI agent is software that takes ownership of assigned tasks instead of only answering questions. Google says this one answers questions, handles knowledge work, creates images and media, and writes and runs code from one interface. CEO Thomas Kurian announced it at the Gemini at Work 2026 event. Google says the agent can be given its own Workspace account and email address, and that every action it takes is logged to an audit trail under the agent's name. Spend caps pause a project's agent when the budget is hit. Pricing for the agent has not been given.
+
+Meta introduced Muse in September and OpenAI introduced Dots in late September, CBS reports. No independent hands-on reviews of Google's agent were found, so what it can do comes from Google.
+
+Would you give an AI agent its own work email address?
+
+Follow Helios Group for the next update on the Gemini agent, including the pricing Google hasn't given yet.
+EDIT NOTES:
+- Cover leads with Google Cloud (well_known true) rather than Kurian, who is not widely known.
+- Dropped stats (N2 etc.) and the industry versions; story is told in 7 slides without them.
+- Mueller's single-source quote is paraphrased with attribution on slide 4 and not used as a quote slide.
+- Q1 used verbatim from the blog version, not the TechCrunch or keynote variants.
+- Slide 8 shows the Verge versus Constellation timing difference instead of picking one.
+- Rivals slide is one background slide (B1), tied to F4/F10 for why Google starts with businesses.
+- Kept the agent gloss in the caption (from TERMS) so slide space went to facts.
+- Gemini Spark (B2) left out to avoid a second background slide.
+- No critics are named in the brief, so tension comes from cost, pricing and no independent testing.
+
+==== EDITOR
+COVER 1 (chosen): Google Cloud announces an AI agent built to do tasks for employees across work apps  [company: Google Cloud]
+COVER 2: Google Cloud's new Gemini agent works across company apps, starting with enterprise  [product: Gemini agent]
+COVER 3: Google says its Gemini agent can be given its own work email and calendar  [thematic: email inbox screen]
+
+-- SLIDE 2 (text)    [product: Gemini agent]
+  H: Google's Gemini agent takes on work tasks for employees
+  B: An AI agent takes ownership of assigned tasks. Google says this one, announced at Gemini at Work 2026, answers questions, makes images and media, and writes and runs code. It's in private preview for enterprises.
+
+-- SLIDE 3 (quote) Q1   [person: Thomas Kurian]
+  H: Thomas Kurian on how you direct the agent
+
+-- SLIDE 4 (text)    [thematic: network cables ports]
+  H: It plugs into the tools companies already use
+  B: It connects to Microsoft 365, Slack, Jira, Snowflake and more. Google says it works with Gemini and Anthropic's Claude models today. Constellation Research analyst Holger Mueller says its open approach stands out.
+
+-- SLIDE 5 (text)    [setting: open plan office]
+  H: It can get its own email address, calendar and audit trail
+  B: Google says the agent can be set up as a coworker with its own Workspace account. Every action is logged to an audit trail under the agent's name. It runs in the cloud, so work continues after the laptop closes.
+
+-- SLIDE 6 (text)    [thematic: server racks data center]
+  H: A spend cap pauses the agent when the budget runs out
+  B: Google says that if a project hits its real-time cap, its agent pauses until an admin resumes it. Google hasn't given the exact consumption model for agent usage, so the price is still unclear.
+
+-- SLIDE 7 (text)    [event: AI product launch stage]
+  H: Rivals have launched agents of their own
+  B: CBS reports Meta introduced Muse in September and OpenAI introduced Dots in late September. Google says it starts with businesses because they let it solve harder security, scale and performance problems first.
+
+-- SLIDE 8 (text)    [thematic: magnifying glass document]
+  H: So far, only Google has described what it can do
+  B: No independent hands-on reviews were found. Constellation Research expects general availability around the end of October or early November. Google's blog gives no date, and consumers get it later.
+
+FOLLOW: Follow Helios Group for the next update on the Gemini agent, including the pricing Google hasn't given yet.
+CAPTION:
+Google Cloud has announced the Gemini agent, an AI agent that Google says can take on tasks for employees across their work apps. It is in private preview for enterprise customers inside the Gemini Enterprise app, with consumers to follow later.
+
+An AI agent is software that takes ownership of assigned tasks instead of only answering questions. Google says this one answers questions, handles knowledge work, creates images and media, and writes and runs code from one interface. CEO Thomas Kurian announced it at the Gemini at Work 2026 event. Google says the agent can be given its own Workspace account and email address, and that every action it takes is logged to an audit trail under the agent's name. Google says spend caps pause a project's agent when the budget is hit. Pricing for the agent has not been given.
+
+Meta introduced Muse in September and OpenAI introduced Dots in late September, CBS reports. No independent hands-on reviews of Google's agent were found, so what it can do comes from Google.
+
+Would you give an AI agent its own work email address?
+
+Follow Helios Group for the next update on the Gemini agent, including the pricing Google hasn't given yet.
+EDIT NOTES:
+- Cover 1: 'launches' changed to 'announces' and 'does tasks' to 'built to do tasks', since it is only in private preview and capabilities are Google's description.
+- Cover 3: added 'Google says' to keep the F6 attribution.
+- Slide 1 headline: removed 'not just answer' construction; body now glosses AI agent from TERMS and keeps Google attribution and private preview.
+- Slide 2 headline: reworded to avoid 'goals, not steps' contrast and to stop duplicating the quote's words; names Kurian.
+- Slide 3: named Mueller's employer (Constellation Research) since his comment is single-source and from his own employer's outlet; 'runs' changed to 'works with' to match F8.
+- Slide 4: dropped 'not a person' contrast, kept audit trail attributed to the agent; trimmed to fit 220 chars.
+- Slide 5: 'stops' changed to 'pauses' to match F9; kept 'Google says' and the unclear-pricing line.
+- Slide 6 left as the single background slide (B1) with Google's attribution on the businesses-first reason.
+- Slide 7: cut the Verge versus Constellation split, which is not a real conflict; kept N6 as Constellation's expectation and noted Google's blog gives no date.
+- Caption: added 'Google says' before the spend-cap sentence to keep the F9 attribution.
+
+==== HOOK keys [
+  'ok',        'draft',
+  'filled',    'hooks',
+  'dropped',   'raw',
+  'costUsd',   'turns',
+  'retries',   'retryErrors',
+  'turnUsage', 'budgets'
+]
+budgets [
+  104, 104, 104,
+  104, 104, 104,
+  104
+] dropped [] retries 0 []
+slide 2: [tease] How do you direct it? Thomas Kurian has a short answer.  (Q1)
+slide 3: [tease] So which work apps can it reach? The list includes Microsoft 365 and Slack.  (F5)
+slide 4: [tease] It can also get a work identity of its own, down to an email address.  (F6)
+slide 5: [tease] An agent that keeps working raises a cost question, and Google says it has a cap for that.  (F9,F7)
+slide 6: [tease] Google is not alone here. Meta and OpenAI have both launched agents.  (B1)
+slide 7: [tease] Everything so far comes from Google. Has anyone else tested it?  (F1)
+slide 8: — none

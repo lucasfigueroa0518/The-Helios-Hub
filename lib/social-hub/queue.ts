@@ -36,19 +36,25 @@ export function isArchived(moves: readonly Pick<IdeaAdjustment, 'ideaId' | 'kind
 /**
  * The queue, best first. `moves` are the active rows, oldest first. Pins
  * (a `pin`, or an old `promote`) lead in the order they were made; a `place`
- * on a pinned idea is ignored while it stays pinned. `demote` has no meaning
- * here. Rows on ideas absent from `items` change nothing. Ties keep the order
- * `items` came in.
+ * on a pinned idea is ignored while it stays pinned. An old `demote` row still sinks its idea to the bottom (the latest of
+ * an idea's pin, promote and demote rows wins); nothing makes new ones. Rows on ideas absent from `items` change nothing.
+ * Ties keep the order `items` came in.
  */
 export function queueOrder<T extends QueueItem>(items: readonly T[], moves: readonly IdeaAdjustment[]): QueuedIdea<T>[] {
   const here = new Set(items.map((i) => i.id));
   const archived = new Set(moves.filter((m) => m.kind === 'archive' && here.has(m.ideaId)).map((m) => m.ideaId));
   const pinAt = new Map<string, number>();
   const key = new Map<string, number>();
+  const sunk = new Set<string>();
   moves.forEach((m, order) => {
     if (!here.has(m.ideaId)) return;
-    if (m.kind === 'pin' || m.kind === 'promote') pinAt.set(m.ideaId, pinAt.get(m.ideaId) ?? order);
-    else if (m.kind === 'place' && m.sortKey != null) key.set(m.ideaId, m.sortKey);
+    if (m.kind === 'pin' || m.kind === 'promote') {
+      pinAt.set(m.ideaId, pinAt.get(m.ideaId) ?? order);
+      sunk.delete(m.ideaId);
+    } else if (m.kind === 'demote') {
+      pinAt.delete(m.ideaId);
+      sunk.add(m.ideaId);
+    } else if (m.kind === 'place' && m.sortKey != null) key.set(m.ideaId, m.sortKey);
   });
   const live = items.filter((i) => !archived.has(i.id));
   const pinned = live.filter((i) => pinAt.has(i.id)).sort((a, b) => pinAt.get(a.id)! - pinAt.get(b.id)!);
@@ -57,7 +63,8 @@ export function queueOrder<T extends QueueItem>(items: readonly T[], moves: read
     .map((item, order) => ({ item, order, effective: key.get(item.id) ?? item.score }))
     .sort((a, b) => (b.effective ?? -Infinity) - (a.effective ?? -Infinity) || a.order - b.order);
   const out: QueuedIdea<T>[] = pinned.map((item) => ({ item, rank: 0, pinned: true, placed: false, effective: item.score }));
-  for (const r of rest) out.push({ item: r.item, rank: 0, pinned: false, placed: key.has(r.item.id), effective: r.effective });
+  for (const r of rest.filter((x) => !sunk.has(x.item.id))) out.push({ item: r.item, rank: 0, pinned: false, placed: key.has(r.item.id), effective: r.effective });
+  for (const r of rest.filter((x) => sunk.has(x.item.id))) out.push({ item: r.item, rank: 0, pinned: false, placed: false, effective: r.effective });
   return out.map((q, i) => ({ ...q, rank: i + 1 }));
 }
 
@@ -87,14 +94,11 @@ export function dropKey(others: readonly (number | null)[], index: number, up: b
 }
 
 /**
- * The ideas a type's refill drops to hold the cap: the lowest-ranked
- * unprotected ones, as many as it takes. Protected ideas are never dropped, so
- * a pool full of them stays over the cap.
+ * The ideas a type's refill drops to hold the cap: everything ranked past the first `cap` that is not protected. Protected
+ * ideas below the line are kept, so the pool can pass the cap; they never push an idea inside the cap out.
  */
 export function capOverflow<T extends QueueItem>(queued: readonly QueuedIdea<T>[], cap: number, isProtected: (q: QueuedIdea<T>) => boolean): T[] {
-  const excess = queued.length - cap;
-  if (excess <= 0) return [];
-  return queued.filter((q) => !isProtected(q)).slice(-excess).reverse().map((q) => q.item);
+  return queued.slice(cap).filter((q) => !isProtected(q)).map((q) => q.item);
 }
 
 /** The key for a drop between two neighbours the caller saw (either may be absent: the top or the bottom of the list). */
@@ -112,8 +116,9 @@ export function dropKeyBetween(above: number | null | undefined, below: number |
 export function queueTags(moves: readonly IdeaAdjustment[], present: ReadonlySet<string>): Map<string, MoveTag> {
   const tags = new Map<string, MoveTag>();
   for (const m of moves) {
-    if (!present.has(m.ideaId) || m.kind === 'demote') continue;
-    if (m.kind === 'archive') tags.delete(m.ideaId);
+    if (!present.has(m.ideaId)) continue;
+    if (m.kind === 'demote') tags.set(m.ideaId, { kind: 'demoted', text: 'Demoted' });
+    else if (m.kind === 'archive') tags.delete(m.ideaId);
     else if (m.kind === 'place') { if (!tags.has(m.ideaId) || tags.get(m.ideaId)!.kind === 'placed') tags.set(m.ideaId, { kind: 'placed', text: 'Placed' }); }
     else tags.set(m.ideaId, m.skipReason != null ? { kind: 'cant', text: `Can’t be made: ${m.skipReason}` } : { kind: 'pinned', text: 'Pinned' });
   }
@@ -129,12 +134,13 @@ export function orderForNight<T>(
   list: readonly T[],
   idOf: (x: T) => string,
   scoreOf: (x: T) => number | null,
-  night: { pins: readonly string[]; placed: ReadonlyMap<string, number>; archived: ReadonlySet<string> },
+  night: { pins: readonly string[]; placed: ReadonlyMap<string, number>; archived: ReadonlySet<string>; demoted?: ReadonlySet<string> },
 ): T[] {
   const live = list.filter((x) => !night.archived.has(idOf(x)));
   const pinOrder = new Map(night.pins.map((id, i) => [id, i]));
   const pinned = live.filter((x) => pinOrder.has(idOf(x))).sort((a, b) => pinOrder.get(idOf(a))! - pinOrder.get(idOf(b))!);
-  const rest = live.filter((x) => !pinOrder.has(idOf(x)));
+  const rest = live.filter((x) => !pinOrder.has(idOf(x)) && !night.demoted?.has(idOf(x)));
+  const sunk = live.filter((x) => !pinOrder.has(idOf(x)) && night.demoted?.has(idOf(x)));
   const placed = rest.filter((x) => night.placed.has(idOf(x))).sort((a, b) => night.placed.get(idOf(b))! - night.placed.get(idOf(a))!);
   const out = rest.filter((x) => !night.placed.has(idOf(x)));
   for (const x of placed) {
@@ -142,7 +148,7 @@ export function orderForNight<T>(
     const at = out.findIndex((o) => (scoreOf(o) ?? -Infinity) < key);
     out.splice(at < 0 ? out.length : at, 0, x);
   }
-  return [...pinned, ...out];
+  return [...pinned, ...out, ...sunk];
 }
 
 /**

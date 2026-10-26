@@ -676,6 +676,104 @@ test('critters: poses, moods, accessories, and hands that hold props', async () 
   assert.ok(w.legs.l === -w.legs.r && w.steps[0] > 0);
 });
 
+type Box = { part: string; x: number; y: number; w: number; h: number };
+
+/** Every element of an SVG snippet that puts ink inside a box (strokes counted at their width,
+ *  closed filled paths by their area). The kit's paths use only absolute M, L, Q and Z. */
+function inkInBox(svg: string, box: Box): string[] {
+  const near = (px: number, py: number, r: number) => px > box.x - r && px < box.x + box.w + r && py > box.y - r && py < box.y + box.h + r;
+  const inside = (poly: number[][], px: number, py: number) => {
+    let c = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i];
+      const [xj, yj] = poly[j];
+      if (yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  };
+  const hits: string[] = [];
+  for (const [tagText, tag, raw] of svg.matchAll(/<(path|rect|circle|ellipse)\b([^>]*)>/g)) {
+    const a = Object.fromEntries([...raw.matchAll(/([\w-]+)="([^"]*)"/g)].map(([, k, v]) => [k, v]));
+    const n = (k: string) => Number(a[k] ?? 0);
+    const half = a.stroke && a.stroke !== 'none' ? n('stroke-width') / 2 : 0;
+    let hit = false;
+    if (tag === 'circle' || tag === 'ellipse') {
+      const r = (tag === 'circle' ? n('r') : Math.max(n('rx'), n('ry'))) + half;
+      const dx = Math.max(box.x - n('cx'), 0, n('cx') - box.x - box.w);
+      const dy = Math.max(box.y - n('cy'), 0, n('cy') - box.y - box.h);
+      hit = Math.hypot(dx, dy) < r;
+    } else if (tag === 'rect') {
+      hit = n('x') - half < box.x + box.w && n('x') + n('width') + half > box.x && n('y') - half < box.y + box.h && n('y') + n('height') + half > box.y;
+    } else {
+      const toks = (a.d ?? '').match(/[MLQZ]|-?\d*\.?\d+/g) ?? [];
+      const subs: number[][][] = [];
+      let cur: number[][] = [];
+      for (let i = 0; i < toks.length; ) {
+        const cmd = toks[i++];
+        const num = () => Number(toks[i++]);
+        if (cmd === 'M') subs.push((cur = [[num(), num()]]));
+        else if (cmd === 'L') cur.push([num(), num()]);
+        else if (cmd === 'Q') {
+          const [x0, y0] = cur[cur.length - 1];
+          const [cx, cy, x1, y1] = [num(), num(), num(), num()];
+          for (let k = 1; k <= 24; k++) {
+            const t = k / 24;
+            cur.push([(1 - t) ** 2 * x0 + 2 * t * (1 - t) * cx + t * t * x1, (1 - t) ** 2 * y0 + 2 * t * (1 - t) * cy + t * t * y1]);
+          }
+        }
+      }
+      for (const poly of subs) {
+        // the outline, sampled densely along each segment
+        for (let i = 1; i < poly.length && !hit; i++) {
+          for (let k = 0; k <= 8 && !hit; k++) {
+            const px = poly[i - 1][0] + ((poly[i][0] - poly[i - 1][0]) * k) / 8;
+            const py = poly[i - 1][1] + ((poly[i][1] - poly[i - 1][1]) * k) / 8;
+            hit = near(px, py, half);
+          }
+        }
+        if (!hit && a.fill !== 'none' && poly.length > 2) {
+          for (let px = box.x; px <= box.x + box.w && !hit; px += 2) for (let py = box.y; py <= box.y + box.h && !hit; py += 2) hit = inside(poly, px, py);
+        }
+      }
+    }
+    if (hit) hits.push(tagText.slice(0, 90));
+  }
+  return hits;
+}
+
+test('critter accessories never cover or crowd the eyes or mouth (EX3-103); glasses sit on the eyes', async () => {
+  await import('../explainers/world-kit/try.mjs');
+  const { scope } = await import('../explainers/world-kit/draw.js');
+  const { WEAR, WEAR_ON_EYES, FACE_KEEPOUT, wearDrawing, critter } = await import('../explainers/world-kit/cast.js');
+  const zones = FACE_KEEPOUT as Box[];
+  assert.deepEqual(zones.map((z) => z.part), ['eyes', 'mouth']);
+  assert.deepEqual(WEAR_ON_EYES, ['glasses']);
+  for (const ground of ['paper', 'night']) {
+    scope('f-', ground);
+    for (const item of WEAR as string[]) {
+      for (const body of ['ink', 'paper', 'orange']) {
+        const { front } = wearDrawing([item], { body });
+        assert.ok(front.length > 0 || item === 'backpack', item);
+        for (const zone of zones) {
+          if (zone.part === 'eyes' && (WEAR_ON_EYES as string[]).includes(item)) continue;
+          assert.deepEqual(inkInBox(front, zone), [], `${item} on a ${body} critter (${ground}) is in the ${zone.part} keep-out`);
+        }
+      }
+      // critter() draws exactly these accessories
+      assert.ok(critter(0, 0, { wear: [item] }).includes(wearDrawing([item]).front));
+    }
+  }
+  // The measure catches the 3.2 designs: the scarf over the mouth, the mic at its corner, the
+  // apron over it, and the backpack strap beside the eye.
+  const by = -142;
+  const mouth = zones[1];
+  const eyes = zones[0];
+  assert.equal(inkInBox(`<path d="M -66 ${by + 62} Q 0 ${by + 76} 66 ${by + 62} L 66 ${by + 76} Q 0 ${by + 90} -66 ${by + 76} Z" fill="#fff" stroke="#000" stroke-width="4">`, mouth).length, 1);
+  assert.equal(inkInBox(`<circle cx="22" cy="${by + 88}" r="6" fill="#fff">`, mouth).length, 1);
+  assert.equal(inkInBox(`<path d="M -40 ${by + 70} L 40 ${by + 70} L 46 ${by + 112} L -46 ${by + 112} Z" fill="#fff">`, mouth).length, 1);
+  assert.equal(inkInBox(`<path d="M -50 ${by + 2} Q -58 ${by + 50} -46 ${by + 96}" fill="none" stroke="#fff" stroke-width="9">`, eyes).length, 1);
+});
+
 test('the prop library: every prop draws in every state, focal or not, with its name', async () => {
   await import('../explainers/world-kit/try.mjs');
   const { scope } = await import('../explainers/world-kit/draw.js');
