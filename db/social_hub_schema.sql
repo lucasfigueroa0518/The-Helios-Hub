@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS social_hub.content_items (
     UNIQUE (vertical, native_ref)
 );
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'));
 CREATE INDEX IF NOT EXISTS idx_social_hub_items_idea ON social_hub.content_items (vertical, idea_ref);
 
 -- A person's Delete (never a row removal): the post leaves the hub's lists and its idea
@@ -277,7 +277,7 @@ ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS skip_rate double 
 -- any video exists, so a schedule row may carry only its idea (idea_ref) until
 -- the video is attached when the slot comes due.
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'));
 
 ALTER TABLE social_hub.schedule ALTER COLUMN content_item_id DROP NOT NULL;
 ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS idea_ref text;
@@ -324,7 +324,7 @@ ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS shared_to_feed bo
 -- 'partial' when it stopped with frames live), and per-frame insights (the
 -- day's latest capture; Stories' navigation metrics and `final` in `extra`).
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'));
 ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
 ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
