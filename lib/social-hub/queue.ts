@@ -21,6 +21,18 @@ export const POOL_CAP = 30;
  */
 export const QUEUE_LIVE: ReadonlySet<string> = new Set(['explainers', 'reels', 'carousels', 'stories']);
 
+/**
+ * Types that take Archive but not Pin or drag (Last Few Days: its pool is the last run's record, so there is no queue to steer,
+ * but a story a person archives is kept out of every later run). Everything else about them is as for a type not on the queue.
+ */
+export const ARCHIVE_ONLY: ReadonlySet<string> = new Set(['last_few_days']);
+
+/** The ideas a person archived, taken out (for the views of a type whose order is not the queue's). */
+export function withoutArchived<T extends { id: string }>(ideas: readonly T[], moves: ReadonlyArray<{ ideaId: string; kind: string }>): T[] {
+  const gone = new Set(moves.filter((m) => m.kind === 'archive').map((m) => m.ideaId));
+  return gone.size ? ideas.filter((i) => !gone.has(i.id)) : [...ideas];
+}
+
 /** A drop lands this far above or below its neighbour's effective score. */
 const STEP = 0.01;
 

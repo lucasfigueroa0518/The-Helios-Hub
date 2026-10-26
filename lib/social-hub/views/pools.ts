@@ -1,6 +1,6 @@
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
-import { QUEUE_LIVE, capQueued, queueOrder } from '@/lib/social-hub/queue';
+import { QUEUE_LIVE, capQueued, queueOrder, withoutArchived } from '@/lib/social-hub/queue';
 import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 /**
@@ -70,7 +70,7 @@ export function poolList(ideas: readonly HubIdea[], vertical: Vertical, filter: 
   const mine = ideas.filter((i) => i.vertical === vertical);
   const kept = filter === 'all' ? mine : filter === 'ready' ? mine.filter((i) => i.state === 'content_ready') : mine.filter((i) => OPEN.has(i.state));
   // A type whose night does not follow the queue yet keeps Promote and Demote, so the page never shows an order the night won't make.
-  if (!QUEUE_LIVE.has(vertical)) return applyMoves(rankIdeas(kept), movesFor(adjustments, vertical));
+  if (!QUEUE_LIVE.has(vertical)) return applyMoves(withoutArchived(rankIdeas(kept), movesFor(adjustments, vertical)), movesFor(adjustments, vertical));
   const moves = movesFor(adjustments, vertical);
   if (filter === 'all') return queueOrder(rankIdeas(kept), moves).map((q) => q.item);
   // At most 30 open ideas per type (Stories: per series); pinned, dragged, yours and made ideas are never cut.

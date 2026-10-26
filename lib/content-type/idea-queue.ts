@@ -1,6 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { QUEUE_LIVE, dropKeyBetween, queueOrder } from '@/lib/social-hub/queue';
+import { ARCHIVE_ONLY, QUEUE_LIVE, dropKeyBetween, queueOrder } from '@/lib/social-hub/queue';
 import { archiveIdea, pinIdea, placeIdea, reorderPins, unpinIdea } from '@/lib/social-hub/queue-store';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -23,7 +23,7 @@ export function parseQueueAction(body: unknown): QueueAction {
   if (!VERTICALS.includes(b.vertical as Vertical)) throw new Error('Unknown content type.');
   const vertical = b.vertical as Vertical;
   // A hand move on a type whose night does not follow the queue would promise what the night will not do.
-  if (!QUEUE_LIVE.has(vertical)) throw new Error('This type does not take pins, drags or archives yet.');
+  if (!QUEUE_LIVE.has(vertical) && !(ARCHIVE_ONLY.has(vertical) && b.action === 'archive')) throw new Error(ARCHIVE_ONLY.has(vertical) ? 'This type only takes Archive.' : 'This type does not take pins, drags or archives yet.');
   const idea = (v: unknown, what: string) => {
     if (typeof v !== 'string' || !IDEA_ID.test(v) || !v.startsWith(`${vertical}:`)) throw new Error(`Unknown ${what}.`);
     return v;

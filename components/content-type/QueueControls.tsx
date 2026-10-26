@@ -10,12 +10,14 @@ import { postQueue } from '@/components/content-type/queue-post';
  * Pin / Unpin and Archive for one idea (idea pool standard). Pin puts it at the top of the queue until it is made;
  * Archive hides it for good (a soft delete: kept, never brought back by a refill).
  */
-export function QueueControls({ vertical, ideaId, pinned, title, compact = false, buttonClass = 'rh-btn rh-rank__btn', onPinned }: {
+export function QueueControls({ vertical, ideaId, pinned, title, compact = false, archiveOnly = false, buttonClass = 'rh-btn rh-rank__btn', onPinned }: {
   vertical: string;
   ideaId: string;
   pinned: boolean;
   title: string;
   compact?: boolean;
+  /** Last Few Days: Archive only (it has no queue to pin or drag within). */
+  archiveOnly?: boolean;
   /** The page's own button class (the Social Hub pages use `sh-btn`). */
   buttonClass?: string;
   /** Called after a pin lands, so the page can ask about generating an idea that has nothing made yet. */
@@ -40,9 +42,9 @@ export function QueueControls({ vertical, ideaId, pinned, title, compact = false
   }
   return (
     <span className="rh-rank" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      <button type="button" className={buttonClass} disabled={busy} onClick={() => run(pinned ? 'unpin' : 'pin')} title={pinned ? 'Unpin: back to its place by score' : 'Pin: top of the queue until it is made'} aria-label={pinned ? 'Unpin' : 'Pin to the top of the queue'}>
+      {archiveOnly ? null : <button type="button" className={buttonClass} disabled={busy} onClick={() => run(pinned ? 'unpin' : 'pin')} title={pinned ? 'Unpin: back to its place by score' : 'Pin: top of the queue until it is made'} aria-label={pinned ? 'Unpin' : 'Pin to the top of the queue'}>
         {pinned ? <PinOff size={13} /> : <Pin size={13} />}{compact ? null : pinned ? ' Unpin' : ' Pin'}
-      </button>
+      </button>}
       <button type="button" className={buttonClass} disabled={busy} onClick={() => run('archive')} title="Archive: hide it for good" aria-label="Archive">
         <Archive size={13} />{compact ? null : ' Archive'}
       </button>

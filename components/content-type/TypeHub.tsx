@@ -16,7 +16,7 @@ import { MADE_LABEL, STORY_SERIES, type MadeKind, type TypeBenchItem, type TypeC
 import type { ProgressItem } from '@/lib/content-type/progress';
 import type { GenerateIdea } from '@/lib/content-type/queue-client';
 import { runStatusText, type RunSnapshot } from '@/lib/content-type/run-status';
-import { QUEUE_LIVE } from '@/lib/social-hub/queue';
+import { ARCHIVE_ONLY, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import { metricValue } from '@/lib/social-hub/metrics';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -143,7 +143,9 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
           {isOpen ? (
             queueLive
               ? <QueueControls vertical={model.vertical} ideaId={item.idea.id} pinned={item.pinned === true} title={item.idea.title} compact onPinned={() => { if (!item.card && generate) setAskPin({ id: item.idea.id, title: item.idea.title }); }} />
-              : <RankButtons vertical={model.vertical} ideaId={item.idea.id} compact />
+              : ARCHIVE_ONLY.has(model.vertical)
+                ? <QueueControls vertical={model.vertical} ideaId={item.idea.id} pinned={false} title={item.idea.title} compact archiveOnly />
+                : <RankButtons vertical={model.vertical} ideaId={item.idea.id} compact />
           ) : null}
           {benchAction && !item.card ? <span onClick={(e) => e.stopPropagation()}>{benchAction(item)}</span> : null}
         </span>
@@ -276,7 +278,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]}{idea.idea.group ? ` · ${idea.idea.group}` : ''} · ranked {idea.rank} of {idea.idea.group ? bench.filter((b) => b.idea.group === idea.idea.group).length : model.benchTotal}{idea.idea.score != null ? ` · ${idea.idea.scoreLabel || model.scoreLabel || 'score'} ${formatScore(idea.idea.score)}` : ''}</p>
             {idea.idea.detail ? <p>{idea.idea.detail}</p> : null}
             {idea.idea.createdAt ? <p className="rh-muted">Added {shortDate(idea.idea.createdAt)}</p> : null}
-            {idea.idea.state === 'idea_only' || idea.idea.state === 'content_ready' ? <div style={{ marginTop: 12 }}>{queueLive ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={idea.pinned === true} title={idea.idea.title} onPinned={() => { if (!idea.card && generate) setAskPin({ id: idea.idea.id, title: idea.idea.title }); }} /> : <RankButtons vertical={model.vertical} ideaId={idea.idea.id} />}</div> : null}
+            {idea.idea.state === 'idea_only' || idea.idea.state === 'content_ready' ? <div style={{ marginTop: 12 }}>{queueLive ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={idea.pinned === true} title={idea.idea.title} onPinned={() => { if (!idea.card && generate) setAskPin({ id: idea.idea.id, title: idea.idea.title }); }} /> : ARCHIVE_ONLY.has(model.vertical) ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={false} title={idea.idea.title} archiveOnly /> : <RankButtons vertical={model.vertical} ideaId={idea.idea.id} />}</div> : null}
             {benchAction ? <div style={{ marginTop: 12 }}>{benchAction(idea)}</div> : null}
             <ScoreSection idea={idea.idea} />
           </div>

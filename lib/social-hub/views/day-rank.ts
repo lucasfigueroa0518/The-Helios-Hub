@@ -4,7 +4,7 @@ import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
 import type { SlotsByDate } from '@/lib/social-hub/slots/types';
 import { rankIdeas } from '@/lib/social-hub/views/pools';
 import { isRejected } from '@/lib/social-hub/views/state';
-import { QUEUE_LIVE, capQueued, queueOrder, queueTags } from '@/lib/social-hub/queue';
+import { QUEUE_LIVE, capQueued, queueOrder, queueTags, withoutArchived } from '@/lib/social-hub/queue';
 import { applyMoves, movesFor, moveTags, type IdeaAdjustment, type MoveTag } from '@/lib/social-hub/views/moves';
 
 /**
@@ -89,7 +89,7 @@ export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjust
   for (const list of groups.values()) {
     // A type whose night does not follow the queue yet keeps Promote and Demote (one promote a night, demotes last).
     if (!queued) {
-      applyMoves(rankIdeas(list), moves).forEach((idea, i) => out.push({ idea, rank: i + 1, moved: lastMove.get(idea.id) ?? null, tag: tags.get(idea.id) ?? null, pinned: false, placed: false }));
+      applyMoves(withoutArchived(rankIdeas(list), moves), moves).forEach((idea, i) => out.push({ idea, rank: i + 1, moved: lastMove.get(idea.id) ?? null, tag: tags.get(idea.id) ?? null, pinned: false, placed: false }));
       continue;
     }
     for (const q of capQueued(queueOrder(rankIdeas(list), moves))) out.push({ idea: q.item, rank: q.rank, moved: q.pinned ? 'promoted' : null, tag: tags.get(q.item.id) ?? null, pinned: q.pinned, placed: q.placed });
