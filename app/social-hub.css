@@ -461,3 +461,30 @@ p.sh-subtle { max-width: 75ch; }
 .sh-switch.is-on .sh-switch__knob { transform: translateX(14px); }
 .sh-switch__text { display: flex; flex-direction: column; gap: 2px; }
 .sh-switch__text .sh-muted { font-size: var(--sh-fs-small); }
+
+/* Idea queue (pool standard, 2026-10-21): the pool page's drag handle, pin zone and row. */
+.sh-queue { margin: 0; padding: 0; list-style: none; }
+.sh-queue .rh-queue-item + .rh-queue-item, .sh-queue li + li { border-top: 1px solid var(--sh-hairline); }
+.sh-queue li { background: var(--color-surface); }
+.sh-queue li.is-dragging { box-shadow: var(--sh-overlay); border-radius: var(--radius-md); }
+.sh-queue__row { display: grid; grid-template-columns: 28px 24px minmax(0, 1fr) 88px auto; align-items: start; gap: 12px; padding: 12px 14px; }
+.sh-queue__row.is-pinned { background: var(--sh-needs-wash); }
+.sh-queue__rank { color: var(--color-text-muted); font-size: var(--sh-fs-label); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; padding-top: 3px; }
+.sh-queue__handle { display: grid; place-items: center; }
+.sh-queue__grip { display: grid; place-items: center; width: 24px; height: 28px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--color-text-muted); cursor: grab; }
+.sh-queue__grip:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.sh-queue__grip:active { cursor: grabbing; }
+.sh-queue__grip:focus-visible { outline: 2px solid var(--sh-focus); outline-offset: 1px; }
+.sh-queue__main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sh-queue__chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sh-queue__score { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.sh-queue__btn { min-width: 0; }
+.sh-chip--pinned { background: var(--color-primary); color: var(--color-text-inverse); }
+.sh-queue-zone { display: grid; place-items: center; min-height: 40px; margin: 10px 14px; border: 1.5px dashed var(--sh-hairline); border-radius: var(--radius-md); color: var(--color-text-muted); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); transition: background 160ms ease, border-color 160ms ease; }
+.sh-queue-zone.is-active { border-color: var(--sh-focus); background: var(--sh-needs-wash); color: var(--sh-needs-ink); }
+@media (max-width: 640px) {
+  .sh-queue__row { grid-template-columns: 22px 24px minmax(0, 1fr); }
+  .sh-queue__score, .sh-queue__row > :last-child { grid-column: 3; justify-self: start; align-items: flex-start; }
+}
+.sh-queue li { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.sh-queue li.is-dragging, .sh-queue li.is-dragging * { cursor: grabbing; }

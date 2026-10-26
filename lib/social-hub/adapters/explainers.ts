@@ -245,6 +245,7 @@ export function explainerIdeas(rows: readonly ExplainerTopicRow[]): HubIdea[] {
     id: `explainers:topic:${row.topic_id}`,
     vertical: 'explainers',
     title: row.title,
+    yours: row.origin === 'manual',
     score: num(row.weighted_score),
     scoreLabel: 'Weighted score (0–100)',
     breakdown: explainerBreakdown(row),

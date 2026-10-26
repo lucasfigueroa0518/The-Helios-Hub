@@ -9,7 +9,7 @@ import type { OverrideRow, TemplateRow } from '@/lib/social-hub/slots/types';
 // Mon 2026-10-19 … Sun 2026-10-25.
 const WEEK = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'];
 const T = (weekday: number, vertical: TemplateRow['vertical'], startMinute: number, feedMode: TemplateRow['feedMode'] = null, series: StorySeries | null = null): TemplateRow => ({ weekday, vertical, startMinute, series, feedMode });
-const O = (nyDate: string, vertical: OverrideRow['vertical'], startMinute: number, action: OverrideRow['action'], feedMode: OverrideRow['feedMode'] = null, series: StorySeries | null = null): OverrideRow => ({ nyDate, vertical, startMinute, series, action, feedMode });
+const O = (nyDate: string, vertical: OverrideRow['vertical'], startMinute: number, action: OverrideRow['action'], feedMode: OverrideRow['feedMode'] = null, series: StorySeries | null = null): OverrideRow => ({ nyDate, vertical, startMinute, series, action, feedMode, setBy: 'system' });
 
 test('a template day resolves in start order at its free times', () => {
   const tpl = [T(2, 'explainers', 780, 'main'), T(2, 'reels', 525, 'trial'), T(3, 'reels', 1080, 'trial')];

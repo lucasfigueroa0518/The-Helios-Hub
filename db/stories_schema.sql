@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS stories.sets (
 -- Free-time slots (2026-10-20): the minute of the New York day a set is booked at, so a
 -- series can run twice a day. NULL for legacy window-based sets.
 ALTER TABLE stories.sets ADD COLUMN IF NOT EXISTS slot_minute smallint;
+-- Who set the set's day and minute (calendar type schedules, 2026-10-21): 'person' when a
+-- person moved it, 'system' or NULL otherwise. A schedule save moves only the system's sets.
+ALTER TABLE stories.sets ADD COLUMN IF NOT EXISTS slot_by text CHECK (slot_by IN ('person','system'));
 -- Two live-set indexes, deploy-order safe in both directions (ruling R25):
 --   uq_stories_sets_live_day  (series, ny_date)            one set a day; pre-redesign code names it in
 --                                                           ON CONFLICT (series, ny_date), so it stays here.

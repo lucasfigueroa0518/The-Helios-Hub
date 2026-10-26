@@ -17,6 +17,8 @@ import type { Lane, LfdCandidate, Pick } from './types';
 export const MAX_STORIES = 6;
 export const MIN_STORIES = 5;
 export const MAX_MAJOR = 3;
+/** Seeds one post may hold (design 2026-10-26): the rest wait for the next run. */
+export const MAX_SEEDS = 3;
 export const PER_COMPANY = 2;
 export const JUDGED_MAX = 60;
 export const RUNDOWN_POOL = 20;
@@ -103,7 +105,8 @@ async function sameEvent(jev: JevAsk, a: { headline: string; body: string }, b: 
 
 /** Keep the stronger article (the longer body); carry every source id, outlet and the best scores. */
 function fold(into: LfdCandidate, from: LfdCandidate): LfdCandidate {
-  const keep = from.body.length > into.body.length ? from : into;
+  // A person's seed keeps its own article, url and origin: it absorbs the duplicate rather than being replaced by it.
+  const keep = into.yours ? into : from.yours ? from : from.body.length > into.body.length ? from : into;
   const other = keep === into ? from : into;
   const max = (a: number | null, b: number | null) => (a === null ? b : b === null ? a : Math.max(a, b));
   return {
@@ -115,6 +118,7 @@ function fold(into: LfdCandidate, from: LfdCandidate): LfdCandidate {
     blockbuster: Math.max(into.blockbuster, from.blockbuster),
     major: max(into.major, from.major),
     firstSeen: into.firstSeen ?? from.firstSeen,
+    ...(into.yours || from.yours ? { yours: true, origin: 'seed' as const } : {}),
   };
 }
 
@@ -147,18 +151,30 @@ export class Selector {
   private readonly majors: LfdCandidate[];
   private readonly rundown: LfdCandidate[];
   private readonly tried = new Set<string>();
+  private readonly forced: LfdCandidate[];
+  /** Seeds taken that the last post already covered (they are taken anyway; the run records it). */
+  readonly repeats = new Set<string>();
 
   constructor(
     majors: LfdCandidate[],
     rundown: LfdCandidate[],
     private readonly previous: Array<{ headline: string; body: string }>,
     private readonly jev: JevAsk,
+    /** A person's seeds, taken before the lanes (up to MAX_SEEDS), oldest first. They skip the company cap and the repeat check. */
+    forced: LfdCandidate[] = [],
   ) {
+    this.forced = forced.slice(0, MAX_SEEDS);
     this.majors = majors.filter((c) => (c.major ?? 0) >= MAJOR_NEWS_BAR).sort((a, b) => (b.major ?? 0) - (a.major ?? 0));
     this.rundown = [...rundown].sort(rundownOrder);
   }
 
   async fill(): Promise<Pick[]> {
+    for (const c of this.forced) {
+      if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) continue;
+      this.tried.add(c.key);
+      if (await this.coveredLastTime(c)) this.repeats.add(c.key);
+      this.picks.push({ ...c, lane: (c.major ?? 0) >= MAJOR_NEWS_BAR ? 'major' : 'rundown' });
+    }
     while (this.picks.filter((p) => p.lane === 'major').length < MAX_MAJOR) {
       if (!(await this.take('major'))) break;
     }

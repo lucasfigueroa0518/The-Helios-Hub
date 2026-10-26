@@ -5,6 +5,9 @@ import { Delta } from '@/components/social-hub/analytics/KpiStrip';
 import { DaySheet } from '@/components/social-hub/calendar/DaySheet';
 import { MonthGrid } from '@/components/social-hub/calendar/MonthGrid';
 import { SourceSwitch, WeekBoard, type ReadyItem } from '@/components/social-hub/calendar/WeekBoard';
+import { SandboxWeekBoard, ScheduleSandbox } from '@/components/social-hub/calendar/schedule-sandbox';
+import { SchedulesMenu } from '@/components/social-hub/calendar/SchedulesMenu';
+import { ToastHosts } from '@/components/social-hub/calendar/toast-slot';
 import type { SlimPost } from '@/components/social-hub/calendar/SlotCard';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 import { TypeToggles } from '@/components/social-hub/calendar/CalendarControls';
@@ -19,7 +22,8 @@ import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { contentRefs } from '@/lib/social-hub/house';
-import { isStorySeries, type ResolvedSlot, type SlotsByDate, type SlotSource } from '@/lib/social-hub/slots/types';
+import type { ScheduleView } from '@/lib/social-hub/slots/schedule';
+import { isStorySeries, type ResolvedSlot, type SlotsByDate, type SlotSource, type TemplateRow } from '@/lib/social-hub/slots/types';
 import { actionEnabled, SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { metricSpec } from '@/lib/social-hub/metrics';
@@ -39,7 +43,6 @@ const MARK_LABEL = { posted: 'posted', scheduled: 'scheduled', failed: 'failed',
 
 /** The week view's input (the page loads it; the preview builds it from the seed). */
 export type CalendarWeek = {
-  mode: 'week' | 'template';
   monday: string;
   days: WeekDayInput[];
   source: SlotSource;
@@ -47,12 +50,16 @@ export type CalendarWeek = {
   readOnly?: boolean;
   /** The preview: the board edits on screen only and sends nothing. */
   sandbox?: boolean;
-  /** Each weekday's Standard week slots (0 = Sunday), for "Edited" and Reset day. */
+  /** Each weekday's standing slots (0 = Sunday), for Reset day and Gaps. */
   standard: Record<number, ResolvedSlot[]>;
   /** The daily caps (readCaps; DEFAULT_CAPS on the preview). */
   caps: Record<Vertical, number>;
   /** What switching on changes, for the confirm. */
   switchFacts: SwitchFacts;
+  /** Every type's standing schedule, for the Schedules dropdown (from the week's template). */
+  schedules?: ScheduleView[];
+  /** The preview's standing week: a Schedules save replaces it on screen and the board follows. */
+  template?: TemplateRow[];
 };
 
 /** Calendar (BRIEFS.md §2): the week's slots to edit (spec §3), or the month's shape, gaps ahead, and a day panel to act from. */
@@ -103,34 +110,42 @@ function readyItems(posts: readonly HubPost[], now: Date): ReadyItem[] {
 
 function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week: CalendarWeek }) {
   const path = `${base}/calendar`;
-  const template = week.mode === 'template';
   const thisMonday = mondayOf(nyDateOf(now)!);
-  const keep: HubParams = { scope: params.scope, week: params.week, type: params.type };
+  const keep: HubParams = { week: params.week, type: params.type };
   const href = (changes: Record<string, string | null>) => withParams(path, '', keep, changes);
   const dim = isVertical(params.type) ? params.type : null;
   const legacy = week.source === 'legacy';
   const editable = actionEnabled('editSlots') && !week.readOnly && !legacy;
   const dates = new Set(week.days.map((d) => d.nyDate).filter(Boolean));
-  const posts = template ? [] : dataset.posts.filter((p) => p.nyDate && dates.has(p.nyDate) && p.slot && ON_BOARD.has(p.status)).map(slim);
-  const ready = template || !editable || !actionEnabled('reschedule') ? [] : readyItems(dataset.posts, now);
-  return (
+  const posts = dataset.posts.filter((p) => p.nyDate && dates.has(p.nyDate) && p.slot && ON_BOARD.has(p.status)).map(slim);
+  const ready = !editable || !actionEnabled('reschedule') ? [] : readyItems(dataset.posts, now);
+  const sandbox = week.sandbox === true;
+  const boardProps = {
+    monday: week.monday,
+    canUnschedule: actionEnabled('unschedule'),
+    days: week.days,
+    standard: week.standard,
+    caps: week.caps,
+    posts,
+    ready,
+    now: now.toISOString(),
+    editable,
+    sandbox,
+    dim,
+  };
+  const screen = (
     <>
       <PageHead
-        title={template ? 'Standard week' : weekLabel(week.monday)}
+        title={weekLabel(week.monday)}
         actions={
           <>
             <ViewToggle path={path} view="week" />
-            <div className="sh-pills" role="group" aria-label="Show">
-              <HubLink className="sh-pill" href={href({ scope: 'template', week: null })} aria-current={template ? 'page' : undefined} history="replace">Standard week</HubLink>
-              <HubLink className="sh-pill" href={href({ scope: null })} aria-current={template ? undefined : 'page'} history="replace">This week</HubLink>
+            {week.schedules ? <SchedulesMenu schedules={week.schedules} caps={week.caps} editable={editable} sandbox={sandbox} legacy={legacy} readOnlyReason={!actionEnabled('editSlots') ? 'off' : week.readOnly ? 'unread' : null} /> : null}
+            <div className="sh-pills" role="group" aria-label="Week">
+              <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, -7) })} aria-label="Previous week" history="replace"><ChevronLeft size={16} aria-hidden="true" /></HubLink>
+              <HubLink className="sh-btn" href={href({ week: null })} aria-current={week.monday === thisMonday ? 'page' : undefined} history="replace">Today</HubLink>
+              <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, 7) })} aria-label="Next week" history="replace"><ChevronRight size={16} aria-hidden="true" /></HubLink>
             </div>
-            {template ? null : (
-              <div className="sh-pills" role="group" aria-label="Week">
-                <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, -7) })} aria-label="Previous week" history="replace"><ChevronLeft size={16} aria-hidden="true" /></HubLink>
-                <HubLink className="sh-btn" href={href({ week: null })} aria-current={week.monday === thisMonday ? 'page' : undefined} history="replace">Today</HubLink>
-                <HubLink className="sh-btn sh-btn--icon" href={href({ week: addDays(week.monday, 7) })} aria-label="Next week" history="replace"><ChevronRight size={16} aria-hidden="true" /></HubLink>
-              </div>
-            )}
           </>
         }
       />
@@ -141,23 +156,12 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
           Showing {verticalInfo(dim).label} first. <HubLink className="sh-link" href={href({ type: null })} history="replace">Show every type</HubLink>
         </p>
       ) : null}
-      {template ? <p className="sh-subtle sh-week__focus">The standard week repeats every week. A change on This week shows on that date only.</p> : null}
-      <WeekBoard
-        mode={week.mode}
-        monday={week.monday}
-        canUnschedule={actionEnabled('unschedule')}
-        days={week.days}
-        standard={week.standard}
-        caps={week.caps}
-        posts={posts}
-        ready={ready}
-        now={now.toISOString()}
-        editable={editable}
-        sandbox={week.sandbox === true}
-        dim={dim}
-      />
+      {sandbox && week.template ? <SandboxWeekBoard {...boardProps} /> : <WeekBoard {...boardProps} />}
+      <ToastHosts />
     </>
   );
+  // The preview holds its standing week on screen, so a Schedules save there moves the board's cards.
+  return sandbox && week.template ? <ScheduleSandbox template={week.template}>{screen}</ScheduleSandbox> : screen;
 }
 
 function MonthScreen({ dataset, base, params, now, weekFailed = false }: { dataset: HubDataset; base: string; params: HubParams; now: Date; weekFailed?: boolean }) {

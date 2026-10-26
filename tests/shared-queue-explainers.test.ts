@@ -65,7 +65,7 @@ async function explainersOn(): Promise<ExplainersDb> {
 
 async function topic(db: ExplainersDb, title: string, score: number, status = 'pool'): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO explainers.topics (title, origin, status, weighted_score) VALUES ($1, 'manual', $2, $3) RETURNING id`,
+    `INSERT INTO explainers.topics (title, origin, status, weighted_score) VALUES ($1, 'seeded', $2, $3) RETURNING id`,
     [title, status, score],
   );
   return rows[0]!.id;

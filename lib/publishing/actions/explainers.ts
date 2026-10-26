@@ -14,7 +14,8 @@ const REFUSAL: Record<string, string> = {
   daily_spend_cap: 'Today’s explainer spend cap is used up.',
   already_in_flight: 'A render for this topic is already queued or running.',
   topic_not_found: 'That topic no longer exists.',
-  topic_not_renderable: 'That topic can’t be rendered (rejected or displaced).',
+  topic_not_renderable: 'That topic is archived, so it can’t be rendered.',
+  topic_published: 'That topic has already been posted.',
 };
 
 /**
@@ -39,6 +40,8 @@ export function explainerActions(deps: {
   requestRerender: (db: ExplainersDb, input: { topicId: string; settings: never }) => Promise<{ ok: boolean; reason?: string }>;
   itemId: (db: ExplainersDb, jobId: string) => Promise<string | null>;
   unscheduleJob: (db: ExplainersDb, jobId: string) => Promise<{ ok: boolean; note: string }>;
+  /** The topic's newest finished render: what Regenerate takes off the calendar and out of approval (pool standard, 2026-10-21). */
+  latestJobId?: (db: ExplainersDb, topicId: string) => Promise<string | null>;
   verdictOf: (db: ExplainersDb, jobId: string) => Promise<string | null>;
   placeItem: Place;
   rescheduleItem: Place;
@@ -105,9 +108,17 @@ export function explainerActions(deps: {
       const db = await deps.db();
       const settings = await deps.loadSettings(db);
       const out = await deps.requestRerender(db, { topicId: need(t, 'topicId'), settings: settings as never });
-      return out.ok
-        ? { ok: true, note: 'A new render is queued. It replaces the current version when it finishes.' }
-        : { ok: false, note: REFUSAL[out.reason ?? ''] ?? `Refused: ${out.reason}` };
+      if (!out.ok) return { ok: false, note: REFUSAL[out.reason ?? ''] ?? `Refused: ${out.reason}` };
+      // Idea pool standard: a regenerate takes the version being replaced off the calendar and withdraws its approval, so
+      // nothing posts what was not reviewed after the new render. Only once the new render is accepted (a cap refusal changes nothing).
+      const prior = deps.latestJobId ? await deps.latestJobId(db, need(t, 'topicId')) : null;
+      const off = prior ? await deps.unscheduleJob(db, prior) : null;
+      return {
+        ok: true,
+        note: off?.ok
+          ? 'A new render is queued. The version it replaces is unscheduled and no longer approved; approve the new one when it is ready.'
+          : 'A new render is queued. It replaces the current version when it finishes.',
+      };
     },
     async unschedule(t) {
       const out = await deps.unscheduleJob(await deps.db(), need(t, 'jobId'));

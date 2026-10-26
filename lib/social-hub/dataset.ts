@@ -68,7 +68,7 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
     case 'last_few_days': {
       const r = reads.last_few_days;
       if (!r) return { posts: [], ideas: [] };
-      return r instanceof Error ? r : { posts: lfdPosts(r), ideas: lfdIdeas(r.latestRun) };
+      return r instanceof Error ? r : { posts: lfdPosts(r), ideas: lfdIdeas(r.latestRun, r.seeds) };
     }
   }
 }

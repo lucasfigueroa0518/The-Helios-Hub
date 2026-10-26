@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock, X } from 'lucide-react';
+import { Check, Lock, X } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 
 import { PostLink } from '@/components/social-hub/nav/PostLink';
@@ -43,7 +43,7 @@ export function cardLabel(card: BoardCard<SlimPost>, when: string): string {
   ].filter(Boolean).join(', ');
 }
 
-export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragProps, onOpen, onFlip }: {
+export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragProps, onOpen, onFlip, select }: {
   card: BoardCard<SlimPost>;
   /** The drawn y in axis minutes (stackOffsets): its true time, or lower when a crowded stack pushed it. */
   top: number;
@@ -57,6 +57,8 @@ export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragP
   dragProps: Record<string, unknown>;
   onOpen: (anchor: HTMLElement) => void;
   onFlip: () => void;
+  /** Select mode (spec 2026-10-21 §2): a click toggles the card in the selection instead of opening it. */
+  select?: { selected: boolean; onToggle: () => void } | null;
 }) {
   const names = chipNames(card.vertical, card.series);
   const style: CSSProperties = {
@@ -67,12 +69,15 @@ export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragP
     left: '4px',
     right: '4px',
   };
-  const canFlip = editable && !card.locked && card.feedMode != null;
+  const canFlip = editable && !card.locked && card.feedMode != null && !select;
+  const activate = (el: HTMLElement) => (select ? select.onToggle() : onOpen(el));
   return (
     <div
       className="sh-board__card"
       style={style}
       data-status={card.status}
+      data-selected={select?.selected ? 'true' : undefined}
+      data-selecting={select ? 'true' : undefined}
       data-locked={card.locked ? 'true' : undefined}
       data-open={open ? 'true' : undefined}
       data-dimmed={dimmed ? 'true' : undefined}
@@ -80,20 +85,24 @@ export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragP
       data-over-cap={card.overCap ? 'true' : undefined}
       data-card={card.key}
       {...dragProps}
+      // In select mode the whole card toggles, the Trial / Main tag included.
+      onClick={select ? () => select.onToggle() : undefined}
     >
       <div
         role="button"
         tabIndex={0}
         className="sh-board__open"
         aria-label={cardLabel(card, when)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
+        aria-haspopup={select ? undefined : 'dialog'}
+        aria-expanded={select ? undefined : open}
+        aria-pressed={select ? select.selected : undefined}
         title={`${names.full} · ${clockLabel(card.startMinute)}`}
-        onClick={(e) => onOpen(e.currentTarget)}
+        onClick={select ? undefined : (e) => onOpen(e.currentTarget)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(e.currentTarget); }
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(e.currentTarget); }
         }}
       >
+        {select?.selected ? <Check size={11} className="sh-board__check" aria-hidden="true" /> : null}
         <span className="sh-board__time" aria-hidden="true">{shortClock(card.startMinute)}</span>
         <span className="sh-board__name" aria-hidden="true">
           <span className="sh-board__dot" />
@@ -103,7 +112,9 @@ export function SlotCard({ card, top, when, editable, dimmed, faded, open, dragP
         {card.locked && card.status !== 'posted' ? <Lock size={11} className="sh-board__lock" aria-hidden="true" /> : null}
       </div>
       {/* No tag on a locked card: it can't flip, and the lock needs the room (Trial / Main stays in the label and panel). */}
-      {card.feedMode && !card.locked ? (
+      {card.feedMode && !card.locked && select ? (
+        <span className="sh-board__tag" data-mode={card.feedMode} aria-hidden="true">{card.feedMode === 'trial' ? 'Trial' : 'Main'}</span>
+      ) : card.feedMode && !card.locked ? (
         <button
           type="button"
           className="sh-board__tag"
@@ -221,10 +232,9 @@ export function Floating({ anchor, flip, label, onClose, children, width }: { an
   );
 }
 
-export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptions, timesFor, onClose, onMode, onMove, onRemove, onReset, onCopyDay }: {
+export function SlotPanel({ card, column, anchor, flip, editable, dayOptions, timesFor, onClose, onMode, onMove, onRemove, onReset }: {
   card: BoardCard<SlimPost>;
   column: BoardColumn;
-  mode: 'week' | 'template';
   anchor: HTMLElement;
   flip: boolean;
   editable: boolean;
@@ -237,13 +247,9 @@ export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptio
   onMove: (to: number, minute: number) => void;
   onRemove: () => void;
   onReset: () => void;
-  onCopyDay: () => void;
 }) {
   const names = chipNames(card.vertical, card.series);
-  const weekday = WEEKDAY_LONG[column.weekday]!;
-  const when = mode === 'week' && column.nyDate
-    ? new Date(`${column.nyDate}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
-    : `Every ${weekday}`;
+  const when = new Date(`${column.nyDate}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
   const [to, setTo] = useState(card.day);
   const [minute, setMinute] = useState(card.startMinute);
   const canEdit = editable && !card.locked;
@@ -277,14 +283,12 @@ export function SlotPanel({ card, column, mode, anchor, flip, editable, dayOptio
           </p>
         </div>
       ) : null}
-      {mode === 'week' ? (
-        column.edited ? (
-          <p className="sh-board__source">
-            This day differs from the standard {weekday}.{' '}
-            {editable ? <><button type="button" className="sh-board__lnk" onClick={onReset}>Reset day</button> · <button type="button" className="sh-board__lnk" onClick={onCopyDay}>Make this every {weekday}</button></> : null}
-          </p>
-        ) : <p className="sh-board__source sh-muted">Comes from the standard week (every {weekday}).</p>
-      ) : <p className="sh-board__source sh-muted">Part of the Standard week. Each week’s {weekday} starts from it.</p>}
+      {card.mine ? (
+        <p className="sh-board__source">
+          You changed this slot for this date.{' '}
+          {editable ? <button type="button" className="sh-board__lnk" onClick={onReset}>Reset day</button> : null}
+        </p>
+      ) : <p className="sh-board__source sh-muted">Comes from the schedule (every {WEEKDAY_LONG[column.weekday]}).</p>}
       {canEdit ? (
         <div className="sh-board__move">
           <DayTimePicker

@@ -212,6 +212,33 @@ post; it never posts twice. Check with
 `BEGIN READ ONLY; SELECT value FROM social_hub.settings WHERE key IN ('slot_source','daily_caps'); ROLLBACK;`.
 `legacy` mode is unchanged.
 
+### Type schedules and batch select (D60)
+
+Two tools, kept apart. **Schedules** (Calendar header) sets one type's standing
+routine: one list of start times plus Mon-Sun days, Trial/Main per time for
+Text on Screen and Explainers only, Last Few Days one time, each Stories series
+its own entry. It writes `slot_template` and replaces the Standard week tab.
+The save is refused if the list is longer than the type's daily cap or repeats
+a time; a time near another Main-feed type's only warns. **The board** only
+edits single dates, and gained **Select**: Set time (exact minute), Trial/Main
+(reels only), Remove (one question for booked posts). Over 20 changes are split
+into several saves; one batch is one undo step.
+
+System bookings follow a schedule change; person-set ones stay. A schedule
+save moves the posts the system booked on later days (old and new times pair
+in time order) or sends them back to Ready to place when their time or day
+goes away. Stories sets move through the Stories reschedule path. Started
+slots today and published posts are never touched.
+
+Set-by marks: `slot_override.set_by`, `schedule.slot_by`, `stories.sets.slot_by`,
+each `person` or `system`. A board edit, batch edit, placement, reschedule or
+drag is `person`. System pins and the overnight run's own bookings are
+`system`; a click-made Stories set (Generate) is `system` too. A `person` post
+is never moved or removed by a schedule save, and the routine slot it replaced
+does not come back at its new time on that date. A new Last Few Days day skips
+a date that holds a person's Carousel. Rows without a mark count as `system`.
+Both tools are read-only in `legacy`.
+
 ### Go-live order (D59)
 
 Do these in order. Each step is safe to stop after: until step 4 everything
@@ -226,7 +253,10 @@ runs in `legacy` mode.
    `ON CONFLICT (series, ny_date)`, and Postgres refuses that insert (42P10)
    if no index on exactly `(series, ny_date)` exists. Check read-only:
    `psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SELECT indexname FROM pg_indexes WHERE schemaname = 'stories' AND indexname LIKE 'uq_stories_sets_live_%'; SELECT value FROM social_hub.settings WHERE key IN ('slot_source','daily_caps'); ROLLBACK;"`
-   lists both indexes, `"legacy"` and the caps.
+   lists both indexes, `"legacy"` and the caps. The apply also adds
+   `slot_override.set_by`, `schedule.slot_by` and `stories.sets.slot_by` (D60).
+   Apply before redeploying the social worker: a worker started earlier caches
+   "no column" until it restarts.
 2. **Deploy the social worker and the hub:** `./scripts/gcp/deploy-social-worker.sh`,
    and the hub deploy that serves `/api/stories/*` and the Calendar. Both now
    run the free-time-slot code, which works with or without the one-a-day index.

@@ -191,10 +191,15 @@ test('Generate renders a pool candidate; auto renders only a promoted one', asyn
   const [proposed] = await addTopics(db, [{ title: 'unscored', origin: 'seeded' }]);
   const pooled = await poolTopic(db, 'pooled', { weighted_score: 70 });
 
+  // Idea pool standard (2026-10-21): a click renders any topic that is not archived, even one nobody has scored yet.
+  const [archived] = await addTopics(db, [{ title: 'archived', origin: 'seeded' }]);
+  await db.query(`UPDATE explainers.topics SET status = 'archived' WHERE id = $1`, [archived.id]);
   assert.deepEqual(
-    await requestRender(db, { topicId: proposed.id, trigger: 'click', settings: DEFAULT_SETTINGS }),
+    await requestRender(db, { topicId: archived.id, trigger: 'click', settings: DEFAULT_SETTINGS }),
     { ok: false, reason: 'topic_not_renderable' },
   );
+  const [unscored] = await addTopics(db, [{ title: 'unscored click', origin: 'seeded' }]);
+  assert.equal((await requestRender(db, { topicId: unscored.id, trigger: 'click', settings: DEFAULT_SETTINGS })).ok, true);
   assert.deepEqual(
     await requestRender(db, { topicId: pooled, trigger: 'auto', settings: DEFAULT_SETTINGS }),
     { ok: false, reason: 'topic_not_renderable' },

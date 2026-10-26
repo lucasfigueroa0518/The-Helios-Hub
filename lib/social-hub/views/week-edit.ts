@@ -1,7 +1,7 @@
 import { sortSlots } from '@/lib/social-hub/slots/resolve';
 import { ALREADY_STARTED, applyMove, applyPlace, applyRemove, canPlace, isLocked, PAST_DAY, type DayCtx, type Refusal } from '@/lib/social-hub/slots/rules';
 import { clockLabel, DAY_START, DEFAULT_FEED_MODE, GRID, isUsual, LAST_START, nextOpenMinute, nyMinuteOf, SERIES_NAME, snapMinute, TYPE_NAME, USUAL } from '@/lib/social-hub/slots/times';
-import { isReelType, parseSlotId, sameSlotKey, slotId, type FeedMode, type ResolvedSlot, type SlotKey, type StorySeries } from '@/lib/social-hub/slots/types';
+import { isReelType, MAX_CHANGES, parseSlotId, sameSlotKey, slotId, type FeedMode, type ResolvedSlot, type SlotKey, type StorySeries } from '@/lib/social-hub/slots/types';
 import type { SlotChange } from '@/lib/social-hub/slots/write';
 import { nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -10,8 +10,9 @@ import { dayShortLabel, WEEKDAY_LONG, type BoardPost, type WeekDayInput } from '
 /**
  * The week board's edits (spec 2026-10-20-calendar-week-board-redesign), as
  * pure plans: what a drop would do (the ghost's tag and tone), the slot
- * changes an edit sends, the changes that undo it, "Make it every
- * <weekday>", and which booked posts an edit would leave without a slot.
+ * changes an edit sends, the changes that undo it, Reset day, and which
+ * booked posts an edit would leave without a slot. Every edit here is a date
+ * edit; standing changes happen only in the Schedules tool.
  * Every plan goes through slots/rules.ts, the same rules the server applies;
  * the server stays the judge. The board applies a plan's `next` on screen
  * while it saves (and for good on the preview, which saves nothing).
@@ -20,9 +21,8 @@ import { dayShortLabel, WEEKDAY_LONG, type BoardPost, type WeekDayInput } from '
 export { WEEKDAY_LONG };
 
 export type BoardState<P extends BoardPost = BoardPost> = {
-  mode: 'week' | 'template';
   days: WeekDayInput[];
-  /** Each weekday's Standard week slots (0 = Sunday). */
+  /** Each weekday's standing slots (0 = Sunday): what Reset day restores and Gaps compare with. */
   standard: Readonly<Record<number, readonly ResolvedSlot[]>>;
   posts: P[];
 };
@@ -74,45 +74,45 @@ export const nameOf = (k: { vertical: Vertical; series: StorySeries | null }): s
 
 const keyOf = (s: SlotKey): SlotKey => ({ vertical: s.vertical, startMinute: s.startMinute, series: s.series });
 
-export function dayCtx(state: BoardState<BoardPost>, day: number, clock: Clock): DayCtx {
+/** A board day's rules context: always a real date (only the template has none). */
+export type DateCtx = DayCtx & { nyDate: string };
+
+export function dayCtx(state: BoardState<BoardPost>, day: number, clock: Clock): DateCtx {
   const d = state.days[day]!;
-  return { nyDate: state.mode === 'week' ? d.nyDate : null, weekday: d.weekday, slots: [...d.slots], today: clock.today, nowMinute: clock.nowMinute };
+  return { nyDate: d.nyDate, weekday: d.weekday, slots: [...d.slots], today: clock.today, nowMinute: clock.nowMinute };
 }
 
-/** "Wed Oct 21", or "every Wednesday" on the Standard week tab. */
+/** "Wed Oct 21". */
 export function dayName(state: BoardState<BoardPost>, day: number): string {
-  const d = state.days[day]!;
-  return state.mode === 'week' && d.nyDate ? dayShortLabel(d.nyDate) : `every ${WEEKDAY_LONG[d.weekday]}`;
+  return dayShortLabel(state.days[day]!.nyDate);
 }
 
-/** The toast: a date edit is "Just this date."; a Standard week edit holds every week. */
-export const toastText = (label: string, mode: BoardState['mode']): string => `${label}. ${mode === 'week' ? 'Just this date.' : 'Every week from now on.'}`;
+/** The toast: a board edit holds for that date only. */
+export const toastText = (label: string): string => `${label}. Just this date.`;
 
 // ── Slot changes in the writer's shape ──
 
 const clearOf = (clear?: boolean) => (clear ? { clearCarousels: true as const } : {});
 
 function putAdd(state: BoardState<BoardPost>, day: number, key: SlotKey, feedMode: FeedMode | null, clear?: boolean): SlotChange {
-  const d = state.days[day]!;
-  const k = keyOf(key);
-  return state.mode === 'week'
-    ? { scope: 'date', op: 'put', nyDate: d.nyDate!, action: 'add', ...k, feedMode, ...clearOf(clear) }
-    : { scope: 'template', op: 'put', weekday: d.weekday, ...k, feedMode, ...clearOf(clear) };
+  return { scope: 'date', op: 'put', nyDate: state.days[day]!.nyDate, action: 'add', ...keyOf(key), feedMode, ...clearOf(clear) };
 }
 
 function putRemove(state: BoardState<BoardPost>, day: number, key: SlotKey): SlotChange {
-  const d = state.days[day]!;
-  const k = keyOf(key);
-  return state.mode === 'week' ? { scope: 'date', op: 'put', nyDate: d.nyDate!, action: 'remove', ...k } : { scope: 'template', op: 'delete', weekday: d.weekday, ...k };
+  return { scope: 'date', op: 'put', nyDate: state.days[day]!.nyDate, action: 'remove', ...keyOf(key) };
 }
 
 function moveChange(state: BoardState<BoardPost>, from: number, key: SlotKey, to: number, minute: number, clear?: boolean): SlotChange {
   const a = state.days[from]!;
   const b = state.days[to]!;
-  const k = keyOf(key);
-  return state.mode === 'week'
-    ? { scope: 'date', op: 'move', from: { nyDate: a.nyDate!, ...k }, to: { nyDate: b.nyDate!, startMinute: minute }, ...clearOf(clear) }
-    : { scope: 'template', op: 'move', from: { weekday: a.weekday, ...k }, to: { weekday: b.weekday, startMinute: minute }, ...clearOf(clear) };
+  return { scope: 'date', op: 'move', from: { nyDate: a.nyDate, ...keyOf(key) }, to: { nyDate: b.nyDate, startMinute: minute }, ...clearOf(clear) };
+}
+
+/** The keys the person has now set on a date (each once): a board edit's keys join them, so the date reads Edited at once. */
+function withPerson(personKeys: readonly SlotKey[], keys: readonly SlotKey[]): SlotKey[] {
+  const out = [...personKeys];
+  for (const k of keys) if (!out.some((x) => sameSlotKey(x, k))) out.push(keyOf(k));
+  return out;
 }
 
 // ── Drop preview ──
@@ -143,7 +143,7 @@ export const TAKEN = 'That slot is taken.';
  * time, and a Story only ever goes into one of its series' slots.
  */
 export function dropState(input: {
-  ctx: DayCtx;
+  ctx: DateCtx;
   vertical: Vertical;
   series: StorySeries | null;
   raw: number;
@@ -161,7 +161,7 @@ export function dropState(input: {
   if (input.ready) {
     const existing = ctx.slots.find((s) => sameSlotKey(s, { vertical, startMinute: snap.minute, series }));
     if (existing) {
-      if (ctx.nyDate !== null && ctx.nyDate < ctx.today) return refused(PAST_DAY);
+      if (ctx.nyDate < ctx.today) return refused(PAST_DAY);
       if (isLocked(ctx, existing)) return refused(ALREADY_STARTED);
       if (input.ready.taken(snap.minute)) return refused(TAKEN);
       minute = snap.minute;
@@ -202,7 +202,7 @@ const noop = <P extends BoardPost>(state: BoardState<P>, minute: number | null):
 /** The edit's changes, undo and the board after it, through the rules. Booked posts on a moved slot move with it on screen. */
 export function planEdit<P extends BoardPost>(state: BoardState<P>, edit: Edit, clock: Clock): Plan<P> | Refusal {
   const days = state.days.map((d) => ({ ...d, slots: [...d.slots] }));
-  const set = (i: number, slots: readonly ResolvedSlot[]) => { days[i] = { ...days[i]!, slots: sortSlots([...slots]) }; };
+  const set = (i: number, slots: readonly ResolvedSlot[], keys: readonly SlotKey[]) => { days[i] = { ...days[i]!, slots: sortSlots([...slots]), personKeys: withPerson(days[i]!.personKeys, keys) }; };
   const where = dayName(state, edit.day);
 
   if (edit.op === 'place') {
@@ -210,8 +210,8 @@ export function planEdit<P extends BoardPost>(state: BoardState<P>, edit: Edit, 
     const asked: SlotKey = { vertical: edit.vertical, startMinute: edit.minute, series: edit.series };
     const r = applyPlace(dayCtx(state, edit.day, clock), { ...asked, feedMode }, { clearCarousels: edit.clearCarousels });
     if (!r.ok) return r;
-    set(edit.day, r.slots);
     const placed = { ...asked, startMinute: r.minute };
+    set(edit.day, r.slots, [placed, ...r.removed]);
     const lfd = r.removed.length ? '; its Carousels are off' : '';
     return {
       ok: true, noop: false, minute: r.minute,
@@ -228,13 +228,13 @@ export function planEdit<P extends BoardPost>(state: BoardState<P>, edit: Edit, 
     const r = applyMove(from, to, edit.key, edit.minute, { clearCarousels: edit.clearCarousels });
     if (!r.ok) return r;
     if (r.noop) return noop(state, r.minute);
-    set(edit.day, r.from);
-    if (edit.to !== edit.day) set(edit.to, r.to);
     const moved = { ...edit.key, startMinute: r.minute };
+    if (edit.to === edit.day) set(edit.day, r.from, [edit.key, moved, ...r.removed]);
+    else { set(edit.day, r.from, [edit.key]); set(edit.to, r.to, [moved, ...r.removed]); }
     const a = state.days[edit.day]!;
     const b = state.days[edit.to]!;
     const oldId = slotId(edit.key.startMinute, edit.key.series);
-    const posts = state.mode !== 'week' ? state.posts : state.posts.map((p) =>
+    const posts = state.posts.map((p) =>
       p.vertical === edit.key.vertical && p.nyDate === a.nyDate && p.slot?.id === oldId && HOLDING.has(p.status)
         ? { ...p, nyDate: b.nyDate, slot: { id: slotId(r.minute, edit.key.series), label: clockLabel(r.minute) } }
         : p);
@@ -252,7 +252,7 @@ export function planEdit<P extends BoardPost>(state: BoardState<P>, edit: Edit, 
   if (edit.op === 'remove') {
     const r = applyRemove(ctx, edit.key);
     if (!r.ok) return r;
-    set(edit.day, r.slots);
+    set(edit.day, r.slots, [edit.key]);
     return {
       ok: true, noop: false, minute: null,
       label: `${nameOf(edit.key)} removed from ${where}`,
@@ -266,10 +266,10 @@ export function planEdit<P extends BoardPost>(state: BoardState<P>, edit: Edit, 
   const slot = ctx.slots.find((s) => sameSlotKey(s, edit.key));
   if (!slot) return { ok: false, reason: 'That slot isn’t on this day.' };
   if (!isReelType(slot.vertical)) return { ok: false, reason: 'Only reels post as Trial or Main feed.' };
-  if (ctx.nyDate !== null && ctx.nyDate < ctx.today) return { ok: false, reason: PAST_DAY };
+  if (ctx.nyDate < ctx.today) return { ok: false, reason: PAST_DAY };
   if (isLocked(ctx, slot)) return { ok: false, reason: ALREADY_STARTED };
   if (slot.feedMode === edit.feedMode) return noop(state, slot.startMinute);
-  set(edit.day, ctx.slots.map((s) => (sameSlotKey(s, edit.key) ? { ...s, feedMode: edit.feedMode } : s)));
+  set(edit.day, ctx.slots.map((s) => (sameSlotKey(s, edit.key) ? { ...s, feedMode: edit.feedMode } : s)), [edit.key]);
   return {
     ok: true, noop: false, minute: slot.startMinute,
     label: `${nameOf(edit.key)} on ${where} now posts ${edit.feedMode === 'trial' ? 'as a Trial reel' : 'to the main feed'}`,
@@ -277,52 +277,6 @@ export function planEdit<P extends BoardPost>(state: BoardState<P>, edit: Edit, 
     inverse: [putAdd(state, edit.day, edit.key, slot.feedMode)],
     next: withDays(state, days),
   };
-}
-
-export type Every = Omit<Plan<BoardPost>, 'next'> & { button: string; standard: Record<number, readonly ResolvedSlot[]> };
-
-/**
- * "Make it every <weekday>" (spec, Calls I made): the change just made, on the
- * Standard week only. A move between days applies both halves (a template
- * move); a change the Standard week already matches, or can't take, has
- * nothing to save (null). `edit` carries the minute the change landed on.
- */
-export function everyFor(state: BoardState<BoardPost>, edit: Edit, clock: Clock): Every | null {
-  if (state.mode !== 'week') return null;
-  const t: BoardState<BoardPost> = {
-    mode: 'template',
-    days: state.days.map((d) => ({ nyDate: null, weekday: d.weekday, slots: [...(state.standard[d.weekday] ?? [])] })),
-    standard: state.standard,
-    posts: [],
-  };
-  const has = (day: number, key: SlotKey) => t.days[day]!.slots.find((s) => sameSlotKey(s, key));
-  const dateSlot = (day: number, key: SlotKey) => state.days[day]!.slots.find((s) => sameSlotKey(s, key));
-  let e: Edit | null = null;
-  if (edit.op === 'place') {
-    const key: SlotKey = { vertical: edit.vertical, startMinute: edit.minute, series: edit.series };
-    const there = has(edit.day, key);
-    const mode = isReelType(edit.vertical) ? (edit.feedMode ?? DEFAULT_FEED_MODE[edit.vertical]) : null;
-    e = !there ? edit : mode && there.feedMode !== mode ? { op: 'mode', day: edit.day, key, feedMode: mode } : null;
-  } else if (edit.op === 'move') {
-    const moved = { ...edit.key, startMinute: edit.minute };
-    e = has(edit.day, edit.key)
-      ? edit
-      : { op: 'place', day: edit.to, vertical: edit.key.vertical, series: edit.key.series, minute: edit.minute, feedMode: dateSlot(edit.to, moved)?.feedMode ?? null, clearCarousels: edit.clearCarousels };
-  } else if (edit.op === 'remove') {
-    e = has(edit.day, edit.key) ? edit : null;
-  } else {
-    const there = has(edit.day, edit.key);
-    e = !there ? { op: 'place', day: edit.day, vertical: edit.key.vertical, series: edit.key.series, minute: edit.key.startMinute, feedMode: edit.feedMode } : there.feedMode === edit.feedMode ? null : edit;
-  }
-  if (!e) return null;
-  const r = planEdit(t, e, clock);
-  if (!r.ok || r.noop) return null;
-  // The days the saved change touches: a move that became a place on the target names only the target.
-  const touched = [...new Set([e.day, e.op === 'move' ? e.to : e.day])];
-  const standard: Record<number, readonly ResolvedSlot[]> = { ...state.standard };
-  for (const i of touched) standard[t.days[i]!.weekday] = r.next.days[i]!.slots;
-  const names = touched.map((i) => WEEKDAY_LONG[state.days[i]!.weekday]).join(' and ');
-  return { ok: true, noop: false, minute: r.minute, label: `Saved: every ${names} now has this change`, changes: r.changes, inverse: r.inverse, button: `Make it every ${names}`, standard };
 }
 
 export type Hit<P extends BoardPost = BoardPost> = { post: P; why: 'removed' | 'feed-mode' | 'cannot-move' };
@@ -334,7 +288,6 @@ export type Hit<P extends BoardPost = BoardPost> = { post: P; why: 'removed' | '
  * with it, so it isn't a hit. Same reading as the slot writer's 409.
  */
 export function bookedHits<P extends BoardPost>(before: BoardState<P>, after: BoardState<P>): Hit<P>[] {
-  if (before.mode !== 'week') return [];
   const slotAt = (s: BoardState<P>, nyDate: string | null, id: string | undefined, vertical: Vertical) => {
     const k = id ? parseSlotId(id) : null;
     const d = s.days.find((x) => x.nyDate === nyDate);
@@ -356,36 +309,62 @@ export function bookedHits<P extends BoardPost>(before: BoardState<P>, after: Bo
 }
 
 /**
- * Reset day (decision 11, Must handle §2): every key of the date that differs
- * from the Standard week goes back to it, one `delete` each, except slots that
- * have started or posted, which stay as they are. The inverse rebuilds the day.
+ * The person's removals of a routine slot that stay because a hand-set slot of
+ * the same type has started (or posted) in its place: a schedule save tied
+ * them one for one (schedule-write.ts), so deleting one would bring the
+ * routine slot back next to the started one, a post more than the schedule.
+ * Paired in time order, as the save pairs times.
+ */
+function keptTies(personKeys: readonly SlotKey[], stays: (k: SlotKey) => boolean, slots: readonly ResolvedSlot[], std: readonly ResolvedSlot[]): SlotKey[] {
+  const type = (k: SlotKey) => `${k.vertical}|${k.series ?? ''}`;
+  const has = (list: readonly SlotKey[], k: SlotKey) => list.some((x) => sameSlotKey(x, k));
+  const partners = new Map<string, number>();
+  for (const k of personKeys) if (stays(k) && has(slots, k) && !has(std, k)) partners.set(type(k), (partners.get(type(k)) ?? 0) + 1);
+  const out: SlotKey[] = [];
+  for (const k of [...personKeys].sort((a, b) => a.startMinute - b.startMinute)) {
+    const n = partners.get(type(k)) ?? 0;
+    if (!n || stays(k) || has(slots, k) || !has(std, k)) continue;
+    partners.set(type(k), n - 1);
+    out.push(k);
+  }
+  return out;
+}
+
+/**
+ * Reset day (spec 2026-10-21 §3): the date's own edits go, one `delete` per
+ * key the person set, so those keys go back to the schedule. A system pin
+ * (today's started slot held, a pin a schedule save wrote) stays, and so does
+ * a key that has started or posted, and a tie to one that has (keptTies). Deletes that take a slot off go first,
+ * so a slot coming back never meets the one it replaced halfway (Last Few
+ * Days and Carousels). The inverse puts the person's edits back, in reverse.
  */
 export function planReset<P extends BoardPost>(state: BoardState<P>, day: number, clock: Clock): Plan<P> | Refusal {
   const ctx = dayCtx(state, day, clock);
-  if (state.mode !== 'week' || ctx.nyDate === null) return { ok: false, reason: 'The Standard week has nothing to reset.' };
-  if (ctx.nyDate < ctx.today) return { ok: false, reason: PAST_DAY };
+  const nyDate = state.days[day]!.nyDate;
+  if (nyDate < ctx.today) return { ok: false, reason: PAST_DAY };
   const std = state.standard[ctx.weekday] ?? [];
-  const keys = new Map<string, SlotKey>();
-  for (const s of [...ctx.slots, ...std]) keys.set(`${s.vertical}|${slotId(s.startMinute, s.series)}`, keyOf(s));
-  const posted = new Set(state.posts.filter((p) => p.status === 'published' && p.nyDate === ctx.nyDate && p.slot).map((p) => `${p.vertical}|${p.slot!.id}`));
-  const slots: ResolvedSlot[] = [];
-  const changes: SlotChange[] = [];
-  const inverse: SlotChange[] = [];
-  for (const [id, key] of keys) {
+  const posted = new Set(state.posts.filter((p) => p.status === 'published' && p.nyDate === nyDate && p.slot).map((p) => `${p.vertical}|${p.slot!.id}`));
+  const kept: SlotKey[] = [];
+  const off: Array<{ key: SlotKey; cur: ResolvedSlot | undefined }> = [];
+  const back: Array<{ key: SlotKey; cur: ResolvedSlot | undefined }> = [];
+  const personKeys = state.days[day]!.personKeys;
+  const stays = (key: SlotKey) => isLocked(ctx, key) || posted.has(`${key.vertical}|${slotId(key.startMinute, key.series)}`);
+  const ties = keptTies(personKeys, stays, ctx.slots, std);
+  let slots = [...ctx.slots];
+  for (const key of personKeys) {
+    if (stays(key) || ties.some((t) => sameSlotKey(t, key))) { kept.push(key); continue; }
     const cur = ctx.slots.find((s) => sameSlotKey(s, key));
     const base = std.find((s) => sameSlotKey(s, key));
-    if (isLocked(ctx, key) || posted.has(id)) {
-      if (cur) slots.push(cur);
-      continue;
-    }
+    (cur && !base ? off : back).push({ key, cur });
+    slots = slots.filter((s) => !sameSlotKey(s, key));
     if (base) slots.push({ ...base, origin: 'template' });
-    if ((!cur && !base) || (cur && base && cur.feedMode === base.feedMode)) continue;
-    changes.push({ scope: 'date', op: 'delete', nyDate: ctx.nyDate, ...key });
-    inverse.push(cur ? putAdd(state, day, key, cur.feedMode) : putRemove(state, day, key));
   }
-  if (!changes.length) return noop(state, null);
-  const days = state.days.map((d, i) => (i === day ? { ...d, slots: sortSlots(slots) } : d));
-  return { ok: true, noop: false, minute: null, label: `${dayName(state, day)} is back to the standard week`, changes, inverse, next: withDays(state, days) };
+  const resets = [...off, ...back];
+  if (!resets.length) return noop(state, null);
+  const changes: SlotChange[] = resets.map(({ key }) => ({ scope: 'date', op: 'delete', nyDate, ...keyOf(key) }));
+  const inverse: SlotChange[] = resets.map(({ key, cur }) => (cur ? putAdd(state, day, key, cur.feedMode) : putRemove(state, day, key))).reverse();
+  const days = state.days.map((d, i) => (i === day ? { ...d, slots: sortSlots(slots), personKeys: kept } : d));
+  return { ok: true, noop: false, minute: null, label: `${dayName(state, day)} is back to its schedule`, changes, inverse, next: withDays(state, days) };
 }
 
 /**
@@ -401,9 +380,8 @@ export function planReady<P extends BoardPost>(
   minute: number,
   clock: Clock,
 ): { ok: true; minute: number; slot: string; label: string; next: BoardState<P> } | Refusal {
-  if (state.mode !== 'week') return { ok: false, reason: 'A post needs a real date. Place it on This week.' };
   const ctx = dayCtx(state, day, clock);
-  const nyDate = ctx.nyDate!;
+  const nyDate = state.days[day]!.nyDate;
   const taken = readyTakenAt(state, post, series, nyDate);
   const d = dropState({ ctx, vertical: post.vertical, series, raw: minute, caps: { reels: 99, explainers: 99, carousels: 99, last_few_days: 99, stories: 99 }, ready: { taken } });
   if (d.tone === 'refused' || d.tone === 'confirm') return { ok: false, reason: d.reason ?? TAKEN };
@@ -412,7 +390,8 @@ export function planReady<P extends BoardPost>(
   const slots = ctx.slots.some((s) => sameSlotKey(s, key))
     ? ctx.slots
     : sortSlots([...ctx.slots, { ...key, feedMode: isReelType(post.vertical) ? DEFAULT_FEED_MODE[post.vertical] : null, origin: 'override' as const }]);
-  const days = state.days.map((x, i) => (i === day ? { ...x, slots } : x));
+  // A placement is the person's (placement.ts writes set_by 'person').
+  const days = state.days.map((x, i) => (i === day ? { ...x, slots, personKeys: withPerson(x.personKeys, [key]) } : x));
   const id = slotId(at, series);
   const placed = { ...post, nyDate, slot: { id, label: clockLabel(at) }, status: 'scheduled' as const, approval: { ...post.approval, approvedAt: null } };
   const posts = [...state.posts.filter((p) => p.id !== post.id), placed];
@@ -420,46 +399,23 @@ export function planReady<P extends BoardPost>(
 }
 
 /**
- * "Make this every <weekday>" from the details panel (decision 9): the
- * Standard week's weekday becomes this date's slots, as template changes
- * (deletes first, so Last Few Days and Carousels never meet halfway).
- */
-export function planCopyDay(state: BoardState<BoardPost>, day: number): (Omit<Plan<BoardPost>, 'next'> & { standard: Record<number, readonly ResolvedSlot[]> }) | Refusal {
-  const d = state.days[day]!;
-  if (state.mode !== 'week' || !d.nyDate) return { ok: false, reason: 'This is already the Standard week.' };
-  const weekday = d.weekday;
-  const std = sortSlots([...(state.standard[weekday] ?? [])]);
-  const date = sortSlots([...d.slots]);
-  const del = (s: SlotKey): SlotChange => ({ scope: 'template', op: 'delete', weekday, ...keyOf(s) });
-  const put = (s: ResolvedSlot): SlotChange => ({ scope: 'template', op: 'put', weekday, ...keyOf(s), feedMode: s.feedMode });
-  const gone = std.filter((s) => !date.some((x) => sameSlotKey(x, s)));
-  const added = date.filter((s) => !std.some((x) => sameSlotKey(x, s) && x.feedMode === s.feedMode));
-  const fresh = added.filter((s) => !std.some((x) => sameSlotKey(x, s)));
-  const changes = [...gone.map(del), ...added.map(put)];
-  const inverse = [...fresh.map(del), ...gone.map(put), ...added.filter((s) => !fresh.includes(s)).map((s) => put(std.find((x) => sameSlotKey(x, s))!))];
-  const standard: Record<number, readonly ResolvedSlot[]> = { ...state.standard, [weekday]: date.map((s) => ({ ...s, origin: 'template' as const })) };
-  if (!changes.length) return { ok: true, noop: true, minute: null, label: '', changes: [], inverse: [], standard: state.standard as Record<number, readonly ResolvedSlot[]> };
-  return { ok: true, noop: false, minute: null, label: `Saved: every ${WEEKDAY_LONG[weekday]} now looks like ${dayShortLabel(d.nyDate)}`, changes, inverse, standard };
-}
-
-/**
  * The start times a day can still take, on the 15-minute grid from 8:00 AM to
  * 8:45 PM: today only after now (a slot at now has started), none on a past
  * day. The place picker's Time menu.
  */
-export function openMinutes(ctx: DayCtx): number[] {
-  if (ctx.nyDate !== null && ctx.nyDate < ctx.today) return [];
-  const from = ctx.nyDate !== null && ctx.nyDate === ctx.today ? Math.max(DAY_START, nextOpenMinute(ctx.nowMinute)) : DAY_START;
+export function openMinutes(ctx: DateCtx): number[] {
+  if (ctx.nyDate < ctx.today) return [];
+  const from = ctx.nyDate === ctx.today ? Math.max(DAY_START, nextOpenMinute(ctx.nowMinute)) : DAY_START;
   const out: number[] = [];
   for (let m = from; m <= LAST_START; m += GRID) out.push(m);
   return out;
 }
 
 /** The picker's first time: today the next open mark; another day the type's first usual start, else its first open time. Null when the day has none. */
-export function defaultPlaceMinute(ctx: DayCtx, vertical: Vertical): number | null {
+export function defaultPlaceMinute(ctx: DateCtx, vertical: Vertical): number | null {
   const open = openMinutes(ctx);
   if (!open.length) return null;
-  if (ctx.nyDate !== null && ctx.nyDate === ctx.today) return open[0]!;
+  if (ctx.nyDate === ctx.today) return open[0]!;
   return USUAL[vertical].map((w) => w.start).find((m) => open.includes(m)) ?? open[0]!;
 }
 
@@ -468,8 +424,120 @@ export function defaultPlaceMinute(ctx: DayCtx, vertical: Vertical): number | nu
  * series' open Stories slots (a set never adds a slot); anything else every
  * open time (openMinutes).
  */
-export function readyMinutes(ctx: DayCtx, vertical: Vertical, series: StorySeries | null): number[] {
+export function readyMinutes(ctx: DateCtx, vertical: Vertical, series: StorySeries | null): number[] {
   const open = openMinutes(ctx);
   if (vertical !== 'stories') return open;
   return ctx.slots.filter((s) => s.vertical === 'stories' && s.series === series && open.includes(s.startMinute)).map((s) => s.startMinute).sort((a, b) => a - b);
+}
+
+// ── Batch select (spec 2026-10-21 §2) ──
+
+/** One action for every selected card. */
+export type BatchAction = { op: 'time'; minute: number } | { op: 'mode'; feedMode: FeedMode } | { op: 'remove' };
+
+/** Set time's skip when the picked minute has passed today: the time is exact, so the card never moves to another one. */
+export const TIME_PASSED = 'That time has passed today.';
+
+/** A batch is sent as saves of at most MAX_CHANGES (the slot writer's per-call limit). */
+export function chunked<T>(list: readonly T[], size = MAX_CHANGES): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+export type Batch<P extends BoardPost = BoardPost> = {
+  label: string;
+  /** The changes as saves of at most MAX_CHANGES, sent in order. */
+  chunks: SlotChange[][];
+  /** `inverse[i]` undoes `chunks[i]`; undo sends them last chunk first. */
+  inverse: SlotChange[][];
+  next: BoardState<P>;
+  /** Cards the rules turned away; the rest of the batch still goes. */
+  skipped: Array<{ key: SlotKey; day: number; reason: string }>;
+  /** Waiting posts the batch would leave without their slot (one ask for all of them). */
+  booked: Hit<P>[];
+};
+
+const nOf = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/**
+ * The same action on several cards, each on its own date. Every card goes
+ * through planEdit, on the board as the cards before it left it, so a batch
+ * follows the single-edit rules exactly: a locked card, a duplicate minute or
+ * a Trial / Main on a type that has none is skipped with its reason, and the
+ * rest still applies. Set time keeps each card on its date at the exact
+ * minute picked (no snap): a minute already passed today skips that card
+ * (TIME_PASSED) rather than moving it to the next open time. Every change
+ * is a date change (the slot writer marks it the person's).
+ */
+export function planBatch<P extends BoardPost>(state: BoardState<P>, keys: ReadonlyArray<{ day: number; key: SlotKey }>, action: BatchAction, clock: Clock): Batch<P> {
+  let cur = state;
+  const changes: SlotChange[][] = [];
+  const inverses: SlotChange[][] = [];
+  const skipped: Batch<P>['skipped'] = [];
+  for (const { day, key } of keys) {
+    if (action.op === 'mode' && !isReelType(key.vertical)) {
+      skipped.push({ key, day, reason: `No Trial / Main for ${key.series ? SERIES_NAME[key.series].many : TYPE_NAME[key.vertical].many}.` });
+      continue;
+    }
+    if (action.op === 'time' && state.days[day]!.nyDate === clock.today && action.minute <= clock.nowMinute) {
+      skipped.push({ key, day, reason: TIME_PASSED });
+      continue;
+    }
+    const edit: Edit = action.op === 'time'
+      ? { op: 'move', day, key, to: day, minute: action.minute }
+      : action.op === 'mode' ? { op: 'mode', day, key, feedMode: action.feedMode } : { op: 'remove', day, key };
+    const p = planEdit(cur, edit, clock);
+    if (!p.ok) { skipped.push({ key, day, reason: p.reason }); continue; }
+    // The rules never land Set time elsewhere once the passed-minute check is done; if they ever did, skip rather than misreport.
+    if (action.op === 'time' && p.minute !== action.minute) { skipped.push({ key, day, reason: TIME_PASSED }); continue; }
+    if (p.noop) continue;
+    cur = p.next;
+    changes.push(p.changes);
+    inverses.push(p.inverse);
+  }
+  // Chunk by edit so an edit's changes and its inverse stay in the same save; each chunk's inverse runs newest edit first.
+  const chunks: SlotChange[][] = [];
+  const inverse: SlotChange[][] = [];
+  let at = 0;
+  while (at < changes.length) {
+    let size = 0;
+    let end = at;
+    while (end < changes.length && size + Math.max(changes[end]!.length, inverses[end]!.length) <= MAX_CHANGES) { size += Math.max(changes[end]!.length, inverses[end]!.length); end++; }
+    if (end === at) end = at + 1;
+    chunks.push(changes.slice(at, end).flat());
+    inverse.push(inverses.slice(at, end).reverse().flat());
+    at = end;
+  }
+  const n = changes.length;
+  const label = !n ? ''
+    : action.op === 'time' ? `${nOf(n, 'slot')} moved to ${clockLabel(action.minute)}`
+      : action.op === 'mode' ? `${nOf(n, 'slot')} now post${n === 1 ? 's' : ''} ${action.feedMode === 'trial' ? (n === 1 ? 'as a Trial reel' : 'as Trial reels') : 'to the main feed'}`
+        : `${nOf(n, 'slot')} removed`;
+  return { label, chunks, inverse, next: cur, skipped, booked: bookedHits(state, cur) };
+}
+
+/** Select mode's state: the week it belongs to, whether it is on, and the selected cards' keys. */
+export type Selection = { monday: string; on: boolean; picked: readonly string[] };
+
+/**
+ * The selection that still applies to the board on screen. A new week clears
+ * it and leaves select mode (card keys are day index and slot, so they would
+ * name next week's dates). Otherwise only keys of cards still on the board
+ * stay (an Undo or a refresh can take a selected card away, and its key must
+ * not come back selected on another card later). The same object when
+ * nothing changes.
+ */
+export function syncSelection(sel: Selection, monday: string, cards: ReadonlyArray<{ key: string }>): Selection {
+  if (sel.monday !== monday) return { monday, on: false, picked: [] };
+  const live = sel.picked.filter((k) => cards.some((c) => c.key === k));
+  return live.length === sel.picked.length ? sel : { ...sel, picked: live };
+}
+
+/** The batch toast: what was done ("3 slots moved to 11:30 AM. Just these dates.") and each skipped part ("1 skipped: No Trial / Main for Carousels."). */
+export function batchToast(b: Pick<Batch, 'label' | 'skipped'>): string {
+  const by = new Map<string, number>();
+  for (const s of b.skipped) by.set(s.reason, (by.get(s.reason) ?? 0) + 1);
+  const skipped = [...by].map(([reason, n]) => `${n} skipped: ${reason}`);
+  return [b.label ? `${b.label}. Just these dates.` : 'Nothing changed.', ...skipped].join(' ');
 }

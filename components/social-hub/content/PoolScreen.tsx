@@ -1,12 +1,14 @@
 import { Breadcrumbs } from '@/components/social-hub/nav/Breadcrumbs';
 import { DataNotes } from '@/components/social-hub/DataNotes';
 import { HubLink } from '@/components/social-hub/nav/HubNav';
+import { PoolList, type PoolRowData } from '@/components/social-hub/content/PoolList';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { relative, shortDate, when } from '@/lib/social-hub/views/format';
+import { QUEUE_LIVE, queueTags } from '@/lib/social-hub/queue';
 import { crumbsFor } from '@/lib/social-hub/views/nav';
 import { IDEA_STATE_LABEL, poolList, poolStale, poolSummary, type PoolFilter } from '@/lib/social-hub/views/pools';
 import { moveTags } from '@/lib/social-hub/views/moves';
@@ -43,7 +45,10 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
   const filter: PoolFilter = params.show === 'ready' || params.show === 'all' ? params.show : 'open';
   const summary = poolSummary(dataset.ideas, vertical);
   const ideas = poolList(dataset.ideas, vertical, filter, dataset.adjustments ?? []);
-  const tags = moveTags(dataset.adjustments ?? [], vertical, now, new Set(dataset.ideas.filter((i) => i.vertical === vertical).map((i) => i.id)));
+  const present = new Set(dataset.ideas.filter((i) => i.vertical === vertical).map((i) => i.id));
+  const tags = QUEUE_LIVE.has(vertical)
+    ? queueTags((dataset.adjustments ?? []).filter((a) => a.vertical === vertical), present)
+    : moveTags(dataset.adjustments ?? [], vertical, now, present);
   const top = Math.max(...ideas.map((i) => i.score ?? 0), 0) || 1;
   // A detail every row shares says nothing about any one idea; dates read as dates, not ISO.
   const parts = (d: string | null | undefined) => (d ? d.split(' · ') : []);
@@ -55,6 +60,25 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
   const stateVaries = new Set(ideas.map((i) => `${i.state}:${i.versionCount > 1}`)).size > 1;
   const addedVaries = new Set(ideas.map(addedOf)).size > 1;
   const info = verticalInfo(vertical);
+  // A type on the idea queue shows the draggable list: pin, drag and archive (the page's own Everything view stays a table).
+  const queueLive = QUEUE_LIVE.has(vertical) && filter !== 'all';
+  const queueRows: PoolRowData[] = ideas.map((idea) => {
+    const tag = tags.get(idea.id);
+    return {
+      id: idea.id,
+      title: idea.title,
+      detail: detailOf(idea.detail),
+      score: idea.score == null ? '—' : idea.score.toFixed(idea.score >= 10 ? 0 : 2),
+      bar: idea.score == null ? null : Math.max(4, (idea.score / top) * 100),
+      state: IDEA_STATE_LABEL[idea.state],
+      versions: idea.hasContent && idea.versionCount > 1 ? `${idea.versionCount} versions` : null,
+      chips: [...(idea.yours ? [{ text: 'Yours' }] : []), ...(tag ? [{ text: tag.text, ...(tag.kind === 'pinned' ? { kind: 'pinned' as const } : {}) }] : [])],
+      pinned: tag?.kind === 'pinned' || tag?.kind === 'cant',
+      hasContent: idea.hasContent,
+      open: idea.state === 'idea_only' || idea.state === 'content_ready',
+      why: <ScoreWhy idea={idea} />,
+    };
+  });
   const stale = poolStale(summary.lastRefill, now, vertical);
 
   return (
@@ -75,7 +99,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
       ) : null}
       <DataNotes dataset={dataset} />
       <p className="sh-note">
-        {HOW[vertical]}
+        {HOW[vertical]}{QUEUE_LIVE.has(vertical) && vertical !== 'stories' ? ' Hold and drag any idea to move it.' : ''}
         {ideas.length > 1 && !stateVaries ? ` All ${ideas.length} are ${ALL_ARE[ideas[0]!.state]}.` : ''}
         {ideas.length > 1 && !addedVaries && addedOf(ideas[0]!) !== '—' ? ` All added ${addedOf(ideas[0]!).replace(/^(Today|Tomorrow|Yesterday)/, (w) => w.toLowerCase())}.` : ''}
       </p>
@@ -92,6 +116,9 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
         <div className="sh-panel sh-empty"><strong>Nothing here</strong>{filter === 'open' ? 'The pool is empty until its next refill.' : 'No ideas match.'}</div>
       ) : (
         <div className="sh-panel">
+          {queueLive ? (
+            <PoolList vertical={vertical} rows={queueRows} scoreLabel={summary.scoreLabel ?? 'Score'} canDrag={vertical !== 'stories'} />
+          ) : (
           <div className="sh-table-wrap">
             <table className="sh-table sh-table--stack">
               <thead>
@@ -134,6 +161,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
               </tbody>
             </table>
           </div>
+          )}
           <p className="sh-muted">Other slots go to the best ideas found overnight.</p>
         </div>
       )}

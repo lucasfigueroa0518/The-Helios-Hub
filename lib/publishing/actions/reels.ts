@@ -60,7 +60,9 @@ export function reelActions(deps: {
       if (lock) return { ok: false, note: `This reel is locked for ${lock.nyDate} and stays as it is.` };
       const out = await deps.requestFinish(postIdeaId, slateId);
       if (out.status === 'failed') return { ok: false, note: out.note };
-      return { ok: true, note: `Rebuilding today’s video for this idea. ${out.note}` };
+      // Idea pool standard (2026-10-21): the video being rebuilt comes off the calendar and out of approval once the rebuild is accepted.
+      const off = await deps.unscheduleIdea(postIdeaId).catch(() => null);
+      return { ok: true, note: `Rebuilding today’s video for this idea. ${off?.ok ? 'The old one is unscheduled and no longer approved; approve the new one when it is ready. ' : ''}${out.note}` };
     },
     async unschedule(t) {
       const out = await deps.unscheduleIdea(need(t, 'postIdeaId'));

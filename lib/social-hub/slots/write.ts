@@ -13,12 +13,13 @@ import { readSeedInputs, seedTemplate, type SeedInputs } from './seed';
 import { rebookSlot } from '@/lib/social-hub/placement';
 
 import { driftMinute } from './book';
+import { markColumns, SCHEDULE_SLOT_BY_SQL } from './columns';
 import { legacyKey } from './legacy';
-import { OVERRIDE_INSERT, OVERRIDE_UPSERT, overrideKeyWhere } from './override';
+import { OVERRIDE_INSERT, OVERRIDE_INSERT_SET_BY, OVERRIDE_UPSERT, OVERRIDE_UPSERT_SET_BY, overrideKeyWhere } from './override';
 import { DEFAULT_FEED_MODE, FEED_GAP, isFeedSlot, nyMinuteOf } from './times';
 import {
-  isReelType, isSlotMinute, isStorySeries, parseSlotId, sameSlotKey, slotId, slotKeyString,
-  type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type SlotQuery, type SlotSource, type StorySeries, type TemplateRow,
+  isReelType, isSlotMinute, isStorySeries, MAX_CHANGES, parseSlotId, sameSlotKey, slotId, slotKeyString,
+  type FeedMode, type OverrideRow, type ResolvedSlot, type SetBy, type SlotKey, type SlotQuery, type SlotSource, type StorySeries, type TemplateRow,
 } from './types';
 
 /**
@@ -40,6 +41,13 @@ import {
  *    and each type's own steps), then sends the change again; "Keep it"
  *    sends nothing. Stories' minute lives in stories.sets, so a booked
  *    Stories slot's move is a 409 too (why 'cannot-move').
+ *
+ * "Set by" marks (calendar type schedules spec §4 item 1): a date edit here
+ * is a person's (slot_override.set_by 'person'), and a person's edit back to
+ * the Standard week's time keeps an 'add' pin instead of deleting the row; the
+ * pins this file writes itself (holdStartedToday, a Standard move whose target
+ * has passed) are the system's. A booking a date move carries along becomes
+ * the person's (schedule.slot_by); one a Standard-week move carries keeps its mark.
  *
  * Bookings made before the cutover carry a legacy window id ('afternoon',
  * 'morning_download'); they read as that window's start minute, so they are
@@ -84,7 +92,7 @@ export type ApplyOpts = {
 
 // ── Parsing ──
 
-const MAX_CHANGES = 20;
+export { MAX_CHANGES };
 const isMode = (m: unknown): m is FeedMode | null | undefined => m === undefined || m === null || m === 'trial' || m === 'main';
 const isWeekday = (d: unknown): d is number => Number.isInteger(d) && (d as number) >= 0 && (d as number) <= 6;
 
@@ -148,7 +156,8 @@ export function parseChanges(body: unknown): SlotChange[] | string {
 
 // ── The in-memory state ──
 
-type State = { template: TemplateRow[]; overrides: OverrideRow[] };
+/** The template and the overrides, in memory (also schedule-write.ts's before and after). */
+export type State = { template: TemplateRow[]; overrides: OverrideRow[] };
 
 const keyOf = (s: Key): SlotKey => ({ vertical: s.vertical, startMinute: s.startMinute, series: s.series });
 
@@ -167,14 +176,38 @@ function setTemplateDay(s: State, weekday: number, slots: readonly ResolvedSlot[
   ];
 }
 
-/** A date's overrides become exactly the difference between its slots and the Standard week's. */
-function setDateDay(s: State, nyDate: string, slots: readonly ResolvedSlot[]): void {
+/**
+ * A date's overrides become exactly the difference between its slots and the
+ * Standard week's, with one exception: a person's slot at the Standard week's
+ * own time and Trial / Main is kept as an 'add' pin (so a schedule save leaves
+ * it alone) when this edit changed that key, when the edit is a person's
+ * add on that key (`added`: an Undo of a Reset putting their pin back), or
+ * when a person pinned it before. A row whose action and feed mode don't
+ * change keeps its mark.
+ */
+function setDateDay(s: State, nyDate: string, slots: readonly ResolvedSlot[], setBy: SetBy = 'person', added?: SlotKey): void {
   const base = resolveDay(s.template, [], nyDate);
+  const was = resolveDay(s.template, s.overrides, nyDate);
+  const old = s.overrides.filter((o) => o.nyDate === nyDate);
+  const changed = (k: ResolvedSlot) => {
+    const a = was.find((y) => sameSlotKey(y, k));
+    return !a || a.feedMode !== k.feedMode;
+  };
+  const mark = (k: SlotKey, action: 'add' | 'remove', feedMode: FeedMode | null): SetBy => {
+    const prev = old.find((o) => sameSlotKey(o, k));
+    return prev && prev.action === action && prev.feedMode === feedMode ? prev.setBy : setBy;
+  };
   const rows: OverrideRow[] = [];
-  for (const b of base) if (!slots.some((x) => sameSlotKey(x, b))) rows.push({ nyDate, ...keyOf(b), action: 'remove', feedMode: null });
+  for (const b of base) if (!slots.some((x) => sameSlotKey(x, b))) rows.push({ nyDate, ...keyOf(b), action: 'remove', feedMode: null, setBy: mark(b, 'remove', null) });
   for (const x of slots) {
     const b = base.find((y) => sameSlotKey(x, y));
-    if (!b || b.feedMode !== x.feedMode) rows.push({ nyDate, ...keyOf(x), action: 'add', feedMode: x.feedMode });
+    if (!b || b.feedMode !== x.feedMode) {
+      rows.push({ nyDate, ...keyOf(x), action: 'add', feedMode: x.feedMode, setBy: mark(x, 'add', x.feedMode) });
+      continue;
+    }
+    const prev = old.find((o) => sameSlotKey(o, x));
+    const pinned = prev?.setBy === 'person' && prev.action === 'add' && prev.feedMode === x.feedMode;
+    if (pinned || (setBy === 'person' && (changed(x) || (added !== undefined && sameSlotKey(added, x))))) rows.push({ nyDate, ...keyOf(x), action: 'add', feedMode: x.feedMode, setBy: pinned ? 'person' : setBy });
   }
   s.overrides = [...s.overrides.filter((o) => o.nyDate !== nyDate), ...rows];
 }
@@ -218,7 +251,9 @@ function applyOne(s: State, c: SlotChange, today: string, nowMinute: number): Ap
   if (c.op === 'put' && (c.scope === 'template' || c.action === 'add')) {
     if (has) {
       if (ctx.nyDate !== null && (ctx.nyDate < today || isLocked(ctx, has))) return { ok: false, reason: ctx.nyDate < today ? PAST_DAY : ALREADY_STARTED };
-      write(ctx, withMode(ctx.slots, key, c.feedMode));
+      // A date add on a key the day has is the person's: kept as their pin even at the Standard week's own time and mode.
+      if (ctx.nyDate === null) write(ctx, withMode(ctx.slots, key, c.feedMode));
+      else setDateDay(s, ctx.nyDate, withMode(ctx.slots, key, c.feedMode), 'person', key);
       return ok(key.startMinute);
     }
     const r = applyPlace(ctx, { ...key, feedMode: c.feedMode ?? null }, clear);
@@ -267,7 +302,7 @@ function applyOne(s: State, c: SlotChange, today: string, nowMinute: number): Ap
  * such key pins what today resolved to before (add with its feed mode, or
  * remove). A key with an override today is already pinned.
  */
-function holdStartedToday(before: State, s: State, today: string, nowMinute: number): void {
+export function holdStartedToday(before: State, s: State, today: string, nowMinute: number): void {
   const was = resolveDay(before.template, before.overrides, today);
   const now = resolveDay(s.template, s.overrides, today);
   const keys = new Map<string, SlotKey>();
@@ -278,7 +313,7 @@ function holdStartedToday(before: State, s: State, today: string, nowMinute: num
     const a = was.find((x) => sameSlotKey(x, key));
     const b = now.find((x) => sameSlotKey(x, key));
     if ((!a && !b) || (a && b && a.feedMode === b.feedMode)) continue;
-    s.overrides.push(a ? { nyDate: today, ...key, action: 'add', feedMode: a.feedMode } : { nyDate: today, ...key, action: 'remove', feedMode: null });
+    s.overrides.push(a ? { nyDate: today, ...key, action: 'add', feedMode: a.feedMode, setBy: 'system' } : { nyDate: today, ...key, action: 'remove', feedMode: null, setBy: 'system' });
   }
 }
 
@@ -289,13 +324,14 @@ const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jo
 /** Types whose booking is the social_hub.schedule row (placement.rescheduleItem); Stories' minute lives in stories.sets. */
 const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'reels', 'explainers']);
 
-type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string> };
+/** `slotBy`: schedule.slot_by when set (Stories: mirrored from stories.sets.slot_by by projectSet), else the person's when they placed it (source 'user'), else the system's. */
+export type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string>; slotBy: SetBy };
 
 /** Waiting posts on these dates (free-time or legacy window slot ids), locked for this transaction. */
-async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booking[]> {
+export async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booking[]> {
   if (!dates.length) return [];
   const { rows } = await q(
-    `SELECT s.id::text AS id, s.vertical, s.ny_date::text AS ny_date, s.slot, s.feed_mode, s.publish_at, s.idea_ref, ci.native_ref
+    `SELECT s.id::text AS id, s.vertical, s.ny_date::text AS ny_date, s.slot, s.feed_mode, s.publish_at, s.idea_ref, ci.native_ref, ${SCHEDULE_SLOT_BY_SQL('s')} AS slot_by
        FROM social_hub.schedule s LEFT JOIN social_hub.content_items ci ON ci.id = s.content_item_id
       WHERE s.status = 'scheduled' AND s.ny_date = ANY($1::date[])
       ORDER BY s.publish_at
@@ -311,6 +347,7 @@ async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booki
     out.push({
       id: r.id, vertical: v, nyDate: String(r.ny_date).slice(0, 10), slot: String(r.slot), key: { vertical: v, ...parsed },
       feedMode: r.feed_mode ?? null, publishAt: new Date(r.publish_at), refs: ref ? { [REF_KEY[v]]: String(ref) } : {},
+      slotBy: r.slot_by === 'person' ? 'person' : 'system',
     });
   }
   return out;
@@ -319,7 +356,7 @@ async function bookingsOn(q: SlotQuery, dates: readonly string[]): Promise<Booki
 /** A booking made before the cutover has no feed_mode: it posts as its type always did. */
 const modeOf = (b: Booking): FeedMode | null => b.feedMode ?? DEFAULT_FEED_MODE[b.vertical];
 
-const modeClash = (b: Booking, slot: ResolvedSlot) => {
+export const modeClash = (b: Booking, slot: ResolvedSlot) => {
   const mode = modeOf(b);
   return isReelType(b.vertical) && slot.feedMode != null && mode != null && slot.feedMode !== mode;
 };
@@ -346,18 +383,19 @@ function followTarget(follows: readonly Follow[], b: Booking): { nyDate: string;
   return null;
 }
 
-type Plan = { b: Booking; nyDate: string; slot: ResolvedSlot };
+/** `byPerson`: a date move carries it, so the booking becomes the person's; a Standard-week move keeps its mark. */
+type Plan = { b: Booking; nyDate: string; slot: ResolvedSlot; byPerson: boolean };
 
-const TAKEN = 'That slot is taken.';
+export const TAKEN = 'That slot is taken.';
 
-const bookedPost = (b: Booking, why: BookedPost['why']): BookedPost => ({
+export const bookedPost = (b: Booking, why: BookedPost['why']): BookedPost => ({
   scheduleId: b.id, vertical: b.vertical, nyDate: b.nyDate, slot: b.slot, feedMode: b.feedMode, publishAt: b.publishAt.toISOString(), refs: b.refs, why,
 });
 
 // ── Apply ──
 
 /** Where bookings can sit: the next two weeks, plus every date a change touched. */
-function bookedDates(today: string, extra: Iterable<string>): string[] {
+export function bookedDates(today: string, extra: Iterable<string>): string[] {
   const out = new Set<string>();
   for (const d of extra) if (d >= today) out.add(d);
   for (let i = 0; i < 14; i += 1) out.add(addCalendarDays(today, i));
@@ -413,12 +451,12 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
     // A Standard-week move whose target day this week has passed (Thu → Tue on a Wednesday): this week's post
     // keeps its slot on its own date (a date add), and the Standard week changes from the next occurrence on.
     if (found?.standard && !target && !s.overrides.some((o) => o.nyDate === b.nyDate && sameSlotKey(o, b.key))) {
-      s.overrides.push({ nyDate: b.nyDate, ...b.key, action: 'add', feedMode: was.feedMode });
+      s.overrides.push({ nyDate: b.nyDate, ...b.key, action: 'add', feedMode: was.feedMode, setBy: 'system' });
       continue;
     }
     const slot = target && resolveDay(s.template, s.overrides, target.nyDate).find((x) => sameSlotKey(x, { ...b.key, startMinute: target.minute }));
     if (target && slot) {
-      if (MOVE_HERE.has(b.vertical)) plans.push({ b, nyDate: target.nyDate, slot });
+      if (MOVE_HERE.has(b.vertical)) plans.push({ b, nyDate: target.nyDate, slot, byPerson: !target.standard });
       else booked.push(bookedPost(b, 'cannot-move'));
       continue;
     }
@@ -459,7 +497,11 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
     const at = times[i]!;
     const slot = slotId(p.slot.startMinute, p.slot.series);
     // The one booking move (placement.rebookSlot, as rescheduleItem): the row stays (source, approval); the slot's Trial / Main moves with it.
-    const moved = await rebookSlot(q, { scheduleId: p.b.id, nyDate: p.nyDate, slot, publishAt: at, feedMode: isReelType(p.b.vertical) ? p.slot.feedMode : null });
+    const moved = await rebookSlot(
+      q,
+      { scheduleId: p.b.id, nyDate: p.nyDate, slot, publishAt: at, feedMode: isReelType(p.b.vertical) ? p.slot.feedMode : null },
+      p.byPerson ? { slotBy: 'person' } : {},
+    );
     // A race past the check above; the route's transaction rolls back on this result's status.
     if (!moved.ok && moved.why === 'taken') return { ok: false, status: 409, error: TAKEN };
     if (!moved.ok) throw new Error(`Booking ${p.b.id} started posting before it could move.`);
@@ -471,7 +513,7 @@ export async function applySlotChanges(q: SlotQuery, changes: readonly SlotChang
 }
 
 /** Write only what changed: deleted rows go, new or changed rows are upserted, untouched rows keep their updated_by. */
-async function writeDiff(q: SlotQuery, before: State, s: State, by: string): Promise<void> {
+export async function writeDiff(q: SlotQuery, before: State, s: State, by: string): Promise<void> {
   const tOld = new Map(before.template.map((r) => [rowKey(r.weekday, r), r]));
   const tNew = new Map(s.template.map((r) => [rowKey(r.weekday, r), r]));
   for (const [k, r] of tOld) {
@@ -489,17 +531,22 @@ async function writeDiff(q: SlotQuery, before: State, s: State, by: string): Pro
   }
   const oOld = new Map(before.overrides.map((r) => [rowKey(r.nyDate, r), r]));
   const oNew = new Map(s.overrides.map((r) => [rowKey(r.nyDate, r), r]));
+  // The mark is written only where the column exists (R3); reads treat its absence as 'system'.
+  const withMark = oNew.size > 0 && (await markColumns(q)).overrideSetBy;
   for (const [k, r] of oOld) {
     if (oNew.has(k)) continue;
     await q(`DELETE FROM social_hub.slot_override WHERE ${overrideKeyWhere(1)}`, [r.nyDate, r.vertical, r.startMinute, r.series]);
   }
   for (const [k, r] of oNew) {
     const old = oOld.get(k);
-    if (old && old.action === r.action && old.feedMode === r.feedMode) continue;
+    if (old && old.action === r.action && old.feedMode === r.feedMode && old.setBy === r.setBy) continue;
     await q(
-      `${OVERRIDE_INSERT} VALUES ($1::date, $2, $3, $4, $5, $6, $7, now())
+      withMark
+        ? `${OVERRIDE_INSERT_SET_BY} VALUES ($1::date, $2, $3, $4, $5, $6, $7, now(), $8)
+       ${OVERRIDE_UPSERT_SET_BY}`
+        : `${OVERRIDE_INSERT} VALUES ($1::date, $2, $3, $4, $5, $6, $7, now())
        ${OVERRIDE_UPSERT}`,
-      [r.nyDate, r.vertical, r.startMinute, r.series, r.action, r.feedMode, by],
+      withMark ? [r.nyDate, r.vertical, r.startMinute, r.series, r.action, r.feedMode, by, r.setBy] : [r.nyDate, r.vertical, r.startMinute, r.series, r.action, r.feedMode, by],
     );
   }
 }

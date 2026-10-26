@@ -18,6 +18,7 @@
  * while a Story set is publishing, and the hub reads one identity per post.
  */
 import type { Queryable } from '@/lib/stories/db';
+import { hasColumn } from '@/lib/social-hub/slots/columns';
 import { isStorySeries, slotId } from '@/lib/social-hub/slots/types';
 import { approveItem, clearDecision, ensureContentItem, rejectItem, type SpineQuery } from '@/lib/social-hub/spine';
 
@@ -40,10 +41,11 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
   const { rows } = await db.query<{
     id: string; series: string; ny_date: string; status: string; trigger: string;
     publish_at: string | null; approved_at: string | null; published_at: string | null; updated_at: string; error: string | null;
-    slot_minute: number | null;
+    slot_minute: number | null; slot_by: string | null;
   }>(
     `SELECT id::text AS id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger,
             (to_jsonb(sets)->>'slot_minute')::smallint AS slot_minute, -- through the row: runs before the column exists (R12)
+            to_jsonb(sets)->>'slot_by' AS slot_by,
             publish_at::text AS publish_at, approved_at::text AS approved_at, published_at::text AS published_at,
             updated_at::text AS updated_at, error
        FROM stories.sets WHERE id = $1`,
@@ -89,13 +91,16 @@ export async function projectSet(db: Queryable, setId: string): Promise<void> {
   // Legacy and hand-made sets book under the series name; a template set books its slot, and follows it when the set moves (R15).
   const slot = set.slot_minute != null && isStorySeries(set.series) ? slotId(set.slot_minute, set.series) : set.series;
   if (set.publish_at && slotStatus) {
+    // The set's "set by" mark rides along to its booking (one source of truth for the hub's Booking.slotBy):
+    // 'person' once a person moved it, else 'system'. Named only where schedule.slot_by exists (R3).
+    const mark = (await hasColumn(db, 'social_hub', 'schedule', 'slot_by')) ? (set.slot_by === 'person' ? 'person' : 'system') : null;
     await db.query(
-      `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, publish_attempt_id, error, legacy_id)
-       VALUES ($1, 'stories', $2::date, $3, $4::timestamptz, $5, $6, $7, $8, $9::uuid)
+      `INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, publish_attempt_id, error, legacy_id${mark ? ', slot_by' : ''})
+       VALUES ($1, 'stories', $2::date, $3, $4::timestamptz, $5, $6, $7, $8, $9::uuid${mark ? ', $10' : ''})
        ON CONFLICT (legacy_id) DO UPDATE SET ny_date = excluded.ny_date, slot = excluded.slot, publish_at = excluded.publish_at, status = excluded.status,
-              publish_attempt_id = excluded.publish_attempt_id, error = excluded.error`,
+              publish_attempt_id = excluded.publish_attempt_id, error = excluded.error${mark ? ', slot_by = excluded.slot_by' : ''}`,
       [itemId, set.ny_date, slot, set.publish_at, slotStatus, set.trigger === 'auto' ? 'auto' : 'user', attemptId,
-        slotStatus === 'failed' || slotStatus === 'cancelled' ? set.error : null, set.id],
+        slotStatus === 'failed' || slotStatus === 'cancelled' ? set.error : null, set.id, ...(mark ? [mark] : [])],
     );
   }
 

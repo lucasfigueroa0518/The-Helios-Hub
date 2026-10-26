@@ -1,5 +1,6 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
 import { evaluateTopic, topicRef, trimPool, type Evaluation } from '@/lib/explainers/ideas/evaluate';
+import { getTopic } from '@/lib/explainers/repository';
 import { ideaUsd, type IdeaModel } from '@/lib/explainers/ideas/generator';
 import { cycleRetryGate } from '@/lib/explainers/ideas/retry';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
@@ -20,8 +21,9 @@ import { loadSettings, loadThemeBrief } from '@/lib/explainers/settings';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { quotaFromSlots } from '@/lib/social-hub/slots';
 import { consoleFillLog, dailyFillOrQuota, reportFill, type DailyFill, type FillLog } from '@/lib/social-hub/fill';
-import { markPromoteUsed, readMoves, recordPromoteSkip, withSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
-import { ideaRef, NO_MOVES, orderTonight, tonightMoves } from '@/lib/social-hub/views/moves';
+import { markPromoteUsed, readMoves, recordPromoteSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
+import { finishNightPlacements } from '@/lib/social-hub/queue-store';
+import { tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 export type IdeaCycleDeps = {
   db: ExplainersDb;
@@ -80,6 +82,26 @@ export async function explainersQuota(db: ExplainersDb, day: string): Promise<nu
   return (await quotaFromSlots((text, params) => db.query(text, params) as never, 'explainers', day)) ?? (await postsPerDay(db));
 }
 
+
+const movesQuery = (db: ExplainersDb): MovesQuery => (text, params) => db.query(text, params as never) as never;
+const topicOfIdea = (ideaId: string) => ideaId.replace(/^explainers:topic:/, '');
+const ideaOfTopic = (topicId: string) => `explainers:topic:${topicId}`;
+
+/** What a person did to the pool, read once per run. A failed read is no moves: the night runs as it did before them. */
+async function readPoolMoves(q: MovesQuery): Promise<IdeaAdjustment[]> {
+  return readMoves(q, 'explainers');
+}
+
+/** Topics a person pinned or dragged: the pool trim never cuts them. */
+const heldTopicIds = (moves: readonly IdeaAdjustment[]): Set<string> =>
+  new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => topicOfIdea(m.ideaId)));
+
+/** Topics a person archived, as history: the machine does not bring them back. */
+async function archivedTopics(db: ExplainersDb, moves: readonly IdeaAdjustment[]) {
+  const found = await Promise.all(moves.filter((m) => m.kind === 'archive').map((m) => getTopic(db, topicOfIdea(m.ideaId)).catch(() => null)));
+  return found.filter((t): t is NonNullable<typeof t> => t != null);
+}
+
 /**
  * E-16 daily lifecycle. Runs only while auto_render is on (A-5, A-7): generate
  * three ideas in one call, dedupe and score each (E-15, A-3), trim the pool to
@@ -97,6 +119,10 @@ export async function explainersQuota(db: ExplainersDb, day: string): Promise<nu
  */
 export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult> {
   const { db } = deps;
+  // Where the hub records Promote / Pin / Drag / Archive: the main database when the worker passes it (the explainers handle may be
+  // a database of its own), else this one. A read that fails is no moves, so the night runs as before.
+  const movesQ: MovesQuery = deps.moves ?? movesQuery(db);
+  const movesReadAt = new Date();
   const settings = await loadSettings(db);
   if (!settings.auto_render) return { status: 'skipped', reason: 'auto_render_off' };
 
@@ -131,9 +157,11 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   if (!cycleId) return { status: 'skipped', reason: 'already_ran_today' };
 
   try {
+    const moves = await readPoolMoves(movesQ);
+    const archived = await archivedTopics(db, moves);
     const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);
     const pool = await listPool(db);
-    const rendered = await listRecentlyRendered(db, settings.dedupe_lookback_days, deps.now);
+    const rendered = [...(await listRecentlyRendered(db, settings.dedupe_lookback_days, deps.now)), ...archived];
 
     const response = await deps.ideaModel.propose({
       model: settings.idea_model,
@@ -175,40 +203,24 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     const evaluations: Evaluation[] = [];
     for (const topic of added) {
       evaluations.push(
-        await evaluateTopic({ db, jev, settings, themeBrief, now: deps.now, ideaModel: deps.ideaModel, ideaCycleId: cycleId }, topic.id),
+        await evaluateTopic({ db, jev, settings, themeBrief, now: deps.now, ideaModel: deps.ideaModel, ideaCycleId: cycleId, extraHistory: archived }, topic.id),
       );
     }
-    // Shared queue: tonight's promoted topic is never cut from the pool and goes first; demoted topics go last.
-    // A promote that can't be made (not a pool topic or a placeable render any more) steps aside, in the same
-    // run, with why on the move; the next eligible promote is picked. Never blocks the night.
-    const approvalNeeded = await requireApproval(db);
-    let moveList = deps.moves ? await readMoves(deps.moves, 'explainers') : [];
-    let tonight = moveList.length ? tonightMoves(moveList, 'explainers') : NO_MOVES;
-    if (deps.moves && tonight.promote) {
-      const makeable = new Set((await fillCandidates(db, approvalNeeded)).map((c) => `explainers:topic:${c.topicId}`));
-      while (tonight.promote && !makeable.has(tonight.promote.ideaId)) {
-        await recordPromoteSkip(deps.moves, 'explainers', tonight.promote.ideaId, EXPLAINER_GONE);
-        moveList = withSkip(moveList, tonight.promote.ideaId, EXPLAINER_GONE);
-        tonight = tonightMoves(moveList, 'explainers');
-      }
-    }
-    const promoteIdea = tonight.promote?.ideaId ?? null;
-    const promoteTopic = promoteIdea ? ideaRef(promoteIdea) : null;
-    const usePromote = async () => {
-      if (deps.moves && promoteIdea) await markPromoteUsed(deps.moves, 'explainers', promoteIdea);
-    };
-    await trimPool(db, settings.pool_size, promoteTopic);
+    await trimPool(db, settings.pool_size, heldTopicIds(moves));
 
     // Daily fill (D54): the top `quota − placed` candidates, fresh topics and surviving renders ranked together.
     // A surviving render is placed, not rendered again; at most `daily_render_cap` pool topics are rendered
     // (SH-49: two a day), and requestRender still enforces both caps.
-    const ranked = orderTonight(
-      await fillCandidates(db, approvalNeeded),
-      (c) => `explainers:topic:${c.topicId}`,
-      new Set(promoteIdea ? [promoteIdea] : []),
-      tonight.demoted,
-    );
-    const chosen = ranked.slice(0, fill.making);
+    const approvalNeeded = await requireApproval(db);
+    const candidates = await fillCandidates(db, approvalNeeded, moves);
+    // A pin that can no longer be made (not a pool topic or a placeable render any more) steps aside with why on the move; the
+    // rest of the queue goes on. Never blocks the night.
+    const makeable = new Set(candidates.map((c) => ideaOfTopic(c.topicId)));
+    for (const pin of tonightMoves(moves, 'explainers').pins) {
+      if (!makeable.has(pin.ideaId)) await recordPromoteSkip(movesQ, 'explainers', pin.ideaId, EXPLAINER_GONE);
+    }
+    const chosen = candidates.slice(0, fill.making);
+    const handMoved = new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => m.ideaId));
     const renderCap = Math.max(1, settings.daily_render_cap);
     const live = await publishingLive(db);
     const renders: string[] = [];
@@ -220,7 +232,7 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
       if (candidate.jobId) {
         const scheduled = live ? await scheduleJob(db, candidate.jobId, 'auto', deps.now ?? new Date()) : null;
         allocated.push({ topicId: candidate.topicId, jobId: candidate.jobId, scheduled });
-        if (candidate.topicId === promoteTopic) await usePromote();
+        if (handMoved.has(ideaOfTopic(candidate.topicId))) await markPromoteUsed(movesQ, 'explainers', ideaOfTopic(candidate.topicId));
         continue;
       }
       if (capped || renders.length >= renderCap) continue;
@@ -233,13 +245,17 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
       const requested = await requestRender(db, { topicId: candidate.topicId, trigger: 'auto', settings, now: deps.now });
       render ??= requested;
       if (!requested.ok) capped = true;
-      if (candidate.topicId === promoteTopic) {
-        if (requested.ok) await usePromote();
+      if (handMoved.has(ideaOfTopic(candidate.topicId))) {
+        if (requested.ok) await markPromoteUsed(movesQ, 'explainers', ideaOfTopic(candidate.topicId));
         // A render that doesn't start caps the night, so no other topic is tried. That is transient: no skip is
-        // recorded, so the promote stays active for next night.
-        else console.info(`[explainers] promote ${promoteTopic} not rendered tonight (${requested.reason.replace(/_/g, ' ')}); kept for next night`);
+        // recorded, so the pin stays active for next night.
+        else console.info(`[explainers] ${candidate.topicId} not rendered tonight (${requested.reason.replace(/_/g, ' ')}); kept for next night`);
       }
     }
+    // The night ran with auto-render on and made its picks: hand placements are used up and the ideas compete by score
+    // again (a failed run never reaches here, so a hand move is not undone by a night that did nothing for it).
+    // A night that was capped left ideas it chose unmade: their placements stay for the next night.
+    if (!capped) await finishNightPlacements(movesQ, 'explainers', undefined, movesReadAt);
 
     await db.query(
       `UPDATE explainers.idea_cycles c
@@ -284,7 +300,7 @@ export type HandTopic = Omit<NewTopic, 'scope'>;
  * click, so these calls are his.
  */
 export async function addAndEvaluateTopics(
-  deps: { db: ExplainersDb; jevTransport: JevTransport; ideaModel: IdeaModel; now?: Date },
+  deps: { db: ExplainersDb; jevTransport: JevTransport; ideaModel: IdeaModel; now?: Date; /** The main database, where pins and drags live (the explainers handle may be its own). */ moves?: MovesQuery },
   topics: HandTopic[],
 ): Promise<IntakeResult> {
   const { db } = deps;
@@ -315,6 +331,6 @@ export async function addAndEvaluateTopics(
     const evaluation = await evaluateTopic({ db, jev, settings, themeBrief, now: deps.now, ideaModel: deps.ideaModel }, topic.id);
     results.push({ topicId: topic.id, title: topic.title, scope: topic.scope!, evaluation });
   }
-  await trimPool(db, settings.pool_size);
+  await trimPool(db, settings.pool_size, heldTopicIds(await readPoolMoves(deps.moves ?? movesQuery(db))));
   return results;
 }

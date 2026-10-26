@@ -1,5 +1,6 @@
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
+import { QUEUE_LIVE, capQueued, queueOrder, withoutArchived } from '@/lib/social-hub/queue';
 import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 /**
@@ -64,9 +65,16 @@ export function poolSummaries(ideas: readonly HubIdea[]): PoolSummary[] {
 
 export type PoolFilter = 'open' | 'ready' | 'all';
 
-/** A type's pool in score order, with the shared queue on top: tonight's promote first, demoted ideas last (L2). */
+/** A type's pool as the queue: pinned ideas first, then everything by score or where a drag left it; archived ideas gone (2026-10-21 pool standard). */
 export function poolList(ideas: readonly HubIdea[], vertical: Vertical, filter: PoolFilter, adjustments: readonly IdeaAdjustment[] = []): HubIdea[] {
   const mine = ideas.filter((i) => i.vertical === vertical);
   const kept = filter === 'all' ? mine : filter === 'ready' ? mine.filter((i) => i.state === 'content_ready') : mine.filter((i) => OPEN.has(i.state));
-  return applyMoves(rankIdeas(kept), movesFor(adjustments, vertical));
+  // A type whose night does not follow the queue yet keeps Promote and Demote, so the page never shows an order the night won't make.
+  if (!QUEUE_LIVE.has(vertical)) return applyMoves(withoutArchived(rankIdeas(kept), movesFor(adjustments, vertical)), movesFor(adjustments, vertical));
+  const moves = movesFor(adjustments, vertical);
+  if (filter === 'all') return queueOrder(rankIdeas(kept), moves).map((q) => q.item);
+  // At most 30 open ideas per type (Stories: per series); pinned, dragged, yours and made ideas are never cut.
+  const groups = new Map<string, HubIdea[]>();
+  for (const idea of rankIdeas(kept)) groups.set(vertical === 'stories' ? idea.group ?? '' : '', [...(groups.get(vertical === 'stories' ? idea.group ?? '' : '') ?? []), idea]);
+  return [...groups.values()].flatMap((list) => capQueued(queueOrder(list, moves)).map((q) => q.item));
 }

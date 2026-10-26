@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from 'react';
 
-import { ExplainerGenerate } from '@/components/content-type/TypeControls';
+import { ExplainerGenerate, explainerGenerate } from '@/components/content-type/TypeControls';
 import { TypeHub } from '@/components/content-type/TypeHub';
 
 /**
@@ -10,6 +10,6 @@ import { TypeHub } from '@/components/content-type/TypeHub';
  * bench idea. The button is a function, so it is built on the client side
  * (a server page can't pass a function into a client component).
  */
-export function ExplainersHub(props: Omit<ComponentProps<typeof TypeHub>, 'benchAction'>) {
-  return <TypeHub {...props} benchAction={(item) => <ExplainerGenerate ideaId={item.idea.id} title={item.idea.title} />} />;
+export function ExplainersHub(props: Omit<ComponentProps<typeof TypeHub>, 'benchAction' | 'generate'>) {
+  return <TypeHub {...props} generate={explainerGenerate} benchAction={(item) => <ExplainerGenerate ideaId={item.idea.id} title={item.idea.title} />} />;
 }

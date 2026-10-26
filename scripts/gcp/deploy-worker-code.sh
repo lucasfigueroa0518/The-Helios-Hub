@@ -108,32 +108,33 @@ tar -czf "${ARCHIVE}" \
   --exclude='./helios_text_engine/.venv' \
   .
 
+DEPLOY_ID="$(date +%s)-$$"
 gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
-  "${ARCHIVE}" "${INSTANCE}:/tmp/helios-app.tgz"
+  "${ARCHIVE}" "${INSTANCE}:/tmp/helios-app-${DEPLOY_ID}.tgz"
 
 gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
-  scripts/gcp/helios-worker.service "${INSTANCE}:/tmp/helios-worker.service"
+  scripts/gcp/helios-worker.service "${INSTANCE}:/tmp/helios-worker-${DEPLOY_ID}.service"
 
 if [[ -f "${ENV_FILE}" ]]; then
   gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
-    "${ENV_FILE}" "${INSTANCE}:/tmp/worker.env"
+    "${ENV_FILE}" "${INSTANCE}:/tmp/worker-${DEPLOY_ID}.env"
   gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
-    scripts/gcp/merge-higgsfield-env.py "${INSTANCE}:/tmp/merge-higgsfield-env.py"
+    scripts/gcp/merge-higgsfield-env.py "${INSTANCE}:/tmp/merge-higgsfield-env-${DEPLOY_ID}.py"
 fi
 
 gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --command="
   set -euo pipefail
   sudo rm -rf /opt/helios-worker/app
   sudo mkdir -p /opt/helios-worker/app
-  sudo tar -xzf /tmp/helios-app.tgz -C /opt/helios-worker/app
-  if [[ -f /tmp/merge-higgsfield-env.py && -f /tmp/worker.env && -f /opt/helios-worker/worker.env ]]; then
-    sudo python3 /tmp/merge-higgsfield-env.py /opt/helios-worker/worker.env /tmp/worker.env
+  sudo tar -xzf /tmp/helios-app-${DEPLOY_ID}.tgz -C /opt/helios-worker/app
+  if [[ -f /tmp/merge-higgsfield-env-${DEPLOY_ID}.py && -f /tmp/worker-${DEPLOY_ID}.env && -f /opt/helios-worker/worker.env ]]; then
+    sudo python3 /tmp/merge-higgsfield-env-${DEPLOY_ID}.py /opt/helios-worker/worker.env /tmp/worker-${DEPLOY_ID}.env
   fi
-  if [[ -f /tmp/worker.env ]]; then
-    sudo mv /tmp/worker.env /opt/helios-worker/worker.env
+  if [[ -f /tmp/worker-${DEPLOY_ID}.env ]]; then
+    sudo mv /tmp/worker-${DEPLOY_ID}.env /opt/helios-worker/worker.env
     sudo chmod 600 /opt/helios-worker/worker.env
   fi
-  sudo cp /tmp/helios-worker.service /etc/systemd/system/helios-worker.service
+  sudo cp /tmp/helios-worker-${DEPLOY_ID}.service /etc/systemd/system/helios-worker.service
   sudo systemctl daemon-reload
   cd /opt/helios-worker/app
   # --help succeeds even when ensurepip is missing, so try the real create.

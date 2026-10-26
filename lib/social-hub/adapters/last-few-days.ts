@@ -1,7 +1,7 @@
 import { attemptStatus, cancelNote, category, historyByMedia, iso, latest, nyDateFor, scheduleStatus, slotCategory, slotText, text, yesNo } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
-import type { LfdPostRow, LfdRead, LfdRunRow } from '@/lib/social-hub/queries/last-few-days';
+import type { LfdPostRow, LfdRead, LfdRunRow, LfdSeedRow } from '@/lib/social-hub/queries/last-few-days';
 import type { FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, SourceRef } from '@/lib/social-hub/types';
 
 /**
@@ -197,13 +197,33 @@ const DROP_REASON: Record<string, string> = {
  * with the reason, and the rest of each lane's queue, in post order. The pool
  * for the next post needs Jev judgments, so it is not computed on a page view.
  */
-export function lfdIdeas(run: LfdRunRow | null): HubIdea[] {
-  if (!run) return [];
+export function lfdIdeas(run: LfdRunRow | null, seeds: readonly LfdSeedRow[] = []): HubIdea[] {
+  const out: HubIdea[] = [];
+  const seen = new Set<string>();
+  // A person's seeds lead: they are taken before the lanes. Their outcome is the latest run's word (used, or why not).
+  for (const s of seeds) {
+    if (!s.key || seen.has(s.key)) continue;
+    seen.add(s.key);
+    out.push({
+      id: `last_few_days:story:${s.key}`,
+      vertical: 'last_few_days',
+      title: text(s.headline) ?? s.key,
+      score: 1000 - out.length,
+      scoreLabel: 'Yours: taken before the lanes',
+      breakdown: null,
+      state: 'idea_only',
+      hasContent: false,
+      versionCount: 0,
+      generatedAt: null,
+      createdAt: s.added_at,
+      detail: ['Yours: a link you added', s.outcome ? `last run: ${s.outcome}` : 'waits for the next run', s.expires_at ? `kept until ${s.expires_at.slice(0, 10)}` : null].filter(Boolean).join(' · '),
+      yours: true,
+    });
+  }
+  if (!run) return out;
   const r = (run.record ?? {}) as { window?: { after?: string; through?: string }; picks?: QueueEntry[]; drops?: QueueEntry[]; queues?: { major?: QueueEntry[]; rundown?: QueueEntry[] } };
   const window = r.window?.after && r.window.through ? `window ${r.window.after} → ${r.window.through}` : null;
   const at = iso(run.started_at ?? run.requested_at);
-  const out: HubIdea[] = [];
-  const seen = new Set<string>();
   const add = (e: QueueEntry, lane: string, state: HubIdea['state'], note: string | null) => {
     if (!e.key || seen.has(e.key)) return;
     seen.add(e.key);

@@ -6,12 +6,17 @@ import { ChevronLeft, ChevronRight, ExternalLink, Film, GalleryHorizontal, Image
 
 import { Drawer, Section } from '@/app/reels/ui';
 import { BackToHub } from '@/components/content-type/BackToHub';
+import { GenerateConfirm } from '@/components/content-type/GenerateConfirm';
+import { PoolQueue } from '@/components/content-type/PoolQueue';
+import { QueueControls } from '@/components/content-type/QueueControls';
 import { RankButtons } from '@/components/content-type/RankButtons';
 import { useRunProgress } from '@/components/content-type/run-progress';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
 import { MADE_LABEL, STORY_SERIES, type MadeKind, type TypeBenchItem, type TypeCard, type TypeHubModel } from '@/lib/content-type/model';
 import type { ProgressItem } from '@/lib/content-type/progress';
+import type { GenerateIdea } from '@/lib/content-type/queue-client';
 import { runStatusText, type RunSnapshot } from '@/lib/content-type/run-status';
+import { ARCHIVE_ONLY, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import { metricValue } from '@/lib/social-hub/metrics';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -36,7 +41,7 @@ const MADE_TITLE: Record<MadeKind, string> = { slides: 'Slides are', frames: 'St
 const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
 const longDay = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
 
-export function TypeHub({ model, title, headerActions, progress, nav, benchAction, benchNote, fullPostBase = '/social' }: {
+export function TypeHub({ model, title, headerActions, progress, nav, benchAction, generate, benchNote, fullPostBase = '/social' }: {
   model: TypeHubModel;
   title: string;
   headerActions?: ReactNode;
@@ -45,6 +50,8 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   nav?: ReactNode;
   /** A per-idea button (Explainers: Generate), shown on bench rows and in their drawer. */
   benchAction?: (item: TypeBenchItem) => ReactNode;
+  /** Generate one idea by itself (Explainers). Asked about when an idea with nothing made is pinned or dragged into today's top slots. */
+  generate?: GenerateIdea;
   benchNote?: string;
   /** Where "Open the full post" goes: the hub (live) or its preview mirror. */
   fullPostBase?: string;
@@ -63,6 +70,11 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   const [dayId, setDayId] = useState<string>(today);
   const [openPost, setOpenPost] = useState<string | null>(null);
   const [openIdea, setOpenIdea] = useState<string | null>(null);
+  // A pin on an idea with nothing made yet asks whether to generate it now (idea pool standard).
+  // The version of a post the drawer shows (null: the one that was opened). Older versions are viewed here, not made current.
+  const [versionId, setVersionId] = useState<string | null>(null);
+  const [askPin, setAskPin] = useState<{ id: string; title: string } | null>(null);
+  const queueLive = QUEUE_LIVE.has(model.vertical);
   // Stories: the bench narrowed to one series. Filtering only hides rows; the pool is the same.
   const [series, setSeries] = useState<string | null>(null);
   const seriesTabs = model.vertical === 'stories' ? STORY_SERIES.map((name) => ({ name, n: bench.filter((b) => b.idea.group === name).length })) : [];
@@ -86,11 +98,62 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const open = days.flatMap((d) => d.cards).find((c) => c.post.id === openPost) ?? bench.find((b) => b.card?.post.id === openPost)?.card ?? null;
+  const opened = days.flatMap((d) => d.cards).find((c) => c.post.id === openPost) ?? bench.find((b) => b.card?.post.id === openPost)?.card ?? null;
+  const versions = opened?.post.idea ? model.versions[opened.post.idea.id] ?? [] : [];
+  const open = versions.find((v) => v.post.id === versionId) ?? opened;
   const idea = bench.find((b) => b.idea.id === openIdea) ?? null;
   const ideaRun = idea ? runOf(idea.idea) : null;
   const ideaStatus = runText(ideaRun);
+  // Today's open slots: the queue's top ideas that have nothing made yet (idea pool standard). Past and later days show only posts.
+  const openSlots = queueLive && day.date === today ? model.slots.filter((sl) => !sl.card && sl.idea) : [];
   const posted = day.cards.filter((c) => c.post.status === 'published').length;
+
+  const benchRow = (item: TypeBenchItem, handle: ReactNode) => {
+    const run = runOf(item.idea);
+    const status = runText(run);
+    const made = item.card ? item.made ?? null : null;
+    const MadeIcon = made ? MADE_ICON[made] : null;
+    const openRow = () => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id));
+    const isOpen = item.idea.state === 'idea_only' || item.idea.state === 'content_ready';
+    return (
+      <div className={`rh-row${queueLive ? ' rh-row--queue' : ''}${item.pinned ? ' is-pinned' : ''}`} role="button" tabIndex={0} onClick={openRow} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); } }}>
+        <span className="rh-row__rank">{item.rank}</span>
+        {queueLive ? <span className="rh-row__grip-cell">{handle}</span> : null}
+        <span className="rh-row__main">
+          <span className="rh-row__headline">{item.idea.title}</span>
+          {status ? <span className={`rh-row__status${run?.state === 'failed' ? ' is-failed' : ''}`}>{status}</span> : null}
+          {item.idea.group || item.idea.detail ? (
+            <span className="rh-row__labels">
+              {item.idea.group ? <span className="rh-tag">{item.idea.group}</span> : null}
+              {item.idea.detail}
+            </span>
+          ) : null}
+        </span>
+        <span className="rh-row__pills">
+          {made && MadeIcon && item.card ? (
+            <span className="rh-chip rh-chip--ready" title={`${MADE_TITLE[made]} made and waiting: ${item.card.offer.state.label.toLowerCase()}`}>
+              <MadeIcon size={11} /> {MADE_LABEL[made]}
+            </span>
+          ) : (
+            <span className="rh-chip">{IDEA_STATE_LABEL[item.idea.state]}</span>
+          )}
+          {item.inQuota ? <span className="rh-chip rh-chip--quota" title="One of today’s quota candidates">Today</span> : null}
+          {item.idea.yours ? <span className="rh-chip" title="You typed this idea in">Yours</span> : null}
+          {item.tag ? <span className={`rh-chip${item.tag.kind === 'pinned' ? ' rh-chip--pinned' : ''}`}>{item.tag.text}</span> : null}
+          {isOpen ? (
+            queueLive
+              ? <QueueControls vertical={model.vertical} ideaId={item.idea.id} pinned={item.pinned === true} title={item.idea.title} compact onPinned={() => { if (!item.card && generate) setAskPin({ id: item.idea.id, title: item.idea.title }); }} />
+              : ARCHIVE_ONLY.has(model.vertical)
+                ? <QueueControls vertical={model.vertical} ideaId={item.idea.id} pinned={false} title={item.idea.title} compact archiveOnly />
+                : <RankButtons vertical={model.vertical} ideaId={item.idea.id} compact />
+          ) : null}
+          {benchAction && !item.card ? <span onClick={(e) => e.stopPropagation()}>{benchAction(item)}</span> : null}
+        </span>
+        <span className="rh-row__score" title={item.idea.breakdown ? 'Open to see where the score comes from' : undefined}>{item.idea.score == null ? '—' : formatScore(item.idea.score)}</span>
+        <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
+      </div>
+    );
+  };
 
   return (
     <div className="rh">
@@ -137,13 +200,17 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
           </div>
         </section>
 
-        {day.cards.length === 0 ? (
+        {day.cards.length === 0 && openSlots.length === 0 ? (
           <p className="rh-empty">{day.date > today ? `Nothing is scheduled for this day.` : `No ${info.label.toLowerCase()} posts on this day.`}</p>
         ) : (
           <div className="rh-top">
             {day.cards.map((card) => {
               const run = runForPost(card.post, bench, live);
               return <PostCard key={card.post.id} card={card} status={run ? runStatusText(run, now) : null} failed={run?.state === 'failed'} onOpen={() => setOpenPost(card.post.id)} />;
+            })}
+            {openSlots.map((slot) => {
+              const item = bench.find((b) => b.idea.id === slot.idea!.id);
+              return <EmptySlot key={slot.idea!.id} rank={slot.rank} title={slot.idea!.title} action={item && benchAction ? benchAction(item) : null} onOpen={() => setOpenIdea(slot.idea!.id)} />;
             })}
           </div>
         )}
@@ -164,53 +231,41 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
           {shown.length === 0 ? (
             <p className="rh-empty">{series ? `No ${series} ideas in the pool until its next refill.` : 'The pool is empty until its next refill.'}</p>
           ) : (
-            <ul className="rh-rest__list">
-              {shown.map((item) => {
-                const run = runOf(item.idea);
-                const status = runText(run);
-                const made = item.card ? item.made ?? null : null;
-                const MadeIcon = made ? MADE_ICON[made] : null;
-                const openRow = () => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id));
-                return (
-                <li key={item.idea.id}>
-                  <div className="rh-row" role="button" tabIndex={0} onClick={openRow} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); } }}>
-                    <span className="rh-row__rank">{item.rank}</span>
-                    <span className="rh-row__main">
-                      <span className="rh-row__headline">{item.idea.title}</span>
-                      {status ? <span className={`rh-row__status${run?.state === 'failed' ? ' is-failed' : ''}`}>{status}</span> : null}
-                      {item.idea.group || item.idea.detail ? (
-                        <span className="rh-row__labels">
-                          {item.idea.group ? <span className="rh-tag">{item.idea.group}</span> : null}
-                          {item.idea.detail}
-                        </span>
-                      ) : null}
-                    </span>
-                    <span className="rh-row__pills">
-                      {made && MadeIcon && item.card ? (
-                        <span className="rh-chip rh-chip--ready" title={`${MADE_TITLE[made]} made and waiting: ${item.card.offer.state.label.toLowerCase()}`}>
-                          <MadeIcon size={11} /> {MADE_LABEL[made]}
-                        </span>
-                      ) : (
-                        <span className="rh-chip">{IDEA_STATE_LABEL[item.idea.state]}</span>
-                      )}
-                      {item.inQuota ? <span className="rh-chip rh-chip--quota" title="One of today’s quota candidates">Today</span> : null}
-                      {item.tag ? <span className="rh-chip">{item.tag.text}</span> : null}
-                      {item.idea.state === 'idea_only' || item.idea.state === 'content_ready' ? <RankButtons vertical={model.vertical} ideaId={item.idea.id} compact /> : null}
-                      {benchAction && !item.card ? <span onClick={(e) => e.stopPropagation()}>{benchAction(item)}</span> : null}
-                    </span>
-                    <span className="rh-row__score" title={item.idea.breakdown ? 'Open to see where the score comes from' : undefined}>{item.idea.score == null ? '—' : formatScore(item.idea.score)}</span>
-                    <ChevronRight size={16} className="rh-row__chev" aria-hidden="true" />
-                  </div>
-                </li>
-                );
-              })}
-            </ul>
+            queueLive ? (
+              <PoolQueue
+                vertical={model.vertical}
+                rows={shown.map((item) => ({ id: item.idea.id, pinned: item.pinned === true, hasContent: item.card != null, title: item.idea.title }))}
+                topN={model.slots.length}
+                generate={generate}
+                enabled={model.vertical !== 'stories' || series != null}
+                renderRow={(id, handle) => benchRow(shown.find((b) => b.idea.id === id)!, handle)}
+              />
+            ) : (
+              <ul className="rh-rest__list">
+                {shown.map((item) => <li key={item.idea.id}>{benchRow(item, null)}</li>)}
+              </ul>
+            )
           )}
         </section>
       </div>
 
+      {askPin && generate ? <GenerateConfirm generate={generate} ideaId={askPin.id} title={askPin.title} reason="top" onDone={() => setAskPin(null)} /> : null}
       {open ? (
-        <Drawer label={`${info.label} details`} onClose={() => setOpenPost(null)}>
+        <Drawer label={`${info.label} details`} onClose={() => { setOpenPost(null); setVersionId(null); }}>
+          {versions.length > 1 ? (
+            <div className="rh-versions" role="group" aria-label="Versions">
+              <span className="rh-muted">Version</span>
+              {versions.map((v, i) => {
+                const label = `v${versions.length - i}`;
+                const current = i === 0;
+                return (
+                  <button key={v.post.id} type="button" className={`rh-btn rh-btn--xs${v.post.id === open?.post.id ? ' rh-btn--primary' : ''}`} aria-pressed={v.post.id === open?.post.id} onClick={() => setVersionId(v.post.id)} title={`${current ? 'Current version' : 'Earlier version'}${v.post.generatedAt ? `, made ${shortDate(v.post.generatedAt)}` : ''}`}>
+                    {label}{current ? ' · current' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
           <PostDetail card={open} idea={bench.find((b) => b.card?.post.id === open.post.id)?.idea ?? null} run={runForPost(open.post, bench, live)} now={now} fullPostBase={fullPostBase} fromPath={`/${model.vertical}`} />
         </Drawer>
       ) : null}
@@ -223,7 +278,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             <p className="rh-muted">{IDEA_STATE_LABEL[idea.idea.state]}{idea.idea.group ? ` · ${idea.idea.group}` : ''} · ranked {idea.rank} of {idea.idea.group ? bench.filter((b) => b.idea.group === idea.idea.group).length : model.benchTotal}{idea.idea.score != null ? ` · ${idea.idea.scoreLabel || model.scoreLabel || 'score'} ${formatScore(idea.idea.score)}` : ''}</p>
             {idea.idea.detail ? <p>{idea.idea.detail}</p> : null}
             {idea.idea.createdAt ? <p className="rh-muted">Added {shortDate(idea.idea.createdAt)}</p> : null}
-            {idea.idea.state === 'idea_only' || idea.idea.state === 'content_ready' ? <div style={{ marginTop: 12 }}><RankButtons vertical={model.vertical} ideaId={idea.idea.id} /></div> : null}
+            {idea.idea.state === 'idea_only' || idea.idea.state === 'content_ready' ? <div style={{ marginTop: 12 }}>{queueLive ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={idea.pinned === true} title={idea.idea.title} onPinned={() => { if (!idea.card && generate) setAskPin({ id: idea.idea.id, title: idea.idea.title }); }} /> : ARCHIVE_ONLY.has(model.vertical) ? <QueueControls vertical={model.vertical} ideaId={idea.idea.id} pinned={false} title={idea.idea.title} archiveOnly /> : <RankButtons vertical={model.vertical} ideaId={idea.idea.id} />}</div> : null}
             {benchAction ? <div style={{ marginTop: 12 }}>{benchAction(idea)}</div> : null}
             <ScoreSection idea={idea.idea} />
           </div>
@@ -280,6 +335,25 @@ function pageList(post: HubPost): Array<{ src: string; label: string; remote: bo
   }
   if (post.media.kind === 'frames') return post.media.frames.flatMap((f) => (f.src ? [{ src: f.src, label: f.label, remote: false }] : []));
   return [];
+}
+
+/** A day's slot whose idea has nothing made yet: the idea, and (Explainers) a Generate button. */
+function EmptySlot({ rank, title, action, onOpen }: { rank: number | null; title: string; action: ReactNode; onOpen: () => void }) {
+  return (
+    <article className="rh-reel rh-reel--empty">
+      <button type="button" className="rh-reel__media rh-reel__media--empty" style={{ aspectRatio: '9 / 16' }} onClick={onOpen} aria-label={`Open ${title}`}>
+        <span className="rh-reel__state"><ImageIcon size={22} />Not made yet</span>
+      </button>
+      <div className="rh-reel__meta">
+        <span className="rh-reel__score" style={{ fontSize: 22 }}>{rank != null ? `#${rank}` : '—'}</span>
+        <span className="rh-reel__labels">
+          <span>{title}</span>
+          <span className="rh-reel__cat">Open slot · waiting to be made</span>
+        </span>
+      </div>
+      {action ? <div style={{ marginTop: 8 }}>{action}</div> : null}
+    </article>
+  );
 }
 
 function PostCard({ card, status, failed, onOpen }: { card: TypeCard; status: string | null; failed?: boolean; onOpen: () => void }) {

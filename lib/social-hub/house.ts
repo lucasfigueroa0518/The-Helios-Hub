@@ -126,7 +126,7 @@ export function typicalCost(posts: readonly HubPost[], vertical: Vertical, today
 export type ActionPlan =
   | {
       kind: 'post';
-      action: 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'place' | 'reschedule' | 'unschedule';
+      action: 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'archive' | 'place' | 'reschedule' | 'unschedule';
       label: string;
       endpoint: string;
       body: Record<string, unknown>;
@@ -160,7 +160,7 @@ function hasContent(post: HubPost): boolean {
  * `lfdPublishingLive`: lfd.settings publishing_live. Last Few Days offers Hard
  * publish only while it is on (unknown counts as off).
  */
-export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null; lfdPublishingLive?: boolean }): ActionPlan[] {
+export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null; lfdPublishingLive?: boolean; archive?: { ideaId: string | null } }): ActionPlan[] {
   const plans: ActionPlan[] = [];
   const info = verticalInfo(post.vertical);
   const live = post.status !== 'published' && post.status !== 'publishing';
@@ -207,11 +207,19 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
             ? { lfdPostId: post.refs.lfdPostId }
             : { setId: post.refs.setId };
     const missing = Object.values(refs).some((v) => !v);
-    plans.push({
-      kind: 'post', action: 'reject', label: 'Reject', endpoint: '/api/social-hub/actions/reject',
-      body: { vertical: post.vertical, refs }, disabled: missing ? 'This content can’t be found any more.' : null,
-      confirm: 'It won’t post, and its slot opens for something else.',
-    });
+    // A type on the idea queue (pool standard, 2026-10-21) archives instead of rejecting: the same stop, and the idea is
+    // archived too so no refill brings it back.
+    plans.push(ctx.archive
+      ? {
+          kind: 'post', action: 'archive', label: 'Archive', endpoint: '/api/social-hub/actions/archive',
+          body: { vertical: post.vertical, refs, ideaId: ctx.archive.ideaId }, disabled: missing ? 'This content can’t be found any more.' : null,
+          confirm: 'It won’t post, any slot it holds opens, and the idea won’t come back. It is kept, not deleted.',
+        }
+      : {
+          kind: 'post', action: 'reject', label: 'Reject', endpoint: '/api/social-hub/actions/reject',
+          body: { vertical: post.vertical, refs }, disabled: missing ? 'This content can’t be found any more.' : null,
+          confirm: 'It won’t post, and its slot opens for something else.',
+        });
   }
   if ((post.vertical === 'explainers' || post.vertical === 'stories') && post.status === 'ready' && !post.approval.approvedAt) {
     const ref = post.vertical === 'explainers' ? post.refs.jobId : post.refs.setId;

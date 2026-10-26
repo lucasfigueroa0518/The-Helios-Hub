@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Plus, Settings } from 'lucide-react';
 
 import { AddTopics } from '@/app/explainers/topics-view';
+import { GenerateConfirm } from '@/components/content-type/GenerateConfirm';
+import type { GenerateOutcome } from '@/lib/content-type/queue-client';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 import { Drawer } from '@/app/reels/ui';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
@@ -179,29 +181,161 @@ export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 
 
 // ── Explainers: generate from a bench idea ──────────────────────────────────
 
+/** Generate one explainer topic. The cap question comes back as `ask: 'over_cap'`; the progress strip is told a render was queued. */
+export async function explainerGenerate(ideaId: string, overrideCaps: boolean): Promise<GenerateOutcome> {
+  const topicId = ideaId.replace(/^explainers:topic:/, '');
+  const res = await fetch(`/api/explainers/topics/${topicId}/generate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ overrideCaps }) });
+  const json = (await res.json().catch(() => ({}))) as { error?: string; ask?: string; costUsd?: number };
+  if (res.ok) {
+    window.dispatchEvent(new Event(PROGRESS_EVENT));
+    return { ok: true };
+  }
+  if (json.ask === 'over_cap') return { ok: false, ask: 'over_cap', message: json.error ?? 'A daily cap is used up.', costUsd: json.costUsd ?? 0 };
+  return { ok: false, message: json.error ?? `Request failed (${res.status})` };
+}
+
 export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: string }) {
   const router = useRouter();
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" onClick={() => setAsking(true)}>Generate</button>
+      {asking ? <GenerateConfirm generate={explainerGenerate} ideaId={ideaId} title={title} reason="click" onDone={() => { setAsking(false); void refreshHubPage(router); }} /> : null}
+    </>
+  );
+}
+
+// ── Carousels: seed a story ─────────────────────────────────────────────────
+
+/**
+ * Carousels: paste a story's link (design 2026-10-25-carousels-seeding). The page is read with a plain web request and the
+ * story is scored once (one Jev call, a fraction of a cent); this click is the approval for it. Nothing is made: pin it or
+ * Run now to make it. A seed waits a week.
+ */
+export function CarouselSeedButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [headline, setHeadline] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const topicId = ideaId.replace(/^explainers:topic:/, '');
-  async function generate() {
-    if (!confirm(`Render "${title}"? This makes live model, voice and video calls for this one reel.`)) return;
+  async function submit() {
     setBusy(true);
+    setError(null);
     try {
-      await call(`/api/explainers/topics/${topicId}/generate`, {});
-      window.dispatchEvent(new Event(PROGRESS_EVENT));
-      setNote('Render queued.');
+      const out = await call<{ title: string; score: number; status: string }>('/api/carousels/seed', { url, headline });
+      setNote(`“${out.title}” is in the queue, scored ${out.score.toFixed(1)} of 5.5${out.status === 'qualified' ? '' : ' (below the bar the night uses, so it only runs if you pin it)'}. Nothing was made.`);
+      setOpen(false);
+      setUrl('');
+      setHeadline('');
       void refreshHubPage(router);
     } catch (e) {
-      setNote(msg(e));
+      setError(msg(e));
     } finally {
       setBusy(false);
     }
   }
   return (
     <>
-      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" disabled={busy} onClick={generate}>Generate</button>
-      {note ? <span className="rh-muted"> {note}</span> : null}
+      <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
+        <Plus size={15} /> Seed an idea
+      </button>
+      {open ? (
+        <Drawer label="Seed a story" onClose={() => setOpen(false)}>
+          <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+            <h2 className="rh-detail__archetype">Seed a story</h2>
+            <input className="helios-field-input" placeholder="Link to the story" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link to the story" />
+            <input className="helios-field-input" placeholder="Headline (optional)" value={headline} onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />
+            <div className="ex-actions">
+              <button type="submit" className="rh-btn rh-btn--primary" disabled={busy || !url.trim()}>{busy ? 'Reading and scoring…' : 'Add and score'}</button>
+            </div>
+            <p className="rh-muted">Reads the page and scores the story once, a fraction of a cent. Nothing is made; pin it or Run now to make it. It waits a week.</p>
+            {error ? <p className="rh-note rh-note--bad">{error}</p> : null}
+          </form>
+        </Drawer>
+      ) : null}
+      {note ? <p className="rh-toast" role="status">{note}</p> : null}
+    </>
+  );
+}
+
+// ── Stories: seed an idea ───────────────────────────────────────────────────
+
+type SeedFields = Record<string, string>;
+
+/**
+ * Stories: type an idea into a series' pool (idea seeding spec, 2026-10-21). A story for Morning Download, a number for
+ * Guess the Number, a tool for Free vs. Paid. It costs nothing (no model or web call) and starts no build; it sits in the
+ * pool as "Yours" and competes like any idea.
+ */
+export function StorySeedButton() {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [series, setSeries] = useState('morning_download');
+  const [f, setF] = useState<SeedFields>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const set = (key: string) => (e: { target: { value: string } }) => setF((cur) => ({ ...cur, [key]: e.target.value }));
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await call<{ title: string }>('/api/stories/seed', { series, ...f });
+      setNote(`“${out.title}” is in the ${SERIES_LABEL[series]} pool. Nothing was made; it competes like any idea, and you can pin it.`);
+      setOpen(false);
+      setF({});
+      void refreshHubPage(router);
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
+        <Plus size={15} /> Seed an idea
+      </button>
+      {open ? (
+        <Drawer label="Seed an idea" onClose={() => setOpen(false)}>
+          <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+            <h2 className="rh-detail__archetype">Seed an idea</h2>
+            <select className="helios-field-input" value={series} onChange={(e) => { setSeries(e.target.value); setF({}); }} aria-label="Series">
+              {Object.entries(SERIES_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+            {series === 'morning_download' ? (
+              <>
+                <input className="helios-field-input" placeholder="The story’s headline" value={f.headline ?? ''} onChange={set('headline')} aria-label="Headline" />
+                <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
+                <textarea className="ex-textarea" placeholder="What it says, in your words (optional)" value={f.notes ?? ''} onChange={set('notes')} aria-label="Notes" rows={4} />
+              </>
+            ) : null}
+            {series === 'guess_the_number' ? (
+              <>
+                <input className="helios-field-input" placeholder="The number, e.g. $3.9B" value={f.value ?? ''} onChange={set('value')} aria-label="Number" />
+                <input className="helios-field-input" placeholder="What it counts, e.g. raised for AI data centers" value={f.fact ?? ''} onChange={set('fact')} aria-label="What it counts" />
+                <input className="helios-field-input" placeholder="The story it comes from (optional)" value={f.storyHeadline ?? ''} onChange={set('storyHeadline')} aria-label="Story" />
+                <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
+              </>
+            ) : null}
+            {series === 'free_vs_paid' ? (
+              <>
+                <input className="helios-field-input" placeholder="The tool, e.g. GIMP" value={f.toolName ?? ''} onChange={set('toolName')} aria-label="Tool" />
+                <input className="helios-field-input" placeholder="Link to the tool" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
+                <input className="helios-field-input" placeholder="What it is (optional)" value={f.description ?? ''} onChange={set('description')} aria-label="What it is" />
+              </>
+            ) : null}
+            <div className="ex-actions">
+              <button type="submit" className="rh-btn rh-btn--primary" disabled={busy}>{busy ? 'Adding…' : 'Add to the pool'}</button>
+            </div>
+            <p className="rh-muted">Free: no model or web call, and nothing is built. Free vs. Paid still pairs your tool with its counterpart when the set is built.</p>
+            {error ? <p className="rh-note rh-note--bad">{error}</p> : null}
+          </form>
+        </Drawer>
+      ) : null}
+      {note ? <p className="rh-toast" role="status">{note}</p> : null}
     </>
   );
 }
@@ -221,7 +355,7 @@ export function SettingsButton({ children }: { children: ReactNode }) {
   );
 }
 
-/** Explainers: add a topic or paste a list; each is written up and scored (a live model call) when added. */
+/** Explainers: seed an idea (a topic or a question) or paste a list; each is written up and scored (a live model call) when you click. A seed is never refused or trimmed. */
 export function AddTopicsButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -229,10 +363,10 @@ export function AddTopicsButton() {
   return (
     <>
       <button type="button" className="rh-btn rh-btn--primary" onClick={() => setOpen(true)}>
-        <Plus size={15} /> Add topics
+        <Plus size={15} /> Seed an idea
       </button>
       {open ? (
-        <Drawer label="Add a topic" onClose={() => setOpen(false)}>
+        <Drawer label="Seed an idea" onClose={() => setOpen(false)}>
           <AddTopics onDone={(text) => { setOpen(false); setNote(text); void refreshHubPage(router); }} />
         </Drawer>
       ) : null}

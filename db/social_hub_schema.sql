@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS social_hub.content_items (
     UNIQUE (vertical, native_ref)
 );
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'));
 CREATE INDEX IF NOT EXISTS idx_social_hub_items_idea ON social_hub.content_items (vertical, idea_ref);
 
 -- A person's Delete (never a row removal): the post leaves the hub's lists and its idea
@@ -277,7 +277,7 @@ ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS skip_rate double 
 -- any video exists, so a schedule row may carry only its idea (idea_ref) until
 -- the video is attached when the slot comes due.
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'));
 
 ALTER TABLE social_hub.schedule ALTER COLUMN content_item_id DROP NOT NULL;
 ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS idea_ref text;
@@ -324,7 +324,7 @@ ALTER TABLE social_hub.media_insights ADD COLUMN IF NOT EXISTS shared_to_feed bo
 -- 'partial' when it stopped with frames live), and per-frame insights (the
 -- day's latest capture; Stories' navigation metrics and `final` in `extra`).
 ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
-ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days'));
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events'));
 ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
 ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
@@ -375,6 +375,14 @@ CREATE INDEX IF NOT EXISTS idx_social_hub_idea_adjustments_active
 -- A worker overwrites them on each skip; the move stays active (consumed_at stays NULL).
 ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS skip_reason text;
 ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS skipped_at timestamptz;
+
+-- Idea pool standard (spec 2026-10-21-idea-pool-standard-design): a person's Pin, drag (place) and
+-- Archive are rows here too. `place` carries sort_key, where the drop left the idea in the queue
+-- (lib/social-hub/queue.ts); an archive row is permanent (consumed_at stays NULL) and hides its idea.
+ALTER TABLE social_hub.idea_adjustments DROP CONSTRAINT IF EXISTS idea_adjustments_kind_check;
+ALTER TABLE social_hub.idea_adjustments ADD CONSTRAINT idea_adjustments_kind_check
+    CHECK (kind IN ('promote', 'demote', 'pin', 'place', 'archive'));
+ALTER TABLE social_hub.idea_adjustments ADD COLUMN IF NOT EXISTS sort_key double precision;
 
 -- Health tab (spec 2026-10-13 §4.3): the 07:30 morning report, one row per night.
 CREATE TABLE IF NOT EXISTS social_hub.health_reports (
@@ -490,6 +498,13 @@ ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_feed_mode_che
 ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_feed_mode_check CHECK (
     feed_mode IS NULL OR (vertical IN ('reels', 'explainers') AND feed_mode IN ('trial', 'main'))
 );
+
+-- Who set a date edit or a booking (calendar type schedules, 2026-10-21): 'person' (board,
+-- batch, placement, reschedule, drags) or 'system' (pins the calendar writes itself). A
+-- schedule save moves only the system's bookings. NULL reads as 'system'; a booking with
+-- source 'user' reads as 'person'. Additive, safe in either deploy order (R3).
+ALTER TABLE social_hub.slot_override ADD COLUMN IF NOT EXISTS set_by text CHECK (set_by IN ('person','system'));
+ALTER TABLE social_hub.schedule ADD COLUMN IF NOT EXISTS slot_by text CHECK (slot_by IN ('person','system'));
 
 -- Who decides cadence: 'legacy' (each type's settings, as before) or 'template' (the calendar).
 INSERT INTO social_hub.settings (key, value) VALUES ('slot_source', '"legacy"'::jsonb) ON CONFLICT (key) DO NOTHING;

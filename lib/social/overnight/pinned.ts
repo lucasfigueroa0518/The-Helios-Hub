@@ -34,13 +34,19 @@ function revive(g: StoredGroup): ScoredGroup {
 export async function loadPinnedCandidates(query: Query, storyIds: readonly string[]): Promise<ScoredCandidate[]> {
   if (!storyIds.length) return [];
   const { rows } = await query(
-    `SELECT c AS group_json
-       FROM (SELECT record, started_at FROM social.runs
-              WHERE kind = 'daily' AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
-              ORDER BY started_at DESC NULLS LAST LIMIT $2) r,
-            jsonb_array_elements(r.record->'selection'->'shortlist') c
-      WHERE c->>'id' = ANY($1::text[])
-      ORDER BY r.started_at DESC NULLS LAST`,
+    `SELECT u.c AS group_json
+       FROM (SELECT c, r.started_at
+               FROM (SELECT record, started_at FROM social.runs
+                      WHERE kind = 'daily' AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
+                      ORDER BY started_at DESC NULLS LAST LIMIT $2) r,
+                    jsonb_array_elements(r.record->'selection'->'shortlist') c
+             UNION ALL
+             -- A person's seeded stories (lib/social/overnight/seeds.ts): as new as it gets, so a seed wins a tie.
+             SELECT c, now() AS started_at
+               FROM social.settings s, jsonb_array_elements(s.value) c
+              WHERE s.key = 'carousel_seeds' AND jsonb_typeof(s.value) = 'array') u
+      WHERE u.c->>'id' = ANY($1::text[])
+      ORDER BY u.started_at DESC NULLS LAST`,
     [[...storyIds], RUNS_BACK],
   );
   const newest = new Map<string, StoredGroup>();

@@ -25,12 +25,12 @@ const IDEAS = [idea(1, 4), idea(2, 3), idea(3, 2), idea(4, 1)];
 const move = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ id: `m-${n}-${kind}-${at}`, vertical: 'reels', ideaId: IDEAS[n - 1]!.id, nyDate: TODAY, kind, createdAt: at });
 const titles = (adj: IdeaAdjustment[]) => dayRanking(IDEAS, 'reels', adj).map((r) => r.idea.title);
 
-test('Promote makes an idea next (one a night, oldest first); Demote sinks it below every other idea', () => {
+test('Pinned ideas lead the queue, in the order pinned (a Promote row reads as a pin); an old Demote row sinks its idea (pool standard, 2026-10-21)', () => {
   assert.deepEqual(titles([]), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4']);
   assert.deepEqual(titles([move(3, 'promote', 't1')]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4']);
-  assert.deepEqual(titles([move(1, 'demote', 't1')]), ['Idea 2', 'Idea 3', 'Idea 4', 'Idea 1']);
+  assert.deepEqual(titles([move(1, 'demote', 't1')]), ['Idea 2', 'Idea 3', 'Idea 4', 'Idea 1'], 'an old Demote row still sinks (nothing makes new ones)');
   assert.deepEqual(titles([move(3, 'promote', 't1'), move(3, 'demote', 't2')]), ['Idea 1', 'Idea 2', 'Idea 4', 'Idea 3'], 'the latest move wins: promoted, then demoted, sinks');
-  assert.deepEqual(titles([move(3, 'promote', 't1'), move(4, 'promote', 't2')]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4'], 'one promote a night: the newer one waits in its place');
+  assert.deepEqual(titles([move(3, 'promote', 't1'), move(4, 'promote', 't2')]), ['Idea 3', 'Idea 4', 'Idea 1', 'Idea 2'], 'any number of pins, in the order pinned');
   assert.deepEqual(titles([{ ...move(3, 'promote', 't1'), nyDate: '2026-10-08' }]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4'], 'a move from yesterday still steers until its idea is made (B8)');
   assert.deepEqual(applyMoves([{ id: 'a' }, { id: 'b' }], [{ ideaId: 'b', kind: 'demote' }]).map((x) => x.id), ['a', 'b'], 'the last idea stays last');
 });
@@ -55,15 +55,15 @@ test('a move is used up when its idea gets content made after it; content made b
   assert.deepEqual(madeMoveIds([{ ...m, vertical: 'stories', ideaId: 'stories:pool:free_vs_paid:k' }], [madeAfter]), [], 'Stories go by their pool entry');
 });
 
-test('made content fills the day ahead of the ranking; Promote only reorders what is not made yet', () => {
+test('the queue fills the day, each slot with its content if it has any; a made reel for a lower idea does not jump it (2026-10-21)', () => {
   // Ideas 1 and 4 have videos made today; the quota is 2.
   const data = { posts: [reelPost(1), reelPost(4)], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } };
   const plain = quotaCandidates(data, 'reels', NOW);
-  assert.deepEqual(plain.map((c) => [c.idea?.title, Boolean(c.post)]).sort(), [['Idea 1', true], ['Idea 4', true]], 'both made reels fill the day');
+  assert.deepEqual(plain.map((c) => [c.idea?.title, Boolean(c.post)]), [['Idea 1', true], ['Idea 2', false]], 'the top two ideas; only the first has content');
   const one = { ...data, posts: [reelPost(4)], dayQuotas: { reels: 2, carousels: 2, explainers: 1 } };
   const promoted = quotaCandidates({ ...one, adjustments: [move(3, 'promote', 't1')] }, 'reels', NOW);
-  assert.deepEqual(promoted.map((c) => [c.idea?.title, Boolean(c.post)]), [['Idea 4', true], ['Idea 3', false]], 'the made reel holds; the promoted idea takes the open card');
-  assert.deepEqual(todaysContent(data, NOW).map((p) => p.name).sort(), ['REEL 1', 'REEL 4']);
+  assert.deepEqual(promoted.map((c) => [c.idea?.title, Boolean(c.post)]), [['Idea 3', false], ['Idea 1', false]], 'a pin takes the first slot');
+  assert.deepEqual(todaysContent(data, NOW).map((p) => p.name), ['REEL 1']);
 });
 
 test('a slot already scheduled today holds its place ahead of the ranking', () => {
@@ -147,16 +147,16 @@ const exPost = (topic: string, over: Partial<HubPost> = {}): HubPost => ({
 });
 const exQuotas = { reels: 2, carousels: 1, explainers: 1 };
 
-test('explainers: a render the night made today, for a topic the page ranks lower, fills today\'s slot', () => {
+test('explainers: a render made for a topic the queue ranks lower does not fill today\'s slot (the night follows the queue now)', () => {
   const c = quotaCandidates({ posts: [exPost('t2')], ideas: EX_IDEAS, dayQuotas: exQuotas }, 'explainers', NOW);
   assert.equal(c.length, 1);
-  assert.equal(c[0]!.post?.id, 'explainers:job-t2');
-  assert.equal(c[0]!.idea?.title, 'What is a webhook?');
-  assert.equal(c[0]!.locked, false);
+  assert.equal(c[0]!.post, null);
+  assert.equal(c[0]!.idea?.title, 'What is a database index?');
 });
 
-test('explainers: Run now does not render again when the night already made today\'s explainer', () => {
-  const day = typeDay(quotaCandidates({ posts: [exPost('t2')], ideas: EX_IDEAS, dayQuotas: exQuotas }, 'explainers', NOW), 1);
+test('explainers: Run now does not render again when the night already made the queue\'s top explainer', () => {
+  const ideas = [exIdea('t1', 'What is a database index?', 5, { state: 'content_ready', hasContent: true }), EX_IDEAS[1]!];
+  const day = typeDay(quotaCandidates({ posts: [exPost('t1')], ideas, dayQuotas: exQuotas }, 'explainers', NOW), 1);
   assert.equal(day.held, 1);
   assert.deepEqual(day.missing, []);
 });
@@ -179,17 +179,17 @@ test('explainers: a slot already scheduled today still comes first', () => {
   assert.deepEqual(c.map((x) => [x.post?.id, x.locked]), [['explainers:job-t1', true]], 'quota 1: the scheduled one holds it');
 });
 
-test('every type: a reel made today for a lower-ranked idea fills the day (2026-10-13)', () => {
+test('every type: a reel made today for a lower-ranked idea does not take the day from the queue (2026-10-21)', () => {
   const data = { posts: [reelPost(4)], ideas: IDEAS, dayQuotas: { reels: 1, carousels: 1, explainers: 1 } };
   const c = quotaCandidates(data, 'reels', NOW);
-  assert.deepEqual(c.map((x) => [x.idea?.title, Boolean(x.post)]), [['Idea 4', true]]);
+  assert.deepEqual(c.map((x) => [x.idea?.title, Boolean(x.post)]), [['Idea 1', false]]);
 });
 
 test('two versions of one idea made today show once, the newest (Review Focus 1)', () => {
-  const older = reelPost(4, { generatedAt: '2026-10-09T05:00:00Z' });
-  const newer = reelPost(4, { id: 'reels:video:newer', generatedAt: '2026-10-09T07:00:00Z' });
+  const older = reelPost(1, { generatedAt: '2026-10-09T05:00:00Z' });
+  const newer = reelPost(1, { id: 'reels:video:newer', generatedAt: '2026-10-09T07:00:00Z' });
   const c = quotaCandidates({ posts: [older, newer], ideas: IDEAS, dayQuotas: { reels: 2, carousels: 1, explainers: 1 } }, 'reels', NOW);
-  assert.deepEqual(c.map((x) => x.post?.id ?? x.idea?.title), ['reels:video:newer', 'Idea 1']);
+  assert.deepEqual(c.map((x) => x.post?.id ?? x.idea?.title), ['reels:video:newer', 'Idea 2']);
 });
 
 test('more made than slots: only the quota shows (Review Focus 2)', () => {

@@ -18,7 +18,14 @@ export const isStorySeries = (v: unknown): v is StorySeries => typeof v === 'str
 
 export type TemplateRow = { weekday: number; vertical: Vertical; startMinute: number; series: StorySeries | null; feedMode: FeedMode | null };
 
-export type OverrideRow = { nyDate: string; vertical: Vertical; startMinute: number; series: StorySeries | null; action: 'add' | 'remove'; feedMode: FeedMode | null };
+/**
+ * Who set a date edit or a booking: a person (board, batch, placement,
+ * reschedule, drags) or the system (pins the calendar writes itself, the
+ * overnight run's bookings). A row with no mark is the system's.
+ */
+export type SetBy = 'person' | 'system';
+
+export type OverrideRow = { nyDate: string; vertical: Vertical; startMinute: number; series: StorySeries | null; action: 'add' | 'remove'; feedMode: FeedMode | null; setBy: SetBy };
 
 export type ResolvedSlot = {
   vertical: Vertical;
@@ -65,6 +72,9 @@ export type SlotSource = 'legacy' | 'template';
 export type SlotQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
 /** Only reels can be trial reels on Instagram: Text on Screen and Explainers. */
+/** The most slot changes one call to the slot writer takes (write.ts re-exports it; here so the board can use it without server code). */
+export const MAX_CHANGES = 20;
+
 export const REEL_TYPES: readonly Vertical[] = ['reels', 'explainers'];
 
 export const isReelType = (v: Vertical): boolean => REEL_TYPES.includes(v);

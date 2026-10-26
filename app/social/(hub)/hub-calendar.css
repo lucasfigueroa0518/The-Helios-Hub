@@ -217,6 +217,16 @@
 .sh-board__tag:focus-visible { outline: 2px solid var(--sh-focus); outline-offset: 1px; }
 .sh-board__tag--key { cursor: default; margin: 0; }
 /* The ghost: one element, moved by transform; dashed where it would land, solid on a usual start. */
+/* Select mode (spec 2026-10-21 §2): the toggle, the actions bar, and the selected cards' check. */
+.sh-board__selectbar { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.sh-board__select { gap: 6px; }
+.sh-board__select[aria-pressed='true'] { border-color: var(--color-text); background: var(--color-surface-2); }
+.sh-board__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.sh-board__selcount { font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-board__card[data-selecting='true'] { cursor: pointer; }
+.sh-board__card[data-selecting='true'][data-locked='true'] { cursor: not-allowed; }
+.sh-board__card[data-selected='true'] { z-index: 3; box-shadow: 0 0 0 2px var(--sh-focus); background: color-mix(in srgb, var(--sh-focus) 10%, var(--color-surface)); }
+.sh-board__check { flex: none; margin-right: -2px; color: var(--sh-focus); }
 .sh-board__ghost { position: absolute; top: 0; left: 0; z-index: 6; display: flex; align-items: center; padding: 0 10px; border: 1.5px dashed var(--sh-focus); border-radius: 9px; background: color-mix(in srgb, var(--sh-focus) 8%, var(--color-surface)); color: var(--sh-focus); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); pointer-events: none; transition: transform 70ms ease-out; will-change: transform; }
 .sh-board__ghost[hidden] { display: none; }
 .sh-board__ghost[data-snapped='true'] { border-style: solid; background: color-mix(in srgb, var(--sh-focus) 13%, var(--color-surface)); }
@@ -271,20 +281,41 @@
    while a details panel or picker is open so it never covers one (fix round 1, #4 and #5). */
 .sh-board__toasts { position: fixed; left: 50%; bottom: 20px; z-index: var(--z-overlay); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
 .sh-board__toasts.is-top { top: 72px; bottom: auto; }
+/* The week page's shared toast place: the board's and the Schedules toast stack here instead of overlapping. */
+.sh-toast-host { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .sh-board__toast button { pointer-events: auto; }
 .sh-board__toast { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: var(--radius-md); background: var(--color-text); color: var(--color-text-inverse); box-shadow: var(--sh-overlay); font-size: var(--sh-fs-small); }
 .sh-board__toast.is-warn { background: var(--sh-failed-ink); }
 .sh-board__toast button { min-height: 28px; padding: 0 10px; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: var(--radius-sm); background: transparent; color: inherit; font: inherit; cursor: pointer; }
 .sh-board__toast button:hover { background: rgba(255, 255, 255, 0.12); }
-.sh-board__toast .sh-board__toast-primary { border-color: var(--color-text-inverse); background: var(--color-text-inverse); color: var(--color-text); }
-.sh-board__toast .sh-board__toast-primary:hover { background: var(--color-surface-hover); }
 .sh-board__spin { animation: sh-board-spin 1s linear infinite; }
 @keyframes sh-board-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .sh-board__spin { animation: none; } }
+
+/* The Schedules dropdown and form (calendar type schedules, Task 4): the board's panel, list and toast, with its own rows. */
+.sh-sched-menu .sh-menu__item .sh-board__dot { margin-right: 2px; }
+.sh-sched { display: flex; flex-direction: column; gap: 12px; }
+.sh-sched p { margin: 0; }
+.sh-sched__field { display: flex; flex-direction: column; gap: 8px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.sh-sched__legend { padding: 0; margin-bottom: 6px; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-weight: var(--font-weight-semibold); }
+.sh-sched__times { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.sh-sched__time { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 4px 4px 0; border-radius: var(--radius-sm); }
+.sh-sched__time[data-problem='true'] { box-shadow: inset 3px 0 0 var(--sh-failed-ink); padding-left: 8px; background: var(--sh-failed-wash); }
+.sh-sched__clock { min-width: 84px; font-variant-numeric: tabular-nums; font-weight: var(--font-weight-medium); }
+.sh-sched__remove { margin-left: auto; }
+.sh-sched__add { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.sh-sched__add .sh-btn { gap: 6px; }
+.sh-sched__days { flex-wrap: wrap; }
+.sh-sched__msgs { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 8px 10px; border-radius: var(--radius-sm); list-style: none; }
+.sh-sched__msgs--error { background: var(--sh-failed-wash); color: var(--sh-failed-ink); }
+.sh-sched__msgs--warn { background: var(--color-surface-hover); color: var(--color-text); }
+.sh-sched__foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; border-top: 1px solid var(--sh-hairline); }
+.sh-sched__foot .sh-btn--primary { gap: 6px; }
 
 @media (max-width: 640px) {
   .sh-board__panel { left: 12px; right: 12px; bottom: 12px; }
   .sh-board__panel .sh-menu__list { top: auto; bottom: calc(100% + 6px); max-height: 50vh; }
   .sh-board__tray { padding: 8px 10px; }
   .sh-board__chip { min-height: 40px; }
+  .sh-board__actions .sh-menu__list { max-height: 50vh; }
 }

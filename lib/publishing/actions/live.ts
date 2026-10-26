@@ -77,6 +77,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       requestRerender: explainersRepo.requestRerender as never,
       itemId: explainersItems.explainerItemId,
       unscheduleJob: explainersSchedule.unscheduleJob,
+      latestJobId: async (d, topicId) => (await d.query<{ id: string }>(`SELECT id::text AS id FROM explainers.jobs WHERE topic_id = $1 AND status = 'ok' ORDER BY finished_at DESC NULLS LAST, seq DESC LIMIT 1`, [topicId])).rows[0]?.id ?? null,
       verdictOf: async (d, jobId) => (await explainersRepo.getFeedback(d, jobId))?.verdict ?? null,
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
@@ -107,7 +108,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       slotOf: (id) => placement.activeSlotByRef(storiesSpine, 'stories', id),
       plan: placement.planPlacement,
       // The set's move and its re-projection onto the spine commit together.
-      rescheduleSet: (id, nyDate, publishAt, slotMinute) => db.transaction((tx) => storiesRepo.rescheduleSet(tx, id, nyDate, publishAt, slotMinute)),
+      rescheduleSet: (id, nyDate, publishAt, slotMinute, slotBy) => db.transaction((tx) => storiesRepo.rescheduleSet(tx, id, nyDate, publishAt, slotMinute, slotBy)),
     }),
     last_few_days: lastFewDaysActions({
       query: socialQuery,

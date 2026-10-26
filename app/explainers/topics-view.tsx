@@ -26,9 +26,16 @@ const OUTCOMES: Record<string, string> = {
   not_proposed: 'skipped',
   rejected_history_duplicate: 'rejected: duplicates a recent render',
   rejected_gates: 'rejected: failed a gate',
-  entered_pool: 'entered the pool',
+  entered_pool: 'is in the pool',
   won_head_to_head: 'entered the pool, displacing a duplicate',
   lost_head_to_head: 'displaced by a stronger duplicate',
+};
+
+/** What a seed would have been refused for, said plainly: the idea is in the pool either way. */
+const SEED_FLAGS: Record<string, string> = {
+  history_duplicate: 'close to an explainer made recently',
+  near_pool_topic: 'close to an idea already in the pool',
+  below_gate: 'scored below a quality bar, so the night skips it unless you pin it',
 };
 
 function score(value: number | null) {
@@ -68,11 +75,11 @@ export function AddTopics({ onDone }: { onDone: (note: string) => void }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await requestJson<{ results: { title: string; evaluation: { outcome: string } }[] }>(
+      const result = await requestJson<{ results: { title: string; evaluation: { outcome: string; flags?: string[] } }[] }>(
         '/api/explainers/topics',
         { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) },
       );
-      onDone(result.results.map((r) => `${r.title}: ${OUTCOMES[r.evaluation.outcome] ?? r.evaluation.outcome}`).join(' · '));
+      onDone(result.results.map((r) => `${r.title}: ${OUTCOMES[r.evaluation.outcome] ?? r.evaluation.outcome}${(r.evaluation.flags ?? []).map((f) => ` (${SEED_FLAGS[f] ?? f})`).join('')}`).join(' · '));
       setTitle('');
       setSourceUrl('');
       setSourceText('');
@@ -86,7 +93,7 @@ export function AddTopics({ onDone }: { onDone: (note: string) => void }) {
 
   return (
     <div className="ex-form">
-      <h2 className="rh-detail__archetype">Add a topic</h2>
+      <h2 className="rh-detail__archetype">Seed an idea</h2>
       <form
         className="ex-form"
         onSubmit={(event) => {
@@ -94,14 +101,14 @@ export function AddTopics({ onDone }: { onDone: (note: string) => void }) {
           void submit({ title, sourceUrl, sourceText });
         }}
       >
-        <p className="rh-card__title">One topic</p>
-        <input className="helios-field-input" placeholder="Title, e.g. What is a webhook?" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="Title" />
+        <p className="rh-card__title">What should the explainer explain?</p>
+        <input className="helios-field-input" placeholder="A topic or a question, e.g. Why do LLMs hallucinate?" value={title} onChange={(e) => setTitle(e.target.value)} aria-label="What should the explainer explain?" />
         <input className="helios-field-input" placeholder="Source URL (optional)" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} aria-label="Source URL" />
         <textarea className="ex-textarea" placeholder="Source notes (optional). Claims and visuals must trace to the source." value={sourceText} onChange={(e) => setSourceText(e.target.value)} aria-label="Source notes" rows={3} />
         <div className="ex-actions">
           <button type="submit" className="rh-btn rh-btn--primary" disabled={busy || !title.trim()}>
             {busy ? <Loader2 size={14} className="rh-spin" /> : <Plus size={14} />}
-            Add and score
+            Seed and score
           </button>
         </div>
       </form>
@@ -112,7 +119,7 @@ export function AddTopics({ onDone }: { onDone: (note: string) => void }) {
           void submit({ list });
         }}
       >
-        <p className="rh-card__title">Paste a list</p>
+        <p className="rh-card__title">Or paste a list</p>
         <textarea
           className="ex-textarea"
           placeholder={'One title per line.\nWhat is a webhook?\nWhy does a database need a primary key?'}

@@ -4,13 +4,13 @@ import test from 'node:test';
 
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
-import { canMoveBack, chipNames, datedWeek, lfdWeekdays, mondayOf, splitBooked, stuckNote, switchOnCopy, templateWeek, weekLabel } from '@/lib/social-hub/views/week';
+import { canMoveBack, chipNames, datedWeek, lfdWeekdays, mondayOf, splitBooked, stuckNote, switchOnCopy, weekLabel } from '@/lib/social-hub/views/week';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
 
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const week = (monday: string) => Array.from({ length: 7 }, (_, i) => {
   const nyDate = addDays(monday, i);
-  return { nyDate, weekday: weekdayOf(nyDate), slots: resolveDay(tpl, [], nyDate) };
+  return { nyDate, weekday: weekdayOf(nyDate), slots: resolveDay(tpl, [], nyDate), personKeys: [] };
 });
 
 test('mondayOf steps back to Monday', () => {
@@ -19,13 +19,23 @@ test('mondayOf steps back to Monday', () => {
   assert.equal(mondayOf('2026-10-19'), '2026-10-19');
 });
 
-test('weekLabel names the week; templateWeek drops dates, Monday first', () => {
+test('weekLabel names the week; datedWeek resolves each date Monday first, with no edits of the person\'s', () => {
   assert.equal(weekLabel('2026-10-19'), 'Oct 19 – 25');
   assert.equal(weekLabel('2026-10-26'), 'Oct 26 – Nov 1');
-  const t = templateWeek(tpl, '2026-10-19');
+  const t = datedWeek(tpl, '2026-10-19');
   assert.deepEqual(t.map((d) => d.weekday), [1, 2, 3, 4, 5, 6, 0]);
-  assert.ok(t.every((d) => d.nyDate === null));
-  assert.deepEqual(datedWeek(tpl, '2026-10-19'), week('2026-10-19'));
+  assert.deepEqual(t, week('2026-10-19'));
+});
+
+test('weekFromOverrides: each date\'s person keys are its person overrides only, adds and removes alike', async () => {
+  const { weekFromOverrides } = await import('@/lib/social-hub/views/week');
+  const o = (nyDate: string, startMinute: number, action: 'add' | 'remove', setBy: 'person' | 'system') =>
+    ({ nyDate, vertical: 'explainers' as const, startMinute, series: null, action, feedMode: action === 'add' ? ('main' as const) : null, setBy });
+  const days = weekFromOverrides(tpl, [o('2026-10-21', 1020, 'add', 'person'), o('2026-10-21', 930, 'remove', 'person'), o('2026-10-22', 1140, 'add', 'system')], '2026-10-19');
+  assert.deepEqual(days[2]!.personKeys, [{ vertical: 'explainers', startMinute: 1020, series: null }, { vertical: 'explainers', startMinute: 930, series: null }]);
+  assert.ok(days[2]!.slots.some((s) => s.startMinute === 1020) && !days[2]!.slots.some((s) => s.vertical === 'explainers' && s.startMinute === 930));
+  assert.deepEqual(days[3]!.personKeys, [], 'a system pin is not the person\'s');
+  assert.ok(days[3]!.slots.some((s) => s.startMinute === 1140));
 });
 
 test('each Stories chip names its series; other types use their short name', () => {

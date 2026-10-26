@@ -171,21 +171,22 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
 /**
  * Hub controls (Lucas, 2026-10-09): the Content page's Run now and Settings,
  * and the type pages' run-progress poll, plus the Calendar's week board (its
- * slot writes, the unschedule it offers on a booked slot, and Ready to place's place). Client components
+ * slot writes, the unschedule it offers on a booked slot, and Ready to place's place)
+ * and its Schedules dropdown (the schedule save and its Undo). Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/social-hub/calendar/WeekBoard.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank)|social-hub\/(slots|actions\/(unschedule|place)))\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place)))\b/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
-export function networkReach(start: string): string | null {
+export function networkReach(start: string, boundaries: ReadonlySet<string> = BOUNDARIES): string | null {
   const seen = new Set<string>();
   const queue: Array<{ file: string; chain: string[] }> = [{ file: start, chain: [start] }];
   while (queue.length) {
     const { file, chain } = queue.shift()!;
     if (seen.has(file)) continue;
     seen.add(file);
-    if (BOUNDARIES.has(file)) continue;
+    if (boundaries.has(file)) continue;
     if (file === ACTION_BUTTONS || HUB_CONTROLS.has(file)) {
       for (const spec of importsOf(readFileSync(path.join(ROOT, file), 'utf8'))) {
         const next = resolveImport(file, spec);
@@ -224,14 +225,45 @@ test('action handlers stay pure: their pipeline calls come in as dependencies', 
   }
 });
 
+/**
+ * Flagged write routes outside actions/, and the only modules each may reach
+ * that write outside social_hub. The schedule save (calendar type schedules,
+ * Task 3) injects two of each type's own functions: the Stories repo's
+ * rescheduleSet (moves a set; its minute lives in stories.sets) and each
+ * type's unschedule, through the same liveContentActions every action route
+ * uses (ruling P1). The route file and everything else it imports, including
+ * slots/schedule-write.ts, are still scanned like read code.
+ */
+const WRITE_ROUTES = new Map<string, readonly string[]>([
+  ['app/api/social-hub/slots/schedule/route.ts', ['lib/stories/repository.ts', 'lib/publishing/actions/live.ts']],
+]);
+
 test('hub read code never reaches a network module or a foreign write; only flagged action routes may', () => {
   const offenders: string[] = [];
   for (const file of HUB_FILES) {
     if (file.startsWith(ACTIONS_DIR)) continue;
-    const reason = networkReach(file);
+    const allowed = WRITE_ROUTES.get(file);
+    const reason = networkReach(file, allowed ? new Set([...BOUNDARIES, ...allowed]) : BOUNDARIES);
     if (reason) offenders.push(reason);
   }
   assert.deepEqual(offenders, []);
+});
+
+test('the flagged write routes check editSlots and a session before they write', () => {
+  for (const [file, allowed] of WRITE_ROUTES) {
+    assert.ok(HUB_FILES.includes(file), `${file} exists`);
+    const text = code(readFileSync(path.join(ROOT, file), 'utf8'));
+    // Each allowed module is imported directly by the route (never a wider hole), and without it the route would fail the scan.
+    const direct = importsOf(text).map((spec) => resolveImport(file, spec));
+    for (const m of allowed) assert.ok(direct.includes(m), `${file} imports ${m}`);
+    assert.ok(networkReach(file), `${file} reaches a foreign write only through its allowed modules`);
+    const post = text.slice(text.indexOf('export async function POST'));
+    const gate = post.indexOf("actionEnabled('editSlots')");
+    const session = post.indexOf('getSession()');
+    const work = post.indexOf('saveSchedule(');
+    assert.ok(session >= 0 && gate > session && work > gate, `${file} checks the session and the editSlots flag before saving`);
+    assert.equal(sqlWriteTargets(text).length, 0, `${file} writes no SQL itself`);
+  }
 });
 
 test('every action route checks its flag before doing anything', () => {

@@ -52,14 +52,14 @@ test('Stories: one Tonight per series', () => {
 
 test('the ranking and Today’s candidates carry the tag', () => {
   const ranked = dayRanking(IDEAS, 'reels', MOVES, NOW);
-  assert.deepEqual(ranked.map((r) => [r.idea.title, r.tag?.text ?? null]), [['Idea 3', 'Tonight'], ['Idea 2', null], ['Idea 4', 'Promoted · waiting'], ['Idea 1', 'Demoted']]);
+  assert.deepEqual(ranked.map((r) => [r.idea.title, r.tag?.text ?? null]), [['Idea 3', 'Pinned'], ['Idea 4', 'Pinned'], ['Idea 2', null], ['Idea 1', 'Demoted']]);
   const cards = quotaCandidates({ posts: [], ideas: IDEAS, adjustments: MOVES, dayQuotas: { reels: 2, carousels: 2, explainers: 1 } }, 'reels', NOW);
-  assert.deepEqual(cards.map((c) => [c.idea?.title, c.tag?.text ?? null]), [['Idea 3', 'Tonight'], ['Idea 2', null]]);
+  assert.deepEqual(cards.map((c) => [c.idea?.title, c.tag?.text ?? null]), [['Idea 3', 'Pinned'], ['Idea 4', 'Pinned']]);
 });
 
-test('the pool puts the promote first and demoted last; otherwise score order (L2)', () => {
+test('the pool puts pinned ideas first, in the order pinned, an old Demote row last; otherwise score order', () => {
   assert.deepEqual(poolList(IDEAS, 'reels', 'open').map((i) => i.title), ['Idea 1', 'Idea 2', 'Idea 3', 'Idea 4']);
-  assert.deepEqual(poolList(IDEAS, 'reels', 'open', MOVES).map((i) => i.title), ['Idea 3', 'Idea 2', 'Idea 4', 'Idea 1']);
+  assert.deepEqual(poolList(IDEAS, 'reels', 'open', MOVES).map((i) => i.title), ['Idea 3', 'Idea 4', 'Idea 2', 'Idea 1']);
 });
 
 test('an older promote whose idea is gone does not hold Tonight; the newer present promote is Tonight', () => {
@@ -69,5 +69,5 @@ test('an older promote whose idea is gone does not hold Tonight; the newer prese
   assert.equal(tags.get('reels:idea:4')?.text, 'Tonight');
   assert.equal(tags.has('reels:idea:9'), false);
   const ranked = dayRanking(IDEAS, 'reels', moves, NOW);
-  assert.equal(ranked.find((r) => r.idea.id === 'reels:idea:4')?.tag?.text, 'Tonight');
+  assert.equal(ranked.find((r) => r.idea.id === 'reels:idea:4')?.tag?.text, 'Pinned');
 });

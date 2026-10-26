@@ -3,6 +3,8 @@ import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
 import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
+import { queueOrder } from '@/lib/social-hub/queue';
+import type { IdeaAdjustment } from '@/lib/social-hub/views/moves';
 import { slotPlan } from '@/lib/social-hub/slots';
 import { chooseTemplateSlot } from '@/lib/social-hub/slots/scheduler';
 import { bookSlot } from '@/lib/social-hub/spine';
@@ -179,14 +181,15 @@ export type FillCandidate = { topicId: string; title: string; /** The surviving 
  * posted. The cycle renders a pool topic it picks; it places a surviving
  * render instead of rendering its topic again.
  */
-export async function fillCandidates(db: Queryable, approvalNeeded: boolean): Promise<FillCandidate[]> {
-  const { rows } = await db.query<{ topic_id: string; title: string; job_id: string | null }>(
+export async function fillCandidates(db: Queryable, approvalNeeded: boolean, moves: readonly IdeaAdjustment[] = []): Promise<FillCandidate[]> {
+  const { rows } = await db.query<{ topic_id: string; title: string; job_id: string | null; score: string | null; below_gate: boolean }>(
     `WITH placeable AS (${PLACEABLE_RENDERS}),
      newest AS (
        SELECT DISTINCT ON (topic_id) id, topic_id FROM explainers.jobs
         WHERE status = 'ok'
         ORDER BY topic_id, finished_at DESC NULLS LAST, seq DESC)
-     SELECT c.id::text AS topic_id, c.title, c.job_id FROM (
+     SELECT c.id::text AS topic_id, c.title, c.job_id, c.weighted_score::text AS score,
+            COALESCE(c.jev_notes->'seed_flags' @> '"below_gate"'::jsonb, false) AS below_gate FROM (
        SELECT t.*, n.id::text AS job_id
          FROM explainers.topics t
          LEFT JOIN newest n ON n.topic_id = t.id AND t.status = 'rendered' AND n.id IN (SELECT id FROM placeable)
@@ -200,7 +203,13 @@ export async function fillCandidates(db: Queryable, approvalNeeded: boolean): Pr
      ORDER BY ${POOL_ORDER_BY}`,
     [approvalNeeded],
   );
-  return rows.map((r) => ({ topicId: r.topic_id, title: r.title, jobId: r.job_id }));
+  // The queue decides (pool standard, 2026-10-21): pinned topics first, then by score or where a drag left them,
+  // archived ones gone. The query's order (POOL_ORDER_BY) breaks ties.
+  const items = rows.map((r) => ({ id: `explainers:topic:${r.topic_id}`, score: r.score == null ? null : Number(r.score), row: r }));
+  // A seed that fell below a quality gate is the person's to make (Make it, or a pin): the night skips it unless it is pinned.
+  return queueOrder(items, moves.filter((m) => m.vertical === 'explainers'))
+    .filter((q) => !q.item.row.below_gate || q.pinned)
+    .map((q) => ({ topicId: q.item.row.topic_id, title: q.item.row.title, jobId: q.item.row.job_id }));
 }
 
 /** The note on a slot cancelled because nobody approved its render in time (B3; carousels and reels say the same). */

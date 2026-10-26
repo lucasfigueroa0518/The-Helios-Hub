@@ -4,7 +4,7 @@ import type { Photo } from '@/lib/stories/render/types';
 /** NY dates: slates with after < ny_date <= through (spec §3.1). */
 export type LfdWindow = { after: string; through: string };
 
-export type Origin = 'reels' | 'carousel' | 'feed';
+export type Origin = 'reels' | 'carousel' | 'feed' | 'seed';
 export type Lane = 'major' | 'rundown';
 
 export type LfdCandidate = {
@@ -26,6 +26,8 @@ export type LfdCandidate = {
   alsoFrom: string[];
   /** major-news@2 score once judged; null when not judged. */
   major: number | null;
+  /** A person seeded this story (lib/lfd/seeds.ts): it is taken before the lanes and bypasses the repeat and company checks. */
+  yours?: boolean;
 };
 
 export type Pick = LfdCandidate & { lane: Lane };

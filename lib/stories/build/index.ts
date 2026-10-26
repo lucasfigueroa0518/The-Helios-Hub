@@ -13,7 +13,9 @@ import type { PhotoFinder } from '@/lib/stories/photos';
 import type { Renderer } from '@/lib/stories/render/render';
 import type { ReviewCall } from '@/lib/stories/render/review';
 import { leadKeysForPair, livePoolReads, markPoolUsed, openPool, refreshPoolIfDue, type OpenPool } from '@/lib/stories/pool';
-import { applyMoves } from '@/lib/social-hub/views/moves';
+import { applyMoves, tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
+import { QUEUE_LIVE, orderForNight } from '@/lib/social-hub/queue';
+import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { storyKey } from '@/lib/stories/sources/reels';
 import { runRenderStage } from '@/lib/stories/render-stage';
 import { daySpendUsd, failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
@@ -62,6 +64,7 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
   const photoUsdBefore = deps.photos.usd;
   try {
     const series = got.set.series;
+    const poolReadAt = new Date();
     const pool = await seriesPool(deps, series, now);
     const jev = createStoriesJev(deps.jevTransport, deps.db);
     const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool };
@@ -76,6 +79,8 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     if (pool) {
       const used = series === 'free_vs_paid' ? leadKeysForPair(pool.leads, (result.payload.pair ?? {}) as Record<string, unknown>) : result.historyKeys;
       await markPoolUsed(deps.db, series, used, now).catch((err) => deps.log?.(`pool: could not mark used: ${err instanceof Error ? err.message : String(err)}`));
+      // The series' set is built from the pool: hand placements for this series are used up and its ideas compete by score again.
+      if (QUEUE_LIVE.has('stories')) await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, 'stories', `stories:pool:${series}:`, poolReadAt);
     }
     const photoUsd = deps.photos.usd - photoUsdBefore;
     if (photoUsd > 0) await recordCost(deps.db, { setId, vendor: 'jev', component: 'photo-finder', usd: photoUsd });
@@ -124,6 +129,7 @@ export async function activeStoryMoves(db: SetBuilderDeps['db'], series: string,
 
 /** The series' pool in the shared queue's order (views/moves.ts): its oldest promote first, demoted ideas last. */
 async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool, now: Date): Promise<OpenPool> {
+  if (QUEUE_LIVE.has('stories')) return inQueueOrder(db, series, pool);
   const moves = await activeStoryMoves(db, series, now);
   if (!moves.length) return pool;
   const order = <T>(list: T[], key: (x: T) => string) => applyMoves(list.map((x) => ({ id: key(x), x })), moves).map((w) => w.x);
@@ -132,5 +138,40 @@ async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPo
     numbers: order(pool.numbers, (n) => n.key),
     unbriefed: order(pool.unbriefed, (c) => `story:${c.key}`),
     leads: order(pool.leads, (l) => storyKey(l.url)),
+  };
+}
+
+/**
+ * The series' pool in the pool standard's order (2026-10-21): its pins in the order pinned, archived ideas gone, a dragged idea
+ * at its key among the scores, the rest as the pool ranks them. A failed read of the moves leaves the pool as it was.
+ */
+export async function inQueueOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool): Promise<OpenPool> {
+  if (!pool.meta) return pool;
+  const prefix = `stories:pool:${series}:`;
+  type Row = { idea_id: string; kind: IdeaAdjustment['kind']; sort_key: number | string | null; skip_reason: string | null; created_at: string };
+  let rows: Row[];
+  try {
+    rows = (await db.query<Row>(
+      `SELECT idea_id, kind, sort_key, skip_reason, created_at::text AS created_at FROM social_hub.idea_adjustments
+        WHERE vertical = 'stories' AND idea_id LIKE $1 AND consumed_at IS NULL ORDER BY created_at, id`,
+      [`${prefix}%`],
+    )).rows;
+  } catch {
+    return pool;
+  }
+  if (!rows.length) return pool;
+  const night = tonightMoves(
+    rows.map((r) => ({ id: r.idea_id, vertical: 'stories' as const, ideaId: r.idea_id.slice(prefix.length), nyDate: '', kind: r.kind, createdAt: r.created_at, sortKey: r.sort_key == null ? null : Number(r.sort_key), skipReason: r.skip_reason })),
+    'stories',
+  );
+  const ids = { pins: night.pins.map((p) => p.ideaId), placed: night.placed, archived: night.archived, demoted: night.demoted };
+  const reorder = <T,>(list: T[], meta: Array<{ key: string; score: number | null }>) =>
+    orderForNight(list.map((x, i) => ({ x, ...meta[i]! })), (e) => e.key, (e) => e.score, ids).map((e) => e.x);
+  return {
+    ...pool,
+    stories: reorder(pool.stories, pool.meta.stories),
+    numbers: reorder(pool.numbers, pool.meta.numbers),
+    unbriefed: reorder(pool.unbriefed, pool.meta.unbriefed),
+    leads: reorder(pool.leads, pool.meta.leads),
   };
 }

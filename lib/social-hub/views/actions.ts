@@ -49,7 +49,7 @@ function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
   switch (state) {
     case 'needs_you':
     case 'slot_booked':
-      return approve ? 'primary' : action === 'reject' ? 'secondary' : 'more';
+      return approve ? 'primary' : action === 'reject' || action === 'archive' ? 'secondary' : 'more';
     case 'ready':
       return approve ? 'primary' : action === 'place' ? 'secondary' : 'more';
     case 'approved':
@@ -60,7 +60,7 @@ function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
       return action === 'hardPublish' ? 'primary' : action === 'hardRegenerate' ? 'secondary' : 'more';
     case 'not_approved':
     case 'cancelled':
-      return action === 'place' ? 'primary' : action === 'hardRegenerate' ? 'secondary' : action === 'reject' ? 'more' : 'hide';
+      return action === 'place' ? 'primary' : action === 'hardRegenerate' ? 'secondary' : action === 'reject' || action === 'archive' ? 'more' : 'hide';
     default:
       return 'hide';
   }
@@ -68,7 +68,7 @@ function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
 
 /** The flag that gates each action (both placement routes share `reschedule`, D50). */
 export function flagOf(action: PostPlan['action']): ActionFlag {
-  return action === 'place' ? 'reschedule' : action;
+  return action === 'place' ? 'reschedule' : action === 'archive' ? 'reject' : action;
 }
 
 function labelFor(state: PostState['id'], plan: PostPlan, vertical: HubPost['vertical']): string {
@@ -84,6 +84,8 @@ function labelFor(state: PostState['id'], plan: PostPlan, vertical: HubPost['ver
       return 'Regenerate';
     case 'reject':
       return 'Reject';
+    case 'archive':
+      return 'Archive';
     case 'place':
       return 'Schedule…';
     case 'reschedule':
@@ -97,6 +99,7 @@ const TITLE: Partial<Record<PostPlan['action'], string>> = {
   hardPublish: 'Publish now?',
   hardRegenerate: 'Make a new version?',
   reject: 'Reject this post?',
+  archive: 'Archive this post?',
   place: 'Schedule it',
   reschedule: 'Move it',
   unschedule: 'Take it off the calendar?',
@@ -122,7 +125,7 @@ export function actionMenu(post: HubPost, state: PostState, plans: readonly Acti
       label: labelFor(state.id, plan, post.vertical),
       plan,
       disabled: isOff ? OFF : plan.disabled,
-      danger: plan.action === 'reject',
+      danger: plan.action === 'reject' || plan.action === 'archive',
       confirmTitle: TITLE[plan.action] ?? null,
       ...(plan.pick === 'slot' && slots ? { slots } : {}),
     };

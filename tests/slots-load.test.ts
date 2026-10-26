@@ -38,7 +38,7 @@ test('readTemplate and readOverrides read start minutes and Stories series', asy
   assert.deepEqual(monday.filter((r) => r.vertical === 'explainers').map((r) => [r.startMinute, r.series, r.feedMode]), [[780, null, 'main'], [930, null, 'main']]);
   assert.deepEqual(monday.filter((r) => r.vertical === 'stories').map((r) => [r.startMinute, r.series]).sort(), [[510, 'guess_the_number'], [510, 'morning_download']]);
   await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode) VALUES ('2026-10-20', 'stories', 900, 'morning_download', 'add', NULL)`);
-  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add', feedMode: null }]);
+  assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add', feedMode: null, setBy: 'system' }]);
   assert.deepEqual(await readOverrides(q, '2026-10-21', '2026-10-30'), []);
 });
 

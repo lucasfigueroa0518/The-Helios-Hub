@@ -93,11 +93,13 @@ test('dayRanking ranks Stories per series: each series’ promote leads its own 
 
 test('orderTonight works on any list by id; tonightMoves gives both halves', () => {
   const rows = [{ topicId: 't1' }, { topicId: 't2' }, { topicId: 't3' }];
-  const ordered = orderTonight(rows, (r) => `explainers:topic:${r.topicId}`, new Set(['explainers:topic:t3']), new Set(['explainers:topic:t1']));
+  const ordered = orderTonight(rows, (r) => `last_few_days:story:${r.topicId}`, new Set(['last_few_days:story:t3']), new Set(['last_few_days:story:t1']));
   assert.deepEqual(ordered.map((r) => r.topicId), ['t3', 't2', 't1']);
-  const t = tonightMoves([mv('explainers', 'explainers:topic:t3', 'promote', '2026-10-12T10:00:00Z'), mv('explainers', 'explainers:topic:t1', 'demote', '2026-10-12T11:00:00Z')], 'explainers');
-  assert.equal(t.promote?.ideaId, 'explainers:topic:t3');
-  assert.deepEqual([...t.demoted], ['explainers:topic:t1']);
+  // An ordered list of pins keeps its own order (the order pinned), not the list's.
+  assert.deepEqual(orderTonight(rows, (r) => `last_few_days:story:${r.topicId}`, ['last_few_days:story:t3', 'last_few_days:story:t2'], new Set()).map((r) => r.topicId), ['t3', 't2', 't1']);
+  const t = tonightMoves([mv('last_few_days', 'last_few_days:story:t3', 'promote', '2026-10-12T10:00:00Z'), mv('last_few_days', 'last_few_days:story:t1', 'demote', '2026-10-12T11:00:00Z')], 'last_few_days');
+  assert.equal(t.promote?.ideaId, 'last_few_days:story:t3');
+  assert.deepEqual([...t.demoted], ['last_few_days:story:t1']);
 });
 
 test('ideaRef strips the type and kind, keeping colons in the ref', () => {

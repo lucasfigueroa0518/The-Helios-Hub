@@ -233,6 +233,24 @@ export async function productionSpendForDay(db: Queryable, day: string): Promise
   return num(rows[0].usd);
 }
 
+/** How many typed-in ideas (seeds) may wait in the pool at once; the 11th is refused with a plain message. */
+export const MAX_OPEN_SEEDS = 10;
+
+export async function openSeedCount(db: Queryable): Promise<number> {
+  const { rows } = await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM explainers.topics WHERE origin = 'manual' AND status = 'pool'`);
+  return Number(rows[0]?.n ?? 0);
+}
+
+/** A topic with a post that went out is done: Generate is for what has not been published. */
+async function topicPublished(db: Queryable, topicId: string): Promise<boolean> {
+  const { rows } = await db.query(
+    `SELECT 1 FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
+      WHERE ci.vertical = 'explainers' AND ci.idea_ref = $1 AND a.status = 'published' LIMIT 1`,
+    [topicId],
+  );
+  return rows.length > 0;
+}
+
 async function productionRendersForDay(db: Queryable, day: string): Promise<number> {
   const { rows } = await db.query<{ n: unknown }>(
     `SELECT count(*) AS n
@@ -253,16 +271,30 @@ export type RenderRequest =
       reason:
         | 'topic_not_found'
         | 'topic_not_renderable'
+        | 'topic_published'
         | 'already_in_flight'
         | 'daily_render_cap'
         | 'daily_spend_cap';
     };
 
-/** Topic states a render can start from. `queued` covers a retry after a failed job. */
+/**
+ * What a render may start from. The night renders only a promoted topic. A person's click renders any
+ * topic that is not archived (idea pool standard, 2026-10-21: every unpublished idea can always be
+ * generated); a topic already posted is refused separately, in requestRender.
+ */
 const RENDERABLE: Record<JobTrigger, readonly TopicStatus[]> = {
-  click: ['pool', 'promoted', 'queued'],
+  click: ['proposed', 'pool', 'rejected', 'displaced', 'promoted', 'queued', 'rendered'],
   auto: ['promoted'],
 };
+
+/** A render's typical cost for the "go over the cap?" question: the average of finished production renders, else the per-reel cap. */
+export async function typicalRenderCostUsd(db: Queryable, settings: Pick<ExplainersSettings, 'per_reel_cap_usd'>): Promise<number> {
+  const { rows } = await db.query<{ usd: string | null }>(
+    `SELECT avg(spend_usd)::text AS usd FROM (SELECT spend_usd FROM explainers.jobs WHERE status = 'ok' AND mode = 'production' AND spend_usd > 0 ORDER BY requested_at DESC LIMIT 20) j`,
+  );
+  const avg = Number(rows[0]?.usd);
+  return Number.isFinite(avg) && avg > 0 ? Math.round(avg * 100) / 100 : settings.per_reel_cap_usd;
+}
 
 /**
  * Queue a render. Click renders a pool candidate (A-5); auto renders the
@@ -270,7 +302,7 @@ const RENDERABLE: Record<JobTrigger, readonly TopicStatus[]> = {
  */
 export async function requestRender(
   db: ExplainersDb,
-  input: { topicId: string; trigger: JobTrigger; settings: ExplainersSettings; now?: Date },
+  input: { topicId: string; trigger: JobTrigger; settings: ExplainersSettings; now?: Date; overrideCaps?: boolean },
 ): Promise<RenderRequest> {
   const { topicId, trigger, settings } = input;
   return db.transaction(async (tx) => {
@@ -283,7 +315,11 @@ export async function requestRender(
       return { ok: false, reason: 'topic_not_renderable' } as const;
     }
 
-    if (settings.mode === 'production') {
+    if (trigger === 'click' && (await topicPublished(tx, topicId))) return { ok: false, reason: 'topic_published' } as const;
+
+    // A person's confirmed click may go over the day's caps (it is one render, and the spend is recorded as any render's);
+    // the night never does.
+    if (settings.mode === 'production' && !(trigger === 'click' && input.overrideCaps)) {
       const day = nyDate(input.now);
       if ((await productionRendersForDay(tx, day)) >= settings.daily_render_cap) {
         return { ok: false, reason: 'daily_render_cap' } as const;

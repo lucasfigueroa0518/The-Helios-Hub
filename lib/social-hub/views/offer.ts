@@ -6,6 +6,8 @@ import { actionMenu, placeHereMenu, type ActionMenu, type SlotChoice } from '@/l
 import { cardActions, type CardActions } from '@/lib/social-hub/views/card-actions';
 import { dayWord } from '@/lib/social-hub/views/format';
 import { windowRange, windowsOn } from '@/lib/social-hub/views/plan';
+import { ideaOwns } from '@/lib/social-hub/views/day-rank';
+import { QUEUE_LIVE } from '@/lib/social-hub/queue';
 import { addDays, nyDateOf, nyDayStart } from '@/lib/social-hub/time';
 import { approvalOffState, postState, type PostState } from '@/lib/social-hub/views/state';
 import { typicals, type Typicals } from '@/lib/social-hub/views/typical';
@@ -75,7 +77,12 @@ export function offerer(dataset: HubDataset, now: Date, flags: HubFlags = SOCIAL
 
   function build(post: HubPost): Offer {
       const state = postState(post, now);
-      const plans = actionsFor(post, { quota, typicalCostLabel: label(post.vertical), lfdPublishingLive: dataset.lfdPublishingLive === true });
+      const plans = actionsFor(post, {
+        quota,
+        typicalCostLabel: label(post.vertical),
+        lfdPublishingLive: dataset.lfdPublishingLive === true,
+        ...(QUEUE_LIVE.has(post.vertical) ? { archive: { ideaId: dataset.ideas.find((i) => i.vertical === post.vertical && ideaOwns(i, post))?.id ?? null } } : {}),
+      });
       const slots = plans.some((p) => p.kind === 'post' && p.pick === 'slot') ? slotChoices(dataset, post, now) : undefined;
       const menu = actionMenu(post, state, plans, enabled, slots);
       const card = cardActions(state, plans, enabled, slots);

@@ -19,7 +19,7 @@ export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainer
 
 type AdjustmentRow = {
   id: string; vertical: IdeaAdjustment['vertical']; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string;
-  skip_reason?: string | null; skipped_at?: string | null;
+  skip_reason?: string | null; skipped_at?: string | null; sort_key?: number | string | null;
 };
 
 const ADJUSTMENT_COLS = `id::text AS id, vertical, idea_id, ny_date::text AS ny_date, kind,
@@ -28,9 +28,12 @@ const ADJUSTMENT_COLS = `id::text AS id, vertical, idea_id, ny_date::text AS ny_
 /** The shared queue's skip columns (2026-10-14): why the last night couldn't make a promote. */
 const SKIP_COLS = `, skip_reason, to_char(skipped_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS skipped_at`;
 
+/** The pool standard's drag key (2026-10-21): where a drop left an idea in the queue. */
+const SORT_COL = ', sort_key';
+
 const toAdjustment = (r: AdjustmentRow): IdeaAdjustment => ({
   id: r.id, vertical: r.vertical, ideaId: r.idea_id, nyDate: r.ny_date.slice(0, 10), kind: r.kind, createdAt: r.created_at,
-  skipReason: r.skip_reason ?? null, skippedAt: r.skipped_at ?? null,
+  skipReason: r.skip_reason ?? null, skippedAt: r.skipped_at ?? null, sortKey: r.sort_key == null ? null : Number(r.sort_key),
 });
 
 /**
@@ -40,6 +43,11 @@ const toAdjustment = (r: AdjustmentRow): IdeaAdjustment => ({
  */
 export async function readAdjustments(q: HubQuery, nyDate: string): Promise<IdeaAdjustment[]> {
   const active = (cols: string) => q<AdjustmentRow>(`SELECT ${cols} FROM social_hub.idea_adjustments WHERE consumed_at IS NULL ORDER BY created_at`);
+  try {
+    return (await active(ADJUSTMENT_COLS + SKIP_COLS + SORT_COL)).rows.map(toAdjustment);
+  } catch {
+    // The sort_key column is not applied yet: the moves without drags.
+  }
   try {
     return (await active(ADJUSTMENT_COLS + SKIP_COLS)).rows.map(toAdjustment);
   } catch {

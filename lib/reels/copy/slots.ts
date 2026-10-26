@@ -1,5 +1,6 @@
 import { rankCopyLines, type CopyLineJudgment } from '@/lib/reels/copy/pick';
 import { rankForSlate, type BucketId, type FrameworkId, type RankedIdea } from '@/lib/reels/scoring/decide';
+import { orderForNight } from '@/lib/social-hub/queue';
 import { orderTonight } from '@/lib/social-hub/views/moves';
 
 /**
@@ -41,7 +42,18 @@ export type SlotIdea = {
 export type SlotLock = { slot: number; postIdeaId: string };
 
 /** Shared queue: tonight's promoted idea (post idea id) and the demoted ones. */
-export type SlotMoves = { promote: string | null; demoted: ReadonlySet<string> };
+export type SlotMoves = {
+  promote: string | null;
+  demoted: ReadonlySet<string>;
+  /**
+   * Idea pool standard (2026-10-21), when Trial Reels is on the queue: every pin in the order pinned, where a drag left
+   * each placed idea, and the archived ones. Present, they replace promote/demoted in the order; `promote` is then just
+   * the first pin.
+   */
+  pins?: readonly string[];
+  placed?: ReadonlyMap<string, number>;
+  archived?: ReadonlySet<string>;
+};
 
 export type GradedLine = CopyLineJudgment & { inRange: boolean; ideaId: string; lineIndex: number };
 
@@ -85,7 +97,11 @@ export function orderedForSlots(ideas: readonly SlotIdea[], penaltyOf: (id: stri
     .map((idea) => byId.get(idea.id))
     .filter((idea): idea is SlotIdea => idea != null);
   // Shared queue: tonight's promoted idea first, demoted ideas last; the rest keep net − penalty order.
-  return moves ? orderTonight(ordered, (idea) => idea.id, new Set(moves.promote ? [moves.promote] : []), moves.demoted) : ordered;
+  if (!moves) return ordered;
+  if (moves.pins || moves.placed || moves.archived) {
+    return orderForNight(ordered, (idea) => idea.id, (idea) => idea.net - penaltyOf(idea.id), { pins: moves.pins ?? [], placed: moves.placed ?? new Map(), archived: moves.archived ?? new Set(), demoted: moves.demoted });
+  }
+  return orderTonight(ordered, (idea) => idea.id, new Set(moves.promote ? [moves.promote] : []), moves.demoted);
 }
 
 /**
@@ -152,22 +168,32 @@ export async function fillSlots(input: {
     else passingGeneral += 1;
   }
 
-  // The promote leads only until it has been attempted; after a miss it sinks like any penalized idea, so it never
+  // A pin leads only until it has been attempted; after a miss it sinks like any penalized idea, so it never
   // gets a second full attempt in a later slot.
-  let promoteAttempted = false;
+  const pinIds = new Set(input.moves?.pins ?? (input.moves?.promote ? [input.moves.promote] : []));
+  const attempted = new Set<string>();
   const attempt: typeof input.attempt = (idea, rewrite) => {
-    if (idea.id === input.moves?.promote) promoteAttempted = true;
+    if (pinIds.has(idea.id)) attempted.add(idea.id);
     return input.attempt(idea, rewrite);
   };
-  const liveMoves = (): SlotMoves | undefined => (input.moves && promoteAttempted ? { ...input.moves, promote: null } : input.moves);
+  const liveMoves = (): SlotMoves | undefined => {
+    const moves = input.moves;
+    if (!moves || attempted.size === 0) return moves;
+    return {
+      ...moves,
+      promote: moves.promote && !attempted.has(moves.promote) ? moves.promote : null,
+      ...(moves.pins ? { pins: moves.pins.filter((id) => !attempted.has(id)) } : {}),
+    };
+  };
 
   const pool = (mode: 'reserved' | 'general', tried: ReadonlySet<string>): SlotIdea[] => {
     const available = orderedForSlots(input.ideas, penaltyOf, liveMoves()).filter(
       (idea) => !used.has(idea.id) && !tried.has(idea.id),
     );
     // Shared queue (Q4): tonight's promoted idea leads either pool, in the knowledge lane or not.
-    const promoted = liveMoves()?.promote ? available.find((idea) => idea.id === input.moves!.promote) : undefined;
-    const first = (list: SlotIdea[]) => (promoted ? [promoted, ...list.filter((idea) => idea !== promoted)] : list);
+    const live = liveMoves();
+    const leading = (live?.pins ?? (live?.promote ? [live.promote] : [])).flatMap((id) => available.filter((idea) => idea.id === id));
+    const first = (list: SlotIdea[]) => (leading.length ? [...leading, ...list.filter((idea) => !leading.includes(idea))] : list);
     if (mode === 'reserved') {
       const lane = available.filter(inKnowledgeLane);
       return first(lane.length > 0 ? lane : available);
@@ -202,7 +228,7 @@ export async function fillSlots(input: {
       opener = false;
       // A promoted idea outside the lane that misses falls through like a general idea (penalized, never shipped
       // on its best line); the lane idea after it opens fresh.
-      if (!result.passed && idea.id === input.moves?.promote && !inKnowledgeLane(idea)) {
+      if (!result.passed && pinIds.has(idea.id) && !inKnowledgeLane(idea)) {
         if (result.judged) await penalize(idea, tried, 'general');
         opener = true;
         continue;

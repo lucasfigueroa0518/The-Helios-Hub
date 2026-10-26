@@ -51,10 +51,18 @@ export function carouselActions(deps: {
       return out.queued ? { ok: true, note: 'Queued to publish now.' } : { ok: false, note: out.note ?? 'Not queued.', status: out.status };
     },
     async regenerate(t, by) {
-      const out = await deps.requestRerun(await deps.query(), need(t, 'postId'), by);
-      return out.queued
-        ? { ok: true, note: 'A rerun of this story is queued, under the carousel run cap. The new version shows up in Content ready when it finishes; this one stays as it is.' }
-        : { ok: false, note: out.note };
+      const q = await deps.query();
+      const out = await deps.requestRerun(q, need(t, 'postId'), by);
+      if (!out.queued) return { ok: false, note: out.note };
+      // Idea pool standard (2026-10-21): the version being replaced comes off the calendar and out of approval once the rerun is
+      // accepted, so nothing posts what was not reviewed after the regenerate. A refusal changes nothing.
+      const off = await deps.unschedulePost(q, need(t, 'postId')).catch(() => null);
+      return {
+        ok: true,
+        note: off?.ok
+          ? 'A rerun of this story is queued, under the carousel run cap. The version it replaces is unscheduled and no longer approved; approve the new one when it shows up in Content ready.'
+          : 'A rerun of this story is queued, under the carousel run cap. The new version shows up in Content ready when it finishes; this one stays as it is.',
+      };
     },
     async unschedule(t) {
       const out = await deps.unschedulePost(await deps.query(), need(t, 'postId'));

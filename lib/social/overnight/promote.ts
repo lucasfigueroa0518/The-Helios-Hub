@@ -81,26 +81,106 @@ export async function pickPromoted(query: Query, firstStoryId: string): Promise<
   return null;
 }
 
-/** Selection as usual, then: the promoted story above every fresh score (once), demoted stories below every other. */
-export function promotedStages(stages: PipelineStages, promoted: ScoredCandidate | null, demoted: ReadonlySet<string>): PipelineStages {
+/**
+ * The pool standard's night (2026-10-21): what the run is told besides its pins. `archived` stories are never made, and
+ * `archivedUrls` are the member URLs of archived stories (a group's id is a representative URL that can change night to
+ * night, so an archived story is matched by any shared URL as well as by id).
+ *
+ * `placed` is where a drag left a story, and `extra` are stories the night's own selection did not return but the person's queue
+ * holds: a dragged story, and the person's qualified seeds. Both are on the hub's score scale (story-scoring probSum, 0 to 5.5),
+ * while a candidate's `score` is only its rank in tonight's selection, so `probOf` (tonight's probSum by story id) is how a key
+ * finds its place among tonight's candidates.
+ */
+export type CarouselNight = {
+  archived?: ReadonlySet<string>;
+  archivedUrls?: ReadonlySet<string>;
+  placed?: ReadonlyMap<string, number>;
+  extra?: ReadonlyArray<{ candidate: ScoredCandidate; key: number }>;
+  probOf?: (id: string) => number | undefined;
+};
+
+/**
+ * Selection as usual, then: tonight's pins above everything, in the order pinned (before the pool standard, one promote);
+ * archived stories removed; a dragged story, and each qualified seed, slotted in where its score would sit among tonight's
+ * candidates; demoted stories (old rows) below every other. With nothing to apply the selection passes through untouched.
+ */
+export function promotedStages(stages: PipelineStages, promoted: ScoredCandidate | readonly ScoredCandidate[] | null, demoted: ReadonlySet<string>, night: CarouselNight = {}): PipelineStages {
+  const pins: readonly ScoredCandidate[] = promoted == null ? [] : Array.isArray(promoted) ? promoted : [promoted as ScoredCandidate];
+  if (!pins.length && !demoted.size && !night.archived?.size && !night.placed?.size && !night.extra?.length) return stages;
   return {
     ...stages,
     async score(articles, now) {
       const res = await stages.score(articles, now);
       if (!res.ok) return res;
       // Same story under another id: group ids are a representative URL, which can change night to night,
-      // so a fresh group that shares any member URL with the promoted story is that story, not a new one.
-      const promotedUrls = new Set(promoted ? [promoted.url, ...promoted.members.map((m) => m.url)] : []);
-      const sameStory = (c: ScoredCandidate) => c.id === promoted?.id || [c.url, ...c.members.map((m) => m.url)].some((u) => promotedUrls.has(u));
-      const fresh = res.value.filter((c) => !sameStory(c));
-      const scores = fresh.map((c) => c.score);
-      const top = Math.max(0, ...scores);
-      const bottom = Math.min(0, ...scores);
-      const kept = fresh.filter((c) => !demoted.has(c.id));
-      const sunk = fresh.filter((c) => demoted.has(c.id)).map((c, i) => ({ ...c, score: bottom - 1 - i }));
-      return { ...res, value: [...(promoted ? [{ ...promoted, score: top + 1 }] : []), ...kept, ...sunk] };
+      // so a fresh group that shares any member URL with a pinned story is that story, not a new one.
+      const pinnedUrls = new Set(pins.flatMap((p) => [p.url, ...p.members.map((m) => m.url)]));
+      const urlsOf = (c: ScoredCandidate) => [c.url, ...c.members.map((m) => m.url)];
+      const sameStory = (c: ScoredCandidate) => pins.some((p) => p.id === c.id) || urlsOf(c).some((u) => pinnedUrls.has(u));
+      const archived = (c: ScoredCandidate) => night.archived?.has(c.id) === true || urlsOf(c).some((u) => night.archivedUrls?.has(u));
+      const fresh = res.value.filter((c) => !sameStory(c) && !archived(c));
+
+      // The stories to slot in by key: dragged ones (fresh or not) and the seeds; a drag overrides a seed's own score.
+      const slotted = new Map<string, { c: ScoredCandidate; key: number }>();
+      for (const [id, key] of night.placed ?? []) {
+        const c = fresh.find((f) => f.id === id) ?? night.extra?.find((e) => e.candidate.id === id)?.candidate;
+        if (c && !sameStory(c) && !archived(c)) slotted.set(id, { c, key });
+      }
+      for (const e of night.extra ?? []) {
+        const c = e.candidate;
+        if (slotted.has(c.id) || sameStory(c) || archived(c) || fresh.some((f) => f.id === c.id || urlsOf(f).some((u) => urlsOf(c).includes(u)))) continue;
+        slotted.set(c.id, { c, key: e.key });
+      }
+      const rest = fresh.filter((c) => !slotted.has(c.id));
+      const effective = (c: ScoredCandidate) => slotted.get(c.id)?.key ?? night.probOf?.(c.id) ?? -Infinity;
+      for (const { c, key } of [...slotted.values()].sort((x, y) => y.key - x.key)) {
+        // Without tonight's scores a dragged story goes first and a seed last; with them, before the first candidate scoring below its key.
+        const at = night.probOf ? rest.findIndex((o) => effective(o) < key) : night.placed?.has(c.id) ? 0 : -1;
+        rest.splice(at < 0 ? rest.length : at, 0, c);
+      }
+      const kept = rest.filter((c) => !demoted.has(c.id));
+      const sunk = rest.filter((c) => demoted.has(c.id));
+      const ordered = [...pins.filter((p) => !archived(p)), ...kept, ...sunk];
+      // A candidate's score is its place in the run (higher runs first).
+      return { ...res, value: ordered.map((c, i) => ({ ...c, score: ordered.length - i })) };
     },
   };
+}
+
+/**
+ * Every pin tonight, as candidates in the order pinned: each is checked as a single promote is (not found, already posted,
+ * on the calendar: skipped with why on the move) and one that is gone does not stop the rest. Done before the run spends
+ * anything. Never throws.
+ */
+export async function pickPins(query: Query, storyIds: readonly string[]): Promise<ScoredCandidate[]> {
+  const out: ScoredCandidate[] = [];
+  for (const id of storyIds) {
+    try {
+      const found = await loadPromoted(query, id);
+      if (found) out.push(found);
+    } catch {
+      // degrade: this pin is not made tonight
+    }
+  }
+  return out;
+}
+
+/** The member URLs of archived stories, from the stored shortlists, so a story whose id drifted is still caught. Never throws. */
+export async function loadArchivedUrls(query: Query, storyIds: readonly string[]): Promise<Set<string>> {
+  const urls = new Set<string>();
+  for (const id of storyIds) {
+    try {
+      for (const c of await loadPinnedCandidates(query, [id])) for (const u of [c.url, ...c.members.map((m) => m.url)]) urls.add(u);
+    } catch {
+      // Not in any recent shortlist: matched by id only.
+    }
+  }
+  return urls;
+}
+
+/** After the run: every pin the run shipped is used; one it did not is skipped with why. */
+export async function settlePins(query: Query, storyIds: readonly string[], result: Pick<RunDayResult, 'shipped' | 'onCalendar' | 'setAsides'>): Promise<void> {
+  for (const id of storyIds) await settlePromote(query, id, result);
 }
 
 /** After the run: the promote is used when shipped (made or a stored post reused); otherwise why, on the move. */
