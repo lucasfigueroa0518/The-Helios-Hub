@@ -335,6 +335,7 @@ const pts = (n: number) => Number(n.toFixed(3));
 /** The net's parts, as Trial Reels' own drawer adds them up (app/reels/reels-hub.tsx netParts). */
 export function reelBreakdown(row: ReelIdeaRow): ScoreBreakdown | null {
   const net = num(row.net);
+  if (net == null && row.unscored) return { formula: 'Psychology + ½ × bucket fit + 2 × value + blockbuster bonus.', parts: [], note: 'Not scored yet.' };
   if (net == null) return { formula: 'Psychology + ½ × bucket fit + 2 × value + blockbuster bonus.', parts: [], note: 'No bucket cleared its bar, so the idea has no net score.' };
   const psychology = num(row.psychology);
   const bucket = num(row.bucket_score);
@@ -377,8 +378,12 @@ export function reelIdeas(rows: readonly ReelIdeaRow[]): HubIdea[] {
     versionCount: row.video_count ?? 0,
     generatedAt: iso(row.last_video_at),
     createdAt: iso(row.scored_at),
-    detail: [row.rank != null ? `Rank ${row.rank}` : null, row.selected ? 'Selected tonight' : null, row.origin === 'carryover' ? 'Carryover' : null]
-      .filter(Boolean)
-      .join(' · ') || null,
+    // A seed's row is a carryover only by construction (it is what a pin copies), so the chip says whose it is instead.
+    detail: row.yours
+      ? [row.unscored ? 'Not scored yet' : null, 'You typed this idea'].filter(Boolean).join(' · ')
+      : [row.rank != null ? `Rank ${row.rank}` : null, row.selected ? 'Selected tonight' : null, row.origin === 'carryover' ? 'Carryover' : null]
+          .filter(Boolean)
+          .join(' · ') || null,
+    yours: row.yours === true,
   }));
 }

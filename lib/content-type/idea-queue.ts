@@ -3,6 +3,7 @@ import type { HubDataset } from '@/lib/social-hub/dataset';
 import { ARCHIVE_ONLY, QUEUE_LIVE, dropKeyBetween, queueOrder } from '@/lib/social-hub/queue';
 import { archiveIdea, pinIdea, placeIdea, reorderPins, unpinIdea } from '@/lib/social-hub/queue-store';
 import type { Vertical } from '@/lib/social-hub/types';
+import { isUnscoredSeed } from '@/lib/reels/seeds';
 
 /**
  * One person's move on a type's idea queue (spec 2026-10-21-idea-pool-standard-design):
@@ -53,7 +54,12 @@ export function keyFor(dataset: HubDataset, move: Extract<QueueAction, { action:
 export async function recordQueueAction(move: QueueAction, by: string, dataset: HubDataset): Promise<void> {
   const q = (text: string, params?: unknown[]) => dbQuery(text, params as never) as never;
   switch (move.action) {
-    case 'pin': return pinIdea(q, move.vertical, move.ideaId, by);
+    case 'pin': {
+      // A typed-in Text on Screen idea with no net score cannot be copied onto tonight's slate: say so now, not as "not in the pool" at 1 AM.
+      const id = move.vertical === 'reels' ? /^reels:idea:([0-9a-f-]{36})$/.exec(move.ideaId)?.[1] : undefined;
+      if (id && (await isUnscoredSeed(id))) throw Object.assign(new Error('No bucket cleared its bar, so the night has nothing to make it from.'), { status: 409 });
+      return pinIdea(q, move.vertical, move.ideaId, by);
+    }
     case 'unpin': return unpinIdea(q, move.vertical, move.ideaId);
     case 'archive': return archiveIdea(q, move.vertical, move.ideaId, by);
     case 'place': return placeIdea(q, move.vertical, move.ideaId, keyFor(dataset, move), by);

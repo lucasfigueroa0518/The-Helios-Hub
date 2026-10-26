@@ -36,7 +36,9 @@ export type DropReason =
   | 'planted_instruction'
   | 'already_seen'
   | 'over_cap'
-  | 'not_selected';
+  | 'not_selected'
+  /** A person's typed-in idea (seeding spec 2026-10-26): kept out of every grouping read, still copied, scored and shown. */
+  | 'seed';
 
 export type Engagement = {
   points?: number;
