@@ -38,6 +38,8 @@ export const KIND_CONFIG: Record<WorkKind, KindConfig> = {
   'anthropic.cost_sync': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -8 },
   'auto.cycle': { lane: 'auto_campaign', defaultMaxAttempts: 2, priority: 15 },
   'networking.weekly_ingest': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -6 },
+  // Its own job and lease after each ingest (AE-06): a few hundred throttled GETs a week.
+  'networking.event_details': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -6 },
   'seo.gsc_daily_sync': { lane: 'maintenance', defaultMaxAttempts: 2, priority: -5 },
   'system.reconcile': { lane: 'maintenance', defaultMaxAttempts: 3, priority: -10 },
   // Lane creation outranks handoff: a handoff into a half-built lane is wasted.

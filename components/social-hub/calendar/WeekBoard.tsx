@@ -89,6 +89,7 @@ const TRAY: Array<{ vertical: Vertical; series: StorySeries | null; label: strin
   { vertical: 'explainers', series: null, label: 'Explainer' },
   { vertical: 'carousels', series: null, label: 'Carousel' },
   { vertical: 'last_few_days', series: null, label: 'Last Few Days' },
+  { vertical: 'ai_events', series: null, label: 'AI Events' },
   { vertical: 'stories', series: 'morning_download', label: SERIES_NAME.morning_download.one },
   { vertical: 'stories', series: 'guess_the_number', label: SERIES_NAME.guess_the_number.one },
   { vertical: 'stories', series: 'free_vs_paid', label: SERIES_NAME.free_vs_paid.one },

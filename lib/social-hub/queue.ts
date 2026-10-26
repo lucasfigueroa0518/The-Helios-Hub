@@ -51,8 +51,12 @@ export function isArchived(moves: readonly Pick<IdeaAdjustment, 'ideaId' | 'kind
  * on a pinned idea is ignored while it stays pinned. An old `demote` row still sinks its idea to the bottom (the latest of
  * an idea's pin, promote and demote rows wins); nothing makes new ones. Rows on ideas absent from `items` change nothing.
  * Ties keep the order `items` came in.
+ *
+ * `lead` (Lucas, 2026-10-26) is the last run's picks, best first: they sit at the top of the unpinned list, each a
+ * step above the best other idea, so a drag lands between real neighbours and its key stays on the score scale.
+ * A pin, a drag or an old demote on a lead idea wins over its lead place.
  */
-export function queueOrder<T extends QueueItem>(items: readonly T[], moves: readonly IdeaAdjustment[]): QueuedIdea<T>[] {
+export function queueOrder<T extends QueueItem>(items: readonly T[], moves: readonly IdeaAdjustment[], lead: readonly string[] = []): QueuedIdea<T>[] {
   const here = new Set(items.map((i) => i.id));
   const archived = new Set(moves.filter((m) => m.kind === 'archive' && here.has(m.ideaId)).map((m) => m.ideaId));
   const pinAt = new Map<string, number>();
@@ -70,9 +74,13 @@ export function queueOrder<T extends QueueItem>(items: readonly T[], moves: read
   });
   const live = items.filter((i) => !archived.has(i.id));
   const pinned = live.filter((i) => pinAt.has(i.id)).sort((a, b) => pinAt.get(a.id)! - pinAt.get(b.id)!);
-  const rest = live
-    .filter((i) => !pinAt.has(i.id))
-    .map((item, order) => ({ item, order, effective: key.get(item.id) ?? item.score }))
+  const leadAt = new Map(lead.filter((id) => here.has(id) && !pinAt.has(id) && !key.has(id) && !sunk.has(id)).map((id, i, all) => [id, all.length - i]));
+  const unpinned = live.filter((i) => !pinAt.has(i.id));
+  // From machine scores only: a drag above the lead keeps its key above it on the next read.
+  const top = Math.max(...unpinned.filter((i) => !leadAt.has(i.id) && !key.has(i.id)).map((i) => i.score ?? -Infinity));
+  const above = Number.isFinite(top) ? top : Math.max(0, ...unpinned.map((i) => i.score ?? 0));
+  const rest = unpinned
+    .map((item, order) => ({ item, order, effective: leadAt.has(item.id) ? round(above + STEP * leadAt.get(item.id)!) : key.get(item.id) ?? item.score }))
     .sort((a, b) => (b.effective ?? -Infinity) - (a.effective ?? -Infinity) || a.order - b.order);
   const out: QueuedIdea<T>[] = pinned.map((item) => ({ item, rank: 0, pinned: true, placed: false, effective: item.score }));
   for (const r of rest.filter((x) => !sunk.has(x.item.id))) out.push({ item: r.item, rank: 0, pinned: false, placed: key.has(r.item.id), effective: r.effective });
@@ -81,6 +89,11 @@ export function queueOrder<T extends QueueItem>(items: readonly T[], moves: read
 }
 
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
+
+/** The last run's picks as queueOrder's `lead`, best first (ideas carry `runPick`, 0 first; Text on Screen sets it). */
+export function runLead(ideas: ReadonlyArray<{ id: string; runPick?: number | null }>): string[] {
+  return ideas.filter((i) => i.runPick != null).sort((a, b) => a.runPick! - b.runPick!).map((i) => i.id);
+}
 
 /**
  * Where a dragged idea sorts. `others` are the effective scores of the
@@ -172,4 +185,13 @@ export function orderForNight<T>(
 export function capQueued<T extends QueueItem & { yours?: boolean; hasContent?: boolean }>(queued: readonly QueuedIdea<T>[], cap = POOL_CAP): QueuedIdea<T>[] {
   const drop = new Set(capOverflow(queued, cap, (q) => q.pinned || q.placed || q.item.yours === true || q.item.hasContent === true));
   return queued.filter((q) => !drop.has(q.item));
+}
+
+/**
+ * Today's slots from the list as the person sees it (Lucas, 2026-10-26): what is already booked or posted keeps its
+ * place, and the rest are the top of the list, in its order, until the day's slots are full.
+ */
+export function slotsFromOrder<T>(ordered: readonly T[], booked: (x: T) => boolean, slots: number): T[] {
+  const held = ordered.filter(booked);
+  return [...held, ...ordered.filter((x) => !booked(x))].slice(0, Math.max(slots, 0));
 }

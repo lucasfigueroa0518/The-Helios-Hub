@@ -27,6 +27,15 @@
  * takes its day's 9:00–10:00 AM window. Its posts publish and its insights are
  * read here like carousels until the single publisher drives the type.
  *
+ * AI Events This Week (planning/AI Events/DECISIONS.md, AE-08) shares this
+ * process too: at 12:00 PM on its days (ai_events.settings.days, Sunday) with
+ * its auto_run on, a run is queued that ranks the coming week's events (Jev
+ * event-pick@1, capped at run_cap_usd), renders the carousel and, while
+ * ai_events publishing_live is on, books the Sunday 6:00–7:00 PM window. Its
+ * runs (the clock, the hub's Generate or Rebuild post) are claimed after Last
+ * Few Days', under the same 30-minute timeout. Its posts publish and their
+ * insights are read here until the single publisher drives the type.
+ *
  * Nothing is scheduled or published unless social.settings.publishing_live is
  * on. Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
  * Once social_hub.settings publisher_mode is 'live', releasing, posting and
@@ -97,17 +106,27 @@ async function main(): Promise<void> {
   const { carryOutLfdRun, withLfdTimeout } = await import('@/lib/lfd/worker');
   const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
   const { threeAmQueue } = await import('@/lib/lfd/clock');
-  const { isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
+  const { isAiEventsDay, isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
   const { readSlotSource } = await import('@/lib/social-hub/slots/load');
   const { liveLfdDeps } = await import('@/lib/lfd/live');
   const { liveMemesForPost } = await import('@/lib/memes/lfd-post-live');
   const { claimAndPublishLfd } = await import('@/lib/lfd/publish');
   const { releaseDueLfd } = await import('@/lib/lfd/schedule');
+  const aiEventsSettings = await import('@/lib/ai-events/settings');
+  const aiEventsStore = await import('@/lib/ai-events/store');
+  const { carryOutAiEventsRun, withAiEventsTimeout } = await import('@/lib/ai-events/worker');
+  const { AI_EVENTS_RUN_TIMEOUT_MS, AI_EVENTS_SPINE_VERTICAL } = await import('@/lib/ai-events/config');
+  const { firstAiEventsCheckAt, nextAiEventsRunAt, noonQueue } = await import('@/lib/ai-events/clock');
+  const { liveAiEventsDeps, liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
+  const { claimAndPublishAiEvents } = await import('@/lib/ai-events/publish');
+  const { releaseDueAiEvents } = await import('@/lib/ai-events/schedule');
   const query = await socialQuery();
   /** The same connection, typed for lib/lfd (it takes the hub's query shape). */
   const lfdQuery = query as unknown as HubQuery;
   /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
   const standDown = () => publisherOwnsPublishing(query, 'carousels');
+  /** The public calendar snapshot after an AI Events run or post (plan M3). */
+  const aiEventsSnapshot = liveAiEventsSnapshot(lfdQuery);
 
   let stopping = false;
   const stop = (signal: string) => {
@@ -258,6 +277,8 @@ async function main(): Promise<void> {
     // Last Few Days posts are feed carousels too: the same reads on the same cadence (spec §7.3).
     const lfd = await pollCarouselInsights(query, client, new Date(), 200, 'last_few_days');
     if (force || lfd.considered > 0) log('lfd_insights_complete', { ...lfd });
+    const aiEvents = await pollCarouselInsights(query, client, new Date(), 200, 'ai_events');
+    if (force || aiEvents.considered > 0) log('ai_events_insights_complete', { ...aiEvents });
   }
 
   try {
@@ -268,7 +289,10 @@ async function main(): Promise<void> {
     let lastInsights = 0;
     let lastRerunError: string | null = null;
     let lastLfdError: string | null = null;
-    log('scheduled', { nextRunAt: runAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
+    // Started after today's noon: check once now, so a Sunday-afternoon restart still runs the week.
+    let aiEventsAt = firstAiEventsCheckAt(new Date());
+    let lastAiEventsError: string | null = null;
+    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
       if (Date.now() >= runAt.getTime()) {
@@ -298,6 +322,29 @@ async function main(): Promise<void> {
           log('run_skipped', { reason: slot.reason });
         }
         runAt = nextRun();
+        continue;
+      }
+
+      if (Date.now() >= aiEventsAt.getTime()) {
+        // 12:00 PM: on an AI Events day (Sunday) with its auto_run on, the week's run is queued (AE-08).
+        const ae = await aiEventsSettings.readAiEventsSettings(lfdQuery).catch((error) => {
+          log('ai_events_settings_failed', { error: errorText(error) });
+          return null;
+        });
+        // Template mode: the calendar says whether today has an AI Events slot (null while legacy).
+        const aeToday = calendarDateKey(new Date());
+        const aePlan = await slotPlan(lfdQuery, aeToday, 1).catch(() => null);
+        const noon = noonQueue(new Date(), ae, aePlan ? isAiEventsDay(aePlan, aeToday) : null);
+        if (noon.queue && ae?.runCapUsd != null) {
+          const id = await aiEventsStore.requestRun(lfdQuery, 'scheduled', ae.runCapUsd).catch((error) => {
+            log('ai_events_request_failed', { error: errorText(error) });
+            return null;
+          });
+          log('ai_events_run_requested', { runId: id, trigger: 'scheduled' });
+        } else {
+          log('ai_events_run_skipped', { reason: noon.reason });
+        }
+        aiEventsAt = nextAiEventsRunAt(new Date());
         continue;
       }
 
@@ -387,6 +434,38 @@ async function main(): Promise<void> {
         continue;
       }
 
+      // AI Events runs (Sunday 12:00, or the hub's Generate and Rebuild post), after Last Few Days' and in this same process.
+      const aeClaimed = await aiEventsStore.claimRun(lfdQuery).catch((error) => {
+        // Logged once per distinct error (e.g. before the ai_events schema is applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastAiEventsError) log('ai_events_claim_failed', { error: text });
+        lastAiEventsError = text;
+        return null;
+      });
+      if (aeClaimed) {
+        // Past AI_EVENTS_RUN_TIMEOUT_MS the run is failed and the loop goes on (the cut-off promise is not cancelled).
+        const out = await withAiEventsTimeout(
+          carryOutAiEventsRun(
+            {
+              query: lfdQuery,
+              now: () => new Date(),
+              log,
+              engine: (_run, capUsd) => liveAiEventsDeps(lfdQuery, { capUsd }),
+              snapshot: aiEventsSnapshot,
+            },
+            aeClaimed,
+          ).catch((error) => ({ runId: aeClaimed.id, status: 'failed' as const, note: errorText(error) })),
+          AI_EVENTS_RUN_TIMEOUT_MS,
+          async () => {
+            log('ai_events_run_timeout', { runId: aeClaimed.id });
+            await aiEventsStore.failRun(lfdQuery, aeClaimed.id, 'timed out after 30 minutes').catch((error) => log('ai_events_fail_failed', { runId: aeClaimed.id, error: errorText(error) }));
+            return { runId: aeClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          },
+        );
+        log('ai_events_run_result', { ...out });
+        continue;
+      }
+
       // One-story reruns the Social Hub queued (D51), when no run is queued or running.
       const capUsd = (await getSocialSetting<number>('run_cap_usd').catch(() => null)) ?? cfg.DEFAULT_RUN_CAP_USD;
       const rerun = await runs.claimRerun(query, { capUsd, hookPass: true }).catch((error) => {
@@ -438,6 +517,29 @@ async function main(): Promise<void> {
           });
           if (published) {
             log('lfd_publish_complete', { ...published });
+            continue;
+          }
+        }
+      }
+
+      // AI Events posts the same way while the single publisher doesn't drive it; a post republishes the calendar snapshot.
+      const aeNow = await aiEventsSettings.readAiEventsSettings(lfdQuery).catch(() => null);
+      if (aeNow?.publishingLive && !(await publisherOwnsPublishing(query, AI_EVENTS_SPINE_VERTICAL))) {
+        const due = await releaseDueAiEvents(query, { requireApproval: aeNow.requireApproval }).catch((error) => {
+          log('ai_events_schedule_release_failed', { error: errorText(error) });
+          return 0;
+        });
+        if (due > 0) log('ai_events_schedule_due', { released: due });
+        if (metaConfigured()) {
+          const published = await claimAndPublishAiEvents(
+            { query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) },
+            { snapshot: aiEventsSnapshot, log },
+          ).catch((error) => {
+            log('ai_events_publish_failed', { error: errorText(error) });
+            return null;
+          });
+          if (published) {
+            log('ai_events_publish_complete', { ...published });
             continue;
           }
         }

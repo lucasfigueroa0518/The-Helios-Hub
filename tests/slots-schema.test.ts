@@ -68,7 +68,7 @@ test('stories.sets: two live sets of a series on one day need different slot min
 test('daily_caps starts at the agreed numbers', async () => {
   const { pg } = await openHubTestDb();
   const r = await pg.query<{ value: unknown }>(`SELECT value FROM social_hub.settings WHERE key = 'daily_caps'`);
-  assert.deepEqual(r.rows[0]?.value, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2 });
+  assert.deepEqual(r.rows[0]?.value, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2 });
 });
 
 test('schedule_feed_mode_check: only reel types carry a feed mode', async () => {

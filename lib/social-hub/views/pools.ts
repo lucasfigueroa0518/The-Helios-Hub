@@ -1,6 +1,6 @@
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
-import { QUEUE_LIVE, capQueued, queueOrder, withoutArchived } from '@/lib/social-hub/queue';
+import { QUEUE_LIVE, capQueued, queueOrder, runLead, withoutArchived } from '@/lib/social-hub/queue';
 import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 /**
@@ -9,14 +9,17 @@ import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/view
  * compared across types, only ranked within one.
  */
 
-/** Every pool refills at least nightly; three days without one means its run has stopped. */
+/** Every pool refills at least nightly; three days without one means its run has stopped (Last Few Days and AI Events refill less often). */
 export const POOL_STALE_MS = 3 * 86_400_000;
 
 /** Last Few Days refills twice a week (Friday to Tuesday is four days), so its pool is stale only after five. */
 const LFD_STALE_MS = 5 * 86_400_000;
 
+/** AI Events ranks its pool once a week (Sunday noon), so it is stale only after eight days. */
+export const AI_EVENTS_STALE_MS = 8 * 86_400_000;
+
 export function poolStale(lastRefill: string | null | undefined, now: Date, vertical?: Vertical): boolean {
-  const limit = vertical === 'last_few_days' ? LFD_STALE_MS : POOL_STALE_MS;
+  const limit = vertical === 'last_few_days' ? LFD_STALE_MS : vertical === 'ai_events' ? AI_EVENTS_STALE_MS : POOL_STALE_MS;
   return Boolean(lastRefill) && now.getTime() - Date.parse(lastRefill!) > limit;
 }
 
@@ -59,6 +62,16 @@ export function poolSummary(ideas: readonly HubIdea[], vertical: Vertical): Pool
   };
 }
 
+/** How often a type's pool normally refills, for the stale note ("it normally refills …"). */
+export const REFILL_CADENCE: Record<Vertical, string> = {
+  reels: 'every night',
+  explainers: 'every night',
+  carousels: 'every night',
+  stories: 'every night',
+  last_few_days: 'twice a week',
+  ai_events: 'every Sunday at noon',
+};
+
 export function poolSummaries(ideas: readonly HubIdea[]): PoolSummary[] {
   return VERTICAL_IDS.map((v) => poolSummary(ideas, v));
 }
@@ -72,9 +85,9 @@ export function poolList(ideas: readonly HubIdea[], vertical: Vertical, filter: 
   // A type whose night does not follow the queue yet keeps Promote and Demote, so the page never shows an order the night won't make.
   if (!QUEUE_LIVE.has(vertical)) return applyMoves(withoutArchived(rankIdeas(kept), movesFor(adjustments, vertical)), movesFor(adjustments, vertical));
   const moves = movesFor(adjustments, vertical);
-  if (filter === 'all') return queueOrder(rankIdeas(kept), moves).map((q) => q.item);
+  if (filter === 'all') return queueOrder(rankIdeas(kept), moves, runLead(kept)).map((q) => q.item);
   // At most 30 open ideas per type (Stories: per series); pinned, dragged, yours and made ideas are never cut.
   const groups = new Map<string, HubIdea[]>();
   for (const idea of rankIdeas(kept)) groups.set(vertical === 'stories' ? idea.group ?? '' : '', [...(groups.get(vertical === 'stories' ? idea.group ?? '' : '') ?? []), idea]);
-  return [...groups.values()].flatMap((list) => capQueued(queueOrder(list, moves)).map((q) => q.item));
+  return [...groups.values()].flatMap((list) => capQueued(queueOrder(list, moves, runLead(list))).map((q) => q.item));
 }

@@ -10,7 +10,7 @@ import { verticalInfo } from '@/lib/social-hub/verticals';
 import { relative, shortDate, when } from '@/lib/social-hub/views/format';
 import { QUEUE_LIVE, queueTags } from '@/lib/social-hub/queue';
 import { crumbsFor } from '@/lib/social-hub/views/nav';
-import { IDEA_STATE_LABEL, poolList, poolStale, poolSummary, type PoolFilter } from '@/lib/social-hub/views/pools';
+import { IDEA_STATE_LABEL, poolList, poolStale, poolSummary, REFILL_CADENCE, type PoolFilter } from '@/lib/social-hub/views/pools';
 import { moveTags } from '@/lib/social-hub/views/moves';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
 
@@ -27,6 +27,7 @@ const HOW: Record<Vertical, string> = {
   carousels: 'The 3:00 AM run shortlists stories; the top two become posts. A finished post keeps its rank and is reused.',
   stories: 'Built at 4:00 AM from the other pools, one set per series that is due.',
   last_few_days: 'Picked at 3:00 AM on Tuesdays and Fridays: up to 3 major headlines, then the best Text on Screen ideas. This is the latest post’s queue, its picks and what it dropped.',
+  ai_events: 'Ranked at 12:00 PM on Sundays: the coming week’s events in Miami, Boston, NYC and SF, scored by event-pick@1. The top 3 per city go into the carousel; gated and excluded events are retired with the reason. Pin or exclude events on the AI Events page.',
 };
 
 const ALL_ARE: Record<IdeaState, string> = {
@@ -94,7 +95,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
       )}
       {stale ? (
         <p className="sh-note sh-note--failed">
-          This pool hasn’t refilled in {relative(summary.lastRefill, now).replace(/ ago$/, '')}; it normally refills every night. Check the nightly idea run in {info.label}.
+          This pool hasn’t refilled in {relative(summary.lastRefill, now).replace(/ ago$/, '')}; it normally refills {REFILL_CADENCE[vertical]}. Check {vertical === 'ai_events' ? 'the Sunday run' : 'the nightly idea run'} in {info.label}.
         </p>
       ) : null}
       <DataNotes dataset={dataset} />

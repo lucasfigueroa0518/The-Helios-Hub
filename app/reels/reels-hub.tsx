@@ -22,7 +22,7 @@ import {
 
 import { Drawer, ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
-import { capQueued, queueOrder } from '@/lib/social-hub/queue';
+import { capQueued, queueOrder, slotsFromOrder } from '@/lib/social-hub/queue';
 import { ideaRef, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 import { ENTERTAINMENT_BOOST, NET_BUCKET_WEIGHT, NET_VALUE_WEIGHT } from '@/lib/reels/config';
 import type { StoredCopyJob } from '@/lib/reels/copy/jobs';
@@ -348,7 +348,7 @@ function isPostingReel(reel: Reel): boolean {
 
 /* ------------------------------------------------------------------- hub */
 
-export function ReelsHub({ initial, moves = [], reviewPath = '' }: { initial: ReelsOverview; /** What a person did to the idea queue: pins, drags, archives (idea pool standard, 2026-10-21). */ moves?: IdeaAdjustment[]; reviewPath?: string }) {
+export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = '' }: { initial: ReelsOverview; /** What a person did to the idea queue: pins, drags, archives (idea pool standard, 2026-10-21). */ moves?: IdeaAdjustment[]; /** Today's reel slots; null: unknown (the top shows the run's picks). */ slotsToday?: number | null; reviewPath?: string }) {
   const [data, setData] = useState<ReelsOverview>(initial);
   const [dayId, setDayId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -499,11 +499,33 @@ export function ReelsHub({ initial, moves = [], reviewPath = '' }: { initial: Re
   const archived = useMemo(() => new Set(moves.filter((m) => m.kind === 'archive').map((m) => ideaRef(m.ideaId))), [moves]);
   const reels = view ? view.slate.scores.filter((score) => !archived.has(score.postIdeaId)).map((score) => reelFor(view, score)) : [];
   const ranked = [...reels].sort((a, b) => (a.score.rank ?? 999) - (b.score.rank ?? 999));
-  const top = ranked.filter((reel) => reel.score.selected);
-  // The bench in the queue's order: pins first, a dragged idea at its place, never more than 30 (pinned and dragged ones aside).
-  const rest = view?.isCurrent
-    ? capQueued(queueOrder(ranked.filter((reel) => !reel.score.selected).map((reel) => ({ id: `reels:idea:${reel.score.postIdeaId}`, score: reel.score.net, reel })), moves))
+  const picks = ranked.filter((reel) => reel.score.selected);
+  // Today (Lucas, 2026-10-26): the list is the queue with the last run's picks leading (made ones first), and the top is
+  // today's slots filled from the list as the person sees it, so a drag changes the top at once. Earlier days show their picks.
+  const live = Boolean(view?.isCurrent && slotsToday != null);
+  const lead = [...picks].sort((a, b) => Number(b.phase === 'ready') - Number(a.phase === 'ready') || (a.score.rank ?? 999) - (b.score.rank ?? 999)).map((reel) => `reels:idea:${reel.score.postIdeaId}`);
+  const lowestPick = Math.max(...picks.map((reel) => reel.score.rank ?? -Infinity));
+  // Booked or posted for this day holds a slot; an idea posted on an earlier day is done and leaves the list (as on the Content page).
+  const booked = (reel: Reel) => reel.schedule != null && reel.schedule.nyDate === view?.slate.nyDate;
+  const postedBefore = (reel: Reel) => !booked(reel) && (reel.schedule?.status === 'published' || publishState(reel, data.music).kind === 'published');
+  const queued = view?.isCurrent
+    ? capQueued(queueOrder((live ? ranked.filter((reel) => !postedBefore(reel)) : ranked.filter((reel) => !reel.score.selected)).map((reel) => ({ id: `reels:idea:${reel.score.postIdeaId}`, score: reel.score.net, reel, hasContent: reel.phase === 'ready' })), moves, live ? lead : []))
     : [];
+  // The list as the person sees it while a drop is on its way to the server; a fresh read starts from the server's order.
+  const [seen, setSeen] = useState<string[] | null>(null);
+  const onOrder = useCallback((ids: string[]) => setSeen((prev) => (prev && prev.join() === ids.join() ? prev : ids)), []);
+  const queueKey = queued.map((q) => `${q.item.id}${q.pinned ? '*' : ''}`).join();
+  useEffect(() => setSeen(null), [queueKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuilt only when the server's order changes, so a drop is not reset
+  const queueRows = useMemo(() => queued.map((q) => ({ id: q.item.id, pinned: q.pinned, hasContent: q.item.hasContent, title: q.item.reel.score.headlines[0] ?? 'Untitled idea' })), [queueKey]);
+  const ordered = seen ? seen.flatMap((id) => queued.filter((q) => q.item.id === id)) : queued;
+  const top = live ? slotsFromOrder(ordered.map((q) => q.item.reel), booked, slotsToday ?? 0) : picks;
+  const todayRank = new Map(top.map((reel, i) => [`reels:idea:${reel.score.postIdeaId}`, i + 1]));
+  const skipOf = (reel: Reel) =>
+    !live || reel.score.selected || reel.score.rank == null || reel.score.rank >= lowestPick
+      ? null
+      : reel.copy && reel.copy.status !== 'ok' ? 'Skipped: copy didn’t pass' : 'Skipped by the last run';
+  const rest = ordered;
   const open = reels.find((reel) => reel.score.postIdeaId === openId) ?? null;
   const today = todayInNewYork();
 
@@ -628,7 +650,7 @@ export function ReelsHub({ initial, moves = [], reviewPath = '' }: { initial: Re
             </section>
 
             {top.length === 0 ? (
-              <p className="rh-empty">Nothing cleared the bar this day, so no reels were selected.</p>
+              <p className="rh-empty">{live ? 'No reel slots today.' : 'Nothing cleared the bar this day, so no reels were selected.'}</p>
             ) : (
               <div className="rh-top">
                 {top.map((reel) => (
@@ -645,7 +667,9 @@ export function ReelsHub({ initial, moves = [], reviewPath = '' }: { initial: Re
 
             {top.length > 0 && (
               <p className="rh-muted rh-posting-note">
-                These reels can post today, one per window still open. A reel that misses today's windows carries to tomorrow. It is not scheduled late.
+                {live
+                  ? `Today's ${top.length === 1 ? 'slot' : `${top.length} slots`}, filled from the top of the list below. Drag an idea into the top ${top.length} to put it here; one with no video yet needs to be generated.`
+                  : "These reels can post today, one per window still open. A reel that misses today's windows carries to tomorrow. It is not scheduled late."}
               </p>
             )}
 
@@ -655,16 +679,20 @@ export function ReelsHub({ initial, moves = [], reviewPath = '' }: { initial: Re
                   The bench <span>{rest.length}</span>
                 </h3>
                 <p className="rh-muted">
-                  Depth and rotation. These do not go out until the next run picks them. Hold and drag any idea to move it, pin it to make it first, or archive it to hide it for good.
+                  {live
+                    ? 'Last night’s picks lead, made ones first. The top of the list fills today’s slots. Hold and drag any idea to move it, pin it to make it first, or archive it to hide it for good.'
+                    : 'Depth and rotation. These do not go out until the next run picks them. Hold and drag any idea to move it, pin it to make it first, or archive it to hide it for good.'}
                 </p>
                 <PoolQueue
                   vertical="reels"
                   topN={0}
                   enabled
-                  rows={rest.map((q) => ({ id: q.item.id, pinned: q.pinned, hasContent: false, title: q.item.reel.score.headlines[0] ?? 'Untitled idea' }))}
+                  rows={queueRows}
+                  onOrder={onOrder}
                   renderRow={(id, handle) => {
                     const q = rest.find((r) => r.item.id === id)!;
-                    return <RestRow reel={q.item.reel} ideaId={id} rank={q.rank} pinned={q.pinned} placed={q.placed} handle={handle} onOpen={() => setOpenId(q.item.reel.score.postIdeaId)} />;
+                    const shownRank = rest.indexOf(q) + 1;
+                    return <RestRow reel={q.item.reel} ideaId={id} rank={shownRank} pinned={q.pinned} placed={q.placed} today={todayRank.get(id) ?? null} skip={skipOf(q.item.reel)} handle={handle} onOpen={() => setOpenId(q.item.reel.score.postIdeaId)} />;
                   }}
                 />
               </section>
@@ -850,7 +878,7 @@ const PHASE_CHIP: Record<ReelPhase, string> = {
   blocked: 'No reel',
 };
 
-function RestRow({ reel, ideaId, rank, pinned, placed, handle, onOpen }: { reel: Reel; ideaId: string; rank: number; pinned: boolean; placed: boolean; handle: ReactNode; onOpen: () => void }) {
+function RestRow({ reel, ideaId, rank, pinned, placed, today = null, skip = null, handle, onOpen }: { reel: Reel; ideaId: string; rank: number; pinned: boolean; placed: boolean; /** Its place in today's slots, if it fills one. */ today?: number | null; /** Why the last run passed over it. */ skip?: string | null; handle: ReactNode; onOpen: () => void }) {
   const { archetype, category } = labels(reel.score);
   const title = reel.score.headlines[0] ?? 'Untitled idea';
   return (
@@ -865,7 +893,9 @@ function RestRow({ reel, ideaId, rank, pinned, placed, handle, onOpen }: { reel:
       </span>
       <span className="rh-row__pills">
         <Pills score={reel.score} />
+        {today != null ? <span className="rh-chip rh-chip--quota" title="Fills one of today’s slots">Today #{today}</span> : null}
         {pinned ? <span className="rh-chip rh-chip--pinned">Pinned</span> : placed ? <span className="rh-chip">Placed</span> : null}
+        {skip ? <span className="rh-chip" title="The last run passed over it though it ranked above one of its picks">{skip}</span> : null}
         <span className={`rh-chip rh-chip--${reel.phase}`}>
           {reel.phase === 'working' && <Loader2 size={11} className="rh-spin" />} {PHASE_CHIP[reel.phase]}
         </span>

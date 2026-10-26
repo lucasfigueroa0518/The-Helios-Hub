@@ -28,9 +28,9 @@ import type { CarouselMetaClient } from './meta';
 export type PublishTrigger = 'approve' | 'auto' | 'force';
 
 /** The spine verticals that post an image set as a feed carousel. */
-export type FeedVertical = 'carousels' | 'last_few_days';
+export type FeedVertical = 'carousels' | 'last_few_days' | 'ai_events';
 
-const NOUN: Record<FeedVertical, string> = { carousels: 'carousel', last_few_days: 'Last Few Days post' };
+const NOUN: Record<FeedVertical, string> = { carousels: 'carousel', last_few_days: 'Last Few Days post', ai_events: 'AI Events post' };
 
 export type Queued =
   | { queued: true; id: string }
@@ -58,7 +58,7 @@ export function checkFeedPayload(imageObjects: readonly string[], caption: strin
 /** One requested attempt for an item. A second attempt in flight or published is refused by the spine's indexes. */
 export async function queueFeedAttempt(
   query: Query,
-  a: { vertical: FeedVertical; itemId: string; trigger: PublishTrigger; caption: string; imageObjects: readonly string[] },
+  a: { vertical: FeedVertical; itemId: string; trigger: PublishTrigger; caption: string; imageObjects: readonly string[]; locationId?: string },
 ): Promise<Queued> {
   // publish_once (D36): an item that already has a published attempt never queues again, even when its own
   // row was not marked published (a failure after Instagram took the post).
@@ -71,7 +71,7 @@ export async function queueFeedAttempt(
     const inserted = await query(
       `INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption, payload)
        VALUES ($1, $2, $3, 'requested', $4, $5::jsonb) RETURNING id`,
-      [a.itemId, a.vertical, a.trigger, a.caption, JSON.stringify({ image_objects: a.imageObjects })],
+      [a.itemId, a.vertical, a.trigger, a.caption, JSON.stringify({ image_objects: a.imageObjects, ...(a.locationId ? { location_id: a.locationId } : {}) })],
     );
     return { queued: true, id: inserted.rows[0].id as string };
   } catch (error) {
@@ -175,12 +175,12 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
   let posted: { mediaId: string; permalink: string | null; nativeRef: string; hookDone: boolean } | null = null;
   try {
     const { rows } = await query(
-      `SELECT ci.native_ref, a.caption, a.payload->'image_objects' AS image_objects
+      `SELECT ci.native_ref, a.caption, a.payload->'image_objects' AS image_objects, a.payload->>'location_id' AS location_id
          FROM social_hub.publish_attempts a JOIN social_hub.content_items ci ON ci.id = a.content_item_id
         WHERE a.id = $1`,
       [id],
     );
-    const attempt = rows[0] as { native_ref: string; caption: string; image_objects: string[] };
+    const attempt = rows[0] as { native_ref: string; caption: string; image_objects: string[]; location_id: string | null };
 
     // Rejected after its slot opened: never posts (D41).
     const { rows: rejected } = await query(
@@ -199,7 +199,7 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
       children.push(await meta.createImageItem(await deps.signImage(objectPath, PUBLISH_IMAGE_URL_SECONDS)));
     }
     await update(query, id, { child_container_ids: JSON.stringify(children) });
-    const containerId = await meta.createCarousel(children, attempt.caption);
+    const containerId = await meta.createCarousel(children, attempt.caption, attempt.location_id ?? undefined);
     await update(query, id, { status: 'processing', container_id: containerId });
 
     const deadline = now() + PUBLISH_POLL_TIMEOUT_MINUTES * 60_000;

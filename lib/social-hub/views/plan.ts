@@ -33,6 +33,11 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
   ],
   // lib/lfd/config.ts LFD_WINDOW on DEFAULT_LFD_DAYS (Tue, Fri); tests/lfd-hub.test.ts pins the copy.
   last_few_days: [{ id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60, days: [2, 5] }],
+  // lib/ai-events/config.ts AI_EVENTS_WINDOW on DEFAULT_AI_EVENTS_DAYS (Sunday, AE-08); tests/ai-events-hub.test.ts pins the copy.
+  ai_events: [
+    { id: 'evening', label: 'Evening', startMinute: 18 * 60, endMinute: 19 * 60, days: [0] },
+    { id: 'night', label: 'Night', startMinute: 19 * 60, endMinute: 20 * 60, days: [0] },
+  ],
   stories: [
     { id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY },
     { id: 'guess_the_number', label: 'Guess the Number', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [1, 4] },

@@ -10,6 +10,7 @@ import type { CostReads } from '@/lib/social-hub/queries/costs';
 import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
 import type { InsightRow, ReelsRead } from '@/lib/social-hub/queries/reels';
 import type { StoriesRead } from '@/lib/social-hub/queries/stories';
+import type { AiEventsPoolRow, AiEventsRead } from '@/lib/social-hub/queries/ai-events';
 import { addDays, nyDayStart } from '@/lib/social-hub/time';
 
 /** The preview's "now": Thursday 2026-10-08, 3:00 PM New York. */
@@ -397,4 +398,78 @@ export function previewDatasetWithAccount(): HubDataset {
       lastRefresh: '2026-10-08T09:45:00Z',
     },
   };
+}
+
+// ── AI Events This Week (its own preview dataset, so the counts the other screens pin stay put) ──
+
+/** The coming week's pool on FIXTURE_NOW (Thursday Oct 8): Mon Oct 12 to Sun Oct 18, 2026-W42, and its post in review. */
+function aiEventsRead(): AiEventsRead {
+  const week = { weekKey: '2026-W42', startDate: '2026-10-12', endDate: '2026-10-18', editable: true };
+  const part = (label: string, points: number | null, detail: string) => ({ label, points, detail });
+  const parts = (s: number) => [
+    part('Notable speakers', Number((s * 0.22).toFixed(2)), `${(s / 10).toFixed(2)} yes`),
+    part('Ecosystem moment', 0, 'speakers is stronger and counts instead'),
+    part('Established host', Number((s * 0.14).toFixed(2)), `${(s / 11).toFixed(2)} yes`),
+    part('Quality crowd', Number((s * 0.13).toFixed(2)), `${(s / 12).toFixed(2)} yes`),
+    part('Substantive program', Number((s * 0.08).toFixed(2)), `${(s / 13).toFixed(2)} yes`),
+    part('Would want to go', Number((s * 0.13).toFixed(2)), `${(s / 11).toFixed(2)} yes`),
+    part('Attendance', 0.62, '140 going'),
+    part('Anchor roster', 0.5, 'AI Tinkerers'),
+    part('Vendor pitch', -0.08, '0.08 yes'),
+  ];
+  type Row = [metro: string, title: string, day: string, minute: number, host: string, venue: string, score: number | null, extra?: Partial<AiEventsPoolRow>];
+  const rows: Row[] = [
+    ['miami', 'Refresh Miami: AI Founders Night', '2026-10-13', 1110, 'Refresh Miami', 'The LAB Miami', 7.4, { picked: true, pick_rank: 1 }],
+    ['miami', 'Miami AI Builders Demo Night', '2026-10-15', 1080, 'AI Tinkerers', 'Venture Café Miami', 6.1, { picked: true, pick_rank: 2 }],
+    ['miami', 'Generative AI for Real Estate Webinar', '2026-10-14', 720, 'PropTech Pro', 'Online lounge', null, { gate: 'in_person_networking, vendor_pitch' }],
+    ['boston', 'AI Tinkerers Boston', '2026-10-13', 1110, 'AI Tinkerers', 'CIC Cambridge', 8.2, { picked: true, pick_rank: 1, pinned_by: 'tommy@heliosmarketing.org', pinned_at: '2026-10-08T15:00:00Z' }],
+    ['boston', 'The Engine: Tough Tech Founders Breakfast', '2026-10-16', 480, 'The Engine', 'The Engine', 7.0, { picked: true, pick_rank: 2 }],
+    ['boston', 'MassTLC AI Summit Side Mixer', '2026-10-14', 1080, 'MassTLC', 'District Hall', 6.6, { picked: true, pick_rank: 3 }],
+    ['boston', 'LLM Ops Meetup', '2026-10-15', 1110, 'Boston ML', 'Microsoft NERD', 4.9],
+    ['boston', 'Make $10k a Month with AI Agents', '2026-10-17', 600, 'Hustle Lab', 'WeWork South Station', null, { gate: 'get_rich' }],
+    ['nyc', 'Data Driven NYC', '2026-10-13', 1080, 'FirstMark', 'Betaworks', 8.0, { picked: true, pick_rank: 1 }],
+    ['nyc', 'localhost:nyc', '2026-10-15', 1110, 'localhost', 'Ramp HQ', 7.1, { picked: true, pick_rank: 2 }],
+    ['nyc', 'NY Tech Alliance Meetup', '2026-10-14', 1080, 'NY Tech Alliance', 'Civic Hall', 6.9, { excluded_by: 'tommy@heliosmarketing.org', excluded_at: '2026-10-08T15:05:00Z' }],
+    ['nyc', 'Agents in Production Panel', '2026-10-16', 1110, 'AI Collective', 'Ace Hotel', 5.8, { picked: true, pick_rank: 3 }],
+    ['sf', 'South Park Commons Demo Day', '2026-10-15', 1020, 'South Park Commons', 'SPC', 7.9, { picked: true, pick_rank: 1 }],
+    ['sf', 'Frontier Tower Hack Night', '2026-10-13', 1140, 'Frontier Tower', 'Frontier Tower', 6.4, { picked: true, pick_rank: 2 }],
+    ['sf', 'Hacker Dojo AI Office Hours', '2026-10-14', 1110, 'Hacker Dojo', 'Hacker Dojo, Mountain View', 5.2],
+  ];
+  const zone = (metro: string) => (metro === 'sf' ? 'America/Los_Angeles' : 'America/New_York');
+  const rankIn = new Map<string, number>();
+  const pool: AiEventsPoolRow[] = rows.map(([metro, title, day, minute, host, venue, score, extra]) => {
+    const rank = score == null ? null : (rankIn.set(metro, (rankIn.get(metro) ?? 0) + 1), rankIn.get(metro)!);
+    const start = metro === 'sf' ? new Date(nyDayStart(day).getTime() + (minute + 180) * 60_000).toISOString() : at(day, minute);
+    return {
+      event_id: uuid(9), metro, rank: extra?.gate ? 9 : rank, score, gate: null, picked: false, pick_rank: null,
+      pinned_by: null, pinned_at: null, excluded_by: null, excluded_at: null, updated_at: '2026-10-04T16:04:00Z',
+      title, start_at: start, end_at: null, timezone: zone(metro), organizer_name: host, host_name: null, venue_name: venue, city: null,
+      guest_count: score == null ? null : Math.round(score * 18), canonical_url: `https://luma.com/preview-${counter}`, status: 'scheduled',
+      parts: score == null ? [part('Gate: In-person networking', null, '0.20 yes, needs 0.50 or more (failed)')] : parts(score), scored_at: '2026-10-04T16:03:00Z',
+      ...extra,
+    };
+  });
+  const post = {
+    post_id: uuid(9), run_id: null, week_key: week.weekKey, slug: 'ai-events-2026-w42', ny_date: '2026-10-11', status: 'review', hook: 'week_planned', look: 'glass',
+    caption: 'Your AI week, already planned. Swipe for your city.\n\nAll RSVP links and the full calendar: link in bio (heliosgroup.ai)',
+    cities: ['miami', 'boston', 'nyc', 'sf'].map((metro) => ({ metro, picks: pool.filter((p) => p.metro === metro && p.picked).map((p) => ({ id: p.event_id, title: p.title, rsvpUrl: p.canonical_url })) })),
+    event_count: pool.filter((p) => p.picked).length, created_at: '2026-10-04T16:06:00Z', updated_at: '2026-10-04T16:06:00Z', published_at: null,
+    render: { slides: [{ layoutVariant: 'ae_glass_cover', aiEvents: { role: 'cover', lead: 'Your AI week, already planned.', lit: 'Swipe for your city.' } }, ...['Miami', 'Boston', 'New York', 'SF Bay Area'].map((city) => ({ layoutVariant: 'ae_glass_city', aiEvents: { role: 'city', city } })), { layoutVariant: 'ae_glass_cta', aiEvents: { role: 'cta', lead: 'Free AI events', lit: 'calendar' } }] },
+    render_version: 1, slide_count: 6, has_slide_objects: false, fit_problems: [], render_problems: [],
+  };
+  return { posts: [post], attempts: [], schedules: [], insights: [], pool, week, latestRun: null, requireApproval: true, publishingLive: false };
+}
+
+let cachedAiEvents: HubDataset | null = null;
+
+/** The preview dataset with AI Events This Week's post and weekly pool (the /social/preview/type/ai_events mirror). */
+export function previewDatasetWithAiEvents(): HubDataset {
+  if (cachedAiEvents) return cachedAiEvents;
+  const base = previewDataset();
+  const saved = counter;
+  counter = 9000;
+  const ai = buildDataset({ reels: new Error('n/a'), explainers: new Error('n/a'), carousels: new Error('n/a'), stories: new Error('n/a'), ai_events: aiEventsRead() }, null, FIXTURE_NOW);
+  counter = saved;
+  cachedAiEvents = { ...base, posts: [...base.posts, ...ai.posts], ideas: [...base.ideas, ...ai.ideas], aiEventsWeek: ai.aiEventsWeek, aiEventsPublishingLive: false };
+  return cachedAiEvents;
 }

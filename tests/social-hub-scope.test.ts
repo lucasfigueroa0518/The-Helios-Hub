@@ -128,6 +128,11 @@ const NETWORK_PATHS = [
   /^lib\/reels\/visual\/storage\.ts$/,
   /^lib\/anthropic(-client)?\.ts$/,
   /^lib\/supabase\.ts$/,
+  // AI Events (plan M2/M3): the ranking's Jev wrapper and run, the engine's live wiring, the public
+  // feed upload and the deploy hook. Named here so the scan never depends on how they reach the network.
+  /^lib\/networking\/pick\/(jev|rank|questions|state|candidates)\.ts$/,
+  /^lib\/networking\/(public-feed-storage|public-snapshot|deploy-hook|details|ingest)\.ts$/,
+  /^lib\/ai-events\/(live|run|worker|publish)\.ts$/,
 ];
 
 function resolveImport(from: string, spec: string): string | null {
@@ -171,12 +176,13 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
 /**
  * Hub controls (Lucas, 2026-10-09): the Content page's Run now and Settings,
  * and the type pages' run-progress poll, plus the Calendar's week board (its
- * slot writes, the unschedule it offers on a booked slot, and Ready to place's place)
- * and its Schedules dropdown (the schedule save and its Undo). Client components
+ * slot writes, the unschedule it offers on a booked slot, and Ready to place's place),
+ * its Schedules dropdown (the schedule save and its Undo), and AI Events' pool buttons
+ * (Pin / Exclude / Clear and Rebuild post, /api/ai-events/pool). Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place)))\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place))|ai-events\/pool)\b/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string, boundaries: ReadonlySet<string> = BOUNDARIES): string | null {
@@ -213,6 +219,25 @@ test('the network scan catches real network modules (positive control)', () => {
   assert.ok(networkReach('lib/explainers/storage.ts'), 'explainer storage signs URLs');
   assert.ok(networkReach('lib/instagram/insights-client.ts'));
   assert.equal(networkReach('lib/instagram/clock.ts'), null);
+});
+
+test('the AI Events network modules are caught, and the pure pick modules the hub reads are not', () => {
+  for (const file of ['lib/networking/pick/rank.ts', 'lib/networking/pick/jev.ts', 'lib/ai-events/live.ts', 'lib/networking/public-snapshot.ts', 'lib/networking/deploy-hook.ts']) {
+    assert.ok(networkReach(file), `${file} must count as a network module`);
+  }
+  // Safe for the hub (plan M2): scores, terms, picks, the week and the rosters never reach Jev or a write.
+  for (const file of ['lib/networking/pick/score.ts', 'lib/networking/pick/terms.ts', 'lib/networking/pick/picks.ts', 'lib/networking/pick/week.ts', 'lib/networking/pick/anchors-roster.ts', 'lib/ai-events/hooks.ts', 'lib/ai-events/looks.ts', 'lib/ai-events/title.ts', 'lib/ai-events/types.ts', 'lib/ai-events/config.ts']) {
+    assert.equal(networkReach(file), null, file);
+  }
+});
+
+test('hub code never imports the Jev side of the event ranking (plan M2: Jev is never reachable from lib/social-hub)', () => {
+  const JEV_SIDE = /^@\/lib\/(networking\/pick\/(jev|rank|questions|state|candidates)|reels\/jev\/(client|runner)|ai-events\/(live|run|worker))$/;
+  const offenders: string[] = [];
+  for (const file of HUB_FILES) {
+    for (const spec of importsOf(readFileSync(path.join(ROOT, file), 'utf8'))) if (JEV_SIDE.test(spec)) offenders.push(`${file} imports ${spec}`);
+  }
+  assert.deepEqual(offenders, []);
 });
 
 test('the reach scan also catches SQL writes in imported modules (positive control)', () => {

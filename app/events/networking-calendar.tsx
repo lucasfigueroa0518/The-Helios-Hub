@@ -32,12 +32,14 @@ import { HeliosMenu } from '@/app/components/helios-menu';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { requestJson } from '@/lib/client-request';
 import { INDUSTRIES } from '@/lib/networking/taxonomy';
-import type {
-  AccessType,
-  Bucket,
-  IngestRunSummary,
-  Metro,
-  StoredNetworkingEvent,
+import {
+  INTERNAL_METROS,
+  type AccessType,
+  type Bucket,
+  type IngestRunSummary,
+  type InternalMetro,
+  type Metro,
+  type StoredNetworkingEvent,
 } from '@/lib/networking/types';
 
 type Counts = {
@@ -57,7 +59,37 @@ type EventsResponse = {
   ingest: IngestRunSummary | null;
 };
 
-type MetroFilter = 'all' | Metro;
+/** POST /api/networking/publish: the public snapshot for heliosgroup.ai (all four metros). */
+type PublishResponse = {
+  ok: true;
+  events: number;
+  picks: number;
+  weekKey: string | null;
+  changed: boolean;
+  hook: { fired: true; ok: boolean; status: number | null } | { fired: false; reason: 'no_hook_url' | 'unchanged' | 'throttled' };
+};
+
+const HOOK_SKIP_LABEL: Record<'no_hook_url' | 'unchanged' | 'throttled', string> = {
+  no_hook_url: 'no deploy hook configured',
+  unchanged: 'site already current',
+  throttled: 'site rebuild waits for the hourly limit',
+};
+
+function publishSummary(result: PublishResponse, at: Date): string {
+  const parts = [
+    `Published ${result.events} events at ${format(at, 'p')}`,
+    result.picks ? `${result.picks} picks` : 'no picks',
+    result.changed ? null : 'no content change',
+    result.hook.fired
+      ? result.hook.ok
+        ? 'site rebuild started'
+        : `site rebuild failed${result.hook.status ? ` (HTTP ${result.hook.status})` : ''}`
+      : HOOK_SKIP_LABEL[result.hook.reason],
+  ];
+  return parts.filter(Boolean).join(' · ');
+}
+
+type MetroFilter = 'all' | InternalMetro;
 type WindowFilter = '30' | '90';
 type ViewMode = 'calendar' | 'list';
 type MenuSection = 'location' | 'duration' | 'rooms' | 'access' | 'industry' | 'view' | 'add';
@@ -66,6 +98,14 @@ const ACCESS_LABEL: Record<AccessType, string> = {
   open: 'Open',
   paid: 'Paid',
   invite_only: 'Invite-only',
+};
+
+/** Every metro has a label; the internal calendar only ever shows INTERNAL_METROS. */
+const METRO_LABEL: Record<Metro, string> = {
+  boston: 'Boston',
+  miami: 'Miami',
+  nyc: 'New York',
+  sf: 'SF Bay Area',
 };
 
 const BUCKET_LABEL: Record<Bucket, string> = {
@@ -102,7 +142,7 @@ function placeLines(event: StoredNetworkingEvent): { primary: string; secondary?
   const venue = event.venueName?.trim() || '';
   const city = event.city?.trim() || '';
   const address = event.address?.trim() || '';
-  const primary = venue || city || (event.metro === 'boston' ? 'Boston' : 'Miami');
+  const primary = venue || city || METRO_LABEL[event.metro];
   const extras = [address, city].filter((part) => {
     if (!part) return false;
     return part.toLowerCase() !== primary.toLowerCase();
@@ -126,9 +166,7 @@ function cellPreview(events: StoredNetworkingEvent[]) {
 }
 
 function metroLabel(metro: MetroFilter): string {
-  if (metro === 'boston') return 'Boston';
-  if (metro === 'miami') return 'Miami';
-  return 'Both cities';
+  return metro === 'all' ? 'Both cities' : METRO_LABEL[metro];
 }
 
 function BucketDots({ bucket }: { bucket: Bucket }) {
@@ -163,6 +201,8 @@ export function NetworkingCalendar() {
   const [importUrl, setImportUrl] = useState('');
   const [importBusy, setImportBusy] = useState(false);
   const [ingestBusy, setIngestBusy] = useState(false);
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishNote, setPublishNote] = useState<string | null>(null);
   const agendaRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -306,6 +346,19 @@ export function NetworkingCalendar() {
     }
   }
 
+  async function onPublish() {
+    setPublishBusy(true);
+    setPublishNote(null);
+    try {
+      const result = await requestJson<PublishResponse>('/api/networking/publish', { method: 'POST' });
+      setPublishNote(publishSummary(result, new Date()));
+    } catch (err) {
+      setPublishNote(`Publish failed: ${err instanceof Error ? err.message : 'unknown error'}`);
+    } finally {
+      setPublishBusy(false);
+    }
+  }
+
   if (loading && !data) return <HubLoadingSpinner label="Loading networking calendar" />;
 
   const counts = data?.counts;
@@ -329,6 +382,9 @@ export function NetworkingCalendar() {
       </button>
       <button className="btn" type="button" onClick={onRunIngest} disabled={ingestBusy}>
         {ingestBusy ? 'Queued…' : 'Run weekly ingest'}
+      </button>
+      <button className="btn" type="button" onClick={onPublish} disabled={publishBusy}>
+        {publishBusy ? 'Publishing…' : 'Publish to website'}
       </button>
     </form>
   );
@@ -371,14 +427,14 @@ export function NetworkingCalendar() {
 
             <div className="networking-toolbar">
               <div className="segmented" role="tablist" aria-label="Location">
-                {(['all', 'boston', 'miami'] as const).map((id) => (
+                {(['all', ...INTERNAL_METROS] as const).map((id) => (
                   <button
                     key={id}
                     type="button"
                     className={`segmented__item${metro === id ? ' segmented__item--active' : ''}`}
                     onClick={() => setMetro(id)}
                   >
-                    {id === 'all' ? 'Both' : id === 'boston' ? 'Boston' : 'Miami'}
+                    {id === 'all' ? 'Both' : METRO_LABEL[id]}
                   </button>
                 ))}
               </div>
@@ -423,6 +479,7 @@ export function NetworkingCalendar() {
                 ? `Last ingest ${format(new Date(data.ingest.startedAt), 'MMM d, yyyy p')} · kept ${data.ingest.keptCount} · rejected ${data.ingest.rejectedCount}${data.ingest.status === 'running' ? ' · running' : ''}`
                 : 'No ingest has run yet. Queue one to populate the calendar.'}
             </p>
+            {publishNote ? <p className="networking-health">{publishNote}</p> : null}
           </div>
 
           <button type="button" className="networking-mobile-bar" onClick={() => setMenuOpen(true)}>
@@ -572,8 +629,7 @@ export function NetworkingCalendar() {
               <ChoiceList
                 options={[
                   { id: 'all', label: 'Both cities' },
-                  { id: 'boston', label: 'Boston' },
-                  { id: 'miami', label: 'Miami' },
+                  ...INTERNAL_METROS.map((id) => ({ id, label: METRO_LABEL[id] })),
                 ]}
                 value={metro}
                 onChange={(id) => setMetro(id as MetroFilter)}
@@ -671,6 +727,7 @@ export function NetworkingCalendar() {
                   ? `Last ingest ${format(new Date(data.ingest.startedAt), 'MMM d, yyyy p')} · kept ${data.ingest.keptCount} · rejected ${data.ingest.rejectedCount}`
                   : 'No ingest has run yet.'}
               </p>
+              {publishNote ? <p className="networking-health">{publishNote}</p> : null}
             </FilterAccordion>
           </div>
           <div className="networking-menu__footer">

@@ -36,11 +36,13 @@ export function sortSlots<T extends Pick<ResolvedSlot, 'vertical' | 'startMinute
 }
 
 export const LFD_CAROUSEL_CONFLICT = 'Last Few Days runs the 3 AM job that day. Carousels are off.';
+export const AI_EVENTS_TWICE = 'AI Events posts at most two carousels a day (Miami and Boston).';
 
 /** Why a day's slots can't stand, in plain sentences; empty when they can. */
 export function validateDay(slots: readonly ResolvedSlot[]): string[] {
   const errors: string[] = [];
   if (slots.some((s) => s.vertical === 'last_few_days') && slots.some((s) => s.vertical === 'carousels')) errors.push(LFD_CAROUSEL_CONFLICT);
+  if (slots.filter((s) => s.vertical === 'ai_events').length > 2) errors.push(AI_EVENTS_TWICE);
   for (const s of slots) {
     const label = verticalInfo(s.vertical).label;
     if (isReelType(s.vertical) && !s.feedMode) errors.push(`${label} (${clockLabel(s.startMinute)}) needs Trial or Main feed.`);

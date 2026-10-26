@@ -138,6 +138,21 @@ test('Carousel: one is_carousel_item container per slide, then a CAROUSEL parent
   });
 });
 
+test('Carousel: a location_id on the CAROUSEL parent geotags the post (AE-34)', async () => {
+  await withMetaEnv(async () => {
+    const { sent, fetchImpl } = recorder();
+    const meta = createLiveCarouselClient(fetchImpl);
+    await meta.createCarousel(['item-1', 'item-2'], 'Miami this week', '110148382341970');
+    assert.deepEqual(sent, [
+      {
+        method: 'POST',
+        url: `${BASE}/${IG}/media`,
+        params: { media_type: 'CAROUSEL', children: 'item-1,item-2', caption: 'Miami this week', location_id: '110148382341970' },
+      },
+    ]);
+  });
+});
+
 test('Story: one STORIES image container per frame, then the shared status, publish and quota calls', async () => {
   const { sent, fetchImpl } = recorder();
   const meta = createStoriesMetaClient({ token: TOKEN, igUserId: IG, fetchImpl });

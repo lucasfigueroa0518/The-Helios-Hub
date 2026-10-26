@@ -38,25 +38,30 @@ export const USUAL: Record<Vertical, ReadonlyArray<{ start: number; end: number;
   ],
   last_few_days: [{ start: 540, end: 600, name: 'Morning' }],
   stories: [{ start: 510, end: 600, name: 'Morning' }],
+  ai_events: [
+    { start: 1080, end: 1140, name: 'Evening' },
+    { start: 1140, end: 1200, name: 'Night' },
+  ],
 };
 
-/** Default slot times per type (the seed). LFD runs on its days (Tue/Fri), Stories series on theirs. */
+/** Default slot times per type (the seed). LFD runs on its days (Tue/Fri), AI Events on Sunday at 6 and 7 PM (Miami, then Boston; AE-29), Stories series on theirs. */
 export const DEFAULT_TIMES: Record<Vertical, readonly number[]> = {
   reels: [525, 675, 1080],
   explainers: [780, 930],
   carousels: [540, 870],
   last_few_days: [540],
   stories: [510],
+  ai_events: [1080, 1140],
 };
 
 /** The hidden safety cap per day the overnight runs never exceed. Stories: per series. */
-export const DEFAULT_CAPS: Record<Vertical, number> = { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2 };
+export const DEFAULT_CAPS: Record<Vertical, number> = { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2 };
 
-/** When each type's overnight run makes the day's posts. */
-export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM' };
+/** When each type's run makes the day's posts (overnight; AI Events at Sunday noon, AE-08). */
+export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM' };
 
 /** Default Trial / Main feed for a new slot of a type (reels Trial, Explainers Main, the rest none). */
-export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null };
+export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null, ai_events: null };
 
 /** Names for board copy ("{Day} has {n} {Type}s…", "At the daily limit for {Type}s ({cap})"). */
 export const TYPE_NAME: Record<Vertical, { one: string; many: string }> = {
@@ -64,6 +69,7 @@ export const TYPE_NAME: Record<Vertical, { one: string; many: string }> = {
   explainers: { one: 'Explainer', many: 'Explainers' },
   carousels: { one: 'Carousel', many: 'Carousels' },
   last_few_days: { one: 'Last Few Days', many: 'Last Few Days posts' },
+  ai_events: { one: 'AI Events', many: 'AI Events posts' },
   stories: { one: 'Stories', many: 'Stories' },
 };
 
@@ -114,7 +120,7 @@ export function nextOpenMinute(nowMinute: number): number {
   return (Math.floor(nowMinute / GRID) + 1) * GRID;
 }
 
-/** Feed posts keep 30 minutes apart: Main-feed reels, Carousels, LFD. Stories and Trial reels are exempt. */
+/** Feed posts keep 30 minutes apart: Main-feed reels, Carousels, LFD, AI Events. Stories and Trial reels are exempt. */
 export function isFeedSlot(s: Pick<ResolvedSlot, 'vertical' | 'feedMode'>): boolean {
   if (s.vertical === 'stories') return false;
   if (s.vertical === 'reels' || s.vertical === 'explainers') return s.feedMode === 'main';

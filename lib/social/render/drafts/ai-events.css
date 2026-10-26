@@ -1,0 +1,449 @@
+/* ── AI Events This Week (planning/AI Events/DECISIONS.md AE-13 to AE-16, AE-22 to AE-26; components: lib/social/render/ai-events) ──
+   Four looks × cover / city / CTA. The cover is one layout for every look (AE-22); city slides feature one top
+   pick and tease two more (AE-24/25); only the closing slide draws the mark (AE-26). All of it sits on top of the design system's premium.css (loaded before this file by the
+   preview pages and fit-check.ts). Each slide is one div.ae-frame filling the slide; stage looks also carry
+   .premium (light; covers and the CTA slide may be data-premium="full"). Daylight is editorial white, the
+   logged exception (AE-14): Premium recipes appear there only inside dark islands (.premium.ae-island).
+   Rules kept here: the whole mark, never cropped or covered, with clear space of at least its "H" height on
+   every side; the lit line is solid orange with a glow, never gradient text; Lucide icons only; no textures.
+   Every text block is a Fit region (data-fit-min, its max-height is its region); Pragmatica blocks clip to
+   their lines (.ae-clip, the .lfd-clip trick). Decorative layers stay inside the 1080×1350 slide. */
+
+/* Design-system tokens premium.css reads, restated (headless renders load no shared sheet). Values equal
+   explainers/design/helios-design-system/colors_and_type.css :root; tests/design-system-tokens.test.ts checks. */
+.ae-frame {
+  --stage-top: #161616;
+  --stage-bottom: #0B0B0B;
+  --stage-ink: #FFFFFF;
+  --stage-ink-2: rgba(255,255,255,0.66);
+  --stage-ink-3: rgba(255,255,255,0.45);
+  --stage-orange: #FF6A2A;
+  --stage-red: #E8413B;
+  --premium-glow-rgb: 255, 106, 42;
+  --premium-red-rgb: 232, 65, 59;
+  --premium-highlight: inset 0 1px 0 rgba(255,255,255,0.20);
+  --premium-hairline: rgba(255,255,255,0.10);
+  --premium-shadow-lift: 0 30px 60px -20px rgba(0,0,0,0.80), 0 8px 18px rgba(0,0,0,0.35);
+  --premium-glass: linear-gradient(180deg, rgba(255,255,255,0.13) 0%, rgba(255,255,255,0.05) 100%);
+  --premium-glass-line: rgba(255,255,255,0.16);
+  --premium-glass-shadow: 0 12px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.22);
+  --premium-tile: linear-gradient(160deg, #FF7A2E 0%, #F0552A 55%, #E8413B 100%);
+  --helios-sun-top: #FDC60F;
+  --helios-sun-mid: #F48C3F;
+  --helios-sun-bottom: #EA3C3A;
+  --helios-sun: linear-gradient(180deg, var(--helios-sun-top) 0%, var(--helios-sun-mid) 35%, var(--helios-sun-bottom) 62%, var(--helios-sun-bottom) 100%);
+  --helios-orange: #FF5E1A;
+  --helios-green: #138510;
+  --helios-green-on-dark: #1BBF17;
+  --accent-hover: #E54E0F;
+  --neutral-0: #FFFFFF;
+  --neutral-50: #FAFAFA;
+  --neutral-100: #F5F5F5;
+  --neutral-200: #E5E5E5;
+  --neutral-500: #737373;
+  --neutral-600: #525252;
+  --neutral-900: #171717;
+  --shadow-cta-glow: 0 0 40px -10px var(--helios-orange);
+  --weight-bold: 700;
+  --weight-light: 300;
+  --text-eyebrow: 13px;
+  --tracking-tight: -0.02em;
+  --radius-pill: 9999px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+/* ── Frame ── */
+.helios-slide[class*='helios-slide--ae_'] { padding: 0; background: #0B0B0B; }
+.helios-slide[class*='helios-slide--ae_'] .helios-slide__well { position: absolute; inset: 0; padding: 0; }
+.ae-frame, .ae-frame *, .ae-frame *::before, .ae-frame *::after { box-sizing: border-box; }
+.ae-frame {
+  position: absolute; inset: 0; overflow: hidden;
+  font-family: var(--font-body); font-weight: 400; color: var(--stage-ink);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+.ae-frame[data-look] :is(h1, h2, p) { margin: 0; overflow-wrap: normal; word-break: normal; hyphens: manual; }
+/* Pragmatica's tall content box overflows its last line (see .lfd-clip); fitText would read that as too tall, so the
+   lines sit in a clip box. The box reaches 0.32em past the lines (padding, cancelled by negative margins) so the lit
+   glow and descenders are never cut; every region holding one allows that much (max-height: calc(lines + 0.32em)). */
+.ae-frame .ae-clip { display: block; overflow-x: visible; overflow-y: clip; padding: 0.32em 0; margin: -0.32em 0; }
+/* Its region is a formatting root, so the negative margins never collapse through it (fitText would read 0.64em). */
+.ae-frame[data-look] :is(h1, h2, p):has(> .ae-clip) { display: flow-root; }
+.ae-frame .hp-beam { z-index: 0; }
+.ae-frame .hp-dot { flex: none; }
+/* The mark's PNG has a transparent margin (80 of 5000 px each side): set the image so its disk fills the orb box
+   and the halo starts at the disk's edge. Only transparent pixels sit outside the box; the whole mark shows. */
+.ae-frame .hp-orb.ae-orb { position: relative; }
+.ae-frame .hp-orb.ae-orb img { width: 103.31%; height: 103.31%; max-width: none; margin: -1.653%; border-radius: 0; }
+/* Premium inside the white look: a dark island that paints nothing of its own. */
+.ae-frame .premium.ae-island { background: none; color: var(--stage-ink); }
+
+/* ── Type ── */
+.ae-frame[data-look] .ae-eyebrow {
+  display: flex; align-items: center; gap: 16px; max-width: 100%;
+  font-family: var(--font-body); font-weight: 700; font-size: 22px; line-height: 28px; max-height: 28px;
+  letter-spacing: 0.24em; text-transform: uppercase; white-space: nowrap; color: var(--stage-orange);
+}
+.ae-frame[data-look] .ae-eyebrow::before { content: ''; flex: none; width: 40px; height: 2px; background: currentColor; }
+.ae-frame[data-look] .ae-eyebrow.ae-eyebrow--center { justify-content: center; }
+.ae-frame[data-look] .ae-eyebrow.ae-eyebrow--center::after { content: ''; flex: none; width: 40px; height: 2px; background: currentColor; }
+
+.ae-frame[data-look] .ae-headline {
+  margin: 0; font-family: var(--font-heading); font-weight: 700; line-height: 0.95;
+  letter-spacing: -0.02em; text-transform: uppercase; color: var(--stage-ink);
+}
+.ae-frame[data-look] .ae-headline .ae-lead,
+.ae-frame[data-look] .ae-headline .ae-lit { display: block; text-wrap: balance; }
+/* The lit line: solid stage orange with a glow (.hp-lit), never transparent gradient text. */
+.ae-frame[data-look] .ae-headline .ae-lit { color: var(--stage-orange); text-shadow: 0 0 36px rgba(var(--premium-glow-rgb), var(--premium-text-glow, 0.28)); }
+/* A "→" in the copy is drawn as the Lucide arrow (withArrows), held to the word before it; on the lit line it glows too. */
+.ae-frame[data-look] .ae-nowrap { white-space: nowrap; }
+.ae-frame[data-look] .ae-arrow { display: inline-block; width: 0.78em; height: 0.78em; margin-left: 0.2em; vertical-align: -0.04em; }
+.ae-frame[data-look] .ae-lit .ae-arrow { filter: drop-shadow(0 0 14px rgba(var(--premium-glow-rgb), 0.45)); }
+
+.ae-frame[data-look] .ae-line { font-size: 32px; line-height: 42px; max-height: 84px; color: var(--stage-ink-2); }
+.ae-frame[data-look] .ae-site {
+  font-family: var(--font-heading); font-weight: 700; font-size: 64px; line-height: 1; max-height: calc(64px + 0.32em); max-width: 100%;
+  letter-spacing: -0.02em; white-space: nowrap; color: var(--stage-ink);
+}
+
+/* ── The cover, every look (AE-22): the plain stage (Daylight: white), the hook centred and large, the calendar CTA
+   under it, the week above and the cities below, quiet. No mark, no light, no pills. ── */
+.ae-frame[data-look][data-role='cover'] .ae-cv {
+  position: absolute; z-index: 1; left: 64px; right: 64px; top: 120px; bottom: 200px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+}
+.ae-frame[data-look] .ae-cv-week {
+  font-weight: 700; font-size: 24px; line-height: 30px; max-height: 30px; letter-spacing: 0.24em; text-transform: uppercase; white-space: nowrap;
+  color: var(--stage-ink-3);
+}
+.ae-frame[data-look] .ae-cv-hook { width: 100%; margin-top: 44px; font-size: 132px; max-height: calc(752px + 0.32em); }
+.ae-frame[data-look] .ae-cv-cta { margin-top: 64px; max-width: 100%; font-size: 46px; line-height: 56px; max-height: 56px; white-space: nowrap; color: var(--stage-ink); }
+.ae-frame[data-look] .ae-cv-cta .ae-sep { color: var(--stage-ink-3); }
+.ae-frame[data-look] .ae-cv-cta strong { font-weight: 700; color: var(--stage-orange); }
+.ae-frame[data-look] .ae-cv-cities {
+  position: absolute; z-index: 1; left: 168px; right: 168px; bottom: 80px; text-align: center;
+  font-weight: 700; font-size: 20px; line-height: 24px; max-height: 24px; letter-spacing: 0.2em; text-transform: uppercase; white-space: pre;
+  color: var(--stage-ink-3);
+}
+
+/* ── The tease (AE-29), every look: the question on the plain stage, the week's #1 locked in a card under it ── */
+.ae-frame[data-look][data-role='tease'] .ae-tz {
+  position: absolute; z-index: 1; left: 64px; right: 64px; top: 104px; bottom: 176px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+}
+.ae-frame[data-look] .ae-tz-hook { width: 100%; font-size: 112px; max-height: calc(380px + 0.32em); }
+.ae-frame[data-look] .ae-tz-card-wrap { width: 100%; margin-top: 56px; }
+.ae-frame[data-look] .ae-tz-card { position: relative; width: 100%; height: 400px; overflow: hidden; }
+.ae-frame[data-look] .ae-tz-blur {
+  position: absolute; inset: 56px 64px; display: flex; flex-direction: column; justify-content: center; gap: 26px;
+  filter: blur(14px); opacity: 0.55;
+}
+.ae-frame[data-look] .ae-tz-bar { display: block; height: 40px; border-radius: 12px; background: var(--stage-ink-3); }
+.ae-frame[data-look] .ae-tz-bar--sm { width: 34%; height: 26px; }
+.ae-frame[data-look] .ae-tz-bar--lg { width: 88%; height: 64px; }
+.ae-frame[data-look] .ae-tz-bar--md { width: 58%; }
+.ae-frame[data-look] .ae-tz-lock {
+  position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+}
+.ae-frame[data-look] .hp-tile.ae-tz-lock-icon { width: 64px; height: 64px; border-radius: 18px; }
+.ae-frame[data-look] .hp-tile.ae-tz-lock-icon svg { width: 30px; height: 30px; }
+.ae-frame[data-look] .ae-tz-rank {
+  font-family: var(--font-heading); font-weight: 700; font-size: 132px; line-height: 1; max-height: calc(132px + 0.32em);
+  color: var(--stage-orange); text-shadow: 0 0 36px rgba(var(--premium-glow-rgb), var(--premium-text-glow, 0.28));
+}
+.ae-frame[data-look] .ae-tz .ae-cv-cta { margin-top: 48px; font-size: 38px; line-height: 48px; max-height: 48px; }
+.ae-frame[data-look='daylight'] .ae-tz-bar { background: rgba(17, 17, 17, 0.5); }
+.ae-frame[data-look='daylight'] .hp-tile.ae-tz-lock-icon { background: rgba(255, 106, 42, 0.12); color: var(--stage-orange); box-shadow: none; }
+
+/* ── The city slide (AE-24/25): the city lit at the top, the top pick framed, the mentions, the calendar CTA ── */
+.ae-frame[data-look] .ae-head { position: absolute; z-index: 1; left: 64px; right: 64px; top: 80px; }
+.ae-frame[data-look] .ae-head--center { text-align: center; }
+.ae-frame[data-look] .ae-city { font-size: 120px; line-height: 1; max-height: calc(120px + 0.32em); white-space: nowrap; }
+.ae-frame[data-look] .ae-body { position: absolute; z-index: 1; left: 64px; right: 64px; top: 252px; bottom: 228px; display: flex; flex-direction: column; justify-content: center; gap: 44px; }
+.ae-frame[data-look] .ae-pick { flex: none; }
+.ae-frame[data-look] .ae-row-body { flex: 1 1 auto; min-width: 0; }
+
+/* The top pick's text: the label, the day and time, the title, the host and venue. */
+.ae-frame[data-look] .ae-pick-label { font-size: 22px; line-height: 28px; max-height: 28px; }
+.ae-frame[data-look] .ae-when {
+  margin-top: 20px; white-space: nowrap;
+  font-weight: 700; font-size: 26px; line-height: 32px; max-height: 32px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--stage-ink);
+}
+.ae-frame[data-look] .ae-title {
+  margin-top: 14px; font-family: var(--font-heading); font-weight: 700; font-size: 60px; line-height: 1.08; max-height: calc(195px + 0.32em);
+  letter-spacing: -0.015em; color: var(--stage-ink);
+}
+.ae-frame[data-look] .ae-meta { margin-top: 16px; font-size: 30px; line-height: 38px; max-height: 76px; white-space: nowrap; color: var(--stage-ink-2); }
+/* Host and venue share a line when they fit, else each takes its own: never an orphaned word. */
+.ae-frame[data-look] .ae-meta--stack .ae-host,
+.ae-frame[data-look] .ae-meta--stack .ae-place { display: block; }
+.ae-frame[data-look] .ae-meta .ae-host { color: var(--stage-ink); }
+
+/* The honorable mentions: a ruled label, then the day and the title on one line each. */
+.ae-frame[data-look] .ae-mentions { flex: none; display: flex; flex-direction: column; gap: 18px; }
+.ae-frame[data-look] .ae-mentions-label {
+  display: flex; align-items: center; gap: 20px; white-space: nowrap;
+  font-weight: 700; font-size: 18px; line-height: 22px; max-height: 22px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--stage-ink-3);
+}
+.ae-frame[data-look] .ae-mentions-label::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--premium-hairline); }
+.ae-frame[data-look] .ae-mention { display: flex; align-items: baseline; gap: 24px; }
+.ae-frame[data-look] .ae-mention-day {
+  flex: none; width: 128px; white-space: nowrap;
+  font-weight: 700; font-size: 22px; line-height: 36px; max-height: 36px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--stage-orange);
+}
+.ae-frame[data-look] .ae-mention-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; font-size: 30px; line-height: 36px; max-height: 36px; color: var(--stage-ink-2); }
+
+/* ── Chrome: footer, swipe, the city CTA, the CTA pill ── */
+.ae-frame[data-look] .ae-footer {
+  position: absolute; left: 64px; right: 168px; bottom: 72px; z-index: 1;
+  display: flex; justify-content: space-between; align-items: center; gap: 24px; padding-top: 22px; border-top: 1px solid var(--premium-hairline);
+  font-family: var(--font-body); font-weight: 700; font-size: 16px; letter-spacing: 0.18em; text-transform: uppercase;
+}
+.ae-frame[data-look] .ae-footer .ae-foot-l,
+.ae-frame[data-look] .ae-footer .ae-foot-r { line-height: 20px; max-height: 20px; white-space: nowrap; min-width: 0; color: var(--stage-ink-3); }
+.ae-frame[data-look] .ae-footer .ae-foot-l { flex: none; }
+.ae-frame[data-look] .ae-footer .ae-foot-r { flex: 0 1 auto; text-align: right; }
+.ae-frame[data-look] .ae-footer strong { font-weight: 700; color: var(--stage-ink); }
+.ae-frame[data-look] .hp-tile.ae-swipe { position: absolute; right: 64px; bottom: 56px; z-index: 2; }
+/* The last slide has no swipe tile, so its footer runs the full width. */
+.ae-frame[data-look][data-role='cta'] .ae-footer { right: 64px; }
+.ae-frame[data-look] .hp-tile.ae-swipe svg { width: 28px; height: 28px; }
+
+.ae-frame[data-look] .ae-more { position: absolute; left: 64px; right: 64px; bottom: 140px; z-index: 1; display: flex; align-items: center; gap: 18px; height: 56px; }
+.ae-frame[data-look] .hp-tile.ae-more-icon { flex: none; width: 48px; height: 48px; border-radius: 14px; }
+.ae-frame[data-look] .hp-tile.ae-more-icon svg { width: 24px; height: 24px; }
+.ae-frame[data-look] .ae-more-text { flex: 1 1 auto; min-width: 0; white-space: nowrap; font-size: 27px; line-height: 34px; max-height: 34px; color: var(--stage-ink-2); }
+.ae-frame[data-look] .ae-more-text strong { font-weight: 700; color: var(--stage-orange); }
+
+.ae-frame[data-look] .hp-cta.ae-cta { max-width: 100%; gap: 12px; padding: 20px 34px; font-size: 26px; }
+.ae-frame[data-look] .ae-cta .ae-cta-text { min-width: 0; font-weight: 700; font-size: 26px; line-height: 32px; max-height: 32px; white-space: nowrap; color: #FFFFFF; }
+.ae-frame[data-look] .ae-cta svg { flex: none; width: 28px; height: 28px; }
+
+/* The final slide's CTA dominates (E-10): a larger pill, a stronger glow and two halo rings (pseudo-elements: paint only,
+   inside the canvas on every look). */
+.ae-frame[data-look] .hp-cta.ae-cta--halo { position: relative; overflow: visible; }
+.ae-frame[data-look] .ae-cta--halo::before,
+.ae-frame[data-look] .ae-cta--halo::after { content: ''; position: absolute; border-radius: 9999px; pointer-events: none; }
+.ae-frame[data-look] .ae-cta--halo::before { inset: -12px; border: 1.5px solid rgba(var(--premium-glow-rgb), 0.36); }
+.ae-frame[data-look] .ae-cta--halo::after { inset: -26px; border: 1px solid rgba(var(--premium-glow-rgb), 0.16); }
+.ae-frame[data-look][data-role='cta'] .hp-cta.ae-cta {
+  gap: 16px; padding: 26px 52px;
+  box-shadow: 0 0 64px -6px rgba(var(--premium-glow-rgb), 0.70), 0 18px 40px -18px rgba(var(--premium-red-rgb), 0.60), inset 0 1px 0 rgba(255,255,255,0.40);
+}
+.ae-frame[data-look][data-role='cta'] .ae-cta .ae-cta-text { font-size: 38px; line-height: 46px; max-height: 46px; }
+.ae-frame[data-look][data-role='cta'] .ae-cta svg { width: 38px; height: 38px; }
+
+/* ── Spotlight ── */
+.ae-frame[data-look='spotlight'] { --premium-spot-y: 50%; }
+.ae-frame[data-look='spotlight'][data-role='city'] { --premium-spot-y: 6%; }
+.ae-frame[data-look='spotlight'] .hp-card.ae-card { padding: 44px 48px 46px; border-radius: 28px; }
+.ae-frame[data-look='spotlight'] .ae-mentions { padding: 0 48px; }
+/* The closing slide: the whole mark in the beam's light, the copy centred under it. */
+.ae-frame[data-look='spotlight'] .hp-orb.ae-sp-orb { position: absolute; z-index: 1; left: 50%; top: 96px; width: 232px; height: 232px; margin-left: -116px; }
+.ae-frame[data-look='spotlight'] .ae-sp-copy {
+  position: absolute; z-index: 1; left: 64px; right: 64px; top: 380px; bottom: 170px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+}
+.ae-frame[data-look='spotlight'] .ae-final { width: 100%; margin-top: 32px; font-size: 112px; max-height: calc(320px + 0.32em); }
+.ae-frame[data-look='spotlight'] .ae-line { margin-top: 32px; max-width: 820px; }
+.ae-frame[data-look='spotlight'] .ae-site { margin-top: 44px; }
+.ae-frame[data-look='spotlight'] .hp-cta.ae-cta { margin-top: 36px; }
+
+/* ── Obsidian glass ── */
+.ae-frame[data-look='glass'] .ae-gl-light {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(40% 30% at 25% 72%, rgba(var(--premium-glow-rgb), 0.30) 0%, rgba(var(--premium-glow-rgb), 0) 100%),
+    radial-gradient(34% 26% at 76% 74%, rgba(var(--premium-glow-rgb), 0.14) 0%, rgba(var(--premium-glow-rgb), 0) 100%);
+}
+.ae-frame[data-look='glass'] .ae-gl-light--panel {
+  background:
+    radial-gradient(46% 24% at 88% 30%, rgba(var(--premium-glow-rgb), 0.22) 0%, rgba(var(--premium-glow-rgb), 0) 100%),
+    radial-gradient(42% 22% at 10% 78%, rgba(var(--premium-red-rgb), 0.16) 0%, rgba(var(--premium-red-rgb), 0) 100%);
+}
+.ae-frame[data-look='glass'] .hp-glass.ae-panel { display: flex; gap: 36px; padding: 44px 44px 46px; border-radius: 32px; }
+.ae-frame[data-look='glass'] .hp-tile.ae-row-icon { flex: none; width: 96px; height: 96px; border-radius: 26px; }
+.ae-frame[data-look='glass'] .hp-tile.ae-row-icon svg { width: 46px; height: 46px; }
+.ae-frame[data-look='glass'] .ae-mentions { padding: 0 44px; }
+/* The closing slide: the mark large and low; its clear space (≥ the H, about 14% of its width) keeps the card, copy and footer off it. */
+.ae-frame[data-look='glass'] .ae-gl-copy { position: absolute; left: 64px; right: 64px; top: 72px; height: 640px; display: flex; flex-direction: column; }
+.ae-frame[data-look='glass'] .hp-orb.ae-gl-orb {
+  position: absolute; left: 72px; top: 760px; width: 392px; height: 392px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 0 80px 12px rgba(var(--premium-glow-rgb), 0.55), 0 0 200px 56px rgba(var(--premium-glow-rgb), 0.20);
+}
+.ae-frame[data-look='glass'] .ae-final { margin-top: 32px; font-size: 120px; max-height: calc(342px + 0.32em); }
+.ae-frame[data-look='glass'] .ae-line { margin-top: 32px; max-width: 860px; }
+.ae-frame[data-look='glass'] .hp-glass.ae-gl-card {
+  position: absolute; left: 528px; right: 64px; top: 780px; height: 352px; padding: 40px 36px; border-radius: 28px;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+}
+.ae-frame[data-look='glass'] .ae-gl-card .ae-site { font-size: 48px; max-height: calc(48px + 0.32em); }
+.ae-frame[data-look='glass'] .ae-gl-card .hp-cta.ae-cta { margin-top: 48px; }
+
+/* ── Daylight (white, AE-14) ── */
+.ae-frame[data-look='daylight'] { background: var(--neutral-0); color: var(--neutral-900); }
+.ae-frame[data-look='daylight'] .ae-eyebrow { color: var(--helios-green); letter-spacing: 0.18em; }
+.ae-frame[data-look='daylight'] .ae-headline { color: var(--neutral-900); text-transform: none; letter-spacing: -0.03em; line-height: 1.04; }
+.ae-frame[data-look='daylight'] .ae-headline .ae-lit { color: var(--stage-orange); text-shadow: 0 0 32px rgba(var(--premium-glow-rgb), 0.22); }
+.ae-frame[data-look='daylight'] .ae-line { color: var(--neutral-600); }
+.ae-frame[data-look='daylight'] .ae-site { color: var(--neutral-900); }
+.ae-frame[data-look='daylight'] .ae-footer { border-top-color: var(--neutral-200); }
+.ae-frame[data-look='daylight'] .ae-footer .ae-foot-l,
+.ae-frame[data-look='daylight'] .ae-footer .ae-foot-r { color: var(--neutral-500); }
+.ae-frame[data-look='daylight'] .ae-footer strong { color: var(--neutral-900); }
+/* The cover on white: the same layout, off-black ink. */
+.ae-frame[data-look='daylight'] .ae-cv-hook { font-size: 120px; }
+.ae-frame[data-look='daylight'] :is(.ae-cv-week, .ae-cv-cities, .ae-cv-cta .ae-sep) { color: var(--neutral-500); }
+.ae-frame[data-look='daylight'] .ae-cv-cta { color: var(--neutral-900); }
+.ae-frame[data-look='daylight'] .ae-cv-cta strong { color: var(--accent-hover); }
+/* The city slide on white: the pick in a hairline card with a tinted orange icon square, the CTA a glowing pill. */
+.ae-frame[data-look='daylight'] .ae-city { text-transform: none; font-size: 112px; line-height: 1.04; max-height: calc(116px + 0.32em); letter-spacing: -0.03em; }
+.ae-frame[data-look='daylight'] .ae-body { bottom: 250px; }
+.ae-frame[data-look='daylight'] .ae-dl-pick {
+  display: flex; gap: 36px; padding: 44px 44px 46px; border-radius: 28px;
+  background: var(--neutral-50); border: 1px solid var(--neutral-200); box-shadow: 0 24px 48px -32px rgba(23,23,23,0.25);
+}
+.ae-frame[data-look='daylight'] .ae-dl-icon {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 26px;
+  color: var(--helios-orange); background: rgba(255,94,26,0.10);
+}
+.ae-frame[data-look='daylight'] .ae-dl-icon svg { width: 46px; height: 46px; }
+.ae-frame[data-look='daylight'] .ae-when { color: var(--neutral-600); }
+.ae-frame[data-look='daylight'] .ae-title { color: var(--neutral-900); letter-spacing: -0.02em; }
+.ae-frame[data-look='daylight'] .ae-meta { color: var(--neutral-600); }
+.ae-frame[data-look='daylight'] .ae-meta .ae-host { color: var(--neutral-900); }
+.ae-frame[data-look='daylight'] .ae-mentions { padding: 0 44px; }
+.ae-frame[data-look='daylight'] .ae-mentions-label { color: var(--neutral-500); }
+.ae-frame[data-look='daylight'] .ae-mentions-label::after { background: var(--neutral-200); }
+.ae-frame[data-look='daylight'] .ae-mention-day { color: var(--accent-hover); }
+.ae-frame[data-look='daylight'] .ae-mention-title { color: var(--neutral-900); }
+.ae-frame[data-look='daylight'] .ae-dl-cta-wrap { position: absolute; left: 64px; right: 64px; bottom: 150px; display: flex; }
+/* The closing slide. */
+.ae-frame[data-look='daylight'] .ae-dl-orb-wrap { position: absolute; top: 112px; left: 50%; width: 232px; height: 232px; margin-left: -116px; }
+.ae-frame[data-look='daylight'] .hp-orb.ae-dl-orb { width: 232px; height: 232px; box-shadow: 0 24px 60px -18px rgba(255,94,26,0.55), 0 0 0 1px rgba(23,23,23,0.04); }
+.ae-frame[data-look='daylight'] .ae-dl-final { position: absolute; left: 64px; right: 64px; top: 392px; bottom: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.ae-frame[data-look='daylight'] .ae-final { width: 100%; margin-top: 30px; font-size: 100px; max-height: calc(300px + 0.32em); }
+.ae-frame[data-look='daylight'] .ae-line { margin-top: 30px; max-width: 820px; }
+.ae-frame[data-look='daylight'] .ae-dl-final .ae-site { margin-top: 40px; }
+.ae-frame[data-look='daylight'] .ae-dl-cta-wrap--final { position: static; margin-top: 48px; justify-content: center; }
+
+/* ── The orb ── */
+/* The city slide: left-aligned on hairlines, the top pick between rules. */
+.ae-frame[data-look='orb'] .ae-ob-pick { padding: 40px 0 42px; border-top: 1px solid var(--premium-hairline); border-bottom: 1px solid var(--premium-hairline); }
+.ae-frame[data-look='orb'] .ae-title { font-size: 68px; max-height: calc(221px + 0.32em); }
+.ae-frame[data-look='orb'] .ae-more { bottom: 56px; right: 160px; height: 64px; }
+.ae-frame[data-look='orb'][data-role='city'] .ae-body { bottom: 168px; }
+/* The closing slide: a massive headline, the whole mark large on the right, a hairline meta row. */
+.ae-frame[data-look='orb'] .hp-orb.ae-ob-orb {
+  position: absolute; top: 80px; right: 64px; width: 420px; height: 420px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 0 90px 14px rgba(var(--premium-glow-rgb), 0.50), 0 0 220px 40px rgba(var(--premium-glow-rgb), 0.18);
+}
+.ae-frame[data-look='orb'] .ae-ob-kicker { position: absolute; top: 96px; left: 64px; width: 470px; }
+.ae-frame[data-look='orb'] .ae-ob-kicker-line { margin-top: 22px; font-size: 30px; line-height: 40px; max-height: 120px; color: var(--stage-ink-2); }
+.ae-frame[data-look='orb'] .ae-ob-copy { position: absolute; left: 64px; right: 64px; top: 560px; bottom: 236px; display: flex; flex-direction: column; justify-content: flex-end; }
+.ae-frame[data-look='orb'] .ae-ob-hook { font-size: 132px; line-height: 0.92; max-height: calc(380px + 0.32em); }
+.ae-frame[data-look='orb'] .ae-ob-copy .ae-site { margin-top: 36px; font-size: 72px; max-height: calc(72px + 0.32em); }
+.ae-frame[data-look='orb'] .ae-ob-meta {
+  position: absolute; left: 64px; right: 64px; bottom: 56px; z-index: 1;
+  display: flex; align-items: center; gap: 40px; padding-top: 28px; border-top: 1px solid var(--premium-hairline);
+}
+.ae-frame[data-look='orb'] .ae-ob-cell { flex: 1 1 0; min-width: 0; }
+.ae-frame[data-look='orb'] .ae-ob-label { font-weight: 700; font-size: 16px; line-height: 20px; max-height: 20px; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap; color: var(--stage-ink-3); }
+.ae-frame[data-look='orb'] .ae-ob-value { margin-top: 10px; font-weight: 400; font-size: 30px; line-height: 36px; max-height: 36px; white-space: nowrap; color: var(--stage-ink); }
+.ae-frame[data-look='orb'] .ae-ob-meta .hp-cta.ae-cta { flex: none; }
+
+/* ── The rank slide (AE-29), every look: no card, no label. The rank, the poster whole, then the event large. ── */
+.ae-frame[data-role='rank'] .ae-rk {
+  position: absolute; z-index: 1; left: 72px; right: 72px; top: 72px; bottom: 168px;
+  display: flex; flex-direction: column;
+}
+.ae-frame[data-role='rank'] .ae-rk-rank {
+  flex: none; font-family: var(--font-heading); font-weight: 700; font-size: 96px; line-height: 1; max-height: calc(96px + 0.32em);
+  letter-spacing: -0.02em; color: var(--stage-orange); text-shadow: 0 0 36px rgba(var(--premium-glow-rgb), var(--premium-text-glow, 0.28));
+}
+/* The poster's row is the space left over; the grid track makes its size definite, so the poster fits it whole. */
+.ae-frame[data-role='rank'] .ae-rk-poster { flex: 1 1 auto; min-height: 0; margin-top: 40px; display: grid; grid-template: 100% / 100%; align-items: center; justify-items: start; }
+.ae-frame[data-role='rank'] .ae-rk-pic {
+  display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; border-radius: 20px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* ghost: the rank as a huge outlined numeral behind everything, running off the right edge. */
+.ae-frame[data-role='rank'] .ae-bleed { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ae-frame[data-role='rank'] .ae-rk-ghost {
+  position: absolute; top: -60px; right: -170px;
+  font-family: var(--font-heading); font-weight: 700; font-size: 1180px; line-height: 1; letter-spacing: -0.06em;
+  color: var(--stage-bottom); -webkit-text-stroke: 4px rgba(var(--premium-glow-rgb), 0.30);
+}
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-ghost { color: var(--neutral-0); -webkit-text-stroke-color: rgba(var(--premium-glow-rgb), 0.28); }
+/* panorama: each numeral and its glow sit on a seam, so the swipe joins one slide's light to the next. */
+.ae-frame[data-role='rank'] .ae-rk-ghost--seam-in,
+.ae-frame[data-role='rank'] .ae-rk-ghost--seam-out { top: auto; right: auto; bottom: -200px; transform: translateX(-50%); }
+.ae-frame[data-role='rank'] .ae-rk-ghost--seam-in { left: 0; }
+.ae-frame[data-role='rank'] .ae-rk-ghost--seam-out { left: 1080px; }
+.ae-frame[data-role='rank'][data-treat~='panorama'] .ae-rk-ghost {
+  font-size: 885px;
+  color: rgba(var(--premium-glow-rgb), 0.05);
+  -webkit-text-stroke: 5px rgba(var(--premium-glow-rgb), 0.41);
+  filter: drop-shadow(0 0 48px rgba(var(--premium-glow-rgb), 0.41));
+}
+.ae-frame[data-look='daylight'][data-role='rank'][data-treat~='panorama'] .ae-rk-ghost {
+  color: rgba(var(--premium-glow-rgb), 0.045);
+  -webkit-text-stroke-color: rgba(var(--premium-glow-rgb), 0.32);
+  filter: drop-shadow(0 0 36px rgba(var(--premium-glow-rgb), 0.24));
+}
+/* A level floor of light (even across the width, so neighbouring slides match at the edge), plus an orb on each seam. */
+.ae-frame[data-role='rank'] .ae-rk-wash {
+  position: absolute; left: -80px; right: -80px; bottom: -40px; height: 420px;
+  background: linear-gradient(180deg, rgba(var(--premium-glow-rgb), 0) 0%, rgba(var(--premium-glow-rgb), 0.18) 100%);
+}
+.ae-frame[data-role='rank'] .ae-rk-glow {
+  position: absolute; width: 980px; height: 980px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--premium-glow-rgb), 0.50) 0%, rgba(var(--premium-glow-rgb), 0.22) 34%, rgba(var(--premium-glow-rgb), 0) 68%);
+}
+.ae-frame[data-role='rank'] .ae-rk-glow--seam-in,
+.ae-frame[data-role='rank'] .ae-rk-glow--seam-out { top: auto; bottom: -280px; transform: translateX(-50%); }
+.ae-frame[data-role='rank'] .ae-rk-glow--seam-in { left: 0; }
+.ae-frame[data-role='rank'] .ae-rk-glow--seam-out { left: 1080px; }
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-wash {
+  background: linear-gradient(180deg, rgba(var(--premium-glow-rgb), 0) 0%, rgba(var(--premium-glow-rgb), 0.10) 100%);
+}
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-glow {
+  background: radial-gradient(circle, rgba(var(--premium-glow-rgb), 0.28) 0%, rgba(var(--premium-glow-rgb), 0.12) 36%, rgba(var(--premium-glow-rgb), 0) 68%);
+}
+.ae-frame[data-role='rank'] .ae-rk-text { flex: none; margin-top: 56px; }
+.ae-frame[data-role='rank'] .ae-rk-when {
+  white-space: nowrap; font-weight: 700; font-size: 30px; line-height: 38px; max-height: 38px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--stage-orange);
+}
+.ae-frame[data-role='rank'] .ae-rk-title {
+  margin-top: 18px; font-family: var(--font-heading); font-weight: 700; font-size: 64px; line-height: 1.06; max-height: calc(204px + 0.32em);
+  letter-spacing: -0.015em; text-wrap: balance; color: var(--stage-ink);
+}
+.ae-frame[data-role='rank'] .ae-rk-host { margin-top: 24px; white-space: nowrap; font-size: 34px; line-height: 44px; max-height: 44px; color: var(--stage-ink); }
+.ae-frame[data-role='rank'] .ae-rk-place { margin-top: 4px; white-space: nowrap; font-size: 34px; line-height: 44px; max-height: 44px; color: var(--stage-ink-2); }
+
+/* type: the rank huge, the event under it, the block centred in the slide. */
+.ae-frame[data-role='rank'][data-layout='type'] .ae-rk { justify-content: center; }
+.ae-frame[data-role='rank'][data-layout='type'] .ae-rk-rank { font-size: 220px; max-height: calc(220px + 0.32em); }
+.ae-frame[data-role='rank'][data-layout='type'] .ae-rk-text { margin-top: 64px; }
+.ae-frame[data-role='rank'][data-layout='type'] .ae-rk-when { font-size: 34px; line-height: 42px; max-height: 42px; }
+.ae-frame[data-role='rank'][data-layout='type'] .ae-rk-title { margin-top: 24px; font-size: 92px; max-height: calc(390px + 0.32em); }
+.ae-frame[data-role='rank'][data-layout='type'] .ae-rk-host { margin-top: 40px; font-size: 38px; line-height: 50px; max-height: 50px; }
+.ae-frame[data-role='rank'][data-layout='type'] .ae-rk-place { font-size: 38px; line-height: 50px; max-height: 50px; }
+
+/* ambient: the poster's own colour as a blurred, dimmed wash behind it; everything centred. */
+.ae-frame[data-role='rank'] .ae-rk-haze {
+  position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover;
+  filter: blur(90px) saturate(1.4) brightness(0.42); opacity: 0.9;
+}
+.ae-frame[data-role='rank'][data-layout='ambient'] .ae-rk { align-items: center; text-align: center; }
+.ae-frame[data-role='rank'][data-layout='ambient'] .ae-rk-poster { justify-items: center; width: 100%; }
+.ae-frame[data-role='rank'][data-layout='ambient'] .ae-rk-text { width: 100%; }
+
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-title,
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-host { color: var(--neutral-900); }
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-place { color: var(--neutral-600); }
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-pic { box-shadow: 0 24px 64px rgba(17, 17, 17, 0.18), 0 0 0 1px rgba(17, 17, 17, 0.06); }
+.ae-frame[data-look='daylight'][data-role='rank'] .ae-rk-haze { filter: blur(90px) saturate(1.2) brightness(1.15); opacity: 0.35; }

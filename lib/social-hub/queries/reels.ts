@@ -107,6 +107,10 @@ export type ReelIdeaRow = {
   chosen_bucket?: string | null;
   chosen_framework?: string | null;
   components?: ReelScoreComponents | null;
+  /** On the newest slate (not a seed's older score), made into a video there, or its copy never passed there. */
+  on_latest?: boolean;
+  made_on_latest?: boolean;
+  copy_missed?: boolean;
   /** A person's typed-in idea (design 2026-10-26-text-on-screen-seeding). */
   yours?: boolean;
   /** A seed whose scoring failed or has not run: no score row at all. */
@@ -218,7 +222,7 @@ seeds AS (
    WHERE so.adapter_id = 'seed' AND so.drop_reason = 'seed'
 ),
 pool AS (
-  SELECT s.post_idea_id, s.net, s.rank, s.selected, s.origin, latest.scored_at AS scored_at,
+  SELECT s.post_idea_id, s.net, s.rank, s.selected, s.origin, latest.scored_at AS scored_at, true AS on_latest,
          s.psychology, s.bucket_score, s.value_score, s.blockbuster, s.chosen_bucket, s.chosen_framework, s.components,
          false AS unscored
     FROM latest
@@ -226,7 +230,7 @@ pool AS (
    WHERE NOT EXISTS (SELECT 1 FROM seeds x WHERE x.post_idea_id = s.post_idea_id AND NOT x.open)
   UNION ALL
   -- A seed whose score row is on an older slate (or that has none yet) still shows, with its newest stored score.
-  SELECT x.post_idea_id, o.net, o.rank, COALESCE(o.selected, false), o.origin, COALESCE(o.scored_at, x.ingest_time),
+  SELECT x.post_idea_id, o.net, o.rank, COALESCE(o.selected, false), o.origin, COALESCE(o.scored_at, x.ingest_time), false,
          o.psychology, o.bucket_score, o.value_score, o.blockbuster, o.chosen_bucket, o.chosen_framework, o.components,
          (o.post_idea_id IS NULL) AS unscored
     FROM seeds x
@@ -246,6 +250,11 @@ SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, s.scor
        s.unscored,
        EXISTS (SELECT 1 FROM social_hub.schedule x
                 WHERE x.vertical = 'reels' AND x.idea_ref = s.post_idea_id::text AND x.status IN ('scheduled', 'publishing')) AS scheduled,
+       s.on_latest,
+       -- The last run's own work on it (Lucas, 2026-10-26: the run's picks lead the queue; a skip says why).
+       EXISTS (SELECT 1 FROM reels.video_jobs j JOIN latest ON j.slate_id = latest.id WHERE j.post_idea_id = s.post_idea_id AND j.status = 'ok') AS made_on_latest,
+       (EXISTS (SELECT 1 FROM reels.idea_copy c JOIN latest ON c.slate_id = latest.id WHERE c.post_idea_id = s.post_idea_id AND c.status <> 'ok')
+        AND NOT EXISTS (SELECT 1 FROM reels.idea_copy c JOIN latest ON c.slate_id = latest.id WHERE c.post_idea_id = s.post_idea_id AND c.status = 'ok')) AS copy_missed,
        EXISTS (SELECT 1 FROM reels.video_jobs j WHERE j.post_idea_id = s.post_idea_id AND j.status = 'ok') AS has_video,
        (SELECT count(*)::int FROM reels.video_jobs j WHERE j.post_idea_id = s.post_idea_id AND j.status = 'ok') AS video_count,
        (SELECT max(j.finished_at)::text FROM reels.video_jobs j WHERE j.post_idea_id = s.post_idea_id AND j.status = 'ok') AS last_video_at

@@ -145,7 +145,7 @@ export type CostSummary = {
 /** Window totals at every level; each level is the plain sum of the one below. */
 export function summarize(ledger: CostLedger, w: CostWindow): CostSummary {
   const zero = () => ({ ledger: 0, items: 0, unattributed: 0 });
-  const byVertical: CostSummary['byVertical'] = { reels: zero(), explainers: zero(), carousels: zero(), stories: zero(), last_few_days: zero() };
+  const byVertical: CostSummary['byVertical'] = { reels: zero(), explainers: zero(), carousels: zero(), stories: zero(), last_few_days: zero(), ai_events: zero() };
   for (const row of ledger.rows) if (inWindow(row.nyDate, row.vertical, w)) byVertical[row.vertical].ledger += row.micros;
   for (const a of ledger.allocations) if (inWindow(a.nyDate, a.vertical, w)) byVertical[a.vertical].items += a.micros;
   for (const u of ledger.unattributed) if (inWindow(u.nyDate, u.vertical, w)) byVertical[u.vertical].unattributed += u.micros;
