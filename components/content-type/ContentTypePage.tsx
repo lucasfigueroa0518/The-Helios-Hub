@@ -14,6 +14,7 @@ import {
   StorySeedButton,
 } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
+import { LfdSeedButton } from '@/components/content-type/LfdSeedButton';
 import { GenerationProgress } from '@/components/content-type/GenerationProgress';
 import { RunProgressProvider } from '@/components/content-type/run-progress';
 import { TypeHub } from '@/components/content-type/TypeHub';
@@ -76,7 +77,7 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
     generate = <><StoriesGenerate /><StorySeedButton /></>;
     settings = <PostingSettings type="stories" />;
   } else if (vertical === 'last_few_days') {
-    generate = <LfdRunButton />;
+    generate = <><LfdRunButton /><LfdSeedButton /></>;
     settings = <PostingSettings type="last_few_days" />;
   } else {
     generate = <AddTopicsButton />;

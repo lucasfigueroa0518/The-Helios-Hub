@@ -67,6 +67,9 @@ export type LfdRunRow = {
   record: Record<string, unknown> | null;
 };
 
+/** A person's seed (lib/lfd/seeds.ts), as the Ideas view needs it: an lfd.settings row `seed:<storyKey>`. */
+export type LfdSeedRow = { key: string; headline: string; url: string; outlet: string; status: string; outcome: string | null; added_at: string | null; expires_at: string | null };
+
 export type LfdRead = {
   posts: LfdPostRow[];
   attempts: LfdAttemptRow[];
@@ -74,6 +77,8 @@ export type LfdRead = {
   insights: InsightRow[];
   /** The newest run that made a post (its record is the Ideas view). */
   latestRun: LfdRunRow | null;
+  /** Seeds still waiting (open, not expired, not archived), or made by the latest run. Empty when they cannot be read. */
+  seeds: LfdSeedRow[];
   requireApproval: boolean;
 };
 
@@ -96,11 +101,23 @@ SELECT id::text AS id, status, trigger, requested_at::text AS requested_at, star
 
 export const LFD_REQUIRE_APPROVAL_SQL = `SELECT value FROM lfd.settings WHERE key = 'require_approval'`;
 
+export const LFD_SEEDS_SQL = `
+SELECT substr(s.key, 6) AS key, s.value->>'headline' AS headline, s.value->>'url' AS url, s.value->>'outlet' AS outlet,
+       s.value->>'status' AS status, s.value->>'outcome' AS outcome, s.value->>'addedAt' AS added_at, s.value->>'expiresAt' AS expires_at
+  FROM lfd.settings s
+ WHERE s.key LIKE 'seed:%'
+   AND s.value->>'status' = 'open'
+   AND (s.value->>'expiresAt')::timestamptz > now()
+   AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = 'last_few_days' AND a.kind = 'archive' AND a.idea_id = 'last_few_days:story:' || substr(s.key, 6))
+ ORDER BY s.value->>'addedAt'`;
+
 export async function readLastFewDays(q: HubQuery, spine: SpineRead): Promise<LfdRead> {
-  const [posts, run, approval] = await Promise.all([
+  const [posts, run, approval, seeds] = await Promise.all([
     q<LfdPostRow>(LFD_POSTS_SQL),
     q<LfdRunRow>(LFD_LATEST_RUN_SQL),
     q<{ value: unknown }>(LFD_REQUIRE_APPROVAL_SQL),
+    // Seeds never break the page: no table, a bad row, no archive table: none.
+    q<LfdSeedRow>(LFD_SEEDS_SQL).then((r) => r.rows, () => [] as LfdSeedRow[]),
   ]);
   const mine = forVertical(spine, 'last_few_days');
   return {
@@ -116,6 +133,7 @@ export async function readLastFewDays(q: HubQuery, spine: SpineRead): Promise<Lf
     })),
     insights: insightRows(mine.insights, 'last_few_days'),
     latestRun: run.rows[0] ?? null,
+    seeds,
     requireApproval: settingIsOn(approval.rows),
   };
 }

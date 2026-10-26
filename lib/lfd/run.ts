@@ -21,11 +21,12 @@ import type { PhotoFinder } from '@/lib/stories/photos';
 import { grounded, REWRITE_NOTE } from './ground';
 import { leadImage } from './lead-image';
 import { findPhotos, REFUSED_ICON_SCENE } from './photos';
-import { judgedPool, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
+import { judgedPool, MAX_SEEDS, MIN_STORIES, mergeSameEvent, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { LFD_CAPTION_VERSION, writeLfdCaptionLines } from './caption-lines';
 import { buildPost, composeCaption } from './post';
 import { leadOrder } from './lead';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
+import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate } from './seeds';
 import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
 import type { Drop, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
 import { checkSlide, VISION_UNAVAILABLE, type SlideVerdict } from './vision';
@@ -71,7 +72,7 @@ function windowStartIso(w: LfdWindow): string {
   return `${w.after}T04:00:00Z`;
 }
 
-async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: ReadonlyMap<string, number> = new Map()) {
+async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: ReadonlyMap<string, number> = new Map(), seeds: LfdCandidate[] = []) {
   const reels = withoutUsed(await reelsLane(d.query, w), used);
   const until = d.replay ? d.now.toISOString() : undefined;
   const carousel = withoutUsed(await carouselLane(d.query, windowStartIso(w), until), used);
@@ -83,25 +84,34 @@ async function gather(d: LfdRunDeps, w: LfdWindow, used: Set<string>, known: Rea
     return [];
   });
   const feed = withoutUsed(fresh, used);
-  const judged = await scoreMajor(judgedPool(carousel, reels, feed), d.jev, known);
+  // A person's seeds are scored by the same judge (one call each, inside the run cap) and go first in the merge so a seed
+  // absorbs a same-event duplicate. A machine candidate with a seed's own key is the seed (its source ids are carried over).
+  const seedKeys = new Set(seeds.map((s) => s.key));
+  const ownSeeds = seeds.map((s) => ({ ...s, refs: [...new Set([...s.refs, ...[...reels, ...carousel, ...feed].filter((c) => c.key === s.key).flatMap((c) => c.refs)])] }));
+  const scoredSeeds = await scoreMajor(ownSeeds, d.jev, known);
+  const notSeed = (list: LfdCandidate[]) => (seedKeys.size ? list.filter((c) => !seedKeys.has(c.key)) : list);
+  const judged = await scoreMajor(judgedPool(notSeed(carousel), notSeed(reels), notSeed(feed)), d.jev, known);
   const judgedKeys = new Set(judged.map((c) => c.key));
-  const rundownOnly = [...reels].sort(rundownOrder).filter((c) => !judgedKeys.has(c.key)).slice(0, RUNDOWN_POOL);
-  const merged = await mergeSameEvent([...judged.sort((a, b) => (b.major ?? 0) - (a.major ?? 0)), ...rundownOnly], d.jev);
+  const rundownOnly = notSeed([...reels]).sort(rundownOrder).filter((c) => !judgedKeys.has(c.key)).slice(0, RUNDOWN_POOL);
+  const merged = await mergeSameEvent([...scoredSeeds, ...judged.sort((a, b) => (b.major ?? 0) - (a.major ?? 0)), ...rundownOnly], d.jev);
+  const machine = seedKeys.size ? merged.filter((c) => !c.yours) : merged;
   return {
-    majors: merged.filter((c) => c.major !== null),
-    rundown: merged.filter((c) => c.origin === 'reels' || c.refs.some((r) => reels.some((x) => x.refs.includes(r)))),
+    majors: machine.filter((c) => c.major !== null),
+    rundown: machine.filter((c) => c.origin === 'reels' || c.refs.some((r) => reels.some((x) => x.refs.includes(r)))),
+    /** The person's seeds, taken before the lanes. */
+    forced: merged.filter((c) => c.yours),
     counts: { reels: reels.length, carousel: carousel.length, feed: feed.length, judged: judged.length },
     /** Every major-news score judged so far, by key: a re-gather reuses these instead of judging again. */
-    scores: new Map([...known, ...judged.map((c) => [c.key, c.major ?? 0] as const)]),
+    scores: new Map([...known, ...[...scoredSeeds, ...judged].map((c) => [c.key, c.major ?? 0] as const)]),
     feedError,
   };
 }
 
 /** Distinct stories that could be picked: above-bar majors plus the rundown, deduped by key and shared refs. */
-function distinctEligible(pools: { majors: LfdCandidate[]; rundown: LfdCandidate[] }): number {
+function distinctEligible(pools: { majors: LfdCandidate[]; rundown: LfdCandidate[]; forced?: LfdCandidate[] }): number {
   const seen = new Set<string>();
   let n = 0;
-  for (const c of [...pools.majors.filter((m) => (m.major ?? 0) >= MAJOR_NEWS_BAR), ...pools.rundown]) {
+  for (const c of [...(pools.forced ?? []), ...pools.majors.filter((m) => (m.major ?? 0) >= MAJOR_NEWS_BAR), ...pools.rundown]) {
     const ids = [c.key, ...c.refs];
     if (ids.some((id) => seen.has(id))) continue;
     ids.forEach((id) => seen.add(id));
@@ -185,18 +195,30 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
   try {
     const previous = await previousPosts(d.query, PREVIOUS_POSTS, d.replay ? nyDate : undefined);
     const used = usedIdeaIds(previous);
+    // A person's seeds and archives. Neither read may fail a run: an error means none, noted in the record.
+    let seedList: Awaited<ReturnType<typeof readOpenSeeds>> = [];
+    try {
+      const archived = await readArchivedKeys(d.query);
+      for (const key of archived) used.add(key);
+      seedList = d.replay ? [] : await readOpenSeeds(d.query, d.now, archived);
+    } catch (err) {
+      record.seedError = err instanceof Error ? err.message : String(err);
+    }
+    // At most MAX_SEEDS to a post; the rest wait (and cost no Jev call).
+    const taking = seedList.slice(0, MAX_SEEDS);
+    const seedCandidates = taking.map(seedCandidate);
     let window = windowFor(nyDate, previous[0]?.nyDate ?? null);
-    let pools = await gather(run, window, used);
+    let pools = await gather(run, window, used, new Map(), seedCandidates);
     if (distinctEligible(pools) < MIN_STORIES) {
       window = extendWindow(window);
-      pools = await gather(run, window, used, pools.scores);
+      pools = await gather(run, window, used, pools.scores, seedCandidates);
       record.safetyNet = true;
     }
     record.window = window;
     record.pool = pools.counts;
     if (pools.feedError) record.feedError = pools.feedError;
 
-    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev);
+    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev, pools.forced);
     const queueRow = (c: LfdCandidate) => ({ key: c.key, headline: c.headline, major: c.major, net: c.net });
     record.queues = { major: selector.top('major', QUEUE_TOP).map(queueRow), rundown: selector.top('rundown', QUEUE_TOP).map(queueRow) };
     let pending: Pick[] = await selector.fill();
@@ -430,6 +452,25 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       renderProblems: [...renderProblemsOf(fit), ...visionProblems],
       short,
     });
+    if (seedList.length) {
+      const inPost = new Set(final.map((r) => r.pick.key));
+      const outcomes = seedList.map((s) => {
+        const drop = drops.find((x) => x.key === s.key);
+        const repeat = selector.repeats.has(s.key);
+        const outcome = inPost.has(s.key)
+          ? `in the post${repeat ? ' (the last post already covered it)' : ''}`
+          : drop ? `${drop.reason}${drop.detail ? `: ${drop.detail}` : ''}`
+          : !taking.some((t) => t.key === s.key) ? `waiting: this run already had ${MAX_SEEDS}`
+          : 'not used in this run';
+        return { key: s.key, headline: s.headline, url: s.url, outcome, made: inPost.has(s.key), ...(repeat ? { repeat: true } : {}) };
+      });
+      record.seeds = outcomes;
+      try {
+        await recordSeedOutcomes(d.query, outcomes.map((o) => ({ key: o.key, outcome: o.outcome, made: o.made })));
+      } catch (err) {
+        record.seedError = err instanceof Error ? err.message : String(err);
+      }
+    }
     record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null }));
     record.stories = final.length;
     const spend = d.spend();
