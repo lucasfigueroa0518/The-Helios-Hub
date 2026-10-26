@@ -147,3 +147,10 @@ test('tonightMoves on a queue type: ordered pins (a skipped one steps aside), ar
   const legacy = tonightMoves([{ ...move('reels:idea:x', 'promote'), vertical: 'reels' }], 'reels');
   assert.equal(legacy.pins.length, 1, 'a type not on the queue keeps its single promote');
 });
+
+test('orderForNight: two dragged ideas keep their own order, compared by their keys and not their machine scores', async () => {
+  const { orderForNight } = await import('@/lib/social-hub/queue');
+  const list = [idea('x', 9), idea('y', 7), idea('z', 2), idea('a', 1), idea('b', 0.5)];
+  const night = { pins: [] as string[], placed: new Map([['a', 8.5], ['b', 7.5]]), archived: new Set<string>() };
+  assert.equal(orderForNight(list, (i) => i.id, (i) => i.score, night).map((i) => i.id).join(''), 'xabyz');
+});

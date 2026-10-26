@@ -188,6 +188,7 @@ async function main(): Promise<void> {
   async function carryOutRun(run: { id: string; capUsd: number; storyIds?: string[]; trigger?: string }, rerun?: { requestId: string; postId: string }): Promise<void> {
     const pinned = run.storyIds ?? [];
     let stories = pinned.length || 1;
+    let movesReadAt: Date | undefined;
     let moves: { pinIds: string[]; demoteIds: string[]; archiveIds: string[]; placed: Array<readonly [string, number]> } = { pinIds: [], demoteIds: [], archiveIds: [], placed: [] };
     if (!rerun && pinned.length) {
       log('run_pinned', { runId: run.id, storyIds: pinned });
@@ -210,6 +211,7 @@ async function main(): Promise<void> {
       }
       // Shared queue: the 3 AM run makes tonight's carousel promote first and sinks demoted stories (a failed read: no moves).
       if (run.trigger === 'scheduled') {
+        movesReadAt = new Date();
         const tonight = await readTonightMoves(query, 'carousels');
         moves = {
           pinIds: tonight.pins.map((pin) => ideaRef(pin.ideaId)),
@@ -227,7 +229,7 @@ async function main(): Promise<void> {
     const status = (await query(`SELECT status FROM social.runs WHERE id = $1`, [run.id])).rows[0]?.status;
     log('run_complete', { runId: run.id, exitCode: code, status });
     // The scheduled night ran to a finish: hand placements are used up and the stories compete by score again (a run that died keeps them).
-    if (!rerun && !pinned.length && run.trigger === 'scheduled' && code === 0 && status !== 'failed' && QUEUE_LIVE.has('carousels')) await finishNightPlacements(query, 'carousels');
+    if (!rerun && !pinned.length && run.trigger === 'scheduled' && code === 0 && status !== 'failed' && QUEUE_LIVE.has('carousels')) await finishNightPlacements(query, 'carousels', undefined, movesReadAt);
 
     for (const post of await runs.postsMissingSlides(query, run.id)) {
       try {

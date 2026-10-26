@@ -90,3 +90,30 @@ test('only so many seeds wait; archiving one frees a place; a seed goes after 7 
   assert.equal((await readOpenSeeds(query, later)).length, 0, 'all gone after a week');
   assert.equal((await query(CAROUSEL_IDEAS_SQL.replace('now()', `'${later.toISOString()}'::timestamptz`))).rows.length, 0, 'and the hub stops listing them');
 });
+
+test('a link to this machine or a private network is refused before anything is fetched', async () => {
+  const { query } = await db();
+  const { calls, deps: d } = deps();
+  for (const bad of ['http://localhost:3000/x', 'http://127.0.0.1/x', 'http://10.0.0.5/x', 'http://192.168.1.2/x', 'http://169.254.169.254/latest', 'http://[::1]/x', 'http://printer.local/x']) {
+    await refused(addCarouselSeed(query, { url: bad }, d), 400, /private|look right/);
+  }
+  assert.equal(calls.fetch, 0);
+});
+
+test('a dragged story and a qualified seed slot into tonight’s selection by score; a drag during the run is not consumed', async () => {
+  const { promotedStages } = await import('@/lib/social/overnight/promote');
+  const { stubCandidates } = await import('@/lib/social/pipeline/stubs');
+  const fresh = stubCandidates(STUB_ARTICLES); // story-a, story-b, story-c
+  const seed = { ...stubCandidates([{ ...STUB_ARTICLES[0]!, sourceUrl: 'https://news.test/seed-x', headline: 'Seed X' }])[0]!, id: 'https://news.test/seed-x' };
+  const probs: Record<string, number> = { 'story-a': 4, 'story-b': 3, 'story-c': 1 };
+  const order = async (night: Parameters<typeof promotedStages>[3]) => {
+    const staged = promotedStages(createStubStages(), [], new Set(), { probOf: (id) => probs[id], ...night });
+    const res = await staged.score(STUB_ARTICLES, NOW);
+    return res.ok ? res.value.map((c) => c.id).join(',') : 'fail';
+  };
+  assert.equal(await order({ extra: [{ candidate: seed, key: 3.5 }] }), `story-a,${seed.id},story-b,story-c`, 'a seed of 3.5 sits between 4 and 3');
+  assert.equal(await order({ extra: [{ candidate: seed, key: 0.2 }] }), `story-a,story-b,story-c,${seed.id}`);
+  assert.equal(await order({ placed: new Map([['story-c', 3.2]]) }), 'story-a,story-c,story-b', 'a fresh story dragged to 3.2 moves up past a 3');
+  assert.equal(await order({ placed: new Map([[seed.id, 5]]), extra: [{ candidate: seed, key: 0.2 }] }), `${seed.id},story-a,story-b,story-c`, 'a drag overrides the seed’s own score');
+  assert.equal(await order({}), 'story-a,story-b,story-c', 'nothing to apply: the selection as it came');
+});

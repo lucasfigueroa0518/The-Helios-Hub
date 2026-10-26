@@ -30,11 +30,19 @@ export async function unpinIdea(q: MovesQuery, vertical: Vertical, ideaId: strin
 
 /** Put the pins in this order: the listed ideas' pin rows are rewritten oldest first. Ideas not currently pinned are skipped. */
 export async function reorderPins(q: MovesQuery, vertical: Vertical, order: readonly string[], by: string | null): Promise<void> {
-  const { rows } = await q(`SELECT idea_id FROM social_hub.idea_adjustments WHERE vertical = $1 AND ${ACTIVE_PIN}`, [vertical]);
-  const pinned = new Set(rows.map((r: { idea_id: string }) => r.idea_id));
-  const wanted = order.filter((id) => pinned.has(id));
-  for (const id of wanted) await unpinIdea(q, vertical, id);
-  for (const id of wanted) await q(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind, created_by) VALUES ($1, $2, $3::date, 'pin', $4)`, [vertical, id, nyToday(), by]);
+  // One statement, so a dropped connection never leaves pins taken off and not put back. The ideas that are pinned now, in the
+  // order asked; a millisecond apart so their order is kept.
+  await q(
+    `WITH gone AS (
+       UPDATE social_hub.idea_adjustments SET consumed_at = now()
+        WHERE vertical = $1 AND idea_id = ANY($2::text[]) AND ${ACTIVE_PIN}
+        RETURNING idea_id)
+     INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind, created_by, created_at)
+     SELECT $1, t.id, $3::date, 'pin', $4, clock_timestamp() + t.ord * interval '1 millisecond'
+       FROM unnest($2::text[]) WITH ORDINALITY AS t(id, ord)
+      WHERE t.id IN (SELECT idea_id FROM gone)`,
+    [vertical, [...order], nyToday(), by],
+  );
 }
 
 /** Record a drag: the idea sorts at `sortKey` until its placement is used. Replaces its earlier placement. */
@@ -59,11 +67,13 @@ export async function archiveIdea(q: MovesQuery, vertical: Vertical, ideaId: str
  * must not call this, so a hand move is never undone by a night that did nothing for it.
  * `scope` limits it to a Stories series (idea ids start with `stories:pool:<series>:`).
  */
-export async function finishPlacements(q: MovesQuery, vertical: Vertical, scope?: string): Promise<void> {
+export async function finishPlacements(q: MovesQuery, vertical: Vertical, scope?: string, readAt?: Date): Promise<void> {
+  // `readAt`: when the worker read its moves. A drag made after that (3:05 AM, during the run) was never seen, so it stays.
   await q(
     `UPDATE social_hub.idea_adjustments SET consumed_at = now()
-      WHERE vertical = $1 AND kind = 'place' AND consumed_at IS NULL AND ($2::text IS NULL OR idea_id LIKE $2::text || '%')`,
-    [vertical, scope ?? null],
+      WHERE vertical = $1 AND kind = 'place' AND consumed_at IS NULL AND ($2::text IS NULL OR idea_id LIKE $2::text || '%')
+        AND ($3::timestamptz IS NULL OR created_at <= $3::timestamptz)`,
+    [vertical, scope ?? null, readAt?.toISOString() ?? null],
   );
 }
 
@@ -81,9 +91,9 @@ export async function expireOldPlacements(q: MovesQuery, vertical: Vertical, day
  * week old are dropped. It never throws (no moves table, a dropped connection): a hand move is cleaned up on a later
  * night, never at the cost of this one.
  */
-export async function finishNightPlacements(q: MovesQuery, vertical: Vertical, scope?: string): Promise<void> {
+export async function finishNightPlacements(q: MovesQuery, vertical: Vertical, scope?: string, readAt?: Date): Promise<void> {
   try {
-    await finishPlacements(q, vertical, scope);
+    await finishPlacements(q, vertical, scope, readAt);
     await expireOldPlacements(q, vertical);
   } catch {
     // Degrade: the night's own result stands.

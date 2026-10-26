@@ -63,7 +63,7 @@ export function withSkip(moves: readonly IdeaAdjustment[], ideaId: string, reaso
 /** The night made the idea: every active move on it is used up (as the hub's consumeMoves does). */
 export async function markPromoteUsed(q: MovesQuery, vertical: Vertical, ideaId: string): Promise<boolean> {
   try {
-    await q(`UPDATE social_hub.idea_adjustments SET consumed_at = now() WHERE vertical = $1 AND idea_id = $2 AND consumed_at IS NULL`, [vertical, ideaId]);
+    await q(`UPDATE social_hub.idea_adjustments SET consumed_at = now() WHERE vertical = $1 AND idea_id = $2 AND consumed_at IS NULL AND kind <> 'archive'`, [vertical, ideaId]);
     return true;
   } catch {
     return false;

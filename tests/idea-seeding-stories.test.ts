@@ -72,3 +72,12 @@ test('a series holds only so many seeds; the next is refused plainly, another se
   await assert.rejects(() => seedIdea(db, { series: 'morning_download', headline: 'One too many' }, NOW), (e: unknown) => e instanceof ApiError && e.status === 409 && /make or archive one/.test(e.message));
   await seedIdea(db, { series: 'guess_the_number', value: '1', fact: 'a thing' }, NOW);
 });
+
+test('archiving a seed frees its place, so the cap never locks a series for good', async () => {
+  const { db } = await harnessDb();
+  const keys: string[] = [];
+  for (let i = 0; i < MAX_OPEN_SEEDS; i++) keys.push((await seedIdea(db, { series: 'morning_download', headline: `Story ${i}` }, NOW)).key);
+  await assert.rejects(() => seedIdea(db, { series: 'morning_download', headline: 'One too many' }, NOW), (e: unknown) => e instanceof ApiError && e.status === 409);
+  await db.query(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind) VALUES ('stories', $1, '2026-10-09', 'archive')`, [`stories:pool:morning_download:${keys[0]}`]);
+  await seedIdea(db, { series: 'morning_download', headline: 'Now there is room' }, NOW);
+});

@@ -86,6 +86,7 @@ export async function generatePassingReels(input: {
   // A pin that can't be made (gone, held out, placed by a person, no scores) steps aside in the same run, with why on the
   // move, and the rest stay. A failed read is no moves: the night runs as before.
   const queued = QUEUE_LIVE.has('reels');
+  const movesReadAt = new Date();
   let moveList = input.dailyFill ? await readMoves(reelsMovesQuery, 'reels') : [];
   let tonight: TonightMoves = moveList.length ? tonightMoves(moveList, 'reels') : NO_MOVES;
   const stepAside = async (ideaId: string, reason: string) => {
@@ -216,7 +217,7 @@ export async function generatePassingReels(input: {
   }
   // The night ran and made its picks: hand placements are used up and the ideas compete by score again.
   if (queued && input.dailyFill) {
-    await finishNightPlacements(reelsMovesQuery, 'reels');
+    await finishNightPlacements(reelsMovesQuery, 'reels', undefined, movesReadAt);
   }
 
   await selectFilledIdeas(

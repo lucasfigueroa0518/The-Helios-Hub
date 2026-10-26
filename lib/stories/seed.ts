@@ -70,8 +70,19 @@ export function seedItem(body: SeedBody, now: Date, id: string = crypto.randomUU
 }
 
 export async function openSeedCount(db: Queryable, series: Series): Promise<number> {
-  const { rows } = await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM stories.pool WHERE series = $1 AND used_at IS NULL AND key LIKE 'seed:%'`, [series]);
-  return Number(rows[0]?.n ?? 0);
+  // Seeds a person archived free their place. A database without the moves table counts them all.
+  try {
+    const { rows } = await db.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM stories.pool p
+        WHERE p.series = $1 AND p.used_at IS NULL AND p.key LIKE 'seed:%'
+          AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = 'stories' AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)`,
+      [series],
+    );
+    return Number(rows[0]?.n ?? 0);
+  } catch {
+    const { rows } = await db.query<{ n: string }>(`SELECT count(*)::text AS n FROM stories.pool WHERE series = $1 AND used_at IS NULL AND key LIKE 'seed:%'`, [series]);
+    return Number(rows[0]?.n ?? 0);
+  }
 }
 
 /** Put a typed idea into its series' pool. Free of cost; starts nothing. */

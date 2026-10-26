@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { anthropic } from '@/lib/anthropic';
+import { dbQuery } from '@/lib/db';
 import { explainersDb } from '@/lib/explainers/connection';
 import { addAndEvaluateTopics, type HandTopic } from '@/lib/explainers/ideas/cycle';
 import { anthropicIdeaModel } from '@/lib/explainers/ideas/generator';
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `You have ${MAX_OPEN_SEEDS} seeded ideas waiting; make or remove one first.` }, { status: 409 });
     }
     const results = await addAndEvaluateTopics(
-      { db, jevTransport: liveJevTransport, ideaModel: anthropicIdeaModel(anthropic) },
+      { db, jevTransport: liveJevTransport, ideaModel: anthropicIdeaModel(anthropic), moves: (text, params) => dbQuery(text, params as never) as never },
       topics,
     );
     return NextResponse.json({ results });

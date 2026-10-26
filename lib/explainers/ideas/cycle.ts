@@ -122,6 +122,7 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   // Where the hub records Promote / Pin / Drag / Archive: the main database when the worker passes it (the explainers handle may be
   // a database of its own), else this one. A read that fails is no moves, so the night runs as before.
   const movesQ: MovesQuery = deps.moves ?? movesQuery(db);
+  const movesReadAt = new Date();
   const settings = await loadSettings(db);
   if (!settings.auto_render) return { status: 'skipped', reason: 'auto_render_off' };
 
@@ -253,7 +254,8 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     }
     // The night ran with auto-render on and made its picks: hand placements are used up and the ideas compete by score
     // again (a failed run never reaches here, so a hand move is not undone by a night that did nothing for it).
-    await finishNightPlacements(movesQ, 'explainers');
+    // A night that was capped left ideas it chose unmade: their placements stay for the next night.
+    if (!capped) await finishNightPlacements(movesQ, 'explainers', undefined, movesReadAt);
 
     await db.query(
       `UPDATE explainers.idea_cycles c
@@ -298,7 +300,7 @@ export type HandTopic = Omit<NewTopic, 'scope'>;
  * click, so these calls are his.
  */
 export async function addAndEvaluateTopics(
-  deps: { db: ExplainersDb; jevTransport: JevTransport; ideaModel: IdeaModel; now?: Date },
+  deps: { db: ExplainersDb; jevTransport: JevTransport; ideaModel: IdeaModel; now?: Date; /** The main database, where pins and drags live (the explainers handle may be its own). */ moves?: MovesQuery },
   topics: HandTopic[],
 ): Promise<IntakeResult> {
   const { db } = deps;
@@ -329,6 +331,6 @@ export async function addAndEvaluateTopics(
     const evaluation = await evaluateTopic({ db, jev, settings, themeBrief, now: deps.now, ideaModel: deps.ideaModel }, topic.id);
     results.push({ topicId: topic.id, title: topic.title, scope: topic.scope!, evaluation });
   }
-  await trimPool(db, settings.pool_size, heldTopicIds(await readPoolMoves(movesQuery(db))));
+  await trimPool(db, settings.pool_size, heldTopicIds(await readPoolMoves(deps.moves ?? movesQuery(db))));
   return results;
 }

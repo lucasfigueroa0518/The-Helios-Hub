@@ -169,9 +169,23 @@ async function main() {
   const pinnedLib = pinnedIds.length ? await import('@/lib/social/overnight/pinned') : null;
   const pinned = pinnedLib ? await pinnedLib.loadPinnedCandidates(store.query!, pinnedIds) : null;
   // Tonight's promote: its newest shortlist entry. Already posted or not found: skipped, with why on the move.
-  const promoteLib = pinIds.length || demoteIds.length || archiveIds.length || placedKeys.size ? await import('@/lib/social/overnight/promote') : null;
+  const promoteLib = pinIds.length || demoteIds.length || archiveIds.length || placedKeys.size || (runIdArg && !rerunPostArg && !pinnedIds.length) ? await import('@/lib/social/overnight/promote') : null;
   const promoted = promoteLib && pinIds.length ? await promoteLib.pickPins(store.query!, pinIds) : [];
   const archivedUrls = promoteLib && archiveIds.length ? await promoteLib.loadArchivedUrls(store.query!, archiveIds) : new Set<string>();
+  // Stories the person's queue holds that tonight's selection may not return: a dragged story, and the qualified seeds (each
+  // gated as a pin is: not already posted, not already on the calendar). They slot in by score (promotedStages).
+  const extra: Array<{ candidate: import('@/lib/social/pipeline/types').ScoredCandidate; key: number }> = [];
+  if (promoteLib && runIdArg && !rerunPostArg && !pinnedIds.length) {
+    const { readOpenSeeds } = await import('@/lib/social/overnight/seeds');
+    const wanted = new Map<string, number>(placedKeys);
+    for (const seed of await readOpenSeeds(store.query!, new Date())) {
+      if (seed.status === 'qualified' && !archiveIds.includes(seed.id) && !wanted.has(seed.id)) wanted.set(seed.id, seed.probSum);
+    }
+    for (const [id, key] of wanted) {
+      const found = await promoteLib.loadPromoted(store.query!, id).catch(() => null);
+      if (found) extra.push({ candidate: found, key });
+    }
+  }
   // A rerun reads no feeds: its one story is the stored post's. Neither does a run of named stories.
   const ownArticles = rerun || pinned ? [] : await fetchFeeds(HELIOS_SOCIAL_FEEDS);
   // The reels ingest's sources (Hacker News, papers, GitHub Trending, vendor notes, more outlets) join the pool;
@@ -263,7 +277,13 @@ async function main() {
       : pinned && pinnedLib
         ? pinnedLib.pinnedStages(stages, pinned)
         : promoteLib
-          ? promoteLib.promotedStages(stages, promoted, new Set(demoteIds), { archived: new Set(archiveIds), archivedUrls, placed: placedKeys })
+          ? promoteLib.promotedStages(stages, promoted, new Set(demoteIds), {
+              archived: new Set(archiveIds),
+              archivedUrls,
+              placed: placedKeys,
+              extra,
+              probOf: (id) => (selection as { scored?: Array<{ id: string; probSum: number }> } | null)?.scored?.find((g) => g.id === id)?.probSum,
+            })
           : stages,
     // The meter stops the day between stages: no new story past the cap, a story in progress stops at the ceiling.
     // Only the Claude-call guard keeps a per-call reserve.

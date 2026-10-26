@@ -143,9 +143,10 @@ export function orderForNight<T>(
   const sunk = live.filter((x) => !pinOrder.has(idOf(x)) && night.demoted?.has(idOf(x)));
   const placed = rest.filter((x) => night.placed.has(idOf(x))).sort((a, b) => night.placed.get(idOf(b))! - night.placed.get(idOf(a))!);
   const out = rest.filter((x) => !night.placed.has(idOf(x)));
+  const effective = (o: T) => night.placed.get(idOf(o)) ?? scoreOf(o) ?? -Infinity;
   for (const x of placed) {
     const key = night.placed.get(idOf(x))!;
-    const at = out.findIndex((o) => (scoreOf(o) ?? -Infinity) < key);
+    const at = out.findIndex((o) => effective(o) < key);
     out.splice(at < 0 ? out.length : at, 0, x);
   }
   return [...pinned, ...out, ...sunk];

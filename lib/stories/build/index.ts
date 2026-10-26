@@ -64,6 +64,7 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
   const photoUsdBefore = deps.photos.usd;
   try {
     const series = got.set.series;
+    const poolReadAt = new Date();
     const pool = await seriesPool(deps, series, now);
     const jev = createStoriesJev(deps.jevTransport, deps.db);
     const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool };
@@ -79,7 +80,7 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
       const used = series === 'free_vs_paid' ? leadKeysForPair(pool.leads, (result.payload.pair ?? {}) as Record<string, unknown>) : result.historyKeys;
       await markPoolUsed(deps.db, series, used, now).catch((err) => deps.log?.(`pool: could not mark used: ${err instanceof Error ? err.message : String(err)}`));
       // The series' set is built from the pool: hand placements for this series are used up and its ideas compete by score again.
-      if (QUEUE_LIVE.has('stories')) await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, 'stories', `stories:pool:${series}:`);
+      if (QUEUE_LIVE.has('stories')) await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, 'stories', `stories:pool:${series}:`, poolReadAt);
     }
     const photoUsd = deps.photos.usd - photoUsdBefore;
     if (photoUsd > 0) await recordCost(deps.db, { setId, vendor: 'jev', component: 'photo-finder', usd: photoUsd });

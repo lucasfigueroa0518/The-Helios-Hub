@@ -84,16 +84,29 @@ export async function pickPromoted(query: Query, firstStoryId: string): Promise<
 /**
  * The pool standard's night (2026-10-21): what the run is told besides its pins. `archived` stories are never made, and
  * `archivedUrls` are the member URLs of archived stories (a group's id is a representative URL that can change night to
- * night, so an archived story is matched by any shared URL as well as by id); `placed` is where a drag left a fresh story.
+ * night, so an archived story is matched by any shared URL as well as by id).
+ *
+ * `placed` is where a drag left a story, and `extra` are stories the night's own selection did not return but the person's queue
+ * holds: a dragged story, and the person's qualified seeds. Both are on the hub's score scale (story-scoring probSum, 0 to 5.5),
+ * while a candidate's `score` is only its rank in tonight's selection, so `probOf` (tonight's probSum by story id) is how a key
+ * finds its place among tonight's candidates.
  */
-export type CarouselNight = { archived?: ReadonlySet<string>; archivedUrls?: ReadonlySet<string>; placed?: ReadonlyMap<string, number> };
+export type CarouselNight = {
+  archived?: ReadonlySet<string>;
+  archivedUrls?: ReadonlySet<string>;
+  placed?: ReadonlyMap<string, number>;
+  extra?: ReadonlyArray<{ candidate: ScoredCandidate; key: number }>;
+  probOf?: (id: string) => number | undefined;
+};
 
 /**
- * Selection as usual, then: tonight's pins above every fresh score, in the order pinned (before the pool standard, one
- * promote); archived stories removed; placed stories at their key; demoted stories (types not on the queue) below every other.
+ * Selection as usual, then: tonight's pins above everything, in the order pinned (before the pool standard, one promote);
+ * archived stories removed; a dragged story, and each qualified seed, slotted in where its score would sit among tonight's
+ * candidates; demoted stories (old rows) below every other. With nothing to apply the selection passes through untouched.
  */
 export function promotedStages(stages: PipelineStages, promoted: ScoredCandidate | readonly ScoredCandidate[] | null, demoted: ReadonlySet<string>, night: CarouselNight = {}): PipelineStages {
   const pins: readonly ScoredCandidate[] = promoted == null ? [] : Array.isArray(promoted) ? promoted : [promoted as ScoredCandidate];
+  if (!pins.length && !demoted.size && !night.archived?.size && !night.placed?.size && !night.extra?.length) return stages;
   return {
     ...stages,
     async score(articles, now) {
@@ -105,14 +118,31 @@ export function promotedStages(stages: PipelineStages, promoted: ScoredCandidate
       const urlsOf = (c: ScoredCandidate) => [c.url, ...c.members.map((m) => m.url)];
       const sameStory = (c: ScoredCandidate) => pins.some((p) => p.id === c.id) || urlsOf(c).some((u) => pinnedUrls.has(u));
       const archived = (c: ScoredCandidate) => night.archived?.has(c.id) === true || urlsOf(c).some((u) => night.archivedUrls?.has(u));
-      const fresh = res.value.filter((c) => !sameStory(c) && !archived(c)).map((c) => (night.placed?.has(c.id) ? { ...c, score: night.placed.get(c.id)! } : c));
-      const scores = res.value.filter((c) => !sameStory(c) && !archived(c)).map((c) => c.score);
-      const top = Math.max(0, ...scores);
-      const bottom = Math.min(0, ...scores);
-      const kept = fresh.filter((c) => !demoted.has(c.id)).sort((a, b) => b.score - a.score);
-      const sunk = fresh.filter((c) => demoted.has(c.id)).map((c, i) => ({ ...c, score: bottom - 1 - i }));
-      const leading = pins.filter((p) => !archived(p)).map((p, i, all) => ({ ...p, score: top + all.length - i }));
-      return { ...res, value: [...leading, ...kept, ...sunk] };
+      const fresh = res.value.filter((c) => !sameStory(c) && !archived(c));
+
+      // The stories to slot in by key: dragged ones (fresh or not) and the seeds; a drag overrides a seed's own score.
+      const slotted = new Map<string, { c: ScoredCandidate; key: number }>();
+      for (const [id, key] of night.placed ?? []) {
+        const c = fresh.find((f) => f.id === id) ?? night.extra?.find((e) => e.candidate.id === id)?.candidate;
+        if (c && !sameStory(c) && !archived(c)) slotted.set(id, { c, key });
+      }
+      for (const e of night.extra ?? []) {
+        const c = e.candidate;
+        if (slotted.has(c.id) || sameStory(c) || archived(c) || fresh.some((f) => f.id === c.id || urlsOf(f).some((u) => urlsOf(c).includes(u)))) continue;
+        slotted.set(c.id, { c, key: e.key });
+      }
+      const rest = fresh.filter((c) => !slotted.has(c.id));
+      const effective = (c: ScoredCandidate) => slotted.get(c.id)?.key ?? night.probOf?.(c.id) ?? -Infinity;
+      for (const { c, key } of [...slotted.values()].sort((x, y) => y.key - x.key)) {
+        // Without tonight's scores a dragged story goes first and a seed last; with them, before the first candidate scoring below its key.
+        const at = night.probOf ? rest.findIndex((o) => effective(o) < key) : night.placed?.has(c.id) ? 0 : -1;
+        rest.splice(at < 0 ? rest.length : at, 0, c);
+      }
+      const kept = rest.filter((c) => !demoted.has(c.id));
+      const sunk = rest.filter((c) => demoted.has(c.id));
+      const ordered = [...pins.filter((p) => !archived(p)), ...kept, ...sunk];
+      // A candidate's score is its place in the run (higher runs first).
+      return { ...res, value: ordered.map((c, i) => ({ ...c, score: ordered.length - i })) };
     },
   };
 }
