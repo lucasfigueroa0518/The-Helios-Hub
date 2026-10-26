@@ -171,6 +171,10 @@ export type HubIdea = {
   yours?: boolean;
   /** AI Events: a person's pin or exclude on the event for its week (Pin / Exclude / Clear). */
   hold?: 'pinned' | 'excluded' | null;
+  /** Text on Screen: its place among the last run's picks (made ones first, 0 is the best); null: not picked. Leads the queue. */
+  runPick?: number | null;
+  /** Text on Screen: why the last run passed over it though it ranked above a pick; null: it didn't. */
+  runSkip?: string | null;
   /** An outside page for the idea (AI Events: the event's RSVP page). */
   link?: string | null;
   /** A render that is queued, running, or whose latest try failed. */

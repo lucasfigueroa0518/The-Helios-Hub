@@ -4,7 +4,7 @@ import { capacityWindows } from '@/lib/social-hub/views/plan';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { offerer, type Offer } from '@/lib/social-hub/views/offer';
 import { poolSummary } from '@/lib/social-hub/views/pools';
-import { dayRanking, ideaOwns, quotaCandidates } from '@/lib/social-hub/views/day-rank';
+import { contentFor, dayRanking, ideaOwns, quotaCandidates } from '@/lib/social-hub/views/day-rank';
 import type { MoveTag } from '@/lib/social-hub/views/moves';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 import { AI_EVENTS_CITY_TABS, weekLabel } from '@/lib/social-hub/adapters/ai-events';
@@ -75,6 +75,8 @@ export type TypeHubModel = {
   versions: Record<string, TypeCard[]>;
   /** Today's quota slots in queue order (Stories and Last Few Days keep their own cards). */
   slots: TypeSlot[];
+  /** Each open idea's content for today (being made, or made with something to show), by idea id: a slot the person drags an idea into shows it. */
+  content: Record<string, TypeCard>;
   scoreLabel: string | null;
   lastRefill: string | null;
   poolOpen: number;
@@ -117,10 +119,12 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
   // Made but not on a day yet: not part of any day. It waits on the bench with its idea.
   const waiting: TypeCard[] = [];
   const madeVersions = new Map<string, TypeCard[]>();
+  const cardOf = new Map<string, TypeCard>();
   for (const post of dataset.posts) {
     if (post.vertical !== vertical) continue;
     const t = thumbOf(post.media);
     const card: TypeCard = { post, offer: o.offer(post), thumb: t.src, remote: t.remote, count: t.count };
+    cardOf.set(post.id, card);
     if (post.idea?.id && madeKind(post)) madeVersions.set(post.idea.id, [...(madeVersions.get(post.idea.id) ?? []), card]);
     if (!fillsQuota(post) || !post.nyDate || post.nyDate < earliest) {
       if (post.nyDate && post.nyDate < earliest) continue;
@@ -200,7 +204,12 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     bench: rows,
     benchTotal: rows.length,
     versions: Object.fromEntries([...madeVersions].filter(([, cards]) => cards.length > 1).map(([id, cards]) => [id, cards.sort((a, b) => (b.post.generatedAt ?? '').localeCompare(a.post.generatedAt ?? '') || a.post.id.localeCompare(b.post.id))])),
-    slots: slotsOf(candidates, days.find((d) => d.date === today)?.cards ?? [], vertical),
+    slots: slotsOf(candidates, cardOf, vertical),
+    content: Object.fromEntries(open.slice(0, 50).flatMap((idea) => {
+      const post = contentFor(idea, dataset.posts);
+      const card = post ? cardOf.get(post.id) : undefined;
+      return card ? [[idea.id, card] as const] : [];
+    })),
     scoreLabel: summary.scoreLabel ?? null,
     lastRefill: summary.lastRefill ?? null,
     poolOpen: summary.open,
@@ -275,12 +284,13 @@ function bySeries(open: readonly HubIdea[]): Array<{ idea: HubIdea; rank: number
 }
 
 /** Today's quota slots for a type with an idea queue: each candidate's idea with its card if it has content, else an open slot. */
-function slotsOf(candidates: ReturnType<typeof quotaCandidates>, todays: readonly TypeCard[], vertical: Vertical): TypeSlot[] {
+function slotsOf(candidates: ReturnType<typeof quotaCandidates>, cardOf: ReadonlyMap<string, TypeCard>, vertical: Vertical): TypeSlot[] {
   if (vertical === 'stories' || vertical === 'last_few_days') return [];
   return candidates.map((c) => ({
     rank: c.rank,
     idea: c.idea,
-    card: c.post ? todays.find((t) => t.post.id === c.post!.id) ?? null : null,
+    // Any of the type's posts: a made post with no day yet still fills its slot (it is not on today's strip).
+    card: c.post ? cardOf.get(c.post.id) ?? null : null,
     locked: c.locked,
   }));
 }

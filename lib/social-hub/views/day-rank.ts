@@ -4,7 +4,7 @@ import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
 import type { SlotsByDate } from '@/lib/social-hub/slots/types';
 import { rankIdeas } from '@/lib/social-hub/views/pools';
 import { isRejected } from '@/lib/social-hub/views/state';
-import { QUEUE_LIVE, capQueued, queueOrder, queueTags, withoutArchived } from '@/lib/social-hub/queue';
+import { QUEUE_LIVE, capQueued, queueOrder, queueTags, runLead, withoutArchived } from '@/lib/social-hub/queue';
 import { applyMoves, movesFor, moveTags, type IdeaAdjustment, type MoveTag } from '@/lib/social-hub/views/moves';
 
 /**
@@ -95,7 +95,7 @@ export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjust
       applyMoves(withoutArchived(rankIdeas(list), moves), moves).forEach((idea, i) => out.push({ idea, rank: i + 1, moved: lastMove.get(idea.id) ?? null, tag: tags.get(idea.id) ?? null, pinned: false, placed: false }));
       continue;
     }
-    for (const q of capQueued(queueOrder(rankIdeas(list), moves))) out.push({ idea: q.item, rank: q.rank, moved: q.pinned ? 'promoted' : null, tag: tags.get(q.item.id) ?? null, pinned: q.pinned, placed: q.placed });
+    for (const q of capQueued(queueOrder(rankIdeas(list), moves, runLead(list)))) out.push({ idea: q.item, rank: q.rank, moved: q.pinned ? 'promoted' : null, tag: tags.get(q.item.id) ?? null, pinned: q.pinned, placed: q.placed });
   }
   return out;
 }
@@ -138,7 +138,7 @@ export function hasMedia(post: HubPost): boolean {
 }
 
 /** An idea's content for today: being made, or made with something to look at and not failed, skipped or rejected. Newest first. */
-function contentFor(idea: HubIdea, posts: readonly HubPost[]): HubPost | null {
+export function contentFor(idea: HubIdea, posts: readonly HubPost[]): HubPost | null {
   const mine = posts.filter((p) => p.vertical === idea.vertical && ideaOwns(idea, p));
   const making = mine.find((p) => p.status === 'generating');
   if (making) return making;

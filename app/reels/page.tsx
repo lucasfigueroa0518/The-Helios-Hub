@@ -7,6 +7,7 @@ import { ensureReviewToken } from '@/lib/reels/review';
 import { getSession } from '@/lib/session';
 import { reelsMovesQuery } from '@/lib/reels/pipeline/promote';
 import { readMoves } from '@/lib/social-hub/moves-store';
+import { reelsPerDay } from '@/lib/reels/pipeline/fill';
 
 import './reels.css';
 import '@/components/content-type/type-hub.css';
@@ -22,7 +23,7 @@ export default async function ReelsPage() {
   const session = await getSession();
   if (!session) redirect('/');
   // Independent reads: run them together rather than one after another.
-  const [, initial, reviewToken, moves] = await Promise.all([
+  const [, initial, reviewToken, moves, slotsToday] = await Promise.all([
     beginInsightsRefresh().catch(() => undefined),
     loadReelsOverview().catch((error) => ({
       error: error instanceof Error ? error.message : String(error),
@@ -30,6 +31,8 @@ export default async function ReelsPage() {
     ensureReviewToken().catch(() => null),
     // What a person did to the queue (idea pool standard): pins, drags, archives. A failed read shows the bench as the night ranked it.
     readMoves(reelsMovesQuery, 'reels').catch(() => []),
+    // Today's reel slots (the calendar's, else posts_per_day): the top shows that many. A failed read shows the run's picks.
+    reelsPerDay().catch(() => null),
   ]);
 
   if ('error' in initial) {
@@ -48,5 +51,5 @@ export default async function ReelsPage() {
     );
   }
 
-  return <ReelsHub initial={initial} moves={moves} reviewPath={`/watch/${reviewToken ?? await ensureReviewToken()}`} />;
+  return <ReelsHub initial={initial} moves={moves} slotsToday={slotsToday} reviewPath={`/watch/${reviewToken ?? await ensureReviewToken()}`} />;
 }

@@ -1,6 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { ARCHIVE_ONLY, QUEUE_LIVE, dropKeyBetween, queueOrder } from '@/lib/social-hub/queue';
+import { ARCHIVE_ONLY, QUEUE_LIVE, dropKeyBetween, queueOrder, runLead } from '@/lib/social-hub/queue';
 import { archiveIdea, pinIdea, placeIdea, reorderPins, unpinIdea } from '@/lib/social-hub/queue-store';
 import type { Vertical } from '@/lib/social-hub/types';
 import { isUnscoredSeed } from '@/lib/reels/seeds';
@@ -46,7 +46,7 @@ export function parseQueueAction(body: unknown): QueueAction {
 /** A drag's key from the queue as the dataset shows it now. A neighbour that is gone counts as the end of the list. */
 export function keyFor(dataset: HubDataset, move: Extract<QueueAction, { action: 'place' }>): number {
   const ideas = dataset.ideas.filter((i) => i.vertical === move.vertical);
-  const queued = queueOrder(ideas, (dataset.adjustments ?? []).filter((a) => a.vertical === move.vertical));
+  const queued = queueOrder(ideas, (dataset.adjustments ?? []).filter((a) => a.vertical === move.vertical), runLead(ideas));
   const effective = (id: string | null) => (id == null ? undefined : queued.find((q) => q.item.id === id && !q.pinned)?.effective);
   return dropKeyBetween(effective(move.aboveId), effective(move.belowId), move.up);
 }
