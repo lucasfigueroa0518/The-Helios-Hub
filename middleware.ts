@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import NextAuth from 'next-auth';
 
 import { authConfig } from '@/auth.config';
+import { HUB_TIMING_HEADER, isTimedHubPath } from '@/lib/social-hub/server-timing-path';
 
 const { auth } = NextAuth(authConfig);
 
@@ -95,8 +96,16 @@ export default auth((req) => {
     return NextResponse.redirect(login);
   }
 
-  return NextResponse.next();
+  return continueWithTiming(req);
 });
+
+/** A hub page gets a request id so its RSC response can carry Server-Timing. */
+function continueWithTiming(req: { headers: Headers; nextUrl: { pathname: string } }) {
+  if (!isTimedHubPath(req.nextUrl.pathname)) return NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set(HUB_TIMING_HEADER, crypto.randomUUID());
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
 
 export const config = {
   matcher: [

@@ -64,10 +64,22 @@ test('Health is the fourth hub tab with its own section and crumb', () => {
   assert.deepEqual(crumbsFor('/social', '/social/analytics/cost').map((c) => c.label), ['Analytics', 'Cost']);
 });
 
-test('hub tabs use automatic prefetch so a loading shell is enough', async () => {
+test('hub tabs and the main menu prefetch the shell on sight and the full route on hover', async () => {
   const { readFileSync } = await import('node:fs');
   const tabs = readFileSync('components/social-hub/nav/HubTabs.tsx', 'utf8');
-  assert.doesNotMatch(tabs, /<Link[^>]*\sprefetch/);
+  const menu = readFileSync('components/hub-shell/HubSidebar.tsx', 'utf8');
+  const warm = readFileSync('components/hub-shell/warm-link.tsx', 'utf8');
+  assert.match(tabs, /WarmLink/);
+  assert.match(menu, /WarmLink/);
+  assert.match(warm, /router\.prefetch\(href, \{ kind: PrefetchKind\.FULL \}\)/);
+  assert.match(warm, /PrefetchKind\.AUTO/);
+  assert.match(warm, /entry\.kind = PrefetchKind\.FULL/);
+  assert.match(warm, /entry\.lastUsedTime == null/);
+  assert.match(warm, /prefetch=\{false\}/);
+  assert.match(warm, /router\.push\(href\)/);
+  assert.doesNotMatch(tabs, /prefetch=\{true\}/);
+  assert.doesNotMatch(menu, /prefetch=\{true\}/);
+  assert.doesNotMatch(warm, /prefetch=\{true\}/);
 });
 
 test('links into force-dynamic Health night pages and the Cost page never prefetch', async () => {

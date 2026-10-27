@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 
+import { ensureDashboardTokens } from '@/app/dashboards/(admin)/(main)/access';
 import BackgroundHealth from '@/app/dashboards/(admin)/(main)/projects/[id]/BackgroundHealth';
 import DeleteProjectButton from '@/app/dashboards/(admin)/(main)/projects/[id]/DeleteProjectButton';
 import EditProjectForm from '@/app/dashboards/(admin)/(main)/projects/[id]/EditProjectForm';
@@ -14,6 +15,8 @@ export default async function EditProjectPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const blocked = await ensureDashboardTokens();
+  if (blocked) return blocked;
   const { id } = await params;
   const [project, clients] = await Promise.all([
     getAdminProject(id),

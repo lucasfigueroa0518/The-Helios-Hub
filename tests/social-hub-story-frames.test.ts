@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import type { HubPost } from '@/lib/social-hub/types';
-import { signOpenedPost, signVisibleStoryFrames } from '@/lib/social-hub/views/story-frames';
+import { signOpenedPost, signVisibleStoryFrames, storyFramePostIds } from '@/lib/social-hub/views/story-frames';
 
 function frames(id: string, items: Array<{ src: string | null; path?: string | null }>): HubPost {
   return { id, media: { kind: 'frames', frames: items.map((item, i) => ({ src: item.src, label: `Frame ${i + 1}`, path: item.path })) } } as HubPost;
@@ -42,4 +42,13 @@ test('visible story frames are signed in one batch; a missing path, a thrown sig
 
   const opened = await signOpenedPost(shown, encodeURIComponent('stories:set:b'), async (paths) => paths.map((path) => `https://signed.example/${path}`));
   assert.equal(opened.posts[1]!.media.kind === 'frames' && opened.posts[1]!.media.frames[0]!.src, 'https://signed.example/sets/b/01.jpg');
+});
+
+test('only a frame that still uses the route and has a stored object is on screen to sign', () => {
+  const ids = storyFramePostIds([
+    frames('stories:set:a', [{ src: '/api/stories/frames/1', path: 'sets/a/01.jpg' }]),
+    frames('stories:set:b', [{ src: '/api/stories/frames/2', path: null }]),
+    frames('stories:set:c', [{ src: 'https://already.signed/x', path: 'sets/c/01.jpg' }]),
+  ]);
+  assert.deepEqual([...ids], ['stories:set:a']);
 });
