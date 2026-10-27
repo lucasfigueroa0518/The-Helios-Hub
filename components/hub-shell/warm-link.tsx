@@ -12,8 +12,12 @@ import { PrefetchKind } from 'next/dist/client/components/router-reducer/router-
  *
  * Calling the full prefetch twice while the shell entry is still in place makes
  * Next fetch the page twice. The link's own hover prefetch stays off for the
- * same reason. A prefetch that does not start a request is already cached, and
- * the click navigates immediately.
+ * same reason.
+ *
+ * The page you opened is seeded as an auto prefetch that is already marked
+ * used. Coming back to it is treated as stale, and Next refetches the page
+ * and the drawer as two full loads. That seed already holds the render, so
+ * marking it full lets the return reuse it.
  */
 const WAIT_MS = 10000;
 const START_GRACE_MS = 150;
@@ -89,13 +93,82 @@ function waitForPrefetch(pathname: string, from: number): Promise<boolean> {
   });
 }
 
-function warm(href: string, router: { prefetch: (href: string, options: { kind: PrefetchKind }) => void }): Promise<void> {
+type PrefetchEntry = {
+  kind: PrefetchKind;
+  lastUsedTime: number | null;
+  url?: { pathname: string };
+};
+
+type HookNode = {
+  memoizedState?: unknown;
+  next?: HookNode | null;
+};
+
+type FiberNode = {
+  memoizedState?: HookNode | null;
+  return?: FiberNode | null;
+};
+
+function routerCache(state: unknown): Map<string, PrefetchEntry> | null {
+  if (!state || typeof state !== 'object') return null;
+  const record = state as { prefetchCache?: unknown; value?: unknown };
+  if (record.prefetchCache instanceof Map) return record.prefetchCache;
+  if (!record.value || typeof record.value !== 'object') return null;
+  const resolved = record.value as { prefetchCache?: unknown };
+  return resolved.prefetchCache instanceof Map ? resolved.prefetchCache : null;
+}
+
+function findPrefetchCache(node: Element): Map<string, PrefetchEntry> | null {
+  const fiberKey = Object.keys(node).find((key) => key.startsWith('__reactFiber$'));
+  if (!fiberKey) return null;
+  let fiber = (node as unknown as Record<string, FiberNode | undefined>)[fiberKey] ?? null;
+  const seen = new Set<FiberNode>();
+  for (let hop = 0; fiber && hop < 80 && !seen.has(fiber); hop += 1) {
+    seen.add(fiber);
+    let hook = fiber.memoizedState ?? null;
+    for (let index = 0; hook && index < 30; index += 1) {
+      const cache = routerCache(hook.memoizedState);
+      if (cache) return cache;
+      hook = hook.next ?? null;
+    }
+    fiber = fiber.return ?? null;
+  }
+  return null;
+}
+
+/**
+ * The document seed is the auto entry Next already marked used. A shell prefetch
+ * has no lastUsedTime, so this leaves it alone and the hover can still load it.
+ * Returns true when the click can navigate from that seed.
+ */
+function reuseDocumentSeed(node: Element | null, pathname: string): boolean {
+  if (!node) return false;
+  const cache = findPrefetchCache(node);
+  if (!cache) return false;
+  let reuse = false;
+  for (const entry of cache.values()) {
+    if (entry?.url?.pathname !== pathname || entry.lastUsedTime == null) continue;
+    if (entry.kind === PrefetchKind.AUTO) entry.kind = PrefetchKind.FULL;
+    if (entry.kind === PrefetchKind.FULL) reuse = true;
+  }
+  return reuse;
+}
+
+function warm(
+  href: string,
+  node: Element | null,
+  router: { prefetch: (href: string, options: { kind: PrefetchKind }) => void },
+): Promise<void> {
   const until = freshUntil.get(href);
   if (until != null && until > Date.now()) return Promise.resolve();
   const pending = inflight.get(href);
   if (pending) return pending;
-  ensureFetchWatch();
   const pathname = pathnameOf(href);
+  if (reuseDocumentSeed(node, pathname)) {
+    freshUntil.set(href, Date.now() + FRESH_MS);
+    return Promise.resolve();
+  }
+  ensureFetchWatch();
   const from = watches.length;
   router.prefetch(href, { kind: PrefetchKind.FULL });
   const next = waitForPrefetch(pathname, from).then((found) => {
@@ -116,6 +189,9 @@ export function WarmLink({ onClick, onMouseEnter, onFocus, ...props }: Component
   useEffect(() => {
     const anchor = anchorRef.current;
     if (!href || !anchor) return;
+    if (pathnameOf(href) === window.location.pathname) {
+      reuseDocumentSeed(anchor, pathnameOf(href));
+    }
     const observer = new IntersectionObserver((entries) => {
       if (shelled.current || !entries.some((entry) => entry.isIntersecting)) return;
       shelled.current = true;
@@ -131,7 +207,7 @@ export function WarmLink({ onClick, onMouseEnter, onFocus, ...props }: Component
     if (event.defaultPrevented || !href) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
-    const ready = warm(href, router);
+    const ready = warm(href, event.currentTarget, router);
     ready.then(() => {
       router.push(href);
     });
@@ -144,11 +220,11 @@ export function WarmLink({ onClick, onMouseEnter, onFocus, ...props }: Component
       prefetch={false}
       onMouseEnter={(event) => {
         onMouseEnter?.(event);
-        if (href) warm(href, router);
+        if (href) warm(href, event.currentTarget, router);
       }}
       onFocus={(event: FocusEvent<HTMLAnchorElement>) => {
         onFocus?.(event);
-        if (href) warm(href, router);
+        if (href) warm(href, event.currentTarget, router);
       }}
       onClick={handleClick}
     />

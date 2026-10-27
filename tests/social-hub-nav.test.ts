@@ -73,6 +73,8 @@ test('hub tabs and the main menu prefetch the shell on sight and the full route 
   assert.match(menu, /WarmLink/);
   assert.match(warm, /router\.prefetch\(href, \{ kind: PrefetchKind\.FULL \}\)/);
   assert.match(warm, /PrefetchKind\.AUTO/);
+  assert.match(warm, /entry\.kind = PrefetchKind\.FULL/);
+  assert.match(warm, /entry\.lastUsedTime == null/);
   assert.match(warm, /prefetch=\{false\}/);
   assert.match(warm, /router\.push\(href\)/);
   assert.doesNotMatch(tabs, /prefetch=\{true\}/);
