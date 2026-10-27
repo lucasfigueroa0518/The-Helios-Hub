@@ -167,6 +167,9 @@ test('the post with memes: the meme cover keeps the mosaic photos; meme slides s
   assert.equal(slideOf('e').photoAspect, 0.8, 'the slide box takes the meme\'s shape');
   assert.equal(slideOf('b').photoAspect, undefined);
   assert.match(post.caption, /– Headline b\n– Headline a/);
+  const memed = stories.map((s, i) => (i === 4 ? { ...s, photoSource: 'meme' as const, photo: { ...s.photo, src: 'data:image/png;base64,meme' } } : s));
+  const mosaicOnly = postWithMemes(memed, placeMemes(withMemes({})), () => ({ url: '' }), new Date('2026-10-13T07:00:00Z'));
+  assert.ok(!mosaicOnly.slides[0]!.lfdCover!.photos.some((p) => p.url.includes('meme')));
   // Without memes it is exactly Tommy's post.
   const plain = postWithMemes(stories, placeMemes(withMemes({})), () => ({ url: '' }), new Date('2026-10-13T07:00:00Z'));
   assert.deepEqual(plain, buildPost(stories.map(readyFromSaved), new Date('2026-10-13T07:00:00Z')));

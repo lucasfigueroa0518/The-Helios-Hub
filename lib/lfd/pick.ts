@@ -189,6 +189,31 @@ export class Selector {
     return (lane === 'major' ? this.majors : this.rundown).slice(0, n);
   }
 
+  /**
+   * Unused majors (by score) then unused rundown (by net), skipping `skip` keys and
+   * shared refs. The meme-pool scan uses this when the lineup has no 92% story.
+   */
+  unused(n: number, skip: Iterable<string>): LfdCandidate[] {
+    const blocked = new Set(skip);
+    const out: LfdCandidate[] = [];
+    for (const c of [...this.majors, ...this.rundown]) {
+      if (blocked.has(c.key) || c.refs.some((r) => blocked.has(r))) continue;
+      blocked.add(c.key);
+      c.refs.forEach((r) => blocked.add(r));
+      out.push(c);
+      if (out.length >= n) break;
+    }
+    return out;
+  }
+
+  /** Take a story that the meme scan added, so a later replace will not pick it again. */
+  adopt(c: LfdCandidate, lane: Lane): Pick {
+    this.tried.add(c.key);
+    const pick: Pick = { ...c, lane };
+    this.picks.push(pick);
+    return pick;
+  }
+
   drop(key: string): void {
     const i = this.picks.findIndex((p) => p.key === key);
     if (i !== -1) this.picks.splice(i, 1);

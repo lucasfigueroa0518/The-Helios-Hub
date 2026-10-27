@@ -102,13 +102,18 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
   const post = rows[0];
   if (!post || !Array.isArray(post.stories) || post.stories.length === 0) return { placed: 0, gated: 0, skipped: 'no post', costUsd: 0 };
   const stories = post.stories;
+  const pending = stories.filter((s) => !s.meme && s.photoSource !== 'meme');
+  if (!pending.length) {
+    d.log('lfd_memes_skipped', { postId, reason: 'already had memes' });
+    return { placed: 0, gated: 0, costUsd: 0, skipped: 'already had memes' };
+  }
   let costUsd = 0;
   const over = () => costUsd >= d.capUsd;
 
-  // 1–2. Tags and the gate.
-  const tags = await tagStories(d.jev, stories.map((s) => ({ id: s.key, headline: s.headline, text: textOf(s) })));
-  const gated = gate(fitOdds(evidence.rows), stories.map((s, i) => ({ key: s.key, origIndex: i, tags: tags.get(s.key) as StoryTags })), evidence.threshold);
-  const chosen = stories.filter((s) => gated.find((g) => g.key === s.key)?.chosen);
+  // 1–2. Tags and the gate (stories the engine already memed are left as they are).
+  const tags = await tagStories(d.jev, pending.map((s) => ({ id: s.key, headline: s.headline, text: textOf(s) })));
+  const gated = gate(fitOdds(evidence.rows), pending.map((s, i) => ({ key: s.key, origIndex: i, tags: tags.get(s.key) as StoryTags })), evidence.threshold);
+  const chosen = pending.filter((s) => gated.find((g) => g.key === s.key)?.chosen);
   d.log('lfd_memes_gate', { postId, chosen: chosen.length, passing: gated.filter((g) => g.passes).length, stories: stories.length, evidence: evidence.rows.length });
   if (!chosen.length) return { placed: 0, gated: 0, costUsd };
 
@@ -161,28 +166,40 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
   }
 
   // 5. Placement, uploads, re-render, the post row.
-  const placement: Placement = placeMemes(stories.map((s) => ({ key: s.key, memeId: picks.get(s.key)?.memeId ?? null })));
+  const fallback = new Map(stories.map((s, i) => [s.key, i]));
+  const ranked = [...stories].sort((a, b) => (a.leadIndex ?? fallback.get(a.key)!) - (b.leadIndex ?? fallback.get(b.key)!));
+  const placement: Placement = placeMemes(ranked.map((s) => ({
+    key: s.key,
+    memeId: picks.get(s.key)?.memeId ?? s.meme?.memeId ?? (s.photoSource === 'meme' ? s.meme?.memeId ?? `engine:${s.key}` : null),
+  })));
   const images = new Map<string, MemeImage>();
   const objects = new Map<string, string>();
+  const byKey = new Map(stories.map((s) => [s.key, s]));
   for (const p of placement.placed) {
-    const pick = picks.get(p.key)!;
-    const png = await trimLetterbox(fs.readFileSync(pick.imagePath));
-    const object = `lfd/${post.slug}/meme-${p.rank}.png`;
-    await d.upload(object, png, 'image/png');
-    images.set(p.memeId, await memeImageOf(png));
-    objects.set(p.memeId, object);
+    const pick = picks.get(p.key);
+    if (pick) {
+      const png = await trimLetterbox(fs.readFileSync(pick.imagePath));
+      const object = `lfd/${post.slug}/meme-${p.rank}.png`;
+      await d.upload(object, png, 'image/png');
+      images.set(p.memeId, await memeImageOf(png));
+      objects.set(p.memeId, object);
+      continue;
+    }
+    const existing = byKey.get(p.key);
+    if (existing?.photoSource === 'meme' && existing.photo.src) images.set(p.memeId, { url: existing.photo.src });
+    if (existing?.meme?.object) objects.set(p.memeId, existing.meme.object);
   }
   fs.rmSync(renderDir, { recursive: true, force: true });
   const render = postWithMemes(stories, placement, (id) => images.get(id) ?? { url: '' }, d.now());
   const slideObjects = await d.storeSlides(post.slug, render);
   // The saved render keeps each meme's storage object, not the image: the hub lists posts with their render.
   const savedRender = postWithMemes(stories, placement, (id) => ({ ...images.get(id), url: `storage:${objects.get(id) ?? ''}` }), d.now());
-  const byKey = new Map(stories.map((s) => [s.key, s]));
   const newStories = placement.order.map((key) => {
     const s = byKey.get(key)!;
     const p = placement.placed.find((x) => x.key === key);
     const pick = picks.get(key);
-    if (!p || !pick) return s;
+    if (!p) return s;
+    if (!pick) return s.meme ? { ...s, meme: { ...s.meme, role: p.role, position: p.position } } : s;
     const text = pick.fill.fills.flatMap((f) => (f.kind === 'entity' ? [] : [f.text]));
     const meme: PostMeme = { templateId: pick.templateId, memeId: pick.memeId, rank: p.rank, role: p.role, position: p.position, object: objects.get(pick.memeId)!, text };
     return { ...s, meme };
