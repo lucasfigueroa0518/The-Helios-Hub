@@ -1,5 +1,6 @@
 import { listCampaigns } from '@/lib/campaigns';
-import { dbQuery } from '@/lib/db';
+import { dbQuery, isDbConnectTimeout } from '@/lib/db';
+import { logInfo } from '@/lib/observability/log-event';
 import { getAdminProjects } from '@/lib/dashboards/admin-data';
 import type { Campaign } from '@/lib/campaigns';
 import type { AdminProject } from '@/lib/dashboards/types';
@@ -40,6 +41,12 @@ export type HomePayload = {
   projects: AdminProject[];
   campaigns: Campaign[];
   outreachStats: OutreachHomeStats;
+  /** A section whose read timed out. An empty list here is a failed load, not "nothing yet". */
+  unavailable?: {
+    boards?: boolean;
+    projects?: boolean;
+    campaigns?: boolean;
+  };
 };
 
 async function loadWeekStats(email: string): Promise<WeekEmailTotals> {
@@ -64,10 +71,18 @@ async function loadWeekStats(email: string): Promise<WeekEmailTotals> {
 }
 
 export async function loadHome(userId: string, email: string): Promise<HomePayload> {
+  const started = performance.now();
+  const unavailable: NonNullable<HomePayload['unavailable']> = {};
   const [boards, projects, campaigns, displayName, weekStats] = await Promise.all([
-    listHomeBoards(userId),
-    getAdminProjects().catch(() => [] as AdminProject[]),
-    listCampaigns(userId).catch(() => [] as Campaign[]),
+    listHomeBoards(userId, unavailable),
+    getAdminProjects().catch((error: unknown) => {
+      if (isDbConnectTimeout(error)) unavailable.projects = true;
+      return [] as AdminProject[];
+    }),
+    listCampaigns(userId).catch((error: unknown) => {
+      if (isDbConnectTimeout(error)) unavailable.campaigns = true;
+      return [] as Campaign[];
+    }),
     loadDisplayName(userId, email),
     loadWeekStats(email),
   ]);
@@ -75,13 +90,24 @@ export async function loadHome(userId: string, email: string): Promise<HomePaylo
   const activeCampaigns = campaigns.filter((campaign) => campaign.status === 'active');
   const outreachStats = computeOutreachStats(campaigns, userId, email, weekStats);
 
-  return {
+  const payload = {
     displayName,
     boards,
     projects: projects.filter((project) => project.status === 'ACTIVE'),
     campaigns: activeCampaigns,
     outreachStats,
+    unavailable,
   };
+  logInfo({
+    component: 'home',
+    event: 'load_complete',
+    durationMs: Math.round(performance.now() - started),
+    boards: payload.boards.length,
+    projects: payload.projects.length,
+    liveCampaigns: payload.outreachStats.liveCampaignsCount,
+    unavailable: payload.unavailable,
+  });
+  return payload;
 }
 
 async function loadDisplayName(userId: string, email: string): Promise<string> {
@@ -107,7 +133,10 @@ async function loadDisplayName(userId: string, email: string): Promise<string> {
   }
 }
 
-async function listHomeBoards(userId: string): Promise<HomeBoard[]> {
+async function listHomeBoards(
+  userId: string,
+  unavailable: NonNullable<HomePayload['unavailable']>,
+): Promise<HomeBoard[]> {
   try {
     const { rows } = await dbQuery<{
       id: string;
@@ -135,7 +164,8 @@ async function listHomeBoards(userId: string): Promise<HomeBoard[]> {
       name: row.name,
       accent: row.background ?? '#FF5E1A',
     }));
-  } catch {
+  } catch (error) {
+    if (isDbConnectTimeout(error)) unavailable.boards = true;
     return [];
   }
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { chooseDbConnection, resolvePoolMax } from '@/lib/db';
+import { chooseDbConnection, dbPoolSettings, resolvePoolMax } from '@/lib/db';
 
 const SESSION = 'postgres://postgres.example:secret@aws-0.pooler.supabase.com:5432/postgres';
 const TRANSACTION = 'postgres://postgres.example:secret@aws-0.pooler.supabase.com:6543/postgres';
@@ -44,4 +44,20 @@ test('session mode clamps a worker-sized pool to 2 clients', () => {
   assert.equal(resolvePoolMax('transaction', { PG_POOL_MAX: '40' }), 8);
   assert.equal(resolvePoolMax('transaction', {}), 6);
   assert.equal(resolvePoolMax('session', {}), 2);
+});
+
+test('a Vercel isolate keeps a smaller transaction pool', () => {
+  assert.equal(resolvePoolMax('transaction', { VERCEL: '1' }), 3);
+  assert.equal(resolvePoolMax('transaction', { VERCEL: '1', PG_POOL_MAX: '8' }), 3);
+  assert.equal(resolvePoolMax('transaction', { VERCEL: '1', PG_POOL_MAX: '1' }), 1);
+  assert.equal(resolvePoolMax('session', { VERCEL: '1', PG_POOL_MAX: '8' }), 2);
+});
+
+test('a checkout gives up in 3 seconds', () => {
+  const web = dbPoolSettings('transaction', { VERCEL: '1' });
+  const worker = dbPoolSettings('transaction', {});
+  assert.equal(web.connectionTimeoutMillis, 3_000);
+  assert.equal(web.max, 3);
+  assert.equal(worker.connectionTimeoutMillis, 3_000);
+  assert.equal(worker.max, 6);
 });

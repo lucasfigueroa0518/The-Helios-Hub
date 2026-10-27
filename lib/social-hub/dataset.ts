@@ -34,6 +34,8 @@ export type HubDataset = {
   sources: HubSource[];
   /** A vertical whose read failed shows an error note; the rest of the hub still works. */
   errors: Array<{ vertical: Vertical; message: string }>;
+  /** Set when a connection timeout was replaced with the last good read, or when there was nothing to show. */
+  staleNote?: string;
   /** The allocated ledger (§8a); null when the cost reads failed. */
   cost: CostLedger | null;
   /** Cost read failures and denormalized-total disagreements, shown as notes. */

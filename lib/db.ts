@@ -1,8 +1,22 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
+
+import { markIsolateBoot } from '@/lib/observability/isolate';
+import { logError, logWarn } from '@/lib/observability/log-event';
+
+/** One checkout attempt. A stalled pooler fails this fast so the retry can run. */
+export const DB_CONNECT_TIMEOUT_MS = 3_000;
+/** First try plus two retries. A query error is not one of these attempts. */
+export const DB_CONNECT_ATTEMPTS = 3;
 
 const globalPool = globalThis as typeof globalThis & {
   __outreachHubPool?: Pool;
+  __outreachHubGate?: DbGate;
 };
+
+/** Set while this async call already holds a gate slot, so a nested query cannot deadlock. */
+const dbSlotDepth = new AsyncLocalStorage<number>();
 
 /**
  * Runtime connection selection.
@@ -68,15 +82,30 @@ function runtimeConnectionString(choice: DbConnectionChoice): string {
 
 /**
  * Session mode is clamped to 2 clients per process so several processes fit under pool_size 15.
- * Transaction mode multiplexes clients, so it defaults to 6: a page that fans out
- * a dozen queries (analytics, roster) should not queue them two at a time.
+ * Transaction mode on a long-lived worker defaults to 6. A Vercel isolate defaults to 3:
+ * Home, Social Hub, Trello, and Dashboards can boot together, and each isolate has its own pool.
  */
 export function resolvePoolMax(mode: 'session' | 'transaction', env: DbEnv = process.env): number {
-  const fallback = mode === 'session' ? 2 : 6;
+  const web = env.VERCEL === '1';
+  const fallback = mode === 'session' ? 2 : (web ? 3 : 6);
   const parsed = Number(env.PG_POOL_MAX ?? fallback);
   const requested = Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
-  const cap = mode === 'session' ? 2 : 8;
+  const cap = mode === 'session' ? 2 : (web ? 3 : 8);
   return Math.max(1, Math.min(cap, requested));
+}
+
+export function dbPoolSettings(mode: 'session' | 'transaction', env: DbEnv = process.env): {
+  max: number;
+  connectionTimeoutMillis: number;
+  idleTimeoutMillis: number;
+  allowExitOnIdle: true;
+} {
+  return {
+    max: resolvePoolMax(mode, env),
+    connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    idleTimeoutMillis: 10_000,
+    allowExitOnIdle: true,
+  };
 }
 
 function applicationName(): string {
@@ -87,7 +116,14 @@ function applicationName(): string {
   return 'helios-node';
 }
 
-function isPoolExhaustedError(error: unknown): boolean {
+/** node-pg: the checkout timer fired. This is a connect wait, not a failed query. */
+export function isDbConnectTimeout(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /timeout exceeded when trying to connect/i.test(message);
+}
+
+export function isRetryableDbConnectError(error: unknown): boolean {
+  if (isDbConnectTimeout(error)) return true;
   const message = error instanceof Error ? error.message : String(error);
   return /EMAXCONNSESSION|max clients reached|remaining connection slots/i.test(message);
 }
@@ -96,93 +132,199 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Retry a checkout. Leave syntax errors, constraint failures, and deadlocks alone. */
+export async function withDbConnectRetries<T>(
+  run: () => Promise<T>,
+  wait: (ms: number) => Promise<void> = sleep,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= DB_CONNECT_ATTEMPTS; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableDbConnectError(error) || attempt === DB_CONNECT_ATTEMPTS) throw error;
+      await wait(150 * attempt);
+    }
+  }
+  throw lastError;
+}
+
+export type DbGate = {
+  run<T>(fn: () => Promise<T>): Promise<T>;
+  close(): void;
+};
+
+/**
+ * At most `max` tasks call into the pool. The rest wait here, so their wait is
+ * not the pool's checkout timer. A task that is still queued when the gate
+ * closes fails instead of hanging.
+ */
+export function createDbGate(max: number): DbGate {
+  let active = 0;
+  let closed = false;
+  const limit = Math.max(1, max);
+  const waiting: Array<{ start: () => void; reject: (error: Error) => void }> = [];
+  return {
+    run(fn) {
+      if (closed) return Promise.reject(new Error('Database gate is closed'));
+      return new Promise((resolve, reject) => {
+        const start = () => {
+          if (closed) {
+            reject(new Error('Database gate is closed'));
+            return;
+          }
+          active += 1;
+          Promise.resolve()
+            .then(fn)
+            .then(resolve, reject)
+            .finally(() => {
+              active -= 1;
+              const next = waiting.shift();
+              if (next) next.start();
+            });
+        };
+        if (active < limit) start();
+        else waiting.push({ start, reject });
+      });
+    },
+    close() {
+      closed = true;
+      const pending = waiting.splice(0);
+      for (const item of pending) item.reject(new Error('Database gate is closed'));
+    },
+  };
+}
+
+/** A nested call reuses the slot already held by this async context. */
+export function runInDbSlot<T>(gate: DbGate, fn: () => Promise<T>): Promise<T> {
+  if ((dbSlotDepth.getStore() ?? 0) > 0) return fn();
+  return gate.run(() => dbSlotDepth.run(1, fn));
+}
+
+/**
+ * After a checkout gives up, more queries in this process fail immediately for
+ * a second. Otherwise a page that started dozens of queries would repeat the
+ * full timeout on every one of them.
+ */
+let connectBlockedUntil = 0;
+
+export function resetDbConnectCooldown(): void {
+  connectBlockedUntil = 0;
+}
+
+export function dbConnectCooldownActive(now = Date.now()): boolean {
+  return now < connectBlockedUntil;
+}
+
+export function markDbConnectGaveUp(error: unknown, now = Date.now()): void {
+  if (!isDbConnectTimeout(error)) return;
+  connectBlockedUntil = now + 1_000;
+  logWarn({
+    component: 'db-pool',
+    event: 'connect_timeout',
+    ...describeDbTarget(),
+    pool: dbPoolSnapshot(),
+  });
+}
+
+function rejectIfConnectCooling(): void {
+  if (!dbConnectCooldownActive()) return;
+  throw new Error('timeout exceeded when trying to connect');
+}
+
 function getPool(): Pool {
   if (!globalPool.__outreachHubPool) {
     const choice = chooseDbConnection();
-    const max = resolvePoolMax(choice.mode);
+    const settings = dbPoolSettings(choice.mode);
+    markIsolateBoot('db-pool', {
+      mode: choice.mode,
+      hostPort: choice.hostPort,
+      max: settings.max,
+      application: applicationName(),
+    });
     if (choice.mode === 'session') {
-      console.error(JSON.stringify({
-        ts: new Date().toISOString(),
-        level: 'warn',
+      logWarn({
         component: 'db-pool',
-        message: 'session_pooler_selected',
+        event: 'session_pooler_selected',
         hostPort: choice.hostPort,
-        max,
+        max: settings.max,
         note: 'Session mode caps every client at pool_size. Prefer the transaction pooler on :6543.',
-      }));
+      });
     }
     const pool = new Pool({
       connectionString: runtimeConnectionString(choice),
       application_name: applicationName(),
       ssl: process.platform === 'win32' ? false : { rejectUnauthorized: false },
-      max,
-      idleTimeoutMillis: 10_000,
-      connectionTimeoutMillis: 15_000,
-      allowExitOnIdle: true,
+      ...settings,
     });
     // Idle clients can drop on network blips; without this handler Node treats it as fatal.
     pool.on('error', (error) => {
-      console.error(JSON.stringify({
-        ts: new Date().toISOString(),
-        level: 'error',
+      logError({
         component: 'db-pool',
-        message: 'idle_client_error',
+        event: 'idle_client_error',
         error: error instanceof Error ? error.message : String(error),
-      }));
+        pool: dbPoolSnapshot(),
+      });
     });
     globalPool.__outreachHubPool = pool;
+    globalPool.__outreachHubGate = createDbGate(settings.max);
   }
   return globalPool.__outreachHubPool;
+}
+
+function getGate(): DbGate {
+  const pool = getPool();
+  if (!globalPool.__outreachHubGate) {
+    globalPool.__outreachHubGate = createDbGate(pool.options.max ?? 1);
+  }
+  return globalPool.__outreachHubGate;
+}
+
+function withDbSlot<T>(fn: () => Promise<T>): Promise<T> {
+  return runInDbSlot(getGate(), fn);
+}
+
+async function queryWithConnectPolicy<T>(run: () => Promise<T>): Promise<T> {
+  rejectIfConnectCooling();
+  try {
+    return await withDbConnectRetries(run);
+  } catch (error) {
+    markDbConnectGaveUp(error);
+    throw error;
+  }
 }
 
 export async function dbQuery<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResult<T>> {
-  const maxAttempts = 3;
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await getPool().query<T>(text, params);
-    } catch (error) {
-      lastError = error;
-      if (!isPoolExhaustedError(error) || attempt === maxAttempts) throw error;
-      // Brief backoff so idle clients can return to the Supabase session pool.
-      await sleep(150 * attempt);
-    }
-  }
-  throw lastError;
+  return withDbSlot(() => queryWithConnectPolicy(() => getPool().query<T>(text, params)));
 }
 
 /** Run related writes atomically. Roll back automatically when the callback throws. */
 export async function dbTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
-  const maxAttempts = 3;
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  return withDbSlot(async () => {
+    const client = await queryWithConnectPolicy(() => getPool().connect());
     try {
-      const client = await getPool().connect();
-      try {
-        await client.query('BEGIN');
-        const result = await callback(client);
-        await client.query('COMMIT');
-        return result;
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
     } catch (error) {
-      lastError = error;
-      if (!isPoolExhaustedError(error) || attempt === maxAttempts) throw error;
-      await sleep(150 * attempt);
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-  }
-  throw lastError;
+  });
 }
 
 /** Drain the shared pool (tests / graceful worker shutdown). */
 export async function closeDbPool(): Promise<void> {
+  const gate = globalPool.__outreachHubGate;
+  globalPool.__outreachHubGate = undefined;
+  gate?.close();
   if (!globalPool.__outreachHubPool) return;
   const pool = globalPool.__outreachHubPool;
   globalPool.__outreachHubPool = undefined;
