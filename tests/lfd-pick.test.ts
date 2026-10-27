@@ -149,6 +149,16 @@ test('scoreMajor reuses scores it already has instead of asking Jev again', asyn
   assert.equal(scored[0]!.major, 0.42);
 });
 
+test('unused walks leftover majors then rundown, skipping keys already used', () => {
+  const majors = [cand({ headline: 'M1', major: 0.9, origin: 'carousel' }), cand({ headline: 'M2', major: 0.8, origin: 'carousel' }), cand({ headline: 'M3', major: 0.7, origin: 'carousel' })];
+  const rundown = [cand({ headline: 'R1', net: 3, origin: 'reels' }), cand({ headline: 'R2', net: 2, origin: 'reels' })];
+  const sel = new Selector(majors, rundown, [], jevStub({}));
+  assert.deepEqual(sel.unused(8, [majors[0]!.key]).map((c) => c.headline), ['M2', 'M3', 'R1', 'R2']);
+  const taken = sel.adopt(majors[1]!, 'major');
+  assert.equal(taken.headline, 'M2');
+  assert.equal(sel.picks[0]!.key, majors[1]!.key);
+});
+
 test('a shared common headline word alone does not trigger a same-event check', async () => {
   let calls = 0;
   const base = jevStub({ same: () => true });

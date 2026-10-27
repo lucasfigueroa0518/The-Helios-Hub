@@ -55,7 +55,10 @@ export type StoryCopy = {
  * Stories finder. `photoTrace`: how that photo was chosen (finder steps, or the
  * lead-image note), saved on the post for the review screen.
  */
-export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo; photoSource?: 'lead' | 'finder'; photoTrace?: string[] };
+/** A meme the engine used as the story's picture (photo-fail rescue or pool scan). */
+export type EngineMeme = { templateId: string; memeId: string; rank: number; role: 'cover' | 'slide'; position: number; object: string; text: string[] };
+
+export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo; photoSource?: 'lead' | 'finder' | 'meme'; photoTrace?: string[]; meme?: EngineMeme };
 
 /** A story that left the post, and why (the run record, spec §7.1). `unfinished`: still pending when the rounds ran out. */
 export type Drop = {

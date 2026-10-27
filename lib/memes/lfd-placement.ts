@@ -10,7 +10,8 @@
  *   slide shows the meme in its photo box. The cover stays the photo mosaic.
  * - #2 and #3 keep their place among the others, and their slides show their
  *   memes in the photo box.
- * The cover mosaic always uses the stories' original photos (ME-100).
+ * The cover mosaic always uses the stories' original photos (ME-100), never
+ * a meme image. Cover is a single meme or a collage of non-memes, not both.
  */
 export const TOP_STORIES = 3;
 export const MAX_PLACED = 3;

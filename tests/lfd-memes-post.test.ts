@@ -143,6 +143,26 @@ function worker(query: HubQuery, memes: CarryOutDeps['memes'], order: string[]):
   };
 }
 
+test('addMemesToPost does not generate again for stories that already have a meme', async () => {
+  const { query, postId, deps, seen } = await setup();
+  await query(`UPDATE lfd.posts SET stories = $2::jsonb WHERE id = $1`, [
+    postId,
+    JSON.stringify(HEADLINES.map((h, i) => ({ ...story(i, h), ...(i === 1 ? { meme: { templateId: 'drake', memeId: 'e', rank: 1, role: 'slide', position: 2, object: 'x', text: [] } } : {}) }))),
+  ]);
+  await addMemesToPost(deps, postId);
+  assert.equal(seen.length, 1, 'only the Backfire story that did not already have a meme is generated');
+
+  const all = await setup();
+  const allId = await insertPost(all.query, {
+    runId: null, slug: 'lfd-2026-10-13-all', nyDate: '2026-10-13', ideaIds: [],
+    stories: HEADLINES.map((h, i) => ({ ...story(i, h), photoSource: 'meme' as const })),
+    render: {}, caption: 'c', slideObjects: [], fitProblems: [], short: false,
+  });
+  const none = await addMemesToPost(all.deps, allId);
+  assert.equal(none.skipped, 'already had memes');
+  assert.equal(all.seen.length, 0);
+});
+
 test('the worker adds memes after the run and records their spend; a meme failure never fails the run', async () => {
   const { query } = await openHubTestDb();
   const order: string[] = [];

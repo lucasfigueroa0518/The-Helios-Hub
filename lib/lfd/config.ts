@@ -19,3 +19,6 @@ export const LFD_RUN_TIMEOUT_MS = 30 * 60_000;
 
 /** The meme stage's spend cap when lfd.settings has no memes_cap_usd: 3 briefs and 3 meme runs come to about $0.50. */
 export const DEFAULT_LFD_MEMES_CAP_USD = 1;
+
+/** Unused majors then rundown to walk when the lineup still has no 92% meme story. */
+export const MEME_POOL_SCAN = 8;

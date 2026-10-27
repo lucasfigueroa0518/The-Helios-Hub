@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { markRuns } from '@/lib/lfd/marks';
-import { buildPost, captionFor, composeCaption, LFD_HOOK_LINES } from '@/lib/lfd/post';
+import { arrangeMemes, buildPost, captionFor, composeCaption, coverMemeOf, LFD_HOOK_LINES } from '@/lib/lfd/post';
 import type { Ready } from '@/lib/lfd/types';
 
 const ready = (i: number): Ready => ({
@@ -61,6 +61,48 @@ test('buildPost passes the photo kind through: logos render as logos on the stor
   assert.equal(post.slides[2]!.photoKind, 'logo');
   assert.equal(post.slides[1]!.photoKind, undefined, 'a scene photo stays the default');
   assert.deepEqual(post.slides[0]!.lfdCover!.photos.map((p) => p.kind), ['scene', 'logo', 'scene', 'scene', 'scene']);
+});
+
+test('a meme-as-photo story is marked photoKind meme so the slide uses the meme well', () => {
+  const items = [0, 1, 2, 3, 4].map(ready);
+  items[2]!.photoSource = 'meme';
+  items[2]!.photo = { src: 'data:image/png;base64,xx', credit: 'meme', kind: 'scene' };
+  const post = buildPost(items, new Date('2026-10-13T07:00:00Z'));
+  assert.equal(post.slides[3]!.photoKind, 'meme');
+  assert.equal(post.slides[3]!.photoUrl, 'data:image/png;base64,xx');
+});
+
+test('the cover collage never includes a meme photo; it is a single meme or non-meme tiles', () => {
+  const items = [0, 1, 2, 3, 4].map(ready);
+  items[2]!.photoSource = 'meme';
+  items[2]!.photo = { src: 'data:image/png;base64,meme', credit: 'meme', kind: 'scene' };
+  const mosaic = buildPost(items, new Date('2026-10-13T07:00:00Z'));
+  assert.deepEqual(mosaic.slides[0]!.lfdCover!.photos.map((p) => p.url), ['https://img/0.jpg', 'https://img/1.jpg', 'https://img/3.jpg', 'https://img/4.jpg']);
+  assert.equal(mosaic.slides[0]!.lfdCover!.meme, undefined);
+  const one = buildPost(items, new Date('2026-10-13T07:00:00Z'), null, { coverMeme: { url: 'data:image/png;base64,meme' } });
+  assert.deepEqual(one.slides[0]!.lfdCover!.meme, { url: 'data:image/png;base64,meme' });
+  assert.ok(!one.slides[0]!.lfdCover!.photos.some((p) => p.url.includes('meme')));
+});
+
+test('arrangeMemes: a top-3 meme is the cover; a weaker one becomes the second slide', () => {
+  const items = [0, 1, 2, 3, 4].map(ready);
+  items[2]!.photoSource = 'meme';
+  items[2]!.meme = { templateId: 't', memeId: 'm2', rank: 1, role: 'slide', position: 0, object: 'x', text: [] };
+  items[2]!.photo = { src: 'data:image/png;base64,m2', credit: 'meme', kind: 'scene' };
+  const top = arrangeMemes(items);
+  assert.deepEqual(top.ready.map((r) => r.pick.key), ['k2', 'k0', 'k1', 'k3', 'k4']);
+  assert.deepEqual(top.placement.cover, { kind: 'meme', memeId: 'm2', storyKey: 'k2' });
+  assert.deepEqual(coverMemeOf(top.ready, top.placement), { url: 'data:image/png;base64,m2' });
+  items[2]!.photoSource = 'finder';
+  items[2]!.meme = undefined;
+  items[2]!.photo = { src: 'https://img/2.jpg', credit: 'Credit 2', kind: 'scene' };
+  items[4]!.photoSource = 'meme';
+  items[4]!.meme = { templateId: 't', memeId: 'm4', rank: 1, role: 'slide', position: 0, object: 'x', text: [] };
+  items[4]!.photo = { src: 'data:image/png;base64,m4', credit: 'meme', kind: 'scene' };
+  const late = arrangeMemes(items);
+  assert.deepEqual(late.ready.map((r) => r.pick.key), ['k0', 'k4', 'k1', 'k2', 'k3']);
+  assert.deepEqual(late.placement.cover, { kind: 'mosaic' });
+  assert.equal(coverMemeOf(late.ready, late.placement), undefined);
 });
 
 test('the cover mosaic has a layout for every story count from 1 to 6', async () => {

@@ -37,6 +37,28 @@ export async function liveLfdDeps(
   const budget = createRunBudget({ capUsd: o.capUsd, otherSpendUsd: () => tally.costUsd });
   const create = budget.guard(liveMessagesCreate(newAnthropic()));
   const bucket = mediaBucket(SLIDE_BUCKET);
+  const { readLfdSettings } = await import('./settings');
+  const settings = await readLfdSettings(query).catch(() => null);
+  let memes: import('./run').LfdRunDeps['memes'];
+  if (settings?.memes !== false) {
+    const { clearsStoryGate, makeStoryMeme } = await import('@/lib/memes/lfd-engine');
+    const { openMemeRenderer } = await import('@/lib/memes/render');
+    const memeCap = settings?.memesCapUsd ?? 1;
+    const memeTally = createJevTally();
+    const memeJev = capped(tallied(createJevAsk(), memeTally), memeTally, memeCap);
+    const memeCreate = liveMessagesCreate(newAnthropic());
+    let memeClaude = 0;
+    memes = {
+      capUsd: memeCap,
+      clears: (story, opts) => clearsStoryGate(memeJev, story, opts),
+      make: async (story) => {
+        if (memeClaude >= memeCap) return null;
+        const out = await makeStoryMeme({ create: memeCreate, jev: memeJev, openRenderer: openMemeRenderer, query, now: () => now }, story);
+        if (out) memeClaude += out.costUsd;
+        return out;
+      },
+    };
+  }
   return {
     deps: {
       query,
@@ -47,13 +69,14 @@ export async function liveLfdDeps(
       fetchBody: fetchBodyLive,
       readPage: (url) => readPage(url),
       fitCheck: checkRenderFit,
-      upload: (p, b) => bucket.upload(p, b, 'image/jpeg'),
+      upload: (p, b, t) => bucket.upload(p, b, t ?? 'image/jpeg'),
       now,
       trigger: o.trigger,
       capUsd: o.capUsd,
       spend: () => ({ claudeUsd: budget.claudeUsd(), jevUsd: tally.costUsd }),
       closings: closingsLog(query, 'lfd'),
       ...(o.runId ? { runId: o.runId } : {}),
+      ...(memes ? { memes } : {}),
     },
     spentUsd: () => budget.spent(),
   };
