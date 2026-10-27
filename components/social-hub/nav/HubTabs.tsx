@@ -1,8 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 
+import { WarmLink } from '@/components/hub-shell/warm-link';
 import { hubBaseOf } from '@/lib/social-hub/links';
 import { activeHubTab, HUB_TABS, safeFrom } from '@/lib/social-hub/views/nav';
 
@@ -15,11 +15,11 @@ export function HubTabs() {
   return (
     <div className="sh-hubbar">
       <nav className="sh-hubtabs" aria-label="Social Hub">
-        {/* On screen, prefetch stays partial and stops at loading.tsx. Hover loads the full route (`experimental.dynamicOnHover`). */}
+        {/* On screen, prefetch stays partial. Hover loads the full route, and the click uses that response. */}
         {HUB_TABS.map((t) => (
-          <Link key={t.id} href={`${base}${t.path}`} unstable_dynamicOnHover aria-current={active === t.id ? 'page' : undefined}>
+          <WarmLink key={t.id} href={`${base}${t.path}`} aria-current={active === t.id ? 'page' : undefined}>
             {t.label}
-          </Link>
+          </WarmLink>
         ))}
       </nav>
     </div>

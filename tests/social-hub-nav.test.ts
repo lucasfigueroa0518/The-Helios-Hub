@@ -68,12 +68,16 @@ test('hub tabs and the main menu prefetch the shell on sight and the full route 
   const { readFileSync } = await import('node:fs');
   const tabs = readFileSync('components/social-hub/nav/HubTabs.tsx', 'utf8');
   const menu = readFileSync('components/hub-shell/HubSidebar.tsx', 'utf8');
-  const config = readFileSync('next.config.ts', 'utf8');
-  assert.match(tabs, /unstable_dynamicOnHover/);
-  assert.match(menu, /unstable_dynamicOnHover/);
-  assert.match(config, /dynamicOnHover:\s*true/);
-  assert.doesNotMatch(tabs, /<Link[^>]*\sprefetch/);
+  const warm = readFileSync('components/hub-shell/warm-link.tsx', 'utf8');
+  assert.match(tabs, /WarmLink/);
+  assert.match(menu, /WarmLink/);
+  assert.match(warm, /router\.prefetch\(href, \{ kind: PrefetchKind\.FULL \}\)/);
+  assert.match(warm, /PrefetchKind\.AUTO/);
+  assert.match(warm, /prefetch=\{false\}/);
+  assert.match(warm, /router\.push\(href\)/);
+  assert.doesNotMatch(tabs, /prefetch=\{true\}/);
   assert.doesNotMatch(menu, /prefetch=\{true\}/);
+  assert.doesNotMatch(warm, /prefetch=\{true\}/);
 });
 
 test('links into force-dynamic Health night pages and the Cost page never prefetch', async () => {

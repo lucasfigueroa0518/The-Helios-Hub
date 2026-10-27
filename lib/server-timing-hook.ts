@@ -32,21 +32,32 @@ function header(req: IncomingMessage, name: string): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function shouldHold(req: IncomingMessage): boolean {
-  if (header(req, 'rsc') !== '1') return false;
+function isFullFlight(req: IncomingMessage): boolean {
   // A partial prefetch stops at the loading shell and must not wait for the page.
   if (header(req, 'next-router-prefetch')) return false;
   if (header(req, 'next-router-segment-prefetch')) return false;
+  if (header(req, 'rsc') === '1') return true;
+  // Next deletes the flight headers before it pipes a full RSC body. The `_rsc`
+  // cache buster stays on the URL. A document request does not have it.
+  return /(?:\?|&)_rsc=/.test(req.url ?? '');
+}
+
+function shouldHold(req: IncomingMessage): boolean {
+  if (!isFullFlight(req)) return false;
   const path = (req.url ?? '').split('?')[0]?.replace(/\/$/, '') || '/';
   return isTimedHubPath(path);
 }
 
+const stamped = new WeakSet<ServerResponse>();
+
 function stamp(res: ServerResponse, id: string): void {
-  if (res.headersSent) return;
+  if (res.headersSent || stamped.has(res)) return;
   const value = hubTimingValue(id);
   if (!value) return;
   const prev = res.getHeader('Server-Timing');
-  res.setHeader('Server-Timing', prev ? `${prev}, ${value}` : value);
+  const prevText = Array.isArray(prev) ? prev.join(', ') : prev == null ? '' : String(prev);
+  res.setHeader('Server-Timing', prevText ? `${prevText}, ${value}` : value);
+  stamped.add(res);
 }
 
 function release(res: ServerResponse): void {

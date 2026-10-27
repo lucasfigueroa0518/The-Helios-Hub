@@ -1,7 +1,6 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
@@ -28,11 +27,12 @@ import {
 import type { ComponentProps } from 'react';
 
 import { HUB_NAV, type HubNavItem } from '@/components/hub-shell/nav';
+import { WarmLink } from '@/components/hub-shell/warm-link';
 import { useMobileNav } from '@/components/hub-shell/MobileNavContext';
 
-/** On screen, prefetch stays partial. Hover loads the full route (`experimental.dynamicOnHover`). */
-function MenuLink(props: ComponentProps<typeof Link>) {
-  return <Link {...props} unstable_dynamicOnHover />;
+/** On screen, prefetch stays partial. Hover loads the full route, and the click uses that response. */
+function MenuLink(props: ComponentProps<typeof WarmLink>) {
+  return <WarmLink {...props} />;
 }
 
 const STORAGE_KEY = 'helios-hub-sidebar-collapsed';

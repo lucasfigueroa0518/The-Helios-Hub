@@ -76,6 +76,56 @@ test('a full hub RSC response keeps its header until the page seals', async () =
   }
 });
 
+test('a full flight still gets the header after Next strips the rsc header', async () => {
+  const id = `stripped-${Date.now()}`;
+  enterHubTiming(id);
+  addHubSpan(id, 'dataset', 11);
+  addHubSpan(id, 'extras', 2);
+  addHubSpan(id, 'sign', 1);
+  const { server, port } = await listen((_req, res) => {
+    res.flushHeaders();
+    res.end('ready');
+  });
+  try {
+    const pending = fetch(`http://127.0.0.1:${port}/social?_rsc=probe`, {
+      headers: { 'x-hub-timing': id },
+      signal: AbortSignal.timeout(2000),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    let settled = false;
+    const raced = pending.then((res) => {
+      settled = true;
+      return res;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(settled, false);
+    leaveHubTiming(id);
+    const res = await raced;
+    assert.equal(res.headers.get('server-timing'), 'dataset;dur=11.0, extras;dur=2.0, sign;dur=1.0');
+    assert.equal(await res.text(), 'ready');
+  } finally {
+    leaveHubTiming(id);
+    server.close();
+  }
+});
+
+test('a document request is not held for the seal', async () => {
+  const id = `document-${Date.now()}`;
+  const { server, port } = await listen((_req, res) => {
+    res.end('html');
+  });
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/social`, {
+      headers: { accept: 'text/html', 'x-hub-timing': id },
+      signal: AbortSignal.timeout(1000),
+    });
+    assert.equal(res.headers.get('server-timing'), null);
+    assert.equal(await res.text(), 'html');
+  } finally {
+    server.close();
+  }
+});
+
 test('a partial prefetch is not held for the seal', async () => {
   const id = `partial-${Date.now()}`;
   const { server, port } = await listen((_req, res) => {

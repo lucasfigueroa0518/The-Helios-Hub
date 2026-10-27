@@ -2,18 +2,16 @@ import { notFound, redirect } from 'next/navigation';
 
 import { ContentScreen } from '@/components/social-hub/content/ContentScreen';
 import { LoadError } from '@/components/social-hub/LoadError';
-import { liveHubQuery } from '@/lib/social-hub/db';
 import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { readRefresh } from '@/lib/social-hub/live';
 import { timeHub, withHubTiming } from '@/lib/social-hub/server-timing';
+import { loadCachedLibraries, readCachedMisses, readCachedProgress } from '@/lib/social-hub/views/cached-extras';
 import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
 import { legacyRootRedirect } from '@/lib/social-hub/views/legacy-routes';
-import { loadLibraries } from '@/lib/social-hub/views/libraries';
 import { signVisibleStoryFrames } from '@/lib/social-hub/views/story-frames';
 import { loadHubDataset } from '@/lib/social-hub/views/cached-dataset';
-import { readAllProgress } from '@/lib/content-type/progress';
-import { NO_MISSES, readRunMisses } from '@/lib/content-type/run-misses';
+import { NO_MISSES } from '@/lib/content-type/run-misses';
 import { getSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -38,9 +36,9 @@ export default function Page({ searchParams }: { searchParams: Promise<RawSearch
       }),
       timeHub('extras', () => Promise.all([
         readRefresh(session.email),
-        loadLibraries(liveHubQuery),
-        readAllProgress(),
-        readRunMisses(liveHubQuery).catch(() => NO_MISSES),
+        loadCachedLibraries(),
+        readCachedProgress(),
+        readCachedMisses().catch(() => NO_MISSES),
       ])),
     ]);
     if ('error' in datasetResult && typeof datasetResult.error === 'string') return <LoadError message={datasetResult.error} />;
