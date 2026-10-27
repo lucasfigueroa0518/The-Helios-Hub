@@ -64,7 +64,7 @@ test('Health is the fourth hub tab with its own section and crumb', () => {
   assert.deepEqual(crumbsFor('/social', '/social/analytics/cost').map((c) => c.label), ['Analytics', 'Cost']);
 });
 
-test('hub tabs and the main menu prefetch the shell on sight and the full route on hover', async () => {
+test('hub tabs and the main menu prefetch the shell on sight, warm data on hover, full rsc on click', async () => {
   const { readFileSync } = await import('node:fs');
   const tabs = readFileSync('components/social-hub/nav/HubTabs.tsx', 'utf8');
   const menu = readFileSync('components/hub-shell/HubSidebar.tsx', 'utf8');
@@ -77,6 +77,12 @@ test('hub tabs and the main menu prefetch the shell on sight and the full route 
   assert.match(warm, /entry\.lastUsedTime == null/);
   assert.match(warm, /prefetch=\{false\}/);
   assert.match(warm, /router\.push\(href\)/);
+  assert.match(warm, /const HOVER_DWELL_MS = 200/);
+  assert.match(warm, /\/api\/hub\/warm\?path=/);
+  assert.match(warm, /queueDataWarm/);
+  assert.match(warm, /warmNavigation/);
+  assert.match(warm, /onMouseLeave/);
+  assert.doesNotMatch(warm, /queueWarm\(event\.currentTarget\)/);
   assert.doesNotMatch(tabs, /prefetch=\{true\}/);
   assert.doesNotMatch(menu, /prefetch=\{true\}/);
   assert.doesNotMatch(warm, /prefetch=\{true\}/);

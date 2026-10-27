@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, type ComponentProps, type FocusEvent, type MouseEvent } from 'react';
 import { PrefetchKind } from 'next/dist/client/components/router-reducer/router-reducer-types';
 
+import { isDataWarmablePath } from '@/lib/hub/warm-paths';
+
 /**
- * On sight, a visible link prefetches the loading shell. Hover and focus start
- * one full prefetch. The click waits for that response when one is in flight,
- * then navigates, so the click uses it instead of starting another.
+ * On sight, a visible link prefetches the loading shell (AUTO). Hover and focus
+ * call /api/hub/warm so shared data caches fill without a full RSC render.
+ * The click runs one full prefetch, waits for it, then navigates.
  *
  * Calling the full prefetch twice while the shell entry is still in place makes
  * Next fetch the page twice. The link's own hover prefetch stays off for the
@@ -22,12 +24,15 @@ import { PrefetchKind } from 'next/dist/client/components/router-reducer/router-
 const WAIT_MS = 10000;
 const START_GRACE_MS = 150;
 const FRESH_MS = 4 * 60 * 1000;
+const HOVER_DWELL_MS = 200;
 
 type RscWatch = { url: string; done: Promise<void> };
 
 const watches: RscWatch[] = [];
-const inflight = new Map<string, Promise<void>>();
-const freshUntil = new Map<string, number>();
+const navInflight = new Map<string, Promise<void>>();
+const navFreshUntil = new Map<string, number>();
+const dataFreshUntil = new Map<string, number>();
+let dataWarmInflight: Promise<void> | null = null;
 
 function pathnameOf(href: string): string {
   return new URL(href, window.location.origin).pathname;
@@ -154,37 +159,73 @@ function reuseDocumentSeed(node: Element | null, pathname: string): boolean {
   return reuse;
 }
 
-function warm(
+/** One data warm at a time so a menu sweep does not fan out DB reads. */
+function warmData(pathname: string): Promise<void> {
+  if (!isDataWarmablePath(pathname)) return Promise.resolve();
+  const until = dataFreshUntil.get(pathname);
+  if (until != null && until > Date.now()) return Promise.resolve();
+  if (dataWarmInflight) return dataWarmInflight;
+  const url = `/api/hub/warm?path=${encodeURIComponent(pathname)}`;
+  dataWarmInflight = fetch(url, { credentials: 'include', cache: 'no-store' })
+    .then((res) => {
+      if (res.ok || res.status === 204) {
+        dataFreshUntil.set(pathname, Date.now() + FRESH_MS);
+      }
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      dataWarmInflight = null;
+    });
+  return dataWarmInflight;
+}
+
+function warmNavigation(
   href: string,
   node: Element | null,
   router: { prefetch: (href: string, options: { kind: PrefetchKind }) => void },
 ): Promise<void> {
-  const until = freshUntil.get(href);
+  const until = navFreshUntil.get(href);
   if (until != null && until > Date.now()) return Promise.resolve();
-  const pending = inflight.get(href);
+  const pending = navInflight.get(href);
   if (pending) return pending;
   const pathname = pathnameOf(href);
   if (reuseDocumentSeed(node, pathname)) {
-    freshUntil.set(href, Date.now() + FRESH_MS);
+    navFreshUntil.set(href, Date.now() + FRESH_MS);
     return Promise.resolve();
   }
   ensureFetchWatch();
   const from = watches.length;
   router.prefetch(href, { kind: PrefetchKind.FULL });
   const next = waitForPrefetch(pathname, from).then((found) => {
-    if (found) freshUntil.set(href, Date.now() + FRESH_MS);
+    if (found) navFreshUntil.set(href, Date.now() + FRESH_MS);
   }).finally(() => {
-    inflight.delete(href);
+    navInflight.delete(href);
   });
-  inflight.set(href, next);
+  navInflight.set(href, next);
   return next;
 }
 
-export function WarmLink({ onClick, onMouseEnter, onFocus, ...props }: ComponentProps<typeof Link>) {
+export function WarmLink({ onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...props }: ComponentProps<typeof Link>) {
   const router = useRouter();
   const href = typeof props.href === 'string' ? props.href : null;
   const anchorRef = useRef<HTMLAnchorElement>(null);
   const shelled = useRef(false);
+  const dwell = useRef<number | null>(null);
+
+  const clearDwell = () => {
+    if (dwell.current == null) return;
+    window.clearTimeout(dwell.current);
+    dwell.current = null;
+  };
+
+  const queueDataWarm = (hrefValue: string) => {
+    clearDwell();
+    dwell.current = window.setTimeout(() => {
+      dwell.current = null;
+      if (dataWarmInflight) return;
+      void warmData(pathnameOf(hrefValue));
+    }, HOVER_DWELL_MS);
+  };
 
   useEffect(() => {
     const anchor = anchorRef.current;
@@ -199,7 +240,10 @@ export function WarmLink({ onClick, onMouseEnter, onFocus, ...props }: Component
       observer.disconnect();
     });
     observer.observe(anchor);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      clearDwell();
+    };
   }, [href, router]);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -207,7 +251,8 @@ export function WarmLink({ onClick, onMouseEnter, onFocus, ...props }: Component
     if (event.defaultPrevented || !href) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
-    const ready = warm(href, event.currentTarget, router);
+    clearDwell();
+    const ready = warmNavigation(href, event.currentTarget, router);
     ready.then(() => {
       router.push(href);
     });
@@ -220,11 +265,19 @@ export function WarmLink({ onClick, onMouseEnter, onFocus, ...props }: Component
       prefetch={false}
       onMouseEnter={(event) => {
         onMouseEnter?.(event);
-        if (href) warm(href, event.currentTarget, router);
+        if (href) queueDataWarm(href);
+      }}
+      onMouseLeave={(event) => {
+        onMouseLeave?.(event);
+        clearDwell();
       }}
       onFocus={(event: FocusEvent<HTMLAnchorElement>) => {
         onFocus?.(event);
-        if (href) warm(href, event.currentTarget, router);
+        if (href) queueDataWarm(href);
+      }}
+      onBlur={(event) => {
+        onBlur?.(event);
+        clearDwell();
       }}
       onClick={handleClick}
     />

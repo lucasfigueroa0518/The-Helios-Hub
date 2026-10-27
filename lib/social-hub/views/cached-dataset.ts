@@ -10,6 +10,8 @@ import type { Vertical } from '@/lib/social-hub/types';
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 
 import { HUB_COST_TAG, HUB_DATA_TAG, hubDataTag } from '@/lib/social-hub/views/cache-tags';
+import { logHubDatasetRebuild, logHubDatasetServe } from '@/lib/observability/hub-dataset-telemetry';
+import { finishDatasetLoad } from '@/lib/social-hub/views/stale-dataset';
 
 export { HUB_COST_TAG, HUB_DATA_TAG, hubDataTag };
 
@@ -113,6 +115,7 @@ async function cachedReads(): Promise<VerticalReads> {
 
 const shared = unstable_cache(
   async () => {
+    logHubDatasetRebuild();
     // The spine is read once for whichever types miss. Types still in cache are not read again.
     const dataset = await withSharedSpine(liveHubQuery, async () => loadDataset(liveHubQuery, new Date(), cachedCostPart(), await cachedReads()));
     if (dataset.errors.length > 0) throw new PartialRead(dataset);
@@ -124,10 +127,17 @@ const shared = unstable_cache(
 
 /** Once per request (layout, page and drawer share it). */
 export const loadHubDataset = cache(async (): Promise<HubDataset> => {
+  const started = performance.now();
   try {
-    return unpack<HubDataset>(await shared());
+    const dataset = finishDatasetLoad(unpack<HubDataset>(await shared()));
+    logHubDatasetServe(dataset, { durationMs: Math.round(performance.now() - started), source: 'shared_cache' });
+    return dataset;
   } catch (error) {
-    if (error instanceof PartialRead) return slim(error.dataset);
+    if (error instanceof PartialRead) {
+      const dataset = finishDatasetLoad(slim(error.dataset));
+      logHubDatasetServe(dataset, { durationMs: Math.round(performance.now() - started), source: 'partial_read' });
+      return dataset;
+    }
     throw error;
   }
 });

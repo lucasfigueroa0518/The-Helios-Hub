@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import NextAuth from 'next-auth';
 
 import { authConfig } from '@/auth.config';
+import {
+  HELIOS_START_HEADER,
+  HELIOS_TRACE_HEADER,
+} from '@/lib/observability/trace-headers';
 import { HUB_TIMING_HEADER, isTimedHubPath } from '@/lib/social-hub/server-timing-path';
 
 const { auth } = NextAuth(authConfig);
@@ -78,7 +82,7 @@ function isProtectedPage(pathname: string): boolean {
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   if (isPublicPath(pathname)) {
-    return NextResponse.next();
+    return forwardRequest(req);
   }
 
   // Edge config has no session callback — email presence means a valid Auth.js JWT.
@@ -88,7 +92,7 @@ export default auth((req) => {
     if (!signedIn) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    return NextResponse.next();
+    return forwardRequest(req);
   }
 
   if (isProtectedPage(pathname) && !signedIn) {
@@ -96,14 +100,21 @@ export default auth((req) => {
     return NextResponse.redirect(login);
   }
 
-  return continueWithTiming(req);
+  return forwardRequest(req);
 });
 
-/** A hub page gets a request id so its RSC response can carry Server-Timing. */
-function continueWithTiming(req: { headers: Headers; nextUrl: { pathname: string } }) {
-  if (!isTimedHubPath(req.nextUrl.pathname)) return NextResponse.next();
+/** Trace + start time for Vercel runtime logs; hub pages also get a Server-Timing id. */
+function forwardRequest(req: { headers: Headers; nextUrl: { pathname: string } }) {
   const requestHeaders = new Headers(req.headers);
-  requestHeaders.set(HUB_TIMING_HEADER, crypto.randomUUID());
+  if (!requestHeaders.has(HELIOS_TRACE_HEADER)) {
+    requestHeaders.set(HELIOS_TRACE_HEADER, crypto.randomUUID());
+  }
+  if (!requestHeaders.has(HELIOS_START_HEADER)) {
+    requestHeaders.set(HELIOS_START_HEADER, String(Date.now()));
+  }
+  if (isTimedHubPath(req.nextUrl.pathname)) {
+    requestHeaders.set(HUB_TIMING_HEADER, crypto.randomUUID());
+  }
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
