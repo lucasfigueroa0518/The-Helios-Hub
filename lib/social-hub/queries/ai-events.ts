@@ -135,7 +135,32 @@ export type AiEventsRead = {
 export const AI_EVENTS_POSTS_SQL = `
 SELECT p.id::text AS post_id, p.run_id::text AS run_id, p.week_key, p.slug, p.ny_date::text AS ny_date, p.status, p.hook, p.look,
        p.caption, p.cities, cardinality(p.event_ids) AS event_count,
-       p.created_at::text AS created_at, p.updated_at::text AS updated_at, p.published_at::text AS published_at, p.render, p.render_version,
+       p.created_at::text AS created_at, p.updated_at::text AS updated_at, p.published_at::text AS published_at,
+       -- Slide outline the hub paints: layout, alt, and the city / pick titles. Cities stay on p.cities.
+       CASE WHEN p.render IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object(
+         'slides', (
+           SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'layoutVariant', s.slide->'layoutVariant',
+             'altText', s.slide->'altText',
+             'aiEvents', jsonb_strip_nulls(jsonb_build_object(
+               'role', s.slide->'aiEvents'->'role',
+               'city', s.slide->'aiEvents'->'city',
+               'lead', s.slide->'aiEvents'->'lead',
+               'lit', s.slide->'aiEvents'->'lit',
+               'pick', CASE WHEN jsonb_typeof(s.slide->'aiEvents'->'pick') = 'object'
+                 THEN jsonb_strip_nulls(jsonb_build_object('title', s.slide->'aiEvents'->'pick'->'title')) END,
+               'mentions', (
+                 SELECT COALESCE(jsonb_agg(jsonb_strip_nulls(jsonb_build_object('title', m.mention->'title')) ORDER BY m.ord), '[]'::jsonb)
+                 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(s.slide->'aiEvents'->'mentions') = 'array' THEN s.slide->'aiEvents'->'mentions' ELSE '[]'::jsonb END)
+                   WITH ORDINALITY AS m(mention, ord)
+               )
+             ))
+           ) ORDER BY s.ord), '[]'::jsonb)
+           FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.render->'slides') = 'array' THEN p.render->'slides' ELSE '[]'::jsonb END)
+             WITH ORDINALITY AS s(slide, ord)
+         )
+       )) END AS render,
+       p.render_version,
        COALESCE(jsonb_array_length(p.slide_objects), jsonb_array_length(p.render->'slides')) AS slide_count,
        (jsonb_typeof(p.slide_objects) = 'array' AND jsonb_array_length(p.slide_objects) > 0) AS has_slide_objects,
        p.fit_problems, p.render_problems, p.metro, p.bar_tier

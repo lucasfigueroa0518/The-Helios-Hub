@@ -4,6 +4,16 @@ import { createStoriesStorage } from '@/lib/stories/storage';
 
 const FRAME_API = /^\/api\/stories\/frames\//;
 
+/** Posts whose on-screen frame still points at the frame route and has a stored object. */
+export function storyFramePostIds(posts: readonly HubPost[]): Set<string> {
+  const ids = new Set<string>();
+  for (const post of posts) {
+    if (post.media.kind !== 'frames') continue;
+    if (post.media.frames.some((frame) => frame.path && frame.src && FRAME_API.test(frame.src))) ids.add(post.id);
+  }
+  return ids;
+}
+
 type SignMany = (paths: string[]) => Promise<Array<string | null>>;
 
 async function liveSign(paths: string[]): Promise<Array<string | null>> {
@@ -16,7 +26,7 @@ async function liveSign(paths: string[]): Promise<Array<string | null>> {
  * keeps the route (and the object path); the signature is minted here, on
  * this request, and is not cached. A failed sign leaves the route in place.
  */
-export async function signVisibleStoryFrames<T extends HubDataset>(dataset: T, postIds: ReadonlySet<string>, signMany: SignMany = liveSign): Promise<T> {
+export async function signVisibleStoryFrames<T extends { posts: HubPost[] }>(dataset: T, postIds: ReadonlySet<string>, signMany: SignMany = liveSign): Promise<T> {
   if (postIds.size === 0) return dataset;
   const paths: string[] = [];
   const slots: Array<{ postIndex: number; frameIndex: number }> = [];

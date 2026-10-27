@@ -8,6 +8,7 @@ import { liveHubQuery } from '@/lib/social-hub/db';
 import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, withParams, type HubParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { loadForPage } from '@/lib/social-hub/live';
+import { timeHub, withHubTiming } from '@/lib/social-hub/server-timing';
 import { readCaps, readOverrides, readSlotSource, readTemplate } from '@/lib/social-hub/slots/load';
 import { SCHEDULE_ENTRIES, scheduleFromTemplate } from '@/lib/social-hub/slots/schedule';
 import { readSeedInputs, seedTemplate } from '@/lib/social-hub/slots/seed';
@@ -78,30 +79,32 @@ function calendarFramePosts(posts: readonly HubPost[], params: HubParams, now: D
   return ids;
 }
 
-export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
-  if (!SOCIAL_HUB_FLAGS.views.calendar) notFound();
-  const session = await getSession();
-  if (!session) redirect('/');
-  const params = toParams(await searchParams);
-  // Old links to the removed standing-week tab (?scope=template; Schedules replace it) open the week.
-  if (params.scope === 'template') redirect(withParams(`${HUB_BASE}/calendar`, '', params, { scope: null }));
-  const now = new Date();
-  const wantsWeek = calendarView(params) === 'week';
-  const [loaded, week] = await Promise.all([
-    loadForPage(session.email),
-    wantsWeek
-      ? loadWeek(params, now).catch((err: unknown) => {
-          console.error('[social-hub] calendar week failed to load', err);
-          return null;
-        })
-      : Promise.resolve(null),
-  ]);
-  if ('error' in loaded) return <LoadError message={loaded.error} />;
-  const dataset = await signVisibleStoryFrames(loaded, calendarFramePosts(loaded.posts, params, now, week));
-  return (
-    <>
-      <RefreshNote refresh={loaded.refresh} />
-      <CalendarScreen dataset={dataset} base={HUB_BASE} params={params} now={now} week={week} weekFailed={wantsWeek && !week} />
-    </>
-  );
+export default function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
+  return withHubTiming(async () => {
+    if (!SOCIAL_HUB_FLAGS.views.calendar) notFound();
+    const session = await getSession();
+    if (!session) redirect('/');
+    const params = toParams(await searchParams);
+    // Old links to the removed standing-week tab (?scope=template; Schedules replace it) open the week.
+    if (params.scope === 'template') redirect(withParams(`${HUB_BASE}/calendar`, '', params, { scope: null }));
+    const now = new Date();
+    const wantsWeek = calendarView(params) === 'week';
+    const [loaded, week] = await Promise.all([
+      timeHub('dataset', () => loadForPage(session.email)),
+      wantsWeek
+        ? timeHub('week', () => loadWeek(params, now).catch((err: unknown) => {
+            console.error('[social-hub] calendar week failed to load', err);
+            return null;
+          }))
+        : Promise.resolve(null),
+    ]);
+    if ('error' in loaded) return <LoadError message={loaded.error} />;
+    const dataset = await timeHub('sign', () => signVisibleStoryFrames(loaded, calendarFramePosts(loaded.posts, params, now, week)));
+    return (
+      <>
+        <RefreshNote refresh={loaded.refresh} />
+        <CalendarScreen dataset={dataset} base={HUB_BASE} params={params} now={now} week={week} weekFailed={wantsWeek && !week} />
+      </>
+    );
+  });
 }

@@ -84,16 +84,48 @@ export type LfdRead = {
 
 export const LFD_POSTS_SQL = `
 SELECT p.id::text AS post_id, p.run_id::text AS run_id, p.slug, p.ny_date::text AS ny_date, p.status, p.caption,
-       p.created_at::text AS created_at, p.published_at::text AS published_at, p.render, p.stories,
+       p.created_at::text AS created_at, p.published_at::text AS published_at,
+       -- Slide outline the hub paints. Each story's source stays on p.stories.
+       CASE WHEN p.render IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object(
+         'slides', (
+           SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'layoutVariant', s.slide->'layoutVariant',
+             'altText', s.slide->'altText',
+             'photoUrl', s.slide->'photoUrl',
+             'lfdStory', jsonb_strip_nulls(jsonb_build_object(
+               'headline', s.slide->'lfdStory'->'headline',
+               'body', s.slide->'lfdStory'->'body'
+             ))
+           ) ORDER BY s.ord), '[]'::jsonb)
+           FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.render->'slides') = 'array' THEN p.render->'slides' ELSE '[]'::jsonb END)
+             WITH ORDINALITY AS s(slide, ord)
+         )
+       )) END AS render,
+       p.stories,
        COALESCE(jsonb_array_length(p.slide_objects), jsonb_array_length(p.render->'slides')) AS slide_count,
        (jsonb_typeof(p.slide_objects) = 'array' AND jsonb_array_length(p.slide_objects) > 0) AS has_slide_objects,
        p.fit_problems, p.render_problems, p.short
   FROM lfd.posts p
  ORDER BY p.created_at DESC`;
 
+/** One queue row as the Ideas view reads it, in the stored order. */
+function lfdQueue(path: string): string {
+  return `(SELECT COALESCE(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+    'key', e->'key', 'headline', e->'headline', 'lane', e->'lane', 'major', e->'major',
+    'net', e->'net', 'reason', e->'reason', 'detail', e->'detail'
+  )) ORDER BY ord), '[]'::jsonb)
+  FROM jsonb_array_elements(CASE WHEN jsonb_typeof(${path}) = 'array' THEN ${path} ELSE '[]'::jsonb END) WITH ORDINALITY AS t(e, ord))`;
+}
+
 export const LFD_LATEST_RUN_SQL = `
 SELECT id::text AS id, status, trigger, requested_at::text AS requested_at, started_at::text AS started_at,
-       finished_at::text AS finished_at, total_usd::float8 AS total_usd, stop_reason, record
+       finished_at::text AS finished_at, total_usd::float8 AS total_usd, stop_reason,
+       CASE WHEN record IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object(
+         'window', jsonb_strip_nulls(jsonb_build_object('after', record->'window'->'after', 'through', record->'window'->'through')),
+         'picks', ${lfdQueue(`record->'picks'`)},
+         'drops', ${lfdQueue(`record->'drops'`)},
+         'queues', jsonb_build_object('major', ${lfdQueue(`record->'queues'->'major'`)}, 'rundown', ${lfdQueue(`record->'queues'->'rundown'`)})
+       )) END AS record
   FROM lfd.runs
  WHERE status IN ('ok', 'partial')
  ORDER BY COALESCE(started_at, requested_at) DESC

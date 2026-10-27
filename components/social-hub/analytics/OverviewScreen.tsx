@@ -15,12 +15,10 @@ import type { HubDataset } from '@/lib/social-hub/dataset';
 import { hubHref, withParams, type HubParams } from '@/lib/social-hub/links';
 import { formatMetric, formatMetricKey, metricSpec, metricsFor } from '@/lib/social-hub/metrics';
 import { rangeLabel } from '@/lib/social-hub/time';
-import { overviewKpis, parseQuery, trendSeries, typeRows } from '@/lib/social-hub/views/analytics';
+import { ANALYTICS_TOP_POSTS, overviewKpis, parseQuery, trendSeries, typeRows } from '@/lib/social-hub/views/analytics';
 
 /** Analytics overview (BRIEFS.md §3): how the account is doing, which type carries it, then the posts. */
 /** The overview answers "how are we doing"; the full list is one click away. */
-const TOP_POSTS = 10;
-
 export function OverviewScreen({ dataset, base, params, now }: { dataset: HubDataset; base: string; params: HubParams; now: Date }) {
   const q = parseQuery(params, null, now);
   const allPosts = params.posts === 'all' || q.page > 1;
@@ -98,7 +96,7 @@ export function OverviewScreen({ dataset, base, params, now }: { dataset: HubDat
           params={params}
           columns={[q.metric === 'views' ? 'views' : q.metric, ...(q.metric === 'shares' ? [] : ['shares' as const])]}
           showType
-          {...(allPosts ? {} : { limit: TOP_POSTS, moreHref: withParams(path, '', params, { posts: 'all', page: null }) })}
+          {...(allPosts ? {} : { limit: ANALYTICS_TOP_POSTS, moreHref: withParams(path, '', params, { posts: 'all', page: null }) })}
         />
       </section>
 

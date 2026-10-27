@@ -9,7 +9,7 @@ import { formatUsd } from '@/lib/social-hub/cost';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { formatMetricKey, metricSpec, postMetric } from '@/lib/social-hub/metrics';
 import type { Query } from '@/lib/social-hub/views/analytics';
-import { sortedPosts } from '@/lib/social-hub/views/analytics';
+import { analyticsTablePosts } from '@/lib/social-hub/views/analytics';
 import { displayName, shortDate } from '@/lib/social-hub/views/format';
 import type { HubPost, MetricKey } from '@/lib/social-hub/types';
 
@@ -27,9 +27,7 @@ export function PostsTable({ posts, q, path, params, columns, showType, limit, m
   limit?: number;
   moreHref?: string;
 }) {
-  const sorted = sortedPosts(posts, limit ? { ...q, page: 1 } : q);
-  const { page, pageCount, total } = sorted;
-  const items = limit ? sorted.items.slice(0, limit) : sorted.items;
+  const { page, pageCount, total, items } = analyticsTablePosts(posts, q, limit);
   const href = (changes: Record<string, string | null>) => withParams(path, '', params, changes);
   const sortHref = (col: string) => href({ sort: col === q.metric ? null : col, dir: q.sort === col && q.dir === 'desc' ? 'asc' : null, page: null });
   const head = (col: string, label: string, numeric = true) => {

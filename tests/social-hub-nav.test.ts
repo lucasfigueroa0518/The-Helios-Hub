@@ -64,10 +64,16 @@ test('Health is the fourth hub tab with its own section and crumb', () => {
   assert.deepEqual(crumbsFor('/social', '/social/analytics/cost').map((c) => c.label), ['Analytics', 'Cost']);
 });
 
-test('hub tabs use automatic prefetch so a loading shell is enough', async () => {
+test('hub tabs and the main menu prefetch the shell on sight and the full route on hover', async () => {
   const { readFileSync } = await import('node:fs');
   const tabs = readFileSync('components/social-hub/nav/HubTabs.tsx', 'utf8');
+  const menu = readFileSync('components/hub-shell/HubSidebar.tsx', 'utf8');
+  const config = readFileSync('next.config.ts', 'utf8');
+  assert.match(tabs, /unstable_dynamicOnHover/);
+  assert.match(menu, /unstable_dynamicOnHover/);
+  assert.match(config, /dynamicOnHover:\s*true/);
   assert.doesNotMatch(tabs, /<Link[^>]*\sprefetch/);
+  assert.doesNotMatch(menu, /prefetch=\{true\}/);
 });
 
 test('links into force-dynamic Health night pages and the Cost page never prefetch', async () => {

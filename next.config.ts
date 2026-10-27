@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   // The Helios Hub can sit next to other repos with their own lockfiles.
   // Pin tracing to this root so Next does not pick a parent node_modules.
   outputFileTracingRoot: hubRoot,
+  experimental: {
+    // Next compiles `unstable_dynamicOnHover` out unless this is on. Viewport
+    // prefetch stays partial; hover then loads the full route.
+    dynamicOnHover: true,
+  },
   serverExternalPackages: [
     'tesseract.js',
     '@tesseract.js-data/eng',

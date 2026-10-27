@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import Link from 'next/link';
 
 import CopyUrlButton from '@/app/dashboards/(admin)/CopyUrlButton';
+import { ensureDashboardTokens } from '@/app/dashboards/(admin)/(main)/access';
 import { RowActions } from '@/components/dashboards/admin/RowActions';
 import { getAdminProjects } from '@/lib/dashboards/admin-data';
 
@@ -15,6 +16,8 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 export default async function AdminProjectsPage() {
+  const blocked = await ensureDashboardTokens();
+  if (blocked) return blocked;
   const projects = await getAdminProjects();
 
   return (
