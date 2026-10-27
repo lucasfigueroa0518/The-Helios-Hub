@@ -192,7 +192,7 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       pipelineHref: '/stories',
       media: {
         kind: 'frames',
-        frames: frames.map((f) => ({ src: f.storage_path ? `/api/stories/frames/${encodeURIComponent(f.frame_id)}` : null, label: `Frame ${f.seq} · ${f.role}` })),
+        frames: frames.map((f) => ({ src: f.storage_path ? `/api/stories/frames/${encodeURIComponent(f.frame_id)}` : null, label: `Frame ${f.seq} · ${f.role}`, path: f.storage_path })),
       },
       costMicros: null,
       costNote: null,

@@ -12,7 +12,9 @@ import { readCaps, readOverrides, readSlotSource, readTemplate } from '@/lib/soc
 import { SCHEDULE_ENTRIES, scheduleFromTemplate } from '@/lib/social-hub/slots/schedule';
 import { readSeedInputs, seedTemplate } from '@/lib/social-hub/slots/seed';
 import type { SlotQuery } from '@/lib/social-hub/slots/types';
-import { addDays, isDayKey, nyDateOf } from '@/lib/social-hub/time';
+import { addDays, isDayKey, monthOf, nyDateOf } from '@/lib/social-hub/time';
+import { signVisibleStoryFrames } from '@/lib/social-hub/views/story-frames';
+import type { HubPost } from '@/lib/social-hub/types';
 import { datedWeek, lfdWeekdays, mondayOf, standardByWeekday, weekFromOverrides } from '@/lib/social-hub/views/week';
 import { getSession } from '@/lib/session';
 
@@ -54,6 +56,28 @@ async function loadWeek(params: HubParams, now: Date): Promise<CalendarWeek> {
   return { days: datedWeek(shown, monday), ...common };
 }
 
+function datesInMonth(month: string): Set<string> {
+  const [year, monthNumber] = month.split('-').map(Number);
+  if (!year || !monthNumber) return new Set();
+  const last = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const dates = new Set<string>();
+  for (let day = 1; day <= last; day += 1) dates.add(`${month}-${String(day).padStart(2, '0')}`);
+  return dates;
+}
+
+/** Story frames the week or month actually shows, plus sets still waiting on the ready tray. */
+function calendarFramePosts(posts: readonly HubPost[], params: HubParams, now: Date, week: CalendarWeek | null): Set<string> {
+  const dates = calendarView(params) === 'week' && week
+    ? new Set(week.days.map((d) => d.nyDate))
+    : datesInMonth(monthOf(params.month ?? (isDayKey(params.day) ? params.day.slice(0, 7) : undefined), now));
+  const ids = new Set<string>();
+  for (const post of posts) {
+    if (post.media.kind !== 'frames') continue;
+    if ((post.nyDate && dates.has(post.nyDate)) || post.status === 'ready' || post.status === 'generating') ids.add(post.id);
+  }
+  return ids;
+}
+
 export default async function Page({ searchParams }: { searchParams: Promise<RawSearchParams> }) {
   if (!SOCIAL_HUB_FLAGS.views.calendar) notFound();
   const session = await getSession();
@@ -73,10 +97,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
       : Promise.resolve(null),
   ]);
   if ('error' in loaded) return <LoadError message={loaded.error} />;
+  const dataset = await signVisibleStoryFrames(loaded, calendarFramePosts(loaded.posts, params, now, week));
   return (
     <>
       <RefreshNote refresh={loaded.refresh} />
-      <CalendarScreen dataset={loaded} base={HUB_BASE} params={params} now={now} week={week} weekFailed={wantsWeek && !week} />
+      <CalendarScreen dataset={dataset} base={HUB_BASE} params={params} now={now} week={week} weekFailed={wantsWeek && !week} />
     </>
   );
 }

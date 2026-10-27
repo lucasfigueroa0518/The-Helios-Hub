@@ -16,6 +16,8 @@ export type StoriesStorage = {
   upload(objectPath: string, body: Buffer, contentType?: string): Promise<void>;
   /** A URL Instagram can fetch for `expiresIn` seconds; the bucket stays private. */
   sign(objectPath: string, expiresIn?: number): Promise<string>;
+  /** The same signature for many objects in one request. A path that fails comes back null. */
+  signMany(objectPaths: string[], expiresIn?: number): Promise<Array<string | null>>;
   download(objectPath: string): Promise<Buffer>;
   remove(objectPaths: string[]): Promise<void>;
 };
@@ -98,6 +100,24 @@ export function createStoriesStorage(cfg: StorageConfig = liveStorageConfig()): 
       const parsed = (await res.json()) as { signedURL?: string };
       if (!parsed.signedURL) throw new Error('sign returned no URL');
       return signedUrl(cfg.baseUrl, parsed.signedURL);
+    },
+    async signMany(objectPaths, expiresIn = 3600) {
+      const out: Array<string | null> = [];
+      for (let i = 0; i < objectPaths.length; i += 100) {
+        const paths = objectPaths.slice(i, i + 100);
+        const req = json({ expiresIn, paths });
+        const res = await call('POST', `/storage/v1/object/sign/${STORIES_BUCKET}`, req.body, req.headers);
+        if (!res.ok) {
+          out.push(...paths.map(() => null));
+          continue;
+        }
+        const parsed = (await res.json()) as Array<{ error?: string | null; signedURL?: string }>;
+        paths.forEach((_, n) => {
+          const row = parsed[n];
+          out.push(row?.signedURL && !row.error ? signedUrl(cfg.baseUrl, row.signedURL) : null);
+        });
+      }
+      return out;
     },
     async download(objectPath) {
       const res = await call('GET', `/storage/v1/object/${STORIES_BUCKET}/${encodePath(objectPath)}`);

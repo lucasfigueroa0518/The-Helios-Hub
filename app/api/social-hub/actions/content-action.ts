@@ -72,9 +72,12 @@ export function contentAction(opts: {
   parse?: (body: unknown, allowed?: readonly Vertical[]) => Parsed | null;
 }): ActionSpec<Parsed> {
   const parse = opts.parse ?? parseTarget;
+  const movesAPairedDay = opts.verb === 'place' || opts.verb === 'reschedule' || opts.verb === 'unschedule';
   return {
     flag: opts.flag,
     parse: (body) => parse(body, opts.allowed) ?? opts.legacy?.(body) ?? null,
+    // Carousels and Last Few Days share days. Moving one can change the other, so those actions refresh both.
+    scope: ({ vertical }) => (movesAPairedDay && (vertical === 'carousels' || vertical === 'last_few_days') ? null : vertical),
     run: async ({ vertical, target, input }, ctx) => {
       const verb = (await opts.actions())[vertical][opts.verb];
       if (!verb) return { ok: false, note: `${vertical} has no ${opts.verb} here; use its own page.`, status: 409 };

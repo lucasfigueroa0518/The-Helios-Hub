@@ -451,6 +451,29 @@ test('actions per vertical: flagged posts where an existing function exists, lin
   assert.ok(!actionsFor(published, ctx).some((p) => p.kind === 'post' && p.action === 'hardPublish'), 'a posted carousel is not posted again');
 });
 
+test('a successful action drops only that type’s cache; a paired-day move drops the whole hub', async () => {
+  const tags: string[] = [];
+  const revalidate = (tag: string) => { tags.push(tag); };
+  const approved = actionRoute(approveCarousel(registry({ approveSchedule: spy(true) })), on({ revalidate }));
+  assert.equal((await approved(req({ scheduleId: U }))).status, 200);
+  assert.deepEqual(tags, ['social-hub:data:carousels']);
+
+  tags.length = 0;
+  const refused = actionRoute(approveCarousel(registry({ approveSchedule: spy(false) })), on({ revalidate }));
+  assert.equal((await refused(req({ scheduleId: U }))).status, 409);
+  assert.deepEqual(tags, []);
+
+  tags.length = 0;
+  const placed = actionRoute(placeContent(registry({ placeItem: spy({ ok: true, note: 'Placed.' }), carouselItemId: spy('item-c') })), onPlace({ revalidate }));
+  assert.equal((await placed(req({ vertical: 'carousels', refs: { postId: U }, nyDate: '2026-10-09', slot: 'morning' }))).status, 200);
+  assert.deepEqual(tags, ['social-hub:data']);
+
+  tags.length = 0;
+  const reel = actionRoute(placeContent(registry({ placeItem: spy({ ok: true, note: 'Placed.' }), reelItemId: spy('item-r') })), onPlace({ revalidate }));
+  assert.equal((await reel(req({ vertical: 'reels', refs: { postIdeaId: U, videoJobId: V }, nyDate: '2026-10-10', slot: 'evening' }))).status, 200);
+  assert.deepEqual(tags, ['social-hub:data:reels']);
+});
+
 test('quota: parse the publishers\' messages; only the last 24 h counts; media counted from rows', () => {
   assert.deepEqual(parseQuotaMessage('The Instagram account has 3 of 100 posts left in its 24-hour quota.'), { left: 3, total: 100 });
   assert.deepEqual(parseQuotaMessage('publishing quota: 98/100 used in 24 hours, 5 frames to post'), { left: 2, total: 100 });

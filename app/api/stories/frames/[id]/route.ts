@@ -14,5 +14,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   const { rows } = await liveStoriesDb.query<{ storage_path: string | null }>(`SELECT storage_path FROM stories.frames WHERE id = $1`, [id]);
   const path = rows[0]?.storage_path;
   if (!path) return NextResponse.json({ error: 'Not rendered yet.' }, { status: 404 });
-  return NextResponse.redirect(await createStoriesStorage().sign(path, 600));
+  const response = NextResponse.redirect(await createStoriesStorage().sign(path, 600));
+  // The signature lasts 600s. The browser may reuse this redirect for a little less, so it doesn't follow an expired URL.
+  response.headers.set('Cache-Control', 'private, max-age=540');
+  return response;
 }

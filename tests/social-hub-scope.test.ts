@@ -208,11 +208,19 @@ export function networkReach(start: string, boundaries: ReadonlySet<string> = BO
     for (const spec of importsOf(text)) {
       if (NETWORK_PACKAGES.includes(spec)) return `${chain.join(' → ')} → ${spec}`;
       const next = resolveImport(file, spec);
+      // The one read-side network call: signing the story frames a page is about to show.
+      // The bucket stays private. Every other hub read still must not reach storage.
+      if (next === 'lib/stories/storage.ts' && file === 'lib/social-hub/views/story-frames.ts') continue;
       if (next && !seen.has(next)) queue.push({ file: next, chain: [...chain, next] });
     }
   }
   return null;
 }
+
+test('story frame signing is the one hub read allowed to reach storage', () => {
+  assert.equal(networkReach('lib/social-hub/views/story-frames.ts'), null);
+  assert.ok(networkReach('lib/stories/storage.ts'));
+});
 
 test('the network scan catches real network modules (positive control)', () => {
   assert.ok(networkReach('lib/social/overnight/meta.ts'), 'carousel Meta client reaches Graph');

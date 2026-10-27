@@ -19,7 +19,7 @@ import {
   type LedgerRow,
   type Pool,
 } from '@/lib/social-hub/cost';
-import { buildDataset, findPost } from '@/lib/social-hub/dataset';
+import { buildCostPart, buildDataset, findPost } from '@/lib/social-hub/dataset';
 import { hubId } from '@/lib/social-hub/ids';
 import { readAll } from '@/lib/social-hub/load';
 import { agreement, buildLedger, readCosts, reelItem } from '@/lib/social-hub/queries/costs';
@@ -228,6 +228,14 @@ test('the real ledgers reconcile end to end, with the expected attribution per v
   assert.equal(cost(hubId('stories', 'set', IDS.set1)), 210_000);
   assert.equal(cost(hubId('explainers', 'job', IDS.job2)), 2_900_000);
   assert.equal(cost(hubId('reels', 'schedule', IDS.reelSched2)), null, 'no render yet, no cost');
+
+  // The cached cost part (per-item totals only, no rows) costs every post the same as the full ledger (2026-10-26).
+  const part = buildCostPart(costs);
+  const cached = JSON.parse(JSON.stringify({ ...part, ledger: { rows: [], allocations: [], unattributed: [] } }));
+  const fromCache = buildDataset(await readAll(query), cached, new Date('2026-10-08T12:00:00Z'));
+  assert.deepEqual(fromCache.posts.map((p) => [p.id, p.costMicros, p.costNote]), d.posts.map((p) => [p.id, p.costMicros, p.costNote]));
+  assert.deepEqual(fromCache.costNotes, d.costNotes);
+  assert.ok(fromCache.cost, 'a ledger still reads as present (DataNotes)');
 });
 
 test('a disagreement between a denormalized total and its rows is reported, not added', async () => {
