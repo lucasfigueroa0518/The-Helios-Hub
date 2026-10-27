@@ -2,6 +2,8 @@ import { revalidateTag } from 'next/cache';
 
 import { actionEnabled, SOCIAL_HUB_FLAGS, type ActionFlag, type HubFlags } from '@/lib/social-hub/flags';
 import { getSession } from '@/lib/session';
+import type { Vertical } from '@/lib/social-hub/types';
+import { HUB_DATA_TAG, hubDataTag } from '@/lib/social-hub/views/cache-tags';
 
 /**
  * Flag-gated action routes (BUILD_PLAN §S1.5, §S5). The flag is checked
@@ -17,11 +19,18 @@ export type ActionSpec<B> = {
   flag: ActionFlag;
   parse: (body: unknown) => B | null;
   run: (body: B, ctx: { email: string }) => Promise<ActionResult>;
+  /**
+   * Which slice this action changes. `null` clears the whole hub (a day move
+   * that can also change the paired type). Left out, the whole hub is cleared.
+   */
+  scope?: (body: B) => Vertical | null;
 };
 
 export type ActionEnv = {
   flags?: HubFlags;
   session?: () => Promise<{ email: string } | null>;
+  /** Tests pass this. A request uses Next's tag revalidation. */
+  revalidate?: (tag: string) => void;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,7 +54,7 @@ export function actionRoute<B>(spec: ActionSpec<B>, env: ActionEnv = {}): (req: 
     if (!body) return Response.json({ ok: false, note: 'Bad request' }, { status: 400 });
     try {
       const result = await spec.run(body, { email: session.email });
-      if (result.ok) refreshHubData();
+      if (result.ok) refreshHubData(spec.scope?.(body) ?? null, env.revalidate ?? revalidateTag);
       return Response.json(result, { status: result.status ?? (result.ok ? 200 : 409) });
     } catch (error) {
       const status = typeof (error as { status?: unknown })?.status === 'number' ? (error as { status: number }).status : 500;
@@ -54,10 +63,14 @@ export function actionRoute<B>(spec: ActionSpec<B>, env: ActionEnv = {}): (req: 
   };
 }
 
-/** The hub's shared read is cached for a minute (views/cached-dataset.ts); an action makes it stale at once. */
-function refreshHubData(): void {
+/**
+ * The hub's shared read is cached for a minute (views/cached-dataset.ts).
+ * One type's tag drops that type and the assembled page, and leaves the
+ * other types cached. The global tag drops every slice.
+ */
+function refreshHubData(vertical: Vertical | null, revalidate: (tag: string) => void): void {
   try {
-    revalidateTag('social-hub:data');
+    revalidate(vertical ? hubDataTag(vertical) : HUB_DATA_TAG);
   } catch {
     // Outside a Next request (tests) there is no cache to revalidate.
   }

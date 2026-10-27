@@ -634,7 +634,7 @@ test('Free vs. Paid: struck prices read naturally', () => {
 
 const storage = (): StoriesStorage & { uploads: string[] } => {
   const uploads: string[] = [];
-  return { uploads, upload: async (p) => { uploads.push(p); }, sign: async (p) => `https://signed.test/${p}`, download: async () => Buffer.alloc(0), remove: async () => {} };
+  return { uploads, upload: async (p) => { uploads.push(p); }, sign: async (p) => `https://signed.test/${p}`, signMany: async (paths: string[]) => paths.map((p) => `https://signed.test/${p}`), download: async () => Buffer.alloc(0), remove: async () => {} };
 };
 const cleanReview: ReviewCall = async () => ({ flags: [], usage: { model: 'claude-haiku-5-5', inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, usd: 0.0001 } });
 

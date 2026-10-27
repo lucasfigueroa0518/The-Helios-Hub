@@ -15,8 +15,9 @@ export function HubTabs() {
   return (
     <div className="sh-hubbar">
       <nav className="sh-hubtabs" aria-label="Social Hub">
+        {/* Default prefetch stops at loading.tsx. `prefetch` (true) would render each tab's data just because the tab is on screen. */}
         {HUB_TABS.map((t) => (
-          <Link key={t.id} href={`${base}${t.path}`} aria-current={active === t.id ? 'page' : undefined} prefetch>
+          <Link key={t.id} href={`${base}${t.path}`} aria-current={active === t.id ? 'page' : undefined}>
             {t.label}
           </Link>
         ))}

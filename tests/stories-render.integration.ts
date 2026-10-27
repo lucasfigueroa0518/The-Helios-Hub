@@ -30,7 +30,7 @@ const usage = { model: 'claude-haiku-5-5', inputTokens: 1800, outputTokens: 220,
 
 function storage() {
   const uploads = new Map<string, Buffer>();
-  const s: StoriesStorage = { upload: async (p, b) => { uploads.set(p, b); }, sign: async (p) => `https://signed/${p}`, download: async (p) => uploads.get(p)!, remove: async () => {} };
+  const s: StoriesStorage = { upload: async (p, b) => { uploads.set(p, b); }, sign: async (p) => `https://signed/${p}`, signMany: async (paths) => paths.map((p) => `https://signed/${p}`), download: async (p) => uploads.get(p)!, remove: async () => {} };
   return { s, uploads };
 }
 

@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import type { ProgressItem } from '@/lib/content-type/progress';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
-import { canMakeCard, inFlightKey, runForCandidate, runningSummary, runOnMadeCard } from '@/lib/social-hub/views/run-for';
+import { aRunLeft, canMakeCard, inFlightKey, inFlightRuns, runForCandidate, runningSummary, runOnMadeCard } from '@/lib/social-hub/views/run-for';
 
 const none = { carousels: [], stories: [], explainers: [] };
 
@@ -47,6 +47,17 @@ test('an explainer run stays on its own topic, and a stories run stays on its se
   assert.equal(runForCandidate(candidate({ vertical: 'reels' }), runs), null);
   assert.equal(inFlightKey(runs), inFlightKey({ ...runs, carousels: [] }));
   assert.notEqual(inFlightKey(runs), inFlightKey(none));
+});
+
+test('only a finished run marks the hub read stale; a start or a stage change does not (2026-10-26)', () => {
+  const running = { ...none, explainers: [item({ id: 'job-1', stage: 'session_a' })] };
+  const before = inFlightRuns(running);
+  const moved = inFlightRuns({ ...none, explainers: [item({ id: 'job-1', stage: 'session_b' })] });
+  const started = inFlightRuns({ ...running, carousels: [item({ id: 'run-2:0', state: 'queued' })] });
+  assert.equal(aRunLeft(before, moved), false, 'a stage change keeps the cached read');
+  assert.equal(aRunLeft(before, started), false, 'a new run keeps the cached read');
+  assert.equal(aRunLeft(before, inFlightRuns(none)), true, 'a run that left may have made something');
+  assert.equal(aRunLeft(inFlightRuns(none), inFlightRuns(none)), false);
 });
 
 test('a run that was asked for particular carousel stories shows only on those stories’ cards', () => {

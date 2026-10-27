@@ -11,7 +11,7 @@ import type { CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
 import type { ReelsRead } from '@/lib/social-hub/queries/reels';
 import type { StoriesRead } from '@/lib/social-hub/queries/stories';
-import { allocate, withCosts, type CostLedger } from '@/lib/social-hub/cost';
+import { allocate, itemCosts, withItemCosts, type CostLedger, type ItemCosts } from '@/lib/social-hub/cost';
 import { agreement, buildLedger, type CostReads } from '@/lib/social-hub/queries/costs';
 import { dedupeSources } from '@/lib/social-hub/sources';
 import type { AccountRead } from '@/lib/social-hub/queries/account';
@@ -88,9 +88,35 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
 
 const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events'];
 
+/**
+ * The cost half of the dataset, built on its own so it can be cached apart
+ * from the content (views/cached-dataset.ts): an action changes a post, not
+ * what it cost, so it should not re-read and re-allocate the whole ledger.
+ */
+export type CostPart = { kind: 'cost-part'; ledger: CostLedger | null; items: ItemCosts | null; notes: string[] };
+
+export function buildCostPart(costReads: CostReads | Error | null): CostPart {
+  const notes: string[] = [];
+  if (costReads instanceof Error) {
+    notes.push(`Cost could not be read: ${costReads.message}`);
+    return { kind: 'cost-part', ledger: null, items: null, notes };
+  }
+  if (!costReads) return { kind: 'cost-part', ledger: null, items: null, notes };
+  const { rows, pools } = buildLedger(costReads);
+  const ledger = allocate(rows, pools);
+  notes.push(...agreement(costReads));
+  const missing = (costReads as CostReads & { explainersMissing?: string }).explainersMissing;
+  if (missing) notes.push(`Explainer costs not included: ${missing}`);
+  return { kind: 'cost-part', ledger, items: itemCosts(ledger), notes };
+}
+
+function isCostPart(costs: CostReads | Error | CostPart | null): costs is CostPart {
+  return Boolean(costs && !(costs instanceof Error) && (costs as CostPart).kind === 'cost-part');
+}
+
 export function buildDataset(
   reads: VerticalReads,
-  costReads: CostReads | Error | null = null,
+  costReads: CostReads | Error | CostPart | null = null,
   now = new Date(),
   latestQuota: HubDataset['latestQuota'] = null,
   account: AccountRead = { present: false },
@@ -111,17 +137,10 @@ export function buildDataset(
       errors.push({ vertical, message: error instanceof Error ? error.message : String(error) });
     }
   }
-  let cost: CostLedger | null = null;
-  const costNotes: string[] = [];
-  if (costReads instanceof Error) costNotes.push(`Cost could not be read: ${costReads.message}`);
-  else if (costReads) {
-    const { rows, pools } = buildLedger(costReads);
-    cost = allocate(rows, pools);
-    costNotes.push(...agreement(costReads));
-    const missing = (costReads as CostReads & { explainersMissing?: string }).explainersMissing;
-    if (missing) costNotes.push(`Explainer costs not included: ${missing}`);
-  }
-  const costed = cost ? withCosts(posts, cost) : posts;
+  const part = isCostPart(costReads) ? costReads : buildCostPart(costReads);
+  const cost = part.ledger;
+  const costNotes = part.notes;
+  const costed = part.items ? withItemCosts(posts, part.items) : posts;
   costed.sort((a, b) => (b.postedAt ?? b.publishAt ?? '').localeCompare(a.postedAt ?? a.publishAt ?? '') || a.id.localeCompare(b.id));
   const ai = reads.ai_events && !(reads.ai_events instanceof Error) ? reads.ai_events : null;
   return {

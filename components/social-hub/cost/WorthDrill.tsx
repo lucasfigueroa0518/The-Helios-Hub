@@ -73,7 +73,7 @@ export function WorthDrill({ byType, posts, base }: { byType: WorthModel['byType
               <ol className="sh-cost-ranked">
                 {ranked.map(({ post, per }) => (
                   <li key={post.id}>
-                    <Link href={`${base}/post/${encodeURIComponent(post.id)}`} className="sh-cost-ranked__name">{post.name}</Link>
+                    <Link href={`${base}/post/${encodeURIComponent(post.id)}`} prefetch={false} className="sh-cost-ranked__name">{post.name}</Link>
                     <span className="sh-ops-meta sh-ops-num">{money(post.costMicros, 1)}</span>
                     <span className="sh-ops-num">{perUnit(per)}</span>
                   </li>

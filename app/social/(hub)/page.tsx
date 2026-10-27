@@ -6,8 +6,10 @@ import { liveHubQuery } from '@/lib/social-hub/db';
 import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links';
 import { loadForPage } from '@/lib/social-hub/live';
+import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
 import { legacyRootRedirect } from '@/lib/social-hub/views/legacy-routes';
 import { loadLibraries } from '@/lib/social-hub/views/libraries';
+import { signVisibleStoryFrames } from '@/lib/social-hub/views/story-frames';
 import { readAllProgress } from '@/lib/content-type/progress';
 import { NO_MISSES, readRunMisses } from '@/lib/content-type/run-misses';
 import { getSession } from '@/lib/session';
@@ -30,5 +32,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Raw
     readRunMisses(liveHubQuery).catch(() => NO_MISSES),
   ]);
   if ('error' in loaded) return <LoadError message={loaded.error} />;
-  return <ContentScreen dataset={loaded} base={HUB_BASE} now={new Date()} libraries={libraries} progress={progress} misses={misses} />;
+  const now = new Date();
+  // Today's cards are the frames on screen. Their URLs are signed once, outside the shared cache.
+  const shown = new Set(allQuotaCandidates(loaded, now).flatMap((c) => (c.post ? [c.post.id] : [])));
+  const dataset = await signVisibleStoryFrames(loaded, shown);
+  return <ContentScreen dataset={dataset} base={HUB_BASE} now={now} libraries={libraries} progress={progress} misses={misses} />;
 }

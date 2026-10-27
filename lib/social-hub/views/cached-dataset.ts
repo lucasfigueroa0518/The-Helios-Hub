@@ -2,8 +2,16 @@ import { unstable_cache } from 'next/cache';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { cache } from 'react';
 
-import type { HubDataset } from '@/lib/social-hub/dataset';
-import { loadDataset } from '@/lib/social-hub/load';
+import type { CostLedger } from '@/lib/social-hub/cost';
+import type { CostPart, HubDataset, VerticalReads } from '@/lib/social-hub/dataset';
+import { liveHubQuery } from '@/lib/social-hub/db';
+import { loadCostPart, loadDataset, readOne, withSharedSpine } from '@/lib/social-hub/load';
+import type { Vertical } from '@/lib/social-hub/types';
+import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
+
+import { HUB_COST_TAG, HUB_DATA_TAG, hubDataTag } from '@/lib/social-hub/views/cache-tags';
+
+export { HUB_COST_TAG, HUB_DATA_TAG, hubDataTag };
 
 /**
  * One read of every pipeline, shared for a minute (REDESIGN plan B1). The
@@ -12,7 +20,42 @@ import { loadDataset } from '@/lib/social-hub/load';
  * revalidate the tag; a read with per-type errors is never cached.
  */
 
-export const HUB_DATA_TAG = 'social-hub:data';
+/**
+ * Cost is cached apart from the content, for ten minutes. Reading and
+ * allocating the ledger was the slowest half of every content rebuild
+ * (~0.7 s, ~6 MB read, ~17 MB built and then dropped), and nothing an action
+ * does changes what a post cost. A run finishing marks both tags stale
+ * (POST /api/content-type/progress).
+ */
+
+const NO_ROWS: CostLedger = { rows: [], allocations: [], unattributed: [] };
+
+class UncachedCosts extends Error {
+  constructor(readonly part: CostPart) {
+    super('cost read failed');
+  }
+}
+
+const sharedCosts = unstable_cache(
+  async (): Promise<CostPart> => {
+    const part = await loadCostPart();
+    // A failed read is never cached: the next request tries again.
+    if (!part.ledger) throw new UncachedCosts(part);
+    // Posts need only the per-item totals; keep whether a ledger exists (DataNotes).
+    return { ...part, ledger: NO_ROWS };
+  },
+  ['social-hub-costs', process.env.VERCEL_DEPLOYMENT_ID ?? 'local', 'v1'],
+  { revalidate: 600, tags: [HUB_COST_TAG] },
+);
+
+async function cachedCostPart(): Promise<CostPart> {
+  try {
+    return await sharedCosts();
+  } catch (error) {
+    if (error instanceof UncachedCosts) return error.part;
+    throw error;
+  }
+}
 
 class PartialRead extends Error {
   constructor(readonly dataset: HubDataset) {
@@ -21,13 +64,13 @@ class PartialRead extends Error {
 }
 
 /**
- * Every post already carries its allocated cost (withCosts), and no page
- * reads the ledger itself: its rows and allocations are ~9 MB of the ~9 MB
- * dataset, over the 2 MB Next data cache item limit. Keep only whether a
- * ledger exists (DataNotes shows cost notes only then).
+ * Every post already carries its allocated cost (withItemCosts), and no page
+ * reads the ledger itself, so keep only whether one exists (DataNotes shows
+ * cost notes only then). The cached cost part already has no rows; a failed
+ * cost read falls back to the full one, which this drops.
  */
 function slim(dataset: HubDataset): HubDataset {
-  return dataset.cost ? { ...dataset, cost: { rows: [], allocations: [], unattributed: [] } } : dataset;
+  return dataset.cost ? { ...dataset, cost: NO_ROWS } : dataset;
 }
 
 /**
@@ -35,28 +78,54 @@ function slim(dataset: HubDataset): HubDataset {
  * entry over 2 MB, so it was never stored and every request re-read every
  * schema. Stored gzipped it is ~230 KB (packing and unpacking take ~20 ms).
  */
-function pack(dataset: HubDataset): string {
-  return gzipSync(JSON.stringify(dataset)).toString('base64');
+function pack(value: unknown): string {
+  return gzipSync(JSON.stringify(value)).toString('base64');
 }
 
-function unpack(packed: string): HubDataset {
-  return JSON.parse(gunzipSync(Buffer.from(packed, 'base64')).toString('utf8')) as HubDataset;
+function unpack<T>(packed: string): T {
+  return JSON.parse(gunzipSync(Buffer.from(packed, 'base64')).toString('utf8')) as T;
+}
+
+const deployment = process.env.VERCEL_DEPLOYMENT_ID ?? 'local';
+
+/** One type's read. Tagged with the global tag too, so a full clear drops every slice. */
+function verticalCache(vertical: Vertical) {
+  return unstable_cache(
+    async () => pack(await readOne(liveHubQuery, vertical)),
+    ['social-hub-vertical', vertical, deployment, 'v1'],
+    { revalidate: 60, tags: [HUB_DATA_TAG, hubDataTag(vertical)] },
+  );
+}
+
+const verticalCaches = Object.fromEntries(VERTICAL_IDS.map((vertical) => [vertical, verticalCache(vertical)])) as Record<Vertical, () => Promise<string>>;
+
+/** Cache hits stay packed. A miss throws, so a failed read is never stored. */
+async function cachedReads(): Promise<VerticalReads> {
+  const entries = await Promise.all(VERTICAL_IDS.map(async (vertical) => {
+    try {
+      return [vertical, unpack(await verticalCaches[vertical]())] as const;
+    } catch (error) {
+      return [vertical, error instanceof Error ? error : new Error(String(error))] as const;
+    }
+  }));
+  return Object.fromEntries(entries) as VerticalReads;
 }
 
 const shared = unstable_cache(
   async () => {
-    const dataset = await loadDataset();
+    // The spine is read once for whichever types miss. Types still in cache are not read again.
+    const dataset = await withSharedSpine(liveHubQuery, async () => loadDataset(liveHubQuery, new Date(), cachedCostPart(), await cachedReads()));
     if (dataset.errors.length > 0) throw new PartialRead(dataset);
     return pack(slim(dataset));
   },
-  ['social-hub-dataset', process.env.VERCEL_DEPLOYMENT_ID ?? 'local', 'v4-gzip'],
-  { revalidate: 60, tags: [HUB_DATA_TAG] },
+  ['social-hub-dataset', deployment, 'v5-parts'],
+  { revalidate: 60, tags: [HUB_DATA_TAG, ...VERTICAL_IDS.map(hubDataTag)] },
 );
 
 /** Once per request (layout, page and drawer share it). */
 export const loadHubDataset = cache(async (): Promise<HubDataset> => {
   try {
-    return unpack(await shared());
+    return unpack<HubDataset>(await shared());
   } catch (error) {
     if (error instanceof PartialRead) return slim(error.dataset);
     throw error;

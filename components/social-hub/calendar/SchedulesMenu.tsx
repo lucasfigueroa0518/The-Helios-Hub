@@ -1,10 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { ChevronDown, Loader, Settings2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { ScheduleForm, type SaveOutcome } from '@/components/social-hub/calendar/ScheduleForm';
+import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
 import { useScheduleSandbox } from '@/components/social-hub/calendar/schedule-sandbox';
 import { ToastSlot } from '@/components/social-hub/calendar/toast-slot';
 import { typeStyle } from '@/components/social-hub/ui/marks';
@@ -68,7 +68,7 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
   /** After a save went through (on screen or on the server). */
   onSaved?: (schedule: TypeSchedule) => void;
 }) {
-  const router = useRouter();
+  const { pending, refresh } = useHubRefresh();
   const box = useScheduleSandbox();
   const views: ScheduleView[] = sandbox && box ? SCHEDULE_ENTRIES.map((e) => scheduleFromTemplate(box.template, e)) : schedules;
 
@@ -136,7 +136,7 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
       const toReady = typeof out.toReady === 'number' ? out.toReady : 0;
       const byType = Array.isArray(out.toReadyByType) ? (out.toReadyByType as BackToReady[]) : toReady ? [{ label, count: toReady }] : [];
       setOpen(null);
-      router.refresh();
+      refresh();
       say({ text: savedToast(label, byType), undo: { kind: 'live', label, toReady, inverse: out.inverse as TypeSchedule, inverseOther: (out.inverseOther as TypeSchedule | null) ?? null } });
       onSaved?.(s);
       return { kind: 'saved' };
@@ -144,9 +144,9 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
     const errors = Array.isArray(out.errors) ? (out.errors as string[]) : typeof out.error === 'string' ? [out.error] : ['That didn’t save. Try again in a moment.'];
     if (status === 422 && out.confirm) return { kind: 'confirm', lines: errors };
     // A half-done save (posts already sent back to Ready) changed the board: show it.
-    if (typeof out.toReady === 'number' && out.toReady > 0) router.refresh();
+    if (typeof out.toReady === 'number' && out.toReady > 0) refresh();
     return { kind: 'errors', errors };
-  }, [box, caps, onSaved, router, sandbox, say]);
+  }, [box, caps, onSaved, refresh, sandbox, say]);
 
   const undo = useCallback(async (u: Undo) => {
     setToast(null);
@@ -155,7 +155,7 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
       say({ text: undoneToast(u.label, 0) });
       return;
     }
-    if (busy) return;
+    if (busy || pending) return;
     setBusy(true);
     try {
       // The saved entry first, then the other type's lost days (LFD / Carousels), in that order.
@@ -168,14 +168,14 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
         try {
           res = await post({ schedule: s, confirm: true });
         } catch {
-          if (done) router.refresh();
+          if (done) refresh();
           say({ text: `${half()}${OFFLINE}`, warn: true });
           return;
         }
         if (res.status !== 200) {
           const { out } = res;
           const why = Array.isArray(out.errors) ? (out.errors as string[]).join(' ') : typeof out.error === 'string' ? out.error : 'Undo didn’t go through.';
-          router.refresh();
+          refresh();
           say({ text: `${half()}${why}`, warn: true });
           return;
         }
@@ -184,9 +184,9 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
     } finally {
       setBusy(false);
     }
-    router.refresh();
+    refresh();
     say({ text: undoneToast(u.label, u.toReady) });
-  }, [box, busy, router, say]);
+  }, [box, busy, pending, refresh, say]);
 
   const pick = (e: ScheduleEntry) => {
     setList(false);
@@ -244,7 +244,7 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
           cap={caps[open.entry.vertical]}
           editable={editable}
           note={editable ? null : legacy ? LEGACY_NOTE : readOnlyReason === 'unread' ? UNREAD_NOTE : OFF_NOTE}
-          busy={busy}
+          busy={busy || pending}
           anchor={open.anchor}
           onClose={() => setOpen(null)}
           onSave={save}
@@ -256,8 +256,8 @@ export function SchedulesMenu({ schedules, caps, editable, sandbox, legacy = fal
         {toast ? (
           <div className={`sh-board__toast${toast.warn ? ' is-warn' : ''}`} role={toast.warn ? 'alert' : 'status'}>
             <span>{toast.text}</span>
-            {toast.undo ? <button type="button" disabled={busy} onClick={() => void undo(toast.undo!)}>Undo</button> : null}
-            {busy ? <Loader size={14} className="sh-board__spin" aria-label="Saving" /> : null}
+            {toast.undo ? <button type="button" disabled={busy || pending} onClick={() => void undo(toast.undo!)}>Undo</button> : null}
+            {busy || pending ? <Loader size={14} className="sh-board__spin" aria-label="Saving" /> : null}
           </div>
         ) : null}
       </ToastSlot>

@@ -1,9 +1,9 @@
 'use client';
 
 import { Loader } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useId, useRef, useState } from 'react';
 
+import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
 import { narrowStep, type PlanStep, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -16,7 +16,7 @@ const usd = (n: number) => `$${n.toFixed(2)}`;
  * starts nothing.
  */
 export function MakeItButton({ vertical, target }: { vertical: Vertical; target: string | undefined }) {
-  const router = useRouter();
+  const { pending, refresh } = useHubRefresh();
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const [step, setStep] = useState<PlanStep | null>(null);
@@ -34,7 +34,7 @@ export function MakeItButton({ vertical, target }: { vertical: Vertical; target:
       const narrowed = own ? narrowStep(own, target) : null;
       if (!narrowed || narrowed.action === 'none') {
         setNote({ ok: true, text: narrowed?.note ?? 'Nothing to make for this card.' });
-        router.refresh();
+        refresh();
         return;
       }
       setStep(narrowed);
@@ -54,7 +54,7 @@ export function MakeItButton({ vertical, target }: { vertical: Vertical; target:
       const out = (await res.json().catch(() => ({}))) as { results?: Array<{ ok: boolean; note: string }>; error?: string };
       const r = out.results?.[0];
       setNote(r ? { ok: r.ok, text: r.note } : { ok: res.ok, text: out.error ?? (res.ok ? 'Nothing needed making.' : 'That didn’t work. Try again in a moment.') });
-      router.refresh();
+      refresh();
     } catch {
       setNote({ ok: false, text: 'Couldn’t reach the hub. Try again in a moment.' });
     } finally {
@@ -65,8 +65,8 @@ export function MakeItButton({ vertical, target }: { vertical: Vertical; target:
   return (
     <div className="sh-actions sh-actions--card">
       <div className="sh-actions__row">
-        <button type="button" className="sh-btn sh-btn--primary" disabled={busy} data-busy={busy ? '' : undefined} onClick={() => void open()}>
-          {busy ? <Loader size={14} aria-hidden="true" /> : null}
+        <button type="button" className="sh-btn sh-btn--primary" disabled={busy || pending} data-busy={busy || pending ? '' : undefined} onClick={() => void open()}>
+          {busy || pending ? <Loader size={14} aria-hidden="true" /> : null}
           Make it
         </button>
       </div>
@@ -76,7 +76,7 @@ export function MakeItButton({ vertical, target }: { vertical: Vertical; target:
         <p>{step?.note} Up to {usd(step?.estimateUsd ?? 0)}. Your click approves this spend.</p>
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => dialog.current?.close()}>Cancel</button>
-          <button type="button" className="sh-btn sh-btn--primary" onClick={() => void run()}>Make it (up to {usd(step?.estimateUsd ?? 0)})</button>
+          <button type="button" className="sh-btn sh-btn--primary" disabled={busy || pending} onClick={() => void run()}>Make it (up to {usd(step?.estimateUsd ?? 0)})</button>
         </div>
       </dialog>
     </div>
