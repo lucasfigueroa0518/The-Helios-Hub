@@ -8,7 +8,7 @@ import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
 import { createPostIdea, insertSource, shortlistCandidates } from '@/lib/reels/repository';
 import { loadIdeaMaterial } from '@/lib/reels/scoring/store';
 import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
-import { isPrivateHost } from '@/lib/social/overnight/seeds';
+import { isPrivateHost } from '@/lib/net/private-host';
 
 /**
  * Seeding a Text on Screen idea (design 2026-10-26-text-on-screen-seeding-design): a person types an idea into the queue.
