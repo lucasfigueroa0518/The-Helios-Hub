@@ -178,3 +178,20 @@ test('a rejecting complete propagates, it does not become an ask', async () => {
     await assert.rejects(() => interpret({ complete }, { snapshot, sentence: 'x' }), /network down/);
   });
 });
+
+test('the system block carries the type\'s argsGuide and is identical across different snapshots', async () => {
+  registerDescription({ ...desc, argsGuide: { photo: 'args.hint is optional.', wording: 'args.value is the exact new text.' } });
+  try {
+    const a = stub(okJson);
+    const b = stub(okJson);
+    await interpret({ complete: a.complete }, { snapshot, sentence: 'slide 3 photo' });
+    const other: PostSnapshot = { ...snapshot, parts: [{ ref: { kind: 'slide', key: '3' }, text: 'Totally different' }] };
+    await interpret({ complete: b.complete }, { snapshot: other, sentence: 'something else' });
+    const sa = JSON.stringify(a.calls[0]!.system);
+    assert.match(sa, /args\.hint is optional/);
+    assert.match(sa, /args\.value is the exact new text/);
+    assert.equal(sa, JSON.stringify(b.calls[0]!.system));
+  } finally {
+    restoreRegistryForTest();
+  }
+});

@@ -33,6 +33,12 @@ export type InterpretResult =
 
 const FALLBACK_QUESTION = 'I could not tell which part of the post you mean or what to change. Can you say it another way?';
 
+/** The type's per-fix-kind args guidance (static, so it stays in the cached prefix). */
+function argsLines(d: ContentTypeDescription): string[] {
+  const lines = d.fixKinds.flatMap((k) => (d.argsGuide?.[k] ? [`- ${k}: ${d.argsGuide[k]}`] : []));
+  return lines.length ? ['', 'For each fix kind, return these args:', ...lines] : [];
+}
+
 /** Static per content type: instructions, schema, and the type's fix kinds and stage tags. */
 function systemPrompt(d: ContentTypeDescription): string {
   return [
@@ -42,6 +48,7 @@ function systemPrompt(d: ContentTypeDescription): string {
     '',
     `Allowed fixKind values: ${d.fixKinds.join(', ')}`,
     `Allowed stageTag values (the pipeline stage that produced the thing being fixed): ${d.stageTags.join(', ')}`,
+    ...argsLines(d),
     '',
     'Reply with a single JSON object and nothing else, in one of two shapes.',
     'To act: {"status":"ok","part":{"kind":"<part kind from the post>","key":"<part key from the post>"},"fixKind":"<allowed fixKind>","stageTag":"<allowed stageTag>","instruction":"<the fix, restated plainly in one sentence>","args":{"<optional name>":"<optional value>"}}',

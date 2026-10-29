@@ -94,6 +94,8 @@ export interface ContentTypeDescription {
   /** The type's StageTag list (its pipeline stages a revision can be attributed to). */
   stageTags: readonly string[];
   fixKinds: readonly FixKind[];
+  /** Per fix kind: the `args` keys the interpreter must return (put in its static system block). */
+  argsGuide?: Partial<Record<FixKind, string>>;
   load(q: Query, refs: ActionTarget): Promise<PostSnapshot | null>;
   estimate(fix: FixKind): number;
   revise(ctx: { q: Query; refs: ActionTarget; interpretation: Interpretation; meter: CostMeter }): Promise<RevisionResult>;

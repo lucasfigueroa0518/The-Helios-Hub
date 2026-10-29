@@ -8,9 +8,9 @@
  * Part keys are 1-based slide numbers ("3" = the third slide, how people say it).
  * Colors are fixed by the post's look, so there is no color fix (the engine refuses it).
  */
-import { aiEventsItemId } from '@/lib/ai-events/items';
 import { COPY_MAX } from '@/lib/ai-events/post';
 import { updatePostRender } from '@/lib/ai-events/store';
+import { safeHttpUrl } from '@/lib/networking/public-snapshot';
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Post as RenderPost, SlideCopy } from '@/lib/social/render/types';
@@ -93,6 +93,8 @@ function stateOf(slide: SlideCopy, file: string | undefined): PartState {
   };
 }
 
+const objectsMatch = (p: PostRow) => Array.isArray(p.slide_objects) && p.slide_objects.length === p.render.slides.length;
+
 const blocked = (note: string) => ({ ok: false as const, reason: 'blocked' as const, note });
 const failed = (note: string) => ({ ok: false as const, reason: 'failed' as const, note });
 
@@ -113,6 +115,11 @@ export function createAiEventsDescription(deps: AiEventsDeps): ContentTypeDescri
     label: 'AI events',
     stageTags: AI_EVENTS_STAGE_TAGS,
     fixKinds: ['photo', 'wording', 'layout'],
+    argsGuide: {
+      wording: 'args.field is one of title, host or place, and args.value is the exact new text for that field.',
+      layout: 'args.layout is one of poster, ambient or type and/or args.treat is ghost or panorama (give at least one).',
+      photo: 'No args are needed; args.hint is an optional note about the kind of photo wanted.',
+    },
 
     async load(q, refs) {
       const post = await readPost(q, postIdOf(refs));
@@ -142,6 +149,7 @@ export function createAiEventsDescription(deps: AiEventsDeps): ContentTypeDescri
       if (!post) return failed('This AI events post could not be found, so nothing was changed.');
       if (post.status === 'rejected') return blocked('This post was rejected, so it was not changed.');
       if (post.status === 'published') return blocked('This post is already published, so it was not changed.');
+      if (!objectsMatch(post)) return failed('This post\'s stored slide images do not match its slides, so nothing was changed.');
       const n = slideNo(it.part);
       const slide = post.render.slides[n - 1];
       const a = slide && ae(slide);
@@ -155,9 +163,9 @@ export function createAiEventsDescription(deps: AiEventsDeps): ContentTypeDescri
 
       if (it.fixKind === 'wording') {
         if (!na.pick) return blocked(`Slide ${n} has fixed wording, so it was not changed. Only the event slides (title, host, place) can be reworded.`);
-        const field = (args.field ?? 'title').toLowerCase();
-        if (field !== 'title' && field !== 'host' && field !== 'place') return blocked(`Only the title, host or place of an event slide can be reworded (not "${field}").`);
-        let value = (args.value ?? args.text ?? '').trim();
+        const field = (args.field ?? '').toLowerCase();
+        if (field !== 'title' && field !== 'host' && field !== 'place') return failed(`I could not tell which part of slide ${n} to reword (it must be the title, host or place), so nothing was changed.`);
+        let value = (args.value ?? '').trim();
         if (field === 'host' && value.toLowerCase().startsWith(HOSTED_BY.toLowerCase())) value = value.slice(HOSTED_BY.length).trim();
         if (!value) return failed(`I could not tell what slide ${n}'s ${field} should say, so nothing was changed.`);
         const cap = COPY_MAX[field];
@@ -171,8 +179,8 @@ export function createAiEventsDescription(deps: AiEventsDeps): ContentTypeDescri
         const layout = args.layout?.toLowerCase();
         const treat = args.treat?.toLowerCase();
         if (!layout && !treat) return failed(`I could not tell which layout slide ${n} should use (poster, ambient or type), so nothing was changed.`);
-        if (layout && !(LAYOUTS as readonly string[]).includes(layout)) return blocked(`"${layout}" is not a layout. Choose poster, ambient or type.`);
-        if (treat && !(TREATS as readonly string[]).includes(treat)) return blocked(`"${treat}" is not a number style. Choose ghost or panorama.`);
+        if (layout && !(LAYOUTS as readonly string[]).includes(layout)) return failed(`"${layout}" is not a layout I know. Choose poster, ambient or type; nothing was changed.`);
+        if (treat && !(TREATS as readonly string[]).includes(treat)) return failed(`"${treat}" is not a number style I know. Choose ghost or panorama; nothing was changed.`);
         if (layout) na.layout = layout;
         if (treat) na.treat = [treat];
       } else if (it.fixKind === 'photo') {
@@ -181,7 +189,7 @@ export function createAiEventsDescription(deps: AiEventsDeps): ContentTypeDescri
         if (!eventId) return failed(`I could not find which event slide ${n} shows, so its photo was not changed.`);
         const current = na.pick.image ?? null;
         const used = new Set(render.slides.map((s, i) => (i === n - 1 ? null : ae(s)?.pick?.image)).filter((u): u is string => !!u));
-        const found = [...new Set(await deps.imageCandidates(q, eventId))].filter((u) => u && u !== current);
+        const found = [...new Set((await deps.imageCandidates(q, eventId)).map((u) => safeHttpUrl(u)))].filter((u): u is string => !!u && u !== current);
         if (!found.length) return failed(`I looked for another image for this event and found none, so slide ${n}'s photo was not changed.`);
         const fresh = found.filter((u) => !used.has(u));
         if (!fresh.length) return blocked(`Every other image I found for this event is already used on another slide, so slide ${n}'s photo was not changed.`);
@@ -208,6 +216,7 @@ export function createAiEventsDescription(deps: AiEventsDeps): ContentTypeDescri
     async restore({ q, refs, part, state }) {
       const post = await readPost(q, postIdOf(refs));
       if (!post) throw new Error('The AI events post is gone.');
+      if (!objectsMatch(post)) throw new Error('The post\'s stored slide images do not match its slides, so nothing was restored.');
       const n = slideNo(part);
       const slide = post.render.slides[n - 1];
       if (!slide || !ae(slide)) throw new Error(`There is no slide ${part.key} to restore.`);

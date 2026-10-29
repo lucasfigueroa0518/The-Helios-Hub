@@ -169,7 +169,7 @@ test('a layout fix changes the rank slide\'s layout and treat, and rejects an un
   const refs = { aiEventsPostId: p.id };
   const bad = await desc.revise({ q: query as unknown as Query, refs, interpretation: interp(slide(3), 'layout', { layout: 'sideways' }), meter: meter() });
   assert.equal(bad.ok, false);
-  if (!bad.ok) assert.equal(bad.reason, 'blocked');
+  if (!bad.ok) assert.equal(bad.reason, 'failed');
   const res = await desc.revise({ q: query as unknown as Query, refs, interpretation: interp(slide(3), 'layout', { layout: 'type', treat: 'ghost' }), meter: meter() });
   assert.equal(res.ok, true);
   const after = await row(query, p.id);
@@ -260,4 +260,64 @@ test('unschedule delegates to the type\'s own unschedule', async () => {
   const out = await desc.unschedule(query as unknown as Query, { aiEventsPostId: 'abc' });
   assert.deepEqual(out, { ok: true, note: 'Unscheduled.' });
   assert.deepEqual(calls.unschedule, ['abc']);
+});
+
+test('the description has an argsGuide for every fix kind it offers', () => {
+  const d = descriptionFor('ai_events')!;
+  for (const k of d.fixKinds) assert.ok(d.argsGuide?.[k], k);
+});
+
+test('missing or invalid args fail with a plain note and change nothing, per fix kind', async () => {
+  const { query } = await openAiEventsDb();
+  const p = await seed(query);
+  const { desc, calls } = setup();
+  const refs = { aiEventsPostId: p.id };
+  const bads: Array<[Interpretation['fixKind'], Record<string, string> | undefined]> = [
+    ['wording', undefined],
+    ['wording', { value: 'No field given' }],
+    ['wording', { field: 'subtitle', value: 'x' }],
+    ['wording', { field: 'title', value: '   ' }],
+    ['layout', undefined],
+    ['layout', { layout: 'sideways' }],
+    ['layout', { treat: 'sparkle' }],
+  ];
+  for (const [kind, args] of bads) {
+    const res = await desc.revise({ q: query as unknown as Query, refs, interpretation: interp(slide(2), kind, args), meter: meter() });
+    assert.equal(res.ok, false, `${kind} ${JSON.stringify(args)}`);
+    if (!res.ok) { assert.equal(res.reason, 'failed'); assert.ok(res.note.length > 10); }
+  }
+  assert.equal(calls.rendered.length, 0);
+  const after = await row(query, p.id);
+  assert.equal(after.render_version, 1);
+  assert.deepEqual(after.slide_objects, p.objects);
+});
+
+test('an unsafe image URL candidate is ignored', async () => {
+  const { query } = await openAiEventsDb();
+  const p = await seed(query);
+  const unsafe = setup({ candidates: ['javascript:alert(1)', 'file:///etc/passwd', 'data:text/html,x'] });
+  const res = await unsafe.desc.revise({ q: query as unknown as Query, refs: { aiEventsPostId: p.id }, interpretation: interp(slide(2), 'photo'), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.reason, 'failed');
+  const mixed = setup({ candidates: ['javascript:alert(1)', 'https://img.test/e2-safe.jpg'] });
+  const ok = await mixed.desc.revise({ q: query as unknown as Query, refs: { aiEventsPostId: p.id }, interpretation: interp(slide(2), 'photo'), meter: meter() });
+  assert.equal(ok.ok, true);
+  assert.equal(ai((await row(query, p.id)).render, 2).pick.image, 'https://img.test/e2-safe.jpg');
+});
+
+test('missing or mismatched slide_objects fails up front, in revise and restore, writing nothing', async () => {
+  const { query } = await openAiEventsDb();
+  const p = await seed(query);
+  const { desc, calls } = setup();
+  const q = query as unknown as Query;
+  const refs = { aiEventsPostId: p.id };
+  for (const objects of [null, JSON.stringify(p.objects.slice(0, 2))]) {
+    await query(`UPDATE ai_events.posts SET slide_objects = $2::jsonb WHERE id = $1`, [p.id, objects]);
+    const res = await desc.revise({ q, refs, interpretation: interp(slide(2), 'wording', { field: 'title', value: 'New title' }), meter: meter() });
+    assert.equal(res.ok, false);
+    if (!res.ok) assert.equal(res.reason, 'failed');
+    await assert.rejects(desc.restore({ q, refs, part: slide(2), state: { files: [p.objects[1]!] } }));
+  }
+  assert.equal(calls.rendered.length, 0);
+  assert.equal((await row(query, p.id)).render_version, 1);
 });
