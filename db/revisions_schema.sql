@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS revisions.requests (
                       CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events')),
     item_id         uuid NOT NULL REFERENCES social_hub.content_items (id),
     -- Which parts of the item the instruction points at: [{ kind, key }].
-    refs            jsonb NOT NULL DEFAULT '[]'::jsonb,
+    refs            jsonb NOT NULL DEFAULT '{}'::jsonb,
     requested_by    text,
     instruction     text NOT NULL,
     -- An ask-back reply points at the request that asked.

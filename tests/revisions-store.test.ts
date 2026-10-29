@@ -133,3 +133,11 @@ test('markApplied on a row that is not running changes nothing', async () => {
   assert.equal(row.before, null);
   assert.equal(row.spendUsd, 0);
 });
+
+test('a row inserted without refs reads back refs as an object, not an array', async () => {
+  const { q, itemId } = await setup();
+  await q(`INSERT INTO revisions.requests (vertical, item_id, instruction) VALUES ('carousels', $1, 'x')`, [itemId]);
+  const [row] = await listForItem(q, itemId);
+  assert.deepEqual(row!.refs, {});
+  assert.equal(Array.isArray(row!.refs), false);
+});
