@@ -47,7 +47,8 @@ async function reelsDb(opts: { withSlate?: boolean } = {}): Promise<PGlite> {
   const { pg } = await openHubTestDb();
   const query = (text: string, params?: unknown[]) => pg.query<any>(text, params as unknown[]);
   // dbTransaction needs a connect(); a PGlite session is one connection, so BEGIN/COMMIT on it is the transaction.
-  (globalThis as { __outreachHubPool?: unknown }).__outreachHubPool = { query, connect: async () => ({ query, release: () => undefined }) };
+  // lib/db.ts sizes its query gate from pool.options.max (perf(hub) #21), so the stand-in pool must carry it.
+  (globalThis as { __outreachHubPool?: unknown }).__outreachHubPool = { options: { max: 4 }, query, connect: async () => ({ query, release: () => undefined }) };
   if (opts.withSlate !== false) {
     await pg.exec(`
       INSERT INTO reels.runs (id, trigger, status) VALUES ('${RUN}', 'scheduled', 'ok');
@@ -258,13 +259,14 @@ test('warnings: the same link already in the pool, and a headline close to a rec
   assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 1, 'added anyway');
 });
 
-test('the night’s carryover rule picks up a high-net seed from yesterday’s slate', async () => {
+test('the night’s carryover rule never picks up a seed, however high its net', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
   const seed = await addReelSeed({ headline: 'Yesterday’s seed', text: PAGE }, { jev });
+  await pg.query(`UPDATE reels.idea_scores SET net = 9 WHERE post_idea_id = $1`, [seed.id]);
   const ranked = await loadSlateRanked('2026-10-08');
-  assert.ok(ranked.some((r) => r.id === seed.id), 'the seed row is on the slate');
+  assert.ok(!ranked.some((r) => r.id === seed.id), 'the night does not read the seed row');
   const misses = carryoverMisses(ranked, heldFromCarryover(ranked));
-  assert.ok(misses.some((m) => m.id === seed.id), 'and it is among the misses the next night rescores');
-  void pg;
+  assert.ok(!misses.some((m) => m.id === seed.id), 'so it is never among the misses the next night rescores');
+  assert.ok(ranked.some((r) => r.id === NORMAL), 'an ordinary idea on the same slate is still read');
 });

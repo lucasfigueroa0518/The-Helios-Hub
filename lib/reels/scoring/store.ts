@@ -119,7 +119,13 @@ export async function loadSlateRanked(
          WHERE ny_date = $1::date
          ORDER BY scored_at DESC
          LIMIT 1
-      )`,
+      )
+        -- A person's seed is never a carryover: the night does not make it unprompted (a pin or Run now does).
+        AND NOT EXISTS (
+          SELECT 1 FROM reels.post_idea_members m
+            JOIN reels.sources so ON so.id = m.source_id
+           WHERE m.post_idea_id = s.post_idea_id AND so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+        )`,
     [nyDate],
   );
   return rows.map((row) => ({
