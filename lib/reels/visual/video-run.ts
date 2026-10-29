@@ -24,6 +24,7 @@ import { routeHook } from '@/lib/reels/visual/hook-route';
 import { motionRecord } from '@/lib/reels/visual/motion-prompt';
 import { writeMotion, type MotionClient } from '@/lib/reels/visual/motion-writer';
 import { muxHookSfx, overlayPlate, probeVideo } from '@/lib/reels/visual/overlay';
+import { keepCleanClip } from '@/lib/reels/visual/clean-clip';
 import { downloadFrameObject, signFrameObject, uploadFrameObject } from '@/lib/reels/visual/storage';
 import type { Bucket, MemberRole } from '@/lib/reels/types';
 
@@ -414,6 +415,8 @@ export async function claimAndRenderVideo(deps?: {
       const finalPath = sounded.path;
       const videoPath = `${id}/reel.mp4`;
       await uploadFrameObject(videoPath, await readFile(finalPath), 'video/mp4');
+      // Best effort (never throws): the clean clip beside the reel lets a wording fix re-lay text later.
+      await keepCleanClip(videoPath, clip.bytes);
       const warnings = [...notices, ...written.prompt.warnings];
       await finish(id, 'ok', {
         // Fail open: the clip ships and the warnings ride along as labels.

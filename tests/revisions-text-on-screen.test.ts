@@ -786,7 +786,8 @@ test('undo makes the restored still the idea\'s newest frame row again (the read
 
 test('the clean clip is kept: motion fix, then two wording fixes re-lay on stored raw clips and never ask Fal', async () => {
   assert.equal(rawKeyFor(`${VIDEO}/reel.revabc.mp4`), `${VIDEO}/raw.revabc.mp4`);
-  assert.equal(rawKeyFor(CLIP), null);
+  assert.equal(rawKeyFor(CLIP), `${VIDEO}/raw.mp4`);
+  assert.equal(rawKeyFor('odd/name.mp4'), null);
   const s = await seed();
   const { desc, calls } = setup();
   const m = await desc.revise({ q: s.q, refs, interpretation: interp(stage('video'), 'motion'), meter: meter() });

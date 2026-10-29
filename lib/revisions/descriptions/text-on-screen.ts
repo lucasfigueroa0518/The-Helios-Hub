@@ -280,8 +280,10 @@ const POSTING_SQL = (j: string) =>
              WHERE ci.vertical = 'reels' AND ci.native_ref = ${j}.id::text AND sc.status IN ('publishing', 'published'))
    OR EXISTS (SELECT 1 FROM social_hub.schedule sc WHERE sc.vertical = 'reels' AND sc.idea_ref = ${j}.post_idea_id::text AND sc.status = 'publishing')`;
 
-/** The raw (clean) clip a revision keeps beside its reel: `<id>/raw.rev<x>.mp4` next to `<id>/reel.rev<x>.mp4`. Null for a pipeline reel's name with no revision id. */
+/** The raw (clean) clip kept beside a reel: `<id>/raw.rev<x>.mp4` next to `<id>/reel.rev<x>.mp4`, and `<id>/raw.mp4` next to a pipeline reel's `<id>/reel.mp4` (video-run keeps it, clean-clip.ts). */
 export function rawKeyFor(videoPath: string): string | null {
+  const plain = /^(.*)\/reel\.mp4$/.exec(videoPath);
+  if (plain) return `${plain[1]}/raw.mp4`;
   const m = /^(.*)\/reel\.rev([^/]+)\.mp4$/.exec(videoPath);
   return m ? `${m[1]}/raw.rev${m[2]}.mp4` : null;
 }
