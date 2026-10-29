@@ -1,9 +1,8 @@
 import { dbQuery } from '@/lib/db';
-import { REFERENCE_POOL_HOURS } from '@/lib/reels/config';
 import { loadPublishedStoryKeys, storyUrlKey } from '@/lib/reels/copy/held-out';
 import type { JevRunner } from '@/lib/reels/jev/runner';
-import { fetchPageFollowingRedirects, canonicalizeUrl } from '@/lib/reels/net/http';
-import { parsePage } from '@/lib/reels/net/html';
+import { canonicalizeUrl } from '@/lib/reels/net/http';
+import { readPageText } from '@/lib/reels/seed-search';
 import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
 import { createPostIdea, insertSource } from '@/lib/reels/repository';
 import { loadIdeaMaterial } from '@/lib/reels/scoring/store';
@@ -59,11 +58,6 @@ export type ReelSeedOutcome =
   | { status: 'no_match'; reason: 'nothing_found' | 'scoring_unavailable' };
 
 const clean = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
-
-async function defaultReadPage(url: string): Promise<string | null> {
-  const page = await fetchPageFollowingRedirects(url, { retries: 0, timeoutMs: 15_000 });
-  return parsePage(page.html).text;
-}
 
 const OPEN_SEEDS_SQL = `
 SELECT m.post_idea_id::text AS id, so.headline, so.ingest_time::text AS added_at
@@ -224,7 +218,7 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
   const flags: string[] = [];
   let body = text;
   if (!body && link) {
-    const page = await (deps.readPage ?? defaultReadPage)(link).catch(() => null);
+    const page = await (deps.readPage ?? readPageText)(link).catch(() => null);
     if (page && page.trim().length >= MIN_PAGE_CHARS) body = page.trim().slice(0, MAX_TEXT_CHARS);
     else flags.push('I couldn’t read that page, so the idea uses just your headline as its text. A line or two of your own would give the writer more to work with.');
   }
