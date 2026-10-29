@@ -8,7 +8,13 @@
  *
  * Order (nothing is written on any non-ok path): checks → the billable calls → render of the
  * touched slides (fit + render problems fail it) → the vision check (photo) → ONE guarded UPDATE of
- * `stories`, `render`, `caption` and `slide_objects` together.
+ * `stories`, `render`, `caption` and `slide_objects` together. JPEGs uploaded before a vision
+ * rejection or a lost guarded save stay in storage unreferenced, by design (the never-delete rule).
+ *
+ * Caption: a template caption is rebuilt whole. A model-written caption keeps its lines on a photo
+ * or crop fix (only its credits tail is rebuilt), but a wording fix replaces it with the template
+ * (composeCaption without lines, no model call), so the caption never states the old words. The old
+ * caption is saved in `before.derived` and comes back on undo while the stories match it again.
  *
  *   layout   the photo's crop (photo.focus): render only, 0 model calls
  *   wording  the writer's limits and normalize() → Jev grounding over the whole slide; a miss gets ONE
@@ -96,7 +102,7 @@ export type LastFewDaysDeps = {
 
 type PostRow = { id: string; slug: string; status: string; stories: LfdStory[]; render: RenderPost; caption: string; slide_objects: string[] | null };
 /** The part's state, plus what was built from it (the caption and the cover tiles its cover file shows). */
-type LfdState = PartState & { derived?: { caption: string; coverTiles: unknown } };
+type LfdState = PartState & { derived?: { caption: string; coverTiles: unknown; from?: unknown } };
 
 const postIdOf = (refs: ActionTarget) => refs.lfdPostId ?? '';
 const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -140,7 +146,7 @@ function stateOf(post: { stories: LfdStory[]; render: RenderPost; caption: strin
     photo: { photo: s.photo, photoSource: s.photoSource ?? null, photoTrace: s.photoTrace ?? [] },
     layout: { focus: s.photo?.focus ?? null },
     files: [objects[i + 1], objects[0]].filter((f): f is string => typeof f === 'string'),
-    derived: { caption: post.caption, coverTiles: coverOf(post.render)?.lfdCover?.photos ?? null },
+    derived: { caption: post.caption, coverTiles: coverOf(post.render)?.lfdCover?.photos ?? null, from: captionInputs(post.stories) },
   };
 }
 
@@ -149,25 +155,42 @@ function setOrDelete(o: Record<string, unknown>, key: string, value: unknown): v
   else o[key] = value;
 }
 
+/** The story words a caption can state (the template lists headlines; a model caption retells setups, headlines and bodies). */
+const CAPTION_WORDS = ['setup', 'headline', 'body'] as const;
+/** What a caption is built from: each story's words, outlet and photo credit. */
+const captionInputs = (stories: LfdStory[]) => stories.map((s) => ({ setup: s.setup, headline: s.headline, body: s.body, outlet: s.outlet, credit: s.photo?.credit ?? null }));
+
+/** The template caption (composeCaption without lines: no model call) for these stories. */
+async function templateCaption(stories: LfdStory[]): Promise<string> {
+  const [{ composeCaption }, { readyFromSaved }] = await Promise.all([import('@/lib/lfd/post'), import('@/lib/memes/lfd-sim/post')]);
+  return composeCaption(stories.map(readyFromSaved), null).caption;
+}
+
 /**
- * The caption for `to`, from the caption built for `from`, by the pipeline's own functions: a
- * template caption (composeCaption without lines) is rebuilt whole; a model caption keeps its lines
- * and only its credits (creditsFor, always last) are rebuilt. A caption that is neither is kept.
+ * The caption for `to`, from the caption built for `from`, by the pipeline's own functions:
+ * - a template caption is rebuilt whole;
+ * - a model caption whose stories' words changed becomes the template (its prose may state the old words);
+ * - otherwise a model caption keeps its lines and only its credits (creditsFor, always last) are rebuilt.
+ * `error`: the credits can't be rebuilt (the caption does not end with them) or the result is over
+ * Instagram's limit; the caller changes nothing.
  */
-async function recaption(caption: string, from: LfdStory[], to: LfdStory[]): Promise<string> {
-  const [{ composeCaption, creditsFor }, { readyFromSaved }] = await Promise.all([import('@/lib/lfd/post'), import('@/lib/memes/lfd-sim/post')]);
+async function recaption(caption: string, from: LfdStory[], to: LfdStory[]): Promise<{ caption: string } | { error: string }> {
+  const [{ CAPTION_MAX_CHARS, composeCaption, creditsFor }, { readyFromSaved }] = await Promise.all([import('@/lib/lfd/post'), import('@/lib/memes/lfd-sim/post')]);
   const a = from.map(readyFromSaved);
   const b = to.map(readyFromSaved);
-  if (caption === composeCaption(a, null).caption) return composeCaption(b, null).caption;
+  if (caption === composeCaption(a, null).caption) return { caption: composeCaption(b, null).caption };
+  if (from.some((s, i) => CAPTION_WORDS.some((k) => !same(s[k], to[i]?.[k])))) return { caption: composeCaption(b, null).caption };
   const oldCredits = creditsFor(a);
   const newCredits = creditsFor(b);
-  if (oldCredits === newCredits) return caption;
+  if (oldCredits === newCredits) return { caption };
   let head: string;
   if (!oldCredits) head = caption;
   else if (caption.endsWith(`\n\n${oldCredits}`)) head = caption.slice(0, -(oldCredits.length + 2));
   else if (caption === oldCredits) head = '';
-  else return caption;
-  return [head, newCredits].filter(Boolean).join('\n\n');
+  else return { error: 'the caption does not end with its Sources and Photos credits, so the new photo\'s credit could not be added' };
+  const next = [head, newCredits].filter(Boolean).join('\n\n');
+  if (next.length > CAPTION_MAX_CHARS) return { error: `the caption with the new photo credit would be ${next.length} characters, over Instagram's ${CAPTION_MAX_CHARS}` };
+  return { caption: next };
 }
 
 /**
@@ -175,7 +198,7 @@ async function recaption(caption: string, from: LfdStory[], to: LfdStory[]): Pro
  * slide), its cover tile follows its photo, and the caption is rebuilt from all stories as they are now.
  * Only what changed is touched, so a meme slide's image and other stories stay byte-identical.
  */
-async function applyStory(post: PostRow, i: number, next: LfdStory): Promise<{ stories: LfdStory[]; render: RenderPost; caption: string; coverChanged: boolean }> {
+async function applyStory(post: PostRow, i: number, next: LfdStory): Promise<{ stories: LfdStory[]; render: RenderPost; caption: { caption: string } | { error: string }; coverChanged: boolean }> {
   const [{ buildPost }, { readyFromSaved }] = await Promise.all([import('@/lib/lfd/post'), import('@/lib/memes/lfd-sim/post')]);
   const cur = post.stories[i]!;
   const stories = clone(post.stories);
@@ -199,7 +222,7 @@ async function applyStory(post: PostRow, i: number, next: LfdStory): Promise<{ s
     }
   }
   const caption = await recaption(post.caption, post.stories, stories);
-  render.caption = caption;
+  if ('caption' in caption) render.caption = caption.caption;
   return { stories, render, caption, coverChanged };
 }
 
@@ -422,6 +445,8 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       }
 
       const built = await applyStory(post, i, next);
+      if ('error' in built.caption) return failed(`Story ${no} was not changed: ${built.caption.error}. Nothing was written.`);
+      const caption = built.caption.caption;
       const id = newId();
       const want = [{ slide: i + 2, key: slideKey(post.slug, i + 2, id) }];
       if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme) want.unshift({ slide: 1, key: slideKey(post.slug, 1, id) });
@@ -446,8 +471,9 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       }
       const objects = [...(post.slide_objects ?? [])];
       for (const r of out) objects[r.slide - 1] = r.file;
-      if (!(await save(q, post, { ...built, objects }))) return failed('The post changed or left review while the fix ran, so it was not changed.');
-      return { ok: true, before: stateOf(post, i, post.slide_objects ?? []), after: stateOf(built, i, objects) };
+      const after = { stories: built.stories, render: built.render, caption, objects };
+      if (!(await save(q, post, after))) return failed('The post changed or left review while the fix ran, so it was not changed.');
+      return { ok: true, before: stateOf(post, i, post.slide_objects ?? []), after: stateOf(after, i, objects) };
     },
 
     async restore({ q, refs, part, state }) {
@@ -470,6 +496,12 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
 
       // Undo is per story, so another story may have changed since: the caption and the cover are rebuilt from now.
       const built = await applyStory(post, i, next);
+      // The saved caption comes back while the stories are again the ones it was built from (a model caption a
+      // wording fix replaced); otherwise it is rebuilt from now, and the template stands in if that can't apply.
+      const caption = s.derived?.from !== undefined && same(captionInputs(built.stories), s.derived.from)
+        ? s.derived.caption
+        : 'caption' in built.caption ? built.caption.caption : await templateCaption(built.stories);
+      built.render.caption = caption;
       const objects = [...(post.slide_objects ?? [])];
       if (s.files[0]) objects[i + 1] = s.files[0];
       const tiles = coverOf(built.render)?.lfdCover?.photos ?? null;
@@ -483,8 +515,8 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
         }
       }
       // Already in that state: nothing to write (idempotent).
-      if (same(built.stories, post.stories) && same(built.render, post.render) && built.caption === post.caption && same(objects, post.slide_objects)) return;
-      if (!(await save(q, post, { ...built, objects }))) throw new Error('The post changed or left review, so the story could not be restored.');
+      if (same(built.stories, post.stories) && same(built.render, post.render) && caption === post.caption && same(objects, post.slide_objects)) return;
+      if (!(await save(q, post, { stories: built.stories, render: built.render, caption, objects }))) throw new Error('The post changed or left review, so the story could not be restored.');
     },
 
     unschedule: (q, refs) => deps.unschedule(q, postIdOf(refs)),

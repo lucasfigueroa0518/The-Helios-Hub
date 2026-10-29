@@ -40,11 +40,13 @@ function stories(): Story[] {
 
 type Seeded = { id: string; stories: Story[]; render: RenderPost; caption: string };
 
-async function seed(q: Query, o: { status?: string; caption?: 'template' | 'model'; coverMeme?: boolean } = {}): Promise<Seeded> {
+async function seed(q: Query, o: { status?: string; caption?: 'template' | 'model' | ((credits: string) => string); coverMeme?: boolean } = {}): Promise<Seeded> {
   const st = stories();
   const ready = st.map(readyFromSaved);
   const render = buildPost(ready, new Date('2026-10-28T12:00:00Z'), undefined, o.coverMeme ? { coverMeme: { url: 'storage:lfd/x/meme-1.png' } } : undefined);
-  const caption = o.caption === 'model'
+  const caption = typeof o.caption === 'function'
+    ? o.caption(creditsFor(ready))
+    : o.caption === 'model'
     ? ['Swipe to catch up on the week', 'Haiku got faster. OpenAI is hiring in London.', 'Which one caught your eye?', 'Retail teams should watch the price drop. Helios thinks so.', creditsFor(ready)].join('\n\n')
     : composeCaption(ready, null).caption;
   render.caption = caption;
@@ -516,4 +518,92 @@ test('unschedule delegates to the type\'s own unscheduleLfdPost', async () => {
   const { desc, calls } = setup();
   assert.deepEqual(await desc.unschedule(q, { lfdPostId: 'abc' }), { ok: true, note: 'Unscheduled.' });
   assert.deepEqual(calls.unschedule, ['abc']);
+});
+
+// ---- Fix round 1: a wording fix never leaves a model caption stating the old words ----
+
+const MODEL_PROSE = 'Haiku got faster. OpenAI is hiring in London.';
+const templateOf = (st: Story[]) => composeCaption(st.map(readyFromSaved), null).caption;
+
+test('a wording fix over a model caption replaces it with the template caption; undo brings the model caption back', async () => {
+  const q = await db();
+  const p = await seed(q, { caption: 'model' });
+  const { desc } = setup();
+  const refs = refsOf(p.id);
+  const res = await desc.revise({ q, refs, interpretation: interp(story(1), 'wording', { field: 'headline', value: 'Anthropic ships a faster Haiku' }), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  if (!res.ok) return;
+  const after = await row(q, p.id);
+  assert.equal(after.caption, templateOf(after.stories));
+  assert.equal(after.render.caption, after.caption);
+  assert.match(after.caption, /– Anthropic ships a faster Haiku/);
+  assert.ok(!after.caption.includes(MODEL_PROSE));
+  // The old caption is kept in the log's before state.
+  assert.equal((res.before as { derived?: { caption: string } }).derived?.caption, p.caption);
+  await desc.restore({ q, refs, part: story(1), state: res.before });
+  const back = await row(q, p.id);
+  assert.equal(back.caption, p.caption);
+  assert.equal(back.render.caption, p.caption);
+  assert.deepEqual(back.stories, p.stories);
+});
+
+test('undo out of order over a model caption: wording on story 1, photo on story 3, undo story 1 keeps story 3\'s credit and matches the slides', async () => {
+  const q = await db();
+  const p = await seed(q, { caption: 'model' });
+  const refs = refsOf(p.id);
+  const { desc } = setup();
+  const w = await desc.revise({ q, refs, interpretation: interp(story(1), 'wording', { field: 'headline', value: 'Anthropic ships a faster Haiku' }), meter: meter() });
+  const ph = await desc.revise({ q, refs, interpretation: interp(story(3), 'photo'), meter: meter() });
+  assert.ok(w.ok && ph.ok);
+  if (!w.ok) return;
+  await desc.restore({ q, refs, part: story(1), state: w.before });
+  const r = await row(q, p.id);
+  assert.equal(r.stories[0]!.headline, 'Anthropic ships Claude Haiku 5.5');
+  assert.equal(r.stories[2]!.photo.src, 'https://img.test/new.jpg');
+  // The stories no longer match the saved model caption: rebuilt from now, never contradicting the slides.
+  assert.equal(r.caption, templateOf(r.stories));
+  assert.match(r.caption, /Reuters \/ CC BY 4\.0/);
+  assert.match(r.caption, /– Anthropic ships Claude Haiku 5\.5/);
+  assert.doesNotMatch(r.caption, /faster Haiku|Jane Doe/);
+});
+
+test('a post whose caption is the template stays the template through a wording fix and its undo', async () => {
+  const q = await db();
+  const p = await seed(q);
+  const { desc } = setup();
+  const refs = refsOf(p.id);
+  const res = await desc.revise({ q, refs, interpretation: interp(story(2), 'wording', { field: 'body', value: 'The office will hire 300 people' }), meter: meter() });
+  assert.equal(res.ok, true);
+  if (!res.ok) return;
+  const after = await row(q, p.id);
+  assert.equal(after.caption, templateOf(after.stories));
+  await desc.restore({ q, refs, part: story(2), state: res.before });
+  assert.equal((await row(q, p.id)).caption, p.caption);
+});
+
+test('a photo swap whose caption does not end with its credits fails and writes nothing', async () => {
+  const q = await db();
+  const p = await seed(q, { caption: () => 'A caption a person edited by hand, with no credits line.' });
+  const { desc, calls } = setup();
+  const res = await desc.revise({ q, refs: refsOf(p.id), interpretation: interp(story(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) { assert.equal(res.reason, 'failed'); assert.match(res.note, /credit/); }
+  assert.equal(calls.rendered.length, 0);
+  const after = await row(q, p.id);
+  assert.deepEqual(after.stories, p.stories);
+  assert.equal(after.caption, p.caption);
+  assert.deepEqual(after.slide_objects, OBJECTS);
+});
+
+test('a photo swap that would push a model caption over 2200 characters fails and writes nothing', async () => {
+  const q = await db();
+  // Long enough that the new, longer credit crosses the limit.
+  const p = await seed(q, { caption: (credits) => { const head = `Swipe to catch up.\n\n${'x'.repeat(2200)}`; return `${head.slice(0, 2200 - credits.length - 2)}\n\n${credits}`; } });
+  assert.equal(p.caption.length, 2200);
+  const { desc, calls } = setup();
+  const res = await desc.revise({ q, refs: refsOf(p.id), interpretation: interp(story(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) { assert.equal(res.reason, 'failed'); assert.match(res.note, /2200/); }
+  assert.equal(calls.rendered.length, 0);
+  assert.equal((await row(q, p.id)).caption, p.caption);
 });
