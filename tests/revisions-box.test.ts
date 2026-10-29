@@ -241,3 +241,68 @@ test('the box sends the one ref each type\'s revise verb reads', async () => {
   assert.deepEqual(revisionRefs('reels', { postIdeaId: 'a', videoJobId: 'b' }), { videoJobId: 'b' });
   assert.equal(revisionRefs('stories', {}), null);
 });
+
+// ── Fix round 1 ─────────────────────────────────────────────────────────────
+
+test('keep going at the ceiling must allow more than the ceiling, defaulting to twice it', async () => {
+  const { overrideProblem } = await import('@/lib/revisions/box-state');
+  const note = 'Paused at the $1.50 ceiling for carousels after spending $1.52. Nothing was changed; you can keep going.';
+  const s = box([row({ status: 'paused_at_ceiling', note, capUsd: 0.5, ceilingUsd: 1.5, spendUsd: 1.52 })]);
+  assert.ok(s.current?.kind === 'paused');
+  if (s.current?.kind !== 'paused') return;
+  assert.equal(s.current.minUsd, 1.5);
+  assert.equal(s.current.suggestUsd, 3);
+  assert.match(overrideProblem(s.current, '1.5') ?? '', /more than \$1\.50/);
+  assert.match(overrideProblem(s.current, '1') ?? '', /more than \$1\.50/);
+  assert.equal(overrideProblem(s.current, '1.51'), null);
+  assert.equal(overrideProblem(s.current, '3'), null);
+  assert.match(overrideProblem(s.current, '0') ?? '', /above \$0|more than/);
+  assert.match(overrideProblem(s.current, 'abc') ?? '', /amount/i);
+  assert.equal(overrideProblem(s.current, ''), '', 'empty: nothing to say yet, but not allowed');
+});
+
+test('the cap pause keeps its rule: any amount above $0', async () => {
+  const { overrideProblem } = await import('@/lib/revisions/box-state');
+  const s = box([row({ status: 'paused_at_cap', note: 'This photo fix is estimated at $0.80, above the $0.50 cap for carousels. Allow a higher amount to run it.', capUsd: 0.5, ceilingUsd: 1.5 })]);
+  if (s.current?.kind !== 'paused') return assert.fail('paused');
+  assert.equal(s.current.minUsd, null);
+  assert.equal(s.current.suggestUsd, 0.8);
+  assert.equal(overrideProblem(s.current, '0.3'), null);
+  assert.match(overrideProblem(s.current, '0') ?? '', /above \$0/);
+});
+
+test('after an ask-back the Done line names the original request, not the reply', () => {
+  const ask = row({ status: 'asking', question: 'Which slide?', instruction: 'Make the headline shorter' });
+  const reply = row({ status: 'applied', parentId: ask.id, instruction: 'slide 3', part: slide3 });
+  const s = box([reply, ask]);
+  assert.ok(s.current?.kind === 'applied');
+  assert.equal(s.current?.kind === 'applied' && s.current.summary, 'Done: “Make the headline shorter” (slide 3).');
+  assert.equal(s.parts[0]!.latest.instruction, 'Make the headline shorter');
+});
+
+test('notes from the action routes get the same plain treatment as rows', async () => {
+  const { plainPostNote } = await import('@/lib/revisions/box-state');
+  assert.equal(plainPostNote(true, 'Undid the last revision of slide 3.'), 'Undid the last revision of slide 3.');
+  const raw = plainPostNote(false, 'Restoring slide 3 failed and its content did not change: TypeError: x is undefined.');
+  assert.doesNotMatch(raw, /TypeError|undefined/);
+  assert.match(raw, /nothing was changed/i);
+  assert.equal(plainPostNote(false, 'That question was already answered.'), 'That question was already answered.');
+  assert.match(plainPostNote(false, undefined), /didn’t work/);
+});
+
+test('Restore original takes two clicks: the first arms it, the second runs it', async () => {
+  const { restoreClick } = await import('@/lib/revisions/box-state');
+  assert.equal(restoreClick(null, 'slide:3'), 'arm');
+  assert.equal(restoreClick('slide:5', 'slide:3'), 'arm');
+  assert.equal(restoreClick('slide:3', 'slide:3'), 'run');
+});
+
+test('the box uses the server\'s instruction limit', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync('components/social-hub/post/RevisionBox.tsx', 'utf8');
+  assert.match(src, /import \{[^}]*INSTRUCTION_MAX_CHARS[^}]*\} from '@\/lib\/revisions\/types'/);
+  assert.doesNotMatch(src, /=\s*1000\b/);
+  // types.ts is safe in the browser: type-only imports.
+  const types = readFileSync('lib/revisions/types.ts', 'utf8');
+  for (const m of types.matchAll(/^import\s+(type\s+)?/gm)) assert.ok(m[1], 'lib/revisions/types.ts must import types only');
+});

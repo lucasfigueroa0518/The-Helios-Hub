@@ -8,6 +8,7 @@ import test from 'node:test';
 
 import { revisionsRead } from '@/app/api/social-hub/actions/revisions/handler';
 import { carouselActions } from '@/lib/publishing/actions/carousels';
+import { reelActions } from '@/lib/publishing/actions/reels';
 import type { ContentActions } from '@/lib/publishing/actions/types';
 import { claimNextRequested, createRequest, markApplied, markRunning } from '@/lib/revisions/store';
 import type { Interpretation } from '@/lib/revisions/types';
@@ -27,17 +28,39 @@ const on = (extra: Partial<ActionEnv> = {}): ActionEnv => ({ flags: ALL_ON, sess
 const get = (qs: string) => new Request(`http://hub.test/api/social-hub/actions/revisions?${qs}`, { method: 'GET' });
 const part = { kind: 'slide', key: '3' };
 
-function registry(q: Query, itemId: string, calls = { query: 0 }): () => Promise<Record<Vertical, ContentActions>> {
+/** The poll must only read: any INSERT/UPDATE/DELETE through this query fails the test. */
+function readOnly(q: Query, seen: string[] = []): Query {
+  return (async (text: string, params?: unknown[]) => {
+    seen.push(text);
+    if (/\b(INSERT|UPDATE|DELETE|UPSERT|MERGE)\b/i.test(text)) throw new Error(`the read wrote: ${text.slice(0, 80)}`);
+    return q(text, params);
+  }) as Query;
+}
+
+/** A content item on the spine for `nativeRef` (what the write path's ensureContentItem would have made). */
+async function spineItem(q: Query, vertical: string, nativeRef: string): Promise<string> {
+  const { rows } = await q(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ($1, 'feed', $2) RETURNING id`, [vertical, nativeRef]);
+  return String(rows[0].id);
+}
+
+function registry(q: Query, _itemId?: string, calls = { query: 0 }): () => Promise<Record<Vertical, ContentActions>> {
   const never = (name: string) => (async () => { throw new Error(`${name} must not be called`); }) as never;
   return async () => ({
     carousels: carouselActions({
-      query: async () => { calls.query += 1; return q; },
-      itemId: async (_q, postId) => (postId === U ? itemId : null),
+      query: async () => { calls.query += 1; return readOnly(q); },
+      // The verbs' item resolver upserts the spine item: the read must never call it.
+      itemId: never('itemId (an upsert) from the read'),
       approveSchedule: never('approveSchedule'), approvePost: never('approvePost'), rejectPost: never('rejectPost'),
       hardPublishPost: never('hardPublishPost'), requestRerun: never('requestRerun'), unschedulePost: never('unschedulePost'),
       placeItem: never('placeItem'), rescheduleItem: never('rescheduleItem'),
     }),
-    reels: { vertical: 'reels' },
+    reels: reelActions({
+      query: readOnly(q) as never,
+      itemId: never('reelItemId (an upsert) from the read'),
+      schedulePostIdea: never('schedulePostIdea'), rejectReel: never('rejectReel'), forcePost: never('forcePost'),
+      unscheduleIdea: never('unscheduleIdea'), placeItem: never('placeItem'), rescheduleItem: never('rescheduleItem'),
+      todaySlate: never('todaySlate'), findReelLock: never('findReelLock'), requestFinish: never('requestFinish'),
+    }),
     explainers: { vertical: 'explainers' },
     stories: { vertical: 'stories' },
     last_few_days: { vertical: 'last_few_days' },
@@ -72,7 +95,9 @@ test('validates the vertical and the refs', async () => {
 });
 
 test('returns only the safe fields of the item\'s rows, newest first', async () => {
-  const { q, itemId } = await setupRevisionsDb();
+  const { q: base } = await setupRevisionsDb();
+  const q = base;
+  const itemId = await spineItem(q, 'carousels', U);
   const first = await createRequest(q, { vertical: 'carousels', refs: { postId: U }, itemId, by: 'tommy@helios.test', instruction: 'shorter' });
   await claimNextRequested(q);
   const i: Interpretation = { vertical: 'carousels', part, fixKind: 'wording', stageTag: 'copy_write', instruction: 'shorter' };
@@ -96,25 +121,42 @@ test('returns only the safe fields of the item\'s rows, newest first', async () 
   assert.equal(JSON.stringify(body).includes('tommy@'), false);
 });
 
-test('a post that is gone answers 404 with a plain note', async () => {
-  const { q, itemId } = await setupRevisionsDb();
-  const GET = actionReadRoute(revisionsRead(registry(q, itemId)), on());
-  const res = await GET(get(`vertical=carousels&postId=${W}`));
-  assert.equal(res.status, 404);
-  assert.match(((await res.json()) as { note: string }).note, /gone/);
+test('a post with no spine item yet has no rows, and the read creates none', async () => {
+  const { q } = await setupRevisionsDb();
+  const GET = actionReadRoute(revisionsRead(registry(q)), on());
+  for (const qs of [`vertical=carousels&postId=${W}`, `vertical=reels&videoJobId=${W}`]) {
+    const res = await GET(get(qs));
+    assert.equal(res.status, 200, qs);
+    assert.deepEqual(((await res.json()) as { rows: unknown[] }).rows, []);
+  }
+  const { rows } = await q(`SELECT count(*)::int AS n FROM social_hub.content_items WHERE native_ref = $1`, [W]);
+  assert.equal(rows[0].n, 0, 'viewing a post never creates its spine item');
+});
+
+test('the poll only reads, for carousels and text on screen alike', async () => {
+  const { q } = await setupRevisionsDb();
+  const carousel = await spineItem(q, 'carousels', U);
+  const reel = await spineItem(q, 'reels', W);
+  await createRequest(q, { vertical: 'carousels', refs: { postId: U }, itemId: carousel, by: 'x', instruction: 'shorter' });
+  await createRequest(q, { vertical: 'reels', refs: { videoJobId: W }, itemId: reel, by: 'x', instruction: 'bigger words' });
+  const GET = actionReadRoute(revisionsRead(registry(q)), on());
+  const a = (await (await GET(get(`vertical=carousels&postId=${U}`))).json()) as { rows: Array<{ instruction: string }> };
+  const b = (await (await GET(get(`vertical=reels&videoJobId=${W.toUpperCase()}`))).json()) as { rows: Array<{ instruction: string }> };
+  assert.deepEqual(a.rows.map((r) => r.instruction), ['shorter']);
+  assert.deepEqual(b.rows.map((r) => r.instruction), ['bigger words'], 'a uuid in any case finds the item (native_ref is the id text)');
 });
 
 test('a type without the read answers 409 with no rows', async () => {
-  const { q, itemId } = await setupRevisionsDb();
-  const GET = actionReadRoute(revisionsRead(registry(q, itemId)), on());
+  const { q } = await setupRevisionsDb();
+  const GET = actionReadRoute(revisionsRead(registry(q)), on());
   const res = await GET(get(`vertical=stories&setId=${U}`));
   assert.equal(res.status, 409);
 });
 
 test('refresh=1 drops the type\'s cached hub read so the revised preview shows; a plain poll does not', async () => {
-  const { q, itemId } = await setupRevisionsDb();
+  const { q } = await setupRevisionsDb();
   const tags: string[] = [];
-  const GET = actionReadRoute(revisionsRead(registry(q, itemId)), on({ revalidate: (t) => tags.push(t) }));
+  const GET = actionReadRoute(revisionsRead(registry(q)), on({ revalidate: (t) => tags.push(t) }));
   await GET(get(`vertical=carousels&postId=${U}`));
   assert.deepEqual(tags, []);
   await GET(get(`vertical=carousels&postId=${U}&refresh=1`));
@@ -122,9 +164,9 @@ test('refresh=1 drops the type\'s cached hub read so the revised preview shows; 
 });
 
 test('a database failure is a plain note, never the raw error', async () => {
-  const { itemId } = await setupRevisionsDb();
+  await setupRevisionsDb();
   const broken: Query = (async () => { throw new Error('connect ECONNREFUSED 10.0.0.1:6543'); }) as never;
-  const GET = actionReadRoute(revisionsRead(registry(broken, itemId)), on());
+  const GET = actionReadRoute(revisionsRead(registry(broken)), on());
   const res = await GET(get(`vertical=carousels&postId=${U}`));
   assert.equal(res.status, 500);
   const note = ((await res.json()) as { note: string }).note;

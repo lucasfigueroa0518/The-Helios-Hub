@@ -4,8 +4,9 @@ import { Loader, RotateCcw, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
-import { revisionBoxState, type BoxRow, type BoxState, type PartControl } from '@/lib/revisions/box-state';
-import type { PartRef } from '@/lib/revisions/types';
+import { allowedAmount, overrideProblem, plainPostNote, restoreClick, revisionBoxState, type BoxRow, type BoxState, type PartControl } from '@/lib/revisions/box-state';
+// The server's own limit; types.ts has type-only imports, so it is safe in the browser.
+import { INSTRUCTION_MAX_CHARS, type PartRef } from '@/lib/revisions/types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 /** The hub's own flagged routes (Targeted Revisions); the box calls nothing else. */
@@ -14,18 +15,12 @@ const UNDO = '/api/social-hub/actions/undo-revision';
 const CONTINUE = '/api/social-hub/actions/continue-revision';
 const READ = '/api/social-hub/actions/revisions';
 
-/** The server's limit (lib/revisions/types.ts INSTRUCTION_MAX_CHARS); a client component can't import that module's runtime. */
-const MAX_CHARS = 1000;
 const POLL_MS = 4000;
 
 type Note = { ok: boolean; text: string };
 type Busy = null | 'submit' | 'reply' | 'continue' | `undo:${string}` | `restore:${string}`;
 
 const usd = (n: number) => `$${n.toFixed(2)}`;
-const amountOf = (raw: string): number | null => {
-  const n = Number(raw.replace(/^\s*\$/, '').trim());
-  return raw.trim() !== '' && Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
-};
 
 export type RevisionBoxViewProps = {
   state: BoxState;
@@ -34,6 +29,9 @@ export type RevisionBoxViewProps = {
   text: string;
   reply: string;
   amount: string;
+  /** The part whose Restore original is armed (`kind:key`): the next click on it runs. */
+  armed: string | null;
+  onArm: (key: string | null) => void;
   onText: (v: string) => void;
   onReply: (v: string) => void;
   onAmount: (v: string) => void;
@@ -58,6 +56,7 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
   const [text, setText] = useState('');
   const [reply, setReply] = useState('');
   const [amount, setAmount] = useState('');
+  const [armed, setArmed] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const refsKey = JSON.stringify(refs);
   const wasActive = useRef(false);
@@ -78,7 +77,7 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
           setNow(new Date());
           return out.rows;
         }
-        if (!res.ok && out.note) setNote({ ok: false, text: out.note });
+        if (!res.ok && out.note) setNote({ ok: false, text: plainPostNote(false, out.note) });
       } catch {
         // A missed poll is retried on the next tick; the box keeps what it showed.
       }
@@ -113,7 +112,7 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
     wasActive.current = active;
   }, [active, load, refresh]);
 
-  // The paused control starts at the suggested amount (the estimate, else the cap); a ceiling pause starts empty.
+  // The paused control starts at the suggested amount: the estimate (else the cap) at the cap, twice the ceiling at the ceiling.
   const pausedId = state.current?.kind === 'paused' ? state.current.id : null;
   const suggested = state.current?.kind === 'paused' ? state.current.suggestUsd : null;
   useEffect(() => {
@@ -126,7 +125,8 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
     try {
       const res = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ vertical, refs, ...body }) });
       const out = (await res.json().catch(() => ({}))) as { note?: string };
-      setNote({ ok: res.ok, text: out.note ?? (res.ok ? 'Done.' : 'That didn’t work. Try again in a moment.') });
+      // Route notes can carry raw errors (a failed restore): the same plain treatment as the rows' notes.
+      setNote({ ok: res.ok, text: plainPostNote(res.ok, out.note) });
       return res.ok;
     } catch {
       setNote({ ok: false, text: 'Couldn’t reach the hub. Check your connection and try again.' });
@@ -154,8 +154,9 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
   }
 
   async function keepGoing() {
-    const n = amountOf(amount);
-    if (state.current?.kind !== 'paused' || n == null || busy) return;
+    if (state.current?.kind !== 'paused' || busy) return;
+    const n = allowedAmount(state.current, amount);
+    if (n == null) return;
     if (await post(CONTINUE, { revisionId: state.current.revisionId, overrideUsd: n }, 'continue')) {
       await load();
     }
@@ -163,6 +164,7 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
 
   async function undo(p: PartControl, original: boolean) {
     if (busy) return;
+    setArmed(null);
     const part: PartRef = { kind: p.part.kind, key: p.part.key };
     if (await post(UNDO, { part, ...(original ? { original: true } : {}) }, `${original ? 'restore' : 'undo'}:${p.part.kind}:${p.part.key}`)) {
       await load(true);
@@ -187,6 +189,8 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
       text={text}
       reply={reply}
       amount={amount}
+      armed={armed}
+      onArm={setArmed}
       onText={setText}
       onReply={setReply}
       onAmount={setAmount}
@@ -218,7 +222,8 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
   const amountId = `${id}-amount`;
   const cur = state.current;
   const disabled = Boolean(state.lock);
-  const amount = amountOf(p.amount);
+  const problem = cur?.kind === 'paused' ? overrideProblem(cur, p.amount) : null;
+  const amount = cur?.kind === 'paused' ? allowedAmount(cur, p.amount) : null;
 
   let status: ReactNode = null;
   if (cur?.kind === 'revising') {
@@ -238,7 +243,7 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
             id={replyId}
             className="sh-revise__input"
             value={p.reply}
-            maxLength={MAX_CHARS}
+            maxLength={INSTRUCTION_MAX_CHARS}
             onChange={(e) => p.onReply(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -287,7 +292,8 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
                 p.onContinue();
               }
             }}
-            aria-invalid={p.amount.trim() !== '' && amount == null ? true : undefined}
+            aria-invalid={problem ? true : undefined}
+            aria-describedby={problem ? `${amountId}-why` : undefined}
             disabled={busy != null}
           />
           <button type="button" className="sh-btn sh-btn--primary" onClick={p.onContinue} disabled={busy != null || amount == null} data-busy={busy === 'continue' ? '' : undefined}>
@@ -295,7 +301,7 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
             {cur.needsAmount ? (amount != null ? `Keep going, up to ${usd(amount)}` : 'Keep going') : amount != null ? `Allow up to ${usd(amount)}` : 'Allow up to…'}
           </button>
         </div>
-        {p.amount.trim() !== '' && amount == null ? <p className="sh-revise__hint sh-revise__hint--failed">Enter an amount above $0.</p> : null}
+        {problem ? <p className="sh-revise__hint sh-revise__hint--failed" id={`${amountId}-why`}>{problem}</p> : null}
       </div>
     );
   }
@@ -322,7 +328,7 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
                 id={textId}
                 className="sh-revise__text"
                 rows={3}
-                maxLength={MAX_CHARS}
+                maxLength={INSTRUCTION_MAX_CHARS}
                 value={p.text}
                 placeholder="For example: slide 3’s headline is too long"
                 aria-describedby={countId}
@@ -331,7 +337,7 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
                 disabled={busy != null}
               />
               <div className="sh-revise__bar">
-                <span className="sh-revise__count" id={countId} aria-live="off">{p.text.length}/{MAX_CHARS}</span>
+                <span className="sh-revise__count" id={countId} aria-live="off">{p.text.length}/{INSTRUCTION_MAX_CHARS}</span>
                 <button type="submit" className="sh-btn sh-btn--primary" disabled={busy != null || !p.text.trim()} data-busy={busy === 'submit' ? '' : undefined}>
                   {busy === 'submit' ? <Loader size={14} aria-hidden="true" /> : null}
                   Revise
@@ -354,13 +360,26 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
                         {busy === `undo:${key}` ? <Loader size={14} aria-hidden="true" /> : <Undo2 size={14} aria-hidden="true" />}
                         Undo
                       </button>
-                      {part.canRestore ? (
-                        <button type="button" className="sh-btn sh-btn--quiet" onClick={() => p.onUndo(part, true)} disabled={busy != null} data-busy={busy === `restore:${key}` ? '' : undefined}>
+                      {part.canRestore && p.armed !== key ? (
+                        <button type="button" className="sh-btn sh-btn--quiet" onClick={() => (restoreClick(p.armed, key) === 'run' ? p.onUndo(part, true) : p.onArm(key))} disabled={busy != null} data-busy={busy === `restore:${key}` ? '' : undefined}>
                           {busy === `restore:${key}` ? <Loader size={14} aria-hidden="true" /> : <RotateCcw size={14} aria-hidden="true" />}
                           Restore original
                         </button>
                       ) : null}
                     </span>
+                    {/* Restore original drops every change to the part at once, with no redo: a second, explicit click. */}
+                    {part.canRestore && p.armed === key ? (
+                      <span className="sh-revise__confirm" role="group" aria-label={`Restore the original ${part.label}`}>
+                        <span className="sh-revise__hint">This drops all {part.applied} changes to {part.label} and brings back the original.</span>
+                        <span className="sh-revise__part-tools">
+                          <button type="button" className="sh-btn sh-btn--quiet" onClick={() => p.onArm(null)} disabled={busy != null}>Cancel</button>
+                          <button type="button" className="sh-btn sh-btn--danger" onClick={() => (restoreClick(p.armed, key) === 'run' ? p.onUndo(part, true) : p.onArm(key))} disabled={busy != null} data-busy={busy === `restore:${key}` ? '' : undefined}>
+                            {busy === `restore:${key}` ? <Loader size={14} aria-hidden="true" /> : <RotateCcw size={14} aria-hidden="true" />}
+                            Yes, restore the original
+                          </button>
+                        </span>
+                      </span>
+                    ) : null}
                   </li>
                 );
               })}

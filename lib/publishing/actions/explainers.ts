@@ -1,5 +1,5 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
-import type { SpineQuery } from '@/lib/social-hub/spine';
+import { findContentItem, type SpineQuery } from '@/lib/social-hub/spine';
 import { formatPlacement, type Placement, type PlacementOutcome, type PlacementTarget } from '@/lib/social-hub/placement';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { reviseVerbs } from '@/lib/revisions/actions';
@@ -155,6 +155,8 @@ export function explainerActions(deps: {
       vertical: 'explainers',
       query: async () => (await query())!,
       itemOf: async (_q, t) => deps.itemId(await deps.db(), need(t, 'jobId')),
+      // The read's lookup: the spine lives in the explainers database, and the poll must not write there either.
+      findItem: async (_q, t) => findContentItem(await spineQuery(), 'explainers', need(t, 'jobId').toLowerCase()),
     });
     const guarded =
       (fn: ActionFn | undefined): ActionFn =>

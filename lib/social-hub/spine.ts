@@ -23,6 +23,15 @@ export async function ensureContentItem(
   return rows[0].id as string;
 }
 
+/**
+ * The item's id when it is already on the spine, else null. A plain read: it never creates the
+ * item (ensureContentItem does), so a view can look an item up without writing.
+ */
+export async function findContentItem(query: SpineQuery, vertical: SpineVertical, nativeRef: string): Promise<string | null> {
+  const { rows } = await query(`SELECT id::text AS id FROM social_hub.content_items WHERE vertical = $1 AND native_ref = $2`, [vertical, nativeRef]);
+  return (rows[0]?.id as string | undefined) ?? null;
+}
+
 export type ApprovalVia = 'user' | 'force' | 'auto' | 'setting';
 
 /** Approve an item. An item already approved keeps its first approval time and how it came. */

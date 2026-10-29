@@ -11,8 +11,10 @@
  */
 import type { ActionOutcome, ActionTarget, ContentActions } from '@/lib/publishing/actions/types';
 import type { Query } from '@/lib/social/store/pg';
+import { findContentItem } from '@/lib/social-hub/spine';
 import type { Vertical } from '@/lib/social-hub/types';
 
+import { REVISION_REF_KEY } from './box-state';
 import { continueAfterCeiling, restoreOriginal, undoRevision, type EngineDeps } from './engine';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
 import { createRequest, getRequest, recentForItem } from './store';
@@ -25,6 +27,12 @@ export type ReviseDeps = {
   vertical: Vertical;
   query: () => Promise<Query>;
   itemOf: (q: Query, target: ActionTarget) => Promise<string | null>;
+  /**
+   * The post's spine item for a READ (the revision box's poll): a lookup that never writes. Default:
+   * `social_hub.content_items` through `query`, by the type's revision ref (native_ref is the id text,
+   * so lower case). The verbs' `itemOf` upserts the item and is only for the write paths.
+   */
+  findItem?: (q: Query, target: ActionTarget) => Promise<string | null>;
   /** Engine notices (undo and restore send none today); defaults to the console. */
   notify?: (msg: string) => Promise<void>;
   now?: () => Date;
@@ -97,11 +105,18 @@ export function reviseVerbs(deps: ReviseDeps): Pick<ContentActions, 'revise' | '
       return conflict(await continueAfterCeiling(engine(q), id, by, usd));
     },
 
-    /** The post's rows, newest first, for the post view's revision box (a plain read; null when the post is gone). */
+    /**
+     * The post's rows, newest first, for the post view's revision box. Reads only: a post that is not
+     * on the spine yet has no revisions ([]), and looking it up never creates its item.
+     */
     async revisions(t) {
       const q = await deps.query();
-      const itemId = await deps.itemOf(q, t);
-      return itemId ? recentForItem(q, itemId) : null;
+      const find = deps.findItem ?? ((qq: Query, tt: ActionTarget) => {
+        const ref = tt[REVISION_REF_KEY[deps.vertical]];
+        return ref ? findContentItem(qq, deps.vertical, ref.toLowerCase()) : Promise.resolve(null);
+      });
+      const itemId = await find(q, t);
+      return itemId ? recentForItem(q, itemId) : [];
     },
   };
 }

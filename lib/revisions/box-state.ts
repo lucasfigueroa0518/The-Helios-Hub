@@ -123,12 +123,15 @@ function amounts(note: string | null): number[] {
   return [...(note ?? '').matchAll(/\$\s?(\d+(?:\.\d+)?)/g)].map((m) => Number(m[1])).filter((n) => Number.isFinite(n) && n > 0);
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 /**
- * The amount the "Allow up to" control starts at: the estimate the paused-at-cap note names (its
- * first amount), else the cap; null when neither is known. A ceiling pause suggests nothing: the
- * person enters the amount themselves.
+ * The amount the "Allow up to" control starts at. At the cap: the estimate the note names (its first
+ * amount), else the cap. At the ceiling: twice the ceiling (a continued revision re-runs from the
+ * start, so it needs room above the ceiling it hit). Null when nothing is known.
  */
-export function suggestOverrideUsd(r: Pick<BoxRow, 'status' | 'note' | 'capUsd'>): number | null {
+export function suggestOverrideUsd(r: Pick<BoxRow, 'status' | 'note' | 'capUsd'> & Partial<Pick<BoxRow, 'ceilingUsd'>>): number | null {
+  if (r.status === 'paused_at_ceiling') return r.ceilingUsd && r.ceilingUsd > 0 ? round2(r.ceilingUsd * 2) : null;
   if (r.status !== 'paused_at_cap') return null;
   const estimate = /estimated at/i.test(r.note ?? '') ? amounts(r.note)[0] : undefined;
   if (estimate) return estimate;
@@ -151,7 +154,18 @@ export type Current =
   | { kind: 'asking'; id: string; instruction: string; question: string; replyTo: string }
   | { kind: 'applied'; id: string; summary: string }
   | { kind: 'blocked' | 'failed'; id: string; note: string }
-  | { kind: 'paused'; id: string; revisionId: string; at: 'cap' | 'ceiling'; note: string; suggestUsd: number | null; needsAmount: boolean; notified: boolean };
+  | {
+      kind: 'paused';
+      id: string;
+      revisionId: string;
+      at: 'cap' | 'ceiling';
+      note: string;
+      suggestUsd: number | null;
+      /** The allowed amount must be MORE than this (the ceiling it paused at); null: anything above $0. */
+      minUsd: number | null;
+      needsAmount: boolean;
+      notified: boolean;
+    };
 
 export type PartControl = {
   part: PartRef;
@@ -183,7 +197,48 @@ export type BoxState = {
 
 const partKey = (p: PartRef) => `${p.kind}\u0000${p.key}`;
 
-function currentOf(r: BoxRow, now: Date): Current | null {
+const money = (n: number) => `$${n.toFixed(2)}`;
+
+/**
+ * Why the typed amount can't be allowed, or null when it can. '' (empty, nothing to say yet) still
+ * blocks the button. At the ceiling the amount must be above it: re-running up to the same ceiling
+ * would only pause again after spending the same again.
+ */
+export function overrideProblem(cur: Pick<Extract<Current, { kind: 'paused' }>, 'minUsd'>, raw: string): string | null {
+  const text = raw.replace(/^\s*\$/, '').trim();
+  if (!text) return '';
+  const n = Number(text);
+  if (!Number.isFinite(n)) return 'Enter an amount in dollars, like 2.50.';
+  if (cur.minUsd != null && round2(n) <= cur.minUsd) return `Allow more than ${money(cur.minUsd)}, the limit it already reached.`;
+  if (round2(n) <= 0) return 'Enter an amount above $0.';
+  return null;
+}
+
+/** The typed amount in dollars (rounded to cents) when it can be allowed, else null. */
+export function allowedAmount(cur: Pick<Extract<Current, { kind: 'paused' }>, 'minUsd'>, raw: string): number | null {
+  return overrideProblem(cur, raw) === null ? round2(Number(raw.replace(/^\s*\$/, '').trim())) : null;
+}
+
+/** A note an action route answered with, made safe to show (same rules as a row's note). */
+export function plainPostNote(ok: boolean, note: string | null | undefined): string {
+  const text = note?.trim() ?? '';
+  if (!text) return ok ? 'Done.' : 'That didn’t work. Try again in a moment.';
+  if (!TECHNICAL.test(text)) return text;
+  return ok ? 'Done.' : 'That didn’t work, and nothing was changed. Try again in a moment.';
+}
+
+/** Restore original drops every revision of a part at once: the first click arms it, a second click on the same part runs it. */
+export function restoreClick(armed: string | null, key: string): 'arm' | 'run' {
+  return armed === key ? 'run' : 'arm';
+}
+
+/** The words a request stands for: after an ask-back, the original request (the reply only clarified it). */
+function askedFor(r: BoxRow, byId: ReadonlyMap<string, BoxRow>): string {
+  const parent = r.parentId ? byId.get(r.parentId) : undefined;
+  return parent?.instruction ?? r.instruction;
+}
+
+function currentOf(r: BoxRow, now: Date, byId: ReadonlyMap<string, BoxRow>): Current | null {
   switch (r.status) {
     case 'requested':
     case 'running': {
@@ -196,14 +251,15 @@ function currentOf(r: BoxRow, now: Date): Current | null {
     case 'asking':
       return { kind: 'asking', id: r.id, instruction: r.instruction, question: r.question?.trim() || 'Can you say a bit more about what to change?', replyTo: r.id };
     case 'applied':
-      return { kind: 'applied', id: r.id, summary: `Done: “${r.instruction}”${r.part ? ` (${partLabel(r.part)})` : ''}.` };
+      return { kind: 'applied', id: r.id, summary: `Done: “${askedFor(r, byId)}”${r.part ? ` (${partLabel(r.part)})` : ''}.` };
     case 'blocked':
     case 'failed':
       return { kind: r.status, id: r.id, note: plainNote(r.status, r.note) };
     case 'paused_at_cap':
     case 'paused_at_ceiling': {
       const at = r.status === 'paused_at_cap' ? 'cap' : 'ceiling';
-      return { kind: 'paused', id: r.id, revisionId: r.id, at, note: plainNote(r.status, r.note), suggestUsd: suggestOverrideUsd(r), needsAmount: at === 'ceiling', notified: at === 'ceiling' };
+      const minUsd = at === 'ceiling' && r.ceilingUsd && r.ceilingUsd > 0 ? r.ceilingUsd : null;
+      return { kind: 'paused', id: r.id, revisionId: r.id, at, note: plainNote(r.status, r.note), suggestUsd: suggestOverrideUsd(r), minUsd, needsAmount: at === 'ceiling', notified: at === 'ceiling' };
     }
     default:
       return null;
@@ -228,7 +284,8 @@ export function revisionBoxState(rows: readonly BoxRow[], opts: { vertical: Vert
   const sorted = newestFirst(rows);
   // An answered question is history: its reply row (newer) is what the box shows.
   const newest = sorted[0];
-  const current = newest ? currentOf(newest, now) : null;
+  const byId = new Map(sorted.map((r) => [r.id, r]));
+  const current = newest ? currentOf(newest, now, byId) : null;
 
   const groups = new Map<string, BoxRow[]>();
   for (const r of sorted) {
@@ -242,7 +299,7 @@ export function revisionBoxState(rows: readonly BoxRow[], opts: { vertical: Vert
       part: latest.part!,
       label: partLabel(latest.part!),
       applied: applied.length,
-      latest: { id: latest.id, instruction: latest.instruction },
+      latest: { id: latest.id, instruction: askedFor(latest, byId) },
       canUndo: true,
       canRestore: applied.length > 1,
     };

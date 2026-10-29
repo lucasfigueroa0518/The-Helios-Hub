@@ -5,6 +5,11 @@
  * old path back), so adding `?v=<pathVersion(path)>` to the preview URL makes the hub fetch the file
  * the post now uses instead of the cached old one. Pure; no crypto needed.
  */
+/** `url?v=<pathVersion(path)>`, or the bare URL when the stored path is not known. */
+export function versionedSrc(url: string, path: unknown): string {
+  return typeof path === 'string' && path ? `${url}?v=${pathVersion(path)}` : url;
+}
+
 export function pathVersion(path: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < path.length; i += 1) {

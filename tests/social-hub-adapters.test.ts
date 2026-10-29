@@ -5,6 +5,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { slideOutline } from '@/lib/social-hub/adapters/carousels';
+import { lfdSlides } from '@/lib/social-hub/adapters/last-few-days';
 import { reelFactorValues } from '@/lib/social-hub/adapters/reels';
 import { setMetrics } from '@/lib/social-hub/adapters/stories';
 import { buildDataset, findPost, type HubDataset } from '@/lib/social-hub/dataset';
@@ -294,4 +296,20 @@ test('pathVersion changes with the stored path and is URL-safe', () => {
   assert.match(a, /^[0-9a-z]+$/);
   assert.notEqual(a, b);
   assert.equal(a, pathVersion('sets/a/03-story.jpg'), 'stable for one path');
+});
+
+test('carousel and Last Few Days slide URLs follow the stored slide file (a revised slide gets a new URL)', () => {
+  const objects = ['posts/p/slide-01.jpg', 'posts/p/slide-02.jpg'];
+  const revised = ['posts/p/slide-01.jpg', 'posts/p/slide-02.rev9c1e.jpg'];
+  const base = { post_id: 'p', title: 'T', ny_date: '2026-10-08', render: { slides: [{}, {}] }, slide_count: 2, has_slide_objects: true };
+  for (const [fn, prefix] of [[slideOutline, '/api/social/slides/p/'], [lfdSlides, '/api/last-few-days/slides/p/']] as const) {
+    const before = fn({ ...base, slide_objects: objects } as never).map((s) => s.src);
+    const after = fn({ ...base, slide_objects: revised } as never).map((s) => s.src);
+    assert.equal(before[0], `${prefix}0?v=${pathVersion(objects[0]!)}`);
+    assert.equal(after[0], before[0], 'an unrevised slide keeps its URL');
+    assert.equal(after[1], `${prefix}1?v=${pathVersion(revised[1]!)}`);
+    assert.notEqual(after[1], before[1], 'the revised slide gets a new URL');
+    assert.deepEqual(fn({ ...base, slide_objects: objects } as never).map((s) => s.src), before, 'stable for the same files');
+    assert.deepEqual(fn({ ...base, has_slide_objects: false, slide_objects: null } as never).map((s) => s.src), [null, null]);
+  }
 });

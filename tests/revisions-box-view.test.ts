@@ -33,8 +33,8 @@ function row(over: Partial<BoxRow>): BoxRow {
 function view(rows: BoxRow[], extra: Partial<RevisionBoxViewProps> = {}, vertical: Vertical = 'carousels', lock: string | null = null): string {
   const props: RevisionBoxViewProps = {
     state: revisionBoxState(rows, { vertical, lock, now: NOW }),
-    busy: null, note: null, text: '', reply: '', amount: '',
-    onText: noop, onReply: noop, onAmount: noop, onSubmit: noop, onAnswer: noop, onContinue: noop, onUndo: noop,
+    busy: null, note: null, text: '', reply: '', amount: '', armed: null,
+    onText: noop, onArm: noop, onReply: noop, onAmount: noop, onSubmit: noop, onAnswer: noop, onContinue: noop, onUndo: noop,
     ...extra,
   };
   return renderToStaticMarkup(createElement(RevisionBoxView, props));
@@ -118,7 +118,7 @@ test('paused at the ceiling: the note, the notification line, and Keep going nee
   const typed = view([row({ status: 'paused_at_ceiling', note, ceilingUsd: 1.5 })], { amount: '3' });
   assert.match(typed, />Keep going, up to \$3\.00<\/button>/);
   const zero = view([row({ status: 'paused_at_ceiling', note, ceilingUsd: 1.5 })], { amount: '0' });
-  assert.match(zero, /Enter an amount above \$0\./);
+  assert.match(zero, /Allow more than \$1\.50/, 'at the ceiling the amount must be above it');
   assert.match(zero, /aria-invalid="true"/);
 });
 
@@ -155,4 +155,22 @@ test('the post view leaves the box out while the revise flag is off', async () =
   );
   assert.ok(html.includes('sh-post'));
   assert.doesNotMatch(html, /sh-revise/);
+});
+
+test('Restore original asks for a second click before it discards the part\'s changes', () => {
+  const rows = [row({ status: 'applied', part: slide3, instruction: 'Shorter' }), row({ status: 'applied', part: slide3, instruction: 'Even shorter' })];
+  const idle = view(rows);
+  assert.match(idle, />Restore original<\/button>/);
+  assert.doesNotMatch(idle, /Yes, restore the original/);
+  const armed = view(rows, { armed: 'slide:3' });
+  assert.match(armed, />Yes, restore the original<\/button>/);
+  assert.match(armed, /drops all 2 changes to slide 3/);
+  assert.match(armed, />Cancel<\/button>/);
+});
+
+test('keep going at the ceiling says why a too-small amount can\'t be used', () => {
+  const note = 'Paused at the $1.50 ceiling for carousels after spending $1.52. Nothing was changed; you can keep going.';
+  const html = view([row({ status: 'paused_at_ceiling', note, ceilingUsd: 1.5 })], { amount: '1.5' });
+  assert.match(html, /more than \$1\.50/);
+  assert.match(html, /<button type="button" class="sh-btn sh-btn--primary" disabled="">/);
 });
