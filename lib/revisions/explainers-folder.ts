@@ -34,6 +34,11 @@ import type { Queryable } from '@/lib/explainers/db';
 export const HOLD_STAGE = 'revision';
 const MANIFEST = 'revision-hold.json';
 export const holdStage = (token: string) => `${HOLD_STAGE}:${token}`;
+/**
+ * A released redo whose files could not be put back: stage `revision_interrupted:<id>` on an `ok`
+ * job. Scene redos of it are refused, and start-up recovery retries the repair from its manifest.
+ */
+export const INTERRUPTED = 'revision_interrupted';
 
 export type RedoManifest = { id: string; key: string; stage: string; hadEvents: boolean; movedVideo: boolean; movedSheet: boolean };
 
@@ -115,36 +120,48 @@ export function readManifest(jobDir: string): RedoManifest | null {
 
 /**
  * helios-explainers start-up (never in --once, which may run beside a live redo): put back and
- * release every job a redo still holds. Each job is isolated: a failure to put its files back is
- * logged with the job id and its hold is still released (stage revision_interrupted), so one bad
- * folder never stops the worker from starting or blocks renders. Returns the job ids it released.
+ * release every job a redo still holds, and retry the repair of jobs released as
+ * `revision_interrupted:<id>`. Each job is isolated: a failure to put its files back is logged with
+ * the job id and a held job is still released (stage `revision_interrupted:<id>`, retried next
+ * start-up), so one bad folder never stops the worker from starting or blocks renders. Returns the
+ * job ids it released or repaired.
  */
 export async function recoverSceneRedos(db: Queryable, jobsRoot: string, log: (event: string, fields: Record<string, unknown>) => void = () => undefined): Promise<string[]> {
-  const { rows } = await db.query<{ id: string; stage: string }>(
-    `SELECT id::text AS id, stage FROM explainers.jobs WHERE status = 'running' AND stage LIKE $1`,
-    [`${HOLD_STAGE}:%`],
+  // Jobs a redo still holds, and released ones whose files are still waiting for repair.
+  const { rows } = await db.query<{ id: string; status: string; stage: string }>(
+    `SELECT id::text AS id, status, stage FROM explainers.jobs
+      WHERE (status = 'running' AND stage LIKE $1) OR (status = 'ok' AND stage LIKE $2)`,
+    [`${HOLD_STAGE}:%`, `${INTERRUPTED}:%`],
   );
   const done: string[] = [];
-  for (const { id, stage } of rows) {
-    const token = stage.slice(HOLD_STAGE.length + 1);
-    let back = 'revision_interrupted';
+  for (const { id, status, stage } of rows) {
+    const held = status === 'running';
+    const token = stage.slice(stage.indexOf(':') + 1);
+    // Default: still waiting (keeps the token, so the next start-up tries again).
+    let back = `${INTERRUPTED}:${token}`;
     try {
       const jobDir = path.join(jobsRoot, id);
       const m = readManifest(jobDir);
       if (m && m.id === token) {
         putBack(jobDir, m);
         back = m.stage;
-      } else if (m) {
-        // Left by an earlier redo that was kept: never replayed over its committed files.
-        log('scene_redo_stale_manifest', { jobId: id, manifest: m.id, hold: token });
-        finishAside(jobDir);
+      } else {
+        // No manifest of this redo: nothing to put back (a manifest left by an earlier, kept redo is never replayed).
+        if (m) {
+          log('scene_redo_stale_manifest', { jobId: id, manifest: m.id, hold: token });
+          finishAside(jobDir);
+        }
+        back = INTERRUPTED;
       }
     } catch (error) {
       log('scene_redo_recovery_failed', { jobId: id, error: error instanceof Error ? error.message : String(error) });
     }
     try {
-      await release(db, id, token, back);
-      done.push(id);
+      if (held) await release(db, id, token, back);
+      else if (back !== stage) {
+        await db.query(`UPDATE explainers.jobs SET stage = $2 WHERE id = $1 AND status = 'ok' AND stage = $3`, [id, back || null, stage]);
+      }
+      if (held || back !== stage) done.push(id);
     } catch (error) {
       log('scene_redo_release_failed', { jobId: id, error: error instanceof Error ? error.message : String(error) });
     }

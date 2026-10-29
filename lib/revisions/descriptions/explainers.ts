@@ -47,8 +47,9 @@ import { DEFAULT_SETTINGS } from '@/lib/explainers/settings';
 import type { JobRow, LintViolation } from '@/lib/explainers/types';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 
-import { collateral, finishAside, hold, holdStage, putBack, readManifest, release, restoreCollateral, setAside, snapshot } from '../explainers-folder';
-import type { ContentTypeDescription, FixKind, PartState, PostSnapshot } from '../types';
+import { CeilingReached } from '../caps';
+import { collateral, finishAside, hold, holdStage, INTERRUPTED, putBack, readManifest, release, restoreCollateral, setAside, snapshot } from '../explainers-folder';
+import { RevisionFailure, type ContentTypeDescription, type FixKind, type PartState, type PostSnapshot } from '../types';
 
 import type { Metered } from './carousels';
 import { liveExplainersDeps } from './explainers-live';
@@ -108,6 +109,10 @@ export type ExplainersDeps = {
   now?: () => Date;
   /** A short id for the revision's storage keys. Default: random. */
   newId?: () => string;
+  /** A loud notice for a person (a redo whose working files need a manual repair). */
+  notify?: (msg: string) => Promise<void>;
+  /** Put a redo's set-aside files back (explainers-folder.ts putBack); swappable for tests. */
+  putBack?: typeof putBack;
 };
 
 type Pointer = { path: string; bytes: number | null; location: 'local' | 'bucket' };
@@ -323,6 +328,7 @@ async function captionTo(db: Queryable, jobId: string, current: string | null, n
 
 export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDescription {
   const newId = deps.newId ?? (() => randomUUID().replace(/-/g, '').slice(0, 10));
+  const putBackFiles = deps.putBack ?? putBack;
   const now = () => deps.now?.() ?? new Date();
   const projectDirOf = (jobId: string) => path.join(deps.jobsRoot(), jobId, 'project');
 
@@ -424,6 +430,9 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         return blocked(`This explainer has ${usd(left)} left of its ${usd(job.spend_cap_usd)} spending cap and a scene redo needs about ${usd(need)}, so the scene was not redone.`);
       }
 
+      if (job.stage?.startsWith(`${INTERRUPTED}:`)) {
+        return failed("This explainer's working files need a manual repair after an earlier scene redo, so its scenes can't be redone until that is done (the explainers worker retries the repair when it restarts).");
+      }
       const id = newId();
       // The hold carries this redo's id, and so does its manifest (start-up recovery matches them).
       const stage = await hold(db, job.id, id);
@@ -433,6 +442,7 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
       let kept = false;
       let before: ReturnType<typeof snapshot> | null = null;
       let collateralDone = false;
+      let inflight: unknown = null;
       try {
         // A manifest an earlier redo left behind is never this redo's: clear it before writing ours.
         finishAside(jobDir);
@@ -490,35 +500,59 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         const beforeState: SceneState = { copy: { module: oldModule, events: oldEvents }, video: latest.video, sheet: latest.sheet, files: files(latest.video, latest.sheet), made: nextVideo.path };
         const after: SceneState = { copy: { module: newModule, events: readText(evFile) }, video: nextVideo, sheet: nextSheet, files: files(nextVideo, nextSheet), made: latest.video.path };
         return { ok: true as const, before: beforeState, after };
+      } catch (e) {
+        inflight = e;
+        throw e;
       } finally {
         if (!kept) await rollBack();
       }
 
       /**
        * Every non-kept path: the other files first (a failure there is logged and never skips the
-       * rest), then the scene's own files from the manifest, then the release. If the scene's files
-       * cannot be put back, the hold is KEPT and the error thrown (the engine ends the row failed), so
-       * helios-explainers' start-up recovery repairs the folder from the manifest.
+       * rest), then the scene's own files from the manifest (one retry), then the release. The hold
+       * is ALWAYS released, so a failed put-back never blocks the nightly renders. When the scene's
+       * files still cannot be put back, the job is released as `revision_interrupted:<id>` (scene redos
+       * refused until repaired; start-up recovery retries it), the manifest and `*.before-rev` files stay,
+       * a loud notice goes out, and the revision fails with an accurate note (RevisionFailure).
        */
       async function rollBack(): Promise<void> {
+        const key = scene!.key;
+        const jobId = job!.id;
         if (before && !collateralDone) {
           try {
-            restoreCollateral(projectDir, before, collateral(projectDir, before, scene!.key, codeWritten), id);
+            restoreCollateral(projectDir, before, collateral(projectDir, before, key, codeWritten), id);
           } catch (e) {
-            console.error(`[revisions] explainer ${job!.id} redo ${id}: the other files could not be checked or put back: ${errText(e)}`);
+            console.error(`[revisions] explainer ${jobId} redo ${id}: the other files could not be checked or put back: ${errText(e)}`);
           }
         }
         const manifest = readManifest(jobDir);
+        let failure: unknown = null;
         if (manifest && manifest.id === id) {
-          try {
-            putBack(jobDir, manifest);
-          } catch (e) {
-            throw new Error(
-              `the scene's files could not be put back (${errText(e)}); this explainer stays held until the explainers worker restarts and repairs it`,
-            );
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              putBackFiles(jobDir, manifest);
+              failure = null;
+              break;
+            } catch (e) {
+              failure = e;
+            }
           }
         }
-        await release(db, job!.id, id, stage!);
+        if (failure === null) {
+          await release(db, jobId, id, stage!);
+          return;
+        }
+        await release(db, jobId, id, `${INTERRUPTED}:${id}`);
+        const notice =
+          `Needs attention: explainer ${jobId}: a redo of scene ${key} (redo ${id}) could not put its files back (${errText(failure)}). ` +
+          `Its working folder ${jobDir} needs a manual repair: revision-hold.json and the *.before-rev${id} files there hold the original scene, video and contact sheet. ` +
+          'The published video is unchanged; renders are not blocked; the explainers worker retries the repair when it restarts.';
+        console.error(`[revisions] ${notice}`);
+        await deps.notify?.(notice).catch(() => undefined);
+        const ceiling = inflight instanceof CeilingReached ? ` It had also reached its ${usd(inflight.ceilingUsd)} spending ceiling after ${usd(inflight.spent)}.` : '';
+        throw new RevisionFailure(
+          `The redo of scene ${key} could not put the scene back; this explainer's working files need a manual repair; the published video is unchanged.${ceiling}`,
+        );
       }
     },
 

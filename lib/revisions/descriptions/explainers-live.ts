@@ -57,4 +57,8 @@ export const liveExplainersDeps: ExplainersDeps = {
     return { storagePath: out.storagePath, bytes: out.bytes, location: out.location ?? 'local' };
   },
   unscheduleJob: async (db, jobId) => (await import('@/lib/explainers/publish/schedule')).unscheduleJob(db, jobId),
+  // The worker's journal is where a person looks (journalctl -u helios-explainers): one JSON line, flagged.
+  notify: async (msg) => {
+    console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'explainers-worker', message: 'revision_needs_attention', note: msg }));
+  },
 };

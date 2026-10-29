@@ -13,7 +13,7 @@ import type { Query } from '@/lib/social/store/pg';
 import { CeilingReached, capFor, createCostMeter } from './caps';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
 import { latestApplied, listForItem, markApplied, markEnded, markRunning, markUndone, originalOf, requeueWithOverride, unmarkUndone } from './store';
-import type { ContentTypeDescription, CostMeter, PartRef, PartState, PostSnapshot, RevisionResult, RevisionRow } from './types';
+import { RevisionFailure, type ContentTypeDescription, type CostMeter, type PartRef, type PartState, type PostSnapshot, type RevisionResult, type RevisionRow } from './types';
 
 export type EngineDeps = { q: Query; notify: (msg: string) => Promise<void>; now: () => Date };
 export type EngineOutcome = { ok: boolean; note: string };
@@ -150,6 +150,8 @@ async function runSteps(deps: EngineDeps, row: RevisionRow, st: RunState): Promi
   try {
     result = await desc.revise({ q, refs: row.refs, interpretation: interp, meter });
   } catch (e) {
+    // The description's own note, already accurate (it may say the original could NOT be kept).
+    if (e instanceof RevisionFailure) return fail(`${e.message}${reviewSuffix(st)}`, meter.spent);
     if (e instanceof CeilingReached || meter.spent > ceiling) return pauseAtCeiling();
     return fail(`The ${interp.fixKind} fix failed and the original was kept: ${errText(e)}.${reviewSuffix(st)}`, meter.spent);
   }

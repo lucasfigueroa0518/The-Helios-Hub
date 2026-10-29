@@ -17,13 +17,13 @@ import type { AgentMessage, AgentQuery } from '@/lib/explainers/render/agent';
 import { RESUME_PROMPT, rebuildScene, sceneResumeNote } from '@/lib/explainers/render/job';
 import { ChargedSpendMeter } from '@/lib/explainers/render/meter';
 import { workspacePaths } from '@/lib/explainers/render/workspace';
-import { failStaleRunningJobs, saveFeedback } from '@/lib/explainers/repository';
+import { claimNextJob, failStaleRunningJobs, saveFeedback } from '@/lib/explainers/repository';
 import { DEFAULT_SETTINGS } from '@/lib/explainers/settings';
 import { localArtifactStore } from '@/lib/explainers/storage';
 import type { LintViolation } from '@/lib/explainers/types';
 import { explainerActions } from '@/lib/publishing/actions/explainers';
 import { CeilingReached, createCostMeter, resetCapsForTest, setCapsForTest } from '@/lib/revisions/caps';
-import { hold, setAside } from '@/lib/revisions/explainers-folder';
+import { hold, putBack as realPutBack, setAside } from '@/lib/revisions/explainers-folder';
 import { claimAndRunRevisions } from '@/lib/revisions/worker';
 import {
   EXPLAINERS_FOLDER_GONE_NOTE,
@@ -828,31 +828,120 @@ test('start-up recovery isolates a job whose files cannot be put back: it logs t
   } finally {
     fs.chmodSync(frames, 0o755);
   }
-  assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'revision_interrupted' });
+  // Released, keeping the token so the next start-up tries the repair again.
+  assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'revision_interrupted:e1' });
   assert.equal(logged.length, 1);
   assert.equal(logged[0]!.jobId, JOB);
   assert.match(String(logged[0]!.error), /EACCES|permission/i);
 });
 
-test('if putting the scene back fails during a rollback, the hold is kept and the error surfaces; start-up recovery repairs it', async () => {
+/** A put-back that fails its first `fails` calls, then does the real thing. */
+function flakyPutBack(fails: number) {
+  const calls = { n: 0 };
+  const fn: typeof realPutBack = (jobDir, m) => {
+    calls.n += 1;
+    if (calls.n <= fails) throw new Error(`EIO: simulated put-back failure ${calls.n}`);
+    realPutBack(jobDir, m);
+  };
+  return { fn, calls };
+}
+const blockedByBounds = [{ source: 'hyperframes' as const, rule: 'text_bounds', frame: 2, severity: 'error' as const, detail: 'cut off' }];
+
+test('(a) a put-back that fails once is retried: the redo rolls back cleanly, the hold is released, nobody is notified', async () => {
   const fx = await fixture();
+  const flaky = flakyPutBack(1);
+  const notes: string[] = [];
+  const d = createExplainersDescription(depsFor(fx, { bounds: blockedByBounds, putBack: flaky.fn, notify: async (m) => void notes.push(m) }));
+  const out = await d.revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+  assert.equal(out.ok ? null : out.reason, 'blocked');
+  assert.equal(flaky.calls.n, 2);
+  assert.deepEqual(notes, []);
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), MODULES['02-gap.js']);
+  assert.equal(fs.readFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'utf8'), 'old-mp4');
+  assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'caption' });
+  assert.equal(fs.existsSync(path.join(fx.jobsRoot, JOB, 'revision-hold.json')), false);
+});
+
+test('(b) a put-back that fails twice releases the hold so renders are never blocked, notifies loudly, fails the row accurately, and leaves the files for repair; (c) the next start-up repairs them', async () => {
+  const fx = await fixture();
+  const jobDir = path.join(fx.jobsRoot, JOB);
   const frames = path.join(fx.projectDir, 'assets', 'frames');
-  const log: SessionLog = { prompts: [], atStart: [], paidMessages: 0 };
-  const query = sceneSession(log, { after: () => fs.chmodSync(frames, 0o555) });
-  const d = createExplainersDescription(
-    depsFor(fx, { log, query, bounds: [{ source: 'hyperframes', rule: 'text_bounds', frame: 2, severity: 'error', detail: 'cut off' }] }),
+  const notes: string[] = [];
+  registerDescription(
+    createExplainersDescription(depsFor(fx, { bounds: blockedByBounds, putBack: flakyPutBack(2).fn, notify: async (m) => void notes.push(m) })),
   );
+  setCapsForTest({ explainers: { wording: { capUsd: 5, ceilingUsd: 10 } } });
   try {
-    await assert.rejects(d.revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() }), /could not be put back/);
+    const itemId = (await explainerItemId(fx.db, JOB))!;
+    const req = await createRequest(fx.q, { vertical: 'explainers', refs, itemId, by: 'tommy', instruction: 'wave' });
+    const it = sceneFix('02-gap');
+    await markRunning(fx.q, req.id, it, 5, 10);
+    await runRevision({ q: fx.q, notify: async () => undefined, now: () => NOW }, { ...(await getRequest(fx.q, req.id))!, interpretation: it });
+    const row = (await getRequest(fx.q, req.id))!;
+    assert.equal(row.status, 'failed');
+    assert.match(row.note!, /could not put the scene back; this explainer's working files need a manual repair; the published video is unchanged\./);
+    assert.doesNotMatch(row.note!, /original was kept/);
   } finally {
-    fs.chmodSync(frames, 0o755);
+    resetCapsForTest();
+    restoreRegistryForTest();
   }
-  assert.deepEqual(await holdRow(fx.db), { status: 'running', stage: 'revision:r1' }, 'still held, so recovery can repair it');
+  // Released, never left holding the one-render slot.
+  assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'revision_interrupted:r1' });
+  await fx.db.query(`INSERT INTO explainers.topics (id, title, origin, status) VALUES ($1, 'Other', 'manual', 'queued')`, [OTHER_TOPIC]);
+  await fx.db.query(
+    `INSERT INTO explainers.jobs (id, topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model) VALUES ($1, $2, 'requested', 'click', 'development', 8, 'm', 'm')`,
+    [OTHER_JOB, OTHER_TOPIC],
+  );
+  assert.equal((await claimNextJob(fx.db))?.id, OTHER_JOB, 'the next render is claimed');
+  await fx.db.query(`UPDATE explainers.jobs SET status = 'ok' WHERE id = $1`, [OTHER_JOB]);
+  // Loud notice naming the job, the folder and the repair.
+  assert.equal(notes.length, 1);
+  assert.match(notes[0]!, new RegExp(JOB));
+  assert.match(notes[0]!, /needs a manual repair/);
+  assert.ok(notes[0]!.includes(jobDir));
+  // The manifest and the set-aside files stay for the repair; the stored video is untouched.
+  assert.ok(fs.existsSync(path.join(jobDir, 'revision-hold.json')));
+  assert.ok(fs.existsSync(path.join(frames, '02-gap.js.before-revr1')));
+  assert.equal((await latest(fx.db, 'video'))!.storage_path, OLD_VIDEO);
+  // While it waits for repair, a scene redo of this explainer is refused before anything runs.
+  const waiting = await createExplainersDescription(depsFor(fx)).revise({ q: fx.q, refs, interpretation: sceneFix('03-dictionary'), meter: meter() });
+  assert.equal(waiting.ok ? null : waiting.reason, 'failed');
+  if (!waiting.ok) assert.match(waiting.note, /manual repair/);
+
+  // (c) The next start-up puts the files back (put-back works this time) and restores the stage.
   assert.deepEqual(await recoverSceneRedos(fx.db, fx.jobsRoot), [JOB]);
   assert.equal(moduleOnDisk(fx, '02-gap.js'), MODULES['02-gap.js']);
   assert.equal(moduleOnDisk(fx, '02-gap.events.json'), MODULES['02-gap.events.json']);
   assert.equal(fs.readFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'utf8'), 'old-mp4');
+  assert.equal(fs.existsSync(path.join(jobDir, 'revision-hold.json')), false);
   assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'caption' });
+  const after = await createExplainersDescription(depsFor(fx)).revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+  assert.equal(after.ok, true, JSON.stringify(after));
+});
+
+test('a ceiling stop and a failed put-back together: both are in the note, and the hold is still released', async () => {
+  const fx = await fixture();
+  const log: SessionLog = { prompts: [], atStart: [], paidMessages: 0 };
+  const notes: string[] = [];
+  registerDescription(createExplainersDescription(depsFor(fx, { log, query: sceneSession(log, { messages: 5 }), putBack: flakyPutBack(2).fn, notify: async (m) => void notes.push(m) })));
+  setCapsForTest({ explainers: { wording: { capUsd: 5, ceilingUsd: 0.05 } } });
+  try {
+    const itemId = (await explainerItemId(fx.db, JOB))!;
+    const req = await createRequest(fx.q, { vertical: 'explainers', refs, itemId, by: 'tommy', instruction: 'wave' });
+    const it = sceneFix('02-gap');
+    await markRunning(fx.q, req.id, it, 5, 0.05);
+    await runRevision({ q: fx.q, notify: async () => undefined, now: () => NOW }, { ...(await getRequest(fx.q, req.id))!, interpretation: it });
+    const row = (await getRequest(fx.q, req.id))!;
+    assert.equal(row.status, 'failed');
+    assert.match(row.note!, /ceiling/);
+    assert.match(row.note!, /need a manual repair/);
+  } finally {
+    resetCapsForTest();
+    restoreRegistryForTest();
+  }
+  assert.equal(log.paidMessages, 1);
+  assert.equal(notes.length, 1);
+  assert.equal((await holdRow(fx.db)).status, 'ok');
 });
 
 test('a collateral step that throws during the rollback still puts the scene back before releasing the hold', async () => {

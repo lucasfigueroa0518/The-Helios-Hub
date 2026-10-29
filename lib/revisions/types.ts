@@ -102,3 +102,15 @@ export interface ContentTypeDescription {
   restore(ctx: { q: Query; refs: ActionTarget; part: PartRef; state: PartState }): Promise<void>;
   unschedule(q: Query, refs: ActionTarget): Promise<{ ok: boolean; note: string }>;
 }
+
+/**
+ * A revise failure whose message is already the whole, accurate note for the person (e.g. "the
+ * working files need a manual repair"). The engine ends the row `failed` with it as is, without its
+ * generic "the original was kept" wrapper, and never pauses it at the ceiling (the message says so).
+ */
+export class RevisionFailure extends Error {
+  constructor(note: string) {
+    super(note);
+    this.name = 'RevisionFailure';
+  }
+}
