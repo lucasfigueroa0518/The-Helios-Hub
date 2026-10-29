@@ -31,6 +31,8 @@ import type { Query } from '@/lib/social/store/pg';
 
 import type { ContentTypeDescription, FixKind, PartRef, PartState, PostSnapshot } from '../types';
 
+import { liveCarouselsDeps } from './carousels-live';
+
 /** The carousel pipeline's stages a fix can be put down to (lib/social/pipeline/orchestrator.ts, design-stage, render). */
 export const CAROUSELS_STAGE_TAGS = ['writer', 'editor', 'fact-check', 'photo', 'layout', 'canvas', 'render'] as const;
 
@@ -59,7 +61,13 @@ const BLEEDS = ['true', 'false'] as const;
 const PHOTO_FIELDS = ['photoUrl', 'photoCredit', 'photoKind', 'photoFocus', 'photoSize', 'logoPlate', 'logoWide', 'photoIsSpeaker'] as const;
 const LAYOUT_FIELDS = ['layoutVariant', 'photoPlacement', 'photoTreatment', 'photoBleed', 'textAnchor', 'fade', 'bleedText'] as const;
 
-type Spend = (usd: number) => void;
+/**
+ * The revision's meter as a billable dep sees it. `stopped()` is true once the ceiling was hit:
+ * check it BEFORE every paid call and `halt()` (throws the ceiling error) instead of paying.
+ */
+export type Metered = { spend(usd: number): void; stopped(): boolean; halt(): never };
+/** A found photo; `scene` is the query a stock photo was found for (the used_photos tag). */
+export type FoundPhoto = Photo & { scene?: string };
 export type FactCheckVerdict = { ok: true } | { ok: false; flagged: boolean; reason: string };
 
 export type CarouselsDeps = {
@@ -71,11 +79,11 @@ export type CarouselsDeps = {
   renderSlide: (input: { slug: string; post: RenderPost; slide: number; key: string }) => Promise<{ file: string; text: string }>;
   /**
    * ONE fact-check call on the draft carrying the new words. `flagged`: the checker rejected
-   * words on this slide (or the main claim); otherwise the check could not run. Calls `spend` as it pays.
+   * words on this slide (or the main claim); otherwise the check could not run. Charges `meter` as it pays.
    */
-  factCheck: (input: { brief: unknown; draft: unknown; slide: number }, spend: Spend) => Promise<FactCheckVerdict>;
-  /** ONE photo-chain call for the slide: a usable photo whose URL is not in `exclude`, or null. Calls `spend` as it pays. */
-  findPhoto: (input: { brief: unknown; draft: unknown; slide: number; exclude: ReadonlySet<string>; hint?: string }, spend: Spend) => Promise<Photo | null>;
+  factCheck: (input: { brief: unknown; draft: unknown; slide: number }, meter: Metered) => Promise<FactCheckVerdict>;
+  /** ONE photo-chain call for the slide: a usable photo whose URL is not in `exclude`, or null. Charges `meter` as it pays. */
+  findPhoto: (input: { brief: unknown; draft: unknown; slide: number; exclude: ReadonlySet<string>; hint?: string }, meter: Metered) => Promise<FoundPhoto | null>;
   unschedule: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   /** A short id for the revision's storage key. Default: random. */
   newId?: () => string;
@@ -93,8 +101,6 @@ const oneOf = <T extends string>(list: readonly T[], v: string | undefined): v i
 const blocked = (note: string) => ({ ok: false as const, reason: 'blocked' as const, note });
 const failed = (note: string) => ({ ok: false as const, reason: 'failed' as const, note });
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
-/** C7's comparison (mechanical/checks.ts checkDroppedText): case, quote marks and spacing do not count. */
-const flat = (s: string) => s.toLowerCase().replace(/[“”"‘’'…]/g, '').replace(/\s+/g, ' ').trim();
 
 async function readPost(q: Query, postId: string): Promise<PostRow | null> {
   if (!/^[0-9a-f-]{36}$/i.test(postId)) return null;
@@ -150,7 +156,8 @@ function stateOf(post: { render: RenderPost; draft: Draft | null }, n: number, f
   const s = post.render.slides[n - 1]!;
   return {
     copy: { headline: s.headline ?? null, body: s.body ?? null, altText: s.altText, draft: draftLine(post.draft, n) },
-    photo: pick(s, PHOTO_FIELDS),
+    // The caption's photo credits are derived from every slide's photo: kept with the photo so undo restores them.
+    photo: { ...pick(s, PHOTO_FIELDS), attributionBlock: post.render.attributionBlock ?? null },
     colors: { canvas: s.canvas ?? null },
     layout: pick(s, LAYOUT_FIELDS),
     files: file ? [file] : [],
@@ -216,15 +223,15 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
   const newId = deps.newId ?? (() => randomUUID().replace(/-/g, '').slice(0, 10));
 
   /** Write render + draft + slide_objects in one statement, only if the post is still as read (and revisable). */
-  async function save(q: Query, post: PostRow, render: RenderPost, draft: Draft | null, objects: string[], used?: { photo: Photo; slide: number }): Promise<boolean> {
+  async function save(q: Query, post: PostRow, render: RenderPost, draft: Draft | null, objects: string[], used?: { photo: FoundPhoto; slide: number }): Promise<boolean> {
     const { rows } = await q(
       `WITH up AS (
          UPDATE social.posts SET render = $2::jsonb, draft = $3::jsonb, slide_objects = $4::jsonb
           WHERE id = $1::uuid AND status IN ('preview', 'review') AND render = $5::jsonb AND slide_objects IS NOT DISTINCT FROM $6::jsonb
           RETURNING id, story_id),
        logged AS (
-         INSERT INTO social.used_photos (url, used_at, story_id, slide, source, qid, subject, credit, post_id)
-         SELECT $7::text, now(), coalesce(up.story_id, up.id::text), $8::int, $9::text, $10::text, $11::text, $12::text, up.id FROM up WHERE $7::text IS NOT NULL
+         INSERT INTO social.used_photos (url, used_at, story_id, slide, source, qid, subject, credit, scene, post_id)
+         SELECT $7::text, now(), coalesce(up.story_id, up.id::text), $8::int, $9::text, $10::text, $11::text, $12::text, $13::text, up.id FROM up WHERE $7::text IS NOT NULL
          ON CONFLICT (url, used_at, story_id, slide) DO NOTHING
          RETURNING 1)
        SELECT count(*)::int AS n FROM up`,
@@ -241,23 +248,37 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         used?.photo.qid ?? null,
         used?.photo.subject ?? null,
         used?.photo.credit ?? null,
+        used?.photo.scene ?? null,
       ],
     );
     return Number(rows[0]?.n ?? 0) === 1;
   }
 
-  /** Charges the meter; a CeilingReached thrown inside a dep is remembered so a dep that swallows it cannot hide it. */
-  function spender(meter: { spend(usd: number): void }) {
+  /**
+   * Charges the meter. Once it has thrown, `stopped()` is true and `halt()` re-throws that error, so
+   * a dep that swallows the error makes no further paid call, and `check()` surfaces it afterwards.
+   */
+  function metered(meter: { spend(usd: number): void }): Metered & { check(): void } {
     let stop: unknown = null;
-    const spend: Spend = (usd) => {
-      try {
-        meter.spend(usd);
-      } catch (e) {
-        stop ??= e;
-        throw e;
-      }
+    const halt = (): never => {
+      throw stop;
     };
-    return { spend, check: () => { if (stop) throw stop; } };
+    return {
+      spend(usd) {
+        if (stop) halt();
+        try {
+          meter.spend(usd);
+        } catch (e) {
+          stop = e;
+          throw e;
+        }
+      },
+      stopped: () => stop !== null,
+      halt,
+      check: () => {
+        if (stop) halt();
+      },
+    };
   }
 
   const objectsMatch = (p: PostRow) => Array.isArray(p.slide_objects) && p.slide_objects.length === p.render.slides.length;
@@ -315,9 +336,11 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
       const objects = [...(post.slide_objects ?? [])];
       const before = stateOf(post, n, objects[n - 1]);
       const args = it.args ?? {};
-      const { spend, check } = spender(meter);
-      let usedPhoto: Photo | undefined;
+      const m = metered(meter);
+      const check = m.check;
+      let usedPhoto: FoundPhoto | undefined;
       let mustShow: string | null = null;
+      let flat: ((s: string) => string) | null = null;
 
       if (it.fixKind === 'color') {
         const canvas = args.canvas?.trim().toLowerCase();
@@ -337,6 +360,7 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         if (bl && !oneOf(BLEEDS, bl)) return failed(`I could not tell whether the photo should fill the slide (true or false), so nothing was changed.`);
         if (old.panoramaSide) return blocked(`Slide ${n} is half of a two-slide photo spread, so its layout was not changed (it would break the spread).`);
         const story = old.layoutVariant === 'text' || old.layoutVariant === 'image';
+        if (old.template) return blocked(`Slide ${n}'s layout was chosen as a set design (${old.template}), which fixes its layout, so it was not changed. Ask for a different photo or color instead.`);
         if (lv && !story) return blocked(`Slide ${n} is a ${old.layoutVariant} slide, whose layout is fixed. Only story slides switch between text and image.`);
         if ((pl || tr || bl) && !old.photoUrl) return blocked(`Slide ${n} has no photo, so there is no photo layout to change.`);
         if (bl === 'true' && (old.photoKind === 'subject' || old.photoKind === 'logo')) {
@@ -353,7 +377,9 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
       } else if (it.fixKind === 'wording') {
         const field = args.field?.trim().toLowerCase();
         if (field !== 'headline' && field !== 'body') return failed(`I could not tell which words on slide ${n} to change (the headline or the body), so nothing was changed.`);
-        const { fixDashes, fixQuoteMarks, fixWhitespace, LIMITS } = await import('@/lib/social/mechanical/checks');
+        const checks = await import('@/lib/social/mechanical/checks');
+        const { fixDashes, fixQuoteMarks, fixWhitespace, LIMITS } = checks;
+        flat = checks.flat;
         const value = fixWhitespace(fixQuoteMarks(fixDashes(args.value ?? '')));
         if (!value) return failed(`I could not tell what slide ${n}'s ${field} should say, so nothing was changed.`);
         if (old.layoutVariant === 'follow') return blocked(`Slide ${n} is the closing "follow" slide, whose words are written by code, so it was not changed.`);
@@ -370,7 +396,7 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         const oldText = runText(oldRun);
         next[field] = respan(oldRun, value);
         if (oldText && next.altText.includes(oldText)) next.altText = next.altText.split(oldText).join(value);
-        const verdict = await deps.factCheck({ brief: post.brief, draft, slide: n }, spend);
+        const verdict = await deps.factCheck({ brief: post.brief, draft, slide: n }, m);
         check();
         if (!verdict.ok) {
           return verdict.flagged
@@ -389,12 +415,12 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         );
         for (const r of recent.rows) exclude.add(r.url as string);
         const hint = args.hint?.trim();
-        const found = await deps.findPhoto({ brief: post.brief, draft, slide: n, exclude, ...(hint ? { hint } : {}) }, spend);
+        const found = await deps.findPhoto({ brief: post.brief, draft, slide: n, exclude, ...(hint ? { hint } : {}) }, m);
         check();
         if (!found || exclude.has(found.url) || !found.credit?.trim()) {
           return failed(`I searched for another photo for slide ${n} and couldn't find a different usable photo (one not already in this post or used in the last ${NO_REPEAT_DAYS} days), so the original was kept.`);
         }
-        const { canBleedPerson, photoKindOf, LOGO_WIDE_ASPECT } = await import('@/lib/social/render/from-draft');
+        const { attributionBlock, canBleedPerson, photoKindOf, LOGO_WIDE_ASPECT } = await import('@/lib/social/render/from-draft');
         const kind = photoKindOf(found);
         for (const k of [...PHOTO_FIELDS, 'photoBleed', 'fade', 'bleedText']) delete (next as unknown as Record<string, unknown>)[k];
         next.photoUrl = found.url;
@@ -409,6 +435,10 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
           next.layoutVariant = 'text';
           next.photoPlacement = 'top';
         }
+        // The caption's "Photos:" credits (published with the post) are rebuilt from every slide's photo, as the pipeline builds them.
+        const block = attributionBlock(render.slides.map((sl) => (sl.photoCredit ? ({ credit: sl.photoCredit } as Photo) : null)));
+        if (block) render.attributionBlock = block;
+        else delete render.attributionBlock;
         usedPhoto = found;
       } else {
         return blocked(`${it.fixKind} fixes are not available for carousels.`);
@@ -423,7 +453,7 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
       } catch (e) {
         return failed(`Slide ${n} could not be drawn with that change (${errText(e)}), so the original was kept.`);
       }
-      if (mustShow && !flat(out.text).includes(flat(mustShow))) {
+      if (mustShow && flat && !flat(out.text).includes(flat(mustShow))) {
         return failed(`The new words did not all fit on slide ${n} when it was drawn, so the original was kept. Try shorter words.`);
       }
       objects[n - 1] = out.file;
@@ -452,8 +482,13 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
           if (copy.draft.body !== null) setDraftLine(draft, n, 'body', copy.draft.body);
         }
       }
-      for (const group of [state.photo, state.layout] as Array<Record<string, unknown> | undefined>) {
+      const { attributionBlock: block, ...photo } = (state.photo ?? {}) as Record<string, unknown>;
+      for (const group of [state.photo ? photo : undefined, state.layout] as Array<Record<string, unknown> | undefined>) {
         if (group) for (const [k, v] of Object.entries(group)) setOrDelete(s, k, v);
+      }
+      if (state.photo && block !== undefined) {
+        if (typeof block === 'string' && block) render.attributionBlock = block;
+        else delete render.attributionBlock;
       }
       const colors = state.colors as { canvas?: string | null } | undefined;
       if (colors && 'canvas' in colors) setOrDelete(s, 'canvas', colors.canvas);
@@ -468,116 +503,4 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
   };
 }
 
-/** Live deps: every import is lazy, so importing the registry loads no renderer, storage, model or Jev client. */
-const liveDeps: CarouselsDeps = {
-  async renderSlide({ slug, post, slide, key }) {
-    const [{ checkRenderFit }, { storeSlideJpegs }, { mediaBucket }, { SLIDE_BUCKET }] = await Promise.all([
-      import('@/lib/social/render/fit-check'),
-      import('@/lib/social/overnight/slides'),
-      import('@/lib/media-bucket'),
-      import('@/lib/social/overnight/config'),
-    ]);
-    const bucket = mediaBucket(SLIDE_BUCKET);
-    const own = `/slide-${String(slide).padStart(2, '0')}.jpg`;
-    let text = '';
-    let stored = false;
-    // The whole post is drawn (local Chromium, no AI) so the slide keeps its place and numbering;
-    // only this slide's problems fail it, and only its JPEG is uploaded, to the revision's own key.
-    await storeSlideJpegs(slug, post, {
-      fitCheck: async (p, opts) => {
-        const r = await checkRenderFit(p, opts);
-        const mine = (x: string) => x.startsWith(`slide ${slide} `) || !/^slide \d+ /.test(x);
-        const problems = [...r.problems.filter(mine), ...r.violations.filter((v) => v.slide === slide).map((v) => `bounds: ${v.element} "${v.text}"`)];
-        if (problems.length) throw new Error(`${problems.length} render problem(s): ${problems.slice(0, 3).join('; ')}`);
-        text = r.slideText[slide - 1] ?? '';
-        return r;
-      },
-      upload: async (p, b) => {
-        if (!p.endsWith(own)) return;
-        await bucket.upload(key, b, 'image/jpeg');
-        stored = true;
-      },
-    });
-    if (!stored) throw new Error(`slide ${slide} was not rendered`);
-    return { file: key, text };
-  },
-
-  async factCheck({ brief, draft, slide }, spend) {
-    const [{ runFactCheck }, { fillDraft }, { newAnthropic }, { liveMessagesCreate }] = await Promise.all([
-      import('@/lib/social/factcheck/factcheck'),
-      import('@/lib/social/writer/draft'),
-      import('@/lib/anthropic-client'),
-      import('@/lib/social/reporter/reporter'),
-    ]);
-    type B = Parameters<typeof runFactCheck>[0];
-    type D = Parameters<typeof fillDraft>[0];
-    const b = brief as B;
-    const submission = draft as D;
-    const r = await runFactCheck(b, { submission, filled: fillDraft(submission, b) }, { create: liveMessagesCreate(newAnthropic()) });
-    spend(r.costUsd);
-    if (!r.ok) return { ok: false, flagged: false, reason: r.detail || r.reason };
-    if (r.flags.main_claim_false) return { ok: false, flagged: true, reason: 'it says the story\'s main claim is false' };
-    const chosen = submission.chosen_cover;
-    const here = r.flags.flags.filter((f) => (slide === 1 ? f.where.part === 'cover' && f.where.number === chosen : f.where.part === 'slide' && f.where.number === slide));
-    if (!here.length) return { ok: true };
-    const why = here.map((f) => `"${f.quoted_text}" is not what the brief says${f.fix.kind === 'swap' && f.fix.replacement ? ` (the brief has "${f.fix.replacement}")` : ''}`);
-    return { ok: false, flagged: true, reason: why.join('; ') };
-  },
-
-  async findPhoto({ brief, draft, slide, exclude, hint }, spend) {
-    const [find, { fillDraft }, { coverRequest }, { createVisionCheck }, { createJevAsk, jevCostUsd }, { createSizeProbe }, { checkPhotoCredit }, { newAnthropic }, { priceAnthropicMessages }] = await Promise.all([
-      import('@/lib/social/photos/find'),
-      import('@/lib/social/writer/draft'),
-      import('@/lib/social/photos/design'),
-      import('@/lib/social/photos/vision'),
-      import('@/lib/social/jev/client'),
-      import('@/lib/social/photos/size'),
-      import('@/lib/social/mechanical/checks'),
-      import('@/lib/anthropic-client'),
-      import('@/lib/anthropic-pricing'),
-    ]);
-    type B = Parameters<typeof find.newSearchContext>[0];
-    type D = Parameters<typeof fillDraft>[0];
-    type Req = Parameters<typeof find.searchVisual>[0];
-    const b = brief as B;
-    const filled = fillDraft(draft as D, b);
-    const client = newAnthropic();
-    // Every Haiku vision call and every Jev call is charged to the revision's meter as it is made.
-    const create: Parameters<typeof createVisionCheck>[0]['create'] = async (params) => {
-      const res = await client.messages.create(params as never);
-      spend(Number(priceAnthropicMessages([res as never], { modelId: String((params as { model?: string }).model ?? '') }).costUsd));
-      return res as never;
-    };
-    const ask = createJevAsk();
-    const jev: typeof ask = async (request, meta) => {
-      const res = await ask(request, meta);
-      spend(jevCostUsd(res.usage));
-      return res;
-    };
-    const deps = { jev, http: fetch, vision: createVisionCheck({ create, http: fetch }), size: createSizeProbe(fetch) };
-    const requests: Req[] = [];
-    if (hint) requests.push({ kind: 'thematic', query: hint } as Req);
-    if (slide === 1) {
-      const c = filled.cover_options[filled.chosen_cover - 1]!;
-      requests.push(coverRequest(c.visual), coverRequest(c.fallback_visual), ...(c.alt_visuals ?? []).map(coverRequest));
-    } else {
-      const s = filled.slides[slide - 2]!;
-      requests.push(s.visual, s.fallback_visual, ...(s.alt_visuals ?? []));
-    }
-    const ctx = find.newSearchContext(b, [], { recent: new Set(exclude) });
-    for (const request of requests) {
-      const r = await find.searchVisual(request, ctx, deps, { cover: slide === 1 });
-      // Logo cards need the plate chosen from the logo's luminance; a swap only takes a logo that has one.
-      const ok = r.candidates.find((c) => !exclude.has(c.url) && (c.source !== 'logo' || c.plate) && checkPhotoCredit(c, `slide ${slide}`, b).length === 0);
-      if (ok) return ok;
-    }
-    return null;
-  },
-
-  async unschedule(q, postId) {
-    const { unschedulePost } = await import('@/lib/social/overnight/schedule');
-    return unschedulePost(q, postId);
-  },
-};
-
-export const carouselsDescription: ContentTypeDescription = createCarouselsDescription(liveDeps);
+export const carouselsDescription: ContentTypeDescription = createCarouselsDescription(liveCarouselsDeps);

@@ -5,12 +5,12 @@ import test from 'node:test';
 
 import { PGlite } from '@electric-sql/pglite';
 
-import { createCarouselsDescription, FACT_CHECK_CALL_ESTIMATE_USD, type CarouselsDeps } from '@/lib/revisions/descriptions/carousels';
+import { createCarouselsDescription, FACT_CHECK_CALL_ESTIMATE_USD, type CarouselsDeps, type FoundPhoto } from '@/lib/revisions/descriptions/carousels';
+import { firstUsable, meteredCreate, meteredJev } from '@/lib/revisions/descriptions/carousels-live';
 import { CALL_RESERVE_USD } from '@/lib/social/pipeline/live-stages';
 import { descriptionFor } from '@/lib/revisions/registry';
 import { CeilingReached, createCostMeter } from '@/lib/revisions/caps';
 import type { Interpretation, PartRef } from '@/lib/revisions/types';
-import type { Photo } from '@/lib/social/photos/find';
 import type { Post as RenderPost, SlideCopy } from '@/lib/social/render/types';
 import type { Query } from '@/lib/social/store/pg';
 import { schemaSql } from '@/lib/stories/local-db';
@@ -33,8 +33,10 @@ function render(): RenderPost {
     { position: 2, layoutVariant: 'stat', title: [{ text: '$3.9B', role: 'hook' }], numberNote: 'raised', headline: [{ text: 'The biggest round this year', role: 'narrative' }], altText: 'The biggest round this year', canvas: 'green' },
     { position: 3, layoutVariant: 'follow', altText: 'Follow Helios' },
   ];
-  return { format: 'carousel', storyType: 'tech', source: 'TechCrunch', sourceUrl: 'https://example.com/a', publishedAt: '2026-10-28', issueNumber: 0, slides, caption: 'Crusoe raised $3.9B.' } as RenderPost;
+  return { format: 'carousel', storyType: 'tech', source: 'TechCrunch', sourceUrl: 'https://example.com/a', publishedAt: '2026-10-28', issueNumber: 0, slides, caption: 'Crusoe raised $3.9B.', attributionBlock: BLOCK } as RenderPost;
 }
+
+const BLOCK = 'Photos: WIKIMEDIA COMMONS · CC BY-SA 4.0; OPENVERSE · CC0';
 
 const DRAFT = {
   cover_options: [{ text: 'Crusoe raises $3.9B', facts: ['F1'] }],
@@ -59,9 +61,9 @@ async function seed(q: Query, status = 'review') {
   return { id, render: r };
 }
 
-const photo = (url: string, extra: Partial<Photo> = {}): Photo => ({ url, credit: 'OPENVERSE · CC0', source: 'stock', width: 1600, height: 1000, qid: null, subject: null, ...extra });
+const photo = (url: string, extra: Partial<FoundPhoto> = {}): FoundPhoto => ({ url, credit: 'OPENVERSE · CC0', source: 'stock', width: 1600, height: 1000, qid: null, subject: null, ...extra });
 
-type Opts = { photo?: Photo | null; factCheck?: { ok: true } | { ok: false; flagged: boolean; reason: string }; renderThrows?: boolean; renderedText?: (post: RenderPost, n: number) => string; spend?: number };
+type Opts = { photo?: FoundPhoto | null; findPhoto?: CarouselsDeps['findPhoto']; factCheck?: { ok: true } | { ok: false; flagged: boolean; reason: string }; renderThrows?: boolean; renderedText?: (post: RenderPost, n: number) => string; spend?: number };
 
 function setup(o: Opts = {}) {
   const calls = {
@@ -79,14 +81,15 @@ function setup(o: Opts = {}) {
       const sl = input.post.slides[input.slide - 1]!;
       return { file: input.key, text: o.renderedText ? o.renderedText(input.post, input.slide) : `${spanText(sl.headline)} ${spanText(sl.body)}` };
     },
-    async factCheck(input, spend) {
+    async factCheck(input, m) {
       calls.factChecks.push({ draft: input.draft, slide: input.slide });
-      spend(o.spend ?? 0.04);
+      m.spend(o.spend ?? 0.04);
       return o.factCheck ?? { ok: true };
     },
-    async findPhoto(input, spend) {
+    async findPhoto(input, m) {
       calls.photos.push({ slide: input.slide, exclude: input.exclude, ...(input.hint ? { hint: input.hint } : {}) });
-      spend(o.spend ?? 0.02);
+      if (o.findPhoto) return o.findPhoto(input, m);
+      m.spend(o.spend ?? 0.02);
       return o.photo === undefined ? photo('https://img.test/new.jpg') : o.photo;
     },
     async unschedule(_q, postId) {
@@ -450,4 +453,93 @@ test('unschedule delegates to the type\'s own unschedulePost', async () => {
   const { desc, calls } = setup();
   assert.deepEqual(await desc.unschedule(q, { postId: 'abc' }), { ok: true, note: 'Unscheduled.' });
   assert.deepEqual(calls.unschedule, ['abc']);
+});
+
+test('a photo swap rebuilds the caption\'s photo credits, and undo puts the original credits back', async () => {
+  const q = await openDb();
+  const p = await seed(q);
+  const { desc } = setup({ photo: photo('https://img.test/cc-by.jpg', { source: 'commons', credit: 'WIKIMEDIA COMMONS · CC BY 4.0' }) });
+  const refs = { postId: p.id };
+  const res = await desc.revise({ q, refs, interpretation: interp(slide(2), 'photo'), meter: meter() });
+  assert.ok(res.ok);
+  if (!res.ok) return;
+  const after = (await row(q, p.id)).render.attributionBlock!;
+  assert.match(after, /WIKIMEDIA COMMONS · CC BY 4\.0/);
+  assert.match(after, /WIKIMEDIA COMMONS · CC BY-SA 4\.0/);
+  assert.doesNotMatch(after, /OPENVERSE · CC0/);
+  assert.equal((res.before.photo as { attributionBlock: string }).attributionBlock, BLOCK);
+  assert.equal((res.after.photo as { attributionBlock: string }).attributionBlock, after);
+  await desc.restore({ q, refs, part: slide(2), state: res.before });
+  assert.equal((await row(q, p.id)).render.attributionBlock, BLOCK);
+  assert.deepEqual((await row(q, p.id)).render, p.render);
+});
+
+test('a post with no photo credits block stays consistent through a swap and its undo', async () => {
+  const q = await openDb();
+  const p = await seed(q);
+  await q(`UPDATE social.posts SET render = render - 'attributionBlock' WHERE id = $1`, [p.id]);
+  const start = (await row(q, p.id)).render;
+  const { desc } = setup();
+  const refs = { postId: p.id };
+  const res = await desc.revise({ q, refs, interpretation: interp(slide(2), 'photo'), meter: meter() });
+  assert.ok(res.ok);
+  if (!res.ok) return;
+  assert.equal((res.before.photo as { attributionBlock: unknown }).attributionBlock, null);
+  // After the swap the block matches the slides' credits (every photo credited once).
+  assert.equal((await row(q, p.id)).render.attributionBlock, 'Photos: WIKIMEDIA COMMONS · CC BY-SA 4.0; OPENVERSE · CC0');
+  await desc.restore({ q, refs, part: slide(2), state: res.before });
+  assert.deepEqual((await row(q, p.id)).render, start);
+  // A color fix never touches the block.
+  const c = await desc.revise({ q, refs, interpretation: interp(slide(3), 'color', { canvas: 'white' }), meter: meter() });
+  assert.ok(c.ok);
+  assert.equal((await row(q, p.id)).render.attributionBlock, undefined);
+});
+
+test('after the ceiling no paid call is made, even when the search code swallows the error', async () => {
+  const q = await openDb();
+  const p = await seed(q);
+  let paid = 0;
+  const { desc } = setup({
+    findPhoto: async (_input, m) => {
+      const create = meteredCreate(async (_params: never) => { paid++; return {}; }, m, () => 0.5);
+      const jev = meteredJev(async (_request: never) => { paid++; return { usage: { input_tokens: 1000, output_tokens: 0 } }; }, m, () => 0.5);
+      // Like vision.ts and find.ts: every paid call's error is caught and the search goes on.
+      const swallow = async (f: () => Promise<unknown>) => { try { await f(); } catch { /* logged as a step */ } };
+      return firstUsable(['visual', 'fallback', 'alt'], async () => {
+        await swallow(() => create(undefined as never));
+        await swallow(() => jev(undefined as never));
+        await swallow(() => create(undefined as never));
+        return null;
+      }, m);
+    },
+  });
+  await assert.rejects(
+    desc.revise({ q, refs: { postId: p.id }, interpretation: interp(slide(2), 'photo'), meter: createCostMeter(0.1) }),
+    CeilingReached,
+  );
+  assert.equal(paid, 1);
+  assert.deepEqual((await row(q, p.id)).render, p.render);
+});
+
+test('a layout fix on a slide with a set design (template) is refused and nothing is written', async () => {
+  const q = await openDb();
+  const p = await seed(q);
+  await q(`UPDATE social.posts SET render = jsonb_set(render, '{slides,1,template}', '"T2"') WHERE id = $1`, [p.id]);
+  const start = await row(q, p.id);
+  const { desc, calls } = setup();
+  const res = await desc.revise({ q, refs: { postId: p.id }, interpretation: interp(slide(2), 'layout', { photoPlacement: 'top' }), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) { assert.equal(res.reason, 'blocked'); assert.match(res.note, /T2/); }
+  assert.equal(calls.rendered.length, 0);
+  assert.deepEqual(await row(q, p.id), start);
+});
+
+test('a stock photo is logged in used_photos with the scene it was found for', async () => {
+  const q = await openDb();
+  const p = await seed(q);
+  const { desc } = setup({ photo: photo('https://img.test/stock.jpg', { scene: 'data center' }) });
+  const res = await desc.revise({ q, refs: { postId: p.id }, interpretation: interp(slide(2), 'photo'), meter: meter() });
+  assert.equal(res.ok, true);
+  const used = (await q(`SELECT scene, source, credit FROM social.used_photos WHERE url = 'https://img.test/stock.jpg'`)).rows;
+  assert.deepEqual(used, [{ scene: 'data center', source: 'stock', credit: 'OPENVERSE · CC0' }]);
 });
