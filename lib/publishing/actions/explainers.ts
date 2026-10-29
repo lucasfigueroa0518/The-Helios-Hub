@@ -3,6 +3,7 @@ import type { SpineQuery } from '@/lib/social-hub/spine';
 import { formatPlacement, type Placement, type PlacementOutcome, type PlacementTarget } from '@/lib/social-hub/placement';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { reviseVerbs } from '@/lib/revisions/actions';
+import type { Query } from '@/lib/social/store/pg';
 
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
@@ -55,6 +56,13 @@ export function explainerActions(deps: {
     throughDate: string,
   ) => Promise<{ scheduled: true; publishAt: string } | { scheduled: false; note: string }>;
   publishingLive: (db: ExplainersDb) => Promise<boolean>;
+  /**
+   * Targeted Revisions: the database the social worker claims revision rows from (socialQuery,
+   * DATABASE_URL), or null when Explainers keep a database of their own (EXPLAINERS_DATABASE_URL, or
+   * local PGlite): the log references the spine item, which then is not in the worker's database,
+   * so revisions are refused there. Absent: the explainers handle (tests that use one database).
+   */
+  revisionsQuery?: () => Promise<Query | null>;
   /** The clock (tests pin it). */
   now?: () => Date;
 }): ContentActions {
@@ -133,6 +141,25 @@ export function explainerActions(deps: {
     delete: deleteVerb({ refKey: 'jobId', query: spineQuery, itemOf: async (_q, jobId) => deps.itemId(await deps.db(), jobId) }),
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),
-    ...reviseVerbs({ vertical: 'explainers', query: spineQuery, itemOf: async (_q, t) => deps.itemId(await deps.db(), need(t, 'jobId')) }),
+    ...revisions(),
   };
+
+  /**
+   * Revision rows go where the social worker claims them (the revisions query); the post itself is
+   * read by the description through the explainers handle. Refused when the two are not one database.
+   */
+  function revisions(): Pick<ContentActions, 'revise' | 'undoRevision' | 'continueRevision'> {
+    const NOT_SHARED = 'Explainer changes are not available here: explainers keep their own database on this setup, not the shared database the revisions worker reads. Nothing was changed.';
+    const query = async (): Promise<Query | null> => (deps.revisionsQuery ? deps.revisionsQuery() : ((await spineQuery()) as unknown as Query));
+    const verbs = reviseVerbs({
+      vertical: 'explainers',
+      query: async () => (await query())!,
+      itemOf: async (_q, t) => deps.itemId(await deps.db(), need(t, 'jobId')),
+    });
+    const guarded =
+      (fn: ActionFn | undefined): ActionFn =>
+      async (t, by, input) =>
+        (await query()) ? fn!(t, by, input) : { ok: false, note: NOT_SHARED, status: 409 };
+    return { revise: guarded(verbs.revise), undoRevision: guarded(verbs.undoRevision), continueRevision: guarded(verbs.continueRevision) };
+  }
 }

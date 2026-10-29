@@ -59,3 +59,49 @@ export class SpendMeter {
     this.seen.clear();
   }
 }
+
+/**
+ * A render meter that also charges another meter as spend accrues (Targeted Revisions: a scene
+ * redo's session is charged to the revision's ceiling message by message, while the job's own
+ * per-reel cap still applies through the base class). Once `charge` throws, the error is kept,
+ * nothing more is charged, and `overCap` turns true, so runAgentSession aborts the session at
+ * once (it swallows errors from its stream loop, which is why the error is kept, not thrown).
+ */
+export class ChargedSpendMeter extends SpendMeter {
+  private stopped: unknown = null;
+
+  constructor(capUsd: number, carriedUsd: number, private readonly charge: (usd: number) => void) {
+    super(capUsd, carriedUsd);
+  }
+
+  /** What `charge` threw (e.g. CeilingReached), or null. */
+  get stopError(): unknown {
+    return this.stopped;
+  }
+
+  private bill(usd: number): void {
+    if (this.stopped !== null || !(usd > 0)) return;
+    try {
+      this.charge(usd);
+    } catch (error) {
+      this.stopped = error;
+    }
+  }
+
+  override observe(message: Parameters<SpendMeter['observe']>[0]): number {
+    const usd = super.observe(message);
+    this.bill(usd);
+    return usd;
+  }
+
+  /** The SDK's total can exceed the streamed estimate: the difference is charged too. */
+  override settleSession(sessionTotalUsd: number): void {
+    const streamed = this.sessionEstimateUsd;
+    super.settleSession(sessionTotalUsd);
+    this.bill(sessionTotalUsd - streamed);
+  }
+
+  override get overCap(): boolean {
+    return super.overCap || this.stopped !== null;
+  }
+}

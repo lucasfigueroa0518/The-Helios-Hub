@@ -1,5 +1,6 @@
 import { aiEventsDescription } from './descriptions/ai-events';
 import { carouselsDescription } from './descriptions/carousels';
+import { explainersDescription } from './descriptions/explainers';
 import { lastFewDaysDescription } from './descriptions/last-few-days';
 import { storiesDescription } from './descriptions/stories';
 import { textOnScreenDescription } from './descriptions/text-on-screen';
@@ -16,7 +17,7 @@ export const VERTICAL_LABELS: Record<Vertical, string> = {
 };
 
 // Real descriptions (Tasks 6-11) are added here.
-const STATIC: Partial<Record<Vertical, ContentTypeDescription>> = { ai_events: aiEventsDescription, carousels: carouselsDescription, last_few_days: lastFewDaysDescription, stories: storiesDescription, reels: textOnScreenDescription };
+const STATIC: Partial<Record<Vertical, ContentTypeDescription>> = { ai_events: aiEventsDescription, carousels: carouselsDescription, last_few_days: lastFewDaysDescription, stories: storiesDescription, reels: textOnScreenDescription, explainers: explainersDescription };
 
 let extra: Partial<Record<Vertical, ContentTypeDescription>> = {};
 let staticHidden = false;
