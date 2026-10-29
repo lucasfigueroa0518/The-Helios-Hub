@@ -217,6 +217,12 @@ function setOrDelete(s: SlideCopy, key: string, value: unknown): void {
   else o[key] = value;
 }
 
+/** The caption's "Photos:" credits for the slides as they are, built by the pipeline's own attributionBlock(). */
+async function creditsBlock(render: RenderPost): Promise<string | null> {
+  const { attributionBlock } = await import('@/lib/social/render/from-draft');
+  return attributionBlock(render.slides.map((sl) => (sl.photoCredit ? ({ credit: sl.photoCredit } as Photo) : null))) ?? null;
+}
+
 const bleedable = (s: SlideCopy) => Boolean(s.photoUrl) && ((s.photoKind ?? 'scene') === 'scene' || s.photoBleed === true);
 
 export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDescription {
@@ -420,7 +426,7 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         if (!found || exclude.has(found.url) || !found.credit?.trim()) {
           return failed(`I searched for another photo for slide ${n} and couldn't find a different usable photo (one not already in this post or used in the last ${NO_REPEAT_DAYS} days), so the original was kept.`);
         }
-        const { attributionBlock, canBleedPerson, photoKindOf, LOGO_WIDE_ASPECT } = await import('@/lib/social/render/from-draft');
+        const { canBleedPerson, photoKindOf, LOGO_WIDE_ASPECT } = await import('@/lib/social/render/from-draft');
         const kind = photoKindOf(found);
         for (const k of [...PHOTO_FIELDS, 'photoBleed', 'fade', 'bleedText']) delete (next as unknown as Record<string, unknown>)[k];
         next.photoUrl = found.url;
@@ -436,7 +442,7 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
           next.photoPlacement = 'top';
         }
         // The caption's "Photos:" credits (published with the post) are rebuilt from every slide's photo, as the pipeline builds them.
-        const block = attributionBlock(render.slides.map((sl) => (sl.photoCredit ? ({ credit: sl.photoCredit } as Photo) : null)));
+        const block = await creditsBlock(render);
         if (block) render.attributionBlock = block;
         else delete render.attributionBlock;
         usedPhoto = found;
@@ -486,9 +492,19 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
       for (const group of [state.photo ? photo : undefined, state.layout] as Array<Record<string, unknown> | undefined>) {
         if (group) for (const [k, v] of Object.entries(group)) setOrDelete(s, k, v);
       }
-      if (state.photo && block !== undefined) {
-        if (typeof block === 'string' && block) render.attributionBlock = block;
-        else delete render.attributionBlock;
+      if (state.photo) {
+        // Undo is per part, so another slide's photo may have changed since this state was saved: rebuild the
+        // caption credits from the slides as restored now. The saved block is only the fallback (and the log's record).
+        let next: string | null | undefined;
+        try {
+          next = await creditsBlock(render);
+        } catch {
+          next = block === undefined ? undefined : typeof block === 'string' && block ? block : null;
+        }
+        if (next !== undefined) {
+          if (next) render.attributionBlock = next;
+          else delete render.attributionBlock;
+        }
       }
       const colors = state.colors as { canvas?: string | null } | undefined;
       if (colors && 'canvas' in colors) setOrDelete(s, 'canvas', colors.canvas);

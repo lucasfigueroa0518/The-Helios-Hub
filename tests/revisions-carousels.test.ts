@@ -487,9 +487,13 @@ test('a post with no photo credits block stays consistent through a swap and its
   assert.equal((res.before.photo as { attributionBlock: unknown }).attributionBlock, null);
   // After the swap the block matches the slides' credits (every photo credited once).
   assert.equal((await row(q, p.id)).render.attributionBlock, 'Photos: WIKIMEDIA COMMONS · CC BY-SA 4.0; OPENVERSE · CC0');
+  // Undo rebuilds the block from the restored slides (every credit once), whatever was saved.
   await desc.restore({ q, refs, part: slide(2), state: res.before });
-  assert.deepEqual((await row(q, p.id)).render, start);
+  const back = (await row(q, p.id)).render;
+  assert.equal(back.attributionBlock, BLOCK);
+  assert.deepEqual({ ...back, attributionBlock: undefined }, { ...start, attributionBlock: undefined });
   // A color fix never touches the block.
+  await q(`UPDATE social.posts SET render = render - 'attributionBlock' WHERE id = $1`, [p.id]);
   const c = await desc.revise({ q, refs, interpretation: interp(slide(3), 'color', { canvas: 'white' }), meter: meter() });
   assert.ok(c.ok);
   assert.equal((await row(q, p.id)).render.attributionBlock, undefined);
@@ -542,4 +546,24 @@ test('a stock photo is logged in used_photos with the scene it was found for', a
   assert.equal(res.ok, true);
   const used = (await q(`SELECT scene, source, credit FROM social.used_photos WHERE url = 'https://img.test/stock.jpg'`)).rows;
   assert.deepEqual(used, [{ scene: 'data center', source: 'stock', credit: 'OPENVERSE · CC0' }]);
+});
+
+test('undo out of order: swap slide 2, swap slide 3, undo slide 2 keeps slide 3\'s new credit', async () => {
+  const q = await openDb();
+  const p = await seed(q);
+  const refs = { postId: p.id };
+  // Slide 3 starts with a photo of its own so its credit is in the block.
+  await q(`UPDATE social.posts SET render = jsonb_set(jsonb_set(render, '{slides,2,photoUrl}', '"https://img.test/s3.jpg"'), '{slides,2,photoCredit}', '"STOCKSNAP · CC0"') WHERE id = $1`, [p.id]);
+  const two = setup({ photo: photo('https://img.test/two.jpg', { source: 'commons', credit: 'WIKIMEDIA COMMONS · CC BY 4.0' }) });
+  const a = await two.desc.revise({ q, refs, interpretation: interp(slide(2), 'photo'), meter: meter() });
+  const three = setup({ photo: photo('https://img.test/three.jpg', { source: 'commons', credit: 'FLICKR · CC BY 2.0' }) });
+  const b = await three.desc.revise({ q, refs, interpretation: interp(slide(3), 'photo'), meter: meter() });
+  assert.ok(a.ok && b.ok);
+  if (!a.ok) return;
+  await two.desc.restore({ q, refs, part: slide(2), state: a.before });
+  const r = (await row(q, p.id)).render;
+  assert.equal(r.slides[1]!.photoCredit, 'OPENVERSE · CC0');
+  assert.equal(r.slides[2]!.photoCredit, 'FLICKR · CC BY 2.0');
+  assert.equal(r.attributionBlock, 'Photos: WIKIMEDIA COMMONS · CC BY-SA 4.0; OPENVERSE · CC0; FLICKR · CC BY 2.0');
+  assert.doesNotMatch(r.attributionBlock!, /CC BY 4\.0|STOCKSNAP/);
 });
