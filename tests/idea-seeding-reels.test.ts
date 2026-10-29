@@ -152,6 +152,24 @@ test('the pool view lists the seed as the person’s own, off an older slate too
   assert.ok(shown.some((q) => q.item.id === off.id), 'but not the seed');
 });
 
+test('the queue puts a seed where its score falls, not last, though its stored rank is last', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const A = 'a0000000-0000-4000-8000-0000000000a1';
+  const B = 'a0000000-0000-4000-8000-0000000000b1';
+  await pg.exec(`INSERT INTO reels.post_ideas (id, timely) VALUES ('${A}', false), ('${B}', false);
+    INSERT INTO reels.idea_scores (slate_id, post_idea_id, origin, net, rank, selected, chosen_bucket, chosen_framework, components) VALUES
+      ('${NEW_SLATE}', '${A}', 'timely', 3.0, 2, false, 'the_saga', 'arousal', '{}'::jsonb),
+      ('${NEW_SLATE}', '${B}', 'timely', 0.8, 3, false, 'the_saga', 'arousal', '{}'::jsonb)`);
+  const seed = await addReelSeed({ headline: 'A seed between the others', text: PAGE }, { jev });
+  await pg.query(`UPDATE reels.idea_scores SET net = 2.0 WHERE post_idea_id = $1`, [seed.id]);
+  const { rows } = await pg.query<any>(REEL_IDEAS_SQL);
+  const stored = (rows as ReelIdeaRow[]).find((r) => String(r.post_idea_id) === seed.id)!;
+  assert.equal(Number(stored.rank), 4, 'stored last: the seed row takes max(rank) + 1');
+  const shown = queueOrder(reelIdeas(rows as ReelIdeaRow[]), []).map((q) => q.item.id.replace('reels:idea:', ''));
+  assert.deepEqual(shown, [A, seed.id, NORMAL, B], 'but the queue sorts by net, so the seed sits between 3.0 and 1.5');
+});
+
 test('the 11th open seed is refused; archiving, making or expiring one frees a place', async () => {
   const pg = await reelsDb();
   const { jev, calls } = stub();
