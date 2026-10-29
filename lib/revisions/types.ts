@@ -50,3 +50,43 @@ export type RevisionRow = {
   undoneAt: string | null;
   undoneBy: string | null;
 };
+
+// ---- Task 2: the per-content-type description ----
+
+import type { Query } from '@/lib/social/store/pg';
+import type { ActionTarget } from '@/lib/publishing/actions/types';
+
+/** Spend tracker handed to a revision; throws CeilingReached (caps.ts) past the ceiling. */
+export type CostMeter = { spend(usd: number): void; readonly spent: number };
+
+export type PostSnapshot = {
+  vertical: Vertical;
+  refs: ActionTarget;
+  status: 'preview' | 'review' | 'approved' | 'scheduled' | 'published' | 'rejected';
+  parts: ReadonlyArray<{
+    ref: PartRef;
+    text?: string;
+    photoUrl?: string;
+    photoCredit?: string;
+    color?: string;
+    layout?: string;
+  }>;
+};
+
+export type RevisionResult =
+  | { ok: true; before: PartState; after: PartState }
+  | { ok: false; reason: 'blocked' | 'failed'; note: string };
+
+/** Code-defined description each content type supplies to the shared revision engine. */
+export interface ContentTypeDescription {
+  vertical: Vertical;
+  label: string;
+  /** The type's StageTag list (its pipeline stages a revision can be attributed to). */
+  stageTags: readonly string[];
+  fixKinds: readonly FixKind[];
+  load(q: Query, refs: ActionTarget): Promise<PostSnapshot | null>;
+  estimate(fix: FixKind): number;
+  revise(ctx: { q: Query; refs: ActionTarget; interpretation: Interpretation; meter: CostMeter }): Promise<RevisionResult>;
+  restore(ctx: { q: Query; refs: ActionTarget; part: PartRef; state: PartState }): Promise<void>;
+  unschedule(q: Query, refs: ActionTarget): Promise<{ ok: boolean; note: string }>;
+}
