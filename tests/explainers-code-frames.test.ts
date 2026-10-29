@@ -12,7 +12,7 @@ const load = async () => {
 };
 
 type Draw = { draw: (t: number) => string };
-const samplesOf = (K: any, f: Draw, d: number) => K.sampleTimes(d).map((t) => ({ t, svg: String(f.draw(t)) }));
+const samplesOf = (K: any, f: Draw, d: number) => K.sampleTimes(d).map((t: number) => ({ t, svg: String(f.draw(t)) }));
 function codeChecks(K: any, samples: { t: number; svg: string }[]) {
   const { frameProblems, emptyContainerProblems, textOverObjectProblems, drawnElements, framedBoxes, blankOpenProblems } = K;
   return [

@@ -330,7 +330,7 @@ test("the hook's shots run on frame 1's voice clock: after the drop every opener
   for (const key of OPENER_KEYS) {
     const seen: number[] = [];
     const hook = { default: { ground: 'paper', shots: [{ at: 0, kind: 'medium', on: [540, 1000] }], draw: (t: number) => { seen.push(t); return '<g data-hook=""></g>'; } }, hero: null };
-    const f = openerFrame(key, { hook, voice: 3, words: [{ word: 'this', start: 0.4, end: 0.7 }], term: 'MCP' });
+    const f = openerFrame(key, { hook, voice: 3, words: [{ word: 'this', start: 0.4, end: 0.7 }] as any, term: 'MCP' });
     const T = 5;
     seen.length = 0;
     try { f.draw(T); } catch { /* an opener that needs a critter hero is covered elsewhere */ }

@@ -22,7 +22,7 @@ test('a metadata token is impersonated and Google ADC is not required', async ()
   };
 
   const token = await getSearchConsoleAccessToken(
-    { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' },
+    { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' } as unknown as NodeJS.ProcessEnv,
     fetchImpl,
   );
 
@@ -46,7 +46,7 @@ test('a service account JSON key is used without asking the metadata server', as
           client_email: 'sync@example.iam.gserviceaccount.com',
           private_key: 'not-a-key',
         }),
-      },
+      } as unknown as NodeJS.ProcessEnv,
       fetchImpl,
     ),
     /error/,
@@ -65,7 +65,7 @@ test('a minted token is reused and a metadata miss is tried again', async () => 
     }
     return jsonResponse({ accessToken: 'impersonated-token', expireTime: new Date(Date.now() + 3600_000).toISOString() });
   };
-  const env = { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' };
+  const env = { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' } as unknown as NodeJS.ProcessEnv;
 
   const first = await getSearchConsoleAccessToken(env, fetchImpl);
   const second = await getSearchConsoleAccessToken(env, fetchImpl);
@@ -84,7 +84,7 @@ test('the worker does not fall back to Google ADC when the metadata server is do
   };
   await assert.rejects(
     () => getSearchConsoleAccessToken(
-      { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' },
+      { GSC_IMPERSONATE_SERVICE_ACCOUNT: 'helios-gsc-sync@example.iam.gserviceaccount.com' } as unknown as NodeJS.ProcessEnv,
       fetchImpl,
     ),
     /metadata server did not respond/,

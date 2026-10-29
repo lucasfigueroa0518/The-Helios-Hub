@@ -162,9 +162,9 @@ test('blocking: the frame builder gets its frame slice of blocking.json; the kit
   assert.ok(msg.includes('<blocking path="assets/world/blocking.json" frame="04-x">'));
   assert.ok(msg.includes('"hero"') && !msg.includes('"cup": {'));
   assert.deepEqual(Object.keys(blockingFor(blocking, '06-y')), ['main']);
-  assert.deepEqual(blockingProblems(blocking, ['04-x', '06-y']), []);
+  assert.deepEqual(blockingProblems(blocking, ['04-x', '06-y'] as any), []);
   assert.equal(blockingProblems({ main: { '04-x': { hero: { at: [0, 1] } } } }).length, 1);
-  assert.equal(blockingProblems({ main: { '09-z': {} } }, ['04-x']).length, 1);
+  assert.equal(blockingProblems({ main: { '09-z': {} } }, ['04-x'] as any).length, 1);
 });
 
 test('mechanism builders run on tech_frame_worker_model (Opus by default); world builders stay on frame_worker_model', async () => {
