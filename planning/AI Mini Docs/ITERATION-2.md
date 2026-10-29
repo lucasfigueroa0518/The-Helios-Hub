@@ -140,6 +140,6 @@ one prompt. 5. Musts are HARD CONSTRAINTs; the rest is craft.
 - Prompt review (fresh reviewer): 3 must-fix, 13 should-fix, 6 nits — all applied (pronounce in the
   tool schemas, image check exempts made visuals and anchors, MD-63 mute framing, sound ownership,
   cold-open arc, seeds vs makes, HC wording, bounds ids, MECE pointers to FRAME.md).
-- Open for Lucas: HC9 "no two adjacent frames share a staging type" is a builder-added must (Lucas asked
-  only for the same-person rule); prompts approval; the live run.
+- Settled by Lucas (MD-64): HC9 stays a must; prompts approved; one live test reel approved with a $15 cap.
+  Blocked on the cloud environment's API keys (none set as of 2026-10-29).
 - Tests: 167 Reel AI Drama + 588 Explainers/Real Case pass; tsc clean.

@@ -219,6 +219,7 @@ reach the builders.
 | MD-61 | 2026-10-29 | **A sound designer step**, after timing is locked: cold-open tension, music drops and swells on reveals, a change at the turn, stingers on key lines. | "Yes, sound designer step." |
 | MD-62 | 2026-10-29 | **Iteration 2 approved to build.** | "Go ahead" |
 | MD-63 | 2026-10-29 | **Works on mute stays a rule; the "80% muted" premise is dropped.** Every reel must read from picture, captions and on-screen words alone (MD-15 stands as a rule), but most viewers hear the sound, so sound and music are designed as a full layer of the experience, not a bonus. Amends MD-15's rationale. | "Works on mute should be a rule. But yes, you're right, the 80% number is false and the reality is most people watch with the sound on." |
+| MD-64 | 2026-10-29 | **No two adjacent story frames share a staging type** (director HC9) is confirmed as a must. It was builder-added next to Lucas's same-person rule (MD-60); Lucas approved it. Prompts approved for the first Iteration 2 live run (cap $15). | "No two frames in a row use the same kind of shot is a great rule." |
 | MD-04 | 2026-10-28 | **The LiteLLM reel's storytelling, writing and logic are not carried forward;** its visuals weren't great either. Nothing from the old writing path is kept by default. | "storytelling, writing, logic really sucked. The visuals also weren't great. Many parts of it sucked in general." |
 
 ## Research (approved 2026-10-28; four tracks, in `research/`)
