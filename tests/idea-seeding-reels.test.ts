@@ -16,7 +16,7 @@ import { groupRun } from '@/lib/reels/pipeline/grouping';
 import { putOnSlate } from '@/lib/reels/pipeline/promote';
 import { carryoverMisses, heldFromCarryover } from '@/lib/reels/scoring/decide';
 import { loadSlateRanked } from '@/lib/reels/scoring/store';
-import { MAX_TEXT_CHARS, SeedError, addReelSeed, isUnscoredSeed, readOpenSeeds } from '@/lib/reels/seeds';
+import { MAX_TEXT_CHARS, SeedError, addReelSeed, isUnscoredSeed, readOpenSeeds, type ReelSeedOutcome } from '@/lib/reels/seeds';
 import { reelIdeas } from '@/lib/social-hub/adapters/reels';
 import { REEL_IDEAS_SQL, type ReelIdeaRow } from '@/lib/social-hub/queries/reels';
 import { capQueued, queueOrder } from '@/lib/social-hub/queue';
@@ -61,17 +61,29 @@ async function reelsDb(opts: { withSlate?: boolean } = {}): Promise<PGlite> {
   return pg;
 }
 
+
+type Added = Extract<ReelSeedOutcome, { status: 'added' }>;
+/** A seed that is expected to be added: fails the test with the outcome if it was stopped instead. */
+async function add(input: Parameters<typeof addReelSeed>[0], deps: Parameters<typeof addReelSeed>[1]): Promise<Added> {
+  const out = await addReelSeed(input, deps);
+  assert.equal(out.status, 'added', JSON.stringify(out));
+  return out as Added;
+}
+
 const refused = (p: Promise<unknown>, status: number, match: RegExp) =>
   assert.rejects(p, (e: unknown) => e instanceof SeedError && e.status === status && match.test(e.message));
 const count = async (pg: PGlite, sql: string) => Number((await pg.query<{ n: string }>(`SELECT count(*)::text AS n FROM ${sql}`)).rows[0]!.n);
-const headline = (n: number) => `Seeded idea ${n} about topic ${n * 7919}`;
+// Unrelated headlines: the duplicate check would (rightly) stop a run of near-identical ones.
+const TOPICS = ['Quantum chips shrink again', 'Wildfire season starts early', 'Bakery chain files for bankruptcy', 'Rocket lands upright on barge', 'Museum recovers stolen sculpture', 'Transit strike halts commuters', 'Vaccine trial shows promise', 'Chess champion loses to bot', 'Glacier collapse floods valley', 'Retailer recalls baby strollers', 'Solar farm powers whole county', 'Pilot lands plane on highway'];
+const headline = (n: number) => TOPICS[n]!;
 
 test('a typed idea is a seed source and idea, scored once (two Jev calls), and written as one carryover row on the newest slate', async () => {
   const pg = await reelsDb();
   const { calls, jev } = stub();
   const slatesBefore = await count(pg, 'reels.score_slates');
   const runsBefore = await count(pg, 'reels.runs');
-  const out = await addReelSeed({ headline: 'Anthropic ships a new model', text: PAGE, url: 'https://news.test/a?utm_source=x' }, { jev, readPage: async () => assert.fail('own text: the page is not read') });
+  const out = await add({ headline: 'Anthropic ships a new model', text: PAGE, url: 'https://news.test/a?utm_source=x' }, { jev, readPage: async () => assert.fail('own text: the page is not read') });
+  assert.equal(out.status, 'added');
   assert.equal(out.scored, true);
   assert.equal(calls.n, 2, 'pass 1 and pass 2');
   const src = (await pg.query<any>(`SELECT run_id, adapter_id, source_name, canonical_url, drop_reason, raw_payload FROM reels.sources WHERE adapter_id = 'seed'`)).rows;
@@ -90,7 +102,7 @@ test('a typed idea is a seed source and idea, scored once (two Jev calls), and w
 test('putOnSlate copies the seed’s stored row onto a new slate, as it does for any idea', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
-  const out = await addReelSeed({ headline: 'Seed to pin', text: PAGE }, { jev });
+  const out = await add({ headline: 'Seed to pin', text: PAGE }, { jev });
   await pg.exec(`INSERT INTO reels.runs (id, trigger, status) VALUES ('a0000000-0000-4000-8000-000000000002', 'scheduled', 'ok');
     INSERT INTO reels.score_slates (id, run_id, ny_date, scored_at, pass1_version, pass2_version) VALUES ('a0000000-0000-4000-8000-000000000005', 'a0000000-0000-4000-8000-000000000002', '2026-10-09', '2026-10-09T05:30:00Z', 'p1', 'p2')`);
   assert.equal(await putOnSlate('a0000000-0000-4000-8000-000000000005', out.id), true);
@@ -103,7 +115,7 @@ test('no grouping read returns a seed, and the night’s grouping leaves it alon
   const pg = await reelsDb();
   const { jev } = stub();
   const title = 'OpenAI releases a brand new frontier model today';
-  const seed = await addReelSeed({ headline: title, text: PAGE }, { jev });
+  const seed = await add({ headline: title, text: PAGE }, { jev });
   // A machine story with the same headline joins the pool after it (the case the drop reason exists for).
   const sid = await insertSource({ runId: RUN, canonicalUrl: 'https://wire.test/x', headline: title, body: PAGE, author: null, byline: null, sourceName: 'Wire', sourceType: 'A1', adapterId: 'rss', bucket: 'A', publishTime: null, language: null, engagement: {}, mediaUrls: [], citationUrls: [], rawPayload: {}, dropReason: null });
   const other = await createPostIdea(sid!, RUN, 'test');
@@ -123,7 +135,7 @@ test('no grouping read returns a seed, and the night’s grouping leaves it alon
 test('the pool view lists the seed as the person’s own, off an older slate too, and the 30 cap keeps it', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
-  const seed = await addReelSeed({ headline: 'Mine on the newest slate', text: PAGE }, { jev });
+  const seed = await add({ headline: 'Mine on the newest slate', text: PAGE }, { jev });
   const view = async () => {
     const { rows } = await pg.query<any>(REEL_IDEAS_SQL);
     return reelIdeas(rows as ReelIdeaRow[]);
@@ -161,7 +173,7 @@ test('the queue puts a seed where its score falls, not last, though its stored r
     INSERT INTO reels.idea_scores (slate_id, post_idea_id, origin, net, rank, selected, chosen_bucket, chosen_framework, components) VALUES
       ('${NEW_SLATE}', '${A}', 'timely', 3.0, 2, false, 'the_saga', 'arousal', '{}'::jsonb),
       ('${NEW_SLATE}', '${B}', 'timely', 0.8, 3, false, 'the_saga', 'arousal', '{}'::jsonb)`);
-  const seed = await addReelSeed({ headline: 'A seed between the others', text: PAGE }, { jev });
+  const seed = await add({ headline: 'A seed between the others', text: PAGE }, { jev });
   await pg.query(`UPDATE reels.idea_scores SET net = 2.0 WHERE post_idea_id = $1`, [seed.id]);
   const { rows } = await pg.query<any>(REEL_IDEAS_SQL);
   const stored = (rows as ReelIdeaRow[]).find((r) => String(r.post_idea_id) === seed.id)!;
@@ -175,7 +187,7 @@ test('an 11th open seed is accepted; archiving, making or expiring one still lea
   const { jev } = stub();
   const OPEN = 11;
   const ids: string[] = [];
-  for (let i = 0; i < OPEN; i++) ids.push((await addReelSeed({ headline: headline(i), text: PAGE }, { jev })).id);
+  for (let i = 0; i < OPEN; i++) ids.push((await add({ headline: headline(i), text: PAGE }, { jev })).id);
   assert.equal((await readOpenSeeds()).length, OPEN, 'no cap on open seeds');
   await pg.query<any>(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind) VALUES ('reels', $1, '2026-10-08', 'archive')`, [`reels:idea:${ids[0]}`]);
   assert.equal((await readOpenSeeds()).length, OPEN - 1);
@@ -188,8 +200,8 @@ test('an 11th open seed is accepted; archiving, making or expiring one still lea
 test('expired and archived seeds are gone from the pool view', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
-  const a = await addReelSeed({ headline: 'Will expire', text: PAGE }, { jev });
-  const b = await addReelSeed({ headline: 'Will be archived', text: PAGE }, { jev });
+  const a = await add({ headline: 'Will expire', text: PAGE }, { jev });
+  const b = await add({ headline: 'Will be archived', text: PAGE }, { jev });
   const ids = async () => ((await pg.query<any>(REEL_IDEAS_SQL)).rows as ReelIdeaRow[]).map((r) => r.post_idea_id);
   assert.ok((await ids()).includes(a.id));
   await pg.query<any>(`UPDATE reels.sources SET ingest_time = now() - interval '8 days' WHERE headline = 'Will expire'`);
@@ -210,7 +222,7 @@ test('text over the limit is refused with how much to cut, never trimmed, and no
   await refused(addReelSeed({ headline: 'Bad link', url: 'not a link' }, { jev }), 400, /http/);
   assert.equal(calls.n, 0);
   assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0);
-  const exact = await addReelSeed({ headline: 'Exactly at the limit', text: 'y'.repeat(MAX_TEXT_CHARS) }, { jev });
+  const exact = await add({ headline: 'Exactly at the limit', text: 'y'.repeat(MAX_TEXT_CHARS) }, { jev });
   const body = (await pg.query<{ body: string }>(`SELECT s.body FROM reels.sources s JOIN reels.post_idea_members m ON m.source_id = s.id WHERE m.post_idea_id = $1`, [exact.id])).rows[0]!.body;
   assert.equal(body.length, MAX_TEXT_CHARS, 'kept whole');
 });
@@ -218,13 +230,13 @@ test('text over the limit is refused with how much to cut, never trimmed, and no
 test('an unreadable link still adds the idea, with the headline as its text and a note', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
-  const out = await addReelSeed({ headline: 'Behind a paywall', url: 'https://paywalled.test/story' }, { jev, readPage: async () => null });
+  const out = await add({ headline: 'Behind a paywall', url: 'https://paywalled.test/story' }, { jev, readPage: async () => null });
   assert.equal(out.scored, true);
   assert.ok(out.flags.some((f) => /couldn’t read that page/.test(f)));
   const body = (await pg.query<{ body: string }>(`SELECT body FROM reels.sources WHERE adapter_id = 'seed'`)).rows[0]!.body;
   assert.equal(body, 'Behind a paywall');
   // A readable page with no text of the person's own is used as the idea's text.
-  const read = await addReelSeed({ headline: 'A readable page', url: 'https://ok.test/story' }, { jev, readPage: async () => PAGE });
+  const read = await add({ headline: 'A readable page', url: 'https://ok.test/story' }, { jev, readPage: async () => PAGE });
   assert.equal(read.flags.length, 0);
   assert.equal((await pg.query<{ body: string }>(`SELECT s.body FROM reels.sources s JOIN reels.post_idea_members m ON m.source_id = s.id WHERE m.post_idea_id = $1`, [read.id])).rows[0]!.body, PAGE.trim());
 });
@@ -232,7 +244,7 @@ test('an unreadable link still adds the idea, with the headline as its text and 
 test('a failed model call keeps the idea, shown “not scored yet”, and a pin on it is refused', async () => {
   const pg = await reelsDb();
   const { jev } = stub({ fail: true });
-  const out = await addReelSeed({ headline: 'Model is down', text: PAGE }, { jev });
+  const out = await add({ headline: 'Model is down', text: PAGE }, { jev });
   assert.deepEqual([out.scored, out.net], [false, null]);
   assert.equal(await count(pg, `reels.idea_scores WHERE post_idea_id = '${out.id}'`), 0);
   const ideas = reelIdeas((await pg.query<any>(REEL_IDEAS_SQL)).rows as ReelIdeaRow[]);
@@ -255,29 +267,76 @@ test('no scored night refuses before anything is spent or written', async () => 
 test('a double-click returns the first seed and spends nothing more', async () => {
   const pg = await reelsDb();
   const { jev, calls } = stub();
-  const first = await addReelSeed({ headline: 'Clicked twice', text: PAGE }, { jev });
-  const again = await addReelSeed({ headline: 'Clicked twice', text: PAGE }, { jev });
+  const first = await add({ headline: 'Clicked twice', text: PAGE }, { jev });
+  const again = await add({ headline: 'Clicked twice', text: PAGE }, { jev });
   assert.equal(again.id, first.id);
   assert.equal(again.repeat, true);
   assert.equal(calls.n, 2);
   assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 1);
 });
 
-test('warnings: the same link already in the pool, and a headline close to a recent idea; the seed is added anyway', async () => {
+/** An ordinary idea from a source; `queued` puts it on the newest slate (the queue), otherwise it is only in the reference pool. */
+async function ordinaryIdea(pg: PGlite, input: { url: string; headline: string; net?: number; queued: boolean }): Promise<string> {
+  const sid = await insertSource({ runId: RUN, canonicalUrl: input.url, headline: input.headline, body: PAGE, author: null, byline: null, sourceName: 'Wire', sourceType: 'A1', adapterId: 'rss', bucket: 'A', publishTime: null, language: null, engagement: {}, mediaUrls: [], citationUrls: [], rawPayload: {}, dropReason: null });
+  const id = await createPostIdea(sid!, RUN, 'test');
+  if (input.queued) {
+    await pg.query(`INSERT INTO reels.idea_scores (slate_id, post_idea_id, origin, net, rank, selected, chosen_bucket, chosen_framework, components) VALUES ($1, $2, 'timely', $3, 9, false, 'the_saga', 'arousal', '{}'::jsonb)`, [NEW_SLATE, id, input.net ?? 1]);
+  }
+  return id;
+}
+
+test('a link already in the queue stops with the existing idea and spends nothing', async () => {
+  const pg = await reelsDb();
+  const { jev, calls } = stub();
+  const existing = await ordinaryIdea(pg, { url: 'https://wire.test/story', headline: 'Wire story about a model launch', net: 2.5, queued: true });
+  const out = await addReelSeed({ headline: 'My own words about cats', text: PAGE, url: 'https://www.wire.test/story?utm_source=x' }, { jev });
+  assert.equal(out.status, 'duplicate');
+  if (out.status !== 'duplicate') return;
+  assert.deepEqual(out.existing, { id: existing, headline: 'Wire story about a model launch', net: 2.5, yours: false });
+  assert.equal(calls.n, 0, 'nothing spent');
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0, 'nothing written');
+});
+
+test('a headline close to a queued idea stops the same way', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
-  const sid = await insertSource({ runId: RUN, canonicalUrl: 'https://wire.test/story', headline: 'Anthropic releases Claude Opus 5.5 with lower prices', body: PAGE, author: null, byline: null, sourceName: 'Wire', sourceType: 'A1', adapterId: 'rss', bucket: 'A', publishTime: null, language: null, engagement: {}, mediaUrls: [], citationUrls: [], rawPayload: {}, dropReason: null });
-  await createPostIdea(sid!, RUN, 'test');
-  const out = await addReelSeed({ headline: 'Anthropic releases Claude Opus 5.5 with lower prices', text: PAGE, url: 'https://www.wire.test/story?utm_source=x' }, { jev });
-  assert.ok(out.flags.some((f) => /already in the pool/.test(f)), out.flags.join('|'));
-  assert.ok(out.flags.some((f) => /Close to a recent idea/.test(f)), out.flags.join('|'));
-  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 1, 'added anyway');
+  const existing = await ordinaryIdea(pg, { url: 'https://wire.test/story', headline: 'Anthropic releases Claude Opus 5.5 with lower prices', queued: true });
+  const out = await addReelSeed({ headline: 'Anthropic releases Claude Opus 5.5 with lower prices', text: PAGE, url: 'https://other.test/same-story' }, { jev });
+  assert.equal(out.status, 'duplicate');
+  assert.equal(out.status === 'duplicate' && out.existing.id, existing);
+});
+
+test('a seed already waiting counts as in the queue, and is marked yours', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const first = await add({ headline: 'First words', text: PAGE, url: 'https://news.test/a' }, { jev });
+  const out = await addReelSeed({ headline: 'Other words entirely about dogs', text: PAGE, url: 'https://news.test/a?utm_medium=y' }, { jev });
+  assert.equal(out.status, 'duplicate');
+  assert.deepEqual(out.status === 'duplicate' && [out.existing.id, out.existing.yours], [first.id, true]);
+});
+
+test('an idea only in the reference pool, not on the slate, is not in the queue', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  await ordinaryIdea(pg, { url: 'https://wire.test/story', headline: 'Anthropic releases Claude Opus 5.5 with lower prices', queued: false });
+  const out = await add({ headline: 'Anthropic releases Claude Opus 5.5 with lower prices', text: PAGE, url: 'https://wire.test/story' }, { jev });
+  assert.equal(out.status, 'added');
+});
+
+test('seedAnyway adds it after a duplicate stop', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  await ordinaryIdea(pg, { url: 'https://wire.test/story', headline: 'Wire story about a model launch', queued: true });
+  const input = { headline: 'My own words about cats', text: PAGE, url: 'https://wire.test/story' };
+  assert.equal((await addReelSeed(input, { jev })).status, 'duplicate');
+  assert.equal((await addReelSeed({ ...input, seedAnyway: true }, { jev })).status, 'added');
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 1);
 });
 
 test('the night’s carryover rule never picks up a seed, however high its net', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
-  const seed = await addReelSeed({ headline: 'Yesterday’s seed', text: PAGE }, { jev });
+  const seed = await add({ headline: 'Yesterday’s seed', text: PAGE }, { jev });
   await pg.query(`UPDATE reels.idea_scores SET net = 9 WHERE post_idea_id = $1`, [seed.id]);
   const ranked = await loadSlateRanked('2026-10-08');
   assert.ok(!ranked.some((r) => r.id === seed.id), 'the night does not read the seed row');
