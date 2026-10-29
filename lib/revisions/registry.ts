@@ -1,4 +1,5 @@
 import { aiEventsDescription } from './descriptions/ai-events';
+import { carouselsDescription } from './descriptions/carousels';
 import type { ContentTypeDescription, Vertical } from './types';
 
 /** Reels are shown to people as "text on screen", never "trial reels". */
@@ -12,7 +13,7 @@ export const VERTICAL_LABELS: Record<Vertical, string> = {
 };
 
 // Real descriptions (Tasks 6-11) are added here.
-const STATIC: Partial<Record<Vertical, ContentTypeDescription>> = { ai_events: aiEventsDescription };
+const STATIC: Partial<Record<Vertical, ContentTypeDescription>> = { ai_events: aiEventsDescription, carousels: carouselsDescription };
 
 let extra: Partial<Record<Vertical, ContentTypeDescription>> = {};
 let staticHidden = false;
