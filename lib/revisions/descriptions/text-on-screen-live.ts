@@ -111,29 +111,23 @@ export const liveTextOnScreenDeps: TextOnScreenDeps = {
 
   plate,
 
-  /**
-   * The clean clip, from (1) the raw clip a revision stored beside its reel (`raw.rev<id>.mp4` next to
-   * `reel.rev<id>.mp4`), else (2) Fal's stored result for the clip's request (`higgsfield_job_id` is
-   * the Fal request id): a read of a finished request, not a new generation. The pipeline's own video
-   * stage does not store its raw clip, so for a pipeline-made reel (2) is the only source; Fal's
-   * retention of old results is not guaranteed, and when neither is there the fix is refused.
-   */
-  async cleanClip({ videoPath, higgsfieldJobId }, toPath) {
+  async readClip(key, toPath) {
     const { downloadFrameObject } = await import('@/lib/reels/visual/storage');
-    const rawKey = /\/reel(\.rev[^/]+)?\.mp4$/.test(videoPath) ? videoPath.replace(/\/reel(\.rev[^/]+)?\.mp4$/, '/raw$1.mp4') : null;
-    if (rawKey) {
-      try {
-        await writeFile(toPath, await downloadFrameObject(rawKey));
-        return true;
-      } catch {
-        // No raw clip stored for this reel: try Fal.
-      }
+    try {
+      await writeFile(toPath, await downloadFrameObject(key));
+      return true;
+    } catch {
+      return false;
     }
+  },
+
+  /** Fal's stored result for the clip's request. Retention of old results is not guaranteed: false when gone. */
+  async falClip(requestId, toPath) {
     const key = process.env.FAL_API_KEY?.trim();
-    if (!higgsfieldJobId || !key) return false;
+    if (!key) return false;
     try {
       const { FAL_KLING_I2V } = await import('@/lib/reels/visual/kling/api');
-      const res = await fetch(`https://queue.fal.run/${FAL_KLING_I2V}/requests/${encodeURIComponent(higgsfieldJobId)}`, {
+      const res = await fetch(`https://queue.fal.run/${FAL_KLING_I2V}/requests/${encodeURIComponent(requestId)}`, {
         headers: { authorization: `Key ${key}` },
         signal: AbortSignal.timeout(60_000),
       });
@@ -194,5 +188,10 @@ export const liveTextOnScreenDeps: TextOnScreenDeps = {
   async unschedule(_q, postIdeaId) {
     const { unscheduleIdea } = await import('@/lib/reels/publish/schedule');
     return unscheduleIdea(postIdeaId);
+  },
+
+  async withdrawItem(q, itemId) {
+    const { unscheduleItem } = await import('@/lib/social/overnight/schedule');
+    return unscheduleItem(q, itemId);
   },
 };

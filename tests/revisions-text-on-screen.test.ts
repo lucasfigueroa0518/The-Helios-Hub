@@ -18,12 +18,14 @@ import {
   textOnScreenDescription,
   TEXT_ON_SCREEN_KLING_USD,
   TEXT_ON_SCREEN_STAGE_TAGS,
+  rawKeyFor,
   type TextOnScreenDeps,
 } from '@/lib/revisions/descriptions/text-on-screen';
 import { runRevision } from '@/lib/revisions/engine';
 import { descriptionFor, registerDescription, restoreRegistryForTest } from '@/lib/revisions/registry';
 import { claimNextRequested, createRequest, listForItem, markRunning } from '@/lib/revisions/store';
 import { relayPlate, type PlateDeps } from '@/lib/revisions/text-on-screen-plate';
+import { unscheduleItem } from '@/lib/social/overnight/schedule';
 import type { Interpretation, PartRef } from '@/lib/revisions/types';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -67,6 +69,8 @@ type Seeded = { pg: PGlite; q: Query };
 
 async function seed(o: { lock?: boolean; inFlight?: 'visual' | 'video' | 'copy' | 'finish'; noClip?: boolean } = {}): Promise<Seeded> {
   const { pg } = await openHubTestDb();
+  STORE.clear();
+  for (const k of [BG, FRAME, CLIP]) STORE.add(k);
   await pg.exec(readFileSync(path.join(process.cwd(), 'db', 'revisions_schema.sql'), 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('\\')).join('\n'));
   (globalThis as { __outreachHubPool?: unknown }).__outreachHubPool = { query: (text: string, params?: unknown[]) => pg.query(text, params as unknown[]), options: { max: 1 } };
   await pg.query(`INSERT INTO reels.runs (id, trigger, status) VALUES ($1, 'scheduled', 'ok')`, [RUN]);
@@ -130,6 +134,8 @@ type Opts = {
 
 /** Unique across setups, as random ids are live. */
 let ids = 0;
+/** The fake reels-frames bucket for one seeded database (keys stored by any setup). */
+const STORE = new Set<string>();
 
 function setup(o: Opts = {}) {
   const calls = {
@@ -143,7 +149,9 @@ function setup(o: Opts = {}) {
     qa: [] as string[],
     stored: [] as string[],
     read: [] as string[],
-    clean: [] as string[],
+    readClips: [] as string[],
+    fal: [] as string[],
+    withdrawn: [] as string[],
     unschedule: [] as string[],
   };
   const plate: PlateDeps = {
@@ -172,9 +180,11 @@ function setup(o: Opts = {}) {
     },
     async storeFile(key) {
       calls.stored.push(key);
+      STORE.add(key);
     },
     async storeBuffer(key) {
       calls.stored.push(key);
+      STORE.add(key);
     },
     async workDir() {
       return { dir: '/tmp/work', done: async () => {} };
@@ -190,9 +200,17 @@ function setup(o: Opts = {}) {
       return { pass: true, reasons: [], mean_luma: 0.2, bright_fraction: 0, width: 1152, height: 2048 };
     },
     plate,
-    async cleanClip({ videoPath }) {
-      calls.clean.push(videoPath);
+    async readClip(key) {
+      calls.readClips.push(key);
+      return STORE.has(key);
+    },
+    async falClip(requestId) {
+      calls.fal.push(requestId);
       return o.clean !== false;
+    },
+    async withdrawItem(q, itemId) {
+      calls.withdrawn.push(itemId);
+      return unscheduleItem(q, itemId);
     },
     async writeScene({ hint, profile }, m) {
       calls.scene.push({ hint: hint ?? null, profile });
@@ -284,8 +302,9 @@ test('wording fix calls relayPlate and zero image or video model calls', async (
   assert.equal(calls.kling.length, 0);
   assert.equal(calls.scene.length, 0);
   assert.equal(calls.motion.length, 0);
-  // The stored clean clip, the stored grade (orange) and the stored hook are reused.
-  assert.deepEqual(calls.clean, [CLIP]);
+  // A pipeline reel keeps no raw clip, so the clean clip comes from Fal's stored result; grade and hook are reused.
+  assert.deepEqual(calls.fal, ['fal-req-1']);
+  assert.ok(calls.stored.some((k) => /raw\.revr\d+\.mp4$/.test(k)), 'the clean clip is kept beside the new reel');
   assert.deepEqual(calls.plates, [{ copy: NEW_COPY, profile: 'orange' }]);
   assert.equal(calls.overlays.length, 1);
   assert.equal(calls.overlays[0]!.hook, 'glitch');
@@ -593,7 +612,11 @@ test('restore puts back the reel and its old files for every fix kind, recompute
     const work = calls.overlays.length + calls.kling.length + calls.image.length;
     await desc.restore({ q: s.q, refs, part, state: res.before });
     const back = await snapshot(s.q);
-    assert.deepEqual({ ...back, history: 0 }, { ...before, history: 0 }, kind);
+    const strip = (x: typeof back) => ({ ...x, history: 0, video: x.video.map((v) => ({ ...v, visual_job_id: null })) });
+    assert.deepEqual(strip(back), strip(before), kind);
+    // The video points at the original still (the same row, or a fresh copy of it).
+    const still = await current(s.q);
+    assert.deepEqual([still.background_storage_path, still.frame_storage_path, still.scene, still.render.colorProfile], [BG, FRAME, SCENE, 'orange'], kind);
     await desc.restore({ q: s.q, refs, part, state: res.before });
     assert.deepEqual(await snapshot(s.q), back, `${kind} twice`);
     assert.equal(calls.overlays.length + calls.kling.length + calls.image.length, work, 'restore never renders or pays');
@@ -699,4 +722,101 @@ test('a scheduled reel goes back to review when its movement is revised (engine 
     restoreRegistryForTest();
     resetCapsForTest();
   }
+});
+
+/* ── Fix round 1 ── */
+
+test('an approved reel with no slot (force-posted then failed) goes back to review and is revised (engine run)', async () => {
+  const s = await seed();
+  const item = (await s.q(`INSERT INTO social_hub.content_items (vertical, format, native_ref, idea_ref) VALUES ('reels', 'reel', $1, $2) RETURNING id::text AS id`, [VIDEO, IDEA])).rows[0]!.id as string;
+  await s.q(`INSERT INTO social_hub.approvals (content_item_id, decision, via) VALUES ($1, 'approved', 'force')`, [item]);
+  await s.q(`INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption) VALUES ($1, 'reels', 'force', 'failed', 'c')`, [item]);
+  assert.equal((await textOnScreenDescription.load(s.q, refs))!.status, 'approved');
+  const { deps, calls } = setup();
+  registerDescription(createTextOnScreenDescription(deps));
+  setCapsForTest({ reels: { motion: { capUsd: 1, ceilingUsd: 1.5 } } });
+  try {
+    await createRequest(s.q, { vertical: 'reels', refs, itemId: item, by: 'tommy', instruction: 'calmer movement' });
+    const row = (await claimNextRequested(s.q))!;
+    const it = interp(stage('video'), 'motion');
+    await markRunning(s.q, row.id, it, 0, 0);
+    await runRevision({ q: s.q, notify: async () => {}, now: () => new Date() }, { ...row, interpretation: it });
+    const [done] = await listForItem(s.q, item);
+    assert.equal(done!.status, 'applied', done!.note ?? '');
+    assert.deepEqual(calls.withdrawn, [item], 'the spine withdrew the approval (unscheduleIdea had no slot)');
+    assert.deepEqual(calls.unschedule, [], 'unscheduleIdea is only used when there is a slot');
+    assert.equal((await textOnScreenDescription.load(s.q, refs))!.status, 'review');
+    assert.notEqual((await current(s.q)).video_storage_path, CLIP);
+  } finally {
+    restoreRegistryForTest();
+    resetCapsForTest();
+  }
+});
+
+test('undo makes the restored still the idea\'s newest frame row again (the readers\' ordering); redo still works; files stay', async () => {
+  for (const [kind, args] of [['photo', undefined], ['color', { grade: 'green' }]] as const) {
+    const s = await seed();
+    const { desc } = setup();
+    const res = await desc.revise({ q: s.q, refs, interpretation: interp(stage('frame'), kind, args), meter: meter() });
+    assert.equal(res.ok, true, JSON.stringify(res));
+    if (!res.ok) continue;
+    // loadFramesForIdeas (run.ts): newest by requested_at; latestBackground (video-run.ts): newest ok with a background by finished_at.
+    const byRequested = async () => (await s.q(`SELECT DISTINCT ON (post_idea_id) id::text AS id, scene, background_storage_path, render->>'colorProfile' AS grade FROM reels.visual_jobs WHERE post_idea_id = $1 ORDER BY post_idea_id, requested_at DESC`, [IDEA])).rows[0]!;
+    const byFinished = async () => (await s.q(`SELECT id::text AS id, scene, background_storage_path, render->>'colorProfile' AS grade FROM reels.visual_jobs WHERE post_idea_id = $1 AND status = 'ok' AND background_storage_path IS NOT NULL ORDER BY finished_at DESC NULLS LAST LIMIT 1`, [IDEA])).rows[0]!;
+    const revised = await byRequested();
+    assert.notEqual(revised.background_storage_path, BG, kind);
+    await desc.restore({ q: s.q, refs, part: stage('frame'), state: res.before });
+    for (const latest of [await byRequested(), await byFinished()]) {
+      assert.deepEqual([latest.background_storage_path, latest.scene, latest.grade], [BG, SCENE, 'orange'], kind);
+      assert.equal(latest.id, (await current(s.q)).visual_job_id, 'the video points at the newest row');
+    }
+    const rows = (await s.q(`SELECT count(*)::int AS n FROM reels.visual_jobs WHERE post_idea_id = $1`, [IDEA])).rows[0]!.n;
+    await desc.restore({ q: s.q, refs, part: stage('frame'), state: res.before });
+    assert.equal((await s.q(`SELECT count(*)::int AS n FROM reels.visual_jobs WHERE post_idea_id = $1`, [IDEA])).rows[0]!.n, rows, 'idempotent: nothing written');
+    // The revision's row is never deleted; its files stay recoverable.
+    assert.equal((await s.q(`SELECT count(*)::int AS n FROM reels.visual_jobs WHERE id = $1::uuid`, [revised.id])).rows[0]!.n, 1);
+    for (const f of res.after.files) assert.ok(STORE.has(f), f);
+    // Redo brings the revision's still back, as the newest row.
+    await desc.restore({ q: s.q, refs, part: stage('frame'), state: res.after });
+    const redone = await byRequested();
+    assert.equal(redone.background_storage_path, revised.background_storage_path, kind);
+    assert.equal((await current(s.q)).video_storage_path, res.after.files[0]);
+  }
+});
+
+test('the clean clip is kept: motion fix, then two wording fixes re-lay on stored raw clips and never ask Fal', async () => {
+  assert.equal(rawKeyFor(`${VIDEO}/reel.revabc.mp4`), `${VIDEO}/raw.revabc.mp4`);
+  assert.equal(rawKeyFor(CLIP), null);
+  const s = await seed();
+  const { desc, calls } = setup();
+  const m = await desc.revise({ q: s.q, refs, interpretation: interp(stage('video'), 'motion'), meter: meter() });
+  assert.equal(m.ok, true, JSON.stringify(m));
+  const w1 = await desc.revise({ q: s.q, refs, interpretation: interp(stage('copy'), 'wording', { value: NEW_COPY }), meter: meter() });
+  assert.equal(w1.ok, true, JSON.stringify(w1));
+  const third = 'OpenAI shipped a model that writes its own tests and the team only noticed a week later';
+  const w2 = await desc.revise({ q: s.q, refs, interpretation: interp(stage('copy'), 'wording', { value: third }), meter: meter() });
+  assert.equal(w2.ok, true, JSON.stringify(w2));
+  assert.deepEqual(calls.fal, []);
+  assert.equal(calls.readClips.length, 2);
+  for (const k of calls.readClips) assert.match(k, /raw\.revr\d+\.mp4$/);
+  assert.notEqual(calls.readClips[0], calls.readClips[1], 'the second wording fix uses the raw clip the first one kept');
+  assert.equal((await current(s.q)).on_screen_copy, third);
+});
+
+test('a post started while Kling ran stops the write: failed, nothing written', async () => {
+  const s = await seed();
+  const before = await snapshot(s.q);
+  const { desc } = setup({
+    deps: {
+      async kling() {
+        const item = (await s.q(`INSERT INTO social_hub.content_items (vertical, format, native_ref, idea_ref) VALUES ('reels', 'reel', $1, $2) RETURNING id::text AS id`, [VIDEO, IDEA])).rows[0]!.id;
+        await s.q(`INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption) VALUES ($1, 'reels', 'force', 'requested', 'c')`, [item]);
+        return { bytes: Buffer.from('raw'), jobId: 'fal-late' };
+      },
+    },
+  });
+  const res = await desc.revise({ q: s.q, refs, interpretation: interp(stage('video'), 'motion'), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.equal(res.reason, 'failed');
+  assert.deepEqual(await snapshot(s.q), before);
 });

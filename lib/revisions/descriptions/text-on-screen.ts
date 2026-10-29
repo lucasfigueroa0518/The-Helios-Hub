@@ -42,7 +42,7 @@ import type { CopyReport } from '@/lib/reels/copy/report';
 import type { BucketId } from '@/lib/reels/scoring/decide';
 import { COLOR_PROFILES, colorProfileOrNoir, isColorProfile, type ColorProfile } from '@/lib/reels/visual/color';
 import type { BackgroundQa } from '@/lib/reels/visual/engine';
-import type { Hook, HookTiming } from '@/lib/reels/visual/hook';
+import { HOOK_TIMING_IDS, HOOKS, type Hook, type HookTiming } from '@/lib/reels/visual/hook';
 import type { MotionPrompt } from '@/lib/reels/visual/motion-prompt';
 import type { VisualCategory } from '@/lib/reels/visual/scene';
 import type { Query } from '@/lib/social/store/pg';
@@ -78,8 +78,6 @@ export const TEXT_ON_SCREEN_IMAGE_ESTIMATE_USD = 0.25;
 export const TEXT_ON_SCREEN_WRITER_ESTIMATE_USD = 0.03;
 
 const STAGES = ['copy', 'frame', 'video'] as const;
-const HOOK_NAMES = ['glitch', 'color_bars', 'invert', 'vhs', 'thermal', 'blue_screen'] as const;
-const TIMINGS = ['double', 'strobe', 'tail'] as const;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** run.ts VISUAL_RECENT_SCENES: the scene writer is told the last 10 scenes so it does not repeat them. */
 const RECENT_SCENES = 10;
@@ -104,11 +102,14 @@ export type TextOnScreenDeps = {
   checkBackground: (png: Buffer, profile: ColorProfile) => Promise<BackgroundQa>;
   /** ffmpeg + text engine steps for relayPlate. Local, free. */
   plate: PlateDeps;
+  /** Read a stored clip (the raw clip a revision kept) to `toPath`; false when there is none. Free. */
+  readClip: (key: string, toPath: string) => Promise<boolean>;
   /**
-   * Put the reel's CLEAN clip (Kling's clip before the text, hook and sound) at `toPath`. False when
-   * none can be found. Free (a storage or result read, never a generation).
+   * Fal's stored result for a finished clip request (`higgsfield_job_id`) to `toPath`: a read, never a
+   * generation. False when Fal no longer has it. The fallback for pipeline-made reels, whose video stage
+   * does not keep its raw clip.
    */
-  cleanClip: (input: { videoJobId: string; videoPath: string; higgsfieldJobId: string | null }, toPath: string) => Promise<boolean>;
+  falClip: (requestId: string, toPath: string) => Promise<boolean>;
   /** ONE scene-writer call with the person's hint as its own note; null when it wrote no scene. Charges `meter`. */
   writeScene: (
     input: { story: string; category: VisualCategory; onScreenText: string; recentScenes: string[]; profile: ColorProfile; hint: string | null },
@@ -123,8 +124,13 @@ export type TextOnScreenDeps = {
   ) => Promise<MotionPrompt>;
   /** ONE Kling clip from the stored background. The description charges the clip's price BEFORE calling. */
   kling: (input: { prompt: string; backgroundKey: string; profile: ColorProfile }, meter: Metered) => Promise<{ bytes: Buffer; jobId: string | null }>;
-  /** The type's own un-approve: lib/reels/publish/schedule.ts unscheduleIdea. */
+  /** The type's own un-approve: lib/reels/publish/schedule.ts unscheduleIdea (the idea's slot and its approval). */
   unschedule: (q: Query, postIdeaId: string) => Promise<{ ok: boolean; note: string }>;
+  /**
+   * The spine's un-approve for an item with no slot (lib/social/overnight/schedule.ts unscheduleItem):
+   * a force-posted-then-failed or released reel keeps its approval with no slot to cancel.
+   */
+  withdrawItem: (q: Query, itemId: string) => Promise<{ ok: boolean; note: string }>;
   /** A short id for the revision's storage keys. Default: random. */
   newId?: () => string;
 };
@@ -239,6 +245,47 @@ const BUSY_SQL = (j: string) =>
    OR EXISTS (SELECT 1 FROM reels.video_jobs x WHERE x.post_idea_id = ${j}.post_idea_id AND x.status IN ('requested', 'running'))
    OR EXISTS (SELECT 1 FROM reels.finish_requests x WHERE x.post_idea_id = ${j}.post_idea_id AND x.status = 'active')`;
 
+/** A frame row as a NewVisual (restore copies it). */
+async function readVisual(q: Query, id: string): Promise<Omit<NewVisual, 'id'> | null> {
+  const { rows } = await q(
+    `SELECT category, story, on_screen_copy, scene, image_prompt, background_storage_path, frame_storage_path, background_qa, render, warnings
+       FROM reels.visual_jobs WHERE id = $1::uuid`,
+    [id],
+  );
+  const v = rows[0];
+  if (!v) return null;
+  return {
+    category: v.category,
+    story: v.story,
+    onScreenCopy: v.on_screen_copy,
+    scene: v.scene,
+    imagePrompt: v.image_prompt,
+    backgroundPath: v.background_storage_path,
+    framePath: v.frame_storage_path,
+    qa: v.background_qa,
+    render: v.render ?? {},
+    warnings: Array.isArray(v.warnings) ? v.warnings : [],
+    usd: 0,
+  };
+}
+
+/** What a person sees of a still: same key = same frame (a restored copy matches its source). */
+const stillKey = (v: Omit<NewVisual, 'id'>) => JSON.stringify([v.backgroundPath, v.framePath, v.scene, v.onScreenCopy, v.render]);
+
+/** Posting or posted: a non-failed publish attempt or a publishing/published slot for the video's item, or a publishing slot for the idea. */
+const POSTING_SQL = (j: string) =>
+  `EXISTS (SELECT 1 FROM social_hub.content_items ci JOIN social_hub.publish_attempts pa ON pa.content_item_id = ci.id
+             WHERE ci.vertical = 'reels' AND ci.native_ref = ${j}.id::text AND pa.status <> 'failed')
+   OR EXISTS (SELECT 1 FROM social_hub.content_items ci JOIN social_hub.schedule sc ON sc.content_item_id = ci.id
+             WHERE ci.vertical = 'reels' AND ci.native_ref = ${j}.id::text AND sc.status IN ('publishing', 'published'))
+   OR EXISTS (SELECT 1 FROM social_hub.schedule sc WHERE sc.vertical = 'reels' AND sc.idea_ref = ${j}.post_idea_id::text AND sc.status = 'publishing')`;
+
+/** The raw (clean) clip a revision keeps beside its reel: `<id>/raw.rev<x>.mp4` next to `<id>/reel.rev<x>.mp4`. Null for a pipeline reel's name with no revision id. */
+export function rawKeyFor(videoPath: string): string | null {
+  const m = /^(.*)\/reel\.rev([^/]+)\.mp4$/.exec(videoPath);
+  return m ? `${m[1]}/raw.rev${m[2]}.mp4` : null;
+}
+
 async function lockOf(q: Query, r: Row): Promise<string | null> {
   const { rows } = await q(`SELECT l.ny_date FROM (SELECT $1::uuid AS slate_id, $2::uuid AS post_idea_id) j, LATERAL (${LOCK_SQL('j')}) l LIMIT 1`, [r.slate_id, r.post_idea_id]);
   return (rows[0]?.ny_date as string | undefined) ?? null;
@@ -256,13 +303,13 @@ function readRecord(text: string | null): { hook: Hook | null; routed: Hook | nu
     const v = re.exec(s)?.[1];
     return v && (allowed as readonly string[]).includes(v) ? (v as T) : null;
   };
-  const hook = pick(/^Hook: (\S+)$/m, HOOK_NAMES);
+  const hook = pick(/^Hook: (\S+)$/m, HOOKS);
   const lines = s.split('\n');
   const at = lines.findIndex((l) => l.startsWith('Camera:'));
   return {
     hook,
-    routed: pick(/^Routed hook: (\S+)$/m, HOOK_NAMES) ?? hook,
-    timing: pick(/^Hook timing: (\S+)$/m, TIMINGS) ?? 'double',
+    routed: pick(/^Routed hook: (\S+)$/m, HOOKS) ?? hook,
+    timing: pick(/^Hook timing: (\S+)$/m, HOOK_TIMING_IDS) ?? 'double',
     kling: at >= 0 ? lines.slice(at).join('\n') : '',
   };
 }
@@ -328,13 +375,14 @@ async function save(
                         AND c.on_screen_copy IS NOT DISTINCT FROM $5::text)
           AND NOT EXISTS (${LOCK_SQL('j')})
           AND NOT (${BUSY_SQL('j')})
+          AND NOT (${POSTING_SQL('j')})
         FOR UPDATE OF j
      ),
      vis AS (
        INSERT INTO reels.visual_jobs (id, post_idea_id, slate_id, status, requested_at, started_at, finished_at, category, story,
                                       on_screen_copy, scene, image_prompt, background_storage_path, frame_storage_path,
                                       background_qa, render, warnings, usd)
-       SELECT $6::uuid, g.post_idea_id, g.slate_id, 'ok', now(), now(), now(), $7::text, $8::text, $9::text, $10::text, $11::text,
+       SELECT $6::uuid, g.post_idea_id, g.slate_id, 'ok', clock_timestamp(), clock_timestamp(), clock_timestamp(), $7::text, $8::text, $9::text, $10::text, $11::text,
               $12::text, $13::text, $14::jsonb, $15::jsonb, $16::jsonb, $17::numeric
          FROM guard g WHERE $6::uuid IS NOT NULL
        RETURNING id
@@ -533,7 +581,10 @@ export function createTextOnScreenDescription(deps: TextOnScreenDeps): ContentTy
           if (!fit.ok) return failed(`The text engine could not set the new words (${fit.error}), so the text on screen was not changed.`);
           if (!fit.value.ok) return blocked(`The new text on screen does not fit the frame (${fit.value.error}), so it was not changed. Try fewer or shorter words.`);
           const clean = path.join(work.dir, 'clean.mp4');
-          const found = await attempt(() => deps.cleanClip({ videoJobId: r.video_id, videoPath: r.video_storage_path!, higgsfieldJobId: r.higgsfield_job_id }, clean));
+          const stored = rawKeyFor(r.video_storage_path!);
+          const found = await attempt(async () =>
+            (stored ? await deps.readClip(stored, clean) : false) || (r.higgsfield_job_id ? await deps.falClip(r.higgsfield_job_id, clean) : false),
+          );
           if (!found.ok || !found.value) {
             return failed('This text on screen reel has no clean clip (the video before its words) stored, so the words could not be laid again. Ask for a new movement instead, which makes a new clip with these words.');
           }
@@ -541,11 +592,13 @@ export function createTextOnScreenDescription(deps: TextOnScreenDeps): ContentTy
           if (!relay.ok) return failed(`The new words could not be laid over the video (${relay.error}), so the text on screen was not changed.`);
           const visualId = randomUUID();
           const frameKey = `${visualId}/frame.png`;
-          const stored = await attempt(async () => {
+          // The clean clip goes beside the new reel, so the next wording fix finds it there (never via Fal).
+          const kept = await attempt(async () => {
             await deps.storeBuffer(frameKey, fit.value.ok ? fit.value.png : Buffer.alloc(0), 'image/png');
+            await deps.storeFile(rawKey, clean, 'video/mp4');
             await deps.storeFile(videoKey, relay.value.videoPath, 'video/mp4');
           });
-          if (!stored.ok) return failed(`The new video could not be stored (${stored.error}), so the text on screen was not changed.`);
+          if (!kept.ok) return failed(`The new video could not be stored (${kept.error}), so the text on screen was not changed.`);
           const visual: NewVisual = {
             id: visualId,
             category: r.category,
@@ -564,7 +617,7 @@ export function createTextOnScreenDescription(deps: TextOnScreenDeps): ContentTy
             copy: { onScreenCopy: value, checks: await checksFor(q, r, value) },
             visual,
             video: { visualJobId: visualId, videoPath: videoKey, motionPrompt: r.motion_prompt, higgsfieldJobId: r.higgsfield_job_id },
-          }, { scene: r.scene, grade, framePath: frameKey, backgroundPath: r.background_storage_path });
+          }, { scene: r.scene, grade, framePath: frameKey, backgroundPath: r.background_storage_path, rawPath: rawKey });
         }
 
         // photo, color, motion: the background (new or stored), then one new clip.
@@ -683,21 +736,47 @@ export function createTextOnScreenDescription(deps: TextOnScreenDeps): ContentTy
       if (!s.video) throw new Error('This undo record has no text on screen reel state.');
       const words = s.copy?.onScreenCopy ?? r.on_screen_copy;
       const v = s.video;
+      // The still to come back to. When it is not the current row, a COPY of it is inserted, so the
+      // idea's newest frame row (what loadFramesForIdeas and latestBackground read) is the restored one.
+      const target = v.visualJobId ? await readVisual(q, v.visualJobId) : null;
+      if (v.visualJobId && !target) throw new Error('The frame this text on screen reel is being restored to is gone.');
+      const current = r.visual_job_id ? await readVisual(q, r.visual_job_id) : null;
+      const sameStill = r.visual_job_id === v.visualJobId || (!!target && !!current && stillKey(target) === stillKey(current));
       const unchanged =
-        r.video_storage_path === v.videoPath && r.visual_job_id === v.visualJobId && r.motion_prompt === v.motionPrompt && r.higgsfield_job_id === v.higgsfieldJobId && r.on_screen_copy === words;
+        r.video_storage_path === v.videoPath && sameStill && r.motion_prompt === v.motionPrompt && r.higgsfield_job_id === v.higgsfieldJobId && r.on_screen_copy === words;
       if (unchanged) return; // idempotent
       if (s.made !== undefined && r.video_storage_path !== s.made) {
         throw new Error('A later fix to this text on screen reel changed it after this one; undo that fix first.');
       }
       const copyChanged = words != null && words !== r.on_screen_copy;
-      const ok = await save(q, r, { ...(copyChanged ? { copy: { onScreenCopy: words, checks: await checksFor(q, r, words) } } : {}), video: v });
-      if (!ok) throw new Error('The text on screen reel changed, is locked, or is being made right now, so it was not restored.');
+      const visual: NewVisual | undefined = !sameStill && target ? { ...target, id: randomUUID() } : undefined;
+      const ok = await save(q, r, {
+        ...(copyChanged ? { copy: { onScreenCopy: words, checks: await checksFor(q, r, words) } } : {}),
+        ...(visual ? { visual } : {}),
+        video: { ...v, visualJobId: visual?.id ?? (sameStill ? r.visual_job_id : v.visualJobId) },
+      });
+      if (!ok) throw new Error('The text on screen reel changed, is locked, is posting, or is being made right now, so it was not restored.');
     },
 
+    /**
+     * Back to review: the idea's slot and approval (unscheduleIdea). A reel with no slot (force-posted
+     * and failed, or a released slot) can still be approved: its approval is withdrawn on the spine.
+     */
     unschedule: async (q, refs) => {
-      const postIdeaId = refs.postIdeaId ?? (await readReel(q, refs))?.post_idea_id;
+      const r = await readReel(q, refs);
+      const postIdeaId = refs.postIdeaId ?? r?.post_idea_id;
       if (!postIdeaId) return { ok: false, note: 'This text on screen reel could not be found.' };
-      return deps.unschedule(q, postIdeaId);
+      const slot = await q(`SELECT 1 FROM social_hub.schedule WHERE vertical = 'reels' AND idea_ref = $1 AND status IN ('scheduled', 'publishing') LIMIT 1`, [postIdeaId]);
+      const item = r ? ((await q(`SELECT id::text AS id FROM social_hub.content_items WHERE vertical = 'reels' AND native_ref = $1`, [r.video_id])).rows[0]?.id as string | undefined) : undefined;
+      if (slot.rows.length) {
+        const out = await deps.unschedule(q, postIdeaId);
+        if (!out.ok || !item) return out;
+        // unscheduleIdea withdraws the slot's item's approval; this video's own approval goes too.
+        const still = await q(`SELECT 1 FROM social_hub.approvals WHERE content_item_id = $1::uuid AND decision = 'approved'`, [item]);
+        return still.rows.length ? deps.withdrawItem(q, item) : out;
+      }
+      if (!item) return { ok: false, note: 'This text on screen reel has no slot and no approval to withdraw.' };
+      return deps.withdrawItem(q, item);
     },
   };
 
