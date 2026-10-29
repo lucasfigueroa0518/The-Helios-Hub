@@ -20,7 +20,6 @@ import { isPrivateHost } from '@/lib/net/private-host';
 
 export const SEED_ADAPTER = 'seed';
 export const SEED_DAYS = 7;
-export const MAX_OPEN_SEEDS = 10;
 export const MAX_HEADLINE_CHARS = 200;
 export const MAX_TEXT_CHARS = 10_000;
 /** The same headline typed again inside this window is the first click's seed (a double-click). */
@@ -174,10 +173,9 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
   );
   if (again.rows[0]) return { id: again.rows[0].id, title: again.rows[0].headline, scored: again.rows[0].net != null, net: again.rows[0].net, flags: [], repeat: true };
 
-  // Refuse before spending anything: no scored night to sit on, or the place limit.
+  // Refuse before spending anything: no scored night to sit on.
   const slate = await dbQuery(`SELECT 1 FROM reels.score_slates LIMIT 1`);
   if (slate.rows.length === 0) throw new SeedError(409, 'No night has been scored yet, so the idea has no queue to join. Nothing was spent.');
-  if ((await readOpenSeeds()).length >= MAX_OPEN_SEEDS) throw new SeedError(409, `You have ${MAX_OPEN_SEEDS} seeded ideas waiting; make or archive one first.`);
 
   const flags: string[] = [];
   let body = text;

@@ -16,7 +16,7 @@ import { groupRun } from '@/lib/reels/pipeline/grouping';
 import { putOnSlate } from '@/lib/reels/pipeline/promote';
 import { carryoverMisses, heldFromCarryover } from '@/lib/reels/scoring/decide';
 import { loadSlateRanked } from '@/lib/reels/scoring/store';
-import { MAX_OPEN_SEEDS, MAX_TEXT_CHARS, SeedError, addReelSeed, isUnscoredSeed, readOpenSeeds } from '@/lib/reels/seeds';
+import { MAX_TEXT_CHARS, SeedError, addReelSeed, isUnscoredSeed, readOpenSeeds } from '@/lib/reels/seeds';
 import { reelIdeas } from '@/lib/social-hub/adapters/reels';
 import { REEL_IDEAS_SQL, type ReelIdeaRow } from '@/lib/social-hub/queries/reels';
 import { capQueued, queueOrder } from '@/lib/social-hub/queue';
@@ -170,22 +170,19 @@ test('the queue puts a seed where its score falls, not last, though its stored r
   assert.deepEqual(shown, [A, seed.id, NORMAL, B], 'but the queue sorts by net, so the seed sits between 3.0 and 1.5');
 });
 
-test('the 11th open seed is refused; archiving, making or expiring one frees a place', async () => {
+test('an 11th open seed is accepted; archiving, making or expiring one still leaves the open list', async () => {
   const pg = await reelsDb();
-  const { jev, calls } = stub();
+  const { jev } = stub();
+  const OPEN = 11;
   const ids: string[] = [];
-  for (let i = 0; i < MAX_OPEN_SEEDS; i++) ids.push((await addReelSeed({ headline: headline(i), text: PAGE }, { jev })).id);
-  const spent = calls.n;
-  await refused(addReelSeed({ headline: headline(99), text: PAGE }, { jev }), 409, /make or archive one first/);
-  assert.equal(calls.n, spent, 'refused before any spend');
+  for (let i = 0; i < OPEN; i++) ids.push((await addReelSeed({ headline: headline(i), text: PAGE }, { jev })).id);
+  assert.equal((await readOpenSeeds()).length, OPEN, 'no cap on open seeds');
   await pg.query<any>(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind) VALUES ('reels', $1, '2026-10-08', 'archive')`, [`reels:idea:${ids[0]}`]);
-  assert.equal((await readOpenSeeds()).length, MAX_OPEN_SEEDS - 1);
-  await addReelSeed({ headline: headline(98), text: PAGE }, { jev });
-  await refused(addReelSeed({ headline: headline(97), text: PAGE }, { jev }), 409, /make or archive/);
+  assert.equal((await readOpenSeeds()).length, OPEN - 1);
   await pg.query<any>(`UPDATE reels.sources SET ingest_time = now() - interval '8 days' WHERE headline = $1`, [headline(1)]);
-  assert.equal((await readOpenSeeds()).length, MAX_OPEN_SEEDS - 1, 'an expired seed frees its place');
+  assert.equal((await readOpenSeeds()).length, OPEN - 2, 'an expired seed leaves the list');
   await pg.query<any>(`INSERT INTO reels.video_jobs (post_idea_id, slate_id, status, finished_at, video_storage_path) VALUES ($1, '${NEW_SLATE}', 'ok', now(), 'v.mp4')`, [ids[2]]);
-  assert.equal((await readOpenSeeds()).length, MAX_OPEN_SEEDS - 2, 'a made seed frees its place');
+  assert.equal((await readOpenSeeds()).length, OPEN - 3, 'a made seed leaves the list');
 });
 
 test('expired and archived seeds are gone from the pool view', async () => {
