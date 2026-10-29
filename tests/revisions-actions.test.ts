@@ -213,6 +213,12 @@ test('a reply with parentId links to the earlier row', async () => {
     assert.equal((await POST(req({ vertical: 'carousels', refs: { postId: U }, instruction: 'x', parentId: W }))).status, 400);
     assert.equal((await POST(req({ vertical: 'carousels', refs: { postId: U }, instruction: 'x', parentId: reply.id }))).status, 400, 'the parent must be asking');
     assert.equal((await listForItem(q, itemId)).length, 2);
+
+    // A second reply to the same question is refused, so it cannot start a second run.
+    const again = await POST(req({ vertical: 'carousels', refs: { postId: U }, instruction: 'slide 3 please', parentId: first.id }));
+    assert.equal(again.status, 409);
+    assert.equal((await again.json()).note, 'That question was already answered.');
+    assert.equal((await listForItem(q, itemId)).length, 2);
   });
 });
 

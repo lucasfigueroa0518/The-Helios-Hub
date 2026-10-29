@@ -1,8 +1,9 @@
 /**
  * The social worker's revisions step (scripts/social_worker.ts, each tick):
- * claim the oldest `requested` rows one at a time, interpret each with Haiku,
+ * claim the oldest `requested` rows one at a time, interpret each new one with Haiku,
  * then either ask back (`asking`, no spend beyond the Haiku call) or hand the
- * row to the engine (lib/revisions/engine.ts runRevision).
+ * row to the engine (lib/revisions/engine.ts runRevision). A row continued past its cap or
+ * ceiling already carries its interpretation and goes straight to the engine.
  *
  * Only rows a person queued from the hub are ever touched (CLAUDE.md Rule 2:
  * no sweeps). A claimed row never stays `running`: every failure before the
@@ -49,6 +50,13 @@ async function handle(deps: RevisionWorkerDeps, row: RevisionRow): Promise<void>
   let spent = 0;
   const fail = (note: string) => markEnded(q, row.id, 'failed', note, 0);
   try {
+    // A row continued past its cap or ceiling keeps its interpretation: run it as the person
+    // approved it, without paying Haiku again or risking a different part, fix or a question.
+    if (row.interpretation) {
+      await runRevision({ q, notify: deps.notify, now: deps.now }, row);
+      deps.log?.('revision_continued', { id: row.id, vertical: row.vertical });
+      return;
+    }
     const desc = descriptionFor(row.vertical);
     if (!desc) return await fail(`Revisions are not available for ${label} yet.`);
     const snapshot = await desc.load(q, row.refs);

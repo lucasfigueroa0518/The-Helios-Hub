@@ -7,6 +7,7 @@ import type { Complete } from '@/lib/revisions/interpret';
 import { clearRegistryForTest, registerDescription, restoreRegistryForTest } from '@/lib/revisions/registry';
 import { createRequest, listForItem } from '@/lib/revisions/store';
 import type { ContentTypeDescription, PartState, PostSnapshot } from '@/lib/revisions/types';
+import { continueAfterCeiling } from '@/lib/revisions/engine';
 import { claimAndRunRevisions, type RevisionWorkerDeps } from '@/lib/revisions/worker';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -58,11 +59,12 @@ async function withWorker(
   fake: ReturnType<typeof fakeType> | null,
   complete: Complete,
   fn: (ctx: { q: Query; itemId: string; deps: RevisionWorkerDeps; notes: string[] }) => Promise<void>,
+  cap = { capUsd: 0.2, ceilingUsd: 0.5 },
 ) {
   const { q, itemId } = await setupRevisionsDb();
   const notes: string[] = [];
   clearRegistryForTest();
-  setCapsForTest({ carousels: { wording: { capUsd: 0.2, ceilingUsd: 0.5 } } });
+  setCapsForTest({ carousels: { wording: cap } });
   try {
     if (fake) registerDescription(fake.desc);
     const deps: RevisionWorkerDeps = { q, complete, notify: async (m) => void notes.push(m), now: () => new Date('2026-10-28T12:00:00Z') };
@@ -182,3 +184,41 @@ test('claims at most `max` rows per tick', async () => {
     assert.equal((await listForItem(q, itemId)).every((r) => r.status === 'asking'), true);
   });
 });
+
+for (const c of [
+  { name: 'its cap', paused: 'paused_at_cap', cap: { capUsd: 0.005, ceilingUsd: 0.5 }, revisesBefore: 0 },
+  { name: 'its ceiling', paused: 'paused_at_ceiling', cap: { capUsd: 0.2, ceilingUsd: 0.01 }, revisesBefore: 1 },
+] as const) {
+  test(`a row continued past ${c.name} runs again without a second interpreter call`, async () => {
+    const fake = fakeType();
+    // A second call would ask back; it must never happen.
+    const s = stub(OK_JSON, ASK_JSON);
+    await withWorker(
+      fake,
+      s.complete,
+      async ({ q, itemId, deps }) => {
+        const r = await submit(q, itemId);
+        assert.equal(await claimAndRunRevisions(deps), 1);
+        let row = (await listForItem(q, itemId))[0];
+        assert.equal(row.status, c.paused, row.note ?? '');
+        assert.equal(fake.calls.revise, c.revisesBefore);
+        const spentBefore = row.spendUsd;
+
+        const cont = await continueAfterCeiling(deps, r.id, 'lucas', 0.05);
+        assert.equal(cont.ok, true, cont.note);
+        assert.equal(await claimAndRunRevisions(deps), 1);
+
+        assert.equal(s.calls.length, 1, 'complete is not called for a continued row');
+        row = (await listForItem(q, itemId))[0];
+        assert.equal(row.status, 'applied', row.note ?? '');
+        assert.deepEqual(row.part, part);
+        assert.equal(row.fixKind, 'wording');
+        assert.equal(row.interpretation?.instruction, 'Shorten the slide 3 headline.');
+        assert.equal(row.overrideUsd, 0.05);
+        assert.equal(fake.calls.revise, c.revisesBefore + 1);
+        assert.ok(row.spendUsd > spentBefore, 'the continued run adds its spend');
+      },
+      c.cap,
+    );
+  });
+}

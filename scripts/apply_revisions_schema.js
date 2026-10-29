@@ -1,3 +1,5 @@
+// Applies db/revisions_schema.sql to DIRECT_DATABASE_URL (a human decision: it is the shared production DB).
+// Usage: node scripts/apply_revisions_schema.js
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');

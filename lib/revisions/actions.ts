@@ -65,6 +65,9 @@ export function reviseVerbs(deps: ReviseDeps): Pick<ContentActions, 'revise' | '
       if (input?.parentId) {
         const parent = await getRequest(q, input.parentId);
         if (!parent || parent.itemId !== itemId || parent.status !== 'asking') return bad('That question is not open on this post.');
+        // One reply per question, so two replies cannot start two paid runs.
+        const { rows } = await q(`SELECT 1 FROM revisions.requests WHERE parent_id = $1 LIMIT 1`, [parent.id]);
+        if (rows.length) return { ok: false, note: 'That question was already answered.', status: 409 };
       }
       await createRequest(q, { vertical: deps.vertical, refs: t, itemId, by, instruction, parentId: input?.parentId ?? null });
       return { ok: true, note: 'Revising…' };

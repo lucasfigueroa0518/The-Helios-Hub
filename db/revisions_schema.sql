@@ -4,7 +4,7 @@
 -- Tests run this file on PGlite.
 --
 -- Apply (a human decision: DATABASE_URL is the shared production DB):
---   npm run db:revisions
+--   node scripts/apply_revisions_schema.js
 \set ON_ERROR_STOP on
 
 CREATE SCHEMA IF NOT EXISTS revisions;
