@@ -45,6 +45,7 @@ export function createCostMeter(ceilingUsd: number): CostMeter {
   let spent = 0;
   return {
     spend(usd: number) {
+      if (!Number.isFinite(usd) || usd < 0) throw new RangeError(`CostMeter.spend needs a finite, non-negative amount, got ${usd}.`);
       spent += usd;
       if (spent > ceilingUsd) throw new CeilingReached(spent, ceilingUsd);
     },

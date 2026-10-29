@@ -1,3 +1,5 @@
+import type { ActionTarget } from '@/lib/publishing/actions/types';
+import type { Query } from '@/lib/social/store/pg';
 import type { Vertical } from '@/lib/social-hub/types';
 
 export type { Vertical };
@@ -52,9 +54,6 @@ export type RevisionRow = {
 };
 
 // ---- Task 2: the per-content-type description ----
-
-import type { Query } from '@/lib/social/store/pg';
-import type { ActionTarget } from '@/lib/publishing/actions/types';
 
 /** Spend tracker handed to a revision; throws CeilingReached (caps.ts) past the ceiling. */
 export type CostMeter = { spend(usd: number): void; readonly spent: number };

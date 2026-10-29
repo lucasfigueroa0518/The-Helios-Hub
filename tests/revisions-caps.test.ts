@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { CeilingReached, capFor, createCostMeter, resetCapsForTest, setCapsForTest } from '@/lib/revisions/caps';
-import { clearRegistryForTest, descriptionFor, registerDescription } from '@/lib/revisions/registry';
+import { clearRegistryForTest, descriptionFor, registerDescription, restoreRegistryForTest } from '@/lib/revisions/registry';
 import type { ContentTypeDescription, FixKind, Vertical } from '@/lib/revisions/types';
 
 const VERTICALS: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events'];
@@ -35,15 +35,47 @@ test('a CostMeter throws CeilingReached once spent exceeds the ceiling and recor
   assert.ok(Math.abs(meter.spent - 0.12) < 1e-9);
 });
 
+test('CostMeter rejects NaN, Infinity and negative spend with a RangeError and leaves spent unchanged', () => {
+  const meter = createCostMeter(1);
+  meter.spend(0.25);
+  for (const bad of [NaN, Infinity, -Infinity, -0.1]) {
+    assert.throws(() => meter.spend(bad), RangeError);
+    assert.equal(meter.spent, 0.25);
+  }
+});
+
+test('a ceiling of 0 allows spend(0) and refuses spend(0.01)', () => {
+  const meter = createCostMeter(0);
+  meter.spend(0);
+  assert.equal(meter.spent, 0);
+  assert.throws(() => meter.spend(0.01), CeilingReached);
+});
+
+test('after CeilingReached the meter keeps throwing and keeps the crossing amount', () => {
+  const meter = createCostMeter(0.1);
+  assert.throws(() => meter.spend(0.15), CeilingReached);
+  assert.equal(meter.spent, 0.15);
+  assert.throws(() => meter.spend(0.01), CeilingReached);
+  assert.ok(Math.abs(meter.spent - 0.16) < 1e-9);
+});
+
 test('descriptionFor returns null for a type with no description yet', () => {
   clearRegistryForTest();
-  for (const v of VERTICALS) assert.equal(descriptionFor(v), null);
+  try {
+    for (const v of VERTICALS) assert.equal(descriptionFor(v), null);
+  } finally {
+    restoreRegistryForTest();
+  }
 });
 
 test('registerDescription makes descriptionFor return it until cleared', () => {
   const fake = { vertical: 'reels', label: 'text on screen' } as ContentTypeDescription;
-  registerDescription(fake);
-  assert.equal(descriptionFor('reels'), fake);
-  clearRegistryForTest();
-  assert.equal(descriptionFor('reels'), null);
+  try {
+    registerDescription(fake);
+    assert.equal(descriptionFor('reels'), fake);
+    clearRegistryForTest();
+    assert.equal(descriptionFor('reels'), null);
+  } finally {
+    restoreRegistryForTest();
+  }
 });
