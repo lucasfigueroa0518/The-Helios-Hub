@@ -306,3 +306,42 @@ test('the box uses the server\'s instruction limit', async () => {
   const types = readFileSync('lib/revisions/types.ts', 'utf8');
   for (const m of types.matchAll(/^import\s+(type\s+)?/gm)) assert.ok(m[1], 'lib/revisions/types.ts must import types only');
 });
+
+// ── Fix round 2: an earlier allowance raises the limit the row hit ─────────────
+
+test('a ceiling pause after an earlier allowance counts that allowance as the limit', async () => {
+  const { overrideProblem } = await import('@/lib/revisions/box-state');
+  // The engine logs the base ceiling (1.5) but ran with max(ceiling, override) = 3.
+  const note = 'Paused at the $3.00 ceiling for carousels after spending $3.02. Nothing was changed; you can keep going.';
+  const s = box([row({ status: 'paused_at_ceiling', note, capUsd: 0.5, ceilingUsd: 1.5, overrideUsd: 3, spendUsd: 3.02 })]);
+  if (s.current?.kind !== 'paused') return assert.fail('paused');
+  assert.equal(s.current.minUsd, 3);
+  assert.equal(s.current.suggestUsd, 6);
+  assert.match(overrideProblem(s.current, '2.50') ?? '', /more than \$3\.00/);
+  assert.match(overrideProblem(s.current, '3') ?? '', /more than \$3\.00/);
+  assert.equal(overrideProblem(s.current, '3.01'), null);
+});
+
+test('a ceiling pause with no earlier allowance is unchanged', () => {
+  const s = box([row({ status: 'paused_at_ceiling', note: 'Paused.', capUsd: 0.5, ceilingUsd: 1.5, overrideUsd: null })]);
+  if (s.current?.kind !== 'paused') return assert.fail('paused');
+  assert.equal(s.current.minUsd, 1.5);
+  assert.equal(s.current.suggestUsd, 3);
+});
+
+test('a cap pause after an earlier allowance needs more than that allowance', async () => {
+  const { overrideProblem } = await import('@/lib/revisions/box-state');
+  // Estimate unreadable: the fallback must not be the base cap, which would only pause again.
+  const s = box([row({ status: 'paused_at_cap', note: 'Over the cap.', capUsd: 0.5, ceilingUsd: 1.5, overrideUsd: 0.8 })]);
+  if (s.current?.kind !== 'paused') return assert.fail('paused');
+  assert.equal(s.current.minUsd, 0.8);
+  assert.equal(s.current.suggestUsd, 1.6);
+  assert.match(overrideProblem(s.current, '0.6') ?? '', /more than \$0\.80/);
+  // With a readable estimate, the estimate is still the suggestion.
+  const e = box([row({ status: 'paused_at_cap', note: 'This photo fix is estimated at $1.20, above the $0.80 cap for carousels. Allow a higher amount to run it.', capUsd: 0.5, overrideUsd: 0.8 })]);
+  assert.equal(e.current?.kind === 'paused' && e.current.suggestUsd, 1.2);
+  // No earlier allowance: unchanged (any amount above $0, the estimate or the cap suggested).
+  const plain = box([row({ status: 'paused_at_cap', note: 'Over the cap.', capUsd: 0.5, overrideUsd: null })]);
+  assert.equal(plain.current?.kind === 'paused' && plain.current.minUsd, null);
+  assert.equal(plain.current?.kind === 'paused' && plain.current.suggestUsd, 0.5);
+});

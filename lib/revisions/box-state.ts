@@ -130,12 +130,25 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
  * amount), else the cap. At the ceiling: twice the ceiling (a continued revision re-runs from the
  * start, so it needs room above the ceiling it hit). Null when nothing is known.
  */
-export function suggestOverrideUsd(r: Pick<BoxRow, 'status' | 'note' | 'capUsd'> & Partial<Pick<BoxRow, 'ceilingUsd'>>): number | null {
-  if (r.status === 'paused_at_ceiling') return r.ceilingUsd && r.ceilingUsd > 0 ? round2(r.ceilingUsd * 2) : null;
+export function suggestOverrideUsd(r: Pick<BoxRow, 'status' | 'note' | 'capUsd'> & Partial<Pick<BoxRow, 'ceilingUsd' | 'overrideUsd'>>): number | null {
+  const limit = limitHit(r);
+  if (r.status === 'paused_at_ceiling') return limit ? round2(limit * 2) : null;
   if (r.status !== 'paused_at_cap') return null;
   const estimate = /estimated at/i.test(r.note ?? '') ? amounts(r.note)[0] : undefined;
   if (estimate) return estimate;
+  // After an earlier allowance the base cap would only pause again: suggest past what was allowed.
+  if (r.overrideUsd && r.overrideUsd > 0) return limit ? round2(limit * 2) : null;
   return r.capUsd && r.capUsd > 0 ? r.capUsd : null;
+}
+
+/**
+ * The limit the run actually hit. The engine logs the BASE cap and ceiling (markRunning) but runs with
+ * max(base, override) (engine.ts), so a row continued once carries its allowance in `overrideUsd`.
+ */
+function limitHit(r: Partial<Pick<BoxRow, 'status' | 'capUsd' | 'ceilingUsd' | 'overrideUsd'>>): number | null {
+  const base = r.status === 'paused_at_ceiling' ? r.ceilingUsd : r.status === 'paused_at_cap' ? r.capUsd : null;
+  const limit = Math.max(base ?? 0, r.overrideUsd ?? 0);
+  return limit > 0 ? limit : null;
 }
 
 function minutesAgo(since: string | null, now: Date): string {
@@ -258,7 +271,9 @@ function currentOf(r: BoxRow, now: Date, byId: ReadonlyMap<string, BoxRow>): Cur
     case 'paused_at_cap':
     case 'paused_at_ceiling': {
       const at = r.status === 'paused_at_cap' ? 'cap' : 'ceiling';
-      const minUsd = at === 'ceiling' && r.ceilingUsd && r.ceilingUsd > 0 ? r.ceilingUsd : null;
+      // The amount must be MORE than the limit the run hit (base or an earlier allowance, whichever is higher).
+      // A cap pause with no earlier allowance keeps its rule: any amount above $0.
+      const minUsd = at === 'ceiling' || (r.overrideUsd ?? 0) > 0 ? limitHit(r) : null;
       return { kind: 'paused', id: r.id, revisionId: r.id, at, note: plainNote(r.status, r.note), suggestUsd: suggestOverrideUsd(r), minUsd, needsAmount: at === 'ceiling', notified: at === 'ceiling' };
     }
     default:

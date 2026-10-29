@@ -174,3 +174,10 @@ test('keep going at the ceiling says why a too-small amount can\'t be used', () 
   assert.match(html, /more than \$1\.50/);
   assert.match(html, /<button type="button" class="sh-btn sh-btn--primary" disabled="">/);
 });
+
+test('keep going after an earlier allowance refuses an amount at or below it', () => {
+  const note = 'Paused at the $3.00 ceiling for carousels after spending $3.02. Nothing was changed; you can keep going.';
+  const html = view([row({ status: 'paused_at_ceiling', note, ceilingUsd: 1.5, overrideUsd: 3 })], { amount: '2.50' });
+  assert.match(html, /Allow more than \$3\.00/);
+  assert.match(html, /<button type="button" class="sh-btn sh-btn--primary" disabled="">/);
+});
