@@ -4,13 +4,16 @@
  * The worker claims a row and stores the interpretation before calling runRevision.
  * The engine never deletes rendered files: it only records paths in before/after,
  * and descriptions keep every version on disk.
+ *
+ * Review rule: any change to an approved or scheduled post (revise, undo, restore)
+ * first sends it back to review via description.unschedule. Nothing here re-approves.
  */
 import type { Query } from '@/lib/social/store/pg';
 
 import { CeilingReached, capFor, createCostMeter } from './caps';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
 import { latestApplied, listForItem, markApplied, markEnded, markRunning, markUndone, originalOf, requeueWithOverride, unmarkUndone } from './store';
-import type { ContentTypeDescription, PartRef, PostSnapshot, RevisionRow } from './types';
+import type { ContentTypeDescription, CostMeter, PartRef, PartState, PostSnapshot, RevisionResult, RevisionRow } from './types';
 
 export type EngineDeps = { q: Query; notify: (msg: string) => Promise<void>; now: () => Date };
 export type EngineOutcome = { ok: boolean; note: string };
@@ -30,8 +33,60 @@ async function safeNotify(deps: EngineDeps, msg: string) {
   }
 }
 
+/** unschedule that never throws. */
+async function sendBackToReview(desc: ContentTypeDescription, q: Query, refs: RevisionRow['refs']): Promise<EngineOutcome> {
+  try {
+    return await desc.unschedule(q, refs);
+  } catch (e) {
+    return { ok: false, note: errText(e) };
+  }
+}
+
+/** What a run has done so far, so a failure at any point can be cleaned up honestly. */
+type RunState = {
+  desc: ContentTypeDescription | null;
+  meter: CostMeter | null;
+  /** Set once revise reported new content on the post; cleared once that content is logged or rolled back. */
+  revisedBefore: PartState | null;
+  sentBack: boolean;
+};
+
 /** Runs one revision. `row` is already claimed (status `running`) with its interpretation stored. */
 export async function runRevision(deps: EngineDeps, row: RevisionRow): Promise<void> {
+  const st: RunState = { desc: null, meter: null, revisedBefore: null, sentBack: false };
+  try {
+    await runSteps(deps, row, st);
+  } catch (e) {
+    // Anything unexpected: never leave the row `running` or revised content unlogged.
+    const spent = st.meter?.spent ?? 0;
+    const why = `The revision stopped on an unexpected error: ${errText(e)}.`;
+    if (st.revisedBefore) return endWithRollback(deps, row, st, why, spent);
+    await markEnded(deps.q, row.id, 'failed', `${why} The original was kept.${reviewSuffix(st)}`, spent);
+  }
+}
+
+const reviewSuffix = (st: RunState) => (st.sentBack ? ' The post was sent back to review and stays there.' : '');
+
+/**
+ * Restores the part's `before` and ends the row `failed`. If the restore itself fails,
+ * the row still ends `failed` with a loud note and a notification goes out.
+ */
+async function endWithRollback(deps: EngineDeps, row: RevisionRow, st: RunState, why: string, spent: number): Promise<void> {
+  const before = st.revisedBefore!;
+  const part = row.interpretation!.part;
+  try {
+    await st.desc!.restore({ q: deps.q, refs: row.refs, part, state: before });
+    st.revisedBefore = null;
+    await markEnded(deps.q, row.id, 'failed', `${why} The original was restored.${reviewSuffix(st)}`, spent);
+  } catch (e) {
+    const label = VERTICAL_LABELS[row.vertical];
+    const loud = `${why} The engine could not roll back (${errText(e)}); the post may still carry the revised content.`;
+    await markEnded(deps.q, row.id, 'failed', `${loud}${reviewSuffix(st)}`, spent);
+    await safeNotify(deps, `Needs attention: a ${label} revision of ${partName(part)} failed and could not roll back; the post may still carry the revised content.`);
+  }
+}
+
+async function runSteps(deps: EngineDeps, row: RevisionRow, st: RunState): Promise<void> {
   const { q } = deps;
   const label = VERTICAL_LABELS[row.vertical];
   const fail = (note: string, cost = 0) => markEnded(q, row.id, 'failed', note, cost);
@@ -40,11 +95,12 @@ export async function runRevision(deps: EngineDeps, row: RevisionRow): Promise<v
   if (!interp) return fail('This revision has no interpretation, so nothing was changed.');
   const desc = descriptionFor(row.vertical);
   if (!desc) return fail(`Revisions are not available for ${label} yet.`);
+  st.desc = desc;
 
+  // Refusals and cap pauses happen before anything touches the post (no unschedule, no spend).
   const snap = await desc.load(q, row.refs);
   if (!snap) return fail(`This ${label} post could not be found, so nothing was changed.`);
   if (LOCKED.includes(snap.status)) return fail(`This ${label} post is ${snap.status} and can no longer be revised.`);
-
   if (!desc.fixKinds.includes(interp.fixKind)) {
     return fail(`${label} does not offer a ${interp.fixKind} fix, so nothing was changed.`);
   }
@@ -66,14 +122,22 @@ export async function runRevision(deps: EngineDeps, row: RevisionRow): Promise<v
       0,
     );
   }
-
   const meter = createCostMeter(ceiling);
+  st.meter = meter;
+
+  // Back to review before any content changes, so a scheduled post never goes out half-revised.
+  if (SEND_BACK.includes(snap.status)) {
+    const back = await sendBackToReview(desc, q, row.refs);
+    if (!back.ok) return fail(`The post could not be sent back to review (${back.note}), so nothing was changed.`);
+    st.sentBack = true;
+  }
+
   const pauseAtCeiling = async () => {
     await markEnded(
       q,
       row.id,
       'paused_at_ceiling',
-      `Paused at the ${usd(ceiling)} ceiling for ${label} after spending ${usd(meter.spent)}. Nothing was changed; you can keep going.`,
+      `Paused at the ${usd(ceiling)} ceiling for ${label} after spending ${usd(meter.spent)}. Nothing was changed; you can keep going.${reviewSuffix(st)}`,
       meter.spent,
     );
     await safeNotify(
@@ -82,59 +146,107 @@ export async function runRevision(deps: EngineDeps, row: RevisionRow): Promise<v
     );
   };
 
-  let result;
+  let result: RevisionResult;
   try {
     result = await desc.revise({ q, refs: row.refs, interpretation: interp, meter });
   } catch (e) {
     if (e instanceof CeilingReached || meter.spent > ceiling) return pauseAtCeiling();
-    return fail(`The ${interp.fixKind} fix failed and the original was kept: ${errText(e)}`, meter.spent);
+    return fail(`The ${interp.fixKind} fix failed and the original was kept: ${errText(e)}.${reviewSuffix(st)}`, meter.spent);
   }
+  if (result.ok) st.revisedBefore = result.before;
 
   if (meter.spent > ceiling) {
     // The description swallowed CeilingReached. Never keep work done past the ceiling.
-    if (result.ok) await desc.restore({ q, refs: row.refs, part: interp.part, state: result.before });
+    if (st.revisedBefore) {
+      return endWithRollback(deps, row, st, `The revision went past the ${usd(ceiling)} ceiling for ${label}.`, meter.spent);
+    }
     return pauseAtCeiling();
   }
-  if (!result.ok) return markEnded(q, row.id, result.reason, result.note, meter.spent);
+  if (!result.ok) return markEnded(q, row.id, result.reason, `${result.note}${reviewSuffix(st)}`, meter.spent);
 
-  if (SEND_BACK.includes(snap.status)) {
-    const back = await sendBackToReview(desc, q, row);
+  // The post may have changed while revise ran.
+  const now = await desc.load(q, row.refs);
+  if (!now || LOCKED.includes(now.status)) {
+    const what = now ? `became ${now.status}` : 'disappeared';
+    return endWithRollback(deps, row, st, `The post ${what} while the revision ran, so it was not kept.`, meter.spent);
+  }
+  if (SEND_BACK.includes(now.status)) {
+    const back = await sendBackToReview(desc, q, row.refs);
     if (!back.ok) {
-      await desc.restore({ q, refs: row.refs, part: interp.part, state: result.before });
-      return fail(`The post could not be sent back to review (${back.note}), so the original was kept.`, meter.spent);
+      return endWithRollback(deps, row, st, `The post was approved during the revision and could not be sent back to review (${back.note}).`, meter.spent);
     }
+    st.sentBack = true;
   }
 
   const applied = await markApplied(q, row.id, { before: result.before, after: result.after, costUsd: meter.spent });
-  if (!applied) {
-    // The row left `running` underneath us: do not leave an unlogged change on the post.
-    await desc.restore({ q, refs: row.refs, part: interp.part, state: result.before });
-    console.error(`[revisions] ${row.id} was no longer running; the revision was rolled back.`);
+  if (applied) {
+    st.revisedBefore = null;
+    return;
   }
-}
-
-async function sendBackToReview(desc: ContentTypeDescription, q: Query, row: RevisionRow): Promise<EngineOutcome> {
+  // The row left `running` underneath us: someone else owns its status now, so do not
+  // overwrite it, but do not leave an unlogged change on the post either.
   try {
-    return await desc.unschedule(q, row.refs);
+    await desc.restore({ q, refs: row.refs, part: interp.part, state: result.before });
+    st.revisedBefore = null;
+    console.error(`[revisions] ${row.id} was no longer running; the revision was rolled back.`);
   } catch (e) {
-    return { ok: false, note: errText(e) };
+    st.revisedBefore = null;
+    await safeNotify(
+      deps,
+      `Needs attention: a ${label} revision of ${partName(interp.part)} could not be logged or rolled back (${errText(e)}); the post may still carry the revised content.`,
+    );
   }
 }
 
 /** Shared guard for undo and restore: the type exists and the post is not locked. */
-async function editable(q: Query, row: RevisionRow): Promise<{ desc: ContentTypeDescription } | EngineOutcome> {
+async function editable(q: Query, row: RevisionRow): Promise<{ desc: ContentTypeDescription; snap: PostSnapshot } | EngineOutcome> {
   const label = VERTICAL_LABELS[row.vertical];
   const desc = descriptionFor(row.vertical);
   if (!desc) return { ok: false, note: `Revisions are not available for ${label} yet.` };
   const snap = await desc.load(q, row.refs);
   if (!snap) return { ok: false, note: `This ${label} post could not be found.` };
   if (LOCKED.includes(snap.status)) return { ok: false, note: `This ${label} post is ${snap.status} and can no longer be changed.` };
-  return { desc };
+  return { desc, snap };
+}
+
+/**
+ * After the undo rows are claimed: send an approved/scheduled post back to review, then
+ * restore `state`. On any failure the claims are released and nothing is reported as done.
+ */
+async function reviewThenRestore(
+  q: Query,
+  g: { desc: ContentTypeDescription; snap: PostSnapshot },
+  row: RevisionRow,
+  part: PartRef,
+  state: PartState,
+  claimed: string[],
+): Promise<EngineOutcome | null> {
+  const release = async () => {
+    for (const id of claimed) await unmarkUndone(q, id);
+  };
+  let sentBack = false;
+  if (SEND_BACK.includes(g.snap.status)) {
+    const back = await sendBackToReview(g.desc, q, row.refs);
+    if (!back.ok) {
+      await release();
+      return { ok: false, note: `The post could not be sent back to review (${back.note}), so nothing changed.` };
+    }
+    sentBack = true;
+  }
+  try {
+    await g.desc.restore({ q, refs: row.refs, part, state });
+  } catch (e) {
+    await release();
+    const review = sentBack ? ' The post was sent back to review and stays there.' : '';
+    return { ok: false, note: `Restoring ${partName(part)} failed and its content did not change: ${errText(e)}.${review}` };
+  }
+  return null;
 }
 
 /**
  * Reverts the latest applied revision of `part` (restores its `before`) and marks it undone.
- * Calling it again walks back one more. Never re-approves and never unschedules.
+ * Calling it again walks back one more. Sends an approved/scheduled post back to review first;
+ * never re-approves.
  */
 export async function undoRevision(deps: EngineDeps, itemId: string, part: PartRef, by: string): Promise<EngineOutcome> {
   const { q } = deps;
@@ -147,16 +259,14 @@ export async function undoRevision(deps: EngineDeps, itemId: string, part: PartR
   if (!(await markUndone(q, latest.id, by))) {
     return { ok: false, note: `That revision of ${partName(part)} was already undone; nothing changed.` };
   }
-  try {
-    await guard.desc.restore({ q, refs: latest.refs, part, state: latest.before });
-  } catch (e) {
-    await unmarkUndone(q, latest.id);
-    return { ok: false, note: `Undo failed and nothing changed: ${errText(e)}` };
-  }
-  return { ok: true, note: `Undid the last revision of ${partName(part)}.` };
+  const failed = await reviewThenRestore(q, guard, latest, part, latest.before, [latest.id]);
+  return failed ?? { ok: true, note: `Undid the last revision of ${partName(part)}.` };
 }
 
-/** Puts `part` back to the pipeline's original and marks every applied revision of it undone. */
+/**
+ * Puts `part` back to the pipeline's original and marks every applied revision of it undone.
+ * Sends an approved/scheduled post back to review first; never re-approves.
+ */
 export async function restoreOriginal(deps: EngineDeps, itemId: string, part: PartRef, by: string): Promise<EngineOutcome> {
   const { q } = deps;
   const original = await originalOf(q, itemId, part);
@@ -168,16 +278,11 @@ export async function restoreOriginal(deps: EngineDeps, itemId: string, part: Pa
   const guard = await editable(q, newest);
   if (!('desc' in guard)) return guard;
 
-  const marked: string[] = [];
-  for (const r of applied) if (await markUndone(q, r.id, by)) marked.push(r.id);
-  if (marked.length === 0) return { ok: false, note: `Those revisions of ${partName(part)} were already undone; nothing changed.` };
-  try {
-    await guard.desc.restore({ q, refs: newest.refs, part, state: original });
-  } catch (e) {
-    for (const id of marked) await unmarkUndone(q, id);
-    return { ok: false, note: `Restoring the original failed and nothing changed: ${errText(e)}` };
-  }
-  return { ok: true, note: `Restored the original ${partName(part)}.` };
+  const claimed: string[] = [];
+  for (const r of applied) if (await markUndone(q, r.id, by)) claimed.push(r.id);
+  if (claimed.length === 0) return { ok: false, note: `Those revisions of ${partName(part)} were already undone; nothing changed.` };
+  const failed = await reviewThenRestore(q, guard, newest, part, original, claimed);
+  return failed ?? { ok: true, note: `Restored the original ${partName(part)}.` };
 }
 
 /**

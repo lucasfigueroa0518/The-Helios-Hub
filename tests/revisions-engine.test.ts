@@ -26,10 +26,26 @@ const refs = { postId: 'p1' };
 type Post = { status: PostSnapshot['status']; slide3: PartState };
 
 /** In-memory carousel. Rendered files only ever accumulate; the test asserts that. */
-function fakeType(opts: { estimate?: number; spends?: number[]; result?: 'ok' | 'blocked' | 'swallow'; status?: Post['status'] } = {}) {
+type FakeOpts = {
+  estimate?: number;
+  spends?: number[];
+  result?: 'ok' | 'blocked' | 'swallow' | 'throw';
+  status?: Post['status'];
+  /** Runs inside revise after the new content is written (e.g. flip the post status mid-run). */
+  duringRevise?: (post: Post) => void;
+  /** Return false (or throw) from unschedule on these 1-based call numbers. */
+  unscheduleFailsOn?: number[];
+  unscheduleThrows?: boolean;
+  restoreThrows?: boolean;
+  loadThrows?: boolean;
+};
+
+function fakeType(opts: FakeOpts = {}) {
   const post: Post = { status: opts.status ?? 'review', slide3: { copy: 'v0', files: ['slide3-v0.png'] } };
   const files = new Set<string>(post.slide3.files);
   const calls = { revise: 0, restore: 0, unschedule: 0 };
+  /** Call order across revise / restore / unschedule. */
+  const events: string[] = [];
   let version = 0;
   const fileCountHistory: number[] = [files.size];
   const track = () => {
@@ -41,16 +57,21 @@ function fakeType(opts: { estimate?: number; spends?: number[]; result?: 'ok' | 
     label: 'carousels',
     stageTags: ['copy_write', 'photo_pick'],
     fixKinds: ['wording', 'photo'],
-    load: async () => ({ vertical: 'carousels', refs, status: post.status, parts: [{ ref: part, text: String(post.slide3.copy) }] }),
+    load: async () => {
+      if (opts.loadThrows) throw new Error('db down');
+      return { vertical: 'carousels', refs, status: post.status, parts: [{ ref: part, text: String(post.slide3.copy) }] };
+    },
     estimate: () => opts.estimate ?? 0.05,
     async revise({ interpretation, meter }) {
       calls.revise += 1;
+      events.push('revise');
       try {
         for (const s of opts.spends ?? [0.05]) meter.spend(s);
       } catch (e) {
         if (opts.result === 'swallow') return { ok: false, reason: 'failed', note: 'stage threw' };
         throw e;
       }
+      if (opts.result === 'throw') throw new Error('renderer crashed');
       if (opts.result === 'blocked') return { ok: false, reason: 'blocked', note: 'Fact-check failed: the number is wrong.' };
       version += 1;
       const before = post.slide3;
@@ -58,20 +79,26 @@ function fakeType(opts: { estimate?: number; spends?: number[]; result?: 'ok' | 
       files.add(file);
       post.slide3 = { copy: `${interpretation.instruction} #${version}`, files: [file] };
       track();
+      opts.duringRevise?.(post);
       return { ok: true, before, after: post.slide3 };
     },
     async restore({ state }) {
       calls.restore += 1;
+      events.push('restore');
+      if (opts.restoreThrows) throw new Error('disk full');
       post.slide3 = state;
       track();
     },
     async unschedule() {
       calls.unschedule += 1;
+      events.push('unschedule');
+      if (opts.unscheduleThrows) throw new Error('scheduler offline');
+      if (opts.unscheduleFailsOn?.includes(calls.unschedule)) return { ok: false, note: 'slot is locked' };
       post.status = 'review';
       return { ok: true, note: 'sent back to review' };
     },
   };
-  return { desc, post, files, calls };
+  return { desc, post, files, calls, events };
 }
 
 const CAP = { capUsd: 0.2, ceilingUsd: 0.5 };
@@ -276,6 +303,7 @@ test('success on an approved post calls unschedule once and logs applied with be
     const row = await submit(q, itemId);
     await runRevision(deps, row);
     assert.equal(fake.calls.unschedule, 1);
+    assert.deepEqual(fake.events, ['unschedule', 'revise'], 'back to review before any content changes');
     assert.equal(fake.post.status, 'review');
     const after = await rowOf(q, itemId, row.id);
     assert.equal(after?.status, 'applied');
@@ -319,7 +347,7 @@ test('undo restores the previous state, marks the row undone, and does not re-ap
     assert.equal(res.ok, true);
     assert.deepEqual(fake.post.slide3, { copy: 'v0', files: ['slide3-v0.png'] });
     assert.equal(fake.post.status, 'review');
-    assert.equal(fake.calls.unschedule, 1);
+    assert.equal(fake.calls.unschedule, 1, 'a post already in review is not unscheduled again by undo');
     const after = await rowOf(q, itemId, row.id);
     assert.equal(after?.status, 'undone');
     assert.equal(after?.undoneBy, 'ana');
@@ -409,5 +437,218 @@ test('rendered file paths referenced by a log row are never deleted by a later r
     const referenced = (await listForItem(q, itemId)).flatMap((r) => [...(r.before?.files ?? []), ...(r.after?.files ?? [])]);
     assert.ok(referenced.length >= 6);
     for (const f of referenced) assert.ok(fake.files.has(f), `${f} was deleted`);
+  });
+});
+
+// ---- Fix round 1: failure paths, unschedule-before-revise, review on undo/restore ----
+
+test('refusals and cap pauses on an approved post never unschedule', async () => {
+  for (const [name, fake, i] of [
+    ['cap pause', fakeType({ status: 'approved', estimate: 0.3 }), interp()],
+    ['fixKind refusal', fakeType({ status: 'approved' }), interp('motion')],
+  ] as const) {
+    await withEngine(fake, async ({ q, itemId, deps }) => {
+      const row = await submit(q, itemId, i);
+      await runRevision(deps, row);
+      assert.equal(fake.calls.unschedule, 0, name);
+      assert.equal(fake.calls.revise, 0, name);
+      assert.equal(fake.post.status, 'approved', name);
+    }, { carousels: { wording: CAP, motion: CAP } });
+  }
+});
+
+test('a pre-revise unschedule that fails ends failed without revising', async () => {
+  const fake = fakeType({ status: 'scheduled', unscheduleFailsOn: [1] });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'failed');
+    assert.match(after!.note!, /could not be sent back to review/);
+    assert.equal(fake.calls.revise, 0);
+    assert.equal(fake.post.status, 'scheduled');
+  });
+});
+
+test('a pre-revise unschedule that throws ends failed without revising', async () => {
+  const fake = fakeType({ status: 'approved', unscheduleThrows: true });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    assert.equal((await rowOf(q, itemId, row.id))?.status, 'failed');
+    assert.equal(fake.calls.revise, 0);
+  });
+});
+
+test('blocked on an approved post leaves it in review and the note says so', async () => {
+  const fake = fakeType({ status: 'approved', result: 'blocked' });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'blocked');
+    assert.match(after!.note!, /Fact-check failed/);
+    assert.match(after!.note!, /review/);
+    assert.equal(fake.post.status, 'review');
+    assert.deepEqual(fake.post.slide3, { copy: 'v0', files: ['slide3-v0.png'] });
+  });
+});
+
+test('a generic throw from revise ends failed with the spend recorded, never running', async () => {
+  const fake = fakeType({ result: 'throw', spends: [0.07] });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'failed');
+    assert.match(after!.note!, /renderer crashed/);
+    near(after!.spendUsd, 0.07);
+  });
+});
+
+test('a throw from load ends the row failed instead of leaving it running', async () => {
+  const fake = fakeType({ loadThrows: true });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'failed');
+    assert.match(after!.note!, /db down/);
+  });
+});
+
+test('post approved mid-run is sent back to review before the revision is logged', async () => {
+  const fake = fakeType({ duringRevise: (p) => void (p.status = 'approved') });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    assert.deepEqual(fake.events, ['revise', 'unschedule']);
+    assert.equal(fake.post.status, 'review');
+    assert.equal((await rowOf(q, itemId, row.id))?.status, 'applied');
+  });
+});
+
+test('post published mid-run restores before and ends failed, never applied', async () => {
+  const fake = fakeType({ duringRevise: (p) => void (p.status = 'published') });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'failed');
+    assert.match(after!.note!, /published/);
+    assert.equal(after?.after, null);
+    assert.deepEqual(fake.post.slide3, { copy: 'v0', files: ['slide3-v0.png'] });
+    assert.equal(fake.calls.unschedule, 0);
+  });
+});
+
+test('approved mid-run and unschedule failing: content restored, row failed', async () => {
+  const fake = fakeType({ duringRevise: (p) => void (p.status = 'approved'), unscheduleFailsOn: [1] });
+  await withEngine(fake, async ({ q, itemId, deps, notes }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'failed');
+    assert.match(after!.note!, /original was restored/);
+    assert.deepEqual(fake.post.slide3, { copy: 'v0', files: ['slide3-v0.png'] });
+    assert.equal(notes.length, 0);
+  });
+});
+
+test('unschedule failing AND the rollback restore throwing: failed, loud note, notify', async () => {
+  const fake = fakeType({ duringRevise: (p) => void (p.status = 'approved'), unscheduleFailsOn: [1], restoreThrows: true });
+  await withEngine(fake, async ({ q, itemId, deps, notes }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'failed');
+    assert.match(after!.note!, /could not roll back/);
+    assert.match(after!.note!, /may still carry the revised content/);
+    assert.equal(notes.length, 1);
+    assert.match(notes[0], /could not roll back/);
+  });
+});
+
+test('markApplied returning false rolls the content back and leaves the row status alone', async () => {
+  const fake = fakeType();
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    const racing: Query = async (text, params) => {
+      if (/SET status = 'applied'/.test(text)) {
+        await q(`UPDATE revisions.requests SET status = 'failed', note = 'cancelled elsewhere' WHERE id = $1`, [row.id]);
+      }
+      return q(text, params);
+    };
+    await runRevision({ ...deps, q: racing }, row);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'failed');
+    assert.equal(after?.note, 'cancelled elsewhere');
+    assert.deepEqual(fake.post.slide3, { copy: 'v0', files: ['slide3-v0.png'] });
+  });
+});
+
+test('undo on an approved post unschedules once then restores, and the post ends in review', async () => {
+  const fake = fakeType();
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    await runRevision(deps, await submit(q, itemId));
+    fake.post.status = 'approved';
+    fake.events.length = 0;
+    const res = await undoRevision(deps, itemId, part, 'ana');
+    assert.equal(res.ok, true);
+    assert.deepEqual(fake.events, ['unschedule', 'restore']);
+    assert.equal(fake.post.status, 'review');
+    assert.deepEqual(fake.post.slide3, { copy: 'v0', files: ['slide3-v0.png'] });
+  });
+});
+
+test('undo where unschedule fails changes nothing and releases the claim', async () => {
+  const fake = fakeType({ unscheduleFailsOn: [1] });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    fake.post.status = 'scheduled';
+    const res = await undoRevision(deps, itemId, part, 'ana');
+    assert.equal(res.ok, false);
+    assert.equal(fake.calls.restore, 0);
+    assert.equal((await rowOf(q, itemId, row.id))?.status, 'applied');
+  });
+});
+
+test('restore throwing during undo rolls the claim back', async () => {
+  const fake = fakeType({ restoreThrows: true });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    const row = await submit(q, itemId);
+    await runRevision(deps, row);
+    const res = await undoRevision(deps, itemId, part, 'ana');
+    assert.equal(res.ok, false);
+    assert.match(res.note, /disk full/);
+    const after = await rowOf(q, itemId, row.id);
+    assert.equal(after?.status, 'applied');
+    assert.equal(after?.undoneBy, null);
+  });
+});
+
+test('restoreOriginal on a scheduled post unschedules then restores; refused when published', async () => {
+  const fake = fakeType();
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    for (const s of ['a', 'b']) await runRevision(deps, await submit(q, itemId, interp('wording', s)));
+    fake.post.status = 'published';
+    assert.equal((await restoreOriginal(deps, itemId, part, 'ana')).ok, false);
+    assert.equal(fake.calls.restore, 0);
+    fake.post.status = 'scheduled';
+    fake.events.length = 0;
+    assert.equal((await restoreOriginal(deps, itemId, part, 'ana')).ok, true);
+    assert.deepEqual(fake.events, ['unschedule', 'restore']);
+    assert.equal(fake.post.status, 'review');
+    assert.equal(fake.post.slide3.copy, 'v0');
+  });
+});
+
+test('restore throwing during restoreOriginal releases every claim', async () => {
+  const fake = fakeType({ restoreThrows: true });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    for (const s of ['a', 'b']) await runRevision(deps, await submit(q, itemId, interp('wording', s)));
+    assert.equal((await restoreOriginal(deps, itemId, part, 'ana')).ok, false);
+    assert.deepEqual((await listForItem(q, itemId)).map((r) => r.status), ['applied', 'applied']);
   });
 });
