@@ -47,7 +47,7 @@ import { DEFAULT_SETTINGS } from '@/lib/explainers/settings';
 import type { JobRow, LintViolation } from '@/lib/explainers/types';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 
-import { collateral, finishAside, hold, HOLD_STAGE, putBack, release, restoreCollateral, setAside, snapshot } from '../explainers-folder';
+import { collateral, finishAside, hold, holdStage, putBack, readManifest, release, restoreCollateral, setAside, snapshot } from '../explainers-folder';
 import type { ContentTypeDescription, FixKind, PartState, PostSnapshot } from '../types';
 
 import type { Metered } from './carousels';
@@ -76,7 +76,6 @@ export const EXPLAINERS_FOLDER_GONE_NOTE = "This explainer's working files were 
 const SCENE_FIXES: readonly FixKind[] = ['wording', 'photo', 'color', 'layout'];
 const FRAME_ID = /^[a-z0-9][a-z0-9-]*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const HOLD = HOLD_STAGE;
 
 /**
  * Whether a job's working folder still counts for scene redos: true until the explainer is
@@ -264,14 +263,14 @@ function metered(meter: { spend(usd: number): void }): Metered & { check(): void
 async function pointAt(
   db: Queryable,
   jobId: string,
-  guard: { status: 'running' | 'ok'; currentVideo: string | null; releaseStage?: string },
+  guard: { status: 'running' | 'ok'; currentVideo: string | null; holdStage?: string; releaseStage?: string },
   video: Pointer,
   sheet: Pointer | null,
 ): Promise<boolean> {
   const { rows } = await db.query<{ n: number }>(
     `WITH guard AS (
        SELECT j.id FROM explainers.jobs j
-        WHERE j.id = $1 AND j.status = $2 AND ($2 = 'ok' OR j.stage = '${HOLD}')
+        WHERE j.id = $1 AND j.status = $2 AND ($2 = 'ok' OR j.stage = $11)
           AND ${LATEST_SQL('j', 'video', 'storage_path')} IS NOT DISTINCT FROM $3::text
           AND NOT (${POSTING_SQL('j')})
         FOR UPDATE OF j
@@ -299,6 +298,7 @@ async function pointAt(
       sheet?.bytes ?? null,
       sheet?.location ?? 'local',
       guard.releaseStage || null,
+      guard.holdStage ?? null,
     ],
   );
   return Number(rows[0]?.n ?? 0) === 1;
@@ -424,19 +424,22 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         return blocked(`This explainer has ${usd(left)} left of its ${usd(job.spend_cap_usd)} spending cap and a scene redo needs about ${usd(need)}, so the scene was not redone.`);
       }
 
-      const stage = await hold(db, job.id);
+      const id = newId();
+      // The hold carries this redo's id, and so does its manifest (start-up recovery matches them).
+      const stage = await hold(db, job.id, id);
       if (stage == null) return failed('A render is running right now (or another explainer change is), so nothing was changed. Try again once it is finished.');
       const m = metered(meter);
-      const id = newId();
       const oldEvents = readText(evFile);
       let kept = false;
-      let manifest: ReturnType<typeof setAside> | null = null;
       let before: ReturnType<typeof snapshot> | null = null;
+      let collateralDone = false;
       try {
+        // A manifest an earlier redo left behind is never this redo's: clear it before writing ours.
+        finishAside(jobDir);
         // Every other scene, the plan, the voice and the world, as they are now (the redo may not touch them).
         before = snapshot(projectDir, scene.key, codeWritten);
         // Renamed aside, never deleted: the old module, its sound events, the local video and contact sheet.
-        manifest = setAside(jobDir, { id, key: scene.key, stage });
+        setAside(jobDir, { id, key: scene.key, stage });
 
         let out: SceneRebuild;
         try {
@@ -453,7 +456,15 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         }
         const touched = collateral(projectDir, before, scene.key, codeWritten);
         if (touched.length) {
-          return blocked(`Redoing ${scene.key} also changed other parts of this explainer (${touched.join(', ')}), so nothing was kept and they were put back.`);
+          collateralDone = true;
+          const lost = restoreCollateral(projectDir, before, touched, id);
+          if (lost.length) console.error(`[revisions] explainer ${job.id} redo ${id}: could not restore ${lost.join(', ')}`);
+          const back = touched.filter((f) => !lost.includes(f));
+          return blocked(
+            `Redoing ${scene.key} also changed other parts of this explainer (${touched.join(', ')}), so nothing was kept.` +
+              (back.length ? ` Put back: ${back.join(', ')}.` : '') +
+              (lost.length ? ` These could not be put back: ${lost.join(', ')}.` : ''),
+          );
         }
         const problems = out.violations.filter((v: LintViolation) => v.severity === 'error' && v.frame === scene.number);
         if (problems.length) {
@@ -471,7 +482,7 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         const toPointer = (s: StoredFile): Pointer => ({ path: s.storagePath, bytes: s.bytes, location: s.location });
         const nextVideo = toPointer(storedVideo);
         const nextSheet = storedSheet ? toPointer(storedSheet) : latest.sheet;
-        const applied = await pointAt(db, job.id, { status: 'running', currentVideo: latest.video.path, releaseStage: stage }, nextVideo, storedSheet ? nextSheet : null);
+        const applied = await pointAt(db, job.id, { status: 'running', currentVideo: latest.video.path, holdStage: holdStage(id), releaseStage: stage }, nextVideo, storedSheet ? nextSheet : null);
         if (!applied) return failed('This explainer changed or started posting while the scene was redone, so it was not changed.');
         kept = true;
         finishAside(jobDir);
@@ -480,15 +491,34 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         const after: SceneState = { copy: { module: newModule, events: readText(evFile) }, video: nextVideo, sheet: nextSheet, files: files(nextVideo, nextSheet), made: latest.video.path };
         return { ok: true as const, before: beforeState, after };
       } finally {
-        if (!kept) {
-          // Put the folder back as it was (what the session left is set aside, not deleted) and release the job.
+        if (!kept) await rollBack();
+      }
+
+      /**
+       * Every non-kept path: the other files first (a failure there is logged and never skips the
+       * rest), then the scene's own files from the manifest, then the release. If the scene's files
+       * cannot be put back, the hold is KEPT and the error thrown (the engine ends the row failed), so
+       * helios-explainers' start-up recovery repairs the folder from the manifest.
+       */
+      async function rollBack(): Promise<void> {
+        if (before && !collateralDone) {
           try {
-            if (before) restoreCollateral(projectDir, before, collateral(projectDir, before, scene.key, codeWritten), id);
-            if (manifest) putBack(jobDir, manifest);
-          } finally {
-            await release(db, job.id, stage);
+            restoreCollateral(projectDir, before, collateral(projectDir, before, scene!.key, codeWritten), id);
+          } catch (e) {
+            console.error(`[revisions] explainer ${job!.id} redo ${id}: the other files could not be checked or put back: ${errText(e)}`);
           }
         }
+        const manifest = readManifest(jobDir);
+        if (manifest && manifest.id === id) {
+          try {
+            putBack(jobDir, manifest);
+          } catch (e) {
+            throw new Error(
+              `the scene's files could not be put back (${errText(e)}); this explainer stays held until the explainers worker restarts and repairs it`,
+            );
+          }
+        }
+        await release(db, job!.id, id, stage!);
       }
     },
 

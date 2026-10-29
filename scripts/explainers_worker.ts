@@ -88,9 +88,13 @@ async function main(): Promise<void> {
 
   // A scene redo (Targeted Revisions) this worker was running when it stopped: put its job folder back
   // (the old scene module, video and contact sheet) and release its hold, BEFORE the stale sweep.
-  const { recoverSceneRedos } = await import('@/lib/revisions/descriptions/explainers');
-  const recovered = await recoverSceneRedos(db, jobsRoot);
-  if (recovered.length) log('scene_redos_recovered', { jobs: recovered });
+  // Each job is isolated (a failure is logged and its hold still released), so start-up always goes on.
+  // Never in --once: a manual or dev run beside the service could rename files under a live redo.
+  if (!once) {
+    const { recoverSceneRedos } = await import('@/lib/revisions/descriptions/explainers');
+    const recovered = await recoverSceneRedos(db, jobsRoot, (event, fields) => log(event, fields));
+    if (recovered.length) log('scene_redos_recovered', { jobs: recovered });
+  }
   // One worker, one render at a time: anything still `running` died with a previous process.
   const stale = await failStaleRunningJobs(db, 'Worker restarted while this render was running.');
   if (stale) log('stale_jobs_failed', { count: stale });

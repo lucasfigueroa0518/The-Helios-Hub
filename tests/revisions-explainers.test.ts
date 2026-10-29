@@ -159,7 +159,10 @@ const result = (cost: number): AgentMessage => ({
 type SessionLog = { prompts: string[]; atStart: string[]; paidMessages: number; options?: Record<string, any> };
 
 /** A session that rebuilds the named frame: writes a new module, a new video and a new contact sheet. */
-function sceneSession(log: SessionLog, opts: { messages?: number; writeModule?: boolean; inputTokens?: number; alsoWrite?: Record<string, string> } = {}): AgentQuery {
+function sceneSession(
+  log: SessionLog,
+  opts: { messages?: number; writeModule?: boolean; inputTokens?: number; alsoWrite?: Record<string, string>; after?: (projectDir: string) => void } = {},
+): AgentQuery {
   return ({ prompt, options }) =>
     (async function* () {
       log.prompts.push(prompt);
@@ -177,6 +180,7 @@ function sceneSession(log: SessionLog, opts: { messages?: number; writeModule?: 
       if (opts.writeModule !== false) fs.writeFileSync(path.join(dir, 'assets', 'frames', `${frame}.js`), `export default { draw: () => "<text>new ${frame} webhook</text>" };\n`);
       fs.writeFileSync(path.join(dir, 'renders', 'video.mp4'), `new-mp4-${frame}`);
       fs.writeFileSync(path.join(dir, 'snapshots', 'contact-sheet.jpg'), `new-jpg-${frame}`);
+      opts.after?.(dir);
       yield result(0.4);
     })();
 }
@@ -652,12 +656,12 @@ test('unschedule delegates to unscheduleJob: the slot is cancelled and the appro
   assert.equal((await d.load(fx.q, refs))!.status, 'review');
 });
 
-test('a worker restart puts a job held by an interrupted scene redo back to ok, not failed', async () => {
+test('the stale-render sweep never touches a redo hold (recovery owns it): not failed, not released', async () => {
   const fx = await fixture();
-  await fx.db.query(`UPDATE explainers.jobs SET status = 'running', stage = 'revision' WHERE id = $1`, [JOB]);
+  await fx.db.query(`UPDATE explainers.jobs SET status = 'running', stage = 'revision:x1' WHERE id = $1`, [JOB]);
   assert.equal(await failStaleRunningJobs(fx.db, 'worker restarted'), 0);
-  const row = (await fx.db.query<{ status: string; error: string | null }>(`SELECT status, error FROM explainers.jobs WHERE id = $1`, [JOB])).rows[0]!;
-  assert.deepEqual(row, { status: 'ok', error: null });
+  const row = (await fx.db.query<{ status: string; stage: string; error: string | null }>(`SELECT status, stage, error FROM explainers.jobs WHERE id = $1`, [JOB])).rows[0]!;
+  assert.deepEqual(row, { status: 'running', stage: 'revision:x1', error: null });
 });
 
 // ── Where the rows live (the DB split) ─────────────────────────────────────
@@ -739,7 +743,7 @@ test('start-up recovery after a crash mid-redo: the old module, events, video an
   const jobDir = path.join(fx.jobsRoot, JOB);
   const frames = path.join(fx.projectDir, 'assets', 'frames');
   // The redo got as far as the session: hold taken, files renamed aside, a half-written new module and video.
-  assert.equal(await hold(fx.db, JOB), 'caption');
+  assert.equal(await hold(fx.db, JOB, 'c1'), 'caption');
   setAside(jobDir, { id: 'c1', key: '02-gap', stage: 'caption' });
   assert.ok(fs.existsSync(path.join(frames, '02-gap.js.before-revc1')));
   fs.writeFileSync(path.join(frames, '02-gap.js'), 'half-written');
@@ -767,9 +771,9 @@ test('start-up recovery after a crash mid-redo: the old module, events, video an
 
 test('start-up recovery of a hold with no set-aside files (nothing moved yet) just releases it', async () => {
   const fx = await fixture();
-  assert.equal(await hold(fx.db, JOB), 'caption');
+  assert.equal(await hold(fx.db, JOB, 'h1'), 'caption');
   assert.deepEqual(await recoverSceneRedos(fx.db, fx.jobsRoot), [JOB]);
-  assert.equal((await jobRow(fx.db)).status, 'ok');
+  assert.deepEqual(await jobRow(fx.db), { status: 'ok', stage: 'revision_interrupted' });
   for (const [f, src] of Object.entries(MODULES)) assert.equal(moduleOnDisk(fx, f), src);
   assert.deepEqual(await recoverSceneRedos(fx.db, fx.jobsRoot), [], 'nothing held: nothing to do');
 });
@@ -804,4 +808,110 @@ test('restore never writes into the folder while a render or another redo holds 
   fs.writeFileSync(path.join(fx.projectDir, 'assets', 'frames', '02-gap.js'), 'mid-redo');
   await assert.rejects(d.restore({ q: fx.q, refs, part: { kind: 'scene', key: '02-gap' }, state: out.before }), /being made or redone/);
   assert.equal(moduleOnDisk(fx, '02-gap.js'), 'mid-redo');
+});
+
+// ── Fix round 2: recovery and rollback hardening ───────────────────────────
+
+const holdRow = async (db: ExplainersDb) => (await db.query<{ status: string; stage: string }>(`SELECT status, stage FROM explainers.jobs WHERE id = $1`, [JOB])).rows[0]!;
+
+test('start-up recovery isolates a job whose files cannot be put back: it logs the job, still releases the hold, and returns', async () => {
+  const fx = await fixture();
+  const jobDir = path.join(fx.jobsRoot, JOB);
+  const frames = path.join(fx.projectDir, 'assets', 'frames');
+  assert.equal(await hold(fx.db, JOB, 'e1'), 'caption');
+  setAside(jobDir, { id: 'e1', key: '02-gap', stage: 'caption' });
+  fs.chmodSync(frames, 0o555); // put-back cannot rename in here
+  const logged: Array<Record<string, unknown>> = [];
+  try {
+    const ids = await recoverSceneRedos(fx.db, fx.jobsRoot, (event, fields) => logged.push({ event, ...fields }));
+    assert.deepEqual(ids, [JOB]);
+  } finally {
+    fs.chmodSync(frames, 0o755);
+  }
+  assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'revision_interrupted' });
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0]!.jobId, JOB);
+  assert.match(String(logged[0]!.error), /EACCES|permission/i);
+});
+
+test('if putting the scene back fails during a rollback, the hold is kept and the error surfaces; start-up recovery repairs it', async () => {
+  const fx = await fixture();
+  const frames = path.join(fx.projectDir, 'assets', 'frames');
+  const log: SessionLog = { prompts: [], atStart: [], paidMessages: 0 };
+  const query = sceneSession(log, { after: () => fs.chmodSync(frames, 0o555) });
+  const d = createExplainersDescription(
+    depsFor(fx, { log, query, bounds: [{ source: 'hyperframes', rule: 'text_bounds', frame: 2, severity: 'error', detail: 'cut off' }] }),
+  );
+  try {
+    await assert.rejects(d.revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() }), /could not be put back/);
+  } finally {
+    fs.chmodSync(frames, 0o755);
+  }
+  assert.deepEqual(await holdRow(fx.db), { status: 'running', stage: 'revision:r1' }, 'still held, so recovery can repair it');
+  assert.deepEqual(await recoverSceneRedos(fx.db, fx.jobsRoot), [JOB]);
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), MODULES['02-gap.js']);
+  assert.equal(moduleOnDisk(fx, '02-gap.events.json'), MODULES['02-gap.events.json']);
+  assert.equal(fs.readFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'utf8'), 'old-mp4');
+  assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'caption' });
+});
+
+test('a collateral step that throws during the rollback still puts the scene back before releasing the hold', async () => {
+  const fx = await fixture();
+  const log: SessionLog = { prompts: [], atStart: [], paidMessages: 0 };
+  // The session turns SCRIPT.md into a folder: the collateral check cannot read it and throws.
+  const query = sceneSession(log, {
+    after: (dir) => {
+      fs.rmSync(path.join(dir, 'SCRIPT.md'));
+      fs.mkdirSync(path.join(dir, 'SCRIPT.md'));
+    },
+  });
+  const d = createExplainersDescription(depsFor(fx, { log, query }));
+  const out = await d.revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() }).catch((e: unknown) => e);
+  assert.ok(out instanceof Error || (typeof out === 'object' && out !== null && (out as { ok?: boolean }).ok === false));
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), MODULES['02-gap.js']);
+  assert.equal(moduleOnDisk(fx, '02-gap.events.json'), MODULES['02-gap.events.json']);
+  assert.equal(fs.readFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'utf8'), 'old-mp4');
+  assert.deepEqual(await holdRow(fx.db), { status: 'ok', stage: 'caption' });
+  assert.equal(fs.existsSync(path.join(fx.jobsRoot, JOB, 'revision-hold.json')), false);
+});
+
+test('a manifest left by an earlier committed redo never puts old files back over committed ones', async () => {
+  const fx = await fixture();
+  const jobDir = path.join(fx.jobsRoot, JOB);
+  const d = createExplainersDescription(depsFor(fx));
+  const out = await d.revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+  assert.ok(out.ok, JSON.stringify(out));
+  const committedModule = moduleOnDisk(fx, '02-gap.js');
+  const committedVideo = (await latest(fx.db, 'video'))!.storage_path;
+  // Simulated crash before finishAside: r1's manifest is still there (its .before-rev files are history on disk).
+  fs.writeFileSync(path.join(jobDir, 'revision-hold.json'), JSON.stringify({ id: 'r1', key: '02-gap', stage: 'caption', hadEvents: true, movedVideo: true, movedSheet: true }));
+  // A later redo takes the hold and crashes before it sets anything aside.
+  assert.equal(await hold(fx.db, JOB, 'r2'), 'caption');
+  await recoverSceneRedos(fx.db, fx.jobsRoot);
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), committedModule, 'the committed scene stays');
+  assert.equal(fs.readFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'utf8'), 'new-mp4-02-gap');
+  assert.equal((await latest(fx.db, 'video'))!.storage_path, committedVideo);
+  assert.equal((await holdRow(fx.db)).status, 'ok');
+
+  // And a new redo clears a leftover manifest before writing its own.
+  fs.writeFileSync(path.join(jobDir, 'revision-hold.json'), JSON.stringify({ id: 'r1', key: '02-gap', stage: 'caption', hadEvents: true, movedVideo: true, movedSheet: true }));
+  const again = await d.revise({ q: fx.q, refs, interpretation: sceneFix('03-dictionary'), meter: meter() });
+  assert.ok(again.ok, JSON.stringify(again));
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), committedModule);
+  assert.equal(fs.existsSync(path.join(jobDir, 'revision-hold.json')), false);
+});
+
+test('a collateral block names what could not be put back (the voice audio is hashed, not kept)', async () => {
+  const fx = await fixture();
+  fs.mkdirSync(path.join(fx.projectDir, 'assets', 'voice'), { recursive: true });
+  fs.writeFileSync(path.join(fx.projectDir, 'assets', 'voice', 'line-1.mp3'), 'voice');
+  const log: SessionLog = { prompts: [], atStart: [], paidMessages: 0 };
+  const query = sceneSession(log, { alsoWrite: { 'assets/voice/line-1.mp3': 'new voice', 'assets/frames/03-dictionary.js': 'tampered' } });
+  const out = await createExplainersDescription(depsFor(fx, { log, query })).revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+  assert.equal(out.ok ? null : out.reason, 'blocked');
+  if (!out.ok) {
+    assert.match(out.note, /could not be put back: assets\/voice\/line-1\.mp3/);
+    assert.doesNotMatch(out.note, /and they were put back/);
+  }
+  assert.equal(moduleOnDisk(fx, '03-dictionary.js'), MODULES['03-dictionary.js']);
 });

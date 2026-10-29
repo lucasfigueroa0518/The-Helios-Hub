@@ -464,20 +464,20 @@ export async function finishJob(
  * Jobs left `running` by a worker that died. Only one worker renders at a time
  * (E-02), so at start-up any running job is orphaned. Returns how many failed.
  *
- * A finished render held by a Targeted Revisions scene redo (stage REVISION_STAGE) is not a
- * failed render: it goes back to `ok` with its video unchanged (the redo writes its result only
- * in one final statement that needs the hold, so an interrupted redo changed nothing).
+ * A finished render held by a Targeted Revisions scene redo (stage `revision:<id>`) is not a
+ * render: it is left alone here. helios-explainers' start-up puts its folder back and releases it
+ * first (lib/revisions/explainers-folder.ts recoverSceneRedos), and `--once` must not touch a hold a
+ * live worker may own.
  */
 export const REVISION_STAGE = 'revision';
 
 export async function failStaleRunningJobs(db: Queryable, reason: string): Promise<number> {
-  await db.query(`UPDATE explainers.jobs SET status = 'ok', stage = 'revision_interrupted' WHERE status = 'running' AND stage = $1`, [REVISION_STAGE]);
   const { rows } = await db.query(
     `UPDATE explainers.jobs
         SET status = 'failed', error = $1, finished_at = now()
-      WHERE status = 'running'
+      WHERE status = 'running' AND coalesce(stage, '') NOT LIKE $2
       RETURNING id`,
-    [reason],
+    [reason, `${REVISION_STAGE}:%`],
   );
   return rows.length;
 }

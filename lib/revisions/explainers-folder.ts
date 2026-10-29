@@ -10,9 +10,10 @@
  *   putBack   renames them back over whatever the session left (which is set aside as
  *             `*.failed-rev<id>`), then removes the manifest. The in-process rollback and the
  *             start-up recovery both use it.
- *   recoverSceneRedos  helios-explainers start-up, BEFORE failStaleRunningJobs: every job still held
- *             by a redo is put back from its manifest and released with the stage it had. Only that
- *             worker runs explainer redos, so no other process ever releases a live hold.
+ *   recoverSceneRedos  helios-explainers start-up, BEFORE failStaleRunningJobs (which leaves redo
+ *             holds alone): every job still held by a redo is put back from its manifest (only when the
+ *             manifest is the current hold's) and released with the stage it had. Only that worker runs
+ *             explainer redos, so no other process ever releases a live hold.
  *
  * The collateral check: a scene redo may change only its own scene. Every other frame module and
  * sound-events file, STORYBOARD.md, SCRIPT.md, audio_meta.json, assets/world/world.js and the voice
@@ -25,9 +26,14 @@ import path from 'node:path';
 
 import type { Queryable } from '@/lib/explainers/db';
 
-/** The stage a redo's hold carries (lib/explainers/repository.ts REVISION_STAGE). */
+/**
+ * A redo's hold carries stage `revision:<redo id>` (lib/explainers/repository.ts REVISION_STAGE is the
+ * prefix). The id is also the manifest's, so recovery only ever acts on the manifest of the CURRENT
+ * hold: a manifest an earlier, committed redo left behind is never replayed.
+ */
 export const HOLD_STAGE = 'revision';
 const MANIFEST = 'revision-hold.json';
+export const holdStage = (token: string) => `${HOLD_STAGE}:${token}`;
 
 export type RedoManifest = { id: string; key: string; stage: string; hadEvents: boolean; movedVideo: boolean; movedSheet: boolean };
 
@@ -45,15 +51,15 @@ const paths = (jobDir: string, key: string, id: string) => {
   };
 };
 
-/** Hold the job's running slot. The stage it had ('' for none), or null when a render or another redo is running. */
-export async function hold(db: Queryable, jobId: string): Promise<string | null> {
+/** Hold the job's running slot for redo `token`. The stage it had ('' for none), or null when a render or another redo is running. */
+export async function hold(db: Queryable, jobId: string, token: string): Promise<string | null> {
   try {
     const { rows } = await db.query<{ old: string | null }>(
       `UPDATE explainers.jobs j SET status = 'running', stage = $2
          FROM (SELECT stage AS old FROM explainers.jobs WHERE id = $1) o
         WHERE j.id = $1 AND j.status = 'ok' AND NOT EXISTS (SELECT 1 FROM explainers.jobs r WHERE r.status = 'running')
         RETURNING o.old`,
-      [jobId, HOLD_STAGE],
+      [jobId, holdStage(token)],
     );
     return rows.length ? (rows[0]!.old ?? '') : null;
   } catch (e) {
@@ -63,8 +69,9 @@ export async function hold(db: Queryable, jobId: string): Promise<string | null>
   }
 }
 
-export async function release(db: Queryable, jobId: string, stage: string): Promise<void> {
-  await db.query(`UPDATE explainers.jobs SET status = 'ok', stage = $2 WHERE id = $1 AND status = 'running' AND stage = $3`, [jobId, stage || null, HOLD_STAGE]);
+/** Release redo `token`'s hold, back to `stage`. */
+export async function release(db: Queryable, jobId: string, token: string, stage: string): Promise<void> {
+  await db.query(`UPDATE explainers.jobs SET status = 'ok', stage = $2 WHERE id = $1 AND status = 'running' AND stage = $3`, [jobId, stage || null, holdStage(token)]);
 }
 
 /** Write the manifest, then rename the scene's files and the local video and contact sheet aside. */
@@ -92,7 +99,7 @@ export function putBack(jobDir: string, m: RedoManifest): void {
   fs.rmSync(p.manifest, { force: true });
 }
 
-/** The redo was kept: the manifest goes; the `*.before-rev<id>` files stay as history. */
+/** The redo was kept (or is starting): the manifest goes; any `*.before-rev<id>` files stay as history. */
 export function finishAside(jobDir: string): void {
   fs.rmSync(path.join(jobDir, MANIFEST), { force: true });
 }
@@ -106,16 +113,43 @@ export function readManifest(jobDir: string): RedoManifest | null {
   }
 }
 
-/** helios-explainers start-up: put back and release every job a redo still holds. Returns their ids. */
-export async function recoverSceneRedos(db: Queryable, jobsRoot: string): Promise<string[]> {
-  const { rows } = await db.query<{ id: string }>(`SELECT id::text AS id FROM explainers.jobs WHERE status = 'running' AND stage = $1`, [HOLD_STAGE]);
-  for (const { id } of rows) {
-    const jobDir = path.join(jobsRoot, id);
-    const m = readManifest(jobDir);
-    if (m) putBack(jobDir, m);
-    await release(db, id, m ? m.stage : 'revision_interrupted');
+/**
+ * helios-explainers start-up (never in --once, which may run beside a live redo): put back and
+ * release every job a redo still holds. Each job is isolated: a failure to put its files back is
+ * logged with the job id and its hold is still released (stage revision_interrupted), so one bad
+ * folder never stops the worker from starting or blocks renders. Returns the job ids it released.
+ */
+export async function recoverSceneRedos(db: Queryable, jobsRoot: string, log: (event: string, fields: Record<string, unknown>) => void = () => undefined): Promise<string[]> {
+  const { rows } = await db.query<{ id: string; stage: string }>(
+    `SELECT id::text AS id, stage FROM explainers.jobs WHERE status = 'running' AND stage LIKE $1`,
+    [`${HOLD_STAGE}:%`],
+  );
+  const done: string[] = [];
+  for (const { id, stage } of rows) {
+    const token = stage.slice(HOLD_STAGE.length + 1);
+    let back = 'revision_interrupted';
+    try {
+      const jobDir = path.join(jobsRoot, id);
+      const m = readManifest(jobDir);
+      if (m && m.id === token) {
+        putBack(jobDir, m);
+        back = m.stage;
+      } else if (m) {
+        // Left by an earlier redo that was kept: never replayed over its committed files.
+        log('scene_redo_stale_manifest', { jobId: id, manifest: m.id, hold: token });
+        finishAside(jobDir);
+      }
+    } catch (error) {
+      log('scene_redo_recovery_failed', { jobId: id, error: error instanceof Error ? error.message : String(error) });
+    }
+    try {
+      await release(db, id, token, back);
+      done.push(id);
+    } catch (error) {
+      log('scene_redo_release_failed', { jobId: id, error: error instanceof Error ? error.message : String(error) });
+    }
   }
-  return rows.map((r) => r.id);
+  return done;
 }
 
 // ── The collateral check ───────────────────────────────────────────────────
