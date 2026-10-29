@@ -269,6 +269,62 @@ test('every candidate failing to score adds nothing and says scoring was unavail
   assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0);
 });
 
+const paid = (run: () => Promise<{ candidates: SeedCandidate[]; usd: number }>, approved = true) => {
+  const spent = { n: 0 };
+  return { spent, paid: { approved: () => approved, run: async () => { spent.n += 1; return run(); } } };
+};
+
+test('paid search: not approved means nothing is spent and nothing is offered', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const { spent, paid: p } = paid(async () => ({ candidates: [], usd: 0 }), false);
+  const out = await addReelSeed({ headline: 'Anthropic releases Claude Opus 5.5', confirmPaid: true }, { jev, search: NO_SEARCH, paid: p });
+  assert.deepEqual(out, { status: 'no_match', reason: 'nothing_found' });
+  assert.equal(spent.n, 0);
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0);
+});
+
+test('paid search: approved but not confirmed offers the estimate and spends nothing', async () => {
+  await reelsDb();
+  const { jev } = stub();
+  const { spent, paid: p } = paid(async () => ({ candidates: [], usd: 0 }));
+  const out = await addReelSeed({ headline: 'Anthropic releases Claude Opus 5.5' }, { jev, search: NO_SEARCH, paid: p });
+  assert.deepEqual(out, { status: 'needs_paid_confirm', estimateUsd: 0.1, maxUsd: 0.15 });
+  assert.equal(spent.n, 0);
+});
+
+test('paid search: confirmed, it runs once, builds the idea from the best article, and a repeated confirm adds nothing more', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const { spent, paid: p } = paid(async () => ({ candidates: [story('https://publisher.test/n', 'Anthropic releases Claude Opus 5.5 - Verge', 'web')], usd: 0.07 }));
+  const input = { headline: 'Anthropic releases Claude Opus 5.5', confirmPaid: true };
+  const out = await add(input, { jev, search: NO_SEARCH, paid: p });
+  assert.equal(out.substitute?.url, 'https://publisher.test/n');
+  const again = await add(input, { jev, search: NO_SEARCH, paid: p });
+  assert.equal(again.repeat, true);
+  assert.equal(spent.n, 1, 'one paid search in total');
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 1);
+});
+
+test('paid search: a free tier that answers means the paid tier is never offered', async () => {
+  await reelsDb();
+  const { jev } = stub();
+  const { spent, paid: p } = paid(async () => ({ candidates: [], usd: 0 }));
+  const out = await add({ headline: 'Anthropic releases Claude Opus 5.5' }, { jev, search: { ...NO_SEARCH, collected: async () => [story('https://wire.test/opus', 'Anthropic releases Claude Opus 5.5 with lower prices')] }, paid: p });
+  assert.equal(out.substitute?.why, 'headline_only');
+  assert.equal(spent.n, 0);
+});
+
+test('paid search: a search that fails or finds nothing related adds nothing', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const boom = paid(async () => { throw new Error('529 overloaded'); });
+  assert.deepEqual(await addReelSeed({ headline: 'Anthropic releases Claude Opus 5.5', confirmPaid: true }, { jev, search: NO_SEARCH, paid: boom.paid }), { status: 'no_match', reason: 'nothing_found' });
+  const unrelated = paid(async () => ({ candidates: [story('https://x.test/a', 'Local bakery wins regional award', 'web')], usd: 0.05 }));
+  assert.deepEqual(await addReelSeed({ headline: 'Anthropic releases Claude Opus 5.5', confirmPaid: true }, { jev, search: NO_SEARCH, paid: unrelated.paid }), { status: 'no_match', reason: 'nothing_found' });
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0);
+});
+
 test('a failed model call keeps the idea, shown “not scored yet”, and a pin on it is refused', async () => {
   const pg = await reelsDb();
   const { jev } = stub({ fail: true });

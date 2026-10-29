@@ -1,7 +1,14 @@
+import type Anthropic from '@anthropic-ai/sdk';
+
+import { newAnthropic } from '@/lib/anthropic-client';
+import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
+import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
 import { dbQuery } from '@/lib/db';
-import { REFERENCE_POOL_HOURS } from '@/lib/reels/config';
+import { B6_MODEL, REFERENCE_POOL_HOURS } from '@/lib/reels/config';
 import { isPrivateHost } from '@/lib/net/private-host';
 import { fetchPageFollowingRedirects, fetchText } from '@/lib/reels/net/http';
+import { REPORT_ARTICLES_TOOL, SEED_SEARCH_SYSTEM, buildSeedSearchUserPrompt } from '@/lib/reels/prompts/seed-search';
+import { recordCost } from '@/lib/reels/repository';
 import { parseFeed } from '@/lib/reels/net/feed';
 import { parsePage } from '@/lib/reels/net/html';
 import type { JevRunner } from '@/lib/reels/jev/runner';
@@ -135,4 +142,85 @@ export async function pickBest(seedHeadline: string, candidates: readonly SeedCa
     if (!best || r.value.net > (best.score.net ?? -Infinity)) best = { candidate: related[i]!, score: r.value };
   });
   return best ?? { failed: 'none_related' };
+}
+
+/** The paid search's output cap, and the input a search is assumed to read at most; with the 3 searches they bound the cost. */
+export const PAID_MAX_OUTPUT_TOKENS = 1000;
+/** An assumption, not a measurement: what 3 searches' results add to the input. The cost test is only as good as this. */
+export const PAID_INPUT_ALLOWANCE_TOKENS = 30_000;
+
+/** What the drawer quotes before a paid search runs: about 7 to 10 cents in practice, quoted at the top of that. */
+export function estimatePaidSearchUsd(): number {
+  return 0.1;
+}
+
+/** The paid search stays off until Tommy approves the prompt wording (lib/reels/prompts/seed-search.ts) and sets this. */
+export function seedSearchApproved(): boolean {
+  return process.env.REELS_SEED_SEARCH_PROMPT_APPROVED === 'true';
+}
+
+export type PaidSearchDeps = {
+  client: { messages: { create(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message> } };
+  readPage?: (url: string) => Promise<string | null>;
+};
+
+/**
+ * One model call with the web_search tool (at most SEED_WEB_SEARCHES searches, PAID_MAX_OUTPUT_TOKENS out). The model reports
+ * links only; each page is read with the plain page reader, so the idea is built from the real article. The spend is
+ * recorded and returned.
+ */
+export async function webCandidates(headline: string, deps: PaidSearchDeps): Promise<{ candidates: SeedCandidate[]; usd: number }> {
+  const tools: Anthropic.MessageCreateParams['tools'] = [
+    { type: 'web_search_20250305', name: 'web_search', max_uses: SEED_WEB_SEARCHES },
+    withToolCache(REPORT_ARTICLES_TOOL as Anthropic.Tool),
+  ];
+  const message = await deps.client.messages.create({
+    model: B6_MODEL,
+    max_tokens: PAID_MAX_OUTPUT_TOKENS,
+    system: cachedSystemText(SEED_SEARCH_SYSTEM),
+    messages: [{ role: 'user', content: buildSeedSearchUserPrompt(headline) }],
+    tools,
+  });
+  const priced = priceAnthropicMessages([message], { modelId: B6_MODEL, fallbackCacheTtl: '1h' });
+  const usd = Number(priced.costUsd);
+  await recordCost({
+    runId: null,
+    vendor: 'anthropic',
+    component: 'seed-search',
+    inputTokens: priced.uncached_input_tokens + priced.cache_read_input_tokens + priced['cache_creation.ephemeral_5m_input_tokens'] + priced['cache_creation.ephemeral_1h_input_tokens'],
+    outputTokens: priced.output_tokens,
+    usd,
+  });
+  if (usd > SEED_MAX_USD) console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'reels-seed', message: 'paid_search_over_ceiling', usd, ceiling: SEED_MAX_USD }));
+
+  const reported: Array<{ url: string; headline: string; outlet: string }> = [];
+  for (const block of message.content) {
+    if (block.type !== 'tool_use' || block.name !== REPORT_ARTICLES_TOOL.name) continue;
+    const articles = (block.input as { articles?: unknown }).articles;
+    if (!Array.isArray(articles)) continue;
+    for (const a of articles as Array<Record<string, unknown>>) {
+      if (typeof a?.url === 'string' && typeof a.headline === 'string' && /^https?:\/\//i.test(a.url)) {
+        reported.push({ url: a.url, headline: a.headline, outlet: typeof a.outlet === 'string' && a.outlet ? a.outlet : new URL(a.url).hostname.replace(/^www\./, '') });
+      }
+    }
+  }
+  const readPage = deps.readPage ?? readPageText;
+  const opened = await Promise.all(
+    reported.slice(0, SEED_WEB_SEARCHES).map(async (a): Promise<SeedCandidate | null> => {
+      try {
+        if (isPrivateHost(new URL(a.url).hostname)) return null;
+        const body = (await readPage(a.url))?.trim() ?? '';
+        return body.length >= MIN_BODY_CHARS ? { url: a.url, headline: a.headline, body, outlet: a.outlet, source: 'web' } : null;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return { candidates: opened.filter((c): c is SeedCandidate => c != null), usd };
+}
+
+/** The real paid search: a client from ANTHROPIC_API_KEY. Throws when there is none. */
+export async function runPaidSearch(headline: string): Promise<{ candidates: SeedCandidate[]; usd: number }> {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set.');
+  return webCandidates(headline, { client: newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) });
 }

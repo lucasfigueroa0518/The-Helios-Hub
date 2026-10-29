@@ -7,7 +7,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createPostIdea, insertSource } from '@/lib/reels/repository';
-import { OVERLAP_FLOOR, SEED_MAX_CANDIDATES, collectedCandidates, headlineOverlap, newsCandidates, pickBest, type SeedCandidate } from '@/lib/reels/seed-search';
+import { OVERLAP_FLOOR, SEED_MAX_CANDIDATES, collectedCandidates, headlineOverlap, newsCandidates, pickBest, type SeedCandidate,
+  PAID_INPUT_ALLOWANCE_TOKENS, PAID_MAX_OUTPUT_TOKENS, SEED_MAX_USD, SEED_WEB_SEARCHES, estimatePaidSearchUsd, seedSearchApproved, webCandidates, type PaidSearchDeps } from '@/lib/reels/seed-search';
+import { B6_MODEL } from '@/lib/reels/config';
+import { ratesForModel } from '@/lib/anthropic-pricing';
+import { computeSearchCostUsd } from '@/lib/drafting/cost';
 
 import { PAGE, RUN, reelsDb, stub } from './fixtures/reels-seed';
 
@@ -87,4 +91,80 @@ test('pickBest: nothing related, or every score failing, is a named failure, not
   assert.deepEqual(await pickBest('Anthropic releases Claude Opus 5.5', [cand('https://a.test/2', 'Local bakery wins regional award')], stub().jev), { failed: 'none_related' });
   assert.deepEqual(await pickBest('Anthropic releases Claude Opus 5.5', [cand('https://a.test/1', 'Anthropic releases Claude Opus 5.5')], stub({ fail: true }).jev), { failed: 'scoring_unavailable' });
   assert.deepEqual(await pickBest('Anthropic releases Claude Opus 5.5', [], stub().jev), { failed: 'none_related' });
+});
+
+type Params = { model: string; max_tokens: number; system: Array<{ cache_control?: unknown }>; tools: Array<{ name: string; type?: string; max_uses?: number; cache_control?: unknown }> };
+/** A stub Anthropic client: records each request and answers with the model "reporting" the given articles. */
+function claude(articles: Array<{ url: string; headline: string; outlet: string }>, usage = { input_tokens: 20_000, output_tokens: 300, searches: 3 }) {
+  const seen: Params[] = [];
+  return {
+    seen,
+    client: {
+      messages: {
+        async create(params: Params) {
+          seen.push(params);
+          return {
+            id: 'msg_stub',
+            content: [{ type: 'tool_use', id: 'tu_1', name: 'report_articles', input: { articles } }],
+            usage: { input_tokens: usage.input_tokens, output_tokens: usage.output_tokens, server_tool_use: { web_search_requests: usage.searches } },
+          } as never;
+        },
+      },
+    } as unknown as PaidSearchDeps['client'],
+  };
+}
+
+test('the paid search is capped at 3 searches and 1,000 output tokens, with the stable prefix cached', async () => {
+  await reelsDb();
+  const { client, seen } = claude([]);
+  await webCandidates('Anthropic releases Claude Opus 5.5', { client, readPage: async () => PAGE });
+  const req = seen[0]!;
+  assert.equal(req.model, B6_MODEL);
+  assert.equal(req.max_tokens, PAID_MAX_OUTPUT_TOKENS);
+  assert.equal(PAID_MAX_OUTPUT_TOKENS, 1000);
+  assert.equal(req.tools.find((t) => t.type === 'web_search_20250305')?.max_uses, SEED_WEB_SEARCHES);
+  assert.ok(req.system[0]!.cache_control, 'the system prompt is cached');
+  assert.ok(req.tools.at(-1)!.cache_control, 'the last tool carries the cache breakpoint');
+});
+
+test('the paid search returns the articles the model reported, each read for its real text, and what it cost', async () => {
+  const pg = await reelsDb();
+  const { client } = claude([
+    { url: 'https://publisher.test/a', headline: 'Anthropic releases Claude Opus 5.5', outlet: 'The Verge' },
+    { url: 'https://publisher.test/b', headline: 'Opus 5.5 explained', outlet: 'Wired' },
+  ]);
+  const out = await webCandidates('Anthropic releases Claude Opus 5.5', { client, readPage: async (u) => (u.endsWith('/a') ? PAGE : 'short') });
+  assert.deepEqual(out.candidates.map((c) => [c.url, c.source, c.body.length > 200]), [['https://publisher.test/a', 'web', true]]);
+  const rates = ratesForModel(B6_MODEL);
+  const expected = computeSearchCostUsd(3) + (20_000 / 1e6) * rates.inputPerMtokUsd + (300 / 1e6) * rates.outputPerMtokUsd;
+  assert.ok(Math.abs(out.usd - expected) < 1e-6, `${out.usd} vs ${expected}`);
+  const logged = (await pg.query<{ usd: string; component: string }>(`SELECT usd::text, component FROM reels.cost_events WHERE component = 'seed-search'`)).rows;
+  assert.equal(logged.length, 1, 'the spend is recorded');
+});
+
+test('the paid search never reads a private address the model reports', async () => {
+  await reelsDb();
+  const { client } = claude([{ url: 'http://169.254.169.254/latest', headline: 'Anthropic releases Claude Opus 5.5', outlet: 'x' }]);
+  const out = await webCandidates('Anthropic releases Claude Opus 5.5', { client, readPage: async () => assert.fail('a private address is never read') });
+  assert.deepEqual(out.candidates, []);
+});
+
+test('the estimate is under the ceiling, and the worst case at current rates is too', () => {
+  const rates = ratesForModel(B6_MODEL);
+  const worst = computeSearchCostUsd(SEED_WEB_SEARCHES) + (PAID_INPUT_ALLOWANCE_TOKENS / 1e6) * rates.inputPerMtokUsd + (PAID_MAX_OUTPUT_TOKENS / 1e6) * rates.outputPerMtokUsd;
+  assert.ok(estimatePaidSearchUsd() <= SEED_MAX_USD);
+  assert.ok(worst <= SEED_MAX_USD, `worst case ${worst} is over ${SEED_MAX_USD}`);
+});
+
+test('the paid search is off until REELS_SEED_SEARCH_PROMPT_APPROVED=true', () => {
+  const was = process.env.REELS_SEED_SEARCH_PROMPT_APPROVED;
+  try {
+    delete process.env.REELS_SEED_SEARCH_PROMPT_APPROVED;
+    assert.equal(seedSearchApproved(), false);
+    process.env.REELS_SEED_SEARCH_PROMPT_APPROVED = 'true';
+    assert.equal(seedSearchApproved(), true);
+  } finally {
+    if (was === undefined) delete process.env.REELS_SEED_SEARCH_PROMPT_APPROVED;
+    else process.env.REELS_SEED_SEARCH_PROMPT_APPROVED = was;
+  }
 });

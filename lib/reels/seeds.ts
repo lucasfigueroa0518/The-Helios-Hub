@@ -2,7 +2,7 @@ import { dbQuery } from '@/lib/db';
 import { loadPublishedStoryKeys, storyUrlKey } from '@/lib/reels/copy/held-out';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { canonicalizeUrl } from '@/lib/reels/net/http';
-import { collectedCandidates, newsCandidates, pickBest, readPageText, type PickedStory, type SeedCandidate } from '@/lib/reels/seed-search';
+import { SEED_MAX_USD, collectedCandidates, estimatePaidSearchUsd, newsCandidates, pickBest, readPageText, runPaidSearch, seedSearchApproved, type PickedStory, type SeedCandidate } from '@/lib/reels/seed-search';
 import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
 import { createPostIdea, insertSource } from '@/lib/reels/repository';
 import { loadIdeaMaterial } from '@/lib/reels/scoring/store';
@@ -41,6 +41,8 @@ export type ReelSeedDeps = {
     collected?: (headline: string) => Promise<SeedCandidate[]>;
     news?: (headline: string) => Promise<SeedCandidate[]>;
   };
+  /** The paid web search: only when both free tiers found nothing, approved, and the person confirmed the cost. */
+  paid?: { approved: () => boolean; run: (headline: string) => Promise<{ candidates: SeedCandidate[]; usd: number }> };
 };
 
 export type ReelSeedResult = {
@@ -59,7 +61,7 @@ export type ReelSeedResult = {
 export type ReelSeedOutcome =
   | (ReelSeedResult & { status: 'added'; substitute?: { url: string; title: string; why: 'link_unreadable' | 'headline_only' } })
   | { status: 'duplicate'; existing: { id: string; headline: string; net: number | null; yours: boolean } }
-  | { status: 'needs_paid_confirm'; estimateUsd: number; maxUsd: number }
+  | { status: 'needs_paid_confirm'; estimateUsd: number; maxUsd: number; linkUnreadable?: true }
   | { status: 'no_match'; reason: 'nothing_found' | 'scoring_unavailable'; linkUnreadable?: true };
 
 const clean = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
@@ -102,10 +104,15 @@ export async function isUnscoredSeed(postIdeaId: string): Promise<boolean> {
 }
 
 /**
- * A related story for a headline: collected stories first, then Google News, taking the first tier that has a related story
- * that scores. A tier that errors counts as empty. Says why when none does.
+ * A related story for a headline: collected stories, then Google News (both free), then, only if the paid search is approved
+ * and the person confirmed its cost, a web search. Takes the first tier with a related story that scores. A tier that errors
+ * counts as empty. Says why when none does, or asks for the confirmation.
  */
-async function findSubstitute(headline: string, deps: ReelSeedDeps): Promise<PickedStory | Extract<ReelSeedOutcome, { status: 'no_match' }>> {
+async function findSubstitute(
+  headline: string,
+  deps: ReelSeedDeps,
+  confirmPaid: boolean,
+): Promise<PickedStory | Extract<ReelSeedOutcome, { status: 'no_match' | 'needs_paid_confirm' }>> {
   const tiers = [deps.search?.collected ?? collectedCandidates, deps.search?.news ?? ((h: string) => newsCandidates(h))];
   let scoringDown = false;
   for (const tier of tiers) {
@@ -113,7 +120,21 @@ async function findSubstitute(headline: string, deps: ReelSeedDeps): Promise<Pic
     if ('candidate' in picked) return picked;
     if (picked.failed === 'scoring_unavailable') scoringDown = true;
   }
-  return { status: 'no_match', reason: scoringDown ? 'scoring_unavailable' : 'nothing_found' };
+  // Scoring is down: a paid search could not be scored either, so do not spend on it.
+  if (scoringDown) return { status: 'no_match', reason: 'scoring_unavailable' };
+  const paid = deps.paid ?? { approved: seedSearchApproved, run: runPaidSearch };
+  if (!paid.approved()) return { status: 'no_match', reason: 'nothing_found' };
+  if (!confirmPaid) return { status: 'needs_paid_confirm', estimateUsd: estimatePaidSearchUsd(), maxUsd: SEED_MAX_USD };
+  let found: { candidates: SeedCandidate[]; usd: number };
+  try {
+    found = await paid.run(headline);
+  } catch (error) {
+    console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'reels-seed', message: 'paid_search_failed', error: error instanceof Error ? error.message : String(error) }));
+    return { status: 'no_match', reason: 'nothing_found' };
+  }
+  const picked = await pickBest(headline, found.candidates, deps.jev);
+  if ('candidate' in picked) return picked;
+  return { status: 'no_match', reason: picked.failed === 'scoring_unavailable' ? 'scoring_unavailable' : 'nothing_found' };
 }
 
 /** Notes shown beside the result. Each read is read-only and never throws. */
@@ -247,7 +268,7 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
   let substitute: Extract<ReelSeedOutcome, { status: 'added' }>['substitute'];
   let found: PickedStory | null = null;
   if (!body) {
-    const result = await findSubstitute(headline, deps);
+    const result = await findSubstitute(headline, deps, input.confirmPaid === true);
     if (!('candidate' in result)) return unreadable ? { ...result, linkUnreadable: true } : result;
     found = result;
     canonical = canonicalizeUrl(found.candidate.url);
