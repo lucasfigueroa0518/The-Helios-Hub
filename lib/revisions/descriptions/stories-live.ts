@@ -103,6 +103,8 @@ export const liveStoriesDeps: StoriesDeps = {
     ]);
     const settings = await loadSettings(liveStoriesDb);
     const create = await meteredStoriesCreate(liveWriterCreate(), m);
+    // Errors (an outage, a refusal, no tool call) are thrown, never turned into "no rewrite": the
+    // description reports them as failed, and only a second grounding miss as blocked.
     try {
       // The build's writer call (morning-download.ts writeFor) for this one story, under a short id.
       const out = await writeStructured<import('@/lib/stories/prompts').MdHeadlinesOut>({
@@ -114,8 +116,7 @@ export const liveStoriesDeps: StoriesDeps = {
       return s?.headline ? { headline: s.headline } : null;
     } catch (e) {
       if (m.stopped()) m.halt();
-      if (e instanceof Error && e.name === 'CeilingReached') throw e;
-      return null;
+      throw e;
     }
   },
 
@@ -136,6 +137,11 @@ export const liveStoriesDeps: StoriesDeps = {
     const photo = await finder.find(request);
     if (m.stopped()) m.halt();
     return photo;
+  },
+
+  async photoSize(url) {
+    const { createSizeProbe } = await import('@/lib/social/photos/size');
+    return createSizeProbe()(url);
   },
 
   async unschedule(q, setId) {

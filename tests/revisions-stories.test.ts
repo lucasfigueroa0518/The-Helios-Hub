@@ -94,6 +94,8 @@ type Opts = {
   rewrite?: string | null;
   problems?: string[];
   source?: string | null;
+  /** Pixel sizes by URL (default 2000×1500); null = unreadable. */
+  sizes?: Record<string, { w: number; h: number } | null>;
   deps?: Partial<StoriesDeps>;
 };
 
@@ -105,6 +107,7 @@ function setup(o: Opts = {}) {
     rewrites: [] as string[],
     unschedule: [] as string[],
     paid: 0,
+    sized: [] as string[],
   };
   const finds = [...(o.finds ?? [FRESH])];
   const scores = [...(o.scores ?? [0.9])];
@@ -137,6 +140,10 @@ function setup(o: Opts = {}) {
       calls.paid++;
       m.spend(0.02);
       return finds.length > 1 ? finds.shift()! : (finds[0] ?? null);
+    },
+    async photoSize(url) {
+      calls.sized.push(url);
+      return o.sizes && url in o.sizes ? o.sizes[url]! : { w: 2000, h: 1500 };
     },
     async unschedule(_q, setId) {
       calls.unschedule.push(setId);
@@ -561,7 +568,121 @@ function depsWithRealUnschedule(calls: ReturnType<typeof setup>['calls']): Stori
     grounded: async () => 0,
     rewrite: async () => null,
     findPhoto: async () => null,
+    photoSize: async () => null,
     unschedule: (q, setId) => storiesDescription.unschedule(q, { setId }),
     newId: () => `e${++ids}`,
   };
 }
+
+/* ── Fix round 1: opener cover rules, honest rewrite errors, no rejected photos back ── */
+
+test('opener photo swap applies the cover rules: a logo is rejected, then a good photo is accepted', async () => {
+  const s = await seed();
+  const GOOD: Photo = { src: 'https://img.test/anthropic-hq.jpg', credit: 'Photo: Ann · CC BY 4.0', kind: 'scene' };
+  const LOGO: Photo = { src: 'https://img.test/anthropic-logo.png', credit: 'Logo: Anthropic', kind: 'logo' };
+  const { desc, calls } = setup({ finds: [LOGO, GOOD] });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(1), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(calls.finds.length, 2);
+  assert.ok(calls.finds[1]!.exclude.has(LOGO.src), 'the rejected logo is not offered again');
+  assert.equal(srcOf((await framesOf(s.q, s.setId))[0]!), GOOD.src);
+  assert.deepEqual(calls.sized, [GOOD.src]);
+});
+
+test('opener photo swap applies the cover rules: an undersized photo is rejected, then one over 1080 is accepted', async () => {
+  const s = await seed();
+  const SMALL: Photo = { src: 'https://img.test/small.jpg', credit: 'Photo: Sam · CC BY 4.0', kind: 'person' };
+  const BIG: Photo = { src: 'https://img.test/big.jpg', credit: 'Photo: Bea · CC BY 4.0', kind: 'person' };
+  const { desc, calls } = setup({ finds: [SMALL, BIG], sizes: { [SMALL.src]: { w: 1200, h: 900 }, [BIG.src]: { w: 1600, h: 1080 } } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(1), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.deepEqual(calls.sized, [SMALL.src, BIG.src]);
+  assert.equal(srcOf((await framesOf(s.q, s.setId))[0]!), BIG.src);
+});
+
+test('opener photo swap: only undersized or unreadable photos fails with a plain note and writes nothing', async () => {
+  const s = await seed();
+  const SMALL: Photo = { src: 'https://img.test/small.jpg', credit: 'Photo: Sam · CC BY 4.0', kind: 'person' };
+  const UNKNOWN: Photo = { src: 'https://img.test/unknown.jpg', credit: 'Photo: Uma · CC BY 4.0', kind: 'scene' };
+  const { desc, calls } = setup({ finds: [SMALL, UNKNOWN], sizes: { [SMALL.src]: { w: 800, h: 600 }, [UNKNOWN.src]: null } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(1), 'photo'), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) {
+    assert.equal(res.reason, 'failed');
+    assert.match(res.note, /too small for the opening frame/);
+  }
+  assert.equal(calls.rendered.length, 0);
+  assert.deepEqual(await framesOf(s.q, s.setId), s.frames);
+  assert.deepEqual(await payloadOf(s.q, s.setId), s.payload);
+});
+
+test('story frame photo swaps are not held to the cover floor', async () => {
+  const s = await seed();
+  const { desc, calls } = setup({ finds: [FRESH], sizes: { [FRESH.src]: { w: 700, h: 600 } } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.deepEqual(calls.sized, []);
+});
+
+test('wording: a writer outage is failed with an honest note, never a fact-check block; nothing written', async () => {
+  const s = await seed();
+  const { desc } = setup({ scores: [0.3], deps: { rewrite: async () => { throw new Error('529 overloaded'); } } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'wording', { field: 'headline', value: 'Claude writes all Anthropic code.' }), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) {
+    assert.equal(res.reason, 'failed');
+    assert.match(res.note, /couldn't reach the writer/);
+    assert.doesNotMatch(res.note, /fact check could not/);
+  }
+  assert.deepEqual(await framesOf(s.q, s.setId), s.frames);
+
+  const g = setup({ deps: { grounded: async () => { throw new Error('Jev timeout'); } } });
+  const res2 = await g.desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'wording', { field: 'headline', value: 'Claude writes all Anthropic code.' }), meter: meter() });
+  assert.equal(res2.ok, false);
+  if (!res2.ok) {
+    assert.equal(res2.reason, 'failed');
+    assert.match(res2.note, /couldn't reach the fact check/);
+  }
+  const n = setup({ scores: [0.3], rewrite: null });
+  const res3 = await n.desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'wording', { field: 'headline', value: 'Claude writes all Anthropic code.' }), meter: meter() });
+  assert.equal(res3.ok, false);
+  if (!res3.ok) assert.equal(res3.reason, 'failed');
+  assert.deepEqual(await framesOf(s.q, s.setId), s.frames);
+});
+
+test('swap frame 2 twice: the second result differs from both the original and the first replacement', async () => {
+  const s = await seed();
+  const SECOND: Photo = { src: 'https://img.test/london-2.jpg', credit: 'Photo: Lee · CC BY 4.0', kind: 'scene' };
+  const a = setup({ finds: [FRESH] });
+  assert.equal((await a.desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(2), 'photo'), meter: meter() })).ok, true);
+  // The finder offers the original (turned down) first, then the first replacement, then a new one.
+  const b = setup({ finds: [OPENAI, FRESH, SECOND] });
+  const res = await b.desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(2), 'photo', { hint: 'the London office' }), meter: meter() });
+  assert.ok(b.calls.finds.every((r) => r.exclude.has(OPENAI.src) && r.exclude.has(FRESH.src)));
+  // Two searches: the original and the first replacement are both refused, so the swap fails honestly.
+  assert.equal(res.ok, false);
+  assert.equal(srcOf((await framesOf(s.q, s.setId))[1]!), FRESH.src);
+  const c = setup({ finds: [SECOND] });
+  const ok = await c.desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(2), 'photo'), meter: meter() });
+  assert.equal(ok.ok, true, JSON.stringify(ok));
+  const now = srcOf((await framesOf(s.q, s.setId))[1]!);
+  assert.equal(now, SECOND.src);
+  assert.notEqual(now, OPENAI.src);
+  assert.notEqual(now, FRESH.src);
+});
+
+test('a photo turned down in an applied revision (revisions log) is excluded even without a photo log entry', async () => {
+  const s = await seed();
+  const TURNED_DOWN = 'https://img.test/turned-down.jpg';
+  const item = (await s.q(`SELECT id::text AS id FROM social_hub.content_items WHERE vertical = 'stories' AND native_ref = $1`, [s.setId])).rows[0]!.id as string;
+  await s.q(
+    `INSERT INTO revisions.requests (vertical, item_id, refs, instruction, status, part, fix_kind, before)
+     VALUES ('stories', $1, $2::jsonb, 'different photo', 'applied', $3::jsonb, 'photo', $4::jsonb)`,
+    [item, JSON.stringify(refsOf(s.setId)), JSON.stringify(frame(4)), JSON.stringify({ copy: { ...MD[3], photo: { src: TURNED_DOWN, credit: 'x', kind: 'scene' } }, files: [] })],
+  );
+  const { desc, calls } = setup({ finds: [{ src: TURNED_DOWN, credit: 'x', kind: 'scene' }, FRESH] });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(4), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.ok(calls.finds[0]!.exclude.has(TURNED_DOWN));
+  assert.equal(srcOf((await framesOf(s.q, s.setId))[3]!), FRESH.src);
+});

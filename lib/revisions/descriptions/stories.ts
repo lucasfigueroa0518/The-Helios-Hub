@@ -94,13 +94,22 @@ export type StoriesDeps = {
   sourceText: (q: Query, story: { key: string; url: string }) => Promise<string | null>;
   /** Jev md-grounding@1 on a headline: the `supported` probability. Charges `meter` as it pays. */
   grounded: (input: { setId: string; headline: string; source: string }, meter: Metered) => Promise<number>;
-  /** ONE Sonnet md-headlines rewrite of the story with `note`, or null. Charges `meter` as it pays. */
+  /**
+   * ONE Sonnet md-headlines rewrite of the story with `note`; null only when the writer answered with no
+   * headline. An outage, refusal or other error THROWS (reported as failed, not as a fact-check miss).
+   * Charges `meter` as it pays.
+   */
   rewrite: (
     input: { setId: string; story: { key: string; headline: string; outlet: string; url: string; body: string }; note: string },
     meter: Metered,
   ) => Promise<{ headline: string } | null>;
   /** ONE finder search (createLivePhotoFinder().find) for `request`, or null. Charges `meter` as it pays. */
   findPhoto: (input: { setId: string; request: PhotoRequest }, meter: Metered) => Promise<Photo | null>;
+  /**
+   * A photo's pixel size (the finder's own size probe, lib/social/photos/size.ts createSizeProbe), or
+   * null when it can't be read. Free (an HTTP read, no model). Used for the opener's cover floor.
+   */
+  photoSize: (url: string) => Promise<{ w: number; h: number } | null>;
   /** The type's own un-approve: repository unscheduleSet (the set goes back to ready, its slot cancelled). */
   unschedule: (q: Query, setId: string) => Promise<{ ok: boolean; note: string }>;
   /** A short id for the revision's storage key. Default: random. */
@@ -277,6 +286,37 @@ function loggedAsk(set: SetRow, label: string): { kind: string; query: string } 
   return m ? { kind: m[1]!, query: m[2]! } : null;
 }
 
+const REPLACED = /^revision: replaced (\S+) with /;
+
+/**
+ * Photos this frame showed before a "different photo" revision replaced them: from the frame's photo-log
+ * steps (`revision: replaced X with Y`) and from the revisions log (applied revisions of this frame,
+ * their `before` photo), which also covers sets without a photo log (Guess the Number).
+ */
+async function rejectedPhotos(q: Query, set: SetRow, label: string, seq: number): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const step of logOf(set, label)?.steps ?? []) {
+    const m = REPLACED.exec(step);
+    if (m && m[1] !== 'no') out.add(m[1]!);
+  }
+  try {
+    const { rows } = await q(
+      `SELECT before FROM revisions.requests
+        WHERE vertical = 'stories' AND refs->>'setId' = $1 AND part->>'kind' = 'frame' AND part->>'key' = $2
+          AND fix_kind = 'photo' AND status = 'applied' AND before IS NOT NULL`,
+      [set.id, String(seq)],
+    );
+    for (const r of rows) {
+      const before = r.before as { copy?: FrameData; photo?: Photo | null } | null;
+      const src = (before?.copy ? framePhoto(before.copy)?.src : undefined) ?? before?.photo?.src;
+      if (src) out.add(src);
+    }
+  } catch {
+    // The revisions log is not there (a database without revisions_schema.sql): the photo log alone counts.
+  }
+  return out;
+}
+
 export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescription {
   const newId = deps.newId ?? (() => randomUUID().replace(/-/g, '').slice(0, 10));
 
@@ -392,18 +432,35 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
         const source = await deps.sourceText(q, { key: story.key, url: story.url });
         if (!source) return failed(`I could not re-read frame ${seq}'s article to fact-check the new headline, so nothing was changed.`);
         const { GROUNDING_BAR } = await import('@/lib/stories/build/morning-download');
+        // An outage or error from the fact check or the writer is "could not do it" (failed), never a
+        // fact-check rejection; a ceiling stop re-throws.
+        type Called<T> = { ok: true; value: T } | { ok: false; error: string };
+        const call = async <T,>(f: () => Promise<T>): Promise<Called<T>> => {
+          try {
+            const value = await f();
+            m.check();
+            return { ok: true, value };
+          } catch (e) {
+            m.check();
+            return { ok: false, error: errText(e) };
+          }
+        };
+        const unreachable = (what: string, error: string) => failed(`I couldn't reach the ${what} (${error}), so frame ${seq}'s headline was not changed.`);
         let headline = value;
-        const first = await deps.grounded({ setId: set.id, headline, source }, m);
-        m.check();
-        if (!(first >= GROUNDING_BAR)) {
+        const was = row.copy.headline;
+        const first = await call(() => deps.grounded({ setId: set.id, headline, source }, m));
+        if (!first.ok) return unreachable('fact check', first.error);
+        if (!(first.value >= GROUNDING_BAR)) {
           // The build's rule: a grounding miss gets ONE rewrite, which must ground again.
           const note = `${REWRITE_NOTE}\n\nA person asked for this headline: "${value}". Keep that change as far as the source supports it.`;
-          const retry = await deps.rewrite({ setId: set.id, story: { key: story.key, headline: row.copy.headline, outlet: story.source, url: story.url, body: source }, note }, m);
-          m.check();
-          const again = retry?.headline?.trim();
-          const ok = again && fits(again) ? (await deps.grounded({ setId: set.id, headline: again, source }, m)) >= GROUNDING_BAR : false;
-          m.check();
-          if (!again || !ok) return blocked(`The fact check could not match frame ${seq}'s new headline to its article, even after one rewrite, so it was not changed. Try words the article states.`);
+          const retry = await call(() => deps.rewrite({ setId: set.id, story: { key: story.key, headline: was, outlet: story.source, url: story.url, body: source }, note }, m));
+          if (!retry.ok) return unreachable('writer', retry.error);
+          const again = retry.value?.headline?.trim();
+          if (!again) return failed(`The fact check did not match the new headline, and the writer returned no rewrite for frame ${seq}, so nothing was changed.`);
+          if (!fits(again)) return blocked(`The fact check did not match the new headline, and the one rewrite ran past two sentences or ${HEADLINE_MAX} characters, so frame ${seq} was not changed.`);
+          const second = await call(() => deps.grounded({ setId: set.id, headline: again, source }, m));
+          if (!second.ok) return unreachable('fact check', second.error);
+          if (!(second.value >= GROUNDING_BAR)) return blocked(`The fact check could not match frame ${seq}'s new headline to its article, even after one rewrite, so it was not changed. Try words the article states.`);
           headline = again;
         }
         copy = { ...row.copy, headline };
@@ -417,6 +474,8 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
           for (const p of [framePhoto(r.copy), r.photo]) if (p?.src) exclude.add(p.src);
         }
         const label = logLabel(rows, row);
+        // Nor a photo the person already turned down on this frame (an earlier "different photo" revision).
+        for (const u of await rejectedPhotos(q, set, label, seq)) exclude.add(u);
         const stories = Array.isArray(set.payload.stories) ? (set.payload.stories as MdStory[]) : [];
         const url = row.role === 'story' ? stories[storyIndex(rows, row)]?.url : row.role === 'opener' ? stories[0]?.url : (set.payload.url as string | undefined);
         const words = row.copy.role === 'story' ? row.copy.headline : row.copy.role === 'opener' ? (stories[0]?.headline ?? wordsOf(row.copy)) : wordsOf(row.copy);
@@ -447,14 +506,34 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
             continue;
           }
           m.check();
-          if (photo?.src && !exclude.has(photo.src) && photo.credit?.trim()) {
-            found = { src: photo.src, credit: photo.credit, kind: photo.kind };
-            break;
+          if (!photo?.src || !photo.credit?.trim()) {
+            tried.push(`"${ask.query}" (nothing usable)`);
+            continue;
           }
-          tried.push(photo?.src ? `"${ask.query}" (only a photo already used)` : `"${ask.query}" (nothing usable)`);
+          if (exclude.has(photo.src)) {
+            tried.push(`"${ask.query}" (only a photo already used)`);
+            continue;
+          }
+          if (row.role === 'opener') {
+            // The cover rules the build's design stage applies to the opener (photos.ts findSet `cover`; size.ts):
+            // never a logo, and at least COVER_MIN_SHORT_SIDE on the short side. find() does not apply them.
+            exclude.add(photo.src);
+            if (photo.kind === 'logo') {
+              tried.push(`"${ask.query}" (a logo, which the opening frame never shows)`);
+              continue;
+            }
+            const { COVER_MIN_SHORT_SIDE, clearsFloor } = await import('@/lib/social/photos/size');
+            const floor = await clearsFloor({ url: photo.src, width: null, height: null }, COVER_MIN_SHORT_SIDE, deps.photoSize);
+            if (!floor.ok) {
+              tried.push(`"${ask.query}" (too small for the opening frame: ${floor.size}; needs ${COVER_MIN_SHORT_SIDE})`);
+              continue;
+            }
+          }
+          found = { src: photo.src, credit: photo.credit, kind: photo.kind };
+          break;
         }
         if (!found) {
-          return failed(`I searched for another photo for frame ${seq} (${tried.join('; ')}) and couldn't find a different usable one (not shown on another frame of this set or used in the last 7 days), so the original was kept.`);
+          return failed(`I searched for another photo for frame ${seq} (${tried.join('; ')}) and couldn't find a different usable one (not shown on another frame of this set, turned down before, or used in the last 7 days), so the original was kept.`);
         }
         copy = withPhoto(row.copy, found);
         const old = logOf(set, label)?.steps ?? [];
