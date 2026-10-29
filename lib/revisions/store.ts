@@ -177,3 +177,22 @@ export async function requeueWithOverride(q: Query, id: string, overrideUsd: num
 export async function setOverride(q: Query, id: string, overrideUsd: number): Promise<void> {
   await q(`UPDATE revisions.requests SET override_usd = $2 WHERE id = $1`, [id, overrideUsd]);
 }
+
+export async function getRequest(q: Query, id: string): Promise<RevisionRow | null> {
+  const { rows } = await q(`SELECT * FROM revisions.requests WHERE id = $1`, [id]);
+  return rows[0] ? toRow(rows[0]) : null;
+}
+
+/** Logs what the interpreter decided on a claimed row (the engine sets the caps when it runs). */
+export async function setInterpretation(q: Query, id: string, interpretation: Interpretation): Promise<void> {
+  await q(
+    `UPDATE revisions.requests SET interpretation = $2::jsonb, part = $3::jsonb, fix_kind = $4, stage_tag = $5 WHERE id = $1`,
+    [id, JSON.stringify(interpretation), JSON.stringify(interpretation.part), interpretation.fixKind, interpretation.stageTag],
+  );
+}
+
+/** Adds a cost that was spent outside the engine's meter (the interpreter's call). */
+export async function addSpend(q: Query, id: string, usd: number): Promise<void> {
+  if (!(usd > 0)) return;
+  await q(`UPDATE revisions.requests SET spend_usd = spend_usd + $2 WHERE id = $1`, [id, usd]);
+}

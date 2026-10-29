@@ -4,6 +4,9 @@ import type { Vertical } from '@/lib/social-hub/types';
 
 export type { Vertical };
 
+/** The longest instruction a person can type (the route's parser and the `revise` verb both check it). */
+export const INSTRUCTION_MAX_CHARS = 1000;
+
 export type FixKind = 'photo' | 'wording' | 'color' | 'layout' | 'motion';
 
 /** One addressable part of an item, e.g. { kind: 'slide', key: '3' }. */

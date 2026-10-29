@@ -120,6 +120,8 @@ async function main(): Promise<void> {
   const { liveAiEventsDeps, liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { claimAndPublishAiEvents } = await import('@/lib/ai-events/publish');
   const { releaseDueAiEvents } = await import('@/lib/ai-events/schedule');
+  const { claimAndRunRevisions } = await import('@/lib/revisions/worker');
+  const { newAnthropic } = await import('@/lib/anthropic-client');
   const query = await socialQuery();
   /** The same connection, typed for lib/lfd (it takes the hub's query shape). */
   const lfdQuery = query as unknown as HubQuery;
@@ -127,6 +129,17 @@ async function main(): Promise<void> {
   const standDown = () => publisherOwnsPublishing(query, 'carousels');
   /** The public calendar snapshot after an AI Events run or post (plan M3). */
   const aiEventsSnapshot = liveAiEventsSnapshot(lfdQuery);
+  /**
+   * Targeted Revisions: the live Haiku call behind the interpreter. Its system block arrives
+   * already cached (lib/revisions/interpret.ts, cachedSystemText); the client is made on first use.
+   */
+  let revisionsClient: ReturnType<typeof newAnthropic> | null = null;
+  const reviseComplete: import('@/lib/revisions/interpret').Complete = async (req) => {
+    revisionsClient ??= newAnthropic();
+    const res = await revisionsClient.messages.create({ model: req.model, max_tokens: req.max_tokens, system: req.system, messages: req.messages });
+    const text = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    return { text, usage: res.usage };
+  };
 
   let stopping = false;
   const stop = (signal: string) => {
@@ -288,6 +301,7 @@ async function main(): Promise<void> {
     let healthAt = nextHealthReport();
     let lastInsights = 0;
     let lastRerunError: string | null = null;
+    let lastRevisionsError: string | null = null;
     let lastLfdError: string | null = null;
     // Started after today's noon: check once now, so a Sunday-afternoon restart still runs the week.
     let aiEventsAt = firstAiEventsCheckAt(new Date());
@@ -465,6 +479,16 @@ async function main(): Promise<void> {
         log('ai_events_run_result', { ...out });
         continue;
       }
+
+      // Targeted Revisions a person queued from the hub (only those rows; never a sweep): interpret, then ask back or run.
+      const revised = await claimAndRunRevisions({ q: query, complete: reviseComplete, notify: async (m) => log('revision_notice', { message: m }), now: () => new Date(), log }).catch((error) => {
+        // Logged once per distinct error (e.g. before db/revisions_schema.sql is applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastRevisionsError) log('revisions_claim_failed', { error: text });
+        lastRevisionsError = text;
+        return 0;
+      });
+      if (revised > 0) continue;
 
       // One-story reruns the Social Hub queued (D51), when no run is queued or running.
       const capUsd = (await getSocialSetting<number>('run_cap_usd').catch(() => null)) ?? cfg.DEFAULT_RUN_CAP_USD;

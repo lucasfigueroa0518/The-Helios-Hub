@@ -1,3 +1,4 @@
+import type { PartRef } from '@/lib/revisions/types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 /**
@@ -12,15 +13,43 @@ export type ActionTarget = Readonly<Record<string, string>>;
 
 export type ActionOutcome = { ok: boolean; note: string; status?: number };
 
-/** `place` and `reschedule` put content on a chosen day and window (D50). */
-export type ActionVerb = 'approve' | 'reject' | 'publishNow' | 'regenerate' | 'place' | 'reschedule' | 'unschedule' | 'delete';
+/**
+ * `place` and `reschedule` put content on a chosen day and window (D50).
+ * `revise`, `undoRevision` and `continueRevision` are Targeted Revisions (lib/revisions/actions.ts).
+ */
+export type ActionVerb =
+  | 'approve'
+  | 'reject'
+  | 'publishNow'
+  | 'regenerate'
+  | 'place'
+  | 'reschedule'
+  | 'unschedule'
+  | 'delete'
+  | 'revise'
+  | 'undoRevision'
+  | 'continueRevision';
 
 /**
  * What a verb may carry besides its target: the day and window for `place`
  * and `reschedule`; a review's tags and note for `reject` (kept where the
- * type keeps a review: Explainers, D53).
+ * type keeps a review: Explainers, D53). Targeted Revisions: the person's
+ * words (`instruction`) and the question they answer (`parentId`) for
+ * `revise`; the `part` (and `original` for the pipeline's original) for
+ * `undoRevision`; the paused row and the raised allowance for `continueRevision`.
  */
-export type ActionInput = { nyDate?: string; slot?: string; tags?: readonly string[]; note?: string };
+export type ActionInput = {
+  nyDate?: string;
+  slot?: string;
+  tags?: readonly string[];
+  note?: string;
+  instruction?: string;
+  parentId?: string;
+  part?: PartRef;
+  original?: boolean;
+  revisionId?: string;
+  overrideUsd?: number;
+};
 
 export type ActionFn = (target: ActionTarget, by: string, input?: ActionInput) => Promise<ActionOutcome>;
 

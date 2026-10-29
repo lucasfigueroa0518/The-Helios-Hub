@@ -2,6 +2,7 @@ import type { ExplainersDb } from '@/lib/explainers/db';
 import type { SpineQuery } from '@/lib/social-hub/spine';
 import { formatPlacement, type Placement, type PlacementOutcome, type PlacementTarget } from '@/lib/social-hub/placement';
 import { nyDateOf } from '@/lib/social-hub/time';
+import { reviseVerbs } from '@/lib/revisions/actions';
 
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
@@ -57,6 +58,11 @@ export function explainerActions(deps: {
   /** The clock (tests pin it). */
   now?: () => Date;
 }): ContentActions {
+  /** The explainers handle may be its own database; its spine rows (and the revisions log) are reached through it. */
+  const spineQuery = async (): Promise<SpineQuery> => {
+    const db = await deps.db();
+    return ((text, params) => db.query(text, params)) as SpineQuery;
+  };
   const placement =
     (fn: Place): ActionFn =>
     async (t, by, input) => {
@@ -124,15 +130,9 @@ export function explainerActions(deps: {
       const out = await deps.unscheduleJob(await deps.db(), need(t, 'jobId'));
       return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
-    delete: deleteVerb({
-      refKey: 'jobId',
-      query: async () => {
-        const db = await deps.db();
-        return ((text, params) => db.query(text, params)) as SpineQuery;
-      },
-      itemOf: async (_q, jobId) => deps.itemId(await deps.db(), jobId),
-    }),
+    delete: deleteVerb({ refKey: 'jobId', query: spineQuery, itemOf: async (_q, jobId) => deps.itemId(await deps.db(), jobId) }),
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),
+    ...reviseVerbs({ vertical: 'explainers', query: spineQuery, itemOf: async (_q, t) => deps.itemId(await deps.db(), need(t, 'jobId')) }),
   };
 }
