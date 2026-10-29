@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS revisions.requests (
     parent_id       uuid REFERENCES revisions.requests (id),
     status          text NOT NULL DEFAULT 'requested'
                       CHECK (status IN ('requested', 'asking', 'running', 'applied', 'blocked',
-                                        'failed', 'paused_at_ceiling', 'undone')),
+                                        'failed', 'paused_at_cap', 'paused_at_ceiling', 'undone')),
     question        text,
     interpretation  jsonb,
     stage_tag       text,

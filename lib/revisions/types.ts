@@ -16,6 +16,7 @@ export type RevisionStatus =
   | 'applied'
   | 'blocked'
   | 'failed'
+  | 'paused_at_cap'
   | 'paused_at_ceiling'
   | 'undone';
 

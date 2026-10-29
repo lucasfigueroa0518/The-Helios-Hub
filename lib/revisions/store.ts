@@ -87,20 +87,22 @@ export async function markApplied(
   q: Query,
   id: string,
   a: { before: PartState; after: PartState; costUsd: number },
-): Promise<void> {
-  await q(
+): Promise<boolean> {
+  const { rows } = await q(
     `UPDATE revisions.requests
         SET status = 'applied', before = $2::jsonb, after = $3::jsonb,
             spend_usd = spend_usd + $4, finished_at = now()
-      WHERE id = $1 AND status = 'running'`,
+      WHERE id = $1 AND status = 'running'
+      RETURNING id`,
     [id, JSON.stringify(a.before), JSON.stringify(a.after), a.costUsd],
   );
+  return rows.length > 0;
 }
 
 export async function markEnded(
   q: Query,
   id: string,
-  status: 'blocked' | 'failed' | 'paused_at_ceiling',
+  status: 'blocked' | 'failed' | 'paused_at_cap' | 'paused_at_ceiling',
   note: string,
   costUsd: number,
 ): Promise<void> {
@@ -110,8 +112,22 @@ export async function markEnded(
   );
 }
 
-export async function markUndone(q: Query, id: string, by: string): Promise<void> {
-  await q(`UPDATE revisions.requests SET status = 'undone', undone_at = now(), undone_by = $2 WHERE id = $1 AND status = 'applied'`, [id, by]);
+/** applied -> undone. Returns false (and changes nothing) when the row is not `applied`. */
+export async function markUndone(q: Query, id: string, by: string): Promise<boolean> {
+  const { rows } = await q(
+    `UPDATE revisions.requests SET status = 'undone', undone_at = now(), undone_by = $2 WHERE id = $1 AND status = 'applied' RETURNING id`,
+    [id, by],
+  );
+  return rows.length > 0;
+}
+
+/** Puts back an undo whose restore failed: undone -> applied. */
+export async function unmarkUndone(q: Query, id: string): Promise<boolean> {
+  const { rows } = await q(
+    `UPDATE revisions.requests SET status = 'applied', undone_at = NULL, undone_by = NULL WHERE id = $1 AND status = 'undone' RETURNING id`,
+    [id],
+  );
+  return rows.length > 0;
 }
 
 export async function listForItem(q: Query, itemId: string): Promise<RevisionRow[]> {
@@ -141,6 +157,21 @@ export async function originalOf(q: Query, itemId: string, part: PartRef): Promi
     [itemId, part.kind, part.key],
   );
   return rows[0]?.before ?? null;
+}
+
+/**
+ * A paused row (at its cap or its ceiling) goes back to `requested` with a raised override,
+ * so the worker re-runs it from the start. spend_usd keeps what earlier attempts spent.
+ */
+export async function requeueWithOverride(q: Query, id: string, overrideUsd: number, note: string): Promise<boolean> {
+  const { rows } = await q(
+    `UPDATE revisions.requests
+        SET status = 'requested', override_usd = $2, note = $3, finished_at = NULL
+      WHERE id = $1 AND status IN ('paused_at_cap', 'paused_at_ceiling')
+      RETURNING id`,
+    [id, overrideUsd, note],
+  );
+  return rows.length > 0;
 }
 
 export async function setOverride(q: Query, id: string, overrideUsd: number): Promise<void> {
