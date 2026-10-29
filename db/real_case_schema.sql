@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS real_case.cost_events (
     cycle_id            uuid REFERENCES real_case.story_cycles (id) ON DELETE SET NULL,
     story_id            uuid REFERENCES real_case.stories (id) ON DELETE SET NULL,
     mode                text NOT NULL CHECK (mode IN ('development', 'production')),
-    vendor              text NOT NULL CHECK (vendor IN ('anthropic', 'heygen', 'jev')),
+    vendor              text NOT NULL CHECK (vendor IN ('anthropic', 'heygen', 'jev', 'openai')),
     component           text NOT NULL,
     input_tokens        integer NOT NULL DEFAULT 0,
     output_tokens       integer NOT NULL DEFAULT 0,
@@ -211,3 +211,25 @@ INSERT INTO real_case.settings (key, value) VALUES
     ('frame_worker_model',   '"claude-sonnet-5-5"'::jsonb),
     ('fact_check_model',     '"claude-sonnet-5-5"'::jsonb)
 ON CONFLICT (key) DO NOTHING;
+
+-- ── AI News Explained (RC-26, RC-27) ─────────────────────────────────────────
+-- The scout starts from recent AI news, so a search and a story no longer need an Explainer topic
+-- (the topic is a label only). `event_date` drives the 90-day window and freshness; `scores` holds
+-- the story scores by key (stakes, turn, scene, reveal, artifacts, players, freshness). The first
+-- build's five score columns stay for its rows' history.
+
+ALTER TABLE real_case.stories ALTER COLUMN topic_id DROP NOT NULL;
+ALTER TABLE real_case.topic_scouts ALTER COLUMN topic_id DROP NOT NULL;
+ALTER TABLE real_case.stories ADD COLUMN IF NOT EXISTS event_date date;
+ALTER TABLE real_case.stories ADD COLUMN IF NOT EXISTS scores jsonb;
+
+INSERT INTO real_case.settings (key, value) VALUES
+    ('searches_per_night',   '1'::jsonb),
+    ('stories_per_search',   '3'::jsonb),
+    ('news_window_days',     '90'::jsonb)
+ON CONFLICT (key) DO NOTHING;
+
+-- ── Object prep (RC-52): gpt-image drawings and object photos are OpenAI spend ──
+
+ALTER TABLE real_case.cost_events DROP CONSTRAINT IF EXISTS cost_events_vendor_check;
+ALTER TABLE real_case.cost_events ADD CONSTRAINT cost_events_vendor_check CHECK (vendor IN ('anthropic', 'heygen', 'jev', 'openai'));

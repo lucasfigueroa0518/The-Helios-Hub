@@ -1,8 +1,7 @@
 import type { Questions } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { chooseAnalogySafely, topicAnalogy } from '@/lib/explainers/ideas/analogy';
-import { chooseGapSafely } from '@/lib/explainers/ideas/gap';
+import { chooseAnalogySafely } from '@/lib/explainers/ideas/analogy';
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import type { ExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
@@ -346,16 +345,15 @@ async function evaluateSeed(deps: EvaluateDeps, candidate: TopicRow, pool: reado
 }
 
 /**
- * The topic's analogy, then its curiosity gap (EX3-120). Neither ever keeps a topic out of the pool
- * (EX3-125; supersedes EX3-104's drop): a pass with no pick, or a failed one, is written again by the
- * topic's render.
+ * The topic's analogy (EX3-125: it never keeps a topic out of the pool; a pass with no pick, or a
+ * failed one, is written again by the topic's render). Explainers 4.3: the curiosity gap writer
+ * (lib/explainers/ideas/gap.ts, EX3-120) is no longer run here: the 4.3 reel has no gap beat, so it
+ * neither feeds nor blocks a reel. Its code stays.
  */
 async function pickAnalogyFor(deps: EvaluateDeps, topic: TopicRow): Promise<void> {
   if (!deps.ideaModel) return;
   const shared = { db: deps.db, jev: deps.jev, ideaModel: deps.ideaModel, mode: deps.settings.mode, ideaCycleId: deps.ideaCycleId ?? null, now: deps.now };
-  const note = await chooseAnalogySafely({ ...shared, model: deps.settings.analogy_model }, topic);
-  const analogy = topicAnalogy({ jev_notes: { analogy: note } });
-  if (analogy) await chooseGapSafely({ ...shared, model: deps.settings.idea_model, themeBrief: deps.themeBrief }, topic, analogy);
+  await chooseAnalogySafely({ ...shared, model: deps.settings.analogy_model }, topic);
 }
 
 /**

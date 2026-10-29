@@ -21,12 +21,16 @@ export type SavedStory = {
   major: number | null;
   net: number | null;
   lead: number | null;
+  /** Index in the lead-ordered lineup, before meme placement moved stories. */
+  leadIndex?: number;
   setup: string;
   headline: string;
   highlight: string;
   names: string[];
   body: string;
   photo: Photo;
+  photoSource?: 'lead' | 'finder' | 'meme';
+  meme?: { templateId: string; memeId: string; rank: number; role: 'cover' | 'slide'; position: number; object: string; text: string[] };
 };
 
 export function readyFromSaved(s: SavedStory): Ready {
@@ -35,7 +39,7 @@ export function readyFromSaved(s: SavedStory): Ready {
     key: s.key, refs: [], origin: s.origin, headline: s.headline, sourceName: s.outlet, url: s.url, body: s.body,
     publishedAt: null, net: s.net, blockbuster: 0, firstSeen: null, alsoFrom: [], major: s.major, lane: s.lane,
   };
-  return { pick, copy, photo: s.photo };
+  return { pick, copy, photo: s.photo, photoSource: s.photoSource, meme: s.meme };
 }
 
 /** A placed meme's image: a URL the renderer can load, and its width / height so the slide takes the meme's shape. */
@@ -43,7 +47,7 @@ export type MemeImage = { url: string; aspect?: number };
 
 /**
  * The post with memes placed. `memeImage` turns a meme id into its image (a data URL in the simulation). Mosaic
- * photos stay the stories' own photos, in the new order.
+ * photos stay the stories' own photos (never meme images), in the new order.
  */
 export function postWithMemes(stories: SavedStory[], placement: Placement, memeImage: (memeId: string) => MemeImage, now: Date): RenderPost {
   const byKey = new Map(stories.map((s) => [s.key, s]));

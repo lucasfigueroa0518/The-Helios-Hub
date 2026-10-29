@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { openerByKey, openerTiming, pickOpener } from './bank.js';
+import { OBJECT_HERO_OPENERS, openerByKey, openerTiming, pickOpener, storyboardHeroKind } from './bank.js';
 
 const REF_PEAK_DB = -6;
 const MAX_BOOST_DB = 18;
@@ -240,8 +240,12 @@ export function ensureOpener(root, rand = Math.random) {
   const key = chosenOpener(root);
   if (key) return key;
   if (existsSync(join(root, 'assets', 'frames', '01-opener.js'))) return null;
-  const pick = pickOpener([], { rand });
-  writeFileSync(join(root, CHOICE), `${JSON.stringify({ key: pick, name: openerByKey(pick).name, by: 'pace' }, null, 1)}\n`);
+  // the hero's kind is the storyboard's (`- hero: <id> — object`): an object-led reel draws only
+  // from the openers that never touch a critter hero (EX3-111), and the choice records it
+  const sb = join(root, 'STORYBOARD.md');
+  const hero = storyboardHeroKind(existsSync(sb) ? readFileSync(sb, 'utf8') : '');
+  const pick = pickOpener([], { rand, ...(hero === 'object' ? { pool: OBJECT_HERO_OPENERS } : {}) });
+  writeFileSync(join(root, CHOICE), `${JSON.stringify({ key: pick, name: openerByKey(pick).name, hero, by: 'pace' }, null, 1)}\n`);
   return pick;
 }
 

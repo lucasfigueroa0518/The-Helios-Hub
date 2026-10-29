@@ -7,7 +7,12 @@ import { priceAnthropicUsage, usageBucketsFromMessage, type MessageUsageLike } f
  * The SDK's own result total replaces the estimate when a session ends.
  */
 export class SpendMeter {
-  private estimated = 0;
+  /**
+   * Each running session's streamed estimate, by its key (begin()). Parallel sessions (the code build
+   * runner's frame builders, the picture fix) each settle only their own; DEFAULT is the one-at-a-time key.
+   */
+  private readonly estimates = new Map<symbol, number>();
+  private static readonly DEFAULT = Symbol('session');
   private settled = 0;
   private readonly seen = new Set<string>();
 
@@ -19,12 +24,26 @@ export class SpendMeter {
 
   /** Session A's settled cost carried into session B, and so on. */
   get totalUsd(): number {
-    return this.carriedUsd + this.settled + this.estimated;
+    let estimated = 0;
+    for (const v of this.estimates.values()) estimated += v;
+    return this.carriedUsd + this.settled + estimated;
   }
 
   /** The current session's streamed estimate, not yet settled. */
   get sessionEstimateUsd(): number {
-    return this.estimated;
+    return this.estimateOf();
+  }
+
+  /** A new session's key, for observe() and settleSession() when sessions run in parallel. */
+  begin(): symbol {
+    const key = Symbol('session');
+    this.estimates.set(key, 0);
+    return key;
+  }
+
+  /** One session's streamed estimate, not yet settled. */
+  estimateOf(key: symbol = SpendMeter.DEFAULT): number {
+    return this.estimates.get(key) ?? 0;
   }
 
   get remainingUsd(): number {
@@ -39,7 +58,7 @@ export class SpendMeter {
    * Price one streamed assistant message. Messages are deduplicated by id, since
    * the SDK may stream the same message in more than one frame.
    */
-  observe(message: { id?: string | null; model?: string; usage?: MessageUsageLike['usage'] | null }): number {
+  observe(message: { id?: string | null; model?: string; usage?: MessageUsageLike['usage'] | null }, key: symbol = SpendMeter.DEFAULT): number {
     if (!message.usage || !message.model) return 0;
     if (message.id) {
       if (this.seen.has(message.id)) return 0;
@@ -48,14 +67,22 @@ export class SpendMeter {
     const usd = Number(
       priceAnthropicUsage(usageBucketsFromMessage({ usage: message.usage }, '5m'), { modelId: message.model }).costUsd,
     );
-    this.estimated += usd;
+    this.estimates.set(key, this.estimateOf(key) + usd);
     return usd;
   }
 
+  /**
+   * A direct Messages API call made outside any session (Explainers 4.2: the understanding test's
+   * readers and diagnosis), priced by the caller. Call it between sessions, never during one.
+   */
+  charge(usd: number): void {
+    if (Number.isFinite(usd) && usd > 0) this.settled += usd;
+  }
+
   /** A session ended: swap its running estimate for the SDK's reported total. */
-  settleSession(sessionTotalUsd: number): void {
+  settleSession(sessionTotalUsd: number, key: symbol = SpendMeter.DEFAULT): void {
     this.settled += sessionTotalUsd;
-    this.estimated = 0;
-    this.seen.clear();
+    this.estimates.delete(key);
+    // message ids are unique across sessions, so `seen` is kept (a parallel session's ids stay deduplicated)
   }
 }

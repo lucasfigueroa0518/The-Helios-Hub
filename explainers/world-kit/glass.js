@@ -12,19 +12,23 @@
 //   route(points, { progress, … })         a hairline track and its lit part, through points
 //   packet(points, u, { color })           a glossy capsule riding the same route at u (0..1)
 //   uiIcon(name, x, y, size, { color })    a Lucide icon centred on (x, y)
+//   stepTracker(steps, current, x, y, o)   frame 6's numbered rail of the anchor steps
 //   glassPanel(x, y, w, h, r, o)           the frosted surface itself (cards.js builds on it)
 //   routeAt(points, u, o)                  { x, y, angle } on a route, for placing things on it
 //
-// Every function is pure: it returns SVG (chatBubble, glassCard and pill return { svg, box } that
-// also stringifies to the svg) from its arguments, so an animation is a progress argument (a packet's
-// u, a route's progress, a card's lit, a bubble's progress). Text is measured with cards.js
+// Every function is pure: it returns SVG (chatBubble, glassCard, pill and stepTracker return
+// { svg, box } that also stringifies to the svg) from its arguments, so an animation is a progress
+// argument (a packet's u, a route's progress, a card's lit, a bubble's progress, a stop's lit). Text is measured with cards.js
 // textWidth(), set as <text data-k="text">, and every text-bearing component is a
-// data-k="textbox" group with a data-k="shape" rect, so bounds.mjs checks it stays inside.
+// data-k="textbox" group with a data-k="shape" rect, so bounds.mjs checks it stays inside. Text a
+// viewer reads is ≥ MIN_TEXT (30px) and holds 4.5:1 on its surface (frame.md V-T2); the only smaller
+// text is a decorative line (data-decor, ≥ MIN_DECOR 24px) that carries no meaning.
 // Glass in SVG: layered translucent fills, a top highlight, hairline borders, soft blurred shadows and
 // coloured glows from the palette. Colours are read defensively (the hx-4 ramps may not be loaded).
 
 import { T, el, g, id, isDark, W, H } from './draw.js';
 import { textWidth } from './cards.js';
+import * as CORE from './core.js';
 
 // ── Small helpers ─────────────────────────────────────────────────────────────────────────
 const f = (v) => {
@@ -108,9 +112,13 @@ export function roundRect(x, y, w, h, r) {
   ].filter(Boolean).join(' ');
 }
 
+const rAdd = (r, d) => (Array.isArray(r) ? r.map((v) => Math.max(0, v + d)) : Math.max(0, r + d));
+const rMax = (r) => (Array.isArray(r) ? Math.max(...r) : r);
+
 /** A CSS-style box shadow under a rounded rect: offset, blur (CSS px), spread, colour, opacity. */
-export function boxShadow(x, y, w, h, r, { dx = 0, dy = 0, blur: b = 20, spread = 0, color = '#322314', opacity = 0.3 } = {}) {
+export function boxShadow(x, y, w, h, r, { dx = 0, dy = 0, blur: b = 20, spread = 0, color = null, opacity = 0.3 } = {}) {
   if (opacity <= 0) return '';
+  color = color ?? pal().shadow;
   const X = x + dx - spread;
   const Y = y + dy - spread;
   const Wd = Math.max(1, w + spread * 2);
@@ -126,41 +134,76 @@ export function glowAt(cx, cy, rx, ry, color, opacity = 0.4, softness = 0.45) {
   return defs(flt) + el('ellipse', { cx: f(cx), cy: f(cy), rx: f(rx), ry: f(ry), fill: color, 'fill-opacity': f(opacity), filter: flt.ref });
 }
 
-// ── Palette (read defensively: the hx-4 ramps land in core.js with agent RENDER) ─────────────
-// orange is the Helios premium tile (premium.css --premium-tile); the others follow the hx-4 ramps
-// (TOKENS[`${c}-lit` | c | `${c}-shade` | `${c}-dark`]) with still 10's values as the fallback.
-const RAMP = {
-  orange: { lit: '#FF7A2E', base: '#F0552A', shade: '#E8413B', glow: '#FF6A2A', text: '#CC4E19' },
-  teal: { lit: '#4FD8E0', base: '#14B8C4', shade: '#0C8F9A', glow: '#14B8C4', text: '#0A7788' },
-  blue: { lit: '#7C97F0', base: '#4169E1', shade: '#2F4FB8', glow: '#4169E1', text: '#2B329F' },
-  yellow: { lit: '#FEDE78', base: '#FDC60F', shade: '#ECA811', glow: '#FDC60F', text: '#C47910' },
-  lilac: { lit: '#D992E9', base: '#C377E0', shade: '#A662CC', glow: '#C377E0', text: '#7947A6' },
-  green: { lit: '#3DB43A', base: '#138510', shade: '#0E6A0C', glow: '#30C463', text: '#0E6A0C' },
-  ink: { lit: '#3A3A3C', base: '#1C1C1E', shade: '#0E0E0F', glow: '#171717', text: '#171717' },
-};
+// ── Palette (V-T1: palette tokens and mixes of two tokens only) ───────────────────────────
+// Read defensively: each hx-4 token falls back to its nearest hx-3 token, and mixes use core's
+// mixHex when it is there. orange's ramp is the Helios premium tile (premium.css --premium-tile:
+// orange-lit → orange/stage-red → stage-red); graphite (phone, screen, sent bubble) is the ink ramp.
+const mixC = (a, b, t) => (CORE.mixHex && /^#[0-9a-f]{6}$/i.test(a) && /^#[0-9a-f]{6}$/i.test(b) ? CORE.mixHex(a, b, t) : t < 0.5 ? a : b);
+const tk = (...names) => names.map((n) => T[n]).find(Boolean);
+
 /** The colour names glass components take. */
-export const GLASS_COLORS = Object.keys(RAMP);
+export const GLASS_COLORS = ['orange', 'teal', 'blue', 'yellow', 'lilac', 'green', 'ink'];
 
 /** { lit, base, shade, glow, text } for a palette colour name. */
 export function ramp(name) {
-  const r = RAMP[name];
-  if (!r) throw new Error(`HX: glass colour "${name}" must be one of ${GLASS_COLORS.join(', ')} (palette only).`);
-  if (name === 'orange' || name === 'ink') return { ...r, text: name === 'orange' ? (T['orange-text'] ?? r.text) : (T.ink ?? r.text) };
+  if (!GLASS_COLORS.includes(name)) throw new Error(`HX: glass colour "${name}" must be one of ${GLASS_COLORS.join(', ')} (palette only).`);
+  if (name === 'orange') {
+    const red = tk('stage-red', 'orange-dark');
+    return { lit: tk('orange-lit', 'orange'), base: mixC(T.orange, red, 0.3), shade: red, glow: tk('stage-orange', 'orange'), text: tk('orange-text', 'orange-dark') };
+  }
+  if (name === 'ink') {
+    const lit = mixC(tk('ink-lit', 'ink'), tk('text-secondary', 'ink-lit'), 0.35);
+    return { lit, base: T.ink, shade: tk('ink-shade', 'ink'), glow: T.ink, text: T.ink };
+  }
+  const base = tk(name, 'status-info');
+  return { lit: tk(`${name}-lit`, name, 'status-info'), base, shade: tk(`${name}-shade`, name, 'status-info'), glow: base, text: tk(`${name}-dark`, `${name}-shade`, name, 'ink') };
+}
+
+/** The neutrals the UI uses, all tokens or two-token mixes. */
+function pal() {
+  const paper = T.paper;
+  const lit = T['paper-lit'];
+  const shade = T['paper-shade'];
+  const darkP = T['paper-dark'];
+  const ter = T['text-tertiary'];
+  const sec = T['text-secondary'];
   return {
-    lit: T[`${name}-lit`] ?? r.lit,
-    base: T[name] ?? r.base,
-    shade: T[`${name}-shade`] ?? r.shade,
-    glow: r.glow,
-    text: T[`${name}-dark`] ?? r.text,
+    white: tk('canvas'),
+    shadow: tk('shadow-warm', 'ink'),
+    black: tk('ink-dark', 'ink-shade', 'ink'),
+    screenTop: mixC(T.canvas, lit, 0.4),
+    screenBottom: mixC(lit, paper, 0.45),
+    reply: mixC(paper, shade, 0.3),
+    dots: mixC(darkP, ter, 0.3),
+    soft: mixC(sec, ter, 0.35), // ≥ 4.5:1 on the glass
+    faint: mixC(ter, darkP, 0.4),
+    meta: mixC(ter, darkP, 0.45),
+    head: mixC(ter, darkP, 0.2),
+    idle: mixC(darkP, ter, 0.15),
+    groundTop: mixC(lit, paper, 0.45),
+    groundMid: paper,
+    groundLow: mixC(tk('paper-sweep', 'paper'), shade, 0.4),
   };
 }
 
-const INK = () => T.ink ?? '#171717';
-const WHITE = '#FFFFFF';
-const textMain = () => (isDark() ? (T['paper-lit'] ?? '#FBFAF6') : INK());
-const textSoft = () => (isDark() ? 'rgba(255,255,255,0.62)' : '#6B665E');
-const textFaint = () => (isDark() ? 'rgba(255,255,255,0.45)' : '#9C968D');
-const SHADOW = '#322314'; // warm umber, the studio shadow (still 10: rgba(50, 35, 20, …))
+const INK = () => T.ink;
+const WHITE = T.canvas ?? 'white';
+const textMain = () => (isDark() ? T['paper-lit'] : INK());
+const textSoft = () => (isDark() ? 'rgba(255,255,255,0.62)' : pal().soft);
+
+// ── Contrast (frame.md: load-bearing text ≥ 4.5:1; large text and UI marks ≥ 3:1) ───────────
+const rgbOf = (hex) => (/^#[0-9a-f]{6}$/i.test(hex) ? [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) : null);
+const lumOf = (rgb) => rgb.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)).reduce((a, c, i) => a + c * [0.2126, 0.7152, 0.0722][i], 0);
+/** The WCAG contrast ratio of two hex colours (1 when either is not hex). */
+export function contrast(a, b) {
+  const A = rgbOf(a);
+  const B = rgbOf(b);
+  if (!A || !B) return 1;
+  const [l1, l2] = [lumOf(A), lumOf(B)].sort((x, y) => y - x);
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+/** Light text on `bg` when it holds 4.5:1 there, else ink. */
+export const onColor = (bg) => (contrast(T['paper-lit'], bg) >= 4.5 ? T['paper-lit'] : contrast(WHITE, bg) >= 4.5 ? WHITE : INK());
 
 // ── Text (measured, so bounds.mjs can check it) ─────────────────────────────────────────────
 const FAMILY = { 'roboto-400': 'Roboto', 'roboto-500': 'Roboto', 'roboto-700': 'Roboto', 'pragmatica-700': "'Pragmatica Extended'" };
@@ -171,20 +214,30 @@ export function measure(text, size, face = 'roboto-500', tracking = 0) {
   return textWidth(s, size, face) + tracking * size * [...s].length;
 }
 
-/** The largest size ≤ want (and ≥ min) at which `text` fits `width`. */
-export function fitSize(text, want, width, face = 'roboto-500', min = 12, tracking = 0) {
+/** The smallest size of text a viewer must read, in px on the 1080-wide frame (frame.md V-T2), and
+ *  of a purely decorative label that carries no meaning. Every component keeps its text at or above
+ *  these: text that does not fit wraps or grows its shape instead of shrinking past them. */
+export const MIN_TEXT = 30;
+export const MIN_DECOR = 24;
+/** The step tracker's floor: its stop labels and numbers are read at a glance beside the action. */
+export const TRACKER_MIN = 34;
+
+/** The largest size ≤ want (and ≥ min, default MIN_TEXT) at which `text` fits `width`. */
+export function fitSize(text, want, width, face = 'roboto-500', min = MIN_TEXT, tracking = 0) {
   const w1 = measure(text, 1, face, tracking);
   return w1 > 0 ? clamp(Math.min(want, width / w1), Math.min(min, want), want) : want;
 }
 
-/** One measured line of text: <text data-k="text">. anchor: start | middle | end. */
-export function label(text, x, y, size, { face = 'roboto-500', color = INK(), anchor = 'start', tracking = 0, opacity = 1, caps = false } = {}) {
+/** One measured line of text: <text data-k="text">. anchor: start | middle | end. `decor` marks a
+ *  decorative label (data-decor, ≥ MIN_DECOR); everything else is ≥ MIN_TEXT. */
+export function label(text, x, y, size, { face = 'roboto-500', color = INK(), anchor = 'start', tracking = 0, opacity = 1, caps = false, decor = false } = {}) {
   const s = caps ? String(text).toUpperCase() : String(text);
   const [, weight] = face.split('-');
   return el(
     'text',
     {
       'data-k': 'text',
+      'data-decor': decor ? 1 : undefined,
       x: f(x),
       y: f(y),
       'text-anchor': anchor === 'start' ? undefined : anchor,
@@ -214,6 +267,19 @@ function wrapWords(words, width, size, face) {
   return rows;
 }
 
+/** Rows of `text` at the largest size ≤ want (≥ min) that fits `width` in `maxLines` rows; past
+ *  that it stays at `min` and takes more rows. Returns { size, rows: string[] }. */
+export function wrapFit(text, want, width, face = 'roboto-500', maxLines = 2, min = MIN_TEXT) {
+  const words = String(text).trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return { size: want, rows: [] };
+  const fits = (sz, rows) => rows.every((r) => measure(r.join(' '), sz, face) <= width + 0.5);
+  for (let sz = want; sz >= min; sz -= 1) {
+    const rows = wrapWords(words, width, sz, face);
+    if (rows.length <= maxLines && fits(sz, rows)) return { size: sz, rows: rows.map((r) => r.join(' ')) };
+  }
+  return { size: min, rows: wrapWords(words, width, min, face).map((r) => r.join(' ')) };
+}
+
 /** A value that is its svg wherever a string is expected, and carries its box. */
 const boxed = (svg, box) => ({ svg, box, toString: () => svg });
 const svgOf = (v) => (v == null || v === false ? '' : typeof v === 'string' ? v : Array.isArray(v) ? v.map(svgOf).join('') : v.svg ?? String(v));
@@ -237,14 +303,28 @@ function pop(svg, cx, cy, appear) {
 export function glassPanel(x, y, w, h, r = 28, { tint = null, tintLevel = 0, ring = null, ringLevel = 0, shadow = 1, fill = null, dark = isDark(), strength = 1, path = null } = {}) {
   const out = [];
   const d = path ?? roundRect(x, y, w, h, r);
+  // Shadows and glows sit outside the glass only (a CSS box-shadow is never painted under its box),
+  // so the translucent fill stays clean: they are masked out where the panel is.
+  const under = [];
   if (ring && ringLevel > 0) {
     const R = ramp(ring);
-    out.push(boxShadow(x, y, w, h, r, { blur: 46, spread: 2, color: R.glow, opacity: 0.42 * ringLevel }));
+    under.push(boxShadow(x, y, w, h, r, { blur: 50, spread: 4, color: R.glow, opacity: 0.5 * ringLevel }));
   }
   if (shadow > 0) {
     const s = clamp(h / 220, 0.25, 1.2);
-    out.push(boxShadow(x, y, w, h, r, { dy: 40 * s, blur: 70 * s, spread: -36 * s, color: dark ? '#000000' : SHADOW, opacity: (dark ? 0.8 : 0.42) * shadow }));
-    out.push(boxShadow(x, y, w, h, r, { dy: 2, blur: 6, color: dark ? '#000000' : SHADOW, opacity: (dark ? 0.35 : 0.07) * shadow }));
+    under.push(boxShadow(x, y, w, h, r, { dy: 40 * s, blur: 70 * s, spread: -36 * s, color: dark ? pal().black : pal().shadow, opacity: (dark ? 0.8 : 0.42) * shadow }));
+    under.push(boxShadow(x, y, w, h, r, { dy: 2, blur: 6, color: dark ? pal().black : pal().shadow, opacity: (dark ? 0.35 : 0.07) * shadow }));
+  }
+  if (under.length) {
+    if (fill) out.push(...under);
+    else {
+      const m = [x - 160, y - 160, w + 320, h + 360].map(f);
+      const mid = id(`gl-k${hash(`${d}|${m}`)}`);
+      out.push(
+        el('mask', { id: mid, maskUnits: 'userSpaceOnUse', x: m[0], y: m[1], width: m[2], height: m[3] }, el('rect', { x: m[0], y: m[1], width: m[2], height: m[3], fill: 'white' }) + el('path', { d, fill: 'black' })),
+        g({ mask: `url(#${mid})` }, under),
+      );
+    }
   }
   const body = fill
     ? linear([[0, fill, 1], [1, fill, 1]])
@@ -255,18 +335,18 @@ export function glassPanel(x, y, w, h, r = 28, { tint = null, tintLevel = 0, rin
   out.push(el('path', { d, fill: body.ref }));
   if (tint && tintLevel > 0) {
     const R = ramp(tint);
-    const tg = linear([[0, R.lit, 0.16 * tintLevel], [1, R.base, 0.3 * tintLevel]]);
+    const tg = linear([[0, R.lit, 0.12 * tintLevel], [1, R.base, 0.24 * tintLevel]]);
     ds.push(tg);
     out.push(el('path', { d, fill: tg.ref }));
   }
   // The top highlight: a white hairline that fades out down the sides.
   const hl = linear([[0, WHITE, dark ? 0.32 : 1], [Math.min(0.5, 24 / h), WHITE, dark ? 0.12 : 0.85], [1, WHITE, dark ? 0.06 : 0.55]]);
   ds.push(hl);
-  out.push(el('path', { d: path ?? roundRect(x + 0.6, y + 0.6, w - 1.2, h - 1.2, Math.max(0, r - 0.6)), fill: 'none', stroke: hl.ref, 'stroke-width': 1.4 }));
+  out.push(el('path', { d: path ?? roundRect(x + 0.6, y + 0.6, w - 1.2, h - 1.2, rAdd(r, -0.6)), fill: 'none', stroke: hl.ref, 'stroke-width': 1.4 }));
   if (!dark) out.push(el('path', { d, fill: 'none', stroke: INK(), 'stroke-opacity': 0.06, 'stroke-width': 1 }));
   if (ring && ringLevel > 0) {
     const R = ramp(ring);
-    out.push(el('path', { d: path ?? roundRect(x - 1.25, y - 1.25, w + 2.5, h + 2.5, r + 1.25), fill: 'none', stroke: R.base, 'stroke-opacity': f(0.95 * ringLevel), 'stroke-width': 2.5 }));
+    out.push(el('path', { d: path ?? roundRect(x - 1.25, y - 1.25, w + 2.5, h + 2.5, rAdd(r, 1.25)), fill: 'none', stroke: R.base, 'stroke-opacity': f(0.95 * ringLevel), 'stroke-width': 2.5 }));
   }
   return defs(...ds) + out.join('');
 }
@@ -281,18 +361,24 @@ export function glossPanel(x, y, w, h, r = 22, { color = 'orange', path = null, 
   const d = path ?? roundRect(x, y, w, h, r);
   const s = clamp(h / 160, 0.3, 1.2);
   const out = [];
-  if (color === 'ink') out.push(boxShadow(x, y, w, h, r, { dy: 22 * s, blur: 44 * s, spread: -16 * s, color: '#000000', opacity: 0.45 }));
+  if (color === 'ink') out.push(boxShadow(x, y, w, h, r, { dy: 22 * s, blur: 44 * s, spread: -16 * s, color: pal().black, opacity: 0.45 }));
   else if (glow) out.push(boxShadow(x, y, w, h, r, { dy: 18 * s, blur: 40 * s, spread: -10 * s, color: R.glow, opacity: 0.5 }));
-  out.push(boxShadow(x, y, w, h, r, { dy: 4 * s, blur: 10 * s, spread: -2 * s, color: color === 'ink' ? '#000000' : R.shade, opacity: 0.25 }));
+  out.push(boxShadow(x, y, w, h, r, { dy: 4 * s, blur: 10 * s, spread: -2 * s, color: color === 'ink' ? pal().black : R.shade, opacity: 0.25 }));
   const body = linear([[0, R.lit], [0.55, R.base], [1, R.shade]], [0.33, 0.03, 0.67, 0.97]);
   const low = linear([[0, R.shade, 0], [0.72, R.shade, 0], [1, R.shade, 0.35]]);
   const spec = linear([[0, WHITE, color === 'ink' ? 0.1 : 0.3], [0.5, WHITE, color === 'ink' ? 0.03 : 0.08], [1, WHITE, 0]]);
   const hl = linear([[0, WHITE, color === 'ink' ? 0.22 : 0.6], [Math.min(0.5, 20 / h), WHITE, 0.08], [1, WHITE, 0]]);
   out.push(defs(body, low, spec, hl));
   out.push(el('path', { d, fill: body.ref }), el('path', { d, fill: low.ref }));
-  out.push(el('path', { d: roundRect(x + w * 0.03, y + Math.min(3, h * 0.03), w * 0.94, h * 0.48, [Math.max(0, r - 2), Math.max(0, r - 2), r * 0.5, r * 0.5]), fill: spec.ref }));
+  out.push(el('path', { d: roundRect(x + w * 0.03, y + Math.min(3, h * 0.03), w * 0.94, h * 0.48, [rMax(r) - 2, rMax(r) - 2, rMax(r) * 0.5, rMax(r) * 0.5].map((v) => Math.max(0, v))), fill: spec.ref }));
   out.push(el('path', { d, fill: 'none', stroke: hl.ref, 'stroke-width': 1.4 }));
   return out.join('');
+}
+
+/** The graphite body of a phone or a display, lit from the top left (the ink ramp). */
+function graphite() {
+  const I = ramp('ink');
+  return linear([[0, I.lit], [0.3, I.base], [0.7, I.shade], [1, mixC(I.base, I.lit, 0.6)]], [0.21, 0.09, 0.79, 0.91]);
 }
 
 /** A dark display: a graphite bezel with a hairline, the screen inset in it, a glass sheen. */
@@ -300,10 +386,10 @@ export function screenPanel(x, y, w, h, r = 22) {
   const b = clamp(Math.min(w, h) * 0.05, 5, 12);
   const out = [];
   const s = clamp(h / 200, 0.3, 1.2);
-  out.push(boxShadow(x, y, w, h, r, { dy: 30 * s, blur: 56 * s, spread: -24 * s, color: SHADOW, opacity: isDark() ? 0.9 : 0.5 }));
-  const frame = linear([[0, '#3A3A3C'], [0.3, '#1C1C1E'], [0.7, '#0E0E0F'], [1, '#2A2A2C']], [0.21, 0.09, 0.79, 0.91]);
+  out.push(boxShadow(x, y, w, h, r, { dy: 30 * s, blur: 56 * s, spread: -24 * s, color: pal().shadow, opacity: isDark() ? 0.9 : 0.5 }));
+  const frame = graphite();
   const rim = linear([[0, WHITE, 0.3], [0.15, WHITE, 0.12], [1, WHITE, 0.1]]);
-  const glassG = linear([[0, '#1F2125'], [1, '#0D0E10']]);
+  const glassG = linear([[0, mixC(T.ink, T['ink-lit'] ?? T.ink, 0.5)], [1, tk('ink-shade', 'ink')]]);
   const sheen = linear([[0, WHITE, 0.12], [0.36, WHITE, 0], [1, WHITE, 0]], [0.06, 0.27, 0.94, 0.73]);
   out.push(defs(frame, rim, glassG, sheen));
   out.push(el('path', { d: roundRect(x, y, w, h, r), fill: frame.ref }));
@@ -317,18 +403,19 @@ export function screenPanel(x, y, w, h, r = 22) {
  *  UI sits, a faint warm key light top right. On the stage: the premium lit stage. Draw it first. */
 export function glassGround({ bloomY = 0.4, key = true } = {}) {
   if (isDark()) {
-    const base = linear([[0, T['stage-top'] ?? '#161616'], [1, T['stage-bottom'] ?? '#0B0B0B']]);
-    const glow = radial([[0, T['stage-orange'] ?? '#FF6A2A', 0.16], [0.72, T['stage-orange'] ?? '#FF6A2A', 0]], W, 0, W * 0.62, H * 0.42);
+    const base = linear([[0, tk('stage-top', 'night', 'ink')], [1, tk('stage-bottom', 'ink')]]);
+    const glow = radial([[0, tk('stage-orange', 'orange'), 0.16], [0.72, tk('stage-orange', 'orange'), 0]], W, 0, W * 0.62, H * 0.42);
     const lift = radial([[0, WHITE, 0.05], [0.7, WHITE, 0]], 0, 0, W * 0.55, H * 0.38);
-    const bloom = radial([[0, T['stage-red'] ?? '#E8413B', 0.1], [0.72, T['stage-red'] ?? '#E8413B', 0]], W * 0.15, H, W * 0.7, H * 0.32);
+    const bloom = radial([[0, tk('stage-red', 'orange-dark'), 0.1], [0.72, tk('stage-red', 'orange-dark'), 0]], W * 0.15, H, W * 0.7, H * 0.32);
     return g({ 'data-ui': 'ground' }, [
       defs(base, glow, lift, bloom),
       ...[base, glow, lift, bloom].map((p) => el('rect', { x: 0, y: 0, width: W, height: H, fill: p.ref })),
     ]);
   }
-  const base = radial([[0, '#F6F3EE'], [0.55, '#F1EDE6'], [1, '#E6E0D5']], W * 0.5, H * 0.3, W * 1.25, H * 0.72);
+  const P = pal();
+  const base = radial([[0, P.groundTop], [0.55, P.groundMid], [1, P.groundLow]], W * 0.5, H * 0.3, W * 1.25, H * 0.72);
   const bloom = radial([[0, WHITE, 0.85], [1, WHITE, 0]], W * 0.5, H * bloomY, W * 0.62, H * 0.34);
-  const warm = radial([[0, T.yellow ?? '#FDC60F', 0.13], [1, T.yellow ?? '#FDC60F', 0]], W * 0.82, H * 0.33, W * 0.36, H * 0.15);
+  const warm = radial([[0, tk('yellow', 'status-warning'), 0.13], [1, tk('yellow', 'status-warning'), 0]], W * 0.82, H * 0.33, W * 0.36, H * 0.15);
   return g({ 'data-ui': 'ground' }, [
     defs(base, bloom, warm),
     el('rect', { x: 0, y: 0, width: W, height: H, fill: base.ref }),
@@ -353,10 +440,10 @@ export function glossTile(x, y, size, { icon = null, color = 'orange', lit = 1, 
   const x0 = x - s / 2;
   const y0 = y - s / 2;
   const out = [];
-  if (glow && lit > 0) {
+  if (glow && lit > 0 && color !== 'ink') {
     out.push(glowAt(x, y + s * 0.12, s * 0.78, s * 0.62, R.glow, 0.42 * lit, 0.42));
     out.push(boxShadow(x0, y0, s, s, r, { dy: s * 0.16, blur: s * 0.3, spread: -s * 0.07, color: R.glow, opacity: 0.55 * lit }));
-  }
+  } else if (color === 'ink') out.push(boxShadow(x0, y0, s, s, r, { dy: s * 0.16, blur: s * 0.32, spread: -s * 0.08, color: pal().black, opacity: 0.4 }));
   out.push(boxShadow(x0, y0, s, s, r, { dy: s * 0.06, blur: s * 0.12, spread: -s * 0.04, color: R.shade, opacity: 0.3 }));
   const body = linear([[0, R.lit], [0.55, R.base], [1, R.shade]], [0.33, 0.03, 0.67, 0.97]);
   const spec = linear([[0, WHITE, 0.38], [0.45, WHITE, 0.12], [1, WHITE, 0]]);
@@ -367,9 +454,11 @@ export function glossTile(x, y, size, { icon = null, color = 'orange', lit = 1, 
   out.push(el('path', { d: roundRect(x0, y0, s, s, r), fill: low.ref }));
   out.push(el('path', { d: roundRect(x0 + s * 0.05, y0 + s * 0.025, s * 0.9, s * 0.5, [r * 0.92, r * 0.92, r * 0.5, r * 0.5]), fill: spec.ref }));
   out.push(el('path', { d: roundRect(x0 + 0.75, y0 + 0.75, s - 1.5, s - 1.5, r - 0.75), fill: 'none', stroke: hl.ref, 'stroke-width': 1.5 }));
+  // Unlit, the tile sits back: a paper wash over its colour (it lights up as `lit` rises).
+  if (lit < 1) out.push(el('path', { d: roundRect(x0, y0, s, s, r), fill: T['paper-lit'], 'fill-opacity': f(0.4 * (1 - clamp01(lit))) }));
   if (icon) {
     const isz = iconSize ?? s * 0.46;
-    const ink = color === 'yellow' ? (T['yellow-dark'] ?? '#C47910') : WHITE;
+    const ink = color === 'yellow' ? ramp('yellow').text : WHITE;
     out.push(uiIcon(icon, x, y, isz, { color: ink, sw: clamp(2.2 * (24 / isz) * (isz / 40), 1.6, 2.4), rotate: iconRotate }));
   }
   return pop(g({ 'data-ui': 'tile' }, out), x, y, appear);
@@ -377,52 +466,58 @@ export function glossTile(x, y, size, { icon = null, color = 'orange', lit = 1, 
 
 // ── Pill ────────────────────────────────────────────────────────────────────────────────────
 /**
- * A label chip centred on (x, y): tracked capitals (Roboto 700) on glass (`tone: 'glass'`), on a
- * tint of `color` (`'tint'`, the "✓ PICKED" badge) or on the glossy colour (`'solid'`). `dot`
- * (true or a colour name) leads with a status dot; orange's dot is the sun gradient. `icon` leads
- * with a uiIcon instead. Returns { svg, box } (also usable as the svg string).
+ * A label chip centred on (x, y): Roboto 700 (tracked capitals by default) on glass (`tone:
+ * 'glass'`), on a tint of `color` (`'tint'`) or on the glossy colour (`'solid'`). `dot` (true or a
+ * colour name) leads with a status dot; orange's dot is the sun gradient. `icon` leads with a uiIcon
+ * instead. The text is ≥ MIN_TEXT (30px) and holds 4.5:1 on its surface; a label too long for
+ * `maxW` widens the chip rather than shrinking past 30px. Returns { svg, box } (also usable as the
+ * svg string).
  * @param {string} text @param {number} x @param {number} y
  * @param {{ dot?: boolean | string, color?: string, tone?: 'glass' | 'tint' | 'solid', icon?: string,
  *           size?: number, caps?: boolean, tracking?: number, appear?: number, maxW?: number }} [o]
  */
-export function pill(text, x, y, { dot = false, color = 'orange', tone = 'glass', icon = null, size = 16, caps = true, tracking = 0.2, appear = 1, maxW = 520 } = {}) {
+export function pill(text, x, y, { dot = false, color = 'orange', tone = 'glass', icon = null, size = MIN_TEXT, caps = true, tracking = 0.12, appear = 1, maxW = 640 } = {}) {
   const R = ramp(color);
+  size = Math.max(MIN_TEXT, size);
   const str = caps ? String(text).toUpperCase() : String(text);
-  const lead = dot || icon ? size * (icon ? 1.25 : 0.5) + size * 0.62 : 0;
-  const padX = size * 1.3;
-  const sz = fitSize(str, size, maxW - padX * 2 - lead, 'roboto-700', 10, tracking);
+  const lead = icon ? size * 1.05 + size * 0.38 : dot ? size * 0.42 + size * 0.42 : 0;
+  const padX = size * 0.8;
+  const sz = fitSize(str, size, maxW - padX * 2 - lead, 'roboto-700', MIN_TEXT, tracking);
   // The tracking after the last letter is not ink: measure without it so the text sits centred.
   const tw = measure(str, sz, 'roboto-700', tracking) - tracking * sz;
-  const h = size * 2.9;
+  const h = size * 1.9;
   const w = tw + padX * 2 + lead;
   const bx = x - w / 2;
   const by = y - h / 2;
   const out = [];
+  let surface = isDark() ? T.ink : T['paper-lit'];
   if (tone === 'glass') out.push(glassPanel(bx, by, w, h, h / 2, { shadow: 0.55 }));
   else if (tone === 'tint') {
-    out.push(el('path', { d: roundRect(bx, by, w, h, h / 2), fill: R.base, 'fill-opacity': 0.14, stroke: R.base, 'stroke-opacity': 0.45, 'stroke-width': 1 }));
+    surface = isDark() ? T.ink : mixC(WHITE, R.base, 0.14);
+    out.push(el('path', { d: roundRect(bx, by, w, h, h / 2), fill: R.base, 'fill-opacity': 0.14, stroke: R.base, 'stroke-opacity': 0.45, 'stroke-width': 1.2 }));
   } else {
-    out.push(boxShadow(bx, by, w, h, h / 2, { dy: 6, blur: 18, spread: -2, color: R.glow, opacity: 0.45 }));
+    surface = R.base;
+    out.push(boxShadow(bx, by, w, h, h / 2, { dy: 8, blur: 22, spread: -2, color: R.glow, opacity: 0.45 }));
     const body = linear([[0, R.lit], [0.55, R.base], [1, R.shade]], [0.33, 0.03, 0.67, 0.97]);
     const hl = linear([[0, WHITE, 0.55], [0.3, WHITE, 0], [1, WHITE, 0]]);
     out.push(defs(body, hl), el('path', { d: roundRect(bx, by, w, h, h / 2), fill: body.ref }), el('path', { d: roundRect(bx + 0.6, by + 0.6, w - 1.2, h - 1.2, h / 2), fill: 'none', stroke: hl.ref, 'stroke-width': 1.2 }));
   }
   out.push(el('rect', { 'data-k': 'shape', x: f(bx), y: f(by), width: f(w), height: f(h), rx: f(h / 2), fill: 'none' }));
-  const color_ = tone === 'solid' ? WHITE : tone === 'tint' ? R.text : textMain();
+  const color_ = tone === 'solid' ? onColor(surface) : tone === 'tint' ? (isDark() ? R.lit : mixC(R.text, INK(), 0.35)) : textMain();
   let cx = bx + padX;
   if (icon) {
-    out.push(uiIcon(icon, cx + size * 0.62, y, size * 1.25, { color: tone === 'solid' ? WHITE : R.base, sw: 3 }));
+    out.push(uiIcon(icon, cx + size * 0.52, y, size * 1.05, { color: tone === 'solid' ? color_ : tone === 'tint' ? color_ : R.base, sw: 2.6 }));
     cx += lead;
   } else if (dot) {
     const dc = dot === true ? color : dot;
-    const r = size * 0.25;
+    const r = size * 0.21;
     const dcx = cx + r;
     if (dc === 'orange') {
-      const sun = linear([[0, T['sun-top'] ?? '#FDC60F'], [0.35, T['sun-mid'] ?? '#F48C3F'], [0.62, T['sun-bottom'] ?? '#EA3C3A'], [1, T['sun-bottom'] ?? '#EA3C3A']]);
-      out.push(glowAt(dcx, y, r * 2.2, r * 2.2, '#FF6A2A', 0.55, 0.35), defs(sun), el('circle', { cx: f(dcx), cy: f(y), r: f(r), fill: sun.ref }));
+      const sun = linear([[0, tk('sun-top', 'status-warning')], [0.35, tk('sun-mid', 'orange-lit')], [0.62, tk('sun-bottom', 'orange-dark')], [1, tk('sun-bottom', 'orange-dark')]]);
+      out.push(glowAt(dcx, y, r * 2.2, r * 2.2, ramp('orange').glow, 0.55, 0.35), defs(sun), el('circle', { cx: f(dcx), cy: f(y), r: f(r), fill: sun.ref }));
     } else {
       const D = ramp(dc);
-      out.push(el('circle', { cx: f(dcx), cy: f(y), r: f(r), fill: dc === 'ink' ? '#B9B3A9' : D.base }));
+      out.push(el('circle', { cx: f(dcx), cy: f(y), r: f(r), fill: dc === 'ink' ? pal().idle : D.base }));
     }
     cx += lead;
   }
@@ -434,9 +529,12 @@ export function pill(text, x, y, { dot = false, color = 'orange', tone = 'glass'
 /**
  * A frosted glass card, top-left (x, y), w × h: a glossy tile with `icon` in `accent` top left, the
  * title in Pragmatica, `sub` beneath in Roboto, and a state: 'picked' (accent ring, coloured glow,
- * tinted glass, "✓ PICKED" badge), 'idle' (dimmed, "● IDLE") or 'plain'. `lit` (0..1, default 1
- * when picked, else 0) animates the lighting up; `appear` pops the card in. Text is fitted to the
- * card. Returns { svg, box } (also usable as the svg string).
+ * tinted glass, a ✓ badge), 'idle' (the glass and tile sit back, a grey dot; the text keeps its
+ * contrast) or 'plain'. `badge` adds a word to the badge (a ≥ 30px pill, e.g. 'Picked', 'Idle').
+ * `lit` (0..1, default 1 when picked, else 0) animates the lighting up; `appear` pops the card in.
+ * Text is ≥ MIN_TEXT (30px): a title or sub too long for the width wraps (two rows each), and the
+ * card grows taller when its text needs it; the returned box is the card as drawn. Returns
+ * { svg, box } (also usable as the svg string).
  * @param {number} x @param {number} y @param {number} w @param {number} h
  * @param {{ title?: string, sub?: string, icon?: string, state?: 'picked' | 'idle' | 'plain',
  *           accent?: string, lit?: number, badge?: string, appear?: number, radius?: number }} [o]
@@ -445,45 +543,48 @@ export function glassCard(x, y, w, h, { title = '', sub = '', icon = null, state
   if (!['picked', 'idle', 'plain'].includes(state)) throw new Error(`HX: glassCard state "${state}" must be picked, idle or plain.`);
   const R = ramp(accent);
   const L = clamp01(lit ?? (state === 'picked' ? 1 : 0));
-  const r = radius ?? clamp(Math.min(w, h) * 0.15, 14, 36);
-  const pad = clamp(Math.min(w, h) * 0.12, 16, 32);
-  const tile = icon ? clamp(h * 0.29, 34, 84) : 0;
-  let tSize = clamp(h * 0.14, 18, 46);
-  let sSize = clamp(tSize * 0.78, 14, 30);
-  // Fit the content's height: tile, gap, title, sub.
-  const gap = h * 0.1;
-  const need = pad + tile + (tile ? gap : 0) + tSize * 1.05 + (sub ? sSize * 1.45 : 0) + pad * 0.85;
-  const k = need > h ? Math.max(0.55, (h - pad * 1.85) / (need - pad * 1.85)) : 1;
-  const tl = tile * k;
-  tSize *= k;
-  sSize *= k;
+  const idle = state === 'idle' ? 1 - L : 0;
+  const r = radius ?? clamp(Math.min(w, h) * 0.15, 16, 38);
+  const pad = clamp(Math.min(w, h) * 0.13, 22, 36);
+  const tile = icon ? clamp(h * 0.28, 52, 96) : 0;
   const inner = w - pad * 2;
-  const tS = fitSize(title, tSize, inner, 'pragmatica-700', 12);
-  const sS = fitSize(sub, sSize, inner, 'roboto-500', 11);
+  const T1 = wrapFit(title, clamp(h * 0.17, 34, 56), inner, 'pragmatica-700', 2);
+  const S1 = sub ? wrapFit(sub, clamp(T1.size * 0.8, MIN_TEXT, 40), inner, 'roboto-500', 2) : { size: 0, rows: [] };
+  const gap = clamp(h * 0.08, 12, 28);
+  const tLine = T1.size * 1.08;
+  const sLine = S1.size * 1.25;
+  const need = pad + tile + (tile ? gap : 0) + T1.rows.length * tLine + (S1.rows.length ? S1.size * 0.3 + S1.rows.length * sLine : 0) + pad * 0.8;
+  const H_ = Math.max(h, need);
   const out = [];
-  out.push(glassPanel(x, y, w, h, r, { tint: accent, tintLevel: L, ring: accent, ringLevel: L, shadow: 1 }));
-  out.push(el('rect', { 'data-k': 'shape', x: f(x), y: f(y), width: f(w), height: f(h), rx: f(r), fill: 'none' }));
-  if (icon) out.push(glossTile(x + pad + tl / 2, y + pad + tl / 2, tl, { icon, color: accent, lit: 0.35 + 0.65 * L, glow: true }));
-  const titleBase = y + pad + tl + (tl ? gap * k : 0) + tS * 0.78;
-  out.push(label(title, x + pad, titleBase, tS, { face: 'pragmatica-700', color: textMain() }));
-  if (sub) out.push(label(sub, x + pad, titleBase + sSize * 1.38, sS, { face: 'roboto-500', color: textSoft() }));
-  // The state badge, top right, level with the tile.
-  const by = y + pad + (tl ? tl / 2 : 12 * k);
-  const bSize = clamp(h * 0.064, 11, 16);
+  out.push(glassPanel(x, y, w, H_, r, { tint: accent, tintLevel: L, ring: accent, ringLevel: L, shadow: 1, strength: 1 - 0.25 * idle }));
+  out.push(el('rect', { 'data-k': 'shape', x: f(x), y: f(y), width: f(w), height: f(H_), rx: f(r), fill: 'none' }));
+  if (icon) out.push(glossTile(x + pad + tile / 2, y + pad + tile / 2, tile, { icon, color: accent, lit: 0.35 + 0.65 * L, glow: true }));
+  // Idle text stays readable (frame.md: 4.5:1); only its weight of colour drops.
+  const tColor = idle > 0.5 && !isDark() ? T['text-secondary'] : textMain();
+  let base = y + pad + tile + (tile ? gap : 0) + T1.size * 0.8;
+  T1.rows.forEach((row, i) => out.push(label(row, x + pad, base + i * tLine, T1.size, { face: 'pragmatica-700', color: tColor })));
+  base += (T1.rows.length - 1) * tLine + S1.size * 0.3 + sLine;
+  S1.rows.forEach((row, i) => out.push(label(row, x + pad, base + i * sLine - S1.size * 0.15, S1.size, { face: 'roboto-500', color: textSoft() })));
+  // The state badge, top right, level with the tile (or the first line).
+  const by = y + pad + (tile ? tile / 2 : T1.size * 0.45);
   if (state === 'picked' && L > 0.02) {
-    const text = badge ?? 'Picked';
-    const bw = measure(text.toUpperCase(), bSize, 'roboto-700', 0.16) + bSize * 1.25 * 2 + bSize * 1.25 + bSize * 0.62;
-    out.push(pill(text, x + w - pad * 0.8 - bw / 2, by, { tone: 'tint', icon: 'check', color: accent, size: bSize, tracking: 0.16, appear: clamp01((L - 0.3) / 0.7), maxW: inner * 0.6 }).svg);
+    const ap = clamp01((L - 0.3) / 0.7);
+    if (badge) {
+      const b = pill(badge, 0, 0, { tone: 'tint', icon: 'check', color: accent, appear: 1 });
+      out.push(pill(badge, x + w - pad * 0.8 - b.box.w / 2, by, { tone: 'tint', icon: 'check', color: accent, appear: ap }).svg);
+    } else {
+      const cr = 22;
+      const cx = x + w - pad - cr;
+      out.push(pop([el('circle', { cx: f(cx), cy: f(by), r: cr, fill: R.base, 'fill-opacity': 0.16, stroke: R.base, 'stroke-opacity': 0.5, 'stroke-width': 1.2 }), uiIcon('check', cx, by, 26, { color: mixC(R.text, INK(), 0.2), sw: 3 })].join(''), cx, by, ap));
+    }
   } else if (state === 'idle') {
-    const text = (badge ?? 'Idle').toUpperCase();
-    const tw = measure(text, bSize, 'roboto-700', 0.22);
-    const rx = x + w - pad;
-    out.push(el('circle', { cx: f(rx - tw - bSize * 0.9), cy: f(by), r: f(bSize * 0.32), fill: '#B9B3A9' }));
-    out.push(label(text, rx - tw, by + bSize * 0.36, bSize, { face: 'roboto-700', color: textFaint(), tracking: 0.22 }));
+    if (badge) {
+      const b = pill(badge, 0, 0, { dot: 'ink' });
+      out.push(pill(badge, x + w - pad * 0.8 - b.box.w / 2, by, { dot: 'ink' }).svg);
+    } else out.push(el('circle', { cx: f(x + w - pad - 8), cy: f(by), r: 8, fill: pal().idle }));
   }
-  const opacity = state === 'idle' ? 0.62 + 0.38 * L : 1;
-  const svg = g({ 'data-k': 'textbox', 'data-ui': 'card', 'data-state': state, opacity: opacity < 1 ? f(opacity) : undefined }, out);
-  return boxed(pop(svg, x + w / 2, y + h / 2, appear), { x, y, w, h });
+  const svg = g({ 'data-k': 'textbox', 'data-ui': 'card', 'data-state': state }, out);
+  return boxed(pop(svg, x + w / 2, y + H_ / 2, appear), { x, y, w, h: H_ });
 }
 
 // ── Phone and chat ──────────────────────────────────────────────────────────────────────────
@@ -492,12 +593,16 @@ export function glassCard(x, y, w, h, { title = '', sub = '', icon = null, state
  * RIGHT edge; `from: 'ai'` the light reply, x its LEFT edge; y its top. `progress` (0..1) pops the
  * bubble in over its first quarter, then types the words in. `typing` (true, or a phase in seconds
  * for the dots' pulse) draws the "…" typing bubble instead of text. Wraps to `maxW` (the bubble's
- * outer width) by measured width. Returns { svg, box } (also usable as the svg string).
+ * outer width) by measured width at ≥ MIN_TEXT (30px; default 34): a long message takes more rows,
+ * never a smaller size. `meta` ("Sent") is a decorative 24px line under it. The reply is frosted glass on the ground (`surface: 'glass'`) and a
+ * flat light grey on a phone screen (`'flat'`, phone() passes it). Returns { svg, box } (also usable
+ * as the svg string).
  * @param {string} text @param {number} x @param {number} y
  * @param {{ from?: 'user' | 'ai', maxW?: number, size?: number, progress?: number,
- *           typing?: boolean | number, meta?: string }} [o]
+ *           typing?: boolean | number, meta?: string, surface?: 'glass' | 'flat' }} [o]
  */
-export function chatBubble(text, x, y, { from = 'user', maxW = 280, size = 28, progress = 1, typing = false, meta = null } = {}) {
+export function chatBubble(text, x, y, { from = 'user', maxW = 400, size = 34, progress = 1, typing = false, meta = null, surface = 'glass' } = {}) {
+  size = Math.max(MIN_TEXT, size);
   if (from !== 'user' && from !== 'ai') throw new Error(`HX: chatBubble from "${from}" must be user or ai.`);
   const user = from === 'user';
   const out = [];
@@ -510,24 +615,21 @@ export function chatBubble(text, x, y, { from = 'user', maxW = 280, size = 28, p
     const bx = user ? x - w : x;
     const r = h / 2;
     const corners = user ? [r, r, size * 0.28, r] : [r, r, r, size * 0.28];
-    out.push(el('path', { d: roundRect(bx, y, w, h, corners), fill: user ? '#2A2A2A' : '#ECE8E1' }));
+    out.push(user ? glossPanel(bx, y, w, h, corners, { color: 'ink' }) : surface === 'flat' ? el('path', { d: roundRect(bx, y, w, h, corners), fill: pal().reply }) : glassPanel(bx, y, w, h, corners, { strength: 1.2, shadow: 0.6 }));
     const phase = typeof typing === 'number' ? typing : 0;
     for (let i = 0; i < 3; i++) {
       const o = typeof typing === 'number' ? 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(2 * Math.PI * (phase * 1.4 - i * 0.2))) : [1, 0.7, 0.45][i];
-      out.push(el('circle', { cx: f(bx + size * 0.65 + d / 2 + i * (d + gap)), cy: f(y + h / 2), r: f(d / 2), fill: user ? '#FFFFFF' : '#B4ADA3', opacity: f(o) }));
+      out.push(el('circle', { cx: f(bx + size * 0.65 + d / 2 + i * (d + gap)), cy: f(y + h / 2), r: f(d / 2), fill: user ? WHITE : pal().dots, opacity: f(o) }));
     }
     return boxed(pop(g({ 'data-ui': 'bubble' }, out), user ? x - w : x, y + h / 2, appear), { x: bx, y, w, h });
   }
   const padX = size * 0.79;
   const padY = size * 0.6;
   const inner = maxW - padX * 2;
-  let sz = size;
-  let rows = [];
   const words = String(text).trim().split(/\s+/).filter(Boolean);
-  for (; sz >= 12; sz -= 1) {
-    rows = wrapWords(words, inner, sz, 'roboto-500');
-    if (rows.every((r) => measure(r.join(' '), sz, 'roboto-500') <= inner + 0.5)) break;
-  }
+  const fit = wrapFit(words.join(' '), size, inner, 'roboto-500', 99);
+  const sz = fit.size;
+  const rows = fit.rows.map((r) => r.split(' '));
   const lineH = sz * 1.2;
   const tw = Math.max(...rows.map((r) => measure(r.join(' '), sz, 'roboto-500')), sz);
   const w = tw + padX * 2;
@@ -536,12 +638,12 @@ export function chatBubble(text, x, y, { from = 'user', maxW = 280, size = 28, p
   const big = size * 0.93;
   const corners = user ? [big, big, size * 0.28, big] : [big, big, big, size * 0.28];
   if (user) {
-    out.push(boxShadow(bx, y, w, h, big, { dy: 14, blur: 24, spread: -12, color: '#000000', opacity: 0.45 }));
-    const body = linear([[0, '#2A2A2A'], [1, '#171717']]);
+    out.push(boxShadow(bx, y, w, h, big, { dy: 14, blur: 24, spread: -12, color: pal().black, opacity: 0.45 }));
+    const body = linear([[0, T['ink-lit'] ?? T.ink], [1, T.ink]]);
     const hl = linear([[0, WHITE, 0.2], [0.25, WHITE, 0], [1, WHITE, 0]]);
     out.push(defs(body, hl), el('path', { d: roundRect(bx, y, w, h, corners), fill: body.ref }), el('path', { d: roundRect(bx + 0.6, y + 0.6, w - 1.2, h - 1.2, corners), fill: 'none', stroke: hl.ref, 'stroke-width': 1.2 }));
   } else {
-    out.push(el('path', { d: roundRect(bx, y, w, h, corners), fill: '#ECE8E1' }));
+    out.push(surface === 'flat' ? el('path', { d: roundRect(bx, y, w, h, corners), fill: pal().reply }) : glassPanel(bx, y, w, h, corners, { strength: 1.2, shadow: 0.7 }));
   }
   out.push(el('rect', { 'data-k': 'shape', x: f(bx), y: f(y), width: f(w), height: f(h), rx: f(big), fill: 'none' }));
   // Words type in over the rest of the progress, one after another.
@@ -551,28 +653,29 @@ export function chatBubble(text, x, y, { from = 'user', maxW = 280, size = 28, p
   rows.forEach((row, i) => {
     const base = y + padY + i * lineH + sz * 0.94;
     const spans = row.map((wd, j) => {
-      const o = clamp01(typed * n - k++ + 1 - 0.0001 > 0 ? (typed * n - (k - 1)) * 1.6 : 0);
-      return el('tspan', { opacity: f(clamp01(o)) }, `${j ? ' ' : ''}${esc(wd)}`);
+      const o = clamp01((typed * n - k++) * 1.6);
+      return el('tspan', { opacity: f(o) }, `${j ? ' ' : ''}${esc(wd)}`);
     });
     out.push(el('text', { 'data-k': 'text', 'data-text': esc(row.join(' ')), x: f(bx + padX), y: f(base), 'font-size': f(sz), 'font-family': 'Roboto', 'font-weight': 500, fill: user ? WHITE : INK() }, spans.join('')));
   });
-  if (meta) out.push(label(meta, user ? bx + w - 6 : bx + 6, y + h + sz * 0.62, sz * 0.5, { color: '#A29C93', anchor: user ? 'end' : 'start', opacity: appear }));
-  return boxed(pop(g({ 'data-k': 'textbox', 'data-ui': 'bubble' }, out), user ? x : x, y + h, appear), { x: bx, y, w, h });
+  // The meta line ("Sent") sits under the bubble, outside its textbox.
+  const metaSvg = meta ? label(meta, user ? bx + w - 6 : bx + 6, y + h + MIN_DECOR * 1.15, MIN_DECOR, { color: pal().meta, anchor: user ? 'end' : 'start', decor: true }) : '';
+  return boxed(pop(g({ 'data-ui': 'bubble' }, [g({ 'data-k': 'textbox' }, out), metaSvg]), x, y + h, appear), { x: bx, y, w, h });
 }
 
 /**
- * A phone, top-left at (x, y), w × h (still 10: 336 × 580): graphite frame with a hairline and a
- * top highlight, the island, the status bar, a chat header (`sub` over `title`), a hairline, an
- * optional time stamp, then `messages` stacked down the screen ([{ text, from, progress, typing,
- * meta }]) and `children` on top (an SVG string, or a function of the screen rect { x, y, w, h,
- * top, bottom, left, right } returning SVG). `fade` (default true) dissolves the lower third into
- * the paper, as in the still. The screen is the phone's data-k="shape", so bounds.mjs keeps its text
- * on the screen.
+ * A phone, top-left at (x, y), w × h (default 380 × 660): graphite frame with a hairline and a top
+ * highlight, the island and status icons, the chat header `title` (≥ 30px; '' for none) over a
+ * hairline, then `messages` stacked down the screen ([{ text, from, progress, typing, meta }]) and
+ * `children` on top (an SVG string, or a function of the screen rect { x, y, w, h, top, bottom,
+ * left, right, next } returning SVG). `fade` (default true) dissolves the lower third into the
+ * paper, as in the still, so keep what must be read in the top two thirds. The screen is the
+ * phone's data-k="shape", so bounds.mjs keeps its text on the screen.
  * @param {number} x @param {number} y
- * @param {{ w?: number, h?: number, title?: string, sub?: string, time?: string, stamp?: string | false,
- *           messages?: object[], children?: string | Function, fade?: boolean, bubbleSize?: number, appear?: number }} [o]
+ * @param {{ w?: number, h?: number, title?: string, messages?: object[], children?: string | Function,
+ *           fade?: boolean, bubbleSize?: number, appear?: number }} [o]
  */
-export function phone(x, y, { w = 336, h = 580, title = 'New chat', sub = 'Assistant', time = '9:41', stamp = null, messages = [], children = '', fade = true, bubbleSize = null, appear = 1 } = {}) {
+export function phone(x, y, { w = 380, h = 660, title = 'New chat', messages = [], children = '', fade = true, bubbleSize = null, appear = 1 } = {}) {
   const k = w / 336;
   const R = 58 * k;
   const inset = 10 * k;
@@ -582,48 +685,44 @@ export function phone(x, y, { w = 336, h = 580, title = 'New chat', sub = 'Assis
   const sh = h - inset * 2;
   const sr = R - inset;
   const out = [];
-  out.push(boxShadow(x, y, w, h, R, { dy: 50 * k, blur: 80 * k, spread: -40 * k, color: '#28190F', opacity: 0.55 }));
-  out.push(boxShadow(x, y, w, h, R, { dy: 18 * k, blur: 30 * k, spread: -12 * k, color: '#28190F', opacity: 0.25 }));
-  const frame = linear([[0, '#3A3A3C'], [0.3, '#1C1C1E'], [0.7, '#0E0E0F'], [1, '#2A2A2C']], [0.21, 0.09, 0.79, 0.91]);
+  out.push(boxShadow(x, y, w, h, R, { dy: 50 * k, blur: 80 * k, spread: -40 * k, color: pal().shadow, opacity: 0.55 }));
+  out.push(boxShadow(x, y, w, h, R, { dy: 18 * k, blur: 30 * k, spread: -12 * k, color: pal().shadow, opacity: 0.25 }));
+  const frame = graphite();
   const rim = linear([[0, WHITE, 0.3], [0.12, WHITE, 0.14], [1, WHITE, 0.12]]);
-  const screen = linear([[0, '#FDFCFA'], [1, '#F7F5F1']]);
+  const screen = linear([[0, pal().screenTop], [1, pal().screenBottom]]);
   const sheen = linear([[0, WHITE, 0.55], [0.34, WHITE, 0], [1, WHITE, 0]], [0.06, 0.27, 0.94, 0.73]);
   out.push(defs(frame, rim, screen, sheen));
   out.push(el('path', { d: roundRect(x, y, w, h, R), fill: frame.ref }));
   out.push(el('path', { d: roundRect(x + 0.75, y + 0.75, w - 1.5, h - 1.5, R - 0.75), fill: 'none', stroke: rim.ref, 'stroke-width': 1.5 }));
   out.push(el('path', { d: roundRect(sx, sy, sw, sh, sr), fill: screen.ref }));
   out.push(el('rect', { 'data-k': 'shape', x: f(sx), y: f(sy), width: f(sw), height: f(sh), rx: f(sr), fill: 'none' }));
-  // Island and status bar.
-  out.push(el('rect', { x: f(x + w / 2 - 48 * k), y: f(sy + 14 * k), width: f(96 * k), height: f(28 * k), rx: f(14 * k), fill: '#0B0B0B' }));
-  out.push(label(time, sx + 30 * k, sy + 34 * k, 17 * k, { color: INK() }));
+  // Island and status icons (no clock: a label under 24px carries nothing a viewer can read).
+  out.push(el('rect', { x: f(x + w / 2 - 48 * k), y: f(sy + 14 * k), width: f(96 * k), height: f(28 * k), rx: f(14 * k), fill: tk('ink-shade', 'ink') }));
   const bx = sx + sw - 28 * k - 54 * k;
   const by = sy + 22 * k;
   [[0, 7, 5], [5, 5, 7], [10, 2.5, 9.5], [15, 0, 12]].forEach(([dx, dy, hh]) => out.push(el('rect', { x: f(bx + dx * k), y: f(by + dy * k), width: f(3 * k), height: f(hh * k), rx: f(k), fill: INK() })));
   const bt = bx + 26 * k;
-  out.push(el('rect', { x: f(bt + 0.5 * k), y: f(by + 0.5 * k - 0.5 * k), width: f(23 * k), height: f(12 * k), rx: f(3.5 * k), fill: 'none', stroke: INK(), 'stroke-opacity': 0.4, 'stroke-width': f(k) }));
+  out.push(el('rect', { x: f(bt + 0.5 * k), y: f(by), width: f(23 * k), height: f(12 * k), rx: f(3.5 * k), fill: 'none', stroke: INK(), 'stroke-opacity': 0.4, 'stroke-width': f(k) }));
   out.push(el('rect', { x: f(bt + 2.5 * k), y: f(by + 2 * k), width: f(17 * k), height: f(8 * k), rx: f(2 * k), fill: INK() }));
   out.push(el('rect', { x: f(bt + 25 * k), y: f(by + 3.5 * k), width: f(2 * k), height: f(5 * k), rx: f(k), fill: INK(), opacity: 0.4 }));
   // Chat header.
   const cx = x + w / 2;
-  const headW = sw - 44 * k;
-  if (sub) out.push(label(sub, cx, sy + 82 * k, fitSize(sub, 16 * k, headW, 'roboto-500'), { color: '#8A857D', anchor: 'middle', tracking: 0.02 }));
-  if (title) out.push(label(title, cx, sy + 106 * k, fitSize(title, 19 * k, headW, 'roboto-700'), { face: 'roboto-700', color: INK(), anchor: 'middle' }));
-  out.push(el('rect', { x: f(sx + 22 * k), y: f(sy + 122 * k), width: f(sw - 44 * k), height: f(Math.max(1, k)), fill: INK(), opacity: 0.08 }));
-  let top = sy + 150 * k;
-  const st = stamp === null ? `Today ${time}` : stamp;
-  if (st) {
-    out.push(label(st, cx, sy + 220 * k, 14 * k, { color: '#A29C93', anchor: 'middle', tracking: 0.02 }));
-    top = sy + 244 * k;
+  let top = sy + 70 * k;
+  if (title) {
+    const ts = fitSize(title, MIN_TEXT, sw - 44 * k, 'roboto-700');
+    out.push(label(title, cx, sy + 62 * k + ts * 0.36, ts, { face: 'roboto-700', color: INK(), anchor: 'middle' }));
+    out.push(el('rect', { x: f(sx + 22 * k), y: f(sy + 98 * k), width: f(sw - 44 * k), height: f(Math.max(1, k)), fill: INK(), opacity: 0.08 }));
+    top = sy + 122 * k;
   }
   // Messages stacked down the screen.
-  const bsz = bubbleSize ?? 28 * k;
+  const bsz = Math.max(MIN_TEXT, bubbleSize ?? 34);
   const area = { x: sx, y: sy, w: sw, h: sh, top, bottom: sy + sh - 24 * k, left: sx + 18 * k, right: sx + sw - 18 * k };
   let cy = top;
   for (const m of messages) {
     const from = m.from ?? 'user';
-    const b = chatBubble(m.text ?? '', from === 'user' ? area.right : area.left, cy, { from, maxW: sw - 36 * k - 40 * k, size: m.size ?? bsz, progress: m.progress ?? 1, typing: m.typing ?? false, meta: m.meta ?? null });
+    const b = chatBubble(m.text ?? '', from === 'user' ? area.right : area.left, cy, { from, maxW: sw * 0.86, size: m.size ?? bsz, progress: m.progress ?? 1, typing: m.typing ?? false, meta: m.meta ?? null, surface: 'flat' });
     out.push(b.svg);
-    cy += b.box.h + (m.meta ? 44 * k : 22 * k);
+    cy += b.box.h + (m.meta ? 22 + MIN_DECOR * 1.4 : 22);
   }
   area.next = cy;
   out.push(svgOf(typeof children === 'function' ? children(area) : children));
@@ -775,7 +874,7 @@ export function route(points, { color = 'teal', progress = 1, glow = true, dashe
     if (glow) {
       const flt = blur(width * 1.5, boundsOf(S, width * 3));
       ds.push(flt);
-      out.push(defs(...ds), el('path', { d: lit, fill: 'none', stroke, 'stroke-width': f(width * 3), 'stroke-linecap': 'round', opacity: 0.38, filter: flt.ref }));
+      out.push(defs(...ds), el('path', { d: lit, fill: 'none', stroke, 'stroke-width': f(width * (trail == null ? 3 : 3.4)), 'stroke-linecap': 'round', opacity: trail == null ? 0.38 : 0.6, filter: flt.ref }));
     } else if (ds.length) out.push(defs(...ds));
     out.push(el('path', { d: lit, fill: 'none', stroke, 'stroke-width': f(width), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
     if (ends && p >= 1 && trail == null) {
@@ -793,7 +892,7 @@ export function route(points, { color = 'teal', progress = 1, glow = true, dashe
  * @param {number[][]} points @param {number} u
  * @param {{ color?: string, bend?: string, pull?: number, size?: number, trail?: number, glow?: boolean }} [o]
  */
-export function packet(points, u, { color = 'orange', bend = 'smooth', pull = 0.5, size = 1, trail = 0.3, glow = true } = {}) {
+export function packet(points, u, { color = 'orange', bend = 'smooth', pull = 0.5, size = 1, trail = 0.45, glow = true } = {}) {
   if (!(u > 0 && u < 1)) return '';
   const S = sampled(points, bend, pull);
   const R = ramp(color);
@@ -812,6 +911,95 @@ export function packet(points, u, { color = 'orange', bend = 'smooth', pull = 0.
   cap.push(el('rect', { x: f(-w / 2 + 0.75), y: f(-h / 2 + 0.75), width: f(w - 1.5), height: f(h - 1.5), rx: f(h / 2 - 0.75), fill: 'none', stroke: hl.ref, 'stroke-width': 1.5 }));
   out.push(g({ transform: `translate(${f(q.x)} ${f(q.y)}) rotate(${f(q.angle)})` }, cap));
   return g({ 'data-ui': 'packet', opacity: fade < 1 ? f(fade) : undefined }, out);
+}
+
+// ── Step tracker (frame 6) ──────────────────────────────────────────────────────────────────
+/** The upcoming stops' text and marks: muted but readable (≥ 4.5:1 on the paper and the stage). */
+// unlit stops read at ≥ 4.5:1 on their ground and on the glass disc (text-secondary on paper)
+const upcomingInk = () => (isDark() ? mixC(T['paper-lit'], T['text-tertiary'], 0.4) : T['text-secondary']);
+
+/**
+ * Frame 6's step tracker: a numbered rail along one edge of the safe area, its stops the anchor
+ * steps' technical names (`steps`: strings, 4 words or fewer). Stops before `current` are done (a
+ * glossy ink disc with a ✓), `current` is lit (a glossy green disc with its number, a halo, its label
+ * on a green-tinted pill), the rest are upcoming (a glass disc, number and label in a muted ink that
+ * still holds 4.5:1). The rail is a hairline lit green up to the current stop. `lit` (0..1) animates
+ * the current stop lighting on its voice cue (the rail reaches it, the disc pops and glows).
+ * `axis: 'v'` (default) stacks the stops down from (x, y) with labels to the right; `'h'` runs them
+ * along from (x, y) with labels centred below. Labels are Roboto 700 at ≥ MIN_TEXT (default 34),
+ * wrapping to two rows within `maxW` (v) or the stop spacing (h). Returns { svg, box, stops } (stops:
+ * the discs' centres; also usable as the svg string).
+ * @param {string[]} steps @param {number} current @param {number} x @param {number} y
+ * @param {{ axis?: 'v' | 'h', gap?: number, size?: number, maxW?: number, lit?: number, appear?: number }} [o]
+ */
+export function stepTracker(steps, current, x, y, { axis = 'v', gap = null, size = 34, maxW = 440, lit = 1, appear = 1 } = {}) {
+  if (!Array.isArray(steps) || !steps.length) throw new Error('HX: stepTracker needs its steps (the anchor steps\' technical names).');
+  if (axis !== 'v' && axis !== 'h') throw new Error(`HX: stepTracker axis "${axis}" must be v or h.`);
+  size = Math.max(TRACKER_MIN, size);
+  const n = steps.length;
+  const cur = Math.round(Number.isFinite(current) ? current : -1);
+  const L = clamp01(lit);
+  const dr = 32;
+  const step = gap ?? (axis === 'v' ? 150 : 250);
+  const C = steps.map((_, i) => (axis === 'v' ? [x + dr, y + dr + i * step] : [x + dr + i * step, y + dr]));
+  const G_ = ramp('green');
+  const I = ramp('ink');
+  const out = [];
+  // The rail.
+  if (n > 1) {
+    const reach = cur < 0 ? 0 : cur >= n ? 1 : clamp01((cur - 1 + L) / (n - 1));
+    out.push(route([C[0], C[n - 1]], { bend: 'line', color: 'green', progress: reach, ends: false, width: 4 }));
+  }
+  const boxes = [];
+  steps.forEach((raw, i) => {
+    const text = String(raw?.label ?? raw);
+    const state = i < cur ? 'done' : i === cur ? 'current' : 'upcoming';
+    const [cx, cy] = C[i];
+    const disc = [];
+    const k = state === 'current' ? 0.92 + 0.08 * easeUI(L) + 0.06 * Math.sin(Math.PI * clamp01(L)) : 1;
+    const r = dr * k;
+    const num = String(i + 1);
+    let numColor = upcomingInk();
+    if (state === 'done') {
+      disc.push(glossPanel(cx - r, cy - r, r * 2, r * 2, r, { color: 'ink' }));
+      disc.push(uiIcon('check', cx, cy, 30, { color: WHITE, sw: 3 }));
+    } else if (state === 'current') {
+      if (L > 0) disc.push(glowAt(cx, cy, r * 2.1, r * 2.1, G_.glow, 0.45 * L, 0.4));
+      disc.push(glossPanel(cx - r, cy - r, r * 2, r * 2, r, { color: 'green' }));
+      if (L < 1) disc.push(el('circle', { cx: f(cx), cy: f(cy), r: f(r), fill: T['paper-lit'], 'fill-opacity': f(0.55 * (1 - L)) }));
+      disc.push(el('circle', { cx: f(cx), cy: f(cy), r: f(r + 9), fill: 'none', stroke: G_.base, 'stroke-opacity': f(0.4 * L), 'stroke-width': 2 }));
+      // the number reads on the disc as it is NOW (still washed toward paper while it lights up),
+      // so it never drops under 4.5:1 mid-light (it was white on a pale disc, 2.2:1)
+      numColor = onColor(mixC(G_.base, T['paper-lit'], 0.55 * (1 - L)));
+    } else {
+      disc.push(glassPanel(cx - r, cy - r, r * 2, r * 2, r, { shadow: 0.5, strength: 1.1 }));
+      disc.push(el('circle', { cx: f(cx), cy: f(cy), r: f(r - 0.75), fill: 'none', stroke: upcomingInk(), 'stroke-opacity': 0.55, 'stroke-width': 1.5 }));
+    }
+    disc.push(el('rect', { 'data-k': 'shape', x: f(cx - r), y: f(cy - r), width: f(r * 2), height: f(r * 2), rx: f(r), fill: 'none' }));
+    if (state !== 'done') disc.push(label(num, cx, cy + TRACKER_MIN * 0.36, TRACKER_MIN, { face: 'roboto-700', color: numColor, anchor: 'middle' }));
+    out.push(g({ 'data-k': 'textbox', 'data-ui': 'stop', 'data-state': state }, disc));
+    // The label.
+    const room = axis === 'v' ? maxW : step - 24;
+    const fit = wrapFit(text, size, room - (state === 'current' ? size * 1.2 : 0), 'roboto-700', 2, TRACKER_MIN);
+    const lh = fit.size * 1.15;
+    const tw = Math.max(...fit.rows.map((row) => measure(row, fit.size, 'roboto-700')));
+    const padX = fit.size * 0.6;
+    const bw = tw + padX * 2;
+    const bh = fit.rows.length * lh + fit.size * 0.7;
+    const lx = axis === 'v' ? cx + dr + 22 : cx - bw / 2;
+    const ly = axis === 'v' ? cy - bh / 2 : cy + dr + 18;
+    const lab = [];
+    const tColor = state === 'upcoming' ? upcomingInk() : state === 'current' ? (isDark() ? G_.lit : mixC(G_.text, INK(), 0.2)) : textMain();
+    if (state === 'current') lab.push(pop(el('path', { d: roundRect(lx, ly, bw, bh, Math.min(bh / 2, fit.size)), fill: G_.base, 'fill-opacity': 0.12, stroke: G_.base, 'stroke-opacity': 0.4, 'stroke-width': 1.2 }), lx + bw / 2, ly + bh / 2, 0.4 + 0.6 * L));
+    lab.push(el('rect', { 'data-k': 'shape', x: f(lx), y: f(ly), width: f(bw), height: f(bh), rx: f(Math.min(bh / 2, fit.size)), fill: 'none' }));
+    const ax = axis === 'v' ? lx + padX : lx + bw / 2;
+    fit.rows.forEach((row, j) => lab.push(label(row, ax, ly + fit.size * 0.35 + j * lh + fit.size * 0.86, fit.size, { face: 'roboto-700', color: tColor, anchor: axis === 'v' ? 'start' : 'middle' })));
+    out.push(g({ 'data-k': 'textbox', 'data-ui': 'stop-label' }, lab));
+    boxes.push([Math.min(cx - dr, lx), Math.min(cy - dr, ly), Math.max(cx + dr, lx + bw), Math.max(cy + dr, ly + bh)]);
+  });
+  const bb = [Math.min(...boxes.map((b) => b[0])), Math.min(...boxes.map((b) => b[1])), Math.max(...boxes.map((b) => b[2])), Math.max(...boxes.map((b) => b[3]))];
+  const svg = pop(g({ 'data-ui': 'step-tracker' }, out), (bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2, appear);
+  return { ...boxed(svg, { x: bb[0], y: bb[1], w: bb[2] - bb[0], h: bb[3] - bb[1] }), stops: C.map(([sx, sy]) => ({ x: sx, y: sy })) };
 }
 
 // ── Icons: a vendored Lucide subset (lucide-react 1.28.0, ISC), 24-unit grid, 2px stroke ──────
@@ -939,7 +1127,7 @@ export const UI_ICONS = [...Object.keys(LUCIDE), ...Object.keys(ALIAS)];
 export function uiIcon(name, x, y, size = 32, { color = null, sw = 2, rotate = 0, opacity = 1 } = {}) {
   const key = LUCIDE[name] ? name : ALIAS[name];
   if (!key) throw new Error(`HX: no uiIcon "${name}". Use one of: ${UI_ICONS.join(', ')}.`);
-  const c = color == null ? textMain() : RAMP[color] ? ramp(color).base : T[color] ?? color;
+  const c = color == null ? textMain() : GLASS_COLORS.includes(color) ? ramp(color).base : T[color] ?? color;
   const k = size / 24;
   const tf = `translate(${f(x)} ${f(y)})${rotate ? ` rotate(${f(rotate)})` : ''} scale(${f(k * 1000) / 1000}) translate(-12 -12)`;
   return g({ 'data-ui': 'icon', 'data-icon': key, transform: tf, fill: 'none', stroke: c, 'stroke-width': f(sw), 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: opacity < 1 ? f(opacity) : undefined }, LUCIDE[key]);

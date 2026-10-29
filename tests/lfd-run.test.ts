@@ -702,3 +702,113 @@ test('a caption reply with no usage does not fail the run', async () => {
   const { rows } = await d.query<{ caption: string }>(`SELECT caption FROM lfd.posts`);
   assert.match(rows[0]!.caption, /^⬅️ Swipe for a new Claude Haiku/);
 });
+
+async function stubMemePng(): Promise<Buffer> {
+  const sharp = (await import('sharp')).default;
+  return sharp({ create: { width: 16, height: 16, channels: 3, background: '#224466' } }).png().toBuffer();
+}
+
+function memesHook(o: { clears: (headline: string, assumeShort?: boolean) => boolean; made?: string[] }): NonNullable<LfdRunDeps['memes']> {
+  const made = o.made ?? [];
+  return {
+    capUsd: 1,
+    clears: async (s, opts) => o.clears(s.headline, opts?.assumeShort),
+    make: async (s) => {
+      made.push(s.key);
+      return { png: await stubMemePng(), templateId: 'drake', text: ['top', 'bottom'], costUsd: 0.1 };
+    },
+  };
+}
+
+test('a finder miss that clears the meme gate stays with the meme as the photo', async () => {
+  const made: string[] = [];
+  const d = await deps({
+    photos: photos((q) => q.includes('Niche Thing 0')),
+    memes: memesHook({ clears: (h) => h.includes('Niche Thing 0'), made }),
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = await recordOf(d, res.runId) as unknown as Rec & { memes: { rescued: Array<{ headline: string }>; added: unknown } };
+  assert.equal(rec.drops.filter((x) => x.reason === 'no-photo').length, 0);
+  assert.ok(rec.memes.rescued.some((x) => x.headline.includes('Niche Thing 0')), JSON.stringify(rec.memes));
+  const { rows } = await d.query<{ stories: Array<{ url: string; photoSource: string; photo: { src: string }; meme?: { templateId: string; object: string } }>; render: { slides: Array<{ photoUrl?: string }> } }>(`SELECT stories, render FROM lfd.posts`);
+  const kept = rows[0]!.stories.find((s) => s.url === 'https://n.com/0');
+  assert.ok(kept, 'the story stays');
+  assert.equal(kept.photoSource, 'meme');
+  assert.equal(kept.meme?.templateId, 'drake');
+  assert.match(kept.photo.src, /^storage:lfd\/.+\/meme-engine-/);
+  assert.equal(kept.meme?.object, kept.photo.src.slice('storage:'.length));
+  assert.ok(!JSON.stringify(rows[0]!.render).includes('data:image'), 'the saved render does not keep the PNG');
+  assert.ok(made.length >= 1);
+});
+
+test('a finder miss that fails the meme gate is still dropped as no-photo', async () => {
+  const d = await deps({
+    photos: photos((q) => q.includes('Niche Thing 0')),
+    memes: memesHook({ clears: () => false }),
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = await recordOf(d, res.runId);
+  const drop = rec.drops.find((x) => x.reason === 'no-photo');
+  assert.ok(drop && drop.key.endsWith('n.com/0'), JSON.stringify(rec.drops));
+  const { rows } = await d.query<{ stories: Array<{ url: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => s.url === 'https://n.com/0'));
+});
+
+test('a vision-rejected story that clears the gate is kept and skipped on the next vision pass', async () => {
+  const w = writerStub({ vision: (s) => (s.headline.includes('Niche Thing 0') ? 'a stack of newspapers' : null) });
+  const base = await deps({
+    create: w.create,
+    memes: memesHook({ clears: (h) => h.includes('Niche Thing 0') }),
+  });
+  let renders = 0;
+  const res = await runLastFewDays({ ...base, fitCheck: async (post, opts) => { renders += 1; return base.fitCheck(post, opts); } });
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(renders, 2);
+  const rec = await recordOf(base, res.runId) as unknown as Rec & VisionRec & { memes: { rescued: Array<{ key: string }> } };
+  assert.equal(rec.drops.filter((x) => x.reason === 'vision-rejected').length, 0);
+  assert.ok(rec.memes.rescued.some((x) => x.key.endsWith('n.com/0')));
+  const { rows } = await base.query<{ stories: Array<{ url: string; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
+  assert.equal(rows[0]!.stories.find((s) => s.url === 'https://n.com/0')?.photoSource, 'meme');
+});
+
+test('when the lineup has no 92% story, the scan adds the first unused major that clears', async () => {
+  const { query } = await openHubTestDb();
+  await seedCarouselRun(query, '2026-10-12T07:00:00Z', [
+    { id: 'https://big.com/alpha', headline: 'Alpha Ships A Thing', source: 'The Verge' },
+    { id: 'https://big.com/beta', headline: 'Beta Ships A Thing', source: 'The Verge' },
+    { id: 'https://big.com/gamma', headline: 'Gamma Ships A Thing', source: 'The Verge' },
+    { id: 'https://big.com/launch', headline: 'Launch New Model Today', source: 'The Verge' },
+  ]);
+  const idea = await seedReelsIdea(query, { headline: 'Niche Thing Happens', url: 'https://n.com/0' });
+  await seedScore(query, idea, { nyDate: '2026-10-11', origin: 'timely', net: 0.9 });
+  const made: string[] = [];
+  const d = await deps({
+    query,
+    jev: jev((h) => (/Alpha|Beta|Gamma|Launch/.test(h) ? 1 : 0)),
+    memes: memesHook({ clears: (h) => h.includes('Launch'), made }),
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(res.stories, 5);
+  assert.equal(res.short, false);
+  const rec = await recordOf(d, res.runId) as unknown as Rec & { memes: { added: { headline: string } | null; scanned: Array<{ headline: string }> } };
+  assert.ok(rec.memes.added?.headline.includes('Launch'), JSON.stringify(rec.memes));
+  const { rows } = await d.query<{ stories: Array<{ url: string; photoSource: string }> }>(`SELECT stories FROM lfd.posts`);
+  const added = rows[0]!.stories.find((s) => s.url === 'https://big.com/launch');
+  assert.ok(added);
+  assert.equal(added.photoSource, 'meme');
+  assert.ok(made.some((k) => k.includes('launch') || k.includes('big.com/launch')));
+});
+
+test('when the lineup already has a passer, the scan does not make leftover memes', async () => {
+  const made: string[] = [];
+  const d = await deps({ memes: memesHook({ clears: (h) => h.includes('Haiku'), made }) });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = await recordOf(d, res.runId) as unknown as Rec & { memes: { scanned: unknown[]; added: unknown } };
+  assert.deepEqual(rec.memes.scanned, []);
+  assert.equal(rec.memes.added, null);
+  assert.equal(made.length, 0, 'no meme generated; a photo story that passes waits for the post-hoc stage');
+});

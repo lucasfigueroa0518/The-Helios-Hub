@@ -1,7 +1,8 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { listPool, listTopics } from '@/lib/explainers/repository';
 import { loadSettings, loadThemeBrief, type ExplainersSettings } from '@/lib/explainers/settings';
-import type { CostVendor, JobRow, TopicRow, Verdict } from '@/lib/explainers/types';
+import type { CostVendor, JobRow, LintViolation, TopicRow, Verdict } from '@/lib/explainers/types';
+import { warningsSummary, type WarningsSummary } from '@/lib/explainers/warnings';
 
 /** Read models for the three Explainers tabs. Dates go out as ISO strings. */
 
@@ -62,7 +63,15 @@ export type JobSummary = JobRow & {
   artifact_count: number;
   lint_count: number;
   verdict: Verdict | null;
+  /** The reel's warnings (Explainers 4.2, fail open): how many, and the first two in plain words. */
+  warnings: WarningsSummary;
 };
+
+/** json_agg comes back parsed from pg and as text from some drivers. */
+function parseRows(value: unknown): Pick<LintViolation, 'rule' | 'frame' | 'detail' | 'severity'>[] {
+  const v = typeof value === 'string' ? (JSON.parse(value) as unknown) : value;
+  return Array.isArray(v) ? (v as Pick<LintViolation, 'rule' | 'frame' | 'detail' | 'severity'>[]) : [];
+}
 
 export async function loadReelsView(db: Queryable, limit = 50): Promise<JobSummary[]> {
   const { rows } = await db.query<Record<string, unknown>>(
@@ -75,6 +84,11 @@ export async function loadReelsView(db: Queryable, limit = 50): Promise<JobSumma
               ORDER BY a.seq DESC LIMIT 1) AS contact_sheet_id,
             (SELECT count(*)::int FROM explainers.artifacts a WHERE a.job_id = j.id) AS artifact_count,
             (SELECT count(*)::int FROM explainers.lint_violations l WHERE l.job_id = j.id) AS lint_count,
+            COALESCE((
+              SELECT json_agg(json_build_object('rule', l.rule, 'frame', l.frame, 'detail', l.detail, 'severity', l.severity) ORDER BY l.frame NULLS FIRST, l.seq)
+                FROM explainers.lint_violations l
+               WHERE l.job_id = j.id AND l.severity = 'warning'
+            ), '[]'::json) AS warning_rows,
             COALESCE((
               SELECT json_agg(json_build_object(
                        'vendor', c.vendor,
@@ -94,8 +108,9 @@ export async function loadReelsView(db: Queryable, limit = 50): Promise<JobSumma
       LIMIT $1`,
     [limit],
   );
-  return rows.map((row) => ({
+  return rows.map(({ warning_rows, ...row }) => ({
     ...(row as unknown as JobSummary),
+    warnings: warningsSummary(parseRows(warning_rows)),
     spend_usd: Number(row.spend_usd),
     spend_cap_usd: Number(row.spend_cap_usd),
     weighted_score: row.weighted_score == null ? null : Number(row.weighted_score),

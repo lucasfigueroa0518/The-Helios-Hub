@@ -31,7 +31,7 @@ import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { CLOSE } from './close-timing.js';
-import { CLOSE_FRAME, isClose, parseFrames, seconds, writeClose, writeOpener } from './frames.mjs';
+import { CLOSE_FRAME, isClose, isHandoff, parseFrames, seconds, writeClose, writeHandoff, writeOpener } from './frames.mjs';
 import { openerByKey } from './openers/bank.js';
 import { ensureOpener } from './openers/sound.mjs';
 
@@ -405,11 +405,25 @@ export function pace(root, { tighten = true } = {}) {
     if (f.id) writeFileSync(join(root, 'assets', 'timing', `${f.id}.json`), `${JSON.stringify(timing, null, 1)}\n`);
   }
   const total = r3(frames.reduce((n, f) => n + (f.duration > 0 ? f.duration : 0), 0));
+  // Frame 3 is code's hand-off when the job chose one (4.3): written with its paced length.
+  for (const f of frames) if (isHandoff(root, f)) writeHandoff(root, f);
   return { ok: errors.length === 0, errors, total, frames: paced, tightened };
 }
 
+/**
+ * Rewrite only frame 3's hand-off module (4.3 fix), once the frames are built: its backdrop is
+ * frame 4's first shot, which exists only after frame 4's builder wrote it. `node assets/kit/pace.mjs handoff`.
+ */
+export function rewriteHandoff(root) {
+  const file = join(root, 'STORYBOARD.md');
+  const frames = existsSync(file) ? parseFrames(readFileSync(file, 'utf8')) : [];
+  const done = [];
+  for (const f of frames) if (isHandoff(root, f) && writeHandoff(root, f) !== null) done.push(f.id);
+  return { ok: true, errors: [], handoff: done };
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
-  const result = pace(process.cwd());
+  const result = process.argv[2] === 'handoff' ? rewriteHandoff(process.cwd()) : pace(process.cwd());
   console.log(JSON.stringify(result, null, 1));
   process.exit(result.ok ? 0 : 1);
 }

@@ -1,0 +1,434 @@
+{
+ "note": "Lucas reviewed 46 flagged principles on 2026-10-28. Every principle in research/01-03 not listed here is kept as written. 02-writing.md section 13 (muted viewer) is kept in full. final.action is binding.",
+ "items": [
+  {
+   "id": "W-31",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Too strict for news on stills: muted viewers get the story from the captions, and a photo rarely carries plot by itself.",
+   "my_rec": "R",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-34",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "A silent gap is dead air for a muted viewer, and long gaps cost retention.",
+   "my_rec": "R",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-37",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Stills have no natural sound, and silence as a throttle never reaches a muted viewer. W-34 covers what is left.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-111",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Same reason as W-34.",
+   "my_rec": "R",
+   "final": {
+    "action": "keep"
+   }
+  },
+  {
+   "id": "W-130",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Works for sound-on viewers only if something on screen holds the moment.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "A beat with no narration before the key line, while the picture or on-screen words hold the moment."
+   }
+  },
+  {
+   "id": "W-36",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Sound-first reveals are lost on mute.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Bring a new image in first and let it land for a moment, then name it."
+   }
+  },
+  {
+   "id": "W-19",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Spoken signposts spend scarce words, and on-screen change does the job for both audiences.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-129",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Same as W-19.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-82",
+   "theme": "Silence and the muted viewer",
+   "why_flagged": "Keep the idea, drop the spoken signpost.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Flag what matters with a change of pace and on-screen emphasis."
+   }
+  },
+  {
+   "id": "D-73",
+   "theme": "What may be done to a real photo",
+   "why_flagged": "AP allows only technical edits. Our cutouts, grade, grain and duotone would all break this.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Never change what a photo shows. Stylized treatment (cutout, grade, grain, duotone, blur behind a lifted subject) is allowed when it reads as treatment."
+   }
+  },
+  {
+   "id": "D-74",
+   "theme": "What may be done to a real photo",
+   "why_flagged": "Lifting a subject out of its background is removal, read literally.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Never add, remove, move or clone anything inside a photo's scene; lifting a subject out as a visible cutout is a treatment, not an edit."
+   }
+  },
+  {
+   "id": "D-93",
+   "theme": "What may be done to a real photo",
+   "why_flagged": "Forbids background blur and toning, which the documentary look uses. The D-73 rewrite covers the real limit.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-54",
+   "theme": "What may be done to a real photo",
+   "why_flagged": "Parallax needs pixels filled in behind a lifted layer, which is a small use of image generation. You allowed generation in three cases and upscaling sparingly; this would be a fourth.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Use parallax on key images only. Filling the gap behind a lifted layer is allowed; inventing visible content is not."
+   }
+  },
+  {
+   "id": "D-78",
+   "theme": "What may be done to a real photo",
+   "why_flagged": "Labeling every posed or handout photo clutters 60 seconds. The on-screen credit and source log cover provenance.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-64",
+   "theme": "What may be done to a real photo",
+   "why_flagged": "Superseded by your rule (MD-02): any photo without a watermark is usable. The source log (D-63) stays.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-6",
+   "theme": "Lesson creep",
+   "why_flagged": "Searching for a bigger theme tends to end in a lesson.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Set the story inside the larger forces shaping AI; that context runs through it rather than arriving as a closing lesson. (Lucas: \"I want these stories to be cognizant of the greater themes that are going on in the AI world. We don't necessarily need to end on a lesson or moral, but the story will probably be intertwined with a greater context.\")"
+   }
+  },
+  {
+   "id": "W-9",
+   "theme": "Lesson creep",
+   "why_flagged": "Same risk as D-6.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Give meaning in at most one line, as stakes, not a moral."
+   }
+  },
+  {
+   "id": "W-134",
+   "theme": "Lesson creep",
+   "why_flagged": "A reflection-line ending is a soft moral. Your ending is the thread that is still unfolding (MD-05).",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-5",
+   "theme": "Lesson creep",
+   "why_flagged": "An \"explanatory narrative\" is the educational format. The visuals check and selection pick stories that already have action.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-4",
+   "theme": "Lesson creep",
+   "why_flagged": "Written for months of shooting. Our writer works from a finished fact sheet.",
+   "my_rec": "R",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-5",
+   "theme": "Lesson creep",
+   "why_flagged": "Merged into the D-4 rewrite.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-3",
+   "theme": "Heroes, villains and whom the story centers",
+   "why_flagged": "Rules out stories built around a flawed CEO or a rivalry, which are the core of AI drama.",
+   "my_rec": "R",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "W-2",
+   "theme": "Heroes, villains and whom the story centers",
+   "why_flagged": "\"Resolve\" conflicts with stories that are still unfolding.",
+   "my_rec": "R",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-33",
+   "theme": "Heroes, villains and whom the story centers",
+   "why_flagged": "In AI news the one at fault is often the protagonist. The Tinder Swindler rule doesn't map.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Never glorify wrongdoing; when people were harmed, give them their place in the story."
+   }
+  },
+  {
+   "id": "D-97",
+   "theme": "Heroes, villains and whom the story centers",
+   "why_flagged": "Covered by the D-33 rewrite.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-68",
+   "theme": "Heroes, villains and whom the story centers",
+   "why_flagged": "We can't contact the subjects of a story.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "When someone faces allegations, include their public response or denial if one exists."
+   }
+  },
+  {
+   "id": "W-86",
+   "theme": "Length, pace and word count",
+   "why_flagged": "It says 110–140 words while S-39 says 150–170 wpm. Your old pacing rule was 180–200 wpm with pauses of 0.2s or less.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Budget about 140–170 narrated words for 60 seconds, leaving room for two or three short picture beats."
+   }
+  },
+  {
+   "id": "S-39",
+   "theme": "Length, pace and word count",
+   "why_flagged": "Merged into the W-86 rewrite.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "S-10",
+   "theme": "Length, pace and word count",
+   "why_flagged": "The format is 60 seconds. One unverified note says TikTok pays creators only on videos over a minute.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Aim for about 60 seconds; run up to about 75 only when the story needs it."
+   }
+  },
+  {
+   "id": "D-51",
+   "theme": "Holding a still vs keeping it moving",
+   "why_flagged": "Ken Burns lets key images hold, while short-form evidence says a frozen frame loses the eye (S-52, S-91).",
+   "my_rec": "R",
+   "final": {
+    "action": "keep"
+   }
+  },
+  {
+   "id": "D-46",
+   "theme": "Music and sound",
+   "why_flagged": "Stills have no native sound, and short-form evidence says score from the start (S-70).",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-47",
+   "theme": "Music and sound",
+   "why_flagged": "Burns layers ambience under stills. Your rule (RC-46) is that every sound is an on-screen action's own sound. Ambience is the open question.",
+   "my_rec": "R",
+   "final": {
+    "action": "keep"
+   }
+  },
+  {
+   "id": "S-79",
+   "theme": "Music and sound",
+   "why_flagged": "Merged into the D-47 rewrite.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "S-74",
+   "theme": "Music and sound",
+   "why_flagged": "The current music tool picks one bed per reel, so this needs build work.",
+   "my_rec": "R",
+   "final": {
+    "action": "keep"
+   }
+  },
+  {
+   "id": "S-86",
+   "theme": "Series and parts",
+   "why_flagged": "Assumes a next part.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "S-88",
+   "theme": "Series and parts",
+   "why_flagged": "Assumes a next part.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "S-89",
+   "theme": "Series and parts",
+   "why_flagged": "Assumes a next part.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "S-35",
+   "theme": "Talking to the viewer",
+   "why_flagged": "The 128% figure is TikTok ad data about purchase intent. W-46 (address the viewer rarely) fits a documentary better.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "S-33",
+   "theme": "Talking to the viewer",
+   "why_flagged": "A comment question spoken in the video breaks the documentary voice, and the close is a voiceless brand card (MD-13).",
+   "my_rec": "R",
+   "final": {
+    "action": "keep",
+    "note": "The question is spoken over the brand close, with captions, and never makes the reel longer."
+   }
+  },
+  {
+   "id": "S-34",
+   "theme": "Talking to the viewer",
+   "why_flagged": "Keep the voice consistent, but there's no spoken sign-off in this format.",
+   "my_rec": "R",
+   "final": {
+    "action": "keep"
+   }
+  },
+  {
+   "id": "S-8",
+   "theme": "On-screen text, sourcing and process",
+   "why_flagged": "Full-screen documents, posts and clippings are core evidence for us. The platform rule is about overlay text.",
+   "my_rec": "R",
+   "final": {
+    "action": "keep"
+   }
+  },
+  {
+   "id": "D-40",
+   "theme": "On-screen text, sourcing and process",
+   "why_flagged": "\"Restrained graphics\" vs the muted viewer's need for on-screen words.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Keep graphics restrained in style; on-screen words are there for the muted viewer and the evidence, never as decoration."
+   }
+  },
+  {
+   "id": "D-61",
+   "theme": "On-screen text, sourcing and process",
+   "why_flagged": "Two sources for every claim is strict. The old fact gate rejected 4 of 7 stories.",
+   "my_rec": "R",
+   "final": {
+    "action": "rewrite",
+    "text": "Confirm the claims the story turns on against two independent sources; supporting details need one reliable source."
+   }
+  },
+  {
+   "id": "W-90",
+   "theme": "On-screen text, sourcing and process",
+   "why_flagged": "Every draft is a paid model pass.",
+   "my_rec": "R",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "S-5",
+   "theme": "On-screen text, sourcing and process",
+   "why_flagged": "Analytics are for your own review, not something the writer or director can act on.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  },
+  {
+   "id": "D-11",
+   "theme": "On-screen text, sourcing and process",
+   "why_flagged": "About re-cutting a long series around a verdict; it doesn't apply to a 60-second piece.",
+   "my_rec": "C",
+   "final": {
+    "action": "cut"
+   }
+  }
+ ]
+}

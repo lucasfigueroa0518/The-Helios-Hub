@@ -9,6 +9,7 @@ import { requestJson } from '@/lib/client-request';
 import { reviewCaption } from '@/lib/explainers/caption-format';
 import type { JobDetail, JobSummary } from '@/lib/explainers/overview';
 import { FAILURE_TAGS, type FailureTag, type Verdict } from '@/lib/explainers/types';
+import { groupWarnings, reelWarnings, warningLabel, type WarningsSummary } from '@/lib/explainers/warnings';
 import { usePoll } from '@/lib/use-poll';
 
 const usd = (v: number) => `$${v.toFixed(2)}`;
@@ -182,6 +183,51 @@ function Review({ detail, onSaved }: { detail: JobDetail; onSaved: () => void })
   );
 }
 
+/**
+ * The warnings banner (Explainers 4.2, fail open): every problem the checks could not fix before the
+ * reel shipped, in plain words, most important first. Shown above the video so it is read first.
+ */
+function WarningsBanner({ lint }: { lint: JobDetail['lint'] }) {
+  const warnings = groupWarnings(reelWarnings(lint));
+  if (warnings.length === 0) return null;
+  return (
+    <section className="ex-warnings" role="alert" aria-label="Warnings">
+      <p className="ex-warnings__head">
+        <AlertTriangle size={15} /> This reel shipped with {warnings.length} {warnings.length === 1 ? 'warning' : 'warnings'}
+      </p>
+      <p className="ex-warnings__sub">The checks had their one fix round; what is left is listed here. Watch these before you approve.</p>
+      <ul className="ex-warnings__list">
+        {warnings.map((w) => (
+          <li key={w.id}>
+            <strong>
+              {warningLabel(w.rule)}
+              {w.frame != null && `, frame ${w.frame}`}:
+            </strong>{' '}
+            {w.detail}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The reel card's notice: the warnings' count and the first two (Explainers 4.2). */
+function WarningsNotice({ warnings }: { warnings: WarningsSummary | undefined }) {
+  if (!warnings || warnings.count === 0) return null;
+  return (
+    <div className="ex-reel__warnings" title={warnings.first.join('\n')}>
+      <span className="ex-reel__warnings-count">
+        <AlertTriangle size={12} /> {warnings.count} {warnings.count === 1 ? 'warning' : 'warnings'}
+      </span>
+      {warnings.first.map((text, i) => (
+        <span key={i} className="ex-reel__warnings-line">
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function ReelDrawer({ jobId, onClose, onChanged }: { jobId: string; onClose: () => void; onChanged: () => void }) {
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,6 +288,8 @@ function ReelDrawer({ jobId, onClose, onChanged }: { jobId: string; onClose: () 
               <AlertTriangle size={13} /> {detail.job.error}
             </p>
           )}
+
+          <WarningsBanner lint={detail.lint} />
 
           <div className="rh-detail__media">
             {video ? (
@@ -407,6 +455,7 @@ function ReelCard({ job, onOpen }: { job: JobSummary; onOpen: () => void }) {
           {job.capped && <span className="rh-chip rh-chip--failed">Cap</span>}
         </span>
       </button>
+      <WarningsNotice warnings={job.warnings} />
     </article>
   );
 }

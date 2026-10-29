@@ -34,6 +34,6 @@ export default function draw(t, ctx) {
   }
   parts.push(slamMark(t, landAt, { cy: 600, tilt: 3, from: 2.4, hold: 1.05 }));
   parts.push(burst(540, 960, seg(t, landAt, landAt + 0.4, (x) => x), 4.5));
-  parts.push(title(ctx, t, landAt + 1.15));
+  parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

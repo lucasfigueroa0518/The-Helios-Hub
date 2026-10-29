@@ -1,7 +1,7 @@
 // Scissors Cut-Out: a plain page with the hook's critter printed on it and a dashed cut line round
 // it. Scissors snip round it in rhythm; the cut-out lifts off, the page falls away to show the
 // hook, and the critter drops into its own place there.
-import { T, g, el, ref, defs, seg, lerp, E, scene, heroAt, heroCritter, title, shake, shaken, burst } from './common.js';
+import { T, g, el, ref, defs, seg, lerp, E, scene, heroAt, heroCritter, title, shake, shaken, burst, softShape, gloss } from './common.js';
 
 const S = 4.2;
 const FEET = [540, 1250];
@@ -22,13 +22,15 @@ const cutAt = (t, snips) => snips.reduce((u, s) => u + seg(t, s - 0.05, s, E.out
 function scissors(x, y, ang, open) {
   const o = 4 + 20 * open;
   const blade = (sgn) => g({ transform: `rotate(${(sgn * o).toFixed(2)})` }, [
-    el('path', { d: `M 0 0 L 230 ${sgn * -6} L 0 ${sgn * 22} Z`, fill: T['paper-lit'], stroke: T.ink, 'stroke-width': 5, 'stroke-linejoin': 'round' }),
-    el('path', { d: `M 0 0 L -120 ${sgn * 30}`, stroke: T.ink, 'stroke-width': 14, 'stroke-linecap': 'round' }),
-    el('ellipse', { cx: -170, cy: sgn * 52, rx: 62, ry: 42, fill: 'none', stroke: T.orange, 'stroke-width': 24 }),
-    el('ellipse', { cx: -170, cy: sgn * 52, rx: 62, ry: 42, fill: 'none', stroke: T.ink, 'stroke-width': 4 }),
+    // a steel blade (soft, glossy), a dark shank, a glossy orange loop handle
+    softShape(`M 0 0 L 230 ${sgn * -6} L 0 ${sgn * 22} Z`, T['paper-shade'], { gloss: true, form: 0.6 }),
+    el('path', { d: `M 0 0 L -120 ${sgn * 30}`, stroke: T['ink-lit'], 'stroke-width': 14, 'stroke-linecap': 'round' }),
+    el('ellipse', { cx: -170, cy: sgn * 52, rx: 62, ry: 42, fill: 'none', stroke: T['orange-shade'], 'stroke-width': 26 }),
+    el('ellipse', { cx: -170, cy: sgn * 52, rx: 62, ry: 42, fill: 'none', stroke: T.orange, 'stroke-width': 18 }),
+    el('path', { d: `M -224 ${sgn * 52 - 14} A 62 42 0 0 1 -150 ${sgn * 52 - 40}`, fill: 'none', stroke: T['orange-lit'], 'stroke-width': 6, 'stroke-linecap': 'round', opacity: 0.8 }),
   ]);
   // the blades point along the cut: (x, y) is where they meet the paper
-  return g({ transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${ang.toFixed(1)}) translate(-150 0)`, filter: ref('wobble') }, [blade(1), blade(-1), el('circle', { cx: 0, cy: 0, r: 10, fill: T.ink })]);
+  return g({ transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${ang.toFixed(1)}) translate(-150 0)` }, [blade(1), blade(-1), el('circle', { cx: 0, cy: 0, r: 10, fill: T['ink-lit'] })]);
 }
 
 const printed = (ctx, pose) => heroCritter(ctx, FEET[0], FEET[1], S, { mood: 'worried', arms: 'down', ...pose });
@@ -43,10 +45,10 @@ export default function draw(t, ctx) {
     const f = seg(t, fall[0], fall[1], E.in);
     const hole = t >= lift[0];
     const page = [
-      el('path', { d: `M -60 -60 H 1140 V 1980 H -60 Z ${hole ? D : ''}`, fill: T['paper-lit'], 'fill-rule': 'evenodd', stroke: hole ? T.ink : 'none', 'stroke-width': 5 }),
+      el('path', { d: `M -60 -60 H 1140 V 1980 H -60 Z ${hole ? D : ''}`, fill: T['paper-lit'], 'fill-rule': 'evenodd', stroke: hole ? T['paper-shade'] : 'none', 'stroke-width': 4 }),
       hole ? '' : printed(ctx, {}),
-      hole ? '' : el('path', { d: D, fill: 'none', stroke: T.ink, 'stroke-width': 5, 'stroke-dasharray': '22 16', opacity: 0.55 }),
-      !hole && u > 0 ? el('path', { d: D, fill: 'none', stroke: T.ink, 'stroke-width': 7, pathLength: 1, 'stroke-dasharray': `${u.toFixed(4)} 1` }) : '',
+      hole ? '' : el('path', { d: D, fill: 'none', stroke: T['text-tertiary'], 'stroke-width': 4, 'stroke-dasharray': '22 16', 'stroke-linecap': 'round', opacity: 0.6 }),
+      !hole && u > 0 ? el('path', { d: D, fill: 'none', stroke: T['text-secondary'], 'stroke-width': 4, pathLength: 1, 'stroke-dasharray': `${u.toFixed(4)} 1`, 'stroke-linecap': 'round' }) : '',
     ];
     parts.push(g({ transform: `translate(${(-120 * f).toFixed(1)} ${(2100 * f * f).toFixed(1)}) rotate(${(-12 * f).toFixed(2)} 540 1900)` }, page));
   }
@@ -59,8 +61,8 @@ export default function draw(t, ctx) {
     const x = lerp(FEET[0], h.x, d);
     const y = lerp(FEET[1], h.y, d) - 120 * Math.sin(Math.PI * d);
     parts.push(g({ transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k.toFixed(4)}) translate(${-FEET[0]} ${-FEET[1]})`, opacity: (1 - seg(t, drop[1] - 0.05, drop[1], (q) => q)).toFixed(3) }, [
-      el('path', { d: D, fill: T.ink, opacity: (0.08 + 0.14 * l).toFixed(3), transform: `translate(${(10 + 26 * l).toFixed(1)} ${(14 + 36 * l).toFixed(1)})` }),
-      el('path', { d: D, fill: T['paper-lit'], stroke: T.ink, 'stroke-width': 5 }),
+      el('path', { d: D, fill: T['shadow-warm'], opacity: (0.12 + 0.16 * l).toFixed(3), transform: `translate(${(-10 - 26 * l).toFixed(1)} ${(14 + 36 * l).toFixed(1)})`, filter: ref('soft-shadow') }),
+      softShape(D, T['paper-lit'], { form: 0.5 }),
       printed(ctx, { mood: 'happy' }),
     ]));
   }
@@ -78,6 +80,6 @@ export default function draw(t, ctx) {
     const h = heroAt(ctx, t);
     if (h) parts.push(burst(h.mid[0], h.mid[1], seg(t, drop[1], drop[1] + 0.35, (q) => q), 2.4));
   }
-  parts.push(title(ctx, t, drop[1] - 0.1));
+  parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

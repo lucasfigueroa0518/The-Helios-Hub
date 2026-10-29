@@ -10,11 +10,19 @@ audience: broad business audience, nontechnical through technically curious
 music: none
 ---
 
+## Visual arc
+
+- throughline: one letter's trip from the sender to the mailbox, then the same trip as a real message, ending with the alert raised by the sender
+- colour script: 1 morning, warm and open; 2 day on paper and glass; 3 day, calm; 4 morning sun on the lawn; 5 morning sun; 6 day on paper and glass; 7 the warmest light of the reel
+- motifs: the flag snapping up; it comes back in frame 7 as the order screen's alert lighting on its own
+- intensity: quick at the hook, a calm rest at the hand-off, rising through the analogy, resolved at the tie-together
+- bridges: frame 5 to 6, the letter carries across the cut and becomes the order message
+
 ## Anchor scene
 
 - metaphor: a mailbox whose flag pops up the instant a letter lands, so nobody walks out to check it
-- setting: table
-- ground: paper
+- places:
+  - lawn — exterior: a curbside lawn at the end of a short gravel drive, the house behind — the carrier delivers and the flag goes up
 - hook: the carrier sprints up the drive, the letter flies into the mailbox, and the flag slams up before the carrier stops
 - hero: carrier — critter
 - steps:
@@ -23,12 +31,11 @@ music: none
   - the letter drops in — payload delivered
   - the flag snaps up — your app updates
 - entities:
-  - mailbox — a mailbox on a post — stands for your app's webhook URL — prop: mailbox (exact: an American rural curbside mailbox on a post, in a house curb) — beats 1, 2, 4, 5, 6
-  - letter — a letter — stands for the event payload — a thin paper sheet folded in thirds — beats 1, 4, 5, 6
-  - flag — the mailbox flag — stands for the notification your app receives — an orange slab on a hinge — beats 1, 2, 4, 5, 6
-  - carrier — a mail carrier critter — stands for the other app sending the event — a critter with a bag, look: orange, wear backpack — beats 1, 4, 5
-- states: letters delivered 0 → 1; flag down → up; mailbox on its post → gone (frame 5); trips to check 0 the whole time
-- layout: the mailbox centred on the table, the drive running in from the left, the carrier entering along it
+  - mailbox — a mailbox on a post — stands for your app's webhook URL — prop: mailbox (exact: an American rural curbside mailbox on a post, in a house curb) — beats 1, 4, 5
+  - letter — a letter — stands for the webhook message, the event's payload — a thin paper sheet folded in thirds, cheated big so it reads — beats 1, 4, 5, 6
+  - flag — the mailbox flag — stands for the notification your app receives — a slab on a hinge — beats 1, 3, 4, 5, 7
+  - carrier — a mail carrier critter — stands for the other app sending the event — a critter in a mail carrier's uniform with a mailbag across the body — beats 1, 4, 5
+- states: letters delivered 0 → 1; flag down → up; trips to check 0 the whole time
 
 ## Hook
 
@@ -36,17 +43,6 @@ music: none
 2. a critter peeks out of the house window at an empty mailbox, again and again — clarity 5/5, thumb-stop 3/5
 3. the flag pops up on its own while the critter sleeps in a chair — clarity 4/5, thumb-stop 3/5
 - pick: 1 — a mail carrier racing to a mailbox reads at a glance, and the flag snapping up on its own makes you ask why
-
-## Curiosity gap
-
-Say this line in frame 2, word for word (written by the gap writer, picked by Jev, EX3-120):
-
-> A store takes your card, and a second later your phone buzzes with the payment. Nobody refreshed anything. So how does the app know the moment it happens?
-
-- gap_question: So how does the app know the moment it happens?
-- way in: everyday mystery
-- score: 87.5 of 100
-- closed_by: frame 7, when the voice says the store sends the app a message
 
 ## Frame 1 — Series opener
 
@@ -56,127 +52,111 @@ Say this line in frame 2, word for word (written by the gap writer, picked by Je
 - status: outline
 - src: compositions/frames/01-opener.html
 - type: hook
-- engagement: Open loop + visual hook + audio ramp
+- ground: paper
+- look: world
 - voiceover: "In the next minute, this little mailbox will teach you a tech concept."
-- anchor: scene
-- shots: medium — the carrier racing to the mailbox — at 0s
-- ground: paper
-- scene: The carrier sprints up the drive and the flag slams up mid-stride; then the handwritten title card
+- shots:
+  - medium — the carrier racing to the mailbox — at 0s — angle: low at the drive's edge, the mailbox ahead and the house behind — why: a race to a mailbox reads at once, and the flag going up on its own makes you wonder why — cast: carrier, mailbox, letter — place: lawn
+- scene: The carrier sprints up the drive and the flag slams up mid-stride
 
-narrativeRole: Opens the loop on a moment the viewer cannot explain yet.
-keyMessage: Something here happens on its own, and the reel will show how.
+## Frame 2 — Quick definition
 
-## Frame 2 — Curiosity gap
-
-- duration: 9s
+- duration: 5s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/02-gap.html
-- type: pain_point
-- engagement: Attention reset + curiosity gap
-- voiceover: "A store takes your card, and a second later your phone buzzes with the payment. Nobody refreshed anything. So how does the app know the moment it happens?"
-- gap_question: "So how does the app know the moment it happens?"
-- anchor: own
-- shots: close — the phone buzzing — on "phone"; insert — the payment message — on "payment"
-- reset: the ground flips to night and the camera punches in on the phone
-- ground: night
-- scene: The hook's staging with the real thing in the mailbox's place: a payment message races in, lands on a phone alone on a dark table, and the phone lights up, plenty of empty space around it
-
-narrativeRole: Poses the gap about the real thing the viewer uses.
-keyMessage: The app knew at once, and nobody asked it.
-
-## Frame 3 — Define the concept
-
-- duration: 7s
-- hold: 0.15s
-- transition_in: cut
-- status: outline
-- src: compositions/frames/03-define.html
+- src: compositions/frames/02-define.html
 - type: product_intro
-- engagement: Grounding definition
-- definition: "A webhook is a message one app sends to another app's web address the moment an event happens, like a payment going through."
-- part_of_speech: noun
-- voiceover: "A webhook is a message one app sends to another app's web address the moment an event happens, like a payment going through."
-- anchor: own
 - ground: paper
-- scene: The dictionary card fills in; below it, a payment slab sends one envelope to a second app slab
+- look: mechanism
+- voiceover: "A webhook is when one app sends another a message the moment something happens."
+- shots:
+  - medium — one app sending a message to another — at 0s — angle: straight on, the two apps side by side — why: the whole idea in one picture
+  - close — the message arriving — on "message" — angle: in on the receiving app — why: it lands the moment it is sent
+- scene: One laptop sends a single envelope to a second laptop, which lights up as it lands
 
-narrativeRole: Grounds the viewer in what a webhook is.
-keyMessage: One app tells another the moment something happens.
+## Frame 3 — Hand-off
+
+- duration: 3s
+- hold: 0.15s
+- transition_in: cut
+- status: outline
+- src: compositions/frames/03-handoff.html
+- type: handoff
+- ground: paper
+- look: world
+- voiceover: "Let's dive into this in everyday terms."
+- handoff_parts: mailbox, letter, flag
+- world_sounds: footstep, creak
+- scene: The card "today's AI Brain Break: webhook", the lawn and its mailbox showing around it
 
 ## Frame 4 — Everyday analogy
 
-- duration: 12s
+- duration: 13s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
 - src: compositions/frames/04-analogy.html
 - type: feature_showcase
-- engagement: Analogy anchor + progressive disclosure + anticipation
-- voiceover: "Here's the trick: a flag on the mailbox. It is our alert. A carrier, the other app, brings a letter, the event. When it drops in, the flag snaps up on its own."
-- anchor: scene
-- shots: wide — the drive and the mailbox — at 0s; medium — the carrier and the letter — on "carrier"; close — the flag — on "flag"
 - ground: paper
-- scene: Establishing shot of the mailbox; the carrier walks in, the letter drops in, and the flag snaps up
+- look: world
+- voiceover: "This mailbox is where messages land. The carrier, the sending app, brings a letter, the message. When it drops in, the flag snaps up on its own, so nobody walks out to check."
+- shots:
+  - wide — the mailbox by the drive — at 0s — angle: eye level from across the lawn, the house behind — why: where we are and what waits for the letter — cast: mailbox, flag — place: lawn
+  - medium — the carrier and the letter — on "carrier" — angle: low from the drive, the mailbox ahead — why: the sender arrives with the message — cast: carrier, letter, mailbox — place: lawn
+  - close — the flag — on "flag" — angle: from the mailbox's side, level with the flag — why: the alert goes up with nobody checking — cast: flag, mailbox — place: lawn
+- scene: The mailbox on the lawn; the carrier walks in, the letter drops in, and the flag snaps up
 
-narrativeRole: Plays the analogy, naming each part's real job as it appears.
-keyMessage: The mailbox tells you; nobody has to check.
-
-## Frame 5 — Why it works, where it breaks
+## Frame 5 — Definition payoff
 
 - duration: 10s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/05-why.html
+- src: compositions/frames/05-payoff.html
 - type: feature_showcase
-- engagement: Cached understanding + boundary
-- voiceover: "The flag goes up because the letter itself raises it, so nobody walks out to check. That is the webhook's trick. But if the mailbox is gone, the letter has nowhere to land."
-- anchor: scene
-- shots: insert — the letter pushing the flag up — on "flag"; medium — the empty post where the mailbox stood — on "mailbox"
 - ground: paper
-- scene: The letter pushes the flag up in an insert; then the mailbox is gone and the next letter drops onto the bare post
-
-narrativeRole: Shows why the analogy works, then its one limit.
-keyMessage: The sender does the telling; it only works while your app is there to receive.
+- look: world
+- definition: "A webhook is a letter one app drops in another app's mailbox the moment something happens."
+- part_of_speech: noun
+- voiceover: "A webhook is a letter one app drops in another app's mailbox the moment something happens. It works because the sender raises the flag, so nobody has to check."
+- shots:
+  - medium — the letter pushing the flag up — on "works" — angle: from the street side, looking back at the house — why: the sender's own delivery raises the alert — cast: letter, flag, mailbox — place: lawn — carry: letter box 400 1000 680 1300
+- scene: The dictionary card fills in; below it, the letter pushes the flag up on its own
 
 ## Frame 6 — Tiny real example
 
-- duration: 10s
+- duration: 11s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
 - src: compositions/frames/06-example.html
 - type: social_proof
-- engagement: Worked example + progress tracker
-- voiceover: "Here's a real example. A store ships order 4821. It sends one message to your app's address. The message lands with the order number. Your app updates in a second."
-- anchor: own
-- example_steps: order 4821 ships → store sends message → message lands → order screen updates
-- shots: insert — the store's order 4821 — on "store"; insert — the message to your app — on "sends"; insert — the message landing with the order number — on "lands"; insert — the order screen updating — on "updates"
 - ground: paper
-- scene: The step tracker lights the event fires, POST to the endpoint, payload delivered, your app updates, while inserts show order 4821 shipping, the store's message, the message landing and the order screen updating
+- look: mechanism
+- voiceover: "Here's a real example. A store ships order 4821. It sends one message to your app's address. The message lands with the order number. Your app updates in a second."
+- shots:
+  - medium — the store's order 4821 — on "store" — angle: straight on, the store's laptop on the left — why: the event that starts it — carry: letter box 400 1000 680 1300
+  - medium — the message to your app — on "sends" — angle: straight on, the route from the store to the app — why: one message travels, nobody asks
+  - insert — the message landing with the order number — on "lands" — angle: in on the app's address — why: the order number arrives with it
+  - close — the order screen updating — on "updates" — angle: straight on, the phone's order screen — why: the result, a second later
+- scene: Order 4821 ships on the store's laptop, one message travels to the app's address, lands with the order number, and the phone's order screen updates
 
-narrativeRole: Runs the mechanism once with a real example.
-keyMessage: One event, one message, instant update.
+## Frame 7 — Tie-together
 
-## Frame 7 — The payoff
-
-- duration: 6s
+- duration: 8s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/07-payoff.html
+- src: compositions/frames/07-tie.html
 - type: benefit_highlight
-- engagement: Payoff + callback + distillation
-- voiceover: "Your app knows the moment it happens because the store sends it a message as the payment clears. Nobody checks; the flag just goes up."
-- anchor: own
-- shots: medium — the phone getting the store's message — at 0s; insert — the flag going up — on "flag"
-- ground: forest
-- scene: A paper phone on a counter lights with the store's payment message; one callback shot of the mailbox flag going up
-
-narrativeRole: Answers frame 2's question in real terms, then the takeaway.
-keyMessage: The sender tells your app; your app never has to ask.
+- ground: paper
+- look: blend
+- voiceover: "The store raised the flag itself, the moment the order shipped. So when an app updates the instant something happens, you know a message just landed."
+- shots:
+  - medium — the mailbox flag fading over the phone's alert — at 0s — angle: straight on, the phone and the store's laptop — why: the analogy's flag and the real alert are the same trick
+  - close — the app updating its alert — on "app updates" — angle: in on the phone's screen — why: what it means for the viewer, in real terms
+- scene: The mailbox flag fades over the phone's order alert, which lights on its own
 
 ## Frame 8 — Close
 
@@ -185,9 +165,5 @@ keyMessage: The sender tells your app; your app never has to ask.
 - status: outline
 - src: compositions/frames/08-close.html
 - type: branding
-- engagement: Brand close
 - ground: white
 - scene: White screen; the Helios logo animates in and AI BRAIN BREAK writes itself beneath it, centred together
-
-narrativeRole: Signs the series off.
-keyMessage: AI Brain Break, by Helios.

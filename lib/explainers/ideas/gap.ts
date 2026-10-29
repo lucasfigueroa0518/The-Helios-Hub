@@ -5,7 +5,7 @@ import type { ExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import { GAP_GATE, GAP_SCORING } from '@/lib/explainers/jev/questions/gap-scoring';
 import { recordCost } from '@/lib/explainers/repository';
 import { GAP_KEYS, type AnalogyCandidate, type GapCandidate, type GapKey, type GapNote, type GapPass, type GapScores, type Mode, type TopicRow } from '@/lib/explainers/types';
-import { countWords, stem, TOSS_RE } from '../../../explainers/lint/lint-storyboard.mjs';
+import { countWords, quotedSpans, stem, TOSS_RE } from '../../../explainers/lint/lint-storyboard.mjs';
 
 /**
  * The curiosity gap is written for the most pull and picked by Jev (Explainers 3.8, EX3-120; Lucas,
@@ -25,7 +25,11 @@ export const GAP_FLOORS: Partial<Record<GapKey, number>> = { clarity: 3, closabl
 export const FALSE_CLAIM_MAX = 0.5;
 /** The first pass and one retry. */
 export const MAX_GAP_PASSES = 2;
-export const GAP_BELOW_BAR_REASON = `No curiosity gap could be picked after ${MAX_GAP_PASSES} tries (EX3-120).`;
+/**
+ * The render's failure when the gap writer returned no line at all. Explainers 4.2: when lines exist but
+ * none could be picked, the render goes on with the least-bad one and a `gap:no_pass` warning.
+ */
+export const GAP_BELOW_BAR_REASON = `The gap writer returned no curiosity gap line in ${MAX_GAP_PASSES} tries (EX3-120).`;
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 
@@ -58,7 +62,9 @@ function words(text: string, skip: Set<string>): Set<string> {
 /**
  * The hard rules code can check before any Jev spend (gap writer constraints 2, 4, 5, 6): ends on its
  * question, no toss, no term, the word range, and nothing from the analogy: its name or the analogy
- * side of its mapping (gap-writer-v2). Empty when it passes.
+ * side of its mapping (gap-writer-v2); and no quotation marks (Explainers 4.1 round 2: the line is
+ * said word for word, and a listener cannot hear quotes, EX3-106, so the voice lint refuses them).
+ * Empty when it passes.
  */
 export function gapCheckProblems(candidate: GapCandidate, input: { term: string; analogy: Pick<AnalogyCandidate, 'name' | 'mapping'>; topic?: string }): string[] {
   const out: string[] = [];
@@ -68,6 +74,8 @@ export function gapCheckProblems(candidate: GapCandidate, input: { term: string;
   else if (last.trim().replace(/[^\p{L}\p{N}?]+/gu, ' ').toLowerCase() !== candidate.question.trim().replace(/["”’']+$/, '').replace(/[^\p{L}\p{N}?]+/gu, ' ').toLowerCase()) {
     out.push('its question is not the last sentence of the line');
   }
+  const quoted = quotedSpans(line);
+  if (quoted.length) out.push(`puts words in quotation marks (${quoted.map((q) => `"${q}"`).join(', ')}): the line is said word for word, so say the words with no quotes`);
   const toss = TOSS_RE.exec(line);
   if (toss) out.push(`tosses to the next beat ("${toss[0]}")`);
   const term = input.term.trim().toLowerCase();
@@ -128,6 +136,21 @@ export function topicGapNote(topic: Pick<TopicRow, 'jev_notes'>, analogy: Pick<A
 export function topicGap(topic: Pick<TopicRow, 'jev_notes'>, analogy: Pick<AnalogyCandidate, 'name'> | null): GapCandidate | null {
   const note = topicGapNote(topic, analogy);
   return note && 'pick' in note ? note.passes[note.pick.pass].candidates[note.pick.index] : null;
+}
+
+/**
+ * Fail open (Explainers 4.2; Lucas, 2026-10-27: "I don't want things to block the reel"): when no line
+ * could be picked in two passes, a below-bar note turned into a pick of its least-bad line, for this
+ * render only (the topic keeps its below-bar note, so a later render writes again). Lines Jev scored
+ * come before ones the code checks refused; then the fewest misses; then the highest total. Null when
+ * the note holds no line at all.
+ */
+export function leastBadGap(note: GapNote): Extract<GapNote, { pick: unknown }> | null {
+  if (!('passes' in note) || !('below_bar' in note)) return null;
+  const all = note.passes.flatMap((pass, p) => pass.candidates.map((_c, i) => ({ p, i, scored: pass.scores[i] ? 0 : 1, misses: pass.misses[i]?.length ?? 0, total: pass.totals[i] ?? 0 })));
+  const best = all.sort((a, b) => a.scored - b.scored || a.misses - b.misses || b.total - a.total || a.p - b.p || a.i - b.i)[0];
+  if (!best) return null;
+  return { version: note.version, analogy_name: note.analogy_name, passes: note.passes, pick: { pass: best.p, index: best.i }, picked_at: note.checked_at };
 }
 
 export function gapBelowBar(note: GapNote | null | undefined): boolean {

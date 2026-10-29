@@ -368,15 +368,13 @@ test('Jev logs and costs land in the explainers tables', async () => {
   );
   // First topic: 2 scoring calls (empty history, no gate). Second: 1 gate + 2 scoring.
   // Both made the pool, so each also had its 13 golden examples matched, its 2 named analogies gated
-  // and compared both ways (EX3-123, EX3-124), then its 3 curiosity gaps scored and gated (EX3-120).
-  assert.equal(logs[0].n, 51);
+  // and compared both ways (EX3-123, EX3-124). 4.3: no curiosity gap is written in the idea phase.
+  assert.equal(logs[0].n, 39);
   assert.deepEqual(costs, [
     { component: 'analogy_compare', n: 4 },
     { component: 'analogy_gates', n: 4 },
     { component: 'analogy_golden_match', n: 26 },
     { component: 'duplicate_gate', n: 1 },
-    { component: 'gap_gate', n: 6 },
-    { component: 'gap_scoring', n: 6 },
     { component: 'idea_scoring', n: 4 },
   ]);
 });
@@ -401,7 +399,6 @@ test('duplicate of a pool topic: Stage 2 finds it in batches of five, the better
       ['gate', 1], ['pairs', 5], ['pairs', 2], ['scoring', 1], ['scoring', 6],
       ...Array.from({ length: 13 }, () => ['golden', 1]),
       ['analogy_gates', 3], ['analogy_gates', 3], ['compare', 1], ['compare', 1],
-      ...Array.from({ length: 3 }, () => [['gap', 3], ['gap_gate', 1]]).flat(),
     ],
   );
   const loser = (await listTopics(db, ['displaced']))[0];
@@ -720,7 +717,7 @@ test('the pick rules: names match loosely, gates fail at 0.5, the swapped-order 
 const noteOf = async (db: ExplainersDb, id: string) =>
   ((await getTopic(db, id))?.jev_notes as { analogy: Extract<AnalogyNote, { candidates: unknown }> }).analogy;
 
-test("a topic that makes the pool gets its named analogy from two Opus calls and Jev's pick, then its curiosity gap", async () => {
+test("a topic that makes the pool gets its named analogy from two Opus calls and Jev's pick, and no curiosity gap (4.3)", async () => {
   const { db } = await scratchExplainersDb();
   const ideas = stubIdeas();
   // Jev prefers the second analogy in both orders.
@@ -781,17 +778,9 @@ test("a topic that makes the pool gets its named analogy from two Opus calls and
     { vendor: 'anthropic', component: 'analogy_writer', n: 2 },
   ]);
 
-  // The curiosity gap is written for the picked analogy right away (EX3-120), on the idea model.
-  assert.equal(ideas.gapCalls.length, 1);
-  assert.equal(ideas.gapCalls[0].analogy.name, 'Thing 2');
-  assert.equal(ideas.gapCalls[0].model, 'claude-sonnet-5-5');
-  assert.equal(ideas.gapCalls[0].term, 'webhooks');
-  assert.equal(topicGap(webhooks, topicAnalogy(webhooks))?.question, 'How does it know what you want 1?', 'a tie keeps the first');
-  const gapNote = (webhooks.jev_notes as { gap: GapNote }).gap;
-  assert.equal(gapNote.version, GAP_WRITER_VERSION);
-  assert.equal(gapNote.analogy_name, 'Thing 2');
-  // A gap written for another analogy is written again.
-  assert.equal(topicGap(webhooks, { name: 'Another thing' }), null);
+  // Explainers 4.3: the reel has no curiosity gap, so the idea phase no longer writes one.
+  assert.equal(ideas.gapCalls.length, 0);
+  assert.equal(topicGap(webhooks, topicAnalogy(webhooks)), null);
 });
 
 test('both calls write the same analogy: it is taken, with no comparison (Lucas: "Accept")', async () => {

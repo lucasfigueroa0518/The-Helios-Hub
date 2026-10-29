@@ -1,0 +1,6 @@
+{ "images": [
+  { "title": "Sam Altman speaks at DevDay", "imageUrl": "https://cdn.example-news.com/altman-devday.jpg", "imageWidth": 1800, "imageHeight": 1200, "source": "Example News", "domain": "example-news.com", "link": "https://example-news.com/devday" },
+  { "title": "Sam Altman stock photo", "imageUrl": "https://media.gettyimages.com/id/123/photo/altman.jpg?s=612x612", "imageWidth": 612, "imageHeight": 408, "source": "Getty Images", "domain": "gettyimages.com", "link": "https://www.gettyimages.com/detail/123" },
+  { "title": "A crowd outside a building", "imageUrl": "https://cdn.other.example/crowd.jpg", "imageWidth": 1600, "imageHeight": 1000, "source": "Other", "domain": "other.example", "link": "https://other.example/crowd" },
+  { "title": "Tiny thumbnail of Sam Altman", "imageUrl": "https://cdn.other.example/tiny-altman.jpg", "imageWidth": 300, "imageHeight": 200, "source": "Other", "domain": "other.example", "link": "https://other.example/tiny" }
+] }

@@ -13,15 +13,29 @@ import type { EntryType, Questions, SystemOneResult } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
 import { NO_ANALOGY_REASON } from '@/lib/explainers/ideas/analogy';
-import { GAP_BELOW_BAR_REASON } from '@/lib/explainers/ideas/gap';
 import { ANALOGY_WRITER_VERSION, GAP_WRITER_VERSION, type AnalogyRequest, type GapRequest, type IdeaModel } from '@/lib/explainers/ideas/generator';
-import { runAgentSession, scrubbedEnv, sessionOptions, UNSANDBOXED_HYPERFRAMES, type AgentMessage, type AgentQuery } from '@/lib/explainers/render/agent';
-import { runRenderJob, BUILD_PROMPT, PLAN_PROMPT, RESUME_PROMPT, repairPrompt, repairProjectAssembly, storyboardHero, type RenderDeps } from '@/lib/explainers/render/job';
-import { FINDINGS_FILE, FIX_PROMPT, scriptLine, storyboardGapQuestion } from '@/lib/explainers/render/understanding';
+import { PICTURE_CHECK_FILE, runAgentSession, scrubbedEnv, sessionOptions, UNSANDBOXED_HYPERFRAMES, type AgentMessage, type AgentQuery } from '@/lib/explainers/render/agent';
+import { frameModulesWritten, runRenderJob, tryViolations, BUILD_PROMPT, PLAN_PROMPT, RESUME_PROMPT, repairPrompt, repairProjectAssembly, storyboardHero, type RenderDeps } from '@/lib/explainers/render/job';
+import {
+  ANSWER_KEY_FILE,
+  FINDINGS_FILE,
+  FIX_PROMPT,
+  REEL_TEST_FILE,
+  REEL_TEST_NEWCOMER_FILE,
+  scriptLine,
+  type Diagnosis,
+  type DiagnoseRequest,
+  type ProbeAnswer,
+  type ReaderAnswers,
+  type ReaderRequest,
+  type UnderstandingModel,
+} from '@/lib/explainers/render/understanding';
+import { loadReelsView } from '@/lib/explainers/overview';
 import { SpendMeter } from '@/lib/explainers/render/meter';
 import { checkBash, checkToolCall, insideDir } from '@/lib/explainers/render/policy';
+import { isReelWarning } from '@/lib/explainers/warnings';
 import { fetchSourceText, htmlToText, resolveSource, type FetchLike } from '@/lib/explainers/render/source';
-import { briefMarkdown, openerLineFor, PROJECT_INSTRUCTIONS, prepareWorkspace, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
+import { briefMarkdown, isExplainers41, isExplainers42, kitImportClosure, KIT_ENTRIES, KIT_VERSION, openerLineFor, PROJECT_INSTRUCTIONS, prepareWorkspace, RECIPE_LAYERS, RECIPE_PATH, SFX_DIR, workspacePaths } from '@/lib/explainers/render/workspace';
 import { addTopics, getJob, getTopic, listArtifacts, listLintViolations, requestRender, claimNextJob } from '@/lib/explainers/repository';
 import type { AnalogyCandidate, GapCandidate, GapNote } from '@/lib/explainers/types';
 import { CaptionError, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
@@ -184,7 +198,8 @@ test('the agent names the Anthropic workspace on every request when one is confi
 test('the agent gets a scrubbed environment, web tools, project settings only, and a sandbox', () => {
   process.env.DATABASE_URL = 'postgres://supabase-secret';
   const env = scrubbedEnv({ projectDir: JOB, homeDir: '/jobs/abc/home', tmpDir: `${JOB}/.tmp`, secrets });
-  assert.deepEqual(Object.keys(env).sort(), [
+  // HELIOS_CHROME only when this host has a HyperFrames Chrome (the job's home, else the worker's).
+  assert.deepEqual(Object.keys(env).filter((k) => k !== 'HELIOS_CHROME').sort(), [
     'ANTHROPIC_API_KEY', 'CLAUDE_AGENT_SDK_CLIENT_APP', 'DO_NOT_TRACK', 'HELIOS_VOICE_ID', 'HEYGEN_API_KEY', 'HOME',
     'HYPERFRAMES_MEDIA_HOME', 'HYPERFRAMES_NO_TELEMETRY', 'HYPERFRAMES_NO_UPDATE_CHECK', 'HYPERFRAMES_SKIP_SKILLS',
     'LANG', 'NODE_USE_ENV_PROXY', 'PATH', 'TMPDIR',
@@ -215,15 +230,18 @@ test('the agent gets a scrubbed environment, web tools, project settings only, a
   assert.ok(UNSANDBOXED_HYPERFRAMES.every((rule) => rule.endsWith(' *')));
   assert.deepEqual(options.sandbox.filesystem.allowWrite, [JOB, '/jobs/abc/home']);
   assert.equal(options.agents['frame-worker'].model, 'claude-sonnet-5-5');
-  // The first-time viewer plays the stranger for the gap and the whole reel on Sonnet (EX3-108); the picture check stays on Haiku.
+  // The first-time viewer plays the stranger for the gap and the whole reel on Sonnet (EX3-108); a
+  // session that names no picture-check model (Real Case) keeps the legacy Haiku check.
   assert.equal(options.agents['first-viewer'].model, 'claude-sonnet-5-5');
   assert.equal(options.agents['picture-checker'].model, 'claude-haiku-5-5');
+  // Explainers 4.1 roles fall back to the frame worker's model when the session names none.
+  for (const a of ['frame-worker-scene', 'frame-worker-tech']) assert.equal(options.agents[a].model, 'claude-sonnet-5-5', a);
+  assert.ok(!options.agents['frame-worker'].tools.includes('Bash'), 'the legacy frame worker runs no commands');
   assert.deepEqual(options.agents['first-viewer'].tools, ['Read', 'SubagentHandback']);
   const viewer = options.agents['first-viewer'].prompt as string;
-  assert.match(viewer, /## Beat 1" to "## Beat 8/);
-  assert.match(viewer, /whether a reasonable person could reach a different answer/);
+  // 4.2: the first viewer runs only the gap test (beats 1–2); the whole reel is the readers' (code's).
+  assert.doesNotMatch(viewer, /## Beat 8|example_ambiguous/);
   assert.match(viewer, /Quote marks, symbols and spelling are invisible to you/);
-  assert.match(viewer, /"example_ambiguous": false/);
   assert.match(viewer, /"keep_watching": 1, "confused": \["\.\.\."\]\}/, 'the gap test keeps its JSON');
   assert.equal(options.maxBudgetUsd, 5);
 });
@@ -327,9 +345,13 @@ type StubJevOptions = {
   gates?: (analogy: string) => number;
   /** p(a over b); default 0.5. */
   compare?: (a: string, b: string) => number;
-  /** The understanding test's answers (EX3-133), by key; default 0.9 (they match). */
-  understanding?: (key: string, state: Record<string, unknown>) => number;
+  /** The understanding test's checklist (Explainers 4.2), by key; default yes for the good questions, no for the bad. */
+  checklist?: (key: string, state: Record<string, unknown>) => number | undefined;
 };
+
+/** The checklist questions where yes is the bad answer. */
+const CHECKLIST_BAD = new Set(['step_wrong', 'belief_contradicts', 'belief_listed']);
+const CHECKLIST_KEYS = new Set(['same_kind', 'same_story_part', 'step_present', 'step_wrong', 'map_row', 'new_example', 'belief_contradicts', 'belief_listed', 'example_matches', 'question_answered']);
 
 /**
  * Jev for the analogy, gap and understanding passes: every gap scoring question gets `score(line)`;
@@ -350,7 +372,7 @@ function analogyJev(score: (line: string) => number, options: StubJevOptions = {
         if (key === 'same_concept' || key === 'false_claim') answers[key] = noul(0.1);
         else if (key === 'false_mapping' || key === 'is_the_system' || key === 'real_names') answers[key] = noul(options.gates?.(String(s.analogy)) ?? 0.1);
         else if (key === 'a_over_b') answers[key] = noul(options.compare?.(String(s.a), String(s.b)) ?? 0.5);
-        else if (key === 'mechanism_match' || key === 'example_match' || key === 'gap_answered') answers[key] = noul(options.understanding?.(key, s) ?? 0.9);
+        else if (CHECKLIST_KEYS.has(key)) answers[key] = noul(options.checklist?.(key, s) ?? (CHECKLIST_BAD.has(key) ? 0.1 : 0.9));
         else answers[key] = { type: 'score', score: score(String(s.candidate)), confidence: 1 };
       }
       return { model: 'jev-stub', answers, usage: { input_tokens: 1_000, output_tokens: 0 } } as unknown as SystemOneResult<Q>;
@@ -385,9 +407,12 @@ function deps(db: ExplainersDb, query: AgentQuery): RenderDeps {
     store: localArtifactStore(path.join(root, 'storage')),
     jobsRoot: path.join(root, 'jobs'),
     secrets: { anthropicApiKey: 'sk', heygenApiKey: 'hg' },
+    // these tests drive session B through the fake query: the agent build runner (build.ts has its own tests)
+    settingsOverride: { build_runner: 'agent' },
     prepare: ({ jobsRoot, jobId }: { jobsRoot: string; jobId: string }) => fakePrepare(jobsRoot, jobId),
     hyperframesLint: () => [{ source: 'hyperframes' as const, rule: 'studio_missing_editable_id', frame: 2, severity: 'warning' as const, detail: 'no id' }],
     boundsCheck: () => [],
+    tryCheck: () => [],
     harvest: () => ({ added: [], skipped: [] }),
     writeCaption: async () => ({
       text: [
@@ -423,9 +448,6 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
         fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
         fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
         fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'gap-check.json'), JSON.stringify({ meant_question: 'How?', answers: { keep_watching: 5, confused: [] }, pass: true }));
-        // The reel test failed twice; this worker has no Jev to judge it (EX3-133).
-        const failed = { answers: { example_ambiguous: true, other_reading: 'the fish was tired' }, pass: false, why: 'the example reads two ways' };
-        fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'comprehension-check.json'), JSON.stringify({ meant: { example_answer: 'the cat' }, ...failed, second: failed }));
         yield assistant('p1', { input_tokens: 50_000, output_tokens: 5_000 }, 'thesis, analogy, numbers');
         yield result(0.2);
       },
@@ -451,7 +473,7 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
     return { added: [{ name: 'surgical scalpel', file: 'x.js' }], skipped: [] };
   };
   const outcome = await runRenderJob(d, job);
-  assert.deepEqual(outcome, { status: 'ok' });
+  assert.equal(outcome.status, 'ok');
   // The reel's verified new drawings go to the bank once its video is kept (EX3-114).
   assert.equal(harvested.length, 1);
   assert.equal(harvested[0].jobId, job.id);
@@ -469,12 +491,14 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
     assert.ok(kinds.includes(k as never), `missing ${k}`);
   }
   // The first-time-viewer test's verdict is kept (EX3-101).
-  const gapReport = (await listArtifacts(db, job.id)).find((a) => a.kind === 'lint_report' && /"phase": "gap_check"/.test(a.content ?? ''));
-  assert.match(gapReport?.content ?? '', /"keep_watching": 5/);
-  // The reel test's answers are kept; without Jev the worker cannot judge them and the build goes on (EX3-133).
-  const reelReport = (await listArtifacts(db, job.id)).find((a) => a.kind === 'lint_report' && /"phase": "understanding"/.test(a.content ?? ''));
-  assert.match(reelReport?.content ?? '', /"other_reading": "the fish was tired"/);
-  assert.match(reelReport?.content ?? '', /"verdict": null/);
+  // 4.3: no gap check; frame 3's hand-off is drawn from the bank after the plan.
+  assert.ok(!(await listArtifacts(db, job.id)).some((a) => a.kind === 'lint_report' && /"phase": "gap_check"/.test(a.content ?? '')));
+  // 4.2: this worker has no reader model, so the understanding test did not run, and the reel says so.
+  assert.ok(!(await listArtifacts(db, job.id)).some((a) => a.kind === 'lint_report' && /"phase": "understanding"/.test(a.content ?? '')));
+  assert.ok((await listLintViolations(db, job.id)).some((v) => v.rule === 'understanding:not_run' && v.severity === 'warning'));
+  // The finished reel carries its warnings' count and the first two (its notice).
+  assert.ok(outcome.status === 'ok' && outcome.warnings.count >= 1);
+  assert.ok(outcome.status === 'ok' && outcome.warnings.first.length === Math.min(2, outcome.warnings.count));
   const caption = (await listArtifacts(db, job.id)).find((a) => a.kind === 'post_caption');
   assert.match(caption?.content ?? '', /^The hook stays under the preview limit/);
   assert.doesNotMatch(caption?.content ?? '', /Episode \d/i);
@@ -483,7 +507,9 @@ test('a render runs plan → checkpoint → build → collect and keeps every ar
 
   const rules = (await listLintViolations(db, job.id)).map((v) => `${v.source}:${v.rule}`);
   assert.ok(rules.includes('storyboard:narration_on_screen'), 'post-build on-screen check ran on the scene modules');
-  assert.ok(rules.includes('storyboard:opener_sfx'), "the opener's sounds are checked once audio exists");
+  // A lint error left after the build is a reel warning (4.2, fail open): `lint:<rule>`.
+  assert.ok(rules.includes('storyboard:lint:opener_sfx'), "the opener's sounds are checked once audio exists");
+  assert.ok((await listLintViolations(db, job.id)).filter((v) => v.rule === 'lint:opener_sfx').every((v) => v.severity === 'warning'));
   assert.ok(rules.includes('hyperframes:studio_missing_editable_id'));
 
   const { rows: costs } = await db.query<{ vendor: string; component: string; usd_known: boolean }>(
@@ -539,7 +565,7 @@ test('job records closing and skips Jev at the ceiling', async () => {
     d.closings = { recent: c.recent, record: async (...row) => void recorded.push(row) };
     d.writeCaption = async (facts, opts) => (writeCalls.push(opts), { ...(await stubbed(facts, opts)), builderRead: READ });
 
-    assert.deepEqual(await runRenderJob(d, job), { status: 'ok' }, c.name);
+    assert.equal((await runRenderJob(d, job)).status, 'ok', c.name);
     assert.equal(fitCalls.length, c.asked ? 1 : 0, `${c.name}: Jev asked`);
     if (c.asked) assert.equal(fitCalls[0]!.title, 'What is an API?');
     if (c.asked) assert.deepEqual(fitSubjects, [job.id], `${c.name}: Jev keyed by the job id`);
@@ -562,7 +588,7 @@ test('a rejected caption is retried once with the reason, and the second request
     if (seen.length === 1) throw new CaptionError(reason);
     return stubbed(facts, opts);
   };
-  assert.deepEqual(await runRenderJob(d, job), { status: 'ok' });
+  assert.equal((await runRenderJob(d, job)).status, 'ok');
   assert.equal(seen.length, 2);
   assert.equal(seen[0]!.retryReason, undefined, 'the first request has no reason');
   assert.equal(seen[1]!.retryReason, reason, 'the retry carries the rejection reason');
@@ -579,7 +605,7 @@ test('a transport or API failure retries without a rejection reason', async () =
     if (seen.length === 1) throw new Error('529 Overloaded: the API is busy');
     return stubbed(facts, opts);
   };
-  assert.deepEqual(await runRenderJob(d, job), { status: 'ok' });
+  assert.equal((await runRenderJob(d, job)).status, 'ok');
   assert.equal(seen.length, 2);
   assert.equal(seen[1]!.retryReason, undefined, 'an API error is not a caption the model wrote');
 });
@@ -609,7 +635,7 @@ test('a resumed job reuses its workspace and plan: no preparation, no session A,
   );
   let prepared = false;
   const outcome = await runRenderJob({ ...d, query, resume: true, resumeNote: note, prepare: () => { prepared = true; return ws; } }, job);
-  assert.deepEqual(outcome, { status: 'ok' });
+  assert.equal(outcome.status, 'ok');
   assert.equal(prepared, false, 'the workspace is not prepared again');
   assert.deepEqual(seen.map((x) => x.prompt), [`${RESUME_PROMPT} ${note}`], 'no session A');
   assert.equal(fs.readFileSync(path.join(ws.projectDir, 'assets', 'frames', '02-gap.js'), 'utf8'), 'kept');
@@ -640,6 +666,77 @@ test('the spend cap kills the run and keeps what it produced', async () => {
   assert.ok(kinds.includes('brief') && kinds.includes('transcript_log'));
 });
 
+test('a cap in session B keeps the reel when every frame is written: the worker renders it and the cap is recorded (hx-4)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  let rendered = 0;
+  const query = stubQuery({
+    [PLAN_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+      fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+      yield assistant('p1', { input_tokens: 1_000, output_tokens: 100 }, 'planned');
+      yield result(0.1);
+    },
+    [BUILD_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'index.html'), '<html></html>');
+      fs.writeFileSync(path.join(o.cwd, 'audio_meta.json'), '{"voices":[]}');
+      const modules = path.join(o.cwd, 'assets', 'frames');
+      const frames = path.join(o.cwd, 'compositions', 'frames');
+      fs.mkdirSync(modules, { recursive: true });
+      fs.mkdirSync(frames, { recursive: true });
+      for (let n = 1; n <= 8; n += 1) {
+        fs.writeFileSync(path.join(modules, `0${n}-beat.js`), 'export default {}');
+        fs.writeFileSync(path.join(frames, `0${n}-beat.html`), '<template></template>');
+      }
+      yield assistant('b1', { input_tokens: 3_000_000, output_tokens: 300_000 }, 'expensive');
+      if ((o.abortController as AbortController).signal.aborted) throw new Error('aborted');
+      yield result(9);
+    },
+  });
+  const d = deps(db, query);
+  d.repairAssembly = () => [];
+  d.renderVideo = (projectDir) => {
+    rendered += 1;
+    fs.mkdirSync(path.join(projectDir, 'renders'), { recursive: true });
+    fs.writeFileSync(path.join(projectDir, 'renders', 'video.mp4'), 'worker-mp4');
+  };
+  const outcome = await runRenderJob(d, job);
+  assert.equal(outcome.status, 'ok');
+  assert.equal(rendered, 1, 'the worker rendered the written frames');
+  const rules = (await listLintViolations(db, job.id)).map((v) => v.rule);
+  assert.ok(rules.includes('spend_cap'), 'the cap is recorded on the reel');
+
+  // Frames missing: the cap still fails the job, as before.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  const query2 = stubQuery({
+    [PLAN_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+      fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+      yield result(0.1);
+    },
+    [BUILD_PROMPT]: async function* (o) {
+      yield assistant('b1', { input_tokens: 3_000_000, output_tokens: 300_000 }, 'expensive');
+      if ((o.abortController as AbortController).signal.aborted) throw new Error('aborted');
+      yield result(9);
+    },
+  });
+  const failed = await runRenderJob(deps(db2, query2), job2);
+  assert.equal(failed.status === 'failed' && failed.capped, true);
+});
+
+test('salvage counts only frames\' own modules, never code\'s opener or a frame\'s new props', () => {
+  const dir = tmp();
+  const frames = path.join(dir, 'assets', 'frames');
+  fs.mkdirSync(frames, { recursive: true });
+  fs.writeFileSync(path.join(frames, '01-opener.js'), '');
+  for (const n of [2, 3, 4, 5, 6, 7]) fs.writeFileSync(path.join(frames, `0${n}-beat.js`), '');
+  fs.writeFileSync(path.join(frames, '01-hook.props.js'), '');
+  assert.equal(frameModulesWritten(dir), false, 'the hook itself is missing');
+  fs.writeFileSync(path.join(frames, '01-hook.js'), '');
+  assert.equal(frameModulesWritten(dir), true);
+});
+
 test('an assembled project with no MP4 is rendered by the worker, not left as a success', async () => {
   const { db } = await scratchExplainersDb();
   const job = await queuedJob(db);
@@ -668,7 +765,7 @@ test('an assembled project with no MP4 is rendered by the worker, not left as a 
     fs.writeFileSync(path.join(projectDir, 'renders', 'video.mp4'), 'worker-mp4');
   };
   const outcome = await runRenderJob(d, job);
-  assert.deepEqual(outcome, { status: 'ok' });
+  assert.equal(outcome.status, 'ok');
   assert.equal(rendered, 1);
   const video = (await listArtifacts(db, job.id)).find((a) => a.kind === 'video')!;
   assert.equal(fs.readFileSync(d.store.localPath(video.storage_path!)!, 'utf8'), 'worker-mp4');
@@ -735,7 +832,7 @@ test('missing frames get one repair session, then the worker renders', async () 
     fs.writeFileSync(path.join(projectDir, 'renders', 'video.mp4'), 'repaired-mp4');
   };
   const outcome = await runRenderJob(d, job);
-  assert.deepEqual(outcome, { status: 'ok' });
+  assert.equal(outcome.status, 'ok');
   assert.equal(rendered, 1);
 });
 
@@ -790,13 +887,32 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
   // The Helios replacements are what the job sees (exclusion, not override).
   const overrides = path.join(process.cwd(), 'explainers', 'skill-overrides');
   for (const f of [
-    'faceless-explainer/SKILL.md', 'faceless-explainer/references/story-design.md', 'faceless-explainer/references/visual-design.md',
-    'faceless-explainer/references/motion-language.md', 'faceless-explainer/sub-agents/frame-worker.md', 'hyperframes/references/frame-worker-core.md',
+    'faceless-explainer/SKILL.md', 'faceless-explainer/references/story-design.md', 'faceless-explainer/sub-agents/frame-worker.md', 'hyperframes/references/frame-worker-core.md',
   ]) {
     assert.equal(fs.readFileSync(p('.claude/skills', f), 'utf8'), fs.readFileSync(path.join(overrides, f), 'utf8'), f);
   }
+  // 4.2: visual-design.md and motion-language.md are folded into craft, house style and frame.md; neither
+  // the Helios copy nor the upstream one reaches the job.
+  for (const f of ['faceless-explainer/references/visual-design.md', 'faceless-explainer/references/motion-language.md']) {
+    assert.ok(!fs.existsSync(p('.claude/skills', f)), `should not exist: ${f}`);
+  }
   assert.ok(!fs.existsSync(p('.claude/skills/faceless-explainer/scripts/audio.test.mjs')), 'upstream tests are not copied');
-  assert.match(fs.readFileSync(p('frame.md'), 'utf8'), /version: helios-explainer-v10/);
+  // The design truth is the preset's FRAME.md (helios-explainer-v13 in 4.2), copied by build-frame.
+  assert.match(fs.readFileSync(p('frame.md'), 'utf8'), /version: helios-explainer-v\d+/);
+  // Explainers 4.2: the job is marked 4.2 (try.mjs's 4.1+ checks run strictly), craft, house style and
+  // minimums sit with the recipe in place of principles.md, and the set, explanation, object,
+  // self-review and check modules are pinned with all they import.
+  assert.equal(KIT_VERSION, '4.3');
+  assert.equal(fs.readFileSync(p('assets/kit/VERSION'), 'utf8'), `${KIT_VERSION}\n`);
+  assert.equal(fs.readFileSync(p('.helios-lint/world-kit/VERSION'), 'utf8'), `${KIT_VERSION}\n`);
+  assert.ok(isExplainers41(ws.projectDir) && isExplainers42(ws.projectDir));
+  for (const f of RECIPE_LAYERS) {
+    assert.equal(fs.readFileSync(p(RECIPE_PATH, f), 'utf8'), fs.readFileSync(path.join(process.cwd(), 'explainers', 'recipe', f), 'utf8'), f);
+  }
+  assert.ok(!fs.existsSync(p(RECIPE_PATH, 'principles.md')), "4.1's principles.md never reaches a 4.2 job");
+  const pinned = kitImportClosure(p('assets/kit'), KIT_ENTRIES);
+  assert.deepEqual(pinned.missing, []);
+  for (const f of ['set.js', 'explain.js', 'snap.mjs', 'objects.js', 'lens.js', 'glass.js', 'cast.js', 'shots.js', 'bounds.mjs', 'frames.mjs', 'mount.mjs']) assert.ok(pinned.files.includes(f), `pinned ${f}`);
   assert.match(fs.readFileSync(p('.hyperframes/caption-skin.html'), 'utf8'), /var DARK = \[\];/);
   assert.match(fs.readFileSync(p('.hyperframes/caption-skin.html'), 'utf8'), /var QUIET = \[\];/);
   // The 3.1 kit and the sound library: two opener sounds copied, the library linked (EX3-63, EX3-75).
@@ -895,8 +1011,8 @@ test("a topic with no picked analogy gets the pass as the render's first stage (
   assert.equal(requests.length, 2, 'two writer calls');
   assert.deepEqual(requests.map((r) => r.model), ['claude-opus-5-5', 'claude-opus-5-5'], 'analogy_model, not the idea model');
   assert.match(brief, /## Analogy\n\n[^\n]*Jev's pick[^\n]*\n\nName: A mailbox with a flag\n\nA letter drops in/);
-  // The gap is written right after, for the picked analogy (EX3-120).
-  assert.match(brief, /## Curiosity gap\n\nSay this line in frame 2, word for word[^\n]*\n\n> You tap pay on your phone/);
+  // 4.3: no curiosity gap is written or carried.
+  assert.doesNotMatch(brief, /## Curiosity gap/);
   const topic = await getTopic(db, job.topic_id);
   const note = (topic?.jev_notes as { analogy: { pick: number; pick_reason: string } }).analogy;
   assert.equal(note.pick, 1);
@@ -918,11 +1034,12 @@ test("a topic with no picked analogy gets the pass as the render's first stage (
   assert.match(none.status === 'failed' ? none.error : '', /no picked analogy/);
 });
 
-test('nothing passes in three writer calls: the render fails before planning, and the topic stays (EX3-125)', async () => {
+test('nothing passes in three writer calls: the least-bad analogy goes ahead with a warning; the topic keeps its below-bar note (4.2, fail open)', async () => {
   const { db } = await scratchExplainersDb();
   const job = await queuedJob(db, { analogy: false });
   const requests: AnalogyRequest[] = [];
   let planned = false;
+  let brief = '';
   const query = stubQuery({
     [PLAN_PROMPT]: async function* () {
       planned = true;
@@ -930,20 +1047,42 @@ test('nothing passes in three writer calls: the render fails before planning, an
     },
   });
   const d = deps(db, query);
-  d.analogy = { ideaModel: analogyModel(['A doorbell', 'A pager', 'A bell'], requests), jevTransport: analogyJev(() => 3, { gates: () => 0.8 }) };
+  // Every candidate fails the gates; the pager fails them least.
+  d.analogy = { ideaModel: analogyModel(['A doorbell', 'A pager', 'A bell'], requests), jevTransport: analogyJev(() => 3, { gates: (a) => (a.startsWith('A pager') ? 0.6 : 0.9) }) };
+  d.prepare = (input) => {
+    brief = briefMarkdown(input.topic, input.analogy ?? null, input.gap ?? null);
+    return fakePrepare(input.jobsRoot, input.jobId);
+  };
   const outcome = await runRenderJob(d, job);
-  assert.equal(outcome.status, 'failed');
-  assert.equal(outcome.status === 'failed' ? outcome.error : '', NO_ANALOGY_REASON);
-  assert.equal(planned, false, 'no session A without an analogy');
   assert.equal(requests.length, 3, 'two calls and a third');
+  assert.equal(planned, true, 'the render goes on to the plan');
+  assert.match(outcome.status === 'failed' ? outcome.error : '', /without a plan/, 'the stub plan writes nothing; the analogy stage is what is under test');
+  assert.match(brief, /## Analogy\n\n[^\n]*\n\nName: A pager\n/);
+  const warned = (await listLintViolations(db, job.id)).filter((v) => v.rule === 'analogy:no_pass');
+  assert.equal(warned.length, 1);
+  assert.equal(warned[0].severity, 'warning');
+  assert.match(warned[0].detail, /the least-bad one, "A pager": /);
   const topic = await getTopic(db, job.topic_id);
   assert.notEqual(topic?.status, 'rejected');
-  assert.equal(topic?.reject_reason ?? null, null);
   const note = (topic?.jev_notes as { analogy: { below_bar?: boolean } }).analogy;
-  assert.equal(note.below_bar, true);
+  assert.equal(note.below_bar, true, 'a later render writes again');
+
+  // A writer that never returns a usable analogy is the one case that still fails the run.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2, { analogy: false });
+  let planned2 = false;
+  const d2 = deps(db2, stubQuery({ [PLAN_PROMPT]: async function* () { planned2 = true; yield result(0.1); } }));
+  const broken = analogyModel(['unused']);
+  broken.writeAnalogy = async () => {
+    throw new Error('the API is down');
+  };
+  d2.analogy = { ideaModel: broken, jevTransport: analogyJev(() => 3) };
+  const failed = await runRenderJob(d2, job2);
+  assert.equal(failed.status === 'failed' ? failed.error : '', NO_ANALOGY_REASON);
+  assert.equal(planned2, false);
 });
 
-test('a topic with an analogy but no current gap gets the gap stage; none can be picked: the render fails and the topic stays (EX3-120)', async () => {
+test('4.3: no gap stage: a topic with no curiosity gap renders without one, and BRIEF.md carries none', async () => {
   const gapModel = (requests: GapRequest[], lines: GapCandidate[]) =>
     ({
       async propose(): Promise<never> {
@@ -966,60 +1105,25 @@ test('a topic with an analogy but no current gap gets the gap stage; none can be
     },
   });
 
-  // Picked: BRIEF.md carries it.
   const { db } = await scratchExplainersDb();
   const job = await queuedJob(db, { gap: false });
   const requests: GapRequest[] = [];
   const d = deps(db, query);
-  d.analogy = { ideaModel: gapModel(requests, [GAP('so fast'), GAP('at all'), GAP('in time')]), jevTransport: analogyJev((line) => (line.endsWith('at all?') ? 4 : 3)) };
-  let gapPicked: GapNote | null = null;
+  d.analogy = { ideaModel: gapModel(requests, [GAP('so fast'), GAP('at all'), GAP('in time')]), jevTransport: analogyJev(() => 3) };
+  let given: unknown = 'unset';
   d.prepare = (input) => {
-    gapPicked = input.gap ?? null;
+    given = input.gap;
     return fakePrepare(input.jobsRoot, input.jobId);
   };
   await runRenderJob(d, job);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].analogy.name, 'A mailbox with a flag');
-  assert.ok(gapPicked && 'pick' in gapPicked);
-  assert.deepEqual((gapPicked as Extract<GapNote, { pick: unknown }>).pick, { pass: 0, index: 1 });
-  const { rows } = await db.query<{ component: string }>(`SELECT component FROM explainers.cost_events WHERE job_id = $1 AND component LIKE 'gap%' ORDER BY created_at`, [job.id]);
-  assert.deepEqual(rows.map((r) => r.component).slice(0, 3), ['gap_writer', 'gap_scoring', 'gap_gate']);
-
-  // A current gap: no gap stage.
-  const { db: dbCurrent } = await scratchExplainersDb();
-  const current = await queuedJob(dbCurrent);
-  const none: GapRequest[] = [];
-  const dCurrent = deps(dbCurrent, query);
-  dCurrent.analogy = { ideaModel: gapModel(none, []), jevTransport: analogyJev(() => 3) };
-  await runRenderJob(dCurrent, current);
-  assert.equal(none.length, 0, 'the idea phase already picked it');
-
-  // None can be picked in two passes: the render fails before planning; the topic stays in the pool.
-  const { db: db2 } = await scratchExplainersDb();
-  const job2 = await queuedJob(db2, { gap: false });
-  const requests2: GapRequest[] = [];
-  let planned = false;
-  const d2 = deps(
-    db2,
-    stubQuery({
-      [PLAN_PROMPT]: async function* () {
-        planned = true;
-        yield result(0.1);
-      },
-    }),
-  );
-  d2.analogy = { ideaModel: gapModel(requests2, [GAP('so fast'), GAP('at all'), GAP('in time')]), jevTransport: analogyJev(() => 1) };
-  const outcome = await runRenderJob(d2, job2);
-  assert.equal(outcome.status === 'failed' ? outcome.error : '', GAP_BELOW_BAR_REASON);
-  assert.equal(planned, false);
-  assert.equal(requests2.length, 2);
-  assert.ok(requests2[1].retry);
-  const kept = await getTopic(db2, job2.topic_id);
-  assert.notEqual(kept?.status, 'rejected');
-  assert.equal(kept?.reject_reason ?? null, null);
+  assert.equal(requests.length, 0, 'the gap writer is never called');
+  assert.equal(given, undefined, 'no gap reaches the workspace');
+  const { rows } = await db.query<{ component: string }>(`SELECT component FROM explainers.cost_events WHERE job_id = $1 AND component LIKE 'gap%'`, [job.id]);
+  assert.deepEqual(rows, []);
+  assert.deepEqual((await listLintViolations(db, job.id)).filter((v) => v.rule.startsWith('gap:')), []);
 });
 
-// ── The understanding test (EX3-133) and the opener after the plan (EX3-128) ──
+// ── The understanding test (Explainers 4.2) and the opener after the plan (EX3-128) ──
 
 const fullScript = [
   '# SCRIPT', '', '**Voice:** HeyGen', '',
@@ -1027,37 +1131,111 @@ const fullScript = [
   '## Line 7 — Payoff (Frame 7)', '', '    The store sends the app a message the moment it happens.', '    So you never have to ask.', '',
 ].join('\n');
 
-test('the understanding test reads the plan: the gap question, frame 7\'s line, the hero', () => {
-  assert.equal(storyboardGapQuestion(goodStoryboard), 'So how does the app know the moment it happens?');
+test('the understanding test reads the plan: frame 7\'s line, the hero', () => {
   assert.equal(scriptLine(fullScript, 7), 'The store sends the app a message the moment it happens. So you never have to ask.');
   assert.equal(scriptLine(fullScript, 5), null);
   assert.equal(storyboardHero(goodStoryboard), 'critter');
-  assert.equal(storyboardHero(goodStoryboard.replace('- hero: carrier — critter', '- hero: mailbox flag — object')), 'object');
+  assert.equal(storyboardHero(goodStoryboard.replace(/- hero: carrier — critter/, '- hero: mailbox flag — object')), 'object');
   assert.equal(storyboardHero('no anchor block'), 'critter');
 });
 
-/** A comprehension-check.json as the director writes it (SKILL.md step 5b). */
-const comprehension = (answers: Record<string, unknown>) =>
-  JSON.stringify({ meant: { term_in_plain_words: 'the app is told the moment it happens', example_answer: 'the order shows as paid' }, answers, pass: true, why: '' });
-const viewer = (overrides: Record<string, unknown> = {}) => ({
-  beats: [{ beat: 4, same_characters: true, confused: [] }, { beat: 6, same_characters: true, confused: ['the word payload'] }],
-  concept_in_my_words: 'the app is told right away',
+/** A plan the readers can quote: frame 3's line names the term; the others never do. */
+const readerScript = (line3 = 'A webhook is a message one app sends to another app the moment something happens.') =>
+  [
+    '# SCRIPT', '', '**Voice:** HeyGen', '',
+    '## Line 1 — Opener (Frame 1)', '', '    In the next minute, this little mailbox will teach you a tech concept.', '',
+    '## Line 3 — Define (Frame 3)', '', `    ${line3}`, '',
+    '## Line 4 — Analogy (Frame 4)', '', '    The carrier drops a letter in the mailbox and the flag pops up.', '',
+    '## Line 7 — Payoff (Frame 7)', '', '    The store sends the app a message the moment it happens.', '    So you never have to ask.', '',
+  ].join('\n');
+
+/** The director's answer key (CONTRACT-4.2 schema). */
+const KEY = {
+  term_is: 'a message one app sends another the moment something happens',
+  story_part: 'the letter',
+  mechanism_steps: [
+    { step: 'something happens', core: true },
+    { step: 'the app sends a message to the other app', core: true },
+    { step: 'the message carries the details', core: false },
+  ],
+  mapping: [{ story: 'the mailbox', real: "the other app's address" }],
+  boundary: null,
+  false_beliefs_to_avoid: ['a person carries the message'],
   example_answer: 'the order shows as paid',
-  example_ambiguous: false,
-  other_reading: '',
-  example_is_the_scene: false,
-  confused_overall: [],
-  ...overrides,
+  question: 'So how does the app know the moment it happens?',
+  answer: 'the store sends it a message',
+};
+
+/** A probe answer quoting a line both readers' files say (it never names the term). */
+const probe = (answer: string, extra: Partial<ProbeAnswer> = {}): ProbeAnswer => ({
+  answer,
+  beats: [3],
+  quotes: ['one app sends to another app'],
+  sure: 'sure',
+  source: 'video',
+  ...extra,
 });
 
-function understandingQuery(seen: { prompt: string; options: Record<string, any> }[], fix: (cwd: string) => void, hero = '- hero: carrier — critter'): AgentQuery {
+/** A reader who understood: one ear-confusion note, nothing serious. */
+const readerAnswers = (probes: Partial<ReaderAnswers['probes']> = {}): ReaderAnswers => ({
+  beats: [
+    { beat: 3, see_and_hear: 'a card', think_it_explains: 'a message', learned: 'apps tell each other', expect_next: 'an example', could_not_follow: [] },
+    { beat: 4, see_and_hear: 'a mailbox', think_it_explains: 'the same', learned: 'the flag means news', expect_next: 'why', could_not_follow: [{ quote: 'the flag pops up', why: 'fast' }] },
+  ],
+  probes: {
+    what_it_is: probe('a message an app sends the moment something happens'),
+    which_one: probe('the letter'),
+    two_stories: probe('no', { two: false, quotes: [] }),
+    how_it_works: probe('something happens, then the app sends a message to the other app'),
+    the_map: probe('the mailbox is the address', { rows: [{ story: 'the mailbox', real: "the other app's address" }] }),
+    new_case: probe('my bank texts me when my card is used', { source: 'not from the video', quotes: [] }),
+    what_youd_assume: probe('it arrives right away; nobody has to check', { beliefs: ['it arrives right away', 'nobody has to check'] }),
+    where_it_stops: probe('it did not say', { quotes: [] }),
+    the_example: probe('the order shows as paid', { other_answer: '' }),
+    the_takeaway: probe('my apps hear about things the moment they happen'),
+    where_lost: probe('nowhere', { lost_beat: 0, quotes: [] }),
+    ...probes,
+  },
+});
+
+/**
+ * The readers and the diagnosis, stubbed (no model call): `answers` per call (an Error throws), the
+ * diagnosis likewise. Every request is recorded.
+ */
+function readerModel(
+  answers: (request: ReaderRequest, call: number) => ReaderAnswers | Error = () => readerAnswers(),
+  diagnose: (request: DiagnoseRequest) => Diagnosis[] | Error = (r) => r.serious.map((_f, i) => ({ finding: i + 1, beat: 3, cause: 'definition' as const, why: 'Beat 3 names the wrong thing.' })),
+): UnderstandingModel & { reads: ReaderRequest[]; diagnoses: DiagnoseRequest[] } {
+  const reads: ReaderRequest[] = [];
+  const diagnoses: DiagnoseRequest[] = [];
+  const usage = { input_tokens: 5_000, output_tokens: 2_000 };
+  return {
+    reads,
+    diagnoses,
+    async read(request) {
+      reads.push(request);
+      const value = answers(request, reads.length);
+      if (value instanceof Error) throw value;
+      return { value, usage, model: 'claude-sonnet-5-5' };
+    },
+    async diagnose(request) {
+      diagnoses.push(request);
+      const value = diagnose(request);
+      if (value instanceof Error) throw value;
+      return { value, usage, model: 'claude-sonnet-5-5' };
+    },
+  };
+}
+
+/** Session A writes the plan and the answer key; the fix (when asked) runs `fix`; session B renders. */
+function understandingQuery(seen: { prompt: string; options: Record<string, any> }[], fix: (cwd: string) => void = () => undefined, key: unknown = KEY): AgentQuery {
   return stubQuery(
     {
       [PLAN_PROMPT]: async function* (o) {
-        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard.replace('- hero: carrier — critter', hero));
-        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), fullScript);
+        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), readerScript());
         fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
-        fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer({ concept_in_my_words: 'a shop that sells mail', example_ambiguous: true, other_reading: 'the order failed', beats: [{ beat: 4, same_characters: false, confused: [] }] })));
+        if (key) fs.writeFileSync(path.join(o.cwd, ANSWER_KEY_FILE), JSON.stringify(key));
         yield assistant('p1', { input_tokens: 1000, output_tokens: 100 }, 'plan');
         yield result(0.2);
       },
@@ -1078,99 +1256,522 @@ function understandingQuery(seen: { prompt: string; options: Record<string, any>
   );
 }
 
-/** Jev that matches only the explanation and example the fix wrote. */
-const understandingJev = () =>
-  analogyJev(() => 3, {
-    understanding: (key, state) =>
-      key === 'mechanism_match' ? (state.viewer_explanation === 'a shop that sells mail' ? 0.1 : 0.9) : 0.9,
-  });
+/** Jev for the checklist: `checklist(key, state)` answers, else yes for the good questions and no for the bad. */
+const checklistJev = (checklist?: (key: string, state: Record<string, unknown>) => number | undefined) => analogyJev(() => 3, { checklist });
 
-test('a serious misunderstanding gets one fix session before the build; fixed, the reel is not flagged (EX3-133)', async () => {
+const rulesOf = async (db: ExplainersDb, jobId: string) => (await listLintViolations(db, jobId)).map((v) => v.rule);
+
+test('the understanding test (4.2): code builds what a viewer meets, two readers in parallel, Jev judges against the answer key; nothing serious, no fix', async () => {
   const { db } = await scratchExplainersDb();
   const job = await queuedJob(db);
   const seen: { prompt: string; options: Record<string, any> }[] = [];
-  let findings: { blocking: { kind: string }[]; minor: string[] } | null = null;
+  const d = deps(db, understandingQuery(seen));
+  const jev = checklistJev();
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: jev };
+  const readers = readerModel();
+  d.understanding = readers;
+  const outcome = await runRenderJob(d, job);
+  assert.equal(outcome.status, 'ok');
+  assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT, BUILD_PROMPT], 'nothing serious: no fix session');
+  // The director runs on director_model (Opus); session B on the orchestrator (Sonnet).
+  assert.equal(seen[0].options.model, 'claude-opus-5-5');
+  assert.equal(seen[1].options.model, 'claude-sonnet-5-5');
+
+  // Two readers on reader_model: the newcomer meets an invented word everywhere, the curious one the term.
+  assert.deepEqual(readers.reads.map((r) => [r.persona, r.model]), [['newcomer', 'claude-sonnet-5-5'], ['curious', 'claude-sonnet-5-5']]);
+  const [newcomer, curious] = readers.reads;
+  assert.equal(curious.term, 'webhook', "the curious reader gets the real term (the storyboard's, when the topic has none)");
+  assert.notEqual(newcomer.term, curious.term);
+  assert.doesNotMatch(newcomer.reelTest, /webhook/i, 'the term is replaced everywhere');
+  assert.match(newcomer.reelTest, new RegExp(`Voice: A ${newcomer.term} is a message one app sends`));
+  assert.match(newcomer.reelTest, new RegExp(`a card that reads "today.s AI Brain Break: ${newcomer.term}"`));
+  assert.match(curious.reelTest, /Voice: A webhook is a message one app sends to another app the moment something happens\./);
+  for (const r of readers.reads) {
+    for (let n = 1; n <= 8; n += 1) assert.match(r.reelTest, new RegExp(`^## Beat ${n}$`, 'm'));
+    assert.match(r.reelTest, /The video ends on the Helios logo\./);
+    assert.doesNotMatch(r.reelTest, /stands for|gap_question|why:|cast:|closed_by/);
+  }
+  const project = workspacePaths(d.jobsRoot, job.id).projectDir;
+  assert.equal(fs.readFileSync(path.join(project, REEL_TEST_FILE), 'utf8'), curious.reelTest);
+  assert.equal(fs.readFileSync(path.join(project, REEL_TEST_NEWCOMER_FILE), 'utf8'), newcomer.reelTest);
+  assert.ok(!fs.existsSync(path.join(project, FINDINGS_FILE)), 'no findings file when nothing is serious');
+
+  // Jev's checklist, per reader: each core and nice step, the map row, the beliefs, the example, the question.
+  const asked = (key: string) => jev.calls.filter((c) => c.keys.length === 1 && c.keys[0] === key);
+  assert.equal(asked('same_kind').length, 2);
+  assert.equal(asked('step_present').length, 6);
+  assert.equal(asked('map_row').length, 2);
+  assert.equal(asked('question_answered').length, 0, '4.3: the reel raises no question to answer');
+  assert.deepEqual(Object.keys(asked('same_kind')[0].state).sort(), ['term_is', 'viewer_answer']);
+
+  // What is left is a warning, never a stop: one ear note per reader (minor), nothing serious.
+  const rules = await rulesOf(db, job.id);
+  assert.ok(rules.includes('understanding:minor'));
+  assert.ok(!rules.some((r) => /^understanding:(wrong|two|missing|over|example|question)/.test(r)));
+  const { rows: costs } = await db.query<{ component: string }>(`SELECT component FROM explainers.cost_events WHERE job_id = $1 AND vendor = 'anthropic' ORDER BY created_at`, [job.id]);
+  assert.deepEqual(costs.map((c) => c.component), [
+    'session_a:claude-sonnet-5-5',
+    'understanding_reader_newcomer:claude-sonnet-5-5',
+    'understanding_reader_curious:claude-sonnet-5-5',
+    'session_b:claude-sonnet-5-5',
+    'post_caption:claude-sonnet-5-5',
+  ]);
+  const reports = (await listArtifacts(db, job.id)).filter((a) => a.kind === 'lint_report' && /"phase": "understanding"/.test(a.content ?? ''));
+  assert.deepEqual(reports.map((r) => JSON.parse(r.content!).attempt), ['first']);
+});
+
+/** The curious reader names the mailbox as the term until `fixedAt` calls; the fix rewrites frame 3. */
+const wrongUntil = (fixedAt: number) => (r: ReaderRequest, call: number) =>
+  r.persona === 'curious' && call < fixedAt ? readerAnswers({ what_it_is: probe('a mailbox') }) : readerAnswers();
+const wrongKindJev = () => checklistJev((key, state) => (key === 'same_kind' ? (state.viewer_answer === 'a mailbox' ? 0.1 : 0.9) : undefined));
+
+test('serious: one diagnosis, one fix session on the director model, one re-test; the better version goes ahead (4.2)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const seen: { prompt: string; options: Record<string, any> }[] = [];
+  let findings = null as { serious: Record<string, unknown>[]; minor: string[] } | null;
   const d = deps(
     db,
     understandingQuery(seen, (cwd) => {
       findings = JSON.parse(fs.readFileSync(path.join(cwd, FINDINGS_FILE), 'utf8'));
-      assert.ok(!fs.existsSync(path.join(cwd, '.hyperframes', 'comprehension-check.json')), 'the old answers are cleared, so the fix must test again');
-      fs.writeFileSync(path.join(cwd, 'SCRIPT.md'), fullScript.replace('So you never have to ask.', 'So the app never has to ask.'));
-      fs.writeFileSync(path.join(cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer()));
+      fs.writeFileSync(path.join(cwd, 'SCRIPT.md'), readerScript('A webhook is the message one app sends to another app the moment something happens.'));
     }),
   );
-  const jev = understandingJev();
-  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: jev };
-  const outcome = await runRenderJob(d, job);
-  assert.deepEqual(outcome, { status: 'ok' });
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: wrongKindJev() };
+  const readers = readerModel(wrongUntil(3));
+  d.understanding = readers;
+  assert.equal((await runRenderJob(d, job)).status, 'ok');
   assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT, FIX_PROMPT, BUILD_PROMPT]);
-  assert.deepEqual(findings!.blocking.map((f) => f.kind), ['mechanism', 'example_ambiguous', 'character_changed']);
-  // Code read the stranger's raw answers; Jev judged the mechanism, the example, and the gap against frame 7.
-  const asked = jev.calls.filter((c) => c.keys.includes('mechanism_match') || c.keys.includes('gap_answered'));
-  assert.deepEqual(asked.map((c) => c.keys.join('+')), ['mechanism_match+example_match', 'gap_answered', 'mechanism_match+example_match', 'gap_answered']);
-  assert.equal(asked[1].state.payoff, 'The store sends the app a message the moment it happens. So you never have to ask.');
-  assert.equal(asked[1].state.question, 'So how does the app know the moment it happens?');
-  assert.equal(asked[3].state.payoff, 'The store sends the app a message the moment it happens. So the app never has to ask.', 'the second test reads the fixed script');
-  const rules = (await listLintViolations(db, job.id)).map((v) => v.rule);
-  assert.ok(!rules.includes('understanding_flag'));
+  assert.equal(seen[1].options.model, 'claude-opus-5-5', 'the fix is the director');
+  assert.equal(readers.reads.length, 4, 'two readers, then both again on the fixed reel');
+  assert.match(readers.reads[3].reelTest, /Voice: A webhook is the message one app sends/, 'the re-test reads the fixed script');
+  assert.equal(readers.diagnoses.length, 1);
+  assert.equal(readers.diagnoses[0].serious.length, 1);
+  // CONTRACT-4.2's findings file, with the diagnosis folded in.
+  assert.ok(findings);
+  const f = findings.serious[0];
+  assert.deepEqual(Object.keys(f).sort(), ['beat', 'cause', 'reader', 'reader_quote', 'script_quote', 'type', 'why']);
+  assert.equal(f.type, 'wrong_referent');
+  assert.equal(f.reader, 'curious');
+  assert.equal(f.reader_quote, 'a mailbox');
+  assert.equal(f.script_quote, 'one app sends to another app');
+  assert.equal(f.beat, 3);
+  assert.equal(f.cause, 'definition');
+  assert.equal(f.why, 'Beat 3 names the wrong thing.');
+  assert.ok(findings.minor.every((m) => typeof m === 'string'));
+  // Fixed: no serious warning; the fixed plan is the latest artifact; two reports.
+  const rules = await rulesOf(db, job.id);
+  assert.ok(!rules.includes('understanding:wrong_referent'));
+  const scripts = (await listArtifacts(db, job.id)).filter((a) => a.kind === 'script');
+  assert.match(scripts.at(-1)!.content ?? '', /A webhook is the message one app sends/);
   const reports = (await listArtifacts(db, job.id)).filter((a) => a.kind === 'lint_report' && /"phase": "understanding"/.test(a.content ?? ''));
   assert.deepEqual(reports.map((r) => JSON.parse(r.content!).attempt), ['first', 'after_fix']);
-  assert.match(reports[1].content!, /Beat 6: the word payload/, 'minor confusion is recorded, never blocking');
-  const scripts = (await listArtifacts(db, job.id)).filter((a) => a.kind === 'script');
-  assert.match(scripts.at(-1)!.content ?? '', /So the app never has to ask\./, 'the fixed plan is the latest artifact');
   const { rows } = await db.query<{ component: string }>(`SELECT component FROM explainers.cost_events WHERE job_id = $1 AND vendor = 'anthropic' ORDER BY created_at`, [job.id]);
-  assert.deepEqual(rows.map((r) => r.component.split(':')[0]), ['session_a', 'session_fix', 'session_b', 'post_caption']);
+  assert.deepEqual(rows.map((r) => r.component.split(':')[0]), [
+    'session_a', 'understanding_reader_newcomer', 'understanding_reader_curious', 'understanding_diagnosis', 'session_fix',
+    'understanding_reader_newcomer', 'understanding_reader_curious', 'session_b', 'post_caption',
+  ]);
 });
 
-test('still serious after the fix: the build goes on and the reel is flagged; no fix when nothing is serious (EX3-133)', async () => {
+test('a fix that makes it worse is reverted; a tie keeps the fix; what is left ships as warnings (4.2)', async () => {
+  // Worse: one serious before the fix, two after: the plan from before the fix goes ahead.
   const { db } = await scratchExplainersDb();
   const job = await queuedJob(db);
   const seen: { prompt: string; options: Record<string, any> }[] = [];
-  const d = deps(
-    db,
-    understandingQuery(seen, (cwd) => {
-      fs.writeFileSync(path.join(cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer({ concept_in_my_words: 'a shop that sells mail' })));
-    }),
+  const d = deps(db, understandingQuery(seen, (cwd) => fs.writeFileSync(path.join(cwd, 'SCRIPT.md'), readerScript('A webhook is a doorbell.'))));
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: wrongKindJev() };
+  d.understanding = readerModel((r, call) =>
+    // after the fix, both readers hear the term used for two things (a serious finding each)
+    call <= 2 ? (r.persona === 'curious' ? readerAnswers({ what_it_is: probe('a mailbox') }) : readerAnswers()) : readerAnswers({ two_stories: probe('the mailbox and the message', { two: true, beats: [4], quotes: ['the flag pops up'] }) }),
   );
-  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: understandingJev() };
-  const outcome = await runRenderJob(d, job);
-  assert.deepEqual(outcome, { status: 'ok' }, 'a flag never stops the build');
-  assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT, FIX_PROMPT, BUILD_PROMPT], 'one fix session, never two');
-  const flags = (await listLintViolations(db, job.id)).filter((v) => v.rule === 'understanding_flag');
-  assert.equal(flags.length, 1);
-  assert.equal(flags[0].severity, 'error');
-  assert.match(flags[0].detail, /^mechanism: The viewer explained it as: "a shop that sells mail"/);
+  assert.equal((await runRenderJob(d, job)).status, 'ok', 'a worse fix never stops the reel');
+  const project = workspacePaths(d.jobsRoot, job.id).projectDir;
+  assert.equal(fs.readFileSync(path.join(project, 'SCRIPT.md'), 'utf8'), readerScript(), 'reverted to the plan from before the fix');
+  const scripts = (await listArtifacts(db, job.id)).filter((a) => a.kind === 'script');
+  assert.equal(scripts.at(-1)!.content, readerScript(), 'the latest script artifact is the version that went ahead');
+  const rows = await listLintViolations(db, job.id);
+  const serious = rows.filter((v) => v.rule === 'understanding:wrong_referent');
+  assert.equal(serious.length, 1, "the first test's finding remains");
+  assert.equal(serious[0].severity, 'warning');
+  assert.equal(serious[0].frame, 3);
+  assert.match(serious[0].detail, /^A viewer took the term for something else\. The curious viewer: "a mailbox"\. The reel: "one app sends to another app"\./);
+  assert.ok(rows.some((v) => v.rule === 'understanding:minor' && /The fix made it worse \(2 serious findings after it, 1 before\)/.test(v.detail)));
 
-  // Nothing serious: minor confusion is recorded and no fix session runs.
+  // A tie keeps the fix, and its finding is the warning.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  const d2 = deps(db2, understandingQuery([], (cwd) => fs.writeFileSync(path.join(cwd, 'SCRIPT.md'), readerScript('A webhook is a fast message one app sends to another app.'))));
+  d2.analogy = { ideaModel: analogyModel(['unused']), jevTransport: wrongKindJev() };
+  d2.understanding = readerModel(wrongUntil(99));
+  assert.equal((await runRenderJob(d2, job2)).status, 'ok');
+  assert.match(fs.readFileSync(path.join(workspacePaths(d2.jobsRoot, job2.id).projectDir, 'SCRIPT.md'), 'utf8'), /A webhook is a fast message one app sends to another app\./);
+  assert.equal((await rulesOf(db2, job2.id)).filter((r) => r === 'understanding:wrong_referent').length, 1);
+});
+
+test('fail open: a reader, the diagnosis or Jev failing never stops the reel; no reader model is a warning (4.2)', async () => {
+  // One reader fails: the other is still judged, and the reel says the test only half ran.
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, understandingQuery([]));
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: checklistJev() };
+  d.understanding = readerModel((r) => (r.persona === 'newcomer' ? new Error('529 overloaded') : readerAnswers()));
+  assert.equal((await runRenderJob(d, job)).status, 'ok');
+  const notRun = (await listLintViolations(db, job.id)).filter((v) => v.rule === 'understanding:not_run');
+  assert.deepEqual(notRun.map((v) => v.detail), ['the newcomer reader failed: 529 overloaded']);
+
+  // Both readers fail: nothing to judge, no fix, the build goes on.
   const { db: db2 } = await scratchExplainersDb();
   const job2 = await queuedJob(db2);
   const seen2: { prompt: string; options: Record<string, any> }[] = [];
-  const query2 = stubQuery(
-    {
+  const d2 = deps(db2, understandingQuery(seen2));
+  d2.analogy = { ideaModel: analogyModel(['unused']), jevTransport: checklistJev() };
+  d2.understanding = readerModel(() => new Error('down'));
+  assert.equal((await runRenderJob(d2, job2)).status, 'ok');
+  assert.deepEqual(seen2.map((s) => s.prompt), [PLAN_PROMPT, BUILD_PROMPT]);
+  assert.equal((await rulesOf(db2, job2.id)).filter((r) => r === 'understanding:not_run').length, 2);
+
+  // The diagnosis fails: the fix still runs, with each finding's default cause.
+  const { db: db3 } = await scratchExplainersDb();
+  const job3 = await queuedJob(db3);
+  let cause: unknown = null;
+  const seen3: { prompt: string; options: Record<string, any> }[] = [];
+  const d3 = deps(db3, understandingQuery(seen3, (cwd) => (cause = JSON.parse(fs.readFileSync(path.join(cwd, FINDINGS_FILE), 'utf8')).serious[0].cause)));
+  d3.analogy = { ideaModel: analogyModel(['unused']), jevTransport: wrongKindJev() };
+  d3.understanding = readerModel(wrongUntil(3), () => new Error('diagnosis down'));
+  assert.equal((await runRenderJob(d3, job3)).status, 'ok');
+  assert.deepEqual(seen3.map((s) => s.prompt), [PLAN_PROMPT, FIX_PROMPT, BUILD_PROMPT]);
+  assert.equal(cause, 'definition');
+
+  // Jev fails: code judges what it can read on its own, and says so.
+  const { db: db4 } = await scratchExplainersDb();
+  const job4 = await queuedJob(db4);
+  const d4 = deps(db4, understandingQuery([]));
+  const broken: JevTransport = { systemOne: async () => { throw new Error('Jev down'); } } as never;
+  d4.analogy = { ideaModel: analogyModel(['unused']), jevTransport: broken };
+  d4.understanding = readerModel();
+  assert.equal((await runRenderJob(d4, job4)).status, 'ok');
+  const jevNotes = (await listLintViolations(db4, job4.id)).filter((v) => v.rule === 'understanding:not_run');
+  assert.ok(jevNotes.some((v) => /^Jev could not judge the curious reader: Jev down/.test(v.detail)), jevNotes.map((v) => v.detail).join('; '));
+
+  // No answer key: the readers still read; code judges what it can, and the reel says so.
+  const { db: db5 } = await scratchExplainersDb();
+  const job5 = await queuedJob(db5);
+  const d5 = deps(db5, understandingQuery([], () => undefined, null));
+  d5.analogy = { ideaModel: analogyModel(['unused']), jevTransport: checklistJev() };
+  d5.understanding = readerModel();
+  assert.equal((await runRenderJob(d5, job5)).status, 'ok');
+  assert.ok((await rulesOf(db5, job5.id)).includes('understanding:no_answer_key'));
+});
+
+test('a reader refusal is retried once in plain wording; a second refusal fails open (4.2)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, understandingQuery([]));
+  d.analogy = { ideaModel: analogyModel(['unused']), jevTransport: checklistJev() };
+  const readers = readerModel((r) => (r.persona === 'newcomer' && !r.plain ? new Error('newcomer reader: the model declined the request') : readerAnswers()));
+  d.understanding = readers;
+  assert.equal((await runRenderJob(d, job)).status, 'ok');
+  assert.deepEqual(readers.reads.map((r) => [r.persona, Boolean(r.plain)]), [['newcomer', false], ['curious', false], ['newcomer', true]]);
+  assert.ok(!(await rulesOf(db, job.id)).includes('understanding:not_run'), 'the retry read it');
+
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  const d2 = deps(db2, understandingQuery([]));
+  d2.analogy = { ideaModel: analogyModel(['unused']), jevTransport: checklistJev() };
+  const r2 = readerModel((r) => (r.persona === 'newcomer' ? new Error('the model declined the request') : readerAnswers()));
+  d2.understanding = r2;
+  assert.equal((await runRenderJob(d2, job2)).status, 'ok');
+  assert.equal(r2.reads.filter((r) => r.persona === 'newcomer').length, 2, 'one retry, never more');
+  assert.ok((await listLintViolations(db2, job2.id)).some((v) => v.rule === 'understanding:not_run' && /newcomer reader failed: the model declined/.test(v.detail)));
+});
+
+test('the A/B path: stopAt ends before session B; a resumed copy builds with a settings override (scene_builder_model)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const seen: { prompt: string; options: Record<string, any> }[] = [];
+  const d = deps(db, happyQuery());
+  const plan = await runRenderJob({ ...d, query: stubQuery({ [PLAN_PROMPT]: async function* (o) {
+    fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+    fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+    yield result(0.2);
+  } }, seen), stopAt: 'session_b' }, job);
+  assert.match(plan.status === 'failed' ? plan.error : '', /Stopped before session B/);
+  assert.deepEqual(seen.map((s) => s.prompt), [PLAN_PROMPT], 'no session B');
+
+  const job2 = await queuedJob(db);
+  const ws = fakePrepare(d.jobsRoot, job2.id);
+  fs.cpSync(workspacePaths(d.jobsRoot, job.id).projectDir, ws.projectDir, { recursive: true });
+  const seen2: { prompt: string; options: Record<string, any> }[] = [];
+  const query = stubQuery({ [RESUME_PROMPT]: async function* (o) {
+    fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
+    fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4');
+    yield result(0.3);
+  } }, seen2);
+  const out = await runRenderJob({ ...d, query, resume: true, settingsOverride: { build_runner: 'agent', scene_builder_model: 'claude-sonnet-5-5' } }, job2);
+  assert.equal(out.status, 'ok');
+  assert.deepEqual(seen2.map((s) => s.prompt), [RESUME_PROMPT]);
+  assert.equal(seen2[0].options.agents['scene-builder'].model, 'claude-sonnet-5-5', 'the only difference between the copies');
+});
+
+// ── Fail open everywhere else (Explainers 4.2) ──
+
+test('fail open in collect: lint, HyperFrames lint, bounds, try and picture-check leftovers are warnings; the reel renders', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, happyQuery());
+  d.prepare = ((input: { jobsRoot: string; jobId: string }) => {
+    const ws = fakePrepare(input.jobsRoot, input.jobId);
+    fs.mkdirSync(path.join(ws.projectDir, 'assets', 'kit'), { recursive: true });
+    fs.writeFileSync(path.join(ws.projectDir, 'assets', 'kit', 'VERSION'), `${KIT_VERSION}\n`);
+    return ws;
+  }) as never;
+  d.hyperframesLint = () => [{ source: 'hyperframes', rule: 'missing_timeline', frame: 4, severity: 'error', detail: 'no timeline' }];
+  d.boundsCheck = () => [{ source: 'hyperframes', rule: 'text_bounds', frame: 2, severity: 'error', detail: 'bounds.mjs: 02-gap: "Payment" leaves the frame' }];
+  d.tryCheck = (dir) =>
+    tryViolations({
+      ok: false,
+      errors: ['04-analogy: shots 2 and 3: jump cut'],
+      problems: [{ frame: '04-analogy', check: 'jump_cut', rule: 'breakage:jump_cut', message: 'shots 2 and 3: jump cut' }],
+    }).concat(dir ? [] : []);
+  const outcome = await runRenderJob(d, job);
+  assert.equal(outcome.status, 'ok', 'no quality problem fails a reel');
+  const rows = await listLintViolations(db, job.id);
+  const by = (rule: string) => rows.filter((v) => v.rule === rule);
+  assert.deepEqual(by('breakage:hyperframes_lint').map((v) => [v.severity, v.frame, v.detail]), [['warning', 4, 'missing_timeline: no timeline']]);
+  assert.deepEqual(by('breakage:bounds').map((v) => [v.severity, v.frame]), [['warning', 2]]);
+  assert.deepEqual(by('breakage:jump_cut').map((v) => [v.severity, v.frame, v.detail]), [['warning', 4, '04-analogy: shots 2 and 3: jump cut']]);
+  assert.deepEqual(by('picture:missing').map((v) => v.severity), ['warning']);
+  assert.ok(!rows.some((v) => v.severity === 'error' && v.source === 'hyperframes'), 'nothing from the browser checks is left as an error');
+  // A storyboard-lint error the director's own round left is a warning too (`lint:<rule>`).
+  assert.ok(rows.filter((v) => /^lint:/.test(v.rule)).every((v) => v.severity === 'warning'));
+  assert.ok(!rows.some((v) => v.source === 'storyboard' && v.severity === 'error'), rows.filter((v) => v.severity === 'error').map((v) => v.rule).join(', '));
+  // The notice: the count and the first two, most important first; the reels list shows the same.
+  assert.ok(outcome.status === 'ok');
+  const summary = outcome.status === 'ok' ? outcome.warnings : null;
+  assert.equal(summary!.count, rows.filter((v) => isReelWarning(v)).length);
+  assert.equal(summary!.first.length, 2);
+  assert.match(summary!.first[0], /^Breakage, frame \d: /);
+  const [listed] = (await loadReelsView(db)).filter((j) => j.id === job.id);
+  assert.deepEqual(listed.warnings, summary);
+});
+
+test('fail open: a caption that cannot be written leaves a finished reel with a warning, not a failed run', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const d = deps(db, happyQuery());
+  d.writeCaption = async () => {
+    throw new CaptionError('the paragraph before the hashtags does not name Helios.');
+  };
+  const outcome = await runRenderJob(d, job);
+  assert.equal(outcome.status, 'ok');
+  assert.equal((await getJob(db, job.id))?.status, 'ok');
+  const missing = (await listLintViolations(db, job.id)).filter((v) => v.rule === 'caption:missing');
+  assert.equal(missing.length, 1);
+  assert.match(missing[0].detail, /cannot post until it has one/);
+  assert.ok(!(await listArtifacts(db, job.id)).some((a) => a.kind === 'post_caption'));
+});
+
+test('the cap: a session B that already rendered is salvaged, never failed; the cap and the salvage are on the reel', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const query = stubQuery({
+    [PLAN_PROMPT]: async function* (o) {
+      fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+      fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
+      yield result(0.1);
+    },
+    [BUILD_PROMPT]: async function* (o) {
+      fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
+      fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4-bytes');
+      yield assistant('b1', { input_tokens: 3_000_000, output_tokens: 300_000 }, 'expensive');
+      if ((o.abortController as AbortController).signal.aborted) throw new Error('aborted');
+      yield result(9);
+    },
+  });
+  const outcome = await runRenderJob(deps(db, query), job);
+  assert.equal(outcome.status, 'ok');
+  const rules = await rulesOf(db, job.id);
+  assert.ok(rules.includes('spend_cap') && rules.includes('salvaged'));
+  assert.ok(outcome.status === 'ok' && /^Spend cap: /.test(outcome.warnings.first[0]), 'the cap leads the notice');
+});
+
+test('the worker runs the picture check itself after session B: one fix round for failing frames, then the render (4.2)', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const prompts: { prompt: string; agent?: string }[] = [];
+  let checks = 0;
+  const query: AgentQuery = ({ prompt, options }) => {
+    prompts.push({ prompt, agent: options.agent as string | undefined });
+    return (async function* () {
+      const cwd = options.cwd as string;
+      if (prompt === PLAN_PROMPT) {
+        fs.writeFileSync(path.join(cwd, 'STORYBOARD.md'), goodStoryboard);
+        fs.writeFileSync(path.join(cwd, 'SCRIPT.md'), script);
+      } else if (prompt === BUILD_PROMPT) {
+        fs.writeFileSync(path.join(cwd, 'index.html'), '<html></html>');
+        fs.mkdirSync(path.join(cwd, 'compositions', 'frames'), { recursive: true });
+        for (let n = 1; n <= 8; n += 1) fs.writeFileSync(path.join(cwd, 'compositions', 'frames', `0${n}-beat.html`), '<template></template>');
+      } else if (options.agent === 'picture-checker') {
+        checks += 1;
+        const floating = checks === 1 ? ['a mug beside the critter'] : [];
+        yield assistant(`c${checks}`, { input_tokens: 100, output_tokens: 10 }, JSON.stringify({ frames: [{ frame: '04-beat', subject: 'the critter', matches_line: 'yes', jump_cuts: [], floating, mechanism: 'not_mechanism', objects: [] }], reel: { one_film: 'yes', changed_look: [] } }));
+      }
+      yield result(0.1);
+    })();
+  };
+  const d = deps(db, query);
+  d.prepare = ((input: { jobsRoot: string; jobId: string }) => {
+    const ws = fakePrepare(input.jobsRoot, input.jobId);
+    fs.mkdirSync(path.join(ws.projectDir, 'assets', 'kit'), { recursive: true });
+    fs.writeFileSync(path.join(ws.projectDir, 'assets', 'kit', 'VERSION'), `${KIT_VERSION}\n`);
+    return ws;
+  }) as never;
+  d.snapSequences = () => ({ frames: [{ id: '04-beat', number: 4, look: 'world', voiceover: 'A line.', stills: [{ t: 0.15, file: '.hyperframes/sequences/04-beat-0.15.png' }] }] });
+  // frame 4 still has code-check breakage, so it gets the picture fix round (a clean, quiet frame skips it)
+  d.tryCheck = () => [{ source: 'storyboard', rule: 'breakage:framing', frame: 4, severity: 'warning', detail: 'a part near the edge' }];
+  let rendered = false;
+  d.renderVideo = (dir) => {
+    assert.ok(fs.existsSync(path.join(dir, PICTURE_CHECK_FILE)), 'the check is written before the render');
+    rendered = true;
+    fs.mkdirSync(path.join(dir, 'renders'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'renders', 'video.mp4'), 'mp4');
+  };
+  d.repairAssembly = () => [];
+  assert.equal((await runRenderJob(d, job)).status, 'ok');
+  assert.ok(rendered);
+  assert.equal(checks, 2, 'checked, fixed once, checked again');
+  const fix = prompts.find((p) => /The picture check \(run by the worker\)/.test(p.prompt));
+  assert.match(fix!.prompt, /- 04-beat: floating: a mug beside the critter/);
+  assert.equal(prompts.filter((p) => /The picture check \(run by the worker\)/.test(p.prompt)).length, 1, 'one fix round');
+  const rules = await rulesOf(db, job.id);
+  assert.ok(!rules.includes('picture:missing') && !rules.includes('picture:floating'), 'fixed: no warning');
+});
+
+test('cost fix: the grid check is one vision call; only flagged frames go to their own builder, directly, in parallel', async () => {
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  const prompts: { prompt: string; agent?: string; model?: string }[] = [];
+  const query: AgentQuery = ({ prompt, options }) => {
+    prompts.push({ prompt, agent: options.agent as string | undefined, model: options.model as string | undefined });
+    return (async function* () {
+      const cwd = options.cwd as string;
+      if (prompt === PLAN_PROMPT) {
+        fs.writeFileSync(path.join(cwd, 'STORYBOARD.md'), goodStoryboard);
+        fs.writeFileSync(path.join(cwd, 'SCRIPT.md'), script);
+      } else if (prompt === BUILD_PROMPT) {
+        fs.writeFileSync(path.join(cwd, 'index.html'), '<html></html>');
+        fs.mkdirSync(path.join(cwd, 'compositions', 'frames'), { recursive: true });
+        for (let n = 1; n <= 8; n += 1) fs.writeFileSync(path.join(cwd, 'compositions', 'frames', `0${n}-beat.html`), '<template></template>');
+      }
+      yield result(0.1);
+    })();
+  };
+  const d = deps(db, query);
+  d.prepare = ((input: { jobsRoot: string; jobId: string }) => {
+    const ws = fakePrepare(input.jobsRoot, input.jobId);
+    fs.mkdirSync(path.join(ws.projectDir, 'assets', 'kit'), { recursive: true });
+    fs.writeFileSync(path.join(ws.projectDir, 'assets', 'kit', 'VERSION'), `${KIT_VERSION}\n`);
+    return ws;
+  }) as never;
+  d.snapSequences = () => ({
+    frames: [
+      { id: '04-beat', number: 4, look: 'mechanism', voiceover: 'A line.', stills: [{ t: 0.15, file: '.hyperframes/sequences/04-beat-0.15.png' }] },
+      { id: '05-beat', number: 5, look: 'world', voiceover: 'B line.', stills: [{ t: 0.15, file: '.hyperframes/sequences/05-beat-0.15.png' }] },
+    ],
+  });
+  // frame 4 still has code-check breakage, so it gets the picture fix round (a clean, quiet frame skips it)
+  d.tryCheck = () => [{ source: 'storyboard', rule: 'breakage:framing', frame: 4, severity: 'warning', detail: 'a part near the edge' }];
+  let calls = 0;
+  const models: string[] = [];
+  d.pictureVision = async (params) => {
+    calls += 1;
+    models.push(params.model);
+    assert.ok(Array.isArray(params.system) && (params.system as { cache_control?: unknown }[]).at(-1)?.cache_control, 'cached instructions');
+    const frames = calls === 1
+      ? [{ frame: '04-beat', matches_line: 'no', why: 'no flow', jump_cuts: [], floating: [], mechanism: 'clear', objects: [] }, { frame: '05-beat', matches_line: 'yes', jump_cuts: [{ between: ['1s', '2s'] }], floating: [], objects: [] }]
+      : [{ frame: '04-beat', matches_line: 'yes', jump_cuts: [], floating: [], mechanism: 'clear', objects: [] }];
+    return { text: JSON.stringify({ frames, reel: { one_film: 'yes', changed_look: [] } }), model: 'claude-haiku-5-5', usage: { input_tokens: 10, output_tokens: 5 }, usd: 0.01 };
+  };
+  d.renderVideo = (dir) => {
+    fs.mkdirSync(path.join(dir, 'renders'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'renders', 'video.mp4'), 'mp4');
+  };
+  d.repairAssembly = () => [];
+  assert.equal((await runRenderJob(d, job)).status, 'ok');
+  assert.equal(calls, 2, 'one grid call, one re-check of the fixed frame');
+  assert.deepEqual(models, ['claude-haiku-5-5', 'claude-haiku-5-5']);
+  assert.ok(!prompts.some((p) => p.agent === 'picture-checker'), 'no checker session');
+  const fixes = prompts.filter((p) => /The picture check \(run by the worker\)/.test(p.prompt));
+  assert.deepEqual(fixes.map((f) => f.agent), ['frame-worker-tech'], 'only the flagged frame, by its look, no orchestrator');
+  assert.equal(fixes[0].model, 'claude-opus-5-5', 'a mechanism frame is fixed on tech_frame_worker_model');
+  assert.doesNotMatch(fixes[0].prompt, /helios-explainer-director/);
+  const rules = await rulesOf(db, job.id);
+  assert.ok(rules.includes('picture:jump_cut') && !rules.includes('picture:line'), 'felt jumps stay warnings; the fixed frame is clean');
+});
+
+// ── The picture check is required in a 4.1+ job, and fails open (Explainers 4.2) ──
+
+test('collect warns on a 4.1+ reel with no picture check, and records what the stranger could not follow', async () => {
+  const build = (check: unknown) =>
+    stubQuery({
       [PLAN_PROMPT]: async function* (o) {
-        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard.replace('- hero: carrier — critter', '- hero: mailbox flag — object'));
-        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), fullScript);
-        fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
-        fs.writeFileSync(path.join(o.cwd, '.hyperframes', 'comprehension-check.json'), comprehension(viewer()));
+        fs.writeFileSync(path.join(o.cwd, 'STORYBOARD.md'), goodStoryboard);
+        fs.writeFileSync(path.join(o.cwd, 'SCRIPT.md'), script);
         yield result(0.2);
       },
       [BUILD_PROMPT]: async function* (o) {
         fs.mkdirSync(path.join(o.cwd, 'renders'), { recursive: true });
         fs.writeFileSync(path.join(o.cwd, 'renders', 'video.mp4'), 'mp4-bytes');
+        if (check !== undefined) {
+          fs.mkdirSync(path.join(o.cwd, '.hyperframes'), { recursive: true });
+          fs.writeFileSync(path.join(o.cwd, PICTURE_CHECK_FILE), JSON.stringify(check));
+        }
         yield result(0.3);
       },
-    },
-    seen2,
-  );
-  const d2 = deps(db2, query2);
-  d2.analogy = { ideaModel: analogyModel(['unused']), jevTransport: understandingJev() };
-  assert.deepEqual(await runRenderJob(d2, job2), { status: 'ok' });
-  assert.deepEqual(seen2.map((s) => s.prompt), [PLAN_PROMPT, BUILD_PROMPT]);
-  assert.equal((await listLintViolations(db2, job2.id)).filter((v) => v.rule === 'understanding_flag').length, 0);
-  // The storyboard's object hero draws from the openers that never touch the hero (EX3-111, EX3-128).
-  const choice = JSON.parse(fs.readFileSync(path.join(workspacePaths(d2.jobsRoot, job2.id).projectDir, 'assets', 'opener.json'), 'utf8'));
-  assert.equal(choice.hero, 'object');
-  assert.ok(['paper-rip', 'typewriter', 'big-bang', 'balloon-pop', 'block-drop', 'unboxing', 'paper-plane'].includes(choice.key), choice.key);
+    });
+  const as42 = (d: RenderDeps) => {
+    d.prepare = ((input: { jobsRoot: string; jobId: string }) => {
+      const ws = fakePrepare(input.jobsRoot, input.jobId);
+      fs.mkdirSync(path.join(ws.projectDir, 'assets', 'kit'), { recursive: true });
+      fs.writeFileSync(path.join(ws.projectDir, 'assets', 'kit', 'VERSION'), `${KIT_VERSION}\n`);
+      return ws;
+    }) as never;
+    return d;
+  };
+  // A 4.2 job without the check: rendered, with a warning.
+  const { db } = await scratchExplainersDb();
+  const job = await queuedJob(db);
+  assert.equal((await runRenderJob(as42(deps(db, build(undefined))), job)).status, 'ok');
+  const missing = (await listLintViolations(db, job.id)).filter((v) => v.rule === 'picture:missing');
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].severity, 'warning');
+  // A legacy job without it: as before, nothing.
+  const { db: db2 } = await scratchExplainersDb();
+  const job2 = await queuedJob(db2);
+  assert.equal((await runRenderJob(deps(db2, build(undefined)), job2)).status, 'ok');
+  assert.equal((await listLintViolations(db2, job2.id)).filter((v) => /^picture/.test(v.rule)).length, 0);
+  // A 4.2 job with the check: one warning per kind of problem, per frame.
+  const { db: db3 } = await scratchExplainersDb();
+  const job3 = await queuedJob(db3);
+  const check = {
+    frames: [
+      { frame: '04-analogy', stills: ['0.15s', '3.10s'], subject: 'the orange critter', action: 'walks to a door and back', matches_line: 'no', why: 'the line says it goes to the store', jump_cuts: [{ between: ['3.10s', '4.20s'], why: 'the same view, the same size' }], floating: ['a mug beside the body'], place: 'a kitchen', mechanism: 'not_mechanism', objects: [], unclear: [] },
+      { frame: '06-example', stills: ['0.15s'], subject: 'cannot tell', action: 'cards appear', matches_line: 'partly', jump_cuts: [], place: 'no clear place', mechanism: 'unclear', mechanism_seen: 'cards appear', objects: [], unclear: [] },
+      { frame: '05-why', stills: ['0.15s'], subject: 'the nurse', action: 'sorts', matches_line: 'yes', jump_cuts: [], place: 'a clinic', mechanism: 'not_mechanism', objects: [], unclear: [] },
+    ],
+    reel: { one_film: 'yes', why: '', changed_look: [] },
+  };
+  assert.equal((await runRenderJob(as42(deps(db3, build(check))), job3)).status, 'ok');
+  const found = (await listLintViolations(db3, job3.id)).filter((v) => /^picture:/.test(v.rule));
+  assert.deepEqual(found.map((v) => [v.rule, v.frame, v.severity]), [
+    ['picture:line', 4, 'warning'],
+    ['picture:jump_cut', 4, 'warning'],
+    ['picture:floating', 4, 'warning'],
+    ['picture:who', 6, 'warning'],
+    ['picture:mechanism', 6, 'warning'],
+  ]);
+  assert.match(found[0].detail, /the picture does not show what the line says \(the line says it goes to the store\)/);
+  assert.match(found[1].detail, /a cut felt like a jump between 3\.10s and 4\.20s \(the same view, the same size\)/);
 });
 
 test('a build that stopped after the scene modules is finished by the worker, with no model', { skip: spawnSyncOk('ffmpeg') ? false : 'ffmpeg is not installed' }, () => {

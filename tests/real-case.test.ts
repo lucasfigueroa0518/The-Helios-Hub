@@ -7,8 +7,8 @@ import {
   addStory,
   finishScout,
   getStory,
+  listLabelTopics,
   listStories,
-  pickSeedTopics,
   recordRealCaseCost,
   cycleSpend,
   saveStoryCheck,
@@ -20,7 +20,7 @@ import {
   type NewStory,
 } from '@/lib/real-case/repository';
 import { ensureRealCaseSchema, realCaseStatements } from '@/lib/real-case/schema';
-import { compareStories, STORY_BAR, storyBarMisses, storyTotal } from '@/lib/real-case/scoring';
+import { compareStories, freshness, STORY_BAR, storyBarMisses, storyTotal } from '@/lib/real-case/scoring';
 import { DEFAULT_REAL_CASE_SETTINGS, loadRealCaseSettings, saveRealCaseSetting } from '@/lib/real-case/settings';
 import {
   archivedCopyUrl,
@@ -32,7 +32,7 @@ import {
   type FetchedPage,
   type PageFetcher,
 } from '@/lib/real-case/source-check';
-import type { StoryClaim, StoryScores, StorySource } from '@/lib/real-case/types';
+import type { NewsStory, StoryClaim, StoryScores, StorySource } from '@/lib/real-case/types';
 
 import { scratchExplainersDb } from './explainers-pglite';
 
@@ -48,17 +48,19 @@ async function topic(db: ExplainersDb, title: string, status: string, score: num
   return row.id;
 }
 
-const BEATS = {
-  incident: 'A search assistant told people to add glue to pizza sauce.',
-  puzzle: 'The advice already existed online, as a joke. How did a joke become the answer?',
-  steps: [
-    { step: 'retrieve', in_story: 'search pulls the joke post' },
-    { step: 'augment', in_story: 'the post sits beside the question' },
-    { step: 'generate', in_story: 'the model writes from it' },
-  ],
-  click: 'The model writes from what it is handed.',
-  other_side: 'Limiting forum posts at the retrieve step.',
-  takeaway: 'Check what it cites.',
+const ACTS: NewsStory = {
+  event_date: '2026-10-20',
+  place: null,
+  cold_open: 'A search assistant suggested an odd recipe.',
+  setup: 'A search page added written answers.',
+  moment: 'An answer quoted a joke post as advice.',
+  fallout: 'Screenshots spread.',
+  reveal: 'The answer was written from what search retrieved.',
+  since: 'Forum posts are limited in answers.',
+  for_you: 'Check what an answer cites.',
+  cast: [{ name: 'A search company', kind: 'organization', role: 'ran the assistant' }],
+  timeline: [],
+  artifacts: [],
 };
 
 function newStory(topicId: string, title: string, over: Partial<NewStory> = {}): NewStory {
@@ -70,14 +72,14 @@ function newStory(topicId: string, title: string, over: Partial<NewStory> = {}):
     title,
     summary: 'A summary.',
     polarity: 'failure',
-    story: BEATS,
+    story: ACTS,
     claims: [],
     sources: [],
     ...over,
   };
 }
 
-const SCORES = (n: number): StoryScores => ({ recognition: n, tension: n, illumination: n, mechanism_fit: n, tellable: n });
+const SCORES = (n: number): StoryScores => ({ stakes: n, turn: n, scene: n, reveal: n, artifacts: n, players: n, freshness: n });
 
 // ── Schema and isolation (RC-01) ────────────────────────────────────────────
 
@@ -104,8 +106,8 @@ test('a full pass of this route never changes an Explainer topic', async () => {
   const before = await snapshot();
 
   const cycleId = await startCycle(db, { mode: 'development', trigger: 'auto' });
-  const seeds = await pickSeedTopics(db, { limit: 3, cooldownDays: 30 });
-  const scoutId = await startScout(db, seeds[0], cycleId);
+  await listLabelTopics(db);
+  const scoutId = await startScout(db, null, cycleId);
   const story = await addStory(db, newStory(a, 'Glue on pizza', { scoutId, cycleId }));
   await saveStoryScores(db, story.id, SCORES(3.5), storyTotal(SCORES(3.5)));
   await setStoryStatus(db, story.id, 'pool');
@@ -115,40 +117,20 @@ test('a full pass of this route never changes an Explainer topic', async () => {
   assert.deepEqual(await snapshot(), before);
 });
 
-// ── Seeds (RC-08) ───────────────────────────────────────────────────────────
+// ── Topics as labels (RC-27) ────────────────────────────────────────────────
 
-test('seeds: every non-archived topic, best Explainer score first', async () => {
+test('label topics: every non-archived topic, best Explainer score first', async () => {
   const db = await freshDb();
   await topic(db, 'Pool topic', 'pool', 60);
   await topic(db, 'Rendered topic', 'rendered', 90);
   await topic(db, 'Analogy-rejected topic', 'rejected', 75);
   await topic(db, 'Archived topic', 'archived', 99);
   await topic(db, 'Unscored topic', 'proposed', null);
-  const seeds = await pickSeedTopics(db, { limit: 10, cooldownDays: 30 });
+  const topics = await listLabelTopics(db);
   assert.deepEqual(
-    seeds.map((s) => s.title),
+    topics.map((s) => s.title),
     ['Rendered topic', 'Analogy-rejected topic', 'Pool topic', 'Unscored topic'],
   );
-});
-
-test('seeds: a topic searched inside the cooldown is skipped, unless the search failed', async () => {
-  const db = await freshDb();
-  const now = new Date('2026-10-25T12:00:00Z');
-  const found = await topic(db, 'Found recently', 'pool', 90);
-  const weak = await topic(db, 'Weak recently', 'pool', 85);
-  const failed = await topic(db, 'Failed recently', 'pool', 80);
-  const old = await topic(db, 'Searched long ago', 'pool', 70);
-  for (const [id, title, outcome, at] of [
-    [found, 'Found recently', 'found', '2026-10-20T00:00:00Z'],
-    [weak, 'Weak recently', 'weak', '2026-10-01T00:00:00Z'],
-    [failed, 'Failed recently', 'failed', '2026-10-24T00:00:00Z'],
-    [old, 'Searched long ago', 'none', '2026-08-01T00:00:00Z'],
-  ] as const) {
-    const scout = await startScout(db, { id, title }, null);
-    await db.query('UPDATE real_case.topic_scouts SET outcome = $2, scouted_at = $3 WHERE id = $1', [scout, outcome, at]);
-  }
-  const seeds = await pickSeedTopics(db, { limit: 10, cooldownDays: 30, now });
-  assert.deepEqual(seeds.map((s) => s.title), ['Failed recently', 'Searched long ago']);
 });
 
 test('the nightly cycle runs once per New York day; clicks are not limited', async () => {
@@ -194,20 +176,30 @@ test('scoring: total out of 100, the bar, the floors and the tie-breaks', () => 
   assert.equal(storyTotal(SCORES(4)), 100);
   assert.equal(storyTotal(SCORES(2)), 50);
   assert.deepEqual(storyBarMisses(SCORES(3.5)), []);
-  const weakFit = { ...SCORES(4), mechanism_fit: 2 };
-  assert.ok(storyTotal(weakFit) >= STORY_BAR.total);
-  assert.deepEqual(storyBarMisses(weakFit), ['mechanism fit 2 of 4, under 2.5']);
-  // Same total; mechanism fit breaks the tie.
-  const a = { ...SCORES(3), mechanism_fit: 4, illumination: 2 };
-  const b = { ...SCORES(3), mechanism_fit: 2, illumination: 4 };
+  const weakReveal = { ...SCORES(4), reveal: 2 };
+  assert.ok(storyTotal(weakReveal) >= STORY_BAR.total);
+  assert.deepEqual(storyBarMisses(weakReveal), ['reveal 2 of 4, under 2.5']);
+  // Same total (both weigh 20); the reveal breaks the tie.
+  const a = { ...SCORES(3), reveal: 4, stakes: 2 };
+  const b = { ...SCORES(3), reveal: 2, stakes: 4 };
   assert.equal(storyTotal(a), storyTotal(b));
   assert.ok(compareStories(a, b) > 0);
 });
 
+test('freshness: full for two weeks, then falling to 0 at the window', () => {
+  const now = new Date('2026-10-26T12:00:00Z');
+  assert.equal(freshness('2026-10-20', 90, now), 4);
+  assert.equal(freshness('2026-10-13', 90, now), 4);
+  assert.equal(freshness('2026-07-28', 90, now), 0);
+  assert.equal(freshness('2026-11-01', 90, now), 4);
+  const mid = freshness('2026-09-03', 90, now);
+  assert.ok(mid > 1.9 && mid < 2.1, String(mid));
+});
+
 test('settings: a valid change saves; an invalid one throws', async () => {
   const db = await freshDb();
-  assert.equal(await saveRealCaseSetting(db, 'topics_per_night', 5), 5);
-  assert.equal((await loadRealCaseSettings(db)).topics_per_night, 5);
+  assert.equal(await saveRealCaseSetting(db, 'searches_per_night', 2), 2);
+  assert.equal((await loadRealCaseSettings(db)).searches_per_night, 2);
   await assert.rejects(saveRealCaseSetting(db, 'nightly_cap_usd', -1));
   await assert.rejects(saveRealCaseSetting(db, 'auto_scout', 'yes'));
 });

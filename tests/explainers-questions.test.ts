@@ -7,7 +7,7 @@ import { ANALOGY_COMPARE, ANALOGY_COMPARE_FIELDS, ANALOGY_GATE_FIELDS, ANALOGY_G
 import { DUPLICATE_GATE, DUPLICATE_JUDGE } from '@/lib/explainers/jev/questions/duplicate';
 import { IDEA_SCORING, IDEA_SCORING_FIELDS } from '@/lib/explainers/jev/questions/idea-scoring';
 import { GAP_GATE, GAP_SCORING, GAP_SCORING_FIELDS } from '@/lib/explainers/jev/questions/gap-scoring';
-import { UNDERSTANDING, UNDERSTANDING_FIELDS } from '@/lib/explainers/render/understanding';
+import { UNDERSTANDING_CHECKLIST, UNDERSTANDING_CHECKLIST_FIELDS } from '@/lib/explainers/render/understanding';
 import { ANALOGY_GATE_KEYS, GAP_KEYS, IDEA_SCORE_KEYS, SCORE_KEYS } from '@/lib/explainers/types';
 
 const read = (name: string) => fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', name), 'utf8');
@@ -146,17 +146,41 @@ test('analogy checks v1 match the register verbatim: the golden match, the three
   for (const fields of [ANALOGY_GATE_FIELDS, ANALOGY_COMPARE_FIELDS]) assert.ok(!fields.some((f) => /example|golden/.test(f)));
 });
 
-test('the understanding test matches the register verbatim (EX3-133)', () => {
-  const checks = noulBlocks('**U1 — Mechanism', '**End of the understanding test**', 'U');
-  assert.equal(UNDERSTANDING.version, 'explainers-understanding-v1');
-  assert.deepEqual(checks.map((c) => c.key), Object.keys(UNDERSTANDING.questions));
+test('the understanding test v2 checklist matches the register verbatim (Explainers 4.2, EX4-181)', (t) => {
+  assert.equal(UNDERSTANDING_CHECKLIST.id, 'explainers-understanding');
+  assert.equal(UNDERSTANDING_CHECKLIST.version, 'explainers-understanding-v2');
+  assert.deepEqual(Object.keys(UNDERSTANDING_CHECKLIST.questions), Object.keys(UNDERSTANDING_CHECKLIST_FIELDS));
+  // The code's text waits for the register in .explainers-local/4.2-plan/NOTES-E.md ("Understanding
+  // test v2"); once the register has the section, the comparison is strict.
+  if (!register.includes('### Understanding test v2')) {
+    t.diagnostic('planning/Explainer Reels/DECISIONS.md has no "### Understanding test v2" yet');
+    return;
+  }
+  // V1 to V10: two-digit numbers, so this splits on its own.
+  const checks = section(register, '**V1 — ', '**End of understanding test v2**')
+    .split(/(?:^|\n)\*\*V\d+ — [^*]+\*\*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => ({
+      key: /Key: (\w+)/.exec(block)![1],
+      question: /Question:\n(.+?)\nState fields:/s.exec(block)![1].trim(),
+      fields: /State fields:\n(.+?)\n\nJudge rule:/s.exec(block)![1].trim().split('\n').map((line) => line.trim().slice(2)),
+      judge: /Judge rule:\n(.+?)(?:\n\n|$)/s.exec(block)![1].trim(),
+    }));
+  assert.deepEqual(checks.map((c) => c.key), Object.keys(UNDERSTANDING_CHECKLIST.questions));
   for (const c of checks) {
-    const key = c.key as keyof typeof UNDERSTANDING.questions;
-    const instructions = UNDERSTANDING.questions[key].instructions as { question: string; judge: string };
+    const key = c.key as keyof typeof UNDERSTANDING_CHECKLIST.questions;
+    const instructions = UNDERSTANDING_CHECKLIST.questions[key].instructions as { question: string; judge: string };
     assert.equal(instructions.question, c.question, c.key);
     assert.equal(instructions.judge, c.judge, c.key);
-    assert.deepEqual([...UNDERSTANDING_FIELDS[key]], c.fields, c.key);
+    assert.deepEqual([...UNDERSTANDING_CHECKLIST_FIELDS[key]], c.fields, c.key);
   }
+});
+
+test('the definition check is gone (Explainers 4.2, EX4-179): no module, no question set', () => {
+  assert.ok(!fs.existsSync(path.join(process.cwd(), 'lib', 'explainers', 'jev', 'questions', 'definition-check.ts')));
+  const code = fs.readFileSync(path.join(process.cwd(), 'lib', 'explainers', 'render', 'understanding.ts'), 'utf8');
+  assert.doesNotMatch(code, /definition-check|DEFINITION_CHECK|checkDefinitionMapping/);
 });
 
 test('E-15 duplicate gate matches the approved packet verbatim', () => {

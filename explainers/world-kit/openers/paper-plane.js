@@ -1,7 +1,7 @@
 // Paper Plane: a paper plane loops in from off-screen, straight at the camera, and smacks into the
 // glass. It sticks, unfolds flat into a sheet with "AI BRAIN BREAK" on it, then peels off and falls
 // away, leaving the hook.
-import { T, g, el, ref, defs, seg, lerp, E, scene, title, wordmark, shake, shaken, burst } from './common.js';
+import { T, g, el, defs, seg, lerp, E, scene, title, wordmark, shake, shaken, burst, softShape, card } from './common.js';
 
 const B = [[-260, 1560], [520, 1820], [1240, 560], [540, 900]];
 function bez(u) {
@@ -11,18 +11,17 @@ function bez(u) {
 }
 
 function plane(squash = 0) {
-  return g({ transform: `scale(1 ${(1 - squash).toFixed(3)})`, filter: ref('wobble') }, [
-    el('path', { d: 'M 170 0 L -90 0 L -150 64 Z', fill: T['paper-shade'], stroke: T.ink, 'stroke-width': 5, 'stroke-linejoin': 'round' }),
-    el('path', { d: 'M 170 0 L -150 -96 L -90 0 Z', fill: T['paper-lit'], stroke: T.ink, 'stroke-width': 5, 'stroke-linejoin': 'round' }),
-    el('path', { d: 'M 170 0 L -120 -46', stroke: T['paper-dark'], 'stroke-width': 3 }),
-    el('path', { d: 'M -90 0 L -130 34', stroke: T.ink, 'stroke-width': 4 }),
+  return g({ transform: `scale(1 ${(1 - squash).toFixed(3)})` }, [
+    softShape('M 170 0 L -90 0 L -150 64 Z', T['paper-shade'], { form: 0.6 }),
+    softShape('M 170 0 L -150 -96 L -90 0 Z', T['paper-lit'], { form: 0.6 }),
+    el('path', { d: 'M 170 0 L -120 -46', stroke: T['paper-dark'], 'stroke-width': 3, 'stroke-linecap': 'round' }),
+    el('path', { d: 'M -90 0 L -130 34', stroke: T['paper-dark'], 'stroke-width': 3, 'stroke-linecap': 'round' }),
   ]);
 }
 
 function sheet() {
-  return g({ filter: ref('wobble') }, [
-    el('rect', { x: -400, y: -520, width: 800, height: 1040, fill: T.ink, opacity: 0.2, transform: 'translate(16 22)' }),
-    el('rect', { x: -400, y: -520, width: 800, height: 1040, fill: T['paper-lit'], stroke: T.ink, 'stroke-width': 6 }),
+  return g({}, [
+    card(-400, -520, 800, 1040, { r: 10, lift: 1.4 }),
     // the creases the folds left
     ...['M 0 -520 L 0 520', 'M -400 -120 L 0 -520 L 400 -120', 'M -400 120 L 0 -300 L 400 120'].map((d) => el('path', { d, fill: 'none', stroke: T['paper-dark'], 'stroke-width': 4 })),
     wordmark(0, 0, 104, 1),
@@ -51,6 +50,6 @@ export default function draw(t, ctx) {
     if (p < 1) parts.push(g({ transform: `translate(${(540 + 260 * p).toFixed(1)} ${(940 + slide + 1700 * p).toFixed(1)}) rotate(${(-2 + 34 * p).toFixed(2)})` }, sheet()));
   }
   parts.push(burst(540, 920, seg(t, SMACK, SMACK + 0.35, (x) => x), 4));
-  parts.push(title(ctx, t, peel[0] + 0.2));
+  parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

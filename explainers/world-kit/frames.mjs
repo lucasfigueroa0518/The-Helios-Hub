@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import { CLOSE_EVENTS } from './close-timing.js';
 import { openerByKey } from './openers/bank.js';
+import { HANDOFF_FRAME, handoffByKey, handoffEvents } from './handoff-bank.js';
 import { chosenOpener, openerLine } from './openers/sound.mjs';
 
 /** `- key: value` fields of one frame block, keys lowercased. */
@@ -112,4 +113,66 @@ export function writeOpener(root, f) {
   writeFileSync(join(dir, `${f.id}.js`), module);
   writeFileSync(join(dir, `${f.id}.events.json`), '[]\n');
   return key;
+}
+
+// ── The hand-off (Explainers 4.3): frame 3 is code's when the job chose a template ─────────────
+
+/** Where a job names its hand-off (job.ts assignHandoff): { key, name, parts, sounds, hero }. */
+export const HANDOFF_CHOICE = join('assets', 'handoff.json');
+
+/** The project's hand-off choice, or null (a job from before 4.3: frame 3 is the worker's own). */
+export function chosenHandoff(root) {
+  const file = join(root, HANDOFF_CHOICE);
+  if (!existsSync(file)) return null;
+  try {
+    const c = JSON.parse(readFileSync(file, 'utf8'));
+    return handoffByKey(c?.key) ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+/** True when frame `f` is code's hand-off (frame 3, with a choice on file). */
+export const isHandoff = (root, f) => Boolean(f) && f.number === HANDOFF_FRAME && Boolean(chosenHandoff(root));
+
+/**
+ * Write frame 3's module (one call into handoff.js with the frame's length, the term, the hero and
+ * the mapped parts baked in) and its soft sound events. The length is the paced timing file's when
+ * there is one, else the storyboard's. Returns the template's key, or null when the job chose none.
+ */
+export function writeHandoff(root, f) {
+  const choice = chosenHandoff(root);
+  if (!choice || !f?.id) return null;
+  let duration = Number.isFinite(f.duration) && f.duration > 0 ? f.duration : 3.2;
+  const timing = join(root, 'assets', 'timing', `${f.id}.json`);
+  if (existsSync(timing)) {
+    try {
+      const d = Number(JSON.parse(readFileSync(timing, 'utf8'))?.duration);
+      if (d > 0) duration = d;
+    } catch {
+      // the storyboard's length stands
+    }
+  }
+  const ground = ['paper', 'stage'].includes(f.fields?.ground) ? f.fields.ground : 'paper';
+  const parts = Array.isArray(choice.parts) ? choice.parts : [];
+  const sounds = Array.isArray(choice.sounds) ? choice.sounds : [];
+  const opts = { duration, term: storyboardTerm(root), hero: choice.hero ?? null, parts, ground };
+  const dir = join(root, 'assets', 'frames');
+  mkdirSync(dir, { recursive: true });
+  // frame 4's module, when it is built: its first shot is frame 3's backdrop (a continuation, no jump)
+  const nextF = projectFrames(root).find((x) => x.number === f.number + 1);
+  const nextFile = nextF?.id && existsSync(join(dir, `${nextF.id}.js`)) ? `./${nextF.id}.js` : null;
+  const module = [
+    `// Frame 3 (Explainers 4.3): the hand-off, "${handoffByKey(choice.key).name}", over the reel's own world.`,
+    '// Written by code from assets/handoff.json; never edit. Nobody builds frame 3.',
+    "import * as world from '../world/world.js';",
+    "import { handoffFrame } from '../kit/handoff.js';",
+    ...(nextFile ? [`import next from ${JSON.stringify(nextFile)};`] : []),
+    '',
+    `export default handoffFrame(${JSON.stringify(choice.key)}, { world, ${nextFile ? 'next, ' : ''}...${JSON.stringify(opts)} });`,
+    '',
+  ].join('\n');
+  writeFileSync(join(dir, `${f.id}.js`), module);
+  writeFileSync(join(dir, `${f.id}.events.json`), `${JSON.stringify(handoffEvents(choice.key, { duration, sounds, parts: parts.length }), null, 1)}\n`);
+  return choice.key;
 }

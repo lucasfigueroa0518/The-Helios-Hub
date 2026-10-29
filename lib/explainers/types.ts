@@ -90,7 +90,7 @@ export type GapCandidate = {
   line: string;
   /** The question, exactly as it ends the line. */
   question: string;
-  /** The way in it uses (everyday mystery, contradiction, stakes, number, wrong belief, "you did this today", or its own). */
+  /** The formula it uses (hidden mechanism, counter-intuitive truth, stakes, wrong belief, or its own). */
   way_in: string;
   /** One line on why it pulls. */
   why_it_pulls: string;

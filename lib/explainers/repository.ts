@@ -403,6 +403,23 @@ export async function recentOpeners(db: Queryable, exceptJobId: string, limit: n
   return rows.map((r) => r.opener);
 }
 
+/** The hand-offs of the latest reels before job `exceptJobId`, newest first (Explainers 4.3). */
+export async function recentHandoffs(db: Queryable, exceptJobId: string, limit: number): Promise<string[]> {
+  const { rows } = await db.query<{ handoff: string }>(
+    `SELECT handoff FROM explainers.jobs
+      WHERE handoff IS NOT NULL AND id <> $1 AND status <> 'failed'
+      ORDER BY seq DESC
+      LIMIT $2`,
+    [exceptJobId, limit],
+  );
+  return rows.map((r) => r.handoff);
+}
+
+/** Record the hand-off template job `id` drew (Explainers 4.3). */
+export async function setJobHandoff(db: Queryable, id: string, handoff: string): Promise<void> {
+  await db.query('UPDATE explainers.jobs SET handoff = $2 WHERE id = $1', [id, handoff]);
+}
+
 /** Record the opener job `id` drew. */
 export async function setJobOpener(db: Queryable, id: string, opener: string): Promise<void> {
   await db.query('UPDATE explainers.jobs SET opener = $2 WHERE id = $1', [id, opener]);

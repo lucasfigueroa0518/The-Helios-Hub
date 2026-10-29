@@ -12,11 +12,12 @@
 //   propNames()                                    every asset name, sorted
 //
 // Each prop is drawn about its own origin (base center, world z = 0) with the kit's isometric
-// projection, so props share one light, one outline weight and one grain. Organic things are
-// ink contours with flat fills and stipple; boxy things are iso solids (FRAME.md § objects).
-// The batches live in props/*.js; this file holds the helpers they build from.
+// projection, so props share one light. hx-4 (Soft 3D, still 08): boxy things are soft volumes
+// and organic things soft-shaded shapes (props/kit.js); every drawing then goes through soften(),
+// which turns any ink outline left in a prop's own code into a soft edge, so the library and the
+// bank restyle with no edits. The batches live in props/*.js; props/kit.js holds the helpers.
 
-import { el, g, ref, line, TONES, T, shadow, isoDisc, P0, box, RX, top, face, accent, accentFill } from './props/kit.js';
+import { el, g, line, TONES, T, shadow, isoDisc, P0, box, RX, top, face, accent, accentFill, soften } from './props/kit.js';
 
 export * from './props/kit.js';
 import { TAGS } from './props/tags.js';
@@ -155,7 +156,7 @@ export function prop(name, x, y, o = {}) {
 
 /**
  * Draw an asset from `defs` (the bank's PROPS, or a scene's own NEW_PROPS, EX3-114) standing with its
- * base center at screen (x, y): the same placement, scale, states and wobble as the bank's.
+ * base center at screen (x, y): the same placement, scale, states and soft style as the bank's.
  * @param {Record<string, { states: string[], draw: (o: { state: string, focal: boolean }) => string[] }>} defs
  * @param {string} name
  * @param {number} x
@@ -168,5 +169,5 @@ export function propFrom(defs, name, x, y, { s = 1, state, focal = false, flip =
   const st = state ?? p.states[0];
   if (!p.states.includes(st)) throw new Error(`HX: prop "${name}" has states ${p.states.join(', ')}; got "${st}".`);
   const parts = p.draw({ state: st, focal });
-  return g({ 'data-prop': name, transform: `translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${(flip ? -s : s).toFixed(4)} ${s.toFixed(4)})`, filter: ref('wobble') }, parts);
+  return g({ 'data-prop': name, transform: `translate(${x.toFixed(2)} ${y.toFixed(2)}) scale(${(flip ? -s : s).toFixed(4)} ${s.toFixed(4)})` }, soften([].concat(parts).join('')));
 }

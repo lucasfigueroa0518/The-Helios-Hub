@@ -1,14 +1,14 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { nyDate } from '@/lib/explainers/repository';
-import { compareStories } from '@/lib/real-case/scoring';
+import { compareStories, freshness } from '@/lib/real-case/scoring';
 import type { StoryCheck } from '@/lib/real-case/source-check';
 import {
   STORY_SCORE_KEYS,
   type Mode,
   type Polarity,
   type ScoutOutcome,
+  type NewsStory,
   type SeedTopic,
-  type StoryBeats,
   type StoryClaim,
   type StoryRow,
   type StoryScores,
@@ -21,14 +21,20 @@ export { nyDate };
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 const iso = (v: unknown): string | null => (v === null || v === undefined ? null : v instanceof Date ? v.toISOString() : String(v));
 
+/**
+ * A `date` column as YYYY-MM-DD. Drivers differ on the Date they return (pg: local midnight; PGlite:
+ * UTC midnight), so queries cast date columns to text and this only trims.
+ */
+function day(v: unknown): string | null {
+  return v === null || v === undefined ? null : String(v).slice(0, 10);
+}
+
 function storyRow(r: Record<string, unknown>): StoryRow {
   return {
     ...(r as unknown as StoryRow),
-    recognition: num(r.recognition),
-    tension: num(r.tension),
-    illumination: num(r.illumination),
-    mechanism_fit: num(r.mechanism_fit),
-    tellable: num(r.tellable),
+    // The story's own copy (jsonb) is the source of truth; the column is for SQL (expiry, the window).
+    event_date: (r.story as { event_date?: string } | null)?.event_date ?? null,
+    scores: (r.scores as StoryScores | null) ?? null,
     weighted_score: num(r.weighted_score),
     checked_at: iso(r.checked_at),
     scored_at: iso(r.scored_at),
@@ -38,41 +44,39 @@ function storyRow(r: Record<string, unknown>): StoryRow {
   };
 }
 
-/** A scored story's five scores, or null while any is missing. */
-export function storyScores(row: Pick<StoryRow, (typeof STORY_SCORE_KEYS)[number]>): StoryScores | null {
+/**
+ * A scored story's scores, or null while any is missing. With `fresh`, freshness is recomputed from
+ * the event date for that moment, so the pool ranks by today's freshness, not the day it was scored.
+ */
+export function storyScores(
+  row: Pick<StoryRow, 'scores' | 'event_date'>,
+  fresh?: { windowDays: number; now?: Date },
+): StoryScores | null {
+  if (!row.scores) return null;
   const out = {} as StoryScores;
   for (const key of STORY_SCORE_KEYS) {
-    const value = row[key];
-    if (value === null) return null;
+    const value = row.scores[key];
+    if (typeof value !== 'number' || !Number.isFinite(value)) return null;
     out[key] = value;
   }
+  if (fresh && row.event_date) out.freshness = freshness(row.event_date, fresh.windowDays, fresh.now);
   return out;
 }
 
-// ── Seeds: Explainer topics, read only (RC-01, RC-08) ───────────────────────
+// ── Topics: Explainer topics as labels, read only (RC-01, RC-27) ─────────────
 
 /**
- * The topics to search next: every non-archived Explainer topic (pool, rendered and rejected alike,
- * RC-08) that this route hasn't searched inside the cooldown, best Explainer score first. A search
- * that failed doesn't count, so the topic is tried again. Reads explainers.topics; never writes it.
+ * The Explainer topics a story can be labeled with: every non-archived one, best Explainer score
+ * first. Reads explainers.topics; never writes it.
  */
-export async function pickSeedTopics(
-  db: Queryable,
-  opts: { limit: number; cooldownDays: number; now?: Date },
-): Promise<SeedTopic[]> {
-  if (opts.limit < 1) return [];
+export async function listLabelTopics(db: Queryable, limit = 80): Promise<SeedTopic[]> {
   const { rows } = await db.query<Record<string, unknown>>(
     `SELECT t.id, t.title, t.scope, t.term, t.status, t.weighted_score
        FROM explainers.topics t
       WHERE t.status <> 'archived'
-        AND NOT EXISTS (
-              SELECT 1 FROM real_case.topic_scouts s
-               WHERE s.topic_id = t.id
-                 AND s.outcome <> 'failed'
-                 AND s.scouted_at > $2::timestamptz - make_interval(days => $3::int))
       ORDER BY t.weighted_score DESC NULLS LAST, t.created_at ASC
       LIMIT $1`,
-    [opts.limit, (opts.now ?? new Date()).toISOString(), opts.cooldownDays],
+    [limit],
   );
   return rows.map((r) => ({ ...(r as unknown as SeedTopic), weighted_score: num(r.weighted_score) }));
 }
@@ -117,11 +121,12 @@ export async function finishCycle(
   );
 }
 
-export async function startScout(db: Queryable, topic: Pick<SeedTopic, 'id' | 'title'>, cycleId: string | null): Promise<string> {
+/** A search's row: `topic` is null for a news search (RC-27); its label is then "News search". */
+export async function startScout(db: Queryable, topic: Pick<SeedTopic, 'id' | 'title'> | null, cycleId: string | null): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
     `INSERT INTO real_case.topic_scouts (topic_id, topic_title, cycle_id, outcome)
      VALUES ($1, $2, $3, 'running') RETURNING id`,
-    [topic.id, topic.title, cycleId],
+    [topic?.id ?? null, topic?.title ?? NEWS_SEARCH_LABEL, cycleId],
   );
   return rows[0].id;
 }
@@ -137,9 +142,11 @@ export async function finishScout(
   );
 }
 
+export const NEWS_SEARCH_LABEL = 'News search';
+
 export type ScoutRow = {
   id: string;
-  topic_id: string;
+  topic_id: string | null;
   topic_title: string;
   outcome: ScoutOutcome;
   stories_found: number;
@@ -148,40 +155,39 @@ export type ScoutRow = {
   scouted_at: string;
 };
 
-/** Each topic's latest search, newest first (the lab page's weak and failed topics). */
+/** The latest searches, newest first (the lab page). */
 export async function listLatestScouts(db: Queryable, limit = 100): Promise<ScoutRow[]> {
   const { rows } = await db.query<Record<string, unknown>>(
-    `SELECT DISTINCT ON (topic_id) id, topic_id, topic_title, outcome, stories_found, best_score, error, scouted_at
+    `SELECT id, topic_id, topic_title, outcome, stories_found, best_score, error, scouted_at
        FROM real_case.topic_scouts
-      ORDER BY topic_id, scouted_at DESC`,
+      ORDER BY scouted_at DESC
+      LIMIT $1`,
+    [limit],
   );
-  return rows
-    .map((r) => ({ ...(r as unknown as ScoutRow), best_score: num(r.best_score), scouted_at: iso(r.scouted_at)! }))
-    .sort((a, b) => b.scouted_at.localeCompare(a.scouted_at))
-    .slice(0, limit);
+  return rows.map((r) => ({ ...(r as unknown as ScoutRow), best_score: num(r.best_score), scouted_at: iso(r.scouted_at)! }));
 }
 
 // ── Stories ─────────────────────────────────────────────────────────────────
 
 export type NewStory = {
-  topicId: string;
+  topicId: string | null;
   scoutId: string | null;
   cycleId: string | null;
   term: string;
   title: string;
   summary: string;
   polarity: Polarity;
-  story: StoryBeats;
+  story: NewsStory;
   claims: StoryClaim[];
   sources: StorySource[];
 };
 
 export async function addStory(db: Queryable, s: NewStory): Promise<StoryRow> {
   const { rows } = await db.query<Record<string, unknown>>(
-    `INSERT INTO real_case.stories (topic_id, scout_id, cycle_id, term, title, summary, polarity, story, claims, sources)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb)
+    `INSERT INTO real_case.stories (topic_id, scout_id, cycle_id, term, title, summary, polarity, story, claims, sources, event_date)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::date)
      RETURNING *`,
-    [s.topicId, s.scoutId, s.cycleId, s.term.trim(), s.title.trim(), s.summary, s.polarity, JSON.stringify(s.story), JSON.stringify(s.claims), JSON.stringify(s.sources)],
+    [s.topicId, s.scoutId, s.cycleId, s.term.trim(), s.title.trim(), s.summary, s.polarity, JSON.stringify(s.story), JSON.stringify(s.claims), JSON.stringify(s.sources), s.story.event_date],
   );
   return storyRow(rows[0]);
 }
@@ -227,6 +233,14 @@ export async function saveStoryCheck(db: Queryable, id: string, check: StoryChec
   return rows[0].status;
 }
 
+/** Replace a story's act material (the facts-only rebuild), noting why in jev_notes. */
+export async function saveStoryMaterial(db: Queryable, id: string, story: NewsStory, note: Record<string, unknown>): Promise<void> {
+  await db.query(
+    `UPDATE real_case.stories SET story = $2::jsonb, jev_notes = jev_notes || $3::jsonb, updated_at = now() WHERE id = $1`,
+    [id, JSON.stringify(story), JSON.stringify(note)],
+  );
+}
+
 export async function saveStoryScores(
   db: Queryable,
   id: string,
@@ -236,11 +250,10 @@ export async function saveStoryScores(
 ): Promise<void> {
   await db.query(
     `UPDATE real_case.stories
-        SET recognition = $2, tension = $3, illumination = $4, mechanism_fit = $5, tellable = $6,
-            weighted_score = $7, scored_at = now(), updated_at = now(),
-            jev_notes = jev_notes || $8::jsonb
+        SET scores = $2::jsonb, weighted_score = $3, scored_at = now(), updated_at = now(),
+            jev_notes = jev_notes || $4::jsonb
       WHERE id = $1`,
-    [id, scores.recognition, scores.tension, scores.illumination, scores.mechanism_fit, scores.tellable, total, JSON.stringify(notes)],
+    [id, JSON.stringify(scores), total, JSON.stringify(notes)],
   );
 }
 
@@ -260,13 +273,34 @@ export async function setStoryStatus(
 }
 
 /**
- * Keep the best `poolSize` pool stories (total, then the tie-breaks); the rest are displaced. A story
- * named in `keep` is never cut. Returns the ids displaced.
+ * Retire pool stories whose event is older than the news window, or that have no event date (the
+ * first build's stories, RC-26): they move to `archived`. Returns the ids retired.
  */
-export async function trimStoryPool(db: Queryable, poolSize: number, keep: string | null = null): Promise<string[]> {
+export async function expireOldStories(db: Queryable, windowDays: number, now: Date = new Date()): Promise<string[]> {
+  const { rows } = await db.query<{ id: string }>(
+    `UPDATE real_case.stories
+        SET status = 'archived', reject_reason = 'Older than the news window.', updated_at = now()
+      WHERE status = 'pool'
+        AND (event_date IS NULL OR event_date < ($1::timestamptz - make_interval(days => $2::int))::date)
+      RETURNING id`,
+    [now.toISOString(), windowDays],
+  );
+  return rows.map((r) => r.id);
+}
+
+/**
+ * Keep the best `poolSize` pool stories (total with today's freshness, then the tie-breaks); the rest
+ * are displaced. A story named in `keep` is never cut. Returns the ids displaced.
+ */
+export async function trimStoryPool(
+  db: Queryable,
+  poolSize: number,
+  keep: string | null = null,
+  fresh: { windowDays: number; now?: Date } = { windowDays: 90 },
+): Promise<string[]> {
   const pool = await listStories(db, ['pool'], 10_000);
   const ranked = pool
-    .map((row) => ({ row, scores: storyScores(row) }))
+    .map((row) => ({ row, scores: storyScores(row, fresh) }))
     .sort((a, b) => {
       if (a.row.id === keep) return -1;
       if (b.row.id === keep) return 1;
@@ -282,6 +316,21 @@ export async function trimStoryPool(db: Queryable, poolSize: number, keep: strin
     );
   }
   return cut;
+}
+
+/**
+ * Events the scout already found inside the news window, whatever became of them (pooled, made,
+ * rejected), newest first: the scout skips them, so a search pays only for new events.
+ */
+export async function listKnownEvents(db: Queryable, windowDays: number, now: Date = new Date(), limit = 60): Promise<{ title: string; event_date: string | null }[]> {
+  const { rows } = await db.query<Record<string, unknown>>(
+    `SELECT title, event_date::text AS event_date FROM real_case.stories
+      WHERE event_date IS NOT NULL AND event_date >= ($1::timestamptz - make_interval(days => $2::int))::date
+      ORDER BY event_date DESC, created_at DESC
+      LIMIT $3`,
+    [now.toISOString(), windowDays, limit],
+  );
+  return rows.map((r) => ({ title: String(r.title), event_date: day(r.event_date) }));
 }
 
 /** Stories made into reels inside the lookback, for the duplicate check. */
@@ -303,7 +352,7 @@ export type RealCaseCostInput = {
   jobId?: string | null;
   storyId?: string | null;
   mode: Mode;
-  vendor: 'anthropic' | 'heygen' | 'jev';
+  vendor: 'anthropic' | 'heygen' | 'jev' | 'openai';
   component: string;
   inputTokens?: number;
   outputTokens?: number;

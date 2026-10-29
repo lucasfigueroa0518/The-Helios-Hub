@@ -30,18 +30,24 @@ export const OPENERS = [
     key: 'paper-rip',
     name: 'Paper Rip',
     voiceAt: 0.4,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.breakAt + 0.25,
     timing: () => ({ breakAt: 0.4 }),
   },
   {
     key: 'record-scratch',
     name: 'Record Scratch Freeze',
     voiceAt: 1.0,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.unfreezeAt + 0.15,
     timing: (voice, words) => ({ breakAt: 0.7, unfreezeAt: r3(1.0 + thisAt(words)) }),
   },
   {
     key: 'typewriter',
     name: 'Typewriter',
     voiceAt: 0,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.zipEnd,
     timing: () => {
       const keys = beats(12, 0.06, 0.072);
       const ding = r3(keys[keys.length - 1] + 0.1);
@@ -52,30 +58,40 @@ export const OPENERS = [
     key: 'big-bang',
     name: 'Big Bang',
     voiceAt: 0.6,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.breakAt + 1.1,
     timing: () => ({ breakAt: 0.6 }),
   },
   {
     key: 'knock-knock',
     name: 'Knock Knock',
     voiceAt: 0.62,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.duck[1] + 0.1,
     timing: () => ({ breakAt: 0.32, knocks: [0.32, 0.52], point: 0.66, writeAt: [0.68, 1.15], duck: [1.18, 1.42] }),
   },
   {
     key: 'eye-zoom',
     name: 'Eye Zoom-Out',
     voiceAt: 0.5,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.landAt + 1.15,
     timing: () => ({ breakAt: 0.5, blink: [0.34, 0.46], zoom: [0.5, 0.92], landAt: 0.92 }),
   },
   {
     key: 'balloon-pop',
     name: 'Balloon Pop',
     voiceAt: 0.72,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.breakAt + 0.25,
     timing: () => ({ breakAt: 0.72, gulps: [[0, 0.22, 0.45], [0.24, 0.44, 0.75], [0.46, 0.68, 1.12]] }),
   },
   {
     key: 'block-drop',
     name: 'Block Drop',
     voiceAt: 0,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.breakAt + 0.3,
     timing: () => {
       const lands = beats(12, 0.1, 0.085);
       const last = lands[lands.length - 1];
@@ -87,18 +103,24 @@ export const OPENERS = [
     key: 'unboxing',
     name: 'Unboxing',
     voiceAt: 0.48,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.dive[1],
     timing: () => ({ breakAt: 0.48, cut: [0.1, 0.42], open: [0.48, 0.66], short: [0.56, 0.76], dive: [0.82, 1.22] }),
   },
   {
     key: 'paper-plane',
     name: 'Paper Plane',
     voiceAt: 0.46,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.peel[0] + 0.2,
     timing: () => ({ breakAt: 0.46, unfold: [0.74, 0.98], peel: [1.42, 1.8] }),
   },
   {
     key: 'scissors',
     name: 'Scissors Cut-Out',
     voiceAt: 0.08,
+    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
+    title: (m) => m.drop[1] - 0.1,
     timing: () => ({ breakAt: 0.86, snips: beats(8, 0.1, 0.095), lift: [0.86, 1.0], fall: [0.92, 1.3], drop: [1.02, 1.42] }),
   },
 ];
@@ -116,15 +138,51 @@ export const OBJECT_HERO_OPENERS = ['paper-rip', 'typewriter', 'big-bang', 'ball
 export const openerByKey = (key) => OPENERS.find((o) => o.key === key) ?? null;
 
 /**
- * The full timing of opener `key` for a line of `voice` seconds: every moment from its
- * timing(), plus `voiceAt`, `voice` (the line's length), and `duration` (frame 1's length, as
- * pace.mjs makes it: the lead, the line, the hold).
+ * When each opener uncovers the hook for good, in seconds from frame 1's start (Explainers 4.1,
+ * round 2): the opener over a hook that paints the whole frame, rendered in headless Chrome every
+ * 0.1s; the first moment from which at least 60% of the safe area shows the hook to the end of the
+ * frame (an opener may flash the hook first and cover it again: record-scratch, paper-plane).
+ * Measured 2026-10-27 with a 3.8s opener line (the openers' choreography before the line does not
+ * depend on it). The hook's own first change is judged from here, and the picture check's first
+ * frame-1 still waits for it (snap.mjs sequences). Re-measure when an opener's timing changes.
  */
-/** @returns {{ key: string, voiceAt: number, voice: number, duration: number, breakAt: number, [moment: string]: any }} */
+export const HOOK_REVEAL = Object.freeze({
+  'paper-rip': 0.5,
+  'record-scratch': 2.4,
+  typewriter: 1.3,
+  'big-bang': 0.7,
+  'knock-knock': 1.4,
+  'eye-zoom': 0.5,
+  'balloon-pop': 0.8,
+  'block-drop': 1.6,
+  unboxing: 0.6,
+  'paper-plane': 1.7,
+  scissors: 1.3,
+});
+
+/**
+ * The hero's kind from STORYBOARD.md's `## Anchor scene` (`- hero: <entity id> — critter | object`,
+ * EX3-128): 'object' in an object-led reel, else 'critter' (a storyboard without one: critter).
+ * The same reading as lib/explainers/render/job.ts storyboardHero.
+ */
+export function storyboardHeroKind(storyboard) {
+  const m = /^\s*-?\s*hero:.*?\b(critter|object)\b[^\n]*$/im.exec(String(storyboard ?? ''));
+  return m?.[1]?.toLowerCase() === 'object' ? 'object' : 'critter';
+}
+
+/**
+ * The full timing of opener `key` for a line of `voice` seconds: every moment from its
+ * timing(), plus `voiceAt`, `voice` (the line's length), `duration` (frame 1's length, as
+ * pace.mjs makes it: the lead, the line, the hold) and `titleAt` (when the title card with the
+ * term starts, after the break; it lands cards.js TITLE_LANDS later).
+ */
+/** @returns {{ key: string, voiceAt: number, voice: number, duration: number, breakAt: number, titleAt: number, [moment: string]: any }} */
 export function openerTiming(key, voice, words = []) {
   const o = openerByKey(key);
   if (!o) throw new Error(`no opener "${key}" in the bank (${OPENER_KEYS.join(', ')})`);
-  return { key, voiceAt: o.voiceAt, voice: r3(voice), duration: r3(o.voiceAt + voice + HOLD), ...o.timing(voice, words) };
+  const M = { key, voiceAt: o.voiceAt, voice: r3(voice), duration: r3(o.voiceAt + voice + HOLD), ...o.timing(voice, words) };
+  // every opener ends on the title card with the term (EX3-102): `titleAt` is when it starts
+  return { ...M, titleAt: r3(o.title(M)) };
 }
 
 /**

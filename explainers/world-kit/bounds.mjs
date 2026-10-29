@@ -6,7 +6,9 @@
 //
 // It reports text cut off by the frame edge, text crossing the shape it belongs in (textBox()),
 // and readable text in the keep-outs (the caption band y < 570, the bottom y > 1600, the right
-// edge x > 940), except the cards that live there (the title and dictionary cards). The 3.2
+// edge x > 940), except the cards that live there (the title and dictionary cards). Set text (a
+// room's sign, inside [data-set]: lens.js set() and every ROOM piece render() draws) is
+// background: it may sit in the band or leave the frame on a close shot, but not cover the focal. The 3.2
 // fine-tuning reel's "happy to help!" ran out of its bubble and off the screen, and the picture
 // check never photographed it; this looks at every moment. Frame 1 from the opener bank
 // (EX3-102) is skipped: code drew it, and its letters leave the frame on purpose.
@@ -16,7 +18,11 @@
 // the repo's playwright-core. Without a driver or a Chrome, it prints
 // { ok: true, skipped } and exits 0: the check is a guard, never a blocker of the build.
 //
-// Prints JSON { ok, errors[], checked, skipped? } and exits 1 on any error.
+// Prints JSON { ok, errors[], checked, skipped? } and exits 1 on any error, so the builder's one fix
+// round sees it (Explainers 4.2, fail open: the job turns what is left into warnings and renders
+// anyway). With errors it also prints `problems: [{ frame, check, rule, message }]`, one per error
+// (check `bounds`, rule `breakage:bounds`; `load` for a frame module that does not load), as
+// try.mjs does.
 
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -43,15 +49,31 @@ const H = 1920;
 
 /**
  * The problems with the text measured at one moment. `items`: [{ label, role, rect: [l, t, r, b],
- * box: [l, t, r, b] | null }] in screen px. Text entirely outside the frame is out of the
- * camera's view, not a problem.
+ * box: [l, t, r, b] | null, set? }] in screen px, plus the focal's box as { focal: true, rect }.
+ * Text entirely outside the frame is out of the camera's view, not a problem. Set text (inside
+ * [data-set]: the room's signs, lens.js set(), every ROOM piece) is background: only covering the
+ * focal or other readable text is a problem for it.
  */
 export function textProblems(items) {
   const out = [];
-  for (const { label, role, rect, box } of items) {
+  const focals = items.filter((it) => it.focal).map((it) => it.rect);
+  const texts = items.filter((it) => !it.focal);
+  const overlap = (a, b) => Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])) * Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+  for (const { label, role, rect, box, set } of texts) {
     const [l, t, r, b] = rect;
     if (r <= 0 || l >= W || b <= 0 || t >= H) continue;
     const name = `"${label || 'text'}"`;
+    if (set) {
+      // set text (a sign or label of the room, [data-set]): background, so it may sit in the
+      // caption band or run off the frame on a closer shot; it may not cover what the viewer reads
+      const area = Math.max(1, (r - l) * (b - t));
+      if (focals.some((f) => overlap(rect, f) / area >= IN_KEEP_OUT)) out.push(`${name} (set text) covers the focal`);
+      for (const o of texts) {
+        if (o.set || o.rect === rect) continue;
+        if (overlap(rect, o.rect) / area >= IN_KEEP_OUT) out.push(`${name} (set text) covers "${o.label || 'text'}"`);
+      }
+      continue;
+    }
     if (l < -SLACK || t < -SLACK || r > W + SLACK || b > H + SLACK) out.push(`${name} is cut off by the frame edge`);
     if (box && (l < box[0] - SLACK || t < box[1] - SLACK || r > box[2] + SLACK || b > box[3] + SLACK)) out.push(`${name} runs outside its box (use textBox(); never place text in a shape by hand)`);
     if (!EXEMPT_ROLES.has(role)) {
@@ -102,7 +124,12 @@ function measure(svgs) {
         role: el.closest('[data-role]')?.getAttribute('data-role') ?? null,
         rect: [r.left, r.top, r.right, r.bottom],
         box: b ? [b.left, b.top, b.right, b.bottom] : null,
+        set: !!el.closest('[data-set]') && !el.closest('[data-k="focus"]'),
       });
+    }
+    for (const f of host.querySelectorAll('[data-k="focus"]')) {
+      const r = f.getBoundingClientRect();
+      if (r.width >= 1 && r.height >= 1) items.push({ focal: true, rect: [r.left, r.top, r.right, r.bottom] });
     }
     return items;
   });
@@ -112,7 +139,7 @@ function measure(svgs) {
  * A browser driver: puppeteer-core from the project's node_modules (HyperFrames' own runtime),
  * else playwright-core (the repo's). Returns { launch(executablePath) → { page(), close() } }.
  */
-async function driver() {
+export async function driver() {
   const bases = [process.env.HELIOS_NODE_MODULES, join(process.cwd(), 'node_modules'), dirname(fileURLToPath(import.meta.url))].filter(Boolean);
   const load = (name) => {
     for (const base of bases) {
@@ -179,7 +206,11 @@ export function findChrome() {
   return null;
 }
 
-/** Check the frames of the project at `root` (or only `only`). */
+/**
+ * Check the frames of the project at `root` (or only `only`).
+ * @param {string} root @param {string | null} [only]
+ * @returns {Promise<{ ok: boolean, errors: string[], checked: number, skipped?: string, problems?: Array<{ frame: string, check: string, rule: string, message: string }> }>}
+ */
 export async function checkBounds(root, only = null) {
   const drv = await driver();
   if (!drv) return { ok: true, errors: [], checked: 0, skipped: 'no browser driver (puppeteer-core or playwright-core) is installed' };
@@ -189,7 +220,7 @@ export async function checkBounds(root, only = null) {
   mkdirSync(dirname(page_), { recursive: true });
   writeFileSync(page_, `<!doctype html><html><head><meta charset="utf-8"><style>${FONTS.replaceAll('url("assets/', 'url("../assets/')} html,body{margin:0;background:#fff}#w{position:absolute;left:0;top:0;width:${W}px;height:${H}px}</style></head><body><div id="w"></div></body></html>`);
   const browser = await drv.launch(executablePath);
-  const errors = [];
+  const problems = [];
   let checked = 0;
   try {
     const page = await browser.page();
@@ -205,7 +236,7 @@ export async function checkBounds(root, only = null) {
       try {
         scene = (await import(`${pathToFileURL(file).href}?bounds`)).default;
       } catch (e) {
-        errors.push(`${f.id}: failed to load: ${e?.message ?? e}`);
+        problems.push(problemOf(f.id, 'load', `failed to load: ${e?.message ?? e}`));
         continue;
       }
       const times = [...Array.from({ length: Math.floor(f.duration / STEP) + 1 }, (_, i) => Math.min(i * STEP, f.duration - 1 / 30))];
@@ -224,12 +255,18 @@ export async function checkBounds(root, only = null) {
         measured.forEach((items, k) => moments.push({ t: batch[k], problems: textProblems(items) }));
         checked += batch.length;
       }
-      errors.push(...summarize(moments).map((e) => `${f.id}: ${e}`));
+      problems.push(...summarize(moments).map((e) => problemOf(f.id, 'bounds', e)));
     }
   } finally {
     await browser.close();
   }
-  return { ok: errors.length === 0, errors, checked };
+  const errors = problems.map((p) => `${p.frame}: ${p.message}`);
+  return { ok: errors.length === 0, errors, checked, ...(problems.length ? { problems } : {}) };
+}
+
+/** A problem as the job reads it (E: a warning row per problem left after the fix round). */
+function problemOf(frame, check, message) {
+  return { frame, check, rule: `breakage:${check}`, message };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

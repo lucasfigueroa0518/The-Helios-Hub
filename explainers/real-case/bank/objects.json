@@ -1,0 +1,102 @@
+{
+ "objects": [
+  {
+   "slug": "padlock",
+   "kind": "cutout",
+   "name": "padlock",
+   "width": 496,
+   "height": 766,
+   "credit": "Made for Helios",
+   "license": "generated",
+   "source": "gpt-image-2",
+   "approved": true,
+   "file": "explainers/real-case/bank/objects/cutout/padlock/padlock.png",
+   "strokes": null,
+   "created_at": "2026-10-27T03:01:22.406Z"
+  },
+  {
+   "slug": "paper-map",
+   "kind": "cutout",
+   "name": "paper map",
+   "width": 763,
+   "height": 643,
+   "credit": "Made for Helios",
+   "license": "generated",
+   "source": "gpt-image-2",
+   "approved": true,
+   "file": "explainers/real-case/bank/objects/cutout/paper-map/paper-map.png",
+   "strokes": null,
+   "created_at": "2026-10-27T03:01:55.849Z"
+  },
+  {
+   "slug": "smartphone",
+   "kind": "cutout",
+   "name": "smartphone",
+   "width": 376,
+   "height": 774,
+   "credit": "Made for Helios",
+   "license": "generated",
+   "source": "gpt-image-2",
+   "approved": true,
+   "file": "explainers/real-case/bank/objects/cutout/smartphone/smartphone.png",
+   "strokes": null,
+   "created_at": "2026-10-27T03:00:52.676Z"
+  },
+  {
+   "slug": "padlock",
+   "kind": "drawing",
+   "name": "padlock",
+   "width": 900,
+   "height": 900,
+   "credit": "Drawn for Helios",
+   "license": "generated",
+   "source": "gpt-image-2",
+   "approved": true,
+   "file": "explainers/real-case/bank/objects/drawing/padlock/padlock.png",
+   "strokes": "explainers/real-case/bank/objects/drawing/padlock/padlock.strokes.json",
+   "created_at": "2026-10-27T02:50:32.697Z"
+  },
+  {
+   "slug": "paper-map",
+   "kind": "drawing",
+   "name": "paper map",
+   "width": 900,
+   "height": 900,
+   "credit": "Drawn for Helios",
+   "license": "generated",
+   "source": "gpt-image-2",
+   "approved": true,
+   "file": "explainers/real-case/bank/objects/drawing/paper-map/paper-map.png",
+   "strokes": "explainers/real-case/bank/objects/drawing/paper-map/paper-map.strokes.json",
+   "created_at": "2026-10-27T02:51:24.203Z"
+  },
+  {
+   "slug": "smartphone",
+   "kind": "drawing",
+   "name": "smartphone",
+   "width": 900,
+   "height": 900,
+   "credit": "Drawn for Helios",
+   "license": "generated",
+   "source": "gpt-image-2",
+   "approved": true,
+   "file": "explainers/real-case/bank/objects/drawing/smartphone/smartphone.png",
+   "strokes": "explainers/real-case/bank/objects/drawing/smartphone/smartphone.strokes.json",
+   "created_at": "2026-10-27T02:49:43.065Z"
+  },
+  {
+   "slug": "jensen-huang",
+   "kind": "person-sketch",
+   "name": "Jensen Huang",
+   "width": 900,
+   "height": 900,
+   "credit": "Drawn for Helios",
+   "license": "generated",
+   "source": "gpt-image-2",
+   "approved": false,
+   "file": "explainers/real-case/bank/objects/person-sketch/jensen-huang/jensen-huang.png",
+   "strokes": "explainers/real-case/bank/objects/person-sketch/jensen-huang/jensen-huang.strokes.json",
+   "created_at": "2026-10-27T02:51:54.168Z"
+  }
+ ]
+}

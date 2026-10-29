@@ -266,7 +266,15 @@ INSERT INTO explainers.settings (key, value) VALUES
     ('voice_name',           '"Lucas Figueroa"'::jsonb),
     ('voice_id',             'null'::jsonb),
     ('orchestrator_model',   '"claude-sonnet-5-5"'::jsonb),
+    ('build_runner',         '"code"'::jsonb),  -- cost fix 1 (2026-10-28): 'agent' brings back the orchestrator session
     ('frame_worker_model',   '"claude-sonnet-5-5"'::jsonb),
+    -- Explainers 4.2: Opus for the director (Session A and its fix) and the scene builder; Sonnet for
+    -- every frame builder (frame_worker_model) and the readers; Haiku for the picture check's grids.
+    ('director_model',       '"claude-opus-5-5"'::jsonb),
+    ('scene_builder_model',  '"claude-opus-5-5"'::jsonb),
+    ('tech_frame_worker_model', '"claude-opus-5-5"'::jsonb),  -- look: mechanism builders (2026-10-28)
+    ('picture_check_model',  '"claude-haiku-5-5"'::jsonb),  -- one vision call over contact grids (2026-10-28)
+    ('reader_model',         '"claude-sonnet-5-5"'::jsonb),
     ('idea_model',           '"claude-sonnet-5-5"'::jsonb),
     ('analogy_model',        '"claude-opus-5-5"'::jsonb),
     ('music_enabled',        'true'::jsonb),
@@ -592,3 +600,7 @@ ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS term text;
 -- ── Explainers 3.4 (EX3-102): the opener each reel drew from the bank ────────────
 -- explainers/world-kit/openers/bank.js; the next reel never repeats one of the last 8 (HISTORY).
 ALTER TABLE explainers.jobs ADD COLUMN IF NOT EXISTS opener text;
+
+-- ── Explainers 4.3: the hand-off template each reel drew (frame 3) ──────────────────────────
+-- explainers/world-kit/handoff-bank.js; the next reel never repeats one of the last 4 (HANDOFF_HISTORY).
+ALTER TABLE explainers.jobs ADD COLUMN IF NOT EXISTS handoff text;

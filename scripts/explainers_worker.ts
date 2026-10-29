@@ -61,6 +61,7 @@ async function main(): Promise<void> {
   const { explainersDb } = await import('@/lib/explainers/connection');
   const { claimNextJob, failStaleRunningJobs, nyDate } = await import('@/lib/explainers/repository');
   const { runRenderJob } = await import('@/lib/explainers/render/job');
+  const { anthropicPictureVision } = await import('@/lib/explainers/render/picture');
   const { loadAgentQuery } = await import('@/lib/explainers/render/agent');
   const { artifactStoreFromEnv, signArtifact } = await import('@/lib/explainers/storage');
   const { IDEA_CYCLE_HOUR_NY, EXPLAINERS_INSIGHTS_HOUR_NY, EXPLAINERS_INSIGHTS_MINUTE_NY } = await import('@/lib/explainers/publish/config');
@@ -109,8 +110,13 @@ async function main(): Promise<void> {
     // v4 captions: the build-line fit (Jev) and the explainer closings log (social captions redesign).
     const buildFit = liveExplainerBuildFit();
     const closings = closingsLog((text, params) => db.query(text, params), 'explainer');
+    // Explainers 4.2: the understanding test's two readers and its diagnosis run as Agent SDK sessions
+    // (agents `reader` and `diagnoser`, reader_model, Read only); direct calls were refused live.
+    const understanding = 'agent' as const;
+    // The picture check: one vision call over contact grids (falls back to the agent session on error).
+    const pictureVision = anthropicPictureVision(anthropic);
     const outcome = await runRenderJob(
-      { db, query, store, jobsRoot, secrets, analogy, buildFit, closings, log: (event, fields) => log(event, fields) },
+      { db, query, store, jobsRoot, secrets, analogy, understanding, pictureVision, buildFit, closings, log: (event, fields) => log(event, fields) },
       job,
     );
     log('job_finished', { jobId: job.id, ...outcome });

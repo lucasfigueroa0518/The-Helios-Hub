@@ -1,0 +1,36 @@
+[
+ {
+  "t": 0,
+  "kind": "foley",
+  "what": "marker cap"
+ },
+ {
+  "t": 0.2,
+  "kind": "foley",
+  "what": "marker writing whiteboard",
+  "dur": 0.5
+ },
+ {
+  "t": 0.6,
+  "kind": "foley",
+  "what": "marker writing whiteboard",
+  "dur": 1.2
+ },
+ {
+  "t": 1.9,
+  "kind": "foley",
+  "what": "marker writing whiteboard",
+  "dur": 0.6
+ },
+ {
+  "t": 2.5,
+  "kind": "foley",
+  "what": "marker writing whiteboard",
+  "dur": 1.0
+ },
+ {
+  "t": 3.6,
+  "kind": "foley",
+  "what": "pen cap"
+ }
+]

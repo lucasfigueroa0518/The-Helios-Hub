@@ -2,7 +2,8 @@
 // No DOM and no imports, so it runs in the browser and in Node tests alike.
 //
 //   palette tokens and their 4-step ramps (V-T1, still 06) · the grounds (paper studio sweep,
-//   the premium stage, white) · the one light · the critter ruler (CRITTER_CM, PX_PER_CM) ·
+//   the premium stage, white) · the one light · the critter ruler (CRITTER_CM, PX_PER_CM) and the
+//   cheated scale (CHEAT, propScale; 4.2) ·
 //   polarity curves (V-8) · speed ramps (V-9) · the calm camera (V-7, X-20) · the state ledger
 //   (V-1) · seeded randomness · the isometric projection (V-2)
 //
@@ -16,45 +17,51 @@ export const FRAME = { w: 1080, h: 1920, safe: { x0: 96, x1: 940, y0: 570, y1: 1
 // Every color is a ramp: lit, base, shade, dark (OKLCH: lit +0.07 L, shade −0.07 L, dark −0.19 L;
 // warmer in the light, cooler in the shade). Orange stays the hero's.
 export const TOKENS = {
-  paper: '#F3F0EA',
-  'paper-lit': '#FBFAF6',
-  'paper-shade': '#E2DACB',
-  'paper-dark': '#CFC5B3',
+  paper: '#F4EFE7',
+  'paper-lit': '#FEF9F3',
+  'paper-shade': '#DCD5C9',
+  'paper-dark': '#CAC1B3',
   /** The studio sweep's low end (the paper ground, hx-4). */
   'paper-sweep': '#EFE9DF',
   canvas: '#FFFFFF',
-  ink: '#171717',
-  'ink-lit': '#2B2926',
-  'ink-shade': '#0C0C0C',
-  'ink-dark': '#040404',
+  ink: '#1F1915',
+  'ink-lit': '#322D29',
+  'ink-shade': '#150E08',
+  'ink-dark': '#0B0401',
   'text-secondary': '#525252',
   'text-tertiary': '#737373',
   orange: '#FF5E1A',
-  'orange-lit': '#FF7A3D',
-  'orange-shade': '#E8541C',
-  'orange-dark': '#C8430F',
+  'orange-lit': '#FF9462',
+  'orange-shade': '#E24213',
+  'orange-dark': '#A02B02',
   'orange-text': '#CC4E19',
   green: '#138510',
-  'green-lit': '#479830',
-  'green-shade': '#096E07',
-  'green-dark': '#004800',
+  'green-lit': '#5D9831',
+  'green-shade': '#036A29',
+  'green-dark': '#013D1F',
   // The four colors the brand already owns (still 06): sun yellow, royal blue, reels teal, stories lilac.
-  yellow: '#FDC60F',
-  'yellow-lit': '#FEDE78',
-  'yellow-shade': '#ECA811',
-  'yellow-dark': '#C47910',
-  blue: '#4169E1',
-  'blue-lit': '#4E88F1',
-  'blue-shade': '#3753CB',
-  'blue-dark': '#2B329F',
-  teal: '#14B8C4',
-  'teal-lit': '#4ACFD2',
-  'teal-shade': '#009EAE',
-  'teal-dark': '#0A7788',
-  lilac: '#C377E0',
-  'lilac-lit': '#D992E9',
-  'lilac-shade': '#A662CC',
-  'lilac-dark': '#7947A6',
+  yellow: '#F1C45E',
+  'yellow-lit': '#FFDFB2',
+  'yellow-shade': '#CFAE45',
+  'yellow-dark': '#99862B',
+  blue: '#5A98CB',
+  'blue-lit': '#82AFDF',
+  'blue-shade': '#3E81AF',
+  'blue-dark': '#17597B',
+  teal: '#57AFAF',
+  'teal-lit': '#80C7BF',
+  'teal-shade': '#3D959B',
+  'teal-dark': '#1D6972',
+  lilac: '#A482BE',
+  'lilac-lit': '#BF9BCE',
+  'lilac-shade': '#886BA6',
+  'lilac-dark': '#5B4778',
+  // Red (4.1), from the status-error / stage-red family: for the things that are red in the real
+  // place (a tomato, a fire extinguisher, a stop sign), never a ground and never the hero's accent.
+  red: '#CA5551',
+  'red-lit': '#DB7867',
+  'red-shade': '#AD3D42',
+  'red-dark': '#771929',
   night: '#171717',
   // The Helios premium stage (premium.css): charcoal under a warm glow, a red bloom low.
   'stage-top': '#161616',
@@ -75,7 +82,7 @@ export const TOKENS = {
 };
 
 /** The palette colors that have a 4-step ramp, by name. */
-export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac'];
+export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac', 'red'];
 
 /** A palette color's ramp: { lit, base, shade, dark }. */
 export function ramp(name) {
@@ -96,6 +103,41 @@ export function mixHex(a, b, t) {
     const l = toLin(v / 255) * (1 - k) + toLin(B[i] / 255) * k;
     return Math.round(Math.min(1, Math.max(0, toGam(l))) * 255).toString(16).padStart(2, '0');
   }).join('').toUpperCase();
+}
+
+/** Names a tone may also go by: `white` is the canvas (the outfits palette says white). */
+export const TONE_ALIASES = { white: 'canvas' };
+const HEX6 = /^#[0-9A-Fa-f]{6}$/;
+/** Every color name a tone may use: the ramp names, the palette tokens and the aliases. */
+export const toneNames = () => [...new Set([...PALETTE, ...Object.keys(TOKENS), ...Object.keys(TONE_ALIASES)])];
+
+/**
+ * The one tone resolver (4.1): what every lens/draw solid and every set piece is painted from.
+ * Accepts a ramp name ('teal', 'red'; returned as is, so the solid uses the palette's own ramp), a
+ * palette token ('ink-lit', 'green-shade', 'yellow-lit'; its hex), `{ mix: [a, b, k] }` of two
+ * tones (k = share of b, default 0.5; mixed in linear light, as hex) or a '#RRGGBB' hex already
+ * mixed from the palette. Anything else THROWS with the allowed names: a color that silently
+ * rendered white or paper was the 4.1 Phase 1 bug. set.js tone() is this, with paper for nothing.
+ * @param {string | { mix: [any, any, number?] }} v
+ * @returns {string} a PALETTE ramp name or a hex
+ */
+export function resolveTone(v) {
+  if (typeof v === 'string') {
+    if (PALETTE.includes(v)) return v;
+    const name = TONE_ALIASES[v] ?? v;
+    if (TOKENS[name]) return TOKENS[name];
+    if (HEX6.test(v)) return v.toUpperCase();
+  } else if (v && typeof v === 'object' && Array.isArray(v.mix)) {
+    const [a, b, k = 0.5] = v.mix;
+    return mixHex(toneHex(a), toneHex(b), k);
+  }
+  const shown = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
+  throw new Error(`HX: unknown color ${shown}. A tone is a palette name (${PALETTE.join(', ')}), a palette token (${Object.keys(TOKENS).filter((k) => !PALETTE.includes(k)).join(', ')}), { mix: [a, b, k] } or a palette hex.`);
+}
+/** A tone as one hex: a ramp name gives its base. */
+export function toneHex(v) {
+  const t = resolveTone(v);
+  return HEX6.test(t) ? t : TOKENS[t];
 }
 
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
@@ -150,6 +192,33 @@ export const CRITTER_CM = 72;
 export const CRITTER_PX = 142;
 /** Screen px per cm at scale 1. */
 export const PX_PER_CM = CRITTER_PX / CRITTER_CM;
+
+// ── Cheated scale (4.2) ───────────────────────────────────────────────────────────────────
+/** Scale is believable, not true (4.2, house style): things stay plausible next to each other, and
+ *  the props the action depends on are cheated bigger so they read on a phone. `scale: 'cheat'`
+ *  grows a prop until its longest side is at least `readCm` next to the 72 cm critter, at most
+ *  `max` times its real size, and never shrinks it. A number is the factor itself. */
+export const CHEAT = { readCm: 30, max: 3 };
+/**
+ * The factor a prop is drawn at: `scale` 'cheat' (CHEAT, from its real size `sizeCm`, a number or
+ * [w, d, h] in cm), a positive number (that factor), or nothing (1, its real size). Anything else
+ * throws, saying what it takes.
+ * @param {'cheat' | number | undefined | null} scale
+ * @param {number | number[]} [sizeCm]
+ */
+export function propScale(scale, sizeCm) {
+  if (scale === undefined || scale === null) return 1;
+  if (typeof scale === 'number') {
+    if (!(scale > 0 && Number.isFinite(scale))) throw new Error(`HX: a prop's scale is 'cheat' or a positive number (got ${scale})`);
+    return scale;
+  }
+  if (scale === 'cheat') {
+    const dims = (Array.isArray(sizeCm) ? sizeCm : [sizeCm]).filter((v) => typeof v === 'number' && v > 0);
+    if (!dims.length) throw new Error("HX: scale 'cheat' needs the prop's real size in cm (a number or [w, d, h])");
+    return Math.min(CHEAT.max, Math.max(1, CHEAT.readCm / Math.max(...dims)));
+  }
+  throw new Error(`HX: a prop's scale is 'cheat' or a positive number (got ${JSON.stringify(scale)})`);
+}
 
 // ── Polarity: the speed curve of a move (V-8) ─────────────────────────────────────────────
 function backOut(s, x) {
@@ -410,7 +479,8 @@ export const FPS_BOIL = 10;
 /** Smooth motion: returns t unchanged (it used to hold each pose for two frames). */
 export const onTwos = (t) => t;
 /** A constant seed (there is no boil any more). */
-export const boilSeed = () => 4;
+/** No boil in hx-4: the seed never changes (kept for old callers, which pass t). */
+export const boilSeed = (_t = 0) => 4;
 
 // ── The isometric projection (V-2) ────────────────────────────────────────────────────────
 export const ISO_COS = Math.cos(Math.PI / 6);

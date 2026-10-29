@@ -17,8 +17,31 @@
 // arguments, so a frame is a pure function of time (E2-06). Def ids are hashed from their content,
 // so a def drawn twice is the same def and ids never depend on draw order.
 
-import { getStroke } from 'https://cdn.jsdelivr.net/npm/perfect-freehand@1.2.3/+esm';
-import { TOKENS as T, GROUNDS, FRAME, rng, isoPlane, groundOf, mixHex } from './core.js';
+// perfect-freehand comes from the CDN in the browser. It is loaded lazily (4.1), so the kit also
+// imports in plain Node with no network and no loader hook (a scene builder measuring
+// ceilingShare / fitCeiling, a test): there the freehand marks fall back to a plain stroke outline.
+// try.mjs still stubs the URL for Node, so its checks see the same output as before.
+let getStroke = plainStroke;
+try {
+  ({ getStroke } = await import('https://cdn.jsdelivr.net/npm/perfect-freehand@1.2.3/+esm'));
+} catch {
+  getStroke = plainStroke;
+}
+/** A stroke outline with no pressure: each point offset by half the size on both sides. */
+function plainStroke(points, { size = 9 } = {}) {
+  if (!points?.length) return [];
+  const r = size / 2;
+  const side = (k) => points.map((p, i) => {
+    const a = points[Math.max(0, i - 1)];
+    const b = points[Math.min(points.length - 1, i + 1)];
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy) || 1;
+    return [p[0] - (k * dy * r) / l, p[1] + (k * dx * r) / l];
+  });
+  return [...side(1), ...side(-1).reverse()];
+}
+import { TOKENS as T, GROUNDS, FRAME, rng, isoPlane, groundOf, mixHex, resolveTone } from './core.js';
 import { HERSHEY_CAP, HERSHEY_SANS } from './hershey-sans.js';
 
 export { T };
@@ -358,28 +381,38 @@ export const TONES = {
   blue: rampTones('blue'),
   teal: rampTones('teal'),
   lilac: rampTones('lilac'),
+  red: rampTones('red'),
 };
 
 /**
- * Any tones value as named faces: a TONES entry, a palette name ('teal'), one hex (a ramp is
- * mixed from it), or an older [top, mid, dark] array (its lighter side tone goes on the lit
- * right face, so every box takes the one light).
+ * Any tones value as named faces: a TONES entry, a palette name ('teal'), a palette token
+ * ('ink-lit', 'green-shade'), `{ mix: [a, b, k] }`, one hex (a ramp is mixed from it), a
+ * { lit, base, shade, dark } ramp, or an older [top, mid, dark] array (its lighter side tone goes
+ * on the lit right face, so every box takes the one light). Names go through core resolveTone,
+ * the one resolver set.js tone() uses too: an unknown color THROWS with the allowed names (it
+ * used to fall back to paper and render white). Nothing given (undefined, null) is paper.
  */
 export function tonesOf(tones) {
+  if (tones === undefined || tones === null) return TONES.paper;
   if (tones && typeof tones === 'object' && tones.top && tones.left && tones.right) return tones;
   if (typeof tones === 'string' && TONES[tones]) return TONES[tones];
-  if (isHex(tones)) {
-    const lit = mixHex(tones, T.canvas, 0.22);
-    const shade = mixHex(tones, T.ink, 0.16);
-    return tonesFrom({ top: lit, left: shade, right: tones, lit, base: tones, shade, dark: mixHex(tones, T.ink, 0.4) });
-  }
   if (Array.isArray(tones) && tones.length >= 3) {
     const [top, a, b] = tones;
     const [right, left] = lum(a) >= lum(b) ? [a, b] : [b, a];
     const dark = isHex(left) ? mixHex(left, T.ink, 0.3) : left;
     return tonesFrom({ top, left, right, lit: top, base: right, shade: left, dark });
   }
-  return TONES.paper;
+  if (tones && typeof tones === 'object' && !Array.isArray(tones) && isHex(tones.base)) {
+    const { base } = tones;
+    const lit = tones.lit ?? mixHex(base, T.canvas, 0.22);
+    const shade = tones.shade ?? mixHex(base, T.ink, 0.16);
+    return tonesFrom({ top: lit, left: shade, right: base, lit, base, shade, dark: tones.dark ?? mixHex(base, T.ink, 0.4) });
+  }
+  const t = resolveTone(tones);
+  if (TONES[t]) return TONES[t];
+  const lit = mixHex(t, T.canvas, 0.22);
+  const shade = mixHex(t, T.ink, 0.16);
+  return tonesFrom({ top: lit, left: shade, right: t, lit, base: t, shade, dark: mixHex(t, T.ink, 0.4) });
 }
 
 /** A tint toward white (k 0..1), for hex colors; other paints pass through. */
@@ -450,9 +483,14 @@ export function isoBox(P, x, y, z, w, d, h, tones = TONES.paper, { radius = 6, g
   const silhouette = h > 0 ? [A, B, B0, C0, D0, D] : top;
   const clip = clipOf(el('path', { d: roundedPath(silhouette, r) }));
   // the face paints: the top lit toward the back right, the sides falling off toward the floor
-  const topG = lin([[0, lift(tn.top, DARK ? 0.12 : 0.3)], [1, tn.top]], 1, 0, 0.1, 1);
-  const leftBase = DARK ? sink(tn.left, T['stage-bottom'], 0.3) : tn.left;
-  const rightBase = DARK ? sink(tn.right, T['stage-orange'], 0.05) : tn.right;
+  // the top: lit toward the back right; on the stage the warm key catches it and the front sinks
+  const topG = DARK
+    ? lin([[0, sink(tn.top, T['stage-orange'], 0.05)], [1, sink(tn.top, T['stage-bottom'], 0.22)]], 1, 0, 0.1, 1)
+    : lin([[0, lift(tn.top, 0.3)], [1, tn.top]], 1, 0, 0.1, 1);
+  // on the stage the ambient is low: the face turned away sinks toward the charcoal, and the lit
+  // face takes a little of the warm key
+  const leftBase = DARK ? sink(tn.left, T['stage-bottom'], 0.45) : tn.left;
+  const rightBase = DARK ? sink(sink(tn.right, T['stage-bottom'], 0.14), T['stage-orange'], 0.06) : tn.right;
   const leftG = lin([[0, leftBase], [1, sink(leftBase, tn.dark, 0.55)]]);
   const rightG = lin([[0, lift(rightBase, 0.08)], [0.55, rightBase], [1, sink(rightBase, tn.shade, 0.6)]]);
   const inner = [];
@@ -469,8 +507,8 @@ export function isoBox(P, x, y, z, w, d, h, tones = TONES.paper, { radius = 6, g
   }
   // the rounded edges catch the light: the top's front rim, and the vertical edge between sides
   if (h > 0) {
-    inner.push(el('polyline', { points: poly([D, Cc, B]), fill: 'none', stroke: lift(tn.top, 0.6), 'stroke-width': hw.toFixed(1), 'stroke-linejoin': 'round', opacity: DARK ? 0.55 : 0.9 }));
-    inner.push(el('line', { x1: f1(Cc[0]), y1: f1(Cc[1]), x2: f1(C0[0]), y2: f1(C0[1]), stroke: lift(tn.right, 0.45), 'stroke-width': (hw * 0.7).toFixed(1), opacity: DARK ? 0.35 : 0.6 }));
+    inner.push(el('polyline', { points: poly([D, Cc, B]), fill: 'none', stroke: lift(tn.top, 0.5), 'stroke-width': hw.toFixed(1), 'stroke-linejoin': 'round', opacity: DARK ? 0.45 : 0.7 }));
+    inner.push(el('line', { x1: f1(Cc[0]), y1: f1(Cc[1]), x2: f1(C0[0]), y2: f1(C0[1]), stroke: lift(tn.right, 0.4), 'stroke-width': (hw * 0.7).toFixed(1), opacity: DARK ? 0.25 : 0.45 }));
     // the side faces darken where they meet the floor (occlusion inside the volume)
     const foot = lin([[0, T['shadow-warm'], 0], [0.7, T['shadow-warm'], 0], [1, T['shadow-warm'], DARK ? 0.35 : 0.14]]);
     inner.push(el('polygon', { points: poly([D, Cc, B, B0, C0, D0]), fill: foot.paint }));
@@ -478,7 +516,7 @@ export function isoBox(P, x, y, z, w, d, h, tones = TONES.paper, { radius = 6, g
   }
   if (DARK) {
     // the warm key light rims the lit edges on the stage
-    inner.push(el('polyline', { points: poly(h > 0 ? [A, B, B0] : [A, B, Cc]), fill: 'none', stroke: T['stage-orange'], 'stroke-width': Math.max(1.6, hw * 0.8).toFixed(1), 'stroke-linejoin': 'round', opacity: 0.55 }));
+    inner.push(el('polyline', { points: poly(h > 0 ? [A, B, B0] : [A, B, Cc]), fill: 'none', stroke: T['stage-orange'], 'stroke-width': Math.max(1.6, hw * 0.9).toFixed(1), 'stroke-linejoin': 'round', opacity: 0.45 }));
   }
   parts.push(defsOf(clip, topG, leftG, rightG, ...extra), g({ 'clip-path': clip.paint }, inner));
   if (outline) {
@@ -571,7 +609,7 @@ export function softShape(d, fill = T['paper-lit'], { gloss: glossy = false, for
     ]));
   }
   if (glossy) out.push(gloss(d, { strength: 0.8 }));
-  if (DARK) out.push(g({ 'clip-path': clip.paint }, el('path', { d, fill: 'none', stroke: T['stage-orange'], 'stroke-width': 3, opacity: 0.45, transform: 'translate(-1.5 1.5)' })));
+  if (DARK) out.push(g({ 'clip-path': clip.paint }, el('path', { d, fill: 'none', stroke: T['stage-orange'], 'stroke-width': 4, opacity: 0.55, transform: 'translate(-3.5 3.5)', filter: ref('soft-edge') })));
   return out.join('');
 }
 

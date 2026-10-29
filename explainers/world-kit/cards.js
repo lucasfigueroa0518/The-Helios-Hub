@@ -5,9 +5,10 @@
 //
 //   textWidth(text, size, face)      the real width in px (measured advance widths, metrics.js)
 //   typeset(words, { width, size })  greedy line breaks from real widths
-//   dictionaryCard(t, o)             frame 3's card: headword, part of speech, rule, and the
+//   dictionaryCard(t, o)             frame 5's card (4.3; frame 3's before): headword, part of speech, rule, and the
 //                                    definition filling in word by word on its voice times
-//   titleCard(t, o)                  frame 1's top-band card: "today's brain break:" and the
+//   titleCard(t, o)                  a worker-built frame 1's top-band card (before 4.3; 4.3's
+//                                    card is handoff.js handoffCard, frame 3): "today's brain break:" and the
 //                                    term, handwritten in Hershey Sans while the opener line plays,
 //                                    animating from the reel's first frame (EX3-93)
 //   textBox(text, x, y, o)           text inside a shape (a speech or chat bubble, a note, a sign,
@@ -26,7 +27,7 @@
 import { T, el, g, isDark, handwrite, handwriteWidth } from './draw.js';
 import { seg, E, clamp01 } from './motion.js';
 import { METRICS } from './metrics.js';
-import { easeUI, glassPanel, glossPanel, screenPanel, roundRect, ramp } from './glass.js';
+import { easeUI, glassPanel, glossPanel, screenPanel, roundRect, ramp, onColor, MIN_TEXT } from './glass.js';
 
 const ink = () => (isDark() ? T['paper-lit'] : T.ink);
 
@@ -76,7 +77,7 @@ function textLine(words, x, y, size, face, fill, opacities, extra = {}) {
 const escapeXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /**
- * Frame 3's dictionary card (EX3-69): a frosted glass card in the top half that slides in, shows the
+ * The dictionary card (EX3-69; 4.3: frame 5, the definition payoff): a frosted glass card in the top half that slides in, shows the
  * headword (the topic's term) and its part of speech, then fills in the definition word by word
  * on the voice's word times and stays. Captions are quiet for the frame (the card replaces
  * them). Returns the card group (data-role="definition") and its bottom edge, so the visual
@@ -88,7 +89,8 @@ const escapeXml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').
  */
 export function dictionaryCard(t, { headword, pos = 'noun', words, inAt = 0, x = 104, y = 270, w = 872, size = 42, tilt = 0 }) {
   const pad = 48;
-  const headSize = Math.min(76, (w - pad * 2) / Math.max(1, textWidth(headword, 1, 'pragmatica-700')));
+  size = Math.max(MIN_TEXT, size);
+  const headSize = Math.max(MIN_TEXT, Math.min(76, (w - pad * 2) / Math.max(1, textWidth(headword, 1, 'pragmatica-700'))));
   const texts = words.map((wd) => String(wd.text).trim()).filter(Boolean);
   const times = words.filter((wd) => String(wd.text).trim()).map((wd) => wd.start);
   const lines = typeset(texts, { width: w - pad * 2, size, face: 'roboto-500' });
@@ -101,13 +103,15 @@ export function dictionaryCard(t, { headword, pos = 'noun', words, inAt = 0, x =
   const dy = (1 - slide) * 90;
   // The part of speech as a tinted chip under the headword (green, the brand's second colour).
   const posText = pos.toUpperCase();
-  const posSize = 22;
-  const chipH = 38;
+  const posSize = MIN_TEXT;
+  const chipH = 46;
   const chipW = textWidth(posText, posSize, 'roboto-700') + posText.length * posSize * 0.18 + 36 - posSize * 0.18;
-  const chipY = top + 17;
+  const chipY = top + 14;
   const posOp = seg(t, inAt + 0.25, inAt + 0.4, E.linear);
   const G = ramp('green');
+  // an opaque plate under the glass (4.3 fix): the world never shows through the definition
   const parts = [
+    el('path', { d: roundRect(x, y, w, h, 32), fill: isDark() ? T.ink : T['paper-lit'], 'data-k': 'plate' }),
     glassPanel(x, y, w, h, 32, { strength: 1.12 }),
     textLine([headword], x + pad, top, headSize, 'pragmatica-700', ink(), [seg(t, inAt + 0.15, inAt + 0.3, E.linear)]),
     g({ opacity: posOp.toFixed(3) }, [
@@ -192,7 +196,8 @@ export const BOX_KINDS = ['speech', 'chat', 'note', 'sign', 'screen'];
  * Text inside a shape, the shape sized around the text: a speech bubble (frosted glass, tail
  * below), a chat bubble (its tight corner on the `tail` side: light glass on the left, the dark sent
  * bubble on the right), a note card (glass), a sign board (glossy graphite), or a screen (a dark
- * display, light text). `focal` makes the box the glossy orange tile with light text.
+ * display, light text). `focal` makes the box the glossy orange tile (ink text, for 4.5:1). Text is
+ * never under 30px: what does not fit `maxW` in `lines` at 30px takes more lines.
  * The text is measured (Hershey Sans for handwriting, Roboto otherwise), wrapped onto at most
  * `lines` lines, and shrunk only if a word still cannot fit `maxW`; the box is that text plus
  * padding, centred on (x, y). Nothing about the text is placed by hand, so it cannot leave its
@@ -214,11 +219,16 @@ export function textBox(text, x, y, o = {}) {
   const measure = (s, size) => (hand ? handwriteWidth(s, size) : textWidth(s, size, 'roboto-500'));
   const inner = maxW - padX * 2;
   // Wrap at the wanted size; shrink only when the words still do not fit.
-  let size = want;
+  // Never under MIN_TEXT (30px, frame.md V-T2): text that does not fit at 30px takes more lines.
+  let size = Math.max(MIN_TEXT, want);
   let rows = [str];
-  for (; size >= 14; size -= 2) {
+  for (; size >= MIN_TEXT; size -= 2) {
     rows = wrap(str.split(/\s+/), inner, (s) => measure(s, size));
     if (rows.length <= maxLines && rows.every((r) => measure(r, size) <= inner + 0.5)) break;
+  }
+  if (size < MIN_TEXT) {
+    size = MIN_TEXT;
+    rows = wrap(str.split(/\s+/), inner, (s) => measure(s, size));
   }
   const lineH = size * (hand ? 1.55 : 1.3);
   const textW = Math.max(...rows.map((r) => measure(r, size)));
@@ -232,7 +242,8 @@ export function textBox(text, x, y, o = {}) {
   const dark = isDark();
   const r = kind === 'note' ? 18 : kind === 'sign' ? 14 : kind === 'screen' ? 22 : kind === 'chat' ? 24 : 30;
   const glossy = focal ? 'orange' : kind === 'sign' || (kind === 'chat' && tail === 'right') ? 'ink' : null;
-  const color = o.color ?? (glossy || kind === 'screen' ? T['paper-lit'] : ink());
+  // Text holds 4.5:1 on its surface: light on graphite and screens, ink on the glossy orange.
+  const color = o.color ?? (glossy === 'orange' ? onColor(ramp('orange').base) : glossy || kind === 'screen' ? T['paper-lit'] : ink());
   let path = null;
   if (kind === 'speech' && tail !== 'none') {
     // One outline for the body and its tail, so the glass has no seam.

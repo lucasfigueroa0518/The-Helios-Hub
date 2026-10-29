@@ -46,9 +46,13 @@ import {
 export const GOLDEN_HIDE_AT = 0.5;
 /** A candidate fails a gate at or above this (EX3-124). */
 export const ANALOGY_GATE_MAX = 0.5;
-/** The render's failure when no candidate passes in three calls (EX3-125). The topic stays. */
+/**
+ * The render's failure when the writer produced no usable analogy at all in three calls (every reply
+ * unreadable). Explainers 4.2: when candidates exist but none passed, the render goes on with the
+ * least-bad one and an `analogy:no_pass` warning (fail open; supersedes EX3-125's failed render).
+ */
 export const NO_ANALOGY_REASON =
-  'No analogy passed the checks in three writer calls (EX3-125). The topic stays in the pool; the next render tries again.';
+  'The analogy writer returned no usable analogy in three calls. The topic stays in the pool; the next render tries again.';
 
 const GATE_MISS: Record<(typeof ANALOGY_GATE_KEYS)[number], string> = {
   false_mapping: 'its mapping teaches something false or misleading',
@@ -131,6 +135,22 @@ export function topicAnalogy(topic: Pick<TopicRow, 'jev_notes'>): AnalogyCandida
   const note = (topic.jev_notes as { analogy?: AnalogyNote } | null)?.analogy;
   if (!note || note.version !== ANALOGY_WRITER_VERSION) return null;
   return pickedTry(note)?.analogy ?? null;
+}
+
+/**
+ * Fail open (Explainers 4.2; Lucas, 2026-10-27: "I don't want things to block the reel"): when nothing
+ * passed in three calls, the least-bad candidate the writer returned, with why it missed. Gated
+ * candidates come before ones the code checks refused; then the fewest misses; then the lowest summed
+ * gate probabilities. Null only when no call returned a usable analogy.
+ */
+export function leastBadAnalogy(note: AnalogyNote): { analogy: AnalogyCandidate; misses: string[] } | null {
+  if (!('candidates' in note)) return null;
+  const tries = [...note.candidates, ...(note.third ? [note.third] : [])].filter((t): t is AnalogyTry & { analogy: AnalogyCandidate } => Boolean(t.analogy));
+  const rank = (t: AnalogyTry) => [t.gates ? 0 : 1, t.misses.length, t.gates ? ANALOGY_GATE_KEYS.reduce((sum, k) => sum + t.gates![k], 0) : 0];
+  const best = tries
+    .map((t, i) => ({ t, i, r: rank(t) }))
+    .sort((a, b) => a.r[0] - b.r[0] || a.r[1] - b.r[1] || a.r[2] - b.r[2] || a.i - b.i)[0];
+  return best ? { analogy: best.t.analogy, misses: best.t.misses } : null;
 }
 
 /** True when this writer's three calls produced nothing that passed (EX3-125). */

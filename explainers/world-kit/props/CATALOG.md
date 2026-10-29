@@ -333,6 +333,20 @@ the usual case. Name it in the anchor block as `prop: <name> (exact: <its is lin
 - parts: ribbed cargo box, cab with windshield, three visible wheels
 - not: car, van, bus, fire truck, tanker, pickup truck, garbage truck
 
+## yellow library request slip (bank)
+- is: a small yellow paper library request slip with a folded-down corner and three short printed lines
+- setting: library desk, library request, asking for a book
+- material: yellow paper
+- parts: yellow paper sheet, folded corner, three short lines
+- not: sticky note, receipt, ticket, envelope, index card, search bar, form with boxes
+
+## hardback library book with lilac spine tag (bank)
+- is: a teal cloth hardback library book standing upright, spine to the viewer, gilt bands and a dark title plate on the spine, and (tagged) a lilac coordinate label with a short printed code
+- setting: library shelf, library desk, book shelved by meaning
+- material: teal cloth cover, paper pages, lilac paper label
+- parts: teal cover, page block, gilt bands, title plate, lilac spine tag with three code marks
+- not: notebook, ledger, binder, tablet, magazine, box, barcode sticker, price tag
+
 ## store support chat window (bank)
 - is: an upright chat window for a shop: a striped shop awning across the top, an empty message area, and a message-entry bar with a send dot at the bottom
 - setting: online shop, customer support, phone or laptop screen, chat app

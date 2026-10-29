@@ -1,0 +1,48 @@
+[
+ {
+  "t": 0.3,
+  "kind": "foley",
+  "what": "paper drop"
+ },
+ {
+  "t": 0.45,
+  "kind": "foley",
+  "what": "paper drop"
+ },
+ {
+  "t": 0.53,
+  "kind": "foley",
+  "what": "pushpin"
+ },
+ {
+  "t": 2.3,
+  "kind": "foley",
+  "what": "paper drop"
+ },
+ {
+  "t": 2.6,
+  "kind": "foley",
+  "what": "pushpin"
+ },
+ {
+  "t": 3.3,
+  "kind": "foley",
+  "what": "cord taut"
+ },
+ {
+  "t": 3.75,
+  "kind": "foley",
+  "what": "marker cap"
+ },
+ {
+  "t": 3.9,
+  "kind": "foley",
+  "what": "felt marker writing paper",
+  "dur": 0.5
+ },
+ {
+  "t": 4.5,
+  "kind": "foley",
+  "what": "pen cap"
+ }
+]

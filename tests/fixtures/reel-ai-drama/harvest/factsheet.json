@@ -1,0 +1,23 @@
+{
+  "summary": "Fixture fact sheet.",
+  "timeline": [{ "date": "2026-10-01", "event": "The board posts its statement", "fact_ids": ["F1"] }],
+  "facts": [
+    { "id": "F1", "text": "The board posted a statement removing the CEO.", "source_ids": ["S1", "S2"], "key": true, "confidence": "confirmed" }
+  ],
+  "sources": [
+    { "id": "S1", "url": "https://example-news.com/2026/10/01/board-fires-ceo", "title": "Board fires its CEO in a surprise statement", "publisher": "Example News", "date": "2026-10-01", "kind": "news" },
+    { "id": "S2", "url": "https://openai.com/index/board-statement", "title": "Statement from the board", "publisher": "OpenAI", "date": "2026-10-01", "kind": "official" },
+    { "id": "S3", "url": "https://www.youtube.com/watch?v=abcdefghijk", "title": "DevDay keynote", "publisher": "OpenAI", "date": "2026-10-01", "kind": "video" },
+    { "id": "S4", "url": "https://arxiv.org/abs/2610.01234", "title": "A paper the story mentions", "publisher": "arXiv", "date": "2026-09-30", "kind": "paper" }
+  ],
+  "quotes": [],
+  "artifacts": [
+    { "id": "A1", "kind": "post", "text": "The board no longer has confidence in his ability to lead", "source_id": "S2", "url": "https://x.com/OpenAI/status/1", "date": "2026-10-01" }
+  ],
+  "cast": [
+    { "name": "Sam Altman", "role": "CEO", "kind": "person", "player_id": null, "want": "to keep his company", "qid": "Q7407093" },
+    { "name": "OpenAI", "role": "the company", "kind": "company", "player_id": null, "want": "to survive", "qid": "Q21708200" }
+  ],
+  "places": [{ "name": "OpenAI headquarters", "address": "1455 3rd Street, San Francisco", "lat": null, "lon": null, "role": "where the board met" }],
+  "verdict": { "holds": true, "reason": "Two independent sources confirm the statement." }
+}

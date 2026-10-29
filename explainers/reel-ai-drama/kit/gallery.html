@@ -1,0 +1,153 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Reel AI Drama kit gallery</title>
+<style>html,body{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;background:#111}
+#w{position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden}
+/* A still of the caption skin (presets/reel-ai-drama/caption-skin.html): the band, the size, the colours. */
+.cap{position:absolute;left:96px;width:844px;top:292px;z-index:90;font:700 74px/1.05 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-.02em;text-transform:lowercase;color:#FEF9F3;text-shadow:0 2px 18px rgba(0,0,0,.55),0 0 2px rgba(0,0,0,.6)}
+.cap.ink{color:#1F1915;text-shadow:none}
+.tag{position:absolute;right:20px;top:20px;z-index:95;font:700 18px Roboto;color:#fff;background:rgba(0,0,0,.55);padding:4px 10px;border-radius:4px}</style>
+</head><body><div id="w"></div>
+<script type="module">
+// The kit gallery: ?shot=<name>&t=<seconds>. Every treatment on real banked images and the smoke
+// fixture's page and map; a still of the caption over each. No network beyond the local server.
+import * as nk from './components/index.js';
+import close from './close.js';
+
+const q = new URLSearchParams(location.search);
+const shot = q.get('shot') || 'photo';
+const T = Number(q.get('t') ?? 2.5);
+const R = '../../../';
+const BANK = R + 'explainers/real-case/bank/';
+const FIX = '../smoke/fixture/media/';
+const LOGO = R + 'lib/social/render/assets/logos/';
+nk.installKit(document, { textures: './textures/', fonts: {
+  pragmatica: R + 'explainers/design/fonts/PragmaticaExtended-Bold.otf',
+  roboto400: R + 'explainers/design/fonts/Roboto-400.woff2',
+  roboto500: R + 'explainers/design/fonts/Roboto-500.woff2',
+  roboto700: R + 'explainers/design/fonts/Roboto-700.woff2',
+  gochi: './fonts/GochiHand-Regular.ttf', playfair: './fonts/PlayfairDisplay.ttf', courier: './fonts/CourierPrime-Regular.ttf',
+  tinos400: './fonts/Tinos-Regular.ttf', tinos700: './fonts/Tinos-Bold.ttf', tinosItalic: './fonts/Tinos-Italic.ttf',
+} });
+await Promise.all(['700 40px "Pragmatica Extended"', '400 40px Roboto', '500 40px Roboto', '700 40px Tinos', '400 40px "Gochi Hand"', '700 40px "Playfair Display"'].map((f) => document.fonts.load(f).catch(() => null)));
+const media = {
+  founderA: { file: BANK + 'source/elon-musk.jpg', width: 3363, height: 4602, credit: 'Photo: Gage Skidmore, CC BY-SA 4.0' },
+  founderB: { file: BANK + 'source/jensen-huang.jpg', width: 645, height: 839, credit: 'Photo: fixture credit' },
+  founderC: { file: BANK + 'source/demis-hassabis.jpg', width: 2458, height: 3275, credit: 'Photo: fixture credit' },
+  page: { file: FIX + 'V5.png', width: 1520, height: 1044, boxes: [{ text: 'A Smaller Model Learns to Plan', x: 21, y: 32, w: 719, h: 49 }], credit: 'a saved research page (fixture)' },
+  map: { file: FIX + 'V6.jpg', width: 1620, height: 2880, map: { plain: FIX + 'V6.plain.jpg', width: 1620, height: 2880, pin: { x: 810, y: 1440 }, label: 'The restaurant', sublabel: 'The town · one summer' } },
+};
+const ctx = { id: shot, duration: 6, nk, assets: R + 'explainers/design/helios-design-system/assets/', media, timing: { words: [] } };
+const doc = document;
+const host = document.getElementById('w');
+let caption = 'a still of the caption, two lines at most.';
+let ink = false;
+let r = null;
+const B = {
+  photo() {
+    const p = nk.photo(doc, { media: media.founderA, focus: [0.5, 0.24], move: 'push', duration: 6, credit: media.founderA.credit });
+    const n = nk.number(doc, { value: '$4M', label: 'then the board met.', at: 1 });
+    p.el.append(n.el);
+    caption = 'she put four million into the lab.';
+    return { el: p.el, render: (t) => { p.render(t); n.render(t); } };
+  },
+  'photo-pan'() {
+    const p = nk.photo(doc, { media: media.founderC, focus: [0.5, 0.3], move: 'pan', dir: 'left', grade: 'cool', duration: 6, credit: media.founderC.credit });
+    caption = 'a pan, cool grade.';
+    return p;
+  },
+  cutout_lift() {
+    const c = nk.cutoutLift(doc, { cutout: BANK + 'cutouts/sam-altman.png', name: 'The co-founder', role: 'Chief executive, the lab', at: [0.1, 0.7], duration: 6, credit: 'Photo: Steve Jurvetson, CC BY 2.0' });
+    caption = 'he won the case.';
+    return c;
+  },
+  collision() {
+    const c = nk.collision(doc, { left: { src: BANK + 'cutouts/elon-musk.png', height: 800 }, right: { src: BANK + 'cutouts/sam-altman.png', height: 760 }, center: { src: LOGO + 'openai.png', w: 240, light: true }, at: [0.1, 0.8], credit: 'Photos: Gage Skidmore; Steve Jurvetson · Logo: OpenAI' });
+    const n = nk.number(doc, { value: '$12M', label: 'in damages, demanded', tone: 'orange', labelTone: 'muted', y: 1300, at: 1 });
+    c.el.append(n.el);
+    caption = 'he wanted both of them removed.';
+    return { el: c.el, render: (t) => { c.render(t); n.render(t); } };
+  },
+  page() {
+    caption = 'eight researchers wrote it.';
+    return nk.page(doc, { media: media.page, marks: [{ box: 'Smaller', kind: 'circle', at: 1.5 }], push: { at: [0, 6], scale: 1.1 }, duration: 6, credit: media.page.credit });
+  },
+  'page-underline'() {
+    caption = 'the same page, underlined.';
+    return nk.page(doc, { media: media.page, marks: [{ box: 0, kind: 'underline', at: 1 }, { box: 0, kind: 'highlight', at: 2 }], duration: 6, credit: media.page.credit });
+  },
+  document() {
+    caption = 'a paper, on the desk.';
+    return nk.documentSheet(doc, { media: media.page, marks: [{ box: 0, kind: 'box', at: 1.5 }], duration: 6, credit: media.page.credit });
+  },
+  post() {
+    caption = 'a post, recreated and labelled.';
+    return nk.post(doc, { text: 'We are pausing the rollout while we look into this.', speaker: 'Example Co.', date: 'Sep 14, 2026', credit: 'a public post (fixture)' });
+  },
+  map() {
+    caption = 'one dinner. five people at the table.';
+    return nk.map(doc, { media: media.map, at: 0.6, duration: 6 });
+  },
+  headline() {
+    caption = 'the news broke on a friday.';
+    return nk.headline(doc, { text: 'Board [[meets]] in private', publication: 'The Example Ledger', date: 'Friday', over: { media: media.founderB, focus: [0.5, 0.3], move: 'hold', grade: 'mono' }, at: 0.2, markAt: 1.4 });
+  },
+  lower_third() {
+    const p = nk.photo(doc, { media: media.founderB, focus: [0.5, 0.32], move: 'push', grade: 'warm', duration: 6, credit: media.founderB.credit });
+    const l = nk.lowerThird(doc, { name: 'The chipmaker', role: 'Co-founder and chief executive', at: 0.5 });
+    p.el.append(l.el);
+    caption = 'he bet the company on it.';
+    return { el: p.el, render: (t) => { p.render(t); l.render(t); } };
+  },
+  number() {
+    const p = nk.photo(doc, { media: media.founderC, focus: [0.5, 0.3], move: 'hold', grade: 'mono', duration: 6, credit: media.founderC.credit });
+    const n = nk.number(doc, { value: '1,200', label: 'researchers, by the end', countUp: true, at: 0.5 });
+    p.el.append(n.el);
+    caption = 'the lab kept growing.';
+    return { el: p.el, render: (t) => { p.render(t); n.render(t); } };
+  },
+  board() {
+    const s = nk.scene(doc, 'board');
+    const pol = nk.polaroid(doc, { cutout: BANK + 'cutouts/sam-altman.png', caption: 'The co-founder · CEO', x: 120, y: 760, w: 520, h: 600, rot: -3 });
+    const logo = nk.logoPrint(doc, { logo: LOGO + 'openai.png', x: 640, y: 1240, w: 340, h: 200, rot: 4 });
+    s.stage.append(pol, logo, nk.pushPin(doc, { x: 380, y: 790 }), nk.pushPin(doc, { x: 810, y: 1262, color: 'yellow' }));
+    caption = 'the board, for a moment.';
+    return s;
+  },
+  whiteboard() {
+    const s = nk.scene(doc, 'whiteboard', { framing: 'wide' });
+    const layer = nk.inkLayer(doc, s.stage, { kind: 'dry' });
+    const note = nk.markerNote(doc, layer, 'scale = compute', { x: 120, y: 520, size: 96 });
+    note.progress(1);
+    caption = 'the whiteboard, for a moment.';
+    ink = true;
+    return s;
+  },
+  newspaper() {
+    const s = nk.scene(doc, 'newspaper', { masthead: 'The Example Ledger', date: 'Friday' });
+    s.stage.append(nk.article(doc, { headline: 'Board meets in private', deck: 'A fixture story for the kit gallery', x: 0, y: 40, w: 1000, fillerLines: 30 }));
+    caption = 'the newspaper, for a moment.';
+
+    return s;
+  },
+  close() {
+    close.build(host, ctx);
+    caption = 'would you have taken the deal?';
+    return { el: null, render: (t) => close.render(t) };
+  },
+};
+r = (B[shot] ?? B.photo)();
+if (r.el) host.append(r.el);
+const cap = document.createElement('div');
+cap.className = `cap${ink ? ' ink' : ''}`;
+cap.textContent = caption;
+document.body.append(cap);
+const tag = document.createElement('div');
+tag.className = 'tag';
+tag.textContent = `${shot} · t ${T}s`;
+document.body.append(tag);
+await document.fonts.ready;
+await Promise.all([...document.images].map((i) => (i.complete ? null : new Promise((ok) => { i.onload = i.onerror = ok; }))));
+r.render(0);
+r.render(T);
+window.__ready = true;
+</script></body></html>

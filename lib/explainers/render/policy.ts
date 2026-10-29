@@ -38,16 +38,87 @@ export const SESSION_TOOLS = [
   'WebFetch',
 ];
 
-/** Tools a frame worker may use: read its packet, frame.md, the world and the kit, write its one module, hand the report back. */
+/**
+ * Tools the legacy frame worker may use (`frame-worker`, which Real Case's frame worker still is):
+ * read its packet, frame.md, the world and the kit, write its one module, hand the report back.
+ */
 export const FRAME_WORKER_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'SubagentHandback'];
 
-/** The scene builder: the same reach, writing assets/world/world.js. */
-export const SCENE_BUILDER_TOOLS = FRAME_WORKER_TOOLS;
+/**
+ * Explainers 4.1: the scene builder and the scene and tech frame workers have the same reach plus
+ * Bash, and their Bash is SNAP_COMMAND only (checkToolCall): they look at stills of their own work.
+ */
+export const SELF_REVIEW_TOOLS = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'SubagentHandback'];
+
+/** The scene builder: writes assets/world/world.js and identity.js, and snaps its set. */
+export const SCENE_BUILDER_TOOLS = SELF_REVIEW_TOOLS;
+
+/**
+ * The one command the scene builder and the frame workers may run (Explainers 4.1, kept in 4.2: the
+ * builders' self-review): `node assets/kit/snap.mjs world`, or `node assets/kit/snap.mjs <frame-id> <t1,t2,…>` with
+ * up to six times in seconds. Nothing before or after it: no `cd`, no chaining, no redirect, no
+ * other script. snap.mjs itself counts the calls (this check is stateless): four per frame (MAX_CALLS),
+ * three for `world` (MAX_WORLD_CALLS, cost lever L6); agent.ts SNAPS_PER_FRAME / SNAPS_FOR_WORLD.
+ */
+export const SNAP_COMMAND = /^node assets\/kit\/snap\.mjs (?:world|(?!world |sequences )[a-z0-9][a-z0-9-]{0,40} \d{1,3}(?:\.\d{1,3})?(?:,\d{1,3}(?:\.\d{1,3})?){0,5})$/;
+
+/**
+ * The builders' self-check (cost fix 2026-10-28): the breakage check on their own work, before they
+ * hand back, so the orchestrator's fix round only gets what is left. `node assets/kit/try.mjs frame
+ * <frame-id>` for a frame builder, `world` or `props` for the scene builder. try.mjs needs no browser.
+ * Exactly that, nothing before or after it; SELF_CHECKS_PER_BUILDER runs per builder (selfCheckBudget).
+ */
+export const SELF_CHECK_COMMAND = /^node assets\/kit\/try\.mjs (?:world|props|frame [a-z0-9][a-z0-9-]{0,40})$/;
+/** A builder's self-check runs: a first check and one after its fix. */
+export const SELF_CHECKS_PER_BUILDER = 2;
+
+/**
+ * The self-check budget, per builder (`key`: the subagent's agent_id, or the main thread's agent).
+ * Counts only SELF_CHECK_COMMAND runs; denies the one past SELF_CHECKS_PER_BUILDER. Stateful by
+ * design: the caller keeps `counts` for the session.
+ */
+export function selfCheckBudget(counts: Map<string, number>, key: string, command: string): PolicyDecision {
+  if (!SELF_CHECK_COMMAND.test(command)) return allow;
+  const used = counts.get(key) ?? 0;
+  if (used >= SELF_CHECKS_PER_BUILDER) {
+    return deny(`your ${SELF_CHECKS_PER_BUILDER} self-checks are used: hand back and name what the last one still reported`);
+  }
+  counts.set(key, used + 1);
+  return allow;
+}
+
+/**
+ * Builders may Read and Grep the kit's source freely (cost fix 2's read block and Grep cap were removed
+ * 2026-10-28): KIT-REFERENCE.md, inlined in their instructions, is the first stop; the source is there
+ * when the reference does not explain something.
+ */
+
+/** Subagents whose Bash is SNAP_COMMAND or SELF_CHECK_COMMAND and nothing else. */
+export const SNAP_ONLY_AGENTS = new Set(['scene-builder', 'frame-worker-scene', 'frame-worker-tech']);
+/**
+ * Subagents that only look: Read (and hand back), nothing else, whatever their tool list says. The
+ * understanding test's `reader` and `diagnoser` (Explainers 4.2) are direct calls with no tools; they
+ * are listed so nothing that ever dispatches them can give them more.
+ */
+export const READ_ONLY_AGENTS = new Set(['picture-checker', 'first-viewer', 'reader', 'diagnoser']);
+/** Subagents with no Bash at all (the legacy frame worker, which Real Case uses). */
+export const NO_BASH_AGENTS = new Set(['frame-worker']);
 
 const PATH_KEYS = ['file_path', 'path', 'notebook_path'];
 
-/** Inside the project but never writable by the file tools: the pinned skills, the CLI install, the world kit, the lint. */
-const READ_ONLY_DIRS = ['.claude', 'node_modules', '.media', '.helios-lint', path.join('assets', 'kit')];
+/**
+ * Inside the project but never writable by the file tools: the pinned skills, the CLI install, the
+ * world kit, the lint, and the stills (snap.mjs writes them and its per-frame counters through Bash).
+ */
+const READ_ONLY_DIRS = [
+  '.claude',
+  'node_modules',
+  '.media',
+  '.helios-lint',
+  path.join('assets', 'kit'),
+  path.join('.hyperframes', 'snaps'),
+  path.join('.hyperframes', 'sequences'),
+];
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
 
 /** True when `target` resolves inside `root` (symlink-free lexical check). */
@@ -192,11 +263,26 @@ export function checkBash(command: string, jobDir: string, cwd = jobDir): Policy
   return allow;
 }
 
-/** The one gate every tool call passes. */
-export function checkToolCall(toolName: string, input: Record<string, unknown>, jobDir: string): PolicyDecision {
+/** The self-review command check for a builder (SNAP_COMMAND, SELF_CHECK_COMMAND). */
+export function checkSnapCommand(command: string): PolicyDecision {
+  return SNAP_COMMAND.test(command) || SELF_CHECK_COMMAND.test(command)
+    ? allow
+    : deny('only `node assets/kit/snap.mjs <frame-id> <t1,t2,…>` (up to 6 times), `node assets/kit/snap.mjs world`, or `node assets/kit/try.mjs frame <frame-id>` / `world` / `props` may run, exactly, with nothing before or after it');
+}
+
+/**
+ * The one gate every tool call passes. `agentType` is the subagent's type when the call comes from
+ * a subagent (the hook's agent_type, present with agent_id); the main thread passes none.
+ */
+export function checkToolCall(toolName: string, input: Record<string, unknown>, jobDir: string, agentType?: string): PolicyDecision {
   if (!SESSION_TOOLS.includes(toolName)) return deny(`tool ${toolName} is not available`);
+  if (agentType && READ_ONLY_AGENTS.has(agentType) && toolName !== 'Read' && toolName !== 'SubagentHandback') {
+    return deny(`${agentType} may only Read`);
+  }
   if (toolName === 'Bash') {
     const command = typeof input.command === 'string' ? input.command : '';
+    if (agentType && NO_BASH_AGENTS.has(agentType)) return deny(`${agentType} runs no commands`);
+    if (agentType && SNAP_ONLY_AGENTS.has(agentType)) return checkSnapCommand(command);
     return checkBash(command, jobDir);
   }
   for (const key of PATH_KEYS) {

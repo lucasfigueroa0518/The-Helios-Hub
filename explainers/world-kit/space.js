@@ -1,20 +1,24 @@
-// The Explainers world kit, space (hx-4, approved stills 01, 02, 04 and 05): one room, one camera,
-// true scale. Every world entity has a real size in centimetres; a scene places everything in
-// centimetres on one floor plane through the kit's isometric projection, draws it back to front,
-// puts what is inside a container behind its frame, and makes tiny things readable with a
-// magnifier instead of drawing them huge.
+// The Explainers world kit, space (hx-4, approved stills 01, 02, 04 and 05; 4.2): one room, one
+// camera, one believable scale. Every world entity has a real size in centimetres; a scene places
+// everything in centimetres on one floor plane through the kit's isometric projection, draws it
+// back to front, puts what is inside a container behind its frame, and makes tiny things readable
+// by cheating them bigger, an insert, or a magnifier.
 //
 //   scene({ ppcm, origin, P })        cm → screen on the iso floor: { at, size, depth, s, critterS, … }
-//   sizes(SIZES)                      validate the world's scale ledger; scaleOf(id, px) helpers
-//   scaleProblems(SIZES, drawn)       entities drawn off their real size (relative to the critter)
+//   plane(at, origin, u, v)           lay flat art (a sign, a label) on any world face, in cm
+//   sizes(SIZES)                      the world's size ledger: its shape, and px / scaleOf helpers
+//   propScale(scale, sizeCm) · CHEAT  'cheat' or a number: the factor a prop is drawn at (core.js)
 //   depthSort(items)                  [{ at: [x, y, z], svg }] joined back to front
 //   container({ clip, back, contents, front })   inside means behind the frame
 //   magnifier({ from, at, r, zoom, draw })        a lens inset with its zoom cone (still 02)
 //
-// The ruler is the critter: CRITTER_CM (72 cm) tall. Story exaggeration is declared per entity in
-// SIZES (`exaggerate`, at most 1.5×); anything else is drawn at its real size.
+// The ruler is the critter: CRITTER_CM (72 cm) tall. 4.2 (house style): scale is believable, not
+// true. Things stay plausible next to each other, and the props the action depends on are cheated
+// bigger (SIZES `scale: 'cheat' | <number>`; the older `exaggerate` is the same number). No size
+// is checked: true scale is no longer enforced.
 
 import * as core from './core.js';
+import { CHEAT, propScale } from './core.js';
 import { T, el, g, id, line, isDark, groundName } from './draw.js';
 import { blurDef, hashId } from './light.js';
 
@@ -26,10 +30,7 @@ export const CRITTER_CM = core.CRITTER_CM ?? 72;
 export const CRITTER_PX = core.CRITTER_PX ?? 142;
 /** Screen px per cm at critter scale 1. */
 export const PX_PER_CM = core.PX_PER_CM ?? CRITTER_PX / CRITTER_CM;
-/** Story exaggeration is capped here (approved still 01). */
-export const MAX_EXAGGERATION = 1.5;
-/** An entity with no declared exaggeration may be this far off its real size (drawing slack). */
-export const SIZE_TOLERANCE = 1.15;
+export { CHEAT, propScale };
 
 // ── The scene: centimetres on one floor plane ─────────────────────────────────────────────
 
@@ -109,7 +110,13 @@ export function depthSort(items) {
 
 const CM_KEYS = ['w', 'd', 'h'];
 
-/** The problems with a world's SIZES ({ id: { w, d, h } } in cm, `exaggerate?` ≤ 1.5, `far?`). */
+/** The factor an entry of SIZES is drawn at: its `scale` ('cheat' or a number), else its older
+ *  `exaggerate` (a number), else 1. */
+const entryScale = (s) => propScale(s.scale ?? s.exaggerate, [s.w, s.d, s.h]);
+
+/** The problems with a world's SIZES ({ id: { w, d, h } } in cm, `scale?` 'cheat' | number,
+ *  `exaggerate?` a number (older name for scale), `far?`): its shape only (4.2: no cap, no check
+ *  of what is drawn). */
 export function sizeProblems(SIZES) {
   if (!SIZES || typeof SIZES !== 'object' || Array.isArray(SIZES)) return ['SIZES must be an object { id: { w, d, h } } of real sizes in cm'];
   const out = [];
@@ -119,21 +126,18 @@ export function sizeProblems(SIZES) {
       continue;
     }
     for (const k of CM_KEYS) if (!(typeof s[k] === 'number' && s[k] > 0 && Number.isFinite(s[k]))) out.push(`SIZES.${key}.${k} must be a positive number of cm (got ${JSON.stringify(s[k] ?? null)})`);
-    if (s.exaggerate !== undefined) {
-      const e = s.exaggerate;
-      if (!(typeof e === 'number' && e > 0)) out.push(`SIZES.${key}.exaggerate must be a number`);
-      else if (e > MAX_EXAGGERATION + 1e-9 || e < 1 / MAX_EXAGGERATION - 1e-9) out.push(`SIZES.${key}.exaggerate is ${e}×; story exaggeration is capped at ${MAX_EXAGGERATION}× (and ${n2(1 / MAX_EXAGGERATION)}× for a shrink)`);
-    }
+    if (s.scale !== undefined && s.scale !== 'cheat' && !(typeof s.scale === 'number' && s.scale > 0 && Number.isFinite(s.scale))) out.push(`SIZES.${key}.scale must be 'cheat' or a positive number (got ${JSON.stringify(s.scale)})`);
+    if (s.exaggerate !== undefined && !(typeof s.exaggerate === 'number' && s.exaggerate > 0 && Number.isFinite(s.exaggerate))) out.push(`SIZES.${key}.exaggerate must be a positive number (or use scale: 'cheat' | <number>)`);
   }
   return out;
 }
 
 /**
- * Validate a world's SIZES and get its helpers: `problems` (error strings), `ok`, `cm(id)` (the
- * real size), `px(id, { ppcm, axis })` (how many px it is drawn at, with its exaggeration) and
- * `scaleOf(id, drawnPxHeight, { ppcm })` (the scale for art drawn `drawnPxHeight` px tall at scale
- * 1, so it comes out at its ledger size next to a critter of that scene; ppcm defaults to the
- * critter at scale 1).
+ * The world's SIZES and its helpers: `problems` (its shape, error strings), `ok`, `cm(id)` (the
+ * real size), `scale(id)` (the factor it is drawn at: 'cheat' resolved by propScale), `px(id,
+ * { ppcm, axis })` (how many px it is drawn at, with its scale) and `scaleOf(id, drawnPxHeight,
+ * { ppcm })` (the scale for art drawn `drawnPxHeight` px tall at scale 1, so it comes out at its
+ * ledger size next to a critter of that scene; ppcm defaults to the critter at scale 1).
  */
 export function sizes(SIZES) {
   const problems = sizeProblems(SIZES);
@@ -142,69 +146,15 @@ export function sizes(SIZES) {
     if (!s) throw new Error(`space.sizes: "${key}" has no real size in SIZES`);
     return s;
   };
-  const px = (key, { ppcm = PX_PER_CM, axis = 'h' } = {}) => get(key)[axis] * (get(key).exaggerate ?? 1) * ppcm;
+  const px = (key, { ppcm = PX_PER_CM, axis = 'h' } = {}) => get(key)[axis] * entryScale(get(key)) * ppcm;
   return {
     problems,
     ok: problems.length === 0,
     cm: (key) => ({ w: get(key).w, d: get(key).d, h: get(key).h }),
+    scale: (key) => entryScale(get(key)),
     px,
     scaleOf: (key, drawnPxHeight, o = {}) => px(key, o) / drawnPxHeight,
   };
-}
-
-/** How far a drawn entity is from its real size, relative to the critter (1 = true scale). */
-function factorOf(real, drawnPx, critterPx, axis) {
-  return (drawnPx / critterPx) / (real[axis] / CRITTER_CM);
-}
-
-/**
- * The scale check (try.mjs): `drawn` is one sample or a list of samples, each
- * `{ t?, critter: px | critterS: s, <id>: px | { h | w | d: px, far? } }` — a critter's drawn
- * height (or its critter() scale) and each entity's drawn height (or width or depth) in the
- * same picture. An entity more than its allowed exaggeration away from its real size relative to
- * the critter is an error: the allowance is its declared `exaggerate` (≤ 1.5×), else
- * SIZE_TOLERANCE. Entities marked `far` (seen through a window, far away) are skipped.
- */
-export function scaleProblems(SIZES, drawn) {
-  const out = sizeProblems(SIZES);
-  if (out.length) return out;
-  const samples = Array.isArray(drawn) ? drawn : [drawn];
-  const seen = new Set();
-  for (const sample of samples) {
-    if (!sample) continue;
-    const at = typeof sample.t === 'number' ? ` at ${sample.t.toFixed(2)}s` : '';
-    const critterPx = sample.critter ?? (sample.critterS ? sample.critterS * CRITTER_PX : null);
-    if (!(critterPx > 0)) {
-      out.push(`the scale check needs a critter's drawn height${at} (critter: px or critterS: scale) to measure against`);
-      continue;
-    }
-    for (const [key, v] of Object.entries(sample)) {
-      if (key === 't' || key === 'critter' || key === 'critterS') continue;
-      const real = SIZES[key];
-      if (!real) {
-        if (!seen.has(`missing:${key}`)) out.push(`"${key}" is drawn but has no real size in SIZES ({ w, d, h } in cm)`);
-        seen.add(`missing:${key}`);
-        continue;
-      }
-      if (real.far || v?.far) continue;
-      const axis = typeof v === 'number' ? 'h' : CM_KEYS.find((k) => typeof v?.[k] === 'number');
-      const px = typeof v === 'number' ? v : v?.[axis];
-      if (!axis || !(px > 0)) continue;
-      const f = factorOf(real, px, critterPx, axis);
-      const allowed = real.exaggerate !== undefined ? Math.max(real.exaggerate, 1 / real.exaggerate) : SIZE_TOLERANCE;
-      if (f > allowed + 1e-6 || f < 1 / allowed - 1e-6) {
-        const tag = `${key}:${f > 1 ? 'big' : 'small'}`;
-        if (seen.has(tag)) continue;
-        seen.add(tag);
-        const realPx = real[axis] * (critterPx / CRITTER_CM);
-        const hint = real.exaggerate !== undefined
-          ? `its SIZES allow ${n2(allowed)}×`
-          : `draw it at ${Math.round(realPx)} px, or declare exaggerate (at most ${MAX_EXAGGERATION}×) in SIZES`;
-        out.push(`"${key}" is drawn ${n2(f)}× its real size${at} (${real[axis]} cm ${axis === 'h' ? 'tall' : axis === 'w' ? 'wide' : 'deep'} next to a ${CRITTER_CM} cm critter is ${Math.round(realPx)} px, drawn ${Math.round(px)} px): ${hint}`);
-      }
-    }
-  }
-  return out;
 }
 
 // ── Containers: inside means behind the frame (still 05) ──────────────────────────────────
@@ -294,7 +244,9 @@ export function magnifier({ from, at, r = 220, zoom = 4, draw, label = true } = 
   defs.push(sh.defs);
   out.push(el('circle', { cx: n2(at[0]), cy: n2(at[1] + r * 0.09), r: n2(r), fill: T.ink, opacity: dark ? 0.45 : 0.18, filter: sh.url }));
   const ctx = { zoom, from, at, r, lw: (px) => px / zoom };
-  const inner = typeof draw === 'function' ? draw(ctx) : draw ?? '';
+  // The lens is a view of the scene, not a second cast: its copy carries no cast tags, so try's
+  // cast check never counts a magnified critter twice.
+  const inner = String(typeof draw === 'function' ? draw(ctx) : draw ?? '').replace(/ data-(who|look)="[^"]*"/g, '');
   const sheen = id(`lenssheen-${key}`);
   defs.push(el('radialGradient', { id: sheen, cx: 0.3, cy: 0.22, r: 0.75 }, [
     el('stop', { offset: 0, 'stop-color': T.canvas, 'stop-opacity': dark ? 0.16 : 0.5 }),

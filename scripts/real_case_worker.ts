@@ -61,6 +61,7 @@ async function main(): Promise<void> {
   const { ensureRealCaseSchema } = await import('@/lib/real-case/schema');
   const { claimNextRealCaseJob, failStaleRealCaseJobs } = await import('@/lib/real-case/jobs');
   const { runRealCaseJob } = await import('@/lib/real-case/render/job');
+  const { prepareJobObjects } = await import('@/lib/real-case/objects/prepare');
   const { anthropicFactChecker } = await import('@/lib/real-case/render/fact-check');
   const { runStoryCycle } = await import('@/lib/real-case/cycle');
   const { anthropicStoryScout } = await import('@/lib/real-case/scout');
@@ -94,6 +95,8 @@ async function main(): Promise<void> {
         secrets: { anthropicApiKey, heygenApiKey },
         factChecker: anthropicFactChecker(anthropic),
         jevTransport: liveJevTransport,
+        objects: (projectDir, storyboard) =>
+          prepareJobObjects(projectDir, storyboard, { create: (p) => anthropic.messages.create(p), log: (event, fields) => log(event, fields) }),
         log: (event, fields) => log(event, fields),
       },
       job,
