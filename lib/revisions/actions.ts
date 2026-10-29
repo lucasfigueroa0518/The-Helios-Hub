@@ -15,7 +15,7 @@ import type { Vertical } from '@/lib/social-hub/types';
 
 import { continueAfterCeiling, restoreOriginal, undoRevision, type EngineDeps } from './engine';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
-import { createRequest, getRequest } from './store';
+import { createRequest, getRequest, recentForItem } from './store';
 import { INSTRUCTION_MAX_CHARS, type PartRef } from './types';
 
 const LOCKED = new Set(['published', 'rejected']);
@@ -37,7 +37,7 @@ const conflict = (o: { ok: boolean; note: string }): ActionOutcome => (o.ok ? o 
 const validPart = (p: PartRef | undefined): p is PartRef =>
   !!p && typeof p.kind === 'string' && typeof p.key === 'string' && p.kind.trim() !== '' && p.key.trim() !== '';
 
-export function reviseVerbs(deps: ReviseDeps): Pick<ContentActions, 'revise' | 'undoRevision' | 'continueRevision'> {
+export function reviseVerbs(deps: ReviseDeps): Pick<ContentActions, 'revise' | 'undoRevision' | 'continueRevision' | 'revisions'> {
   const label = VERTICAL_LABELS[deps.vertical];
   const engine = (q: Query): EngineDeps => ({
     q,
@@ -95,6 +95,13 @@ export function reviseVerbs(deps: ReviseDeps): Pick<ContentActions, 'revise' | '
       const row = await getRequest(q, id);
       if (!row || row.itemId !== itemId) return { ok: false, note: 'That revision is not on this post.', status: 404 };
       return conflict(await continueAfterCeiling(engine(q), id, by, usd));
+    },
+
+    /** The post's rows, newest first, for the post view's revision box (a plain read; null when the post is gone). */
+    async revisions(t) {
+      const q = await deps.query();
+      const itemId = await deps.itemOf(q, t);
+      return itemId ? recentForItem(q, itemId) : null;
     },
   };
 }

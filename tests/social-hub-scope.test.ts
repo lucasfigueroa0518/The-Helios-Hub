@@ -178,11 +178,12 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
  * and the type pages' run-progress poll, plus the Calendar's week board (its
  * slot writes, the unschedule it offers on a booked slot, and Ready to place's place),
  * its Schedules dropdown (the schedule save and its Undo), and AI Events' pool buttons
- * (Pin / Exclude / Clear and Rebuild post, /api/ai-events/pool). Client components
+ * (Pin / Exclude / Clear and Rebuild post, /api/ai-events/pool), and the post view's revision box (Targeted Revisions:
+ * revise, undo, continue, and its poll of the post's revision rows). Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place))|ai-events\/pool)\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/social-hub/post/RevisionBox.tsx']);
+const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place|revise|undo-revision|continue-revision|revisions))|ai-events\/pool)\b/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string, boundaries: ReadonlySet<string> = BOUNDARIES): string | null {
@@ -304,7 +305,8 @@ test('every action route checks its flag before doing anything', () => {
   assert.ok(routes.length >= 4, 'the four action routes exist');
   for (const file of routes) {
     const text = readFileSync(path.join(ROOT, file), 'utf8');
-    assert.match(text, /actionRoute\(/, `${file} must be built with actionRoute() (flag gate)`);
+    // A read beside the actions (the revision box's poll) is gated the same way, by actionReadRoute().
+    assert.match(text, /actionRoute\(|actionReadRoute\(/, `${file} must be built with actionRoute() or actionReadRoute() (flag gate)`);
   }
 });
 

@@ -1,4 +1,4 @@
-import type { PartRef } from '@/lib/revisions/types';
+import type { PartRef, RevisionRow } from '@/lib/revisions/types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 /**
@@ -53,7 +53,10 @@ export type ActionInput = {
 
 export type ActionFn = (target: ActionTarget, by: string, input?: ActionInput) => Promise<ActionOutcome>;
 
-export type ContentActions = { vertical: Vertical } & Partial<Record<ActionVerb, ActionFn>>;
+/** A post's revision rows, newest first (Targeted Revisions: what the post view's box polls); null when the post is gone. */
+export type RevisionsReader = (target: ActionTarget) => Promise<RevisionRow[] | null>;
+
+export type ContentActions = { vertical: Vertical } & Partial<Record<ActionVerb, ActionFn>> & { revisions?: RevisionsReader };
 
 /** A ref the verb needs, or a 400 the route returns. */
 export function need(target: ActionTarget, key: string): string {

@@ -4,17 +4,11 @@ import { explainersDescription } from './descriptions/explainers';
 import { lastFewDaysDescription } from './descriptions/last-few-days';
 import { storiesDescription } from './descriptions/stories';
 import { textOnScreenDescription } from './descriptions/text-on-screen';
+import { VERTICAL_LABELS } from './labels';
 import type { ContentTypeDescription, Vertical } from './types';
 
-/** Reels are shown to people as "text on screen", never "trial reels". */
-export const VERTICAL_LABELS: Record<Vertical, string> = {
-  reels: 'text on screen',
-  explainers: 'explainers',
-  carousels: 'carousels',
-  stories: 'stories',
-  last_few_days: 'last few days',
-  ai_events: 'AI events',
-};
+/** Reels are shown to people as "text on screen", never "trial reels" (labels.ts, shared with the post view). */
+export { VERTICAL_LABELS };
 
 // Real descriptions (Tasks 6-11) are added here.
 const STATIC: Partial<Record<Vertical, ContentTypeDescription>> = { ai_events: aiEventsDescription, carousels: carouselsDescription, last_few_days: lastFewDaysDescription, stories: storiesDescription, reels: textOnScreenDescription, explainers: explainersDescription };

@@ -11,6 +11,7 @@ import { buildDataset, findPost, type HubDataset } from '@/lib/social-hub/datase
 import { factorsFor, groupPosts, THIN_SAMPLE } from '@/lib/social-hub/factors';
 import { hubId } from '@/lib/social-hub/ids';
 import { readAll } from '@/lib/social-hub/load';
+import { pathVersion } from '@/lib/social-hub/media-version';
 import type { HubPost } from '@/lib/social-hub/types';
 import {
   FACTOR_OPTIONS,
@@ -55,7 +56,8 @@ test('Trial Reels: published attempt, scheduled slot, cancelled-unapproved slot'
   assert.equal(pub.nyDate, '2026-10-06');
   assert.equal(pub.metrics.views, 250, 'latest totals (SH-10)');
   assert.equal(pub.history.length, 2);
-  assert.equal(pub.media.kind === 'video' && pub.media.src, `/api/reels/video/${IDS.video1}`);
+  // Versioned by the stored file (Targeted Revisions): a revised video has a new path, so a new URL past the redirect's browser cache.
+  assert.match(pub.media.kind === 'video' ? pub.media.src ?? '' : '', new RegExp(`^/api/reels/video/${IDS.video1}\\?v=[0-9a-z]+$`));
   assert.deepEqual(pub.factorValues.psychology, { kind: 'category', key: 'curiosity', label: 'Curiosity' });
   assert.deepEqual(pub.factorValues.hook, { kind: 'category', key: 'glitch', label: 'Glitch' });
   assert.deepEqual(pub.factorValues.sound, { kind: 'category', key: 'off', label: 'No hook sound' });
@@ -123,6 +125,12 @@ test('IG Stories: a set is one post; completion and frame 1–3 exits match the 
   const set = byId(d, hubId('stories', 'set', IDS.set1));
   assert.equal(set.name, 'Morning Download: OpenAI ships a new model');
   assert.equal(set.media.kind === 'frames' && set.media.frames.length, 3);
+  // A frame's preview URL carries its stored file's version, so a revised frame (new storage_path) is not served from the
+  // route's 540 s browser cache of the old redirect.
+  for (const f of set.media.kind === 'frames' ? set.media.frames : []) {
+    if (!f.path) continue;
+    assert.match(f.src ?? '', new RegExp(`^/api/stories/frames/[^?]+\\?v=${pathVersion(f.path)}$`));
+  }
   assert.equal(set.metrics.reach, 100, 'first-frame reach');
   assert.equal(set.metrics.completion, 0.6, 'last ÷ first reach');
   assert.equal(set.metrics.exitsFirst3, 17);
@@ -278,4 +286,12 @@ test('regressions from the M2 critique: unlinked published slots, failed tries, 
   assert.equal(d.posts.some((p) => p.vertical === 'carousels' && p.status === 'failed'), false, 'no separate failed post for the same content');
   assert.deepEqual(ready.factorValues.photos, { kind: 'tags', values: [{ key: 'unsplash', label: 'Unsplash' }], empty: 'No photo record' });
   assert.equal(d.ideas.some((i) => i.vertical === 'reels' && i.state === 'content_ready'), false, 'SH-59');
+});
+
+test('pathVersion changes with the stored path and is URL-safe', () => {
+  const a = pathVersion('sets/a/03-story.jpg');
+  const b = pathVersion('sets/a/03-story.rev7f3a.jpg');
+  assert.match(a, /^[0-9a-z]+$/);
+  assert.notEqual(a, b);
+  assert.equal(a, pathVersion('sets/a/03-story.jpg'), 'stable for one path');
 });

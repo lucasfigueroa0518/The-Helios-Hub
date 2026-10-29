@@ -148,7 +148,7 @@ export function explainerActions(deps: {
    * Revision rows go where the social worker claims them (the revisions query); the post itself is
    * read by the description through the explainers handle. Refused when the two are not one database.
    */
-  function revisions(): Pick<ContentActions, 'revise' | 'undoRevision' | 'continueRevision'> {
+  function revisions(): Pick<ContentActions, 'revise' | 'undoRevision' | 'continueRevision' | 'revisions'> {
     const NOT_SHARED = 'Explainer changes are not available here: explainers keep their own database on this setup, not the shared database the revisions worker reads. Nothing was changed.';
     const query = async (): Promise<Query | null> => (deps.revisionsQuery ? deps.revisionsQuery() : ((await spineQuery()) as unknown as Query));
     const verbs = reviseVerbs({
@@ -160,6 +160,12 @@ export function explainerActions(deps: {
       (fn: ActionFn | undefined): ActionFn =>
       async (t, by, input) =>
         (await query()) ? fn!(t, by, input) : { ok: false, note: NOT_SHARED, status: 409 };
-    return { revise: guarded(verbs.revise), undoRevision: guarded(verbs.undoRevision), continueRevision: guarded(verbs.continueRevision) };
+    return {
+      revise: guarded(verbs.revise),
+      undoRevision: guarded(verbs.undoRevision),
+      continueRevision: guarded(verbs.continueRevision),
+      // Not shared: there are no revision rows to show (a submit answers with NOT_SHARED).
+      revisions: async (t) => ((await query()) ? verbs.revisions!(t) : []),
+    };
   }
 }

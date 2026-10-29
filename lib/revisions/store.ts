@@ -138,6 +138,12 @@ export async function unmarkUndone(q: Query, id: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/** The item's newest rows first, at most `limit` (the post view's revision box polls this; a plain read). */
+export async function recentForItem(q: Query, itemId: string, limit = 50): Promise<RevisionRow[]> {
+  const { rows } = await q(`SELECT * FROM revisions.requests WHERE item_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2`, [itemId, limit]);
+  return rows.map(toRow);
+}
+
 export async function listForItem(q: Query, itemId: string): Promise<RevisionRow[]> {
   const { rows } = await q(`SELECT * FROM revisions.requests WHERE item_id = $1 ORDER BY created_at, id`, [itemId]);
   return rows.map(toRow);
