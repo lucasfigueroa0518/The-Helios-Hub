@@ -4,6 +4,9 @@ import { isPrivateHost } from '@/lib/net/private-host';
 import { fetchPageFollowingRedirects, fetchText } from '@/lib/reels/net/http';
 import { parseFeed } from '@/lib/reels/net/feed';
 import { parsePage } from '@/lib/reels/net/html';
+import type { JevRunner } from '@/lib/reels/jev/runner';
+import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
+import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
 import { resolveGoogleNewsUrl } from '@/lib/social/ingest/resolve-google-news';
 
 /**
@@ -107,4 +110,29 @@ export async function newsCandidates(headline: string, deps: NewsDeps = {}): Pro
     }),
   );
   return opened.filter((c): c is SeedCandidate => c != null).slice(0, SEED_MAX_CANDIDATES);
+}
+
+export type PickedStory = { candidate: SeedCandidate; score: InterpretedScore };
+
+/**
+ * The best related story among the candidates. A candidate whose headline shares under OVERLAP_FLOOR of the seed headline's
+ * words is dropped unscored (a high score must not pull in an unrelated story). Up to SEED_MAX_CANDIDATES are scored at once
+ * with the same two Jev calls every idea gets (candidates are not stored ideas, so their calls are logged against none);
+ * the highest net wins, and its score becomes the idea's score.
+ */
+export async function pickBest(seedHeadline: string, candidates: readonly SeedCandidate[], jev: JevRunner): Promise<PickedStory | { failed: 'none_related' | 'scoring_unavailable' }> {
+  const related = candidates.filter((c) => headlineOverlap(seedHeadline, c.headline) >= OVERLAP_FLOOR).slice(0, SEED_MAX_CANDIDATES);
+  if (related.length === 0) return { failed: 'none_related' };
+  const settled = await Promise.allSettled(
+    related.map((c, i) =>
+      scoreOneIdea(null as unknown as string, jev, { id: `candidate:${i}`, lastJoinedMs: Date.now(), members: [{ role: 'primary', sourceName: c.outlet, headline: c.headline, body: c.body }] }, null),
+    ),
+  );
+  if (settled.every((r) => r.status === 'rejected')) return { failed: 'scoring_unavailable' };
+  let best: PickedStory | null = null;
+  settled.forEach((r, i) => {
+    if (r.status !== 'fulfilled' || r.value.net == null) return;
+    if (!best || r.value.net > (best.score.net ?? -Infinity)) best = { candidate: related[i]!, score: r.value };
+  });
+  return best ?? { failed: 'none_related' };
 }

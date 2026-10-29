@@ -7,9 +7,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { createPostIdea, insertSource } from '@/lib/reels/repository';
-import { OVERLAP_FLOOR, SEED_MAX_CANDIDATES, collectedCandidates, headlineOverlap, newsCandidates } from '@/lib/reels/seed-search';
+import { OVERLAP_FLOOR, SEED_MAX_CANDIDATES, collectedCandidates, headlineOverlap, newsCandidates, pickBest, type SeedCandidate } from '@/lib/reels/seed-search';
 
-import { PAGE, RUN, reelsDb } from './fixtures/reels-seed';
+import { PAGE, RUN, reelsDb, stub } from './fixtures/reels-seed';
 
 const rss = (items: Array<{ title: string; link: string }>) =>
   `<?xml version="1.0"?><rss version="2.0"><channel>${items.map((i) => `<item><title>${i.title}</title><link>${i.link}</link><pubDate>Wed, 28 Oct 2026 10:00:00 GMT</pubDate></item>`).join('')}</channel></rss>`;
@@ -60,4 +60,31 @@ test('newsCandidates: an HTTP error, a zero-item feed or a throwing page read is
   assert.deepEqual(await newsCandidates('Anything at all', { ...deps, fetchText: async () => { throw new Error('503'); } }), []);
   assert.deepEqual(await newsCandidates('Anything at all', { ...deps, fetchText: async () => rss([]) }), []);
   assert.deepEqual(await newsCandidates('Anything at all', { fetchText: async () => rss([{ title: 'Anything at all today', link: 'https://p.test/a' }]), readPage: async () => { throw new Error('blocked'); } }), []);
+});
+
+const cand = (url: string, headline: string): SeedCandidate => ({ url, headline, body: PAGE, outlet: 'Wire', source: 'collected' });
+
+test('pickBest scores related candidates, logs each Jev call, and returns the highest net; unrelated ones are never scored', async () => {
+  const pg = await reelsDb();
+  const { jev, calls } = stub();
+  const picked = await pickBest('Anthropic releases Claude Opus 5.5', [cand('https://a.test/1', 'Anthropic releases Claude Opus 5.5'), cand('https://a.test/2', 'Local bakery wins regional award')], jev);
+  assert.ok('candidate' in picked && picked.candidate.url === 'https://a.test/1');
+  assert.equal(calls.n, 2, 'one related candidate, two Jev calls');
+  assert.ok(Number((await pg.query<{ n: string }>(`SELECT count(*)::text AS n FROM reels.jev_logs`)).rows[0]!.n) >= 2, 'the calls are logged');
+});
+
+test('pickBest takes the higher net when two related candidates score differently', async () => {
+  await reelsDb();
+  const { jev } = stub({ scoreBy: (state) => (JSON.stringify(state).includes('SECOND') ? 4 : 2) });
+  const a = { ...cand('https://a.test/1', 'Anthropic releases Claude Opus 5.5'), body: PAGE };
+  const b = { ...cand('https://a.test/2', 'Anthropic releases Claude Opus 5.5 SECOND'), body: PAGE };
+  const picked = await pickBest('Anthropic releases Claude Opus 5.5', [a, b], jev);
+  assert.ok('candidate' in picked && picked.candidate.url === 'https://a.test/2');
+});
+
+test('pickBest: nothing related, or every score failing, is a named failure, not a throw', async () => {
+  await reelsDb();
+  assert.deepEqual(await pickBest('Anthropic releases Claude Opus 5.5', [cand('https://a.test/2', 'Local bakery wins regional award')], stub().jev), { failed: 'none_related' });
+  assert.deepEqual(await pickBest('Anthropic releases Claude Opus 5.5', [cand('https://a.test/1', 'Anthropic releases Claude Opus 5.5')], stub({ fail: true }).jev), { failed: 'scoring_unavailable' });
+  assert.deepEqual(await pickBest('Anthropic releases Claude Opus 5.5', [], stub().jev), { failed: 'none_related' });
 });

@@ -14,6 +14,7 @@ import { groupRun } from '@/lib/reels/pipeline/grouping';
 import { putOnSlate } from '@/lib/reels/pipeline/promote';
 import { carryoverMisses, heldFromCarryover } from '@/lib/reels/scoring/decide';
 import { loadSlateRanked } from '@/lib/reels/scoring/store';
+import type { SeedCandidate } from '@/lib/reels/seed-search';
 import { MAX_TEXT_CHARS, SeedError, addReelSeed, isUnscoredSeed, readOpenSeeds, type ReelSeedOutcome } from '@/lib/reels/seeds';
 import { reelIdeas } from '@/lib/social-hub/adapters/reels';
 import { REEL_IDEAS_SQL, type ReelIdeaRow } from '@/lib/social-hub/queries/reels';
@@ -186,18 +187,86 @@ test('text over the limit is refused with how much to cut, never trimmed, and no
   assert.equal(body.length, MAX_TEXT_CHARS, 'kept whole');
 });
 
-test('an unreadable link still adds the idea, with the headline as its text and a note', async () => {
+// Searches are always stubbed in these tests: nothing here may reach the network.
+const NO_SEARCH = { collected: async () => [], news: async () => [] };
+const story = (url: string, title: string, source: SeedCandidate['source'] = 'collected'): SeedCandidate => ({ url, headline: title, body: PAGE, outlet: 'Wire', source });
+
+test('a readable link with no text of the person’s own is used as the idea’s text, and nothing is searched', async () => {
   const pg = await reelsDb();
   const { jev } = stub();
-  const out = await add({ headline: 'Behind a paywall', url: 'https://paywalled.test/story' }, { jev, readPage: async () => null });
-  assert.equal(out.scored, true);
-  assert.ok(out.flags.some((f) => /couldn’t read that page/.test(f)));
-  const body = (await pg.query<{ body: string }>(`SELECT body FROM reels.sources WHERE adapter_id = 'seed'`)).rows[0]!.body;
-  assert.equal(body, 'Behind a paywall');
-  // A readable page with no text of the person's own is used as the idea's text.
-  const read = await add({ headline: 'A readable page', url: 'https://ok.test/story' }, { jev, readPage: async () => PAGE });
+  const search = { collected: async () => assert.fail('no search when the page reads'), news: async () => assert.fail('no search when the page reads') };
+  const read = await add({ headline: 'A readable page', url: 'https://ok.test/story' }, { jev, readPage: async () => PAGE, search });
   assert.equal(read.flags.length, 0);
+  assert.equal(read.substitute, undefined);
   assert.equal((await pg.query<{ body: string }>(`SELECT s.body FROM reels.sources s JOIN reels.post_idea_members m ON m.source_id = s.id WHERE m.post_idea_id = $1`, [read.id])).rows[0]!.body, PAGE.trim());
+});
+
+test('a headline with no link builds from the best related collected story, with that story’s link and text', async () => {
+  const pg = await reelsDb();
+  const { jev, calls } = stub();
+  const search = {
+    collected: async () => [story('https://wire.test/opus', 'Anthropic releases Claude Opus 5.5 with lower prices')],
+    news: async () => assert.fail('collected stories answered; Google News is not asked'),
+  };
+  const out = await add({ headline: 'Anthropic releases Claude Opus 5.5' }, { jev, search });
+  assert.deepEqual(out.substitute, { url: 'https://wire.test/opus', title: 'Anthropic releases Claude Opus 5.5 with lower prices', why: 'headline_only' });
+  assert.ok(out.flags.some((f) => /found from your headline/.test(f)), out.flags.join('|'));
+  const src = (await pg.query<any>(`SELECT canonical_url, headline, body FROM reels.sources WHERE adapter_id = 'seed'`)).rows;
+  assert.deepEqual(src, [{ canonical_url: 'https://wire.test/opus', headline: 'Anthropic releases Claude Opus 5.5', body: PAGE.trim() }], 'your headline, the story’s link and text');
+  assert.equal(calls.n, 2, 'the winner’s score is the idea’s score: no second scoring');
+  assert.equal(await count(pg, `reels.idea_scores WHERE post_idea_id = '${out.id}'`), 1);
+});
+
+test('collected stories first, then Google News: the news tier answers when nothing collected is related', async () => {
+  await reelsDb();
+  const { jev } = stub();
+  const search = { collected: async () => [story('https://x.test/a', 'Local bakery wins regional award')], news: async () => [story('https://publisher.test/n', 'Anthropic releases Claude Opus 5.5 - The Verge', 'news')] };
+  const out = await add({ headline: 'Anthropic releases Claude Opus 5.5' }, { jev, search });
+  assert.equal(out.substitute?.url, 'https://publisher.test/n');
+});
+
+test('nothing related anywhere adds nothing and spends nothing', async () => {
+  const pg = await reelsDb();
+  const { jev, calls } = stub();
+  const out = await addReelSeed({ headline: 'Bitcoin' }, { jev, search: { ...NO_SEARCH, collected: async () => [story('https://x.test/a', 'Local bakery wins regional award')] } });
+  assert.deepEqual(out, { status: 'no_match', reason: 'nothing_found' });
+  assert.equal(calls.n, 0);
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0);
+});
+
+test('an unreadable link searches for the story; the idea says the link could not be read and which story it used', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const search = { ...NO_SEARCH, news: async () => [story('https://publisher.test/n', 'Behind a paywall: the full story', 'news')] };
+  const out = await add({ headline: 'Behind a paywall', url: 'https://paywalled.test/story' }, { jev, readPage: async () => null, search });
+  assert.equal(out.substitute?.why, 'link_unreadable');
+  assert.ok(out.flags.some((f) => /couldn’t read your link/.test(f) && /Behind a paywall: the full story/.test(f)), out.flags.join('|'));
+  assert.equal((await pg.query<any>(`SELECT canonical_url FROM reels.sources WHERE adapter_id = 'seed'`)).rows[0].canonical_url, 'https://publisher.test/n');
+});
+
+test('an unreadable link and no related story adds nothing, and says the link was the problem', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const out = await addReelSeed({ headline: 'Behind a paywall', url: 'https://paywalled.test/story' }, { jev, readPage: async () => null, search: NO_SEARCH });
+  assert.deepEqual(out, { status: 'no_match', reason: 'nothing_found', linkUnreadable: true });
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0);
+});
+
+test('a substitute story already in the queue stops as a duplicate', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const existing = await ordinaryIdea(pg, { url: 'https://wire.test/opus', headline: 'Anthropic releases Claude Opus 5.5 with lower prices', queued: true });
+  const out = await addReelSeed({ headline: 'Opus 5.5 is out' }, { jev, search: { ...NO_SEARCH, collected: async () => [story('https://www.wire.test/opus?utm_source=x', 'Claude Opus 5.5 is out from Anthropic')] } });
+  assert.equal(out.status, 'duplicate');
+  assert.equal(out.status === 'duplicate' && out.existing.id, existing);
+});
+
+test('every candidate failing to score adds nothing and says scoring was unavailable', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub({ fail: true });
+  const out = await addReelSeed({ headline: 'Anthropic releases Claude Opus 5.5' }, { jev, search: { ...NO_SEARCH, collected: async () => [story('https://wire.test/opus', 'Anthropic releases Claude Opus 5.5 with lower prices')] } });
+  assert.deepEqual(out, { status: 'no_match', reason: 'scoring_unavailable' });
+  assert.equal(await count(pg, `reels.sources WHERE adapter_id = 'seed'`), 0);
 });
 
 test('a failed model call keeps the idea, shown “not scored yet”, and a pin on it is refused', async () => {

@@ -16,13 +16,13 @@ export const NORMAL = 'a0000000-0000-4000-8000-000000000011';
 export const PAGE = 'A long page about a new model and what it changes for everyone building with it. '.repeat(6);
 
 /** A stub transport: every score question answers 3 of 4 at 0.9 confidence, every yes/no 0.1. Counts the calls. */
-export function stub(opts: { fail?: boolean } = {}) {
+export function stub(opts: { fail?: boolean; scoreBy?: (state: EntryType) => number } = {}) {
   const calls = { n: 0 };
   const transport: JevTransport = {
-    async systemOne<const Q extends Questions>(_state: EntryType, questions: Q) {
+    async systemOne<const Q extends Questions>(state: EntryType, questions: Q) {
       calls.n += 1;
       if (opts.fail) throw new Error('stub: model unavailable');
-      const answers = Object.fromEntries(Object.keys(questions).map((k) => [k, ['frontierDrop', 'blueChipCompany', 'blueChipPerson'].includes(k) ? { noul: 0.1 } : { score: 3, confidence: 0.9 }]));
+      const answers = Object.fromEntries(Object.keys(questions).map((k) => [k, ['frontierDrop', 'blueChipCompany', 'blueChipPerson'].includes(k) ? { noul: 0.1 } : { score: opts.scoreBy ? opts.scoreBy(state) : 3, confidence: 0.9 }]));
       return { answers, usage: { input_tokens: 1000, output_tokens: 0 }, model: 'stub' } as never;
     },
   };

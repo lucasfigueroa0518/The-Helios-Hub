@@ -2,7 +2,7 @@ import { dbQuery } from '@/lib/db';
 import { loadPublishedStoryKeys, storyUrlKey } from '@/lib/reels/copy/held-out';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { canonicalizeUrl } from '@/lib/reels/net/http';
-import { readPageText } from '@/lib/reels/seed-search';
+import { collectedCandidates, newsCandidates, pickBest, readPageText, type PickedStory, type SeedCandidate } from '@/lib/reels/seed-search';
 import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
 import { createPostIdea, insertSource } from '@/lib/reels/repository';
 import { loadIdeaMaterial } from '@/lib/reels/scoring/store';
@@ -36,6 +36,11 @@ export type ReelSeedDeps = {
   jev: JevRunner;
   /** The page's text, or null when it cannot be read. Default: the plain page reader the night uses (no model). */
   readPage?: (url: string) => Promise<string | null>;
+  /** Where a substitute story comes from when there is no link or it cannot be read. Default: the free tiers in seed-search. */
+  search?: {
+    collected?: (headline: string) => Promise<SeedCandidate[]>;
+    news?: (headline: string) => Promise<SeedCandidate[]>;
+  };
 };
 
 export type ReelSeedResult = {
@@ -55,7 +60,7 @@ export type ReelSeedOutcome =
   | (ReelSeedResult & { status: 'added'; substitute?: { url: string; title: string; why: 'link_unreadable' | 'headline_only' } })
   | { status: 'duplicate'; existing: { id: string; headline: string; net: number | null; yours: boolean } }
   | { status: 'needs_paid_confirm'; estimateUsd: number; maxUsd: number }
-  | { status: 'no_match'; reason: 'nothing_found' | 'scoring_unavailable' };
+  | { status: 'no_match'; reason: 'nothing_found' | 'scoring_unavailable'; linkUnreadable?: true };
 
 const clean = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
@@ -94,6 +99,21 @@ export async function isUnscoredSeed(postIdeaId: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * A related story for a headline: collected stories first, then Google News, taking the first tier that has a related story
+ * that scores. A tier that errors counts as empty. Says why when none does.
+ */
+async function findSubstitute(headline: string, deps: ReelSeedDeps): Promise<PickedStory | Extract<ReelSeedOutcome, { status: 'no_match' }>> {
+  const tiers = [deps.search?.collected ?? collectedCandidates, deps.search?.news ?? ((h: string) => newsCandidates(h))];
+  let scoringDown = false;
+  for (const tier of tiers) {
+    const picked = await pickBest(headline, await tier(headline).catch(() => []), deps.jev);
+    if ('candidate' in picked) return picked;
+    if (picked.failed === 'scoring_unavailable') scoringDown = true;
+  }
+  return { status: 'no_match', reason: scoringDown ? 'scoring_unavailable' : 'nothing_found' };
 }
 
 /** Notes shown beside the result. Each read is read-only and never throws. */
@@ -217,13 +237,30 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
 
   const flags: string[] = [];
   let body = text;
+  let unreadable = false;
   if (!body && link) {
     const page = await (deps.readPage ?? readPageText)(link).catch(() => null);
     if (page && page.trim().length >= MIN_PAGE_CHARS) body = page.trim().slice(0, MAX_TEXT_CHARS);
-    else flags.push('I couldn’t read that page, so the idea uses just your headline as its text. A line or two of your own would give the writer more to work with.');
+    else unreadable = true;
   }
-  if (!body) body = headline;
-  if (body === headline && !link) flags.push('A one-line idea gives thin copy. Paste a few lines of the story if you have them.');
+  // No text and no readable link: the headline alone gives the writer nothing, so find the story (collected, then the web).
+  let substitute: Extract<ReelSeedOutcome, { status: 'added' }>['substitute'];
+  let found: PickedStory | null = null;
+  if (!body) {
+    const result = await findSubstitute(headline, deps);
+    if (!('candidate' in result)) return unreadable ? { ...result, linkUnreadable: true } : result;
+    found = result;
+    canonical = canonicalizeUrl(found.candidate.url);
+    if (!input.seedAnyway) {
+      const duplicate = await findQueueDuplicate(canonical, found.candidate.headline);
+      if (duplicate) return duplicate;
+    }
+    body = found.candidate.body.trim().slice(0, MAX_TEXT_CHARS);
+    const why = unreadable ? 'link_unreadable' : 'headline_only';
+    substitute = { url: found.candidate.url, title: found.candidate.headline, why };
+    const from = `“${found.candidate.headline}” (${found.candidate.outlet})`;
+    flags.push(unreadable ? `I couldn’t read your link, so I used ${from} instead.` : `Built from ${from}, found from your headline.`);
+  }
 
   // The source, then the idea. The source is deleted again if the idea cannot be made, so nothing half-exists.
   const sourceId = await insertSource({
@@ -262,12 +299,12 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
   try {
     const [material] = await loadIdeaMaterial([ideaId]);
     if (!material) throw new Error('idea not found');
-    const result = await scoreOneIdea(null as unknown as string, deps.jev, material);
+    const result = found?.score ?? (await scoreOneIdea(null as unknown as string, deps.jev, material));
     const written = await writeSeedRow(ideaId, result);
-    return { status: 'added', id: ideaId, title: headline, scored: written, net: written ? result.net : null, flags };
+    return { status: 'added', id: ideaId, title: headline, scored: written, net: written ? result.net : null, flags, substitute };
   } catch (error) {
     console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'reels-seed', message: 'scoring_failed', postIdeaId: ideaId, error: error instanceof Error ? error.message : String(error) }));
     flags.push('Scoring failed, so the idea is kept but shows “Not scored yet”.');
-    return { status: 'added', id: ideaId, title: headline, scored: false, net: null, flags };
+    return { status: 'added', id: ideaId, title: headline, scored: false, net: null, flags, substitute };
   }
 }
