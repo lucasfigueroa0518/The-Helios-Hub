@@ -1,3 +1,4 @@
+import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Query } from '@/lib/social/store/pg';
 import type { Interpretation, PartRef, PartState, RevisionRow, Vertical } from '@/lib/revisions/types';
 
@@ -10,7 +11,7 @@ function toRow(r: any): RevisionRow {
     id: r.id,
     vertical: r.vertical,
     itemId: r.item_id,
-    refs: r.refs ?? [],
+    refs: r.refs ?? {},
     requestedBy: r.requested_by ?? null,
     instruction: r.instruction,
     parentId: r.parent_id ?? null,
@@ -37,7 +38,7 @@ function toRow(r: any): RevisionRow {
 
 export async function createRequest(
   q: Query,
-  a: { vertical: Vertical; refs: PartRef[]; itemId: string; by: string | null; instruction: string; parentId?: string | null },
+  a: { vertical: Vertical; refs: ActionTarget; itemId: string; by: string | null; instruction: string; parentId?: string | null },
 ): Promise<RevisionRow> {
   const { rows } = await q(
     `INSERT INTO revisions.requests (vertical, item_id, refs, requested_by, instruction, parent_id)

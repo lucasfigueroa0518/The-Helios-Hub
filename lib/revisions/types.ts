@@ -20,7 +20,14 @@ export type RevisionStatus =
   | 'undone';
 
 /** What the interpreter decided the instruction means. Shape is owned by the engine. */
-export type Interpretation = { part?: PartRef; fixKind?: FixKind; stageTag?: string; [k: string]: unknown };
+export type Interpretation = {
+  vertical: Vertical;
+  part: PartRef;
+  fixKind: FixKind;
+  stageTag: string;
+  instruction: string;
+  args?: Record<string, string>;
+};
 
 /** A part's state before or after a revision (stored as jsonb). */
 export type PartState = { copy?: unknown; photo?: unknown; colors?: unknown; layout?: unknown; files: string[] };
@@ -29,7 +36,7 @@ export type RevisionRow = {
   id: string;
   vertical: Vertical;
   itemId: string;
-  refs: PartRef[];
+  refs: ActionTarget;
   requestedBy: string | null;
   instruction: string;
   parentId: string | null;

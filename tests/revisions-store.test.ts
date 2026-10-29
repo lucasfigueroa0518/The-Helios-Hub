@@ -35,27 +35,27 @@ const part: PartRef = { kind: 'slide', key: '3' };
 const state = (n: string): PartState => ({ copy: n, files: [`${n}.png`] });
 
 async function applyOne(q: Query, itemId: string, before: string, after: string) {
-  const r = await createRequest(q, { vertical: 'carousels', refs: [part], itemId, by: 'tommy', instruction: `to ${after}` });
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: 'tommy', instruction: `to ${after}` });
   await claimNextRequested(q);
-  await markRunning(q, r.id, { part, fixKind: 'wording', stageTag: 'writer' }, 0.1, 0.5);
+  await markRunning(q, r.id, { vertical: 'carousels', part, fixKind: 'wording', stageTag: 'writer', instruction: 'shorter' }, 0.1, 0.5);
   await markApplied(q, r.id, { before: state(before), after: state(after), costUsd: 0.02 });
   return r;
 }
 
 test('createRequest inserts status requested', async () => {
   const { q, itemId } = await setup();
-  const r = await createRequest(q, { vertical: 'carousels', refs: [part], itemId, by: 'tommy', instruction: 'shorter' });
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: 'tommy', instruction: 'shorter' });
   assert.equal(r.status, 'requested');
   assert.equal(r.itemId, itemId);
-  assert.deepEqual(r.refs, [part]);
+  assert.deepEqual(r.refs, { postId: 'p1' });
   assert.equal(r.spendUsd, 0);
   assert.equal(r.parentId, null);
 });
 
 test('claimNextRequested takes the oldest and flips to running exactly once (second claim returns null)', async () => {
   const { q, itemId } = await setup();
-  const a = await createRequest(q, { vertical: 'carousels', refs: [], itemId, by: null, instruction: 'a' });
-  await createRequest(q, { vertical: 'carousels', refs: [], itemId, by: null, instruction: 'b' });
+  const a = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: null, instruction: 'a' });
+  await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: null, instruction: 'b' });
   const first = await claimNextRequested(q);
   assert.equal(first?.id, a.id);
   assert.equal(first?.status, 'running');
@@ -85,8 +85,8 @@ test('originalOf returns the before of the first applied revision even after lat
 
 test('parentId links an ask-back reply', async () => {
   const { q, itemId } = await setup();
-  const ask = await createRequest(q, { vertical: 'carousels', refs: [], itemId, by: 'tommy', instruction: 'fix it' });
-  const reply = await createRequest(q, { vertical: 'carousels', refs: [], itemId, by: 'tommy', instruction: 'slide 3', parentId: ask.id });
+  const ask = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: 'tommy', instruction: 'fix it' });
+  const reply = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: 'tommy', instruction: 'slide 3', parentId: ask.id });
   assert.equal(reply.parentId, ask.id);
   const all = await listForItem(q, itemId);
   assert.deepEqual(all.map((r) => r.id), [ask.id, reply.id]);
@@ -116,7 +116,7 @@ test('originalOf returns revision 1 before with revisions 1 and 2 both live', as
 
 test('markUndone on a row that is not applied changes nothing', async () => {
   const { q, itemId } = await setup();
-  const r = await createRequest(q, { vertical: 'carousels', refs: [part], itemId, by: null, instruction: 'x' });
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: null, instruction: 'x' });
   await markUndone(q, r.id, 'tommy');
   const [row] = await listForItem(q, itemId);
   assert.equal(row.status, 'requested');
@@ -126,7 +126,7 @@ test('markUndone on a row that is not applied changes nothing', async () => {
 
 test('markApplied on a row that is not running changes nothing', async () => {
   const { q, itemId } = await setup();
-  const r = await createRequest(q, { vertical: 'carousels', refs: [part], itemId, by: null, instruction: 'x' });
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: null, instruction: 'x' });
   await markApplied(q, r.id, { before: state('a'), after: state('b'), costUsd: 0.5 });
   const [row] = await listForItem(q, itemId);
   assert.equal(row.status, 'requested');
