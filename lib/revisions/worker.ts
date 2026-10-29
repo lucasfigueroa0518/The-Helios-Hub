@@ -15,7 +15,7 @@ import type { Query } from '@/lib/social/store/pg';
 import { runRevision } from './engine';
 import { interpret, type Complete } from './interpret';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
-import { addSpend, claimNextRequested, getRequest, markAsking, markEnded, setInterpretation } from './store';
+import { addSpend, claimNextRequested, getRequest, markAsking, markEnded, setInterpretation, type ClaimFilter } from './store';
 import type { RevisionRow } from './types';
 
 export type RevisionWorkerDeps = {
@@ -26,6 +26,8 @@ export type RevisionWorkerDeps = {
   /** Rows handled per tick (default 3), so revisions never starve the rest of the loop. */
   max?: number;
   log?: (message: string, fields?: Record<string, unknown>) => void;
+  /** Which verticals this worker claims (default: all). The social worker excludes explainers; helios-explainers takes only them. */
+  filter?: ClaimFilter;
 };
 
 const LOCKED = new Set(['published', 'rejected']);
@@ -36,7 +38,7 @@ export async function claimAndRunRevisions(deps: RevisionWorkerDeps): Promise<nu
   const max = deps.max ?? 3;
   let n = 0;
   while (n < max) {
-    const row = await claimNextRequested(deps.q);
+    const row = await claimNextRequested(deps.q, deps.filter);
     if (!row) break;
     n += 1;
     await handle(deps, row);

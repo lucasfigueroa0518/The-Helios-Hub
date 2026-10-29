@@ -481,7 +481,8 @@ async function main(): Promise<void> {
       }
 
       // Targeted Revisions a person queued from the hub (only those rows; never a sweep): interpret, then ask back or run.
-      const revised = await claimAndRunRevisions({ q: query, complete: reviseComplete, notify: async (m) => log('revision_notice', { message: m }), now: () => new Date(), log }).catch((error) => {
+      // Explainer revisions are helios-explainers' (they run a render session in its job folders and memory budget).
+      const revised = await claimAndRunRevisions({ q: query, complete: reviseComplete, notify: async (m) => log('revision_notice', { message: m }), now: () => new Date(), log, filter: { exclude: 'explainers' } }).catch((error) => {
         // Logged once per distinct error (e.g. before db/revisions_schema.sql is applied), not every poll.
         const text = errorText(error);
         if (text !== lastRevisionsError) log('revisions_claim_failed', { error: text });

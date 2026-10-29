@@ -48,14 +48,22 @@ export async function createRequest(
   return toRow(rows[0]);
 }
 
-/** Oldest `requested` row -> `running`, exactly once (single UPDATE, row-locked, SKIP LOCKED). */
-export async function claimNextRequested(q: Query): Promise<RevisionRow | null> {
+/**
+ * Which rows a worker claims: `only` one vertical, or every vertical but the `exclude` one. Explainer
+ * revisions run in helios-explainers (only: 'explainers'); the social worker claims the rest.
+ */
+export type ClaimFilter = { only?: Vertical; exclude?: Vertical };
+
+/** Oldest `requested` row (within `filter`) -> `running`, exactly once (single UPDATE, row-locked, SKIP LOCKED). */
+export async function claimNextRequested(q: Query, filter: ClaimFilter = {}): Promise<RevisionRow | null> {
   const { rows } = await q(
     `UPDATE revisions.requests SET status = 'running', started_at = now()
       WHERE id = (SELECT id FROM revisions.requests WHERE status = 'requested'
+                     AND ($1::text IS NULL OR vertical = $1) AND ($2::text IS NULL OR vertical <> $2)
                    ORDER BY created_at, id LIMIT 1 FOR UPDATE SKIP LOCKED)
         AND status = 'requested'
       RETURNING *`,
+    [filter.only ?? null, filter.exclude ?? null],
   );
   return rows[0] ? toRow(rows[0]) : null;
 }

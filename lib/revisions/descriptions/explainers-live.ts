@@ -2,13 +2,14 @@
  * Live deps for the Explainers revision description (explainers.ts). Every service import is lazy,
  * so importing the registry opens no database, loads no Agent SDK and touches no disk.
  *
- * Where it runs: the revisions step of the social worker (helios-social on helios-social-worker),
- * which shares worker.env with helios-explainers: the same EXPLAINERS_JOBS_DIR (the job folders
- * live on that VM), the same Explainers database (EXPLAINERS_DB=supabase: the main database the
- * revisions log is in) and the same artifact store (EXPLAINERS_STORAGE=bucket).
+ * Where it runs: the explainers-only revisions step of helios-explainers (scripts/explainers_worker.ts,
+ * claimAndRunRevisions with filter { only: 'explainers' }; the social worker excludes these rows), so a
+ * scene redo runs in that worker's job folders (EXPLAINERS_JOBS_DIR), memory budget and one-at-a-time
+ * loop, and its start-up recovers an interrupted redo (recoverSceneRedos). The revisions log is in the
+ * main database (socialQuery); the Explainers handle is the same database (EXPLAINERS_DB=supabase).
  *
- * The session is the only billable call of a scene redo (the voice and music are kept; the caption
- * is not rewritten). Its spend is charged to the revision's meter message by message through a
+ * The session is the only billable call of a scene redo. It runs voice-locked (no HeyGen key, no
+ * HeyGen hosts), so the voice and music cannot be made again; the caption is not rewritten. Its spend is charged to the revision's meter message by message through a
  * ChargedSpendMeter that also keeps the job's own per-reel cap (spend_cap_usd, carrying spend_usd),
  * and the session aborts the moment either is passed.
  */
@@ -42,11 +43,10 @@ export const liveExplainersDeps: ExplainersDeps = {
     const settings = await loadSettings(db);
     if (!settings.voice_id) throw new Error('no HeyGen voice id is set (Settings → HeyGen voice ID)');
     const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim();
-    const heygenApiKey = process.env.HEYGEN_API_KEY?.trim();
-    if (!anthropicApiKey || !heygenApiKey) throw new Error('the worker has no ANTHROPIC_API_KEY or HEYGEN_API_KEY');
+    if (!anthropicApiKey) throw new Error('the worker has no ANTHROPIC_API_KEY');
     const meter = new ChargedSpendMeter(input.job.spend_cap_usd, input.job.spend_usd, (usd) => m.spend(usd));
     return rebuildScene(
-      { db, query: await loadAgentQuery(), jobsRoot: liveJobsRoot(), secrets: { anthropicApiKey, heygenApiKey }, voiceId: settings.voice_id, meter },
+      { db, query: await loadAgentQuery(), jobsRoot: liveJobsRoot(), secrets: { anthropicApiKey }, voiceId: settings.voice_id, meter },
       input.job,
       { frameId: input.frameId, frameNumber: input.frameNumber, note: input.note },
     );

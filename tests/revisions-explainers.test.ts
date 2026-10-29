@@ -23,8 +23,11 @@ import { localArtifactStore } from '@/lib/explainers/storage';
 import type { LintViolation } from '@/lib/explainers/types';
 import { explainerActions } from '@/lib/publishing/actions/explainers';
 import { CeilingReached, createCostMeter, resetCapsForTest, setCapsForTest } from '@/lib/revisions/caps';
+import { hold, setAside } from '@/lib/revisions/explainers-folder';
+import { claimAndRunRevisions } from '@/lib/revisions/worker';
 import {
   EXPLAINERS_FOLDER_GONE_NOTE,
+  recoverSceneRedos,
   EXPLAINERS_SCENE_REDO_SHARE,
   EXPLAINERS_STAGE_TAGS,
   createExplainersDescription,
@@ -153,20 +156,22 @@ const result = (cost: number): AgentMessage => ({
   errors: [],
 });
 
-type SessionLog = { prompts: string[]; atStart: string[]; paidMessages: number };
+type SessionLog = { prompts: string[]; atStart: string[]; paidMessages: number; options?: Record<string, any> };
 
 /** A session that rebuilds the named frame: writes a new module, a new video and a new contact sheet. */
-function sceneSession(log: SessionLog, opts: { messages?: number; writeModule?: boolean } = {}): AgentQuery {
+function sceneSession(log: SessionLog, opts: { messages?: number; writeModule?: boolean; inputTokens?: number; alsoWrite?: Record<string, string> } = {}): AgentQuery {
   return ({ prompt, options }) =>
     (async function* () {
       log.prompts.push(prompt);
+      log.options = options;
       const dir = String(options.cwd);
       log.atStart = fs.readdirSync(path.join(dir, 'assets', 'frames')).sort();
+      for (const [rel, body] of Object.entries(opts.alsoWrite ?? {})) fs.writeFileSync(path.join(dir, rel), body);
       const frame = /Stale frame: ([a-z0-9-]+)\./.exec(prompt)?.[1] ?? 'none';
       const signal = (options.abortController as AbortController).signal;
       for (let i = 0; i < (opts.messages ?? 1); i += 1) {
         log.paidMessages += 1;
-        yield assistant(`m${i}`, 100_000);
+        yield assistant(`m${i}`, opts.inputTokens ?? 100_000);
         if (signal.aborted) throw new Error('aborted');
       }
       if (opts.writeModule !== false) fs.writeFileSync(path.join(dir, 'assets', 'frames', `${frame}.js`), `export default { draw: () => "<text>new ${frame} webhook</text>" };\n`);
@@ -191,7 +196,7 @@ function depsFor(fx: Fx, over: Partial<ExplainersDeps> & { query?: AgentQuery; b
           db: fx.db,
           query: over.query ?? sceneSession(log),
           jobsRoot: fx.jobsRoot,
-          secrets: { anthropicApiKey: 'sk', heygenApiKey: 'hg' },
+          secrets: { anthropicApiKey: 'sk' },
           voiceId: 'voice-1',
           meter,
           hyperframesLint: () => [],
@@ -390,8 +395,13 @@ test('scene redo deletes only that frame\'s module and calls resume with a resum
   assert.equal(log.prompts[0], `${RESUME_PROMPT} ${sceneResumeNote('02-gap', 'Make the critter wave at the mailbox.')}`);
   assert.match(log.prompts[0]!, /Stale frame: 02-gap\./);
   assert.match(log.prompts[0]!, /Make the critter wave at the mailbox\./);
-  // When the session started only 02-gap's module (and its sound events) were gone.
-  assert.deepEqual(log.atStart, ['01-hook.js', '01-opener.js', '03-dictionary.js']);
+  // When the session started only 02-gap's module and sound events were gone: renamed aside, not deleted.
+  assert.deepEqual(log.atStart, ['01-hook.js', '01-opener.js', '02-gap.events.json.before-revr1', '02-gap.js.before-revr1', '03-dictionary.js']);
+  // The session is voice-locked: no HeyGen key and no HeyGen hosts, so the voice cannot be made again.
+  assert.equal(log.options!.env.HEYGEN_API_KEY, undefined);
+  assert.ok(!log.options!.sandbox.network.allowedDomains.some((d: string) => /heygen/.test(d)));
+  assert.ok(log.options!.sandbox.network.allowedDomains.includes('cdn.jsdelivr.net'));
+  assert.equal(fs.existsSync(path.join(fx.jobsRoot, JOB, 'revision-hold.json')), false, 'the manifest goes once the redo is kept');
   // Other scenes untouched, byte for byte.
   for (const f of ['01-hook.js', '01-opener.js', '03-dictionary.js']) assert.equal(moduleOnDisk(fx, f), MODULES[f]);
   assert.equal(moduleOnDisk(fx, '02-gap.js'), 'export default { draw: () => "<text>new 02-gap webhook</text>" };\n');
@@ -512,22 +522,26 @@ test('a scene redo never runs while a render is running (the one-at-a-time index
   assert.deepEqual(await jobRow(fx.db), { status: 'ok', stage: 'caption' });
 });
 
-test('the job\'s own per-reel spend cap still applies: an exhausted cap is blocked before any session, a cap hit mid-session is blocked and rolled back', async () => {
-  const spent = await fixture({ spendUsd: 8 });
+test('the job\'s own per-reel spend cap still applies: too little left for the estimate is blocked before any session, a cap hit mid-session is blocked and rolled back', async () => {
   const log: SessionLog = { prompts: [], atStart: [], paidMessages: 0 };
-  const out = await createExplainersDescription(depsFor(spent, { log })).revise({ q: spent.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
-  assert.equal(out.ok ? null : out.reason, 'blocked');
-  assert.equal(log.prompts.length, 0);
+  for (const spendUsd of [8, 6.5]) {
+    const spent = await fixture({ spendUsd });
+    const out = await createExplainersDescription(depsFor(spent, { log })).revise({ q: spent.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+    assert.equal(out.ok ? null : out.reason, 'blocked');
+    if (!out.ok) assert.match(out.note, /left of its \$8\.00 spending cap/);
+  }
+  assert.equal(log.prompts.length, 0, 'no session');
 
-  const near = await fixture({ spendUsd: 7.99 });
-  const mid = await createExplainersDescription(depsFor(near, { log, query: sceneSession(log, { messages: 3 }) })).revise({
+  const near = await fixture({ spendUsd: 5.9 });
+  const mid = await createExplainersDescription(depsFor(near, { log, query: sceneSession(log, { messages: 3, inputTokens: 2_000_000 }) })).revise({
     q: near.q,
     refs,
     interpretation: sceneFix('02-gap'),
     meter: meter(),
   });
   assert.equal(mid.ok ? null : mid.reason, 'blocked');
-  if (!mid.ok) assert.match(mid.note, /\$8\.00/);
+  if (!mid.ok) assert.match(mid.note, /reached this explainer's \$8\.00 spending cap/);
+  assert.equal(log.paidMessages, 1);
   assert.equal(moduleOnDisk(near, '02-gap.js'), MODULES['02-gap.js']);
   assert.equal((await latest(near.db, 'video'))!.storage_path, OLD_VIDEO);
   assert.deepEqual(await jobRow(near.db), { status: 'ok', stage: 'caption' });
@@ -690,4 +704,104 @@ test('a revise request made through the Explainers verbs lands where the worker 
   } finally {
     restoreRegistryForTest();
   }
+});
+
+// ── Fix round 1: placement, crash safety, collateral writes ────────────────
+
+test('the claim filter: helios-explainers takes only explainer rows, the social worker never takes one', async () => {
+  const fx = await fixture();
+  const explainerItem = (await explainerItemId(fx.db, JOB))!;
+  const { rows } = await fx.db.query<{ id: string }>(`INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('carousels', 'feed', 'post-1') RETURNING id::text AS id`);
+  const carouselItem = rows[0]!.id;
+  const ex = await createRequest(fx.q, { vertical: 'explainers', refs, itemId: explainerItem, by: 'tommy', instruction: 'Brighter gap scene.' });
+  const ca = await createRequest(fx.q, { vertical: 'carousels', refs: { postId: 'post-1' }, itemId: carouselItem, by: 'tommy', instruction: 'Shorter cover.' });
+
+  // The social worker's step (exclude explainers) with only the explainer row left: it claims nothing.
+  await fx.db.query(`UPDATE revisions.requests SET status = 'failed' WHERE id = $1`, [ca.id]);
+  const n = await claimAndRunRevisions({ q: fx.q, complete: async () => { throw new Error('no interpreter call expected'); }, notify: async () => undefined, now: () => NOW, filter: { exclude: 'explainers' } });
+  assert.equal(n, 0);
+  assert.equal((await getRequest(fx.q, ex.id))!.status, 'requested');
+
+  await fx.db.query(`UPDATE revisions.requests SET status = 'requested' WHERE id = $1`, [ca.id]);
+  const social = await claimNextRequested(fx.q, { exclude: 'explainers' });
+  assert.equal(social?.id, ca.id, 'the older explainer row is skipped');
+  assert.equal((await getRequest(fx.q, ex.id))!.status, 'requested');
+  await fx.db.query(`UPDATE revisions.requests SET status = 'requested' WHERE id = $1`, [ca.id]);
+  const mine = await claimNextRequested(fx.q, { only: 'explainers' });
+  assert.equal(mine?.id, ex.id);
+  assert.equal((await getRequest(fx.q, ca.id))!.status, 'requested', 'the carousel row is left for the social worker');
+  assert.equal(await claimNextRequested(fx.q, { only: 'explainers' }), null);
+  assert.equal((await claimNextRequested(fx.q))?.id, ca.id, 'no filter: every vertical, as before');
+});
+
+test('start-up recovery after a crash mid-redo: the old module, events, video and contact sheet come back, the hold is released with its stage, and the next redo works', async () => {
+  const fx = await fixture();
+  const jobDir = path.join(fx.jobsRoot, JOB);
+  const frames = path.join(fx.projectDir, 'assets', 'frames');
+  // The redo got as far as the session: hold taken, files renamed aside, a half-written new module and video.
+  assert.equal(await hold(fx.db, JOB), 'caption');
+  setAside(jobDir, { id: 'c1', key: '02-gap', stage: 'caption' });
+  assert.ok(fs.existsSync(path.join(frames, '02-gap.js.before-revc1')));
+  fs.writeFileSync(path.join(frames, '02-gap.js'), 'half-written');
+  fs.writeFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'half-rendered');
+  const n = await artifactCount(fx.db);
+
+  assert.deepEqual(await recoverSceneRedos(fx.db, fx.jobsRoot), [JOB]);
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), MODULES['02-gap.js']);
+  assert.equal(moduleOnDisk(fx, '02-gap.events.json'), MODULES['02-gap.events.json']);
+  assert.equal(moduleOnDisk(fx, '02-gap.js.failed-revc1'), 'half-written', 'what the session left is set aside, not deleted');
+  assert.equal(fs.readFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'utf8'), 'old-mp4');
+  assert.equal(fs.readFileSync(path.join(fx.projectDir, 'snapshots', 'contact-sheet.jpg'), 'utf8'), 'old-jpg');
+  assert.equal(fs.existsSync(path.join(jobDir, 'revision-hold.json')), false);
+  assert.deepEqual(await jobRow(fx.db), { status: 'ok', stage: 'caption' });
+  assert.equal(await artifactCount(fx.db), n);
+  assert.equal((await latest(fx.db, 'video'))!.storage_path, OLD_VIDEO);
+  assert.equal((await latest(fx.db, 'contact_sheet'))!.storage_path, OLD_SHEET);
+  // The stale sweep after it finds nothing of ours.
+  assert.equal(await failStaleRunningJobs(fx.db, 'worker restarted'), 0);
+
+  const out = await createExplainersDescription(depsFor(fx)).revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+  assert.equal(out.ok, true, JSON.stringify(out));
+  if (out.ok) assert.deepEqual(out.before.copy, { module: MODULES['02-gap.js'], events: MODULES['02-gap.events.json'] });
+});
+
+test('start-up recovery of a hold with no set-aside files (nothing moved yet) just releases it', async () => {
+  const fx = await fixture();
+  assert.equal(await hold(fx.db, JOB), 'caption');
+  assert.deepEqual(await recoverSceneRedos(fx.db, fx.jobsRoot), [JOB]);
+  assert.equal((await jobRow(fx.db)).status, 'ok');
+  for (const [f, src] of Object.entries(MODULES)) assert.equal(moduleOnDisk(fx, f), src);
+  assert.deepEqual(await recoverSceneRedos(fx.db, fx.jobsRoot), [], 'nothing held: nothing to do');
+});
+
+test('a session that also changes another scene or the voice timing is blocked, rolled back, and those files are put back', async () => {
+  const fx = await fixture();
+  const log: SessionLog = { prompts: [], atStart: [], paidMessages: 0 };
+  const query = sceneSession(log, { alsoWrite: { 'assets/frames/03-dictionary.js': 'tampered', 'audio_meta.json': '{"frames":[]}' } });
+  const n = await artifactCount(fx.db);
+  const out = await createExplainersDescription(depsFor(fx, { log, query })).revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+  assert.equal(out.ok ? null : out.reason, 'blocked');
+  if (!out.ok) {
+    assert.match(out.note, /assets\/frames\/03-dictionary\.js/);
+    assert.match(out.note, /audio_meta\.json/);
+  }
+  assert.equal(moduleOnDisk(fx, '03-dictionary.js'), MODULES['03-dictionary.js'], 'the other scene is put back');
+  assert.equal(fs.existsSync(path.join(fx.projectDir, 'audio_meta.json')), false, 'the file the session added is set aside');
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), MODULES['02-gap.js']);
+  assert.equal(fs.readFileSync(path.join(fx.projectDir, 'renders', 'video.mp4'), 'utf8'), 'old-mp4');
+  assert.equal(await artifactCount(fx.db), n);
+  assert.deepEqual(await jobRow(fx.db), { status: 'ok', stage: 'caption' });
+});
+
+test('restore never writes into the folder while a render or another redo holds the job', async () => {
+  const fx = await fixture();
+  const d = createExplainersDescription(depsFor(fx));
+  const out = await d.revise({ q: fx.q, refs, interpretation: sceneFix('02-gap'), meter: meter() });
+  assert.ok(out.ok);
+  if (!out.ok) return;
+  await d.restore({ q: fx.q, refs, part: { kind: 'scene', key: '02-gap' }, state: out.before }); // back to the original
+  await fx.db.query(`UPDATE explainers.jobs SET status = 'running', stage = 'revision' WHERE id = $1`, [JOB]);
+  fs.writeFileSync(path.join(fx.projectDir, 'assets', 'frames', '02-gap.js'), 'mid-redo');
+  await assert.rejects(d.restore({ q: fx.q, refs, part: { kind: 'scene', key: '02-gap' }, state: out.before }), /being made or redone/);
+  assert.equal(moduleOnDisk(fx, '02-gap.js'), 'mid-redo');
 });

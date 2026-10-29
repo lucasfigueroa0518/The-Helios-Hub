@@ -21,12 +21,14 @@
  * Scene redo order (nothing is written on any non-ok path):
  *   checks (part, args, published/rejected, retention + folder, the job's own spend cap) → hold the
  *   job's running slot (status 'running', stage 'revision': the one-render-at-a-time index, so no
- *   render starts and none is running) → keep the module source, move the old video and contact
- *   sheet aside on disk → remove the module → the session (charged to the meter message by message,
- *   ChargedSpendMeter) → gates (text bounds and HyperFrames/storyboard errors on that frame) → store
+ *   render starts and none is running) → hash every other scene, the plan, the voice and the world →
+ *   rename the module, its events, the old video and contact sheet aside (explainers-folder.ts, with a
+ *   manifest the worker's start-up recovers from) → the voice-locked session (charged to the meter
+ *   message by message, ChargedSpendMeter) → the collateral check (nothing else changed) → gates
+ *   (text bounds and HyperFrames/storyboard errors on that frame) → store
  *   the new video and contact sheet under NEW keys (`video.rev<id>.mp4`) → ONE guarded statement adds
- *   the artifact rows and releases the slot. Any other outcome puts the module, the video and the
- *   contact sheet back on disk and releases the slot.
+ *   the artifact rows and releases the slot. Any other outcome puts the other files, the module, the
+ *   video and the contact sheet back on disk and releases the slot. Runs in helios-explainers only.
  *
  * Undo: a scene's `before` carries its module source and the old video/contact-sheet pointers.
  * One video carries every scene, so restore refuses when a later fix replaced the video this one
@@ -45,12 +47,15 @@ import { DEFAULT_SETTINGS } from '@/lib/explainers/settings';
 import type { JobRow, LintViolation } from '@/lib/explainers/types';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 
+import { collateral, finishAside, hold, HOLD_STAGE, putBack, release, restoreCollateral, setAside, snapshot } from '../explainers-folder';
 import type { ContentTypeDescription, FixKind, PartState, PostSnapshot } from '../types';
 
 import type { Metered } from './carousels';
 import { liveExplainersDeps } from './explainers-live';
 
 export type { Metered };
+/** helios-explainers start-up recovery of an interrupted scene redo (lib/revisions/explainers-folder.ts). */
+export { recoverSceneRedos } from '../explainers-folder';
 
 /** The Explainers pipeline's stages (lib/explainers/render/job.ts): plan (session A), lint, build (session B), render, caption. */
 export const EXPLAINERS_STAGE_TAGS = ['plan', 'lint', 'build', 'render', 'caption'] as const;
@@ -71,8 +76,7 @@ export const EXPLAINERS_FOLDER_GONE_NOTE = "This explainer's working files were 
 const SCENE_FIXES: readonly FixKind[] = ['wording', 'photo', 'color', 'layout'];
 const FRAME_ID = /^[a-z0-9][a-z0-9-]*$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** The stage a scene redo's hold carries (lib/explainers/repository.ts REVISION_STAGE, which a worker restart releases). */
-const HOLD = 'revision';
+const HOLD = HOLD_STAGE;
 
 /**
  * Whether a job's working folder still counts for scene redos: true until the explainer is
@@ -187,12 +191,23 @@ async function publishedAt(db: Queryable, jobId: string): Promise<string | null>
 
 /** The frames a frame worker wrote, from the stored storyboard: frame 1's hook under a bank opener, never the kit's close. */
 async function scenesOf(storyboard: string | null, job: JobRow): Promise<Scene[]> {
-  if (!storyboard) return [];
+  return (await framesOf(storyboard, job)).scenes;
+}
+
+/** The worker-written scenes, and the module ids code writes (the bank opener over the hook, the kit's close). */
+async function framesOf(storyboard: string | null, job: JobRow): Promise<{ scenes: Scene[]; codeWritten: string[] }> {
+  if (!storyboard) return { scenes: [], codeWritten: [] };
   const { parseFrames, isClose, HOOK_ID, OPENER_FRAME } = await import('../../../explainers/world-kit/frames.mjs');
   const scenes: Scene[] = [];
+  const codeWritten: string[] = [];
   for (const f of parseFrames(storyboard) as Array<{ number: number; name: string; id: string; fields: Record<string, string> }>) {
-    if (!f.id || isClose(f)) continue;
+    if (!f.id) continue;
+    if (isClose(f)) {
+      codeWritten.push(f.id);
+      continue;
+    }
     const key = f.number === OPENER_FRAME && job.opener ? (HOOK_ID as string) : f.id;
+    if (key !== f.id) codeWritten.push(f.id);
     if (!FRAME_ID.test(key)) continue;
     const said = (v: string | undefined) => (v ?? '').replace(/^["“]|["”]$/g, '').trim();
     const what = [f.fields.scene && `Shows: ${f.fields.scene}`, f.fields.voiceover && `Voice: "${said(f.fields.voiceover)}"`, f.fields.shots && `Shots: ${f.fields.shots}`]
@@ -201,7 +216,7 @@ async function scenesOf(storyboard: string | null, job: JobRow): Promise<Scene[]
     const hook = key !== f.id ? ' (the hook under the series opener)' : '';
     scenes.push({ key, number: f.number, name: f.name, text: `Frame ${f.number}, ${f.name}${hook}. ${what}`.slice(0, 600) });
   }
-  return scenes;
+  return { scenes, codeWritten };
 }
 
 /** A file's text, or null. */
@@ -211,12 +226,6 @@ function readText(file: string): string | null {
   } catch {
     return null;
   }
-}
-
-function moveIfThere(from: string, to: string): boolean {
-  if (!fs.existsSync(from)) return false;
-  fs.renameSync(from, to);
-  return true;
 }
 
 /** Put a module (and its sound events) on disk as `state` says; null events = none. */
@@ -249,28 +258,6 @@ function metered(meter: { spend(usd: number): void }): Metered & { check(): void
       if (stop) halt();
     },
   };
-}
-
-/** Hold the job's running slot (the one-render-at-a-time index). The stage it had, or null when a render or redo is running. */
-async function hold(db: Queryable, jobId: string): Promise<string | null> {
-  try {
-    const { rows } = await db.query<{ old: string | null }>(
-      `UPDATE explainers.jobs j SET status = 'running', stage = $2
-         FROM (SELECT stage AS old FROM explainers.jobs WHERE id = $1) o
-        WHERE j.id = $1 AND j.status = 'ok' AND NOT EXISTS (SELECT 1 FROM explainers.jobs r WHERE r.status = 'running')
-        RETURNING o.old`,
-      [jobId, HOLD],
-    );
-    return rows.length ? (rows[0]!.old ?? '') : null;
-  } catch (e) {
-    // The unique indexes (one running job; one in-flight job per topic) refused the hold.
-    if ((e as { code?: string })?.code === '23505') return null;
-    throw e;
-  }
-}
-
-async function release(db: Queryable, jobId: string, stage: string): Promise<void> {
-  await db.query(`UPDATE explainers.jobs SET status = 'ok', stage = $2 WHERE id = $1 AND status = 'running' AND stage = $3`, [jobId, stage || null, HOLD]);
 }
 
 /** Add artifact rows pointing at `video` (+ `sheet`) while the guard holds. Returns whether it applied. */
@@ -411,7 +398,7 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
       }
       if (it.part.kind !== 'scene') return failed(`An explainer's parts are its scenes and its caption; "${it.part.kind} ${it.part.key}" is not one of them, so nothing was changed.`);
       if (!SCENE_FIXES.includes(it.fixKind)) return failed(`${it.fixKind} fixes are not available for explainer scenes, so nothing was changed.`);
-      const scenes = await scenesOf(latest.storyboard, job);
+      const { scenes, codeWritten } = await framesOf(latest.storyboard, job);
       const scene = scenes.find((s) => s.key === it.part.key);
       if (!scene) {
         const names = scenes.map((s) => s.key).join(', ') || 'none';
@@ -424,14 +411,17 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
       if (!retainJobFolder({ createdAt: job.requested_at, publishedAt: await publishedAt(db, job.id) }, now()) || !(await deps.folderExists(job.id))) {
         return failed(EXPLAINERS_FOLDER_GONE_NOTE);
       }
-      const projectDir = projectDirOf(job.id);
-      const framesDir = path.join(projectDir, 'assets', 'frames');
-      const modFile = path.join(framesDir, `${scene.key}.js`);
-      const evFile = path.join(framesDir, `${scene.key}.events.json`);
+      const jobDir = path.join(deps.jobsRoot(), job.id);
+      const projectDir = path.join(jobDir, 'project');
+      const modFile = path.join(projectDir, 'assets', 'frames', `${scene.key}.js`);
+      const evFile = path.join(projectDir, 'assets', 'frames', `${scene.key}.events.json`);
       const oldModule = readText(modFile);
       if (oldModule == null) return failed(EXPLAINERS_FOLDER_GONE_NOTE);
-      if (job.spend_usd >= job.spend_cap_usd) {
-        return blocked(`This explainer has already used its ${usd(job.spend_cap_usd)} spending cap, so the scene was not redone.`);
+      // The job's own per-reel cap: what is left of it must cover a scene redo's estimate.
+      const need = job.spend_cap_usd * EXPLAINERS_SCENE_REDO_SHARE;
+      const left = Math.max(0, job.spend_cap_usd - job.spend_usd);
+      if (left < need) {
+        return blocked(`This explainer has ${usd(left)} left of its ${usd(job.spend_cap_usd)} spending cap and a scene redo needs about ${usd(need)}, so the scene was not redone.`);
       }
 
       const stage = await hold(db, job.id);
@@ -439,19 +429,14 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
       const m = metered(meter);
       const id = newId();
       const oldEvents = readText(evFile);
-      const video = path.join(projectDir, 'renders', 'video.mp4');
-      const sheet = path.join(projectDir, 'snapshots', 'contact-sheet.jpg');
-      const videoAside = path.join(projectDir, 'renders', `video.before-rev${id}.mp4`);
-      const sheetAside = path.join(projectDir, 'snapshots', `contact-sheet.before-rev${id}.jpg`);
       let kept = false;
-      let movedVideo = false;
-      let movedSheet = false;
+      let manifest: ReturnType<typeof setAside> | null = null;
+      let before: ReturnType<typeof snapshot> | null = null;
       try {
-        // The session must render afresh: the old local video and contact sheet go aside (never deleted).
-        movedVideo = moveIfThere(video, videoAside);
-        movedSheet = moveIfThere(sheet, sheetAside);
-        fs.rmSync(modFile, { force: true });
-        fs.rmSync(evFile, { force: true });
+        // Every other scene, the plan, the voice and the world, as they are now (the redo may not touch them).
+        before = snapshot(projectDir, scene.key, codeWritten);
+        // Renamed aside, never deleted: the old module, its sound events, the local video and contact sheet.
+        manifest = setAside(jobDir, { id, key: scene.key, stage });
 
         let out: SceneRebuild;
         try {
@@ -465,6 +450,10 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         if (!out.ok) {
           if (out.capped) return blocked(`Redoing the scene reached this explainer's ${usd(job.spend_cap_usd)} spending cap, so the original was kept.`);
           return failed(`The scene could not be rebuilt (${out.error}), so the original was kept.`);
+        }
+        const touched = collateral(projectDir, before, scene.key, codeWritten);
+        if (touched.length) {
+          return blocked(`Redoing ${scene.key} also changed other parts of this explainer (${touched.join(', ')}), so nothing was kept and they were put back.`);
         }
         const problems = out.violations.filter((v: LintViolation) => v.severity === 'error' && v.frame === scene.number);
         if (problems.length) {
@@ -485,19 +474,17 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
         const applied = await pointAt(db, job.id, { status: 'running', currentVideo: latest.video.path, releaseStage: stage }, nextVideo, storedSheet ? nextSheet : null);
         if (!applied) return failed('This explainer changed or started posting while the scene was redone, so it was not changed.');
         kept = true;
+        finishAside(jobDir);
         const files = (v: Pointer, s: Pointer | null) => [v.path, ...(s ? [s.path] : [])];
-        const before: SceneState = { copy: { module: oldModule, events: oldEvents }, video: latest.video, sheet: latest.sheet, files: files(latest.video, latest.sheet), made: nextVideo.path };
+        const beforeState: SceneState = { copy: { module: oldModule, events: oldEvents }, video: latest.video, sheet: latest.sheet, files: files(latest.video, latest.sheet), made: nextVideo.path };
         const after: SceneState = { copy: { module: newModule, events: readText(evFile) }, video: nextVideo, sheet: nextSheet, files: files(nextVideo, nextSheet), made: latest.video.path };
-        return { ok: true as const, before, after };
+        return { ok: true as const, before: beforeState, after };
       } finally {
         if (!kept) {
-          // Put the folder back as it was (the failed render is set aside, not deleted) and release the job.
+          // Put the folder back as it was (what the session left is set aside, not deleted) and release the job.
           try {
-            if (fs.existsSync(video)) fs.renameSync(video, path.join(projectDir, 'renders', `video.failed-rev${id}.mp4`));
-            if (movedVideo) fs.renameSync(videoAside, video);
-            if (fs.existsSync(sheet)) fs.renameSync(sheet, path.join(projectDir, 'snapshots', `contact-sheet.failed-rev${id}.jpg`));
-            if (movedSheet) fs.renameSync(sheetAside, sheet);
-            writeModule(framesDir, scene.key, { module: oldModule, events: oldEvents });
+            if (before) restoreCollateral(projectDir, before, collateral(projectDir, before, scene.key, codeWritten), id);
+            if (manifest) putBack(jobDir, manifest);
           } finally {
             await release(db, job.id, stage);
           }
@@ -526,23 +513,24 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
       if (!FRAME_ID.test(part.key)) throw new Error('This undo record names no scene.');
       const framesDir = path.join(projectDirOf(job.id), 'assets', 'frames');
       const onDisk = fs.existsSync(framesDir);
-      const putBack = (copy: { module: string; events: string | null }) => {
+      const putModule = (copy: { module: string; events: string | null }) => {
         if (onDisk) writeModule(framesDir, part.key, copy);
       };
+      // Never write into the folder while a render or another redo holds the job.
+      if (job.status !== 'ok') throw new Error('This explainer is being made or redone right now, so it was not restored.');
       if (latest.video?.path === s.video.path) {
-        putBack(s.copy); // idempotent: the pointers are already there; keep the folder in step
+        putModule(s.copy); // idempotent: the pointers are already there; keep the folder in step
         return;
       }
       if (s.made !== undefined && latest.video?.path !== s.made) {
         throw new Error('A later fix to this explainer changed its video after this one; undo that fix first.');
       }
-      if (job.status !== 'ok') throw new Error('This explainer is being made or redone right now, so it was not restored.');
       // The folder first (so a later scene redo starts from the restored scene), the pointers second.
       const was = onDisk ? { module: readText(path.join(framesDir, `${part.key}.js`)), events: readText(path.join(framesDir, `${part.key}.events.json`)) } : null;
-      putBack(s.copy);
+      putModule(s.copy);
       const sheet = s.sheet && s.sheet.path !== latest.sheet?.path ? s.sheet : null;
       if (!(await pointAt(db, job.id, { status: 'ok', currentVideo: latest.video?.path ?? null }, s.video, sheet))) {
-        if (was?.module != null) putBack({ module: was.module, events: was.events });
+        if (was?.module != null) putModule({ module: was.module, events: was.events });
         throw new Error('The explainer changed, is posting, or is being made right now, so the scene was not restored.');
       }
     },

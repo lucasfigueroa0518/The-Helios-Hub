@@ -448,7 +448,9 @@ export function sceneResumeNote(frameId: string, change: string): string {
   ].join(' ');
 }
 
-export type SceneRebuildDeps = Pick<RenderDeps, 'db' | 'query' | 'jobsRoot' | 'secrets' | 'hyperframesLint' | 'boundsCheck' | 'renderVideo' | 'repairAssembly' | 'log'> & {
+export type SceneRebuildDeps = Pick<RenderDeps, 'db' | 'query' | 'jobsRoot' | 'hyperframesLint' | 'boundsCheck' | 'renderVideo' | 'repairAssembly' | 'log'> & {
+  /** The Anthropic key only: the session runs voice-locked (no HeyGen key, no HeyGen hosts). */
+  secrets: { anthropicApiKey: string };
   /** The render meter: the job's per-reel cap (spend_cap_usd, carrying spend_usd). A ChargedSpendMeter also charges a revision. */
   meter: SpendMeter;
   voiceId: string;
@@ -492,8 +494,10 @@ export async function rebuildScene(
       model: job.orchestrator_model,
       frameWorkerModel: job.frame_worker_model,
       meter: deps.meter,
-      secrets: { ...deps.secrets, voiceId: deps.voiceId },
+      secrets: { anthropicApiKey: deps.secrets.anthropicApiKey, heygenApiKey: '', voiceId: deps.voiceId },
       log: (entry) => transcriptLines.push(JSON.stringify(entry)),
+      // One scene changes; the voice, music and sound are final and cannot be made again.
+      voiceLocked: true,
     });
     await recordSessionCost(deps.db, job, job.mode, 'revision', b);
     if (b.capped) return { ok: false, capped: true, error: `the spend cap was reached in the session (${b.subtype})` };
