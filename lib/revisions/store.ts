@@ -91,7 +91,7 @@ export async function markApplied(
     `UPDATE revisions.requests
         SET status = 'applied', before = $2::jsonb, after = $3::jsonb,
             spend_usd = spend_usd + $4, finished_at = now()
-      WHERE id = $1`,
+      WHERE id = $1 AND status = 'running'`,
     [id, JSON.stringify(a.before), JSON.stringify(a.after), a.costUsd],
   );
 }
@@ -110,7 +110,7 @@ export async function markEnded(
 }
 
 export async function markUndone(q: Query, id: string, by: string): Promise<void> {
-  await q(`UPDATE revisions.requests SET status = 'undone', undone_at = now(), undone_by = $2 WHERE id = $1`, [id, by]);
+  await q(`UPDATE revisions.requests SET status = 'undone', undone_at = now(), undone_by = $2 WHERE id = $1 AND status = 'applied'`, [id, by]);
 }
 
 export async function listForItem(q: Query, itemId: string): Promise<RevisionRow[]> {
@@ -129,10 +129,13 @@ export async function latestApplied(q: Query, itemId: string, part: PartRef): Pr
   return rows[0] ? toRow(rows[0]) : null;
 }
 
-/** The part as it was before any revision: the `before` of the earliest applied row. */
+/**
+ * The part as the pipeline made it: the `before` of the earliest row that ever applied for it.
+ * Undone rows count, since undoing a revision does not change what the original was.
+ */
 export async function originalOf(q: Query, itemId: string, part: PartRef): Promise<PartState | null> {
   const { rows } = await q(
-    `SELECT before FROM revisions.requests WHERE item_id = $1 AND ${partMatch} AND status = 'applied'
+    `SELECT before FROM revisions.requests WHERE item_id = $1 AND ${partMatch} AND status IN ('applied', 'undone') AND before IS NOT NULL
       ORDER BY finished_at ASC, created_at ASC, id ASC LIMIT 1`,
     [itemId, part.kind, part.key],
   );

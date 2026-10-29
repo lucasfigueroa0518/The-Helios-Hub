@@ -4,6 +4,8 @@ import test from 'node:test';
 
 import { PGlite } from '@electric-sql/pglite';
 
+import type { Query } from '@/lib/social/store/pg';
+
 import {
   claimNextRequested,
   createRequest,
@@ -22,17 +24,17 @@ async function setup() {
   const pg = new PGlite();
   await pg.exec(schemaSql(path.join(process.cwd(), 'db', 'social_hub_schema.sql')));
   await pg.exec(schemaSql(path.join(process.cwd(), 'db', 'revisions_schema.sql')));
-  const q = async (text: string, params?: unknown[]) => ({ rows: (await pg.query(text, params)).rows as any[] });
+  const q: Query = async (text, params) => ({ rows: (await pg.query<Record<string, unknown>>(text, params)).rows });
   const { rows } = await q(
     `INSERT INTO social_hub.content_items (vertical, format, native_ref) VALUES ('carousels', 'feed', 'p1') RETURNING id`,
   );
-  return { q, itemId: rows[0].id as string };
+  return { q, itemId: String(rows[0].id) };
 }
 
 const part: PartRef = { kind: 'slide', key: '3' };
 const state = (n: string): PartState => ({ copy: n, files: [`${n}.png`] });
 
-async function applyOne(q: any, itemId: string, before: string, after: string) {
+async function applyOne(q: Query, itemId: string, before: string, after: string) {
   const r = await createRequest(q, { vertical: 'carousels', refs: [part], itemId, by: 'tommy', instruction: `to ${after}` });
   await claimNextRequested(q);
   await markRunning(q, r.id, { part, fixKind: 'wording', stageTag: 'writer' }, 0.1, 0.5);
@@ -88,4 +90,46 @@ test('parentId links an ask-back reply', async () => {
   assert.equal(reply.parentId, ask.id);
   const all = await listForItem(q, itemId);
   assert.deepEqual(all.map((r) => r.id), [ask.id, reply.id]);
+});
+
+test('originalOf still returns the before after the only revision is undone', async () => {
+  const { q, itemId } = await setup();
+  const r1 = await applyOne(q, itemId, 'v0', 'v1');
+  await markUndone(q, r1.id, 'tommy');
+  assert.deepEqual(await originalOf(q, itemId, part), state('v0'));
+});
+
+test('originalOf returns revision 1 before when 1 is undone and 2 then applied', async () => {
+  const { q, itemId } = await setup();
+  const r1 = await applyOne(q, itemId, 'v0', 'v1');
+  await markUndone(q, r1.id, 'tommy');
+  await applyOne(q, itemId, 'v0', 'v2');
+  assert.deepEqual(await originalOf(q, itemId, part), state('v0'));
+});
+
+test('originalOf returns revision 1 before with revisions 1 and 2 both live', async () => {
+  const { q, itemId } = await setup();
+  await applyOne(q, itemId, 'v0', 'v1');
+  await applyOne(q, itemId, 'v1', 'v2');
+  assert.deepEqual(await originalOf(q, itemId, part), state('v0'));
+});
+
+test('markUndone on a row that is not applied changes nothing', async () => {
+  const { q, itemId } = await setup();
+  const r = await createRequest(q, { vertical: 'carousels', refs: [part], itemId, by: null, instruction: 'x' });
+  await markUndone(q, r.id, 'tommy');
+  const [row] = await listForItem(q, itemId);
+  assert.equal(row.status, 'requested');
+  assert.equal(row.undoneAt, null);
+  assert.equal(row.undoneBy, null);
+});
+
+test('markApplied on a row that is not running changes nothing', async () => {
+  const { q, itemId } = await setup();
+  const r = await createRequest(q, { vertical: 'carousels', refs: [part], itemId, by: null, instruction: 'x' });
+  await markApplied(q, r.id, { before: state('a'), after: state('b'), costUsd: 0.5 });
+  const [row] = await listForItem(q, itemId);
+  assert.equal(row.status, 'requested');
+  assert.equal(row.before, null);
+  assert.equal(row.spendUsd, 0);
 });
