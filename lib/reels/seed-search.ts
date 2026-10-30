@@ -14,7 +14,7 @@ import { parsePage } from '@/lib/reels/net/html';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
 import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
-import { resolveGoogleNewsUrl } from '@/lib/social/ingest/resolve-google-news';
+import { isGoogleNewsUrl, resolveGoogleNewsUrl } from '@/lib/social/ingest/resolve-google-news';
 
 /**
  * Finding a story to build a Text on Screen seed from when the person gave only a headline, or gave a link that cannot be
@@ -56,6 +56,13 @@ export async function readPageText(url: string): Promise<string | null> {
   const page = await fetchPageFollowingRedirects(url, { retries: 0, timeoutMs: 15_000 });
   return parsePage(page.html).text;
 }
+
+/** A pasted Google News wrapper link's publisher URL, or null when it cannot be unwound. */
+export async function resolveWrapperLink(url: string): Promise<string | null> {
+  return (await resolveGoogleNewsUrl(url))?.resolvedUrl ?? null;
+}
+
+export { isGoogleNewsUrl };
 
 /** Collected stories (not seeds, inside the reference pool window) whose headline is close to this one, best first. */
 export async function collectedCandidates(headline: string): Promise<SeedCandidate[]> {

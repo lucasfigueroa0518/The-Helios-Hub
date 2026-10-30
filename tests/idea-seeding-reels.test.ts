@@ -13,7 +13,7 @@ import { listUngroupedSources, shortlistCandidates, shortlistIdeaMerges, createP
 import { groupRun } from '@/lib/reels/pipeline/grouping';
 import { putOnSlate } from '@/lib/reels/pipeline/promote';
 import { carryoverMisses, heldFromCarryover } from '@/lib/reels/scoring/decide';
-import { loadSlateRanked } from '@/lib/reels/scoring/store';
+import { loadSlateRanked, slateIdeaIds } from '@/lib/reels/scoring/store';
 import type { SeedCandidate } from '@/lib/reels/seed-search';
 import { MAX_TEXT_CHARS, SeedError, addReelSeed, isUnscoredSeed, readOpenSeeds, type ReelSeedOutcome } from '@/lib/reels/seeds';
 import { reelIdeas } from '@/lib/social-hub/adapters/reels';
@@ -140,6 +140,35 @@ test('the queue puts a seed where its score falls, not last, though its stored r
   assert.equal(Number(stored.rank), 4, 'stored last: the seed row takes max(rank) + 1');
   const shown = queueOrder(reelIdeas(rows as ReelIdeaRow[]), []).map((q) => q.item.id.replace('reels:idea:', ''));
   assert.deepEqual(shown, [A, seed.id, NORMAL, B], 'but the queue sorts by net, so the seed sits between 3.0 and 1.5');
+});
+
+test('a same-day rerun does not pick the seed up either: slateIdeaIds leaves seeds out', async () => {
+  await reelsDb();
+  const { jev } = stub();
+  const seed = await add({ headline: 'Added after the night ran', text: PAGE }, { jev });
+  const ids = await slateIdeaIds('2026-10-08');
+  assert.ok(!ids.includes(seed.id), 'the rerun does not rescore the seed as a timely idea');
+  assert.ok(ids.includes(NORMAL), 'an ordinary idea on the slate is still read');
+});
+
+test('a pasted Google News wrapper link is resolved to the publisher page before it is read', async () => {
+  const pg = await reelsDb();
+  const { jev } = stub();
+  const read: string[] = [];
+  const wrapper = 'https://news.google.com/rss/articles/CBMiWrapper?oc=5';
+  const out = await add({ headline: 'Opus 5.5 is out', url: wrapper }, { jev, resolveLink: async () => 'https://publisher.test/real?utm_source=x', readPage: async (u) => { read.push(u); return PAGE; }, search: NO_SEARCH });
+  assert.deepEqual(read, ['https://publisher.test/real?utm_source=x'], 'the publisher page, not Google’s shell, is read');
+  assert.equal((await pg.query<any>(`SELECT canonical_url FROM reels.sources WHERE adapter_id = 'seed'`)).rows[0].canonical_url, 'https://publisher.test/real');
+  assert.equal(out.substitute, undefined);
+});
+
+test('a Google News wrapper link that cannot be resolved takes the unreadable-link path', async () => {
+  await reelsDb();
+  const { jev } = stub();
+  let readCalls = 0;
+  const out = await addReelSeed({ headline: 'Opus 5.5 is out', url: 'https://news.google.com/rss/articles/CBMiWrapper?oc=5' }, { jev, resolveLink: async () => null, readPage: async () => { readCalls += 1; return PAGE; }, search: NO_SEARCH });
+  assert.equal(readCalls, 0, 'Google’s app shell is never read as the story');
+  assert.deepEqual(out, { status: 'no_match', reason: 'nothing_found', linkUnreadable: true });
 });
 
 test('an 11th open seed is accepted; archiving, making or expiring one still leaves the open list', async () => {

@@ -77,7 +77,13 @@ export async function slateIdeaIds(nyDate: string): Promise<string[]> {
          WHERE ny_date = $1::date
          ORDER BY scored_at DESC
          LIMIT 1
-      )`,
+      )
+        -- A rerun for the same date must not rescore a person's seed as a timely idea and so make it unprompted.
+        AND NOT EXISTS (
+          SELECT 1 FROM reels.post_idea_members m
+            JOIN reels.sources so ON so.id = m.source_id
+           WHERE m.post_idea_id = s.post_idea_id AND so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+        )`,
     [nyDate],
   );
   return rows.map((row) => row.post_idea_id);

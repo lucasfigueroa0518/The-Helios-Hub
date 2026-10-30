@@ -2,7 +2,7 @@ import { dbQuery } from '@/lib/db';
 import { loadPublishedStoryKeys, storyUrlKey } from '@/lib/reels/copy/held-out';
 import type { JevRunner } from '@/lib/reels/jev/runner';
 import { canonicalizeUrl } from '@/lib/reels/net/http';
-import { SEED_MAX_USD, collectedCandidates, estimatePaidSearchUsd, newsCandidates, pickBest, readPageText, runPaidSearch, seedSearchApproved, type PickedStory, type SeedCandidate } from '@/lib/reels/seed-search';
+import { SEED_MAX_USD, collectedCandidates, isGoogleNewsUrl, resolveWrapperLink, estimatePaidSearchUsd, newsCandidates, pickBest, readPageText, runPaidSearch, seedSearchApproved, type PickedStory, type SeedCandidate } from '@/lib/reels/seed-search';
 import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
 import { createPostIdea, insertSource } from '@/lib/reels/repository';
 import { loadIdeaMaterial } from '@/lib/reels/scoring/store';
@@ -36,6 +36,8 @@ export type ReelSeedDeps = {
   jev: JevRunner;
   /** The page's text, or null when it cannot be read. Default: the plain page reader the night uses (no model). */
   readPage?: (url: string) => Promise<string | null>;
+  /** Unwinds a pasted Google News wrapper link to the publisher's URL (null when it cannot). Default: the news decoder. */
+  resolveLink?: (url: string) => Promise<string | null>;
   /** Where a substitute story comes from when there is no link or it cannot be read. Default: the free tiers in seed-search. */
   search?: {
     collected?: (headline: string) => Promise<SeedCandidate[]>;
@@ -221,7 +223,7 @@ async function writeSeedRow(postIdeaId: string, result: InterpretedScore): Promi
 export async function addReelSeed(input: { headline?: unknown; text?: unknown; url?: unknown; seedAnyway?: boolean; confirmPaid?: boolean }, deps: ReelSeedDeps): Promise<ReelSeedOutcome> {
   const headline = clean(input.headline);
   const text = clean(input.text);
-  const link = clean(input.url);
+  let link = clean(input.url);
   if (!headline) throw new SeedError(400, 'Write the idea’s headline.');
   if (headline.length > MAX_HEADLINE_CHARS) throw new SeedError(400, `The headline is ${headline.length - MAX_HEADLINE_CHARS} characters over the ${MAX_HEADLINE_CHARS} limit. Cut that much.`);
   if (text.length > MAX_TEXT_CHARS) throw new SeedError(400, `Your text is ${text.length - MAX_TEXT_CHARS} characters over the ${MAX_TEXT_CHARS.toLocaleString('en-US')} limit. Cut that much; nothing was trimmed for you.`);
@@ -233,6 +235,23 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
       canonical = canonicalizeUrl(link);
     } catch {
       throw new SeedError(400, 'That link doesn’t look right, or points somewhere private. It must start with http:// or https://');
+    }
+  }
+
+  // A Google News wrapper link opens Google's app shell, not the story: unwind it first. If it will not unwind, the link is unreadable.
+  let wrapperFailed = false;
+  if (link && isGoogleNewsUrl(link)) {
+    const resolved = await (deps.resolveLink ?? resolveWrapperLink)(link).catch(() => null);
+    let ok = false;
+    try {
+      ok = !!resolved && /^https?:\/\//i.test(resolved) && !isPrivateHost(new URL(resolved).hostname);
+    } catch { /* not a URL */ }
+    if (ok) {
+      link = resolved!;
+      canonical = canonicalizeUrl(resolved!);
+    } else {
+      wrapperFailed = true;
+      canonical = null;
     }
   }
 
@@ -258,8 +277,8 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
 
   const flags: string[] = [];
   let body = text;
-  let unreadable = false;
-  if (!body && link) {
+  let unreadable = wrapperFailed;
+  if (!body && link && !wrapperFailed) {
     const page = await (deps.readPage ?? readPageText)(link).catch(() => null);
     if (page && page.trim().length >= MIN_PAGE_CHARS) body = page.trim().slice(0, MAX_TEXT_CHARS);
     else unreadable = true;
