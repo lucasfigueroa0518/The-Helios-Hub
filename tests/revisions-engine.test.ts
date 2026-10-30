@@ -39,6 +39,8 @@ type FakeOpts = {
   restoreThrows?: boolean;
   /** Throw from restore on these 1-based call numbers only. */
   restoreThrowsOn?: number[];
+  /** The message restore throws with (default 'disk full', a transient failure). */
+  restoreError?: string;
   loadThrows?: boolean;
 };
 
@@ -89,7 +91,7 @@ function fakeType(opts: FakeOpts = {}) {
     async restore({ state }) {
       calls.restore += 1;
       events.push('restore');
-      if (opts.restoreThrows || opts.restoreThrowsOn?.includes(calls.restore)) throw new Error('disk full');
+      if (opts.restoreThrows || opts.restoreThrowsOn?.includes(calls.restore)) throw new Error(opts.restoreError ?? 'disk full');
       restored.push(String(state.copy));
       post.slide3 = state;
       track();
@@ -711,5 +713,19 @@ test('a failure on step 2 undoes only the newest row, keeps the older one, says 
     assert.equal(fake.post.slide3.copy, 'v0');
     assert.deepEqual((await listForItem(q, itemId)).map((r) => r.status), ['undone', 'undone']);
     assert.equal(fake.calls.unschedule, 2, 'one for the first revise, one for the restore; the re-run finds the post in review');
+  });
+});
+
+test('a partial restore stopped by another part\'s later fix says to undo that fix first, not to just try again', async () => {
+  const fake = fakeType({ restoreThrowsOn: [2], restoreError: 'A later fix to this carousels post changed it after this one; undo that fix first.' });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    for (const s of ['a', 'b']) await runRevision(deps, await submit(q, itemId, interp('wording', s)));
+    const res = await restoreOriginal(deps, itemId, part, 'ana');
+    assert.equal(res.ok, false);
+    assert.equal(
+      res.note,
+      'Undid 1 of 2 revisions of slide 3, then stopped: A later fix to this carousels post changed it after this one; undo that fix first. The older ones are still in place. Undo the fix it names first, then use Restore original again.',
+    );
+    assert.doesNotMatch(res.note, /picks up from there/);
   });
 });

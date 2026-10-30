@@ -150,7 +150,7 @@ test('failStaleRunning fails only `running` rows of the worker\'s own verticals,
     const r = (await getRequest(q, id))!;
     assert.equal(r.status, 'failed');
     assert.equal(r.note, RESTARTED_NOTE);
-    assert.equal(RESTARTED_NOTE, 'The worker restarted while this change ran; the post was not changed by it (check the post if it had been sent back to review).');
+    assert.equal(RESTARTED_NOTE, 'The worker restarted while this change ran, so it did not finish. Check the post: it may have been sent back to review, and in rare cases the change may already be on it.');
     assert.ok(r.finishedAt);
     assert.equal(r.spendUsd, 0);
   }
@@ -180,7 +180,7 @@ test('failStaleRunning with olderThanMs fails only rows running longer than that
   const r = (await getRequest(q, old))!;
   assert.equal(r.status, 'failed');
   assert.equal(r.note, STALE_RUNNING_NOTE);
-  assert.equal(STALE_RUNNING_NOTE, 'This change did not finish in time; the post was not changed by it (check the post).');
+  assert.equal(STALE_RUNNING_NOTE, 'This change did not finish in time. Check the post: in rare cases the change may already be on it.');
   assert.equal((await getRequest(q, young))!.status, 'running');
   assert.equal((await getRequest(q, fresh))!.status, 'running');
 });

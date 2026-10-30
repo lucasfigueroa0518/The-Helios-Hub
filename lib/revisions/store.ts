@@ -68,11 +68,15 @@ export async function claimNextRequested(q: Query, filter: ClaimFilter = {}): Pr
   return rows[0] ? toRow(rows[0]) : null;
 }
 
-/** The note on a row a worker's start-up found `running`: the process that ran it died (deploy, OOM, systemd). */
+/**
+ * The note on a row a worker's start-up found `running`: the process that ran it died (deploy, OOM,
+ * systemd). It may have died after the type's guarded write but before markApplied, so the note never
+ * claims the post is unchanged.
+ */
 export const RESTARTED_NOTE =
-  'The worker restarted while this change ran; the post was not changed by it (check the post if it had been sent back to review).';
+  'The worker restarted while this change ran, so it did not finish. Check the post: it may have been sent back to review, and in rare cases the change may already be on it.';
 /** The note on a row still `running` long after any change takes (the per-tick sweep). */
-export const STALE_RUNNING_NOTE = 'This change did not finish in time; the post was not changed by it (check the post).';
+export const STALE_RUNNING_NOTE = 'This change did not finish in time. Check the post: in rare cases the change may already be on it.';
 
 /**
  * Ends rows left `running` by a process that is gone: `failed`, finished now, with a plain note. Only

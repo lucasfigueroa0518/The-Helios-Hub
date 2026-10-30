@@ -265,6 +265,9 @@ export async function undoRevision(deps: EngineDeps, itemId: string, part: PartR
   return failed ?? { ok: true, note: `Undid the last revision of ${partName(part)}.` };
 }
 
+/** A description's refusal that holds until another fix is undone (whole-item types' `made` check), not a transient failure. */
+const REFUSED_UNTIL_UNDONE = /undo that fix first/i;
+
 /** Newest applied first: the order the revisions were put in place (finished), then created, then id. */
 function newestAppliedFirst(rows: RevisionRow[]): RevisionRow[] {
   const key = (r: RevisionRow) => [r.finishedAt ?? '', r.createdAt, r.id] as const;
@@ -326,10 +329,11 @@ export async function restoreOriginal(deps: EngineDeps, itemId: string, part: Pa
       await release(chain.slice(i));
       const why = errText(e).replace(/\.+$/, '');
       if (i === 0) return { ok: false, note: `Restoring ${partName(part)} failed and its content did not change: ${why}.${review}` };
-      return {
-        ok: false,
-        note: `Undid ${i} of ${chain.length} revisions of ${partName(part)}, then stopped: ${why}. The older ones are still in place; Restore original again picks up from there.${review}`,
-      };
+      // A later fix to another part refuses until it is undone: trying again alone would stop at the same place.
+      const next = REFUSED_UNTIL_UNDONE.test(why)
+        ? ' The older ones are still in place. Undo the fix it names first, then use Restore original again.'
+        : ' The older ones are still in place; Restore original again picks up from there.';
+      return { ok: false, note: `Undid ${i} of ${chain.length} revisions of ${partName(part)}, then stopped: ${why}.${next}${review}` };
     }
   }
   return { ok: true, note: `Restored the original ${partName(part)}.` };
