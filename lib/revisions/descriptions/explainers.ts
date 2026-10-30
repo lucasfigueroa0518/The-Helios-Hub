@@ -127,13 +127,16 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const jobIdOf = (refs: ActionTarget) => (UUID.test(refs.jobId ?? '') ? refs.jobId! : null);
 
-/** Posting or posted: a non-failed publish attempt or a publishing/published slot (spine or the type's own tables). */
+/**
+ * Posting or posted: a non-failed publish attempt or a publishing/published slot, on the spine only.
+ * The frozen legacy explainers tables are never named here (the backfill copied their attempts onto
+ * the spine; tests/social-spine-backfill.test.ts holds that contract).
+ */
 const POSTING_SQL = (j: string) =>
   `EXISTS (SELECT 1 FROM social_hub.content_items ci JOIN social_hub.publish_attempts pa ON pa.content_item_id = ci.id
              WHERE ci.vertical = 'explainers' AND ci.native_ref = ${j}.id::text AND pa.status <> 'failed')
    OR EXISTS (SELECT 1 FROM social_hub.content_items ci JOIN social_hub.schedule sc ON sc.content_item_id = ci.id
-             WHERE ci.vertical = 'explainers' AND ci.native_ref = ${j}.id::text AND sc.status IN ('publishing', 'published'))
-   OR EXISTS (SELECT 1 FROM explainers.publish_attempts p WHERE p.job_id = ${j}.id AND p.status <> 'failed')`;
+             WHERE ci.vertical = 'explainers' AND ci.native_ref = ${j}.id::text AND sc.status IN ('publishing', 'published'))`;
 const LATEST_SQL = (j: string, kind: string, col: string) =>
   `(SELECT a.${col} FROM explainers.artifacts a WHERE a.job_id = ${j}.id AND a.kind = '${kind}' ORDER BY a.seq DESC LIMIT 1)`;
 
@@ -181,13 +184,9 @@ async function statusOf(db: Queryable, job: JobRow, latest: Latest): Promise<Pos
 
 async function publishedAt(db: Queryable, jobId: string): Promise<string | null> {
   const { rows } = await db.query<{ at: string | null }>(
-    `SELECT min(at)::text AS at FROM (
-       SELECT coalesce(pa.finished_at, pa.requested_at) AS at FROM social_hub.publish_attempts pa
-         JOIN social_hub.content_items ci ON ci.id = pa.content_item_id
-        WHERE ci.vertical = 'explainers' AND ci.native_ref = $1 AND pa.status = 'published'
-       UNION ALL
-       SELECT coalesce(p.finished_at, p.requested_at) FROM explainers.publish_attempts p WHERE p.job_id = $1::uuid AND p.status = 'published'
-     ) x`,
+    `SELECT min(coalesce(pa.finished_at, pa.requested_at))::text AS at FROM social_hub.publish_attempts pa
+       JOIN social_hub.content_items ci ON ci.id = pa.content_item_id
+      WHERE ci.vertical = 'explainers' AND ci.native_ref = $1 AND pa.status = 'published'`,
     [jobId],
   );
   return rows[0]?.at ?? null;

@@ -1039,3 +1039,23 @@ test('Restore original after two redos of one scene puts back the original modul
     restoreRegistryForTest();
   }
 });
+
+// ── The spine is the only record of posting (the frozen legacy tables are never named) ──
+
+test('posting and posted come from the spine\'s publish attempts: a failed attempt keeps review, a live or published one locks the post', async () => {
+  const fx = await fixture();
+  const d = createExplainersDescription(depsFor(fx));
+  const item = (await explainerItemId(fx.db, JOB))!;
+  const attempt = (status: string) =>
+    fx.db.query(`INSERT INTO social_hub.publish_attempts (content_item_id, vertical, trigger, status, caption) VALUES ($1, 'explainers', 'auto', $2, 'c')`, [item, status]);
+  await attempt('failed');
+  assert.equal((await d.load(fx.q, refs))!.status, 'review');
+  await fx.db.query(`DELETE FROM social_hub.publish_attempts`);
+  await attempt('publishing');
+  assert.equal((await d.load(fx.q, refs))!.status, 'published');
+  await fx.db.query(`UPDATE social_hub.publish_attempts SET status = 'published', finished_at = now()`);
+  assert.equal((await d.load(fx.q, refs))!.status, 'published');
+  const out = await d.revise({ q: fx.q, refs, interpretation: captionFix(NEW_CAPTION), meter: meter() });
+  assert.equal(out.ok, false, 'a posted explainer is never revised');
+  assert.equal((await latest(fx.db, 'post_caption'))!.content, CAPTION);
+});
