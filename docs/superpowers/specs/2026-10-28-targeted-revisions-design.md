@@ -110,6 +110,26 @@ Also decided by Tommy after the builder check: any hub user can revise any unpub
 - **Ask-back is not a conversation thread.** The user's reply is a new submission that carries the earlier sentence and the question as context; each attempt is its own log row, linked to the previous one.
 - **Cap, ceiling, and estimate logic is config-driven** with a cost estimator per fix kind; placeholder numbers are replaced by the values Tommy approves.
 
+## Content paths per type (added 2026-10-30, from Lucas's point)
+
+Lucas's point: each content type has its own paths: source links vs LLM enrichment, and news vs educational topics. A read-only check of the code (2026-10-30) found that the pipelines are mostly news-only; the only real educational or LLM-only paths are Explainers and two Stories series. No description branches on the variant. They branch on what the saved post still holds (brief, draft, article text, photo request), so a variant that kept less data gets a plain refusal, never a silent wrong answer.
+
+| Type | Variants that exist | Wording | Photo | Color / layout | Gap or note |
+|---|---|---|---|---|---|
+| Carousels | News only (a feed story, or a person's pasted link). No educational path. | Fact-check against the saved brief; refused when the post has no saved brief and draft (old or dev posts). | Photo chain; same refusal. | Works; refuses spread halves, templated slides, follow slides. | The raw article text is not kept; the brief's facts stand in for it. |
+| Stories: Morning Download | News, from the carousel and reels pool. | Grounded against the re-read article (0.6 bar, one rewrite); needs the story's url and readable article text. | Works (up to two searches). | Backdrop, crop. | Headline only; opener and closer refused. |
+| Stories: Guess the Number | A pool item (carousel brief, unbriefed story, reels idea) or the model's own idea. | Refused: the answer gate can't be re-run. | Works, using the cited page as source. | Crop, family. | Regenerate the set to change wording. |
+| Stories: Free vs Paid | LLM only, evergreen. | Refused (same reason). | Refused on tool-logo frames. | Backdrop only. | No source data is kept. |
+| Text on screen | Six content buckets; timely, carryover or typed-seed slate. All news or source-backed. | Word-range and text-artifact checks only; no fact-check, because the person chose the words (the result note says so). | Background redo from the stored scene; refused if no scene is stored. | Grade redo; motion works. | Needs the clean clip (reels made before the raw-clip change may refuse). |
+| Explainers | Educational only (seeded, generated, manual); a source link or text is optional. | Scene redo through the build session; caption fix is $0. No fact-check either way. | Same redo as wording. | Same redo. | Reworded scenes and captions are not fact-checked, sourced or not; the result note should say so. A source check against the saved source text could come later. |
+| Last Few Days | News only (lanes major/rundown; reels, carousel, feed or seed stories). | Grounded against the re-read article; refused when it can't be re-read. | Finder plus vision check. | Crop only; cover and memes refuse. | None for variants. |
+| AI Events | No news/educational split: a weekly ranked list from the events table. | Title, host, place on event slides; $0. | Another listing image for the event. | Layout on rank slides; color refused. | None. |
+
+Decisions this table implies (mine, for Tommy to check):
+- Keep every refusal as it is. Each one already says why, and a blunt refusal beats an unchecked change.
+- Do not invent a grounding step for variants that have no source (Explainers, Free vs Paid, Guess the Number): say "not fact-checked" in the result note instead, where words change.
+- If true news-vs-educational variants are wanted for carousels, Last Few Days or text on screen, that is a pipeline change first; the revision descriptions would then need a matching branch.
+
 ## Left to the builder
 
 File layout, table and column names, the exact structured-request schema, how images are shown to Haiku, how undo restores each type's rendered files, the queue and claim mechanism, and test design.
