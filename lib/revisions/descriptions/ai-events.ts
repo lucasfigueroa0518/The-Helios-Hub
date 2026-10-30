@@ -149,6 +149,8 @@ export function createAiEventsDescription(deps: AiEventsDeps): ContentTypeDescri
       if (!post) return failed('This AI events post could not be found, so nothing was changed.');
       if (post.status === 'rejected') return blocked('This post was rejected, so it was not changed.');
       if (post.status === 'published') return blocked('This post is already published, so it was not changed.');
+      // updatePostRender writes only a post in review, so a preview's revision could never be saved.
+      if (post.status === 'preview') return blocked('This post is still a preview; revise it once it is in review.');
       if (!objectsMatch(post)) return failed('This post\'s stored slide images do not match its slides, so nothing was changed.');
       const n = slideNo(it.part);
       const slide = post.render.slides[n - 1];

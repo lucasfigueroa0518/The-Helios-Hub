@@ -345,3 +345,14 @@ test('a cap pause after an earlier allowance needs more than that allowance', as
   assert.equal(plain.current?.kind === 'paused' && plain.current.minUsd, null);
   assert.equal(plain.current?.kind === 'paused' && plain.current.suggestUsd, 0.5);
 });
+
+test('a row swept after a worker restart shows as failed with its note, and the box takes a new request again', async () => {
+  const { RESTARTED_NOTE } = await import('@/lib/revisions/store');
+  const stuck = box([row({ id: 'r1', status: 'running', startedAt: '2026-10-29T09:00:00Z' })]);
+  assert.equal(stuck.canSubmit, false);
+  assert.equal(stuck.polling, true);
+  const swept = box([row({ id: 'r1', status: 'failed', note: RESTARTED_NOTE, startedAt: '2026-10-29T09:00:00Z', finishedAt: '2026-10-29T14:00:00Z' })]);
+  assert.deepEqual(swept.current, { kind: 'failed', id: 'r1', note: RESTARTED_NOTE });
+  assert.equal(swept.canSubmit, true);
+  assert.equal(swept.polling, false);
+});

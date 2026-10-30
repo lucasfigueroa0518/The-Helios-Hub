@@ -37,6 +37,8 @@ type FakeOpts = {
   unscheduleFailsOn?: number[];
   unscheduleThrows?: boolean;
   restoreThrows?: boolean;
+  /** Throw from restore on these 1-based call numbers only. */
+  restoreThrowsOn?: number[];
   loadThrows?: boolean;
 };
 
@@ -46,6 +48,8 @@ function fakeType(opts: FakeOpts = {}) {
   const calls = { revise: 0, restore: 0, unschedule: 0 };
   /** Call order across revise / restore / unschedule. */
   const events: string[] = [];
+  /** The `copy` of each state restore put back, in call order. */
+  const restored: string[] = [];
   let version = 0;
   const fileCountHistory: number[] = [files.size];
   const track = () => {
@@ -85,7 +89,8 @@ function fakeType(opts: FakeOpts = {}) {
     async restore({ state }) {
       calls.restore += 1;
       events.push('restore');
-      if (opts.restoreThrows) throw new Error('disk full');
+      if (opts.restoreThrows || opts.restoreThrowsOn?.includes(calls.restore)) throw new Error('disk full');
+      restored.push(String(state.copy));
       post.slide3 = state;
       track();
     },
@@ -98,7 +103,7 @@ function fakeType(opts: FakeOpts = {}) {
       return { ok: true, note: 'sent back to review' };
     },
   };
-  return { desc, post, files, calls, events };
+  return { desc, post, files, calls, events, restored };
 }
 
 const CAP = { capUsd: 0.2, ceilingUsd: 0.5 };
@@ -638,7 +643,8 @@ test('restoreOriginal on a scheduled post unschedules then restores; refused whe
     fake.post.status = 'scheduled';
     fake.events.length = 0;
     assert.equal((await restoreOriginal(deps, itemId, part, 'ana')).ok, true);
-    assert.deepEqual(fake.events, ['unschedule', 'restore']);
+    // Final wave: restore walks the chain newest first (one restore per revision), unscheduling once.
+    assert.deepEqual(fake.events, ['unschedule', 'restore', 'restore']);
     assert.equal(fake.post.status, 'review');
     assert.equal(fake.post.slide3.copy, 'v0');
   });
@@ -650,5 +656,60 @@ test('restore throwing during restoreOriginal releases every claim', async () =>
     for (const s of ['a', 'b']) await runRevision(deps, await submit(q, itemId, interp('wording', s)));
     assert.equal((await restoreOriginal(deps, itemId, part, 'ana')).ok, false);
     assert.deepEqual((await listForItem(q, itemId)).map((r) => r.status), ['applied', 'applied']);
+  });
+});
+
+/* ── Final wave: Restore original walks the chain newest -> oldest ── */
+
+test('restoreOriginal restores each applied revision\'s before, newest first, and ends at the first row\'s before', async () => {
+  const fake = fakeType();
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    for (const s of ['a', 'b', 'c']) await runRevision(deps, await submit(q, itemId, interp('wording', s)));
+    const res = await restoreOriginal(deps, itemId, part, 'ana');
+    assert.equal(res.ok, true, res.note);
+    assert.equal(res.note, 'Restored the original slide 3.');
+    assert.deepEqual(fake.restored, ['b #2', 'a #1', 'v0']);
+    assert.deepEqual(fake.post.slide3, { copy: 'v0', files: ['slide3-v0.png'] }, 'same end state as before: the first row\'s before');
+    assert.equal(fake.calls.unschedule, 0, 'a post in review is never unscheduled');
+  });
+});
+
+test('restoreOriginal on an approved post unschedules once, ends in review, and never re-approves', async () => {
+  const fake = fakeType({ status: 'approved' });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    for (const s of ['a', 'b']) await runRevision(deps, await submit(q, itemId, interp('wording', s)));
+    fake.post.status = 'approved';
+    fake.events.length = 0;
+    const res = await restoreOriginal(deps, itemId, part, 'ana');
+    assert.equal(res.ok, true, res.note);
+    assert.deepEqual(fake.events, ['unschedule', 'restore', 'restore']);
+    assert.equal(fake.post.status, 'review');
+    assert.equal(fake.post.slide3.copy, 'v0');
+  });
+});
+
+test('a failure on step 2 undoes only the newest row, keeps the older one, says where it stopped, and a re-run continues', async () => {
+  const fake = fakeType({ status: 'approved', restoreThrowsOn: [2] });
+  await withEngine(fake, async ({ q, itemId, deps }) => {
+    for (const s of ['a', 'b']) await runRevision(deps, await submit(q, itemId, interp('wording', s)));
+    fake.post.status = 'approved';
+    const [older, newer] = await listForItem(q, itemId);
+    const res = await restoreOriginal(deps, itemId, part, 'ana');
+    assert.equal(res.ok, false);
+    assert.equal(
+      res.note,
+      'Undid 1 of 2 revisions of slide 3, then stopped: disk full. The older ones are still in place; Restore original again picks up from there. The post was sent back to review and stays there.',
+    );
+    assert.equal(fake.post.slide3.copy, 'a #1', 'the newest revision is undone');
+    assert.equal(fake.post.status, 'review', 'not re-approved');
+    assert.equal((await rowOf(q, itemId, newer!.id))?.status, 'undone');
+    assert.equal((await rowOf(q, itemId, older!.id))?.status, 'applied', 'the claim on the row not undone is released');
+    assert.equal((await rowOf(q, itemId, older!.id))?.undoneBy, null);
+
+    const again = await restoreOriginal(deps, itemId, part, 'ana');
+    assert.equal(again.ok, true, again.note);
+    assert.equal(fake.post.slide3.copy, 'v0');
+    assert.deepEqual((await listForItem(q, itemId)).map((r) => r.status), ['undone', 'undone']);
+    assert.equal(fake.calls.unschedule, 2, 'one for the first revise, one for the restore; the re-run finds the post in review');
   });
 });

@@ -12,10 +12,11 @@
  */
 import type { Query } from '@/lib/social/store/pg';
 
+import { hasAnyCap, noCapNote } from './caps';
 import { runRevision } from './engine';
 import { interpret, type Complete } from './interpret';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
-import { addSpend, claimNextRequested, getRequest, markAsking, markEnded, setInterpretation, type ClaimFilter } from './store';
+import { addSpend, claimNextRequested, failStaleRunning, getRequest, markAsking, markEnded, setInterpretation, type ClaimFilter } from './store';
 import type { RevisionRow } from './types';
 
 export type RevisionWorkerDeps = {
@@ -25,7 +26,7 @@ export type RevisionWorkerDeps = {
   now: () => Date;
   /** Rows handled per tick (default 3), so revisions never starve the rest of the loop. */
   max?: number;
-  log?: (message: string, fields?: Record<string, unknown>) => void;
+  log?: Log;
   /** Which verticals this worker claims (default: all). The social worker excludes explainers; helios-explainers takes only them. */
   filter?: ClaimFilter;
 };
@@ -33,10 +34,44 @@ export type RevisionWorkerDeps = {
 const LOCKED = new Set(['published', 'rejected']);
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** A change runs for minutes; a row of this worker's still `running` after this long has no live process behind it. */
+export const STALE_RUNNING_MS = 2 * 60 * 60 * 1000;
+
+type Log = (message: string, fields?: Record<string, unknown>) => void;
+
+/**
+ * A worker's start-up, before its loop: `recover` (the explainers worker's job-folder repair,
+ * recoverSceneRedos) first, so the workspace is put back before any row is ended; then every row
+ * this worker owns (`filter`) that is still `running` is ended `failed` with a plain note: the
+ * process that ran it is gone. Rows are never requeued (a half-run may already have made its one
+ * guarded write). `query` null: no sweep (e.g. the revisions log is not reachable from this worker).
+ * The sweep never throws (a failure is logged and start-up goes on); `recover` keeps its own behaviour.
+ */
+export async function startUpRevisions(o: {
+  recover?: () => Promise<unknown>;
+  query: (() => Promise<Query>) | null;
+  filter: ClaimFilter;
+  log: Log;
+}): Promise<string[]> {
+  if (o.recover) await o.recover();
+  if (!o.query) return [];
+  try {
+    const ids = await failStaleRunning(await o.query(), { filter: o.filter });
+    if (ids.length) o.log('revisions_restart_swept', { ids });
+    return ids;
+  } catch (e) {
+    o.log('revisions_restart_sweep_failed', { error: errText(e) });
+    return [];
+  }
+}
+
 /** Claims and handles up to `max` requested rows. Returns how many it claimed. */
 export async function claimAndRunRevisions(deps: RevisionWorkerDeps): Promise<number> {
   const max = deps.max ?? 3;
   let n = 0;
+  // Belt and braces beside the start-up sweep: this worker's rows stuck `running` for hours.
+  const stale = await failStaleRunning(deps.q, { filter: deps.filter, olderThanMs: STALE_RUNNING_MS });
+  if (stale.length) deps.log?.('revisions_stale_swept', { ids: stale });
   while (n < max) {
     const row = await claimNextRequested(deps.q, deps.filter);
     if (!row) break;
@@ -61,6 +96,8 @@ async function handle(deps: RevisionWorkerDeps, row: RevisionRow): Promise<void>
     }
     const desc = descriptionFor(row.vertical);
     if (!desc) return await fail(`Revisions are not available for ${label} yet.`);
+    // No approved cap: nothing could run, so never pay the interpreter to find that out.
+    if (!hasAnyCap(row.vertical)) return await fail(noCapNote(row.vertical));
     const snapshot = await desc.load(q, row.refs);
     if (!snapshot) return await fail(`This ${label} post could not be found, so nothing was changed.`);
     if (LOCKED.has(snapshot.status)) return await fail(`This ${label} post is ${snapshot.status} and can no longer be revised.`);

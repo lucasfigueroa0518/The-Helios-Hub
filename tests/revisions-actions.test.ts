@@ -12,6 +12,7 @@ import { undoRevisionContent } from '@/app/api/social-hub/actions/undo-revision/
 import { carouselActions } from '@/lib/publishing/actions/carousels';
 import { reelActions } from '@/lib/publishing/actions/reels';
 import type { ContentActions } from '@/lib/publishing/actions/types';
+import { resetCapsForTest, setCapsForTest } from '@/lib/revisions/caps';
 import { clearRegistryForTest, registerDescription, restoreRegistryForTest } from '@/lib/revisions/registry';
 import { claimNextRequested, createRequest, listForItem, markApplied, markEnded, markRunning } from '@/lib/revisions/store';
 import type { ContentTypeDescription, Interpretation, PartState, PostSnapshot } from '@/lib/revisions/types';
@@ -86,11 +87,14 @@ function registry(q: Query, itemId: string): () => Promise<Record<Vertical, Cont
 async function withDb(fake: ReturnType<typeof fakeType>, fn: (ctx: { q: Query; itemId: string; actions: ReturnType<typeof registry> }) => Promise<void>) {
   const { q, itemId } = await setupRevisionsDb();
   clearRegistryForTest();
+  // The verb refuses a type with no approved cap at submit (final wave), so the carousels fake gets one.
+  setCapsForTest({ carousels: { wording: { capUsd: 0.2, ceilingUsd: 0.5 } } });
   try {
     registerDescription(fake.desc);
     await fn({ q, itemId, actions: registry(q, itemId) });
   } finally {
     restoreRegistryForTest();
+    resetCapsForTest();
   }
 }
 
@@ -271,5 +275,38 @@ test('undoRevision and continueRevision call the engine with the user\'s email',
     assert.equal(row.overrideUsd, 1.5);
     assert.match(row.note!, new RegExp(`Continued by ${EMAIL}`));
     assert.equal(fake.calls.revise, 0);
+  });
+});
+
+/* ── Final wave: no paid interpretation without a cap ── */
+
+test('a type with no approved cap is refused at submit with a 409 and the plain note; no row is inserted', async () => {
+  const fake = fakeType();
+  await withDb(fake, async ({ q, itemId, actions }) => {
+    const POST = actionRoute(reviseContent(actions), on());
+    for (const caps of [{}, { carousels: null }, { carousels: {} }, { reels: { wording: { capUsd: 1, ceilingUsd: 2 } } }]) {
+      setCapsForTest(caps);
+      const res = await POST(req({ vertical: 'carousels', refs: { postId: U }, instruction: 'Make the slide 3 headline shorter' }));
+      assert.equal(res.status, 409);
+      assert.deepEqual(await res.json(), { ok: false, note: 'There is no approved cap for carousels yet, so nothing was run.', status: 409 });
+    }
+    assert.equal((await listForItem(q, itemId)).length, 0);
+    // A cap present: it flows as before.
+    setCapsForTest({ carousels: { photo: { capUsd: 0.2, ceilingUsd: 0.5 } } });
+    const ok = await POST(req({ vertical: 'carousels', refs: { postId: U }, instruction: 'Make the slide 3 headline shorter' }));
+    assert.equal(ok.status, 200);
+    assert.equal((await listForItem(q, itemId)).length, 1);
+  });
+});
+
+test('no cap for reels: the note says "text on screen"', async () => {
+  const fake = fakeType();
+  const reels = { ...fake, desc: { ...fake.desc, vertical: 'reels' as const } };
+  await withDb(reels, async ({ actions }) => {
+    setCapsForTest({});
+    const POST = actionRoute(reviseContent(actions), on());
+    const res = await POST(req({ vertical: 'reels', refs: { videoJobId: U }, instruction: 'shorter' }));
+    assert.equal(res.status, 409);
+    assert.equal((await res.json()).note, 'There is no approved cap for text on screen yet, so nothing was run.');
   });
 });

@@ -1,3 +1,4 @@
+import { VERTICAL_LABELS } from './labels';
 import type { CostMeter, FixKind, Vertical } from './types';
 
 export type Cap = { capUsd: number; ceilingUsd: number };
@@ -31,6 +32,20 @@ export function resetCapsForTest(): void {
 /** The approved cap and hard ceiling for a vertical and fix, or null (refused). */
 export function capFor(vertical: Vertical, fix: FixKind): Cap | null {
   return active[vertical]?.[fix] ?? null;
+}
+
+/**
+ * True when the type has at least one approved cap (any fix kind). With none, nothing about a request
+ * can run, so it is refused before the paid interpreter call (worker) and at submit (the revise verb).
+ */
+export function hasAnyCap(vertical: Vertical): boolean {
+  const caps = active[vertical];
+  return !!caps && Object.values(caps).some((c) => !!c);
+}
+
+/** The plain note for a type (or one of its fix kinds) with no approved cap. */
+export function noCapNote(vertical: Vertical, fix?: FixKind): string {
+  return `There is no approved cap for ${VERTICAL_LABELS[vertical]}${fix ? ` (${fix} fixes)` : ''} yet, so nothing was run.`;
 }
 
 export class CeilingReached extends Error {

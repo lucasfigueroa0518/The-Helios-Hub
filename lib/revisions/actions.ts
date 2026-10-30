@@ -15,6 +15,7 @@ import { findContentItem } from '@/lib/social-hub/spine';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { REVISION_REF_KEY } from './box-state';
+import { hasAnyCap, noCapNote } from './caps';
 import { continueAfterCeiling, restoreOriginal, undoRevision, type EngineDeps } from './engine';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
 import { createRequest, getRequest, recentForItem } from './store';
@@ -62,6 +63,8 @@ export function reviseVerbs(deps: ReviseDeps): Pick<ContentActions, 'revise' | '
 
       const desc = descriptionFor(deps.vertical);
       if (!desc) return { ok: false, note: `Revisions are not available for ${label} yet.`, status: 409 };
+      // Refused here, not after a paid interpreter call: with no approved cap nothing could run.
+      if (!hasAnyCap(deps.vertical)) return { ok: false, note: noCapNote(deps.vertical), status: 409 };
 
       const q = await deps.query();
       const itemId = await deps.itemOf(q, t);

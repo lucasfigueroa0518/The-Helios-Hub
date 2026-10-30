@@ -10,9 +10,9 @@
  */
 import type { Query } from '@/lib/social/store/pg';
 
-import { CeilingReached, capFor, createCostMeter } from './caps';
+import { CeilingReached, capFor, createCostMeter, noCapNote } from './caps';
 import { VERTICAL_LABELS, descriptionFor } from './registry';
-import { latestApplied, listForItem, markApplied, markEnded, markRunning, markUndone, originalOf, requeueWithOverride, unmarkUndone } from './store';
+import { latestApplied, listForItem, markApplied, markEnded, markRunning, markUndone, requeueWithOverride, unmarkUndone } from './store';
 import { RevisionFailure, type ContentTypeDescription, type CostMeter, type PartRef, type PartState, type PostSnapshot, type RevisionResult, type RevisionRow } from './types';
 
 export type EngineDeps = { q: Query; notify: (msg: string) => Promise<void>; now: () => Date };
@@ -105,7 +105,7 @@ async function runSteps(deps: EngineDeps, row: RevisionRow, st: RunState): Promi
     return fail(`${label} does not offer a ${interp.fixKind} fix, so nothing was changed.`);
   }
   const cap = capFor(row.vertical, interp.fixKind);
-  if (!cap) return fail(`There is no approved cap for ${label} (${interp.fixKind} fixes) yet, so nothing was run.`);
+  if (!cap) return fail(noCapNote(row.vertical, interp.fixKind));
 
   const override = row.overrideUsd ?? 0;
   const effectiveCap = Math.max(cap.capUsd, override);
@@ -265,26 +265,74 @@ export async function undoRevision(deps: EngineDeps, itemId: string, part: PartR
   return failed ?? { ok: true, note: `Undid the last revision of ${partName(part)}.` };
 }
 
+/** Newest applied first: the order the revisions were put in place (finished), then created, then id. */
+function newestAppliedFirst(rows: RevisionRow[]): RevisionRow[] {
+  const key = (r: RevisionRow) => [r.finishedAt ?? '', r.createdAt, r.id] as const;
+  return [...rows].sort((a, b) => {
+    const ka = key(a);
+    const kb = key(b);
+    for (let i = 0; i < ka.length; i += 1) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? 1 : -1;
+    return 0;
+  });
+}
+
 /**
- * Puts `part` back to the pipeline's original and marks every applied revision of it undone.
- * Sends an approved/scheduled post back to review first; never re-approves.
+ * Puts `part` back to the pipeline's original by walking its applied revisions NEWEST -> OLDEST:
+ * each step restores that row's `before` (whole-item types such as text on screen and explainers
+ * can only go back one revision at a time; per-part types recompute their derived fields each step)
+ * and the last step lands on the first row's `before`, the original. Every row is claimed first; an
+ * approved/scheduled post is sent back to review ONCE before the first step. The walk stops at the
+ * first failure: that row and the older ones are released (still applied) and the note says how many
+ * were undone and why it stopped. Running it again picks up from there. Never re-approves.
  */
 export async function restoreOriginal(deps: EngineDeps, itemId: string, part: PartRef, by: string): Promise<EngineOutcome> {
   const { q } = deps;
-  const original = await originalOf(q, itemId, part);
-  const applied = (await listForItem(q, itemId)).filter(
-    (r) => r.status === 'applied' && r.part?.kind === part.kind && r.part?.key === part.key,
+  const chain = newestAppliedFirst(
+    (await listForItem(q, itemId)).filter((r) => r.status === 'applied' && r.part?.kind === part.kind && r.part?.key === part.key),
   );
-  if (!original || applied.length === 0) return { ok: false, note: `${partName(part)} is already the original.` };
-  const newest = applied[applied.length - 1];
-  const guard = await editable(q, newest);
+  if (chain.length === 0) return { ok: false, note: `${partName(part)} is already the original.` };
+  const guard = await editable(q, chain[0]);
   if (!('desc' in guard)) return guard;
 
-  const claimed: string[] = [];
-  for (const r of applied) if (await markUndone(q, r.id, by)) claimed.push(r.id);
+  const release = async (rows: RevisionRow[]) => {
+    for (const r of rows) await unmarkUndone(q, r.id);
+  };
+  const claimed: RevisionRow[] = [];
+  for (const r of chain) if (await markUndone(q, r.id, by)) claimed.push(r);
   if (claimed.length === 0) return { ok: false, note: `Those revisions of ${partName(part)} were already undone; nothing changed.` };
-  const failed = await reviewThenRestore(q, guard, newest, part, original, claimed);
-  return failed ?? { ok: true, note: `Restored the original ${partName(part)}.` };
+  if (claimed.length !== chain.length) {
+    // Someone undid one of them meanwhile: walking around it could skip a step of the chain.
+    await release(claimed);
+    return { ok: false, note: `The revisions of ${partName(part)} changed while restoring, so nothing changed. Try again.` };
+  }
+
+  let sentBack = false;
+  if (SEND_BACK.includes(guard.snap.status)) {
+    const back = await sendBackToReview(guard.desc, q, chain[0].refs);
+    if (!back.ok) {
+      await release(claimed);
+      return { ok: false, note: `The post could not be sent back to review (${back.note}), so nothing changed.` };
+    }
+    sentBack = true;
+  }
+  const review = sentBack ? ' The post was sent back to review and stays there.' : '';
+
+  for (let i = 0; i < chain.length; i += 1) {
+    const r = chain[i];
+    try {
+      if (!r.before) throw new Error('This revision has no record of what came before it');
+      await guard.desc.restore({ q, refs: r.refs, part, state: r.before });
+    } catch (e) {
+      await release(chain.slice(i));
+      const why = errText(e).replace(/\.+$/, '');
+      if (i === 0) return { ok: false, note: `Restoring ${partName(part)} failed and its content did not change: ${why}.${review}` };
+      return {
+        ok: false,
+        note: `Undid ${i} of ${chain.length} revisions of ${partName(part)}, then stopped: ${why}. The older ones are still in place; Restore original again picks up from there.${review}`,
+      };
+    }
+  }
+  return { ok: true, note: `Restored the original ${partName(part)}.` };
 }
 
 /**

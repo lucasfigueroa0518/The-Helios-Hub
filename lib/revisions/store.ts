@@ -68,6 +68,34 @@ export async function claimNextRequested(q: Query, filter: ClaimFilter = {}): Pr
   return rows[0] ? toRow(rows[0]) : null;
 }
 
+/** The note on a row a worker's start-up found `running`: the process that ran it died (deploy, OOM, systemd). */
+export const RESTARTED_NOTE =
+  'The worker restarted while this change ran; the post was not changed by it (check the post if it had been sent back to review).';
+/** The note on a row still `running` long after any change takes (the per-tick sweep). */
+export const STALE_RUNNING_NOTE = 'This change did not finish in time; the post was not changed by it (check the post).';
+
+/**
+ * Ends rows left `running` by a process that is gone: `failed`, finished now, with a plain note. Only
+ * the rows `filter` gives this worker (the same filter its claims use), and with `olderThanMs` only
+ * rows started longer ago than that. Never requeues: a half-run may already have made its one guarded
+ * write, so running it again could apply it twice. Returns the ended rows' ids.
+ */
+export async function failStaleRunning(
+  q: Query,
+  o: { filter?: ClaimFilter; olderThanMs?: number; note?: string } = {},
+): Promise<string[]> {
+  const note = o.note ?? (o.olderThanMs !== undefined ? STALE_RUNNING_NOTE : RESTARTED_NOTE);
+  const { rows } = await q(
+    `UPDATE revisions.requests SET status = 'failed', finished_at = now(), note = $3
+      WHERE status = 'running'
+        AND ($1::text IS NULL OR vertical = $1) AND ($2::text IS NULL OR vertical <> $2)
+        AND ($4::double precision IS NULL OR started_at IS NULL OR started_at < now() - make_interval(secs => $4::double precision))
+      RETURNING id`,
+    [o.filter?.only ?? null, o.filter?.exclude ?? null, note, o.olderThanMs !== undefined ? o.olderThanMs / 1000 : null],
+  );
+  return rows.map((r) => String(r.id));
+}
+
 export async function markAsking(q: Query, id: string, question: string): Promise<void> {
   await q(`UPDATE revisions.requests SET status = 'asking', question = $2, finished_at = now() WHERE id = $1`, [id, question]);
 }

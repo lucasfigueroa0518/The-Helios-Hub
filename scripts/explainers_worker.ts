@@ -90,10 +90,23 @@ async function main(): Promise<void> {
   // (the old scene module, video and contact sheet) and release its hold, BEFORE the stale sweep.
   // Each job is isolated (a failure is logged and its hold still released), so start-up always goes on.
   // Never in --once: a manual or dev run beside the service could rename files under a live redo.
+  // Then (only after that repair) the revision rows the previous process left `running` end `failed`
+  // with a plain note, never requeued; explainer rows only, and only when the revisions log is reachable
+  // (explainers share the main database). A sweep failure is logged and start-up goes on.
+  const shared = process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
+  const { socialQuery } = await import('@/lib/social/store');
+  const { claimAndRunRevisions, startUpRevisions } = await import('@/lib/revisions/worker');
   if (!once) {
     const { recoverSceneRedos } = await import('@/lib/revisions/descriptions/explainers');
-    const recovered = await recoverSceneRedos(db, jobsRoot, (event, fields) => log(event, fields));
-    if (recovered.length) log('scene_redos_recovered', { jobs: recovered });
+    await startUpRevisions({
+      recover: async () => {
+        const recovered = await recoverSceneRedos(db, jobsRoot, (event, fields) => log(event, fields));
+        if (recovered.length) log('scene_redos_recovered', { jobs: recovered });
+      },
+      query: shared ? socialQuery : null,
+      filter: { only: 'explainers' },
+      log,
+    });
   }
   // One worker, one render at a time: anything still `running` died with a previous process.
   const stale = await failStaleRunningJobs(db, 'Worker restarted while this render was running.');
@@ -140,10 +153,7 @@ async function main(): Promise<void> {
    * runs a session and a render in this worker's job folders, one at a time, between renders. The
    * revisions log is in the main database, so this runs only when explainers share it.
    */
-  const shared = process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
   if (!shared) log('revisions_off', { reason: 'Explainers keep their own database, so explainer revisions are refused.' });
-  const { claimAndRunRevisions } = await import('@/lib/revisions/worker');
-  const { socialQuery } = await import('@/lib/social/store');
   const { newAnthropic } = await import('@/lib/anthropic-client');
   let revisionsClient: ReturnType<typeof newAnthropic> | null = null;
   /** The interpreter's Haiku call; its system block arrives already cached (lib/revisions/interpret.ts). */

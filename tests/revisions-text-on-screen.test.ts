@@ -21,7 +21,7 @@ import {
   rawKeyFor,
   type TextOnScreenDeps,
 } from '@/lib/revisions/descriptions/text-on-screen';
-import { runRevision } from '@/lib/revisions/engine';
+import { restoreOriginal, runRevision } from '@/lib/revisions/engine';
 import { descriptionFor, registerDescription, restoreRegistryForTest } from '@/lib/revisions/registry';
 import { claimNextRequested, createRequest, listForItem, markRunning } from '@/lib/revisions/store';
 import { relayPlate, type PlateDeps } from '@/lib/revisions/text-on-screen-plate';
@@ -820,4 +820,78 @@ test('a post started while Kling ran stops the write: failed, nothing written', 
   assert.equal(res.ok, false);
   if (!res.ok) assert.equal(res.reason, 'failed');
   assert.deepEqual(await snapshot(s.q), before);
+});
+
+/* ── Final wave: Restore original walks the whole-reel chain newest -> oldest ── */
+
+const THIRD_COPY = 'OpenAI shipped a model that writes its own tests and the team only noticed a week later';
+
+/** An item on the spine (optionally approved, no slot) with the reel's revisions run through the engine. */
+async function engineReel(s: Seeded, o: { approved?: boolean } = {}) {
+  const item = (await s.q(`INSERT INTO social_hub.content_items (vertical, format, native_ref, idea_ref) VALUES ('reels', 'reel', $1, $2) RETURNING id::text AS id`, [VIDEO, IDEA])).rows[0]!.id as string;
+  if (o.approved) await s.q(`INSERT INTO social_hub.approvals (content_item_id, decision, via) VALUES ($1, 'approved', 'user')`, [item]);
+  const { deps } = setup();
+  registerDescription(createTextOnScreenDescription(deps));
+  setCapsForTest({ reels: { motion: { capUsd: 1, ceilingUsd: 1.5 }, wording: { capUsd: 1, ceilingUsd: 1.5 } } });
+  const engine = { q: s.q, notify: async () => {}, now: () => new Date() };
+  const run = async (it: Interpretation) => {
+    await createRequest(s.q, { vertical: 'reels', refs, itemId: item, by: 'tommy', instruction: it.instruction });
+    const row = (await claimNextRequested(s.q))!;
+    await markRunning(s.q, row.id, it, 0, 0);
+    await runRevision(engine, { ...row, interpretation: it });
+    const done = (await listForItem(s.q, item)).find((r) => r.id === row.id)!;
+    assert.equal(done.status, 'applied', done.note ?? '');
+    return done;
+  };
+  return { item, engine, run };
+}
+
+test('Restore original with two wording fixes (after a motion fix) puts the original words back in one click; every wording row is undone', async () => {
+  const s = await seed();
+  try {
+    const { item, engine, run } = await engineReel(s, { approved: true });
+    const motion = await run(interp(stage('video'), 'motion'));
+    const motionClip = (await current(s.q)).video_storage_path;
+    await run(interp(stage('copy'), 'wording', { value: NEW_COPY }));
+    await run(interp(stage('copy'), 'wording', { value: THIRD_COPY }));
+    assert.equal((await current(s.q)).on_screen_copy, THIRD_COPY);
+
+    const res = await restoreOriginal(engine, item, stage('copy'), 'tommy');
+    assert.equal(res.ok, true, res.note);
+    const end = await current(s.q);
+    assert.equal(end.on_screen_copy, COPY, 'the original words');
+    assert.equal(end.video_storage_path, motionClip, 'the clip the motion fix made, with the original words laid on it');
+    assert.deepEqual(end.checks, JSON.parse(JSON.stringify(checksFor(COPY))));
+    const rows = await listForItem(s.q, item);
+    assert.deepEqual(rows.filter((r) => r.part?.key === 'copy').map((r) => r.status), ['undone', 'undone']);
+    assert.equal(rows.find((r) => r.id === motion.id)!.status, 'applied', 'the movement fix is another part and stays');
+    assert.equal((await textOnScreenDescription.load(s.q, refs))!.status, 'review', 'sent back to review, never re-approved');
+  } finally {
+    restoreRegistryForTest();
+    resetCapsForTest();
+  }
+});
+
+test('Restore original stops honestly when a fix to another part came between: the newest wording fix is undone, the rest kept', async () => {
+  const s = await seed();
+  try {
+    const { item, engine, run } = await engineReel(s);
+    const w1 = await run(interp(stage('copy'), 'wording', { value: NEW_COPY }));
+    const motion = await run(interp(stage('video'), 'motion'));
+    const motionClip = (await current(s.q)).video_storage_path;
+    const w2 = await run(interp(stage('copy'), 'wording', { value: THIRD_COPY }));
+
+    const res = await restoreOriginal(engine, item, stage('copy'), 'tommy');
+    assert.equal(res.ok, false);
+    assert.match(res.note, /^Undid 1 of 2 revisions of stage copy, then stopped: A later fix to this text on screen reel changed it after this one; undo that fix first\./);
+    const rows = await listForItem(s.q, item);
+    const status = (id: string) => rows.find((r) => r.id === id)!.status;
+    assert.deepEqual([status(w2.id), status(w1.id), status(motion.id)], ['undone', 'applied', 'applied']);
+    const end = await current(s.q);
+    assert.equal(end.on_screen_copy, NEW_COPY);
+    assert.equal(end.video_storage_path, motionClip);
+  } finally {
+    restoreRegistryForTest();
+    resetCapsForTest();
+  }
 });

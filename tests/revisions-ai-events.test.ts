@@ -321,3 +321,22 @@ test('missing or mismatched slide_objects fails up front, in revise and restore,
   assert.equal(calls.rendered.length, 0);
   assert.equal((await row(query, p.id)).render_version, 1);
 });
+
+test('a preview post is refused up front with an honest note, and nothing is rendered or written', async () => {
+  const { query } = await openAiEventsDb();
+  const p = await seed(query, 'preview');
+  const { desc, calls } = setup();
+  for (const [fix, args] of [['wording', { field: 'title', value: 'New title' }], ['layout', { layout: 'poster' }], ['photo', undefined]] as const) {
+    const res = await desc.revise({ q: query as unknown as Query, refs: { aiEventsPostId: p.id }, interpretation: interp(slide(2), fix, args), meter: meter() });
+    assert.equal(res.ok, false, fix);
+    if (!res.ok) {
+      assert.equal(res.reason, 'blocked');
+      assert.equal(res.note, 'This post is still a preview; revise it once it is in review.');
+    }
+  }
+  assert.equal(calls.rendered.length, 0);
+  assert.equal(calls.candidates.length, 0);
+  const r = await row(query, p.id);
+  assert.equal(r.render_version, 1);
+  assert.equal(r.status, 'preview');
+});

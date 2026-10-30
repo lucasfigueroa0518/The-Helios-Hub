@@ -128,3 +128,59 @@ test('a row inserted without refs reads back refs as an object, not an array', a
   assert.deepEqual(row!.refs, {});
   assert.equal(Array.isArray(row!.refs), false);
 });
+
+/* ── Final wave: rows a dead worker left `running` ── */
+
+test('failStaleRunning fails only `running` rows of the worker\'s own verticals, with the restart note, and returns their ids', async () => {
+  const { failStaleRunning, getRequest, RESTARTED_NOTE } = await import('@/lib/revisions/store');
+  const { q, itemId } = await setup();
+  const mk = async (vertical: 'carousels' | 'explainers' | 'reels', status: string) => {
+    const r = await createRequest(q, { vertical, refs: {}, itemId, by: null, instruction: `${vertical} ${status}` });
+    await q(`UPDATE revisions.requests SET status = $2, started_at = now() WHERE id = $1`, [r.id, status]);
+    return r.id;
+  };
+  const carouselRunning = await mk('carousels', 'running');
+  const reelRunning = await mk('reels', 'running');
+  const explainerRunning = await mk('explainers', 'running');
+  const others = [await mk('carousels', 'requested'), await mk('carousels', 'asking'), await mk('carousels', 'paused_at_cap'), await mk('carousels', 'paused_at_ceiling'), await mk('carousels', 'applied')];
+
+  const swept = await failStaleRunning(q, { filter: { exclude: 'explainers' } });
+  assert.deepEqual([...swept].sort(), [carouselRunning, reelRunning].sort());
+  for (const id of [carouselRunning, reelRunning]) {
+    const r = (await getRequest(q, id))!;
+    assert.equal(r.status, 'failed');
+    assert.equal(r.note, RESTARTED_NOTE);
+    assert.equal(RESTARTED_NOTE, 'The worker restarted while this change ran; the post was not changed by it (check the post if it had been sent back to review).');
+    assert.ok(r.finishedAt);
+    assert.equal(r.spendUsd, 0);
+  }
+  assert.equal((await getRequest(q, explainerRunning))!.status, 'running', 'the other worker\'s row is left alone');
+  assert.deepEqual(
+    (await Promise.all(others.map((id) => getRequest(q, id)))).map((r) => r!.status),
+    ['requested', 'asking', 'paused_at_cap', 'paused_at_ceiling', 'applied'],
+  );
+  // The explainers worker's own sweep takes only its row; a second sweep finds nothing.
+  assert.deepEqual(await failStaleRunning(q, { filter: { only: 'explainers' } }), [explainerRunning]);
+  assert.deepEqual(await failStaleRunning(q, { filter: { exclude: 'explainers' } }), []);
+});
+
+test('failStaleRunning with olderThanMs fails only rows running longer than that, with the timeout note', async () => {
+  const { failStaleRunning, getRequest, STALE_RUNNING_NOTE } = await import('@/lib/revisions/store');
+  const { q, itemId } = await setup();
+  const mk = async (hours: number) => {
+    const r = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: null, instruction: `${hours}h` });
+    await q(`UPDATE revisions.requests SET status = 'running', started_at = now() - make_interval(mins => $2) WHERE id = $1`, [r.id, Math.round(hours * 60)]);
+    return r.id;
+  };
+  const old = await mk(3);
+  const young = await mk(1.5);
+  const fresh = await mk(0);
+  const swept = await failStaleRunning(q, { olderThanMs: 2 * 60 * 60 * 1000, filter: { exclude: 'explainers' } });
+  assert.deepEqual(swept, [old]);
+  const r = (await getRequest(q, old))!;
+  assert.equal(r.status, 'failed');
+  assert.equal(r.note, STALE_RUNNING_NOTE);
+  assert.equal(STALE_RUNNING_NOTE, 'This change did not finish in time; the post was not changed by it (check the post).');
+  assert.equal((await getRequest(q, young))!.status, 'running');
+  assert.equal((await getRequest(q, fresh))!.status, 'running');
+});

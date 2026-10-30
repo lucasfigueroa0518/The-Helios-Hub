@@ -3,7 +3,7 @@
 -- depends on social_hub.content_items (db/social_hub_schema.sql), alters nothing.
 -- Tests run this file on PGlite.
 --
--- Apply (a human decision: DATABASE_URL is the shared production DB):
+-- Apply (a human decision: DIRECT_DATABASE_URL, the direct connection to the shared production DB):
 --   node scripts/apply_revisions_schema.js
 \set ON_ERROR_STOP on
 

@@ -222,3 +222,103 @@ for (const c of [
     );
   });
 }
+
+/* ── Final wave: no paid interpretation without a cap ── */
+
+test('no approved cap for the type: the row fails with the plain note before any interpreter call, $0', async () => {
+  const fake = fakeType();
+  const s = stub(OK_JSON);
+  for (const caps of [{}, { carousels: null }, { carousels: {} }, { reels: { wording: { capUsd: 1, ceilingUsd: 2 } } }]) {
+    await withWorker(fake, s.complete, async ({ q, itemId, deps }) => {
+      setCapsForTest(caps);
+      await submit(q, itemId);
+      assert.equal(await claimAndRunRevisions(deps), 1);
+      const row = (await listForItem(q, itemId))[0];
+      assert.equal(row.status, 'failed');
+      assert.equal(row.note, 'There is no approved cap for carousels yet, so nothing was run.');
+      assert.equal(row.spendUsd, 0);
+    });
+  }
+  assert.equal(s.calls.length, 0, 'Haiku is never called');
+  assert.equal(fake.calls.revise, 0);
+});
+
+test('no cap: reels say "text on screen" in the note', async () => {
+  const fake = fakeType();
+  const reels = { ...fake, desc: { ...fake.desc, vertical: 'reels' as const } };
+  const s = stub(OK_JSON);
+  await withWorker(reels, s.complete, async ({ q, itemId, deps }) => {
+    setCapsForTest({});
+    await createRequest(q, { vertical: 'reels', refs, itemId, by: 'lucas', instruction: 'x' });
+    await claimAndRunRevisions(deps);
+    const row = (await listForItem(q, itemId))[0];
+    assert.equal(row.note, 'There is no approved cap for text on screen yet, so nothing was run.');
+  });
+  assert.equal(s.calls.length, 0);
+});
+
+/* ── Final wave: rows a dead worker left `running` ── */
+
+test('startUpRevisions repairs first, then fails only this worker\'s `running` rows, and logs the ids', async () => {
+  const { startUpRevisions } = await import('@/lib/revisions/worker');
+  const { RESTARTED_NOTE, getRequest } = await import('@/lib/revisions/store');
+  await withWorker(fakeType(), stub(OK_JSON).complete, async ({ q, itemId }) => {
+    const mine = await submit(q, itemId);
+    const theirs = await createRequest(q, { vertical: 'explainers', refs: { jobId: 'j1' }, itemId, by: 'lucas', instruction: 'x' });
+    const waiting = await submit(q, itemId, 'still queued');
+    await q(`UPDATE revisions.requests SET status = 'running', started_at = now() WHERE id = ANY($1::uuid[])`, [[mine.id, theirs.id]]);
+
+    const order: string[] = [];
+    const logs: Array<[string, Record<string, unknown> | undefined]> = [];
+    const swept = await startUpRevisions({
+      recover: async () => void order.push('recover'),
+      query: async () => {
+        order.push('sweep');
+        return q;
+      },
+      filter: { exclude: 'explainers' },
+      log: (m, f) => void logs.push([m, f]),
+    });
+    assert.deepEqual(order, ['recover', 'sweep'], 'the workspace is repaired before the rows are ended');
+    assert.deepEqual(swept, [mine.id]);
+    assert.equal((await getRequest(q, mine.id))!.note, RESTARTED_NOTE);
+    assert.equal((await getRequest(q, theirs.id))!.status, 'running');
+    assert.equal((await getRequest(q, waiting.id))!.status, 'requested', 'not requeued, not touched');
+    assert.deepEqual(logs, [['revisions_restart_swept', { ids: [mine.id] }]]);
+    // A requested row is claimed normally afterwards; the swept one is never run again.
+  });
+});
+
+test('startUpRevisions never throws: a failing sweep is logged and start-up goes on; no query means no sweep', async () => {
+  const { startUpRevisions } = await import('@/lib/revisions/worker');
+  const logs: string[] = [];
+  const failing: Query = async () => {
+    throw new Error('relation "revisions.requests" does not exist');
+  };
+  assert.deepEqual(await startUpRevisions({ query: async () => failing, filter: { only: 'explainers' }, log: (m) => void logs.push(m) }), []);
+  assert.deepEqual(logs, ['revisions_restart_sweep_failed']);
+  let asked = false;
+  assert.deepEqual(await startUpRevisions({ query: null, recover: async () => void (asked = true), filter: { only: 'explainers' }, log: (m) => void logs.push(m) }), []);
+  assert.equal(asked, true, 'recovery still runs');
+  assert.equal(logs.length, 1);
+});
+
+test('each tick also fails this worker\'s rows running longer than 2 hours, before claiming', async () => {
+  const { STALE_RUNNING_NOTE, getRequest } = await import('@/lib/revisions/store');
+  const fake = fakeType();
+  const s = stub(ASK_JSON);
+  await withWorker(fake, s.complete, async ({ q, itemId, deps }) => {
+    const old = await submit(q, itemId, 'old');
+    const recent = await submit(q, itemId, 'recent');
+    const otherOld = await createRequest(q, { vertical: 'explainers', refs: { jobId: 'j1' }, itemId, by: 'lucas', instruction: 'x' });
+    await q(`UPDATE revisions.requests SET status = 'running', started_at = now() - interval '3 hours' WHERE id = ANY($1::uuid[])`, [[old.id, otherOld.id]]);
+    await q(`UPDATE revisions.requests SET status = 'running', started_at = now() - interval '90 minutes' WHERE id = $1`, [recent.id]);
+    const logs: string[] = [];
+    assert.equal(await claimAndRunRevisions({ ...deps, filter: { exclude: 'explainers' }, log: (m) => void logs.push(m) }), 0);
+    assert.equal((await getRequest(q, old.id))!.status, 'failed');
+    assert.equal((await getRequest(q, old.id))!.note, STALE_RUNNING_NOTE);
+    assert.equal((await getRequest(q, recent.id))!.status, 'running');
+    assert.equal((await getRequest(q, otherOld.id))!.status, 'running', 'another worker\'s row');
+    assert.ok(logs.includes('revisions_stale_swept'));
+  });
+});

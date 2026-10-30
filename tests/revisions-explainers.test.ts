@@ -34,7 +34,7 @@ import {
   retainJobFolder,
   type ExplainersDeps,
 } from '@/lib/revisions/descriptions/explainers';
-import { runRevision, undoRevision } from '@/lib/revisions/engine';
+import { restoreOriginal, runRevision, undoRevision } from '@/lib/revisions/engine';
 import { descriptionFor, registerDescription, restoreRegistryForTest } from '@/lib/revisions/registry';
 import { claimNextRequested, createRequest, getRequest, markRunning } from '@/lib/revisions/store';
 import type { Interpretation, PartRef } from '@/lib/revisions/types';
@@ -680,6 +680,8 @@ test('a revise request made through the Explainers verbs lands where the worker 
     },
   });
   registerDescription(desc);
+  // The verb refuses a type with no approved cap at submit (final wave), so explainers get one here.
+  setCapsForTest({ explainers: { wording: { capUsd: 5, ceilingUsd: 10 } } });
   const actions = (revisionsQuery: () => Promise<Query | null>) =>
     explainerActions({
       db: async () => explainersHandle,
@@ -706,6 +708,7 @@ test('a revise request made through the Explainers verbs lands where the worker 
     assert.equal(split.ok, false);
     assert.match(split.note, /shared database/);
   } finally {
+    resetCapsForTest();
     restoreRegistryForTest();
   }
 });
@@ -1003,4 +1006,36 @@ test('a collateral block names what could not be put back (the voice audio is ha
     assert.doesNotMatch(out.note, /and they were put back/);
   }
   assert.equal(moduleOnDisk(fx, '03-dictionary.js'), MODULES['03-dictionary.js']);
+});
+
+// ── Final wave: Restore original walks the chain newest -> oldest ──────────
+
+test('Restore original after two redos of one scene puts back the original module and video in one click; both rows undone', async () => {
+  const fx = await fixture();
+  registerDescription(createExplainersDescription(depsFor(fx)));
+  setCapsForTest({ explainers: { wording: { capUsd: 5, ceilingUsd: 10 } } });
+  const engine = { q: fx.q, notify: async () => undefined, now: () => NOW };
+  const itemId = (await explainerItemId(fx.db, JOB))!;
+  const gap: PartRef = { kind: 'scene', key: '02-gap' };
+  try {
+    for (let i = 0; i < 2; i += 1) {
+      const it = sceneFix('02-gap');
+      const req = await createRequest(fx.q, { vertical: 'explainers', refs, itemId, by: 'tommy', instruction: it.instruction });
+      await markRunning(fx.q, req.id, it, 5, 10);
+      await runRevision(engine, { ...(await getRequest(fx.q, req.id))!, interpretation: it });
+      const row = (await getRequest(fx.q, req.id))!;
+      assert.equal(row.status, 'applied', row.note ?? '');
+    }
+    assert.notEqual((await latest(fx.db, 'video'))!.storage_path, OLD_VIDEO);
+    const res = await restoreOriginal(engine, itemId, gap, 'tommy');
+    assert.equal(res.ok, true, res.note);
+    assert.equal((await latest(fx.db, 'video'))!.storage_path, OLD_VIDEO);
+    assert.equal((await latest(fx.db, 'contact_sheet'))!.storage_path, OLD_SHEET);
+    assert.equal(moduleOnDisk(fx, '02-gap.js'), MODULES['02-gap.js']);
+    const { rows } = await fx.db.query<{ status: string }>(`SELECT status FROM revisions.requests WHERE item_id = $1`, [itemId]);
+    assert.deepEqual(rows.map((r) => r.status), ['undone', 'undone']);
+  } finally {
+    resetCapsForTest();
+    restoreRegistryForTest();
+  }
 });

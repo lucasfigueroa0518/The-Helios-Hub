@@ -120,7 +120,7 @@ async function main(): Promise<void> {
   const { liveAiEventsDeps, liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { claimAndPublishAiEvents } = await import('@/lib/ai-events/publish');
   const { releaseDueAiEvents } = await import('@/lib/ai-events/schedule');
-  const { claimAndRunRevisions } = await import('@/lib/revisions/worker');
+  const { claimAndRunRevisions, startUpRevisions } = await import('@/lib/revisions/worker');
   const { newAnthropic } = await import('@/lib/anthropic-client');
   const query = await socialQuery();
   /** The same connection, typed for lib/lfd (it takes the hub's query shape). */
@@ -293,6 +293,10 @@ async function main(): Promise<void> {
     const aiEvents = await pollCarouselInsights(query, client, new Date(), 200, 'ai_events');
     if (force || aiEvents.considered > 0) log('ai_events_insights_complete', { ...aiEvents });
   }
+
+  // Targeted Revisions left `running` by the previous process (deploy, OOM, systemd restart) end
+  // `failed` with a plain note, never requeued; this worker's rows only (explainers are helios-explainers').
+  await startUpRevisions({ query: async () => query, filter: { exclude: 'explainers' }, log });
 
   try {
     let runAt = nextRun();
