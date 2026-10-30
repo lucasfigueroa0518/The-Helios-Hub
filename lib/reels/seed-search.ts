@@ -53,7 +53,8 @@ export function headlineOverlap(seedHeadline: string, candidateHeadline: string)
 
 /** The text of the page at `url`, or null when it cannot be read. The plain page reader the night uses (no model). */
 export async function readPageText(url: string): Promise<string | null> {
-  const page = await fetchPageFollowingRedirects(url, { retries: 0, timeoutMs: 15_000 });
+  // A person's (or a model's) link: refuse private addresses at the first URL and at every redirect hop.
+  const page = await fetchPageFollowingRedirects(url, { retries: 0, timeoutMs: 15_000, blockPrivate: true });
   return parsePage(page.html).text;
 }
 
