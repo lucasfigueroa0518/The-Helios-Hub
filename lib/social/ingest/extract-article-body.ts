@@ -1,6 +1,7 @@
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 
+import { assertPublicUrl, type HostLookup } from '@/lib/reels/net/http';
 import { isGoogleNewsUrl, resolveGoogleNewsUrl } from '@/lib/social/ingest/resolve-google-news';
 
 /**
@@ -30,6 +31,7 @@ const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:120.0) Gecko/20100101 Firefox/120.0';
 
 const FETCH_TIMEOUT_MS = 15_000;
+const MAX_REDIRECTS = 5;
 
 export type ExtractedBody = {
   /** The URL passed in (may be a Google News wrapper). */
@@ -55,24 +57,41 @@ export type ExtractArticleBodyOptions = {
   minTextLength?: number;
   /** Override the fetch timeout for slow hosts. */
   timeoutMs?: number;
+  /** The address lookup the private-address guard uses. Default: DNS. Tests inject one. */
+  lookup?: HostLookup;
 };
 
-async function fetchHtml(url: string, timeoutMs: number): Promise<string | null> {
+/**
+ * GET the page, following redirects one hop at a time. The first URL and every hop are checked first, so a link (or a
+ * redirect) to localhost, a private network or a cloud metadata address is never requested. Returns null on any failure.
+ */
+async function fetchHtml(url: string, timeoutMs: number, lookup?: HostLookup): Promise<{ html: string; landed: string } | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': BROWSER_UA,
-        Accept:
-          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-      redirect: 'follow',
-      signal: controller.signal,
-    });
-    if (!res.ok) return null;
-    return await res.text();
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+      await assertPublicUrl(current, lookup);
+      const res = await fetch(current, {
+        headers: {
+          'User-Agent': BROWSER_UA,
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+        },
+        redirect: 'manual',
+        signal: controller.signal,
+      });
+      const location = res.headers.get('location');
+      if (res.status >= 300 && res.status < 400 && location) {
+        await res.body?.cancel().catch(() => undefined);
+        current = new URL(location, current).toString();
+        continue;
+      }
+      if (!res.ok) return null;
+      return { html: await res.text(), landed: current };
+    }
+    return null;
   } catch {
     return null;
   } finally {
@@ -111,8 +130,10 @@ export async function extractArticleBody(
     googleNewsResolved = resolvedUrl !== articleUrl;
   }
 
-  const html = await fetchHtml(resolvedUrl, timeoutMs);
-  if (!html) return null;
+  const page = await fetchHtml(resolvedUrl, timeoutMs, options.lookup);
+  if (!page) return null;
+  const { html } = page;
+  resolvedUrl = page.landed;
 
   let text = '';
   let title: string | null = null;
