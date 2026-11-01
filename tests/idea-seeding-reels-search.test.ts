@@ -18,6 +18,16 @@ import { PAGE, RUN, reelsDb, stub } from './fixtures/reels-seed';
 const rss = (items: Array<{ title: string; link: string }>) =>
   `<?xml version="1.0"?><rss version="2.0"><channel>${items.map((i) => `<item><title>${i.title}</title><link>${i.link}</link><pubDate>Wed, 28 Oct 2026 10:00:00 GMT</pubDate></item>`).join('')}</channel></rss>`;
 
+test('headlineOverlap: plurals match, and real related Google News headlines clear the floor', () => {
+  const seed = 'Hugging Face incident shows third-party risks of misaligned AI models';
+  assert.ok(headlineOverlap(seed, 'OpenAI and Hugging Face partner to address security incident during model evaluation') >= OVERLAP_FLOOR);
+  assert.ok(headlineOverlap(seed, 'OpenAI Notifies Dozens of Third Parties About ‘Misaligned’ AI Model Activity') >= OVERLAP_FLOOR);
+  assert.ok(headlineOverlap(seed, 'Local bakery wins regional award') < OVERLAP_FLOOR, 'an unrelated story still misses');
+  assert.equal(headlineOverlap('Claude models', 'Claude model'), 1, 'models = model');
+  assert.equal(headlineOverlap('class action', 'clas action'), 0.5, 'ss is not a plural');
+  assert.equal(headlineOverlap('Opus ships', 'Opus ship'), 1, 'us is not a plural');
+});
+
 test('headlineOverlap: the share of the seed headline’s words a candidate has; stop-words do not count', () => {
   assert.equal(headlineOverlap('Anthropic releases Claude Opus 5.5', 'Anthropic releases Claude Opus 5.5'), 1);
   assert.ok(headlineOverlap('Anthropic releases Claude Opus 5.5', 'Why Claude Opus 5.5 matters, as Anthropic releases it') >= OVERLAP_FLOOR);

@@ -31,7 +31,7 @@ export const SEED_MAX_CANDIDATES = 4;
 /** A page with less text than this is a paywall stub or an error page, not a story. */
 export const MIN_BODY_CHARS = 200;
 /** Share of the seed headline's significant words a candidate headline must contain. A first guess to tune. */
-export const OVERLAP_FLOOR = 0.4;
+export const OVERLAP_FLOOR = 0.3;
 /** Trigram floor for collected stories; the duplicate check uses 0.6. A first guess to tune. */
 export const COLLECTED_FLOOR = 0.3;
 
@@ -39,7 +39,13 @@ export type SeedCandidate = { url: string; headline: string; body: string; outle
 
 const STOP = new Set(['a', 'an', 'the', 'of', 'and', 'or', 'to', 'in', 'on', 'for', 'at', 'by', 'is', 'are', 'was', 'were', 'it', 'its', 'as', 'with', 'from', 'that', 'this', 'be', 'has', 'have', 'will', 'new']);
 
-const words = (text: string): string[] => (text.toLowerCase().match(/[a-z0-9]+(?:\.[0-9]+)?/g) ?? []).filter((w) => !STOP.has(w));
+/** A plural and its singular are one word ("models" = "model", "parties" = "party"); "ss", "us" and "is" endings are not plurals. */
+const singular = (w: string): string => {
+  if (w.length > 4 && w.endsWith('ies')) return `${w.slice(0, -3)}y`;
+  return w.length > 3 && w.endsWith('s') && !/(ss|us|is)$/.test(w) ? w.slice(0, -1) : w;
+};
+
+const words = (text: string): string[] => (text.toLowerCase().match(/[a-z0-9]+(?:\.[0-9]+)?/g) ?? []).filter((w) => !STOP.has(w)).map(singular);
 
 /** The share of the seed headline's significant words that the candidate headline also has (0 when the seed has none). */
 export function headlineOverlap(seedHeadline: string, candidateHeadline: string): number {
