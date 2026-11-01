@@ -82,17 +82,17 @@ test('registerDescription makes descriptionFor return it until cleared', () => {
 
 test('hasAnyCap: true only with at least one fix kind approved; follows setCapsForTest and resetCapsForTest', async () => {
   const { hasAnyCap, noCapNote } = await import('@/lib/revisions/caps');
-  for (const v of VERTICALS) assert.equal(hasAnyCap(v), false, `${v} ships with no caps`);
+  for (const v of VERTICALS) assert.equal(hasAnyCap(v), true, `${v} ships with approved caps`);
   setCapsForTest({ reels: { motion: { capUsd: 1, ceilingUsd: 2 } }, carousels: {}, stories: null });
   try {
     assert.equal(hasAnyCap('reels'), true);
     assert.equal(hasAnyCap('carousels'), false, 'an empty config approves nothing');
     assert.equal(hasAnyCap('stories'), false);
-    assert.equal(hasAnyCap('explainers'), false);
+    assert.equal(hasAnyCap('explainers'), false, 'the override replaces the shipped caps');
   } finally {
     resetCapsForTest();
   }
-  assert.equal(hasAnyCap('reels'), false, 'reset goes back to the shipped (empty) caps');
+  assert.equal(hasAnyCap('reels'), true, 'reset goes back to the shipped caps');
   assert.equal(noCapNote('reels'), 'There is no approved cap for text on screen yet, so nothing was run.');
   assert.equal(noCapNote('carousels', 'photo'), 'There is no approved cap for carousels (photo fixes) yet, so nothing was run.');
 });

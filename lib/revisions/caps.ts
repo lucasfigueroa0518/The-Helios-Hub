@@ -9,13 +9,17 @@ export type Cap = { capUsd: number; ceilingUsd: number };
  */
 export type CapsConfig = Partial<Record<Vertical, Partial<Record<FixKind, Cap>> | null>>;
 
+const c = (capUsd: number, ceilingUsd: number): Cap => ({ capUsd, ceilingUsd });
+const RENDER_ONLY = c(0.05, 0.1);
+
+/** Approved by Tommy 2026-11-01. Cap = expected spend per revision; ceiling = hard stop. Changing one needs a worker redeploy. */
 export const CAPS: CapsConfig = {
-  reels: null,
-  explainers: null,
-  carousels: null,
-  stories: null,
-  last_few_days: null,
-  ai_events: null,
+  carousels: { photo: c(0.15, 0.4), wording: c(0.4, 1.0), color: RENDER_ONLY, layout: RENDER_ONLY },
+  stories: { photo: c(0.2, 0.5), wording: c(0.15, 0.4), color: RENDER_ONLY, layout: RENDER_ONLY },
+  last_few_days: { photo: c(0.15, 0.4), wording: c(0.4, 1.0), layout: RENDER_ONLY },
+  ai_events: { photo: c(0.15, 0.4), wording: c(0.1, 0.3), layout: RENDER_ONLY },
+  reels: { wording: c(0.15, 0.4), photo: c(0.5, 1.25), motion: c(0.75, 1.5), color: c(0.75, 1.5) },
+  explainers: { photo: c(0.75, 1.5), wording: c(0.75, 1.5), color: c(0.75, 1.5), layout: c(0.75, 1.5) },
 };
 
 let active: CapsConfig = CAPS;
