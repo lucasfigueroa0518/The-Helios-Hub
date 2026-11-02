@@ -1,7 +1,7 @@
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 
-import { assertPublicUrl, type HostLookup } from '@/lib/reels/net/http';
+import { assertPublicUrl, type HostLookup } from '@/lib/net/public-url';
 import { isGoogleNewsUrl, resolveGoogleNewsUrl } from '@/lib/social/ingest/resolve-google-news';
 
 /**

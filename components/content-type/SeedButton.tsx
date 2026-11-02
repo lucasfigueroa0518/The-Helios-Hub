@@ -9,9 +9,11 @@ import '@/app/reels/reels.css';
 import '@/components/content-type/type-hub.css';
 
 import { Drawer } from '@/app/reels/ui';
+import { CarouselSeedForm } from '@/components/content-type/CarouselSeedForm';
+import { ExplainerSeedForm } from '@/components/content-type/ExplainerSeedForm';
 import { LfdSeedForm } from '@/components/content-type/LfdSeedForm';
 import { ReelSeedForm } from '@/components/content-type/ReelSeedForm';
-import { CarouselSeedForm, ExplainerSeedForm, StorySeedForm } from '@/components/content-type/TypeControls';
+import { StorySeedForm } from '@/components/content-type/StorySeedForm';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { SEED_BUTTON, isSeedable, type SeedVertical } from '@/lib/content-type/seed-verticals';
 import type { Vertical } from '@/lib/social-hub/types';
