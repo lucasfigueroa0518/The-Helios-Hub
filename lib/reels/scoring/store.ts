@@ -30,6 +30,8 @@ export type StoredScore = {
   confidence: number | null;
   components: InterpretedScore;
   headlines: string[];
+  /** A seed: the person typed this idea in (a source marked adapter 'seed'). Set by loadSlates; absent elsewhere. */
+  yours?: boolean;
 };
 
 export type StoredSlate = {
@@ -345,6 +347,7 @@ export async function loadSlates(
       confidence: number | null;
       components: InterpretedScore;
       headlines: string[] | null;
+      yours: boolean;
     }>(
       `SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected,
               s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
@@ -356,7 +359,12 @@ export async function loadSlates(
                   FROM reels.post_idea_members m
                   JOIN reels.sources src ON src.id = m.source_id
                  WHERE m.post_idea_id = s.post_idea_id
-              ) AS headlines
+              ) AS headlines,
+              EXISTS (
+                SELECT 1 FROM reels.post_idea_members m2
+                  JOIN reels.sources so ON so.id = m2.source_id
+                 WHERE m2.post_idea_id = s.post_idea_id AND so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+              ) AS yours
          FROM reels.idea_scores s
         WHERE s.slate_id = ANY($1::uuid[])
           AND ($2::boolean = false OR s.selected)
@@ -392,6 +400,7 @@ export async function loadSlates(
       confidence: row.confidence,
       components: row.components,
       headlines: row.headlines ?? [],
+      yours: row.yours,
     });
   }
   return out;

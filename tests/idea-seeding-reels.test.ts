@@ -13,7 +13,7 @@ import { listUngroupedSources, shortlistCandidates, shortlistIdeaMerges, createP
 import { groupRun } from '@/lib/reels/pipeline/grouping';
 import { putOnSlate } from '@/lib/reels/pipeline/promote';
 import { carryoverMisses, heldFromCarryover } from '@/lib/reels/scoring/decide';
-import { loadSlateRanked, slateIdeaIds } from '@/lib/reels/scoring/store';
+import { loadSlate, loadSlateRanked, slateIdeaIds } from '@/lib/reels/scoring/store';
 import type { SeedCandidate } from '@/lib/reels/seed-search';
 import { MAX_TEXT_CHARS, SeedError, addReelSeed, isUnscoredSeed, readOpenSeeds, type ReelSeedOutcome } from '@/lib/reels/seeds';
 import { reelIdeas } from '@/lib/social-hub/adapters/reels';
@@ -456,4 +456,15 @@ test('the night’s carryover rule never picks up a seed, however high its net',
   const misses = carryoverMisses(ranked, heldFromCarryover(ranked));
   assert.ok(!misses.some((m) => m.id === seed.id), 'so it is never among the misses the next night rescores');
   assert.ok(ranked.some((r) => r.id === NORMAL), 'an ordinary idea on the same slate is still read');
+});
+
+test('the Text on Screen page’s slate marks a seed as yours (so the page can show the chip and the cap can keep it)', async () => {
+  const pg = await reelsDb();
+  void pg;
+  const { jev } = stub();
+  const seed = await add({ headline: 'Mine on the page', text: PAGE }, { jev });
+  const slate = (await loadSlate(NEW_SLATE))!;
+  const byId = new Map(slate.scores.map((s) => [s.postIdeaId, s]));
+  assert.equal(byId.get(seed.id)!.yours, true);
+  assert.equal(byId.get(NORMAL)!.yours, false, 'an ordinary idea is not yours');
 });
