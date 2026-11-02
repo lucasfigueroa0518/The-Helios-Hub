@@ -7,8 +7,7 @@
  *
  *   Text on Screen   each missing idea on today's slate is built (copy → frame → video);
  *                    with no slate today, a reels night is queued instead
- *   Carousels        a carousel run for the top of the ranked queue, in order (made
- *                    carousels are kept); with no ranked story it picks from fresh news
+ *   Carousels        none: no routine slots, so Run now skips them (their idea pool stays)
  *   Explainers       a render for each missing topic
  *   Stories          today's set for each series due today that has none
  *   Last Few Days    today's post, on its days
@@ -111,22 +110,6 @@ export function planFrom(i: RunInputs): RunPlan {
     else if (!d.missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Today’s quota is made.', estimateUsd: 0 });
     else if (!missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Its missing reels are already being made.', estimateUsd: 0 });
     else steps.push({ ...base, action: 'reels_build', targets: missing.map((m) => m.ref), note: `Makes ${titles(missing)}.`, estimateUsd: missing.length * i.cost.reelBuild });
-  }
-
-  {
-    const d = i.carousels;
-    const base = filled('carousels', d);
-    const needed = d.quota - d.held;
-    if (d.quota === 0) steps.push({ ...base, action: 'none', targets: [], note: 'Quota is 0.', estimateUsd: 0 });
-    else if (needed <= 0) steps.push({ ...base, action: 'none', targets: [], note: 'Today’s quota is made.', estimateUsd: 0 });
-    else if (i.inFlight.carouselRun) steps.push({ ...base, needed, action: 'none', targets: [], note: 'A carousel run is already queued or running.', estimateUsd: 0 });
-    else {
-      // The top of today's ranked queue, in order (Promote / Demote applied), as many as the day still needs.
-      const queue = d.missing.slice(0, needed);
-      if (queue.length) steps.push({ ...base, needed, action: 'carousel_run', targets: queue.map((m) => m.ref), note: `Makes ${titles(queue)}.`, estimateUsd: i.cost.carouselCap });
-      // Nothing ranked to name (the pool is empty): the run picks from fresh news, as the 3:00 AM run does.
-      else steps.push({ ...base, needed, action: 'carousel_run', targets: [], note: `No ranked story to make, so it runs the carousel pipeline for ${n(needed, 'post')} and picks from fresh news.`, estimateUsd: i.cost.carouselCap });
-    }
   }
 
   {

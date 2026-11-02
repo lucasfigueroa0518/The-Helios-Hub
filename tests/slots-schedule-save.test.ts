@@ -286,7 +286,8 @@ test('trial/main change reaches system bookings', async () => {
 });
 
 test('Last Few Days on a Carousels day needs a confirm', async () => {
-  const { q } = await seeded();
+  const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[540, null], [870, null]], NOT_LFD_DAYS); // the seed has no Carousels now
   const plan = await planScheduleSave(q, sched('last_few_days', [540], [2, 3, 5]), { now: SUN_10AM });
   assert.equal(plan.ok, false);
   if (plan.ok) return;
@@ -297,6 +298,7 @@ test('Last Few Days on a Carousels day needs a confirm', async () => {
 
 test('with the confirm, Carousels come off that day but a person-placed Carousel stays and Last Few Days skips it', async () => {
   const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[540, null], [870, null]], NOT_LFD_DAYS); // the seed has no Carousels now
   const placed = await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0540', publishAt: '2026-10-28T13:05:00Z', source: 'user' });
   const asked = await planScheduleSave(q, sched('last_few_days', [540], [2, 3, 5]), { now: SUN_10AM });
   assert.ok(!asked.ok && asked.errors.includes('Last Few Days skips Wed Oct 28: you set a Carousel there.'), JSON.stringify(asked));
@@ -315,6 +317,7 @@ test('with the confirm, Carousels come off that day but a person-placed Carousel
 
 test('a later Last Few Days save doesn\'t list a skip that was already there', async () => {
   const { pg, q } = await seeded();
+  await useTimes(pg, 'carousels', null, [[540, null], [870, null]], NOT_LFD_DAYS); // the seed has no Carousels now
   await book(pg, { vertical: 'carousels', nyDate: WED, slot: 't0540', publishAt: '2026-10-28T13:05:00Z', source: 'user' });
   await save(pg, q, sched('last_few_days', [540], [2, 3, 5]), SUN_10AM, { confirm: true });
   const { plan } = await save(pg, q, sched('last_few_days', [540], [2, 3, 5]), SUN_10AM);

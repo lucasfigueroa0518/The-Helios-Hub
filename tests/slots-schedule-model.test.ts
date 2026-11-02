@@ -96,16 +96,17 @@ test('the form: days run Monday first, Add a time stops at the cap (Last Few Day
 
 test('the form: a new time adds no warning or error, inside the usual window when it can (fix round 1, B3)', () => {
   const ex = [sched('Explainers', [780, 930], all, 'main')];
-  // Carousels 9:00 / 2:30 against Explainers Main 1:00 / 3:30: not 3:30 PM (the old pick, a feed warning), and 30 minutes from 9:00.
+  // Carousels 9:00 / 2:30 against Explainers Main 1:00 / 3:30: not 3:30 PM (the old pick, a feed warning). Carousels have no usual window now, so it is the first clean mark on the grid.
   const car = sched('Carousels', [540, 870], all);
   const m = nextTime(car, { cap: 3, others: ex });
   assert.notEqual(m, 930);
-  assert.equal(m, 570, 'the first clean mark in the Carousels morning window');
+  assert.equal(m, 480, 'the first clean mark on the grid: Carousels have no usual window');
   const r = checkSchedule({ ...car, times: [...car.times, { minute: m, feedMode: null }] }, { cap: 3, others: ex });
   assert.deepEqual([r.errors, r.warnings], [[], []]);
-  // Empty: the usual window's start.
-  assert.equal(nextTime(sched('Carousels', [], all), { cap: 3, others: [] }), 540);
-  // Both usual windows full of conflicts: falls outside them, still clean.
+  // Empty: the grid's start, since Carousels have no usual window. A type that has one still starts there.
+  assert.equal(nextTime(sched('Carousels', [], all), { cap: 3, others: [] }), 480);
+  assert.equal(nextTime(sched('Last Few Days', [], [2]), { cap: 1, others: [] }), 540);
+  // Conflicts around the first marks: still clean.
   const busy = [sched('Explainers', [540, 570, 870, 900], all, 'main')];
   const out = nextTime(sched('Carousels', [], all), { cap: 3, others: busy });
   assert.deepEqual(checkSchedule(sched('Carousels', [out], all), { cap: 3, others: busy }).warnings, []);

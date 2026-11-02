@@ -24,7 +24,7 @@ export const DEFAULT_SEED_INPUTS: SeedInputs = {
 /**
  * The first template (spec §Seeding): today's pattern at the default times
  * (times.ts DEFAULT_TIMES). Text on Screen and Explainers every day,
- * Carousels on every day but Last Few Days', LFD on its days, AI Events on
+ * LFD on its days (Carousels never post), AI Events on
  * its days (Sunday evening), each Stories series on its days. Reels Trial,
  * Explainers Main.
  * tests/slots-resolve.test.ts pins Monday to the default times list.
@@ -37,7 +37,7 @@ export function seedTemplate(input: SeedInputs): TemplateRow[] {
   for (const weekday of EVERY_DAY) {
     add(weekday, 'reels');
     add(weekday, 'explainers');
-    add(weekday, input.lfdDays.includes(weekday) ? 'last_few_days' : 'carousels');
+    if (input.lfdDays.includes(weekday)) add(weekday, 'last_few_days');
     if ((input.aiEventsDays ?? DEFAULT_AI_EVENTS_SEED_DAYS).includes(weekday)) add(weekday, 'ai_events');
     for (const series of Object.keys(input.storyDays) as StorySeries[]) {
       if (input.storyDays[series].includes(weekday)) add(weekday, 'stories', series);

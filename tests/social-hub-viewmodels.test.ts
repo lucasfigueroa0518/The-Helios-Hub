@@ -64,10 +64,14 @@ test('place and move share the reschedule flag; every plan names a flag that exi
 
 test('slot choices are today’s open windows for the type', () => {
   const ready = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready')!;
-  const slots = slotChoices(d, ready, now);
-  assert.ok(slots.length > 0);
-  assert.ok(slots.every((s) => s.slot === 'morning' || s.slot === 'afternoon'));
-  const o = offerer(d, now);
+  // Carousels have no routine windows: with no calendar slot for them there is nothing to choose,
+  // and with carousel slots later today (the fixture clock is 3 PM) the choices are exactly those slots.
+  assert.deepEqual(slotChoices(d, ready, now), []);
+  const carouselSlot = (startMinute: number) => ({ vertical: 'carousels' as const, startMinute, series: null, feedMode: null, origin: 'template' as const });
+  const withCalendar = { ...d, dayQuotas: { ...d.dayQuotas, slots: { [nyDateOf(now)!]: [carouselSlot(960), carouselSlot(1080)] } } } as typeof d;
+  const slots = slotChoices(withCalendar, ready, now);
+  assert.deepEqual(slots.map((s) => s.slot), ['t0960', 't1080']);
+  const o = offerer(withCalendar, now);
   const offer = o.offer(ready);
   const place = [offer.menu.primary, ...offer.menu.secondary, ...offer.menu.more].find((a) => a?.key === 'place');
   if (place) assert.ok(place.slots?.length, 'place offers the picker');
@@ -108,9 +112,9 @@ test('a day’s slots are the sum of that day’s quotas, and only scheduled or 
     post({ id: 'story', vertical: 'stories', status: 'publishing' }),
   ], '2026-10-09', quotas);
   assert.deepEqual(friday, { slots: 3, filled: 2 });
-  // No quotas loaded: each type's windows. Thursday has both Story series; Friday only Morning Download, plus Last Few Days.
-  assert.equal(slotsForDay([], '2026-10-08', null).slots, 9);
-  assert.equal(slotsForDay([], '2026-10-09', null).slots, 9);
+  // No quotas loaded: each type's windows (Carousels have none). Thursday has both Story series; Friday only Morning Download, plus Last Few Days.
+  assert.equal(slotsForDay([], '2026-10-08', null).slots, 7);
+  assert.equal(slotsForDay([], '2026-10-09', null).slots, 7);
 });
 
 test('the Content model leads with what needs a person and orders today by time', () => {

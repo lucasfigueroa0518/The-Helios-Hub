@@ -50,9 +50,8 @@ import {
 } from '@/lib/instagram/window';
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
 import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
-import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
-import { carouselOffDays, readLfdSettings } from '@/lib/lfd/settings';
+import { readLfdSettings } from '@/lib/lfd/settings';
 import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW, DEFAULT_AI_EVENTS_DAYS } from '@/lib/ai-events/config';
 import { readAiEventsSettings } from '@/lib/ai-events/settings';
 import { bookSlotStatement, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
@@ -152,10 +151,8 @@ async function storyWindows(query: SpineQuery): Promise<SlotWindow[]> {
 export async function placementRules(query: SpineQuery, vertical: SpineVertical): Promise<PlacementRules> {
   switch (vertical) {
     case 'carousels': {
-      // LFD-02: while Last Few Days' auto_run is on, its days have no carousel windows.
-      const off = await carouselOffDays(query);
-      const windows = named(CAROUSEL_SLOTS, { morning: 'Morning', afternoon: 'Afternoon' });
-      return { vertical, spaced: true, windows: off.length ? windows.map((w) => ({ ...w, days: EVERY_DAY.filter((d) => !off.includes(d)) })) : windows };
+      // Carousels have no routine windows: they post only in slots dragged onto the calendar.
+      return { vertical, spaced: true, windows: [] };
     }
     case 'last_few_days': {
       // One 9:00–10:00 AM window on its days (spec §7.4); a feed post, so spaced.

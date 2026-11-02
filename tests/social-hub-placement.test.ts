@@ -44,7 +44,11 @@ import { getSet, rescheduleSet } from '@/lib/stories/repository';
 import { pgliteDb } from '@/lib/stories/local-db';
 import { DEFAULT_SETTINGS as STORY_SETTINGS } from '@/lib/stories/settings';
 
+import { DEFAULT_SEED_INPUTS } from '@/lib/social-hub/slots/seed';
+import { setSlotSource } from '@/lib/social-hub/slots/write';
+
 import { openHubTestDb } from './fixtures/social-hub/pglite';
+import { seedWithCarousels } from './helpers/seed-with-carousels';
 
 /** Thursday 2026-10-08, 8:00 AM New York. */
 const NOW = new Date('2026-10-08T12:00:00Z');
@@ -61,6 +65,22 @@ function ny(at: Date | string): string {
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(at));
   const p = (t: string) => parts.find((x) => x.type === t)!.value;
   return `${p('year')}-${p('month')}-${p('day')} ${p('hour')}:${p('minute')}`;
+}
+
+/**
+ * A calendar that has carousel slots (9:00 and 2:30 PM, every day, with Last Few Days off). Carousels have no
+ * routine windows anymore, so a person places one into a calendar slot: template mode, slot ids t0540 / t0870.
+ */
+async function carouselCalendar(): Promise<{ pg: PGlite; q: SpineQuery }> {
+  const db = await spineDb();
+  for (const r of seedWithCarousels({ ...DEFAULT_SEED_INPUTS, lfdDays: [] })) {
+    await db.pg.query(
+      `INSERT INTO social_hub.slot_template (weekday, vertical, start_minute, series, feed_mode, updated_by) VALUES ($1, $2, $3, $4, $5, 't') ON CONFLICT DO NOTHING`,
+      [r.weekday, r.vertical, r.startMinute, r.series, r.feedMode],
+    );
+  }
+  await setSlotSource(db.q as never, 'template', 't');
+  return db;
 }
 
 let serial = 0;
@@ -98,31 +118,31 @@ async function busy(q: SpineQuery, vertical: 'carousels' | 'explainers', nyDate:
 // ── Place: the rules ────────────────────────────────────────────────────────
 
 test('place: a carousel goes into the chosen day and window as a person’s slot, at a minute inside the window', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const c = await carousel(pg, q);
-  const out = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 'morning', now: NOW, rng: first });
+  const out = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 't0540', now: NOW, rng: first });
   assert.equal(out.ok, true, out.note);
   assert.equal(out.note, 'Scheduled for Fri Oct 9, 9:00 AM.');
   const row = (await pg.query<{ ny_date: string; slot: string; publish_at: string; status: string; source: string; content_item_id: string }>(
     `SELECT ny_date::text AS ny_date, slot, publish_at, status, source, content_item_id::text AS content_item_id FROM social_hub.schedule`,
   )).rows[0]!;
-  assert.deepEqual([row.ny_date, row.slot, ny(row.publish_at), row.status, row.source, row.content_item_id], ['2026-10-09', 'morning', '2026-10-09 09:00', 'scheduled', 'user', c.itemId]);
+  assert.deepEqual([row.ny_date, row.slot, ny(row.publish_at), row.status, row.source, row.content_item_id], ['2026-10-09', 't0540', '2026-10-09 09:00', 'scheduled', 'user', c.itemId]);
   assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals`)).rows.length, 0, 'placing is not approving (D36)');
 
-  // The last minute of the window is still inside it.
+  // The last minute of the slot's 15-minute drift is still inside it.
   const c2 = await carousel(pg, q);
-  const late = await placeItem(q, { vertical: 'carousels', itemId: c2.itemId, nyDate: '2026-10-09', slot: 'afternoon', now: NOW, rng: last });
+  const late = await placeItem(q, { vertical: 'carousels', itemId: c2.itemId, nyDate: '2026-10-09', slot: 't0870', now: NOW, rng: last });
   assert.ok(late.ok);
-  assert.equal(ny((late as { publishAt: string }).publishAt), '2026-10-09 15:30');
+  assert.equal(ny((late as { publishAt: string }).publishAt), '2026-10-09 14:45');
   assert.equal(formatPlacement(new Date('2026-10-09T13:23:00Z')), 'Fri Oct 9, 9:23 AM');
 });
 
 test('place: a slot the type doesn’t have is refused, with the windows it does have', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const c = await carousel(pg, q);
   const bad = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 'late', now: NOW });
   assert.equal(bad.ok, false);
-  assert.match(bad.note, /^Carousels have no “late” slot\. Pick morning \(Morning, 9:00–10:00 AM\) or afternoon \(Afternoon, 2:30–3:30 PM\)\.$/);
+  assert.match(bad.note, /^Carousels have no “late” slot\. Pick a time on the calendar\.$/);
   for (const [vertical, slot] of [['explainers', 'morning'], ['reels', 'late'], ['stories', 'morning']] as const) {
     const plan = await planPlacement(q, { vertical, nyDate: '2026-10-09', slot, now: NOW });
     assert.equal(plan.ok, false, `${vertical} ${slot}`);
@@ -131,69 +151,73 @@ test('place: a slot the type doesn’t have is refused, with the windows it does
 });
 
 test('place: never in the past, never outside the window, at most two weeks ahead', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const c = await carousel(pg, q);
-  const at = (nyDate: string, now = NOW) => placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate, slot: 'morning', now, rng: first });
+  const at = (nyDate: string, now = NOW) => placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate, slot: 't0540', now, rng: first });
   assert.equal((await at('2026-10-07')).note, 'That day has passed.');
   assert.equal((await at('2026-10-23')).note, 'Pick a day in the next two weeks.');
   assert.equal((await at('2026-02-30')).note, 'Pick a day as YYYY-MM-DD.');
-  // 11:00 AM: today's morning window is over.
-  assert.equal((await at('2026-10-08', new Date('2026-10-08T15:00:00Z'))).note, 'Today’s morning window (9:00–10:00 AM) is over.');
-  // 9:30 AM: the window has started; the minute is still ahead.
-  const midWindow = new Date('2026-10-08T13:30:00Z');
+  // 11:00 AM: today's 9:00 slot has started and its drift is over; a person's placement takes the next open 15-minute mark instead.
+  const c0 = await carousel(pg, q);
+  const lateToday = await placeItem(q, { vertical: 'carousels', itemId: c0.itemId, nyDate: '2026-10-08', slot: 't0540', now: new Date('2026-10-08T15:00:00Z'), rng: first });
+  assert.equal(lateToday.note, 'Scheduled for Thu Oct 8, 11:15 AM.');
+  // 9:05 AM: the slot's drift has started; the minute is still ahead.
+  const midWindow = new Date('2026-10-08T13:05:00Z');
   const ok = await at('2026-10-08', midWindow);
   assert.ok(ok.ok, ok.note);
   assert.ok(new Date((ok as { publishAt: string }).publishAt) > midWindow);
-  assert.equal(ny((ok as { publishAt: string }).publishAt), '2026-10-08 09:31');
+  assert.equal(ny((ok as { publishAt: string }).publishAt), '2026-10-08 09:06');
 });
 
 test('place: one item per window per day; a taken slot is refused, here and on a move', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const a = await carousel(pg, q);
   const b = await carousel(pg, q);
-  assert.ok((await placeItem(q, { vertical: 'carousels', itemId: a.itemId, nyDate: '2026-10-09', slot: 'morning', now: NOW, rng: first })).ok);
-  assert.equal((await placeItem(q, { vertical: 'carousels', itemId: b.itemId, nyDate: '2026-10-09', slot: 'morning', now: NOW })).note, 'That slot is taken.');
-  assert.ok((await placeItem(q, { vertical: 'carousels', itemId: b.itemId, nyDate: '2026-10-10', slot: 'morning', now: NOW, rng: first })).ok);
-  assert.equal((await rescheduleItem(q, { vertical: 'carousels', itemId: b.itemId, nyDate: '2026-10-09', slot: 'morning', now: NOW })).note, 'That slot is taken.');
+  assert.ok((await placeItem(q, { vertical: 'carousels', itemId: a.itemId, nyDate: '2026-10-09', slot: 't0540', now: NOW, rng: first })).ok);
+  assert.equal((await placeItem(q, { vertical: 'carousels', itemId: b.itemId, nyDate: '2026-10-09', slot: 't0540', now: NOW })).note, 'Carousel already has a slot at 9:00 AM.');
+  assert.ok((await placeItem(q, { vertical: 'carousels', itemId: b.itemId, nyDate: '2026-10-10', slot: 't0540', now: NOW, rng: first })).ok);
+  assert.equal((await rescheduleItem(q, { vertical: 'carousels', itemId: b.itemId, nyDate: '2026-10-09', slot: 't0540', now: NOW })).note, 'Carousel already has a slot at 9:00 AM.');
   // Content with a waiting slot is moved, not placed twice.
-  assert.match((await placeItem(q, { vertical: 'carousels', itemId: a.itemId, nyDate: '2026-10-11', slot: 'morning', now: NOW })).note, /^It already has a slot \(Fri Oct 9, 9:00 AM\)\. Move it instead\.$/);
+  assert.match((await placeItem(q, { vertical: 'carousels', itemId: a.itemId, nyDate: '2026-10-11', slot: 't0540', now: NOW })).note, /^It already has a slot \(Fri Oct 9, 9:00 AM\)\. Move it instead\.$/);
 });
 
 test('spacing: carousels and explainers keep 30 minutes from every other feed post', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   // Explainer posts at 2:45 and 3:15 PM leave no carousel minute in 2:30–3:30 PM.
   await busy(q, 'explainers', '2026-10-09', 'afternoon', '2026-10-09T18:45:00Z');
   await busy(q, 'explainers', '2026-10-09', 'late', '2026-10-09T19:15:00Z');
   const c = await carousel(pg, q);
-  const crowded = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 'afternoon', now: NOW, rng: first });
-  assert.equal(crowded.note, 'Every minute left in that window is within 30 minutes of another feed post.');
+  const crowded = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 't0870', now: NOW, rng: first });
+  // Every minute of the slot's drift is crowded, so the post is pushed to the first minute that clears them: 3:15 PM + 30.
+  assert.ok(crowded.ok, crowded.note);
+  assert.equal(crowded.note, 'Scheduled for Fri Oct 9, 3:45 PM.');
   // One carousel at 1:15 PM: an explainer in 1:00–2:30 PM starts at 1:45 at the earliest.
-  await busy(q, 'carousels', '2026-10-10', 'morning', '2026-10-10T17:15:00Z');
+  await busy(q, 'carousels', '2026-10-10', 't0540', '2026-10-10T17:15:00Z');
   const e = await explainer(pg);
   const itemId = (await explainerItemId({ query: (t, p) => pg.query(t, p) as never }, e.job))!;
   const spaced = await placeItem(q, { vertical: 'explainers', itemId, nyDate: '2026-10-10', slot: 'afternoon', now: NOW, rng: first });
   assert.ok(spaced.ok, spaced.note);
   assert.equal(ny((spaced as { publishAt: string }).publishAt), '2026-10-10 13:45');
   const slots = await openSlots(q, 'carousels', '2026-10-09', { now: NOW });
-  assert.deepEqual(slots.map((s) => [s.slot, s.state]), [['morning', 'free'], ['afternoon', 'crowded']]);
+  assert.deepEqual(slots.map((s) => [s.slot, s.state]), [['t0540', 'free'], ['t0870', 'taken']]);
 });
 
 test('spacing: Trial Reels and Stories are exempt in both directions (D33)', async () => {
-  const { pg, q } = await spineDb();
-  await busy(q, 'carousels', '2026-10-09', 'morning', '2026-10-09T13:00:00Z'); // 9:00 AM
-  // A reel and a story at the carousel's very minute.
+  const { pg, q } = await carouselCalendar();
+  await busy(q, 'carousels', '2026-10-09', 't0540', '2026-10-09T13:00:00Z'); // 9:00 AM
+  // A reel at the carousel's very minute, and a story within 15 minutes of it.
   const reel = await placeItem(q, { vertical: 'reels', itemId: null, ideaRef: 'idea-1', nyDate: '2026-10-09', slot: 'morning', now: NOW, rng: () => 15 });
   assert.ok(reel.ok, reel.note);
   assert.equal(ny((reel as { publishAt: string }).publishAt), '2026-10-09 09:00');
-  const story = await planPlacement(q, { vertical: 'stories', nyDate: '2026-10-09', slot: 'morning_download', now: NOW, rng: () => 30 });
+  const story = await planPlacement(q, { vertical: 'stories', nyDate: '2026-10-09', slot: 'morning_download', now: NOW, rng: () => 15 });
   assert.ok(story.ok);
-  assert.equal(ny(story.publishAt), '2026-10-09 09:00');
+  assert.equal(ny(story.publishAt), '2026-10-09 08:45'); // the Stories slot's own minute: 15 minutes from the 9:00 carousel, which Stories ignore
   // And the reel doesn't make a carousel wait.
   const c = await carousel(pg, q);
-  assert.ok((await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-10', slot: 'morning', now: NOW, rng: first })).ok);
+  assert.ok((await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-10', slot: 't0540', now: NOW, rng: first })).ok);
   await placeItem(q, { vertical: 'reels', itemId: null, ideaRef: 'idea-2', nyDate: '2026-10-11', slot: 'morning', now: NOW, rng: () => 15 }); // 9:00 AM
   const c2 = await carousel(pg, q);
-  const beside = await placeItem(q, { vertical: 'carousels', itemId: c2.itemId, nyDate: '2026-10-11', slot: 'morning', now: NOW, rng: first });
+  const beside = await placeItem(q, { vertical: 'carousels', itemId: c2.itemId, nyDate: '2026-10-11', slot: 't0540', now: NOW, rng: first });
   assert.equal(ny((beside as { publishAt: string }).publishAt), '2026-10-11 09:00');
 });
 
@@ -226,18 +250,18 @@ test('refusals: rejected content, a try in flight, already posted', async () => 
 // ── Reschedule ──────────────────────────────────────────────────────────────
 
 test('reschedule: the same slot row moves; its source stays; its own time doesn’t space against itself', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const c = await carousel(pg, q);
-  const booked = await bookSlot(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 'morning', publishAt: new Date('2026-10-09T13:10:00Z'), source: 'auto' });
+  const booked = await bookSlot(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 't0540', publishAt: new Date('2026-10-09T13:10:00Z'), source: 'auto' });
   // Same window, earlier minute: 9:00 is 10 minutes from its own old 9:10, which doesn't count.
-  const same = await rescheduleItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 'morning', now: NOW, rng: first });
+  const same = await rescheduleItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-09', slot: 't0540', now: NOW, rng: first });
   assert.equal(same.note, 'Moved to Fri Oct 9, 9:00 AM.');
-  const moved = await rescheduleItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-10', slot: 'afternoon', now: NOW, rng: first });
+  const moved = await rescheduleItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-10', slot: 't0870', now: NOW, rng: first });
   assert.equal(moved.note, 'Moved to Sat Oct 10, 2:30 PM.');
   const rows = (await pg.query<{ id: string; ny_date: string; slot: string; source: string; status: string }>(`SELECT id, ny_date::text AS ny_date, slot, source, status FROM social_hub.schedule`)).rows;
-  assert.deepEqual(rows, [{ id: booked.id, ny_date: '2026-10-10', slot: 'afternoon', source: 'auto', status: 'scheduled' }]);
+  assert.deepEqual(rows, [{ id: booked.id, ny_date: '2026-10-10', slot: 't0870', source: 'auto', status: 'scheduled' }]);
   const nothing = await carousel(pg, q);
-  assert.equal((await rescheduleItem(q, { vertical: 'carousels', itemId: nothing.itemId, nyDate: '2026-10-10', slot: 'morning', now: NOW })).note, 'It isn’t scheduled, so there is nothing to move.');
+  assert.equal((await rescheduleItem(q, { vertical: 'carousels', itemId: nothing.itemId, nyDate: '2026-10-10', slot: 't0540', now: NOW })).note, 'It isn’t scheduled, so there is nothing to move.');
 });
 
 test('Trial Reels: slots belong to the idea; a move keeps the slot’s approval', async () => {
@@ -326,18 +350,18 @@ test('the Stories window copy matches lib/stories/settings.ts', () => {
 });
 
 test('openSlots: free, taken (with what holds it), over; the slot being moved shows free', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const c = await carousel(pg, q);
-  const placed = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'afternoon', now: NOW, rng: first });
+  const placed = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 't0870', now: NOW, rng: first });
   assert.ok(placed.ok);
   const at11 = new Date('2026-10-08T15:00:00Z');
   const today = await openSlots(q, 'carousels', '2026-10-08', { now: at11 });
-  assert.deepEqual(today.map((s) => [s.slot, s.state, s.free]), [['morning', 'over', false], ['afternoon', 'taken', false]]);
+  assert.deepEqual(today.map((s) => [s.slot, s.state, s.free]), [['t0540', 'over', false], ['t0870', 'taken', false]]);
   assert.equal(today[1]!.scheduleId, (placed as { scheduleId: string }).scheduleId);
-  assert.equal(today[1]!.window, '2:30–3:30 PM');
+  assert.equal(today[1]!.window, '2:30–2:45 PM');
   const moving = await openSlots(q, 'carousels', '2026-10-08', { now: at11, moving: (placed as { scheduleId: string }).scheduleId });
   assert.equal(moving[1]!.state, 'free');
-  assert.deepEqual((await openSlots(q, 'reels', '2026-10-09', { now: NOW })).map((s) => s.slot), ['morning', 'midday', 'evening']);
+  assert.deepEqual((await openSlots(q, 'reels', '2026-10-09', { now: NOW })).map((s) => s.slot), ['t0525', 't0675', 't1080']);
 });
 
 // ── Explainers: placement through the action layer; reject with tags (D53) ──
@@ -607,24 +631,24 @@ test('scheduleJob through today never reaches tomorrow; without a limit it does'
 });
 
 test('Reschedule on a failed post books a new slot today beside the failed one, as a person’s slot (B7)', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const c = await carousel(pg, q);
-  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: first });
+  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 't0540', now: NOW, rng: first });
   assert.ok(booked.ok, booked.note);
   await pg.query(`UPDATE social_hub.schedule SET status = 'failed', error = 'Container never reached FINISHED' WHERE id = $1`, [(booked as { scheduleId: string }).scheduleId]);
-  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: last });
+  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 't0540', now: NOW, rng: last });
   assert.ok(again.ok, again.note);
   const rows = (await pg.query<{ status: string; source: string }>(`SELECT status, source FROM social_hub.schedule WHERE content_item_id = $1 ORDER BY created_at`, [c.itemId])).rows;
   assert.deepEqual(rows.map((r) => [r.status, r.source]), [['failed', 'user'], ['scheduled', 'user']]);
 });
 
 test('Reschedule of a failed, never-approved post leaves the new slot unapproved: Reschedule alone does not publish (B7)', async () => {
-  const { pg, q } = await spineDb();
+  const { pg, q } = await carouselCalendar();
   const c = await carousel(pg, q);
-  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: first });
+  const booked = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 't0540', now: NOW, rng: first });
   assert.ok(booked.ok, booked.note);
   await pg.query(`UPDATE social_hub.schedule SET status = 'failed', error = 'boom' WHERE id = $1`, [(booked as { scheduleId: string }).scheduleId]);
-  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 'morning', now: NOW, rng: last });
+  const again = await placeItem(q, { vertical: 'carousels', itemId: c.itemId, nyDate: '2026-10-08', slot: 't0540', now: NOW, rng: last });
   assert.ok(again.ok, again.note);
   const slot = (await pg.query<{ approved_at: string | null }>(`SELECT approved_at FROM social_hub.schedule WHERE status = 'scheduled' AND content_item_id = $1`, [c.itemId])).rows;
   assert.equal(slot.length, 1);
