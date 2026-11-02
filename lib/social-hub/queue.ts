@@ -96,6 +96,19 @@ export function runLead(ideas: ReadonlyArray<{ id: string; runPick?: number | nu
 }
 
 /**
+ * The lead for a page's queue: ideas with content already made lead (newest made first), then the last run's picks.
+ * A made idea has no better score than the rest, so without this it sinks to wherever its machine score falls.
+ */
+export function poolLead(ideas: ReadonlyArray<{ id: string; runPick?: number | null; hasContent?: boolean; state?: string; generatedAt?: string | null }>): string[] {
+  const made = ideas
+    .filter((i) => i.hasContent && (i.state === 'idea_only' || i.state === 'content_ready'))
+    .sort((a, b) => (b.generatedAt ?? '').localeCompare(a.generatedAt ?? ''))
+    .map((i) => i.id);
+  const taken = new Set(made);
+  return [...made, ...runLead(ideas).filter((id) => !taken.has(id))];
+}
+
+/**
  * Where a dragged idea sorts. `others` are the effective scores of the
  * unpinned list without the dragged idea, in display order; `index` is where
  * it was dropped among them; `up` is whether it moved toward the top. Up lands
