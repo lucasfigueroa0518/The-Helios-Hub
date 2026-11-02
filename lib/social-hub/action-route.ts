@@ -75,3 +75,39 @@ function refreshHubData(vertical: Vertical | null, revalidate: (tag: string) => 
     // Outside a Next request (tests) there is no cache to revalidate.
   }
 }
+
+/** A flag-gated read next to the action routes (the revision box's poll). Same gate and session as actionRoute. */
+export type ReadSpec<B> = {
+  flag: ActionFlag;
+  /** The request's query string, or null (400). */
+  parse: (params: URLSearchParams) => B | null;
+  run: (body: B) => Promise<{ status: number; body: Record<string, unknown> }>;
+  /** When set for this request, the slice to drop from the hub's cached read before answering (the post changed). */
+  refresh?: (body: B) => Vertical | null | undefined;
+};
+
+/**
+ * GET twin of actionRoute: 404 while the flag is off (no session read, no query), 401 without a
+ * session, 400 on a bad query, then the read. Never cached; an exception answers a plain note.
+ */
+export function actionReadRoute<B>(spec: ReadSpec<B>, env: ActionEnv = {}): (req: Request) => Promise<Response> {
+  return async function GET(req: Request): Promise<Response> {
+    const headers = { 'cache-control': 'private, no-store' };
+    if (!actionEnabled(spec.flag, env.flags ?? SOCIAL_HUB_FLAGS)) {
+      return Response.json({ ok: false, note: 'This action is turned off.' }, { status: 404, headers });
+    }
+    const session = await (env.session ?? getSession)();
+    if (!session) return Response.json({ ok: false, note: 'Unauthorized' }, { status: 401, headers });
+    const body = spec.parse(new URL(req.url).searchParams);
+    if (!body) return Response.json({ ok: false, note: 'Bad request' }, { status: 400, headers });
+    try {
+      const vertical = spec.refresh?.(body);
+      if (vertical) refreshHubData(vertical, env.revalidate ?? revalidateTag);
+      const out = await spec.run(body);
+      return Response.json(out.body, { status: out.status, headers });
+    } catch (error) {
+      console.error('[social-hub] read failed:', error instanceof Error ? error.message : error);
+      return Response.json({ ok: false, note: 'Couldn’t load the changes for this post. Try again in a moment.' }, { status: 500, headers });
+    }
+  };
+}

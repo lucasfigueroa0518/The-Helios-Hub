@@ -23,6 +23,8 @@ export type CarouselPostRow = {
   render: Record<string, unknown> | null;
   slide_count: number | null;
   has_slide_objects: boolean;
+  /** The stored slide files in order (their paths version the preview URLs: a revised slide has a new path). */
+  slide_objects?: unknown;
   hook_pass: boolean | null;
   photo_sources: string[] | null;
   checks: { fixes?: unknown[]; warnings?: unknown[]; photoReplacements?: unknown[]; renderReview?: unknown[] } | null;
@@ -105,6 +107,7 @@ SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.capti
        )) END AS render,
        COALESCE(jsonb_array_length(p.slide_objects), jsonb_array_length(p.render->'slides')) AS slide_count,
        (jsonb_typeof(p.slide_objects) = 'array' AND jsonb_array_length(p.slide_objects) > 0) AS has_slide_objects,
+       p.slide_objects,
        r.hook_pass,
        -- used_photos.post_id is rarely filled by the pipeline: match the story within a day of the post.
        (SELECT array_agg(DISTINCT u.source ORDER BY u.source) FROM social.used_photos u

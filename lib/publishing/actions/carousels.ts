@@ -1,3 +1,4 @@
+import { reviseVerbs } from '@/lib/revisions/actions';
 import type { Query } from '@/lib/social/store/pg';
 import type { Placement, PlacementOutcome, PlacementTarget } from '@/lib/social-hub/placement';
 
@@ -71,5 +72,6 @@ export function carouselActions(deps: {
     delete: deleteVerb({ refKey: 'postId', query: deps.query as never, itemOf: (q, postId) => deps.itemId(q as Query, postId) }),
     place: (t, by, input) => placement(t, input, deps.placeItem, by),
     reschedule: (t, by, input) => placement(t, input, deps.rescheduleItem, by),
+    ...reviseVerbs({ vertical: 'carousels', query: deps.query, itemOf: (q, t) => deps.itemId(q, need(t, 'postId')) }),
   };
 }

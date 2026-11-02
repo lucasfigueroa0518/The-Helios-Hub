@@ -51,7 +51,8 @@ test('a post in review reads as one ready post with its slides, caption, sources
   assert.equal(post.media.kind, 'slides');
   const slides = post.media.kind === 'slides' ? post.media.slides : [];
   assert.equal(slides.length, 8);
-  assert.equal(slides[0]!.src, `/api/last-few-days/slides/${id}/0`);
+  // Versioned by the stored slide file (Targeted Revisions: a revised slide gets a new URL).
+  assert.match(slides[0]!.src ?? '', new RegExp(`^/api/last-few-days/slides/${id}/0\\?v=[0-9a-z]+$`));
   assert.equal(slides[1]!.headline, 'Anthropic Releases Claude Haiku 5.5');
   assert.match(post.description ?? '', /^Do you realize/);
   assert.deepEqual(post.sources.map((s) => [s.url, s.title]), [

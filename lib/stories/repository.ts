@@ -255,6 +255,42 @@ export async function saveFrameRender(
   );
 }
 
+/** One frame's settings and render, as a Targeted Revision reads and writes them. */
+export type FrameRevisionState = { copy: FrameData; photo: Photo | null; backdrop: Backdrop; template: string | null; storagePath: string | null; jpegBytes: number | null };
+
+/**
+ * A Targeted Revision of ONE frame (lib/revisions/descriptions/stories.ts), and the set payload
+ * derived from its frames, in one statement. Written only while the frame is still `expect`, unposted,
+ * and its set is still in `statuses` with payload `expectPayload`; false when anything moved (nothing
+ * is written then). `storagePath` is the revision's own JPEG key: an old JPEG is never overwritten.
+ * The review columns stay as the render stage left them.
+ */
+export async function saveFrameRevision(
+  db: Queryable,
+  frameId: string,
+  r: { expect: FrameRevisionState; next: FrameRevisionState; expectPayload: Record<string, unknown>; payload: Record<string, unknown>; statuses: SetStatus[] },
+): Promise<boolean> {
+  const j = (v: unknown) => (v === null || v === undefined ? null : JSON.stringify(v));
+  const { rows } = await db.query<{ id: string }>(
+    `WITH f AS (
+       UPDATE stories.frames fr
+          SET copy = $2::jsonb, photo = $3::jsonb, backdrop = $4, template = $5, storage_path = $6, jpeg_bytes = $7
+        WHERE fr.id = $1 AND fr.ig_container_id IS NULL AND fr.ig_media_id IS NULL
+          AND fr.copy = $8::jsonb AND fr.photo IS NOT DISTINCT FROM $9::jsonb AND fr.backdrop = $10
+          AND fr.template IS NOT DISTINCT FROM $11 AND fr.storage_path IS NOT DISTINCT FROM $12
+          AND EXISTS (SELECT 1 FROM stories.sets s WHERE s.id = fr.set_id AND s.status = ANY($13::text[]) AND s.payload = $14::jsonb)
+        RETURNING fr.set_id)
+     UPDATE stories.sets s SET payload = $15::jsonb, updated_at = now() FROM f WHERE s.id = f.set_id RETURNING s.id::text AS id`,
+    [
+      frameId,
+      j(r.next.copy), j(r.next.photo), r.next.backdrop, r.next.template, r.next.storagePath, r.next.jpegBytes,
+      j(r.expect.copy), j(r.expect.photo), r.expect.backdrop, r.expect.template, r.expect.storagePath,
+      r.statuses, j(r.expectPayload), j(r.payload),
+    ],
+  );
+  return rows.length === 1;
+}
+
 export const markReady = (db: Queryable, setId: string, flagged: boolean) => move(db, setId, ['building'], 'ready', 'built_at = now(), flagged = $4', [flagged]);
 export const markSkipped = (db: Queryable, setId: string, reason: string) => move(db, setId, ['requested', 'building'], 'skipped', 'error = $4', [reason]);
 export const failSet = (db: Queryable, setId: string, error: string) =>

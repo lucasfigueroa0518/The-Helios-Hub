@@ -1,5 +1,6 @@
 import type { Placement, PlacementOutcome, PlacementTarget } from '@/lib/social-hub/placement';
 import type { SpineQuery } from '@/lib/social-hub/spine';
+import { reviseVerbs } from '@/lib/revisions/actions';
 
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
@@ -72,5 +73,7 @@ export function reelActions(deps: {
     delete: deleteVerb({ refKey: 'videoJobId', query: async () => deps.query, itemOf: (_q, videoJobId) => deps.itemId(videoJobId) }),
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),
+    // A revision changes made video, so it is named by the video job (as delete is).
+    ...reviseVerbs({ vertical: 'reels', query: async () => deps.query, itemOf: (_q, t) => deps.itemId(need(t, 'videoJobId')) }),
   };
 }

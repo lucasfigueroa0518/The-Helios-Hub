@@ -1,7 +1,9 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
-import type { SpineQuery } from '@/lib/social-hub/spine';
+import { findContentItem, type SpineQuery } from '@/lib/social-hub/spine';
 import { formatPlacement, type Placement, type PlacementOutcome, type PlacementTarget } from '@/lib/social-hub/placement';
 import { nyDateOf } from '@/lib/social-hub/time';
+import { reviseVerbs } from '@/lib/revisions/actions';
+import type { Query } from '@/lib/social/store/pg';
 
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ContentActions } from './types';
@@ -54,9 +56,21 @@ export function explainerActions(deps: {
     throughDate: string,
   ) => Promise<{ scheduled: true; publishAt: string } | { scheduled: false; note: string }>;
   publishingLive: (db: ExplainersDb) => Promise<boolean>;
+  /**
+   * Targeted Revisions: the database the social worker claims revision rows from (socialQuery,
+   * DATABASE_URL), or null when Explainers keep a database of their own (EXPLAINERS_DATABASE_URL, or
+   * local PGlite): the log references the spine item, which then is not in the worker's database,
+   * so revisions are refused there. Absent: the explainers handle (tests that use one database).
+   */
+  revisionsQuery?: () => Promise<Query | null>;
   /** The clock (tests pin it). */
   now?: () => Date;
 }): ContentActions {
+  /** The explainers handle may be its own database; its spine rows (and the revisions log) are reached through it. */
+  const spineQuery = async (): Promise<SpineQuery> => {
+    const db = await deps.db();
+    return ((text, params) => db.query(text, params)) as SpineQuery;
+  };
   const placement =
     (fn: Place): ActionFn =>
     async (t, by, input) => {
@@ -124,15 +138,36 @@ export function explainerActions(deps: {
       const out = await deps.unscheduleJob(await deps.db(), need(t, 'jobId'));
       return out.ok ? { ok: true, note: out.note } : { ok: false, note: out.note, status: 409 };
     },
-    delete: deleteVerb({
-      refKey: 'jobId',
-      query: async () => {
-        const db = await deps.db();
-        return ((text, params) => db.query(text, params)) as SpineQuery;
-      },
-      itemOf: async (_q, jobId) => deps.itemId(await deps.db(), jobId),
-    }),
+    delete: deleteVerb({ refKey: 'jobId', query: spineQuery, itemOf: async (_q, jobId) => deps.itemId(await deps.db(), jobId) }),
     place: placement(deps.placeItem),
     reschedule: placement(deps.rescheduleItem),
+    ...revisions(),
   };
+
+  /**
+   * Revision rows go where the social worker claims them (the revisions query); the post itself is
+   * read by the description through the explainers handle. Refused when the two are not one database.
+   */
+  function revisions(): Pick<ContentActions, 'revise' | 'undoRevision' | 'continueRevision' | 'revisions'> {
+    const NOT_SHARED = 'Explainer changes are not available here: explainers keep their own database on this setup, not the shared database the revisions worker reads. Nothing was changed.';
+    const query = async (): Promise<Query | null> => (deps.revisionsQuery ? deps.revisionsQuery() : ((await spineQuery()) as unknown as Query));
+    const verbs = reviseVerbs({
+      vertical: 'explainers',
+      query: async () => (await query())!,
+      itemOf: async (_q, t) => deps.itemId(await deps.db(), need(t, 'jobId')),
+      // The read's lookup: the spine lives in the explainers database, and the poll must not write there either.
+      findItem: async (_q, t) => findContentItem(await spineQuery(), 'explainers', need(t, 'jobId').toLowerCase()),
+    });
+    const guarded =
+      (fn: ActionFn | undefined): ActionFn =>
+      async (t, by, input) =>
+        (await query()) ? fn!(t, by, input) : { ok: false, note: NOT_SHARED, status: 409 };
+    return {
+      revise: guarded(verbs.revise),
+      undoRevision: guarded(verbs.undoRevision),
+      continueRevision: guarded(verbs.continueRevision),
+      // Not shared: there are no revision rows to show (a submit answers with NOT_SHARED).
+      revisions: async (t) => ((await query()) ? verbs.revisions!(t) : []),
+    };
+  }
 }

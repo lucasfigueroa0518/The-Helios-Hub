@@ -2,6 +2,7 @@ import { formatPlacement, type Planned, type PlacementRules } from '@/lib/social
 import { parseSlotId, type SetBy } from '@/lib/social-hub/slots/types';
 import type { SpineQuery } from '@/lib/social-hub/spine';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
+import { reviseVerbs } from '@/lib/revisions/actions';
 
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionFn, type ActionOutcome, type ContentActions } from './types';
@@ -13,6 +14,12 @@ type Plan = (
 ) => Promise<Planned>;
 
 const SERIES_NAME: Record<string, string> = SERIES_LABEL;
+
+/** A story set's spine item (its native ref is the set id). */
+async function storyItemOf(q: SpineQuery, setId: string): Promise<string | null> {
+  return (await q(`SELECT id FROM social_hub.content_items WHERE vertical = 'stories' AND native_ref = $1`, [setId])).rows[0]?.id ?? null;
+}
+
 const isUniqueViolation = (error: unknown) => (error as { code?: string } | null)?.code === '23505';
 
 /**
@@ -95,9 +102,10 @@ export function storyActions(deps: {
     delete: deleteVerb({
       refKey: 'setId',
       query: async () => deps.query,
-      itemOf: async (q, setId) => (await q(`SELECT id FROM social_hub.content_items WHERE vertical = 'stories' AND native_ref = $1`, [setId])).rows[0]?.id ?? null,
+      itemOf: (q, setId) => storyItemOf(q, setId),
     }),
     place: placement('place'),
     reschedule: placement('reschedule'),
+    ...reviseVerbs({ vertical: 'stories', query: async () => deps.query, itemOf: (q, t) => storyItemOf(q, need(t, 'setId')) }),
   };
 }

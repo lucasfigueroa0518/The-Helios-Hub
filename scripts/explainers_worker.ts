@@ -86,6 +86,28 @@ async function main(): Promise<void> {
   const store = artifactStoreFromEnv();
   const jobsRoot = process.env.EXPLAINERS_JOBS_DIR || path.join(process.cwd(), '.explainers-local', 'jobs');
 
+  // A scene redo (Targeted Revisions) this worker was running when it stopped: put its job folder back
+  // (the old scene module, video and contact sheet) and release its hold, BEFORE the stale sweep.
+  // Each job is isolated (a failure is logged and its hold still released), so start-up always goes on.
+  // Never in --once: a manual or dev run beside the service could rename files under a live redo.
+  // Then (only after that repair) the revision rows the previous process left `running` end `failed`
+  // with a plain note, never requeued; explainer rows only, and only when the revisions log is reachable
+  // (explainers share the main database). A sweep failure is logged and start-up goes on.
+  const shared = process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
+  const { socialQuery } = await import('@/lib/social/store');
+  const { claimAndRunRevisions, startUpRevisions } = await import('@/lib/revisions/worker');
+  if (!once) {
+    const { recoverSceneRedos } = await import('@/lib/revisions/descriptions/explainers');
+    await startUpRevisions({
+      recover: async () => {
+        const recovered = await recoverSceneRedos(db, jobsRoot, (event, fields) => log(event, fields));
+        if (recovered.length) log('scene_redos_recovered', { jobs: recovered });
+      },
+      query: shared ? socialQuery : null,
+      filter: { only: 'explainers' },
+      log,
+    });
+  }
   // One worker, one render at a time: anything still `running` died with a previous process.
   const stale = await failStaleRunningJobs(db, 'Worker restarted while this render was running.');
   if (stale) log('stale_jobs_failed', { count: stale });
@@ -124,6 +146,39 @@ async function main(): Promise<void> {
       }
     }
     return true;
+  };
+
+  /**
+   * Targeted Revisions for explainers only (the social worker leaves these rows alone): a scene redo
+   * runs a session and a render in this worker's job folders, one at a time, between renders. The
+   * revisions log is in the main database, so this runs only when explainers share it.
+   */
+  if (!shared) log('revisions_off', { reason: 'Explainers keep their own database, so explainer revisions are refused.' });
+  const { newAnthropic } = await import('@/lib/anthropic-client');
+  let revisionsClient: ReturnType<typeof newAnthropic> | null = null;
+  /** The interpreter's Haiku call; its system block arrives already cached (lib/revisions/interpret.ts). */
+  const reviseComplete: import('@/lib/revisions/interpret').Complete = async (req) => {
+    revisionsClient ??= newAnthropic();
+    const res = await revisionsClient.messages.create({ model: req.model, max_tokens: req.max_tokens, system: req.system, messages: req.messages });
+    return { text: res.content.map((b) => (b.type === 'text' ? b.text : '')).join(''), usage: res.usage };
+  };
+  let lastRevisionsError: string | null = null;
+  const revisionsStep = async (): Promise<number> => {
+    if (!shared) return 0;
+    return claimAndRunRevisions({
+      q: await socialQuery(),
+      complete: reviseComplete,
+      notify: async (m) => log('revision_notice', { message: m }),
+      now: () => new Date(),
+      log,
+      max: 1,
+      filter: { only: 'explainers' },
+    }).catch((error) => {
+      const text = errorText(error);
+      if (text !== lastRevisionsError) log('revisions_claim_failed', { error: text });
+      lastRevisionsError = text;
+      return 0;
+    });
   };
 
   if (once) {
@@ -195,6 +250,7 @@ async function main(): Promise<void> {
           });
         }
       }
+      await revisionsStep();
       await renderNext();
       await publishStep().catch((error) => log('publish_failed', { error: errorText(error) }));
       if (Date.now() >= sweepAt.getTime() || Date.now() - lastInsights >= INSIGHTS_EVERY_MS) {

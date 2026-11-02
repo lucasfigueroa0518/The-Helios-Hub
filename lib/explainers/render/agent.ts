@@ -121,7 +121,17 @@ export type SessionInput = {
   secrets: { anthropicApiKey: string; heygenApiKey: string; voiceId: string };
   /** One line per SDK message, for the transcript artifact. */
   log: (entry: Record<string, unknown>) => void;
+  /**
+   * The voice and music are final (a Targeted Revisions scene redo): no HeyGen key in the
+   * environment and no HeyGen hosts in the sandbox's network list, so they cannot be made again.
+   */
+  voiceLocked?: boolean;
 };
+
+/** The network hosts a session may reach: HeyGen's only while the voice may be made. */
+export function allowedDomains(voiceLocked = false): string[] {
+  return voiceLocked ? ALLOWED_NETWORK_DOMAINS.filter((d) => !/heygen/i.test(d)) : ALLOWED_NETWORK_DOMAINS;
+}
 
 function which(binary: string): string | null {
   for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
@@ -132,7 +142,7 @@ function which(binary: string): string | null {
 }
 
 /** The scrubbed environment: no database URL, no Supabase key, no outreach keys. */
-export function scrubbedEnv(input: Pick<SessionInput, 'projectDir' | 'homeDir' | 'tmpDir' | 'secrets'>): Record<string, string> {
+export function scrubbedEnv(input: Pick<SessionInput, 'projectDir' | 'homeDir' | 'tmpDir' | 'secrets' | 'voiceLocked'>): Record<string, string> {
   const pathDirs = [
     path.join(RUNTIME_DIR, 'node_modules', '.bin'),
     path.dirname(process.execPath),
@@ -150,7 +160,7 @@ export function scrubbedEnv(input: Pick<SessionInput, 'projectDir' | 'homeDir' |
     LANG: 'en_US.UTF-8',
     ANTHROPIC_API_KEY: input.secrets.anthropicApiKey,
     ...(workspace ? { ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${workspace}` } : {}),
-    HEYGEN_API_KEY: input.secrets.heygenApiKey,
+    ...(input.voiceLocked ? {} : { HEYGEN_API_KEY: input.secrets.heygenApiKey }),
     HELIOS_VOICE_ID: input.secrets.voiceId,
     HYPERFRAMES_MEDIA_HOME: input.projectDir,
     // The OS sandbox reaches the network only through its proxy (HTTP(S)_PROXY);
@@ -226,7 +236,7 @@ export function sessionOptions(input: SessionInput, abort: AbortController, onDe
       allowUnsandboxedCommands: false,
       excludedCommands: UNSANDBOXED_HYPERFRAMES,
       filesystem: { allowWrite: [input.projectDir, input.homeDir] },
-      network: { allowedDomains: ALLOWED_NETWORK_DOMAINS, allowLocalBinding: true },
+      network: { allowedDomains: allowedDomains(input.voiceLocked), allowLocalBinding: true },
       credentials: { envVars: [{ name: 'ANTHROPIC_API_KEY', mode: 'deny' }] },
     },
   };

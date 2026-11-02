@@ -1,5 +1,6 @@
 import { attemptStatus, cancelNote, category, historyByMedia, iso, latest, nyDateFor, scheduleStatus, slotCategory, slotText, text, yesNo } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { versionedSrc } from '@/lib/social-hub/media-version';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import type { LfdPostRow, LfdRead, LfdRunRow, LfdSeedRow } from '@/lib/social-hub/queries/last-few-days';
 import type { FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, SourceRef } from '@/lib/social-hub/types';
@@ -56,7 +57,8 @@ export function lfdSlides(row: LfdPostRow): Array<{ src: string | null; alt: str
   return Array.from({ length: count }, (_, i) => {
     const slide = slides[i] ?? {};
     return {
-      src: row.has_slide_objects ? `/api/last-few-days/slides/${row.post_id}/${i}` : null,
+      // Versioned by the stored file: a revised slide has a new path, so the hub shows it without a reload.
+      src: row.has_slide_objects ? versionedSrc(`/api/last-few-days/slides/${row.post_id}/${i}`, Array.isArray(row.slide_objects) ? row.slide_objects[i] : null) : null,
       alt: str(slide.altText) ?? `${lfdTitle(row)}, slide ${i + 1}`,
       photo: typeof slide.photoUrl === 'string' && /^https:\/\//.test(slide.photoUrl) ? slide.photoUrl : null,
       layout: str(slide.layoutVariant),

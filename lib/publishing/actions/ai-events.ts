@@ -1,6 +1,7 @@
 // lib/publishing/actions/ai-events.ts
 import type { Placement, PlacementOutcome, PlacementTarget } from '@/lib/social-hub/placement';
 import type { Query } from '@/lib/social/store/pg';
+import { reviseVerbs } from '@/lib/revisions/actions';
 
 import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionInput, type ActionOutcome, type ActionTarget, type ContentActions } from './types';
@@ -83,5 +84,6 @@ export function aiEventsActions(deps: {
     delete: deleteVerb({ refKey: 'aiEventsPostId', query: deps.query as never, itemOf: (q, postId) => deps.itemId(q as Query, postId) }),
     place: (t, by, input) => placement(t, input, deps.placeItem, by),
     reschedule: (t, by, input) => placement(t, input, deps.rescheduleItem, by),
+    ...reviseVerbs({ vertical: 'ai_events', query: deps.query, itemOf: (q, t) => deps.itemId(q, need(t, 'aiEventsPostId')) }),
   };
 }

@@ -22,6 +22,8 @@ export type LfdPostRow = {
   stories: unknown;
   slide_count: number | null;
   has_slide_objects: boolean;
+  /** The stored slide files in order (their paths version the preview URLs: a revised slide has a new path). */
+  slide_objects?: unknown;
   fit_problems: unknown;
   render_problems: unknown;
   short: boolean;
@@ -104,6 +106,7 @@ SELECT p.id::text AS post_id, p.run_id::text AS run_id, p.slug, p.ny_date::text 
        p.stories,
        COALESCE(jsonb_array_length(p.slide_objects), jsonb_array_length(p.render->'slides')) AS slide_count,
        (jsonb_typeof(p.slide_objects) = 'array' AND jsonb_array_length(p.slide_objects) > 0) AS has_slide_objects,
+       p.slide_objects,
        p.fit_problems, p.render_problems, p.short
   FROM lfd.posts p
  ORDER BY p.created_at DESC`;

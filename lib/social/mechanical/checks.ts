@@ -305,7 +305,8 @@ export function expectedSlideText(d: FilledDraft): string[][] {
   ];
 }
 
-const flat = (s: string) => s.toLowerCase().replace(/[“”"‘’'…]/g, '').replace(/\s+/g, ' ').trim();
+/** C7's comparison: case, quote marks and spacing do not count (also used by Targeted Revisions). */
+export const flat = (s: string) => s.toLowerCase().replace(/[“”"‘’'…]/g, '').replace(/\s+/g, ' ').trim();
 
 /** C7 (Tommy, 2026-10-06): every text field in the final draft appears on its rendered slide. */
 export function checkDroppedText(d: FilledDraft, renderedText: string[]): Failure[] {
