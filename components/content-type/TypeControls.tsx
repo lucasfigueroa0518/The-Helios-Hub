@@ -2,13 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Plus, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 import { AddTopics } from '@/app/explainers/topics-view';
 import { GenerateConfirm } from '@/components/content-type/GenerateConfirm';
 import type { GenerateOutcome } from '@/lib/content-type/queue-client';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 import { Drawer } from '@/app/reels/ui';
+import type { SeedFormProps } from '@/components/content-type/SeedButton';
+import { SEED_BUTTON } from '@/lib/content-type/seed-verticals';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { ScheduleStrip } from '@/components/content-type/ScheduleStrip';
 import type { ScheduleDay } from '@/lib/content-type/posting';
@@ -241,24 +243,17 @@ export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: st
  * story is scored once (one Jev call, a fraction of a cent); this click is the approval for it. Nothing is made: pin it or
  * Run now to make it. A seed waits a week.
  */
-export function CarouselSeedButton() {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
+export function CarouselSeedForm({ done }: SeedFormProps) {
   const [url, setUrl] = useState('');
   const [headline, setHeadline] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
   async function submit() {
     setBusy(true);
     setError(null);
     try {
       const out = await call<{ title: string; score: number; status: string }>('/api/carousels/seed', { url, headline });
-      setNote(`“${out.title}” is in the queue, scored ${out.score.toFixed(1)} of 5.5${out.status === 'qualified' ? '' : ' (below the bar the night uses, so it only runs if you pin it)'}. Nothing was made.`);
-      setOpen(false);
-      setUrl('');
-      setHeadline('');
-      void refreshHubPage(router);
+      done(`“${out.title}” is in the queue, scored ${out.score.toFixed(1)} of 5.5${out.status === 'qualified' ? '' : ' (below the bar the night uses, so it only runs if you pin it)'}. Nothing was made.`);
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -266,26 +261,16 @@ export function CarouselSeedButton() {
     }
   }
   return (
-    <>
-      <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
-        <Plus size={15} /> Seed an idea
-      </button>
-      {open ? (
-        <Drawer label="Seed a story" onClose={() => setOpen(false)}>
-          <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-            <h2 className="rh-detail__archetype">Seed a story</h2>
-            <input className="helios-field-input" placeholder="Link to the story" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link to the story" />
-            <input className="helios-field-input" placeholder="Headline (optional)" value={headline} onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />
-            <div className="ex-actions">
-              <button type="submit" className="rh-btn rh-btn--primary" disabled={busy || !url.trim()}>{busy ? 'Reading and scoring…' : 'Add and score'}</button>
-            </div>
-            <p className="rh-muted">Reads the page and scores the story once, a fraction of a cent. Nothing is made; pin it or Run now to make it. It waits a week.</p>
-            {error ? <p className="rh-note rh-note--bad">{error}</p> : null}
-          </form>
-        </Drawer>
-      ) : null}
-      {note ? <p className="rh-toast" role="status">{note}</p> : null}
-    </>
+    <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
+      <input className="helios-field-input" placeholder="Link to the story" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link to the story" />
+      <input className="helios-field-input" placeholder="Headline (optional)" value={headline} onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />
+      <div className="ex-actions">
+        <button type="submit" className="rh-btn rh-btn--primary" disabled={busy || !url.trim()}>{busy ? 'Reading and scoring…' : 'Add and score'}</button>
+      </div>
+      <p className="rh-muted">Reads the page and scores the story once, a fraction of a cent. Nothing is made; pin it or Run now to make it. It waits a week.</p>
+      {error ? <p className="rh-note rh-note--bad">{error}</p> : null}
+    </form>
   );
 }
 
@@ -298,24 +283,18 @@ type SeedFields = Record<string, string>;
  * Guess the Number, a tool for Free vs. Paid. It costs nothing (no model or web call) and starts no build; it sits in the
  * pool as "Yours" and competes like any idea.
  */
-export function StorySeedButton() {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
+export function StorySeedForm({ done }: SeedFormProps) {
   const [series, setSeries] = useState('morning_download');
   const [f, setF] = useState<SeedFields>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
   const set = (key: string) => (e: { target: { value: string } }) => setF((cur) => ({ ...cur, [key]: e.target.value }));
   async function submit() {
     setBusy(true);
     setError(null);
     try {
       const out = await call<{ title: string }>('/api/stories/seed', { series, ...f });
-      setNote(`“${out.title}” is in the ${SERIES_LABEL[series]} pool. Nothing was made; it competes like any idea, and you can pin it.`);
-      setOpen(false);
-      setF({});
-      void refreshHubPage(router);
+      done(`“${out.title}” is in the ${SERIES_LABEL[series]} pool. Nothing was made; it competes like any idea, and you can pin it.`);
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -323,49 +302,39 @@ export function StorySeedButton() {
     }
   }
   return (
-    <>
-      <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
-        <Plus size={15} /> Seed an idea
-      </button>
-      {open ? (
-        <Drawer label="Seed an idea" onClose={() => setOpen(false)}>
-          <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-            <h2 className="rh-detail__archetype">Seed an idea</h2>
-            <select className="helios-field-input" value={series} onChange={(e) => { setSeries(e.target.value); setF({}); }} aria-label="Series">
-              {Object.entries(SERIES_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-            </select>
-            {series === 'morning_download' ? (
-              <>
-                <input className="helios-field-input" placeholder="The story’s headline" value={f.headline ?? ''} onChange={set('headline')} aria-label="Headline" />
-                <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
-                <textarea className="ex-textarea" placeholder="What it says, in your words (optional)" value={f.notes ?? ''} onChange={set('notes')} aria-label="Notes" rows={4} />
-              </>
-            ) : null}
-            {series === 'guess_the_number' ? (
-              <>
-                <input className="helios-field-input" placeholder="The number, e.g. $3.9B" value={f.value ?? ''} onChange={set('value')} aria-label="Number" />
-                <input className="helios-field-input" placeholder="What it counts, e.g. raised for AI data centers" value={f.fact ?? ''} onChange={set('fact')} aria-label="What it counts" />
-                <input className="helios-field-input" placeholder="The story it comes from (optional)" value={f.storyHeadline ?? ''} onChange={set('storyHeadline')} aria-label="Story" />
-                <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
-              </>
-            ) : null}
-            {series === 'free_vs_paid' ? (
-              <>
-                <input className="helios-field-input" placeholder="The tool, e.g. GIMP" value={f.toolName ?? ''} onChange={set('toolName')} aria-label="Tool" />
-                <input className="helios-field-input" placeholder="Link to the tool" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
-                <input className="helios-field-input" placeholder="What it is (optional)" value={f.description ?? ''} onChange={set('description')} aria-label="What it is" />
-              </>
-            ) : null}
-            <div className="ex-actions">
-              <button type="submit" className="rh-btn rh-btn--primary" disabled={busy}>{busy ? 'Adding…' : 'Add to the pool'}</button>
-            </div>
-            <p className="rh-muted">Free: no model or web call, and nothing is built. Free vs. Paid still pairs your tool with its counterpart when the set is built.</p>
-            {error ? <p className="rh-note rh-note--bad">{error}</p> : null}
-          </form>
-        </Drawer>
-      ) : null}
-      {note ? <p className="rh-toast" role="status">{note}</p> : null}
-    </>
+  <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
+    <select className="helios-field-input" value={series} onChange={(e) => { setSeries(e.target.value); setF({}); }} aria-label="Series">
+      {Object.entries(SERIES_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+    </select>
+    {series === 'morning_download' ? (
+      <>
+        <input className="helios-field-input" placeholder="The story’s headline" value={f.headline ?? ''} onChange={set('headline')} aria-label="Headline" />
+        <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
+        <textarea className="ex-textarea" placeholder="What it says, in your words (optional)" value={f.notes ?? ''} onChange={set('notes')} aria-label="Notes" rows={4} />
+      </>
+    ) : null}
+    {series === 'guess_the_number' ? (
+      <>
+        <input className="helios-field-input" placeholder="The number, e.g. $3.9B" value={f.value ?? ''} onChange={set('value')} aria-label="Number" />
+        <input className="helios-field-input" placeholder="What it counts, e.g. raised for AI data centers" value={f.fact ?? ''} onChange={set('fact')} aria-label="What it counts" />
+        <input className="helios-field-input" placeholder="The story it comes from (optional)" value={f.storyHeadline ?? ''} onChange={set('storyHeadline')} aria-label="Story" />
+        <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
+      </>
+    ) : null}
+    {series === 'free_vs_paid' ? (
+      <>
+        <input className="helios-field-input" placeholder="The tool, e.g. GIMP" value={f.toolName ?? ''} onChange={set('toolName')} aria-label="Tool" />
+        <input className="helios-field-input" placeholder="Link to the tool" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
+        <input className="helios-field-input" placeholder="What it is (optional)" value={f.description ?? ''} onChange={set('description')} aria-label="What it is" />
+      </>
+    ) : null}
+    <div className="ex-actions">
+      <button type="submit" className="rh-btn rh-btn--primary" disabled={busy}>{busy ? 'Adding…' : 'Add to the pool'}</button>
+    </div>
+    <p className="rh-muted">Free: no model or web call, and nothing is built. Free vs. Paid still pairs your tool with its counterpart when the set is built.</p>
+    {error ? <p className="rh-note rh-note--bad">{error}</p> : null}
+  </form>
   );
 }
 
@@ -385,23 +354,8 @@ export function SettingsButton({ children }: { children: ReactNode }) {
 }
 
 /** Explainers: seed an idea (a topic or a question) or paste a list; each is written up and scored (a live model call) when you click. A seed is never refused or trimmed. */
-export function AddTopicsButton() {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  return (
-    <>
-      <button type="button" className="rh-btn rh-btn--primary" onClick={() => setOpen(true)}>
-        <Plus size={15} /> Seed an idea
-      </button>
-      {open ? (
-        <Drawer label="Seed an idea" onClose={() => setOpen(false)}>
-          <AddTopics onDone={(text) => { setOpen(false); setNote(text); void refreshHubPage(router); }} />
-        </Drawer>
-      ) : null}
-      {note ? <p className="rh-toast" role="status">{note}</p> : null}
-    </>
-  );
+export function ExplainerSeedForm({ done }: SeedFormProps) {
+  return <AddTopics onDone={(text) => done(text)} />;
 }
 
 // ── Settings: generate, auto-publish and the daily quota, the same on every type ──

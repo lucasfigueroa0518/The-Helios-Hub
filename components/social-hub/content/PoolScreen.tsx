@@ -1,3 +1,5 @@
+import { SeedButton } from '@/components/content-type/SeedButton';
+import { isSeedable } from '@/lib/content-type/seed-verticals';
 import { Breadcrumbs } from '@/components/social-hub/nav/Breadcrumbs';
 import { DataNotes } from '@/components/social-hub/DataNotes';
 import { HubLink } from '@/components/social-hub/nav/HubNav';
@@ -90,6 +92,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
           <PageHead
             title={`${info.label} pool`}
             meta={`${summary.open} waiting · ${summary.ready} with content ready${summary.lastRefill && !stale ? ` · refilled ${relative(summary.lastRefill, now)}` : ''}`}
+            actions={isSeedable(vertical) ? <SeedButton vertical={vertical} /> : undefined}
           />
         </>
       )}

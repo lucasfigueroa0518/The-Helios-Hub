@@ -4,7 +4,7 @@ import { BackToHub } from '@/components/content-type/BackToHub';
 import { PoolQueue } from '@/components/content-type/PoolQueue';
 import { QueueControls } from '@/components/content-type/QueueControls';
 import { PostingSettings, SettingsButton } from '@/components/content-type/TypeControls';
-import { ReelSeedButton } from '@/components/content-type/ReelSeedButton';
+import { SeedButton } from '@/components/content-type/SeedButton';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -572,7 +572,7 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
                 </button>
               ) : null}
             </div>
-            <ReelSeedButton />
+            <SeedButton vertical="reels" />
             <SettingsButton>
               <PostingSettings type="reels" />
             </SettingsButton>

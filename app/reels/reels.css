@@ -30,6 +30,9 @@
 
 .rh__inner { max-width: 1280px; margin: 0 auto; }
 
+/* A `.rh` scope with no box of its own: carries the colours to a control placed in another page's layout (the shared seed button). */
+.rh--scope { display: contents; }
+
 .rh-spin { animation: rh-spin 900ms linear infinite; }
 @keyframes rh-spin { to { transform: rotate(360deg); } }
 

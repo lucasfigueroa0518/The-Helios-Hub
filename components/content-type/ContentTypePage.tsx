@@ -4,19 +4,16 @@ import type { ReactNode } from 'react';
 import { SettingsForm } from '@/app/explainers/settings/settings-form';
 import { RebuildPostButton } from '@/components/content-type/AiEventsPoolButtons';
 import {
-  AddTopicsButton,
   AiEventsRunButton,
   CarouselRunButton,
-  CarouselSeedButton,
   LfdRunButton,
   LiveToggle,
   PostingSettings,
   SettingsButton,
   StoriesGenerate,
-  StorySeedButton,
 } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
-import { LfdSeedButton } from '@/components/content-type/LfdSeedButton';
+import { SeedButton } from '@/components/content-type/SeedButton';
 import { GenerationProgress } from '@/components/content-type/GenerationProgress';
 import { RunProgressProvider } from '@/components/content-type/run-progress';
 import { TypeHub } from '@/components/content-type/TypeHub';
@@ -74,13 +71,13 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
   let generate: ReactNode;
   let settings: ReactNode;
   if (vertical === 'carousels') {
-    generate = <><CarouselRunButton /><CarouselSeedButton /></>;
+    generate = <><CarouselRunButton /><SeedButton vertical="carousels" /></>;
     settings = <PostingSettings type="carousels" />;
   } else if (vertical === 'stories') {
-    generate = <><StoriesGenerate /><StorySeedButton /></>;
+    generate = <><StoriesGenerate /><SeedButton vertical="stories" /></>;
     settings = <PostingSettings type="stories" />;
   } else if (vertical === 'last_few_days') {
-    generate = <><LfdRunButton /><LfdSeedButton /></>;
+    generate = <><LfdRunButton /><SeedButton vertical="last_few_days" /></>;
     settings = <PostingSettings type="last_few_days" />;
   } else if (vertical === 'ai_events') {
     // Rebuild post re-renders the coming week's post from the pool; with none waiting there is nothing to rebuild.
@@ -92,7 +89,7 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
     );
     settings = <PostingSettings type="ai_events" />;
   } else {
-    generate = <AddTopicsButton />;
+    generate = <SeedButton vertical="explainers" />;
     const view = explainersView!;
     settings = (
       <>

@@ -50,3 +50,11 @@ Why: Lucas's point after the Text on Screen build. Each content type has its own
   3. Last Few Days and Stories seeds can reach the night unprompted. Whether that is wanted is a per-type decision, not yet made.
   4. Explainers' typed topics cost real money (Sonnet + Jev, and a render if promoted) without a quote.
 - **To confirm before relying on this:** the (?) cells above; whether Explainers reads the source URL; whether Carousels' night really skips seeds.
+
+## 5. One shared seed button (2026-11-02, approved by Tommy)
+
+Every idea pool shows the same "Seed an idea" button (`components/content-type/SeedButton.tsx`): same label, drawer title, placement and result note. Only the form inside the drawer is per type, because the inputs and costs differ (section 1). It is on the new Social Hub pool pages (`PoolScreen.tsx`, page header actions) and on the old per-type pages, which now use the same component.
+
+- **Pools with a seed:** Text on Screen, Carousels, Last Few Days, Stories, Explainers. The list is `lib/content-type/seed-verticals.ts`; the button map is exhaustive over it, so adding a pool there without a form will not compile.
+- **AI Events: no seed, on purpose.** Decided 2026-11-02 not to build one tonight. It has no seed path today (its pool only has Pin and Exclude), the button renders nothing there, and a test pins that it is the only pool without one. A seed there would mean adding an event by link or text; it needs its own design (scoring, whether it costs a model call) and Tommy's approval before any live call.
+- **Still out of scope:** Stories duplicate check and expiry; an Explainers cost quote. The paid Text on Screen search stays gated off.
