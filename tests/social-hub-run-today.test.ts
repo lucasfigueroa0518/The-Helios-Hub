@@ -92,10 +92,10 @@ const step = (plan: ReturnType<typeof planFrom>, v: string) => plan.steps.find((
 test('Run now makes exactly the candidates with no content, each the way its type can', () => {
   const plan = planFrom(base);
   assert.deepEqual([step(plan, 'reels').action, step(plan, 'reels').targets], ['reels_build', ['r2']], 'the missing reel idea is built on today’s slate');
-  assert.equal(plan.steps.some((s) => s.vertical === 'carousels'), false, 'carousels are opt-in: Run now has no carousel step');
+  assert.equal(step(plan, 'carousels').action, 'carousel_run');
   assert.deepEqual(step(plan, 'explainers').targets, ['t1']);
   assert.deepEqual(step(plan, 'stories').targets, ['morning_download']);
-  assert.equal(plan.estimateUsd, 1 + 5 + 0.45, 'no carousel run cap in the estimate');
+  assert.equal(plan.estimateUsd, 1 + 2 + 5 + 0.45);
 });
 
 test('Run now leaves a full, already-running or slate-less type to the right path', () => {
@@ -108,6 +108,7 @@ test('Run now leaves a full, already-running or slate-less type to the right pat
     series: [{ id: 'morning_download', label: 'Morning Download', held: true }],
   });
   assert.equal(step(plan, 'reels').action, 'reels_run', 'no slate today: the night runs');
+  assert.equal(step(plan, 'carousels').action, 'none');
   assert.equal(step(plan, 'explainers').action, 'none', 'its render is already queued');
   assert.equal(step(plan, 'stories').action, 'none');
 });
@@ -235,6 +236,12 @@ test('a step that cannot be split (no reels slate yet) runs whole, and says so',
   const [step] = stepsFor(plan, 'reels', 'r2');
   assert.equal(step!.action, 'reels_run');
   assert.equal(step!.estimateUsd, base.cost.reelsNight);
+});
+
+test('a carousel run for one story keeps its run cap as the estimate', () => {
+  const plan = planFrom({ ...base, carousels: { quota: 2, held: 0, missing: [{ ideaId: 'carousels:story:s1', ref: 's1', title: 'S1' }, { ideaId: 'carousels:story:s2', ref: 's2', title: 'S2' }] } });
+  const [step] = stepsFor(plan, 'carousels', 's2');
+  assert.deepEqual([step!.targets, step!.estimateUsd], [['s2'], base.cost.carouselCap]);
 });
 
 test('the run body: no body is Run now, a type is its button, a card needs a type and a usable id', () => {
