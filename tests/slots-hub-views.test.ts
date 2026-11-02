@@ -448,8 +448,9 @@ test('readPosting in template mode works out perDay, LFD days and series days fr
   const legacyStories = await readPosting('stories', TUE);
   assert.equal(legacyCarousels.perDay, 2, 'legacy: the posts_per_day default');
   await setSlotSource(q, 'template', 't');
-  assert.equal((await readPosting('carousels', TUE)).perDay, 0, 'Tuesday is an LFD day on the seeded calendar');
-  assert.equal((await readPosting('carousels', new Date('2026-10-21T14:00:00Z'))).perDay, 2);
+  // Carousels are opt-in: the seeded calendar has no carousel slots on any day, LFD day or not.
+  assert.equal((await readPosting('carousels', TUE)).perDay, 0, 'Tuesday: no carousel slots');
+  assert.equal((await readPosting('carousels', new Date('2026-10-21T14:00:00Z'))).perDay, 0, 'Wednesday: none either, until one is dragged on');
   assert.equal((await readPosting('reels', TUE)).perDay, 3);
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', startMinute: 1080, series: null, action: 'remove' }], { by: 't', now: TUE });
   assert.equal((await readPosting('reels', TUE)).perDay, 2, 'today\'s slots, not posts_per_day');
