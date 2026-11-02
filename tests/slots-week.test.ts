@@ -49,16 +49,16 @@ test('the Switch on confirm says what changes the moment it is on (ruling R8)', 
   const lfdDays = lfdWeekdays(seedTemplate(DEFAULT_SEED_INPUTS));
   assert.deepEqual(lfdDays, [2, 5]);
   assert.equal(switchOnCopy({ templateEmpty: true, lfdPaused: false, lfdDays }), 'From now on the calendar decides what posts when. Today’s pattern is copied in.');
+  // Carousels are opt-in, so a paused Last Few Days costs no Carousels days and the copy no longer says so.
   assert.equal(
     switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays }),
-    'From now on the calendar decides what posts when. Today’s pattern is copied in. Last Few Days is paused, so Tuesdays and Fridays (its days) will have no Carousels until you edit the calendar.',
+    'From now on the calendar decides what posts when. Today’s pattern is copied in.',
   );
   assert.equal(
     switchOnCopy({ templateEmpty: false, lfdPaused: false, lfdDays }),
     'From now on the calendar decides what posts when. Your saved calendar from last time comes back, not a fresh copy of today’s settings.',
   );
   assert.doesNotMatch(switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays: [] }), /Carousels/, 'no LFD days, nothing lost');
-  assert.match(switchOnCopy({ templateEmpty: false, lfdPaused: true, lfdDays: [1, 3, 5] }), /Mondays, Wednesdays and Fridays/);
   assert.doesNotMatch(switchOnCopy({ templateEmpty: true, lfdPaused: true, lfdDays }), /nothing changes/);
 });
 

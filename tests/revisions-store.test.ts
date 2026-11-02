@@ -1,0 +1,186 @@
+/** Targeted Revisions task 1: the requests table and store on PGlite (offline, real schema files). */
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import type { Query } from '@/lib/social/store/pg';
+
+import {
+  claimNextRequested,
+  createRequest,
+  latestApplied,
+  listForItem,
+  markApplied,
+  markRunning,
+  markUndone,
+  originalOf,
+} from '@/lib/revisions/store';
+import type { PartRef, PartState } from '@/lib/revisions/types';
+
+import { setupRevisionsDb as setup } from './fixtures/revisions/pglite';
+
+const part: PartRef = { kind: 'slide', key: '3' };
+const state = (n: string): PartState => ({ copy: n, files: [`${n}.png`] });
+
+async function applyOne(q: Query, itemId: string, before: string, after: string) {
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: 'tommy', instruction: `to ${after}` });
+  await claimNextRequested(q);
+  await markRunning(q, r.id, { vertical: 'carousels', part, fixKind: 'wording', stageTag: 'writer', instruction: 'shorter' }, 0.1, 0.5);
+  assert.equal(await markApplied(q, r.id, { before: state(before), after: state(after), costUsd: 0.02 }), true);
+  return r;
+}
+
+test('createRequest inserts status requested', async () => {
+  const { q, itemId } = await setup();
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: 'tommy', instruction: 'shorter' });
+  assert.equal(r.status, 'requested');
+  assert.equal(r.itemId, itemId);
+  assert.deepEqual(r.refs, { postId: 'p1' });
+  assert.equal(r.spendUsd, 0);
+  assert.equal(r.parentId, null);
+});
+
+test('claimNextRequested takes the oldest and flips to running exactly once (second claim returns null)', async () => {
+  const { q, itemId } = await setup();
+  const a = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: null, instruction: 'a' });
+  await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: null, instruction: 'b' });
+  const first = await claimNextRequested(q);
+  assert.equal(first?.id, a.id);
+  assert.equal(first?.status, 'running');
+  const second = await claimNextRequested(q);
+  assert.equal(second?.instruction, 'b');
+  assert.equal(await claimNextRequested(q), null);
+});
+
+test('latestApplied returns the newest applied row for a part and ignores undone', async () => {
+  const { q, itemId } = await setup();
+  await applyOne(q, itemId, 'v0', 'v1');
+  const second = await applyOne(q, itemId, 'v1', 'v2');
+  assert.equal((await latestApplied(q, itemId, part))?.id, second.id);
+  assert.equal(await markUndone(q, second.id, 'tommy'), true);
+  const now = await latestApplied(q, itemId, part);
+  assert.equal(now?.after?.copy, 'v1');
+  assert.equal(await latestApplied(q, itemId, { kind: 'slide', key: '9' }), null);
+});
+
+test('originalOf returns the before of the first applied revision even after later ones', async () => {
+  const { q, itemId } = await setup();
+  assert.equal(await originalOf(q, itemId, part), null);
+  await applyOne(q, itemId, 'v0', 'v1');
+  await applyOne(q, itemId, 'v1', 'v2');
+  assert.deepEqual(await originalOf(q, itemId, part), state('v0'));
+});
+
+test('parentId links an ask-back reply', async () => {
+  const { q, itemId } = await setup();
+  const ask = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: 'tommy', instruction: 'fix it' });
+  const reply = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: 'tommy', instruction: 'slide 3', parentId: ask.id });
+  assert.equal(reply.parentId, ask.id);
+  const all = await listForItem(q, itemId);
+  assert.deepEqual(all.map((r) => r.id), [ask.id, reply.id]);
+});
+
+test('originalOf still returns the before after the only revision is undone', async () => {
+  const { q, itemId } = await setup();
+  const r1 = await applyOne(q, itemId, 'v0', 'v1');
+  await markUndone(q, r1.id, 'tommy');
+  assert.deepEqual(await originalOf(q, itemId, part), state('v0'));
+});
+
+test('originalOf returns revision 1 before when 1 is undone and 2 then applied', async () => {
+  const { q, itemId } = await setup();
+  const r1 = await applyOne(q, itemId, 'v0', 'v1');
+  await markUndone(q, r1.id, 'tommy');
+  await applyOne(q, itemId, 'v0', 'v2');
+  assert.deepEqual(await originalOf(q, itemId, part), state('v0'));
+});
+
+test('originalOf returns revision 1 before with revisions 1 and 2 both live', async () => {
+  const { q, itemId } = await setup();
+  await applyOne(q, itemId, 'v0', 'v1');
+  await applyOne(q, itemId, 'v1', 'v2');
+  assert.deepEqual(await originalOf(q, itemId, part), state('v0'));
+});
+
+test('markUndone on a row that is not applied changes nothing', async () => {
+  const { q, itemId } = await setup();
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: null, instruction: 'x' });
+  assert.equal(await markUndone(q, r.id, 'tommy'), false);
+  const [row] = await listForItem(q, itemId);
+  assert.equal(row.status, 'requested');
+  assert.equal(row.undoneAt, null);
+  assert.equal(row.undoneBy, null);
+});
+
+test('markApplied on a row that is not running changes nothing', async () => {
+  const { q, itemId } = await setup();
+  const r = await createRequest(q, { vertical: 'carousels', refs: { postId: 'p1' }, itemId, by: null, instruction: 'x' });
+  assert.equal(await markApplied(q, r.id, { before: state('a'), after: state('b'), costUsd: 0.5 }), false);
+  const [row] = await listForItem(q, itemId);
+  assert.equal(row.status, 'requested');
+  assert.equal(row.before, null);
+  assert.equal(row.spendUsd, 0);
+});
+
+test('a row inserted without refs reads back refs as an object, not an array', async () => {
+  const { q, itemId } = await setup();
+  await q(`INSERT INTO revisions.requests (vertical, item_id, instruction) VALUES ('carousels', $1, 'x')`, [itemId]);
+  const [row] = await listForItem(q, itemId);
+  assert.deepEqual(row!.refs, {});
+  assert.equal(Array.isArray(row!.refs), false);
+});
+
+/* ── Final wave: rows a dead worker left `running` ── */
+
+test('failStaleRunning fails only `running` rows of the worker\'s own verticals, with the restart note, and returns their ids', async () => {
+  const { failStaleRunning, getRequest, RESTARTED_NOTE } = await import('@/lib/revisions/store');
+  const { q, itemId } = await setup();
+  const mk = async (vertical: 'carousels' | 'explainers' | 'reels', status: string) => {
+    const r = await createRequest(q, { vertical, refs: {}, itemId, by: null, instruction: `${vertical} ${status}` });
+    await q(`UPDATE revisions.requests SET status = $2, started_at = now() WHERE id = $1`, [r.id, status]);
+    return r.id;
+  };
+  const carouselRunning = await mk('carousels', 'running');
+  const reelRunning = await mk('reels', 'running');
+  const explainerRunning = await mk('explainers', 'running');
+  const others = [await mk('carousels', 'requested'), await mk('carousels', 'asking'), await mk('carousels', 'paused_at_cap'), await mk('carousels', 'paused_at_ceiling'), await mk('carousels', 'applied')];
+
+  const swept = await failStaleRunning(q, { filter: { exclude: 'explainers' } });
+  assert.deepEqual([...swept].sort(), [carouselRunning, reelRunning].sort());
+  for (const id of [carouselRunning, reelRunning]) {
+    const r = (await getRequest(q, id))!;
+    assert.equal(r.status, 'failed');
+    assert.equal(r.note, RESTARTED_NOTE);
+    assert.equal(RESTARTED_NOTE, 'The worker restarted while this change ran, so it did not finish. Check the post: it may have been sent back to review, and in rare cases the change may already be on it.');
+    assert.ok(r.finishedAt);
+    assert.equal(r.spendUsd, 0);
+  }
+  assert.equal((await getRequest(q, explainerRunning))!.status, 'running', 'the other worker\'s row is left alone');
+  assert.deepEqual(
+    (await Promise.all(others.map((id) => getRequest(q, id)))).map((r) => r!.status),
+    ['requested', 'asking', 'paused_at_cap', 'paused_at_ceiling', 'applied'],
+  );
+  // The explainers worker's own sweep takes only its row; a second sweep finds nothing.
+  assert.deepEqual(await failStaleRunning(q, { filter: { only: 'explainers' } }), [explainerRunning]);
+  assert.deepEqual(await failStaleRunning(q, { filter: { exclude: 'explainers' } }), []);
+});
+
+test('failStaleRunning with olderThanMs fails only rows running longer than that, with the timeout note', async () => {
+  const { failStaleRunning, getRequest, STALE_RUNNING_NOTE } = await import('@/lib/revisions/store');
+  const { q, itemId } = await setup();
+  const mk = async (hours: number) => {
+    const r = await createRequest(q, { vertical: 'carousels', refs: {}, itemId, by: null, instruction: `${hours}h` });
+    await q(`UPDATE revisions.requests SET status = 'running', started_at = now() - make_interval(mins => $2) WHERE id = $1`, [r.id, Math.round(hours * 60)]);
+    return r.id;
+  };
+  const old = await mk(3);
+  const young = await mk(1.5);
+  const fresh = await mk(0);
+  const swept = await failStaleRunning(q, { olderThanMs: 2 * 60 * 60 * 1000, filter: { exclude: 'explainers' } });
+  assert.deepEqual(swept, [old]);
+  const r = (await getRequest(q, old))!;
+  assert.equal(r.status, 'failed');
+  assert.equal(r.note, STALE_RUNNING_NOTE);
+  assert.equal(STALE_RUNNING_NOTE, 'This change did not finish in time. Check the post: in rare cases the change may already be on it.');
+  assert.equal((await getRequest(q, young))!.status, 'running');
+  assert.equal((await getRequest(q, fresh))!.status, 'running');
+});

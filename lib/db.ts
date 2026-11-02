@@ -276,7 +276,7 @@ function getPool(): Pool {
 function getGate(): DbGate {
   const pool = getPool();
   if (!globalPool.__outreachHubGate) {
-    globalPool.__outreachHubGate = createDbGate(pool.options.max ?? 1);
+    globalPool.__outreachHubGate = createDbGate(pool.options?.max ?? 1);
   }
   return globalPool.__outreachHubGate;
 }

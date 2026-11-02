@@ -1,6 +1,9 @@
 import { execFile } from 'node:child_process';
 
+import { PrivateAddressError, assertPublicUrl, type HostLookup } from '@/lib/net/public-url';
 import { FETCH_RETRIES, FETCH_TIMEOUT_MS, USER_AGENT } from '@/lib/reels/config';
+
+export { PrivateAddressError, assertPublicUrl, type HostLookup };
 
 export class HttpError extends Error {
   constructor(readonly status: number, readonly url: string) {
@@ -38,13 +41,13 @@ function fetchOverHttp1(
   headers: Record<string, string>,
   timeoutMs: number,
   signal?: AbortSignal,
+  follow = true,
 ): Promise<Http1Page> {
   const args = [
     '--http1.1',
     '-sS',
-    '-L',
-    '--max-redirs',
-    String(HTTP1_REDIRECTS),
+    // A guarded fetch has already followed the redirects itself, hop by hop; curl must not follow another unchecked one.
+    ...(follow ? ['-L', '--max-redirs', String(HTTP1_REDIRECTS)] : []),
     '--max-time',
     String(Math.max(1, Math.ceil(timeoutMs / 1000))),
     '-A',
@@ -114,10 +117,11 @@ async function recoverChallenge(
   headers: Record<string, string>,
   timeoutMs: number,
   signal?: AbortSignal,
+  follow = true,
 ): Promise<{ status: number; body: string; finalUrl: string; contentType: string | null } | null> {
   if (!isCloudflareChallenge(response.status, (name) => response.headers.get(name))) return null;
   await response.body?.cancel().catch(() => undefined);
-  const page = await fetchOverHttp1(url, headers, timeoutMs, signal);
+  const page = await fetchOverHttp1(url, headers, timeoutMs, signal, follow);
   return { status: page.status, body: page.body, finalUrl: page.finalUrl, contentType: page.contentType };
 }
 
@@ -127,7 +131,31 @@ export type FetchTextOptions = {
   timeoutMs?: number;
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  /**
+   * Only for fetchPageFollowingRedirects. Fetch a URL a person (or a model) supplied: refuse private addresses at the first
+   * URL and at every redirect hop, following redirects here instead of in the runtime. Off by default.
+   */
+  blockPrivate?: boolean;
+  /** The address lookup the guard uses. Default: DNS. */
+  lookup?: HostLookup;
 };
+
+/** Follow redirects one hop at a time, checking each URL before it is requested. Returns the final response and its URL. */
+async function fetchGuarded(url: string, headers: Record<string, string>, signal: AbortSignal, lookup?: HostLookup): Promise<{ response: Response; landed: string }> {
+  let current = url;
+  for (let hop = 0; hop <= HTTP1_REDIRECTS; hop += 1) {
+    await assertPublicUrl(current, lookup);
+    const response = await fetch(current, { redirect: 'manual', signal, headers });
+    const location = response.headers.get('location');
+    if (response.status >= 300 && response.status < 400 && location) {
+      await response.body?.cancel().catch(() => undefined);
+      current = new URL(location, current).toString();
+      continue;
+    }
+    return { response, landed: current };
+  }
+  throw new Error(`Too many redirects from ${url}`);
+}
 
 /**
  * GET with a Helios user agent, a per-attempt timeout, and bounded retries.
@@ -205,12 +233,9 @@ export async function fetchPageFollowingRedirects(
     options.signal?.addEventListener('abort', onAbort, { once: true });
     try {
       const headers = requestHeaders(options);
-      const response = await fetch(url, {
-        redirect: 'follow',
-        signal: controller.signal,
-        headers,
-      });
-      const recovered = await recoverChallenge(response, url, headers, timeoutMs, options.signal);
+      const guarded = options.blockPrivate ? await fetchGuarded(url, headers, controller.signal, options.lookup) : null;
+      const response = guarded?.response ?? (await fetch(url, { redirect: 'follow', signal: controller.signal, headers }));
+      const recovered = await recoverChallenge(response, guarded?.landed ?? url, headers, timeoutMs, options.signal, !guarded);
       if (recovered) {
         if (recovered.status >= 200 && recovered.status < 300) {
           return { html: recovered.body, finalUrl: recovered.finalUrl, contentType: recovered.contentType };
@@ -224,11 +249,12 @@ export async function fetchPageFollowingRedirects(
       } else {
         return {
           html: await response.text(),
-          finalUrl: response.url || url,
+          finalUrl: guarded?.landed ?? (response.url || url),
           contentType: response.headers.get('content-type'),
         };
       }
     } catch (error) {
+      if (error instanceof PrivateAddressError) throw error;
       if (error instanceof HttpError && error.status < 500 && error.status !== 429) throw error;
       lastError = error;
     } finally {

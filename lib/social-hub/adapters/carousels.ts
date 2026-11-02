@@ -15,6 +15,7 @@ import {
   yesNo,
 } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { versionedSrc } from '@/lib/social-hub/media-version';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import type { CarouselIdeaRow, CarouselPostRow, CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ContentVersion, FactorValue, HubIdea, HubPost, HubStatus, MetricSnapshot, NativeField, ScoreBreakdown, ScorePart, SourceRef } from '@/lib/social-hub/types';
@@ -137,8 +138,8 @@ export function slideOutline(row: CarouselPostRow): Array<{ src: string | null; 
     const slide = slides[i] ?? {};
     const photo = typeof slide.photoUrl === 'string' && /^https:\/\//.test(slide.photoUrl) ? slide.photoUrl : null;
     return {
-      // Rendered JPEG through the carousel slide route when the post has slide objects.
-      src: row.has_slide_objects ? `/api/social/slides/${row.post_id}/${i}` : null,
+      // Rendered JPEG through the carousel slide route when the post has slide objects, versioned by its stored file.
+      src: row.has_slide_objects ? versionedSrc(`/api/social/slides/${row.post_id}/${i}`, Array.isArray(row.slide_objects) ? row.slide_objects[i] : null) : null,
       alt: typeof slide.altText === 'string' ? slide.altText : `${row.title}, slide ${i + 1}`,
       photo,
       layout: typeof slide.layoutVariant === 'string' ? slide.layoutVariant : null,

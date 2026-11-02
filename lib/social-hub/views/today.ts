@@ -137,10 +137,11 @@ export function needsGroups(posts: readonly HubPost[], now: Date): NeedsGroup[] 
 export function contentModel(dataset: HubDataset, now: Date): ContentModel {
   const today = nyDateOf(now)!;
   const nowIso = now.toISOString();
-  const needs = needsGroups(dataset.posts, now);
+  const posts = dataset.posts;
+  const needs = needsGroups(posts, now);
   const carouselOff = dataset.dayQuotas?.lfdDays ?? [];
   const slots = dataset.dayQuotas?.slots ?? null;
-  const todays = publishingCandidates(dataset.posts, today, carouselOff, slots);
+  const todays = publishingCandidates(posts, today, carouselOff, slots);
   const bands = new Map<LineupBand['id'], LineupBand>();
   let nowAfter: string | null = null;
   for (const post of todays) {
@@ -155,7 +156,7 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
   }
   const lineup = (['morning', 'afternoon', 'evening'] as const).map((id) => bands.get(id)).filter((b): b is LineupBand => Boolean(b));
   const unplaced: HubPost[] = [];
-  const next = dataset.posts.filter((p) => (p.status === 'scheduled' || p.status === 'publishing') && (p.publishAt ?? '') > nowIso).sort(bySoonest)[0] ?? null;
+  const next = posts.filter((p) => (p.status === 'scheduled' || p.status === 'publishing') && (p.publishAt ?? '') > nowIso).sort(bySoonest)[0] ?? null;
   return {
     today,
     needs,
@@ -163,8 +164,8 @@ export function contentModel(dataset: HubDataset, now: Date): ContentModel {
     lineup,
     nowAfter,
     unplaced,
-    plan: { ...dayPlan(dataset.posts, today, carouselOff, today, slots), ...slotsForDay(dataset.posts, today, dataset.dayQuotas) },
-    quota: quotaFrom(dataset.latestQuota, dataset.posts, now),
+    plan: { ...dayPlan(posts, today, carouselOff, today, slots), ...slotsForDay(posts, today, dataset.dayQuotas) },
+    quota: quotaFrom(dataset.latestQuota, posts, now),
     next,
   };
 }

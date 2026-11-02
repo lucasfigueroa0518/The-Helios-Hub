@@ -1,5 +1,6 @@
 import { FAILURE_TAGS } from '@/lib/explainers/types';
 import type { ActionInput, ActionTarget, ActionVerb, ContentActions } from '@/lib/publishing/actions/types';
+import { INSTRUCTION_MAX_CHARS } from '@/lib/revisions/types';
 import { isUuid, type ActionSpec } from '@/lib/social-hub/action-route';
 import type { ActionFlag } from '@/lib/social-hub/flags';
 import { isDayKey } from '@/lib/social-hub/time';
@@ -60,6 +61,48 @@ export function parsePlacement(body: unknown, allowed: readonly Vertical[] = VER
   const b = body as { nyDate?: unknown; slot?: unknown } | null;
   if (!parsed || !isDayKey(b?.nyDate) || typeof b?.slot !== 'string' || !SLOT.test(b.slot)) return null;
   return { vertical: parsed.vertical, target: parsed.target, input: { nyDate: b.nyDate, slot: b.slot } };
+}
+
+/** A part's kind or key: a short word or number from the post's own parts list. */
+const PART_FIELD = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+/** A target without review fields, for the revision routes. */
+function bareTarget(body: unknown, allowed?: readonly Vertical[]): Parsed | null {
+  const parsed = parseTarget(body, allowed);
+  return parsed ? { vertical: parsed.vertical, target: parsed.target } : null;
+}
+
+/**
+ * `{ vertical, refs, instruction, parentId? }` (Targeted Revisions `revise`).
+ * An empty instruction passes here so the verb answers it with a plain note (400).
+ */
+export function parseRevise(body: unknown, allowed?: readonly Vertical[]): Parsed | null {
+  const parsed = bareTarget(body, allowed);
+  const b = body as { instruction?: unknown; parentId?: unknown } | null;
+  if (!parsed || typeof b?.instruction !== 'string' || b.instruction.length > INSTRUCTION_MAX_CHARS) return null;
+  if (b.parentId !== undefined && !isUuid(b.parentId)) return null;
+  return { ...parsed, input: { instruction: b.instruction, ...(b.parentId ? { parentId: b.parentId as string } : {}) } };
+}
+
+/** `{ vertical, refs, part: { kind, key }, original? }` (`undoRevision`; `original: true` restores the pipeline's original). */
+export function parseUndoRevision(body: unknown, allowed?: readonly Vertical[]): Parsed | null {
+  const parsed = bareTarget(body, allowed);
+  const b = body as { part?: { kind?: unknown; key?: unknown } | null; original?: unknown } | null;
+  const part = b?.part;
+  if (!parsed || !part || typeof part !== 'object') return null;
+  if (typeof part.kind !== 'string' || !PART_FIELD.test(part.kind) || typeof part.key !== 'string' || !PART_FIELD.test(part.key)) return null;
+  if (b!.original !== undefined && typeof b!.original !== 'boolean') return null;
+  return { ...parsed, input: { part: { kind: part.kind, key: part.key }, ...(b!.original ? { original: true } : {}) } };
+}
+
+/** `{ vertical, refs, revisionId, overrideUsd > 0 }` (`continueRevision`). */
+export function parseContinueRevision(body: unknown, allowed?: readonly Vertical[]): Parsed | null {
+  const parsed = bareTarget(body, allowed);
+  const b = body as { revisionId?: unknown; overrideUsd?: unknown } | null;
+  if (!parsed || !isUuid(b?.revisionId)) return null;
+  const usd = b!.overrideUsd;
+  if (typeof usd !== 'number' || !Number.isFinite(usd) || usd <= 0) return null;
+  return { ...parsed, input: { revisionId: b!.revisionId as string, overrideUsd: usd } };
 }
 
 export function contentAction(opts: {

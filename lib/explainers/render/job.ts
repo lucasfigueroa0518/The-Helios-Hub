@@ -436,6 +436,109 @@ async function recordSessionCost(db: ExplainersDb, job: JobRow, mode: Mode, phas
 }
 
 /**
+ * The resume note for a Targeted Revisions scene redo: names the one stale frame (its module was
+ * removed) and carries the person's change for that frame's worker. Appended to RESUME_PROMPT.
+ */
+export function sceneResumeNote(frameId: string, change: string): string {
+  const said = change.replace(/\s+/g, ' ').trim().replace(/"/g, "'");
+  return [
+    `Stale frame: ${frameId}. Its module assets/frames/${frameId}.js was removed so it is rebuilt; every other frame module is final, keep it exactly as it is.`,
+    `Dispatch one frame worker, for ${frameId} only, and add this change to its packet, in the person's words: "${said}".`,
+    'Keep STORYBOARD.md, SCRIPT.md, the voice, the music and assets/world/world.js as they are.',
+  ].join(' ');
+}
+
+export type SceneRebuildDeps = Pick<RenderDeps, 'db' | 'query' | 'jobsRoot' | 'hyperframesLint' | 'boundsCheck' | 'renderVideo' | 'repairAssembly' | 'log'> & {
+  /** The Anthropic key only: the session runs voice-locked (no HeyGen key, no HeyGen hosts). */
+  secrets: { anthropicApiKey: string };
+  /** The render meter: the job's per-reel cap (spend_cap_usd, carrying spend_usd). A ChargedSpendMeter also charges a revision. */
+  meter: SpendMeter;
+  voiceId: string;
+};
+
+export type SceneRebuild =
+  | { ok: true; videoPath: string; contactSheetPath: string | null; violations: LintViolation[] }
+  | { ok: false; capped: boolean; error: string };
+
+/**
+ * Targeted Revisions: rebuild ONE frame of a finished render in its kept workspace (the RenderDeps
+ * `resume` path, scoped to a named frame). The caller has already removed that frame's module (and
+ * kept its source), moved the old video and contact sheet aside, and holds the job's running slot.
+ * One session B with RESUME_PROMPT + sceneResumeNote, then the deterministic assembly repair and the
+ * worker render when needed, then the final checks the pipeline runs (built-frame storyboard lint,
+ * HyperFrames lint, text bounds), returned for the caller to gate on.
+ *
+ * Writes nothing to Storage and no artifact or job row: the session's cost goes to the job's cost
+ * ledger (explainers.cost_events, as every session's does), and the caller stores the new files under
+ * new keys and points the job at them.
+ */
+export async function rebuildScene(
+  deps: SceneRebuildDeps,
+  job: JobRow,
+  scene: { frameId: string; frameNumber: number; note: string },
+): Promise<SceneRebuild> {
+  const ws = workspacePaths(deps.jobsRoot, job.id);
+  const storyboardFile = path.join(ws.projectDir, 'STORYBOARD.md');
+  const scriptFile = path.join(ws.projectDir, 'SCRIPT.md');
+  if (!fs.existsSync(storyboardFile) || !fs.existsSync(scriptFile)) return { ok: false, capped: false, error: 'the plan (STORYBOARD.md, SCRIPT.md) is not on disk' };
+  fs.mkdirSync(ws.homeDir, { recursive: true });
+  fs.mkdirSync(ws.tmpDir, { recursive: true });
+  const transcriptLines: string[] = [];
+  try {
+    const b = await runAgentSession({
+      query: deps.query,
+      prompt: `${RESUME_PROMPT} ${sceneResumeNote(scene.frameId, scene.note)}`,
+      projectDir: ws.projectDir,
+      homeDir: ws.homeDir,
+      tmpDir: ws.tmpDir,
+      model: job.orchestrator_model,
+      frameWorkerModel: job.frame_worker_model,
+      meter: deps.meter,
+      secrets: { anthropicApiKey: deps.secrets.anthropicApiKey, heygenApiKey: '', voiceId: deps.voiceId },
+      log: (entry) => transcriptLines.push(JSON.stringify(entry)),
+      // One scene changes; the voice, music and sound are final and cannot be made again.
+      voiceLocked: true,
+    });
+    await recordSessionCost(deps.db, job, job.mode, 'revision', b);
+    if (b.capped) return { ok: false, capped: true, error: `the spend cap was reached in the session (${b.subtype})` };
+    if (!fs.existsSync(path.join(ws.projectDir, 'assets', 'frames', `${scene.frameId}.js`))) {
+      return { ok: false, capped: false, error: `the frame worker did not write a new ${scene.frameId} scene (${b.subtype}${b.errors.length ? `: ${b.errors.join('; ')}` : ''})` };
+    }
+    const video = path.join(ws.projectDir, 'renders', 'video.mp4');
+    if (!fileReady(video)) {
+      const repaired = (deps.repairAssembly ?? repairProjectAssembly)(ws.projectDir);
+      if (repaired.length) deps.log?.('assembly_repaired', { jobId: job.id, steps: repaired });
+      if (projectAssembled(ws.projectDir) && !fileReady(video)) {
+        try {
+          (deps.renderVideo ?? renderProjectVideo)(ws.projectDir);
+        } catch (error) {
+          return { ok: false, capped: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+    }
+    if (!fileReady(video)) return { ok: false, capped: false, error: `the session ended without a new video (${b.subtype})` };
+
+    const final = lintStoryboard({
+      storyboard: read(storyboardFile) ?? '',
+      script: read(scriptFile) ?? '',
+      frameSource: frameModulesByNumber(ws.projectDir),
+      audioMeta: readJson(path.join(ws.projectDir, 'audio_meta.json')),
+      frameEvents: eventsFromDir(path.join(ws.projectDir, 'assets', 'frames')),
+      eventsTrack: fs.existsSync(path.join(ws.projectDir, EVENTS_TRACK)),
+    });
+    const builtOnly = new Set(['narration_on_screen', 'opener_sfx', 'sound_events', 'sound_track', 'headword_term']);
+    const onScreen = (final.violations as LintViolation[]).filter((v) => builtOnly.has(v.rule) || /on-screen text/.test(v.detail));
+    const violations = [...onScreen, ...(deps.hyperframesLint ?? runHyperframesLint)(ws.projectDir), ...(deps.boundsCheck ?? runBoundsCheck)(ws.projectDir)];
+    const sheet = path.join(ws.projectDir, 'snapshots', 'contact-sheet.jpg');
+    return { ok: true, videoPath: video, contactSheetPath: fileReady(sheet) ? sheet : null, violations };
+  } finally {
+    if (transcriptLines.length) {
+      fs.writeFileSync(path.join(ws.jobDir, `transcript.revision-${Date.now()}.jsonl`), `${transcriptLines.join('\n')}\n`);
+    }
+  }
+}
+
+/**
  * One render: source → analogy (only when the topic has none, EX3-31) →
  * workspace → session A (plan) → checkpoint (lint, no LLM) → session B (build
  * + render) → collect outputs. Every artifact a stage produced is kept, even

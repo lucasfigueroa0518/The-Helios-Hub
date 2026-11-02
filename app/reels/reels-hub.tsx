@@ -4,7 +4,7 @@ import { BackToHub } from '@/components/content-type/BackToHub';
 import { PoolQueue } from '@/components/content-type/PoolQueue';
 import { QueueControls } from '@/components/content-type/QueueControls';
 import { PostingSettings, SettingsButton } from '@/components/content-type/TypeControls';
-import { ReelSeedButton } from '@/components/content-type/ReelSeedButton';
+import { SeedButton } from '@/components/content-type/SeedButton';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -509,7 +509,7 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
   const booked = (reel: Reel) => reel.schedule != null && reel.schedule.nyDate === view?.slate.nyDate;
   const postedBefore = (reel: Reel) => !booked(reel) && (reel.schedule?.status === 'published' || publishState(reel, data.music).kind === 'published');
   const queued = view?.isCurrent
-    ? capQueued(queueOrder((live ? ranked.filter((reel) => !postedBefore(reel)) : ranked.filter((reel) => !reel.score.selected)).map((reel) => ({ id: `reels:idea:${reel.score.postIdeaId}`, score: reel.score.net, reel, hasContent: reel.phase === 'ready' })), moves, live ? lead : []))
+    ? capQueued(queueOrder((live ? ranked.filter((reel) => !postedBefore(reel)) : ranked.filter((reel) => !reel.score.selected)).map((reel) => ({ id: `reels:idea:${reel.score.postIdeaId}`, score: reel.score.net, reel, hasContent: reel.phase === 'ready', yours: reel.score.yours === true })), moves, live ? lead : []))
     : [];
   // The list as the person sees it while a drop is on its way to the server; a fresh read starts from the server's order.
   const [seen, setSeen] = useState<string[] | null>(null);
@@ -572,7 +572,7 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
                 </button>
               ) : null}
             </div>
-            <ReelSeedButton />
+            <SeedButton vertical="reels" />
             <SettingsButton>
               <PostingSettings type="reels" />
             </SettingsButton>
@@ -777,7 +777,7 @@ function Pills({ score }: { score: StoredScore }) {
   return (
     <>
       {score.selected && <span className="rh-pill rh-pill--selected">Selected</span>}
-      {score.origin === 'carryover' && <span className="rh-pill">Carryover</span>}
+      {score.origin === 'carryover' && !score.yours && <span className="rh-pill">Carryover</span>}
     </>
   );
 }
@@ -894,6 +894,7 @@ function RestRow({ reel, ideaId, rank, pinned, placed, today = null, skip = null
       <span className="rh-row__pills">
         <Pills score={reel.score} />
         {today != null ? <span className="rh-chip rh-chip--quota" title="Fills one of today’s slots">Today #{today}</span> : null}
+        {reel.score.yours ? <span className="rh-chip" title="You typed this idea in">Yours</span> : null}
         {pinned ? <span className="rh-chip rh-chip--pinned">Pinned</span> : placed ? <span className="rh-chip">Placed</span> : null}
         {skip ? <span className="rh-chip" title="The last run passed over it though it ranked above one of its picks">{skip}</span> : null}
         <span className={`rh-chip rh-chip--${reel.phase}`}>

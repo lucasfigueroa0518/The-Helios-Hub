@@ -7,7 +7,7 @@
  * person turns each on, one at a time, after checking it on real data.
  */
 
-export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'refreshOnVisit' | 'editSlots';
+export type ActionFlag = 'approveCarousel' | 'approveTrialReel' | 'approveContent' | 'hardPublish' | 'hardRegenerate' | 'reject' | 'reschedule' | 'unschedule' | 'refreshOnVisit' | 'editSlots' | 'revise';
 
 export type ViewFlag = 'calendar' | 'analytics' | 'house' | 'post' | 'health' | 'cost' | 'calendarWeek';
 
@@ -35,6 +35,8 @@ export const SOCIAL_HUB_FLAGS: HubFlags = Object.freeze({
     refreshOnVisit: false,
     // Weekly slot calendar: edit the template and single dates (spec 2026-10-14).
     editSlots: true,
+    // Targeted Revisions: revise one part of a post, undo it, continue a paused one. Off until Tommy turns it on.
+    revise: false,
   }),
   views: Object.freeze({
     calendar: true,
@@ -58,6 +60,7 @@ export const ACTION_FLAGS: readonly ActionFlag[] = [
   'unschedule',
   'refreshOnVisit',
   'editSlots',
+  'revise',
 ];
 
 export function actionEnabled(flag: ActionFlag, flags: HubFlags = SOCIAL_HUB_FLAGS): boolean {

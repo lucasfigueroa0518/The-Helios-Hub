@@ -27,10 +27,8 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
     { id: 'afternoon', label: 'Afternoon', startMinute: 13 * 60, endMinute: 14 * 60 + 30 },
     { id: 'late', label: 'Late afternoon', startMinute: 15 * 60 + 30, endMinute: 17 * 60 },
   ],
-  carousels: [
-    { id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60 },
-    { id: 'afternoon', label: 'Afternoon', startMinute: 14 * 60 + 30, endMinute: 15 * 60 + 30 },
-  ],
+  // Carousels have no default windows: they post only where a slot is dragged onto the calendar.
+  carousels: [],
   // lib/lfd/config.ts LFD_WINDOW on DEFAULT_LFD_DAYS (Tue, Fri); tests/lfd-hub.test.ts pins the copy.
   last_few_days: [{ id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60, days: [2, 5] }],
   // lib/ai-events/config.ts AI_EVENTS_WINDOW on DEFAULT_AI_EVENTS_DAYS (Sunday, AE-08); tests/ai-events-hub.test.ts pins the copy.
@@ -42,6 +40,19 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
     { id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY },
     { id: 'guess_the_number', label: 'Guess the Number', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [1, 4] },
     { id: 'free_vs_paid', label: 'Free vs. Paid', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [2, 6] },
+  ],
+};
+
+/**
+ * What `capacityWindows` pads a day with so a booking whose slot left the calendar still holds its place.
+ * Carousels have no routine windows (PLAN), but posts made while they did (or dragged in and later removed)
+ * keep a place on their day; these are never offered as open slots.
+ */
+const PAD_WINDOWS: Record<Vertical, readonly PlanWindow[]> = {
+  ...PLAN,
+  carousels: [
+    { id: 'morning', label: 'Morning', startMinute: 9 * 60, endMinute: 10 * 60 },
+    { id: 'afternoon', label: 'Afternoon', startMinute: 14 * 60 + 30, endMinute: 15 * 60 + 30 },
   ],
 };
 
@@ -113,7 +124,7 @@ export function capacityWindows(vertical: Vertical, nyDate: string, carouselOff:
   if (slots?.[nyDate]) {
     const on = windowsOn(vertical, nyDate, [], slots);
     const before = today !== undefined && nyDate < today ? windowsOn(vertical, nyDate).length : 0;
-    const pad = PLAN[vertical].slice(0, Math.max(0, Math.max(held, before) - on.length));
+    const pad = PAD_WINDOWS[vertical].slice(0, Math.max(0, Math.max(held, before) - on.length));
     return [...on, ...pad].sort((a, b) => a.startMinute - b.startMinute);
   }
   const all = windowsOn(vertical, nyDate, [], slots);

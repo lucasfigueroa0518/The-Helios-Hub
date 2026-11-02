@@ -25,12 +25,13 @@ test('placement: Last Few Days has one morning window on its days, spaced from o
   assert.equal((await planPlacement(q, { vertical: 'last_few_days', nyDate: '2026-10-13', slot: 'afternoon', now: TUE })).ok, false);
 });
 
-test('placement: carousels give up Tuesday and Friday only while Last Few Days auto_run is on', async () => {
+test('placement: carousels have no routine windows, with or without Last Few Days auto_run', async () => {
   const { query } = await openHubTestDb();
   const q = query as SpineQuery;
-  assert.deepEqual((await placementRules(q, 'carousels')).windows.map((w) => w.days), [undefined, undefined]);
+  // Carousels are opt-in: the days they give up to Last Few Days are the calendar's (the seed leaves them out), not a window rule.
+  assert.deepEqual((await placementRules(q, 'carousels')).windows, []);
   await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
-  assert.deepEqual((await placementRules(q, 'carousels')).windows.map((w) => w.days), [[0, 1, 3, 4, 6], [0, 1, 3, 4, 6]]);
+  assert.deepEqual((await placementRules(q, 'carousels')).windows, []);
 });
 
 test('a carousel approved on a Tuesday is booked Tuesday, or Wednesday while Last Few Days is on', async () => {

@@ -3,9 +3,12 @@ import { ArrowUpRight } from 'lucide-react';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
 import { MediaPreview } from '@/components/social-hub/MediaPreview';
 import { MetricChart } from '@/components/social-hub/MetricChart';
+import { RevisionBox } from '@/components/social-hub/post/RevisionBox';
 import { StateBadge, TypeMark } from '@/components/social-hub/ui/marks';
+import { lockReason, revisionRefs } from '@/lib/revisions/box-state';
 import { formatUsd, perDollar } from '@/lib/social-hub/cost';
 import type { HubDataset } from '@/lib/social-hub/dataset';
+import { actionEnabled } from '@/lib/social-hub/flags';
 import { formatMetric, formatMetricKey, formatMetrics, metricSpec, postMetric } from '@/lib/social-hub/metrics';
 import { sourceDomain } from '@/lib/social-hub/sources';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -32,6 +35,7 @@ const EMPTY = new Set(['', '—', '-', 'n/a', 'null', 'undefined']);
  */
 export function PostView({ post, o, dataset }: { post: HubPost; o: Offerer; dataset: HubDataset }) {
   const { state, menu } = o.offer(post);
+  const reviseRefs = revisionRefs(post.vertical, post.refs);
   const info = verticalInfo(post.vertical);
   const posted = post.status === 'published';
   const keys = KEY_METRICS[post.format].filter((k) => metricSpec(k).formats.includes(post.format));
@@ -72,6 +76,11 @@ export function PostView({ post, o, dataset }: { post: HubPost; o: Offerer; data
       <section className="sh-post__media" aria-label="Media">
         <MediaPreview media={post.media} title={displayName(post)} />
       </section>
+
+      {/* Targeted Revisions: fix one part in your own words. Not rendered at all while the `revise` flag is off. */}
+      {actionEnabled('revise') && reviseRefs ? (
+        <RevisionBox key={post.id} vertical={post.vertical} refs={reviseRefs} lock={lockReason({ status: post.status, stateId: state.id })} />
+      ) : null}
 
       <section className="sh-post__numbers" aria-labelledby={`numbers-${post.id}`}>
         <h3 className="sh-post__h" id={`numbers-${post.id}`}>Performance</h3>

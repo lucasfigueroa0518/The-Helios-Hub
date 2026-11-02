@@ -116,6 +116,12 @@ test('gapsFor: feed posts under 30 minutes apart, Trial reels exempt', () => {
   assert.ok(!kinds([S('explainers', 780), S('carousels', 810)]).includes('feed-gap'));
 });
 
+test('gapsFor: a dragged-in carousel has no usual window to be outside of', () => {
+  const slots = [S('carousels', 600)];
+  const kinds = gapsFor(day(slots), slots, DEFAULT_CAPS).map((g) => g.kind);
+  assert.ok(!kinds.includes('outside-usual'));
+});
+
 test('gapsFor: over the daily cap', () => {
   const slots = [S('explainers', 780), S('explainers', 810), S('explainers', 930), S('explainers', 960)];
   const over = gapsFor(day(slots), slots, DEFAULT_CAPS).filter((g) => g.kind === 'over-cap');

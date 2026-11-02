@@ -47,10 +47,6 @@ export function switchOnCopy(facts: SwitchFacts): string {
         ? 'Today’s pattern is copied in.'
         : 'Your saved calendar from last time comes back, not a fresh copy of today’s settings.',
   );
-  if (facts.lfdPaused && facts.lfdDays.length) {
-    const days = listOf([...facts.lfdDays].sort((a, b) => a - b).map((d) => WEEKDAY_PLURAL[d]!));
-    parts.push(`Last Few Days is paused, so ${days} (its days) will have no Carousels until you edit the calendar.`);
-  }
   return parts.join(' ');
 }
 

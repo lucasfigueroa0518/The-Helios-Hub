@@ -92,6 +92,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       rescheduleItem: placement.rescheduleItem,
       scheduleJob: (d, jobId, source, now, through) => explainersSchedule.scheduleJob(d, jobId, source, now, through),
       publishingLive: explainersSchedule.publishingLive,
+      // Revision rows live where the social worker claims them (DATABASE_URL); only when explainers share that database.
+      revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),
     }),
     reels: reelActions({
       schedulePostIdea: reels.schedulePostIdea as never,

@@ -244,7 +244,8 @@ test('carousels template: a noon slot books in [12:00, 12:15] as t0720', async (
 test('carousels template: 4 slots under a cap of 3 fill 3; the 4th is never booked', async () => {
   const { q, posts } = await carouselDb(4);
   await setSlotSource(q, 'template', 't');
-  assert.equal((await applySlotChanges(q, [add('carousels', 720), add('carousels', 1080)], opts)).ok, true);
+  // Carousels are opt-in: the seed has none, so this day's four slots are all added here.
+  assert.equal((await applySlotChanges(q, [add('carousels', 540), add('carousels', 720), add('carousels', 870), add('carousels', 1080)], opts)).ok, true);
   assert.equal((await carouselFill(q, new Date('2026-10-21T11:00:00Z'))).quota, 3);
   for (const p of posts.slice(0, 3)) assert.ok((await schedulePost(q, p, 'auto', LATE_TUESDAY, WED, first)).scheduled);
   assert.equal((await schedulePost(q, posts[3]!, 'auto', LATE_TUESDAY, WED, first)).scheduled, false);

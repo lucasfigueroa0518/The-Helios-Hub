@@ -51,6 +51,8 @@ export async function scoreOneIdea(
   runId: string,
   jev: JevRunner,
   idea: IdeaMaterial,
+  /** The post idea the Jev log rows point at. A candidate that is not a stored idea passes null. */
+  postIdeaId: string | null = idea.id,
 ): Promise<InterpretedScore> {
   const pass1 = await jev.ask({
     component: 'scoring-pass1',
@@ -58,7 +60,7 @@ export async function scoreOneIdea(
     sets: [SCORING_PASS_1],
     questions: SCORING_PASS_1.questions,
     runId,
-    postIdeaId: idea.id,
+    postIdeaId: postIdeaId ?? undefined,
   });
   let result = interpretPass1(pass1.answers);
   if (result.chosenBucket && result.chosenFramework) {
@@ -68,7 +70,7 @@ export async function scoreOneIdea(
       sets: [SCORING_PASS_2],
       questions: SCORING_PASS_2.questions,
       runId,
-      postIdeaId: idea.id,
+      postIdeaId: postIdeaId ?? undefined,
     });
     result = applyPass2(result, pass2.answers);
   }
