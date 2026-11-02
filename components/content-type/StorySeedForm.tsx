@@ -18,6 +18,8 @@ export function StorySeedForm({ done }: SeedFormProps) {
   const [f, setF] = useState<SeedFields>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The fields a series needs before it can be added (the same ones the route refuses without). */
+  const valid = series === 'morning_download' ? Boolean(f.headline?.trim()) : series === 'guess_the_number' ? Boolean(f.value?.trim() && f.fact?.trim()) : Boolean(f.toolName?.trim() && f.url?.trim());
   const set = (key: string) => (e: { target: { value: string } }) => setF((cur) => ({ ...cur, [key]: e.target.value }));
   async function submit() {
     setBusy(true);
@@ -34,7 +36,7 @@ export function StorySeedForm({ done }: SeedFormProps) {
     }
   }
   return (
-  <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+  <form className="ex-form rh-seed-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
     <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
     <select className="helios-field-input" value={series} onChange={(e) => { setSeries(e.target.value); setF({}); }} aria-label="Series">
       {Object.entries(SERIES_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
@@ -62,7 +64,7 @@ export function StorySeedForm({ done }: SeedFormProps) {
       </>
     ) : null}
     <div className="ex-actions">
-      <button type="submit" className="rh-btn rh-btn--primary" disabled={busy}>{busy ? 'Adding…' : 'Add to the pool'}</button>
+      <button type="submit" className="rh-btn rh-btn--primary" disabled={busy || !valid}>{busy ? 'Adding…' : 'Add to the pool'}</button>
     </div>
     <p className="rh-muted">Free: no model or web call, and nothing is built. Free vs. Paid still pairs your tool with its counterpart when the set is built.</p>
     {error ? <p className="rh-note rh-note--bad">{error}</p> : null}

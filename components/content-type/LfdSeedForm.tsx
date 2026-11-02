@@ -29,7 +29,7 @@ export function LfdSeedForm({ done }: SeedFormProps) {
     }
   }
   return (
-  <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+  <form className="ex-form rh-seed-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
     <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
     <input className="helios-field-input" placeholder="Link to the story" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link to the story" />
     <input className="helios-field-input" placeholder="Headline (optional)" value={headline} onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />

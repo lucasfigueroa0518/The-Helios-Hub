@@ -49,10 +49,10 @@ export function ReelSeedForm({ done }: SeedFormProps) {
     }
   }
   return (
-    <form className="ex-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <form className="ex-form rh-seed-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
       <input className="helios-field-input" placeholder="Headline" maxLength={200} value={headline} onChange={(e) => setHeadline(e.target.value)} aria-label="Headline" />
-      <textarea className="helios-field-input" placeholder="Your text (optional): the story, in your words" rows={6} value={text} onChange={(e) => setText(e.target.value)} aria-label="Your text" />
+      <textarea className="ex-textarea" placeholder="Your text (optional): the story, in your words" rows={6} value={text} onChange={(e) => setText(e.target.value)} aria-label="Your text" />
       <p className="rh-muted">{text.length.toLocaleString('en-US')} of {MAX_TEXT.toLocaleString('en-US')} characters. A one-line idea gives thin copy; a few lines give the writer facts.</p>
       <input className="helios-field-input" placeholder="Link (optional)" value={url} onChange={(e) => setUrl(e.target.value)} aria-label="Link" />
       <div className="ex-actions">

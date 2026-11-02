@@ -33,6 +33,29 @@
 /* A `.rh` scope with no box of its own: carries the colours to a control placed in another page's layout (the shared seed button). */
 .rh--scope { display: contents; }
 
+/* The shared seed drawer's form: the same on every pool, whichever page opens it. The Explainers stylesheet that styled
+   `.ex-form` is not loaded on the hub pages, and `.rh .helios-field-input` is a 132px filter box, so the form sets its own (with `.rh` in front so it outranks that rule, which comes later in this file). */
+.rh .rh-seed-form { display: grid; gap: 10px; }
+.rh .rh-seed-form .ex-form { display: grid; gap: 10px; }
+.rh .rh-seed-form .ex-form + .ex-form { margin-top: 22px; }
+.rh .rh-seed-form .helios-field-input { width: 100%; max-width: none; height: 40px; padding: 0 12px; box-sizing: border-box; }
+.rh .rh-seed-form select.helios-field-input { padding-right: 8px; }
+.rh .rh-seed-form .ex-textarea, .rh .rh-seed-form textarea {
+  width: 100%;
+  height: auto;
+  min-height: 96px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--rh-line-strong);
+  border-radius: 10px;
+  background: var(--rh-surface);
+  color: var(--rh-ink);
+  font: inherit;
+  resize: vertical;
+}
+.rh .rh-seed-form .ex-actions { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.rh .rh-seed-form .rh-muted { margin: 0; }
+
 .rh-spin { animation: rh-spin 900ms linear infinite; }
 @keyframes rh-spin { to { transform: rotate(360deg); } }
 

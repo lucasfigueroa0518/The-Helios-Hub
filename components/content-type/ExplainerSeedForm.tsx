@@ -51,7 +51,7 @@ export function ExplainerSeedForm({ done }: SeedFormProps) {
   }
 
   return (
-    <div className="ex-form">
+    <div className="ex-form rh-seed-form">
       <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
       <form
         className="ex-form"
