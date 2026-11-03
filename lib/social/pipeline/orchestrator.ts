@@ -44,7 +44,7 @@ export type FreshDraftEntry = { storyId: string; attempt: number; detail: string
 /** storyId used for log entries that concern the whole day, not one story. */
 export const DAY_SCOPE_ID = '*';
 
-export type StopReason = 'target-reached' | 'out-of-stories' | 'cost-cap' | 'scoring-failed';
+export type StopReason = 'target-reached' | 'out-of-stories' | 'cost-cap' | 'scoring-failed' | 'scored';
 
 export type RunDayInput = {
   /** The day's fetched feed articles; selection groups and ranks them. */
@@ -54,6 +54,8 @@ export type RunDayInput = {
   log: SetAsideLog;
   now: Date;
   targetPosts?: number;
+  /** Pool refresh: fetch, score and select, then stop before any story is made. The shortlist is the run's whole output. */
+  scoreOnly?: boolean;
   /** The finished post already stored for a story, if any (SH-60). Omitted: every story runs. */
   stored?: (storyId: string) => Promise<string | null>;
   /** True when the story's content already holds a slot (daily fill, D54). Omitted: no story is passed over. */
@@ -173,6 +175,7 @@ export async function runDay(input: RunDayInput): Promise<RunDayResult> {
     throw err;
   }
   ranked = [...ranked].sort((a, b) => b.score - a.score);
+  if (input.scoreOnly) return finish('scored');
 
   // ── One story at a time, in rank order ──────────────────────────────
   for (const story of ranked) {

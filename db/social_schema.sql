@@ -128,12 +128,13 @@ ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS error text;
 ALTER TABLE social.runs ADD COLUMN IF NOT EXISTS story_ids text[] NOT NULL DEFAULT '{}';
 ALTER TABLE social.runs ALTER COLUMN started_at DROP NOT NULL;
 
+-- `pool`: the nightly idea-pool refresh (score and select, make nothing). Re-runnable: replaces the older three-value check.
+ALTER TABLE social.runs DROP CONSTRAINT IF EXISTS social_runs_trigger_check;
+ALTER TABLE social.runs ADD CONSTRAINT social_runs_trigger_check
+  CHECK (trigger IN ('scheduled', 'manual', 'cli', 'pool'));
+
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'social_runs_trigger_check') THEN
-    ALTER TABLE social.runs ADD CONSTRAINT social_runs_trigger_check
-      CHECK (trigger IN ('scheduled', 'manual', 'cli'));
-  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'social_runs_status_check') THEN
     ALTER TABLE social.runs ADD CONSTRAINT social_runs_status_check
       CHECK (status IN ('requested', 'running', 'ok', 'partial', 'failed', 'skipped'));
