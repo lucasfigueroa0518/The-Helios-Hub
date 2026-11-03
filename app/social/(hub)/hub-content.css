@@ -250,3 +250,6 @@
 /* Primary and ⋯ only: they share one row. */
 .sh-actions--card .sh-actions__row:has(.sh-menu) > .sh-btn--primary:has(+ .sh-menu:last-child) { flex: 1 1 0; }
 .sh-actions--card .sh-menu > .sh-btn--icon { width: 100%; }
+/* The "Review in …" link is a navigation, not an action: it gets its own full-width row under the buttons instead of squeezing beside them. */
+.sh-actions--card .sh-actions__row > .sh-btn--quiet { grid-column: 1 / -1; justify-content: center; }
+.sh-actions--card .sh-actions__row:has(.sh-menu) > .sh-btn--quiet { flex: 1 1 100%; order: 1; }

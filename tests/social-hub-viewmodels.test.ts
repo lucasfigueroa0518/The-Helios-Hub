@@ -56,6 +56,15 @@ test('at most one primary action, and turned-off actions are never offered as bu
   }
 });
 
+test('a post that needs you shows Schedule as a button beside Approve, not under More', () => {
+  const post = d.posts.find((p) => p.vertical === 'carousels' && p.status === 'ready' && postState(p, now).id === 'needs_you');
+  assert.ok(post, 'fixture has a carousel that needs you');
+  const state = postState(post!, now);
+  const menu = actionMenu(post!, state, actionsFor(post!, { quota: null, typicalCostLabel: '$1.00' }), ALL_ON);
+  assert.ok(menu.secondary.some((a) => a.key === 'place' && a.label === 'Schedule'), 'Schedule is a button');
+  assert.ok(!menu.more.some((a) => a.key === 'place'), 'and not in the menu');
+});
+
 test('place and move share the reschedule flag; every plan names a flag that exists', () => {
   assert.equal(flagOf('place'), 'reschedule');
   assert.equal(flagOf('reschedule'), 'reschedule');
