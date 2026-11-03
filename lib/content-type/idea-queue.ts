@@ -1,9 +1,10 @@
 import { dbQuery } from '@/lib/db';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { ARCHIVE_ONLY, QUEUE_LIVE, dropKeyBetween, queueOrder, runLead } from '@/lib/social-hub/queue';
+import { QUEUE_LIVE, dropKeyBetween, queueOrder, runLead } from '@/lib/social-hub/queue';
 import { archiveIdea, pinIdea, placeIdea, reorderPins, unpinIdea } from '@/lib/social-hub/queue-store';
 import type { Vertical } from '@/lib/social-hub/types';
 import { isUnscoredSeed } from '@/lib/reels/seeds';
+import { findStoryLink, keyOfIdea } from '@/lib/lfd/pins';
 
 /**
  * One person's move on a type's idea queue (spec 2026-10-21-idea-pool-standard-design):
@@ -24,7 +25,10 @@ export function parseQueueAction(body: unknown): QueueAction {
   if (!VERTICALS.includes(b.vertical as Vertical)) throw new Error('Unknown content type.');
   const vertical = b.vertical as Vertical;
   // A hand move on a type whose night does not follow the queue would promise what the night will not do.
-  if (!QUEUE_LIVE.has(vertical) && !(ARCHIVE_ONLY.has(vertical) && b.action === 'archive')) throw new Error(ARCHIVE_ONLY.has(vertical) ? 'This type only takes Archive.' : 'This type does not take pins, drags or archives yet.');
+  if (!QUEUE_LIVE.has(vertical)) throw new Error('This type does not take pins, drags or archives yet.');
+  // Last Few Days: its night honors pins (taken before the lanes) and archives, but the post's order is the run's own (lanes, then
+  // the cover), so a drag among unpinned stories has nothing to steer. Reordering pins is honored: they are taken in that order.
+  if (vertical === 'last_few_days' && b.action === 'place') throw new Error('Last Few Days takes Pin and Archive. The run sets the rest of the post’s order itself, so a drag below the pins does nothing.');
   const idea = (v: unknown, what: string) => {
     if (typeof v !== 'string' || !IDEA_ID.test(v) || !v.startsWith(`${vertical}:`)) throw new Error(`Unknown ${what}.`);
     return v;
@@ -58,6 +62,11 @@ export async function recordQueueAction(move: QueueAction, by: string, dataset: 
       // A typed-in Text on Screen idea with no net score cannot be copied onto tonight's slate: say so now, not as "not in the pool" at 1 AM.
       const id = move.vertical === 'reels' ? /^reels:idea:([0-9a-f-]{36})$/.exec(move.ideaId)?.[1] : undefined;
       if (id && (await isUnscoredSeed(id))) throw Object.assign(new Error('No bucket cleared its bar, so the night has nothing to make it from.'), { status: 409 });
+      // Last Few Days: the night needs the story's link to make a pin a candidate; say so now, not after the next run.
+      if (move.vertical === 'last_few_days') {
+        const key = keyOfIdea(move.ideaId);
+        if (!key || !(await findStoryLink(q, key))) throw Object.assign(new Error('No link was recorded for that story yet, so the run could not take it. It will be pinnable after the next run.'), { status: 409 });
+      }
       return pinIdea(q, move.vertical, move.ideaId, by);
     }
     case 'unpin': return unpinIdea(q, move.vertical, move.ideaId);

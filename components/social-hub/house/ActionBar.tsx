@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowUpRight, Loader, MoreHorizontal } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
-import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side';
+import { menuFlip, menuSide, type MenuFlip, type MenuSide } from '@/components/social-hub/house/menu-side';
 import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
 import type { ActionMenu, OfferedAction, SlotChoice } from '@/lib/social-hub/views/actions';
 
@@ -24,6 +24,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
   const moreRoot = useRef<HTMLDivElement>(null);
   const moreList = useRef<HTMLUListElement>(null);
   const [moreSide, setMoreSide] = useState<MenuSide>('right');
+  const [moreFlip, setMoreFlip] = useState<MenuFlip>('down');
   const [confirming, setConfirming] = useState<OfferedAction | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -52,8 +53,12 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
       const root = moreRoot.current;
       const list = moreList.current;
       if (!root || !list) return;
-      const next = menuSide(root.getBoundingClientRect(), list.offsetWidth, clipBox(root));
+      const box = clipBox(root);
+      const rect = root.getBoundingClientRect();
+      const next = menuSide(rect, list.offsetWidth, box);
       setMoreSide((prev) => (prev === next ? prev : next));
+      const flip = menuFlip(rect, list.offsetHeight, box);
+      setMoreFlip((prev) => (prev === flip ? prev : flip));
     };
     place();
     window.addEventListener('resize', place);
@@ -129,7 +134,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
               <MoreHorizontal size={16} aria-hidden="true" />
             </button>
             {moreOpen ? (
-              <ul ref={moreList} role="menu" className={`sh-menu__list${moreSide === 'left' ? ' sh-menu__list--left' : ''}`}>
+              <ul ref={moreList} role="menu" className={`sh-menu__list${moreSide === 'left' ? ' sh-menu__list--left' : ''}${moreFlip === 'up' ? ' sh-menu__list--up' : ''}`}>
                 {menu.more.map((a) => (
                   <li key={a.key} role="none">
                     <button
@@ -196,9 +201,11 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
   );
 }
 
-function clipBox(el: HTMLElement): { left: number; right: number } {
+function clipBox(el: HTMLElement): { left: number; right: number; top: number; bottom: number } {
   let left = 0;
   let right = window.innerWidth;
+  let top = 0;
+  let bottom = window.innerHeight;
   const clips = (value: string) => value === 'auto' || value === 'hidden' || value === 'scroll' || value === 'clip';
   for (let node = el.parentElement; node && node !== document.documentElement; node = node.parentElement) {
     const style = getComputedStyle(node);
@@ -206,8 +213,10 @@ function clipBox(el: HTMLElement): { left: number; right: number } {
     const box = node.getBoundingClientRect();
     left = Math.max(left, box.left);
     right = Math.min(right, box.right);
+    top = Math.max(top, box.top);
+    bottom = Math.min(bottom, box.bottom);
   }
-  return { left, right };
+  return { left, right, top, bottom };
 }
 
 /** Today's remaining windows for the type; taken ones are shown unavailable. */

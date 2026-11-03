@@ -238,3 +238,15 @@
 .sh-actions--card .sh-btn--primary { grid-column: 1 / -1; }
 /* Make it sits alone on its card: full width like Approve. */
 .sh-actions--card .sh-actions__row > .sh-btn:only-child { grid-column: 1 / -1; }
+.sh-actions--card { align-items: stretch; }
+.sh-actions--card .sh-actions__why, .sh-actions--card .sh-actions__note { max-width: none; text-align: left; }
+/* A card whose menu has a More list (the content type pages): the primary fills the row, the other buttons share the next
+   row evenly, and the ⋯ is a fixed-width cell at its end, so the bar always spans the card. */
+.sh-actions--card .sh-actions__row:has(.sh-menu) { display: flex; flex-wrap: wrap; justify-content: stretch; }
+.sh-actions--card .sh-actions__row:has(.sh-menu) > .sh-btn { flex: 1 1 0; }
+.sh-actions--card .sh-actions__row:has(.sh-menu) > .sh-btn--primary { flex: 1 1 100%; }
+.sh-actions--card .sh-actions__row:has(.sh-menu) > .sh-menu { flex: 0 0 36px; }
+.sh-actions--card .sh-actions__row:has(.sh-menu) > .sh-menu:only-child { flex: 1 1 100%; }
+/* Primary and ⋯ only: they share one row. */
+.sh-actions--card .sh-actions__row:has(.sh-menu) > .sh-btn--primary:has(+ .sh-menu:last-child) { flex: 1 1 0; }
+.sh-actions--card .sh-menu > .sh-btn--icon { width: 100%; }

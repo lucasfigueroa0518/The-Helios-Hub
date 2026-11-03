@@ -697,6 +697,14 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
                 />
               </section>
             )}
+            {rest.length === 0 && (
+              <section className="rh-rest">
+                <h3 className="rh-rest__title">
+                  The bench <span>0</span>
+                </h3>
+                <p className="rh-empty">The pool is empty until its next refill.</p>
+              </section>
+            )}
           </>
         )}
       </div>
@@ -893,13 +901,14 @@ function RestRow({ reel, ideaId, rank, pinned, placed, today = null, skip = null
       </span>
       <span className="rh-row__pills">
         <Pills score={reel.score} />
-        {today != null ? <span className="rh-chip rh-chip--quota" title="Fills one of today’s slots">Today #{today}</span> : null}
-        {reel.score.yours ? <span className="rh-chip" title="You typed this idea in">Yours</span> : null}
-        {pinned ? <span className="rh-chip rh-chip--pinned">Pinned</span> : placed ? <span className="rh-chip">Placed</span> : null}
-        {skip ? <span className="rh-chip" title="The last run passed over it though it ranked above one of its picks">{skip}</span> : null}
+        {/* Same chip order as the other pools (TypeHub): state, Today, skipped, Yours, Pinned/Placed, then the buttons. */}
         <span className={`rh-chip rh-chip--${reel.phase}`}>
           {reel.phase === 'working' && <Loader2 size={11} className="rh-spin" />} {PHASE_CHIP[reel.phase]}
         </span>
+        {today != null ? <span className="rh-chip rh-chip--quota" title="Fills one of today’s slots">Today #{today}</span> : null}
+        {skip ? <span className="rh-chip" title="The last run passed over it though it ranked above one of its picks">{skip}</span> : null}
+        {reel.score.yours ? <span className="rh-chip" title="You typed this idea in">Yours</span> : null}
+        {pinned ? <span className="rh-chip rh-chip--pinned">Pinned</span> : placed ? <span className="rh-chip">Placed</span> : null}
         <QueueControls vertical="reels" ideaId={ideaId} pinned={pinned} title={title} compact />
       </span>
       <span className="rh-row__score">{score2(reel.score.net)}</span>

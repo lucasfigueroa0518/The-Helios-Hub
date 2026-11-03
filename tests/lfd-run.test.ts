@@ -339,7 +339,7 @@ test('the run record carries what the Ideas view needs', async () => {
   assert.equal(rec.picks[0]!.lane, 'major');
   assert.ok(rec.queues.major.length >= 1 && rec.queues.major.length <= 10);
   assert.ok(rec.queues.rundown.length >= 1 && rec.queues.rundown.length <= 10);
-  assert.deepEqual(Object.keys(rec.queues.rundown[0]!).sort(), ['headline', 'key', 'major', 'net']);
+  assert.deepEqual(Object.keys(rec.queues.rundown[0]!).sort(), ['headline', 'key', 'major', 'net', 'url']);
   assert.deepEqual(rec.drops, []);
   assert.ok(rec.claudeCache.readTokens > 0 && rec.claudeCache.creationTokens > 0);
   assert.equal(rec.feedError, undefined);

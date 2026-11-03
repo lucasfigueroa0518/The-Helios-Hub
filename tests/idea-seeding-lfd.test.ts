@@ -302,3 +302,79 @@ test('the hub lists seeds as the person’s own with the last outcome, and an ar
   await query(`UPDATE lfd.settings SET value = value || '{"outcome":"thin-text"}'::jsonb WHERE key = $1`, [`seed:${keyOf('a')}`]);
   assert.match((await ideas()).find((i) => i.yours)!.detail ?? '', /last run: thin-text/);
 });
+
+// ── Pins (the shared queue: social_hub.idea_adjustments rows) ───────────────────────────────────────────────────────────
+
+const pinRow = (query: HubQuery, key: string, kind = 'pin') =>
+  query(`INSERT INTO social_hub.idea_adjustments (vertical, idea_id, ny_date, kind) VALUES ('last_few_days', $1, '2026-10-13', $2)`, [`last_few_days:story:${key}`, kind]);
+/** A past run whose record carries the link the hub showed for the story. */
+const recordLink = (query: HubQuery, n: string) =>
+  query(`INSERT INTO lfd.runs (trigger, status, started_at, record) VALUES ('manual', 'ok', $1, $2::jsonb)`, [new Date(NOW.getTime() - 3 * 86_400_000).toISOString(), JSON.stringify({ queues: { major: [{ key: keyOf(n), headline: HEADLINES[n], url: link(n), major: 0.9, net: null }], rundown: [] } })]);
+const adj = async (query: HubQuery, key: string) => (await query<{ kind: string; consumed_at: string | null; skip_reason: string | null }>(`SELECT kind, consumed_at, skip_reason FROM social_hub.idea_adjustments WHERE idea_id = $1 ORDER BY created_at`, [`last_few_days:story:${key}`])).rows;
+
+test('pin: the night takes a pinned story before the lanes, the pin is used up, and it costs one Jev call', async () => {
+  const { query } = await freshDb();
+  const base = await run((await freshDb()).query);
+  await recordLink(query, 'a');
+  await pinRow(query, keyOf('a'));
+  const { post, record, jevCalls } = await run(query, { fetchBody: async () => LONG });
+  const taken = post.stories.find((s) => s.key === keyOf('a'));
+  assert.equal(taken?.lane, 'major');
+  assert.equal(taken?.origin, 'seed');
+  assert.equal(post.stories.length, 6);
+  assert.equal(jevCalls, base.jevCalls + 1);
+  assert.deepEqual(record.seeds.map((s: any) => [s.key, s.outcome, s.pinned]), [[keyOf('a'), 'in the post', true]]);
+  assert.ok((await adj(query, keyOf('a')))[0]!.consumed_at, 'the pin is used up once the story is made');
+});
+
+test('pin: two pins keep the order pinned; an unpinned (consumed) or archived pin is not taken; no pins and no fetch means the golden picks', async () => {
+  const { query } = await freshDb();
+  await recordLink(query, 'a');
+  await recordLink(query, 'b');
+  await pinRow(query, keyOf('b'));
+  await pinRow(query, keyOf('a'));
+  await query(`UPDATE social_hub.idea_adjustments SET consumed_at = now() WHERE idea_id = $1`, [`last_few_days:story:${keyOf('b')}`]); // unpinned
+  let fetches = 0;
+  const res = await run(query, { fetchBody: async () => (fetches += 1, LONG) });
+  assert.equal(fetches, 1, 'only the active pin is fetched');
+  assert.deepEqual(res.post.stories.filter((s) => s.origin === 'seed').map((s) => s.key), [keyOf('a')]);
+  const plain = await run((await freshDb()).query);
+  assert.deepEqual(plain.post.stories.map((s) => s.key), GOLDEN);
+  assert.equal(plain.record.pinsSkipped, undefined);
+
+  const arch = await freshDb();
+  await recordLink(arch.query, 'a');
+  await pinRow(arch.query, keyOf('a'));
+  await archive(arch.query, keyOf('a'));
+  const out = await run(arch.query, { fetchBody: async () => LONG });
+  assert.ok(!out.post.stories.some((s) => s.key === keyOf('a')), 'archive outranks a pin');
+});
+
+test('pin: a pin the night cannot honor says why and steps aside; one that only waited for a free slot stays pinned', async () => {
+  const { query } = await freshDb();
+  await pinRow(query, keyOf('a')); // no link was ever recorded
+  await recordLink(query, 'b');
+  await pinRow(query, keyOf('b')); // link recorded, page unreadable
+  const res = await run(query, { fetchBody: async () => null });
+  assert.deepEqual(res.post.stories.map((s) => s.key), GOLDEN);
+  assert.deepEqual(res.record.pinsSkipped.map((f: any) => [f.key, f.reason]), [[keyOf('a'), 'no link was recorded for this story'], [keyOf('b'), 'its page could not be read']]);
+  assert.equal((await adj(query, keyOf('a')))[0]!.skip_reason, 'no link was recorded for this story');
+  assert.equal((await adj(query, keyOf('b')))[0]!.consumed_at, null, 'not used up');
+
+  const full = await freshDb();
+  await full.query(`INSERT INTO lfd.runs (trigger, status, started_at, record) VALUES ('manual', 'ok', $1, $2::jsonb)`, [new Date(NOW.getTime() - 3 * 86_400_000).toISOString(), JSON.stringify({ queues: { major: ['a', 'b', 'c', 'd'].map((n) => ({ key: keyOf(n), headline: HEADLINES[n], url: link(n), major: 0.9, net: null })), rundown: [] } })]);
+  for (const n of ['a', 'b', 'c', 'd']) await pinRow(full.query, keyOf(n));
+  const four = await run(full.query, { fetchBody: async () => LONG });
+  assert.deepEqual(four.post.stories.filter((s) => s.origin === 'seed').map((s) => s.key), [keyOf('a'), keyOf('b'), keyOf('c')], 'three to a post, in the order pinned');
+  const d = await adj(full.query, keyOf('d'));
+  assert.deepEqual([d[0]!.consumed_at, d[0]!.skip_reason], [null, null], 'the fourth waits, still pinned, no skip');
+});
+
+test('pin: the hub refuses a pin the night could not take, and a drag below the pins', async () => {
+  const { parseQueueAction, recordQueueAction } = await import('@/lib/content-type/idea-queue');
+  const id = `last_few_days:story:${keyOf('a')}`;
+  for (const action of ['pin', 'unpin', 'archive']) assert.equal(parseQueueAction({ vertical: 'last_few_days', action, ideaId: id }).action, action);
+  assert.equal(parseQueueAction({ vertical: 'last_few_days', action: 'reorder-pins', order: [id] }).action, 'reorder-pins');
+  assert.throws(() => parseQueueAction({ vertical: 'last_few_days', action: 'place', ideaId: id, aboveId: null, belowId: null, up: true }), /Pin and Archive/);
+  void recordQueueAction;
+});
