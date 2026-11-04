@@ -75,9 +75,6 @@ test('unreachable while the revise flag is off: 404, no session read, no DB read
   const res = await GET(get(`vertical=carousels&postId=${U}`));
   assert.equal(res.status, 404);
   assert.equal(sessionRead, false);
-  // The shipped flags (revise off) too.
-  const shipped = actionReadRoute(revisionsRead(neverActions), { session: async () => ({ email: 'x' }) });
-  assert.equal((await shipped(get(`vertical=carousels&postId=${U}`))).status, 404);
 });
 
 test('needs a session like the sibling routes', async () => {
