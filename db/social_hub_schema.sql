@@ -533,3 +533,22 @@ CREATE TABLE IF NOT EXISTS social_hub.caption_closings (
 );
 CREATE INDEX IF NOT EXISTS caption_closings_type_created
     ON social_hub.caption_closings (type, created_at DESC);
+
+-- One-box seeding (2026-11-04): a person types a sentence or two; an agent finds the source and files the idea. One row per
+-- request so a placeholder card can show progress and a failure reason. Additive.
+CREATE TABLE IF NOT EXISTS social_hub.seed_requests (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    vertical     text NOT NULL,
+    series       text,
+    blurb        text NOT NULL,
+    link         text,
+    status       text NOT NULL DEFAULT 'working' CHECK (status IN ('working','failed','done')),
+    stage        text NOT NULL DEFAULT 'queued',
+    message      text,
+    idea_id      text,
+    cost_usd     numeric(8,4) NOT NULL DEFAULT 0,
+    created_at   timestamptz NOT NULL DEFAULT now(),
+    updated_at   timestamptz NOT NULL DEFAULT now(),
+    dismissed_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS seed_requests_vertical_status ON social_hub.seed_requests (vertical, status);
