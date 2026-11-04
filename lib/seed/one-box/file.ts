@@ -27,41 +27,42 @@ export type FileResult =
 
 /** Primary source first, each page prefixed with its URL, clipped to the Explainers source limit. */
 function sourceText(v: Verified): string {
-  return v.articles.map((a) => `${a.url}\n${a.text}`).join('\n\n').slice(0, MAX_SOURCE_CHARS);
+  return v.passed.map((p) => `${p.url}\n${p.text}`).join('\n\n').slice(0, MAX_SOURCE_CHARS);
 }
 
 export async function fileIdea(i: { input: OneBoxInput; verified: Verified; deps: FileDeps }): Promise<FileResult> {
   const { input, verified: v, deps } = i;
-  const primary = v.articles[0]!;
+  const primary = v.passed[0]!;
+  const e = primary.entry;
   try {
     switch (input.vertical) {
       case 'reels': {
-        const out = await deps.reel({ headline: primary.headline, url: primary.url, text: primary.text.slice(0, MAX_SOURCE_CHARS) });
+        const out = await deps.reel({ headline: e.headline!, url: e.url!, text: primary.text.slice(0, MAX_SOURCE_CHARS) });
         if (out.status === 'added') return { status: 'added', ideaId: out.id, title: out.title };
         if (out.status === 'duplicate') return { status: 'duplicate', existing: out.existing.headline };
         return { status: 'refused', reason: 'The idea could not be scored or filed.' };
       }
       case 'carousels': {
-        const out = await deps.carousel({ url: primary.url, headline: primary.headline });
+        const out = await deps.carousel({ url: e.url!, headline: e.headline! });
         return { status: 'added', ideaId: out.id, title: out.title };
       }
       case 'last_few_days': {
-        const out = await deps.lfd({ url: primary.url, headline: primary.headline });
+        const out = await deps.lfd({ url: e.url!, headline: e.headline! });
         return { status: 'added', ideaId: out.id, title: out.title };
       }
       case 'stories': {
         const series = input.series ?? 'morning_download';
         const body: Record<string, unknown> =
           series === 'guess_the_number'
-            ? { series, value: v.number!.value, fact: v.number!.fact, storyHeadline: v.number!.storyHeadline ?? primary.headline, url: primary.url }
+            ? { series, value: e.value, fact: e.fact, storyHeadline: e.storyHeadline ?? e.fact, url: e.url }
             : series === 'free_vs_paid'
-              ? { series, toolName: v.tool!.name, url: v.tool!.url, description: v.tool!.description }
-              : { series, headline: primary.headline, url: primary.url, notes: input.blurb };
+              ? { series, toolName: e.toolName, url: e.url, description: e.description ?? '' }
+              : { series, headline: e.headline, url: e.url, notes: input.blurb };
         const out = await deps.story(body);
         return { status: 'added', ideaId: out.key, title: out.title };
       }
       case 'explainers': {
-        const out = await deps.explainer({ title: v.conceptTitle || input.blurb.slice(0, 120), origin: 'manual', sourceUrl: primary.url, sourceText: sourceText(v) });
+        const out = await deps.explainer({ title: e.title!, origin: 'manual', sourceUrl: e.sourceUrl!, sourceText: sourceText(v) });
         return { status: 'added', ideaId: out.topicId, title: out.title };
       }
     }

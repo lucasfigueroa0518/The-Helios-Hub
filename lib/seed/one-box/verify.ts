@@ -9,18 +9,11 @@ import { MIN_BODY_CHARS, readPageText } from '@/lib/reels/seed-search';
 import { Ledger, ONE_BOX_VERIFY_MODEL, VERIFY_MAX_OUTPUT_TOKENS, verifyWorstCaseUsd } from './budget';
 import { VERDICT_TOOL, VERIFY_SYSTEM, buildVerifyUserTurn } from './prompts';
 import type { Client, CostRecorder } from './search';
-import type { Finding, OneBoxInput, ReportedArticle, Verified, VerifiedArticle } from './types';
+import { entryTitle, entryUrl, missingFields, shapeOf } from './shape';
+import type { Entry, Finding, OneBoxInput, PassedEntry, Verified } from './types';
 
 export const defaultVerifyCost: CostRecorder = (usd, inputTokens, outputTokens) =>
   recordReelsCost({ runId: null, vendor: 'anthropic', component: 'one-box-verify', inputTokens, outputTokens, usd });
-
-const safeHost = (u: string): string => {
-  try {
-    return new URL(u).hostname.replace(/^www\./, '');
-  } catch {
-    return u;
-  }
-};
 
 const LIMIT_REASON = 'Stopped at the 35-cent limit.';
 
@@ -43,7 +36,7 @@ async function judge(i: { client: Client; ledger: Ledger; input: OneBoxInput; pa
     system: cachedSystemText(VERIFY_SYSTEM),
     tools: [withToolCache(VERDICT_TOOL as Anthropic.Tool)],
     tool_choice: { type: 'tool', name: VERDICT_TOOL.name },
-    messages: [{ role: 'user', content: buildVerifyUserTurn({ vertical: i.input.vertical, blurb: i.input.blurb, pageText: i.pageText }) }],
+    messages: [{ role: 'user', content: buildVerifyUserTurn({ vertical: i.input.vertical, series: i.input.series, blurb: i.input.blurb, pageText: i.pageText }) }],
   });
   const priced = priceAnthropicMessages([message], { modelId: ONE_BOX_VERIFY_MODEL, fallbackCacheTtl: '1h' });
   const usd = Number(priced.costUsd);
@@ -56,9 +49,10 @@ async function judge(i: { client: Client; ledger: Ledger; input: OneBoxInput; pa
 }
 
 /**
- * Design section 4: each reported page is read by the plain reader, then judged by an independent Haiku call that sees the
- * page itself (not the search model's claim). Best first; the first clear yes is the primary source, later yeses are supporting.
- * Number: the figure must be on a verified page. Tool: the tool's own page is the candidate and must mention its name.
+ * Design section 4: each candidate entry (the pool's own fields) must be complete; its page is read by the plain reader, then
+ * judged by an independent Haiku call that sees the page itself (not the search model's claim). Best first; the first clear yes
+ * is the primary source. Guess the Number: the figure must be on the page. Free vs. Paid: the tool's page must mention its name.
+ * Explainers keeps every page that passes as source material.
  */
 export async function verifyFinding(i: {
   client: Client;
@@ -70,43 +64,43 @@ export async function verifyFinding(i: {
 }): Promise<{ ok: true; verified: Verified } | { ok: false; reason: string }> {
   const readPage = i.readPage ?? readPageText;
   const recordCost = i.recordCost ?? defaultVerifyCost;
-  if (i.input.series === 'free_vs_paid' && !i.finding.tool) return { ok: false, reason: 'No tool was found for that idea.' };
-  if (i.input.series === 'guess_the_number' && !i.finding.number) return { ok: false, reason: 'No number was found for that idea.' };
-  const tool = i.input.series === 'free_vs_paid' ? i.finding.tool : undefined;
-  const candidates: ReportedArticle[] = tool ? [{ url: tool.url, headline: tool.name, outlet: safeHost(tool.url) }] : i.finding.articles.slice(0, 3);
-  if (candidates.length === 0) return { ok: false, reason: 'The search found no page to use as a source.' };
+  const shape = shapeOf(i.input);
+  const complete = i.finding.entries.filter((e) => missingFields(shape, e).length === 0).slice(0, 3);
+  if (complete.length === 0) {
+    const first = i.finding.entries[0];
+    return { ok: false, reason: first ? `The search didn’t come back with everything ${shape.label} needs (missing ${missingFields(shape, first).join(', ')}).` : `The search found nothing ${shape.label} could use.` };
+  }
 
-  const passed: VerifiedArticle[] = [];
-  let firstTried: { candidate: ReportedArticle; reason: string } | null = null;
+  const passed: PassedEntry[] = [];
+  let firstTried: { entry: Entry; reason: string } | null = null;
   let stoppedAtLimit = false;
-  for (const candidate of candidates) {
-    const text = await readable(candidate.url, readPage);
+  for (const entry of complete) {
+    const url = entryUrl(shape, entry);
+    const text = await readable(url, readPage);
     if (!text) continue;
     if (!i.ledger.canAfford(verifyWorstCaseUsd())) {
       stoppedAtLimit = true;
       break;
     }
     const verdict = await judge({ client: i.client, ledger: i.ledger, input: i.input, pageText: text, recordCost });
-    if (verdict.matches) passed.push({ ...candidate, text });
-    else if (!firstTried) firstTried = { candidate, reason: verdict.reason };
+    let reason = verdict.reason;
+    let ok = verdict.matches;
+    if (ok && entry.value && !text.includes(entry.value)) {
+      ok = false;
+      reason = `the number “${entry.value}” isn’t on that page`;
+    }
+    if (ok && entry.toolName && !text.toLowerCase().includes(entry.toolName.toLowerCase())) {
+      ok = false;
+      reason = `that page doesn’t mention “${entry.toolName}”`;
+    }
+    if (ok) passed.push({ entry, url, text });
+    else if (!firstTried) firstTried = { entry, reason };
+    if (ok && i.input.vertical !== 'explainers') break;
   }
   if (passed.length === 0) {
     if (stoppedAtLimit) return { ok: false, reason: LIMIT_REASON };
-    if (firstTried) return { ok: false, reason: `The closest source I found was “${firstTried.candidate.headline}” (${firstTried.candidate.outlet}), but it isn’t the same idea: ${firstTried.reason}` };
+    if (firstTried) return { ok: false, reason: `The closest source I found was “${entryTitle(firstTried.entry)}”, but it isn’t the same idea: ${firstTried.reason}` };
     return { ok: false, reason: 'None of the pages the search found could be opened and read.' };
   }
-
-  const verified: Verified = { articles: passed };
-  if (i.finding.conceptTitle) verified.conceptTitle = i.finding.conceptTitle;
-  if (i.input.series === 'guess_the_number') {
-    const n = i.finding.number;
-    if (!n) return { ok: false, reason: 'No number was found for that idea.' };
-    if (!passed[0]!.text.includes(n.value)) return { ok: false, reason: `The number “${n.value}” isn’t on the page I found, so I can’t vouch for it.` };
-    verified.number = n;
-  }
-  if (tool) {
-    if (!passed[0]!.text.toLowerCase().includes(tool.name.toLowerCase())) return { ok: false, reason: `The page at ${tool.url} doesn’t mention “${tool.name}”.` };
-    verified.tool = tool;
-  }
-  return { ok: true, verified };
+  return { ok: true, verified: { passed } };
 }

@@ -11,25 +11,21 @@ export type OneBoxInput = {
   link?: string;
 };
 
-export type ReportedArticle = { url: string; headline: string; outlet: string };
+/** The fields a pool's existing add function takes (design: the agent returns exactly these). Every field is a plain string. */
+export type EntryField = 'headline' | 'url' | 'title' | 'sourceUrl' | 'value' | 'fact' | 'storyHeadline' | 'toolName' | 'description';
+export type Entry = Partial<Record<EntryField, string>>;
 
-/** What the search call reports (design section 3). */
+/** What the search call reports (design section 3): up to three candidate entries, best first, each in the pool's own fields. */
 export type Finding = {
   found: boolean;
   reason?: string;
   duplicateOf?: string;
-  articles: ReportedArticle[];
+  entries: Entry[];
   mainPoint?: string;
-  conceptTitle?: string;
-  number?: { value: string; fact: string; storyHeadline?: string };
-  tool?: { name: string; url: string; description: string };
 };
 
-export type VerifiedArticle = ReportedArticle & { text: string };
+/** A candidate whose page was read and judged a match. `url` is the page it was judged on. */
+export type PassedEntry = { entry: Entry; url: string; text: string };
 
-export type Verified = {
-  articles: VerifiedArticle[];
-  conceptTitle?: string;
-  number?: { value: string; fact: string; storyHeadline?: string };
-  tool?: { name: string; url: string; description: string };
-};
+/** The verified result; the first is the primary source. */
+export type Verified = { passed: PassedEntry[] };

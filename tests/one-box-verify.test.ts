@@ -6,7 +6,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { Ledger } from '@/lib/seed/one-box/budget';
 import type { Client } from '@/lib/seed/one-box/search';
-import type { Finding } from '@/lib/seed/one-box/types';
+import type { Entry, Finding, OneBoxInput } from '@/lib/seed/one-box/types';
 import { verifyFinding } from '@/lib/seed/one-box/verify';
 
 const PAGE = (word: string) => `${word} `.repeat(80);
@@ -24,68 +24,71 @@ function stub(verdicts: boolean[], usage: Record<string, unknown> = { input_toke
   };
   return { client, calls };
 }
-const art = (n: number) => ({ url: `https://news.test/${n}`, headline: `Headline ${n}`, outlet: 'News' });
-const finding = (extra: Partial<Finding> = {}): Finding => ({ found: true, articles: [art(1), art(2)], ...extra });
-const base = { input: { vertical: 'reels' as const, blurb: 'blurb' }, recordCost: async () => undefined };
+const e = (n: number): Entry => ({ headline: `Headline ${n}`, url: `https://news.test/${n}` });
+const finding = (entries: Entry[] = [e(1), e(2)]): Finding => ({ found: true, entries });
+const base = { input: { vertical: 'reels' } as OneBoxInput & { vertical: 'reels' }, recordCost: async () => undefined };
 const reader = async (url: string) => PAGE(url.includes('/1') ? 'alpha' : 'beta');
+const stories = (series: 'guess_the_number' | 'free_vs_paid'): OneBoxInput => ({ vertical: 'stories', series, blurb: 'b' });
 
-test('first article rejected, second accepted: the second is primary', async () => {
+test('first entry rejected, second accepted: the second is primary', async () => {
   const { client } = stub([false, true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('reels'), finding: finding(), readPage: reader });
+  const r = await verifyFinding({ ...base, input: { vertical: 'reels', blurb: 'b' }, client, ledger: new Ledger('reels'), finding: finding(), readPage: reader });
   assert.ok(r.ok);
-  assert.equal(r.verified.articles[0]!.url, 'https://news.test/2');
+  assert.equal(r.verified.passed[0]!.url, 'https://news.test/2');
+  assert.equal(r.verified.passed.length, 1);
 });
 
-test('all rejected: ok:false and the reason names the first candidate', async () => {
+test('all rejected: ok:false and the reason names the closest entry', async () => {
   const { client } = stub([false]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('reels'), finding: finding(), readPage: reader });
+  const r = await verifyFinding({ ...base, input: { vertical: 'reels', blurb: 'b' }, client, ledger: new Ledger('reels'), finding: finding(), readPage: reader });
   assert.ok(!r.ok);
   assert.match(r.reason, /Headline 1/);
   assert.match(r.reason, /different story/);
 });
 
-test('an unreadable page is skipped without a verifier call', async () => {
+test('an entry missing a required field is not verified and no call is made', async () => {
   const { client, calls } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('reels'), finding: finding({ articles: [art(1)] }), readPage: async () => null });
+  const r = await verifyFinding({ ...base, input: { vertical: 'carousels', blurb: 'b' }, client, ledger: new Ledger('carousels'), finding: finding([{ headline: 'only a headline' }]), readPage: reader });
   assert.ok(!r.ok);
+  assert.match(r.reason, /missing url/);
   assert.equal(calls.length, 0);
 });
 
-test('a private-host article is skipped', async () => {
+test('an unreadable page and a private host are skipped without a verifier call', async () => {
   const { client, calls } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('reels'), finding: finding({ articles: [{ url: 'http://10.0.0.1/x', headline: 'h', outlet: 'o' }] }), readPage: reader });
-  assert.ok(!r.ok);
+  const r1 = await verifyFinding({ ...base, input: { vertical: 'reels', blurb: 'b' }, client, ledger: new Ledger('reels'), finding: finding([e(1)]), readPage: async () => null });
+  const r2 = await verifyFinding({ ...base, input: { vertical: 'reels', blurb: 'b' }, client, ledger: new Ledger('reels'), finding: finding([{ headline: 'h', url: 'http://10.0.0.1/x' }]), readPage: reader });
+  assert.ok(!r1.ok && !r2.ok);
   assert.equal(calls.length, 0);
 });
 
-test('a Number whose value is not on the page fails', async () => {
-  const { client } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('stories'), input: { vertical: 'stories', series: 'guess_the_number', blurb: 'b' }, finding: finding({ articles: [art(1)], number: { value: '73%', fact: 'of x' } }), readPage: reader });
-  assert.ok(!r.ok);
-  assert.match(r.reason, /73%/);
-});
-
-test('a Number whose value is on the page passes', async () => {
-  const { client } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('stories'), input: { vertical: 'stories', series: 'guess_the_number', blurb: 'b' }, finding: finding({ articles: [art(1)], number: { value: '73%', fact: 'of x' } }), readPage: async () => `${PAGE('alpha')} the figure was 73% overall` });
-  assert.ok(r.ok);
-  assert.deepEqual(r.verified.number, { value: '73%', fact: 'of x' });
-});
-
-test('a Tool whose page does not mention its name fails; one that does passes', async () => {
-  const tool = { name: 'Acme Studio', url: 'https://acme.test', description: 'd' };
-  const stories = { vertical: 'stories' as const, series: 'free_vs_paid' as const, blurb: 'b' };
-  const bad = await verifyFinding({ ...base, client: stub([true]).client, ledger: new Ledger('stories'), input: stories, finding: finding({ articles: [], tool }), readPage: reader });
+test('Guess the Number: the figure must be on the page', async () => {
+  const num: Entry = { value: '73%', fact: 'of x', url: 'https://news.test/1' };
+  const bad = await verifyFinding({ ...base, input: stories('guess_the_number'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([num]), readPage: reader });
   assert.ok(!bad.ok);
-  const good = await verifyFinding({ ...base, client: stub([true]).client, ledger: new Ledger('stories'), input: stories, finding: finding({ articles: [], tool }), readPage: async () => `${PAGE('alpha')} welcome to acme studio` });
-  assert.ok(good.ok, JSON.stringify(good));
-  assert.equal(good.verified.tool?.name, 'Acme Studio');
+  assert.match(bad.reason, /73%/);
+  const good = await verifyFinding({ ...base, input: stories('guess_the_number'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([num]), readPage: async () => `${PAGE('alpha')} the figure was 73% overall` });
+  assert.ok(good.ok);
+});
+
+test('Free vs. Paid: the tool’s page must mention its name', async () => {
+  const tool: Entry = { toolName: 'Acme Studio', url: 'https://acme.test', description: 'd' };
+  const bad = await verifyFinding({ ...base, input: stories('free_vs_paid'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([tool]), readPage: reader });
+  assert.ok(!bad.ok);
+  const good = await verifyFinding({ ...base, input: stories('free_vs_paid'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([tool]), readPage: async () => `${PAGE('alpha')} welcome to acme studio` });
+  assert.ok(good.ok);
+});
+
+test('Explainers keeps every page that passes as source material', async () => {
+  const { client } = stub([true, true]);
+  const r = await verifyFinding({ ...base, input: { vertical: 'explainers', blurb: 'AI hallucinations' }, client, ledger: new Ledger('explainers'), finding: finding([{ title: 'Hallucination', sourceUrl: 'https://news.test/1' }, { title: 'Hallucination', sourceUrl: 'https://news.test/2' }]), readPage: reader });
+  assert.ok(r.ok);
+  assert.equal(r.verified.passed.length, 2);
 });
 
 test('huge usage stops further verifier calls at the cap', async () => {
   const { client, calls } = stub([false], { input_tokens: 5_000_000, output_tokens: 10 });
-  const ledger = new Ledger('reels');
-  const r = await verifyFinding({ ...base, client, ledger, finding: finding({ articles: [art(1), art(2), art(1)] }), readPage: reader });
+  const r = await verifyFinding({ ...base, input: { vertical: 'reels', blurb: 'b' }, client, ledger: new Ledger('reels'), finding: finding([e(1), e(2), e(3)]), readPage: reader });
   assert.ok(!r.ok);
   assert.equal(calls.length, 1);
   assert.match(r.reason, /35-cent limit/);
@@ -93,43 +96,10 @@ test('huge usage stops further verifier calls at the cap', async () => {
 
 test('the verifier request caches the system and the tool, never the user turn', async () => {
   const { client, calls } = stub([true]);
-  await verifyFinding({ ...base, client, ledger: new Ledger('reels'), finding: finding({ articles: [art(1)] }), readPage: reader });
+  await verifyFinding({ ...base, input: { vertical: 'reels', blurb: 'b' }, client, ledger: new Ledger('reels'), finding: finding([e(1)]), readPage: reader });
   const p = calls[0]!;
   assert.ok((p.system as Anthropic.TextBlockParam[])[0]!.cache_control);
   assert.ok((p.tools as Array<{ cache_control?: unknown }>)[0]!.cache_control);
   assert.equal(typeof p.messages[0]!.content, 'string');
   assert.equal(p.model, 'claude-haiku-5-5');
-});
-
-test('Explainers with no pages fails with a plain reason', async () => {
-  const { client } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('explainers'), input: { vertical: 'explainers', blurb: 'AI hallucinations' }, finding: finding({ articles: [], conceptTitle: 'Hallucination' }), readPage: reader });
-  assert.ok(!r.ok);
-});
-
-test('Free vs Paid with no tool reported fails before any verifier call', async () => {
-  const { client, calls } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('stories'), input: { vertical: 'stories', series: 'free_vs_paid', blurb: 'b' }, finding: finding(), readPage: reader });
-  assert.ok(!r.ok);
-  assert.match(r.reason, /No tool/);
-  assert.equal(calls.length, 0);
-});
-
-test('Guess the Number with no number reported fails before any verifier call', async () => {
-  const { client, calls } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('stories'), input: { vertical: 'stories', series: 'guess_the_number', blurb: 'b' }, finding: finding(), readPage: reader });
-  assert.ok(!r.ok);
-  assert.equal(calls.length, 0);
-});
-
-test('a Number found only on a supporting page, not the primary, fails', async () => {
-  const { client } = stub([true, true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('stories'), input: { vertical: 'stories', series: 'guess_the_number', blurb: 'b' }, finding: finding({ number: { value: '73%', fact: 'of x' } }), readPage: async (u) => (u.endsWith('/2') ? `${PAGE('beta')} was 73%` : PAGE('alpha')) });
-  assert.ok(!r.ok);
-});
-
-test('a malformed article url is dropped, not thrown', async () => {
-  const { client } = stub([true]);
-  const r = await verifyFinding({ ...base, client, ledger: new Ledger('reels'), finding: finding({ articles: [{ url: 'https://', headline: 'h', outlet: 'o' }, art(2)] }), readPage: reader });
-  assert.ok(r.ok);
 });

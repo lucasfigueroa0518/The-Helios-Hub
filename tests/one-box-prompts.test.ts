@@ -27,7 +27,7 @@ test('the blurb, link hint and pool headlines appear only in the user turn', () 
     vertical: 'stories', series: 'guess_the_number', blurb: 'BLURB-ALPHA', poolHeadlines: ['HEADLINE-ONE'],
     linkHint: { url: 'https://x.test/a', headline: 'HINT-HEADLINE', excerpt: 'HINT-EXCERPT' },
   });
-  for (const needle of ['BLURB-ALPHA', 'HEADLINE-ONE', 'HINT-HEADLINE', 'HINT-EXCERPT', 'https://x.test/a', 'guess_the_number']) {
+  for (const needle of ['BLURB-ALPHA', 'HEADLINE-ONE', 'HINT-HEADLINE', 'HINT-EXCERPT', 'https://x.test/a']) {
     assert.ok(turn.includes(needle), needle);
     assert.ok(!ONE_BOX_SYSTEM.includes(needle) && !JSON.stringify(REPORT_FINDING_TOOL).includes(needle), `${needle} leaked into the cached prefix`);
   }
@@ -44,9 +44,16 @@ test('buildVerifyUserTurn clips the page text to 3000 characters', () => {
   assert.ok(turn.includes('x'.repeat(3000)));
 });
 
-test('the report tool allows at most three articles', () => {
-  const articles = (REPORT_FINDING_TOOL.input_schema.properties as Record<string, { maxItems?: number }>).articles;
-  assert.equal(articles?.maxItems, 3);
+test('the report tool allows at most three entries, with only the pools’ existing field names', () => {
+  const props = REPORT_FINDING_TOOL.input_schema.properties as Record<string, { maxItems?: number; items?: { properties: Record<string, unknown> } }>;
+  assert.equal(props.entries?.maxItems, 3);
+  assert.deepEqual(Object.keys(props.entries!.items!.properties).sort(), ['description', 'fact', 'headline', 'sourceUrl', 'storyHeadline', 'title', 'toolName', 'url', 'value']);
+});
+
+test('the system prompt names each pool’s exact input fields', () => {
+  for (const line of ['Text on Screen (reels): headline, url', 'Carousels: url, headline', 'Last Few Days (last_few_days): url, headline', 'Guess the Number: value, fact, url (optionally storyHeadline)', 'Free vs. Paid: toolName, url (optionally description)', 'Explainers: title, sourceUrl']) {
+    assert.ok(ONE_BOX_SYSTEM.includes(line), line);
+  }
 });
 
 test('both prompt versions are drafts and the gate needs the exact env value', () => {

@@ -7,13 +7,13 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { Ledger } from '@/lib/seed/one-box/budget';
 import { runSearch, type Client } from '@/lib/seed/one-box/search';
 
-function stub(input: unknown, usage: Record<string, unknown> = { input_tokens: 1000, output_tokens: 200, server_tool_use: { web_search_requests: 2 } }) {
+function stub(input: unknown, usage: Record<string, unknown> = { input_tokens: 1000, output_tokens: 200, server_tool_use: { web_search_requests: 2 } }, stop = 'tool_use') {
   const calls: Anthropic.MessageCreateParamsNonStreaming[] = [];
   const client: Client = {
     messages: {
       async create(params) {
         calls.push(params);
-        return { id: 'm', type: 'message', role: 'assistant', model: 'stub', stop_reason: 'tool_use', stop_sequence: null, usage, content: input === undefined ? [{ type: 'text', text: 'no tool' }] : [{ type: 'tool_use', id: 't', name: 'report_finding', input }] } as unknown as Anthropic.Message;
+        return { id: 'm', type: 'message', role: 'assistant', model: 'stub', stop_reason: stop, stop_sequence: null, usage, content: input === undefined ? [{ type: 'text', text: 'no tool' }] : [{ type: 'tool_use', id: 't', name: 'report_finding', input }] } as unknown as Anthropic.Message;
       },
     },
   };
@@ -21,19 +21,22 @@ function stub(input: unknown, usage: Record<string, unknown> = { input_tokens: 1
 }
 const base = { input: { vertical: 'reels' as const, blurb: 'OpenAI shipped a thing' }, poolHeadlines: ['Existing headline'], recordCost: async () => undefined };
 
-test('parses articles, number and tool extras', async () => {
+test('parses entries in the pool’s own field names, up to three', async () => {
   const { client } = stub({
-    found: true, main_point: 'p', concept_title: 'Hallucination',
-    articles: [{ url: 'https://a.test/1', headline: 'H1', outlet: 'A' }],
-    number: { value: '40%', fact: 'of things', story_headline: 'S' },
-    tool: { name: 'Tool', url: 'https://t.test', description: 'd' },
+    found: true, main_point: 'p',
+    entries: [
+      { headline: 'H1', url: 'https://a.test/1' },
+      { value: '40%', fact: 'of things', storyHeadline: 'S', url: 'https://a.test/2', bogus: 'dropped' },
+      { toolName: 'Tool', url: 'https://t.test', description: 'd' },
+      { headline: 'H4', url: 'https://a.test/4' },
+    ],
   });
   const r = await runSearch({ ...base, client, ledger: new Ledger('reels') });
   assert.ok('finding' in r);
-  assert.deepEqual(r.finding.articles, [{ url: 'https://a.test/1', headline: 'H1', outlet: 'A' }]);
-  assert.deepEqual(r.finding.number, { value: '40%', fact: 'of things', storyHeadline: 'S' });
-  assert.equal(r.finding.tool?.name, 'Tool');
-  assert.equal(r.finding.conceptTitle, 'Hallucination');
+  assert.equal(r.finding.entries.length, 3);
+  assert.deepEqual(r.finding.entries[0], { headline: 'H1', url: 'https://a.test/1' });
+  assert.deepEqual(r.finding.entries[1], { value: '40%', fact: 'of things', storyHeadline: 'S', url: 'https://a.test/2' });
+  assert.equal(r.finding.entries[2]!.toolName, 'Tool');
 });
 
 test('the request caches the system and the last tool, never the user turn', async () => {
@@ -47,7 +50,7 @@ test('the request caches the system and the last tool, never the user turn', asy
   assert.ok(tools[1]!.cache_control, 'last tool carries the breakpoint');
   const content = p.messages[0]!.content;
   assert.equal(typeof content, 'string', 'the user turn is a plain string with no cache_control');
-  assert.ok((content as string).includes('OpenAI shipped a thing') && (content as string).includes('Existing headline'));
+  assert.ok((content as string).includes('OpenAI shipped a thing') && (content as string).includes('Existing headline') && (content as string).includes('Text on Screen'));
 });
 
 test('a private-host link becomes an unreadable hint and the call still happens', async () => {
@@ -81,6 +84,20 @@ test('a reply with no report_finding block is found:false with a reason', async 
   assert.ok(r.finding.reason);
 });
 
+test('a reply that stopped before reporting says it ran out of room', async () => {
+  const { client } = stub(undefined, undefined, 'pause_turn');
+  const r = await runSearch({ ...base, client, ledger: new Ledger('reels') });
+  assert.ok('finding' in r);
+  assert.match(r.finding.reason!, /ran out of room/);
+});
+
+test('an entry with a malformed url is dropped, not thrown', async () => {
+  const { client } = stub({ found: true, entries: [{ headline: 'bad', url: 'https://' }, { headline: 'ok', url: 'https://a.test/1' }] });
+  const r = await runSearch({ ...base, client, ledger: new Ledger('reels') });
+  assert.ok('finding' in r);
+  assert.deepEqual(r.finding.entries.map((e) => e.headline), ['ok']);
+});
+
 test('the ledger rises by the priced usage, and the cost is recorded', async () => {
   const { client } = stub({ found: false, reason: 'x' }, { input_tokens: 10_000, output_tokens: 1000, server_tool_use: { web_search_requests: 3 } });
   const ledger = new Ledger('reels');
@@ -88,19 +105,4 @@ test('the ledger rises by the priced usage, and the cost is recorded', async () 
   await runSearch({ ...base, client, ledger, recordCost: async (usd) => void recorded.push(usd) });
   assert.ok(ledger.spent > 0.03 && ledger.spent < 0.2, String(ledger.spent));
   assert.deepEqual(recorded, [ledger.spent]);
-});
-
-test('a reply that stopped before reporting says so, with the stop reason', async () => {
-  const { client } = stub(undefined);
-  (client.messages as { create: Client['messages']['create'] }).create = async () => ({ id: 'm', type: 'message', role: 'assistant', model: 's', stop_reason: 'pause_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 }, content: [{ type: 'text', text: '...' }] }) as unknown as Anthropic.Message;
-  const r = await runSearch({ ...base, client, ledger: new Ledger('reels') });
-  assert.ok('finding' in r);
-  assert.match(r.finding.reason!, /ran out of room|paused/i);
-});
-
-test('a malformed article url from the model is dropped, not thrown', async () => {
-  const { client } = stub({ found: true, articles: [{ url: 'https://', headline: 'bad', outlet: '' }, { url: 'https://a.test/1', headline: 'ok', outlet: '' }] });
-  const r = await runSearch({ ...base, client, ledger: new Ledger('reels') });
-  assert.ok('finding' in r);
-  assert.deepEqual(r.finding.articles.map((a) => a.headline), ['ok']);
 });

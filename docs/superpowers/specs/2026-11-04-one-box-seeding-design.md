@@ -123,3 +123,7 @@ Exact search count/token caps that fit the 35-cent math; the pricing constants; 
 ## Not touched
 
 Workers and `deploy-social-worker.sh` (seeding runs on Vercel); AI Events; the three pre-existing failing tests; unrelated refactors.
+
+## Amendment (2026-11-04, Tommy): the agent returns each pool's exact current input
+
+Tommy: "it should give each content type back exactly what it needs currently." So the `report_finding` tool no longer returns a generic shape (articles, number, tool, concept title) for the code to map. It returns up to three `entries`, each using only the field names that pool's add function takes today (`lib/seed/one-box/shape.ts` is the single table): Text on Screen `headline, url`; Carousels and Last Few Days `url, headline`; Stories Morning Download `headline, url`; Guess the Number `value, fact, url` (+ `storyHeadline`); Free vs. Paid `toolName, url` (+ `description`); Explainers `title, sourceUrl`. Fields the agent never writes stay with the code: Text on Screen's page text and Explainers' source text come from the pages we read, and Stories Morning Download's notes are the person's own blurb. An entry missing a required field is never verified or filed. Verification and filing work from these same fields.

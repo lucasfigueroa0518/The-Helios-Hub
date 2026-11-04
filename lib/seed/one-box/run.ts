@@ -2,6 +2,7 @@ import type { Query } from '@/lib/social/store/pg';
 
 import { Ledger } from './budget';
 import { fileIdea, type FileDeps } from './file';
+import { entryTitle, entryUrl, missingFields, shapeOf } from './shape';
 import { doneRequest, failRequest, setStage } from './requests';
 import { runSearch, type Client, type CostRecorder } from './search';
 import type { OneBoxInput } from './types';
@@ -37,9 +38,10 @@ export async function runOneBox(i: {
     if (finding.duplicateOf) return await fail(`That idea is already in the pool: “${finding.duplicateOf}”. Nothing was added.`);
     if (!finding.found) return await fail(finding.reason || 'I couldn’t find a solid source for that idea. Nothing was added.');
 
-    const primary = finding.articles[0];
+    const shape = shapeOf(i.input);
+    const primary = finding.entries.find((e) => missingFields(shape, e).length === 0);
     if (primary) {
-      const existing = await i.fileDeps.existing(i.input.vertical, primary.url, primary.headline).catch(() => null);
+      const existing = await i.fileDeps.existing(i.input.vertical, entryUrl(shape, primary), entryTitle(primary)).catch(() => null);
       if (existing) return await fail(`That story is already in the queue: “${existing}”. Nothing was added.`);
     }
 

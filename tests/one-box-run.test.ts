@@ -21,7 +21,7 @@ async function db(): Promise<Query> {
   return async (text, params) => ({ rows: (await pg.query(text, params)).rows as any[] });
 }
 const PAGE = (w: string) => `${w} `.repeat(80);
-const art = (n: number) => ({ url: `https://news.test/${n}`, headline: `Headline ${n}`, outlet: 'News' });
+const art = (n: number) => ({ url: `https://news.test/${n}`, headline: `Headline ${n}` });
 
 /** A client that answers the search call with `finding` and each verifier call from `verdicts`. */
 function client(finding: unknown, verdicts: boolean[], usage: Record<string, unknown> = { input_tokens: 800, output_tokens: 40 }) {
@@ -66,7 +66,7 @@ const input: OneBoxInput = { vertical: 'reels', blurb: 'OpenAI shipped a thing' 
 
 test('happy path files once and marks done with the idea id', async () => {
   const q = await db();
-  const { c, log } = client({ found: true, articles: [art(1)] }, [true]);
+  const { c, log } = client({ found: true, entries: [art(1)] }, [true]);
   const { d, filed } = fileDeps();
   const row = await go(input, c, d, q);
   assert.deepEqual([row.status, row.idea_id], ['done', 'r1']);
@@ -77,7 +77,7 @@ test('happy path files once and marks done with the idea id', async () => {
 
 test('first article fails the verifier, second passes: the second is filed', async () => {
   const q = await db();
-  const { c } = client({ found: true, articles: [art(1), art(2)] }, [false, true]);
+  const { c } = client({ found: true, entries: [art(1), art(2)] }, [false, true]);
   const { d, filed } = fileDeps();
   const row = await go(input, c, d, q);
   assert.equal(row.status, 'done');
@@ -86,7 +86,7 @@ test('first article fails the verifier, second passes: the second is filed', asy
 
 test('huge usage stops after the first call: nothing filed, cost recorded, message names the 35-cent limit', async () => {
   const q = await db();
-  const { c, log } = client({ found: true, articles: [art(1), art(2)] }, [true], { input_tokens: 5_000_000, output_tokens: 10 });
+  const { c, log } = client({ found: true, entries: [art(1), art(2)] }, [true], { input_tokens: 5_000_000, output_tokens: 10 });
   const { d, filed } = fileDeps();
   const row = await go(input, c, d, q);
   assert.equal(row.status, 'failed');
@@ -98,7 +98,7 @@ test('huge usage stops after the first call: nothing filed, cost recorded, messa
 
 test('duplicate_of from the model fails with that headline and files nothing', async () => {
   const q = await db();
-  const { c } = client({ found: false, duplicate_of: 'Existing headline', articles: [] }, [true]);
+  const { c } = client({ found: false, duplicate_of: 'Existing headline', entries: [] }, [true]);
   const { d, filed } = fileDeps();
   const row = await go(input, c, d, q);
   assert.equal(row.status, 'failed');
@@ -108,14 +108,14 @@ test('duplicate_of from the model fails with that headline and files nothing', a
 
 test('found:false fails with the model’s reason', async () => {
   const q = await db();
-  const { c } = client({ found: false, reason: 'No article covers that.', articles: [] }, [true]);
+  const { c } = client({ found: false, reason: 'No article covers that.', entries: [] }, [true]);
   const row = await go(input, c, fileDeps().d, q);
   assert.deepEqual([row.status, row.message], ['failed', 'No article covers that.']);
 });
 
 test('an existing duplicate of the found URL fails before any verifier call', async () => {
   const q = await db();
-  const { c, log } = client({ found: true, articles: [art(1)] }, [true]);
+  const { c, log } = client({ found: true, entries: [art(1)] }, [true]);
   const { d, filed } = fileDeps({ existing: async () => 'Already queued' });
   const row = await go(input, c, d, q);
   assert.equal(row.status, 'failed');
@@ -126,7 +126,7 @@ test('an existing duplicate of the found URL fails before any verifier call', as
 
 test('verifier says no to everything: failed, nothing filed, message names the closest source', async () => {
   const q = await db();
-  const { c } = client({ found: true, articles: [art(1)] }, [false]);
+  const { c } = client({ found: true, entries: [art(1)] }, [false]);
   const { d, filed } = fileDeps();
   const row = await go(input, c, d, q);
   assert.equal(row.status, 'failed');
@@ -136,21 +136,21 @@ test('verifier says no to everything: failed, nothing filed, message names the c
 
 test('a thrown filer error leaves the request failed, never working', async () => {
   const q = await db();
-  const { c } = client({ found: true, articles: [art(1)] }, [true]);
+  const { c } = client({ found: true, entries: [art(1)] }, [true]);
   const row = await go(input, c, fileDeps({ reel: async () => { throw new Error('boom'); } }).d, q);
   assert.equal(row.status, 'failed');
 });
 
 test('an add function refusal is shown as the failure reason', async () => {
   const q = await db();
-  const { c } = client({ found: true, articles: [art(1)] }, [true]);
+  const { c } = client({ found: true, entries: [art(1)] }, [true]);
   const row = await go({ vertical: 'carousels', blurb: 'b' }, c, fileDeps({ carousel: async () => { throw new Error('You have 10 seeded stories waiting.'); } }).d, q);
   assert.deepEqual([row.status, row.message], ['failed', 'You have 10 seeded stories waiting. Nothing was added.']);
 });
 
 test('the stage is filing at the moment the filer runs, and a crash there reads as may-have-been-added once stale', async () => {
   const q = await db();
-  const { c } = client({ found: true, articles: [art(1)] }, [true]);
+  const { c } = client({ found: true, entries: [art(1)] }, [true]);
   let stageDuringFiling = '';
   const { id } = await createRequest(q, input, NOW);
   const d = fileDeps({
