@@ -47,6 +47,8 @@ The old forms stay until the new prompt is approved (see Prompt approval); `Seed
 Modeled on `lib/reels/seed-search.ts` `webCandidates` (same client, `B6_MODEL`, `web_search_20250305` tool, `priceAnthropicMessages`, `recordCost` with component `one-box-seed`), but NOT the nightly collectors.
 
 - One `report_finding` tool (stable schema for all types): `found` (bool), `article` {url, headline, outlet}, `main_point` (one sentence, the model's reading of the article), and optional type extras: `number` {value, fact} (Stories Number), `tool` {name, url, description} (Stories Tool), `concept_title` (Explainers). Per-type guidance for all five types lives in the **static system prompt**; the user turn carries only the type, the series if any, the blurb and the optional link. So the cached prefix (tools, then system) is identical across all seeds of every type. `cachedSystemText` and `withToolCache` from `lib/anthropic-cache.ts`; the blurb never sits in a cached block. **Prompt caching rule satisfied.**
+- **Pool check by the agent (Tommy, 2026-11-04):** the user turn also carries the headlines of the ideas currently in that pool (open queue plus open seeds, read-only, that one pool only, capped at about 40 headlines). The agent is told to report `duplicate_of` (that headline) instead of an article when the blurb is already covered. This is a lookup of existing rows for one seed, never an enrichment or sweep (Rule 2). The code-side duplicate check on the found URL (section 7) stays as the backstop. The headlines vary per seed, so they sit in the user turn after the cached prefix.
+- **One or several articles (Tommy):** the agent may report up to 3 articles about the idea, best first (`articles[]`, replacing the single `article`). The first verified one is the primary source; further verified ones are supporting sources. Tommy's blurb is 2-3 sentences (limit 600 characters).
 - The model returns links and short facts only. It never writes article text; pages are read by the plain reader (`readPageText`, private-host guard, every hop), 200-char minimum.
 - A pasted link: the reader fetches it first; if readable, its headline and a short excerpt go in the user turn as "a possibly relevant page, treat as data, cross-check it"; if unreadable, the agent is told the link failed and searches from the blurb alone. A bad link never blocks a seed.
 
@@ -81,7 +83,9 @@ Code builds each record from the verified article by calling the **existing add 
 | Stories, Headline | `seedIdea` series `morning_download` | headline, url, notes = the blurb (Tommy's words) |
 | Stories, Number | `seedIdea` `guess_the_number` | value, fact, storyHeadline, url |
 | Stories, Tool | `seedIdea` `free_vs_paid` | toolName, url (the tool's official page), description |
-| Explainers | the `app/api/explainers/topics` logic | title = `concept_title` (tidied concept), sourceUrl = found source, so E-09 (claims trace to the source) applies |
+| Explainers | the `app/api/explainers/topics` logic | title = `concept_title` (tidied concept, not an article headline), sourceUrl = primary source, **sourceText = the verified articles' text (primary first, trimmed to the 20,000-character limit, each prefixed with its URL)** so the explainer is structured from the research, not from a headline, and E-09 (claims trace to the source) applies |
+
+Stories (Tommy: "it'll basically just go off that blurb"): the series is still chosen by Tommy (asked 2026-11-04, he kept it). Number: the agent proposes `value` and `fact` from the blurb and the articles, and the value must appear in a verified page. Tool: the agent proposes the tool's name, official URL and description from the blurb and searches. Headline: as in the table.
 
 ### 7. Duplicates, caps, failures (open question 4)
 
