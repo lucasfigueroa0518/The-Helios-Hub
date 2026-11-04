@@ -72,3 +72,14 @@ test('dismissed failed rows and done rows are not listed; other verticals are no
   assert.equal((await listCards(q, 'reels', minutes(1))).length, 0);
   assert.equal((await listCards(q, 'carousels', minutes(1))).length, 1);
 });
+
+test('a quick retry after a failure is a new request, and another Stories series is not the same request', async () => {
+  const q = await db();
+  const a = await createRequest(q, input('same words'), NOW);
+  await failRequest(q, a.id, 'No source found.', 0);
+  const b = await createRequest(q, input('same words'), minutes(0.2));
+  assert.equal(b.reused, false);
+  const s1 = await createRequest(q, { vertical: 'stories', series: 'morning_download', blurb: 'story words' }, NOW);
+  const s2 = await createRequest(q, { vertical: 'stories', series: 'free_vs_paid', blurb: 'story words' }, NOW);
+  assert.notEqual(s1.id, s2.id);
+});

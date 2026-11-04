@@ -89,3 +89,18 @@ test('the ledger rises by the priced usage, and the cost is recorded', async () 
   assert.ok(ledger.spent > 0.03 && ledger.spent < 0.2, String(ledger.spent));
   assert.deepEqual(recorded, [ledger.spent]);
 });
+
+test('a reply that stopped before reporting says so, with the stop reason', async () => {
+  const { client } = stub(undefined);
+  (client.messages as { create: Client['messages']['create'] }).create = async () => ({ id: 'm', type: 'message', role: 'assistant', model: 's', stop_reason: 'pause_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 10 }, content: [{ type: 'text', text: '...' }] }) as unknown as Anthropic.Message;
+  const r = await runSearch({ ...base, client, ledger: new Ledger('reels') });
+  assert.ok('finding' in r);
+  assert.match(r.finding.reason!, /ran out of room|paused/i);
+});
+
+test('a malformed article url from the model is dropped, not thrown', async () => {
+  const { client } = stub({ found: true, articles: [{ url: 'https://', headline: 'bad', outlet: '' }, { url: 'https://a.test/1', headline: 'ok', outlet: '' }] });
+  const r = await runSearch({ ...base, client, ledger: new Ledger('reels') });
+  assert.ok('finding' in r);
+  assert.deepEqual(r.finding.articles.map((a) => a.headline), ['ok']);
+});

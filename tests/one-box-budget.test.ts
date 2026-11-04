@@ -2,11 +2,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { Ledger, ONE_BOX_MAX_USD, RESERVE_USD, searchWorstCaseUsd, verifyWorstCaseUsd } from '@/lib/seed/one-box/budget';
+import { Ledger, ONE_BOX_MAX_USD, RESERVE_USD, SEARCH_INPUT_ALLOWANCE_TOKENS, SEARCH_MAX_USES, searchWorstCaseUsd, verifyWorstCaseUsd } from '@/lib/seed/one-box/budget';
 
 test('the cap is 35 cents', () => assert.equal(ONE_BOX_MAX_USD, 0.35));
 
-test('one search call can cost at most 20 cents', () => assert.ok(searchWorstCaseUsd() <= 0.2, String(searchWorstCaseUsd())));
+test('one search call can cost at most 25 cents, with at most 3 searches and 60k tokens of input assumed', () => {
+  assert.ok(searchWorstCaseUsd() <= 0.25, String(searchWorstCaseUsd()));
+  assert.equal(SEARCH_MAX_USES, 3);
+  assert.equal(SEARCH_INPUT_ALLOWANCE_TOKENS, 60_000);
+});
 
 test('a search plus three verifier calls fit the Explainers budget after its 8-cent reserve', () => {
   assert.ok(searchWorstCaseUsd() + verifyWorstCaseUsd() * 3 <= ONE_BOX_MAX_USD - RESERVE_USD.explainers);

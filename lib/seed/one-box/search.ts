@@ -20,6 +20,13 @@ export const defaultSearchCost: CostRecorder = (usd, inputTokens, outputTokens) 
   recordReelsCost({ runId: null, vendor: 'anthropic', component: 'one-box-seed', inputTokens, outputTokens, usd });
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+const validHttp = (u: string): boolean => {
+  try {
+    return /^https?:\/\//i.test(u) && Boolean(new URL(u).hostname);
+  } catch {
+    return false;
+  }
+};
 
 /** A pasted link as a hint: its page read by the plain reader (private hosts refused), or `unreadable`. Never throws. */
 async function linkHint(link: string, readPage: (url: string) => Promise<string | null>): Promise<LinkHint> {
@@ -37,13 +44,20 @@ async function linkHint(link: string, readPage: (url: string) => Promise<string 
 
 function parseFinding(message: Anthropic.Message): Finding {
   const block = message.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === REPORT_FINDING_TOOL.name);
-  if (!block) return { found: false, reason: 'The search did not report anything.', articles: [] };
+  if (!block) {
+    console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'one-box-seed', message: 'no_report', stop_reason: message.stop_reason }));
+    const ranOut = message.stop_reason === 'pause_turn' || message.stop_reason === 'max_tokens';
+    return { found: false, reason: ranOut ? 'The search ran out of room before it reported anything.' : 'The search did not report anything.', articles: [] };
+  }
   const i = block.input as Record<string, unknown>;
   const articles: ReportedArticle[] = [];
   if (Array.isArray(i.articles)) {
     for (const a of i.articles as Array<Record<string, unknown>>) {
-      if (typeof a?.url === 'string' && /^https?:\/\//i.test(a.url) && typeof a.headline === 'string') {
-        articles.push({ url: a.url, headline: a.headline, outlet: str(a.outlet) || new URL(a.url).hostname.replace(/^www\./, '') });
+      if (typeof a?.url === 'string' && typeof a.headline === 'string') {
+        try {
+          const host = new URL(a.url).hostname;
+          if (/^https?:\/\//i.test(a.url) && host) articles.push({ url: a.url, headline: a.headline, outlet: str(a.outlet) || host.replace(/^www\./, '') });
+        } catch { /* a malformed url is dropped */ }
       }
     }
   }
@@ -55,7 +69,7 @@ function parseFinding(message: Anthropic.Message): Finding {
   const n = i.number as Record<string, unknown> | undefined;
   if (n && str(n.value) && str(n.fact)) finding.number = { value: str(n.value), fact: str(n.fact), ...(str(n.story_headline) ? { storyHeadline: str(n.story_headline) } : {}) };
   const t = i.tool as Record<string, unknown> | undefined;
-  if (t && str(t.name) && /^https?:\/\//i.test(str(t.url))) finding.tool = { name: str(t.name), url: str(t.url), description: str(t.description) };
+  if (t && str(t.name) && validHttp(str(t.url))) finding.tool = { name: str(t.name), url: str(t.url), description: str(t.description) };
   return finding;
 }
 

@@ -43,13 +43,14 @@ export function SeedButton({ vertical }: { vertical: Vertical }) {
   const [note, setNote] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const oneBox = useOneBox(vertical);
+  const oneBox = useOneBox(vertical, !isSeedable(vertical));
   if (!isSeedable(vertical)) return null;
   const Form = FORMS[vertical];
   const done = (text?: string) => {
     setOpen(false);
     if (text) {
       setNote(text);
+      oneBox.reload();
       void refreshHubPage(router);
     }
   };
@@ -66,7 +67,7 @@ export function SeedButton({ vertical }: { vertical: Vertical }) {
             <div className="rh rh--scope">
               {open ? (
                 <Drawer label={SEED_BUTTON.title} onClose={() => setOpen(false)}>
-                  {oneBox.enabled ? <OneBoxSeedForm vertical={vertical} done={done} /> : <Form done={done} />}
+                  {!oneBox.loaded ? <p className="rh-muted">Loading…</p> : oneBox.enabled ? <OneBoxSeedForm vertical={vertical} done={done} /> : <Form done={done} />}
                 </Drawer>
               ) : null}
               {note ? <p className="rh-toast" role="status">{note}</p> : null}

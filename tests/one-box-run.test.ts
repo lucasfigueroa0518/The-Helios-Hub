@@ -81,7 +81,7 @@ test('first article fails the verifier, second passes: the second is filed', asy
   const { d, filed } = fileDeps();
   const row = await go(input, c, d, q);
   assert.equal(row.status, 'done');
-  assert.deepEqual(filed, [{ headline: 'Headline 2', url: 'https://news.test/2' }]);
+  assert.equal((filed[0] as { url: string }).url, 'https://news.test/2');
 });
 
 test('huge usage stops after the first call: nothing filed, cost recorded, message names the 35-cent limit', async () => {

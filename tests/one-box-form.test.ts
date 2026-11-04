@@ -17,7 +17,7 @@ async function html(vertical: 'reels' | 'stories' | 'explainers') {
 
 test('the submit text states the price and the ceiling', async () => {
   const { ONE_BOX_SUBMIT } = await form();
-  assert.equal(ONE_BOX_SUBMIT, 'Find source and add, about 12¢ (never more than 35¢)');
+  assert.equal(ONE_BOX_SUBMIT, 'Find source and add, about 12¢ (35¢ limit)');
   assert.ok((await html('reels')).includes(ONE_BOX_SUBMIT));
 });
 test('Stories shows the series choice; the other pools do not', async () => {

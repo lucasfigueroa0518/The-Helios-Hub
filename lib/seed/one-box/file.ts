@@ -9,7 +9,7 @@ import type { OneBoxInput, SeedVerticalKey, StorySeries, Verified } from './type
 export const MAX_SOURCE_CHARS = 20_000;
 
 export type FileDeps = {
-  reel: (a: { headline: string; url: string }) => Promise<{ status: 'added'; id: string; title: string } | { status: 'duplicate'; existing: { id: string; headline: string; net: number | null; yours: boolean } } | { status: 'needs_paid_confirm' | 'no_match' }>;
+  reel: (a: { headline: string; url: string; text: string }) => Promise<{ status: 'added'; id: string; title: string } | { status: 'duplicate'; existing: { id: string; headline: string; net: number | null; yours: boolean } } | { status: 'needs_paid_confirm' | 'no_match' }>;
   carousel: (a: { url: string; headline: string }) => Promise<{ id: string; title: string }>;
   lfd: (a: { url: string; headline: string }) => Promise<{ id: string; title: string }>;
   story: (body: Record<string, unknown>) => Promise<{ key: string; title: string }>;
@@ -36,7 +36,7 @@ export async function fileIdea(i: { input: OneBoxInput; verified: Verified; deps
   try {
     switch (input.vertical) {
       case 'reels': {
-        const out = await deps.reel({ headline: primary.headline, url: primary.url });
+        const out = await deps.reel({ headline: primary.headline, url: primary.url, text: primary.text.slice(0, MAX_SOURCE_CHARS) });
         if (out.status === 'added') return { status: 'added', ideaId: out.id, title: out.title };
         if (out.status === 'duplicate') return { status: 'duplicate', existing: out.existing.headline };
         return { status: 'refused', reason: 'The idea could not be scored or filed.' };

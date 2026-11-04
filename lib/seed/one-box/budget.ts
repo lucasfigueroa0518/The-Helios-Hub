@@ -23,10 +23,14 @@ export const RESERVE_USD: Record<SeedVerticalKey, number> = {
 };
 
 /** The search call's caps. They bound its cost together with the per-search fee. */
-export const SEARCH_MAX_USES = 4;
+export const SEARCH_MAX_USES = 3;
 export const SEARCH_MAX_OUTPUT_TOKENS = 1500;
-/** An assumption, not a measurement: the most input a search call is assumed to read (results included). */
-export const SEARCH_INPUT_ALLOWANCE_TOKENS = 40_000;
+/**
+ * An assumption, not a measurement, and the one place the 35-cent limit is not enforced by the API: a search turn re-bills its
+ * results on each server-side step, so its real input is only known after the call. Retune this from the cost the first live
+ * seeds record (reels.cost_events, component one-box-seed) before relying on the limit.
+ */
+export const SEARCH_INPUT_ALLOWANCE_TOKENS = 60_000;
 /** The cached prefix (tools + system) is assumed to be written at the 1-hour rate in the worst case. */
 const PREFIX_TOKENS = 3_000;
 

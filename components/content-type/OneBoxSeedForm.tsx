@@ -12,7 +12,7 @@ import { SERIES_LABEL } from '@/lib/content-type/story-series';
  */
 
 export const MAX_BLURB = 600;
-export const ONE_BOX_SUBMIT = 'Find source and add, about 12¢ (never more than 35¢)';
+export const ONE_BOX_SUBMIT = 'Find source and add, about 12¢ (35¢ limit)';
 const SERIES = ['morning_download', 'guess_the_number', 'free_vs_paid'] as const;
 const PLACEHOLDER: Record<SeedVertical, string> = {
   reels: 'In a sentence or two, what is the story? e.g. what happened and why it matters.',

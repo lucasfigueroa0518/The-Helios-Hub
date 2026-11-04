@@ -12,7 +12,7 @@ export async function DELETE(_request: Request, ctx: { params: Promise<{ id: str
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await ctx.params;
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return NextResponse.json({ error: 'Bad id' }, { status: 400 });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return NextResponse.json({ error: 'Bad id' }, { status: 400 });
   await dismissRequest((text, params) => dbQuery(text, params as never) as never, id);
   return NextResponse.json({ ok: true });
 }

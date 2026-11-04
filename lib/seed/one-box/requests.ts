@@ -34,9 +34,10 @@ export async function workingCount(q: Query, now = new Date()): Promise<number> 
 export async function createRequest(q: Query, input: OneBoxInput, now = new Date()): Promise<{ id: string; reused: boolean }> {
   const again = await q(
     `SELECT id::text FROM social_hub.seed_requests
-      WHERE vertical = $1 AND blurb = $2 AND created_at > $3::timestamptz
+      WHERE vertical = $1 AND blurb = $2 AND series IS NOT DISTINCT FROM $4 AND link IS NOT DISTINCT FROM $5
+        AND status = 'working' AND created_at > $3::timestamptz
       ORDER BY created_at DESC LIMIT 1`,
-    [input.vertical, input.blurb, new Date(now.getTime() - SAME_BLURB_SECONDS * 1000).toISOString()],
+    [input.vertical, input.blurb, new Date(now.getTime() - SAME_BLURB_SECONDS * 1000).toISOString(), input.series ?? null, input.link ?? null],
   );
   if (again.rows[0]) return { id: again.rows[0].id as string, reused: true };
   if ((await workingCount(q, now)) >= MAX_WORKING) throw new Error('Three seeds are already being worked on; wait for one to finish.');

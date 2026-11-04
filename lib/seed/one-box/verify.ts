@@ -14,6 +14,14 @@ import type { Finding, OneBoxInput, ReportedArticle, Verified, VerifiedArticle }
 export const defaultVerifyCost: CostRecorder = (usd, inputTokens, outputTokens) =>
   recordReelsCost({ runId: null, vendor: 'anthropic', component: 'one-box-verify', inputTokens, outputTokens, usd });
 
+const safeHost = (u: string): string => {
+  try {
+    return new URL(u).hostname.replace(/^www\./, '');
+  } catch {
+    return u;
+  }
+};
+
 const LIMIT_REASON = 'Stopped at the 35-cent limit.';
 
 async function readable(url: string, readPage: (u: string) => Promise<string | null>): Promise<string | null> {
@@ -62,8 +70,10 @@ export async function verifyFinding(i: {
 }): Promise<{ ok: true; verified: Verified } | { ok: false; reason: string }> {
   const readPage = i.readPage ?? readPageText;
   const recordCost = i.recordCost ?? defaultVerifyCost;
+  if (i.input.series === 'free_vs_paid' && !i.finding.tool) return { ok: false, reason: 'No tool was found for that idea.' };
+  if (i.input.series === 'guess_the_number' && !i.finding.number) return { ok: false, reason: 'No number was found for that idea.' };
   const tool = i.input.series === 'free_vs_paid' ? i.finding.tool : undefined;
-  const candidates: ReportedArticle[] = tool ? [{ url: tool.url, headline: tool.name, outlet: new URL(tool.url).hostname.replace(/^www\./, '') }] : i.finding.articles.slice(0, 3);
+  const candidates: ReportedArticle[] = tool ? [{ url: tool.url, headline: tool.name, outlet: safeHost(tool.url) }] : i.finding.articles.slice(0, 3);
   if (candidates.length === 0) return { ok: false, reason: 'The search found no page to use as a source.' };
 
   const passed: VerifiedArticle[] = [];
@@ -91,7 +101,7 @@ export async function verifyFinding(i: {
   if (i.input.series === 'guess_the_number') {
     const n = i.finding.number;
     if (!n) return { ok: false, reason: 'No number was found for that idea.' };
-    if (!passed.some((p) => p.text.includes(n.value))) return { ok: false, reason: `The number “${n.value}” isn’t on the page I found, so I can’t vouch for it.` };
+    if (!passed[0]!.text.includes(n.value)) return { ok: false, reason: `The number “${n.value}” isn’t on the page I found, so I can’t vouch for it.` };
     verified.number = n;
   }
   if (tool) {

@@ -26,7 +26,7 @@ const run = (input: OneBoxInput, v: Verified, d: FileDeps) => fileIdea({ input, 
 test('Text on Screen: the article headline and url', async () => {
   const { d, seen } = deps();
   const r = await run({ vertical: 'reels', blurb: 'b' }, verified(), d);
-  assert.deepEqual(seen.reel, [{ headline: 'Headline 1', url: 'https://news.test/1' }]);
+  assert.deepEqual(seen.reel, [{ headline: 'Headline 1', url: 'https://news.test/1', text: 'body '.repeat(60) }], 'the verified page text goes with it, so the add function never re-reads or substitutes');
   assert.deepEqual(r, { status: 'added', ideaId: 'r1', title: 'Headline 1' });
 });
 test('Carousels and Last Few Days: url and headline', async () => {

@@ -36,7 +36,7 @@ const uniq = (xs: string[]) => [...new Set(xs)].slice(0, MAX_HEADLINES);
 
 export function liveFileDeps(): FileDeps {
   return {
-    reel: (a) => addReelSeed({ headline: a.headline, url: a.url }, { jev: createLiveJevRunner() }),
+    reel: (a) => addReelSeed({ headline: a.headline, url: a.url, text: a.text }, { jev: createLiveJevRunner() }),
     carousel: (a) => addCarouselSeed(query as never, a, { fetchBody: fetchBodyLive, jev: createJevAsk() }),
     lfd: (a) => addLfdSeed(query as never, a, { fetchBody: fetchBodyLive }),
     story: (body) => seedIdea(liveStoriesDb, body),
