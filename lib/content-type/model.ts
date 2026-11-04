@@ -43,6 +43,8 @@ export type TypeBenchItem = {
   placed?: boolean;
   /** The row's chip when the type names its states its own way (AI Events: In the post, Pinned, Gated, Excluded). */
   chip?: string | null;
+  /** Made content whose idea has left the pool: it still waits on a person, but it is not one of the pool's ideas, so no count includes it. */
+  madeOnly?: boolean;
 };
 
 /** One of today's quota slots, filled from the top of the queue: the idea and its post, or an open slot waiting to be made. */
@@ -193,7 +195,7 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     // AI Events: the week's post leads the bench, outside the city tabs (rank 0 shows no number).
     const group = vertical === 'ai_events' ? null : card.post.idea?.label ?? null;
     const rank = vertical === 'ai_events' ? 0 : vertical === 'stories' ? rows.filter((r) => r.idea.group === group).length + 1 : rows.length + 1;
-    const item = row({ id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group }, rank, card);
+    const item = { ...row({ id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group }, rank, card), madeOnly: true };
     if (vertical === 'ai_events') rows.unshift(item);
     else rows.push(item);
   }
@@ -202,7 +204,8 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     today,
     days,
     bench: rows,
-    benchTotal: rows.length,
+    // The pool's ideas only: made content kept on the bench after its idea left is listed but never counted.
+    benchTotal: rows.filter((r) => !r.madeOnly).length,
     versions: Object.fromEntries([...madeVersions].filter(([, cards]) => cards.length > 1).map(([id, cards]) => [id, cards.sort((a, b) => (b.post.generatedAt ?? '').localeCompare(a.post.generatedAt ?? '') || a.post.id.localeCompare(b.post.id))])),
     slots: slotsOf(candidates, cardOf, vertical),
     content: Object.fromEntries(open.slice(0, 50).flatMap((idea) => {

@@ -19,6 +19,11 @@ export async function autoRunOn(): Promise<boolean> {
   return (await getSocialSetting<boolean>('auto_run')) === true;
 }
 
+/** The nightly pool refresh: score the day's stories so the idea pool stays full, and make nothing. Off until a human turns it on. */
+export async function autoPoolOn(): Promise<boolean> {
+  return (await getSocialSetting<boolean>('auto_pool')) === true;
+}
+
 /** A person approves every carousel before it posts (docs/social-overnight.md). On unless set to false. */
 export async function requireApproval(): Promise<boolean> {
   return (await getSocialSetting<boolean>('require_approval')) !== false;

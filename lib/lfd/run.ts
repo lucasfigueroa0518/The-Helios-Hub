@@ -31,6 +31,8 @@ import { leadOrder } from './lead';
 import { findPhotos, REFUSED_ICON_SCENE } from './photos';
 import { judgedPool, MAX_SEEDS, MIN_STORIES, mergeSameEvent, PER_COMPANY, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { arrangeMemes, buildPost, composeCaption, coverMemeOf } from './post';
+import { readPinnedStories } from './pins';
+import { markPromoteUsed, recordPromoteSkip } from '@/lib/social-hub/moves-store';
 import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate } from './seeds';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
 import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
@@ -265,7 +267,23 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     } catch (err) {
       record.seedError = err instanceof Error ? err.message : String(err);
     }
+    // Pins (the shared queue, idea_adjustments): a pinned story is a candidate of its own, taken before the lanes like a seed and
+    // ahead of the seeds (in the order pinned). A read that fails means no pins, noted in the record; one the run cannot start on
+    // (no link, unreadable page) gets its reason recorded on the pin below.
+    let pinKeys = new Set<string>();
+    let pinFailed: Array<{ key: string; reason: string }> = [];
+    if (!d.replay) {
+      try {
+        const pins = await readPinnedStories(d.query, { fetchBody: d.fetchBody }, new Set(seedList.map((s) => s.key)));
+        pinKeys = new Set(pins.keys);
+        pinFailed = pins.failed;
+        seedList = [...pins.stories, ...seedList];
+      } catch (err) {
+        record.pinError = err instanceof Error ? err.message : String(err);
+      }
+    }
     // At most MAX_SEEDS to a post; the rest wait (and cost no Jev call).
+    const seedRowKeys = new Set(seedList.filter((s) => s.expiresAt !== '').map((s) => s.key));
     const taking = seedList.slice(0, MAX_SEEDS);
     const seedCandidates = taking.map(seedCandidate);
     let window = windowFor(nyDate, previous[0]?.nyDate ?? null);
@@ -280,7 +298,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     if (pools.feedError) record.feedError = pools.feedError;
 
     const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev, pools.forced);
-    const queueRow = (c: LfdCandidate) => ({ key: c.key, headline: c.headline, major: c.major, net: c.net });
+    const queueRow = (c: LfdCandidate) => ({ key: c.key, headline: c.headline, url: c.url, major: c.major, net: c.net });
     record.queues = { major: selector.top('major', QUEUE_TOP).map(queueRow), rundown: selector.top('rundown', QUEUE_TOP).map(queueRow) };
     let pending: Pick[] = await selector.fill();
     const ready: Ready[] = [];
@@ -607,7 +625,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       renderProblems: [...renderProblemsOf(fit), ...visionProblems],
       short,
     });
-    if (seedList.length) {
+    if (seedList.length || pinFailed.length) {
       const inPost = new Set(final.map((r) => r.pick.key));
       const outcomes = seedList.map((s) => {
         const drop = drops.find((x) => x.key === s.key);
@@ -617,11 +635,21 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
           : drop ? `${drop.reason}${drop.detail ? `: ${drop.detail}` : ''}`
           : !taking.some((t) => t.key === s.key) ? `waiting: this run already had ${MAX_SEEDS}`
           : 'not used in this run';
-        return { key: s.key, headline: s.headline, url: s.url, outcome, made: inPost.has(s.key), ...(repeat ? { repeat: true } : {}) };
+        return { key: s.key, headline: s.headline, url: s.url, outcome, made: inPost.has(s.key), ...(repeat ? { repeat: true } : {}), ...(pinKeys.has(s.key) ? { pinned: true } : {}) };
       });
       record.seeds = outcomes;
       try {
-        await recordSeedOutcomes(d.query, outcomes.map((o) => ({ key: o.key, outcome: o.outcome, made: o.made })));
+        await recordSeedOutcomes(d.query, outcomes.filter((o) => !pinKeys.has(o.key) || seedRowKeys.has(o.key)).map((o) => ({ key: o.key, outcome: o.outcome, made: o.made })));
+        // The shared pin rows: a pin the post made is used up; one that could not be made says why (it steps aside, the hub shows
+        // "Can't be made: <why>"); one that only waited for a free slot stays pinned for the next run. Both are best-effort.
+        const ioQ = d.query as unknown as Parameters<typeof markPromoteUsed>[0];
+        for (const o of outcomes) {
+          if (!pinKeys.has(o.key)) continue;
+          if (o.made) await markPromoteUsed(ioQ, 'last_few_days', `last_few_days:story:${o.key}`);
+          else if (!o.outcome.startsWith('waiting')) await recordPromoteSkip(ioQ, 'last_few_days', `last_few_days:story:${o.key}`, o.outcome);
+        }
+        for (const f of pinFailed) await recordPromoteSkip(ioQ, 'last_few_days', `last_few_days:story:${f.key}`, f.reason);
+        record.pinsSkipped = pinFailed;
       } catch (err) {
         record.seedError = err instanceof Error ? err.message : String(err);
       }

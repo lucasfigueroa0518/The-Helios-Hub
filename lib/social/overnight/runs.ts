@@ -8,7 +8,8 @@ import { SOCIAL_STALE_RUN_MINUTES } from './config';
  * daily script (scripts/social_daily.ts --run-id) finishes it.
  */
 
-export type RunTrigger = 'scheduled' | 'manual';
+/** `pool`: the nightly pool refresh (fetch, score, select; no posts made). */
+export type RunTrigger = 'scheduled' | 'manual' | 'pool';
 
 /**
  * Queue a run. Null when one is already queued (the single-requested index).

@@ -54,6 +54,8 @@ export type PostingState = {
   type: ContentType;
   live: boolean;
   generate: boolean | null;
+  /** Carousels: the nightly idea-pool refresh (`auto_pool`), separate from Generate. Absent for the other types. */
+  pool?: boolean;
   autoPublish: boolean;
   perDay: number | null;
   maxPerDay: number | null;
@@ -84,6 +86,8 @@ export const NIGHT_DAYS = 31;
 export type PostingPatch = {
   live?: boolean;
   generate?: boolean;
+  /** Carousels only: the nightly pool refresh. */
+  pool?: boolean;
   autoPublish?: boolean;
   perDay?: number;
   series?: { id: string; enabled?: boolean; generate?: boolean; days?: number[] };
@@ -196,9 +200,9 @@ export async function readPosting(type: ContentType, now = new Date()): Promise<
 
 async function readTypePosting(type: ContentType): Promise<TypeFields> {
   if (type === 'carousels') {
-    const [auto, approval, live, per] = await Promise.all(['auto_run', 'require_approval', 'publishing_live', 'posts_per_day'].map((k) => getSocialSetting<unknown>(k)));
+    const [auto, approval, live, per, pool] = await Promise.all(['auto_run', 'require_approval', 'publishing_live', 'posts_per_day', 'auto_pool'].map((k) => getSocialSetting<unknown>(k)));
     const per2 = count(per);
-    return { type, live: live === true, generate: auto === true, autoPublish: approval === false, perDay: Number.isInteger(per2) && per2 >= 0 ? per2 : carouselCfg.DEFAULT_POSTS_PER_DAY, maxPerDay: carouselCfg.CAROUSEL_SLOTS.length, series: null };
+    return { type, live: live === true, generate: auto === true, pool: pool === true, autoPublish: approval === false, perDay: Number.isInteger(per2) && per2 >= 0 ? per2 : carouselCfg.DEFAULT_POSTS_PER_DAY, maxPerDay: carouselCfg.CAROUSEL_SLOTS.length, series: null };
   }
   if (type === 'explainers') {
     const db = await exDb();
@@ -242,7 +246,8 @@ function quota(patch: PostingPatch, max: number | null, min: number): number | n
 
 /** Everything a patch can get wrong, checked before any connection is opened. */
 function validate(type: ContentType, patch: PostingPatch): void {
-  for (const k of ['live', 'generate', 'autoPublish'] as const) if (patch[k] !== undefined && typeof patch[k] !== 'boolean') throw new Error(`${k} must be true or false.`);
+  for (const k of ['live', 'generate', 'autoPublish', 'pool'] as const) if (patch[k] !== undefined && typeof patch[k] !== 'boolean') throw new Error(`${k} must be true or false.`);
+  if (patch.pool !== undefined && type !== 'carousels') throw new Error('Only Carousels has a separate idea-pool refresh.');
   if (patch.perDay !== undefined) {
     if (type === 'stories') throw new Error('Stories have no daily quota; each series has its own days.');
     if (type === 'last_few_days') throw new Error('Last Few Days has no daily quota; it posts once on each of its days.');
@@ -275,6 +280,7 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
   if (patch.cap !== undefined) await writeCaps(appQuery, { [type]: patch.cap });
   if (type === 'carousels') {
     if (patch.generate !== undefined) await setSocialSetting('auto_run', patch.generate);
+    if (patch.pool !== undefined) await setSocialSetting('auto_pool', patch.pool);
     if (patch.autoPublish !== undefined) await setSocialSetting('require_approval', !patch.autoPublish);
     if (patch.live !== undefined) await setSocialSetting('publishing_live', patch.live);
     const n = quota(patch, carouselCfg.CAROUSEL_SLOTS.length, 0);

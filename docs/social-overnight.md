@@ -39,6 +39,13 @@ looks. A slot more than 60 minutes late is cancelled, never posted late. The hum
 
 While `social_hub.settings.slot_source` is `template`, each run fills that date's calendar slots instead of `posts_per_day`, Last Few Days runs on dates with an LFD slot, and Stories series post on dates with their slot. `legacy` is the old behavior. In template mode a day with an LFD slot never runs Carousels, even with Last Few Days paused: the 3 AM run queues nothing and logs why.
 
+Carousels idea pool refresh (`social.settings.auto_pool`, hub Settings: "Fill the idea pool every night"): separate from `auto_run`
+(Generate). At 3:00 AM, when no carousel run is queued (Generate off, or the calendar has no carousel slot) and it isn't a Last Few
+Days run, the worker queues a `social.runs` row with `trigger = 'pool'`. The daily script runs it with `--score-only`: it fetches
+feeds, scores and selects stories, records the shortlist the hub's pool reads, and stops (`stop_reason = 'scored'`; no posts, no
+schedule). A claimed scheduled run that the daily fill would skip (quota 0) becomes a pool run while `auto_pool` is on. Needs
+`db/social_runs_pool_trigger.sql` applied once, then `./scripts/gcp/deploy-social-worker.sh`.
+
 One type per hour so no two pipelines call Claude, Jev, or Meta at the same
 time. All workers run on the social worker VM; outreach stays alone on
 `helios-orch-worker`.

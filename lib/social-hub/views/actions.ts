@@ -48,6 +48,8 @@ function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
   const approve = action === 'approveCarousel' || action === 'approveTrialReel' || action === 'approveContent';
   switch (state) {
     case 'needs_you':
+      // Schedule is the next most likely move after Approve, so it is a button, not a menu item.
+      return approve ? 'primary' : action === 'place' || action === 'reject' || action === 'archive' ? 'secondary' : 'more';
     case 'slot_booked':
       return approve ? 'primary' : action === 'reject' || action === 'archive' ? 'secondary' : 'more';
     case 'ready':
@@ -88,7 +90,7 @@ function labelFor(state: PostState['id'], plan: PostPlan, vertical: HubPost['ver
     case 'archive':
       return 'Archive';
     case 'place':
-      return 'Schedule…';
+      return 'Schedule';
     case 'reschedule':
       return 'Move…';
     case 'unschedule':

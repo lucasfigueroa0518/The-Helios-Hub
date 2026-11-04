@@ -78,7 +78,8 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   const queueLive = QUEUE_LIVE.has(model.vertical);
   // Stories (by series) and AI Events (by city): the bench narrowed to one group. Filtering only hides rows; the pool is the same.
   const [series, setSeries] = useState<string | null>(null);
-  const seriesTabs = model.groups.map((name) => ({ name, n: bench.filter((b) => b.idea.group === name).length }));
+  const inPool = (b: TypeBenchItem) => !b.madeOnly;
+  const seriesTabs = model.groups.map((name) => ({ name, n: bench.filter((b) => inPool(b) && b.idea.group === name).length }));
   const shown = series ? bench.filter((b) => b.idea.group === series) : bench;
   const events = model.vertical === 'ai_events';
   // The list as the person sees it while a drop is on its way to the server; a fresh read starts from the server's order.
@@ -141,9 +142,10 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
     const openRow = () => (item.card ? setOpenPost(item.card.post.id) : setOpenIdea(item.idea.id));
     const isOpen = item.idea.state === 'idea_only' || item.idea.state === 'content_ready';
     return (
-      <div className={`rh-row${queueLive ? ' rh-row--queue' : ''}${item.pinned ? ' is-pinned' : ''}`} role="button" tabIndex={0} onClick={openRow} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); } }}>
+      <div className={`rh-row rh-row--queue${item.pinned ? ' is-pinned' : ''}`} role="button" tabIndex={0} onClick={openRow} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRow(); } }}>
         <span className="rh-row__rank">{queueLive && seen ? seen.indexOf(item.idea.id) + 1 || item.rank : item.rank > 0 ? item.rank : null}</span>
-        {queueLive ? <span className="rh-row__grip-cell">{handle}</span> : null}
+        {/* Every pool shares one column grid. Types without a drag handle (Last Few Days, AI Events) leave this cell empty, which is also where their pin/drag lands once they get it. */}
+        <span className="rh-row__grip-cell">{handle}</span>
         <span className="rh-row__main">
           <span className="rh-row__headline">{item.idea.title}</span>
           {status ? <span className={`rh-row__status${run?.state === 'failed' ? ' is-failed' : ''}`}>{status}</span> : null}
@@ -262,8 +264,8 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
         )}
 
         <section className="rh-rest">
-          <h3 className="rh-rest__title">The bench <span>{series ? shown.length : model.benchTotal}</span></h3>
-          <p className="rh-muted">{benchNote ?? (events ? 'The week’s ranked events, best first within each city.' : seriesTabs.length ? 'Ideas waiting for the next generation, best first within each series.' : 'Ideas waiting for the next generation, best first.')}</p>
+          <h3 className="rh-rest__title">The bench <span>{series ? shown.filter(inPool).length : model.benchTotal}</span></h3>
+          <p className="rh-muted">{benchNote ?? (events ? 'The week’s ranked events, best first within each city.' : seriesTabs.length ? 'Ideas waiting for the next generation, best first within each series.' : 'Ideas waiting for the next generation, best first.')}{queueLive ? ' Pin an idea to make it first until it is made; archive it to hide it for good.' : ARCHIVE_ONLY.has(model.vertical) ? ' Archive an idea to hide it for good.' : ''}</p>
           {events && model.poolWeek ? (
             <p className="rh-muted ae-pool__week">
               Week of {model.poolWeek.label}.{' '}
@@ -272,7 +274,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
           ) : null}
           {seriesTabs.length ? (
             <div className="segmented rh-bench-filter" role="group" aria-label={events ? 'Cities' : 'Series'}>
-              <button type="button" className={`segmented__item${series == null ? ' segmented__item--active' : ''}`} aria-pressed={series == null} onClick={() => setSeries(null)}>All {groupNoun} <span className="rh-bench-filter__n">{bench.length}</span></button>
+              <button type="button" className={`segmented__item${series == null ? ' segmented__item--active' : ''}`} aria-pressed={series == null} onClick={() => setSeries(null)}>All {groupNoun} <span className="rh-bench-filter__n">{model.benchTotal}</span></button>
               {seriesTabs.map((t) => (
                 <button key={t.name} type="button" className={`segmented__item${series === t.name ? ' segmented__item--active' : ''}`} aria-pressed={series === t.name} onClick={() => setSeries(t.name)}>
                   {t.name} <span className="rh-bench-filter__n">{t.n}</span>
@@ -476,7 +478,7 @@ function PostCard({ card, status, failed, onOpen }: { card: TypeCard; status: st
       </button>
       {/* Every action the hub offers for this post, on the card itself (Approve, Reject, Regenerate, Delete, ...). */}
       <div className="sh" style={{ minHeight: 0, background: 'transparent', marginTop: 8 }}>
-        <ActionBar menu={offer.menu} compact showOffNote={false} />
+        <ActionBar menu={offer.menu} variant="card" showOffNote={false} />
       </div>
     </article>
   );

@@ -258,6 +258,8 @@ type Posting = {
   type: 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events';
   live: boolean;
   generate: boolean | null;
+  /** Carousels: the nightly idea-pool refresh, separate from Generate. */
+  pool?: boolean;
   autoPublish: boolean;
   perDay: number | null;
   maxPerDay: number | null;
@@ -334,6 +336,18 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
     <div className="rh-settings">
       {!data.live ? (
         <p className="rh-settings__note"><strong>Live is off</strong>, so nothing is scheduled or posted yet, even approved {noun}. Turn Live on in the header when you are ready.</p>
+      ) : null}
+      {data.pool !== undefined ? (
+        <Switch
+          checked={data.pool}
+          onChange={(on) => {
+            if (on && !confirm('Fill the idea pool every night? At 3:00 AM it reads the news feeds and scores the stories with live model calls (up to the run cap), so the pool stays full. It makes no posts.')) return;
+            void save({ pool: on });
+          }}
+          hint="Scores the day's stories at 3:00 AM so the idea pool stays full. Makes nothing; turn on Generate below to also make posts."
+        >
+          Fill the idea pool every night
+        </Switch>
       ) : null}
       {data.generate !== null ? (
         <Switch

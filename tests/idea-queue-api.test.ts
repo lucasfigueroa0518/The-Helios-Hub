@@ -17,8 +17,8 @@ test('parseQueueAction accepts each action and rejects other types’ ideas, bad
   assert.throws(() => parseQueueAction({ vertical: 'explainers', action: 'delete', ideaId: A }), /action must be/);
   assert.throws(() => parseQueueAction({ vertical: 'explainers', action: 'reorder-pins', order: new Array(201).fill(A) }), /order must/);
   assert.throws(() => parseQueueAction(null), /Unknown content type/);
-  assert.throws(() => parseQueueAction({ vertical: 'last_few_days', action: 'pin', ideaId: 'last_few_days:story:x' }), /only takes Archive/, 'Last Few Days has no queue to pin within');
-  assert.throws(() => parseQueueAction({ vertical: 'last_few_days', action: 'place', ideaId: 'last_few_days:story:x', aboveId: null, belowId: null, up: true }), /only takes Archive/);
+  assert.deepEqual(parseQueueAction({ vertical: 'last_few_days', action: 'pin', ideaId: 'last_few_days:story:x' }), { action: 'pin', vertical: 'last_few_days', ideaId: 'last_few_days:story:x' }, 'a Last Few Days pin is a shared-queue pin the run takes first');
+  assert.throws(() => parseQueueAction({ vertical: 'last_few_days', action: 'place', ideaId: 'last_few_days:story:x', aboveId: null, belowId: null, up: true }), /Pin and Archive/, 'no drag below the pins: its post order is the run’s');
   assert.deepEqual(parseQueueAction({ vertical: 'last_few_days', action: 'archive', ideaId: 'last_few_days:story:x' }), { action: 'archive', vertical: 'last_few_days', ideaId: 'last_few_days:story:x' });
 });
 

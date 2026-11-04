@@ -81,7 +81,8 @@ async function main(): Promise<void> {
   const { calendarDateKey, nextRunAt } = await import('@/lib/instagram/clock');
   const cfg = await import('@/lib/social/overnight/config');
   const { socialQuery } = await import('@/lib/social/store');
-  const { autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
+  const { autoPoolOn, autoRunOn, getSocialSetting, publishingLive, requireApproval } = await import('@/lib/social/overnight/settings');
+  const { poolRunDue } = await import('@/lib/social/overnight/pool');
   const runs = await import('@/lib/social/overnight/runs');
   const { carouselFill, nightStoriesFor, releaseDueSchedules, scheduleRunPosts } = await import('@/lib/social/overnight/schedule');
   const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
@@ -184,12 +185,14 @@ async function main(): Promise<void> {
     rerunPostId?: string,
     storyIds: readonly string[] = [],
     moves: { pinIds: readonly string[]; demoteIds: readonly string[]; archiveIds: readonly string[]; placed: ReadonlyArray<readonly [string, number]> } = { pinIds: [], demoteIds: [], archiveIds: [], placed: [] },
+    scoreOnly = false,
   ): Promise<{ code: number | null; tail: string }> {
     return new Promise((resolve) => {
       const tsx = path.join(process.cwd(), 'node_modules', '.bin', 'tsx');
       const args = [
         'scripts/social_daily.ts', '--run-id', runId, '--stories', String(stories), '--cap-usd', String(capUsd),
         ...(rerunPostId ? ['--rerun-post', rerunPostId] : []),
+        ...(scoreOnly ? ['--score-only'] : []),
         ...storyIds.flatMap((id) => ['--story-id', id]),
         ...moves.pinIds.flatMap((id) => ['--pin-id', id]),
         ...moves.demoteIds.flatMap((id) => ['--demote-id', id]),
@@ -218,6 +221,15 @@ async function main(): Promise<void> {
    * `run.storyIds`: Run now named the stories to make (the top of the ranked queue); the run makes exactly those.
    */
   async function carryOutRun(run: { id: string; capUsd: number; storyIds?: string[]; trigger?: string }, rerun?: { requestId: string; postId: string }): Promise<void> {
+    // The pool refresh: score and select, make nothing, schedule nothing.
+    if (!rerun && run.trigger === 'pool') {
+      log('run_started', { runId: run.id, stories: 0, capUsd: run.capUsd, poolOnly: true });
+      const { code, tail } = await runDailyScript(run.id, 0, run.capUsd, undefined, [], undefined, true);
+      await runs.failRun(query, run.id, `The daily script exited (${code}) before finishing the pool refresh. ${tail}`);
+      const status = (await query(`SELECT status FROM social.runs WHERE id = $1`, [run.id])).rows[0]?.status;
+      log('run_complete', { runId: run.id, exitCode: code, status, poolOnly: true });
+      return;
+    }
     const pinned = run.storyIds ?? [];
     let stories = pinned.length || 1;
     let movesReadAt: Date | undefined;
@@ -235,6 +247,12 @@ async function main(): Promise<void> {
       // Template mode: the day's carousel slots are the knob, so run_stories never cuts the fill.
       stories = fill ? nightStoriesFor(fill, runStories, await readSlotSource(query)) : runStories;
       if (fill) reportFill(fill, log, { runId: run.id, runStories, stories });
+      if (fill && stories < 1 && run.trigger === 'scheduled' && (await autoPoolOn().catch(() => false))) {
+        // Nothing to make today, but the pool still fills: this claimed run becomes the pool refresh.
+        log('run_pool_instead', { runId: run.id, reason: 'quota_filled' });
+        await query(`UPDATE social.runs SET trigger = 'pool' WHERE id = $1`, [run.id]);
+        return carryOutRun({ ...run, trigger: 'pool' }, undefined);
+      }
       if (fill && stories < 1) {
         const note = `${quotaFilledNote(fill, 'carousel')} The run made nothing new.`;
         await runs.skipRun(query, run.id, note);
@@ -336,6 +354,13 @@ async function main(): Promise<void> {
             return null;
           });
           log('run_requested', { runId: id, trigger: 'scheduled' });
+        } else if (poolRunDue(slot.queue, await autoPoolOn().catch(() => false))) {
+          const capUsd = (await getSocialSetting<number>('run_cap_usd')) ?? cfg.DEFAULT_RUN_CAP_USD;
+          const id = await runs.requestRun(query, 'pool', { capUsd, hookPass: false }).catch((error) => {
+            log('request_failed', { error: errorText(error), poolOnly: true });
+            return null;
+          });
+          log('run_requested', { runId: id, trigger: 'pool', reason: slot.reason });
         } else {
           log('run_skipped', { reason: slot.reason });
         }

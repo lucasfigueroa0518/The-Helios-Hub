@@ -220,6 +220,7 @@ p.sh-subtle { max-width: 75ch; }
   animation: sh-pop 150ms var(--sh-ease);
 }
 .sh-menu__list--left { left: 0; right: auto; }
+.sh-menu__list--up { top: auto; bottom: calc(100% + 6px); }
 .sh-menu__item {
   display: flex;
   align-items: center;

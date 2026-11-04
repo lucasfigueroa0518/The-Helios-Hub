@@ -69,14 +69,14 @@ test('a regenerated idea lists its made versions newest first, and the older one
 test('a type whose night does not follow the queue yet keeps Promote and Demote: one promote a night, demotes last', async () => {
   const { dayRanking } = await import('@/lib/social-hub/views/day-rank');
   const { poolList } = await import('@/lib/social-hub/views/pools');
-  const idea = (n: number, score: number) => ({ id: `last_few_days:story:${n}`, vertical: 'last_few_days' as const, title: `Story ${n}`, score, scoreLabel: 'Score', state: 'idea_only' as const, hasContent: false, versionCount: 0, generatedAt: null, createdAt: null, detail: null });
+  const idea = (n: number, score: number) => ({ id: `ai_events:event:${n}`, vertical: 'ai_events' as const, title: `Story ${n}`, score, scoreLabel: 'Score', state: 'idea_only' as const, hasContent: false, versionCount: 0, generatedAt: null, createdAt: null, detail: null });
   const ideas = [idea(1, 4), idea(2, 3), idea(3, 2), idea(4, 1)];
-  const mv = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ id: `c${n}${kind}`, vertical: 'last_few_days', ideaId: `last_few_days:story:${n}`, nyDate: '2026-10-08', kind, createdAt: at });
+  const mv = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ id: `c${n}${kind}`, vertical: 'ai_events', ideaId: `ai_events:event:${n}`, nyDate: '2026-10-08', kind, createdAt: at });
   const moves = [mv(3, 'promote', '2026-10-08T01:00:00Z'), mv(4, 'promote', '2026-10-08T02:00:00Z'), mv(1, 'demote', '2026-10-08T03:00:00Z')];
-  const order = dayRanking(ideas, 'last_few_days', moves, FIXTURE_NOW).map((r) => r.idea.title);
+  const order = dayRanking(ideas, 'ai_events', moves, FIXTURE_NOW).map((r) => r.idea.title);
   assert.deepEqual(order, ['Story 3', 'Story 2', 'Story 4', 'Story 1']);
-  assert.deepEqual(poolList(ideas, 'last_few_days', 'open', moves).map((i) => i.title), order);
-  assert.equal(dayRanking(ideas, 'last_few_days', moves, FIXTURE_NOW)[0]!.tag?.text, 'Tonight');
+  assert.deepEqual(poolList(ideas, 'ai_events', 'open', moves).map((i) => i.title), order);
+  assert.equal(dayRanking(ideas, 'ai_events', moves, FIXTURE_NOW)[0]!.tag?.text, 'Tonight');
 });
 
 test('the page shows at most 30 open ideas; pinned, dragged, yours and made ideas are never cut', async () => {

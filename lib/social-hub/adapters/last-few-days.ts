@@ -182,7 +182,7 @@ export function lfdPosts(read: LfdRead): HubPost[] {
   return foldLifecycle('last_few_days', posts);
 }
 
-type QueueEntry = { key?: string; headline?: string; lane?: string; major?: number | null; net?: number | null; reason?: string; detail?: string };
+type QueueEntry = { key?: string; headline?: string; url?: string; lane?: string; major?: number | null; net?: number | null; reason?: string; detail?: string };
 
 const DROP_REASON: Record<string, string> = {
   'thin-text': 'the article text was too thin',

@@ -86,6 +86,9 @@ async function main() {
   // The render review (photo spec §5b), fixes on, before/after saved (Tommy, 2026-10-07: the first end-to-end run is its calibration).
   const reviewOn = process.argv.includes('--review');
   const preview = process.argv.includes('--preview');
+  // --score-only: the pool refresh. Score and select the day's stories, record the shortlist, make nothing.
+  const scoreOnly = process.argv.includes('--score-only');
+  if (scoreOnly && (preview || !process.argv.includes('--run-id'))) throw new Error('--score-only is a worker-queued run: it needs --run-id and cannot be a preview.');
   // --run-id: the social worker's queued run (lib/social/overnight/runs.ts); its posts are `pipeline`.
   // A run started by hand is recorded as before and its posts are `dev`.
   const runIdArg = (() => {
@@ -291,6 +294,7 @@ async function main() {
     log: store.setAsides,
     now,
     targetPosts: rerun ? 1 : pinned ? pinned.length : stories,
+    ...(scoreOnly ? { scoreOnly: true } : {}),
     // The worker's runs reuse a story's finished post instead of making it again (SH-60, P2-M4); a rerun makes it again on purpose.
     // A story whose post already holds a slot (a person placed it) is passed over: the daily fill counted it (D54).
     ...(runIdArg && store.query && !rerun
@@ -369,7 +373,7 @@ async function main() {
       };
       let runId: string;
       if (runIdArg) {
-        await finishRun(store.query, runIdArg, { ...finished, status: result.shipped.length > 0 ? 'ok' : 'partial' });
+        await finishRun(store.query, runIdArg, { ...finished, status: result.shipped.length > 0 || result.stopReason === 'scored' ? 'ok' : 'partial' });
         runId = runIdArg;
       } else {
         runId = await insertRun(store.query, { kind: preview ? 'preview' : 'daily', startedAt: now.toISOString(), capUsd, ...finished });

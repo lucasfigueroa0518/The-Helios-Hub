@@ -131,19 +131,33 @@
 .sh-skel--line { width: 40%; height: 14px; }
 .sh-skel--title { width: 70%; height: 24px; }
 .sh-skel--block { width: 100%; height: 220px; }
-.sh-skel--calendar { width: 100%; height: 420px; }
+.sh-skel--calendar { width: 100%; height: 620px; border-radius: var(--radius-md); }
 .sh-skel--card { width: 100%; height: auto; aspect-ratio: 4 / 5; }
 .sh-skel--stat { height: 72px; }
 .sh-skel--row { height: 16px; }
-.sh-page-loading { display: flex; flex-direction: column; gap: 18px; padding: 4px 0 24px; }
-.sh-page-loading__head { display: flex; flex-direction: column; gap: 8px; }
-.sh-page-loading__row { display: flex; gap: 12px; overflow: hidden; }
-.sh-page-loading__card { width: 168px; flex: none; display: flex; flex-direction: column; gap: 8px; }
+/* Hub page skeleton pieces: sized to the real header, section heads, cards and buttons (HubPageLoading). */
+.sh-skel--head-title { width: 140px; max-width: 60%; height: 29px; }
+.sh-skel--head-meta { width: 320px; max-width: 90%; height: 15px; margin: 3px 0; }
+.sh-skel--btn { width: 112px; height: 32px; border-radius: var(--radius-pill, 999px); }
+.sh-skel--sec-title { height: 15px; margin: 3px 0; max-width: 60%; }
+.sh-skel--card-line { width: 85%; height: 14px; }
+.sh-skel--short { width: 50%; }
+.sh-skel--card-pill { width: 100%; height: 34px; border-radius: var(--radius-pill, 999px); }
+.sh-skel--card-btn { width: 100%; height: 40px; border-radius: var(--radius-pill, 999px); }
+.sh-pool--skel { min-height: 184px; }
+.sh-skel-card { min-height: 490px; }
+.sh-skel-lib { display: flex; align-items: center; gap: 16px; height: 72px; padding: 0 24px; }
+.sh-skel-lib + .sh-skel-lib { border-top: 1px solid var(--sh-hairline); }
+.sh-skel--lib-icon { width: 40px; height: 40px; flex: none; border-radius: var(--radius-md); }
 .sh-page-loading__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .sh-page-loading__list { display: flex; flex-direction: column; gap: 10px; }
 @media (max-width: 720px) {
   .sh-page-loading__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sh-page-loading__card { width: 140px; }
+  .sh-skel-lib { padding: 0 16px; height: 110px; }
+  .sh-skel-card { min-height: 502px; }
+  /* On a phone the real header's day label drops under the title and the summary wraps. */
+  .sh-skel--head-aside { margin-bottom: 25px; }
+  .sh-skel--head-meta { height: 25px; }
 }
 @keyframes sh-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
