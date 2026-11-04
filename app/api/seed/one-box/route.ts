@@ -40,10 +40,10 @@ export async function POST(request: Request) {
   return NextResponse.json(out.body, { status: out.status });
 }
 
-/** The placeholder cards for one pool. */
+/** The placeholder cards for one pool, and whether the one-box is switched on (prompt approved). */
 export async function GET(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const vertical = new URL(request.url).searchParams.get('vertical') ?? '';
-  return NextResponse.json({ cards: await listCards(q, vertical) });
+  return NextResponse.json({ enabled: oneBoxApproved(), cards: await listCards(q, vertical) });
 }

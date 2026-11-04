@@ -11,6 +11,8 @@ import '@/components/content-type/type-hub.css';
 import { Drawer } from '@/app/reels/ui';
 import { CarouselSeedForm } from '@/components/content-type/CarouselSeedForm';
 import { ExplainerSeedForm } from '@/components/content-type/ExplainerSeedForm';
+import { OneBoxSeedForm } from '@/components/content-type/OneBoxSeedForm';
+import { SeedRequestCards, useOneBox } from '@/components/content-type/SeedRequestCards';
 import { LfdSeedForm } from '@/components/content-type/LfdSeedForm';
 import { ReelSeedForm } from '@/components/content-type/ReelSeedForm';
 import { StorySeedForm } from '@/components/content-type/StorySeedForm';
@@ -41,6 +43,7 @@ export function SeedButton({ vertical }: { vertical: Vertical }) {
   const [note, setNote] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const oneBox = useOneBox(vertical);
   if (!isSeedable(vertical)) return null;
   const Form = FORMS[vertical];
   const done = (text?: string) => {
@@ -52,6 +55,7 @@ export function SeedButton({ vertical }: { vertical: Vertical }) {
   };
   return (
     <>
+      {oneBox.enabled ? <SeedRequestCards cards={oneBox.cards} reload={oneBox.reload} /> : null}
       <span className="rh rh--scope">
         <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
           <Plus size={15} /> {SEED_BUTTON.label}
@@ -62,7 +66,7 @@ export function SeedButton({ vertical }: { vertical: Vertical }) {
             <div className="rh rh--scope">
               {open ? (
                 <Drawer label={SEED_BUTTON.title} onClose={() => setOpen(false)}>
-                  <Form done={done} />
+                  {oneBox.enabled ? <OneBoxSeedForm vertical={vertical} done={done} /> : <Form done={done} />}
                 </Drawer>
               ) : null}
               {note ? <p className="rh-toast" role="status">{note}</p> : null}
