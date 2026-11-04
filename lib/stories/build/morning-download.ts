@@ -8,7 +8,7 @@
  *   merge    one Jev same-event check per cross-system pair sharing a name
  *   rank     one major-news@2 call per candidate → score (the source adds
  *            nothing); up to 5 clear the bar, else the top 2 (S-04)
- *   write    md-headlines@2 (one Sonnet call), length and sentence checks
+ *   write    md-headlines@3 (one Sonnet call), length and sentence checks
  *   ground   md-grounding@1 per headline; a miss gets one rewrite, a second
  *            miss drops the story; fewer than 2 left skips the day
  *   photos   a carousel item keeps the photo its design stage already
@@ -123,7 +123,7 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
     return { ...out, stories: out.stories.flatMap((s) => (byId.has(s.key) ? [{ ...s, key: byId.get(s.key)!.key }] : [])) };
   };
   const first = await writeFor(chosen);
-  const ok = (h: string) => h.length <= 260 && sentenceCount(h) >= 1 && sentenceCount(h) <= 2;
+  const ok = (h: string) => h.length <= 240 && sentenceCount(h) >= 1 && sentenceCount(h) <= 2;
   const oneEach = (list: typeof first.stories) => {
     const seen = new Set<string>();
     return list.filter((s) => byKey.has(s.key) && !seen.has(s.key) && (seen.add(s.key), true));
@@ -141,7 +141,7 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   for (const s of written) (await ground(s)) ? grounded.push(s) : misses.push(byKey.get(s.key)!);
   if (misses.length) {
     log.push(`grounding: ${misses.length} rewrite(s)`);
-    const again = await writeFor(misses, 'Each of these stories had no headline last time, or its headline made a claim the source does not support, or ran past two sentences or 240 characters. Write one headline for each, stating only what the source says.');
+    const again = await writeFor(misses, 'Each of these stories had no headline last time, or its headline made a claim the source does not support, or ran past two sentences or 240 characters. Write one headline for each, with every claim stated in the source or following directly from it.');
     for (const s of oneEach(again.stories).filter((x) => misses.some((m) => m.key === x.key))) if (await ground(s)) grounded.push(s);
   }
   written = chosen.map((c) => grounded.find((g) => g.key === c.key)).filter((x): x is (typeof written)[number] => Boolean(x));
