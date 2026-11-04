@@ -14,7 +14,7 @@ import { ExplainerSeedForm } from '@/components/content-type/ExplainerSeedForm';
 import { LfdSeedForm } from '@/components/content-type/LfdSeedForm';
 import { ReelSeedForm } from '@/components/content-type/ReelSeedForm';
 import { StorySeedForm } from '@/components/content-type/StorySeedForm';
-import { refreshHubPage } from '@/lib/content-type/refresh-client';
+import { refreshAfterSeed } from '@/lib/content-type/refresh-client';
 import { SEED_BUTTON, isSeedable, type SeedVertical } from '@/lib/content-type/seed-verticals';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -35,7 +35,7 @@ const FORMS: Record<SeedVertical, ComponentType<SeedFormProps>> = {
  * Only the form inside the drawer differs by type (what that type needs and what it costs). Nothing is made by a seed.
  * Renders nothing for a pool with no seed path (AI Events).
  */
-export function SeedButton({ vertical }: { vertical: Vertical }) {
+export function SeedButton({ vertical, onSeeded }: { vertical: Vertical; onSeeded?: () => void | Promise<void> }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export function SeedButton({ vertical }: { vertical: Vertical }) {
     setOpen(false);
     if (text) {
       setNote(text);
-      void refreshHubPage(router);
+      void refreshAfterSeed(router, onSeeded);
     }
   };
   return (

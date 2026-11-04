@@ -572,7 +572,7 @@ export function ReelsHub({ initial, moves = [], slotsToday = null, reviewPath = 
                 </button>
               ) : null}
             </div>
-            <SeedButton vertical="reels" />
+            <SeedButton vertical="reels" onSeeded={refresh} />
             <SettingsButton>
               <PostingSettings type="reels" />
             </SettingsButton>
