@@ -130,45 +130,56 @@ function partly(required: Record<string, unknown>, optional: Record<string, unkn
 const num = { type: 'number' } as const;
 const list = (items: unknown) => ({ type: 'array', items }) as const;
 
-/** What a frame is, in fields (types.ts `Blueprint`, ITERATION-10-CONTRACT §4). Every time is the exact spoken words, never seconds. */
-export const BLUEPRINT = partly(
-  {
-    ground: str,
-    style: { type: 'string', enum: ['cutouts', 'paper'] },
-    arrangement: { type: 'string', enum: ['face_off', 'lead_inset', 'row', 'pile', 'facing', 'turned_away', 'leads_to', 'solo'] },
-    pieces: list(
-      partly(
-        { id: str, on: str },
-        {
-          asset: str,
-          treatment: { type: 'string', enum: ['page', 'post', 'document', 'headline', 'newspaper', 'map', 'photo', 'number', 'stat', 'board', 'lift', 'lower_third'] },
-          opts: { type: 'object' },
-          fill: { type: 'boolean' },
-          note: str,
-          note_role: { type: 'string', enum: ['figure', 'place', 'date', 'body'] },
-          role: { type: 'string', enum: ['lead'] },
-          side: { type: 'string', enum: ['left', 'right'] },
-          belongs: str,
-          onto: obj({ piece: str, box: str }),
-          crop: obj({ x: num, y: num, w: num, h: num }),
-          until: str,
-          label: str,
-        },
+/**
+ * What a frame is, in fields (types.ts `Blueprint`, ITERATION-10-CONTRACT §4). Every time is the exact spoken words, never seconds.
+ * `piece` adds fields to a piece: the solver's `place` (Iteration 11 §6) is only in the solver's schema, never the director's.
+ */
+function blueprintSchema(piece: Record<string, unknown> = {}) {
+  return partly(
+    {
+      ground: str,
+      style: { type: 'string', enum: ['cutouts', 'paper'] },
+      arrangement: { type: 'string', enum: ['face_off', 'lead_inset', 'row', 'pile', 'facing', 'turned_away', 'leads_to', 'solo'] },
+      pieces: list(
+        partly(
+          { id: str, on: str },
+          {
+            asset: str,
+            treatment: { type: 'string', enum: ['page', 'post', 'document', 'headline', 'newspaper', 'map', 'photo', 'number', 'stat', 'board', 'lift', 'lower_third'] },
+            opts: { type: 'object' },
+            fill: { type: 'boolean' },
+            note: str,
+            note_role: { type: 'string', enum: ['figure', 'place', 'date', 'body'] },
+            role: { type: 'string', enum: ['lead'] },
+            side: { type: 'string', enum: ['left', 'right'] },
+            belongs: str,
+            onto: obj({ piece: str, box: str }),
+            crop: obj({ x: num, y: num, w: num, h: num }),
+            until: str,
+            label: str,
+            ...piece,
+          },
+        ),
       ),
-    ),
-    labels: list(partly({ text: str, on: str }, { sub: str, kind: str, for: str })),
-    speech: list(partly({ on_piece: str, text: str, on: str }, { until: str })),
-    marks: list(partly({ kind: str, on_piece: str, on: str }, { target: str, from: str })),
-    arrows: list(obj({ from: str, to: str, on: str })),
-    camera: obj({ move: { type: 'string', enum: ['hold', 'push', 'drift', 'slide', 'tour'] }, stops: list(partly({ on: str, aim: str }, { zoom: num })) }),
-    sounds: list(partly({ kind: str, what: str, on: str }, { dur: num })),
-  },
-  {
-    hook: obj({ text: str, on: str }),
-    peak: { type: 'boolean' },
-    ground_tone: list(obj({ on: str, to: num })),
-  },
-);
+      labels: list(partly({ text: str, on: str }, { sub: str, kind: str, for: str })),
+      speech: list(partly({ on_piece: str, text: str, on: str }, { until: str })),
+      marks: list(partly({ kind: str, on_piece: str, on: str }, { target: str, from: str })),
+      arrows: list(obj({ from: str, to: str, on: str })),
+      camera: obj({ move: { type: 'string', enum: ['hold', 'push', 'drift', 'slide', 'tour'] }, stops: list(partly({ on: str, aim: str }, { zoom: num })) }),
+      sounds: list(partly({ kind: str, what: str, on: str }, { dur: num })),
+    },
+    {
+      hook: obj({ text: str, on: str }),
+      peak: { type: 'boolean' },
+      ground_tone: list(obj({ on: str, to: num })),
+    },
+  );
+}
+
+export const BLUEPRINT = blueprintSchema();
+
+/** The solver's blueprint: the director's, and a piece may carry its exact geometry, px on the 1080x1920 frame. */
+export const SOLVER_BLUEPRINT = blueprintSchema({ place: partly({ x: num, y: num, w: num }, { rotate: num, z: num }) });
 
 export const SUBMIT_PLAN_TOOL: SubmitTool = {
   name: 'submit_plan',
@@ -261,5 +272,45 @@ export const SUBMIT_VIEWING_TOOL: SubmitTool = {
     want_next: str,
     keep_watching: { type: 'integer' },
     confused: { type: 'array', items: obj({ at: { type: ['number', 'null'] }, what: str }) },
+  }),
+};
+
+// ── The solver (Iteration 11 §5) ─────────────────────────────────────────────────────────────────────
+
+/** The solver's look (solver.ts `LookVerdict`): one verdict a frame. `aim` is null on `strong`. */
+export const SUBMIT_LOOK_TOOL: SubmitTool = {
+  name: 'submit_look',
+  description: 'Submit a verdict for every frame, once.',
+  strict: true,
+  input_schema: obj({
+    verdicts: {
+      type: 'array',
+      items: obj({ frame: { type: 'integer' }, verdict: { type: 'string', enum: ['strong', 'weak', 'wrong'] }, because: str, aim: nullableStr }),
+    },
+  }),
+};
+
+/** A drawing the solver orders for its frame (types.ts `MakeRequest`). */
+const MAKE_REQUEST = obj({ id: str, kind: { type: 'string', enum: [...MAKE_KINDS] }, brief: str, people: strList, from_assets: strList, seed: nullableStr });
+
+/** One sound of a code frame's events file (kit/sound.mjs `eventProblems` checks it). */
+const FRAME_EVENT = partly({ t: num, kind: str }, { what: str, dur: num, shown: str });
+
+/**
+ * The solver's change to one frame (solver.ts `SolverSubmit`). Not strict: `change` is a plan (`blueprint`, optional `makes`) or
+ * code (`module` and `events`), and the solver's parser checks which.
+ */
+export const SUBMIT_FRAME_TOOL: SubmitTool = {
+  name: 'submit_frame',
+  description: 'Submit the frame you changed, once: what was wrong, your approach and the change.',
+  strict: false,
+  input_schema: obj({
+    frame: { type: 'integer' },
+    diagnosis: str,
+    approach: str,
+    change: partly(
+      { kind: { type: 'string', enum: ['plan', 'code'] } },
+      { blueprint: SOLVER_BLUEPRINT, makes: list(MAKE_REQUEST), module: str, events: list(FRAME_EVENT) },
+    ),
   }),
 };

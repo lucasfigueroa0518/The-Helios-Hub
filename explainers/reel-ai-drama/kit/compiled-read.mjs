@@ -1,12 +1,14 @@
 // Read what the compiled frames really did, from the browser. Deterministic, free, no model. For every story frame (or only
 // the given ids): load it the way the checks do, play it through, and report its stage manifest, the words and marks that
 // couldn't land, and the stage's notes; with --stills <dir>, one still at the frame's main beat, for the creative pass.
+// Every frame also reports `words`, each distinct text it showed while it played (the solver's words check). A frame the solver
+// wrote (assets/solved.json) carries `solved`, and one that doesn't go through compiledFrame reports `manifest: null`.
 //
 //   node assets/kit/compiled-read.mjs [--stills <dir>] [<id> …]
 //
 // Prints JSON { ok, frames: { [number]: { id, name, duration, ...record } }, stills: [{ number, name, id, at, file }], skipped? }.
 
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -14,6 +16,40 @@ import { isClose, objectStrokes, projectFrames, projectMedia } from './frames.mj
 import { loadFrame } from './measure.mjs';
 
 const STEP = 0.5;
+/** The most distinct texts a frame reports. */
+const MAX_WORDS = 200;
+
+/** assets/solved.json, or {}. */
+function readSolved(root) {
+  try {
+    const raw = JSON.parse(readFileSync(join(root, 'assets', 'solved.json'), 'utf8'));
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+/** In the page: render t, and add every text a viewer could see in the frame to `seen`. */
+function renderAndRead(t) {
+  window.__render(t);
+  const host = document.getElementById('w');
+  const seen = (window.__seenWords ??= new Set());
+  if (!host) return;
+  const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const text = n.textContent.replace(/\s+/g, ' ').trim();
+    if (!text || seen.size >= 200) continue;
+    let el = n.parentElement;
+    let shown = true;
+    let opacity = 1;
+    for (; el && el !== host.parentElement; el = el.parentElement) {
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') { shown = false; break; }
+      opacity *= Number(cs.opacity);
+    }
+    if (shown && opacity > 0.05) seen.add(text);
+  }
+}
 
 /** When a frame has settled: the last thing it plans has landed, or 60% in when nothing lands late. Pure. */
 export function mainBeat(manifest, duration) {
@@ -32,15 +68,29 @@ export async function readCompiled(root, { only = null, stills = null, open = nu
   const frames = {};
   const shots = [];
   if (stills) mkdirSync(stills, { recursive: true });
+  const solved = readSolved(root);
   try {
     for (const f of projectFrames(root)) {
       if (isClose(f) || !f.id || !(f.duration > 0) || (only && !only.includes(f.id))) continue;
       b.errors.length = 0;
       try {
         await loadFrame(b.page, root, f, media, strokes);
-        for (let t = 0; t < f.duration; t += STEP) await b.page.evaluate((x) => window.__render(x), t);
-        await b.page.evaluate((x) => window.__render(x), Math.max(0, f.duration - 1 / 30));
-        const record = await b.page.evaluate((id) => ({ ...(document.__compiled?.[id] ?? { reports: ['the frame did not go through compiledFrame'] }), notes: document.__stageNotes ?? [], skips: document.__markSkips ?? [] }), f.id);
+        await b.page.evaluate(() => { window.__seenWords = new Set(); });
+        const read = `(${renderAndRead.toString()})`;
+        for (let t = 0; t < f.duration; t += STEP) await b.page.evaluate(`${read}(${t})`);
+        await b.page.evaluate(`${read}(${Math.max(0, f.duration - 1 / 30)})`);
+        const own = solved[f.id] ?? null;
+        const record = await b.page.evaluate(
+          ({ id, own }) => ({
+            ...(document.__compiled?.[id] ?? (own ? { manifest: null, reports: [] } : { reports: ['the frame did not go through compiledFrame'] })),
+            notes: document.__stageNotes ?? [],
+            skips: document.__markSkips ?? [],
+            words: [...(window.__seenWords ?? [])],
+          }),
+          { id: f.id, own },
+        );
+        if (own) record.solved = own;
+        if (record.words.length > MAX_WORDS) record.words = record.words.slice(0, MAX_WORDS);
         frames[f.number] = { id: f.id, name: f.name, duration: f.duration, ...record, errors: [...b.errors] };
         if (stills) {
           const at = mainBeat(record.manifest, f.duration);

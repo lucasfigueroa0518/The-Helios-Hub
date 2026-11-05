@@ -41,11 +41,53 @@ export type CompileInput = {
   plain?: readonly number[];
   /** Write only these frames' files (the names introduced in earlier frames still come from all of them). */
   only?: readonly number[];
+  /** Frames to write although `assets/solved.json` lists them: the solver building a new version. Never set by a recompile. */
+  rewrite?: readonly number[];
   /** Local OCR for a picture a blueprint marks words on. Default: Tesseract when installed. */
   readWords?: ((file: string) => Promise<{ text: string; left: number; top: number; width: number; height: number; conf: number }[]>) | null;
 };
 
-export type CompileResult = { frames: { n: number; id: string; treatment: string; plain: boolean }[]; problems: string[] };
+export type CompileResult = { frames: { n: number; id: string; treatment: string; plain: boolean; solved?: boolean }[]; problems: string[] };
+
+// ── Solved frames (Iteration 11 §6) ─────────────────────────────────────────────────────────────────
+
+/** The solver's frames: `assets/solved/<id>.js` and `<id>.events.json`, listed in `assets/solved.json`. */
+export const SOLVED_FILE = path.join('assets', 'solved.json');
+export const SOLVED_DIR = path.join('assets', 'solved');
+/** One shipped solver frame. `kind` 'plain' is the last resort (`plainBlueprint`), `round` 3. */
+export type SolvedEntry = { kind: 'plan' | 'code' | 'plain'; round: number; usd: number };
+/** `assets/solved.json`: frame id → what shipped. */
+export type SolvedIndex = Record<string, SolvedEntry>;
+
+/** `assets/solved.json`, or {} when there is none or it can't be read. */
+export function readSolved(projectDir: string): SolvedIndex {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(projectDir, SOLVED_FILE), 'utf8')) as unknown;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    return Object.fromEntries(Object.entries(raw as Record<string, SolvedEntry>).filter(([, v]) => v && typeof v === 'object' && ['plan', 'code', 'plain'].includes(v.kind)));
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * A listed frame's live files are its solved copy: put back what a wipe or an edit changed. False when the solved copy is gone
+ * (the frame is then compiled as planned, and the caller says so).
+ */
+export function restoreSolved(projectDir: string, id: string): boolean {
+  const from = path.join(projectDir, SOLVED_DIR);
+  const to = path.join(projectDir, 'assets', 'frames');
+  if (!fs.existsSync(path.join(from, `${id}.js`))) return false;
+  fs.mkdirSync(to, { recursive: true });
+  for (const name of [`${id}.js`, `${id}.events.json`]) {
+    const src = path.join(from, name);
+    if (!fs.existsSync(src)) continue;
+    const body = fs.readFileSync(src);
+    const dst = path.join(to, name);
+    if (!fs.existsSync(dst) || !fs.readFileSync(dst).equals(body)) fs.writeFileSync(dst, body);
+  }
+  return true;
+}
 
 /** A blueprint with every list present, or null when it holds nothing to show. Pure. */
 export function normalBlueprint(b: Partial<Blueprint> | null | undefined): Blueprint | null {
@@ -316,7 +358,8 @@ async function readMarkedWords(projectDir: string, frames: readonly { blueprint:
 
 /**
  * Write `assets/frames/<id>.js` and `<id>.events.json` for every frame but the close, and each custom piece to
- * `assets/custom/<id>.js`. `problems`: what degraded (a plain frame, an unusable touch); the reel still ships.
+ * `assets/custom/<id>.js`. `problems`: what degraded (a plain frame, an unusable touch); the reel still ships. A frame listed in
+ * `assets/solved.json` is never overwritten: its solved copy is put back instead (contract §6, pre-mortem #5).
  */
 export async function compileReel(input: CompileInput): Promise<CompileResult> {
   const { plan, projectDir } = input;
@@ -335,6 +378,8 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
   const idOf = (n: number, fallback: string) => storyboard.find((s) => s.number === n)?.id || fallback;
   const only = input.only ? new Set(input.only) : null;
   const plainSet = new Set(input.plain ?? []);
+  const solved = readSolved(projectDir);
+  const rewrite = new Set(input.rewrite ?? []);
 
   const prepared = planned.filter((f) => f.treatment !== 'close').map((f) => {
     let blueprint = normalBlueprint(f.blueprint);
@@ -354,6 +399,14 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
     const { f, id, blueprint, touches, custom } = p;
     const treatment = String(blueprintTreatment({ ...f, blueprint }));
     const isPlain = p.degraded || plainSet.has(f.n);
+    if (solved[id] && !rewrite.has(f.n)) {
+      if (restoreSolved(projectDir, id)) {
+        out.push({ n: f.n, id, treatment, plain: solved[id].kind === 'plain', solved: true });
+        if (!isPlain) known.push(...namesIn(blueprint));
+        continue;
+      }
+      problems.push(`frame ${f.n}: assets/solved.json lists it but its solved copy is gone, so it is compiled as planned`);
+    }
     if (!only || only.has(f.n)) {
       try {
         if (p.degraded) problems.push(`frame ${f.n}: no blueprint to compile, so it shows its first picture, plain`);
@@ -388,7 +441,8 @@ export type CompiledFrameRecord = {
   id: string;
   name?: string;
   duration?: number;
-  manifest?: Manifest;
+  /** null: a solved frame that doesn't go through compiledFrame, so there's no stage manifest (contract §6). */
+  manifest?: Manifest | null;
   reports?: string[];
   notes?: string[];
   skips?: string[];
@@ -399,6 +453,10 @@ export type CompiledFrameRecord = {
   names_held_back?: string[];
   in_turn?: string[];
   closer_cuts?: boolean;
+  /** Set on a frame `assets/solved.json` lists. */
+  solved?: SolvedEntry;
+  /** Every distinct piece of text the frame showed while it played (compiled-read.mjs), for the solver's words check. */
+  words?: string[];
 };
 
 /** Run kit/compiled-read.mjs in the project: each frame's manifest and what didn't land; with `stills`, a still at its main beat. */

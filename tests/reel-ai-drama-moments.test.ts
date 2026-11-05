@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +12,7 @@ import { EDGE_INSET, findingTimes, MERGE_WITHIN, pickMoments, sceneChanges, SETT
 import type { Runner } from '@/lib/reel-ai-drama/render/runner';
 import { fullStill, makeSheets, sheetGrid, stripLines, stripSvg, TILE, viewerSheets } from '@/lib/reel-ai-drama/render/sheets';
 import type { FrameSpan } from '@/lib/reel-ai-drama/render/video';
-import { OPENING_STILL_AT } from '@/lib/reel-ai-drama/render/video';
+import { frameSpans, OPENING_STILL_AT } from '@/lib/reel-ai-drama/render/video';
 
 // ── Fixtures (the shapes of a real project's STORYBOARD, compiled read and checks) ──────────────
 
@@ -125,6 +126,10 @@ test('finding: the middle of each named range, on the frame it names, in the rea
   assert.deepEqual(findingTimes('"x" is parked (7s–7.8s)'), [7.4]);
   assert.deepEqual(findingTimes('"x" sits low (1.2s); and again (3s-5s)'), [1.2, 4]);
   assert.deepEqual(findingTimes('mark something the picture shows'), []);
+  assert.deepEqual(findingTimes('"x" is visible with no picture (from 2.3s)'), [2.3]);
+  assert.deepEqual(findingTimes('"x" is still fading in at the first instant (t = 0.1s, opacity 0.40): put it on'), [0.1]);
+  assert.deepEqual(findingTimes('"x" first shows at 6.8s, in the frame\'s last 1s: too late'), [6.8]);
+  assert.deepEqual(findingTimes('the face sits at x 540, y 1300 (2s–3s); centre it at y 800–1100'), [2.5]);
   const ms = pick({
     findings: [
       'screen: [off_frame] 02-the-post: "Azure Government" is parked partly off the edge (6.5s–6.7s)',
@@ -253,4 +258,127 @@ test('stills fail loudly, re-made frames leave no old sheets, and fullStill is u
   assert.equal(await fullStill('v.mp4', 3.5, file, { run }), file);
   const last = calls.at(-1)!;
   assert.ok(last.includes('3.5') && !last.includes('-vf'));
+});
+
+// ── The real project (tests/fixtures/iter11-live: the first live reel's storyboard, frames, timing and phone video) ──────
+
+const LIVE = path.join(process.cwd(), 'tests', 'fixtures', 'iter11-live');
+const LIVE_PROJECT = path.join(LIVE, 'project');
+const LIVE_VIDEO = path.join(LIVE, 'video-phone.mp4');
+const LIVE_FRAMES = ['04-the-post-goes-viral', '08-old-email-unexplained-line', '09-300-000-signatures'];
+const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
+
+type LiveBlueprint = {
+  pieces?: { id: string; on?: string }[];
+  labels?: { text: string; on?: string }[];
+  marks?: { kind: string; on_piece?: string; on?: string }[];
+  arrows?: { from: string; to: string; on?: string }[];
+  speech?: { on?: string; piece?: string; text: string }[];
+  camera?: { stops?: { on?: string; aim: string }[] };
+};
+
+/**
+ * A frame's manifest as the stage reports it, rebuilt offline from its compiled module and its voice timing: each piece,
+ * mark, arrow, label and camera stop lands on the first word of its `on` phrase (0 when it has none). The browser that
+ * normally reports it isn't available to tests.
+ */
+function liveRecord(id: string): CompiledFrameRecord {
+  const js = fs.readFileSync(path.join(LIVE_PROJECT, 'assets', 'frames', `${id}.js`), 'utf8');
+  const bp = (JSON.parse(js.slice(js.indexOf('compiledFrame(') + 'compiledFrame('.length, js.lastIndexOf(');'))) as { blueprint: LiveBlueprint }).blueprint;
+  const timing = JSON.parse(fs.readFileSync(path.join(LIVE_PROJECT, 'assets', 'timing', `${id}.json`), 'utf8')) as { duration: number; words: { text: string; start: number }[] };
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9']+/g, ' ').trim().split(' ').filter(Boolean);
+  const words = timing.words.map((w) => ({ w: norm(w.text).join(''), at: w.start }));
+  const cue = (on?: string) => {
+    const want = norm(on ?? '');
+    if (!want.length) return 0;
+    const i = words.findIndex((_, k) => want.every((x, j) => words[k + j]?.w === x.replace(/ /g, '')));
+    return i < 0 ? 0 : words[i]!.at;
+  };
+  return {
+    id,
+    duration: timing.duration,
+    manifest: {
+      pieces: (bp.pieces ?? []).map((p) => ({ id: p.id, at: cue(p.on) })),
+      marks: (bp.marks ?? []).map((k) => ({ kind: k.kind, on: k.on_piece ?? null, at: cue(k.on) })),
+      arrows: (bp.arrows ?? []).map((a) => ({ from: a.from, to: a.to, at: cue(a.on) })),
+      labels: (bp.labels ?? []).map((l) => ({ text: l.text, at: cue(l.on) })),
+      speech: (bp.speech ?? []).map((s) => ({ on: s.piece ?? '', text: s.text, at: cue(s.on) })),
+      camera: { stops: (bp.camera?.stops ?? []).map((s) => ({ at: cue(s.on), aim: s.aim })) },
+    },
+  };
+}
+
+function liveInput() {
+  const spans = frameSpans(fs.readFileSync(path.join(LIVE_PROJECT, 'STORYBOARD.md'), 'utf8'));
+  const records = Object.fromEntries(LIVE_FRAMES.map((id) => [String(Number(id.slice(0, 2))), liveRecord(id)]));
+  return { spans, records };
+}
+
+test('real project: all four sources on the live reel\'s storyboard, frames and timing; nothing within 0.15 s of another in a frame', () => {
+  const { spans, records } = liveInput();
+  // Real check lines, in the shapes the kit writes them (assemble prefixes the step).
+  const findings = [
+    'screen: [off_frame] 08-old-email-unexplained-line: "p_old" is mostly off the edge (2.1s–2.9s)',
+    'screen: [low_contrast] 09-300-000-signatures: "p_count" reads at contrast 1.8:1 against what is behind it (from 4.2s); give it a plate or a contrasting colour',
+    'bounds: 04-the-post-goes-viral: [too_small] "boycott" is too small to read on a phone (14px on screen, at least 28px; push in, enlarge, or make it filler) (1.0s)',
+  ];
+  // Scene changes the video really has at its cuts, plus two the timeline can't explain: 4.3 s into frame 1, which has no manifest, and frame 8.
+  const changes = [4.3, 7.9, 22.467, 45.367, 48.966, 52.7];
+  const ms = pickMoments({ spans, records, findings, changes });
+  const story = spans.filter((s) => s.treatment !== 'close');
+
+  assert.deepEqual([...new Set(ms.map((m) => m.frame))], story.map((s) => s.number), 'every story frame, the close left out');
+  for (const s of story) {
+    const own = ofFrame(ms, s.number);
+    assert.ok(own.every((m) => m.reel_t >= s.start && m.reel_t < s.end), `frame ${s.number} stays in its span`);
+    assert.ok(own.every((m, i) => i === 0 || m.t - own[i - 1]!.t > MERGE_WITHIN), `frame ${s.number} has no two moments within ${MERGE_WITHIN}s`);
+    assert.ok(own.length >= 2 && own[0]!.source === 'edge' && own.at(-1)!.source === 'edge', `frame ${s.number} has both edges`);
+  }
+  assert.equal(ms[0]!.reel_t, OPENING_STILL_AT);
+  for (const n of [4, 8, 9]) assert.ok(ofFrame(ms, n).some((m) => m.source === 'timeline'), `frame ${n} has timeline moments`);
+  assert.ok(ofFrame(ms, 1).every((m) => m.source !== 'timeline'), 'a frame with no manifest has no timeline moments');
+
+  const f8 = ofFrame(ms, 8);
+  assert.ok(f8.some((m) => /p_ice arrives/.test(m.what) && /p_contract arrives/.test(m.what)), 'two pieces on the same word share one tile with both labels');
+  assert.ok(f8.some((m) => /circle mark on p_face/.test(m.what)));
+  assert.ok(f8.some((m) => /arrow p_contract to p_old/.test(m.what)));
+  assert.ok(f8.some((m) => m.source === 'finding' && m.t === 2.5 && /\[off_frame\] "p_old"/.test(m.what)));
+  assert.ok(ofFrame(ms, 9).some((m) => /check: \[low_contrast\]/.test(m.what) && m.t === 4.2), 'an open range is shot where it starts');
+  assert.ok(ofFrame(ms, 4).some((m) => /check: \[too_small\] "boycott"/.test(m.what) && m.t === 1), 'bounds lines name the frame before the rule');
+  assert.ok(ofFrame(ms, 9).some((m) => /counter/.test(m.what) || /p_count arrives/.test(m.what)));
+
+  const change = ms.filter((m) => m.source === 'change');
+  assert.deepEqual(change.map((m) => [m.frame, m.reel_t]), [[1, 4.3], [8, 48.966]], 'cuts are the edges; only unexplained changes become moments');
+});
+
+test('real video: sceneChanges reads the rendered reel\'s cuts with ffmpeg', { skip: !hasFfmpeg && 'no ffmpeg' }, () => {
+  const changes = sceneChanges(LIVE_VIDEO);
+  const { spans } = liveInput();
+  assert.ok(changes.length >= 8, `changes: ${changes.join(', ')}`);
+  // Most frame cuts show as a sharp change within a frame of video of the storyboard's start.
+  const cuts = spans.slice(1).filter((s) => changes.some((c) => Math.abs(c - s.start) <= 0.1));
+  assert.ok(cuts.length >= spans.length / 2, `cuts seen: ${cuts.map((s) => s.number).join(', ')}`);
+  const ms = pickMoments({ ...liveInput(), findings: [], changes });
+  assert.ok(ms.some((m) => m.source === 'change'), 'the live reel has changes no timeline explains');
+});
+
+test('real video: a frame\'s sheet is cut from the video, tiles full size, the picture whole below its label', { skip: !hasFfmpeg && 'no ffmpeg' }, async () => {
+  const dir = tempDir();
+  const ms = ofFrame(pickMoments({ ...liveInput(), findings: [], changes: [] }), 8);
+  assert.ok(ms.length > 4, 'enough moments to fill a 3x2 sheet');
+  const sheets = await makeSheets(LIVE_VIDEO, ms, dir);
+  assert.deepEqual(sheets.flatMap((s) => s.moments), ms, 'every moment on a tile, in order');
+  const sheet = sheets[0]!;
+  const { cols, rows } = sheetGrid(sheet.moments.length);
+  const { data, info } = await sharp(sheet.file).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  assert.equal(info.width, cols * TILE.W + (cols - 1) * 8);
+  const strip = (info.height - (rows - 1) * 8) / rows - TILE.H;
+  assert.ok(strip >= 38 && Number.isInteger(strip), `strip ${strip}`);
+  // The first tile's picture is the video at that moment: compare it with a full still scaled to the tile.
+  const full = await fullStill(LIVE_VIDEO, sheet.moments[0]!.reel_t, path.join(dir, 'full.png'));
+  assert.equal((await sharp(full).metadata()).width, 720, 'the full still is the video\'s own size');
+  const want = await sharp(full).resize(TILE.W, TILE.H, { fit: 'fill' }).removeAlpha().raw().toBuffer();
+  let diff = 0;
+  for (let y = 0; y < TILE.H; y++) for (let x = 0; x < TILE.W; x++) for (let c = 0; c < 3; c++) diff += Math.abs(data[((strip + y) * info.width + x) * 3 + c]! - want[(y * TILE.W + x) * 3 + c]!);
+  assert.ok(diff / (TILE.W * TILE.H * 3) < 12, `mean difference ${diff / (TILE.W * TILE.H * 3)}`);
 });

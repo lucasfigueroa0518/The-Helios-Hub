@@ -17,7 +17,8 @@ is one moment cut from the rendered video, chosen by code: the frame's first and
 timeline does, what a measured check named, and sharp changes in the picture. Tiles can look nearly alike,
 and that is never a finding.
 
-Each tile is the whole phone screen at about 40% of its size. Above its picture is a black strip with the
+Each tile is the whole phone screen at about 40% of its size, so it is small: fine detail and small text render
+softer on a tile than on the phone, and every size is read relative to the tile. Above its picture is a black strip with the
 frame number, the time in the reel, the time in the frame and what the timeline says happens then. The strip is not
 part of the picture, so never judge it, and judge what the picture shows where the two differ.
 

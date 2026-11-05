@@ -39,6 +39,7 @@ function timelineEvents(record: CompiledFrameRecord | undefined, duration: numbe
       ...(typeof p.until === 'number' && p.until < duration - EDGE_INSET ? [{ at: p.until, what: `${p.id} leaves` }] : []),
     ]),
     ...(m.marks ?? []).map((k) => ({ at: k.at, what: `${k.kind} mark${k.on ? ` on ${k.on}` : ''}` })),
+    ...(m.arrows ?? []).map((a) => ({ at: a.at, what: `arrow ${a.from} to ${a.to}` })),
     ...(m.labels ?? []).map((l) => ({ at: l.at, what: `label "${clip(l.text)}"` })),
     ...(m.speech ?? []).map((s) => ({ at: s.at, what: `speech "${clip(s.text)}"` })),
     ...(m.hook ? [{ at: m.hook.at, what: `hook "${clip(m.hook.text)}"` }] : []),
@@ -54,9 +55,14 @@ function findingFrame(finding: string, frames: { number: number; id: string | nu
   return n !== undefined && frames.some((f) => f.number === Number(n)) ? Number(n) : null;
 }
 
-/** The middle of each time range a line names: `(1.2s)` or `(1.2s–3.4s)`, in seconds into the frame. Pure. */
+/**
+ * The middle of each time range a line names, in seconds into the frame, in the shapes the kit's checks write: `(1.2s)`,
+ * `(1.2s–3.4s)`, `(from 1.2s)`, `(t = 0.1s, …)` and `first shows at 1.2s`. An open range (`from`) is shot where it starts. Pure.
+ */
 export function findingTimes(finding: string): number[] {
-  return [...finding.matchAll(/\((\d+(?:\.\d+)?)s(?:\s*[–-]\s*(\d+(?:\.\d+)?)s)?\)/g)].map((m) => round((Number(m[1]) + Number(m[2] ?? m[1])) / 2));
+  const ranges = [...finding.matchAll(/\((?:from\s+|t\s*=\s*)?(\d+(?:\.\d+)?)s(?:\s*[–-]\s*(\d+(?:\.\d+)?)s)?\s*[),;:]/g)].map((m) => round((Number(m[1]) + Number(m[2] ?? m[1])) / 2));
+  const at = [...finding.matchAll(/\bshows at (\d+(?:\.\d+)?)s\b/g)].map((m) => round(Number(m[1])));
+  return [...new Set([...ranges, ...at])];
 }
 
 /** A check's line as a label: its rule and what it found, without the script and frame it already belongs to. Pure. */

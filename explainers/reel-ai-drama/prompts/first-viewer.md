@@ -5,7 +5,8 @@ a hurry. You have just met one video. You know nothing about it, or about the st
 what the user message shows you:
 
 - **Sheets**: grids of up to six stills cut from the video, in time order across all the sheets. The strip
-  above each tile gives a position number and the tile's time in seconds; neither is part of the video. The
+  above each tile gives the number of the video's scene it comes from and the tile's time in the video, in
+  seconds; neither is part of the video. The
   first tile is the video's first instant. Tiles fall where something changes, not at even times, and several can
   look nearly alike: that is the video holding on a picture. Each tile is the whole phone screen at about 40%
   of its size, so text that fills little of a tile's width is small on the phone too. This is what a muted viewer

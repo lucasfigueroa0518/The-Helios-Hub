@@ -5,7 +5,9 @@
 //   storyboard   at least two frames; exactly one close and it is the last frame, carrying the spoken
 //                question (MD-13, MD-18); every other frame names a treatment the kit builds
 //   source       each frame module exists, has a default export, imports only from ../kit/, and uses no
-//                clock, randomness, CSS animation or network (render must be a pure function)
+//                clock, randomness, CSS animation or network (render must be a pure function). A frame the
+//                solver wrote (listed in assets/solved.json) may place its pieces by hand: [hand_placed] is
+//                waived for it, and nothing else is
 //   events       the events file is a valid list (sound.mjs's rules), with no whoosh or sting kinds
 //                (every sound is an action's own or the place's ambience), and no sound that implies
 //                an event the record doesn't show without naming the asset that shows it (D-48)
@@ -86,6 +88,19 @@ export function sourceProblems(given) {
   return out;
 }
 
+/** The ids assets/solved.json lists (Iteration 11 §6): the solver's frames. Empty when there is none. */
+export function solvedIds(root) {
+  try {
+    const raw = JSON.parse(readFileSync(join(root, 'assets', 'solved.json'), 'utf8'));
+    return new Set(raw && typeof raw === 'object' && !Array.isArray(raw) ? Object.keys(raw) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** A solved frame's source problems: the hand-placing rule is waived, and only that one. Pure. */
+export const solvedSourceProblems = (src) => sourceProblems(src).filter((p) => !p.startsWith('[hand_placed]'));
+
 /** Problems with the storyboard as a whole (breakage only). */
 export function storyboardProblems(frames) {
   const out = [];
@@ -135,13 +150,14 @@ export async function tryFrames(root, only = null) {
   const media = projectMedia(root);
   const assetIds = Object.keys(media).length ? new Set(Object.keys(media)) : null;
   const frames = all.filter((f) => (!only || f.id === only) && !isClose(f));
+  const solved = solvedIds(root);
   const report = [];
   for (const f of frames) {
     const file = join(root, 'assets', 'frames', `${f.id}.js`);
     const mine = [];
     if (!f.id) mine.push('has no src');
     else if (!existsSync(file)) mine.push(`assets/frames/${f.id}.js is missing`);
-    else mine.push(...sourceProblems(readFileSync(file, 'utf8')));
+    else mine.push(...(solved.has(f.id) ? solvedSourceProblems : sourceProblems)(readFileSync(file, 'utf8')));
     const ev = join(root, 'assets', 'frames', `${f.id}.events.json`);
     let list = null;
     try {
