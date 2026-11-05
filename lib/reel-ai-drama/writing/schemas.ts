@@ -219,22 +219,6 @@ export const SUBMIT_PLAN_TOOL: SubmitTool = {
   }),
 };
 
-/** The creative pass (types.ts `Touches`): everything a touch can add. None is a good answer. Not strict: each type uses its own fields. */
-export const SUBMIT_TOUCHES_TOOL: SubmitTool = {
-  name: 'submit_touches',
-  description: 'Submit the touches and custom pieces you add, once. Empty lists mean the reel needs none.',
-  strict: false,
-  input_schema: obj({
-    touches: list(
-      partly(
-        { id: str, frame: { type: 'integer' }, why: str, type: { type: 'string', enum: ['extra_line', 'in_turn', 'closer_cuts', 'mark', 'ground_tone', 'sound'] } },
-        { text: str, for: str, on: {}, piece_ids: strList, from: str, to: {}, aim: str, kind: str, on_piece: str, target: str, what: str, dur: num },
-      ),
-    ),
-    custom: list(partly({ id: str, frame: { type: 'integer' }, why: str, aspect: num, min_width: num, on: str, code: str }, { until: str })),
-  }),
-};
-
 export const SUBMIT_CAPTION_TOOL: SubmitTool = {
   name: 'submit_caption',
   description: 'Submit the post caption, once.',

@@ -391,19 +391,8 @@ export type Blueprint = {
   sounds: { kind: string; what: string; on: BlueprintWords; dur?: number }[];
 };
 
-/** What the creative pass may add to a frame (ITERATION-10-CONTRACT §5). Touches only add. */
-export type Touch = { id: string; frame: number; why: string } & (
-  | { type: 'extra_line'; text: string; for?: string; on: BlueprintWords }
-  | { type: 'in_turn'; piece_ids: string[]; from: BlueprintWords; to: BlueprintWords }
-  | { type: 'closer_cuts'; aim: string; on: BlueprintWords[] }
-  | { type: 'mark'; kind: string; on_piece: string; target?: string; on: BlueprintWords }
-  | { type: 'ground_tone'; on: BlueprintWords; to: number }
-  | { type: 'sound'; kind: string; what: string; on: BlueprintWords; dur?: number }
-);
 /** A small piece of code in a box the layout assigns; it can touch nothing else (assets/custom/<id>.js). */
 export type CustomPiece = { id: string; frame: number; why: string; aspect: number; min_width: number; on: BlueprintWords; until?: BlueprintWords; code: string };
-/** assets/touches.json. */
-export type Touches = { touches: Touch[]; custom: CustomPiece[] };
 
 /**
  * A blueprint with its asset ids rewritten by `to` (a wish resolved, a photo swapped for its cutout, a failed make). `to`
@@ -583,7 +572,7 @@ export type JobStage =
   | 'sound_design'
   | 'compile'
   | 'assemble'
-  | 'creative_pass'
+  | 'solver'
   | 'render'
   | 'first_viewer'
   | 'deliver';

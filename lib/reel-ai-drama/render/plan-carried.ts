@@ -19,7 +19,8 @@ export type Manifest = {
 
 /** One frame as compiled-read reports it. */
 export type FrameManifest = {
-  manifest?: Manifest;
+  /** null: a frame the solver wrote as its own code, which has no stage manifest (Iteration 11 §6). */
+  manifest?: Manifest | null;
   /** Seconds each phrase resolved to in this frame. */
   cues?: Record<string, number>;
   /** Labels the stage holds back on purpose: a name already introduced; a logo that says its own. */
@@ -125,12 +126,16 @@ function missesIn(frame: number, b: Blueprint, m: FrameManifest): PlanMiss[] {
   return out;
 }
 
-/** Every planned thing a frame's render doesn't carry. A frame with no manifest is one miss; the close has no plan to carry. */
+/**
+ * Every planned thing a frame's render doesn't carry. A frame with no reading is one miss; the close has no plan to carry, and
+ * neither has a frame the solver wrote as code (`manifest: null`): measured checks still run on it.
+ */
 export function checkPlanCarried(plan: DirectorPlan, manifests: Record<string, FrameManifest | null | undefined>): PlanMiss[] {
   return plan.frames.flatMap((f) => {
     if (!f.blueprint || f.treatment === 'close') return [];
     const m = manifests[String(f.n)];
     if (!m) return [{ frame: f.n, kind: 'frame' as const, id: 'frame', why: 'no manifest came back for it' }];
+    if (m.manifest === null && !m.failed) return [];
     return missesIn(f.n, f.blueprint, m);
   });
 }

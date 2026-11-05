@@ -36,10 +36,30 @@ import {
 } from '@/lib/reel-ai-drama/production/jobs';
 import { varietyFindings } from '@/lib/reel-ai-drama/checks/variety';
 import { designFindingText, type DesignReview } from '@/lib/reel-ai-drama/checks/design';
-import { applyTouches, type CreativeResult } from '@/lib/reel-ai-drama/production/creative';
-import { NO_TOUCHES, TOUCHES_FILE, type CompiledRead, type CompileInput, type CompileResult } from '@/lib/reel-ai-drama/render/compile';
+import {
+  describePictures,
+  lastResort,
+  lastResortFrames,
+  measuredFinding,
+  readVersions,
+  recordFindings,
+  reviewFinding,
+  seriousFindings,
+  settleFrame,
+  solverLook,
+  solverRound,
+  type FrameAttempt,
+  type FrameFinding,
+  type FrameVersion,
+  type FrameWork,
+  type ReelBrief,
+  type SolverDeps,
+  type SolverImage,
+} from '@/lib/reel-ai-drama/production/solver';
+import type { CompiledRead, CompileInput, CompileResult } from '@/lib/reel-ai-drama/render/compile';
 import { checkPlanCarried, planMissText, type PlanMiss } from '@/lib/reel-ai-drama/render/plan-carried';
-import type { FrameStill } from '@/lib/reel-ai-drama/render/video';
+import type { Sheet } from '@/lib/reel-ai-drama/render/sheets';
+import { frameSpans } from '@/lib/reel-ai-drama/render/video';
 import { planWithoutFailedMakes } from '@/lib/reel-ai-drama/render/make';
 import { applyWishes } from '@/lib/reel-ai-drama/render/wishes';
 import { centralCutoutRequests, cutoutSwaps, stageCutoutRequests, useCutouts, wishCutoutRequests, type CutoutRequest } from '@/lib/reel-ai-drama/harvest/cutouts';
@@ -47,8 +67,10 @@ import { emptyTrace, noOpFlags } from '@/lib/reel-ai-drama/production/noop';
 import type { SoundCues } from '@/lib/reel-ai-drama/render/sound-design';
 import { sameVoices, type VoiceInput, type VoiceResult } from '@/lib/reel-ai-drama/render/voice';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
+import { blueprintAssets } from '@/lib/reel-ai-drama/types';
 import type {
   Asset,
+  Blueprint,
   DeliveryReport,
   DirectorPlan,
   FactSheet,
@@ -60,7 +82,6 @@ import type {
   PostText,
   ShotWish,
   StoryNotes,
-  Touches,
   VisualsInventory,
   WriterDraft,
 } from '@/lib/reel-ai-drama/types';
@@ -72,11 +93,12 @@ import { isLogo, planWarnings, standInsFrom, type StandIn } from '@/lib/reel-ai-
 /**
  * One Reel AI Drama production run (PROCESS.md P1–P9, CONTRACT.md § B5):
  *   pick → reporting ‖ harvest → writer → blind story editor → (notes: one writer rewrite) → cutouts →
- *   director → wish search → (lines back: one revise) → lock → facts check (one fix, then cut) → workspace + project files → voice → integrity (one fix
- *   via the director, then warn) → sound design → compile → assemble and measure (breakage or a missed plan item: one
- *   recompile on a new layout, then a flag) → creative pass → touches (a failing one is removed) → render → contact sheet
- *   → first viewer ‖ design review (picture findings: one director re-plan of the named frames, recompile, re-render,
- *   then warn) → post text → reuse record → deliver. No model writes frame code (ITERATION-10).
+ *   director → wish search → (lines back: one revise) → lock → facts check (one fix, then cut) → workspace + project files → voice →
+ *   image check ‖ plan checks (one combined `pre_build` fix of the named frames, escalated once if still found, then flags) →
+ *   sound design → compile → measure (a frame that won't build ships plain) → render → sheets of moments → first viewer ‖ design
+ *   review → director content pass (once) → solver look → two solver rounds (each: build, measure, render, re-read the changed
+ *   frames, ship the version with the fewest serious findings) → last resort → final read → flags → post text → reuse record →
+ *   deliver (Iteration 11). The solver may write a frame's code; measured checks still run on it.
  * Every builder's module is reached through ProductionDeps, so the whole run can be stubbed; the live
  * modules are wired in production/live.ts only.
  *
@@ -142,15 +164,14 @@ export type ProductionDeps = {
       ctx: StepCtx,
     ): Promise<DirectorPlan>;
     writePost(input: { draft: WriterDraft; facts: FactSheet; inventory: VisualsInventory; usedAssetIds: string[] }, ctx: StepCtx): Promise<PostText>;
-    /** The creative pass (ITERATION-10 §X): proposes touches on the compiled reel; fails open. Missing: the reel ships as compiled. */
-    creativePass?(input: { draft: WriterDraft; plan: DirectorPlan; projectDir: string }, ctx: StepCtx): Promise<CreativeResult>;
   };
   checks: {
     checkFacts(jev: DramaJevRunner, input: { draft: WriterDraft; facts: FactSheet }): Promise<{ unsupported: { line_id: string; why: string }[] }>;
     checkIntegrity(input: { plan: DirectorPlan; inventory: VisualsInventory; draft: WriterDraft; facts: FactSheet }, ctx: StepCtx): Promise<{ problems: IntegrityProblem[] }>;
-    checkFirstViewer(input: { contactSheet: string; captions: string; draft: WriterDraft; facts: FactSheet }, ctx: StepCtx): Promise<FirstViewerResult>;
-    /** MD-129: the design reviewer on one still per story frame, beside the first viewer; fails open. Missing: no design review. */
-    checkDesign?(input: { stills: FrameStill[]; plan: DirectorPlan; draft: WriterDraft }, ctx: StepCtx): Promise<DesignReview>;
+    /** Reads unlabelled sheets of the whole reel (`viewerSheets`). */
+    checkFirstViewer(input: { sheets: Sheet[]; captions: string; draft: WriterDraft; facts: FactSheet }, ctx: StepCtx): Promise<FirstViewerResult>;
+    /** MD-129: the design reviewer on each frame's sheets of moments, beside the first viewer; fails open. Missing: no design review. */
+    checkDesign?(input: { sheets: Sheet[]; plan: DirectorPlan; draft: WriterDraft }, ctx: StepCtx): Promise<DesignReview>;
   };
   render: {
     kitGuide: string;
@@ -168,15 +189,24 @@ export type ProductionDeps = {
     compileReel(input: CompileInput): Promise<CompileResult>;
     /** What the compiled frames really did, from the browser: the plan check reads it. Missing: no plan check. */
     readCompiled?(projectDir: string): Promise<CompiledRead> | CompiledRead;
-    /** The measured checks on one frame, for the touch removal rule. Missing: no touch is tried. */
-    frameFindings?(projectDir: string, frameId: string): Promise<string[]> | string[];
     assembleProject(projectDir: string): Promise<{ ok: boolean; problems: string[] }>;
     renderVideo(projectDir: string): Promise<string>;
     contactSheet(projectDir: string, videoPath: string): Promise<string>;
-    /** MD-129: one still per story frame (the close excluded), for the design reviewer. */
-    frameStills?(projectDir: string, videoPath: string): Promise<FrameStill[]>;
+    /**
+     * Iteration 11 §2–§3: the moments of the rendered reel (`frames`: only these; null: every frame) cut into labelled sheets
+     * for the reviewers and the solver, and with `viewer`, unlabelled sheets of the whole reel for the first viewer. Missing:
+     * no sheets, so no design review, first viewer or solver look.
+     */
+    reelSheets?(projectDir: string, videoPath: string, input: { findings: string[]; dir: string; frames: number[] | null; viewer: boolean }): Promise<{ review: Sheet[]; viewer: Sheet[] }>;
+    /** One full-size still from the video at `reel_t` seconds, for the solver. */
+    fullStill?(videoPath: string, reel_t: number, file: string): Promise<string>;
     videoSeconds?(videoPath: string): Promise<number | null>;
   };
+  /**
+   * Iteration 11 §5: the problem solver's deps for this job (its models, limit, kit guide and the kit's CLIs on the project).
+   * Missing: no solver; the reel ships as compiled and reviewed, with its findings flagged.
+   */
+  solver?(ctx: StepCtx, input: { projectDir: string; inventory: VisualsInventory }): SolverDeps;
 };
 
 export type IntegrityProblem = { frame: number; asset_id: string; why: string };
@@ -252,17 +282,43 @@ export function firstViewerFindings(r: FirstViewerResult, hookSeconds: number): 
   return out;
 }
 
+/** The design items the director's content pass takes (Iteration 11 §4); every other finding goes to the solver. */
+export const CONTENT_ITEMS: readonly string[] = ['nothing_missing', 'one_medium'];
+
 /**
- * What the one director re-plan is asked to fix (MD-129): the design reviewer's problems, each on its frame, and the first
- * viewer's picture findings, on the frame they name, or else the opening that carries the hook. The reviewer's warnings never
- * reach it. Pure.
+ * What the director's content pass is asked to fix: the first viewer's picture findings (on the frame they name, else the
+ * opening that carries the hook) and the design review's `nothing_missing` and `one_medium` findings, either severity. Pure.
  */
-export function pictureFixProblems(picture: readonly string[], design: DesignReview | null): FixProblem[] {
+export function contentPassProblems(picture: readonly string[], design: DesignReview | null): FixProblem[] {
+  const content = [...(design?.problems ?? []), ...(design?.warnings ?? [])].filter((p) => CONTENT_ITEMS.includes(p.item));
   return [
     ...picture.map((why) => ({ frame: Number(/\bframe (\d+)/i.exec(why)?.[1] ?? 1), asset_id: null, why: `The first viewer: ${why}` })),
-    ...(design?.problems ?? []).map((p) => ({ frame: p.frame, asset_id: null, why: `The design review: ${designFindingText(p)}` })),
+    ...content.map((p) => ({ frame: p.frame, asset_id: null, why: `The design review: ${designFindingText(p)}` })),
   ];
 }
+
+/** What every solver call shares about the reel: the script by frame, every picture described, and the words it states. Pure. */
+export function solverBrief(draft: WriterDraft, plan: DirectorPlan, facts: FactSheet, inventory: VisualsInventory): ReelBrief {
+  const lines = new Map(draft.rungs.flatMap((r) => r.lines.map((l) => [l.id, l] as const)));
+  const script = plan.frames
+    .map((f) => `Frame ${f.n}: ${f.line_ids.map((id) => lines.get(id)?.text ?? '').filter(Boolean).join(' ')}${f.on_screen ? ` [on screen: ${f.on_screen}]` : ''}`)
+    .join('\n');
+  const allowed = [
+    ...[...lines.values()].flatMap((l) => [l.text, l.on_screen ?? '']),
+    draft.hook.on_screen,
+    ...plan.frames.map((f) => f.on_screen ?? ''),
+    JSON.stringify(facts),
+  ].filter(Boolean).join('\n');
+  return { script, pictures: describePictures(inventory), allowed };
+}
+
+/** `plan` with frame `n` on `blueprint`, its pictures added to the frame's assets. Pure. */
+export function withBlueprint(plan: DirectorPlan, n: number, blueprint: Blueprint): DirectorPlan {
+  return { ...plan, frames: plan.frames.map((f) => (f.n === n ? { ...f, blueprint, asset_ids: [...new Set([...blueprintAssets(blueprint), ...(f.asset_ids ?? [])])] } : f)) };
+}
+
+/** The measured state of the project: each frame's lines, and the lines no frame could be found for. */
+type Measured = { ok: boolean; byFrame: Map<number, string[]>; loose: string[] };
 
 /** A finding that starts in the words: the story told back wrong or not understood (checks/first-viewer.ts wording). */
 const WORDS_FINDING = /^The viewer told the story as|did not understand the story/i;
@@ -667,23 +723,6 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       }
     }
 
-    // MD-59/60: variety (no one shown the same way > 2 in a row; every main character on screen when named;
-    // no staging type twice running): one director fix round, then warn.
-    const variety = varietyFindings(plan, { draft, inventory, facts, standIns });
-    if (variety.length) {
-      await stage('director');
-      const flagged = [...new Set(variety.map((v) => v.frame))];
-      try {
-        const fixed = await arrive(await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'plan_check', plan, problems: variety } }, ctx), 'variety fix');
-        plan = reconcilePlan(draft, mergeFrames(plan, fixed, flagged));
-        await keepText('director_plan', plan);
-      } catch (error) {
-        await flag('integrity', `The variety re-plan failed (${errorText(error)}); frames ${flagged.join(', ')} keep their plan.`);
-      }
-      await settle('variety fix');
-      for (const v of varietyFindings(plan, { draft, inventory, facts, standIns })) await flag('integrity', `Variety, frame ${v.frame}: ${v.why}`);
-    }
-
     // MD-59: the assets the director asked to be made for exact moments; a failed make falls back (fail open).
     const runMakes = async () => {
       const pending = (plan.makes ?? []).filter((m) => !inventory.assets.some((a) => a.id === m.id));
@@ -736,47 +775,60 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     const question = closeVoiceSeconds(projectDir);
     if (question !== null && question > CLOSE.maxQuestion) log('close_stretched', { jobId: job.id, questionSeconds: question, closeSeconds: CLOSE.duration });
 
-    // C2: integrity (each image shows what its line claims): one fix via the director, then warn.
+    // Iteration 11 §4: the plan checks (MD-59/60 variety) and the image check (C2) go to the director together, once, before
+    // anything is built (`pre_build`): only the named frames go and come back. A problem the re-check still finds gets one more
+    // round on the escalation model; what remains ships as flags.
     await stage('integrity_check');
-    const integrityCheck = async (): Promise<Awaited<ReturnType<ProductionDeps['checks']['checkIntegrity']>>> => {
+    const integrityCheck = async (): Promise<IntegrityProblem[]> => {
       try {
-        return await deps.checks.checkIntegrity({ plan, inventory, draft, facts }, ctx);
+        return (await deps.checks.checkIntegrity({ plan, inventory, draft, facts }, ctx)).problems;
       } catch (error) {
         await flag('integrity', `The image check failed (${errorText(error)}); the pictures ship unchecked.`);
-        return { problems: [] };
+        return [];
       }
     };
-    const integrity = await integrityCheck();
-    await keepText('integrity_check', { round: 0, problems: integrity.problems });
+    const preBuildFindings = async () => ({ integrity: await integrityCheck(), variety: varietyFindings(plan, { draft, inventory, facts, standIns }) });
+    let found = await preBuildFindings();
+    await keepText('integrity_check', { round: 0, problems: found.integrity, variety: found.variety });
     await settle('integrity check');
-    if (integrity.problems.length > 0) {
+    let preBuildFixed = false;
+    for (const escalate of [false, true]) {
+      if (!found.integrity.length && !found.variety.length) break;
       // A garbled image never stays an anchor: its person's next best portrait takes over before the fix.
-      const reanchored = reanchor(inventory, garbledAssetIds(integrity.problems));
+      const reanchored = reanchor(inventory, garbledAssetIds(found.integrity));
       if (reanchored.moved.length) {
         inventory = reanchored.inventory;
         await keepText('inventory', inventory);
         for (const m of reanchored.moved) log('reanchored', { jobId: job.id, ...m });
       }
-      const flagged = [...new Set(integrity.problems.map((p) => p.frame))];
-      let still = integrity.problems;
+      const problems: FixProblem[] = [...found.variety.map((v) => ({ frame: v.frame, asset_id: v.asset_id, why: v.why })), ...found.integrity];
+      const named = [...new Set(problems.map((p) => p.frame))];
+      await stage('director');
       try {
         const fixed = await arrive(
-          await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'image_check', plan, problems: integrity.problems } }, ctx),
-          'image-check fix',
+          await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'pre_build', plan, problems, ...(escalate ? { escalate } : {}) } }, ctx),
+          escalate ? 'pre-build fix (escalated)' : 'pre-build fix',
         );
-        plan = reconcilePlan(draft, mergeFrames(plan, fixed, flagged));
+        plan = reconcilePlan(draft, mergeFrames(plan, fixed, named));
         await keepText('director_plan', plan);
+        preBuildFixed = true;
         // Makes the fix asked for exist before the re-check looks at them (they were "not in the inventory").
         if (deps.render.makeAssets) await runMakes();
         fs.cpSync(harvestDir, ws.jobDir, { recursive: true });
-        await stage('integrity_check');
-        still = (await integrityCheck()).problems;
-        await keepText('integrity_check', { round: 1, problems: still });
       } catch (error) {
-        await flag('integrity', `The re-plan on the image check failed (${errorText(error)}); frames ${flagged.join(', ')} keep their plan.`);
+        await settle('pre-build fix');
+        await flag('integrity', `The pre-build re-plan failed (${errorText(error)}); frames ${named.join(', ')} keep their plan.`);
+        break;
       }
-      await settle('integrity fix');
-      for (const p of still) await flag('integrity', `Frame ${p.frame} (${p.asset_id}): ${p.why}`);
+      await settle(escalate ? 'pre-build fix (escalated)' : 'pre-build fix');
+      await stage('integrity_check');
+      found = await preBuildFindings();
+      await keepText('integrity_check', { round: escalate ? 2 : 1, problems: found.integrity, variety: found.variety });
+      await settle('integrity re-check');
+    }
+    for (const p of found.integrity) await flag('integrity', `Frame ${p.frame} (${p.asset_id}): ${p.why}`);
+    for (const v of found.variety) await flag('integrity', `Variety, frame ${v.frame}: ${v.why}`);
+    if (preBuildFixed) {
       // The rewrite must not lose the voice: same lines → assemble re-paces from the voice already made;
       // different lines → voice them again (MD-58: a frame shorter than its voice cuts the line off).
       const voiced = fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8');
@@ -799,9 +851,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       for (const p of sound.problems.filter((x) => !x.startsWith('warning:'))) await flag('render', `Sound design: ${p}`);
     }
 
-    // P7: code compiles every frame from its blueprint. No model writes a frame.
-    let accepted: Touches = NO_TOUCHES;
-    const seeds: Record<number, number> = {};
+    // P7: code compiles every frame from its blueprint.
     const plainFrames: number[] = [];
     let compiledFrames: CompileResult['frames'] = [];
     const flagOnce = async (check: JobFlag['check'], detail: string) => {
@@ -811,95 +861,60 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     };
     const compile = async (only?: number[]) => {
       await stage('compile');
-      const done = await deps.render.compileReel({ plan, inventory, projectDir, touches: accepted, seeds, plain: plainFrames, ...(only ? { only } : {}) });
+      const done = await deps.render.compileReel({ plan, inventory, projectDir, plain: plainFrames, ...(only ? { only } : {}) });
       compiledFrames = done.frames;
       for (const p of done.problems) await flagOnce('render', `Compile: ${p}`);
     };
-    const measure = async (label: string | number) => {
+    const idOf = (n: number) => compiledFrames.find((f) => f.n === n)?.id ?? '';
+    /**
+     * Assembly's breakage, the plan check and each frame's own reports, by frame. Nothing is flagged here: the solver answers
+     * what it can, and what the last measurement still finds ships as flags.
+     */
+    const measure = async (label: string): Promise<Measured> => {
       await stage('assemble');
       const result = await deps.render.assembleProject(projectDir);
       await keepText('breakage', { round: label, ...result });
-      return result;
-    };
-    /** The plan check on the render: every planned thing, on its word. Without a browser it can't run, and that's flagged. */
-    const carried = async (): Promise<PlanMiss[]> => {
-      if (!deps.render.readCompiled) return [];
-      let read: CompiledRead;
-      try {
-        read = await deps.render.readCompiled(projectDir);
-      } catch (error) {
-        read = { ok: false, frames: {}, stills: [], skipped: errorText(error) };
-      }
-      if (!read.ok) {
-        await flagOnce('breakage', `The plan check could not run: ${read.skipped ?? 'no reading came back'}.`);
-        return [];
-      }
-      for (const [n, f] of Object.entries(read.frames)) for (const r of f.reports ?? []) await flagOnce('render', `Frame ${n}: ${r}`);
-      return checkPlanCarried(plan, read.frames);
-    };
-    /**
-     * Measured breakage or a missed plan item gets one recompile on a new layout, then a flag. A frame that still won't build
-     * or draw ships as a plain picture, flagged: nothing here blocks the reel.
-     */
-    const measureAndRepair = async (label: string) => {
-      let result = await measure(label);
-      let misses = await carried();
-      const named = () => [...new Set([...result.problems.map((p) => problemFrame(p, compiledFrames)), ...misses.map((m) => m.frame)])].filter((n): n is number => n !== null);
-      const first = named();
-      if (first.length) {
-        for (const n of first) seeds[n] = (seeds[n] ?? n * 1000) + 1;
-        await compile(first);
-        result = await measure(`${label}_recompile`);
-        misses = await carried();
-        const dead = [...new Set(result.problems.filter((p) => DEAD_FRAME.test(p)).map((p) => problemFrame(p, compiledFrames)))].filter((n): n is number => n !== null);
-        if (dead.length) {
-          plainFrames.push(...dead);
-          await compile(dead);
-          result = await measure(`${label}_plain`);
-          misses = await carried();
+      const byFrame = new Map<number, string[]>();
+      const loose: string[] = [];
+      const add = (n: number | null, line: string) => {
+        if (n === null) loose.push(line);
+        else byFrame.set(n, [...(byFrame.get(n) ?? []), line]);
+      };
+      for (const p of result.problems) add(problemFrame(p, compiledFrames), p);
+      if (deps.render.readCompiled) {
+        let read: CompiledRead;
+        try {
+          read = await deps.render.readCompiled(projectDir);
+        } catch (error) {
+          read = { ok: false, frames: {}, stills: [], skipped: errorText(error) };
+        }
+        if (!read.ok) await flagOnce('breakage', `The plan check could not run: ${read.skipped ?? 'no reading came back'}.`);
+        else {
+          for (const [key, f] of Object.entries(read.frames)) {
+            const n = problemFrame(f.id ?? key, compiledFrames) ?? (Number.isFinite(Number(key)) ? Number(key) : null);
+            for (const r of f.reports ?? []) add(n, `Frame ${n ?? key}: ${r}`);
+          }
+          for (const m of checkPlanCarried(plan, read.frames)) add(m.frame, planMissText(m));
         }
       }
-      for (const p of result.problems) await flagOnce('breakage', p);
-      if (!result.ok && result.problems.length === 0) await flagOnce('breakage', 'Assembly still reports a failure after its recompile.');
-      for (const m of misses) await flagOnce('breakage', planMissText(m));
-      return result;
+      return { ok: result.ok, byFrame, loose };
+    };
+    /** A frame that won't build or draw at all ships as its first picture, plain and flagged; the solver may still rework it. */
+    const measurePlain = async (label: string): Promise<Measured> => {
+      let m = await measure(label);
+      const dead = [...m.byFrame].filter(([n, lines]) => !plainFrames.includes(n) && lines.some((l) => DEAD_FRAME.test(l))).map(([n]) => n);
+      if (dead.length) {
+        plainFrames.push(...dead);
+        await compile(dead);
+        m = await measure(`${label}_plain`);
+      }
+      return m;
     };
     await compile();
-    let assembled = await measureAndRepair('compiled');
+    let measured = await measurePlain('compiled');
 
-    // The creative pass watches the compiled reel and may add; each touch is compiled and measured against its frame's clean
-    // baseline, and any new finding removes it. It fails open: an error means no touches and a flag.
-    if (deps.writing.creativePass) {
-      await stage('creative_pass');
-      const creative = await deps.writing.creativePass({ draft, plan, projectDir }, ctx);
-      for (const p of creative.problems) await flagOnce('render', `Creative pass: ${p}`);
-      await settle('creative pass');
-      const offered = creative.touches.touches.length + creative.touches.custom.length;
-      if (offered && deps.render.frameFindings) {
-        const findings = deps.render.frameFindings;
-        const idOf = (n: number) => compiledFrames.find((f) => f.n === n)?.id ?? '';
-        const applied = await applyTouches({
-          proposed: creative.touches,
-          compile: async (touches, frame) => {
-            accepted = touches;
-            await compile([frame]);
-          },
-          findings: async (frame) => {
-            const misses = deps.render.readCompiled ? checkPlanCarried({ ...plan, frames: plan.frames.filter((f) => f.n === frame) }, (await deps.render.readCompiled(projectDir)).frames) : [];
-            return [...(await findings(projectDir, idOf(frame))), ...misses.map(planMissText)];
-          },
-        });
-        accepted = applied.accepted;
-        for (const r of applied.removed) await flagOnce('render', `Touch ${r.id} on frame ${r.frame} was removed; the frame stays as compiled: ${r.why}`);
-        fs.mkdirSync(path.dirname(path.join(projectDir, TOUCHES_FILE)), { recursive: true });
-        fs.writeFileSync(path.join(projectDir, TOUCHES_FILE), `${JSON.stringify(accepted, null, 1)}\n`);
-        await keepText('breakage', { round: 'touches', accepted, removed: applied.removed });
-        // Sounds, caption tones and the kit's cues are measured over the whole reel, with what stayed.
-        if (accepted.touches.length + accepted.custom.length) assembled = await measureAndRepair('with_touches');
-      }
-    }
-
-    // P8: render, then the contact sheet the first viewer looks at.
+    // P8: render, then the contact sheet. Every round renders (free) and cuts its sheets from the video, so the reviewers and
+    // the solver see what the viewer sees, captions included (Iteration 11 §3, pre-mortem #1).
     const renderAndSheet = async (retry: boolean) => {
       await stage('render');
       let video: string;
@@ -921,60 +936,114 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       try {
         sheet = await deps.render.contactSheet(projectDir, video);
       } catch (error) {
-        await flag('render', `The contact sheet failed (${errorText(error)}); the reel ships without it or the first viewer's read.`);
+        await flag('render', `The contact sheet failed (${errorText(error)}); the reel ships without it.`);
       }
       return { video, sheet };
     };
     let { video, sheet } = await renderAndSheet(true);
-
-    // C3: the first-time viewer, and beside it the design reviewer on a still of every story frame (MD-129). Their picture
-    // findings get one director re-plan of the frames they name, a recompile and a re-render, then warn. Findings that start in
-    // the words never reach it (M11): they ship as flags. The design review fails open.
-    await stage('first_viewer');
-    const viewerInput = () => ({ contactSheet: sheet, captions: captionsFor(sheet, draft, plan), draft, facts });
-    const designRead = async (): Promise<DesignReview | null> => {
-      if (!deps.checks.checkDesign || !deps.render.frameStills) return null;
+    /** Set when a re-render failed: the reel ships the last video that rendered, and the picture work stops. */
+    let frozen = false;
+    /** A re-render after a change; a failure keeps the video before it (never block a reel). */
+    const rerender = async (why: string): Promise<boolean> => {
+      const saved = { video: `${video}.before${path.extname(video)}`, sheet: sheet ? `${sheet}.before${path.extname(sheet)}` : '' };
+      fs.copyFileSync(video, saved.video);
+      if (sheet) fs.copyFileSync(sheet, saved.sheet);
       try {
-        const stills = await deps.render.frameStills(projectDir, video);
-        return await deps.checks.checkDesign({ stills, plan, draft }, ctx);
-      } catch (error) {
-        return { problems: [], warnings: [], errors: [errorText(error)], usd: 0 };
+        ({ video, sheet } = await renderAndSheet(false));
+        return true;
+      } catch {
+        ({ video, sheet } = saved);
+        frozen = true;
+        await flag('render', `The reel would not render after ${why}, so it ships the version from before it.`);
+        return false;
       }
     };
-    const viewerRead = async (): Promise<Awaited<ReturnType<ProductionDeps['checks']['checkFirstViewer']>>> => {
-      const unread = { hookSeconds: null, understood: true, problems: [], warnings: [] };
-      if (!sheet) return unread;
+
+    // Sheets of moments (Iteration 11 §2–§3): the reviewers and the solver read them; the first viewer reads unlabelled ones.
+    const sheetsDir = path.join(jobDir, 'sheets');
+    let cutRound = 0;
+    const reviewSheets = new Map<number, Sheet[]>();
+    const cut = async (frames: number[] | null, viewer: boolean): Promise<Sheet[]> => {
+      if (!deps.render.reelSheets) return [];
+      cutRound += 1;
       try {
-        return await deps.checks.checkFirstViewer(viewerInput(), ctx);
+        const made = await deps.render.reelSheets(projectDir, video, {
+          findings: [...[...measured.byFrame.values()].flat(), ...measured.loose],
+          dir: path.join(sheetsDir, `round-${cutRound}`),
+          frames,
+          viewer,
+        });
+        for (const n of new Set(made.review.map((s) => s.frame))) reviewSheets.set(n, made.review.filter((s) => s.frame === n));
+        return made.viewer;
+      } catch (error) {
+        await flag('render', `Cutting the sheets failed (${errorText(error)}); the reviewers read what they had.`);
+        return [];
+      }
+    };
+
+    // C3: the first-time viewer on the whole reel, and the design reviewer on each frame's sheets (MD-129). The design review
+    // fails open; unchanged frames keep their findings, and only changed frames are read again (pre-mortem #10).
+    const designBy = new Map<number, DesignReview>();
+    const designErrors: string[] = [];
+    const designOf = (n: number) => designBy.get(n) ?? { problems: [], warnings: [], errors: [], usd: 0 };
+    const designRead = async (frames: number[] | null) => {
+      if (!deps.checks.checkDesign) return;
+      const sheets = [...reviewSheets].filter(([n]) => !frames || frames.includes(n)).flatMap(([, s]) => s);
+      if (!sheets.length) return;
+      let review: DesignReview;
+      try {
+        review = await deps.checks.checkDesign({ sheets, plan, draft }, ctx);
+      } catch (error) {
+        review = { problems: [], warnings: [], errors: [errorText(error)], usd: 0 };
+      }
+      designErrors.push(...review.errors);
+      for (const n of new Set(sheets.map((s) => s.frame))) {
+        designBy.set(n, { problems: review.problems.filter((p) => p.frame === n), warnings: review.warnings.filter((p) => p.frame === n), errors: [], usd: 0 });
+      }
+    };
+    const designAll = (): DesignReview => ({
+      problems: [...designBy.values()].flatMap((d) => d.problems),
+      warnings: [...designBy.values()].flatMap((d) => d.warnings),
+      errors: [],
+      usd: 0,
+    });
+    const viewerRead = async (sheets: Sheet[]): Promise<FirstViewerResult> => {
+      const unread = { hookSeconds: null, understood: true, problems: [], warnings: [] };
+      if (!sheets.length) return unread;
+      try {
+        return await deps.checks.checkFirstViewer({ sheets, captions: captionsFor(sheet, draft, plan), draft, facts }, ctx);
       } catch (error) {
         await flag('first_viewer', `The first viewer failed (${errorText(error)}); shipped without its read.`);
         return unread;
       }
     };
-    const readPicture = () => Promise.all([viewerRead(), designRead()]);
-    const flagDesignErrors = async (d: DesignReview | null) => {
-      for (const e of d?.errors ?? []) await flag('first_viewer', `Design review failed; shipped without it: ${e}`);
-    };
-    let [viewer, design] = await readPicture();
+    const storyFrames = () => plan.frames.filter((f) => f.treatment !== 'close').map((f) => f.n);
+
+    const viewerSheets = await cut(null, true);
+    await stage('first_viewer');
+    let [viewer] = await Promise.all([viewerRead(viewerSheets), designRead(null)]);
     let routed = firstViewerRouting(viewer, settings.hook_seconds);
-    let findings = routed.picture;
-    await keepText('first_viewer', { round: 0, ...viewer, findings, script_findings: routed.words, design });
+    await keepText('first_viewer', { round: 0, ...viewer, findings: routed.picture, script_findings: routed.words, design: designAll() });
     await settle('first viewer and design review');
-    await flagDesignErrors(design);
-    if (findings.length > 0 || (design?.problems.length ?? 0) > 0) {
-      const problems = pictureFixProblems(findings, design);
-      const named = [...new Set(problems.map((p) => p.frame))].filter((n) => plan.frames.some((f) => f.n === n && f.treatment !== 'close'));
+    /** Frames whose picture changed since the first viewer last watched: the final read runs when there are any. */
+    let changedSinceViewer = false;
+
+    // Iteration 11 §4: the content pass. What's missing or mixed on the rendered frames (and the first viewer's picture findings)
+    // goes to the director once, on `director_fix_model`; layout faults go straight to the solver.
+    const content = contentPassProblems(routed.picture, designAll());
+    if (content.length) {
+      const named = [...new Set(content.map((p) => p.frame))].filter((n) => storyFrames().includes(n));
       let replanned = false;
       await stage('director');
       try {
-        const fixed = await arrive(await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'picture_review', plan, problems } }, ctx), 'picture-review fix');
+        const fixed = await arrive(await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'content_pass', plan, problems: content } }, ctx), 'content pass');
         plan = reconcilePlan(draft, mergeFrames(plan, fixed, named));
         await keepText('director_plan', plan);
         replanned = true;
       } catch (error) {
-        await flag('first_viewer', `The re-plan of frames ${named.join(', ')} failed (${errorText(error)}); the reel ships as it was rendered.`);
+        await flag('first_viewer', `The content pass on frames ${named.join(', ')} failed (${errorText(error)}); the solver takes them as they are.`);
       }
-      await settle('director re-plan');
+      await settle('content pass');
       if (replanned) try {
         if (deps.render.makeAssets) await runMakes();
         fs.cpSync(harvestDir, ws.jobDir, { recursive: true });
@@ -984,45 +1053,190 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
           await stage('voice');
           await voice();
         }
-        // A touch was made for the frame as it was: a re-planned frame goes back to its plan.
-        const dropped = [...accepted.touches, ...accepted.custom].filter((t) => named.includes(t.frame));
-        accepted = { touches: accepted.touches.filter((t) => !named.includes(t.frame)), custom: accepted.custom.filter((c) => !named.includes(c.frame)) };
-        for (const t of dropped) await flagOnce('render', `Touch ${t.id} on frame ${t.frame} went with the re-plan of that frame.`);
         await compile(named);
-        assembled = await measureAndRepair('after_replan');
-        // Never block a reel: a re-plan that breaks the render ships the version before it, flagged.
-        const saved = { video: `${video}.before-fix${path.extname(video)}`, sheet: sheet ? `${sheet}.before-fix${path.extname(sheet)}` : '' };
-        fs.copyFileSync(video, saved.video);
-        if (sheet) fs.copyFileSync(sheet, saved.sheet);
-        let rerendered = true;
-        try {
-          ({ video, sheet } = await renderAndSheet(false));
-        } catch {
-          rerendered = false;
-          ({ video, sheet } = saved);
-          await flag('render', 'The fix broke the render, so the reel ships the version from before the fix.');
-        }
-        if (rerendered) {
+        measured = await measurePlain('content_pass');
+        if (await rerender('the content pass')) {
+          changedSinceViewer = true;
+          await cut(named, false);
           await stage('first_viewer');
-          [viewer, design] = await readPicture();
-          routed = firstViewerRouting(viewer, settings.hook_seconds);
-          findings = routed.picture;
-          await keepText('first_viewer', { round: 1, ...viewer, findings, script_findings: routed.words, design });
-          await settle('first viewer fix');
-          await flagDesignErrors(design);
+          await designRead(named);
+          await settle('design review after the content pass');
         }
       } catch (error) {
         // Only a runaway stops a job; anything else here leaves the render already made.
         if (error instanceof ProductionFailure) throw error;
-        await flag('render', `The rebuild after the re-plan failed (${errorText(error)}); the reel ships as first rendered.`);
+        frozen = true;
+        await flag('render', `The rebuild after the content pass failed (${errorText(error)}); the reel ships as first rendered.`);
       }
-      for (const f of findings) await flag('first_viewer', f);
-      for (const p of design?.problems ?? []) await flag('first_viewer', `Design: ${designFindingText(p)}`);
     }
-    // The last read's word findings: what the viewer still didn't get, after any picture fix.
+
+    // Iteration 11 §5–§7: the problem solver. One reel-wide look, then up to two rounds on what's wrong or weak, each change
+    // built, measured, rendered and re-read; every attempt is kept and the version with the fewest serious findings ships.
+    const solved: { frame: number; label: string; kind: string; serious: number; flag: string | null }[] = [];
+    if (deps.solver && !frozen) {
+      await stage('solver');
+      const solver = deps.solver(ctx, { projectDir, inventory });
+      const storyboard = () => (fs.existsSync(path.join(projectDir, 'STORYBOARD.md')) ? fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8') : '');
+      const spans = frameSpans(storyboard());
+      const lineText = new Map(draft.rungs.flatMap((r) => r.lines.map((l) => [l.id, l] as const)));
+      const frameOf = (n: number) => plan.frames.find((f) => f.n === n);
+      const voiceOf = (n: number) => (frameOf(n)?.line_ids ?? []).map((id) => lineText.get(id)?.text ?? '').filter(Boolean).join(' ');
+      const brief = solverBrief(draft, plan, facts, inventory);
+      const findingsOf = (n: number): FrameFinding[] => [
+        ...(measured.byFrame.get(n) ?? []).map((line) => measuredFinding(n, line)),
+        ...[...designOf(n).problems, ...designOf(n).warnings].map(reviewFinding),
+      ];
+      const images = (n: number): SolverImage[] => (reviewSheets.get(n) ?? []).map((s, i, all) => ({ file: s.file, label: `Frame ${n}, sheet ${i + 1} of ${all.length}` }));
+      const story = storyFrames();
+      const aims = new Map<number, string>();
+      const workFor = async (n: number): Promise<FrameWork> => {
+        const span = spans.find((s) => s.number === n);
+        let still: SolverImage | null = null;
+        if (span && deps.render.fullStill) {
+          const file = await deps.render.fullStill(video, (span.start + span.end) / 2, path.join(sheetsDir, `still-${n}-${cutRound}.jpg`)).catch(() => null);
+          if (file) still = { file, label: `Frame ${n}, full size, at its middle` };
+        }
+        return {
+          n,
+          id: idOf(n),
+          name: span?.name ?? '',
+          voice: voiceOf(n),
+          job: frameOf(n)?.purpose ?? '',
+          duration: span ? Math.round((span.end - span.start) * 1000) / 1000 : 0,
+          blueprint: frameOf(n)?.blueprint ?? null,
+          findings: findingsOf(n),
+          sheets: images(n),
+          still,
+          neighbours: [n - 1, n + 1].filter((m) => story.includes(m)).map((m) => ({ n: m, sheets: images(m) })),
+          ...(aims.get(n) ? { aim: aims.get(n)! } : {}),
+        };
+      };
+      /** The version each changed frame ships, installed; the plan follows a plan version, so a rewritten storyboard keeps it. */
+      const settleFrames = async (frames: number[]) => {
+        const swapped: number[] = [];
+        for (const n of frames) {
+          const s = settleFrame(projectDir, idOf(n), n);
+          for (const p of s.problems) await flagOnce('render', `Solver: ${p}`);
+          if (!s.chosen) continue;
+          if (s.chosen.blueprint && s.chosen.kind !== 'code') plan = withBlueprint(plan, n, s.chosen.blueprint);
+          if (s.swappedBack) swapped.push(n);
+          const entry = { frame: n, label: s.chosen.label, kind: s.chosen.kind, serious: s.serious, flag: s.flag };
+          const at = solved.findIndex((x) => x.frame === n);
+          if (at >= 0) solved[at] = entry;
+          else solved.push(entry);
+        }
+        return swapped;
+      };
+      /** After a round: re-check new pictures, measure, render, re-read the changed frames, record and settle (contract §5 Check). */
+      const afterChange = async (attempts: FrameAttempt[], label: string) => {
+        const built = attempts.filter((a) => a.built);
+        if (!built.length) return;
+        const changed = built.map((a) => a.frame);
+        // The plan check reads each changed frame against the blueprint it now has.
+        for (const a of built) {
+          const v = readVersions(projectDir, a.id).find((x) => x.label === a.label);
+          if (v?.blueprint && v.kind !== 'code') plan = withBlueprint(plan, a.frame, v.blueprint);
+        }
+        // Pre-mortem #8: a swapped picture is checked against its line again.
+        const pictured = built.filter((a) => a.newPictures.length);
+        const imageFindings = new Map<number, FrameFinding[]>();
+        if (pictured.length) {
+          await stage('integrity_check');
+          const probe = { ...plan, frames: plan.frames.filter((f) => pictured.some((a) => a.frame === f.n)).map((f) => ({ ...f, asset_ids: pictured.find((a) => a.frame === f.n)!.newPictures })) };
+          try {
+            for (const p of (await deps.checks.checkIntegrity({ plan: probe, inventory, draft, facts }, ctx)).problems) {
+              imageFindings.set(p.frame, [...(imageFindings.get(p.frame) ?? []), { frame: p.frame, from: 'review', item: 'nothing_missing', severity: 'problem', what: `the image check: ${p.asset_id}: ${p.why}` }]);
+            }
+          } catch (error) {
+            await flagOnce('integrity', `The image check on the solver's new pictures failed (${errorText(error)}).`);
+          }
+          await settle(`image check after ${label}`);
+        }
+        measured = await measure(label);
+        if (!(await rerender(`the solver's ${label}`))) {
+          // The reel stopped rendering with this round in it: every frame it changed goes back to its version before.
+          for (const a of built) recordFindings(projectDir, a.id, a.label, [{ frame: a.frame, from: 'build', what: 'the reel would not render with it' }]);
+          await settleFrames(changed);
+          return;
+        }
+        changedSinceViewer = true;
+        await cut(changed, false);
+        await stage('first_viewer');
+        await designRead(changed);
+        await settle(`design review after ${label}`);
+        await stage('solver');
+        for (const a of built) {
+          recordFindings(projectDir, a.id, a.label, [...[...designOf(a.frame).problems, ...designOf(a.frame).warnings].map(reviewFinding), ...(imageFindings.get(a.frame) ?? [])]);
+        }
+        const swapped = await settleFrames(changed);
+        if (swapped.length) {
+          // A frame swapped back: the video must show the version that ships.
+          measured = await measure(`${label}_settled`);
+          if (await rerender(`swapping back frames ${swapped.join(', ')}`)) await cut(swapped, false);
+        }
+      };
+
+      const look = await solverLook(
+        { projectDir, brief, frames: story.map((n) => ({ n, id: idOf(n), name: spans.find((s) => s.number === n)?.name ?? '', voice: voiceOf(n), job: frameOf(n)?.purpose ?? '', sheets: images(n) })), findings: story.flatMap(findingsOf) },
+        solver,
+      );
+      for (const v of look.verdicts) if (v.aim) aims.set(v.frame, v.aim);
+      await keepText('solver', { step: 'look', ...look });
+      for (const p of look.problems) await flagOnce('render', `Solver: ${p}`);
+      await settle('solver look');
+      const worked = new Set(look.work);
+      const stillSerious = () => [...worked].filter((n) => (solved.find((s) => s.frame === n)?.serious ?? seriousFindings(findingsOf(n)).length) > 0);
+      for (const round of [1, 2] as const) {
+        if (frozen) break;
+        const list = round === 1 ? look.work : stillSerious();
+        if (!list.length) break;
+        const frames: FrameWork[] = [];
+        for (const n of list) frames.push(await workFor(n));
+        const res = await solverRound({ projectDir, plan, brief, round, frames, inventoryIds: inventory.assets.map((a) => a.id) }, solver);
+        await keepText('solver', { step: `round_${round}`, attempts: res.attempts, usd: res.usd });
+        for (const p of res.problems) await flagOnce('render', `Solver: ${p}`);
+        await settle(`solver round ${round}`);
+        await afterChange(res.attempts, `r${round}`);
+      }
+      // The last resort (§7): a frame still serious after round 2 or at the limit tries its simplest clean version. Weak only never.
+      const last = frozen
+        ? []
+        : lastResortFrames([...worked].map((n) => {
+            const s = solved.find((x) => x.frame === n);
+            return { frame: n, serious: s?.serious ?? seriousFindings(findingsOf(n)).length, kind: (s?.kind ?? 'compiled') as FrameVersion['kind'] };
+          }));
+      if (last.length) {
+        const attempts: FrameAttempt[] = [];
+        for (const n of last) attempts.push(await lastResort({ projectDir, plan, work: await workFor(n), allowed: brief.allowed }, solver.kit));
+        for (const a of attempts) for (const p of a.problems) await flagOnce('render', `Solver: ${p}`);
+        await afterChange(attempts, 'last');
+      }
+      for (const s of solved) {
+        if (s.flag) await flagOnce('render', `Solver, frame ${s.frame}: ${s.flag}`);
+        if (s.serious > 0) await flagOnce('render', `Solver, frame ${s.frame}: ships with ${s.serious} serious finding(s).`);
+      }
+      await keepText('solver', { step: 'shipped', frames: solved });
+      await keepFile('solver', path.join(projectDir, 'assets', 'solved.json'), 'solved.json');
+    }
+
+    // The final read: the first viewer watches what ships, when anything changed since it last did.
+    if (changedSinceViewer && !frozen) {
+      await stage('first_viewer');
+      viewer = await viewerRead(await cut(null, true));
+      routed = firstViewerRouting(viewer, settings.hook_seconds);
+      await keepText('first_viewer', { round: 'final', ...viewer, findings: routed.picture, script_findings: routed.words, design: designAll() });
+      await settle('final read');
+    }
+    // What still stands ships as flags: the last measurement, the reviewers' last read, the first viewer's last read.
+    for (const lines of measured.byFrame.values()) for (const l of lines) await flagOnce('breakage', l);
+    for (const l of measured.loose) await flagOnce('breakage', l);
+    if (!measured.ok && !measured.loose.length && !measured.byFrame.size) await flagOnce('breakage', 'Assembly still reports a failure.');
+    for (const e of designErrors) await flagOnce('first_viewer', `Design review failed; shipped without it: ${e}`);
+    for (const f of routed.picture) await flag('first_viewer', f);
+    for (const p of designAll().problems) await flag('first_viewer', `Design: ${designFindingText(p)}`);
     for (const f of routed.words) await flag('first_viewer', `Script: ${f}`);
     for (const w of viewer.warnings ?? []) await flag('first_viewer', w);
-    for (const w of design?.warnings ?? []) await flag('first_viewer', `Design (taste): ${designFindingText(w)}`);
+    for (const w of designAll().warnings) await flag('first_viewer', `Design (taste): ${designFindingText(w)}`);
 
     // MD-81: a step that quietly did nothing gets one loud flag before delivery.
     for (const f of noOpFlags(trace, { central, cast, inventory })) await flag(f.check, f.detail);

@@ -75,35 +75,6 @@ export function stillTimes(spans: FrameSpan[]): number[] {
   return [...new Set(times)].filter((t) => t >= 0).sort((a, b) => a - b);
 }
 
-/** One still of one story frame, for the design reviewer (MD-129). */
-export type FrameStill = { number: number; name: string; treatment: string; at: number; file: string; opening?: boolean };
-/** The design reviewer's still size: large enough to judge small text, edges and crops. */
-export const FRAME_STILL = { W: 720, H: 1280 };
-
-/**
- * One still per story frame (the close excluded) at the same moment the contact sheet uses, full enough
- * to read: renders/frames/frame-NN.jpg; before them, frame 1's first instant (frame-01-opening.jpg), so the
- * opening is judged as it plays. Throws when a still fails (the caller fails open).
- */
-export async function frameStills(projectDir: string, videoPath: string, deps: { run?: Runner } = {}): Promise<FrameStill[]> {
-  const run = deps.run ?? spawnRunner;
-  const dir = path.join(projectDir, 'renders', 'frames');
-  fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(dir, { recursive: true });
-  const spans = frameSpans(fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8')).filter((s) => s.treatment !== 'close' && s.end > s.start);
-  const out: FrameStill[] = [];
-  const take = (s: FrameSpan, at: number, name: string, opening: boolean) => {
-    const file = path.join(dir, name);
-    const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(at), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${FRAME_STILL.W}:${FRAME_STILL.H}`, '-q:v', '3', file], { cwd: projectDir, timeoutMs: 120_000 });
-    if (res.status !== 0) throw new Error(`frame stills: frame ${s.number} at ${at}s failed: ${tail(res)}`);
-    out.push({ number: s.number, name: s.name, treatment: s.treatment, at, file, ...(opening ? { opening: true } : {}) });
-  };
-  const first = spans[0];
-  if (first) take(first, OPENING_STILL_AT, `frame-${String(first.number).padStart(2, '0')}-opening.jpg`, true);
-  for (const s of spans) take(s, stillAt(s), `frame-${String(s.number).padStart(2, '0')}.jpg`, false);
-  return out;
-}
-
 /**
  * Caption pages as the viewer reads them: the skin's paging (presets/reel-ai-drama/caption-skin.html):
  * at most 7 words and about 34 characters, broken at sentence ends, long pauses and frame changes.

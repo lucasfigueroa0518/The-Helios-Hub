@@ -22,7 +22,8 @@ export const PROMPT_NAMES = [
   'harvest-look',
   'sound-designer',
   'design-review',
-  'creative-pass',
+  'solver-look',
+  'solver-frame',
 ] as const;
 export type PromptName = (typeof PROMPT_NAMES)[number];
 

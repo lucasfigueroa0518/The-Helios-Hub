@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { parseFrames } from '@/explainers/reel-ai-drama/kit/frames.mjs';
-import { wordsAt, withTouches } from '@/explainers/reel-ai-drama/kit/components/compiled.js';
+import { wordsAt } from '@/explainers/reel-ai-drama/kit/components/compiled.js';
 import { cueAt } from '@/explainers/reel-ai-drama/kit/components/moves.js';
 import { blueprintTreatment, planFrames } from '@/explainers/reel-ai-drama/kit/project-files.mjs';
 import { EVENT_KINDS, IMPLIES_EVENT, MAX_AMBIENCE, MAX_DUR } from '@/explainers/reel-ai-drama/kit/sound.mjs';
@@ -11,19 +11,16 @@ import { findTesseract, readWordsHard, tesseractWords } from '@/lib/reel-ai-dram
 import { HYPERFRAMES_ENV } from '@/lib/explainers/render/workspace';
 import type { Manifest } from '@/lib/reel-ai-drama/render/plan-carried';
 import { jsonOut, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
-import { blueprintAssets, type Blueprint, type CustomPiece, type DirectorPlan, type StoryboardFrame, type Touch, type Touches, type VisualsInventory } from '@/lib/reel-ai-drama/types';
+import { blueprintAssets, type Blueprint, type CustomPiece, type DirectorPlan, type StoryboardFrame, type VisualsInventory } from '@/lib/reel-ai-drama/types';
 
 /**
  * Compile, don't retype (ITERATION-10-CONTRACT §5). Every story frame becomes one logic-free module that hands its blueprint
- * and accepted touches to `compiledFrame` (kit/components/compiled.js) and on to `nk.stage`, so a planned mark or move can't be
+ * (and any custom pieces) to `compiledFrame` (kit/components/compiled.js) and on to `nk.stage`, so a planned mark or move can't be
  * lost in the typing. No model, no network. Nothing here throws for one frame: a frame that can't compile becomes a plain one
  * and a problem line, and the reel ships.
  */
 
-export const TOUCHES_FILE = path.join('assets', 'touches.json');
-export const MAX_TOUCHES = 3;
 export const MAX_CUSTOM = 2;
-export const NO_TOUCHES: Touches = { touches: [], custom: [] };
 
 const PLAIN_GROUNDS = new Set(['charcoal', 'kraft', 'whiteboard']);
 const list = <T>(v: T[] | undefined | null): T[] => (Array.isArray(v) ? v : []);
@@ -34,7 +31,8 @@ export type CompileInput = {
   plan: DirectorPlan;
   inventory?: VisualsInventory | null;
   projectDir: string;
-  touches?: Touches | null;
+  /** Custom pieces (assets/custom/<id>.js), each checked by `customProblems`; at most one a frame and MAX_CUSTOM a reel. */
+  custom?: readonly CustomPiece[] | null;
   /** A new layout for a frame: its recompile after breakage or a missed plan item. */
   seeds?: Record<number, number>;
   /** Frames that shipped broken twice: their first picture, held. */
@@ -132,7 +130,7 @@ export function namesIn(blueprint: Blueprint | null): string[] {
   return [...blueprint.pieces.flatMap((p) => (p.label ? [p.label] : [])), ...blueprint.labels.filter((l) => l.for).map((l) => l.text)];
 }
 
-// ── Custom pieces and touches ───────────────────────────────────────────────────────────────────────
+// ── Custom pieces ───────────────────────────────────────────────────────────────────────────────
 
 /** What a custom piece may not reach for. It gets `el` and may make what it draws with `el.ownerDocument.createElement`. */
 const CUSTOM_BANNED: [RegExp, string][] = [
@@ -160,85 +158,32 @@ export function customProblems(code: string): string[] {
   return out;
 }
 
-const TOUCH_KEYS: Record<Touch['type'], string[]> = {
-  extra_line: ['text', 'for', 'on'],
-  in_turn: ['piece_ids', 'from', 'to'],
-  closer_cuts: ['aim', 'on'],
-  mark: ['kind', 'on_piece', 'target', 'on'],
-  ground_tone: ['on', 'to'],
-  sound: ['kind', 'what', 'on', 'dur'],
-};
-
-/** What's wrong with one touch on this plan, or null. Touches only add: they can't name a position, a size or a removal. Pure. */
-function touchProblem(t: Touch, frame: StoryboardFrame | undefined): string | null {
-  if (!frame || !frame.blueprint || frame.treatment === 'close') return `frame ${t.frame} can't take a touch`;
-  const keys = TOUCH_KEYS[t.type];
-  if (!keys) return `no touch type "${(t as { type?: unknown }).type}"`;
-  const extra = Object.keys(t).filter((k) => !['id', 'frame', 'why', 'type', ...keys].includes(k) && (t as Record<string, unknown>)[k] != null);
-  if (extra.length) return `a touch can only add; it can't set ${extra.join(', ')}`;
-  const ids = new Set(list(frame.blueprint.pieces).map((p) => p.id));
-  if (t.type === 'extra_line' && !one(t.text)) return 'an extra line needs words';
-  if (t.type === 'extra_line' && t.for && !ids.has(t.for)) return `no piece "${t.for}"`;
-  if (t.type === 'in_turn' && (list(t.piece_ids).length < 2 || t.piece_ids.some((id) => !ids.has(id)))) return 'words in turn need two pieces of this frame';
-  if (t.type === 'closer_cuts' && (!one(t.aim) || !list(t.on).length)) return 'closer cuts need an aim and the words they land on';
-  if (t.type === 'mark' && (!ids.has(t.on_piece) || !one(t.kind))) return `no piece "${t.on_piece}" to mark`;
-  if (t.type === 'ground_tone' && !(Number.isFinite(t.to) && t.to >= 0 && t.to <= 1)) return 'a ground tone runs from 0 to 1';
-  if (t.type === 'sound' && (!one(t.what) || !one(t.kind))) return 'a sound needs a kind and what it is';
-  return null;
-}
-
-/**
- * The limits, in code: at most MAX_TOUCHES touches and MAX_CUSTOM custom pieces a reel, at most one of either per frame, none
- * required. What's over or wrong is dropped with a reason. Pure.
- */
-export function acceptTouches(proposed: Partial<Touches> | null | undefined, plan: DirectorPlan): { touches: Touches; rejected: { id: string; frame: number; why: string }[] } {
+/** The custom pieces that may run: code that passes `customProblems`, one a frame, MAX_CUSTOM a reel. Pure. */
+export function acceptCustom(proposed: readonly CustomPiece[] | null | undefined, plan: DirectorPlan): { custom: CustomPiece[]; rejected: { id: string; frame: number; why: string }[] } {
   const rejected: { id: string; frame: number; why: string }[] = [];
   const taken = new Set<number>();
-  const byN = new Map(plan.frames.map((f) => [f.n, f]));
-  const touches: Touch[] = [];
   const seen = new Set<string>();
-  const fresh = (id: string, frame: number) => {
-    if (!/^[A-Za-z][\w-]{0,40}$/.test(String(id)) || seen.has(id)) {
-      rejected.push({ id: String(id), frame, why: 'needs an id of its own' });
-      return false;
-    }
-    seen.add(id);
-    return true;
-  };
-  for (const t of list(proposed?.touches)) {
-    if (!fresh(t?.id, t?.frame)) continue;
-    const why = touchProblem(t, byN.get(t.frame)) ?? (touches.length >= MAX_TOUCHES ? `at most ${MAX_TOUCHES} touches a reel` : taken.has(t.frame) ? 'at most one touch or custom piece a frame' : null);
-    if (why) { rejected.push({ id: t.id, frame: t.frame, why }); continue; }
-    taken.add(t.frame);
-    touches.push(t);
-  }
+  const byN = new Map(plan.frames.map((f) => [f.n, f]));
   const custom: CustomPiece[] = [];
-  for (const c of list(proposed?.custom)) {
-    if (!fresh(c?.id, c?.frame)) continue;
+  for (const c of list(proposed as CustomPiece[])) {
+    if (!/^[A-Za-z][\w-]{0,40}$/.test(String(c?.id)) || seen.has(c.id)) {
+      rejected.push({ id: String(c?.id), frame: c?.frame, why: 'needs an id of its own' });
+      continue;
+    }
+    seen.add(c.id);
     const f = byN.get(c.frame);
-    const clash = list(f?.blueprint?.pieces).some((p) => p.id === c.id);
     const bad = customProblems(String(c.code ?? ''));
     const why = !f?.blueprint || f.treatment === 'close' ? `frame ${c.frame} can't take a custom piece`
-      : clash ? `a planned piece is already called ${c.id}`
+      : list(f.blueprint.pieces).some((p) => p.id === c.id) ? `a planned piece is already called ${c.id}`
         : !(c.aspect > 0 && c.min_width > 0) ? 'a custom piece needs an aspect and a minimum width'
           : bad.length ? `its code ${bad.join('; ')}`
             : custom.length >= MAX_CUSTOM ? `at most ${MAX_CUSTOM} custom pieces a reel`
-              : taken.has(c.frame) ? 'at most one touch or custom piece a frame' : null;
+              : taken.has(c.frame) ? 'at most one custom piece a frame' : null;
     if (why) { rejected.push({ id: c.id, frame: c.frame, why }); continue; }
     taken.add(c.frame);
     custom.push(c);
   }
-  return { touches: { touches, custom }, rejected };
-}
-
-/** The accepted touches, from assets/touches.json. */
-export function readTouches(projectDir: string): Touches {
-  try {
-    const t = JSON.parse(fs.readFileSync(path.join(projectDir, TOUCHES_FILE), 'utf8')) as Touches;
-    return { touches: list(t.touches), custom: list(t.custom) };
-  } catch {
-    return { ...NO_TOUCHES };
-  }
+  return { custom, rejected };
 }
 
 // ── The files ───────────────────────────────────────────────────────────────────────────────────────
@@ -257,11 +202,11 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
 
 /**
  * The frame's sounds on their words, in the format kit/sound.mjs reads. Arrivals keep the stage's own kit cues (measure.mjs
- * merges them), so only what the plan and touches name is here. `reports`: the words that couldn't be found. Pure.
+ * merges them), so only what the plan names is here. `reports`: the words that couldn't be found. Pure.
  */
-export function eventsFor(blueprint: Blueprint, touches: readonly Touch[], timing: TimingFile, duration: number, assetIds: readonly string[], report: (r: string) => void = () => {}): Record<string, unknown>[] {
+export function eventsFor(blueprint: Blueprint, timing: TimingFile, duration: number, assetIds: readonly string[], report: (r: string) => void = () => {}): Record<string, unknown>[] {
   const at = wordsAt({ words: timing.words ?? [], lines: timing.lines ?? [], cueAt, report });
-  const sounds = [...blueprint.sounds, ...touches.flatMap((t) => (t.type === 'sound' ? [{ kind: t.kind, what: t.what, on: t.on, dur: t.dur }] : []))];
+  const sounds = list(blueprint.sounds);
   const kinds = EVENT_KINDS as string[];
   const out = sounds.flatMap((s) => {
     const t = round(Math.max(0, Math.min(duration, at(s.on, `sound "${one(s.what)}"`))));
@@ -298,10 +243,9 @@ export function frameModule(spec: Record<string, unknown>, custom: readonly Cust
 /** A word as OCR might give it: AI and Al, O and 0 read as one. */
 const wordKey = (w: unknown) => String(w ?? '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '').replace(/[il1|]/g, 'l').replace(/0/g, 'o');
 /** The phrases a blueprint marks or aims at, by the picture they must be on (or null: any on the frame). */
-function markedPhrases(b: Blueprint, touches: readonly Touch[]): { asset: string | null; phrase: string }[] {
+function markedPhrases(blueprint: Blueprint): { asset: string | null; phrase: string }[] {
   const text = (v: unknown) => /^text\s*:\s*(.+)$/is.exec(String(v ?? ''))?.[1]?.trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, '') ?? null;
-  const assetOf = (id: string) => b.pieces.find((p) => p.id === id)?.asset ?? null;
-  const { blueprint } = withTouches(b, touches as never);
+  const assetOf = (id: string) => blueprint.pieces.find((p) => p.id === id)?.asset ?? null;
   return [
     ...blueprint.marks.flatMap((m: { target?: string; on_piece: string }) => (text(m.target) ? [{ asset: assetOf(m.on_piece), phrase: text(m.target)! }] : [])),
     ...(list(blueprint.camera?.stops) as { aim: string }[]).flatMap((s) => (text(s.aim) ? [{ asset: null, phrase: text(s.aim)! }] : [])),
@@ -315,7 +259,7 @@ type InventoryFile = { assets: { id: string; file?: string; width?: number; heig
  * none. A picture a blueprint marks words on and that holds no words gets read here (local OCR, free), once. Fails open: the
  * mark then skips and the plan check says so.
  */
-async function readMarkedWords(projectDir: string, frames: readonly { blueprint: Blueprint; touches: Touch[]; assets: string[] }[], readWords: CompileInput['readWords'], problems: string[]): Promise<void> {
+async function readMarkedWords(projectDir: string, frames: readonly { blueprint: Blueprint; assets: string[] }[], readWords: CompileInput['readWords'], problems: string[]): Promise<void> {
   const file = path.join(projectDir, 'assets', 'inventory.json');
   let inv: InventoryFile;
   try {
@@ -328,7 +272,7 @@ async function readMarkedWords(projectDir: string, frames: readonly { blueprint:
   let changed = false;
   const tried = new Set<string>();
   for (const f of frames) {
-    for (const { asset, phrase } of markedPhrases(f.blueprint, f.touches)) {
+    for (const { asset, phrase } of markedPhrases(f.blueprint)) {
       const want = phrase.split(/\s+/).map(wordKey).filter(Boolean);
       const candidates = (asset ? [asset] : f.assets).map((id) => byId.get(id)).filter((a): a is InventoryFile['assets'][number] => Boolean(a));
       const saysIt = (words: readonly { text: unknown }[]) => {
@@ -358,13 +302,13 @@ async function readMarkedWords(projectDir: string, frames: readonly { blueprint:
 
 /**
  * Write `assets/frames/<id>.js` and `<id>.events.json` for every frame but the close, and each custom piece to
- * `assets/custom/<id>.js`. `problems`: what degraded (a plain frame, an unusable touch); the reel still ships. A frame listed in
+ * `assets/custom/<id>.js`. `problems`: what degraded (a plain frame, an unusable custom piece); the reel still ships. A frame listed in
  * `assets/solved.json` is never overwritten: its solved copy is put back instead (contract §6, pre-mortem #5).
  */
 export async function compileReel(input: CompileInput): Promise<CompileResult> {
   const { plan, projectDir } = input;
-  const accepted = acceptTouches(input.touches ?? NO_TOUCHES, plan);
-  const problems: string[] = accepted.rejected.map((r) => `frame ${r.frame}: touch ${r.id} dropped: ${r.why}`);
+  const accepted = acceptCustom(input.custom, plan);
+  const problems: string[] = accepted.rejected.map((r) => `frame ${r.frame}: custom piece ${r.id} dropped: ${r.why}`);
   const framesDir = path.join(projectDir, 'assets', 'frames');
   const customDir = path.join(projectDir, 'assets', 'custom');
   fs.mkdirSync(framesDir, { recursive: true });
@@ -386,9 +330,8 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
     const degraded = !blueprint;
     if (!blueprint) blueprint = plainBlueprint(f);
     blueprint = withOnScreen(blueprint, f);
-    const touches = accepted.touches.touches.filter((t) => t.frame === f.n);
-    const custom = accepted.touches.custom.filter((c) => c.frame === f.n);
-    return { f, id: idOf(f.n, f.id), blueprint, degraded, touches, custom, assets: [...new Set([...blueprintAssets(blueprint), ...(f.asset_ids ?? [])])] };
+    const custom = accepted.custom.filter((c) => c.frame === f.n);
+    return { f, id: idOf(f.n, f.id), blueprint, degraded, custom, assets: [...new Set([...blueprintAssets(blueprint), ...(f.asset_ids ?? [])])] };
   });
   // Every frame, also on a partial compile: a re-plan rewrites inventory.json, and frames it didn't touch still read their marks from it.
   await readMarkedWords(projectDir, prepared, input.readWords, problems);
@@ -396,7 +339,7 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
   const out: CompileResult['frames'] = [];
   const known: string[] = [];
   for (const p of prepared) {
-    const { f, id, blueprint, touches, custom } = p;
+    const { f, id, blueprint, custom } = p;
     const treatment = String(blueprintTreatment({ ...f, blueprint }));
     const isPlain = p.degraded || plainSet.has(f.n);
     if (solved[id] && !rewrite.has(f.n)) {
@@ -411,7 +354,7 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
       try {
         if (p.degraded) problems.push(`frame ${f.n}: no blueprint to compile, so it shows its first picture, plain`);
         else if (plainSet.has(f.n)) problems.push(`frame ${f.n}: it would not build as planned, so it shows its first picture, plain`);
-        const spec = { treatment, blueprint, known_names: [...new Set(known)], ...(touches.length ? { touches } : {}), ...(custom.length ? { custom: custom.map(({ code: _code, ...c }) => { void _code; return c; }) } : {}), ...(input.seeds?.[f.n] != null ? { seed: input.seeds[f.n] } : {}), ...(isPlain ? { plain: true } : {}) };
+        const spec = { treatment, blueprint, known_names: [...new Set(known)], ...(custom.length ? { custom: custom.map(({ code: _code, ...c }) => { void _code; return c; }) } : {}), ...(input.seeds?.[f.n] != null ? { seed: input.seeds[f.n] } : {}), ...(isPlain ? { plain: true } : {}) };
         for (const c of custom) {
           fs.mkdirSync(customDir, { recursive: true });
           fs.writeFileSync(path.join(customDir, `${c.id}.js`), c.code);
@@ -419,7 +362,7 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
         fs.writeFileSync(path.join(framesDir, `${id}.js`), frameModule(spec, custom));
         const timing = timingOf(projectDir, id);
         const duration = timing.duration ?? storyboard.find((s) => s.number === f.n)?.duration ?? 6;
-        const events = eventsFor(blueprint, touches, timing, duration, p.assets, (r) => problems.push(`frame ${f.n}: ${r}`));
+        const events = eventsFor(blueprint, timing, duration, p.assets, (r) => problems.push(`frame ${f.n}: ${r}`));
         fs.writeFileSync(path.join(framesDir, `${id}.events.json`), `${JSON.stringify(events, null, 1)}\n`);
       } catch (e) {
         // The one thing that can't happen quietly: a frame with no module at all. It still gets a plain one.
@@ -466,7 +409,7 @@ export function readCompiled(projectDir: string, { stills = null, only = null, r
   return jsonOut<CompiledRead>(res) ?? { ok: false, frames: {}, stills: [], skipped: tail(res) };
 }
 
-/** What the kit's measured checks say about one frame (try, bounds, screen), for the touch removal rule. */
+/** What the kit's measured checks say about one frame (try, bounds, screen), for the solver and the tests. */
 export function frameFindings(projectDir: string, frameId: string, { run = spawnRunner }: { run?: Runner } = {}): string[] {
   const out: string[] = [];
   for (const script of ['try', 'bounds', 'screen']) {

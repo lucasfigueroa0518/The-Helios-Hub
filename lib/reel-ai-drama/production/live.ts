@@ -37,15 +37,14 @@ import { writePost } from '@/lib/reel-ai-drama/writing/post';
 import { editStory } from '@/lib/reel-ai-drama/writing/story-editor';
 import { reviseScript, writeScript } from '@/lib/reel-ai-drama/writing/writer';
 // B4 kit + render
-import { assembleProject, contactSheet, frameStills, KIT_GUIDE, prepareWorkspace, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
+import { assembleProject, contactSheet, fullStill, KIT_GUIDE, prepareWorkspace, reelSheets, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
 import { recordCost } from '@/lib/reel-ai-drama/cost';
 import { makeAssets } from '@/lib/reel-ai-drama/render/make';
 import { designSound } from '@/lib/reel-ai-drama/render/sound-design';
 import { RecordingDramaJevRunner } from '@/lib/reel-ai-drama/jev';
-import { CREATIVE_MODEL, creativePass } from '@/lib/reel-ai-drama/production/creative';
 import { liveSolverKit, type SolverDeps, type SolverKit } from '@/lib/reel-ai-drama/production/solver';
 import type { Mode, VisualsInventory } from '@/lib/reel-ai-drama/types';
-import { compileReel, frameFindings, readCompiled } from '@/lib/reel-ai-drama/render/compile';
+import { compileReel, readCompiled } from '@/lib/reel-ai-drama/render/compile';
 import type { ProductionDeps, StepCtx } from '@/lib/reel-ai-drama/production/run';
 import type { ScheduleDeps } from '@/lib/reel-ai-drama/production/schedule';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
@@ -126,8 +125,6 @@ export async function liveProductionDeps(input: {
       reviseScript: (i, ctx) => reviseScript(base(ctx, 'writer_revise', ctx.settings.writer_model), i),
       directReel: (i, ctx) => directReel(base(ctx, 'director', ctx.settings.director_model), i),
       writePost: (i, ctx) => writePost(base(ctx, 'post_text', ctx.settings.writer_model), i),
-      // One cached Sonnet call on the compiled reel's stills; its own cost goes to the job's ledger, and it fails open.
-      creativePass: (i, ctx) => creativePass(i, { ...base(ctx, 'creative_pass', CREATIVE_MODEL), loadPrompt: () => loadPrompt('creative-pass') }),
     },
     checks: {
       checkFacts: (runner, i) => checkFacts(runner, i),
@@ -150,12 +147,23 @@ export async function liveProductionDeps(input: {
         designSound(i, { create: anthropicCreate(anthropic, 'sound_design'), model: ctx.settings.orchestrator_model, loadPrompt: () => loadPrompt('sound-designer'), db, jobId: ctx.jobId, mode: ctx.mode }),
       compileReel,
       readCompiled: (dir) => readCompiled(dir),
-      frameFindings: (dir, id) => frameFindings(dir, id),
       assembleProject,
       renderVideo,
       contactSheet,
-      frameStills: (dir, video) => frameStills(dir, video),
+      reelSheets: (dir, video, i) => reelSheets(dir, video, i),
+      fullStill: (video, t, file) => fullStill(video, t, file),
     },
+    // Iteration 11 §5: the problem solver on the job's project; a plan change may order drawings through the make step.
+    solver: (ctx, i) =>
+      liveSolverDeps({
+        db,
+        jobId: ctx.jobId,
+        mode: ctx.mode,
+        settings: ctx.settings,
+        projectDir: i.projectDir,
+        inventory: i.inventory,
+        ...(input.log ? { log: input.log } : {}),
+      }),
   };
 }
 
@@ -185,6 +193,7 @@ export function liveSolverDeps(input: {
     models: { look: settings.solver_look_model, first: settings.solver_first_model, second: settings.solver_second_model },
     limitUsd: settings.solver_limit_usd,
     kit: liveSolverKit(input.projectDir, { inventory: input.inventory ?? null, makeAssets: input.makeAssets }),
+    loadPrompt: (name) => loadPrompt(name),
     ...(input.log ? { log: input.log } : {}),
   };
 }

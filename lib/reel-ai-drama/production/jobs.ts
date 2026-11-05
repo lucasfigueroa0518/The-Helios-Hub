@@ -29,6 +29,7 @@ export type ArtifactKind =
   | 'contact_sheet'
   | 'video'
   | 'delivery_report'
+  | 'solver'
   | 'transcript_log';
 
 export type Job = {

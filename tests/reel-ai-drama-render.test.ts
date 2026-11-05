@@ -5,9 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { Workspace } from '@/lib/explainers/render/workspace';
+import { stillTimes } from '@/lib/reel-ai-drama/render/video';
 import {
   KIT_GUIDE, assembleProject, captionPages, captionTranscript, contactSheet, frameSpans, prepareWorkspace, readMusicHistory,
-  renderVideo, repace, runVoice, sameVoices, stillTimes, type Runner, type RunResult,
+  renderVideo, repace, runVoice, sameVoices, type Runner, type RunResult,
 } from '@/lib/reel-ai-drama/render';
 import { cutPoints, frameStarts, scaleWords, scriptFrames, splitTake, takeGroups } from '@/lib/reel-ai-drama/render/voice';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';

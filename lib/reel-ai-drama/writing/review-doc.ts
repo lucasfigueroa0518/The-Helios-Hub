@@ -17,14 +17,15 @@ export const FLAGS_PATH = path.join('planning', 'AI Mini Docs', 'research', 'fla
 
 type Flag = { id: string; theme: string; final: { action: 'cut' | 'keep' | 'rewrite' | 'superseded'; text?: string; note?: string } };
 
-const USED_BY: Partial<Record<PromptName | 'creative-pass', string>> = {
+const USED_BY: Partial<Record<PromptName, string>> = {
   producer: 'B1 development producer (Sonnet 5.5 + web search), one cell per call → `Pitch[]`',
   reporting: 'B2 reporting (Sonnet 5.5 + search/fetch) → `FactSheet`; can kill the story',
   'story-editor': 'Blind story editor (Opus 5.5), system = this + principles; reads the script only → `StoryNotes` (MD-102)',
   writer: 'P4 writer (Opus 5.5), system = this + principles; owns the story from the brief, the fact timeline and the inventory → `WriterDraft` (MD-100)',
   'writer-revise': 'One rewrite on story-editor notes, P5 lines back, C1 facts fix (Opus 5.5), system = this + principles → replacements',
   director: 'P5 director (Opus 5.5), system = this + director craft + story timing + kit guide → `DirectorPlan`',
-  'creative-pass': 'Creative pass (Sonnet 5.5, one still per compiled frame) → `submit_touches`: at most three touches and two custom pieces, none required',
+  'solver-look': 'Problem solver, look (Sonnet 5.5): every frame\'s sheets, the script, all findings and every picture → `submit_look`, a verdict per frame',
+  'solver-frame': 'Problem solver, one frame (Sonnet 5.5, then Opus 5.5 on a second round) → `submit_frame`: a plan or code change, built and measured',
   'first-viewer': 'C3 first-time viewer (Sonnet 5.5 vision on the contact sheet + caption transcript)',
   'design-review': 'Design reviewer (MD-129, MD-133): one still per story frame plus the first instant of frame 1; shared intro + the fast set (Haiku 5.5) or the judge set (Sonnet 5.5) → `submit_design_review`',
   'post-text': 'P9 post caption (Sonnet 5.5); code adds credits and the comment question',

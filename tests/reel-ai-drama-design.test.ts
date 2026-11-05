@@ -8,7 +8,6 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { checkDesign, designFindingText, frameBrief, FAST_ITEMS, JUDGE_ITEMS, parseDesignFindings } from '@/lib/reel-ai-drama/checks/design';
 import { designReviewSystem } from '@/lib/reel-ai-drama/prompts';
-import { frameStills, type Runner } from '@/lib/reel-ai-drama/render';
 import type { Sheet } from '@/lib/reel-ai-drama/render/sheets';
 import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';
@@ -199,23 +198,3 @@ test('parseDesignFindings: bad frames, foreign items and empty findings are drop
   assert.equal(designFindingText({ frame: 3, item: 'marks_on_target', what: 'The ring circles blank paper.' }), 'Frame 3, marks on target: The ring circles blank paper.');
 });
 
-test('frameStills: frame 1\'s first instant, then one still per story frame (close excluded) at the contact sheet\'s 60% moment, at review size', async () => {
-  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'rad-design-'));
-  fs.writeFileSync(
-    path.join(project, 'STORYBOARD.md'),
-    '## Frame 1 — Open\n\n- duration: 4\n- treatment: photo\n\n## Frame 2 — Map\n\n- duration: 6\n- treatment: map\n\n## Frame 3 — Close\n\n- duration: 2.5\n- treatment: close\n',
-  );
-  const calls: string[][] = [];
-  const run: Runner = (_cmd, args) => {
-    calls.push(args);
-    fs.writeFileSync(args.at(-1)!, 'jpg');
-    return { status: 0, stdout: '', stderr: '' } as ReturnType<Runner>;
-  };
-  const stills = await frameStills(project, 'video.mp4', { run });
-  assert.deepEqual(stills.map((s) => [s.number, s.treatment, s.at, path.basename(s.file)]), [[1, 'photo', 0.1, 'frame-01-opening.jpg'], [1, 'photo', 2.4, 'frame-01.jpg'], [2, 'map', 7.6, 'frame-02.jpg']]);
-  assert.equal(stills[0]!.opening, true);
-  assert.equal(stills[1]!.opening, undefined);
-  assert.ok(calls.every((a) => a.includes('scale=720:1280')));
-  const failing: Runner = () => ({ status: 1, stdout: '', stderr: 'boom' }) as ReturnType<Runner>;
-  await assert.rejects(frameStills(project, 'video.mp4', { run: failing }), /frame 1/);
-});
