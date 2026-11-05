@@ -748,7 +748,7 @@ export function stage(doc, o = {}) {
           const fromLeft = p.side ? p.side === 'left' : (visLeft + visRight) / 2 < STAGE.W / 2;
           const off = fromLeft ? -(visRight + 40) : STAGE.W - visLeft + 40;
           dx += off * (1 - easeOut(seg(t, at.since, at.since + 0.6)));
-        } else if (p.kind !== 'drawing' && !p.note && !(p.kind === 'logo' && onBoard)) {
+        } else if (p.kind !== 'drawing' && !p.note && !(p.kind === 'logo' && onBoard && r.inner)) {
           const m = arrive(seg(t, at.since, at.since + 0.35), { from: [0, -70], lift: 0.04, settle: 2 });
           dx += m.x;
           dy += m.y;
