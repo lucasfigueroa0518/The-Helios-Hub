@@ -174,7 +174,8 @@ export function eventProblems(events, duration, { assets = null } = {}) {
     } else if (e?.dur !== undefined && !(e?.kind === 'foley' && typeof e.dur === 'number' && e.dur >= 0.2 && e.dur <= MAX_DUR)) {
       out.push(`${where}: "dur" is only for foley (0.2 to ${MAX_DUR} seconds) and ambience`);
     }
-    if (described && IMPLIES_EVENT.test(String(e.what ?? ''))) {
+    // A kit graphic's own sound (`kit: true`) belongs to the graphic on screen, not to the record.
+    if (described && e.kit !== true && IMPLIES_EVENT.test(String(e.what ?? ''))) {
       const shown = typeof e.shown === 'string' ? e.shown.trim() : '';
       if (!shown) out.push(`${where}: "${e.what}" implies an event; add "shown" with the id of the asset that shows it, or drop the sound (D-48)`);
       else if (assets && !assets.has(shown)) out.push(`${where}: "shown" names ${shown}, which is not in the inventory`);
@@ -329,11 +330,11 @@ export function withEventsTrack(meta, total) {
 /** The sound designer's cue file at the project root. */
 export const CUES_FILE = 'sound_cues.json';
 export const MUSIC_ACTIONS = ['start', 'drop', 'swell', 'change', 'cut', 'resume'];
-export const STINGER_KINDS = ['hit', 'riser', 'whoosh', 'sub', 'silence'];
-/** The kinds that count as a big hit (research 07 §3: one per ~10–15s, never two within ~2s). */
+export const STINGER_KINDS = ['hit', 'riser', 'whoosh', 'sub', 'silence', 'spot'];
+/** The kinds that count as a big hit (never two within ~2s; MD-142 opens the spacing to one per HEAVY_SPACING s). */
 export const HEAVY_KINDS = ['hit', 'sub'];
 export const HEAVY_GAP = 2;
-export const HEAVY_SPACING = 10;
+export const HEAVY_SPACING = 6;
 
 /**
  * The sounds a designed stinger may use, per kind; the first is the default. `land`: seconds into the
@@ -359,12 +360,23 @@ export const STINGER_LIBRARY = {
     { id: 'pixabay/whoosh-short', land: 0.15, about: 'short whoosh (0.6s)' },
     { id: 'pixabay/whoosh-cinematic', land: 2.9, about: 'long sweeping whoosh, trimmed to the motion' },
   ],
+  // The sound of a real thing, landing on its moment.
+  spot: [
+    { id: 'freesound/camera-shutter/232130-1', land: 0, about: 'a camera shutter' },
+    { id: 'pixabay/typing', land: 0, about: 'a burst of typing on keys' },
+    { id: 'pixabay/notification', land: 0, about: 'a message notification' },
+    { id: 'rpg-audio/doorClose_1', land: 0, about: 'a door closing' },
+    { id: 'rpg-audio/doorOpen_1', land: 0, about: 'a door opening' },
+    { id: 'rpg-audio/bookOpen', land: 0, about: 'a book or file opening' },
+    { id: 'freesound/pencil-write/234016-2', land: 0, about: 'a pen writing' },
+    { id: 'pixabay/glitch-1', land: 0, about: 'a hard digital glitch' },
+  ],
 };
 /** Phone speakers barely play sub-bass, so every sub carries this mid layer (research 07 §5). */
 export const SUB_MID_LAYER = 'impact-sounds/impactSoft_heavy_001';
 export const SUB_MID_GAIN = 0.5;
 /** Default gains (the same scale as KINDS: after level-matching to REF_PEAK_DB). */
-export const STINGER_GAIN = { hit: 0.9, sub: 0.9, riser: 0.6, whoosh: 0.5 };
+export const STINGER_GAIN = { hit: 0.9, sub: 0.9, riser: 0.6, whoosh: 0.5, spot: 0.5 };
 /** Designed stingers that land on a word sit this much lower (they are meant to be felt under it). */
 export const DESIGNED_UNDER_SPEECH = 0.7;
 /** The room tone kept under a designed silence (never digital silence, research 07 §4). */
@@ -447,7 +459,11 @@ export function readCues(root, clock = frameClock(root)) {
     })
     .filter((c) => c.start != null && c.end != null && c.end - c.start >= 0.5 && typeof c.id === 'string')
     .sort((a, b) => a.start - b.start);
-  return { music, stingers, ambience };
+  const muffles = (Array.isArray(raw.muffles) ? raw.muffles : [])
+    .map((c) => ({ ...c, t: when(c), dur: Math.max(0, num(c?.dur, 0)) }))
+    .filter((c) => inside(c.t) && c.dur > 0)
+    .sort((a, b) => a.t - b.t);
+  return { music, stingers, ambience, muffles };
 }
 
 /** The windows of the designed silences: [{ start, end }]. */
@@ -521,6 +537,8 @@ export function resolveDesigned(catalog, designed, { speech = [] } = {}) {
       const dur = Math.max(0.2, c.dur || 0.6);
       const from = r3(Math.max(0, entry.land - dur * 0.6));
       push(c, sound, { start: c.t - (entry.land - from), trim: { from, len: r3(Math.min(sound.duration - from, dur)) }, volume: gain * level(sound) });
+    } else if (c.kind === 'spot') {
+      push(c, sound, { start: c.t, volume: gain * level(sound) });
     }
   }
   for (const a of designed?.ambience ?? []) {

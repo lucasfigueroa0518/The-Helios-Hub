@@ -200,3 +200,13 @@ a { color: var(--color-primary); }
   align-items: center;
 }
 .text-muted { color: var(--color-text-muted); font-size: var(--font-size-sm); }
+
+.helios-skel { display: block; border-radius: 8px; background: linear-gradient(90deg, var(--color-surface-2), var(--color-surface-hover), var(--color-surface-2)); background-size: 200% 100%; animation: helios-skel 1.2s linear infinite; }
+.helios-skel--title { width: min(280px, 60%); height: 28px; }
+.helios-skel--line { width: min(420px, 80%); height: 14px; }
+.helios-skel--block { width: 100%; height: 220px; }
+.helios-skel--tile { height: 148px; border-radius: 16px; }
+@keyframes helios-skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.helios-loading { display: flex; flex-direction: column; gap: 16px; }
+.helios-loading__row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 720px) { .helios-loading__row { grid-template-columns: 1fr; } }

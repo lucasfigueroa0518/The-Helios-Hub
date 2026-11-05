@@ -426,7 +426,6 @@ function deps(db: ExplainersDb, query: AgentQuery): RenderDeps {
         '',
         '#one #two #three',
       ].join('\n'),
-      builderRead: 'A dental practice meets this at the front desk, and Helios builds that kind of step.',
       usd: 0,
       model: 'claude-sonnet-5-5',
       inputTokens: 0,
@@ -541,40 +540,6 @@ function happyQuery(): AgentQuery {
     },
   });
 }
-
-test('job records closing and skips Jev at the ceiling', async () => {
-  const READ = 'A dental practice answering the same intake question all day meets this first, and Helios builds that kind of step.';
-  const closing = (buildLine: boolean): RecentClosing => ({ closing: 'An older read.', buildLine, createdAt: new Date() });
-  const cases: { name: string; recent: () => Promise<RecentClosing[]>; fit: () => Promise<number | null>; asked: boolean; include: boolean }[] = [
-    { name: 'at the ceiling', recent: async () => [closing(true), closing(false), closing(true)], fit: async () => 0.95, asked: false, include: false },
-    { name: 'under the ceiling, a good fit', recent: async () => [closing(false)], fit: async () => 0.95, asked: true, include: true },
-    { name: 'an unreadable log fails closed', recent: async () => { throw new Error('no table'); }, fit: async () => 0.95, asked: false, include: false },
-    { name: 'a failed fit call means no build line', recent: async () => [], fit: async () => { throw new Error('Jev down'); }, asked: true, include: false },
-    { name: 'a weak fit', recent: async () => [], fit: async () => 0.2, asked: true, include: false },
-  ];
-  for (const c of cases) {
-    const { db } = await scratchExplainersDb();
-    const job = await queuedJob(db);
-    const d = deps(db, happyQuery());
-    const fitCalls: CaptionFacts[] = [];
-    const fitSubjects: string[] = [];
-    const writeCalls: { recent: RecentClosing[]; includeBuildLine: boolean }[] = [];
-    const recorded: [string, string, boolean][] = [];
-    const stubbed = d.writeCaption!;
-    d.buildFit = async (facts, subjectId) => (fitCalls.push(facts), fitSubjects.push(subjectId), c.fit());
-    d.closings = { recent: c.recent, record: async (...row) => void recorded.push(row) };
-    d.writeCaption = async (facts, opts) => (writeCalls.push(opts), { ...(await stubbed(facts, opts)), builderRead: READ });
-
-    assert.equal((await runRenderJob(d, job)).status, 'ok', c.name);
-    assert.equal(fitCalls.length, c.asked ? 1 : 0, `${c.name}: Jev asked`);
-    if (c.asked) assert.equal(fitCalls[0]!.title, 'What is an API?');
-    if (c.asked) assert.deepEqual(fitSubjects, [job.id], `${c.name}: Jev keyed by the job id`);
-    assert.equal(writeCalls.length, 1);
-    assert.equal(writeCalls[0]!.includeBuildLine, c.include, `${c.name}: include_build_line`);
-    if (c.name === 'an unreadable log fails closed') assert.deepEqual(writeCalls[0]!.recent, [], `${c.name}: an empty recent-closings list`);
-    assert.deepEqual(recorded, [[job.id, READ, c.include]], `${c.name}: closing recorded`);
-  }
-});
 
 test('a rejected caption is retried once with the reason, and the second request carries it', async () => {
   const { db } = await scratchExplainersDb();
@@ -976,6 +941,9 @@ function analogyModel(names: string[], requests: AnalogyRequest[] = []): IdeaMod
     async writeScopes(): Promise<never> {
       throw new Error('not used');
     },
+    async rewritePayload(): Promise<never> {
+      throw new Error('not used');
+    },
     async writeAnalogy(request: AnalogyRequest) {
       requests.push(request);
       return { candidate: CANDIDATE(names[Math.min(requests.length, names.length) - 1]), usage: { input_tokens: 1_000, output_tokens: 500 }, model: 'claude-opus-5-5' };
@@ -1092,6 +1060,9 @@ test('4.3: no gap stage: a topic with no curiosity gap renders without one, and 
         throw new Error('not used');
       },
       async writeAnalogy(): Promise<never> {
+        throw new Error('not used');
+      },
+      async rewritePayload(): Promise<never> {
         throw new Error('not used');
       },
       async writeGaps(request: GapRequest) {
@@ -1833,4 +1804,14 @@ test('the explainers deploy script and unit never touch the shared worker direct
   assert.match(deploy, /INSTANCE="\$\{SOCIAL_INSTANCE:-helios-social-worker\}"/);
   assert.match(unit, /WorkingDirectory=\/opt\/helios-social\/app/);
   assert.match(unit, /EnvironmentFile=\/opt\/helios-social\/worker.env/);
+});
+
+test('BRIEF.md carries ## Lesson frame after the learning objective only when the topic has a frame (ideas-coverage contract)', () => {
+  const base = { title: 'X', scope: 'Learn X', source_url: null, source_text: null };
+  const framed = briefMarkdown({ ...base, lesson_payload: 'One line to keep.', lesson_altitude: 'familiar', lesson_map: 'Where it sits.' });
+  assert.match(framed, /## Lesson frame\nPayload: One line to keep\.\nAltitude: familiar\nMap position: Where it sits\.\n/);
+  assert.ok(framed.indexOf('Learning objective:') < framed.indexOf('## Lesson frame'));
+  assert.ok(framed.indexOf('## Lesson frame') < framed.indexOf('## Term'));
+  assert.doesNotMatch(briefMarkdown(base), /## Lesson frame/);
+  assert.doesNotMatch(briefMarkdown({ ...base, lesson_payload: null, lesson_altitude: null, lesson_map: null }), /Lesson frame/);
 });

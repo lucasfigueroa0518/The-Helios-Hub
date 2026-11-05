@@ -9,7 +9,7 @@ import { validatePitch } from '@/lib/reel-ai-drama/development/producer';
 import { closeVoiceSeconds, cutLines } from '@/lib/reel-ai-drama/production/draft';
 import { validateFactSheet } from '@/lib/reel-ai-drama/reporting/validate';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';
-import type { Asset, DirectorPlan, FactSheet, Pitch, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
+import { FOCUS_KINDS, type Asset, type DirectorPlan, type FactSheet, type Pitch, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
 import { inventoryForDirecting } from '@/lib/reel-ai-drama/writing/director';
 import { planWarnings, validateDraft, validatePlan } from '@/lib/reel-ai-drama/writing/validate';
 import { planFrames, storyboardMarkdown, writeProjectFiles } from '../explainers/reel-ai-drama/kit/project-files.mjs';
@@ -75,17 +75,17 @@ function draft(over: { pauseOn?: string; pause?: number; question?: string } = {
     }),
   }));
   return {
-    title: 'T', engine: 'end first', hook: { on_screen: 'One bet', line_id: 'L1' }, rungs, turn_rung_id: 'R6', landing_rung_id: 'R7',
-    close_question: over.question ?? 'Would you have shipped it?', word_count: 0,
+    title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' }, rungs, peak_rung_id: 'R6', landing_rung_id: 'R7',
+    close_question: over.question ?? 'Would you have shipped it?', word_count: 0, central: [],
   };
 }
 
 /** Frames of two lines each (frame 2 carries L3 and L4), then the close. */
 function plan(d: WriterDraft = draft(), edit: (f: DirectorPlan['frames'][number]) => void = () => undefined): DirectorPlan {
   const ids = d.rungs.flatMap((r) => r.lines.map((l) => l.id));
-  const frames = Array.from({ length: 7 }, (_, i) => ({
+  const frames: DirectorPlan['frames'] = Array.from({ length: 7 }, (_, i) => ({
     n: i + 1, name: `f${i + 1}`, line_ids: ids.slice(i * 2, i * 2 + 2), treatment: 'photo', asset_ids: ['V1'], purpose: 'the founder', motion: 'push',
-    marks: '', sound: 'room tone', music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: i === 0 ? 'One bet' : null,
+    marks: '', sound: 'room tone', music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: i === 0 ? 'One bet' : null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
   }));
   frames.forEach(edit);
   frames.push({ n: 8, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
@@ -122,11 +122,11 @@ test('#4 every line label reaches the storyboard, timed to its line; a competing
   writeProjectFiles(dir, { draft: d, plan: p, inventory: { ...INVENTORY, assets: [] } });
   const lines = JSON.parse(fs.readFileSync(path.join(dir, 'assets', 'lines.json'), 'utf8'));
   assert.deepEqual(lines['02-f2'], [
-    { id: 'L3', words: 10, label: '$4M', pause_after: 0 },
-    { id: 'L4', words: 10, label: null, pause_after: 0 },
+    { id: 'L3', words: 10, label: '$4M', label_kind: null, pause_after: 0 },
+    { id: 'L4', words: 10, label: null, label_kind: null, pause_after: 0 },
   ]);
 
-  assert.deepEqual(check(p, d).warnings, []);
+  assert.deepEqual(check(p, d).warnings.filter((w) => !w.startsWith('[repeated_picture]')), []);
   const competing = check(plan(d, (f) => (f.n === 2 ? (f.on_screen = 'March 2020') : undefined)), d);
   assert.deepEqual(competing.problems, []);
   assert.ok(competing.warnings.some((w) => /frame 2 shows "March 2020" as well as L3's label "\$4M"/.test(w)), competing.warnings.join('\n'));
@@ -172,7 +172,7 @@ test('#9 pause_after: 0–1s, counted toward the length, ends its frame, written
   const ctx = { facts: FACTS, inventory: INVENTORY, limits: DEFAULT_SETTINGS };
   assert.deepEqual(validateDraft(draft({ pauseOn: 'L4', pause: 0.6 }), ctx).problems, []);
   assert.ok(validateDraft(draft({ pauseOn: 'L4', pause: 1.5 }), ctx).problems.some((p) => /L4's pause_after is 1.5/.test(p)));
-  const tight = validateDraft(draft({ pauseOn: 'L4', pause: 1 }), { ...ctx, limits: { ...DEFAULT_SETTINGS, max_seconds: 50.3 } }).problems;
+  const tight = validateDraft(draft({ pauseOn: 'L4', pause: 1 }), { ...ctx, limits: { ...DEFAULT_SETTINGS, max_seconds: 50.3, words_per_minute_target: 168 } }).problems;
   assert.ok(tight.some((p) => /plus 1s of pauses runs about 51s; at most 50.3s/.test(p)), tight.join('\n'));
 
   const mid = draft({ pauseOn: 'L3', pause: 0.6 });
@@ -186,7 +186,7 @@ test('#9 pause_after: 0–1s, counted toward the length, ends its frame, written
 
 test("#18 a pitch stays in its cell: the cell's player in the cast, its story type and its era", () => {
   const pitch = {
-    title: 'T', logline: 'L', pitch: 'P', story_type: 'big_bet', era: 'origins', event_date: '1996-03-01', date_precision: 'month',
+    title: 'T', brief: 'P', story_type: 'big_bet', era: 'origins', event_date: '1996-03-01', date_precision: 'month',
     cast: [{ name: 'A founder', role: 'founder', kind: 'person', player_id: null, want: 'to survive' }, { name: 'Nvidia', role: 'the company', kind: 'company', player_id: 'nvidia', want: 'to live' }],
     central_figure: 'A founder', scene: 'S', turn: 'T', implication: 'I', why_now: null, engine: 'countdown',
     expected_visuals: [{ kind: 'person_photo', what: 'w', hint: 'h' }], sources: [{ url: 'https://example.com/s', title: 's', publisher: 'p', date: null }], typicality: 0.2,

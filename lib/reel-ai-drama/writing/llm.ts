@@ -45,7 +45,7 @@ export type SubmitTool = {
 };
 
 /** A parser returns the typed value and every problem the model must fix (empty when it's valid). */
-export type Parsed<T> = { value: T | null; problems: string[] };
+export type Parsed<T> = { value: T | null; problems: string[]; /** Asked to fix once; never fails the call. */ soft?: string[] };
 
 export type SubmitRequest<T> = {
   /** Pipeline step for the cost ledger and the log (`writer`, `director`, `post_text`…). */
@@ -59,6 +59,8 @@ export type SubmitRequest<T> = {
   parse: (input: unknown) => Parsed<T>;
   /** Validation fix rounds after the first submit (default 1). */
   fixes?: number;
+  /** Never block a reel: what code can still make of the last answer once the fix rounds are spent; null when it can't. */
+  salvage?: (input: unknown, problems: readonly string[]) => T | null;
 };
 
 export type SubmitResult<T> = { value: T; usd: number; calls: number };
@@ -141,38 +143,72 @@ function fixMessage(call: Anthropic.ToolUseBlock, problems: string[]): Anthropic
  * nudges once when the turn ends without the call, and gives `fixes` rounds for validation problems.
  * The ledger gets one cost event per request, success or failure.
  */
+/** The most output room a retried turn gets. */
+export const MAX_TOKENS_CEILING = 128_000;
+
 export async function runSubmit<T>(send: SendMessage, ledger: Ledger, req: SubmitRequest<T>): Promise<SubmitResult<T>> {
   const fixes = req.fixes ?? 1;
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: req.user }];
   const responses: Anthropic.Message[] = [];
   let model = req.model;
   let fixesLeft = fixes;
+  let softAsked = false;
   let nudged = false;
   let continuations = 0;
   let lastProblems: string[] = [];
+  // MD-65: a turn cut off by max_tokens gets one fresh try with twice the room before the step fails.
+  let maxTokens = req.maxTokens;
+  let roomRetried = false;
   const fail = async (message: string): Promise<never> => {
     const spent = await record(ledger, req.component, model, responses);
     throw new WritingError(`${req.component}: ${message}`, spent, lastProblems);
   };
 
   for (;;) {
-    const message = await send(submitParams(req, messages));
+    const message = await send(submitParams({ ...req, maxTokens }, messages));
     responses.push(message);
     model = message.model || model;
-    if (message.stop_reason === 'max_tokens') return fail('the turn hit max_tokens before submitting');
+    if (message.stop_reason === 'max_tokens') {
+      if (roomRetried) return fail('the turn hit max_tokens before submitting');
+      roomRetried = true;
+      maxTokens = Math.min(maxTokens * 2, MAX_TOKENS_CEILING);
+      continue;
+    }
     if (message.stop_reason === 'refusal') return fail('the model declined the request');
     const call = message.content.find(
       (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === req.tool.name,
     );
     messages.push({ role: 'assistant', content: message.content as unknown as Anthropic.ContentBlockParam[] });
     if (call) {
-      const parsed = req.parse(coerceJsonStrings(call.input));
+      // These schemas aren't all strict, so a field can be missing: a parser that trips on the shape is a problem to fix, not a crash.
+      let parsed: Parsed<T>;
+      try {
+        parsed = req.parse(coerceJsonStrings(call.input));
+      } catch (error) {
+        parsed = { value: null, problems: [`the output has the wrong shape (${error instanceof Error ? error.message : String(error)}); send every required field`] };
+      }
       if (parsed.value && parsed.problems.length === 0) {
+        // One round on what should change but mustn't fail the call: then the value goes through as it stands.
+        const soft = parsed.soft ?? [];
+        if (soft.length && !softAsked) {
+          softAsked = true;
+          messages.push(fixMessage(call, soft));
+          continue;
+        }
         const spent = await record(ledger, req.component, model, responses);
         return { value: parsed.value, usd: spent, calls: responses.length };
       }
       lastProblems = parsed.problems.length ? parsed.problems : ['the output could not be read'];
-      if (fixesLeft <= 0) return fail(`output still invalid after ${fixes} fix round(s): ${lastProblems.join('; ')}`);
+      if (fixesLeft <= 0) {
+        let saved: T | null = null;
+        try {
+          saved = req.salvage?.(coerceJsonStrings(call.input), lastProblems) ?? null;
+        } catch {
+          saved = null;
+        }
+        if (saved !== null) return { value: saved, usd: await record(ledger, req.component, model, responses), calls: responses.length };
+        return fail(`output still invalid after ${fixes} fix round(s): ${lastProblems.join('; ')}`);
+      }
       fixesLeft -= 1;
       messages.push(fixMessage(call, lastProblems));
       continue;

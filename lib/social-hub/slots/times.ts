@@ -32,10 +32,7 @@ export const USUAL: Record<Vertical, ReadonlyArray<{ start: number; end: number;
     { start: 780, end: 870, name: 'Afternoon' },
     { start: 930, end: 1020, name: 'Late afternoon' },
   ],
-  carousels: [
-    { start: 540, end: 600, name: 'Morning' },
-    { start: 870, end: 930, name: 'Afternoon' },
-  ],
+  carousels: [],
   last_few_days: [{ start: 540, end: 600, name: 'Morning' }],
   stories: [{ start: 510, end: 600, name: 'Morning' }],
   ai_events: [
@@ -48,7 +45,7 @@ export const USUAL: Record<Vertical, ReadonlyArray<{ start: number; end: number;
 export const DEFAULT_TIMES: Record<Vertical, readonly number[]> = {
   reels: [525, 675, 1080],
   explainers: [780, 930],
-  carousels: [540, 870],
+  carousels: [],
   last_few_days: [540],
   stories: [510],
   ai_events: [1080, 1140],
@@ -103,13 +100,15 @@ export function snapMinute(raw: number, vertical: Vertical): { minute: number; s
   return { minute: grid, snappedTo: null };
 }
 
-/** Whether a start minute sits inside one of the type's usual windows (end exclusive). */
+/** Whether a start minute sits inside one of the type's usual windows (end exclusive). A type with none (Carousels, opt-in) has no "outside". */
 export function isUsual(vertical: Vertical, minute: number): boolean {
+  if (USUAL[vertical].length === 0) return true;
   return USUAL[vertical].some((w) => minute >= w.start && minute < w.end);
 }
 
 /** The usual start closest to a minute (ties go earlier). */
 export function nearestUsualStart(vertical: Vertical, minute: number): number {
+  if (USUAL[vertical].length === 0) return minute;
   let best = USUAL[vertical][0]!.start;
   for (const w of USUAL[vertical]) if (Math.abs(w.start - minute) < Math.abs(best - minute)) best = w.start;
   return best;

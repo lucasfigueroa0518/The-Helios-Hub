@@ -30,6 +30,9 @@ import { TREATMENTS, frameTreatment, isClose, objectStrokes, projectFrames, proj
 import { eventProblems } from './sound.mjs';
 import { open } from './browser.mjs';
 
+/** How far the close may stretch past CLOSE.duration for its question before it is worth a warning. */
+const CLOSE_STRETCH = 0.5;
+
 /** Kinds a frame may not use: decorative sounds (SCENES.md rule 2). */
 export const BANNED_KINDS = new Set(['whoosh', 'sting']);
 /** The reel's length (MD-35: about 60s, up to 75s). Outside this is a warning, not breakage. */
@@ -45,16 +48,39 @@ const IMPURE = [
   [/requestAnimationFrame|setTimeout|setInterval/, 'schedules work (render(t) must be synchronous)'],
   [/https?:\/\/(?!www\.w3\.org)/, 'loads from the network'],
   [/filter\s*[:=]\s*['"`]?\s*url\(/, 'applies an SVG filter (HyperFrames shows it through hidden frames; use the kit\'s baked textures)'],
+  [/clipPath\s*=\s*`inset\([^`]*\$\{/, 'wipes by hand with a moving clip (its straight edge reads as a cut picture; reveal a drawing with nk.drawn, or nk.tg.softReveal as its mask)'],
   [/visibility\s*[:=]\s*['"`]?visible/, "sets visibility to visible (it shows through the hidden frame after this one ends; set '' to show)"],
 ];
 
+/** The treatments whose pieces the kit places (nk.stage): a frame never gives them pixel numbers. */
+export const STAGED_TREATMENTS = ['collision', 'tableau', 'collage', 'whiteboard'];
+const SEEDED_TABLEAU = /\.tableau\(\s*\w+\s*,\s*\{[^}]*?\bsetting\s*:\s*['"`]/;
+const PIXELS = /\b(?:x|y|left|top|inset|bottom)\s*:\s*-?[\d(]/;
+
+/** A frame that places a stage's pieces by hand, or null. `treatment`: the frame's, read from its source when not given. Pure. */
+export function handPlaced(src, treatment = /\btreatment\s*:\s*['"`](\w+)['"`]/.exec(src)?.[1]) {
+  const why = [];
+  if (/\.collision\(/.test(src)) why.push('nk.collision');
+  if (/\.collage\(/.test(src)) why.push('nk.collage');
+  if (/\.tableau\(/.test(src) && !SEEDED_TABLEAU.test(src)) why.push('nk.tableau on a real setting');
+  if (STAGED_TREATMENTS.includes(treatment)) {
+    for (const m of src.matchAll(/\.(drawn|drawnLogo|markerNote|markerDrawing)\(([^;]*?)\)\s*[;,)]/g)) if (PIXELS.test(m[2])) why.push(`nk.${m[1]} with pixel numbers`);
+  }
+  return why.length ? `[hand_placed] places pieces by hand (${[...new Set(why)].join(', ')}): use nk.stage, which works out every position, size and depth from the measured pictures` : null;
+}
+
 /** Problems in one frame module's source text. */
-export function sourceProblems(src) {
+export function sourceProblems(given) {
   const out = [];
+  // A compiled frame's spec is the story's words and a plan's data, not code: a quote saying "from 'the board'" is no import.
+  const src = given.replace(/(\bcompiledFrame\()\{[\s\S]*\}(?=(?:, \{[^{}]*\})?\);)/, '$1{}');
+  const placed = handPlaced(src);
+  if (placed) out.push(placed);
   if (!/export\s+default\b/.test(src)) out.push('has no default export { treatment, build(root, ctx), render(t) }');
   for (const m of src.matchAll(/\bfrom\s+['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) {
     const spec = m[1] ?? m[2];
-    if (!spec.startsWith('../kit/')) out.push(`imports ${spec} (only ../kit/ may be imported)`);
+    // A compiled frame also imports its custom piece, checked on its own before it gets here (render/compile.ts).
+    if (!spec.startsWith('../kit/') && !spec.startsWith('../custom/')) out.push(`imports ${spec} (only ../kit/ may be imported)`);
   }
   for (const [re, why] of IMPURE) if (re.test(src)) out.push(why);
   return out;
@@ -87,7 +113,8 @@ export function storyboardWarnings(frames) {
   if (total > 0 && (total < LENGTH.min || total > LENGTH.max)) out.push(`the reel runs ${total.toFixed(1)}s; aim for about 60s, at most 75s`);
   for (const f of frames) {
     if (!isClose(f) && f.duration > MAX_FRAME) out.push(`frame ${f.number} holds ${f.duration}s: something new must happen inside it at least every 8s (a push, a mark, a new layer)`);
-    if (isClose(f) && f.duration > CLOSE.duration + 0.05) out.push(`the close runs ${f.duration}s: the question is too long for the ${CLOSE.duration}s close; shorten it`);
+    // The close stretches to fit its question (pace.mjs closeLength); a long stretch means a long question.
+    if (isClose(f) && f.duration > CLOSE.duration + CLOSE_STRETCH) out.push(`the close runs ${f.duration}s: it stretched past ${CLOSE.duration}s to fit a long question; keep the question to about 6 words`);
   }
   return out;
 }
@@ -96,7 +123,7 @@ export function storyboardWarnings(frames) {
 export function eventsFileProblems(list, duration, assets = null) {
   if (list == null) return ['has no events file (every visible action has its sound; a still has its ambience)'];
   const out = eventProblems(list, duration, { assets });
-  if (Array.isArray(list)) list.forEach((e, i) => { if (BANNED_KINDS.has(e?.kind)) out.push(`event ${i}: kind "${e.kind}" is decorative; use the action's own foley or the place's ambience`); });
+  if (Array.isArray(list)) list.forEach((e, i) => { if (BANNED_KINDS.has(e?.kind) && e?.kit !== true) out.push(`event ${i}: kind "${e.kind}" is decorative; use the action's own foley or the place's ambience`); });
   return out;
 }
 
@@ -148,7 +175,7 @@ export async function tryFrames(root, only = null) {
             return out;
           }
           const host = document.getElementById('w');
-          const snap = (t) => { window.__render(t); return host.innerHTML; };
+          const snap = (t) => { window.__render(t); return window.__canon(host); };
           const times = [];
           for (let t = 0; t <= args.duration + 1e-6; t += 0.5) times.push(Math.round(t * 1000) / 1000);
           times.push(Math.max(0, args.duration - 1 / 30));

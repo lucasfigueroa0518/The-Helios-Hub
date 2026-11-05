@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 
 import { campaignHref } from '@/lib/home/campaignHref';
 import { parseTrelloSearch, trelloHref } from '@/lib/trello/viewUrl';
-import { formatWelcomeDateTime } from '@/components/hub-home/HubHome';
+import { formatWelcomeDateTime, HOME_UNAVAILABLE_COPY, homeSectionStatus } from '@/components/hub-home/HubHome';
 
 import { getCurrentWeekBounds } from '@/lib/home/loadHome';
 import { isLiveAutoCampaign } from '@/lib/auto-campaigns/status';
@@ -28,6 +28,18 @@ describe('hub home week bounds', () => {
     const wedBounds = getCurrentWeekBounds(wednesday);
     assert.equal(wedBounds.weekStartStr, '2026-08-24');
     assert.equal(wedBounds.weekEndStr, '2026-08-30');
+  });
+});
+
+describe('hub home connection failure', () => {
+  it('a timed-out section is not shown as empty', () => {
+    assert.equal(homeSectionStatus(0, true), 'unavailable');
+    assert.equal(homeSectionStatus(0, false), 'empty');
+    assert.equal(homeSectionStatus(3, false), 'ready');
+    assert.equal(homeSectionStatus(3, true), 'unavailable');
+    assert.match(HOME_UNAVAILABLE_COPY.boards, /could not be loaded/);
+    assert.match(HOME_UNAVAILABLE_COPY.projects, /could not be loaded/);
+    assert.match(HOME_UNAVAILABLE_COPY.campaigns, /could not be loaded/);
   });
 });
 

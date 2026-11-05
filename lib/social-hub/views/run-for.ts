@@ -10,6 +10,21 @@ export function inFlightKey(runs: AllProgress): string {
   return TYPES.flatMap((v) => (runs[v] ?? []).map((i) => `${v}:${i.id}:${i.state}:${i.stage ?? ''}`)).sort().join('|');
 }
 
+/** Which runs are in flight, by type and id (state and stage left out), so a poll can tell when one finished. */
+export function inFlightRuns(runs: AllProgress): string[] {
+  return TYPES.flatMap((v) => (runs[v] ?? []).map((i) => `${v}/${i.id}`)).sort();
+}
+
+/**
+ * A run the page knew about is no longer in flight, so it may have made
+ * something new: only then is the shared hub read worth marking stale. A run
+ * starting or moving a stage needs a re-render, not a fresh read of every schema.
+ */
+export function aRunLeft(before: readonly string[], after: readonly string[]): boolean {
+  const still = new Set(after);
+  return before.some((run) => !still.has(run));
+}
+
 /** One line per type that is queued or running, for the top of the Content page. */
 export function runningSummary(runs: AllProgress): string[] {
   return TYPES.flatMap((v) => {

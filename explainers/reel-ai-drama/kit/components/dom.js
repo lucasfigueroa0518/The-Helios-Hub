@@ -116,3 +116,21 @@ export function markOf(el, which = 0) {
 /** Illegible filler lines (newspaper body that is neither facts nor invented sentences). */
 export const filler = (n, { cls = 'nk-greek', w = 100 } = {}) =>
   Array.from({ length: n }, (_, i) => `<div class="${cls}" style="width:${i % 5 === 4 ? 55 : w}%"></div>`).join('');
+
+/**
+ * A subtree as a comparable string: its markup with each element's inline styles sorted and an empty style
+ * attribute dropped. Two renders of one moment may write the same properties in a different order (a property
+ * cleared and set again moves to the end of the attribute) with nothing different on screen; only a real
+ * difference may count against render(t)'s purity.
+ */
+export function canonicalDom(root) {
+  const copy = root.cloneNode(true);
+  for (const el of copy.querySelectorAll('*')) {
+    const s = el.style;
+    if (!s) continue;
+    const props = Array.from({ length: s.length }, (_, i) => s[i]).sort();
+    if (props.length) el.setAttribute('style', props.map((p) => `${p}:${s.getPropertyValue(p)}`).join(';'));
+    else el.removeAttribute('style');
+  }
+  return copy.innerHTML;
+}

@@ -1,12 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Loader, MoreHorizontal } from 'lucide-react';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 
-import type { ActionMenu, OfferedAction, SlotChoice } from '@/lib/social-hub/views/actions';
 import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side';
+import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
+import type { ActionMenu, OfferedAction, SlotChoice } from '@/lib/social-hub/views/actions';
 
 /**
  * Actions on a post (MATRICES.md §2), wherever it appears: one primary, a
@@ -16,7 +16,8 @@ import { menuSide, type MenuSide } from '@/components/social-hub/house/menu-side
  * refreshes (the route revalidates the shared read).
  */
 export function ActionBar({ menu, compact = false, showOffNote = true, variant = 'bar', readOnly = false }: { menu: ActionMenu; compact?: boolean; showOffNote?: boolean; /** `card`: Today's Content, primary full width over a 2-column grid. */ variant?: 'bar' | 'card'; /** Shown but not clickable (the preview page). */ readOnly?: boolean }) {
-  const router = useRouter();
+  const { pending, refresh } = useHubRefresh();
+  const held = useRef<string | null>(null);
   const pickerTitleId = useId();
   const confirmTitleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -67,7 +68,7 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
       const res = await fetch(plan.endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...plan.body, ...extra }) });
       const out = (await res.json().catch(() => ({}))) as { note?: string };
       setNote({ ok: res.ok, text: out.note ?? (res.ok ? 'Done.' : 'That didn’t work. Try again in a moment.') });
-      if (res.ok) router.refresh();
+      if (res.ok) refresh();
     } catch {
       setNote({ ok: false, text: 'Couldn’t reach the hub. Check your connection and try again.' });
     } finally {
@@ -89,16 +90,20 @@ export function ActionBar({ menu, compact = false, showOffNote = true, variant =
     } else void run(action);
   }
 
+  if (busy) held.current = busy;
+  else if (!pending) held.current = null;
+  const mark = busy ?? (pending ? held.current : null);
+
   const button = (action: OfferedAction, primary: boolean) => (
     <button
       key={action.key}
       type="button"
       className={`sh-btn${primary ? ' sh-btn--primary' : ''}${action.danger ? ' sh-btn--danger' : ''}`}
-      disabled={readOnly || Boolean(action.disabled) || busy != null}
-      data-busy={busy === action.key ? '' : undefined}
+      disabled={readOnly || Boolean(action.disabled) || mark != null}
+      data-busy={mark === action.key ? '' : undefined}
       onClick={() => start(action)}
     >
-      {busy === action.key ? <Loader size={14} aria-hidden="true" /> : null}
+      {mark === action.key ? <Loader size={14} aria-hidden="true" /> : null}
       {action.label}
     </button>
   );

@@ -267,9 +267,24 @@ export function openerLineFor(topic: { jev_notes?: Record<string, unknown> | nul
   return CODING_TOPIC.test(words) ? OPENER_TEMPLATES.coding : OPENER_TEMPLATES.tech;
 }
 
+/** BRIEF.md's `## Lesson frame` (ideas-coverage PLAN § Contract): written only when the topic has a full frame, so older topics render as before. */
+function lessonFrameLines(topic: { lesson_payload?: string | null; lesson_altitude?: string | null; lesson_map?: string | null }): string[] {
+  const payload = topic.lesson_payload?.trim();
+  const altitude = topic.lesson_altitude?.trim();
+  const map = topic.lesson_map?.trim();
+  if (!payload || !altitude || !map) return [];
+  return ['## Lesson frame', `Payload: ${payload}`, `Altitude: ${altitude}`, `Map position: ${map}`, ''];
+}
+
 /** BRIEF.md for an autonomous Helios run (brief-format.md), with the term (EX3-86), the opener line (EX3-130), the picked analogy (EX3-15, EX3-123), and a curiosity gap only when one is passed (4.3 reels pass none). */
 export function briefMarkdown(
-  topic: Pick<TopicRow, 'title' | 'scope' | 'source_url' | 'source_text'> & { term?: string | null; jev_notes?: Record<string, unknown> | null },
+  topic: Pick<TopicRow, 'title' | 'scope' | 'source_url' | 'source_text'> & {
+    term?: string | null;
+    jev_notes?: Record<string, unknown> | null;
+    lesson_payload?: string | null;
+    lesson_altitude?: string | null;
+    lesson_map?: string | null;
+  },
   analogy: AnalogyCandidate | null = null,
   gap: GapNote | null = null,
 ): string {
@@ -299,6 +314,7 @@ export function briefMarkdown(
     '',
     'Plain-spoken, authoritative, no hype. A Helios Explainer Reel of about a minute in the fixed eight-beat structure, built around one anchor scene, so a first-time viewer understands it.',
     '',
+    ...lessonFrameLines(topic),
     '## Term',
     '',
     topic.term?.trim()

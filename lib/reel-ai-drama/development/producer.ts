@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk';
 
+import { withRetry } from '@/lib/reel-ai-drama/retry';
 import { ephemeralCache } from '@/lib/anthropic-cache';
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { Queryable } from '@/lib/explainers/db';
@@ -19,7 +20,7 @@ import {
 } from '@/lib/reel-ai-drama/types';
 import type { CellRow, NewsItem } from '@/lib/reel-ai-drama/development/ledger';
 import { appendJsonl } from '@/lib/reel-ai-drama/development/log';
-import { isPlayerId, norm, playerIdForName } from '@/lib/reel-ai-drama/development/util';
+import { isPlayerId, playerIdForName } from '@/lib/reel-ai-drama/development/util';
 
 /**
  * The development producer (PROCESS.md D2, MD-21): one cell per call, Sonnet with web search and fetch,
@@ -82,14 +83,11 @@ export const SUBMIT_PITCHES_TOOL = {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: [
-            'title', 'logline', 'pitch', 'story_type', 'era', 'event_date', 'date_precision', 'cast', 'central_figure',
-            'scene', 'turn', 'implication', 'why_now', 'engine', 'expected_visuals', 'sources', 'typicality',
-          ],
+          required: ['title', 'brief', 'story_type', 'era', 'event_date', 'date_precision', 'cast', 'why_now', 'expected_visuals', 'sources', 'typicality'],
           properties: {
             title: str,
-            logline: str,
-            pitch: str,
+            // MD-100: the story in prose (who, what, when, the main tension, what to focus on, why it mattered).
+            brief: str,
             story_type: { type: 'string', enum: Object.keys(STORY_TYPES) },
             era: { type: 'string', enum: Object.keys(ERAS) },
             event_date: str,
@@ -99,16 +97,11 @@ export const SUBMIT_PITCHES_TOOL = {
               items: {
                 type: 'object',
                 additionalProperties: false,
-                required: ['name', 'role', 'kind', 'player_id', 'want'],
-                properties: { name: str, role: str, kind: { type: 'string', enum: ['person', 'company'] }, player_id: nullableStr, want: str },
+                required: ['name', 'role', 'kind', 'player_id'],
+                properties: { name: str, role: str, kind: { type: 'string', enum: ['person', 'company', 'product'] }, player_id: nullableStr },
               },
             },
-            central_figure: str,
-            scene: str,
-            turn: str,
-            implication: str,
             why_now: nullableStr,
-            engine: str,
             expected_visuals: {
               type: 'array',
               items: {
@@ -137,8 +130,8 @@ export const SUBMIT_PITCHES_TOOL = {
 
 /** Server tools in a fixed order so the cached prefix never changes (RC-58 versions). */
 export const PRODUCER_SERVER_TOOLS = [
-  { type: 'web_search_20250305', name: 'web_search', max_uses: MAX_SEARCHES },
-  { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: MAX_FETCHES },
+  { type: 'web_search_20260209', name: 'web_search', max_uses: MAX_SEARCHES },
+  { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: MAX_FETCHES },
 ] as const;
 
 /** The blue-chip roster the cast's player_id must come from: stable, so it sits in the cached system. */
@@ -163,7 +156,6 @@ export function producerUserMessage(cell: CellRow, ctx: ProducerContext, pitches
       already_pitched: ctx.nearest.slice(0, MAX_NEAREST).map((p) => ({
         title: p.title,
         event_date: p.event_date,
-        central_figure: p.central_figure,
         cast: p.cast.map((c) => c.name),
         story_type: p.story_type,
       })),
@@ -221,7 +213,7 @@ export function validatePitch(raw: unknown, opts: { today: string; cell?: PitchC
   const title = text(r.title) ?? '(untitled)';
   const fail = (why: string): Validated => ({ ok: false, why, title });
 
-  const fields = ['title', 'logline', 'pitch', 'central_figure', 'scene', 'turn', 'implication', 'engine'] as const;
+  const fields = ['title', 'brief'] as const;
   const s: Record<string, string> = {};
   for (const f of fields) {
     const v = text(r[f]);
@@ -242,15 +234,12 @@ export function validatePitch(raw: unknown, opts: { today: string; cell?: PitchC
   for (const c of r.cast as Record<string, unknown>[]) {
     const name = text(c?.name);
     const role = text(c?.role);
-    const want = text(c?.want);
-    if (!name || !role || !want) return fail('a cast member lacks a name, role or want');
-    if (c.kind !== 'person' && c.kind !== 'company') return fail(`cast ${name}: bad kind`);
+    if (!name || !role) return fail('a cast member lacks a name or role');
+    if (c.kind !== 'person' && c.kind !== 'company' && c.kind !== 'product') return fail(`cast ${name}: bad kind`);
     const given = typeof c.player_id === 'string' ? c.player_id.trim() : null;
     const player_id = isPlayerId(given) ? given : playerIdForName(name);
-    cast.push({ name, role, kind: c.kind, player_id, want });
+    cast.push({ name, role, kind: c.kind, player_id });
   }
-  const central = cast.find((c) => norm(c.name) === norm(s.central_figure));
-  if (!central) return fail(`central_figure ${s.central_figure} is not in the cast`);
   if (opts.cell) {
     if (r.story_type !== opts.cell.story_type) return fail(`story_type ${String(r.story_type)} is not the cell's (${opts.cell.story_type})`);
     if (r.era !== opts.cell.era) return fail(`era ${String(r.era)} is not the cell's (${opts.cell.era})`);
@@ -281,19 +270,13 @@ export function validatePitch(raw: unknown, opts: { today: string; cell?: PitchC
     typicality,
     pitch: {
       title: s.title,
-      logline: s.logline,
-      pitch: s.pitch,
+      brief: s.brief,
       story_type: r.story_type as StoryType,
       era: r.era as Era,
       event_date: date,
       date_precision: precision,
       cast,
-      central_figure: central.name,
-      scene: s.scene,
-      turn: s.turn,
-      implication: s.implication,
       why_now: text(r.why_now),
-      engine: s.engine,
       expected_visuals: expected,
       sources,
     },
@@ -414,7 +397,7 @@ export async function producePitches(deps: ProducerDeps, cell: CellRow, ctx: Pro
 /** The live send: streaming (long outputs), every response appended to the JSONL log. */
 export function anthropicCreate(client: Anthropic, component: string): CreateMessage {
   return async (params) => {
-    const message = await client.messages.stream(params).finalMessage();
+    const message = await withRetry((p: typeof params) => client.messages.stream(p).finalMessage(), params);
     appendJsonl(component, { model: message.model, stop_reason: message.stop_reason, usage: message.usage, content: message.content });
     return message;
   };

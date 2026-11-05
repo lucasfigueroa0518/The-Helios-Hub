@@ -111,6 +111,23 @@ export function byFrame(errors: string[]): Map<number, string[]> {
   return out;
 }
 
+/** A frame's own files (module, events, props) as they are now; restoreFrame puts them back. */
+export function snapshotFrame(projectDir: string, id: string): Map<string, string | null> {
+  const out = new Map<string, string | null>();
+  for (const ext of ['.js', '.events.json', '.props.js']) {
+    const file = path.join(projectDir, 'assets', 'frames', `${id}${ext}`);
+    out.set(file, fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
+  }
+  return out;
+}
+
+export function restoreFrame(projectDir: string, snapshot: Map<string, string | null>): void {
+  for (const [file, text] of snapshot) {
+    if (text === null) fs.rmSync(file, { force: true });
+    else fs.writeFileSync(file, text);
+  }
+}
+
 /** try.mjs's errors as lines (its problems when it printed them, else its errors). */
 export function tryErrors(r: CmdResult): string[] {
   const j = jsonOut(r.stdout);
@@ -389,6 +406,10 @@ export async function runBuild(deps: BuildDeps): Promise<BuildOutcome> {
   const failing = (c: typeof checks) => [...new Set([...c.tried.keys(), ...c.bounds.keys()])].filter((n) => n > 0);
   const fixable = failing(checks).filter((n) => ids.has(n) && !CODE_FRAMES.has(n));
   if (fixable.length) {
+    // Keep the better version (2026-11-03): a fix that leaves a frame with more errors than it had
+    // (render B's frame 7: its builder ran out of checks and shipped an unverified rewrite) is undone.
+    const before = checks;
+    const kept = new Map(fixable.map((n) => [n, snapshotFrame(projectDir, moduleId(n, ids.get(n)!))]));
     await Promise.all(
       fixable.map((n) => {
         const t = checks.tried.get(n) ?? [];
@@ -398,6 +419,16 @@ export async function runBuild(deps: BuildDeps): Promise<BuildOutcome> {
     );
     for (const n of fixable) node(kit('mount.mjs'), [ids.get(n)!]);
     checks = buildChecks();
+    const count = (c: typeof checks, n: number) => (c.tried.get(n)?.length ?? 0) + (c.bounds.get(n)?.length ?? 0);
+    const worse = fixable.filter((n) => count(checks, n) > count(before, n));
+    if (worse.length) {
+      for (const n of worse) {
+        restoreFrame(projectDir, kept.get(n)!);
+        node(kit('mount.mjs'), [ids.get(n)!]);
+      }
+      log('build_fix_undone', { frames: worse.map((n) => ids.get(n)), before: worse.map((n) => count(before, n)), after: worse.map((n) => count(checks, n)) });
+      checks = buildChecks();
+    }
   }
   for (const n of failing(checks)) notes.push(`Frame ${ids.get(n) ?? n}: build checks left:\n${list([...(checks.tried.get(n) ?? []), ...(checks.bounds.get(n) ?? [])])}`);
   for (const e of [...(checks.tried.get(0) ?? []), ...(checks.bounds.get(0) ?? [])]) notes.push(`Build check: ${e}`);

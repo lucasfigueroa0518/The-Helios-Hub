@@ -4,19 +4,23 @@ import { bluePlayer, BLUE_CHIP_PLAYERS } from '@/lib/social-hub/blue-chip-player
 import { logoFor, logoForPlayer } from '@/lib/social-hub/logo-bank';
 
 import type { Source } from '../types';
+import { serperSource } from './serper';
 
 /**
  * The logo bank (`lib/social-hub/logo-bank.ts`). A company's banked logo is its character image: the
  * mark that stands for it wherever it appears, so it is exempt from the 20-day rule like a person's
- * cutout (MD-41, MD-45).
+ * cutout (MD-41, MD-45). A name the bank doesn't hold (a product, a research lab, a smaller company) is
+ * searched on Google Images instead (MD-135); those finds go through the same screens as any search.
  */
 export const logoSource: Source = async (want, run) => {
-  const name = want.terms.toLowerCase();
+  const name = want.terms.replace(/\blogo\b/gi, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
   const player = (want.playerId ? bluePlayer(want.playerId) : undefined) ?? BLUE_CHIP_PLAYERS.find((p) => p.kind === 'company' && [p.name, ...(p.aka ?? [])].some((n) => n.toLowerCase() === name));
   const logo = player ? logoForPlayer(player) : want.playerId ? logoFor(want.playerId) : null;
   if (!logo) {
     run.notes.push(`logo bank: no logo for ${want.terms}`);
-    return [];
+    const terms = /\blogo\b/i.test(want.terms) ? want.terms : `${want.terms} logo`;
+    const found = await serperSource({ ...want, kind: 'logo', terms }, run);
+    return found.map((c) => ({ ...c, flags: [...c.flags, 'logo'] }));
   }
   const root = run.deps.root ?? process.cwd();
   return [

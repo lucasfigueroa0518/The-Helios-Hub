@@ -12,13 +12,13 @@ import type { DramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { CRAFT_NAMES, directorSystem, loadCraft, loadPrompt, PROMPT_NAMES, writerSystem } from '@/lib/reel-ai-drama/prompts';
 import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';
-import type { Asset, DirectorPlan, FactSheet, Pitch, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
+import { FOCUS_KINDS, type Asset, type DirectorPlan, type FactSheet, type Pitch, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
 import { directReel } from '@/lib/reel-ai-drama/writing/director';
-import type { SendMessage, SubmitParams } from '@/lib/reel-ai-drama/writing/llm';
+import { runSubmit, type SendMessage, type SubmitParams } from '@/lib/reel-ai-drama/writing/llm';
 import { creditsFor, writePost } from '@/lib/reel-ai-drama/writing/post';
 import { buildReviewDoc, flagsReport } from '@/lib/reel-ai-drama/writing/review-doc';
-import { applyRevision, countWords, pruneCutLines, validateDraft, validatePlan } from '@/lib/reel-ai-drama/writing/validate';
-import { reviseScript, writeScript } from '@/lib/reel-ai-drama/writing/writer';
+import { applyRevision, countWords, maxRungWords, maxWords, pruneCutLines, targetWords, validateDraft, validatePlan } from '@/lib/reel-ai-drama/writing/validate';
+import { lengthNote, reviseScript, writeScript } from '@/lib/reel-ai-drama/writing/writer';
 import { BLUE_CHIP_PLAYERS } from '@/lib/social-hub/blue-chip-players';
 
 import { scratchExplainersDb } from './explainers-pglite';
@@ -50,11 +50,11 @@ function asset(id: string, over: Partial<Asset> = {}): Asset {
 
 const INVENTORY: VisualsInventory = { assets: ['V1', 'V2', 'V3', 'V4'].map((id) => asset(id)), usable_count: 4, counts: {}, kill: null, usd: 0 };
 
-const PITCH = { title: 'The bet', engine: 'end first' } as unknown as Pitch;
+const PITCH = { title: 'The bet', brief: 'A founder bets the company on one product.', cast: [] } as unknown as Pitch;
 
 const words = (n: number, w = 'word') => Array.from({ length: n }, () => w).join(' ');
 
-/** A valid draft: 7 rungs × 20 words = 140 words, turn at R6. */
+/** A valid draft: 7 rungs × 20 words = 140 words, the peak at R6. */
 function goodDraft(): WriterDraft {
   let n = 0;
   const rungs = Array.from({ length: 7 }, (_, i) => ({
@@ -62,16 +62,16 @@ function goodDraft(): WriterDraft {
     purpose: `purpose ${i + 1}`,
     lines: [10, 10].map((count) => ({ id: `L${++n}`, text: `${words(count)}.`, on_screen: null, fact_ids: ['F1'], must_show: null })),
   }));
-  return { title: 'T', engine: 'end first', hook: { on_screen: 'One bet', line_id: 'L1' }, rungs, turn_rung_id: 'R6', landing_rung_id: 'R7', close_question: 'Would you have shipped it?', word_count: 0 };
+  return { title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' }, rungs, peak_rung_id: 'R6', landing_rung_id: 'R7', close_question: 'Would you have shipped it?', word_count: 0, central: [] };
 }
 
 const lineIds = (d: WriterDraft) => d.rungs.flatMap((r) => r.lines.map((l) => l.id));
 
 function goodPlan(d: WriterDraft = goodDraft()): DirectorPlan {
   const ids = lineIds(d);
-  const frames = Array.from({ length: 7 }, (_, i) => ({
+  const frames: DirectorPlan['frames'] = Array.from({ length: 7 }, (_, i) => ({
     n: i + 1, name: `f${i + 1}`, line_ids: ids.slice(i * 2, i * 2 + 2), treatment: 'photo', asset_ids: [`V${(i % 4) + 1}`], purpose: 'p', motion: 'push', marks: '', sound: 'room tone',
-    music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: i === 0 ? 'One bet' : null,
+    music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: i === 0 ? 'One bet' : null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
   }));
   frames.push({ n: 8, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
   return { frames, lines_back: [] };
@@ -124,12 +124,16 @@ function stubJev(answer: (state: Record<string, string>) => Record<string, numbe
 // ── Prompts ────────────────────────────────────────────────────────────────
 
 test('loadPrompt loads every prompt and craft file; system prompts compose', () => {
-  for (const name of PROMPT_NAMES) assert.ok(loadPrompt(name).length > 300, name);
-  for (const name of CRAFT_NAMES) assert.ok(loadCraft(name).includes('HARD CONSTRAINTS'), name);
+  // creative-pass is a one-line placeholder until Claude writes it, last, from the build's report (ITERATION-10-CONTRACT §5).
+  for (const name of PROMPT_NAMES) assert.ok(name === 'creative-pass' ? loadPrompt(name).length > 0 : loadPrompt(name).length > 300, name);
+  // The principles are the writing side's craft (MD-104); the musts live in the role prompts.
+  for (const name of CRAFT_NAMES) assert.ok(name === 'director-craft' ? loadCraft(name).includes('HARD CONSTRAINTS') : loadCraft(name).length > 200, name);
   assert.throws(() => loadPrompt('nope' as never));
   assert.ok(writerSystem().startsWith(loadPrompt('writer')));
+  // S6: the director reads the story's structure and timing (story-timing), not the whole writer craft.
   const dir = directorSystem('KIT GUIDE TEXT');
-  assert.ok(dir.includes(loadCraft('director-craft')) && dir.includes(loadCraft('writer-craft')) && dir.endsWith('KIT GUIDE TEXT'));
+  assert.ok(dir.startsWith(loadPrompt('director')) && dir.includes(loadCraft('director-craft')) && dir.includes(loadCraft('story-timing')) && dir.endsWith('KIT GUIDE TEXT'));
+  assert.ok(!dir.includes(loadCraft('principles')), 'no copy of the writing principles');
 });
 
 // ── Validators ─────────────────────────────────────────────────────────────
@@ -154,10 +158,30 @@ test('the draft validator catches each broken rule', () => {
   assert.match(problemsFor((d) => (d.rungs[2]!.lines[0]!.text = words(25))), /rung R3 runs/);
   assert.match(problemsFor((d) => (d.close_question = 'Would you have shipped it')), /question mark/);
   assert.match(problemsFor((d) => (d.close_question = `${words(12)}?`)), /close question runs/);
-  assert.match(problemsFor((d) => (d.turn_rung_id = 'R2')), /back half/);
+  assert.match(problemsFor((d) => (d.peak_rung_id = 'R12')), /peak_rung_id "R12" is not a rung/);
   assert.match(problemsFor((d) => (d.landing_rung_id = 'R6')), /landing_rung_id/);
   assert.match(problemsFor((d) => (d.rungs[3]!.lines[0]!.id = 'L42')), /line 7 has id/);
-  assert.match(problemsFor((d) => d.rungs.splice(4, 3)), /narration totals 80 words/);
+  assert.match(problemsFor((d) => d.rungs.splice(4, 3)), /narration totals 80 words; about 180 make 60 seconds/);
+  // MD-91: one silent picture beat at most.
+  assert.equal(problemsFor((d) => (d.rungs[1]!.lines[0]!.pause_after = 0.5)), '');
+  assert.match(
+    problemsFor((d) => {
+      d.rungs[1]!.lines[0]!.pause_after = 0.5;
+      d.rungs[3]!.lines[0]!.pause_after = 0.4;
+    }),
+    /2 lines ask for a silent picture beat \(L3, L7\); 1 at most/,
+  );
+});
+
+test('the word budget follows words_per_minute_target (MD-91) and the Length note states it', () => {
+  assert.equal(maxRungWords(DEFAULT_SETTINGS), 24);
+  assert.equal(maxWords(DEFAULT_SETTINGS), 245);
+  assert.equal(targetWords(DEFAULT_SETTINGS), 180);
+  assert.equal(maxWords({ max_seconds: 60, rung_max_seconds: 8, words_per_minute_target: 150 }), 153);
+  assert.equal(maxRungWords({ max_seconds: 60, rung_max_seconds: 8 }), 24, 'no rate given: the default 180');
+  const note = lengthNote(DEFAULT_SETTINGS);
+  assert.match(note, /about 60 seconds: about 180 spoken words at 180 words a minute/);
+  assert.match(note, /At most about 80 seconds \(about 245 words\)/);
 });
 
 test('a valid plan passes; the plan validator catches coverage, order, treatments and assets', () => {
@@ -216,7 +240,7 @@ test('writeScript: cached system prefix, auto tool choice, one validation fix, c
   assert.equal(system.length, 1);
   assert.deepEqual(system[0]!.cache_control, { type: 'ephemeral', ttl: '1h' });
   assert.ok(system[0]!.text.includes('HARD CONSTRAINTS'));
-  assert.ok(typeof first.messages[0]!.content === 'string' && first.messages[0]!.content.includes('## Fact sheet'));
+  assert.ok(typeof first.messages[0]!.content === 'string' && first.messages[0]!.content.includes('## The facts'));
   const fix = send.calls[1]!.messages.at(-1)!.content as Anthropic.ToolResultBlockParam[];
   assert.equal(fix[0]!.type, 'tool_result');
   assert.match(String(fix[0]!.content), /cites F9/);
@@ -240,18 +264,25 @@ test('reviseScript merges the replacements; directReel validates the plan; write
   const draft = goodDraft();
   const revised = await reviseScript(
     { create: stubSend([toolMessage('submit_revision', { replacements: [{ line_id: 'L3', cut: false, text: `${words(9, 'fresh')}.`, on_screen: null, fact_ids: ['F2'], must_show: 'V2' }] })]), db, mode: 'production' },
-    { draft, linesBack: [{ line_id: 'L3', why: 'no picture', suggestion: 'x' }], facts: FACTS, inventory: INVENTORY },
+    { draft, notes: [{ source: 'Director', lines: ['L3'], note: 'no picture', suggestion: 'x' }], facts: FACTS, inventory: INVENTORY },
   );
   assert.match(revised.rungs[1]!.lines[0]!.text, /^fresh/);
   assert.equal(revised.rungs[1]!.lines[1]!.text, draft.rungs[1]!.lines[1]!.text);
 
-  const send = stubSend([toolMessage('submit_plan', goodPlan(draft))]);
+  // A plan with no blueprint problems goes straight through; what the frames show waits for the plan checks' one fix round.
+  const send = stubSend([toolMessage('submit_plan', goodPlan(draft)), toolMessage('submit_plan', goodPlan(draft))]);
   const plan = await directReel({ create: send, db, mode: 'production' }, { draft, inventory: INVENTORY, facts: FACTS, kitGuide: '# Kit guide' });
   assert.equal(plan.frames.length, 8);
   assert.ok((send.calls[0]!.system as Anthropic.TextBlockParam[])[0]!.text.endsWith('# Kit guide'));
-  const fixSend = stubSend([toolMessage('submit_plan', goodPlan(draft))]);
+  const fixSend = stubSend([toolMessage('submit_plan', goodPlan(draft)), toolMessage('submit_plan', goodPlan(draft))]);
   await directReel({ create: fixSend, db, mode: 'production' }, { draft, inventory: INVENTORY, facts: FACTS, kitGuide: '# Kit guide', fix: { plan, problems: [{ frame: 2, asset_id: 'V2', why: 'wrong person' }] } });
-  assert.match(String(fixSend.calls[0]!.messages[0]!.content), /Image-check problems[\s\S]*wrong person/);
+  const firstBlocks = send.calls[0]!.messages[0]!.content as Anthropic.TextBlockParam[];
+  const fixBlocks = fixSend.calls[0]!.messages[0]!.content as Anthropic.TextBlockParam[];
+  assert.match(fixBlocks[1]!.text, /Image-check problems[\s\S]*wrong person/);
+  // A fix round re-sends the shared input byte for byte, so it reads the first call's cache.
+  assert.equal(firstBlocks.length, 1);
+  assert.equal(fixBlocks[0]!.text, firstBlocks[0]!.text);
+  assert.ok(firstBlocks[0]!.cache_control && fixBlocks[0]!.cache_control);
 
   const inv = { ...INVENTORY, assets: [asset('V1'), asset('V2', { credit: 'Photo V1' }), asset('V3', { credit: 'Agency' })] };
   assert.deepEqual(creditsFor(inv, ['V3', 'V1', 'V2', 'V3']), ['Agency', 'Photo V1']);
@@ -318,12 +349,25 @@ test('first-viewer check: verdict mapping and the stubbed call', async () => {
   const db = await freshDb();
   const send = stubSend([toolMessage('submit_viewing', fine)]);
   const jev = stubJev(() => ({ story_match: 0.7 }));
+  const tile = { frame: 1, id: '01-a', t: 0.1, reel_t: 0.1, what: '', source: 'edge' as const };
+  const viewerTiles = [{ frame: 1, file: 'frame-01-1.jpg', moments: [tile] }, { frame: 1, file: 'frame-01-2.jpg', moments: [{ ...tile, t: 2, reel_t: 2 }] }];
   const out = await checkFirstViewer(
     { create: send, jev, db, mode: 'production', readSheet: async () => 'AAAA' },
-    { contactSheet: 'sheet.png', captions: '[0.0] one bet', draft: goodDraft(), facts: FACTS },
+    { sheets: viewerTiles, captions: '[0.0] one bet', draft: goodDraft(), facts: FACTS },
   );
   assert.deepEqual(out, { hookSeconds: 1, understood: true, problems: [], warnings: [] });
   assert.equal(send.calls[0]!.model, DEFAULT_SETTINGS.orchestrator_model);
+  // Every sheet goes in the suffix; the stable prefix carries the breakpoint.
+  const user = send.calls[0]!.messages[0]!.content as { type: string; cache_control?: unknown }[];
+  assert.equal(user.filter((b) => b.type === 'image').length, 2);
+  assert.ok(user.every((b) => !b.cache_control));
+  assert.ok((send.calls[0]!.system as { cache_control?: unknown }[]).at(-1)!.cache_control);
+  // The stranger never gets the plan's labels, nor an empty look.
+  const base = { captions: '', draft: goodDraft(), facts: FACTS };
+  const deps = { create: send, jev, db, mode: 'production' as const, readSheet: async () => 'AAAA' };
+  const labelled = [{ ...viewerTiles[0]!, moments: [{ ...viewerTiles[0]!.moments[0]!, what: 'p_founder arrives' }] }];
+  await assert.rejects(checkFirstViewer(deps, { ...base, sheets: labelled }), /viewerSheets/);
+  await assert.rejects(checkFirstViewer(deps, { ...base, sheets: [] }), /no sheets/);
 });
 
 // ── Pollution and flags lint ───────────────────────────────────────────────
@@ -398,4 +442,25 @@ test('the review document covers every craft and prompt file', () => {
   const doc = buildReviewDoc();
   for (const n of [...CRAFT_NAMES, ...PROMPT_NAMES]) assert.ok(doc.includes(`\`${n}.md\``), n);
   assert.ok(doc.includes('| W-31 |'));
+});
+
+test('a turn cut off by max_tokens gets one fresh try with twice the room, then fails', async () => {
+  const cut = { ...toolMessage('x', {}), content: [], stop_reason: 'max_tokens' } as unknown as Anthropic.Message;
+  const tool = { name: 'submit_x', description: 'x', strict: false, input_schema: { type: 'object', properties: {} } } as never;
+  const ledger = { db: { query: async () => ({ rows: [] }) }, mode: 'development' } as never;
+  const req = { component: 'director', model: 'claude-opus-5-5', system: 's', user: 'u', tool, maxTokens: 1000, parse: (raw: unknown) => ({ value: raw, problems: [] }) };
+  const send = stubSend([cut, toolMessage('submit_x', { ok: true })]);
+  assert.deepEqual((await runSubmit(send, ledger, req)).value, { ok: true });
+  assert.deepEqual(send.calls.map((c) => c.max_tokens), [1000, 2000]);
+  await assert.rejects(runSubmit(stubSend([cut, cut]), ledger, req), /max_tokens/);
+});
+
+test('MD-126: the director may drop a carried line\'s label, never one its frame does not carry', () => {
+  const draft = goodDraft();
+  const ok = goodPlan(draft);
+  ok.frames[1]!.drop_labels = [ok.frames[1]!.line_ids[0]!];
+  assert.deepEqual(validatePlan(ok, { draft, inventory: INVENTORY }).problems, []);
+  const bad = goodPlan(draft);
+  bad.frames[1]!.drop_labels = ['L1'];
+  assert.match(validatePlan(bad, { draft, inventory: INVENTORY }).problems.join(' | '), /frame \d+ drops L1's label, but it doesn't carry L1/);
 });

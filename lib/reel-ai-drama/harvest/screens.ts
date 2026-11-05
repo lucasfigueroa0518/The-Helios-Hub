@@ -71,14 +71,74 @@ export const MEASURE_SRC = `(phrases) => {
 
 type Measured = { text: string; rects: ViewportRect[] }[];
 
+/** Words of an error page or a bot wall; only believed on a short page, since an article may be about one. */
+const FAILED_PAGE = /\b(page not found|not found|404|403 forbidden|access denied|forbidden|just a moment|attention required|verify you are (a )?human|are you a robot|security check|enable javascript|site can.t be reached|service unavailable|something went wrong|unusual traffic)\b/i;
+const SHORT_PAGE = 1500;
+
+/** Why a capture isn't the page, or null: an HTTP error, or a short page saying it failed. Pure. */
+export function captureProblem({ status, title, text }: { status: number | null; title: string; text: string }): string | null {
+  if (status !== null && status >= 400) return `HTTP ${status}`;
+  const m = text.trim().length < SHORT_PAGE ? FAILED_PAGE.exec(`${title} ${text}`) : null;
+  return m ? `the page says "${m[0]}"` : null;
+}
+
+/** Runs in the page: hides fixed and sticky overlays (ad bars, cookie bars) that cover part of the view. */
+export const CLEAR_OVERLAYS_SRC = `() => {
+  const view = innerWidth * innerHeight;
+  for (const el of document.querySelectorAll('body *')) {
+    const st = getComputedStyle(el);
+    if (st.position !== 'fixed' && st.position !== 'sticky') continue;
+    const r = el.getBoundingClientRect();
+    if (r.width * r.height < view * 0.7) el.style.visibility = 'hidden';
+  }
+}`;
+
+/** Runs in the page: the headline and the block it sits in (its header, when that is not most of the page). */
+export const HEADLINE_BLOCK_SRC = `() => {
+  const h = document.querySelector('article h1, main h1, h1');
+  if (!h) return null;
+  const hr = h.getBoundingClientRect();
+  if (hr.width < 100 || hr.height < 14) return null;
+  let el = h;
+  for (let p = h.parentElement, i = 0; p && i < 3; p = p.parentElement, i++) {
+    if (p.matches('body, main, article')) break;
+    if (p.getBoundingClientRect().height > innerHeight * 0.6) break;
+    el = p;
+  }
+  const r = el.getBoundingClientRect();
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+}`;
+
+const CROP_PAD = 16;
+const CROP_MIN_H = 120;
+
+/** The clip around a headline block, full width and padded, or null when it wouldn't help (too thin, nearly the whole view). Pure. */
+export function cropRect(block: ViewportRect | null, viewport = VIEWPORT): ViewportRect | null {
+  if (!block) return null;
+  const y = Math.max(0, Math.floor(block.y - CROP_PAD));
+  const bottom = Math.min(viewport.height, Math.ceil(block.y + block.h + CROP_PAD));
+  const h = bottom - y;
+  if (h < CROP_MIN_H || h > viewport.height * 0.85) return null;
+  return { x: 0, y, w: viewport.width, h };
+}
+
+/** Image-pixel boxes moved into a clip's frame; boxes outside it are dropped. Pure. */
+export function boxesInCrop(boxes: readonly TextBox[], clip: ViewportRect, dpr: number = DPR): TextBox[] {
+  const top = clip.y * dpr;
+  const bottom = (clip.y + clip.h) * dpr;
+  return boxes.filter((b) => b.y >= top && b.y + b.h <= bottom).map((b) => ({ ...b, y: b.y - top }));
+}
+
 /**
  * The live capture: one headless Chromium for the whole harvest. The first phrase found is scrolled to a
  * quarter of the way down the frame, so the marked words sit in the picture. Cookie banners are not
- * dismissed (no autoconsent yet); a banner over the words shows up as a missing box.
+ * dismissed (no autoconsent yet) when they cover most of the view; a banner over the words shows up as a
+ * missing box. Smaller fixed overlays are hidden. `crop: 'headline'` returns just the headline's block where a
+ * page has one (MD-141). A failed page comes back with `problem`.
  */
 export function playwrightScreenshot(): { screenshot: Screenshot; close: () => Promise<void> } {
   let browser: import('playwright').Browser | null = null;
-  const screenshot: Screenshot = async (url, { out, phrases }): Promise<ScreenshotResult> => {
+  const screenshot: Screenshot = async (url, { out, phrases, crop }): Promise<ScreenshotResult> => {
     if (!browser) {
       const { chromium } = await import('playwright');
       browser = await chromium.launch({ headless: true });
@@ -86,24 +146,35 @@ export function playwrightScreenshot(): { screenshot: Screenshot; close: () => P
     const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: DPR, userAgent: `${USER_AGENT} Chrome/130`, locale: 'en-US' });
     try {
       const page = await context.newPage();
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
       await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => undefined);
+      await page.evaluate(`(${CLEAR_OVERLAYS_SRC})()`).catch(() => undefined);
+      const bodyText = await page.evaluate('document.body ? document.body.innerText : ""').catch(() => '') as string;
+      const problem = captureProblem({ status: response?.status() ?? null, title: await page.title().catch(() => ''), text: bodyText });
       const measure = () => page.evaluate(`(${MEASURE_SRC})(${JSON.stringify(phrases)})`) as Promise<Measured>;
+      const blockNow = () => (crop === 'headline' ? (page.evaluate(`(${HEADLINE_BLOCK_SRC})()`).catch(() => null) as Promise<ViewportRect | null>) : Promise.resolve(null));
+      const headline = await blockNow();
       const first = (await measure()).find((m) => m.rects.length)?.rects[0];
-      if (first) {
+      if (headline) {
+        await page.evaluate(`window.scrollBy(0, ${Math.round(headline.y - CROP_PAD * 2)})`);
+        await page.waitForTimeout(400);
+      } else if (first) {
         await page.evaluate(`window.scrollBy(0, ${Math.round(first.y - VIEWPORT.height * 0.25)})`);
         await page.waitForTimeout(400);
       }
       const measured = await measure();
+      const clip = cropRect(await blockNow());
       fs.mkdirSync(path.dirname(out), { recursive: true });
-      await page.screenshot({ path: out, type: 'png' });
+      await page.screenshot({ path: out, type: 'png', ...(clip ? { clip: { x: clip.x, y: clip.y, width: clip.w, height: clip.h } } : {}) });
+      const boxes = measured.flatMap((m) => boxesToImagePixels(m.text, m.rects));
       return {
         file: out,
-        width: VIEWPORT.width * DPR,
-        height: VIEWPORT.height * DPR,
-        boxes: measured.flatMap((m) => boxesToImagePixels(m.text, m.rects)),
+        width: (clip?.w ?? VIEWPORT.width) * DPR,
+        height: (clip?.h ?? VIEWPORT.height) * DPR,
+        boxes: clip ? boxesInCrop(boxes, clip) : boxes,
         title: (await page.title()) || url,
         captured_at: new Date().toISOString(),
+        ...(problem ? { problem } : {}),
       };
     } finally {
       await context.close();

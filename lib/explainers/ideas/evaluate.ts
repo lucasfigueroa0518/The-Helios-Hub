@@ -2,7 +2,9 @@ import type { Questions } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
 import { chooseAnalogySafely } from '@/lib/explainers/ideas/analogy';
-import type { IdeaModel } from '@/lib/explainers/ideas/generator';
+import { normalizeTerm, topicBucket } from '@/lib/explainers/ideas/coverage';
+import { ideaUsd, type IdeaModel } from '@/lib/explainers/ideas/generator';
+import { ALTITUDE_CHECK, ALTITUDE_MARGIN, FAMILIAR_YES } from '@/lib/explainers/jev/questions/altitude';
 import type { ExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
   DUPLICATE_GATE,
@@ -12,10 +14,10 @@ import {
 } from '@/lib/explainers/jev/questions/duplicate';
 import { IDEA_SCORING, IDEA_SCORING_FIELDS } from '@/lib/explainers/jev/questions/idea-scoring';
 import { POOL_CAP, capOverflow } from '@/lib/social-hub/queue';
-import { getTopic, listPool, listRecentlyRendered } from '@/lib/explainers/repository';
+import { getTopic, listPool, listRecentlyRendered, recordCost } from '@/lib/explainers/repository';
 import { failedGates, weightedScore, type TopicScores } from '@/lib/explainers/scoring';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
-import { IDEA_SCORE_KEYS, type IdeaScoreKey, type ScoreKey, type TopicRow } from '@/lib/explainers/types';
+import { IDEA_SCORE_KEYS, type IdeaScoreKey, type LessonAltitude, type ScoreKey, type TopicRow } from '@/lib/explainers/types';
 import { untrusted } from '@/lib/reels/jev/state';
 
 export type EvaluateDeps = {
@@ -170,6 +172,31 @@ export async function findPoolMatches(
   return [];
 }
 
+// ── Coverage-aware history (ideas coverage, 2026-11-03) ────────────────────
+
+/**
+ * The free code check: the first topic (pool first, then renders) whose normalized term, or title when it has no
+ * term, equals the candidate's. Catches the same word proposed twice across every bucket at no model cost.
+ */
+export function sameTermTopic(candidate: Pick<TopicRow, 'id' | 'term' | 'title'>, topics: readonly TopicRow[]): TopicRow | null {
+  const key = normalizeTerm(candidate.term ?? candidate.title);
+  if (!key) return null;
+  return topics.find((t) => t.id !== candidate.id && normalizeTerm(t.term ?? t.title) === key) ?? null;
+}
+
+/**
+ * Renders the Jev gate compares a candidate with: its own bucket's. A candidate or render with no known bucket is
+ * compared with everything (the safe side), so nothing slips past for want of a label.
+ */
+export function ownBucketRenders(candidate: Pick<TopicRow, 'bucket' | 'term' | 'title'>, rendered: readonly TopicRow[]): TopicRow[] {
+  const bucket = topicBucket(candidate);
+  if (!bucket) return [...rendered];
+  return rendered.filter((t) => {
+    const own = topicBucket(t);
+    return !own || own === bucket;
+  });
+}
+
 // ── Ranking (pure; mirrors POOL_ORDER_BY) ───────────────────────────────────
 
 const TIE_BREAKS: ScoreKey[] = [
@@ -207,9 +234,9 @@ export type SeedFlag = 'history_duplicate' | 'near_pool_topic' | 'below_gate';
 
 export type Evaluation =
   | { outcome: 'not_proposed' }
-  | { outcome: 'rejected_history_duplicate' }
+  | { outcome: 'rejected_history_duplicate'; /** The earlier reel a seed repeats, when one is known. */ earlierTitle?: string }
   | { outcome: 'rejected_gates'; gates: ScoreKey[]; score: number }
-  | { outcome: 'entered_pool'; score: number; flags?: SeedFlag[] }
+  | { outcome: 'entered_pool'; score: number; flags?: SeedFlag[]; /** A seed that auto-won against this pool topic. */ displacedId?: string }
   | { outcome: 'won_head_to_head'; score: number; displacedId: string }
   | { outcome: 'lost_head_to_head'; score: number; winnerId: string };
 
@@ -269,13 +296,26 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
   // Every topic gets its scope from the model alongside its title (A-9).
   if (!candidate.scope) throw new Error(`topic ${topicId} has no scope`);
 
+  // Ideas coverage (2026-11-03): the Jev gate sees the candidate's own bucket's renders in the lookback, archived
+  // topics and the whole pool; the free term check sees every bucket's renders and the pool.
   const pool = (await listPool(deps.db)).filter((t) => t.id !== topicId);
-  const rendered = [...(await listRecentlyRendered(deps.db, deps.settings.dedupe_lookback_days, deps.now)), ...(deps.extraHistory ?? [])];
+  const allRendered = await listRecentlyRendered(deps.db, deps.settings.dedupe_lookback_days, deps.now);
+  const rendered = ownBucketRenders(candidate, allRendered);
+  const sameTerm = sameTermTopic(candidate, [...pool, ...allRendered]);
+  const sameTermInPool = sameTerm && pool.some((t) => t.id === sameTerm.id) ? sameTerm : null;
 
-  if (candidate.origin === 'manual') return evaluateSeed(deps, candidate, pool, rendered);
+  if (candidate.origin === 'manual') return evaluateSeed(deps, candidate, pool, rendered, sameTerm);
 
   let match: TopicRow | null = null;
-  if (await duplicatesHistory(deps, candidate, [...pool, ...rendered])) {
+  if (sameTerm && !sameTermInPool) {
+    await setStatus(deps, topicId, 'rejected', {
+      reason: `Same term as "${sameTerm.title}", rendered in the last ${deps.settings.dedupe_lookback_days} days.`,
+      duplicateOf: sameTerm.id,
+    });
+    return { outcome: 'rejected_history_duplicate' };
+  }
+  if (sameTermInPool) match = sameTermInPool;
+  else if (await duplicatesHistory(deps, candidate, [...pool, ...rendered, ...(deps.extraHistory ?? [])])) {
     const matches = await findPoolMatches(deps, candidate, pool);
     if (matches.length === 0) {
       await setStatus(deps, topicId, 'rejected', {
@@ -297,6 +337,7 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
   }
 
   if (!match) {
+    await checkAltitude(deps, candidate);
     await setStatus(deps, topicId, 'pool');
     await pickAnalogyFor(deps, candidate);
     return { outcome: 'entered_pool', score };
@@ -304,6 +345,7 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
 
   const scored = { ...candidate, ...scores, weighted_score: score };
   if (challengerWins(scored, match)) {
+    await checkAltitude(deps, candidate);
     await pickAnalogyFor(deps, candidate);
     await setStatus(deps, match.id, 'displaced', {
       reason: 'Lost a duplicate head-to-head.',
@@ -320,19 +362,34 @@ export async function evaluateTopic(deps: EvaluateDeps, topicId: string): Promis
 }
 
 /**
- * A seed: scored for display and ranking only. It is never rejected for a duplicate or a gate, never loses a head-to-head,
- * and displaces nothing; what it would have been refused for comes back as flags (and is kept on the topic for the night).
+ * A seed (ideas coverage, 2026-11-03): deduped like any idea, against its own bucket's renders, the pool and the free
+ * term check. One that repeats a render from the lookback is rejected, with the earlier topic named; one that matches
+ * a pool topic auto-wins (the pool topic is displaced, flag `near_pool_topic`). It is never rejected for a gate and
+ * never loses a head-to-head; a gate it misses comes back as the `below_gate` flag (kept on the topic for the night).
  */
-async function evaluateSeed(deps: EvaluateDeps, candidate: TopicRow, pool: readonly TopicRow[], rendered: readonly TopicRow[]): Promise<Evaluation> {
+async function evaluateSeed(
+  deps: EvaluateDeps,
+  candidate: TopicRow,
+  pool: readonly TopicRow[],
+  rendered: readonly TopicRow[],
+  sameTerm: TopicRow | null,
+): Promise<Evaluation> {
   const flags: SeedFlag[] = [];
-  if (await duplicatesHistory(deps, candidate, [...pool, ...rendered])) {
+  let displaced: TopicRow | null = null;
+  if (sameTerm) {
+    if (!pool.some((t) => t.id === sameTerm.id)) return rejectSeed(deps, candidate, sameTerm);
+    displaced = sameTerm;
+  } else if (await duplicatesHistory(deps, candidate, [...pool, ...rendered])) {
     const matches = await findPoolMatches(deps, candidate, [...pool]);
-    flags.push(matches.length > 0 ? 'near_pool_topic' : 'history_duplicate');
+    if (matches.length === 0) return rejectSeed(deps, candidate, (await findPoolMatches(deps, candidate, rendered))[0] ?? null);
+    displaced = matches[0];
   }
+  if (displaced) flags.push('near_pool_topic');
   const scores = await scoreTopic(deps, candidate);
   const score = weightedScore(scores);
   await saveScores(deps, candidate.id, scores, score);
   if (failedGates(scores).length > 0) flags.push('below_gate');
+  await checkAltitude(deps, candidate);
   await deps.db.query(
     `UPDATE explainers.topics
         SET status = 'pool', reject_reason = NULL, duplicate_of = NULL,
@@ -340,8 +397,90 @@ async function evaluateSeed(deps: EvaluateDeps, candidate: TopicRow, pool: reado
       WHERE id = $1`,
     [candidate.id, JSON.stringify(flags)],
   );
+  if (displaced) {
+    await setStatus(deps, displaced.id, 'displaced', { reason: 'A hand-added topic teaches the same thing.', duplicateOf: candidate.id });
+  }
   await pickAnalogyFor(deps, candidate);
-  return { outcome: 'entered_pool', score, flags };
+  return { outcome: 'entered_pool', score, flags, ...(displaced ? { displacedId: displaced.id } : {}) };
+}
+
+/** A seed that repeats a recent render: rejected, naming the earlier topic when one is known. */
+async function rejectSeed(deps: EvaluateDeps, candidate: TopicRow, earlier: TopicRow | null): Promise<Evaluation> {
+  const days = deps.settings.dedupe_lookback_days;
+  await setStatus(deps, candidate.id, 'rejected', {
+    reason: earlier ? `Repeats "${earlier.title}", rendered in the last ${days} days.` : `Repeats a topic rendered in the last ${days} days.`,
+    duplicateOf: earlier?.id ?? null,
+  });
+  return { outcome: 'rejected_history_duplicate', ...(earlier ? { earlierTitle: earlier.title } : {}) };
+}
+
+// ── Altitude check (ideas coverage, 2026-11-03) ─────────────────────────────
+
+/**
+ * Jev's altitude question for a topic with a lesson frame. When it disagrees with the label (familiar or not), Jev
+ * wins: one call rewrites only the payload for the corrected altitude, and its cost is recorded like the other idea
+ * calls. `embedded` stays unless Jev says familiar. A failed rewrite keeps the generator's frame and is noted; it
+ * never changes the evaluation. Returns the corrected altitude, or null when the label stands.
+ */
+export async function checkAltitude(deps: EvaluateDeps, topic: TopicRow): Promise<LessonAltitude | null> {
+  if (!topic.lesson_altitude || !topic.lesson_payload) return null;
+  const result = await deps.jev.ask({
+    component: 'idea_scoring',
+    state: { topic_title: topic.title, term: topic.term ?? topic.title, topic_scope: topic.scope, theme_brief: deps.themeBrief },
+    set: ALTITUDE_CHECK,
+    questions: ALTITUDE_CHECK.questions,
+    topicId: topic.id,
+  });
+  const p = (result.answers as Record<string, { noul?: number }>).viewer_knows_word?.noul;
+  if (typeof p !== 'number' || !Number.isFinite(p)) return null;
+  const familiar = p >= FAMILIAR_YES;
+  const confident = Math.abs(p - FAMILIAR_YES) >= ALTITUDE_MARGIN;
+  const labelled = topic.lesson_altitude;
+  const corrected: LessonAltitude | null = !confident
+    ? null
+    : familiar && labelled !== 'familiar' ? 'familiar' : !familiar && labelled === 'familiar' ? 'unfamiliar' : null;
+  const note: Record<string, unknown> = { p_familiar: p, labelled, corrected };
+  if (corrected && deps.ideaModel) {
+    try {
+      const rewritten = await deps.ideaModel.rewritePayload({
+        model: deps.settings.idea_model,
+        themeBrief: deps.themeBrief,
+        title: topic.title,
+        scope: topic.scope ?? '',
+        term: topic.term ?? topic.title,
+        altitude: corrected,
+        payload: topic.lesson_payload,
+        mapPosition: topic.lesson_map,
+      });
+      await recordCost(deps.db, {
+        ideaCycleId: deps.ideaCycleId ?? null,
+        mode: deps.settings.mode,
+        vendor: 'anthropic',
+        component: 'payload_rewriter',
+        inputTokens: Number(rewritten.usage.input_tokens ?? 0),
+        outputTokens: Number(rewritten.usage.output_tokens ?? 0),
+        cacheReadTokens: Number(rewritten.usage.cache_read_input_tokens ?? 0),
+        cacheWriteTokens: Number(rewritten.usage.cache_creation_input_tokens ?? 0),
+        usd: ideaUsd(rewritten),
+      });
+      await deps.db.query(
+        `UPDATE explainers.topics SET lesson_payload = $2, lesson_altitude = $3, updated_at = now() WHERE id = $1`,
+        [topic.id, rewritten.payload, corrected],
+      );
+      // The analogy writer reads this row next; it carries the rewritten payload.
+      topic.lesson_payload = rewritten.payload;
+      topic.lesson_altitude = corrected;
+    } catch (error) {
+      note.rewrite_error = error instanceof Error ? error.message : String(error);
+    }
+  }
+  await deps.db.query(
+    `UPDATE explainers.topics
+        SET jev_notes = COALESCE(jev_notes, '{}'::jsonb) || jsonb_build_object('altitude_check', $2::jsonb), updated_at = now()
+      WHERE id = $1`,
+    [topic.id, JSON.stringify(note)],
+  );
+  return corrected;
 }
 
 /**

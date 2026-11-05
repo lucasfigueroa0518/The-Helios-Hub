@@ -175,15 +175,28 @@ export function itemFirstDay(ledger: CostLedger): Map<string, string> {
   return out;
 }
 
+/**
+ * All a post needs from the ledger: each item's full cost and its first day.
+ * Plain records, so it caches on its own (views/cached-dataset.ts) at a few
+ * KB where the allocated ledger is several MB.
+ */
+export type ItemCosts = { totals: Record<string, Micros>; firstDay: Record<string, string> };
+
+export function itemCosts(ledger: CostLedger): ItemCosts {
+  return { totals: Object.fromEntries(itemTotals(ledger)), firstDay: Object.fromEntries(itemFirstDay(ledger)) };
+}
+
 /** Put each post's cost on it (SH-21). Posts sharing one item show the same cost; totals dedupe (below). */
 export function withCosts(posts: readonly HubPost[], ledger: CostLedger): HubPost[] {
-  const totals = itemTotals(ledger);
-  const firstDay = itemFirstDay(ledger);
+  return withItemCosts(posts, itemCosts(ledger));
+}
+
+export function withItemCosts(posts: readonly HubPost[], costs: ItemCosts): HubPost[] {
   return posts.map((post) => {
     if (!post.costItemKey) return post;
-    const micros = totals.get(post.costItemKey);
+    const micros = costs.totals[post.costItemKey];
     if (micros == null) return { ...post, costMicros: null };
-    const day = firstDay.get(post.costItemKey);
+    const day = costs.firstDay[post.costItemKey];
     const postedDay = post.nyDate;
     return {
       ...post,

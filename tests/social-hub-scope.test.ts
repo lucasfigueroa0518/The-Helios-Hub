@@ -178,11 +178,13 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
  * and the type pages' run-progress poll, plus the Calendar's week board (its
  * slot writes, the unschedule it offers on a booked slot, and Ready to place's place),
  * its Schedules dropdown (the schedule save and its Undo), and AI Events' pool buttons
- * (Pin / Exclude / Clear and Rebuild post, /api/ai-events/pool). Client components
+ * (Pin / Exclude / Clear and Rebuild post, /api/ai-events/pool), and the post view's revision box (Targeted Revisions:
+ * revise, undo, continue, and its poll of the post's revision rows), and the shared Seed an idea drawer's five forms (one
+ * file and one /seed endpoint each, 2026-11-02) with the refresh helper they share. Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx']);
-const CONTROL_ENDPOINTS = /^\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place))|ai-events\/pool)\b/;
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/RankButtons.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/social-hub/post/RevisionBox.tsx', 'components/content-type/ReelSeedForm.tsx', 'components/content-type/CarouselSeedForm.tsx', 'components/content-type/LfdSeedForm.tsx', 'components/content-type/StorySeedForm.tsx', 'components/content-type/ExplainerSeedForm.tsx', 'lib/content-type/refresh-client.ts']);
+const CONTROL_ENDPOINTS = /^(?:\/api\/(content-type\/(posting|run-today|progress|idea-rank|idea-queue)|social-hub\/(slots|actions\/(unschedule|place|revise|undo-revision|continue-revision|revisions))|ai-events\/pool|(reels|carousels|last-few-days|stories)\/seed)\b|\/api\/explainers\/topics$)/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
 export function networkReach(start: string, boundaries: ReadonlySet<string> = BOUNDARIES): string | null {
@@ -208,11 +210,19 @@ export function networkReach(start: string, boundaries: ReadonlySet<string> = BO
     for (const spec of importsOf(text)) {
       if (NETWORK_PACKAGES.includes(spec)) return `${chain.join(' → ')} → ${spec}`;
       const next = resolveImport(file, spec);
+      // The one read-side network call: signing the story frames a page is about to show.
+      // The bucket stays private. Every other hub read still must not reach storage.
+      if (next === 'lib/stories/storage.ts' && file === 'lib/social-hub/views/story-frames.ts') continue;
       if (next && !seen.has(next)) queue.push({ file: next, chain: [...chain, next] });
     }
   }
   return null;
 }
+
+test('story frame signing is the one hub read allowed to reach storage', () => {
+  assert.equal(networkReach('lib/social-hub/views/story-frames.ts'), null);
+  assert.ok(networkReach('lib/stories/storage.ts'));
+});
 
 test('the network scan catches real network modules (positive control)', () => {
   assert.ok(networkReach('lib/social/overnight/meta.ts'), 'carousel Meta client reaches Graph');
@@ -296,7 +306,8 @@ test('every action route checks its flag before doing anything', () => {
   assert.ok(routes.length >= 4, 'the four action routes exist');
   for (const file of routes) {
     const text = readFileSync(path.join(ROOT, file), 'utf8');
-    assert.match(text, /actionRoute\(/, `${file} must be built with actionRoute() (flag gate)`);
+    // A read beside the actions (the revision box's poll) is gated the same way, by actionReadRoute().
+    assert.match(text, /actionRoute\(|actionReadRoute\(/, `${file} must be built with actionRoute() or actionReadRoute() (flag gate)`);
   }
 });
 
@@ -347,6 +358,7 @@ const INTENDED: Record<(typeof ACTION_FLAGS)[number], boolean> = {
   unschedule: true,
   refreshOnVisit: false,
   editSlots: true,
+  revise: true,
 };
 
 test('action flags match their intended Phase 2 state', () => {

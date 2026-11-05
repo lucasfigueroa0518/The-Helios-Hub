@@ -157,11 +157,21 @@ export type Look = {
   key_moment: boolean;
   /** One person's face is the clean, clear subject (anchor material, MD-60). */
   portrait?: boolean;
+  /** The file is broken: shuffled or misplaced tiles, blocks of wrong or missing pixels, a half-decoded picture. */
+  garbled?: boolean;
+  /** The picture shows what its tile line says it was meant to show (the targeted wish search keeps only these). */
+  fits?: boolean;
+  /** The caption or the picture shows the named person is someone else with a cast member's name (iteration 4). */
+  namesake?: boolean;
+  /** A page or player that failed, an error state, a broken image or an ad over the content (MD-141). */
+  broken?: boolean;
 };
 
-/** Reject reason from a look, or null. Our own captures carry site branding as their subject (§4.2). */
+/** Reject reason from a look, or null. Our own captures carry site branding as their subject (§4.2); a failed one still goes. */
 export function lookVerdict(c: Pick<RawCandidate, 'made'>, look: Look): string | null {
+  if (look.broken) return 'broken_capture';
   if (c.made) return null;
+  if (look.garbled) return 'garbled:look';
   if (look.tv_logo) return 'tv_channel_logo';
   if (look.watermark) return 'watermark';
   if (look.ai_generated) return 'ai_generated:look';
@@ -209,6 +219,11 @@ export function nameInUrl(name: string, ...urls: (string | null | undefined)[]):
  * this picture itself (a Commons file description, a news or press caption, the IPTC caption embedded in the
  * file, or a search result whose title and URL both name them). Probable: only a search title or a page title
  * names them. Anything else never claims the person; a photo whose only job was to show that person is rejected.
+ *
+ * Namesakes (iteration 4, Best on Paper's anchor was a Denver mayoral candidate named Thomas Wolf): a name in a
+ * title and a URL proves the name, not the person. When the look says the picture shows a namesake, the claim
+ * is dropped unless a QID ties it; when a name-only basis (search title + URL) is all there is and the look
+ * calls the picture unrelated to the story, the person stays probable, so it can't anchor or be cut out.
  */
 export function identityVerdict(
   c: Pick<RawCandidate, 'people' | 'qids' | 'source' | 'caption' | 'kind' | 'flags'> & Partial<Pick<RawCandidate, 'url' | 'source_page' | 'embedded_caption'>>,
@@ -217,11 +232,16 @@ export function identityVerdict(
   if (!c.people.length) return { reject: null, people: [], flags: [] };
   const personShot = c.kind === 'person_photo';
   const facesSeen = look ? look.faces : null;
-  if (c.qids.length && (c.source === 'bank' || c.source === 'wikidata')) {
+  // The photo bank's QIDs come from identity-verified sightings (Wikidata-checked carousels, verified harvests).
+  if (c.qids.length && (c.source === 'bank' || c.source === 'wikidata' || c.source === 'photo_bank')) {
     if (personShot && facesSeen === 0 && !c.flags.includes('cutout')) return { reject: 'identity:no_face', people: [], flags: [] };
     const flags = ['identity:verified'];
     if (facesSeen !== null && facesSeen > c.people.length) flags.push(`group_photo:${facesSeen}_faces`);
     return { reject: null, people: c.people, flags };
+  }
+  if (look?.namesake) {
+    if (personShot) return { reject: 'identity:namesake', people: [], flags: [] };
+    return { reject: null, people: [], flags: ['identity:namesake'] };
   }
   const inCaption = namesIn(c.caption, c.people);
   const embedded = c.embedded_caption ? namesIn(c.embedded_caption, c.people) : [];
@@ -242,7 +262,10 @@ export function identityVerdict(
     return null;
   };
   const bases = named.map(basis);
-  const flags = facesSeen !== null && bases.every(Boolean) ? ['identity:verified', `identity_basis:${[...new Set(bases)].join('+')}`] : ['identity:probable'];
+  // A name in a search title and a URL, on a picture the look calls unrelated to this story: maybe a namesake.
+  const nameOnly = look?.about_story === false && bases.some((b) => b === 'title_and_url');
+  const flags = facesSeen !== null && bases.every(Boolean) && !nameOnly ? ['identity:verified', `identity_basis:${[...new Set(bases)].join('+')}`] : ['identity:probable'];
+  if (nameOnly && facesSeen !== null && bases.every(Boolean)) flags.push('identity:name_only_off_story');
   if (facesSeen !== null && facesSeen > named.length) flags.push(`group_photo:${facesSeen}_faces`);
   return { reject: null, people: named, flags };
 }

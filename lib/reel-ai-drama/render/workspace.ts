@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { normalHistory } from '@/explainers/reel-ai-drama/kit/music.mjs';
 import { EXPLAINERS_DIR, prepareWorkspace as prepareExplainerWorkspace, type MusicHistory, type Workspace } from '@/lib/explainers/render/workspace';
 import type { TopicRow } from '@/lib/explainers/types';
 import { spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
@@ -18,8 +19,7 @@ import { spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runne
  * What the overlay replaces, and why:
  *   CLAUDE.md, AGENTS.md, BRIEF.md       point at the kit guide (assets/kit/FRAME.md) and the locked inputs
  *   .claude/skills/helios-explainer-director/   removed: this format has no scene builder
- *   faceless-explainer SKILL.md, sub-agents/frame-worker.md   B3's build-workflow and frame-worker
- *                                        prompts, when they exist (the session also gets them from loadPrompt)
+ *   faceless-explainer/references/       removed: the Explainer's story design (its 8 beats) is another format's spec
  *   assets/kit                           this format's kit (explainers/reel-ai-drama/kit), never the world kit;
  *                                        the gallery and the harvest-time map renderer stay out
  *   assets/world, opener.json, opener sounds   removed (no opening sting, MD-13)
@@ -36,9 +36,9 @@ export const PRESET = 'reel-ai-drama';
 export const PROJECT_INSTRUCTIONS = [
   '# Helios Reel AI Drama job',
   '',
-  'This project is one Reel AI Drama reel. SCRIPT.md, STORYBOARD.md and assets/inventory.json are locked inputs:',
-  'build each storyboard frame as assets/frames/<id>.js plus its events file, with the kit described in',
-  'assets/kit/FRAME.md. Nothing else applies here.',
+  'This project is one Reel AI Drama reel. SCRIPT.md, STORYBOARD.md and assets/inventory.json are locked inputs.',
+  'Code compiles every frame from assets/plan.json (lib/reel-ai-drama/render/compile.ts) with the kit described in',
+  'assets/kit/FRAME.md: assets/frames/ is generated, never edited. Nothing else applies here.',
   '',
 ].join('\n');
 
@@ -46,39 +46,47 @@ export const PROJECT_INSTRUCTIONS = [
 const KIT_EXCLUDE = /(^|[\\/])(gallery\.(html|mjs)|maps|fonts)([\\/]|$)/;
 /** The Explainer opener sounds the Explainer prepare copies into assets/sfx. */
 const EXPLAINER_OPENER_SOUNDS = ['riser.mp3', 'impact-bass-1.mp3'];
-/** B3's prompts laid over the faceless-explainer workflow files when they exist. */
-export const PROMPT_OVERLAYS: [string, string][] = [
-  ['build-workflow.md', '.claude/skills/faceless-explainer/SKILL.md'],
-  ['frame-worker.md', '.claude/skills/faceless-explainer/sub-agents/frame-worker.md'],
-];
-
 /** This format's music rotation, beside the jobs folder, never shared with the Explainer or Real Case one. */
 export function musicHistoryPath(jobsRoot: string): string {
   return path.join(path.dirname(path.resolve(jobsRoot)), 'reel-ai-drama-music-history.json');
 }
 
-export function readMusicHistory(jobsRoot: string): MusicHistory {
-  try {
-    const parsed = JSON.parse(fs.readFileSync(musicHistoryPath(jobsRoot), 'utf8')) as Partial<MusicHistory>;
-    return { used: Number(parsed.used) || 0, recent: Array.isArray(parsed.recent) ? parsed.recent.map(String).slice(-10) : [] };
-  } catch {
-    return { used: 0, recent: [] };
-  }
-}
+/** The rotation's history: one entry per reel, oldest first; music.mjs writes it the moment a reel chooses (MD-144). */
+export type ReelMusicHistory = MusicHistory & { reels?: { job: string | null; ids: string[] }[] };
 
-/** After a reel is made: count its tracks (assets/bgm/choice.json) in this format's rotation. */
-export function recordMusicChoice(jobsRoot: string, projectDir: string): string[] {
-  let ids: string[] = [];
+/** Each past job's tracks from its assets/bgm/choice.json, oldest first (for a history file that doesn't exist yet). */
+function reelsOnDisk(jobsRoot: string): { job: string; ids: string[] }[] {
+  let jobs: string[] = [];
   try {
-    const choice = JSON.parse(fs.readFileSync(path.join(projectDir, 'assets', 'bgm', 'choice.json'), 'utf8')) as { id?: string; ids?: string[] };
-    ids = (choice.ids ?? (choice.id ? [choice.id] : [])).map(String);
+    jobs = fs.readdirSync(jobsRoot);
   } catch {
     return [];
   }
-  if (!ids.length) return [];
-  const history = readMusicHistory(jobsRoot);
-  fs.writeFileSync(musicHistoryPath(jobsRoot), `${JSON.stringify({ used: history.used + 1, recent: [...history.recent, ...ids].slice(-10) }, null, 1)}\n`);
-  return ids;
+  return jobs
+    .flatMap((job) => {
+      const file = path.join(jobsRoot, job, 'render', 'project', 'assets', 'bgm', 'choice.json');
+      try {
+        const choice = JSON.parse(fs.readFileSync(file, 'utf8')) as { id?: string; ids?: string[] };
+        const ids = (choice.ids ?? (choice.id ? [choice.id] : [])).map(String);
+        return ids.length ? [{ job, ids, at: fs.statSync(file).mtimeMs }] : [];
+      } catch {
+        return [];
+      }
+    })
+    .sort((a, b) => a.at - b.at)
+    .map(({ job, ids }) => ({ job, ids }));
+}
+
+export function readMusicHistory(jobsRoot: string): ReelMusicHistory {
+  let raw: unknown = null;
+  try {
+    raw = JSON.parse(fs.readFileSync(musicHistoryPath(jobsRoot), 'utf8'));
+  } catch {
+    const reels = reelsOnDisk(jobsRoot);
+    raw = reels.length ? { used: reels.length, recent: reels.flatMap((r) => r.ids), reels } : null;
+  }
+  const history = normalHistory(raw) as Required<ReelMusicHistory>;
+  return Array.isArray((raw as { reels?: unknown } | null)?.reels) ? history : { used: history.used, recent: history.recent } as ReelMusicHistory;
 }
 
 /** The topic shape the Explainer prepare needs (its BRIEF.md is replaced by the overlay). */
@@ -98,11 +106,10 @@ export function buildFrameWith(run: Runner) {
 /** Lay the Reel AI Drama files over a prepared Explainer workspace's project (deterministic, no model). */
 export function applyOverlay(
   projectDir: string,
-  { buildFrame, musicHistory = null, kitDir = KIT_DIR, promptsDir = path.join(REEL_AI_DRAMA_DIR, 'prompts') }: {
+  { buildFrame, musicHistory = null, kitDir = KIT_DIR }: {
     buildFrame: (projectDir: string, presetDir: string) => void;
-    musicHistory?: MusicHistory | null;
+    musicHistory?: (ReelMusicHistory & { ledger?: string; job?: string }) | null;
     kitDir?: string;
-    promptsDir?: string;
   },
 ): void {
   const write = (rel: string, content: string) => {
@@ -113,10 +120,7 @@ export function applyOverlay(
   for (const file of ['CLAUDE.md', 'AGENTS.md']) write(file, PROJECT_INSTRUCTIONS);
   write('BRIEF.md', '# Reel AI Drama\n\nThe story is in SCRIPT.md (the narration) and STORYBOARD.md (the director\'s frames); the pictures are in assets/inventory.json and assets/media/. The kit guide is assets/kit/FRAME.md.\n');
   fs.rmSync(path.join(projectDir, '.claude', 'skills', 'helios-explainer-director'), { recursive: true, force: true });
-  for (const [from, to] of PROMPT_OVERLAYS) {
-    const src = path.join(promptsDir, from);
-    if (fs.existsSync(src)) write(to, fs.readFileSync(src, 'utf8'));
-  }
+  fs.rmSync(path.join(projectDir, '.claude', 'skills', 'faceless-explainer', 'references'), { recursive: true, force: true });
 
   const assets = path.join(projectDir, 'assets');
   fs.rmSync(path.join(assets, 'kit'), { recursive: true, force: true });
@@ -139,7 +143,6 @@ export type PrepareDeps = {
   run?: Runner;
   buildFrame?: (projectDir: string, presetDir: string) => void;
   kitDir?: string;
-  promptsDir?: string;
 };
 
 /** The job's workspace: the Explainer prepare one level down in the job folder, then the overlay. */
@@ -150,11 +153,11 @@ export async function prepareWorkspace({ jobsRoot, jobId }: { jobsRoot: string; 
   const ws = base({ jobsRoot: jobDir, jobId: 'render', topic: workspaceTopic(jobId), sourceText: null, analogy: null, gap: null });
   applyOverlay(ws.projectDir, {
     buildFrame: deps.buildFrame ?? buildFrameWith(deps.run ?? spawnRunner),
-    musicHistory: readMusicHistory(jobsRoot),
+    // `ledger`: music.mjs re-reads and writes the history at pick time, so jobs see each other's choices.
+    musicHistory: { ...readMusicHistory(jobsRoot), ledger: musicHistoryPath(jobsRoot), job: jobId },
     ...(deps.kitDir ? { kitDir: deps.kitDir } : {}),
-    ...(deps.promptsDir ? { promptsDir: deps.promptsDir } : {}),
   });
-  // A short temp dir per job (the agent sandbox's socket-path limit); the base's would be shared.
+  // A short temp dir per job; the base's would be shared.
   const tmpDir = path.join(os.tmpdir(), `hx-${jobId.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`);
   fs.mkdirSync(tmpDir, { recursive: true });
   return { jobDir, projectDir: ws.projectDir, homeDir: ws.homeDir, tmpDir };

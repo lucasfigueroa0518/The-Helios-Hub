@@ -23,6 +23,8 @@ export type CarouselPostRow = {
   render: Record<string, unknown> | null;
   slide_count: number | null;
   has_slide_objects: boolean;
+  /** The stored slide files in order (their paths version the preview URLs: a revised slide has a new path). */
+  slide_objects?: unknown;
   hook_pass: boolean | null;
   photo_sources: string[] | null;
   checks: { fixes?: unknown[]; warnings?: unknown[]; photoReplacements?: unknown[]; renderReview?: unknown[] } | null;
@@ -85,9 +87,27 @@ export type CarouselsRead = {
 
 export const CAROUSEL_POSTS_SQL = `
 SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.caption,
-       p.created_at::text AS created_at, p.published_at::text AS published_at, p.render,
+       p.created_at::text AS created_at, p.published_at::text AS published_at,
+       -- The hub reads source, story type, source URL, and each slide's copy. The rest of the render stays in the row.
+       CASE WHEN p.render IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object(
+         'source', p.render->'source',
+         'storyType', p.render->'storyType',
+         'sourceUrl', p.render->'sourceUrl',
+         'slides', (
+           SELECT COALESCE(jsonb_agg(jsonb_build_object(
+             'headline', s.slide->'headline',
+             'body', s.slide->'body',
+             'photoUrl', s.slide->'photoUrl',
+             'layoutVariant', s.slide->'layoutVariant',
+             'altText', s.slide->'altText'
+           ) ORDER BY s.ord), '[]'::jsonb)
+           FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p.render->'slides') = 'array' THEN p.render->'slides' ELSE '[]'::jsonb END)
+             WITH ORDINALITY AS s(slide, ord)
+         )
+       )) END AS render,
        COALESCE(jsonb_array_length(p.slide_objects), jsonb_array_length(p.render->'slides')) AS slide_count,
        (jsonb_typeof(p.slide_objects) = 'array' AND jsonb_array_length(p.slide_objects) > 0) AS has_slide_objects,
+       p.slide_objects,
        r.hook_pass,
        -- used_photos.post_id is rarely filled by the pipeline: match the story within a day of the post.
        (SELECT array_agg(DISTINCT u.source ORDER BY u.source) FROM social.used_photos u
@@ -106,7 +126,8 @@ SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.capti
 /** Candidate stories from the newest daily run's shortlist, scored by Jev (probSum). */
 export const CAROUSEL_IDEAS_SQL = `
 WITH latest AS (
-  SELECT record, started_at FROM social.runs
+  -- Sort the id only. The shortlist is read from that one run, so the other daily records stay on the server.
+  SELECT id, started_at FROM social.runs
    WHERE kind = 'daily' AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
    ORDER BY started_at DESC NULLS LAST LIMIT 1
 )
@@ -125,7 +146,8 @@ SELECT c->>'id' AS story_id,
        EXISTS (SELECT 1 FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
                 WHERE ci.vertical = 'carousels' AND ci.idea_ref = c->>'id' AND s.status IN ('scheduled', 'publishing')) AS scheduled
   FROM (
-    SELECT c, latest.started_at FROM latest, jsonb_array_elements(latest.record->'selection'->'shortlist') c
+    SELECT c, latest.started_at FROM latest
+    JOIN social.runs r ON r.id = latest.id, jsonb_array_elements(r.record->'selection'->'shortlist') c
     UNION ALL
     -- A person's seeded stories (design 2026-10-25-carousels-seeding): theirs until they expire after a week.
     SELECT c, (c->'seed'->>'addedAt')::timestamptz AS started_at

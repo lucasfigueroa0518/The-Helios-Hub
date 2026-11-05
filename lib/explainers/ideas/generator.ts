@@ -3,7 +3,8 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { cachedSystemText } from '@/lib/anthropic-cache';
 import { priceAnthropicUsage, usageBucketsFromMessage, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { TopicRef } from '@/lib/explainers/ideas/evaluate';
-import type { AnalogyCandidate, AnalogyMapping, GapCandidate } from '@/lib/explainers/types';
+import { BUCKET_IDS, type Bucket } from '@/lib/explainers/ideas/coverage';
+import { LESSON_ALTITUDES, type AnalogyCandidate, type AnalogyMapping, type GapCandidate, type LessonAltitude } from '@/lib/explainers/types';
 
 /**
  * The model calls the Explainers topic pipeline makes: the idea generator, the scope writer, the
@@ -29,13 +30,24 @@ export const IDEAS_PER_CALL = 3;
 // (two AI ideas and one computer-science or tech idea per call, EX3-73), plus
 // the term each reel defines. Approved in the 3.2 plan (Lucas, 2026-10-13).
 // Nothing calls this until auto_render is on (A-7). v5 (3.9, EX3-123): the reel shape's analogy is
-// a well-known one whose defining trait is the concept, as theme brief v4 says.
+// a well-known one whose defining trait is the concept, as theme brief v4 says. v6 (ideas coverage,
+// 2026-11-03): ideas come from tonight's buckets, each with its bucket and lesson frame; the user message
+// carries the picked buckets' recent renders and the pool instead of all history.
 
-export const IDEA_GENERATOR_VERSION = 'idea-generator-v5';
+export const IDEA_GENERATOR_VERSION = 'idea-generator-v6';
 
 /** The reel shape every topic must fit (EX3-10; 3.9, EX3-123), shared by the prompts and theme brief v4. */
 export const REEL_SHAPE =
   'one curiosity gap, one plain definition, one well-known analogy whose defining trait is the concept, that can carry the reel, one tiny real example, and one real-world application';
+
+/**
+ * The lesson frame each idea carries (ideas-coverage PLAN.md, 2026-11-03), shared by the idea generator and the
+ * scope writer. Every reel still teaches its definition; the frame says where the lesson starts and how deep it goes.
+ */
+export const LESSON_FRAME_RULE = `payload, altitude, map_position: the lesson frame. Every reel teaches the term's plain definition; the frame says where the viewer starts and how far the reel goes past the definition.
+   - altitude: where the average viewer of the theme brief's audience stands with the concept. "unfamiliar": most viewers do not really know what it is, so the definition and how it works is the payload. "familiar": most viewers already know the word, so the definition is a quick anchor and the payload goes past it. "embedded": the concept is one part of a larger system, so the reel places it in that system before and after defining it.
+   - payload: one sentence, the one thing the viewer leaves with, at the depth the altitude calls for. For a familiar word the payload goes past the definition, to the mechanism, cause or failure behind it.
+   - map_position: one sentence placing the concept in the system it belongs to: what it does there, and what comes before and after it.`;
 
 /** The AI skew per call (EX3-73). */
 export const AI_IDEAS_PER_CALL = 2;
@@ -49,13 +61,15 @@ export const IDEA_GENERATOR_INSTRUCTIONS = `You propose topics for Helios Explai
 HARD CONSTRAINTS. Every one is required.
 1. Return exactly ${IDEAS_PER_CALL} ideas as JSON matching the response schema. No other output.
 2. Each idea teaches exactly one complete thought that fits one minute with ${REEL_SHAPE}.
-3. Skew toward AI. Exactly ${AI_IDEAS_PER_CALL} of the ${IDEAS_PER_CALL} ideas teach an AI concept (how models, agents, context, tokens, training, retrieval, or other parts of artificial intelligence work). The other idea teaches a computer-science or tech concept: those are still part of the curriculum, and they matter most when they help someone understand AI.
+3. Skew toward AI, inside tonight's buckets. The user message lists tonight's ${AI_IDEAS_PER_CALL} AI buckets and one computer-science bucket. Exactly ${AI_IDEAS_PER_CALL} of the ${IDEAS_PER_CALL} ideas teach an AI concept (how models, agents, context, tokens, training, retrieval, or other parts of artificial intelligence work), one in each AI bucket. The other idea teaches a computer-science or tech concept in the computer-science bucket: those are still part of the curriculum, and they matter most when they help someone understand AI.
+   bucket: the id of the bucket the idea belongs to, one of tonight's. A bucket's concepts to teach are guidance: an idea may fit its bucket without being on that list.
 4. topic_title: the viewer-facing title or question, 12 words or fewer.
 5. topic_scope: one sentence that states the exact learning objective, beginning with "Explain".
 6. ${TERM_RULE}
-7. The ${IDEAS_PER_CALL} ideas are mutually distinct, and each is distinct from every topic in the current pool and the recently rendered list in the user message. Two ideas are duplicates when the viewer would learn essentially the same core concept or leave with the same primary takeaway, even if the title, hook, analogy, or example differs.
-8. Never propose a banned topic or angle from the brief.
-9. Do not write hooks, analogies, scripts, scores, or reasoning. Titles, terms and scopes only.`;
+7. ${LESSON_FRAME_RULE}
+8. The ${IDEAS_PER_CALL} ideas are mutually distinct, and each is distinct from every topic in the current pool and the recent renders in the user message. Two ideas are duplicates when the viewer would learn essentially the same core concept or leave with the same primary takeaway, even if the title, hook, analogy, or example differs.
+9. Never propose a banned topic or angle from the brief.
+10. Do not write hooks, analogies, scripts, scores, or reasoning. Titles, terms, scopes, buckets and lesson frames only.`;
 
 export function ideaGeneratorSystem(themeBrief: string): string {
   return `${IDEA_GENERATOR_INSTRUCTIONS}\n\n<theme_brief>\n${themeBrief}\n</theme_brief>`;
@@ -72,33 +86,71 @@ const TOPIC_ITEM = {
   additionalProperties: false,
 } as const;
 
+/** The frame fields; `bucket` lists every id so the schema (and the cached request) never changes per night. */
+const FRAME_PROPERTIES = {
+  bucket: { type: 'string', enum: [...BUCKET_IDS], description: 'The id of the bucket the idea belongs to.' },
+  payload: { type: 'string', description: 'One sentence: the one thing the viewer leaves with, at the depth the altitude calls for.' },
+  altitude: { type: 'string', enum: [...LESSON_ALTITUDES], description: "Where the average viewer's understanding of the concept ends." },
+  map_position: { type: 'string', description: 'One sentence placing the concept in the system it belongs to.' },
+} as const;
+const FRAME_KEYS = ['bucket', 'payload', 'altitude', 'map_position'] as const;
+
+const FRAMED_ITEM = {
+  type: 'object',
+  properties: { ...TOPIC_ITEM.properties, ...FRAME_PROPERTIES },
+  required: [...TOPIC_ITEM.required, ...FRAME_KEYS],
+  additionalProperties: false,
+} as const;
+
 export const IDEAS_SCHEMA = {
   type: 'object',
-  properties: { ideas: { type: 'array', items: TOPIC_ITEM } },
+  properties: { ideas: { type: 'array', items: FRAMED_ITEM } },
   required: ['ideas'],
   additionalProperties: false,
 } as const;
 
-export function ideaGeneratorUserMessage(pool: readonly TopicRef[], rendered: readonly TopicRef[]): string {
-  return [
-    'Current candidate pool (do not duplicate):',
-    JSON.stringify(pool),
-    '',
-    'Rendered in the duplicate lookback window (do not duplicate):',
-    JSON.stringify(rendered),
-    '',
-    `Propose exactly ${IDEAS_PER_CALL} new ideas.`,
-  ].join('\n');
+/** One of tonight's buckets as the generator sees it: its concepts no render has taught yet, and its recent renders. */
+export type PickedBucket = Pick<Bucket, 'id' | 'name' | 'kind'> & { concepts_to_teach: readonly string[]; rendered: readonly TopicRef[] };
+
+/** Everything that changes per night, after the cached prefix: tonight's buckets with their renders, then the pool. */
+export function ideaGeneratorUserMessage(
+  buckets: readonly PickedBucket[],
+  pool: readonly TopicRef[],
+  historyDays?: number,
+  archived: readonly TopicRef[] = [],
+): string {
+  const window = historyDays ? `in the last ${historyDays} days` : 'recently';
+  const lines = ["Tonight's buckets:"];
+  for (const b of buckets) {
+    lines.push(
+      '',
+      `${b.id} (${b.name}, ${b.kind === 'ai' ? 'AI' : 'computer science'})`,
+      `Concepts to teach: ${JSON.stringify(b.concepts_to_teach)}`,
+      `Rendered ${window} (do not duplicate): ${JSON.stringify(b.rendered)}`,
+    );
+  }
+  if (archived.length > 0) lines.push('', 'Archived by a person (do not bring back):', JSON.stringify(archived));
+  lines.push('', 'Current candidate pool, all buckets (do not duplicate):', JSON.stringify(pool), '', `Propose exactly ${IDEAS_PER_CALL} new ideas.`);
+  return lines.join('\n');
 }
 
 export type IdeaRequest = {
   model: string;
   themeBrief: string;
+  /** Tonight's buckets (pickBuckets), each with its renders from the last `historyDays`. */
+  buckets: readonly PickedBucket[];
   pool: readonly TopicRef[];
+  /** Every render the request carries, all buckets together (the picked buckets' renders plus archived topics). */
   rendered: readonly TopicRef[];
+  /** Topics a person archived in tonight's buckets or with no bucket: the machine must not bring them back. */
+  archived?: readonly TopicRef[];
+  historyDays?: number;
 };
 
-export type GeneratedIdea = { topic_title: string; topic_scope: string; term: string };
+/** A topic's lesson frame (ideas-coverage PLAN.md, Contract). */
+export type LessonFrame = { bucket: string; payload: string; altitude: LessonAltitude; map_position: string };
+
+export type GeneratedIdea = { topic_title: string; topic_scope: string; term: string } & LessonFrame;
 
 export type IdeaResponse = {
   ideas: GeneratedIdea[];
@@ -112,9 +164,10 @@ export type IdeaResponse = {
 // their scopes from one call per click, all titles together. Version
 // scope-writer-v4 (Explainers 3.2, EX3-86): v3's one-minute reel, plus the term
 // each reel defines. It also backfills the terms of topics written before 3.2.
-// Approved in the 3.2 plan (Lucas, 2026-10-13). v5 (3.9, EX3-123): the new reel shape (REEL_SHAPE).
+// Approved in the 3.2 plan (Lucas, 2026-10-13). v5 (3.9, EX3-123): the new reel shape (REEL_SHAPE). v6 (ideas
+// coverage, 2026-11-03): in the same call, each title's bucket (any of the thirteen) and lesson frame.
 
-export const SCOPE_WRITER_VERSION = 'scope-writer-v5';
+export const SCOPE_WRITER_VERSION = 'scope-writer-v6';
 
 export const SCOPE_WRITER_INSTRUCTIONS = `You write the one-sentence learning objective (topic_scope) and the term for Helios Explainer Reel titles that a person entered by hand. Each reel runs about one minute, 9:16, and teaches one computer-science, software, or AI concept to a broad business audience. The theme brief below defines the audience and what one reel can teach. It is binding.
 
@@ -123,8 +176,10 @@ HARD CONSTRAINTS. Every one is required.
 2. Each topic_scope is one sentence that states the exact learning objective, beginning with "Explain".
 3. Narrow each scope to one complete thought that fits one minute with ${REEL_SHAPE}.
 4. ${TERM_RULE}
-5. Keep the title's intent. Do not change, merge, or drop titles, and do not judge whether a title is a good topic. Scoring happens later.
-6. Do not write hooks, analogies, scripts, or reasoning.`;
+5. bucket: the id of the coverage bucket the concept belongs to, from the response schema's list.
+6. ${LESSON_FRAME_RULE}
+7. Keep the title's intent. Do not change, merge, or drop titles, and do not judge whether a title is a good topic. Scoring happens later.
+8. Do not write hooks, analogies, scripts, or reasoning.`;
 
 export function scopeWriterSystem(themeBrief: string): string {
   return `${SCOPE_WRITER_INSTRUCTIONS}\n\n<theme_brief>\n${themeBrief}\n</theme_brief>`;
@@ -132,13 +187,74 @@ export function scopeWriterSystem(themeBrief: string): string {
 
 export const SCOPES_SCHEMA = {
   type: 'object',
-  properties: { scopes: { type: 'array', items: TOPIC_ITEM } },
+  properties: { scopes: { type: 'array', items: FRAMED_ITEM } },
   required: ['scopes'],
   additionalProperties: false,
 } as const;
 
 export type ScopeRequest = { model: string; themeBrief: string; titles: readonly string[] };
-export type ScopeResponse = { scopes: string[]; terms: string[]; usage: MessageUsageLike['usage']; model: string };
+export type ScopeResponse = {
+  scopes: string[];
+  terms: string[];
+  /** Each title's bucket and lesson frame, in order (scope-writer-v6). */
+  frames: LessonFrame[];
+  usage: MessageUsageLike['usage'];
+  model: string;
+};
+
+// ── Payload rewriter (ideas coverage, 2026-11-03) ───────────────────────────
+// When Jev's altitude check disagrees with the generator's label (familiar or not), Jev wins and one call
+// rewrites only the payload for the corrected altitude. Title, scope, term and map position stay.
+
+export const PAYLOAD_REWRITER_VERSION = 'payload-rewriter-v1';
+
+export const PAYLOAD_REWRITER_INSTRUCTIONS = `You rewrite the payload of one Helios Explainer Reel's lesson frame. Each reel runs about one minute, 9:16, and teaches one computer-science, software, or AI concept to a broad business audience. The theme brief below defines the audience. It is binding.
+
+A check found that the frame's altitude was wrong; the user message gives the corrected altitude. Every reel teaches the term's plain definition; the altitude says how far it goes past it.
+- "unfamiliar": most viewers do not really know what the concept is, so the definition and how it works is the payload.
+- "familiar": most viewers already know the word, so the definition is a quick anchor and the payload goes past it, to the mechanism, cause or failure behind it.
+- "embedded": the concept is one part of a larger system, so the reel places it in that system before and after defining it.
+
+HARD CONSTRAINTS. Every one is required.
+1. Return one payload as JSON matching the response schema. No other output.
+2. The payload is one sentence: the one thing the viewer leaves with, at the depth the corrected altitude calls for.
+3. Stay inside the topic's title, scope and term; do not change the concept or widen the lesson.
+4. Do not write hooks, analogies, scripts, or reasoning.`;
+
+export function payloadRewriterSystem(themeBrief: string): string {
+  return `${PAYLOAD_REWRITER_INSTRUCTIONS}\n\n<theme_brief>\n${themeBrief}\n</theme_brief>`;
+}
+
+export const PAYLOAD_SCHEMA = {
+  type: 'object',
+  properties: { payload: FRAME_PROPERTIES.payload },
+  required: ['payload'],
+  additionalProperties: false,
+} as const;
+
+export type PayloadRequest = {
+  model: string;
+  themeBrief: string;
+  title: string;
+  scope: string;
+  term: string;
+  /** The corrected altitude. */
+  altitude: LessonAltitude;
+  payload: string;
+  mapPosition: string | null;
+};
+export type PayloadResponse = { payload: string; usage: MessageUsageLike['usage']; model: string };
+
+export function payloadRewriterUserMessage(request: Omit<PayloadRequest, 'model' | 'themeBrief'>): string {
+  return [
+    `Topic: ${request.title}`,
+    `Learning objective: ${request.scope}`,
+    `Term: ${request.term}`,
+    ...(request.mapPosition ? [`Map position: ${request.mapPosition}`] : []),
+    `Previous payload: ${request.payload}`,
+    `Corrected altitude: ${request.altitude}`,
+  ].join('\n');
+}
 
 // ── Analogy writer (EX3-30; v8 in 3.9, EX3-123) ─────────────────────────────
 // analogy-writer-v8 (Explainers 3.9, approved by Lucas 2026-10-26): the golden-set prompt. Two
@@ -149,7 +265,7 @@ export type ScopeResponse = { scopes: string[]; terms: string[]; usage: MessageU
 // on the run that used this prompt: "Ok these are great!". v1 to v7 wrote staged scenes; the
 // director stages the analogy from v8 on (EX3-128).
 
-export const ANALOGY_WRITER_VERSION = 'analogy-writer-v8';
+export const ANALOGY_WRITER_VERSION = 'analogy-writer-v9';
 /** Two calls in parallel; a third only when neither passes (EX3-123). */
 export const ANALOGY_CALLS = 2;
 export const MIN_ANALOGY_SENTENCES = 2;
@@ -182,7 +298,7 @@ export function goldenExample(g: GoldenAnalogy): string {
   return `${g.concept}: **${g.name}**\n${g.text}`;
 }
 
-/** The writer's system prompt (analogy-writer-v8). `{EXAMPLES}` is the golden set minus what Jev hid. */
+/** The writer's system prompt (analogy-writer-v9: the Lesson line, 2026-11-03). `{EXAMPLES}` is the golden set minus what Jev hid. */
 export const ANALOGY_WRITER_INSTRUCTIONS = `You write the analogy at the heart of a one-minute "AI Brain Break" reel, a simple cartoon/paper animation that teaches one AI or software concept to business owners and curious professionals. Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend.
 
 What the best analogies have in common:
@@ -193,6 +309,7 @@ What the best analogies have in common:
 - It often holds a contrast the viewer already understands: with and without, before and after, one kind and the other. The concept becomes the difference between the two.
 - One concrete, specific detail makes it vivid, and often a little funny.
 - It shows the concept doing its job. Its limits, if any, are for later in the reel.
+- HARD CONSTRAINT: when the message gives a Lesson, the analogy's defining trait is that Lesson (the mechanism, cause or failure the viewer must leave with), not only what the word means.
 - It names no real company, store or product, no real person, and no character from a film, show or book. A brand name that has become the everyday word for a kind of thing is fine.
 
 These analogies, each for a different concept, meet that bar. They show the standard, not a template; find the one that fits this concept as well as these fit theirs.
@@ -242,11 +359,14 @@ export type AnalogyRequest = {
   scope: string;
   /** Golden concepts Jev left out for this topic (the leave-one-out, EX3-124). */
   hidden: readonly string[];
+  /** The topic's lesson payload (ideas coverage, 2026-11-03): the analogy carries it. */
+  payload?: string | null;
 };
 export type AnalogyResponse = { candidate: AnalogyCandidate; usage: MessageUsageLike['usage']; model: string };
 
-export function analogyWriterUserMessage(term: string, scope: string): string {
-  return `Concept: ${term}\nLearning objective: ${scope}`;
+export function analogyWriterUserMessage(term: string, scope: string, payload?: string | null): string {
+  const lesson = payload?.trim() ? `\nLesson: ${payload.trim()}` : '';
+  return `Concept: ${term}\nLearning objective: ${scope}${lesson}`;
 }
 
 // ── Curiosity gap writer (EX3-120) ──────────────────────────────────────────
@@ -373,7 +493,7 @@ export function ideaGeneratorParams(request: IdeaRequest): StructuredParams {
     model: request.model,
     max_tokens: MAX_TOKENS,
     system: cachedSystemText(ideaGeneratorSystem(request.themeBrief)),
-    messages: [{ role: 'user', content: ideaGeneratorUserMessage(request.pool, request.rendered) }],
+    messages: [{ role: 'user', content: ideaGeneratorUserMessage(request.buckets, request.pool, request.historyDays, request.archived) }],
     output_config: { format: { type: 'json_schema', schema: IDEAS_SCHEMA } },
   };
 }
@@ -384,7 +504,7 @@ export function analogyWriterParams(request: AnalogyRequest): StructuredParams {
     model: request.model,
     max_tokens: MAX_TOKENS,
     system: cachedSystemText(analogyWriterSystem(request.hidden)),
-    messages: [{ role: 'user', content: analogyWriterUserMessage(request.term, request.scope) }],
+    messages: [{ role: 'user', content: analogyWriterUserMessage(request.term, request.scope, request.payload) }],
     output_config: { format: { type: 'json_schema', schema: ANALOGY_SCHEMA } },
   };
 }
@@ -407,10 +527,20 @@ export function scopeWriterParams(request: ScopeRequest): StructuredParams {
     messages: [
       {
         role: 'user',
-        content: `Write a topic_scope and a term for each of these ${request.titles.length} titles, in order:\n${JSON.stringify(request.titles)}`,
+        content: `Write a topic_scope, a term, a bucket and a lesson frame for each of these ${request.titles.length} titles, in order:\n${JSON.stringify(request.titles)}`,
       },
     ],
     output_config: { format: { type: 'json_schema', schema: SCOPES_SCHEMA } },
+  };
+}
+
+export function payloadRewriterParams(request: PayloadRequest): StructuredParams {
+  return {
+    model: request.model,
+    max_tokens: MAX_TOKENS,
+    system: cachedSystemText(payloadRewriterSystem(request.themeBrief)),
+    messages: [{ role: 'user', content: payloadRewriterUserMessage(request) }],
+    output_config: { format: { type: 'json_schema', schema: PAYLOAD_SCHEMA } },
   };
 }
 
@@ -432,8 +562,19 @@ export function structuredJson(message: Pick<Anthropic.Message, 'content' | 'sto
   }
 }
 
-/** Exactly three non-empty, distinct ideas. */
-export function parseIdeas(input: unknown): GeneratedIdea[] {
+/** A bucket and lesson frame, trimmed and checked; `buckets` narrows the allowed ids (tonight's picks). */
+export function parseFrame(raw: unknown, label: string, buckets: readonly string[] = BUCKET_IDS): LessonFrame {
+  const f = (raw ?? {}) as Record<string, unknown>;
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const frame = { bucket: text(f.bucket), payload: text(f.payload), altitude: text(f.altitude) as LessonAltitude, map_position: text(f.map_position) };
+  if (!buckets.includes(frame.bucket)) throw new Error(`${label} has a bucket outside ${buckets.join(', ')}: "${frame.bucket}"`);
+  if (!LESSON_ALTITUDES.includes(frame.altitude)) throw new Error(`${label} has no valid altitude`);
+  if (!frame.payload || !frame.map_position) throw new Error(`${label} is missing its payload or map position`);
+  return frame;
+}
+
+/** Exactly three non-empty, distinct ideas, each with its bucket (one of `buckets`, tonight's picks) and frame. */
+export function parseIdeas(input: unknown, buckets: readonly string[] = BUCKET_IDS): GeneratedIdea[] {
   const ideas = (input as { ideas?: unknown })?.ideas;
   if (!Array.isArray(ideas) || ideas.length !== IDEAS_PER_CALL) {
     throw new Error(`idea generator must return exactly ${IDEAS_PER_CALL} ideas`);
@@ -448,12 +589,12 @@ export function parseIdeas(input: unknown): GeneratedIdea[] {
     const key = title.toLowerCase();
     if (seen.has(key)) throw new Error(`idea generator repeated the title "${title}"`);
     seen.add(key);
-    return { topic_title: title, topic_scope: scope, term };
+    return { topic_title: title, topic_scope: scope, term, ...parseFrame(raw, `idea ${i + 1}`, buckets) };
   });
 }
 
 /** One non-empty scope and term per title, in order, with the titles echoed unchanged. */
-export function parseScopes(input: unknown, titles: readonly string[]): { scopes: string[]; terms: string[] } {
+export function parseScopes(input: unknown, titles: readonly string[]): { scopes: string[]; terms: string[]; frames: LessonFrame[] } {
   const scopes = (input as { scopes?: unknown })?.scopes;
   if (!Array.isArray(scopes) || scopes.length !== titles.length) {
     throw new Error(`scope writer must return ${titles.length} scopes`);
@@ -467,9 +608,9 @@ export function parseScopes(input: unknown, titles: readonly string[]): { scopes
     const term = typeof entry.term === 'string' ? entry.term.trim() : '';
     if (!scope) throw new Error(`scope ${i + 1} is empty`);
     if (!term) throw new Error(`scope ${i + 1} has no term`);
-    return { scope, term };
+    return { scope, term, frame: parseFrame(raw, `scope ${i + 1}`) };
   });
-  return { scopes: parsed.map((p) => p.scope), terms: parsed.map((p) => p.term) };
+  return { scopes: parsed.map((p) => p.scope), terms: parsed.map((p) => p.term), frames: parsed.map((p) => p.frame) };
 }
 
 /**
@@ -509,7 +650,14 @@ export function parseGaps(input: unknown): GapCandidate[] {
   });
 }
 
-export function ideaUsd(response: Pick<IdeaResponse | ScopeResponse | AnalogyResponse | GapResponse, 'usage' | 'model'>): number {
+/** One non-empty payload. */
+export function parsePayload(input: unknown): string {
+  const payload = (input as { payload?: unknown })?.payload;
+  if (typeof payload !== 'string' || !payload.trim()) throw new Error('payload rewriter returned no payload');
+  return payload.trim();
+}
+
+export function ideaUsd(response: Pick<IdeaResponse | ScopeResponse | AnalogyResponse | GapResponse | PayloadResponse, 'usage' | 'model'>): number {
   return Number(
     priceAnthropicUsage(usageBucketsFromMessage({ usage: response.usage }, '1h'), {
       modelId: response.model,
@@ -526,19 +674,21 @@ export interface IdeaModel {
   /** One call, one analogy (EX3-123). */
   writeAnalogy(request: AnalogyRequest): Promise<AnalogyResponse>;
   writeGaps(request: GapRequest): Promise<GapResponse>;
+  /** One call: the payload for a corrected altitude (ideas coverage). */
+  rewritePayload(request: PayloadRequest): Promise<PayloadResponse>;
 }
 
 export function anthropicIdeaModel(client: Anthropic): IdeaModel {
   return {
     async propose(request) {
       const message = await client.messages.create(ideaGeneratorParams(request));
-      const ideas = parseIdeas(structuredJson(message, 'idea generator'));
+      const ideas = parseIdeas(structuredJson(message, 'idea generator'), request.buckets.map((b) => b.id));
       return { ideas, usage: message.usage, model: message.model };
     },
     async writeScopes(request) {
       const message = await client.messages.create(scopeWriterParams(request));
-      const { scopes, terms } = parseScopes(structuredJson(message, 'scope writer'), request.titles);
-      return { scopes, terms, usage: message.usage, model: message.model };
+      const { scopes, terms, frames } = parseScopes(structuredJson(message, 'scope writer'), request.titles);
+      return { scopes, terms, frames, usage: message.usage, model: message.model };
     },
     async writeAnalogy(request) {
       const message = await client.messages.create(analogyWriterParams(request));
@@ -547,6 +697,10 @@ export function anthropicIdeaModel(client: Anthropic): IdeaModel {
     async writeGaps(request) {
       const message = await client.messages.create(gapWriterParams(request));
       return { candidates: parseGaps(structuredJson(message, 'gap writer')), usage: message.usage, model: message.model };
+    },
+    async rewritePayload(request) {
+      const message = await client.messages.create(payloadRewriterParams(request));
+      return { payload: parsePayload(structuredJson(message, 'payload rewriter')), usage: message.usage, model: message.model };
     },
   };
 }

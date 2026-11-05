@@ -8,7 +8,7 @@ type KitResult = { ok?: boolean; errors?: string[]; warnings?: string[]; skipped
  * mount, music at the marked frames, sound, captions, index.html, transitions), then try (storyboard,
  * sources, events, determinism), bounds (text and covering) and screen (empty or unloaded pictures, parked
  * off the edge, shown before an entrance, low contrast, text on a busy picture: MD-58). Breakage is returned as problems, never
- * thrown; `warnings` are pacing notes (length, long frames, a long close question).
+ * thrown; `warnings` are pacing notes (length, long frames).
  */
 export async function assembleProject(
   projectDir: string,

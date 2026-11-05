@@ -30,6 +30,14 @@ async function seeded(seed?: SeedInputs) {
   return { pg, q };
 }
 
+/** Carousels are opt-in now, so the seed has none: add the old 9:00 and 2:30 PM rows on every non-LFD day. */
+async function withCarousels(pg: Pg, lfdDays: readonly number[] = DEFAULT_SEED_INPUTS.lfdDays) {
+  for (const weekday of [0, 1, 2, 3, 4, 5, 6]) {
+    if (lfdDays.includes(weekday)) continue;
+    for (const m of [540, 870]) await pg.query(`INSERT INTO social_hub.slot_template (weekday, vertical, start_minute, series, feed_mode, updated_by) VALUES ($1, 'carousels', $2, NULL, NULL, 'test')`, [weekday, m]);
+  }
+}
+
 /** New York minute of the day of an instant. */
 function nyMinute(at: Date | string): number {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date(at));
@@ -128,7 +136,8 @@ test('a Carousel on a Last Few Days day is refused (template)', async () => {
 });
 
 test('Last Few Days on a Carousel day asks first; the yes removes that day\'s Carousels', async () => {
-  const { q } = await seeded();
+  const { pg, q } = await seeded();
+  await withCarousels(pg);
   const change: SlotChange = { scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'last_few_days', startMinute: 540, series: null, action: 'add' };
   const ask = await applySlotChanges(q, [change], opts);
   assert.equal((ask as { status: number }).status, 422);
@@ -248,6 +257,7 @@ test('a moved Main-feed post keeps 30 minutes from other feed posts (pushed late
 test('a cross-day move of a booked Carousel Tue → Thu reschedules it to Thu', async () => {
   // LFD only on Fridays here, so Tuesday has Carousels.
   const { pg, q } = await seeded({ ...DEFAULT_SEED_INPUTS, lfdDays: [5] });
+  await withCarousels(pg, [5]);
   const b = await book(pg, 'carousels', '2026-10-20', 't0870', null, '11111111-1111-1111-1111-111111111111');
   const out = await applySlotChanges(q, [dateMove('2026-10-20', 'carousels', 870, { nyDate: '2026-10-22', startMinute: 900 })], opts);
   assert.equal(out.ok, true, JSON.stringify(out));
@@ -285,6 +295,7 @@ test('a booked Stories slot can\'t move from here: 409, nothing changes', async 
 
 test('removing a booked slot returns 409 with its refs, and nothing changes (booking and approval intact)', async () => {
   const { pg, q } = await seeded();
+  await withCarousels(pg);
   const b = await book(pg, 'carousels', '2026-10-21', 't0540', null, '11111111-1111-1111-1111-111111111111');
   await pg.query(`INSERT INTO social_hub.approvals (content_item_id, decision, via) VALUES ($1, 'approved', 'user')`, [b.itemId]);
   const out = await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-21', vertical: 'carousels', startMinute: 540, series: null, action: 'remove' }], opts);
@@ -299,6 +310,7 @@ test('removing a booked slot returns 409 with its refs, and nothing changes (boo
 
 test('a template delete with a booked post 13 days out returns 409 with its refs', async () => {
   const { pg, q } = await seeded();
+  await withCarousels(pg);
   await book(pg, 'carousels', '2026-10-28', 't0870', null, '11111111-1111-1111-1111-111111111111');
   const out = await applySlotChanges(q, [{ scope: 'template', op: 'delete', weekday: 3, vertical: 'carousels', startMinute: 870, series: null }], opts);
   assert.equal((out as { status: number }).status, 409);

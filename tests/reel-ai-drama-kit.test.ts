@@ -8,7 +8,7 @@ import { JSDOM } from 'jsdom';
 import { CLOSE, CLOSE_EVENTS } from '../explainers/reel-ai-drama/kit/close-timing.js';
 import * as frames from '../explainers/reel-ai-drama/kit/frames.mjs';
 import { darkWindows, frameHtml, quietWindows } from '../explainers/reel-ai-drama/kit/mount.mjs';
-import { CLOSE_DURATION, CLOSE_TAIL, closeLength, holdFor, lineSpans, pacedStoryboard } from '../explainers/reel-ai-drama/kit/pace.mjs';
+import { CLOSE_DURATION, CLOSE_TAIL, closeLength, holdFor, lineSpans, OPENER_TEMPO, pacedStoryboard, pauseFor, SILENT_BEAT } from '../explainers/reel-ai-drama/kit/pace.mjs';
 import { eventsFileProblems, sourceProblems, storyboardProblems, storyboardWarnings } from '../explainers/reel-ai-drama/kit/try.mjs';
 import { musicPlan, mixMusicArgs, XFADE } from '../explainers/reel-ai-drama/kit/music.mjs';
 import { bedFor, eventProblems, eventsToCues, mixArgs, resolveCues } from '../explainers/reel-ai-drama/kit/sound.mjs';
@@ -66,42 +66,50 @@ test('try: the close must be last, voiced, and the only one; treatments are the 
   const odd = storyboardProblems(frames.parseFrames(storyboard([{ treatment: 'hologram' }, { treatment: 'close', voice: 'q?' }])));
   assert.ok(odd.some((p: string) => /hologram/.test(p)));
   const warn = storyboardWarnings(frames.parseFrames(storyboard([{ treatment: 'photo', dur: 9.5 }, { treatment: 'close', voice: 'q?', dur: 3.1 }])));
-  assert.ok(warn.some((w: string) => /every 8s/.test(w)) && warn.some((w: string) => /too long for the 2.5s close/.test(w)) && warn.some((w: string) => /about 60s/.test(w)));
+  assert.ok(warn.some((w: string) => /every 8s/.test(w)) && warn.some((w: string) => /stretched past 2.5s to fit a long question/.test(w)) && warn.some((w: string) => /about 60s/.test(w)));
 });
 
-test('pace: no sting hold; the close is always 2.5s, never stretched; a pause_after is a silent beat after the voice', () => {
+test('pace: no sting hold; the close is 2.5s, stretched to a longer question; silent beats ≈1s at most', () => {
   assert.equal(holdFor(undefined), 0.13);
   assert.equal(holdFor(0.5), 0.13);
   near(closeLength(), CLOSE_DURATION);
+  near(closeLength(2), CLOSE_DURATION);
+  near(closeLength(2.9), 2.9 + CLOSE_TAIL);
+  assert.equal(OPENER_TEMPO, 1, 'the take is sped up once, in the voice step; the opener gets no tempo of its own');
+  assert.equal(SILENT_BEAT.max, 1);
+  assert.equal(pauseFor(0.6), 0.6);
+  assert.equal(pauseFor(0.6, 0.5), 0.5, 'silent_beat_max caps a picture beat too');
   assert.ok(CLOSE.maxQuestion + CLOSE_TAIL <= CLOSE_DURATION + 1e-9, 'the longest question plus its tail fits the close');
   const sb = storyboard([{ treatment: 'photo' }, { treatment: 'photo', voice: '', dur: 1.2 }, { treatment: 'map', pause: 0.6 }, { treatment: 'close', voice: 'q?' }]);
   const { paced, storyboard: out } = pacedStoryboard(sb, [{ frame: 1, duration_s: 3 }, { frame: 3, duration_s: 4 }, { frame: 4, duration_s: 1.6 }]);
   const by = (n: number) => paced.find((p: { frame: number }) => p.frame === n)!;
   assert.deepEqual(by(1), { frame: 1, voice: 3, hold: 0.13, duration: 3.13 });
-  assert.equal(by(2).duration, 1.2, 'a silent beat keeps its planned length');
+  assert.equal(by(2).duration, 1, 'a silent beat keeps its planned length up to silent_beat_max (1s)');
+  const wider = pacedStoryboard(sb, [{ frame: 1, duration_s: 3 }, { frame: 3, duration_s: 4 }, { frame: 4, duration_s: 1.6 }], { silentBeatMax: 4 });
+  assert.equal(wider.paced.find((p: { frame: number }) => p.frame === 2)!.duration, 1.2, 'a wider setting keeps the planned 1.2s');
   assert.deepEqual(by(3), { frame: 3, voice: 4, hold: 0.73, duration: 4.73 }, 'the pause is held after the voice');
   assert.equal(by(4).duration, CLOSE_DURATION);
   assert.equal(by(4).voice, 1.6);
   assert.match(out, /- voice_end: 1\.6s/);
-  // A question voiced past the close never stretches it (the run flags it instead).
+  // A question voiced past the close stretches it, so the question is never cut off (Best on Paper, iteration 3).
   const long = pacedStoryboard(storyboard([{ treatment: 'photo' }, { treatment: 'close', voice: 'q?' }]), [{ frame: 1, duration_s: 3 }, { frame: 2, duration_s: 2.9 }]);
-  assert.equal(long.paced.find((p: { frame: number }) => p.frame === 2)!.duration, CLOSE_DURATION);
+  near(long.paced.find((p: { frame: number }) => p.frame === 2)!.duration, 2.9 + CLOSE_TAIL);
 });
 
 test('pace: line spans split the voice by the lines\' word counts, scaled when the voice differs', () => {
   const words = Array.from({ length: 10 }, (_, i) => ({ text: `w${i}`, start: i, end: i + 0.5 }));
   assert.deepEqual(lineSpans([{ id: 'L1', words: 4, label: '$4M' }, { id: 'L2', words: 6, label: null }], words), [
-    { id: 'L1', start: 0, end: 3.5, label: '$4M' },
-    { id: 'L2', start: 4, end: 9.5, label: null },
+    { id: 'L1', start: 0, end: 3.5, label: '$4M', label_kind: null },
+    { id: 'L2', start: 4, end: 9.5, label: null, label_kind: null },
   ]);
   const scaled = lineSpans([{ id: 'L1', words: 2, label: 'a' }, { id: 'L2', words: 3, label: 'b' }], words);
   assert.deepEqual(scaled.map((l: { start: number; end: number }) => [l.start, l.end]), [[0, 3.5], [4, 9.5]]);
   assert.deepEqual(lineSpans([], words), []);
 });
 
-test('mount: captions are light on every dark ground (all but the whiteboard), never quiet', () => {
+test('mount: captions are light on every dark ground (all but the whiteboard and the white close), never quiet', () => {
   const fr = frames.parseFrames(storyboard([{ treatment: 'photo' }, { treatment: 'whiteboard' }, { treatment: 'newspaper' }, { treatment: 'close', voice: 'q?', dur: 2.5 }]));
-  assert.deepEqual(darkWindows(fr), [[0, 4], [8, 14.5]]);
+  assert.deepEqual(darkWindows(fr), [[0, 4], [8, 12]]);
   assert.deepEqual(quietWindows(), []);
   assert.throws(() => frameHtml('01-a', 4, { treatment: 'hologram' }), /treatment/);
   const html = frameHtml('01-a', 4, { treatment: 'page', media: { V1: { file: 'assets/media/V1.png' } } });
@@ -289,7 +297,7 @@ test('kit sources: no network, clock, randomness or CSS animation in what frames
 // ── Project files ─────────────────────────────────────────────────────────────────────────────
 
 const DRAFT: WriterDraft = {
-  title: 'The dinner', engine: 'mystery', hook: { on_screen: '$38M', line_id: 'L1' },
+  title: 'The dinner', hook: { on_screen: '$38M', line_id: 'L1' },
   rungs: [
     { id: 'R1', purpose: 'hook', lines: [{ id: 'L1', text: 'He put thirty-eight million dollars in.', on_screen: '$38M', fact_ids: ['F1'], must_show: 'V1' }] },
     { id: 'R2', purpose: 'ladder', lines: [
@@ -297,7 +305,7 @@ const DRAFT: WriterDraft = {
       { id: 'L3', text: 'Five people at one table.', on_screen: null, fact_ids: ['F2', 'F3'], must_show: 'V6' },
     ] },
   ],
-  turn_rung_id: 'R2', landing_rung_id: 'R2', close_question: 'Would you have taken the deal?', word_count: 16,
+  peak_rung_id: 'R2', landing_rung_id: 'R2', close_question: 'Would you have taken the deal?', word_count: 16, central: [],
 };
 const PLAN: DirectorPlan = {
   frames: [
@@ -390,4 +398,69 @@ test('render-map: the printed page uses OpenFreeMap liberty, hides clutter, labe
   assert.ok(page.includes(STYLE_URL) && page.includes('-122.2') && /poi\|transit/.test(page) && page.includes('sepia'));
   const marks = marksHtml({ label: 'Rosewood <Sand> Hill', sublabel: 'Menlo Park' });
   assert.ok(marks.includes('#FF5E1A') && marks.includes('Rosewood &lt;Sand&gt; Hill') && marks.includes('Pragmatica Extended'));
+});
+
+// ── Iteration 3: marks attached to their targets, the first caption letter ─────────────────────
+
+test('marks: a mark with no target is skipped and reported; page marks, headline marks and collage rings are tied to theirs', () => {
+  const doc = dom();
+  const d = doc as unknown as Document;
+  const host = doc.getElementById('w')!;
+  const layer = nk.inkLayer(d, host as unknown as HTMLElement);
+  assert.ok((nk.markerCircle(d, layer, null as unknown as Element) as { skipped?: unknown }).skipped);
+  assert.ok((nk.markerUnderline(d, layer, undefined as unknown as Element) as { skipped?: unknown }).skipped);
+  assert.equal((d as unknown as { __markSkips: string[] }).__markSkips.length, 2);
+
+  const p = nk.page(d, { media: MEDIA.page, marks: [{ box: 0, kind: 'circle', at: 2 }], duration: 6 });
+  const stroke = p.marks[0].el as Element;
+  const target = p.el.querySelector(`[data-ink-target="${stroke.getAttribute('data-ink-for')}"]`);
+  assert.equal(stroke.getAttribute('data-ink'), 'circle');
+  assert.ok(target?.hasAttribute('data-ink-region'), 'the measured box is the target');
+
+  const c = nk.collage(d, { layers: [
+    { src: 'media/V1.jpg', media: { width: 1000, height: 500 }, x: 200, y: 800, w: 600 },
+    { seed: 'scribble-ring', around: 0, pad: 20 },
+    { seed: 'scribble-ring', x: 40, y: 790, w: 400 },
+  ], duration: 6 });
+  const [, ring, loose] = c.items.map((i: { el: HTMLElement }) => i.el);
+  assert.equal(ring.style.left, '180px');
+  assert.equal(ring.style.top, '780px');
+  assert.equal(ring.style.width, '640px');
+  assert.equal(ring.style.height, '340px', 'sized from the layer it rings (600 × 300)');
+  assert.equal(c.items[0].el.getAttribute('data-ink-target'), ring.getAttribute('data-ink-for'));
+  assert.equal(loose.getAttribute('data-ink'), 'ring');
+  assert.equal(loose.getAttribute('data-ink-for'), null, 'a ring with no `around` has no target: the screen check reports it');
+
+  const holder = doc.createElement('div');
+  host.append(holder);
+  const spot = nk.markTarget(d, holder as unknown as HTMLElement, { x: 0.25, y: 0.1, w: 0.5, h: 0.2 });
+  assert.equal(spot.style.left, '25%');
+  assert.ok(spot.hasAttribute('data-ink-region'));
+});
+
+test('caption skin: no letter gets two sets at one time, so the first letter of the first caption shows from t = 0', () => {
+  const html = fs.readFileSync(path.join(process.cwd(), 'explainers', 'reel-ai-drama', 'presets', 'reel-ai-drama', 'caption-skin.html'), 'utf8');
+  const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((s) => s.includes('var GROUPS'))!;
+  const groups = [
+    { id: 'g0', frame: 1, start: 0, end: 1.3, text: 'Summer 2015.', words: [{ text: 'Summer', start: 0, end: 0.26 }, { text: '2015.', start: 0.42, end: 1.22 }] },
+    { id: 'g1', frame: 1, start: 1.4, end: 2, text: 'The people', words: [{ text: 'The', start: 1.44, end: 1.44 }, { text: 'people', start: 1.47, end: 1.71 }] },
+  ];
+  const { window } = new JSDOM('<!doctype html><div id="caption-stage"></div>', { runScripts: 'outside-only' });
+  const sets: { id: string; prop: string; pos: number; value: unknown }[] = [];
+  const tl = {
+    set(el: { id?: string }, vars: Record<string, unknown>, pos: number) { for (const [prop, value] of Object.entries(vars)) sets.push({ id: el.id ?? '', prop, pos, value }); return tl; },
+    to() { return tl; },
+  };
+  (window as unknown as { gsap: unknown }).gsap = { timeline: () => tl };
+  window.eval(script.replace(/var GROUPS = \[\];/, `var GROUPS = ${JSON.stringify(groups)};`).replace(/var DURATION = 0;/, 'var DURATION = 3;'));
+  const seen = new Set<string>();
+  for (const s of sets) {
+    const key = `${s.id}|${s.prop}|${s.pos}`;
+    assert.ok(!seen.has(key), `${s.id} gets two ${s.prop} sets at ${s.pos}s`);
+    seen.add(key);
+  }
+  const first = sets.filter((s) => s.id === 'caption-char-0-0-0');
+  assert.deepEqual(first.map((s) => [s.pos, s.value]), [[0, 1]], 'the first letter is shown at t = 0 and never hidden there');
+  const later = sets.filter((s) => s.id === 'caption-char-0-0-1');
+  assert.deepEqual(later.map((s) => s.value), [0, 1], 'a letter that types in later is hidden until its time');
 });

@@ -19,6 +19,9 @@ import { DAY_MS, centralPlayerId, isoDate } from '@/lib/reel-ai-drama/developmen
  * `weekly_dev_cap_usd` (MD-28); a step already started finishes.
  */
 
+/** A producer cell's usual cost with margin (iteration 5 measured about $0.36), for launching cells in parallel. */
+export const CELL_ESTIMATE_USD = 0.6;
+
 export type DevelopmentDeps = {
   db: Queryable;
   /** The producer's send and prompt loader; the session supplies db, session id, model and count. */
@@ -232,10 +235,11 @@ export async function runDevelopmentSession(
       const cells = await pickCells(db, settings, now, { reopen, random: deps.random });
       log('cells', { picked: cells.map((c) => `${c.player_id}/${c.story_type}/${c.era}`) });
 
-      for (const cell of cells) {
+      // Cells search at the same time (Lucas, 2026-11-03: "running in parallel to the max"); each checks the cap before it starts.
+      const runCell = async (cell: (typeof cells)[number]): Promise<void> => {
         if (await capReached()) {
           summary.status = 'capped';
-          break;
+          return;
         }
         const { rows: [search] } = await db.query<{ id: string }>(
           `INSERT INTO reel_ai_drama.searches (session_id, cell_id, started_at) VALUES ($1, $2, $3) RETURNING id`,
@@ -269,26 +273,33 @@ export async function runDevelopmentSession(
             JSON.stringify(e instanceof ProducerError ? e.spend.queries : []),
             new Date().toISOString(),
           ]);
-          continue; // not marked searched: the cell stays a candidate
+          return; // not marked searched: the cell stays a candidate
         }
         summary.cellsSearched += 1;
         summary.pitchesMade += pitches.length;
         await markSearched(db, cell.id, { pitchesMade: pitches.length, now, dueDays: settings.cell_due_days });
 
-        for (const p of pitches) {
-          const id = await insertPitch(db, p, { sessionId, searchId: search.id, cellId: cell.id });
-          if (await capReached()) {
-            summary.status = 'capped';
-            continue; // saved as `new`: the next session checks it
-          }
-          try {
-            tally(await checkPitch(ctx, id, p));
-          } catch (e) {
-            summary.errors.push(`pitch ${p.title}: ${e instanceof Error ? e.message : String(e)}`);
-          }
-        }
-        if (summary.status === 'capped') break;
-      }
+        await Promise.all(
+          pitches.map(async (p) => {
+            const id = await insertPitch(db, p, { sessionId, searchId: search.id, cellId: cell.id });
+            if (await capReached()) {
+              summary.status = 'capped';
+              return; // saved as `new`: the next session checks it
+            }
+            try {
+              tally(await checkPitch(ctx, id, p));
+            } catch (e) {
+              summary.errors.push(`pitch ${p.title}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }),
+        );
+      };
+      // In parallel the cap can't stop a later cell after an expensive one, so launch only the cells the
+      // budget left can cover at a cell's usual cost; the rest wait for the next session.
+      const left = settings.weekly_dev_cap_usd - (await developmentSpendSince(db, weekStart));
+      const launch = cells.slice(0, Math.max(1, Math.floor(left / CELL_ESTIMATE_USD)));
+      if (launch.length < cells.length) summary.status = 'capped';
+      await Promise.all(launch.map(runCell));
     }
     await tendPool(db, settings, now);
   } catch (e) {

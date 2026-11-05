@@ -3,7 +3,6 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
 import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { PLAN } from '@/lib/social-hub/views/plan';
@@ -57,7 +56,7 @@ test('the hub dataset survives JSON (it is cached across requests)', () => {
 
 test('the hub plan mirrors each type’s own posting windows', () => {
   assert.deepEqual(PLAN.reels.map((w) => [w.id, w.startMinute, w.endMinute]), POSTING_SLOTS.map((w) => [w.id, w.startMinute, w.endMinute]));
-  assert.deepEqual(PLAN.carousels.map((w) => [w.id, w.startMinute, w.endMinute]), CAROUSEL_SLOTS.map((w) => [w.id, w.startMinute, w.endMinute]));
+  assert.deepEqual(PLAN.carousels, [], 'Carousels are opt-in: no routine windows, only the slots a person adds to the calendar');
   assert.deepEqual(PLAN.explainers.map((w) => [w.id, w.startMinute, w.endMinute]), EXPLAINER_WINDOWS.map((w) => [w.id, w.startMinute, w.endMinute]));
   assert.deepEqual(PLAN.stories.map((w) => w.id), ['morning_download', 'guess_the_number', 'free_vs_paid']);
 });

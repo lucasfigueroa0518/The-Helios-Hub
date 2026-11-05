@@ -22,12 +22,28 @@ export function formatWelcomeDateTime(date: Date): string {
   return `The day is ${dayOfWeek}, ${monthDate}. It is ${timeAmPm}`;
 }
 
+export const HOME_UNAVAILABLE_COPY = {
+  boards: 'Boards could not be loaded. Refresh to try again.',
+  projects: 'Dashboards could not be loaded. Refresh to try again.',
+  campaigns: 'Campaigns could not be loaded. Refresh to try again.',
+} as const;
+
+export function homeSectionStatus(count: number, unavailable: boolean): 'ready' | 'empty' | 'unavailable' {
+  if (unavailable) return 'unavailable';
+  return count === 0 ? 'empty' : 'ready';
+}
+
 export function HubHome({ data }: { data: HomePayload }) {
   const [dateTimeText, setDateTimeText] = useState<string>('');
-  const boardsEmpty = data.boards.length === 0;
-  const dashboardsEmpty = data.projects.length === 0;
-  const outreachEmpty = (data.outreachStats?.liveCampaignsCount ?? 0) === 0
-    && (data.outreachStats?.totalSent ?? 0) === 0;
+  const boardsStatus = homeSectionStatus(data.boards.length, data.unavailable?.boards === true);
+  const dashboardsStatus = homeSectionStatus(data.projects.length, data.unavailable?.projects === true);
+  const outreachStatus = homeSectionStatus(
+    (data.outreachStats?.liveCampaignsCount ?? 0) + (data.outreachStats?.totalSent ?? 0),
+    data.unavailable?.campaigns === true,
+  );
+  const boardsEmpty = boardsStatus !== 'ready';
+  const dashboardsEmpty = dashboardsStatus !== 'ready';
+  const outreachEmpty = outreachStatus !== 'ready';
 
   useEffect(() => {
     setDateTimeText(formatWelcomeDateTime(new Date()));
@@ -56,7 +72,9 @@ export function HubHome({ data }: { data: HomePayload }) {
             <div className="hub-home__eyebrow">My Boards</div>
             <Link href="/trello" className="hub-home__action">Open Trello</Link>
           </div>
-          {boardsEmpty ? (
+          {boardsStatus === 'unavailable' ? (
+            <p className="hub-home__empty">{HOME_UNAVAILABLE_COPY.boards}</p>
+          ) : boardsEmpty ? (
             <p className="hub-home__empty">No boards yet</p>
           ) : (
             <div className="hub-home__carousel">
@@ -79,7 +97,9 @@ export function HubHome({ data }: { data: HomePayload }) {
             <Link href="/dashboards" className="hub-home__eyebrow">My Client Dashboards</Link>
             <Link href="/dashboards" className="hub-home__action">Open dashboards</Link>
           </div>
-          {dashboardsEmpty ? (
+          {dashboardsStatus === 'unavailable' ? (
+            <p className="hub-home__empty">{HOME_UNAVAILABLE_COPY.projects}</p>
+          ) : dashboardsEmpty ? (
             <p className="hub-home__empty">No Active Dashboards</p>
           ) : (
             <div className="hub-home__carousel">
@@ -106,7 +126,9 @@ export function HubHome({ data }: { data: HomePayload }) {
             <Link href="/hub" className="hub-home__eyebrow">My Outreach</Link>
             <Link href="/hub" className="hub-home__action">Outreach Hub</Link>
           </div>
-          {outreachEmpty ? (
+          {outreachStatus === 'unavailable' ? (
+            <p className="hub-home__empty">{HOME_UNAVAILABLE_COPY.campaigns}</p>
+          ) : outreachEmpty ? (
             <p className="hub-home__empty">No active campaigns</p>
           ) : (
             <Link href="/hub" className="hub-home-outreach-bar">

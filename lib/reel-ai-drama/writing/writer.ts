@@ -1,9 +1,10 @@
 import { writerSystem } from '@/lib/reel-ai-drama/prompts';
 import { DEFAULT_SETTINGS, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
-import type { DirectorPlan, FactSheet, Pitch, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
+import { pitchBrief, type DirectorPlan, type FactSheet, type Pitch, type StoryNotes, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
 import { runSubmit, section, type Effort, type Ledger, type SendMessage } from '@/lib/reel-ai-drama/writing/llm';
 import { SUBMIT_REVISION_TOOL, SUBMIT_SCRIPT_TOOL } from '@/lib/reel-ai-drama/writing/schemas';
-import { applyRevision, isCharacterImage, isLogo, validateDraft, type Replacement } from '@/lib/reel-ai-drama/writing/validate';
+import { factTimeline } from '@/lib/reel-ai-drama/writing/timeline';
+import { applyRevision, isCharacterImage, isLogo, maxWords, targetWords, validateDraft, type Replacement, type RevisionExtras } from '@/lib/reel-ai-drama/writing/validate';
 
 /** Every outside call the writing steps make, injected so tests stub them. */
 export type WritingDeps = Ledger & {
@@ -34,20 +35,29 @@ export function inventoryForWriting(inventory: VisualsInventory) {
   }));
 }
 
-export function writerUserMessage(input: { pitch: Pitch; facts: FactSheet; inventory: VisualsInventory; settings: ReelAiDramaSettings }): string {
+/** The length section the writer reads: seconds and the word budget at the delivered pace (MD-91, MD-103). */
+export function lengthNote(settings: ReelAiDramaSettings): string {
+  return (
+    `Aim for about ${settings.target_seconds} seconds: about ${targetWords(settings)} spoken words at ${settings.words_per_minute_target} words a minute. ` +
+    `At most about ${settings.max_seconds} seconds (about ${maxWords(settings)} words), only when the story needs it.`
+  );
+}
+
+/** The writer's input (MD-100): the pitch's brief, the facts as a dated timeline, the inventory, the length. */
+export type WriterInput = { pitch: Pitch; facts: FactSheet; inventory: VisualsInventory; settings: ReelAiDramaSettings };
+
+/** Section names writer.md reads: "The brief", "The facts", "The visual inventory", "The length". */
+export function writerUserMessage(input: WriterInput): string {
   return [
-    section('Length', `Aim for about ${input.settings.target_seconds} seconds; at most about ${input.settings.max_seconds}, only when the story needs it.`),
-    section('Pitch', input.pitch),
-    section('Fact sheet', input.facts),
-    section('Visuals inventory', inventoryForWriting(input.inventory)),
+    section('The brief', pitchBrief(input.pitch) || input.pitch.title),
+    section('The facts', factTimeline(input.facts)),
+    section('The visual inventory', inventoryForWriting(input.inventory)),
+    section('The length', lengthNote(input.settings)),
   ].join('\n\n');
 }
 
-/** P4: the writer (Opus 5.5) writes the script to the verified facts and the visuals that exist. */
-export async function writeScript(
-  deps: WritingDeps,
-  input: { pitch: Pitch; facts: FactSheet; inventory: VisualsInventory; settings: ReelAiDramaSettings },
-): Promise<WriterDraft> {
+/** P4: the writer (Opus 5.5) owns the whole story (MD-100): the script from the brief, the facts and the visuals that exist. */
+export async function writeScript(deps: WritingDeps, input: WriterInput): Promise<WriterDraft> {
   const settings = input.settings ?? deps.settings ?? DEFAULT_SETTINGS;
   const result = await runSubmit(deps.create, deps, {
     component: 'writer',
@@ -63,37 +73,66 @@ export async function writeScript(
   return result.value;
 }
 
-/** Notes on lines: the director's lines back, or facts-check findings shaped the same way. */
-export type LineNote = DirectorPlan['lines_back'][number];
+/** Who a revision note comes from (writer-revise.md names the three). */
+export type NoteSource = 'Story editor' | 'Director' | 'Facts check';
+
+/** One note for the writer's revision: its source, the lines it names, why, and an optional suggestion. */
+export type RevisionNote = { source: NoteSource; lines: string[]; note: string; suggestion?: string };
+
+/** The director's lines back as revision notes. */
+export function directorNotes(linesBack: DirectorPlan['lines_back']): RevisionNote[] {
+  return linesBack.map((n) => ({ source: 'Director', lines: [n.line_id], note: n.why, ...(n.suggestion?.trim() ? { suggestion: n.suggestion } : {}) }));
+}
+
+/** The blind story editor's notes as revision notes (notes that name no line can't be acted on and are left out). */
+export function storyEditorNotes(notes: StoryNotes['notes']): RevisionNote[] {
+  return notes.filter((n) => n.lines.length).map((n) => ({ source: 'Story editor', lines: n.lines, note: n.note }));
+}
+
+/** The notes section: one plain entry per note, its source first. */
+export function notesText(notes: RevisionNote[]): string {
+  return notes
+    .map((n) => `- ${n.source} — ${n.lines.join(', ')}: ${n.note.trim()}${n.suggestion?.trim() ? `\n  Suggestion: ${n.suggestion.trim()}` : ''}`)
+    .join('\n');
+}
+
+/** Section names writer-revise.md reads: "The notes", "The script", "The facts", "The visual inventory". */
+export function reviseUserMessage(input: { draft: WriterDraft; notes: RevisionNote[]; facts: FactSheet; inventory: VisualsInventory | null }): string {
+  const { word_count: _words, ...script } = input.draft;
+  void _words;
+  return [
+    section('The notes', notesText(input.notes)),
+    section('The script', script),
+    section('The facts', factTimeline(input.facts)),
+    ...(input.inventory ? [section('The visual inventory', inventoryForWriting(input.inventory))] : []),
+  ].join('\n\n');
+}
 
 /**
- * One round of revisions (MD-38; also the facts check's one fix, MD-39). The writer returns only the
- * noted lines; code merges them so every other line, and every line id, stays as the plan knows it.
+ * One round of revisions (MD-38, MD-39, MD-102): the story editor's notes, the director's lines back, or the
+ * facts check's findings. The writer returns only the noted lines; code merges them so every other line, and
+ * every line id, stays as the plan knows it.
  */
 export async function reviseScript(
   deps: WritingDeps,
-  input: { draft: WriterDraft; linesBack: LineNote[]; facts: FactSheet; inventory: VisualsInventory | null },
+  input: { draft: WriterDraft; notes: RevisionNote[]; facts: FactSheet; inventory: VisualsInventory | null },
 ): Promise<WriterDraft> {
-  if (!input.linesBack.length) return input.draft;
+  const notes = input.notes.filter((n) => n.lines.length);
+  if (!notes.length) return input.draft;
   const settings = deps.settings ?? DEFAULT_SETTINGS;
-  const notedLineIds = input.linesBack.map((n) => n.line_id);
+  const notedLineIds = [...new Set(notes.flatMap((n) => n.lines))];
   const result = await runSubmit(deps.create, deps, {
     component: 'writer_revise',
     model: settings.writer_model,
     system: writerSystem('writer-revise', deps.root),
-    user: [
-      section('Notes on lines', input.linesBack),
-      section('Script', input.draft),
-      section('Fact sheet', input.facts),
-      ...(input.inventory ? [section('Visuals inventory', inventoryForWriting(input.inventory))] : []),
-    ].join('\n\n'),
+    user: reviseUserMessage({ ...input, notes }),
     tool: SUBMIT_REVISION_TOOL,
     maxTokens: WRITER_MAX_TOKENS,
     effort: WRITER_EFFORT,
     parse: (raw) => {
       const replacements = (raw as { replacements?: Replacement[] })?.replacements;
       if (!Array.isArray(replacements)) return { value: null, problems: ['replacements is missing'] };
-      const revised = applyRevision(input.draft, replacements, { notedLineIds, facts: input.facts, inventory: input.inventory, limits: settings });
+      const revised = applyRevision(input.draft, replacements, { notedLineIds, facts: input.facts, inventory: input.inventory, limits: settings }, raw as RevisionExtras);
       // New respellings for the replacement lines join the draft's (an entry for the same word is replaced).
       const added = ((raw as { pronounce?: { word: string; say: string }[] })?.pronounce ?? []).filter((p) => p?.word?.trim() && p?.say?.trim());
       if (revised.value && added.length) {

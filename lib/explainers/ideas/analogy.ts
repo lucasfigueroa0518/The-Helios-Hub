@@ -188,7 +188,7 @@ export type AnalogyDeps = {
   now?: Date;
 };
 
-type AnalogyTopic = Pick<TopicRow, 'id' | 'title' | 'scope' | 'term'>;
+type AnalogyTopic = Pick<TopicRow, 'id' | 'title' | 'scope' | 'term'> & { lesson_payload?: string | null };
 
 async function saveNote(db: Queryable, topicId: string, note: AnalogyNote): Promise<void> {
   await db.query(
@@ -235,7 +235,7 @@ async function writeOne(deps: AnalogyDeps, topic: AnalogyTopic, hidden: string[]
   const term = topic.term?.trim() || topic.title;
   let candidate: AnalogyCandidate;
   try {
-    const response = await deps.ideaModel.writeAnalogy({ model: deps.model, term, scope, hidden });
+    const response = await deps.ideaModel.writeAnalogy({ model: deps.model, term, scope, hidden, payload: topic.lesson_payload });
     await recordCost(deps.db, {
       jobId: deps.jobId ?? null,
       ideaCycleId: deps.ideaCycleId ?? null,

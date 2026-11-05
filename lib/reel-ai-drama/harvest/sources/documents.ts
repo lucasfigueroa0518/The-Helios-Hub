@@ -22,7 +22,11 @@ function screenSource(source: Extract<SourceName, 'screen' | 'document' | 'paper
       return [];
     }
     const phrases = (want.phrases ?? []).filter((p) => p.trim());
-    const shot = await shoot(want.url, { out: run.nextName('png'), phrases });
+    const shot = await shoot(want.url, { out: run.nextName('png'), phrases, ...(want.kind === 'headline' ? { crop: 'headline' as const } : {}) });
+    if (shot.problem) {
+      run.notes.push(`${want.url}: capture dropped (${shot.problem})`);
+      return [];
+    }
     const missing = phrases.filter((p) => !shot.boxes.some((b) => b.text === p));
     const host = siteOf(want.url);
     const day = shot.captured_at.slice(0, 10);

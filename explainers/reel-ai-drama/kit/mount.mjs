@@ -11,7 +11,8 @@
 // drawn. ctx = { id, duration, treatment, timing: { words[], lines[] }, media, objects, nk, assets: 'assets/' }.
 //
 // Caption windows in .hyperframes/caption-skin.html: DARK (light captions) on every dark ground (all
-// but the whiteboard); QUIET stays empty: the close question is captioned (MD-18).
+// but the whiteboard), the fallback; measure.mjs then samples the band and writes TONES (dark | light |
+// plate), which lead. QUIET stays empty: the close question is captioned (MD-18).
 //
 //   node assets/kit/mount.mjs          every storyboard frame that has a scene module
 //   node assets/kit/mount.mjs <id>     one frame
@@ -29,7 +30,7 @@ export { TREATMENTS };
 const GSAP = 'https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js';
 /** Faces a frame may use; each is loaded before build() so measured marks land on final glyphs. */
 export const FONT_LOADS = [
-  '700 40px "Pragmatica Extended"', '400 40px Roboto', '500 40px Roboto', '700 40px Roboto', '400 40px "Gochi Hand"',
+  '700 40px "Pragmatica Extended"', '400 40px Roboto', '500 40px Roboto', '700 40px Roboto', '400 40px "Patrick Hand"',
   '700 40px "Playfair Display"', '400 40px "Courier Prime"', '400 40px Tinos', '700 40px Tinos', 'italic 400 40px Tinos',
 ];
 
@@ -64,7 +65,7 @@ export function frameHtml(id, duration, { treatment = 'photo', timing = null, me
     <script src="${GSAP}"></script>
     <style>
       #root { position: absolute; inset: 0; container-type: size; overflow: hidden; }
-      #${key}-world { position: absolute; inset: 0; overflow: hidden; }
+      #${key}-world { position: absolute; inset: 0; overflow: hidden; background: #0D0B0A; }
     </style>
     <script>
       window.__hf = window.__hf || {};
@@ -77,6 +78,8 @@ export function frameHtml(id, duration, { treatment = 'photo', timing = null, me
       import scene from './assets/frames/${id}.js';
       nk.installKit(document, { fonts: 'assets/fonts/' });
       const host = document.getElementById('${key}-world');
+      // The reel's first frame: its main picture is on from the first instant (anchor.js isOpening).
+      if (${JSON.stringify(/^0*1(-|$)/.test(id))}) host.setAttribute('data-opening', '');
       const ctx = Object.assign(${JSON.stringify(ctx)}, { nk, assets: 'assets/' });
       await Promise.all(${JSON.stringify(FONT_LOADS)}.map((f) => document.fonts.load(f).catch(() => null)));
       scene.build(host, ctx);

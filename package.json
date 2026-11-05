@@ -86,7 +86,7 @@
     "framer-motion": "^11.15.0",
     "google-auth-library": "^11.0.2",
     "google-news-decoder": "^1.0.1",
-    "jsdom": "^29.1.1",
+    "jsdom": "26.1.0",
     "jszip": "^3.10.1",
     "lucide-react": "^1.26.0",
     "mammoth": "^1.12.0",

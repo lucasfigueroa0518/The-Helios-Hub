@@ -1,0 +1,210 @@
+{
+ "assets": [
+  {
+   "id": "V14",
+   "kind": "person_photo",
+   "file": "assets/media/V14.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMS-Exec-Nadella-Satya-2017-08-31-22_(cropped).jpg",
+   "credit": "Brian Smale and Microsoft, CC BY-SA 4.0",
+   "license": null,
+   "shows": "An approved cutout portrait of Satya Nadella on a transparent background (their character image).",
+   "people": [
+    "Satya Nadella"
+   ],
+   "qids": [
+    "Q7426870"
+   ],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1898,
+   "height": 2160,
+   "phash": "eca51bceb6136b20",
+   "character_image": true,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "cutout",
+    "identity:verified",
+    "faces:1",
+    "anchor:Satya Nadella",
+    "source:bank",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:person:satya-nadella",
+    "resized:0.896",
+    "boxes:media/V14.boxes.json"
+   ],
+   "anchor_for": "Satya Nadella",
+   "face": {
+    "x": 0.2722,
+    "y": 0.1844,
+    "w": 0.4395,
+    "h": 0.3859
+   },
+   "made_kind": null,
+   "regions": {
+    "faces": [
+     {
+      "x": 0.2722,
+      "y": 0.1844,
+      "w": 0.4395,
+      "h": 0.3859,
+      "score": 0.7828168272972107,
+      "trusted": true,
+      "name": "Satya Nadella"
+     }
+    ],
+    "cut": {
+     "grade": "clean",
+     "edge_softness": 0.0181,
+     "islands": 0,
+     "straight_cuts": 0,
+     "sharpness": 1,
+     "fringe": 0.0004,
+     "with_source": false
+    },
+    "sharp_width_px": 2373,
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.4463,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": false,
+     "bottom": true
+    },
+    "phash": "eca51bcea6136b21",
+    "expression": null,
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V62",
+   "kind": "place_photo",
+   "file": "assets/media/V62.jpg",
+   "url": "https://images.seattletimes.com/wp-content/uploads/2026/10/10262026_Microsoft_081214.jpg?d=2040x1285",
+   "source_page": "https://www.seattletimes.com/business/microsoft/microsoft-offers-mass-buyouts-for-roughly-a-quarter-of-its-workforce/",
+   "credit": "The Seattle Times (www.seattletimes.com)",
+   "license": null,
+   "shows": "Microsoft sign on a stone plaza at the Redmond campus with a few people walking past.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 2040,
+   "height": 1285,
+   "phash": "dc6821b5741e3b71",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:visual:5",
+    "boxes:media/V62.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5922,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 2550,
+    "focus": null,
+    "phash": "dc6821b5741e3b71",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V74",
+   "kind": "object",
+   "file": "assets/media/V74.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AKingston_Technology_USB_flash_drives._USB_3.0.jpg",
+   "credit": "Dmitry Makeev, CC BY-SA 4.0 · Wikimedia Commons",
+   "license": "CC BY-SA 4.0",
+   "shows": "A real-photo cutout of A plain USB flash drive, alone, on a clean background: cut out of V73 (A white Kingston USB 3.0 flash drive with a red accent, cap removed, on a white background) onto a transparent background.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": "2019-05-10",
+   "date_confidence": "exact",
+   "width": 1286,
+   "height": 804,
+   "phash": "eec0b02fca308db7",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "cutout",
+    "cutout_made",
+    "cutout_thing",
+    "cutout_of:V73",
+    "cutout_wish",
+    "cutout_wish:W9",
+    "wish:W9"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "cut": {
+     "grade": "clean",
+     "edge_softness": 0.0653,
+     "islands": 0,
+     "straight_cuts": 0.017,
+     "sharpness": 0.9917,
+     "fringe": 0,
+     "with_source": true
+    },
+    "sharp_width_px": 1071,
+    "visible": {
+     "x": 0.0254,
+     "y": 0.0375,
+     "w": 0.9492,
+     "h": 0.9219
+    },
+    "brightness": 0.7821,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "phash": "eec0942dca3385b7",
+    "expression": null,
+    "dup_of": null
+   }
+  }
+ ]
+}

@@ -1,5 +1,6 @@
 import { category, iso, num, text, yesNo } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { pathVersion } from '@/lib/social-hub/media-version';
 import { clockLabel } from '@/lib/social-hub/slots/times';
 import { isStorySeries, slotId } from '@/lib/social-hub/slots/types';
 import type { StoriesRead, StoryFrameRow, StoryInsightRow, StoryPoolRow, StorySetRow } from '@/lib/social-hub/queries/stories';
@@ -192,7 +193,7 @@ export function storyPosts(read: StoriesRead): HubPost[] {
       pipelineHref: '/stories',
       media: {
         kind: 'frames',
-        frames: frames.map((f) => ({ src: f.storage_path ? `/api/stories/frames/${encodeURIComponent(f.frame_id)}` : null, label: `Frame ${f.seq} · ${f.role}` })),
+        frames: frames.map((f) => ({ src: f.storage_path ? `/api/stories/frames/${encodeURIComponent(f.frame_id)}?v=${pathVersion(f.storage_path)}` : null, label: `Frame ${f.seq} · ${f.role}`, path: f.storage_path })),
       },
       costMicros: null,
       costNote: null,

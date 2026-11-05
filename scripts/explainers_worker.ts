@@ -9,6 +9,7 @@
  *
  *   npm run explainers:worker          # loop: poll every 15s
  *   npm run explainers:worker -- --once   # run the next queued render, then exit
+ *   npm run explainers:worker -- --once --parallel   # local: render beside a running job (no one-at-a-time gate)
  *
  * Database: EXPLAINERS_DATABASE_URL (locally: `npm run explainers:db`) or
  * EXPLAINERS_DB=supabase (the social worker VM). EXPLAINERS_STORAGE=bucket
@@ -50,6 +51,8 @@ function required(name: string): string {
 
 async function main(): Promise<void> {
   const once = process.argv.includes('--once');
+  // --parallel (local only): several workers render at once, so a running job is a sibling's, not an orphan.
+  const parallel = process.argv.includes('--parallel');
   if (!process.env.EXPLAINERS_DATABASE_URL?.trim() && process.env.EXPLAINERS_DB !== 'supabase') {
     log('missing_env', { name: 'EXPLAINERS_DATABASE_URL or EXPLAINERS_DB=supabase' });
     process.exit(1);
@@ -79,16 +82,36 @@ async function main(): Promise<void> {
   const { liveJevTransport } = await import('@/lib/reels/jev/client');
   // Promote / Demote live in the main database (social_hub.idea_adjustments), whichever database explainers use.
   const { dbQuery } = await import('@/lib/db');
-  const { liveExplainerBuildFit } = await import('@/lib/explainers/caption');
-  const { closingsLog } = await import('@/lib/social/captions/closings-store');
 
   const db = await explainersDb();
   const query = await loadAgentQuery();
   const store = artifactStoreFromEnv();
   const jobsRoot = process.env.EXPLAINERS_JOBS_DIR || path.join(process.cwd(), '.explainers-local', 'jobs');
 
+  // A scene redo (Targeted Revisions) this worker was running when it stopped: put its job folder back
+  // (the old scene module, video and contact sheet) and release its hold, BEFORE the stale sweep.
+  // Each job is isolated (a failure is logged and its hold still released), so start-up always goes on.
+  // Never in --once: a manual or dev run beside the service could rename files under a live redo.
+  // Then (only after that repair) the revision rows the previous process left `running` end `failed`
+  // with a plain note, never requeued; explainer rows only, and only when the revisions log is reachable
+  // (explainers share the main database). A sweep failure is logged and start-up goes on.
+  const shared = process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
+  const { socialQuery } = await import('@/lib/social/store');
+  const { claimAndRunRevisions, startUpRevisions } = await import('@/lib/revisions/worker');
+  if (!once) {
+    const { recoverSceneRedos } = await import('@/lib/revisions/descriptions/explainers');
+    await startUpRevisions({
+      recover: async () => {
+        const recovered = await recoverSceneRedos(db, jobsRoot, (event, fields) => log(event, fields));
+        if (recovered.length) log('scene_redos_recovered', { jobs: recovered });
+      },
+      query: shared ? socialQuery : null,
+      filter: { only: 'explainers' },
+      log,
+    });
+  }
   // One worker, one render at a time: anything still `running` died with a previous process.
-  const stale = await failStaleRunningJobs(db, 'Worker restarted while this render was running.');
+  const stale = parallel ? 0 : await failStaleRunningJobs(db, 'Worker restarted while this render was running.');
   if (stale) log('stale_jobs_failed', { count: stale });
 
   let stopping = false;
@@ -102,21 +125,18 @@ async function main(): Promise<void> {
 
   const renderNext = async (): Promise<boolean> => {
     if (!secrets.heygenApiKey) return false;
-    const job = await claimNextJob(db);
+    const job = await claimNextJob(db, { parallel });
     if (!job) return false;
     log('job_claimed', { jobId: job.id, topicId: job.topic_id, trigger: job.trigger, capUsd: job.spend_cap_usd });
     // A topic without a picked analogy gets the pass on this click, for this topic only (EX3-31).
     const analogy = { ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport };
-    // v4 captions: the build-line fit (Jev) and the explainer closings log (social captions redesign).
-    const buildFit = liveExplainerBuildFit();
-    const closings = closingsLog((text, params) => db.query(text, params), 'explainer');
     // Explainers 4.2: the understanding test's two readers and its diagnosis run as Agent SDK sessions
     // (agents `reader` and `diagnoser`, reader_model, Read only); direct calls were refused live.
     const understanding = 'agent' as const;
     // The picture check: one vision call over contact grids (falls back to the agent session on error).
     const pictureVision = anthropicPictureVision(anthropic);
     const outcome = await runRenderJob(
-      { db, query, store, jobsRoot, secrets, analogy, understanding, pictureVision, buildFit, closings, log: (event, fields) => log(event, fields) },
+      { db, query, store, jobsRoot, secrets, analogy, understanding, pictureVision, log: (event, fields) => log(event, fields) },
       job,
     );
     log('job_finished', { jobId: job.id, ...outcome });
@@ -130,6 +150,39 @@ async function main(): Promise<void> {
       }
     }
     return true;
+  };
+
+  /**
+   * Targeted Revisions for explainers only (the social worker leaves these rows alone): a scene redo
+   * runs a session and a render in this worker's job folders, one at a time, between renders. The
+   * revisions log is in the main database, so this runs only when explainers share it.
+   */
+  if (!shared) log('revisions_off', { reason: 'Explainers keep their own database, so explainer revisions are refused.' });
+  const { newAnthropic } = await import('@/lib/anthropic-client');
+  let revisionsClient: ReturnType<typeof newAnthropic> | null = null;
+  /** The interpreter's Haiku call; its system block arrives already cached (lib/revisions/interpret.ts). */
+  const reviseComplete: import('@/lib/revisions/interpret').Complete = async (req) => {
+    revisionsClient ??= newAnthropic();
+    const res = await revisionsClient.messages.create({ model: req.model, max_tokens: req.max_tokens, system: req.system, messages: req.messages });
+    return { text: res.content.map((b) => (b.type === 'text' ? b.text : '')).join(''), usage: res.usage };
+  };
+  let lastRevisionsError: string | null = null;
+  const revisionsStep = async (): Promise<number> => {
+    if (!shared) return 0;
+    return claimAndRunRevisions({
+      q: await socialQuery(),
+      complete: reviseComplete,
+      notify: async (m) => log('revision_notice', { message: m }),
+      now: () => new Date(),
+      log,
+      max: 1,
+      filter: { only: 'explainers' },
+    }).catch((error) => {
+      const text = errorText(error);
+      if (text !== lastRevisionsError) log('revisions_claim_failed', { error: text });
+      lastRevisionsError = text;
+      return 0;
+    });
   };
 
   if (once) {
@@ -201,6 +254,7 @@ async function main(): Promise<void> {
           });
         }
       }
+      await revisionsStep();
       await renderNext();
       await publishStep().catch((error) => log('publish_failed', { error: errorText(error) }));
       if (Date.now() >= sweepAt.getTime() || Date.now() - lastInsights >= INSIGHTS_EVERY_MS) {

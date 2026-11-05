@@ -3,7 +3,7 @@ import { noul } from '@typesafe-ai/sdk';
 import type { Queryable } from '@/lib/explainers/db';
 import type { DramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { defineQuestionSet } from '@/lib/reels/jev/question-set';
-import type { Pitch } from '@/lib/reel-ai-drama/types';
+import { pitchBrief, pitchCentral, type Pitch } from '@/lib/reel-ai-drama/types';
 import { DAY_MS, norm, slug } from '@/lib/reel-ai-drama/development/util';
 
 /**
@@ -25,8 +25,9 @@ function whenOf(p: Pitch): string {
 
 /** who (central figure, then the cast) | what (story type) | when (month, or year at year precision). */
 export function eventKey(p: Pitch): string {
-  const central = p.cast.find((c) => norm(c.name) === norm(p.central_figure));
-  const who = central?.player_id ?? slug(p.central_figure);
+  const name = pitchCentral(p);
+  const central = p.cast.find((c) => norm(c.name) === norm(name));
+  const who = central?.player_id ?? slug(name);
   return `${who}|${castSlugs(p).join('+')}|${p.story_type}|${whenOf(p)}`;
 }
 
@@ -59,7 +60,7 @@ function dateCloseness(a: Pitch, b: Pitch): number {
 
 /** 0–1: title words, cast and date. Wording alone never decides (the event does). */
 export function similarity(a: Pitch, b: Pitch): number {
-  const title = jaccard(titleTokens(`${a.title} ${a.scene}`), titleTokens(`${b.title} ${b.scene}`));
+  const title = jaccard(titleTokens(`${a.title} ${a.scene ?? ''}`), titleTokens(`${b.title} ${b.scene ?? ''}`));
   const cast = jaccard(new Set(castSlugs(a)), new Set(castSlugs(b)));
   return 0.3 * title + 0.45 * cast + 0.25 * dateCloseness(a, b);
 }
@@ -102,12 +103,10 @@ export const SAME_EVENT_PAIRS = defineQuestionSet({
 export function pitchRef(p: Pitch) {
   return {
     title: p.title,
-    logline: p.logline,
+    brief: pitchBrief(p),
     event_date: p.event_date,
-    central_figure: p.central_figure,
+    central_figure: pitchCentral(p),
     cast: p.cast.map((c) => c.name),
-    scene: p.scene,
-    turn: p.turn,
   };
 }
 

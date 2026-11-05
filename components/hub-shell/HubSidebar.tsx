@@ -1,7 +1,6 @@
 'use client';
 
 import Image from 'next/image';
-import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
@@ -25,8 +24,16 @@ import {
   X,
 } from 'lucide-react';
 
+import type { ComponentProps } from 'react';
+
 import { HUB_NAV, type HubNavItem } from '@/components/hub-shell/nav';
+import { WarmLink } from '@/components/hub-shell/warm-link';
 import { useMobileNav } from '@/components/hub-shell/MobileNavContext';
+
+/** On screen, prefetch stays partial. Hover loads the full route, and the click uses that response. */
+function MenuLink(props: ComponentProps<typeof WarmLink>) {
+  return <WarmLink {...props} />;
+}
 
 const STORAGE_KEY = 'helios-hub-sidebar-collapsed';
 
@@ -93,7 +100,7 @@ export function HubSidebar({ email }: { email: string }) {
           >
             <Menu size={20} />
           </button>
-          <Link href="/" className="hub-sidebar__brand" aria-label="The Helios Hub">
+          <MenuLink href="/" className="hub-sidebar__brand" aria-label="The Helios Hub">
             <div className="hub-sidebar__logo-wrap">
               <Image
                 src="/trello/helios-logo-sm.png"
@@ -105,7 +112,7 @@ export function HubSidebar({ email }: { email: string }) {
               />
             </div>
             <span className="hub-sidebar__brand-title text-sm font-semibold">Helios Hub</span>
-          </Link>
+          </MenuLink>
           <div className="hub-sidebar__avatar" aria-hidden="true" style={{ width: 28, height: 28, fontSize: 12 }}>
             {initial}
           </div>
@@ -116,7 +123,7 @@ export function HubSidebar({ email }: { email: string }) {
       <aside className={`hub-sidebar${collapsed ? ' is-collapsed' : ''}`}>
         <div className="hub-sidebar__header">
           {!collapsed && (
-            <Link href="/" className="hub-sidebar__brand" aria-label="The Helios Hub">
+            <MenuLink href="/" className="hub-sidebar__brand" aria-label="The Helios Hub">
               <div className="hub-sidebar__logo-wrap">
                 <Image
                   src="/trello/helios-logo-sm.png"
@@ -131,7 +138,7 @@ export function HubSidebar({ email }: { email: string }) {
                 <span className="hub-sidebar__brand-title">Helios Hub</span>
                 <span className="hub-sidebar__brand-sub">Workspace</span>
               </span>
-            </Link>
+            </MenuLink>
           )}
           <button
             type="button"
@@ -156,7 +163,7 @@ export function HubSidebar({ email }: { email: string }) {
                 onMouseEnter={() => item.children && setHoverId(item.id)}
                 onMouseLeave={() => setHoverId((current) => (current === item.id ? null : current))}
               >
-                <Link href={item.href} className="hub-nav-item__row">
+                <MenuLink href={item.href} className="hub-nav-item__row">
                   <span className="hub-nav-item__icon">
                     <Icon size={16} aria-hidden="true" />
                   </span>
@@ -169,18 +176,18 @@ export function HubSidebar({ email }: { email: string }) {
                   {item.children && !collapsed && (
                     <ChevronDown size={12} className="hub-nav-item__caret" aria-hidden="true" />
                   )}
-                </Link>
+                </MenuLink>
                 {item.children && !collapsed && (
                   <div className="hub-nav-item__sub">
                     <div className="hub-nav-item__sub-inner">
                       {item.children.map((child) => (
-                        <Link
+                        <MenuLink
                           key={child.href}
                           href={child.href}
                           className={`hub-nav-item__sub-link${child.match(pathname, search) ? ' is-active' : ''}`}
                         >
                           {child.label}
-                        </Link>
+                        </MenuLink>
                       ))}
                     </div>
                   </div>
@@ -188,13 +195,13 @@ export function HubSidebar({ email }: { email: string }) {
                 {item.children && collapsed && open && (
                   <div className="hub-nav-flyout" role="menu">
                     {item.children.map((child) => (
-                      <Link
+                      <MenuLink
                         key={child.href}
                         href={child.href}
                         className={child.match(pathname, search) ? 'is-active' : undefined}
                       >
                         {child.label}
-                      </Link>
+                      </MenuLink>
                     ))}
                   </div>
                 )}
@@ -242,7 +249,7 @@ export function HubSidebar({ email }: { email: string }) {
               className="hub-mobile-drawer-panel"
             >
               <div className="hub-mobile-drawer__header">
-                <Link href="/" onClick={closeMobileNav} className="hub-sidebar__brand" aria-label="The Helios Hub">
+                <MenuLink href="/" onClick={closeMobileNav} className="hub-sidebar__brand" aria-label="The Helios Hub">
                   <div className="hub-sidebar__logo-wrap">
                     <Image
                       src="/trello/helios-logo-sm.png"
@@ -257,7 +264,7 @@ export function HubSidebar({ email }: { email: string }) {
                     <span className="hub-sidebar__brand-title">Helios Hub</span>
                     <span className="hub-sidebar__brand-sub">Workspace</span>
                   </span>
-                </Link>
+                </MenuLink>
                 <button
                   type="button"
                   className="hub-mobile-drawer__close"
@@ -279,7 +286,7 @@ export function HubSidebar({ email }: { email: string }) {
                       key={item.id}
                       className={`hub-nav-item${active ? ' is-active' : ''}${open ? ' is-open' : ''}${item.children ? ' has-children' : ''}`}
                     >
-                      <Link
+                      <MenuLink
                         href={item.href}
                         className="hub-nav-item__row"
                         aria-expanded={item.children ? open : undefined}
@@ -302,19 +309,19 @@ export function HubSidebar({ email }: { email: string }) {
                         {item.children && (
                           <ChevronDown size={14} className="hub-nav-item__caret" aria-hidden="true" />
                         )}
-                      </Link>
+                      </MenuLink>
                       {item.children && (
                         <div className="hub-nav-item__sub">
                           <div className="hub-nav-item__sub-inner">
                             {item.children.map((child) => (
-                              <Link
+                              <MenuLink
                                 key={child.href}
                                 href={child.href}
                                 className={`hub-nav-item__sub-link${child.match(pathname, search) ? ' is-active' : ''}`}
                                 onClick={closeMobileNav}
                               >
                                 {child.label}
-                              </Link>
+                              </MenuLink>
                             ))}
                           </div>
                         </div>

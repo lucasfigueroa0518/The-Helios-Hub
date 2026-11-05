@@ -54,8 +54,10 @@ storyboard or the world's `STATES`.
    what you built (§§ 1, 2, 4 and 5 always; § 9 for characters and props; § 10 for a mechanism or a
    blend); does the frame do its job in the visual arc? Fix everything one review found in a single
    write of the module (one Write of the whole file, never a run of small edits), then snap again. You have **4
-   snaps** for the frame: a first look, up to two revisions, and a last look. It is the only command
-   you run.
+   snaps** for the frame: a first look, up to two revisions, and a last look, **2 runs** of
+   `node assets/kit/try.mjs frame <frame id>`, and **2 runs** of `node assets/kit/bounds.mjs <frame id>`
+   (the text check: text cut off by the frame, outside its box, or in a keep-out). These are the only commands you run, each exactly as
+   written with nothing before or after it: no `cd`, no pipes (`| head`, `| grep`), no `cat`, `sed`, `ls`, `python` or `node -e`: Read, Grep and Glob read files, Write and Edit change them.
 5. **Report.** Your last message names the files you wrote and lists, plainly, anything you could not
    fix, and any pose, state or camera view the world lacks (which entity, what it needs). The orchestrator
    runs the build checks and sends you their exact errors once; whatever is left after that ships as

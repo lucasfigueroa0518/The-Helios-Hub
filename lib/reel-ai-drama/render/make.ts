@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { seedKind, seedSvg } from '@/explainers/reel-ai-drama/kit/settings/index.js';
+import { removePaper } from '@/lib/reel-ai-drama/harvest/transparent';
 import { priceImageUsage, type ImageUsage } from '@/lib/reels/visual/image';
-import type { Asset, DirectorPlan, MakeRequest, StoryboardFrame, VisualKind, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
+import { mapBlueprintAssets, type Asset, type DirectorPlan, type MakeRequest, type StoryboardFrame, type VisualKind, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
 import { CHARACTER_TREATMENTS, type Treatment } from '@/lib/reel-ai-drama/writing/schemas';
 import { isCharacterImage, isLogo } from '@/lib/reel-ai-drama/writing/validate';
 
@@ -16,6 +17,9 @@ import { isCharacterImage, isLogo } from '@/lib/reel-ai-drama/writing/validate';
  *     anchor, else any portrait of them), in marker line style with the expression the brief asks for.
  *   - a drawing, a setting or a collage layer: drawn by the image model to the brief (a drawing traces
  *     from_assets when it names a picture). Always drawn, never photoreal.
+ * Drawn makes come out without their paper (iteration 4): an expression sketch or a drawing keeps only its ink
+ * (transparent everywhere else), a collage element keeps its own paper but loses the white around it; a
+ * setting fills the frame and stays opaque (harvest/transparent.ts; flag `transparent`).
  * Fails open per request: a failed make becomes a problem string, and `planWithoutFailedMakes` puts the
  * frame back on existing assets. No Claude call here; the image model's spend is returned and, when
  * `deps.record` is given, recorded per call.
@@ -127,6 +131,9 @@ export const generateMakeImage: GenerateImage = async ({ prompt, reference, size
 
 // ── Assets ────────────────────────────────────────────────────────────────
 
+/** How each made kind loses its paper; a setting fills the frame and keeps it. */
+export const PAPER_MODE: Record<MakeRequest['kind'], 'ink' | 'paper' | null> = { setting: null, expression: 'ink', drawing: 'ink', collage: 'paper' };
+
 const KIND_OF: Record<MakeRequest['kind'], VisualKind> = { setting: 'place_photo', expression: 'person_photo', drawing: 'object', collage: 'paper' };
 
 const SHOWS: Record<MakeRequest['kind'], string> = {
@@ -237,10 +244,13 @@ export async function makeAssets(
       held = 0;
       await deps.record?.({ component: 'make', vendor: 'openai', usd: out.usage.usd, make: m.id }).catch(() => undefined);
       const file = path.join('media', `${m.id}.png`);
-      fs.writeFileSync(path.join(input.jobDir, file), out.png);
+      const mode = PAPER_MODE[m.kind];
+      const clear = mode ? await removePaper(out.png, mode).catch(() => null) : null;
+      const png = clear?.png ?? out.png;
+      fs.writeFileSync(path.join(input.jobDir, file), png);
       const [w, h] = MAKE_SIZE[m.kind].split('x').map(Number);
       const credit = ref ? `Illustration by Helios, drawn from: ${ref.credit}` : 'Illustration: Helios';
-      made.set(m.id, madeAsset(m, file, pngSize(out.png) ?? { width: w, height: h }, { flags: ref ? [`traced_from:${ref.id}`] : [], credit }));
+      made.set(m.id, madeAsset(m, file, pngSize(png) ?? { width: w, height: h }, { flags: [...(ref ? [`traced_from:${ref.id}`] : []), ...(clear ? ['transparent'] : [])], credit }));
     } catch (err) {
       committed -= held;
       problems.push(`${m.id} (${m.kind}) was not made: ${err instanceof Error ? err.message : String(err)}`);
@@ -298,7 +308,14 @@ export function planWithoutFailedMakes(plan: DirectorPlan, madeIds: Iterable<str
     if (people.length && !CHARACTER_TREATMENTS.includes(treatment as Treatment)) treatment = 'cutout_lift';
     if (!ids.length && treatment !== 'whiteboard' && treatment !== 'board' && treatment !== 'newspaper') treatment = 'photo';
     notes.push(`frame ${f.n}: ${lost.join(', ')} could not be made; it uses ${ids.join(', ') || 'no asset'}${treatment !== f.treatment ? ` as a ${treatment}` : ''} instead`);
-    return { ...f, asset_ids: ids, shows: shows.map((sh) => ({ ...sh, treatment: sh.treatment === f.treatment ? treatment : sh.treatment })), treatment };
+    return {
+      ...f,
+      asset_ids: ids,
+      shows: shows.map((sh) => ({ ...sh, treatment: sh.treatment === f.treatment ? treatment : sh.treatment })),
+      treatment,
+      // The blueprint follows: a lost make's piece shows its fallback, or goes.
+      ...(f.blueprint ? { blueprint: mapBlueprintAssets(f.blueprint, (id) => (swap.has(id) ? swap.get(id) ?? null : id)) } : {}),
+    };
   });
   return { plan: { ...plan, frames, makes: (plan.makes ?? []).filter((m) => ok.has(m.id)) }, notes };
 }

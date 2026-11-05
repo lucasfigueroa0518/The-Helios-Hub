@@ -35,19 +35,37 @@ export type ReelAiDramaSettings = {
   min_visuals: number;
   /** A photo can appear in another reel only after this many days (MD-45). */
   reuse_days: number;
-  /** Length (MD-35 S-10 rewrite) and pacing (MD-34, MD-35). */
+  /** Length (MD-103: about 60s, up to 80s when the story needs it) and pacing (MD-34, MD-35). */
   target_seconds: number;
   max_seconds: number;
   hook_seconds: number;
   rung_max_seconds: number;
+  /** The voice (MD-93): one take, sped up after recording with ffmpeg `atempo` (HeyGen ignores `speed`). */
+  voice_tempo: number;
+  /** The delivered narration pace, the word budget's rate (MD-91: up to the caption ceiling). */
+  words_per_minute_target: number;
+  /** The longest silent beat, in seconds: a frame with no voice, or a line's picture beat (MD-103: about 0.15s). */
+  silent_beat_max: number;
   /** Models (MD-49). Jev scores run on Jev's own configured model. */
   producer_model: string;
   reporting_model: string;
   writer_model: string;
+  /** The blind story editor (MD-102). */
+  story_editor_model: string;
   director_model: string;
   orchestrator_model: string;
   frame_worker_model: string;
   vision_model: string;
+  /** The design reviewer's judgment items (MD-133); its mechanical items run on `vision_model`. */
+  design_judge_model: string;
+  /** Iteration 11: director fix rounds run here first, and escalate if the re-check still finds the problem. */
+  director_fix_model: string;
+  director_fix_escalation_model: string;
+  /** Iteration 11: the problem solver's reel-wide look and its two rounds, and what all of them may spend on one reel. */
+  solver_look_model: string;
+  solver_first_model: string;
+  solver_second_model: string;
+  solver_limit_usd: number;
 };
 
 export type ReelAiDramaSettingKey = keyof ReelAiDramaSettings;
@@ -58,7 +76,7 @@ export const DEFAULT_SETTINGS: ReelAiDramaSettings = {
   per_week: 3,
   weekly_dev_cap_usd: 3,
   cells_per_session: 4,
-  pitches_per_cell: 4,
+  pitches_per_cell: 5,
   cell_due_days: 120,
   visuals_check_cap_usd: 0.35,
   drama_bar: 0.55,
@@ -70,16 +88,27 @@ export const DEFAULT_SETTINGS: ReelAiDramaSettings = {
   min_visuals: 15,
   reuse_days: 20,
   target_seconds: 60,
-  max_seconds: 75,
+  max_seconds: 80,
   hook_seconds: 1.5,
   rung_max_seconds: 8,
+  voice_tempo: 1.12,
+  words_per_minute_target: 180,
+  silent_beat_max: 0.15,
   producer_model: 'claude-sonnet-5-5',
   reporting_model: 'claude-sonnet-5-5',
   writer_model: 'claude-opus-5-5',
+  story_editor_model: 'claude-opus-5-5',
   director_model: 'claude-opus-5-5',
   orchestrator_model: 'claude-sonnet-5-5',
   frame_worker_model: 'claude-sonnet-5-5',
   vision_model: 'claude-haiku-5-5',
+  design_judge_model: 'claude-sonnet-5-5',
+  director_fix_model: 'claude-sonnet-5-5',
+  director_fix_escalation_model: 'claude-opus-5-5',
+  solver_look_model: 'claude-sonnet-5-5',
+  solver_first_model: 'claude-sonnet-5-5',
+  solver_second_model: 'claude-opus-5-5',
+  solver_limit_usd: 4,
 };
 
 function fail(key: string, expected: string, value: unknown): never {
@@ -113,13 +142,25 @@ const PARSERS: { [K in ReelAiDramaSettingKey]: (v: unknown) => ReelAiDramaSettin
   max_seconds: num('max_seconds', 10),
   hook_seconds: num('hook_seconds', 0.1),
   rung_max_seconds: num('rung_max_seconds', 1),
+  // ffmpeg's atempo takes 0.5–2 in one pass.
+  voice_tempo: num('voice_tempo', 0.5, 2),
+  words_per_minute_target: num('words_per_minute_target', 60, 300),
+  silent_beat_max: num('silent_beat_max', 0, 4),
   producer_model: str('producer_model'),
   reporting_model: str('reporting_model'),
   writer_model: str('writer_model'),
+  story_editor_model: str('story_editor_model'),
   director_model: str('director_model'),
   orchestrator_model: str('orchestrator_model'),
   frame_worker_model: str('frame_worker_model'),
   vision_model: str('vision_model'),
+  design_judge_model: str('design_judge_model'),
+  director_fix_model: str('director_fix_model'),
+  director_fix_escalation_model: str('director_fix_escalation_model'),
+  solver_look_model: str('solver_look_model'),
+  solver_first_model: str('solver_first_model'),
+  solver_second_model: str('solver_second_model'),
+  solver_limit_usd: num('solver_limit_usd', 2),
 };
 
 export function isSettingKey(key: string): key is ReelAiDramaSettingKey {

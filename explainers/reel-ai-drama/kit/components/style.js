@@ -4,6 +4,7 @@
 // once per document by installKit(); fonts come from the job's assets/fonts (no CDN, no network at render).
 //
 // Determinism: no CSS animations or transitions anywhere; textures are baked tiles (kit/textures).
+import { toneIn } from '../stage-layout.js';
 
 /** Helios tokens (explainers/frame-presets/helios/FRAME.md): the words, type and accent (MD-44). */
 export const HELIOS = { orange: '#FF5E1A', paperLit: '#FEF9F3', paper: '#F4EFE7', ink: '#1F1915', night: '#0D0B0A' };
@@ -22,7 +23,7 @@ export const FONT_FILES = {
   roboto400: 'Roboto-400.woff2',
   roboto500: 'Roboto-500.woff2',
   roboto700: 'Roboto-700.woff2',
-  gochi: 'GochiHand-Regular.ttf',
+  hand: 'PatrickHand-Regular.ttf',
   // Open-licence stand-ins for the stills' Mac faces (Didot, American Typewriter, Times New Roman), bundled
   // so the Linux render VM sets the same type as a Mac preview.
   playfair: 'PlayfairDisplay.ttf',
@@ -31,6 +32,65 @@ export const FONT_FILES = {
   tinos700: 'Tinos-Bold.ttf',
   tinosItalic: 'Tinos-Italic.ttf',
 };
+
+/**
+ * A picture behind others, as a place: held back, but still that place. `blur` softens it enough to sit
+ * behind what is in front; it never goes far enough to lose what the place is.
+ */
+export const BACKDROP = { grayscale: 0.35, brightness: 0.62, blur: 4 };
+/** The backdrop's grade; `mono` when what stands in front of it has no colour, so it doesn't keep any either. */
+export const backdropFilter = ({ mono = false } = {}) => `grayscale(${mono ? 1 : BACKDROP.grayscale}) brightness(${BACKDROP.brightness})`;
+
+/** Kinds of picture that are a page of words. */
+const PAGE_KINDS = new Set(['headline', 'page', 'document', 'post', 'article', 'screenshot']);
+/** A real picture with this many measured words is a page, whatever it was filed as. */
+const PAGE_WORDS = 12;
+/** Made kinds that are drawings: their ground is theirs to lose. */
+const DRAWING_KINDS = new Set(['sketch', 'drawing', 'expression']);
+/**
+ * A page or article: it always keeps its paper. Its ground is never keyed away, which would leave bare text.
+ * `made` doesn't decide this: a screen capture is made too. Only a made drawing is not a page. Pure.
+ */
+export const isPage = (media) => Boolean(media) && !DRAWING_KINDS.has(media.made_kind) && (PAGE_KINDS.has(media.kind) || (media.regions?.words?.length ?? 0) >= PAGE_WORDS);
+
+/** A picture with no colour of its own: measured (`regions.chroma`, 0–1) when it can be, else its flags or what the look step saw. Pure. */
+export function isMono(media) {
+  const c = media?.regions?.chroma ?? media?.chroma;
+  if (Number.isFinite(c)) return c < 0.06;
+  if (media?.flags?.some?.((f) => /^(mono|bw|black_and_white|grayscale)$/.test(f))) return true;
+  return /black[- ]and[- ]white|monochrome|gr[ae]yscale|\bb&w\b/i.test(media?.shows ?? '');
+}
+
+/** A picture's mean luminance, 0–1: the harvest's measure, else its tone grid; null when it has neither. Pure. */
+export function brightnessOf(media) {
+  const b = media?.regions?.brightness ?? media?.brightness;
+  if (Number.isFinite(b)) return b;
+  return toneIn(media?.regions ?? null);
+}
+
+/** How far a picture may be pushed toward the others' level (either way). */
+const TONE_REACH = 0.18;
+const TONE_LEVEL = 0.9;
+
+/**
+ * The CSS filter that makes `media` belong with `others`, the other pictures in the frame (ground included).
+ * One black-and-white picture takes the whole frame to black and white, so colour never sits next to it; otherwise
+ * the shared desaturation removes colour casts between them. Each is then moved toward the group's mean
+ * brightness, within TONE_REACH. Alone, a picture gets the kit's figure grade. Pure.
+ * @param {any} media
+ * @param {any[]} [others]
+ * @returns {string}
+ */
+export function matchTone(media, others = []) {
+  const group = [media, ...others].filter(Boolean);
+  const mono = group.some(isMono);
+  const grey = mono ? 1 : group.length > 1 ? 0.6 : 0.35;
+  const levels = group.map(brightnessOf).filter((v) => Number.isFinite(v) && v > 0);
+  const own = brightnessOf(media);
+  const mean = levels.length ? levels.reduce((a, b) => a + b, 0) / levels.length : null;
+  const shift = own > 0 && mean ? Math.max(1 - TONE_REACH, Math.min(1 + TONE_REACH, mean / own)) : 1;
+  return `grayscale(${grey}) contrast(1.08) brightness(${(TONE_LEVEL * shift).toFixed(3)}) sepia(.12)`;
+}
 
 /** The baked surface tiles (kit/textures, made by bake-textures.mjs). No live element is ever given an
  *  SVG filter: HyperFrames composites those even while their frame is hidden. */
@@ -43,7 +103,7 @@ export function fontFaces(fonts) {
 @font-face{font-family:'Roboto';src:url('${fonts.roboto400}') format('woff2');font-weight:400;}
 @font-face{font-family:'Roboto';src:url('${fonts.roboto500}') format('woff2');font-weight:500;}
 @font-face{font-family:'Roboto';src:url('${fonts.roboto700}') format('woff2');font-weight:700;}
-@font-face{font-family:'Gochi Hand';src:url('${fonts.gochi}') format('truetype');}
+@font-face{font-family:'Patrick Hand';src:url('${fonts.hand}') format('truetype');}
 @font-face{font-family:'Playfair Display';src:url('${fonts.playfair}') format('truetype');font-weight:400 900;}
 @font-face{font-family:'Courier Prime';src:url('${fonts.courier}') format('truetype');font-weight:400;}
 @font-face{font-family:'Tinos';src:url('${fonts.tinos400}') format('truetype');font-weight:400;}
@@ -54,7 +114,7 @@ export function fontFaces(fonts) {
 export const css = (tex) => `
 .nk{--cord:${COLORS.cord};--marker:${COLORS.marker};--news-ink:${COLORS.ink};--paper:${COLORS.paper};--manila:${COLORS.manila};
   --serif:'Tinos','Times New Roman',serif;--head:'Playfair Display','Didot',serif;
-  --type:'Courier Prime','American Typewriter',monospace;--hand:'Gochi Hand',cursive;
+  --type:'Courier Prime','American Typewriter',monospace;--hand:'Patrick Hand',cursive;
   position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden;background:#2a2118;-webkit-font-smoothing:antialiased;}
 .nk *{box-sizing:border-box;}
 .nk .abs{position:absolute;}
@@ -76,8 +136,7 @@ export const css = (tex) => `
   background:linear-gradient(180deg,#F7F8F8 0%,#EEF0F0 55%,#E3E6E6 100%);
   box-shadow:0 0 0 14px #C4C8CB,0 0 0 16px #9EA3A7,0 0 0 18px #D7DADC,0 40px 60px -10px rgba(0,0,0,0.55);}
 .nk-wb-skin{position:absolute;inset:0;border-radius:6px;overflow:hidden;pointer-events:none;}
-.nk-wb-skin .nk-residue{position:absolute;inset:0;opacity:0.12;filter:blur(3px);}
-.nk-wb-glare{position:absolute;inset:0;z-index:30;pointer-events:none;border-radius:6px;background:
+.nk-wb-glare{position:absolute;inset:0;pointer-events:none;border-radius:6px;background:
   linear-gradient(105deg,rgba(255,255,255,0) 22%,rgba(255,255,255,0.55) 27%,rgba(255,255,255,0) 31%,rgba(255,255,255,0) 36%,rgba(255,255,255,0.4) 39%,rgba(255,255,255,0) 42%),
   radial-gradient(40% 18% at 78% 12%,rgba(255,255,255,0.7),rgba(255,255,255,0) 70%);mix-blend-mode:screen;}
 .nk-wb-corner{position:absolute;width:34px;height:34px;background:#8B9095;border-radius:4px;box-shadow:inset 0 2px 2px rgba(255,255,255,0.4);z-index:3;}
@@ -164,11 +223,11 @@ export const css = (tex) => `
 .nk-ink path{fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .nk-ink.dry{-webkit-mask:url('${tex}dryerase.png') 0 0/${TILE};mask:url('${tex}dryerase.png') 0 0/${TILE};}
 .nk-ink path.hl{stroke-linecap:butt;mix-blend-mode:multiply;}
-.nk-note{position:absolute;font-family:var(--hand);white-space:nowrap;z-index:26;}
+.nk-note{position:absolute;font-family:var(--hand);white-space:nowrap;z-index:26;-webkit-text-stroke:.018em currentColor;}
 .nk-note.dry{-webkit-mask:url('${tex}dryerase.png') 0 0/${TILE};mask:url('${tex}dryerase.png') 0 0/${TILE};}
 
 /* ── Reel AI Drama: full-screen treatments (rd-*) ─────────────────────────────────── */
-.rd{--rd-orange:${HELIOS.orange};--rd-paper-lit:${HELIOS.paperLit};--rd-ink:${HELIOS.ink};--rd-night:${HELIOS.night};
+.rd{--hand:'Patrick Hand',cursive;--rd-orange:${HELIOS.orange};--rd-paper-lit:${HELIOS.paperLit};--rd-ink:${HELIOS.ink};--rd-night:${HELIOS.night};
   position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden;background:var(--rd-night);-webkit-font-smoothing:antialiased;}
 .rd *{box-sizing:border-box;}
 .rd .abs,.rd-layer{position:absolute;}
@@ -179,12 +238,9 @@ export const css = (tex) => `
 .rd-shade{position:absolute;inset:0;pointer-events:none;}
 .rd-vignette{position:absolute;inset:0;pointer-events:none;z-index:48;background:radial-gradient(ellipse at 50% 45%,transparent 45%,rgba(0,0,0,0.6) 100%);}
 .rd .nk-grain{z-index:50;}
-.rd-close{background:radial-gradient(ellipse at 40% 45%,#1d1916 0%,var(--rd-night) 70%);}
-.rd-wordmark{font:700 104px/1 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.03em;color:var(--rd-paper-lit);white-space:nowrap;}
-.rd-series{font:500 38px Roboto,sans-serif;color:rgba(254,249,243,0.8);letter-spacing:0.01em;}
 .rd-words{position:absolute;z-index:46;}
 .rd-big{font:700 118px/1 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.03em;color:var(--rd-paper-lit);white-space:nowrap;}
-.rd-sub{font:700 54px/1.1 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.02em;text-transform:lowercase;color:var(--rd-orange);margin-top:14px;}
+.rd-sub{font:700 54px/1.1 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.02em;color:var(--rd-orange);margin-top:14px;}
 .rd-label{font:500 38px/1.2 Roboto,sans-serif;color:rgba(254,249,243,0.8);margin-top:16px;}
 .rd-l3-bar{width:84px;height:8px;background:var(--rd-orange);margin-bottom:22px;}
 .rd-l3-name{font:700 76px/1 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.02em;color:var(--rd-paper-lit);white-space:nowrap;}
@@ -194,7 +250,7 @@ export const css = (tex) => `
 .rd-ink{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;}
 .rd-ink path{fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .rd-ink path.hl{stroke-linecap:butt;mix-blend-mode:multiply;}
-.rd-sheet{position:absolute;box-shadow:0 30px 80px rgba(0,0,0,0.7);transform-origin:0 0;}
+.rd-sheet{position:absolute;background:#F4EFE4;box-shadow:0 30px 80px rgba(0,0,0,0.7);transform-origin:0 0;}
 .rd-paper::after{content:'';position:absolute;inset:0;pointer-events:none;background:url('${tex}paper.png') 0 0/${TILE};opacity:0.5;mix-blend-mode:multiply;}
 .rd-postcard{border-radius:28px;overflow:hidden;}
 .rd-pin{position:absolute;width:38px;height:38px;margin:-19px 0 0 -19px;border-radius:50%;background:var(--rd-orange);border:6px solid var(--rd-paper-lit);box-shadow:0 4px 14px rgba(0,0,0,0.45);z-index:5;}
@@ -205,4 +261,30 @@ export const css = (tex) => `
 .rd-strip::after{content:'';position:absolute;inset:0;pointer-events:none;background:url('${tex}paper.png') 0 0/${TILE};opacity:0.55;mix-blend-mode:multiply;}
 .rd-strip .k{font:700 24px Roboto,sans-serif;letter-spacing:0.18em;text-transform:uppercase;border-bottom:2px solid #1B1A17;padding-bottom:10px;display:flex;justify-content:space-between;}
 .rd-strip .hl{font:700 70px/1.02 'Tinos','Times New Roman',serif;letter-spacing:-0.01em;margin-top:18px;}
+/* ── Iteration 4: anchors (measured pictures, marks), labels, stat, lift ───────────────────── */
+.rd-anchor{position:absolute;pointer-events:none;overflow:visible;z-index:30;}
+.rd-anchor > div{position:absolute;pointer-events:none;}
+.rd-anchor svg path{fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.rd-tag{white-space:nowrap;}
+.rd-tag-t{font:500 36px/1.15 Roboto,sans-serif;letter-spacing:0.01em;}
+.rd-tag-s{font:400 28px/1.2 Roboto,sans-serif;opacity:0.8;margin-top:4px;}
+/* MD-130: a date label is the prominent one: an orange rule, the date in Pragmatica Extended Bold. */
+.rd-date-bar{width:64px;height:8px;background:var(--rd-orange);margin-bottom:16px;}
+.rd-date-t{font:700 60px/1.02 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.015em;color:var(--rd-paper-lit);}
+.rd-date .rd-tag-s{font:500 32px/1.2 Roboto,sans-serif;margin-top:10px;}
+[data-plate="light"] .rd-date-t{color:var(--rd-ink);}
+.rd-stat-title{position:absolute;left:96px;right:140px;font:500 40px/1.2 Roboto,sans-serif;color:rgba(254,249,243,0.85);text-align:center;}
+.rd-stat-big{position:absolute;left:50%;transform:translateX(-50%);font:700 220px/1 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.04em;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.rd-stat-label{position:absolute;left:96px;right:140px;text-align:center;font:700 54px/1.1 'Pragmatica Extended',Helvetica,Arial,sans-serif;letter-spacing:-0.02em;color:var(--rd-paper-lit);}
+.rd-stat-barlabel{position:absolute;font:500 36px/1.2 Roboto,sans-serif;color:rgba(254,249,243,0.85);white-space:nowrap;}
+.rd-stat-bar{position:absolute;height:58px;border-radius:4px;transform-origin:0 50%;}
+.rd-stat-barvalue{position:absolute;font:700 52px/1.1 'Pragmatica Extended',Helvetica,Arial,sans-serif;color:var(--rd-paper-lit);white-space:nowrap;}
+.rd-stat-disc{position:absolute;border-radius:50%;transform-origin:50% 100%;box-shadow:0 20px 50px rgba(0,0,0,0.45);}
+.rd-stat-scalelabel{position:absolute;transform:translateX(-50%);text-align:center;white-space:nowrap;}
+.rd-stat-scalelabel .v{font:700 52px/1.1 'Pragmatica Extended',Helvetica,Arial,sans-serif;color:var(--rd-paper-lit);}
+.rd-stat-scalelabel .l{font:500 32px/1.2 Roboto,sans-serif;color:rgba(254,249,243,0.8);margin-top:6px;}
+/* A print or a card is paper, even when its picture's file has no ground of its own. */
+[data-framed]{background:#F4EFE4;}
+.rd-lift{position:absolute;z-index:50;display:block;object-fit:fill;}
+.rd-lift-cut{background-repeat:no-repeat;border:8px solid #F3EEE4;box-sizing:border-box;}
 `;

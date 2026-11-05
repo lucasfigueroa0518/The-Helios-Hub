@@ -92,7 +92,7 @@ test('skip, scored under the bar: each candidate keeps its answers, score and fa
 
 test('the record survives buildSet\'s own skip bookkeeping and a good build leaves none', async () => {
   const { db, set } = await setup();
-  const base = { db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({ submit_pairs: () => ({ pairs: [] }) }), photos: stubPhotos(), renderer: await stubRenderer(), review: (async () => ({ flags: [] })) as never, storage: { upload: async () => {}, sign: async (p: string) => p, download: async () => Buffer.alloc(0), remove: async () => {} }, now: () => NOW };
+  const base = { db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({ submit_pairs: () => ({ pairs: [] }) }), photos: stubPhotos(), renderer: await stubRenderer(), review: (async () => ({ flags: [] })) as never, storage: { upload: async () => {}, sign: async (p: string) => p, signMany: async (paths: string[]) => paths, download: async () => Buffer.alloc(0), remove: async () => {} }, now: () => NOW };
   const out = await buildSet({ ...base, builders: { free_vs_paid: (d) => buildFreeVsPaid(d, async () => LEADS) } }, set.id);
   assert.equal(out.status, 'skipped');
   const got = await getSet(db, set.id);

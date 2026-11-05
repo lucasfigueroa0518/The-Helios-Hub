@@ -1,0 +1,36 @@
+[
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "quiet room tone",
+  "dur": 8
+ },
+ {
+  "t": 0,
+  "kind": "foley",
+  "what": "marker writing",
+  "dur": 0.9,
+  "kit": true
+ },
+ {
+  "t": 0,
+  "kind": "foley",
+  "what": "marker writing",
+  "dur": 1.2,
+  "kit": true
+ },
+ {
+  "t": 1.729,
+  "kind": "foley",
+  "what": "marker writing",
+  "dur": 0.9,
+  "kit": true
+ },
+ {
+  "t": 3.812,
+  "kind": "foley",
+  "what": "marker writing",
+  "dur": 0.9,
+  "kit": true
+ }
+]

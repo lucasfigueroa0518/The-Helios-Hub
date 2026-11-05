@@ -1,6 +1,6 @@
 ---
 name: helios-explainer-director
-description: "Runs one Helios Explainer Reel end to end, headless, through the Helios faceless-explainer workflow. Use only inside the explainers worker's job directory. Version director-v16 (Explainers 4.3: the new eight beats; recipe/craft.md, house-style.md, minimums.md; planning/Explainer Reels/DECISIONS.md), drafted 2026-10-28."
+description: "Runs one Helios Explainer Reel end to end, headless, through the Helios faceless-explainer workflow. Use only inside the explainers worker's job directory. Version director-v17 (Explainers 4.3: the new eight beats and the lesson frame, planning/Explainer Reels/ideas-coverage/PLAN.md; recipe/craft.md, house-style.md, minimums.md; planning/Explainer Reels/DECISIONS.md), drafted 2026-10-28."
 ---
 
 # Helios Explainer Director (Explainers 4.3)
@@ -41,7 +41,10 @@ craft; name the conflict in your last message. The build phase reads only the wo
    edit `frame.md`, anything in `assets/kit/`, or `assets/sfx-library/`.
 5. **The beats and the analogy are fixed.** The eight beats are story-design.md's, in its order.
    BRIEF.md's `## Analogy` is staged, never swapped and never changed in what it is or what its parts
-   stand for; `## Term` is the exact phrase the reel defines.
+   stand for; `## Term` is the exact phrase the reel defines. BRIEF.md's `## Lesson frame`, when
+   present, is kept the same way: **HARD CONSTRAINT: its Payload and its Map position are never
+   swapped or changed in meaning.** How the beats carry the frame, and how much screen time context
+   gets, is story-design.md § The lesson frame.
 6. **Stay in your phase.** The worker names it (`PHASE: plan`, `PHASE: fix` or `PHASE: build`). Do
    exactly that phase's steps, then stop.
 7. **Fail open** (`minimums.md` § Fail open). A check you run never stops the reel: fix what it
@@ -57,7 +60,8 @@ One author, two passes, then the answer key.
 ### Pass 1: the voiceover
 1. Read the files above, `BRIEF.md`, the source material and the skeleton
    (`.media/recipes/helios-explainer/storyboard-skeleton.md`). Research where it helps.
-2. Find the teaching truth (story-design.md § Inputs) before writing a line.
+2. Read BRIEF.md's `## Lesson frame` when it has one, then find the teaching truth (story-design.md
+   § Inputs) before writing a line.
 3. Stage the analogy: `## Anchor scene` (its places may stay rough until pass 2) and the three hook
    candidates and the pick (`## Hook`) (story-design.md § The plan's blocks).
 4. Write the whole voiceover in `SCRIPT.md` (story-design.md § The script), beat by beat to each

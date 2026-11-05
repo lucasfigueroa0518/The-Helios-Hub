@@ -61,6 +61,29 @@ test('storage: upload creates the private bucket on first use, retries outages, 
   assert.equal(await st.sign('sets/a.jpg'), 'https://x.supabase.co/storage/v1/object/sign/stories/sets/a.jpg?token=abc');
 });
 
+test('storage: signMany signs a batch, leaves a failed path null, and chunks past 100', async () => {
+  const sizes: number[] = [];
+  const s = stubFetch((c) => {
+    const body = JSON.parse(c.body!) as { paths: string[]; expiresIn: number };
+    sizes.push(body.paths.length);
+    assert.equal(body.expiresIn, 3600);
+    assert.equal(c.url.pathname, '/storage/v1/object/sign/stories');
+    return { json: body.paths.map((p) => (p === 'bad.jpg' ? { error: 'missing' } : { signedURL: `/object/sign/stories/${p}?token=t` })) };
+  });
+  const st = createStoriesStorage({ baseUrl: 'https://x.supabase.co', serviceRole: 'srk', fetch: s.fetch, sleep: noSleep });
+  assert.deepEqual(await st.signMany([]), []);
+  assert.equal(sizes.length, 0);
+  const urls = await st.signMany(['a.jpg', 'bad.jpg']);
+  assert.deepEqual(urls, ['https://x.supabase.co/storage/v1/object/sign/stories/a.jpg?token=t', null]);
+  const many = await st.signMany(Array.from({ length: 101 }, (_, i) => `n${i}.jpg`));
+  assert.equal(many.length, 101);
+  assert.equal(many[100], 'https://x.supabase.co/storage/v1/object/sign/stories/n100.jpg?token=t');
+  assert.deepEqual(sizes.slice(-2), [100, 1]);
+  const down = stubFetch(() => ({ status: 500, text: 'down' }));
+  const failed = createStoriesStorage({ baseUrl: 'https://x.supabase.co', serviceRole: 'srk', fetch: down.fetch, sleep: noSleep });
+  assert.deepEqual(await failed.signMany(['a.jpg', 'b.jpg']), [null, null]);
+});
+
 test('storage: a 400 is not retried', async () => {
   const s = stubFetch(() => ({ status: 400, text: 'bad mime' }));
   const st = createStoriesStorage({ baseUrl: 'https://x.supabase.co', serviceRole: 'srk', fetch: s.fetch, sleep: noSleep });
@@ -125,7 +148,7 @@ function fakeMeta(opts: { quota?: { used: number; total: number } | null; states
   };
   return { meta, log };
 }
-const storage: StoriesStorage = { upload: async () => {}, sign: async (p) => `https://signed/${p}`, download: async () => Buffer.alloc(0), remove: async () => {} };
+const storage: StoriesStorage = { upload: async () => {}, sign: async (p) => `https://signed/${p}`, signMany: async (paths) => paths.map((p) => `https://signed/${p}`), download: async () => Buffer.alloc(0), remove: async () => {} };
 const FRAMES = [3, 1, 2].map((seq) => ({ id: `f${seq}`, seq, storagePath: `sets/${SET}/0${seq}.jpg` }));
 
 test('publishSet: containers first, all ready, then publish in order', async () => {

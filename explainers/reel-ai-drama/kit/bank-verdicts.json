@@ -1,0 +1,202 @@
+{
+  "verdicts": [
+    {
+      "id": "alex-karp",
+      "name": "Alex Karp",
+      "qid": "Q19560940",
+      "sha256": "ad9d922c9d2d8d6d02d97af1124ec3fd47b48f97572d222725f88a04f91a934f",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:07.227Z",
+      "verdict": "same",
+      "reason": "Both photos show the same man with curly grey hair, rimless glasses, a similar face shape and smile, and the same AI Safety Summit lanyard and suit, so the faces match.",
+      "reference": "Alex Karp attends AI Summit (53302457013) (cropped).jpg"
+    },
+    {
+      "id": "andrej-karpathy",
+      "name": "Andrej Karpathy",
+      "qid": "Q56037405",
+      "sha256": "6f5804d95dc4abda4970830231da1ab8497d89aca8abce4aa992d3b0067f67a7",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:09.649Z",
+      "verdict": "unsure",
+      "reason": "Both men have short brown hair and a similar general build, but picture A is a small, low-resolution, partly turned view with the face mostly at a distance, so the features cannot be compared reliably with the clearer reference portrait.",
+      "reference": "Andrej karpathy 2016.webp"
+    },
+    {
+      "id": "andy-jassy",
+      "name": "Andy Jassy",
+      "qid": "Q41812531",
+      "sha256": "cee91b3c551672182607a31c6bdad3292edd979af5b0abec19bcc1b9ba52c387",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:12.702Z",
+      "verdict": "unsure",
+      "reason": "The face in picture B is very small and at a distance, so its features cannot be compared reliably with the close-up face in picture A.",
+      "reference": "Andy Jassy in 2016.jpg"
+    },
+    {
+      "id": "dario-amodei",
+      "name": "Dario Amodei",
+      "qid": "Q103335665",
+      "sha256": "df84f6911b53697c49b017f15c0175731b29b71aff69be51047c0072defede17",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:15.324Z",
+      "verdict": "same",
+      "reason": "Both pictures show a man with dark curly hair, dark-rimmed glasses, a similar nose, ear and jawline, and a comparable build, with the difference in angle accounting for the rest.",
+      "reference": "Dario Amodei in 2023 (cropped).jpg"
+    },
+    {
+      "id": "demis-hassabis",
+      "name": "Demis Hassabis",
+      "qid": "Q3022141",
+      "sha256": "8698420af84ee4de5dac17f08ecf124c0932e6237f6a8a9ea79368de494afe8e",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:18.438Z",
+      "verdict": "unsure",
+      "reason": "Picture B is a group meeting photo where the candidate man at lower left is small, angled and partly hidden, so his face cannot be reliably compared with the clear frontal portrait in Picture A.",
+      "reference": "Visit by Ekaterina Zaharieva, to Ireland (P-070642-00-19).jpg"
+    },
+    {
+      "id": "donald-trump",
+      "name": "Donald Trump",
+      "qid": "Q22686",
+      "sha256": "943e296a57d6f8d98587f5ff3cb45ce83ad44f7794ce95e9159f984a66435c8c",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:21.495Z",
+      "verdict": "different",
+      "reason": "Picture B shows a white-bearded, bespectacled man with white hair and a different face shape, while Picture A shows a clean-shaven man with light blond hair and different facial proportions, so the two do not match.",
+      "reference": "P20250213JB-0663 (cropped).jpg"
+    },
+    {
+      "id": "elon-musk",
+      "name": "Elon Musk",
+      "qid": "Q317521",
+      "sha256": "a0ec7f92f3cae7ed96b8a4d7525070a530905709c3a3f8282b73f58e9ea8f291",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:24.806Z",
+      "verdict": "unsure",
+      "reason": "Picture B is a stylized caricature drawing, whose exaggerated features cannot reliably confirm or rule out that Picture A is the same person.",
+      "reference": "ADL Field Guide.png"
+    },
+    {
+      "id": "eric-schmidt",
+      "name": "Eric Schmidt",
+      "qid": "Q92747",
+      "sha256": "e1ff98d8af419a2427b251ba3f579d156ead8b546a788803c3b30801f99075d3",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:28.108Z",
+      "verdict": "unsure",
+      "reason": "The man in picture B is too small and far away to compare facial features reliably, and he is not wearing the glasses seen in picture A, so the pictures neither clearly match nor clearly differ.",
+      "reference": "Eric and Wendy Schmidt in 2024.jpg"
+    },
+    {
+      "id": "ilya-sutskever",
+      "name": "Ilya Sutskever",
+      "qid": "Q21712134",
+      "sha256": "d14abebdccfd58f76fe5b5e997737c8b9d9eef5b5a1e6b22f65eee4037ef198e",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:31.204Z",
+      "verdict": "unsure",
+      "reason": "The reference portrait is very small and low-resolution, with the man seated at a distance, so his facial features can't be compared reliably with the close-up bank cutout, which has a bearded man in a light blue shirt.",
+      "reference": "Ilya Sutskever and Sam Altman in TAU (cropped).jpg"
+    },
+    {
+      "id": "jeff-bezos",
+      "name": "Jeff Bezos",
+      "qid": "Q312556",
+      "sha256": "ce428aa160a3b4283186ce12543f294a6a6597ea7a0acd9ca8ddf822990930f2",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:33.671Z",
+      "verdict": "same",
+      "reason": "Both pictures show a bald man with the same brow line, eye spacing, nose and ear shape, and the same navy jacket and light striped shirt style, so the faces match.",
+      "reference": "Lauren Sánchez and Jeff Bezos.jpg"
+    },
+    {
+      "id": "jensen-huang",
+      "name": "Jensen Huang",
+      "qid": "Q305177",
+      "sha256": "39ce1b434446b6e0ed994054422729c175ddb01c372f41ecb8c82f32fa569be7",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:35.474Z",
+      "verdict": "same",
+      "reason": "Both pictures show an older East Asian man with swept-back gray hair, rimless-style half-frame metal glasses with the same temple design, matching brow, nose and mouth shape, and a similar face structure.",
+      "reference": "Jensen Huang Stanford 2026-04-30 010 (cropped).jpg"
+    },
+    {
+      "id": "john-ternus",
+      "name": "John Ternus",
+      "qid": "Q106028933",
+      "sha256": "c228b4119224fd5ad5ce39957f0787ebb5b4f15049f6f792f370aee3f79436eb",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:38.093Z",
+      "verdict": "same",
+      "reason": "Both pictures show a man with the same short dark hairstyle, similar brow line, nose, jaw and light stubble, and nothing in the faces contradicts a match despite the different expressions and lighting.",
+      "reference": "John Ternus at the Apple 50th Anniversary Kickoff.jpg"
+    },
+    {
+      "id": "liang-wenfeng",
+      "name": "Liang Wenfeng",
+      "qid": "Q131847088",
+      "sha256": "8a7c055624a21974a75f99850c5925d73588bd365f7fa6f97967e0ed7e7f25f3",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:40.828Z",
+      "verdict": "unsure",
+      "reason": "No verified portrait on Wikidata or Commons to compare with.",
+      "reference": null
+    },
+    {
+      "id": "mark-zuckerberg",
+      "name": "Mark Zuckerberg",
+      "qid": "Q36215",
+      "sha256": "9d1c83e3707ed2480e9d1599983b415bb7be08aec9bd2d8026a53838ea08a9a3",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:41.072Z",
+      "verdict": "same",
+      "reason": "Both faces are clear and show consistent features: light blue eyes set at a similar spacing, a matching nose and mouth, and a similar face shape and ears, with the difference in hair length and style explained by time and grooming.",
+      "reference": "Mark Zuckerberg (2025) (cropped) (b).jpg"
+    },
+    {
+      "id": "sam-altman",
+      "name": "Sam Altman",
+      "qid": "Q7407093",
+      "sha256": "83c9bdf25cef19519dfd80d9d5007d79661fb50bd8dcb2e99455535b6de9be27",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:44.877Z",
+      "verdict": "unsure",
+      "reason": "Both men have short brown hair and a similar age and build, but picture B's face is small, angled and lower-resolution, so the facial features cannot be compared reliably enough to confirm or rule out a match.",
+      "reference": "“Sam Altman” by Village Global.jpg"
+    },
+    {
+      "id": "satya-nadella",
+      "name": "Satya Nadella",
+      "qid": "Q7426870",
+      "sha256": "ff4ddc0613a26b594030bbe346b71ffe4e79f38afae0b5c4d25c6548e166b13e",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:48.598Z",
+      "verdict": "unsure",
+      "reason": "In picture B the man who could be the subject is only a few dozen pixels across in a crowded group shot, too small to compare facial features reliably against the close-up in picture A.",
+      "reference": "Satya Nadella Gears of War 4 Gold Master.jpg"
+    },
+    {
+      "id": "sundar-pichai",
+      "name": "Sundar Pichai",
+      "qid": "Q3503829",
+      "sha256": "ad43b8c901aed1d2a8eb4695870b0478bdbfb92bbdaa7bf13875d3e555e511d2",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:51.821Z",
+      "verdict": "unsure",
+      "reason": "The man in picture B is second from left and very small, so his facial features are too low-resolution to compare reliably with the close-up in picture A, even though both show a smiling man with glasses.",
+      "reference": "Visit by Günther Oettinger, to the United States (P-029089-00-14).jpg"
+    },
+    {
+      "id": "tim-cook",
+      "name": "Tim Cook",
+      "qid": "Q265852",
+      "sha256": "0967a655bcabf26f0db8923a20862165cea240ecc7cc7c3400a5ff82d03ba4ad",
+      "model": "claude-haiku-5-5",
+      "checked_at": "2026-11-02T19:21:54.798Z",
+      "verdict": "same",
+      "reason": "Both pictures show a smiling older man with silver-white hair, rectangular dark-framed glasses, matching face shape, nose and ears, and the same navy suit, white shirt and dotted navy tie.",
+      "reference": "Tim Cook with Ursula von der Leyen in New York City - 2026 (cropped).jpg"
+    }
+  ]
+}

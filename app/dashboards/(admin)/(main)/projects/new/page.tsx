@@ -1,9 +1,12 @@
+import { ensureDashboardTokens } from '@/app/dashboards/(admin)/(main)/access';
 import NewProjectForm from '@/app/dashboards/(admin)/(main)/projects/new/NewProjectForm';
 import { getAllClients } from '@/lib/dashboards/admin-data';
 
 export const maxDuration = 60;
 
 export default async function NewProjectPage() {
+  const blocked = await ensureDashboardTokens();
+  if (blocked) return blocked;
   const clients = await getAllClients();
   return (
     <div className="max-w-2xl">

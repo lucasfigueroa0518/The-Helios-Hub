@@ -73,7 +73,7 @@ export function heliosLine(text: string): string {
 }
 
 /** The caption body, or a throw that names which rule it broke. */
-export function parseCaption(raw: unknown): string {
+export function parseCaption(raw: unknown, opts: { heliosLine?: boolean } = {}): string {
   const text = stripEpisodePrefix(typeof raw === 'string' ? raw : '');
   if (!text) throw new Error('caption is empty');
   if (stampCaption(text, HOOK_EPISODE_BUDGET).length > CAPTION_MAX_CHARS) {
@@ -102,11 +102,13 @@ export function parseCaption(raw: unknown): string {
   if (blocks.length < CAPTION_MIN_PARAGRAPHS) {
     throw new Error('caption needs at least the hook, the save prompt or question, and the Helios line');
   }
-  // v5 (per-format comps, 2026-10-19): every caption ends on the Helios line, just before the hashtags.
-  if (!/\bHelios\b/.test(blocks.at(-1) ?? '')) {
-    throw new Error('the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.');
+  // v5 (per-format comps, 2026-10-19): a caption ends on the Helios line, just before the hashtags. Explainers (caption v13) pass false: no such line.
+  if (opts.heliosLine !== false) {
+    if (!/\bHelios\b/.test(blocks.at(-1) ?? '')) {
+      throw new Error('the paragraph before the hashtags does not name Helios. End on the Helios line, with Helios named once.');
+    }
+    if (countEmoji(blocks.at(-1) ?? '') > 0) throw new Error('no emoji in the Helios line');
   }
-  if (countEmoji(blocks.at(-1) ?? '') > 0) throw new Error('no emoji in the Helios line');
 
   const hook = blocks[0] ?? '';
   if (!hook) throw new Error('caption is missing a hook');

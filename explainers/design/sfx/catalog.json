@@ -23906,5 +23906,141 @@
   "peakDb": -20.4,
   "meanDb": -38.7,
   "source": "https://freesound.org/people/swantje14/sounds/544843/"
+ },
+ {
+  "id": "freesound/camera-shutter/232130-1",
+  "file": "freesound/camera-shutter/232130-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 1.13,
+  "peakDb": 0,
+  "meanDb": -19.2,
+  "source": "https://freesound.org/people/Werra/sounds/232130/"
+ },
+ {
+  "id": "freesound/camera-shutter/207865-1",
+  "file": "freesound/camera-shutter/207865-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.38,
+  "peakDb": 0,
+  "meanDb": -26.8,
+  "source": "https://freesound.org/people/uEffects/sounds/207865/"
+ },
+ {
+  "id": "freesound/camera-shutter/207865-2",
+  "file": "freesound/camera-shutter/207865-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.36,
+  "peakDb": -26.6,
+  "meanDb": -42.5,
+  "source": "https://freesound.org/people/uEffects/sounds/207865/"
+ },
+ {
+  "id": "freesound/camera-shutter/207865-3",
+  "file": "freesound/camera-shutter/207865-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.32,
+  "peakDb": -24,
+  "meanDb": -45.8,
+  "source": "https://freesound.org/people/uEffects/sounds/207865/"
+ },
+ {
+  "id": "freesound/camera-shutter/353044-1",
+  "file": "freesound/camera-shutter/353044-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 1.62,
+  "peakDb": 0,
+  "meanDb": -15.3,
+  "source": "https://freesound.org/people/montclairguy/sounds/353044/"
+ },
+ {
+  "id": "freesound/camera-shutter/157812-1",
+  "file": "freesound/camera-shutter/157812-1.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.31,
+  "peakDb": -25.4,
+  "meanDb": -37.5,
+  "source": "https://freesound.org/people/akonze/sounds/157812/"
+ },
+ {
+  "id": "freesound/camera-shutter/157812-2",
+  "file": "freesound/camera-shutter/157812-2.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 0.66,
+  "peakDb": 0,
+  "meanDb": -23.4,
+  "source": "https://freesound.org/people/akonze/sounds/157812/"
+ },
+ {
+  "id": "freesound/camera-shutter/157812-3",
+  "file": "freesound/camera-shutter/157812-3.mp3",
+  "pack": "freesound",
+  "group": "freesound/camera-shutter",
+  "tags": [
+   "shutter",
+   "camera",
+   "snapshot",
+   "freesound",
+   "oneshot"
+  ],
+  "duration": 1.15,
+  "peakDb": 0,
+  "meanDb": -24.3,
+  "source": "https://freesound.org/people/akonze/sounds/157812/"
  }
 ]

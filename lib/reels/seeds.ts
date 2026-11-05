@@ -1,14 +1,13 @@
 import { dbQuery } from '@/lib/db';
-import { REFERENCE_POOL_HOURS } from '@/lib/reels/config';
 import { loadPublishedStoryKeys, storyUrlKey } from '@/lib/reels/copy/held-out';
 import type { JevRunner } from '@/lib/reels/jev/runner';
-import { fetchPageFollowingRedirects, canonicalizeUrl } from '@/lib/reels/net/http';
-import { parsePage } from '@/lib/reels/net/html';
+import { canonicalizeUrl } from '@/lib/reels/net/http';
+import { SEED_MAX_USD, collectedCandidates, isGoogleNewsUrl, resolveWrapperLink, estimatePaidSearchUsd, newsCandidates, pickBest, readPageText, runPaidSearch, seedSearchApproved, type PickedStory, type SeedCandidate } from '@/lib/reels/seed-search';
 import { scoreOneIdea } from '@/lib/reels/pipeline/scoring';
-import { createPostIdea, insertSource, shortlistCandidates } from '@/lib/reels/repository';
+import { createPostIdea, insertSource } from '@/lib/reels/repository';
 import { loadIdeaMaterial } from '@/lib/reels/scoring/store';
 import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
-import { isPrivateHost } from '@/lib/social/overnight/seeds';
+import { isPrivateHost } from '@/lib/net/private-host';
 
 /**
  * Seeding a Text on Screen idea (design 2026-10-26-text-on-screen-seeding-design): a person types an idea into the queue.
@@ -20,7 +19,6 @@ import { isPrivateHost } from '@/lib/social/overnight/seeds';
 
 export const SEED_ADAPTER = 'seed';
 export const SEED_DAYS = 7;
-export const MAX_OPEN_SEEDS = 10;
 export const MAX_HEADLINE_CHARS = 200;
 export const MAX_TEXT_CHARS = 10_000;
 /** The same headline typed again inside this window is the first click's seed (a double-click). */
@@ -38,6 +36,15 @@ export type ReelSeedDeps = {
   jev: JevRunner;
   /** The page's text, or null when it cannot be read. Default: the plain page reader the night uses (no model). */
   readPage?: (url: string) => Promise<string | null>;
+  /** Unwinds a pasted Google News wrapper link to the publisher's URL (null when it cannot). Default: the news decoder. */
+  resolveLink?: (url: string) => Promise<string | null>;
+  /** Where a substitute story comes from when there is no link or it cannot be read. Default: the free tiers in seed-search. */
+  search?: {
+    collected?: (headline: string) => Promise<SeedCandidate[]>;
+    news?: (headline: string) => Promise<SeedCandidate[]>;
+  };
+  /** The paid web search: only when both free tiers found nothing, approved, and the person confirmed the cost. */
+  paid?: { approved: () => boolean; run: (headline: string) => Promise<{ candidates: SeedCandidate[]; usd: number }> };
 };
 
 export type ReelSeedResult = {
@@ -52,12 +59,14 @@ export type ReelSeedResult = {
   repeat?: boolean;
 };
 
-const clean = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+/** What a seed click comes to. Only `added` wrote anything; the others stop before any write (and, but for `no_match` after a search, before any spend). */
+export type ReelSeedOutcome =
+  | (ReelSeedResult & { status: 'added'; substitute?: { url: string; title: string; why: 'link_unreadable' | 'headline_only' } })
+  | { status: 'duplicate'; existing: { id: string; headline: string; net: number | null; yours: boolean } }
+  | { status: 'needs_paid_confirm'; estimateUsd: number; maxUsd: number; linkUnreadable?: true }
+  | { status: 'no_match'; reason: 'nothing_found' | 'scoring_unavailable'; linkUnreadable?: true };
 
-async function defaultReadPage(url: string): Promise<string | null> {
-  const page = await fetchPageFollowingRedirects(url, { retries: 0, timeoutMs: 15_000 });
-  return parsePage(page.html).text;
-}
+const clean = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
 
 const OPEN_SEEDS_SQL = `
 SELECT m.post_idea_id::text AS id, so.headline, so.ingest_time::text AS added_at
@@ -96,23 +105,43 @@ export async function isUnscoredSeed(postIdeaId: string): Promise<boolean> {
   }
 }
 
-/** Notes shown beside the result. Each read is read-only and never throws. */
-async function warningsFor(sourceId: string, headline: string, canonical: string | null): Promise<string[]> {
-  const flags: string[] = [];
-  if (canonical) {
-    try {
-      const { rows } = await dbQuery(
-        `SELECT 1 FROM reels.sources WHERE canonical_url = $1 AND id <> $2 AND adapter_id <> '${SEED_ADAPTER}'
-            AND ingest_time > now() - ($3 || ' hours')::interval LIMIT 1`,
-        [canonical, sourceId, String(REFERENCE_POOL_HOURS)],
-      );
-      if (rows.length > 0) flags.push('That link is already in the pool.');
-    } catch { /* a note, not a gate */ }
+/**
+ * A related story for a headline: collected stories, then Google News (both free), then, only if the paid search is approved
+ * and the person confirmed its cost, a web search. Takes the first tier with a related story that scores. A tier that errors
+ * counts as empty. Says why when none does, or asks for the confirmation.
+ */
+async function findSubstitute(
+  headline: string,
+  deps: ReelSeedDeps,
+  confirmPaid: boolean,
+): Promise<PickedStory | Extract<ReelSeedOutcome, { status: 'no_match' | 'needs_paid_confirm' }>> {
+  const tiers = [deps.search?.collected ?? collectedCandidates, deps.search?.news ?? ((h: string) => newsCandidates(h))];
+  let scoringDown = false;
+  for (const tier of tiers) {
+    const picked = await pickBest(headline, await tier(headline).catch(() => []), deps.jev);
+    if ('candidate' in picked) return picked;
+    if (picked.failed === 'scoring_unavailable') scoringDown = true;
   }
+  // Scoring is down: a paid search could not be scored either, so do not spend on it.
+  if (scoringDown) return { status: 'no_match', reason: 'scoring_unavailable' };
+  const paid = deps.paid ?? { approved: seedSearchApproved, run: runPaidSearch };
+  if (!paid.approved()) return { status: 'no_match', reason: 'nothing_found' };
+  if (!confirmPaid) return { status: 'needs_paid_confirm', estimateUsd: estimatePaidSearchUsd(), maxUsd: SEED_MAX_USD };
+  let found: { candidates: SeedCandidate[]; usd: number };
   try {
-    const near = await shortlistCandidates(sourceId, headline, 1, HEADLINE_FLOOR);
-    if (near.length > 0) flags.push(`Close to a recent idea: “${near[0]!.headline}”.`);
-  } catch { /* a note, not a gate */ }
+    found = await paid.run(headline);
+  } catch (error) {
+    console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'reels-seed', message: 'paid_search_failed', error: error instanceof Error ? error.message : String(error) }));
+    return { status: 'no_match', reason: 'nothing_found' };
+  }
+  const picked = await pickBest(headline, found.candidates, deps.jev);
+  if ('candidate' in picked) return picked;
+  return { status: 'no_match', reason: picked.failed === 'scoring_unavailable' ? 'scoring_unavailable' : 'nothing_found' };
+}
+
+/** Notes shown beside the result. Each read is read-only and never throws. */
+async function warningsFor(canonical: string | null): Promise<string[]> {
+  const flags: string[] = [];
   if (canonical) {
     try {
       const key = storyUrlKey(canonical);
@@ -120,6 +149,52 @@ async function warningsFor(sourceId: string, headline: string, canonical: string
     } catch { /* a note, not a gate */ }
   }
   return flags;
+}
+
+const QUEUE_DUPLICATE_SQL = (archived: boolean) => `
+WITH latest AS (SELECT id FROM reels.score_slates ORDER BY scored_at DESC LIMIT 1),
+queued AS (
+  SELECT s.post_idea_id FROM reels.idea_scores s JOIN latest ON s.slate_id = latest.id
+  UNION
+  SELECT m.post_idea_id FROM reels.post_idea_members m JOIN reels.sources so ON so.id = m.source_id
+   WHERE so.adapter_id = '${SEED_ADAPTER}' AND so.drop_reason = '${SEED_ADAPTER}' AND so.ingest_time > now() - interval '${SEED_DAYS} days'
+),
+hits AS (
+  SELECT q.post_idea_id, s.headline,
+         CASE WHEN $1::text IS NOT NULL AND s.canonical_url = $1 THEN 1.0
+              ELSE greatest(similarity(s.headline, $2), word_similarity(s.headline, $2), word_similarity($2, s.headline)) END AS sim
+    FROM queued q
+    JOIN reels.post_idea_members m ON m.post_idea_id = q.post_idea_id
+    JOIN reels.sources s ON s.id = m.source_id
+   WHERE true${archived ? `
+     AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
+                      WHERE a.vertical = 'reels' AND a.kind = 'archive' AND a.idea_id = 'reels:idea:' || q.post_idea_id::text)` : ''}
+)
+SELECT h.post_idea_id::text AS id, h.headline,
+       (SELECT s2.net FROM reels.idea_scores s2 JOIN reels.score_slates sl ON sl.id = s2.slate_id
+         WHERE s2.post_idea_id = h.post_idea_id ORDER BY sl.scored_at DESC LIMIT 1) AS net,
+       EXISTS (SELECT 1 FROM reels.post_idea_members m2 JOIN reels.sources so2 ON so2.id = m2.source_id
+                WHERE m2.post_idea_id = h.post_idea_id AND so2.adapter_id = '${SEED_ADAPTER}' AND so2.drop_reason = '${SEED_ADAPTER}') AS yours
+  FROM hits h
+ WHERE h.sim >= $3
+ ORDER BY h.sim DESC
+ LIMIT 1`;
+
+/**
+ * The idea already in the queue (on the newest slate, or an open seed) that has this link or a headline close to this one.
+ * Read-only, and null when the read fails: a duplicate check is a courtesy, never a gate on the write.
+ */
+export async function findQueueDuplicate(canonical: string | null, headline: string): Promise<Extract<ReelSeedOutcome, { status: 'duplicate' }> | null> {
+  type Row = { id: string; headline: string; net: number | null; yours: boolean };
+  const args = [canonical, headline, HEADLINE_FLOOR];
+  try {
+    const { rows } = await dbQuery<Row>(QUEUE_DUPLICATE_SQL(true), args).catch(() => dbQuery<Row>(QUEUE_DUPLICATE_SQL(false), args));
+    const hit = rows[0];
+    if (!hit) return null;
+    return { status: 'duplicate', existing: { id: hit.id, headline: hit.headline, net: hit.net == null ? null : Number(hit.net), yours: hit.yours } };
+  } catch {
+    return null;
+  }
 }
 
 /** Write the scored idea as one `carryover` row on the newest slate (what putOnSlate writes). False when no slate exists. */
@@ -145,10 +220,10 @@ async function writeSeedRow(postIdeaId: string, result: InterpretedScore): Promi
  * Add a typed idea to the Text on Screen queue. Throws SeedError (with a plain message) when it is refused; nothing is spent
  * or written in that case. A failed model call is not a refusal: the idea is kept, `scored: false`.
  */
-export async function addReelSeed(input: { headline?: unknown; text?: unknown; url?: unknown }, deps: ReelSeedDeps): Promise<ReelSeedResult> {
+export async function addReelSeed(input: { headline?: unknown; text?: unknown; url?: unknown; seedAnyway?: boolean; confirmPaid?: boolean }, deps: ReelSeedDeps): Promise<ReelSeedOutcome> {
   const headline = clean(input.headline);
   const text = clean(input.text);
-  const link = clean(input.url);
+  let link = clean(input.url);
   if (!headline) throw new SeedError(400, 'Write the idea’s headline.');
   if (headline.length > MAX_HEADLINE_CHARS) throw new SeedError(400, `The headline is ${headline.length - MAX_HEADLINE_CHARS} characters over the ${MAX_HEADLINE_CHARS} limit. Cut that much.`);
   if (text.length > MAX_TEXT_CHARS) throw new SeedError(400, `Your text is ${text.length - MAX_TEXT_CHARS} characters over the ${MAX_TEXT_CHARS.toLocaleString('en-US')} limit. Cut that much; nothing was trimmed for you.`);
@@ -163,6 +238,23 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
     }
   }
 
+  // A Google News wrapper link opens Google's app shell, not the story: unwind it first. If it will not unwind, the link is unreadable.
+  let wrapperFailed = false;
+  if (link && isGoogleNewsUrl(link)) {
+    const resolved = await (deps.resolveLink ?? resolveWrapperLink)(link).catch(() => null);
+    let ok = false;
+    try {
+      ok = !!resolved && /^https?:\/\//i.test(resolved) && !isPrivateHost(new URL(resolved).hostname);
+    } catch { /* not a URL */ }
+    if (ok) {
+      link = resolved!;
+      canonical = canonicalizeUrl(resolved!);
+    } else {
+      wrapperFailed = true;
+      canonical = null;
+    }
+  }
+
   // A double-click: the same headline inside a minute is the first seed.
   const again = await dbQuery<{ id: string; headline: string; net: number | null }>(
     `SELECT m.post_idea_id::text AS id, so.headline,
@@ -172,22 +264,43 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
       ORDER BY so.ingest_time DESC LIMIT 1`,
     [headline, String(DOUBLE_CLICK_SECONDS)],
   );
-  if (again.rows[0]) return { id: again.rows[0].id, title: again.rows[0].headline, scored: again.rows[0].net != null, net: again.rows[0].net, flags: [], repeat: true };
+  if (again.rows[0]) return { status: 'added', id: again.rows[0].id, title: again.rows[0].headline, scored: again.rows[0].net != null, net: again.rows[0].net, flags: [], repeat: true };
 
-  // Refuse before spending anything: no scored night to sit on, or the place limit.
+  // Refuse before spending anything: no scored night to sit on.
   const slate = await dbQuery(`SELECT 1 FROM reels.score_slates LIMIT 1`);
   if (slate.rows.length === 0) throw new SeedError(409, 'No night has been scored yet, so the idea has no queue to join. Nothing was spent.');
-  if ((await readOpenSeeds()).length >= MAX_OPEN_SEEDS) throw new SeedError(409, `You have ${MAX_OPEN_SEEDS} seeded ideas waiting; make or archive one first.`);
+
+  if (!input.seedAnyway) {
+    const duplicate = await findQueueDuplicate(canonical, headline);
+    if (duplicate) return duplicate;
+  }
 
   const flags: string[] = [];
   let body = text;
-  if (!body && link) {
-    const page = await (deps.readPage ?? defaultReadPage)(link).catch(() => null);
+  let unreadable = wrapperFailed;
+  if (!body && link && !wrapperFailed) {
+    const page = await (deps.readPage ?? readPageText)(link).catch(() => null);
     if (page && page.trim().length >= MIN_PAGE_CHARS) body = page.trim().slice(0, MAX_TEXT_CHARS);
-    else flags.push('I couldn’t read that page, so the idea uses just your headline as its text. A line or two of your own would give the writer more to work with.');
+    else unreadable = true;
   }
-  if (!body) body = headline;
-  if (body === headline && !link) flags.push('A one-line idea gives thin copy. Paste a few lines of the story if you have them.');
+  // No text and no readable link: the headline alone gives the writer nothing, so find the story (collected, then the web).
+  let substitute: Extract<ReelSeedOutcome, { status: 'added' }>['substitute'];
+  let found: PickedStory | null = null;
+  if (!body) {
+    const result = await findSubstitute(headline, deps, input.confirmPaid === true);
+    if (!('candidate' in result)) return unreadable ? { ...result, linkUnreadable: true } : result;
+    found = result;
+    canonical = canonicalizeUrl(found.candidate.url);
+    if (!input.seedAnyway) {
+      const duplicate = await findQueueDuplicate(canonical, found.candidate.headline);
+      if (duplicate) return duplicate;
+    }
+    body = found.candidate.body.trim().slice(0, MAX_TEXT_CHARS);
+    const why = unreadable ? 'link_unreadable' : 'headline_only';
+    substitute = { url: found.candidate.url, title: found.candidate.headline, why };
+    const from = `“${found.candidate.headline}” (${found.candidate.outlet})`;
+    flags.push(unreadable ? `I couldn’t read your link, so I used ${from} instead.` : `Built from ${from}, found from your headline.`);
+  }
 
   // The source, then the idea. The source is deleted again if the idea cannot be made, so nothing half-exists.
   const sourceId = await insertSource({
@@ -220,18 +333,18 @@ export async function addReelSeed(input: { headline?: unknown; text?: unknown; u
     throw error;
   }
 
-  flags.push(...(await warningsFor(sourceId, headline, canonical)));
+  flags.push(...(await warningsFor(canonical)));
 
   // Score it once (pass 1, then pass 2 when a framework and bucket survive). A failure keeps the idea, unscored.
   try {
     const [material] = await loadIdeaMaterial([ideaId]);
     if (!material) throw new Error('idea not found');
-    const result = await scoreOneIdea(null as unknown as string, deps.jev, material);
+    const result = found?.score ?? (await scoreOneIdea(null as unknown as string, deps.jev, material));
     const written = await writeSeedRow(ideaId, result);
-    return { id: ideaId, title: headline, scored: written, net: written ? result.net : null, flags };
+    return { status: 'added', id: ideaId, title: headline, scored: written, net: written ? result.net : null, flags, substitute };
   } catch (error) {
     console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'reels-seed', message: 'scoring_failed', postIdeaId: ideaId, error: error instanceof Error ? error.message : String(error) }));
     flags.push('Scoring failed, so the idea is kept but shows “Not scored yet”.');
-    return { id: ideaId, title: headline, scored: false, net: null, flags };
+    return { status: 'added', id: ideaId, title: headline, scored: false, net: null, flags, substitute };
   }
 }

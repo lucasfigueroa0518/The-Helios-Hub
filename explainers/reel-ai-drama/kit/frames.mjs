@@ -1,6 +1,6 @@
 // The frames of a Reel AI Drama reel, read from STORYBOARD.md. No DOM; Node only. try.mjs, mount.mjs,
 // pace.mjs, sound.mjs and music.mjs share this one reading (forked from the news kit's frames.mjs:
-// any number of frames, no sting, the last frame is the brand close, MD-13).
+// any number of frames, no sting, the last frame is the brand close, MD-143).
 //
 // A frame block is `## Frame N — Name` followed by `- key: value` lines. The frame id is the basename
 // of its `src` (compositions/frames/04-moment.html → 04-moment); its scene module is
@@ -9,16 +9,16 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { CLOSE_EVENTS } from './close-timing.js';
+import { CLOSE_EVENTS, CLOSE_FADE } from './close-timing.js';
 
 /** Every frame `treatment:` the kit builds (FRAME.md). The close is code's; the rest are the frame workers'. */
 export const TREATMENTS = [
   'photo', 'cutout_lift', 'collision', 'page', 'map', 'document', 'post', 'headline', 'lower_third', 'number',
-  'board', 'whiteboard', 'newspaper', 'tableau', 'collage', 'close',
+  'board', 'whiteboard', 'newspaper', 'tableau', 'collage', 'stat', 'lift', 'close',
 ];
-/** Treatments on a light ground: captions turn to ink there. Every other ground is dark under the caption
- *  band (graded photos, the desk above the newspaper page). */
-export const LIGHT_TREATMENTS = new Set(['whiteboard']);
+/** Treatments on a light ground: captions turn to ink there (the whiteboard, the white close). Every other
+ *  ground is dark under the caption band (graded photos, the desk above the newspaper page). */
+export const LIGHT_TREATMENTS = new Set(['whiteboard', 'close']);
 /** Music cues a frame may carry (S-74): the bed starts, changes, drops out, holds or ends at the frame's start. */
 export const MUSIC_CUES = ['start', 'change', 'drop', 'hold', 'end'];
 
@@ -66,7 +66,7 @@ export function projectFrames(root) {
 /** A storyboard frame's treatment (`- treatment:`), photo when unset. */
 export const frameTreatment = (f) => (f?.fields?.treatment ?? '').trim().toLowerCase() || 'photo';
 
-/** The brand close: the frame whose treatment is `close` (the last frame, MD-13). */
+/** The brand close: the frame whose treatment is `close` (the last frame, MD-143). */
 export const isClose = (f) => Boolean(f) && frameTreatment(f) === 'close';
 
 /** A frame's music cue (`- music:`), hold when unset or unknown. */
@@ -79,7 +79,7 @@ export function musicCue(f) {
 export const voiceText = (f) => String(f?.fields?.voiceover ?? '').replace(/^["'“]|["'”]$/g, '').trim();
 
 /** The close's scene module: the kit's close.js. */
-export const CLOSE_MODULE = "// The brand close (MD-13, MD-18): the kit's, the same in every reel. Written by code; never edit.\nexport { default } from '../kit/close.js';\n";
+export const CLOSE_MODULE = "// The brand close (MD-143): the kit's, the same in every reel. Written by code; never edit.\nexport { default } from '../kit/close.js';\n";
 
 /** Write the close's module and sound events for storyboard frame `f` of the project at `root`. */
 export function writeClose(root, f) {
@@ -87,6 +87,34 @@ export function writeClose(root, f) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${f.id}.js`), CLOSE_MODULE);
   writeFileSync(join(dir, `${f.id}.events.json`), `${JSON.stringify(CLOSE_EVENTS, null, 1)}\n`);
+}
+
+/**
+ * A storyboard with the close's `- transition_in:` set to the crossfade (MD-143), so the last story frame
+ * never hard-cuts into the white. Every other frame's is left alone. Pure and idempotent.
+ */
+export function withCloseFade(storyboard) {
+  const text = String(storyboard);
+  const heads = [...text.matchAll(/^##\s+Frame\s+\d+.*$/gm)];
+  for (let i = heads.length - 1; i >= 0; i--) {
+    const start = heads[i].index;
+    const end = i + 1 < heads.length ? heads[i + 1].index : text.length;
+    const block = text.slice(start, end);
+    if (frameTreatment({ fields: blockFields(block) }) !== 'close') continue;
+    const line = `- transition_in: ${CLOSE_FADE}`;
+    const next = /^-\s+transition_in:.*$/m.test(block) ? block.replace(/^-\s+transition_in:.*$/m, line) : block.replace(/^(##\s+Frame.*(?:\r?\n)+)/, `$1${line}\n`);
+    return text.slice(0, start) + next + text.slice(end);
+  }
+  return text;
+}
+
+/** Give the project's close its crossfade (assemble.mjs, before the transitions are injected). */
+export function writeCloseFade(root) {
+  const file = join(root, 'STORYBOARD.md');
+  if (!existsSync(file)) return;
+  const before = readFileSync(file, 'utf8');
+  const after = withCloseFade(before);
+  if (after !== before) writeFileSync(file, after);
 }
 
 /** The placed drawings' strokes by kind and slug (assets/objects/<kind>/<slug>.strokes.json), for ctx.objects. */
@@ -108,18 +136,27 @@ export function objectStrokes(root) {
 
 /**
  * The reel's media, for ctx.media: assets/inventory.json (written by project-files.mjs) as
- * { [asset id]: { file, kind, width, height, credit, shows, boxes?, map? } }. Empty when missing.
+ * { [asset id]: { id, file, kind, width, height, credit, shows, people, made, made_kind, boxes?, map?, face?,
+ * regions? } } (`regions`: the box sidecar's faces, words, photos and lift, 0–1). Empty when missing.
  * @returns {Record<string, any>}
  */
+const cutoutOf = (a) => (a.flags ?? []).map((f) => /^cutout_of:(.+)$/.exec(String(f))?.[1]).find(Boolean) ?? null;
+
+/** @returns {Record<string, any>} */
 export function projectMedia(root) {
   try {
     const inv = JSON.parse(readFileSync(join(root, 'assets', 'inventory.json'), 'utf8'));
     const out = {};
     for (const a of inv.assets ?? []) {
       out[a.id] = {
-        file: a.file, kind: a.kind, width: a.width, height: a.height, credit: a.credit ?? '', shows: a.shows ?? '',
-        character_image: Boolean(a.character_image), ...(a.boxes ? { boxes: a.boxes } : {}), ...(a.map ? { map: a.map } : {}),
+        id: a.id, file: a.file, kind: a.kind, width: a.width, height: a.height, credit: a.credit ?? '', shows: a.shows ?? '',
+        character_image: Boolean(a.character_image), people: a.people ?? [], made: Boolean(a.made), made_kind: a.made_kind ?? null,
+        ...(a.boxes ? { boxes: a.boxes } : {}), ...(a.map ? { map: a.map } : {}),
         ...(a.cutout ? { cutout: a.cutout } : {}), ...(a.face ? { face: a.face } : {}), ...(a.anchor_for ? { anchor_for: a.anchor_for } : {}),
+        ...(a.regions ? { regions: a.regions } : {}),
+        // What the stage reads off a record: what kind of cut it is, and the photo it was cut from.
+        ...(a.flags?.length ? { flags: a.flags } : {}),
+        ...(cutoutOf(a) ? { cutout_of: cutoutOf(a) } : {}),
       };
     }
     return out;

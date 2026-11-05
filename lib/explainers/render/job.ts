@@ -8,7 +8,7 @@ import { harvestNewProps, type HarvestResult } from '@/lib/explainers/render/ban
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import { defaultExec, repairBuild, runBuild, type BuildDeps, type BuildOutcome, type Exec } from '@/lib/explainers/render/build';
-import { frameWorkerForLook, PICTURE_CHECK_FILE, runAgentSession, SCENE_BUILDER_AGENT, scrubbedEnv, TECH_FRAME_WORKER_AGENT, type AgentQuery, type FrameLook, type MainAgent, type SessionResult } from '@/lib/explainers/render/agent';
+import { CacheWarmGate, frameWorkerForLook, PICTURE_CHECK_FILE, runAgentSession, SCENE_BUILDER_AGENT, scrubbedEnv, TECH_FRAME_WORKER_AGENT, type AgentQuery, type FrameLook, type MainAgent, type SessionResult } from '@/lib/explainers/render/agent';
 import { gridFrames, gridLayout, pictureFixNeeded, pictureGridParams, renderGrids, type PictureVision } from '@/lib/explainers/render/picture';
 import { SpendMeter } from '@/lib/explainers/render/meter';
 import {
@@ -59,8 +59,6 @@ import { loadSettings, loadThemeBrief, type ExplainersSettings } from '@/lib/exp
 import type { ArtifactStore } from '@/lib/explainers/storage';
 import type { ArtifactKind, JobRow, LintViolation, Mode, TopicRow } from '@/lib/explainers/types';
 import { CaptionError, writeExplainerCaption, type CaptionDraft, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
-import { ceilingAllows, decideBuildLine, type RecentClosing } from '@/lib/social/captions/build-line';
-import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { eventsFromDir, lintStoryboard } from '../../../explainers/lint/lint-storyboard.mjs';
 import { mountFrames } from '../../../explainers/world-kit/mount.mjs';
@@ -137,13 +135,6 @@ export type RenderDeps = {
   harvest?: (input: { projectDir: string; jobId: string; topic: string }) => HarvestResult;
   /** Swappable for tests. The real one calls Sonnet. A finished video always gets one. */
   writeCaption?: (facts: CaptionFacts, opts: CaptionOptions) => Promise<CaptionDraft>;
-  /**
-   * v4 captions: Jev's fit score for the build line (`liveExplainerBuildFit`), null on failure.
-   * Absent: no build line. Asked only when the closings ceiling leaves room.
-   */
-  buildFit?: (facts: CaptionFacts, subjectId: string) => Promise<number | null>;
-  /** v4 captions: the explainer closings log. Absent: no recent closings, nothing recorded. */
-  closings?: ClosingsLog;
   /**
    * The analogy pass for a topic that has no picked analogy (EX3-31): the analogy writer and
    * Jev. Without it, such a topic fails with that reason.
@@ -309,41 +300,6 @@ function recordCaptionCost(db: ExplainersDb, jobId: string, mode: Mode, draft: C
     cacheWriteTokens: draft.cacheWriteTokens,
     usd: draft.usd,
   });
-}
-
-/**
- * v4 captions. The recent explainer closings and whether this caption gets the build line.
- * An unreadable log fails closed: no Jev call, no build line, an empty recent-closings list.
- * Jev is asked only when the ceiling leaves room, and a failed fit call means no build line;
- * the caption still ships with its light Helios mention.
- */
-async function captionBuildLine(
-  deps: RenderDeps,
-  facts: CaptionFacts,
-  jobId: string,
-  log: (event: string, fields?: Record<string, unknown>) => void,
-): Promise<CaptionOptions> {
-  let recent: RecentClosing[] = [];
-  if (deps.closings) {
-    try {
-      recent = await deps.closings.recent();
-    } catch (error) {
-      log('caption_closings_unread', { jobId, error: error instanceof Error ? error.message : String(error) });
-      log('caption_build_line', { jobId, fit: null, includeBuildLine: false, recent: 0 });
-      return { recent: [], includeBuildLine: false };
-    }
-  }
-  let fit: number | null = null;
-  if (ceilingAllows(recent) && deps.buildFit) {
-    try {
-      fit = await deps.buildFit(facts, jobId);
-    } catch {
-      fit = null;
-    }
-  }
-  const includeBuildLine = decideBuildLine(fit, recent);
-  log('caption_build_line', { jobId, fit, includeBuildLine, recent: recent.length });
-  return { recent, includeBuildLine };
 }
 
 function read(file: string): string | null {
@@ -1142,6 +1098,109 @@ async function understandingTest(ctx: {
 }
 
 /**
+ * The resume note for a Targeted Revisions scene redo: names the one stale frame (its module was
+ * removed) and carries the person's change for that frame's worker. Appended to RESUME_PROMPT.
+ */
+export function sceneResumeNote(frameId: string, change: string): string {
+  const said = change.replace(/\s+/g, ' ').trim().replace(/"/g, "'");
+  return [
+    `Stale frame: ${frameId}. Its module assets/frames/${frameId}.js was removed so it is rebuilt; every other frame module is final, keep it exactly as it is.`,
+    `Dispatch one frame worker, for ${frameId} only, and add this change to its packet, in the person's words: "${said}".`,
+    'Keep STORYBOARD.md, SCRIPT.md, the voice, the music and assets/world/world.js as they are.',
+  ].join(' ');
+}
+
+export type SceneRebuildDeps = Pick<RenderDeps, 'db' | 'query' | 'jobsRoot' | 'hyperframesLint' | 'boundsCheck' | 'renderVideo' | 'repairAssembly' | 'log'> & {
+  /** The Anthropic key only: the session runs voice-locked (no HeyGen key, no HeyGen hosts). */
+  secrets: { anthropicApiKey: string };
+  /** The render meter: the job's per-reel cap (spend_cap_usd, carrying spend_usd). A ChargedSpendMeter also charges a revision. */
+  meter: SpendMeter;
+  voiceId: string;
+};
+
+export type SceneRebuild =
+  | { ok: true; videoPath: string; contactSheetPath: string | null; violations: LintViolation[] }
+  | { ok: false; capped: boolean; error: string };
+
+/**
+ * Targeted Revisions: rebuild ONE frame of a finished render in its kept workspace (the RenderDeps
+ * `resume` path, scoped to a named frame). The caller has already removed that frame's module (and
+ * kept its source), moved the old video and contact sheet aside, and holds the job's running slot.
+ * One session B with RESUME_PROMPT + sceneResumeNote, then the deterministic assembly repair and the
+ * worker render when needed, then the final checks the pipeline runs (built-frame storyboard lint,
+ * HyperFrames lint, text bounds), returned for the caller to gate on.
+ *
+ * Writes nothing to Storage and no artifact or job row: the session's cost goes to the job's cost
+ * ledger (explainers.cost_events, as every session's does), and the caller stores the new files under
+ * new keys and points the job at them.
+ */
+export async function rebuildScene(
+  deps: SceneRebuildDeps,
+  job: JobRow,
+  scene: { frameId: string; frameNumber: number; note: string },
+): Promise<SceneRebuild> {
+  const ws = workspacePaths(deps.jobsRoot, job.id);
+  const storyboardFile = path.join(ws.projectDir, 'STORYBOARD.md');
+  const scriptFile = path.join(ws.projectDir, 'SCRIPT.md');
+  if (!fs.existsSync(storyboardFile) || !fs.existsSync(scriptFile)) return { ok: false, capped: false, error: 'the plan (STORYBOARD.md, SCRIPT.md) is not on disk' };
+  fs.mkdirSync(ws.homeDir, { recursive: true });
+  fs.mkdirSync(ws.tmpDir, { recursive: true });
+  const transcriptLines: string[] = [];
+  try {
+    const b = await runAgentSession({
+      query: deps.query,
+      prompt: `${RESUME_PROMPT} ${sceneResumeNote(scene.frameId, scene.note)}`,
+      projectDir: ws.projectDir,
+      homeDir: ws.homeDir,
+      tmpDir: ws.tmpDir,
+      model: job.orchestrator_model,
+      frameWorkerModel: job.frame_worker_model,
+      meter: deps.meter,
+      secrets: { anthropicApiKey: deps.secrets.anthropicApiKey, heygenApiKey: '', voiceId: deps.voiceId },
+      log: (entry) => transcriptLines.push(JSON.stringify(entry)),
+      // One scene changes; the voice, music and sound are final and cannot be made again.
+      voiceLocked: true,
+    });
+    await recordSessionCost(deps.db, job, job.mode, 'revision', b);
+    if (b.capped) return { ok: false, capped: true, error: `the spend cap was reached in the session (${b.subtype})` };
+    if (!fs.existsSync(path.join(ws.projectDir, 'assets', 'frames', `${scene.frameId}.js`))) {
+      return { ok: false, capped: false, error: `the frame worker did not write a new ${scene.frameId} scene (${b.subtype}${b.errors.length ? `: ${b.errors.join('; ')}` : ''})` };
+    }
+    const video = path.join(ws.projectDir, 'renders', 'video.mp4');
+    if (!fileReady(video)) {
+      const repaired = (deps.repairAssembly ?? repairProjectAssembly)(ws.projectDir);
+      if (repaired.length) deps.log?.('assembly_repaired', { jobId: job.id, steps: repaired });
+      if (projectAssembled(ws.projectDir) && !fileReady(video)) {
+        try {
+          (deps.renderVideo ?? renderProjectVideo)(ws.projectDir);
+        } catch (error) {
+          return { ok: false, capped: false, error: error instanceof Error ? error.message : String(error) };
+        }
+      }
+    }
+    if (!fileReady(video)) return { ok: false, capped: false, error: `the session ended without a new video (${b.subtype})` };
+
+    const final = lintStoryboard({
+      storyboard: read(storyboardFile) ?? '',
+      script: read(scriptFile) ?? '',
+      frameSource: frameModulesByNumber(ws.projectDir),
+      audioMeta: readJson(path.join(ws.projectDir, 'audio_meta.json')),
+      frameEvents: eventsFromDir(path.join(ws.projectDir, 'assets', 'frames')),
+      eventsTrack: fs.existsSync(path.join(ws.projectDir, EVENTS_TRACK)),
+    });
+    const builtOnly = new Set(['narration_on_screen', 'opener_sfx', 'sound_events', 'sound_track', 'headword_term']);
+    const onScreen = (final.violations as LintViolation[]).filter((v) => builtOnly.has(v.rule) || /on-screen text/.test(v.detail));
+    const violations = [...onScreen, ...(deps.hyperframesLint ?? runHyperframesLint)(ws.projectDir), ...(deps.boundsCheck ?? runBoundsCheck)(ws.projectDir)];
+    const sheet = path.join(ws.projectDir, 'snapshots', 'contact-sheet.jpg');
+    return { ok: true, videoPath: video, contactSheetPath: fileReady(sheet) ? sheet : null, violations };
+  } finally {
+    if (transcriptLines.length) {
+      fs.writeFileSync(path.join(ws.jobDir, `transcript.revision-${Date.now()}.jsonl`), `${transcriptLines.join('\n')}\n`);
+    }
+  }
+}
+
+/**
  * One render: source → analogy (only when the topic has none, EX3-31) →
  * workspace → session A (plan) → checkpoint (lint, no LLM) → session B (build
  * + render) → collect outputs. Every artifact a stage produced is kept, even
@@ -1234,8 +1293,18 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     // on the job's orchestrator model; the scene builder on scene_builder_model; every frame builder on
     // the job's frame_worker_model, except mechanism builders on tech_frame_worker_model; the picture check
     // on picture_check_model.
-    const session = (prompt: string, model: string = job.orchestrator_model, agent?: MainAgent) =>
+    const warmGate = new CacheWarmGate();
+    const session = async (prompt: string, model: string = job.orchestrator_model, agent?: MainAgent) => {
+      const gate = await warmGate.enter(`${model}|${agent ?? 'main'}`);
+      try {
+        return await runSession(prompt, model, agent, gate.onReply);
+      } finally {
+        gate.onEnd();
+      }
+    };
+    const runSession = (prompt: string, model: string, agent: MainAgent | undefined, onReply: () => void) =>
       runAgentSession({
+        onReply,
         mainAgent: agent,
         readerModel: settings.reader_model,
         query: deps.query,
@@ -1497,7 +1566,6 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       script: read(path.join(ws.projectDir, 'SCRIPT.md')) ?? script,
       source: topic.source_text,
     };
-    const captionOpts = await captionBuildLine(deps, facts, job.id, log);
     const writer = deps.writeCaption ?? ((input, opts) => writeExplainerCaption(input, job.orchestrator_model, opts));
     let draft: CaptionDraft | null = null;
     let captionError: unknown = null;
@@ -1505,7 +1573,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     let retryReason: string | undefined;
     for (let attempt = 0; attempt < 2 && !draft; attempt += 1) {
       try {
-        draft = await writer(facts, retryReason ? { ...captionOpts, retryReason } : captionOpts);
+        draft = await writer(facts, retryReason ? { retryReason } : {});
       } catch (error) {
         captionError = error;
         // Only a caption the model wrote and code rejected tells the retry why; an API or transport failure does not.
@@ -1518,7 +1586,6 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     if (draft) {
       await recordCaptionCost(db, job.id, job.mode, draft);
       await keepText('post_caption', draft.text);
-      await deps.closings?.record(job.id, draft.builderRead, captionOpts.includeBuildLine);
     } else {
       // Fail open (Explainers 4.2): the reel is made; it waits for a caption before it can post.
       const detail = captionError instanceof Error ? captionError.message : String(captionError);

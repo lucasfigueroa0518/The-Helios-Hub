@@ -93,7 +93,9 @@ export type StoriesRead = {
  * database, and a page shows the day's skip once.
  */
 export const STORY_SETS_SQL = `
-SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style, s.payload,
+SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style,
+       -- The build log (photo_log and the rest) is for the stories worker. Pages read stories, story, pair, question, url.
+       (s.payload - 'photo_log' - 'historyKeys' - 'fvpSkip' - 'gtn' - 'gtnSkip' - 'log' - 'pool') AS payload,
        s.publish_at::text AS publish_at, (to_jsonb(s)->>'slot_minute')::int AS slot_minute, s.flagged, s.error, s.spend_usd,
        s.approved_at::text AS approved_at, s.published_at::text AS published_at,
        s.built_at::text AS built_at, s.created_at::text AS created_at,

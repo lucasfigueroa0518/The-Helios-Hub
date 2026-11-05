@@ -41,6 +41,23 @@ test('a clean sheet passes; ids, sources and the verdict are kept', () => {
   assert.ok(problems.every((p) => /unchecked/.test(p)), problems.join('; '));
 });
 
+test('relations (iteration 4) rest on remaining facts; an old sheet without them stays without', () => {
+  const s = sheet();
+  const fact = s.facts[0]!.id;
+  s.relations = [
+    { a: 'The Rosewood', relation: 'is a mile from', b: 'Stanford', fact_ids: [fact] },
+    { a: 'Musk', relation: 'rival of', b: 'Page', fact_ids: ['F404'] },
+    { a: '', relation: 'near', b: 'x', fact_ids: [fact] },
+  ];
+  const { sheet: out, problems } = validateFactSheet(s);
+  assert.deepEqual(out.relations, [s.relations[0]]);
+  assert.ok(problems.some((p) => /relation "Musk rival of Page" rests on no remaining fact; dropped/.test(p)));
+  assert.ok(problems.some((p) => /a relation needs a, relation and b/.test(p)));
+  assert.ok(!('relations' in validateFactSheet(sheet()).sheet), 'an old sheet gains no field');
+  const props = (SUBMIT_FACT_SHEET_TOOL.input_schema as { properties: Record<string, unknown> }).properties;
+  assert.ok(props.relations, 'the tool asks for relations');
+});
+
 test('independent sources are different sites and different publishers', () => {
   assert.equal(siteOf('https://news.bbc.co.uk/x'), 'bbc.co.uk');
   assert.equal(siteOf('https://blog.openai.com/a'), 'openai.com');
@@ -135,7 +152,7 @@ test('reportStory resumes on pause_turn, caches the prefix, logs, records cost a
   assert.deepEqual(first.tool_choice, { type: 'auto' });
   assert.deepEqual((first.system as { text: string; cache_control?: unknown }[])[0], { type: 'text', text: 'PROMPT:reporting', cache_control: { type: 'ephemeral', ttl: '1h' } });
   const tools = first.tools as { name: string; type?: string; cache_control?: unknown; strict?: boolean }[];
-  assert.deepEqual(tools.map((t) => t.type ?? t.name), ['web_search_20250305', 'web_fetch_20250910', 'submit_fact_sheet']);
+  assert.deepEqual(tools.map((t) => t.type ?? t.name), ['web_search_20260209', 'web_fetch_20260209', 'submit_fact_sheet']);
   assert.ok(tools[2].cache_control && tools[2].strict === false, 'the fact-sheet schema is too large to be strict');
   assert.match(String(first.messages[0].content), /Today: 2026-10-28/);
   assert.equal(calls[1].messages.length, 2, 'the continuation resends the paused assistant turn');

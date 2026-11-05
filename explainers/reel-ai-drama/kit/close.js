@@ -1,13 +1,65 @@
-// The brand close (MD-13, MD-18): the last frame, about 2.5s. A dark graded ground with grain, an orange
-// rule, the "Reel AI Drama" wordmark in Pragmatica Extended, and "a Helios series" with the Helios mark
-// (never recolored, clear space kept). The comment question is spoken and captioned over it, so the
-// whole block sits below the caption band (y 260–560). Code-built, the same in every reel; the project's
-// close module is one line written by frames.mjs. Sounds: close-timing.js CLOSE_EVENTS.
+// The brand close (MD-143): the last frame, the same in every reel, built by code. AI Brain Break's close
+// with this series' wordmark: a white screen, the Helios logo scales in, "Reel AI Drama" writes itself
+// beneath it in the print handwriting, the two centred on the screen together. The comment question is
+// spoken and captioned over it, in ink: the block sits below the caption band (y 260–560). The project's
+// close module is one line written by frames.mjs. Sounds and the crossfade in: close-timing.js.
 import { CLOSE } from './close-timing.js';
-import { seg, easeOut, arrive, clamp } from './geometry.js';
+import { HERSHEY_CAP, HERSHEY_SANS } from './hershey-sans.js';
+import { clamp, seg } from './geometry.js';
 
 export const TREATMENT = 'close';
-export const BLOCK = { x: 96, y: 860 };
+export const GROUND = '#FFFFFF';
+/** The words under the logo. */
+export const WORDMARK = 'Reel AI Drama';
+const INK = '#1F1915';
+/** The wordmark's width on screen, and the gap between the logo and its cap line. */
+const WORD_W = 640;
+const GAP = 70;
+
+/** Width of `text` in px at cap height `size`, in Hershey Sans. Pure. */
+export function handwriteWidth(text, size) {
+  const k = size / HERSHEY_CAP;
+  return [...String(text)].reduce((w, ch) => w + (HERSHEY_SANS[ch] ?? HERSHEY_SANS[' ']).a * k, 0);
+}
+
+/**
+ * The strokes that write `text` centred on x with its baseline at y, in writing order: { d, length }. `size`
+ * is the cap height in px. Pure (world-kit draw.js's handwrite, as paths drawn by their length).
+ */
+export function handwriteStrokes(text, x, y, size) {
+  const k = size / HERSHEY_CAP;
+  let cursor = x - handwriteWidth(text, size) / 2;
+  const out = [];
+  for (const ch of String(text)) {
+    const glyph = HERSHEY_SANS[ch] ?? HERSHEY_SANS[' '];
+    for (const s of glyph.s) {
+      const pts = s.map(([gx, gy]) => [cursor + gx * k, y - gy * k]);
+      const length = pts.slice(1).reduce((n, p, i) => n + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+      out.push({ d: `M ${pts.map(([px, py]) => `${px.toFixed(1)} ${py.toFixed(1)}`).join(' L ')}`, length });
+    }
+    cursor += glyph.a * k;
+  }
+  return out;
+}
+
+/** The wordmark's cap height: it fills WORD_W, up to world-kit's 84px. */
+export const WORD_SIZE = Math.min(84, WORD_W / Math.max(1, handwriteWidth(WORDMARK, 1)));
+/** The logo, about 40% of the screen wide. The logo and the words together are centred on the screen. */
+const LOGO_W = 440;
+/** Helios-logo.png's transparent margin above the circle, as a share of its width (measured). */
+const LOGO_PAD = 0.0205;
+const WEIGHT = 1.25;
+const INK_BELOW = (WORD_SIZE * 0.08 * WEIGHT) / 2;
+const BLOCK_H = LOGO_W * (1 - LOGO_PAD) + GAP + WORD_SIZE + INK_BELOW;
+const BLOCK_TOP = 960 - BLOCK_H / 2;
+export const LOGO = { cx: 540, cy: BLOCK_TOP - LOGO_W * LOGO_PAD + LOGO_W / 2, w: LOGO_W };
+/** The words' baseline. */
+export const WORD_BASELINE = BLOCK_TOP + BLOCK_H - INK_BELOW;
+/** The top of what the eye sees: below the caption band. */
+export const BLOCK = { x: 540 - WORD_W / 2, y: BLOCK_TOP };
+
+/** Overshoots past 1 and settles once (the logo's scale). */
+const backOut = (u) => { const x = clamp(u) - 1; return 1 + 2.70158 * x * x * x + 1.70158 * x * x; };
 
 let draw = null;
 
@@ -16,29 +68,38 @@ export default {
   build(root, ctx) {
     const { nk } = ctx;
     const doc = root.ownerDocument;
-    const el = nk.h(doc, 'div', { class: 'rd rd-close' });
-    const block = nk.h(doc, 'div', { class: 'abs', style: { left: `${BLOCK.x}px`, top: `${BLOCK.y}px`, width: '888px', transformOrigin: '0 50%' } });
-    const rule = nk.h(doc, 'div', { class: 'abs', style: { left: '0', top: '0', width: '120px', height: '10px', background: 'var(--rd-orange)' } });
-    const word = nk.h(doc, 'div', { class: 'abs rd-wordmark', style: { left: '0', top: '44px' } }, 'Reel <span style="color:var(--rd-orange)">AI</span> Drama');
-    const by = nk.h(doc, 'div', { class: 'abs', style: { left: '0', top: '200px', display: 'flex', alignItems: 'center', gap: '22px' } });
-    const mark = nk.h(doc, 'img', { src: `${ctx.assets}Helios-mark.png`, alt: '', 'data-role': 'logo', style: { width: '76px', height: '76px', borderRadius: '50%', display: 'block' } });
-    const series = nk.h(doc, 'div', { class: 'rd-series' }, 'a Helios series');
-    by.append(mark, series);
-    block.append(rule, word, by);
-    el.append(block, nk.h(doc, 'div', { class: 'rd-vignette' }), nk.filmGrain(doc));
+    const el = nk.h(doc, 'div', { class: 'rd rd-close', style: { background: GROUND } });
+    const { cx, cy, w } = LOGO;
+    const logo = nk.h(doc, 'img', { class: 'abs', src: `${ctx.assets}kit/Helios-logo.png`, alt: '', 'data-role': 'logo', style: { left: `${cx - w / 2}px`, top: `${cy - w / 2}px`, width: `${w}px`, height: `${w}px` } });
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = doc.createElementNS(NS, 'svg');
+    svg.setAttribute('width', '1080');
+    svg.setAttribute('height', '1920');
+    svg.setAttribute('data-role', 'wordmark');
+    svg.setAttribute('data-set', '');
+    svg.setAttribute('style', 'position:absolute;left:0;top:0;overflow:visible');
+    const strokes = handwriteStrokes(WORDMARK, cx, WORD_BASELINE, WORD_SIZE).map((s) => {
+      const path = doc.createElementNS(NS, 'path');
+      for (const [k, v] of Object.entries({ d: s.d, fill: 'none', stroke: INK, 'stroke-width': (WORD_SIZE * 0.08 * WEIGHT).toFixed(2), 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })) path.setAttribute(k, v);
+      svg.append(path);
+      return { path, length: s.length };
+    });
+    const total = strokes.reduce((n, s) => n + s.length, 0);
+    el.append(logo, svg);
     root.append(el);
-    const grain = el.querySelector('.nk-grain');
     draw = (t) => {
-      const r = easeOut(seg(t, CLOSE.ruleIn[0], CLOSE.ruleIn[1]));
-      rule.style.clipPath = `inset(0 ${(100 - 100 * r).toFixed(2)}% 0 0)`;
-      const w = easeOut(seg(t, CLOSE.wordIn[0], CLOSE.wordIn[1]));
-      word.style.clipPath = `inset(-20px ${(100 - 100 * w).toFixed(2)}% -20px -20px)`;
-      const m = arrive(seg(t, CLOSE.markIn[0], CLOSE.markIn[1]), { from: [0, -40], lift: 0.04, settle: 1 });
-      by.style.visibility = m.visible ? '' : 'hidden';
-      mark.style.transform = `translate(0, ${m.y.toFixed(2)}px) scale(${m.scale.toFixed(4)})`;
-      series.style.opacity = String(clamp((t - CLOSE.markIn[0]) / 0.2));
-      block.style.transform = `scale(${(1 + 0.03 * seg(t, 0, CLOSE.duration)).toFixed(4)})`;
-      grain.style.backgroundPosition = `${(Math.floor(t * 12) * 137) % 512}px ${(Math.floor(t * 12) * 251) % 512}px`;
+      const [a, b] = CLOSE.logoIn;
+      const s = 0.55 + 0.45 * backOut(seg(t, a, b));
+      logo.style.opacity = seg(t, a, a + 0.12).toFixed(3);
+      logo.style.transform = `scale(${s.toFixed(4)})`;
+      let budget = seg(t, CLOSE.write[0], CLOSE.write[1]) * total;
+      for (const k of strokes) {
+        // The stroke being written is cut where the pen is now; a dot of zero length shows once reached.
+        const part = Math.min(budget, k.length);
+        k.path.style.strokeDasharray = `${part.toFixed(2)} ${(k.length + 10).toFixed(2)}`;
+        k.path.style.opacity = budget > 0 ? '1' : '0';
+        budget -= k.length;
+      }
     };
     draw(0);
   },

@@ -1,11 +1,13 @@
 // The pacing engine for Reel AI Drama, forked from the news kit's pace.mjs (Explainers 3.1–3.3, EX3-60,
 // EX3-79, EX3-89). The waveform-silence tightening and the 0.2s pause cap are unchanged. What differs:
-// no sting (MD-13); the cold open keeps its natural tempo; any number of frames; a frame with no
-// voiceover is a silent beat that keeps its planned length; a frame's `pause_after` (a line's silent
-// picture beat, W-130) is added after its voice; and the close (the last frame) carries the spoken
-// question and is always CLOSE_DURATION long (MD-18, S-33: the question never lengthens the reel; a
-// question voiced past CLOSE.maxQuestion is flagged by the production run, never stretched).
-// Deterministic, no model.
+// no sting (MD-13); the voice is one take already sped up by `voice_tempo` (render/voice.ts, MD-93), so no
+// frame gets a tempo of its own; any number of frames; a frame with no voiceover is a silent beat that
+// keeps its planned length up to `silent_beat_max` (MD-91); a frame's `pause_after` (a line's silent
+// picture beat, W-130) is added after its voice, within the same cap; and the close (the last frame)
+// carries the spoken question: CLOSE_DURATION long, stretched to fit a longer question's voice plus
+// CLOSE_TAIL (iteration 4: a question must never be cut off). Deterministic, no model.
+//
+// Settings come from PACE_FILE at the project root (written by the voice step; absent = the defaults).
 //
 // Run right after `audio.mjs sync-durations`. Two passes:
 //   1. Tighten each voice line, cutting ONLY silence measured in the waveform (ffmpeg's silence
@@ -19,12 +21,12 @@
 //      onset (or end) where a timestamp fell inside a silence. The original WAV and words are
 //      kept (assets/voice/orig/, `words_orig`), so a re-run starts from them.
 //      The cold open (frame 1, RC-35) also loses its lead-in silence, so the first word lands on
-//      frame 0. Its tempo is natural.
+//      frame 0. Its tempo is the take's.
 //   2. Each frame's `duration` becomes its tightened voice plus its hold (TAIL + hold = 0.2s of
 //      silence between lines, Lucas's maximum) plus its `pause_after`, and its `voice_end` is written
-//      beside it. The close is CLOSE_DURATION (its question plays inside it).
+//      beside it. The close is closeLength(its question's voice).
 //      assets/timing/<frame id>.json gets the frame's word times and its lines' spans (`lines`: { id,
-//      start, end, label } from assets/lines.json), so marks, numbers, labels and sound events land on
+//      start, end, label, label_kind } from assets/lines.json), so marks, numbers, labels and sound events land on
 //      exact words and each line's label on its own line.
 // Idempotent: it always computes from the original voice, never from what is already there.
 //
@@ -53,21 +55,24 @@ export const LINE_LEAD = 0.02;
 /** The pause after each line: with TAIL and the next line's LINE_LEAD, 0.2s of silence between lines
  *  (EX3-79; a kept 0.14s lead-in once made a 1s gap before a name, MD-58). */
 export const HOLD = 0.13;
-/** The close: the last frame, a fixed length; its question is spoken inside it (MD-18). */
+/** The close: the last frame; its question is spoken inside it (MD-18), at least this long. */
 export const CLOSE_DURATION = CLOSE.duration;
-/** After the close's question, this much should stay on screen (CLOSE.maxQuestion + CLOSE_TAIL = the close). */
+/** After the close's question, this much stays on screen (CLOSE.maxQuestion + CLOSE_TAIL = the unstretched close). */
 export const CLOSE_TAIL = 0.2;
-/** The longest silent picture beat after a frame's voice (W-130), in seconds. */
+/** The longest silent picture beat after a frame's voice (W-130), in seconds; `silent_beat_max` may lower it. */
 export const PAUSE_MAX = 1;
-/** A silent beat (a frame with no voiceover) keeps its planned length, within these bounds. */
-export const SILENT_BEAT = { min: 0.6, max: 4 };
+/** A silent beat (a frame with no voiceover) keeps its planned length, within these bounds (MD-91: ≈1s at most). */
+export const SILENT_BEAT = { min: 0.6, max: 1 };
+/** The pace settings the voice step writes (`{ silent_beat_max }`), at the project root. */
+export const PACE_FILE = 'pace.json';
 /** What counts as silence (EX3-89): quieter than SILENCE_DB for at least SILENCE_MIN seconds,
  *  what a listener hears as a pause (a breath under it is part of the pause). Every cut keeps
  *  half its cap (75–100 ms) of that quiet beside each word, so soft onsets and decays stay. */
 export const SILENCE_DB = -40;
 export const SILENCE_MIN = 0.05;
 /** The cold open: its lead-in silence is cut to OPENER_LEAD so the first word lands on frame 0
- *  (RC-35), and its voice runs at the Explainer opener's 1.2× (pitch kept; Lucas, 2026-10-26). */
+ *  (RC-35). It keeps the take's tempo: the whole voice is sped up once, by `voice_tempo`, before it is
+ *  split into frames (MD-93), so OPENER_TEMPO stays 1 (any other value would speed the opener again). */
 export const OPENER_FRAME = 1;
 export const OPENER_TEMPO = 1;
 export const OPENER_LEAD = 0.02;
@@ -85,17 +90,35 @@ export function holdFor(planned) {
   return r3(hold);
 }
 
-/** The close's length: always CLOSE_DURATION, whatever the question's voice (MD-18: never stretched). */
-export const closeLength = () => CLOSE_DURATION;
+/** The close's length: CLOSE_DURATION, or the question's voice plus CLOSE_TAIL when that is longer (BoP ended inside "chatbots?"). */
+export function closeLength(voice = 0) {
+  return r3(Math.max(CLOSE_DURATION, Number.isFinite(voice) && voice > 0 ? voice + CLOSE_TAIL : 0));
+}
 
-/** A frame's silent picture beat (`- pause_after:`), 0–PAUSE_MAX seconds. */
-export function pauseFor(planned) {
-  return Number.isFinite(planned) && planned > 0 ? r3(Math.min(planned, PAUSE_MAX)) : 0;
+/** The longest silent beat: `silent_beat_max` when given (0–4s, the setting's range), else SILENT_BEAT.max. */
+function beatMax(max) {
+  return Number.isFinite(max) && max >= 0 ? Math.min(max, 4) : SILENT_BEAT.max;
+}
+
+/** A frame's silent picture beat (`- pause_after:`), 0–PAUSE_MAX seconds (and at most `max`, the silent-beat cap). */
+export function pauseFor(planned, max = PAUSE_MAX) {
+  return Number.isFinite(planned) && planned > 0 ? r3(Math.min(planned, PAUSE_MAX, beatMax(max))) : 0;
+}
+
+/** The project's pace settings (PACE_FILE), or {} when there are none. */
+export function paceSettings(root) {
+  try {
+    const raw = JSON.parse(readFileSync(join(root, PACE_FILE), 'utf8'));
+    return raw && typeof raw === 'object' ? raw : {};
+  } catch {
+    return {};
+  }
 }
 
 /**
  * Each line's span inside its frame's voice: the frame's words split by the lines' word counts (scaled
- * when the voice's word count differs from the script's). `lines`: [{ id, words, label }].
+ * when the voice's word count differs from the script's). `lines`: [{ id, words, label, label_kind }]; each
+ * span keeps its label and the label's kind ('date' or null, MD-130).
  */
 export function lineSpans(lines, words) {
   if (!lines?.length || !words?.length) return [];
@@ -107,7 +130,7 @@ export function lineSpans(lines, words) {
   lines.forEach((l, i) => {
     const n = i === lines.length - 1 ? words.length - at : Math.max(1, Math.round((Number(l.words) || 0) * k));
     const span = words.slice(at, Math.min(words.length, at + n));
-    if (span.length) out.push({ id: l.id, start: span[0].start, end: span[span.length - 1].end, label: l.label ?? null });
+    if (span.length) out.push({ id: l.id, start: span[0].start, end: span[span.length - 1].end, label: l.label ?? null, label_kind: l.label ? l.label_kind ?? null : null });
     at += span.length;
   });
   return out;
@@ -358,9 +381,10 @@ export function tightenVoices(root, meta, { detect = detectSilences, lead = 0 } 
 /**
  * The storyboard with each voiced frame's `duration` = voice + hold and its `voice_end` set.
  * `voices`: audio_meta.json's voices ({ frame, duration_s }). The close is closeLength(voice); a frame
- * with no voice keeps its planned duration (a silent beat, SILENT_BEAT bounds).
+ * with no voice keeps its planned duration (a silent beat: SILENT_BEAT.min to `silentBeatMax`).
  */
-export function pacedStoryboard(storyboard, voices) {
+export function pacedStoryboard(storyboard, voices, { silentBeatMax = SILENT_BEAT.max } = {}) {
+  const maxBeat = beatMax(silentBeatMax);
   const voiceByFrame = new Map((voices ?? []).filter((v) => v.frame != null && v.duration_s > 0).map((v) => [Number(v.frame), v.duration_s]));
   const lines = String(storyboard).split(/\r?\n/);
   const out = [];
@@ -385,8 +409,8 @@ export function pacedStoryboard(storyboard, voices) {
         const voice = voiceByFrame.get(frame);
         const close = isClose(frames.get(frame));
         const fields = frames.get(frame)?.fields ?? {};
-        const hold = close ? r3(Math.max(0, closeLength() - voice)) : r3(holdFor(seconds(fields.hold)) + pauseFor(seconds(fields.pause_after)));
-        const duration = close ? closeLength() : r3(voice + hold);
+        const hold = close ? r3(Math.max(0, closeLength(voice) - voice)) : r3(holdFor(seconds(fields.hold)) + pauseFor(seconds(fields.pause_after), maxBeat));
+        const duration = close ? closeLength(voice) : r3(voice + hold);
         out.push(`${m[1]}${duration}s`);
         pendingVoiceEnd = `- voice_end: ${r3(voice)}s`;
         paced.push({ frame, voice: r3(voice), hold, duration });
@@ -399,7 +423,7 @@ export function pacedStoryboard(storyboard, voices) {
       if (m) {
         const f = frames.get(frame);
         const planned = seconds(f.fields.duration);
-        const duration = isClose(f) ? CLOSE_DURATION : r3(Math.min(SILENT_BEAT.max, Math.max(SILENT_BEAT.min, Number.isFinite(planned) ? planned : 1.5)));
+        const duration = isClose(f) ? CLOSE_DURATION : r3(Math.min(maxBeat, Math.max(Math.min(SILENT_BEAT.min, maxBeat), Number.isFinite(planned) ? planned : 1.5)));
         out.push(`${m[1]}${duration}s`);
         paced.push({ frame, voice: 0, hold: duration, duration });
         continue;
@@ -426,7 +450,7 @@ export function pace(root, { tighten = true } = {}) {
     errors.push(...t.errors);
     writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
   }
-  const { storyboard, paced } = pacedStoryboard(readFileSync(sbFile, 'utf8'), meta.voices);
+  const { storyboard, paced } = pacedStoryboard(readFileSync(sbFile, 'utf8'), meta.voices, { silentBeatMax: paceSettings(root).silent_beat_max });
   writeFileSync(sbFile, storyboard);
 
   const frames = parseFrames(storyboard);

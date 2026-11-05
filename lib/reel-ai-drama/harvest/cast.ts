@@ -39,7 +39,10 @@ export type CastCand = {
   reject: string | null;
 };
 
-const isCutout = (c: CastCand) => c.source === 'bank' && c.flags.includes('cutout');
+/** A transparent cutout: banked (approved) or cut from a verified portrait this run (`cutout_made`). */
+export const isCutout = (c: Pick<CastCand, 'flags'>) => c.flags.includes('cutout');
+/** Marked broken by the look, the upscale check or the integrity check: never an anchor. */
+export const isGarbled = (c: Pick<CastCand, 'flags'>) => c.flags.some((f) => f === 'garbled' || f.startsWith('garbled:'));
 export const isVerified = (c: CastCand) => isCutout(c) || c.flags.includes('identity:verified') || c.made_kind === 'sketch';
 
 /** Faces in the picture: the detector when it found any, else the look, else one for a banked cutout. */
@@ -62,7 +65,7 @@ export function showsPerson(c: CastCand, name: string): boolean {
  * useful size near the middle, resolution, a person shot over an event shot, recency.
  */
 export function anchorScore(c: CastCand, name: string): number | null {
-  if (!showsPerson(c, name) || !isVerified(c) || c.people.length !== 1 || c.look?.text_heavy) return null;
+  if (!showsPerson(c, name) || !isVerified(c) || c.people.length !== 1 || c.look?.text_heavy || c.look?.garbled || isGarbled(c)) return null;
   if (c.made_kind === 'sketch') return 0;
   if (isCutout(c)) return 100;
   if (faceCount(c) !== 1) return null;
@@ -120,23 +123,45 @@ export function sketchReference<T extends CastCand>(cands: readonly T[], name: s
   return best?.c ?? null;
 }
 
-export type CastCoverage = { name: string; main: boolean; portraits: number; verified: number; anchor: string | null; sketch: boolean };
+export type CastCoverage = {
+  name: string;
+  main: boolean;
+  /** The plot turns on them (MD-68, MD-75): six verified looks and a cutout. */
+  central: boolean;
+  portraits: number;
+  verified: number;
+  /** Verified looks wanted (plan.ts `lookTarget`). */
+  target: number;
+  anchor: string | null;
+  sketch: boolean;
+  /** The asset id of their transparent cutout (banked or cut this run), or null. */
+  cutout: string | null;
+};
 
-/** Per-person counts of usable portraits (distinct after the near-duplicate screen) and confirmed ones. */
-export function coverageOf(cands: readonly CastCand[], person: Pick<CastPerson, 'name' | 'main'>): Omit<CastCoverage, 'anchor' | 'sketch'> {
-  const mine = cands.filter((c) => showsPerson(c, person.name));
-  return { name: person.name, main: person.main, portraits: mine.length, verified: mine.filter(isVerified).length };
+/**
+ * Per-person counts of usable portraits (distinct after the near-duplicate screen; a cutout cut from one of
+ * them is the same picture and doesn't count) and confirmed ones.
+ */
+export function coverageOf(
+  cands: readonly CastCand[],
+  person: Pick<CastPerson, 'name' | 'main'> & Partial<Pick<CastPerson, 'central'>>,
+): Pick<CastCoverage, 'name' | 'main' | 'central' | 'portraits' | 'verified'> {
+  const mine = cands.filter((c) => showsPerson(c, person.name) && !c.flags.includes('cutout_made'));
+  return { name: person.name, main: person.main, central: person.central ?? false, portraits: mine.length, verified: mine.filter(isVerified).length };
+}
+
+/** A sketch is needed when a main or central character has no anchor (no confirmed solo picture), or anyone has no picture at all. */
+export function needsSketch(cov: Pick<CastCoverage, 'main' | 'portraits' | 'verified'> & Partial<Pick<CastCoverage, 'central'>>, hasAnchor: boolean): boolean {
+  return cov.portraits === 0 || ((cov.main || cov.central === true) && !hasAnchor);
 }
 
 /**
- * Looks a person still needs from the second pass: main characters want several, and one of them confirmed;
- * supporting people want one usable picture.
+ * The portrait to cut a central person out of: their anchor when it is a photo, else their best confirmed
+ * solo picture. Never a sketch, a banked cutout (already cut) or a garbled picture.
  */
-export function lookCount(cov: Pick<CastCoverage, 'main' | 'portraits' | 'verified'>): number {
-  return cov.main && cov.verified === 0 ? 0 : cov.portraits;
-}
-
-/** A sketch is needed when a main character has no confirmed picture, or anyone has none at all. */
-export function needsSketch(cov: Pick<CastCoverage, 'main' | 'portraits' | 'verified'>, hasAnchor: boolean): boolean {
-  return cov.portraits === 0 || (cov.main && !hasAnchor);
+export function cutoutSource<T extends CastCand & { anchor_for?: string | null }>(cands: readonly T[], name: string): T | null {
+  const ok = (c: T) => !c.made && !isCutout(c) && !!c.file;
+  const anchor = cands.find((c) => c.anchor_for === name);
+  if (anchor && ok(anchor) && anchorScore(anchor, name) !== null) return anchor;
+  return pickAnchor(cands.filter(ok), name);
 }

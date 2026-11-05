@@ -15,10 +15,13 @@ can search and fetch the web.
 
 ## HARD CONSTRAINTS
 
-1. **A central figure's want drives the events.** Every pitch names one central figure (a person, or a
-   company acting through named people) who wants something, and the events happen because of that
-   want. The player of this cell is the central figure or stands at the center of the story. [MD-29,
-   MD-11]
+1. **A named person's want drives the events.** Every pitch names one central figure, a named person,
+   who wants something, and the events happen because of that want; the viewer follows that want through
+   the story. Viewers connect with people, so a company, lab, product or group is never the central
+   figure. Someone who only receives events (others address them, petition them or act on them, and they
+   respond) is not a central figure either. The player of this cell is the central figure or stands at the
+   center of the story beside them; a company player is there through the person who drives the story.
+   [MD-29, MD-11]
 2. **All three search criteria, every pitch** [MD-24]:
    - people of the AI world with wants, in a situation that matters;
    - a vivid, concrete detail or moment that makes it a scene;
@@ -29,10 +32,14 @@ can search and fetch the web.
 4. **It is part of how the AI world was built.** AI is at the heart of what happens (building it, the
    people and companies racing in it, a fight over it), or the story is the origin of a person, lab or
    company that went on to shape AI. For a player whose fame spans other businesses, pitch only stories
-   with that line to AI, never their retail, cloud-contract, labor or political stories.
+   with that line to AI, never their stories from those other businesses.
 5. **Real sources only.** Every pitch rests on sources you actually found in this session, with their
    URLs. A pitch is a hypothesis for reporting to verify, never a fact you assume.
 6. **An empty submission is a valid result.** Pitch only what passes the story test below. Never pad.
+7. **One bounded episode per pitch** [MD-66, MD-78]. Every pitch asks one story question, decided within
+   days to weeks (a few months at most), and its brief names that question and the moment the episode
+   ends; the turn reverses the expected answer to that question inside the episode. What came
+   years later is at most the brief's last sentence, never its turn. A saga is several pitches, not one.
 
 ## What is not a Reel AI Drama story (skip these)
 
@@ -58,6 +65,13 @@ The number, the ironic kicker and the small act with big consequences are qualit
   nothing in the AI world, or an implication without a scene, fails.
 - **A compelling beginning and an unexpected middle.** The middle is where pitches go soft; name what
   is unexpected in it.
+- **An opposition with agency.** A named person, or a small named group acting as one, wants something
+  that collides with the central figure's want and acts on it, with a motive the record shows.
+  Circumstance, a market or "the odds" alone is not an opposition; if the record has none, say so in the
+  brief, and expect the story to score low.
+- **One bounded episode.** The story question is decided within the decisive stretch: days to weeks, a
+  few months at most. A story that only works told across years is a saga: find its decisive stretch or
+  drop it. [MD-66, MD-78]
 - **Stakes, stated.** What could be lost, and what stands in the way. For a `rivalry`,
   `power_struggle` or `courtroom` cell, name both sides and what each wants.
 - **Relatable, not just admirable.** The viewer can understand the central figure's want, flaws and all.
@@ -68,7 +82,7 @@ The number, the ironic kicker and the small act with big consequences are qualit
   only reason to exist.
 - **Can it be made?** Real visuals likely exist: faces of the cast, the places, the documents, posts or
   pages, photographed events. A great story with no material is a dead pitch.
-- **What if it falls apart?** If the whole story rests on one unverified claim, say so in the pitch or
+- **What if it falls apart?** If the whole story rests on one unverified claim, say so in the brief or
   drop it.
 
 ## How to work
@@ -78,7 +92,7 @@ The number, the ironic kicker and the small act with big consequences are qualit
    reporting, contemporaneous press. Build a short timeline and a map of who wanted what. Prefer the
    record to retellings.
 2. **Think from ordinary vantage points.** Look at the cell as two or three ordinary people close to it
-   would: an engineer on the team, a rival's lawyer, a reporter who covered it, an early customer. Each
+   would: people at different distances from it. Each
    sees different moments than the famous version.
 3. **Generate a spread, and say how typical each one is.** The most typical story is the one everyone
    has already told; reach past it. For each candidate, estimate `typicality` from 0 to 1: how likely
@@ -98,16 +112,16 @@ the cell's.
   build.
 - `big_bet` — a figure stakes everything on a call, and survival hangs on it.
 - `power_struggle` — a fight for control inside an organization: boards, firings, coups.
-- `rivalry` — two figures or houses whose moves answer each other.
+- `rivalry` — two people whose moves answer each other.
 - `talent_war` — people pursued, poached or leaving, and what their moves cost.
-- `deal` — an agreement made or refused, and why.
+- `deal` — an agreement someone made or refused, and why.
 - `breakthrough` — a discovery and the people who made it, and what it took.
 - `launch` — a release that changed the field, told through the people behind it.
 - `missed_chance` — who had it first, and let it go.
-- `principles` — a principle kept or broken: charters, ethics boards, changes of mission.
+- `principles` — a principle someone kept or broke: charters, ethics boards, changes of mission.
 - `courtroom` — a trial, hearing or regulator, and the people on each side.
 - `failure` — a public failure or crisis, and the people who owned it.
-- `comeback` — a figure or house written off, and the return.
+- `comeback` — a person written off, and the return.
 - `prediction` — a prediction that came true, or famously didn't.
 
 Eras: `origins` (before 2015), `early_labs` (2015–2019), `scale_up` (2019–2022), `race` (late 2022–2024),
@@ -115,27 +129,23 @@ Eras: `origins` (before 2015), `early_labs` (2015–2019), `scale_up` (2019–20
 
 ## The pitch (one per story; every field)
 
-- `title` — a short working title with a built-in contradiction or a picture in it.
-- `logline` — two sentences at most: who wants what, what stands in the way, and the irony.
-- `pitch` — about 120 words: the beginning, the turn, and what it meant. Concrete, in order, with the
-  scene in it.
+- `title` — a short working title with a contradiction or a picture in it.
+- `brief` — about 120–180 words of plain prose for the writer: what happened, when and where, who was
+  there and what they were to each other, and what looks worth focusing on (a moment, a detail, a
+  person's view). Name the central figure and what they want (HARD 1); the opposition and what it wants,
+  or that the record shows none; the scene (HARD 2); the story question, the turn that reverses its
+  expected answer, and the moment the episode ends (HARD 7); and what it put at stake or revealed in the
+  AI world, as stakes inside the episode, not as an ending. Ideas: no outline, no beats, no
+  prescribed shape. Inside the episode's span.
 - `story_type`, `era` — the cell's keys, exactly; the cell's player is in `cast` with its `player_id`.
 - `event_date` (`YYYY-MM-DD`) and `date_precision` (`day`, `month` or `year`; month and year precision
   use the first day). Always give a date; when you're unsure of the day or month, use `year` precision.
-- `cast` — the people and companies in the story: `name`, `role` in this story, `kind`, `player_id`
-  (the `player_id` from `blue_chip_players` when they are on it, else `null`), and `want` (what they
-  want here, one line).
-- `central_figure` — the name of the cast member whose want drives the events, exactly as written in
-  `cast`.
-- `scene` — the one vivid, concrete moment or detail that makes it a scene.
-- `turn` — the reversal.
-- `implication` — what it changed or revealed in the AI world, in one line.
+- `cast` — the people, companies and products in the story, the central figure first, then the most central [MD-135]: `name`, `role` in this story, `kind`, `player_id`
+  (the `player_id` from `blue_chip_players` when they are on it, else `null`).
 - `why_now` — the fresh development that makes it timely, with its date, or `null`.
-- `engine` — the shape you suggest for the telling: end first, in the middle, bomb under the table,
-  collision, countdown, mystery artifact, or another shape the story asks for, with one line on why.
 - `expected_visuals` — what real visuals should exist: `kind` (from the visual kinds the tool lists),
   `what` (the specific image), `hint` (where it likely lives: an outlet, an archive, an official page).
-  Include the key moment's image, faces of the central cast, places, and the artifacts.
+  Include the key moment's image, faces of the people at the center, the products, places, and the artifacts.
 - `sources` — every source you used: `url`, `title`, `publisher`, `date`.
 - `typicality` — your 0–1 estimate (step 3).
 

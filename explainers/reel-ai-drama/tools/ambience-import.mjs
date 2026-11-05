@@ -45,6 +45,13 @@ export const PLACES = {
   keyboards: { queries: ['typing office ambience', 'keyboard typing', 'computer keyboard typing'], keep: /typing|keyboard|keys/i, drop: /typewriter|piano|synth|single|one key|mouse|click/i, tags: ['keystrokes', 'typists', 'clacking', 'coding', 'coder', 'programmer', 'hacker', 'devs'] },
   night: { queries: ['night city ambience', 'city at night'], keep: /night/i, drop: /cricket|insect|forest|frog|owl|siren|party|rain/i, also: /city|street|urban|town|traffic|downtown/i, tags: ['night', 'nighttime', 'nocturnal', 'city', 'late', 'evening', 'skyline', 'midnight'] },
   newsroom: { queries: ['busy office', 'open plan office', 'call center ambience'], keep: /office|newsroom|call ?cent|open ?plan|workplace|trading/i, drop: /quiet|printer|door/i, tags: ['newsroom', 'busy', 'bustling', 'openplan', 'plan', 'callcenter', 'trading', 'bullpen', 'staffers'] },
+  fireplace: { queries: ['fireplace crackling', 'crackling fire ambience', 'campfire crackling'], keep: /fire ?place|crackl|camp ?fire|hearth|log fire|wood fire/i, drop: /forest|rain|wind|bird|alarm|truck|gun|cook|match/i, tags: ['fireplace', 'crackling', 'crackle', 'hearth', 'campfire', 'firewood', 'embers', 'mantel', 'log'] },
+  car: { queries: ['car interior driving', 'inside car driving ambience', 'car interior highway'], keep: /car|vehicle|driving/i, also: /interior|inside|in ?car|cabin/i, drop: /door|crash|horn|start|alarm|race|rain|window|park/i, tags: ['carinterior', 'driving', 'backseat', 'dashboard', 'highway', 'commute', 'freeway', 'rideshare', 'taxi'] },
+  train: { queries: ['train interior ambience', 'subway train interior', 'inside train'], keep: /train|subway|metro|tram|underground/i, also: /interior|inside|on ?board|ride|riding|carriage/i, drop: /horn|whistle|announce|station|crossing|model|toy/i, tags: ['train', 'subway', 'metro', 'railway', 'commuter', 'carriage', 'tram', 'underground'] },
+  airplane: { queries: ['airplane cabin ambience', 'aircraft interior', 'plane cabin'], keep: /plane|aircraft|cabin|flight|airliner|jet/i, also: /cabin|interior|inside|in ?flight|on ?board/i, drop: /tak(e|ing) ?off|landing|announce|ding|fighter|toy/i, tags: ['airplane', 'aeroplane', 'aircraft', 'inflight', 'flight', 'airliner', 'seatbelt'] },
+  factory: { queries: ['factory ambience', 'factory floor machines', 'industrial machinery ambience'], keep: /factory|machinery|industrial|manufactur|assembly|plant|workshop/i, drop: /alarm|siren|steam|explos|drill|hammer|horror/i, tags: ['factory', 'assembly', 'manufacturing', 'plant', 'industrial', 'machinery', 'warehouse', 'production'] },
+  forest: { queries: ['forest ambience birds', 'forest birdsong'], keep: /forest|woods|woodland|birdsong|nature/i, drop: /rain|storm|thunder|night|fire|chainsaw|cricket|owl|witch/i, tags: ['forest', 'woods', 'woodland', 'birdsong', 'nature', 'trees', 'wilderness'] },
+  shore: { queries: ['ocean waves ambience', 'sea shore waves', 'beach waves'], keep: /ocean|sea\b|shore|beach|waves/i, drop: /storm|seagull|gull|boat|underwater|harbou?r|people|kids|children/i, tags: ['ocean', 'sea', 'shore', 'waves', 'surf', 'seaside', 'coastline'] },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -105,7 +112,9 @@ function cut(src, dst, from, len, gainDb) {
 
 const catalogFile = join(SFX, 'ambience-catalog.json'); // its own catalog: Explainer lookups never see the beds
 const main = JSON.parse(readFileSync(catalogFile, 'utf8'));
-const used = new Set(main.filter((s) => s.pack !== 'freesound-ambience').flatMap((s) => s.tags));
+// The shared library's tags too: a word Explainers or foley already searches never joins a bed.
+const shared = JSON.parse(readFileSync(join(SFX, 'catalog.json'), 'utf8'));
+const used = new Set([...main.filter((s) => s.pack !== 'freesound-ambience'), ...shared].flatMap((s) => s.tags));
 if (used.has('ambience')) throw new Error('an existing sound already uses the tag "ambience"');
 const known = new Set(main.map((s) => s.source).filter(Boolean));
 const have = new Set(main.filter((s) => s.pack === 'freesound-ambience').map((s) => s.group));

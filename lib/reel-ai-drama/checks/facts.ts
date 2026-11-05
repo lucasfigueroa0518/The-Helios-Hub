@@ -13,7 +13,7 @@ import { defineQuestionSet } from '@/lib/reels/jev/question-set';
  */
 export const FACTS_SET = defineQuestionSet({
   id: 'reel-ai-drama-facts',
-  version: 'reel-ai-drama-facts-v1',
+  version: 'reel-ai-drama-facts-v2',
   questions: {
     supported: noul({
       question: 'Does the fact sheet support what this line claims?',
@@ -23,7 +23,7 @@ export const FACTS_SET = defineQuestionSet({
     meaning_kept: noul({
       question: 'Does the line keep the meaning of the facts it draws on?',
       judge:
-        'Read line, on_screen, context_before (the line before it) and facts. Answer yes when the line keeps the meaning of the facts: the same people doing the same things, in the same order of cause, with allegations still presented as allegations and disputed points not stated as settled. Differences of wording, emphasis, tone or compression never matter. Answer no only when the line changes the meaning: it turns an allegation into a finding, states a disputed point as settled, reverses who acted, merges separate events into one, or implies an outcome the facts do not.',
+        'Read line, on_screen, context_before (the line before it) and facts. Answer yes when the line keeps the meaning of the facts: the same people doing the same things, in the same order of cause, with allegations still presented as allegations and disputed points not stated as settled. Differences of wording, emphasis, tone or compression never matter, and neither does a hook\'s framing (a tease, a provocation, a loaded question, a tie to today) as long as what it asserts is true. Answer no only when the line changes the meaning: it turns an allegation into a finding, states a disputed point as settled, reverses who acted, merges separate events into one, or implies an outcome the facts do not.',
     }),
   },
 });

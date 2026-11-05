@@ -8,7 +8,8 @@
  *   Text on Screen   each missing idea on today's slate is built (copy → frame → video);
  *                    with no slate today, a reels night is queued instead
  *   Carousels        a carousel run for the top of the ranked queue, in order (made
- *                    carousels are kept); with no ranked story it picks from fresh news
+ *                    carousels are kept); with no ranked story it picks from fresh news.
+ *                    Carousels are opt-in: a day with no carousel slot has quota 0, so this does nothing
  *   Explainers       a render for each missing topic
  *   Stories          today's set for each series due today that has none
  *   Last Few Days    today's post, on its days

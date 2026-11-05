@@ -315,7 +315,19 @@ export type SessionInput = {
   secrets: { anthropicApiKey: string; heygenApiKey: string; voiceId: string };
   /** One line per SDK message, for the transcript artifact. */
   log: (entry: Record<string, unknown>) => void;
+  /**
+   * The voice and music are final (a Targeted Revisions scene redo): no HeyGen key in the
+   * environment and no HeyGen hosts in the sandbox's network list, so they cannot be made again.
+   */
+  voiceLocked?: boolean;
+  /** Each reply the model streams (CacheWarmGate: the first one means the prompt prefix is cached). */
+  onReply?: () => void;
 };
+
+/** The network hosts a session may reach: HeyGen's only while the voice may be made. */
+export function allowedDomains(voiceLocked = false): string[] {
+  return voiceLocked ? ALLOWED_NETWORK_DOMAINS.filter((d) => !/heygen/i.test(d)) : ALLOWED_NETWORK_DOMAINS;
+}
 
 function which(binary: string): string | null {
   for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
@@ -326,7 +338,7 @@ function which(binary: string): string | null {
 }
 
 /** The scrubbed environment: no database URL, no Supabase key, no outreach keys. */
-export function scrubbedEnv(input: Pick<SessionInput, 'projectDir' | 'homeDir' | 'tmpDir' | 'secrets'>): Record<string, string> {
+export function scrubbedEnv(input: Pick<SessionInput, 'projectDir' | 'homeDir' | 'tmpDir' | 'secrets' | 'voiceLocked'>): Record<string, string> {
   const pathDirs = [
     path.join(RUNTIME_DIR, 'node_modules', '.bin'),
     path.dirname(process.execPath),
@@ -344,7 +356,7 @@ export function scrubbedEnv(input: Pick<SessionInput, 'projectDir' | 'homeDir' |
     LANG: 'en_US.UTF-8',
     ANTHROPIC_API_KEY: input.secrets.anthropicApiKey,
     ...(workspace ? { ANTHROPIC_CUSTOM_HEADERS: `anthropic-workspace-id: ${workspace}` } : {}),
-    HEYGEN_API_KEY: input.secrets.heygenApiKey,
+    ...(input.voiceLocked ? {} : { HEYGEN_API_KEY: input.secrets.heygenApiKey }),
     HELIOS_VOICE_ID: input.secrets.voiceId,
     HYPERFRAMES_MEDIA_HOME: input.projectDir,
     // The job's HOME has no browser when `hyperframes browser ensure` did not fill it (job b5488742:
@@ -364,17 +376,51 @@ function chromeFor(homeDir: string): string | null {
   return findChrome([homeDir, process.env.HOME ?? ''].filter(Boolean));
 }
 
+const STACK_BUILDERS = new Set<string>([SCENE_BUILDER_AGENT, SCENE_FRAME_WORKER_AGENT, TECH_FRAME_WORKER_AGENT]);
+const key0 = (h: { agent_id?: string }, agentType: string | undefined) => h.agent_id ?? `main:${agentType ?? ''}`;
+
+/**
+ * Why a lookup needs no answer, or null. A builder (its prompt holds STACK_FILES in full) asking to
+ * Read one of them; or any session repeating a Read, Grep or Glob with the same input while nothing
+ * was written or run since (any Write, Edit or Bash clears the memory: snap.mjs rewrites the stills).
+ */
+export function repeatedLookup(memory: Map<string, Set<string>>, key: string, tool: string, toolInput: Record<string, unknown>, projectDir: string, agentType: string | undefined): string | null {
+  if (tool === 'Write' || tool === 'Edit' || tool === 'NotebookEdit' || tool === 'Bash') {
+    memory.delete(key);
+    return null;
+  }
+  if (tool !== 'Read' && tool !== 'Grep' && tool !== 'Glob') return null;
+  if (tool === 'Read' && agentType && STACK_BUILDERS.has(agentType)) {
+    const rel = path.relative(projectDir, path.resolve(projectDir, String(toolInput.file_path ?? '')));
+    if ((STACK_FILES as readonly string[]).includes(rel)) return `${rel} is already in your prompt, in full (the files at its top): use that copy.`;
+  }
+  const sig = tool + JSON.stringify(toolInput);
+  const seen = memory.get(key) ?? new Set<string>();
+  memory.set(key, seen);
+  if (seen.has(sig)) return 'You already made this exact call, and nothing was written or run since: its earlier result above still holds.';
+  seen.add(sig);
+  return null;
+}
+
 export function sessionOptions(input: SessionInput, abort: AbortController, onDenied: (tool: string, reason: string) => void): Record<string, unknown> {
   // Each builder's self-check runs, by agent_id (the main thread's own key when it is the builder).
   const selfChecks = new Map<string, number>();
+  // Cost (2026-11-02): a builder already has the instruction stack in its prompt, and a lookup it
+  // repeats with nothing changed since returns what it already has. Both are answered with a pointer
+  // instead of the same text again (zero new information either way).
+  const lookups = new Map<string, Set<string>>();
   const policyHook = async (hookInput: { tool_name?: string; tool_input?: unknown; agent_id?: string; agent_type?: string }) => {
     const tool = String(hookInput.tool_name ?? '');
     // agent_type names the subagent (agent_id is present only inside one); the main thread has none.
     const agentType = hookInput.agent_id ? hookInput.agent_type : input.mainAgent;
     const toolInput = (hookInput.tool_input ?? {}) as Record<string, unknown>;
     let decision = checkToolCall(tool, toolInput, input.projectDir, agentType);
-    const key = hookInput.agent_id ?? `main:${agentType ?? ''}`;
+    const key = key0(hookInput, agentType);
     if (decision.allow && tool === 'Bash') decision = selfCheckBudget(selfChecks, key, String(toolInput.command ?? ''));
+    if (decision.allow) {
+      const repeat = repeatedLookup(lookups, key, tool, toolInput, input.projectDir, agentType);
+      if (repeat) decision = { allow: false, reason: repeat };
+    }
     if (decision.allow) {
       return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow' } };
     }
@@ -464,7 +510,7 @@ export function sessionOptions(input: SessionInput, abort: AbortController, onDe
       allowUnsandboxedCommands: false,
       excludedCommands: UNSANDBOXED_HYPERFRAMES,
       filesystem: { allowWrite: [input.projectDir, input.homeDir] },
-      network: { allowedDomains: ALLOWED_NETWORK_DOMAINS, allowLocalBinding: true },
+      network: { allowedDomains: allowedDomains(input.voiceLocked), allowLocalBinding: true },
       credentials: { envVars: [{ name: 'ANTHROPIC_API_KEY', mode: 'deny' }] },
     },
   };
@@ -505,6 +551,7 @@ export async function runAgentSession(input: SessionInput): Promise<SessionResul
       input.log(message);
       if (typeof message.session_id === 'string') result.sessionId = message.session_id;
       if (message.type === 'assistant') {
+        input.onReply?.();
         input.meter.observe((message.message ?? {}) as Parameters<SpendMeter['observe']>[0], meterKey);
         const text = textOf(message);
         if (text && !message.parent_tool_use_id) result.lastText = text;
@@ -533,6 +580,58 @@ export async function runAgentSession(input: SessionInput): Promise<SessionResul
   result.totalCostUsd = settled;
   input.meter.settleSession(settled, meterKey);
   return result;
+}
+
+/**
+ * Cost (2026-11-02): sessions launched together with the same model and agent share one prompt
+ * prefix (~92k tokens for a builder), but none of them can read it from the cache until one has
+ * written it, so each paid the full cache write (every reel: 5–6 builders at the same second). The
+ * gate lets the first session per key go, and holds the others until it streams its first reply (or
+ * ends, or WARM_WAIT_MS passes). A key used within PREFIX_TTL_MS is warm and never waits. Same
+ * prompts and models; only the start times move.
+ */
+export const PREFIX_TTL_MS = 4.5 * 60 * 1000;
+export const WARM_WAIT_MS = 90 * 1000;
+export class CacheWarmGate {
+  private lastReply = new Map<string, number>();
+  private warming = new Map<string, Promise<void>>();
+  constructor(private now: () => number = Date.now) {}
+
+  /** Wait (when needed) before starting a session on `key`; returns the onReply/onEnd hooks for it. */
+  async enter(key: string): Promise<{ onReply: () => void; onEnd: () => void }> {
+    for (;;) {
+      const last = this.lastReply.get(key);
+      if (last !== undefined && this.now() - last < PREFIX_TTL_MS) return this.hooks(key, null);
+      const pending = this.warming.get(key);
+      if (!pending) break;
+      await pending;
+    }
+    let release!: () => void;
+    const ready = new Promise<void>((resolve) => { release = resolve; });
+    const timer = setTimeout(() => this.release(key, ready, release), WARM_WAIT_MS);
+    timer.unref?.();
+    this.warming.set(key, ready);
+    return this.hooks(key, () => { clearTimeout(timer); this.release(key, ready, release); });
+  }
+
+  private hooks(key: string, done: (() => void) | null) {
+    let first = true;
+    return {
+      onReply: () => {
+        this.lastReply.set(key, this.now());
+        if (first && done) done();
+        first = false;
+      },
+      onEnd: () => { if (done) done(); },
+    };
+  }
+
+  private release(key: string, ready: Promise<void>, resolve: () => void) {
+    if (this.warming.get(key) === ready) this.warming.delete(key);
+    // Fail open: a first session that never replied lets the rest start together.
+    if (!this.lastReply.has(key)) this.lastReply.set(key, this.now());
+    resolve();
+  }
 }
 
 /** The real SDK, loaded from explainers/runtime. */

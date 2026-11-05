@@ -62,10 +62,8 @@ test('seed parity: Mon 2026-10-19 resolves to exactly the default times', () => 
     ['stories', 510, 'guess_the_number', null],
     ['stories', 510, 'morning_download', null],
     ['reels', 525, null, 'trial'],
-    ['carousels', 540, null, null],
     ['reels', 675, null, 'trial'],
     ['explainers', 780, null, 'main'],
-    ['carousels', 870, null, null],
     ['explainers', 930, null, 'main'],
     ['reels', 1080, null, 'trial'],
   ]);

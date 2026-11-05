@@ -86,3 +86,49 @@ export class SpendMeter {
     // message ids are unique across sessions, so `seen` is kept (a parallel session's ids stay deduplicated)
   }
 }
+
+/**
+ * A render meter that also charges another meter as spend accrues (Targeted Revisions: a scene
+ * redo's session is charged to the revision's ceiling message by message, while the job's own
+ * per-reel cap still applies through the base class). Once `charge` throws, the error is kept,
+ * nothing more is charged, and `overCap` turns true, so runAgentSession aborts the session at
+ * once (it swallows errors from its stream loop, which is why the error is kept, not thrown).
+ */
+export class ChargedSpendMeter extends SpendMeter {
+  private stopped: unknown = null;
+
+  constructor(capUsd: number, carriedUsd: number, private readonly chargeTo: (usd: number) => void) {
+    super(capUsd, carriedUsd);
+  }
+
+  /** What `charge` threw (e.g. CeilingReached), or null. */
+  get stopError(): unknown {
+    return this.stopped;
+  }
+
+  private bill(usd: number): void {
+    if (this.stopped !== null || !(usd > 0)) return;
+    try {
+      this.chargeTo(usd);
+    } catch (error) {
+      this.stopped = error;
+    }
+  }
+
+  override observe(message: Parameters<SpendMeter['observe']>[0], key?: symbol): number {
+    const usd = super.observe(message, key);
+    this.bill(usd);
+    return usd;
+  }
+
+  /** The SDK's total can exceed the streamed estimate: the difference is charged too. */
+  override settleSession(sessionTotalUsd: number, key?: symbol): void {
+    const streamed = this.estimateOf(key);
+    super.settleSession(sessionTotalUsd, key);
+    this.bill(sessionTotalUsd - streamed);
+  }
+
+  override get overCap(): boolean {
+    return super.overCap || this.stopped !== null;
+  }
+}

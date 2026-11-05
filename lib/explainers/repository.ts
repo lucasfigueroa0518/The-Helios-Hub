@@ -12,6 +12,7 @@ import {
   type FeedbackRow,
   type JobRow,
   type JobTrigger,
+  type LessonAltitude,
   type LintViolation,
   type TopicOrigin,
   type TopicRow,
@@ -99,6 +100,11 @@ export type NewTopic = {
   sourceUrl?: string | null;
   sourceText?: string | null;
   origin: TopicOrigin;
+  /** Coverage bucket and lesson frame (ideas coverage, 2026-11-03). */
+  bucket?: string | null;
+  lessonPayload?: string | null;
+  lessonAltitude?: LessonAltitude | null;
+  lessonMap?: string | null;
 };
 
 export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<TopicRow[]> {
@@ -108,8 +114,9 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
       const title = topic.title.trim();
       if (!title) throw new Error('topic title is empty');
       const { rows } = await tx.query<Record<string, unknown>>(
-        `INSERT INTO explainers.topics (title, scope, term, source_url, source_text, origin)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO explainers.topics
+           (title, scope, term, source_url, source_text, origin, bucket, lesson_payload, lesson_altitude, lesson_map)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
         [
           title,
@@ -118,6 +125,10 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
           topic.sourceUrl?.trim() || null,
           topic.sourceText?.trim() || null,
           topic.origin,
+          topic.bucket?.trim() || null,
+          topic.lessonPayload?.trim() || null,
+          topic.lessonAltitude ?? null,
+          topic.lessonMap?.trim() || null,
         ],
       );
       added.push(toTopic(rows[0]));
@@ -163,12 +174,34 @@ export async function listRecentlyRendered(
 ): Promise<TopicRow[]> {
   const { rows } = await db.query<Record<string, unknown>>(
     `SELECT * FROM explainers.topics
-      WHERE rendered_at IS NOT NULL
+      WHERE rendered_at IS NOT NULL AND status <> 'retired'
         AND rendered_at >= $1::timestamptz - make_interval(days => $2::int)
       ORDER BY rendered_at DESC`,
     [now.toISOString(), lookbackDays],
   );
   return rows.map(toTopic);
+}
+
+/** Every rendered topic, newest first: the coverage map's input (ideas coverage, 2026-11-03). */
+export async function listRendered(db: Queryable): Promise<TopicRow[]> {
+  const { rows } = await db.query<Record<string, unknown>>(
+    `SELECT * FROM explainers.topics WHERE rendered_at IS NOT NULL AND status <> 'retired' ORDER BY rendered_at DESC`,
+  );
+  return rows.map(toTopic);
+}
+
+/** Writes a topic's bucket and lesson frame (generator, seeds, the payload rewrite and the one-time backfill). */
+export async function saveLessonFrame(
+  db: Queryable,
+  topicId: string,
+  frame: { bucket?: string | null; payload: string; altitude: LessonAltitude; map: string },
+): Promise<void> {
+  await db.query(
+    `UPDATE explainers.topics
+        SET bucket = COALESCE($2, bucket), lesson_payload = $3, lesson_altitude = $4, lesson_map = $5, updated_at = now()
+      WHERE id = $1`,
+    [topicId, frame.bucket ?? null, frame.payload, frame.altitude, frame.map],
+  );
 }
 
 /** Lucas's Reject on a topic that has not been rendered or queued. */
@@ -354,8 +387,11 @@ export async function requestRender(
   });
 }
 
-/** Oldest requested job, if nothing is running (one render at a time, E-02). */
-export async function claimNextJob(db: Queryable): Promise<JobRow | null> {
+/**
+ * Oldest requested job, if nothing is running (one render at a time, E-02). `parallel` (local runs started from
+ * Claude Code, Lucas 2026-11-03: "set the norm to having local renders … run in parallel") claims it regardless.
+ */
+export async function claimNextJob(db: Queryable, opts: { parallel?: boolean } = {}): Promise<JobRow | null> {
   const { rows } = await db.query<Record<string, unknown>>(
     `UPDATE explainers.jobs
         SET status = 'running', started_at = now(), stage = 'claimed'
@@ -366,8 +402,9 @@ export async function claimNextJob(db: Queryable): Promise<JobRow | null> {
                LIMIT 1
                FOR UPDATE SKIP LOCKED
             )
-        AND NOT EXISTS (SELECT 1 FROM explainers.jobs WHERE status = 'running')
+        AND ($1::boolean OR NOT EXISTS (SELECT 1 FROM explainers.jobs WHERE status = 'running'))
       RETURNING *`,
+    [opts.parallel === true],
   );
   return rows[0] ? toJob(rows[0]) : null;
 }
@@ -480,14 +517,21 @@ export async function finishJob(
 /**
  * Jobs left `running` by a worker that died. Only one worker renders at a time
  * (E-02), so at start-up any running job is orphaned. Returns how many failed.
+ *
+ * A finished render held by a Targeted Revisions scene redo (stage `revision:<id>`) is not a
+ * render: it is left alone here. helios-explainers' start-up puts its folder back and releases it
+ * first (lib/revisions/explainers-folder.ts recoverSceneRedos), and `--once` must not touch a hold a
+ * live worker may own.
  */
+export const REVISION_STAGE = 'revision';
+
 export async function failStaleRunningJobs(db: Queryable, reason: string): Promise<number> {
   const { rows } = await db.query(
     `UPDATE explainers.jobs
         SET status = 'failed', error = $1, finished_at = now()
-      WHERE status = 'running'
+      WHERE status = 'running' AND coalesce(stage, '') NOT LIKE $2
       RETURNING id`,
-    [reason],
+    [reason, `${REVISION_STAGE}:%`],
   );
   return rows.length;
 }

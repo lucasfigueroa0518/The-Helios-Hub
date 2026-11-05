@@ -9,15 +9,19 @@
 //                  (`- duration:` rewritten from the voice), mount.mjs (`- src:`, `- treatment:`) and
 //                  music.mjs (`- music:`). `music: none` in the front matter keeps audio.mjs from
 //                  fetching a bed: music.mjs places the music itself.
-//   assets/media/  a copy of every inventory asset and its sidecars (<stem>.boxes.json: measured text
+//   assets/media/  a copy of every inventory asset and its sidecars (<file>.boxes.json or <stem>.boxes.json:
+//                  iteration 4's { faces, words, photos, lift } in 0–1 of the image → the inventory's
+//                  `regions` (and pixel `boxes` from its words); or the older measured text
 //                  boxes { image?, width, height, boxes: [{ text, x, y, w, h }] } in image pixels, B2's
 //                  format, also named by the asset flag `boxes:<path>`; <stem>.map.json + <stem>.plain.png: a rendered map; <stem>.fg.png and
 //                  <stem>.plate.<ext>: a parallax cut and its gap-fill plate)
 //   assets/inventory.json  the inventory with files pointing at assets/media/ and the sidecars inlined
+//   assets/frame-assets/<frame id>.json  the inventory records one frame's storyboard entry names
 //                  (ctx.media in every frame)
-//   assets/lines.json  each frame's lines in order: { [frame id]: [{ id, words, label, pause_after }] };
+//   assets/lines.json  each frame's lines in order: { [frame id]: [{ id, words, label, label_kind, pause_after }] };
 //                  pace.mjs turns it into `lines` in every timing file (ctx.timing.lines), so each line's
-//                  label lands on its own line (W-39)
+//                  label lands on its own line (W-39); `label_kind` 'date' (MD-130) styles a date label
+//                  more prominently (nk.label's `kind`)
 //
 // One storyboard frame holds one or more script lines; the last frame is the brand close, voiced with
 // the draft's closing question (MD-18). A plan without a close gets one. Every line's `on_screen` label
@@ -26,6 +30,7 @@
 
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, isAbsolute, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { CLOSE } from './close-timing.js';
 import { MUSIC_CUES, TREATMENTS } from './frames.mjs';
@@ -56,9 +61,75 @@ export function draftLines(draft) {
 export function planFrames(plan, draft) {
   const frames = [...(plan?.frames ?? [])].sort((a, b) => a.n - b.n).map((f) => ({ ...f }));
   if (!frames.length || frames[frames.length - 1].treatment !== 'close') {
-    frames.push({ n: 0, name: 'Close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'The brand close; the comment question is spoken over it', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
+    frames.push({ n: 0, name: 'Close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'The brand close; the comment question is spoken over it', blueprint: null, music: 'end', on_screen: null });
   }
-  return frames.map((f, i) => ({ ...f, n: i + 1, id: `${pad2(i + 1)}-${slug(f.name)}`, question: f.treatment === 'close' ? one(draft?.close_question) : null }));
+  return frames.map((f, i) => ({ ...f, treatment: blueprintTreatment(f), n: i + 1, id: `${pad2(i + 1)}-${slug(f.name)}`, question: f.treatment === 'close' ? one(draft?.close_question) : null }));
+}
+
+/**
+ * The storyboard `- treatment:` of a compiled frame: the kit's checks and the captions read it, and the module's must match.
+ * A whiteboard ground is a whiteboard (captions turn to ink there); a frame that isn't on one can't say it is. Pure.
+ */
+export function blueprintTreatment(f) {
+  const b = f?.blueprint;
+  if (!b || f.treatment === 'close') return f?.treatment;
+  if (b.ground === 'whiteboard') return 'whiteboard';
+  const staged = b.style === 'paper' ? 'collage' : 'collision';
+  return f.treatment === 'whiteboard' || !TREATMENTS.includes(f.treatment) ? staged : f.treatment;
+}
+
+const quoted = (w) => `“${one(w)}”`;
+
+/**
+ * A blueprint as storyboard lines Lucas and the checks can read: `[key, value]`, in the order a frame unfolds. Every time is
+ * the spoken words it lands on (“” is the frame's start). Pure.
+ */
+export function blueprintFields(b) {
+  if (!b) return [];
+  const piece = (p) => [
+    `${p.id}${p.role === 'lead' ? ' (lead)' : ''}: ${[p.asset, p.treatment, p.fill ? 'full frame' : '', p.note != null ? `note ${quoted(p.note)}${p.note_role ? ` as ${p.note_role}` : ''}` : ''].filter(Boolean).join(' ') || 'nothing'}`,
+    p.side ? `on the ${p.side}` : '',
+    p.belongs ? `with ${p.belongs}` : '',
+    p.onto ? `onto ${p.onto.piece}'s ${p.onto.box}` : '',
+    p.crop ? 'cropped' : '',
+    p.label ? `named ${quoted(p.label)}` : '',
+    `lands on ${quoted(p.on)}`,
+    p.until ? `leaves on ${quoted(p.until)}` : '',
+  ].filter(Boolean).join(', ');
+  const join = (list, f) => (list ?? []).map(f).join('; ');
+  return [
+    ['ground', [b.ground, `style ${b.style}`, `arrangement ${b.arrangement}`, b.peak ? 'peak' : ''].filter(Boolean).join(' · ')],
+    ['hook', b.hook ? `${quoted(b.hook.text)} on ${quoted(b.hook.on)}` : ''],
+    ['pieces', join(b.pieces, piece)],
+    ['named', join(b.labels, (l) => `${quoted(l.text)}${l.sub ? ` / ${quoted(l.sub)}` : ''}${l.kind ? ` (${l.kind})` : ''}${l.for ? ` for ${l.for}` : ''} on ${quoted(l.on)}`)],
+    ['speech', join(b.speech, (x) => `${x.on_piece} says ${quoted(x.text)} on ${quoted(x.on)}${x.until ? ` until ${quoted(x.until)}` : ''}`)],
+    ['marks', join(b.marks, (m) => `${m.kind} on ${m.on_piece}${m.target ? ` at ${m.target}` : ''}${m.from ? ` from ${m.from}` : ''} on ${quoted(m.on)}`)],
+    ['arrows', join(b.arrows, (a) => `${a.from} to ${a.to} on ${quoted(a.on)}`)],
+    ['camera', b.camera ? `${b.camera.move}${(b.camera.stops ?? []).length ? `: ${join(b.camera.stops, (c) => `${c.aim}${c.zoom ? ` at ${c.zoom}x` : ''} on ${quoted(c.on)}`)}` : ''}` : ''],
+    ['ground_tone', join(b.ground_tone, (g) => `to ${g.to} on ${quoted(g.on)}`)],
+    ['sounds', join(b.sounds, (x) => `${x.kind}: ${one(x.what)} on ${quoted(x.on)}${x.dur ? ` for ${x.dur}s` : ''}`)],
+  ].filter(([, v]) => one(v));
+}
+
+/** The storyboard's text with the named frames' blueprints written in (the free replay); everything else stays. Pure. */
+export function withBlueprints(storyboard, frames) {
+  const text = String(storyboard);
+  const heads = [...text.matchAll(/^##\s+Frame\s+(\d+).*$/gm)];
+  const byN = new Map(frames.map((f) => [Number(f.n), f]));
+  const GONE = new Set(['motion', 'sound', 'ground', 'hook', 'pieces', 'named', 'speech', 'marks', 'arrows', 'camera', 'ground_tone', 'sounds']);
+  let out = text.slice(0, heads[0]?.index ?? text.length);
+  heads.forEach((m, i) => {
+    const end = i + 1 < heads.length ? heads[i + 1].index : text.length;
+    const block = text.slice(m.index, end);
+    const f = byN.get(Number(m[1]));
+    if (!f?.blueprint) { out += block; return; }
+    const lines = block.split('\n').filter((l) => !GONE.has(/^-\s+([\w-]+):/.exec(l)?.[1]));
+    const at = lines.findIndex((l) => /^-\s+music:/.test(l));
+    const fields = blueprintFields(f.blueprint).map(([k, v]) => `- ${k}: ${one(v)}`);
+    lines.splice(at < 0 ? lines.length : at, 0, ...fields);
+    out += lines.join('\n').replace(/^-\s+treatment:.*$/m, `- treatment: ${blueprintTreatment(f)}`);
+  });
+  return out;
 }
 
 /** Problems with a draft/plan/inventory triple (unknown ids, lines left out or used twice). */
@@ -86,13 +157,36 @@ export function projectProblems(draft, frames, inventory) {
 const words = (text) => one(text).split(' ').filter(Boolean).length;
 const sameText = (a, b) => one(a).toLowerCase() === one(b).toLowerCase();
 
-/** The frame's lines in order: { id, words, label, pause_after } (label: the line's on_screen, or null). */
+/** A label that is only a date: "2015", "December 2015", "Dec. 11, 2015", "11 December 2015", "late 2015", "2014–2015". */
+const MONTH = '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\.?';
+const YEAR = "(?:19|20)\\d{2}|'\\d{2}";
+const DATE_ONLY = new RegExp(`^(?:(?:early|mid|late|spring|summer|autumn|fall|winter)[- ]+)?(?:(?:\\d{1,2}(?:st|nd|rd|th)? +)?${MONTH}(?: +\\d{1,2}(?:st|nd|rd|th)?)?,? +)?(?:${YEAR})(?: *[–—-] *(?:${YEAR}))?$`, 'i');
+export const isDateLabel = (label) => DATE_ONLY.test(one(label));
+
+/**
+ * The kind of a line's label (MD-130): 'date' when the writer marks it (`on_screen_kind: 'date'`; L1's label
+ * is always a date), else null. A line written before the writer marked dates (no `on_screen_kind` at all)
+ * counts as a date when its label is nothing but a date.
+ */
+export function labelKind(line, label) {
+  if (!label) return null;
+  if (line?.on_screen_kind === 'date') return 'date';
+  if (line && 'on_screen_kind' in line) return null;
+  return isDateLabel(label) ? 'date' : null;
+}
+
+/**
+ * The frame's lines in order: { id, words, label, label_kind, pause_after } (label: the line's on_screen, or
+ * null when the director dropped it, MD-126; label_kind: 'date' or null, MD-130).
+ */
 export function frameLines(frame, lines) {
   if (frame.treatment === 'close') return [];
+  const dropped = new Set(frame.drop_labels ?? []);
   return (frame.line_ids ?? []).filter((id) => lines.has(id)).map((id) => {
     const l = lines.get(id);
     const p = Number(l.pause_after);
-    return { id, words: words(l.text), label: one(l.on_screen) || null, pause_after: Number.isFinite(p) && p > 0 ? r2(Math.min(p, PAUSE_MAX)) : 0 };
+    const label = dropped.has(id) ? null : one(l.on_screen) || null;
+    return { id, words: words(l.text), label, label_kind: labelKind(l, label), pause_after: Number.isFinite(p) && p > 0 ? r2(Math.min(p, PAUSE_MAX)) : 0 };
   });
 }
 
@@ -147,6 +241,14 @@ export function frameShows(frame) {
   return (frame.shows ?? []).filter((s) => one(s?.person)).map((s) => `${one(s.person)} = ${one(s.asset_id)}${s.treatment ? ` (${one(s.treatment)})` : ''}`).join('; ');
 }
 
+/** A frame's `- shots:` (its picture beats in spoken order, MD-136): "“the words” = what shows [V3, W1] introduces Name; …". */
+export function frameShots(frame) {
+  return (frame.shots ?? []).filter((s) => one(s?.at)).map((s) => {
+    const ids = (s.asset_ids ?? []).map(one).filter(Boolean);
+    return `“${one(s.at)}” = ${one(s.shows)}${ids.length ? ` [${ids.join(', ')}]` : ''}${one(s.introduces) ? ` introduces ${one(s.introduces)}` : ''}`;
+  }).join('; ');
+}
+
 /** A frame's `- makes:` (the made assets it uses and their briefs): "M2 = expression, seed worry, from V3: brief | …". */
 export function frameMakes(frame, makes) {
   const byId = new Map((makes ?? []).map((m) => [m.id, m]));
@@ -190,10 +292,11 @@ export function storyboardMarkdown(draft, frames, makes = []) {
       ...field('shows', frameShows(f)),
       ...field('makes', frameMakes(f, makes)),
       ...field('lines', (f.line_ids ?? []).join(', ')),
+      ...field('shots', frameShots(f)),
       ...field('purpose', f.purpose),
-      ...field('motion', f.motion),
-      ...field('marks', f.marks),
-      ...field('sound', f.sound),
+      ...(f.blueprint
+        ? blueprintFields(f.blueprint).flatMap(([k, v]) => field(k, v))
+        : [...field('motion', f.motion), ...field('marks', f.marks), ...field('sound', f.sound)]),
       `- music: ${MUSIC_CUES.includes(f.music) ? f.music : 'hold'}`,
       ...field('on_screen', f.on_screen),
       ...field('labels', frameLabels(f, lines)),
@@ -228,6 +331,33 @@ export function normalizeBoxes(sidecar, width) {
     .map((b) => ({ text: String(b.text ?? ''), x: r2(b.x * k), y: r2(b.y * k), w: r2(b.w * k), h: r2(b.h * k) }));
 }
 
+const okRegion = (b) => b && [b.x, b.y, b.w, b.h].every(Number.isFinite) && b.w > 0 && b.h > 0;
+/**
+ * The iteration-4 box sidecar (`<file>.boxes.json`, written by the harvest): { faces, words: [{ text, box }],
+ * photos, lift, lift_from (the page region the lift was cut from) }, boxes 0–1 of the image. Null for the older pixel `boxes` format. Bad boxes are dropped.
+ */
+export function sidecarRegions(json) {
+  if (!json || typeof json !== 'object' || Array.isArray(json) || !['faces', 'words', 'photos', 'lift'].some((k) => k in json)) return null;
+  const list = (v) => (Array.isArray(v) ? v : []);
+  return {
+    faces: list(json.faces).filter(okRegion),
+    words: list(json.words).filter((w) => okRegion(w?.box)).map((w) => ({ text: String(w.text ?? ''), box: w.box })),
+    photos: list(json.photos).filter(okRegion),
+    lift: typeof json.lift === 'string' && json.lift ? json.lift : null,
+    lift_from: okRegion(json.lift_from) ? json.lift_from : null,
+  };
+}
+
+/** What a frame worker reads of a record: the measured grids are for code, and only cost tokens to read. */
+const forReading = (a) => (a.regions?.shape || a.regions?.tone ? { ...a, regions: { ...a.regions, shape: undefined, tone: undefined } } : a);
+
+/** The sections of `## Treatments` every frame may need, whatever its treatment. */
+/** The inventory records a frame's storyboard entry names, so its worker needn't load the whole inventory. */
+export function frameAssets(frame, assets) {
+  const named = new Set(JSON.stringify(frame).match(/[A-Za-z0-9_]+/g) ?? []);
+  return assets.filter((a) => named.has(a.id));
+}
+
 /**
  * Write SCRIPT.md, STORYBOARD.md, assets/media/ and assets/inventory.json into `projectDir`.
  * `mediaRoot`: where the inventory's relative files live (default: the job folder, tried as the project's
@@ -240,6 +370,8 @@ export function writeProjectFiles(projectDir, { draft, plan, inventory, mediaRoo
   writeFileSync(join(projectDir, 'SCRIPT.md'), scriptMarkdown(draft, frames));
   writeFileSync(join(projectDir, 'STORYBOARD.md'), storyboardMarkdown(draft, frames, plan?.makes ?? []));
   mkdirSync(join(projectDir, 'assets'), { recursive: true });
+  // The plan as it was compiled from, so a reel can be replayed for free without the database.
+  writeFileSync(join(projectDir, 'assets', 'plan.json'), `${JSON.stringify(plan, null, 1)}\n`);
   const byLine = draftLines(draft);
   writeFileSync(join(projectDir, 'assets', 'lines.json'), `${JSON.stringify(Object.fromEntries(frames.map((f) => [f.id, frameLines(f, byLine)])), null, 1)}\n`);
 
@@ -262,7 +394,10 @@ export function writeProjectFiles(projectDir, { draft, plan, inventory, mediaRoo
     const flaggedSrc = flagged ? locate(flagged, roots) : null;
     if (flaggedSrc && dirname(flaggedSrc) !== dirname(src) || flaggedSrc && !basename(flaggedSrc).startsWith(`${basename(src, extname(src))}.`)) {
       try {
-        entry.boxes = normalizeBoxes(JSON.parse(readFileSync(flaggedSrc, 'utf8')), a.width);
+        const box = JSON.parse(readFileSync(flaggedSrc, 'utf8'));
+        const regions = sidecarRegions(box);
+        if (regions) entry.regions = { ...entry.regions, ...regions, lift: regions.lift ? rel(basename(regions.lift)) : null };
+        else entry.boxes = normalizeBoxes(box, a.width);
         copyFileSync(flaggedSrc, join(mediaDir, basename(flaggedSrc)));
       } catch {
         problems.push(`${a.id}: the boxes sidecar ${flagged} is not valid JSON`);
@@ -272,7 +407,15 @@ export function writeProjectFiles(projectDir, { draft, plan, inventory, mediaRoo
       copyFileSync(join(dirname(src), side), join(mediaDir, side));
       const kind = side.slice(basename(src, extname(src)).length + 1);
       try {
-        if (kind === 'boxes.json') entry.boxes = normalizeBoxes(JSON.parse(readFileSync(join(dirname(src), side), 'utf8')), a.width);
+        if (kind === 'boxes.json' || kind === `${extname(src).slice(1)}.boxes.json`) {
+          const box = JSON.parse(readFileSync(join(dirname(src), side), 'utf8'));
+          const regions = sidecarRegions(box);
+          if (regions) {
+            // What was measured from the pixels (visible, shape, tone, chip) stays beside what the harvest found.
+            entry.regions = { ...entry.regions, ...regions, lift: regions.lift ? rel(basename(regions.lift)) : null };
+            if (!entry.boxes?.length && regions.words.length) entry.boxes = regions.words.map((w) => ({ text: w.text, x: r2(w.box.x * a.width), y: r2(w.box.y * a.height), w: r2(w.box.w * a.width), h: r2(w.box.h * a.height) }));
+          } else entry.boxes = normalizeBoxes(box, a.width);
+        }
         else if (kind === 'map.json') {
           const m = JSON.parse(readFileSync(join(dirname(src), side), 'utf8'));
           entry.map = { ...m, ...(m.plain ? { plain: rel(m.plain) } : {}) };
@@ -286,5 +429,7 @@ export function writeProjectFiles(projectDir, { draft, plan, inventory, mediaRoo
   }
   for (const id of missing) problems.push(`asset ${id}: its file is missing`);
   writeFileSync(join(projectDir, 'assets', 'inventory.json'), `${JSON.stringify({ ...inventory, assets }, null, 1)}\n`);
+  mkdirSync(join(projectDir, 'assets', 'frame-assets'), { recursive: true });
+  for (const f of frames) writeFileSync(join(projectDir, 'assets', 'frame-assets', `${f.id}.json`), `${JSON.stringify({ assets: frameAssets(f, assets).map(forReading) }, null, 1)}\n`);
   return { frames: frames.map((f) => ({ n: f.n, id: f.id, treatment: f.treatment })), media: assets.map((a) => a.id), missing, problems };
 }

@@ -256,3 +256,14 @@ by explainers/reel-ai-drama/tools/ambience-import.mjs.
 | keyboards | [Mechanical Keyboard Typing (Treble Version)](https://freesound.org/people/stu556/sounds/450282/) | stu556 | CC0 |
 | night | [Night city atmosphere](https://freesound.org/people/Soundkrampf/sounds/237329/) | Soundkrampf | CC0 |
 | newsroom | [Office ambience - call center 3](https://freesound.org/people/leonelmail/sounds/579568/) | leonelmail | CC0 |
+| fireplace | [fire crackles](https://freesound.org/people/florianreichelt/sounds/563766/) | florianreichelt | CC0 |
+| car | [Car interior](https://freesound.org/people/Kukensius/sounds/320228/) | Kukensius | CC0 |
+| train | [Empty train moving slowly (recorded inside passenger car)](https://freesound.org/people/avakas/sounds/197124/) | avakas | CC0 |
+| airplane | [Plane Interior](https://freesound.org/people/Vurca/sounds/341591/) | Vurca | CC0 |
+| factory | [Industrial ambience](https://freesound.org/people/Lewente/sounds/393398/) | Lewente | CC0 |
+| forest | [forest with small river birds and nature field recording](https://freesound.org/people/Garuda1982/sounds/577623/) | Garuda1982 | CC0 |
+| shore | [Big waves hit land.wav](https://freesound.org/people/straget/sounds/412308/) | straget | CC0 |
+| camera-shutter | [Vintage Camera Flash Powder and Shutter](https://freesound.org/people/Werra/sounds/232130/) | Werra |
+| camera-shutter | [Camera Focusing and Shutter](https://freesound.org/people/uEffects/sounds/207865/) | uEffects |
+| camera-shutter | [Camera shutter and flash combined](https://freesound.org/people/montclairguy/sounds/353044/) | montclairguy |
+| camera-shutter | [DSLR Camera Click](https://freesound.org/people/akonze/sounds/157812/) | akonze |

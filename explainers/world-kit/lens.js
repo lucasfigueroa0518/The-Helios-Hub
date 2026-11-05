@@ -1050,7 +1050,9 @@ export function render(P, { env = [], items: given = [], focus: rawFocus = null,
       return { it, i, d };
     })
     .filter(({ it }) => it.svg);
-  const sorted = paintOrder(P, listed).map(({ it }) => piece(it));
+  const order = paintOrder(P, listed);
+  logPaint(P, order);
+  const sorted = order.map(({ it }) => piece(it));
   const defs = [...filters.values()].map((f) => f.defs).join('');
   // marked as a lens picture, so frame() (and the try's framing check) know it was drawn
   // through a lens even when the frame passes no { lens }
@@ -1136,12 +1138,46 @@ function behind(P, A, B) {
   }
   return best;
 }
+/** Flat things (a sheet, a card, a folder, a tray, a desk) are at most this tall (cm), or lower
+ *  than 0.6 of their width (a sheet tilted up as it is dealt is still flat). */
+export const FLAT_CM = 8;
+/** The ceiling on that tilted case, so a wide wall or a desk on its legs never counts as flat and paints over what stands before it. */
+const FLAT_TILT_CM = 24;
+/** Two boxes no plane separates, both flat, their floor plans overlapping: the one that sits higher lies on top of the other, so it paints after it
+ *  when the lens looks down (a sheet slid onto a folder, a card dealt over the pile, a card taken
+ *  off the top of a stack, which rides above it while it travels). Decided by the boxes' heights,
+ *  not by the distance to their centres, so the order does not flip from frame to frame as one
+ *  moves sideways. +1 A first, −1 B first, 0 undecided. */
+function isFlat(Q) {
+  const h = Q[1][2] - Q[0][2];
+  const w = Math.max(Q[1][0] - Q[0][0], Q[1][1] - Q[0][1]);
+  return w > 0 && h <= Math.max(FLAT_CM, Math.min(FLAT_TILT_CM, 0.6 * w)); // a point (w 0) has no floor plan to lie on
+}
+function stacked(P, A, B) {
+  if (!isFlat(A) || !isFlat(B)) return 0;
+  const ox = Math.min(A[1][0], B[1][0]) - Math.max(A[0][0], B[0][0]);
+  const oy = Math.min(A[1][1], B[1][1]) - Math.max(A[0][1], B[0][1]);
+  if (!(ox > 0 && oy > 0)) return 0;
+  const mA = A[0][2] + A[1][2];
+  const mB = B[0][2] + B[1][2];
+  if (Math.abs(mA - mB) < 0.02) return 0;
+  const up = P.pos[2] >= Math.max(A[1][2], B[1][2]) ? 1 : -1; // a lens below them sees the other face
+  return (mA < mB ? 1 : -1) * up;
+}
+/** Optional recorder for the checks (try.mjs): while globalThis.__hxPaintLog is an array, each
+ *  render() pushes its items' { id, bounds } in paint order (one list per render). */
+function logPaint(P, order) {
+  const log = globalThis.__hxPaintLog;
+  if (!Array.isArray(log)) return;
+  log.push(order.map(({ it }) => ({ id: it.id ?? null, bounds: boundsOf(it, P) })).filter((x) => x.id && x.bounds));
+}
 /**
  * The paint order of render()'s items (4.1): farthest first by each item's `at`, corrected for
  * things with extent. An item may give `bounds` (its world box; setBuilder gives its fixtures
  * theirs); two items whose boxes a plane separates are painted back to front across that plane,
  * so a long counter no longer paints over the critter in front of it, and a pin on a table's top
- * is never covered by the table. A topological sort over those pairs, ties by distance.
+ * is never covered by the table; flat things that overlap lie in height order (stacked). A
+ * topological sort over those pairs, ties by distance.
  * @param {any} P  @param {Array<{ it: any, i: number, d: number }>} list
  */
 export function paintOrder(P, list) {
@@ -1157,19 +1193,32 @@ export function paintOrder(P, list) {
     if (!bx[a]) continue;
     for (let b = a + 1; b < n; b++) {
       if (!bx[b] || !(sized[a] || sized[b])) continue;
-      const r = behind(P, bx[a], bx[b]);
+      const r = behind(P, bx[a], bx[b]) || stacked(P, bx[a], bx[b]);
       if (r === 1) { after[a].push(b); indeg[b] += 1; }
       else if (r === -1) { after[b].push(a); indeg[a] += 1; }
     }
   }
-  // Kahn's sort; among the ready ones, the farthest (the base order) first; a cycle (rare: three
-  // boxes overlapping round each other) falls back to the base order for what is left
+  // Kahn's sort; among the ready ones, the farthest (the base order) first; a cycle (three boxes
+  // overlapping round each other, as cards dealt past a folder can) starts from the lowest left
   const out = [];
   const done = new Array(n).fill(false);
   for (let step = 0; step < n; step++) {
     let pick = -1;
     for (let k = 0; k < n; k++) if (!done[k] && indeg[k] === 0) { pick = k; break; }
-    if (pick < 0) pick = done.indexOf(false);
+    if (pick < 0) {
+      // a cycle: anything standing goes first, farthest first (a shelf must not paint over the room
+      // because it is tall); then the lowest flat thing (the bottom of a stack), the same way every
+      // frame, so a cycle never flips the order from frame to frame as a thing moves
+      for (let k = 0; k < n && pick < 0; k++) if (!done[k] && !(bx[k] && isFlat(bx[k]))) pick = k;
+      if (pick < 0) {
+        let low = Infinity;
+        for (let k = 0; k < n; k++) {
+          if (done[k]) continue;
+          const z = bx[k][0][2] + bx[k][1][2];
+          if (z < low - 0.02) { pick = k; low = z; }
+        }
+      }
+    }
     done[pick] = true;
     out.push(base[pick]);
     for (const m of after[pick]) indeg[m] -= 1;

@@ -14,6 +14,7 @@ export const TOPIC_STATUSES = [
   'promoted',
   'queued',
   'rendered',
+  'retired',
   // Explainers 3.1 pool reset: off the site and out of every list, the scheduler, and duplicate
   // history; kept whole so a topic (and its reels) can be brought back by setting its status.
   'archived',
@@ -192,12 +193,28 @@ export type AnalogyNote =
   | { version: string; golden_hidden: string[]; candidates: AnalogyTry[]; third?: AnalogyTry; below_bar: true; checked_at: string }
   | { version: string; error: string; failed_at: string };
 
+/**
+ * Lesson altitude (ideas-coverage PLAN.md, Contract): `unfamiliar` (the definition and how it works is the payload),
+ * `familiar` (the definition is an anchor; the payload is the mechanism, cause or failure behind it), `embedded`
+ * (placed in its system around the definition).
+ */
+export const LESSON_ALTITUDES = ['unfamiliar', 'familiar', 'embedded'] as const;
+export type LessonAltitude = (typeof LESSON_ALTITUDES)[number];
+
 export type TopicRow = {
   id: string;
   title: string;
   scope: string | null;
   /** The exact phrase the reel defines (EX3-86). Null on topics written before 3.2 until backfilled. */
   term: string | null;
+  /** Its coverage-map bucket (lib/explainers/ideas/coverage.ts, 2026-11-03). Null on older topics until framed. */
+  bucket: string | null;
+  /** The lesson frame (ideas-coverage PLAN.md): the one thing the viewer leaves with. */
+  lesson_payload: string | null;
+  /** Where the average viewer's understanding of the concept ends. */
+  lesson_altitude: LessonAltitude | null;
+  /** One sentence placing the concept in the system it belongs to. */
+  lesson_map: string | null;
   source_url: string | null;
   source_text: string | null;
   origin: TopicOrigin;

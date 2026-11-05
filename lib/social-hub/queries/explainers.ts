@@ -116,7 +116,7 @@ SELECT j.id AS job_id, j.topic_id, j.status, j.trigger, j.mode, j.spend_usd,
      ORDER BY a.seq DESC
      LIMIT 1
   ) vid ON true
- WHERE t.status <> 'archived'
+ WHERE t.status NOT IN ('archived', 'retired')
  ORDER BY j.seq DESC`;
 
 /** The topic pool (spec §7 Ideas): every live topic with its score and content stock. */

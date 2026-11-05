@@ -1,10 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { CheckSquare, Loader } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 'react';
 
 import { createHistory, undoChunks, type Command, type Tab } from '@/components/social-hub/calendar/history';
+import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
 import { DayTimePicker, Floating, SlotCard, SlotPanel, TIME_OPTIONS, type SlimPost } from '@/components/social-hub/calendar/SlotCard';
 import { Menu } from '@/components/social-hub/ui/Menu';
 import { sourceSeries, sourceVertical, useBoardDrag, type DragSource } from '@/components/social-hub/calendar/useBoardDrag';
@@ -120,7 +120,7 @@ export function WeekBoard(props: {
   /** The preview: its Schedules saves, oldest first, each applied once to the week on screen (schedule-sandbox.tsx). */
   scheduleChanges?: readonly ScheduleChange[];
 }) {
-  const router = useRouter();
+  const { pending: refreshPending, refresh } = useHubRefresh();
   const { caps, editable, sandbox } = props;
   const tab: Tab = `week:${props.monday}`;
 
@@ -296,11 +296,11 @@ export function WeekBoard(props: {
           const ids = new Set(list.map((b) => b.postId));
           confirmed.current = { ...confirmed.current, posts: confirmed.current.posts.filter((p) => !ids.has(p.id)) };
         }
-        if (error) { warn(error); if (!sandbox) router.refresh(); return; }
+        if (error) { warn(error); if (!sandbox) refresh(); return; }
         then();
       },
     });
-  }, [begin, finish, moveBack, props.canUnschedule, router, sandbox, warn]);
+  }, [begin, finish, moveBack, props.canUnschedule, refresh, sandbox, warn]);
 
   type Commit = { label: string; changes: Command['changes']; inverse: Command['inverse']; next: BoardState<SlimPost>; chunks?: Command['changes'][]; inverseChunks?: Command['inverse'][] };
   type CommitOpts = { text?: string; undoable?: boolean; checked?: boolean; moved?: number; reopen?: string; /** After a save that went through. */ done?: () => void };
@@ -326,7 +326,7 @@ export function WeekBoard(props: {
       const command: Command = { label: plan.label, changes: done.flat(), inverse: [...undoDone].reverse().flat(), chunks: done, inverseChunks: undoDone, tab, undoable: o.undoable !== false };
       history.push(command);
       setState(confirmed.current);
-      router.refresh();
+      refresh();
       o.done?.();
       say({ text: `Only part of this saved (${plural(done.flat().length, 'change')} of ${plan.chunks!.flat().length}). ${res.booked ? 'A booked post would lose its slot.' : res.reason ?? 'The rest didn’t save.'}${movedNote(o.moved ?? 0)}`, warn: true, command });
       return;
@@ -338,11 +338,11 @@ export function WeekBoard(props: {
         return;
       }
       warn(`${res.reason ?? 'That didn’t save.'}${movedNote(o.moved ?? 0)}`);
-      if (o.moved && !sandbox) router.refresh();
+      if (o.moved && !sandbox) refresh();
       return;
     }
     confirmed.current = plan.next;
-    if (!sandbox) router.refresh();
+    if (!sandbox) refresh();
     const command: Command = { label: plan.label, changes: plan.changes, inverse: plan.inverse, tab, undoable: o.undoable !== false, ...(plan.chunks ? { chunks: plan.chunks, inverseChunks: plan.inverseChunks } : {}) };
     history.push(command);
     before.set(command, was);
@@ -350,7 +350,7 @@ export function WeekBoard(props: {
     say({ text: `${o.text ?? toastText(plan.label)}${moved}`, command });
     if (o.reopen) setReopen(o.reopen);
     o.done?.();
-  }, [askBooked, begin, finish, router, sandbox, say, sendAll, tab, warn]);
+  }, [askBooked, begin, finish, refresh, sandbox, say, sendAll, tab, warn]);
 
   const doEdit = useCallback((edit: Edit, o: { reopen?: boolean } = {}) => {
     if (saving()) return;
@@ -394,7 +394,7 @@ export function WeekBoard(props: {
       rest.inverse = [...rest.inverseChunks!].reverse().flat();
       history.push(rest);
       setState(confirmed.current);
-      router.refresh();
+      refresh();
       say({ text: `Undo went only part of the way. ${res.booked ? 'A booked post would lose its slot.' : res.reason ?? 'The rest didn’t go through.'}`, warn: true, command: rest });
       return;
     }
@@ -405,9 +405,9 @@ export function WeekBoard(props: {
       return;
     }
     if (snap) confirmed.current = snap;
-    if (!sandbox) router.refresh();
+    if (!sandbox) refresh();
     say({ text: `Undone: ${c.label}.` });
-  }, [begin, finish, router, sandbox, say, sendAll, tab, warn]);
+  }, [begin, finish, refresh, sandbox, say, sendAll, tab, warn]);
 
   // Cmd/Ctrl+Z undoes the tab's last change (not while a dialog or a field has focus).
   useEffect(() => {
@@ -502,12 +502,12 @@ export function WeekBoard(props: {
       } finally {
         finish();
       }
-      router.refresh();
+      refresh();
     }
     confirmed.current = r.next;
     history.push({ label: r.label, changes: [], inverse: [], tab, undoable: false });
     say({ text: r.label });
-  }, [begin, clock, finish, ready, router, sandbox, say, tab, warn]);
+  }, [begin, clock, finish, ready, refresh, sandbox, say, tab, warn]);
 
   // ── Drag ──
 
@@ -613,7 +613,7 @@ export function WeekBoard(props: {
   };
 
   return (
-    <div className="sh-board" data-dragging={drag.dragging ? 'true' : undefined} data-busy={busy ? 'true' : undefined}>
+    <div className="sh-board" data-dragging={drag.dragging ? 'true' : undefined} data-busy={busy || refreshPending ? 'true' : undefined}>
       {busy ? <p className="sh-board__saving" role="status"><Loader size={14} className="sh-board__spin" aria-hidden="true" />Saving… other changes wait for this one.</p> : null}
       {sandbox ? <p className="sh-note sh-board__sandbox">Preview: changes stay on this screen and nothing is saved.</p> : null}
       {editable ? (
@@ -819,7 +819,7 @@ export function WeekBoard(props: {
         />
       ) : null}
 
-      <Confirm ask={ask} busy={busy} onClose={() => setAsk(null)} />
+      <Confirm ask={ask} busy={busy || refreshPending} onClose={() => setAsk(null)} />
 
       <ToastSlot top={Boolean(open || pick)}>
         {toast ? (
@@ -920,7 +920,7 @@ function Confirm({ ask, busy, onClose }: { ask: Ask | null; busy: boolean; onClo
  * template mode a small Switch back. Both confirm their consequence first.
  */
 export function SourceSwitch({ source, readOnly = false, facts }: { source: SlotSource; readOnly?: boolean; /** What switching on changes (read on the server). */ facts: SwitchFacts }) {
-  const router = useRouter();
+  const { pending: refreshPending, refresh } = useHubRefresh();
   const titleId = useId();
   const dialog = useRef<HTMLDialogElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -935,7 +935,7 @@ export function SourceSwitch({ source, readOnly = false, facts }: { source: Slot
       const { status, out } = await post(SOURCE, { source: on ? 'legacy' : 'template' });
       if (status === 200) {
         dialog.current?.close();
-        router.refresh();
+        refresh();
       } else setNote(typeof out.error === 'string' ? out.error : 'That didn’t switch. Try again in a moment.');
     } catch {
       setNote(OFFLINE);
@@ -964,7 +964,7 @@ export function SourceSwitch({ source, readOnly = false, facts }: { source: Slot
         {note ? <p className="sh-note sh-note--failed" role="alert">{note}</p> : null}
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => dialog.current?.close()}>Cancel</button>
-          <button type="button" className="sh-btn sh-btn--primary" disabled={busy} data-busy={busy ? '' : undefined} onClick={() => void flip()}>
+          <button type="button" className="sh-btn sh-btn--primary" disabled={busy || refreshPending} data-busy={busy || refreshPending ? '' : undefined} onClick={() => void flip()}>
             {busy ? <Loader size={14} aria-hidden="true" /> : null}{on ? 'Switch back' : 'Switch on'}
           </button>
         </div>

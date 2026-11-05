@@ -16,6 +16,7 @@ const DRY = process.argv.includes('--dry-run');
 const PER = 4;
 
 export const CATS = {
+  'camera-shutter': { queries: ['camera shutter', 'dslr shutter', 'camera shutter click', 'photo camera click'], keep: /shutter|camera/i, drop: /drone|motor|video|wind|music|loop|ambien|phone/i, tags: ['shutter', 'camera', 'snapshot'], desc: 'a camera shutter clicking' },
   magnet: { queries: ['magnet whiteboard', 'magnet snap', 'fridge magnet', 'magnet click'], keep: /magnet/i, drop: /field|hum|drone|ambien|music|loop/i, tags: ['magnet', 'clack'] },
   'cord-taut': { queries: ['rope taut', 'rope pull tight', 'rope tension', 'string pulled tight'], keep: /rope|cord|string/i, drop: /guitar|violin|bass|swing|jump|ship|creak|music|loop/i, tags: ['cord', 'rope', 'taut'] },
   'whiteboard-squeak': { queries: ['whiteboard marker squeak', 'marker squeak', 'whiteboard squeak'], keep: /whiteboard|marker|sharpie|\bpen\b/i, drop: /door|shoe|floor|mouse|toy|music|loop/i, tags: ['squeak', 'dryerase'] },
@@ -67,7 +68,9 @@ const known = new Set(main.map((s) => s.source).filter(Boolean));
 const tmp = join(SFX, '.rc-import-raw');
 const added = [];
 const credits = [];
+const only = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7);
 for (const [cat, c] of Object.entries(CATS)) {
+  if (only && cat !== only) continue;
   const seen = new Map();
   for (const q of c.queries) {
     for (const s of await search(q)) if (!seen.has(s.id)) seen.set(s.id, s);

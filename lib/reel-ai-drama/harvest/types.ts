@@ -1,11 +1,16 @@
 import type { Queryable } from '@/lib/explainers/db';
+import type { DramaHit, DramaLookup, DramaOfferInput } from '@/lib/media-library/drama';
 import type { BankedCutout } from '@/lib/real-case/bank';
 import type { CreateMessage } from '@/lib/reel-ai-drama/reporting/llm';
 import type { Asset, VisualKind } from '@/lib/reel-ai-drama/types';
 
+import type { Look } from './filters';
+
 /** Where a candidate came from (one adapter each, `harvest/sources/`). */
 export type SourceName =
   | 'bank'
+  /** The hub's central photo bank (Supabase media_library), asked before every other source (photo-bank.ts). */
+  | 'photo_bank'
   | 'wikidata'
   | 'commons'
   | 'openverse'
@@ -83,11 +88,22 @@ export type RawCandidate = {
   embedded_caption?: string;
   text_boxes?: TextBox[];
   flags: string[];
+  /** A look the photo bank already holds for this picture (an identity-matched hit): reused, so no paid look. */
+  prior_look?: Look | null;
 };
 
-export type ScreenshotResult = { file: string; width: number; height: number; boxes: TextBox[]; title: string; captured_at: string };
+export type ScreenshotResult = {
+  file: string;
+  width: number;
+  height: number;
+  boxes: TextBox[];
+  title: string;
+  captured_at: string;
+  /** Why the capture isn't the page (an HTTP error, a bot wall); the harvest drops it (MD-141). */
+  problem?: string;
+};
 /** Playwright capture of a page/post/document (screens.ts live; stubbed in tests). */
-export type Screenshot = (url: string, opts: { out: string; phrases: string[] }) => Promise<ScreenshotResult>;
+export type Screenshot = (url: string, opts: { out: string; phrases: string[]; crop?: 'headline' }) => Promise<ScreenshotResult>;
 
 /** The kit's map renderer (B4, `explainers/reel-ai-drama/kit/maps/render-map.mjs`). */
 export type RenderMap = (opts: { lat: number; lon: number; zoom: number; label: string; sublabel: string; out: string }) => Promise<unknown>;
@@ -100,13 +116,34 @@ export type VideoFrames = (
 /** Upscales `input` by `scale` into `output`; null when no upscaler is installed (MD-16). */
 export type Upscale = (input: string, output: string, scale: number) => Promise<void>;
 
+/** Cuts a person out of `src` into a transparent, trimmed PNG at `out` (rembg, live.ts); never throws for a miss. */
+export type CutPerson = (src: string, out: string) => Promise<{ ok: true; width: number; height: number; coverage: number } | { ok: false; error: string }>;
+
 /** A face box, normalised 0–1 to the image (x, y top-left), with the detector's confidence. */
 export type FaceBox = { x: number; y: number; w: number; h: number; score: number };
 /** Face boxes per local file; null for a file the detector could not read. Local code, no AI (faces.ts). */
 export type DetectFaces = (files: string[]) => Promise<Map<string, FaceBox[] | null>>;
 
+/** Reads the words on an image: Tesseract TSV words in image pixels (local OCR, boxes.ts). */
+export type ReadWords = (file: string) => Promise<{ text: string; left: number; top: number; width: number; height: number; conf: number }[]>;
+
 /** Draws a line sketch of the person in `reference` (sketch.ts); never photoreal (MD-14). */
 export type GenerateSketch = (req: { prompt: string; reference: string }) => Promise<{ png: Buffer; usd: number }>;
+
+/**
+ * The hub's photo bank as the harvest sees it (photo-bank.ts; live: liveHarvestPhotoBank). Every call may
+ * fail; the harvest treats a failure as "the bank has nothing" and goes on exactly as without it.
+ */
+export type HarvestPhotoBank = {
+  /** Bank photos for a want; [] when the bank's finder_source switch is off. */
+  lookup(q: DramaLookup): Promise<DramaHit[]>;
+  /** The bank's own copy of a photo (its master path in the photo-bank bucket). */
+  fetchStored(masterPath: string): Promise<Buffer>;
+  /** Synchronous, never throws; written only while the bank's capture switch is on. */
+  offer(input: DramaOfferInput): void;
+  /** Waits at most `ms` for queued offers. */
+  flush?(ms: number): Promise<void>;
+};
 
 export type HarvestDeps = {
   db: Queryable;
@@ -122,10 +159,14 @@ export type HarvestDeps = {
   renderMap?: RenderMap | null;
   videoFrames?: VideoFrames | null;
   upscale?: Upscale | null;
+  /** Background remover for central people's cutouts; null: no cutouts, noted. */
+  cutout?: CutPerson | null;
   /** Local face detector (MediaPipe in a headless page); null: no face boxes, noted. */
   detectFaces?: DetectFaces | null;
   /** Line-sketch generator for cast with no clean photo; null: no sketches, noted. */
   sketch?: GenerateSketch | null;
+  /** Local OCR for the box sidecars' `words` (Tesseract, boxes.ts); null: no words. */
+  readWords?: ReadWords | null;
   /** Banked cutouts (defaults to `loadCutouts()`), resolved against `root`. */
   cutouts?: readonly BankedCutout[];
   root?: string;
@@ -134,6 +175,8 @@ export type HarvestDeps = {
   log?: (entry: Record<string, unknown>) => void;
   /** Stop paying for looks and searches past this (default HARVEST_CAP_USD). */
   capUsd?: number;
+  /** The hub's photo bank: read first, and handed every kept photo. Absent or null: not used (tests, no DATABASE_URL). */
+  photoBank?: HarvestPhotoBank | null;
 };
 
 /** Per-run state every adapter shares. */

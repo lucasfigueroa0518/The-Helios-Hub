@@ -9,11 +9,13 @@ import { voiceCuts } from '../explainers/reel-ai-drama/kit/assemble.mjs';
 
 const moment = (t: number, o: Record<string, unknown> = {}) => ({ t, cover: 0.5, imgs: [], texts: [], blocks: [], ...o });
 
-test('screen: an empty stretch of 0.6s or more is empty_frame; a shorter one is not', () => {
+test('screen: an empty stretch of 0.4s or more is empty_frame; a shorter one is not, unless the frame opens on it', () => {
   const long = [0, 0.2, 0.4, 0.6, 0.8].map((t) => moment(t, { cover: t < 0.8 ? 0.02 : 0.5 }));
   assert.ok(screenProblems(long, { duration: 1 }).some((p: string) => p.startsWith('[empty_frame]')));
-  const short = [0, 0.2, 0.4].map((t) => moment(t, { cover: t < 0.2 ? 0.02 : 0.5 }));
+  const short = [0, 0.2, 0.4, 0.6].map((t) => moment(t, { cover: t === 0.2 ? 0.02 : 0.5 }));
   assert.ok(!screenProblems(short, { duration: 1 }).some((p: string) => p.startsWith('[empty_frame]')));
+  const opens = [0, 0.2, 0.4].map((t) => moment(t, { cover: t < 0.2 ? 0.02 : 0.5 }));
+  assert.match(screenProblems(opens, { duration: 1 }).join('\n'), /\[empty_frame\] the frame opens on an empty screen/);
 });
 
 test('screen: a visible image with no picture is image_unloaded', () => {
@@ -52,7 +54,7 @@ test('assemble: a frame shorter than its voice is a voice_cut; the close is exem
   assert.match(cuts[0], /\[voice_cut\] frame 1/);
 });
 
-test('photo crop: a face lands on the upper third of the frame; no face means no override', async () => {
+test('photo crop: a face lands on the subject line; no face means no override', async () => {
   const { faceFocus, FACE_LINE } = await import('../explainers/reel-ai-drama/kit/components/treatments.js');
   const [w, h] = [2000, 1500];
   const face = { x: 0.4, y: 0.05, w: 0.2, h: 0.2 };
@@ -61,4 +63,26 @@ test('photo crop: a face lands on the upper third of the frame; no face means no
   const faceOnScreen = 960 - (fy - (face.y + face.h / 2)) * h * s;
   assert.ok(Math.abs(faceOnScreen / 1920 - FACE_LINE) < 0.01);
   assert.equal(faceFocus(null, w, h), null);
+});
+
+test('live calls retry a dropped connection or an overloaded API, never a real error', async () => {
+  const { withRetry, isTransient } = await import('@/lib/reel-ai-drama/retry');
+  let n = 0;
+  const flaky = async () => { if (n++ < 2) throw new TypeError('terminated'); return 'ok'; };
+  assert.equal(await withRetry(flaky, null, { waitMs: 1 }), 'ok');
+  assert.equal(n, 3);
+  assert.ok(isTransient({ status: 529 }) && !isTransient({ status: 400, message: 'invalid_request' }));
+  await assert.rejects(withRetry(async () => { throw Object.assign(new Error('bad'), { status: 400 }); }, null, { waitMs: 1 }), /bad/);
+});
+
+test('screen: a mark with no target, or over nothing for 0.4s, is mark_on_nothing; a mark on its word is not', () => {
+  const ring = (content: boolean, target = true) => ({ label: 'ring on V4.jpg', target, content });
+  const blank = [0, 0.2, 0.4].map((t) => moment(t, { marks: [ring(false)] }));
+  assert.match(screenProblems(blank, { duration: 1 }).join('\n'), /\[mark_on_nothing\] "ring on V4.jpg" marks nothing visible/);
+  const landing = [moment(0, { marks: [ring(false)] }), moment(0.2, { marks: [ring(true)] }), moment(0.4, { marks: [ring(true)] })];
+  assert.deepEqual(screenProblems(landing, { duration: 1 }), [], 'a blank moment as the target arrives is not reported');
+  const loose = [moment(0, { marks: [{ label: 'hand-drawn orange stroke 1', target: false, content: false }] })];
+  assert.match(screenProblems(loose, { duration: 1 }).join('\n'), /\[mark_on_nothing\] "hand-drawn orange stroke 1" has no target element/);
+  const fine = [0, 0.2, 0.4, 0.6].map((t) => moment(t, { marks: [{ label: 'underline on $6 million', target: true, content: true }] }));
+  assert.deepEqual(screenProblems(fine, { duration: 1 }), []);
 });

@@ -52,6 +52,7 @@ import {
   type AnalogyRequest,
   type GapRequest,
   type IdeaModel,
+  type PayloadRequest,
 } from '@/lib/explainers/ideas/generator';
 import { getTopic, listPool, listTopics } from '@/lib/explainers/repository';
 import { weightedScore } from '@/lib/explainers/scoring';
@@ -105,6 +106,8 @@ type JevAnswers = {
   compare?: (a: string, b: string) => number;
   gap?: (line: string) => number;
   falseClaim?: (line: string) => number;
+  /** p(the average viewer already knows the word), by title; default 0.1 (agrees with the stubs' "unfamiliar"). */
+  familiar?: (title: string) => number;
 };
 
 /**
@@ -113,7 +116,7 @@ type JevAnswers = {
  * call is recorded for assertions.
  */
 function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], verdicts: JevAnswers = {}) {
-  const { golden = () => 0.1, gates = (): ReturnType<NonNullable<JevAnswers['gates']>> => ({}), compare = () => 0.5, gap = () => 3, falseClaim = () => 0.1 } = verdicts;
+  const { golden = () => 0.1, gates = (): ReturnType<NonNullable<JevAnswers['gates']>> => ({}), compare = () => 0.5, gap = () => 3, falseClaim = () => 0.1, familiar = () => 0.1 } = verdicts;
   const calls: Call[] = [];
   const isSame = (a: string, b: string) =>
     same.some(([x, y]) => (x === a && y === b) || (x === b && y === a));
@@ -133,6 +136,8 @@ function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], 
                 ? 'compare'
             : keys[0] === 'false_claim'
               ? 'gap_gate'
+            : keys[0] === 'viewer_knows_word'
+              ? 'altitude'
               : (GAP_KEYS as readonly string[]).includes(keys[0])
                 ? 'gap'
                 : 'scoring';
@@ -147,6 +152,8 @@ function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], 
           answers[key] = { type: 'noul', noul: compare(s.a as string, s.b as string) };
         } else if (setId === 'gap') {
           answers[key] = { type: 'score', score: gap(s.candidate as string), confidence: 1 };
+        } else if (setId === 'altitude') {
+          answers[key] = { type: 'noul', noul: familiar(s.topic_title as string) };
         } else if (setId === 'gap_gate') {
           answers[key] = { type: 'noul', noul: falseClaim(s.candidate as string) };
         } else if (setId === 'scoring') {
@@ -171,15 +178,23 @@ function stubJev(scores: Record<string, Scores>, same: [string, string][] = [], 
   return { transport, calls };
 }
 
+const STUB_FRAME = { bucket: 'how-llms-work', payload: 'The one thing.', altitude: 'unfamiliar' as const, map_position: 'Where it sits.' };
+
 function stubIdeas(
   batches: [string, string][][] = [],
-): IdeaModel & { requests: unknown[]; scopeRequests: string[][]; analogyRequests: string[]; analogyCalls: AnalogyRequest[]; gapCalls: GapRequest[] } {
+): IdeaModel & { requests: unknown[]; scopeRequests: string[][]; analogyRequests: string[]; analogyCalls: AnalogyRequest[]; gapCalls: GapRequest[]; payloadCalls: PayloadRequest[] } {
   const requests: unknown[] = [];
   const scopeRequests: string[][] = [];
   const analogyRequests: string[] = [];
   const analogyCalls: AnalogyRequest[] = [];
   const gapCalls: GapRequest[] = [];
+  const payloadCalls: PayloadRequest[] = [];
   return {
+    payloadCalls,
+    async rewritePayload(request) {
+      payloadCalls.push(request);
+      return { payload: `Rewritten for ${request.altitude}.`, usage: { input_tokens: 50, output_tokens: 20 }, model: 'claude-sonnet-5-5' };
+    },
     requests,
     scopeRequests,
     analogyRequests,
@@ -204,6 +219,7 @@ function stubIdeas(
       return {
         scopes: request.titles.map((title) => `Explain ${title}.`),
         terms: request.titles.map((title) => title.toLowerCase()),
+        frames: request.titles.map(() => ({ ...STUB_FRAME })),
         usage: { input_tokens: 100, output_tokens: 40 },
         model: 'claude-sonnet-5-5',
       };
@@ -213,7 +229,7 @@ function stubIdeas(
       const next = batches.shift();
       if (!next) throw new Error('no canned ideas left');
       return {
-        ideas: next.map(([topic_title, topic_scope]) => ({ topic_title, topic_scope, term: topic_title.toLowerCase() })),
+        ideas: next.map(([topic_title, topic_scope]) => ({ topic_title, topic_scope, term: topic_title.toLowerCase(), ...STUB_FRAME })),
         usage: { input_tokens: 200, output_tokens: 150, cache_read_input_tokens: 1200 },
         model: 'claude-sonnet-5-5',
       };
@@ -269,8 +285,13 @@ test('batches of five and the head-to-head rule', () => {
 });
 
 test('generator output must be exactly three distinct ideas', () => {
-  const ok = parseIdeas({ ideas: [{ topic_title: 'a', topic_scope: 'x', term: 'ta' }, { topic_title: 'b', topic_scope: 'y', term: 'tb' }, { topic_title: 'c', topic_scope: 'z', term: 'tc' }] });
+  const ok = parseIdeas({ ideas: [{ topic_title: 'a', topic_scope: 'x', term: 'ta', ...STUB_FRAME }, { topic_title: 'b', topic_scope: 'y', term: 'tb', ...STUB_FRAME }, { topic_title: 'c', topic_scope: 'z', term: 'tc', ...STUB_FRAME }] });
   assert.deepEqual(ok.map((i) => i.term), ['ta', 'tb', 'tc']);
+  assert.deepEqual(ok.map((i) => i.altitude), ['unfamiliar', 'unfamiliar', 'unfamiliar']);
+  const framed = (b: string) => [1, 2, 3].map((n) => ({ topic_title: `t${n}`, topic_scope: 's', term: `t${n}`, ...STUB_FRAME, bucket: b }));
+  assert.throws(() => parseIdeas({ ideas: framed('how-llms-work') }, ['web-and-apis']), /bucket outside/);
+  assert.throws(() => parseIdeas({ ideas: framed('how-llms-work').map((i) => ({ ...i, altitude: 'high' })) }), /altitude/);
+  assert.throws(() => parseIdeas({ ideas: framed('how-llms-work').map((i) => ({ ...i, payload: ' ' })) }), /payload or map position/);
   assert.throws(() => parseIdeas({ ideas: [{ topic_title: 'a', topic_scope: 'x' }, { topic_title: 'b', topic_scope: 'y', term: 'tb' }, { topic_title: 'c', topic_scope: 'z', term: 'tc' }] }), /title, scope, or term/);
   assert.equal(ok.length, 3);
   assert.throws(() => parseIdeas({ ideas: [{ topic_title: 'a', topic_scope: 'x' }] }), /exactly 3/);
@@ -284,8 +305,10 @@ test('both calls use structured outputs, never forced tool use, and cache the st
   const idea = ideaGeneratorParams({
     model: 'claude-sonnet-5-5',
     themeBrief: 'BRIEF',
+    buckets: [{ id: 'how-llms-work', name: 'How LLMs work', kind: 'ai', concepts_to_teach: ['inference'], rendered: [{ topic_title: 'r', topic_scope: 'rs' }] }],
     pool: [{ topic_title: 'p', topic_scope: 'ps' }],
-    rendered: [],
+    rendered: [{ topic_title: 'r', topic_scope: 'rs' }],
+    historyDays: 90,
   });
   const scope = scopeWriterParams({ model: 'claude-sonnet-5-5', themeBrief: 'BRIEF', titles: ['A', 'B'] });
   for (const params of [idea, scope]) {
@@ -303,6 +326,8 @@ test('both calls use structured outputs, never forced tool use, and cache the st
   const system = idea.system as { text: string }[];
   assert.ok(system[0].text.startsWith(IDEA_GENERATOR_INSTRUCTIONS));
   assert.ok(!system[0].text.includes('"p"'), 'pool is not in the cached prefix');
+  assert.ok(!system[0].text.includes('how-llms-work ('), "tonight's buckets are not in the cached prefix");
+  assert.match(idea.messages[0].content as string, /how-llms-work \(How LLMs work, AI\)[\s\S]*"inference"[\s\S]*last 90 days[\s\S]*"topic_title":"r"/);
   assert.ok((idea.messages[0].content as string).includes('"topic_title":"p"'));
   assert.ok((scope.messages[0].content as string).includes('["A","B"]'));
 });
@@ -351,8 +376,9 @@ test('hand-added titles get their scopes from one model call per click', async (
 });
 
 test('scope writer output must match the titles one for one', () => {
-  assert.deepEqual(parseScopes({ scopes: [{ topic_title: 'A', topic_scope: 'Explain A.', term: 'a' }] }, ['A']), { scopes: ['Explain A.'], terms: ['a'] });
+  assert.deepEqual(parseScopes({ scopes: [{ topic_title: 'A', topic_scope: 'Explain A.', term: 'a', ...STUB_FRAME }] }, ['A']), { scopes: ['Explain A.'], terms: ['a'], frames: [STUB_FRAME] });
   assert.throws(() => parseScopes({ scopes: [{ topic_title: 'A', topic_scope: 'Explain A.' }] }, ['A']), /no term/);
+  assert.throws(() => parseScopes({ scopes: [{ topic_title: 'A', topic_scope: 'Explain A.', term: 'a' }] }, ['A']), /bucket outside/);
   assert.throws(() => parseScopes({ scopes: [] }, ['A']), /must return 1/);
   assert.throws(() => parseScopes({ scopes: [{ topic_title: 'B', topic_scope: 'x' }] }, ['A']), /does not match/);
   assert.throws(() => parseScopes({ scopes: [{ topic_title: 'A', topic_scope: ' ' }] }, ['A']), /empty/);
@@ -368,14 +394,15 @@ test('Jev logs and costs land in the explainers tables', async () => {
   );
   // First topic: 2 scoring calls (empty history, no gate). Second: 1 gate + 2 scoring.
   // Both made the pool, so each also had its 13 golden examples matched, its 2 named analogies gated
-  // and compared both ways (EX3-123, EX3-124). 4.3: no curiosity gap is written in the idea phase.
-  assert.equal(logs[0].n, 39);
+  // and compared both ways (EX3-123, EX3-124). 4.3: no curiosity gap is written in the idea phase. Ideas coverage:
+  // each topic that makes the pool also gets the altitude check (one idea_scoring call each).
+  assert.equal(logs[0].n, 41);
   assert.deepEqual(costs, [
     { component: 'analogy_compare', n: 4 },
     { component: 'analogy_gates', n: 4 },
     { component: 'analogy_golden_match', n: 26 },
     { component: 'duplicate_gate', n: 1 },
-    { component: 'idea_scoring', n: 4 },
+    { component: 'idea_scoring', n: 6 },
   ]);
 });
 
@@ -396,7 +423,7 @@ test('duplicate of a pool topic: Stage 2 finds it in batches of five, the better
   assert.deepEqual(
     calls.map((c) => [c.set, c.keys.length]),
     [
-      ['gate', 1], ['pairs', 5], ['pairs', 2], ['scoring', 1], ['scoring', 6],
+      ['gate', 1], ['pairs', 5], ['pairs', 2], ['scoring', 1], ['scoring', 6], ['altitude', 1],
       ...Array.from({ length: 13 }, () => ['golden', 1]),
       ['analogy_gates', 3], ['analogy_gates', 3], ['compare', 1], ['compare', 1],
     ],
@@ -426,8 +453,8 @@ test('duplicate of a recently rendered topic is rejected without scoring', async
   assert.equal(result.evaluation.outcome, 'rejected_history_duplicate');
   assert.deepEqual(calls.map((c) => c.set), ['gate']);
 
-  // Past the 45-day window the same topic may return.
-  await db.query(`UPDATE explainers.topics SET rendered_at = now() - interval '46 days' WHERE title = 'Webhooks'`);
+  // Past the 120-day window (ideas coverage, 2026-11-03) the same topic may return.
+  await db.query(`UPDATE explainers.topics SET rendered_at = now() - interval '121 days' WHERE title = 'Webhooks'`);
   const later = stubJev({ 'Webhooks, later': STRONG }, [['Webhooks, later', 'Webhooks']]);
   const [ok] = await addAndEvaluateTopics({ db, jevTransport: later.transport, ideaModel: stubIdeas() }, [
     { title: 'Webhooks, later', origin: 'seeded' },
@@ -611,7 +638,7 @@ test('the worker retries a failed or thrown night after the delay, at most twice
 const registerText = () => fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
 
 test('analogy writer v8 is the golden-set prompt, with the no-real-names line and JSON output (EX3-123)', () => {
-  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v8');
+  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v9');
   assert.equal(ANALOGY_CALLS, 2);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /^You write the analogy at the heart of a one-minute "AI Brain Break" reel/);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend\./);
@@ -663,6 +690,7 @@ test('the analogy writer is Opus-ready: structured output, the cached golden pro
   assert.ok(!system[0].text.includes('Explain webhooks'));
   assert.equal(params.messages[0].content, 'Concept: webhook\nLearning objective: Explain webhooks.');
   assert.equal(analogyWriterUserMessage('RAG', 'Explain RAG.'), 'Concept: RAG\nLearning objective: Explain RAG.');
+  assert.equal(analogyWriterUserMessage('RAG', 'Explain RAG.', 'Wrong pages in, wrong answer out.'), 'Concept: RAG\nLearning objective: Explain RAG.\nLesson: Wrong pages in, wrong answer out.');
 });
 
 test('the writer reply: a name, an explanation and a mapping, or the call fails', async () => {
@@ -739,7 +767,7 @@ test("a topic that makes the pool gets its named analogy from two Opus calls and
   const webhooks = (await getTopic(db, results[0].topicId))!;
   const note = await noteOf(db, results[0].topicId);
   assert.ok('pick' in note);
-  assert.equal(note.version, 'analogy-writer-v8');
+  assert.equal(note.version, 'analogy-writer-v9');
   assert.deepEqual(note.golden_hidden, ['webhook']);
   assert.equal(note.candidates.length, 2);
   assert.equal(note.pick, 1);
@@ -894,8 +922,8 @@ test('a writer call that fails is a failed candidate; a failed pass is recorded 
 });
 
 test('the idea generator skews to AI and still asks for CS or tech (EX3-73); both write the term (EX3-86)', () => {
-  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v5');
-  assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v5');
+  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v6');
+  assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v6');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) assert.ok(prompt.includes(TERM_RULE));
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Exactly 2 of the 3 ideas teach an AI concept/);
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /The other idea teaches a computer-science or tech concept/);

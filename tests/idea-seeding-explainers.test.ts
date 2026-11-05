@@ -40,7 +40,7 @@ function jev(scores: Record<ScoreKey, number>, duplicate = 0.1): JevTransport {
 
 const ideas = (): IdeaModel => ({
   async writeScopes(request: { titles: string[] }) {
-    return { scopes: request.titles.map((t) => `Explain ${t}.`), terms: request.titles.map(() => 'term'), usage: { input_tokens: 1, output_tokens: 1 }, model: 'stub' };
+    return { scopes: request.titles.map((t) => `Explain ${t}.`), terms: request.titles.map((t) => t.toLowerCase()), frames: request.titles.map(() => ({ bucket: 'how-llms-work', payload: 'P.', altitude: 'unfamiliar', map_position: 'M.' })), usage: { input_tokens: 1, output_tokens: 1 }, model: 'stub' };
   },
 }) as unknown as IdeaModel;
 
@@ -65,17 +65,19 @@ test('a seed below a quality bar is kept and flagged, where a machine idea is re
   assert.equal(machine!.evaluation.outcome, 'rejected_gates');
 });
 
-test('a seed close to a recent render is kept and flagged; close to a pool idea, both stay', async () => {
+// Ideas coverage (2026-11-03) supersedes "kept and flagged; both stay": a seed repeating a recent render is blocked,
+// and a seed matching a pool idea auto-wins (the pool idea is displaced).
+test('a seed repeating a recent render is blocked; one close to a pool idea auto-wins', async () => {
   const { db } = await scratchExplainersDb();
   await db.query(`INSERT INTO explainers.topics (title, origin, status, scope, rendered_at) VALUES ('Why LLMs hallucinate', 'generated', 'rendered', 'S', now() - interval '2 days')`);
   const [recent] = await seed(db, 'Why do LLMs hallucinate?', jev(STRONG, 0.9));
-  assert.deepEqual((recent!.evaluation as { flags: string[] }).flags, ['history_duplicate']);
-  assert.equal(await statusOf(db, recent!.topicId), 'pool');
+  assert.equal(recent!.evaluation.outcome, 'rejected_history_duplicate');
+  assert.equal(await statusOf(db, recent!.topicId), 'rejected');
   await db.query(`UPDATE explainers.topics SET status = 'archived' WHERE status = 'rendered'`);
   const { rows } = await db.query<{ id: string }>(`INSERT INTO explainers.topics (title, origin, status, scope, weighted_score) VALUES ('A pool idea', 'generated', 'pool', 'S', 60) RETURNING id`);
   const [near] = await seed(db, 'A near-twin of a pool idea', jev(STRONG, 0.9));
   assert.deepEqual((near!.evaluation as { flags: string[] }).flags, ['near_pool_topic']);
-  assert.equal(await statusOf(db, rows[0]!.id), 'pool', 'a seed never displaces another topic');
+  assert.equal(await statusOf(db, rows[0]!.id), 'displaced', 'the seed auto-wins');
   assert.equal(await statusOf(db, near!.topicId), 'pool');
 });
 

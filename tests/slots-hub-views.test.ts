@@ -13,6 +13,7 @@ import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadSlots, readCaps } from '@/lib/social-hub/slots/load';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
+import { seedWithCarousels } from './helpers/seed-with-carousels';
 import type { OverrideRow, SlotsByDate } from '@/lib/social-hub/slots/types';
 import { applySlotChanges, setSlotSource, writeCaps } from '@/lib/social-hub/slots/write';
 import type { HubPost } from '@/lib/social-hub/types';
@@ -42,6 +43,10 @@ afterEach(() => {
 const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
 const slotsFor = (dates: string[], overrides = [] as OverrideRow[]): SlotsByDate =>
   Object.fromEntries(dates.map((d) => [d, resolveDay(tpl, overrides, d)]));
+// Carousels are opt-in now, so a test about Carousel slots builds its calendar with them.
+const carouselTpl = seedWithCarousels(DEFAULT_SEED_INPUTS);
+const slotsForCarousels = (dates: string[], overrides = [] as OverrideRow[]): SlotsByDate =>
+  Object.fromEntries(dates.map((d) => [d, resolveDay(carouselTpl, overrides, d)]));
 const remove = (nyDate: string, vertical: OverrideRow['vertical'], startMinute: number, series: OverrideRow['series'] = null): OverrideRow =>
   ({ nyDate, vertical, startMinute, series, action: 'remove', feedMode: null, setBy: 'system' });
 const add = (nyDate: string, vertical: OverrideRow['vertical'], startMinute: number, feedMode: OverrideRow['feedMode'] = null, series: OverrideRow['series'] = null): OverrideRow =>
@@ -50,13 +55,15 @@ const add = (nyDate: string, vertical: OverrideRow['vertical'], startMinute: num
 // ── Views: a type's windows are that day's slot times ──
 
 test('windowsOn follows the day\'s slot times when given, and the old windows when not', () => {
-  const slots = slotsFor(['2026-10-21'], [remove('2026-10-21', 'carousels', 540)]);
+  const slots = slotsForCarousels(['2026-10-21'], [remove('2026-10-21', 'carousels', 540)]);
   assert.deepEqual(windowsOn('carousels', '2026-10-21', [], slots).map((w) => [w.id, w.startMinute, w.endMinute, w.label]), [['t0870', 870, 885, '2:30 PM']]);
-  assert.deepEqual(windowsOn('carousels', '2026-10-21', []).map((w) => w.id), ['morning', 'afternoon']);
-  // A date the map doesn't cover falls back to the old rule.
-  assert.deepEqual(windowsOn('carousels', '2026-10-22', [], slots).map((w) => w.id), ['morning', 'afternoon']);
+  // Carousels have no old windows now: without the calendar there is nothing to show.
+  assert.deepEqual(windowsOn('carousels', '2026-10-21', []).map((w) => w.id), []);
+  // A date the map doesn't cover falls back to the old rule (Explainers still have windows).
+  assert.deepEqual(windowsOn('carousels', '2026-10-22', [], slots).map((w) => w.id), []);
+  assert.deepEqual(windowsOn('explainers', '2026-10-22', [], slots).map((w) => w.id), ['afternoon', 'late']);
   // The calendar ignores carouselOff: a Wednesday with carousel slots keeps them.
-  assert.deepEqual(windowsOn('carousels', '2026-10-21', [3], slotsFor(['2026-10-21'])).map((w) => w.id), ['t0540', 't0870']);
+  assert.deepEqual(windowsOn('carousels', '2026-10-21', [3], slotsForCarousels(['2026-10-21'])).map((w) => w.id), ['t0540', 't0870']);
   // A free time outside every old window counts: an Explainer at noon.
   const noon = slotsFor(['2026-10-21'], [add('2026-10-21', 'explainers', 720, 'main')]);
   assert.deepEqual(windowsOn('explainers', '2026-10-21', [], noon).map((w) => w.id), ['t0720', 't0780', 't0930']);
@@ -308,7 +315,7 @@ test('template: openSlots lists the day\'s slot times, free or taken', async () 
   assert.match((gtn as { note: string }).note, /Add it on the calendar first/);
 });
 
-test('template mode with an unreadable calendar keeps the legacy days (Carousels give up Last Few Days days)', async () => {
+test('template mode with an unreadable calendar keeps the legacy days (Last Few Days only on its days; Carousels have no legacy windows)', async () => {
   const { pg, query } = await openHubTestDb();
   await pg.query(`INSERT INTO lfd.settings (key, value) VALUES ('auto_run', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   await setSlotSource(query as never, 'template', 't');
@@ -317,11 +324,16 @@ test('template mode with an unreadable calendar keeps the legacy days (Carousels
     if (/slot_template|slot_override/.test(text)) throw new Error('relation does not exist');
     return query(text, params);
   }) as never;
-  const tuesday = await planPlacement(broken, { vertical: 'carousels', nyDate: '2026-10-20', slot: 'afternoon', now: NOW });
-  assert.equal(tuesday.ok, false);
-  assert.match((tuesday as { note: string }).note, /doesn’t post on Tuesdays/);
-  const picker = await openSlots(broken, 'carousels', '2026-10-20', { now: NOW });
-  assert.deepEqual(picker.map((s) => s.state), ['off', 'off']);
+  // Carousels are opt-in: no routine windows, so nothing to fall back to.
+  const carousel = await planPlacement(broken, { vertical: 'carousels', nyDate: '2026-10-20', slot: 'afternoon', now: NOW });
+  assert.equal(carousel.ok, false);
+  assert.deepEqual(await openSlots(broken, 'carousels', '2026-10-20', { now: NOW }), []);
+  // Last Few Days keeps its legacy days: a Wednesday is not one.
+  const wednesday = await planPlacement(broken, { vertical: 'last_few_days', nyDate: WED, slot: 'morning', now: NOW });
+  assert.equal(wednesday.ok, false);
+  assert.match((wednesday as { note: string }).note, /doesn’t post on Wednesdays/);
+  const picker = await openSlots(broken, 'last_few_days', WED, { now: NOW });
+  assert.deepEqual(picker.map((s) => s.state), ['off']);
 });
 
 test('legacy placement is unchanged: window ids, no feed mode stored, old weekday rule (Review Focus 5)', async () => {
@@ -436,8 +448,9 @@ test('readPosting in template mode works out perDay, LFD days and series days fr
   const legacyStories = await readPosting('stories', TUE);
   assert.equal(legacyCarousels.perDay, 2, 'legacy: the posts_per_day default');
   await setSlotSource(q, 'template', 't');
-  assert.equal((await readPosting('carousels', TUE)).perDay, 0, 'Tuesday is an LFD day on the seeded calendar');
-  assert.equal((await readPosting('carousels', new Date('2026-10-21T14:00:00Z'))).perDay, 2);
+  // Carousels are opt-in: the seeded calendar has no carousel slots on any day, LFD day or not.
+  assert.equal((await readPosting('carousels', TUE)).perDay, 0, 'Tuesday: no carousel slots');
+  assert.equal((await readPosting('carousels', new Date('2026-10-21T14:00:00Z'))).perDay, 0, 'Wednesday: none either, until one is dragged on');
   assert.equal((await readPosting('reels', TUE)).perDay, 3);
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: '2026-10-20', vertical: 'reels', startMinute: 1080, series: null, action: 'remove' }], { by: 't', now: TUE });
   assert.equal((await readPosting('reels', TUE)).perDay, 2, 'today\'s slots, not posts_per_day');

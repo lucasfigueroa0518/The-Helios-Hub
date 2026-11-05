@@ -17,6 +17,7 @@ export type ArtifactKind =
   | 'fact_sheet'
   | 'inventory'
   | 'writer_draft'
+  | 'story_notes'
   | 'director_plan'
   | 'script_md'
   | 'storyboard_md'
@@ -167,9 +168,14 @@ export async function setStage(db: Queryable, jobId: string, stage: JobStage): P
 }
 
 /** A visible warning the reel ships with (checks fail open, MD-39). */
+/** Add a flag unless the job already carries one with the same check and detail (the same warning once). */
 export async function addFlag(db: Queryable, jobId: string, flag: Omit<JobFlag, 'at'> & { at?: string }): Promise<void> {
   const full: JobFlag = { at: flag.at ?? new Date().toISOString(), check: flag.check, detail: flag.detail };
-  await db.query('UPDATE reel_ai_drama.jobs SET flags = flags || $2::jsonb WHERE id = $1', [jobId, JSON.stringify([full])]);
+  await db.query(
+    `UPDATE reel_ai_drama.jobs SET flags = flags || $2::jsonb
+      WHERE id = $1 AND NOT coalesce(flags, '[]'::jsonb) @> $3::jsonb`,
+    [jobId, JSON.stringify([full]), JSON.stringify([{ check: full.check, detail: full.detail }])],
+  );
 }
 
 /**

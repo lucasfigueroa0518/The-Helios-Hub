@@ -9,13 +9,15 @@
  * search, contact sheet, Jev photo-fit, then the slide pick, with the
  * close-up vision check on Haiku 5.5 (S-70; priced by Stories, lib/stories/cost.ts).
  *
- * Photo bank (DECISIONS_LOG D49): with a `bank`, every find offers its
- * vetted candidates (the pick, and identity-verified headshots, second
- * photos, CEOs, headquarters and logos) with runKind 'story'. Stories run
- * only the metadata pre-screen, not the close-up vision check, so their
- * offers carry no close-up pass unless a vision verdict was recorded. The
- * bank's reader also joins the search (off until its finder_source switch
- * is flipped). Offering never blocks or fails a find.
+ * Photo bank (DECISIONS_LOG D49): with a `bank`, every find and every set
+ * offers its vetted candidates (the picks, and identity-verified headshots,
+ * second photos, CEOs, headquarters and logos) with runKind 'story', places
+ * numbered in order across the finder's run. A single find runs only the
+ * metadata pre-screen, so its offers carry no close-up pass unless a vision
+ * verdict was recorded; a set (Morning Download, Last Few Days) keeps the
+ * design stage's tags, fit and close-up verdicts, and never offers a
+ * candidate its checks rejected. The bank's reader also joins the search
+ * (gated by its finder_source switch). Offering never blocks or fails a find.
  */
 import { createSizeProbe, type SizeProbe } from '@/lib/social/photos/size';
 import type Anthropic from '@anthropic-ai/sdk';
@@ -117,7 +119,38 @@ export function storyVetted(seq: number, request: { kind: VisualKind; query: str
   return out;
 }
 
-export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch; create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>; bank?: PhotoBank; runRef?: string } = {}): PhotoFinder {
+/**
+ * A set's vetted candidates for the photo bank, by the single find's rule (storyVetted): the photos the set uses,
+ * and the identity-verified ones it doesn't. A candidate the design stage rejected is never offered.
+ * `finals[k]` is place k + 1's photo URL after the design stage (promotion included); `offset` numbers the set's
+ * places after the finder's earlier finds. Pure.
+ */
+export function setVetted(offset: number, vetted: VettedPhoto[], finals: Array<string | null>): VettedPhoto[] {
+  const used = new Set(finals.filter((u): u is string => Boolean(u)));
+  const out: VettedPhoto[] = [];
+  for (const v of vetted) {
+    if (v.outcome === 'rejected') continue;
+    const url = v.candidate.url;
+    // Its own place's photo, or a winner promoted to the cover (it stays listed under the place it was found for).
+    const picked = finals[v.slide - 1] === url || (v.outcome === 'picked' && used.has(url));
+    const outcome = picked ? 'picked' : v.candidate.verified && IDENTITY_LANES.has(v.candidate.lane) ? 'verified' : null;
+    if (!outcome) continue;
+    out.push({ ...v, slide: offset + v.slide, outcome });
+  }
+  return out;
+}
+
+export function createLivePhotoFinder(
+  opts: {
+    jev?: JevAsk;
+    http?: typeof fetch;
+    create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
+    bank?: PhotoBank;
+    runRef?: string;
+    /** The set's design stage (tests stub it; default photosForDraft). */
+    design?: typeof photosForDraft;
+  } = {},
+): PhotoFinder {
   let usd = 0;
   // The photo bank's run: this finder (one Stories build), its requests numbered in order.
   const runRef = opts.runRef ?? `stories-build:${new Date().toISOString()}`;
@@ -202,7 +235,7 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
         caption: line(''),
         edit_notes: [],
       };
-      const designed = await photosForDraft(draft, brief, pages, {
+      const designed = await (opts.design ?? photosForDraft)(draft, brief, pages, {
         jev: tallied,
         http: opts.http ?? fetch,
         size,
@@ -213,6 +246,21 @@ export function createLivePhotoFinder(opts: { jev?: JevAsk; http?: typeof fetch;
         ...(opts.bank ? { bank: opts.bank.reader } : {}),
       }, { recent: exclude, storyDate, plainCover: !live[0]!.cover });
       const traces = [designed.cover, ...designed.slides];
+      const offset = seq;
+      seq += live.length;
+      if (opts.bank) {
+        try {
+          opts.bank.offer({
+            runKind: 'story',
+            runRef,
+            subjects: subjects.map((s) => s.name),
+            organizations: subjects.filter((s) => s.type === 'organization').map((s) => s.name),
+            items: setVetted(offset, designed.vetted ?? [], traces.map((t) => t?.photo?.url ?? null)),
+          });
+        } catch {
+          // The bank is best effort: a set never fails over it.
+        }
+      }
       let i = 0;
       return usable.map((r, k) => {
         if (!r) {

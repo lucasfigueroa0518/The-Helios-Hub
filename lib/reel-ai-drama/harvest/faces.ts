@@ -11,6 +11,12 @@ import type { DetectFaces, FaceBox } from './types';
 
 /** Below this confidence a box is noise. */
 export const MIN_FACE_SCORE = 0.5;
+/**
+ * At or above this the detector is sure. Below it a box may be a real head (the detector scores a plain portrait as low
+ * as 0.51) or nothing of the kind (a paper cup at 0.52, a cloud at 0.53): the score can't tell them apart, so a weak box
+ * must also be the best thing a picture of a named person offers, and look like a head.
+ */
+export const STRONG_FACE_SCORE = 0.75;
 /** The detector sees a downscaled copy; normalised boxes don't depend on the size. */
 const DETECT_PX = 640;
 
@@ -33,10 +39,42 @@ export function parseFaceBoxes(raw: unknown): FaceBox[] {
   return out;
 }
 
-/** The main face: the largest box. */
-export function mainFace(boxes: readonly FaceBox[] | null | undefined): { x: number; y: number; w: number; h: number } | null {
+/** A box with its verdict: only a trusted face may be a head. `name`: the one named person it is. */
+export type TrustedFace = FaceBox & { trusted: boolean; name?: string };
+
+const isStrong = (b: Pick<FaceBox, 'score'>) => b.score >= STRONG_FACE_SCORE;
+/** A sure box beats a weak one whatever their sizes; then the larger, then the surer. */
+const byBelief = <T extends FaceBox>(a: T, b: T) => Number(isStrong(b)) - Number(isStrong(a)) || b.w * b.h - a.w * a.h || b.score - a.score;
+
+/**
+ * Which boxes are heads. With people named, a picture holds at most that many of them: the surest and largest first, so
+ * a second box beside a named person's own face is never theirs. A weak box also needs a named person (on a picture of
+ * nobody a weak box is a false alarm) and `plausible` (the pixels look like a head; no check given means no evidence
+ * against it). The result is ordered main face first. Pure.
+ */
+export function trustFaces(boxes: readonly FaceBox[], opts: { people?: readonly string[]; plausible?: (box: FaceBox) => boolean } = {}): TrustedFace[] {
+  const people = (opts.people ?? []).filter(Boolean);
+  const room = people.length || Infinity;
+  let taken = 0;
+  const judged = [...boxes].sort(byBelief).map((b): TrustedFace => {
+    const believed = isStrong(b) ? opts.plausible?.(b) !== false : people.length > 0 && opts.plausible?.(b) !== false;
+    const trusted = believed && taken < room;
+    if (trusted) taken += 1;
+    return { ...b, trusted };
+  });
+  const out = [...judged.filter((b) => b.trusted), ...judged.filter((b) => !b.trusted)];
+  return out.map((b, i) => (people.length === 1 && i === 0 && b.trusted ? { ...b, name: people[0] } : b));
+}
+
+/**
+ * The main face: the surest and largest box, and among judged boxes only a trusted one. A weak box never beats a sure one,
+ * however much larger it is.
+ */
+export function mainFace(boxes: readonly (FaceBox & { trusted?: boolean })[] | null | undefined): { x: number; y: number; w: number; h: number } | null {
   if (!boxes?.length) return null;
-  const big = [...boxes].sort((a, b) => b.w * b.h - a.w * a.h)[0];
+  const judged = boxes.some((b) => b.trusted !== undefined);
+  const big = [...boxes].filter((b) => !judged || b.trusted).sort(byBelief)[0];
+  if (!big) return null;
   return { x: round(big.x), y: round(big.y), w: round(big.w), h: round(big.h) };
 }
 

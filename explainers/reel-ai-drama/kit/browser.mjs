@@ -43,7 +43,7 @@ export function findChrome() {
   return null;
 }
 
-function driver() {
+export function driver() {
   const bases = [process.env.HELIOS_NODE_MODULES, join(process.cwd(), 'node_modules'), dirname(fileURLToPath(import.meta.url))].filter(Boolean);
   const load = (name) => {
     for (const base of bases) {
@@ -82,7 +82,7 @@ function driver() {
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
 
 /** Serve `root` on 127.0.0.1 (symlinks followed: assets/sfx-library is one). */
-function serve(root) {
+export function serve(root) {
   const base = resolve(root);
   const server = http.createServer((req, res) => {
     const file = resolve(join(base, decodeURIComponent(new URL(req.url, 'http://x').pathname)));
@@ -101,9 +101,12 @@ const HARNESS = `<!doctype html><html><head><meta charset="utf-8"><style>html,bo
 <body><div id="w"></div><script type="module">
 import * as nk from '../assets/kit/components/index.js';
 nk.installKit(document, { fonts: '../assets/fonts/', textures: '../assets/kit/textures/' });
+window.__canon = nk.canonicalDom;
 window.__load = async (id, ctx) => {
   const host = document.getElementById('w');
   host.innerHTML = '';
+  host.toggleAttribute('data-opening', /^0*1(-|$)/.test(id));
+  document.__markSkips = [];
   const mod = (await import('../assets/frames/' + id + '.js?v=' + Math.random().toString(36).slice(2))).default;
   if (!mod || typeof mod.build !== 'function' || typeof mod.render !== 'function') throw new Error('the default export must be { treatment, build(root, ctx), render(t) }');
   await Promise.all(${JSON.stringify(FONT_LOADS)}.map((f) => document.fonts.load(f).catch(() => null)));

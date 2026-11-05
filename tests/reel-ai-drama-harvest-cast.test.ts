@@ -7,21 +7,25 @@ import { test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
 import sharp from 'sharp';
 
-import { anchorScore, faceCount, lookCount, needsSketch, pickAnchor, sketchReference, type CastCand } from '@/lib/reel-ai-drama/harvest/cast';
+import { anchorScore, faceCount, needsSketch, pickAnchor, sketchReference, type CastCand } from '@/lib/reel-ai-drama/harvest/cast';
 import { fileFaceDetector, mainFace, parseFaceBoxes } from '@/lib/reel-ai-drama/harvest/faces';
 import { downloadImage } from '@/lib/reel-ai-drama/harvest/fetch';
 import { identityVerdict, nameInUrl, parseIptc, readImageMeta, type Look } from '@/lib/reel-ai-drama/harvest/filters';
 import { runHarvest } from '@/lib/reel-ai-drama/harvest/harvest';
-import { modelScale } from '@/lib/reel-ai-drama/harvest/live';
+import { realEsrganArgs } from '@/lib/reel-ai-drama/harvest/live';
 import { parseLooks, SUBMIT_LOOKS_TOOL } from '@/lib/reel-ai-drama/harvest/look';
 import { anchorUpscale, MAX_LONG_EDGE, normaliseImage, normalisedFormat, scaleBoxes } from '@/lib/reel-ai-drama/harvest/media';
-import { castPeople, officialHostsFor, topUpWants } from '@/lib/reel-ai-drama/harvest/plan';
+import { garbledAssetIds, reanchor } from '@/lib/reel-ai-drama/harvest/anchors';
+import { lookVerdict } from '@/lib/reel-ai-drama/harvest/filters';
+import { checkedUpscale, GarbledUpscaleError, upscaleDiff } from '@/lib/reel-ai-drama/harvest/media';
+import { castPeople, centralPeople, officialHostsFor, topUpWants } from '@/lib/reel-ai-drama/harvest/plan';
+import { lastVisualNumber, MAX_WISHES, pickForWish, searchWishes, WISH_QUERIES, wishWants } from '@/lib/reel-ai-drama/harvest/wishes';
 import { sketchPrompt } from '@/lib/reel-ai-drama/harvest/sketch';
 import { pickPersonQid } from '@/lib/reel-ai-drama/harvest/sources/wikidata';
 import type { FaceBox, HarvestDeps } from '@/lib/reel-ai-drama/harvest/types';
 import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';
-import type { Pitch } from '@/lib/reel-ai-drama/types';
+import type { Asset, FactSheet, Pitch, ShotWish, VisualsInventory } from '@/lib/reel-ai-drama/types';
 
 import { scratchExplainersDb } from './explainers-pglite';
 import { makeJpeg, makePng, seedOf } from './fixtures/reel-ai-drama/harvest/images';
@@ -175,20 +179,27 @@ test('sketch reference: any solo picture that names them, usable or rejected for
   assert.equal(sketchReference([watermarked, usable], 'Ilya Sutskever'), usable, 'a usable picture beats a rejected one');
 });
 
-test('coverage rules: main characters want four looks and one confirmed; a sketch only when there is no anchor or no picture', () => {
-  assert.equal(lookCount({ main: true, portraits: 3, verified: 0 }), 0, 'probable-only main characters search again');
-  assert.equal(lookCount({ main: true, portraits: 3, verified: 1 }), 3);
+test('coverage rules: named people want three confirmed looks, central people six; a sketch only when there is no anchor or no picture', () => {
   assert.equal(needsSketch({ main: true, portraits: 3, verified: 0 }, false), true);
   assert.equal(needsSketch({ main: true, portraits: 3, verified: 1 }, true), false);
   assert.equal(needsSketch({ main: false, portraits: 1, verified: 0 }, false), false, 'a supporting person with a picture needs no sketch');
   assert.equal(needsSketch({ main: false, portraits: 0, verified: 0 }, false), true);
 
-  const greg = { name: 'Greg Brockman', main: true, role: 'OpenAI president and co-founder', qid: null, playerId: null };
-  const more = topUpWants(greg, 1);
-  assert.deepEqual(more.map((w) => w.terms), ['Greg Brockman portrait', 'Greg Brockman interview', 'Greg Brockman site:openai.com']);
-  assert.ok(more.every((w) => w.kind === 'person_photo' && w.sources.join() === 'serper' && w.people[0] === 'Greg Brockman'));
-  assert.deepEqual(topUpWants(greg, 4), []);
-  assert.deepEqual(topUpWants({ ...greg, main: false }, 1), []);
+  assert.equal(needsSketch({ main: false, central: true, portraits: 2, verified: 0 }, false), true, 'a central person with no anchor gets a sketch');
+
+  const greg = { name: 'Greg Brockman', main: true, central: false, role: 'OpenAI president and co-founder', qid: null, playerId: null };
+  const more = topUpWants(greg, { verified: 1 });
+  assert.deepEqual(more.map((w) => w.terms), ['incategory:"Greg Brockman"', 'Greg Brockman portrait', 'Greg Brockman interview', 'Greg Brockman site:openai.com']);
+  assert.deepEqual(more.map((w) => w.sources.join()), ['commons', 'serper', 'serper', 'serper']);
+  assert.ok(more.every((w) => w.kind === 'person_photo' && w.people[0] === 'Greg Brockman'));
+  assert.deepEqual(topUpWants(greg, { verified: 3 }), [], 'three confirmed looks is enough for a named person');
+  assert.deepEqual(topUpWants({ ...greg, main: false }, { verified: 3 }), []);
+  const central = { ...greg, central: true };
+  assert.equal(topUpWants(central, { verified: 3 }).filter((w) => w.sources[0] === 'serper').length, 6, 'a central person short of six gets six searches');
+  assert.deepEqual(topUpWants(central, { verified: 6 }), []);
+  const r2 = topUpWants(central, { verified: 4 }, { round: 2, year: '2015' });
+  assert.ok(r2.every((w) => w.sources.join() === 'serper' && w.id.includes(':r2-')), 'round two is Serper only, with new ids');
+  assert.ok(r2.some((w) => w.terms === 'Greg Brockman 2015'));
   assert.deepEqual(officialHostsFor('Chief scientist at Google DeepMind'), ['blog.google', 'deepmind.google']);
   assert.match(sketchPrompt(), /never a photograph or a photoreal render/);
 });
@@ -224,8 +235,8 @@ test('normalise: long edge at most 2160 px, photos as JPEG, alpha and text kinds
   assert.equal(anchorUpscale(800, 1000), 2);
   assert.equal(anchorUpscale(400, 500), 4);
   assert.equal(anchorUpscale(0, 0), null);
-  assert.equal(modelScale(1.5), 2);
-  assert.equal(modelScale(4), 4);
+  // V21: the ×4-only model asked for -s 2 shuffled its tiles. The model always runs at ×4, named explicitly.
+  assert.deepEqual(realEsrganArgs('in.png', 'out.png'), ['-i', 'in.png', '-o', 'out.png', '-n', 'realesrgan-x4plus', '-s', '4']);
 });
 
 test('download: a rate limit (429) is retried after a wait, then succeeds', async () => {
@@ -256,6 +267,7 @@ test('embedded caption: the IPTC or XMP caption is read from the file', async ()
 
 const PITCH: Pitch = {
   title: 'The weekend OpenAI fired its CEO',
+  brief: 'p',
   logline: 'l',
   pitch: 'p',
   story_type: 'power_struggle',
@@ -281,6 +293,7 @@ const SIZES: Record<string, [number, number]> = {
   'brockman-keynote': [3840, 2560],
   'greg-brockman-stage': [1800, 1200],
   'ilya-photo': [1200, 1500],
+  'mira-murati-talk': [1400, 1800],
 };
 
 function stubHttp(): typeof fetch {
@@ -307,6 +320,7 @@ function stubHttp(): typeof fetch {
       const q = String(JSON.parse(String(init?.body ?? '{}')).q ?? '');
       if (/Brockman/.test(q)) return json({ images: [{ title: 'Greg Brockman on stage', imageUrl: 'https://cdn.example.com/greg-brockman-stage.jpg', link: 'https://example.com/a', source: 'Example', domain: 'example.com' }] });
       if (/Sutskever/.test(q)) return json({ images: [{ title: 'Ilya Sutskever at an event', imageUrl: 'https://cdn.example.com/ilya-photo.jpg', link: 'https://example.com/b', source: 'Example', domain: 'example.com' }] });
+      if (/Murati/.test(q)) return json({ images: [{ title: 'Mira Murati speaks', imageUrl: 'https://cdn.example.com/mira-murati-talk.jpg', link: 'https://example.com/c', source: 'Example', domain: 'example.com' }] });
       return json({ images: [] });
     }
     if (/\.jpe?g$/i.test(u.pathname)) {
@@ -400,7 +414,9 @@ test('a stubbed harvest: confirmed anchors upscaled, a sketch for the unconfirme
   const greg = result.cast.find((c) => c.name === 'Greg Brockman')!;
   assert.equal(greg.anchor, gregAnchor[0].id);
   assert.ok(greg.verified >= 2);
-  assert.ok(result.notes.some((n) => /^cast: Greg Brockman \(main\): \d+ look\(s\), \d+ confirmed, anchor V\d+/.test(n)));
+  assert.ok(result.notes.some((n) => /^cast: Greg Brockman \(central\): \d+ look\(s\), \d+ confirmed, anchor V\d+, cutout none/.test(n)), result.notes.join(' | '));
+  assert.ok(result.notes.some((n) => /cutout: Greg Brockman needs one but no background remover is set/.test(n)));
+  assert.ok(result.wants.some((w) => w.id === 'person-cat:greg-brockman') && result.wants.some((w) => w.id.startsWith('person-look:greg-brockman:r2-')), 'the central person got the category search and a second round');
   assert.ok(result.wants.some((w) => w.id.startsWith('person-look:ilya-sutskever:')), 'the unconfirmed main character got a second search pass');
   const harvest = JSON.parse(fs.readFileSync(path.join(jobDir, 'media', 'harvest.json'), 'utf8'));
   assert.equal(harvest.cast.length, 2);
@@ -439,4 +455,302 @@ test('fail open: an upscaler error keeps the original anchor with a flag; no ske
   assert.ok(result.notes.some((n) => /Ilya Sutskever needs a sketch but no sketch generator/.test(n)));
   assert.ok(!result.inventory.assets.some((a) => a.made_kind === 'sketch'));
   assert.ok(castPeople(PITCH, null).every((p) => p.main));
+});
+
+// ── Iteration 3: the upscaler bug, cutouts, central people, fact-sheet cast, anchor fallback, wish search ──
+
+/** An "upscaler" that resizes correctly, then swaps the picture's quadrants: V21's shuffled tiles. */
+async function shuffledUpscale(input: string, output: string, scale: number) {
+  const m = await sharp(input).metadata();
+  const w = Math.round(m.width! * scale);
+  const h = Math.round(m.height! * scale);
+  const big = await sharp(input).resize(w, h, { fit: 'fill' }).png().toBuffer();
+  const hw = Math.floor(w / 2);
+  const hh = Math.floor(h / 2);
+  const q = (left: number, top: number) => sharp(big).extract({ left, top, width: hw, height: hh }).toBuffer();
+  const [a, b, c, d] = await Promise.all([q(0, 0), q(hw, 0), q(0, hh), q(hw, hh)]);
+  await sharp({ create: { width: w, height: h, channels: 3, background: '#000000' } })
+    .composite([{ input: d, left: 0, top: 0 }, { input: c, left: hw, top: 0 }, { input: b, left: 0, top: hh }, { input: a, left: hw, top: hh }])
+    .png()
+    .toFile(output);
+}
+
+const goodUpscale = async (input: string, output: string, scale: number) => {
+  const m = await sharp(input).metadata();
+  await sharp(input).resize(Math.round(m.width! * scale), Math.round(m.height! * scale), { fit: 'fill' }).png().toFile(output);
+};
+
+test('upscale check: a whole picture passes; shuffled tiles or a wrong size are rejected and deleted', async () => {
+  const dir = tmp('rad-up-');
+  const src = path.join(dir, 'src.jpg');
+  fs.writeFileSync(src, await makeJpeg(11, 400, 500));
+  const ok = await checkedUpscale(goodUpscale, src, path.join(dir, 'ok.png'), 2);
+  assert.deepEqual([ok.width, ok.height], [800, 1000]);
+  assert.ok(ok.diff.mean < 0.05 && ok.diff.worstBlock < 0.2, JSON.stringify(ok.diff));
+
+  const bad = path.join(dir, 'bad.png');
+  await assert.rejects(checkedUpscale(shuffledUpscale, src, bad, 2), GarbledUpscaleError);
+  assert.equal(fs.existsSync(bad), false, 'a garbled upscale is deleted');
+
+  const sized = path.join(dir, 'sized.png');
+  await assert.rejects(checkedUpscale(async (i, o) => void (await sharp(i).png().toFile(o)), src, sized, 2), GarbledUpscaleError, 'an upscale that did not grow the picture is wrong');
+
+  // Alpha: only the person's pixels count, so a cutout on a transparent ground is judged by the person.
+  const cut = path.join(dir, 'cut.png');
+  const person = await sharp(await makeJpeg(12, 200, 300)).png().toBuffer();
+  await sharp({ create: { width: 300, height: 400, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite([{ input: person, left: 50, top: 50 }]).png().toFile(cut);
+  assert.ok((await upscaleDiff(cut, (await checkedUpscale(goodUpscale, cut, path.join(dir, 'cut2.png'), 4), path.join(dir, 'cut2.png')))).mean < 0.05);
+  await assert.rejects(checkedUpscale(shuffledUpscale, cut, path.join(dir, 'cut3.png'), 2), GarbledUpscaleError);
+});
+
+test('a garbled anchor upscale keeps the original anchor, flagged, and says so', async () => {
+  const { db, jobId } = await freshJob();
+  const jobDir = tmp('rad-garble-');
+  const result = await runHarvest(
+    { db, http: stubHttp(), create: stubLooks(), loadPrompt: () => 'LOOK', serperKey: 'k', cutouts: [], upscale: shuffledUpscale, detectFaces: null, sketch: null, now: () => NOW, sleep: async () => undefined, log: () => undefined },
+    { pitch: PITCH, facts: null, jobDir, jobId, mode: 'production', settings: { ...DEFAULT_SETTINGS, min_visuals: 1 } },
+  );
+  const anchor = result.inventory.assets.find((a) => a.anchor_for === 'Greg Brockman')!;
+  assert.equal(anchor.upscaled, false);
+  assert.ok(anchor.flags.includes('upscale_garbled'));
+  assert.deepEqual([anchor.width, anchor.height], [900, 1200], 'the original pixels were saved');
+  assert.ok(result.notes.some((n) => /anchor upscale for Greg Brockman came out garbled .*kept the original/.test(n)));
+});
+
+test('look: a garbled file is rejected; garbled and fits are required tile fields (fits defaults to true)', () => {
+  const items = SUBMIT_LOOKS_TOOL.input_schema.properties.tiles.items;
+  assert.ok((items.required as readonly string[]).includes('garbled') && (items.required as readonly string[]).includes('fits'));
+  assert.equal(lookVerdict({ made: false }, look({ garbled: true })), 'garbled:look');
+  const parsed = parseLooks({ tiles: [{ tile: 1, shows: 'x', faces: 1, garbled: true, fits: false }, { tile: 2, shows: 'y', faces: 1 }] }, 2);
+  assert.deepEqual([parsed.get(0)!.garbled, parsed.get(0)!.fits, parsed.get(1)!.garbled, parsed.get(1)!.fits], [true, false, false, true]);
+  // A garbled picture is never an anchor.
+  const c = { source: 'commons' as const, kind: 'person_photo' as const, people: ['Sam Altman'], qids: [], caption: '', flags: ['identity:verified'], made: false, character_image: false, width: 1200, height: 1500, file: 'x', look: look({ portrait: true }), faces: null, face: null, recency: 0.5, order: 0, reject: null };
+  assert.notEqual(anchorScore(c, 'Sam Altman'), null);
+  assert.equal(anchorScore({ ...c, flags: [...c.flags, 'garbled'] }, 'Sam Altman'), null);
+  assert.equal(anchorScore({ ...c, look: look({ portrait: true, garbled: true }) }, 'Sam Altman'), null);
+});
+
+const FACTS = (texts: string[], cast: FactSheet['cast'] = []): FactSheet => ({
+  summary: 's',
+  timeline: [],
+  facts: texts.map((text, i) => ({ id: `F${i + 1}`, text, source_ids: [], key: false, confidence: 'confirmed' as const })),
+  sources: [],
+  quotes: [],
+  artifacts: [],
+  cast,
+  places: [],
+  verdict: { holds: true, reason: '' },
+});
+
+test('central people: the central figure, then the cast the facts are most about (3+ facts), at most three; a spine list wins', () => {
+  const murati = { name: 'Mira Murati', role: 'OpenAI CTO', kind: 'person' as const, player_id: null, want: 'w', qid: null };
+  const facts = FACTS(
+    ['Sutskever voted.', 'Sutskever signed.', 'Ilya Sutskever regretted it.', 'Murati was named interim CEO.', 'Murati signed the letter.', 'Mira Murati spoke.', 'Murati left.', 'Brockman quit.'],
+    [murati],
+  );
+  assert.deepEqual(centralPeople(PITCH, facts), ['Greg Brockman', 'Mira Murati', 'Ilya Sutskever']);
+  assert.deepEqual(centralPeople(PITCH, null), ['Greg Brockman'], 'before the facts: the central figure and cast the scene names');
+  assert.deepEqual(centralPeople(PITCH, facts, ['Ilya Sutskever']), ['Ilya Sutskever']);
+  const cast = castPeople(PITCH, facts);
+  assert.deepEqual(cast.map((p) => [p.name, p.main, p.central]), [['Mira Murati', false, true], ['Greg Brockman', true, true], ['Ilya Sutskever', true, true]]);
+});
+
+test('cutouts: a central person gets a transparent cutout of their verified portrait, which becomes their anchor', async () => {
+  const { db, jobId } = await freshJob();
+  const jobDir = tmp('rad-cut-');
+  const cut: string[] = [];
+  const result = await runHarvest(
+    {
+      db,
+      http: stubHttp(),
+      create: stubLooks(),
+      loadPrompt: () => 'LOOK',
+      serperKey: 'k',
+      cutouts: [],
+      upscale: goodUpscale,
+      detectFaces: async (files) => new Map(files.map((f) => [f, [{ x: 0.4, y: 0.1, w: 0.2, h: 0.25, score: 0.9 }]])),
+      cutout: async (src, out) => {
+        cut.push(src);
+        const m = await sharp(src).metadata();
+        await sharp(src).ensureAlpha(0.5).png().toFile(out);
+        return { ok: true, width: m.width!, height: m.height!, coverage: 0.4 };
+      },
+      sketch: null,
+      now: () => NOW,
+      sleep: async () => undefined,
+      log: () => undefined,
+    },
+    { pitch: PITCH, facts: null, jobDir, jobId, mode: 'production', settings: { ...DEFAULT_SETTINGS, min_visuals: 1 } },
+  );
+  const { assets } = result.inventory;
+  assert.equal(cut.length, 1, 'only the central person (Greg) is cut out');
+  assert.match(cut[0], /anchor-greg-brockman\.png$/, 'the low-res portrait was upscaled before cutting');
+  const cutout = assets.find((a) => a.flags.includes('cutout_made'))!;
+  assert.ok(cutout, result.notes.join(' | '));
+  assert.equal(cutout.anchor_for, 'Greg Brockman');
+  assert.equal(cutout.character_image, true);
+  assert.ok(cutout.flags.includes('cutout') && cutout.flags.includes('identity:verified'));
+  assert.equal(path.extname(cutout.file), '.png');
+  assert.equal((await sharp(path.join(jobDir, cutout.file)).metadata()).hasAlpha, true);
+  const of = cutout.flags.find((f) => f.startsWith('cutout_of:'))!.slice('cutout_of:'.length);
+  const source = assets.find((a) => a.id === of)!;
+  assert.equal(source.anchor_for, null, 'the photo it was cut from is no longer the anchor');
+  assert.equal(source.character_image, false);
+  assert.ok(!source.flags.includes('anchor:Greg Brockman'));
+  assert.equal(assets.filter((a) => a.anchor_for === 'Greg Brockman').length, 1);
+  const greg = result.cast.find((c) => c.name === 'Greg Brockman')!;
+  assert.equal(greg.cutout, cutout.id);
+  assert.equal(greg.anchor, cutout.id);
+  assert.equal(greg.central, true);
+  assert.equal(greg.target, 6);
+  assert.equal(result.cast.find((c) => c.name === 'Ilya Sutskever')!.cutout, null, 'Ilya is named, not central: no cutout');
+});
+
+test('fact-sheet cast: with the reporting still running, the cast passes wait for it and the fact-sheet people get portraits', async () => {
+  const { db, jobId } = await freshJob();
+  const jobDir = tmp('rad-factcast-');
+  let release: (f: FactSheet) => void = () => undefined;
+  const facts = new Promise<FactSheet>((resolve) => (release = resolve));
+  const murati = { name: 'Mira Murati', role: 'OpenAI CTO', kind: 'person' as const, player_id: null, want: 'w', qid: null };
+  setTimeout(() => release(FACTS(['Murati was named interim CEO.'], [murati])), 20);
+  const result = await runHarvest(
+    { db, http: stubHttp(), create: stubLooks(), loadPrompt: () => 'LOOK', serperKey: 'k', cutouts: [], upscale: goodUpscale, detectFaces: null, sketch: null, now: () => NOW, sleep: async () => undefined, log: () => undefined },
+    { pitch: PITCH, facts, jobDir, jobId, mode: 'production', settings: { ...DEFAULT_SETTINGS, min_visuals: 1 } },
+  );
+  assert.ok(result.wants.some((w) => w.id === 'person:mira-murati'));
+  const mira = result.cast.find((c) => c.name === 'Mira Murati')!;
+  assert.ok(mira, 'the fact-sheet person is in the cast coverage');
+  assert.equal(mira.main, false);
+  assert.ok(mira.verified >= 1, JSON.stringify(mira));
+  assert.ok(result.inventory.assets.some((a) => a.people.includes('Mira Murati')));
+});
+
+const asset = (over: Partial<Asset> & Pick<Asset, 'id'>): Asset => ({
+  kind: 'person_photo', file: `media/${over.id}.jpg`, url: null, source_page: null, credit: 'c', license: null, shows: 's', people: ['Sam Altman'], qids: [], place: null,
+  date_taken: null, date_confidence: 'unknown', width: 1200, height: 1500, phash: null, character_image: false, made: false, upscaled: false, flags: ['identity:verified'],
+  anchor_for: null, face: null, made_kind: null, ...over,
+});
+
+test('anchor fallback: an anchor the integrity check calls garbled hands the job to the next best portrait', () => {
+  const inventory: VisualsInventory = {
+    assets: [
+      asset({ id: 'V1', anchor_for: 'Sam Altman', character_image: true, flags: ['identity:verified', 'cutout', 'anchor:Sam Altman'] }),
+      asset({ id: 'V2', face: { x: 0.4, y: 0.1, w: 0.2, h: 0.2 } }),
+      asset({ id: 'V3', flags: ['identity:verified', 'group_photo:3_faces'], width: 3000, height: 3000 }),
+      asset({ id: 'V4', flags: ['identity:probable'], width: 3000, height: 3000 }),
+      asset({ id: 'V5', people: ['Elon Musk'], anchor_for: 'Elon Musk', character_image: true }),
+    ],
+    usable_count: 5,
+    counts: {},
+    kill: null,
+    usd: 0,
+  };
+  const bad = garbledAssetIds([
+    { asset_id: 'V1', why: 'The image is garbled: shuffled tiles on a black ground.' },
+    { asset_id: 'V5', why: 'Shows a different event than the line says.' },
+  ]);
+  assert.deepEqual(bad, ['V1']);
+  const { inventory: next, moved } = reanchor(inventory, bad);
+  assert.deepEqual(moved, [{ name: 'Sam Altman', from: 'V1', to: 'V2' }]);
+  const byId = new Map(next.assets.map((a) => [a.id, a]));
+  assert.equal(byId.get('V1')!.anchor_for, null);
+  assert.ok(byId.get('V1')!.flags.includes('garbled'));
+  assert.equal(byId.get('V2')!.anchor_for, 'Sam Altman');
+  assert.equal(byId.get('V2')!.character_image, true);
+  assert.equal(byId.get('V5')!.anchor_for, 'Elon Musk', 'other people keep their anchors');
+  assert.equal(inventory.assets[0].anchor_for, 'Sam Altman', 'the input is not changed');
+  assert.deepEqual(reanchor(inventory, []).moved, []);
+});
+
+// ── The wish search (MD-68) ─────────────────────────────────────────────────
+
+test('wish wants: at most three searches per wish, the person plus the wish key words; places and events without a person', () => {
+  const w = wishWants({ id: 'W1', person: 'Greg Brockman', want: 'Greg Brockman on stage announcing the launch at a 2017 keynote', frame_ns: [3], fallback: 'V2' });
+  assert.ok(w.length <= WISH_QUERIES);
+  assert.equal(w[0].terms, 'Greg Brockman stage announcing 2017');
+  assert.equal(w[2].terms, 'Greg Brockman 2017', 'Commons ANDs every word: the person and the year only');
+  assert.equal(w[0].kind, 'person_photo');
+  assert.deepEqual(w[0].people, ['Greg Brockman']);
+  assert.deepEqual(w.map((x) => x.sources[0]), ['serper', 'serper', 'commons']);
+  assert.ok(w.every((x) => x.id.startsWith('wish:W1:') && x.what.includes('on stage')));
+  const place = wishWants({ id: 'W2', person: null, want: 'The Rosewood hotel exterior at night', frame_ns: [1], fallback: 'M1' });
+  assert.equal(place[0].kind, 'place_photo');
+  assert.deepEqual(place[0].people, []);
+});
+
+function wishLooks(rule: (caption: string) => Partial<Look>) {
+  return async (params: Anthropic.MessageCreateParamsNonStreaming) => {
+    const text = ((params.messages[0].content as Anthropic.ContentBlockParam[])[0] as Anthropic.TextBlockParam).text;
+    const tiles = [...text.matchAll(/^(\d+)\. from (\w+); meant to show: (.*); caption: (.*)$/gm)].map((m) => ({ tile: Number(m[1]), ...look({ shows: m[4].slice(0, 60), fits: true, ...rule(m[4]) }) }));
+    return {
+      id: 'msg', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'tool_use', stop_sequence: null,
+      content: [{ type: 'tool_use', id: 't', name: 'submit_looks', input: { tiles } }],
+      usage: { input_tokens: 1800, output_tokens: 300, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+    } as unknown as Anthropic.Message;
+  };
+}
+
+test('wish search: a fitting, verified picture is numbered after the last V id and saved; a misfit keeps the fallback; cost recorded', async () => {
+  const { db, jobId } = await freshJob();
+  const jobDir = tmp('rad-wish-');
+  const media = path.join(jobDir, 'media');
+  fs.mkdirSync(media, { recursive: true });
+  fs.writeFileSync(path.join(media, 'V1.jpg'), await makeJpeg(1));
+  fs.writeFileSync(path.join(media, 'V9.png'), await makePng(2, 600, 800));
+  assert.equal(lastVisualNumber(media), 9);
+  let serper = 0;
+  const http = stubHttp();
+  const counting = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).includes('serper')) serper += 1;
+    return http(input, init);
+  }) as typeof fetch;
+  const wishes: ShotWish[] = [
+    { id: 'W1', person: 'Greg Brockman', want: 'Greg Brockman on stage at a keynote', frame_ns: [2], fallback: 'V1' },
+    { id: 'W2', person: 'Ilya Sutskever', want: 'Ilya Sutskever testifying before a committee', frame_ns: [4], fallback: 'V9' },
+  ];
+  const result = await searchWishes(
+    { db, http: counting, create: wishLooks((caption) => (/Ilya/.test(caption) ? { fits: false } : {})), loadPrompt: () => 'LOOK', serperKey: 'k', cutouts: [], upscale: null, detectFaces: null, now: () => NOW, sleep: async () => undefined, log: () => undefined },
+    { wishes, pitch: PITCH, facts: null, jobDir, jobId, mode: 'production', settings: DEFAULT_SETTINGS },
+  );
+  assert.deepEqual(result.found.map((f) => [f.wish_id, f.asset.id]), [['W1', 'V10']]);
+  const a = result.found[0].asset;
+  assert.ok(fs.existsSync(path.join(jobDir, a.file)));
+  assert.deepEqual(a.people, ['Greg Brockman']);
+  assert.ok(a.flags.includes('wish:W1') && a.flags.includes('identity:verified'));
+  assert.ok(result.problems.some((p) => /^W2: nothing found .* V9 stands in/.test(p)), result.problems.join(' | '));
+  assert.ok(serper <= wishes.length * WISH_QUERIES);
+  assert.ok(result.usd > 0);
+  const { rows } = await db.query<{ component: string }>(`SELECT DISTINCT component FROM reel_ai_drama.cost_events WHERE job_id = $1 ORDER BY component`, [jobId]);
+  assert.deepEqual(rows.map((r) => r.component), ['harvest_look', 'harvest_wish_search']);
+  const { rows: saved } = await db.query<{ ref: string }>(`SELECT ref FROM reel_ai_drama.assets WHERE job_id = $1`, [jobId]);
+  assert.deepEqual(saved.map((r) => r.ref), ['V10']);
+  assert.equal(fs.readdirSync(media).some((f) => f.startsWith('tmp-wishes')), false, 'scratch files are cleaned up');
+});
+
+test('wish search: a copy of an inventory picture is not new; past twelve wishes are not searched; a failing source costs only its wish', async () => {
+  const { db, jobId } = await freshJob();
+  const jobDir = tmp('rad-wish2-');
+  const media = path.join(jobDir, 'media');
+  fs.mkdirSync(media, { recursive: true });
+  fs.writeFileSync(path.join(media, 'V3.jpg'), await makeJpeg(seedOf('https://cdn.example.com/greg-brockman-stage.jpg'), 1800, 1200));
+  const http = stubHttp();
+  const flaky = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).includes('serper') && /Nobody/.test(String(init?.body ?? ''))) throw new Error('socket hang up');
+    return http(input, init);
+  }) as typeof fetch;
+  const wishes: ShotWish[] = [
+    { id: 'W1', person: 'Greg Brockman', want: 'Greg Brockman on stage', frame_ns: [2], fallback: 'V3' },
+    ...Array.from({ length: MAX_WISHES + 1 }, (_, i): ShotWish => ({ id: `W${i + 2}`, person: null, want: `Nobody scene ${i}`, frame_ns: [1], fallback: 'V3' })),
+  ];
+  const result = await searchWishes(
+    { db, http: flaky, create: wishLooks(() => ({})), loadPrompt: () => 'LOOK', serperKey: 'k', cutouts: [], upscale: null, detectFaces: null, now: () => NOW, sleep: async () => undefined, log: () => undefined },
+    { wishes, pitch: PITCH, facts: null, jobDir, jobId, mode: 'production', settings: DEFAULT_SETTINGS },
+  );
+  // The Serper hit duplicates V3; the name-only Commons search (iteration 4) finds a new picture instead.
+  assert.deepEqual(result.found.map((f) => f.wish_id), ['W1']);
+  assert.ok(result.found.every((f) => f.asset.url !== 'https://cdn.example.com/greg-brockman-stage.jpg' && f.asset.flags.includes('source:commons')));
+  assert.ok(result.problems.some((p) => /^2 wish\(es\) past the first 12 were not searched/.test(p)));
+  assert.equal(result.problems.filter((p) => /^W\d+: nothing found/.test(p)).length, MAX_WISHES - 1);
+  // An unknown wish id in a candidate never matches; a taken candidate is not picked twice.
+  assert.equal(pickForWish([], wishes[0]), null);
 });

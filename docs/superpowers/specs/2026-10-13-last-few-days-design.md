@@ -137,12 +137,15 @@ scroll-stopping stories. So a story can get in two ways.
 
 These patterns come from the reference post, where about 10 of the 13 headlines were literal news written punchily.
 
-- **Lead with a name or a number:** a company or person first, and a dollar figure, count or multiple where the story has one.
-- **Use present-tense "just happened" verbs:** "Just Dropped", "Is Here", "Is Now", "Wants to", "Will Now".
+Revised 2026-11-04 after `planning/Social Hub/lfd-md-writing-audit.md` (Lucas approved).
+
+- **Reader:** follows AI on Instagram, doesn't read the trade press. Explain or drop terms they wouldn't know.
+- **Lead with a name the reader knows,** or the number when the number is the point. One idea, target 50 characters.
+- **Use the plainest verb that is literally true.** If the source hedges, the headline hedges.
 - **Colour must come from the source.** A model's own nickname is fine. An invented claim of the "killed 10,000 startups"
   kind is not.
-- **Body:** 2 sentences. First what happened, then one hard detail (a number, who, when), credited where natural
-  ("Anthropic says…").
+- **Body:** 1 or 2 sentences that never repeat the headline: how it works, who it affects, what changes. Includes the
+  hard detail (a number, who, when), and credits a disputed or reported claim to whoever made it.
 - The same anti-hype and anti-AI-tell rules as the carousel Writer.
 - **Slide order is Jev's call** (Tommy, 2026-10-14). After writing, each story gets one Jev `lfd-lead@1` judgment
   (`lib/lfd/questions.ts`; draft wording until Lucas approves it) on its written headline, blurb, the outlets that

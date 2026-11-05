@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { isClose, parseFrames } from '@/explainers/reel-ai-drama/kit/frames.mjs';
-import type { Asset, DirectorPlan, StoryboardFrame, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
+import { blueprintAssets, peakRungId, type Asset, type DirectorPlan, type StoryboardFrame, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
 
 /**
  * Pure edits on the locked script and the shot plan: the facts check's cut (MD-39: a claim still
@@ -33,10 +33,12 @@ export function cutLines(draft: WriterDraft, cut: readonly string[]): WriterDraf
     return after ?? before ?? id;
   };
   const first = rungs[0]?.lines[0]?.id ?? draft.hook.line_id;
+  const { turn_rung_id: _old, ...rest } = draft;
+  void _old;
   return {
-    ...draft,
+    ...rest,
     rungs,
-    turn_rung_id: nearest(draft.turn_rung_id),
+    peak_rung_id: nearest(peakRungId(draft)),
     landing_rung_id: nearest(draft.landing_rung_id),
     hook: gone.has(draft.hook.line_id) ? { on_screen: '', line_id: first } : draft.hook,
     word_count: rungs.reduce((n, r) => n + r.lines.reduce((m, l) => m + words(l.text), 0), 0),
@@ -51,7 +53,7 @@ export function draftProblems(draft: WriterDraft): string[] {
   if (new Set(ids).size !== ids.length) out.push('The script repeats a line id.');
   const rungIds = new Set(draft.rungs.map((r) => r.id));
   if (!ids.includes(draft.hook.line_id)) out.push(`The hook points at a missing line (${draft.hook.line_id}).`);
-  if (!rungIds.has(draft.turn_rung_id)) out.push(`The turn points at a missing rung (${draft.turn_rung_id}).`);
+  if (!rungIds.has(peakRungId(draft))) out.push(`The peak points at a missing rung (${peakRungId(draft)}).`);
   if (!rungIds.has(draft.landing_rung_id)) out.push(`The landing points at a missing rung (${draft.landing_rung_id}).`);
   if (!draft.close_question?.trim()) out.push('The script has no closing question.');
   for (const r of draft.rungs) for (const l of r.lines) if (!l.text.trim()) out.push(`Line ${l.id} is empty.`);
@@ -81,7 +83,12 @@ export function reconcilePlan(draft: WriterDraft, plan: DirectorPlan): DirectorP
     covered.add(id);
   }
   frames = frames.map((f, i) => ({ ...f, n: i + 1 }));
-  return { ...plan, frames };
+  return withBlueprintAssets({ ...plan, frames });
+}
+
+/** `asset_ids` hold everything a blueprint shows: the reuse record, the integrity check and the media copy all read them. Pure. */
+export function withBlueprintAssets(plan: DirectorPlan): DirectorPlan {
+  return { ...plan, frames: plan.frames.map((f) => (f.blueprint ? { ...f, asset_ids: [...new Set([...(f.asset_ids ?? []), ...blueprintAssets(f.blueprint)])] } : f)) };
 }
 
 /** Line ids whose words changed between two drafts (text or label) and still exist in the later one. */
@@ -96,7 +103,16 @@ export function changedLineIds(before: WriterDraft, after: WriterDraft): string[
 /** Clear frame-level words equal to `words` (the cut hook's), so no frame keeps a promise the script dropped. */
 export function clearFrameWords(plan: DirectorPlan, words: string): DirectorPlan {
   const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
-  return { ...plan, frames: plan.frames.map((f) => (norm(f.on_screen) && norm(f.on_screen) === norm(words) ? { ...f, on_screen: null } : f)) };
+  return {
+    ...plan,
+    frames: plan.frames.map((f) => {
+      const out = norm(f.on_screen) && norm(f.on_screen) === norm(words) ? { ...f, on_screen: null } : f;
+      if (!out.blueprint?.hook || norm(out.blueprint.hook.text) !== norm(words)) return out;
+      const { hook: _hook, ...blueprint } = out.blueprint;
+      void _hook;
+      return { ...out, blueprint };
+    }),
+  };
 }
 
 /**
@@ -115,13 +131,19 @@ export function closeVoiceSeconds(projectDir: string): number | null {
   }
 }
 
-/** The director's answer for the flagged frames replaces only those frames (C2's one fix). */
+/**
+ * The director's answer for the flagged frames replaces only those frames (C2's one fix). A frame keeps its number, name and lines:
+ * the name is its file and timing id and the lines are what was voiced, so a fix changes the picture and never the voice.
+ */
 export function mergeFrames(plan: DirectorPlan, fixed: DirectorPlan, flagged: readonly number[]): DirectorPlan {
   const want = new Set(flagged);
   // Makes the re-planned frames ask for join the plan's; an id the plan already has keeps the plan's brief.
   const have = new Set((plan.makes ?? []).map((m) => m.id));
   const makes = [...(plan.makes ?? []), ...(fixed.makes ?? []).filter((m) => !have.has(m.id))];
-  return { ...plan, frames: plan.frames.map((f) => (want.has(f.n) ? fixed.frames.find((g) => g.n === f.n) ?? f : f)), makes, lines_back: [] };
+  return { ...plan, frames: plan.frames.map((f) => {
+    const g = want.has(f.n) ? fixed.frames.find((x) => x.n === f.n) : undefined;
+    return g ? { ...g, n: f.n, name: f.name, line_ids: f.line_ids } : f;
+  }), makes, lines_back: [] };
 }
 
 /** The asset key the 20-day rule reads (schema: the perceptual hash when known, else the source URL). */

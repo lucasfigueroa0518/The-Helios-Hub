@@ -1,61 +1,113 @@
-// Snapshot the Reel AI Drama kit gallery: every treatment on real banked images (and the smoke fixture's
-// page and map) to PNGs, then one contact sheet of them all for Lucas.
-//   node explainers/reel-ai-drama/kit/gallery.mjs [outDir]
-// Default out: .explainers-local/reel-ai-drama/kit-gallery/. Serves the repo on a local port (module
-// scripts do not load over file://); the page makes no network requests beyond that local server.
-import fs from 'node:fs';
-import http from 'node:http';
-import path from 'node:path';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+// The kit gallery, rendered (iteration 4): every case in gallery.html at its moment, in headless Chrome,
+// saved as a still for review. The caption over each is set the way the reel sets it: the band is sampled
+// with the caption hidden (measure.mjs) and the sampled tone is applied. Local only: the repo is served
+// on 127.0.0.1, no model and no network.
+//
+//   node explainers/reel-ai-drama/kit/gallery.mjs [outDir] [shot …]
+//
+// Default outDir: planning/AI Mini Docs/test-runs/iter8-gallery. Prints one JSON line per still.
 
-const DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(DIR, '../../..');
-const OUT = path.resolve(process.argv[2] || path.join(ROOT, '.explainers-local/reel-ai-drama/kit-gallery'));
-const { chromium } = createRequire(path.join(ROOT, 'package.json'))('playwright');
+import { mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.png': 'image/png', '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.jpg': 'image/jpeg', '.json': 'application/json' };
-const server = http.createServer((req, res) => {
-  const file = path.join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname));
-  if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
-  fs.createReadStream(file).pipe(res);
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${server.address().port}/explainers/reel-ai-drama/kit/gallery.html`;
+import { driver, findChrome, serve } from './browser.mjs';
+import { sampleBand, toneFor } from './measure.mjs';
 
-/** [shot, t]: each treatment at a moment where its move, marks and words are under way or done. */
-export const SHOTS = [
-  ['photo', 3], ['photo-pan', 3], ['cutout_lift', 2.5], ['collision', 2], ['page', 3], ['page-underline', 3], ['document', 3], ['post', 2],
-  ['map', 2.5], ['headline', 2.5], ['lower_third', 2.5], ['number', 2.5], ['board', 1], ['whiteboard', 1], ['newspaper', 1], ['close', 1.6],
+const KIT = dirname(fileURLToPath(import.meta.url));
+const REPO = resolve(KIT, '../../..');
+
+/** [shot, t]: the review cases, a shot at each moment worth seeing (a lift before and after its peel). */
+export const CASES = [
+  ['iter4-face-ring', 2.5],
+  ['iter4-text-ring', 3],
+  ['iter4-centred', 2],
+  ['iter4-cutout', 2],
+  ['iter4-caption-article', 1],
+  ['iter4-stat-counter', 2.5],
+  ['iter4-stat-bar', 2.5],
+  ['iter4-stat-scale', 2.5],
+  ['iter4-lift', 0.4],
+  ['iter4-lift', 2.5],
+  ['iter4-drawn', 2],
+  ['iter4-collage-style', 2.5],
+  ['iter7-date-label', 2],
+  ['iter7-object-tableau', 2],
+  ['iter7-object-collage', 2],
+  // Iteration 8: each move at its moments; before (`newspaper`, `board`) and after (`newspaper-moment`, `board-players`).
+  ['move-flash', 0.52],
+  ['move-flash', 2],
+  ['move-phone', 3],
+  ['move-click', 0.4],
+  ['move-click', 1.3],
+  ['move-click', 3.5],
+  ['move-burst', 0.6],
+  ['move-burst', 1.5],
+  ['move-speech', 2],
+  ['move-speech-tableau', 2],
+  ['move-cuts', 1],
+  ['move-cuts', 3],
+  ['move-cuts', 5],
+  ['move-drawn-logo', 1.2],
+  ['move-drawn-logo', 3],
+  ['stat-camera', 1],
+  ['stat-camera', 3],
+  ['stat-world', 0.5],
+  ['board', 2.5],
+  ['board-players', 2.8],
+  ['board-players-five', 3],
+  ['newspaper', 2.5],
+  ['newspaper-moment', 0.22],
+  ['newspaper-moment', 0.7],
+  ['newspaper-moment', 1],
+  ['newspaper-moment', 3],
+  ['newspaper-words', 3],
+  ['close-fade', 0.2],
+  ['close', 0.5],
+  ['close', 1.2],
+  ['close', 2.4],
 ];
 
-fs.mkdirSync(OUT, { recursive: true });
-const browser = await chromium.launch();
-const tab = await browser.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
-const external = [];
-tab.on('request', (r) => { if (!r.url().startsWith('http://127.0.0.1') && !r.url().startsWith('data:')) external.push(r.url()); });
-tab.on('pageerror', (e) => { console.error('page error:', e.message); process.exitCode = 1; });
-const files = [];
-for (const [shot, t] of SHOTS) {
-  await tab.goto(`${base}?${new URLSearchParams({ shot, t: String(t) })}`);
-  await tab.waitForFunction(() => window.__ready === true, null, { timeout: 20000 });
-  await tab.waitForTimeout(200);
-  const file = path.join(OUT, `${shot}.png`);
-  await tab.screenshot({ path: file });
-  files.push([shot, t, file]);
-  console.log('ok', path.relative(ROOT, file));
+export async function renderGallery(outDir = join(REPO, 'planning', 'AI Mini Docs', 'test-runs', 'iter8-gallery'), only = []) {
+  const launch = driver();
+  const chrome = findChrome();
+  if (!launch || !chrome) return { ok: false, skipped: !launch ? 'no browser driver' : 'no headless Chrome' };
+  mkdirSync(outDir, { recursive: true });
+  const server = await serve(REPO);
+  const browser = await launch(chrome);
+  const page = await browser.page();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));
+  const out = [];
+  try {
+    for (const [shot, t] of CASES.filter(([s]) => !only.length || only.includes(s))) {
+      const before = errors.length;
+      await page.goto(`http://127.0.0.1:${server.address().port}/explainers/reel-ai-drama/kit/gallery.html?shot=${shot}&t=${t}`);
+      await page.waitForFunction('window.__ready === true', { timeout: 30000 });
+      await page.evaluate(() => window.__cap(false));
+      const sample = await sampleBand(page, t);
+      const tone = toneFor(sample);
+      await page.evaluate((x) => { window.__render(x.t); window.__tone(x.tone); window.__cap(true); }, { t, tone });
+      const file = join(outDir, `${shot}-t${t}.png`);
+      await page.screenshot({ path: file, type: 'png' });
+      out.push({ shot, t, tone, p10: round(sample?.p10), p90: round(sample?.p90), file, errors: errors.slice(before) });
+    }
+  } finally {
+    await browser.close();
+    server.close();
+  }
+  return { ok: errors.length === 0, stills: out };
 }
-// The contact sheet: every shot at a third of its size, labelled.
-const sheet = `<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#1a1a1a;font:600 22px system-ui;color:#ddd}
-.g{display:grid;grid-template-columns:repeat(4,360px);gap:24px;padding:32px}.t img{width:360px;height:640px;display:block;border-radius:6px}.t div{margin-top:8px}</style>
-<div class="g">${files.map(([s, t, f]) => `<div class="t"><img src="${path.basename(f)}"><div>${s} · ${t}s</div></div>`).join('')}</div>`;
-fs.writeFileSync(path.join(OUT, 'sheet.html'), sheet);
-const sp = await browser.newPage({ viewport: { width: 1600, height: 1200 } });
-await sp.goto(`http://127.0.0.1:${server.address().port}/${path.relative(ROOT, path.join(OUT, 'sheet.html'))}`);
-await sp.waitForTimeout(500);
-await sp.screenshot({ path: path.join(OUT, 'kit-gallery-sheet.png'), fullPage: true });
-console.log('sheet', path.relative(ROOT, path.join(OUT, 'kit-gallery-sheet.png')));
-await browser.close();
-server.close();
-if (external.length) { console.error('external requests (must be none):', [...new Set(external)]); process.exitCode = 1; }
+
+const round = (n) => (Number.isFinite(n) ? Math.round(n * 1000) / 1000 : null);
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  const [dir, ...only] = process.argv.slice(2);
+  renderGallery(dir ? resolve(dir) : undefined, only)
+    .then((r) => {
+      for (const s of r.stills ?? []) console.log(JSON.stringify({ ...s, file: s.file.replace(`${REPO}/`, '') }));
+      if (r.skipped) console.log(JSON.stringify(r));
+      process.exit(r.ok ? 0 : 1);
+    })
+    .catch((e) => { console.error(e); process.exit(1); });
+}

@@ -1,8 +1,9 @@
 import { noul, score } from '@typesafe-ai/sdk';
 
+import { isGroupName } from '@/lib/reel-ai-drama/checks/variety';
 import type { DramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { defineQuestionSet } from '@/lib/reels/jev/question-set';
-import { ERAS, STORY_TYPES, type Pitch, type Score } from '@/lib/reel-ai-drama/types';
+import { ERAS, pitchBrief, pitchCentral, STORY_TYPES, type Pitch, type Score } from '@/lib/reel-ai-drama/types';
 
 /**
  * The two Jev scores (PROCESS.md D4, D5), kept separate (research 05 §11: a blended score lets a
@@ -19,21 +20,23 @@ const LEVELS = 4; // score rubrics are indexed 0..4
 const NOT_THE_TELLING =
   'Judge the events the pitch describes, not how it is written. A large number, a clever ending, or a small act with a big consequence earns nothing here on its own.';
 
+// v8 (iteration 11): the central figure is a named person the viewer follows, never a company or a group, and someone who only
+// receives events doesn't count; a want at level 3 or above is now a gate. The other questions are v7's, which restored v5 (MD-114, MD-116).
 export const DRAMA_SET = defineQuestionSet({
-  id: 'reel-ai-drama-drama-v4',
-  version: '4',
+  id: 'reel-ai-drama-drama-v8',
+  version: '8',
   questions: {
     central_want: score(
       {
-        question: 'Is there one central figure from the AI world whose own want (a fight, a pursuit, a bet or a decision) drives the events of this story?',
-        judge: `A central figure is a named person (or a small named group acting as one) whose wish, ambition, fear, conviction or decision sets the events moving and is tested by them. A quiet want counts as fully as a fight: years spent pursuing a goal, a bet on one choice, a decision to do something a certain way. A company counts only when it acts through named people whose choices we follow. A product, a market, a ranking or an announcement is not a figure. People who only comment on, react to, or are swept along by events do not count. ${NOT_THE_TELLING}`,
+        question: 'Is one named person from the AI world at the center of this story, with a want of their own that the viewer follows through it?',
+        judge: `The central figure is one named person whose wish, ambition, fear, conviction or decision sets the events moving and is tested by them, so the viewer follows that want from the start of the story to its end. A quiet want counts as fully as a fight: years spent pursuing a goal, a bet on one choice, a decision to do something a certain way. Viewers connect with people, so a company, a lab, a product, a market, a ranking, a group or a crowd is never the central figure, however it acts. Someone who only receives events does not count, even when the pitch names them as its center: a person others address, petition, hand things to or act upon, who comments, reacts or is swept along while others drive what happens. ${NOT_THE_TELLING}`,
       },
       [
-        'No one. The story is a product, a figure, a ranking, a market move or an announcement.',
-        'People appear, but they react to events rather than drive them, or the actor is a faceless organization.',
-        'A figure is present, but their want or decision is vague or only implied, and the events would happen without them.',
-        'A named figure with a clear want or decision whose choices move the events.',
-        'A named figure with a specific want, pursuit or decision that sets the events moving and is tested by what happens.',
+        'No person at the center. The story is about a company, a product, a figure, a ranking, a market move or an announcement.',
+        'People are named, but they only receive events and respond to them, or the real actor is an organization or a group.',
+        'A person acts, but their want is vague or only implied, and the events would happen without them.',
+        'A named person with a clear want whose choices move the events, and the viewer can follow that want through the story.',
+        'A named person with a specific want, pursuit or decision that sets the events moving, is tested by what happens, and carries the viewer to the end.',
       ],
     ),
     stakes: score(
@@ -88,6 +91,33 @@ export const DRAMA_SET = defineQuestionSet({
         'A defining effect: the AI world would look different without it.',
       ],
     ),
+    // MD-82: the pitch gate. A plot needs someone pushing back for a reason, and one bounded episode.
+    opposition: score(
+      {
+        question: 'Does someone with agency push back against the central figure, for a motive the record shows?',
+        judge: `Opposition is a named person or a small named group acting as one that chooses to resist, compete with, block or turn on the central figure, wanting something of their own, and whose reason for it is on the record (said, written or reported), not guessed. Churn, a market, a deadline, physics, "the industry" or bad luck is a circumstance, not an opposition. Critics who only comment do not count. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No opposition: nothing pushes back, or only circumstances do.',
+        'Resistance from a faceless force or an unnamed crowd.',
+        'A named opponent who pushes back, but their motive is missing or only guessed.',
+        'A named opponent who chooses to push back, for a motive the record shows.',
+        'A named opponent with a want of their own and a recorded motive, whose choices collide with the central figure\'s and shape the outcome.',
+      ],
+    ),
+    bounded_episode: score(
+      {
+        question: 'Is this one bounded episode: a single story question decided within days to a few months?',
+        judge: `A bounded episode opens on a definite moment and closes when one question is decided (yes or no), all inside days, weeks or a few months. Penalize a saga that spans years, a career summary, a run of separate events strung together, or a question that is still open. Background from earlier years is fine when the deciding stretch itself is short. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No episode: a long saga, a profile or a string of separate events, with no single question decided.',
+        'A question exists, but it plays out over years or is never decided.',
+        'One question, decided over many months to about a year, or the deciding stretch is hard to pin down.',
+        'One question, decided within a few months.',
+        'One question, decided within days or weeks, with a clear opening moment and a clear end.',
+      ],
+    ),
     mostly_spectacle: noul({
       question: 'Is this pitch mainly about a figure, a valuation, a ranking, a market move, or a corporate announcement, rather than about people\'s choices and what came of them?',
       judge: 'Answer yes when the heart of the pitch is a number or an announcement and the people in it are incidental. Answer no when a person\'s choices are the heart of it, even if a number or an announcement is part of it.',
@@ -103,10 +133,19 @@ export const DRAMA_SET = defineQuestionSet({
   },
 });
 
-export const DRAMA_WEIGHTS = { central_want: 0.4, stakes: 0.15, scene: 0.15, turn: 0.15, implication: 0.15 } as const;
+/** v5 (MD-82): opposition and a bounded episode join; the central want still weighs most (MD-29). Restored in v7 (MD-114). */
+export const DRAMA_WEIGHTS = { central_want: 0.3, opposition: 0.15, bounded_episode: 0.1, stakes: 0.1, scene: 0.1, turn: 0.15, implication: 0.1 } as const;
 
-/** Without a central want (index below 2) the score is capped under any sensible bar (MD-29: a skip). */
+/**
+ * The gate on the central figure: under this level (a person whose clear want moves the events) there is no one for the viewer to
+ * follow, so the score is capped under any sensible bar, whatever the rest of the story earns (MD-29, iteration 11: a skip).
+ */
+export const CENTRAL_WANT_GATE = 3;
 export const NO_CENTRAL_WANT_CAP = 0.45;
+/** MD-82: no opposition with agency and a recorded motive (index below 2) caps the score the same way. */
+export const NO_OPPOSITION_CAP = 0.45;
+/** MD-82: no bounded episode (index below 2: a saga, or a question never decided) caps the score the same way. */
+export const NO_EPISODE_CAP = 0.45;
 /** "Mostly spectacle" (noul at or above SPECTACLE_YES) caps the score the same way. */
 export const SPECTACLE_YES = 0.5;
 export const SPECTACLE_CAP = 0.5;
@@ -137,9 +176,17 @@ export function combineDrama(answers: ScoreAnswers): Score {
     notes[key] = `${v.toFixed(2)}/4`;
   }
   const want = level(answers, 'central_want');
-  if (want < 2 && total > NO_CENTRAL_WANT_CAP) {
+  if (want < CENTRAL_WANT_GATE && total > NO_CENTRAL_WANT_CAP) {
     total = NO_CENTRAL_WANT_CAP;
-    notes.cap = 'no central figure whose want drives the events (MD-29)';
+    notes.cap = 'no central person whose want the viewer follows through the events (MD-29)';
+  }
+  if (level(answers, 'opposition') < 2 && total > NO_OPPOSITION_CAP) {
+    total = NO_OPPOSITION_CAP;
+    notes.cap = notes.cap ?? 'no opposition with agency and a motive in the record (MD-82)';
+  }
+  if (level(answers, 'bounded_episode') < 2 && total > NO_EPISODE_CAP) {
+    total = NO_EPISODE_CAP;
+    notes.cap = notes.cap ?? 'not one bounded episode (MD-82)';
   }
   const spectacle = answers.mostly_spectacle?.noul;
   if (typeof spectacle === 'number') {
@@ -271,20 +318,19 @@ export function combineMaterial(answers: ScoreAnswers): Score {
 
 // ── State and calls ─────────────────────────────────────────────────────────
 
-/** Drama is judged from the pitch alone: no expected visuals, no sources, no engine. */
+/**
+ * Drama is judged from the pitch alone: no expected visuals, no sources. Iteration 5 (MD-100): the story is
+ * the prose brief (`pitchBrief` reads an older pitch's text); the central figure is `pitchCentral`.
+ */
 export function dramaState(p: Pitch) {
   return {
     title: p.title,
-    logline: p.logline,
-    pitch: p.pitch,
+    brief: pitchBrief(p),
     story_type: STORY_TYPES[p.story_type],
     era: ERAS[p.era],
     event_date: p.event_date,
-    cast: p.cast.map((c) => ({ name: c.name, role: c.role, want: c.want })),
-    central_figure: p.central_figure,
-    scene: p.scene,
-    turn: p.turn,
-    implication: p.implication,
+    cast: p.cast.map((c) => ({ name: c.name, role: c.role })),
+    central_figure: pitchCentral(p),
     why_now: p.why_now,
   };
 }
@@ -293,12 +339,10 @@ export function dramaState(p: Pitch) {
 export function materialState(p: Pitch) {
   return {
     title: p.title,
-    logline: p.logline,
-    pitch: p.pitch,
+    brief: pitchBrief(p),
     era: ERAS[p.era],
     event_date: p.event_date,
     cast: p.cast.map((c) => ({ name: c.name, role: c.role, kind: c.kind })),
-    scene: p.scene,
   };
 }
 
@@ -307,7 +351,16 @@ export type Scorable = { id: string | null; pitch: Pitch };
 export async function scoreDrama(jev: DramaJevRunner, row: Scorable): Promise<Score> {
   const result = await jev.ask({ component: 'drama_score', state: dramaState(row.pitch), set: DRAMA_SET, questions: DRAMA_SET.questions, pitchId: row.id });
   const drama = combineDrama(result.answers as unknown as ScoreAnswers);
-  return capWithoutPlayer(drama, row.pitch);
+  return capWithoutPerson(capWithoutPlayer(drama, row.pitch), row.pitch);
+}
+
+/** A company, product or group can't be the central figure: the same gate in code, on what the pitch says its center is. */
+export function capWithoutPerson(drama: Score, pitch: Pitch): Score {
+  const central = pitchCentral(pitch).toLowerCase();
+  const entry = pitch.cast.find((c) => c.name.trim().toLowerCase() === central);
+  const person = pitch.cast.some((c) => c.kind === 'person') && (!entry || (entry.kind === 'person' && !isGroupName(entry.name)));
+  if (person || drama.score <= NO_CENTRAL_WANT_CAP) return drama;
+  return { score: NO_CENTRAL_WANT_CAP, notes: { ...drama.notes, cap: drama.notes.cap ?? 'the central figure is not a named person (MD-29)' } };
 }
 
 /** The story must center on someone from the central blue-chip list (MD-11): a cast member with a player_id. */

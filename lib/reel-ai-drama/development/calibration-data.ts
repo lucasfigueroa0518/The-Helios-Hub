@@ -26,8 +26,12 @@ const person = (name: string, role: string, want: string, player_id: string | nu
 const company = (name: string, role: string, want: string, player_id: string | null = null): CastMember => ({ name, role, kind: 'company', player_id, want });
 const v = (kind: ExpectedVisual['kind'], what: string, hint = what): ExpectedVisual => ({ kind, what, hint });
 
-function item(id: string, lane: CalibrationItem['lane'], verdict: CalibrationVerdict, pitch: Omit<Pitch, 'sources'>): CalibrationItem {
-  return { id, lane, verdict, unverified: true, pitch: { ...pitch, sources: [] } };
+/**
+ * The set predates iteration 5's prose brief (MD-100): each story keeps its old fields, and its brief is
+ * its old pitch text (what `pitchBrief` reads for any pitch written before it).
+ */
+function item(id: string, lane: CalibrationItem['lane'], verdict: CalibrationVerdict, pitch: Omit<Pitch, 'sources' | 'brief'>): CalibrationItem {
+  return { id, lane, verdict, unverified: true, pitch: { ...pitch, brief: pitch.pitch ?? pitch.logline ?? '', sources: [] } };
 }
 
 export const CALIBRATION_STORIES: readonly CalibrationItem[] = [
@@ -193,10 +197,10 @@ export const CALIBRATION_STORIES: readonly CalibrationItem[] = [
     event_date: '2022-11-30',
     date_precision: 'day',
     cast: [
-      company('OpenAI', 'the lab', 'to ship a quiet research preview and learn from it', 'openai'),
       person('Sam Altman', 'OpenAI CEO', 'to get the model into people\'s hands', 'sam-altman'),
+      company('OpenAI', 'the lab', 'to ship a quiet research preview and learn from it', 'openai'),
     ],
-    central_figure: 'OpenAI',
+    central_figure: 'Sam Altman',
     scene: 'An office betting pool topped out at 100,000 users.',
     turn: 'A million users in five days; the phrase becomes a laptop sticker.',
     implication: 'The launch that started the AI race.',

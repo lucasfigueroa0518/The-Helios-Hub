@@ -183,50 +183,155 @@ export function settingSvg(id, { layer = 'full' } = {}) {
 // ── Expression marks (drawn in marker around a face) ───────────────────────
 
 /**
- * Generic marker marks that show an inner state around a face (research 06 §1: a drawn layer over the
- * photo layer). `face` is the face box in frame pixels; returns [{ d, width }] paths in frame pixels.
+ * A measured face box runs from the brows to the chin, so the forehead and hair lie above it: on real boxes the
+ * crown sits about 0.6 box heights above the box's top, and the ears a little outside its sides.
+ */
+export const HEAD_RISE = 0.6;
+/** The whole head around a measured face box. */
+export const headOf = (f) => ({ x: f.x - f.w * 0.06, y: f.y - f.h * HEAD_RISE, w: f.w * 1.12, h: f.h * (1 + HEAD_RISE) });
+/** Whether any point falls inside the head's ellipse (shrunk by `margin`). Marks of an inner state stay off the head. Pure. */
+export function crossesHead(points, head, margin = 0.92) {
+  const rx = (head.w / 2) * margin, ry = (head.h / 2) * margin;
+  const cx = head.x + head.w / 2, cy = head.y + head.h / 2;
+  return points.some(([x, y]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 < 1);
+}
+const between = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const rad = (deg) => (deg * Math.PI) / 180;
+
+/**
+ * A point around the head's outline: `deg` from straight up (positive towards `side`), `r` times the outline out. Marks
+ * of an inner state hang off this, so they sit on the head's silhouette whatever its size or where it stands.
+ */
+function around(head, side, deg, r) {
+  const a = rad(deg) * side;
+  return [head.x + head.w / 2 + Math.sin(a) * (head.w / 2) * r, head.y + head.h / 2 - Math.cos(a) * (head.h / 2) * r];
+}
+/** A wavy line following the head's outline, from `d0` to `d1` degrees, `r` times the outline out. */
+function waveAround(head, side, d0, d1, r, amp, waves = 3) {
+  const n = waves * 8;
+  let d = '';
+  for (let i = 0; i <= n; i++) {
+    const u = i / n;
+    const [x, y] = around(head, side, d0 + (d1 - d0) * u, r + amp * Math.sin(u * waves * Math.PI * 2));
+    d += `${i ? ' L' : 'M'}${n1(x)} ${n1(y)}`;
+  }
+  return d;
+}
+/** Spokes off the head's outline between `d0` and `d1` degrees. */
+function spokesAround(head, side, d0, d1, n, r0, r1) {
+  return Array.from({ length: n }, (_, i) => {
+    const deg = n > 1 ? d0 + ((d1 - d0) * i) / (n - 1) : d0;
+    const [xa, ya] = around(head, side, deg, r0);
+    const [xb, yb] = around(head, side, deg, r1);
+    return `M${n1(xa)} ${n1(ya)} L${n1(xb)} ${n1(yb)}`;
+  });
+}
+/** The stroke of a mark on this head: sized to it, thick enough to read. */
+const strokeFor = (head, k = 1) => Math.round(between(head.w * 0.024 * k, 5, 12) * 10) / 10;
+
+/**
+ * Marks that show an inner state, by convention around the top of the head (Lucas, iteration 9), sized to the head and
+ * drawn on its silhouette; never across it, and never at the jaw or the neck. `face` is the measured face box in frame
+ * pixels, `side` the head's side they lean to (1 right, -1 left), `head` the head when it was measured (default
+ * headOf(face)). Returns [{ d, width }] paths in frame pixels.
  */
 export const EXPRESSIONS = {
-  worry: (f) => [0, 1, 2].map((i) => ({ d: wave(f.x + f.w * 0.1, f.y - 40 - i * 34, f.w * 0.8, 10), width: 7 }))
-    .concat([{ d: drop(f.x + f.w + 26, f.y + f.h * 0.28, 26), width: 6 }]),
-  anger: (f) => [{ d: zigzag(f.x - 10, f.y - 60, f.w + 20, 7), width: 8 }, { d: vein(f.x + f.w * 0.9, f.y - 6, 30), width: 8 }],
-  shock: (f) => spokes(f.x + f.w / 2, f.y + f.h / 2, Math.max(f.w, f.h) * 0.75, 10).map((d) => ({ d, width: 7 })),
-  thought: (f) => thought(f.x + f.w, f.y - 20, f.w).map((d) => ({ d, width: 6 })),
-  question: (f) => [{ d: questionMark(f.x + f.w / 2, f.y - 70, Math.max(70, f.w * 0.45)), width: 10 }],
-  idea: (f) => bulb(f.x + f.w / 2, f.y - 110, Math.max(60, f.w * 0.35)).map((d) => ({ d, width: 7 })),
-  argue: (f) => [{ d: burst(f.x + f.w * 1.25, f.y + f.h * 0.75, f.w * 0.55), width: 7 }],
+  // Wavy lines over the temple and one drop running off it.
+  worry: (f, side = 1, head = headOf(f)) => {
+    const w = strokeFor(head);
+    const [dx, dy] = around(head, side, 74, 1.16);
+    return [
+      { d: waveAround(head, side, 8, 58, 1.16, 0.022), width: w },
+      { d: waveAround(head, side, 14, 52, 1.3, 0.022), width: w },
+      { d: drop(dx, dy, between(head.w * 0.085, 14, 54)), width: w },
+    ];
+  },
+  anger: (f, side = 1, head = headOf(f)) => {
+    const s = between(head.w * 0.13, 22, 64);
+    const [vx, vy] = around(head, side, 36, 1.0 + (s * 1.6) / head.h);
+    return [
+      { d: vein(vx, vy, s), width: strokeFor(head, 1.15) },
+      ...spokesAround(head, side, 62, 94, 3, 1.12, 1.34).map((d) => ({ d, width: strokeFor(head, 1.15) })),
+    ];
+  },
+  shock: (f, side = 1, head = headOf(f)) => spokesAround(head, side, -78, 78, 9, 1.1, 1.36).map((d) => ({ d, width: strokeFor(head) })),
+  thought: (f, side = 1, head = headOf(f)) => {
+    const s = between(head.w * 0.44, 90, 300);
+    const c = (cx, cy, r) => `M${n1(cx + r)} ${n1(cy)} A${n1(r)} ${n1(r)} 0 1 0 ${n1(cx - r)} ${n1(cy)} A${n1(r)} ${n1(r)} 0 1 0 ${n1(cx + r)} ${n1(cy)}`;
+    const [ax, ay] = around(head, side, 38, 1.1);
+    const [bx, by] = around(head, side, 38, 1.24);
+    // Far enough out along that bearing for the whole cloud to clear the head, whatever its shape.
+    const reach = s * 0.72, a = rad(38), rx = head.w / 2, ry = head.h / 2;
+    const [mx, my] = around(head, side, 38, Math.max(1.24 + s * 0.3 / head.h, 1 / Math.hypot((Math.sin(a) * rx) / (rx + reach), (Math.cos(a) * ry) / (ry + reach))));
+    return [{ d: c(ax, ay, s * 0.05), width: strokeFor(head) }, { d: c(bx, by, s * 0.08), width: strokeFor(head) }, { d: cloud(mx, my, s), width: strokeFor(head) }];
+  },
+  question: (f, side = 1, head = headOf(f)) => {
+    const s = between(head.w * 0.3, 44, 220);
+    const [x, y] = around(head, side, 34, 1.14 + (s * 1.05) / head.h);
+    return [{ d: questionMark(x, y, s), width: strokeFor(head, 1.3) }];
+  },
+  idea: (f, side = 1, head = headOf(f)) => {
+    const s = between(head.w * 0.2, 34, 120);
+    const [x, y] = around(head, side, 26, 1.12 + (s * 1.5) / head.h);
+    return bulb(x, y, s).map((d) => ({ d, width: strokeFor(head) }));
+  },
+  // A jagged burst by the forehead: the heat between two heads, at the height of their brows.
+  argue: (f, side = 1, head = headOf(f)) => {
+    const r = between(head.w * 0.2, 36, 130);
+    const [x, y] = around(head, side, 64, 1.04 + (r * 1.1) / (head.w / 2));
+    return [{ d: burst(x, y, r), width: strokeFor(head) }];
+  },
 };
 
-const n1 = (v) => v.toFixed(1);
-function wave(x, y, w, amp) {
-  let d = `M${n1(x)} ${n1(y)}`;
-  const steps = 4;
-  for (let i = 0; i < steps; i++) d += ` q${n1(w / steps / 2)} ${i % 2 ? amp : -amp} ${n1(w / steps)} 0`;
-  return d;
+/** A path's bounding box, from its M, L, H, V, C, Q, A and relative q, l commands (control points counted). Pure. */
+export function pathBounds(d) {
+  const toks = String(d).match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
+  let x = 0, y = 0, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, i = 0, cmd = '';
+  const see = (px, py) => { x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py); };
+  const num = () => Number(toks[i++]);
+  while (i < toks.length) {
+    if (/[A-Za-z]/.test(toks[i])) cmd = toks[i++];
+    if (cmd === 'Z' || cmd === 'z') continue;
+    if (cmd === 'M' || cmd === 'L') { x = num(); y = num(); see(x, y); }
+    else if (cmd === 'l') { x += num(); y += num(); see(x, y); }
+    else if (cmd === 'H') { x = num(); see(x, y); }
+    else if (cmd === 'V') { y = num(); see(x, y); }
+    else if (cmd === 'C') { see(num(), num()); see(num(), num()); x = num(); y = num(); see(x, y); }
+    else if (cmd === 'Q') { see(num(), num()); x = num(); y = num(); see(x, y); }
+    else if (cmd === 'q') { const a = num(), b = num(); see(x + a, y + b); x += num(); y += num(); see(x, y); }
+    else if (cmd === 'A') { const r = num(); num(); num(); num(); num(); x = num(); y = num(); see(x - 2 * r, y - 2 * r); see(x + 2 * r, y + 2 * r); }
+    else i += 1;
+  }
+  return Number.isFinite(x0) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
 }
+
+/** Where an expression's strokes reach (frame px), stroke width included. Pure. */
+export function expressionBounds(kind, face, side = 1, head = headOf(face)) {
+  const fn = EXPRESSIONS[kind];
+  if (!fn) return null;
+  const boxes = fn(face, side, head).map((p) => ({ b: pathBounds(p.d), w: p.width })).filter((p) => p.b);
+  if (!boxes.length) return null;
+  const x0 = Math.min(...boxes.map((p) => p.b.x - p.w / 2)), y0 = Math.min(...boxes.map((p) => p.b.y - p.w / 2));
+  const x1 = Math.max(...boxes.map((p) => p.b.x + p.b.w + p.w / 2)), y1 = Math.max(...boxes.map((p) => p.b.y + p.b.h + p.w / 2));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+const n1 = (v) => v.toFixed(1);
 function drop(x, y, s) {
   return `M${n1(x)} ${n1(y - s)} C${n1(x + s * 0.8)} ${n1(y)}, ${n1(x + s * 0.5)} ${n1(y + s * 0.8)}, ${n1(x)} ${n1(y + s * 0.8)} C${n1(x - s * 0.5)} ${n1(y + s * 0.8)}, ${n1(x - s * 0.8)} ${n1(y)}, ${n1(x)} ${n1(y - s)}`;
-}
-function zigzag(x, y, w, n) {
-  let d = `M${n1(x)} ${n1(y)}`;
-  for (let i = 1; i <= n; i++) d += ` L${n1(x + (w * i) / n)} ${n1(y + (i % 2 ? -28 : 0))}`;
-  return d;
 }
 function vein(x, y, s) {
   return `M${n1(x - s)} ${n1(y - s * 0.3)} Q${n1(x)} ${n1(y)} ${n1(x - s * 0.3)} ${n1(y - s)} M${n1(x + s)} ${n1(y - s * 0.3)} Q${n1(x)} ${n1(y)} ${n1(x + s * 0.3)} ${n1(y - s)} M${n1(x - s)} ${n1(y + s * 0.3)} Q${n1(x)} ${n1(y)} ${n1(x - s * 0.3)} ${n1(y + s)} M${n1(x + s)} ${n1(y + s * 0.3)} Q${n1(x)} ${n1(y)} ${n1(x + s * 0.3)} ${n1(y + s)}`;
 }
-function spokes(cx, cy, r, n) {
+function spokes(cx, cy, r, n, ry = r) {
   return Array.from({ length: n }, (_, i) => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2;
-    return `M${n1(cx + Math.cos(a) * r)} ${n1(cy + Math.sin(a) * r)} L${n1(cx + Math.cos(a) * r * 1.3)} ${n1(cy + Math.sin(a) * r * 1.3)}`;
+    return `M${n1(cx + Math.cos(a) * r)} ${n1(cy + Math.sin(a) * ry)} L${n1(cx + Math.cos(a) * r * 1.3)} ${n1(cy + Math.sin(a) * ry * 1.3)}`;
   });
 }
-function thought(x, y, s) {
-  const c = (cx, cy, r) => `M${n1(cx + r)} ${n1(cy)} A${n1(r)} ${n1(r)} 0 1 0 ${n1(cx - r)} ${n1(cy)} A${n1(r)} ${n1(r)} 0 1 0 ${n1(cx + r)} ${n1(cy)}`;
-  const bx = x + s * 0.55;
-  const by = y - s * 0.75;
-  return [c(x + 10, y - 10, 10), c(x + s * 0.2, y - s * 0.25, 16),
-    `M${n1(bx - s * 0.5)} ${n1(by)} q${n1(-s * 0.1)} ${n1(-s * 0.35)} ${n1(s * 0.22)} ${n1(-s * 0.36)} q${n1(s * 0.2)} ${n1(-s * 0.25)} ${n1(s * 0.5)} ${n1(-s * 0.05)} q${n1(s * 0.4)} ${n1(-s * 0.05)} ${n1(s * 0.32)} ${n1(s * 0.35)} q${n1(s * 0.2)} ${n1(s * 0.3)} ${n1(-s * 0.2)} ${n1(s * 0.42)} q${n1(-s * 0.3)} ${n1(s * 0.2)} ${n1(-s * 0.55)} ${n1(s * 0.02)} q${n1(-s * 0.35)} ${n1(s * 0.05)} ${n1(-s * 0.29)} ${n1(-s * 0.38)}`];
+function cloud(mx, my, s) {
+  const bx = mx - s * 0.5, by = my;
+  return `M${n1(bx)} ${n1(by)} q${n1(-s * 0.1)} ${n1(-s * 0.35)} ${n1(s * 0.22)} ${n1(-s * 0.36)} q${n1(s * 0.2)} ${n1(-s * 0.25)} ${n1(s * 0.5)} ${n1(-s * 0.05)} q${n1(s * 0.4)} ${n1(-s * 0.05)} ${n1(s * 0.32)} ${n1(s * 0.35)} q${n1(s * 0.2)} ${n1(s * 0.3)} ${n1(-s * 0.2)} ${n1(s * 0.42)} q${n1(-s * 0.3)} ${n1(s * 0.2)} ${n1(-s * 0.55)} ${n1(s * 0.02)} q${n1(-s * 0.35)} ${n1(s * 0.05)} ${n1(-s * 0.29)} ${n1(-s * 0.38)}`;
 }
 function questionMark(x, y, s) {
   return `M${n1(x - s * 0.4)} ${n1(y - s * 0.55)} C${n1(x - s * 0.4)} ${n1(y - s * 1.05)}, ${n1(x + s * 0.5)} ${n1(y - s * 1.05)}, ${n1(x + s * 0.45)} ${n1(y - s * 0.5)} C${n1(x + s * 0.42)} ${n1(y - s * 0.15)}, ${n1(x)} ${n1(y - s * 0.12)}, ${n1(x)} ${n1(y + s * 0.2)} M${n1(x)} ${n1(y + s * 0.45)} l0 4`;

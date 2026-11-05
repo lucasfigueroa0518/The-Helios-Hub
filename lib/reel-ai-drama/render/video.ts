@@ -61,10 +61,47 @@ export function frameSpans(storyboard: string): FrameSpan[] {
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const stamp = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
 
-/** When the contact sheet takes its stills: 1.0s (the hook, MD-34), then each frame at 60% of its span. */
+/** A frame's representative moment: 60% into its span, once its entrances and motion have settled. */
+export function stillAt(span: FrameSpan): number {
+  return round(span.start + (span.end - span.start) * 0.6);
+}
+
+/** The reel's first instant, as a viewer meets it: what the opening is judged on (MD-140). */
+export const OPENING_STILL_AT = 0.1;
+
+/** When the contact sheet takes its stills: the first instant, 1.0s (the hook, MD-34), then each frame at its `stillAt`. */
 export function stillTimes(spans: FrameSpan[]): number[] {
-  const times = [1.0, ...spans.map((s) => round(s.start + (s.end - s.start) * 0.6))];
+  const times = [OPENING_STILL_AT, 1.0, ...spans.map(stillAt)];
   return [...new Set(times)].filter((t) => t >= 0).sort((a, b) => a - b);
+}
+
+/** One still of one story frame, for the design reviewer (MD-129). */
+export type FrameStill = { number: number; name: string; treatment: string; at: number; file: string; opening?: boolean };
+/** The design reviewer's still size: large enough to judge small text, edges and crops. */
+export const FRAME_STILL = { W: 720, H: 1280 };
+
+/**
+ * One still per story frame (the close excluded) at the same moment the contact sheet uses, full enough
+ * to read: renders/frames/frame-NN.jpg; before them, frame 1's first instant (frame-01-opening.jpg), so the
+ * opening is judged as it plays. Throws when a still fails (the caller fails open).
+ */
+export async function frameStills(projectDir: string, videoPath: string, deps: { run?: Runner } = {}): Promise<FrameStill[]> {
+  const run = deps.run ?? spawnRunner;
+  const dir = path.join(projectDir, 'renders', 'frames');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const spans = frameSpans(fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8')).filter((s) => s.treatment !== 'close' && s.end > s.start);
+  const out: FrameStill[] = [];
+  const take = (s: FrameSpan, at: number, name: string, opening: boolean) => {
+    const file = path.join(dir, name);
+    const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(at), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${FRAME_STILL.W}:${FRAME_STILL.H}`, '-q:v', '3', file], { cwd: projectDir, timeoutMs: 120_000 });
+    if (res.status !== 0) throw new Error(`frame stills: frame ${s.number} at ${at}s failed: ${tail(res)}`);
+    out.push({ number: s.number, name: s.name, treatment: s.treatment, at, file, ...(opening ? { opening: true } : {}) });
+  };
+  const first = spans[0];
+  if (first) take(first, OPENING_STILL_AT, `frame-${String(first.number).padStart(2, '0')}-opening.jpg`, true);
+  for (const s of spans) take(s, stillAt(s), `frame-${String(s.number).padStart(2, '0')}.jpg`, false);
+  return out;
 }
 
 /**
@@ -115,8 +152,8 @@ export function captionTranscript(projectDir: string): string {
 }
 
 /**
- * P9 / C3: a stills grid of the rendered video (renders/contact-sheet.png: the hook at 1.0s, then one
- * still per frame) and the caption transcript beside it (renders/contact-sheet.txt). Returns the PNG.
+ * P9 / C3: a stills grid of the rendered video (renders/contact-sheet.png: the first instant, the hook at
+ * 1.0s, then one still per frame) and the caption transcript beside it (renders/contact-sheet.txt). Returns the PNG.
  */
 export async function contactSheet(projectDir: string, videoPath: string, deps: { run?: Runner; cols?: number } = {}): Promise<string> {
   const run = deps.run ?? spawnRunner;

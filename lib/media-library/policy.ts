@@ -18,7 +18,12 @@
  *   open (CC0, CC BY, CC BY-SA, public domain, Commons) → reuse_ok
  *   government (White House, NASA, .gov …)              → reuse_ok
  *   company / official ("Image: X", "Courtesy of X")    → library only (reuse_ok false)
- *   anything else                                       → not stored
+ *   anything else (a news photo's credit, no credit)    → stored as `unknown`,
+ *                                                         reuse_ok false (Lucas,
+ *                                                         2026-11-03: formats that
+ *                                                         run credited news photos
+ *                                                         may use it; the carousel
+ *                                                         reader never offers it)
  *
  * Tags: the contact sheet's tile tags (lowercased), the words of the
  * requests the photo passed, and the words of the vision check's "what it
@@ -87,9 +92,19 @@ export function licenceOf(photo: { url?: string; credit: string; source: PhotoSo
   return { licence: null, reuseOk: false, reason: `licence not recognised (${v.reason})` };
 }
 
-/** Does this sighting earn the image a place in the bank? */
-export function shouldStore(outcome: Outcome, c: { lane: Lane | string | null; verified: boolean }, licence: LicenceVerdict): boolean {
-  if (licence.licence === null || licence.licence === 'unknown') return false;
+/** The licence a source is stored under: the pass's class, or `unknown` (never reusable) when the credit didn't pass. */
+export function storedLicence(v: LicenceVerdict): { licence: Licence; reuseOk: boolean } {
+  return v.licence === null || v.licence === 'unknown' ? { licence: 'unknown', reuseOk: false } : { licence: v.licence, reuseOk: v.reuseOk };
+}
+
+/** Licences the finder may offer a carousel or a Story again (reuse_ok photos only). */
+export const REUSABLE_LICENCES = ['open', 'government'] as const;
+
+/**
+ * Does this sighting earn the image a place in the bank? Any licence, unknown
+ * included (stored with reuse_ok false; storedLicence): the outcome decides.
+ */
+export function shouldStore(outcome: Outcome, c: { lane: Lane | string | null; verified: boolean }, _licence?: LicenceVerdict): boolean {
   if (outcome === 'picked' || outcome === 'passed' || outcome === 'used') return true;
   if (outcome === 'verified') return c.verified && !!c.lane && IDENTITY_STORE_LANES.has(c.lane);
   return false;
@@ -141,6 +156,7 @@ export function tagsOf(sightings: TaggedSighting[]): string[] {
 
 export type MetaSource = { url: string; lane: string | null; credit: string | null; licence: Licence | null; reuse_ok: boolean; last_ok_at?: string | Date | null };
 export type MetaSighting = TaggedSighting & {
+  run_kind?: string | null;
   request_kind?: string | null;
   qid?: string | null;
   subject?: string | null;
@@ -172,12 +188,21 @@ export function metaOf(sources: MetaSource[], sightings: MetaSighting[]): PhotoM
     subjects: uniq(vetted.filter((s) => s.verified).map((s) => s.subject)),
     scenes: uniq(vetted.filter((s) => (s.request_kind ? SCENE_KINDS.has(s.request_kind) : !s.qid && sceneLanes.size > 0)).map((s) => s.request_query)),
     tags: tagsOf(vetted),
-    vision_pass: vetted.some((s) => s.vision?.pass === true && (s.vision.inferred === true || s.vision.scene === s.request_query)),
+    // The close-up check only: Reel AI Drama's look (watermarks, AI, identity) is a different question.
+    vision_pass: vetted.some((s) => s.run_kind !== 'reel_ai_drama' && s.vision?.pass === true && (s.vision.inferred === true || s.vision.scene === s.request_query)),
   };
 }
 
-/** A social.used_photos `source` as a finder lane (StockSnap is told apart by its credit). */
-export function laneForUsedSource(source: string | null | undefined, credit: string | null | undefined): Lane | null {
+/**
+ * A social.used_photos `source` as a finder lane (StockSnap is told apart by
+ * its credit). Stories and Last Few Days rows get their own lane: they carry
+ * no Wikidata ID and ran no close-up check, so no carousel lane may serve them,
+ * but the bank's identity/tag lookups (lookupForDrama) find them.
+ */
+/** A finder lane, or the lane of a format that isn't a finder (Stories, Last Few Days). */
+export type UsedLane = Lane | 'stories' | 'lfd';
+
+export function laneForUsedSource(source: string | null | undefined, credit: string | null | undefined): UsedLane | null {
   switch (source) {
     case 'stock':
       return /stocksnap|rawpixel/i.test(credit ?? '') ? 'stocksnap' : 'openverse';
@@ -190,8 +215,20 @@ export function laneForUsedSource(source: string | null | undefined, credit: str
     case 'commons-search':
     case 'article':
     case 'official':
+    case 'stories':
+    case 'lfd':
       return source;
     default:
       return null;
   }
+}
+
+/**
+ * Who a Stories credit names: "Dario Amodei, Anthropic CEO · TechCrunch, CC BY
+ * 2.0 · Wikimedia Commons" → "Dario Amodei, Anthropic CEO" (three or more
+ * " · " parts; the first is the photo's subject). Unverified: tags only.
+ */
+export function subjectInCredit(credit: string | null | undefined): string | null {
+  const parts = (credit ?? '').split(' · ').map((p) => p.trim()).filter(Boolean);
+  return parts.length >= 3 ? parts[0]! : null;
 }

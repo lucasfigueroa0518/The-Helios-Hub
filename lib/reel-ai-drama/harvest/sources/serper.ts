@@ -1,4 +1,4 @@
-import type { RawCandidate, Source, SourceRun } from '../types';
+import type { RawCandidate, Source, SourceRun, Want } from '../types';
 
 /**
  * Serper Google Images (research 04 §3 C): the widest net, and the most watermarked one, so its results
@@ -9,17 +9,20 @@ import type { RawCandidate, Source, SourceRun } from '../types';
 export const SERPER_IMAGES_URL = 'https://google.serper.dev/images';
 /** Serper packs run about $0.30–$1.00 per 1,000 queries; priced at the top of that range. */
 export const SERPER_USD_PER_QUERY = 0.001;
-/** First pass about 12; the cast top-up adds up to three per person still short (plan.ts). */
-export const MAX_SERPER_QUERIES = 30;
+/** First pass about 12; cast top-ups add three per named person and up to twelve per central person still short (plan.ts). */
+export const MAX_SERPER_QUERIES = 72;
 export const SERPER_RESULTS = 20;
 
 type SerperImage = { title?: string; imageUrl?: string; imageWidth?: number; imageHeight?: number; source?: string; domain?: string; link?: string };
 
 const mdy = (d: Date) => `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`;
 
-/** News stories search from two weeks before the event to today (MD-09); history stories search all dates. */
-export function serperTbs(run: Pick<SourceRun, 'isNews' | 'eventDate' | 'now'>): string | null {
-  if (!run.isNews || !run.eventDate) return null;
+/** Pictures of a thing, not of a moment: when the picture was taken doesn't matter (MD-139). */
+const DATELESS_KINDS = new Set<Want['kind']>(['logo', 'product', 'object', 'place_photo']);
+
+/** News stories search from two weeks before the event to today (MD-09); history stories and generic things search all dates. */
+export function serperTbs(run: Pick<SourceRun, 'isNews' | 'eventDate' | 'now'>, want?: Pick<Want, 'kind'>): string | null {
+  if (!run.isNews || !run.eventDate || (want && DATELESS_KINDS.has(want.kind))) return null;
   const from = new Date(Date.parse(run.eventDate) - 14 * 86_400_000);
   return `cdr:1,cd_min:${mdy(from)},cd_max:${mdy(run.now)}`;
 }
@@ -34,7 +37,7 @@ export const serperSource: Source = async (want, run) => {
     run.notes.push(`serper "${want.terms}": skipped (query cap ${MAX_SERPER_QUERIES} reached)`);
     return [];
   }
-  const tbs = serperTbs(run);
+  const tbs = serperTbs(run, want);
   run.spend.serperQueries += 1;
   run.spend.serperUsd += SERPER_USD_PER_QUERY;
   const res = await run.deps.http(SERPER_IMAGES_URL, {

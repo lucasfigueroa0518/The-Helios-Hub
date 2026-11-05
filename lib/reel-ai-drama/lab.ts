@@ -9,7 +9,7 @@ import { iso, listJobs, pitchRow } from '@/lib/reel-ai-drama/production/jobs';
 import { weekStart } from '@/lib/reel-ai-drama/production/schedule';
 import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
 import { loadSettings } from '@/lib/reel-ai-drama/settings';
-import { ERAS, STORY_TYPES, type DeliveryReport, type PitchRow, type PostText } from '@/lib/reel-ai-drama/types';
+import { ERAS, pitchBrief, pitchCentral, STORY_TYPES, type DeliveryReport, type PitchRow, type PostText } from '@/lib/reel-ai-drama/types';
 
 /** The Reel AI Drama lab (MD-30: the lab ranks; nothing here spends): what the page shows, and its routes' wrapper. */
 
@@ -61,8 +61,8 @@ export function readCalibrationReport(file = CALIBRATION_FILE): { at: string; re
 export type LabPitch = {
   id: string;
   title: string;
-  logline: string;
-  pitch: string;
+  /** The prose brief (MD-100); a pitch before iteration 5 shows its old pitch text. */
+  brief: string;
   centralFigure: string;
   storyType: string;
   storyTypeLabel: string;
@@ -70,7 +70,6 @@ export type LabPitch = {
   eraLabel: string;
   eventDate: string | null;
   whyNow: string | null;
-  engine: string;
   origin: PitchRow['origin'];
   status: PitchRow['status'];
   rankScore: number | null;
@@ -90,16 +89,14 @@ function labPitch(r: PitchRow): LabPitch {
   return {
     id: r.id,
     title: r.title,
-    logline: p.logline ?? '',
-    pitch: p.pitch ?? '',
-    centralFigure: p.central_figure ?? '',
+    brief: pitchBrief(p),
+    centralFigure: p.cast ? pitchCentral(p) : '',
     storyType: p.story_type ?? '',
     storyTypeLabel: (STORY_TYPES as Record<string, string>)[p.story_type] ?? p.story_type ?? '',
     era: p.era ?? '',
     eraLabel: (ERAS as Record<string, string>)[p.era] ?? p.era ?? '',
     eventDate: r.event_date,
     whyNow: p.why_now ?? null,
-    engine: p.engine ?? '',
     origin: r.origin,
     status: r.status,
     rankScore: r.rank_score,

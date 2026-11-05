@@ -302,6 +302,12 @@ const wednesdayLfd = [
   { scope: 'date', op: 'put', nyDate: WED, vertical: 'last_few_days', startMinute: 540, series: null, action: 'add', feedMode: null },
 ] as const;
 
+/** Carousels are opt-in (the seed has none): Wednesday gets its two old routine windows, 9:00 AM and 2:30 PM, added by hand. */
+const wednesdayCarousels = [
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'add', feedMode: null },
+  { scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 870, series: null, action: 'add', feedMode: null },
+] as const;
+
 async function carouselDb(): Promise<{ q: never; postId: string }> {
   const { query } = await openHubTestDb();
   const { rows } = await query<{ id: string }>(
@@ -328,6 +334,7 @@ test('carousels legacy: unchanged booking (the first open window)', async () => 
 test('carousels template: a removed window is never booked', async () => {
   const { q, postId } = await carouselDb();
   await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [...wednesdayCarousels], { by: 't', now: LATE_TUESDAY });
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY });
   const out = await schedulePost(q, postId, 'auto', LATE_TUESDAY, WED, first);
   assert.ok(out.scheduled);
@@ -347,6 +354,7 @@ test('carousels template: the day\'s quota is its slot count (2, 1, 0)', async (
   const { q } = await carouselDb();
   await (q as (t: string) => Promise<unknown>)(`INSERT INTO social.settings (key, value) VALUES ('posts_per_day', '5'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   await setSlotSource(q, 'template', 't');
+  await applySlotChanges(q, [...wednesdayCarousels], { by: 't', now: LATE_TUESDAY });
   assert.equal((await carouselFill(q, WED_MORNING)).quota, 2, 'posts_per_day no longer counts');
   await applySlotChanges(q, [{ scope: 'date', op: 'put', nyDate: WED, vertical: 'carousels', startMinute: 540, series: null, action: 'remove', feedMode: null }], { by: 't', now: LATE_TUESDAY });
   assert.equal((await carouselFill(q, WED_MORNING)).quota, 1);

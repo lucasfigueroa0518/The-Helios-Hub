@@ -100,6 +100,31 @@ export function ellipseAround(b, pad = 18, seed = 1) {
   return { pts, length: polyLength(pts) };
 }
 
+/**
+ * A hand-drawn ring sized to a measured target (a face, a drawing's ink, a photo region): its axes are
+ * the box's own half-sizes plus `pad`, so the ring hugs what it marks instead of the layer around it.
+ * Starts upper-left and overshoots its start a little, like ellipseAround.
+ */
+export function ringAround(b, pad = 10, seed = 1) {
+  const [cx, cy] = center(b);
+  const r = rng(seed), wob = 0.02 + r() * 0.015, ph = r() * 3;
+  const rx = b.w / 2 + pad, ry = b.h / 2 + pad;
+  const pts = [];
+  for (let i = 0; i <= 44; i++) {
+    const a = -2.6 + (i / 44) * (2 * Math.PI + 0.45);
+    const k = 1 + wob * Math.sin(i * 0.7 + ph);
+    pts.push([cx + rx * k * Math.cos(a), cy + ry * k * Math.sin(a)]);
+  }
+  return { pts, length: polyLength(pts) };
+}
+
+/** A box clipped to another (both { x, y, w, h }); null when they don't meet. */
+export function clipBox(b, to) {
+  const x0 = Math.max(b.x, to.x), y0 = Math.max(b.y, to.y);
+  const x1 = Math.min(b.x + b.w, to.x + to.w), y1 = Math.min(b.y + b.h, to.y + to.h);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+
 /** One quick stroke under a box's baseline (a line box ends below its descenders), slightly bowed. */
 export function underlineUnder(b, { gap = 2, over = 6, bow = 6 } = {}) {
   const y = b.y + b.h * 0.86 + gap;

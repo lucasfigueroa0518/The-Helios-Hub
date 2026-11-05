@@ -7,12 +7,13 @@ import { test } from 'node:test';
 import * as frames from '@/explainers/reel-ai-drama/kit/frames.mjs';
 import { frameMakes, frameShows, storyboardMarkdown } from '@/explainers/reel-ai-drama/kit/project-files.mjs';
 import { EXPRESSIONS, SEED_CATALOG, SETTINGS, seedKind, seedSvg } from '@/explainers/reel-ai-drama/kit/settings/index.js';
-import { mainCharacters, samePerson, stagingOf, varietyFindings, varietyProblems } from '@/lib/reel-ai-drama/checks/variety';
+import { mainCharacters, namedPeople, samePerson, stagingOf, varietyFindings, varietyProblems } from '@/lib/reel-ai-drama/checks/variety';
+import { applyWishes } from '@/lib/reel-ai-drama/render/wishes';
 import { makeAssets, makePrompt, planWithoutFailedMakes, referenceFor, type GenerateImage } from '@/lib/reel-ai-drama/render/make';
-import type { Asset, DirectorPlan, MakeRequest, StoryboardFrame, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
+import { FOCUS_KINDS, type Asset, type DirectorPlan, type FactSheet, type MakeRequest, type StoryboardFrame, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
 import { inventoryForDirecting } from '@/lib/reel-ai-drama/writing/director';
 import { MAKE_KINDS, SUBMIT_PLAN_TOOL, TREATMENTS } from '@/lib/reel-ai-drama/writing/schemas';
-import { MAX_GENERATED_MAKES, makeProblems, pruneCutLines, validatePlan } from '@/lib/reel-ai-drama/writing/validate';
+import { MAX_GENERATED_MAKES, makeProblems, pruneCutLines, validatePlan, wishProblems } from '@/lib/reel-ai-drama/writing/validate';
 
 // ── Fixtures (generic people and places; no real story) ─────────────────────
 
@@ -37,14 +38,14 @@ const INVENTORY: VisualsInventory = {
 
 function draft(texts: string[]): WriterDraft {
   return {
-    title: 'T', engine: 'end first', hook: { on_screen: 'One bet', line_id: 'L1' },
+    title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' },
     rungs: [{ id: 'R1', purpose: 'p', lines: texts.map((text, i) => ({ id: `L${i + 1}`, text, on_screen: null, fact_ids: [], must_show: null })) }],
-    turn_rung_id: 'R1', landing_rung_id: 'R1', close_question: 'Would you?', word_count: 0,
+    peak_rung_id: 'R1', landing_rung_id: 'R1', close_question: 'Would you?', word_count: 0, central: [],
   };
 }
 
 function frame(n: number, over: Partial<StoryboardFrame> = {}): StoryboardFrame {
-  return { n, name: `f${n}`, line_ids: [`L${n}`], treatment: 'photo', asset_ids: ['V4'], purpose: 'p', motion: 'push', marks: '', sound: '', music: n === 1 ? 'start' : 'hold', on_screen: n === 1 ? 'One bet' : null, shows: [], ...over };
+  return { n, name: `f${n}`, line_ids: [`L${n}`], treatment: 'photo', asset_ids: ['V4'], purpose: 'p', motion: 'push', marks: '', sound: '', music: n === 1 ? 'start' : 'hold', on_screen: n === 1 ? 'One bet' : null, shows: [], focus: { kind: FOCUS_KINDS[n % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, ...over };
 }
 
 const close = (n: number): StoryboardFrame => ({ n, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
@@ -84,8 +85,8 @@ test('variety: the same person the same way three appearances in a row is found,
   assert.deepEqual(varietyFindings(plan).filter((x) => x.id === 'same_way'), [], 'another treatment of the same image is another way');
 });
 
-test('variety: a main character named in a frame but not shown is found (full name or surname)', () => {
-  const d = draft(['Ada Founder walked in.', 'Then Rival said no.', "Founder's smile faded.", 'Nobody named here.']);
+test('variety: a person named in a frame but not shown is found (full name or capitalised surname), main or not', () => {
+  const d = draft(['Ada Founder walked in.', 'Then Rival said no.', "Founder's smile faded.", 'Nobody named here, not even a page.']);
   const plan = { frames: [
     frame(1, { asset_ids: ['V1'], shows: [{ person: 'Ada Founder', asset_id: 'V1', treatment: 'photo' }] }),
     frame(2, { treatment: 'page' }),
@@ -93,11 +94,87 @@ test('variety: a main character named in a frame but not shown is found (full na
     frame(4, { treatment: 'page' }),
     close(5),
   ] };
-  const missing = varietyFindings(plan, { draft: d, inventory: INVENTORY }).filter((x) => x.id === 'not_shown');
+  const missing = varietyFindings(plan, { draft: d, inventory: INVENTORY }).filter((x) => x.id === 'named_not_shown');
   assert.deepEqual(missing.map((x) => [x.frame, /Ben Rival|Ada Founder/.exec(x.why)?.[0]]), [[2, 'Ben Rival'], [3, 'Ada Founder']]);
   assert.deepEqual(mainCharacters(INVENTORY), ['Ada Founder', 'Ben Rival']);
   assert.ok(samePerson('Founder', 'Ada Founder') && !samePerson('Ada Founder', 'Ben Rival'));
-  assert.deepEqual(varietyFindings(plan, {}).filter((x) => x.id === 'not_shown'), [], 'without a draft the name check is skipped');
+  assert.deepEqual(varietyFindings(plan, {}).filter((x) => x.id === 'named_not_shown'), [], 'without a draft the name check is skipped');
+
+  // MD-75: a named peripheral person (fact sheet cast, no anchor) is shown too; a lowercase common word is not a name.
+  const facts = { cast: [{ name: 'Cy Page', role: 'investor', kind: 'person', player_id: null, want: '' }, { name: 'Acme Labs', role: 'lab', kind: 'company', player_id: null, want: '' }] } as unknown as FactSheet;
+  const d2 = draft(['Ada Founder met Page.', 'Acme Labs grew.', 'She turned the page.']);
+  const plan2 = { frames: [
+    frame(1, { asset_ids: ['V1'], shows: [{ person: 'Ada Founder', asset_id: 'V1', treatment: 'photo' }] }),
+    frame(2, { treatment: 'page' }),
+    frame(3, { treatment: 'map' }),
+    close(4),
+  ] };
+  const named = varietyFindings(plan2, { draft: d2, inventory: INVENTORY, facts }).filter((x) => x.id === 'named_not_shown');
+  assert.deepEqual(named.map((x) => [x.frame, /Cy Page|Acme Labs/.exec(x.why)?.[0]]), [[1, 'Cy Page']]);
+  assert.deepEqual(namedPeople({ facts, inventory: INVENTORY }), ['Cy Page', 'Ada Founder', 'Ben Rival']);
+});
+
+test('variety: medium_mix — a cutout beside a drawing, or a drawing over a photo; all drawn or all photo is clean (MD-69)', () => {
+  const makes: MakeRequest[] = [{ id: 'M1', kind: 'expression', brief: 'Ben, worried', people: ['Ben Rival'], from_assets: ['V3'], seed: null }];
+  const mixed = { makes, frames: [
+    frame(1, { treatment: 'collision', asset_ids: ['V2', 'M1'], shows: [{ person: 'Ada Founder', asset_id: 'V2', treatment: 'collision' }, { person: 'Ben Rival', asset_id: 'M1', treatment: 'collision' }] }),
+    close(2),
+  ] };
+  const f = varietyFindings(mixed, { inventory: INVENTORY }).filter((x) => x.id === 'medium_mix');
+  assert.equal(f.length, 1);
+  assert.match(f[0].why, /Ada Founder as V2 \(photo\).*Ben Rival as M1 \(drawn\)/);
+
+  const overPhoto = { makes, frames: [frame(1, { treatment: 'cutout_lift', asset_ids: ['V1', 'M1'], shows: [{ person: 'Ben Rival', asset_id: 'M1', treatment: 'cutout_lift' }] }), close(2)] };
+  assert.match(varietyProblems(overPhoto, { inventory: INVENTORY }).join('\n'), /drawing of Ben Rival over the photo V1/);
+
+  const board = { makes, frames: [frame(1, { treatment: 'whiteboard', asset_ids: ['M1'], shows: [{ person: 'Ada Founder', asset_id: 'V2', treatment: 'whiteboard' }, { person: 'Ben Rival', asset_id: 'M1', treatment: 'whiteboard' }] }), close(2)] };
+  assert.deepEqual(varietyFindings(board, { inventory: INVENTORY }).filter((x) => x.id === 'medium_mix'), [], 'both drawn on one whiteboard');
+  const photos = { frames: [frame(1, { treatment: 'tableau', asset_ids: ['V2', 'V3'], shows: [{ person: 'Ada Founder', asset_id: 'V2', treatment: 'tableau' }, { person: 'Ben Rival', asset_id: 'V3', treatment: 'tableau' }] }), close(2)] };
+  assert.deepEqual(varietyFindings(photos, { inventory: INVENTORY }).filter((x) => x.id === 'medium_mix'), []);
+});
+
+// ── Wishes (MD-68) ───────────────────────────────────────────────────────────
+
+test('applyWishes: a found wish becomes the found asset everywhere; a missed one its fallback; resolved wishes leave the plan', () => {
+  const plan: DirectorPlan = {
+    frames: [
+      frame(1, { treatment: 'photo', asset_ids: ['W1', 'V4'], motion: 'push to W1 on his name', marks: 'ring on W1 face', shows: [{ person: 'Ada Founder', asset_id: 'W1', treatment: 'photo' }] }),
+      frame(2, { treatment: 'tableau', asset_ids: ['M2', 'W2', 'V3'], shows: [{ person: 'Ben Rival', asset_id: 'W2', treatment: 'tableau' }] }),
+      frame(3, { treatment: 'collage', asset_ids: ['W3', 'V1'], motion: 'W3 slaps on; W12 stays', shows: [] }),
+      close(4),
+    ],
+    makes: [
+      { id: 'M2', kind: 'setting', brief: 'a hall', people: [], from_assets: [], seed: null },
+      { id: 'M3', kind: 'drawing', brief: 'the hall drawn', people: [], from_assets: ['W3'], seed: null },
+      { id: 'M4', kind: 'expression', brief: 'Ada sketch', people: ['Ada Founder'], from_assets: ['V1'], seed: null },
+    ],
+    wishes: [
+      { id: 'W1', person: 'Ada Founder', want: 'Ada on stage, 2015', frame_ns: [1], fallback: 'V1' },
+      { id: 'W2', person: 'Ben Rival', want: 'Ben at the table', frame_ns: [2], fallback: 'V3' },
+      { id: 'W3', person: null, want: 'the hall from outside', frame_ns: [3], fallback: 'M3' },
+      { id: 'W12', person: null, want: 'a crowd', frame_ns: [3], fallback: 'V4' },
+    ],
+    lines_back: [],
+  };
+  const out = applyWishes(plan, new Map([['W1', 'V21'], ['W3', 'V22']]));
+  assert.deepEqual(out.frames[0].asset_ids, ['V21', 'V4']);
+  assert.equal(out.frames[0].shows![0].asset_id, 'V21');
+  assert.equal(out.frames[0].motion, 'push to V21 on his name');
+  assert.equal(out.frames[0].marks, 'ring on V21 face');
+  assert.deepEqual(out.frames[1].asset_ids, ['M2', 'V3'], 'the fallback is already in the frame: listed once');
+  assert.equal(out.frames[1].shows![0].asset_id, 'V3');
+  assert.equal(out.frames[2].motion, 'V22 slaps on; V4 stays', 'W12 is not read as W1');
+  assert.equal(out.wishes, undefined, 'every wish resolved');
+  assert.deepEqual(out.makes!.map((m) => m.id), ['M2', 'M4'], 'M3 was only a fallback and is no longer needed; M4 is kept as planned');
+  assert.equal(plan.frames[0].asset_ids[0], 'W1', 'pure: the input plan is unchanged');
+
+  const none = applyWishes(plan, new Map());
+  assert.deepEqual(none.frames[2].asset_ids, ['M3', 'V1']);
+  assert.ok(none.makes!.some((m) => m.id === 'M3'), 'a fallback make in use is kept');
+  assert.deepEqual(none.makes!.find((m) => m.id === 'M3')!.from_assets, [], 'a make never traces itself when its wish falls back to it');
+  assert.deepEqual(out.makes!.find((m) => m.id === 'M4')!.from_assets, ['V1']);
+  const plain = { ...plan, wishes: [] };
+  assert.equal(applyWishes(plain, new Map()), plain, 'no wishes: the plan as it is');
 });
 
 // ── Plan schema and validation ─────────────────────────────────────────────
@@ -133,8 +210,10 @@ function composedPlan(): DirectorPlan {
 
 test('validatePlan: make ids count as assets; character images may be staged in a tableau; shows must name the frame\'s assets', () => {
   const d = draft(['Ada Founder and Ben Rival met.', 'Ada worried.']);
+  // MD-127: a drawn setting under real cutouts mixes media; that is the only problem in the composed plan.
   const ok = validatePlan(composedPlan(), { draft: d, inventory: INVENTORY });
-  assert.deepEqual(ok.problems, []);
+  assert.equal(ok.problems.length, 1, ok.problems.join('\n'));
+  assert.match(ok.problems[0]!, /frame 1 mixes real material \(V2, V3\) with made material \(M1\)/);
 
   const bad = composedPlan();
   bad.frames[1].shows = [{ person: 'Ada Founder', asset_id: 'V9', treatment: 'whiteboard' }];
@@ -170,6 +249,12 @@ test('makeProblems: ids, kinds, seeds of the right kind, a picture to trace, the
   assert.ok(capped.some((x) => /at most 6 per reel/.test(x)));
   const seeded = many.map((m) => ({ ...m, kind: 'setting' as const, seed: 'boardroom' }));
   assert.deepEqual(makeProblems(seeded, { frames: [frame(1, { asset_ids: seeded.map((m) => m.id) })] }, INVENTORY), [], 'seeded makes are free');
+  // A make may trace a wished person photo (applyWishes swaps in the find or the fallback), and that wish counts as used.
+  const wishes = [{ id: 'W1', person: 'Nobody Known', want: 'a portrait', frame_ns: [1], fallback: 'V2' }];
+  const fromWish = [{ id: 'M1', kind: 'expression' as const, brief: 'x', people: [], from_assets: ['W1'], seed: null }];
+  const wished = { frames: [frame(1, { asset_ids: ['M1'] })], makes: fromWish, wishes };
+  assert.deepEqual(makeProblems(fromWish, wished, INVENTORY), [], 'a make traces a wish');
+  assert.ok(!wishProblems(wishes, wished, INVENTORY).some((x) => /W1 is used by no frame/.test(x)), 'a wish used by a make is used');
 });
 
 test('pruneCutLines keeps the makes the remaining frames use', () => {
@@ -333,4 +418,11 @@ test('tableau, collage, drawn layers and expression marks build in a DOM and ren
   assert.equal(t.figures[0].box.style.visibility, '');
   assert.equal(typeof nk.TREATMENT_BUILDERS.tableau, 'function');
   assert.equal(typeof nk.TREATMENT_BUILDERS.collage, 'function');
+});
+
+test('MD-126: a dropped label never reaches the frame', async () => {
+  const { frameLines } = await import('@/explainers/reel-ai-drama/kit/project-files.mjs');
+  const lines = new Map([['L2', { id: 'L2', text: 'two words', on_screen: 'A label', pause_after: null }], ['L3', { id: 'L3', text: 'three more words', on_screen: 'Kept', pause_after: null }]]);
+  const out = frameLines({ treatment: 'photo', line_ids: ['L2', 'L3'], drop_labels: ['L2'] }, lines);
+  assert.deepEqual(out.map((l: { label: string | null }) => l.label), [null, 'Kept']);
 });

@@ -14,6 +14,7 @@ import {
   yesNo,
 } from '@/lib/social-hub/adapters/common';
 import { hubId } from '@/lib/social-hub/ids';
+import { pathVersion } from '@/lib/social-hub/media-version';
 import { parseSlotId } from '@/lib/social-hub/slots/types';
 import { foldLifecycle } from '@/lib/social-hub/lifecycle';
 import { reelItem } from '@/lib/social-hub/queries/costs';
@@ -143,7 +144,8 @@ function nativeFields(f: ReelFacts, extra: { songTitle: string | null; songArtis
 }
 
 function videoSrc(videoJobId: string | null, storagePath: string | null): string | null {
-  return videoJobId && storagePath ? `/api/reels/video/${encodeURIComponent(videoJobId)}` : null;
+  // Versioned by the stored file: a revision re-renders the job in place under a new path (media-version.ts).
+  return videoJobId && storagePath ? `/api/reels/video/${encodeURIComponent(videoJobId)}?v=${pathVersion(storagePath)}` : null;
 }
 
 function attemptPost(row: ReelAttemptRow, history: Map<string, import('@/lib/social-hub/types').MetricSnapshot[]>, requireApproval: boolean): HubPost {

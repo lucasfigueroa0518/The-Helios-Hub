@@ -1,17 +1,20 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
+import { bucketCoverage, conceptsToTeach, pickBuckets, topicBucket } from '@/lib/explainers/ideas/coverage';
 import { evaluateTopic, topicRef, trimPool, type Evaluation } from '@/lib/explainers/ideas/evaluate';
 import { getTopic } from '@/lib/explainers/repository';
-import { ideaUsd, type IdeaModel } from '@/lib/explainers/ideas/generator';
+import { AI_IDEAS_PER_CALL, IDEAS_PER_CALL, ideaUsd, type IdeaModel, type PickedBucket } from '@/lib/explainers/ideas/generator';
 import { cycleRetryGate } from '@/lib/explainers/ideas/retry';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
   addTopics,
   listPool,
   listRecentlyRendered,
+  listRendered,
   nyDate,
   productionSpendForDay,
   recordCost,
   requestRender,
+  saveLessonFrame,
   type NewTopic,
   type RenderRequest,
 } from '@/lib/explainers/repository';
@@ -161,13 +164,35 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     const archived = await archivedTopics(db, moves);
     const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);
     const pool = await listPool(db);
-    const rendered = [...(await listRecentlyRendered(db, settings.dedupe_lookback_days, deps.now)), ...archived];
+    // Ideas coverage (2026-11-03): tonight's buckets, least covered first (2 AI : 1 CS). The prompt carries only their
+    // renders from the last prompt_history_days, the archived topics in them (or with no bucket) and the whole pool.
+    const everRendered = await listRendered(db);
+    const picked = pickBuckets(bucketCoverage(everRendered, deps.now ?? new Date(), settings.dedupe_lookback_days), {
+      ai: AI_IDEAS_PER_CALL,
+      cs: IDEAS_PER_CALL - AI_IDEAS_PER_CALL,
+    });
+    const pickedIds = new Set(picked.map((b) => b.id));
+    const recent = await listRecentlyRendered(db, settings.prompt_history_days, deps.now);
+    const tonight: PickedBucket[] = picked.map((b) => ({
+      id: b.id,
+      name: b.name,
+      kind: b.kind,
+      concepts_to_teach: conceptsToTeach(b, everRendered),
+      rendered: recent.filter((t) => topicBucket(t) === b.id).map(topicRef),
+    }));
+    const archivedHere = archived.filter((t) => {
+      const own = topicBucket(t);
+      return !own || pickedIds.has(own);
+    });
 
     const response = await deps.ideaModel.propose({
       model: settings.idea_model,
       themeBrief,
+      buckets: tonight,
       pool: pool.map(topicRef),
-      rendered: rendered.map(topicRef),
+      rendered: [...tonight.flatMap((b) => b.rendered), ...archivedHere.map(topicRef)],
+      archived: archivedHere.map(topicRef),
+      historyDays: settings.prompt_history_days,
     });
     const buckets = response.usage;
     await recordCost(db, {
@@ -189,6 +214,10 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
         scope: idea.topic_scope,
         term: idea.term,
         origin: 'generated' as const,
+        bucket: idea.bucket,
+        lessonPayload: idea.payload,
+        lessonAltitude: idea.altitude,
+        lessonMap: idea.map_position,
       })),
     );
     await db.query('UPDATE explainers.topics SET idea_cycle_id = $1 WHERE id = ANY($2::uuid[])', [
@@ -323,7 +352,20 @@ export async function addAndEvaluateTopics(
 
   const added = await addTopics(
     db,
-    topics.map((topic, i) => ({ ...topic, title: titles[i], scope: written.scopes[i], term: written.terms[i] })),
+    topics.map((topic, i) => {
+      // scope-writer-v6 frames each title in the same call (ideas coverage, 2026-11-03).
+      const frame = written.frames?.[i];
+      return {
+        ...topic,
+        title: titles[i],
+        scope: written.scopes[i],
+        term: written.terms[i],
+        bucket: frame?.bucket ?? null,
+        lessonPayload: frame?.payload ?? null,
+        lessonAltitude: frame?.altitude ?? null,
+        lessonMap: frame?.map_position ?? null,
+      };
+    }),
   );
   const jev = new RecordingExplainersJevRunner(deps.jevTransport, db, { mode: settings.mode });
   const results: IntakeResult = [];
@@ -333,4 +375,33 @@ export async function addAndEvaluateTopics(
   }
   await trimPool(db, settings.pool_size, heldTopicIds(await readPoolMoves(deps.moves ?? movesQuery(db))));
   return results;
+}
+
+/**
+ * One-time backfill (ideas coverage, 2026-11-03; Lucas runs it after approval, it is never scheduled): pool topics
+ * with no bucket or lesson frame get both from one scope-writer call, all titles together. Only the bucket and frame
+ * are written; each topic keeps its title, scope and term. Not a sweep: it touches the pool only, once.
+ */
+export async function frameMissingPoolTopics(deps: { db: ExplainersDb; ideaModel: IdeaModel }): Promise<{ framed: string[] }> {
+  const { db } = deps;
+  const missing = (await listPool(db)).filter((t) => !t.bucket || !t.lesson_payload || !t.lesson_altitude || !t.lesson_map);
+  if (missing.length === 0) return { framed: [] };
+  const settings = await loadSettings(db);
+  const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);
+  const written = await deps.ideaModel.writeScopes({ model: settings.idea_model, themeBrief, titles: missing.map((t) => t.title.trim()) });
+  await recordCost(db, {
+    mode: settings.mode,
+    vendor: 'anthropic',
+    component: 'scope_writer',
+    inputTokens: Number(written.usage.input_tokens ?? 0),
+    outputTokens: Number(written.usage.output_tokens ?? 0),
+    cacheReadTokens: Number(written.usage.cache_read_input_tokens ?? 0),
+    cacheWriteTokens: Number(written.usage.cache_creation_input_tokens ?? 0),
+    usd: ideaUsd(written),
+  });
+  for (const [i, topic] of missing.entries()) {
+    const frame = written.frames[i];
+    await saveLessonFrame(db, topic.id, { bucket: frame.bucket, payload: frame.payload, altitude: frame.altitude, map: frame.map_position });
+  }
+  return { framed: missing.map((t) => t.id) };
 }

@@ -149,6 +149,40 @@ export function validateFactSheet(raw: FactSheet, opts: ValidateOptions = {}): V
     return [{ ...entry, fact_ids: ids }];
   });
 
+  // Relations place people and places against each other (iteration 4): each rests on a remaining fact.
+  const relations = Array.isArray(raw.relations)
+    ? raw.relations.flatMap((r) => {
+        if (!r || typeof r !== 'object' || ![r.a, r.relation, r.b].every((v) => typeof v === 'string' && v.trim())) {
+          problems.push('a relation needs a, relation and b; dropped');
+          return [];
+        }
+        const ids = (Array.isArray(r.fact_ids) ? r.fact_ids : []).filter((id) => factIds.has(id));
+        if (!ids.length) {
+          problems.push(`relation "${r.a} ${r.relation} ${r.b}" rests on no remaining fact; dropped`);
+          return [];
+        }
+        return [{ ...r, fact_ids: ids }];
+      })
+    : undefined;
+
+  // The larger context (MD-119) is sourced like any fact: a member's before/after rests on remaining facts,
+  // else the text is dropped. Old sheets without the fields stay without.
+  const cast = !Array.isArray(raw.cast) ? raw.cast : raw.cast.map((m) => {
+    if (!m || !Array.isArray(m.context_fact_ids)) return m;
+    const unknown = m.context_fact_ids.filter((id) => !factIds.has(id));
+    if (unknown.length) problems.push(`cast "${m.name}" names unknown context facts ${unknown.join(', ')}`);
+    const ids = m.context_fact_ids.filter((id) => factIds.has(id));
+    if (ids.length || !(m.background?.trim() || m.later?.trim())) return { ...m, context_fact_ids: ids };
+    problems.push(`cast "${m.name}": before/after rests on no remaining fact; dropped`);
+    return { ...m, background: null, later: null, context_fact_ids: ids };
+  });
+  const places = !Array.isArray(raw.places) ? raw.places : raw.places.map((p) => {
+    if (!p || !Array.isArray(p.fact_ids)) return p;
+    const ids = p.fact_ids.filter((id) => factIds.has(id));
+    if (ids.length < p.fact_ids.length) problems.push(`place "${p.name}" names unknown facts ${p.fact_ids.filter((id) => !factIds.has(id)).join(', ')}`);
+    return { ...p, fact_ids: ids };
+  });
+
   const urlOfSource = (id: string) => sources.find((s) => s.id === id)?.url ?? null;
   /** Dropped (null), checked word for word on a fetched page (true), or kept unchecked (false: never shown as verbatim). */
   const verbatim = (what: string, text: string, sourceId: string, ownUrl: string | null = null): boolean | null => {
@@ -187,5 +221,5 @@ export function validateFactSheet(raw: FactSheet, opts: ValidateOptions = {}): V
   }
   if (!facts.some((f) => f.key)) problems.push('no fact is marked key');
 
-  return { sheet: { ...raw, sources, facts, timeline, quotes, artifacts, verdict }, problems };
+  return { sheet: { ...raw, sources, facts, timeline, quotes, artifacts, cast, places, ...(relations ? { relations } : {}), verdict }, problems };
 }

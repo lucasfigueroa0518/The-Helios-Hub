@@ -143,6 +143,17 @@ export const grainOffset = (t) => {
 /** A wipe reveal (left to right) as a clip-path inset at progress u. */
 export const wipe = (u, bleed = 20) => `inset(-${bleed}px ${(100 - 100 * clamp(u)).toFixed(2)}% -${bleed}px -${bleed}px)`;
 
+/**
+ * A drawing's reveal at progress u, as a mask-image: the edge is feathered, so a drawing caught mid-reveal never
+ * shows the straight cut a clip leaves. `dir` right or down; `feather` in percent of the drawing. 'none' when done.
+ */
+export function softReveal(u, dir = 'down', feather = 12) {
+  const v = clamp(u);
+  if (v >= 1) return 'none';
+  const edge = v * (100 + feather);
+  return `linear-gradient(to ${dir === 'right' ? 'right' : 'bottom'},#000 ${(edge - feather).toFixed(2)}%,transparent ${edge.toFixed(2)}%)`;
+}
+
 /** Linear progress through [a, b] (re-exported for frames that only import this module). */
 export const prog = (t, a, b) => (b <= a ? (t >= b ? 1 : 0) : clamp((t - a) / (b - a)));
 export { lerp, clamp };

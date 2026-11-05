@@ -1,6 +1,6 @@
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
-import { QUEUE_LIVE, capQueued, queueOrder, runLead, withoutArchived } from '@/lib/social-hub/queue';
+import { QUEUE_LIVE, capQueued, poolLead, queueOrder, withoutArchived } from '@/lib/social-hub/queue';
 import { applyMoves, movesFor, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 
 /**
@@ -44,8 +44,11 @@ export type PoolSummary = {
   scoreLabel: string | null;
 };
 
+/** Open ideas with content already made lead the pool, whatever their score (a made idea must not sink to the bottom). */
+const madeOpen = (i: HubIdea) => (i.hasContent && OPEN.has(i.state) ? 1 : 0);
+
 export function rankIdeas(ideas: readonly HubIdea[]): HubIdea[] {
-  return [...ideas].sort((a, b) => (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title));
+  return [...ideas].sort((a, b) => madeOpen(b) - madeOpen(a) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title));
 }
 
 export function poolSummary(ideas: readonly HubIdea[], vertical: Vertical): PoolSummary {
@@ -85,9 +88,9 @@ export function poolList(ideas: readonly HubIdea[], vertical: Vertical, filter: 
   // A type whose night does not follow the queue yet keeps Promote and Demote, so the page never shows an order the night won't make.
   if (!QUEUE_LIVE.has(vertical)) return applyMoves(withoutArchived(rankIdeas(kept), movesFor(adjustments, vertical)), movesFor(adjustments, vertical));
   const moves = movesFor(adjustments, vertical);
-  if (filter === 'all') return queueOrder(rankIdeas(kept), moves, runLead(kept)).map((q) => q.item);
+  if (filter === 'all') return queueOrder(rankIdeas(kept), moves, poolLead(kept)).map((q) => q.item);
   // At most 30 open ideas per type (Stories: per series); pinned, dragged, yours and made ideas are never cut.
   const groups = new Map<string, HubIdea[]>();
   for (const idea of rankIdeas(kept)) groups.set(vertical === 'stories' ? idea.group ?? '' : '', [...(groups.get(vertical === 'stories' ? idea.group ?? '' : '') ?? []), idea]);
-  return [...groups.values()].flatMap((list) => capQueued(queueOrder(list, moves, runLead(list))).map((q) => q.item));
+  return [...groups.values()].flatMap((list) => capQueued(queueOrder(list, moves, poolLead(list))).map((q) => q.item));
 }

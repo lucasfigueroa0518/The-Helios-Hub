@@ -7,7 +7,11 @@
    "why_flagged": "Too strict for news on stills: muted viewers get the story from the captions, and a photo rarely carries plot by itself.",
    "my_rec": "R",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -16,7 +20,11 @@
    "why_flagged": "A silent gap is dead air for a muted viewer, and long gaps cost retention.",
    "my_rec": "R",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -25,7 +33,11 @@
    "why_flagged": "Stills have no natural sound, and silence as a throttle never reaches a muted viewer. W-34 covers what is left.",
    "my_rec": "C",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -34,7 +46,11 @@
    "why_flagged": "Same reason as W-34.",
    "my_rec": "R",
    "final": {
-    "action": "keep"
+    "action": "superseded",
+    "was": {
+     "action": "keep"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -43,8 +59,12 @@
    "why_flagged": "Works for sound-on viewers only if something on screen holds the moment.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "A beat with no narration before the key line, while the picture or on-screen words hold the moment."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "A beat with no narration before the key line, while the picture or on-screen words hold the moment."
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -53,8 +73,12 @@
    "why_flagged": "Sound-first reveals are lost on mute.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Bring a new image in first and let it land for a moment, then name it."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Bring a new image in first and let it land for a moment, then name it."
+    },
+    "note": "superseded 2026-11-02 by MD-91 (Lucas: 'The reel overall is too slow. Pauses are too long and cadence is too long.')"
    }
   },
   {
@@ -63,7 +87,11 @@
    "why_flagged": "Spoken signposts spend scarce words, and on-screen change does the job for both audiences.",
    "my_rec": "C",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -72,7 +100,11 @@
    "why_flagged": "Same as W-19.",
    "my_rec": "C",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -81,8 +113,12 @@
    "why_flagged": "Keep the idea, drop the spoken signpost.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Flag what matters with a change of pace and on-screen emphasis."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Flag what matters with a change of pace and on-screen emphasis."
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -148,8 +184,12 @@
    "why_flagged": "Searching for a bigger theme tends to end in a lesson.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Set the story inside the larger forces shaping AI; that context runs through it rather than arriving as a closing lesson. (Lucas: \"I want these stories to be cognizant of the greater themes that are going on in the AI world. We don't necessarily need to end on a lesson or moral, but the story will probably be intertwined with a greater context.\")"
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Set the story inside the larger forces shaping AI; that context runs through it rather than arriving as a closing lesson. (Lucas: \"I want these stories to be cognizant of the greater themes that are going on in the AI world. We don't necessarily need to end on a lesson or moral, but the story will probably be intertwined with a greater context.\")"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -158,8 +198,12 @@
    "why_flagged": "Same risk as D-6.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Give meaning in at most one line, as stakes, not a moral."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Give meaning in at most one line, as stakes, not a moral."
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -168,7 +212,11 @@
    "why_flagged": "A reflection-line ending is a soft moral. Your ending is the thread that is still unfolding (MD-05).",
    "my_rec": "C",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -177,7 +225,11 @@
    "why_flagged": "An \"explanatory narrative\" is the educational format. The visuals check and selection pick stories that already have action.",
    "my_rec": "C",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -204,7 +256,11 @@
    "why_flagged": "Rules out stories built around a flawed CEO or a rivalry, which are the core of AI drama.",
    "my_rec": "R",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -213,7 +269,11 @@
    "why_flagged": "\"Resolve\" conflicts with stories that are still unfolding.",
    "my_rec": "R",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -222,8 +282,12 @@
    "why_flagged": "In AI news the one at fault is often the protagonist. The Tinder Swindler rule doesn't map.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Never glorify wrongdoing; when people were harmed, give them their place in the story."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Never glorify wrongdoing; when people were harmed, give them their place in the story."
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -241,8 +305,12 @@
    "why_flagged": "We can't contact the subjects of a story.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "When someone faces allegations, include their public response or denial if one exists."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "When someone faces allegations, include their public response or denial if one exists."
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -251,8 +319,12 @@
    "why_flagged": "It says 110–140 words while S-39 says 150–170 wpm. Your old pacing rule was 180–200 wpm with pauses of 0.2s or less.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Budget about 140–170 narrated words for 60 seconds, leaving room for two or three short picture beats."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Budget about 140–170 narrated words for 60 seconds, leaving room for two or three short picture beats."
+    },
+    "note": "superseded 2026-11-02 by MD-91 (180 words a minute via words_per_minute_target; one silent beat at most)"
    }
   },
   {
@@ -270,8 +342,12 @@
    "why_flagged": "The format is 60 seconds. One unverified note says TikTok pays creators only on videos over a minute.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Aim for about 60 seconds; run up to about 75 only when the story needs it."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Aim for about 60 seconds; run up to about 75 only when the story needs it."
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {
@@ -389,8 +465,12 @@
    "why_flagged": "\"Restrained graphics\" vs the muted viewer's need for on-screen words.",
    "my_rec": "R",
    "final": {
-    "action": "rewrite",
-    "text": "Keep graphics restrained in style; on-screen words are there for the muted viewer and the evidence, never as decoration."
+    "action": "superseded",
+    "was": {
+     "action": "rewrite",
+     "text": "Keep graphics restrained in style; on-screen words are there for the muted viewer and the evidence, never as decoration."
+    },
+    "note": "superseded 2026-11-02 by Iteration 4 (Lucas: 'the $6M/year graphic is REALLY lazy. That could have been something animated'); stat graphics are animated, on-screen words still never decoration"
    }
   },
   {
@@ -409,7 +489,11 @@
    "why_flagged": "Every draft is a paid model pass.",
    "my_rec": "R",
    "final": {
-    "action": "cut"
+    "action": "superseded",
+    "was": {
+     "action": "cut"
+    },
+    "note": "MD-101: principles over engines"
    }
   },
   {

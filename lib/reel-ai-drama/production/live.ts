@@ -4,11 +4,11 @@
  * Messages call, the prompt loader, the model from settings, the job's Jev runner). Where a builder's
  * deps type differs from this base, the typecheck says so at integration (see notes/B5.md).
  */
+import { measureInventory } from '@/lib/reel-ai-drama/harvest/regions';
 import path from 'node:path';
 
 import { anthropic } from '@/lib/anthropic';
 import type { Queryable } from '@/lib/explainers/db';
-import { loadAgentQuery, runAgentSession } from '@/lib/explainers/render/agent';
 import type { ArtifactStore } from '@/lib/explainers/storage';
 // B1 development
 import { runCalibration } from '@/lib/reel-ai-drama/development/calibration';
@@ -20,27 +20,33 @@ import { runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
 import { liveVisualsCheckDeps } from '@/lib/reel-ai-drama/development/visuals-check';
 // B2 reporting + harvest
 import { harvestVisuals } from '@/lib/reel-ai-drama/harvest/harvest';
-import { liveHarvestDeps } from '@/lib/reel-ai-drama/harvest/live';
+import { findRembg, liveHarvestDeps, rembgCutout } from '@/lib/reel-ai-drama/harvest/live';
+import { makeCutouts } from '@/lib/reel-ai-drama/harvest/cutouts';
+import { liveDetectFaces } from '@/lib/reel-ai-drama/harvest/faces';
 import { recordUses } from '@/lib/reel-ai-drama/harvest/reuse';
+import { searchWishes } from '@/lib/reel-ai-drama/harvest/wishes';
 import { reportStory } from '@/lib/reel-ai-drama/reporting/report';
 // B3 prompts, writing, checks
 import { checkFacts } from '@/lib/reel-ai-drama/checks/facts';
 import { checkFirstViewer } from '@/lib/reel-ai-drama/checks/first-viewer';
+import { checkDesign } from '@/lib/reel-ai-drama/checks/design';
 import { checkIntegrity } from '@/lib/reel-ai-drama/checks/integrity';
 import { loadPrompt } from '@/lib/reel-ai-drama/prompts';
 import { directReel } from '@/lib/reel-ai-drama/writing/director';
 import { writePost } from '@/lib/reel-ai-drama/writing/post';
+import { editStory } from '@/lib/reel-ai-drama/writing/story-editor';
 import { reviseScript, writeScript } from '@/lib/reel-ai-drama/writing/writer';
 // B4 kit + render
-import { assembleProject, contactSheet, KIT_GUIDE, prepareWorkspace, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
+import { assembleProject, contactSheet, frameStills, KIT_GUIDE, prepareWorkspace, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
 import { recordCost } from '@/lib/reel-ai-drama/cost';
 import { makeAssets } from '@/lib/reel-ai-drama/render/make';
 import { designSound } from '@/lib/reel-ai-drama/render/sound-design';
 import { RecordingDramaJevRunner } from '@/lib/reel-ai-drama/jev';
-import { dramaAgentOverrides, withAgentOverrides } from '@/lib/reel-ai-drama/production/agents';
+import { CREATIVE_MODEL, creativePass } from '@/lib/reel-ai-drama/production/creative';
+import { compileReel, frameFindings, readCompiled } from '@/lib/reel-ai-drama/render/compile';
 import type { ProductionDeps, StepCtx } from '@/lib/reel-ai-drama/production/run';
 import type { ScheduleDeps } from '@/lib/reel-ai-drama/production/schedule';
-import { loadSettings } from '@/lib/reel-ai-drama/settings';
+import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 
 export const JOBS_ROOT = process.env.REEL_AI_DRAMA_JOBS_DIR || path.join(process.cwd(), '.explainers-local', 'reel-ai-drama', 'jobs');
@@ -61,7 +67,6 @@ export async function liveProductionDeps(input: {
   log?: (event: string, fields?: Record<string, unknown>) => void;
 }): Promise<ProductionDeps> {
   const { db } = input;
-  const query = withAgentOverrides(await loadAgentQuery(), dramaAgentOverrides(loadPrompt('frame-worker')));
   const jev = (ctx: StepCtx) => new RecordingDramaJevRunner(liveJevTransport, db, { mode: ctx.mode, jobId: ctx.jobId });
   const base = (ctx: StepCtx, component: string, model: string) => ({
     db,
@@ -79,7 +84,6 @@ export async function liveProductionDeps(input: {
     jobsRoot: input.jobsRoot ?? JOBS_ROOT,
     secrets: input.secrets,
     log: input.log,
-    prompts: (name) => loadPrompt(name),
     jev,
     pool: { nextForProduction },
     reporting: {
@@ -98,12 +102,30 @@ export async function liveProductionDeps(input: {
         }
       },
       recordUses,
+      // MD-68: the director's wishes, searched with the harvest's own sources and checks (records its own cost).
+      searchWishes: async (i) => {
+        const live = await liveHarvestDeps(db, { anthropic, loadPrompt });
+        if (live.notes.length) input.log?.('wish_search_notes', { jobId: i.jobId, notes: live.notes });
+        try {
+          return await searchWishes(live.deps, i);
+        } finally {
+          await live.close();
+        }
+      },
+      // MD-81: cutouts after the writer and the wish search: local rembg and the local face detector, no spend.
+      cutPeople: async (i) => {
+        const rembg = findRembg();
+        return makeCutouts({ cutout: rembg ? rembgCutout(rembg) : null, detectFaces: liveDetectFaces, db }, i);
+      },
     },
     writing: {
       writeScript: (i, ctx) => writeScript(base(ctx, 'writer', ctx.settings.writer_model), i),
+      editStory: (i, ctx) => editStory(base(ctx, 'story_notes', ctx.settings.story_editor_model), i),
       reviseScript: (i, ctx) => reviseScript(base(ctx, 'writer_revise', ctx.settings.writer_model), i),
       directReel: (i, ctx) => directReel(base(ctx, 'director', ctx.settings.director_model), i),
       writePost: (i, ctx) => writePost(base(ctx, 'post_text', ctx.settings.writer_model), i),
+      // One cached Sonnet call on the compiled reel's stills; its own cost goes to the job's ledger, and it fails open.
+      creativePass: (i, ctx) => creativePass(i, { ...base(ctx, 'creative_pass', CREATIVE_MODEL), loadPrompt: () => loadPrompt('creative-pass') }),
     },
     checks: {
       checkFacts: (runner, i) => checkFacts(runner, i),
@@ -111,27 +133,34 @@ export async function liveProductionDeps(input: {
       checkIntegrity: (i, ctx) =>
         checkIntegrity({ ...base(ctx, 'integrity', ctx.settings.vision_model), jobDir: path.join(input.jobsRoot ?? JOBS_ROOT, '_harvest', ctx.jobId) }, i),
       checkFirstViewer: (i, ctx) => checkFirstViewer(base(ctx, 'first_viewer', ctx.settings.vision_model), i),
+      // MD-129: Haiku (vision_model) and Sonnet (design_judge_model) calls, each recorded under its own component.
+      checkDesign: (i, ctx) => checkDesign(base(ctx, 'design_review', ctx.settings.vision_model), i),
     },
     render: {
       kitGuide: KIT_GUIDE,
       prepareWorkspace,
       writeProjectFiles,
+      measurePictures: (inventory, root) => measureInventory(inventory, root),
       runVoice,
       makeAssets: (i, ctx) =>
         makeAssets(i, { record: (e) => recordCost(db, { jobId: ctx.jobId, mode: ctx.mode, vendor: 'openai', component: 'make', usd: e.usd }) }),
       designSound: (i, ctx) =>
         designSound(i, { create: anthropicCreate(anthropic, 'sound_design'), model: ctx.settings.orchestrator_model, loadPrompt: () => loadPrompt('sound-designer'), db, jobId: ctx.jobId, mode: ctx.mode }),
+      compileReel,
+      readCompiled: (dir) => readCompiled(dir),
+      frameFindings: (dir, id) => frameFindings(dir, id),
       assembleProject,
       renderVideo,
       contactSheet,
+      frameStills: (dir, video) => frameStills(dir, video),
     },
-    agent: { runSession: (s) => runAgentSession({ ...s, query }) },
   };
 }
 
 /** One development session (B1), live: the producer, Jev, the visuals check and news touching a player. */
-export async function runLiveDevelopment(db: Queryable, trigger: 'auto' | 'click'): Promise<unknown> {
-  const settings = await loadSettings(db);
+export async function runLiveDevelopment(db: Queryable, trigger: 'auto' | 'click', overrides: Partial<ReelAiDramaSettings> = {}): Promise<unknown> {
+  // `overrides` is for a one-off run Lucas asks for (e.g. a bigger round past the weekly cap); never saved.
+  const settings = { ...(await loadSettings(db)), ...overrides };
   return runDevelopmentSession(
     {
       db,

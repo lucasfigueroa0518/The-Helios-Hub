@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { isPostingType } from '@/lib/content-type/posting';
 import { readAllProgress, readProgress } from '@/lib/content-type/progress';
 import { getSession } from '@/lib/session';
-import { HUB_DATA_TAG } from '@/lib/social-hub/views/cached-dataset';
+import { HUB_COST_TAG, HUB_DATA_TAG } from '@/lib/social-hub/views/cached-dataset';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,5 +38,7 @@ export async function POST() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   revalidateTag(HUB_DATA_TAG);
+  // A run that finished may have spent money: re-read the cost too (actions only mark the content).
+  revalidateTag(HUB_COST_TAG);
   return NextResponse.json({ ok: true });
 }

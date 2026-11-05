@@ -12,12 +12,12 @@ import { allCells, cellFromRow, markSearched, newsTouching, pickCells, seedCells
 import { nextForProduction, rankScore, tendPool } from '@/lib/reel-ai-drama/development/pool';
 import { producePitches, selectPitches, validatePitch, type CreateMessage } from '@/lib/reel-ai-drama/development/producer';
 import { capWithoutPlayer, combineDrama, combineMaterial, DRAMA_SET, MATERIAL_SET } from '@/lib/reel-ai-drama/development/scores';
-import { runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
+import { CELL_ESTIMATE_USD, runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
 import { checkVisuals, gradeCard, type ImageHit, type VisualsCheckDeps } from '@/lib/reel-ai-drama/development/visuals-check';
 import { RecordingDramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';
-import type { Pitch, PitchRow } from '@/lib/reel-ai-drama/types';
+import { pitchCentral, type Pitch, type PitchRow } from '@/lib/reel-ai-drama/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 
 import { scratchExplainersDb } from './explainers-pglite';
@@ -34,6 +34,7 @@ const TODAY = '2026-10-28';
 function pitch(over: Partial<Pitch> = {}): Pitch {
   return {
     title: 'The founder who bet the company',
+    brief: 'A founder with weeks of cash left flies to a partner and asks for money he expects to lose.',
     logline: 'A founder risks everything on one chip.',
     pitch: 'A founder with weeks of cash left flies to a partner and asks for money he expects to lose.',
     story_type: 'big_bet',
@@ -212,17 +213,19 @@ test('validatePitch is strict on structure and resolves player ids from the blue
   const ok = validatePitch({ ...pitch(), typicality: 0.3 }, { today: TODAY });
   assert.ok(ok.ok);
   const resolved = validatePitch(
-    { ...pitch({ cast: [{ name: 'Sam Altman', role: 'CEO', kind: 'person', player_id: 'altman-sam', want: 'control' }], central_figure: 'sam altman' }) },
+    { ...pitch({ cast: [{ name: 'Sam Altman', role: 'CEO', kind: 'person', player_id: 'altman-sam' }] }) },
     { today: TODAY },
   );
-  assert.ok(resolved.ok && resolved.pitch.cast[0].player_id === 'sam-altman' && resolved.pitch.central_figure === 'Sam Altman');
+  // MD-100: no central_figure on a new pitch; the first person in the cast is its centre (pitchCentral).
+  assert.ok(resolved.ok && resolved.pitch.cast[0].player_id === 'sam-altman' && resolved.pitch.central_figure === undefined && pitchCentral(resolved.pitch) === 'Sam Altman');
   const unknown = validatePitch({ ...pitch({ cast: [{ name: 'Jane Doe', role: 'engineer', kind: 'person', player_id: 'jane', want: 'x' }], central_figure: 'Jane Doe' }) }, { today: TODAY });
   assert.ok(unknown.ok && unknown.pitch.cast[0].player_id === null);
 
   const bad: [Partial<Pitch> | Record<string, unknown>, RegExp][] = [
     [{ story_type: 'heist' }, /story_type/],
     [{ era: 'future' }, /era/],
-    [{ central_figure: 'Someone Else' }, /not in the cast/],
+    [{ brief: '' }, /missing brief/],
+    [{ cast: [] }, /no cast/],
     [{ event_date: null }, /no event_date/],
     [{ event_date: '2027-01-01' }, /future/],
     [{ event_date: '2024-02-30' }, /bad event_date/],
@@ -329,8 +332,8 @@ test('eventKey ignores wording; findDuplicate runs fingerprint, similarity, then
 
 // ── Scores ──────────────────────────────────────────────────────────────────
 
-test('score combination: drama weights MD-29 most and caps without a central want; material weights', () => {
-  const all = (v: number) => ({ central_want: { score: v }, stakes: { score: v }, scene: { score: v }, turn: { score: v }, implication: { score: v }, mostly_spectacle: { noul: 0 } });
+test('score combination: drama v7 (= v5, MD-114) weights MD-29 most and caps without a central want; material weights', () => {
+  const all = (v: number) => ({ central_want: { score: v }, opposition: { score: v }, bounded_episode: { score: v }, stakes: { score: v }, scene: { score: v }, turn: { score: v }, implication: { score: v }, mostly_spectacle: { noul: 0 } });
   assert.equal(combineDrama(all(4)).score, 1);
   assert.equal(combineDrama(all(2)).score, 0.5);
   const noWant = combineDrama({ ...all(4), central_want: { score: 1 } });
@@ -338,6 +341,7 @@ test('score combination: drama weights MD-29 most and caps without a central wan
   assert.match(noWant.notes.cap, /MD-29/);
   const spectacle = combineDrama({ ...all(4), mostly_spectacle: { noul: 0.8 } });
   assert.equal(spectacle.score, 0.5);
+  assert.match(spectacle.notes.cap ?? '', /not people acting on a want/);
   const wantHeavy = combineDrama({ ...all(0), central_want: { score: 4 } }).score;
   const sceneHeavy = combineDrama({ ...all(0), scene: { score: 4 } }).score;
   assert.ok(wantHeavy > sceneHeavy * 2);
@@ -345,9 +349,28 @@ test('score combination: drama weights MD-29 most and caps without a central wan
 
   const m = combineMaterial({ famous_faces: { score: 4 }, photographed_events: { score: 4 }, published_artifacts: { score: 0 }, variety: { score: 0 }, named_place: { score: 0 }, era_photos: { score: 0 } });
   assert.equal(m.score, 0.45);
-  assert.equal(DRAMA_SET.id, 'reel-ai-drama-drama-v4');
+  assert.equal(DRAMA_SET.id, 'reel-ai-drama-drama-v7');
+  assert.equal(DRAMA_SET.version, '7');
   assert.equal(MATERIAL_SET.id, 'reel-ai-drama-material-v1');
 });
+
+test('drama v7 (= v5, MD-82, MD-114): no opposition with agency, or no bounded episode, caps the score under the bar', () => {
+  const all = { central_want: { score: 4 }, opposition: { score: 4 }, bounded_episode: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 }, announced_plan: { noul: 0 }, about_ai: { noul: 1 } };
+  assert.equal(combineDrama(all).score, 1);
+  const noOpponent = combineDrama({ ...all, opposition: { score: 1 } });
+  assert.equal(noOpponent.score, 0.45);
+  assert.match(noOpponent.notes.cap ?? '', /opposition/);
+  const saga = combineDrama({ ...all, bounded_episode: { score: 0 } });
+  assert.equal(saga.score, 0.45);
+  assert.match(saga.notes.cap ?? '', /bounded episode/);
+  // A named opponent with a guessed motive (2) is not capped, only weighed down.
+  const guessed = combineDrama({ ...all, opposition: { score: 2 } }).score;
+  assert.ok(guessed < 1 && guessed > 0.45);
+  assert.throws(() => combineDrama({ central_want: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 } }), /opposition/);
+  assert.ok('opposition' in DRAMA_SET.questions && 'bounded_episode' in DRAMA_SET.questions);
+  assert.ok(!('people' in DRAMA_SET.questions) && !('tension' in DRAMA_SET.questions) && !('episode' in DRAMA_SET.questions));
+});
+
 
 test('question wording never names a calibration story or its people', () => {
   const words = JSON.stringify([DRAMA_SET.questions, MATERIAL_SET.questions]).toLowerCase();
@@ -521,14 +544,14 @@ test('the session respects the weekly development cap', async () => {
   assert.equal(called, 0);
   assert.equal(summary.cellsSearched, 0);
 
-  // Under the cap at the start, over it after the first cell: the session stops starting new cells.
+  // Cells run in parallel, so the session launches only the cells the budget left covers.
   const db2 = await freshDb();
   const pricey = (async () => {
     called += 1;
     return message([{ type: 'tool_use', id: 't', name: 'submit_pitches', input: { candidates: [] } }], 'tool_use', { input_tokens: 5_000_000, output_tokens: 100_000 });
   }) as CreateMessage;
   const capped = await runDevelopmentSession(
-    { db: db2, producer: { create: pricey, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: { ...DEFAULT_SETTINGS, cells_per_session: 4 }, random: () => 0.5 },
+    { db: db2, producer: { create: pricey, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: { ...DEFAULT_SETTINGS, cells_per_session: 4, weekly_dev_cap_usd: CELL_ESTIMATE_USD * 1.5 }, random: () => 0.5 },
     { trigger: 'click' },
   );
   assert.equal(capped.status, 'capped');
@@ -595,7 +618,7 @@ test('seedCalibrationPitches inserts the 12 as new seed pitches, once', async ()
 });
 
 test('drama v2 caps an announced plan and a story with no AI-world player at the center', () => {
-  const all = { central_want: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 } };
+  const all = { central_want: { score: 4 }, opposition: { score: 4 }, bounded_episode: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 } };
   assert.equal(combineDrama({ ...all, announced_plan: { noul: 0.1 } }).score, 1);
   const announced = combineDrama({ ...all, announced_plan: { noul: 0.8 } });
   assert.equal(announced.score, 0.5);
@@ -608,7 +631,7 @@ test('drama v2 caps an announced plan and a story with no AI-world player at the
 });
 
 test('drama v3 caps a story that is not about AI', () => {
-  const all = { central_want: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 }, announced_plan: { noul: 0 } };
+  const all = { central_want: { score: 4 }, opposition: { score: 4 }, bounded_episode: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 }, announced_plan: { noul: 0 } };
   assert.equal(combineDrama({ ...all, about_ai: { noul: 0.9 } }).score, 1);
   const off = combineDrama({ ...all, about_ai: { noul: 0.1 } });
   assert.equal(off.score, 0.45);

@@ -262,7 +262,8 @@ INSERT INTO explainers.settings (key, value) VALUES
     ('daily_spend_cap_usd',  '6'::jsonb),
     ('pool_size',            '25'::jsonb),
     ('ideas_per_day',        '3'::jsonb),
-    ('dedupe_lookback_days', '45'::jsonb),
+    ('dedupe_lookback_days', '120'::jsonb),
+    ('prompt_history_days',  '90'::jsonb),
     ('voice_name',           '"Lucas Figueroa"'::jsonb),
     ('voice_id',             'null'::jsonb),
     ('orchestrator_model',   '"claude-sonnet-5-5"'::jsonb),
@@ -592,7 +593,7 @@ UPDATE explainers.settings SET value = '10'::jsonb, updated_at = now() WHERE key
 -- ════════════════════════════════════════════════════════════════════════════
 ALTER TABLE explainers.topics DROP CONSTRAINT IF EXISTS topics_status_check;
 ALTER TABLE explainers.topics ADD CONSTRAINT topics_status_check CHECK (status IN (
-    'proposed', 'pool', 'rejected', 'displaced', 'promoted', 'queued', 'rendered', 'archived'));
+    'proposed', 'pool', 'rejected', 'displaced', 'promoted', 'queued', 'rendered', 'archived', 'retired'));
 
 -- ── Explainers 3.2 (EX3-86): the exact phrase each reel defines ────────────────
 ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS term text;
@@ -604,3 +605,17 @@ ALTER TABLE explainers.jobs ADD COLUMN IF NOT EXISTS opener text;
 -- ── Explainers 4.3: the hand-off template each reel drew (frame 3) ──────────────────────────
 -- explainers/world-kit/handoff-bank.js; the next reel never repeats one of the last 4 (HANDOFF_HISTORY).
 ALTER TABLE explainers.jobs ADD COLUMN IF NOT EXISTS handoff text;
+
+-- ── Ideas coverage (2026-11-03, planning/Explainer Reels/ideas-coverage/PLAN.md) ──────────────
+-- Each topic's coverage-map bucket and its lesson frame (payload, altitude, map position). Older topics stay null
+-- and render as before. Dedupe now looks back 120 days (was 45); the generator's prompt carries 90.
+ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS bucket text;
+ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS lesson_payload text;
+ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS lesson_altitude text;
+ALTER TABLE explainers.topics DROP CONSTRAINT IF EXISTS topics_lesson_altitude_check;
+ALTER TABLE explainers.topics ADD CONSTRAINT topics_lesson_altitude_check
+    CHECK (lesson_altitude IN ('unfamiliar', 'familiar', 'embedded'));
+ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS lesson_map text;
+INSERT INTO explainers.settings (key, value) VALUES ('prompt_history_days', '90'::jsonb) ON CONFLICT (key) DO NOTHING;
+-- Raise the old default only; a value someone set by hand is kept.
+UPDATE explainers.settings SET value = '120'::jsonb, updated_at = now() WHERE key = 'dedupe_lookback_days' AND value = '45'::jsonb;

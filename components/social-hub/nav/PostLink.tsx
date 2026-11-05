@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { ReactNode } from 'react';
 
 import { hubBaseOf } from '@/lib/social-hub/links';
@@ -17,13 +17,26 @@ export function postHrefFrom(path: string, search: string, id: string): string {
   return `${base}/post/${encodeURIComponent(id)}?from=${encodeURIComponent(from)}`;
 }
 
-/** `decorative`: a second link to the same post (a thumbnail beside its name) stays clickable but out of the tab order and the accessibility tree. */
+/**
+ * `decorative`: a second link to the same post (a thumbnail beside its name) stays clickable but out of the tab order and the accessibility tree.
+ *
+ * Prefetched on intent (hover or focus), not on sight: every post page reads
+ * the whole hub dataset, and a list prefetched each visible card twice (name
+ * and thumbnail), a dozen full server renders per visit that crowded out the
+ * page you actually opened.
+ */
 export function PostLink({ id, className, children, label, decorative = false }: { id: string; className?: string; children: ReactNode; label?: string; decorative?: boolean }) {
   const path = usePathname() ?? '/social';
   const search = useSearchParams()?.toString() ?? '';
+  const router = useRouter();
+  const href = postHrefFrom(path, search, id);
+  const prefetch = () => router.prefetch(href);
   return (
     <Link
-      href={postHrefFrom(path, search, id)}
+      href={href}
+      prefetch={false}
+      onMouseEnter={prefetch}
+      onFocus={prefetch}
       scroll={false}
       className={className}
       aria-label={decorative ? undefined : label}

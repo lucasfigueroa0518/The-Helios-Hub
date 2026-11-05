@@ -16,7 +16,7 @@ import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
 import { allQuotaCandidates } from '@/lib/social-hub/views/day-rank';
-import { inFlightKey, runningSummary } from '@/lib/social-hub/views/run-for';
+import { inFlightKey, inFlightRuns, runningSummary } from '@/lib/social-hub/views/run-for';
 import { contentModel } from '@/lib/social-hub/views/today';
 import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 
@@ -55,7 +55,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, misses,
         )}
       />
       <DataNotes dataset={dataset} />
-      <RunsRefresh active={inFlight} known={inFlightKey(runs)} />
+      <RunsRefresh active={inFlight} known={inFlightKey(runs)} runs={inFlightRuns(runs)} />
 
       <section className="sh-section" aria-labelledby="today-strip">
         <div className="sh-section__head">

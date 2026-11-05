@@ -11,12 +11,12 @@ import type { DirectorPlan, WriterDraft } from '@/lib/reel-ai-drama/types';
 import { soundFixture } from './reel-ai-drama-sound-fixture';
 
 const DRAFT = {
-  title: 'The Dinner', engine: 'bomb', hook: { on_screen: 'A dinner', line_id: 'L1' },
+  title: 'The Dinner', hook: { on_screen: 'A dinner', line_id: 'L1' },
   rungs: [
     { id: 'R1', purpose: 'setup', lines: [{ id: 'L1' }, { id: 'L2' }] },
-    { id: 'R2', purpose: 'turn', lines: [{ id: 'L3' }] },
+    { id: 'R2', purpose: 'peak', lines: [{ id: 'L3' }] },
   ],
-  turn_rung_id: 'R2', landing_rung_id: 'R2', close_question: 'Who was right?', word_count: 13,
+  peak_rung_id: 'R2', landing_rung_id: 'R2', close_question: 'Who was right?', word_count: 13,
 } as unknown as WriterDraft;
 const PLAN = { frames: [], lines_back: [] } as unknown as DirectorPlan;
 
@@ -72,12 +72,12 @@ test('designSound: one cached call, validated cues written, cost recorded, music
   assert.ok(system[0].text.includes('HARD CONSTRAINT') && system[0].text.includes('pixabay/riser'), 'prompt + library in the cached prefix');
   assert.ok((p.tools!.at(-1) as Anthropic.Tool).cache_control, 'tools are cached');
   const user = String(p.messages[0].content);
-  assert.match(user, /Turn: frames 3/);
+  assert.match(user, /Peak: frames 3/);
   assert.match(user, /\[3\] dinner @1\.2/);
 
   assert.ok(out.cues);
   const c = out.cues!;
-  assert.deepEqual(c.music.map((m) => m.action), ['start', 'swell', 'change', 'cut']);
+  assert.deepEqual(c.music.map((m) => m.action), ['start', 'swell', 'change'], 'the cut inside the close goes: the score resolves across it');
   assert.equal(c.music[0].t, 0);
   assert.equal(c.music[2].style, 'reflect');
   assert.equal(c.music[2].t, 6.2);
@@ -85,11 +85,11 @@ test('designSound: one cached call, validated cues written, cost recorded, music
   assert.equal(c.ambience.length, 2);
   assert.equal(c.ambience[0].end, 3, 'the earlier bed ends where the next begins');
   const probs = out.problems.join('\n');
-  for (const why of ['out of order', 'within 10s of the heavy hit', 'not a hit in the library', 'silence over a spoken word', 'resolves into nothing', 'not a frame/word', 'not an ambience bed']) {
+  for (const why of ['out of order', 'within 6s of the heavy hit', 'not a hit in the library', 'silence over a spoken word', 'resolves into nothing', 'not a frame/word', 'not an ambience bed']) {
     assert.ok(probs.includes(why), why);
   }
   const file = JSON.parse(fs.readFileSync(path.join(root, 'sound_cues.json'), 'utf8'));
-  assert.deepEqual(Object.keys(file), ['music', 'stingers', 'ambience']);
+  assert.deepEqual(Object.keys(file), ['music', 'stingers', 'ambience', 'muffles']);
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'audio_meta.json'), 'utf8')).bgm, null);
   assert.ok(out.usd > 0);
   assert.equal(queries.length, 1);
@@ -122,7 +122,7 @@ test('validateCues warns when the cold open has no bed or arc', () => {
   const root = soundFixture();
   const lib = soundLibrary(root);
   const clock = [{ number: 1, id: 'a', name: 'A', start: 0, duration: 20, fields: {}, words: [{ text: 'x', start: 0, end: 0.5 }] }];
-  const reel = { clock, total: 20, closeStart: null, hookFrame: 1, turnFrames: [], landingFrames: [] };
+  const reel = { clock, total: 20, closeStart: null, hookFrame: 1, peakFrames: [], landingFrames: [] };
   const { cues, problems } = validateCues({ music: [{ action: 'start', frame: 1, word: 0, offset: 2 }] }, reel, lib);
   assert.equal(cues.music.length, 1);
   assert.ok(problems.some((p) => p.includes('no music bed from frame 1')));

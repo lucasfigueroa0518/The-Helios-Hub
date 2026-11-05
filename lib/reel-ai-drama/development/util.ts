@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { BLUE_CHIP_PLAYERS, bluePlayer, type BluePlayer } from '@/lib/social-hub/blue-chip-players';
-import type { CastMember, Pitch } from '@/lib/reel-ai-drama/types';
+import { pitchCentral, type CastMember, type Pitch } from '@/lib/reel-ai-drama/types';
 
 /** Lowercase, straight quotes, single spaces: the form names are compared in. */
 export const norm = (s: string): string =>
@@ -28,9 +28,9 @@ export function playerIdForName(name: string): string | null {
 
 export const isPlayerId = (id: string | null | undefined): id is string => !!id && !!bluePlayer(id);
 
-/** The cast member a pitch names as its central figure. */
+/** The pitch's central cast member (`pitchCentral`: the old central figure, else the first person in the cast). */
 export function centralMember(p: Pitch): CastMember | null {
-  const want = norm(p.central_figure);
+  const want = norm(pitchCentral(p));
   return p.cast.find((c) => norm(c.name) === want) ?? null;
 }
 

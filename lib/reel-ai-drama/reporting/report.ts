@@ -15,8 +15,8 @@ import type { FactSheet, Mode, Pitch } from '@/lib/reel-ai-drama/types';
  * (validate.ts). `verdict.holds = false` kills the story (`facts_dont_hold`); the caller acts on it.
  */
 
-export const MAX_SEARCHES = 10;
-export const MAX_FETCHES = 15;
+export const MAX_SEARCHES = 25;
+export const MAX_FETCHES = 30;
 export const MAX_CONTINUATIONS = 4;
 export const MAX_TOKENS = 32000;
 
@@ -66,21 +66,25 @@ export const SUBMIT_FACT_SHEET_TOOL = {
       items: obj({
         name: str,
         role: str,
-        kind: { type: 'string', enum: ['person', 'company'] },
+        kind: { type: 'string', enum: ['person', 'company', 'product'] },
         player_id: nullableStr,
         want: str,
         qid: nullableStr,
+        background: nullableStr,
+        later: nullableStr,
+        context_fact_ids: strList,
       }),
     },
-    places: { type: 'array', items: obj({ name: str, address: nullableStr, lat: nullableNum, lon: nullableNum, role: str }) },
+    places: { type: 'array', items: obj({ name: str, address: nullableStr, lat: nullableNum, lon: nullableNum, role: str, fact_ids: strList }) },
+    relations: { type: 'array', items: obj({ a: str, relation: str, b: str, fact_ids: strList }) },
     verdict: obj({ holds: { type: 'boolean' }, reason: str }),
   }),
 } as const;
 
 /** Fixed order so the cached prefix (tools → system) never changes between turns. */
 export const REPORTING_TOOLS = [
-  { type: 'web_search_20250305', name: 'web_search', max_uses: MAX_SEARCHES },
-  { type: 'web_fetch_20250910', name: 'web_fetch', max_uses: MAX_FETCHES },
+  { type: 'web_search_20260209', name: 'web_search', max_uses: MAX_SEARCHES },
+  { type: 'web_fetch_20260209', name: 'web_fetch', max_uses: MAX_FETCHES },
   withToolCache(SUBMIT_FACT_SHEET_TOOL as unknown as Anthropic.Tool),
 ] as unknown as Anthropic.Tool[];
 

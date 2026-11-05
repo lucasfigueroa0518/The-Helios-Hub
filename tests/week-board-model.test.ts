@@ -9,16 +9,18 @@ import { storyPosts } from '@/lib/social-hub/adapters/stories';
 import type { ReelAttemptRow, ReelsRead } from '@/lib/social-hub/queries/reels';
 import type { StoriesRead, StorySetRow } from '@/lib/social-hub/queries/stories';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
-import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
+import { DEFAULT_SEED_INPUTS } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 import type { ResolvedSlot, SlotKey } from '@/lib/social-hub/slots/types';
 import { addDays, weekdayOf } from '@/lib/social-hub/time';
+import { seedWithCarousels } from './helpers/seed-with-carousels';
 import type { HubPost } from '@/lib/social-hub/types';
 import { boardModel, cardHeight, laterNote, minuteForY, stackOffsets, standardByWeekday, yForMinute, type BoardPost } from '@/lib/social-hub/views/week';
 import * as weekEdit from '@/lib/social-hub/views/week-edit';
 import { bookedHits, dayCtx, defaultPlaceMinute, dropState, openMinutes, readyMinutes, readyTakenAt, dropKey, planEdit, planReady, planReset, toastText, type BoardState } from '@/lib/social-hub/views/week-edit';
 
-const tpl = seedTemplate(DEFAULT_SEED_INPUTS);
+// Carousels are opt-in (the real seed has none); these board tests exercise Carousel behavior, so the calendar carries them.
+const tpl = seedWithCarousels(DEFAULT_SEED_INPUTS);
 const NOW = new Date('2026-10-20T14:00:00Z'); // Tue Oct 20, 10:00 AM New York
 const MON = '2026-10-19';
 const week = () => Array.from({ length: 7 }, (_, i) => {

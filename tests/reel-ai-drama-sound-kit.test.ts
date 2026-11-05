@@ -24,9 +24,9 @@ const catalog = [
 /** A sound_cues.json as the production step writes it (anchored, so the kit re-times it). */
 const CUES = {
   music: [
-    { t: 0, action: 'start', style: 'drone', gain: 0.16, at: { frame: 1, word: null, offset: 0 } },
-    { t: 3.8, action: 'swell', style: null, gain: 0.3, at: { frame: 2, word: 2, offset: 0 } },
-    { t: 6.2, action: 'change', style: 'reflect', gain: 0.2, at: { frame: 3, word: 0, offset: 0 } },
+    { t: 0, action: 'start', style: 'drone', gain: 0.25, at: { frame: 1, word: null, offset: 0 } },
+    { t: 3.8, action: 'swell', style: null, gain: 0.45, at: { frame: 2, word: 2, offset: 0 } },
+    { t: 6.2, action: 'change', style: 'reflect', gain: 0.3, at: { frame: 3, word: 0, offset: 0 } },
     { t: 9, action: 'cut', style: null, gain: 0, at: { frame: 4, word: null, offset: 0 } },
   ],
   stingers: [
@@ -61,15 +61,15 @@ test('readCues re-times anchored cues from the current storyboard and timing', (
 
 test('cueMusicPlan: sections, crossfaded change, hard cut, styles and swells', () => {
   const { segments, styles, swells } = cueMusicPlan(CUES.music, { total: 11.5, closeStart: 9 });
-  assert.deepEqual(styles, ['drone', 'reflect']);
+  assert.deepEqual(styles, ['dread', 'reflect'], 'an old plan\'s drone plays as real music');
   assert.equal(segments.length, 2);
   near(segments[0].start, 0);
   near(segments[0].end, 6.2 + XFADE / 2);
   near(segments[1].start, 6.2 - XFADE / 2);
   near(segments[1].end, 9);
-  assert.equal(segments[1].gain, 0.2);
+  assert.equal(segments[1].gain, 0.3);
   assert.ok(segments[1].fadeOut <= 0.15, 'a cut is a hard stop, not a fade');
-  assert.deepEqual(swells, [{ t: 3.8, gain: 0.3 }]);
+  assert.deepEqual(swells, [{ t: 3.8, gain: 0.45, rise: 3 }]);
   // Out of order cues are skipped; without cues the storyboard marks still drive music.
   assert.equal(cueMusicPlan([{ t: 1, action: 'drop' }], { total: 5 }).segments.length, 0);
   assert.ok(Array.isArray(musicPlan([])));
@@ -78,7 +78,7 @@ test('cueMusicPlan: sections, crossfaded change, hard cut, styles and swells', (
 test('musicEnvelope: ducks under words, lifts in pauses, peaks on a swell, mutes a silence', () => {
   const env = musicEnvelope({
     segments: [{ track: 0, start: 0, end: 10, gain: BED_VOLUME }],
-    swells: [{ t: 8, gain: 0.3 }],
+    swells: [{ t: 8, gain: 0.45 }],
     silences: [{ start: 5.1, end: 5.9 }],
     speech: [{ start: 0, end: 2 }, { start: 6, end: 6.5 }],
     total: 10,
@@ -157,8 +157,8 @@ test('placeMusic lays designed sections and the envelope offline', { skip: !hasF
   assert.ok(r.choice);
   assert.equal(r.choice.designed, true);
   assert.equal(r.choice.tracks.length, 2);
-  assert.deepEqual(r.choice.tracks.map((t: { style: string }) => t.style), ['drone', 'reflect']);
-  assert.ok(queries[0].includes('drone'));
+  assert.deepEqual(r.choice.tracks.map((t: { style: string }) => t.style), ['dread', 'reflect']);
+  assert.ok(queries[0].includes('low strings'));
   assert.ok(fs.existsSync(path.join(root, 'assets', 'bgm', 'envelope.wav')));
   assert.ok(fs.statSync(path.join(root, 'assets', 'bgm', 'track.mp3')).size > 1000);
   const meta = JSON.parse(fs.readFileSync(path.join(root, 'audio_meta.json'), 'utf8'));

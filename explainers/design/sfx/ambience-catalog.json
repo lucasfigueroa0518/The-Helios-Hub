@@ -278,5 +278,156 @@
   "meanDb": -37.6,
   "lufs": -38.1,
   "source": "https://freesound.org/people/leonelmail/sounds/579568/"
+ },
+ {
+  "id": "freesound/ambience/fireplace-563766",
+  "file": "freesound/ambience/fireplace-563766.mp3",
+  "pack": "freesound-ambience",
+  "group": "freesound/ambience/fireplace",
+  "tags": [
+   "ambience",
+   "fireplace",
+   "crackling",
+   "crackle",
+   "hearth",
+   "campfire",
+   "firewood",
+   "embers",
+   "mantel",
+   "log"
+  ],
+  "duration": 25,
+  "peakDb": -14.2,
+  "meanDb": -38.7,
+  "lufs": -38,
+  "source": "https://freesound.org/people/florianreichelt/sounds/563766/"
+ },
+ {
+  "id": "freesound/ambience/car-320228",
+  "file": "freesound/ambience/car-320228.mp3",
+  "pack": "freesound-ambience",
+  "group": "freesound/ambience/car",
+  "tags": [
+   "ambience",
+   "carinterior",
+   "driving",
+   "backseat",
+   "dashboard",
+   "highway",
+   "commute",
+   "freeway",
+   "rideshare",
+   "taxi"
+  ],
+  "duration": 25,
+  "peakDb": -18.8,
+  "meanDb": -35.9,
+  "lufs": -38,
+  "source": "https://freesound.org/people/Kukensius/sounds/320228/"
+ },
+ {
+  "id": "freesound/ambience/train-197124",
+  "file": "freesound/ambience/train-197124.mp3",
+  "pack": "freesound-ambience",
+  "group": "freesound/ambience/train",
+  "tags": [
+   "ambience",
+   "train",
+   "subway",
+   "metro",
+   "railway",
+   "commuter",
+   "tram",
+   "underground"
+  ],
+  "duration": 25,
+  "peakDb": -17,
+  "meanDb": -33.3,
+  "lufs": -38,
+  "source": "https://freesound.org/people/avakas/sounds/197124/"
+ },
+ {
+  "id": "freesound/ambience/airplane-341591",
+  "file": "freesound/ambience/airplane-341591.mp3",
+  "pack": "freesound-ambience",
+  "group": "freesound/ambience/airplane",
+  "tags": [
+   "ambience",
+   "aeroplane",
+   "aircraft",
+   "inflight",
+   "flight",
+   "airliner",
+   "seatbelt"
+  ],
+  "duration": 25,
+  "peakDb": -23,
+  "meanDb": -35,
+  "lufs": -38,
+  "source": "https://freesound.org/people/Vurca/sounds/341591/"
+ },
+ {
+  "id": "freesound/ambience/factory-393398",
+  "file": "freesound/ambience/factory-393398.mp3",
+  "pack": "freesound-ambience",
+  "group": "freesound/ambience/factory",
+  "tags": [
+   "ambience",
+   "factory",
+   "assembly",
+   "manufacturing",
+   "plant",
+   "industrial",
+   "machinery",
+   "warehouse",
+   "production"
+  ],
+  "duration": 25,
+  "peakDb": -22.6,
+  "meanDb": -39.3,
+  "lufs": -38,
+  "source": "https://freesound.org/people/Lewente/sounds/393398/"
+ },
+ {
+  "id": "freesound/ambience/forest-577623",
+  "file": "freesound/ambience/forest-577623.mp3",
+  "pack": "freesound-ambience",
+  "group": "freesound/ambience/forest",
+  "tags": [
+   "ambience",
+   "forest",
+   "woods",
+   "woodland",
+   "birdsong",
+   "nature",
+   "trees",
+   "wilderness"
+  ],
+  "duration": 25,
+  "peakDb": -19.3,
+  "meanDb": -36.7,
+  "lufs": -38,
+  "source": "https://freesound.org/people/Garuda1982/sounds/577623/"
+ },
+ {
+  "id": "freesound/ambience/shore-412308",
+  "file": "freesound/ambience/shore-412308.mp3",
+  "pack": "freesound-ambience",
+  "group": "freesound/ambience/shore",
+  "tags": [
+   "ambience",
+   "ocean",
+   "sea",
+   "shore",
+   "waves",
+   "surf",
+   "seaside",
+   "coastline"
+  ],
+  "duration": 25,
+  "peakDb": -19.3,
+  "meanDb": -38.2,
+  "lufs": -38,
+  "source": "https://freesound.org/people/straget/sounds/412308/"
  }
 ]

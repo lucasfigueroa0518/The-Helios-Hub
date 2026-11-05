@@ -67,23 +67,27 @@ export const SNAP_COMMAND = /^node assets\/kit\/snap\.mjs (?:world|(?!world |seq
  * hand back, so the orchestrator's fix round only gets what is left. `node assets/kit/try.mjs frame
  * <frame-id>` for a frame builder, `world` or `props` for the scene builder. try.mjs needs no browser.
  * Exactly that, nothing before or after it; SELF_CHECKS_PER_BUILDER runs per builder (selfCheckBudget).
+ * Also `node assets/kit/bounds.mjs <frame-id>` (2026-11-03): the fix round sends its errors too, and a
+ * builder that could not run it could not confirm its fix; it has its own SELF_CHECKS_PER_BUILDER runs.
  */
-export const SELF_CHECK_COMMAND = /^node assets\/kit\/try\.mjs (?:world|props|frame [a-z0-9][a-z0-9-]{0,40})$/;
+export const SELF_CHECK_COMMAND = /^node assets\/kit\/(?:try\.mjs (?:world|props|frame [a-z0-9][a-z0-9-]{0,40})|bounds\.mjs (?!all$)[a-z0-9][a-z0-9-]{0,40})$/;
 /** A builder's self-check runs: a first check and one after its fix. */
 export const SELF_CHECKS_PER_BUILDER = 2;
 
 /**
  * The self-check budget, per builder (`key`: the subagent's agent_id, or the main thread's agent).
- * Counts only SELF_CHECK_COMMAND runs; denies the one past SELF_CHECKS_PER_BUILDER. Stateful by
+ * Counts only SELF_CHECK_COMMAND runs, try.mjs and bounds.mjs apart; denies the one past SELF_CHECKS_PER_BUILDER. Stateful by
  * design: the caller keeps `counts` for the session.
  */
 export function selfCheckBudget(counts: Map<string, number>, key: string, command: string): PolicyDecision {
   if (!SELF_CHECK_COMMAND.test(command)) return allow;
-  const used = counts.get(key) ?? 0;
+  const script = /bounds\.mjs/.test(command) ? 'bounds.mjs' : 'try.mjs';
+  const slot = `${key}|${script}`;
+  const used = counts.get(slot) ?? 0;
   if (used >= SELF_CHECKS_PER_BUILDER) {
-    return deny(`your ${SELF_CHECKS_PER_BUILDER} self-checks are used: hand back and name what the last one still reported`);
+    return deny(`your ${SELF_CHECKS_PER_BUILDER} ${script} runs are used: hand back and name what the last one still reported`);
   }
-  counts.set(key, used + 1);
+  counts.set(slot, used + 1);
   return allow;
 }
 
@@ -267,7 +271,7 @@ export function checkBash(command: string, jobDir: string, cwd = jobDir): Policy
 export function checkSnapCommand(command: string): PolicyDecision {
   return SNAP_COMMAND.test(command) || SELF_CHECK_COMMAND.test(command)
     ? allow
-    : deny('only `node assets/kit/snap.mjs <frame-id> <t1,t2,…>` (up to 6 times), `node assets/kit/snap.mjs world`, or `node assets/kit/try.mjs frame <frame-id>` / `world` / `props` may run, exactly, with nothing before or after it');
+    : deny('only `node assets/kit/snap.mjs <frame-id> <t1,t2,…>` (up to 6 times), `node assets/kit/snap.mjs world`, `node assets/kit/try.mjs frame <frame-id>` / `world` / `props`, or `node assets/kit/bounds.mjs <frame-id>` may run, exactly, with nothing before or after it');
 }
 
 /**

@@ -3,7 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { cachedSystemText } from '@/lib/anthropic-cache';
 import { priceAnthropicMessages, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import { logoForPlayerId } from '@/lib/social-hub/logo-bank';
-import { VISUAL_KINDS, type Pitch, type VisualKind, type VisualsCard, type VisualsGrade } from '@/lib/reel-ai-drama/types';
+import { pitchBrief, pitchCentral, VISUAL_KINDS, type Pitch, type VisualKind, type VisualsCard, type VisualsGrade } from '@/lib/reel-ai-drama/types';
 import { appendJsonl } from '@/lib/reel-ai-drama/development/log';
 import { bankedPerson, norm, playerIdForName } from '@/lib/reel-ai-drama/development/util';
 
@@ -103,7 +103,7 @@ export function imageQueries(p: Pitch): string[] {
   const specific: VisualKind[] = ['event_photo', 'place_photo', 'object', 'product', 'archival', 'video_frame'];
   const hints = p.expected_visuals.filter((v) => specific.includes(v.kind)).map((v) => (v.hint || v.what).trim()).filter(Boolean);
   const out = [...new Set(hints)].slice(0, MAX_IMAGE_QUERIES);
-  if (out.length === 0) out.push(`${p.central_figure} ${p.event_date?.slice(0, 4) ?? ''}`.trim());
+  if (out.length === 0) out.push(`${pitchCentral(p)} ${p.event_date?.slice(0, 4) ?? ''}`.trim());
   return out;
 }
 
@@ -237,11 +237,12 @@ export async function checkVisuals(deps: VisualsCheckDeps, pitch: Pitch, capUsd:
     specificImages + (counts.social_post ?? 0) + (counts.document ?? 0) + (counts.paper ?? 0) + Math.min(3, counts.web_page ?? 0);
   const kinds = (VISUAL_KINDS as readonly VisualKind[]).filter((k) => (counts[k] ?? 0) > 0);
 
-  const centralFace = pitch.cast.find((c) => norm(c.name) === norm(pitch.central_figure));
-  const facesGate = centralFace?.kind === 'company'
+  const centralName = pitchCentral(pitch);
+  const centralFace = pitch.cast.find((c) => norm(c.name) === norm(centralName));
+  const facesGate = centralFace && centralFace.kind !== 'person'
     ? logos.has(centralFace.player_id ?? playerIdForName(centralFace.name) ?? '')
-    : faces.some((f) => norm(f.name) === norm(pitch.central_figure) && f.found);
-  if (!facesGate) gaps.push(`no photo found of the central figure, ${pitch.central_figure}`);
+    : faces.some((f) => norm(f.name) === norm(centralName) && f.found);
+  if (!facesGate) gaps.push(`no photo found of the central figure, ${centralName}`);
   if (specific < MIN_SPECIFIC) gaps.push(`only ${specific} visuals specific to this story (need ${MIN_SPECIFIC})`);
   if (kinds.length < MIN_KINDS) gaps.push(`only ${kinds.length} kinds of visual (need ${MIN_KINDS})`);
 
@@ -382,7 +383,7 @@ export function liveLook(client: Anthropic, opts: { model: string; prompt: strin
       {
         type: 'text',
         text: JSON.stringify({
-          story: { title: pitch.title, logline: pitch.logline, event_date: pitch.event_date, cast: pitch.cast.map((c) => c.name) },
+          story: { title: pitch.title, brief: pitchBrief(pitch), event_date: pitch.event_date, cast: pitch.cast.map((c) => c.name) },
           tiles: hits.map((h, index) => ({ index, title: h.title, domain: h.domain })),
         }),
       },

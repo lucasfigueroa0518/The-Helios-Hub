@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import { loadCutouts } from '@/lib/real-case/bank';
 
+import { trustedCutouts } from '../bank-verdicts';
 import type { Source } from '../types';
 
 /**
@@ -11,7 +12,7 @@ import type { Source } from '../types';
  */
 export const bankSource: Source = async (want, run) => {
   const root = run.deps.root ?? process.cwd();
-  const cutouts = run.deps.cutouts ?? loadCutouts(root);
+  const cutouts = run.deps.cutouts ?? trustedCutouts(loadCutouts(root), root);
   const name = want.people[0]?.toLowerCase().trim();
   const hit = cutouts.find((c) => c.approved && ((want.playerId && c.id === want.playerId) || want.qids.includes(c.qid) || c.name.toLowerCase() === name));
   if (!hit) return [];

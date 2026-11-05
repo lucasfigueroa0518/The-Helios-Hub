@@ -119,11 +119,15 @@ carry over unchanged from one frame to the next unless a shot between them moves
 screen.** Set dressing stays in `DRESSING`, never here. `blockingProblems()` in `blocking.js` must
 return no errors.
 
+**HARD CONSTRAINT:** anything that holds other objects has separate back and front parts, with what it holds drawn between them, so an object placed in it visibly goes inside and never just rests on top.
+
 ## Step 7 · Look at your own work
 Run `node assets/kit/snap.mjs world` and Read every still it lists. Critique them as a stranger on a
 phone, against `## Visual arc` and `## Anchor scene`, `craft.md` §§ 1, 2, 8 and 9, `house-style.md`
 and `minimums.md` 5, 6 and 8. Fix everything the stills show in one write per file, then snap again.
-You have **3 snaps**: a first look and at most two revisions. It is the only command you run.
+You have **3 snaps**: a first look and at most two revisions, and **2 runs** of
+`node assets/kit/try.mjs world` or `props`. These are the only commands you run, each exactly as
+written with nothing before or after it: no `cd`, no pipes (`| head`, `| grep`), no `cat`, `sed`, `ls`, `python` or `node -e`: Read, Grep and Glob read files, Write and Edit change them.
 
 Your last message names the files you wrote, and lists plainly what you could not fix, any planned
 shot this world cannot serve, and anything the kit could not build as asked (what you drew instead,

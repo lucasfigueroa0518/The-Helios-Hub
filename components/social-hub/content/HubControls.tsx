@@ -1,13 +1,14 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Play, Settings, X } from 'lucide-react';
 
+import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
+
 /** Mark the shared hub read stale, then re-render (see POST /api/content-type/progress). */
-async function refreshHubPage(router: { refresh: () => void }): Promise<void> {
+async function refreshHubPage(refresh: () => void): Promise<void> {
   await fetch('/api/content-type/progress', { method: 'POST' }).catch(() => undefined);
-  router.refresh();
+  refresh();
 }
 
 /**
@@ -54,7 +55,7 @@ function useDialog(open: boolean) {
 // ── Run now ─────────────────────────────────────────────────────────────────
 
 export function RunTodayButton() {
-  const router = useRouter();
+  const { pending, refresh } = useHubRefresh();
   const [open, setOpen] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [results, setResults] = useState<Result[] | null>(null);
@@ -81,7 +82,7 @@ export function RunTodayButton() {
       const out = await postJson<{ plan: Plan; results: Result[] }>(RUN_TODAY, {});
       setPlan(out.plan);
       setResults(out.results);
-      void refreshHubPage(router);
+      void refreshHubPage(refresh);
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -121,8 +122,8 @@ export function RunTodayButton() {
         <div className="sh-confirm__actions">
           <button type="button" className="sh-btn" onClick={() => setOpen(false)}>{results ? 'Done' : 'Cancel'}</button>
           {plan?.anything && !results ? (
-            <button type="button" className="sh-btn sh-btn--primary" disabled={busy} onClick={run}>
-              {busy ? 'Starting…' : `Run (up to ${usd(plan.estimateUsd)})`}
+            <button type="button" className="sh-btn sh-btn--primary" disabled={busy || pending} onClick={run}>
+              {busy || pending ? 'Starting…' : `Run (up to ${usd(plan.estimateUsd)})`}
             </button>
           ) : null}
         </div>
@@ -158,7 +159,7 @@ function Switch({ on, label, hint, onChange, disabled }: { on: boolean; label: s
 }
 
 export function HubSettingsButton() {
-  const router = useRouter();
+  const { pending, refresh } = useHubRefresh();
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<Record<string, Posting>>({});
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +182,7 @@ export function HubSettingsButton() {
     try {
       const next = await postJson<Posting>(POSTING, { type, ...patch });
       setState((s) => ({ ...s, [type]: next }));
-      void refreshHubPage(router);
+      void refreshHubPage(refresh);
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -219,17 +220,17 @@ export function HubSettingsButton() {
               const p = state[t.id];
               return (
                 <section key={t.id} className="sh-setting">
-                  <h3 className="sh-setting__title">{t.label}{saving === t.id ? <span className="sh-muted"> · saving…</span> : null}</h3>
+                  <h3 className="sh-setting__title">{t.label}{saving === t.id || pending ? <span className="sh-muted"> · saving…</span> : null}</h3>
                   {!p ? (
                     <p className="sh-muted">{error ? 'Not loaded.' : 'Loading…'}</p>
                   ) : (
                     <>
-                      <Switch on={p.live} label="Live" hint={p.live ? 'Scheduling and posting to Instagram.' : 'Off: nothing is scheduled or posted.'} disabled={saving === t.id} onChange={(v) => setLive(t.id, t.label, v)} />
+                      <Switch on={p.live} label="Live" hint={p.live ? 'Scheduling and posting to Instagram.' : 'Off: nothing is scheduled or posted.'} disabled={saving === t.id || pending} onChange={(v) => setLive(t.id, t.label, v)} />
                       {p.generate != null ? (
-                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : t.id === 'ai_events' ? 'Makes the week’s carousel at 12:00 PM on Sundays.' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id} onChange={(v) => setNightly(t.id, t.label, v)} />
+                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : t.id === 'ai_events' ? 'Makes the week’s carousel at 12:00 PM on Sundays.' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id || pending} onChange={(v) => setNightly(t.id, t.label, v)} />
                       ) : null}
                       {p.series?.map((s) => (
-                        <Switch key={s.id} on={s.generate} label={`${s.label}: nightly`} hint={s.enabled ? `Made at 4:00 AM on its days.` : 'This series is turned off.'} disabled={saving === t.id || !s.enabled}
+                        <Switch key={s.id} on={s.generate} label={`${s.label}: nightly`} hint={s.enabled ? `Made at 4:00 AM on its days.` : 'This series is turned off.'} disabled={saving === t.id || pending || !s.enabled}
                           onChange={(v) => { if (!v || window.confirm(`Make ${s.label} automatically at 4:00 AM on its days? Each set makes live model calls.`)) void save(t.id, { series: { id: s.id, generate: v } }); }} />
                       ))}
                       {p.perDay != null && p.maxPerDay != null ? (
@@ -237,7 +238,7 @@ export function HubSettingsButton() {
                           <span>Posts per day</span>
                           <div className="segmented" role="group" aria-label={`${t.label} posts per day`}>
                             {Array.from({ length: p.maxPerDay - t.min + 1 }, (_, i) => t.min + i).map((n) => (
-                              <button key={n} type="button" className={`segmented__item${p.perDay === n ? ' segmented__item--active' : ''}`} aria-pressed={p.perDay === n} disabled={saving === t.id} onClick={() => void save(t.id, { perDay: n })}>{n}</button>
+                              <button key={n} type="button" className={`segmented__item${p.perDay === n ? ' segmented__item--active' : ''}`} aria-pressed={p.perDay === n} disabled={saving === t.id || pending} onClick={() => void save(t.id, { perDay: n })}>{n}</button>
                             ))}
                           </div>
                         </div>

@@ -12,13 +12,15 @@ export type LoadedPage = HubDataset & { refresh: RefreshState };
  * (views/cached-dataset.ts); refresh state is always read fresh. With
  * refresh-on-visit on, a stale hub queues one refresh for the worker (SH-23).
  */
+/** Refresh state for a visit. A failed read is "unknown", the same as a quiet hub. */
+export function readRefresh(by = 'visit'): Promise<RefreshState> {
+  return (actionEnabled('refreshOnVisit') ? queueRefreshIfStale(liveHubQuery, by) : refreshState(liveHubQuery))
+    .catch((): RefreshState => ({ available: false, lastRefresh: null, pending: false }));
+}
+
 export async function loadForPage(by = 'visit'): Promise<LoadedPage | { error: string }> {
   try {
-    const [refresh, dataset] = await Promise.all([
-      (actionEnabled('refreshOnVisit') ? queueRefreshIfStale(liveHubQuery, by) : refreshState(liveHubQuery))
-        .catch((): RefreshState => ({ available: false, lastRefresh: null, pending: false })),
-      loadHubDataset(),
-    ]);
+    const [refresh, dataset] = await Promise.all([readRefresh(by), loadHubDataset()]);
     return { ...dataset, refresh };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };

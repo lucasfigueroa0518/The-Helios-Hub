@@ -17,7 +17,10 @@ export type ExplainersSettings = {
   daily_spend_cap_usd: number;
   pool_size: number;
   ideas_per_day: number;
+  /** Duplicate history for the dedupe (ideas coverage, 2026-11-03: 120 days). */
   dedupe_lookback_days: number;
+  /** How far back the generator's prompt lists the picked buckets' renders (ideas coverage: 90 days, for token cost). */
+  prompt_history_days: number;
   voice_name: string;
   voice_id: string | null;
   /** Session B's orchestrator: dispatch, assembly, picture-check fixes (Explainers 4.2). */
@@ -63,7 +66,9 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   daily_spend_cap_usd: 10,
   pool_size: 25,
   ideas_per_day: 3,
-  dedupe_lookback_days: 45,
+  // Ideas coverage (Lucas, 2026-11-03): dedupe against 120 days; the prompt carries 90.
+  dedupe_lookback_days: 120,
+  prompt_history_days: 90,
   voice_name: 'Lucas Figueroa',
   voice_id: null,
   orchestrator_model: 'claude-sonnet-5-5',
@@ -127,6 +132,7 @@ const PARSERS: { [K in SettingKey]: Parser<K> } = {
   pool_size: integer('pool_size', 1),
   ideas_per_day: integer('ideas_per_day', 1),
   dedupe_lookback_days: integer('dedupe_lookback_days', 0),
+  prompt_history_days: integer('prompt_history_days', 0),
   voice_name: text('voice_name'),
   voice_id: (value) => (value === null ? null : text('voice_id')(value)),
   orchestrator_model: text('orchestrator_model'),

@@ -1,7 +1,8 @@
 // The assembly after the frame workers (forked from the news kit's), in this format's order: pace (when
-// the frames are unpaced), mount every frame (the close included), music (changing at the marked
-// frames), sound (foley and ambience), captions, then index.html and the transitions. The job's repair
-// step and the fixture smoke run share it.
+// the frames are unpaced), mount every frame (the close included), measure (the caption tone sampled from
+// what is under the band, and the kit treatments' own sound cues: measure.mjs), music (changing at the
+// marked frames), sound (foley and ambience), captions, then index.html and the transitions (the close always
+// fades in: frames.mjs withCloseFade, MD-143). The job's repair step and the fixture smoke run share it.
 //
 //   node assets/kit/assemble.mjs [--no-music]     (run from the project root)
 
@@ -10,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { isClose, parseFrames } from './frames.mjs';
+import { isClose, parseFrames, writeCloseFade } from './frames.mjs';
 import { mountFrames } from './mount.mjs';
 import { pace } from './pace.mjs';
 import { placeSound } from './sound.mjs';
@@ -34,7 +35,7 @@ export function voiceCuts(root) {
   return out;
 }
 
-export async function assemble(root, { music = true, placeMusic = null } = {}) {
+export async function assemble(root, { music = true, placeMusic = null, measure = null } = {}) {
   const done = [];
   const errors = [];
   const metaFile = join(root, 'audio_meta.json');
@@ -52,6 +53,10 @@ export async function assemble(root, { music = true, placeMusic = null } = {}) {
   if (mounted.skipped.length) errors.push(`mount: no module for ${mounted.skipped.join(', ')}`);
   done.push(`mounted ${mounted.mounted.join(', ')}`);
 
+  const run = measure ?? (await import('./measure.mjs')).measureProject;
+  const measured = await run(root).catch((e) => ({ ok: true, tones: [], cues: 0, skipped: e instanceof Error ? e.message : String(e) }));
+  done.push(measured.skipped ? `caption tones from the treatments (${measured.skipped})` : `sampled the caption tones (${measured.tones.length} windows); ${measured.cues} kit sound cues`);
+
   if (music && !JSON.parse(readFileSync(metaFile, 'utf8')).bgm) {
     const place = placeMusic ?? (await import('./music.mjs')).placeMusic;
     const result = await place(root).catch((e) => ({ ok: false, errors: [e instanceof Error ? e.message : String(e)] }));
@@ -66,6 +71,7 @@ export async function assemble(root, { music = true, placeMusic = null } = {}) {
   const captions = runNode(root, join(scripts, 'captions.mjs'), ['build', '--storyboard', './STORYBOARD.md', '--audio-meta', './audio_meta.json', '--hyperframes', '.', '--out', './caption_groups.json']);
   if (captions) errors.push(captions);
   else done.push('built the captions');
+  writeCloseFade(root);
   const assembled = runNode(root, join(scripts, 'assemble-index.mjs'), ['--storyboard', './STORYBOARD.md', '--hyperframes', '.']);
   if (assembled) return { ok: false, done, errors: [...errors, assembled] };
   done.push('assembled index.html');

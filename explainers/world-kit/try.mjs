@@ -109,6 +109,7 @@ export const CHECKS = {
   jump_cut: 'the same subject across a cut changes size less than 2x (or more than 1/2)',
   cast: 'a critter drawn twice at one moment, or vanishing mid-shot and coming back',
   identity: 'one look per concept: a CAST critter drawn another way, two critters alike, a concept off identity.js',
+  layers: 'draw order losing depth: two overlapping things swapping in front and back, or an item taken from under the stack it lies in',
   rig: "a critter's rig breaks: a hand or a held prop over the face, a face that does not draw",
   outfit: 'something worn over the eyes or mouth, or an outfit the kit cannot draw',
   face_cut: 'a face cut by the frame edge or by a nearer set piece',
@@ -1317,6 +1318,94 @@ export function twinProblems(samples) {
   return errors;
 }
 
+/** The entities drawn in an SVG, in paint order, with their screen boxes. */
+function paintedEntities(svg) {
+  const out = [];
+  const re = /<g [^>]*data-frame-kind="entity"[^>]*>/g;
+  let m;
+  while ((m = re.exec(String(svg)))) {
+    const who = m[0].match(/data-frame-who="([^"]+)"/)?.[1];
+    const box = m[0].match(/data-frame-box="([^"]+)"/)?.[1]?.split(' ').map(Number);
+    if (who && box?.length === 4 && box.every(Number.isFinite) && !out.some((e) => e.who === who)) out.push({ who, box });
+  }
+  return out;
+}
+
+/**
+ * Layer flicker (Lucas, 2026-11-03: cards glitching over each other): two entities that overlap on
+ * screen under one camera and swap which is in front, then swap back within two samples. One swap
+ * can be real (a card lifted over another); a blink back and forth is the draw order losing track
+ * of depth. Once per pair.
+ */
+export function orderFlickerProblems(samples) {
+  const seq = new Map();
+  for (const { svg } of samples) {
+    const cam = String(svg).match(/data-cam="([^"]*)"/)?.[1] ?? ''; // a cut to another camera starts over
+    const ents = paintedEntities(svg);
+    for (let a = 0; a < ents.length; a++) for (let b = a + 1; b < ents.length; b++) {
+      const A = ents[a].box;
+      const B = ents[b].box;
+      const ox = Math.min(A[2], B[2]) - Math.max(A[0], B[0]);
+      const oy = Math.min(A[3], B[3]) - Math.max(A[1], B[1]);
+      if (!(ox > 2 && oy > 2)) continue;
+      const [p, q] = [ents[a].who, ents[b].who].sort();
+      const front = ents[b].who; // painted later = in front
+      const key = `${p}|${q}|${cam}`;
+      const list = seq.get(key) ?? [];
+      const last = list[list.length - 1];
+      if (last?.front === front) last.n += 1;
+      else list.push({ front, n: 1 });
+      seq.set(key, list);
+    }
+  }
+  const errors = [];
+  for (const [key, list] of seq) {
+    // a blink: in front for at most two samples between two runs of the other (a real crossing,
+    // one card lifted over another and later the other over it, holds each order longer)
+    if (!list.some((r, i) => i > 0 && i < list.length - 1 && r.n <= 2)) continue;
+    const [p, q] = key.split('|');
+    if (errors.some((e) => e.startsWith(`"${p}" and "${q}" `))) continue;
+    errors.push(`"${p}" and "${q}" swap which is in front and back again within a moment while they overlap: their layer flickers. Give both their world \`bounds\` (lens.js paintOrder stacks flat things by height) and keep a moving one higher than what it passes over`);
+  }
+  return errors;
+}
+
+/**
+ * Taken from under the stack (Lucas, 2026-11-03: "the card being moved isn't the card on top"):
+ * an item at rest that starts to move while another item at rest lies on it (their floor plans
+ * overlap, the other sits higher). Needs the render log (samples[].paint, lens.js render).
+ */
+export function pickNotTopProblems(samples) {
+  const errors = [];
+  const seen = new Set();
+  const same = (a, b) => !!a && !!b && a.every((q, i) => q.every((v, k) => Math.abs(v - b[i][k]) < 0.01));
+  const at = (s) => {
+    const m = new Map();
+    for (const list of s.paint ?? []) for (const { id, bounds } of list) if (!m.has(id)) m.set(id, bounds);
+    return m;
+  };
+  const maps = samples.map(at);
+  for (let i = 2; i < maps.length; i++) {
+    for (const [id, now] of maps[i]) {
+      const prev = maps[i - 1].get(id);
+      if (seen.has(id) || !same(prev, maps[i - 2].get(id)) || same(prev, now)) continue;
+      for (const [other, ob] of maps[i - 1]) {
+        if (other === id || !same(ob, maps[i].get(other))) continue;
+        const ox = Math.min(prev[1][0], ob[1][0]) - Math.max(prev[0][0], ob[0][0]);
+        const oy = Math.min(prev[1][1], ob[1][1]) - Math.max(prev[0][1], ob[0][1]);
+        const area = (prev[1][0] - prev[0][0]) * (prev[1][1] - prev[0][1]);
+        if (!(ox > 0 && oy > 0 && ox * oy >= 0.25 * area)) continue;
+        if (ob[0][2] + ob[1][2] > prev[0][2] + prev[1][2] + 0.05 && ob[0][2] >= prev[0][2] - 0.01) {
+          seen.add(id);
+          errors.push(`"${id}" starts to move at ${samples[i].t.toFixed(2)}s from under "${other}", which lies on it: take the top item of a stack first (or put it on top before it moves)`);
+          break;
+        }
+      }
+    }
+  }
+  return errors;
+}
+
 /** A critter missing this long and then back has vanished (not a one-sample blink). */
 const VANISH = 0.2;
 
@@ -1645,14 +1734,18 @@ async function tryFrame(root, id) {
   let drawErrors = 0;
   for (const t of sampleTimes(entry.duration)) {
     let svg;
+    const paint = [];
+    globalThis.__hxPaintLog = paint;
     try {
       svg = scene.draw(t);
     } catch (e) {
       found.push(...as('draw', [`draw(${t.toFixed(2)}) threw: ${e?.message ?? e}`]));
       if (++drawErrors >= 8) break;
       continue;
+    } finally {
+      globalThis.__hxPaintLog = undefined;
     }
-    samples.push({ t, svg });
+    samples.push({ t, svg, paint });
     const bad = frameProblems(svg);
     found.push(...as('draw', bad, `draw(${t.toFixed(2)}): `));
     drawErrors += bad.length;
@@ -1666,6 +1759,8 @@ async function tryFrame(root, id) {
   } : null;
   found.push(...as('cast', castProblems(samples, castAt)));
   found.push(...as('identity', twinProblems(samples)));
+  found.push(...as('layers', orderFlickerProblems(samples)));
+  found.push(...as('layers', pickNotTopProblems(samples)));
   // a perspective (lens.js) frame, recognised by lens.render's mark: the shot's subject (its
   // focal()) stays whole inside the safe area at the shot's rest poses; no face is cut by the
   // frame's edge, and no critter is mostly hidden behind a nearer one. How big a face is, and which
@@ -2125,8 +2220,9 @@ async function tryPartErrors(root, what, id) {
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const [what, id] = process.argv.slice(2);
   const { warnings, kit, ...result } = await tryPart(process.cwd(), what, id);
-  console.log(JSON.stringify(result, null, 1));
   // An older job's look problems: shown, never failing the try, and kept off stdout's { ok, errors }.
   if (warnings?.length) console.error(`try.mjs: ${warnings.length} Explainers 4.1 warning(s) (kit ${kit}; errors in a 4.1 job):\n${warnings.map((w) => `- ${w}`).join('\n')}`);
-  process.exit(result.ok ? 0 : 1);
+  // Write, then exit once stdout has drained: process.exit() right after console.log cut a piped
+  // report off at 64 KB, and the job read the cut JSON as "no errors" (2026-11-03).
+  process.stdout.write(`${JSON.stringify(result, null, 1)}\n`, () => process.exit(result.ok ? 0 : 1));
 }

@@ -163,6 +163,15 @@ export function trendSeries(posts: readonly HubPost[], days: readonly string[], 
   return { series, smoothed };
 }
 
+/** The overview's "top posts" strip. The full list is one page of `sortedPosts`. */
+export const ANALYTICS_TOP_POSTS = 10;
+
+/** The rows PostsTable paints: the current page, or the first `limit` when the overview is capped. */
+export function analyticsTablePosts(posts: readonly HubPost[], q: Query, limit?: number): { page: number; pageCount: number; items: HubPost[]; total: number } {
+  const sorted = sortedPosts(posts, limit != null ? { ...q, page: 1 } : q);
+  return limit != null ? { ...sorted, items: sorted.items.slice(0, limit) } : sorted;
+}
+
 /** Posts table, sorted by a column (metric keys, "posted", "cost"), paged 25 at a time. */
 export function sortedPosts(posts: readonly HubPost[], q: Query): { page: number; pageCount: number; items: HubPost[]; total: number } {
   const dir = q.dir === 'asc' ? -1 : 1;

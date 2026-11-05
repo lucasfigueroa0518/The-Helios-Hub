@@ -64,12 +64,9 @@ function PitchCard({ p, rank, onMake, busy }: { p: LabPitch; rank: number | null
       </button>
       {open && (
         <div className="rad-story-body">
-          <p>
-            <b>{p.logline}</b>
-          </p>
-          {p.pitch && <p>{p.pitch}</p>}
+          {p.brief && <p>{p.brief}</p>}
           {p.whyNow && <p className="rad-note">Why now: {p.whyNow}</p>}
-          <p className="rad-note">Engine: {p.engine || '—'} · origin {p.origin}</p>
+          <p className="rad-note">Origin {p.origin}</p>
           <dl className="rad-scores">
             <div>
               <dt>Drama</dt>

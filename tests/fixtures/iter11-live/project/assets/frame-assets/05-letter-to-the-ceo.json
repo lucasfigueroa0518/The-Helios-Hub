@@ -1,0 +1,375 @@
+{
+ "assets": [
+  {
+   "id": "V14",
+   "kind": "person_photo",
+   "file": "assets/media/V14.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMS-Exec-Nadella-Satya-2017-08-31-22_(cropped).jpg",
+   "credit": "Brian Smale and Microsoft, CC BY-SA 4.0",
+   "license": null,
+   "shows": "An approved cutout portrait of Satya Nadella on a transparent background (their character image).",
+   "people": [
+    "Satya Nadella"
+   ],
+   "qids": [
+    "Q7426870"
+   ],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1898,
+   "height": 2160,
+   "phash": "eca51bceb6136b20",
+   "character_image": true,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "cutout",
+    "identity:verified",
+    "faces:1",
+    "anchor:Satya Nadella",
+    "source:bank",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:person:satya-nadella",
+    "resized:0.896",
+    "boxes:media/V14.boxes.json"
+   ],
+   "anchor_for": "Satya Nadella",
+   "face": {
+    "x": 0.2722,
+    "y": 0.1844,
+    "w": 0.4395,
+    "h": 0.3859
+   },
+   "made_kind": null,
+   "regions": {
+    "faces": [
+     {
+      "x": 0.2722,
+      "y": 0.1844,
+      "w": 0.4395,
+      "h": 0.3859,
+      "score": 0.7828168272972107,
+      "trusted": true,
+      "name": "Satya Nadella"
+     }
+    ],
+    "cut": {
+     "grade": "clean",
+     "edge_softness": 0.0181,
+     "islands": 0,
+     "straight_cuts": 0,
+     "sharpness": 1,
+     "fringe": 0.0004,
+     "with_source": false
+    },
+    "sharp_width_px": 2373,
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.4463,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": false,
+     "bottom": true
+    },
+    "phash": "eca51bcea6136b21",
+    "expression": null,
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V63",
+   "kind": "headline",
+   "file": "assets/media/V63.png",
+   "url": null,
+   "source_page": "https://www.geekwire.com/2018/microsoft-employees-ask-company-cancel-contract-ice-open-letter-ceo/",
+   "credit": "Screenshot of geekwire.com, captured 2026-11-05",
+   "license": null,
+   "shows": "A screenshot of the page \"Microsoft employees ask company to cancel contract with ICE in open letter to CEO – GeekWire\" on geekwire.com, captured 2026-11-05; \"Microsoft employees ask company to cancel contract with ICE in open letter to CEO\" is measured for marks.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": "2026-11-05",
+   "date_confidence": "exact",
+   "width": 1080,
+   "height": 300,
+   "phash": "adc390c8daf4c12f",
+   "character_image": false,
+   "made": true,
+   "upscaled": false,
+   "flags": [
+    "source:screen",
+    "date_basis:capture",
+    "recency:0.4",
+    "want:headline:1",
+    "boxes:media/V63.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.8558,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1350,
+    "focus": null,
+    "phash": "adc390c8daf4c12f",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [
+     {
+      "text": "Microsoft",
+      "box": {
+       "x": 0.0296,
+       "y": 0.15,
+       "w": 0.2787,
+       "h": 0.1733
+      }
+     },
+     {
+      "text": "employees",
+      "box": {
+       "x": 0.3259,
+       "y": 0.1533,
+       "w": 0.3037,
+       "h": 0.2133
+      }
+     },
+     {
+      "text": "ask",
+      "box": {
+       "x": 0.6491,
+       "y": 0.1533,
+       "w": 0.1,
+       "h": 0.17
+      }
+     },
+     {
+      "text": "company",
+      "box": {
+       "x": 0.0296,
+       "y": 0.46,
+       "w": 0.2648,
+       "h": 0.1667
+      }
+     },
+     {
+      "text": "to",
+      "box": {
+       "x": 0.3102,
+       "y": 0.4367,
+       "w": 0.0528,
+       "h": 0.1467
+      }
+     },
+     {
+      "text": "cancel",
+      "box": {
+       "x": 0.3815,
+       "y": 0.4133,
+       "w": 0.1843,
+       "h": 0.17
+      }
+     },
+     {
+      "text": "contract",
+      "box": {
+       "x": 0.5833,
+       "y": 0.4367,
+       "w": 0.2352,
+       "h": 0.1467
+      }
+     },
+     {
+      "text": "with",
+      "box": {
+       "x": 0.8352,
+       "y": 0.4133,
+       "w": 0.1324,
+       "h": 0.17
+      }
+     },
+     {
+      "text": "ICE",
+      "box": {
+       "x": 0.0296,
+       "y": 0.68,
+       "w": 0.0944,
+       "h": 0.1633
+      }
+     },
+     {
+      "text": "in",
+      "box": {
+       "x": 0.1417,
+       "y": 0.6733,
+       "w": 0.0565,
+       "h": 0.1667
+      }
+     },
+     {
+      "text": "open",
+      "box": {
+       "x": 0.2157,
+       "y": 0.72,
+       "w": 0.1389,
+       "h": 0.1633
+      }
+     },
+     {
+      "text": "letter",
+      "box": {
+       "x": 0.3704,
+       "y": 0.6733,
+       "w": 0.15,
+       "h": 0.17
+      }
+     },
+     {
+      "text": "to",
+      "box": {
+       "x": 0.537,
+       "y": 0.6967,
+       "w": 0.0519,
+       "h": 0.1467
+      }
+     },
+     {
+      "text": "CEO",
+      "box": {
+       "x": 0.6074,
+       "y": 0.68,
+       "w": 0.1167,
+       "h": 0.1633
+      }
+     }
+    ],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   },
+   "boxes": [
+    {
+     "text": "Microsoft",
+     "x": 31.97,
+     "y": 45,
+     "w": 301,
+     "h": 51.99
+    },
+    {
+     "text": "employees",
+     "x": 351.97,
+     "y": 45.99,
+     "w": 328,
+     "h": 63.99
+    },
+    {
+     "text": "ask",
+     "x": 701.03,
+     "y": 45.99,
+     "w": 108,
+     "h": 51
+    },
+    {
+     "text": "company",
+     "x": 31.97,
+     "y": 138,
+     "w": 285.98,
+     "h": 50.01
+    },
+    {
+     "text": "to",
+     "x": 335.02,
+     "y": 131.01,
+     "w": 57.02,
+     "h": 44.01
+    },
+    {
+     "text": "cancel",
+     "x": 412.02,
+     "y": 123.99,
+     "w": 199.04,
+     "h": 51
+    },
+    {
+     "text": "contract",
+     "x": 629.96,
+     "y": 131.01,
+     "w": 254.02,
+     "h": 44.01
+    },
+    {
+     "text": "with",
+     "x": 902.02,
+     "y": 123.99,
+     "w": 142.99,
+     "h": 51
+    },
+    {
+     "text": "ICE",
+     "x": 31.97,
+     "y": 204,
+     "w": 101.95,
+     "h": 48.99
+    },
+    {
+     "text": "in",
+     "x": 153.04,
+     "y": 201.99,
+     "w": 61.02,
+     "h": 50.01
+    },
+    {
+     "text": "open",
+     "x": 232.96,
+     "y": 216,
+     "w": 150.01,
+     "h": 48.99
+    },
+    {
+     "text": "letter",
+     "x": 400.03,
+     "y": 201.99,
+     "w": 162,
+     "h": 51
+    },
+    {
+     "text": "to",
+     "x": 579.96,
+     "y": 209.01,
+     "w": 56.05,
+     "h": 44.01
+    },
+    {
+     "text": "CEO",
+     "x": 655.99,
+     "y": 204,
+     "w": 126.04,
+     "h": 48.99
+    }
+   ]
+  }
+ ]
+}

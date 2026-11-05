@@ -16,13 +16,17 @@
  * source fetched most recently, within the last 7 days), not the bank copy,
  * so the renderer and the checks see exactly what the online search would.
  *
+ * Cleared photos only: reuse_ok AND an open or government licence. The bank
+ * also stores company and unknown-licence photos (for Reel AI Drama's credited
+ * news photos, lib/media-library/drama.ts); this reader never offers them.
+ *
  * Gated by media_library.settings.finder_source (off by default).
  */
 import type { FaceBox } from '@/lib/social/render/fit-check';
 import type { Lane } from '@/lib/social/photos/find';
 import type { VisualKind } from '@/lib/social/writer/draft';
 
-import { SCENE_LANES, words } from './policy';
+import { REUSABLE_LICENCES, SCENE_LANES, words } from './policy';
 import { cachedBankSettings, type BankSettings } from './settings';
 import type { FinderSourceMode, Query } from './types';
 
@@ -111,7 +115,7 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
       if (plan.byTags && !want.length) return [];
       const checkUsed = await hasUsedPhotos();
       const now = (deps.now?.() ?? new Date()).toISOString();
-      const params: unknown[] = [[...plan.lanes], now, want, q.qid, plan.visionPass, plan.logoWindow, Math.max(1, q.limit) * 3, SOURCE_FRESH_DAYS, LOGO_SEEN_DAYS, BANK_NO_REPEAT_DAYS];
+      const params: unknown[] = [[...plan.lanes], now, want, q.qid, plan.visionPass, plan.logoWindow, Math.max(1, q.limit) * 3, SOURCE_FRESH_DAYS, LOGO_SEEN_DAYS, BANK_NO_REPEAT_DAYS, [...REUSABLE_LICENCES]];
       const { rows } = await deps.query(
         `WITH offer AS (
            SELECT s.photo_id, s.url, s.source, s.lane, s.credit, s.title, s.date, s.last_ok_at
@@ -130,7 +134,7 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
                   SELECT 1 FROM social.used_photos u JOIN media_library.photo_sources a ON a.url = u.url
                    WHERE a.photo_id = p.id AND u.used_at <= $2::timestamptz AND u.used_at > $2::timestamptz - make_interval(days => $10))` : `($10::int IS NULL)`} AS used_recently
            FROM media_library.photos p
-          WHERE p.status = 'stored' AND p.reuse_ok
+          WHERE p.status = 'stored' AND p.reuse_ok AND p.licence = ANY($11::text[])
             AND EXISTS (SELECT 1 FROM offer o WHERE o.photo_id = p.id)
             AND ($4::text IS NULL OR $4::text = ANY(p.qids))
             AND ($5::boolean IS NOT TRUE OR p.vision_pass)

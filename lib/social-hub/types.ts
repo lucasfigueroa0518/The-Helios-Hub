@@ -69,7 +69,7 @@ export type HubMedia =
       /** Rendered JPEG when a route serves it (OUT_OF_SCOPE #3); else the slide outline from `render`. */
       slides: Array<{ src: string | null; alt: string; photo: string | null; layout: string | null; headline: string | null; body: string | null }>;
     }
-  | { kind: 'frames'; frames: Array<{ src: string | null; label: string }> }
+  | { kind: 'frames'; frames: Array<{ src: string | null; label: string; /** Private bucket path. Signed at render, never stored in the shared cache as a URL. */ path?: string | null }> }
   | { kind: 'none'; note: string };
 
 export type Approval = {

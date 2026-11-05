@@ -2,11 +2,15 @@
   Reel AI Drama — caption skin (explainers/reel-ai-drama/presets/reel-ai-drama), mirroring the Helios
   Explainer skin (explainers/frame-presets/helios/caption-skin.html, MD-42): the same paging, two-line
   clamp, typewriter timing and timeline contract (captions.mjs fills GROUPS / DURATION;
-  assets/kit/mount.mjs fills DARK and QUIET). The look is the approved reel-ai-drama-look stills: big
-  lowercase Pragmatica Extended Bold at 74px, top-left of the band under Instagram's Reels header
-  (x 96–940, y 292–542), no plate. On the graded photos and dark grounds (DARK windows: every frame but
-  the whiteboard) the words are paper-lit with a soft shadow so they stay legible on any picture; on the
-  whiteboard they are ink. QUIET stays empty: the close's question is captioned.
+  assets/kit/mount.mjs fills DARK and QUIET; assets/kit/measure.mjs fills TONES). The look is the
+  approved reel-ai-drama-look stills: big Pragmatica Extended Bold at 74px, in the script's own capitalisation, top-left of the
+  band under Instagram's Reels header (x 96–940, y 292–542). The words are one bright colour throughout (paper-lit
+  #FEF9F3), on top of everything in the frame, so nothing a frame darkens can reach them. What is under the band
+  (iteration 4, TONES, sampled every 0.2s) decides only their backing: `dark` a soft shadow; `light` and
+  `plate` a dark backing plate that types in with the letters (a light ground, or a busy or mid-tone band:
+  a white article, a bright sky); the plate sits under whole glyphs with even padding and never changes
+  how the words render. Without TONES (no browser at build) the treatment decides (DARK windows:
+  every frame but the whiteboard). QUIET stays empty: the close's question is captioned.
 -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 
@@ -22,7 +26,8 @@
   .caption-layer {
     position: absolute;
     inset: 0;
-    z-index: 20;
+    /* Above every layer a frame can draw (the frames' elements share this stacking context). */
+    z-index: 1000;
     pointer-events: none;
   }
   /* The caption band: under Instagram's Reels header (top 250px of 1080×1920), above the
@@ -51,12 +56,34 @@
     font-size: 74px;
     line-height: 1.05;
     letter-spacing: -0.02em;
-    text-transform: lowercase;
-    color: #1F1915;
+    color: #FEF9F3;
   }
   .caption-stage.on-dark .caption-line {
-    color: #FEF9F3;
     text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 0 2px rgba(0, 0, 0, 0.6);
+  }
+  /* A backing plate per letter, so it types in with the words and is never an empty box. The plate is
+     a layer of its own (::before, z-index -1 in the line's isolated stacking context), so every letter's
+     plate paints under every letter's glyph: no neighbour's plate cuts an ascender, a descender or the
+     side of a letter, and the text lays out and renders exactly as without a plate. It spans the glyphs
+     (ascender/figure top 0.8em above the baseline, descender 0.2em below) plus an even 0.14em on every
+     side; the side pads bridge the gaps between letters and words, and the lines' plates overlap into
+     one block. Opaque, so overlaps never darken. */
+  .caption-stage.on-plate .caption-line {
+    text-shadow: none;
+    isolation: isolate;
+  }
+  .caption-stage.on-plate .caption-char {
+    position: relative;
+  }
+  .caption-stage.on-plate .caption-char::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0.06em;
+    bottom: 0.06em;
+    left: -0.14em;
+    right: -0.14em;
+    background: #15110E;
   }
   .caption-stage.is-quiet {
     visibility: hidden;
@@ -95,6 +122,8 @@
   var DARK = [];
   // mount.mjs injects the quiet windows here (none: the close's question is captioned).
   var QUIET = [];
+  // measure.mjs injects the sampled caption tones here: [[start, end, "dark" | "light" | "plate"], …].
+  var TONES = [];
 
   (function () {
     var MAX_WORDS = 7;
@@ -133,16 +162,16 @@
     });
 
     // Hard clamp: a page is at most MAX_LINES lines at 74px in the 844px band. Widths come from the
-    // bundled Pragmatica Extended Bold metrics (per 1000px, lowercase as drawn), so the check does
+    // bundled Pragmatica Extended Bold metrics (per 1000px, as drawn), so the check does
     // not depend on the font having loaded; a page that would wrap to a third line is re-paged.
     var MAX_LINES = 2;
     var BAND_W = 844;
     var FONT_PX = 74;
     var TRACK = -0.02 * FONT_PX;
     var GAP = 0.26 * FONT_PX;
-    var ADV = {"0":755,"1":755,"2":755,"3":755,"4":755,"5":755,"6":755,"7":755,"8":755,"9":755,"a":708,"b":737,"c":690,"d":739,"e":721,"f":443,"g":724,"h":709,"i":302,"j":310,"k":652,"l":302,"m":1071,"n":709,"o":740,"p":735,"q":737,"r":472,"s":625,"t":438,"u":706,"v":598,"w":893,"x":655,"y":599,"z":575,".":396,",":396,"?":701,"!":407,"'":294,"\"":544,"-":569,":":396,";":402,"%":1096,"$":755,"&":826,"(":454,")":454,"/":532};
+    var ADV = {"A":790,"B":823,"C":846,"D":853,"E":748,"F":699,"G":894,"H":854,"I":338,"J":673,"K":810,"L":656,"M":1075,"N":870,"O":919,"P":778,"Q":919,"R":821,"S":767,"T":699,"U":832,"V":745,"W":1097,"X":799,"Y":755,"Z":731,"0":755,"1":755,"2":755,"3":755,"4":755,"5":755,"6":755,"7":755,"8":755,"9":755,"a":708,"b":737,"c":690,"d":739,"e":721,"f":443,"g":724,"h":709,"i":302,"j":310,"k":652,"l":302,"m":1071,"n":709,"o":740,"p":735,"q":737,"r":472,"s":625,"t":438,"u":706,"v":598,"w":893,"x":655,"y":599,"z":575,".":396,",":396,"?":701,"!":407,"'":294,"\"":544,"-":569,":":396,";":402,"%":1096,"$":755,"&":826,"(":454,")":454,"/":532};
     var wordPx = function (text) {
-      return Array.from(String(text).toLowerCase()).reduce(function (n, ch) {
+      return Array.from(String(text)).reduce(function (n, ch) {
         return n + ((ADV[ch] || 760) * FONT_PX) / 1000 + TRACK;
       }, 0);
     };
@@ -197,14 +226,22 @@
     window.__timelines = window.__timelines || {};
     var tl = gsap.timeline({ paused: true });
 
-    // Ground-aware color and quiet windows, by seek-safe class sets.
+    // Ground-aware color and quiet windows, by seek-safe class sets. The sampled TONES lead; without
+    // them, the treatment's DARK windows.
     var marks = [];
-    DARK.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    (TONES.length ? TONES : DARK).forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
     QUIET.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
     marks = marks.filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return a - b; });
     var inside = function (wins, t) { return wins.some(function (w) { return t >= Number(w[0]) && t < Number(w[1]); }); };
+    var toneAt = function (t) {
+      for (var i = 0; i < TONES.length; i++) if (t >= Number(TONES[i][0]) && t < Number(TONES[i][1])) return TONES[i][2];
+      if (TONES.length) return "dark";
+      return inside(DARK, t) ? "dark" : "light";
+    };
     [0].concat(marks).forEach(function (t) {
-      var cls = "caption-stage" + (inside(DARK, t) ? " on-dark" : "") + (inside(QUIET, t) ? " is-quiet" : "");
+      var tone = toneAt(t);
+      // One colour always: a ground the bright words can't read on gets the plate.
+      var cls = "caption-stage" + (tone === "dark" ? " on-dark" : " on-plate") + (inside(QUIET, t) ? " is-quiet" : "");
       tl.set(stage, { className: cls }, Math.max(0, t));
     });
 
@@ -223,8 +260,13 @@
         var span = Math.max(letters.length * MIN_CHAR, Math.max(0, w.end - at));
         letters.forEach(function (ch, k) {
           var el = document.getElementById("caption-char-" + p + "-" + i + "-" + k);
-          tl.set(el, { opacity: 0 }, start);
-          tl.set(el, { opacity: 1 }, at + (span * k) / letters.length);
+          var show = at + (span * k) / letters.length;
+          // Never two sets on one letter at one time: a hide and a show both at t = 0 (the first letter
+          // of the first page) resolve to hidden once the renderer has sought past 0 and back, so the
+          // first letter never showed ("S" of "Summer"). The letter is hidden by CSS and by its page
+          // until then; the hide set is only for a letter that types in after its page appears.
+          if (show > start) tl.set(el, { opacity: 0 }, start);
+          tl.set(el, { opacity: 1 }, show);
         });
       });
     });
