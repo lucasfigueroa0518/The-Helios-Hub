@@ -952,6 +952,10 @@ async function frameUser(input: { projectDir: string; brief: ReelBrief; work: Fr
     const still = seriousFindings([...input.previous.findings, ...(input.previous.review ?? [])]);
     user.push({ type: 'text', text: section("This frame's previous attempt, which wasn't enough", { diagnosis: input.previous.submit.diagnosis, approach: input.previous.submit.approach, change: input.previous.submit.change, still_wrong: still.map((f) => f.what) }) });
   }
+  else if (input.previous && !input.previous.built) {
+    // The previous attempt never built: what stopped it is what this one must avoid.
+    user.push({ type: 'text', text: section("This frame's previous attempt, which didn't build", { why: input.previous.findings.map((f) => f.what) }) });
+  }
   return user;
 }
 

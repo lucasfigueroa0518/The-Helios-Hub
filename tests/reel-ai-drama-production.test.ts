@@ -15,7 +15,7 @@ import { labData } from '@/lib/reel-ai-drama/lab';
 import { cutLines, draftProblems, reconcilePlan } from '@/lib/reel-ai-drama/production/draft';
 import { addArtifact, addFlag, claimNextJob, failStaleJobs, finishJob, getJob, getPitch, listArtifacts, requestJob, setStage } from '@/lib/reel-ai-drama/production/jobs';
 import { calibrateRoute, developRoute, labRoute, makeRoute, settingsPostRoute } from '@/lib/reel-ai-drama/production/routes';
-import { CAP_BACKSTOP, CONTENT_ITEMS, contentPassProblems, firstViewerRouting, runJob, withBlueprint, type ProductionDeps } from '@/lib/reel-ai-drama/production/run';
+import { CAP_BACKSTOP, CONTENT_ITEMS, contentPassProblems, copySolverState, designFrom, firstViewerRouting, runJob, withBlueprint, type ProductionDeps } from '@/lib/reel-ai-drama/production/run';
 import type { SolverDeps, SolverKit } from '@/lib/reel-ai-drama/production/solver';
 import { slotsOpen, weekStart, weeklyTick } from '@/lib/reel-ai-drama/production/schedule';
 import type { Sheet } from '@/lib/reel-ai-drama/render/sheets';
@@ -1352,10 +1352,37 @@ test('solver: a re-render that fails after a solver round ships the earlier vide
   assert.equal(fs.readFileSync(deps.store.localPath!(rows[0]!.storage_path)!, 'utf8'), 'the good mp4');
 });
 
-test('withBlueprint: the frame takes the blueprint and its pictures; the other frames are untouched', () => {
+test('withBlueprint: the frame takes the blueprint and its pictures after its own; the other frames are untouched', () => {
   const next = withBlueprint(PLAN, 2, solverBp('V3'));
   assert.deepEqual(next.frames[1]!.blueprint, solverBp('V3'));
-  assert.deepEqual(next.frames[1]!.asset_ids, ['V3', 'V2']);
+  assert.deepEqual(next.frames[1]!.asset_ids, ['V2', 'V3'], 'the director\'s first picture stays first');
   assert.equal(next.frames[0], PLAN.frames[0]);
   assert.equal(PLAN.frames[1]!.blueprint, undefined, 'pure');
+});
+
+test('copySolverState: the solver\'s state survives a wiped workspace (pre-mortem #16); missing parts are skipped', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rad-solver-state-'));
+  const assets = path.join(root, 'project', 'assets');
+  const kept = path.join(root, '_solver');
+  fs.mkdirSync(path.join(assets, 'solver'), { recursive: true });
+  fs.writeFileSync(path.join(assets, 'solver', 'spend.json'), '{"spent":1.5}');
+  fs.writeFileSync(path.join(assets, 'solved.json'), '{"04-a":{"kind":"plan","round":1,"usd":0.4}}');
+  copySolverState(assets, kept);
+  fs.rmSync(path.join(root, 'project'), { recursive: true, force: true });
+  const fresh = path.join(root, 'project', 'assets');
+  copySolverState(kept, fresh);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(fresh, 'solver', 'spend.json'), 'utf8')).spent, 1.5);
+  assert.ok(fs.existsSync(path.join(fresh, 'solved.json')));
+  assert.ok(!fs.existsSync(path.join(fresh, 'solved')), 'nothing made up');
+  copySolverState(path.join(root, 'nothing-here'), fresh);
+});
+
+test('designFrom: a version\'s recorded review becomes the frame\'s design findings; measured lines are not reviews', () => {
+  const d = designFrom(4, [
+    { frame: 4, from: 'review', item: 'off_edge', severity: 'problem', what: 'cut off' },
+    { frame: 4, from: 'review', item: 'composed', severity: 'warning', what: 'busy' },
+    { frame: 4, from: 'measured', item: 'off_frame', what: '[off_frame] x' },
+  ]);
+  assert.deepEqual(d.problems, [{ frame: 4, item: 'off_edge', severity: 'problem', what: 'cut off' }]);
+  assert.deepEqual(d.warnings.map((w) => w.item), ['composed']);
 });

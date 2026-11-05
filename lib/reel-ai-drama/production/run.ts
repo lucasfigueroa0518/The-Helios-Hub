@@ -35,11 +35,12 @@ import {
   type KillReason,
 } from '@/lib/reel-ai-drama/production/jobs';
 import { varietyFindings } from '@/lib/reel-ai-drama/checks/variety';
-import { designFindingText, type DesignReview } from '@/lib/reel-ai-drama/checks/design';
+import { designFindingText, type DesignFinding, type DesignItem, type DesignReview } from '@/lib/reel-ai-drama/checks/design';
 import {
   describePictures,
   lastResort,
   lastResortFrames,
+  installVersion,
   measuredFinding,
   readVersions,
   recordFindings,
@@ -312,9 +313,34 @@ export function solverBrief(draft: WriterDraft, plan: DirectorPlan, facts: FactS
   return { script, pictures: describePictures(inventory), allowed };
 }
 
-/** `plan` with frame `n` on `blueprint`, its pictures added to the frame's assets. Pure. */
+/** `plan` with frame `n` on `blueprint`, its pictures added after the frame's own (the director's first picture stays first). Pure. */
 export function withBlueprint(plan: DirectorPlan, n: number, blueprint: Blueprint): DirectorPlan {
-  return { ...plan, frames: plan.frames.map((f) => (f.n === n ? { ...f, blueprint, asset_ids: [...new Set([...blueprintAssets(blueprint), ...(f.asset_ids ?? [])])] } : f)) };
+  return { ...plan, frames: plan.frames.map((f) => (f.n === n ? { ...f, blueprint, asset_ids: [...new Set([...(f.asset_ids ?? []), ...blueprintAssets(blueprint)])] } : f)) };
+}
+
+/** A version's recorded review as the frame's design findings (reviewer findings only). Pure. */
+export function designFrom(n: number, review: readonly FrameFinding[]): DesignReview {
+  const as = (severity: 'problem' | 'warning'): DesignFinding[] =>
+    review.filter((f) => f.from === 'review' && f.item && f.severity === severity).map((f) => ({ frame: n, item: f.item as DesignItem, severity, what: f.what }));
+  return { problems: as('problem'), warnings: as('warning'), errors: [], usd: 0 };
+}
+
+/** What the solver keeps under the project's assets: its versions, look and spend, and the frames it shipped (Iteration 11 §6). */
+const SOLVER_STATE = ['solver', 'solved', 'solved.json'] as const;
+
+/**
+ * Copy the solver's state between the project and `dir`, a folder outside the workspace that a re-run of the job wipes, so a
+ * restarted job keeps its limit, its look and its finished frames (pre-mortem #16). Missing parts are skipped.
+ */
+export function copySolverState(from: string, to: string): void {
+  for (const name of SOLVER_STATE) {
+    const src = path.join(from, name);
+    if (!fs.existsSync(src)) continue;
+    const dst = path.join(to, name);
+    fs.mkdirSync(to, { recursive: true });
+    fs.rmSync(dst, { recursive: true, force: true });
+    fs.cpSync(src, dst, { recursive: true });
+  }
 }
 
 /** The measured state of the project: each frame's lines, and the lines no frame could be found for. */
@@ -910,6 +936,10 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       }
       return m;
     };
+    // A restarted job puts back what the solver already did, so compile keeps its shipped frames and the limit carries on.
+    const solverState = path.join(deps.jobsRoot, '_solver', job.id);
+    const projectAssets = path.join(projectDir, 'assets');
+    if (deps.solver) copySolverState(solverState, projectAssets);
     await compile();
     let measured = await measurePlain('compiled');
 
@@ -1120,6 +1150,8 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
           for (const p of s.problems) await flagOnce('render', `Solver: ${p}`);
           if (!s.chosen) continue;
           if (s.chosen.blueprint && s.chosen.kind !== 'code') plan = withBlueprint(plan, n, s.chosen.blueprint);
+          // The frame's findings are now the shipped version's, not those of the attempt that lost.
+          if (s.chosen.review) designBy.set(n, designFrom(n, s.chosen.review));
           if (s.swappedBack) swapped.push(n);
           const entry = { frame: n, label: s.chosen.label, kind: s.chosen.kind, serious: s.serious, flag: s.flag };
           const at = solved.findIndex((x) => x.frame === n);
@@ -1174,13 +1206,34 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
           // A frame swapped back: the video must show the version that ships.
           measured = await measure(`${label}_settled`);
           if (await rerender(`swapping back frames ${swapped.join(', ')}`)) await cut(swapped, false);
+          else {
+            // The video still shows this round's attempts: they go back in, so what ships is what the files say.
+            for (const n of swapped) {
+              const a = built.find((x) => x.frame === n);
+              const v = a ? readVersions(projectDir, a.id).find((x) => x.label === a.label) : null;
+              if (!a || !v) continue;
+              installVersion(projectDir, a.id, n, v);
+              if (v.blueprint && v.kind !== 'code') plan = withBlueprint(plan, n, v.blueprint);
+              if (v.review) designBy.set(n, designFrom(n, v.review));
+              const at = solved.findIndex((x) => x.frame === n);
+              const entry = { frame: n, label: v.label, kind: v.kind, serious: seriousFindings([...v.findings, ...(v.review ?? [])]).length, flag: `ships ${v.label}: the swap back to a version with fewer serious findings would not render` };
+              if (at >= 0) solved[at] = entry;
+              else solved.push(entry);
+            }
+            measured = await measure(`${label}_kept`);
+          }
         }
+        copySolverState(projectAssets, solverState);
       };
 
-      const look = await solverLook(
-        { projectDir, brief, frames: story.map((n) => ({ n, id: idOf(n), name: spans.find((s) => s.number === n)?.name ?? '', voice: voiceOf(n), job: frameOf(n)?.purpose ?? '', sheets: images(n) })), findings: story.flatMap(findingsOf) },
-        solver,
-      );
+      // A look without sheets would judge frames it can't see: without them only the frames with serious findings are reworked.
+      const look = reviewSheets.size
+        ? await solverLook(
+            { projectDir, brief, frames: story.map((n) => ({ n, id: idOf(n), name: spans.find((s) => s.number === n)?.name ?? '', voice: voiceOf(n), job: frameOf(n)?.purpose ?? '', sheets: images(n) })), findings: story.flatMap(findingsOf) },
+            solver,
+          )
+        : { verdicts: [], work: story.filter((n) => seriousFindings(findingsOf(n)).length > 0), usd: 0, problems: ['no sheets of the reel, so no look: only frames with serious findings are reworked'] };
+      copySolverState(projectAssets, solverState);
       for (const v of look.verdicts) if (v.aim) aims.set(v.frame, v.aim);
       await keepText('solver', { step: 'look', ...look });
       for (const p of look.problems) await flagOnce('render', `Solver: ${p}`);
@@ -1198,6 +1251,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         for (const p of res.problems) await flagOnce('render', `Solver: ${p}`);
         await settle(`solver round ${round}`);
         await afterChange(res.attempts, `r${round}`);
+        copySolverState(projectAssets, solverState);
       }
       // The last resort (§7): a frame still serious after round 2 or at the limit tries its simplest clean version. Weak only never.
       const last = frozen
@@ -1217,6 +1271,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         if (s.serious > 0) await flagOnce('render', `Solver, frame ${s.frame}: ships with ${s.serious} serious finding(s).`);
       }
       await keepText('solver', { step: 'shipped', frames: solved });
+      copySolverState(projectAssets, solverState);
       await keepFile('solver', path.join(projectDir, 'assets', 'solved.json'), 'solved.json');
     }
 
