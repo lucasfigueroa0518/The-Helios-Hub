@@ -124,8 +124,9 @@ function stubJev(answer: (state: Record<string, string>) => Record<string, numbe
 // ── Prompts ────────────────────────────────────────────────────────────────
 
 test('loadPrompt loads every prompt and craft file; system prompts compose', () => {
-  // creative-pass is a one-line placeholder until Claude writes it, last, from the build's report (ITERATION-10-CONTRACT §5).
-  for (const name of PROMPT_NAMES) assert.ok(name === 'creative-pass' ? loadPrompt(name).length > 0 : loadPrompt(name).length > 300, name);
+  for (const name of PROMPT_NAMES) assert.ok(loadPrompt(name).length > 300, name);
+  assert.ok(!(PROMPT_NAMES as readonly string[]).includes('creative-pass'), 'the creative pass is retired (Iteration 11)');
+  for (const name of ['solver-look', 'solver-frame'] as const) assert.ok((PROMPT_NAMES as readonly string[]).includes(name), name);
   // The principles are the writing side's craft (MD-104); the musts live in the role prompts.
   for (const name of CRAFT_NAMES) assert.ok(name === 'director-craft' ? loadCraft(name).includes('HARD CONSTRAINTS') : loadCraft(name).length > 200, name);
   assert.throws(() => loadPrompt('nope' as never));

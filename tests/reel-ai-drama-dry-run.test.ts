@@ -1,5 +1,5 @@
-// A dry run of the live loop: `runJob` with the real director, plan validation, fix merge, wish and cut-out plumbing, measuring,
-// project files, compile, plan check, creative pass, touch removal, cost ledger and job record, on a story and pictures of its own.
+// A dry run of the live loop: `runJob` with the real director, plan validation, the pre_build and content_pass fix merges, wish and
+// cut-out plumbing, measuring, project files, compile, plan check, cost ledger and job record, on a story and pictures of its own.
 // Only the outside world is canned: the model answers at the `create` seam with tool responses, the voice writes timing, the browser
 // is JSDOM and the render writes a file. Nothing here reaches a network.
 import assert from 'node:assert/strict';
@@ -18,7 +18,6 @@ import { writeProjectFiles } from '../explainers/reel-ai-drama/kit/project-files
 import { localArtifactStore } from '../lib/explainers/storage';
 import { makeCutouts } from '../lib/reel-ai-drama/harvest/cutouts';
 import { measureInventory } from '../lib/reel-ai-drama/harvest/regions';
-import { creativePass } from '../lib/reel-ai-drama/production/creative';
 import { claimNextJob, getJob, listArtifacts, requestJob } from '../lib/reel-ai-drama/production/jobs';
 import { runJob, type ProductionDeps } from '../lib/reel-ai-drama/production/run';
 import { compileReel, type CompiledRead } from '../lib/reel-ai-drama/render/compile';
@@ -95,7 +94,7 @@ const goodPlan = (): Any => ({
   lines_back: [],
 });
 
-type Toolset = { plan?: Any[]; touches?: Any; createFails?: (tool: string) => boolean };
+type Toolset = { plan?: Any[]; createFails?: (tool: string) => boolean };
 
 function harness(db: Any, tools: Toolset, over: { checks?: Partial<ProductionDeps['checks']>; render?: Partial<ProductionDeps['render']>; harvest?: Partial<ProductionDeps['harvest']>; writing?: Partial<ProductionDeps['writing']> } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rad-dry-'));
@@ -110,7 +109,7 @@ function harness(db: Any, tools: Toolset, over: { checks?: Partial<ProductionDep
     if (tools.createFails?.(tool)) throw new Error(`${tool}: the API said no`);
     // A fix or soft round inside one call gets that call's answer again; each new call takes the next.
     if (tool === 'submit_plan' && params.messages.length === 1 && planAnswers.length > 1 && requests.some((r) => r !== params && r.tools[0].name === tool)) planAnswers.shift();
-    const input = tool === 'submit_plan' ? planAnswers[0] : tools.touches ?? { touches: [], custom: [] };
+    const input = planAnswers[0];
     if (tool === 'submit_plan' && params.messages.length > 1) log.push(String(params.messages.at(-1).content[0]?.content ?? params.messages.at(-1).content).slice(0, 600));
     return { id: 'm', model: params.model, role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: `u${requests.length}`, name: tool, input: JSON.parse(JSON.stringify(input)) }], usage: { input_tokens: 1000, output_tokens: 200, cache_read_input_tokens: 500, cache_creation_input_tokens: 0 } };
   };
@@ -189,7 +188,6 @@ function harness(db: Any, tools: Toolset, over: { checks?: Partial<ProductionDep
       reviseScript: async (i) => JSON.parse(JSON.stringify(i.draft)),
       directReel: (i, ctx) => directReel(base(ctx) as never, i),
       writePost: async () => ({ caption: 'cap', credits: ['Ex'], question: 'q?' }),
-      creativePass: (i, ctx) => creativePass(i, { ...base(ctx), loadPrompt: () => 'CREATIVE', stills: readCompiled, readStill: () => 'BASE64' } as never),
       ...over.writing,
     },
     checks: {
@@ -231,11 +229,6 @@ function harness(db: Any, tools: Toolset, over: { checks?: Partial<ProductionDep
       },
       compileReel: (i) => compileReel({ ...i, readWords: null }),
       readCompiled,
-      frameFindings: async (dir, id) => {
-        const f = storyFrames(dir).find((x) => x.id === id)!;
-        const rec = await buildFrame(dir, f);
-        return [...(rec.failed ? [rec.failed] : []), ...(rec.notes ?? []).filter((n: string) => /failed/.test(n))];
-      },
       assembleProject: async () => ({ ok: true, problems: [] }),
       renderVideo: async (dir) => {
         const f = path.join(dir, 'renders', 'video.mp4');
@@ -248,6 +241,15 @@ function harness(db: Any, tools: Toolset, over: { checks?: Partial<ProductionDep
         fs.mkdirSync(path.dirname(f), { recursive: true });
         fs.writeFileSync(f, 'png');
         return f;
+      },
+      // Sheets of moments: one labelled sheet a story frame for the reviewers, one unlabelled sheet of the reel for the first viewer.
+      reelSheets: async (dir, _video, i) => {
+        const story = storyFrames(dir).map((f: Any) => f.number as number);
+        const moment = (n: number, what: string) => ({ frame: n, id: `f${n}`, t: 1, reel_t: n, what, source: 'edge' as const });
+        return {
+          review: (i.frames ?? story).map((n) => ({ frame: n, file: path.join(i.dir, `frame-${n}.jpg`), moments: [moment(n, 'it lands')] })),
+          viewer: i.viewer ? [{ frame: 1, file: path.join(i.dir, 'viewer.jpg'), moments: story.map((n: number) => moment(n, '')) }] : [],
+        };
       },
       videoSeconds: async () => 58,
       ...over.render,
@@ -275,32 +277,33 @@ const flagsOf = async (db: Any, id: string) => (await getJob(db, id))!.flags.map
 
 test('dry run: a fresh story goes through the whole live loop, first plan to delivery', async () => {
   const { db, job } = await freshJob();
-  const touches = {
-    touches: [{ id: 't1', frame: 1, why: 'lands it', type: 'extra_line', text: 'All winter.', for: 'room', on: 'winter' }],
-    custom: [{ id: 'c1', frame: 3, why: 'draws the drawer', aspect: 1, min_width: 300, on: 'drawer', code: `export default { build(el) { el.ownerDocument.createElement('div'); throw new Error('this piece never builds'); }, render() {} };` }],
-  };
-  let designRounds = 0;
+  const designed: number[][] = [];
   const { deps, requests, voiced, heldPlan, root, log } = harness(db, {
     plan: [
       goodPlan(),
-      // The image check's fix: only the frame it asked about, renamed and carrying someone else's line.
-      { frames: [storyFrame(2, 'A new name', ['L1', 'L2'], blueprint([{ id: 'maria', asset: 'P1', on: 'Maria' }]), { treatment: 'collision', focus: { kind: 'person', what: 'Maria Chen' } })], makes: [], wishes: [], lines_back: [] },
-      // The design review's fix, likewise partial.
+      // The image check's pre_build fix: only the frame it asked about, renamed and carrying someone else's line. On paper, so the
+      // re-check's variety still finds no four frames alike (a solo frame on charcoal would make it escalate).
+      { frames: [storyFrame(2, 'A new name', ['L1', 'L2'], blueprint([{ id: 'maria', asset: 'P1', on: 'Maria' }], { ground: 'kraft', style: 'paper' }), { treatment: 'collision', focus: { kind: 'person', what: 'Maria Chen' } })], makes: [], wishes: [], lines_back: [] },
+      // The content pass (the design review found something missing), likewise partial.
       { frames: [storyFrame(3, 'Another name', ['L3'], blueprint([{ id: 'memo', asset: 'D1', treatment: 'document', on: 'memo' }]), { treatment: 'document', focus: { kind: 'document', what: 'the memo' } })], makes: [], wishes: [], lines_back: [] },
     ],
-    touches,
   }, {
     checks: {
       checkIntegrity: (() => {
         let round = 0;
         return async () => (round++ ? { problems: [] } : { problems: [{ frame: 2, asset_id: 'F1', why: 'The picture shows someone else.' }] });
       })(),
-      checkDesign: async () => {
-        designRounds += 1;
-        return { problems: designRounds === 1 ? [{ frame: 3, item: 'off_edge', severity: 'problem', what: 'The page runs off.' }] : [], warnings: [], errors: [], usd: 0 } as never;
+      checkDesign: async (i) => {
+        designed.push([...new Set(i.sheets.map((x) => x.frame))]);
+        return {
+          // The off-edge finding is the solver's, not the director's: it ships as a flag here (no solver is wired).
+          problems: designed.length === 1 ? [{ frame: 3, item: 'nothing_missing', severity: 'problem', what: 'The drawer is never shown.' }, { frame: 4, item: 'off_edge', severity: 'problem', what: 'The logo runs off.' }] : [],
+          warnings: [],
+          errors: [],
+          usd: 0,
+        } as never;
       },
     },
-    render: { frameStills: async () => [{ number: 3, name: 'x', treatment: 'photo', at: 1, file: 'still.jpg' }] as never },
   });
   const result = await runJob(deps, job);
   const flags = await flagsOf(db, job.id);
@@ -327,26 +330,25 @@ test('dry run: a fresh story goes through the whole live loop, first plan to del
   assert.ok(cuts.some((a) => second.includes(a.id)), `frame 2 stages the cut-out: ${second.join()}`);
   assert.ok(inventory.assets.every((a) => a.regions?.shape !== undefined || a.regions?.brightness !== undefined), 'every picture was measured');
 
-  // The creative pass: the touch stayed; the custom piece that couldn't build was removed, and the frame went back to compiled.
-  const kept = JSON.parse(fs.readFileSync(path.join(projectDir, 'assets', 'touches.json'), 'utf8'));
-  assert.deepEqual(kept.touches.map((t: Any) => t.id), ['t1']);
-  assert.deepEqual(kept.custom, []);
-  assert.ok(flags.some((d) => /Touch c1 on frame 3 was removed/.test(d)), flags.join('\n'));
-  assert.ok(!/custom/.test(fs.readFileSync(path.join(projectDir, 'assets', 'frames', `${frames[2].id}.js`), 'utf8').replace(/compiled\.js/, '')), 'the frame carries no trace of it');
+  // The design review read every story frame, then only the frame the content pass changed; the off-edge finding stayed a flag.
+  assert.deepEqual(designed, [[1, 2, 3, 4], [3]]);
+  assert.ok(flags.includes('Design: Frame 4, nothing off the edge: The logo runs off.'), flags.join('\n'));
+  assert.ok(!flags.some((d) => /never shown/.test(d)), 'the content pass answered it');
 
   // Every call put its breakpoint on the stable prefix.
-  const tools = requests.map((r) => r.tools[0].name);
-  assert.equal(tools.filter((t) => t === 'submit_plan').length, 4, 'the plan, its soft round, two fixes: no round spent on a frame nobody asked about');
-  assert.ok(tools.includes('submit_touches'));
+  const plans = requests.filter((r) => r.tools[0].name === 'submit_plan');
+  assert.equal(plans.length, requests.length, 'only the director was asked anything');
+  assert.equal(plans.length, 4, 'the plan, its soft round, two fixes: no round spent on a frame nobody asked about');
+  assert.deepEqual(plans.slice(2).map((r) => r.model), [DEFAULT_SETTINGS.director_fix_model, DEFAULT_SETTINGS.director_fix_model], 'pre_build and content_pass on the fix model; no escalation');
   for (const r of requests) assert.ok(r.system.at(-1).cache_control, `${r.tools[0].name} caches its system prefix`);
-  for (const r of requests.filter((x) => x.tools[0].name === 'submit_plan')) assert.ok(r.messages[0].content[0].cache_control, 'and the plan the shared input');
+  for (const r of plans) assert.ok(r.messages[0].content[0].cache_control, 'and the plan the shared input');
 
   // Cost and the record.
   const fresh = (await getJob(db, job.id))!;
   assert.equal(fresh.status, 'ok');
   assert.ok(fresh.spend_usd > 0);
   const { rows } = await db.query<{ component: string }>('SELECT DISTINCT component FROM reel_ai_drama.cost_events WHERE job_id = $1', [job.id]);
-  for (const c of ['director', 'director_fix', 'creative_pass']) assert.ok(rows.some((r) => r.component === c), `${c} is on the ledger: ${rows.map((r) => r.component).join()}`);
+  for (const c of ['director', 'director_fix']) assert.ok(rows.some((r) => r.component === c), `${c} is on the ledger: ${rows.map((r) => r.component).join()}`);
   const kinds = (await listArtifacts(db, job.id)).map((a) => a.kind);
   for (const k of ['fact_sheet', 'inventory', 'writer_draft', 'director_plan', 'breakage', 'video', 'contact_sheet', 'delivery_report']) assert.ok(kinds.includes(k as never), k);
 });
@@ -387,7 +389,7 @@ test('dry run: every step after the plan may fail and the reel still ships, each
   const { db, job } = await freshJob();
   const boom = (what: string) => async () => { throw new Error(`${what} broke`); };
   let directorCalls = 0;
-  const { deps, root } = harness(db, { plan: [goodPlan()], touches: { touches: [], custom: [] }, createFails: (t) => t === 'submit_touches' }, {
+  const { deps, root } = harness(db, { plan: [goodPlan()] }, {
     checks: {
       checkFacts: boom('the facts check') as never,
       // The image check names a frame; its fix then fails.
@@ -408,7 +410,6 @@ test('dry run: every step after the plan may fail and the reel still ships, each
       designSound: boom('the sound designer') as never,
       contactSheet: boom('the contact sheet') as never,
       videoSeconds: boom('ffprobe') as never,
-      frameStills: boom('the stills') as never,
       readCompiled: boom('the plan check') as never,
     },
   });
@@ -416,7 +417,7 @@ test('dry run: every step after the plan may fail and the reel still ships, each
   const flags = await flagsOf(db, job.id);
   assert.equal(result.status, 'ok', `${JSON.stringify(result)}\n${flags.join('\n')}`);
   assert.ok(directorCalls >= 2);
-  for (const said of [/facts check failed/, /wish search failed/, /re-plan on the image check failed/, /sound designer failed/, /plan check could not run/, /contact sheet failed/, /post text failed/, /reuse record|used failed/]) {
+  for (const said of [/facts check failed/, /wish search failed/, /pre-build re-plan failed/, /sound designer failed/, /plan check could not run/, /contact sheet failed/, /first viewer failed/, /Design review failed; shipped without it: the design review broke/, /post text failed/, /reuse record|used failed/]) {
     assert.ok(flags.some((d) => said.test(d)), `${said}\n${flags.join('\n')}`);
   }
   const artifacts = await listArtifacts(db, job.id);

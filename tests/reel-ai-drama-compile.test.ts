@@ -4,16 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-import { compiledOptions, withTouches, wordsAt } from '../explainers/reel-ai-drama/kit/components/compiled.js';
+import { compiledOptions, wordsAt } from '../explainers/reel-ai-drama/kit/components/compiled.js';
 import { cueAt } from '../explainers/reel-ai-drama/kit/components/moves.js';
 import { blueprintFields, blueprintTreatment, withBlueprints } from '../explainers/reel-ai-drama/kit/project-files.mjs';
 import { eventProblems } from '../explainers/reel-ai-drama/kit/sound.mjs';
 import { sourceProblems } from '../explainers/reel-ai-drama/kit/try.mjs';
-import { applyTouches, creativePass, newFindings } from '../lib/reel-ai-drama/production/creative';
-import { acceptTouches, compileReel, customProblems, eventsFor, frameModule, MAX_CUSTOM, MAX_TOUCHES, normalBlueprint, plainBlueprint, readTouches, TOUCHES_FILE } from '../lib/reel-ai-drama/render/compile';
+import { acceptCustom, compileReel, customProblems, eventsFor, frameModule, MAX_CUSTOM, normalBlueprint, plainBlueprint } from '../lib/reel-ai-drama/render/compile';
 import { checkPlanCarried, planMissText, type FrameManifest } from '../lib/reel-ai-drama/render/plan-carried';
-import { blueprintAssets, type Blueprint, type CustomPiece, type DirectorPlan, type StoryboardFrame, type Touch, type WriterDraft } from '../lib/reel-ai-drama/types';
-import { SUBMIT_PLAN_TOOL, SUBMIT_TOUCHES_TOOL } from '../lib/reel-ai-drama/writing/schemas';
+import { blueprintAssets, type Blueprint, type CustomPiece, type DirectorPlan, type StoryboardFrame } from '../lib/reel-ai-drama/types';
+import { SUBMIT_PLAN_TOOL } from '../lib/reel-ai-drama/writing/schemas';
 import { blueprintsIn, dropSecrets, originalsProblem, planWith, storyboardPlan } from '../scripts/reel-ai-drama-replay';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the kit's options are plain data, read loosely here
@@ -71,35 +70,21 @@ test('compile options: a thing landing near the cut comes in early enough to be 
   assert.ok(Math.abs(cues['to publish'] - 3.6) < 1e-6);
 });
 
-test('touches only add: lines, in-turn arrivals, closer cuts, marks; nothing planned moves', () => {
-  const touches = [
-    { id: 't1', frame: 1, why: 'x', type: 'extra_line', text: 'Yes.', on: 'free to publish' },
-    { id: 't2', frame: 1, why: 'x', type: 'mark', kind: 'underline', on_piece: 'slide', on: 'saying' },
-    { id: 't3', frame: 1, why: 'x', type: 'closer_cuts', aim: 'slide', on: ['saying', 'free to publish'] },
-    { id: 't4', frame: 1, why: 'x', type: 'in_turn', piece_ids: ['slide'], from: 'saying', to: 'publish' },
-  ] as Touch[];
-  const { blueprint, inTurn, closer } = withTouches(BP, touches);
-  assert.equal(blueprint.labels.length, 2);
-  assert.equal(blueprint.marks.length, 2);
-  assert.equal(blueprint.marks[0], BP.marks[0]);
-  assert.equal(blueprint.camera.move, 'tour');
-  assert.equal(closer, true);
-  assert.deepEqual(inTurn.map((x: { ids: string[] }) => x.ids), [['slide']]);
-  assert.equal(BP.labels.length, 1, 'the plan itself is untouched');
-});
-
-test('touch limits: three touches, two custom, one of either per frame, and no custom code that breaks the rules', () => {
-  const plan = planOf(...[1, 2, 3, 4, 5, 6].map((n) => frameOf(n, BP)));
-  const touch = (id: string, frame: number): Touch => ({ id, frame, why: 'x', type: 'extra_line', text: 'y', on: '' });
+test('custom pieces: two a reel, one a frame, never on a frame without a blueprint or the close, and no code that breaks the rules', () => {
+  const plan = planOf(...[1, 2, 3, 4].map((n) => frameOf(n, BP)), { ...frameOf(5, BP), treatment: 'close' }, frameOf(6));
   const good = 'import { h } from "../kit/components/dom.js";\nexport default { build(el, ctx) { el.append(h(el.ownerDocument, "div")); }, render(t) {} };\n';
   const custom = (id: string, frame: number, code = good): CustomPiece => ({ id, frame, why: 'x', aspect: 1, min_width: 300, on: '', code });
-  const { touches, rejected } = acceptTouches({ touches: [touch('a', 1), touch('b', 1), touch('c', 2), touch('d', 3), touch('e', 4)], custom: [custom('k', 5), custom('l', 1), custom('m', 6, 'export default { build() { fetch("x"); }, render() {} };'), custom('n', 6), custom('o', 6)] }, plan);
-  assert.equal(touches.touches.length, 3);
-  assert.ok(touches.touches.length <= MAX_TOUCHES && touches.custom.length <= MAX_CUSTOM);
-  assert.deepEqual(touches.touches.map((t) => t.id), ['a', 'c', 'd']);
-  assert.deepEqual(touches.custom.map((c) => c.id), ['k', 'n']);
-  assert.ok(rejected.some((r) => r.id === 'b'));
-  assert.ok(rejected.some((r) => r.id === 'm'));
+  const { custom: kept, rejected } = acceptCustom([custom('k', 1), custom('l', 1), custom('m', 2, 'export default { build() { fetch("x"); }, render() {} };'), custom('slide', 2), custom('n', 5), custom('o', 6), custom('p', 3), custom('q', 4)], plan);
+  assert.deepEqual(kept.map((c) => c.id), ['k', 'p']);
+  assert.ok(kept.length <= MAX_CUSTOM);
+  const why = new Map(rejected.map((r) => [r.id, r.why]));
+  assert.match(why.get('l')!, /one custom piece a frame/);
+  assert.match(why.get('m')!, /its code/);
+  assert.match(why.get('slide')!, /planned piece is already called slide/);
+  assert.match(why.get('n')!, /can't take a custom piece/, 'the close');
+  assert.match(why.get('o')!, /can't take a custom piece/, 'no blueprint');
+  assert.match(why.get('q')!, new RegExp(`at most ${MAX_CUSTOM} custom pieces a reel`));
+  assert.deepEqual(acceptCustom(null, plan), { custom: [], rejected: [] });
   for (const bad of ['import x from "https://a.b/c.js"; export default { build() {}, render() {} };', 'export default { build() { setTimeout(() => {}); }, render() { Math.random(); } };', 'import y from "../custom/other.js"; export default { build() {}, render() {} };', 'export default { build() {} };']) {
     assert.ok(customProblems(bad).length > 0, bad);
   }
@@ -117,7 +102,7 @@ test("the kit never sets visibility to 'visible': it would show through the hidd
 test('sounds land on their words in the format the kit checks, with no decorative kinds', () => {
   const timing = { words: WORDS, lines: LINES, duration: 6 };
   const reports: string[] = [];
-  const events = eventsFor({ ...BP, sounds: [...BP.sounds, { kind: 'whoosh', what: 'a whoosh', on: 'saying' }, { kind: 'foley', what: 'a thud', on: 'unsaid words' }] }, [], timing, 6, ['V8'], (r) => reports.push(r));
+  const events = eventsFor({ ...BP, sounds: [...BP.sounds, { kind: 'whoosh', what: 'a whoosh', on: 'saying' }, { kind: 'foley', what: 'a thud', on: 'unsaid words' }] }, timing, 6, ['V8'], (r) => reports.push(r));
   assert.deepEqual(eventProblems(events, 6, { assets: new Set(['V8']) }), []);
   assert.equal(events.find((e) => e.what === 'a clicker click')!.t, WORDS[1].start);
   assert.ok(events.every((e) => e.kind !== 'whoosh'));
@@ -156,7 +141,13 @@ test('compileReel writes every frame: names carry across frames, a frame with no
   assert.equal(again.frames.length, 3);
   assert.ok(!fs.existsSync(path.join(projectDir, 'assets', 'frames', '01-a.js')), 'only the named frame is written');
   assert.match(fs.readFileSync(path.join(projectDir, 'assets', 'frames', '02-b.js'), 'utf8'), /"seed": 7/);
-  assert.deepEqual(readTouches(projectDir), { touches: [], custom: [] });
+  // A custom piece goes through `custom`: written beside the frames when accepted, dropped with a problem line when not.
+  const code = 'export default { build(el) { el.append(el.ownerDocument.createElement("div")); }, render(t) {} };\n';
+  const piece = (id: string, frame: number): CustomPiece => ({ id, frame, why: 'x', aspect: 1, min_width: 300, on: '', code });
+  const withCustom = await compileReel({ plan, projectDir, only: [2], custom: [piece('drawer', 2), piece('again', 2)], readWords: null });
+  assert.equal(fs.readFileSync(path.join(projectDir, 'assets', 'custom', 'drawer.js'), 'utf8'), code);
+  assert.match(fs.readFileSync(path.join(projectDir, 'assets', 'frames', '02-b.js'), 'utf8'), /"drawer"/);
+  assert.ok(withCustom.problems.some((p) => /frame 2: custom piece again dropped: at most one custom piece a frame/.test(p)), withCustom.problems.join('\n'));
 });
 
 const CARRIED: FrameManifest = {
@@ -189,84 +180,6 @@ test('plan check: a piece on the wrong word or side is a miss (M1.8, M7.3, M10.2
   assert.deepEqual(checkPlanCarried(plan, { 1: shown({ at: 3.6, x: 700 }) }), []);
   assert.match(checkPlanCarried(plan, { 1: shown({ at: 0, x: 700 }) })[0].why, /lands at 0s/);
   assert.match(checkPlanCarried(plan, { 1: shown({ at: 3.6, x: 100 }) })[0].why, /stands on the left, not the right/);
-});
-
-const DRAFT = { rungs: [{ id: 'R1', purpose: 'x', lines: [{ id: 'L1', text: 'Then a slide went up.' }] }] } as unknown as WriterDraft;
-const creativeCtx = (over: Record<string, unknown> = {}) => {
-  const costs: unknown[][] = [];
-  const projectDir = tmp();
-  const requests: { system: { text: string; cache_control?: unknown }[]; messages: { content: { type: string; cache_control?: unknown }[] }[]; tools: unknown[]; tool_choice?: unknown }[] = [];
-  return {
-    projectDir,
-    costs,
-    requests,
-    ctx: {
-      db: { query: async (_sql: string, args: unknown[]) => (costs.push(args), { rows: [] }) },
-      mode: 'production',
-      jobId: 'job',
-      loadPrompt: () => 'THE PROMPT',
-      stills: () => ({ ok: true, frames: {}, stills: [{ number: 1, name: 'A', id: '01-a', at: 1.2, file: 'x.jpg' }] }),
-      readStill: () => 'BASE64',
-      create: async (req: never) => {
-        requests.push(req);
-        return { content: [{ type: 'tool_use', id: 'u', name: SUBMIT_TOUCHES_TOOL.name, input: { touches: [{ id: 't1', frame: 1, why: 'x', type: 'extra_line', text: 'Yes.', on: '' }, { id: 't2', frame: 1, why: 'x', type: 'extra_line', text: 'No.', on: '' }], custom: [] } }], usage: { input_tokens: 1000, output_tokens: 100, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, stop_reason: 'tool_use' };
-      },
-      ...over,
-    } as never,
-  };
-};
-
-test('the creative pass: one cached call, stable prefix carries the breakpoint, stills in the suffix, cost on the ledger, one touch a frame', async () => {
-  const { ctx, projectDir, requests, costs } = creativeCtx();
-  const out = await creativePass({ draft: DRAFT, plan: planOf(frameOf(1, BP)), projectDir }, ctx);
-  assert.equal(requests.length, 1, 'never a paid fix round');
-  const req = requests[0];
-  assert.equal(req.system[0].text, 'THE PROMPT');
-  assert.ok(req.system.at(-1)!.cache_control, 'the breakpoint is on the stable prefix');
-  const user = req.messages[0].content;
-  assert.ok(user.some((b) => b.type === 'image'));
-  assert.ok(user.every((b) => !b.cache_control), 'never on the per-reel suffix');
-  assert.deepEqual(out.touches.touches.map((t) => t.id), ['t1']);
-  assert.match(out.problems[0], /t2/);
-  assert.ok(out.usd > 0);
-  assert.ok(costs[0].includes('creative_pass') && costs[0].includes('job'), 'the cost reaches the job through the ledger');
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(projectDir, TOUCHES_FILE), 'utf8')).touches.map((t: { id: string }) => t.id), ['t1']);
-});
-
-test('the creative pass fails open: an error, or no stills, is no touches and a problem line', async () => {
-  const thrown = creativeCtx({ create: async () => { throw new Error('the API is down'); } });
-  const a = await creativePass({ draft: DRAFT, plan: planOf(frameOf(1, BP)), projectDir: thrown.projectDir }, thrown.ctx);
-  assert.deepEqual(a.touches, { touches: [], custom: [] });
-  assert.match(a.problems[0], /the API is down/);
-  const none = creativeCtx({ stills: () => ({ ok: false, frames: {}, stills: [], skipped: 'no browser' }) });
-  const b = await creativePass({ draft: DRAFT, plan: planOf(frameOf(1, BP)), projectDir: none.projectDir }, none.ctx);
-  assert.equal(none.requests.length, 0, 'no pictures, no paid call');
-  assert.match(b.problems[0], /no browser/);
-});
-
-test('the removal rule: a touch with a new finding is removed and the frame recompiled clean; old findings and numbers are not new', async () => {
-  assert.deepEqual(newFindings(['[x] 01-a: at y 100'], ['[x] 01-a: at y 240', '[y] 01-a: new']), ['[y] 01-a: new']);
-  const good = { id: 'g', frame: 1, why: 'x', type: 'extra_line', text: 'a', on: '' } as Touch;
-  const bad = { id: 'b', frame: 2, why: 'x', type: 'extra_line', text: 'b', on: '' } as Touch;
-  const broken = { id: 'k', frame: 3, why: 'x', aspect: 1, min_width: 200, on: '', code: '' } as CustomPiece;
-  const compiled: [string[], number][] = [];
-  let current: string[] = [];
-  const { accepted, removed } = await applyTouches({
-    proposed: { touches: [good, bad], custom: [broken] },
-    compile: async (touches, frame) => {
-      current = [...touches.touches, ...touches.custom].map((t) => t.id);
-      compiled.push([current, frame]);
-    },
-    findings: async (frame) => {
-      if (frame === 3 && current.includes('k')) throw new Error('no reading');
-      return ['[old] always', ...(current.includes('b') ? ['[plate_on_head] 02-b: on a head'] : [])];
-    },
-  });
-  assert.deepEqual(accepted.touches.map((t) => t.id), ['g']);
-  assert.deepEqual(accepted.custom, []);
-  assert.deepEqual(removed.map((r) => r.id), ['b', 'k']);
-  assert.match(removed[0].why, /plate_on_head/);
-  assert.deepEqual(compiled.at(-1), [['g'], 3], 'the clean frame is back');
 });
 
 test('the plan tool carries the blueprint and no free-text motion, marks or sound; the storyboard shows it readably', () => {

@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
+import type Anthropic from '@anthropic-ai/sdk';
+
 import type { Queryable } from '@/lib/explainers/db';
 import { localArtifactStore } from '@/lib/explainers/storage';
 import { recordCost } from '@/lib/reel-ai-drama/cost';
@@ -13,12 +15,14 @@ import { labData } from '@/lib/reel-ai-drama/lab';
 import { cutLines, draftProblems, reconcilePlan } from '@/lib/reel-ai-drama/production/draft';
 import { addArtifact, addFlag, claimNextJob, failStaleJobs, finishJob, getJob, getPitch, listArtifacts, requestJob, setStage } from '@/lib/reel-ai-drama/production/jobs';
 import { calibrateRoute, developRoute, labRoute, makeRoute, settingsPostRoute } from '@/lib/reel-ai-drama/production/routes';
-import { CAP_BACKSTOP, firstViewerRouting, runJob, type ProductionDeps } from '@/lib/reel-ai-drama/production/run';
+import { CAP_BACKSTOP, CONTENT_ITEMS, contentPassProblems, firstViewerRouting, runJob, withBlueprint, type ProductionDeps } from '@/lib/reel-ai-drama/production/run';
+import type { SolverDeps, SolverKit } from '@/lib/reel-ai-drama/production/solver';
 import { slotsOpen, weekStart, weeklyTick } from '@/lib/reel-ai-drama/production/schedule';
+import type { Sheet } from '@/lib/reel-ai-drama/render/sheets';
 import type { VoiceInput } from '@/lib/reel-ai-drama/render/voice';
 import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
 import { DEFAULT_SETTINGS, saveSetting } from '@/lib/reel-ai-drama/settings';
-import type { DirectorPlan, FactSheet, Pitch, StoryNotes, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
+import type { Blueprint, DirectorPlan, FactSheet, Pitch, StoryNotes, VisualsInventory, WriterDraft } from '@/lib/reel-ai-drama/types';
 import type { RevisionNote } from '@/lib/reel-ai-drama/writing/writer';
 
 import { scratchExplainersDb } from './explainers-pglite';
@@ -139,6 +143,19 @@ const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
 type Overrides = { [K in keyof ProductionDeps]?: Partial<ProductionDeps[K]> };
 
+/**
+ * Iteration 11 §3: labelled sheets of each frame's moments for the reviewers and the solver, and with `viewer`, unlabelled
+ * sheets of the whole reel (their moments say nothing) for the first viewer. `frames` null: every frame of the fixture.
+ */
+function stubSheets(dir: string, frames: number[] | null, viewer: boolean): { review: Sheet[]; viewer: Sheet[] } {
+  const ns = frames ?? [1, 2, 3];
+  const moment = (n: number, what: string) => ({ frame: n, id: `0${n}-f`, t: 1, reel_t: (n - 1) * 3 + 1, what, source: 'edge' as const });
+  return {
+    review: ns.map((n) => ({ frame: n, file: path.join(dir, `frame-${n}.jpg`), moments: [moment(n, `frame ${n} lands`)] })),
+    viewer: viewer ? [{ frame: 1, file: path.join(dir, 'viewer-1.jpg'), moments: ns.map((n) => moment(n, '')) }] : [],
+  };
+}
+
 /** Every builder stubbed; `calls` records the order. */
 function stubDeps(db: Queryable, over: Overrides = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rad-prod-'));
@@ -216,6 +233,7 @@ function stubDeps(db: Queryable, over: Overrides = {}) {
         fs.writeFileSync(f, 'png');
         return f;
       },
+      reelSheets: async (_dir, _video, i) => (note('reelSheets', i), stubSheets(i.dir, i.frames, i.viewer)),
       videoSeconds: async () => 62,
       ...over.render,
     },
@@ -306,6 +324,7 @@ test('a stubbed run goes from pitch to ok with every stage in order and artifact
     'assembleProject',
     'renderVideo',
     'contactSheet',
+    'reelSheets',
     'checkFirstViewer',
     'writePost',
     'recordUses',
@@ -415,33 +434,56 @@ test('an unsupported line gets one fix, then is cut and the plan follows', async
   assert.match(flags[0].detail, /Cut line L2/);
 });
 
-test('integrity and the first viewer get one fix through the director; measured breakage gets one recompile on a new layout, then ships flagged', async () => {
+test('Iteration 11 §4: the image check gets one pre_build fix, escalated once while the re-check still finds it; the first viewer\'s picture finding goes to the content pass; measured breakage ships flagged', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db);
+  let checks = 0;
+  let viewed = 0;
   const { deps, calls, seen } = stubDeps(db, {
     checks: {
-      checkIntegrity: async () => ({ problems: [{ frame: 2, asset_id: 'V2', why: 'the photo shows someone else' }] }),
-      checkFirstViewer: async () => ({ hookSeconds: 3, understood: false, problems: ['lost at frame 2'] }),
+      checkIntegrity: async () => (checks++, { problems: [{ frame: 2, asset_id: 'V2', why: 'the photo shows someone else' }] }),
+      checkFirstViewer: async () => (viewed++, { hookSeconds: 3, understood: false, problems: ['lost at frame 2'] }),
     },
     render: { assembleProject: async () => ({ ok: true, problems: ['[caption_on_face] 02-f: caption overlaps a face'] }) },
   });
   const out = await runJob(deps, job);
   assert.equal(out.status, 'ok');
-  // The director: once for integrity, once for the picture findings (the hook, so the opening frame).
-  const directs = (seen.directReel as { fix?: { kind?: string; problems: { frame: number }[] } }[]).filter((d) => d.fix);
-  assert.deepEqual(directs.map((d) => d.fix!.kind), ['image_check', 'picture_review']);
-  assert.deepEqual(directs[1].fix!.problems.map((p) => p.frame), [1]);
-  // The compile: every frame; frame 2 on a new seed; the re-planned frame; frame 2 on a new seed again.
-  const compiles = seen.compileReel as { only?: number[]; seeds?: Record<number, number> }[];
-  assert.deepEqual(compiles.map((c) => c.only ?? 'all'), ['all', [2], [1], [2]]);
-  assert.ok(compiles[1].seeds?.[2], 'a recompile gets a new layout seed');
-  assert.ok(!calls.some((c) => c.startsWith('session:')), 'no model writes a frame');
+  const fixes = (seen.directReel as { fix?: { kind?: string; escalate?: boolean; problems: { frame: number; why: string }[] } }[]).filter((d) => d.fix);
+  assert.deepEqual(fixes.map((d) => [d.fix!.kind, d.fix!.escalate ?? false]), [['pre_build', false], ['pre_build', true], ['content_pass', false]]);
+  assert.deepEqual(fixes[0]!.fix!.problems.map((p) => p.frame), [2], 'only the named frame goes');
+  assert.equal(checks, 3, 'the check, the re-check after the fix, the re-check after the escalation; then flags');
+  // The hook finding names no frame: the opening carries it. "Lost at frame 2" and "not understood" are the words', so flags.
+  assert.deepEqual(fixes[2]!.fix!.problems.map((p) => p.frame), [1]);
+  assert.match(fixes[2]!.fix!.problems[0]!.why, /^The first viewer: The hook lands at 3s/);
+  // The compile: every frame, then only the content pass's frame. The breakage is no dead frame: no plain recompile.
+  assert.deepEqual((seen.compileReel as { only?: number[] }[]).map((c) => c.only ?? 'all'), ['all', [1]]);
   assert.equal(calls.filter((c) => c === 'renderVideo').length, 2);
-  const checks = (await getJob(db, job.id))!.flags.filter((f) => !/repeated_picture/.test(f.detail)).map((f) => f.check);
-  assert.ok(checks.includes('integrity'));
-  assert.ok(checks.includes('breakage'));
-  assert.ok(checks.includes('first_viewer'));
-  assert.equal(checks.filter((c) => c === 'integrity').length, 1);
+  assert.equal(viewed, 2, 'the final read watches what ships');
+  const flags = (await getJob(db, job.id))!.flags.filter((f) => !/repeated_picture/.test(f.detail));
+  assert.deepEqual(flags.filter((f) => f.check === 'integrity').map((f) => f.detail), ['Frame 2 (V2): the photo shows someone else']);
+  assert.ok(flags.some((f) => f.check === 'breakage' && /caption_on_face/.test(f.detail)));
+  assert.ok(flags.some((f) => f.check === 'first_viewer' && /^Script: lost at frame 2/.test(f.detail)));
+});
+
+test('Iteration 11 §4: variety and the image check go to the director together, in one pre_build fix; a clean re-check needs no escalation', async () => {
+  const db = await freshDb();
+  const { job } = await queuedJob(db);
+  const samePhotos: DirectorPlan = { frames: [frame(1, ['L1'], ['V1']), frame(2, ['L2'], ['V2']), frame(3, ['L3'], ['V1'])], lines_back: [] };
+  let checks = 0;
+  const { deps, seen } = stubDeps(db, {
+    writing: { directReel: async (i) => ((seen.directReel ??= []).push(i), clone(i.fix ? PLAN : samePhotos)) },
+    checks: { checkIntegrity: async () => ({ problems: checks++ === 0 ? [{ frame: 2, asset_id: 'V2', why: 'the photo shows someone else' }] : [] }) },
+  });
+  assert.equal((await runJob(deps, job)).status, 'ok');
+  const fixes = (seen.directReel as { fix?: { kind?: string; escalate?: boolean; problems: { frame: number; asset_id: string | null; why: string }[] } }[]).filter((d) => d.fix);
+  assert.equal(fixes.length, 1, 'one call for both checks');
+  assert.equal(fixes[0]!.fix!.kind, 'pre_build');
+  assert.equal(fixes[0]!.fix!.escalate, undefined);
+  const problems = fixes[0]!.fix!.problems;
+  assert.ok(problems.some((p) => p.frame === 2 && p.why === 'the photo shows someone else'), 'the image check');
+  assert.ok(problems.some((p) => p.frame !== 2 || p.why !== 'the photo shows someone else'), `and variety: ${JSON.stringify(problems)}`);
+  assert.equal(checks, 2);
+  assert.ok(!(await getJob(db, job.id))!.flags.some((f) => f.check === 'integrity' && /^(Frame 2|Variety)/.test(f.detail)), 'nothing left to flag');
 });
 
 test('MD-65: passing the cap warns and the reel goes on; only a runaway (2× the cap) stops it', async () => {
@@ -475,56 +517,38 @@ test('MD-65: passing the cap warns and the reel goes on; only a runaway (2× the
   assert.ok(!runaway.calls.includes('directReel'));
 });
 
-test('a runaway creative pass fails the job as capped; its spend is on the job', async () => {
+test('a runaway solver fails the job as capped; its spend is on the job', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db);
-  const { deps, calls } = stubDeps(db, {
-    writing: {
-      creativePass: async (_i, ctx) => {
-        await recordCost(db, { jobId: ctx.jobId, mode: ctx.mode, vendor: 'anthropic', component: 'creative_pass', usd: job.spend_cap_usd * CAP_BACKSTOP + 1 });
-        return { touches: { touches: [], custom: [] }, usd: 0, problems: [] };
-      },
-    },
-  });
+  const { deps, calls } = stubDeps(db);
+  deps.solver = (ctx) =>
+    solverDeps(ctx, db, async (params) => {
+      await recordCost(db, { jobId: ctx.jobId, mode: ctx.mode, vendor: 'anthropic', component: 'solver_look', usd: job.spend_cap_usd * CAP_BACKSTOP + 1 });
+      return lookAnswer(params, { 2: 'wrong' });
+    }, quietKit());
   const out = await runJob(deps, job);
   assert.equal(out.status === 'failed' && out.capped, true);
-  assert.ok(!calls.includes('renderVideo'));
+  assert.ok(!calls.includes('writePost'), 'nothing after the look runs');
 });
 
-test('compile → measure → creative pass: a failing touch is removed and flagged, the good one stays; a dead frame ships plain', async () => {
+test('measure: a frame that will not build ships plain, recompiled alone, before anything else reads it', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db);
-  const good = { id: 't1', frame: 1, type: 'mark', kind: 'underline', target: 'V1', on: 'deal' } as never;
-  const bad = { id: 't2', frame: 3, type: 'mark', kind: 'circle', target: 'V1', on: 'fired' } as never;
-  let current: { touches: { id: string }[] } = { touches: [] };
   let rounds = 0;
-  const { deps, calls, seen, root } = stubDeps(db, {
-    writing: { creativePass: async () => (calls.push('creativePass'), { touches: { touches: [good, bad], custom: [] }, usd: 0.4, problems: ['frame 2: touch t9 dropped: over the limit'] }) },
+  const { deps, seen } = stubDeps(db, {
     render: {
-      compileReel: async (i) => {
-        calls.push('compileReel');
-        (seen.compileReel ??= []).push(i);
-        current = i.touches as never;
-        return { frames: i.plan.frames.map((f) => ({ n: f.n, id: `0${f.n}-f`, treatment: f.treatment, plain: false })), problems: [] };
-      },
       assembleProject: async () => {
         rounds += 1;
-        return { ok: true, problems: rounds === 1 ? ['try: 02-f: build failed: boom'] : rounds === 2 ? ['try: 02-f: build failed: boom'] : [] };
+        return { ok: rounds > 1, problems: rounds === 1 ? ['try: 02-f: build failed: boom'] : [] };
       },
       readCompiled: () => ({ ok: true, frames: {}, stills: [] }),
-      frameFindings: (_d, id) => (id === '03-f' && current.touches.some((t) => t.id === 't2') ? ['[plate_on_face] 03-f: plate on a face'] : []),
     },
   });
   assert.equal((await runJob(deps, job)).status, 'ok');
-  const compiles = seen.compileReel as { only?: number[]; plain?: number[]; touches?: { touches: { id: string }[] } }[];
-  assert.deepEqual(compiles[1].only, [2], 'the broken frame gets a new layout');
-  assert.deepEqual(compiles[2].plain, [2], 'still dead: it ships plain');
-  assert.deepEqual(compiles.at(-1)!.touches!.touches.map((t) => t.id), ['t1'], 'the failing touch is gone');
-  const flags = (await getJob(db, job.id))!.flags.map((f) => f.detail);
-  assert.ok(flags.some((d) => /Touch t2 on frame 3 was removed.*plate on a face/.test(d)), flags.join('\n'));
-  assert.ok(flags.some((d) => /Creative pass: frame 2: touch t9/.test(d)));
-  const kept = JSON.parse(fs.readFileSync(path.join(root, 'jobs', job.id, 'project', 'assets', 'touches.json'), 'utf8'));
-  assert.deepEqual(kept.touches.map((t: { id: string }) => t.id), ['t1']);
+  const compiles = seen.compileReel as { only?: number[]; plain?: number[] }[];
+  assert.deepEqual(compiles.map((c) => [c.only ?? 'all', c.plain]), [['all', [2]], [[2], [2]]], 'the plain list is shared, so the first entry shows it too');
+  assert.equal(rounds, 2);
+  assert.ok(!(await getJob(db, job.id))!.flags.some((f) => /build failed/.test(f.detail)), 'the plain frame measures clean: nothing stands');
 });
 
 test('the cut keeps the script valid, and an empty script is refused', () => {
@@ -794,7 +818,7 @@ test('M11: the routing sends the hook and the muted read to the picture fix, the
   assert.equal(late.picture.length, 2, 'the hook-late finding from the viewer and from the run');
 });
 
-test('variety gets one director fix round; the plan\'s makes are made into the inventory, a failed make falls back and is flagged', async () => {
+test('variety gets one pre_build fix; the plan\'s makes are made into the inventory, a failed make falls back and is flagged', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db);
   const fixes: string[] = [];
@@ -811,8 +835,9 @@ test('variety gets one director fix round; the plan\'s makes are made into the i
   const { deps, seen } = stubDeps(db, {
     writing: {
       directReel: async (i) => {
-        fixes.push(i.fix?.kind ?? 'first');
-        return clone(i.fix?.kind === 'plan_check' ? withMakes : samePhotos);
+        fixes.push(`${i.fix?.kind ?? 'first'}${i.fix?.escalate ? ' (escalated)' : ''}`);
+        // The escalated round (the re-check still finds a repeat) answers with a plan of its own and no makes.
+        return clone(i.fix?.escalate ? PLAN : i.fix?.kind === 'pre_build' ? withMakes : samePhotos);
       },
     },
     render: {
@@ -823,9 +848,11 @@ test('variety gets one director fix round; the plan\'s makes are made into the i
     },
   });
   assert.equal((await runJob(deps, job)).status, 'ok');
-  assert.deepEqual(fixes, ['first', 'plan_check']);
+  // M2 failed and fell back to V1, which frame 1 shows too: the re-check still finds a repeat, so one escalated round.
+  assert.deepEqual(fixes, ['first', 'pre_build', 'pre_build (escalated)']);
   assert.equal(made.length, 1);
-  const written = seen.writeProjectFiles[0] as { plan: DirectorPlan; inventory: VisualsInventory };
+  // The plan checks run after the voice now: the files are written again once the fix is in.
+  const written = seen.writeProjectFiles.at(-1) as { plan: DirectorPlan; inventory: VisualsInventory };
   assert.ok(written.inventory.assets.some((a) => a.id === 'M1'), 'the made asset joins the inventory');
   assert.ok(!written.plan.frames.some((f) => f.asset_ids.includes('M2')), 'a failed make falls back to existing assets');
   const flags = (await getJob(db, job.id))!.flags;
@@ -1045,64 +1072,80 @@ test('MD-122: a hook that does not pull is a warning, never a problem', () => {
 
 // ── MD-129: the design reviewer beside the first viewer ─────────────────────
 
-const DESIGN_STILLS = [{ number: 1, name: 'f1', treatment: 'photo', at: 1.2, file: 'frame-01.jpg' }];
-
-test('MD-129: design problems join the one picture fix; what remains and the warnings ship as flags', async () => {
+test('Iteration 11 §4: only nothing_missing and one_medium (either severity) reach the content pass; other design findings wait for the solver and ship as flags', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db);
-  let reads = 0;
+  const read: { frames: number[]; plan: DirectorPlan }[] = [];
   const { deps, calls, seen } = stubDeps(db, {
     checks: {
       checkDesign: async (i) => {
-        reads += 1;
-        assert.deepEqual(i.stills, DESIGN_STILLS);
+        read.push({ frames: [...new Set(i.sheets.map((x) => x.frame))], plan: i.plan });
+        if (read.length > 1) return { problems: [], warnings: [], errors: [], usd: 0 };
         return {
-          problems: [{ frame: 1, item: 'off_edge', severity: 'problem', what: 'The logo runs off the right edge.' }],
-          warnings: reads === 1 ? [] : [{ frame: 1, item: 'composed', severity: 'warning', what: 'A photo with a push and a label.' }],
+          problems: [
+            { frame: 1, item: 'off_edge', severity: 'problem', what: 'The logo runs off the right edge.' },
+            { frame: 2, item: 'nothing_missing', severity: 'problem', what: 'The board is never shown.' },
+          ],
+          warnings: [
+            { frame: 3, item: 'one_medium', severity: 'warning', what: 'A drawing beside a photo.' },
+            { frame: 1, item: 'focal_point', severity: 'warning', what: 'Two faces compete.' },
+          ],
           errors: [],
           usd: 0.05,
         };
       },
     },
-    render: { frameStills: async () => DESIGN_STILLS },
   });
   assert.equal((await runJob(deps, job)).status, 'ok');
   const fixes = (seen.directReel as { fix?: { kind?: string; problems: { frame: number; why: string }[] } }[]).filter((d) => d.fix);
-  assert.equal(fixes.length, 1, 'one director re-plan for viewer + design');
-  assert.equal(fixes[0].fix!.kind, 'picture_review');
-  assert.deepEqual(fixes[0].fix!.problems.map((p) => p.frame), [1]);
-  assert.match(fixes[0].fix!.problems[0].why, /runs off the right edge/);
-  assert.equal(calls.filter((c) => c === 'renderVideo').length, 2, 'recompiled and rendered again');
-  assert.deepEqual((seen.compileReel as { only?: number[] }[]).map((c) => c.only ?? 'all'), ['all', [1]], 'only the named frame recompiles');
-  assert.equal(reads, 2, 'the design review reads again after the fix');
+  assert.equal(fixes.length, 1, 'once');
+  assert.equal(fixes[0]!.fix!.kind, 'content_pass');
+  assert.deepEqual(fixes[0]!.fix!.problems.map((p) => [p.frame, p.why]), [
+    [2, 'The design review: Frame 2, nothing missing: The board is never shown.'],
+    [3, 'The design review: Frame 3, one medium per frame: A drawing beside a photo.'],
+  ]);
+  // The reviewer read every frame's labelled sheets, then only the frames the content pass changed.
+  assert.deepEqual(read.map((r) => r.frames), [[1, 2, 3], [2, 3]]);
+  assert.deepEqual((seen.compileReel as { only?: number[] }[]).map((c) => c.only ?? 'all'), ['all', [2, 3]]);
+  assert.equal(calls.filter((c) => c === 'renderVideo').length, 2);
   const flags = (await getJob(db, job.id))!.flags.map((f) => f.detail);
   assert.ok(flags.includes('Design: Frame 1, nothing off the edge: The logo runs off the right edge.'), flags.join('\n'));
-  assert.ok(flags.includes('Design (taste): Frame 1, composed, not lazy: A photo with a push and a label.'), flags.join('\n'));
+  assert.ok(flags.includes('Design (taste): Frame 1, a clear focal point: Two faces compete.'), flags.join('\n'));
+  assert.ok(!flags.some((f) => /nothing missing|one medium/.test(f)), 'the frames read again came back clean');
 });
 
-test('MD-129: design warnings alone get no fix; a design review that errors is flagged and the reel ships', async () => {
+test('contentPassProblems: the first viewer on its named frame (else the opening), the two content items, nothing else', () => {
+  assert.deepEqual(CONTENT_ITEMS, ['nothing_missing', 'one_medium']);
+  const got = contentPassProblems(['On mute, frame 3 says nothing.', 'The hook lands at 3s, after 1.5s.'], {
+    problems: [{ frame: 2, item: 'readable_text', severity: 'problem', what: 'tiny' }, { frame: 2, item: 'nothing_missing', severity: 'problem', what: 'no board' }],
+    warnings: [{ frame: 4, item: 'one_medium', severity: 'warning', what: 'mixed' }, { frame: 4, item: 'good_crops', severity: 'warning', what: 'tight' }],
+    errors: [],
+    usd: 0,
+  });
+  assert.deepEqual(got.map((p) => [p.frame, p.asset_id]), [[3, null], [1, null], [2, null], [4, null]]);
+  assert.deepEqual(contentPassProblems([], null), []);
+});
+
+test('content pass: design warnings outside its two items get no fix; a design review that errors is flagged and the reel ships', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db);
   const { deps, calls } = stubDeps(db, {
     checks: { checkDesign: async () => ({ problems: [], warnings: [{ frame: 1, item: 'focal_point', severity: 'warning', what: 'Two faces compete.' }], errors: [], usd: 0 }) },
-    render: { frameStills: async () => DESIGN_STILLS },
   });
   assert.equal((await runJob(deps, job)).status, 'ok');
   assert.equal(calls.filter((c) => c === 'renderVideo').length, 1);
+  assert.ok(!calls.slice(calls.indexOf('renderVideo')).includes('directReel'));
   assert.ok((await getJob(db, job.id))!.flags.some((f) => /^Design \(taste\): Frame 1, a clear focal point/.test(f.detail)));
 
   const db2 = await freshDb();
   const { job: job2 } = await queuedJob(db2);
-  const broken = stubDeps(db2, {
-    checks: { checkDesign: async () => { throw new Error('vision down'); } },
-    render: { frameStills: async () => DESIGN_STILLS },
-  });
+  const broken = stubDeps(db2, { checks: { checkDesign: async () => { throw new Error('vision down'); } } });
   assert.equal((await runJob(broken.deps, job2)).status, 'ok');
   assert.equal(broken.calls.filter((c) => c === 'renderVideo').length, 1);
   assert.ok((await getJob(db2, job2.id))!.flags.some((f) => /Design review failed; shipped without it: vision down/.test(f.detail)));
 });
 
-test('never block a reel: a fix that breaks the render ships the version from before the fix, flagged', async () => {
+test('never block a reel: a content pass that breaks the render ships the version from before it, flagged', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db);
   let renders = 0;
@@ -1111,11 +1154,10 @@ test('never block a reel: a fix that breaks the render ships the version from be
     checks: {
       checkDesign: async () => {
         design += 1;
-        return { problems: [{ frame: 1, item: 'off_edge', severity: 'problem', what: 'The logo runs off the right edge.' }], warnings: [], errors: [], usd: 0 };
+        return { problems: [{ frame: 1, item: 'nothing_missing', severity: 'problem', what: 'The deal is never shown.' }], warnings: [], errors: [], usd: 0 };
       },
     },
     render: {
-      frameStills: async () => DESIGN_STILLS,
       renderVideo: async (dir) => {
         renders += 1;
         const f = path.join(dir, 'renders', 'video.mp4');
@@ -1132,10 +1174,188 @@ test('never block a reel: a fix that breaks the render ships the version from be
   assert.equal((await runJob(deps, job)).status, 'ok');
   assert.equal(renders, 2);
   assert.equal(design, 1, 'nothing new to read after a failed render');
-  const done = await getJob(db, job.id);
-  const flags = done!.flags.map((f) => f.detail);
-  assert.ok(flags.includes('The fix broke the render, so the reel ships the version from before the fix.'), flags.join('\n'));
-  assert.ok(flags.includes('Design: Frame 1, nothing off the edge: The logo runs off the right edge.'), flags.join('\n'));
+  const flags = (await getJob(db, job.id))!.flags.map((f) => f.detail);
+  assert.ok(flags.includes('The reel would not render after the content pass, so it ships the version from before it.'), flags.join('\n'));
+  assert.ok(flags.includes('Design: Frame 1, nothing missing: The deal is never shown.'), flags.join('\n'));
   const { rows } = await db.query<{ storage_path: string }>("SELECT storage_path FROM reel_ai_drama.artifacts WHERE job_id = $1 AND kind = 'video'", [job.id]);
-  assert.equal(rows.length, 1, 'the earlier video is kept');
+  assert.equal(rows.length, 1);
+  assert.equal(fs.readFileSync(deps.store.localPath!(rows[0]!.storage_path)!, 'utf8'), 'the good mp4', 'the earlier video is the one delivered');
+});
+
+test('a first viewer that never watched (no sheets, or it failed) sends nothing to the content pass', async () => {
+  const db = await freshDb();
+  const { job } = await queuedJob(db);
+  const { deps, seen } = stubDeps(db, { checks: { checkFirstViewer: async () => { throw new Error('vision down'); } } });
+  assert.equal((await runJob(deps, job)).status, 'ok');
+  assert.deepEqual((seen.directReel as { fix?: unknown }[]).filter((d) => d.fix), []);
+  const flags = (await getJob(db, job.id))!.flags.map((f) => f.detail);
+  assert.ok(flags.some((d) => /The first viewer failed \(vision down\)/.test(d)));
+  assert.ok(!flags.some((d) => /found no hook/.test(d)), flags.join('\n'));
+});
+
+// ── Iteration 11 §5–§7: the problem solver, through the run (the model and the kit stubbed) ──
+
+const SOLVER_STORYBOARD = [1, 2, 3].map((n) => `## Frame ${n} — F${n}\n\n- duration: 3s\n- treatment: photo\n`).join('\n');
+const ONE_PX = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+const solverBp = (asset: string): Blueprint => ({ ground: 'charcoal', style: 'cutouts', arrangement: 'solo', pieces: [{ id: 'p1', asset, on: '' }], labels: [], speech: [], marks: [], arrows: [], camera: { move: 'hold', stops: [] }, sounds: [] });
+let msgN = 0;
+function toolAnswer(name: string, input: unknown, model: string): Anthropic.Message {
+  msgN += 1;
+  return {
+    id: `msg_${msgN}`, type: 'message', role: 'assistant', model, stop_reason: 'tool_use', stop_sequence: null,
+    content: [{ type: 'tool_use', id: `tu_${msgN}`, name, input }],
+    usage: { input_tokens: 2000, output_tokens: 500, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
+  } as unknown as Anthropic.Message;
+}
+type Params = { model: string; tools: { name: string }[]; messages: { content: unknown }[] };
+/** The look's verdicts: the frames named get theirs (with an aim), the rest are strong. */
+const lookAnswer = (params: unknown, named: Record<number, 'weak' | 'wrong'>) => {
+  const p = params as Params;
+  return toolAnswer('submit_look', { verdicts: [1, 2, 3].map((n) => (named[n] ? { frame: n, verdict: named[n], because: 'it shows nothing', aim: 'show the board' } : { frame: n, verdict: 'strong', because: 'it lands' })) }, p.model);
+};
+/** The frame a round call is about: its second user block opens with the frame's section. */
+const frameOfCall = (params: unknown) => {
+  const p = params as Params;
+  if (p.tools[0]!.name !== 'submit_frame') return 0;
+  return Number(/Frame (\d+):/.exec(JSON.stringify((p.messages[0]!.content as unknown[])[1]))?.[1] ?? 0);
+};
+const solverDeps = (ctx: { jobId: string; mode: SolverDeps['mode'] }, db: Queryable, create: (params: unknown) => Promise<Anthropic.Message>, kit: SolverKit): SolverDeps => ({
+  db, mode: ctx.mode, jobId: ctx.jobId, create: create as SolverDeps['create'], kitGuide: 'KIT', limitUsd: 4, kit,
+  models: { look: 'claude-sonnet-5-5', first: 'claude-sonnet-5-5', second: 'claude-opus-5-5' },
+  loadPrompt: () => 'SOLVER PROMPT',
+  readImage: () => ({ data: ONE_PX, media_type: 'image/png' }),
+});
+/** A kit that builds whatever it's given; `measure` says what the measured checks find on the live frame. */
+function quietKit(measure: (built: number) => string[] = () => []) {
+  const built: { n: number; assets: string[] }[] = [];
+  const kit: SolverKit = {
+    compileFrame: async (plan, n) => (built.push({ n, assets: (plan.frames.find((f) => f.n === n)?.blueprint?.pieces ?? []).map((p) => p.asset ?? '') }), []),
+    tryFrame: () => [],
+    measureFrame: () => measure(built.length),
+    readWords: () => [],
+  };
+  return Object.assign(kit, { built });
+}
+/** A run with the solver wired: the storyboard has three timed frames; `create` answers in order and is recorded. */
+function solverRun(db: Queryable, answer: (params: unknown, i: number) => Promise<Anthropic.Message> | Anthropic.Message, kit: SolverKit, over: Overrides = {}) {
+  const sent: { tool: string; model: string; frame: number; text: string }[] = [];
+  const stub = stubDeps(db, {
+    ...over,
+    render: {
+      writeProjectFiles: (dir) => {
+        fs.writeFileSync(path.join(dir, 'SCRIPT.md'), '# script');
+        fs.writeFileSync(path.join(dir, 'STORYBOARD.md'), SOLVER_STORYBOARD);
+      },
+      ...over.render,
+    },
+  });
+  stub.deps.solver = (ctx) => solverDeps(ctx, db, async (params) => {
+    const p = params as Params;
+    sent.push({ tool: p.tools[0]!.name, model: p.model, frame: frameOfCall(params), text: JSON.stringify(p.messages) });
+    return answer(params, sent.length - 1);
+  }, kit);
+  return { ...stub, sent };
+}
+const shipped = async (db: Queryable, jobId: string) =>
+  JSON.parse((await listArtifacts(db, jobId)).filter((a) => a.kind === 'solver' && a.content && /"shipped"/.test(a.content)).at(-1)!.content!).frames as { frame: number; label: string; kind: string; serious: number; flag: string | null }[];
+
+test('solver: the look puts a wrong frame on the work list, round 1 reworks it alone, the built plan change ships and the plan takes its blueprint', async () => {
+  const db = await freshDb();
+  const { job } = await queuedJob(db);
+  const designed: DirectorPlan[] = [];
+  const integrity: DirectorPlan[] = [];
+  const kit = quietKit();
+  const { deps, sent, calls, seen } = solverRun(db, (params, i) => (i === 0 ? lookAnswer(params, { 2: 'wrong' }) : toolAnswer('submit_frame', { frame: 2, diagnosis: 'the board is missing', approach: 'show the room', change: { kind: 'plan', blueprint: solverBp('V3') } }, (params as Params).model)), kit, {
+    checks: {
+      checkDesign: async (i) => (designed.push(i.plan), { problems: [], warnings: [], errors: [], usd: 0 }),
+      checkIntegrity: async (i) => (integrity.push(i.plan), { problems: [] }),
+    },
+  });
+  assert.equal((await runJob(deps, job)).status, 'ok');
+  assert.deepEqual(sent.map((s) => [s.tool, s.model, s.frame]), [['submit_look', 'claude-sonnet-5-5', 0], ['submit_frame', 'claude-sonnet-5-5', 2]], 'one look, one round-1 call, no round 2');
+  assert.deepEqual(kit.built, [{ n: 2, assets: ['V3'] }]);
+  // Pre-mortem #8: the new picture is checked against its line; then the reviewer reads the changed frame on the new plan.
+  assert.deepEqual(integrity.at(-1)!.frames.map((f) => [f.n, f.asset_ids]), [[2, ['V3']]]);
+  assert.deepEqual(designed.at(-1)!.frames.find((f) => f.n === 2)!.blueprint, solverBp('V3'));
+  assert.deepEqual((seen.reelSheets as { frames: number[] | null; viewer: boolean }[]).map((r) => [r.frames, r.viewer]), [[null, true], [[2], false], [null, true]], 'whole reel, the changed frame, the final read');
+  assert.deepEqual((await shipped(db, job.id)).map((s) => [s.frame, s.label, s.kind, s.serious, s.flag]), [[2, 'r1', 'plan', 0, null]]);
+  // The plan that ships carries the blueprint: the reuse record sees its picture.
+  assert.ok((seen.recordUses[0] as { purpose: string; assetKey: string }[]).some((u) => u.assetKey === 'https://example.com/V3.jpg' && /^frame 2:/.test(u.purpose)));
+  assert.equal(calls.filter((c) => c === 'renderVideo').length, 2);
+  assert.ok((await listArtifacts(db, job.id)).some((a) => a.kind === 'solver' && a.storage_path?.endsWith('solved.json')), 'solved.json is kept');
+});
+
+test('solver: a frame still serious after round 1 goes to round 2 on the second model, then the last resort, which ships when it is cleaner', async () => {
+  const db = await freshDb();
+  const { job } = await queuedJob(db);
+  let assembled = 0;
+  // Rounds 1 and 2 still run off the edge; the last resort (the third build) measures clean.
+  const kit = quietKit((built) => (built < 3 ? ['[off_frame] 02-f: "V3" is mostly off the edge (0.5-2.0s)'] : []));
+  const { deps, sent } = solverRun(db, (params, i) => (i === 0 ? lookAnswer(params, { 2: 'weak' }) : toolAnswer('submit_frame', { frame: 2, diagnosis: 'it runs off', approach: 'bring it in', change: { kind: 'plan', blueprint: solverBp('V3') } }, (params as Params).model)), kit, {
+    render: { assembleProject: async () => (assembled++, { ok: true, problems: assembled === 1 ? ['[off_frame] 02-f: "V2" is mostly off the edge (0.5-2.0s)'] : [] }) },
+  });
+  assert.equal((await runJob(deps, job)).status, 'ok');
+  assert.deepEqual(sent.map((s) => [s.tool, s.model, s.frame]), [['submit_look', 'claude-sonnet-5-5', 0], ['submit_frame', 'claude-sonnet-5-5', 2], ['submit_frame', 'claude-opus-5-5', 2]]);
+  assert.match(sent[2]!.text, /previous attempt, which wasn't enough/, 'round 2 sees round 1 and what is still wrong');
+  assert.match(sent[2]!.text, /still_wrong.*off_frame/);
+  assert.equal(kit.built.length, 3, 'round 1, round 2, the last resort (no model)');
+  assert.deepEqual((await shipped(db, job.id)).map((s) => [s.frame, s.label, s.kind, s.serious]), [[2, 'last', 'plain', 0]]);
+  const flags = (await getJob(db, job.id))!.flags.map((f) => f.detail);
+  assert.ok(flags.some((d) => /^Solver, frame 2: last resort: it shows its simplest version, with 0 serious finding\(s\) against 1/.test(d)), flags.join('\n'));
+});
+
+test('solver: a solver that fails (every call throws) fails open: the reel ships, flagged', async () => {
+  const db = await freshDb();
+  const { job } = await queuedJob(db);
+  let assembled = 0;
+  const kit = quietKit();
+  const { deps, sent } = solverRun(db, () => { throw new Error('overloaded'); }, kit, {
+    render: { assembleProject: async () => (assembled++, { ok: true, problems: assembled === 1 ? ['[off_frame] 02-f: "V2" is mostly off the edge (0.5-2.0s)'] : [] }) },
+  });
+  assert.equal((await runJob(deps, job)).status, 'ok');
+  assert.deepEqual(sent.map((s) => s.tool), ['submit_look', 'submit_frame', 'submit_frame'], 'the look, then rounds 1 and 2 on the serious frame');
+  const flags = (await getJob(db, job.id))!.flags.map((f) => f.detail);
+  assert.ok(flags.some((d) => /^Solver: the look failed \(.*overloaded.*\); the frames with serious findings are reworked/.test(d)), flags.join('\n'));
+  assert.ok(flags.some((d) => /^Solver: frame 2: round 1 failed \(.*overloaded.*\); it keeps its last good version/.test(d)), flags.join('\n'));
+  assert.ok((await listArtifacts(db, job.id)).some((a) => a.kind === 'video'), 'the video was delivered');
+});
+
+test('solver: a re-render that fails after a solver round ships the earlier video, swaps the frame back and stops the picture work, flagged', async () => {
+  const db = await freshDb();
+  const { job } = await queuedJob(db);
+  let renders = 0;
+  const kit = quietKit();
+  const { deps, sent, calls } = solverRun(db, (params, i) => (i === 0 ? lookAnswer(params, { 2: 'wrong' }) : toolAnswer('submit_frame', { frame: 2, diagnosis: 'the board is missing', approach: 'show the room', change: { kind: 'plan', blueprint: solverBp('V3') } }, (params as Params).model)), kit, {
+    render: {
+      renderVideo: async (dir) => {
+        renders += 1;
+        const f = path.join(dir, 'renders', 'video.mp4');
+        fs.mkdirSync(path.dirname(f), { recursive: true });
+        if (renders > 1) {
+          fs.writeFileSync(f, 'half-written');
+          throw new Error('a frame never finished building');
+        }
+        fs.writeFileSync(f, 'the good mp4');
+        return f;
+      },
+    },
+  });
+  assert.equal((await runJob(deps, job)).status, 'ok');
+  assert.equal(renders, 2, 'one render after the round, no retry, nothing after it');
+  assert.equal(sent.length, 2, 'no round 2 once the reel stopped rendering');
+  assert.equal(calls.filter((c) => c === 'checkFirstViewer').length, 1, 'no final read of a video that did not change');
+  assert.deepEqual((await shipped(db, job.id)).map((s) => [s.frame, s.label, s.kind]), [[2, 'v0', 'compiled']]);
+  const flags = (await getJob(db, job.id))!.flags.map((f) => f.detail);
+  assert.ok(flags.includes("The reel would not render after the solver's r1, so it ships the version from before it."), flags.join('\n'));
+  assert.ok(flags.some((d) => /^Solver, frame 2: swapped back to v0/.test(d)), flags.join('\n'));
+  const { rows } = await db.query<{ storage_path: string }>("SELECT storage_path FROM reel_ai_drama.artifacts WHERE job_id = $1 AND kind = 'video'", [job.id]);
+  assert.equal(fs.readFileSync(deps.store.localPath!(rows[0]!.storage_path)!, 'utf8'), 'the good mp4');
+});
+
+test('withBlueprint: the frame takes the blueprint and its pictures; the other frames are untouched', () => {
+  const next = withBlueprint(PLAN, 2, solverBp('V3'));
+  assert.deepEqual(next.frames[1]!.blueprint, solverBp('V3'));
+  assert.deepEqual(next.frames[1]!.asset_ids, ['V3', 'V2']);
+  assert.equal(next.frames[0], PLAN.frames[0]);
+  assert.equal(PLAN.frames[1]!.blueprint, undefined, 'pure');
 });

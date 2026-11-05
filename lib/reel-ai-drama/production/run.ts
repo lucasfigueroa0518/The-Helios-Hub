@@ -1007,14 +1007,14 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       errors: [],
       usd: 0,
     });
-    const viewerRead = async (sheets: Sheet[]): Promise<FirstViewerResult> => {
-      const unread = { hookSeconds: null, understood: true, problems: [], warnings: [] };
-      if (!sheets.length) return unread;
+    /** null: the first viewer didn't watch (no sheets, or it failed), which is no finding at all, never "no hook". */
+    const viewerRead = async (sheets: Sheet[]): Promise<FirstViewerResult | null> => {
+      if (!sheets.length) return null;
       try {
         return await deps.checks.checkFirstViewer({ sheets, captions: captionsFor(sheet, draft, plan), draft, facts }, ctx);
       } catch (error) {
         await flag('first_viewer', `The first viewer failed (${errorText(error)}); shipped without its read.`);
-        return unread;
+        return null;
       }
     };
     const storyFrames = () => plan.frames.filter((f) => f.treatment !== 'close').map((f) => f.n);
@@ -1022,7 +1022,8 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     const viewerSheets = await cut(null, true);
     await stage('first_viewer');
     let [viewer] = await Promise.all([viewerRead(viewerSheets), designRead(null)]);
-    let routed = firstViewerRouting(viewer, settings.hook_seconds);
+    const route = (v: FirstViewerResult | null) => (v ? firstViewerRouting(v, settings.hook_seconds) : { picture: [] as string[], words: [] as string[] });
+    let routed = route(viewer);
     await keepText('first_viewer', { round: 0, ...viewer, findings: routed.picture, script_findings: routed.words, design: designAll() });
     await settle('first viewer and design review');
     /** Frames whose picture changed since the first viewer last watched: the final read runs when there are any. */
@@ -1222,8 +1223,12 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     // The final read: the first viewer watches what ships, when anything changed since it last did.
     if (changedSinceViewer && !frozen) {
       await stage('first_viewer');
-      viewer = await viewerRead(await cut(null, true));
-      routed = firstViewerRouting(viewer, settings.hook_seconds);
+      const last = await viewerRead(await cut(null, true));
+      // A final read that didn't happen leaves the last one standing.
+      if (last) {
+        viewer = last;
+        routed = route(viewer);
+      }
       await keepText('first_viewer', { round: 'final', ...viewer, findings: routed.picture, script_findings: routed.words, design: designAll() });
       await settle('final read');
     }
@@ -1235,7 +1240,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     for (const f of routed.picture) await flag('first_viewer', f);
     for (const p of designAll().problems) await flag('first_viewer', `Design: ${designFindingText(p)}`);
     for (const f of routed.words) await flag('first_viewer', `Script: ${f}`);
-    for (const w of viewer.warnings ?? []) await flag('first_viewer', w);
+    for (const w of viewer?.warnings ?? []) await flag('first_viewer', w);
     for (const w of designAll().warnings) await flag('first_viewer', `Design (taste): ${designFindingText(w)}`);
 
     // MD-81: a step that quietly did nothing gets one loud flag before delivery.
