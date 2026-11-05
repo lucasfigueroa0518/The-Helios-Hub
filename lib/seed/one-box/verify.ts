@@ -7,9 +7,9 @@ import { recordCost as recordReelsCost } from '@/lib/reels/repository';
 import { MIN_BODY_CHARS, readPageText } from '@/lib/reels/seed-search';
 
 import { Ledger, ONE_BOX_VERIFY_MODEL, VERIFY_MAX_OUTPUT_TOKENS, verifyWorstCaseUsd } from './budget';
-import { VERDICT_TOOL, VERIFY_SYSTEM, buildVerifyUserTurn } from './prompts';
+import { VERDICT_TOOL, buildVerifyUserTurn, verifySystemFor } from './prompts';
 import type { Client, CostRecorder } from './search';
-import { entryTitle, entryUrl, missingFields, shapeOf } from './shape';
+import { entryTitle, entryUrl, missingFields, shapeKey, shapeOf } from './shape';
 import type { Entry, Finding, OneBoxInput, PassedEntry, Verified } from './types';
 
 export const defaultVerifyCost: CostRecorder = (usd, inputTokens, outputTokens) =>
@@ -33,7 +33,7 @@ async function judge(i: { client: Client; ledger: Ledger; input: OneBoxInput; pa
   const message = await i.client.messages.create({
     model: ONE_BOX_VERIFY_MODEL,
     max_tokens: VERIFY_MAX_OUTPUT_TOKENS,
-    system: cachedSystemText(VERIFY_SYSTEM),
+    system: cachedSystemText(verifySystemFor(shapeKey(i.input))),
     tools: [withToolCache(VERDICT_TOOL as Anthropic.Tool)],
     tool_choice: { type: 'tool', name: VERDICT_TOOL.name },
     messages: [{ role: 'user', content: buildVerifyUserTurn({ vertical: i.input.vertical, series: i.input.series, blurb: i.input.blurb, pageText: i.pageText }) }],

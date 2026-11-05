@@ -8,7 +8,8 @@ import { recordCost as recordReelsCost } from '@/lib/reels/repository';
 import { readPageText } from '@/lib/reels/seed-search';
 
 import { Ledger, SEARCH_MAX_OUTPUT_TOKENS, SEARCH_MAX_USES, searchWorstCaseUsd } from './budget';
-import { ONE_BOX_SYSTEM, REPORT_FINDING_TOOL, buildSearchUserTurn, type LinkHint } from './prompts';
+import { buildSearchUserTurn, reportFindingToolFor, searchSystemFor, type LinkHint } from './prompts';
+import { shapeKey } from './shape';
 import type { Entry, EntryField, Finding, OneBoxInput } from './types';
 
 /** The Anthropic client surface the one-box uses; tests pass a stub, so no test makes a live call. */
@@ -45,7 +46,7 @@ async function linkHint(link: string, readPage: (url: string) => Promise<string 
 const FIELDS: EntryField[] = ['headline', 'url', 'title', 'sourceUrl', 'value', 'fact', 'storyHeadline', 'toolName', 'description'];
 
 function parseFinding(message: Anthropic.Message): Finding {
-  const block = message.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === REPORT_FINDING_TOOL.name);
+  const block = message.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'report_finding');
   if (!block) {
     console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'one-box-seed', message: 'no_report', stop_reason: message.stop_reason }));
     const ranOut = message.stop_reason === 'pause_turn' || message.stop_reason === 'max_tokens';
@@ -87,8 +88,8 @@ export async function runSearch(i: {
   const message = await i.client.messages.create({
     model: B6_MODEL,
     max_tokens: SEARCH_MAX_OUTPUT_TOKENS,
-    system: cachedSystemText(ONE_BOX_SYSTEM),
-    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_MAX_USES }, withToolCache(REPORT_FINDING_TOOL as Anthropic.Tool)],
+    system: cachedSystemText(searchSystemFor(shapeKey(i.input))),
+    tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_MAX_USES }, withToolCache(reportFindingToolFor(shapeKey(i.input)) as Anthropic.Tool)],
     messages: [{ role: 'user', content: buildSearchUserTurn({ vertical: i.input.vertical, series: i.input.series, blurb: i.input.blurb, linkHint: hint, poolHeadlines: i.poolHeadlines }) }],
   });
   const priced = priceAnthropicMessages([message], { modelId: B6_MODEL, fallbackCacheTtl: '1h' });
