@@ -314,7 +314,7 @@ export const NEAR_MISSES: readonly CalibrationItem[] = [
       company('SoftBank', 'the lead investor', 'a huge stake in the leading AI lab'),
       person('Sam Altman', 'OpenAI CEO', 'to fund the compute race', 'sam-altman'),
     ],
-    central_figure: 'OpenAI',
+    central_figure: 'Sam Altman',
     scene: 'The term sheet line making part of the money conditional on the restructuring.',
     turn: 'The record round comes with a deadline attached.',
     implication: 'Capital at this scale sets the pace of the AI race.',

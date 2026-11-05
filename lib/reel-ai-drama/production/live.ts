@@ -43,6 +43,8 @@ import { makeAssets } from '@/lib/reel-ai-drama/render/make';
 import { designSound } from '@/lib/reel-ai-drama/render/sound-design';
 import { RecordingDramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { CREATIVE_MODEL, creativePass } from '@/lib/reel-ai-drama/production/creative';
+import { liveSolverKit, type SolverDeps, type SolverKit } from '@/lib/reel-ai-drama/production/solver';
+import type { Mode, VisualsInventory } from '@/lib/reel-ai-drama/types';
 import { compileReel, frameFindings, readCompiled } from '@/lib/reel-ai-drama/render/compile';
 import type { ProductionDeps, StepCtx } from '@/lib/reel-ai-drama/production/run';
 import type { ScheduleDeps } from '@/lib/reel-ai-drama/production/schedule';
@@ -154,6 +156,36 @@ export async function liveProductionDeps(input: {
       contactSheet,
       frameStills: (dir, video) => frameStills(dir, video),
     },
+  };
+}
+
+/**
+ * The solver's live deps (Iteration 11 §5): one Messages sender for its calls (each records its own cost under
+ * `solver_look`, `solver_round1`, `solver_round2`), the three models and the limit from settings, the kit guide, and the kit's
+ * free CLIs on the job's project. `makeAssets`, when given, lets a plan change order a drawing; it must add what it makes to
+ * the project's inventory.json.
+ */
+export function liveSolverDeps(input: {
+  db: Queryable;
+  jobId: string;
+  mode: Mode;
+  settings: Pick<ReelAiDramaSettings, 'solver_look_model' | 'solver_first_model' | 'solver_second_model' | 'solver_limit_usd'>;
+  projectDir: string;
+  inventory?: VisualsInventory | null;
+  makeAssets?: SolverKit['makeAssets'];
+  log?: (event: string, fields?: Record<string, unknown>) => void;
+}): SolverDeps {
+  const { settings } = input;
+  return {
+    db: input.db,
+    jobId: input.jobId,
+    mode: input.mode,
+    create: anthropicCreate(anthropic, 'solver'),
+    kitGuide: KIT_GUIDE,
+    models: { look: settings.solver_look_model, first: settings.solver_first_model, second: settings.solver_second_model },
+    limitUsd: settings.solver_limit_usd,
+    kit: liveSolverKit(input.projectDir, { inventory: input.inventory ?? null, makeAssets: input.makeAssets }),
+    ...(input.log ? { log: input.log } : {}),
   };
 }
 

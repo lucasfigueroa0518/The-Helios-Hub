@@ -354,11 +354,17 @@ export async function scoreDrama(jev: DramaJevRunner, row: Scorable): Promise<Sc
   return capWithoutPerson(capWithoutPlayer(drama, row.pitch), row.pitch);
 }
 
-/** A company, product or group can't be the central figure: the same gate in code, on what the pitch says its center is. */
+/**
+ * A company, product or group can't be the central figure: the same gate in code, on what the pitch says its center is. That is
+ * the old `central_figure` when a pitch has one, else the cast's first entry (the producer lists the central figure first), so a
+ * cast led by a company fails even when a person stands further down it.
+ */
 export function capWithoutPerson(drama: Score, pitch: Pitch): Score {
-  const central = pitchCentral(pitch).toLowerCase();
-  const entry = pitch.cast.find((c) => c.name.trim().toLowerCase() === central);
-  const person = pitch.cast.some((c) => c.kind === 'person') && (!entry || (entry.kind === 'person' && !isGroupName(entry.name)));
+  const named = pitch.central_figure?.trim().toLowerCase();
+  const entry = named ? pitch.cast.find((c) => c.name.trim().toLowerCase() === named) : pitch.cast[0];
+  const person = entry
+    ? entry.kind === 'person' && !isGroupName(entry.name)
+    : Boolean(named) && !isGroupName(pitchCentral(pitch)) && pitch.cast.some((c) => c.kind === 'person');
   if (person || drama.score <= NO_CENTRAL_WANT_CAP) return drama;
   return { score: NO_CENTRAL_WANT_CAP, notes: { ...drama.notes, cap: drama.notes.cap ?? 'the central figure is not a named person (MD-29)' } };
 }

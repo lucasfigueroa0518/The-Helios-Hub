@@ -332,10 +332,14 @@ test('eventKey ignores wording; findDuplicate runs fingerprint, similarity, then
 
 // ── Scores ──────────────────────────────────────────────────────────────────
 
-test('score combination: drama v7 (= v5, MD-114) weights MD-29 most and caps without a central want; material weights', () => {
+test('score combination: drama v8 weights MD-29 most and gates on a central want the viewer follows; material weights', () => {
   const all = (v: number) => ({ central_want: { score: v }, opposition: { score: v }, bounded_episode: { score: v }, stakes: { score: v }, scene: { score: v }, turn: { score: v }, implication: { score: v }, mostly_spectacle: { noul: 0 } });
   assert.equal(combineDrama(all(4)).score, 1);
-  assert.equal(combineDrama(all(2)).score, 0.5);
+  assert.equal(combineDrama({ ...all(2), central_want: { score: 3 } }).score, 0.575);
+  // Iteration 11: a vague want (2) is gated too, not only weighed down.
+  const vague = combineDrama(all(2));
+  assert.equal(vague.score, 0.45);
+  assert.match(vague.notes.cap ?? '', /MD-29/);
   const noWant = combineDrama({ ...all(4), central_want: { score: 1 } });
   assert.equal(noWant.score, 0.45);
   assert.match(noWant.notes.cap, /MD-29/);
@@ -349,8 +353,8 @@ test('score combination: drama v7 (= v5, MD-114) weights MD-29 most and caps wit
 
   const m = combineMaterial({ famous_faces: { score: 4 }, photographed_events: { score: 4 }, published_artifacts: { score: 0 }, variety: { score: 0 }, named_place: { score: 0 }, era_photos: { score: 0 } });
   assert.equal(m.score, 0.45);
-  assert.equal(DRAMA_SET.id, 'reel-ai-drama-drama-v7');
-  assert.equal(DRAMA_SET.version, '7');
+  assert.equal(DRAMA_SET.id, 'reel-ai-drama-drama-v8');
+  assert.equal(DRAMA_SET.version, '8');
   assert.equal(MATERIAL_SET.id, 'reel-ai-drama-material-v1');
 });
 
