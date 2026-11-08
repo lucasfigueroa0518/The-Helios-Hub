@@ -13,6 +13,9 @@ For every tile, report:
   visible. Name a person only when the picture itself identifies them (a name badge, a printed
   caption in the image). When only the original caption names them, write "captioned as <name>; not
   confirmed". Otherwise describe them by what is visible (who, doing what, where).
+- `place` — the named place your `shows` states, in as few words as still name it. HARD CONSTRAINT: only
+  what `shows` itself names and the picture supports; an empty string when `shows` names no place. Never
+  a place taken from the caption, the story or the source alone, and never a guess.
 - `watermark` — `true` for any visible watermark or stamped credit over the picture (stock-agency
   marks, "sample", a photographer's mark across it).
 - `tv_logo` — `true` for a TV channel or news-network logo or bug anywhere on the frame.

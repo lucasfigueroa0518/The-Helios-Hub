@@ -377,7 +377,7 @@ test('project files: media and sidecars copied; boxes rescaled; inventory points
   assert.deepEqual(v1.boxes, [{ text: 'a', x: 20, y: 40, w: 200, h: 60 }], 'measured at 1000px wide, the image is 2000px');
   const v6 = inv.assets.find((a: { id: string }) => a.id === 'V6');
   assert.equal(v6.map.plain, 'assets/media/V6.plain.png');
-  assert.equal(frames.projectMedia(project).V6.map.pin.x, 810);
+  assert.equal((frames.projectMedia(project) as Record<string, { map: { pin: { x: number } } }>).V6.map.pin.x, 810);
   assert.deepEqual(normalizeBoxes([{ text: 'x', x: 1, y: 2, w: 0, h: 3 }], 10), [], 'empty boxes are dropped');
 });
 

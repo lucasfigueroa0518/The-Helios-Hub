@@ -6,8 +6,8 @@ what the frames must do with that time.
 
 ## HARD CONSTRAINTS (every reel)
 
-1. **The hook is on screen from t = 0.** Frame 1 shows the image that carries the hook whole and composed from its
-   first instant, already moving, and the hook's on-screen words within 1.5 seconds. Nothing comes before it: no logo, title card, fade or intro.
+1. **The opening line's picture is on screen from t = 0.** Frame 1 is moving from its first instant and nothing comes
+   before it: no logo, title card, fade or intro.
    [MD-34, MD-13, MD-90]
 2. **A new picture beat at least every 12 spoken words, about 4 seconds:** a new image, a move that reveals a
    detail, a mark, a layer, each planned in the frame's shot map. A changing picture never stands in for a story

@@ -38,14 +38,14 @@ const INVENTORY: VisualsInventory = {
 
 function draft(texts: string[]): WriterDraft {
   return {
-    title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' },
+    title: 'T', hook: { line_id: 'L1' },
     rungs: [{ id: 'R1', purpose: 'p', lines: texts.map((text, i) => ({ id: `L${i + 1}`, text, on_screen: null, fact_ids: [], must_show: null })) }],
     peak_rung_id: 'R1', landing_rung_id: 'R1', close_question: 'Would you?', word_count: 0, central: [],
   };
 }
 
 function frame(n: number, over: Partial<StoryboardFrame> = {}): StoryboardFrame {
-  return { n, name: `f${n}`, line_ids: [`L${n}`], treatment: 'photo', asset_ids: ['V4'], purpose: 'p', motion: 'push', marks: '', sound: '', music: n === 1 ? 'start' : 'hold', on_screen: n === 1 ? 'One bet' : null, shows: [], focus: { kind: FOCUS_KINDS[n % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, ...over };
+  return { n, name: `f${n}`, line_ids: [`L${n}`], treatment: 'photo', asset_ids: ['V4'], purpose: 'p', motion: 'push', marks: '', sound: '', music: n === 1 ? 'start' : 'hold', on_screen: null, shows: [], focus: { kind: FOCUS_KINDS[n % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, ...over };
 }
 
 const close = (n: number): StoryboardFrame => ({ n, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });

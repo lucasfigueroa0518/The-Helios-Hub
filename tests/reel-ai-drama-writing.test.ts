@@ -62,7 +62,7 @@ function goodDraft(): WriterDraft {
     purpose: `purpose ${i + 1}`,
     lines: [10, 10].map((count) => ({ id: `L${++n}`, text: `${words(count)}.`, on_screen: null, fact_ids: ['F1'], must_show: null })),
   }));
-  return { title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' }, rungs, peak_rung_id: 'R6', landing_rung_id: 'R7', close_question: 'Would you have shipped it?', word_count: 0, central: [] };
+  return { title: 'T', hook: { line_id: 'L1' }, rungs, peak_rung_id: 'R6', landing_rung_id: 'R7', close_question: 'Would you have shipped it?', word_count: 0, central: [] };
 }
 
 const lineIds = (d: WriterDraft) => d.rungs.flatMap((r) => r.lines.map((l) => l.id));
@@ -71,7 +71,7 @@ function goodPlan(d: WriterDraft = goodDraft()): DirectorPlan {
   const ids = lineIds(d);
   const frames: DirectorPlan['frames'] = Array.from({ length: 7 }, (_, i) => ({
     n: i + 1, name: `f${i + 1}`, line_ids: ids.slice(i * 2, i * 2 + 2), treatment: 'photo', asset_ids: [`V${(i % 4) + 1}`], purpose: 'p', motion: 'push', marks: '', sound: 'room tone',
-    music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: i === 0 ? 'One bet' : null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
+    music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
   }));
   frames.push({ n: 8, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
   return { frames, lines_back: [] };
@@ -154,7 +154,6 @@ test('the draft validator catches each broken rule', () => {
   assert.match(problemsFor((d) => (d.rungs[1]!.lines[0]!.fact_ids = ['F9'])), /cites F9/);
   assert.match(problemsFor((d) => (d.rungs[1]!.lines[0]!.must_show = 'V99')), /must show V99/);
   assert.match(problemsFor((d) => (d.hook.line_id = 'L2')), /hook's line_id/);
-  assert.match(problemsFor((d) => (d.hook.on_screen = words(14))), /hook's on-screen words/);
   assert.match(problemsFor((d) => (d.rungs[2]!.lines[0]!.text = words(25))), /rung R3 runs/);
   assert.match(problemsFor((d) => (d.close_question = 'Would you have shipped it')), /question mark/);
   assert.match(problemsFor((d) => (d.close_question = `${words(12)}?`)), /close question runs/);
@@ -200,7 +199,6 @@ test('a valid plan passes; the plan validator catches coverage, order, treatment
   assert.match(problemsFor((p) => (p.frames[1]!.asset_ids = ['V77'])), /V77, which is not in the inventory/);
   assert.match(problemsFor((p) => (p.frames[1]!.asset_ids = [])), /names no asset/);
   assert.match(problemsFor((p) => (p.frames[0]!.music = 'hold')), /music: start/);
-  assert.match(problemsFor((p) => (p.frames[0]!.on_screen = null)), /hook's words/);
   assert.match(problemsFor((p) => p.lines_back.push({ line_id: 'L99', why: 'x', suggestion: 'y' })), /lines_back names L99/);
 });
 

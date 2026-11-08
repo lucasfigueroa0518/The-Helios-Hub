@@ -579,7 +579,7 @@ test('weeklyTick does nothing while auto is off', async () => {
   assert.deepEqual(out.requested, []);
 });
 
-test('weeklyTick: one development session a week under the cap; per_week jobs spread, kills replaced', async () => {
+test('weeklyTick: one development session a week under the cap; it never requests production (per_week is retired)', async () => {
   const db = await freshDb();
   await saveSetting(db, 'auto', true);
   for (const [i, t] of ['A', 'B', 'C', 'D'].entries()) await insertPitch(db, t, 'pooled', 1 - i / 10);
@@ -588,29 +588,18 @@ test('weeklyTick: one development session a week under the cap; per_week jobs sp
 
   const first = await weeklyTick(deps, monday);
   assert.equal(first.development, 'ran');
-  assert.deepEqual(log, ['tend', 'develop']);
-  assert.equal(first.requested.length, 1);
-  const again = await weeklyTick(deps, new Date(monday.getTime() + 3600_000));
+  assert.deepEqual(log, ['develop']);
+  assert.equal(first.requested.length, 0);
+  const again = await weeklyTick(deps, new Date(monday.getTime() + 5 * 86_400_000));
   assert.equal(again.development, 'already_ran');
   assert.equal(again.requested.length, 0);
-
-  // A killed job doesn't hold its slot.
-  const killed = await claimNextJob(db);
-  await finishJob(db, killed!.id, { status: 'killed', killReason: 'too_few_visuals' });
-  const refill = await weeklyTick(deps, new Date(monday.getTime() + 2 * 3600_000));
-  assert.equal(refill.requested.length, 1);
-
-  // Saturday: all three slots open; two more are queued, then the pool's fourth pitch is left.
-  const saturday = await weeklyTick(deps, new Date(monday.getTime() + 5 * 86_400_000));
-  assert.equal(saturday.jobsDue, 3);
-  assert.equal(saturday.requested.length, 2);
-  assert.equal((await weeklyTick(deps, new Date(monday.getTime() + 6 * 86_400_000))).requested.length, 0);
+  const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM reel_ai_drama.jobs`);
+  assert.equal(rows[0].n, 0);
 });
 
 test('weeklyTick skips development once the week is spent', async () => {
   const db = await freshDb();
   await saveSetting(db, 'auto', true);
-  await saveSetting(db, 'per_week', 0);
   await recordCost(db, { mode: 'development', vendor: 'anthropic', component: 'producer', usd: 3.2 });
   const { deps, log } = scheduleDeps(db);
   const out = await weeklyTick(deps, new Date());
@@ -621,7 +610,7 @@ test('weeklyTick skips development once the week is spent', async () => {
 
 // ── The lab and its routes ─────────────────────────────────────────────────
 
-test('labData shows the ranked pool, the ledger, jobs, costs, deliveries and calibration', async () => {
+test('labData shows the ranked pool, the ledger, jobs, costs, deliveries, requests and calibration from the DB', async () => {
   const db = await freshDb();
   const { job } = await queuedJob(db, 'Made one');
   const { deps } = stubDeps(db);
@@ -631,10 +620,9 @@ test('labData shows the ranked pool, the ledger, jobs, costs, deliveries and cal
   await db.query(`INSERT INTO reel_ai_drama.cells (player_id, story_type, era) VALUES ('openai', 'deal', 'race')`);
   const { rows: [s] } = await db.query<{ id: string }>(`INSERT INTO reel_ai_drama.sessions (status, mode, trigger) VALUES ('ok', 'development', 'click') RETURNING id`);
   await recordCost(db, { sessionId: s.id, mode: 'development', vendor: 'anthropic', component: 'producer', usd: 0.5 });
-  const calibrationFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rad-cal-')), 'latest.json');
-  fs.writeFileSync(calibrationFile, JSON.stringify({ at: '2026-10-28T00:00:00Z', report: { ok: true } }));
+  await db.query(`INSERT INTO reel_ai_drama.calibration_reports (report, usd, created_at) VALUES ('{"ok": true}'::jsonb, 0.2, '2026-10-28T00:00:00Z')`);
 
-  const lab = await labData(db, { calibrationFile });
+  const lab = await labData(db);
   assert.deepEqual(lab.pool.filter((p) => p.status === 'pooled').map((p) => p.title), ['High', 'Low']);
   const high = lab.pool[0];
   assert.equal(high.centralFigure, 'Founder');
@@ -648,21 +636,25 @@ test('labData shows the ranked pool, the ledger, jobs, costs, deliveries and cal
   assert.equal(lab.costs.devWeekUsd, 0.5);
   assert.equal(lab.jobs[0].status, 'ok');
   assert.ok(lab.jobs[0].videoId);
+  assert.equal(lab.jobs[0].verdict, null);
+  assert.equal(lab.jobs[0].cancelRequestedAt, null);
   assert.equal(lab.deliveries.length, 1);
   assert.equal(lab.deliveries[0].post?.caption, 'cap');
-  assert.deepEqual(lab.calibration, { at: '2026-10-28T00:00:00Z', report: { ok: true } });
+  assert.deepEqual(lab.calibration, { at: '2026-10-28T00:00:00.000Z', report: { ok: true }, usd: 0.2 });
+  assert.deepEqual(lab.requests, []);
+  assert.deepEqual(lab.settingsProblems, []);
 });
 
-test('route handlers: session check, make, settings, develop under the cap, calibrate', async () => {
+test('route handlers: session check, make, settings, develop and calibrate only queue', async () => {
   const db = await freshDb();
   const ok = { session: async () => ({ email: 't' }), db: async () => db };
   const json = (body: unknown) => new Request('http://x', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
   assert.equal((await labRoute({ session: async () => null, db: async () => db })).status, 401);
-  const lab = await labRoute({ ...ok, calibrationFile: '/nonexistent/latest.json' });
+  const lab = await labRoute(ok);
   assert.equal(lab.status, 200);
   const body = (await lab.json()) as Record<string, unknown>;
-  for (const k of ['settings', 'pool', 'ledger', 'sessions', 'jobs', 'costs', 'deliveries', 'calibration']) assert.ok(k in body, k);
+  for (const k of ['settings', 'pool', 'ledger', 'sessions', 'jobs', 'costs', 'deliveries', 'calibration', 'requests', 'settingsProblems']) assert.ok(k in body, k);
 
   assert.equal((await makeRoute(json({ pitchId: 'nope' }), ok)).status, 400);
   const pitchId = await insertPitch(db);
@@ -673,21 +665,23 @@ test('route handlers: session check, make, settings, develop under the cap, cali
 
   assert.equal((await settingsPostRoute(json({ key: 'nope', value: 1 }), ok)).status, 400);
   assert.equal((await settingsPostRoute(json({ key: 'visuals_check_cap_usd', value: 0.9 }), ok)).status, 400);
-  const saved = await settingsPostRoute(json({ key: 'per_week', value: 2 }), ok);
-  assert.equal(((await saved.json()) as { settings: { per_week: number } }).settings.per_week, 2);
+  assert.equal((await settingsPostRoute(json({ key: 'per_week', value: 2 }), ok)).status, 400);
+  const saved = await settingsPostRoute(json({ key: 'spread_days', value: 9 }), ok);
+  assert.equal(((await saved.json()) as { settings: { spread_days: number } }).settings.spread_days, 9);
 
-  let developed = 0;
-  const dev = await developRoute(json({}), { ...ok, develop: async () => (developed++, { pitches: 3 }) });
-  assert.equal(dev.status, 200);
-  assert.equal(developed, 1);
+  const dev = await developRoute(json({}), ok);
+  assert.equal(dev.status, 202);
+  assert.equal(((await dev.json()) as { status: string }).status, 'requested');
+  assert.equal((await developRoute(json({}), ok)).status, 409);
+  await db.query(`UPDATE reel_ai_drama.requests SET status = 'ok'`);
   await recordCost(db, { mode: 'development', vendor: 'anthropic', component: 'producer', usd: 3 });
-  assert.equal((await developRoute(json({}), { ...ok, develop: async () => (developed++, {}) })).status, 409);
-  assert.equal(developed, 1);
+  assert.equal((await developRoute(json({}), ok)).status, 409);
 
-  const calibrationFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'rad-cal-')), 'latest.json');
-  const cal = await calibrateRoute(json({}), { ...ok, calibrate: async () => ({ ranked: ['a'] }), calibrationFile });
-  assert.equal(cal.status, 200);
-  assert.deepEqual(JSON.parse(fs.readFileSync(calibrationFile, 'utf8')).report, { ranked: ['a'] });
+  const cal = await calibrateRoute(json({}), ok);
+  assert.equal(cal.status, 202);
+  assert.equal((await calibrateRoute(json({}), ok)).status, 409);
+  const { rows } = await db.query<{ kind: string; status: string }>(`SELECT kind, status FROM reel_ai_drama.requests ORDER BY requested_at`);
+  assert.deepEqual(rows.map((r) => `${r.kind}:${r.status}`), ['develop:ok', 'calibrate:requested']);
 });
 
 // ── Review fixes (planning/AI Mini Docs/notes/review.md) ──────────────────────
@@ -736,7 +730,7 @@ test('#22 a cut hook line clears its words and flags the reel', async () => {
   });
   assert.equal((await runJob(deps, job)).status, 'ok');
   const written = seen.writeProjectFiles![0] as { draft: WriterDraft; plan: DirectorPlan };
-  assert.deepEqual(written.draft.hook, { on_screen: '', line_id: 'L2' });
+  assert.deepEqual(written.draft.hook, { line_id: 'L2' });
   assert.equal(written.plan.frames[0]!.on_screen, null);
   const flags = (await getJob(db, job.id))!.flags;
   assert.ok(flags.some((f) => f.check === 'facts' && /hook line was cut/.test(f.detail)));
@@ -849,7 +843,7 @@ test('MD-102: the editor reads the script only; its notes get one rewrite (write
   // The writer reads the pitch (its brief), the facts, the inventory and the settings: no spine.
   assert.deepEqual(Object.keys(seen.writeScript[0] as object).sort(), ['facts', 'inventory', 'pitch', 'settings']);
   // The editor's input is the script alone.
-  assert.deepEqual(Object.keys(seen.editStory[0] as object).sort(), ['draft', 'settings']);
+  assert.deepEqual(Object.keys(seen.editStory[0] as object).sort(), ['cast', 'draft', 'settings']);
   assert.deepEqual(calls.filter((c) => /editStory|reviseScript|directReel/.test(c)).slice(0, 3), ['editStory', 'reviseScript', 'directReel']);
   const asked = (seen.reviseScript[0] as { notes: RevisionNote[] }).notes;
   assert.deepEqual(asked, [
@@ -1045,7 +1039,7 @@ test('MD-122: a hook that does not pull is a warning, never a problem', () => {
 
 // ── MD-129: the design reviewer beside the first viewer ─────────────────────
 
-const DESIGN_STILLS = [{ number: 1, name: 'f1', treatment: 'photo', at: 1.2, file: 'frame-01.jpg' }];
+const DESIGN_SHEETS = [{ frame: 1, file: 'frame-01-1.jpg', moments: [] }];
 
 test('MD-129: design problems join the one picture fix; what remains and the warnings ship as flags', async () => {
   const db = await freshDb();
@@ -1055,7 +1049,7 @@ test('MD-129: design problems join the one picture fix; what remains and the war
     checks: {
       checkDesign: async (i) => {
         reads += 1;
-        assert.deepEqual(i.stills, DESIGN_STILLS);
+        assert.deepEqual(i.sheets, DESIGN_SHEETS);
         return {
           problems: [{ frame: 1, item: 'off_edge', severity: 'problem', what: 'The logo runs off the right edge.' }],
           warnings: reads === 1 ? [] : [{ frame: 1, item: 'composed', severity: 'warning', what: 'A photo with a push and a label.' }],
@@ -1064,7 +1058,7 @@ test('MD-129: design problems join the one picture fix; what remains and the war
         };
       },
     },
-    render: { frameStills: async () => DESIGN_STILLS },
+    render: { reviewSheets: async () => ({ viewer: [], design: DESIGN_SHEETS }) },
   });
   assert.equal((await runJob(deps, job)).status, 'ok');
   const fixes = (seen.directReel as { fix?: { kind?: string; problems: { frame: number; why: string }[] } }[]).filter((d) => d.fix);
@@ -1085,7 +1079,7 @@ test('MD-129: design warnings alone get no fix; a design review that errors is f
   const { job } = await queuedJob(db);
   const { deps, calls } = stubDeps(db, {
     checks: { checkDesign: async () => ({ problems: [], warnings: [{ frame: 1, item: 'focal_point', severity: 'warning', what: 'Two faces compete.' }], errors: [], usd: 0 }) },
-    render: { frameStills: async () => DESIGN_STILLS },
+    render: { reviewSheets: async () => ({ viewer: [], design: DESIGN_SHEETS }) },
   });
   assert.equal((await runJob(deps, job)).status, 'ok');
   assert.equal(calls.filter((c) => c === 'renderVideo').length, 1);
@@ -1095,7 +1089,7 @@ test('MD-129: design warnings alone get no fix; a design review that errors is f
   const { job: job2 } = await queuedJob(db2);
   const broken = stubDeps(db2, {
     checks: { checkDesign: async () => { throw new Error('vision down'); } },
-    render: { frameStills: async () => DESIGN_STILLS },
+    render: { reviewSheets: async () => ({ viewer: [], design: DESIGN_SHEETS }) },
   });
   assert.equal((await runJob(broken.deps, job2)).status, 'ok');
   assert.equal(broken.calls.filter((c) => c === 'renderVideo').length, 1);
@@ -1115,7 +1109,7 @@ test('never block a reel: a fix that breaks the render ships the version from be
       },
     },
     render: {
-      frameStills: async () => DESIGN_STILLS,
+      reviewSheets: async () => ({ viewer: [], design: DESIGN_SHEETS }),
       renderVideo: async (dir) => {
         renders += 1;
         const f = path.join(dir, 'renders', 'video.mp4');

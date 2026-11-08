@@ -11,9 +11,9 @@ import { parseSlotId, slotId } from '@/lib/social-hub/slots/types';
 test('constants carry the spec values', () => {
   assert.equal(GRID, 15); assert.equal(MAGNET, 20); assert.equal(DRIFT, 15); assert.equal(FEED_GAP, 30);
   assert.equal(DAY_START, 480); assert.equal(LAST_START, 1245);
-  assert.deepEqual(DEFAULT_TIMES, { reels: [525, 675, 1080], explainers: [780, 930], carousels: [], last_few_days: [540], stories: [510], ai_events: [1080, 1140] });
-  assert.deepEqual(DEFAULT_CAPS, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2 });
-  assert.deepEqual(RUN_HOUR_LABEL, { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM' });
+  assert.deepEqual(DEFAULT_TIMES, { reels: [525, 675, 1080], explainers: [780, 930], carousels: [], last_few_days: [540], stories: [510], ai_events: [1080, 1140], reel_ai_drama: [1200] });
+  assert.deepEqual(DEFAULT_CAPS, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2, reel_ai_drama: 1 });
+  assert.deepEqual(RUN_HOUR_LABEL, { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM', reel_ai_drama: '12 AM' });
   assert.deepEqual(USUAL.reels.map((w) => [w.start, w.end]), [[525, 600], [675, 750], [1080, 1260]]);
   assert.deepEqual(USUAL.explainers.map((w) => [w.start, w.end]), [[780, 870], [930, 1020]]);
   assert.deepEqual(USUAL.carousels, [], 'Carousels are opt-in: no usual windows');

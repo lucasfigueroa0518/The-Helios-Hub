@@ -1,15 +1,13 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { developmentSpendSince } from '@/lib/reel-ai-drama/cost';
-import { requestJob } from '@/lib/reel-ai-drama/production/jobs';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { PitchRow } from '@/lib/reel-ai-drama/types';
 
 /**
- * The weekly clock (MD-19, MD-28, MD-30). Off unless `settings.auto`. Once a week, under the weekly
- * development cap: tend the pool, then one development session. Production: `per_week` jobs spread
- * evenly over the week (slot i opens at week start + i × 7/per_week days), each the pool's top pitch by
- * `nextForProduction` (which applies the one-per-player spread). A killed job's replacement takes its
- * slot, so killed jobs don't count. Safe to call on every worker poll.
+ * The weekly clock (MD-28). Off unless `settings.auto`. Once a week, under the weekly development cap: one
+ * development session. Production no longer comes from here (HUB-WIRING-CONTRACT.md §1.1: `per_week` is retired):
+ * it comes only from the nightly fill (lib/reel-ai-drama/night.ts) or a person's click, and the worker tends the pool
+ * once a day on its own. Safe to call on every worker poll.
  */
 
 export type ScheduleDeps = {
@@ -74,34 +72,12 @@ export async function weeklyTick(deps: ScheduleDeps, now: Date): Promise<TickRes
     result.development = 'capped';
   } else {
     try {
-      result.tended = await deps.tendPool(db, settings, now);
       await deps.runDevelopmentSession({ trigger: 'auto' });
       result.development = 'ran';
     } catch (error) {
       result.development = 'failed';
       log('development_failed', { error: error instanceof Error ? error.message : String(error) });
     }
-  }
-
-  // Production: per_week jobs, spread over the week (MD-19, MD-30).
-  const { rows } = await db.query<{ n: unknown }>(
-    "SELECT count(*) AS n FROM reel_ai_drama.jobs WHERE trigger = 'auto' AND status <> 'killed' AND requested_at >= $1",
-    [start.toISOString()],
-  );
-  result.jobsThisWeek = Number(rows[0]?.n ?? 0);
-  result.jobsDue = slotsOpen(settings.per_week, start, now);
-  for (let made = result.jobsThisWeek; made < result.jobsDue; made += 1) {
-    const next = await deps.nextForProduction(db, settings, now);
-    if (!next) {
-      log('pool_empty', { due: result.jobsDue, made });
-      break;
-    }
-    const req = await requestJob(db, { pitchId: next.id, trigger: 'auto', settings });
-    if (!req.ok) {
-      log('request_refused', { pitchId: next.id, reason: req.reason });
-      break;
-    }
-    result.requested.push(req.jobId);
   }
   return result;
 }

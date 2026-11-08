@@ -41,6 +41,12 @@ export type IdeaCycleDeps = {
    * be a database of its own). Absent or failing: no moves, as before.
    */
   moves?: MovesQuery;
+  /**
+   * A person's "Run the idea cycle now" (lib/explainers/ideas/cycle-request.ts): runs even while
+   * auto_render is off. It bypasses only that gate; the one-cycle-per-day index and the spend caps stay.
+   * Absent: the old behavior.
+   */
+  force?: boolean;
 };
 
 /** Why tonight's promoted topic wasn't made: it is no longer a pool topic or a placeable render. */
@@ -127,7 +133,7 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   const movesQ: MovesQuery = deps.moves ?? movesQuery(db);
   const movesReadAt = new Date();
   const settings = await loadSettings(db);
-  if (!settings.auto_render) return { status: 'skipped', reason: 'auto_render_off' };
+  if (!settings.auto_render && !deps.force) return { status: 'skipped', reason: 'auto_render_off' };
 
   const day = nyDate(deps.now);
   const fillLog = deps.log ?? consoleFillLog;

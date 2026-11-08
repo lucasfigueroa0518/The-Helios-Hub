@@ -20,6 +20,8 @@ export type Manifest = {
 /** One frame as compiled-read reports it. */
 export type FrameManifest = {
   manifest?: Manifest;
+  /** Iteration 12: the frame rendered as this hook; its blueprint stands behind it as the fallback, so nothing planned is missing. */
+  hook_frame?: string;
   /** Seconds each phrase resolved to in this frame. */
   cues?: Record<string, number>;
   /** Labels the stage holds back on purpose: a name already introduced; a logo that says its own. */
@@ -50,6 +52,7 @@ function missesIn(frame: number, b: Blueprint, m: FrameManifest): PlanMiss[] {
   const miss = (kind: PlanMiss['kind'], id: string, why: string) => out.push({ frame, kind, id, why });
   if (m.failed) return [{ frame, kind: 'frame', id: 'frame', why: `the frame did not build: ${m.failed}` }];
   if (m.plain) return [{ frame, kind: 'frame', id: 'frame', why: 'the frame fell back to a plain picture' }];
+  if (m.hook_frame) return [];
   const shown = m.manifest ?? {};
   const cue = (on: string | undefined) => (!String(on ?? '').trim() ? 0 : m.cues?.[String(on).trim()] ?? null);
   const near = (at: number, want: number | null) => want === null || Math.abs(at - want) <= WORD_SLACK;

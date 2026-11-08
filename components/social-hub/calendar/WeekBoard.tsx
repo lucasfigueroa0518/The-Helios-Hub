@@ -87,6 +87,7 @@ type Sent = { ok: true } | { ok: false; booked?: Booked[]; reason?: string };
 const TRAY: Array<{ vertical: Vertical; series: StorySeries | null; label: string }> = [
   { vertical: 'reels', series: null, label: 'Text on Screen' },
   { vertical: 'explainers', series: null, label: 'Explainer' },
+  { vertical: 'reel_ai_drama', series: null, label: 'AI Drama' },
   { vertical: 'carousels', series: null, label: 'Carousel' },
   { vertical: 'last_few_days', series: null, label: 'Last Few Days' },
   { vertical: 'ai_events', series: null, label: 'AI Events' },

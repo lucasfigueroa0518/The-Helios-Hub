@@ -5,7 +5,8 @@ import { hostAudio, keepHostAudio } from '@/explainers/hyperframes-skills/facele
 import { PACE_FILE, parseSilences } from '@/explainers/reel-ai-drama/kit/pace.mjs';
 import { prepareTts } from '@/explainers/reel-ai-drama/kit/pronounce.mjs';
 import { EXPLAINERS_DIR, HYPERFRAMES_ENV } from '@/lib/explainers/render/workspace';
-import { spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
+import { appendStepLog, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
+import { errorReason, isRefusal, withRetry, type RetryOptions } from '@/lib/reel-ai-drama/retry';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';
 
 /** The faceless-explainer scripts: the project's pinned copy, else the repo's. */
@@ -271,31 +272,100 @@ function voiceOneTake(projectDir: string, script: string, voiceId: string, tempo
   return { take: 'one', takes: groups.length, notes: [] };
 }
 
-/** The fallback: audio.mjs's per-frame clips (read cold, MD-93's reason to prefer one take), each sped up by `tempo`. */
-function voicePerFrame(projectDir: string, script: string, voiceId: string, tempo: number, exec: Exec): void {
+/**
+ * The fallback: audio.mjs's per-frame clips (read cold, MD-93's reason to prefer one take), each sped up by `tempo`. Returns why the
+ * engine failed, or null. It can also exit 0 having dropped frames, or all of them: `missingVoices` is what decides.
+ */
+function voicePerFrame(projectDir: string, script: string, voiceId: string, tempo: number, exec: Exec): string | null {
   const audio = path.join(scriptsDir(projectDir), 'audio.mjs');
-  exec('audio', process.execPath, [audio, '--script', script, '--storyboard', './STORYBOARD.md', '--hyperframes', '.', '--out', './audio_meta.json', '--voice', voiceId]);
-  if (tempo === 1) return;
+  let engineFailure: string | null = null;
+  try {
+    exec('audio', process.execPath, [audio, '--script', script, '--storyboard', './STORYBOARD.md', '--hyperframes', '.', '--out', './audio_meta.json', '--voice', voiceId]);
+  } catch (error) {
+    engineFailure = errorReason(error);
+  }
   const file = path.join(projectDir, 'audio_meta.json');
+  if (tempo === 1 || engineFailure) return engineFailure;
   const meta = JSON.parse(fs.readFileSync(file, 'utf8')) as { voices?: { path?: string; duration_s?: number; words?: TakeWord[] }[] };
   for (const v of meta.voices ?? []) {
-    if (!v.path) continue;
+    if (!v.path || !fs.existsSync(path.join(projectDir, v.path))) continue;
     speedUp(exec, path.join(projectDir, v.path), path.join(projectDir, v.path), tempo);
     v.duration_s = r3(probeSeconds(exec, v.path));
     v.words = scaleWords(v.words ?? [], tempo);
   }
   fs.writeFileSync(file, `${JSON.stringify(meta, null, 2)}\n`);
+  return null;
+}
+
+type MetaVoice = { frame: number; path: string; duration_s: number; words: TakeWord[] };
+
+function metaVoices(projectDir: string): MetaVoice[] {
+  try {
+    const meta = JSON.parse(fs.readFileSync(path.join(projectDir, 'audio_meta.json'), 'utf8')) as { voices?: MetaVoice[] };
+    return meta.voices ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/** The spoken frames with no usable voice: not in audio_meta.json, no duration, or no audio on disk. */
+export function missingVoices(projectDir: string, frames: ScriptFrame[]): number[] {
+  const voices = metaVoices(projectDir);
+  return frames
+    .filter((f) => {
+      const v = voices.find((x) => Number(x.frame) === f.frame);
+      const file = v?.path ? path.join(projectDir, v.path) : null;
+      return !v || !(v.duration_s > 0) || !file || !fs.existsSync(file) || fs.statSync(file).size === 0;
+    })
+    .map((f) => f.frame);
+}
+
+/** Voice only these frames, each as its own take, and add them to audio_meta.json. Throws, naming each frame's reason, while any is left. */
+function revoiceFrames(projectDir: string, frames: ScriptFrame[], voiceId: string, tempo: number, exec: Exec): void {
+  const dir = path.join(projectDir, TAKE_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(path.join(projectDir, 'assets', 'voice'), { recursive: true });
+  const made: MetaVoice[] = [];
+  const failed: string[] = [];
+  let refused = false;
+  for (const f of frames) {
+    if (refused) break;
+    const base = path.join(TAKE_DIR, `frame-${pad2(f.frame)}`);
+    const file = path.join('assets', 'voice', `${pad2(f.frame)}.wav`);
+    try {
+      fs.writeFileSync(path.join(projectDir, `${base}.txt`), `${f.text}\n`);
+      exec('take', process.execPath, [heygenTtsScript(projectDir), `${base}.txt`, '-o', `${base}.raw.wav`, '--words', `${base}.words.json`, '--voice', voiceId]);
+      const words = scaleWords(JSON.parse(fs.readFileSync(path.join(projectDir, `${base}.words.json`), 'utf8')) as TakeWord[], tempo);
+      speedUp(exec, path.join(projectDir, `${base}.raw.wav`), path.join(projectDir, file), tempo);
+      made.push({ frame: f.frame, path: file.split(path.sep).join('/'), duration_s: r3(probeSeconds(exec, file)), words });
+    } catch (error) {
+      const why = errorReason(error);
+      failed.push(`frame ${f.frame}: ${why}`);
+      // A refusal (no money, a bad key) answers for every frame left: no point asking again.
+      refused = isRefusal(why);
+    }
+  }
+  if (made.length) {
+    const kept = metaVoices(projectDir).filter((v) => !made.some((m) => m.frame === Number(v.frame)));
+    writeMeta(projectDir, [...kept, ...made].sort((x, y) => Number(x.frame) - Number(y.frame)));
+  }
+  if (failed.length) throw new Error(`voice: ${frames.length - made.length} of ${frames.length} missing frames could not be voiced (${failed.join('; ')})`);
 }
 
 /**
  * P6 voice (no model): HeyGen TTS in Lucas's voice, one continuous take for the whole script, sped up by
  * `voice_tempo` and split into frames by its word timestamps (MD-93; per-frame clips only when the take
- * fails). The writer's `pronounce` respellings go in a TTS copy and the spelling is restored on the words
- * after; then the real durations into STORYBOARD.md (sync-durations) and the kit's pace (silence tightened,
- * the 0.2s pause cap, silent beats up to `silent_beat_max`, each frame's duration and word timing).
- * Throws with the failing step's output.
+ * fails). A partial voice is not a result: frames left without a voice are re-voiced alone, and if any stays
+ * missing this throws saying which and why, before pace can turn them into silent frames. The writer's
+ * `pronounce` respellings go in a TTS copy and the spelling is restored on the words after; then the real
+ * durations into STORYBOARD.md (sync-durations) and the kit's pace (silence tightened, the 0.2s pause cap,
+ * silent beats up to `silent_beat_max`, each frame's duration and word timing).
+ *
+ * Outages are waited out and transient vendor errors retried (retry.ts). No lock: the theory that two jobs at once
+ * lost the voice isn't borne out by the timing (ITERATION-12 §1), and a lock can only add a wait. If HeyGen really does
+ * turn away a parallel request, its own words now reach the step log and the flag.
  */
-export async function runVoice(projectDir: string, input: VoiceInput, deps: { run?: Runner } = {}): Promise<VoiceResult> {
+export async function runVoice(projectDir: string, input: VoiceInput, deps: { run?: Runner; retry?: RetryOptions } = {}): Promise<VoiceResult> {
   const run = deps.run ?? spawnRunner;
   const tempo = input.tempo ?? DEFAULT_SETTINGS.voice_tempo;
   // The writer's respellings go to the voice only; restore-spelling puts the written words back for the captions.
@@ -303,6 +373,8 @@ export async function runVoice(projectDir: string, input: VoiceInput, deps: { ru
   const env = { ...process.env, ...HYPERFRAMES_ENV, HEYGEN_API_KEY: input.heygenApiKey, HELIOS_VOICE_ID: input.voiceId };
   const exec: Exec = (label, cmd, args) => {
     const res = run(cmd, args, { cwd: projectDir, env, timeoutMs: 15 * 60 * 1000 });
+    // The engine prints why it dropped a frame and still exits 0: its output is kept either way.
+    if (res.status !== 0 || label === 'audio') appendStepLog(projectDir, `voice ${label}`, res);
     if (res.status !== 0) throw new Error(`voice: ${label} failed: ${tail(res)}`);
     return `${res.stdout}\n${res.stderr}`;
   };
@@ -312,16 +384,32 @@ export async function runVoice(projectDir: string, input: VoiceInput, deps: { ru
   fs.rmSync(path.join(projectDir, 'assets', 'voice', 'orig'), { recursive: true, force: true });
 
   let result: VoiceResult;
+  const notes: string[] = [];
   try {
-    result = voiceOneTake(projectDir, script, input.voiceId, tempo, exec);
+    result = await withRetry(async () => voiceOneTake(projectDir, script, input.voiceId, tempo, exec), undefined, deps.retry);
   } catch (error) {
-    const why = error instanceof Error ? error.message : String(error);
+    const why = errorReason(error);
+    appendStepLog(projectDir, 'voice one-take', why);
+    // Out of money or a bad key: the fallback would be refused the same way.
+    if (isRefusal(why)) throw new Error(`voice: HeyGen refused the take, so nothing was voiced: ${why}`);
+    notes.push(`The one-take voice failed (${why}); the frames were voiced one by one.`);
+    const engine = voicePerFrame(projectDir, script, input.voiceId, tempo, exec);
+    if (engine) notes.push(`The per-frame engine failed (${engine}).`);
+    result = { take: 'per_frame', takes: 0, notes };
+  }
+  const spoken = scriptFrames(fs.readFileSync(path.join(projectDir, script), 'utf8'));
+  const missing = () => {
+    const left = missingVoices(projectDir, spoken);
+    return spoken.filter((f) => left.includes(f.frame));
+  };
+  if (missing().length) {
+    const before = missing().map((f) => f.frame);
     try {
-      voicePerFrame(projectDir, script, input.voiceId, tempo, exec);
-    } catch (fallback) {
-      throw new Error(`${why}; the per-frame fallback failed too: ${fallback instanceof Error ? fallback.message : String(fallback)}`);
+      await withRetry(async () => revoiceFrames(projectDir, missing(), input.voiceId, tempo, exec), undefined, deps.retry);
+    } catch (error) {
+      throw new Error(`voice: frames ${missing().map((f) => f.frame).join(', ')} have no voice. ${errorReason(error)}${notes.length ? ` Before that: ${notes.join(' ')}` : ''}`);
     }
-    result = { take: 'per_frame', takes: 0, notes: [`The one-take voice failed (${why}); the frames were voiced one by one.`] };
+    result.notes = [...result.notes, `Frames ${before.join(', ')} came back without a voice and were re-voiced on their own.`];
   }
   const audio = path.join(scriptsDir(projectDir), 'audio.mjs');
   exec('restore-spelling', process.execPath, ['assets/kit/pronounce.mjs', 'restore']);

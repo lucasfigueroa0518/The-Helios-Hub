@@ -41,7 +41,7 @@ sources).
 3. **Build the timeline** in true order, each entry tied to fact ids and dated as exactly as the record
    allows (at least the year), so the story can say when each thing happened. Keep quoted lines in their
    true order. [D-81]
-4. **Record the cast**, the people, companies and products the story turns on, with their role at the time of the story (what they were then, which may differ
+4. **Record the cast**, only the people, companies and products the story can't be told without, with their role at the time of the story (what they were then, which may differ
    from what they are known for today), what they wanted and why, whether they're on the central list
    (`player_id`), and their Wikidata QID when you can find it (else `null`).
 5. **Place the cast in their larger context.** For each person: who they were before the story, and

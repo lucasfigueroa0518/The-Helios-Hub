@@ -4,7 +4,9 @@
  * Messages call, the prompt loader, the model from settings, the job's Jev runner). Where a builder's
  * deps type differs from this base, the typecheck says so at integration (see notes/B5.md).
  */
+import { dramaJobsDir } from '@/lib/reel-ai-drama/local-dir';
 import { measureInventory } from '@/lib/reel-ai-drama/harvest/regions';
+import fs from 'node:fs';
 import path from 'node:path';
 
 import { anthropic } from '@/lib/anthropic';
@@ -37,7 +39,11 @@ import { writePost } from '@/lib/reel-ai-drama/writing/post';
 import { editStory } from '@/lib/reel-ai-drama/writing/story-editor';
 import { reviseScript, writeScript } from '@/lib/reel-ai-drama/writing/writer';
 // B4 kit + render
-import { assembleProject, contactSheet, frameStills, KIT_GUIDE, prepareWorkspace, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
+import { assembleProject, contactSheet, frameSpans, KIT_GUIDE, prepareWorkspace, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
+import { pickMoments, sceneChanges } from '@/lib/reel-ai-drama/render/moments';
+import { makeSheets, viewerSheets } from '@/lib/reel-ai-drama/render/sheets';
+import { preflight } from '@/lib/reel-ai-drama/production/preflight';
+import { resilientDb, withRetry } from '@/lib/reel-ai-drama/retry';
 import { recordCost } from '@/lib/reel-ai-drama/cost';
 import { makeAssets } from '@/lib/reel-ai-drama/render/make';
 import { designSound } from '@/lib/reel-ai-drama/render/sound-design';
@@ -49,7 +55,12 @@ import type { ScheduleDeps } from '@/lib/reel-ai-drama/production/schedule';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 
-export const JOBS_ROOT = process.env.REEL_AI_DRAMA_JOBS_DIR || path.join(process.cwd(), '.explainers-local', 'reel-ai-drama', 'jobs');
+export const JOBS_ROOT = dramaJobsDir();
+
+/** Jev goes over the network like any model call: an outage waits. */
+const productionJevTransport: typeof liveJevTransport = {
+  systemOne: (state, questions) => withRetry(() => liveJevTransport.systemOne(state, questions), undefined),
+};
 
 /** The kit's project-files writer (B4, an .mjs module), loaded at run time. */
 async function writeProjectFiles(projectDir: string, input: Parameters<ProductionDeps['render']['writeProjectFiles']>[1]): Promise<unknown> {
@@ -66,8 +77,9 @@ export async function liveProductionDeps(input: {
   jobsRoot?: string;
   log?: (event: string, fields?: Record<string, unknown>) => void;
 }): Promise<ProductionDeps> {
-  const { db } = input;
-  const jev = (ctx: StepCtx) => new RecordingDramaJevRunner(liveJevTransport, db, { mode: ctx.mode, jobId: ctx.jobId });
+  const db = resilientDb(input.db);
+  const jobsRoot = input.jobsRoot ?? JOBS_ROOT;
+  const jev = (ctx: StepCtx) => new RecordingDramaJevRunner(productionJevTransport, db, { mode: ctx.mode, jobId: ctx.jobId });
   const base = (ctx: StepCtx, component: string, model: string) => ({
     db,
     create: anthropicCreate(anthropic, component),
@@ -81,9 +93,10 @@ export async function liveProductionDeps(input: {
   return {
     db,
     store: input.store,
-    jobsRoot: input.jobsRoot ?? JOBS_ROOT,
+    jobsRoot,
     secrets: input.secrets,
     log: input.log,
+    preflight: () => preflight({ secrets: input.secrets, jobsRoot }),
     jev,
     pool: { nextForProduction },
     reporting: {
@@ -131,7 +144,7 @@ export async function liveProductionDeps(input: {
       checkFacts: (runner, i) => checkFacts(runner, i),
       // Asset `file` paths are relative to the harvest dir (run.ts keeps it after copying it into the job).
       checkIntegrity: (i, ctx) =>
-        checkIntegrity({ ...base(ctx, 'integrity', ctx.settings.vision_model), jobDir: path.join(input.jobsRoot ?? JOBS_ROOT, '_harvest', ctx.jobId) }, i),
+        checkIntegrity({ ...base(ctx, 'integrity', ctx.settings.vision_model), jobDir: path.join(jobsRoot, '_harvest', ctx.jobId) }, i),
       checkFirstViewer: (i, ctx) => checkFirstViewer(base(ctx, 'first_viewer', ctx.settings.vision_model), i),
       // MD-129: Haiku (vision_model) and Sonnet (design_judge_model) calls, each recorded under its own component.
       checkDesign: (i, ctx) => checkDesign(base(ctx, 'design_review', ctx.settings.vision_model), i),
@@ -152,7 +165,15 @@ export async function liveProductionDeps(input: {
       assembleProject,
       renderVideo,
       contactSheet,
-      frameStills: (dir, video) => frameStills(dir, video),
+      // Code picks every moment worth seeing (Iteration 11 §2); a reader never judges a frame from one still.
+      reviewSheets: async (dir, video, findings) => {
+        const spans = frameSpans(fs.readFileSync(path.join(dir, 'STORYBOARD.md'), 'utf8'));
+        const moments = pickMoments({ spans, records: readCompiled(dir).frames ?? {}, findings, changes: sceneChanges(video) });
+        return {
+          viewer: await viewerSheets(video, moments, path.join(dir, 'renders', 'sheets-viewer')),
+          design: await makeSheets(video, moments, path.join(dir, 'renders', 'sheets-design')),
+        };
+      },
     },
   };
 }

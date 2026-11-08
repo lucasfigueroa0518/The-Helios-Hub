@@ -1,4 +1,4 @@
-import { FOCUS_KINDS } from '@/lib/reel-ai-drama/types';
+import { FOCUS_KINDS, HOOK_IDS } from '@/lib/reel-ai-drama/types';
 import type { SubmitTool } from '@/lib/reel-ai-drama/writing/llm';
 
 /** Strict submit tools whose schemas match lib/reel-ai-drama/types.ts. Stable: they sit in the cached prefix. */
@@ -62,9 +62,21 @@ const FRAME_SHOT = obj({ at: str, shows: str, asset_ids: strList, introduces: nu
 const PRONOUNCE = { type: 'array', items: obj({ word: str, say: str }) } as const;
 
 /** A label's kind (MD-130): 'date' for a date label (`L1`'s always is), else null. */
-const ON_SCREEN_KIND = { anyOf: [{ type: 'string', enum: ['date'] }, { type: 'null' }] } as const;
 
-const SCRIPT_LINE = obj({ id: str, text: str, on_screen: nullableStr, on_screen_kind: ON_SCREEN_KIND, fact_ids: strList, must_show: nullableStr, pause_after: nullableNum });
+/** The opening hook (types.ts `HookChoice`): the director's pick, or the problem solver's swap. Code resolves it. */
+const HOOK_CHOICE_OR_NULL = {
+  type: ['object', 'null'],
+  additionalProperties: false,
+  properties: {
+    id: { type: 'string', enum: [...HOOK_IDS] },
+    beats: { type: 'array', items: obj({ asset: str, on: str }) },
+    charged: str,
+    headlines: { type: 'array', items: obj({ text: str, publisher: str, url: str }) },
+  },
+  required: ['id', 'beats', 'charged'],
+} as const;
+
+const SCRIPT_LINE = obj({ id: str, text: str, on_screen: nullableStr, fact_ids: strList, must_show: nullableStr, pause_after: nullableNum });
 
 /** A rung: `purpose` says what it does in the story. */
 const RUNG = obj({ id: str, purpose: str, lines: { type: 'array', items: SCRIPT_LINE } });
@@ -76,7 +88,7 @@ export const SUBMIT_SCRIPT_TOOL: SubmitTool = {
   strict: false,
   input_schema: obj({
     title: str,
-    hook: obj({ on_screen: str, line_id: str }),
+    hook: obj({ line_id: str }),
     rungs: { type: 'array', items: RUNG },
     peak_rung_id: str,
     landing_rung_id: str,
@@ -109,11 +121,10 @@ export const SUBMIT_REVISION_TOOL: SubmitTool = {
     properties: {
       replacements: {
         type: 'array',
-        items: obj({ line_id: str, cut: { type: 'boolean' }, text: str, on_screen: nullableStr, on_screen_kind: ON_SCREEN_KIND, fact_ids: strList, must_show: nullableStr, pause_after: nullableNum }),
+        items: obj({ line_id: str, cut: { type: 'boolean' }, text: str, on_screen: nullableStr, fact_ids: strList, must_show: nullableStr, pause_after: nullableNum }),
       },
       pronounce: PRONOUNCE,
-      // Optional: what a line change makes stale (the hook's words after an L1 rewrite, a rung's purpose, the close question).
-      hook_on_screen: nullableStr,
+      // Optional: what a line change makes stale (a rung's purpose, the close question).
       close_question: nullableStr,
       purposes: { type: 'array', items: obj({ rung_id: str, purpose: str }) },
     },
@@ -164,7 +175,6 @@ export const BLUEPRINT = partly(
     sounds: list(partly({ kind: str, what: str, on: str }, { dur: num })),
   },
   {
-    hook: obj({ text: str, on: str }),
     peak: { type: 'boolean' },
     ground_tone: list(obj({ on: str, to: num })),
   },
@@ -175,6 +185,7 @@ export const SUBMIT_PLAN_TOOL: SubmitTool = {
   description: 'Submit the storyboard frames, the assets to make, the shots to search for (wishes), and any lines sent back to the writer, once.',
   strict: false,
   input_schema: obj({
+    hook: HOOK_CHOICE_OR_NULL,
     frames: {
       type: 'array',
       items: obj({
@@ -220,6 +231,7 @@ export const SUBMIT_TOUCHES_TOOL: SubmitTool = {
         { text: str, for: str, on: {}, piece_ids: strList, from: str, to: {}, aim: str, kind: str, on_piece: str, target: str, what: str, dur: num },
       ),
     ),
+    hook_swap: HOOK_CHOICE_OR_NULL,
     custom: list(partly({ id: str, frame: { type: 'integer' }, why: str, aspect: num, min_width: num, on: str, code: str }, { until: str })),
   }),
 };

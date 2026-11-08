@@ -107,6 +107,10 @@ const EDGE = 30;
 const GAP = 22;
 /** A label or plate this far from what it clears. */
 const WORD_GAP = 14;
+/** A logo's clear space: nothing placed comes nearer than this. */
+const LOGO_CLEAR = 40;
+/** A logo, a note or words keep this far from the frame's side under the camera: cut, they read as a mistake. */
+const SOLID_MARGIN = 16;
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const LAYER_RANK = { fill: 0, print: 1, card: 1, custom: 2, words: 2, drawing: 2, person: 2, thing: 3, logo: 4, note: 5 };
@@ -187,12 +191,22 @@ export function isCut(media) {
 }
 
 /** What a picture is on a stage: person | thing | logo | card | print | drawing. Pure. */
+/** A picture the harvest filed as a photo, though all it shows is a mark: it's a logo, whatever kind it came in as. Pure. */
+export function showsOnlyLogo(media) {
+  const shows = String(media.shows ?? '');
+  if (facesOf(media).length || ((media.people ?? []).filter(Boolean).length && !/\bno (person|people|one)\b/i.test(shows))) return false;
+  return /^(the |an? )?[^,;.]{0,40}\b(logo|wordmark|app icon)\b/i.test(shows) && !/\b(sign|building|campus|office|poster|screen|shirt|stage)\b/i.test(shows.split(/[;.]/)[0]);
+}
+
+/** A picture all words and no face, with no one named in it, is a screen capture whatever kind it was filed as. Pure. */
+const screenLike = (media) => (media.flags ?? []).includes('text_heavy') && (media.flags ?? []).includes('faces:0') && !(media.people ?? []).filter(Boolean).length;
+
 export function pieceKind(media) {
   if (!media) return 'print';
   if (media.made || DRAWN_KINDS.has(media.made_kind)) return 'drawing';
-  if (media.kind === 'logo' || media.flags?.includes?.('logo')) return 'logo';
+  if (media.kind === 'logo' || media.flags?.includes?.('logo') || showsOnlyLogo(media)) return 'logo';
   if (isCut(media)) return facesOf(media).length || (media.people ?? []).filter(Boolean).length ? 'person' : 'thing';
-  if (TEXT_KINDS.has(media.kind)) return 'card';
+  if (TEXT_KINDS.has(media.kind) || screenLike(media)) return 'card';
   return 'print';
 }
 
@@ -251,12 +265,37 @@ export function headIn(media, face, aspect = (media?.width > 0 && media?.height 
 
 const visibleOf = (media) => (okBox(media?.regions?.visible) ? media.regions.visible : { x: 0, y: 0, w: 1, h: 1 });
 /** The picture's measured words, 0–1 of the image: [{ text, box }]. */
+/**
+ * A measured phrase that wraps comes back as one box per line, each carrying the whole phrase. Its words are shared out
+ * over those boxes in reading order, by width, so each line's box holds the words on that line. Pure.
+ */
+export function splitWrapped(words) {
+  const out = [];
+  for (let i = 0; i < words.length; ) {
+    let j = i + 1;
+    while (j < words.length && words[j].text === words[i].text) j++;
+    const run = words.slice(i, j);
+    const toks = String(words[i].text).split(/\s+/).filter(Boolean);
+    if (run.length < 2 || toks.length < run.length) { out.push(...run); i = j; continue; }
+    const total = run.reduce((n, w) => n + w.box.w, 0) || 1;
+    let used = 0, acc = 0;
+    run.forEach((w, k) => {
+      acc += w.box.w;
+      const upto = k === run.length - 1 ? toks.length : Math.min(toks.length - (run.length - 1 - k), Math.max(used + 1, Math.round((acc / total) * toks.length)));
+      out.push({ text: toks.slice(used, upto).join(' '), box: w.box });
+      used = upto;
+    });
+    i = j;
+  }
+  return out;
+}
+
 export function wordsOf(media) {
   const r = media?.regions ?? {};
   const W = media?.width, H = media?.height;
   let words = (Array.isArray(r.words) ? r.words : []).filter((w) => okBox(w?.box)).map((w) => ({ text: String(w.text ?? ''), box: w.box }));
   if (!words.length && Array.isArray(media?.boxes) && W > 0 && H > 0) {
-    words = media.boxes.filter(okBox).map((b) => ({ text: String(b.text ?? ''), box: { x: b.x / W, y: b.y / H, w: b.w / W, h: b.h / H } }));
+    words = splitWrapped(media.boxes.filter(okBox).map((b) => ({ text: String(b.text ?? ''), box: { x: b.x / W, y: b.y / H, w: b.w / W, h: b.h / H } })));
   }
   return words;
 }
@@ -476,12 +515,27 @@ export function noteBox(text, role = 'body') {
   return { role: NOTE_ROLES[role] ? role : 'body', font: r.font, max: r.max, min: r.min, lines, w: longest * r.font * HAND_EM + 16, h: lines.length * r.font * 1.12 + 10 };
 }
 
+/** How many characters of a number's words fit the words zone at full size, one line. */
+const NUMBER_LINE = 9;
+/** A number's words on as few lines as let it stay large: one when it's short, or can't break; else broken where the lines come out most even. Pure. */
+export function numberLines(value) {
+  const text = String(value ?? '').trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  if (text.length <= NUMBER_LINE || words.length < 2) return [text];
+  let best = null;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' '), b = words.slice(i).join(' ');
+    if (!best || Math.max(a.length, b.length) < Math.max(best[0].length, best[1].length)) best = [a, b];
+  }
+  return best;
+}
+
 /** The kind a treatment is on a stage. */
 const TREATMENT_KIND = { page: 'card', post: 'card', document: 'card', headline: 'card', newspaper: 'card', board: 'card', lift: 'card', map: 'print', photo: 'print', number: 'words', stat: 'words', lower_third: 'words', flash_reveal: 'fill', phone_shot: 'fill', click_reveal: 'fill', burst: 'fill', pull_quote: 'fill' };
 /** A treatment with no picture of its own: how wide for how tall. Stage.js passes `aspect` when it knows better. */
 function treatmentAspect(p) {
   const o = p.opts ?? {};
-  if (p.treatment === 'number') { const v = String(o.value ?? '').length || 1, l = String(o.label ?? '').length; return Math.max(v * 118 * 0.74, l * 34) / (118 * 1.05 + (o.label ? 74 : 0) + 36); }
+  if (p.treatment === 'number') { const v = numberLines(o.value), l = String(o.label ?? '').length; return Math.max(Math.max(1, ...v.map((x) => x.length)) * 118 * 0.74, l * 34) / (v.length * 118 * 1.05 + (o.label ? 74 : 0) + 36); }
   if (p.treatment === 'lower_third') return (Math.max(String(o.name ?? '').length * 46, String(o.role ?? '').length * 24) + 48) / (o.role ? 150 : 110);
   if (p.treatment === 'stat') return (o.kind === 'bar' || o.kind === 'scale') ? 1.05 : 1.35;
   if (p.treatment === 'headline') return 2;
@@ -1170,7 +1224,7 @@ function obstaclesFor(p, plan, level) {
         if (chest) out.push({ ...chest, h: Math.min(chest.h, Math.max(0, k.y + k.h + 40 - chest.y)) });
       }
     } else {
-      out.push(pad(boxInFrame(pl, q.vis), GAP));
+      out.push(pad(boxInFrame(pl, q.vis), p.kind === 'logo' || q.kind === 'logo' ? LOGO_CLEAR : GAP));
     }
   }
   for (const r of plan.reserved) if (!r.owner || r.owner !== p.id) if (together(p, r)) out.push(pad(r, 10));
@@ -1545,6 +1599,7 @@ function markSpot(mark, plan, taken) {
 }
 
 /** Whether words may lie here: no keep, no chest, nothing already placed at the same time; `body`: how much of them may lie on a figure. */
+const SOLID_WORDS = new Set(['words', 'note', 'logo']);
 function wordsClear(r, l, plan, taken, body = 0) {
   // On the ledge, nothing's body is in the way: it stands behind.
   const onLedge = r.y >= plan.ledge + 16;
@@ -1553,6 +1608,8 @@ function wordsClear(r, l, plan, taken, body = 0) {
     const pl = plan.placed.get(id);
     if (q.kind === 'fill') { if (!q.softKeep && keepUnderBox(r, q, pl) > STAGE.keepMax) return false; continue; }
     if (keepUnderBox(r, q, pl) > STAGE.keepMax) return false;
+    // Keeps are sampled points, and words or a mark have to be clear of their whole box: a thin label fits between the points.
+    if (SOLID_WORDS.has(q.kind) && overlap(r, pad(boxInFrame(pl, q.vis), WORD_GAP / 2))) return false;
     if (onLedge) continue;
     if (q.kind === 'person') {
       const chest = chestOf(q, pl);
@@ -1570,7 +1627,8 @@ function labelSpot(label, plan, taken, frameTaken) {
   const y0 = Math.max(plan.ceilingFor ?? STAGE.top, plan.bounds.y0), y1 = Math.min(STAGE.bottom, plan.bounds.y1);
   const fits = (r) => r.x >= x0 - 0.5 && r.x + r.w <= x1 + 0.5 && r.y >= y0 - 0.5 && r.y + r.h <= y1 + 0.5;
   const keeps = [...plan.placedPieces()].filter(([id, q]) => q.kind !== 'fill' && together(label, q)).map(([id, q]) => ({ id, box: boxInFrame(plan.placed.get(id), q.keep) }));
-  if (label.owner && plan.byId.has(label.owner) && plan.placed.has(label.owner)) {
+  // A label on a whole-frame picture is about the frame: it has no spot beside anything.
+  if (label.owner && plan.byId.has(label.owner) && plan.placed.has(label.owner) && plan.byId.get(label.owner).kind !== 'fill') {
     const reserved = plan.reserved.find((r) => r.id === `under:${label.owner}`);
     const q = plan.byId.get(label.owner);
     if (reserved) {
@@ -2298,6 +2356,8 @@ function labelLife(l, owner, prepared) {
   const at = Math.max(l.at ?? 0, earliest);
   const asked = l.until ?? Infinity;
   if (l.kind === 'number') return { at, until: Math.min(asked, owner?.until ?? Infinity), moved: at !== (l.at ?? 0) };
+  // A photo's own words come and go with the photo.
+  if (l.kind === 'photo') return { at, until: Math.min(asked, owner?.until ?? Infinity), moved: false };
   if (!owner) return { at, until: Math.min(asked, at + LIMITS.dateBeat), moved: at !== (l.at ?? 0) };
   const next = Math.min(Infinity, ...prepared.filter((q) => q !== owner && q.kind === 'person' && q.at > at).map((q) => q.at));
   const beat = Math.min(at + LIMITS.labelBeat, Math.max(next, at + LIMITS.labelRead));
@@ -2403,6 +2463,41 @@ export function poseAt(keys, t) {
  * keep; `face:<name>` a head; `text:<words>` the phrase's whole line. Zoom is limited by the head's maximum, by sharpness,
  * and by the room for the words.
  */
+/** A single flat picture up this long doesn't just sit under a slow push: the camera moves in steps. */
+const LONE_SPAN = 2.4;
+/** The least it stays on each step, seconds. */
+const LONE_STEP = 1.2;
+/** How close a step goes, at most, and the least difference from where it was that reads as a move. */
+const LONE_ZOOM = 1.6;
+const LONE_MOVE = 1.1;
+/**
+ * The camera over a picture that's alone on screen and flat (a whole-frame picture, or one print), with no mark or plate of its own:
+ * it goes in on the subject and back in eased steps rather than creeping. Where the picture can't take that (too soft to go closer),
+ * the poses stay as they were. Pure.
+ */
+function lonePictureSteps({ poses, prep, marks, speech, placed, poseFor, dur }) {
+  const out = [];
+  for (const pose of poses) {
+    const span = pose.next - pose.at;
+    const on = prep.filter((p) => p.at < pose.next - 1e-3 && pose.at < p.until - 1e-3);
+    const only = on.length === 1 ? on[0] : null;
+    const flat = only && (only.kind === 'fill' || only.kind === 'print') && !marks.some((m) => m.on === only.id && (m.at ?? 0) < pose.next) && !speech.some((sp) => sp.on === only.id);
+    if (!flat || span < LONE_SPAN) { out.push(pose); continue; }
+    const pl = placed.get(only.id);
+    const subject = only.head && only.measuredHead ? only.head : only.focus ?? (only.softKeep ? null : only.keep);
+    const box = subject ? boxInFrame(pl, subject) : { x: pl.x + pl.w * 0.25, y: pl.y + pl.h * 0.25, w: pl.w * 0.5, h: pl.h * 0.5 };
+    const close = poseFor({ kind: 'piece', piece: only, box, requested: LONE_ZOOM }, pose.at, pose.next);
+    if (close.s < pose.s * LONE_MOVE) { out.push(pose); continue; }
+    const steps = Math.max(2, Math.min(4, Math.floor(span / LONE_STEP / 1.25)));
+    for (let i = 0; i < steps; i++) {
+      const at = pose.at + (span * i) / steps;
+      const next = i + 1 < steps ? pose.at + (span * (i + 1)) / steps : pose.next;
+      out.push({ ...(i % 2 ? close : pose), at, aim: pose.aim, kind: i % 2 ? 'piece' : pose.kind, next: Math.min(next, dur) });
+    }
+  }
+  return out;
+}
+
 function planCamera({ camera, peak, final, plan, labels, speech, marks, duration, notes }) {
   const spec = camera ?? { move: 'push', stops: [{ at: 0, aim: 'whole' }] };
   let move = spec.move ?? 'hold';
@@ -2505,7 +2600,8 @@ function planCamera({ camera, peak, final, plan, labels, speech, marks, duration
   const halfOut = (pose, on, aim) => on.some((p) => {
     if (p.kind === 'fill' || p === aim.piece || p.asGround) return false;
     const b = applyPose(pose, seenBox(p));
-    const out = b.x < -1 || b.x + b.w > STAGE.W + 1;
+    const margin = SOLID_WORDS.has(p.kind) ? SOLID_MARGIN : -1;
+    const out = b.x < margin || b.x + b.w > STAGE.W - margin;
     const gone = b.x + b.w <= 0 || b.x >= STAGE.W;
     return out && !gone;
   });
@@ -2536,7 +2632,7 @@ function planCamera({ camera, peak, final, plan, labels, speech, marks, duration
       if (okWords && !halfOut(pose, on, aim)) break;
       s = Math.max(1, s * 0.92);
     }
-    return { ...poseOn(box, s, safe, world), box };
+    return { ...poseOn(box, s, safe, world), box, piece: aim.piece ?? null };
   };
   const resolved = [];
   stops.forEach((st, i) => {
@@ -2567,6 +2663,11 @@ function planCamera({ camera, peak, final, plan, labels, speech, marks, duration
     });
   }
   poses.forEach((p, i) => { p.next = poses[i + 1]?.at ?? dur; });
+  if (move !== 'tour' && move !== 'slide') {
+    const lively = lonePictureSteps({ poses, prep, marks, speech, placed, poseFor, dur });
+    if (lively.length !== poses.length) notes.push('lone_picture: a single flat picture takes the camera in steps');
+    poses.splice(0, poses.length, ...lively);
+  }
   // Keys: a slow move during each hold, and one eased move between poses.
   const keys = [];
   const travelFor = (a, b) => {
@@ -2586,8 +2687,10 @@ function planCamera({ camera, peak, final, plan, labels, speech, marks, duration
     const end = poseOn(box, s, safe, world);
     const dx = move === 'drift' ? (plan.seed + i) % 2 ? -14 : 14 : 0;
     const shifted = { s: end.s, tx: clamp(end.tx + dx, STAGE.W - end.s * world.w, 0), ty: end.ty };
-    // What must be seen stays seen at the end of the drift too.
-    return insideBox(applyPose(shifted, box), { x: 0, y: top - 2, w: STAGE.W, h: STAGE.H }) ? shifted : insideBox(applyPose(end, box), { x: 0, y: top - 2, w: STAGE.W, h: STAGE.H }) ? end : p;
+    // What must be seen stays seen at the end of the drift too, and nothing on is pushed half out of the frame.
+    const on = prep.filter((q) => q.at < t1 - 1e-3 && t0 < q.until - 1e-3);
+    const ok = (pose) => insideBox(applyPose(pose, box), { x: 0, y: top - 2, w: STAGE.W, h: STAGE.H }) && !halfOut(pose, on, { piece: p.piece });
+    return ok(shifted) ? shifted : ok(end) ? end : p;
   };
   poses.forEach((p, i) => {
     const nextP = poses[i + 1];

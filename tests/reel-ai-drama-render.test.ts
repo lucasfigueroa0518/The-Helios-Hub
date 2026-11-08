@@ -104,8 +104,9 @@ function voiceRunner(project: string, { words = true }: { words?: boolean } = {}
       return ok('✓ take');
     }
     if (args[0]?.endsWith('audio.mjs') && !args.includes('sync-durations')) {
-      write('assets/voice/01.wav');
-      fs.writeFileSync(path.join(project, 'audio_meta.json'), JSON.stringify({ bgm: null, voices: [{ frame: 1, path: 'assets/voice/01.wav', duration_s: 2.24, words: [{ id: 'w0', text: 'Elon', start: 0, end: 1.12 }] }], sfx: [] }));
+      for (const n of ['01', '02', '03']) write(`assets/voice/${n}.wav`);
+      const clip = (frame: number) => ({ frame, path: `assets/voice/0${frame}.wav`, duration_s: 2.24, words: [{ id: 'w0', text: 'Elon', start: 0, end: 1.12 }] });
+      fs.writeFileSync(path.join(project, 'audio_meta.json'), JSON.stringify({ bgm: null, voices: [clip(1), clip(2), clip(3)], sfx: [] }));
       return ok();
     }
     if (cmd === 'ffprobe') return ok('5.000\n');

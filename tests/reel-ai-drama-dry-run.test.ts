@@ -34,7 +34,7 @@ type Any = any;
 const line = (id: string, text: string) => ({ id, text, on_screen: null, fact_ids: ['F1'], must_show: null });
 const DRAFT = {
   title: 'The lab that kept the door open',
-  hook: { on_screen: 'NOT LOCKED', line_id: 'L1' },
+  hook: { line_id: 'L1' },
   rungs: [
     { id: 'R1', purpose: 'setup', lines: [line('L1', 'The vault door stood open all winter.'), line('L2', 'Maria Chen wrote the first warning.')] },
     { id: 'R2', purpose: 'turn', lines: [line('L3', 'The memo sat in a drawer for months.'), line('L4', 'Then the logo came down overnight.')] },
@@ -79,12 +79,12 @@ async function harvestInto(dir: string): Promise<VisualsInventory> {
 
 const blueprint = (pieces: Any[], extra: Any = {}) => ({ ground: 'charcoal', style: 'cutouts', arrangement: 'solo', pieces, labels: [], speech: [], marks: [], arrows: [], camera: { move: 'push', stops: [{ on: '', aim: 'whole' }] }, sounds: [], ...extra });
 const FOCUS = { kind: 'object', what: 'the door' };
-const storyFrame = (n: number, name: string, lines: string[], bp: Any, extra: Any = {}) => ({ n, name, line_ids: lines, treatment: 'photo', asset_ids: [], purpose: `Carries ${name}.`, music: n === 1 ? 'start' : 'hold', on_screen: n === 1 ? 'NOT LOCKED' : null, focus: FOCUS, blueprint: bp, ...extra });
+const storyFrame = (n: number, name: string, lines: string[], bp: Any, extra: Any = {}) => ({ n, name, line_ids: lines, treatment: 'photo', asset_ids: [], purpose: `Carries ${name}.`, music: n === 1 ? 'start' : 'hold', on_screen: null, focus: FOCUS, blueprint: bp, ...extra });
 const CLOSE = { n: 5, name: 'The question', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'The question plays over it.', music: 'hold', on_screen: null };
 /** A plan the director could really send: a dark room filling the frame, a photo of a person to be cut out, a wish, a page, a logo. */
 const goodPlan = (): Any => ({
   frames: [
-    storyFrame(1, 'The open door', ['L1'], blueprint([{ id: 'room', asset: 'R1', fill: true, on: '' }], { hook: { text: 'NOT LOCKED', on: '' } }), { focus: { kind: 'place', what: 'the dark room' } }),
+    storyFrame(1, 'The open door', ['L1'], blueprint([{ id: 'room', asset: 'R1', fill: true, on: '' }]), { focus: { kind: 'place', what: 'the dark room' } }),
     storyFrame(2, 'Who wrote it', ['L2'], blueprint([{ id: 'maria', asset: 'P1', label: 'Maria Chen', on: 'Maria' }, { id: 'shot', asset: 'W1', on: 'warning' }], { arrangement: 'lead_inset' }), { treatment: 'collision', focus: { kind: 'person', what: 'Maria Chen' } }),
     storyFrame(3, 'The drawer', ['L3'], blueprint([{ id: 'memo', asset: 'D1', treatment: 'document', on: '' }], { marks: [{ kind: 'underline', on_piece: 'memo', target: 'text:months', on: 'months' }] }), { treatment: 'document', focus: { kind: 'document', what: 'the memo' } }),
     storyFrame(4, 'Down overnight', ['L4'], blueprint([{ id: 'logo', asset: 'L1', on: '' }, { id: 'note', note: 'overnight', note_role: 'date', on: 'overnight', until: 'logo' }]), { treatment: 'lift', focus: { kind: 'logo', what: 'the logo' } }),
@@ -300,7 +300,7 @@ test('dry run: a fresh story goes through the whole live loop, first plan to del
         return { problems: designRounds === 1 ? [{ frame: 3, item: 'off_edge', severity: 'problem', what: 'The page runs off.' }] : [], warnings: [], errors: [], usd: 0 } as never;
       },
     },
-    render: { frameStills: async () => [{ number: 3, name: 'x', treatment: 'photo', at: 1, file: 'still.jpg' }] as never },
+    render: { reviewSheets: async () => ({ viewer: [], design: [{ frame: 3, file: 'still.jpg', moments: [] }] }) as never },
   });
   const result = await runJob(deps, job);
   const flags = await flagsOf(db, job.id);
@@ -408,7 +408,7 @@ test('dry run: every step after the plan may fail and the reel still ships, each
       designSound: boom('the sound designer') as never,
       contactSheet: boom('the contact sheet') as never,
       videoSeconds: boom('ffprobe') as never,
-      frameStills: boom('the stills') as never,
+      reviewSheets: boom('the sheets') as never,
       readCompiled: boom('the plan check') as never,
     },
   });

@@ -319,10 +319,10 @@ export function holdStartedToday(before: State, s: State, today: string, nowMinu
 
 // ── Bookings ──
 
-const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', stories: 'setId', reels: 'postIdeaId' };
+const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', stories: 'setId', reels: 'postIdeaId', reel_ai_drama: 'jobId' };
 
 /** Types whose booking is the social_hub.schedule row (placement.rescheduleItem); Stories' minute lives in stories.sets. */
-const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'ai_events', 'reels', 'explainers']);
+const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'ai_events', 'reels', 'explainers', 'reel_ai_drama']);
 
 /** `slotBy`: schedule.slot_by when set (Stories: mirrored from stories.sets.slot_by by projectSet), else the person's when they placed it (source 'user'), else the system's. */
 export type Booking = { id: string; vertical: Vertical; nyDate: string; slot: string; key: SlotKey; feedMode: FeedMode | null; publishAt: Date; refs: Record<string, string>; slotBy: SetBy };

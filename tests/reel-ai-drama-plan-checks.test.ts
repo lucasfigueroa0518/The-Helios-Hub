@@ -25,7 +25,7 @@ function asset(id: string, over: Partial<Asset> = {}): Asset {
 const inv = (...assets: Asset[]): VisualsInventory => ({ assets, usable_count: assets.length, counts: {}, kill: null, usd: 0 });
 function draft(...texts: string[]): WriterDraft {
   return {
-    title: 'T', hook: { on_screen: 'A hook', line_id: 'L1' },
+    title: 'T', hook: { line_id: 'L1' },
     rungs: [{ id: 'R1', purpose: 'p', lines: texts.map((text, i) => ({ id: `L${i + 1}`, text, on_screen: null, fact_ids: [], must_show: null, pause_after: null })) }],
     peak_rung_id: 'R1', landing_rung_id: 'R1', close_question: 'Would you?', word_count: 0, central: [],
   };
@@ -376,10 +376,9 @@ test('blueprint validity: wishes and makes count as assets; the close carries no
 
 test('validatePlan: blueprint findings are the one correction, never a failure; pictures join the frame; a planned drawing becomes a make', () => {
   const d = draft(VOICE);
-  d.hook.on_screen = 'A hook';
   const b = valid();
   b.pieces[1]!.on = 'words nobody says';
-  const v = validatePlan({ frames: [frame(1, { on_screen: 'A hook', blueprint: b, treatment: 'tableau' }), closeFrame(2)], lines_back: [] }, { draft: d, inventory: BP_INVENTORY });
+  const v = validatePlan({ frames: [frame(1, { blueprint: b, treatment: 'tableau' }), closeFrame(2)], lines_back: [] }, { draft: d, inventory: BP_INVENTORY });
   assert.deepEqual(v.problems, []);
   assert.equal(v.soft.length, 1);
   assert.match(v.soft[0]!, /"words nobody says"/);
@@ -387,7 +386,7 @@ test('validatePlan: blueprint findings are the one correction, never a failure; 
   assert.ok(v.value!.frames[0]!.asset_ids.includes('V2'), "a piece's picture joins the frame");
 
   const drawn = blueprint({ pieces: [{ id: 'sketch', asset: 'M7', on: 'told' }] });
-  const made = validatePlan({ frames: [frame(1, { on_screen: 'A hook', blueprint: drawn, treatment: 'tableau', shots: [beat('Musk told', 'a drawn laptop on a table', 'M7')] }), closeFrame(2)], lines_back: [] }, { draft: d, inventory: BP_INVENTORY });
+  const made = validatePlan({ frames: [frame(1, { blueprint: drawn, treatment: 'tableau', shots: [beat('Musk told', 'a drawn laptop on a table', 'M7')] }), closeFrame(2)], lines_back: [] }, { draft: d, inventory: BP_INVENTORY });
   assert.deepEqual(made.problems, []);
   assert.deepEqual(made.value!.makes!.map((m) => [m.id, m.kind, m.brief]), [['M7', 'drawing', 'a drawn laptop on a table']]);
 
@@ -431,7 +430,7 @@ const toolMessage = (input: unknown) => ({ id: 'm', type: 'message', role: 'assi
 
 test('the fix round carries the plan findings to the director, and only the named frames', async () => {
   const d = draft('Line one.');
-  const plan = { frames: [frame(1, { on_screen: 'A hook', treatment: 'tableau', asset_ids: ['V1'] }), closeFrame(2)], lines_back: [] } as unknown as DirectorPlan;
+  const plan = { frames: [frame(1, { treatment: 'tableau', asset_ids: ['V1'] }), closeFrame(2)], lines_back: [] } as unknown as DirectorPlan;
   const calls: { messages: { content: { text: string }[] }[] }[] = [];
   const create = (async (p: never) => { calls.push(p); return toolMessage(plan); }) as never;
   const db = { query: async () => ({ rows: [] }) };

@@ -7,14 +7,15 @@ import type { Queryable } from '@/lib/explainers/db';
 import { developmentSpendSince } from '@/lib/reel-ai-drama/cost';
 import { iso, listJobs, pitchRow } from '@/lib/reel-ai-drama/production/jobs';
 import { weekStart } from '@/lib/reel-ai-drama/production/schedule';
-import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
-import { loadSettings } from '@/lib/reel-ai-drama/settings';
+import { latestCalibration, listDramaRequests } from '@/lib/reel-ai-drama/requests';
+import { ensureReelAiDramaSchema, SchemaNotAppliedError } from '@/lib/reel-ai-drama/schema';
+import { loadSettingsReport, SettingsError } from '@/lib/reel-ai-drama/settings';
 import { ERAS, pitchBrief, pitchCentral, STORY_TYPES, type DeliveryReport, type PitchRow, type PostText } from '@/lib/reel-ai-drama/types';
 
 /** The Reel AI Drama lab (MD-30: the lab ranks; nothing here spends): what the page shows, and its routes' wrapper. */
 
 export class LabError extends Error {
-  constructor(message: string, readonly status = 400) {
+  constructor(message: string, readonly status = 400, readonly fields?: Record<string, string>) {
     super(message);
   }
 }
@@ -26,7 +27,7 @@ type Session = { email: string } | null;
  * /api/reel-ai-drama route. In development the lab works without a session (as the Real Case lab).
  */
 export async function reelAiDramaRoute(
-  fn: (ctx: { db: Queryable }) => Promise<unknown>,
+  fn: (ctx: { db: Queryable; by: string }) => Promise<unknown>,
   opts: { session?: () => Promise<Session>; db?: () => Promise<Queryable> } = {},
 ): Promise<NextResponse> {
   let session = opts.session ? await opts.session() : await (await import('@/lib/session')).getSession();
@@ -35,14 +36,22 @@ export async function reelAiDramaRoute(
   try {
     const db = opts.db ? await opts.db() : await (await import('@/lib/explainers/connection')).explainersDb();
     await ensureReelAiDramaSchema(db);
-    return NextResponse.json(await fn({ db }));
+    const out = await fn({ db, by: session.email });
+    return out instanceof NextResponse ? out : NextResponse.json(out);
   } catch (err) {
-    if (err instanceof LabError) return NextResponse.json({ error: err.message }, { status: err.status });
+    if (err instanceof LabError) return NextResponse.json({ error: err.message, ...(err.fields ? { fields: err.fields } : {}) }, { status: err.status });
+    if (err instanceof SettingsError) return NextResponse.json({ error: err.message, fields: err.fields }, { status: 400 });
+    if (err instanceof SchemaNotAppliedError) return NextResponse.json({ error: err.message }, { status: 503 });
+    const status = (err as { status?: unknown } | null)?.status;
+    if (typeof status === 'number' && status >= 400 && status < 500) return NextResponse.json({ error: (err as Error).message }, { status });
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }
 
-/** The latest calibration report (MD-52), written by the calibrate route and script. */
+/**
+ * The old file-based calibration report (MD-52). The lab now reads `reel_ai_drama.calibration_reports`; this file is
+ * kept only for scripts/reel_ai_drama_calibrate.ts.
+ */
 export const CALIBRATION_FILE = path.join(process.cwd(), '.explainers-local', 'reel-ai-drama', 'calibration', 'latest.json');
 
 export function saveCalibrationReport(report: unknown, file = CALIBRATION_FILE): void {
@@ -124,9 +133,9 @@ const parse = <T>(text: string | null): T | null => {
   }
 };
 
-export async function labData(db: Queryable, opts: { now?: Date; calibrationFile?: string } = {}) {
+export async function labData(db: Queryable, opts: { now?: Date } = {}) {
   const now = opts.now ?? new Date();
-  const settings = await loadSettings(db);
+  const { settings, problems: settingsProblems } = await loadSettingsReport(db);
   const start = weekStart(now);
 
   const { rows: poolRows } = await db.query<Record<string, unknown>>(
@@ -159,10 +168,18 @@ export async function labData(db: Queryable, opts: { now?: Date; calibrationFile
   const { rows: artifactRows } = ids.length
     ? await db.query<Record<string, unknown>>(
         `SELECT id, job_id, kind, content FROM reel_ai_drama.artifacts
-          WHERE job_id = ANY($1::uuid[]) AND kind IN ('video', 'contact_sheet', 'delivery_report', 'post_text') ORDER BY created_at`,
+          WHERE job_id = ANY($1::uuid[]) AND kind IN ('video', 'contact_sheet', 'delivery_report', 'post_text') ORDER BY seq`,
         [ids],
       )
     : { rows: [] as Record<string, unknown>[] };
+  const { rows: extraRows } = ids.length
+    ? await db.query<{ id: string; cancel_requested_at: unknown; verdict: string | null }>(
+        `SELECT j.id::text AS id, j.cancel_requested_at, f.verdict FROM reel_ai_drama.jobs j
+           LEFT JOIN reel_ai_drama.feedback f ON f.job_id = j.id WHERE j.id = ANY($1::uuid[])`,
+        [ids],
+      )
+    : { rows: [] as { id: string; cancel_requested_at: unknown; verdict: string | null }[] };
+  const extra = new Map(extraRows.map((r) => [r.id, r]));
   const latest = new Map<string, { id: string; content: string | null }>();
   for (const a of artifactRows) latest.set(`${a.job_id}:${a.kind}`, { id: String(a.id), content: (a.content as string) ?? null });
   const art = (jobId: string, kind: string) => latest.get(`${jobId}:${kind}`) ?? null;
@@ -195,6 +212,8 @@ export async function labData(db: Queryable, opts: { now?: Date; calibrationFile
     finishedAt: j.finished_at,
     videoId: art(j.id, 'video')?.id ?? null,
     contactSheetId: art(j.id, 'contact_sheet')?.id ?? null,
+    cancelRequestedAt: iso(extra.get(j.id)?.cancel_requested_at),
+    verdict: ((v) => (v === 'approved' || v === 'rejected' ? v : null))(extra.get(j.id)?.verdict) as 'approved' | 'rejected' | null,
   }));
   const c = cellCounts[0] ?? {};
 
@@ -260,7 +279,9 @@ export async function labData(db: Queryable, opts: { now?: Date; calibrationFile
           post: report?.post ?? parse<PostText>(art(j.id, 'post_text')?.content ?? null),
         };
       }),
-    calibration: readCalibrationReport(opts.calibrationFile),
+    calibration: await latestCalibration(db),
+    requests: await listDramaRequests(db, 20),
+    settingsProblems,
   };
 }
 

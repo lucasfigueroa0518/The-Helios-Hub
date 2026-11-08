@@ -32,6 +32,15 @@ export async function geocode(run: Pick<SourceRun, 'deps'>, query: string): Prom
   return hit ? { lat: Number(hit.lat), lon: Number(hit.lon), display: hit.display_name } : null;
 }
 
+/** The longest a place's name runs on screen; longer is a description, not a name. */
+const PLACE_MAX = 60;
+/** A place the look named, tidied, or null: nothing named, or a non-answer. Pure. */
+export function placeNamed(raw: unknown): string | null {
+  const text = String(raw ?? '').replace(/\s+/g, ' ').replace(/[.;,\s]+$/, '').trim();
+  if (!text || text.length > PLACE_MAX || /^(none|n\/a|unknown|not (stated|visible|named|shown)|unnamed)\b/i.test(text)) return null;
+  return text;
+}
+
 export const MAP_CREDIT = 'Map data © OpenStreetMap contributors · OpenFreeMap';
 
 export const mapSource: Source = async (want, run) => {

@@ -22,7 +22,7 @@ const INVENTORY: VisualsInventory = { assets: [asset('V1'), asset('V2', { kind: 
 
 function draft(...texts: string[]): WriterDraft {
   return {
-    title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' },
+    title: 'T', hook: { line_id: 'L1' },
     rungs: [{ id: 'R1', purpose: 'p', lines: texts.map((text, i) => ({ id: `L${i + 1}`, text, on_screen: null, fact_ids: [], must_show: null, pause_after: null })) }],
     peak_rung_id: 'R1', landing_rung_id: 'R1', close_question: 'Would you?', word_count: 0, central: [],
   };
@@ -31,7 +31,7 @@ const beat = (at: string, over: Partial<FrameShot> = {}): FrameShot => ({ at, sh
 function frame(n: number, over: Partial<StoryboardFrame> = {}): StoryboardFrame {
   return {
     n, name: `f${n}`, line_ids: [`L${n}`], treatment: 'photo', asset_ids: ['V2'], purpose: 'p', motion: 'push', marks: '', sound: '', music: n === 1 ? 'start' : 'hold',
-    on_screen: n === 1 ? 'One bet' : null, shows: [], focus: { kind: 'place', what: 'a place' }, ...over,
+    on_screen: null, shows: [], focus: { kind: 'place', what: 'a place' }, ...over,
   };
 }
 const marksOnly = (kinds: string[]): Blueprint => ({ ground: 'charcoal', style: 'cutouts', arrangement: 'solo', pieces: [{ id: 'a', asset: 'V2', on: '' }], labels: [], speech: [], marks: kinds.map((kind) => ({ kind, on_piece: 'a', target: 'face:Ada', on: '' })), arrows: [], camera: { move: 'hold', stops: [{ on: '', aim: 'whole' }] }, sounds: [] });

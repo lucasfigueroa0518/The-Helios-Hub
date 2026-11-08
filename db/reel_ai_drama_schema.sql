@@ -1,6 +1,7 @@
 -- db/reel_ai_drama_schema.sql — Reel AI Drama (idempotent).
 -- Schema `reel_ai_drama` on the explainers connection (planning/AI Mini Docs/PLAN.md MD-10, CONTRACT.md).
--- Starts fresh: no foreign keys into real_case or explainers. Local only until Lucas approves a reel.
+-- Starts fresh: no foreign keys into real_case or explainers. Production applies it only through
+-- `npm run db:reel-ai-drama` (Lucas runs it); web requests never run this DDL (HUB-WIRING-CONTRACT.md §3.1).
 -- No dollar-quoted bodies: the loader ends a statement at a line ending in a semicolon.
 \set ON_ERROR_STOP on
 
@@ -191,3 +192,81 @@ CREATE TABLE IF NOT EXISTS reel_ai_drama.jev_logs (
     input_tokens            integer NOT NULL DEFAULT 0,
     created_at              timestamptz NOT NULL DEFAULT now()
 );
+
+-- ════ Hub wiring (planning/AI Mini Docs/HUB-WIRING-CONTRACT.md) ═════════════
+-- Artifacts: where the stored file lives, and a strict order (the newest of a kind wins).
+ALTER TABLE reel_ai_drama.artifacts ADD COLUMN IF NOT EXISTS storage_location text NOT NULL DEFAULT 'local';
+ALTER TABLE reel_ai_drama.artifacts DROP CONSTRAINT IF EXISTS rad_artifacts_location_check;
+ALTER TABLE reel_ai_drama.artifacts ADD CONSTRAINT rad_artifacts_location_check CHECK (storage_location IN ('local', 'bucket'));
+ALTER TABLE reel_ai_drama.artifacts ADD COLUMN IF NOT EXISTS seq bigint GENERATED ALWAYS AS IDENTITY;
+CREATE INDEX IF NOT EXISTS ix_rad_artifacts_job_kind ON reel_ai_drama.artifacts (job_id, kind, seq DESC);
+
+-- Jobs: order, who asked, a person's cancel, the night that requested it.
+ALTER TABLE reel_ai_drama.jobs ADD COLUMN IF NOT EXISTS seq bigint GENERATED ALWAYS AS IDENTITY;
+ALTER TABLE reel_ai_drama.jobs ADD COLUMN IF NOT EXISTS requested_by text;
+ALTER TABLE reel_ai_drama.jobs ADD COLUMN IF NOT EXISTS cancel_requested_at timestamptz;
+ALTER TABLE reel_ai_drama.jobs ADD COLUMN IF NOT EXISTS night_date date;
+
+-- One review verdict per reel (mirrors explainers.feedback); the spine's approval mirrors it.
+CREATE TABLE IF NOT EXISTS reel_ai_drama.feedback (
+    job_id      uuid PRIMARY KEY REFERENCES reel_ai_drama.jobs (id) ON DELETE CASCADE,
+    verdict     text NOT NULL CHECK (verdict IN ('approved', 'rejected')),
+    tags        text[] NOT NULL DEFAULT ARRAY[]::text[],
+    note        text,
+    created_by  text,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE reel_ai_drama.feedback DROP CONSTRAINT IF EXISTS rad_feedback_tags_check;
+ALTER TABLE reel_ai_drama.feedback ADD CONSTRAINT rad_feedback_tags_check
+    CHECK (tags <@ ARRAY['hook', 'story', 'accuracy', 'pacing', 'visuals', 'voice', 'captions', 'sound', 'brand']::text[]);
+
+-- A person's click queued for the worker (develop, calibrate): never run inside a web request.
+CREATE TABLE IF NOT EXISTS reel_ai_drama.requests (
+    id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind          text NOT NULL CHECK (kind IN ('develop', 'calibrate')),
+    status        text NOT NULL DEFAULT 'requested' CHECK (status IN ('requested', 'running', 'ok', 'failed', 'cancelled')),
+    requested_by  text,
+    requested_at  timestamptz NOT NULL DEFAULT now(),
+    started_at    timestamptz,
+    finished_at   timestamptz,
+    error         text,
+    result        jsonb
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_rad_requests_live ON reel_ai_drama.requests (kind) WHERE status IN ('requested', 'running');
+
+-- Calibration reports (replaces .explainers-local/.../calibration/latest.json).
+CREATE TABLE IF NOT EXISTS reel_ai_drama.calibration_reports (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    request_id  uuid REFERENCES reel_ai_drama.requests (id) ON DELETE SET NULL,
+    report      jsonb NOT NULL,
+    usd         numeric NOT NULL DEFAULT 0,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- One nightly fill per New York day (mirrors explainers.idea_cycles for the health report).
+CREATE TABLE IF NOT EXISTS reel_ai_drama.nights (
+    id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    ny_date      date NOT NULL,
+    status       text NOT NULL CHECK (status IN ('running', 'ok', 'failed', 'skipped')),
+    quota        integer NOT NULL DEFAULT 0,
+    placed       integer NOT NULL DEFAULT 0,
+    requested    jsonb NOT NULL DEFAULT '[]'::jsonb,
+    allocated    jsonb NOT NULL DEFAULT '[]'::jsonb,
+    skip_reason  text,
+    error        text,
+    started_at   timestamptz NOT NULL DEFAULT now(),
+    finished_at  timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_rad_nights_day ON reel_ai_drama.nights (ny_date) WHERE status IN ('running', 'ok');
+
+-- Small worker bookkeeping (e.g. pool_tended: {"nyDate": "..."}).
+CREATE TABLE IF NOT EXISTS reel_ai_drama.worker_state (
+    key         text PRIMARY KEY,
+    value       jsonb NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Launch defaults, written once (the typed defaults say the same).
+INSERT INTO reel_ai_drama.settings (key, value) VALUES ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO NOTHING;
+INSERT INTO reel_ai_drama.settings (key, value) VALUES ('require_approval', 'true'::jsonb) ON CONFLICT (key) DO NOTHING;

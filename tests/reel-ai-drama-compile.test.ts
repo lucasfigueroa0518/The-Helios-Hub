@@ -59,16 +59,16 @@ test('compile options: the plan arrives whole, on its words, and the camera star
   assert.equal(options.marks[0].at, WORDS[10].start, 'a planned highlight lands on its word (A8.3)');
   assert.equal(options.marks[0].target, 'text:Can we publish?');
   assert.deepEqual(options.camera.stops.map((s: { aim: string }) => s.aim), ['whole', 'text:Can we publish?'], 'a later stop does not start zoomed in');
-  assert.ok(options.labels.some((l: { text: string; kind?: string }) => l.text === '6 December 2016' && l.kind === 'date'), "the line's own label goes through the layout");
+  assert.ok(!options.labels.some((l: { text: string }) => l.text === '6 December 2016'), 'a date label does not reach the screen (iteration 12)');
   assert.equal(cues['a slide went up'], WORDS[1].start);
 });
 
 test('compile options: a thing landing near the cut comes in early enough to be read (A12.2), and the plan check agrees', () => {
-  const late: Blueprint = { ...BP, marks: [], camera: { move: 'hold', stops: [] }, labels: [{ text: '4', on: 'to publish' }] };
+  const late: Blueprint = { ...BP, marks: [], camera: { move: 'hold', stops: [] }, labels: [{ text: '4', kind: 'number', on: 'to publish' }] };
   const { options, reports, cues } = compiledOptions({ blueprint: late }, { media: { V8: { id: 'V8' } }, words: WORDS as never[], lines: [], duration: 4.6, cueAt }) as unknown as Compiled;
-  assert.ok(Math.abs(options.labels[0].at - 3.6) < 1e-6);
+  assert.ok(Math.abs(options.labels[0].at - 3.4) < 1e-6);
   assert.match(reports[0], /^beat_held: /);
-  assert.ok(Math.abs(cues['to publish'] - 3.6) < 1e-6);
+  assert.ok(Math.abs(cues['to publish'] - 3.4) < 1e-6);
 });
 
 test('touches only add: lines, in-turn arrivals, closer cuts, marks; nothing planned moves', () => {

@@ -8,7 +8,7 @@ and the findings that check made. Read it first.
   measured on, or one of the ids below, or a frame that failed the kit's checks. Each line names the
   element and the time.
 - **`first_viewer`**: two lists, either of which may be empty. `findings` are picture problems a
-  first-time viewer hit (the hook's words didn't land within `hook_seconds_max`, or the pictures and
+  first-time viewer hit (the opening didn't grab within `hook_seconds`, or the pictures and
   on-screen words couldn't be followed on mute). `design` are problems a design reviewer saw on a still
   of a frame, each `{ frame, item, what }`: `what` says what is wrong and where. Confusion that starts in
   the words is not yours: it is flagged for the script, never fixed in the picture.
@@ -60,8 +60,7 @@ files with `Edit`.
   the frame's storyboard names; when there is none, report it.
 - `marks_on_target`: re-anchor the mark on the element it marks, sized to it (`FRAME.md` § Marks).
 - `nothing_missing`: make the missing content appear: the asset loads, and nothing shows before its content.
-- `no_redundancy`: remove the on-screen element that repeats what is in shot or spoken; never reword it,
-  and never remove a date label.
+- `no_redundancy`: remove the on-screen element that repeats what is in shot or spoken; never reword it.
 - `one_medium`: swap the element in the other medium for one in the frame's medium that the storyboard
   names; when there is none, report it.
 - `good_crops`: re-crop or re-position so the face sits well and the subject is whole; a soft image is
@@ -72,12 +71,14 @@ files with `Edit`.
   doesn't repeat its neighbours (scale, position, layering, motion).
 - `formed_opening`: as `opening_unformed` above, on frame 1.
 
+A frame 1 built with `compiledHook` is code's template: never edit its module. Report any finding on it instead.
+
 ## HARD CONSTRAINTS
 
 1. **Picture only.** The script is locked and the voice is recorded: never change `SCRIPT.md`, the
    narration, the timing or the facts. Never edit the kit or the inventory.
 2. **The smallest change that fixes each problem**, in the frame the problem names: move, resize or
-   re-time an element, make the hook's words land earlier and larger, swap to a clearer asset the
+   re-time an element, swap to a clearer asset the
    storyboard's frame already names, sharpen a mark, remove a redundant element. Never add a claim, a
    word or an image the storyboard doesn't have. On a frame built with `nk.stage`, every move or resize is a change to
    what the shot says (its `arrangement`, `role`, `side`, `at` or `belongs`, or fewer pieces on screen at one moment),

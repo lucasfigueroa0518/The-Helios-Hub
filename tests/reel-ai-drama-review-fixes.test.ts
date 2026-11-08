@@ -75,7 +75,7 @@ function draft(over: { pauseOn?: string; pause?: number; question?: string } = {
     }),
   }));
   return {
-    title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' }, rungs, peak_rung_id: 'R6', landing_rung_id: 'R7',
+    title: 'T', hook: { line_id: 'L1' }, rungs, peak_rung_id: 'R6', landing_rung_id: 'R7',
     close_question: over.question ?? 'Would you have shipped it?', word_count: 0, central: [],
   };
 }
@@ -85,7 +85,7 @@ function plan(d: WriterDraft = draft(), edit: (f: DirectorPlan['frames'][number]
   const ids = d.rungs.flatMap((r) => r.lines.map((l) => l.id));
   const frames: DirectorPlan['frames'] = Array.from({ length: 7 }, (_, i) => ({
     n: i + 1, name: `f${i + 1}`, line_ids: ids.slice(i * 2, i * 2 + 2), treatment: 'photo', asset_ids: ['V1'], purpose: 'the founder', motion: 'push',
-    marks: '', sound: 'room tone', music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: i === 0 ? 'One bet' : null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
+    marks: '', sound: 'room tone', music: (i === 0 ? 'start' : 'hold') as DirectorPlan['frames'][number]['music'], on_screen: null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
   }));
   frames.forEach(edit);
   frames.push({ n: 8, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
@@ -115,7 +115,7 @@ test('#4 every line label reaches the storyboard, timed to its line; a competing
   const d = draft();
   const p = plan(d);
   const sb = storyboardMarkdown(d, planFrames(p, d));
-  assert.match(sb, /## Frame 1 — f1[\s\S]*?- on_screen: One bet[\s\S]*?- labels: L2: March 2020\n/);
+  assert.match(sb, /## Frame 1 — f1[\s\S]*?- labels: L2: March 2020\n/);
   assert.match(sb, /## Frame 2 — f2[\s\S]*?- labels: L3: \$4M\n/);
 
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rad-labels-'));
@@ -134,7 +134,7 @@ test('#4 every line label reaches the storyboard, timed to its line; a competing
 
 // #5 ─────────────────────────────────────────────────────────────────────────
 
-test("#5 frame words are only the hook's words or a script line's label", () => {
+test("#5 frame words are only a script line's label", () => {
   const own = check(plan(draft(), (f) => (f.n === 3 ? (f.on_screen = '$5 million, said the filing') : undefined)));
   assert.ok(own.problems.some((p) => /frame 3's on-screen words .* are not the script's/.test(p)), own.problems.join('\n'));
   const label = check(plan(draft(), (f) => (f.n === 3 ? (f.on_screen = '  $4m ') : undefined)));
@@ -230,15 +230,14 @@ test('#19 an unconfirmed core fact kills the story; #20 a quote whose page was n
 
 // #22 ────────────────────────────────────────────────────────────────────────
 
-test('#22 cutting the hook line takes its on-screen words with it; the landing keeps the last rung', () => {
+test('#22 cutting the hook line hands the hook on; the landing keeps the last rung', () => {
   const d = draft();
   const cut = cutLines(d, ['L1', 'L14']);
-  assert.deepEqual(cut.hook, { on_screen: '', line_id: 'L2' });
+  assert.deepEqual(cut.hook, { line_id: 'L2' });
   assert.equal(cut.landing_rung_id, 'R7');
-  assert.equal(cutLines(d, ['L5']).hook.on_screen, 'One bet');
-  // With no hook words, frame 1 needs none.
-  const p = plan(cut, (f) => (f.n === 1 ? (f.on_screen = null) : undefined));
+  assert.deepEqual(cutLines(d, ['L5']).hook, { line_id: 'L1' });
+  const p = plan(cut);
   p.frames[0]!.line_ids = ['L2'];
   p.frames[6]!.line_ids = ['L13'];
-  assert.ok(!check(p, cut).problems.some((x) => /hook's words/.test(x)));
+  assert.ok(!check(p, cut).problems.some((x) => /hook/.test(x)));
 });

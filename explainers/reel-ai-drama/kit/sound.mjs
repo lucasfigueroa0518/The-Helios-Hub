@@ -30,7 +30,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { projectFrames } from './frames.mjs';
@@ -96,7 +96,9 @@ export function bedFor(what) {
 export const MAX_BOOST_DB = 18;
 /** Words that never pick a sound (the catalog's descriptions contain some of them). */
 const STOP = new Set(['a', 'an', 'the', 'of', 'on', 'in', 'to', 'into', 'onto', 'at', 'and', 'or', 'with', 'it', 'its', 'is', 'as', 'that', 'this', 'then', 'so', 'one', 'two', 'three', 's', 'j', 'sound', 'sounds']);
-export const EVENT_KINDS = Object.keys(KINDS);
+export const EVENT_KINDS = [...Object.keys(KINDS), 'file'];
+/** Where a `file` event's sound must live: a hook's own bank, peak-normalized and trimmed to onset. */
+export const FILE_SRC = /^assets\/kit\/hooks\/sfx\/[\w-]+\.mp3$/;
 
 /** Every sound is brought to this peak before its gain, so gains mean the same thing. */
 export const REF_PEAK_DB = -6;
@@ -167,6 +169,13 @@ export function eventProblems(events, duration, { assets = null } = {}) {
     const out = [];
     if (typeof e?.t !== 'number' || !(e.t >= 0 && e.t <= duration)) out.push(`${where}: t must be a number from 0 to ${duration}`);
     if (!EVENT_KINDS.includes(e?.kind)) out.push(`${where}: kind "${e?.kind}" is not one of ${EVENT_KINDS.join(', ')}`);
+    if (e?.kind === 'file') {
+      // A hook's score: a file played as it is, at its own level, from the hook's bank.
+      if (!FILE_SRC.test(String(e.src ?? ''))) out.push(`${where}: a file event's src must be a sound in assets/kit/hooks/sfx/`);
+      if (!(typeof e.level_db === 'number' && e.level_db >= -60 && e.level_db <= 6)) out.push(`${where}: a file event needs "level_db" from -60 to 6`);
+      if (e.dur !== undefined && !(typeof e.dur === 'number' && e.dur > 0)) out.push(`${where}: a file event's "dur" must be a positive number of seconds`);
+      return out;
+    }
     const described = e?.kind === 'foley' || e?.kind === 'ambience';
     if (described && !(typeof e.what === 'string' && e.what.trim())) out.push(`${where}: a ${e.kind} event needs "what" in plain words`);
     if (e?.kind === 'ambience') {
@@ -196,6 +205,10 @@ export function eventsToCues(frames, eventsById, catalog) {
   for (const f of frames) {
     for (const e of eventsById[f.id] ?? []) {
       const t = r3(f.start + e.t);
+      if (e.kind === 'file') {
+        cues.push({ t, kind: 'file', src: e.src, level_db: e.level_db, ...(e.dur != null ? { dur: e.dur } : {}) });
+        continue;
+      }
       const k = KINDS[e.kind];
       if (!k) {
         dropped.push({ frame: f.id, event: e, why: `unknown kind "${e.kind}"` });
@@ -253,6 +266,12 @@ export function resolveCues(catalog, cues, { speech = [] } = {}) {
   const out = [];
   const missing = [];
   for (const c of cues) {
+    if (c.kind === 'file') {
+      // Played as it is: its file, its level, on its time; never quieter under speech, the score already sits under the voice.
+      const sound = { id: `file:${c.src}`, file: relative(LIBRARY, c.src), duration: c.dur ?? 0, peakDb: REF_PEAK_DB };
+      out.push({ ...c, sound, underSpeech: false, ...(c.dur ? { trim: { from: 0, len: r3(c.dur) } } : {}), start: r3(c.t), volume: r3(Math.pow(10, c.level_db / 20)), fade: 0.04 });
+      continue;
+    }
     const k = KINDS[c.kind];
     const all = c.all ?? k.all;
     const any = c.any ?? k.any;
@@ -482,6 +501,11 @@ export function yieldToDesign(cues, designed) {
   const dropped = [];
   for (const c of cues) {
     let why = null;
+    if (c.kind === 'file') {
+      // A hook's score is the design's floor: the designer adds to it, never removes from it.
+      kept.push(c);
+      continue;
+    }
     if (c.kind === 'ambience' && beds) why = 'the sound design sets the ambience';
     else if (c.kind === 'impact' && heavy.some((t) => Math.abs(t - c.t) < HEAVY_GAP)) why = 'within 2s of a designed hit';
     else if (quiet.some((w) => c.t >= w.start - 0.05 && c.t < w.end)) why = 'inside a designed silence';

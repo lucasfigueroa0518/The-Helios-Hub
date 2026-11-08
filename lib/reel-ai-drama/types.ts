@@ -63,6 +63,8 @@ export type CastMember = {
   kind: 'person' | 'company' | 'product';
   /** BluePlayer.id when the member is on the central blue-chip list, else null. */
   player_id: string | null;
+  /** Iteration 12: the general public would know this name unexplained. Decided once at story selection; every later step reads it. */
+  widely_known?: boolean;
   /** What they want in this story. Pitches before iteration 5 only (MD-100: the brief carries the story). */
   want?: string;
 };
@@ -325,8 +327,8 @@ export type StoryNotes = { tell_back: string; notes: { lines: string[]; note: st
 
 export type WriterDraft = {
   title: string;
-  /** The hook: on screen within 1.5s, usually from the first frame (MD-34). */
-  hook: { on_screen: string; line_id: string };
+  /** The hook's line. `on_screen` is gone for new scripts (iteration 12: no title); saved drafts may carry it. */
+  hook: { line_id: string; on_screen?: string };
   /** `purpose`: what the rung does in the story. */
   rungs: { id: string; purpose: string; lines: ScriptLine[] }[];
   /** The rung where the tension peaks (any position; the music lands there). */
@@ -391,6 +393,26 @@ export type Blueprint = {
   sounds: { kind: string; what: string; on: BlueprintWords; dur?: number }[];
 };
 
+/** The eight opening hooks (ITERATION-12-CONTRACT). The director picks by meaning among those whose asset gate passes. */
+export const HOOK_IDS = ['flashbulb', 'wall_of_screens', 'lock_on', 'rewind', 'darkroom', 'slide_carousel', 'front_page', 'burn'] as const;
+export type HookId = (typeof HOOK_IDS)[number];
+/** An image, in order, landing on exact spoken words. Code does crops, timing and sound. */
+export type HookBeat = { asset: string; on: BlueprintWords };
+/** A real headline, verbatim from a source's title. Never invented. */
+export type HookHeadline = { text: string; publisher: string; url: string };
+export type HookChoice = {
+  id: HookId;
+  beats: HookBeat[];
+  /** The line's most charged words: where the hook's main hit lands. */
+  charged: BlueprintWords;
+  /** front_page only: one per page where the sources have several. */
+  headlines?: HookHeadline[];
+  /** Set by code when no hook qualified. */
+  fallback?: 'wall_of_screens_3' | 'front_page' | 'darkroom';
+  /** Set by code: what it changed or lowered, shipped as delivery flags. */
+  flags?: string[];
+};
+
 /** What the creative pass may add to a frame (ITERATION-10-CONTRACT §5). Touches only add. */
 export type Touch = { id: string; frame: number; why: string } & (
   | { type: 'extra_line'; text: string; for?: string; on: BlueprintWords }
@@ -403,7 +425,7 @@ export type Touch = { id: string; frame: number; why: string } & (
 /** A small piece of code in a box the layout assigns; it can touch nothing else (assets/custom/<id>.js). */
 export type CustomPiece = { id: string; frame: number; why: string; aspect: number; min_width: number; on: BlueprintWords; until?: BlueprintWords; code: string };
 /** assets/touches.json. */
-export type Touches = { touches: Touch[]; custom: CustomPiece[] };
+export type Touches = { touches: Touch[]; custom: CustomPiece[]; /** The problem solver's hook swap; passes through resolveHook. */ hook_swap?: HookChoice | null };
 
 /**
  * A blueprint with its asset ids rewritten by `to` (a wish resolved, a photo swapped for its cutout, a failed make). `to`
@@ -534,6 +556,8 @@ export type ShotWish = {
 
 export type DirectorPlan = {
   frames: StoryboardFrame[];
+  /** The opening hook; null or missing means frame 1 renders from its blueprint. */
+  hook?: HookChoice | null;
   /** Assets to make for exact moments (MD-59); may be empty. */
   makes?: MakeRequest[];
   /** Shots planned first, searched for after (MD-68); may be empty. */

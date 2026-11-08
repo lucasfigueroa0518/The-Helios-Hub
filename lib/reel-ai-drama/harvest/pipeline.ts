@@ -23,7 +23,7 @@ import {
   upscaleFactor,
   type Look,
 } from './filters';
-import { expressionOf, lookAt } from './look';
+import { expressionOf, lookAt, placeOf } from './look';
 import { checkedUpscale, isGarbledUpscale, normaliseImage, scaleBoxes } from './media';
 import { measureAsset } from './regions';
 import { recentlyUsed } from './reuse';
@@ -438,7 +438,7 @@ export async function saveAsset(c: Cand, id: string, jobDir: string, extraFlags:
     shows: (c.look?.shows || c.shows || c.caption || `${c.kind.replace('_', ' ')} from ${c.source}`).trim(),
     people: c.people,
     qids: c.qids,
-    place: c.place,
+    place: c.place ?? placeOf(c.look),
     date_taken: c.date_taken,
     date_confidence: dateConfidence(c),
     width: c.width ?? 0,

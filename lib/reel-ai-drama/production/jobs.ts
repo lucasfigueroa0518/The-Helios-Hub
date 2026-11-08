@@ -1,4 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
+import type { StorageLocation } from '@/lib/explainers/storage';
+import { failureClass } from '@/lib/reel-ai-drama/retry';
 import type { ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { JobFlag, JobStage, Mode, PitchRow } from '@/lib/reel-ai-drama/types';
 
@@ -26,6 +28,7 @@ export type ArtifactKind =
   | 'first_viewer'
   | 'breakage'
   | 'post_text'
+  | 'post_caption'
   | 'contact_sheet'
   | 'video'
   | 'delivery_report'
@@ -112,6 +115,10 @@ export async function requestJob(
   input: {
     pitchId: string;
     trigger: JobTrigger;
+    /** Who asked (a person's email, or 'night'); null for older callers. */
+    requestedBy?: string | null;
+    /** The New York day of the night that requested it (trigger 'auto'). */
+    nightDate?: string | null;
     settings: Pick<ReelAiDramaSettings, 'mode' | 'per_reel_cap_usd' | 'orchestrator_model' | 'frame_worker_model' | 'writer_model' | 'director_model' | 'reporting_model' | 'vision_model'>;
   },
 ): Promise<JobRequest> {
@@ -131,9 +138,9 @@ export async function requestJob(
     vision: s.vision_model,
   };
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO reel_ai_drama.jobs (pitch_id, status, trigger, mode, spend_cap_usd, models)
-     VALUES ($1, 'queued', $2, $3, $4, $5::jsonb) RETURNING id`,
-    [input.pitchId, input.trigger, s.mode, s.per_reel_cap_usd, JSON.stringify(models)],
+    `INSERT INTO reel_ai_drama.jobs (pitch_id, status, trigger, mode, spend_cap_usd, models, requested_by, night_date)
+     VALUES ($1, 'queued', $2, $3, $4, $5::jsonb, $6, $7::date) RETURNING id`,
+    [input.pitchId, input.trigger, s.mode, s.per_reel_cap_usd, JSON.stringify(models), input.requestedBy ?? null, input.nightDate ?? null],
   );
   await db.query(`UPDATE reel_ai_drama.pitches SET status = 'picked', updated_at = now() WHERE id = $1`, [input.pitchId]);
   return { ok: true, jobId: rows[0].id };
@@ -163,8 +170,26 @@ export async function listJobs(db: Queryable, limit = 50): Promise<(Job & { titl
   return rows.map((r) => ({ ...jobRow(r), title: String(r.title) }));
 }
 
+/** What a running job fails with when a person cancels it (the runner stops at its next stage). */
+export const CANCELLED_TEXT = 'Cancelled by a person';
+
+export class CancelledByPerson extends Error {
+  constructor() {
+    super(CANCELLED_TEXT);
+  }
+}
+
+/**
+ * Move a running job to its next stage. A person's cancel (cancel_requested_at) stops it here: the stage is not
+ * written and CancelledByPerson is thrown, so the job fails with that reason and its pitch goes back to the pool.
+ */
 export async function setStage(db: Queryable, jobId: string, stage: JobStage): Promise<void> {
-  await db.query('UPDATE reel_ai_drama.jobs SET stage = $2 WHERE id = $1', [jobId, stage]);
+  const { rows } = await db.query<{ cancelled: boolean }>(
+    `UPDATE reel_ai_drama.jobs SET stage = CASE WHEN cancel_requested_at IS NULL THEN $2 ELSE stage END WHERE id = $1
+     RETURNING cancel_requested_at IS NOT NULL AS cancelled`,
+    [jobId, stage],
+  );
+  if (rows[0]?.cancelled) throw new CancelledByPerson();
 }
 
 /** A visible warning the reel ships with (checks fail open, MD-39). */
@@ -194,18 +219,25 @@ export async function finishJob(
   );
   const pitchId = rows[0]?.pitch_id;
   if (!pitchId) return;
+  if (result.status === 'failed' && result.error === CANCELLED_TEXT) {
+    // A person's cancel says nothing about the story: the pitch simply goes back to the pool.
+    await db.query(`UPDATE reel_ai_drama.pitches SET status = 'pooled', updated_at = now() WHERE id = $1 AND status = 'picked'`, [pitchId]);
+    return;
+  }
   if (result.status === 'ok') {
     await db.query(`UPDATE reel_ai_drama.pitches SET status = 'made', made_at = now(), updated_at = now() WHERE id = $1`, [pitchId]);
   } else if (result.status === 'killed') {
     await db.query(`UPDATE reel_ai_drama.pitches SET status = 'killed', reject_reason = $2, updated_at = now() WHERE id = $1`, [pitchId, result.killReason ?? null]);
   } else {
     // A failed or capped job returns its pitch to the pool once; a second failure retires it, so the
-    // schedule never spends on the same broken story again (a click can still make it).
-    const { rows: failed } = await db.query<{ n: unknown }>(
-      `SELECT count(*) AS n FROM reel_ai_drama.jobs WHERE pitch_id = $1 AND status = 'failed'`,
+    // schedule never spends on the same broken story again (a click can still make it). Only a failure
+    // of the story counts: an outage, an empty wallet or a harness bug says nothing about the pitch.
+    const { rows: failed } = await db.query<{ error: string | null; capped: unknown }>(
+      `SELECT error, capped FROM reel_ai_drama.jobs WHERE pitch_id = $1 AND status = 'failed'`,
       [pitchId],
     );
-    const retire = Number(failed[0]?.n ?? 0) >= 2;
+    const counts = (error: string | null | undefined, capped: unknown) => error !== CANCELLED_TEXT && (Boolean(capped) || failureClass(error ?? '') === 'story');
+    const retire = counts(result.error, result.capped) && failed.filter((f) => counts(f.error, f.capped)).length >= 2;
     await db.query(
       `UPDATE reel_ai_drama.pitches SET status = $2, reject_reason = CASE WHEN $2 = 'retired' THEN 'failed twice in production' ELSE reject_reason END,
          updated_at = now() WHERE id = $1 AND status = 'picked'`,
@@ -214,12 +246,50 @@ export async function finishJob(
   }
 }
 
+/**
+ * Put a failed job back in the queue under its own id, so it resumes from what it already paid for (production/run.ts reads its
+ * artifacts by job id). False when it isn't failed or its pitch has another live job.
+ */
+export async function requeueJob(db: Queryable, jobId: string): Promise<boolean> {
+  const { rows } = await db.query<{ pitch_id: string }>(
+    `UPDATE reel_ai_drama.jobs j SET status = 'queued', error = NULL, finished_at = NULL, cancel_requested_at = NULL
+      WHERE j.id = $1 AND j.status = 'failed'
+        AND NOT EXISTS (SELECT 1 FROM reel_ai_drama.jobs o WHERE o.pitch_id = j.pitch_id AND o.id <> j.id AND o.status IN ('queued', 'running'))
+      RETURNING j.pitch_id`,
+    [jobId],
+  );
+  if (!rows[0]) return false;
+  await db.query(`UPDATE reel_ai_drama.pitches SET status = 'picked', updated_at = now() WHERE id = $1 AND status IN ('pooled', 'retired')`, [rows[0].pitch_id]);
+  return true;
+}
+
+/**
+ * How many of the latest finished jobs failed in a row for a reason outside the story (an outage that outlasted its resumes,
+ * a voice or render fault). The worker turns automatic runs off at two (Lucas, 2026-11-07), so a broken harness never burns
+ * the week's budget; queued and clicked jobs still run.
+ */
+export async function harnessFailureStreak(db: Queryable, window = 5): Promise<number> {
+  const { rows } = await db.query<{ status: string; error: string | null; capped: unknown }>(
+    `SELECT status, error, capped FROM reel_ai_drama.jobs WHERE finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT $1`,
+    [window],
+  );
+  let streak = 0;
+  for (const r of rows) {
+    if (r.error === CANCELLED_TEXT) continue;
+    if (r.status !== 'failed' || Boolean(r.capped) || failureClass(r.error ?? '') === 'story') break;
+    streak += 1;
+  }
+  return streak;
+}
+
 /** Jobs left running by a worker that died: failed, with why. */
-export async function failStaleJobs(db: Queryable, reason: string, olderThanMinutes = 120): Promise<number> {
-  // Only jobs running far longer than any render: another worker may be running a job right now
-  // (parallel workers, 2026-10-28), and failing it would kill a live render.
+export async function failStaleJobs(db: Queryable, reason: string, olderThanMinutes = 240): Promise<number> {
+  // Quiet that long since it started or last kept anything, longer than any render or passing outage: another worker may be
+  // running a job right now (parallel workers, 2026-10-28), and failing it would kill a live render.
   const { rows } = await db.query<{ id: string }>(
-    `SELECT id FROM reel_ai_drama.jobs WHERE status = 'running' AND started_at < now() - make_interval(mins => $1)`,
+    `SELECT j.id FROM reel_ai_drama.jobs j
+      WHERE j.status = 'running'
+        AND GREATEST(j.started_at, (SELECT max(a.created_at) FROM reel_ai_drama.artifacts a WHERE a.job_id = j.id)) < now() - make_interval(mins => $1)`,
     [olderThanMinutes],
   );
   for (const r of rows) await finishJob(db, r.id, { status: 'failed', error: reason });
@@ -228,11 +298,13 @@ export async function failStaleJobs(db: Queryable, reason: string, olderThanMinu
 
 export async function addArtifact(
   db: Queryable,
-  a: { jobId: string; kind: ArtifactKind; content?: string | null; storagePath?: string | null; bytes?: number | null },
+  a: { jobId: string; kind: ArtifactKind; content?: string | null; storagePath?: string | null; bytes?: number | null; location?: StorageLocation | null },
 ): Promise<string> {
+  // Where the stored file lives (store.put().location): 'bucket' only when the bucket copy was written.
+  const location: StorageLocation = a.location === 'bucket' ? 'bucket' : 'local';
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO reel_ai_drama.artifacts (job_id, kind, content, storage_path, bytes) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [a.jobId, a.kind, a.content ?? null, a.storagePath ?? null, a.bytes ?? null],
+    `INSERT INTO reel_ai_drama.artifacts (job_id, kind, content, storage_path, bytes, storage_location) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [a.jobId, a.kind, a.content ?? null, a.storagePath ?? null, a.bytes ?? null, location],
   );
   return rows[0].id;
 }
@@ -241,7 +313,7 @@ export type ArtifactRow = { id: string; job_id: string; kind: ArtifactKind; cont
 
 export async function listArtifacts(db: Queryable, jobId: string): Promise<ArtifactRow[]> {
   const { rows } = await db.query<Record<string, unknown>>(
-    'SELECT id, job_id, kind, content, storage_path, bytes, created_at FROM reel_ai_drama.artifacts WHERE job_id = $1 ORDER BY created_at',
+    'SELECT id, job_id, kind, content, storage_path, bytes, created_at FROM reel_ai_drama.artifacts WHERE job_id = $1 ORDER BY seq',
     [jobId],
   );
   return rows.map((r) => ({

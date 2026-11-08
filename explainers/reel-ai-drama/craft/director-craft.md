@@ -12,7 +12,7 @@ goal is entertainment with journalistic integrity: the viewer on the edge of the
 picture true to what it is said to show.
 
 **The story and its order are the script's; the clock the picture keeps lives in the story timing** (the
-hook on screen from t = 0, the change interval, the close). Your frames serve them and never re-plan them. How a treatment is built, and the rules every built frame meets, live in the kit guide. Each
+opening from t = 0, the change interval, the close). Your frames serve them and never re-plan them. How a treatment is built, and the rules every built frame meets, live in the kit guide. Each
 principle reads **Do X** — because Y, with research ids in brackets (`D-` documentary and journalism, `S-`
 short-form, edit and sound, `W-` writing, `MD-` Lucas's decisions). Illustrations are generic and marked.
 
@@ -214,9 +214,9 @@ short-form, edit and sound, `W-` writing, `MD-` Lucas's decisions). Illustration
 
 ## 6. The opening frame
 
-- **Open on the image that carries the hook** — the person, company, product, artifact or place the hook line is
-  about, whole and composed from the first instant, already moving, with the hook's words over it and its date label. Motion onset captures attention,
-  and the date tells the viewer from the first second that this is history. [S-11, S-16, MD-90]
+- **Open on the best image for the spoken line, with a preference for a photo of a person** — when one fits the line; otherwise
+  the company, product, artifact or place the line is about. It is moving from the first instant, because motion onset
+  captures attention, and it acts the line out (your prompt's opening hook). [S-11, S-16, MD-90]
 - **Make the first frame understandable with the sound off, and let it teach the reel's visual
   language.** [S-15, D-17]
 
@@ -227,7 +227,7 @@ short-form, edit and sound, `W-` writing, `MD-` Lucas's decisions). Illustration
 - **Overlaid words use Helios type and the Helios orange accent; pictures keep their documentary grade.**
   [MD-42, MD-44]
 - **On-screen words are labels, never restatements** — a name, a role, a date, a place or a figure,
-  short and next to what it names. The hook's words aside, never a heading or sentence that repeats the line being spoken,
+  short and next to what it names. Never a heading or sentence that repeats the line being spoken,
   and never a label that repeats what a document in shot visibly says: let the viewer read it (mark,
   highlight, push in) or add what it doesn't say. [D-40]
 - **Let the whiteboard carry the context** — the event, the year, the names, the figure at stake, written
@@ -235,8 +235,7 @@ short-form, edit and sound, `W-` writing, `MD-` Lucas's decisions). Illustration
   a written name. A company or product on a whiteboard is its logo drawn in marker (`drawnLogo`), never its name as
   a word. A separate card for a fact that could be written on the board is a missed chance. [MD-59, MD-138]
 - **Limit each moment to the captions plus one other text element** — a label, speech text, or a whiteboard's written
-  context (the board's words count as one); the opening frame may carry the hook's words and its
-  date label together. Names written onto figures (your prompt's HARD CONSTRAINT 8) don't count toward
+  context (the board's words count as one). Names written onto figures (your prompt's HARD CONSTRAINT 8) don't count toward
   the limit. No brand mark during captions; the Helios mark lives in the close.
 - **Never set words on words, and never cover most of the frame with text** — labels go in clear space;
   a full-screen document or post is evidence, not overlay. [S-8]

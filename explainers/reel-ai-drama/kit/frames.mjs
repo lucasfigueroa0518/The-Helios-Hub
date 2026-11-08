@@ -143,13 +143,65 @@ export function objectStrokes(root) {
 const cutoutOf = (a) => (a.flags ?? []).map((f) => /^cutout_of:(.+)$/.exec(String(f))?.[1]).find(Boolean) ?? null;
 
 /** @returns {Record<string, any>} */
+/** Whole years since a picture's date ('2013-05-25', '2011'), today; null when it has none. */
+function ageYears(date, now = new Date()) {
+  const m = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/.exec(String(date ?? ''));
+  if (!m) return null;
+  return (now - new Date(Date.UTC(Number(m[1]), Number(m[2] ?? 12) - 1, Number(m[3] ?? 28)))) / (365.25 * 24 * 3600 * 1000);
+}
+
+const nameWord = (w) => String(w ?? '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+/**
+ * Across the reel's compiled frames, in order: the first frame to show each picture, and the first to name each person, meaning a
+ * frame that has their picture while the voice says their name. A hook frame has its own look and no labels, so it counts for
+ * neither. Empty when the frames can't be read.
+ */
+function reelFirsts(root, assets) {
+  const shown = new Map();
+  const named = new Map();
+  try {
+    const dir = join(root, 'assets', 'frames');
+    const byId = new Map(assets.map((a) => [a.id, a]));
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.js')).sort()) {
+      const n = Number.parseInt(file, 10);
+      const code = readFileSync(join(dir, file), 'utf8');
+      if (!Number.isFinite(n) || !code.includes('compiledFrame(')) continue;
+      const ids = [...code.matchAll(/"(?:asset|ground)":\s*"([^"]+)"/g)].map((m) => m[1]).filter((id) => byId.has(id));
+      for (const id of ids) if (!shown.has(id)) shown.set(id, n);
+      let said = new Set();
+      try {
+        said = new Set(JSON.parse(readFileSync(join(root, 'assets', 'timing', `${file.slice(0, -3)}.json`), 'utf8')).words?.map((w) => nameWord(w.text)) ?? []);
+      } catch {
+        // No timing yet: nobody counts as named.
+      }
+      for (const id of ids) {
+        for (const person of byId.get(id).people ?? []) {
+          const last = nameWord(String(person).trim().split(/\s+/).pop());
+          if (!named.has(person) && (said.has(last) || said.has(`${last}s`))) named.set(person, n);
+        }
+      }
+    }
+  } catch {
+    // Nothing compiled yet.
+  }
+  return { shown, named };
+}
+
 export function projectMedia(root) {
   try {
     const inv = JSON.parse(readFileSync(join(root, 'assets', 'inventory.json'), 'utf8'));
+    const firsts = reelFirsts(root, inv.assets ?? []);
     const out = {};
     for (const a of inv.assets ?? []) {
+      const age = ageYears(a.date_taken);
+      const namedIn = Object.fromEntries((a.people ?? []).filter((p) => firsts.named.has(p)).map((p) => [p, firsts.named.get(p)]));
       out[a.id] = {
         id: a.id, file: a.file, kind: a.kind, width: a.width, height: a.height, credit: a.credit ?? '', shows: a.shows ?? '',
+        // What a photo's own label reads, from its data (compiled.js photoLabel), and which frame shows it or names its people first.
+        place: a.place ?? null, date_taken: a.date_taken ?? null, date_confidence: a.date_confidence ?? 'unknown',
+        ...(age != null ? { age_years: age } : {}),
+        ...(firsts.shown.has(a.id) ? { first_frame: firsts.shown.get(a.id) } : {}),
+        ...(Object.keys(namedIn).length ? { named_in: namedIn } : {}),
         character_image: Boolean(a.character_image), people: a.people ?? [], made: Boolean(a.made), made_kind: a.made_kind ?? null,
         ...(a.boxes ? { boxes: a.boxes } : {}), ...(a.map ? { map: a.map } : {}),
         ...(a.cutout ? { cutout: a.cutout } : {}), ...(a.face ? { face: a.face } : {}), ...(a.anchor_for ? { anchor_for: a.anchor_for } : {}),

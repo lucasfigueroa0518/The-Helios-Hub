@@ -146,6 +146,7 @@ const PUBLISH_CONFIRM: Record<Vertical, string> = {
   reels: 'This trial reel goes out now instead of in its slot. Publishing counts as your approval.',
   carousels: 'This carousel goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
   explainers: 'This reel goes out now instead of in its slot. Publishing counts as your approval unless it was rejected in review.',
+  reel_ai_drama: 'This reel goes out now instead of in its slot. Publishing counts as your approval unless it was rejected in review.',
   stories: 'This set is approved and goes out now, frame by frame.',
   last_few_days: 'This Last Few Days post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
   ai_events: 'This AI Events post goes out now instead of in its Sunday slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
@@ -211,7 +212,7 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
       ? { postId: post.refs.postId }
       : post.vertical === 'reels'
         ? { postIdeaId: post.refs.postIdeaId, ...(post.refs.videoJobId ? { videoJobId: post.refs.videoJobId } : {}) }
-        : post.vertical === 'explainers'
+        : post.vertical === 'explainers' || post.vertical === 'reel_ai_drama'
           ? { jobId: post.refs.jobId }
           : post.vertical === 'last_few_days'
             ? { lfdPostId: post.refs.lfdPostId }
@@ -233,11 +234,12 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
           confirm: 'It won’t post, and its slot opens for something else.',
         });
   }
-  if ((post.vertical === 'explainers' || post.vertical === 'stories') && post.status === 'ready' && !post.approval.approvedAt) {
-    const ref = post.vertical === 'explainers' ? post.refs.jobId : post.refs.setId;
+  if ((post.vertical === 'explainers' || post.vertical === 'reel_ai_drama' || post.vertical === 'stories') && post.status === 'ready' && !post.approval.approvedAt) {
+    const byJob = post.vertical === 'explainers' || post.vertical === 'reel_ai_drama';
+    const ref = byJob ? post.refs.jobId : post.refs.setId;
     plans.push({
       kind: 'post', action: 'approveContent', label: 'Approve', endpoint: '/api/social-hub/actions/approve-content',
-      body: { vertical: post.vertical, refs: post.vertical === 'explainers' ? { jobId: ref } : { setId: ref } },
+      body: { vertical: post.vertical, refs: byJob ? { jobId: ref } : { setId: ref } },
       disabled: ref ? null : 'This content can’t be found any more.',
     });
     plans.push({ kind: 'link', label: 'Review', href: info.reviewHref, note: `Reviewed in ${info.label}, where its tagged feedback lives.` });
@@ -270,7 +272,7 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
     const noContent = hasContent(post) ? null : 'Nothing to publish yet. Regenerate first.';
     const ref = post.vertical === 'reels' ? post.refs.videoJobId
       : post.vertical === 'carousels' ? post.refs.postId
-        : post.vertical === 'explainers' ? post.refs.jobId
+        : post.vertical === 'explainers' || post.vertical === 'reel_ai_drama' ? post.refs.jobId
           : post.vertical === 'last_few_days' ? post.refs.lfdPostId
             : post.vertical === 'ai_events' ? post.refs.aiEventsPostId
               : post.refs.setId;
@@ -305,8 +307,8 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
       confirm: 'The post is rebuilt from this week’s pool with your pins and excludes, from the scores it already has (no new model spend). Its hook, look, approval and slot stay.',
     });
   }
-  if (post.vertical === 'stories' || post.vertical === 'explainers') {
-    const ref = post.vertical === 'stories' ? post.refs.setId : post.refs.topicId;
+  if (post.vertical === 'stories' || post.vertical === 'explainers' || post.vertical === 'reel_ai_drama') {
+    const ref = post.vertical === 'stories' ? post.refs.setId : post.vertical === 'reel_ai_drama' ? post.refs.pitchId : post.refs.topicId;
     plans.push({
       kind: 'post', action: 'hardRegenerate', label: 'Hard regenerate', endpoint: '/api/social-hub/actions/hard-regenerate',
       body: { vertical: post.vertical, ref: ref ?? null },
@@ -327,6 +329,7 @@ export function contentRefs(post: HubPost): Record<string, string | undefined> {
     case 'reels':
       return { postIdeaId: post.refs.postIdeaId };
     case 'explainers':
+    case 'reel_ai_drama':
       return { jobId: post.refs.jobId };
     case 'stories':
       return { setId: post.refs.setId };

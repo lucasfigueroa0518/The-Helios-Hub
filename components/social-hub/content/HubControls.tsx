@@ -144,6 +144,7 @@ const TYPES: Array<{ id: string; label: string; min: number }> = [
   { id: 'stories', label: 'IG Stories', min: 0 },
   { id: 'last_few_days', label: 'Last Few Days', min: 0 },
   { id: 'ai_events', label: 'AI Events This Week', min: 0 },
+  { id: 'reel_ai_drama', label: 'AI Drama Reels', min: 1 },
 ];
 
 function Switch({ on, label, hint, onChange, disabled }: { on: boolean; label: string; hint: string; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -196,7 +197,7 @@ export function HubSettingsButton() {
   }
 
   function setNightly(type: string, label: string, on: boolean) {
-    const when = type === 'last_few_days' ? 'on Tuesdays and Fridays at 3:00 AM' : type === 'ai_events' ? 'on Sundays at 12:00 PM' : 'every night';
+    const when = type === 'last_few_days' ? 'on Tuesdays and Fridays at 3:00 AM' : type === 'ai_events' ? 'on Sundays at 12:00 PM' : type === 'reel_ai_drama' ? 'every night at 12:00 AM (plus a development session on Mondays)' : 'every night';
     const cost = type === 'ai_events' ? 'Each run ranks the coming week’s events with live Jev calls (about $0.02, capped).' : 'Each run makes live model calls to fill the day’s quota.';
     if (on && !window.confirm(`Run ${label} automatically ${when}? ${cost}`)) return;
     void save(type, { generate: on });
@@ -227,7 +228,7 @@ export function HubSettingsButton() {
                     <>
                       <Switch on={p.live} label="Live" hint={p.live ? 'Scheduling and posting to Instagram.' : 'Off: nothing is scheduled or posted.'} disabled={saving === t.id || pending} onChange={(v) => setLive(t.id, t.label, v)} />
                       {p.generate != null ? (
-                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : t.id === 'ai_events' ? 'Makes the week’s carousel at 12:00 PM on Sundays.' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id || pending} onChange={(v) => setNightly(t.id, t.label, v)} />
+                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : t.id === 'ai_events' ? 'Makes the week’s carousel at 12:00 PM on Sundays.' : t.id === 'reel_ai_drama' ? 'Fills the day’s slots at 12:00 AM; develops pitches on Mondays.' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id || pending} onChange={(v) => setNightly(t.id, t.label, v)} />
                       ) : null}
                       {p.series?.map((s) => (
                         <Switch key={s.id} on={s.generate} label={`${s.label}: nightly`} hint={s.enabled ? `Made at 4:00 AM on its days.` : 'This series is turned off.'} disabled={saving === t.id || pending || !s.enabled}

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { LabData, LabPitch } from '@/lib/reel-ai-drama/lab';
 
+import { CALIBRATION_ESTIMATE, draftOf, settingsPayload, type FieldDraft } from './form';
+
 type Tab = 'pool' | 'development' | 'jobs' | 'calibration' | 'settings';
 const TABS: [Tab, string][] = [
   ['pool', 'Pool'],
@@ -13,6 +15,32 @@ const TABS: [Tab, string][] = [
   ['settings', 'Settings'],
 ];
 
+/** §4.8 additions, typed here as the contract pins them so the lab reads them whether or not LabData already has them. */
+type LabRequest = {
+  id: string;
+  kind: 'develop' | 'calibrate';
+  status: string;
+  requestedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+  requestedBy: string | null;
+};
+type SettingProblem = { key: string; stored: unknown; error: string };
+type LabJob = LabData['jobs'][number] & { cancelRequestedAt?: string | null; verdict?: 'approved' | 'rejected' | null };
+type LabView = Omit<LabData, 'jobs' | 'calibration'> & {
+  jobs: LabJob[];
+  requests?: LabRequest[];
+  settingsProblems?: SettingProblem[];
+  calibration: { at: string; report: unknown; usd?: number } | null;
+};
+
+const POLL_MS = 10_000;
+const LIVE_REQUEST = new Set(['requested', 'running']);
+const LIVE_JOB = new Set(['queued', 'running']);
+const REJECTABLE = new Set(['new', 'pooled', 'picked']);
+const REVIVABLE = new Set(['rejected', 'retired', 'killed']);
+
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const score = (n: number | null) => (n === null ? '—' : n.toFixed(2));
 const when = (iso: string | null) => {
@@ -21,14 +49,63 @@ const when = (iso: string | null) => {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
-async function post(url: string, body: unknown): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+type PostResult = { ok: true; data: unknown } | { ok: false; error: string; fields?: Record<string, string> };
+
+async function post(url: string, body: unknown): Promise<PostResult> {
   try {
     const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    const data = await res.json().catch(() => ({}));
-    return res.ok ? { ok: true, data } : { ok: false, error: String((data as { error?: string }).error ?? `HTTP ${res.status}`) };
+    const data = (await res.json().catch(() => ({}))) as { error?: string; fields?: Record<string, string> };
+    return res.ok ? { ok: true, data } : { ok: false, error: String(data.error ?? `HTTP ${res.status}`), fields: data.fields };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+/** The newest request of a kind (requests come newest first). */
+const latestOf = (requests: readonly LabRequest[], kind: LabRequest['kind']) => requests.find((r) => r.kind === kind) ?? null;
+
+function RequestChip({ r }: { r: LabRequest | null }) {
+  if (!r) return null;
+  const label = r.status === 'requested' ? 'queued' : r.status;
+  return <span className={`rad-chip ${r.status === 'ok' ? 'ok' : LIVE_REQUEST.has(r.status) ? 'live' : 'bad'}`}>{label}</span>;
+}
+
+/**
+ * What went wrong, read from the database (so it is still there after a reload): the newest develop and
+ * calibrate request when it failed, stored settings that did not parse, and failed or killed jobs.
+ */
+function Problems({ data }: { data: LabView }) {
+  const requests = data.requests ?? [];
+  const failedRequests = (['develop', 'calibrate'] as const)
+    .map((k) => latestOf(requests, k))
+    .filter((r): r is LabRequest => r !== null && r.status === 'failed');
+  const problems = data.settingsProblems ?? [];
+  // A job a person cancelled is not a problem; every other kill (a story the run gave up on) and every failure is.
+  const failedJobs = data.jobs.filter((j) => j.status === 'failed' || (j.status === 'killed' && j.killReason !== 'cancelled by a person')).slice(0, 3);
+  if (!failedRequests.length && !problems.length && !failedJobs.length) return null;
+  return (
+    <section className="rad-card">
+      <h2>Problems</h2>
+      <ul className="rad-notes">
+        {failedRequests.map((r) => (
+          <li key={r.id} className="rad-error">
+            {r.kind === 'develop' ? 'Development session' : 'Calibration'} failed {when(r.finishedAt ?? r.requestedAt)}: {r.error ?? 'no error text'}
+          </li>
+        ))}
+        {problems.map((p) => (
+          <li key={p.key} className="rad-error">
+            Setting {p.key}: {p.error} (stored {JSON.stringify(p.stored)}; the default is used)
+          </li>
+        ))}
+        {failedJobs.map((j) => (
+          <li key={j.id} className="rad-error">
+            {j.title}: {j.killReason ? `killed, ${j.killReason.replace(/_/g, ' ')}` : 'failed'}
+            {j.error ? `: ${j.error}` : ''}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 function Notes({ notes }: { notes: Record<string, string> }) {
@@ -45,8 +122,14 @@ function Notes({ notes }: { notes: Record<string, string> }) {
   );
 }
 
-function PitchCard({ p, rank, onMake, busy }: { p: LabPitch; rank: number | null; onMake?: (p: LabPitch) => void; busy: boolean }) {
+type PitchActions = { onMake?: (p: LabPitch) => void; onReject?: (p: LabPitch) => void; onRevive?: (p: LabPitch) => void };
+
+function PitchCard({ p, rank, actions, busy }: { p: LabPitch; rank: number | null; actions: PitchActions; busy: boolean }) {
   const [open, setOpen] = useState(false);
+  const { onMake, onReject, onRevive } = actions;
+  const canMake = onMake && p.status === 'pooled';
+  const canReject = onReject && REJECTABLE.has(p.status);
+  const canRevive = onRevive && REVIVABLE.has(p.status);
   return (
     <li className="rad-story">
       <button type="button" className="rad-story-head" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -59,7 +142,7 @@ function PitchCard({ p, rank, onMake, busy }: { p: LabPitch; rank: number | null
         </span>
         <span style={{ display: 'flex', gap: 6 }}>
           {p.visuals && <span className={`rad-chip ${p.visuals.grade ?? ''}`}>{p.visuals.grade ?? 'no card'}</span>}
-          <span className={`rad-chip ${p.status === 'made' ? 'ok' : p.status === 'picked' ? 'live' : p.status === 'killed' ? 'bad' : ''}`}>{p.status}</span>
+          <span className={`rad-chip ${p.status === 'made' ? 'ok' : p.status === 'picked' ? 'live' : p.status === 'killed' || p.status === 'rejected' ? 'bad' : ''}`}>{p.status}</span>
         </span>
       </button>
       {open && (
@@ -102,6 +185,7 @@ function PitchCard({ p, rank, onMake, busy }: { p: LabPitch; rank: number | null
             </>
           )}
           {p.rejectReason && <p className="rad-error">{p.rejectReason}</p>}
+          {p.reviveWhen && <p className="rad-note">Revive when: {p.reviveWhen}</p>}
           {p.sources.length > 0 && (
             <>
               <h4>Sources</h4>
@@ -117,11 +201,23 @@ function PitchCard({ p, rank, onMake, busy }: { p: LabPitch; rank: number | null
               </ul>
             </>
           )}
-          {onMake && p.status === 'pooled' && (
+          {(canMake || canReject || canRevive) && (
             <div className="rad-actions">
-              <button type="button" className="rad-primary" disabled={busy} onClick={() => onMake(p)}>
-                Make this reel
-              </button>
+              {canMake && (
+                <button type="button" className="rad-primary" disabled={busy} onClick={() => onMake(p)}>
+                  Make this reel
+                </button>
+              )}
+              {canReject && (
+                <button type="button" disabled={busy} onClick={() => onReject(p)}>
+                  Reject
+                </button>
+              )}
+              {canRevive && (
+                <button type="button" disabled={busy} onClick={() => onRevive(p)}>
+                  Revive
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -130,51 +226,24 @@ function PitchCard({ p, rank, onMake, busy }: { p: LabPitch; rank: number | null
   );
 }
 
-function SettingRow({ name, value, onSave }: { name: string; value: unknown; onSave: (key: string, value: unknown) => void }) {
-  const [draft, setDraft] = useState(String(value));
-  useEffect(() => setDraft(String(value)), [value]);
-  if (typeof value === 'boolean') {
-    return (
-      <div className="rad-setting">
-        <span>{name}</span>
-        <label className="rad-toggle">
-          <input type="checkbox" checked={value} onChange={(e) => onSave(name, e.target.checked)} /> {value ? 'on' : 'off'}
-        </label>
-      </div>
-    );
-  }
-  const commit = () => {
-    if (draft === String(value)) return;
-    onSave(name, typeof value === 'number' ? Number(draft) : draft);
-  };
-  return (
-    <div className="rad-setting">
-      <span>{name}</span>
-      {name === 'mode' ? (
-        <select value={draft} onChange={(e) => onSave(name, e.target.value)}>
-          <option value="development">development</option>
-          <option value="production">production</option>
-        </select>
-      ) : (
-        <input value={draft} inputMode={typeof value === 'number' ? 'decimal' : 'text'} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === 'Enter' && commit()} />
-      )}
-    </div>
-  );
-}
+type SettingsView = { settings: Record<string, unknown>; editable: string[]; problems: SettingProblem[] };
 
-export function ReelAiDramaLab() {
-  const [tab, setTab] = useState<Tab>('pool');
-  const [data, setData] = useState<LabData | null>(null);
+/** Editable keys only, one batch save; each server or local error shows beside its input. */
+function SettingsPanel({ onSaved }: { onSaved: (note: string) => void }) {
+  const [view, setView] = useState<SettingsView | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, FieldDraft>>({});
+  const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/reel-ai-drama/lab', { cache: 'no-store' });
-      const body = await res.json();
+      const res = await fetch('/api/reel-ai-drama/settings', { cache: 'no-store' });
+      const body = (await res.json()) as SettingsView & { error?: string };
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      setData(body as LabData);
+      setView(body);
+      setDrafts(Object.fromEntries(body.editable.map((k) => [k, draftOf(body.settings[k])])));
+      setFields({});
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -184,9 +253,123 @@ export function ReelAiDramaLab() {
     void load();
   }, [load]);
 
+  if (!view) return <p className={error ? 'rad-error' : 'rad-note'}>{error ?? 'Loading…'}</p>;
+
+  const set = (key: string, value: FieldDraft) => {
+    setDrafts((d) => ({ ...d, [key]: value }));
+    setFields((f) => {
+      const { [key]: _drop, ...rest } = f;
+      return rest;
+    });
+  };
+
+  const save = async () => {
+    const payload = settingsPayload(view.settings, drafts, view.editable);
+    if (!payload.ok) {
+      setFields(payload.fields);
+      setError('Fix the fields marked below. Nothing was saved.');
+      return;
+    }
+    const keys = Object.keys(payload.values);
+    if (!keys.length) {
+      setError(null);
+      onSaved('Nothing changed.');
+      return;
+    }
+    setSaving(true);
+    const res = await post('/api/reel-ai-drama/settings', { values: payload.values });
+    setSaving(false);
+    if (!res.ok) {
+      setFields(res.fields ?? {});
+      setError(`${res.error} Nothing was saved.`);
+      return;
+    }
+    await load();
+    onSaved(`Saved ${keys.join(', ')}.`);
+  };
+
+  const problemOf = new Map(view.problems.map((p) => [p.key, p]));
+  return (
+    <>
+      {error && <p className="rad-error">{error}</p>}
+      {view.editable.map((key) => {
+        const saved = view.settings[key];
+        const draft = drafts[key];
+        const problem = problemOf.get(key);
+        return (
+          <div key={key} className="rad-setting">
+            <span>{key}</span>
+            {typeof saved === 'boolean' ? (
+              <label className="rad-toggle">
+                <input type="checkbox" checked={draft === true} onChange={(e) => set(key, e.target.checked)} /> {draft === true ? 'on' : 'off'}
+              </label>
+            ) : key === 'mode' ? (
+              <select value={String(draft)} onChange={(e) => set(key, e.target.value)}>
+                <option value="development">development</option>
+                <option value="production">production</option>
+              </select>
+            ) : (
+              <input
+                value={String(draft ?? '')}
+                inputMode={typeof saved === 'number' ? 'decimal' : 'text'}
+                aria-invalid={fields[key] ? true : undefined}
+                onChange={(e) => set(key, e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void save()}
+              />
+            )}
+            {fields[key] && <span className="rad-error">{fields[key]}</span>}
+            {problem && <span className="rad-error">Stored value rejected ({problem.error}); using the default.</span>}
+          </div>
+        );
+      })}
+      <div className="rad-actions">
+        <button type="button" className="rad-primary" disabled={saving} onClick={() => void save()}>
+          {saving ? 'Saving…' : 'Save settings'}
+        </button>
+        <button type="button" disabled={saving} onClick={() => void load()}>
+          Discard changes
+        </button>
+      </div>
+    </>
+  );
+}
+
+export function ReelAiDramaLab() {
+  const [tab, setTab] = useState<Tab>('pool');
+  const [data, setData] = useState<LabView | null>(null);
+  /** Only the lab's own load failing, or a click the server refused; run failures come from the data. */
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/reel-ai-drama/lab', { cache: 'no-store' });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+      setData(body as LabView);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const requests = data?.requests ?? [];
+  const live = requests.some((r) => LIVE_REQUEST.has(r.status)) || (data?.jobs.some((j) => LIVE_JOB.has(j.status)) ?? false);
+  // While a develop/calibrate request (or a job) is live, re-read the lab every 10 s.
+  useEffect(() => {
+    if (!live) return;
+    const timer = setInterval(() => void load(), POLL_MS);
+    return () => clearInterval(timer);
+  }, [live, load]);
+
   const act = async (url: string, body: unknown, ok: (data: unknown) => string) => {
     setBusy(true);
     setNotice(null);
+    setError(null);
     const res = await post(url, body);
     setBusy(false);
     if (res.ok) setNotice(ok(res.data));
@@ -199,30 +382,54 @@ export function ReelAiDramaLab() {
     if (!window.confirm(`Make "${p.title}"? The worker runs it, up to ${usd(data.settings.per_reel_cap_usd)}.`)) return;
     void act('/api/reel-ai-drama/make', { pitchId: p.id }, () => 'Queued. The worker picks it up next.');
   };
+  const reject = (p: LabPitch) => {
+    const note = window.prompt(`Reject "${p.title}"? Optional note:`, '');
+    if (note === null) return;
+    void act(`/api/reel-ai-drama/pitches/${encodeURIComponent(p.id)}/reject`, note.trim() ? { note: note.trim() } : {}, () => `Rejected "${p.title}".`);
+  };
+  const revive = (p: LabPitch) => {
+    if (!window.confirm(`Revive "${p.title}" back into the pool?`)) return;
+    void act(`/api/reel-ai-drama/pitches/${encodeURIComponent(p.id)}/revive`, {}, () => `"${p.title}" is back in the pool.`);
+  };
+  const cancel = (j: LabJob) => {
+    if (!window.confirm(`Cancel "${j.title}"?${j.status === 'running' ? ' It stops at its next stage.' : ''}`)) return;
+    void act(`/api/reel-ai-drama/jobs/${encodeURIComponent(j.id)}/cancel`, {}, (d) =>
+      (d as { status?: string }).status === 'cancel_requested' ? 'Cancel requested. The job stops at its next stage.' : 'Cancelled.',
+    );
+  };
+  const retry = (j: LabJob) => {
+    if (!data) return;
+    if (!window.confirm(`Retry "${j.title}"? The worker runs it again, up to ${usd(data.settings.per_reel_cap_usd)}.`)) return;
+    void act(`/api/reel-ai-drama/jobs/${encodeURIComponent(j.id)}/retry`, {}, () => 'Queued again. The worker picks it up next.');
+  };
   const develop = () => {
     if (!data) return;
     const left = data.costs.devCapUsd - data.costs.devWeekUsd;
-    if (!window.confirm(`Run one development session now? About $1–3; ${usd(Math.max(0, left))} left of this week's ${usd(data.costs.devCapUsd)}.`)) return;
-    void act('/api/reel-ai-drama/develop', {}, () => 'Development session finished.');
+    if (!window.confirm(`Run one development session? About $1–3; ${usd(Math.max(0, left))} left of this week's ${usd(data.costs.devCapUsd)}. The worker runs it.`)) return;
+    void act('/api/reel-ai-drama/develop', {}, () => 'Queued. The worker runs the development session on its next poll.');
   };
   const calibrate = () => {
-    if (!window.confirm('Run calibration now? Jev scores on the calibration set, under $0.01.')) return;
-    void act('/api/reel-ai-drama/calibrate', {}, () => 'Calibration finished.');
+    if (!window.confirm(`Run calibration? Jev scores the calibration set, ${CALIBRATION_ESTIMATE}. The worker runs it.`)) return;
+    void act('/api/reel-ai-drama/calibrate', {}, () => 'Queued. The worker runs calibration on its next poll.');
   };
-  const saveSetting = (key: string, value: unknown) => void act('/api/reel-ai-drama/settings', { key, value }, () => `Saved ${key}.`);
 
   const pooled = data?.pool.filter((p) => p.status === 'pooled') ?? [];
   const rankOf = new Map(pooled.map((p, i) => [p.id, i + 1]));
+  const developReq = latestOf(requests, 'develop');
+  const calibrateReq = latestOf(requests, 'calibrate');
+  const developLive = developReq !== null && LIVE_REQUEST.has(developReq.status);
+  const calibrateLive = calibrateReq !== null && LIVE_REQUEST.has(calibrateReq.status);
+  const pitchActions: PitchActions = { onMake: make, onReject: reject, onRevive: revive };
 
   return (
     <main className="rad">
       <header className="rad-head">
         <h1>Reel AI Drama</h1>
-        <p className="rad-sub">The ranked pool, development and production. The lab ranks; the top stories are made automatically when auto is on.</p>
+        <p className="rad-sub">The ranked pool, development and production. While Generate is on, the night makes the top stories for the day&apos;s slots.</p>
         {data && (
           <div className="rad-bar">
             <span>
-              Auto: <b>{data.settings.auto ? 'on' : 'off'}</b> · {data.settings.per_week} a week · mode {data.settings.mode}
+              Generate: <b>{data.settings.auto ? 'on' : 'off'}</b> · {data.settings.posts_per_day} a day · up to {data.settings.daily_render_cap} renders a day · mode {data.settings.mode}
             </span>
             <span>
               Development this week: <b>{usd(data.costs.devWeekUsd)}</b> of {usd(data.costs.devCapUsd)}
@@ -235,6 +442,7 @@ export function ReelAiDramaLab() {
       </header>
       {error && <p className="rad-error">{error}</p>}
       {notice && <p className="rad-notice">{notice}</p>}
+      {data && <Problems data={data} />}
       <nav className="rad-tabs">
         {TABS.map(([key, label]) => (
           <button key={key} type="button" className={tab === key ? 'on' : ''} onClick={() => setTab(key)}>
@@ -252,7 +460,7 @@ export function ReelAiDramaLab() {
           <h2>Pool ({pooled.length} ranked)</h2>
           <ul className="rad-list">
             {data.pool.map((p) => (
-              <PitchCard key={p.id} p={p} rank={rankOf.get(p.id) ?? null} onMake={make} busy={busy} />
+              <PitchCard key={p.id} p={p} rank={rankOf.get(p.id) ?? null} actions={pitchActions} busy={busy} />
             ))}
           </ul>
           {data.others.length > 0 && (
@@ -260,7 +468,7 @@ export function ReelAiDramaLab() {
               <h4>Dropped, killed and duplicates</h4>
               <ul className="rad-list">
                 {data.others.map((p) => (
-                  <PitchCard key={p.id} p={p} rank={null} busy={busy} />
+                  <PitchCard key={p.id} p={p} rank={null} actions={{ onReject: reject, onRevive: revive }} busy={busy} />
                 ))}
               </ul>
             </>
@@ -274,10 +482,32 @@ export function ReelAiDramaLab() {
               {data.ledger.total} cells · {data.ledger.searched} searched · {data.ledger.due} due · {data.ledger.reopened} reopened by news · {data.ledger.pitches} pitches made
             </p>
             <div className="rad-actions">
-              <button type="button" className="rad-primary" disabled={busy || data.costs.devWeekUsd >= data.costs.devCapUsd} onClick={develop}>
+              <button type="button" className="rad-primary" disabled={busy || developLive || data.costs.devWeekUsd >= data.costs.devCapUsd} onClick={develop}>
                 Run a development session (~$1–3)
               </button>
+              <RequestChip r={developReq} />
             </div>
+            {requests.length > 0 && (
+              <>
+                <h4>Requests</h4>
+                <ul className="rad-list">
+                  {requests.map((r) => (
+                    <li key={r.id} className="rad-row">
+                      <span>
+                        {r.kind} · {when(r.requestedAt)}
+                        <span className="rad-meta">
+                          {r.requestedBy ?? 'unknown'}
+                          {r.startedAt ? ` · started ${when(r.startedAt)}` : ''}
+                          {r.finishedAt ? ` · finished ${when(r.finishedAt)}` : ''}
+                          {r.error ? ` · ${r.error}` : ''}
+                        </span>
+                      </span>
+                      <RequestChip r={r} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             <h4>Sessions</h4>
             <ul className="rad-list">
               {data.sessions.map((s) => (
@@ -342,9 +572,25 @@ export function ReelAiDramaLab() {
                       <span className="rad-meta">
                         {j.trigger} · {when(j.requestedAt)} · stage {j.stage ?? '—'} · {usd(j.spendUsd)} of {usd(j.capUsd)}
                         {j.capped ? ' · capped' : ''}
+                        {j.verdict ? ` · ${j.verdict}` : ''}
                       </span>
                     </span>
-                    <span className={`rad-chip ${j.status === 'ok' ? 'ok' : j.status === 'running' || j.status === 'queued' ? 'live' : 'bad'}`}>{j.status}</span>
+                    <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      {LIVE_JOB.has(j.status) &&
+                        (j.cancelRequestedAt ? (
+                          <span className="rad-chip live">cancel requested</span>
+                        ) : (
+                          <button type="button" disabled={busy} onClick={() => cancel(j)}>
+                            Cancel
+                          </button>
+                        ))}
+                      {j.status === 'failed' && (
+                        <button type="button" disabled={busy} onClick={() => retry(j)}>
+                          Retry
+                        </button>
+                      )}
+                      <span className={`rad-chip ${j.status === 'ok' ? 'ok' : LIVE_JOB.has(j.status) ? 'live' : 'bad'}`}>{j.status}</span>
+                    </span>
                   </div>
                   {j.killReason && <p className="rad-error">Killed: {j.killReason.replace(/_/g, ' ')}{j.error ? ` — ${j.error}` : ''}</p>}
                   {!j.killReason && j.error && <p className="rad-error">{j.error}</p>}
@@ -428,13 +674,17 @@ export function ReelAiDramaLab() {
           <h2>Calibration</h2>
           <p className="rad-note">Jev drama and material scores on Lucas&apos;s stories and the near misses; the stories should rank above the near misses.</p>
           <div className="rad-actions">
-            <button type="button" className="rad-primary" disabled={busy} onClick={calibrate}>
-              Run calibration (under $0.01)
+            <button type="button" className="rad-primary" disabled={busy || calibrateLive} onClick={calibrate}>
+              Run calibration ({CALIBRATION_ESTIMATE})
             </button>
+            <RequestChip r={calibrateReq} />
           </div>
           {data.calibration ? (
             <>
-              <h4>Latest report · {when(data.calibration.at)}</h4>
+              <h4>
+                Latest report · {when(data.calibration.at)}
+                {typeof data.calibration.usd === 'number' ? ` · cost ${usd(data.calibration.usd)}` : ''}
+              </h4>
               <CalibrationTable report={data.calibration.report} />
               <details>
                 <summary className="rad-note">Raw report</summary>
@@ -448,9 +698,12 @@ export function ReelAiDramaLab() {
       ) : (
         <section className="rad-card">
           <h2>Settings</h2>
-          {Object.entries(data.settings).map(([k, v]) => (
-            <SettingRow key={k} name={k} value={v} onSave={saveSetting} />
-          ))}
+          <SettingsPanel
+            onSaved={(note) => {
+              setNotice(note);
+              void load();
+            }}
+          />
         </section>
       )}
     </main>

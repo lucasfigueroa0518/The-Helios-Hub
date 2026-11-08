@@ -76,6 +76,7 @@ async function main(): Promise<void> {
   const { nextRunAt } = await import('@/lib/instagram/clock');
   const { loadSettings } = await import('@/lib/explainers/settings');
   const { runIdeaCycle } = await import('@/lib/explainers/ideas/cycle');
+  const { clearIdeaCycleRequest, pendingIdeaCycleRequest } = await import('@/lib/explainers/ideas/cycle-request');
   const { nextCycleTry } = await import('@/lib/explainers/ideas/retry');
   const { anthropicIdeaModel } = await import('@/lib/explainers/ideas/generator');
   const { anthropic } = await import('@/lib/anthropic');
@@ -252,6 +253,32 @@ async function main(): Promise<void> {
             ...('fill' in cycle ? { fill: cycle.fill } : {}),
             ...(cycle.status === 'ok' ? { renders: cycle.renders, allocated: cycle.allocated.map((a) => ({ topicId: a.topicId, jobId: a.jobId, scheduled: a.scheduled })) } : {}),
           });
+        }
+      }
+      // A person's "Run the idea cycle now" (cycle-request.ts): once, even while auto_render is off. force bypasses only
+      // that gate (the one-cycle-per-day index and the spend caps stay). The request is cleared after the run, whatever it did.
+      const asked = await pendingIdeaCycleRequest(db).catch((error) => {
+        log('idea_cycle_request_read_failed', { error: errorText(error) });
+        return null;
+      });
+      if (asked) {
+        try {
+          if (nyDate(new Date(asked.at)) !== today) {
+            log('idea_cycle_request_expired', { at: asked.at, by: asked.by });
+          } else {
+            const cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log, moves: (text, params) => dbQuery(text, params), force: true });
+            log('idea_cycle_requested', {
+              by: asked.by,
+              status: cycle.status,
+              ...('reason' in cycle ? { reason: cycle.reason } : {}),
+              ...('error' in cycle ? { error: cycle.error } : {}),
+              ...(cycle.status === 'ok' ? { renders: cycle.renders } : {}),
+            });
+          }
+        } catch (error) {
+          log('idea_cycle_requested_threw', { error: errorText(error), by: asked.by });
+        } finally {
+          await clearIdeaCycleRequest(db).catch((error) => log('idea_cycle_request_clear_failed', { error: errorText(error) }));
         }
       }
       await revisionsStep();

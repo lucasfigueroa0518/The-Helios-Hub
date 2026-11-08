@@ -675,7 +675,7 @@ export function lowerThird(doc, o = {}) {
 export function number(doc, o = {}) {
   const x = o.x ?? OVERLAY_DEFAULTS.number.x;
   const el = h(doc, 'div', { class: 'rd-words', 'data-treatment': 'number', style: { left: `${x}px`, top: `${o.y ?? OVERLAY_DEFAULTS.number.y}px`, right: '140px' } });
-  const big = h(doc, 'div', { class: 'rd-big', style: { fontSize: `${o.size ?? 118}px`, color: o.tone === 'orange' ? 'var(--rd-orange)' : 'var(--rd-paper-lit)' } }, esc(o.value ?? ''));
+  const big = h(doc, 'div', { class: 'rd-big', style: { fontSize: `${o.size ?? 118}px`, color: o.tone === 'orange' ? 'var(--rd-orange)' : 'var(--rd-paper-lit)' } }, (o.lines ?? [o.value ?? '']).map((l) => esc(l)).join('<br>'));
   el.append(big);
   const lab = o.label ? h(doc, 'div', { class: o.labelTone === 'muted' ? 'rd-label' : 'rd-sub' }, esc(o.label)) : null;
   if (lab) el.append(lab);

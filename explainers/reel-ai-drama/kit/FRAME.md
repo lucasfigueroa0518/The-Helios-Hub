@@ -59,10 +59,9 @@ that the thing lands on, or `''` for the frame's start.
 | `ground` | `charcoal`, `kraft`, `whiteboard`, or a picture's asset id |
 | `style` | `cutouts` (clean figures) or `paper` (torn, tilted, overlapping collage) |
 | `arrangement` | `solo`, `face_off` (two sides), `facing`, `turned_away`, `leads_to` (one thing leading to the next), `row`, `pile` (overlapping), `lead_inset` (one big, others small) |
-| `hook` | `{ text, on }`: frame 1's large hook words, in their own band, on screen by 1.2s |
 | `peak` | `true` on the story's peak: the frame doesn't slide |
 | `pieces` | what is on screen; below |
-| `labels` | `{ text, sub, kind, for, on }`: words about the frame or a piece (`for` is its id). Each script line's own label is shown by code, so don't repeat it. |
+| `labels` | `{ text, sub, for, on }`: only a person on screen, by name and role (`for` is the piece). Code decides what shows: see the label rule below. |
 | `speech` | `{ on_piece, text, on, until }`: a few paraphrased words beside a person |
 | `marks` | `{ kind, on_piece, target, from, on }`: § Marks |
 | `arrows` | `{ from, to, on }`: between two pieces, drawn to their real positions |
@@ -86,8 +85,12 @@ The frame's `treatment` names its staging. Several pictures in one frame are sev
 - Pieces land in their final spots and hold them. The camera reveals them. One `slide` is available for a frame that truly needs it.
 - A camera's aim and any marked words stay in the frame throughout its move. Zoom is capped by head size and sharpness.
 - Nothing is drawn wider than it stays sharp.
-- Labels live for a beat (dates a little longer) or until the next person arrives, so don't plan a name for a whole frame. A name shows on a person's first appearance only.
-- A person standing in a shot is a cutout (code cuts them before the build). One that can't be cut shows as a framed print. A logo on a ground it would disappear on gets a paper chip.
+- A label is one of three things, and code owns all three, from data or not at all. (1) A new person's name and role: it lands on the word where the voice says the name, while the person is on screen, once in the reel, for a beat. (2) A full-screen place photo's place. (3) A full-screen photo two or more years old, at its first showing: its date and place, and who is in it when nothing else says and the identity is confirmed. An unknown date gets no label, an approximate one shows only as a year, and a screenshot's capture date is never one. Photo labels arrive and leave with the photo. Every other label asked for (a date the voice says, a fact on top, a word on a piece) is dropped, and listed in the frame's `labels_cut`.
+- A person standing in a shot is a cutout (code cuts them before the build). One that can't be cut shows as a framed print.
+- A logo sits directly on the ground with clear space round it, never on a card. Code reads its own tones against what's behind it: when it would be lost it takes one ink if it's one colour, else a soft pool of whatever tone separates it best. One with a plate it couldn't lose has that plate's edges faded into the ground.
+- Words are measured on the page and fitted: a long number breaks to two lines and scales to its box, and nothing leaves the safe area. Words don't overlap a number, a note or a logo unless placed there on purpose (`place`).
+- Anything shown stays at least 1.2 s, whatever the words say.
+- No flat picture just sits under a slow push: one whole-frame picture or print alone on screen for 2.4 s or more takes the camera in eased steps, in on its subject and back. Better still, give it something to share the frame with.
 - A lift leaves a cut hole in its page, and nothing dims. Captions are always bright. Backdrops keep the place recognisable. Pages stay on paper. On a board, the first item draws in, except in frame 1.
 - When the cast can't fit, everything shrinks and the frame still ships, so fewer pieces at one moment look better.
 
@@ -190,12 +193,7 @@ number beat that moves, use `stat`.
 them; `near: { on, target: 'face:<person>' }` by one face; otherwise it starts at x 96, y 1180 and keeps clear (§ Keep-outs). Not a treatment: layer it on one.
 - A name lasts only while that person is the subject, not the whole frame: give it `until`, the moment the words
   leave them.
-- `kind: 'date'` (MD-130): a date is the label the viewer must not miss. It is set larger than any other
-  label: an orange rule over the date in Pragmatica Extended Bold (60px, a little smaller only for a long
-  date), paper-lit on its dark plate. It keeps clear of faces, the caption band, page text and other labels
-  like any label. Use it only for the line the writer marked a date.
-- `nk.lineLabel(doc, line, { for, near, x, y, until })`: a line's label from `ctx.timing.lines`, with its words,
-  its kind and its line's start; null when the line has no label. Prefer it for line labels.
+- On a compiled frame the stage's labels come from code (the label rule above); these are for the kit's own use.
 
 ### `stat` — a number beat that moves
 `nk.stat(doc, { kind, at, duration, title, label, credit, over, … })`, centred on the subject line on a
@@ -394,7 +392,7 @@ with these functions. Expression marks (`nk.expressionMarks`) are a drawn feelin
 ## Motion
 
 - Frame 1 opens on its charged image, whole and composed in the middle of the screen from its first instant, with the
-  move already running; the hook's words arrive on the story timing's clock. Only what is secondary to it may arrive later.
+  move already running. Only what is secondary to it may arrive later. A frame 1 that plays an opening hook is code's template (`kit/hooks/`).
 - A frame changes inside it on the story timing's clock (a push reaching its detail, a mark, a number, a lower third,
   a new layer); `try.mjs` warns.
 - The frame is moving from t = 0; a later move may start on its cue word. Push in for tension and

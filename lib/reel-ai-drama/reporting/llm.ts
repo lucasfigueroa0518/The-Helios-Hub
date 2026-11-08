@@ -1,3 +1,4 @@
+import { dramaLogDir } from '@/lib/reel-ai-drama/local-dir';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -18,7 +19,7 @@ export function streamingCreate(client: Anthropic): CreateMessage {
   return (params) => client.messages.stream(params).finalMessage();
 }
 
-export const LOG_DIR = path.join('.explainers-local', 'reel-ai-drama', 'logs');
+export const LOG_DIR = dramaLogDir();
 
 /** A JSONL writer for one component's responses; `dir` defaults to LOG_DIR under the cwd. */
 export function jsonlLog(component: string, id: string, dir: string = LOG_DIR): (entry: Record<string, unknown>) => void {

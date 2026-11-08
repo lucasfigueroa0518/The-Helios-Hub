@@ -18,6 +18,7 @@ const IDEA_ID: Partial<Record<Vertical, (ref: string) => string>> = {
   carousels: (ref) => `carousels:story:${ref}`,
   explainers: (ref) => `explainers:topic:${ref}`,
   reels: (ref) => `reels:idea:${ref}`,
+  reel_ai_drama: (ref) => `reel_ai_drama:pitch:${ref}`,
 };
 
 export async function readDeleted(q: HubQuery): Promise<DeletedItem[]> {

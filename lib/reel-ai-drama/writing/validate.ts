@@ -1,7 +1,9 @@
 import { DEFAULT_SETTINGS, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
+import { BLUE_CHIP_PLAYERS, BLUE_CHIP_SPREAD_KEYS, bluePlayer } from '@/lib/social-hub/blue-chip-players';
 import {
   FOCUS_KINDS,
   type Asset,
+  type CastMember,
   type DirectorPlan,
   type FactSheet,
   type FrameShot,
@@ -35,7 +37,13 @@ export const MAX_WORDS_SLACK = 1.02;
 export const RUNG_WORD_SLACK = 3;
 export const MIN_RUNGS = 4;
 export const MIN_WORDS = 110;
-export const HOOK_ON_SCREEN_MAX_WORDS = 10;
+/**
+ * The first line (iteration 12, no title): about 3.3 seconds at the delivered pace. Long enough for an opening hook's
+ * hits to land on spoken words, short enough to take in at once. principles.md must 1 says the same number.
+ */
+export const FIRST_LINE_MAX_WORDS = 10;
+/** New names a reel may ask the viewer to learn (must 6 says "about two"): one over gets through, as a near miss. */
+export const NEW_NAMES_MAX = 3;
 /** The close question: about 6 words (the prompt says about 6; one word of slack). The close stretches to fit its voice. */
 export const CLOSE_QUESTION_MAX_WORDS = 7;
 export const ON_SCREEN_MAX_WORDS = 12;
@@ -123,16 +131,6 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/**
- * A line's label kind (MD-130): 'date' or null. The script's first line's label is always the date, so it
- * defaults to 'date'; a line with no label has no kind; anything but 'date' reads as null (fail open).
- */
-export function labelKind(line: Pick<ScriptLine, 'on_screen' | 'on_screen_kind'>, isFirst: boolean): 'date' | null {
-  if (!line.on_screen?.trim()) return null;
-  if (isFirst) return 'date';
-  return line.on_screen_kind === 'date' ? 'date' : null;
-}
-
 /** Validate a draft against the facts, the inventory and the length rules. Sets `word_count` from the text. */
 const CREDIT_VERB = '(?:(?:first|later|also|then|once)\\s+)?(?:says?|said|reports?|reported|wrote|writes|found|noted|revealed|described)';
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -163,6 +161,51 @@ export function creditRepeats(lines: readonly ScriptLine[], facts: Pick<FactShee
     if (credited.length > 1) out.push(`${name} is credited ${credited.length} times (${[...new Set(credited)].join(', ')}); credit a source once in the reel, where it first matters, and let its later facts stand on their own (must 4)`);
   }
   return out;
+}
+
+let blueChipNames: Set<string> | null = null;
+const onBlueChipList = (name: string): boolean => {
+  blueChipNames ??= new Set(BLUE_CHIP_PLAYERS.flatMap((p) => [p.name, ...(p.aka ?? []), ...(p.kind === 'company' ? p.tokens : [])]).map((n) => normName(n)));
+  return blueChipNames.has(normName(name));
+};
+
+/**
+ * Whether a name costs the viewer no attention (ALIGN §3, §7): on the blue-chip list, or marked `widely_known` once at
+ * story selection. A company's product counts through the list's aliases. Nothing later re-judges this.
+ */
+export function knownToViewer(m: Pick<CastMember, 'name' | 'kind' | 'player_id' | 'widely_known'>): boolean {
+  if (m.widely_known === true || bluePlayer(m.player_id ?? '') || onBlueChipList(m.name)) return true;
+  return m.kind !== 'person' && BLUE_CHIP_SPREAD_KEYS.some(([, pattern]) => pattern.test(m.name));
+}
+
+/** A person is said by their full name, first name or surname, as written; a company or product by its name. */
+function saysName(m: Pick<CastMember, 'name' | 'kind'>, narration: string): boolean {
+  if (m.kind !== 'person') return playerMatcher(m.name)?.test(narration) ?? false;
+  const parts = plainText(m.name).split(/\s+/).filter((w) => w.length > 2 && /^\p{Lu}/u.test(w));
+  return parts.some((w) => new RegExp(`(?<![\\p{L}\\p{N}])${reEscape(w)}(?![\\p{L}\\p{N}])`, 'u').test(narration));
+}
+
+/** The cast the narration names that the viewer has to learn. A name outside the cast can't be told from a word, so it isn't counted. */
+export function newNamesSaid(lines: readonly Pick<ScriptLine, 'text'>[], cast: FactSheet['cast'] | null | undefined): string[] {
+  const narration = plainText(lines.map((l) => l.text ?? '').join(' '));
+  return [...new Set((cast ?? []).filter((m) => !knownToViewer(m) && saysName(m, narration)).map((m) => m.name))];
+}
+
+const firstLineTooLong = (line: Pick<ScriptLine, 'id' | 'text'> | undefined): string[] => {
+  const n = countWords(line?.text);
+  return line && n > FIRST_LINE_MAX_WORDS ? [`${line.id} runs ${n} spoken words; the first line is one short line of at most ${FIRST_LINE_MAX_WORDS} (must 1): move the rest to the next line`] : [];
+};
+
+const tooManyNames = (names: readonly string[]): string[] =>
+  names.length > NEW_NAMES_MAX ? [`the narration asks the viewer to learn ${names.length} new names (${names.join(', ')}); about two at most (must 6): keep who the viewer follows and who opposes them, and make the others a plain role or cut them`] : [];
+
+/**
+ * What the script should fix but never blocks on (never block a reel): the writer gets one round on it through `soft`,
+ * and what is still so is flagged on delivery.
+ */
+export function scriptWarnings(draft: WriterDraft, facts: Pick<FactSheet, 'cast'>): string[] {
+  const lines = draftLines(draft);
+  return [...firstLineTooLong(lines[0]), ...tooManyNames(newNamesSaid(lines, facts.cast))];
 }
 
 export function validateDraft(
@@ -196,15 +239,13 @@ export function validateDraft(
     for (const f of l.fact_ids ?? []) if (!citable.has(f)) problems.push(`line ${l.id} cites ${f}, which is not in the fact sheet`);
     const show = l.must_show?.trim();
     if (show && assets && ASSET_ID.test(show) && !assets.has(show)) problems.push(`line ${l.id} must show ${show}, which is not in the inventory`);
-    if (l.on_screen && countWords(l.on_screen) > ON_SCREEN_MAX_WORDS) problems.push(`line ${l.id}'s on-screen words run ${countWords(l.on_screen)} words; keep labels to ${ON_SCREEN_MAX_WORDS} or fewer`);
+    if (i > 0 && l.on_screen && countWords(l.on_screen) > ON_SCREEN_MAX_WORDS) problems.push(`line ${l.id}'s on-screen words run ${countWords(l.on_screen)} words; keep labels to ${ON_SCREEN_MAX_WORDS} or fewer`);
     if (l.pause_after !== null && l.pause_after !== undefined && !(typeof l.pause_after === 'number' && l.pause_after >= 0 && l.pause_after <= PAUSE_MAX)) {
       problems.push(`line ${l.id}'s pause_after is ${String(l.pause_after)}; give seconds from 0 to ${PAUSE_MAX}, or null`);
     }
   });
 
   if (!lines.length || draft.hook.line_id !== lines[0]!.id) problems.push(`the hook's line_id must be the first line (L1), got "${draft.hook.line_id}"`);
-  if (!draft.hook.on_screen?.trim()) problems.push('the hook has no on-screen words');
-  else if (countWords(draft.hook.on_screen) > HOOK_ON_SCREEN_MAX_WORDS) problems.push(`the hook's on-screen words run ${countWords(draft.hook.on_screen)} words; keep them to about 8`);
 
   const rungIndex = new Map(draft.rungs.map((r, i) => [r.id, i]));
   const landing = rungIndex.get(draft.landing_rung_id);
@@ -247,10 +288,11 @@ export function validateDraft(
 
   problems.push(...creditRepeats(lines, ctx.facts));
 
+  // Only the line shows during the opening, so the first line has no label. A saved draft's hook words and date marks stop here.
   const firstLine = lines[0]?.id;
-  const rungs = draft.rungs.map((r) => ({ ...r, lines: r.lines.map((l) => ({ ...l, on_screen_kind: labelKind(l, l.id === firstLine) })) }));
-  const value: WriterDraft = { ...draft, rungs, central: Array.isArray(central) ? (central as unknown[]).filter((c): c is string => typeof c === 'string') : [], word_count: total };
-  return { value, problems };
+  const rungs = draft.rungs.map((r) => ({ ...r, lines: r.lines.map((l) => ({ ...l, on_screen: l.id === firstLine ? null : l.on_screen, on_screen_kind: null })) }));
+  const value: WriterDraft = { ...draft, hook: { line_id: draft.hook.line_id }, rungs, central: Array.isArray(central) ? (central as unknown[]).filter((c): c is string => typeof c === 'string') : [], word_count: total };
+  return { value, problems, soft: scriptWarnings(draft, ctx.facts) };
 }
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -303,15 +345,13 @@ export function validateStoryNotes(raw: unknown, ctx: { lineIds: readonly string
 }
 
 /** What a revision may also update when its line changes make it stale (all optional). */
-export type RevisionExtras = { hook_on_screen?: string | null; close_question?: string | null; purposes?: { rung_id: string; purpose: string }[] };
+export type RevisionExtras = { close_question?: string | null; purposes?: { rung_id: string; purpose: string }[] };
 
 export type Replacement = {
   line_id: string;
   cut: boolean;
   text: string;
   on_screen: string | null;
-  /** 'date' for a date label (MD-130); when left out, an unchanged label keeps its kind. */
-  on_screen_kind?: 'date' | null;
   fact_ids: string[];
   must_show: string | null;
   pause_after?: number | null;
@@ -345,8 +385,7 @@ export function applyRevision(
         const r = byId.get(l.id);
         if (!r) return [l];
         if (r.cut) return [];
-        const on_screen_kind = r.on_screen_kind !== undefined ? r.on_screen_kind : r.on_screen === l.on_screen ? l.on_screen_kind ?? null : null;
-        return [{ id: l.id, text: r.text, on_screen: r.on_screen, on_screen_kind, fact_ids: r.fact_ids, must_show: r.must_show, pause_after: r.pause_after === undefined ? l.pause_after ?? null : r.pause_after }];
+        return [{ id: l.id, text: r.text, on_screen: r.on_screen, fact_ids: r.fact_ids, must_show: r.must_show, pause_after: r.pause_after === undefined ? l.pause_after ?? null : r.pause_after }];
       }),
     }))
     .filter((rung) => rung.lines.length > 0);
@@ -355,11 +394,16 @@ export function applyRevision(
   const revised: WriterDraft = {
     ...draft,
     rungs: rungs.map((r) => (purposes.has(r.id) ? { ...r, purpose: purposes.get(r.id)! } : r)),
-    ...(extras.hook_on_screen?.trim() ? { hook: { ...draft.hook, on_screen: extras.hook_on_screen.trim() } } : {}),
     ...(extras.close_question?.trim() ? { close_question: extras.close_question.trim() } : {}),
   };
   const checked = validateRevised(revised, ctx);
-  return { value: checked.value, problems: [...problems, ...checked.problems] };
+  // A revision answers for what it changes: a saved script's long first line or crowd of names isn't this round's to fix.
+  const firstBefore = lines[0];
+  const firstAfter = draftLines(revised)[0];
+  const namesBefore = newNamesSaid(lines, ctx.facts.cast).length;
+  const namesAfter = newNamesSaid(draftLines(revised), ctx.facts.cast);
+  const soft = [...(firstAfter?.text !== firstBefore?.text ? firstLineTooLong(firstAfter) : []), ...(namesAfter.length > namesBefore ? tooManyNames(namesAfter) : [])];
+  return { value: checked.value, problems: [...problems, ...checked.problems], soft };
 }
 
 /**
@@ -388,7 +432,7 @@ export function planWarnings(plan: DirectorPlan, ctx: { draft: WriterDraft; inve
     for (const id of f.line_ids) {
       if (f.drop_labels?.includes(id)) continue;
       const label = lines.get(id)?.on_screen?.trim();
-      if (label && !sameWords(label, own) && !(f.n === 1 && sameWords(own, ctx.draft.hook.on_screen ?? ''))) {
+      if (label && !sameWords(label, own)) {
         out.push(`frame ${f.n} shows "${own}" as well as ${id}'s label "${label}"; one text element per frame, so the label may be dropped`);
       }
     }
@@ -418,9 +462,11 @@ export function validatePlan(raw: unknown, ctx: { draft: WriterDraft; inventory:
   const order = draftLineList.map((l) => l.id);
   const known = new Set(order);
   const lineById = new Map(draftLineList.map((l) => [l.id, l]));
-  // Frame words are the writer's (PROCESS P5 "never decides: the words"): the hook's words or a line's label, nothing else.
-  const allowedWords = [ctx.draft.hook.on_screen, ...draftLineList.map((l) => l.on_screen)].filter((w): w is string => Boolean(w?.trim()));
+  // Frame words are the writer's (PROCESS P5 "never decides: the words"): a line's label, nothing else.
+  const allowedWords = draftLineList.map((l) => l.on_screen).filter((w): w is string => Boolean(w?.trim()));
   const frames = plan.frames;
+  // No title (iteration 12): a blueprint's hook text never reaches a frame.
+  for (const f of frames) if (f.blueprint?.hook) delete f.blueprint.hook;
   // Runs first: a beat's pictures join the frame's assets, so every check on those holds them too.
   problems.push(...normalizeShots(frames));
   normalizeBlueprints(frames);
@@ -478,7 +524,7 @@ export function validatePlan(raw: unknown, ctx: { draft: WriterDraft; inventory:
     }
     if (f.on_screen?.trim()) {
       if (countWords(f.on_screen) > ON_SCREEN_MAX_WORDS) problems.push(`frame ${f.n}'s on-screen words run ${countWords(f.on_screen)}; at most ${ON_SCREEN_MAX_WORDS}`);
-      if (!allowedWords.some((w) => sameWords(w, f.on_screen!))) problems.push(`frame ${f.n}'s on-screen words "${f.on_screen}" are not the script's: use the hook's words or a line's on_screen label exactly, or null`);
+      if (!allowedWords.some((w) => sameWords(w, f.on_screen!))) problems.push(`frame ${f.n}'s on-screen words "${f.on_screen}" are not the script's: use a line's on_screen label exactly, or null`);
     }
     // A line's pause is a silent beat at the end of its frame's voice, so the paused line ends its frame.
     f.line_ids.slice(0, -1).forEach((id) => {
@@ -501,7 +547,6 @@ export function validatePlan(raw: unknown, ctx: { draft: WriterDraft; inventory:
   if (first) {
     if (!first.line_ids.includes(order[0] ?? 'L1')) problems.push(`frame 1 must carry the hook line (${order[0]})`);
     if (first.music !== 'start') problems.push('frame 1 must start the music (music: start)');
-    if (ctx.draft.hook.on_screen?.trim() && !first.on_screen?.trim()) problems.push("frame 1 must show the hook's words (on_screen)");
   }
   for (const b of plan.lines_back) {
     if (!known.has(b.line_id)) problems.push(`lines_back names ${b.line_id}, which is not a script line`);
@@ -1018,7 +1063,6 @@ export function blueprintFindings(plan: PlanLike, ctx: Pick<PlanContext, 'draft'
     if (!(BLUEPRINT_ARRANGEMENTS as readonly string[]).includes(String(b.arrangement))) say(`arrangement "${String(b.arrangement)}" isn't one of ${oneOf(BLUEPRINT_ARRANGEMENTS)}`);
     if (!(BLUEPRINT_STYLES as readonly string[]).includes(String(b.style))) say(`style "${String(b.style)}" isn't one of ${oneOf(BLUEPRINT_STYLES)}`);
     if (!text(b.ground) || (!PLAIN_GROUNDS.has(b.ground) && !exists(b.ground))) say(`ground "${String(b.ground ?? '')}" is neither ${oneOf([...PLAIN_GROUNDS])} nor an asset in the inventory, the makes or the wishes`, text(b.ground) || null);
-    if (b.hook) span('the hook', b.hook);
 
     let leads = 0;
     for (const p of pieces) {
@@ -1677,11 +1721,10 @@ export function salvagePlan(raw: unknown, problems: readonly string[], ctx: { dr
     last = f.asset_ids[0] ?? last;
     if (!isObject(f.focus) || !(FOCUS_KINDS as readonly string[]).includes(f.focus.kind) || !text(f.focus.what)) f.focus = { kind: 'object', what: f.purpose };
     const words = f.on_screen;
-    if (words != null && (typeof words !== 'string' || countWords(words) > ON_SCREEN_MAX_WORDS || ![ctx.draft.hook.on_screen, ...lines.map((l) => l.on_screen)].some((w) => w && sameWords(w, words)))) f.on_screen = null;
+    if (words != null && (typeof words !== 'string' || countWords(words) > ON_SCREEN_MAX_WORDS || !lines.map((l) => l.on_screen).some((w) => w && sameWords(w, words)))) f.on_screen = null;
   }
   const close: StoryboardFrame = { ...(closes.at(-1) ?? { name: 'The question', purpose: 'The question plays over the close.', asset_ids: [], music: 'hold', on_screen: null }), treatment: 'close', line_ids: [] } as StoryboardFrame;
   story[0].music = 'start';
-  if (ctx.draft.hook.on_screen?.trim() && !story[0].on_screen?.trim()) story[0].on_screen = ctx.draft.hook.on_screen;
   const frames = [...story, close].map((f, i) => ({ ...f, n: i + 1 }));
   const lines_back = (Array.isArray(raw.lines_back) ? raw.lines_back : []).filter((b) => isObject(b) && place.has(b.line_id as string) && text(b.why));
   const checked = validatePlan({ frames, makes, wishes, lines_back } as unknown as DirectorPlan, ctx);

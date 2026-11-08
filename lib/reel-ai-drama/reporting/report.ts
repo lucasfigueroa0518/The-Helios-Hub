@@ -6,7 +6,7 @@ import type { MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { Queryable } from '@/lib/explainers/db';
 import { recordCost } from '@/lib/reel-ai-drama/cost';
 import { jsonlLog, messagesUsd, usageTotals, type CreateMessage } from '@/lib/reel-ai-drama/reporting/llm';
-import { validateFactSheet } from '@/lib/reel-ai-drama/reporting/validate';
+import { validateFactSheet, withKnownNames } from '@/lib/reel-ai-drama/reporting/validate';
 import type { FactSheet, Mode, Pitch } from '@/lib/reel-ai-drama/types';
 
 /**
@@ -186,7 +186,7 @@ export async function runReporting(deps: ReportingDeps, pitch: Pitch, ctx: { job
       const usd = await settle();
       for (const p of checked.problems) deps.onProblem?.(p);
       log({ event: 'sheet', verdict: checked.sheet.verdict, problems: checked.problems, usd });
-      return { sheet: checked.sheet, problems: checked.problems, usd, model, webSearches: usageTotals(usages).webSearches };
+      return { sheet: withKnownNames(checked.sheet, pitch), problems: checked.problems, usd, model, webSearches: usageTotals(usages).webSearches };
     }
     const stop = message.stop_reason as string;
     if (stop === 'pause_turn') {

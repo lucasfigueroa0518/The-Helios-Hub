@@ -37,7 +37,7 @@ test('legacy plan: the evening and night windows on Sundays only', () => {
 });
 
 test('a Sunday’s slots count one AI Events post while its quota is on, none while off', () => {
-  const quotas = { reels: 0, carousels: 0, explainers: 0, last_few_days: 0, lfdDays: [] as number[] };
+  const quotas = { reels: 0, carousels: 0, explainers: 0, last_few_days: 0, reel_ai_drama: 0, lfdDays: [] as number[] };
   // Sunday: Morning Download (the only Stories series that day) + AI Events.
   assert.deepEqual(slotsForDay([], SUNDAY, { ...quotas, ai_events: 1 }), { slots: 2, filled: 0 });
   assert.deepEqual(slotsForDay([], SUNDAY, { ...quotas, ai_events: 0 }), { slots: 1, filled: 0 });

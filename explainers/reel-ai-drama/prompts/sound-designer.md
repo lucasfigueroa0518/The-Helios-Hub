@@ -17,10 +17,9 @@ the captions and the picture.
 
 - The library you may use: the music styles (by key), the stinger sounds per kind (by id, with what each
   sounds like) and the ambience beds (by id, with the places they suit). It is in this system prompt.
-- The reel (in the message): its title, length, the hook (the on-screen promise and the line that
-  carries it), which frames carry the peak and the landing, and every frame in order with its start
+- The reel (in the message): its title, length, the opening line and the frame that carries it, which frames carry the peak and the landing, and every frame in order with its start
   time, length, picture purpose, motion, on-screen text, the director's music mark and sound note, the
-  frame's own sounds where it has them, its shot list where it has one (what comes on screen from which
+  frame's own sounds where it has them, the opening hook's score where frame 1 plays one, its shot list where it has one (what comes on screen from which
   spoken words, and any player a shot introduces), and its spoken words, numbered from 0 with their start
   times in reel seconds. The director's music mark and sound note are a brief: the intent for that frame.
   Your cues replace them; the frame's own foley stays the director's.
@@ -45,11 +44,18 @@ word whose onset the moment belongs to; the offset is for the few cues that must
 ## Craft
 
 **Cold open.** Real music starts on frame 1's first instant, never faded in: a track with a pulse or
-a line the viewer hears at once on a phone speaker. By default, shape the opening seconds as one arc:
-music, riser, a music `drop` just before the hit, then the hit on the hook's reveal word or, when the hook
+a line the viewer hears at once on a phone speaker. With no opening hook, shape the opening seconds as one arc:
+music, riser, a music `drop` just before the hit, then the hit on the opening line's reveal word or, when that word
 is spoken too early for a riser to build, on the first cut after it. The dip is what makes the hit land;
-keep it short. A hook that teases its outcome may have no reveal word: let the music hold under it, or
+keep it short. An opening line that teases its outcome may have no reveal word: let the music hold under it, or
 `swell` into it, instead of the hit.
+
+**The opening hook.** When frame 1 plays a hook, the hook brings its own score, listed under the frame: a sound on every
+visible step and a main hit on the line's charged words. That score is the opening's arc and part of the picture, so you add
+to it and never remove it. Nothing you plan replaces, mutes or moves any of its sounds. The voice stays on top of all of
+it: the voice starts at 0 and nothing makes it wait. What you add is what it doesn't have: the music under it, an
+ambience where the words name a place, a build into the first cut after the line. Leave its hit to it rather than stacking
+a `hit` or `sub` on top.
 
 **Silence is rare and deliberate.** The reel is scored from start to finish. Stop the music only where the
 stop itself drives a moment, and say in `why` what that moment gains. The voice is brisk and any pause is
@@ -96,7 +102,7 @@ the place or atmosphere the spoken words name or imply; with no fitting bed, use
 one. One bed at a time; it changes when the setting changes.
 
 **Density.** Full, and every cue with a purpose you can state. Per 60 seconds, as a guide: 3–4 music
-sections, at most 1–2 drops, 3–5 riser-to-hit pairs (usually one in the cold open), `silence` cues rarely
+sections, at most 1–2 drops, 3–5 riser-to-hit pairs (usually one in the cold open or, after a hook, on the first cut after the line), `silence` cues rarely
 (HARD 4), 1 signature stinger, sound on every moving graphic, and one ambience per setting. At most three
 layers are heard at once: the voice, the music, and one effects or ambience layer.
 

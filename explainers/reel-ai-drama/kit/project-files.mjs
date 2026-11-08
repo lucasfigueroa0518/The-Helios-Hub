@@ -20,8 +20,7 @@
 //                  (ctx.media in every frame)
 //   assets/lines.json  each frame's lines in order: { [frame id]: [{ id, words, label, label_kind, pause_after }] };
 //                  pace.mjs turns it into `lines` in every timing file (ctx.timing.lines), so each line's
-//                  label lands on its own line (W-39); `label_kind` 'date' (MD-130) styles a date label
-//                  more prominently (nk.label's `kind`)
+//                  label lands on its own line (W-39); `label_kind` 'date' marks one the stage won't show
 //
 // One storyboard frame holds one or more script lines; the last frame is the brand close, voiced with
 // the draft's closing question (MD-18). A plan without a close gets one. Every line's `on_screen` label
@@ -164,9 +163,9 @@ const DATE_ONLY = new RegExp(`^(?:(?:early|mid|late|spring|summer|autumn|fall|wi
 export const isDateLabel = (label) => DATE_ONLY.test(one(label));
 
 /**
- * The kind of a line's label (MD-130): 'date' when the writer marks it (`on_screen_kind: 'date'`; L1's label
- * is always a date), else null. A line written before the writer marked dates (no `on_screen_kind` at all)
- * counts as a date when its label is nothing but a date.
+ * The kind of a line's label: 'date' when a saved script marks it (`on_screen_kind: 'date'`), else null. A line
+ * written before the writer marked dates (no `on_screen_kind` at all) counts as a date when its label is nothing
+ * but a date. Either way the stage doesn't show it (compiled.js frameLabels): this keeps saved scripts readable.
  */
 export function labelKind(line, label) {
   if (!label) return null;

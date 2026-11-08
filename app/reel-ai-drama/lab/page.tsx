@@ -8,7 +8,7 @@ import './lab.css';
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Reel AI Drama lab', robots: { index: false, follow: false } };
 
-/** The Reel AI Drama lab (planning/AI Mini Docs MD-30): the ranked pool, development, jobs. Local; nothing publishes. */
+/** The Reel AI Drama lab (planning/AI Mini Docs MD-30): the ranked pool, development, jobs. The hub's advanced view (/reel-ai-drama/lab). */
 export default async function Page() {
   if (process.env.NODE_ENV !== 'development' && !(await getSession())) redirect('/');
   return <ReelAiDramaLab />;

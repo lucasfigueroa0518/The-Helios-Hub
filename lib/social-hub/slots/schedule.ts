@@ -16,6 +16,7 @@ export type ScheduleEntry = { vertical: Vertical; series: StorySeries | null; la
 export const SCHEDULE_ENTRIES: readonly ScheduleEntry[] = [
   { vertical: 'reels', series: null, label: 'Text on Screen' },
   { vertical: 'explainers', series: null, label: 'Explainers' },
+  { vertical: 'reel_ai_drama', series: null, label: 'AI Drama Reels' },
   { vertical: 'carousels', series: null, label: 'Carousels' },
   { vertical: 'last_few_days', series: null, label: 'Last Few Days' },
   { vertical: 'stories', series: 'morning_download', label: 'Morning Download' },

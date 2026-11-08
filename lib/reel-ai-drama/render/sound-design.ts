@@ -21,7 +21,7 @@ import type { MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { Queryable } from '@/lib/explainers/db';
 import { recordCost } from '@/lib/reel-ai-drama/cost';
 import { messagesUsd, usageTotals, type CreateMessage } from '@/lib/reel-ai-drama/reporting/llm';
-import { peakRungId, type DirectorPlan, type Mode, type WriterDraft } from '@/lib/reel-ai-drama/types';
+import { peakRungId, type DirectorPlan, type HookChoice, type Mode, type WriterDraft } from '@/lib/reel-ai-drama/types';
 
 /**
  * The sound designer (MD-61, research 07): one Sonnet call after the timing is locked (after pace),
@@ -136,11 +136,11 @@ export function soundCuesTool(lib: SoundLibrary): Anthropic.Tool {
 
 // ── The reel, as the model reads it ────────────────────────────────────────
 
-type Reel = { clock: ClockFrame[]; total: number; closeStart: number | null; hookFrame: number | null; peakFrames: number[]; landingFrames: number[] };
+type Reel = { clock: ClockFrame[]; total: number; closeStart: number | null; hookFrame: number | null; peakFrames: number[]; landingFrames: number[]; /** Frame 1 plays a hook, whose score is the opening's arc. */ hooked?: boolean };
 
 const lineIds = (f: ClockFrame) => String(f.fields.lines ?? '').split(/[,\s]+/).filter(Boolean);
 
-function reelOf(clock: ClockFrame[], draft: WriterDraft): Reel {
+function reelOf(clock: ClockFrame[], draft: WriterDraft, plan?: DirectorPlan): Reel {
   const total = r3(clock.reduce((n, f) => n + f.duration, 0));
   const rungLines = (id: string) => new Set((draft.rungs ?? []).find((r) => r.id === id)?.lines.map((l) => l.id) ?? []);
   const framesFor = (ids: Set<string>) => clock.filter((f) => lineIds(f).some((l) => ids.has(l))).map((f) => f.number);
@@ -152,7 +152,27 @@ function reelOf(clock: ClockFrame[], draft: WriterDraft): Reel {
     hookFrame: framesFor(new Set([draft.hook?.line_id].filter(Boolean)))[0] ?? (clock[0]?.number ?? null),
     peakFrames: framesFor(rungLines(peakRungId(draft))),
     landingFrames: framesFor(rungLines(draft.landing_rung_id)),
+    hooked: Boolean(plan?.hook),
   };
+}
+
+/** Where spoken words land in a frame, in reel seconds; null when they aren't found. */
+function wordsAt(f: ClockFrame, on: string): number | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const want = norm(on).split(' ').filter(Boolean);
+  if (!want.length) return r3(f.start);
+  const said = f.words.map((w) => norm(w.text));
+  const at = said.findIndex((_, i) => want.every((w, j) => said[i + j] === w));
+  return at < 0 ? null : r3(f.start + f.words[at]!.start);
+}
+
+/** The hook's score as the designer reads it: the frame's own sounds don't exist on disk until compile, which runs after this step. */
+function hookScoreLine(f: ClockFrame, hook: HookChoice): string {
+  const at = (on: string) => {
+    const t = wordsAt(f, on);
+    return `"${on}"${t == null ? '' : ` @${t}`}`;
+  };
+  return `  opening hook ${hook.id}: its own score plays through this whole frame, a sound on every visible step, on ${hook.beats.map((b) => at(b.on)).join(', ')}, its main hit on ${at(hook.charged)}. It stays; add to it, never remove it, and the voice stays on top.`;
 }
 
 export function soundUserText(reel: Reel, draft: WriterDraft, plan: DirectorPlan, ownSounds: ReadonlyMap<number, string> = new Map()): string {
@@ -160,7 +180,7 @@ export function soundUserText(reel: Reel, draft: WriterDraft, plan: DirectorPlan
   const planFrames = new Map((plan.frames ?? []).map((f) => [one(f.name), f]));
   return [
     `Reel: ${one(draft.title)} (${reel.total}s, ${reel.clock.length} frames; the last is the brand close${reel.closeStart != null ? ` from ${reel.closeStart}s` : ''})`,
-    `Hook: "${one(draft.hook?.on_screen)}" (line ${draft.hook?.line_id}, frame ${reel.hookFrame ?? '?'})`,
+    `Opening line: "${one(draft.rungs?.flatMap((r) => r.lines).find((l) => l.id === draft.hook?.line_id)?.text)}" (line ${draft.hook?.line_id}, frame ${reel.hookFrame ?? '?'})`,
     `Peak: frames ${reel.peakFrames.join(', ') || 'unknown'}. Landing: frames ${reel.landingFrames.join(', ') || 'unknown'}.`,
     '',
     'Frames (reel seconds; words as [index] word @start):',
@@ -177,6 +197,7 @@ export function soundUserText(reel: Reel, draft: WriterDraft, plan: DirectorPlan
         ...(one(fl.on_screen) ? [`  on screen: ${one(fl.on_screen)}`] : []),
         ...(motion ? [`  motion: ${motion}`] : []),
         ...(sound ? [`  director's sound note: ${sound}`] : []),
+        ...(plan.hook && f.number === reel.hookFrame ? [hookScoreLine(f, plan.hook)] : []),
         ...(ownSounds.get(f.number) ? [`  its own sounds (reel seconds): ${ownSounds.get(f.number)}`] : []),
         ...shots.map((s) => `  shot from "${one(s.at)}": ${one(s.shows)}${s.introduces ? ` (introduces ${one(s.introduces)})` : ''}`),
         `  words: ${f.words.length ? f.words.map((w, i) => `[${i}] ${w.text} @${r3(f.start + w.start)}`).join(' ') : '(no voice)'}`,
@@ -397,8 +418,8 @@ export function validateCues(raw: RawCues, reel: Reel, lib: SoundLibrary): { cue
   // Craft gaps the code can see (kept as warnings; the cues stay).
   repairMusic(music, stingers, reel, problems);
   const openArc = stingers.some((s) => s.kind === 'riser' && s.t <= 6.5);
-  // The riser-to-hit arc is the default opening, not a must: a teased hook may hold or swell instead.
-  if (!openArc && !music.some((m) => m.action === 'swell' && m.t <= 6.5)) problems.push('warning: no riser-to-hit arc or swell in the cold open');
+  // The riser-to-hit arc is the default opening, not a must: a teased line may hold or swell instead, and a hook brings its own score.
+  if (!reel.hooked && !openArc && !music.some((m) => m.action === 'swell' && m.t <= 6.5)) problems.push('warning: no riser-to-hit arc or swell in the cold open');
   const muffles = validMuffles(raw.muffles ?? [], music, stingers, reel, problems, { timeOf: (c) => timeOf(anchorOf(c)), anchorOf, why });
   return { cues: { music, stingers, ambience, muffles }, problems };
 }
@@ -561,9 +582,9 @@ function repairMusic(music: MusicCue[], stingers: readonly StingerCue[], reel: R
 function frameSounds(projectDir: string, clock: readonly ClockFrame[]): Map<number, string> {
   const out = new Map<number, string>();
   for (const f of clock) {
-    const list = readJson<{ t?: number; kind?: string; what?: string }[]>(path.join(projectDir, 'assets', 'frames', `${f.id}.events.json`));
+    const list = readJson<{ t?: number; kind?: string; what?: string; src?: string }[]>(path.join(projectDir, 'assets', 'frames', `${f.id}.events.json`));
     if (!Array.isArray(list)) continue;
-    const text = list.filter((e) => e.kind !== 'ambience' && Number.isFinite(e.t)).map((e) => `${e.what ?? e.kind} @${r3(f.start + Number(e.t))}`).slice(0, 12).join(', ');
+    const text = list.filter((e) => e.kind !== 'ambience' && Number.isFinite(e.t)).map((e) => `${e.what ?? (e.src ? path.basename(e.src) : e.kind)} @${r3(f.start + Number(e.t))}`).slice(0, 12).join(', ');
     if (text) out.set(f.number, text);
   }
   return out;
@@ -585,7 +606,7 @@ export async function designSound(
     const clock = frameClock(projectDir) as ClockFrame[];
     if (!clock.length) return { cues: null, usd, problems: ['sound design: STORYBOARD.md has no frames; no cues'] };
     if (!clock.some((f) => f.words.length)) return { cues: null, usd, problems: ['sound design: no word timing in assets/timing (run pace first); no cues'] };
-    const reel = reelOf(clock, draft);
+    const reel = reelOf(clock, draft, plan);
     const lib = soundLibrary(projectDir);
     const prompt = deps.loadPrompt ? deps.loadPrompt() : fs.readFileSync(path.join(process.cwd(), PROMPT_FILE), 'utf8').trim();
     const tool = soundCuesTool(lib);

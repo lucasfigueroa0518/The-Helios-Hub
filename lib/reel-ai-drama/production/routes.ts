@@ -1,90 +1,141 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { developmentSpendSince } from '@/lib/reel-ai-drama/cost';
-import { labData, LabError, reelAiDramaRoute, saveCalibrationReport } from '@/lib/reel-ai-drama/lab';
-import { requestJob } from '@/lib/reel-ai-drama/production/jobs';
+import { labData, LabError, reelAiDramaRoute } from '@/lib/reel-ai-drama/lab';
 import { weekStart } from '@/lib/reel-ai-drama/production/schedule';
-import { isSettingKey, loadSettings, saveSetting } from '@/lib/reel-ai-drama/settings';
+import {
+  cancelDramaJob,
+  DRAMA_REFUSAL_TEXT,
+  DramaActionError,
+  queueDramaRequest,
+  rejectPitch,
+  requestDramaJob,
+  retryDramaJob,
+  revivePitch,
+  type DramaRequestKind,
+} from '@/lib/reel-ai-drama/requests';
+import { EDITABLE_KEYS, isEditableKey, loadSettings, loadSettingsReport, saveSettings, SettingsError } from '@/lib/reel-ai-drama/settings';
 
 /**
- * The /api/reel-ai-drama handlers, here so tests can call them with a stubbed session and db (Next
- * route files may only export route fields). Nothing runs on page load: the only live actions are the
- * develop, calibrate and make POSTs, each a click that is its own approval.
+ * The /api/reel-ai-drama handlers, here so tests can call them with a stubbed session and db (Next route files may only
+ * export route fields). No handler runs a model: Make queues a job, Develop and Calibrate queue a request the worker
+ * claims (HUB-WIRING-CONTRACT.md §2.2). Every click is its own approval.
  */
 
 export type RouteOpts = {
   session?: () => Promise<{ email: string } | null>;
   db?: () => Promise<Queryable>;
   now?: () => Date;
-  /** One development session (B1 runDevelopmentSession, trigger 'click'); default: the live wiring. */
-  develop?: (db: Queryable) => Promise<unknown>;
-  /** The calibration run (B1 runCalibration); default: the live wiring. */
-  calibrate?: (db: Queryable) => Promise<unknown>;
-  calibrationFile?: string;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const WHY: Record<string, string> = {
-  not_found: 'That pitch is gone.',
-  not_makeable: 'Only a pitch in the pool can be made.',
-  already_running: 'That pitch is already being made.',
-};
 
 const wrap = (opts: RouteOpts) => ({ session: opts.session, db: opts.db });
+const body = async <T>(request: Request): Promise<T | null> => (await request.json().catch(() => null)) as T | null;
+const asLab = (error: unknown): never => {
+  if (error instanceof DramaActionError) throw new LabError(error.message, error.status);
+  throw error;
+};
 
 export function labRoute(opts: RouteOpts = {}) {
-  return reelAiDramaRoute(({ db }) => labData(db, { now: opts.now?.(), calibrationFile: opts.calibrationFile }), wrap(opts));
+  return reelAiDramaRoute(({ db }) => labData(db, { now: opts.now?.() }), wrap(opts));
 }
 
-/** The lab's Make click: queues one production job for a pooled pitch (the worker runs it, ≤ the per-reel cap). */
+/** Make it: queues one production job for a pitch (the worker runs it), under the per-reel and daily caps. */
 export function makeRoute(request: Request, opts: RouteOpts = {}) {
-  return reelAiDramaRoute(async ({ db }) => {
-    const body = (await request.json().catch(() => null)) as { pitchId?: unknown } | null;
-    const pitchId = typeof body?.pitchId === 'string' ? body.pitchId.trim() : '';
+  return reelAiDramaRoute(async ({ db, by }) => {
+    const b = await body<{ pitchId?: unknown }>(request);
+    const pitchId = typeof b?.pitchId === 'string' ? b.pitchId.trim() : '';
     if (!UUID.test(pitchId)) throw new LabError('Give a pitch id');
-    const result = await requestJob(db, { pitchId, trigger: 'click', settings: await loadSettings(db) });
-    if (!result.ok) throw new LabError(WHY[result.reason] ?? result.reason, 409);
+    const result = await requestDramaJob(db, { pitchId, by, now: opts.now?.() });
+    if (!result.ok) throw new LabError(DRAMA_REFUSAL_TEXT[result.reason], 409);
     return result;
   }, wrap(opts));
 }
 
-/** The lab's Develop click: one development session now, refused once the week's cap is spent (MD-28). */
-export function developRoute(_request: Request, opts: RouteOpts = {}) {
-  return reelAiDramaRoute(async ({ db }) => {
-    const settings = await loadSettings(db);
-    const spent = await developmentSpendSince(db, weekStart(opts.now?.() ?? new Date()));
-    if (spent >= settings.weekly_dev_cap_usd) {
-      throw new LabError(`This week's development budget is spent ($${spent.toFixed(2)} of $${settings.weekly_dev_cap_usd.toFixed(2)}).`, 409);
+async function queueRoute(kind: DramaRequestKind, opts: RouteOpts) {
+  return reelAiDramaRoute(async ({ db, by }) => {
+    if (kind === 'develop') {
+      const settings = await loadSettings(db);
+      const spent = await developmentSpendSince(db, weekStart(opts.now?.() ?? new Date()));
+      if (spent >= settings.weekly_dev_cap_usd) {
+        throw new LabError(`This week's development budget is spent ($${spent.toFixed(2)} of $${settings.weekly_dev_cap_usd.toFixed(2)}).`, 409);
+      }
     }
-    const run = opts.develop ?? (async (d: Queryable) => (await import('@/lib/reel-ai-drama/production/live')).runLiveDevelopment(d, 'click'));
-    return { session: await run(db) };
+    const queued = await queueDramaRequest(db, kind, by);
+    if (!queued) throw new LabError(kind === 'develop' ? 'A development session is already queued or running.' : 'A calibration is already queued or running.', 409);
+    const { NextResponse } = await import('next/server');
+    return NextResponse.json({ requestId: queued.requestId, status: 'requested' }, { status: 202 });
   }, wrap(opts));
 }
 
-/** The lab's Calibrate click (MD-52): Jev scores on the calibration set; the report is kept for the lab. */
+/** Develop: queues one development session for the worker (refused once the week's cap is spent, MD-28). */
+export function developRoute(_request: Request, opts: RouteOpts = {}) {
+  return queueRoute('develop', opts);
+}
+
+/** Calibrate (MD-52): queues the Jev calibration for the worker; its report lands in calibration_reports. */
 export function calibrateRoute(_request: Request, opts: RouteOpts = {}) {
-  return reelAiDramaRoute(async ({ db }) => {
-    const run = opts.calibrate ?? (async (d: Queryable) => (await import('@/lib/reel-ai-drama/production/live')).runLiveCalibration(d));
-    const report = await run(db);
-    saveCalibrationReport(report, opts.calibrationFile);
-    return { report };
-  }, wrap(opts));
+  return queueRoute('calibrate', opts);
 }
 
 export function settingsGetRoute(opts: RouteOpts = {}) {
-  return reelAiDramaRoute(async ({ db }) => ({ settings: await loadSettings(db) }), wrap(opts));
+  return reelAiDramaRoute(async ({ db }) => {
+    const { settings, problems } = await loadSettingsReport(db);
+    return { settings, editable: [...EDITABLE_KEYS], problems };
+  }, wrap(opts));
 }
 
-/** One setting changed from the lab; validated, since these values gate spend. */
+/**
+ * Save settings: `{ values: { key: value, … } }` (the legacy `{ key, value }` is still accepted). Only editable keys;
+ * every key and the cross-field rules are checked together, and nothing is saved on a 400 (`fields` says why per key).
+ */
 export function settingsPostRoute(request: Request, opts: RouteOpts = {}) {
-  return reelAiDramaRoute(async ({ db }) => {
-    const body = (await request.json().catch(() => null)) as { key?: unknown; value?: unknown } | null;
-    const key = typeof body?.key === 'string' ? body.key : '';
-    if (!isSettingKey(key)) throw new LabError(`Unknown setting ${key || '(none)'}`);
+  return reelAiDramaRoute(async ({ db, by }) => {
+    const b = await body<{ values?: unknown; key?: unknown; value?: unknown }>(request);
+    let values: Record<string, unknown>;
+    if (b && typeof b.values === 'object' && b.values !== null && !Array.isArray(b.values)) values = b.values as Record<string, unknown>;
+    else if (b && typeof b.key === 'string') values = { [b.key]: b.value };
+    else throw new LabError('Send { values: { key: value } }.');
+    const keys = Object.keys(values);
+    if (!keys.length) throw new LabError('Nothing to save.');
+    const fields: Record<string, string> = {};
+    for (const key of keys) if (!isEditableKey(key)) fields[key] = `${key} can’t be changed here.`;
+    if (Object.keys(fields).length) throw new LabError(Object.values(fields)[0]!, 400, fields);
     try {
-      await saveSetting(db, key, body?.value as never);
+      return { settings: await saveSettings(db, values, by) };
     } catch (error) {
-      throw new LabError(error instanceof Error ? error.message : String(error));
+      if (error instanceof SettingsError) throw new LabError(error.message, 400, error.fields);
+      throw error;
     }
-    return { key, settings: await loadSettings(db) };
   }, wrap(opts));
+}
+
+const idOf = async (params: Promise<{ id: string }> | { id: string }) => {
+  const { id } = await params;
+  if (!UUID.test(id)) throw new LabError('Not found', 404);
+  return id;
+};
+
+export function rejectPitchRoute(request: Request, params: Promise<{ id: string }> | { id: string }, opts: RouteOpts = {}) {
+  return reelAiDramaRoute(async ({ db, by }) => {
+    const id = await idOf(params);
+    const b = await body<{ note?: unknown }>(request);
+    const note = typeof b?.note === 'string' ? b.note.slice(0, 500) : null;
+    return { pitch: await rejectPitch(db, id, by, note).catch(asLab) };
+  }, wrap(opts));
+}
+
+export function revivePitchRoute(_request: Request, params: Promise<{ id: string }> | { id: string }, opts: RouteOpts = {}) {
+  return reelAiDramaRoute(async ({ db }) => {
+    const id = await idOf(params);
+    return { pitch: await revivePitch(db, id, opts.now?.()).catch(asLab) };
+  }, wrap(opts));
+}
+
+export function cancelJobRoute(_request: Request, params: Promise<{ id: string }> | { id: string }, opts: RouteOpts = {}) {
+  return reelAiDramaRoute(async ({ db }) => cancelDramaJob(db, await idOf(params)).catch(asLab), wrap(opts));
+}
+
+export function retryJobRoute(_request: Request, params: Promise<{ id: string }> | { id: string }, opts: RouteOpts = {}) {
+  return reelAiDramaRoute(async ({ db }) => retryDramaJob(db, await idOf(params)).catch(asLab), wrap(opts));
 }

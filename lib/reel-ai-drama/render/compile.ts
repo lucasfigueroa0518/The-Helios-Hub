@@ -7,11 +7,13 @@ import { cueAt } from '@/explainers/reel-ai-drama/kit/components/moves.js';
 import { blueprintTreatment, planFrames } from '@/explainers/reel-ai-drama/kit/project-files.mjs';
 import { EVENT_KINDS, IMPLIES_EVENT, MAX_AMBIENCE, MAX_DUR } from '@/explainers/reel-ai-drama/kit/sound.mjs';
 import { sourceProblems } from '@/explainers/reel-ai-drama/kit/try.mjs';
+import { hookScore, planHook } from '@/explainers/reel-ai-drama/kit/hooks/plan.js';
 import { findTesseract, readWordsHard, tesseractWords } from '@/lib/reel-ai-drama/harvest/boxes';
+import { hookOptions, resolveHook } from '@/lib/reel-ai-drama/hooks/eligibility';
 import { HYPERFRAMES_ENV } from '@/lib/explainers/render/workspace';
 import type { Manifest } from '@/lib/reel-ai-drama/render/plan-carried';
 import { jsonOut, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
-import { blueprintAssets, type Blueprint, type CustomPiece, type DirectorPlan, type StoryboardFrame, type Touch, type Touches, type VisualsInventory } from '@/lib/reel-ai-drama/types';
+import { blueprintAssets, type Blueprint, type CustomPiece, type DirectorPlan, type HookChoice, type SourceRef, type StoryboardFrame, type Touch, type Touches, type VisualsInventory } from '@/lib/reel-ai-drama/types';
 
 /**
  * Compile, don't retype (ITERATION-10-CONTRACT §5). Every story frame becomes one logic-free module that hands its blueprint
@@ -35,6 +37,8 @@ export type CompileInput = {
   inventory?: VisualsInventory | null;
   projectDir: string;
   touches?: Touches | null;
+  /** The story's sources: a hook swap to Front Page checks its headlines against them. */
+  sources?: readonly SourceRef[] | null;
   /** A new layout for a frame: its recompile after breakage or a missed plan item. */
   seeds?: Record<number, number>;
   /** Frames that shipped broken twice: their first picture, held. */
@@ -71,16 +75,13 @@ export function plainBlueprint(frame: Pick<StoryboardFrame, 'asset_ids'>): Bluep
   return { ground: 'charcoal', style: 'cutouts', arrangement: 'solo', pieces: asset ? [{ id: 'p1', asset, on: '' }] : [], labels: [], speech: [], marks: [], arrows: [], camera: { move: 'hold', stops: [] }, sounds: [] };
 }
 
-/**
- * The frame's own words reach the screen whatever the plan's fields say: words the blueprint doesn't already carry become the
- * hook on the reel's first frame and a label elsewhere. Pure.
- */
+/** The frame's own words reach the screen whatever the plan's fields say: words the blueprint doesn't already carry become a label. The opening has no title. Pure. */
 export function withOnScreen(blueprint: Blueprint, frame: Pick<StoryboardFrame, 'on_screen' | 'n'>): Blueprint {
   const words = one(frame.on_screen);
   if (!words) return blueprint;
   const said = [blueprint.hook?.text, ...blueprint.labels.map((l) => l.text), ...blueprint.pieces.flatMap((p) => [p.label, p.note])];
   if (said.some((s) => plain(s) === plain(words))) return blueprint;
-  if (frame.n === 1 && !blueprint.hook) return { ...blueprint, hook: { text: words, on: '' } };
+  if (frame.n === 1) return blueprint;
   return { ...blueprint, labels: [...blueprint.labels, { text: words, on: '' }] };
 }
 
@@ -186,14 +187,14 @@ export function acceptTouches(proposed: Partial<Touches> | null | undefined, pla
     taken.add(c.frame);
     custom.push(c);
   }
-  return { touches: { touches, custom }, rejected };
+  return { touches: { touches, custom, ...(proposed?.hook_swap ? { hook_swap: proposed.hook_swap } : {}) }, rejected };
 }
 
 /** The accepted touches, from assets/touches.json. */
 export function readTouches(projectDir: string): Touches {
   try {
     const t = JSON.parse(fs.readFileSync(path.join(projectDir, TOUCHES_FILE), 'utf8')) as Touches;
-    return { touches: list(t.touches), custom: list(t.custom) };
+    return { touches: list(t.touches), custom: list(t.custom), ...(t.hook_swap ? { hook_swap: t.hook_swap } : {}) };
   } catch {
     return { ...NO_TOUCHES };
   }
@@ -220,7 +221,7 @@ const round = (n: number) => Math.round(n * 1000) / 1000;
 export function eventsFor(blueprint: Blueprint, touches: readonly Touch[], timing: TimingFile, duration: number, assetIds: readonly string[], report: (r: string) => void = () => {}): Record<string, unknown>[] {
   const at = wordsAt({ words: timing.words ?? [], lines: timing.lines ?? [], cueAt, report });
   const sounds = [...blueprint.sounds, ...touches.flatMap((t) => (t.type === 'sound' ? [{ kind: t.kind, what: t.what, on: t.on, dur: t.dur }] : []))];
-  const kinds = EVENT_KINDS as string[];
+  const kinds = (EVENT_KINDS as string[]).filter((k) => k !== 'file');
   const out = sounds.flatMap((s) => {
     const t = round(Math.max(0, Math.min(duration, at(s.on, `sound "${one(s.what)}"`))));
     // A decorative kind is the action's own foley (try.mjs bans whoosh and sting); an unknown one too.
@@ -253,6 +254,34 @@ export function frameModule(spec: Record<string, unknown>, custom: readonly Cust
   ].join('\n');
 }
 
+/** A hook frame's module: the hook and the frame's own spec behind it, nothing else. */
+export function hookModule(spec: { treatment: string; hook: HookChoice; years: Record<string, number>; frame: Record<string, unknown> }): string {
+  const data = JSON.stringify(spec, null, 1).replace(/https?:\/\//g, (m) => m.replace(/\//g, '\\/'));
+  return [
+    '// Compiled from the director\'s plan by lib/reel-ai-drama/render/compile.ts. Never edit: change the plan.',
+    "import { compiledHook } from '../kit/hooks/index.js';",
+    `export default compiledHook(${data});`,
+    '',
+  ].join('\n');
+}
+
+/**
+ * The hook frame 1 renders as: the plan's, or the problem solver's swap when it's among the hooks that qualify. A swap that
+ * doesn't qualify leaves the plan's hook standing, with a problem line. Nothing here invents a hook for a plan without one.
+ */
+export function chosenHook(plan: DirectorPlan, touches: Touches | null | undefined, ctx: { inventory: VisualsInventory | null; sources: readonly SourceRef[]; words: string }, problem: (p: string) => void): HookChoice | null {
+  const swap = touches?.hook_swap ?? null;
+  const planned = plan.hook ?? null;
+  if (!swap || !ctx.inventory) return planned;
+  const sources = [...ctx.sources];
+  const options = hookOptions(ctx.inventory, sources);
+  if (!options.some((o) => o.id === swap.id)) {
+    problem(`the hook swap to ${swap.id} doesn't have the assets it needs, so ${planned?.id ?? 'the frame'} stands`);
+    return planned;
+  }
+  return resolveHook(swap, options, { inventory: ctx.inventory, sources, words: ctx.words });
+}
+
 /** A word as OCR might give it: AI and Al, O and 0 read as one. */
 const wordKey = (w: unknown) => String(w ?? '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '').replace(/[il1|]/g, 'l').replace(/0/g, 'o');
 /** The phrases a blueprint marks or aims at, by the picture they must be on (or null: any on the frame). */
@@ -265,6 +294,11 @@ function markedPhrases(b: Blueprint, touches: readonly Touch[]): { asset: string
     ...(list(blueprint.camera?.stops) as { aim: string }[]).flatMap((s) => (text(s.aim) ? [{ asset: null, phrase: text(s.aim)! }] : [])),
   ];
 }
+
+const yearIn = (v: unknown): number | null => {
+  const m = /\b(1[89]\d\d|20\d\d)\b/.exec(String(v ?? ''));
+  return m ? Number(m[1]) : null;
+};
 
 type InventoryFile = { assets: { id: string; file?: string; width?: number; height?: number; boxes?: unknown[]; regions?: { words?: { text: string; box: { x: number; y: number; w: number; h: number } }[] } | null }[] };
 
@@ -348,12 +382,25 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
   // Every frame, also on a partial compile: a re-plan rewrites inventory.json, and frames it didn't touch still read their marks from it.
   await readMarkedWords(projectDir, prepared, input.readWords, problems);
 
+  // The opening hook replaces only what frame 1 renders: its blueprint stays, for integrity, variety and the fallback.
+  const inventory: VisualsInventory | null = input.inventory ?? (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(projectDir, 'assets', 'inventory.json'), 'utf8')) as VisualsInventory;
+    } catch {
+      return null;
+    }
+  })();
+  const openingId = prepared[0] ? prepared[0].id : '';
+  const openingTiming = openingId ? timingOf(projectDir, openingId) : {};
+  const hook = chosenHook(plan, input.touches, { inventory, sources: input.sources ?? [], words: (openingTiming.words ?? []).map((w) => w.text).join(' ') }, (p) => problems.push(`frame 1: ${p}`));
+
   const out: CompileResult['frames'] = [];
   const known: string[] = [];
   for (const p of prepared) {
     const { f, id, blueprint, touches, custom } = p;
     const treatment = String(blueprintTreatment({ ...f, blueprint }));
     const isPlain = p.degraded || plainSet.has(f.n);
+    const asHook = hook && p === prepared[0] && !plainSet.has(f.n) ? hook : null;
     if (!only || only.has(f.n)) {
       try {
         if (p.degraded) problems.push(`frame ${f.n}: no blueprint to compile, so it shows its first picture, plain`);
@@ -363,11 +410,20 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
           fs.mkdirSync(customDir, { recursive: true });
           fs.writeFileSync(path.join(customDir, `${c.id}.js`), c.code);
         }
-        fs.writeFileSync(path.join(framesDir, `${id}.js`), frameModule(spec, custom));
         const timing = timingOf(projectDir, id);
         const duration = timing.duration ?? storyboard.find((s) => s.number === f.n)?.duration ?? 6;
-        const events = eventsFor(blueprint, touches, timing, duration, p.assets, (r) => problems.push(`frame ${f.n}: ${r}`));
-        fs.writeFileSync(path.join(framesDir, `${id}.events.json`), `${JSON.stringify(events, null, 1)}\n`);
+        if (asHook) {
+          const media = Object.fromEntries((inventory?.assets ?? []).map((a) => [a.id, a]));
+          const years = Object.fromEntries((inventory?.assets ?? []).flatMap((a) => { const y = a.date_confidence === 'unknown' ? null : yearIn(a.date_taken); return y === null ? [] : [[a.id, y]]; }));
+          const plan1 = planHook(asHook, { media, words: (timing.words ?? []) as never[], duration, cueAt, years });
+          for (const r of plan1.reports as string[]) problems.push(`frame ${f.n}: ${r}`);
+          fs.writeFileSync(path.join(framesDir, `${id}.js`), hookModule({ treatment, hook: asHook, years: Object.fromEntries(asHook.beats.flatMap((b) => (years[b.asset] != null ? [[b.asset, years[b.asset]]] : []))), frame: { treatment, blueprint, known_names: [] } }));
+          fs.writeFileSync(path.join(framesDir, `${id}.events.json`), `${JSON.stringify(hookScore(plan1), null, 1)}\n`);
+        } else {
+          fs.writeFileSync(path.join(framesDir, `${id}.js`), frameModule(spec, custom));
+          const events = eventsFor(blueprint, touches, timing, duration, p.assets, (r) => problems.push(`frame ${f.n}: ${r}`));
+          fs.writeFileSync(path.join(framesDir, `${id}.events.json`), `${JSON.stringify(events, null, 1)}\n`);
+        }
       } catch (e) {
         // The one thing that can't happen quietly: a frame with no module at all. It still gets a plain one.
         problems.push(`frame ${f.n}: compile failed (${e instanceof Error ? e.message.slice(0, 160) : String(e)}), so it shows its first picture, plain`);
@@ -376,7 +432,8 @@ export async function compileReel(input: CompileInput): Promise<CompileResult> {
       }
     }
     out.push({ n: f.n, id, treatment, plain: isPlain });
-    if (!isPlain) known.push(...namesIn(blueprint));
+    // A hook shows no labels: a name in frame 1's blueprint hasn't been introduced yet.
+    if (!isPlain && !asHook) known.push(...namesIn(blueprint));
   }
   return { frames: out, problems };
 }

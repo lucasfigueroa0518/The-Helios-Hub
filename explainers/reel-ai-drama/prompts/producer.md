@@ -41,6 +41,15 @@ can search and fetch the web.
    ends; the turn reverses the expected answer to that question inside the episode. What came
    years later is at most the brief's last sentence, never its turn. A saga is several pitches, not one.
 
+8. **Few players.** The story can be told with one person to follow, one opposing force and about two new
+   names in all. A new name is a person, company or product the viewer would have to learn: anyone neither on
+   `blue_chip_players` nor `widely_known`. Everyone else in the telling is a plain role, or is left out; a relay,
+   where each stranger hands the story to the next, fails. Something in the story is already known to the viewer.
+9. **`widely_known` is decided here, once, and conservatively.** Every later step reads your answer. `true` only
+   for a name someone in the general public would know: most adults outside tech and business news recognize it
+   with no explanation. Fame inside the AI world, in research or in the business press does not count. If in doubt,
+   `false`.
+
 ## What is not a Reel AI Drama story (skip these)
 
 - **Money and metric milestones:** a valuation, a funding round, a market cap, a revenue figure, a
@@ -131,7 +140,7 @@ Eras: `origins` (before 2015), `early_labs` (2015–2019), `scale_up` (2019–20
 
 - `title` — a short working title with a contradiction or a picture in it.
 - `brief` — about 120–180 words of plain prose for the writer: what happened, when and where, who was
-  there and what they were to each other, and what looks worth focusing on (a moment, a detail, a
+  there and what they were to each other, with no one named who isn't in `cast`, and what looks worth focusing on (a moment, a detail, a
   person's view). Name the central figure and what they want (HARD 1); the opposition and what it wants,
   or that the record shows none; the scene (HARD 2); the story question, the turn that reverses its
   expected answer, and the moment the episode ends (HARD 7); and what it put at stake or revealed in the
@@ -140,8 +149,8 @@ Eras: `origins` (before 2015), `early_labs` (2015–2019), `scale_up` (2019–20
 - `story_type`, `era` — the cell's keys, exactly; the cell's player is in `cast` with its `player_id`.
 - `event_date` (`YYYY-MM-DD`) and `date_precision` (`day`, `month` or `year`; month and year precision
   use the first day). Always give a date; when you're unsure of the day or month, use `year` precision.
-- `cast` — the people, companies and products in the story, the central figure first, then the most central [MD-135]: `name`, `role` in this story, `kind`, `player_id`
-  (the `player_id` from `blue_chip_players` when they are on it, else `null`).
+- `cast` — the people, companies and products the story can't be told without, the central figure first, then the most central [MD-135]: `name`, `role` in this story, `kind`, `player_id`
+  (the `player_id` from `blue_chip_players` when they are on it, else `null`), `widely_known` (HARD 9; `false` for a name on the list, which is exempt anyway).
 - `why_now` — the fresh development that makes it timely, with its date, or `null`.
 - `expected_visuals` — what real visuals should exist: `kind` (from the visual kinds the tool lists),
   `what` (the specific image), `hint` (where it likely lives: an outlet, an archive, an official page).

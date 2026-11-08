@@ -679,6 +679,10 @@ export async function getFeedback(db: Queryable, jobId: string): Promise<Feedbac
  * now. A topic that already rendered goes back to `promoted` so
  * `requestRender` accepts it; the daily caps still apply. The new render
  * becomes the current version when it finishes; earlier ones stay as history.
+ *
+ * A regenerate is a whole new reel, analogy included (Lucas, 2026-11-08): the topic's analogy pick
+ * moves to `jev_notes.analogies_retired`, so the render's first stage picks a fresh one (EX3-31) and
+ * the picker refuses a retired name. A refused regenerate puts the pick back.
  */
 export async function requestRerender(
   db: ExplainersDb,
@@ -688,10 +692,37 @@ export async function requestRerender(
     `UPDATE explainers.topics SET status = 'promoted', updated_at = now() WHERE id = $1 AND status = 'rendered' RETURNING id`,
     [input.topicId],
   );
+  const { rows: before } = await db.query<{ analogy: unknown }>(
+    `SELECT jev_notes -> 'analogy' AS analogy FROM explainers.topics WHERE id = $1`,
+    [input.topicId],
+  );
+  const pick = before[0]?.analogy ?? null;
+  if (pick) {
+    await db.query(
+      `UPDATE explainers.topics
+          SET jev_notes = (jev_notes - 'analogy')
+                || jsonb_build_object('analogies_retired', COALESCE(jev_notes -> 'analogies_retired', '[]'::jsonb) || jsonb_build_array(jev_notes -> 'analogy')),
+              updated_at = now()
+        WHERE id = $1`,
+      [input.topicId],
+    );
+  }
   const result = await requestRender(db, { topicId: input.topicId, trigger: 'click', settings: input.settings, now: input.now });
-  // A cap refused it: the topic goes back to how it was.
-  if (!result.ok && reopened.rows[0]) {
-    await db.query(`UPDATE explainers.topics SET status = 'rendered', updated_at = now() WHERE id = $1 AND status = 'promoted'`, [input.topicId]);
+  // A cap refused it: the topic goes back to how it was, its analogy pick included.
+  if (!result.ok) {
+    if (reopened.rows[0]) {
+      await db.query(`UPDATE explainers.topics SET status = 'rendered', updated_at = now() WHERE id = $1 AND status = 'promoted'`, [input.topicId]);
+    }
+    if (pick) {
+      await db.query(
+        `UPDATE explainers.topics
+            SET jev_notes = jev_notes || jsonb_build_object('analogy', $2::jsonb,
+                  'analogies_retired', (jev_notes -> 'analogies_retired') - (jsonb_array_length(jev_notes -> 'analogies_retired') - 1)),
+                updated_at = now()
+          WHERE id = $1`,
+        [input.topicId, JSON.stringify(pick)],
+      );
+    }
   }
   return result;
 }

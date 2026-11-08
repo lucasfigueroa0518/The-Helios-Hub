@@ -30,7 +30,7 @@ const FACTS = { facts: [], quotes: [], artifacts: [], cast: [] } as unknown as F
 
 function draft(labels: (string | null)[], kinds: ('date' | null | undefined)[] = []): WriterDraft {
   return {
-    title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' },
+    title: 'T', hook: { line_id: 'L1' },
     rungs: [{ id: 'R1', purpose: 'p', lines: labels.map((on_screen, i) => ({ id: `L${i + 1}`, text: `line ${i + 1}`, on_screen, ...(kinds[i] !== undefined ? { on_screen_kind: kinds[i] } : {}), fact_ids: [], must_show: null })) }],
     peak_rung_id: 'R1', landing_rung_id: 'R1', close_question: 'Would you?', word_count: 0, central: [],
   };
@@ -39,7 +39,7 @@ function draft(labels: (string | null)[], kinds: ('date' | null | undefined)[] =
 function frame(n: number, kind: FocusKind | null, over: Partial<StoryboardFrame> = {}): StoryboardFrame {
   return {
     n, name: `f${n}`, line_ids: [`L${n}`], treatment: 'photo', asset_ids: ['V2'], purpose: 'p', motion: 'push', marks: '', sound: '', music: n === 1 ? 'start' : 'hold',
-    on_screen: n === 1 ? 'One bet' : null, shows: [], ...(kind ? { focus: { kind, what: 'what the eye lands on' } } : {}), ...over,
+    on_screen: null, shows: [], ...(kind ? { focus: { kind, what: 'what the eye lands on' } } : {}), ...over,
   };
 }
 const close = (n: number): StoryboardFrame => ({ n, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
@@ -129,23 +129,10 @@ test('medium and cut_out reach validatePlan: the problem is reported, and a wish
 
 // ── Date labels (MD-130) ────────────────────────────────────────────────────
 
-test('on_screen_kind: the first line\'s label defaults to a date; other labels keep \'date\' or read null; no label, no kind', () => {
-  const v = validateDraft(draft(['March 2015', 'Ada Founder, CEO', 'June 2019', null], [undefined, 'date', 'date', 'date']), { facts: FACTS, inventory: INVENTORY, limits: DEFAULT_SETTINGS });
-  const kinds = v.value!.rungs[0]!.lines.map((l) => l.on_screen_kind);
-  assert.deepEqual(kinds, ['date', 'date', 'date', null]);
-  const plain = validateDraft(draft(['March 2015', 'Ada Founder, CEO'], [null, 'headline' as 'date']), { facts: FACTS, inventory: INVENTORY, limits: DEFAULT_SETTINGS });
-  assert.deepEqual(plain.value!.rungs[0]!.lines.map((l) => l.on_screen_kind), ['date', null]);
-});
-
-test('on_screen_kind through a revision: given, it is kept; left out, an unchanged label keeps its kind and a new label has none', () => {
-  const before = validateDraft(draft(['March 2015', 'June 2019', 'Ada Founder, CEO'], [undefined, 'date', null]), { facts: FACTS, inventory: INVENTORY, limits: DEFAULT_SETTINGS }).value!;
-  const ctx = { notedLineIds: ['L2', 'L3'], facts: FACTS, inventory: INVENTORY, limits: DEFAULT_SETTINGS };
-  const kept = applyRevision(before, [{ line_id: 'L2', cut: false, text: 'new words', on_screen: 'June 2019', fact_ids: [], must_show: null }], ctx).value!;
-  assert.equal(kept.rungs[0]!.lines[1]!.on_screen_kind, 'date');
-  const changed = applyRevision(before, [{ line_id: 'L2', cut: false, text: 'new words', on_screen: '$4M', fact_ids: [], must_show: null }], ctx).value!;
-  assert.equal(changed.rungs[0]!.lines[1]!.on_screen_kind, null);
-  const given = applyRevision(before, [{ line_id: 'L3', cut: false, text: 'new words', on_screen: 'Spring 2020', on_screen_kind: 'date', fact_ids: [], must_show: null }], ctx).value!;
-  assert.equal(given.rungs[0]!.lines[2]!.on_screen_kind, 'date');
+test('iteration 12: no line carries a date mark, and the first line has no label', () => {
+  const v = validateDraft(draft(['February 2010', 'Jan 2019', 'Spring 2020'], ['date', 'date', null]), { facts: FACTS, inventory: INVENTORY, limits: DEFAULT_SETTINGS });
+  assert.deepEqual(v.value!.rungs[0]!.lines.map((l) => l.on_screen_kind), [null, null, null]);
+  assert.deepEqual(v.value!.rungs[0]!.lines.map((l) => l.on_screen), [null, 'Jan 2019', 'Spring 2020']);
 });
 
 test('cut_out: a cut-out wish may only sit in frames that stage cutouts', async () => {

@@ -41,6 +41,8 @@ export type DayQuotas = {
   last_few_days?: number;
   /** AI Events: Miami and Boston carousels on each of its days (Sunday, AE-29); missing reads as one. */
   ai_events?: number;
+  /** AI Drama Reels: its slots for the day (template), else posts_per_day; missing reads as its windows. */
+  reel_ai_drama?: number;
   /** The weekdays Carousels give up to Last Few Days while its auto_run is on (LFD-02); none when missing. */
   lfdDays?: readonly number[];
   /** The calendar's slots by date (template mode), today − 7 … today + 21; null or missing while legacy. */
@@ -219,7 +221,7 @@ export function orderCards(cards: readonly QuotaCandidate[]): QuotaCandidate[] {
     .map((x) => x.c);
 }
 
-export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events'];
+export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'reel_ai_drama'];
 
 /** Every type's quota candidates for today, as the day's cards in posting order. */
 export function allQuotaCandidates(data: Parameters<typeof quotaCandidates>[0], now: Date): QuotaCandidate[] {

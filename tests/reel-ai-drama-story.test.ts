@@ -67,7 +67,7 @@ function goodDraft(): WriterDraft {
     purpose: `rung ${i + 1}`,
     lines: [10, 10].map((count) => ({ id: `L${++n}`, text: `${words(count)}.`, on_screen: null, fact_ids: ['F1'], must_show: null })),
   }));
-  return { title: 'T', hook: { on_screen: 'One bet', line_id: 'L1' }, rungs, peak_rung_id: 'R5', landing_rung_id: 'R7', close_question: 'Would you have shipped it?', word_count: 0, central: ['Jane Roe'] };
+  return { title: 'T', hook: { line_id: 'L1' }, rungs, peak_rung_id: 'R5', landing_rung_id: 'R7', close_question: 'Would you have shipped it?', word_count: 0, central: ['Jane Roe'] };
 }
 
 function toolMessage(name: string, input: unknown, id = 'tu_1'): Anthropic.Message {
@@ -235,7 +235,7 @@ test('the editor reads the script only: line ids, narration and on-screen words;
   const call = send.calls[0]!;
   const user = userText(call);
   assert.equal(user, `## The script\n\n${scriptForEditor(draft)}`);
-  assert.match(user, /^## The script\n\nL1: word[^\n]*\n {4}On screen: One bet\nL2: /);
+  assert.match(user, /^## The script\n\nL1: word[^\n]*\nL2: /);
   assert.match(user, /L3: word[^\n]*\n {4}On screen: March 2020\n/);
   for (const absent of ['F1', 'R1', 'rung', 'purpose', 'fact', 'brief', 'Jane Roe', 'Would you have shipped it?', 'peak', 'V1']) assert.ok(!user.includes(absent), `no ${absent}`);
   assert.equal(systemBlocks(call)[0]!.text, storyEditorSystem());
@@ -304,7 +304,7 @@ test('the plan validator takes wishes: wish ids in frames, a real fallback, ever
   const ids = draft.rungs.flatMap((r) => r.lines.map((l) => l.id));
   const frames: DirectorPlan['frames'] = Array.from({ length: 7 }, (_, i) => ({
     n: i + 1, name: `f${i + 1}`, line_ids: ids.slice(i * 2, i * 2 + 2), treatment: 'photo', asset_ids: [i === 2 ? 'W1' : `V${(i % 4) + 1}`], purpose: 'p', motion: 'push', marks: '', sound: '',
-    music: i === 0 ? 'start' : 'hold', on_screen: i === 0 ? 'One bet' : null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
+    music: i === 0 ? 'start' : 'hold', on_screen: null, focus: { kind: FOCUS_KINDS[i % FOCUS_KINDS.length]!, what: 'what the eye lands on' }, 
   }));
   frames.push({ n: 8, name: 'close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'close', motion: '', marks: '', sound: '', music: 'end', on_screen: null });
   const plan = (wishes: DirectorPlan['wishes']): DirectorPlan => ({ frames: structuredClone(frames), wishes, lines_back: [] });

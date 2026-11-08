@@ -1,3 +1,4 @@
+import { dramaLogDir } from '@/lib/reel-ai-drama/local-dir';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { coerceJsonStrings } from '@/lib/reel-ai-drama/tool-input';
 import path from 'node:path';
@@ -224,7 +225,7 @@ export async function runSubmit<T>(send: SendMessage, ledger: Ledger, req: Submi
   }
 }
 
-export const LOG_DIR = path.join('.explainers-local', 'reel-ai-drama', 'logs');
+export const LOG_DIR = dramaLogDir();
 
 /** The live sender: streams (long outputs need it) and appends every response to a JSONL log. */
 export function liveSend(client: Anthropic, opts: { logFile?: string; label?: string } = {}): SendMessage {

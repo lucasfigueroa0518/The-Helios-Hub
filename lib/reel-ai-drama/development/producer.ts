@@ -97,8 +97,8 @@ export const SUBMIT_PITCHES_TOOL = {
               items: {
                 type: 'object',
                 additionalProperties: false,
-                required: ['name', 'role', 'kind', 'player_id'],
-                properties: { name: str, role: str, kind: { type: 'string', enum: ['person', 'company', 'product'] }, player_id: nullableStr },
+                required: ['name', 'role', 'kind', 'player_id', 'widely_known'],
+                properties: { name: str, role: str, kind: { type: 'string', enum: ['person', 'company', 'product'] }, player_id: nullableStr, widely_known: { type: 'boolean' } },
               },
             },
             why_now: nullableStr,
@@ -238,7 +238,8 @@ export function validatePitch(raw: unknown, opts: { today: string; cell?: PitchC
     if (c.kind !== 'person' && c.kind !== 'company' && c.kind !== 'product') return fail(`cast ${name}: bad kind`);
     const given = typeof c.player_id === 'string' ? c.player_id.trim() : null;
     const player_id = isPlayerId(given) ? given : playerIdForName(name);
-    cast.push({ name, role, kind: c.kind, player_id });
+    // Decided here, once (ALIGN §7): anything but a clear yes is a no, and every later step reads this answer.
+    cast.push({ name, role, kind: c.kind, player_id, widely_known: c.widely_known === true });
   }
   if (opts.cell) {
     if (r.story_type !== opts.cell.story_type) return fail(`story_type ${String(r.story_type)} is not the cell's (${opts.cell.story_type})`);

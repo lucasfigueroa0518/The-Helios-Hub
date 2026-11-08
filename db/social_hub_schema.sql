@@ -521,6 +521,46 @@ INSERT INTO social_hub.settings (key, value) VALUES
     ('daily_caps', '{"reels":5,"explainers":3,"carousels":3,"last_few_days":1,"stories":2,"ai_events":2}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
+-- ════ AI Drama Reels (reel_ai_drama), planning/AI Mini Docs/HUB-WIRING-CONTRACT.md ════
+ALTER TABLE social_hub.content_items DROP CONSTRAINT IF EXISTS content_items_vertical_check;
+ALTER TABLE social_hub.content_items ADD CONSTRAINT content_items_vertical_check
+    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'reel_ai_drama'));
+ALTER TABLE social_hub.idea_adjustments DROP CONSTRAINT IF EXISTS idea_adjustments_vertical_check;
+ALTER TABLE social_hub.idea_adjustments ADD CONSTRAINT idea_adjustments_vertical_check
+    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'reel_ai_drama'));
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_slot_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
+    (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
+    OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
+    OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical = 'last_few_days' AND slot IN ('morning'))
+    OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
+    OR (vertical = 'reel_ai_drama' AND slot IN ('evening'))
+    OR slot ~ '^t[0-9]{4}(:[a-z_]+)?$'
+);
+ALTER TABLE social_hub.schedule DROP CONSTRAINT IF EXISTS schedule_feed_mode_check;
+ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_feed_mode_check CHECK (
+    feed_mode IS NULL OR (vertical IN ('reels', 'explainers', 'reel_ai_drama') AND feed_mode IN ('trial', 'main'))
+);
+ALTER TABLE social_hub.publish_attempts DROP CONSTRAINT IF EXISTS publish_attempts_trigger_check;
+ALTER TABLE social_hub.publish_attempts ADD CONSTRAINT publish_attempts_trigger_check CHECK (
+    (vertical IN ('carousels', 'explainers', 'last_few_days', 'ai_events', 'reel_ai_drama') AND trigger IN ('approve', 'auto', 'force'))
+    OR (vertical = 'reels' AND trigger IN ('approve', 'auto', 'mix_test', 'force'))
+    OR (vertical = 'stories' AND trigger IN ('approve', 'auto'))
+);
+ALTER TABLE social_hub.slot_template DROP CONSTRAINT IF EXISTS slot_template_feed_mode_check;
+ALTER TABLE social_hub.slot_template ADD CONSTRAINT slot_template_feed_mode_check CHECK (
+    (vertical IN ('reels', 'explainers', 'reel_ai_drama') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
+    OR (vertical NOT IN ('reels', 'explainers', 'reel_ai_drama') AND feed_mode IS NULL)
+);
+ALTER TABLE social_hub.slot_override DROP CONSTRAINT IF EXISTS slot_override_feed_mode_check;
+ALTER TABLE social_hub.slot_override ADD CONSTRAINT slot_override_feed_mode_check CHECK (
+    (action = 'remove' AND feed_mode IS NULL)
+    OR (action = 'add' AND vertical IN ('reels', 'explainers', 'reel_ai_drama') AND feed_mode IS NOT NULL AND feed_mode IN ('trial', 'main'))
+    OR (action = 'add' AND vertical NOT IN ('reels', 'explainers', 'reel_ai_drama') AND feed_mode IS NULL)
+);
+
 -- Every caption type logs its closing paragraph here; it feeds recent-closings and the
 -- build-line ceiling (social captions redesign, 2026-10-19).
 CREATE TABLE IF NOT EXISTS social_hub.caption_closings (

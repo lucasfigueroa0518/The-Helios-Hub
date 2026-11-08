@@ -4,6 +4,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { designReviewSystem, type DesignItemSet } from '@/lib/reel-ai-drama/prompts';
 import type { Sheet } from '@/lib/reel-ai-drama/render/sheets';
+import { errorReason } from '@/lib/reel-ai-drama/retry';
 import { DEFAULT_SETTINGS, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { DirectorPlan, ScriptLine, WriterDraft } from '@/lib/reel-ai-drama/types';
 import { runSubmit, WritingError, type Ledger, type Parsed, type SendMessage, type SubmitTool } from '@/lib/reel-ai-drama/writing/llm';
@@ -123,8 +124,6 @@ export type DesignDeps = Ledger & {
   readSheet?: (file: string) => Promise<string>;
 };
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
 /** Both calls, in parallel, on the same user content (every frame's summary, then its sheets, in order). */
 export async function checkDesign(deps: DesignDeps, input: { sheets: Sheet[]; plan: DirectorPlan; draft: WriterDraft }): Promise<DesignReview> {
   const settings = deps.settings ?? DEFAULT_SETTINGS;
@@ -159,12 +158,17 @@ export async function checkDesign(deps: DesignDeps, input: { sheets: Sheet[]; pl
   results.forEach((r, i) => {
     const component = DESIGN_CALLS[sets[i]!].component;
     if (r.status === 'rejected') {
-      review.errors.push(`${component}: ${errorText(r.reason)}`);
+      review.errors.push(`${component}: ${errorReason(r.reason)}`);
       if (r.reason instanceof WritingError) review.usd += r.reason.usd;
       return;
     }
     review.usd += r.value.usd;
-    for (const f of r.value.value) (f.severity === 'problem' ? review.problems : review.warnings).push(f);
+    // A frame 1 that plays a hook is code's template: it may open on purpose unformed, and no fix can edit it. Its findings ship as flags.
+    const onHook = (f: DesignFinding) => Boolean(input.plan.hook) && f.frame === 1;
+    for (const f of r.value.value) {
+      if (onHook(f) && f.item === 'formed_opening') continue;
+      (f.severity === 'problem' && !onHook(f) ? review.problems : review.warnings).push(f);
+    }
   });
   const order = (a: DesignFinding, b: DesignFinding) => a.frame - b.frame;
   review.problems.sort(order);

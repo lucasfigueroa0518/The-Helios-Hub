@@ -1,5 +1,4 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { listPool, listTopics } from '@/lib/explainers/repository';
 import { loadSettings, loadThemeBrief, type ExplainersSettings } from '@/lib/explainers/settings';
 import type { CostVendor, JobRow, LintViolation, TopicRow, Verdict } from '@/lib/explainers/types';
 import { warningsSummary, type WarningsSummary } from '@/lib/explainers/warnings';
@@ -31,26 +30,6 @@ function serializeTopic(topic: TopicRow): TopicRow {
     rendered_at: iso(topic.rendered_at),
     created_at: iso(topic.created_at)!,
     updated_at: iso(topic.updated_at)!,
-  };
-}
-
-export type TopicsView = {
-  pool: TopicRow[];
-  /** Everything else, newest first: proposed, queued, promoted, rendered, rejected, displaced. */
-  others: TopicRow[];
-  settings: Pick<ExplainersSettings, 'auto_render' | 'pool_size' | 'mode'>;
-};
-
-export async function loadTopicsView(db: Queryable): Promise<TopicsView> {
-  const [pool, others, settings] = await Promise.all([
-    listPool(db),
-    listTopics(db, ['proposed', 'promoted', 'queued', 'rendered', 'rejected', 'displaced']),
-    loadSettings(db),
-  ]);
-  return {
-    pool: pool.map(serializeTopic),
-    others: others.map(serializeTopic),
-    settings: { auto_render: settings.auto_render, pool_size: settings.pool_size, mode: settings.mode },
   };
 }
 

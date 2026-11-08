@@ -3,7 +3,8 @@ import { cutSource, isRejectedCut } from '@/lib/reel-ai-drama/harvest/cutouts';
 import { directorSystem } from '@/lib/reel-ai-drama/prompts';
 import { DEFAULT_SETTINGS } from '@/lib/reel-ai-drama/settings';
 import { stagingOf } from '@/lib/reel-ai-drama/checks/variety';
-import { peakRungId, type DirectorPlan, type FactSheet, type ShotWish, type StoryboardFrame, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
+import { hookOptions, identityUnconfirmed, resolveHook } from '@/lib/reel-ai-drama/hooks/eligibility';
+import { peakRungId, type DirectorPlan, type FactSheet, type HookChoice, type ShotWish, type SourceRef, type StoryboardFrame, type VisualsInventory, type WriterDraft } from '@/lib/reel-ai-drama/types';
 import { runSubmit, section } from '@/lib/reel-ai-drama/writing/llm';
 import { SUBMIT_PLAN_TOOL } from '@/lib/reel-ai-drama/writing/schemas';
 import { isCharacterImage, isLogo, salvagePlan, validateFixedPlan, validatePlan } from '@/lib/reel-ai-drama/writing/validate';
@@ -24,16 +25,20 @@ const DIRECTOR_MAX_TOKENS = 64_000;
  * `brightness` and `expression` to choose by feeling, `sharp_width_px` the widest it stays sharp, `open_edges` the sides a
  * cutout stops at, `trusted_faces` how many faces may be heads. A rejected cut isn't offered as a cutout: it is left out when its
  * photo is in the inventory, else offered as a print. The `shape` and `tone` grids are never sent.
+ * A picture whose identity is unconfirmed names nobody here (no `people`, no `anchor_for`, `identity_unconfirmed: true`), so it can't
+ * stand for a named person; `shows` stays, so it can still be used for what it visibly is.
  */
 export function inventoryForDirecting(inventory: VisualsInventory) {
   return inventory.assets.filter((a) => !(isRejectedCut(a) && cutSource(inventory, a))).map((a) => {
     const r = a.regions;
     const rejected = isRejectedCut(a);
+    const unconfirmed = identityUnconfirmed(a);
     return {
       id: a.id,
       kind: a.kind,
       shows: a.shows,
-      people: a.people,
+      people: unconfirmed ? [] : a.people,
+      ...(unconfirmed ? { identity_unconfirmed: true } : {}),
       place: a.place,
       date: a.date_taken,
       date_confidence: a.date_confidence,
@@ -43,7 +48,7 @@ export function inventoryForDirecting(inventory: VisualsInventory) {
       logo: isLogo(a),
       made: a.made,
       made_kind: a.made_kind ?? null,
-      anchor_for: rejected ? null : a.anchor_for ?? null,
+      anchor_for: rejected || unconfirmed ? null : a.anchor_for ?? null,
       parallax: a.flags.includes('parallax'),
       flags: rejected ? a.flags.filter((f) => f !== 'cutout') : a.flags,
       ...(rejected ? { print_only: true } : {}),
@@ -60,12 +65,13 @@ export function inventoryForDirecting(inventory: VisualsInventory) {
 
 /**
  * The locked script as the director reads it: the WriterDraft fields only. A draft saved before iteration 5
- * may carry fields the writer no longer writes; those are left out, and its old turn rung is read as the peak.
+ * may carry fields the writer no longer writes; those are left out (its hook's old on-screen words among them), and its old turn
+ * rung is read as the peak.
  */
 export function scriptForDirecting(draft: WriterDraft): WriterDraft {
   return {
     title: draft.title,
-    hook: draft.hook,
+    hook: { line_id: draft.hook.line_id },
     rungs: draft.rungs.map(({ id, purpose, lines }) => ({ id, purpose, lines })),
     peak_rung_id: peakRungId(draft),
     landing_rung_id: draft.landing_rung_id,
@@ -115,6 +121,7 @@ function fixSections(fix: DirectorFix): string[] {
     section(findings, fix.problems),
     ...(others.length ? [section('The other frames, which stay as they are', others.map(frameLine))] : []),
     ...(makes.length || wishes.length ? [section('Makes and wishes the plan already has', [...makes, ...wishes])] : []),
+    ...(named.has(1) ? [section('The hook the plan has', fix.plan.hook ?? 'none')] : []),
   ];
 }
 
@@ -138,11 +145,38 @@ function withHeldWishes(raw: unknown, fix: DirectorFix): unknown {
   return { ...raw, wishes: [...(fix.plan.wishes ?? []).filter((w) => !fresh.some((g) => g?.id === w.id)), ...fresh] };
 }
 
+/** The fact sheet's sources, as the hooks read them: a real headline only ever comes from one of these titles. */
+export const hookSources = (facts: FactSheet): SourceRef[] => (facts.sources ?? []).map(({ url, title, publisher, date }) => ({ url, title, publisher, date }));
+
+/** The opening line's words: what a hook's cues must land on. */
+const openingWords = (draft: WriterDraft): string => draft.rungs.flatMap((r) => r.lines).find((l) => l.id === draft.hook.line_id)?.text ?? '';
+
+/** The opening is the line and the picture: no words of its own, whichever way a saved draft or a stray field asks for them. */
+function withoutHookWords(plan: DirectorPlan): DirectorPlan {
+  return {
+    ...plan,
+    frames: plan.frames.map((f) => {
+      const { hook: _words, ...blueprint } = f.blueprint ?? ({} as NonNullable<StoryboardFrame['blueprint']>);
+      return { ...f, ...(f.n === 1 ? { on_screen: null } : {}), ...(f.blueprint ? { blueprint: blueprint as NonNullable<StoryboardFrame['blueprint']> } : {}) };
+    }),
+  };
+}
+
+/** Frame 1 holds the hook's look until it ends, so it carries the opening line alone. Asked to fix once; a plan that stays this way still ships. */
+function openingLineSoft(plan: DirectorPlan | null, draft: WriterDraft): string[] {
+  const first = plan?.frames?.[0];
+  return first && first.line_ids.some((id) => id !== draft.hook.line_id) ? [`frame 1 carries ${first.line_ids.join(', ')}; it must carry the opening line (${draft.hook.line_id}) alone`] : [];
+}
+
+const rawHook = (raw: unknown): HookChoice | null | undefined => (typeof raw === 'object' && raw !== null ? (raw as { hook?: HookChoice | null }).hook : undefined);
+
 /**
  * P5: the director (Opus 5.5) plans the frames from the locked script and what the harvest holds, and
  * may send lines back once (MD-38). The kit guide sits in the cached system prefix with both crafts.
  * A fix round runs at medium effort on its own model, sends the named frames and gets only those back; the tool, system and shared
  * input stay byte for byte the first plan's, because any change there would re-write the cache for all of them. It returns the whole plan.
+ * The hook options sit in the shared input. Whatever comes back as `hook` passes through `resolveHook`, so a bad choice can't get through;
+ * a fix keeps the plan's hook unless it names frame 1 and answers with a new one. The sources come from the fact sheet.
  */
 export async function directReel(
   deps: WritingDeps,
@@ -156,6 +190,13 @@ export async function directReel(
   },
 ): Promise<DirectorPlan> {
   const settings = deps.settings ?? DEFAULT_SETTINGS;
+  const sources = hookSources(input.facts);
+  const options = hookOptions(input.inventory, sources);
+  let proposed: HookChoice | null | undefined;
+  const heard = (raw: unknown) => {
+    const answered = rawHook(raw);
+    proposed = !input.fix ? answered : (input.fix.problems.some((p) => p.frame === 1) && answered) || input.fix.plan.hook;
+  };
   const result = await runSubmit(deps.create, deps, {
     component: input.fix ? 'director_fix' : 'director',
     model: input.fix ? (input.fix.escalate ? settings.director_fix_escalation_model : settings.director_fix_model) : settings.director_model,
@@ -169,6 +210,7 @@ export async function directReel(
           section('Script', scriptForDirecting(input.draft)),
           section('Fact sheet', input.facts),
           section('Visuals inventory', inventoryForDirecting(input.inventory)),
+          section('Hook options', options),
         ].join('\n\n'),
         cache_control: ephemeralCache('1h'),
       },
@@ -178,10 +220,25 @@ export async function directReel(
     maxTokens: input.fix ? DIRECTOR_FIX_MAX_TOKENS : DIRECTOR_MAX_TOKENS,
     effort: input.fix ? 'medium' : 'high',
     // A fix answers for its named frames; everything else stays as the run holds it (cutouts, wishes found, made assets).
-    parse: (raw) => (input.fix ? validateFixedPlan(withHeldWishes(raw, input.fix), input.fix, { draft: input.draft, inventory: input.inventory }) : validatePlan(raw, { draft: input.draft, inventory: input.inventory })),
+    parse: (raw) => {
+      heard(raw);
+      if (input.fix) return validateFixedPlan(withHeldWishes(raw, input.fix), input.fix, { draft: input.draft, inventory: input.inventory });
+      const parsed = validatePlan(raw, { draft: input.draft, inventory: input.inventory });
+      return { ...parsed, soft: [...parsed.soft, ...openingLineSoft(parsed.value, input.draft)] };
+    },
     // Never block a reel: a first plan still invalid after its fix round ships repaired, flagged. A failed fix keeps the frames it had.
-    ...(input.fix ? {} : { salvage: (raw: unknown, problems: readonly string[]) => salvagePlan(raw, problems, { draft: input.draft, inventory: input.inventory }) }),
+    ...(input.fix
+      ? {}
+      : {
+          salvage: (raw: unknown, problems: readonly string[]) => {
+            heard(raw);
+            return salvagePlan(raw, problems, { draft: input.draft, inventory: input.inventory });
+          },
+        }),
   });
   deps.onSpend?.('director', result.usd);
-  return result.value;
+  // A fix that keeps the plan's hook keeps it as resolved (or absent, on a plan from before hooks); only a new one is resolved.
+  const kept = input.fix && proposed === input.fix.plan.hook;
+  const hook = kept ? input.fix!.plan.hook : resolveHook(proposed, options, { inventory: input.inventory, sources, words: openingWords(input.draft) });
+  return { ...withoutHookWords(result.value), ...(hook !== undefined ? { hook } : {}) };
 }

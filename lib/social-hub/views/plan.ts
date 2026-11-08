@@ -36,6 +36,8 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
     { id: 'evening', label: 'Evening', startMinute: 18 * 60, endMinute: 19 * 60, days: [0] },
     { id: 'night', label: 'Night', startMinute: 19 * 60, endMinute: 20 * 60, days: [0] },
   ],
+  // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS (8:00–8:45 PM, every day).
+  reel_ai_drama: [{ id: 'evening', label: 'Evening', startMinute: 20 * 60, endMinute: 20 * 60 + 45 }],
   stories: [
     { id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY },
     { id: 'guess_the_number', label: 'Guess the Number', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [1, 4] },

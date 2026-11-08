@@ -16,8 +16,8 @@ const words = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 
 /**
  * Remove lines; drop rungs left empty; keep the hook, turn and landing pointing at lines that exist.
- * A cut hook line takes its on-screen words with it (they promised the cut claim); the landing passes to
- * the last rung that remains, so the final line keeps its role.
+ * A cut hook line hands the hook to the first line left; the landing passes to the last rung that remains,
+ * so the final line keeps its role.
  */
 export function cutLines(draft: WriterDraft, cut: readonly string[]): WriterDraft {
   const gone = new Set(cut);
@@ -40,7 +40,7 @@ export function cutLines(draft: WriterDraft, cut: readonly string[]): WriterDraf
     rungs,
     peak_rung_id: nearest(peakRungId(draft)),
     landing_rung_id: nearest(draft.landing_rung_id),
-    hook: gone.has(draft.hook.line_id) ? { on_screen: '', line_id: first } : draft.hook,
+    hook: gone.has(draft.hook.line_id) ? { line_id: first } : draft.hook,
     word_count: rungs.reduce((n, r) => n + r.lines.reduce((m, l) => m + words(l.text), 0), 0),
   };
 }
@@ -100,7 +100,7 @@ export function changedLineIds(before: WriterDraft, after: WriterDraft): string[
   }).map((l) => l.id);
 }
 
-/** Clear frame-level words equal to `words` (the cut hook's), so no frame keeps a promise the script dropped. */
+/** Clear frame-level words equal to `words` (a saved draft's cut hook words), so no frame keeps a promise the script dropped. */
 export function clearFrameWords(plan: DirectorPlan, words: string): DirectorPlan {
   const norm = (s: string | null) => (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
   return {
@@ -143,7 +143,7 @@ export function mergeFrames(plan: DirectorPlan, fixed: DirectorPlan, flagged: re
   return { ...plan, frames: plan.frames.map((f) => {
     const g = want.has(f.n) ? fixed.frames.find((x) => x.n === f.n) : undefined;
     return g ? { ...g, n: f.n, name: f.name, line_ids: f.line_ids } : f;
-  }), makes, lines_back: [] };
+  }), makes, lines_back: [], ...(fixed.hook !== undefined ? { hook: fixed.hook } : {}) };
 }
 
 /** The asset key the 20-day rule reads (schema: the perceptual hash when known, else the source URL). */

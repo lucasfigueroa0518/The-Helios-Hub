@@ -4,7 +4,6 @@ import test from 'node:test';
 
 import { autoSlide, backdropBand, bareSheets, boxInFrame, crowdLead, crowdSlots, edgeCutCrop, headlinePhrase, lensRoom, LIMITS, phraseLines, preparePiece, solveTimeline, STAGE } from '../explainers/reel-ai-drama/kit/stage-layout.js';
 import { phraseLines as anchorPhrase, pickInk, strokeRect } from '../explainers/reel-ai-drama/kit/components/anchor.js';
-import { repeatsSpoken } from '../explainers/reel-ai-drama/kit/components/compiled.js';
 import { heldCount, STAT_HOLD } from '../explainers/reel-ai-drama/kit/components/stat.js';
 import { readWordsHard } from '../lib/reel-ai-drama/harvest/boxes';
 import { edgeCutOf, inkChroma, pictureFocus, sharpOf, sharpWidth } from '../lib/reel-ai-drama/harvest/regions';
@@ -177,13 +176,6 @@ test('a counted figure holds its last value: the count gives way, not the hold',
   const c = heldCount(1.2, 2.2);
   assert.ok(2.2 - c >= STAT_HOLD - 1e-9, `${c}`);
   assert.equal(heldCount(1.2, 0.5), 0.3);
-});
-
-test('a date spoken as it shows repeats the caption; one the voice doesn\'t say stands', () => {
-  const words = ['on', 'December', '22nd', '2016', 'they'].map((text, i) => ({ text, start: 0.2 + i * 0.3 }));
-  assert.equal(repeatsSpoken('22 December 2016', words, 0), true);
-  assert.equal(repeatsSpoken('6 March 2015', words, 0), false);
-  assert.equal(repeatsSpoken('22 December 2016', words, 30), false, 'said long before it shows');
 });
 
 // ── Layout ─────────────────────────────────────────────────────────────────────

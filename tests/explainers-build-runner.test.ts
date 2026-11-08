@@ -148,7 +148,11 @@ test('kit source is open to builders: no read block, no Grep cap', () => {
 
 test('blocking: the frame builder gets its frame slice of blocking.json; the kit validates its shape', async () => {
   const { builderMessage, blockingSlice } = await import('@/lib/explainers/render/build');
-  const { blockingFor, blockingProblems } = await import('../explainers/world-kit/blocking.js');
+  // blocking.js is plain JS: its `frameIds = null` default would infer `null`, so the test states the real signature
+  const { blockingFor, blockingProblems } = (await import('../explainers/world-kit/blocking.js')) as unknown as {
+    blockingFor: (blocking: unknown, frameId: string) => Record<string, unknown>;
+    blockingProblems: (blocking: unknown, frameIds?: string[] | null) => string[];
+  };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'blocking-'));
   fs.mkdirSync(path.join(dir, '.hyperframes', 'frame-packets'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.hyperframes', 'frame-packets', '_role.md'), 'role');

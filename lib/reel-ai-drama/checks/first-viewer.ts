@@ -5,6 +5,7 @@ import { noul } from '@typesafe-ai/sdk';
 
 import type { DramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { loadPrompt } from '@/lib/reel-ai-drama/prompts';
+import { errorReason } from '@/lib/reel-ai-drama/retry';
 import type { Sheet } from '@/lib/reel-ai-drama/render/sheets';
 import { DEFAULT_SETTINGS, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import { peakRungId, type FactSheet, type WriterDraft } from '@/lib/reel-ai-drama/types';
@@ -109,21 +110,29 @@ export async function checkFirstViewer(
     tool: SUBMIT_VIEWING_TOOL,
     maxTokens: 6_000,
     effort: 'medium',
-    parse: (raw) => ({ value: raw as ViewerAnswers, problems: raw && typeof raw === 'object' ? [] : ['no answers'] }),
+    parse: (raw) => ({ value: raw as ViewerAnswers, problems: raw && typeof raw === 'object' && typeof (raw as ViewerAnswers).story_in_my_words === 'string' ? [] : ['`story_in_my_words` must be a string'] }),
   });
   const answers = result.value;
   let storyMatch: number | null = null;
+  let comparison: string | null = null;
   if (answers.story_in_my_words.trim()) {
-    const asked = await deps.jev.ask({
-      component: 'first_viewer',
-      state: { meant_story: meantStory(input.draft, input.facts), viewer_story: answers.story_in_my_words },
-      set: FIRST_VIEWER_SET,
-      questions: FIRST_VIEWER_SET.questions,
-      pitchId: input.pitchId ?? null,
-    });
-    const v = (asked.answers as Record<string, { noul?: number }>).story_match?.noul;
-    storyMatch = typeof v === 'number' && Number.isFinite(v) ? v : null;
+    try {
+      const asked = await deps.jev.ask({
+        component: 'first_viewer',
+        state: { meant_story: meantStory(input.draft, input.facts), viewer_story: answers.story_in_my_words },
+        set: FIRST_VIEWER_SET,
+        questions: FIRST_VIEWER_SET.questions,
+        pitchId: input.pitchId ?? null,
+      });
+      const v = (asked.answers as Record<string, { noul?: number }>).story_match?.noul;
+      storyMatch = typeof v === 'number' && Number.isFinite(v) ? v : null;
+    } catch (error) {
+      // The paid read still counts: an unanswered comparison isn't a viewer who misunderstood.
+      comparison = errorReason(error);
+      storyMatch = 1;
+    }
   }
-  return viewerVerdict(answers, storyMatch, settings.hook_seconds);
+  const verdict = viewerVerdict(answers, storyMatch, settings.hook_seconds);
+  return comparison ? { ...verdict, warnings: [...verdict.warnings, `The viewer's account couldn't be compared with the story (${comparison}).`] } : verdict;
 }
 

@@ -14,13 +14,22 @@ import { heldCount, stat, statBox } from './stat.js';
 import { isMono, matchTone } from './style.js';
 import { arrive, arrowBetween, easeInOut, easeOut, seg, toPath } from '../geometry.js';
 import { EXPRESSIONS } from '../settings/index.js';
-import { applyPose, backdropBand, bareSheets, boxInFrame, headlinePhrase, lensRoom, poseAt, slideAt, STAGE, WHITEBOARD_BOUNDS, softGround, solveTimeline, toneBehind, toneIn, hashString } from '../stage-layout.js';
+import { applyPose, backdropBand, bareSheets, boxInFrame, gridOf, headlinePhrase, lensRoom, numberLines, poseAt, slideAt, STAGE, WHITEBOARD_BOUNDS, softGround, solveTimeline, toneBehind, toneIn, hashString } from '../stage-layout.js';
 
 const LEAVE = 0.35;
 const PRINT_EDGE = '0 0 0 10px #F4EFE4, 0 20px 34px 8px rgba(0,0,0,.45)';
 /** How dark a plain ground is, 0–1 (kraft and charcoal are both drawn dark). */
 const PLAIN_TONE = { charcoal: 0.1, kraft: 0.2, whiteboard: 0.92 };
-const CHIP_CONTRAST = 0.38;
+/** A logo reads on what's behind it when this much of it stands this far from it in tone. */
+const LOGO_CONTRAST = 0.3;
+const LOGO_READS = 0.6;
+/** The grounds a logo that's lost can be given: a pool of light, of middle tone, or of dark, whichever separates both ends of it most. */
+const LOGO_POOLS = [{ tone: 0.12, rgb: '20,17,14' }, { tone: 0.5, rgb: '122,114,104' }, { tone: 0.92, rgb: '246,241,231' }];
+/** A nearly square plate is an icon: round it off; a wider one fades at its edges. */
+const ROUND_PLATE = [0.8, 1.25];
+/** How bright the brightest of a mark on its own dark plate has to be, on a dark ground. */
+const PLATE_LIT = 0.6;
+const SAFE_SIDE = 30;
 const GROUND_LOOK = 'grayscale(.25) contrast(1.04) brightness(.78) sepia(.08)';
 const BACKDROP_LOOK = 'grayscale(.45) brightness(.45) blur(26px)';
 /** A picture all words: nothing of a letter is left to read behind the captions. */
@@ -163,15 +172,45 @@ export function logoCollapses(media) {
   return detail >= LOGO_TONE_DETAIL || (fill >= LOGO_PLATE_FILL && detail >= LOGO_PLATE_DETAIL);
 }
 
-function logoHolder(doc, holder, p, src, chip, ink = null) {
-  const c = p.crop ?? { x: 0, y: 0, w: 1, h: 1 };
-  const pad = chip ? 0.1 : 0;
-  const inner = h(doc, 'div', { class: 'abs', style: { left: `${pad * 100 * 0.7}%`, top: `${pad * 100}%`, width: `${100 - 2 * pad * 100 * 0.7}%`, height: `${100 - 2 * pad * 100}%` } });
-  inner.append(croppedImg(doc, src, c).box);
-  if (ink) { inner.style.filter = ink; holder.dataset.inked = ''; }
-  if (chip) {
-    holder.dataset.chip = '';
-    Object.assign(holder.style, { background: '#FBF9F4', borderRadius: '4px', boxShadow: '0 10px 18px rgba(0,0,0,.4)' });
+/**
+ * How a logo sits on what's behind it, from its own tones (`behind`, 0-1): as it is when it reads there; in one ink when it's a single
+ * colour and one ink won't erase it; else on a soft pool of the tone that separates it best. One that came with its own plate (it
+ * couldn't be keyed) fades that plate's edges into the ground. Never a card. Pure.
+ */
+export function logoGround(media, behind, isOneColour = false) {
+  const g = gridOf(media?.regions?.tone, true);
+  const tones = g ? [...g.cells].filter((c) => c !== 255).map((c) => c / 15) : [];
+  const plate = Boolean(media?.regions?.chip) || (tones.length > 0 && tones.length === g.cells.length);
+  if (plate) {
+    // A plate as dark as what's behind it, the mark on it dim too, is lifted until the mark reads.
+    const top = tones.length ? [...tones].sort((a, b) => a - b)[Math.floor(tones.length * 0.95)] : 1;
+    return { plate: true, ink: top < PLATE_LIT && behind < 0.5 ? `brightness(${Math.min(2.4, PLATE_LIT / Math.max(0.1, top)).toFixed(2)})` : null, pool: null };
+  }
+  if (!tones.length) return { plate: false, ink: null, pool: null };
+  const reads = tones.filter((t) => Math.abs(t - behind) >= LOGO_CONTRAST).length / tones.length;
+  if (reads >= LOGO_READS) return { plate: false, ink: null, pool: null };
+  if (isOneColour && !logoCollapses(media)) return { plate: false, ink: behind < 0.5 ? 'brightness(0) invert(.93) sepia(.08)' : 'brightness(0)', pool: null };
+  const sorted = [...tones].sort((a, b) => a - b);
+  const dark = sorted[Math.floor(sorted.length * 0.1)], light = sorted[Math.floor(sorted.length * 0.9)];
+  const sep = (t) => Math.min(Math.abs(light - t), Math.abs(dark - t));
+  const pool = LOGO_POOLS.reduce((a, b) => (sep(b.tone) > sep(a.tone) ? b : a));
+  return { plate: false, ink: null, pool };
+}
+
+function logoHolder(doc, holder, p, src, way) {
+  const inner = h(doc, 'div', { class: 'abs', style: { left: '0', top: '0', width: '100%', height: '100%' } });
+  inner.append(croppedImg(doc, src, p.crop ?? { x: 0, y: 0, w: 1, h: 1 }).box);
+  if (way.ink) { inner.style.filter = way.ink; if (!way.plate) holder.dataset.inked = ''; }
+  if (way.pool) {
+    holder.dataset.logoPool = String(way.pool.tone);
+    holder.append(h(doc, 'div', { class: 'abs', style: { left: '-30%', top: '-45%', width: '160%', height: '190%', background: `radial-gradient(closest-side, rgba(${way.pool.rgb},.94) 0%, rgba(${way.pool.rgb},.8) 58%, rgba(${way.pool.rgb},0) 100%)` } }));
+  }
+  if (way.plate) {
+    holder.dataset.logoPlate = '';
+    const a = holder.offsetWidth ? holder.offsetWidth / holder.offsetHeight : parseFloat(holder.style.width) / parseFloat(holder.style.height);
+    const round = a >= ROUND_PLATE[0] && a <= ROUND_PLATE[1];
+    const mask = round ? 'radial-gradient(closest-side, #000 95%, transparent 100%)' : 'linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent), linear-gradient(0deg, transparent, #000 12%, #000 88%, transparent)';
+    Object.assign(inner.style, { maskImage: mask, webkitMaskImage: mask, ...(round ? {} : { maskComposite: 'intersect', webkitMaskComposite: 'source-in' }) });
   }
   holder.append(inner);
 }
@@ -217,11 +256,9 @@ function embedWords(holder, made, base) {
     picture: null,
     render(t) {
       made.render?.(t);
-      if (k == null) {
-        const r = made.el.offsetWidth > 0 ? Math.min(1.25, base.w / made.el.offsetWidth, base.h / Math.max(1, made.el.offsetHeight)) : 1;
-        k = r;
-      }
-      made.el.style.transform = `${made.el.style.transform && made.el.style.transform !== 'none' ? made.el.style.transform.replace(/ ?scale\([^)]*\)/, '') : ''} scale(${k.toFixed(4)})`;
+      // Measured once it's in the page: the stage's first render comes before that, when everything measures nothing.
+      if (k == null && made.el.offsetWidth > 0) k = Math.min(1.25, base.w / made.el.offsetWidth, base.h / Math.max(1, made.el.offsetHeight));
+      made.el.style.transform = `${made.el.style.transform && made.el.style.transform !== 'none' ? made.el.style.transform.replace(/ ?scale\([^)]*\)/, '') : ''} scale(${(k ?? 1).toFixed(4)})`;
     },
   };
 }
@@ -274,7 +311,7 @@ function buildTreatment(doc, p, base, holder, mediaIndex, keeps = []) {
       const camera = o.camera ? { ...o.camera, scale: Math.min(o.camera.scale ?? 2, lensRoom(base, keeps)) } : undefined;
       return embedFull(holder, stat(doc, { ...o, at, count: heldCount(o.count, p.until - at), ...(camera ? { camera } : {}) }), base, statBox(o));
     }
-    case 'number': return embedWords(holder, number(doc, { ...o, at: o.at ?? p.at + 0.1, placed: { x: 0, y: 0 } }), base);
+    case 'number': return embedWords(holder, number(doc, { ...o, lines: numberLines(o.value), at: o.at ?? p.at + 0.1, placed: { x: 0, y: 0 } }), base);
     case 'lower_third': return embedWords(holder, lowerThird(doc, { ...o, at: o.at ?? p.at + 0.1, placed: { x: 0, y: 0 } }), base);
     case 'flash_reveal': return embedFull(holder, flashReveal(doc, { ...o, media, at: o.at ?? p.at, duration: o.duration ?? 60, credit: null }), base);
     case 'phone_shot': return embedFull(holder, phoneShot(doc, { ...o, media, at: o.at ?? p.at, duration: o.duration ?? 60, credit: null }), base);
@@ -543,14 +580,9 @@ export function stage(doc, o = {}) {
       inner = drawnLogo(doc, { media, at: p.at, duration: 1.2, x: 0, y: 0, w: base.w });
       holder.append(inner.el);
     } else if (p.kind === 'logo') {
-      const lum = toneIn(media?.regions);
       const beneath = records.filter((r) => (layout.z[r.p.id] ?? 0) < (layout.z[p.id] ?? 0)).map((r) => ({ p: r.p, pl: { ...r.base, z: layout.z[r.p.id] ?? 0 } }));
       const behind = toneBehind(base, beneath, (x, y) => toneAt({ x: x - 2, y: y - 2, w: 4, h: 4 }));
-      const lost = lum != null && Math.abs(lum - behind) < CHIP_CONTRAST;
-      const collapses = logoCollapses(media);
-      // A one-colour mark has no colour to keep: it takes the ink that reads here, unless one ink would leave a solid shape. The rest keep their colours: a mark that can't be keyed, has colours of its own to lose, or would collapse goes on a chip where it would otherwise be lost, and always on a whiteboard, where it can't be drawn.
-      const ink = lost && !media?.regions?.chip && !collapses && isMono(media) ? (behind < 0.5 ? 'brightness(0) invert(.93) sepia(.08)' : 'brightness(0)') : null;
-      logoHolder(doc, holder, p, src, !ink && (Boolean(media?.regions?.chip) || lost || (onBoard && collapses)), ink);
+      logoHolder(doc, holder, p, src, logoGround(media, behind, isMono(media)));
     } else {
       // A rejected cut shows the photo it came from, when there is one; else on paper of its own.
       const original = p.asPrint ? o.mediaIndex?.[cutoutSource(media)] ?? null : null;
@@ -718,6 +750,16 @@ export function stage(doc, o = {}) {
     const c = applyPose(pose, { x: l.x + l.w / 2, y: l.y + l.h / 2, w: 0, h: 0 });
     return { x: c.x - (l.x + l.w / 2), y: c.y - (l.y + l.h / 2) };
   };
+  // Words sit where the solver put them, by its estimate of their size: what's measured on the page has the last say. Too wide
+  // shrinks to the safe width, and however the pose carries them they stay inside the safe area.
+  const fitWords = (el, spot, s) => {
+    const w = el.offsetWidth, ht = el.offsetHeight;
+    if (!(w > 0)) return `translate(${s.x.toFixed(2)}px, ${s.y.toFixed(2)}px)`;
+    const k = Math.min(1, (STAGE.W - 2 * SAFE_SIDE) / w);
+    const x = Math.max(SAFE_SIDE, Math.min(STAGE.W - SAFE_SIDE - w * k, spot.x + s.x)) - spot.x;
+    const y = Math.min(STAGE.bottom - ht * k, spot.y + s.y) - spot.y;
+    return `translate(${x.toFixed(2)}px, ${y.toFixed(2)}px)${k < 1 ? ` scale(${k.toFixed(4)})` : ''}`;
+  };
   const render = (t) => {
     const pose = poseAt(layout.camera.keys, t);
     cam.style.transform = pose.s === 1 && pose.tx === 0 && pose.ty === 0 ? 'none' : `translate(${pose.tx.toFixed(2)}px, ${pose.ty.toFixed(2)}px) scale(${pose.s.toFixed(4)})`;
@@ -769,13 +811,15 @@ export function stage(doc, o = {}) {
       r.made.render(t);
       const s = showIn(r.spot, pose);
       const slid = r.l.owner ? slideAt(layout.camera.slide, r.l.owner, t) : { dx: 0, dy: 0 };
-      r.made.el.style.transform = `translate(${(s.x + slid.dx * pose.s).toFixed(2)}px, ${(s.y + slid.dy * pose.s).toFixed(2)}px)`;
+      r.made.el.style.transformOrigin = '0 0';
+      r.made.el.style.transform = fitWords(r.made.el, r.spot, { x: s.x + slid.dx * pose.s, y: s.y + slid.dy * pose.s });
     }
     for (const r of plateRecords) {
       r.render(t);
       const s = showIn(r.sp, pose);
       const slid = slideAt(layout.camera.slide, r.sp.on, t);
-      r.el.style.transform = `translate(${(s.x + slid.dx * pose.s).toFixed(2)}px, ${(s.y + slid.dy * pose.s).toFixed(2)}px)`;
+      r.el.style.transformOrigin = '0 0';
+      r.el.style.transform = fitWords(r.el, r.sp, { x: s.x + slid.dx * pose.s, y: s.y + slid.dy * pose.s });
     }
     hookRecord?.render(t);
     for (const b of backdrops) b.el.style.visibility = t >= b.at && t < b.until ? '' : 'hidden';

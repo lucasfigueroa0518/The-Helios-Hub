@@ -8,6 +8,7 @@ import { messagesUsd, usageTotals, type CreateMessage } from '@/lib/reel-ai-dram
 import type { Mode } from '@/lib/reel-ai-drama/types';
 
 import type { Look } from './filters';
+import { placeNamed } from './places';
 
 /**
  * The cheap Haiku look (research 04 §4.1 layer 6, §6.4): 16 thumbnails per numbered contact sheet, one
@@ -59,6 +60,7 @@ export const SUBMIT_LOOKS_TOOL = {
         namesake: { type: 'boolean' },
         broken: { type: 'boolean' },
         expression: { type: 'string', description: 'The main person\'s expression in a few plain words (e.g. "tired, looking away"); an empty string when no face shows.' },
+        place: { type: 'string', description: 'The named place your `shows` states, in as few words as still name it; an empty string when it names none.' },
       }),
     },
   }),
@@ -67,9 +69,12 @@ export const SUBMIT_LOOKS_TOOL = {
 const LOOK_TOOLS = [withToolCache(SUBMIT_LOOKS_TOOL as unknown as Anthropic.Tool)];
 
 /** A look with what it says of the main person's expression (iteration 10: asked on the same sheet, no new call). */
-export type SeenLook = Look & { expression?: string | null };
+export type SeenLook = Look & { expression?: string | null; place?: string | null };
 /** Short plain words for a look's expression, or null. */
 export const expressionOf = (look: Look | null | undefined): string | null => (look as SeenLook | null | undefined)?.expression?.trim().slice(0, 80) || null;
+
+/** The place a look's `shows` states, or null (iteration 12: the only thing a photo's place label may say). */
+export const placeOf = (look: Look | null | undefined): string | null => placeNamed((look as SeenLook | null | undefined)?.place);
 
 export type LookItem = { file: string; claim: string; caption: string; source: string };
 export type LookContext = {
@@ -129,6 +134,7 @@ export function parseLooks(input: unknown, n: number): Map<number, SeenLook> {
       namesake: t.namesake === true,
       broken: t.broken === true,
       ...(String(t.expression ?? '').trim() ? { expression: String(t.expression).trim() } : {}),
+      ...(placeNamed(t.place) ? { place: placeNamed(t.place) } : {}),
     });
   }
   return out;

@@ -46,3 +46,8 @@ CREATE INDEX IF NOT EXISTS idx_revisions_requests_item
     ON revisions.requests (item_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_revisions_requests_queue
     ON revisions.requests (created_at) WHERE status = 'requested';
+
+-- AI Drama Reels (reel_ai_drama), planning/AI Mini Docs/HUB-WIRING-CONTRACT.md
+ALTER TABLE revisions.requests DROP CONSTRAINT IF EXISTS requests_vertical_check;
+ALTER TABLE revisions.requests ADD CONSTRAINT requests_vertical_check
+    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'reel_ai_drama'));

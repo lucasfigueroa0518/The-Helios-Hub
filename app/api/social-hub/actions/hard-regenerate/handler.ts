@@ -16,6 +16,6 @@ export function hardRegenerate(actions: () => Promise<Record<Vertical, ContentAc
     flag: 'hardRegenerate',
     verb: 'regenerate',
     actions,
-    legacy: refBody({ explainers: 'topicId', stories: 'setId', carousels: 'postId', reels: 'postIdeaId', ai_events: 'aiEventsPostId' }),
+    legacy: refBody({ explainers: 'topicId', stories: 'setId', carousels: 'postId', reels: 'postIdeaId', ai_events: 'aiEventsPostId', reel_ai_drama: 'pitchId' }),
   });
 }

@@ -8,6 +8,7 @@ import { readAiEvents } from '@/lib/social-hub/queries/ai-events';
 import { readAccount } from '@/lib/social-hub/queries/account';
 import { readCosts } from '@/lib/social-hub/queries/costs';
 import { readExplainers } from '@/lib/social-hub/queries/explainers';
+import { readReelAiDramaIfReady } from '@/lib/social-hub/queries/reel-ai-drama';
 import { readLatestQuota } from '@/lib/social-hub/queries/quota';
 import { latestQuotaSnapshot } from '@/lib/social-hub/refresh';
 import { readReels } from '@/lib/social-hub/queries/reels';
@@ -37,7 +38,8 @@ function explainersShareMain(q: HubQuery): boolean {
   return process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
 }
 
-const SPINE_WITH_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events'];
+// AI Drama Reels live on the explainers' connection (schema reel_ai_drama), so they go wherever explainers go.
+const SPINE_WITH_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events', 'reel_ai_drama'];
 const SPINE_WITHOUT_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'last_few_days', 'ai_events'];
 
 type SpineLazy = { get: () => Promise<SpineRead> };
@@ -72,6 +74,11 @@ export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(),
     const spine = explainersShareMain(q) ? await spineFor(q, 'explainers') : await readSpine(eq, ['explainers']);
     return readExplainers(eq, spine);
   }
+  if (vertical === 'reel_ai_drama') {
+    const eq = await (explainersQ ?? explainersHandle(q));
+    const spine = explainersShareMain(q) ? await spineFor(q, 'reel_ai_drama') : await readSpine(eq, ['reel_ai_drama']);
+    return readReelAiDramaIfReady(eq, spine);
+  }
   const spine = await spineFor(q, vertical);
   if (vertical === 'reels') return readReels(q, spine);
   if (vertical === 'carousels') return readCarousels(q, spine);
@@ -87,18 +94,20 @@ export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(),
  */
 export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q), now = new Date()): Promise<VerticalReads> {
   const shared = explainersShareMain(q);
-  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events'] : ['carousels', 'reels', 'last_few_days', 'ai_events']);
+  const mainSpine = readSpine(q, shared ? SPINE_WITH_EXPLAINERS : SPINE_WITHOUT_EXPLAINERS);
   mainSpine.catch(() => undefined); // each reader reports the failure itself
   const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
-  const [reels, explainers, carousels, stories, lastFewDays, aiEvents] = await Promise.all([
+  const dramaSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['reel_ai_drama']));
+  const [reels, explainers, carousels, stories, lastFewDays, aiEvents, reelAiDrama] = await Promise.all([
     settle(mainSpine.then((spine) => readReels(q, spine))),
     settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
     settle(mainSpine.then((spine) => readCarousels(q, spine))),
     settle(readStories(q)),
     settle(mainSpine.then((spine) => readLastFewDays(q, spine))),
     settle(mainSpine.then((spine) => readAiEvents(q, spine, now))),
+    settle(explainersQ.then(async (eq) => readReelAiDramaIfReady(eq, await dramaSpine(eq)))),
   ]);
-  return { reels, explainers, carousels, stories, last_few_days: lastFewDays, ai_events: aiEvents };
+  return { reels, explainers, carousels, stories, last_few_days: lastFewDays, ai_events: aiEvents, reel_ai_drama: reelAiDrama };
 }
 
 /** Read and allocate the cost ledger on its own (it is cached apart from the content; views/cached-dataset.ts). */

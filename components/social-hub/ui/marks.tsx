@@ -33,6 +33,7 @@ export const TYPE_ICON: Record<Vertical, LucideIcon> = {
   stories: Sparkles,
   last_few_days: Newspaper,
   ai_events: CalendarDays,
+  reel_ai_drama: Clapperboard,
 };
 
 const STATE_ICON: Record<StateIcon, LucideIcon> = {

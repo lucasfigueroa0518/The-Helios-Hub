@@ -80,7 +80,7 @@ export async function checkFacts(
   const all = factsText(input.facts);
   const findings = await mapLimited(lines, CONCURRENCY, async (line) => {
     const i = lines.indexOf(line);
-    const onScreen = [line.id === input.draft.hook.line_id ? input.draft.hook.on_screen : null, line.on_screen].filter(Boolean).join(' / ');
+    const onScreen = line.on_screen ?? '';
     const asked = await jev.ask({
       component: 'facts_check',
       state: {

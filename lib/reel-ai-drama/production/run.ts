@@ -28,7 +28,6 @@ import {
   finishJob,
   getPitch,
   KILL_REASONS,
-  requestJob,
   setStage,
   type ArtifactKind,
   type Job,
@@ -39,7 +38,9 @@ import { designFindingText, type DesignReview } from '@/lib/reel-ai-drama/checks
 import { applyTouches, type CreativeResult } from '@/lib/reel-ai-drama/production/creative';
 import { NO_TOUCHES, TOUCHES_FILE, type CompiledRead, type CompileInput, type CompileResult } from '@/lib/reel-ai-drama/render/compile';
 import { checkPlanCarried, planMissText, type PlanMiss } from '@/lib/reel-ai-drama/render/plan-carried';
-import type { FrameStill } from '@/lib/reel-ai-drama/render/video';
+import type { Sheet } from '@/lib/reel-ai-drama/render/sheets';
+import { readStepLog } from '@/lib/reel-ai-drama/render/runner';
+import { errorFull, errorReason, failureClass, resilientDb, withRetry, type FailureClass } from '@/lib/reel-ai-drama/retry';
 import { planWithoutFailedMakes } from '@/lib/reel-ai-drama/render/make';
 import { applyWishes } from '@/lib/reel-ai-drama/render/wishes';
 import { centralCutoutRequests, cutoutSwaps, stageCutoutRequests, useCutouts, wishCutoutRequests, type CutoutRequest } from '@/lib/reel-ai-drama/harvest/cutouts';
@@ -63,11 +64,12 @@ import type {
   Touches,
   VisualsInventory,
   WriterDraft,
+  SourceRef,
 } from '@/lib/reel-ai-drama/types';
-import type { DirectorFix, FixProblem } from '@/lib/reel-ai-drama/writing/director';
+import { hookSources, type DirectorFix, type FixProblem } from '@/lib/reel-ai-drama/writing/director';
 import type { StoryEditInput } from '@/lib/reel-ai-drama/writing/story-editor';
 import { directorNotes, storyEditorNotes, type RevisionNote } from '@/lib/reel-ai-drama/writing/writer';
-import { isLogo, planWarnings, standInsFrom, type StandIn } from '@/lib/reel-ai-drama/writing/validate';
+import { isLogo, planWarnings, scriptWarnings, standInsFrom, type StandIn } from '@/lib/reel-ai-drama/writing/validate';
 
 /**
  * One Reel AI Drama production run (PROCESS.md P1–P9, CONTRACT.md § B5):
@@ -93,6 +95,8 @@ export type ProductionDeps = {
   db: Queryable;
   store: ArtifactStore;
   jobsRoot: string;
+  /** The free check before any spend (production/preflight.ts). Problems fail the job at no cost; warnings ship as flags. */
+  preflight?(): Promise<{ ok: boolean; problems: string[]; warnings: string[] }>;
   secrets: { anthropicApiKey: string; heygenApiKey: string };
   /** HeyGen voice; default: the Explainer setting voice_id (read only). */
   voiceId?: string | null;
@@ -143,14 +147,14 @@ export type ProductionDeps = {
     ): Promise<DirectorPlan>;
     writePost(input: { draft: WriterDraft; facts: FactSheet; inventory: VisualsInventory; usedAssetIds: string[] }, ctx: StepCtx): Promise<PostText>;
     /** The creative pass (ITERATION-10 §X): proposes touches on the compiled reel; fails open. Missing: the reel ships as compiled. */
-    creativePass?(input: { draft: WriterDraft; plan: DirectorPlan; projectDir: string }, ctx: StepCtx): Promise<CreativeResult>;
+    creativePass?(input: { draft: WriterDraft; plan: DirectorPlan; projectDir: string; sources?: SourceRef[] }, ctx: StepCtx): Promise<CreativeResult>;
   };
   checks: {
     checkFacts(jev: DramaJevRunner, input: { draft: WriterDraft; facts: FactSheet }): Promise<{ unsupported: { line_id: string; why: string }[] }>;
     checkIntegrity(input: { plan: DirectorPlan; inventory: VisualsInventory; draft: WriterDraft; facts: FactSheet }, ctx: StepCtx): Promise<{ problems: IntegrityProblem[] }>;
-    checkFirstViewer(input: { contactSheet: string; captions: string; draft: WriterDraft; facts: FactSheet }, ctx: StepCtx): Promise<FirstViewerResult>;
-    /** MD-129: the design reviewer on one still per story frame, beside the first viewer; fails open. Missing: no design review. */
-    checkDesign?(input: { stills: FrameStill[]; plan: DirectorPlan; draft: WriterDraft }, ctx: StepCtx): Promise<DesignReview>;
+    checkFirstViewer(input: { sheets: Sheet[]; captions: string; draft: WriterDraft; facts: FactSheet; pitchId?: string | null }, ctx: StepCtx): Promise<FirstViewerResult>;
+    /** MD-129: the design reviewer on sheets of every story frame's moments, beside the first viewer; fails open. Missing: no design review. */
+    checkDesign?(input: { sheets: Sheet[]; plan: DirectorPlan; draft: WriterDraft }, ctx: StepCtx): Promise<DesignReview>;
   };
   render: {
     kitGuide: string;
@@ -173,8 +177,8 @@ export type ProductionDeps = {
     assembleProject(projectDir: string): Promise<{ ok: boolean; problems: string[] }>;
     renderVideo(projectDir: string): Promise<string>;
     contactSheet(projectDir: string, videoPath: string): Promise<string>;
-    /** MD-129: one still per story frame (the close excluded), for the design reviewer. */
-    frameStills?(projectDir: string, videoPath: string): Promise<FrameStill[]>;
+    /** The rendered reel's moments on sheets: unlabelled for the first viewer, labelled for the design reviewer. `findings` are the measured checks' lines. */
+    reviewSheets?(projectDir: string, videoPath: string, findings: string[]): Promise<{ viewer: Sheet[]; design: Sheet[] }>;
     videoSeconds?(videoPath: string): Promise<number | null>;
   };
 };
@@ -185,7 +189,7 @@ export type FirstViewerResult = { hookSeconds: number | null; understood: boolea
 
 export type RunOutcome =
   | { status: 'ok' }
-  | { status: 'failed'; error: string; capped: boolean }
+  | { status: 'failed'; error: string; capped: boolean; failureClass: FailureClass }
   | { status: 'killed'; killReason: KillReason; nextJobId: string | null };
 
 /** MD-65: the per-reel cap warns; only spend past this multiple of it stops a job (a runaway guard). */
@@ -226,6 +230,23 @@ async function priorStory(db: Queryable, jobId: string): Promise<{ draft: Writer
   const rewritten = new Date(draft.created_at).getTime() > new Date(notes.created_at).getTime();
   return { draft: JSON.parse(draft.content) as WriterDraft, notes: JSON.parse(notes.content) as StoryNotes, rewritten };
 }
+/**
+ * A resumed job's plan: the latest one, when it was made for the current script (nothing rewrote the script after it). What the
+ * director cost isn't paid twice; a plan older than the script is stale, and the director runs.
+ */
+async function priorPlan(db: Queryable, jobId: string): Promise<DirectorPlan | null> {
+  const { rows } = await db.query<{ kind: string; content: string; created_at: string | Date }>(
+    `SELECT DISTINCT ON (kind) kind, content, created_at FROM reel_ai_drama.artifacts
+      WHERE job_id = $1 AND kind IN ('writer_draft', 'director_plan') AND content IS NOT NULL ORDER BY kind, created_at DESC`,
+    [jobId],
+  );
+  const by = new Map(rows.map((r) => [r.kind, r]));
+  const plan = by.get('director_plan');
+  const draft = by.get('writer_draft');
+  if (!plan || !draft || new Date(plan.created_at).getTime() < new Date(draft.created_at).getTime()) return null;
+  return JSON.parse(plan.content) as DirectorPlan;
+}
+
 /** A problem's frame, by the frame ids the compile wrote; null when it names none. Pure. */
 export const problemFrame = (problem: string, frames: readonly { n: number; id: string }[]): number | null => frames.find((f) => problem.includes(f.id))?.n ?? null;
 /** A frame that won't build or draw at all: a new layout didn't help, so it ships plain. */
@@ -274,10 +295,10 @@ const PICTURE_FINDING = /hook|on mute|what the story was asking|never worked out
  * `words` (the story not understood) ships as flags, since the script is locked and voiced by then (the
  * story editor's blind read is the words' check, MD-97). Anything unrecognised counts as words.
  */
-export function firstViewerRouting(r: FirstViewerResult, hookSeconds: number): { picture: string[]; words: string[] } {
+export function firstViewerRouting(r: FirstViewerResult, hookSeconds: number, hooked = false): { picture: string[]; words: string[] } {
   const picture: string[] = [];
   const words: string[] = [];
-  for (const f of new Set(firstViewerFindings(r, hookSeconds))) (!WORDS_FINDING.test(f) && PICTURE_FINDING.test(f) ? picture : words).push(f);
+  for (const f of new Set(firstViewerFindings(r, hookSeconds))) (!WORDS_FINDING.test(f) && PICTURE_FINDING.test(f) && !(hooked && /hook/i.test(f)) ? picture : words).push(f);
   return { picture, words };
 }
 
@@ -292,7 +313,9 @@ export function harvestKill(inventory: VisualsInventory, minVisuals: number): Ki
 }
 
 export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome> {
-  const { db, store } = deps;
+  const { store } = deps;
+  // An outage mid-query waits; it doesn't fail a job that has already paid for its steps.
+  const db = resilientDb(deps.db);
   const now = deps.now ?? (() => new Date());
   const log = deps.log ?? (() => undefined);
   const settings = await loadSettings(db);
@@ -316,8 +339,8 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
   const keepFile = async (kind: ArtifactKind, file: string, name: string): Promise<string | null> => {
     if (!file || !fs.existsSync(file)) return null;
     // A second try before a paid-for file is lost to a passing storage error.
-    const { storagePath, bytes } = await store.put(`${prefix}/${name}`, file).catch(() => store.put(`${prefix}/${name}`, file));
-    await addArtifact(db, { jobId: job.id, kind, storagePath, bytes });
+    const { storagePath, bytes, location } = await store.put(`${prefix}/${name}`, file).catch(() => withRetry(() => store.put(`${prefix}/${name}`, file), undefined));
+    await addArtifact(db, { jobId: job.id, kind, storagePath, bytes, location: location ?? 'local' });
     return storagePath;
   };
   const flag = async (check: JobFlag['check'], detail: string) => {
@@ -339,7 +362,22 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
   };
 
   let ws: Workspace | null = null;
+  /** A step's whole output, kept with the job: the flags carry the reason, this carries everything. Never throws. */
+  const keepStepLog = async (extra: Record<string, unknown> = {}) => {
+    const steps = ws ? readStepLog(ws.projectDir) : null;
+    if (!steps && !Object.keys(extra).length) return;
+    await addArtifact(db, { jobId: job.id, kind: 'transcript_log', content: JSON.stringify({ ...extra, steps }, null, 1) }).catch((e) => log('step_log_not_kept', { jobId: job.id, error: errorText(e) }));
+  };
   try {
+    // Before any spend: a run that can't finish finds out now, for free.
+    if (deps.preflight) {
+      const checked = await deps.preflight();
+      for (const w of checked.warnings) await flag('voice', `Preflight: ${w}`);
+      if (!checked.ok) throw new ProductionFailure(`Preflight: ${checked.problems.join(' ')}`);
+    }
+    const voiceId = deps.voiceId !== undefined ? deps.voiceId : (await (await import('@/lib/explainers/settings')).loadSettings(db as never)).voice_id;
+    if (!voiceId) throw new ProductionFailure('No HeyGen voice id is set (Explainers Settings → HeyGen voice ID).');
+
     // P1: the pick (the job names its pitch).
     await stage('pick');
     const row = await getPitch(db, job.pitch_id);
@@ -525,6 +563,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       await stage('writer');
       draft = await deps.writing.writeScript({ pitch, facts, inventory, settings }, ctx);
       await keepText('writer_draft', draft);
+      for (const w of scriptWarnings(draft, facts)) await flag('story', w);
       await settle('writer');
 
       // MD-102: the blind story editor reads the script only and sends notes; the writer rewrites once when
@@ -532,7 +571,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       await stage('story_notes');
       let notes: StoryNotes | null = null;
       try {
-        notes = await deps.writing.editStory({ draft, settings }, ctx);
+        notes = await deps.writing.editStory({ draft, settings, cast: facts.cast }, ctx);
         await keepText('story_notes', notes);
       } catch (error) {
         trace.editorFailed = errorText(error);
@@ -559,9 +598,17 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     // P5: the director shoots first (MD-68), then the targeted search for its wishes; lines back once
     // (MD-38), then the script locks.
     await stage('director');
-    const firstPlan = await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide }, ctx);
-    await keepText('director_plan', firstPlan);
-    await settle('director');
+    // A resumed job with a plan for this script reuses it: the director is the run's most expensive retry.
+    const keptPlan = keptStory ? await priorPlan(db, job.id) : null;
+    let firstPlan: DirectorPlan;
+    if (keptPlan) {
+      firstPlan = keptPlan;
+      log('resumed', { jobId: job.id, from: 'director plan' });
+    } else {
+      firstPlan = await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide }, ctx);
+      await keepText('director_plan', firstPlan);
+      await settle('director');
+    }
     let plan = await arrive(firstPlan, 'wish search');
     if (plan.lines_back.length > 0) {
       await stage('writer_revise');
@@ -669,7 +716,15 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
 
     // MD-59/60: variety (no one shown the same way > 2 in a row; every main character on screen when named;
     // no staging type twice running): one director fix round, then warn.
-    const variety = varietyFindings(plan, { draft, inventory, facts, standIns });
+    const varietyOf = () => {
+      try {
+        return varietyFindings(plan, { draft, inventory, facts, standIns });
+      } catch (error) {
+        log('variety_check_failed', { jobId: job.id, error: errorText(error) });
+        return [];
+      }
+    };
+    const variety = varietyOf();
     if (variety.length) {
       await stage('director');
       const flagged = [...new Set(variety.map((v) => v.frame))];
@@ -681,8 +736,10 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         await flag('integrity', `The variety re-plan failed (${errorText(error)}); frames ${flagged.join(', ')} keep their plan.`);
       }
       await settle('variety fix');
-      for (const v of varietyFindings(plan, { draft, inventory, facts, standIns })) await flag('integrity', `Variety, frame ${v.frame}: ${v.why}`);
+      for (const v of varietyOf()) await flag('integrity', `Variety, frame ${v.frame}: ${v.why}`);
     }
+    // The script is locked and this plan matches it: where a resumed job picks up.
+    await keepText('director_plan', plan);
 
     // MD-59: the assets the director asked to be made for exact moments; a failed make falls back (fail open).
     const runMakes = async () => {
@@ -717,8 +774,6 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
 
     // P6: voice (HeyGen; it reports no price).
     await stage('voice');
-    const voiceId = deps.voiceId !== undefined ? deps.voiceId : (await (await import('@/lib/explainers/settings')).loadSettings(db as never)).voice_id;
-    if (!voiceId) throw new ProductionFailure('No HeyGen voice id is set (Explainers Settings → HeyGen voice ID).');
     const voiceInput: VoiceInput = {
       voiceId,
       heygenApiKey: deps.secrets.heygenApiKey,
@@ -787,7 +842,11 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       }
     }
 
-    for (const w of planWarnings(plan, { draft, inventory })) await flag('integrity', `Plan: ${w}`);
+    try {
+      for (const w of planWarnings(plan, { draft, inventory })) await flag('integrity', `Plan: ${w}`);
+    } catch (error) {
+      log('plan_warnings_failed', { jobId: job.id, error: errorText(error) });
+    }
 
     // MD-61: the sound designer plans the cues on the final voice timing (cues are word-anchored, so later
     // re-paces keep them in place). It fails open: its problems ship as warnings.
@@ -811,7 +870,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     };
     const compile = async (only?: number[]) => {
       await stage('compile');
-      const done = await deps.render.compileReel({ plan, inventory, projectDir, touches: accepted, seeds, plain: plainFrames, ...(only ? { only } : {}) });
+      const done = await deps.render.compileReel({ plan, inventory, projectDir, sources: hookSources(facts), touches: accepted, seeds, plain: plainFrames, ...(only ? { only } : {}) });
       compiledFrames = done.frames;
       for (const p of done.problems) await flagOnce('render', `Compile: ${p}`);
     };
@@ -851,7 +910,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         await compile(first);
         result = await measure(`${label}_recompile`);
         misses = await carried();
-        const dead = [...new Set(result.problems.filter((p) => DEAD_FRAME.test(p)).map((p) => problemFrame(p, compiledFrames)))].filter((n): n is number => n !== null);
+        const dead = [...new Set([...result.problems.filter((p) => DEAD_FRAME.test(p)).map((p) => problemFrame(p, compiledFrames)), ...misses.filter((m) => m.kind === 'frame').map((m) => m.frame)])].filter((n): n is number => n !== null && !plainFrames.includes(n));
         if (dead.length) {
           plainFrames.push(...dead);
           await compile(dead);
@@ -870,32 +929,38 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     // The creative pass watches the compiled reel and may add; each touch is compiled and measured against its frame's clean
     // baseline, and any new finding removes it. It fails open: an error means no touches and a flag.
     if (deps.writing.creativePass) {
-      await stage('creative_pass');
-      const creative = await deps.writing.creativePass({ draft, plan, projectDir }, ctx);
-      for (const p of creative.problems) await flagOnce('render', `Creative pass: ${p}`);
-      await settle('creative pass');
-      const offered = creative.touches.touches.length + creative.touches.custom.length;
-      if (offered && deps.render.frameFindings) {
-        const findings = deps.render.frameFindings;
-        const idOf = (n: number) => compiledFrames.find((f) => f.n === n)?.id ?? '';
-        const applied = await applyTouches({
-          proposed: creative.touches,
-          compile: async (touches, frame) => {
-            accepted = touches;
-            await compile([frame]);
-          },
-          findings: async (frame) => {
-            const misses = deps.render.readCompiled ? checkPlanCarried({ ...plan, frames: plan.frames.filter((f) => f.n === frame) }, (await deps.render.readCompiled(projectDir)).frames) : [];
-            return [...(await findings(projectDir, idOf(frame))), ...misses.map(planMissText)];
-          },
-        });
-        accepted = applied.accepted;
-        for (const r of applied.removed) await flagOnce('render', `Touch ${r.id} on frame ${r.frame} was removed; the frame stays as compiled: ${r.why}`);
-        fs.mkdirSync(path.dirname(path.join(projectDir, TOUCHES_FILE)), { recursive: true });
-        fs.writeFileSync(path.join(projectDir, TOUCHES_FILE), `${JSON.stringify(accepted, null, 1)}\n`);
-        await keepText('breakage', { round: 'touches', accepted, removed: applied.removed });
-        // Sounds, caption tones and the kit's cues are measured over the whole reel, with what stayed.
-        if (accepted.touches.length + accepted.custom.length) assembled = await measureAndRepair('with_touches');
+      try {
+        await stage('creative_pass');
+        const creative = await deps.writing.creativePass({ draft, plan, projectDir, sources: hookSources(facts) }, ctx);
+        for (const p of creative.problems) await flagOnce('render', `Creative pass: ${p}`);
+        await settle('creative pass');
+        const offered = creative.touches.touches.length + creative.touches.custom.length + (creative.touches.hook_swap ? 1 : 0);
+        if (offered && deps.render.frameFindings) {
+          const findings = deps.render.frameFindings;
+          const idOf = (n: number) => compiledFrames.find((f) => f.n === n)?.id ?? '';
+          const applied = await applyTouches({
+            proposed: creative.touches,
+            compile: async (touches, frame) => {
+              accepted = touches;
+              await compile([frame]);
+            },
+            findings: async (frame) => {
+              const misses = deps.render.readCompiled ? checkPlanCarried({ ...plan, frames: plan.frames.filter((f) => f.n === frame) }, (await deps.render.readCompiled(projectDir)).frames) : [];
+              return [...(await findings(projectDir, idOf(frame))), ...misses.map(planMissText)];
+            },
+          });
+          accepted = applied.accepted;
+          for (const r of applied.removed) await flagOnce('render', `Touch ${r.id} on frame ${r.frame} was removed; the frame stays as compiled: ${r.why}`);
+          fs.mkdirSync(path.dirname(path.join(projectDir, TOUCHES_FILE)), { recursive: true });
+          fs.writeFileSync(path.join(projectDir, TOUCHES_FILE), `${JSON.stringify(accepted, null, 1)}\n`);
+          await keepText('breakage', { round: 'touches', accepted, removed: applied.removed });
+          // Sounds, caption tones and the kit's cues are measured over the whole reel, with what stayed.
+          if (accepted.touches.length + accepted.custom.length || accepted.hook_swap) assembled = await measureAndRepair('with_touches');
+        }
+      } catch (error) {
+        // Only a runaway stops a job: the reel ships as compiled, with whatever touches already passed.
+        if (error instanceof ProductionFailure) throw error;
+        await flagOnce('render', `The creative pass failed (${errorText(error)}); the reel ships without its touches.`);
       }
     }
 
@@ -931,32 +996,46 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     // findings get one director re-plan of the frames they name, a recompile and a re-render, then warn. Findings that start in
     // the words never reach it (M11): they ship as flags. The design review fails open.
     await stage('first_viewer');
-    const viewerInput = () => ({ contactSheet: sheet, captions: captionsFor(sheet, draft, plan), draft, facts });
-    const designRead = async (): Promise<DesignReview | null> => {
-      if (!deps.checks.checkDesign || !deps.render.frameStills) return null;
+    const designRead = async (sheets: Sheet[], sheetsFailed: string | null): Promise<DesignReview | null> => {
+      if (!deps.checks.checkDesign) return null;
+      if (sheetsFailed) return { problems: [], warnings: [], errors: [sheetsFailed], usd: 0 };
       try {
-        const stills = await deps.render.frameStills(projectDir, video);
-        return await deps.checks.checkDesign({ stills, plan, draft }, ctx);
+        return await deps.checks.checkDesign({ sheets, plan: { ...plan, hook: accepted.hook_swap ?? plan.hook }, draft }, ctx);
       } catch (error) {
         return { problems: [], warnings: [], errors: [errorText(error)], usd: 0 };
       }
     };
-    const viewerRead = async (): Promise<Awaited<ReturnType<ProductionDeps['checks']['checkFirstViewer']>>> => {
+    const viewerRead = async (sheets: Sheet[], sheetsFailed: string | null): Promise<Awaited<ReturnType<ProductionDeps['checks']['checkFirstViewer']>>> => {
       const unread = { hookSeconds: null, understood: true, problems: [], warnings: [] };
       if (!sheet) return unread;
+      if (sheetsFailed) {
+        await flag('first_viewer', `The first viewer's sheets failed (${sheetsFailed}); shipped without its read.`);
+        return unread;
+      }
       try {
-        return await deps.checks.checkFirstViewer(viewerInput(), ctx);
+        return await deps.checks.checkFirstViewer({ sheets, captions: captionsFor(sheet, draft, plan), draft, facts, pitchId: row.id }, ctx);
       } catch (error) {
         await flag('first_viewer', `The first viewer failed (${errorText(error)}); shipped without its read.`);
         return unread;
       }
     };
-    const readPicture = () => Promise.all([viewerRead(), designRead()]);
+    const readPicture = async () => {
+      let sheets: { viewer: Sheet[]; design: Sheet[] } = { viewer: [], design: [] };
+      let sheetsFailed: string | null = null;
+      if (deps.render.reviewSheets) {
+        try {
+          sheets = await deps.render.reviewSheets(projectDir, video, assembled.problems);
+        } catch (error) {
+          sheetsFailed = errorText(error);
+        }
+      }
+      return Promise.all([viewerRead(sheets.viewer, sheetsFailed), designRead(sheets.design, sheetsFailed)]);
+    };
     const flagDesignErrors = async (d: DesignReview | null) => {
       for (const e of d?.errors ?? []) await flag('first_viewer', `Design review failed; shipped without it: ${e}`);
     };
     let [viewer, design] = await readPicture();
-    let routed = firstViewerRouting(viewer, settings.hook_seconds);
+    let routed = firstViewerRouting(viewer, settings.hook_seconds, Boolean(accepted.hook_swap ?? plan.hook));
     let findings = routed.picture;
     await keepText('first_viewer', { round: 0, ...viewer, findings, script_findings: routed.words, design });
     await settle('first viewer and design review');
@@ -965,6 +1044,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       const problems = pictureFixProblems(findings, design);
       const named = [...new Set(problems.map((p) => p.frame))].filter((n) => plan.frames.some((f) => f.n === n && f.treatment !== 'close'));
       let replanned = false;
+      const hookBefore = plan.hook;
       await stage('director');
       try {
         const fixed = await arrive(await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'picture_review', plan, problems } }, ctx), 'picture-review fix');
@@ -986,7 +1066,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         }
         // A touch was made for the frame as it was: a re-planned frame goes back to its plan.
         const dropped = [...accepted.touches, ...accepted.custom].filter((t) => named.includes(t.frame));
-        accepted = { touches: accepted.touches.filter((t) => !named.includes(t.frame)), custom: accepted.custom.filter((c) => !named.includes(c.frame)) };
+        accepted = { touches: accepted.touches.filter((t) => !named.includes(t.frame)), custom: accepted.custom.filter((c) => !named.includes(c.frame)), ...(accepted.hook_swap && (!named.includes(1) || plan.hook === hookBefore) ? { hook_swap: accepted.hook_swap } : {}) };
         for (const t of dropped) await flagOnce('render', `Touch ${t.id} on frame ${t.frame} went with the re-plan of that frame.`);
         await compile(named);
         assembled = await measureAndRepair('after_replan');
@@ -1005,7 +1085,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         if (rerendered) {
           await stage('first_viewer');
           [viewer, design] = await readPicture();
-          routed = firstViewerRouting(viewer, settings.hook_seconds);
+          routed = firstViewerRouting(viewer, settings.hook_seconds, Boolean(accepted.hook_swap ?? plan.hook));
           findings = routed.picture;
           await keepText('first_viewer', { round: 1, ...viewer, findings, script_findings: routed.words, design });
           await settle('first viewer fix');
@@ -1024,8 +1104,15 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     for (const w of viewer.warnings ?? []) await flag('first_viewer', w);
     for (const w of design?.warnings ?? []) await flag('first_viewer', `Design (taste): ${designFindingText(w)}`);
 
+    // What code changed or lowered in the opening ships as a flag (ITERATION-12 contract): the plan's hook and any swap kept after it.
+    for (const f of [...(plan.hook?.flags ?? []), ...(accepted.hook_swap?.flags ?? [])]) await flag('integrity', `Hook: ${f}`);
+
     // MD-81: a step that quietly did nothing gets one loud flag before delivery.
-    for (const f of noOpFlags(trace, { central, cast, inventory })) await flag(f.check, f.detail);
+    try {
+      for (const f of noOpFlags(trace, { central, cast, inventory })) await flag(f.check, f.detail);
+    } catch (error) {
+      log('noop_flags_failed', { jobId: job.id, error: errorText(error) });
+    }
 
     // P9: deliver — the files, the post text (MD-50), the reuse record (MD-45), the report.
     await stage('deliver');
@@ -1066,6 +1153,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       post,
     };
     await keepText('delivery_report', report);
+    await keepStepLog();
     await finishJob(db, job.id, { status: 'ok' });
     log('job_ok', { jobId: job.id, usd: report.usd, flags: report.flags.length });
     return { status: 'ok' };
@@ -1079,7 +1167,9 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       if (job.trigger === 'auto') try {
         const next = await deps.pool.nextForProduction(db, settings, now());
         if (next) {
-          const req = await requestJob(db, { pitchId: next.id, trigger: job.trigger, settings });
+          // The night's replacement obeys the day's render and spend caps like any request (HUB-WIRING-CONTRACT.md §4.3).
+          const { requestDramaJob, nyDateOf } = await import('@/lib/reel-ai-drama/requests');
+          const req = await requestDramaJob(db, { pitchId: next.id, by: 'night', trigger: 'auto', nightDate: nyDateOf(now()), now: now() });
           if (req.ok) nextJobId = req.jobId;
           log('next_pitch', { jobId: job.id, pitchId: next.id, request: req });
         }
@@ -1090,14 +1180,21 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     }
     const capped = error instanceof ProductionFailure && error.capped;
     const message = errorText(error);
-    if (capped) await addFlag(db, job.id, { check: 'cost', detail: message, at: now().toISOString() });
-    await finishJob(db, job.id, { status: 'failed', error: message, capped });
-    log('job_failed', { jobId: job.id, error: message, capped });
-    return { status: 'failed', error: message, capped };
+    const kind = capped ? 'story' : failureClass(message);
+    // However bad things are, the job's end gets recorded as far as it can be, and the caller gets the reason.
+    try {
+      if (capped) await addFlag(db, job.id, { check: 'cost', detail: message, at: now().toISOString() });
+      await keepStepLog({ failure: { class: kind, error: message, full: errorFull(error) } });
+      await finishJob(db, job.id, { status: 'failed', error: message, capped });
+    } catch (recording) {
+      log('job_failure_not_recorded', { jobId: job.id, error: errorText(recording) });
+    }
+    log('job_failed', { jobId: job.id, error: message, capped, failureClass: kind });
+    return { status: 'failed', error: message, capped, failureClass: kind };
   }
 }
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+const errorText = errorReason;
 
 /** The sound designer's cues written to the project (CUES_FILE), or null when there is none. */
 function readCues(projectDir: string): SoundCues | null {

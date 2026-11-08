@@ -28,7 +28,7 @@ cd "$ROOT"
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
 ZONE="${GCP_ZONE:-us-west1-a}"
 INSTANCE="${SOCIAL_INSTANCE:-helios-social-worker}"
-UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher}"
+UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher helios-reel-ai-drama}"
 ENV_FILE="${SOCIAL_WORKER_ENV_FILE:-}"
 IAP=""
 if [[ "${GCP_SSH_IAP:-}" == "1" ]]; then
@@ -52,6 +52,11 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
     if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('ai_events.runs') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
       AI_EVENTS_INFLIGHT="UNION ALL SELECT 'ai events run ' || id FROM ai_events.runs WHERE status = 'running'"
     fi
+    # AI Drama Reels (reel_ai_drama): a running job or a running Develop / Calibrate click, once its schema is applied.
+    DRAMA_INFLIGHT=""
+    if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('reel_ai_drama.requests') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
+      DRAMA_INFLIGHT="UNION ALL SELECT 'ai drama job ' || id FROM reel_ai_drama.jobs WHERE status = 'running' UNION ALL SELECT 'ai drama request ' || id FROM reel_ai_drama.requests WHERE status = 'running'"
+    fi
     INFLIGHT="$(psql "${DB_URL}" -Atc "
       SELECT 'carousel run ' || id FROM social.runs WHERE status = 'running'
       UNION ALL SELECT 'reels run ' || id FROM reels.runs WHERE status = 'running'
@@ -62,6 +67,7 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
       UNION ALL SELECT 'story set ' || id FROM stories.sets WHERE status = 'building'
       UNION ALL SELECT 'last few days run ' || id FROM lfd.runs WHERE status = 'running'
       ${AI_EVENTS_INFLIGHT}
+      ${DRAMA_INFLIGHT}
       UNION ALL SELECT 'publish ' || id FROM social_hub.publish_attempts WHERE status IN ('creating', 'processing', 'publishing')" 2>/dev/null || echo 'CHECK_FAILED')"
     if [[ "${INFLIGHT}" == "CHECK_FAILED" ]]; then
       echo "Could not check for in-flight work; deploying anyway (FORCE_DEPLOY=1 silences this)." >&2

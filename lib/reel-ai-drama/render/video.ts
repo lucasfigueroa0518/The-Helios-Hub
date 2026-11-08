@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { HYPERFRAMES_BIN, HYPERFRAMES_ENV } from '@/lib/explainers/render/workspace';
-import { spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
+import { appendStepLog, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
+import { KIT_DIR } from '@/lib/reel-ai-drama/render/workspace';
 
 /** HyperFrames' render can take a while on the VM; the Explainer job allows 30 minutes too. */
 export const RENDER_TIMEOUT_MS = 30 * 60 * 1000;
@@ -12,13 +13,53 @@ export async function renderVideo(projectDir: string, deps: { run?: Runner; bin?
   const run = deps.run ?? spawnRunner;
   const out = path.join(projectDir, 'renders', 'video.mp4');
   fs.mkdirSync(path.dirname(out), { recursive: true });
+  // gsap ships with the project, so a render needs no network at all (ITERATION-12 §1).
+  localizeGsap(projectDir);
   const res = run(deps.bin ?? HYPERFRAMES_BIN, ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'], {
     cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: RENDER_TIMEOUT_MS,
   });
-  if (res.status !== 0) throw new Error(`hyperframes render exited ${res.status ?? 'with no status'}: ${tail(res, 800)}`);
+  if (res.status !== 0) {
+    appendStepLog(projectDir, 'hyperframes render', res);
+    throw new Error(`hyperframes render exited ${res.status ?? 'with no status'}: ${tail(res)}`);
+  }
   if (!fs.existsSync(out) || fs.statSync(out).size === 0) throw new Error('hyperframes render left no renders/video.mp4');
   masterLoudness(out, { run });
   return out;
+}
+
+/** gsap as shipped in the kit (verified against the SRI hash the page used), copied to assets/kit/vendor by the workspace. */
+export const GSAP_FILE = path.join(KIT_DIR, 'vendor', 'gsap.min.js');
+const GSAP_IN_PROJECT = 'assets/kit/vendor/gsap.min.js';
+/** The page's gsap tag, as mount.mjs, captions.mjs and assemble-index.mjs write it. Those are shared with other formats, so the output is rewritten. */
+const GSAP_TAG = /<script\b[^>]*\bsrc="https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@[^"]*"[^>]*><\/script>/g;
+
+function htmlFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return htmlFiles(p);
+    return e.name.endsWith('.html') ? [p] : [];
+  });
+}
+
+/** Point every page of the project at its own copy of gsap. Safe to repeat. Returns how many pages changed. */
+export function localizeGsap(projectDir: string): number {
+  const copy = path.join(projectDir, GSAP_IN_PROJECT);
+  if (!fs.existsSync(copy)) {
+    fs.mkdirSync(path.dirname(copy), { recursive: true });
+    fs.copyFileSync(GSAP_FILE, copy);
+  }
+  let changed = 0;
+  for (const file of [path.join(projectDir, 'index.html'), ...htmlFiles(path.join(projectDir, 'compositions'))]) {
+    if (!fs.existsSync(file)) continue;
+    const html = fs.readFileSync(file, 'utf8');
+    const next = html.replace(GSAP_TAG, `<script src="${GSAP_IN_PROJECT}"></script>`);
+    if (next !== html) {
+      fs.writeFileSync(file, next);
+      changed += 1;
+    }
+  }
+  return changed;
 }
 
 /** Reels/TikTok delivery loudness (research 07 §5): integrated −14 LUFS, true peak ≤ −1 dBTP. */
@@ -34,6 +75,7 @@ export function masterLoudness(video: string, { run = spawnRunner }: { run?: Run
     cwd: path.dirname(video), env: process.env, timeoutMs: 5 * 60 * 1000,
   });
   if (res.status !== 0 || !fs.existsSync(tmp) || fs.statSync(tmp).size === 0) {
+    appendStepLog(path.dirname(path.dirname(video)), 'loudness master', res);
     fs.rmSync(tmp, { force: true });
     return false;
   }

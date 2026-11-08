@@ -73,7 +73,7 @@ export function handPlaced(src, treatment = /\btreatment\s*:\s*['"`](\w+)['"`]/.
 export function sourceProblems(given) {
   const out = [];
   // A compiled frame's spec is the story's words and a plan's data, not code: a quote saying "from 'the board'" is no import.
-  const src = given.replace(/(\bcompiledFrame\()\{[\s\S]*\}(?=(?:, \{[^{}]*\})?\);)/, '$1{}');
+  const src = given.replace(/(\bcompiled(?:Frame|Hook)\()\{[\s\S]*\}(?=(?:, \{[^{}]*\})?\);)/, '$1{}');
   const placed = handPlaced(src);
   if (placed) out.push(placed);
   if (!/export\s+default\b/.test(src)) out.push('has no default export { treatment, build(root, ctx), render(t) }');

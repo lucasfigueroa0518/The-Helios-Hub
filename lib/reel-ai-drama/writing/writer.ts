@@ -4,7 +4,7 @@ import { pitchBrief, type DirectorPlan, type FactSheet, type Pitch, type StoryNo
 import { runSubmit, section, type Effort, type Ledger, type SendMessage } from '@/lib/reel-ai-drama/writing/llm';
 import { SUBMIT_REVISION_TOOL, SUBMIT_SCRIPT_TOOL } from '@/lib/reel-ai-drama/writing/schemas';
 import { factTimeline } from '@/lib/reel-ai-drama/writing/timeline';
-import { applyRevision, isCharacterImage, isLogo, maxWords, targetWords, validateDraft, type Replacement, type RevisionExtras } from '@/lib/reel-ai-drama/writing/validate';
+import { applyRevision, isCharacterImage, isLogo, knownToViewer, maxWords, targetWords, validateDraft, type Replacement, type RevisionExtras } from '@/lib/reel-ai-drama/writing/validate';
 
 /** Every outside call the writing steps make, injected so tests stub them. */
 export type WritingDeps = Ledger & {
@@ -43,14 +43,21 @@ export function lengthNote(settings: ReelAiDramaSettings): string {
   );
 }
 
-/** The writer's input (MD-100): the pitch's brief, the facts as a dated timeline, the inventory, the length. */
+/** Who needs no introduction and who the viewer would have to learn (must 6). Read from the cast: selection decided it. */
+export function namesForWriting(cast: FactSheet['cast'] | null | undefined): { known: string[]; new: string[] } {
+  const all = cast ?? [];
+  return { known: all.filter(knownToViewer).map((m) => m.name), new: all.filter((m) => !knownToViewer(m)).map((m) => m.name) };
+}
+
+/** The writer's input (MD-100): the pitch's brief, the facts as a dated timeline, the names, the inventory, the length. */
 export type WriterInput = { pitch: Pitch; facts: FactSheet; inventory: VisualsInventory; settings: ReelAiDramaSettings };
 
-/** Section names writer.md reads: "The brief", "The facts", "The visual inventory", "The length". */
+/** Section names writer.md reads: "The brief", "The facts", "The names", "The visual inventory", "The length". */
 export function writerUserMessage(input: WriterInput): string {
   return [
     section('The brief', pitchBrief(input.pitch) || input.pitch.title),
     section('The facts', factTimeline(input.facts)),
+    section('The names', namesForWriting(input.facts.cast)),
     section('The visual inventory', inventoryForWriting(input.inventory)),
     section('The length', lengthNote(input.settings)),
   ].join('\n\n');
@@ -96,14 +103,16 @@ export function notesText(notes: RevisionNote[]): string {
     .join('\n');
 }
 
-/** Section names writer-revise.md reads: "The notes", "The script", "The facts", "The visual inventory". */
+/** Section names writer-revise.md reads: "The notes", "The script", "The facts", "The names", "The visual inventory". */
 export function reviseUserMessage(input: { draft: WriterDraft; notes: RevisionNote[]; facts: FactSheet; inventory: VisualsInventory | null }): string {
   const { word_count: _words, ...script } = input.draft;
   void _words;
+  const hook = { line_id: input.draft.hook.line_id };
   return [
     section('The notes', notesText(input.notes)),
-    section('The script', script),
+    section('The script', { ...script, hook }),
     section('The facts', factTimeline(input.facts)),
+    section('The names', namesForWriting(input.facts.cast)),
     ...(input.inventory ? [section('The visual inventory', inventoryForWriting(input.inventory))] : []),
   ].join('\n\n');
 }

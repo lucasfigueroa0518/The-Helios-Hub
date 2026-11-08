@@ -19,7 +19,7 @@ import type { Asset, DirectorPlan, StoryboardFrame, VisualsInventory, WriterDraf
 
 const line = (id: string, text: string) => ({ id, text, on_screen: null, fact_ids: ['F1'], must_show: null });
 const DRAFT: WriterDraft = {
-  title: 'A', hook: { on_screen: 'GONE', line_id: 'L1' },
+  title: 'A', hook: { line_id: 'L1' },
   rungs: [{ id: 'R1', purpose: 'p', lines: [line('L1', 'She pulled the post.'), line('L2', 'Nobody noticed for a week.'), line('L3', 'Then it came back.')] }],
   peak_rung_id: 'R1', landing_rung_id: 'R1', close_question: 'Who decides?', word_count: 12, central: [],
 } as unknown as WriterDraft;
@@ -30,7 +30,7 @@ const asset = (id: string, extra: Partial<Asset> = {}): Asset => ({
 const INV: VisualsInventory = { assets: [asset('V1'), asset('V2'), asset('V3', { character_image: true, kind: 'person_photo', people: ['A B'] })], usable_count: 3, counts: {}, kill: null, usd: 0 } as VisualsInventory;
 const bp = (a: string, on = '') => ({ ground: 'charcoal', style: 'cutouts', arrangement: 'solo', pieces: [{ id: 'p', asset: a, on }], labels: [], speech: [], marks: [], arrows: [], camera: { move: 'push', stops: [{ on: '', aim: 'whole' }] }, sounds: [] });
 const frame = (n: number, lines: string[], a: string, extra: Partial<StoryboardFrame> = {}): StoryboardFrame => ({
-  n, name: `Frame ${n}`, line_ids: lines, treatment: 'photo', asset_ids: [a], purpose: `purpose ${n}`, music: n === 1 ? 'start' : 'hold', on_screen: n === 1 ? 'GONE' : null, focus: { kind: 'document', what: 'the post' }, blueprint: bp(a), ...extra,
+  n, name: `Frame ${n}`, line_ids: lines, treatment: 'photo', asset_ids: [a], purpose: `purpose ${n}`, music: n === 1 ? 'start' : 'hold', on_screen: null, focus: { kind: 'document', what: 'the post' }, blueprint: bp(a), ...extra,
 }) as unknown as StoryboardFrame;
 const close = (n: number) => ({ n, name: 'Close', line_ids: [], treatment: 'close', asset_ids: [], purpose: 'the question', music: 'hold', on_screen: null }) as unknown as StoryboardFrame;
 const PLAN = (): DirectorPlan => ({ frames: [frame(1, ['L1'], 'V1'), frame(2, ['L2'], 'V2'), frame(3, ['L3'], 'V1'), close(4)], makes: [], wishes: [], lines_back: [] });
@@ -85,7 +85,7 @@ test('salvage: every structural fault a plan can have comes out as a plan the ru
   assert.equal(plan.frames.at(-1)!.treatment, 'close');
   assert.deepEqual(plan.frames.at(-1)!.line_ids, []);
   assert.equal(plan.frames[0].music, 'start');
-  assert.equal(plan.frames[0].on_screen, 'GONE', "off-script words go; the hook's take their place");
+  assert.equal(plan.frames[0].on_screen, null, 'off-script words go; no title takes their place');
   assert.ok(plan.frames[0].asset_ids.length, 'a frame left with no picture borrows one');
   assert.ok(plan.frames.every((f) => f.asset_ids.every((a) => INV.assets.some((x) => x.id === a))));
   assert.deepEqual(plan.lines_back, []);

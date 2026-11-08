@@ -1,4 +1,5 @@
-import type { FactSheet } from '@/lib/reel-ai-drama/types';
+import type { FactSheet, Pitch } from '@/lib/reel-ai-drama/types';
+import { normName, samePerson } from '@/lib/reel-ai-drama/writing/validate';
 
 /**
  * Code checks on the reporter's fact sheet (PROCESS P2; research 01 §9). The model's sheet is never taken
@@ -90,6 +91,16 @@ function fetchedText(url: string | null | undefined, fetched: ReadonlyMap<string
   const key = urlKey(url);
   for (const [u, text] of fetched) if (urlKey(u) === key) return text;
   return null;
+}
+
+/**
+ * Reporting never judges who the public knows: the sheet's cast takes `widely_known` from the pitch, where selection
+ * decided it. Someone reporting added has no answer, which reads as not known.
+ */
+export function withKnownNames(sheet: FactSheet, pitch: Pick<Pitch, 'cast'>): FactSheet {
+  const known = (pitch.cast ?? []).filter((c) => c.widely_known === true);
+  const isKnown = (m: FactSheet['cast'][number]) => known.some((c) => c.kind === m.kind && (m.kind === 'person' ? samePerson(c.name, m.name) : normName(c.name) === normName(m.name)));
+  return { ...sheet, cast: (sheet.cast ?? []).map((m) => ({ ...m, widely_known: isKnown(m) })) };
 }
 
 export function validateFactSheet(raw: FactSheet, opts: ValidateOptions = {}): ValidatedSheet {

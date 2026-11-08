@@ -88,16 +88,17 @@ test('render() logs its paint order only while a recorder is set', async () => {
   const P = L.lens(CAM);
   const log: any[] = [];
   (globalThis as any).__hxPaintLog = log;
-  L.render(P, { items: [folder, sheet('s', [-74, 48, DZ + 0.6], 0.3)] });
+  L.render(P, { items: [folder, sheet('s', [-74, 48, DZ + 0.6], 0.3)] as never[] });
   (globalThis as any).__hxPaintLog = undefined;
   assert.deepEqual(log[0].map((x: any) => x.id), ['folder', 's']);
-  L.render(P, { items: [folder] });
+  L.render(P, { items: [folder] as never[] });
   assert.equal(log.length, 1);
 });
 
 test('a tilted sheet in flight stays above a landed tilted one it passes over; a critter is not stacked', async () => {
   const { L } = await load();
-  const P = L.lens({ pos: [-24, -20, 165], target: [-24, 47, 19], fov: 60 });
+  const cam = { pos: [-24, -20, 165], target: [-24, 47, 19], fov: 60 };
+  const P = L.lens(cam);
   const landed = { id: 'blue', at: [-8, 59, DZ + 5], bounds: [[-20, 50, DZ], [4, 68, DZ + 9.2]], svg: '<g/>' };
   const flying = { id: 'green', at: [-2, 52, DZ + 7], bounds: [[-14, 43, DZ + 1], [10, 61, DZ + 12]], svg: '<g/>' };
   assert.deepEqual(L.byDistance(P, [flying, landed]).map((it: any) => it.id), ['blue', 'green']);

@@ -10,7 +10,7 @@ import { KIT_DIR } from '@/lib/reel-ai-drama/render/workspace';
 export { prepareWorkspace, applyOverlay, readMusicHistory, musicHistoryPath, KIT_DIR, PRESET_DIR, REEL_AI_DRAMA_DIR } from '@/lib/reel-ai-drama/render/workspace';
 export { runVoice, repace, sameVoices, frameVoices } from '@/lib/reel-ai-drama/render/voice';
 export { assembleProject } from '@/lib/reel-ai-drama/render/assemble';
-export { renderVideo, contactSheet, frameStills, captionPages, captionTranscript, frameSpans, stillAt, stillTimes, type FrameStill } from '@/lib/reel-ai-drama/render/video';
+export { renderVideo, contactSheet, frameStills, localizeGsap, captionPages, captionTranscript, frameSpans, stillAt, stillTimes, type FrameStill } from '@/lib/reel-ai-drama/render/video';
 export { spawnRunner, type Runner, type RunResult } from '@/lib/reel-ai-drama/render/runner';
 /** writeProjectFiles(projectDir, { draft, plan, inventory, mediaRoot? }) → { frames, media, missing, problems } (kit/project-files.mjs). */
 export { writeProjectFiles } from '@/explainers/reel-ai-drama/kit/project-files.mjs';

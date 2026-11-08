@@ -3,6 +3,7 @@ import { noul, score } from '@typesafe-ai/sdk';
 import { isGroupName } from '@/lib/reel-ai-drama/checks/variety';
 import type { DramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { defineQuestionSet } from '@/lib/reels/jev/question-set';
+import { knownToViewer } from '@/lib/reel-ai-drama/writing/validate';
 import { ERAS, pitchBrief, pitchCentral, STORY_TYPES, type Pitch, type Score } from '@/lib/reel-ai-drama/types';
 
 /**
@@ -20,11 +21,12 @@ const LEVELS = 4; // score rubrics are indexed 0..4
 const NOT_THE_TELLING =
   'Judge the events the pitch describes, not how it is written. A large number, a clever ending, or a small act with a big consequence earns nothing here on its own.';
 
+// v9 (iteration 12): `players` joins as a gate; the cast says which names the viewer already knows.
 // v8 (iteration 11): the central figure is a named person the viewer follows, never a company or a group, and someone who only
 // receives events doesn't count; a want at level 3 or above is now a gate. The other questions are v7's, which restored v5 (MD-114, MD-116).
 export const DRAMA_SET = defineQuestionSet({
-  id: 'reel-ai-drama-drama-v8',
-  version: '8',
+  id: 'reel-ai-drama-drama-v9',
+  version: '9',
   questions: {
     central_want: score(
       {
@@ -118,6 +120,20 @@ export const DRAMA_SET = defineQuestionSet({
         'One question, decided within days or weeks, with a clear opening moment and a clear end.',
       ],
     ),
+    // Iteration 12: a known name is nearly free, a new one costs attention, and a minute can only repay so many.
+    players: score(
+      {
+        question: 'Can this story be told with one person to follow, one opposing force, and about two names the viewer has to learn?',
+        judge: `Count the names the telling can't do without: people, companies and products that can't be reduced to a plain role. A cast entry with known: true costs the viewer nothing and is not counted. Reward a story where the viewer holds the same two sides from start to finish, and where something in it is already known to them. Penalize a relay, where each new stranger hands the story to the next and most appear once, so learning a name never pays off. ${NOT_THE_TELLING}`,
+      },
+      [
+        'A crowd of strangers: many names to learn, and no one to follow.',
+        'A relay: the story passes from stranger to stranger, each needing an introduction.',
+        'One person to follow, but about four names to learn, or nothing the viewer already knows.',
+        'One person to follow and one opposing force, with about three names to learn.',
+        'One person to follow and one opposing force, with about two names to learn or fewer, and a name the viewer already knows.',
+      ],
+    ),
     mostly_spectacle: noul({
       question: 'Is this pitch mainly about a figure, a valuation, a ranking, a market move, or a corporate announcement, rather than about people\'s choices and what came of them?',
       judge: 'Answer yes when the heart of the pitch is a number or an announcement and the people in it are incidental. Answer no when a person\'s choices are the heart of it, even if a number or an announcement is part of it.',
@@ -146,6 +162,9 @@ export const NO_CENTRAL_WANT_CAP = 0.45;
 export const NO_OPPOSITION_CAP = 0.45;
 /** MD-82: no bounded episode (index below 2: a saga, or a question never decided) caps the score the same way. */
 export const NO_EPISODE_CAP = 0.45;
+/** More names than a minute can repay (index below 2: a relay or a crowd) caps the score the same way. */
+export const PLAYERS_GATE = 2;
+export const TOO_MANY_PLAYERS_CAP = 0.45;
 /** "Mostly spectacle" (noul at or above SPECTACLE_YES) caps the score the same way. */
 export const SPECTACLE_YES = 0.5;
 export const SPECTACLE_CAP = 0.5;
@@ -187,6 +206,14 @@ export function combineDrama(answers: ScoreAnswers): Score {
   if (level(answers, 'bounded_episode') < 2 && total > NO_EPISODE_CAP) {
     total = NO_EPISODE_CAP;
     notes.cap = notes.cap ?? 'not one bounded episode (MD-82)';
+  }
+  const players = answers.players?.score;
+  if (typeof players === 'number') {
+    notes.players = `${players.toFixed(2)}/4`;
+    if (players < PLAYERS_GATE && total > TOO_MANY_PLAYERS_CAP) {
+      total = TOO_MANY_PLAYERS_CAP;
+      notes.cap = notes.cap ?? 'more players than the viewer can hold (a relay or a crowd of strangers)';
+    }
   }
   const spectacle = answers.mostly_spectacle?.noul;
   if (typeof spectacle === 'number') {
@@ -329,7 +356,7 @@ export function dramaState(p: Pitch) {
     story_type: STORY_TYPES[p.story_type],
     era: ERAS[p.era],
     event_date: p.event_date,
-    cast: p.cast.map((c) => ({ name: c.name, role: c.role })),
+    cast: p.cast.map((c) => ({ name: c.name, role: c.role, known: knownToViewer(c) })),
     central_figure: pitchCentral(p),
     why_now: p.why_now,
   };

@@ -232,7 +232,8 @@ export function frameShotMap(f: StoryboardFrame, draft: WriterDraft, inventory: 
   };
   let start = 0;
   for (const id of f.line_ids) {
-    if (!f.drop_labels?.includes(id)) place(lines.get(id)?.on_screen, labelWord(lines.get(id)?.on_screen ?? '', start, voice));
+    // A date label never reaches the screen (iteration 12): only the rest are up with a picture.
+    if (!f.drop_labels?.includes(id) && lines.get(id)?.on_screen_kind !== 'date') place(lines.get(id)?.on_screen, labelWord(lines.get(id)?.on_screen ?? '', start, voice));
     start += (lineText.get(id) ?? '').split(/[\s—–]+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length;
   }
   if (f.on_screen?.trim() && !placed.some((l) => l.text === f.on_screen!.trim())) placed.push({ text: f.on_screen.trim(), word: 0, owners: null });

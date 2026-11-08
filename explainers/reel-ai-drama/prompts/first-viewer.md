@@ -35,6 +35,9 @@ the voice:
   its time. Ask yourself four questions as you go, and list every one you can't answer as a confusion at
   the moment it bit: When did this happen? Where? Who was there, and who were they to each other? Did
   anyone act for a reason you hadn't been given yet?
+  List these as confusions too, at the moment they bit: you couldn't say who you were following or who
+  stood against them; a name you were expected to hold on to arrived with nothing to tell you who that was; there
+  were more new names than you could keep straight. A name you recognized without being told costs you nothing.
 
 Submit with `submit_viewing`, once:
 `{ hook_seconds, muted_followed, hook_pull, story_in_my_words, want_next, keep_watching, confused: [{ at, what }] }`.

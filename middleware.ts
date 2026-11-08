@@ -72,6 +72,8 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/traffic/')
     || pathname === '/explainers'
     || pathname.startsWith('/explainers/')
+    || pathname === '/reel-ai-drama'
+    || pathname.startsWith('/reel-ai-drama/')
     || pathname === '/reels'
     || pathname.startsWith('/reels/')
     || pathname === '/stories'
@@ -151,6 +153,8 @@ export const config = {
     '/traffic/:path*',
     '/explainers',
     '/explainers/:path*',
+    '/reel-ai-drama',
+    '/reel-ai-drama/:path*',
     '/reels',
     '/reels/:path*',
     '/stories',

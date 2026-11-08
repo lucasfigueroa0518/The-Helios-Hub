@@ -145,7 +145,10 @@ export function topicAnalogy(topic: Pick<TopicRow, 'jev_notes'>): AnalogyCandida
  */
 export function leastBadAnalogy(note: AnalogyNote): { analogy: AnalogyCandidate; misses: string[] } | null {
   if (!('candidates' in note)) return null;
-  const tries = [...note.candidates, ...(note.third ? [note.third] : [])].filter((t): t is AnalogyTry & { analogy: AnalogyCandidate } => Boolean(t.analogy));
+  // A retired analogy never comes back, not even as the least bad.
+  const tries = [...note.candidates, ...(note.third ? [note.third] : [])].filter(
+    (t): t is AnalogyTry & { analogy: AnalogyCandidate } => Boolean(t.analogy) && !t.misses.includes(RETIRED_MISS),
+  );
   const rank = (t: AnalogyTry) => [t.gates ? 0 : 1, t.misses.length, t.gates ? ANALOGY_GATE_KEYS.reduce((sum, k) => sum + t.gates![k], 0) : 0];
   const best = tries
     .map((t, i) => ({ t, i, r: rank(t) }))
@@ -188,7 +191,19 @@ export type AnalogyDeps = {
   now?: Date;
 };
 
-type AnalogyTopic = Pick<TopicRow, 'id' | 'title' | 'scope' | 'term'> & { lesson_payload?: string | null };
+type AnalogyTopic = Pick<TopicRow, 'id' | 'title' | 'scope' | 'term'> & { lesson_payload?: string | null; jev_notes?: TopicRow['jev_notes'] };
+
+/** Why a candidate is refused when an earlier render of this topic already used it (Regenerate, 2026-11-08). */
+export const RETIRED_MISS = 'an earlier render of this topic used this analogy, and Regenerate retired it';
+
+/** The analogies Regenerate retired from this topic (requestRerender), by name. */
+export function retiredAnalogies(topic: { jev_notes?: TopicRow['jev_notes'] }): Pick<AnalogyCandidate, 'name'>[] {
+  const notes = (topic.jev_notes as { analogies_retired?: AnalogyNote[] } | null)?.analogies_retired ?? [];
+  return notes.flatMap((n) => {
+    const picked = n && 'candidates' in n ? pickedTry(n)?.analogy : null;
+    return picked ? [picked] : [];
+  });
+}
 
 async function saveNote(db: Queryable, topicId: string, note: AnalogyNote): Promise<void> {
   await db.query(
@@ -252,6 +267,7 @@ async function writeOne(deps: AnalogyDeps, topic: AnalogyTopic, hidden: string[]
   } catch (error) {
     return { analogy: null, gates: null, misses: [`the writer's reply could not be used: ${error instanceof Error ? error.message : String(error)}`] };
   }
+  if (retiredAnalogies(topic).some((r) => sameAnalogy(r, candidate))) return { analogy: candidate, gates: null, misses: [RETIRED_MISS] };
   const problems = analogyCheckProblems(candidate, term);
   if (problems.length) return { analogy: candidate, gates: null, misses: problems };
   const result = await deps.jev.ask({

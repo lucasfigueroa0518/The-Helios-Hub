@@ -232,7 +232,7 @@ test('toBoxRow keeps only the fields the box needs', () => {
 test('the box sends the one ref each type\'s revise verb reads', async () => {
   const { readFileSync } = await import('node:fs');
   const { REVISION_REF_KEY, revisionRefs } = await import('@/lib/revisions/box-state');
-  const FILES: Record<string, string> = { carousels: 'carousels', reels: 'reels', explainers: 'explainers', stories: 'stories', last_few_days: 'last-few-days', ai_events: 'ai-events' };
+  const FILES: Record<string, string> = { carousels: 'carousels', reels: 'reels', explainers: 'explainers', stories: 'stories', last_few_days: 'last-few-days', ai_events: 'ai-events', reel_ai_drama: 'reel-ai-drama' };
   for (const [vertical, key] of Object.entries(REVISION_REF_KEY)) {
     const src = readFileSync(`lib/publishing/actions/${FILES[vertical]}.ts`, 'utf8');
     const verbs = src.slice(src.indexOf('reviseVerbs('));
