@@ -12,6 +12,7 @@ import { PLAN } from '@/lib/social-hub/views/plan';
 import { dbQuery } from '@/lib/db';
 import { readLfdSettings } from '@/lib/lfd/settings';
 import { readAiEventsSettings } from '@/lib/ai-events/settings';
+import { readFieldNotesSettings } from '@/lib/field-notes/settings';
 import { slotPlan, slotsWithinCap, type SlotPlan } from '@/lib/social-hub/slots';
 import { readCaps, readSlotSource } from '@/lib/social-hub/slots/load';
 import type { ResolvedSlot, SlotQuery } from '@/lib/social-hub/slots/types';
@@ -40,9 +41,9 @@ import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
  * the hidden safety cap the overnight runs never pass; week board spec
  * §Safety cap) is set here, a person's decision, never automatic.
  */
-export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events';
+export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events' | 'field_notes';
 
-export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events'];
+export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
 export const isPostingType = (v: unknown): v is ContentType => POSTING_TYPES.includes(v as ContentType);
 
 /** One day of a type's week on the calendar: its slot count, Trial / Main split (reel types), Stories' series, and whether a date override touched it. */
@@ -58,7 +59,7 @@ export type PostingState = {
   perDay: number | null;
   maxPerDay: number | null;
   series: SeriesState[] | null;
-  /** Last Few Days and AI Events: the weekdays it posts once (0 = Sunday). Absent for the other types. */
+  /** Last Few Days, AI Events and Field Notes: the weekdays it posts once (0 = Sunday). Absent for the other types. */
   days?: number[] | null;
   /** Template mode: this Monday–Sunday week's slots for the type. Null while legacy (the controls above decide). */
   schedule: ScheduleDay[] | null;
@@ -160,6 +161,7 @@ function withCalendar(state: TypeFields, plan: SlotPlan, today: string, cap: num
   const type = state.type;
   if (type === 'last_few_days') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'last_few_days') };
   if (type === 'ai_events') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'ai_events') };
+  if (type === 'field_notes') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'field_notes') };
   if (type === 'stories') {
     return { ...state, series: (state.series ?? []).map((x) => ({ ...x, days: weekdaysWith(plan, (s) => s.vertical === 'stories' && s.series === x.id) })) };
   }
@@ -221,6 +223,11 @@ async function readTypePosting(type: ContentType): Promise<TypeFields> {
     // Two carousels on each of its days, Miami and Boston (Sunday, AE-29): no per-day quota to set.
     return { type, live: s.publishingLive, generate: s.autoRun, autoPublish: !s.requireApproval, perDay: null, maxPerDay: null, series: null, days: s.days };
   }
+  if (type === 'field_notes') {
+    const s = await readFieldNotesSettings((text, params) => dbQuery(text, params));
+    // One post on each calendar day it holds a slot (1-2 a week): no per-day quota to set.
+    return { type, live: s.publishingLive, generate: s.autoRun, autoPublish: !s.requireApproval, perDay: null, maxPerDay: null, series: null, days: null };
+  }
   const s = await loadStories(liveStoriesDb);
   return {
     type,
@@ -247,6 +254,7 @@ function validate(type: ContentType, patch: PostingPatch): void {
     if (type === 'stories') throw new Error('Stories have no daily quota; each series has its own days.');
     if (type === 'last_few_days') throw new Error('Last Few Days has no daily quota; it posts once on each of its days.');
     if (type === 'ai_events') throw new Error('AI Events has no daily quota; it posts Miami and Boston on each of its days.');
+    if (type === 'field_notes') throw new Error('Field Notes has no daily quota; it posts once on each day the calendar gives it.');
     quota(patch, type === 'carousels' ? carouselCfg.CAROUSEL_SLOTS.length : type === 'explainers' ? EXPLAINER_WINDOWS.length : windows('reels'), type === 'explainers' ? 1 : 0);
   }
   if (patch.series) {
@@ -258,7 +266,7 @@ function validate(type: ContentType, patch: PostingPatch): void {
   if (patch.cap !== undefined) {
     if (!Number.isInteger(patch.cap) || patch.cap < 0 || patch.cap > MAX_CAP) throw new Error(`A daily limit is a whole number from 0 to ${MAX_CAP}.`);
     if (patch.cap > maxCapFor(type)) {
-      throw new Error(type === 'ai_events' ? 'AI Events posts Miami and Boston, so its daily limit is 0 to 2.' : 'Last Few Days runs once a day, so its daily limit is 0 or 1.');
+      throw new Error(type === 'ai_events' ? 'AI Events posts Miami and Boston, so its daily limit is 0 to 2.' : type === 'field_notes' ? 'Field Notes posts once a day, so its daily limit is 0 or 1.' : 'Last Few Days runs once a day, so its daily limit is 0 or 1.');
     }
   }
 }
@@ -323,6 +331,16 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
     const set = (key: string, value: unknown) =>
       dbQuery(
         `INSERT INTO ai_events.settings (key, value, updated_at) VALUES ($1, $2::jsonb, now())
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+        [key, JSON.stringify(value)],
+      );
+    if (patch.generate !== undefined) await set('auto_run', patch.generate);
+    if (patch.autoPublish !== undefined) await set('require_approval', !patch.autoPublish);
+    if (patch.live !== undefined) await set('publishing_live', patch.live);
+  } else if (type === 'field_notes') {
+    const set = (key: string, value: unknown) =>
+      dbQuery(
+        `INSERT INTO field_notes.settings (key, value, updated_at) VALUES ($1, $2::jsonb, now())
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
         [key, JSON.stringify(value)],
       );

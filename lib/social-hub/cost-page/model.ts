@@ -12,7 +12,7 @@ export type Series = { days: string[]; lead: number; keys: Array<{ id: string; l
 export type Compare = { label: string; micros: number; change: 'new' | 'same' | 'up' | 'down'; pct: number | null };
 export type Pace = { spentMicros: number; projectedMicros: number; watchMicros: number; underWatch: boolean };
 
-const TYPE_COLOR: Record<Vertical, string> = { reels: '#14b8c4', explainers: '#4169e1', carousels: '#138510', stories: '#c377e0', last_few_days: '#e0529c', ai_events: '#b8860b' };
+const TYPE_COLOR: Record<Vertical, string> = { reels: '#14b8c4', explainers: '#4169e1', carousels: '#138510', stories: '#c377e0', last_few_days: '#e0529c', ai_events: '#b8860b', field_notes: '#6b7a3a' };
 
 function keysFor(by: By) {
   if (by === 'type') return VERTICALS.map((v) => ({ id: v.id, label: v.label, color: TYPE_COLOR[v.id] }));
@@ -88,6 +88,7 @@ const INTERACTIONS: Record<Vertical, MetricKey[]> = {
   stories: ['replies', 'shares', 'follows', 'profileVisits'],
   last_few_days: ['totalInteractions'],
   ai_events: ['totalInteractions'],
+  field_notes: ['totalInteractions'],
 };
 export const KINDS: Array<{ key: MetricKey; label: string }> = [
   { key: 'likes', label: 'Like' }, { key: 'saved', label: 'Save' }, { key: 'shares', label: 'Share' },

@@ -6,6 +6,7 @@ import { reelActions } from './reels';
 import { storyActions } from './stories';
 import { lastFewDaysActions } from './last-few-days';
 import { aiEventsActions } from './ai-events';
+import { fieldNotesActions } from './field-notes';
 import type { ContentActions } from './types';
 
 /** Every type's actions with their live functions (the hub's action routes use this). */
@@ -36,6 +37,10 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     aiItems,
     aiSettings,
     aiManual,
+    fnSchedule,
+    fnItems,
+    fnSettings,
+    fnManual,
   ] = await Promise.all([
     import('@/lib/social/store'),
     import('@/lib/social/overnight/schedule'),
@@ -62,6 +67,10 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     import('@/lib/ai-events/items'),
     import('@/lib/ai-events/settings'),
     import('@/lib/ai-events/manual'),
+    import('@/lib/field-notes/schedule'),
+    import('@/lib/field-notes/items'),
+    import('@/lib/field-notes/settings'),
+    import('@/lib/field-notes/manual'),
   ]);
   const db = storiesDb.liveStoriesDb;
   const storiesSpine = (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
@@ -141,6 +150,18 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       unschedulePost: aiSchedule.unscheduleAiEventsPost,
       queueRebuild: (q, o) => aiManual.queueAiEventsRun(q, { kind: 'rebuild', requestedBy: o.requestedBy, weekKey: o.weekKey }),
       itemId: aiItems.aiEventsItemId,
+      placeItem: placement.placeItem,
+      rescheduleItem: placement.rescheduleItem,
+    }),
+    field_notes: fieldNotesActions({
+      query: socialQuery,
+      approvePost: (q, postId) => fnSchedule.approveFieldNotesPost(q, postId),
+      rejectPost: fnSchedule.rejectFieldNotesPost,
+      hardPublishPost: fnSchedule.hardPublishFieldNotesPost,
+      publishingLive: async (q) => (await fnSettings.readFieldNotesSettings(q)).publishingLive,
+      unschedulePost: fnSchedule.unscheduleFieldNotesPost,
+      queueRebuild: (q, o) => fnManual.queueFieldNotesRun(q, { kind: 'rebuild', requestedBy: o.requestedBy }),
+      itemId: fnItems.fieldNotesItemId,
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
     }),

@@ -13,9 +13,9 @@ import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings
 import { pendingRun, requestRun } from '@/lib/reels/repository';
 import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
-import { isAiEventsDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
+import { isAiEventsDay, isFieldNotesDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
-import { aiEventsDueToday, lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
+import { aiEventsDueToday, fieldNotesDueToday, lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
@@ -31,6 +31,9 @@ import { DEFAULT_AI_EVENTS_RUN_CAP_USD } from '@/lib/ai-events/config';
 import { queueManualAiEventsRun } from '@/lib/ai-events/manual';
 import { readAiEventsSettings } from '@/lib/ai-events/settings';
 import { comingWeek } from '@/lib/networking/pick/week';
+import { queueManualFieldNotesRun } from '@/lib/field-notes/manual';
+import { readFieldNotesSettings } from '@/lib/field-notes/settings';
+import { FIELD_NOTES_DEFAULT_SETTINGS } from '@/lib/field-notes/types';
 
 /** Typical spend, for the confirm line: a reels night ran $1.40–2.80 this month; one reel (copy, frame, video, song) about $1. */
 const REELS_NIGHT_USD = 2.5;
@@ -82,12 +85,34 @@ async function liveAiEvents(today: string, anyDay: boolean, now: Date): Promise<
 }
 
 /**
- * `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button).
- * `aiEventsAnyDay`: the same for AI Events' Generate.
+ * Field Notes for Run now: due when today has its calendar slot and its auto_run is on (any day from
+ * its own Generate), made when today already has a post that wasn't rejected (for Generate: one
+ * already published, since Generate re-renders a post still in review), in flight when a run is
+ * queued or running. Unreadable (schema not applied): no step.
  */
-export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean } = {}): Promise<RunPlan> {
+async function liveFieldNotes(today: string, anyDay: boolean): Promise<{ day: RunInputs['fieldNotes']; inFlight: boolean; cap: number }> {
+  try {
+    const [s, plan, made, flight] = await Promise.all([
+      readFieldNotesSettings(liveHubQuery),
+      slotPlan(liveHubQuery, today, 1).catch(() => null),
+      dbQuery<{ status: string }>(`SELECT status FROM field_notes.posts WHERE ny_date = $1::date AND status <> 'rejected'`, [today]),
+      dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM field_notes.runs WHERE status IN ('requested', 'running')`),
+    ]);
+    const due = fieldNotesDueToday(s, today, anyDay, plan ? isFieldNotesDay(plan, today) : null);
+    const has = made.rows.some((r) => (anyDay ? r.status === 'published' : true));
+    return { day: { due, made: has }, inFlight: Number(flight.rows[0]?.n ?? 0) > 0, cap: s.runCapUsd ?? FIELD_NOTES_DEFAULT_SETTINGS.runCapUsd };
+  } catch {
+    return { day: undefined, inFlight: false, cap: FIELD_NOTES_DEFAULT_SETTINGS.runCapUsd };
+  }
+}
+
+/**
+ * `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button).
+ * `aiEventsAnyDay`: the same for AI Events' Generate. `fieldNotesAnyDay`: and for Field Notes'.
+ */
+export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean; fieldNotesAnyDay?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
-  const [lfd, aiEvents] = await Promise.all([liveLfd(today, opts.lfdAnyDay === true), liveAiEvents(today, opts.aiEventsAnyDay === true, now)]);
+  const [lfd, aiEvents, fieldNotes] = await Promise.all([liveLfd(today, opts.lfdAnyDay === true), liveAiEvents(today, opts.aiEventsAnyDay === true, now), liveFieldNotes(today, opts.fieldNotesAnyDay === true)]);
   const [dataset, stories, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
     loadDataset(liveHubQuery, now),
     readPosting('stories', now),
@@ -121,6 +146,7 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
     series,
     ...(lfd.day ? { lastFewDays: lfd.day } : {}),
     ...(aiEvents.day ? { aiEvents: aiEvents.day } : {}),
+    ...(fieldNotes.day ? { fieldNotes: fieldNotes.day } : {}),
     inFlight: {
       reelsRun: Boolean(reelsPending),
       reelsBuilding: building.rows.map((r) => r.post_idea_id),
@@ -128,8 +154,9 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
       explainerTopics: jobs.rows.map((r) => r.topic_id),
       lfdRun: lfd.inFlight,
       aiEventsRun: aiEvents.inFlight,
+      fieldNotesRun: fieldNotes.inFlight,
     },
-    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap },
+    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap, fieldNotesCap: fieldNotes.cap },
   });
 }
 
@@ -163,7 +190,7 @@ export async function requestStorySets(series: readonly string[], by: string, no
  * runs just that card.
  */
 export async function runToday(by: string, now = new Date(), only?: Vertical, target?: string): Promise<{ plan: RunPlan; results: StepResult[] }> {
-  const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days', aiEventsAnyDay: only === 'ai_events' });
+  const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days', aiEventsAnyDay: only === 'ai_events', fieldNotesAnyDay: only === 'field_notes' });
   const results: StepResult[] = [];
   for (const step of stepsFor(plan, only, target)) {
     if (step.action === 'none') continue;
@@ -207,6 +234,10 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
       } else if (step.action === 'ai_events_run') {
         // The click approves this run's Jev spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
         const out = await queueManualAiEventsRun(liveHubQuery, by);
+        done(out.ok, out.note);
+      } else if (step.action === 'field_notes_run') {
+        // The click approves this run's Claude spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
+        const out = await queueManualFieldNotesRun(liveHubQuery, by);
         done(out.ok, out.note);
       } else if (step.action === 'story_sets') {
         const made = await requestStorySets(step.targets, by, now);

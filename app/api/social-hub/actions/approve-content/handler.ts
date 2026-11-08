@@ -12,5 +12,5 @@ import { contentAction } from '../content-action';
  * `{ vertical, refs: { jobId } | { setId } | { lfdPostId } | { aiEventsPostId } }`.
  */
 export function approveContent(actions: () => Promise<Record<Vertical, ContentActions>>) {
-  return contentAction({ flag: 'approveContent', verb: 'approve', actions, allowed: ['explainers', 'stories', 'last_few_days', 'ai_events'] });
+  return contentAction({ flag: 'approveContent', verb: 'approve', actions, allowed: ['explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes'] });
 }

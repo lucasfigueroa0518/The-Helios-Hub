@@ -1,3 +1,4 @@
+import { ARCHIVE_ONLY_TYPES, QUEUE_LIVE_TYPES } from '@/lib/content-type/config';
 import type { IdeaAdjustment, MoveTag } from '@/lib/social-hub/views/moves';
 
 /**
@@ -19,13 +20,13 @@ export const POOL_CAP = 30;
  * for these; the others keep Promote and Demote until their night workers are converted, so a control never
  * promises what the night will not do. Add a type here in the same change that converts its worker.
  */
-export const QUEUE_LIVE: ReadonlySet<string> = new Set(['explainers', 'reels', 'carousels', 'stories']);
+export const QUEUE_LIVE: ReadonlySet<string> = QUEUE_LIVE_TYPES;
 
 /**
  * Types that take Archive but not Pin or drag (Last Few Days: its pool is the last run's record, so there is no queue to steer,
  * but a story a person archives is kept out of every later run). Everything else about them is as for a type not on the queue.
  */
-export const ARCHIVE_ONLY: ReadonlySet<string> = new Set(['last_few_days']);
+export const ARCHIVE_ONLY: ReadonlySet<string> = ARCHIVE_ONLY_TYPES;
 
 /** The ideas a person archived, taken out (for the views of a type whose order is not the queue's). */
 export function withoutArchived<T extends { id: string }>(ideas: readonly T[], moves: ReadonlyArray<{ ideaId: string; kind: string }>): T[] {

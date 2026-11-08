@@ -52,6 +52,7 @@ async function main(): Promise<void> {
   const { carouselsDriver } = await import('@/lib/publishing/drivers/carousels');
   const { lastFewDaysDriver } = await import('@/lib/publishing/drivers/last-few-days');
   const { aiEventsDriver } = await import('@/lib/publishing/drivers/ai-events');
+  const { fieldNotesDriver } = await import('@/lib/publishing/drivers/field-notes');
   const { liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { explainersDriver } = await import('@/lib/publishing/drivers/explainers');
   const { reelsDriver } = await import('@/lib/publishing/drivers/reels');
@@ -67,6 +68,7 @@ async function main(): Promise<void> {
     lastFewDaysDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
     // A published AI Events post publishes the public calendar snapshot again (plan M3/M4).
     aiEventsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token, snapshot: liveAiEventsSnapshot(query as unknown as HubQuery), log }),
+    fieldNotesDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
     reelsDriver({ meta: createLiveMetaClient }),
   ];
 

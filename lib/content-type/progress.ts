@@ -122,6 +122,24 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
     }
     return out;
   }
+  if (type === 'field_notes') {
+    const { rows } = await dbQuery(
+      `SELECT id::text, kind, status, requested_at::text AS requested_at, started_at::text AS started_at
+         FROM field_notes.runs WHERE status IN ('requested', 'running') ORDER BY requested_at`,
+    );
+    if (!rows.length) return [];
+    // A rebuild only re-renders, so it times against other rebuilds; a build against builds.
+    const out: ProgressItem[] = [];
+    for (const r of rows) {
+      const secs = await typical(
+        `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM field_notes.runs
+          WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
+        [r.kind],
+      );
+      out.push({ id: r.id, label: r.kind === 'rebuild' ? 'Field Notes rebuild' : 'Field Notes run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
+    }
+    return out;
+  }
   return [];
 }
 
@@ -129,11 +147,12 @@ export type AllProgress = Record<'carousels' | 'stories' | 'explainers', Progres
   /** Optional, so a progress map built for the first three types (tests/social-hub-run-for.test.ts) still holds; missing reads as none. */
   last_few_days?: ProgressItem[];
   ai_events?: ProgressItem[];
+  field_notes?: ProgressItem[];
 };
 
 /** Every type's runs in flight, for the Content page's cards and tiles. A type that cannot be read shows nothing in flight. */
 export async function readAllProgress(): Promise<AllProgress> {
   const one = (t: ContentType) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
-  const [carousels, stories, explainers, lastFewDays, aiEvents] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events')]);
-  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents };
+  const [carousels, stories, explainers, lastFewDays, aiEvents, fieldNotes] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events'), one('field_notes')]);
+  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes };
 }

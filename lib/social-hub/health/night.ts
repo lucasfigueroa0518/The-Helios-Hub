@@ -4,6 +4,7 @@ import type { HubQuery } from '@/lib/social-hub/db';
 import { reportCarousels } from '@/lib/social-hub/health/reporters/carousels';
 import { reportLastFewDays } from '@/lib/social-hub/health/reporters/last-few-days';
 import { reportAiEvents } from '@/lib/social-hub/health/reporters/ai-events';
+import { reportFieldNotes } from '@/lib/social-hub/health/reporters/field-notes';
 import { makeExplainersReporter } from '@/lib/social-hub/health/reporters/explainers';
 import { reportReels } from '@/lib/social-hub/health/reporters/reels';
 import { emptyReport, type Reporter } from '@/lib/social-hub/health/reporters/shared';
@@ -22,6 +23,7 @@ export const REPORTERS: Record<Vertical, (h: Handles) => Promise<{ q: HubQuery; 
   stories: async (h) => ({ q: h.q, run: reportStories }),
   last_few_days: async (h) => ({ q: h.q, run: reportLastFewDays }),
   ai_events: async (h) => ({ q: h.q, run: reportAiEvents }),
+  field_notes: async (h) => ({ q: h.q, run: reportFieldNotes }),
   explainers: async (h) => ({ q: await h.explainersQ(), run: makeExplainersReporter(h.q) }),
 };
 

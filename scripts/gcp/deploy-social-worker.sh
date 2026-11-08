@@ -52,6 +52,11 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
     if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('ai_events.runs') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
       AI_EVENTS_INFLIGHT="UNION ALL SELECT 'ai events run ' || id FROM ai_events.runs WHERE status = 'running'"
     fi
+    # The same for Field Notes: its line joins only once its schema is applied.
+    FIELD_NOTES_INFLIGHT=""
+    if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('field_notes.runs') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
+      FIELD_NOTES_INFLIGHT="UNION ALL SELECT 'field notes run ' || id FROM field_notes.runs WHERE status = 'running'"
+    fi
     INFLIGHT="$(psql "${DB_URL}" -Atc "
       SELECT 'carousel run ' || id FROM social.runs WHERE status = 'running'
       UNION ALL SELECT 'reels run ' || id FROM reels.runs WHERE status = 'running'
@@ -62,6 +67,7 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
       UNION ALL SELECT 'story set ' || id FROM stories.sets WHERE status = 'building'
       UNION ALL SELECT 'last few days run ' || id FROM lfd.runs WHERE status = 'running'
       ${AI_EVENTS_INFLIGHT}
+      ${FIELD_NOTES_INFLIGHT}
       UNION ALL SELECT 'publish ' || id FROM social_hub.publish_attempts WHERE status IN ('creating', 'processing', 'publishing')" 2>/dev/null || echo 'CHECK_FAILED')"
     if [[ "${INFLIGHT}" == "CHECK_FAILED" ]]; then
       echo "Could not check for in-flight work; deploying anyway (FORCE_DEPLOY=1 silences this)." >&2

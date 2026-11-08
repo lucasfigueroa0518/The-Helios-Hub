@@ -5,6 +5,7 @@ import { buildCostPart, buildDataset, type CostPart, type HubDataset, type Verti
 import { readCarousels } from '@/lib/social-hub/queries/carousels';
 import { readLastFewDays } from '@/lib/social-hub/queries/last-few-days';
 import { readAiEvents } from '@/lib/social-hub/queries/ai-events';
+import { readFieldNotes } from '@/lib/social-hub/queries/field-notes';
 import { readAccount } from '@/lib/social-hub/queries/account';
 import { readCosts } from '@/lib/social-hub/queries/costs';
 import { readExplainers } from '@/lib/social-hub/queries/explainers';
@@ -37,8 +38,8 @@ function explainersShareMain(q: HubQuery): boolean {
   return process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim();
 }
 
-const SPINE_WITH_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events'];
-const SPINE_WITHOUT_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'last_few_days', 'ai_events'];
+const SPINE_WITH_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events', 'field_notes'];
+const SPINE_WITHOUT_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'last_few_days', 'ai_events', 'field_notes'];
 
 type SpineLazy = { get: () => Promise<SpineRead> };
 const spineSlot = new AsyncLocalStorage<SpineLazy>();
@@ -76,7 +77,8 @@ export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(),
   if (vertical === 'reels') return readReels(q, spine);
   if (vertical === 'carousels') return readCarousels(q, spine);
   if (vertical === 'last_few_days') return readLastFewDays(q, spine);
-  return readAiEvents(q, spine, now);
+  if (vertical === 'ai_events') return readAiEvents(q, spine, now);
+  return readFieldNotes(q, spine);
 }
 
 /**
@@ -87,18 +89,19 @@ export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(),
  */
 export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<HubQuery> = explainersHandle(q), now = new Date()): Promise<VerticalReads> {
   const shared = explainersShareMain(q);
-  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events'] : ['carousels', 'reels', 'last_few_days', 'ai_events']);
+  const mainSpine = readSpine(q, shared ? ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events', 'field_notes'] : ['carousels', 'reels', 'last_few_days', 'ai_events', 'field_notes']);
   mainSpine.catch(() => undefined); // each reader reports the failure itself
   const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
-  const [reels, explainers, carousels, stories, lastFewDays, aiEvents] = await Promise.all([
+  const [reels, explainers, carousels, stories, lastFewDays, aiEvents, fieldNotes] = await Promise.all([
     settle(mainSpine.then((spine) => readReels(q, spine))),
     settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
     settle(mainSpine.then((spine) => readCarousels(q, spine))),
     settle(readStories(q)),
     settle(mainSpine.then((spine) => readLastFewDays(q, spine))),
     settle(mainSpine.then((spine) => readAiEvents(q, spine, now))),
+    settle(mainSpine.then((spine) => readFieldNotes(q, spine))),
   ]);
-  return { reels, explainers, carousels, stories, last_few_days: lastFewDays, ai_events: aiEvents };
+  return { reels, explainers, carousels, stories, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes };
 }
 
 /** Read and allocate the cost ledger on its own (it is cached apart from the content; views/cached-dataset.ts). */

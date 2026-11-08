@@ -14,12 +14,15 @@
  *   Stories          today's set for each series due today that has none
  *   Last Few Days    today's post, on its days
  *   AI Events        the coming week's carousel, on its day (Sunday); no model but Jev
+ *   Field Notes      a photo carousel from the next tip, on a day the calendar gives it a slot
  *
  * `planFrom` decides from plain inputs (tested offline); the live layer
  * (lib/content-type/run-today-live.ts) reads them and re-plans on the server
  * when the person clicks, so a stale page can't run more than today needs.
  */
 import { aiEventsDueOn, type AiEventsSettings } from '@/lib/ai-events/settings';
+import { FIELD_NOTES_AUTO_DAYS } from '@/lib/field-notes/config';
+import type { FieldNotesSettings } from '@/lib/field-notes/types';
 import { lfdDueOn, type LfdSettings } from '@/lib/lfd/settings';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
@@ -40,8 +43,10 @@ export type RunInputs = {
   lastFewDays?: { due: boolean; made: boolean };
   /** AI Events: due today (its day; any day from its own button) and whether the coming week's post exists. Missing: no step. */
   aiEvents?: { due: boolean; made: boolean };
-  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean; aiEventsRun?: boolean };
-  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number; aiEventsCap?: number };
+  /** Field Notes: due today (a calendar slot; any day from its own button) and whether a post is already waiting. Missing: no step. */
+  fieldNotes?: { due: boolean; made: boolean };
+  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean; aiEventsRun?: boolean; fieldNotesRun?: boolean };
+  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number; aiEventsCap?: number; fieldNotesCap?: number };
 };
 
 export type PlanStep = {
@@ -50,7 +55,7 @@ export type PlanStep = {
   quota: number;
   held: number;
   needed: number;
-  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run' | 'ai_events_run';
+  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run' | 'ai_events_run' | 'field_notes_run';
   /** Idea refs (reel post ideas, explainer topics) or Stories series ids to act on. */
   targets: string[];
   note: string;
@@ -92,6 +97,17 @@ export function lfdDueToday(s: Pick<LfdSettings, 'autoRun' | 'days'>, today: str
  */
 export function aiEventsDueToday(s: Pick<AiEventsSettings, 'autoRun' | 'days'>, today: string, anyDay: boolean, calendarDay: boolean | null): boolean {
   return calendarDay !== null ? anyDay || (s.autoRun && calendarDay) : aiEventsDueOn(s, today, anyDay);
+}
+
+/**
+ * Field Notes for Run now, the same rule: due when today has its calendar slot and auto_run is on
+ * (auto_run ships off). With no calendar read (`calendarDay` null) its default days stand in.
+ * `anyDay`: its own Generate, any day.
+ */
+export function fieldNotesDueToday(s: Pick<FieldNotesSettings, 'autoRun'>, today: string, anyDay: boolean, calendarDay: boolean | null): boolean {
+  if (anyDay) return true;
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay();
+  return s.autoRun && (calendarDay !== null ? calendarDay : FIELD_NOTES_AUTO_DAYS.includes(weekday));
 }
 
 const label = (v: Vertical) => verticalInfo(v).label;
@@ -166,6 +182,15 @@ export function planFrom(i: RunInputs): RunPlan {
     else steps.push({ ...base, action: 'ai_events_run', targets: [], note: 'Ranks the coming week’s events in Miami, Boston, NYC and SF and renders the carousel. It waits for your approval.', estimateUsd: i.cost.aiEventsCap ?? 0.5 });
   }
 
+  if (i.fieldNotes) {
+    const d = i.fieldNotes;
+    const base = { vertical: 'field_notes' as const, label: label('field_notes'), quota: d.due ? 1 : 0, held: d.made ? 1 : 0, needed: d.due && !d.made ? 1 : 0 };
+    if (!d.due) steps.push({ ...base, action: 'none', targets: [], note: 'Field Notes posts on the days the calendar gives it; today isn’t one. Generate on its page makes one anyway.', estimateUsd: 0 });
+    else if (d.made) steps.push({ ...base, action: 'none', targets: [], note: 'A Field Notes post is already waiting for review.', estimateUsd: 0 });
+    else if (i.inFlight.fieldNotesRun) steps.push({ ...base, action: 'none', targets: [], note: 'A Field Notes run is already queued or running.', estimateUsd: 0 });
+    else steps.push({ ...base, action: 'field_notes_run', targets: [], note: 'Picks the next tip, pairs it with photos from the pool and renders the carousel. It waits for your approval.', estimateUsd: i.cost.fieldNotesCap ?? 0.5 });
+  }
+
   const estimateUsd = Number(steps.reduce((s, x) => s + x.estimateUsd, 0).toFixed(2));
   return { today: i.today, steps, estimateUsd, anything: steps.some((s) => s.action !== 'none') };
 }
@@ -190,7 +215,7 @@ export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanS
   return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
 }
 
-const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events'];
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
 const TARGET_MAX = 2048;
 
 /**

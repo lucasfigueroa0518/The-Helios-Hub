@@ -13,6 +13,7 @@ import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { ScheduleStrip } from '@/components/content-type/ScheduleStrip';
 import type { ScheduleDay } from '@/lib/content-type/posting';
 import { maxCapFor } from '@/lib/content-type/caps';
+import { TYPE_CONFIG, generateCopy, type ContentTypeId, type PageVertical } from '@/lib/content-type/config';
 import { formatUsd } from '@/lib/social-hub/cost';
 
 /**
@@ -164,7 +165,7 @@ export function StoriesGenerate() {
 // ── Header: the Live switch, shared by every type ───────────────────────────
 
 /** Live: while on, the type schedules and posts on its own. Turning it on asks first. */
-export function LiveToggle({ type, initial }: { type: 'carousels' | 'stories' | 'explainers' | 'last_few_days' | 'ai_events'; initial: boolean }) {
+export function LiveToggle({ type, initial }: { type: PageVertical; initial: boolean }) {
   const router = useRouter();
   const [on, setOn] = useState(initial);
   const [asking, setAsking] = useState(false);
@@ -255,7 +256,7 @@ export function SettingsButton({ children }: { children: ReactNode }) {
 // ── Settings: generate, auto-publish and the daily quota, the same on every type ──
 
 type Posting = {
-  type: 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events';
+  type: ContentTypeId;
   live: boolean;
   generate: boolean | null;
   autoPublish: boolean;
@@ -271,7 +272,6 @@ type Posting = {
 };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const NOUN: Record<Posting['type'], string> = { reels: 'reels', carousels: 'carousels', explainers: 'explainers', stories: 'story sets', last_few_days: 'Last Few Days posts', ai_events: 'AI Events posts' };
 
 function Switch({ checked, onChange, children, hint }: { checked: boolean; onChange: (on: boolean) => void; children: ReactNode; hint?: string }) {
   return (
@@ -292,7 +292,7 @@ function Switch({ checked, onChange, children, hint }: { checked: boolean; onCha
  * saves at once.
  */
 function DailyLimit({ type, cap, costMicros, onSave }: { type: Posting['type']; cap: number; costMicros: number | null; onSave: (cap: number) => void }) {
-  const noun = NOUN[type];
+  const noun = TYPE_CONFIG[type].postsNoun;
   return (
     <div>
       <div className="rh-quota">
@@ -301,7 +301,7 @@ function DailyLimit({ type, cap, costMicros, onSave }: { type: Posting['type']; 
         <strong className="rh-quota__n">{cap}</strong>
         <button type="button" className="rh-btn rh-btn--xs" disabled={cap >= maxCapFor(type)} onClick={() => onSave(cap + 1)} aria-label="One more a night">+</button>
       </div>
-      <p className="rh-settings__note">The most {noun} the overnight run makes a day{type === 'stories' ? ', per series' : ''}, however many slots the calendar has.</p>
+      <p className="rh-settings__note">The most {noun} the overnight run makes a day{TYPE_CONFIG[type].capPerSeries ? ', per series' : ''}, however many slots the calendar has.</p>
       {costMicros != null ? <p className="rh-settings__note">One more a night costs about {formatUsd(costMicros)}.</p> : null}
     </div>
   );
@@ -327,7 +327,7 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
   }
   if (error) return <p className="rh-empty">{error}</p>;
   if (!data) return <p className="rh-muted">Loading…</p>;
-  const noun = NOUN[type];
+  const noun = TYPE_CONFIG[type].postsNoun;
   // With the calendar, when a type posts is set there: the quota and series days give way to its week, read only.
   const calendar = data.schedule ?? null;
   return (
@@ -339,23 +339,13 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
         <Switch
           checked={data.generate}
           onChange={(on) => {
-            const ask = type === 'last_few_days'
-              ? 'Make Last Few Days posts on Tuesdays and Fridays at 3:00 AM? Each run makes live model and web calls (up to the run cap).'
-              : type === 'ai_events'
-                ? 'Make the AI Events post every Sunday at 12:00 PM? Each run ranks the coming week’s events with live Jev calls (about $0.02, up to the run cap). No Claude calls.'
-                : `Make ${noun} every morning? Each run makes live model and web calls.`;
+            const ask = generateCopy(type).confirm;
             if (on && !confirm(ask)) return;
             void save({ generate: on });
           }}
-          hint={
-            type === 'last_few_days'
-              ? 'Makes a Last Few Days post at 3:00 AM on its days (Tuesday and Friday), in place of that day’s carousel run.'
-              : type === 'ai_events'
-                ? 'Ranks the coming week’s events and renders the carousel at 12:00 PM on Sundays, for the 6:00–7:00 PM slot. It waits for your approval unless auto-publish is on.'
-                : `Makes ${noun} every morning to fill the day's quota.`
-          }
+          hint={generateCopy(type).hint}
         >
-          {type === 'last_few_days' ? 'Generate on its days' : type === 'ai_events' ? 'Generate on Sundays' : 'Generate every morning'}
+          {generateCopy(type).label}
         </Switch>
       ) : null}
       <Switch
@@ -374,7 +364,7 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
         <div>
           <div className="rh-quota">
             <span className="rh-quota__label">Posts per day</span>
-            <button type="button" className="rh-btn rh-btn--xs" disabled={data.perDay <= (type === 'explainers' ? 1 : 0)} onClick={() => void save({ perDay: data.perDay! - 1 })} aria-label="One fewer a day">−</button>
+            <button type="button" className="rh-btn rh-btn--xs" disabled={data.perDay <= TYPE_CONFIG[type].perDayMin} onClick={() => void save({ perDay: data.perDay! - 1 })} aria-label="One fewer a day">−</button>
             <strong className="rh-quota__n">{data.perDay}</strong>
             <button type="button" className="rh-btn rh-btn--xs" disabled={data.perDay >= data.maxPerDay} onClick={() => void save({ perDay: data.perDay! + 1 })} aria-label="One more a day">+</button>
           </div>

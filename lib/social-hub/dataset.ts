@@ -4,8 +4,10 @@ import { reelIdeas, reelPosts } from '@/lib/social-hub/adapters/reels';
 import { storyIdeas, storyPosts } from '@/lib/social-hub/adapters/stories';
 import { lfdIdeas, lfdPosts } from '@/lib/social-hub/adapters/last-few-days';
 import { aiEventsIdeas, aiEventsPosts } from '@/lib/social-hub/adapters/ai-events';
+import { fieldNotesIdeas, fieldNotesPosts } from '@/lib/social-hub/adapters/field-notes';
 import type { LfdRead } from '@/lib/social-hub/queries/last-few-days';
 import type { AiEventsRead, AiEventsWeek } from '@/lib/social-hub/queries/ai-events';
+import type { FieldNotesRead } from '@/lib/social-hub/queries/field-notes';
 import type { DayQuotas, IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import type { CarouselsRead } from '@/lib/social-hub/queries/carousels';
 import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
@@ -26,6 +28,8 @@ export type VerticalReads = {
   last_few_days?: LfdRead | Error;
   /** Optional the same way: a caller that leaves it out shows no AI Events posts or pool. */
   ai_events?: AiEventsRead | Error;
+  /** And Field Notes. */
+  field_notes?: FieldNotesRead | Error;
 };
 
 export type HubDataset = {
@@ -52,6 +56,8 @@ export type HubDataset = {
   lfdPublishingLive?: boolean;
   /** ai_events.settings publishing_live (false when unreadable): AI Events offers Hard publish only while it is on. */
   aiEventsPublishingLive?: boolean;
+  /** field_notes.settings publishing_live (false when unreadable): Field Notes offers Hard publish only while it is on. */
+  fieldNotesPublishingLive?: boolean;
   /** The week the AI Events pool shows, and whether Pin / Exclude still change it; null when unread. */
   aiEventsWeek?: AiEventsWeek | null;
   loadedAt: string;
@@ -85,10 +91,15 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
       if (!r) return { posts: [], ideas: [] };
       return r instanceof Error ? r : { posts: aiEventsPosts(r), ideas: aiEventsIdeas(r) };
     }
+    case 'field_notes': {
+      const r = reads.field_notes;
+      if (!r) return { posts: [], ideas: [] };
+      return r instanceof Error ? r : { posts: fieldNotesPosts(r), ideas: fieldNotesIdeas(r) };
+    }
   }
 }
 
-const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events'];
+const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
 
 /**
  * The cost half of the dataset, built on its own so it can be cached apart
@@ -145,9 +156,11 @@ export function buildDataset(
   const costed = part.items ? withItemCosts(posts, part.items) : posts;
   costed.sort((a, b) => (b.postedAt ?? b.publishAt ?? '').localeCompare(a.postedAt ?? a.publishAt ?? '') || a.id.localeCompare(b.id));
   const ai = reads.ai_events && !(reads.ai_events instanceof Error) ? reads.ai_events : null;
+  const fn = reads.field_notes && !(reads.field_notes instanceof Error) ? reads.field_notes : null;
   return {
     posts: costed, ideas, sources: dedupeSources(costed), errors, cost, costNotes, latestQuota, account,
     ...(ai ? { aiEventsWeek: ai.week, aiEventsPublishingLive: ai.publishingLive } : {}),
+    ...(fn ? { fieldNotesPublishingLive: fn.publishingLive } : {}),
     loadedAt: now.toISOString(),
   };
 }

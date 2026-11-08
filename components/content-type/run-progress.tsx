@@ -3,6 +3,7 @@
 import { useCallback, useContext, useEffect, useRef, useState, createContext, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
+import type { PageVertical } from '@/lib/content-type/config';
 import type { ProgressItem } from '@/lib/content-type/progress';
 import { usePoll } from '@/lib/use-poll';
 
@@ -27,7 +28,7 @@ export function useRunProgress(): ProgressItem[] {
  * read the same list, so a stage change shows up in the row and the sidebar
  * without waiting for the cached dataset.
  */
-export function RunProgressProvider({ type, children }: { type: 'carousels' | 'stories' | 'explainers' | 'last_few_days' | 'ai_events'; children: ReactNode }) {
+export function RunProgressProvider({ type, children }: { type: PageVertical; children: ReactNode }) {
   const router = useRouter();
   const [items, setItems] = useState<ProgressItem[]>([]);
   const had = useRef(0);

@@ -17,6 +17,7 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 | Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on; not on Last Few Days days while its `auto_run` is on, LFD-02; see the template-mode paragraph below); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM (none on Last Few Days days while its `auto_run` is on) | 5:30 | built |
 | Last Few Days | `lfd` | `helios-social` (the same process as Carousels; no unit of its own) | 3:00 on its days (`lfd.settings.days`, Tue/Fri), only with `lfd.settings.auto_run` on, in the carousel run's place; a manual run from the hub's "Make Last Few Days now" on any day | 9:00–10:00 AM on its days | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
 | AI Events This Week | `ai_events` | `helios-social` (the same process; no unit of its own) | 12:00 PM on its days (`ai_events.settings.days`, Sunday), only with `ai_events.settings.auto_run` on: ranks the coming week's events (Jev `event-pick@1`, capped at `run_cap_usd`) and renders a ranked carousel each for Miami and Boston; a manual run from the hub's Generate or Rebuild post on any day | Sunday: Miami 6:00–7:00 PM, Boston 7:00–8:00 PM | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
+| Field Notes | `field_notes` | `helios-social` (the same process; no unit of its own) | 12:00 PM on its days (Tue/Fri, `FIELD_NOTES_AUTO_DAYS`), only with `field_notes.settings.auto_run` on (ships off): picks one tip, writes the slides (live Claude and Jev, capped at `run_cap_usd`) and renders the carousel on the photo pool; a manual run from the hub's Generate or Rebuild post on any day | 2:30–3:30 PM on its days, approved posts only, 1 a day | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built; `publishing_live` ships off |
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 4:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
@@ -36,6 +37,13 @@ in the Sunday 6:00–7:00 PM window and Boston in 7:00–8:00 PM only while `pub
 calendar snapshot. It makes no Claude calls. A Rebuild post run re-renders both from the cached scores and keeps their
 looks. A slot more than 60 minutes late is cancelled, never posted late. The human one-shot is
 `npx tsx scripts/ai_events_once.ts` (it carries out a run queued from the hub; Lucas only).
+
+Field Notes (`planning/Field Notes/CONTRACT.md`) also runs inside `helios-social`. Its clock is 12:00 PM, after AI Events' and
+hours from every other run; its runs are claimed after AI Events' in the same loop, under the same 30-minute timeout. Engine
+`lib/field-notes`, schema `field_notes` (apply it before redeploying the worker); its posts are spine items (`vertical 'field_notes'`).
+A run picks one tip, pairs it with photos from the pool (the rest rule), renders 4 to 6 slides and waits for a person: nothing posts
+without approval. It books the afternoon window only while `publishing_live` is on. A slot more than 120 minutes late is cancelled,
+never posted late. Deploy with `./scripts/gcp/deploy-social-worker.sh`.
 
 While `social_hub.settings.slot_source` is `template`, each run fills that date's calendar slots instead of `posts_per_day`, Last Few Days runs on dates with an LFD slot, and Stories series post on dates with their slot. `legacy` is the old behavior. In template mode a day with an LFD slot never runs Carousels, even with Last Few Days paused: the 3 AM run queues nothing and logs why.
 

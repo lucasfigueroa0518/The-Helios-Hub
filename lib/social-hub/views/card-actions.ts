@@ -45,7 +45,7 @@ const TITLE: Partial<Record<PostPlan['action'], string>> = {
 };
 
 /** AI Events' regenerate is Rebuild post (AE-04): the same post re-rendered from the week's pool. */
-const rebuilds = (plan: PostPlan) => plan.action === 'hardRegenerate' && plan.body.vertical === 'ai_events';
+const rebuilds = (plan: PostPlan) => plan.action === 'hardRegenerate' && (plan.body.vertical === 'ai_events' || plan.body.vertical === 'field_notes');
 
 /** Only what posts live, can't be undone here, or spends money asks first. */
 const ASKS = new Set<PostPlan['action']>(['hardPublish', 'hardRegenerate', 'reject', 'archive']);

@@ -39,7 +39,8 @@ export const HUB_NAV: HubNavItem[] = [
       path.startsWith('/stories') ||
       path.startsWith('/explainers') ||
       path.startsWith('/last-few-days') ||
-      path.startsWith('/ai-events'),
+      path.startsWith('/ai-events') ||
+      path.startsWith('/field-notes'),
   },
   {
     id: 'dashboards',

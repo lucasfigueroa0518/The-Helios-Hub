@@ -41,6 +41,8 @@ export type DayQuotas = {
   last_few_days?: number;
   /** AI Events: Miami and Boston carousels on each of its days (Sunday, AE-29); missing reads as one. */
   ai_events?: number;
+  /** Field Notes: one post on each calendar day it holds a slot (cap 1); missing reads as one. */
+  field_notes?: number;
   /** The weekdays Carousels give up to Last Few Days while its auto_run is on (LFD-02); none when missing. */
   lfdDays?: readonly number[];
   /** The calendar's slots by date (template mode), today − 7 … today + 21; null or missing while legacy. */
@@ -165,12 +167,13 @@ export function quotaCandidates(
       return { vertical, idea: null, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null, series: w.label, seriesId: w.id };
     });
   }
-  if (vertical === 'last_few_days' || vertical === 'ai_events') {
+  if (vertical === 'last_few_days' || vertical === 'ai_events' || vertical === 'field_notes') {
     // One card per slot on its days: the posts holding today's windows, then today's made posts. Last Few Days
-    // has no idea pool to rank; AI Events' pool is the week's events, which go into its city posts (AE-29).
+    // has no idea pool to rank; AI Events' pool is the week's events, which go into its city posts (AE-29);
+    // Field Notes' tips go one each into a post, picked by the run, so nothing is ranked here either.
     const quota = Math.min(data.dayQuotas?.[vertical] ?? 1, windows.length);
     if (quota <= 0) return [];
-    const ownIdea = vertical === 'last_few_days' ? `lfd:${today}` : `ai_events:${today}`;
+    const ownIdea = vertical === 'last_few_days' ? `lfd:${today}` : vertical === 'ai_events' ? `ai_events:${today}` : `field_notes:${today}`;
     const mine = data.posts.filter((p) => p.vertical === vertical && !isRejected(p));
     const held = mine.filter((p) => p.nyDate === today && HOLDS.has(p.status)).sort((a, b) => at(a).localeCompare(at(b)) || a.id.localeCompare(b.id));
     const made = mine.filter((p) => !held.includes(p) && p.idea?.id === ownIdea && (p.status === 'generating' || (p.status === 'ready' && hasMedia(p))));
@@ -219,7 +222,7 @@ export function orderCards(cards: readonly QuotaCandidate[]): QuotaCandidate[] {
     .map((x) => x.c);
 }
 
-export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events'];
+export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
 
 /** Every type's quota candidates for today, as the day's cards in posting order. */
 export function allQuotaCandidates(data: Parameters<typeof quotaCandidates>[0], now: Date): QuotaCandidate[] {

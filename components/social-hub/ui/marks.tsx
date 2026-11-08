@@ -3,6 +3,7 @@ import {
   ClockAlert,
   Ban,
   CalendarDays,
+  Camera,
   Check,
   CircleCheck,
   CircleDashed,
@@ -33,6 +34,7 @@ export const TYPE_ICON: Record<Vertical, LucideIcon> = {
   stories: Sparkles,
   last_few_days: Newspaper,
   ai_events: CalendarDays,
+  field_notes: Camera,
 };
 
 const STATE_ICON: Record<StateIcon, LucideIcon> = {

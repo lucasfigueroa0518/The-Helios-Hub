@@ -54,6 +54,7 @@ import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
 import { readLfdSettings } from '@/lib/lfd/settings';
 import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW, DEFAULT_AI_EVENTS_DAYS } from '@/lib/ai-events/config';
 import { readAiEventsSettings } from '@/lib/ai-events/settings';
+import { FIELD_NOTES_AUTO_DAYS, FIELD_NOTES_WINDOW } from '@/lib/field-notes/config';
 import { bookSlotStatement, type SpineQuery, type SpineVertical } from '@/lib/social-hub/spine';
 import { legacyFeedMode, slotPlan, slotsOn, type SlotPlan } from '@/lib/social-hub/slots';
 import { driftMinute } from '@/lib/social-hub/slots/book';
@@ -92,6 +93,7 @@ const TYPE_NAME: Record<SpineVertical, string> = {
   stories: 'Stories',
   last_few_days: 'Last Few Days posts',
   ai_events: 'AI Events posts',
+  field_notes: 'Field Notes posts',
 };
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
@@ -170,6 +172,10 @@ export async function placementRules(query: SpineQuery, vertical: SpineVertical)
           { ...AI_EVENTS_NIGHT_WINDOW, name: 'Night', days },
         ],
       };
+    }
+    case 'field_notes': {
+      // One afternoon window on its days (1-2 a week); a feed post, so spaced. Its days come from the calendar.
+      return { vertical, spaced: true, windows: [{ ...FIELD_NOTES_WINDOW, name: 'Afternoon', days: [...FIELD_NOTES_AUTO_DAYS] }] };
     }
     case 'explainers':
       return { vertical, spaced: true, windows: named(EXPLAINER_WINDOWS, { afternoon: 'Afternoon', late: 'Late afternoon' }) };

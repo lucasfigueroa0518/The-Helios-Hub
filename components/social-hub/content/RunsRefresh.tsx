@@ -35,6 +35,7 @@ export function RunsRefresh({ active, known, runs }: { active: boolean; known: s
       explainers: json.all?.explainers ?? [],
       last_few_days: json.all?.last_few_days ?? [],
       ai_events: json.all?.ai_events ?? [],
+      field_notes: json.all?.field_notes ?? [],
     };
     if (inFlightKey(all) === known) return;
     if (aRunLeft(runs, inFlightRuns(all))) await refreshHubPage(router);

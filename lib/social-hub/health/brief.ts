@@ -11,6 +11,7 @@ const FILES: Record<Vertical, string[]> = {
   stories: ['lib/stories/build/'],
   last_few_days: ['lib/lfd/run.ts', 'lib/lfd/'],
   ai_events: ['lib/ai-events/run.ts', 'lib/networking/pick/rank.ts', 'lib/networking/public-snapshot.ts', 'lib/ai-events/'],
+  field_notes: ['lib/field-notes/run.ts', 'lib/field-notes/write/', 'lib/field-notes/render/', 'lib/field-notes/'],
 };
 
 export function briefFor(p: Problem): string {

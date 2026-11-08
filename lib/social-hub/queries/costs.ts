@@ -42,6 +42,8 @@ export type CostReads = {
   lfdRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
   /** AI Events runs with the week's post (null: it made none). Optional the same way. */
   aiEventsRuns?: Array<{ id: string; jev_usd: string; ny_date: string; post_id: string | null }>;
+  /** Field Notes runs with the post each made (null: it made none). Optional the same way. */
+  fieldNotesRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
 };
 
 /** Trial Reels activities whose spend belongs to one post idea (lib/reels/analytics/rollups.ts). */
@@ -98,6 +100,11 @@ export const COST_SQL = {
                           WHERE p.run_id = r.id OR (r.week_key IS NOT NULL AND p.week_key = r.week_key)
                           ORDER BY (p.run_id = r.id) DESC NULLS LAST, (p.status <> 'rejected') DESC, p.created_at DESC LIMIT 1) AS post_id
                    FROM ai_events.runs r WHERE r.status IN ('ok', 'partial', 'failed', 'skipped')`,
+  // A rebuild re-renders its post in place (run_id moves to the newest run), so a run's post is the one it last rendered.
+  fieldNotesRuns: `SELECT r.id::text AS id, r.claude_usd::text AS claude_usd, r.jev_usd::text AS jev_usd,
+                          ${day('COALESCE(r.started_at, r.requested_at)')} AS ny_date,
+                          (SELECT p.id::text FROM field_notes.posts p WHERE p.run_id = r.id ORDER BY p.created_at DESC LIMIT 1) AS post_id
+                     FROM field_notes.runs r WHERE r.status IN ('ok', 'partial', 'failed')`,
 } as const;
 
 const EXPLAINER_KEYS = new Set<keyof typeof COST_SQL>(['explainerEvents', 'explainerRendered']);
@@ -115,7 +122,7 @@ export async function readCosts(q: HubQuery, explainersQ: Promise<HubQuery> | Hu
   });
   const results = await Promise.all(keys.map((key) => {
     // A database without the lfd schema reads as no Last Few Days spend, never as a cost-read failure.
-    if (key === 'lfdRuns' || key === 'aiEventsRuns') return q(COST_SQL[key]).catch(() => ({ rows: [] }));
+    if (key === 'lfdRuns' || key === 'aiEventsRuns' || key === 'fieldNotesRuns') return q(COST_SQL[key]).catch(() => ({ rows: [] }));
     if (!EXPLAINER_KEYS.has(key)) return q(COST_SQL[key]);
     return eq ? eq(COST_SQL[key]) : Promise.resolve({ rows: [] });
   }));
@@ -234,6 +241,16 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
     if (!run.post_id) pools.push({ key: pool, items: [] });
     const jev = toMicros(run.jev_usd);
     if (jev > 0) rows.push({ id: `${pool}:jev`, vertical: 'ai_events', nyDate: run.ny_date, micros: jev, target, label: 'event ranking (jev)', vendor: 'jev', mode: 'production' });
+  }
+  // ── Field Notes: a run's Claude and Jev spend belongs to the post it made; a run with no post stays unattributed.
+  for (const run of r.fieldNotesRuns ?? []) {
+    const pool = `field_notes:run:${run.id}`;
+    const target: LedgerRow['target'] = run.post_id ? { kind: 'item', item: `field_notes:${run.post_id}` } : { kind: 'pool', pool };
+    if (!run.post_id) pools.push({ key: pool, items: [] });
+    const claude = toMicros(run.claude_usd);
+    const jev = toMicros(run.jev_usd);
+    if (claude > 0) rows.push({ id: `${pool}:claude`, vertical: 'field_notes', nyDate: run.ny_date, micros: claude, target, label: 'writing and editing', vendor: 'anthropic', mode: 'production' });
+    if (jev > 0) rows.push({ id: `${pool}:jev`, vertical: 'field_notes', nyDate: run.ny_date, micros: jev, target, label: 'tip scoring (jev)', vendor: 'jev', mode: 'production' });
   }
   return { rows, pools };
 }

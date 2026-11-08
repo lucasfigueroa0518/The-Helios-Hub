@@ -68,6 +68,7 @@ export const REVISION_REF_KEY: Record<Vertical, string> = {
   stories: 'setId',
   last_few_days: 'lfdPostId',
   ai_events: 'aiEventsPostId',
+  field_notes: 'fieldNotesPostId',
 };
 
 /** The refs a post's revision box sends, or null when the post has no such ref (the box is not shown). */
