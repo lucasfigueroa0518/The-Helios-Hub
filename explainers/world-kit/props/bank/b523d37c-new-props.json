@@ -1,0 +1,68 @@
+{
+ "file": "b523d37c-new-props.js",
+ "job": "b523d37c-3804-4123-8ecd-eb72b2d6ca49",
+ "topic": "What is a vector database and what is it good at?",
+ "added_at": "2026-10-28T01:32:36.781Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "yellow library request slip": {
+   "source_name": "yellow library request slip",
+   "tags": {
+    "is": "a small yellow paper library request slip with a folded-down corner and three short printed lines",
+    "setting": [
+     "library desk",
+     "library request",
+     "asking for a book"
+    ],
+    "material": "yellow paper",
+    "parts": [
+     "yellow paper sheet",
+     "folded corner",
+     "three short lines"
+    ],
+    "not": [
+     "sticky note",
+     "receipt",
+     "ticket",
+     "envelope",
+     "index card",
+     "search bar",
+     "form with boxes"
+    ]
+   },
+   "meant": "yellow paper library request slip",
+   "seen": "yellow note"
+  },
+  "hardback library book with lilac spine tag": {
+   "source_name": "hardback library book with lilac spine tag",
+   "tags": {
+    "is": "a teal cloth hardback library book standing upright, spine to the viewer, gilt bands and a dark title plate on the spine, and (tagged) a lilac coordinate label with a short printed code",
+    "setting": [
+     "library shelf",
+     "library desk",
+     "book shelved by meaning"
+    ],
+    "material": "teal cloth cover, paper pages, lilac paper label",
+    "parts": [
+     "teal cover",
+     "page block",
+     "gilt bands",
+     "title plate",
+     "lilac spine tag with three code marks"
+    ],
+    "not": [
+     "notebook",
+     "ledger",
+     "binder",
+     "tablet",
+     "magazine",
+     "box",
+     "barcode sticker",
+     "price tag"
+    ]
+   },
+   "meant": "teal hardback with lilac spine tag",
+   "seen": "teal book with purple coordinate tags"
+  }
+ }
+}

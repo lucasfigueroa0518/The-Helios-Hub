@@ -1,0 +1,25 @@
+[
+ {
+  "t": 0,
+  "kind": "foley",
+  "what": "paper laid on kraft",
+  "dur": 0.5
+ },
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "quiet office room tone",
+  "dur": 6
+ },
+ {
+  "t": 1.566,
+  "kind": "foley",
+  "what": "paper landing on paper",
+  "kit": true
+ },
+ {
+  "t": 1.866,
+  "kind": "tick",
+  "kit": true
+ }
+]

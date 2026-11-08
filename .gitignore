@@ -84,3 +84,10 @@ planning/Explainer Reels/3.2 review/
 planning/Explainer Reels/3.3 review/
 planning/Explainer Reels/intros/**/*.mp4
 explainers/design/intros/.out/
+
+# Real Case background removal (rembg, local)
+.venv-rembg/
+
+# Local scratch (not for the repo)
+.tmp/
+/.hyperframes/

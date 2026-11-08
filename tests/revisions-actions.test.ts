@@ -81,6 +81,7 @@ function registry(q: Query, itemId: string): () => Promise<Record<Vertical, Cont
     stories: { vertical: 'stories' },
     last_few_days: { vertical: 'last_few_days' },
     ai_events: { vertical: 'ai_events' },
+    reel_ai_drama: { vertical: 'reel_ai_drama' },
   });
 }
 

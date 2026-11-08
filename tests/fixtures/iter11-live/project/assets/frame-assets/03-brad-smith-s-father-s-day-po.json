@@ -1,0 +1,213 @@
+{
+ "assets": [
+  {
+   "id": "V1",
+   "kind": "logo",
+   "file": "assets/media/V1.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMicrosoft_logo_(2012).svg",
+   "credit": "Logo: Microsoft (public domain) · Wikimedia Commons",
+   "license": null,
+   "shows": "The Microsoft logo (wordmark, on a light plate).",
+   "people": [],
+   "qids": [
+    "Q2283"
+   ],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 960,
+   "height": 205,
+   "phash": "81958f6bee661199",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "logo_bank",
+    "logo",
+    "source:logo",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:microsoft",
+    "boxes:media/V1.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5191,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1200,
+    "chroma": 0.4516,
+    "phash": "81958f6bee661199",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V9",
+   "kind": "place_photo",
+   "file": "assets/media/V9.jpg",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/d/d8/Plaza_on_the_Microsoft_Redmond_campus.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+   "source_page": "https://commons.wikimedia.org/wiki/File%3APlaza_on_the_Microsoft_Redmond_campus.jpg",
+   "credit": "Jonathan Schilling, CC BY-SA 4.0 · Wikimedia Commons",
+   "license": "CC BY-SA 4.0",
+   "shows": "A tree-lined paved plaza and walkway between campus buildings, with no people.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": "2006-07-27",
+   "date_confidence": "exact",
+   "width": 2160,
+   "height": 1440,
+   "phash": "b66589234cb256b7",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "source:commons",
+    "date_basis:commons",
+    "recency:0.4",
+    "want:company-place:microsoft",
+    "resized:0.938",
+    "boxes:media/V9.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.3648,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 2700,
+    "focus": {
+     "x": 0.6979,
+     "y": 0.125,
+     "w": 0.2188,
+     "h": 0.4063
+    },
+    "phash": "b66589234cb256b7",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V32",
+   "kind": "person_photo",
+   "file": "assets/media/V32.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3ABrad_Smith_-_Microsoft_-_01.jpg",
+   "credit": "Web Summit, CC BY 2.0 · Wikimedia Commons",
+   "license": "CC BY 2.0",
+   "shows": "Brad Smith, cut out of a photo onto a transparent background (their character image).",
+   "people": [
+    "Brad Smith"
+   ],
+   "qids": [],
+   "place": null,
+   "date_taken": "2018",
+   "date_confidence": "approximate",
+   "width": 852,
+   "height": 2160,
+   "phash": "eb4e93a4a5b492b2",
+   "character_image": true,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "cutout",
+    "cutout_made",
+    "identity:verified",
+    "anchor:Brad Smith",
+    "source:commons",
+    "date_basis:commons",
+    "recency:1",
+    "want:person:brad-smith",
+    "cutout_of:V33",
+    "resized:0.424",
+    "boxes:media/V32.boxes.json"
+   ],
+   "anchor_for": "Brad Smith",
+   "face": {
+    "x": 0.1186,
+    "y": 0.1703,
+    "w": 0.7312,
+    "h": 0.2891
+   },
+   "made_kind": null,
+   "regions": {
+    "faces": [
+     {
+      "x": 0.1186,
+      "y": 0.1703,
+      "w": 0.7312,
+      "h": 0.2891,
+      "score": 0.8886995315551758,
+      "trusted": true,
+      "name": "Brad Smith"
+     }
+    ],
+    "cut": {
+     "grade": "clean",
+     "edge_softness": 0.0401,
+     "islands": 0,
+     "straight_cuts": 0.0633,
+     "sharpness": 0.9861,
+     "fringe": 0.0098,
+     "with_source": true
+    },
+    "sharp_width_px": 1065,
+    "visible": {
+     "x": 0.0743,
+     "y": 0.0234,
+     "w": 0.8663,
+     "h": 0.9766
+    },
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": true
+    },
+    "expression": null,
+    "brightness": 0.5424,
+    "phash": "eb4e93a4a5b192b2",
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  }
+ ]
+}

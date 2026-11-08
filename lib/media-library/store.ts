@@ -108,7 +108,7 @@ export async function refreshPhotoMeta(query: Query, photoId: string): Promise<v
   );
   if (!sources.length) return;
   const { rows: sightings } = await query(
-    `SELECT url, outcome, tile_tags, request_query, request_kind, qid, subject, verified, vision FROM media_library.sightings WHERE url = ANY($1::text[]) ORDER BY at, id`,
+    `SELECT url, run_kind, outcome, tile_tags, request_query, request_kind, qid, subject, verified, vision FROM media_library.sightings WHERE url = ANY($1::text[]) ORDER BY at, id`,
     [sources.map((s) => s.url)],
   );
   const m = metaOf(sources as MetaSource[], sightings as MetaSighting[]);

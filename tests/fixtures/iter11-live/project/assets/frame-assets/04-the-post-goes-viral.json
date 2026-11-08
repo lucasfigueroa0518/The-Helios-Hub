@@ -1,0 +1,172 @@
+{
+ "assets": [
+  {
+   "id": "V1",
+   "kind": "logo",
+   "file": "assets/media/V1.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMicrosoft_logo_(2012).svg",
+   "credit": "Logo: Microsoft (public domain) · Wikimedia Commons",
+   "license": null,
+   "shows": "The Microsoft logo (wordmark, on a light plate).",
+   "people": [],
+   "qids": [
+    "Q2283"
+   ],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 960,
+   "height": 205,
+   "phash": "81958f6bee661199",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "logo_bank",
+    "logo",
+    "source:logo",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:microsoft",
+    "boxes:media/V1.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5191,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1200,
+    "chroma": 0.4516,
+    "phash": "81958f6bee661199",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "M4",
+   "kind": "object",
+   "file": "assets/media/M4.png",
+   "url": null,
+   "source_page": null,
+   "credit": "Illustration: Helios",
+   "license": null,
+   "shows": "A marker drawing, made for this reel (not a photograph): Black marker line drawing for a whiteboard: a smartphone seen front-on, its screen showing a blog page drawn as a header bar and blank text lines; no letters, words or numbers.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1024,
+   "height": 1024,
+   "phash": null,
+   "character_image": false,
+   "made": true,
+   "upscaled": false,
+   "flags": [
+    "made",
+    "made:drawing",
+    "transparent"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": "drawing",
+   "regions": {
+    "visible": {
+     "x": 0.252,
+     "y": 0.043,
+     "w": 0.5137,
+     "h": 0.9063
+    },
+    "brightness": 0.0697,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1280,
+    "focus": {
+     "x": 0.25,
+     "y": 0.0417,
+     "w": 0.5208,
+     "h": 0.9063
+    },
+    "phash": "f84dc6328796879a",
+    "expression": null,
+    "dup_of": null
+   }
+  },
+  {
+   "id": "M5",
+   "kind": "object",
+   "file": "assets/media/M5.png",
+   "url": null,
+   "source_page": null,
+   "credit": "Illustration: Helios",
+   "license": null,
+   "shows": "A marker drawing, made for this reel (not a photograph): Black marker drawing of something spreading fast online: many small share arrows, speech bubbles and heart shapes bursting outward in all directions like ripples from a centre; no words, letters or numbers.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1024,
+   "height": 1024,
+   "phash": null,
+   "character_image": false,
+   "made": true,
+   "upscaled": false,
+   "flags": [
+    "made",
+    "made:drawing",
+    "transparent"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": "drawing",
+   "regions": {
+    "visible": {
+     "x": 0.043,
+     "y": 0.0527,
+     "w": 0.9355,
+     "h": 0.9063
+    },
+    "brightness": 0.0755,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1280,
+    "focus": {
+     "x": 0.6146,
+     "y": 0.1354,
+     "w": 0.0938,
+     "h": 0.0625
+    },
+    "phash": "ee25f1d390e28783",
+    "expression": null,
+    "dup_of": null
+   }
+  }
+ ]
+}

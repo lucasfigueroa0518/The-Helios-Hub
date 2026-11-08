@@ -24,7 +24,9 @@ CREATE SCHEMA IF NOT EXISTS media_library;
 -- thumbs/<sha:2>/<sha>.jpg (480 px, q72). `mime` and `bytes` describe the
 -- original download; width/height are its true (EXIF-oriented) size.
 -- reuse_ok: open or government licence (the finder may offer it again);
--- company/official images are kept for the library only (reuse_ok false).
+-- company/official images, and credits the licence pass can't clear
+-- (licence 'unknown', 2026-11-03), are kept for the library and for Reel AI
+-- Drama's credited photos only (reuse_ok false; never offered to carousels).
 CREATE TABLE IF NOT EXISTS media_library.photos (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     sha256          text NOT NULL UNIQUE CHECK (sha256 ~ '^[0-9a-f]{64}$'),
@@ -94,7 +96,7 @@ CREATE INDEX IF NOT EXISTS idx_media_library_sources_outbox ON media_library.pho
 CREATE TABLE IF NOT EXISTS media_library.sightings (
     id              bigserial PRIMARY KEY,
     url             text NOT NULL,
-    run_kind        text NOT NULL CHECK (run_kind IN ('carousel', 'story', 'backfill')),
+    run_kind        text NOT NULL CHECK (run_kind IN ('carousel', 'story', 'backfill', 'reel_ai_drama')),
     run_ref         text NOT NULL,
     slide           integer NOT NULL,
     request_query   text NOT NULL,
@@ -112,6 +114,13 @@ CREATE TABLE IF NOT EXISTS media_library.sightings (
     at              timestamptz NOT NULL DEFAULT now(),
     UNIQUE (url, run_kind, run_ref, slide, request_query)
 );
+
+-- 2026-11-03: Reel AI Drama's harvest offers its kept photos (run_kind
+-- reel_ai_drama, lane reel-ai-drama; lib/media-library/drama.ts). Widen the
+-- run_kind check on a table created before that (idempotent).
+ALTER TABLE media_library.sightings DROP CONSTRAINT IF EXISTS sightings_run_kind_check;
+ALTER TABLE media_library.sightings ADD CONSTRAINT sightings_run_kind_check
+    CHECK (run_kind IN ('carousel', 'story', 'backfill', 'reel_ai_drama'));
 
 CREATE INDEX IF NOT EXISTS idx_media_library_sightings_url ON media_library.sightings (url, at DESC);
 CREATE INDEX IF NOT EXISTS idx_media_library_sightings_at ON media_library.sightings (at DESC);

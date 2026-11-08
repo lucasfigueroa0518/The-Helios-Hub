@@ -22,7 +22,7 @@ const SEED_FLAGS: Record<string, string> = {
   below_gate: 'scored below a quality bar, so the night skips it unless you pin it',
 };
 
-/** Explainers: seed an idea (a topic or a question) or paste a list; each is written up and scored (a live model call) when you click. A seed is never refused or trimmed. */
+/** Explainers: seed an idea (a topic or a question) or paste a list; each is written up and scored (a live model call) when you click. A seed is refused only when it repeats a recent render, and it is never trimmed. */
 export function ExplainerSeedForm({ done }: SeedFormProps) {
   const [title, setTitle] = useState('');
   const [sourceUrl, setSourceUrl] = useState('');
@@ -36,9 +36,9 @@ export function ExplainerSeedForm({ done }: SeedFormProps) {
     setError(null);
     try {
       const res = await fetch('/api/explainers/topics', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-      const result = (await res.json().catch(() => ({}))) as { results: { title: string; evaluation: { outcome: string; flags?: string[] } }[]; error?: string };
+      const result = (await res.json().catch(() => ({}))) as { results: { title: string; evaluation: { outcome: string; flags?: string[]; earlierTitle?: string } }[]; error?: string };
       if (!res.ok) throw new Error(result.error ?? `Request failed (${res.status})`);
-      done(result.results.map((r) => `${r.title}: ${OUTCOMES[r.evaluation.outcome] ?? r.evaluation.outcome}${(r.evaluation.flags ?? []).map((f) => ` (${SEED_FLAGS[f] ?? f})`).join('')}`).join(' · '));
+      done(result.results.map((r) => `${r.title}: ${r.evaluation.earlierTitle ? `rejected: repeats "${r.evaluation.earlierTitle}"` : OUTCOMES[r.evaluation.outcome] ?? r.evaluation.outcome}${(r.evaluation.flags ?? []).map((f) => ` (${SEED_FLAGS[f] ?? f})`).join('')}`).join(' · '));
       setTitle('');
       setSourceUrl('');
       setSourceText('');

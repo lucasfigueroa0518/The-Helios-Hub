@@ -1,0 +1,123 @@
+{
+ "assets": [
+  {
+   "id": "V52",
+   "kind": "logo",
+   "file": "assets/media/V52.png",
+   "url": "https://1000logos.net/wp-content/uploads/2021/11/Microsoft-Azure-logo.png",
+   "source_page": "https://1000logos.net/microsoft-azure-logo/",
+   "credit": "1000 Logos (1000logos.net)",
+   "license": null,
+   "shows": "Microsoft four-colour logo with the words Microsoft Azure in grey on white.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 2160,
+   "height": 1215,
+   "phash": "8752fcadda522591",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:product-logo:azure",
+    "resized:0.563",
+    "boxes:media/V52.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0.0098,
+     "y": 0.2535,
+     "w": 0.9805,
+     "h": 0.4931
+    },
+    "brightness": 0.5284,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 2700,
+    "chroma": 0.5058,
+    "phash": "8752fcadda522591",
+    "expression": "null",
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V71",
+   "kind": "logo",
+   "file": "assets/media/V71.keyed.png",
+   "url": "https://images.seeklogo.com/logo-png/62/1/fight-for-the-future-logo-png_seeklogo-629763.png",
+   "source_page": "https://seeklogo.com/vector-logo/629763/fight-for-the-future",
+   "credit": "Seeklogo (seeklogo.com)",
+   "license": null,
+   "shows": "The Fight for the Future logo: white bold wordmark with a red heart on a black square.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 600,
+   "height": 600,
+   "phash": "ee169969c4969969",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:wish:W6:1",
+    "wish:W6",
+    "logo_keyed",
+    "boxes:media/V71.keyed.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0.0488,
+     "y": 0.0488,
+     "w": 0.9023,
+     "h": 0.9023
+    },
+    "brightness": 0.0623,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 750,
+    "chroma": 0.0024,
+    "phash": "ee169969c4969969",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  }
+ ]
+}

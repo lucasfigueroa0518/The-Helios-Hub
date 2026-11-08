@@ -22,7 +22,8 @@ music: calm corporate underscore
 - type: hook
 - persuasion: Rhetorical question
 - ground: paper
-- anchor: scene
+- look: scene
+- shots: reaction — the endpoint glowing
 
 ## Frame 2 — Gap
 
@@ -31,7 +32,6 @@ music: calm corporate underscore
 - transition_in: push-slide LEFT
 - status: outline
 - type: feature_showcase
-- engagement: Curiosity gap
 - ground: paper
 - anchor: scene
 - sfx: a whoosh as the phone slides in
@@ -44,8 +44,6 @@ music: calm corporate underscore
 - transition_in: cut
 - status: outline
 - type: product_intro
-- engagement: Grounding definition
 - ground: white
-- anchor: own
-- anchor_why: a diagram
+- look: mechanism
 - blueprint: grid-card-assemble

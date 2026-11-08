@@ -1,0 +1,291 @@
+<template id="captions-template" data-composition-id="captions" data-width="1080" data-height="1920">
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+
+
+<style data-brand-tokens>
+      @font-face { font-family: 'Pragmatica Extended'; src: url('assets/fonts/PragmaticaExtended-Bold.otf') format('opentype'); font-weight: 700; font-style: normal; font-display: block; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/Roboto-300.woff2') format('woff2'); font-weight: 300; font-style: normal; font-display: block; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/Roboto-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: block; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/Roboto-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: block; }
+      @font-face { font-family: 'Roboto'; src: url('assets/fonts/Roboto-700.woff2') format('woff2'); font-weight: 700; font-style: normal; font-display: block; }
+      :root {
+      --ink: #1F1915;
+      --canvas: #FEF9F3;
+      --accent: #FF5E1A;
+      --night: #0D0B0A;
+      --paper: #F4EFE7;
+      --caption-light: #FEF9F3;
+      --cap-ink: #1F1915;
+      --cap-canvas: #FEF9F3;
+      --cap-accent: #FF5E1A;
+      --cap-accent-2: #F4EFE7;
+      --font-display: "Pragmatica Extended", system-ui, serif;
+      --font-body: "Roboto", system-ui, sans-serif;
+      --cap-band-top: 1600px;
+      --cap-band-height: 320px;
+      }
+    </style>
+
+<style>
+  #captions-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .caption-layer {
+    position: absolute;
+    inset: 0;
+    /* Above every layer a frame can draw (the frames' elements share this stacking context). */
+    z-index: 1000;
+    pointer-events: none;
+  }
+  /* The caption band: under Instagram's Reels header (top 250px of 1080×1920), above the
+     picture, inside the side margins (x 96–940). Hardcoded on purpose. */
+  .caption-stage {
+    position: absolute;
+    left: 96px;
+    width: 844px;
+    top: 292px;
+    height: 250px;
+  }
+  .caption-group {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    opacity: 0;
+  }
+  .caption-line {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 0.04em 0.26em;
+    font-family: "Pragmatica Extended", Helvetica, Arial, sans-serif;
+    font-weight: 700;
+    font-size: 74px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    color: #FEF9F3;
+  }
+  .caption-stage.on-dark .caption-line {
+    text-shadow: 0 2px 18px rgba(0, 0, 0, 0.55), 0 0 2px rgba(0, 0, 0, 0.6);
+  }
+  /* A backing plate per letter, so it types in with the words and is never an empty box. The plate is
+     a layer of its own (::before, z-index -1 in the line's isolated stacking context), so every letter's
+     plate paints under every letter's glyph: no neighbour's plate cuts an ascender, a descender or the
+     side of a letter, and the text lays out and renders exactly as without a plate. It spans the glyphs
+     (ascender/figure top 0.8em above the baseline, descender 0.2em below) plus an even 0.14em on every
+     side; the side pads bridge the gaps between letters and words, and the lines' plates overlap into
+     one block. Opaque, so overlaps never darken. */
+  .caption-stage.on-plate .caption-line {
+    text-shadow: none;
+    isolation: isolate;
+  }
+  .caption-stage.on-plate .caption-char {
+    position: relative;
+  }
+  .caption-stage.on-plate .caption-char::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    top: 0.06em;
+    bottom: 0.06em;
+    left: -0.14em;
+    right: -0.14em;
+    background: #15110E;
+  }
+  .caption-stage.is-quiet {
+    visibility: hidden;
+  }
+  .caption-word {
+    display: inline-block;
+  }
+  .caption-char {
+    opacity: 0;
+  }
+  .caption-word.cap-num {
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+
+<div
+  id="captions-root"
+  data-composition-id="captions"
+  data-timeline-locked
+  data-start="0"
+  data-duration="80.945"
+  data-fps="30"
+  data-width="1080"
+  data-height="1920"
+>
+  <div class="caption-layer" aria-hidden="true">
+    <div id="caption-stage" class="caption-stage"></div>
+  </div>
+</div>
+
+<script>
+  // captions.mjs injects the engine's scene-aware groups + real duration here.
+  var GROUPS = [{"id":"caption-group-0","frame":1,"start":0,"end":1.24,"text":"Microsoft was publicly","words":[{"id":"caption-word-0-0","text":"Microsoft","start":0,"end":0.493},{"id":"caption-word-0-1","text":"was","start":0.525,"end":0.704},{"id":"caption-word-0-2","text":"publicly","start":0.81,"end":1.168}]},{"id":"caption-group-1","frame":1,"start":1.24,"end":2.347,"text":"condemning the separation","words":[{"id":"caption-word-1-0","text":"condemning","start":1.24,"end":1.668},{"id":"caption-word-1-1","text":"the","start":1.704,"end":1.74},{"id":"caption-word-1-2","text":"separation","start":1.811,"end":2.311}]},{"id":"caption-group-2","frame":1,"start":2.347,"end":2.811,"text":"of migrant","words":[{"id":"caption-word-2-0","text":"of","start":2.347,"end":2.383},{"id":"caption-word-2-1","text":"migrant","start":2.454,"end":2.74}]},{"id":"caption-group-3","frame":1,"start":2.811,"end":3.311,"text":"children from","words":[{"id":"caption-word-3-0","text":"children","start":2.811,"end":3.097},{"id":"caption-word-3-1","text":"from","start":3.168,"end":3.24}]},{"id":"caption-group-4","frame":1,"start":3.311,"end":4.003,"text":"their parents,","words":[{"id":"caption-word-4-0","text":"their","start":3.311,"end":3.383},{"id":"caption-word-4-1","text":"parents,","start":3.516,"end":3.883}]},{"id":"caption-group-5","frame":1,"start":4.132,"end":4.475,"text":"while its","words":[{"id":"caption-word-5-0","text":"while","start":4.132,"end":4.175},{"id":"caption-word-5-1","text":"its","start":4.282,"end":4.389}]},{"id":"caption-group-6","frame":1,"start":4.475,"end":5.032,"text":"own blog","words":[{"id":"caption-word-6-0","text":"own","start":4.475,"end":4.604},{"id":"caption-word-6-1","text":"blog","start":4.675,"end":4.961}]},{"id":"caption-group-7","frame":1,"start":5.032,"end":5.438,"text":"said its","words":[{"id":"caption-word-7-0","text":"said","start":5.032,"end":5.104},{"id":"caption-word-7-1","text":"its","start":5.175,"end":5.318}]},{"id":"caption-group-8","frame":1,"start":5.461,"end":5.818,"text":"cloud could","words":[{"id":"caption-word-8-0","text":"cloud","start":5.461,"end":5.604},{"id":"caption-word-8-1","text":"could","start":5.675,"end":5.747}]},{"id":"caption-group-9","frame":1,"start":5.818,"end":6.425,"text":"help ICE","words":[{"id":"caption-word-9-0","text":"help","start":5.818,"end":5.961},{"id":"caption-word-9-1","text":"ICE","start":6.129,"end":6.318}]},{"id":"caption-group-10","frame":1,"start":6.425,"end":6.818,"text":"speed up","words":[{"id":"caption-word-10-0","text":"speed","start":6.425,"end":6.532},{"id":"caption-word-10-1","text":"up","start":6.604,"end":6.747}]},{"id":"caption-group-11","frame":1,"start":6.818,"end":7.795,"text":"facial recognition.","words":[{"id":"caption-word-11-0","text":"facial","start":6.818,"end":7.104},{"id":"caption-word-11-1","text":"recognition.","start":7.175,"end":7.675}]},{"id":"caption-group-12","frame":2,"start":7.907,"end":8.574,"text":"Microsoft wrote","words":[{"id":"caption-word-12-0","text":"Microsoft","start":7.907,"end":8.288},{"id":"caption-word-12-1","text":"wrote","start":8.324,"end":8.502}]},{"id":"caption-group-13","frame":2,"start":8.574,"end":9.551,"text":"that in January,","words":[{"id":"caption-word-13-0","text":"that","start":8.574,"end":8.645},{"id":"caption-word-13-1","text":"in","start":8.717,"end":8.788},{"id":"caption-word-13-2","text":"January,","start":8.931,"end":9.431}]},{"id":"caption-group-14","frame":2,"start":9.623,"end":9.769,"text":"in a","words":[{"id":"caption-word-14-0","text":"in","start":9.623,"end":9.626},{"id":"caption-word-14-1","text":"a","start":9.662,"end":9.698}]},{"id":"caption-group-15","frame":2,"start":9.769,"end":11.055,"text":"post announcing ICE's","words":[{"id":"caption-word-15-0","text":"post","start":9.769,"end":9.983},{"id":"caption-word-15-1","text":"announcing","start":10.055,"end":10.412},{"id":"caption-word-15-2","text":"ICE's","start":10.483,"end":10.983}]},{"id":"caption-group-16","frame":2,"start":11.055,"end":11.555,"text":"move onto","words":[{"id":"caption-word-16-0","text":"move","start":11.055,"end":11.269},{"id":"caption-word-16-1","text":"onto","start":11.376,"end":11.483}]},{"id":"caption-group-17","frame":2,"start":11.555,"end":12.389,"text":"its government cloud,","words":[{"id":"caption-word-17-0","text":"its","start":11.555,"end":11.626},{"id":"caption-word-17-1","text":"government","start":11.698,"end":11.983},{"id":"caption-word-17-2","text":"cloud,","start":12.055,"end":12.269}]},{"id":"caption-group-18","frame":2,"start":12.618,"end":12.912,"text":"and called","words":[{"id":"caption-word-18-0","text":"and","start":12.618,"end":12.626},{"id":"caption-word-18-1","text":"called","start":12.698,"end":12.841}]},{"id":"caption-group-19","frame":2,"start":12.912,"end":13.912,"text":"itself proud to","words":[{"id":"caption-word-19-0","text":"itself","start":12.912,"end":13.198},{"id":"caption-word-19-1","text":"proud","start":13.367,"end":13.698},{"id":"caption-word-19-2","text":"to","start":13.769,"end":13.841}]},{"id":"caption-group-20","frame":2,"start":13.912,"end":15.091,"text":"support ICE's work.","words":[{"id":"caption-word-20-0","text":"support","start":13.912,"end":14.198},{"id":"caption-word-20-1","text":"ICE's","start":14.269,"end":14.698},{"id":"caption-word-20-2","text":"work.","start":14.769,"end":14.971}]},{"id":"caption-group-21","frame":3,"start":15.269,"end":15.729,"text":"Five months","words":[{"id":"caption-word-21-0","text":"Five","start":15.269,"end":15.372},{"id":"caption-word-21-1","text":"months","start":15.444,"end":15.658}]},{"id":"caption-group-22","frame":3,"start":15.729,"end":16.064,"text":"later,","words":[{"id":"caption-word-22-0","text":"later,","start":15.729,"end":15.944}]},{"id":"caption-group-23","frame":3,"start":16.229,"end":16.729,"text":"over Father's","words":[{"id":"caption-word-23-0","text":"over","start":16.229,"end":16.301},{"id":"caption-word-23-1","text":"Father's","start":16.372,"end":16.658}]},{"id":"caption-group-24","frame":3,"start":16.729,"end":17.278,"text":"Day weekend,","words":[{"id":"caption-word-24-0","text":"Day","start":16.729,"end":16.801},{"id":"caption-word-24-1","text":"weekend,","start":16.872,"end":17.158}]},{"id":"caption-group-25","frame":3,"start":17.419,"end":18.586,"text":"Microsoft president Brad","words":[{"id":"caption-word-25-0","text":"Microsoft","start":17.419,"end":17.752},{"id":"caption-word-25-1","text":"president","start":17.928,"end":18.18},{"id":"caption-word-25-2","text":"Brad","start":18.252,"end":18.466}]},{"id":"caption-group-26","frame":3,"start":18.609,"end":19.18,"text":"Smith wrote","words":[{"id":"caption-word-26-0","text":"Smith","start":18.609,"end":18.894},{"id":"caption-word-26-1","text":"wrote","start":18.966,"end":19.109}]},{"id":"caption-group-27","frame":3,"start":19.18,"end":19.68,"text":"that keeping","words":[{"id":"caption-word-27-0","text":"that","start":19.18,"end":19.252},{"id":"caption-word-27-1","text":"keeping","start":19.37,"end":19.609}]},{"id":"caption-group-28","frame":3,"start":19.68,"end":20.144,"text":"children with","words":[{"id":"caption-word-28-0","text":"children","start":19.68,"end":19.966},{"id":"caption-word-28-1","text":"with","start":20.037,"end":20.109}]},{"id":"caption-group-29","frame":3,"start":20.144,"end":20.752,"text":"their parents","words":[{"id":"caption-word-29-0","text":"their","start":20.144,"end":20.18},{"id":"caption-word-29-1","text":"parents","start":20.323,"end":20.68}]},{"id":"caption-group-30","frame":3,"start":20.752,"end":21.252,"text":"helps build","words":[{"id":"caption-word-30-0","text":"helps","start":20.752,"end":20.966},{"id":"caption-word-30-1","text":"build","start":21.098,"end":21.18}]},{"id":"caption-group-31","frame":3,"start":21.252,"end":22.372,"text":"a stronger country.","words":[{"id":"caption-word-31-0","text":"a","start":21.252,"end":21.323},{"id":"caption-word-31-1","text":"stronger","start":21.394,"end":21.752},{"id":"caption-word-31-2","text":"country.","start":21.899,"end":22.252}]},{"id":"caption-group-32","frame":4,"start":22.472,"end":22.782,"text":"The next","words":[{"id":"caption-word-32-0","text":"The","start":22.472,"end":22.472},{"id":"caption-word-32-1","text":"next","start":22.496,"end":22.711}]},{"id":"caption-group-33","frame":4,"start":22.782,"end":23.116,"text":"day,","words":[{"id":"caption-word-33-0","text":"day,","start":22.782,"end":22.996}]},{"id":"caption-group-34","frame":4,"start":23.251,"end":23.792,"text":"the January","words":[{"id":"caption-word-34-0","text":"the","start":23.251,"end":23.292},{"id":"caption-word-34-1","text":"January","start":23.363,"end":23.72}]},{"id":"caption-group-35","frame":4,"start":23.792,"end":24.912,"text":"post went viral,","words":[{"id":"caption-word-35-0","text":"post","start":23.792,"end":24.077},{"id":"caption-word-35-1","text":"went","start":24.184,"end":24.292},{"id":"caption-word-35-2","text":"viral,","start":24.434,"end":24.792}]},{"id":"caption-group-36","frame":4,"start":24.963,"end":25.362,"text":"with calls","words":[{"id":"caption-word-36-0","text":"with","start":24.963,"end":25.005},{"id":"caption-word-36-1","text":"calls","start":25.077,"end":25.291}]},{"id":"caption-group-37","frame":4,"start":25.362,"end":26.625,"text":"to boycott Microsoft.","words":[{"id":"caption-word-37-0","text":"to","start":25.362,"end":25.434},{"id":"caption-word-37-1","text":"boycott","start":25.595,"end":25.934},{"id":"caption-word-37-2","text":"Microsoft.","start":26.005,"end":26.505}]},{"id":"caption-group-38","frame":5,"start":26.768,"end":27.434,"text":"On Tuesday,","words":[{"id":"caption-word-38-0","text":"On","start":26.768,"end":26.814},{"id":"caption-word-38-1","text":"Tuesday,","start":26.885,"end":27.314}]},{"id":"caption-group-39","frame":5,"start":27.528,"end":27.885,"text":"an open","words":[{"id":"caption-word-39-0","text":"an","start":27.528,"end":27.599},{"id":"caption-word-39-1","text":"open","start":27.671,"end":27.814}]},{"id":"caption-group-40","frame":5,"start":27.885,"end":28.314,"text":"letter to","words":[{"id":"caption-word-40-0","text":"letter","start":27.885,"end":28.028},{"id":"caption-word-40-1","text":"to","start":28.099,"end":28.242}]},{"id":"caption-group-41","frame":5,"start":28.314,"end":29.648,"text":"CEO Satya Nadella","words":[{"id":"caption-word-41-0","text":"CEO","start":28.314,"end":28.671},{"id":"caption-word-41-1","text":"Satya","start":28.814,"end":29.064},{"id":"caption-word-41-2","text":"Nadella","start":29.099,"end":29.528}]},{"id":"caption-group-42","frame":5,"start":29.711,"end":30.114,"text":"drew more","words":[{"id":"caption-word-42-0","text":"drew","start":29.711,"end":29.793},{"id":"caption-word-42-1","text":"more","start":29.864,"end":30.007}]},{"id":"caption-group-43","frame":5,"start":30.114,"end":31.364,"text":"than 100 employee","words":[{"id":"caption-word-43-0","text":"than","start":30.114,"end":30.222},{"id":"caption-word-43-1","text":"100","start":30.293,"end":30.436},{"id":"caption-word-43-2","text":"employee","start":30.579,"end":31.293}]},{"id":"caption-group-44","frame":5,"start":31.364,"end":32.77,"text":"signatures within hours.","words":[{"id":"caption-word-44-0","text":"signatures","start":31.364,"end":31.793},{"id":"caption-word-44-1","text":"within","start":31.864,"end":32.125},{"id":"caption-word-44-2","text":"hours.","start":32.238,"end":32.65}]},{"id":"caption-group-45","frame":6,"start":32.902,"end":33.242,"text":"It said","words":[{"id":"caption-word-45-0","text":"It","start":32.902,"end":32.908},{"id":"caption-word-45-1","text":"said","start":32.979,"end":33.122}]},{"id":"caption-group-46","frame":6,"start":33.372,"end":33.908,"text":"Microsoft must","words":[{"id":"caption-word-46-0","text":"Microsoft","start":33.372,"end":33.622},{"id":"caption-word-46-1","text":"must","start":33.693,"end":33.908}]},{"id":"caption-group-47","frame":6,"start":33.908,"end":34.911,"text":"\"put children and","words":[{"id":"caption-word-47-0","text":"\"put","start":33.908,"end":34.291},{"id":"caption-word-47-1","text":"children","start":34.363,"end":34.72},{"id":"caption-word-47-2","text":"and","start":34.755,"end":34.791}]},{"id":"caption-group-48","frame":6,"start":34.982,"end":36.34,"text":"families above profits\"","words":[{"id":"caption-word-48-0","text":"families","start":34.982,"end":35.291},{"id":"caption-word-48-1","text":"above","start":35.363,"end":35.648},{"id":"caption-word-48-2","text":"profits\"","start":35.822,"end":36.22}]},{"id":"caption-group-49","frame":6,"start":36.463,"end":37.007,"text":"and cancel","words":[{"id":"caption-word-49-0","text":"and","start":36.463,"end":36.507},{"id":"caption-word-49-1","text":"cancel","start":36.578,"end":36.935}]},{"id":"caption-group-50","frame":6,"start":37.007,"end":37.859,"text":"its ICE contract,","words":[{"id":"caption-word-50-0","text":"its","start":37.007,"end":37.078},{"id":"caption-word-50-1","text":"ICE","start":37.15,"end":37.293},{"id":"caption-word-50-2","text":"contract,","start":37.364,"end":37.739}]},{"id":"caption-group-51","frame":6,"start":38.009,"end":38.366,"text":"worth more","words":[{"id":"caption-word-51-0","text":"worth","start":38.009,"end":38.116},{"id":"caption-word-51-1","text":"more","start":38.188,"end":38.259}]},{"id":"caption-group-52","frame":6,"start":38.366,"end":39.022,"text":"than 19","words":[{"id":"caption-word-52-0","text":"than","start":38.366,"end":38.473},{"id":"caption-word-52-1","text":"19","start":38.545,"end":38.902}]},{"id":"caption-group-53","frame":6,"start":39.116,"end":40.022,"text":"million dollars.","words":[{"id":"caption-word-53-0","text":"million","start":39.116,"end":39.402},{"id":"caption-word-53-1","text":"dollars.","start":39.473,"end":39.902}]},{"id":"caption-group-54","frame":7,"start":40.157,"end":40.686,"text":"That evening,","words":[{"id":"caption-word-54-0","text":"That","start":40.157,"end":40.281},{"id":"caption-word-54-1","text":"evening,","start":40.388,"end":40.566}]},{"id":"caption-group-55","frame":7,"start":40.829,"end":41.566,"text":"Nadella emailed","words":[{"id":"caption-word-55-0","text":"Nadella","start":40.829,"end":41.209},{"id":"caption-word-55-1","text":"emailed","start":41.281,"end":41.495}]},{"id":"caption-group-56","frame":7,"start":41.566,"end":41.972,"text":"the whole","words":[{"id":"caption-word-56-0","text":"the","start":41.566,"end":41.709},{"id":"caption-word-56-1","text":"whole","start":41.781,"end":41.852}]},{"id":"caption-group-57","frame":7,"start":41.995,"end":42.401,"text":"company,","words":[{"id":"caption-word-57-0","text":"company,","start":41.995,"end":42.281}]},{"id":"caption-group-58","frame":7,"start":42.521,"end":42.771,"text":"calling the","words":[{"id":"caption-word-58-0","text":"calling","start":42.521,"end":42.629},{"id":"caption-word-58-1","text":"the","start":42.7,"end":42.736}]},{"id":"caption-group-59","frame":7,"start":42.771,"end":44.057,"text":"border policy \"simply","words":[{"id":"caption-word-59-0","text":"border","start":42.771,"end":42.986},{"id":"caption-word-59-1","text":"policy","start":43.057,"end":43.486},{"id":"caption-word-59-2","text":"\"simply","start":43.486,"end":43.986}]},{"id":"caption-group-60","frame":7,"start":44.057,"end":45.306,"text":"cruel and abusive.\"","words":[{"id":"caption-word-60-0","text":"cruel","start":44.057,"end":44.486},{"id":"caption-word-60-1","text":"and","start":44.557,"end":44.629},{"id":"caption-word-60-2","text":"abusive.\"","start":44.736,"end":45.186}]},{"id":"caption-group-61","frame":8,"start":45.386,"end":45.595,"text":"But he","words":[{"id":"caption-word-61-0","text":"But","start":45.386,"end":45.386},{"id":"caption-word-61-1","text":"he","start":45.452,"end":45.524}]},{"id":"caption-group-62","frame":8,"start":45.595,"end":45.809,"text":"said the","words":[{"id":"caption-word-62-0","text":"said","start":45.595,"end":45.667},{"id":"caption-word-62-1","text":"the","start":45.702,"end":45.738}]},{"id":"caption-group-63","frame":8,"start":45.809,"end":47.095,"text":"ICE contract covered","words":[{"id":"caption-word-63-0","text":"ICE","start":45.809,"end":46.167},{"id":"caption-word-63-1","text":"contract","start":46.238,"end":46.667},{"id":"caption-word-63-2","text":"covered","start":46.738,"end":47.024}]},{"id":"caption-group-64","frame":8,"start":47.095,"end":47.787,"text":"old email,","words":[{"id":"caption-word-64-0","text":"old","start":47.095,"end":47.238},{"id":"caption-word-64-1","text":"email,","start":47.309,"end":47.667}]},{"id":"caption-group-65","frame":8,"start":48.024,"end":49.072,"text":"calendar and documents,","words":[{"id":"caption-word-65-0","text":"calendar","start":48.024,"end":48.238},{"id":"caption-word-65-1","text":"and","start":48.309,"end":48.381},{"id":"caption-word-65-2","text":"documents,","start":48.452,"end":48.952}]},{"id":"caption-group-66","frame":8,"start":49.178,"end":49.856,"text":"never explained","words":[{"id":"caption-word-66-0","text":"never","start":49.178,"end":49.392},{"id":"caption-word-66-1","text":"explained","start":49.464,"end":49.821}]},{"id":"caption-group-67","frame":8,"start":49.856,"end":50.249,"text":"the blog's","words":[{"id":"caption-word-67-0","text":"the","start":49.856,"end":49.892},{"id":"caption-word-67-1","text":"blog's","start":49.999,"end":50.178}]},{"id":"caption-group-68","frame":8,"start":50.249,"end":51.369,"text":"facial recognition line,","words":[{"id":"caption-word-68-0","text":"facial","start":50.249,"end":50.464},{"id":"caption-word-68-1","text":"recognition","start":50.535,"end":50.964},{"id":"caption-word-68-2","text":"line,","start":51.035,"end":51.249}]},{"id":"caption-group-69","frame":8,"start":51.467,"end":51.828,"text":"and kept","words":[{"id":"caption-word-69-0","text":"and","start":51.467,"end":51.507},{"id":"caption-word-69-1","text":"kept","start":51.613,"end":51.793}]},{"id":"caption-group-70","frame":8,"start":51.828,"end":52.469,"text":"the contract.","words":[{"id":"caption-word-70-0","text":"the","start":51.828,"end":51.864},{"id":"caption-word-70-1","text":"contract.","start":51.935,"end":52.349}]},{"id":"caption-group-71","frame":9,"start":52.689,"end":52.946,"text":"By late","words":[{"id":"caption-word-71-0","text":"By","start":52.689,"end":52.732},{"id":"caption-word-71-1","text":"late","start":52.803,"end":52.874}]},{"id":"caption-group-72","frame":9,"start":52.946,"end":53.423,"text":"July,","words":[{"id":"caption-word-72-0","text":"July,","start":52.946,"end":53.303}]},{"id":"caption-group-73","frame":9,"start":53.532,"end":54.209,"text":"a nonprofit","words":[{"id":"caption-word-73-0","text":"a","start":53.532,"end":53.589},{"id":"caption-word-73-1","text":"nonprofit","start":53.696,"end":54.089}]},{"id":"caption-group-74","frame":9,"start":54.303,"end":54.637,"text":"petition","words":[{"id":"caption-word-74-0","text":"petition","start":54.303,"end":54.517}]},{"id":"caption-group-75","frame":9,"start":54.732,"end":56.066,"text":"demanding Microsoft cancel","words":[{"id":"caption-word-75-0","text":"demanding","start":54.732,"end":55.017},{"id":"caption-word-75-1","text":"Microsoft","start":55.089,"end":55.517},{"id":"caption-word-75-2","text":"cancel","start":55.589,"end":55.946}]},{"id":"caption-group-76","frame":9,"start":56.164,"end":56.508,"text":"had more","words":[{"id":"caption-word-76-0","text":"had","start":56.164,"end":56.258},{"id":"caption-word-76-1","text":"more","start":56.329,"end":56.401}]},{"id":"caption-group-77","frame":9,"start":56.508,"end":57.378,"text":"than 300,000","words":[{"id":"caption-word-77-0","text":"than","start":56.508,"end":56.602},{"id":"caption-word-77-1","text":"300,000","start":56.713,"end":57.258}]},{"id":"caption-group-78","frame":9,"start":57.472,"end":58.449,"text":"signatures,","words":[{"id":"caption-word-78-0","text":"signatures,","start":57.472,"end":58.329}]},{"id":"caption-group-79","frame":9,"start":58.672,"end":59.756,"text":"500 from Microsoft","words":[{"id":"caption-word-79-0","text":"500","start":58.672,"end":58.779},{"id":"caption-word-79-1","text":"from","start":58.851,"end":59.133},{"id":"caption-word-79-2","text":"Microsoft","start":59.279,"end":59.636}]},{"id":"caption-group-80","frame":9,"start":59.779,"end":60.256,"text":"staff.","words":[{"id":"caption-word-80-0","text":"staff.","start":59.779,"end":60.136}]},{"id":"caption-group-81","frame":10,"start":60.377,"end":60.864,"text":"A judge's","words":[{"id":"caption-word-81-0","text":"A","start":60.377,"end":60.387},{"id":"caption-word-81-1","text":"judge's","start":60.458,"end":60.744}]},{"id":"caption-group-82","frame":10,"start":60.922,"end":61.244,"text":"deadline to","words":[{"id":"caption-word-82-0","text":"deadline","start":60.922,"end":61.101},{"id":"caption-word-82-1","text":"to","start":61.137,"end":61.172}]},{"id":"caption-group-83","frame":10,"start":61.244,"end":62.53,"text":"reunite separated children","words":[{"id":"caption-word-83-0","text":"reunite","start":61.244,"end":61.601},{"id":"caption-word-83-1","text":"separated","start":61.672,"end":62.03},{"id":"caption-word-83-2","text":"children","start":62.101,"end":62.458}]},{"id":"caption-group-84","frame":10,"start":62.53,"end":62.887,"text":"five and","words":[{"id":"caption-word-84-0","text":"five","start":62.53,"end":62.744},{"id":"caption-word-84-1","text":"and","start":62.78,"end":62.815}]},{"id":"caption-group-85","frame":10,"start":62.887,"end":63.387,"text":"older was","words":[{"id":"caption-word-85-0","text":"older","start":62.887,"end":63.172},{"id":"caption-word-85-1","text":"was","start":63.244,"end":63.315}]},{"id":"caption-group-86","frame":10,"start":63.387,"end":64.507,"text":"July 26,","words":[{"id":"caption-word-86-0","text":"July","start":63.387,"end":63.672},{"id":"caption-word-86-1","text":"26,","start":63.815,"end":64.387}]},{"id":"caption-group-87","frame":10,"start":64.538,"end":64.658,"text":"and","words":[{"id":"caption-word-87-0","text":"and","start":64.538,"end":64.538}]},{"id":"caption-group-88","frame":10,"start":64.771,"end":65.485,"text":"employees chose","words":[{"id":"caption-word-88-0","text":"employees","start":64.771,"end":65.021},{"id":"caption-word-88-1","text":"chose","start":65.092,"end":65.377}]},{"id":"caption-group-89","frame":10,"start":65.485,"end":65.878,"text":"that day","words":[{"id":"caption-word-89-0","text":"that","start":65.485,"end":65.592},{"id":"caption-word-89-1","text":"day","start":65.664,"end":65.807}]},{"id":"caption-group-90","frame":10,"start":65.878,"end":66.353,"text":"to act,","words":[{"id":"caption-word-90-0","text":"to","start":65.878,"end":66.021},{"id":"caption-word-90-1","text":"act,","start":66.164,"end":66.233}]},{"id":"caption-group-91","frame":10,"start":66.543,"end":66.88,"text":"The Seattle","words":[{"id":"caption-word-91-0","text":"The","start":66.543,"end":66.543},{"id":"caption-word-91-1","text":"Seattle","start":66.595,"end":66.809}]},{"id":"caption-group-92","frame":10,"start":66.88,"end":67.643,"text":"Times reported.","words":[{"id":"caption-word-92-0","text":"Times","start":66.88,"end":67.095},{"id":"caption-word-92-1","text":"reported.","start":67.166,"end":67.523}]},{"id":"caption-group-93","frame":11,"start":67.745,"end":68.478,"text":"That Thursday,","words":[{"id":"caption-word-93-0","text":"That","start":67.745,"end":67.858},{"id":"caption-word-93-1","text":"Thursday,","start":67.929,"end":68.358}]},{"id":"caption-group-94","frame":11,"start":68.537,"end":68.835,"text":"at an","words":[{"id":"caption-word-94-0","text":"at","start":68.537,"end":68.572},{"id":"caption-word-94-1","text":"an","start":68.644,"end":68.715}]},{"id":"caption-group-95","frame":11,"start":68.894,"end":69.501,"text":"intern Q&A","words":[{"id":"caption-word-95-0","text":"intern","start":68.894,"end":69.072},{"id":"caption-word-95-1","text":"Q&A","start":69.144,"end":69.465}]},{"id":"caption-group-96","frame":11,"start":69.501,"end":70.121,"text":"in Redmond,","words":[{"id":"caption-word-96-0","text":"in","start":69.501,"end":69.572},{"id":"caption-word-96-1","text":"Redmond,","start":69.644,"end":70.001}]},{"id":"caption-group-97","frame":11,"start":70.191,"end":70.311,"text":"an","words":[{"id":"caption-word-97-0","text":"an","start":70.191,"end":70.191}]},{"id":"caption-group-98","frame":11,"start":70.395,"end":70.931,"text":"employee handed","words":[{"id":"caption-word-98-0","text":"employee","start":70.395,"end":70.609},{"id":"caption-word-98-1","text":"handed","start":70.681,"end":70.895}]},{"id":"caption-group-99","frame":11,"start":70.931,"end":71.395,"text":"Nadella the","words":[{"id":"caption-word-99-0","text":"Nadella","start":70.931,"end":71.288},{"id":"caption-word-99-1","text":"the","start":71.323,"end":71.359}]},{"id":"caption-group-100","frame":11,"start":71.395,"end":72.002,"text":"petition on","words":[{"id":"caption-word-100-0","text":"petition","start":71.395,"end":71.823},{"id":"caption-word-100-1","text":"on","start":71.895,"end":71.966}]},{"id":"caption-group-101","frame":11,"start":72.002,"end":72.88,"text":"a USB stick.","words":[{"id":"caption-word-101-0","text":"a","start":72.002,"end":72.038},{"id":"caption-word-101-1","text":"USB","start":72.109,"end":72.466},{"id":"caption-word-101-2","text":"stick.","start":72.538,"end":72.76}]},{"id":"caption-group-102","frame":12,"start":73.11,"end":73.909,"text":"Microsoft declined","words":[{"id":"caption-word-102-0","text":"Microsoft","start":73.11,"end":73.516},{"id":"caption-word-102-1","text":"declined","start":73.624,"end":73.874}]},{"id":"caption-group-103","frame":12,"start":73.909,"end":74.422,"text":"to comment,","words":[{"id":"caption-word-103-0","text":"to","start":73.909,"end":73.945},{"id":"caption-word-103-1","text":"comment,","start":74.016,"end":74.302}]},{"id":"caption-group-104","frame":12,"start":74.588,"end":75.231,"text":"confirming only","words":[{"id":"caption-word-104-0","text":"confirming","start":74.588,"end":74.874},{"id":"caption-word-104-1","text":"only","start":74.945,"end":75.16}]},{"id":"caption-group-105","frame":12,"start":75.231,"end":75.803,"text":"that Nadella","words":[{"id":"caption-word-105-0","text":"that","start":75.231,"end":75.303},{"id":"caption-word-105-1","text":"Nadella","start":75.374,"end":75.731}]},{"id":"caption-group-106","frame":12,"start":75.803,"end":76.088,"text":"got the","words":[{"id":"caption-word-106-0","text":"got","start":75.803,"end":75.945},{"id":"caption-word-106-1","text":"the","start":75.981,"end":76.017}]},{"id":"caption-group-107","frame":12,"start":76.088,"end":76.851,"text":"USB stick,","words":[{"id":"caption-word-107-0","text":"USB","start":76.088,"end":76.445},{"id":"caption-word-107-1","text":"stick,","start":76.517,"end":76.731}]},{"id":"caption-group-108","frame":12,"start":76.929,"end":77.137,"text":"and its","words":[{"id":"caption-word-108-0","text":"and","start":76.929,"end":76.929},{"id":"caption-word-108-1","text":"its","start":76.994,"end":77.066}]},{"id":"caption-group-109","frame":12,"start":77.137,"end":78.173,"text":"ICE work went","words":[{"id":"caption-word-109-0","text":"ICE","start":77.137,"end":77.566},{"id":"caption-word-109-1","text":"work","start":77.637,"end":77.83},{"id":"caption-word-109-2","text":"went","start":77.955,"end":78.066}]},{"id":"caption-group-110","frame":12,"start":78.173,"end":78.385,"text":"on.","words":[{"id":"caption-word-110-0","text":"on.","start":78.173,"end":78.265}]},{"id":"caption-group-111","frame":13,"start":78.48,"end":78.743,"text":"Should","words":[{"id":"caption-word-111-0","text":"Should","start":78.48,"end":78.623}]},{"id":"caption-group-112","frame":13,"start":78.873,"end":79.337,"text":"Microsoft have","words":[{"id":"caption-word-112-0","text":"Microsoft","start":78.873,"end":79.123},{"id":"caption-word-112-1","text":"have","start":79.194,"end":79.266}]},{"id":"caption-group-113","frame":13,"start":79.337,"end":79.909,"text":"walked away","words":[{"id":"caption-word-113-0","text":"walked","start":79.337,"end":79.552},{"id":"caption-word-113-1","text":"away","start":79.694,"end":79.837}]},{"id":"caption-group-114","frame":13,"start":79.909,"end":80.6,"text":"from ICE?","words":[{"id":"caption-word-114-0","text":"from","start":79.909,"end":79.98},{"id":"caption-word-114-1","text":"ICE?","start":80.052,"end":80.48}]}];
+  var DURATION = 80.945;
+  // mount.mjs injects the dark-ground windows here: [[start, end], …] in seconds.
+  var DARK = [[0,22.452],[26.748,45.366],[52.669,60.357],[67.725,78.445]];
+  // mount.mjs injects the quiet windows here (none: the close's question is captioned).
+  var QUIET = [];
+  // measure.mjs injects the sampled caption tones here: [[start, end, "dark" | "light" | "plate"], …].
+  var TONES = [[0,22.452,"dark"],[22.452,26.748,"light"],[26.748,45.366,"dark"],[45.366,52.669,"light"],[52.669,60.357,"dark"],[60.357,67.725,"light"],[67.725,78.445,"dark"],[78.445,80.945,"light"]];
+
+  (function () {
+    var MAX_WORDS = 7;
+    var MAX_CHARS = 34; // two lines of about 17 characters at 74px in 844px
+    var HOLD_AFTER = 1.2;
+    // A word types across its spoken span; one this short (or with no span) types at this pace.
+    var MIN_CHAR = 0.025;
+    var SENTENCE_END = /[.?!]["')\]]*$/;
+
+    // Re-page the engine's groups: one flat word list, then pages.
+    var words = [];
+    GROUPS.forEach(function (group) {
+      (group.words || []).forEach(function (w) {
+        words.push({ text: String(w.text), start: Number(w.start), end: Number(w.end), frame: group.frame });
+      });
+    });
+    words.sort(function (a, b) { return a.start - b.start; });
+    var pages = [];
+    var page = null;
+    words.forEach(function (w, i) {
+      var prev = i > 0 ? words[i - 1] : null;
+      var chars = page ? page.chars + 1 + w.text.length : w.text.length;
+      var newPage = !page
+        || w.frame !== page.frame
+        || page.words.length >= MAX_WORDS
+        || chars > MAX_CHARS
+        || (prev && SENTENCE_END.test(prev.text))
+        || (prev && w.start - prev.end > 0.8);
+      if (newPage) {
+        page = { frame: w.frame, words: [], chars: w.text.length };
+        pages.push(page);
+      } else {
+        page.chars = chars;
+      }
+      page.words.push(w);
+    });
+
+    // Hard clamp: a page is at most MAX_LINES lines at 74px in the 844px band. Widths come from the
+    // bundled Pragmatica Extended Bold metrics (per 1000px, as drawn), so the check does
+    // not depend on the font having loaded; a page that would wrap to a third line is re-paged.
+    var MAX_LINES = 2;
+    var BAND_W = 844;
+    var FONT_PX = 74;
+    var TRACK = -0.02 * FONT_PX;
+    var GAP = 0.26 * FONT_PX;
+    var ADV = {"A":790,"B":823,"C":846,"D":853,"E":748,"F":699,"G":894,"H":854,"I":338,"J":673,"K":810,"L":656,"M":1075,"N":870,"O":919,"P":778,"Q":919,"R":821,"S":767,"T":699,"U":832,"V":745,"W":1097,"X":799,"Y":755,"Z":731,"0":755,"1":755,"2":755,"3":755,"4":755,"5":755,"6":755,"7":755,"8":755,"9":755,"a":708,"b":737,"c":690,"d":739,"e":721,"f":443,"g":724,"h":709,"i":302,"j":310,"k":652,"l":302,"m":1071,"n":709,"o":740,"p":735,"q":737,"r":472,"s":625,"t":438,"u":706,"v":598,"w":893,"x":655,"y":599,"z":575,".":396,",":396,"?":701,"!":407,"'":294,"\"":544,"-":569,":":396,";":402,"%":1096,"$":755,"&":826,"(":454,")":454,"/":532};
+    var wordPx = function (text) {
+      return Array.from(String(text)).reduce(function (n, ch) {
+        return n + ((ADV[ch] || 760) * FONT_PX) / 1000 + TRACK;
+      }, 0);
+    };
+    var lineCount = function (list) {
+      var lines = 0;
+      var x = 0;
+      list.forEach(function (w) {
+        var px = wordPx(w.text);
+        if (lines === 0 || x + GAP + px > BAND_W) { lines += 1; x = px; } else { x += GAP + px; }
+      });
+      return lines;
+    };
+    var clamped = [];
+    pages.forEach(function (pg) {
+      var rest = pg.words.slice();
+      while (rest.length) {
+        var n = rest.length;
+        while (n > 1 && lineCount(rest.slice(0, n)) > MAX_LINES) n -= 1;
+        // Split a long page into balanced halves rather than a full page and a one-word orphan.
+        if (n < rest.length && rest.length - n === 1 && n > 2) n -= 1;
+        clamped.push({ frame: pg.frame, words: rest.slice(0, n) });
+        rest = rest.slice(n);
+      }
+    });
+    pages = clamped;
+
+    var stage = document.getElementById("caption-stage");
+    pages.forEach(function (pg, p) {
+      var pageEl = document.createElement("div");
+      pageEl.className = "caption-group";
+      pageEl.id = "caption-group-" + p;
+      var line = document.createElement("div");
+      line.className = "caption-line";
+      pg.words.forEach(function (w, i) {
+        var span = document.createElement("span");
+        span.className = /\d/.test(w.text) ? "caption-word cap-num" : "caption-word";
+        span.id = "caption-word-" + p + "-" + i;
+        // One span per letter, laid out from the start (hidden), so typing never reflows the line.
+        Array.from(w.text).forEach(function (ch, k) {
+          var c = document.createElement("span");
+          c.className = "caption-char";
+          c.id = "caption-char-" + p + "-" + i + "-" + k;
+          c.textContent = ch;
+          span.appendChild(c);
+        });
+        line.appendChild(span);
+      });
+      pageEl.appendChild(line);
+      stage.appendChild(pageEl);
+    });
+
+    window.__timelines = window.__timelines || {};
+    var tl = gsap.timeline({ paused: true });
+
+    // Ground-aware color and quiet windows, by seek-safe class sets. The sampled TONES lead; without
+    // them, the treatment's DARK windows.
+    var marks = [];
+    (TONES.length ? TONES : DARK).forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    QUIET.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    marks = marks.filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return a - b; });
+    var inside = function (wins, t) { return wins.some(function (w) { return t >= Number(w[0]) && t < Number(w[1]); }); };
+    var toneAt = function (t) {
+      for (var i = 0; i < TONES.length; i++) if (t >= Number(TONES[i][0]) && t < Number(TONES[i][1])) return TONES[i][2];
+      if (TONES.length) return "dark";
+      return inside(DARK, t) ? "dark" : "light";
+    };
+    [0].concat(marks).forEach(function (t) {
+      var tone = toneAt(t);
+      // One colour always: a ground the bright words can't read on gets the plate.
+      var cls = "caption-stage" + (tone === "dark" ? " on-dark" : " on-plate") + (inside(QUIET, t) ? " is-quiet" : "");
+      tl.set(stage, { className: cls }, Math.max(0, t));
+    });
+
+    pages.forEach(function (pg, p) {
+      var pageEl = document.getElementById("caption-group-" + p);
+      var next = pages[p + 1];
+      var start = Math.max(0, pg.words[0].start);
+      var lastEnd = pg.words[pg.words.length - 1].end;
+      var end = Math.min(next ? next.words[0].start : DURATION, lastEnd + HOLD_AFTER);
+      if (end <= start) end = start + 0.01;
+      tl.set(pageEl, { opacity: 1 }, start);
+      tl.set(pageEl, { opacity: 0 }, end);
+      pg.words.forEach(function (w, i) {
+        var letters = Array.from(w.text);
+        var at = Math.max(start, w.start);
+        var span = Math.max(letters.length * MIN_CHAR, Math.max(0, w.end - at));
+        letters.forEach(function (ch, k) {
+          var el = document.getElementById("caption-char-" + p + "-" + i + "-" + k);
+          var show = at + (span * k) / letters.length;
+          // Never two sets on one letter at one time: a hide and a show both at t = 0 (the first letter
+          // of the first page) resolve to hidden once the renderer has sought past 0 and back, so the
+          // first letter never showed ("S" of "Summer"). The letter is hidden by CSS and by its page
+          // until then; the hide set is only for a letter that types in after its page appears.
+          if (show > start) tl.set(el, { opacity: 0 }, start);
+          tl.set(el, { opacity: 1 }, show);
+        });
+      });
+    });
+
+    // full-span anchor so the sub-comp timeline spans the whole video
+    tl.to({}, { duration: DURATION }, 0);
+    window.__timelines["captions"] = tl;
+  })();
+</script>
+<style>
+  .caption-line { line-height: 1.1 !important; }
+</style>
+</template>

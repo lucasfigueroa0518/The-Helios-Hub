@@ -38,7 +38,7 @@ music: none
 - ground: paper
 - type: hook
 - engagement: Open loop + visual hook + audio ramp
-- voiceover: "In the next 30 seconds, this busy writer will teach you an AI concept."
+- voiceover: "In the next minute, this busy writer will teach you an AI concept."
 - anchor: scene
 
 Fixture frame. Checks the hook (a critter writing), the title card animating from the first frame, the riser and hit, and sound events.

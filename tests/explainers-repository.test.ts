@@ -104,7 +104,7 @@ test('theme brief v1 is the E-14 text verbatim', async () => {
   assert.equal(await loadThemeBrief(db, 'v1'), expected);
 });
 
-test('theme briefs v2 and v3 are the register text verbatim, and a new database starts on v3 (EX3-34)', async () => {
+test('theme briefs v2, v3 and v4 are the register text verbatim, and a new database starts on v4 (EX3-34, EX3-123)', async () => {
   const { db } = await scratchExplainersDb();
   const register = fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
   const between = (from: string, to: string) => {
@@ -112,15 +112,20 @@ test('theme briefs v2 and v3 are the register text verbatim, and a new database 
     assert.ok(start >= 0, from);
     return register.slice(start + from.length, register.indexOf(to, start)).trim();
   };
-  const v3 = between('### Theme brief v3\n\n', '\n\n### Theme brief v2');
-  const v2 = between('### Theme brief v2 (superseded by v3; kept because existing databases still hold it)\n\n', '\n\n### Idea scoring v3');
+  const v4 = between('### Theme brief v4\n\n', '\n\n### Theme brief v3');
+  const v3 = between('### Theme brief v3 (superseded by v4, EX3-123; kept because existing databases still hold it)\n\n', '\n\n### Theme brief v2');
+  const v2 = between('### Theme brief v2 (superseded by v3; kept because existing databases still hold it)\n\n', '\n\n### Idea scoring v4');
+  assert.equal(await loadThemeBrief(db, 'v4'), v4);
   assert.equal(await loadThemeBrief(db, 'v3'), v3);
+  // v4 is v3 with the reel shape's analogy as a well-known one whose defining trait is the concept.
+  assert.equal(v4, v3.replace('one everyday analogy that can carry the whole reel as a single scene', 'one well-known analogy whose defining trait is the concept, that can carry the reel'));
+  assert.notEqual(v4, v3);
   assert.equal(await loadThemeBrief(db, 'v2'), v2);
   assert.match(v3, /Prefer beginner concepts/);
   assert.match(v3, /Skew toward AI\./);
   assert.match(v3, /about a minute/);
   assert.doesNotMatch(v3, /caveat|45-second|accurately in 45 seconds/);
-  assert.equal((await loadSettings(db)).theme_brief_version, 'v3');
+  assert.equal((await loadSettings(db)).theme_brief_version, 'v4');
 });
 
 test('settings validate before they are stored', async () => {

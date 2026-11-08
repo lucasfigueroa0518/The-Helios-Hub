@@ -6,6 +6,8 @@ import { RebuildPostButton } from '@/components/content-type/AiEventsPoolButtons
 import {
   AiEventsRunButton,
   CarouselRunButton,
+  DramaDevelopButton,
+  IdeaCycleButton,
   LfdRunButton,
   LiveToggle,
   PostingSettings,
@@ -13,6 +15,9 @@ import {
   StoriesGenerate,
 } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
+import { ReelAiDramaHub } from '@/components/content-type/ReelAiDramaHub';
+import { ReelAiDramaSettingsForm } from '@/components/content-type/ReelAiDramaSettingsForm';
+import Link from 'next/link';
 import { SeedButton } from '@/components/content-type/SeedButton';
 import { GenerationProgress } from '@/components/content-type/GenerationProgress';
 import { RunProgressProvider } from '@/components/content-type/run-progress';
@@ -38,12 +43,13 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 /** The types this page draws (Text on Screen has its own app page). */
 type PageVertical = Exclude<Vertical, 'reels'>;
 
-const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days', ai_events: 'AI Events This Week' };
+const TITLE: Record<PageVertical, string> = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days', ai_events: 'AI Events This Week', reel_ai_drama: 'AI Drama Reels' };
 const BENCH_NOTE: Record<PageVertical, string> = {
   last_few_days: 'The latest run’s queue: the stories in its post, the ones it dropped and why, and what was next in line. Major headlines lead; Text on Screen ideas fill the rest.',
   carousels: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels. Hold and drag any story to move it.',
   stories: 'Ideas drawn from the other pools. A set is built for each series that is due. Pick a series, then hold and drag an idea to move it.',
   explainers: 'Topics waiting to be rendered, best score first. Generate renders one reel. Hold and drag any topic to move it.',
+  reel_ai_drama: 'Story pitches waiting to be made, best rank first. Make it produces one reel. Hold and drag any pitch to move it.',
   ai_events: 'The week’s ranked events, city by city: the top 3 per city go into the carousel. Gated and excluded events stay listed with the reason. Open a row to see where its score comes from.',
 };
 
@@ -53,7 +59,7 @@ const BENCH_NOTE: Record<PageVertical, string> = {
  * posts, and the bench. The generate buttons, Live and settings write, so they
  * are built here, outside the read-only hub code.
  */
-export async function ContentTypePage({ vertical }: { vertical: PageVertical }) {
+export async function ContentTypePage({ vertical, openSettings = false }: { vertical: PageVertical; openSettings?: boolean }) {
   const session = await getSession();
   if (!session) redirect('/');
   // Independent reads: run them together rather than one after another.
@@ -88,8 +94,18 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
       </>
     );
     settings = <PostingSettings type="ai_events" />;
+  } else if (vertical === 'reel_ai_drama') {
+    // Develop queues one development session for the drama worker; the lab keeps the advanced view.
+    generate = <><DramaDevelopButton /><Link className="rh-btn" href="/reel-ai-drama/lab">Lab</Link></>;
+    settings = (
+      <>
+        <PostingSettings type="reel_ai_drama" />
+        <h3 className="rh-rest__title">Rendering</h3>
+        <ReelAiDramaSettingsForm />
+      </>
+    );
   } else {
-    generate = <SeedButton vertical="explainers" />;
+    generate = <><SeedButton vertical="explainers" /><IdeaCycleButton /></>;
     const view = explainersView!;
     settings = (
       <>
@@ -99,7 +115,7 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
     );
   }
 
-  const Hub = vertical === 'explainers' ? ExplainersHub : TypeHub;
+  const Hub = vertical === 'explainers' ? ExplainersHub : vertical === 'reel_ai_drama' ? ReelAiDramaHub : TypeHub;
   return (
     <RunProgressProvider type={vertical}>
       <Hub
@@ -108,7 +124,7 @@ export async function ContentTypePage({ vertical }: { vertical: PageVertical }) 
         headerActions={
           <>
             {generate}
-            <SettingsButton>{settings}</SettingsButton>
+            <SettingsButton defaultOpen={openSettings}>{settings}</SettingsButton>
             <LiveToggle type={vertical} initial={live} />
           </>
         }

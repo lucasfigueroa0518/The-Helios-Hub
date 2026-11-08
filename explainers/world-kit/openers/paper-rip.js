@@ -15,7 +15,7 @@ export default function draw(t, ctx) {
     const torn = TEAR.slice(0, Math.max(0, Math.round(seg(t, 0.25, RIP, E.in) * 5)));
     return defs() + g({ transform: `translate(540 960) scale(${(1 + 0.03 * b).toFixed(4)}) translate(-540 -960)` }, [
       sheet(),
-      torn.length > 1 ? el('polyline', { points: pts(torn), fill: 'none', stroke: T.ink, 'stroke-width': 4, 'stroke-linejoin': 'round' }) : '',
+      torn.length > 1 ? el('polyline', { points: pts(torn), fill: 'none', stroke: T['text-tertiary'], 'stroke-width': 3.5, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }) : '',
     ]);
   }
   const u = seg(t, RIP, RIP + 0.55, E.out);
@@ -26,11 +26,11 @@ export default function draw(t, ctx) {
     el('polyline', { points: pts(TEAR), fill: 'none', stroke: T['paper-shade'], 'stroke-width': 12, 'stroke-linejoin': 'round', 'clip-path': ref(clip) }),
   ]);
   return [
-    shaken(shake(t, RIP, 34), scene(ctx, t - RIP)),
+    shaken(shake(t, RIP, 34), scene(ctx, t)),
     defs(),
     el('defs', {}, el('clipPath', { id: id('tearL') }, el('polygon', { points: pts(left) })) + el('clipPath', { id: id('tearR') }, el('polygon', { points: pts(right) }))),
     u < 1 ? half(-1, 'tearL') + half(1, 'tearR') : '',
     burst(540, 960, seg(t, RIP, RIP + 0.45, (x) => x), 3.2),
-    title(ctx, t, RIP + 0.25),
+    title(ctx, t, ctx.M.titleAt),
   ].join('');
 }

@@ -37,6 +37,7 @@ export async function wasteSets(q: HubQuery, eq: HubQuery | null): Promise<{ rej
   const reelVideoIds: string[] = [];
   for (const r of spine.rows) {
     if (r.vertical === 'explainers') rejected.add(`explainers:${r.native_ref}`);
+    if (r.vertical === 'reel_ai_drama') rejected.add(`reel_ai_drama:${r.native_ref}`);
     if (r.vertical === 'stories') rejected.add(`stories:${r.native_ref}`);
     if (r.vertical === 'carousels' && r.idea_ref) rejected.add(`carousels:story:${r.idea_ref}`);
     if (r.vertical === 'reels') reelVideoIds.push(r.native_ref);
@@ -66,6 +67,16 @@ export async function wasteSets(q: HubQuery, eq: HubQuery | null): Promise<{ rej
     for (const r of (await eq<{ id: string }>(
       `SELECT id::text FROM (SELECT id, row_number() OVER (PARTITION BY topic_id ORDER BY requested_at DESC) AS rn FROM explainers.jobs) x WHERE rn > 1`,
     )).rows) rejected.add(`explainers:${r.id}`);
+    // AI Drama Reels, the same rules (SELECT only; a database without the drama schema adds nothing).
+    try {
+      for (const r of (await eq<{ job_id: string }>(`SELECT job_id::text FROM reel_ai_drama.feedback WHERE verdict = 'rejected'`)).rows) rejected.add(`reel_ai_drama:${r.job_id}`);
+      for (const r of (await eq<{ id: string }>(`SELECT id::text FROM reel_ai_drama.jobs WHERE status = 'failed'`)).rows) failed.add(`reel_ai_drama:${r.id}`);
+      for (const r of (await eq<{ id: string }>(
+        `SELECT id::text FROM (SELECT id, row_number() OVER (PARTITION BY pitch_id ORDER BY requested_at DESC) AS rn FROM reel_ai_drama.jobs) x WHERE rn > 1`,
+      )).rows) rejected.add(`reel_ai_drama:${r.id}`);
+    } catch {
+      // The drama schema isn't applied on this database yet.
+    }
   }
   return { rejected, failed, filtered };
 }

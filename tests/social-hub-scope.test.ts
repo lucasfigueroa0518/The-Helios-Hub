@@ -164,7 +164,11 @@ function importsOf(text: string): string[] {
  * check, which every page must call (it upserts `outreach.users` at sign-in,
  * not on a hub read). Nothing else is exempt.
  */
-const BOUNDARIES = new Set(['lib/session.ts']);
+/**
+ * lib/session.ts, and the hub shell's warm link (perf #21): a client-side prefetch of the hub's own pages, same
+ * origin, GET only. It reads nothing outside the app and writes nothing.
+ */
+const BOUNDARIES = new Set(['lib/session.ts', 'components/hub-shell/warm-link.tsx']);
 
 /**
  * The one browser-side fetch: the Content House buttons posting to the hub's

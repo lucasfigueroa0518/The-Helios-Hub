@@ -1,0 +1,83 @@
+{
+ "frame": 4,
+ "id": "04-the-post-goes-viral",
+ "duration": 4.296,
+ "voice_end": 4.166,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "The",
+   "start": 0.02,
+   "end": 0.02
+  },
+  {
+   "text": "next",
+   "start": 0.044,
+   "end": 0.259
+  },
+  {
+   "text": "day,",
+   "start": 0.33,
+   "end": 0.544
+  },
+  {
+   "text": "the",
+   "start": 0.799,
+   "end": 0.84
+  },
+  {
+   "text": "January",
+   "start": 0.911,
+   "end": 1.268
+  },
+  {
+   "text": "post",
+   "start": 1.34,
+   "end": 1.625
+  },
+  {
+   "text": "went",
+   "start": 1.732,
+   "end": 1.84
+  },
+  {
+   "text": "viral,",
+   "start": 1.982,
+   "end": 2.34
+  },
+  {
+   "text": "with",
+   "start": 2.511,
+   "end": 2.553
+  },
+  {
+   "text": "calls",
+   "start": 2.625,
+   "end": 2.839
+  },
+  {
+   "text": "to",
+   "start": 2.91,
+   "end": 2.982
+  },
+  {
+   "text": "boycott",
+   "start": 3.143,
+   "end": 3.482
+  },
+  {
+   "text": "Microsoft.",
+   "start": 3.553,
+   "end": 4.053
+  }
+ ],
+ "lines": [
+  {
+   "id": "L4",
+   "start": 0.02,
+   "end": 4.053,
+   "label": null,
+   "label_kind": null
+  }
+ ]
+}

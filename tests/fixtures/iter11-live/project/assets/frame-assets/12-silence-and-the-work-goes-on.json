@@ -1,0 +1,264 @@
+{
+ "assets": [
+  {
+   "id": "V8",
+   "kind": "place_photo",
+   "file": "assets/media/V8.jpg",
+   "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/64/Microsoft_Redmond_Campus_redevelopment_aerial_view%2C_Sept._2021.jpg/3840px-Microsoft_Redmond_Campus_redevelopment_aerial_view%2C_Sept._2021.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMicrosoft_Redmond_Campus_redevelopment_aerial_view%2C_Sept._2021.jpg",
+   "credit": "Atomic Taco, CC BY-SA 2.0 · Wikimedia Commons",
+   "license": "CC BY-SA 2.0",
+   "shows": "Aerial view of the Microsoft Redmond campus under redevelopment, with a lake visible in the distance.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": "2021-09-26",
+   "date_confidence": "exact",
+   "width": 2160,
+   "height": 1440,
+   "phash": "c4d3accc9688df62",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "source:commons",
+    "date_basis:commons",
+    "recency:0.4",
+    "want:company-place:microsoft",
+    "resized:0.563",
+    "boxes:media/V8.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.4679,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 2700,
+    "focus": {
+     "x": 0.5208,
+     "y": 0.2344,
+     "w": 0.25,
+     "h": 0.1875
+    },
+    "phash": "c4d3accc9688df62",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V44",
+   "kind": "logo",
+   "file": "assets/media/V44.png",
+   "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Seal_of_Immigration_and_Customs_Enforcement.svg/3840px-Seal_of_Immigration_and_Customs_Enforcement.svg.png?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=thumbnail",
+   "source_page": "https://en.wikipedia.org/wiki/File:Seal_of_Immigration_and_Customs_Enforcement.svg",
+   "credit": "Wikipedia (en.wikipedia.org)",
+   "license": null,
+   "shows": "The round U.S. Immigration and Customs Enforcement seal with an eagle, stars and text on a black background.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 2160,
+   "height": 2160,
+   "phash": "913946e67b994c6c",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:ice",
+    "resized:0.563",
+    "boxes:media/V44.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "chip": true,
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5083,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 2700,
+    "chroma": 0.1504,
+    "phash": "913946e67b994c6c",
+    "expression": "null",
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V75",
+   "kind": "person_photo",
+   "file": "assets/media/V75.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMS-Exec-Nadella-Satya-2017-08-31-8.jpg",
+   "credit": "Brian Smale and Microsoft, CC BY-SA 4.0 · Wikimedia Commons",
+   "license": "CC BY-SA 4.0",
+   "shows": "Satya Nadella, cut out of V17 onto a transparent background.",
+   "people": [
+    "Satya Nadella"
+   ],
+   "qids": [],
+   "place": null,
+   "date_taken": "2017-08-31",
+   "date_confidence": "exact",
+   "width": 1155,
+   "height": 2048,
+   "phash": "eb96b097492b0d74",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "cutout",
+    "cutout_made",
+    "cutout_after_writer",
+    "cutout_of:V17",
+    "identity:verified"
+   ],
+   "anchor_for": null,
+   "face": {
+    "x": 0.313,
+    "y": 0.0906,
+    "w": 0.2798,
+    "h": 0.1578
+   },
+   "made_kind": null,
+   "regions": {
+    "faces": [
+     {
+      "x": 0.313,
+      "y": 0.0906,
+      "w": 0.2798,
+      "h": 0.1578,
+      "score": 0.9179144501686096,
+      "trusted": true,
+      "name": "Satya Nadella"
+     }
+    ],
+    "cut": {
+     "grade": "clean",
+     "edge_softness": 0.0228,
+     "islands": 0,
+     "straight_cuts": 0.0248,
+     "sharpness": 1,
+     "fringe": 0.0023,
+     "with_source": true
+    },
+    "sharp_width_px": 1444,
+    "visible": {
+     "x": 0.0381,
+     "y": 0.0215,
+     "w": 0.9239,
+     "h": 0.9785
+    },
+    "brightness": 0.2339,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": true
+    },
+    "phash": "eb96b197492b0d64",
+    "expression": null,
+    "dup_of": null
+   }
+  },
+  {
+   "id": "V79",
+   "kind": "object",
+   "file": "assets/media/V79.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AKingston_Technology_DataTraveler_G4_USB_flash_drive_USB_3.0_32_Gb.jpg",
+   "credit": "Dmitry Makeev, CC BY-SA 4.0 · Wikimedia Commons",
+   "license": "CC BY-SA 4.0",
+   "shows": "A real-photo cutout of A single black USB memory stick, alone on a plain background, a different drive from a white Kingston one: cut out of V78 (A white Kingston DataTraveler G4 USB 3.0 flash drive with a red loop, on a white background) onto a transparent background.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": "2018-05-10",
+   "date_confidence": "exact",
+   "width": 1654,
+   "height": 668,
+   "phash": "eaca95a9d5a5885a",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "cutout",
+    "cutout_made",
+    "cutout_thing",
+    "cutout_of:V78",
+    "cutout_wish",
+    "cutout_wish:W3",
+    "wish:W3"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "cut": {
+     "grade": "clean",
+     "edge_softness": 0.0382,
+     "islands": 0,
+     "straight_cuts": 0.0314,
+     "sharpness": 1,
+     "fringe": 0,
+     "with_source": true
+    },
+    "sharp_width_px": 2068,
+    "visible": {
+     "x": 0.0254,
+     "y": 0.0531,
+     "w": 0.9531,
+     "h": 0.8889
+    },
+    "brightness": 0.7706,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "phash": "ea4a95add5a5885a",
+    "expression": null,
+    "dup_of": null
+   }
+  }
+ ]
+}

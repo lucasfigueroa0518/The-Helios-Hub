@@ -1,0 +1,225 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { HYPERFRAMES_BIN, HYPERFRAMES_ENV } from '@/lib/explainers/render/workspace';
+import { appendStepLog, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
+import { KIT_DIR } from '@/lib/reel-ai-drama/render/workspace';
+
+/** HyperFrames' render can take a while on the VM; the Explainer job allows 30 minutes too. */
+export const RENDER_TIMEOUT_MS = 30 * 60 * 1000;
+
+/** P8: render the assembled project to renders/video.mp4 with the pinned HyperFrames. Throws on failure. */
+export async function renderVideo(projectDir: string, deps: { run?: Runner; bin?: string } = {}): Promise<string> {
+  const run = deps.run ?? spawnRunner;
+  const out = path.join(projectDir, 'renders', 'video.mp4');
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  // gsap ships with the project, so a render needs no network at all (ITERATION-12 §1).
+  localizeGsap(projectDir);
+  const res = run(deps.bin ?? HYPERFRAMES_BIN, ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'], {
+    cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: RENDER_TIMEOUT_MS,
+  });
+  if (res.status !== 0) {
+    appendStepLog(projectDir, 'hyperframes render', res);
+    throw new Error(`hyperframes render exited ${res.status ?? 'with no status'}: ${tail(res)}`);
+  }
+  if (!fs.existsSync(out) || fs.statSync(out).size === 0) throw new Error('hyperframes render left no renders/video.mp4');
+  masterLoudness(out, { run });
+  return out;
+}
+
+/** gsap as shipped in the kit (verified against the SRI hash the page used), copied to assets/kit/vendor by the workspace. */
+export const GSAP_FILE = path.join(KIT_DIR, 'vendor', 'gsap.min.js');
+const GSAP_IN_PROJECT = 'assets/kit/vendor/gsap.min.js';
+/** The page's gsap tag, as mount.mjs, captions.mjs and assemble-index.mjs write it. Those are shared with other formats, so the output is rewritten. */
+const GSAP_TAG = /<script\b[^>]*\bsrc="https:\/\/cdn\.jsdelivr\.net\/npm\/gsap@[^"]*"[^>]*><\/script>/g;
+
+function htmlFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return htmlFiles(p);
+    return e.name.endsWith('.html') ? [p] : [];
+  });
+}
+
+/** Point every page of the project at its own copy of gsap. Safe to repeat. Returns how many pages changed. */
+export function localizeGsap(projectDir: string): number {
+  const copy = path.join(projectDir, GSAP_IN_PROJECT);
+  if (!fs.existsSync(copy)) {
+    fs.mkdirSync(path.dirname(copy), { recursive: true });
+    fs.copyFileSync(GSAP_FILE, copy);
+  }
+  let changed = 0;
+  for (const file of [path.join(projectDir, 'index.html'), ...htmlFiles(path.join(projectDir, 'compositions'))]) {
+    if (!fs.existsSync(file)) continue;
+    const html = fs.readFileSync(file, 'utf8');
+    const next = html.replace(GSAP_TAG, `<script src="${GSAP_IN_PROJECT}"></script>`);
+    if (next !== html) {
+      fs.writeFileSync(file, next);
+      changed += 1;
+    }
+  }
+  return changed;
+}
+
+/** Reels/TikTok delivery loudness (research 07 §5): integrated −14 LUFS, true peak ≤ −1 dBTP. */
+export const LOUDNESS = { I: -14, TP: -1, LRA: 11 };
+
+/**
+ * Master the finished reel's audio to LOUDNESS in place (video stream copied). Fails open: the render
+ * stays as it was if ffmpeg is missing or fails.
+ */
+export function masterLoudness(video: string, { run = spawnRunner }: { run?: Runner } = {}): boolean {
+  const tmp = video.replace(/\.mp4$/, '.master.mp4');
+  const res = run('ffmpeg', ['-y', '-v', 'error', '-i', video, '-c:v', 'copy', '-af', `loudnorm=I=${LOUDNESS.I}:TP=${LOUDNESS.TP}:LRA=${LOUDNESS.LRA}`, '-ar', '48000', '-c:a', 'aac', '-b:a', '192k', tmp], {
+    cwd: path.dirname(video), env: process.env, timeoutMs: 5 * 60 * 1000,
+  });
+  if (res.status !== 0 || !fs.existsSync(tmp) || fs.statSync(tmp).size === 0) {
+    appendStepLog(path.dirname(path.dirname(video)), 'loudness master', res);
+    fs.rmSync(tmp, { force: true });
+    return false;
+  }
+  fs.renameSync(tmp, video);
+  return true;
+}
+
+export type FrameSpan = { number: number; name: string; treatment: string; start: number; end: number };
+
+/** The storyboard's frames with their reel start and end (from the paced `- duration:` lines). */
+export function frameSpans(storyboard: string): FrameSpan[] {
+  const out: FrameSpan[] = [];
+  const heads = [...storyboard.matchAll(/^##\s+Frame\s+(\d+)\s*[—–-]?\s*(.*)$/gm)];
+  let at = 0;
+  heads.forEach((m, i) => {
+    const body = storyboard.slice(m.index! + m[0].length, i + 1 < heads.length ? heads[i + 1].index : undefined);
+    const dur = Number(/^-\s+duration:\s*(\d+(?:\.\d+)?)/m.exec(body)?.[1] ?? 0);
+    const treatment = (/^-\s+treatment:\s*(\S+)/m.exec(body)?.[1] ?? 'photo').toLowerCase();
+    out.push({ number: Number(m[1]), name: m[2].trim(), treatment, start: round(at), end: round(at + dur) });
+    at += dur;
+  });
+  return out;
+}
+
+const round = (n: number) => Math.round(n * 1000) / 1000;
+const stamp = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+
+/** A frame's representative moment: 60% into its span, once its entrances and motion have settled. */
+export function stillAt(span: FrameSpan): number {
+  return round(span.start + (span.end - span.start) * 0.6);
+}
+
+/** The reel's first instant, as a viewer meets it: what the opening is judged on (MD-140). */
+export const OPENING_STILL_AT = 0.1;
+
+/** When the contact sheet takes its stills: the first instant, 1.0s (the hook, MD-34), then each frame at its `stillAt`. */
+export function stillTimes(spans: FrameSpan[]): number[] {
+  const times = [OPENING_STILL_AT, 1.0, ...spans.map(stillAt)];
+  return [...new Set(times)].filter((t) => t >= 0).sort((a, b) => a - b);
+}
+
+/** One still of one story frame, for the design reviewer (MD-129). */
+export type FrameStill = { number: number; name: string; treatment: string; at: number; file: string; opening?: boolean };
+/** The design reviewer's still size: large enough to judge small text, edges and crops. */
+export const FRAME_STILL = { W: 720, H: 1280 };
+
+/**
+ * One still per story frame (the close excluded) at the same moment the contact sheet uses, full enough
+ * to read: renders/frames/frame-NN.jpg; before them, frame 1's first instant (frame-01-opening.jpg), so the
+ * opening is judged as it plays. Throws when a still fails (the caller fails open).
+ */
+export async function frameStills(projectDir: string, videoPath: string, deps: { run?: Runner } = {}): Promise<FrameStill[]> {
+  const run = deps.run ?? spawnRunner;
+  const dir = path.join(projectDir, 'renders', 'frames');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const spans = frameSpans(fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8')).filter((s) => s.treatment !== 'close' && s.end > s.start);
+  const out: FrameStill[] = [];
+  const take = (s: FrameSpan, at: number, name: string, opening: boolean) => {
+    const file = path.join(dir, name);
+    const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(at), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${FRAME_STILL.W}:${FRAME_STILL.H}`, '-q:v', '3', file], { cwd: projectDir, timeoutMs: 120_000 });
+    if (res.status !== 0) throw new Error(`frame stills: frame ${s.number} at ${at}s failed: ${tail(res)}`);
+    out.push({ number: s.number, name: s.name, treatment: s.treatment, at, file, ...(opening ? { opening: true } : {}) });
+  };
+  const first = spans[0];
+  if (first) take(first, OPENING_STILL_AT, `frame-${String(first.number).padStart(2, '0')}-opening.jpg`, true);
+  for (const s of spans) take(s, stillAt(s), `frame-${String(s.number).padStart(2, '0')}.jpg`, false);
+  return out;
+}
+
+/**
+ * Caption pages as the viewer reads them: the skin's paging (presets/reel-ai-drama/caption-skin.html):
+ * at most 7 words and about 34 characters, broken at sentence ends, long pauses and frame changes.
+ * Groups without words are kept as they are.
+ */
+export function captionPages(groups: { start: number; text: string; frame?: number; words?: { text: string; start: number; end: number }[] }[]): { start: number; text: string }[] {
+  const pages: { start: number; text: string; frame?: number; n: number; end: number }[] = [];
+  for (const g of groups) {
+    if (!g.words?.length) {
+      pages.push({ start: g.start, text: g.text, n: 99, end: g.start });
+      continue;
+    }
+    for (const w of g.words) {
+      const p = pages[pages.length - 1];
+      const fresh = !p || p.n >= 7 || p.text.length + 1 + w.text.length > 34 || p.frame !== g.frame || /[.?!]["')\]]*$/.test(p.text) || w.start - p.end > 0.8;
+      if (fresh) pages.push({ start: w.start, text: w.text, frame: g.frame, n: 1, end: w.end });
+      else Object.assign(p, { text: `${p.text} ${w.text}`, n: p.n + 1, end: w.end });
+    }
+  }
+  return pages.map(({ start, text }) => ({ start, text }));
+}
+
+/**
+ * The caption transcript: every frame with its time and treatment, then every caption group as the
+ * viewer reads it (caption_groups.json, written by captions.mjs). Plain text, for the first-time viewer.
+ */
+export function captionTranscript(projectDir: string): string {
+  const lines: string[] = [];
+  try {
+    const spans = frameSpans(fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8'));
+    lines.push('FRAMES');
+    for (const s of spans) lines.push(`[${stamp(s.start)}–${stamp(s.end)}] Frame ${s.number} (${s.treatment}): ${s.name}`);
+    lines.push('');
+  } catch {
+    // no storyboard: captions only
+  }
+  lines.push('CAPTIONS');
+  try {
+    type Group = { start: number; text: string; frame?: number; words?: { text: string; start: number; end: number }[] };
+    const groups = (JSON.parse(fs.readFileSync(path.join(projectDir, 'caption_groups.json'), 'utf8')) as { groups?: Group[] }).groups ?? [];
+    for (const p of captionPages(groups)) lines.push(`[${stamp(p.start)}] ${p.text}`);
+  } catch {
+    lines.push('(no caption_groups.json)');
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * P9 / C3: a stills grid of the rendered video (renders/contact-sheet.png: the first instant, the hook at
+ * 1.0s, then one still per frame) and the caption transcript beside it (renders/contact-sheet.txt). Returns the PNG.
+ */
+export async function contactSheet(projectDir: string, videoPath: string, deps: { run?: Runner; cols?: number } = {}): Promise<string> {
+  const run = deps.run ?? spawnRunner;
+  const cols = deps.cols ?? 6;
+  const dir = path.join(projectDir, 'renders', 'sheet');
+  fs.rmSync(dir, { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  const spans = frameSpans(fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8'));
+  const times = stillTimes(spans);
+  const rows = Math.max(1, Math.ceil(times.length / cols));
+  const W = 270;
+  const H = 480;
+  for (let i = 0; i < rows * cols; i++) {
+    const out = path.join(dir, `still-${String(i).padStart(3, '0')}.png`);
+    const args = i < times.length
+      ? ['-v', 'error', '-y', '-ss', String(times[i]), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${W}:${H}`, out]
+      : ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x1a1a1a:s=${W}x${H}`, '-frames:v', '1', out];
+    const res = run('ffmpeg', args, { cwd: projectDir, timeoutMs: 120_000 });
+    if (res.status !== 0) throw new Error(`contact sheet: the still at ${times[i] ?? 'pad'}s failed: ${tail(res)}`);
+  }
+  const png = path.join(projectDir, 'renders', 'contact-sheet.png');
+  const tiled = run('ffmpeg', ['-v', 'error', '-y', '-framerate', '1', '-i', path.join(dir, 'still-%03d.png'), '-vf', `tile=${cols}x${rows}:padding=8:margin=8:color=0x1a1a1a`, '-frames:v', '1', png], { cwd: projectDir, timeoutMs: 120_000 });
+  if (tiled.status !== 0) throw new Error(`contact sheet: tiling failed: ${tail(tiled)}`);
+  const stills = times.map((t, i) => `still ${i + 1}: ${stamp(t)}`).join('\n');
+  fs.writeFileSync(path.join(projectDir, 'renders', 'contact-sheet.txt'), `${captionTranscript(projectDir)}\nSTILLS (left to right, top to bottom)\n${stills}\n`);
+  return png;
+}

@@ -19,7 +19,7 @@ export const POOL_CAP = 30;
  * for these; the others keep Promote and Demote until their night workers are converted, so a control never
  * promises what the night will not do. Add a type here in the same change that converts its worker.
  */
-export const QUEUE_LIVE: ReadonlySet<string> = new Set(['explainers', 'reels', 'carousels', 'stories']);
+export const QUEUE_LIVE: ReadonlySet<string> = new Set(['explainers', 'reels', 'carousels', 'stories', 'reel_ai_drama']);
 
 /**
  * Types that take Archive but not Pin or drag (Last Few Days: its pool is the last run's record, so there is no queue to steer,

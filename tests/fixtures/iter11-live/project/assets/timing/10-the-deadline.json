@@ -1,0 +1,138 @@
+{
+ "frame": 10,
+ "id": "10-the-deadline",
+ "duration": 7.368,
+ "voice_end": 7.238,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "A",
+   "start": 0.02,
+   "end": 0.03
+  },
+  {
+   "text": "judge's",
+   "start": 0.101,
+   "end": 0.387
+  },
+  {
+   "text": "deadline",
+   "start": 0.565,
+   "end": 0.744
+  },
+  {
+   "text": "to",
+   "start": 0.78,
+   "end": 0.815
+  },
+  {
+   "text": "reunite",
+   "start": 0.887,
+   "end": 1.244
+  },
+  {
+   "text": "separated",
+   "start": 1.315,
+   "end": 1.673
+  },
+  {
+   "text": "children",
+   "start": 1.744,
+   "end": 2.101
+  },
+  {
+   "text": "five",
+   "start": 2.173,
+   "end": 2.387
+  },
+  {
+   "text": "and",
+   "start": 2.423,
+   "end": 2.458
+  },
+  {
+   "text": "older",
+   "start": 2.53,
+   "end": 2.815
+  },
+  {
+   "text": "was",
+   "start": 2.887,
+   "end": 2.958
+  },
+  {
+   "text": "July",
+   "start": 3.03,
+   "end": 3.315
+  },
+  {
+   "text": "26,",
+   "start": 3.458,
+   "end": 4.03
+  },
+  {
+   "text": "and",
+   "start": 4.181,
+   "end": 4.181
+  },
+  {
+   "text": "employees",
+   "start": 4.414,
+   "end": 4.664
+  },
+  {
+   "text": "chose",
+   "start": 4.735,
+   "end": 5.02
+  },
+  {
+   "text": "that",
+   "start": 5.128,
+   "end": 5.235
+  },
+  {
+   "text": "day",
+   "start": 5.307,
+   "end": 5.45
+  },
+  {
+   "text": "to",
+   "start": 5.521,
+   "end": 5.664
+  },
+  {
+   "text": "act,",
+   "start": 5.807,
+   "end": 5.876
+  },
+  {
+   "text": "The",
+   "start": 6.186,
+   "end": 6.186
+  },
+  {
+   "text": "Seattle",
+   "start": 6.238,
+   "end": 6.452
+  },
+  {
+   "text": "Times",
+   "start": 6.523,
+   "end": 6.738
+  },
+  {
+   "text": "reported.",
+   "start": 6.809,
+   "end": 7.166
+  }
+ ],
+ "lines": [
+  {
+   "id": "L10",
+   "start": 0.02,
+   "end": 7.166,
+   "label": "July 26, 2018",
+   "label_kind": "date"
+  }
+ ]
+}

@@ -21,6 +21,8 @@ const LEGACY_START: Record<Exclude<Vertical, 'stories'>, ReadonlyArray<{ id: str
   carousels: CAROUSEL_SLOTS,
   last_few_days: [LFD_WINDOW],
   ai_events: [AI_EVENTS_WINDOW, AI_EVENTS_NIGHT_WINDOW],
+  // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS, copied so slot code never imports the drama backend (a test pins it).
+  reel_ai_drama: [{ id: 'evening', startMinute: 1200 }],
 };
 
 export function legacyKey(vertical: Vertical, slot: string): { startMinute: number; series: StorySeries | null } | null {

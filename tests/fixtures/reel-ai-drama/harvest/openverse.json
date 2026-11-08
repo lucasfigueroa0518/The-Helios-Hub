@@ -1,0 +1,4 @@
+{ "results": [
+  { "url": "https://live.staticflickr.com/1/office-sf.jpg", "foreign_landing_url": "https://www.flickr.com/photos/x/1", "mime_type": "image/jpeg", "width": 1600, "height": 1067, "license": "by", "license_version": "2.0", "creator": "Jane Flickr", "source": "flickr", "title": "Office building in San Francisco", "tags": [{ "name": "office" }] },
+  { "url": "https://live.staticflickr.com/2/ai-art.jpg", "foreign_landing_url": "https://www.flickr.com/photos/x/2", "mime_type": "image/jpeg", "width": 1600, "height": 1067, "license": "by", "license_version": "2.0", "creator": "Bot", "source": "flickr", "title": "AI-generated city of the future", "tags": [] }
+] }

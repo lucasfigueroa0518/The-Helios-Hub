@@ -42,6 +42,40 @@
   line-height: 1.35;
 }
 
+/* Explainers 4.2: the reel's warnings (fail open), on the drawer and on the card. */
+.ex-warnings {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--rh-warn);
+  border-left-width: 4px;
+  border-radius: 12px;
+  background: rgba(194, 120, 3, 0.08);
+  color: var(--rh-ink);
+}
+.ex-warnings__head { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 14px; font-weight: 700; }
+.ex-warnings__head svg { color: var(--rh-warn); flex: none; }
+.ex-warnings__sub { margin: 4px 0 8px; color: var(--rh-muted); font-size: 12.5px; }
+.ex-warnings__list { display: grid; gap: 6px; margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.4; }
+.ex-warnings__list strong { font-weight: 700; }
+.ex-reel__warnings {
+  display: grid;
+  gap: 2px;
+  margin: 6px 2px 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(194, 120, 3, 0.1);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+.ex-reel__warnings-count { display: inline-flex; align-items: center; gap: 4px; color: var(--rh-warn); font-weight: 700; }
+.ex-reel__warnings-line {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--rh-ink);
+}
+
 .ex-sheet { display: block; max-width: 100%; border-radius: 12px; border: 1px solid var(--rh-line); }
 .ex-links { display: flex; gap: 14px; margin: 12px 0 0; font-size: 13px; }
 .ex-links a { color: var(--rh-accent-ink); }

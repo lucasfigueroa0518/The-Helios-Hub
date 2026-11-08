@@ -10,9 +10,9 @@ import type { Vertical } from '@/lib/social-hub/types';
  * idea. A move lasts until its idea is made (B8; lib/social-hub/queries/day.ts consumeMoves).
  */
 
-const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories'];
+const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'reel_ai_drama'];
 /** A hub idea id: `<vertical>:<kind>:<ref>`, refs as the adapters make them. */
-const IDEA_ID = /^(reels|carousels|explainers|stories):[A-Za-z_]+:[^\s]{1,2000}$/;
+const IDEA_ID = /^(reels|carousels|explainers|stories|reel_ai_drama):[A-Za-z_]+:[^\s]{1,2000}$/;
 
 export type RankMove = { vertical: Vertical; ideaId: string; kind: 'promote' | 'demote' };
 

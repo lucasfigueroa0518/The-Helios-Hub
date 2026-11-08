@@ -39,9 +39,9 @@ export function isAiEventsDay(plan: SlotPlan, nyDate: string): boolean {
   return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'ai_events');
 }
 
-/** Before the calendar: Text on Screen posts as trial reels, Explainers to the main feed. */
+/** Before the calendar: Text on Screen posts as trial reels, Explainers and AI Drama Reels to the main feed. */
 export function legacyFeedMode(vertical: Vertical): FeedMode | null {
-  return vertical === 'reels' ? 'trial' : vertical === 'explainers' ? 'main' : null;
+  return vertical === 'reels' ? 'trial' : vertical === 'explainers' || vertical === 'reel_ai_drama' ? 'main' : null;
 }
 
 /**
@@ -49,7 +49,7 @@ export function legacyFeedMode(vertical: Vertical): FeedMode | null {
  * the type's old behavior (a force post with no slot, a booking from before
  * the column). Reel types only.
  */
-export async function bookingFeedMode(q: SlotQuery, itemId: string | null, vertical: 'reels' | 'explainers', ideaRef: string | null = null): Promise<FeedMode> {
+export async function bookingFeedMode(q: SlotQuery, itemId: string | null, vertical: 'reels' | 'explainers' | 'reel_ai_drama', ideaRef: string | null = null): Promise<FeedMode> {
   try {
     const { rows } = await q(
       `SELECT feed_mode FROM social_hub.schedule

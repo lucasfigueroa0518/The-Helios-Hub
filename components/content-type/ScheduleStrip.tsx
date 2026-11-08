@@ -7,7 +7,7 @@ const SERIES_SHORT: Record<string, string> = { morning_download: 'Morning Dl', g
 
 /** This week's slots for one type, read only; the calendar owns when (spec §4). */
 export function ScheduleStrip({ type, days }: { type: string; days: readonly ScheduleDay[] }) {
-  const reel = type === 'reels' || type === 'explainers';
+  const reel = type === 'reels' || type === 'explainers' || type === 'reel_ai_drama';
   return (
     <div className="rh-schedule">
       <p className="rh-settings__note">When this type posts is set on the calendar.</p>

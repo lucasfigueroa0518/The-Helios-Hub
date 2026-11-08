@@ -1,6 +1,7 @@
 import type { HubQuery } from '@/lib/social-hub/db';
 import { toMicros, type LedgerRow, type Pool } from '@/lib/social-hub/cost';
 import { klingClipUsdSql } from '@/lib/reels/insights';
+import { readDramaCosts, type DramaCostEventRow, type DramaRenderedRow } from '@/lib/reel-ai-drama/hub-read';
 
 /**
  * Ledger reads for the cost model (§8a), SELECT only. The only money
@@ -42,6 +43,9 @@ export type CostReads = {
   lfdRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
   /** AI Events runs with the week's post (null: it made none). Optional the same way. */
   aiEventsRuns?: Array<{ id: string; jev_usd: string; ny_date: string; post_id: string | null }>;
+  /** AI Drama Reels cost_events and finished jobs (lib/reel-ai-drama/hub.ts readDramaCosts), on the explainers handle. Optional the same way. */
+  dramaEvents?: DramaCostEventRow[];
+  dramaRendered?: DramaRenderedRow[];
 };
 
 /** Trial Reels activities whose spend belongs to one post idea (lib/reels/analytics/rollups.ts). */
@@ -120,6 +124,10 @@ export async function readCosts(q: HubQuery, explainersQ: Promise<HubQuery> | Hu
     return eq ? eq(COST_SQL[key]) : Promise.resolve({ rows: [] });
   }));
   const reads = Object.fromEntries(keys.map((key, i) => [key, results[i]!.rows])) as unknown as CostReads;
+  // AI Drama Reels share the explainers handle. A database without the drama schema reads as no drama spend.
+  const drama = eq ? await readDramaCosts(eq).catch(() => ({ events: [], rendered: [] })) : { events: [], rendered: [] };
+  reads.dramaEvents = drama.events;
+  reads.dramaRendered = drama.rendered;
   return missing ? { ...reads, explainersMissing: missing } : reads;
 }
 
@@ -174,6 +182,24 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
       nyDate: e.ny_date,
       micros: toMicros(e.usd),
       target: e.job_id ? { kind: 'item', item: `explainers:${e.job_id}` } : { kind: 'pool', pool: `explainers:day:${e.ny_date}` },
+      label: e.component,
+      vendor: e.vendor,
+      mode: mode(e.production),
+      ...(e.unknown ? { unknown: true } : {}),
+    });
+  }
+
+  // ── AI Drama Reels: the Explainers rule. Rows with a job are direct; development rows split across that day's reels.
+  const dramaByDay = new Map<string, string[]>();
+  for (const j of r.dramaRendered ?? []) dramaByDay.set(j.ny_date, [...(dramaByDay.get(j.ny_date) ?? []), `reel_ai_drama:${j.job_id}`]);
+  for (const [d, items] of dramaByDay) pools.push({ key: `reel_ai_drama:day:${d}`, items: items.map((item) => ({ item })) });
+  for (const e of r.dramaEvents ?? []) {
+    rows.push({
+      id: `reel_ai_drama:ce:${e.id}`,
+      vertical: 'reel_ai_drama',
+      nyDate: e.ny_date,
+      micros: toMicros(e.usd),
+      target: e.job_id ? { kind: 'item', item: `reel_ai_drama:${e.job_id}` } : { kind: 'pool', pool: `reel_ai_drama:day:${e.ny_date}` },
       label: e.component,
       vendor: e.vendor,
       mode: mode(e.production),

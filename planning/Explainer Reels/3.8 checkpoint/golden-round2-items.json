@@ -1,0 +1,647 @@
+{
+ "A": [
+  {
+   "topic": "RAG chunks",
+   "scene": "A grandmother on a video call asks for the clip of the baby's first steps, and the sender only has one two-hour family video, far too big to attach.",
+   "hook": "The sender tries to attach the huge video and the size bar bursts red while grandma waits on screen.",
+   "maps": "the two-hour video = the whole document; the short clips = the chunks; the attachment size limit = the model's limited prompt space; the sender scanning thumbnails = the search that finds the matching chunk",
+   "src": "draft v8 #1",
+   "seat": "builder",
+   "id": "a01"
+  },
+  {
+   "topic": "Context window",
+   "scene": "During a power cut, someone holds a flashlight while their partner asks about the first box they passed in the garage, but the beam lights only the boxes right in front.",
+   "hook": "The partner asks about the first box and the flashlight holder points the beam at a different one.",
+   "maps": "the partner = the user asking the question; the flashlight holder = the model that answers; the beam = the context window, a fixed-size view; the boxes on the shelves = the pieces of the conversation",
+   "src": "draft v8 #4",
+   "seat": "user",
+   "id": "a02"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A driver at a crossroads has been told only 'take me to Joe's Pizza' and has no idea which way to turn, until the map app turns the name into a street number.",
+   "hook": "The driver is stopped at a crossroads with every road unmarked, while the passenger insists 'just go to Joe's Pizza'.",
+   "maps": "the driver = the browser, who needs to get somewhere; the name 'Joe's Pizza' = the domain name; the map app's search box = the DNS lookup; the pin on 482 Maple St = the server's numeric IP address",
+   "src": "draft v8 #1",
+   "seat": "user",
+   "id": "a03"
+  },
+  {
+   "topic": "API",
+   "scene": "A driver late for dinner hands over the keys at a valet stand and trusts the car will come back, without knowing where it gets parked.",
+   "hook": "The driver waves a ticket at the valet stand, shouting that they are late, while the valet disappears into a huge garage that the driver can't see into.",
+   "maps": "the driver = your software, which needs something fetched; the claim ticket = the structured request that identifies exactly what you want; the valet = the API, which does the fetching and returns the result; the garage = the other system's hidden internals",
+   "src": "draft v8 #4",
+   "seat": "builder",
+   "id": "a04"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A small business owner needs a quick photo of a shelf for inventory and polished portraits for the website, with a phone in a pocket and a photographer on call.",
+   "hook": "The photographer, surrounded by studio lights and a price tag, is shooting a mop bucket in the back room for the stock list.",
+   "maps": "the owner = the router that decides who handles each photo job; the phone camera = the small, cheap, fast model; the hired photographer = the large, powerful, costly model; the photo needs (shelf snapshot, website portraits) = the easy and hard requests arriving",
+   "src": "draft v8 #5",
+   "seat": "builder",
+   "id": "a05"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A cook keeps a small jar of salt on the counter instead of walking to the faraway pantry every time.",
+   "hook": "The cook, pan sizzling, sprints down a long hallway to the pantry for a pinch of salt, for the fifth time, while the food burns.",
+   "maps": "the cook = the program needing data; the pantry down the hall = the slow original source (database or server); the small jar on the counter = the cache; the salt = the requested data",
+   "src": "anchor 3.8 p1#1",
+   "jev": {
+    "reach": 2.76,
+    "aptness": 3.78,
+    "interest": 2.2,
+    "familiarity": 2.88,
+    "hook_clarity": 3.57,
+    "visual_strength": 2.69,
+    "mapping_fidelity": 3.33
+   },
+   "total": 77.15,
+   "id": "a06"
+  },
+  {
+   "topic": "Context window",
+   "scene": "A child asks grandma to praise the very first dinosaur drawing, but the fridge door holds only six drawings and the early ones are now in a drawer.",
+   "hook": "The child holds up the first drawing while grandma smiles at a fridge door that does not show it.",
+   "maps": "the child = the user asking the question; the grandma = the model that answers; the fridge door = the context window, a fixed amount of space; the drawings = the pieces of the conversation",
+   "src": "draft v8 #5",
+   "seat": "user",
+   "id": "a07"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A guest arrives at a wedding knowing only his own name, and the seating chart tells him he's at table 12.",
+   "hook": "A guest holding a name card stands in a banquet hall of identical round tables while other guests stare at him.",
+   "maps": "the guest = the browser; the name card = the domain name; the seating chart = the DNS lookup; table 12 = the server's numeric address",
+   "src": "draft v8 #4",
+   "seat": "user",
+   "id": "a08"
+  },
+  {
+   "topic": "API",
+   "scene": "A customer drops off a stained shirt at the dry cleaner and wants it back clean, but the tag only has certain boxes to tick.",
+   "hook": "The customer scribbles a long note across the tag, and the clerk holds it up, puzzled, with no box to put it in.",
+   "maps": "the customer = your software, which needs a job done; the tick-box tag = the structured format a request must follow; the counter clerk = the API, which accepts valid requests and hands back results; the back room = the other system's hidden machinery",
+   "src": "draft v8 #3",
+   "seat": "builder",
+   "id": "a09"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "At a party, a friend wants a mushroom-only slice, but the pizza is one big pie of mixed toppings and the paper plate is small.",
+   "hook": "The host tries to fit an entire pizza onto a tiny paper plate while a friend asks for just mushroom.",
+   "maps": "the whole pizza = the whole document; the slices = the chunks; the paper plate = the limited prompt space; the host picking a slice = the search that finds the matching chunk",
+   "src": "draft v8 #4",
+   "seat": "builder",
+   "id": "a10"
+  },
+  {
+   "topic": "API",
+   "scene": "A driver at the car wash picks a package on the screen and rolls into a tunnel they can't see through, hoping to come out clean.",
+   "hook": "The driver stares at a screen with three package buttons, none of which is the wax-only wash they want, with a dark tunnel waiting ahead.",
+   "maps": "the driver = your software, which wants a job done; the package screen = the API's fixed list of options you can call; the wash tunnel = the other system doing hidden work; the clean car = the response returned after the work is done",
+   "src": "draft v8 #5",
+   "seat": "builder",
+   "id": "a11"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A baker watching a cooking video on their phone hears the video's oven timer go off, rushes to open their own oven, and ruins the half-baked cake.",
+   "hook": "A baker yanks open the oven door as the cake inside sags, while their own timer sits quiet on the counter and the phone beeps.",
+   "maps": "the baker = the AI model doing the job; the baker's own oven timer = the owner's real instructions; the cooking video = the outside content the model is reading; the beep inside the video = a hidden command inside that content",
+   "src": "draft v8 #2",
+   "seat": "builder",
+   "id": "a12"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A customer at a busy deli at lunchtime sees a line and a clock, and wants a sandwich now.",
+   "hook": "The customer grabs a sandwich from the case in one second while the person beside them is still waiting at the kitchen line with a long ticket.",
+   "maps": "the kitchen line = the slow origin that builds each result from scratch; the display case = the cache holding ready-made results; the customer = the software requesting something",
+   "src": "draft v8 #4",
+   "seat": "user",
+   "id": "a13"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A traveler stands at the front door with a short errand and a long trip, with a taxi at the curb and the meter running.",
+   "hook": "The traveler is climbing into a taxi with the meter already running, to go to a mailbox visible across the street.",
+   "maps": "the traveler = the router that picks a way to get there for each trip; the walking shoes = the small, cheap, fast model; the taxi = the large, powerful, costly model; the trips (corner mailbox, airport) = the easy and hard requests arriving",
+   "src": "draft v8 #2",
+   "seat": "builder",
+   "id": "a14"
+  },
+  {
+   "topic": "Webhook",
+   "scene": "A hungry customer keeps going back to the counter to ask whether the order is ready, instead of holding a pager that will buzz.",
+   "hook": "The customer asks the cook for the fifth time at the counter and the cook rolls their eyes with the meal one minute from done.",
+   "maps": "the kitchen cook = the app where the event happens; the pager = the webhook URL, the registered way to reach the customer; the customer = the receiving app that wants to know; the finished meal = the event and its details",
+   "src": "draft v8 #2",
+   "seat": "builder",
+   "id": "a15"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "A sonar captain hunts a hidden ship in a vast ocean and can only read one small screen.",
+   "hook": "A sonar screen is one huge flashing blob over the entire ocean, and the captain scratches their head because the ship could be anywhere.",
+   "maps": "the whole ocean = the whole document; numbered ocean squares (a few) = the chunks; the sonar ping = the search that compares each piece to the question; the small sonar screen = the model's prompt, with limited room",
+   "src": "anchor 3.8 p3#5",
+   "jev": {
+    "reach": 1.24,
+    "aptness": 3.2,
+    "interest": 2.63,
+    "familiarity": 1.55,
+    "hook_clarity": 1.84,
+    "visual_strength": 2.75,
+    "mapping_fidelity": 3.13
+   },
+   "total": 61.9,
+   "id": "a16"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A shopper in a big grocery store wants pasta sauce, but the shelves show no sauce sign, so she asks an employee who tells her 'aisle 7'.",
+   "hook": "A shopper with a half-full cart stands in front of a dozen identical aisles, holding a jar-shaped thought bubble.",
+   "maps": "the shopper = the browser, who wants to reach a site; the item 'pasta sauce' = the domain name; the store employee = the DNS lookup; aisle 7 = the server's numeric address",
+   "src": "draft v8 #2",
+   "seat": "user",
+   "id": "a17"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A tenant is tired of trekking across town to the landlord's office to borrow the building key every single time.",
+   "hook": "The tenant stands at the front door, rattling a spare key that suddenly will not turn, while the landlord's office sits tiny and far away on the horizon.",
+   "maps": "the landlord's office = the original source that is slow to reach; the spare key on the key ring = the cache, a nearby copy; the tenant = the software asking again and again; the changed lock = the original changing so the copy is stale",
+   "src": "draft v8 #1",
+   "seat": "user",
+   "id": "a18"
+  },
+  {
+   "topic": "API",
+   "scene": "A hungry diner wants a dish, and the only way to get it is through a waiter, because the kitchen door is closed.",
+   "hook": "The diner points at a dish that is not on the menu while the waiter shakes his head, and the closed kitchen door stays shut behind him.",
+   "maps": "the diner = your software, which wants a feature from another system; the menu = the API's documented list of requests it accepts; the waiter = the API itself, carrying the request in and the result back; the kitchen = the other software, whose inner workings stay hidden",
+   "src": "draft v8 #1",
+   "seat": "builder",
+   "id": "a19"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A cook stands in the kitchen with one egg to scramble and a ball of bread dough to knead, with a fork and a stand mixer within reach.",
+   "hook": "The cook is hauling out the giant stand mixer to scramble a single egg, with a mountain of dishes already waiting.",
+   "maps": "the cook = the router that decides which tool each job gets; the fork = the small, cheap, fast model; the stand mixer = the large, powerful, costly model; the kitchen jobs (one egg, bread dough) = the easy and hard requests arriving",
+   "src": "draft v8 #4",
+   "seat": "builder",
+   "id": "a20"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A dog trained to run back at its owner's whistle bolts across the park to a stranger who happens to whistle the same pitch.",
+   "hook": "A dog sprints away from the playing field toward a stranger holding a whistle, ears up, tongue out.",
+   "maps": "the dog = the AI model doing the job; the owner's whistle = the owner's real instructions; the park's background sounds = the outside content the model takes in; the stranger's matching whistle = a hidden command inside that content",
+   "src": "draft v8 #3",
+   "seat": "builder",
+   "id": "a21"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "At work on Wednesday, someone opens the fridge for their chicken-and-rice lunch, but Sunday's meal prep is one giant tub of everything mixed together.",
+   "hook": "The coworker stares at a giant mixed tub that won't fit in the lunchbox as the lunch break ticks away.",
+   "maps": "the giant tub = the whole document; the portion containers = the chunks; the lunchbox = the limited prompt space; the hungry coworker choosing a container = the search that finds the matching chunk",
+   "src": "draft v8 #5",
+   "seat": "builder",
+   "id": "a22"
+  },
+  {
+   "topic": "Webhook",
+   "scene": "A party host keeps peeking out the window for a late friend, instead of letting the friend press the buzzer for their unit.",
+   "hook": "The host is stirring a pot with one eye glued to the street window, burning the sauce while the friend stands unseen at the lobby door.",
+   "maps": "the arriving friend = the app where the event happens; the unit button on the buzzer panel = the webhook URL, the address tied to the host; the host upstairs = the receiving app; the lobby door = the event, the arrival at the building",
+   "src": "draft v8 #4",
+   "seat": "builder",
+   "id": "a23"
+  },
+  {
+   "topic": "Context window",
+   "scene": "A driver asks the passenger holding the phone map where the trip started, but the zoomed-in screen shows only the stretch right around the car.",
+   "hook": "The driver asks where they started and the passenger shrugs at a screen showing only road and a blue dot.",
+   "maps": "the driver = the user asking the question; the passenger = the model that answers; the phone screen = the context window, a fixed-size view; the long route = the whole conversation so far",
+   "src": "draft v8 #2",
+   "seat": "user",
+   "id": "a24"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A shopper in the grocery aisle needs to know if there are eggs at home, and going home to look is out of the question.",
+   "hook": "The shopper confidently drops a carton of eggs back on the shelf while a thought bubble shows the real fridge at home, empty.",
+   "maps": "the fridge at home = the original source, far away; the photo on the shopper's phone = the cache, a nearby copy; the shopper = the software that needs the answer; the partner = another change to the original that makes the copy stale",
+   "src": "draft v8 #2",
+   "seat": "user",
+   "id": "a25"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A homeowner stands at the kitchen sink with a wobbly cabinet door and a dripping pipe, and has to decide who fixes what.",
+   "hook": "The homeowner reaches for the phone to book the plumber for a loose screw, while the screwdriver sits unnoticed on the counter.",
+   "maps": "the homeowner = the router that looks at each job and chooses who handles it; the screwdriver = the small, cheap, fast model; the plumber = the large, powerful, costly model; the household jobs (loose hinge, leaking pipe) = the easy and hard requests arriving",
+   "src": "draft v8 #1",
+   "seat": "builder",
+   "id": "a26"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A person moving house stands in the driveway with a lamp and a sofa, and has to decide how each gets to the new place.",
+   "hook": "The mover is straining to strap a huge sofa to the roof of the tiny hatchback while the moving truck idles nearby.",
+   "maps": "the mover = the router that decides who carries each item; the friend's hatchback = the small, cheap, quick model; the moving truck with its crew = the large, powerful, costly model; the items (lamp, sofa) = the easy and hard requests arriving",
+   "src": "draft v8 #3",
+   "seat": "builder",
+   "id": "a27"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A driver following the route arrows to the airport sees a sticker arrow on a roadside pizza sign and swerves toward the side street it points to.",
+   "hook": "The driver sits at a fork with a road arrow pointing left and a sticker arrow on a shop sign pointing right, eyes darting between them.",
+   "maps": "the driver = the AI model doing the job; the route arrow on the road = the owner's real instructions; the shops and roadside signs = the pages and documents the model reads while working; the planted sticker arrow = a hidden command inside that content",
+   "src": "draft v8 #1",
+   "seat": "builder",
+   "id": "a28"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A traveler rushing through the airport knows only that she is on 'the Lisbon flight', and checks the departures board to find 'Gate 23'.",
+   "hook": "A traveler with a boarding pass sprints past endless gates, checking her watch, with no idea which one is hers.",
+   "maps": "the traveler = the browser; the 'Lisbon' flight name = the domain name; the departures board = the DNS lookup; Gate 23 = the server's numeric address",
+   "src": "draft v8 #3",
+   "seat": "user",
+   "id": "a29"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A hungry person wants soup for dinner, and cooking a pot from scratch takes an hour every single night.",
+   "hook": "The hungry person stares at a clock showing a long wait next to a bubbling pot, while a ready container sits one step away in the fridge.",
+   "maps": "the stove with the big pot = the slow work of computing the result; the container in the fridge = the cache holding the finished result; the hungry person = the software that needs the result",
+   "src": "draft v8 #3",
+   "seat": "user",
+   "id": "a30"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A teammate keeps walking back to a distant meeting room to check the table plan sketched on a whiteboard for the offsite dinner.",
+   "hook": "The teammate confidently points to a seat on a phone photo while, down the hallway, the organizer wipes the whiteboard and draws a different layout.",
+   "maps": "the whiteboard = the original source, in a far room; the photo on the teammate's phone = the cache, a nearby copy; the teammate = the software asking repeatedly; the organizer with the marker = the update that makes the copy stale",
+   "src": "draft v8 #5",
+   "seat": "user",
+   "id": "a31"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A visitor stands outside an apartment building at night, knowing only his friend's name, and finds 'Lee' on the buzzer panel next to unit 305.",
+   "hook": "A visitor in the rain faces a panel of 40 identical buttons, holding a pizza box and unsure which one to press.",
+   "maps": "the visitor = the browser; the friend's name 'Lee' = the domain name; the buzzer panel = the DNS lookup; unit 305 = the server's numeric address",
+   "src": "draft v8 #5",
+   "seat": "user",
+   "id": "a32"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A pirate captain wants to sail to a named island, but the ship's steering dial accepts only coordinates, so the navigator looks the island up in the atlas.",
+   "hook": "A pirate captain shouts a destination at the ship's wheel, but the wheel's dial shows only blank number slots.",
+   "maps": "the pirate captain = The browser that wants a named destination; the navigator with the atlas = DNS lookup that turns a name into numbers; the coordinates on the ship's dial = The numeric IP address used to route the request; the island = The server hosting the website",
+   "src": "anchor 3.8 p2#3",
+   "jev": {
+    "reach": 1.75,
+    "aptness": 3.3,
+    "interest": 2.61,
+    "familiarity": 1.52,
+    "hook_clarity": 2.64,
+    "visual_strength": 2.6,
+    "mapping_fidelity": 3.23
+   },
+   "total": 65.613,
+   "id": "a33"
+  },
+  {
+   "topic": "API",
+   "scene": "A shopper wants a snack from a vending machine and can only get it by pressing a code the machine recognizes.",
+   "hook": "The shopper stabs a code that doesn't exist while the machine blinks ERROR and a snack sits just out of reach behind the glass.",
+   "maps": "the shopper = your program, which wants something from another system; the keypad with listed codes = the API's defined set of calls, each with a fixed format; the vending machine = the other software that does the actual work; the snack = the response the caller gets back",
+   "src": "draft v8 #2",
+   "seat": "builder",
+   "id": "a34"
+  },
+  {
+   "topic": "Webhook",
+   "scene": "A shop owner keeps leaving customers at the counter to check the back door for the supplier, until a bell is wired to ring at the counter.",
+   "hook": "The shop owner abandons a customer mid-sentence for the fourth trip to the back door, only to find an empty dock again.",
+   "maps": "the supplier's driver = the app where the event happens; the back-door bell wired to the counter = the webhook URL, the address that reaches the owner; the shop owner = the receiving app; the crates at the loading dock = the event and its details",
+   "src": "draft v8 #5",
+   "seat": "builder",
+   "id": "a35"
+  },
+  {
+   "topic": "Context window",
+   "scene": "A driver wants proof of the scrape at the start of a long trip, but the dashcam card has been recording over itself and the clerk can only watch what is left.",
+   "hook": "The driver points at the start of the trip while the clerk squints at a card with no scrape on it.",
+   "maps": "the driver = the user asking the question; the insurance clerk = the model that answers; the memory card = the context window, a fixed size; the video clips = the pieces of the conversation",
+   "src": "draft v8 #1",
+   "seat": "user",
+   "id": "a36"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A cell's tiny assembly machine builds whatever blueprint ribbon runs through it, and a virus feeds in its own ribbon.",
+   "hook": "A cell's machine pumps out tiny spiky virus pieces instead of healthy parts, and a red light blinks on its panel.",
+   "maps": "the assembly machine = the language model, which follows whatever it reads; the cell's own blueprint ribbon = the real instructions; the virus's ribbon spliced onto the line = hidden commands inside untrusted content; the finished parts = the model's output or behavior",
+   "src": "anchor 3.8 p3#3",
+   "jev": {
+    "reach": 1.18,
+    "aptness": 3.39,
+    "interest": 2.28,
+    "familiarity": 0.76,
+    "hook_clarity": 1.92,
+    "visual_strength": 3.01,
+    "mapping_fidelity": 3.26
+   },
+   "total": 59.925,
+   "id": "a37"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "Midnight in a new apartment: a tired mover needs a phone charger, and all the small stuff is in one giant box labeled just 'misc'.",
+   "hook": "The mover strains under the huge box beside a tiny nightstand with a phone at 1% battery.",
+   "maps": "the giant box = the whole document; the small labeled bins = the chunks; the label on each bin = each chunk's meaning used for matching; the bedside table = the limited prompt space",
+   "src": "draft v8 #2",
+   "seat": "builder",
+   "id": "a38"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "A driver with the fuel light on looks at a phone showing the whole country on one map, with no street detail visible.",
+   "hook": "The fuel light blinks as the driver squints at a phone showing a blurry map of the whole country.",
+   "maps": "the whole-country map = the whole document; the small map squares = the chunks; the phone screen = the limited prompt space; the driver searching squares = the search that finds the matching chunk",
+   "src": "draft v8 #3",
+   "seat": "builder",
+   "id": "a39"
+  },
+  {
+   "topic": "Webhook",
+   "scene": "A shopper parked outside a store keeps walking in to ask if the groceries are ready, then learns the staff will bring them to the numbered spot.",
+   "hook": "The shopper is half out of the car for the third time, heading to the store door, as bags sit packed and waiting by the counter.",
+   "maps": "the store employee = the app where the event happens; the numbered parking spot = the webhook URL, the address where it will be delivered; the shopper in the car = the receiving app; the grocery bags = the event and its details",
+   "src": "draft v8 #3",
+   "seat": "builder",
+   "id": "a40"
+  },
+  {
+   "topic": "Context window",
+   "scene": "A housemate asks the cook to use the lemon set out first, but the counter fits only five ingredients and the lemon went back in the fridge.",
+   "hook": "The housemate holds up the lemon and the cook stirs a finished dish with no lemon in it.",
+   "maps": "the housemate = the user asking the question; the cook = the model that answers; the counter = the context window, a fixed amount of space; the ingredients = the pieces of the conversation",
+   "src": "draft v8 #3",
+   "seat": "user",
+   "id": "a41"
+  },
+  {
+   "topic": "API",
+   "scene": "A diner orders from a waiter, who carries the order into a closed kitchen and brings back the dish.",
+   "hook": "A hungry points at a menu item as the waiter disappears through swinging doors, then a steaming plate slides out and the has no idea how.",
+   "maps": "Diner = The client program asking for a feature; Waiter holding a menu = The API: it takes only requests listed in its menu (the documentation) and carries them across; Closed kitchen behind swinging doors = The other software and its hidden inner workings; Plate of food = The response returned to the caller",
+   "src": "anchor shipped cdfe57f4",
+   "id": "a42"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A diner in a crowded food court sees the next table's order puck buzz, leaps up, and walks to the counter to collect food that isn't theirs.",
+   "hook": "A diner is half out of their chair with their own puck dark, while the identical puck at the next table buzzes and flashes.",
+   "maps": "the diner = the AI model doing the job; the diner's own order puck = the owner's real instructions; the food court crowd and trays = the outside content the model takes in; the neighbor's buzzing puck = a hidden command inside that content",
+   "src": "draft v8 #5",
+   "seat": "builder",
+   "id": "a43"
+  },
+  {
+   "topic": "Webhook",
+   "scene": "A homeowner waiting on a parcel keeps trotting out to check an empty porch, while the driver could simply ring the bell.",
+   "hook": "The homeowner peeks through the door for the sixth time at an empty porch while the driver's van turns onto the street.",
+   "maps": "the delivery driver = the app where the event happens, which sends the notice; the doorbell at the front door = the webhook URL, the address left for notices; the homeowner inside = the receiving app that needs to know; the parcel on the porch = the event itself and its details",
+   "src": "draft v8 #1",
+   "seat": "builder",
+   "id": "a44"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A driver hunting for stadium parking follows a stranger in a hi-vis vest who waves them off the real lot into a dirt field.",
+   "hook": "A driver crawls forward between two vest-wearing figures waving opposite ways, one at the gate and one pointing to a muddy field.",
+   "maps": "the driver = the AI model doing the job; the real lot attendant = the owner's real instructions; the crowd of people walking around = the outside content the model takes in; the stranger in a hi-vis vest = a hidden command inside that content",
+   "src": "draft v8 #4",
+   "seat": "builder",
+   "id": "a45"
+  }
+ ],
+ "G": [
+  {
+   "topic": "Webhook",
+   "line": "Your app keeps asking a calendar service whether anyone booked, and most replies say nothing changed. How could it hear about bookings instantly?",
+   "src": "draft gap v2 #2",
+   "seat": "builder",
+   "id": "g01"
+  },
+  {
+   "topic": "API",
+   "line": "A shipping company rebuilt everything behind its rate lookup, yet your checkout kept working without a single change. Why didn't it break?",
+   "src": "draft gap v2 #3",
+   "seat": "builder",
+   "id": "g02"
+  },
+  {
+   "topic": "DNS",
+   "line": "You mistype one letter in a web address and get an error, while the correct spelling opens instantly. What can your browser do with one but not the other?",
+   "src": "draft gap v2 #3",
+   "seat": "user",
+   "id": "g03"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "You pay for the text you send an AI. How does your help bot send just the one paragraph that answers a customer?",
+   "src": "draft gap v2 #2",
+   "seat": "builder",
+   "id": "g04"
+  },
+  {
+   "topic": "Context window",
+   "line": "You paste a huge report into an AI chatbot and ask for a summary, and it only covers the second half. Where did the first half go?",
+   "src": "draft gap v2 #2",
+   "seat": "user",
+   "id": "g05"
+  },
+  {
+   "topic": "Context window",
+   "line": "Two hours into a long chat with an AI assistant, you ask about the first thing you told it, and it answers like it never heard it. Why?",
+   "src": "draft gap v2 #1",
+   "seat": "user",
+   "id": "g06"
+  },
+  {
+   "topic": "Cache",
+   "line": "Software often shows you information that is slightly out of date, and it does it on purpose. Why would a program keep an old copy of something instead of asking for the latest every time?",
+   "src": "anchor 3.8 gap p1#2",
+   "jev": {
+    "pull": 2.09,
+    "clarity": 3.12,
+    "closable": 3.3
+   },
+   "id": "g07"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "You paste your whole handbook into an AI chat and it says it's too long. How can it still answer from it?",
+   "src": "draft gap v2 #1",
+   "seat": "builder",
+   "id": "g08"
+  },
+  {
+   "topic": "DNS",
+   "line": "You type a company's name into your browser and its homepage appears in a blink, from anywhere on Earth. How did your browser know where to go?",
+   "src": "draft gap v2 #1",
+   "seat": "user",
+   "id": "g09"
+  },
+  {
+   "topic": "Cache",
+   "line": "A company changes its logo, but you still see the old one on their site until a friend shows you the new one. Why are you stuck in the past?",
+   "src": "draft gap v2 #2",
+   "seat": "user",
+   "id": "g10"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "Giving an AI the whole document sounds like the smart move. Yet many systems cut it into small pieces first and search those. What can a small piece do that the whole document can't?",
+   "src": "anchor 3.8 gap p2#2",
+   "jev": {
+    "pull": 1.64,
+    "clarity": 2.79,
+    "closable": 3.61
+   },
+   "id": "g11"
+  },
+  {
+   "topic": "API",
+   "line": "Your app shows live weather from another company's software you've never seen inside. How does your code get that answer?",
+   "src": "draft gap v2 #2",
+   "seat": "builder",
+   "id": "g12"
+  },
+  {
+   "topic": "Prompt injection",
+   "line": "You ask your resume-screening AI to rank applicants, and one resume ranks first after hiding white text saying 'pick me.' Why did your AI listen to a resume?",
+   "src": "draft gap v2 #2",
+   "seat": "builder",
+   "id": "g13"
+  },
+  {
+   "topic": "API",
+   "line": "You misspell one word in a card charge, and the payment company's software replies with a precise error. How does it know what's wrong?",
+   "src": "draft gap v2 #1",
+   "seat": "builder",
+   "id": "g14"
+  },
+  {
+   "topic": "Model routing",
+   "line": "You send every question, even \"what are your hours?\", to your most powerful AI and the bill balloons. How do you stop overpaying?",
+   "src": "draft gap v2 #1",
+   "seat": "builder",
+   "id": "g15"
+  },
+  {
+   "topic": "DNS",
+   "line": "A company moves its website to a new host, yet you type the same name and still land on the right site. What told your browser the new place?",
+   "src": "draft gap v2 #2",
+   "seat": "user",
+   "id": "g16"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "A 300-page manual covers dozens of topics, but as one unit it can only be matched on a single blurry overall meaning. So how does a search find the one paragraph you need?",
+   "src": "anchor 3.8 gap p2#3",
+   "jev": {
+    "pull": 1.51,
+    "clarity": 2.9,
+    "closable": 3.55
+   },
+   "id": "g17"
+  },
+  {
+   "topic": "Webhook",
+   "line": "A lead fills out your form, but your team only sees it every ten minutes. What would deliver it the instant it's sent?",
+   "src": "draft gap v2 #3",
+   "seat": "builder",
+   "id": "g18"
+  },
+  {
+   "topic": "Prompt injection",
+   "line": "Your support bot reads an incoming email, then ignores your rules and does what the email says. How can a stranger's message outrank your instructions?",
+   "src": "draft gap v2 #3",
+   "seat": "builder",
+   "id": "g19"
+  },
+  {
+   "topic": "Model routing",
+   "line": "Your assistant makes users wait for a one-word answer because every question goes to your biggest AI. How can easy ones return fast?",
+   "src": "draft gap v2 #2",
+   "seat": "builder",
+   "id": "g20"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "Your support bot searches whole manuals and keeps answering with the wrong, vaguely related page. How would you make it find the exact answer?",
+   "src": "draft gap v2 #3",
+   "seat": "builder",
+   "id": "g21"
+  },
+  {
+   "topic": "Context window",
+   "line": "You set ground rules at the start of a long chat, and by the end the AI breaks every one. What happened to your rules?",
+   "src": "draft gap v2 #3",
+   "seat": "user",
+   "id": "g22"
+  },
+  {
+   "topic": "Model routing",
+   "line": "You switched to a cheaper AI, but hard questions now get weaker answers. How do you keep the savings without losing quality?",
+   "src": "draft gap v2 #3",
+   "seat": "builder",
+   "id": "g23"
+  },
+  {
+   "topic": "Cache",
+   "line": "You scroll back up your social feed and the pictures you already saw appear instantly, without using more data. Where were they waiting?",
+   "src": "draft gap v2 #3",
+   "seat": "user",
+   "id": "g24"
+  },
+  {
+   "topic": "Webhook",
+   "line": "Your app asks the payment service every minute if anyone paid, and the answer is mostly no. How can it just be told?",
+   "src": "draft gap v2 #1",
+   "seat": "builder",
+   "id": "g25"
+  },
+  {
+   "topic": "Cache",
+   "line": "You open a website you visited yesterday and it loads almost instantly. Yet a brand-new site takes a few seconds. What did your phone hold onto?",
+   "src": "draft gap v2 #1",
+   "seat": "user",
+   "id": "g26"
+  },
+  {
+   "topic": "Prompt injection",
+   "line": "Your AI assistant summarizes a webpage for a customer, then suddenly emails them something you never asked it to say. What made it follow the page instead of you?",
+   "src": "draft gap v2 #1",
+   "seat": "builder",
+   "id": "g27"
+  }
+ ]
+}

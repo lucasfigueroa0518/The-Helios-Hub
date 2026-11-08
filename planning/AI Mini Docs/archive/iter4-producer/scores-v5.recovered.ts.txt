@@ -1,0 +1,170 @@
+// Recovered from session history: iteration-4 (drama-v5) pitch scoring question set, as it stood 2026-11-02.
+// Weights v5: { central_want: 0.3, opposition: 0.15, bounded_episode: 0.1, stakes: 0.1, scene: 0.1, turn: 0.15, implication: 0.1 }
+// Caps v5 (each 0.45): NO_CENTRAL_WANT_CAP (central_want level < 2, note 'no central figure whose want drives the events (MD-29)'), NO_OPPOSITION_CAP (opposition < 2), NO_EPISODE_CAP (bounded_episode < 2). Spectacle cap note: 'mainly a number or an announcement, not people acting on a want'.
+export const DRAMA_SET = defineQuestionSet({
+  id: 'reel-ai-drama-drama-v5',
+  version: '5',
+  questions: {
+    central_want: score(
+      {
+        question: 'Is there one central figure from the AI world whose own want (a fight, a pursuit, a bet or a decision) drives the events of this story?',
+        judge: `A central figure is a named person (or a small named group acting as one) whose wish, ambition, fear, conviction or decision sets the events moving and is tested by them. A quiet want counts as fully as a fight: years spent pursuing a goal, a bet on one choice, a decision to do something a certain way. A company counts only when it acts through named people whose choices we follow. A product, a market, a ranking or an announcement is not a figure. People who only comment on, react to, or are swept along by events do not count. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No one. The story is a product, a figure, a ranking, a market move or an announcement.',
+        'People appear, but they react to events rather than drive them, or the actor is a faceless organization.',
+        'A figure is present, but their want or decision is vague or only implied, and the events would happen without them.',
+        'A named figure with a clear want or decision whose choices move the events.',
+        'A named figure with a specific want, pursuit or decision that sets the events moving and is tested by what happens.',
+      ],
+    ),
+    stakes: score(
+      {
+        question: 'How much did the people in this story stand to win or lose, in a situation that mattered?',
+        judge: `Reward situations where a person's career, company, reputation, principles, survival or a relationship was really on the line, and where the outcome was genuinely uncertain at the time. Penalize stakes that are only money changing hands, only asserted, or carried by no one in particular. ${NOT_THE_TELLING}`,
+      },
+      [
+        'Nothing real was at stake for anyone in particular.',
+        'Small or routine stakes; the outcome was never in doubt.',
+        'Real stakes for someone, though contained.',
+        'High stakes for named people, with an uncertain outcome.',
+        'Everything was on the line for named people: a company, a career, a life\'s work or a conviction, with the outcome in real doubt.',
+      ],
+    ),
+    scene: score(
+      {
+        question: 'Does the story hold one vivid, concrete detail or moment that makes it a scene a viewer can see?',
+        judge: `A scene is a specific place, object, message, room or exchange at a specific moment: something a viewer could picture. Generic settings (a meeting, a statement, a launch, an interview) are not scenes unless something particular happened in them. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No scene: the story is a summary of outcomes.',
+        'A generic setting with nothing particular in it.',
+        'A specific setting, but nothing memorable happens in it.',
+        'A concrete moment or detail a viewer can picture.',
+        'An unforgettable concrete moment or object that carries the story by itself.',
+      ],
+    ),
+    turn: score(
+      {
+        question: 'Does the story turn: a reversal, a surprise or a decision that changes what the story is about?',
+        judge: `A turn is something that happens inside the events and changes their direction or meaning (a betrayal, a refusal, a reversal of fortune, a hidden fact coming out). A neat closing line is not a turn. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No turn: events run in a straight line.',
+        'A minor development that changes little.',
+        'A real development, but expected.',
+        'A clear reversal or surprise that changes the direction of the story.',
+        'A reversal that changes what the whole story was about.',
+      ],
+    ),
+    implication: score(
+      {
+        question: 'Does what happened have a real implication for the AI world: how it was built, who leads it, or where it is going?',
+        judge: `Reward stories whose outcome shaped the companies, people, technology or rules of the AI world, or still does. Penalize stories that matter only to the people in them, or whose implication is claimed rather than shown. ${NOT_THE_TELLING}`,
+      },
+      [
+        'None: it changed nothing beyond itself.',
+        'A small or short-lived effect.',
+        'A real but local effect on one company or person.',
+        'A clear effect on how the AI world was built or who leads it.',
+        'A defining effect: the AI world would look different without it.',
+      ],
+    ),
+    // MD-82: the pitch gate. A plot needs someone pushing back for a reason, and one bounded episode.
+    opposition: score(
+      {
+        question: 'Does someone with agency push back against the central figure, for a motive the record shows?',
+        judge: `Opposition is a named person or a small named group acting as one that chooses to resist, compete with, block or turn on the central figure, wanting something of their own, and whose reason for it is on the record (said, written or reported), not guessed. Churn, a market, a deadline, physics, "the industry" or bad luck is a circumstance, not an opposition. Critics who only comment do not count. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No opposition: nothing pushes back, or only circumstances do.',
+        'Resistance from a faceless force or an unnamed crowd.',
+        'A named opponent who pushes back, but their motive is missing or only guessed.',
+        'A named opponent who chooses to push back, for a motive the record shows.',
+        'A named opponent with a want of their own and a recorded motive, whose choices collide with the central figure\'s and shape the outcome.',
+      ],
+    ),
+    bounded_episode: score(
+      {
+        question: 'Is this one bounded episode: a single story question decided within days to a few months?',
+        judge: `A bounded episode opens on a definite moment and closes when one question is decided (yes or no), all inside days, weeks or a few months. Penalize a saga that spans years, a career summary, a run of separate events strung together, or a question that is still open. Background from earlier years is fine when the deciding stretch itself is short. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No episode: a long saga, a profile or a string of separate events, with no single question decided.',
+        'A question exists, but it plays out over years or is never decided.',
+        'One question, decided over many months to about a year, or the deciding stretch is hard to pin down.',
+        'One question, decided within a few months.',
+        'One question, decided within days or weeks, with a clear opening moment and a clear end.',
+lib/reel-ai-drama/development/visuals-check.ts:386:          story: { title: pitch.title, logline: pitch.logline ?? pitchBrief(pitch), event_date: pitch.event_d
+explainers/reel-ai-drama/prompts/visuals-look.md:4:events, before any money is spent finding more. The user message gives the story (its title, logline,
+
+// ---- v5 tests as they stood ----
+=====RESULT 3476
+// ── Scores ──────────────────────────────────────────────────────────────────
+
+test('score combination: drama weights MD-29 most and caps without a central want; material weights', () => {
+  const all = (v: number) => ({ central_want: { score: v }, opposition: { score: v }, bounded_episode: { score: v }, stakes: { score: v }, scene: { score: v }, turn: { score: v }, implication: { score: v }, mostly_spectacle: { noul: 0 } });
+  assert.equal(combineDrama(all(4)).score, 1);
+  assert.equal(combineDrama(all(2)).score, 0.5);
+  const noWant = combineDrama({ ...all(4), central_want: { score: 1 } });
+  assert.equal(noWant.score, 0.45);
+  assert.match(noWant.notes.cap, /MD-29/);
+  const spectacle = combineDrama({ ...all(4), mostly_spectacle: { noul: 0.8 } });
+  assert.equal(spectacle.score, 0.5);
+  const wantHeavy = combineDrama({ ...all(0), central_want: { score: 4 } }).score;
+  const sceneHeavy = combineDrama({ ...all(0), scene: { score: 4 } }).score;
+  assert.ok(wantHeavy > sceneHeavy * 2);
+  assert.throws(() => combineDrama({ stakes: { score: 2 } }), /central_want/);
+
+  const m = combineMaterial({ famous_faces: { score: 4 }, photographed_events: { score: 4 }, published_artifacts: { score: 0 }, variety: { score: 0 }, named_place: { score: 0 }, era_photos: { score: 0 } });
+  assert.equal(m.score, 0.45);
+  assert.equal(DRAMA_SET.id, 'reel-ai-drama-drama-v5');
+  assert.equal(MATERIAL_SET.id, 'reel-ai-drama-material-v1');
+});
+
+test('drama v5 (MD-82): no opposition with agency, or no bounded episode, caps the score under the bar', () => {
+  const all = { central_want: { score: 4 }, opposition: { score: 4 }, bounded_episode: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 }, announced_plan: { noul: 0 }, about_ai: { noul: 1 } };
+  assert.equal(combineDrama(all).score, 1);
+  const noOpponent = combineDrama({ ...all, opposition: { score: 1 } });
+  assert.equal(noOpponent.score, 0.45);
+  assert.match(noOpponent.notes.cap ?? '', /opposition/);
+  const saga = combineDrama({ ...all, bounded_episode: { score: 0 } });
+  assert.equal(saga.score, 0.45);
+  assert.match(saga.notes.cap ?? '', /bounded episode/);
+  // A named opponent with a guessed motive (2) is not capped, only weighed down.
+  const guessed = combineDrama({ ...all, opposition: { score: 2 } }).score;
+  assert.ok(guessed < 1 && guessed > 0.45);
+  assert.throws(() => combineDrama({ central_want: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 } }), /opposition/);
+  assert.ok('opposition' in DRAMA_SET.questions && 'bounded_episode' in DRAMA_SET.questions);
+});
+
+
+test('drama v2 caps an announced plan and a story with no AI-world player at the center', () => {
+  const all = { central_want: { score: 4 }, opposition: { score: 4 }, bounded_episode: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 } };
+  assert.equal(combineDrama({ ...all, announced_plan: { noul: 0.1 } }).score, 1);
+test('drama v3 caps a story that is not about AI', () => {
+  const all = { central_want: { score: 4 }, opposition: { score: 4 }, bounded_episode: { score: 4 }, stakes: { score: 4 }, scene: { score: 4 }, turn: { score: 4 }, implication: { score: 4 }, mostly_spectacle: { noul: 0 }, announced_plan: { noul: 0 } };
+  assert.equal(combineDrama({ ...all, about_ai: { noul: 0.9 } }).score, 1);
+=====RESULT 5836
+cd /Users/lucasfigueroa/HELIOS/CODE/The-Helios-Hub; python3 - <<'EOF'
+import re
+f='lib/reel-ai-drama/development/scores.ts'; s=open(f).read()
+def cut(s, key_start, next_key):
+    a=s.index(key_start); b=s.index(next_key, a)
+    return s[:a]+s[b:]
+s=s.replace("id: 'reel-ai-drama-drama-v5',\n  version: '5',","id: 'reel-ai-drama-drama-v6',\n  version: '6',")
+# central_want -> people
+a=s.index("    central_want: score("); b=s.index("    stakes: score(")
+s=s[:a]+'''    people: score(
+      {
+        question: 'Are real people from the AI world at the center of this story, making the choices that drive it?',
+        judge: `Reward named people (or a small named group acting as one) whose choices set the events moving and are tested by them; a company counts only when it acts through named people whose choices we follow. A central figure who wants something and acts on it is the strongest case. A product, a market, a ranking or an announcement is not a person. People who only comment on, react to, or are swept along by events count for little. ${NOT_THE_TELLING}`,
+      },
+      [
+        'No one. The story is a product, a figure, a ranking, a market move or an announcement.',
+        'People appear, but they react to events rather than drive them, or the actor is a faceless organization.',
+        'Named people are present, but their choices matter little to how it went.',
+        'Named people whose choices move the events.',
+        'A named central figure who wants something specific and acts on it, setting the events moving.',
+      ],
+    ),

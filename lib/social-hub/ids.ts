@@ -20,6 +20,7 @@ const REF = /^[0-9A-Za-z-]{1,64}$/;
 const KINDS: Record<Vertical, readonly HubIdKind[]> = {
   reels: ['content', 'idea', 'attempt', 'schedule'],
   explainers: ['content', 'attempt', 'schedule', 'job'],
+  reel_ai_drama: ['content', 'attempt', 'schedule', 'job'],
   carousels: ['content', 'attempt', 'schedule', 'post'],
   stories: ['content', 'set'],
   last_few_days: ['content', 'attempt', 'schedule', 'post'],
