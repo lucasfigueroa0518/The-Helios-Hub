@@ -59,8 +59,8 @@ export const DEFAULT_TIMES: Record<Vertical, readonly number[]> = {
 /** The hidden safety cap per day the overnight runs never exceed. Stories: per series. */
 export const DEFAULT_CAPS: Record<Vertical, number> = { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2, field_notes: 1, reel_ai_drama: 1 };
 
-/** When each type's run makes the day's posts (overnight; AI Events at Sunday noon, AE-08; Field Notes at noon on its days). */
-export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM', field_notes: '12 PM', reel_ai_drama: '12 AM' };
+/** When each type's run makes the day's posts (overnight; AI Events at Sunday noon, AE-08; Field Notes at 2 AM on its days). */
+export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM', field_notes: '2 AM', reel_ai_drama: '12 AM' };
 
 /** Default Trial / Main feed for a new slot of a type (reels Trial, Explainers Main, the rest none). */
 export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null, ai_events: null, field_notes: null, reel_ai_drama: 'main' };

@@ -36,7 +36,7 @@
  * Few Days', under the same 30-minute timeout. Its posts publish and their
  * insights are read here until the single publisher drives the type.
  *
- * Field Notes (planning/Field Notes/CONTRACT.md) shares this process the same way: at 12:00 PM on its
+ * Field Notes (planning/Field Notes/CONTRACT.md) shares this process the same way: at 2:00 AM on its
  * days (Tuesday and Friday) with its auto_run on (it ships off), a run is queued that picks one tip,
  * writes the slides (live Claude and Jev, capped at run_cap_usd) and renders the carousel on the photo
  * pool; while field_notes publishing_live is on, an approved post books the afternoon 2:30–3:30 PM
@@ -332,7 +332,7 @@ async function main(): Promise<void> {
     // Started after today's noon: check once now, so a Sunday-afternoon restart still runs the week.
     let aiEventsAt = firstAiEventsCheckAt(new Date());
     let lastAiEventsError: string | null = null;
-    // The same for Field Notes' noon check (auto_run ships off, so it queues nothing until a person turns it on).
+    // The same for Field Notes' 2 AM check (auto_run ships off, so it queues nothing until a person turns it on).
     let fieldNotesAt = firstFieldNotesCheckAt(new Date());
     let lastFieldNotesError: string | null = null;
     let lastFieldNotesFacesError: string | null = null;

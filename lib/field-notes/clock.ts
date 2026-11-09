@@ -1,5 +1,5 @@
 /**
- * The daily 12:00 PM check, decided from plain inputs so the worker's clock is tested offline.
+ * The daily 2:00 AM check, decided from plain inputs so the worker's clock is tested offline.
  * Field Notes ships with auto_run off, so the check always says no until a person turns it on;
  * a person's Generate is not the clock: it queues on any day (lib/field-notes/manual.ts).
  */
@@ -10,12 +10,12 @@ import type { ParsedFieldNotesSettings } from './settings';
 
 export type NoonDecision = { queue: boolean; reason: string };
 
-/** The next 12:00 PM New York after `from`. */
+/** The next 2:00 AM New York after `from`. */
 export function nextFieldNotesRunAt(from: Date): Date {
   return nextRunAt(from, FIELD_NOTES_RUN_HOUR_LOCAL, FIELD_NOTES_RUN_MINUTE_LOCAL);
 }
 
-/** When a starting worker first checks the noon clock: right away when it starts after today's 12:00, else at the next 12:00. */
+/** When a starting worker first checks the clock: right away when it starts within 12 hours after today's 2:00 AM, else at the next 2:00 AM. */
 export function firstFieldNotesCheckAt(now: Date): Date {
   const next = nextFieldNotesRunAt(now);
   return next.getTime() - now.getTime() > 12 * 60 * 60 * 1000 ? now : next;
