@@ -16,7 +16,7 @@ import type { Vertical } from '@/lib/social-hub/types';
  */
 export type Parsed = { vertical: Vertical; target: ActionTarget; input?: ActionInput };
 
-const VERTICALS: readonly Vertical[] = ['carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
+const VERTICALS: readonly Vertical[] = ['carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 
 /** The longest review note a hub action carries. */
 export const NOTE_MAX_CHARS = 500;
@@ -24,11 +24,21 @@ export const NOTE_MAX_CHARS = 500;
 /** The one flag both placement routes (place and reschedule) answer to (D50). */
 export const RESCHEDULE_FLAG: ActionFlag = 'reschedule';
 
+/** The review vocabulary a type's tags come from: AI Drama Reels have their own; every other type uses the Explainers one. */
+/**
+ * AI Drama Reels' review tags (lib/reel-ai-drama/review.ts DRAMA_REVIEW_TAGS), kept as a literal: that module writes
+ * reel_ai_drama.feedback, and action handlers must not reach a foreign write (tests/social-hub-scope.test.ts).
+ * tests/social-hub-reel-ai-drama-wiring.test.ts pins it to the source.
+ */
+export const DRAMA_REVIEW_TAG_KEYS: readonly string[] = ['hook', 'story', 'accuracy', 'pacing', 'visuals', 'voice', 'captions', 'sound', 'brand'];
+
+const reviewTags = (vertical: unknown): readonly string[] => (vertical === 'reel_ai_drama' ? DRAMA_REVIEW_TAG_KEYS : FAILURE_TAGS);
+
 /** A review's optional tags and note; null when either is malformed. */
-function parseReview(b: { tags?: unknown; note?: unknown }): Pick<ActionInput, 'tags' | 'note'> | null {
+function parseReview(b: { vertical?: unknown; tags?: unknown; note?: unknown }): Pick<ActionInput, 'tags' | 'note'> | null {
   const out: Pick<ActionInput, 'tags' | 'note'> = {};
   if (b.tags !== undefined) {
-    if (!Array.isArray(b.tags) || !b.tags.every((t) => typeof t === 'string' && (FAILURE_TAGS as readonly string[]).includes(t))) return null;
+    if (!Array.isArray(b.tags) || !b.tags.every((t) => typeof t === 'string' && reviewTags(b.vertical).includes(t))) return null;
     out.tags = [...new Set(b.tags as string[])];
   }
   if (b.note !== undefined) {

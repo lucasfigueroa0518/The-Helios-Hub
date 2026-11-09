@@ -17,6 +17,8 @@
  *   FEATURE_LEAVES exists, the post includes at least one (the highest scored still free; it beats the want cap if it
  *   must); inside the tie band a FEATURE_LEAVES tip goes before any other, then the want rule. When the want cap and
  *   then the repo cap would leave the post under `minTotal`, each is relaxed in turn just enough to reach it.
+ * - At most MAX_TECHNIQUE_TIPS `technique` tips on one post (Tommy, 2026-11-08: a post stacked three vendor prompting
+ *   guides in a row), seeded tips counted; relaxed only to reach `minTotal`, before the repo cap.
  *
  * `selectTips` takes the top few; `selectNextTip` is the top one. `admitSeeds` applies the same post rules
  * (distinct subjects, the per-want cap) to a person's seeded tips, in their own order (no score). `scoringOrder` picks
@@ -42,6 +44,9 @@ export const RECENT_WANT_POSTS = 7;
 export const MAX_CANDIDATES_PER_SOURCE = 5;
 /** The leaf that never expires: a tool-agnostic practice (a guide section) is as good next month. */
 export const EVERGREEN_LEAF = 'technique';
+/** At most this many `technique` tips on one post (relaxed only to reach `minTotal`). */
+export const MAX_TECHNIQUE_TIPS = 2;
+const isTechniqueLeaf = (leaf: ContentLeaf | null | undefined): boolean => leaf === EVERGREEN_LEAF;
 /** The open-source repository leaves: at most maxRepoTips(post size) of them on one post (relaxed only to reach `minTotal`). */
 export const REPO_LEAVES = [
   'repo_free_alternative', 'repo_data', 'repo_mcp', 'repo_agent_runtime', 'repo_automation', 'repo_memory',
@@ -244,17 +249,20 @@ export function selectTips(input: SelectInput, count: number): ScoredCandidate[]
   const repoCap = maxRepoTips(postSize);
   let repos = (input.takenLeaves ?? []).filter(isRepoLeaf).length;
   let hasFeature = (input.takenLeaves ?? []).some(isFeatureLeaf);
+  let techniques = (input.takenLeaves ?? []).filter(isTechniqueLeaf).length;
   const out: ScoredCandidate[] = [];
   type E = (typeof eligible)[number];
   const free = (s: E) => !out.includes(s) && !subjectKeys(s).some((k) => seen.has(k));
   const underWantCap = (s: E) => !(s.want && (perWant.get(s.want) ?? 0) >= wantCap);
   const underRepoCap = (s: E) => !(isRepoLeaf(s.leaf) && repos >= repoCap);
+  const underTechniqueCap = (s: E) => !(isTechniqueLeaf(s.leaf) && techniques >= MAX_TECHNIQUE_TIPS);
   const take = (pick: E) => {
     out.push(pick);
     for (const k of subjectKeys(pick)) seen.add(k);
     if (pick.want) perWant.set(pick.want, (perWant.get(pick.want) ?? 0) + 1);
     if (isRepoLeaf(pick.leaf)) repos += 1;
     if (isFeatureLeaf(pick.leaf)) hasFeature = true;
+    if (isTechniqueLeaf(pick.leaf)) techniques += 1;
   };
   /** The best free feature tip, under the want cap when one is; null when none is left (or one is on the post). */
   const featureStillNeeded = (): E | null => {
@@ -266,7 +274,7 @@ export function selectTips(input: SelectInput, count: number): ScoredCandidate[]
   let pool = eligible;
   while (out.length < count) {
     // Whatever can still go on this post, best first.
-    pool = pool.filter((s) => free(s) && underWantCap(s) && underRepoCap(s));
+    pool = pool.filter((s) => free(s) && underWantCap(s) && underRepoCap(s) && underTechniqueCap(s));
     // The last slot goes to a feature tip when the post has none yet and one is eligible (it beats the want cap).
     const reserved = out.length === count - 1 ? featureStillNeeded() : null;
     if (reserved) {
@@ -296,14 +304,14 @@ export function selectTips(input: SelectInput, count: number): ScoredCandidate[]
     if (f) take(f);
   }
 
-  // Starvation: the caps left the post under its minimum. Relax the want cap first, then the repo cap, each just
+  // Starvation: the caps left the post under its minimum. Relax the want cap first, then the technique cap, then the repo cap, each just
   // enough, highest scores first.
   if (input.minTotal !== undefined) {
     const short = () => out.length < count && already + out.length < input.minTotal!;
-    for (const relaxRepo of [false, true]) {
+    for (const level of [0, 1, 2]) {
       for (const s of eligible) {
         if (!short()) break;
-        if (free(s) && (relaxRepo || underRepoCap(s))) take(s);
+        if (free(s) && (level >= 1 || underTechniqueCap(s)) && (level >= 2 || underRepoCap(s))) take(s);
       }
     }
   }

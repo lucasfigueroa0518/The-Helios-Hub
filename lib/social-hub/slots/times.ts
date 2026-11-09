@@ -40,6 +40,7 @@ export const USUAL: Record<Vertical, ReadonlyArray<{ start: number; end: number;
     { start: 1140, end: 1200, name: 'Night' },
   ],
   field_notes: [{ start: 870, end: 930, name: 'Afternoon' }],
+  reel_ai_drama: [{ start: 1170, end: 1245, name: 'Evening' }],
 };
 
 /** Default slot times per type (the seed). LFD runs on its days (Tue/Fri), AI Events on Sunday at 6 and 7 PM (Miami, then Boston; AE-29), Field Notes at 2:30 PM on Tuesday and Friday (1-2 a week), Stories series on theirs. */
@@ -51,16 +52,18 @@ export const DEFAULT_TIMES: Record<Vertical, readonly number[]> = {
   stories: [510],
   ai_events: [1080, 1140],
   field_notes: [870],
+  // AI Drama Reels at 8:00 PM (lib/reel-ai-drama/hub.ts DRAMA_WINDOWS). Not seeded: opt-in on the week board.
+  reel_ai_drama: [1200],
 };
 
 /** The hidden safety cap per day the overnight runs never exceed. Stories: per series. */
-export const DEFAULT_CAPS: Record<Vertical, number> = { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2, field_notes: 1 };
+export const DEFAULT_CAPS: Record<Vertical, number> = { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_events: 2, field_notes: 1, reel_ai_drama: 1 };
 
 /** When each type's run makes the day's posts (overnight; AI Events at Sunday noon, AE-08; Field Notes at noon on its days). */
-export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM', field_notes: '12 PM' };
+export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_events: '12 PM', field_notes: '12 PM', reel_ai_drama: '12 AM' };
 
 /** Default Trial / Main feed for a new slot of a type (reels Trial, Explainers Main, the rest none). */
-export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null, ai_events: null, field_notes: null };
+export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null, ai_events: null, field_notes: null, reel_ai_drama: 'main' };
 
 /** Names for board copy ("{Day} has {n} {Type}s…", "At the daily limit for {Type}s ({cap})"). */
 export const TYPE_NAME: Record<Vertical, { one: string; many: string }> = {
@@ -71,6 +74,7 @@ export const TYPE_NAME: Record<Vertical, { one: string; many: string }> = {
   ai_events: { one: 'AI Events', many: 'AI Events posts' },
   field_notes: { one: 'Field Notes', many: 'Field Notes posts' },
   stories: { one: 'Stories', many: 'Stories' },
+  reel_ai_drama: { one: 'AI Drama reel', many: 'AI Drama reels' },
 };
 
 export const SERIES_NAME: Record<StorySeries, { one: string; many: string }> = {

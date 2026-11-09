@@ -337,7 +337,7 @@ export function createExplainersDescription(deps: ExplainersDeps): ContentTypeDe
     const { parseCaption } = await import('@/lib/explainers/caption-format');
     let text: string;
     try {
-      text = parseCaption(raw);
+      text = parseCaption(raw, { heliosLine: false });
     } catch (e) {
       return blocked(`The new caption breaks a caption rule (${errText(e)}), so the caption was not changed.`);
     }

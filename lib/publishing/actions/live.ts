@@ -7,6 +7,7 @@ import { storyActions } from './stories';
 import { lastFewDaysActions } from './last-few-days';
 import { aiEventsActions } from './ai-events';
 import { fieldNotesActions } from './field-notes';
+import { reelAiDramaActions } from './reel-ai-drama';
 import type { ContentActions } from './types';
 
 /** Every type's actions with their live functions (the hub's action routes use this). */
@@ -41,6 +42,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     fnItems,
     fnSettings,
     fnManual,
+    drama,
   ] = await Promise.all([
     import('@/lib/social/store'),
     import('@/lib/social/overnight/schedule'),
@@ -71,6 +73,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     import('@/lib/field-notes/items'),
     import('@/lib/field-notes/settings'),
     import('@/lib/field-notes/manual'),
+    import('@/lib/reel-ai-drama/hub'),
   ]);
   const db = storiesDb.liveStoriesDb;
   const storiesSpine = (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
@@ -164,6 +167,22 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       itemId: fnItems.fieldNotesItemId,
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
+    }),
+    // AI Drama Reels live on the explainers connection (schema reel_ai_drama), so the Explainers revisions rule applies.
+    reel_ai_drama: reelAiDramaActions({
+      db: explainersConn.explainersDb,
+      setVerdict: drama.setDramaVerdict,
+      hardPublishJob: drama.hardPublishDramaJob,
+      requestJob: drama.requestDramaJob,
+      itemId: drama.dramaItemId,
+      unscheduleJob: drama.unscheduleDramaJob,
+      latestJobId: drama.latestDramaJobId,
+      verdictOf: drama.dramaVerdictOf,
+      scheduleJob: drama.scheduleDramaJob,
+      publishingLive: drama.dramaPublishingLive,
+      placeItem: placement.placeItem,
+      rescheduleItem: placement.rescheduleItem,
+      revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),
     }),
   };
 }

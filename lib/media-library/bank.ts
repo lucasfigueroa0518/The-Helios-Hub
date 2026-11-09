@@ -20,9 +20,10 @@ import type { VettedPhoto } from '@/lib/social/photos/vetted';
 
 import { importUsedPhotos } from './backfill';
 import { runIngest } from './ingest';
-import { licenceOf, shouldStore } from './policy';
+import { planDramaOffer, type DramaOfferInput } from './drama';
+import { licenceOf, shouldStore, storedLicence } from './policy';
 import { createBankReader, type BankReader } from './reader';
-import { cachedBankSettings } from './settings';
+import { cachedBankSettings, type BankSettings } from './settings';
 import { writeRows } from './store';
 import { PHOTO_BANK_BUCKET, type BankRows, type Query, type RunKind, type SightingVision } from './types';
 
@@ -43,6 +44,14 @@ export type PhotoBank = {
   drain(ms: number): Promise<void>;
   /** The bank as a finder source (gated by settings.finder_source). */
   readonly reader: BankReader;
+};
+
+/** What createPhotoBank returns: the finder's bank, plus Reel AI Drama's offers and the raw query/settings its lookups need. */
+export type FullPhotoBank = PhotoBank & {
+  /** Reel AI Drama's harvest photos (lib/media-library/drama.ts); same rules as offer(): synchronous, never throws, gated by capture. */
+  offerDrama(input: DramaOfferInput): void;
+  readonly query: Query;
+  settings(): Promise<BankSettings>;
 };
 
 export type PhotoBankDeps = {
@@ -91,14 +100,15 @@ export function planOffer(input: OfferInput): BankRows {
       at,
     });
     if (item.outcome === 'rejected') continue;
-    const licence = licenceOf(c, input.subjects, input.organizations);
-    if (!shouldStore(item.outcome, c, licence) || !licence.licence) continue;
+    if (!shouldStore(item.outcome, c)) continue;
+    // A credit the licence pass doesn't clear is stored as `unknown` (reuse_ok false): never offered to a carousel again.
+    const licence = storedLicence(licenceOf(c, input.subjects, input.organizations));
     rows.sources.push({ url: c.url, source: c.source, lane: c.lane, title: c.title || null, date: c.date, credit: c.credit, licence: licence.licence, reuse_ok: licence.reuseOk });
   }
   return rows;
 }
 
-export function createPhotoBank(deps: PhotoBankDeps): PhotoBank {
+export function createPhotoBank(deps: PhotoBankDeps): FullPhotoBank {
   const log = (line: string) => {
     try {
       deps.log?.(line);
@@ -141,26 +151,36 @@ export function createPhotoBank(deps: PhotoBankDeps): PhotoBank {
     if (timer) clearTimeout(timer);
   };
 
+  /** Plan synchronously (never throws), then write in the background once `capture` is on. */
+  const queue = (label: string, plan: () => BankRows) => {
+    let rows: BankRows;
+    try {
+      rows = plan();
+    } catch (err) {
+      log(`offer: ${errText(err)}`);
+      return;
+    }
+    if (!rows.sightings.length && !rows.sources.length) return;
+    writes = writes
+      .then(async () => {
+        const s = await settings();
+        if (!s.capture) return;
+        const w = await writeRows(deps.query, rows);
+        log(`offer ${label}: ${w.sightings} sightings, ${w.sources} sources queued`);
+        if (w.sources) kick();
+      })
+      .catch((err) => log(`offer ${label}: ${errText(err)}`));
+  };
+
   return {
     reader,
+    query: deps.query,
+    settings,
     offer(input) {
-      let rows: BankRows;
-      try {
-        rows = planOffer(input);
-      } catch (err) {
-        log(`offer: ${errText(err)}`);
-        return;
-      }
-      if (!rows.sightings.length && !rows.sources.length) return;
-      writes = writes
-        .then(async () => {
-          const s = await settings();
-          if (!s.capture) return;
-          const w = await writeRows(deps.query, rows);
-          log(`offer ${input.runKind} ${input.runRef}: ${w.sightings} sightings, ${w.sources} sources queued`);
-          if (w.sources) kick();
-        })
-        .catch((err) => log(`offer ${input.runKind} ${input.runRef}: ${errText(err)}`));
+      queue(`${input?.runKind} ${input?.runRef}`, () => planOffer(input));
+    },
+    offerDrama(input) {
+      queue(`reel_ai_drama ${input?.runRef}`, () => planDramaOffer(input));
     },
     async drain(ms) {
       const deadline = Date.now() + Math.max(0, ms);

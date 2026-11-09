@@ -1,0 +1,208 @@
+/**
+ * The live wiring: the only place the real builder modules are imported (CONTRACT.md § B5). Tests never
+ * import this file. Each builder's `deps` object is built here from one shared base (db, the streaming
+ * Messages call, the prompt loader, the model from settings, the job's Jev runner). Where a builder's
+ * deps type differs from this base, the typecheck says so at integration (see notes/B5.md).
+ */
+import { dramaJobsDir } from '@/lib/reel-ai-drama/local-dir';
+import { measureInventory } from '@/lib/reel-ai-drama/harvest/regions';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { anthropic } from '@/lib/anthropic';
+import type { Queryable } from '@/lib/explainers/db';
+import type { ArtifactStore } from '@/lib/explainers/storage';
+// B1 development
+import { runCalibration } from '@/lib/reel-ai-drama/development/calibration';
+import { nextForProduction, tendPool } from '@/lib/reel-ai-drama/development/pool';
+import { anthropicCreate } from '@/lib/reel-ai-drama/development/producer';
+import { newsTouching } from '@/lib/reel-ai-drama/development/ledger';
+import { liveStoriesDb } from '@/lib/stories/db';
+import { runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
+import { liveVisualsCheckDeps } from '@/lib/reel-ai-drama/development/visuals-check';
+// B2 reporting + harvest
+import { harvestVisuals } from '@/lib/reel-ai-drama/harvest/harvest';
+import { findRembg, liveHarvestDeps, rembgCutout } from '@/lib/reel-ai-drama/harvest/live';
+import { makeCutouts } from '@/lib/reel-ai-drama/harvest/cutouts';
+import { liveDetectFaces } from '@/lib/reel-ai-drama/harvest/faces';
+import { recordUses } from '@/lib/reel-ai-drama/harvest/reuse';
+import { searchWishes } from '@/lib/reel-ai-drama/harvest/wishes';
+import { reportStory } from '@/lib/reel-ai-drama/reporting/report';
+// B3 prompts, writing, checks
+import { checkFacts } from '@/lib/reel-ai-drama/checks/facts';
+import { checkFirstViewer } from '@/lib/reel-ai-drama/checks/first-viewer';
+import { checkDesign } from '@/lib/reel-ai-drama/checks/design';
+import { checkIntegrity } from '@/lib/reel-ai-drama/checks/integrity';
+import { loadPrompt } from '@/lib/reel-ai-drama/prompts';
+import { directReel } from '@/lib/reel-ai-drama/writing/director';
+import { writePost } from '@/lib/reel-ai-drama/writing/post';
+import { editStory } from '@/lib/reel-ai-drama/writing/story-editor';
+import { reviseScript, writeScript } from '@/lib/reel-ai-drama/writing/writer';
+// B4 kit + render
+import { assembleProject, contactSheet, frameSpans, KIT_GUIDE, prepareWorkspace, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
+import { pickMoments, sceneChanges } from '@/lib/reel-ai-drama/render/moments';
+import { makeSheets, viewerSheets } from '@/lib/reel-ai-drama/render/sheets';
+import { preflight } from '@/lib/reel-ai-drama/production/preflight';
+import { resilientDb, withRetry } from '@/lib/reel-ai-drama/retry';
+import { recordCost } from '@/lib/reel-ai-drama/cost';
+import { makeAssets } from '@/lib/reel-ai-drama/render/make';
+import { designSound } from '@/lib/reel-ai-drama/render/sound-design';
+import { RecordingDramaJevRunner } from '@/lib/reel-ai-drama/jev';
+import { CREATIVE_MODEL, creativePass } from '@/lib/reel-ai-drama/production/creative';
+import { compileReel, frameFindings, readCompiled } from '@/lib/reel-ai-drama/render/compile';
+import type { ProductionDeps, StepCtx } from '@/lib/reel-ai-drama/production/run';
+import type { ScheduleDeps } from '@/lib/reel-ai-drama/production/schedule';
+import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
+import { liveJevTransport } from '@/lib/reels/jev/client';
+
+export const JOBS_ROOT = dramaJobsDir();
+
+/** Jev goes over the network like any model call: an outage waits. */
+const productionJevTransport: typeof liveJevTransport = {
+  systemOne: (state, questions) => withRetry(() => liveJevTransport.systemOne(state, questions), undefined),
+};
+
+/** The kit's project-files writer (B4, an .mjs module), loaded at run time. */
+async function writeProjectFiles(projectDir: string, input: Parameters<ProductionDeps['render']['writeProjectFiles']>[1]): Promise<unknown> {
+  const kit = (await import(path.join(process.cwd(), 'explainers', 'reel-ai-drama', 'kit', 'project-files.mjs'))) as {
+    writeProjectFiles: (dir: string, i: typeof input) => unknown;
+  };
+  return kit.writeProjectFiles(projectDir, input);
+}
+
+export async function liveProductionDeps(input: {
+  db: Queryable;
+  store: ArtifactStore;
+  secrets: { anthropicApiKey: string; heygenApiKey: string };
+  jobsRoot?: string;
+  log?: (event: string, fields?: Record<string, unknown>) => void;
+}): Promise<ProductionDeps> {
+  const db = resilientDb(input.db);
+  const jobsRoot = input.jobsRoot ?? JOBS_ROOT;
+  const jev = (ctx: StepCtx) => new RecordingDramaJevRunner(productionJevTransport, db, { mode: ctx.mode, jobId: ctx.jobId });
+  const base = (ctx: StepCtx, component: string, model: string) => ({
+    db,
+    create: anthropicCreate(anthropic, component),
+    loadPrompt,
+    model,
+    jobId: ctx.jobId,
+    mode: ctx.mode,
+    settings: ctx.settings,
+    jev: jev(ctx),
+  });
+  return {
+    db,
+    store: input.store,
+    jobsRoot,
+    secrets: input.secrets,
+    log: input.log,
+    preflight: () => preflight({ secrets: input.secrets, jobsRoot }),
+    jev,
+    pool: { nextForProduction },
+    reporting: {
+      reportStory: (pitch, ctx) =>
+        reportStory({ db, create: anthropicCreate(anthropic, 'reporting'), loadPrompt, model: ctx.settings.reporting_model }, pitch, { jobId: ctx.jobId, mode: ctx.mode }),
+    },
+    harvest: {
+      // A fresh browser and source set per harvest, closed after it (B2 liveHarvestDeps).
+      harvestVisuals: async (i) => {
+        const live = await liveHarvestDeps(db, { anthropic, loadPrompt });
+        if (live.notes.length) input.log?.('harvest_notes', { jobId: i.jobId, notes: live.notes });
+        try {
+          return await harvestVisuals(live.deps, i);
+        } finally {
+          await live.close();
+        }
+      },
+      recordUses,
+      // MD-68: the director's wishes, searched with the harvest's own sources and checks (records its own cost).
+      searchWishes: async (i) => {
+        const live = await liveHarvestDeps(db, { anthropic, loadPrompt });
+        if (live.notes.length) input.log?.('wish_search_notes', { jobId: i.jobId, notes: live.notes });
+        try {
+          return await searchWishes(live.deps, i);
+        } finally {
+          await live.close();
+        }
+      },
+      // MD-81: cutouts after the writer and the wish search: local rembg and the local face detector, no spend.
+      cutPeople: async (i) => {
+        const rembg = findRembg();
+        return makeCutouts({ cutout: rembg ? rembgCutout(rembg) : null, detectFaces: liveDetectFaces, db }, i);
+      },
+    },
+    writing: {
+      writeScript: (i, ctx) => writeScript(base(ctx, 'writer', ctx.settings.writer_model), i),
+      editStory: (i, ctx) => editStory(base(ctx, 'story_notes', ctx.settings.story_editor_model), i),
+      reviseScript: (i, ctx) => reviseScript(base(ctx, 'writer_revise', ctx.settings.writer_model), i),
+      directReel: (i, ctx) => directReel(base(ctx, 'director', ctx.settings.director_model), i),
+      writePost: (i, ctx) => writePost(base(ctx, 'post_text', ctx.settings.writer_model), i),
+      // One cached Sonnet call on the compiled reel's stills; its own cost goes to the job's ledger, and it fails open.
+      creativePass: (i, ctx) => creativePass(i, { ...base(ctx, 'creative_pass', CREATIVE_MODEL), loadPrompt: () => loadPrompt('creative-pass') }),
+    },
+    checks: {
+      checkFacts: (runner, i) => checkFacts(runner, i),
+      // Asset `file` paths are relative to the harvest dir (run.ts keeps it after copying it into the job).
+      checkIntegrity: (i, ctx) =>
+        checkIntegrity({ ...base(ctx, 'integrity', ctx.settings.vision_model), jobDir: path.join(jobsRoot, '_harvest', ctx.jobId) }, i),
+      checkFirstViewer: (i, ctx) => checkFirstViewer(base(ctx, 'first_viewer', ctx.settings.vision_model), i),
+      // MD-129: Haiku (vision_model) and Sonnet (design_judge_model) calls, each recorded under its own component.
+      checkDesign: (i, ctx) => checkDesign(base(ctx, 'design_review', ctx.settings.vision_model), i),
+    },
+    render: {
+      kitGuide: KIT_GUIDE,
+      prepareWorkspace,
+      writeProjectFiles,
+      measurePictures: (inventory, root) => measureInventory(inventory, root),
+      runVoice,
+      makeAssets: (i, ctx) =>
+        makeAssets(i, { record: (e) => recordCost(db, { jobId: ctx.jobId, mode: ctx.mode, vendor: 'openai', component: 'make', usd: e.usd }) }),
+      designSound: (i, ctx) =>
+        designSound(i, { create: anthropicCreate(anthropic, 'sound_design'), model: ctx.settings.orchestrator_model, loadPrompt: () => loadPrompt('sound-designer'), db, jobId: ctx.jobId, mode: ctx.mode }),
+      compileReel,
+      readCompiled: (dir) => readCompiled(dir),
+      frameFindings: (dir, id) => frameFindings(dir, id),
+      assembleProject,
+      renderVideo,
+      contactSheet,
+      // Code picks every moment worth seeing (Iteration 11 §2); a reader never judges a frame from one still.
+      reviewSheets: async (dir, video, findings) => {
+        const spans = frameSpans(fs.readFileSync(path.join(dir, 'STORYBOARD.md'), 'utf8'));
+        const moments = pickMoments({ spans, records: readCompiled(dir).frames ?? {}, findings, changes: sceneChanges(video) });
+        return {
+          viewer: await viewerSheets(video, moments, path.join(dir, 'renders', 'sheets-viewer')),
+          design: await makeSheets(video, moments, path.join(dir, 'renders', 'sheets-design')),
+        };
+      },
+    },
+  };
+}
+
+/** One development session (B1), live: the producer, Jev, the visuals check and news touching a player. */
+export async function runLiveDevelopment(db: Queryable, trigger: 'auto' | 'click', overrides: Partial<ReelAiDramaSettings> = {}): Promise<unknown> {
+  // `overrides` is for a one-off run Lucas asks for (e.g. a bigger round past the weekly cap); never saved.
+  const settings = { ...(await loadSettings(db)), ...overrides };
+  return runDevelopmentSession(
+    {
+      db,
+      settings,
+      producer: { create: anthropicCreate(anthropic, 'producer'), loadPrompt },
+      jevTransport: liveJevTransport,
+      visuals: liveVisualsCheckDeps({ client: anthropic, visionModel: settings.vision_model, lookPrompt: loadPrompt('visuals-look'), serperApiKey: process.env.SERPER_API_KEY ?? null }),
+      // The Hub news pool lives on the shared stories database, not the explainers one. A failed read
+      // (no shared DB locally) means no news reopens this session, never a failed session.
+      news: (now, days) => newsTouching(liveStoriesDb, now, days).catch(() => []),
+    },
+    { trigger },
+  );
+}
+
+/** Calibration (B1, MD-52): Jev scores only, logged and priced as development. */
+export async function runLiveCalibration(db: Queryable): Promise<unknown> {
+  const settings = await loadSettings(db);
+  return runCalibration({ jev: new RecordingDramaJevRunner(liveJevTransport, db, { mode: 'development' }), settings });
+}
+
+export function liveScheduleDeps(db: Queryable, log?: ScheduleDeps['log']): ScheduleDeps {
+  return { db, runDevelopmentSession: ({ trigger }) => runLiveDevelopment(db, trigger), nextForProduction, tendPool, log };
+}

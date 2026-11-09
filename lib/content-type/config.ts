@@ -167,6 +167,26 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     groupNoun: 'series',
     dragNeedsGroup: false,
   },
+  // Pitches come from weekly development sessions, not seeds; the night makes up to three a day.
+  reel_ai_drama: {
+    title: 'AI Drama Reels',
+    benchNote: 'Story pitches waiting to be made, best rank first. Make it produces one reel. Hold and drag any pitch to move it.',
+    maxCap: 3,
+    queue: 'live',
+    seedable: false,
+    postsNoun: 'AI Drama reels',
+    generate: {
+      label: 'Generate every night',
+      confirm:
+        'Make AI Drama reels every night at 12:00 AM for the day’s slots, and run the weekly development session on Mondays? Each makes live model, search, voice and video calls, up to the daily render and spend caps.',
+      hint: 'At 12:00 AM the night makes the best pitches for the day’s slots; a development session refills the pitch pool on Mondays. Reels wait for your approval unless auto-publish is on.',
+    },
+    perDayMin: 1,
+    capPerSeries: false,
+    weekPool: false,
+    groupNoun: 'series',
+    dragNeedsGroup: false,
+  },
 };
 
 /** The config for a type id given as a plain string (a posting-settings `type`); undefined for an id that is not a type. */

@@ -74,6 +74,7 @@ export const REFILL_CADENCE: Record<Vertical, string> = {
   last_few_days: 'twice a week',
   ai_events: 'every Sunday at noon',
   field_notes: 'on each run (one or two a week)',
+  reel_ai_drama: 'Weekly development session (Mondays) while Generate is on; the pool is re-ranked daily.',
 };
 
 export function poolSummaries(ideas: readonly HubIdea[]): PoolSummary[] {

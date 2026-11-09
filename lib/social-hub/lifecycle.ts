@@ -23,6 +23,7 @@ export function contentKey(post: HubPost): { kind: 'content' | 'idea'; ref: stri
     case 'carousels':
       return r.postId ? { kind: 'content', ref: r.postId } : null;
     case 'explainers':
+    case 'reel_ai_drama':
       return r.jobId ? { kind: 'content', ref: r.jobId } : null;
     case 'reels':
       if (r.videoJobId) return { kind: 'content', ref: r.videoJobId };
@@ -62,7 +63,7 @@ function legacyIds(vertical: Vertical, group: readonly HubPost[]): string[] {
     add('attempt', p.refs.attemptId);
     add('schedule', p.refs.scheduleId);
     if (vertical === 'carousels') add('post', p.refs.postId);
-    if (vertical === 'explainers') add('job', p.refs.jobId);
+    if (vertical === 'explainers' || vertical === 'reel_ai_drama') add('job', p.refs.jobId);
   }
   return out;
 }

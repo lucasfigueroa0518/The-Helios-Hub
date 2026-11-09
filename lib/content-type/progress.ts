@@ -1,5 +1,7 @@
 import { dbQuery } from '@/lib/db';
 import type { ContentType } from '@/lib/content-type/posting';
+import { explainersHubQuery } from '@/lib/social-hub/db';
+import { readDramaProgress } from '@/lib/reel-ai-drama/hub-read';
 
 /**
  * What a content type is making right now, for the "it's working" strip on
@@ -140,6 +142,14 @@ export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
     }
     return out;
   }
+  if (type === 'reel_ai_drama') {
+    // AI Drama Reels live on the explainers handle (schema reel_ai_drama); the pitch is the idea.
+    const { rows, typicalSeconds } = await readDramaProgress(await explainersHubQuery());
+    return rows.map((r) => ({
+      id: r.id, label: r.label, state: r.state, stage: r.stage, error: r.error, topicId: r.pitchId,
+      requestedAt: r.requestedAt, startedAt: r.startedAt, typicalSeconds: r.state === 'failed' ? null : typicalSeconds,
+    }));
+  }
   return [];
 }
 
@@ -148,11 +158,12 @@ export type AllProgress = Record<'carousels' | 'stories' | 'explainers', Progres
   last_few_days?: ProgressItem[];
   ai_events?: ProgressItem[];
   field_notes?: ProgressItem[];
+  reel_ai_drama?: ProgressItem[];
 };
 
 /** Every type's runs in flight, for the Content page's cards and tiles. A type that cannot be read shows nothing in flight. */
 export async function readAllProgress(): Promise<AllProgress> {
   const one = (t: ContentType) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
-  const [carousels, stories, explainers, lastFewDays, aiEvents, fieldNotes] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events'), one('field_notes')]);
-  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes };
+  const [carousels, stories, explainers, lastFewDays, aiEvents, fieldNotes, drama] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events'), one('field_notes'), one('reel_ai_drama')]);
+  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes, reel_ai_drama: drama };
 }

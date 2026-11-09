@@ -20,6 +20,7 @@ import { writeCaps } from '@/lib/social-hub/slots/write';
 import type { HubPost } from '@/lib/social-hub/types';
 import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
 import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
+import { DRAMA_WINDOWS, readDramaPosting, writeDramaPosting } from '@/lib/reel-ai-drama/hub';
 
 /**
  * How each content type makes and posts, in the two switches a person thinks
@@ -41,9 +42,9 @@ import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
  * the hidden safety cap the overnight runs never pass; week board spec
  * §Safety cap) is set here, a person's decision, never automatic.
  */
-export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events' | 'field_notes';
+export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama';
 
-export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
+export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 export const isPostingType = (v: unknown): v is ContentType => POSTING_TYPES.includes(v as ContentType);
 
 /** One day of a type's week on the calendar: its slot count, Trial / Main split (reel types), Stories' series, and whether a date override touched it. */
@@ -208,6 +209,11 @@ async function readTypePosting(type: ContentType): Promise<TypeFields> {
     const per2 = count(per);
     return { type, live: live === true, generate: auto === true, autoPublish: approval === false, perDay: Number.isInteger(per2) && per2 >= 1 ? per2 : EXPLAINER_DEFAULT_PER_DAY, maxPerDay: EXPLAINER_WINDOWS.length, series: null };
   }
+  if (type === 'reel_ai_drama') {
+    // AI Drama Reels (lib/reel-ai-drama/hub.ts): Generate is `auto`, Auto-publish is require_approval off, Live is publishing_live.
+    const p = await readDramaPosting(await exDb());
+    return { type, live: p.live, generate: p.generate, autoPublish: p.autoPublish, perDay: p.perDay, maxPerDay: p.maxPerDay, series: null };
+  }
   if (type === 'reels') {
     const [run, approval, live, per] = await Promise.all(['auto_run', 'require_approval', 'publishing_live', 'posts_per_day'].map((k) => getReelsSetting<unknown>(k)));
     const per2 = count(per);
@@ -255,7 +261,8 @@ function validate(type: ContentType, patch: PostingPatch): void {
     if (type === 'last_few_days') throw new Error('Last Few Days has no daily quota; it posts once on each of its days.');
     if (type === 'ai_events') throw new Error('AI Events has no daily quota; it posts Miami and Boston on each of its days.');
     if (type === 'field_notes') throw new Error('Field Notes has no daily quota; it posts once on each day the calendar gives it.');
-    quota(patch, type === 'carousels' ? carouselCfg.CAROUSEL_SLOTS.length : type === 'explainers' ? EXPLAINER_WINDOWS.length : windows('reels'), type === 'explainers' ? 1 : 0);
+    if (type === 'reel_ai_drama') quota(patch, DRAMA_WINDOWS.length, 1);
+    else quota(patch, type === 'carousels' ? carouselCfg.CAROUSEL_SLOTS.length : type === 'explainers' ? EXPLAINER_WINDOWS.length : windows('reels'), type === 'explainers' ? 1 : 0);
   }
   if (patch.series) {
     if (type !== 'stories') throw new Error('Only Stories have series.');
@@ -266,7 +273,7 @@ function validate(type: ContentType, patch: PostingPatch): void {
   if (patch.cap !== undefined) {
     if (!Number.isInteger(patch.cap) || patch.cap < 0 || patch.cap > MAX_CAP) throw new Error(`A daily limit is a whole number from 0 to ${MAX_CAP}.`);
     if (patch.cap > maxCapFor(type)) {
-      throw new Error(type === 'ai_events' ? 'AI Events posts Miami and Boston, so its daily limit is 0 to 2.' : type === 'field_notes' ? 'Field Notes posts once a day, so its daily limit is 0 or 1.' : 'Last Few Days runs once a day, so its daily limit is 0 or 1.');
+      throw new Error(type === 'ai_events' ? 'AI Events posts Miami and Boston, so its daily limit is 0 to 2.' : type === 'field_notes' ? 'Field Notes posts once a day, so its daily limit is 0 or 1.' : type === 'reel_ai_drama' ? 'AI Drama reels are costly to make, so the daily limit is 0 to 3.' : 'Last Few Days runs once a day, so its daily limit is 0 or 1.');
     }
   }
 }
@@ -306,6 +313,16 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
       const cap = Number(await rowOf(db, 'explainers.settings', 'daily_render_cap'));
       if (!Number.isFinite(cap) || cap < n) await saveExplainersSetting(db, 'daily_render_cap', n);
     }
+  } else if (type === 'reel_ai_drama') {
+    // One transaction in the drama code; perDay also raises daily_render_cap, and live:true books approved reels.
+    const n = quota(patch, DRAMA_WINDOWS.length, 1);
+    const change = {
+      ...(patch.generate !== undefined ? { generate: patch.generate } : {}),
+      ...(patch.autoPublish !== undefined ? { autoPublish: patch.autoPublish } : {}),
+      ...(patch.live !== undefined ? { live: patch.live } : {}),
+      ...(n != null ? { perDay: n } : {}),
+    };
+    if (Object.keys(change).length) await writeDramaPosting(await exDb(), change);
   } else if (type === 'reels') {
     if (patch.generate !== undefined) await setReelsSetting('auto_run', patch.generate);
     if (patch.autoPublish !== undefined) await setReelsSetting('require_approval', !patch.autoPublish);

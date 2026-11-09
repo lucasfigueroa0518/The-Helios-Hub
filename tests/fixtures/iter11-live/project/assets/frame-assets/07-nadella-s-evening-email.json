@@ -1,0 +1,81 @@
+{
+ "assets": [
+  {
+   "id": "V60",
+   "kind": "event_photo",
+   "file": "assets/media/V60.jpg",
+   "url": "https://images.fastcompany.com/image/upload/f_webp,q_auto,c_fit/wp-cms/uploads/2023/08/p-1-90931084-satya-nadella-microsoft-ai-frontrunner.jpg",
+   "source_page": "https://www.fastcompany.com/90931084/satya-nadella-microsoft-ai-frontrunner",
+   "credit": "Fast Company (www.fastcompany.com)",
+   "license": null,
+   "shows": "A man in a blue blazer and glasses in a studio portrait, hands clasped on a table against a blue backdrop.",
+   "people": [
+    "Satya Nadella"
+   ],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1536,
+   "height": 1920,
+   "phash": "fbd18c36803ee02f",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "identity:verified",
+    "identity_basis:title_and_url",
+    "faces:1",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:moment",
+    "boxes:media/V60.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": {
+    "x": 0.3945,
+    "y": 0.1906,
+    "w": 0.2383,
+    "h": 0.1906
+   },
+   "made_kind": null,
+   "regions": {
+    "faces": [
+     {
+      "x": 0.3945,
+      "y": 0.1906,
+      "w": 0.2383,
+      "h": 0.1906,
+      "score": 0.7975751757621765,
+      "trusted": true,
+      "name": "Satya Nadella"
+     }
+    ],
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.4143,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1920,
+    "focus": null,
+    "phash": "fbd18c26903ee02f",
+    "expression": "calm, faint smile",
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  }
+ ]
+}

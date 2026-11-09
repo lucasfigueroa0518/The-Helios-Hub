@@ -134,10 +134,11 @@ test('a seeded run is one post: a cover, one tip slide per tip, Follow; every ti
   assert.equal(post.slides.at(-1)!.blocks[0]!.role, 'hand');
   assert.equal(new Set(post.photo_ids).size, post.photo_ids.length, 'no photo twice in a post');
   assert.deepEqual(post.slides.map((s) => s.photoId), post.photo_ids);
-  // Photos: the people photo is the cover; the tip slides vary (scenery, working, event) newest first; Follow takes the calmest left (scenery).
+  // Photos: the people photo is the cover; Follow's calm photo (the newest scenery) is reserved before the tip slides,
+  // which then vary without a neighbour of Follow's kind (Tommy, 2026-11-08).
   const kinds = await kindsOf(query);
-  assert.deepEqual(post.photo_ids.map((id) => kinds.get(id)), ['people', 'scenery', 'working', 'event', 'scenery']);
-  assert.deepEqual(post.photo_ids, [photoIds[0], photoIds[5], photoIds[4], photoIds[3], photoIds[2]]);
+  assert.deepEqual(post.photo_ids.map((id) => kinds.get(id)), ['people', 'working', 'event', 'working', 'scenery']);
+  assert.deepEqual(post.photo_ids, [photoIds[0], photoIds[4], photoIds[3], photoIds[1], photoIds[5]]);
   // Storage, caption.
   assert.equal(post.slide_objects.length, 5);
   assert.ok(post.slide_objects.every((p) => p.startsWith(`${FIELD_NOTES_SLIDE_PREFIX}/`) && engine.uploaded.has(p)));
@@ -145,7 +146,7 @@ test('a seeded run is one post: a cover, one tip slide per tip, Follow; every ti
   // The photos rest, the tips are drafted, the post is on the spine, nothing is approved or booked.
   const pool = (await query<{ photo_id: string; status: string; last_used_post_seq: number | null }>(`SELECT photo_id::text AS photo_id, status, last_used_post_seq FROM field_notes.pool`)).rows;
   for (const id of post.photo_ids) assert.deepEqual({ s: pool.find((p) => p.photo_id === id)!.status, q: pool.find((p) => p.photo_id === id)!.last_used_post_seq }, { s: 'resting', q: post.seq });
-  assert.equal(pool.find((p) => p.photo_id === photoIds[1])!.status, 'live');
+  assert.equal(pool.find((p) => p.photo_id === photoIds[2])!.status, 'live');
   for (const id of tipIds) assert.equal(await tipStatus(query, id), 'drafted');
   assert.equal((await query(`SELECT 1 FROM social_hub.content_items WHERE vertical = 'field_notes' AND native_ref = $1`, [post.id])).rows.length, 1);
   assert.equal((await query(`SELECT 1 FROM social_hub.approvals`)).rows.length, 0);
@@ -457,8 +458,8 @@ test('the photo rest rule: used photos sit out the next 8 posts, newest first, a
 
 test('photos: the cover is the starred people opener even when an unstarred people photo is newer; tip slides keep to two of a kind', async () => {
   const { query } = await freshDb();
-  // 0 people (starred, oldest), 1-3 working, 4 scenery, 5 event, 6 people (newest, not starred), 7 working.
-  const ids = await addPool(query, 8, ['people', 'working', 'working', 'working', 'scenery', 'event', 'people', 'working']);
+  // 0 people (starred, oldest), 1-3 working, 4 scenery, 5 event, 6 people (newest, not starred), 7 scenery (Follow's).
+  const ids = await addPool(query, 8, ['people', 'working', 'working', 'working', 'scenery', 'event', 'people', 'scenery']);
   await setKind(query, ids[0]!, 'people', true);
   const tipIds = await seedSet(query, 4);
   const r = await carryOutFieldNotesRun(worker(query, stubEngine(query)).w, await claim(query, tipIds[0]));

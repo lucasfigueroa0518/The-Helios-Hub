@@ -1,0 +1,108 @@
+{
+ "frame": 9,
+ "id": "09-300-000-signatures",
+ "duration": 7.688,
+ "voice_end": 7.558,
+ "hold": 0.13,
+ "words": [
+  {
+   "text": "By",
+   "start": 0.02,
+   "end": 0.063
+  },
+  {
+   "text": "late",
+   "start": 0.134,
+   "end": 0.205
+  },
+  {
+   "text": "July,",
+   "start": 0.277,
+   "end": 0.634
+  },
+  {
+   "text": "a",
+   "start": 0.863,
+   "end": 0.92
+  },
+  {
+   "text": "nonprofit",
+   "start": 1.027,
+   "end": 1.42
+  },
+  {
+   "text": "petition",
+   "start": 1.634,
+   "end": 1.848
+  },
+  {
+   "text": "demanding",
+   "start": 2.063,
+   "end": 2.348
+  },
+  {
+   "text": "Microsoft",
+   "start": 2.42,
+   "end": 2.848
+  },
+  {
+   "text": "cancel",
+   "start": 2.92,
+   "end": 3.277
+  },
+  {
+   "text": "had",
+   "start": 3.495,
+   "end": 3.589
+  },
+  {
+   "text": "more",
+   "start": 3.66,
+   "end": 3.732
+  },
+  {
+   "text": "than",
+   "start": 3.839,
+   "end": 3.933
+  },
+  {
+   "text": "300,000",
+   "start": 4.044,
+   "end": 4.589
+  },
+  {
+   "text": "signatures,",
+   "start": 4.803,
+   "end": 5.66
+  },
+  {
+   "text": "500",
+   "start": 6.003,
+   "end": 6.11
+  },
+  {
+   "text": "from",
+   "start": 6.182,
+   "end": 6.464
+  },
+  {
+   "text": "Microsoft",
+   "start": 6.61,
+   "end": 6.967
+  },
+  {
+   "text": "staff.",
+   "start": 7.11,
+   "end": 7.467
+  }
+ ],
+ "lines": [
+  {
+   "id": "L9",
+   "start": 0.02,
+   "end": 7.467,
+   "label": null,
+   "label_kind": null
+  }
+ ]
+}

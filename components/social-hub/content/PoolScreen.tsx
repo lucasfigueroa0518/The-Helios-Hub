@@ -30,6 +30,7 @@ const HOW: Record<Vertical, string> = {
   stories: 'Built at 4:00 AM from the other pools, one set per series that is due.',
   last_few_days: 'Picked at 3:00 AM on Tuesdays and Fridays: up to 3 major headlines, then the best Text on Screen ideas. This is the latest post’s queue, its picks and what it dropped.',
   field_notes: 'Tips for posts, from vendor docs, GitHub, Hacker News, RSS and the ones you seed. Each run picks one tip, pairs it with photos from the pool and renders the carousel; a post is made at 12:00 PM on its days and waits for approval.',
+  reel_ai_drama: 'Pitched in a weekly development session and re-ranked daily; at 12:00 AM the night makes the best pitches for the day’s slots when Generate is on.',
   ai_events: 'Ranked at 12:00 PM on Sundays: the coming week’s events in Miami, Boston, NYC and SF, scored by event-pick@1. The top 3 per city go into the carousel; gated and excluded events are retired with the reason. Pin or exclude events on the AI Events page.',
 };
 

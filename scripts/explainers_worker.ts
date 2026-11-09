@@ -9,6 +9,7 @@
  *
  *   npm run explainers:worker          # loop: poll every 15s
  *   npm run explainers:worker -- --once   # run the next queued render, then exit
+ *   npm run explainers:worker -- --once --parallel   # local: render beside a running job (no one-at-a-time gate)
  *
  * Database: EXPLAINERS_DATABASE_URL (locally: `npm run explainers:db`) or
  * EXPLAINERS_DB=supabase (the social worker VM). EXPLAINERS_STORAGE=bucket
@@ -50,6 +51,8 @@ function required(name: string): string {
 
 async function main(): Promise<void> {
   const once = process.argv.includes('--once');
+  // --parallel (local only): several workers render at once, so a running job is a sibling's, not an orphan.
+  const parallel = process.argv.includes('--parallel');
   if (!process.env.EXPLAINERS_DATABASE_URL?.trim() && process.env.EXPLAINERS_DB !== 'supabase') {
     log('missing_env', { name: 'EXPLAINERS_DATABASE_URL or EXPLAINERS_DB=supabase' });
     process.exit(1);
@@ -61,6 +64,7 @@ async function main(): Promise<void> {
   const { explainersDb } = await import('@/lib/explainers/connection');
   const { claimNextJob, failStaleRunningJobs, nyDate } = await import('@/lib/explainers/repository');
   const { runRenderJob } = await import('@/lib/explainers/render/job');
+  const { anthropicPictureVision } = await import('@/lib/explainers/render/picture');
   const { loadAgentQuery } = await import('@/lib/explainers/render/agent');
   const { artifactStoreFromEnv, signArtifact } = await import('@/lib/explainers/storage');
   const { IDEA_CYCLE_HOUR_NY, EXPLAINERS_INSIGHTS_HOUR_NY, EXPLAINERS_INSIGHTS_MINUTE_NY } = await import('@/lib/explainers/publish/config');
@@ -72,14 +76,13 @@ async function main(): Promise<void> {
   const { nextRunAt } = await import('@/lib/instagram/clock');
   const { loadSettings } = await import('@/lib/explainers/settings');
   const { runIdeaCycle } = await import('@/lib/explainers/ideas/cycle');
+  const { clearIdeaCycleRequest, pendingIdeaCycleRequest } = await import('@/lib/explainers/ideas/cycle-request');
   const { nextCycleTry } = await import('@/lib/explainers/ideas/retry');
   const { anthropicIdeaModel } = await import('@/lib/explainers/ideas/generator');
   const { anthropic } = await import('@/lib/anthropic');
   const { liveJevTransport } = await import('@/lib/reels/jev/client');
   // Promote / Demote live in the main database (social_hub.idea_adjustments), whichever database explainers use.
   const { dbQuery } = await import('@/lib/db');
-  const { liveExplainerBuildFit } = await import('@/lib/explainers/caption');
-  const { closingsLog } = await import('@/lib/social/captions/closings-store');
 
   const db = await explainersDb();
   const query = await loadAgentQuery();
@@ -109,7 +112,7 @@ async function main(): Promise<void> {
     });
   }
   // One worker, one render at a time: anything still `running` died with a previous process.
-  const stale = await failStaleRunningJobs(db, 'Worker restarted while this render was running.');
+  const stale = parallel ? 0 : await failStaleRunningJobs(db, 'Worker restarted while this render was running.');
   if (stale) log('stale_jobs_failed', { count: stale });
 
   let stopping = false;
@@ -123,16 +126,18 @@ async function main(): Promise<void> {
 
   const renderNext = async (): Promise<boolean> => {
     if (!secrets.heygenApiKey) return false;
-    const job = await claimNextJob(db);
+    const job = await claimNextJob(db, { parallel });
     if (!job) return false;
     log('job_claimed', { jobId: job.id, topicId: job.topic_id, trigger: job.trigger, capUsd: job.spend_cap_usd });
     // A topic without a picked analogy gets the pass on this click, for this topic only (EX3-31).
     const analogy = { ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport };
-    // v4 captions: the build-line fit (Jev) and the explainer closings log (social captions redesign).
-    const buildFit = liveExplainerBuildFit();
-    const closings = closingsLog((text, params) => db.query(text, params), 'explainer');
+    // Explainers 4.2: the understanding test's two readers and its diagnosis run as Agent SDK sessions
+    // (agents `reader` and `diagnoser`, reader_model, Read only); direct calls were refused live.
+    const understanding = 'agent' as const;
+    // The picture check: one vision call over contact grids (falls back to the agent session on error).
+    const pictureVision = anthropicPictureVision(anthropic);
     const outcome = await runRenderJob(
-      { db, query, store, jobsRoot, secrets, analogy, buildFit, closings, log: (event, fields) => log(event, fields) },
+      { db, query, store, jobsRoot, secrets, analogy, understanding, pictureVision, log: (event, fields) => log(event, fields) },
       job,
     );
     log('job_finished', { jobId: job.id, ...outcome });
@@ -248,6 +253,32 @@ async function main(): Promise<void> {
             ...('fill' in cycle ? { fill: cycle.fill } : {}),
             ...(cycle.status === 'ok' ? { renders: cycle.renders, allocated: cycle.allocated.map((a) => ({ topicId: a.topicId, jobId: a.jobId, scheduled: a.scheduled })) } : {}),
           });
+        }
+      }
+      // A person's "Run the idea cycle now" (cycle-request.ts): once, even while auto_render is off. force bypasses only
+      // that gate (the one-cycle-per-day index and the spend caps stay). The request is cleared after the run, whatever it did.
+      const asked = await pendingIdeaCycleRequest(db).catch((error) => {
+        log('idea_cycle_request_read_failed', { error: errorText(error) });
+        return null;
+      });
+      if (asked) {
+        try {
+          if (nyDate(new Date(asked.at)) !== today) {
+            log('idea_cycle_request_expired', { at: asked.at, by: asked.by });
+          } else {
+            const cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log, moves: (text, params) => dbQuery(text, params), force: true });
+            log('idea_cycle_requested', {
+              by: asked.by,
+              status: cycle.status,
+              ...('reason' in cycle ? { reason: cycle.reason } : {}),
+              ...('error' in cycle ? { error: cycle.error } : {}),
+              ...(cycle.status === 'ok' ? { renders: cycle.renders } : {}),
+            });
+          }
+        } catch (error) {
+          log('idea_cycle_requested_threw', { error: errorText(error), by: asked.by });
+        } finally {
+          await clearIdeaCycleRequest(db).catch((error) => log('idea_cycle_request_clear_failed', { error: errorText(error) }));
         }
       }
       await revisionsStep();

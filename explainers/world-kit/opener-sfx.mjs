@@ -114,6 +114,7 @@ export function placeOpenerSfx(root, { ffmpeg = 'ffmpeg' } = {}) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   const result = placeOpenerSfx(process.cwd());
-  console.log(JSON.stringify(result, null, 1));
-  process.exit(result.ok ? 0 : 1);
+  // Write, then exit once stdout has drained: process.exit() right after console.log cut a piped
+  // report off at 64 KB, and the job read the cut JSON as "no errors" (2026-11-03).
+  process.stdout.write(`${JSON.stringify(result, null, 1)}\n`, () => process.exit(result.ok ? 0 : 1));
 }

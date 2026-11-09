@@ -6,7 +6,7 @@ import type { JevTransport } from '@/lib/reels/jev/runner';
 import type { Adapter, AdapterItem } from '@/lib/reels/types';
 import { ABOUT_AI_THRESHOLD, FIELD_NOTES_SCORE, FIELD_NOTES_SCORED_KEYS } from '@/lib/field-notes/sources/questions';
 import { entryHash, isFixEntry, isFixGroup, parseDocsPage } from '@/lib/field-notes/sources/docs-adapter';
-import { FEATURE_LEAVES, isFeatureLeaf, isRepoLeaf, MAX_REPO_TIPS, maxPerWant, maxRepoTips, REPO_LEAVES } from '@/lib/field-notes/sources/select';
+import { FEATURE_LEAVES, isFeatureLeaf, isRepoLeaf, MAX_REPO_TIPS, MAX_TECHNIQUE_TIPS, maxPerWant, maxRepoTips, REPO_LEAVES } from '@/lib/field-notes/sources/select';
 import { CONTENT_LEAVES, KNOW_HOW_TIERS, TIP_SLIDES_MAX, TIP_SLIDES_MIN, WANTS, type ContentLeaf, type Want } from '@/lib/field-notes/types';
 import {
   admitSeeds,
@@ -757,4 +757,20 @@ test('selection: a later blog post naming an already-posted feature is skipped; 
   assert.equal(named('Release: owner/repo v2'), true, 'a posted repo slug, case-insensitive');
   assert.equal(named('Agents everywhere'), false, 'a one-word subject never blocks');
   assert.deepEqual(postedNames([], []), { phrases: [], tokens: [] });
+});
+
+test('selectTips: at most MAX_TECHNIQUE_TIPS technique tips on a post, seeded ones counted; relaxed only to reach the minimum', () => {
+  assert.equal(MAX_TECHNIQUE_TIPS, 2);
+  const wants: Want[] = ['faster', 'better', 'cheaper', 'newly_possible'];
+  const tech = [0.95, 0.94, 0.93, 0.92].map((s, i) => leafed(`https://e.com/t${i}`, s, 'technique', wants[i]!));
+  const others = [leafed('https://e.com/f', 0.5, 'llm_app_feature', 'faster'), leafed('https://e.com/s', 0.4, 'skill', 'better')];
+  const out = selectTips({ now: NOW_SEL, tipExpiryDays: 30, scored: [...tech, ...others], minTotal: TIP_SLIDES_MIN }, 4);
+  assert.equal(out.filter((s) => s.leaf === 'technique').length, 2);
+  assert.deepEqual(out.map((s) => s.candidate.sourceUrl), ['https://e.com/t0', 'https://e.com/t1', 'https://e.com/f', 'https://e.com/s']);
+  // A seeded technique counts toward the cap.
+  const seeded = selectTips({ now: NOW_SEL, tipExpiryDays: 30, scored: [...tech, ...others], takenLeaves: ['technique'], takenSubjects: ['x'] }, 3);
+  assert.equal(seeded.filter((s) => s.leaf === 'technique').length, 1);
+  // Only techniques: the cap relaxes just enough for the minimum.
+  assert.equal(selectTips({ now: NOW_SEL, tipExpiryDays: 30, scored: tech, minTotal: TIP_SLIDES_MIN }, 4).length, 3);
+  assert.equal(selectTips({ now: NOW_SEL, tipExpiryDays: 30, scored: tech }, 4).length, 2);
 });

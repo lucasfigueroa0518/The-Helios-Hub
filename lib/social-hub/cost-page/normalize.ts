@@ -1,6 +1,7 @@
 import { EXPLAINERS_STAGES } from '@/lib/social-hub/cost-page/stages/explainers';
 import { REELS_STAGES } from '@/lib/social-hub/cost-page/stages/reels';
 import { STORIES_STAGES } from '@/lib/social-hub/cost-page/stages/stories';
+import { REEL_AI_DRAMA_STAGES } from '@/lib/social-hub/cost-page/stages/reel-ai-drama';
 import type { Vertical } from '@/lib/social-hub/types';
 
 export type Stage = 'research' | 'writing' | 'visuals' | 'video' | 'other';
@@ -28,7 +29,7 @@ const STAGE_RULES: ReadonlyArray<[RegExp, Stage]> = [
   [/score|rank|idea|research|search|dedupe|duplicate|select|jev|generator|feed|story-match|reporter/i, 'research'],
   [/copy|writ|caption|script|hook|line|edit|fact|session|cue|story|draft/i, 'writing'],
 ];
-const BY_TYPE: Partial<Record<Vertical, Record<string, Stage>>> = { reels: REELS_STAGES, explainers: EXPLAINERS_STAGES, stories: STORIES_STAGES };
+const BY_TYPE: Partial<Record<Vertical, Record<string, Stage>>> = { reels: REELS_STAGES, explainers: EXPLAINERS_STAGES, stories: STORIES_STAGES, reel_ai_drama: REEL_AI_DRAMA_STAGES };
 
 /** Exact name, then the name before a `:` or `@` suffix, then the keyword table. */
 export function stageOf(vertical: Vertical, label: string): Stage {
@@ -36,6 +37,8 @@ export function stageOf(vertical: Vertical, label: string): Stage {
   if (map) {
     const hit = map[label] ?? map[label.split(/[:@]/)[0]!];
     if (hit) return hit;
+    // AI Drama names are exact: an unlisted component is 'other', never guessed from its words.
+    if (vertical === 'reel_ai_drama') return 'other';
   }
   for (const [re, stage] of STAGE_RULES) if (re.test(label)) return stage;
   return 'other';

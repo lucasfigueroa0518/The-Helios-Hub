@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { planOffer } from '@/lib/media-library/bank';
-import { laneForUsedSource, licenceOf, metaOf, shouldStore, tagsOf, words } from '@/lib/media-library/policy';
+import { laneForUsedSource, licenceOf, metaOf, shouldStore, storedLicence, subjectInCredit, tagsOf, words } from '@/lib/media-library/policy';
 import type { Candidate, Lane, PhotoSource } from '@/lib/social/photos/find';
 import type { VettedPhoto } from '@/lib/social/photos/vetted';
 
@@ -24,8 +24,11 @@ test('store table: outcome × lane (licence passing)', () => {
     assert.equal(shouldStore('verified', { lane, verified }, OPEN), ['headshot', 'second', 'ceo', 'hq', 'logo'].includes(lane), `verified ${lane}: identity lanes only`);
   }
   assert.equal(shouldStore('verified', { lane: 'headshot', verified: false }, OPEN), false, 'an unverified "headshot" is not identity-verified');
-  assert.equal(shouldStore('picked', { lane: 'openverse', verified: false }, NONE), false, 'no licence, no image');
-  assert.equal(shouldStore('picked', { lane: 'openverse', verified: false }, { licence: 'unknown', reuseOk: false, reason: 'x' }), false);
+  // 2026-11-03: a credit the licence pass can't clear is stored as `unknown`, never reusable (carousels never get it).
+  assert.equal(shouldStore('picked', { lane: 'openverse', verified: false }, NONE), true, 'no cleared licence: still stored');
+  assert.deepEqual(storedLicence(NONE), { licence: 'unknown', reuseOk: false });
+  assert.deepEqual(storedLicence({ licence: 'unknown', reuseOk: true, reason: 'x' }), { licence: 'unknown', reuseOk: false }, 'unknown is never reusable');
+  assert.deepEqual(storedLicence(OPEN), { licence: 'open', reuseOk: true });
 });
 
 test('licence classes: open and government reusable; company and official library-only; the rest not stored', () => {
@@ -63,8 +66,8 @@ test('planOffer: every vetted item is a sighting; only the stored ones are sourc
     ],
   });
   assert.equal(rows.sightings.length, 6);
-  assert.deepEqual(rows.sources.map((s) => s.url), ['https://x/pick.jpg', 'https://x/alt.jpg', 'https://x/sam.jpg', 'https://x/official.png']);
-  assert.deepEqual(rows.sources.map((s) => [s.licence, s.reuse_ok]), [['open', true], ['open', true], ['open', true], ['company', false]]);
+  assert.deepEqual(rows.sources.map((s) => s.url), ['https://x/pick.jpg', 'https://x/alt.jpg', 'https://x/sam.jpg', 'https://x/agency.jpg', 'https://x/official.png']);
+  assert.deepEqual(rows.sources.map((s) => [s.licence, s.reuse_ok]), [['open', true], ['open', true], ['open', true], ['unknown', false], ['company', false]], 'an agency credit is stored as unknown, not reusable');
   const sam = rows.sightings.find((s) => s.url === 'https://x/sam.jpg')!;
   assert.deepEqual([sam.qid, sam.subject, sam.verified, sam.request_qid], ['Q7407093', 'Sam Altman', true, 'Q7407093']);
   assert.deepEqual(rows.sightings[0]!.tile_tags, ['server racks', 'blue lights'], 'tile tags lowercased');
@@ -104,6 +107,8 @@ test('used_photos sources map to lanes (StockSnap told apart by its credit)', ()
   assert.equal(laneForUsedSource('stock', 'Snap, CC0 · via StockSnap'), 'stocksnap');
   assert.equal(laneForUsedSource('commons', null), 'headshot');
   assert.equal(laneForUsedSource('logo', null), 'logo');
-  assert.equal(laneForUsedSource('stories', null), null);
+  assert.equal(laneForUsedSource('stories', null), 'stories');
+  assert.equal(laneForUsedSource('lfd', 'Example News'), 'lfd');
+  assert.equal(laneForUsedSource('mystery', null), null);
   assert.equal(laneForUsedSource(null, null), null);
 });

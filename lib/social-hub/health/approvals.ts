@@ -21,6 +21,8 @@ export const WINDOWS: Record<Vertical, { first: [number, number]; lastEnd: [numb
   ai_events: { first: [18, 0], lastEnd: [19, 0] },
   // lib/field-notes/config.ts FIELD_NOTES_WINDOW (2:30–3:30 PM, its calendar days).
   field_notes: { first: [14, 30], lastEnd: [15, 30] },
+  // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS (8:00–8:45 PM).
+  reel_ai_drama: { first: [20, 0], lastEnd: [20, 45] },
 };
 
 /** When the type's last window closes today; null once it has. Stories: 10 AM, after which a set is never scheduled. */

@@ -812,7 +812,7 @@ test('prompt lens: facts and skipping are required; value headline and plain bod
   assert.match(WRITER_SYSTEM, /Name the thing once, introduced by the everyday kind of thing it is/);
   assert.match(WRITER_SYSTEM, /No commands, flags, file paths, code, setting syntax or developer terms/);
   // Plainer bodies with flair (2026-11-08): a class rule for the never-coded reader, no example copy, no tool names.
-  assert.match(WRITER_SYSTEM, /The body must make sense to someone who has never written code or used a developer tool: describe what the thing lets them do in everyday terms, never in the vocabulary of software work, and keep the flair the Voice section asks for\./);
+  assert.match(WRITER_SYSTEM, /The body must make sense to someone who has never written code or used a developer tool: describe what the thing lets them do in everyday terms, never in the vocabulary of software work, and keep the flair the Voice section asks for\. That vocabulary is any word a non-technical reader would have to look up: software and coding terms, hardware and chip terms, AI-model jargon, and technical product categories alike\./);
   assert.match(WRITER_SYSTEM, /explain it in a few plain words where it appears/);
   assert.match(WRITER_SYSTEM, /Name: the thing's real name exactly as the tip or its source gives it/);
   assert.match(WRITER_SYSTEM, /TryIt: how to try it, copied verbatim from the source/);

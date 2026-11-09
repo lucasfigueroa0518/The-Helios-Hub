@@ -241,8 +241,8 @@ export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: st
 // ── Header buttons that open a drawer ───────────────────────────────────────
 
 /** Settings: the type's switches and caps, in a drawer so the page itself stays the Text on Screen format. */
-export function SettingsButton({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function SettingsButton({ children, defaultOpen = false }: { children: ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <>
       <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
@@ -335,6 +335,9 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
       {!data.live ? (
         <p className="rh-settings__note"><strong>Live is off</strong>, so nothing is scheduled or posted yet, even approved {noun}. Turn Live on in the header when you are ready.</p>
       ) : null}
+      {type === 'reel_ai_drama' ? (
+        <p className="rh-settings__note">Only the shared publisher posts {noun}, and only while its mode is <strong>live</strong>; until then nothing is posted, even with Live on here.</p>
+      ) : null}
       {data.generate !== null ? (
         <Switch
           checked={data.generate}
@@ -411,6 +414,104 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
           ))}
         </>
       ) : null}
+      <Note text={note} />
+    </div>
+  );
+}
+
+// ── Explainers: run today's idea cycle now (C serves POST /api/explainers/idea-cycle) ──
+
+type IdeaCycleInfo = { estimateUsd: number; maxRenders: number; ranToday: boolean; requested: boolean };
+
+/**
+ * "Run the idea cycle now": asks the explainers worker for today's cycle (it still keeps one cycle a day and the spend
+ * caps). The confirm states the route's own estimate; the note that comes back is shown as it is.
+ */
+export function IdeaCycleButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    try {
+      const info = await call<IdeaCycleInfo>('/api/explainers/idea-cycle');
+      if (info.ranToday) { setNote('Today’s idea cycle already ran.'); return; }
+      if (info.requested) { setNote('An idea cycle is already requested. The worker picks it up within a minute.'); return; }
+      if (!confirm(`Run today’s idea cycle now? It refills the topic pool and renders up to ${info.maxRenders} reel${info.maxRenders === 1 ? '' : 's'}, with live model, voice and video calls, about ${usd(info.estimateUsd)}. The daily spend caps still apply.`)) return;
+      const out = await call<{ queued?: boolean; note?: string }>('/api/explainers/idea-cycle', {});
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
+      setNote(out.note ?? (out.queued ? 'Idea cycle requested.' : 'Not requested.'));
+      void refreshHubPage(router);
+    } catch (e) {
+      setNote(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <button type="button" className="rh-btn" disabled={busy} onClick={run}>Run the idea cycle now</button>
+      <Note text={note} />
+    </div>
+  );
+}
+
+// ── AI Drama Reels ──────────────────────────────────────────────────────────
+
+/** Make one pitch into a reel (POST /api/reel-ai-drama/make). The daily render and spend caps answer with a plain note. */
+export async function dramaGenerate(ideaId: string): Promise<GenerateOutcome> {
+  const pitchId = ideaId.replace(/^reel_ai_drama:pitch:/, '');
+  try {
+    const res = await fetch('/api/reel-ai-drama/make', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pitchId }) });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (res.ok) {
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
+      return { ok: true };
+    }
+    return { ok: false, message: json.error ?? `Request failed (${res.status})` };
+  } catch (e) {
+    return { ok: false, message: msg(e) };
+  }
+}
+
+export function DramaMakeIt({ ideaId, title }: { ideaId: string; title: string }) {
+  const router = useRouter();
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" onClick={() => setAsking(true)}>Make it</button>
+      {asking ? <GenerateConfirm generate={dramaGenerate} ideaId={ideaId} title={title} reason="click" onDone={() => { setAsking(false); void refreshHubPage(router); }} /> : null}
+    </>
+  );
+}
+
+/**
+ * Develop: one development session (new pitches for the pool), queued for the drama worker; nothing runs in the
+ * request. The confirm names the weekly development cap from the drama settings.
+ */
+export function DramaDevelopButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    try {
+      const { settings } = await call<{ settings: { weekly_dev_cap_usd?: number } }>('/api/reel-ai-drama/settings');
+      const cap = typeof settings?.weekly_dev_cap_usd === 'number' ? usd(settings.weekly_dev_cap_usd) : 'the weekly development cap';
+      if (!confirm(`Develop new AI Drama pitches now? This queues one development session, up to ${cap}, with live model and web calls. The drama worker runs it; nothing runs in this page.`)) return;
+      await call<{ requestId: string; status: string }>('/api/reel-ai-drama/develop', {});
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
+      setNote('Development session queued. The drama worker picks it up; new pitches land in the pool when it finishes.');
+      void refreshHubPage(router);
+    } catch (e) {
+      setNote(msg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <button type="button" className="rh-btn rh-btn--primary" disabled={busy} onClick={run}>Develop</button>
       <Note text={note} />
     </div>
   );

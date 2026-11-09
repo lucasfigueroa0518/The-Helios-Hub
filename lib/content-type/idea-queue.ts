@@ -11,8 +11,8 @@ import { isUnscoredSeed } from '@/lib/reels/seeds';
  * drag's key from the neighbours the browser saw, never from a number the browser sends.
  */
 
-const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days'];
-const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days):[A-Za-z_]+:[^\s]{1,2000}$/;
+const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'reel_ai_drama'];
+const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days|reel_ai_drama):[A-Za-z_]+:[^\s]{1,2000}$/;
 
 export type QueueAction =
   | { action: 'pin' | 'unpin' | 'archive'; vertical: Vertical; ideaId: string }

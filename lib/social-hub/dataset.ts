@@ -5,6 +5,8 @@ import { storyIdeas, storyPosts } from '@/lib/social-hub/adapters/stories';
 import { lfdIdeas, lfdPosts } from '@/lib/social-hub/adapters/last-few-days';
 import { aiEventsIdeas, aiEventsPosts } from '@/lib/social-hub/adapters/ai-events';
 import { fieldNotesIdeas, fieldNotesPosts } from '@/lib/social-hub/adapters/field-notes';
+import { dramaIdeas, dramaPosts } from '@/lib/social-hub/adapters/reel-ai-drama';
+import type { ReelAiDramaRead } from '@/lib/social-hub/queries/reel-ai-drama';
 import type { LfdRead } from '@/lib/social-hub/queries/last-few-days';
 import type { AiEventsRead, AiEventsWeek } from '@/lib/social-hub/queries/ai-events';
 import type { FieldNotesRead } from '@/lib/social-hub/queries/field-notes';
@@ -30,6 +32,8 @@ export type VerticalReads = {
   ai_events?: AiEventsRead | Error;
   /** And Field Notes. */
   field_notes?: FieldNotesRead | Error;
+  /** Optional the same way: a caller that leaves it out shows no AI Drama posts or pitches. */
+  reel_ai_drama?: ReelAiDramaRead | Error;
 };
 
 export type HubDataset = {
@@ -96,10 +100,15 @@ function adapt(reads: VerticalReads, vertical: Vertical): { posts: HubPost[]; id
       if (!r) return { posts: [], ideas: [] };
       return r instanceof Error ? r : { posts: fieldNotesPosts(r), ideas: fieldNotesIdeas(r) };
     }
+    case 'reel_ai_drama': {
+      const r = reads.reel_ai_drama;
+      if (!r) return { posts: [], ideas: [] };
+      return r instanceof Error ? r : { posts: dramaPosts(r), ideas: dramaIdeas(r.pitches) };
+    }
   }
 }
 
-const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
+const ORDER: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 
 /**
  * The cost half of the dataset, built on its own so it can be cached apart

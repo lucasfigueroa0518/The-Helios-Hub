@@ -1,0 +1,30 @@
+[
+ {
+  "t": 0,
+  "kind": "ambience",
+  "what": "soft outdoor air, leaves rustling",
+  "dur": 8
+ },
+ {
+  "t": 2.17,
+  "kind": "foley",
+  "what": "paper landing on paper",
+  "kit": true
+ },
+ {
+  "t": 2.17,
+  "kind": "foley",
+  "what": "paper landing",
+  "kit": true
+ },
+ {
+  "t": 2.47,
+  "kind": "tick",
+  "kit": true
+ },
+ {
+  "t": 2.47,
+  "kind": "tick",
+  "kit": true
+ }
+]

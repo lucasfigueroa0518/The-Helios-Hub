@@ -255,7 +255,8 @@ function getPool(): Pool {
     const pool = new Pool({
       connectionString: runtimeConnectionString(choice),
       application_name: applicationName(),
-      ssl: process.platform === 'win32' ? false : { rejectUnauthorized: false },
+      // A local Postgres (the localhost copy of the hub's data) has no TLS.
+      ssl: process.platform === 'win32' || /@(127\.0\.0\.1|localhost)[:/]/.test(runtimeConnectionString(choice)) ? false : { rejectUnauthorized: false },
       ...settings,
     });
     // Idle clients can drop on network blips; without this handler Node treats it as fatal.

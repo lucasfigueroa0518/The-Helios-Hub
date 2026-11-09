@@ -245,9 +245,11 @@ export type SeriesSlotDay = { open: ResolvedSlot[]; fill: DailyFill; slotted: nu
  * other live set of the series day (no slot: Generate, a placement under the
  * series name; any status, any trigger) fills the earliest free slot. No more
  * than the series' slot count is ever live, and a slot whose [slot, slot + 15]
- * has passed is not open. Enabled and auto switches are the caller's.
+ * has passed is not open (the worker must not request a missed slot), unless
+ * `includePast`: a person's click runs whenever they click, so it still gets
+ * the first free slot of the day. Enabled and auto switches are the caller's.
  */
-export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot[], now: Date): Promise<Map<Series, SeriesSlotDay>> {
+export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot[], now: Date, opts: { includePast?: boolean } = {}): Promise<Map<Series, SeriesSlotDay>> {
   const date = nyDate(now);
   const out = new Map<Series, SeriesSlotDay>();
   for (const s of SERIES) {
@@ -266,7 +268,7 @@ export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot
     const live = minutes.size + loose;
     const allowance = Math.max(0, mine.length - live);
     const free = mine.filter((x) => !minutes.has(x.startMinute)).slice(loose);
-    const open = free.filter((x) => now <= windowBounds(slotWindow(x.startMinute), date).end).slice(0, allowance);
+    const open = free.filter((x) => opts.includePast || now <= windowBounds(slotWindow(x.startMinute), date).end).slice(0, allowance);
     out.set(s, { open, slotted: minutes.size, loose, fill: { vertical: 'stories', nyDate: date, quota: mine.length, userPlaced: loose, making: allowance } });
   }
   return out;

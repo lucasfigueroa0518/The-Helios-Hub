@@ -55,6 +55,7 @@ async function main(): Promise<void> {
   const { fieldNotesDriver } = await import('@/lib/publishing/drivers/field-notes');
   const { liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { explainersDriver } = await import('@/lib/publishing/drivers/explainers');
+  const { reelAiDramaDriver } = await import('@/lib/publishing/drivers/reel-ai-drama');
   const { reelsDriver } = await import('@/lib/publishing/drivers/reels');
   const { createLiveMetaClient } = await import('@/lib/reels/music/meta');
   const { publisherMode, publisherTick, recordHeartbeat } = await import('@/lib/publishing/publisher');
@@ -78,6 +79,21 @@ async function main(): Promise<void> {
     drivers.push(explainersDriver({ db: await explainersDb(), meta: createLiveReelClient, signVideo: signArtifact, token }));
   } else {
     log('explainers_not_driven', { reason: 'Explainers are not on the shared database (EXPLAINERS_DB=supabase).' });
+  }
+
+  // AI Drama Reels ride the explainers handle (HUB-WIRING-CONTRACT §5): same database rule, plus its schema applied.
+  // This driver is the only thing that posts a drama reel; the drama worker has no publish loop.
+  if (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim()) {
+    const { explainersDb } = await import('@/lib/explainers/connection');
+    const { dramaSchemaReady } = await import('@/lib/reel-ai-drama/hub');
+    const db = await explainersDb();
+    if (await dramaSchemaReady((text, params) => db.query(text, params))) {
+      drivers.push(reelAiDramaDriver({ db, meta: createLiveReelClient, signVideo: signArtifact, token }));
+    } else {
+      log('reel_ai_drama_not_driven', { reason: 'The reel_ai_drama schema is not applied (npm run db:reel-ai-drama).' });
+    }
+  } else {
+    log('reel_ai_drama_not_driven', { reason: 'AI Drama Reels are not on the shared database (EXPLAINERS_DB=supabase).' });
   }
 
   let stopping = false;

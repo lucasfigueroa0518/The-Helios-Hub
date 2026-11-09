@@ -1,0 +1,143 @@
+{
+ "frames": [
+  {
+   "n": 1,
+   "name": "The money",
+   "line_ids": [
+    "L1"
+   ],
+   "treatment": "photo",
+   "asset_ids": [
+    "V1"
+   ],
+   "purpose": "hook: the founder and the number",
+   "motion": "push toward his face",
+   "marks": "",
+   "sound": "office room tone",
+   "music": "start",
+   "on_screen": "$4M"
+  },
+  {
+   "n": 2,
+   "name": "The dinner",
+   "line_ids": [
+    "L2"
+   ],
+   "treatment": "map",
+   "asset_ids": [
+    "V6"
+   ],
+   "purpose": "where it began",
+   "motion": "push to the pin",
+   "marks": "pin drop",
+   "sound": "restaurant room tone, pin tick",
+   "music": "hold",
+   "on_screen": null
+  },
+  {
+   "n": 3,
+   "name": "Across the table",
+   "line_ids": [
+    "L3"
+   ],
+   "treatment": "cutout_lift",
+   "asset_ids": [
+    "V2"
+   ],
+   "purpose": "who was there",
+   "motion": "lift, slow push",
+   "marks": "",
+   "sound": "room tone",
+   "music": "hold",
+   "on_screen": null
+  },
+  {
+   "n": 4,
+   "name": "The fight",
+   "line_ids": [
+    "L4"
+   ],
+   "treatment": "collision",
+   "asset_ids": [
+    "V3",
+    "V2",
+    "V4"
+   ],
+   "purpose": "the turn: they fight over the company",
+   "motion": "they slide in and meet",
+   "marks": "",
+   "sound": "impact as they meet",
+   "music": "change",
+   "on_screen": null
+  },
+  {
+   "n": 5,
+   "name": "The paper",
+   "line_ids": [
+    "L5"
+   ],
+   "treatment": "page",
+   "asset_ids": [
+    "V5"
+   ],
+   "purpose": "the paper that changed the labs",
+   "motion": "slow push to the title",
+   "marks": "circle the title on 'paper'",
+   "sound": "marker on the title",
+   "music": "hold",
+   "on_screen": null
+  },
+  {
+   "n": 6,
+   "name": "The chips",
+   "line_ids": [
+    "L6"
+   ],
+   "treatment": "photo",
+   "asset_ids": [
+    "V7"
+   ],
+   "purpose": "the chips",
+   "motion": "push",
+   "marks": "",
+   "sound": "server room hum",
+   "music": "hold",
+   "on_screen": null
+  },
+  {
+   "n": 7,
+   "name": "The meeting",
+   "line_ids": [
+    "L7"
+   ],
+   "treatment": "headline",
+   "asset_ids": [
+    "V8"
+   ],
+   "purpose": "the board meets",
+   "motion": "strip slams down",
+   "marks": "underline 'meets'",
+   "sound": "paper lands, marker",
+   "music": "drop",
+   "on_screen": null
+  },
+  {
+   "n": 8,
+   "name": "The damages",
+   "line_ids": [
+    "L8"
+   ],
+   "treatment": "photo",
+   "asset_ids": [
+    "V8"
+   ],
+   "purpose": "the size of the claim",
+   "motion": "hold drift",
+   "marks": "",
+   "sound": "quiet boardroom room tone",
+   "music": "start",
+   "on_screen": "$12M"
+  }
+ ],
+ "lines_back": []
+}

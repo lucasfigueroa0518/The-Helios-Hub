@@ -6,6 +6,7 @@ import { reportLastFewDays } from '@/lib/social-hub/health/reporters/last-few-da
 import { reportAiEvents } from '@/lib/social-hub/health/reporters/ai-events';
 import { reportFieldNotes } from '@/lib/social-hub/health/reporters/field-notes';
 import { makeExplainersReporter } from '@/lib/social-hub/health/reporters/explainers';
+import { makeReelAiDramaReporter } from '@/lib/social-hub/health/reporters/reel-ai-drama';
 import { reportReels } from '@/lib/social-hub/health/reporters/reels';
 import { emptyReport, type Reporter } from '@/lib/social-hub/health/reporters/shared';
 import { reportStories } from '@/lib/social-hub/health/reporters/stories';
@@ -25,6 +26,8 @@ export const REPORTERS: Record<Vertical, (h: Handles) => Promise<{ q: HubQuery; 
   ai_events: async (h) => ({ q: h.q, run: reportAiEvents }),
   field_notes: async (h) => ({ q: h.q, run: reportFieldNotes }),
   explainers: async (h) => ({ q: await h.explainersQ(), run: makeExplainersReporter(h.q) }),
+  // Drama lives on the explainers handle; publishing is read on the hub handle.
+  reel_ai_drama: async (h) => ({ q: await h.explainersQ(), run: makeReelAiDramaReporter(h.q) }),
 };
 
 export async function publisherTone(q: HubQuery, now: Date): Promise<Tone> {

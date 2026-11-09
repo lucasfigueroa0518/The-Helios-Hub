@@ -99,6 +99,8 @@ test('Settings: auto needs confirmation; history shows completion and early exit
   const [h] = await listView(db, 'history');
   assert.deepEqual(h!.insights, { completion: 0.75, exitsFirst3: 15, replies: 2, reachFirst: 200 });
   await recordCost(db, { setId: id, vendor: 'anthropic', component: 'md-headlines@1', usd: 0.05 });
+  // cost_events.created_at defaults to the real now(): put it on the test's clock, or the month reads empty outside October.
+  await db.query(`UPDATE stories.cost_events SET created_at = $1`, [NOW]);
   const m = await monthOverview(db, NOW);
   assert.equal(m.month, '2026-10');
   assert.equal(m.total, 0.05);

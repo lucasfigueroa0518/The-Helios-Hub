@@ -1074,3 +1074,31 @@ test('schema: the face-check columns exist, the migration applies twice, and the
   await assert.rejects(() => pg.query(`UPDATE field_notes.pool SET faces_result = 'maybe'`));
   await pg.query(`UPDATE field_notes.pool SET faces_result = 'unavailable: no browser'`);
 });
+
+test('picker: the Follow photo is reserved before the tip slides, scenery then event then working', () => {
+  // One scenery photo only: it goes to Follow, not to a tip slide.
+  const pool = [photo('face', { kind: 'people', uploadedAt: day(1) }), ...many('working', 6, 2), photo('calm', { kind: 'scenery', uploadedAt: day(40) })];
+  const r = pickPostPhotos({ pool, ...R, count: 7 });
+  assert.equal(r.photoIds.at(-1), 'calm');
+  assert.equal(r.photoIds.length, 7);
+  // No scenery: an event photo beats a working one, and a working Follow is warned about.
+  const ev = [photo('face', { kind: 'people', uploadedAt: day(1) }), ...many('working', 6, 2), photo('party', { kind: 'event', uploadedAt: day(3) })];
+  assert.equal(pickPostPhotos({ pool: ev, ...R, count: 7 }).photoIds.at(-1), 'party');
+  const work = pickPostPhotos({ pool: [photo('face', { kind: 'people', uploadedAt: day(1) }), ...many('working', 6, 2)], ...R, count: 5 });
+  assert.ok(work.warnings.some((w) => /Follow slide uses a working photo/.test(w)));
+});
+
+test('picker: the cover prefers a tagger-confirmed face photo and never takes one the tagger refuted', () => {
+  const pool = [
+    ...many('scenery', 3, 2), ...many('working', 3, 10),
+    { ...photo('star-unchecked', { kind: 'people', opener: true, uploadedAt: day(30) }) },
+    { ...photo('confirmed', { kind: 'people', uploadedAt: day(5) }), facesCheck: 'faces' },
+    { ...photo('refuted', { kind: 'people', opener: true, uploadedAt: day(40) }), facesCheck: 'none' },
+  ] as PoolPhoto[];
+  const r = pickPostPhotos({ pool, ...R, count: 5 });
+  assert.equal(r.photoIds[0], 'confirmed');
+  assert.ok(!r.warnings.some((w) => /not confirmed by the face tagger/.test(w)));
+  const noConfirmed = pickPostPhotos({ pool: pool.filter((p) => p.photoId !== 'confirmed'), ...R, count: 5 });
+  assert.equal(noConfirmed.photoIds[0], 'star-unchecked');
+  assert.ok(noConfirmed.warnings.some((w) => /not confirmed by the face tagger/.test(w)));
+});

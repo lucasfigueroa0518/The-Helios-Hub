@@ -4,6 +4,7 @@ import { nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
+import { readDramaMisses } from '@/lib/reel-ai-drama/hub-read';
 
 /**
  * "Run didn't finish" (Content page Phase B, B6): today's runs (New York
@@ -15,6 +16,8 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
  *   Reels       the idea's finish request failed today                   → that idea's card
  *   Carousels   today's latest daily run failed                          → every empty carousel card
  *   AI Events   today's latest build failed                              → its empty card
+ *   Field Notes today's latest build failed                              → its empty card
+ *   AI Drama    the pitch's latest job failed, requested today           → that idea's card
  *
  * A Stories set that failed after it had a minute failed while posting: it was
  * made, so it is not a run that didn't finish.
@@ -22,7 +25,7 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
 export type RunMiss = { key: string | null; title: string; detail: string | null };
 export type RunMisses = Record<Vertical, RunMiss[]>;
 
-export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], last_few_days: [], ai_events: [], field_notes: [] };
+export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], last_few_days: [], ai_events: [], field_notes: [], reel_ai_drama: [] };
 export const MISS_TITLE = 'Run didn’t finish';
 
 const DETAIL_MAX = 140;
@@ -37,7 +40,7 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
   const today = nyDateOf(now)!;
   // A type whose tables can't be read shows no line; the card keeps "Not made yet".
   const read = <T,>(p: Promise<{ rows: T[] }>): Promise<T[]> => p.then((r) => r.rows).catch(() => [] as T[]);
-  const [explainers, stories, reels, carousels, aiEvents, fieldNotes] = await Promise.all([
+  const [explainers, stories, reels, carousels, aiEvents, fieldNotes, drama] = await Promise.all([
     read(q<{ key: string; reason: string | null }>(
       `SELECT j.topic_id::text AS key, j.error AS reason
          FROM explainers.jobs j
@@ -84,8 +87,11 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
         LIMIT 1`,
       [today],
     )),
+    // AI Drama Reels (lib/reel-ai-drama/hub.ts); an unapplied schema shows no line, like the rest.
+    readDramaMisses(q, today).catch(() => [] as Array<{ key: string; reason: string | null }>),
   ]);
   return {
+    reel_ai_drama: drama.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
     explainers: explainers.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
     reels: reels.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
     stories: stories.map((r) => {

@@ -7,7 +7,8 @@
 /** A SELECT/INSERT query function: the runtime passes lib/db.ts `dbQuery`, tests pass PGlite. */
 export type Query = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-export type RunKind = 'carousel' | 'story' | 'backfill';
+/** reel_ai_drama: Reel AI Drama's harvest (lib/media-library/drama.ts). */
+export type RunKind = 'carousel' | 'story' | 'backfill' | 'reel_ai_drama';
 
 /** picked: a slide's winner · passed: a runner-up that passed every check · verified: an identity-verified headshot, second photo, CEO, headquarters or logo · rejected: failed the tag fit or the close-up check · used: imported from social.used_photos. */
 export type Outcome = 'picked' | 'passed' | 'verified' | 'rejected' | 'used';

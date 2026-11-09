@@ -50,6 +50,16 @@ export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
     { id: 'reviewTags', label: 'Review tags' },
     { id: 'spend', label: 'Render spend' },
   ],
+  reel_ai_drama: [
+    { id: 'storyType', label: 'Story type' },
+    { id: 'era', label: 'Era' },
+    { id: 'visualsGrade', label: 'Visuals grade' },
+    { id: 'dramaScore', label: 'Drama score' },
+    { id: 'seconds', label: 'Length (seconds)' },
+    { id: 'slot', label: 'Posting slot' },
+    { id: 'reviewTags', label: 'Review tags' },
+    { id: 'spend', label: 'Production spend' },
+  ],
   carousels: [
     { id: 'hook', label: 'Hook pass' },
     { id: 'slides', label: 'Slide count' },

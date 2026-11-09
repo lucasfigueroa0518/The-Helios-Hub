@@ -99,7 +99,7 @@ test('today’s strip is only post ideas holding a slot; failed and never-made i
 
 test('a day’s slots are the sum of that day’s quotas, and only scheduled or published posts fill them', () => {
   const post = (over: Partial<HubPost>): HubPost => ({ id: 'p', vertical: 'reels', nyDate: '2026-10-09', status: 'ready', ...over }) as HubPost;
-  const quotas = { reels: 1, carousels: 0, explainers: 1, last_few_days: 0, field_notes: 0 };
+  const quotas = { reels: 1, carousels: 0, explainers: 1, last_few_days: 0, field_notes: 0, reel_ai_drama: 0 };
   // Friday: Morning Download is the only Story series due, so 1 + 0 + 1 + 1 (+ 0 Last Few Days).
   const friday = slotsForDay([
     post({ id: 'ready', status: 'ready' }),
@@ -112,10 +112,10 @@ test('a day’s slots are the sum of that day’s quotas, and only scheduled or 
     post({ id: 'story', vertical: 'stories', status: 'publishing' }),
   ], '2026-10-09', quotas);
   assert.deepEqual(friday, { slots: 3, filled: 2 });
-  // No quotas loaded: each type's windows (Carousels have none). Thursday has both Story series; Friday only Morning Download, plus Last Few Days.
-  assert.equal(slotsForDay([], '2026-10-08', null).slots, 7);
-  // Friday is also a Field Notes day (Tue/Fri), so its one window counts: 8.
-  assert.equal(slotsForDay([], '2026-10-09', null).slots, 8);
+  // No quotas loaded: each type's windows (Carousels have none). Thursday has both Story series; Friday only Morning Download, plus Last Few Days. AI Drama's 8:00 PM window is every day.
+  assert.equal(slotsForDay([], '2026-10-08', null).slots, 8);
+  // Friday is also a Field Notes day (Tue/Fri), so its one window counts: 9.
+  assert.equal(slotsForDay([], '2026-10-09', null).slots, 9);
 });
 
 test('the Content model leads with what needs a person and orders today by time', () => {
@@ -128,7 +128,7 @@ test('the Content model leads with what needs a person and orders today by time'
 
 test('pools come in the fixed type order and rank within a type only', () => {
   const pools = poolSummaries(d.ideas);
-  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes']);
+  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama']);
   for (const p of pools) {
     const scores = p.next.map((i) => i.score ?? -Infinity);
     assert.deepEqual(scores, [...scores].sort((a, b) => b - a));

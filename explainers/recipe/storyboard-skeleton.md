@@ -3,129 +3,144 @@ format: 1080x1920
 duration: 60s
 arc: concept-explainer
 mode: autonomous
+message: <fill in: the thesis, the one line the viewer leaves with>
 term: <fill in: BRIEF.md's term, verbatim>
 concept: <fill in: the same term>
+audience: <fill in: who the reel is for>
 music: none
 ---
 
+## Visual arc
+
+- throughline: <fill in: the one visual idea the reel builds from the first frame to the tie-together, in one line>
+- colour script: <fill in: frame by frame, its mood or palette shift (1: …; 2: …; through 7)>
+- motifs: <fill in: what recurs (a shape, a colour, a prop or a framing), and where it comes back changed>
+- intensity: <fill in: where contrast rises, where it eases, and where it resolves>
+- bridges: <fill in: each cut that is a bridge or a carry (frame N to M: the element and how it carries), or none>
+
 ## Anchor scene
 
-<fill in from BRIEF.md's picked analogy: metaphor, setting, ground, hook, steps (3–5, each "<analogy action> — <technical step name>"), entities (at most 4: id — what it is — stands for — how it is built — beats; the actor is a critter with its role accessories; an everyday object names its library prop, e.g. "prop: light switch"; never a person or a body part), states, layout. See story-design.md.>
+- metaphor: <fill in: BRIEF.md's named analogy, staged, in one line>
+- places:
+  - <fill in: place id> — <interior or exterior: its kind> — <what happens there>
+- hook: <fill in: the picked hook from ## Hook, in motion at frame 0>
+- hero: <fill in: entity id> — <critter or object>
+- steps:
+  - <fill in: what happens in the analogy> — <the real step's technical name>
+- entities:
+  - <fill in: id> — <what it is> — stands for <the real part> — <how it is built> — beats <the beats it appears in>
+- states: <fill in: each variable's start value, and how each beat changes it>
 
 ## Hook
 
-<fill in: three hook candidates for frame 1 (the analogy's own hook is one), each rated 1–5 on standalone clarity (a viewer with no context knows what they are looking at within 1 second) and thumb-stop, then the pick and why. See story-design.md.>
+<fill in: three hook candidates, each a moment in the anchor scene with the hero in it, rated 1–5 on standalone clarity and thumb-stop, then "- pick: <n> — <why>". See story-design.md § The plan's blocks.>
 
-## Curiosity gap
+## Frame 1 — Hook
 
-<fill in: three candidate gaps, each a tiny story in the hook's scene (goal, obstacle, twist, the viewer's own question, a promise), rated on clarity, pull, relevance and closable (1–5), then the pick and why, and closed_by. See story-design.md.>
-
-## Frame 1 — Series opener
-
-- duration: 3.5s
+- duration: 4.5s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
 - src: compositions/frames/01-opener.html
 - type: hook
-- scene: <fill in: one line, what is drawn and what moves>
-- engagement: Open loop + visual hook + audio ramp
-- voiceover: "In the next 30 seconds, this <fill in: 1–3 words naming what the hook shows> will teach you an AI concept."
-- anchor: scene
-- shots: <fill in: usually one shot (kind — subject); two if the frame runs past 6s>
+- ground: <fill in: paper or stage>
+- look: <fill in: world or blend>
+- voiceover: "<fill in: BRIEF.md's ## Opener line, its ___ filled>"
+- shots:
+  - <fill in: one line per shot, as story-design.md § Shot lines writes it>
+- scene: <fill in: what the viewer sees, as a viewer would say it>
 
-<fill in: the picked hook, in motion at frame 0 and clear on its own, and its critter (the hero the bank's opener will cut out, circle or zoom into). The opener, "AI BRAIN BREAK" and the title card are code's (EX3-102). The line is the opener template; its slot names what the hook shows ("this little shop", "this soggy forecaster").>
+## Frame 2 — Quick definition
 
-## Frame 2 — Curiosity gap
-
-- duration: 9s
+- duration: 5s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/02-gap.html
-- type: pain_point
-- scene: <fill in: one line, what is drawn and what moves>
-- engagement: Attention reset + curiosity gap
-- anchor: scene
-- gap_question: <fill in: the question exactly as the voiceover asks it>
-- shots: <fill in: 2–3 shots (kind — subject — on "the word the cut lands on"); each subject is what the voice names while it is on screen; none the hook's framing>
-
-<fill in: the gap as a tiny story in the hook's scene (story-design.md § 2), 18–36 words: the goal (who wants what); the obstacle; the twist or stakes; the viewer's own question about how it plays out; then a promise naming something in the viewer's life ("Stick around: it's the same reason chatbots make things up."). No term, no "same spot", plain roles. Reset (punch-in, color change, in-frame zoom-through, or a cut effect).>
-
-## Frame 3 — Define the term
-
-- duration: 7s
-- hold: 0.15s
-- transition_in: cut
-- status: outline
-- src: compositions/frames/03-define.html
+- src: compositions/frames/02-define.html
 - type: product_intro
-- scene: <fill in: one line, what is drawn and what moves>
-- engagement: Grounding definition
-- anchor: own
+- ground: <fill in: paper or stage>
+- look: <fill in: world, mechanism or blend>
+- voiceover: "<fill in: one plain sentence, about 15 words or fewer: [Term] is when …>"
+- shots:
+  - <fill in: one line per shot>
+- scene: <fill in: what the viewer sees>
 
-<fill in: definition of the term (what it is, what it does, when or why; it equals the voiceover) and part_of_speech; the kit's dictionary card in the top half, a visual of the definition below.>
+## Frame 3 — Hand-off
 
-## Frame 4 — Everyday analogy
+- duration: 3s
+- hold: 0.15s
+- transition_in: cut
+- status: outline
+- src: compositions/frames/03-handoff.html
+- type: handoff
+- ground: paper
+- look: world
+- voiceover: "Let's dive into this in everyday terms."
+- handoff_parts: <fill in: 2–3 entity ids of the analogy's mapped parts that matter most, or none>
+- world_sounds: <fill in: 1–2 foley words the analogy's world makes, from frame.md § Sound events, or none>
+- scene: The card "today's AI Brain Break: <the term>", the analogy's world showing around it
 
-- duration: 12s
+## Frame 4 — The analogy plays
+
+- duration: 13s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
 - src: compositions/frames/04-analogy.html
 - type: feature_showcase
-- scene: <fill in: one line, what is drawn and what moves>
-- engagement: Scene setting + analogy anchor + anticipation
-- anchor: scene
-- shots: <fill in: the one wide establishing shot first, then closer shots for the steps (kind — subject — on "cue word"), each subject what the voice names then, a cut every 2.5–4s>
+- ground: <fill in: paper or stage>
+- look: <fill in: world, mechanism or blend>
+- voiceover: "<fill in: the analogy plays, continuing the hook's story>"
+- shots:
+  - <fill in: one line per shot>
+- scene: <fill in: what the viewer sees>
 
-<fill in: continue the scene the viewer has already seen ("Here's what the hire does:", "Watch the forecaster:", "Back on the lawn:"; never "Picture…" or "Imagine…"), introduce each new element by name and job as it arrives, then play the steps to the payoff.>
-
-## Frame 5 — Map the analogy
+## Frame 5 — Definition payoff
 
 - duration: 10s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/05-map.html
+- src: compositions/frames/05-payoff.html
 - type: feature_showcase
-- scene: <fill in: one line, what is drawn and what moves>
-- engagement: Cached understanding + progressive disclosure
-- anchor: scene
-- shots: <fill in: a shot per mapped pair (close, medium or insert on the object the voice names), not frame 4's framing>
-
-<fill in: "the X is the Y, because …" for each pair (at least two), each landing on its object; never a list.>
+- ground: <fill in: paper or stage>
+- look: <fill in: world, mechanism or blend>
+- definition: "<fill in: the term restated with the analogy attached, word for word as the voiceover's first sentence>"
+- part_of_speech: <fill in: usually noun>
+- voiceover: "<fill in: the definition, then why the analogy works>"
+- shots:
+  - <fill in: one line per shot, or one framing under the card>
+- scene: <fill in: the dictionary card, and what the viewer sees below it>
 
 ## Frame 6 — Tiny real example
 
-- duration: 10s
+- duration: 11s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
 - src: compositions/frames/06-example.html
 - type: social_proof
-- scene: <fill in: one line, what is drawn and what moves>
-- engagement: Worked example + progress tracker
-- anchor: own
-- example_steps: <fill in: 3–5 of the example's own concrete steps, in order, each 4 words or fewer, separated by " → ">
-- shots: <fill in: an insert of each step's real thing (kind — subject — on "cue word"); at most one cut back to the anchor scene>
+- ground: <fill in: paper or stage>
+- look: <fill in: mechanism or blend>
+- voiceover: "<fill in: the real example>"
+- shots:
+  - <fill in: one line per shot>
+- scene: <fill in: what the viewer sees>
 
-<fill in: "Here's a real example:", real values, walked through the example_steps in order; the step tracker shows them, an insert illustrates each.>
+## Frame 7 — Tie-together
 
-## Frame 7 — Real world
-
-- duration: 6s
+- duration: 8s
 - hold: 0.15s
 - transition_in: cut
 - status: outline
-- src: compositions/frames/07-real-world.html
+- src: compositions/frames/07-tie.html
 - type: benefit_highlight
-- scene: <fill in: one line, what is drawn and what moves>
-- engagement: Recognition
-- anchor: own
-- shots: <fill in: two shots when it runs past 6s>
-
-<fill in: open with a transition ("Another example would be…", "In everyday life, you meet … when…"); one place the viewer meets this (at most two), a new drawn scene with critters and props on a new ground.>
+- ground: <fill in: paper or stage>
+- look: <fill in: world, mechanism or blend>
+- voiceover: "<fill in: the analogy's trait on the real example, then what it means for the viewer>"
+- shots:
+  - <fill in: one line per shot>
+- scene: <fill in: what the viewer sees>
 
 ## Frame 8 — Close
 
@@ -134,8 +149,7 @@ music: none
 - status: outline
 - src: compositions/frames/08-close.html
 - type: branding
-- engagement: Brand close
 - ground: white
 - scene: White screen; the Helios logo animates in and AI BRAIN BREAK writes itself beneath it, centred together
 
-The close is fixed and built by code (the kit's close.js): no voiceover, no hold, no shots. Copy this block as it is.
+The close is fixed and built by code (the kit's close.js): no voiceover, no hold, no look, no shots. Copy this block as it is.

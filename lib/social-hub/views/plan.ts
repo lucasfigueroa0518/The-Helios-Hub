@@ -38,6 +38,8 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
   ],
   // lib/field-notes/config.ts FIELD_NOTES_WINDOW on FIELD_NOTES_AUTO_DAYS (Tue, Fri: 1-2 a week).
   field_notes: [{ id: 'afternoon', label: 'Afternoon', startMinute: 14 * 60 + 30, endMinute: 15 * 60 + 30, days: [2, 5] }],
+  // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS (8:00–8:45 PM, every day).
+  reel_ai_drama: [{ id: 'evening', label: 'Evening', startMinute: 20 * 60, endMinute: 20 * 60 + 45 }],
   stories: [
     { id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY },
     { id: 'guess_the_number', label: 'Guess the Number', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [1, 4] },

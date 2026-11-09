@@ -34,6 +34,17 @@ import { comingWeek } from '@/lib/networking/pick/week';
 import { queueManualFieldNotesRun } from '@/lib/field-notes/manual';
 import { readFieldNotesSettings } from '@/lib/field-notes/settings';
 import { FIELD_NOTES_DEFAULT_SETTINGS } from '@/lib/field-notes/types';
+import { DRAMA_REFUSAL_TEXT, dramaInFlightPitchIds, dramaRunCostUsd, requestDramaJobs } from '@/lib/reel-ai-drama/hub';
+
+/** AI Drama Reels for Run now: pitches in flight and the per-reel cap, on the explainers handle. Unreadable (schema not applied): no step. */
+async function liveDrama(db: Awaited<ReturnType<typeof explainersDb>>): Promise<{ ok: boolean; inFlight: string[]; cap: number }> {
+  try {
+    const [inFlight, cap] = await Promise.all([dramaInFlightPitchIds(db), dramaRunCostUsd(db)]);
+    return { ok: true, inFlight, cap };
+  } catch {
+    return { ok: false, inFlight: [], cap: 0 };
+  }
+}
 
 /** Typical spend, for the confirm line: a reels night ran $1.40–2.80 this month; one reel (copy, frame, video, song) about $1. */
 const REELS_NIGHT_USD = 2.5;
@@ -124,14 +135,15 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
     loadCarouselSettings(),
     explainersDb(),
   ]);
-  const [jobs, exSettings, sets] = await Promise.all([
+  const [jobs, exSettings, sets, drama] = await Promise.all([
     exDb.query<{ topic_id: string }>(`SELECT topic_id::text FROM explainers.jobs WHERE status IN ('requested', 'running')`),
     loadExplainerSettings(exDb),
     liveStoriesDb.query<{ series: string }>(`SELECT series FROM stories.sets WHERE ny_date = $1::date AND status NOT IN ('rejected', 'failed', 'skipped')`, [today]),
+    liveDrama(exDb),
   ]);
   const quotas = dataset.dayQuotas ?? DEFAULT_DAY_QUOTAS;
   // A type's quota is its posts per day, never more than its windows today (the candidates use the same rule).
-  const day = (v: 'reels' | 'carousels' | 'explainers') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v], capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
+  const day = (v: 'reels' | 'carousels' | 'explainers' | 'reel_ai_drama') => typeDay(quotaCandidates(dataset, v, now), Math.min(quotas[v] ?? DEFAULT_DAY_QUOTAS[v]!, capacityWindows(v, today, dataset.dayQuotas?.lfdDays ?? [], placedCount(dataset.posts, v, today), today, dataset.dayQuotas?.slots ?? null).length));
   // Stories: each series due today by its own settings, or (template mode) a series while it has an
   // open slot today (capped, not passed, not held), the slots the 4 AM worker would still request.
   const open = storySlots ? await openStorySlots(liveStoriesDb, storySlots, now).catch(() => null) : null;
@@ -147,6 +159,7 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
     ...(lfd.day ? { lastFewDays: lfd.day } : {}),
     ...(aiEvents.day ? { aiEvents: aiEvents.day } : {}),
     ...(fieldNotes.day ? { fieldNotes: fieldNotes.day } : {}),
+    ...(drama.ok ? { reelAiDrama: day('reel_ai_drama') } : {}),
     inFlight: {
       reelsRun: Boolean(reelsPending),
       reelsBuilding: building.rows.map((r) => r.post_idea_id),
@@ -155,8 +168,9 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
       lfdRun: lfd.inFlight,
       aiEventsRun: aiEvents.inFlight,
       fieldNotesRun: fieldNotes.inFlight,
+      dramaPitches: drama.inFlight,
     },
-    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap, fieldNotesCap: fieldNotes.cap },
+    cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap, fieldNotesCap: fieldNotes.cap, dramaCap: drama.cap },
   });
 }
 
@@ -227,6 +241,11 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
           else refused.push(r.reason.replaceAll('_', ' '));
         }
         done(queued > 0, `${queued} render${queued === 1 ? '' : 's'} queued${refused.length ? `; refused: ${[...new Set(refused)].join(', ')}` : ''}.`);
+      } else if (step.action === 'drama_jobs') {
+        // The click approves these jobs (CLAUDE.md Rule 1); the drama worker runs them under the daily render and spend caps.
+        const out = await requestDramaJobs(await explainersDb(), step.targets, { by, now });
+        const refused = [...new Set(out.refused.map((r) => DRAMA_REFUSAL_TEXT[r.reason] ?? r.reason))];
+        done(out.queued.length > 0, `${out.queued.length} reel${out.queued.length === 1 ? '' : 's'} queued${refused.length ? `; refused: ${refused.join(' ')}` : ''}.`);
       } else if (step.action === 'lfd_run') {
         // The click approves this run's spend, up to the cap (CLAUDE.md Rule 1); only the social worker runs it.
         const out = await queueManualLfdRun(liveHubQuery);

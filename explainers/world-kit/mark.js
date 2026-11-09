@@ -1,4 +1,4 @@
-// The Explainers world kit (from Explainer 2.0), the mark (hx-3): the Helios logo landing after the payoff
+// The Explainers world kit (from Explainer 2.0), the mark (hx-4): the Helios logo landing after the payoff
 // (VISUAL V-19) under logo protection (V-T4).
 //
 //   V-19  the mark lands in the world over 0.8 to 1.2s and holds to the end, motivated by the
@@ -12,7 +12,7 @@
 // The landing has weight (V-8): the mark drops in from above the frame and hangs, lifts a touch
 // (the anticipation before the slam), slams onto the table, and settles with a small uniform
 // spring (POLARITY.spring) about its base, so its proportions never change. Its contact shadow
-// grows as it nears the table. It moves on twos like everything drawn in the world (V-15). At rest
+// grows as it nears the table, soft and warm (hx-4). It moves smoothly (hx-4 retired the twos). At rest
 // it is the bare image, with no transform and no filter.
 //
 // Draw it last, outside the camera group (after frame()), so nothing ever covers it. No DOM, no
@@ -73,7 +73,7 @@ function pose(u, width, cy) {
 
 /**
  * The mark landing at shot time `at`, centered at rest on (cx, cy), `width` px wide, over `dur`
- * seconds. Returns '' before it starts. `dark`: the shadow on a night or forest ground.
+ * seconds. Returns '' before it starts. `dark`: the shadow on the stage (the dark ground).
  */
 export function markLanding(t, at, { cx, cy, width = DEFAULT_WIDTH, dark = false, dur = 1.0 }) {
   if (!(dur >= MARK.dur[0] - 1e-9 && dur <= MARK.dur[1] + 1e-9)) throw new Error(`HX: the mark lands over ${MARK.dur[0]} to ${MARK.dur[1]}s (V-19).`);
@@ -86,13 +86,16 @@ export function markLanding(t, at, { cx, cy, width = DEFAULT_WIDTH, dark = false
   const half = width / 2;
   const base = cy + half;
 
-  // The contact shadow on the table, under the mark: it gathers as the mark comes down (V-3).
+  // The contact shadow on the table, under the mark: it gathers as the mark comes down (V-3), a
+  // soft warm falloff (hx-4), never a flat ink ellipse.
   const near = 1 - clamp(h / (0.6 * width), 0, 1);
   const parts = [];
   if (near > 0) {
-    const fill = dark ? T.canvas : T.ink;
-    const opacity = (dark ? 0.07 : 0.14) * near;
-    parts.push(`<ellipse ${attrs({ cx: f2(cx), cy: f2(base - 0.012 * width), rx: f2(0.36 * width * (0.55 + 0.45 * near) * k), ry: f2(0.045 * width * (0.55 + 0.45 * near)), fill, opacity: opacity.toFixed(3) })}></ellipse>`);
+    const color = dark ? T['ink-dark'] : T['shadow-warm'];
+    const gid = dark ? 'hx-mark-shadow-dark' : 'hx-mark-shadow';
+    const opacity = (dark ? 0.6 : 0.34) * near;
+    parts.push(`<defs><radialGradient id="${gid}"><stop offset="0" stop-color="${color}"></stop><stop offset="0.5" stop-color="${color}" stop-opacity="0.55"></stop><stop offset="1" stop-color="${color}" stop-opacity="0"></stop></radialGradient></defs>`);
+    parts.push(`<ellipse ${attrs({ cx: f2(cx), cy: f2(base - 0.012 * width), rx: f2(0.42 * width * (0.55 + 0.45 * near) * k), ry: f2(0.06 * width * (0.55 + 0.45 * near)), fill: `url(#${gid})`, opacity: opacity.toFixed(3) })}></ellipse>`);
   }
 
   const image = `<image ${attrs({ href: MARK.src, x: f2(cx - half), y: f2(cy - half), width: f2(width), height: f2(width), preserveAspectRatio: 'xMidYMid meet' })}></image>`;

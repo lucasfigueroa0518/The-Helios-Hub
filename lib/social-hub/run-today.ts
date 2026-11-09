@@ -15,6 +15,7 @@
  *   Last Few Days    today's post, on its days
  *   AI Events        the coming week's carousel, on its day (Sunday); no model but Jev
  *   Field Notes      a photo carousel from the next tip, on a day the calendar gives it a slot
+ *   AI Drama Reels   a production job for each missing pitch (under its daily render and spend caps)
  *
  * `planFrom` decides from plain inputs (tested offline); the live layer
  * (lib/content-type/run-today-live.ts) reads them and re-plans on the server
@@ -45,8 +46,10 @@ export type RunInputs = {
   aiEvents?: { due: boolean; made: boolean };
   /** Field Notes: due today (a calendar slot; any day from its own button) and whether a post is already waiting. Missing: no step. */
   fieldNotes?: { due: boolean; made: boolean };
-  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean; aiEventsRun?: boolean; fieldNotesRun?: boolean };
-  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number; aiEventsCap?: number; fieldNotesCap?: number };
+  /** AI Drama Reels' day, the Explainers shape (targets are pitch ids). Missing: no step. */
+  reelAiDrama?: TypeDay;
+  inFlight: { reelsRun: boolean; reelsBuilding: string[]; carouselRun: boolean; explainerTopics: string[]; lfdRun?: boolean; aiEventsRun?: boolean; fieldNotesRun?: boolean; dramaPitches?: string[] };
+  cost: { reelsNight: number; reelBuild: number; carouselCap: number; explainerCap: number; storySet: number; lfdCap?: number; aiEventsCap?: number; fieldNotesCap?: number; dramaCap?: number };
 };
 
 export type PlanStep = {
@@ -55,8 +58,8 @@ export type PlanStep = {
   quota: number;
   held: number;
   needed: number;
-  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run' | 'ai_events_run' | 'field_notes_run';
-  /** Idea refs (reel post ideas, explainer topics) or Stories series ids to act on. */
+  action: 'none' | 'reels_build' | 'reels_run' | 'carousel_run' | 'explainer_renders' | 'story_sets' | 'lfd_run' | 'ai_events_run' | 'field_notes_run' | 'drama_jobs';
+  /** Idea refs (reel post ideas, explainer topics, AI Drama pitches) or Stories series ids to act on. */
   targets: string[];
   note: string;
   /** Rough ceiling for the spend this step starts. */
@@ -191,6 +194,18 @@ export function planFrom(i: RunInputs): RunPlan {
     else steps.push({ ...base, action: 'field_notes_run', targets: [], note: 'Picks the next tip, pairs it with photos from the pool and renders the carousel. It waits for your approval.', estimateUsd: i.cost.fieldNotesCap ?? 0.5 });
   }
 
+  if (i.reelAiDrama) {
+    // The Explainers block, one production job per missing pitch.
+    const d = i.reelAiDrama;
+    const base = filled('reel_ai_drama', d);
+    const inFlight = i.inFlight.dramaPitches ?? [];
+    const missing = d.missing.filter((m) => !inFlight.includes(m.ref));
+    if (d.quota === 0) steps.push({ ...base, action: 'none', targets: [], note: 'Quota is 0.', estimateUsd: 0 });
+    else if (!d.missing.length) steps.push({ ...base, action: 'none', targets: [], note: d.held >= d.quota ? 'Today’s quota is made.' : 'The idea pool is empty.', estimateUsd: 0 });
+    else if (!missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Its missing reels are already being made.', estimateUsd: 0 });
+    else steps.push({ ...base, action: 'drama_jobs', targets: missing.map((m) => m.ref), note: `Makes ${titles(missing)}.`, estimateUsd: missing.length * (i.cost.dramaCap ?? 8) });
+  }
+
   const estimateUsd = Number(steps.reduce((s, x) => s + x.estimateUsd, 0).toFixed(2));
   return { today: i.today, steps, estimateUsd, anything: steps.some((s) => s.action !== 'none') };
 }
@@ -215,7 +230,7 @@ export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanS
   return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
 }
 
-const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes'];
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 const TARGET_MAX = 2048;
 
 /**

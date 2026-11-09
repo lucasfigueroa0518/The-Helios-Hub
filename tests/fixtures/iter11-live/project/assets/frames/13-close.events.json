@@ -1,0 +1,21 @@
+[
+ {
+  "t": 0.2,
+  "kind": "whoosh"
+ },
+ {
+  "t": 0.62,
+  "kind": "sting"
+ },
+ {
+  "t": 0.72,
+  "kind": "foley",
+  "what": "pencil writing",
+  "dur": 1.23
+ },
+ {
+  "t": 1.97,
+  "kind": "foley",
+  "what": "pen click"
+ }
+]

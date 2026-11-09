@@ -28,7 +28,7 @@ cd "$ROOT"
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
 ZONE="${GCP_ZONE:-us-west1-a}"
 INSTANCE="${SOCIAL_INSTANCE:-helios-social-worker}"
-UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher}"
+UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher helios-reel-ai-drama}"
 ENV_FILE="${SOCIAL_WORKER_ENV_FILE:-}"
 IAP=""
 if [[ "${GCP_SSH_IAP:-}" == "1" ]]; then
@@ -57,6 +57,11 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
     if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('field_notes.runs') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
       FIELD_NOTES_INFLIGHT="UNION ALL SELECT 'field notes run ' || id FROM field_notes.runs WHERE status = 'running'"
     fi
+    # AI Drama Reels (reel_ai_drama): a running job or a running Develop / Calibrate click, once its schema is applied.
+    DRAMA_INFLIGHT=""
+    if [[ "$(psql "${DB_URL}" -Atc "SELECT to_regclass('reel_ai_drama.requests') IS NOT NULL" 2>/dev/null || true)" == "t" ]]; then
+      DRAMA_INFLIGHT="UNION ALL SELECT 'ai drama job ' || id FROM reel_ai_drama.jobs WHERE status = 'running' UNION ALL SELECT 'ai drama request ' || id FROM reel_ai_drama.requests WHERE status = 'running'"
+    fi
     INFLIGHT="$(psql "${DB_URL}" -Atc "
       SELECT 'carousel run ' || id FROM social.runs WHERE status = 'running'
       UNION ALL SELECT 'reels run ' || id FROM reels.runs WHERE status = 'running'
@@ -68,6 +73,7 @@ if [[ "${FORCE_DEPLOY:-}" != "1" ]]; then
       UNION ALL SELECT 'last few days run ' || id FROM lfd.runs WHERE status = 'running'
       ${AI_EVENTS_INFLIGHT}
       ${FIELD_NOTES_INFLIGHT}
+      ${DRAMA_INFLIGHT}
       UNION ALL SELECT 'publish ' || id FROM social_hub.publish_attempts WHERE status IN ('creating', 'processing', 'publishing')" 2>/dev/null || echo 'CHECK_FAILED')"
     if [[ "${INFLIGHT}" == "CHECK_FAILED" ]]; then
       echo "Could not check for in-flight work; deploying anyway (FORCE_DEPLOY=1 silences this)." >&2
@@ -129,6 +135,21 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   fi
   if [[ ! -f /opt/helios-social/worker.env ]]; then
     echo 'Missing /opt/helios-social/worker.env on the VM. Pass SOCIAL_WORKER_ENV_FILE=… once.' >&2
+    exit 1
+  fi
+  # Fail fast on a dead Anthropic key (the deploy-worker-code.sh probe, for this VM). A bad key in
+  # worker.env made every IG Stories build 401 overnight. Only 401/403 block; a network blip or
+  # rate limit does not. One 1-token ping, key never printed.
+  KEY=\$(sudo grep -E '^ANTHROPIC_API_KEY=' /opt/helios-social/worker.env | head -1 | cut -d= -f2- | tr -d '\"\\r')
+  if [[ -z \"\${KEY}\" ]]; then
+    echo 'ERROR: ANTHROPIC_API_KEY missing in /opt/helios-social/worker.env. Pass SOCIAL_WORKER_ENV_FILE=… with a working key.' >&2
+    exit 1
+  fi
+  KEY_STATUS=\$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://api.anthropic.com/v1/messages \
+    -H \"x-api-key: \${KEY}\" -H 'anthropic-version: 2023-06-01' -H 'content-type: application/json' \
+    -d '{\"model\":\"claude-haiku-4-5-20251001\",\"max_tokens\":1,\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' || true)
+  if [[ \"\${KEY_STATUS}\" == '401' || \"\${KEY_STATUS}\" == '403' ]]; then
+    echo \"ERROR: ANTHROPIC_API_KEY in worker.env was rejected (HTTP \${KEY_STATUS}). Nothing was stopped or replaced. Sync a working key from .env.local and redeploy with SOCIAL_WORKER_ENV_FILE=….\" >&2
     exit 1
   fi
   # Every social unit runs as helios (not root): Claude Code refuses

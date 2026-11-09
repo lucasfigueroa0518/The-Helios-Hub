@@ -51,7 +51,11 @@ export function restorePhoto(photo: PoolPhoto): PoolPhoto {
 // ── Variety picker (Tommy and Lucas, 2026-11-05) ──
 // Slide 1 is the cover and must be a `people` photo (our faces; starred opener preferred, newest first). The 3 to 6 tip
 // slides vary over working, scenery and event (max 2 of a kind, which still covers 6 tip slides over the 3 kinds; relaxed only when the pool forces it, with a warning).
-// The Follow slide takes the calmest photo left (scenery, else working or event; a people photo only as a last resort).
+// The Follow slide's photo is reserved right after the cover, before the tip slides take theirs (Tommy, 2026-11-08: a
+// Follow slide landed on a laptop screen with big lettering because the tip slides had used up the scenery): scenery,
+// then event, then working (working photos tend to show screens), a people photo only as a last resort.
+// The cover prefers a photo the face tagger confirmed (`facesCheck: 'faces'`); a people photo it never checked is the
+// fallback, with a warning, and the renderer's `cover_no_face` check still swaps a cover with no face.
 // Pure. The uploader picks working, scenery or event; `people` (and its opener flag) is set at upload by the local face
 // check (photos/faces.ts, no model API), and a person can remove a wrong Faces tag from the pool grid.
 
@@ -73,10 +77,21 @@ const kindCounts = (photos: PoolPhoto[]): Map<PhotoKind, number> => {
   return m;
 };
 
-/** The cover's photo: a people photo, a starred opener first, then the newest. `cands` arrive newest first. */
+/** A pool photo may carry its face check (store.PoolPhotoWithFaces); only 'faces' counts as confirmed. */
+type MaybeChecked = PoolPhoto & { facesCheck?: string | null };
+const faceConfirmed = (p: PoolPhoto): boolean => (p as MaybeChecked).facesCheck === 'faces';
+/** The tagger looked and found no face: never a cover. */
+const faceRefuted = (p: PoolPhoto): boolean => (p as MaybeChecked).facesCheck === 'none';
+
+/**
+ * The cover's photo: a people photo the face tagger confirmed (starred opener first, then the newest), else an
+ * unchecked people photo (same order). A people photo the tagger checked and found no face in is never the cover.
+ * `cands` arrive newest first.
+ */
 function bestCover(cands: PoolPhoto[]): PoolPhoto | null {
-  const people = cands.filter((p) => p.kind === 'people');
-  return people.find((p) => p.opener) ?? people[0] ?? null;
+  const people = cands.filter((p) => p.kind === 'people' && !faceRefuted(p));
+  const confirmed = people.filter(faceConfirmed);
+  return confirmed.find((p) => p.opener) ?? confirmed[0] ?? people.find((p) => p.opener) ?? people[0] ?? null;
 }
 
 type Ctx = { prev?: PhotoKind; next?: PhotoKind; counts: Map<PhotoKind, number> };
@@ -105,9 +120,10 @@ function bestTip(cands: PoolPhoto[], ctx: Ctx): PoolPhoto | null {
   return null;
 }
 
-/** The Follow slide's photo: the calmest left, which is scenery, then working or event, then (last) people. */
+/** The Follow slide's photo: the calmest left, which is scenery, then event, then working, then (last) people. */
 function bestFollow(cands: PoolPhoto[], prev?: PhotoKind): PoolPhoto | null {
-  for (const pref of [(p: PoolPhoto) => p.kind === 'scenery', (p: PoolPhoto) => p.kind !== 'people', () => true]) {
+  const order: PhotoKind[] = ['scenery', 'event', 'working', 'people'];
+  for (const pref of order.map((k) => (p: PoolPhoto) => p.kind === k)) {
     const hit = cands.filter(pref);
     const apart = hit.find((p) => p.kind !== prev);
     if (apart ?? hit[0]) return (apart ?? hit[0])!;
@@ -121,6 +137,9 @@ export function describePicks(photos: PoolPhoto[], available: PoolPhoto[]): stri
   const first = photos[0];
   if (first && first.kind !== 'people') warnings.push(`the cover uses a ${first.kind} photo: no people photo was available`);
   else if (first && !first.opener) warnings.push('no people photo is starred as an opener; the cover uses the newest one');
+  if (first && first.kind === 'people' && !faceConfirmed(first)) warnings.push('the cover photo is not confirmed by the face tagger; the renderer still checks it for a face');
+  const follow = photos.length >= 2 ? photos[photos.length - 1] : undefined;
+  if (follow && follow.kind !== 'scenery' && follow.kind !== 'event') warnings.push(`the Follow slide uses a ${follow.kind} photo: no scenery or event photo was left`);
   const tips = photos.slice(1, -1);
   for (let i = 2; i < photos.length; i++) {
     if (photos[i]!.kind === photos[i - 1]!.kind) warnings.push(`slides ${i} and ${i + 1} share a kind (${photos[i]!.kind}); the pool had no other choice`);
@@ -161,16 +180,19 @@ export function pickPostPhotos(o: { pool: PoolPhoto[]; nextSeq: number; restPost
     const cover = bestCover(available) ?? available[0]!;
     chosen.push(cover);
   }
+  // Follow's photo is reserved before the tip slides pick, so the calm photos are not used up first.
+  const follow = n >= 2 ? bestFollow(left()) : null;
+  if (follow) chosen.push(follow);
+  const tips: PoolPhoto[] = [];
   const tipSlides = Math.max(0, n - 2);
   for (let i = 0; i < tipSlides; i++) {
-    const pick = bestTip(left(), { prev: i === 0 ? undefined : chosen[chosen.length - 1]!.kind, counts: kindCounts(chosen.slice(1)) });
+    const pick = bestTip(left(), { prev: tips.length ? tips[tips.length - 1]!.kind : undefined, next: i === tipSlides - 1 ? follow?.kind : undefined, counts: kindCounts(tips) });
     if (!pick) break;
+    tips.push(pick);
     chosen.push(pick);
   }
-  if (n >= 2 && chosen.length === n - 1) {
-    const follow = bestFollow(left(), chosen[chosen.length - 1]!.kind);
-    if (follow) chosen.push(follow);
-  }
+  // Slide order: cover, tip slides, Follow.
+  chosen.splice(0, chosen.length, ...chosen.filter((p) => p !== follow), ...(follow ? [follow] : []));
   const warnings = describePicks(chosen, available);
   if (chosen.length < o.count) warnings.push(`pool too narrow: ${chosen.length} photos are available and the post needs ${o.count}`);
   return { photoIds: chosen.map((p) => p.photoId), warnings };

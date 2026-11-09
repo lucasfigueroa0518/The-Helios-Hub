@@ -1,9 +1,14 @@
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { SettingsForm } from '@/app/explainers/settings/settings-form';
 import { RebuildPostButton } from '@/components/content-type/AiEventsPoolButtons';
 import { SeedButton } from '@/components/content-type/SeedButton';
-import { AiEventsRunButton, CarouselRunButton, LfdRunButton, StoriesGenerate } from '@/components/content-type/TypeControls';
+import { AiEventsRunButton, CarouselRunButton, DramaDevelopButton, IdeaCycleButton, LfdRunButton, StoriesGenerate } from '@/components/content-type/TypeControls';
+import { ExplainersHub } from '@/components/content-type/ExplainersHub';
+import { ReelAiDramaHub } from '@/components/content-type/ReelAiDramaHub';
+import { ReelAiDramaSettingsForm } from '@/components/content-type/ReelAiDramaSettingsForm';
+import type { TypeHub } from '@/components/content-type/TypeHub';
 import { FieldNotesRunButton } from '@/components/field-notes/FieldNotesRunButton';
 import type { PageVertical } from '@/lib/content-type/config';
 import { aiEventsRebuildRefusal } from '@/lib/content-type/model';
@@ -25,6 +30,8 @@ export type TypeParts<D = undefined> = {
   actions: (page: LoadedPage) => ReactNode;
   /** The one extra section under the common settings. */
   settingsSection?: (data: D) => ReactNode;
+  /** A thin client wrapper of TypeHub that adds a per-idea button (functions can't cross to the client). Default: TypeHub. */
+  hub?: typeof TypeHub;
 };
 
 /** A registry entry with its data type erased; `defineParts` is the only way in, so a section always gets what its own loader returned. */
@@ -55,7 +62,8 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
   field_notes: defineParts({ actions: () => <><FieldNotesRunButton /><SeedButton vertical="field_notes" /></> }),
   explainers: defineParts<RenderingView>({
     load: () => explainersDb().then(loadSettingsView).catch((error: unknown) => ({ error: message(error) })),
-    actions: () => <SeedButton vertical="explainers" />,
+    actions: () => <><SeedButton vertical="explainers" /><IdeaCycleButton /></>,
+    hub: ExplainersHub,
     settingsSection: (view) =>
       'error' in view ? (
         <p className="rh-empty">Could not load settings: {view.error}</p>
@@ -65,5 +73,16 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
           <SettingsForm initial={view.settings} hide={['auto_render', 'daily_render_cap']} />
         </>
       ),
+  }),
+  // Develop queues one development session for the drama worker; the lab keeps the advanced view. Pitches have no seed path.
+  reel_ai_drama: defineParts({
+    actions: () => <><DramaDevelopButton /><Link className="rh-btn" href="/reel-ai-drama/lab">Lab</Link></>,
+    settingsSection: () => (
+      <>
+        <h3 className="rh-rest__title">Rendering</h3>
+        <ReelAiDramaSettingsForm />
+      </>
+    ),
+    hub: ReelAiDramaHub,
   }),
 };

@@ -29,7 +29,7 @@ const windowsPsql = 'C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe';
 const psql = process.env.PSQL_BIN
   || (process.platform === 'win32' && fs.existsSync(windowsPsql) ? windowsPsql : 'psql');
 const schema = path.join(root, 'db', 'social_hub_schema.sql');
-const result = spawnSync(psql, ['-d', url, '-v', 'ON_ERROR_STOP=1', '-f', schema], {
+const result = spawnSync(psql, ['-d', url, '-1', '-v', 'ON_ERROR_STOP=1', '-f', schema], {
   cwd: root,
   stdio: 'inherit',
   env: {

@@ -1,0 +1,856 @@
+{
+ "A": [
+  {
+   "topic": "RAG chunks",
+   "scene": "A mover needs one can opener from a garage piled with stuff, and only a small card table is free in the new kitchen.",
+   "hook": "A mover heaves an entire garage heap onto a wobbly card table, which buckles and bends under the load.",
+   "maps": "the garage heap = the whole document; small boxes with a picture on each lid (a few) = the chunks, each with its own topic; the picture on a box lid = the searchable meaning of a chunk; the small card table = the model's prompt, with limited room",
+   "src": "3.8 p3#2",
+   "jev": {
+    "reach": 2.38,
+    "aptness": 3.18,
+    "interest": 2.55,
+    "familiarity": 2.55,
+    "hook_clarity": 3.53,
+    "visual_strength": 2.83,
+    "mapping_fidelity": 3.27
+   },
+   "total": 73.225,
+   "id": "a01"
+  },
+  {
+   "topic": "Attention",
+   "scene": "A stands in a crowded party where everyone talks at once. It hears 'it was so tired!' and tunes in to the people whose talk explains what 'it' is, while the rest fade into the background.",
+   "hook": "At a loud party, a hears a voice say 'it was so tired!', spins around toward the crowd, and finds a dozen all talking at once.",
+   "maps": "Crowd of chatting, each holding a small picture of what they're talking about = The other words in the text and the information each carries; The listener hearing 'it' = The word being processed; Volume of each voice as the listener perceives it = Attention weights",
+   "src": "shipped ae2cf0e1",
+   "id": "a02"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A cell's tiny assembly machine builds whatever blueprint ribbon runs through it, and a virus feeds in its own ribbon.",
+   "hook": "A cell's machine pumps out tiny spiky virus pieces instead of healthy parts, and a red light blinks on its panel.",
+   "maps": "the assembly machine = the language model, which follows whatever it reads; the cell's own blueprint ribbon = the real instructions; the virus's ribbon spliced onto the line = hidden commands inside untrusted content; the finished parts = the model's output or behavior",
+   "src": "3.8 p3#3",
+   "jev": {
+    "reach": 1.18,
+    "aptness": 3.39,
+    "interest": 2.28,
+    "familiarity": 0.76,
+    "hook_clarity": 1.92,
+    "visual_strength": 3.01,
+    "mapping_fidelity": 3.26
+   },
+   "total": 59.925,
+   "id": "a03"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A pirate captain wants to sail to a named island, but the ship's steering dial accepts only coordinates, so the navigator looks the island up in the atlas.",
+   "hook": "A pirate captain shouts a destination at the ship's wheel, but the wheel's dial shows only blank number slots.",
+   "maps": "the pirate captain = The browser that wants a named destination; the navigator with the atlas = DNS lookup that turns a name into numbers; the coordinates on the ship's dial = The numeric IP address used to route the request; the island = The server hosting the website",
+   "src": "3.8 p2#3",
+   "jev": {
+    "reach": 1.75,
+    "aptness": 3.3,
+    "interest": 2.61,
+    "familiarity": 1.52,
+    "hook_clarity": 2.64,
+    "visual_strength": 2.6,
+    "mapping_fidelity": 3.23
+   },
+   "total": 65.613,
+   "id": "a04"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A cook with hungry guests looks up a dish by name in a thick cookbook's index to get its page number, then flips straight to that page.",
+   "hook": "A flustered cook with hungry guests at the table flips wildly through a 500-page cookbook with no idea where the lasagna recipe is.",
+   "maps": "the cook = the browser, who knows only the name of what they want; the cookbook index (alphabetical list of dish names with page numbers) = the DNS lookup system that maps names to numeric addresses; the numbered page with the recipe = the web server at the numeric IP address",
+   "src": "3.8 p3#1",
+   "jev": {
+    "reach": 2.19,
+    "aptness": 3.19,
+    "interest": 2.35,
+    "familiarity": 3.46,
+    "hook_clarity": 3.38,
+    "visual_strength": 2.34,
+    "mapping_fidelity": 3.37
+   },
+   "total": 74.363,
+   "id": "a05"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A driver obeys a traffic cop's arm waves at a busy junction, but a wavy inflatable tube man outside a car wash waves too.",
+   "hook": "A driver stops dead at a green light, staring at a floppy inflatable tube man while a cop frantically waves them on.",
+   "maps": "the driver in a little car = the language model following directions; the traffic cop = the trusted user or developer giving real instructions; the inflatable tube man = untrusted content carrying a hidden command; the road junction = the single stream of input the model reads",
+   "src": "3.8 p2#2",
+   "jev": {
+    "reach": 2.38,
+    "aptness": 3.27,
+    "interest": 2.81,
+    "familiarity": 1.8,
+    "hook_clarity": 3.38,
+    "visual_strength": 3.13,
+    "mapping_fidelity": 3.06
+   },
+   "total": 71.163,
+   "id": "a06"
+  },
+  {
+   "topic": "API",
+   "scene": "A diner orders from a waiter, who carries the order into a closed kitchen and brings back the dish.",
+   "hook": "A hungry points at a menu item as the waiter disappears through swinging doors, then a steaming plate slides out and the has no idea how.",
+   "maps": "Diner = The client program asking for a feature; Waiter holding a menu = The API: it takes only requests listed in its menu (the documentation) and carries them across; Closed kitchen behind swinging doors = The other software and its hidden inner workings; Plate of food = The response returned to the caller",
+   "src": "shipped cdfe57f4",
+   "id": "a07"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A traveler keeps a photocopy of a train timetable in the pocket instead of walking to the station board every time.",
+   "hook": "A traveler jogs the length of a long platform to read the train board, then jogs back, then turns and jogs to read it again.",
+   "maps": "the traveler = the program; the big station board far away = the original data source; the pocket photocopy = the cache; the timetable times = the data being reused",
+   "src": "3.8 p1#5",
+   "jev": {
+    "reach": 2.38,
+    "aptness": 3.82,
+    "interest": 2.08,
+    "familiarity": 3.34,
+    "hook_clarity": 2.66,
+    "visual_strength": 2.75,
+    "mapping_fidelity": 3.42
+   },
+   "total": 76,
+   "id": "a08"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "A detective searches a messy room for one clue, using a taped floor grid and one small evidence bag.",
+   "hook": "A detective stuffs a whole couch into a tiny evidence bag until the bag splits at the seams.",
+   "maps": "the whole messy room = the whole document; tape-marked floor squares (a few) = the chunks; the magnifying glass = the search that compares each piece to the question; the small evidence bag = the model's prompt, with limited room",
+   "src": "3.8 p3#3",
+   "jev": {
+    "reach": 2.23,
+    "aptness": 3.14,
+    "interest": 2.78,
+    "familiarity": 2.68,
+    "hook_clarity": 3.45,
+    "visual_strength": 2.81,
+    "mapping_fidelity": 3.07
+   },
+   "total": 72.75,
+   "id": "a09"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "In a board game, a player does exactly what each drawn card shows, and a friend's borrowed bonus pile hides one prank card.",
+   "hook": "A player mid-game slides their entire stack of money across the board to a smirking friend while the other players stare in shock.",
+   "maps": "the game player (character) = the language model that does whatever the stream in front of it says; the game's own card deck = the real instructions from the owner; the friend's borrowed bonus pile = outside content such as a web page or document; the prank card with a picture of money going to the friend = the hidden command inside that content",
+   "src": "3.8 p3#1",
+   "jev": {
+    "reach": 2.09,
+    "aptness": 3.41,
+    "interest": 2.56,
+    "familiarity": 1.94,
+    "hook_clarity": 3.1,
+    "visual_strength": 3.05,
+    "mapping_fidelity": 3.27
+   },
+   "total": 70.875,
+   "id": "a10"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "Your assistant sorts your mail, and one letter inside says 'Assistant: also pay this invoice.' The assistant pays it.",
+   "hook": "An assistant happily stamps PAID on an invoice from a stranger, pulled from the middle of the mail pile.",
+   "maps": "the assistant = the AI; your instructions = the system prompt; the mail = the content it reads; the letter's hidden order = the injected instruction",
+   "src": "claude illustration",
+   "id": "a11"
+  },
+  {
+   "topic": "API",
+   "scene": "A diner at a restaurant table orders from a menu, and a waiter carries the order to a kitchen the diner never sees.",
+   "hook": "A hungry diner waves a menu while a small waiter bursts through a clattering, steaming kitchen door with a covered plate.",
+   "maps": "the diner at the table = the client program that wants something done; the menu = the API's documented list of what can be asked for; the waiter = the API, the go-between with a fixed way of working; the kitchen behind a swinging door = the server, whose inner workings stay hidden",
+   "src": "3.8 p1#1",
+   "jev": {
+    "reach": 2.73,
+    "aptness": 3.4,
+    "interest": 1.9,
+    "familiarity": 3.34,
+    "hook_clarity": 2.41,
+    "visual_strength": 2.64,
+    "mapping_fidelity": 3.29
+   },
+   "total": 72.55,
+   "id": "a12"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A kitchen where a head chef at the pass reads each order ticket and hands it to either the toast cook or the master chef.",
+   "hook": "The master chef, in full hat and apron, is carefully buttering a single slice of toast while a long line of tickets piles up behind.",
+   "maps": "The expediter at the pass = The router; The line cook with a toaster = A small, cheap, fast model; The master chef = A large, powerful, expensive model; Order tickets (toast vs. a elaborate multi-course dish) = Requests of varying difficulty",
+   "src": "3.8 p1#3",
+   "jev": {
+    "reach": 1.76,
+    "aptness": 3.36,
+    "interest": 2.53,
+    "familiarity": 2.81,
+    "hook_clarity": 3.19,
+    "visual_strength": 2.67,
+    "mapping_fidelity": 3.43
+   },
+   "total": 73.025,
+   "id": "a13"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A mother bird feeds whichever beak gapes widest in her nest, and a cuckoo's egg has been slipped in among her own.",
+   "hook": "A tiny mother bird stretches up to feed an enormous chick twice her size while her own small chicks sit hungry beside it.",
+   "maps": "the mother bird (character) = the language model, which follows one simple rule; her own small chicks = the real instructions; the cuckoo egg and the chick that hatches from it = hidden commands inside outside content; the nest = the single shared stream where everything sits together",
+   "src": "3.8 p3#5",
+   "jev": {
+    "reach": 1.73,
+    "aptness": 3.2,
+    "interest": 2.82,
+    "familiarity": 1.69,
+    "hook_clarity": 3.33,
+    "visual_strength": 3.09,
+    "mapping_fidelity": 2.74
+   },
+   "total": 66.988,
+   "id": "a14"
+  },
+  {
+   "topic": "DNS",
+   "scene": "You need Sam's address to mail a birthday gift but only know the name, so you text your sister, who asks your mom, who has it.",
+   "hook": "A gift box sits wrapped and ready, the address line blank, the party in two days.",
+   "maps": "Sam's name = the website name; your sister = your local resolver; your mom = the server that knows; the street address = the IP address",
+   "src": "claude illustration",
+   "id": "a15"
+  },
+  {
+   "topic": "DNS",
+   "scene": "Santa's elf gets a child's letter signed only with a name, finds the name in the giant Nice List book where each name is written beside a street number, and sets the sleigh's dial to that number.",
+   "hook": "A loaded sleigh is ready to fly, but its dial blinks empty because the letter has only a name and no address.",
+   "maps": "the letter signed with a name = the domain name typed in the browser; the elf = the DNS resolver; the giant list book of names beside street numbers = the DNS records; the sleigh = the browser's request traveling to the server's address",
+   "src": "3.8 p3#4",
+   "jev": {
+    "reach": 1.79,
+    "aptness": 3.18,
+    "interest": 2.69,
+    "familiarity": 1.5,
+    "hook_clarity": 2.61,
+    "visual_strength": 2.78,
+    "mapping_fidelity": 3.09
+   },
+   "total": 65.013,
+   "id": "a16"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A water cooler in an office saves everyone a trip to the faraway reservoir.",
+   "hook": "A worker trudges out of the office across a long field with an empty bottle while a gleaming water cooler stands unused behind them, empty.",
+   "maps": "the thirsty worker = the program asking for data; the water cooler = the cache; the faraway well = the slow source of truth; the water = the data",
+   "src": "3.8 p1#3",
+   "jev": {
+    "reach": 2.24,
+    "aptness": 3.78,
+    "interest": 1.66,
+    "familiarity": 2.45,
+    "hook_clarity": 2.93,
+    "visual_strength": 2.69,
+    "mapping_fidelity": 3.37
+   },
+   "total": 70.813,
+   "id": "a17"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A kettle takes ages to boil, but a thermos of hot water beside it fills a mug instantly, and that water slowly cools through the day.",
+   "hook": "Two identical mugs sit side by side. One is filled instantly with steaming water from a thermos, while the other waits beside a kettle that has barely started to hiss.",
+   "maps": "Kettle on the stove = The original source: slow work to produce the result; Thermos = The cache: a nearby stored copy of the finished result; Mug = The software asking for the result",
+   "src": "shipped bdbd97f6",
+   "id": "a18"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A school office where a receptionist routes a student's question to a teaching assistant, a teacher, or a professor.",
+   "hook": "A long line of students waits outside a professor's door, while the professor wearily points the first student to the library on a map.",
+   "maps": "The receptionist at the office window = The router; The teaching assistant = A small, cheap, fast model; The professor = A large, powerful, expensive model; Students holding questions (where is the library vs. a hard research puzzle) = Requests of different difficulty",
+   "src": "3.8 p1#5",
+   "jev": {
+    "reach": 2.75,
+    "aptness": 3.3,
+    "interest": 1.75,
+    "familiarity": 3.21,
+    "hook_clarity": 3.01,
+    "visual_strength": 2.39,
+    "mapping_fidelity": 3.41
+   },
+   "total": 72.525,
+   "id": "a19"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A student writes a hard math answer on a sticky note and keeps it on the desk so they never recompute it.",
+   "hook": "The student groans as they start the same long math problem from scratch for the fourth time in a row, a pile of crumpled scratch paper beside them.",
+   "maps": "the student = the program; the hard math problem on a big textbook page = slow computation or fetch; the sticky note on the desk = the cache; the answer = the result being reused",
+   "src": "3.8 p1#2",
+   "jev": {
+    "reach": 2.63,
+    "aptness": 3.73,
+    "interest": 1.73,
+    "familiarity": 3.23,
+    "hook_clarity": 3.11,
+    "visual_strength": 2.38,
+    "mapping_fidelity": 3.36
+   },
+   "total": 74.35,
+   "id": "a20"
+  },
+  {
+   "topic": "DNS",
+   "scene": "At an old telephone switchboard, an operator hears a name from a caller, finds that name's numbered jack on her directory card, and plugs the cord in to connect the call.",
+   "hook": "A tiny operator sits in front of a huge board of identical numbered holes with blinking lights while a caller on the line demands to be connected to the bakery.",
+   "maps": "the caller = the browser; the operator with a directory card = the DNS lookup that turns a name into a number; the wall of numbered jacks with cords = the numeric addresses of servers on the internet; the bakery's phone line = the web server",
+   "src": "3.8 p3#3",
+   "jev": {
+    "reach": 1.4,
+    "aptness": 3.13,
+    "interest": 2.43,
+    "familiarity": 2.01,
+    "hook_clarity": 2.61,
+    "visual_strength": 2.41,
+    "mapping_fidelity": 2.98
+   },
+   "total": 63.25,
+   "id": "a21"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A traveler in a town wants the bakery. The first local does not know the exact house but points toward the right district, and each local after that narrows it down until someone gives the exact house number.",
+   "hook": "A traveler holding a drawing of a bakery turns in circles at a crossroads in a big town, with arrows pointing in every direction and no sign of the bakery.",
+   "maps": "Traveler = The browser looking for a site; Chain of locals, each knowing a smaller area = The DNS servers (root, top-level domain, authoritative) that narrow the search; Numbered house with the bakery = The server hosting the site",
+   "src": "shipped a895028f",
+   "id": "a22"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "A sonar captain hunts a hidden ship in a vast ocean and can only read one small screen.",
+   "hook": "A sonar screen is one huge flashing blob over the entire ocean, and the captain scratches their head because the ship could be anywhere.",
+   "maps": "the whole ocean = the whole document; numbered ocean squares (a few) = the chunks; the sonar ping = the search that compares each piece to the question; the small sonar screen = the model's prompt, with limited room",
+   "src": "3.8 p3#5",
+   "jev": {
+    "reach": 1.24,
+    "aptness": 3.2,
+    "interest": 2.63,
+    "familiarity": 1.55,
+    "hook_clarity": 1.84,
+    "visual_strength": 2.75,
+    "mapping_fidelity": 3.13
+   },
+   "total": 61.9,
+   "id": "a23"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A hospital front desk where a nurse looks at each arriving patient and sends them to a pharmacist, a family doctor, or a surgeon.",
+   "hook": "A patient with a tiny paper cut is being wheeled at speed into a huge operating room while the surgeon scrubs in, looking confused.",
+   "maps": "The triage nurse at the front desk = The router that inspects each request and picks a model; The pharmacy window = A small, cheap, fast model; The surgeon in the operating room = A large, powerful, costly model; Patients arriving with different problems (a sniffle, a broken leg) = Incoming tasks of different difficulty",
+   "src": "3.8 p1#1",
+   "jev": {
+    "reach": 2.47,
+    "aptness": 3.23,
+    "interest": 2.49,
+    "familiarity": 3.08,
+    "hook_clarity": 3.59,
+    "visual_strength": 2.46,
+    "mapping_fidelity": 3.44
+   },
+   "total": 75.538,
+   "id": "a24"
+  },
+  {
+   "topic": "API",
+   "scene": "At a drive-thru you order from the menu board, never see the kitchen, and get exactly one bag back through the window.",
+   "hook": "A car pulls up to the speaker and orders something that isn't on the board; the speaker crackles back a flat no.",
+   "maps": "the menu board = the list of what you can ask for; the speaker = the request; the kitchen = the hidden server; the bag through the window = the response",
+   "src": "claude illustration",
+   "id": "a25"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A cook blends a smoothie from their own fruit and a bag a stranger handed over, and the bag hides a hot pepper.",
+   "hook": "A cook takes a big sip of a bright-red smoothie, eyes watering and steam puffing from their ears, while the blender keeps spinning behind them.",
+   "maps": "the cook (character) = the person or app that sets up the AI's job and hands it material; the blender = the language model, which mixes everything it receives into one result; the cook's own fruit = the real instructions; the stranger's bag with a hidden pepper = an untrusted document carrying a hidden command",
+   "src": "3.8 p3#2",
+   "jev": {
+    "reach": 2.36,
+    "aptness": 3.21,
+    "interest": 2.84,
+    "familiarity": 2.2,
+    "hook_clarity": 3.49,
+    "visual_strength": 2.54,
+    "mapping_fidelity": 2.76
+   },
+   "total": 69.725,
+   "id": "a26"
+  },
+  {
+   "topic": "API",
+   "scene": "Two players sit with a screen between them. One points to a square on the shared grid, and the other checks a hidden board and answers with a red or white peg.",
+   "hook": "A player points at a square, and a red peg pops up from behind the screen, though they cannot see the board.",
+   "maps": "the caller = the program making the call (client); the grid of squares = the fixed set of requests the API accepts; the hidden board behind the screen = the server's inner workings; the red or white peg = the structured response",
+   "src": "3.8 p2#2",
+   "jev": {
+    "reach": 1.67,
+    "aptness": 3.26,
+    "interest": 2.11,
+    "familiarity": 1.69,
+    "hook_clarity": 1.64,
+    "visual_strength": 2.43,
+    "mapping_fidelity": 3.01
+   },
+   "total": 59.95,
+   "id": "a27"
+  },
+  {
+   "topic": "API",
+   "scene": "A reader at a library desk gets books from a locked back room, with a librarian who fetches them using the library's catalog.",
+   "hook": "A reader taps the desk while a small librarian vanishes through a Staff Only door with a rolling ladder rumbling behind it.",
+   "maps": "the reader = the client program; the catalog = the API's documented list of what is available and how to ask; the librarian = the API, the go-between with a set procedure; the staff-only back stacks = the server and its hidden data and systems",
+   "src": "3.8 p1#4",
+   "jev": {
+    "reach": 2.33,
+    "aptness": 3.32,
+    "interest": 2.39,
+    "familiarity": 3.05,
+    "hook_clarity": 2.36,
+    "visual_strength": 2.77,
+    "mapping_fidelity": 3.31
+   },
+   "total": 72.2,
+   "id": "a28"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A clinic front desk where a receptionist looks at each arriving visitor and sends them to either a nurse or a surgeon.",
+   "hook": "A surgeon in scrubs with a huge tool is carefully removing a tiny splinter from a visitor's finger, while a packed waiting room of impatient stares at the clock.",
+   "maps": "Visitors with different problems = Incoming requests of varying difficulty; Receptionist at the desk = The router; Nurse = Small, cheap, fast model; Surgeon = Large, powerful, costly model",
+   "src": "shipped b8e8d707",
+   "id": "a29"
+  },
+  {
+   "topic": "DNS",
+   "scene": "A delivery courier arrives in a huge unfamiliar land holding a package marked only with a bakery's name, and follows a chain of signs that narrow the search until the bakery's own door shows its street number.",
+   "hook": "A tiny courier stands at a giant crossroads with dozens of arrows pointing everywhere, holding a parcel with only a name on it, looking lost.",
+   "maps": "the courier = The resolver that does the searching on the browser's behalf; the crossroads signpost = Root server that points to the right top-level domain district; the district notice board = Top-level domain server that points to the site's own nameserver; the bakery's door plate with a big number = Authoritative nameserver that holds the real numeric address (IP address)",
+   "src": "3.8 p2#1",
+   "jev": {
+    "reach": 2.51,
+    "aptness": 3.25,
+    "interest": 2.46,
+    "familiarity": 2.06,
+    "hook_clarity": 3.07,
+    "visual_strength": 2.92,
+    "mapping_fidelity": 3.2
+   },
+   "total": 70.45,
+   "id": "a30"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A shipping depot where a sorter checks each parcel and puts it on a bike courier, a van, or a cargo plane.",
+   "hook": "A single envelope sits alone in the belly of a giant cargo plane as it taxis down the runway.",
+   "maps": "The sorter at the conveyor belt = The router; The bike courier = A small, cheap, fast model; The cargo plane = A large, powerful, expensive model; Parcels of different size and distance = Requests of different difficulty",
+   "src": "3.8 p1#2",
+   "jev": {
+    "reach": 2.36,
+    "aptness": 3.18,
+    "interest": 2.34,
+    "familiarity": 2.99,
+    "hook_clarity": 3.05,
+    "visual_strength": 3.1,
+    "mapping_fidelity": 3.31
+   },
+   "total": 73.713,
+   "id": "a31"
+  },
+  {
+   "topic": "Cache",
+   "scene": "Every commercial break you get up and walk to the kitchen for one chip, until you finally bring the whole bowl to the couch.",
+   "hook": "Halfway through the game, someone is on their fifth trip to the kitchen for a single chip and misses the big play.",
+   "maps": "the kitchen cupboard = the slow original source; the bowl on the couch = the cache; the chips = the data; chips left out going stale = stale data",
+   "src": "claude illustration",
+   "id": "a32"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A pizza shop keeps a few ready-made pizzas under a heat lamp instead of baking each one to order.",
+   "hook": "A long line of hungry customers watches a clock tick as a single pizza bakes, while the cashier points at an empty heat-lamp shelf.",
+   "maps": "the customer = the program requesting data; the cashier = the cache lookup; the heat-lamp shelf of ready slices = the cache; the oven in the back kitchen = the slow source that computes the answer",
+   "src": "3.8 p1#4",
+   "jev": {
+    "reach": 2.49,
+    "aptness": 3.73,
+    "interest": 2.38,
+    "familiarity": 2.51,
+    "hook_clarity": 3.24,
+    "visual_strength": 2.9,
+    "mapping_fidelity": 3.26
+   },
+   "total": 74.862,
+   "id": "a33"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "A hungry diner wants a mushroom bite, but the plate is tiny and the pizza is huge.",
+   "hook": "A diner jams a huge pizza onto a tiny plate. Cheese slides off the edges and the plate wobbles.",
+   "maps": "the whole pizza with mixed toppings = a large document; the pizza slices, each mostly one topping = the chunks; the diner's mushroom craving = the user's question; the small plate = the model's prompt space (context window)",
+   "src": "3.8 p2#1",
+   "jev": {
+    "reach": 2.59,
+    "aptness": 3.18,
+    "interest": 2.59,
+    "familiarity": 2.4,
+    "hook_clarity": 3.66,
+    "visual_strength": 2.79,
+    "mapping_fidelity": 3.14
+   },
+   "total": 72.913,
+   "id": "a34"
+  },
+  {
+   "topic": "Prompt injection",
+   "scene": "A driver follows orange cones through a highway work zone, and a stranger sets out extra cones that steer the lane into a field.",
+   "hook": "A car is mid-turn at a work zone, steering along a row of cones that bends toward an open field while the real road goes straight.",
+   "maps": "Driver in a car = The language model; Road crew's cones = The owner's real instructions; Open road = The stream of content the model reads as it goes; Stranger's cones = The hidden injected command",
+   "src": "shipped 4bc9af1f",
+   "id": "a35"
+  },
+  {
+   "topic": "API",
+   "scene": "A dog trainer holds up picture cards, and the dog does the matching trick and brings back the slipper.",
+   "hook": "The trainer holds up a scribbled card and the dog tilts its head, confused and not moving.",
+   "maps": "the trainer = the program making the call (client); the picture card = a request from the fixed set the API accepts; the dog = the server that does the work its own way; the slipper brought back = the response",
+   "src": "3.8 p2#3",
+   "jev": {
+    "reach": 1.93,
+    "aptness": 3.31,
+    "interest": 2.58,
+    "familiarity": 1.78,
+    "hook_clarity": 2.74,
+    "visual_strength": 2.33,
+    "mapping_fidelity": 3.09
+   },
+   "total": 65.85,
+   "id": "a36"
+  },
+  {
+   "topic": "API",
+   "scene": "A driver at a bank drive-through sends a fill-in-the-boxes slip in a capsule up a tube to a teller behind glass, and gets cash back in the same capsule.",
+   "hook": "A capsule thunks back out of the tube stamped with a red INCOMPLETE while the driver stares at it from the car.",
+   "maps": "the driver in the car = the program making the call (client); the capsule holding a slip with fixed boxes = the structured request; the tube = the connection the call travels over; the teller behind glass, with a vault the driver never sees = the server and its hidden inner workings",
+   "src": "3.8 p2#1",
+   "jev": {
+    "reach": 1.67,
+    "aptness": 3.4,
+    "interest": 2.63,
+    "familiarity": 0.68,
+    "hook_clarity": 2.5,
+    "visual_strength": 2.62,
+    "mapping_fidelity": 3.22
+   },
+   "total": 62.488,
+   "id": "a37"
+  },
+  {
+   "topic": "Model routing",
+   "scene": "A tool wall where a person reaches for a screwdriver, a drill, or a jackhammer depending on the job.",
+   "hook": "A handyman swings a huge jackhammer at a tiny loose screw, the wall cracking around it.",
+   "maps": "The handyman standing at the wall = The router; The small screwdriver = A small, cheap, fast model; The jackhammer = A large, powerful, expensive model; Jobs on the wall (a loose screw, a concrete slab) = Requests of different difficulty",
+   "src": "3.8 p1#4",
+   "jev": {
+    "reach": 2.25,
+    "aptness": 3.36,
+    "interest": 2.51,
+    "familiarity": 3.39,
+    "hook_clarity": 3.79,
+    "visual_strength": 2.51,
+    "mapping_fidelity": 3.36
+   },
+   "total": 77.1,
+   "id": "a38"
+  },
+  {
+   "topic": "RAG chunks",
+   "scene": "A beekeeper wants lavender honey on toast, but the big vat of honey is mixed together and tastes muddy.",
+   "hook": "A beekeeper dips a spoon into a giant vat of brown honey and winces at the muddy taste, while a toast slice waits.",
+   "maps": "the big vat of mixed honey = the whole document; small comb squares (a few) = the chunks, each with its own flavor; the tasting spoon = the search that compares each piece to the question; the slice of toast = the model's prompt, with limited room",
+   "src": "3.8 p3#4",
+   "jev": {
+    "reach": 1.58,
+    "aptness": 3.19,
+    "interest": 2.71,
+    "familiarity": 2.32,
+    "hook_clarity": 2.71,
+    "visual_strength": 2.67,
+    "mapping_fidelity": 3.09
+   },
+   "total": 67.663,
+   "id": "a39"
+  },
+  {
+   "topic": "Cache",
+   "scene": "A cook keeps a small jar of salt on the counter instead of walking to the faraway pantry every time.",
+   "hook": "The cook, pan sizzling, sprints down a long hallway to the pantry for a pinch of salt, for the fifth time, while the food burns.",
+   "maps": "the cook = the program needing data; the pantry down the hall = the slow original source (database or server); the small jar on the counter = the cache; the salt = the requested data",
+   "src": "3.8 p1#1",
+   "jev": {
+    "reach": 2.76,
+    "aptness": 3.78,
+    "interest": 2.2,
+    "familiarity": 2.88,
+    "hook_clarity": 3.57,
+    "visual_strength": 2.69,
+    "mapping_fidelity": 3.33
+   },
+   "total": 77.15,
+   "id": "a40"
+  }
+ ],
+ "G": [
+  {
+   "topic": "Cache",
+   "line": "Open a website you visited yesterday and it loads faster than it did the first time. What is your device quietly keeping that makes the second visit so much quicker?",
+   "src": "3.8 gap p1#1",
+   "jev": {
+    "pull": 1.73,
+    "clarity": 2.9,
+    "closable": 3.41
+   },
+   "id": "g01"
+  },
+  {
+   "topic": "Model routing",
+   "line": "Bigger AI systems cost more and answer slower, and a company pays for that on every single message. So what stops a simple hello from being handled by the most expensive one?",
+   "src": "3.8 gap p1#1",
+   "jev": {
+    "pull": 1.76,
+    "clarity": 3.09,
+    "closable": 3.48
+   },
+   "id": "g02"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "Feed an AI a whole document for every question and you pay for every word, every time, while the answer gets buried. So why does cutting the document into small pieces fix both problems?",
+   "src": "3.8 gap p1#2",
+   "jev": {
+    "pull": 1.93,
+    "clarity": 2.22,
+    "closable": 2.65
+   },
+   "id": "g03"
+  },
+  {
+   "topic": "Model routing",
+   "line": "The most powerful AI can solve hard problems, yet using it for every question would be slower and cost more. How can the best choice be to not always pick the best?",
+   "src": "3.8 gap p1#3",
+   "jev": {
+    "pull": 1.74,
+    "clarity": 2.21,
+    "closable": 3.47
+   },
+   "id": "g04"
+  },
+  {
+   "topic": "Cache",
+   "line": "Getting data from a distant computer can take thousands of times longer than reusing something you already have. So how do programs avoid most of that waiting?",
+   "src": "3.8 gap p1#3",
+   "jev": {
+    "pull": 2.09,
+    "clarity": 2.57,
+    "closable": 3.62
+   },
+   "id": "g05"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "Giving an AI the whole document sounds like the smart move. Yet many systems cut it into small pieces first and search those. What can a small piece do that the whole document can't?",
+   "src": "3.8 gap p2#2",
+   "jev": {
+    "pull": 1.64,
+    "clarity": 2.79,
+    "closable": 3.61
+   },
+   "id": "g06"
+  },
+  {
+   "topic": "Autocomplete",
+   "line": "You type half a word and your phone already guesses the rest. So how does it know what you meant to say?",
+   "src": "gap-writer prompt example",
+   "id": "g07"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "You upload a long report to a chatbot and ask it one question. It replies in seconds, using only one paragraph. How did it find the right paragraph?",
+   "src": "shipped ec9c06a5",
+   "id": "g08"
+  },
+  {
+   "topic": "Model routing",
+   "line": "A visitor arrives with one tiny splinter. The surgeon grabs the biggest tool. A nurse stands idle. So who should fix a splinter? Stick around: chatbots must pick who handles every question you type.",
+   "src": "shipped b8e8d707",
+   "id": "g09"
+  },
+  {
+   "topic": "DNS",
+   "line": "A company's website can be running perfectly and still vanish for customers if the link between its name and its machine breaks. What does that link actually tell your browser?",
+   "src": "3.8 gap p2#2",
+   "jev": {
+    "pull": 2.2,
+    "clarity": 1.65,
+    "closable": 3.11
+   },
+   "id": "g10"
+  },
+  {
+   "topic": "DNS",
+   "line": "You typed a website's name today, and your browser found it in a blink, anywhere on Earth. But a name says nothing about where something lives. So how did your browser know where to go?",
+   "src": "3.8 gap p2#1",
+   "jev": {
+    "pull": 2.06,
+    "clarity": 3.12,
+    "closable": 3.39
+   },
+   "id": "g11"
+  },
+  {
+   "topic": "API",
+   "line": "You open a weather app on your phone. It shows today's forecast for your city. The app has no weather station of its own. So how does it get the forecast?",
+   "src": "shipped cdfe57f4",
+   "id": "g12"
+  },
+  {
+   "topic": "Model routing",
+   "line": "Most people picture one AI answering everything they type. But a quick question and a hard one can end up with different AIs entirely. What decides which one yours gets?",
+   "src": "3.8 gap p1#2",
+   "jev": {
+    "pull": 1.94,
+    "clarity": 2.54,
+    "closable": 3.33
+   },
+   "id": "g13"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "Ask an AI a question about a 300-page handbook, and it can answer using one exact paragraph. So why does the system shred the handbook into small pieces before it searches anything?",
+   "src": "3.8 gap p1#1",
+   "jev": {
+    "pull": 1.96,
+    "clarity": 2.74,
+    "closable": 3.62
+   },
+   "id": "g14"
+  },
+  {
+   "topic": "DNS",
+   "line": "Millions of people type the same website name every day and all land in the right place, yet the name itself holds no directions. So where does your browser get them?",
+   "src": "3.8 gap p2#3",
+   "jev": {
+    "pull": 2.32,
+    "clarity": 2.59,
+    "closable": 3.46
+   },
+   "id": "g15"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "More information should make an AI smarter, yet handing it a whole document can work worse than handing it one paragraph. Why does searching small pieces beat searching the whole thing?",
+   "src": "3.8 gap p1#3",
+   "jev": {
+    "pull": 2.1,
+    "clarity": 2.51,
+    "closable": 3.58
+   },
+   "id": "g16"
+  },
+  {
+   "topic": "Attention",
+   "line": "Someone says, it was so tired. The listener wonders: what is it? A dozen voices talk at once. How will the listener pick the right ones? Stick around: it's how chatbots work out what you mean.",
+   "src": "shipped 715ba157",
+   "id": "g17"
+  },
+  {
+   "topic": "Cache",
+   "line": "Software often shows you information that is slightly out of date, and it does it on purpose. Why would a program keep an old copy of something instead of asking for the latest every time?",
+   "src": "3.8 gap p1#2",
+   "jev": {
+    "pull": 2.09,
+    "clarity": 3.12,
+    "closable": 3.3
+   },
+   "id": "g18"
+  },
+  {
+   "topic": "DNS",
+   "line": "A website can be running fine and still be unreachable by name if one hidden step fails. What does your browser have to find out before the site can even start loading?",
+   "src": "3.8 gap p1#3",
+   "jev": {
+    "pull": 2.1,
+    "clarity": 2.01,
+    "closable": 3.28
+   },
+   "id": "g19"
+  },
+  {
+   "topic": "Prompt injection",
+   "line": "A driver follows the cones through a work zone. Then the cones bend toward a field, and the driver follows them anyway. Why would the driver do that? Stick around: chatbots get steered this way too.",
+   "src": "shipped 4bc9af1f",
+   "id": "g20"
+  },
+  {
+   "topic": "DNS",
+   "line": "A traveler wants this bakery. The town is huge and every sign points a different way. So how can one traveler find one house? Stick around: it's how every website you open gets found.",
+   "src": "shipped a895028f",
+   "id": "g21"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "Ask a company's AI a question about its 300-page manual and it answers from one exact paragraph. Why does it first cut the manual into small pieces before looking for anything?",
+   "src": "3.8 gap p2#1",
+   "jev": {
+    "pull": 1.84,
+    "clarity": 2.89,
+    "closable": 3.66
+   },
+   "id": "g22"
+  },
+  {
+   "topic": "RAG chunks",
+   "line": "A 300-page manual covers dozens of topics, but as one unit it can only be matched on a single blurry overall meaning. So how does a search find the one paragraph you need?",
+   "src": "3.8 gap p2#3",
+   "jev": {
+    "pull": 1.51,
+    "clarity": 2.9,
+    "closable": 3.55
+   },
+   "id": "g23"
+  },
+  {
+   "topic": "Attention",
+   "line": "A guest hears, 'it was so tired.' What is it? People talk about a cat, a fish, the weather. Which voice explains 'it'? Stick around: it's how chatbots follow what you mean.",
+   "src": "shipped ae2cf0e1",
+   "id": "g24"
+  },
+  {
+   "topic": "Cache",
+   "line": "You open a website you visited yesterday, and it loads in a blink. Yet sometimes it shows yesterday's news. How does it load so fast, and why can it be out of date?",
+   "src": "shipped bdbd97f6",
+   "id": "g25"
+  }
+ ]
+}

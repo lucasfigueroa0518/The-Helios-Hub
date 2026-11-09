@@ -94,7 +94,11 @@ const TYPE_NAME: Record<SpineVertical, string> = {
   last_few_days: 'Last Few Days posts',
   ai_events: 'AI Events posts',
   field_notes: 'Field Notes posts',
+  reel_ai_drama: 'AI Drama reels',
 };
+
+/** lib/reel-ai-drama/hub.ts DRAMA_WINDOWS, copied so placement never imports the drama backend (a test pins it). */
+const DRAMA_PLACEMENT_WINDOWS = [{ id: 'evening', label: '8:00–8:45 PM', startMinute: 1200, endMinute: 1245 }] as const;
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6];
 
@@ -179,6 +183,9 @@ export async function placementRules(query: SpineQuery, vertical: SpineVertical)
     }
     case 'explainers':
       return { vertical, spaced: true, windows: named(EXPLAINER_WINDOWS, { afternoon: 'Afternoon', late: 'Late afternoon' }) };
+    case 'reel_ai_drama':
+      // A Main-feed reel, like Explainers: spaced from the other feed posts.
+      return { vertical, spaced: true, windows: named(DRAMA_PLACEMENT_WINDOWS, { evening: 'Evening' }) };
     case 'reels':
       return { vertical, spaced: false, windows: named(POSTING_SLOTS, { morning: 'Morning', midday: 'Midday', evening: 'Evening' }) };
     case 'stories':

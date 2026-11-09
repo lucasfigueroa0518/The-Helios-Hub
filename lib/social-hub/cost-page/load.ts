@@ -17,6 +17,7 @@ import { DEFAULT_RUN_CAP_USD } from '@/lib/social/overnight/config';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
 import { DEFAULT_AI_EVENTS_RUN_CAP_USD } from '@/lib/ai-events/config';
 import { DEFAULT_FIELD_NOTES_RUN_CAP_USD } from '@/lib/field-notes/config';
+import { readDramaDailySpendCap } from '@/lib/reel-ai-drama/hub-read';
 
 export { parseCostParams } from '@/lib/social-hub/cost-page/params';
 export type { CostParams, CostRange } from '@/lib/social-hub/cost-page/params';
@@ -26,6 +27,7 @@ type Params = { get(name: string): string | null };
 /** Defaults when a setting is missing or unreadable (lib/stories/settings.ts, lib/explainers/settings.ts). */
 const STORIES_WATCH_USD = 25;
 const EXPLAINERS_DAILY_CAP_USD = 10;
+const DRAMA_DAILY_CAP_USD = 20;
 
 /**
  * One jsonb number from a settings table, read SELECT-only. The pipelines' own
@@ -44,13 +46,14 @@ async function settingNumber(q: HubQuery | null, sql: string): Promise<number | 
 /** Each type's monthly watch. Types with only a daily cap use cap × days in the month of `to`. */
 async function watches(eq: HubQuery | null, to: string): Promise<Record<Vertical, number>> {
   const days = new Date(Date.UTC(Number(to.slice(0, 4)), Number(to.slice(5, 7)), 0)).getUTCDate();
-  const [stories, explainersCap, runCap, lfdCap, aiEventsCap, fieldNotesCap] = await Promise.all([
+  const [stories, explainersCap, runCap, lfdCap, aiEventsCap, fieldNotesCap, dramaCap] = await Promise.all([
     settingNumber(liveHubQuery, `SELECT value FROM stories.settings WHERE key = 'monthly_watch_usd'`),
     settingNumber(eq, `SELECT value FROM explainers.settings WHERE key = 'daily_spend_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM social.settings WHERE key = 'run_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM lfd.settings WHERE key = 'run_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM ai_events.settings WHERE key = 'run_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM field_notes.settings WHERE key = 'run_cap_usd'`),
+    eq ? readDramaDailySpendCap(eq).then((v) => (v != null && v > 0 ? v : null)).catch(() => null) : null,
   ]);
   return {
     // Two posts a week: its cap for each one this month can hold.
@@ -63,6 +66,8 @@ async function watches(eq: HubQuery | null, to: string): Promise<Record<Vertical
     stories: stories ?? STORIES_WATCH_USD,
     explainers: (explainersCap ?? EXPLAINERS_DAILY_CAP_USD) * days,
     carousels: (runCap ?? DEFAULT_RUN_CAP_USD) * days,
+    // Daily production cap (reel_ai_drama.settings daily_spend_cap_usd, launch default $20) × days.
+    reel_ai_drama: (dramaCap ?? DRAMA_DAILY_CAP_USD) * days,
   };
 }
 

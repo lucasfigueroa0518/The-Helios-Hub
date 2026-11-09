@@ -1,0 +1,124 @@
+{
+ "assets": [
+  {
+   "id": "V1",
+   "kind": "logo",
+   "file": "assets/media/V1.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMicrosoft_logo_(2012).svg",
+   "credit": "Logo: Microsoft (public domain) · Wikimedia Commons",
+   "license": null,
+   "shows": "The Microsoft logo (wordmark, on a light plate).",
+   "people": [],
+   "qids": [
+    "Q2283"
+   ],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 960,
+   "height": 205,
+   "phash": "81958f6bee661199",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "logo_bank",
+    "logo",
+    "source:logo",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:microsoft",
+    "boxes:media/V1.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5191,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1200,
+    "chroma": 0.4516,
+    "phash": "81958f6bee661199",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V46",
+   "kind": "logo",
+   "file": "assets/media/V46.keyed.png",
+   "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2c/Logo_of_the_United_States_Immigration_and_Customs_Enforcement_Agency.svg/3840px-Logo_of_the_United_States_Immigration_and_Customs_Enforcement_Agency.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail",
+   "source_page": "https://commons.wikimedia.org/wiki/File:Logo_of_the_United_States_Immigration_and_Customs_Enforcement_Agency.svg",
+   "credit": "Wikimedia Commons (commons.wikimedia.org)",
+   "license": null,
+   "shows": "The DHS seal beside the words U.S. Immigration and Customs Enforcement on a black banner.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 2160,
+   "height": 648,
+   "phash": "f0af08440cff0f9e",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:ice",
+    "resized:0.563",
+    "logo_keyed",
+    "boxes:media/V46.keyed.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0.002,
+     "y": 0,
+     "w": 0.9961,
+     "h": 1
+    },
+    "brightness": 0.5541,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1750,
+    "chroma": 0.279,
+    "phash": "8f5cf0a0b8a79c69",
+    "expression": "null",
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  }
+ ]
+}

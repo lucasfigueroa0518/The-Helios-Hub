@@ -1,4 +1,5 @@
 import { cacheReadMultiplier, ratesForModel } from '@/lib/anthropic-pricing';
+import { readDramaCacheTokens } from '@/lib/reel-ai-drama/hub-read';
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -18,8 +19,8 @@ export function cacheSavings(rows: readonly CacheRow[]): { savedMicros: number; 
   return { savedMicros: Math.round(saved * 1e6), withoutMicros: Math.round(readFull * 1e6) };
 }
 
-/** Only Explainers and Stories record cache tokens today (spec §7). */
-export const CACHE_COVERED: readonly Vertical[] = ['explainers', 'stories'];
+/** Only Explainers, Stories and AI Drama Reels record cache tokens today (spec §7). */
+export const CACHE_COVERED: readonly Vertical[] = ['explainers', 'stories', 'reel_ai_drama'];
 
 /** The covered types the Cost page's type filter selects: both for "All types", none for Reels/Carousels. */
 export function cacheCovered(vertical: Vertical | null): Vertical[] {
@@ -53,6 +54,11 @@ export async function readCacheRows(q: HubQuery, eq: HubQuery | null, from: stri
         WHERE e.vendor = 'anthropic' AND e.created_at >= $1 AND e.created_at < $2 AND e.mode = $3 GROUP BY 1`, [from, to, scope.mode],
     );
     for (const r of e.rows) out.push({ vertical: 'explainers', model: r.model ?? 'claude-sonnet-5-5', readTokens: r.r, writeTokens: r.w });
+  }
+  if (eq && covered.includes('reel_ai_drama')) {
+    // A database without the drama schema has no drama cache tokens; never a page failure.
+    const d = await readDramaCacheTokens(eq, { mode: scope.mode, from, to }).catch(() => []);
+    for (const r of d) out.push({ vertical: 'reel_ai_drama', model: 'claude-sonnet-5-5', readTokens: r.readTokens, writeTokens: r.writeTokens });
   }
   return out;
 }

@@ -1,0 +1,203 @@
+{
+  "cutouts": [
+    {
+      "id": "alex-karp",
+      "name": "Alex Karp",
+      "qid": "Q19560940",
+      "file": "explainers/real-case/bank/cutouts/alex-karp.png",
+      "width": 942,
+      "height": 1161,
+      "credit": "UK Government, CC BY 2.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AAlex_Karp_attends_AI_Summit_(53302457013)_4-5_ratio.jpg",
+      "approved": true
+    },
+    {
+      "id": "andrej-karpathy",
+      "name": "Andrej Karpathy",
+      "qid": "Q56037405",
+      "file": "explainers/real-case/bank/cutouts/andrej-karpathy.png",
+      "width": 441,
+      "height": 621,
+      "credit": "Gladwin Analytics, CC BY 3.0 (small source)",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AAndrej_Karpathy%2C_OpenAI.png",
+      "approved": true
+    },
+    {
+      "id": "andy-jassy",
+      "name": "Andy Jassy",
+      "qid": "Q41812531",
+      "file": "explainers/real-case/bank/cutouts/andy-jassy.png",
+      "width": 2462,
+      "height": 2275,
+      "credit": "Lisi Mezistrano Wolf, CC BY-SA 4.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AAndy_Jassy.jpg",
+      "approved": true
+    },
+    {
+      "id": "dario-amodei",
+      "name": "Dario Amodei",
+      "qid": "Q103335665",
+      "file": "explainers/real-case/bank/cutouts/dario-amodei.png",
+      "width": 1768,
+      "height": 2062,
+      "credit": "TechCrunch, CC BY 2.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3ADario_Amodei_at_TechCrunch_Disrupt_2023_02_(cropped).jpg",
+      "approved": true
+    },
+    {
+      "id": "demis-hassabis",
+      "name": "Demis Hassabis",
+      "qid": "Q3022141",
+      "file": "explainers/real-case/bank/cutouts/demis-hassabis.png",
+      "width": 2458,
+      "height": 2994,
+      "credit": "John Sears, CC BY-SA 4.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3ADemis_Hassabis%2C_2024_Nobel_Prize_Laureate_in_Chemistry_7_(cropped).jpg",
+      "approved": true
+    },
+    {
+      "id": "donald-trump",
+      "name": "Donald Trump",
+      "qid": "Q22686",
+      "file": "explainers/real-case/bank/cutouts/donald-trump.png",
+      "width": 1536,
+      "height": 1904,
+      "credit": "Daniel Torok (public domain)",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AOfficial_Presidential_Portrait_of_President_Donald_J._Trump_(2025)_(3x4).jpg",
+      "approved": true
+    },
+    {
+      "id": "elon-musk",
+      "name": "Elon Musk",
+      "qid": "Q317521",
+      "file": "explainers/real-case/bank/cutouts/elon-musk.png",
+      "width": 3363,
+      "height": 4441,
+      "credit": "Gage Skidmore, CC BY-SA 4.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AElon_Musk_(54816836217)_(cropped_2)_(b).jpg",
+      "approved": true
+    },
+    {
+      "id": "eric-schmidt",
+      "name": "Eric Schmidt",
+      "qid": "Q92747",
+      "file": "explainers/real-case/bank/cutouts/eric-schmidt.png",
+      "width": 2048,
+      "height": 2970,
+      "credit": "Charles Haynes, CC BY-SA 2.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AEric_E_Schmidt%2C_2005_(looking_left).jpg",
+      "approved": true
+    },
+    {
+      "id": "ilya-sutskever",
+      "name": "Ilya Sutskever",
+      "qid": "Q21712134",
+      "file": "explainers/real-case/bank/cutouts/ilya-sutskever.png",
+      "width": 442,
+      "height": 436,
+      "credit": "Photo supplied by Lucas",
+      "provenance": "manual: explainers/real-case/bank/manual/ilya-sutskever.png, supplied by Lucas 2026-10-26",
+      "approved": true
+    },
+    {
+      "id": "jeff-bezos",
+      "name": "Jeff Bezos",
+      "qid": "Q312556",
+      "file": "explainers/real-case/bank/cutouts/jeff-bezos.png",
+      "width": 923,
+      "height": 1283,
+      "credit": "Seattle City Council from Seattle, CC BY 2.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AJeff_Bezos_at_Amazon_Spheres_Grand_Opening_in_Seattle_-_2018_(39074799225)_(cropped).jpg",
+      "approved": true
+    },
+    {
+      "id": "jensen-huang",
+      "name": "Jensen Huang",
+      "qid": "Q305177",
+      "file": "explainers/real-case/bank/cutouts/jensen-huang.png",
+      "width": 645,
+      "height": 813,
+      "credit": "The White House (public domain)",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AJen-Hsun_Huang_2025.jpg",
+      "approved": true
+    },
+    {
+      "id": "john-ternus",
+      "name": "John Ternus",
+      "qid": "Q106028933",
+      "file": "explainers/real-case/bank/cutouts/john-ternus.png",
+      "width": 852,
+      "height": 1144,
+      "credit": "Photo supplied by Lucas",
+      "provenance": "manual: explainers/real-case/bank/manual/john-ternus.png, supplied by Lucas 2026-10-26",
+      "approved": true
+    },
+    {
+      "id": "liang-wenfeng",
+      "name": "Liang Wenfeng",
+      "qid": "Q131847088",
+      "file": "explainers/real-case/bank/cutouts/liang-wenfeng.png",
+      "width": 416,
+      "height": 395,
+      "credit": "Photo supplied by Lucas",
+      "provenance": "manual: explainers/real-case/bank/manual/liang-wenfeng.png, supplied by Lucas 2026-10-26",
+      "approved": true
+    },
+    {
+      "id": "mark-zuckerberg",
+      "name": "Mark Zuckerberg",
+      "qid": "Q36215",
+      "file": "explainers/real-case/bank/cutouts/mark-zuckerberg.png",
+      "width": 2125,
+      "height": 2727,
+      "credit": "Anthony Quintano from Westminster, United States, CC BY 2.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AMark_Zuckerberg_F8_2019_Keynote_(32830578717)_(cropped).jpg",
+      "approved": true
+    },
+    {
+      "id": "sam-altman",
+      "name": "Sam Altman",
+      "qid": "Q7407093",
+      "file": "explainers/real-case/bank/cutouts/sam-altman.png",
+      "width": 958,
+      "height": 1045,
+      "credit": "Steve Jurvetson, CC BY 2.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3ASam_Altman_speaking_at_TED_(cropped).jpg",
+      "approved": true
+    },
+    {
+      "id": "satya-nadella",
+      "name": "Satya Nadella",
+      "qid": "Q7426870",
+      "file": "explainers/real-case/bank/cutouts/satya-nadella.png",
+      "width": 2119,
+      "height": 2412,
+      "credit": "Brian Smale and Microsoft, CC BY-SA 4.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3AMS-Exec-Nadella-Satya-2017-08-31-22_(cropped).jpg",
+      "approved": true
+    },
+    {
+      "id": "sundar-pichai",
+      "name": "Sundar Pichai",
+      "qid": "Q3503829",
+      "file": "explainers/real-case/bank/cutouts/sundar-pichai.png",
+      "width": 959,
+      "height": 1344,
+      "credit": "Photographer: Lukasz Kobus (European Commission), CC BY 4.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3ASundar_Pichai_-_2023_(cropped).jpg",
+      "approved": true
+    },
+    {
+      "id": "tim-cook",
+      "name": "Tim Cook",
+      "qid": "Q265852",
+      "file": "explainers/real-case/bank/cutouts/tim-cook.png",
+      "width": 1136,
+      "height": 1612,
+      "credit": "Dati Bendo / European Union, CC BY 4.0",
+      "provenance": "https://commons.wikimedia.org/wiki/File%3ATim_Cook_in_New_York_City_-_2026_(cropped).jpg",
+      "approved": true
+    }
+  ],
+  "missing": []
+}

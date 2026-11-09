@@ -1,0 +1,2191 @@
+[
+ {
+  "topic": {
+   "title": "What is a cache and why does it make software faster?",
+   "term": "cache",
+   "scope": "Explain that a cache is a nearby temporary copy of data that was already fetched or computed, so software can reuse it instead of repeating slow work, and what trade-off comes from the copy going stale."
+  },
+  "analogy": {
+   "seat": "user",
+   "click": "The first time you need something that lives far away, you pay the full slow trip. If you keep a copy close by, every later time is instant. But the copy never updates itself, so when the original changes, the copy quietly goes out of date.",
+   "brainstorm": [
+    "Making a spare house key instead of borrowing the original from the landlord's office each time",
+    "Taking a photo of the fridge shelf before shopping so you needn't call home about eggs",
+    "Putting leftover soup in the fridge instead of cooking a new pot each night",
+    "Deli sandwiches pre-made in the display case instead of built to order",
+    "Photographing the meeting-room whiteboard instead of walking back to look at it",
+    "Keeping the water pitcher on the dinner table instead of walking to the tap each refill",
+    "Keeping a stash of snacks in your desk drawer instead of walking to the far pantry",
+    "Memorizing your shortcut to work after figuring it out once, until a road closes",
+    "Pre-chopping vegetables on Sunday for the whole week, until they wilt",
+    "Carrying a spare phone charger in your bag instead of going back home for it",
+    "Setting out a tray of pre-poured drinks before guests arrive instead of mixing each one",
+    "Screenshotting a boarding gate screen so you needn't walk back to the monitor, until the gate changes",
+    "Putting the TV remote's spare batteries in the nearby drawer instead of the garage shelf"
+   ],
+   "candidates": [
+    {
+     "scene": "A tenant is tired of trekking across town to the landlord's office to borrow the building key every single time.",
+     "elements": [
+      {
+       "name": "the landlord's office",
+       "stands_for": "the original source that is slow to reach"
+      },
+      {
+       "name": "the spare key on the key ring",
+       "stands_for": "the cache, a nearby copy"
+      },
+      {
+       "name": "the tenant",
+       "stands_for": "the software asking again and again"
+      },
+      {
+       "name": "the changed lock",
+       "stands_for": "the original changing so the copy is stale"
+      }
+     ],
+     "process": "First time, the tenant makes the long trip and has a copy cut. Every later time the nearby copy opens the door instantly. When the lock gets changed, the copy fails until the tenant fetches a fresh one.",
+     "visual": "A small cartoon tenant at a door. A long dotted path leads to a far office, while a key dangles from a key ring in hand.",
+     "actor": "the tenant",
+     "hook": "The tenant stands at the front door, rattling a spare key that suddenly will not turn, while the landlord's office sits tiny and far away on the horizon.",
+     "steps": [
+      {
+       "analogy": "Tenant walks to the far office to borrow the key",
+       "technical": "Slow fetch from source"
+      },
+      {
+       "analogy": "Tenant has a spare cut and keeps it on the ring",
+       "technical": "Store copy in cache"
+      },
+      {
+       "analogy": "Next times, the ring key opens the door at once",
+       "technical": "Cache hit"
+      },
+      {
+       "analogy": "The lock is changed, the old copy stops working",
+       "technical": "Stale cached copy"
+      },
+      {
+       "analogy": "Tenant goes back to get a fresh key",
+       "technical": "Refresh the cache"
+      }
+     ]
+    },
+    {
+     "scene": "A shopper in the grocery aisle needs to know if there are eggs at home, and going home to look is out of the question.",
+     "elements": [
+      {
+       "name": "the fridge at home",
+       "stands_for": "the original source, far away"
+      },
+      {
+       "name": "the photo on the shopper's phone",
+       "stands_for": "the cache, a nearby copy"
+      },
+      {
+       "name": "the shopper",
+       "stands_for": "the software that needs the answer"
+      },
+      {
+       "name": "the partner",
+       "stands_for": "another change to the original that makes the copy stale"
+      }
+     ],
+     "process": "Before leaving, the shopper snaps a photo of the fridge. In the store the photo answers each question instantly with no trip home. But the partner uses the last eggs after the photo was taken, so the photo still shows eggs.",
+     "visual": "A small cartoon shopper in a grocery aisle holds up a phone showing a picture of a full fridge shelf. A tiny house is far away in a thought bubble.",
+     "actor": "the shopper",
+     "hook": "The shopper confidently drops a carton of eggs back on the shelf while a thought bubble shows the real fridge at home, empty.",
+     "steps": [
+      {
+       "analogy": "Shopper takes a photo of the fridge shelf before leaving",
+       "technical": "Store copy in cache"
+      },
+      {
+       "analogy": "In the store, shopper checks the photo, not the fridge",
+       "technical": "Cache hit"
+      },
+      {
+       "analogy": "Each question gets an instant answer without the trip home",
+       "technical": "Faster repeat access"
+      },
+      {
+       "analogy": "Partner uses the last eggs after the photo was taken",
+       "technical": "Original changes"
+      },
+      {
+       "analogy": "Photo still says eggs, shopper skips buying them",
+       "technical": "Stale cached copy"
+      }
+     ]
+    },
+    {
+     "scene": "A hungry person wants soup for dinner, and cooking a pot from scratch takes an hour every single night.",
+     "elements": [
+      {
+       "name": "the stove with the big pot",
+       "stands_for": "the slow work of computing the result"
+      },
+      {
+       "name": "the container in the fridge",
+       "stands_for": "the cache holding the finished result"
+      },
+      {
+       "name": "the hungry person",
+       "stands_for": "the software that needs the result"
+      }
+     ],
+     "process": "The first night the person does the full hour of cooking. The leftover portion goes in the fridge, so the next nights it takes a minute to reheat. But the leftover is no longer fresh, and a new pot would taste different.",
+     "visual": "A small cartoon hungry person at a stove with steam, next to an open fridge showing a stacked container, and a clock showing a short wait.",
+     "actor": "the hungry person",
+     "hook": "The hungry person stares at a clock showing a long wait next to a bubbling pot, while a ready container sits one step away in the fridge.",
+     "steps": [
+      {
+       "analogy": "Person spends an hour cooking the soup from scratch",
+       "technical": "Slow computation"
+      },
+      {
+       "analogy": "Extra portion goes into a container in the fridge",
+       "technical": "Store result in cache"
+      },
+      {
+       "analogy": "Next night, person reheats it in a minute",
+       "technical": "Cache hit"
+      },
+      {
+       "analogy": "Days pass, the leftover gets old while a fresh pot would taste better",
+       "technical": "Stale cached copy"
+      }
+     ]
+    },
+    {
+     "scene": "A customer at a busy deli at lunchtime sees a line and a clock, and wants a sandwich now.",
+     "elements": [
+      {
+       "name": "the kitchen line",
+       "stands_for": "the slow origin that builds each result from scratch"
+      },
+      {
+       "name": "the display case",
+       "stands_for": "the cache holding ready-made results"
+      },
+      {
+       "name": "the customer",
+       "stands_for": "the software requesting something"
+      }
+     ],
+     "process": "The first customer waits while the kitchen builds the sandwich. Extra ones are made and put in the case, so later customers grab one instantly. By late afternoon, the case sandwiches are hours old while the kitchen has fresh ingredients.",
+     "visual": "A small cartoon customer at a counter. On one side, a case with sandwiches on a shelf, on the other a kitchen line with a long ticket queue.",
+     "actor": "the customer",
+     "hook": "The customer grabs a sandwich from the case in one second while the person beside them is still waiting at the kitchen line with a long ticket.",
+     "steps": [
+      {
+       "analogy": "Customer waits while the kitchen builds one from scratch",
+       "technical": "Slow fetch from source"
+      },
+      {
+       "analogy": "Extra sandwiches go into the display case",
+       "technical": "Store copy in cache"
+      },
+      {
+       "analogy": "Next customers grab one from the case immediately",
+       "technical": "Cache hit"
+      },
+      {
+       "analogy": "Afternoon, the case sandwiches have sat there for hours",
+       "technical": "Stale cached copy"
+      },
+      {
+       "analogy": "Kitchen swaps in freshly made ones",
+       "technical": "Refresh the cache"
+      }
+     ]
+    },
+    {
+     "scene": "A teammate keeps walking back to a distant meeting room to check the table plan sketched on a whiteboard for the offsite dinner.",
+     "elements": [
+      {
+       "name": "the whiteboard",
+       "stands_for": "the original source, in a far room"
+      },
+      {
+       "name": "the photo on the teammate's phone",
+       "stands_for": "the cache, a nearby copy"
+      },
+      {
+       "name": "the teammate",
+       "stands_for": "the software asking repeatedly"
+      },
+      {
+       "name": "the organizer with the marker",
+       "stands_for": "the update that makes the copy stale"
+      }
+     ],
+     "process": "After one trip, the teammate photographs the board. Every later check uses the photo with no walk. When the organizer redraws the plan, the photo still shows the old arrangement until the teammate goes back.",
+     "visual": "A small cartoon teammate at a desk looking at a phone showing a sketch of tables and colored circles. A far-off room with a whiteboard is visible down a long hallway.",
+     "actor": "the teammate",
+     "hook": "The teammate confidently points to a seat on a phone photo while, down the hallway, the organizer wipes the whiteboard and draws a different layout.",
+     "steps": [
+      {
+       "analogy": "Teammate walks to the far room to read the board",
+       "technical": "Slow fetch from source"
+      },
+      {
+       "analogy": "Teammate snaps a photo of it",
+       "technical": "Store copy in cache"
+      },
+      {
+       "analogy": "Later, teammate checks the photo at their desk",
+       "technical": "Cache hit"
+      },
+      {
+       "analogy": "Organizer redraws the plan on the board",
+       "technical": "Original changes"
+      },
+      {
+       "analogy": "Photo still shows the old layout",
+       "technical": "Stale cached copy"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "You open a website you visited yesterday and it loads almost instantly. Yet a brand-new site takes a few seconds. What did your phone hold onto?",
+     "question": "What did your phone hold onto?",
+     "seat": "user",
+     "why_it_pulls": "Everyone has noticed repeat visits loading faster than first visits and has never been told what is actually different."
+    },
+    {
+     "line": "A company changes its logo, but you still see the old one on their site until a friend shows you the new one. Why are you stuck in the past?",
+     "question": "Why are you stuck in the past?",
+     "seat": "user",
+     "why_it_pulls": "Viewers have seen outdated pages that look different on someone else's screen and want to know why it happens."
+    },
+    {
+     "line": "You scroll back up your social feed and the pictures you already saw appear instantly, without using more data. Where were they waiting?",
+     "question": "Where were they waiting?",
+     "seat": "user",
+     "why_it_pulls": "People notice that scrolling back is instant and that it saves data, and they want to know where the pictures were kept."
+    }
+   ]
+  }
+ },
+ {
+  "topic": {
+   "title": "What happens when you call an API?",
+   "term": "API",
+   "scope": "Explain that an API is a defined way for one piece of software to send a structured request to another and get a structured response back, so programs can use each other's features without knowing how they work inside."
+  },
+  "analogy": {
+   "seat": "builder",
+   "click": "You can't walk into someone else's software and do the work yourself. They give you a fixed set of things you may ask for, in a fixed shape, and a go-between carries your ask in and brings a predictable answer back. You get the result without knowing or touching how it was made.",
+   "brainstorm": [
+    "Ordering from a menu while the kitchen stays behind a door",
+    "Pressing B4 on a vending machine and getting a snack",
+    "Handing a shirt and a tick-box tag to the dry cleaner clerk",
+    "Giving your keys and a ticket to a valet and getting the car back",
+    "Picking a wash package on the car wash screen and driving into the tunnel",
+    "Using the pharmacy drive-up window to get a prescription from shelves you never see",
+    "Asking the hotel front desk for towels from the housekeeping closet",
+    "Using the TV remote, where only the buttons that exist can be pressed",
+    "Choosing small, medium or large at the coffee counter",
+    "Plugging a charger into a standard wall socket",
+    "Taking a numbered ticket at the deli counter and pointing at what you want",
+    "Handing a deposit slip to a bank teller who works the vault you never see"
+   ],
+   "candidates": [
+    {
+     "scene": "A hungry diner wants a dish, and the only way to get it is through a waiter, because the kitchen door is closed.",
+     "elements": [
+      {
+       "name": "the diner",
+       "stands_for": "your software, which wants a feature from another system"
+      },
+      {
+       "name": "the menu",
+       "stands_for": "the API's documented list of requests it accepts"
+      },
+      {
+       "name": "the waiter",
+       "stands_for": "the API itself, carrying the request in and the result back"
+      },
+      {
+       "name": "the kitchen",
+       "stands_for": "the other software, whose inner workings stay hidden"
+      }
+     ],
+     "process": "The diner picks something from the menu and tells the waiter. The waiter carries it through the door. The kitchen cooks it its own way, and the waiter brings back the plate. If the diner asks for something off the menu, the waiter returns with a polite no instead of a dish.",
+     "visual": "A table in the foreground, a closed swinging kitchen door behind it, a waiter shuttling between them with a plate.",
+     "actor": "the diner",
+     "hook": "The diner points at a dish that is not on the menu while the waiter shakes his head, and the closed kitchen door stays shut behind him.",
+     "steps": [
+      {
+       "analogy": "The diner picks a dish from the menu",
+       "technical": "Choose documented request"
+      },
+      {
+       "analogy": "The waiter carries the order to the kitchen",
+       "technical": "Send request"
+      },
+      {
+       "analogy": "The kitchen cooks it out of sight",
+       "technical": "Service does work"
+      },
+      {
+       "analogy": "The waiter brings back the plate",
+       "technical": "Receive response"
+      },
+      {
+       "analogy": "An off-menu ask gets a polite no",
+       "technical": "Handle error"
+      }
+     ]
+    },
+    {
+     "scene": "A shopper wants a snack from a vending machine and can only get it by pressing a code the machine recognizes.",
+     "elements": [
+      {
+       "name": "the shopper",
+       "stands_for": "your program, which wants something from another system"
+      },
+      {
+       "name": "the keypad with listed codes",
+       "stands_for": "the API's defined set of calls, each with a fixed format"
+      },
+      {
+       "name": "the vending machine",
+       "stands_for": "the other software that does the actual work"
+      },
+      {
+       "name": "the snack",
+       "stands_for": "the response the caller gets back"
+      }
+     ],
+     "process": "The shopper presses a valid code, such as B4. The machine does its own hidden work and drops the snack into the tray. A code that doesn't exist gets a blinking error and no snack. The shopper never needs to know how the spiral turns.",
+     "visual": "A glowing keypad, a snack in a spiral behind glass, a tray at the bottom, and a shopper with coins in hand.",
+     "actor": "the shopper",
+     "hook": "The shopper stabs a code that doesn't exist while the machine blinks ERROR and a snack sits just out of reach behind the glass.",
+     "steps": [
+      {
+       "analogy": "The shopper reads which codes exist",
+       "technical": "Know available calls"
+      },
+      {
+       "analogy": "The shopper presses B4",
+       "technical": "Send request"
+      },
+      {
+       "analogy": "The machine turns its spiral out of sight",
+       "technical": "Service does work"
+      },
+      {
+       "analogy": "The snack drops into the tray",
+       "technical": "Receive response"
+      },
+      {
+       "analogy": "A wrong code only blinks an error",
+       "technical": "Handle error"
+      }
+     ]
+    },
+    {
+     "scene": "A customer drops off a stained shirt at the dry cleaner and wants it back clean, but the tag only has certain boxes to tick.",
+     "elements": [
+      {
+       "name": "the customer",
+       "stands_for": "your software, which needs a job done"
+      },
+      {
+       "name": "the tick-box tag",
+       "stands_for": "the structured format a request must follow"
+      },
+      {
+       "name": "the counter clerk",
+       "stands_for": "the API, which accepts valid requests and hands back results"
+      },
+      {
+       "name": "the back room",
+       "stands_for": "the other system's hidden machinery"
+      }
+     ],
+     "process": "The customer ticks Wash and Press and hands over shirt and tag. The clerk takes it into the back room. Later the clerk returns with a clean shirt. If the customer scribbles a request outside the boxes, the clerk can't act on it.",
+     "visual": "A shop counter with a small tag showing tick boxes, a curtain to the back room, and a clerk passing a shirt through.",
+     "actor": "the customer",
+     "hook": "The customer scribbles a long note across the tag, and the clerk holds it up, puzzled, with no box to put it in.",
+     "steps": [
+      {
+       "analogy": "The customer fills in the tick boxes",
+       "technical": "Format the request"
+      },
+      {
+       "analogy": "The clerk takes shirt and tag",
+       "technical": "Send request"
+      },
+      {
+       "analogy": "The back room cleans it unseen",
+       "technical": "Service does work"
+      },
+      {
+       "analogy": "The clerk returns the clean shirt",
+       "technical": "Receive response"
+      }
+     ]
+    },
+    {
+     "scene": "A driver late for dinner hands over the keys at a valet stand and trusts the car will come back, without knowing where it gets parked.",
+     "elements": [
+      {
+       "name": "the driver",
+       "stands_for": "your software, which needs something fetched"
+      },
+      {
+       "name": "the claim ticket",
+       "stands_for": "the structured request that identifies exactly what you want"
+      },
+      {
+       "name": "the valet",
+       "stands_for": "the API, which does the fetching and returns the result"
+      },
+      {
+       "name": "the garage",
+       "stands_for": "the other system's hidden internals"
+      }
+     ],
+     "process": "The driver gives the keys and receives a numbered ticket. Later the driver hands back the ticket. The valet goes into the garage, finds that one car, and returns with it. The driver never learns the garage layout, and a wrong ticket gets no car.",
+     "visual": "A curb-side stand, a ticket stub, a valet jogging into a dark garage entrance, and a car rolling back out.",
+     "actor": "the driver",
+     "hook": "The driver waves a ticket at the valet stand, shouting that they are late, while the valet disappears into a huge garage that the driver can't see into.",
+     "steps": [
+      {
+       "analogy": "The driver hands over keys and gets a ticket",
+       "technical": "Make valid request"
+      },
+      {
+       "analogy": "The valet takes the ticket to the garage",
+       "technical": "Send request"
+      },
+      {
+       "analogy": "The valet finds the car among hundreds",
+       "technical": "Service does work"
+      },
+      {
+       "analogy": "The car comes back to the curb",
+       "technical": "Receive response"
+      }
+     ]
+    },
+    {
+     "scene": "A driver at the car wash picks a package on the screen and rolls into a tunnel they can't see through, hoping to come out clean.",
+     "elements": [
+      {
+       "name": "the driver",
+       "stands_for": "your software, which wants a job done"
+      },
+      {
+       "name": "the package screen",
+       "stands_for": "the API's fixed list of options you can call"
+      },
+      {
+       "name": "the wash tunnel",
+       "stands_for": "the other system doing hidden work"
+      },
+      {
+       "name": "the clean car",
+       "stands_for": "the response returned after the work is done"
+      }
+     ],
+     "process": "The driver taps Deluxe from the options and rolls into the tunnel. Behind the curtain the wash runs its own way. The car comes out clean. Wanting only wax is impossible, since the screen offers just the listed packages.",
+     "visual": "A bright screen with three big package buttons, a dark tunnel entrance with strips of curtain, a dirty car going in and a shiny car coming out.",
+     "actor": "the driver",
+     "hook": "The driver stares at a screen with three package buttons, none of which is the wax-only wash they want, with a dark tunnel waiting ahead.",
+     "steps": [
+      {
+       "analogy": "The driver sees the packages on offer",
+       "technical": "Know available calls"
+      },
+      {
+       "analogy": "The driver taps Deluxe",
+       "technical": "Send request"
+      },
+      {
+       "analogy": "The tunnel washes the car out of view",
+       "technical": "Service does work"
+      },
+      {
+       "analogy": "A shiny car rolls out",
+       "technical": "Receive response"
+      },
+      {
+       "analogy": "A wax-only wish isn't on the screen",
+       "technical": "Unsupported request"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "You misspell one word in a card charge, and the payment company's software replies with a precise error. How does it know what's wrong?",
+     "question": "How does it know what's wrong?",
+     "seat": "builder",
+     "why_it_pulls": "Anyone who has wired their app to a payment service has hit a baffling error and wants to know how software they can't see can be so exact."
+    },
+    {
+     "line": "Your app shows live weather from another company's software you've never seen inside. How does your code get that answer?",
+     "question": "How does your code get that answer?",
+     "seat": "builder",
+     "why_it_pulls": "A builder pulling in outside data without seeing its source wants to know how two separate programs can trade information so reliably."
+    },
+    {
+     "line": "A shipping company rebuilt everything behind its rate lookup, yet your checkout kept working without a single change. Why didn't it break?",
+     "question": "Why didn't it break?",
+     "seat": "builder",
+     "why_it_pulls": "Whoever runs a checkout fears a vendor's changes breaking it, so they want to know why this one survived."
+    }
+   ]
+  }
+ },
+ {
+  "topic": {
+   "title": "Why does RAG split documents into chunks before searching them?",
+   "term": "chunking",
+   "scope": "Explain that documents are cut into small passages so search can return only the specific piece that answers a question, since whole documents are too large and too vague to fit into a model's prompt."
+  },
+  "analogy": {
+   "seat": "builder",
+   "click": "One big whole is too large to hand over and too mixed to match to one specific need, so you cut it into small pieces that each hold one clear thing. Then you can pick just the piece that answers the need and hand over only that, which fits the limited space.",
+   "brainstorm": [
+    "Sending a two-hour family video when someone asks for the first-steps moment",
+    "Hunting for the phone charger in one giant unlabeled moving box",
+    "Finding a gas station on a zoomed-out map of the whole country",
+    "Serving one mushroom slice from a pizza with mixed toppings onto a small plate",
+    "Grabbing one portion from a giant tub of mixed meal-prep for a small lunchbox",
+    "Finding the right outfit when the whole wardrobe is crammed in one trunk",
+    "Showing a friend one song from a three-hour mix recorded as a single track",
+    "Finding the screwdriver you need when the whole garage is dumped in one toolbox",
+    "Reading a year-at-a-glance wall poster to find one week, versus monthly pages",
+    "Cropping one face from a 200-person group photo to show someone",
+    "Finding one sock in a laundry mountain versus sorted piles",
+    "Buying a bulk 24-pack when you need one portion and it won't fit in the cupboard",
+    "The above in more detail follows in the candidates below"
+   ],
+   "candidates": [
+    {
+     "scene": "A grandmother on a video call asks for the clip of the baby's first steps, and the sender only has one two-hour family video, far too big to attach.",
+     "elements": [
+      {
+       "name": "the two-hour video",
+       "stands_for": "the whole document"
+      },
+      {
+       "name": "the short clips",
+       "stands_for": "the chunks"
+      },
+      {
+       "name": "the attachment size limit",
+       "stands_for": "the model's limited prompt space"
+      },
+      {
+       "name": "the sender scanning thumbnails",
+       "stands_for": "the search that finds the matching chunk"
+      }
+     ],
+     "process": "The long video is cut into short clips, each showing one clear moment. When grandma asks for the first steps, the sender scans the clips, picks the one that matches, and attaches only that clip under the limit. Grandma, who stands for the model, gets exactly what she asked for.",
+     "visual": "A long film strip snapping into small labeled-by-picture clips, one slotted into a message bubble with a size bar nearly full.",
+     "actor": "the sender",
+     "hook": "The sender tries to attach the huge video and the size bar bursts red while grandma waits on screen.",
+     "steps": [
+      {
+       "analogy": "The long video is cut into short clips",
+       "technical": "Split into chunks"
+      },
+      {
+       "analogy": "Each clip shows its one moment on a thumbnail",
+       "technical": "Index each chunk"
+      },
+      {
+       "analogy": "Grandma asks for the first steps",
+       "technical": "Question arrives"
+      },
+      {
+       "analogy": "The sender finds the matching clip",
+       "technical": "Find best match"
+      },
+      {
+       "analogy": "Only that clip fits under the size limit",
+       "technical": "Fit into prompt"
+      }
+     ]
+    },
+    {
+     "scene": "Midnight in a new apartment: a tired mover needs a phone charger, and all the small stuff is in one giant box labeled just 'misc'.",
+     "elements": [
+      {
+       "name": "the giant box",
+       "stands_for": "the whole document"
+      },
+      {
+       "name": "the small labeled bins",
+       "stands_for": "the chunks"
+      },
+      {
+       "name": "the label on each bin",
+       "stands_for": "each chunk's meaning used for matching"
+      },
+      {
+       "name": "the bedside table",
+       "stands_for": "the limited prompt space"
+      }
+     ],
+     "process": "The giant box can't be lifted onto the bedside table, and its label 'misc' says nothing about a charger. Unpacked into small bins with specific labels, the mover reads the labels, finds the charger bin, and carries just that bin to the table.",
+     "visual": "A huge box collapsing into a row of small bins with picture labels, one bin placed on a tiny nightstand.",
+     "actor": "the tired mover",
+     "hook": "The mover strains under the huge box beside a tiny nightstand with a phone at 1% battery.",
+     "steps": [
+      {
+       "analogy": "The giant box is unpacked into small bins",
+       "technical": "Split into chunks"
+      },
+      {
+       "analogy": "Each bin gets a label for what's inside",
+       "technical": "Index each chunk"
+      },
+      {
+       "analogy": "The mover needs a charger",
+       "technical": "Question arrives"
+      },
+      {
+       "analogy": "The mover finds the charger bin by its label",
+       "technical": "Find best match"
+      },
+      {
+       "analogy": "Only that bin fits on the nightstand",
+       "technical": "Fit into prompt"
+      }
+     ]
+    },
+    {
+     "scene": "A driver with the fuel light on looks at a phone showing the whole country on one map, with no street detail visible.",
+     "elements": [
+      {
+       "name": "the whole-country map",
+       "stands_for": "the whole document"
+      },
+      {
+       "name": "the small map squares",
+       "stands_for": "the chunks"
+      },
+      {
+       "name": "the phone screen",
+       "stands_for": "the limited prompt space"
+      },
+      {
+       "name": "the driver searching squares",
+       "stands_for": "the search that finds the matching chunk"
+      }
+     ],
+     "process": "Squeezed onto the phone, the whole map is a vague blur where nothing specific can be found. Cut into small squares, each shows one area in readable detail. The driver finds the square near them that shows a gas station, and that one square fills the screen.",
+     "visual": "A big blurry country map breaking into a grid of tiles, one tile zooming sharp to the phone screen with a gas pump icon.",
+     "actor": "the driver",
+     "hook": "The fuel light blinks as the driver squints at a phone showing a blurry map of the whole country.",
+     "steps": [
+      {
+       "analogy": "The big map is cut into small squares",
+       "technical": "Split into chunks"
+      },
+      {
+       "analogy": "Each square shows its own area in detail",
+       "technical": "Index each chunk"
+      },
+      {
+       "analogy": "The driver needs fuel",
+       "technical": "Question arrives"
+      },
+      {
+       "analogy": "The driver finds the square with a gas station",
+       "technical": "Find best match"
+      },
+      {
+       "analogy": "That square fills the phone screen",
+       "technical": "Fit into prompt"
+      }
+     ]
+    },
+    {
+     "scene": "At a party, a friend wants a mushroom-only slice, but the pizza is one big pie of mixed toppings and the paper plate is small.",
+     "elements": [
+      {
+       "name": "the whole pizza",
+       "stands_for": "the whole document"
+      },
+      {
+       "name": "the slices",
+       "stands_for": "the chunks"
+      },
+      {
+       "name": "the paper plate",
+       "stands_for": "the limited prompt space"
+      },
+      {
+       "name": "the host picking a slice",
+       "stands_for": "the search that finds the matching chunk"
+      }
+     ],
+     "process": "The whole pizza can't sit on the plate, and as a single pie it can't be called mushroom or pepperoni because it's a mix. Cut into slices, each slice shows its own topping. The host picks the mushroom slice and puts only that on the plate.",
+     "visual": "A big mixed-topping pizza being cut into slices, one mushroom slice sliding onto a small paper plate.",
+     "actor": "the host",
+     "hook": "The host tries to fit an entire pizza onto a tiny paper plate while a friend asks for just mushroom.",
+     "steps": [
+      {
+       "analogy": "The pizza is cut into slices",
+       "technical": "Split into chunks"
+      },
+      {
+       "analogy": "Each slice shows its own topping",
+       "technical": "Index each chunk"
+      },
+      {
+       "analogy": "A friend asks for mushroom",
+       "technical": "Question arrives"
+      },
+      {
+       "analogy": "The host picks the mushroom slice",
+       "technical": "Find best match"
+      },
+      {
+       "analogy": "That slice goes on the small plate",
+       "technical": "Fit into prompt"
+      }
+     ]
+    },
+    {
+     "scene": "At work on Wednesday, someone opens the fridge for their chicken-and-rice lunch, but Sunday's meal prep is one giant tub of everything mixed together.",
+     "elements": [
+      {
+       "name": "the giant tub",
+       "stands_for": "the whole document"
+      },
+      {
+       "name": "the portion containers",
+       "stands_for": "the chunks"
+      },
+      {
+       "name": "the lunchbox",
+       "stands_for": "the limited prompt space"
+      },
+      {
+       "name": "the hungry coworker choosing a container",
+       "stands_for": "the search that finds the matching chunk"
+      }
+     ],
+     "process": "The giant tub won't fit in the lunchbox, and everything in it is mixed into one blob that can't be matched to a craving. Portioned into separate containers, each holds one clear meal. The coworker picks the chicken-and-rice container and packs only that.",
+     "visual": "A huge tub splitting into neat small containers with picture lids, one container dropping into a small lunchbox.",
+     "actor": "the hungry coworker",
+     "hook": "The coworker stares at a giant mixed tub that won't fit in the lunchbox as the lunch break ticks away.",
+     "steps": [
+      {
+       "analogy": "The giant tub is portioned into containers",
+       "technical": "Split into chunks"
+      },
+      {
+       "analogy": "Each lid shows what's inside",
+       "technical": "Index each chunk"
+      },
+      {
+       "analogy": "The coworker wants chicken and rice",
+       "technical": "Question arrives"
+      },
+      {
+       "analogy": "The coworker picks the matching container",
+       "technical": "Find best match"
+      },
+      {
+       "analogy": "Only that container fits the lunchbox",
+       "technical": "Fit into prompt"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "You paste your whole handbook into an AI chat and it says it's too long. How can it still answer from it?",
+     "question": "How can it still answer from it?",
+     "seat": "builder",
+     "why_it_pulls": "Anyone wiring an AI to company documents hits the length limit fast and wants to know how answers still come from big files."
+    },
+    {
+     "line": "You pay for the text you send an AI. How does your help bot send just the one paragraph that answers a customer?",
+     "question": "How does your help bot send just the one paragraph that answers a customer?",
+     "seat": "builder",
+     "why_it_pulls": "Builders see cost tied to text sent, so they want to know how to send only the relevant paragraph instead of whole documents."
+    },
+    {
+     "line": "Your support bot searches whole manuals and keeps answering with the wrong, vaguely related page. How would you make it find the exact answer?",
+     "question": "How would you make it find the exact answer?",
+     "seat": "builder",
+     "why_it_pulls": "Vague, off-target answers are the frustrating symptom builders see, and they want the fix that makes search precise."
+    }
+   ]
+  }
+ },
+ {
+  "topic": {
+   "title": "What is DNS and how does a website name find its server?",
+   "term": "DNS",
+   "scope": "Explain that DNS is the internet's lookup system that translates a human-readable domain name into the numeric address of the server hosting the site, so browsers know where to send their request."
+  },
+  "analogy": {
+   "seat": "user",
+   "click": "A name is what people remember, but it can't tell you where to go. Before the trip starts, something looks the name up and hands back the exact numeric address, and only then can the visit begin.",
+   "brainstorm": [
+    "Telling a rideshare driver 'Joe's Pizza' while the map app turns it into a street address",
+    "Asking a store employee where the pasta sauce is and hearing 'aisle 7'",
+    "Checking the airport departures board for the Lisbon flight and finding 'Gate 23'",
+    "Finding your name on the wedding seating chart to learn you're at table 12",
+    "Scanning an apartment buzzer panel for 'Lee' and finding unit 305",
+    "Asking the hotel front desk where the conference is and hearing 'room 214'",
+    "Typing a friend's name into a maps app and getting a pin",
+    "Looking up a book title at the library kiosk and getting a shelf number",
+    "Asking the mall directory where the shoe store is and getting 'level 2, unit 41'",
+    "Asking a coworker where Dana sits and hearing 'desk 4B'",
+    "Telling a delivery driver 'the blue house next to the school' and having him find the street number",
+    "Looking up a doctor's name in the building lobby listing and finding suite 310",
+    "Searching a parking app for 'City Garage' and getting its street address"
+   ],
+   "candidates": [
+    {
+     "scene": "A driver at a crossroads has been told only 'take me to Joe's Pizza' and has no idea which way to turn, until the map app turns the name into a street number.",
+     "elements": [
+      {
+       "name": "the driver",
+       "stands_for": "the browser, who needs to get somewhere"
+      },
+      {
+       "name": "the name 'Joe's Pizza'",
+       "stands_for": "the domain name"
+      },
+      {
+       "name": "the map app's search box",
+       "stands_for": "the DNS lookup"
+      },
+      {
+       "name": "the pin on 482 Maple St",
+       "stands_for": "the server's numeric IP address"
+      }
+     ],
+     "process": "The driver can't steer by a name. The map search looks the name up, returns the street number, and only then can the driver set off.",
+     "visual": "A small driver cartoon frozen at a four-way crossroads, with a passenger's speech bubble containing a pizza slice icon and no road signs pointing anywhere.",
+     "actor": "the driver",
+     "hook": "The driver is stopped at a crossroads with every road unmarked, while the passenger insists 'just go to Joe's Pizza'.",
+     "steps": [
+      {
+       "analogy": "The passenger names the place",
+       "technical": "Browser receives domain name"
+      },
+      {
+       "analogy": "The driver can't steer by a name alone",
+       "technical": "Name isn't routable"
+      },
+      {
+       "analogy": "The map search looks the name up",
+       "technical": "Ask DNS resolver"
+      },
+      {
+       "analogy": "A street number pin comes back",
+       "technical": "IP address returned"
+      },
+      {
+       "analogy": "The driver heads to that address",
+       "technical": "Connect to server"
+      }
+     ]
+    },
+    {
+     "scene": "A shopper in a big grocery store wants pasta sauce, but the shelves show no sauce sign, so she asks an employee who tells her 'aisle 7'.",
+     "elements": [
+      {
+       "name": "the shopper",
+       "stands_for": "the browser, who wants to reach a site"
+      },
+      {
+       "name": "the item 'pasta sauce'",
+       "stands_for": "the domain name"
+      },
+      {
+       "name": "the store employee",
+       "stands_for": "the DNS lookup"
+      },
+      {
+       "name": "aisle 7",
+       "stands_for": "the server's numeric address"
+      }
+     ],
+     "process": "The shopper knows what she wants, not where it is. She asks, gets a number back, and walks straight there. Next time she remembers the number herself.",
+     "visual": "A small shopper cartoon with a cart at the end of a row of identical aisles, a thought bubble holding a jar of sauce, and a store employee cartoon with a number sign.",
+     "actor": "the shopper",
+     "hook": "A shopper with a half-full cart stands in front of a dozen identical aisles, holding a jar-shaped thought bubble.",
+     "steps": [
+      {
+       "analogy": "The shopper wants pasta sauce",
+       "technical": "Browser has domain name"
+      },
+      {
+       "analogy": "She can't tell which aisle it's in",
+       "technical": "Address unknown"
+      },
+      {
+       "analogy": "She asks the store employee",
+       "technical": "Query DNS resolver"
+      },
+      {
+       "analogy": "The employee says 'aisle 7'",
+       "technical": "IP address returned"
+      },
+      {
+       "analogy": "She walks to aisle 7 and grabs it",
+       "technical": "Request sent to server"
+      }
+     ]
+    },
+    {
+     "scene": "A traveler rushing through the airport knows only that she is on 'the Lisbon flight', and checks the departures board to find 'Gate 23'.",
+     "elements": [
+      {
+       "name": "the traveler",
+       "stands_for": "the browser"
+      },
+      {
+       "name": "the 'Lisbon' flight name",
+       "stands_for": "the domain name"
+      },
+      {
+       "name": "the departures board",
+       "stands_for": "the DNS lookup"
+      },
+      {
+       "name": "Gate 23",
+       "stands_for": "the server's numeric address"
+      }
+     ],
+     "process": "A flight name doesn't tell her where to walk. The board matches the name to a gate number, then she heads there.",
+     "visual": "A small traveler cartoon with a rolling bag looks up at a big board where one row is highlighted, with a long hallway of identical gates behind her.",
+     "actor": "the traveler",
+     "hook": "A traveler with a boarding pass sprints past endless gates, checking her watch, with no idea which one is hers.",
+     "steps": [
+      {
+       "analogy": "She knows only the flight name",
+       "technical": "Browser has domain name"
+      },
+      {
+       "analogy": "She looks it up on the board",
+       "technical": "Query DNS resolver"
+      },
+      {
+       "analogy": "The board shows Gate 23",
+       "technical": "IP address returned"
+      },
+      {
+       "analogy": "She walks to Gate 23",
+       "technical": "Connect to server"
+      }
+     ]
+    },
+    {
+     "scene": "A guest arrives at a wedding knowing only his own name, and the seating chart tells him he's at table 12.",
+     "elements": [
+      {
+       "name": "the guest",
+       "stands_for": "the browser"
+      },
+      {
+       "name": "the name card",
+       "stands_for": "the domain name"
+      },
+      {
+       "name": "the seating chart",
+       "stands_for": "the DNS lookup"
+      },
+      {
+       "name": "table 12",
+       "stands_for": "the server's numeric address"
+      }
+     ],
+     "process": "His name card says who he is but not where to sit. The chart matches the name to a table number, and then he goes there.",
+     "visual": "A small guest cartoon in a bow tie holding a name card in front of a room of identical round tables, with a chart on an easel beside him.",
+     "actor": "the guest",
+     "hook": "A guest holding a name card stands in a banquet hall of identical round tables while other guests stare at him.",
+     "steps": [
+      {
+       "analogy": "The guest has only a name card",
+       "technical": "Browser has domain name"
+      },
+      {
+       "analogy": "He finds his name on the chart",
+       "technical": "Query DNS resolver"
+      },
+      {
+       "analogy": "The chart says table 12",
+       "technical": "IP address returned"
+      },
+      {
+       "analogy": "He walks to table 12 and sits down",
+       "technical": "Connect to server"
+      }
+     ]
+    },
+    {
+     "scene": "A visitor stands outside an apartment building at night, knowing only his friend's name, and finds 'Lee' on the buzzer panel next to unit 305.",
+     "elements": [
+      {
+       "name": "the visitor",
+       "stands_for": "the browser"
+      },
+      {
+       "name": "the friend's name 'Lee'",
+       "stands_for": "the domain name"
+      },
+      {
+       "name": "the buzzer panel",
+       "stands_for": "the DNS lookup"
+      },
+      {
+       "name": "unit 305",
+       "stands_for": "the server's numeric address"
+      }
+     ],
+     "process": "The visitor knows who he's visiting, not which door. The panel matches the name to a unit number, and he presses that button to get in.",
+     "visual": "A small visitor cartoon holding a pizza box outside a tall building, in front of a panel with rows of buttons, one labeled Lee with 305 beside it.",
+     "actor": "the visitor",
+     "hook": "A visitor in the rain faces a panel of 40 identical buttons, holding a pizza box and unsure which one to press.",
+     "steps": [
+      {
+       "analogy": "He knows only his friend's name",
+       "technical": "Browser has domain name"
+      },
+      {
+       "analogy": "He scans the buzzer panel",
+       "technical": "Query DNS resolver"
+      },
+      {
+       "analogy": "The panel pairs Lee with 305",
+       "technical": "IP address returned"
+      },
+      {
+       "analogy": "He buzzes unit 305",
+       "technical": "Connect to server"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "You type a company's name into your browser and its homepage appears in a blink, from anywhere on Earth. How did your browser know where to go?",
+     "question": "How did your browser know where to go?",
+     "seat": "user",
+     "why_it_pulls": "Everyone types names into a browser daily, yet nobody knows how a plain name turns into a destination so fast."
+    },
+    {
+     "line": "A company moves its website to a new host, yet you type the same name and still land on the right site. What told your browser the new place?",
+     "question": "What told your browser the new place?",
+     "seat": "user",
+     "why_it_pulls": "It reveals the gap between a name staying the same while the real location changes, which anyone who has ever relaunched a site can relate to."
+    },
+    {
+     "line": "You mistype one letter in a web address and get an error, while the correct spelling opens instantly. What can your browser do with one but not the other?",
+     "question": "What can your browser do with one but not the other?",
+     "seat": "user",
+     "why_it_pulls": "Every user has hit a mistyped address, and this makes them want to know what the browser does with a name that makes one work and the other fail."
+    }
+   ]
+  }
+ },
+ {
+  "topic": {
+   "title": "What is model routing, and why not use one AI for everything?",
+   "term": "model routing",
+   "scope": "Explain that model routing is a step that looks at each request and sends it to the smallest model able to handle it, so simple tasks stay cheap and fast while hard ones go to a more powerful model."
+  },
+  "analogy": {
+   "seat": "builder",
+   "click": "Before any job gets done, someone looks at it and hands it to the cheapest helper that can handle it. The big expensive helper is saved for jobs only it can do. If everything goes to the big one, you pay and wait for nothing. If everything goes to the small one, the hard jobs fail.",
+   "brainstorm": [
+    "Homeowner sorts a loose cabinet screw from a leaking pipe: screwdriver or plumber",
+    "Traveler decides whether to walk to the corner mailbox or take a taxi to the airport",
+    "Person moving house decides between a friend's hatchback and a moving crew",
+    "Cook chooses between a fork for one egg and a stand mixer for bread dough",
+    "Business owner chooses between a phone snapshot and a hired photographer",
+    "Manager chooses between a hallway chat and booking the boardroom",
+    "Someone chooses between a damp cloth for a smudge and a pressure washer for a muddy patio",
+    "Shopper at the store entrance sends a one-item customer to the express lane and a full cart to the regular lane",
+    "Parent chooses between a bandage from the drawer and a trip to urgent care",
+    "Person chooses between a pocket calculator and a spreadsheet for splitting a bill versus a yearly budget",
+    "Person chooses between a butter knife and a power drill for a small job versus hanging a heavy shelf",
+    "Person chooses between the local barber for a trim and a salon stylist for a big color change"
+   ],
+   "candidates": [
+    {
+     "scene": "A homeowner stands at the kitchen sink with a wobbly cabinet door and a dripping pipe, and has to decide who fixes what.",
+     "elements": [
+      {
+       "name": "the homeowner",
+       "stands_for": "the router that looks at each job and chooses who handles it"
+      },
+      {
+       "name": "the screwdriver",
+       "stands_for": "the small, cheap, fast model"
+      },
+      {
+       "name": "the plumber",
+       "stands_for": "the large, powerful, costly model"
+      },
+      {
+       "name": "the household jobs (loose hinge, leaking pipe)",
+       "stands_for": "the easy and hard requests arriving"
+      }
+     ],
+     "process": "The homeowner glances at each job and judges how hard it is. The loose hinge gets the screwdriver, which is quick and free. Only the leaking pipe justifies paying the plumber.",
+     "visual": "A cartoon homeowner between a screwdriver on the counter and a plumber's van outside the window, with a dollar tag on the van.",
+     "actor": "the homeowner",
+     "hook": "The homeowner reaches for the phone to book the plumber for a loose screw, while the screwdriver sits unnoticed on the counter.",
+     "steps": [
+      {
+       "analogy": "A fix-it job shows up at the sink",
+       "technical": "Request arrives"
+      },
+      {
+       "analogy": "The homeowner looks at how hard it is",
+       "technical": "Router judges difficulty"
+      },
+      {
+       "analogy": "The loose hinge goes to the screwdriver",
+       "technical": "Send to small model"
+      },
+      {
+       "analogy": "The leaking pipe goes to the plumber",
+       "technical": "Escalate to large model"
+      }
+     ]
+    },
+    {
+     "scene": "A traveler stands at the front door with a short errand and a long trip, with a taxi at the curb and the meter running.",
+     "elements": [
+      {
+       "name": "the traveler",
+       "stands_for": "the router that picks a way to get there for each trip"
+      },
+      {
+       "name": "the walking shoes",
+       "stands_for": "the small, cheap, fast model"
+      },
+      {
+       "name": "the taxi",
+       "stands_for": "the large, powerful, costly model"
+      },
+      {
+       "name": "the trips (corner mailbox, airport)",
+       "stands_for": "the easy and hard requests arriving"
+      }
+     ],
+     "process": "The traveler sizes up each trip before leaving. The mailbox at the corner is a walk that costs nothing. The airport across town needs the taxi, because shoes cannot get there in time.",
+     "visual": "A cartoon traveler at a door, with a mailbox visible down the street and a taxi with a ticking meter at the curb.",
+     "actor": "the traveler",
+     "hook": "The traveler is climbing into a taxi with the meter already running, to go to a mailbox visible across the street.",
+     "steps": [
+      {
+       "analogy": "A trip needs to be made",
+       "technical": "Request arrives"
+      },
+      {
+       "analogy": "The traveler judges the distance",
+       "technical": "Router assesses task"
+      },
+      {
+       "analogy": "The short trip is walked",
+       "technical": "Send to small model"
+      },
+      {
+       "analogy": "The airport run gets the taxi",
+       "technical": "Escalate to large model"
+      }
+     ]
+    },
+    {
+     "scene": "A person moving house stands in the driveway with a lamp and a sofa, and has to decide how each gets to the new place.",
+     "elements": [
+      {
+       "name": "the mover",
+       "stands_for": "the router that decides who carries each item"
+      },
+      {
+       "name": "the friend's hatchback",
+       "stands_for": "the small, cheap, quick model"
+      },
+      {
+       "name": "the moving truck with its crew",
+       "stands_for": "the large, powerful, costly model"
+      },
+      {
+       "name": "the items (lamp, sofa)",
+       "stands_for": "the easy and hard requests arriving"
+      }
+     ],
+     "process": "The mover looks at each item and decides what it needs. The lamp rides in the hatchback for free. The sofa gets the truck. Sending the lamp by truck wastes money. Strapping the sofa to the hatchback fails.",
+     "visual": "A cartoon mover between a small hatchback and a big moving truck, with a lamp in one hand and a sofa beside them.",
+     "actor": "the mover",
+     "hook": "The mover is straining to strap a huge sofa to the roof of the tiny hatchback while the moving truck idles nearby.",
+     "steps": [
+      {
+       "analogy": "An item needs to get across town",
+       "technical": "Request arrives"
+      },
+      {
+       "analogy": "The mover eyes its size and weight",
+       "technical": "Router assesses task"
+      },
+      {
+       "analogy": "The lamp rides in the hatchback",
+       "technical": "Send to small model"
+      },
+      {
+       "analogy": "The sofa goes in the truck",
+       "technical": "Escalate to large model"
+      }
+     ]
+    },
+    {
+     "scene": "A cook stands in the kitchen with one egg to scramble and a ball of bread dough to knead, with a fork and a stand mixer within reach.",
+     "elements": [
+      {
+       "name": "the cook",
+       "stands_for": "the router that decides which tool each job gets"
+      },
+      {
+       "name": "the fork",
+       "stands_for": "the small, cheap, fast model"
+      },
+      {
+       "name": "the stand mixer",
+       "stands_for": "the large, powerful, costly model"
+      },
+      {
+       "name": "the kitchen jobs (one egg, bread dough)",
+       "stands_for": "the easy and hard requests arriving"
+      }
+     ],
+     "process": "The cook looks at each job and picks the simplest tool that works. A fork scrambles the egg in seconds. The dough needs the stand mixer, which takes setup and cleanup but gets the job done.",
+     "visual": "A cartoon cook between a fork on the counter and a big stand mixer, with an egg in one bowl and dough in another.",
+     "actor": "the cook",
+     "hook": "The cook is hauling out the giant stand mixer to scramble a single egg, with a mountain of dishes already waiting.",
+     "steps": [
+      {
+       "analogy": "A kitchen job lands on the counter",
+       "technical": "Request arrives"
+      },
+      {
+       "analogy": "The cook sizes up the job",
+       "technical": "Router judges difficulty"
+      },
+      {
+       "analogy": "The egg gets the fork",
+       "technical": "Send to small model"
+      },
+      {
+       "analogy": "The dough gets the stand mixer",
+       "technical": "Escalate to large model"
+      }
+     ]
+    },
+    {
+     "scene": "A small business owner needs a quick photo of a shelf for inventory and polished portraits for the website, with a phone in a pocket and a photographer on call.",
+     "elements": [
+      {
+       "name": "the owner",
+       "stands_for": "the router that decides who handles each photo job"
+      },
+      {
+       "name": "the phone camera",
+       "stands_for": "the small, cheap, fast model"
+      },
+      {
+       "name": "the hired photographer",
+       "stands_for": "the large, powerful, costly model"
+      },
+      {
+       "name": "the photo needs (shelf snapshot, website portraits)",
+       "stands_for": "the easy and hard requests arriving"
+      }
+     ],
+     "process": "The owner checks what each photo is for. A shelf snapshot for the stock list takes seconds on the phone. Portraits for the website need the photographer's skill and gear, and are worth paying for.",
+     "visual": "A cartoon owner holding up a phone on one side and a photographer with studio lights on the other, with a price tag on the photographer.",
+     "actor": "the owner",
+     "hook": "The photographer, surrounded by studio lights and a price tag, is shooting a mop bucket in the back room for the stock list.",
+     "steps": [
+      {
+       "analogy": "A photo is needed for the business",
+       "technical": "Request arrives"
+      },
+      {
+       "analogy": "The owner checks what it is for",
+       "technical": "Router assesses task"
+      },
+      {
+       "analogy": "The shelf snapshot is taken on the phone",
+       "technical": "Send to small model"
+      },
+      {
+       "analogy": "The portraits go to the photographer",
+       "technical": "Escalate to large model"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "You send every question, even \"what are your hours?\", to your most powerful AI and the bill balloons. How do you stop overpaying?",
+     "question": "How do you stop overpaying?",
+     "seat": "builder",
+     "why_it_pulls": "Anyone paying per AI request has seen easy questions cost as much as hard ones and wants to stop wasting money."
+    },
+    {
+     "line": "Your assistant makes users wait for a one-word answer because every question goes to your biggest AI. How can easy ones return fast?",
+     "question": "How can easy ones return fast?",
+     "seat": "builder",
+     "why_it_pulls": "Anyone who runs an AI feature has watched users wait on trivial questions and wants snappy replies without losing power."
+    },
+    {
+     "line": "You switched to a cheaper AI, but hard questions now get weaker answers. How do you keep the savings without losing quality?",
+     "question": "How do you keep the savings without losing quality?",
+     "seat": "builder",
+     "why_it_pulls": "Builders who tried cutting costs and saw quality drop want a way to keep both low cost and good answers."
+    }
+   ]
+  }
+ },
+ {
+  "topic": {
+   "title": "What is prompt injection, and why can it trick an AI?",
+   "term": "prompt injection",
+   "scope": "Explain that a language model reads instructions and untrusted content as the same stream of text, so hidden commands inside a document or web page can be mistaken for real instructions and hijack its behavior."
+  },
+  "analogy": {
+   "seat": "builder",
+   "click": "The model takes in its owner's instructions and the material it was asked to read through the same channel. It acts on anything that looks like an instruction, so a command hidden in the material gets obeyed as if the owner gave it.",
+   "brainstorm": [
+    "A driver follows the route arrows to the airport, and a prankster's sticker arrow on a roadside sign sends them down a side street.",
+    "A baker watching a cooking video hears the video's oven timer beep and rushes to pull their own cake out too early.",
+    "A dog trained to come at the owner's whistle bolts to a stranger who whistles the same pitch.",
+    "A driver looking for a stadium spot gets waved away from the real lot by a stranger in a hi-vis vest.",
+    "A diner at a food court jumps up when the next table's order puck buzzes, thinking it is their own.",
+    "A pedestrian steps off the curb because a passing bus ad shows a glowing green walking figure.",
+    "An office stands up and files out when a coworker's phone plays a recorded fire-alarm bell.",
+    "A cafe worker grabs their phone when a stranger's phone plays the same default ringtone.",
+    "A TV show's doorbell chime sends someone to the front door to find nobody there.",
+    "A fun runner follows painted course arrows, and a kid's extra chalk arrow leads them off down a side street.",
+    "A festival-goer follows their friend's red jacket through the crowd and ends up trailing a stranger in a matching jacket.",
+    "A driver in fog follows the taillights ahead and ends up pulling into someone's driveway."
+   ],
+   "candidates": [
+    {
+     "scene": "A driver following the route arrows to the airport sees a sticker arrow on a roadside pizza sign and swerves toward the side street it points to.",
+     "elements": [
+      {
+       "name": "the driver",
+       "stands_for": "the AI model doing the job"
+      },
+      {
+       "name": "the route arrow on the road",
+       "stands_for": "the owner's real instructions"
+      },
+      {
+       "name": "the shops and roadside signs",
+       "stands_for": "the pages and documents the model reads while working"
+      },
+      {
+       "name": "the planted sticker arrow",
+       "stands_for": "a hidden command inside that content"
+      }
+     ],
+     "process": "The driver reads everything through one windshield, and an arrow is an arrow wherever it appears. Nothing marks which one is the real route, so the planted arrow gets followed.",
+     "visual": "Two arrows point opposite ways in the same view: the real route arrow on the road and a sticker arrow stuck on a pizza shop sign.",
+     "actor": "the driver",
+     "hook": "The driver sits at a fork with a road arrow pointing left and a sticker arrow on a shop sign pointing right, eyes darting between them.",
+     "steps": [
+      {
+       "analogy": "The driver sets off following the route arrows",
+       "technical": "Owner gives instructions"
+      },
+      {
+       "analogy": "They read every sign and shop along the road",
+       "technical": "Reads outside content"
+      },
+      {
+       "analogy": "A sticker arrow on a shop sign looks just like a route arrow",
+       "technical": "Hidden command in content"
+      },
+      {
+       "analogy": "The driver can't tell it from the real route and turns off",
+       "technical": "Mistaken for instruction"
+      },
+      {
+       "analogy": "They end up somewhere they never meant to go",
+       "technical": "Behavior gets hijacked"
+      }
+     ]
+    },
+    {
+     "scene": "A baker watching a cooking video on their phone hears the video's oven timer go off, rushes to open their own oven, and ruins the half-baked cake.",
+     "elements": [
+      {
+       "name": "the baker",
+       "stands_for": "the AI model doing the job"
+      },
+      {
+       "name": "the baker's own oven timer",
+       "stands_for": "the owner's real instructions"
+      },
+      {
+       "name": "the cooking video",
+       "stands_for": "the outside content the model is reading"
+      },
+      {
+       "name": "the beep inside the video",
+       "stands_for": "a hidden command inside that content"
+      }
+     ],
+     "process": "The baker has learned to act whenever they hear the timer beep. A beep from the video reaches their ears the same way as the real one, so they obey it without checking where it came from.",
+     "visual": "A phone propped by the oven and a beep-sound squiggle leaving the phone, while the baker's own timer stays silent.",
+     "actor": "the baker",
+     "hook": "A baker yanks open the oven door as the cake inside sags, while their own timer sits quiet on the counter and the phone beeps.",
+     "steps": [
+      {
+       "analogy": "The baker sets the oven timer and waits for its beep",
+       "technical": "Owner gives instructions"
+      },
+      {
+       "analogy": "They watch a cooking video while they wait",
+       "technical": "Reads outside content"
+      },
+      {
+       "analogy": "The video plays its own timer beep",
+       "technical": "Hidden command in content"
+      },
+      {
+       "analogy": "The baker hears a beep and treats it as their timer",
+       "technical": "Mistaken for instruction"
+      },
+      {
+       "analogy": "They pull the cake out too early and it collapses",
+       "technical": "Behavior gets hijacked"
+      }
+     ]
+    },
+    {
+     "scene": "A dog trained to run back at its owner's whistle bolts across the park to a stranger who happens to whistle the same pitch.",
+     "elements": [
+      {
+       "name": "the dog",
+       "stands_for": "the AI model doing the job"
+      },
+      {
+       "name": "the owner's whistle",
+       "stands_for": "the owner's real instructions"
+      },
+      {
+       "name": "the park's background sounds",
+       "stands_for": "the outside content the model takes in"
+      },
+      {
+       "name": "the stranger's matching whistle",
+       "stands_for": "a hidden command inside that content"
+      }
+     ],
+     "process": "The dog was trained to obey a particular sound and cannot check who is making it. Any whistle with that pitch counts as the owner's, so the stranger's whistle gets the same obedience.",
+     "visual": "A dog mid-sprint toward a stranger with a whistle, with the park's other sounds drawn as faint swirls.",
+     "actor": "the dog",
+     "hook": "A dog sprints away from the playing field toward a stranger holding a whistle, ears up, tongue out.",
+     "steps": [
+      {
+       "analogy": "The dog learns to run back at the owner's whistle",
+       "technical": "Owner gives instructions"
+      },
+      {
+       "analogy": "At the park it hears kids, birds, and traffic",
+       "technical": "Reads outside content"
+      },
+      {
+       "analogy": "A stranger whistles the same pitch",
+       "technical": "Hidden command in content"
+      },
+      {
+       "analogy": "The dog can't tell it from its owner's whistle",
+       "technical": "Mistaken for instruction"
+      },
+      {
+       "analogy": "It bolts to the stranger and ignores its owner",
+       "technical": "Behavior gets hijacked"
+      }
+     ]
+    },
+    {
+     "scene": "A driver hunting for stadium parking follows a stranger in a hi-vis vest who waves them off the real lot into a dirt field.",
+     "elements": [
+      {
+       "name": "the driver",
+       "stands_for": "the AI model doing the job"
+      },
+      {
+       "name": "the real lot attendant",
+       "stands_for": "the owner's real instructions"
+      },
+      {
+       "name": "the crowd of people walking around",
+       "stands_for": "the outside content the model takes in"
+      },
+      {
+       "name": "the stranger in a hi-vis vest",
+       "stands_for": "a hidden command inside that content"
+      }
+     ],
+     "process": "The driver obeys whoever looks like an attendant, because looking official is all they can check. A stranger who is part of the crowd but dressed like the attendant gets the same obedience.",
+     "visual": "Two vest-wearing figures wave in opposite directions, one by the lot gate and one mixed into the crowd near a dirt field.",
+     "actor": "the driver",
+     "hook": "A driver crawls forward between two vest-wearing figures waving opposite ways, one at the gate and one pointing to a muddy field.",
+     "steps": [
+      {
+       "analogy": "The driver is told to follow the lot attendant's wave",
+       "technical": "Owner gives instructions"
+      },
+      {
+       "analogy": "They creep through a crowd of walkers and tailgaters",
+       "technical": "Reads outside content"
+      },
+      {
+       "analogy": "A stranger in a matching vest waves them toward a field",
+       "technical": "Hidden command in content"
+      },
+      {
+       "analogy": "The driver can't tell the vest is fake and obeys",
+       "technical": "Mistaken for instruction"
+      },
+      {
+       "analogy": "They park in a muddy field, far from the stadium",
+       "technical": "Behavior gets hijacked"
+      }
+     ]
+    },
+    {
+     "scene": "A diner in a crowded food court sees the next table's order puck buzz, leaps up, and walks to the counter to collect food that isn't theirs.",
+     "elements": [
+      {
+       "name": "the diner",
+       "stands_for": "the AI model doing the job"
+      },
+      {
+       "name": "the diner's own order puck",
+       "stands_for": "the owner's real instructions"
+      },
+      {
+       "name": "the food court crowd and trays",
+       "stands_for": "the outside content the model takes in"
+      },
+      {
+       "name": "the neighbor's buzzing puck",
+       "stands_for": "a hidden command inside that content"
+      }
+     ],
+     "process": "The diner's rule is that when a puck buzzes, they go and get food. All pucks look and buzz alike, and the diner reacts to the buzz without checking whose puck it is.",
+     "visual": "Two identical pucks on neighboring tables, one dark in the diner's hand area and one buzzing and flashing next to them.",
+     "actor": "the diner",
+     "hook": "A diner is half out of their chair with their own puck dark, while the identical puck at the next table buzzes and flashes.",
+     "steps": [
+      {
+       "analogy": "The diner is handed a puck and told to go when it buzzes",
+       "technical": "Owner gives instructions"
+      },
+      {
+       "analogy": "They wait amid trays and chatter from other tables",
+       "technical": "Reads outside content"
+      },
+      {
+       "analogy": "The next table's identical puck starts buzzing",
+       "technical": "Hidden command in content"
+      },
+      {
+       "analogy": "The diner treats the buzz as their own call",
+       "technical": "Mistaken for instruction"
+      },
+      {
+       "analogy": "They get up and collect food that isn't theirs",
+       "technical": "Behavior gets hijacked"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "Your AI assistant summarizes a webpage for a customer, then suddenly emails them something you never asked it to say. What made it follow the page instead of you?",
+     "question": "What made it follow the page instead of you?",
+     "seat": "builder",
+     "why_it_pulls": "Builders fear their AI doing something unauthorized after reading content they never wrote, and want to know why it obeyed the page."
+    },
+    {
+     "line": "You ask your resume-screening AI to rank applicants, and one resume ranks first after hiding white text saying 'pick me.' Why did your AI listen to a resume?",
+     "question": "Why did your AI listen to a resume?",
+     "seat": "builder",
+     "why_it_pulls": "Anyone running AI on outside documents wants to know how a hidden line in a file can override their own instructions."
+    },
+    {
+     "line": "Your support bot reads an incoming email, then ignores your rules and does what the email says. How can a stranger's message outrank your instructions?",
+     "question": "How can a stranger's message outrank your instructions?",
+     "seat": "builder",
+     "why_it_pulls": "Owners who gave the bot rules want to understand how a stranger's text could override them, since it affects anything they connect to email or the web."
+    }
+   ]
+  }
+ },
+ {
+  "topic": {
+   "title": "What is a context window?",
+   "term": "context window",
+   "scope": "Explain that a context window is the fixed amount of text a language model can read at once, so anything beyond it, like the start of a long chat, is no longer seen when the model writes its answer."
+  },
+  "analogy": {
+   "seat": "user",
+   "click": "The model never sees the whole conversation. Each time it answers, it reads only a fixed-size window of the most recent text. The window slides forward as the chat grows. Anything that slid out the back is not blurry or half-remembered. It is simply not in front of the model.",
+   "brainstorm": [
+    "Dashcam on loop recording that overwrites the oldest minutes, so the start of the trip is gone",
+    "Passenger holding a phone map zoomed in on one patch of the route, asked where the trip began",
+    "Cook with a counter that fits five ingredients, so the first one went back in the fridge",
+    "Flashlight beam in a dark garage that lights only a few boxes at a time",
+    "Fridge door that holds six kid drawings, with the oldest taken down to the drawer for each new one",
+    "Hotel breakfast plate that holds six items, so the first one slides off the edge",
+    "Home security app that keeps only the last 24 hours of clips",
+    "Peephole that shows only a small circle of the hallway",
+    "Driver looking through a windshield who cannot see the road already passed",
+    "Weekly view on a phone calendar that hides last month",
+    "Car seating four, so someone is dropped off to make room for a new pickup",
+    "Photographer's frame that crops the people standing at the edge of a group shot",
+    "Small card table where a puzzle-maker sweeps old pieces off to make room"
+   ],
+   "candidates": [
+    {
+     "scene": "A driver wants proof of the scrape at the start of a long trip, but the dashcam card has been recording over itself and the clerk can only watch what is left.",
+     "elements": [
+      {
+       "name": "the driver",
+       "stands_for": "the user asking the question"
+      },
+      {
+       "name": "the insurance clerk",
+       "stands_for": "the model that answers"
+      },
+      {
+       "name": "the memory card",
+       "stands_for": "the context window, a fixed size"
+      },
+      {
+       "name": "the video clips",
+       "stands_for": "the pieces of the conversation"
+      }
+     ],
+     "process": "Clips keep arriving and fill the fixed-size card. Each new clip pushes the oldest one off the end. The clerk answers only from the clips on the card and cannot see the ones pushed off.",
+     "visual": "A small card shows a short strip of clips. New clips slide in on the right and the oldest clip drops off the left edge.",
+     "actor": "the insurance clerk",
+     "hook": "The driver points at the start of the trip while the clerk squints at a card with no scrape on it.",
+     "steps": [
+      {
+       "analogy": "The drive records clip after clip",
+       "technical": "Conversation keeps growing"
+      },
+      {
+       "analogy": "The card fills to its fixed size",
+       "technical": "Window reaches its limit"
+      },
+      {
+       "analogy": "The oldest clip is pushed off the end",
+       "technical": "Oldest text drops out"
+      },
+      {
+       "analogy": "The clerk answers from the clips left on the card",
+       "technical": "Model reads the window"
+      }
+     ]
+    },
+    {
+     "scene": "A driver asks the passenger holding the phone map where the trip started, but the zoomed-in screen shows only the stretch right around the car.",
+     "elements": [
+      {
+       "name": "the driver",
+       "stands_for": "the user asking the question"
+      },
+      {
+       "name": "the passenger",
+       "stands_for": "the model that answers"
+      },
+      {
+       "name": "the phone screen",
+       "stands_for": "the context window, a fixed-size view"
+      },
+      {
+       "name": "the long route",
+       "stands_for": "the whole conversation so far"
+      }
+     ],
+     "process": "The route grows longer as the car drives. The screen shows only a fixed-size patch around the newest part. The passenger can answer only from that patch, so the start is off-screen and has to be guessed.",
+     "visual": "A long winding line is drawn across the page. A phone-shaped frame sits over the end of the line, and the beginning stretches off to the left outside the frame.",
+     "actor": "the passenger",
+     "hook": "The driver asks where they started and the passenger shrugs at a screen showing only road and a blue dot.",
+     "steps": [
+      {
+       "analogy": "The route stretches longer with every mile",
+       "technical": "Conversation keeps growing"
+      },
+      {
+       "analogy": "The screen stays the same size",
+       "technical": "Fixed window size"
+      },
+      {
+       "analogy": "The start slides off-screen",
+       "technical": "Early text falls outside"
+      },
+      {
+       "analogy": "The passenger answers from what is on screen",
+       "technical": "Model reads the window"
+      }
+     ]
+    },
+    {
+     "scene": "A housemate asks the cook to use the lemon set out first, but the counter fits only five ingredients and the lemon went back in the fridge.",
+     "elements": [
+      {
+       "name": "the housemate",
+       "stands_for": "the user asking the question"
+      },
+      {
+       "name": "the cook",
+       "stands_for": "the model that answers"
+      },
+      {
+       "name": "the counter",
+       "stands_for": "the context window, a fixed amount of space"
+      },
+      {
+       "name": "the ingredients",
+       "stands_for": "the pieces of the conversation"
+      }
+     ],
+     "process": "Ingredients keep being set out and the counter fills up. Each new one means an old one is moved back to the fridge. The cook cooks only with what is on the counter, so the lemon never makes it into the dish.",
+     "visual": "A narrow counter shows five ingredients in a row. A new one is added on the right while the first, a lemon, is carried off to the fridge on the left.",
+     "actor": "the cook",
+     "hook": "The housemate holds up the lemon and the cook stirs a finished dish with no lemon in it.",
+     "steps": [
+      {
+       "analogy": "Ingredients get set out one after another",
+       "technical": "Conversation keeps growing"
+      },
+      {
+       "analogy": "The counter is full at five",
+       "technical": "Window reaches its limit"
+      },
+      {
+       "analogy": "The first one goes back in the fridge",
+       "technical": "Oldest text drops out"
+      },
+      {
+       "analogy": "The cook makes the dish from what is on the counter",
+       "technical": "Answer from window"
+      }
+     ]
+    },
+    {
+     "scene": "During a power cut, someone holds a flashlight while their partner asks about the first box they passed in the garage, but the beam lights only the boxes right in front.",
+     "elements": [
+      {
+       "name": "the partner",
+       "stands_for": "the user asking the question"
+      },
+      {
+       "name": "the flashlight holder",
+       "stands_for": "the model that answers"
+      },
+      {
+       "name": "the beam",
+       "stands_for": "the context window, a fixed-size view"
+      },
+      {
+       "name": "the boxes on the shelves",
+       "stands_for": "the pieces of the conversation"
+      }
+     ],
+     "process": "They move down the aisle and the beam moves with them. It lights a fixed number of boxes at once. The boxes already passed fall into the dark. The holder can describe only the lit boxes, so the first box is no longer visible.",
+     "visual": "A row of boxes runs along a shelf in a dark garage. A circle of light covers the last few boxes, and the first boxes sit in shadow behind it.",
+     "actor": "the flashlight holder",
+     "hook": "The partner asks about the first box and the flashlight holder points the beam at a different one.",
+     "steps": [
+      {
+       "analogy": "They walk further down the aisle",
+       "technical": "Conversation keeps growing"
+      },
+      {
+       "analogy": "The beam lights only a few boxes",
+       "technical": "Fixed window size"
+      },
+      {
+       "analogy": "Earlier boxes fall into the dark",
+       "technical": "Early text unseen"
+      },
+      {
+       "analogy": "The holder describes only the lit boxes",
+       "technical": "Model reads the window"
+      }
+     ]
+    },
+    {
+     "scene": "A child asks grandma to praise the very first dinosaur drawing, but the fridge door holds only six drawings and the early ones are now in a drawer.",
+     "elements": [
+      {
+       "name": "the child",
+       "stands_for": "the user asking the question"
+      },
+      {
+       "name": "the grandma",
+       "stands_for": "the model that answers"
+      },
+      {
+       "name": "the fridge door",
+       "stands_for": "the context window, a fixed amount of space"
+      },
+      {
+       "name": "the drawings",
+       "stands_for": "the pieces of the conversation"
+      }
+     ],
+     "process": "New drawings keep being made and the door has space for six. Each new drawing goes up and the oldest comes down into the drawer. Grandma can talk only about what is on the door, so the first drawing is invisible to her.",
+     "visual": "A fridge door holds six drawings in two rows. A new drawing is magnetted on at one end while the oldest drops into an open drawer below.",
+     "actor": "the grandma",
+     "hook": "The child holds up the first drawing while grandma smiles at a fridge door that does not show it.",
+     "steps": [
+      {
+       "analogy": "The child keeps making new drawings",
+       "technical": "Conversation keeps growing"
+      },
+      {
+       "analogy": "The door holds six at most",
+       "technical": "Window reaches its limit"
+      },
+      {
+       "analogy": "The oldest comes down into the drawer",
+       "technical": "Oldest text drops out"
+      },
+      {
+       "analogy": "Grandma comments only on what is on the door",
+       "technical": "Answer from window"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "Two hours into a long chat with an AI assistant, you ask about the first thing you told it, and it answers like it never heard it. Why?",
+     "question": "Two hours into a long chat with an AI assistant, you ask about the first thing you told it, and it answers like it never heard it. Why?",
+     "seat": "user",
+     "why_it_pulls": "Anyone who has had a long AI chat has felt the assistant forget their opening instructions and wants to know why."
+    },
+    {
+     "line": "You paste a huge report into an AI chatbot and ask for a summary, and it only covers the second half. Where did the first half go?",
+     "question": "You paste a huge report into an AI chatbot and ask for a summary, and it only covers the second half. Where did the first half go?",
+     "seat": "user",
+     "why_it_pulls": "Viewers who have pasted long documents into a chatbot have seen partial answers and want to know what happened to the rest."
+    },
+    {
+     "line": "You set ground rules at the start of a long chat, and by the end the AI breaks every one. What happened to your rules?",
+     "question": "You set ground rules at the start of a long chat, and by the end the AI breaks every one. What happened to your rules?",
+     "seat": "user",
+     "why_it_pulls": "People who give AI tools instructions up front have watched them get ignored later and want to know how to explain it."
+    }
+   ]
+  }
+ },
+ {
+  "topic": {
+   "title": "What is a webhook?",
+   "term": "webhook",
+   "scope": "Explain that a webhook is a message one app sends automatically to another app's web address the moment an event happens, so the second app learns about it right away instead of asking over and over."
+  },
+  "analogy": {
+   "seat": "builder",
+   "click": "Instead of you asking again and again whether something has happened, the other side rings you the instant it happens, at an address you left with them in advance.",
+   "brainstorm": [
+    "Waiting for a package and walking to the porch every few minutes, versus the driver ringing your doorbell",
+    "Standing at the restaurant counter asking if your order is ready, versus the pager buzzing in your hand",
+    "Parked for curbside pickup, going in to ask about your order, versus staff bringing it to your numbered spot",
+    "Hosting a party and peeking out the window for a guest, versus the guest pressing your unit button on the buzzer panel",
+    "A shop owner leaving the counter to check the back door for the supplier, versus a bell that rings when the truck arrives",
+    "Giving your table number to the kitchen so the dish finds you, instead of you visiting the pass to check",
+    "Checking the oven every minute, versus a timer that beeps the moment it is done",
+    "Standing at the dry cleaner's counter to ask if your suit is ready, versus them calling you when it is",
+    "Waiting for a parent to arrive and standing on the curb, versus them honking at the gate",
+    "Refreshing the bus stop board, versus a stop-request chime on your own bus",
+    "Opening the fridge to see if the cake has set, versus a timer set for exactly that",
+    "Waiting for a plumber and checking the driveway, versus the plumber knocking on your door when he arrives",
+    "Sitting in a waiting room and asking the receptionist every ten minutes, versus the receptionist coming to your seat when the doctor is ready"
+   ],
+   "candidates": [
+    {
+     "scene": "A homeowner waiting on a parcel keeps trotting out to check an empty porch, while the driver could simply ring the bell.",
+     "elements": [
+      {
+       "name": "the delivery driver",
+       "stands_for": "the app where the event happens, which sends the notice"
+      },
+      {
+       "name": "the doorbell at the front door",
+       "stands_for": "the webhook URL, the address left for notices"
+      },
+      {
+       "name": "the homeowner inside",
+       "stands_for": "the receiving app that needs to know"
+      },
+      {
+       "name": "the parcel on the porch",
+       "stands_for": "the event itself and its details"
+      }
+     ],
+     "process": "The homeowner stops checking the porch because the driver rings the bell the moment the parcel is dropped. The homeowner then handles it.",
+     "visual": "A split between the homeowner jogging to the door and finding nothing, and the driver pressing the doorbell.",
+     "actor": "the waiting homeowner",
+     "hook": "The homeowner peeks through the door for the sixth time at an empty porch while the driver's van turns onto the street.",
+     "steps": [
+      {
+       "analogy": "The homeowner gives the driver the house to ring at",
+       "technical": "Register webhook URL"
+      },
+      {
+       "analogy": "The driver drops the parcel on the porch",
+       "technical": "Event occurs"
+      },
+      {
+       "analogy": "The driver presses the doorbell right away",
+       "technical": "Automatic notification sent"
+      },
+      {
+       "analogy": "The homeowner opens the door and takes the parcel",
+       "technical": "Receiver acts"
+      }
+     ]
+    },
+    {
+     "scene": "A hungry customer keeps going back to the counter to ask whether the order is ready, instead of holding a pager that will buzz.",
+     "elements": [
+      {
+       "name": "the kitchen cook",
+       "stands_for": "the app where the event happens"
+      },
+      {
+       "name": "the pager",
+       "stands_for": "the webhook URL, the registered way to reach the customer"
+      },
+      {
+       "name": "the customer",
+       "stands_for": "the receiving app that wants to know"
+      },
+      {
+       "name": "the finished meal",
+       "stands_for": "the event and its details"
+      }
+     ],
+     "process": "The customer takes the pager so the kitchen can reach them. Once the meal is finished, the kitchen buzzes the pager, so the customer can stop asking and go get the food.",
+     "visual": "A customer hovering at the counter on the left, and relaxed at a table on the right with a pager lighting up.",
+     "actor": "the hungry customer",
+     "hook": "The customer asks the cook for the fifth time at the counter and the cook rolls their eyes with the meal one minute from done.",
+     "steps": [
+      {
+       "analogy": "The cook hands over a pager tied to the customer",
+       "technical": "Register webhook URL"
+      },
+      {
+       "analogy": "The customer sits and stops asking",
+       "technical": "Stop polling"
+      },
+      {
+       "analogy": "The meal comes off the grill",
+       "technical": "Event occurs"
+      },
+      {
+       "analogy": "The pager buzzes the instant it is ready",
+       "technical": "Automatic notification sent"
+      },
+      {
+       "analogy": "The customer picks up the meal",
+       "technical": "Receiver acts"
+      }
+     ]
+    },
+    {
+     "scene": "A shopper parked outside a store keeps walking in to ask if the groceries are ready, then learns the staff will bring them to the numbered spot.",
+     "elements": [
+      {
+       "name": "the store employee",
+       "stands_for": "the app where the event happens"
+      },
+      {
+       "name": "the numbered parking spot",
+       "stands_for": "the webhook URL, the address where it will be delivered"
+      },
+      {
+       "name": "the shopper in the car",
+       "stands_for": "the receiving app"
+      },
+      {
+       "name": "the grocery bags",
+       "stands_for": "the event and its details"
+      }
+     ],
+     "process": "The shopper gives a spot number once. When the order is packed, the employee walks straight to that spot, so the shopper no longer has to go in and check.",
+     "visual": "A car in a numbered pickup bay with the employee walking out with bags.",
+     "actor": "the waiting shopper",
+     "hook": "The shopper is half out of the car for the third time, heading to the store door, as bags sit packed and waiting by the counter.",
+     "steps": [
+      {
+       "analogy": "The shopper parks in spot 7 and tells the store",
+       "technical": "Register webhook URL"
+      },
+      {
+       "analogy": "The employee finishes packing the bags",
+       "technical": "Event occurs"
+      },
+      {
+       "analogy": "The employee walks out to spot 7 automatically",
+       "technical": "Automatic notification sent"
+      },
+      {
+       "analogy": "The shopper loads the bags and drives off",
+       "technical": "Receiver acts"
+      }
+     ]
+    },
+    {
+     "scene": "A party host keeps peeking out the window for a late friend, instead of letting the friend press the buzzer for their unit.",
+     "elements": [
+      {
+       "name": "the arriving friend",
+       "stands_for": "the app where the event happens"
+      },
+      {
+       "name": "the unit button on the buzzer panel",
+       "stands_for": "the webhook URL, the address tied to the host"
+      },
+      {
+       "name": "the host upstairs",
+       "stands_for": "the receiving app"
+      },
+      {
+       "name": "the lobby door",
+       "stands_for": "the event, the arrival at the building"
+      }
+     ],
+     "process": "The host gives their unit number once. When the friend arrives at the lobby, they press that button, which rings upstairs, so the host stops watching the street and goes to let them in.",
+     "visual": "A host at a window staring down, then the buzzer in the lobby lighting up inside the apartment.",
+     "actor": "the party host",
+     "hook": "The host is stirring a pot with one eye glued to the street window, burning the sauce while the friend stands unseen at the lobby door.",
+     "steps": [
+      {
+       "analogy": "The host tells the friend which unit to buzz",
+       "technical": "Register webhook URL"
+      },
+      {
+       "analogy": "The friend arrives at the lobby",
+       "technical": "Event occurs"
+      },
+      {
+       "analogy": "The friend presses the unit button",
+       "technical": "Automatic notification sent"
+      },
+      {
+       "analogy": "The host buzzes the friend in",
+       "technical": "Receiver acts"
+      }
+     ]
+    },
+    {
+     "scene": "A shop owner keeps leaving customers at the counter to check the back door for the supplier, until a bell is wired to ring at the counter.",
+     "elements": [
+      {
+       "name": "the supplier's driver",
+       "stands_for": "the app where the event happens"
+      },
+      {
+       "name": "the back-door bell wired to the counter",
+       "stands_for": "the webhook URL, the address that reaches the owner"
+      },
+      {
+       "name": "the shop owner",
+       "stands_for": "the receiving app"
+      },
+      {
+       "name": "the crates at the loading dock",
+       "stands_for": "the event and its details"
+      }
+     ],
+     "process": "The owner is told the driver will use the bell. When crates are unloaded, the driver presses it, and the owner leaves the counter only when needed.",
+     "visual": "An owner torn between a customer and the back door, then a bell ringing over the counter.",
+     "actor": "the shop owner",
+     "hook": "The shop owner abandons a customer mid-sentence for the fourth trip to the back door, only to find an empty dock again.",
+     "steps": [
+      {
+       "analogy": "The owner has the bell wired to the counter",
+       "technical": "Register webhook URL"
+      },
+      {
+       "analogy": "The driver unloads the crates",
+       "technical": "Event occurs"
+      },
+      {
+       "analogy": "The driver presses the bell right away",
+       "technical": "Automatic notification sent"
+      },
+      {
+       "analogy": "The owner goes to check in the delivery",
+       "technical": "Receiver acts"
+      }
+     ]
+    }
+   ]
+  },
+  "gap": {
+   "candidates": [
+    {
+     "line": "Your app asks the payment service every minute if anyone paid, and the answer is mostly no. How can it just be told?",
+     "question": "How can it just be told?",
+     "seat": "builder",
+     "why_it_pulls": "Anyone running a store or app has wasted effort asking over and over for news that rarely comes, and wants a way to just be told."
+    },
+    {
+     "line": "Your app keeps asking a calendar service whether anyone booked, and most replies say nothing changed. How could it hear about bookings instantly?",
+     "question": "How could it hear about bookings instantly?",
+     "seat": "builder",
+     "why_it_pulls": "Builders see the pile of empty replies in their logs and bills, and want the news to arrive on its own."
+    },
+    {
+     "line": "A lead fills out your form, but your team only sees it every ten minutes. What would deliver it the instant it's sent?",
+     "question": "What would deliver it the instant it's sent?",
+     "seat": "builder",
+     "why_it_pulls": "Slow follow-up costs real leads, so an operator wants to know how the form's news reaches the team right away."
+    }
+   ]
+  }
+ }
+]

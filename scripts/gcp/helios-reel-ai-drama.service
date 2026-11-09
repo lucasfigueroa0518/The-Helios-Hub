@@ -1,0 +1,36 @@
+[Unit]
+Description=Helios Reel AI Drama worker (one job at a time)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Non-root, as helios-explainers. systemd reads EnvironmentFile as root before dropping to helios,
+# so worker.env stays mode 600.
+User=helios
+Group=helios
+Environment=HOME=/opt/helios-social/home
+Environment=PLAYWRIGHT_BROWSERS_PATH=/opt/helios-social/ms-playwright
+# worker.env must carry, for this unit:
+#   REEL_AI_DRAMA_LOCAL_DIR=/opt/helios-social/reel-ai-drama   (logs and job files outside the app dir)
+#   EXPLAINERS_STORAGE=bucket                                   (otherwise nothing it makes can be booked or posted)
+#   EXPLAINERS_DB=supabase                                      (the shared database; no EXPLAINERS_DATABASE_URL)
+# The schema is applied by hand first (npm run db:reel-ai-drama); the worker never runs DDL.
+# Host: the social VM, beside helios-explainers (Lucas, 2026-11-08). Deployed with the other social units; it stays
+# off until `sudo systemctl enable --now helios-reel-ai-drama` there.
+WorkingDirectory=/opt/helios-social/app
+EnvironmentFile=/opt/helios-social/worker.env
+ExecStart=/usr/bin/npm run reel-ai-drama:worker
+Restart=always
+RestartSec=15
+KillSignal=SIGTERM
+# A job in flight is failed on restart (Worker restarted…) and can be retried from the lab; give it time to wind down.
+TimeoutStopSec=120
+# PROVISIONAL: copied from helios-explainers, not measured for AI Drama renders (HeyGen, ffmpeg, rembg, the
+# HyperFrames/Chrome kit). Replace after the first measured run on the chosen host.
+MemoryHigh=2000M
+MemoryMax=2500M
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

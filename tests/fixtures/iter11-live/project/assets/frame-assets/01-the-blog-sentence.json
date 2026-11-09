@@ -1,0 +1,242 @@
+{
+ "assets": [
+  {
+   "id": "V1",
+   "kind": "logo",
+   "file": "assets/media/V1.png",
+   "url": null,
+   "source_page": "https://commons.wikimedia.org/wiki/File%3AMicrosoft_logo_(2012).svg",
+   "credit": "Logo: Microsoft (public domain) · Wikimedia Commons",
+   "license": null,
+   "shows": "The Microsoft logo (wordmark, on a light plate).",
+   "people": [],
+   "qids": [
+    "Q2283"
+   ],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 960,
+   "height": 205,
+   "phash": "81958f6bee661199",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "logo_bank",
+    "logo",
+    "source:logo",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:microsoft",
+    "boxes:media/V1.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5191,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 1200,
+    "chroma": 0.4516,
+    "phash": "81958f6bee661199",
+    "expression": null,
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V43",
+   "kind": "logo",
+   "file": "assets/media/V43.png",
+   "url": "https://m.media-amazon.com/images/I/51P1F0kyBPL.jpg",
+   "source_page": "https://www.amazon.com/American-Vinyl-Immigration-Homeland-Security/dp/B07F96HLND",
+   "credit": "Amazon.com (www.amazon.com)",
+   "license": null,
+   "shows": "The U.S. Department of Homeland Security seal above the letters ICE on a white sticker-style graphic.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 500,
+   "height": 375,
+   "phash": "e1a6998e9a398e99",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:company:ice",
+    "boxes:media/V43.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "chip": true,
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.8846,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 625,
+    "chroma": 0.0592,
+    "phash": "e1a6098e9e39ce99",
+    "expression": "null",
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V47",
+   "kind": "logo",
+   "file": "assets/media/V47.keyed.png",
+   "url": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Microsoft_Azure.svg/1280px-Microsoft_Azure.svg.png?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=thumbnail",
+   "source_page": "https://en.wikipedia.org/wiki/Microsoft_Azure",
+   "credit": "Wikipedia (en.wikipedia.org)",
+   "license": null,
+   "shows": "Azure logo: a blue stylized A on a black background.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": null,
+   "date_confidence": "unknown",
+   "width": 1280,
+   "height": 1280,
+   "phash": "935a69a466b16e33",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "from_search",
+    "logo",
+    "source:serper",
+    "date_basis:unknown",
+    "recency:0.4",
+    "want:product-logo:azure",
+    "want:product:azure",
+    "logo_keyed",
+    "boxes:media/V47.keyed.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "visible": {
+     "x": 0.041,
+     "y": 0.0664,
+     "w": 0.918,
+     "h": 0.8672
+    },
+    "brightness": 0.4464,
+    "open_edges": {
+     "left": false,
+     "right": false,
+     "top": false,
+     "bottom": false
+    },
+    "sharp_width_px": 1600,
+    "chroma": 0.6597,
+    "phash": "bef1c426c30ed30e",
+    "expression": "null",
+    "faces": [],
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  },
+  {
+   "id": "V70",
+   "kind": "event_photo",
+   "file": "assets/media/V70.jpg",
+   "url": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Central_Processing_Center_at_McAllen_Border_Patrol_facilities_%2842831734412%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+   "source_page": "https://commons.wikimedia.org/wiki/File%3ACentral_Processing_Center_at_McAllen_Border_Patrol_facilities_(42831734412).jpg",
+   "credit": "CBP Photography, Public domain · Wikimedia Commons",
+   "license": "Public domain",
+   "shows": "Many people waiting in rows inside a large facility with caged holding pens along the walls.",
+   "people": [],
+   "qids": [],
+   "place": null,
+   "date_taken": "2018",
+   "date_confidence": "approximate",
+   "width": 2160,
+   "height": 1215,
+   "phash": "aaa6de2e15db8912",
+   "character_image": false,
+   "made": false,
+   "upscaled": false,
+   "flags": [
+    "faces:0",
+    "source:commons",
+    "date_basis:commons",
+    "recency:1",
+    "want:wish:W2:3",
+    "wish:W2",
+    "resized:0.864",
+    "boxes:media/V70.boxes.json"
+   ],
+   "anchor_for": null,
+   "face": null,
+   "made_kind": null,
+   "regions": {
+    "faces": [],
+    "visible": {
+     "x": 0,
+     "y": 0,
+     "w": 1,
+     "h": 1
+    },
+    "brightness": 0.5021,
+    "open_edges": {
+     "left": true,
+     "right": true,
+     "top": true,
+     "bottom": true
+    },
+    "sharp_width_px": 2700,
+    "focus": null,
+    "phash": "aaa6de2e15db8912",
+    "expression": null,
+    "dup_of": null,
+    "words": [],
+    "photos": [],
+    "lift": null,
+    "lift_from": null
+   }
+  }
+ ]
+}

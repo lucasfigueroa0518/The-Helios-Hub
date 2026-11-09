@@ -17,7 +17,7 @@ import type { Vertical } from '@/lib/social-hub/types';
  */
 
 /** Each type's default when its posts_per_day row is missing (lib/reels/config.ts, lib/social/overnight/config.ts, lib/explainers/publish/config.ts). */
-export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2, last_few_days: 1, ai_events: 2, field_notes: 1, lfdDays: [] };
+export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2, last_few_days: 1, ai_events: 2, field_notes: 1, reel_ai_drama: 1, lfdDays: [] };
 
 type AdjustmentRow = {
   id: string; vertical: IdeaAdjustment['vertical']; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string;
@@ -93,6 +93,12 @@ const perDay = (rows: Array<{ value: unknown }>, fallback: number, min = 0) => {
   return rows.length && Number.isInteger(n) && n >= min ? n : fallback;
 };
 
+/** AI Drama's legacy quota: posts_per_day (at least 1, else the default) while `auto` is stored true, else 0. */
+function dramaQuota(rows: Array<{ key?: string; value: unknown }>): number {
+  if (rows.find((r) => r.key === 'auto')?.value !== true) return 0;
+  return perDay(rows.filter((r) => r.key === 'posts_per_day'), DEFAULT_DAY_QUOTAS.reel_ai_drama!, 1);
+}
+
 /**
  * With the calendar (template mode) each type's quota is today's slot count
  * under its daily limit (what the night makes), and `slots` carries
@@ -106,11 +112,11 @@ export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>,
     const slots: SlotsByDate = Object.fromEntries(plan.byDate);
     const caps = await readCaps(q);
     const count = (v: Vertical) => slotsWithinCap(plan, v, today, caps[v]).made.length;
-    return { reels: count('reels'), carousels: count('carousels'), explainers: count('explainers'), last_few_days: count('last_few_days'), ai_events: count('ai_events'), field_notes: count('field_notes'), lfdDays: [], slots };
+    return { reels: count('reels'), carousels: count('carousels'), explainers: count('explainers'), last_few_days: count('last_few_days'), ai_events: count('ai_events'), field_notes: count('field_notes'), reel_ai_drama: count('reel_ai_drama'), lfdDays: [], slots };
   }
   const sql = (schema: string) => `SELECT value FROM ${schema}.settings WHERE key = 'posts_per_day'`;
   const safe = (p: Promise<{ rows: Array<{ value: unknown }> }>) => p.catch(() => ({ rows: [] as Array<{ value: unknown }> }));
-  const [reels, carousels, explainers, lfd, aiEvents, fieldNotes] = await Promise.all([
+  const [reels, carousels, explainers, lfd, aiEvents, fieldNotes, drama] = await Promise.all([
     safe(q<{ value: unknown }>(sql('reels'))),
     safe(q<{ value: unknown }>(sql('social'))),
     safe(explainersQ.then((eq) => eq<{ value: unknown }>(sql('explainers')))),
@@ -120,6 +126,9 @@ export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>,
     readAiEventsSettings(q).catch(() => null),
     // And Field Notes (field_notes.settings).
     readFieldNotesSettings(q).catch(() => null),
+    // AI Drama Reels (opt-in) on the explainers handle: `auto` and `posts_per_day`. Unreadable (schema not applied) reads as off.
+    // A plain settings read (reel_ai_drama.settings), kept here so the hub's read code never imports drama's write modules.
+    safe(explainersQ.then((eq) => eq<{ value: unknown }>(`SELECT key, value FROM reel_ai_drama.settings WHERE key IN ('auto', 'posts_per_day')`))),
   ]);
   // Last Few Days asks for its post (and Carousels give up its days, LFD-02) only while its auto_run is on.
   const lfdOn = lfd?.autoRun === true;
@@ -132,6 +141,8 @@ export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>,
     ai_events: aiEvents?.autoRun === true ? DEFAULT_DAY_QUOTAS.ai_events : 0,
     // Field Notes asks for its post only while its auto_run is on (it ships off).
     field_notes: fieldNotes?.autoRun === true ? DEFAULT_DAY_QUOTAS.field_notes : 0,
+    // Like Last Few Days and AI Events: AI Drama asks for its posts only while its nightly `auto` is on.
+    reel_ai_drama: dramaQuota(drama.rows as Array<{ key?: string; value: unknown }>),
     lfdDays: lfdOn ? lfd!.days : [],
   };
 }

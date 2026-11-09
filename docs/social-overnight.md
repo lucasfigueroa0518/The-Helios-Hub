@@ -14,6 +14,7 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 |---|---|---|---|---|---|---|
 | Trial Reels | `reels` | `helios-reels` | 12:30 song ingest, 1:00 night run | 8:45–10:00 AM, 11:15 AM–12:30 PM, 6:00–9:00 PM | 5:00 | live |
 | Explainer Reels | `explainers` | `helios-explainers` | 2:00 idea cycle (only with `auto_render` on; `posts_per_day` less what people placed, up to `daily_render_cap` = 2 renders; see Daily fill) | 1:00–2:30 PM and 3:30–5:00 PM (`posts_per_day` = 2), approved reels only | 5:15 | built; renders need `HEYGEN_API_KEY` on the VM |
+| AI Drama Reels | `reel_ai_drama` (on the explainers database handle) | `helios-reel-ai-drama` (social VM; enable with `systemctl enable --now`) | 12:00 AM night fill (only with `auto` on; `posts_per_day` = 1 less what people placed, under the daily spend cap); develop/calibrate requests a person queues on `/reel-ai-drama` | 8:00–8:45 PM, every day; approved reels only while `require_approval` is on | 5:30 | built; posts itself while `publisher_mode` is off or shadow, through the shared publisher when live |
 | Carousels | `social` | `helios-social` | 3:00 daily run (only with `auto_run` on; not on Last Few Days days while its `auto_run` is on, LFD-02; see the template-mode paragraph below); the run's top `posts_per_day` = 2 posts, less what people placed for the day, are scheduled (see Daily fill) | 9:00–10:00 AM and 2:30–3:30 PM (none on Last Few Days days while its `auto_run` is on) | 5:30 | built |
 | Last Few Days | `lfd` | `helios-social` (the same process as Carousels; no unit of its own) | 3:00 on its days (`lfd.settings.days`, Tue/Fri), only with `lfd.settings.auto_run` on, in the carousel run's place; a manual run from the hub's "Make Last Few Days now" on any day | 9:00–10:00 AM on its days | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
 | AI Events This Week | `ai_events` | `helios-social` (the same process; no unit of its own) | 12:00 PM on its days (`ai_events.settings.days`, Sunday), only with `ai_events.settings.auto_run` on: ranks the coming week's events (Jev `event-pick@1`, capped at `run_cap_usd`) and renders a ranked carousel each for Miami and Boston; a manual run from the hub's Generate or Rebuild post on any day | Sunday: Miami 6:00–7:00 PM, Boston 7:00–8:00 PM | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
@@ -197,6 +198,12 @@ other type (D33/D40: quota yes, feed spacing no). `social_hub.settings`
 | `off` (default) | idle | release, post and read insights, as before |
 | `shadow` | logs `shadow_plan`: what it would release, cancel and post | still post |
 | `live` | releases, posts, reads insights; writes `publisher_heartbeat` listing the types it drives | stand down from those steps while the heartbeat (< 5 min old) lists their type; they still schedule, and resume on their own if the publisher goes quiet |
+
+AI Drama Reels behave like the other types: while `publisher_mode` is off or shadow, the drama worker
+(`helios-reel-ai-drama`) releases its due slots, posts one attempt at a time and reads insights itself; with `live`,
+the shared publisher drives them (`lib/publishing/drivers/reel-ai-drama.ts`, added when `EXPLAINERS_DB=supabase`,
+there is no `EXPLAINERS_DATABASE_URL`, and the `reel_ai_drama` schema is applied; otherwise it logs
+`reel_ai_drama_not_driven`) and the drama worker stands down.
 
 Going live: enable the unit (`sudo systemctl enable --now helios-publisher`),
 set `shadow` for a day and compare its `shadow_plan` lines with the type

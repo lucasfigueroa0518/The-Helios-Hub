@@ -17,12 +17,38 @@ export type ExplainersSettings = {
   daily_spend_cap_usd: number;
   pool_size: number;
   ideas_per_day: number;
+  /** Duplicate history for the dedupe (ideas coverage, 2026-11-03: 120 days). */
   dedupe_lookback_days: number;
+  /** How far back the generator's prompt lists the picked buckets' renders (ideas coverage: 90 days, for token cost). */
+  prompt_history_days: number;
   voice_name: string;
   voice_id: string | null;
+  /** Session B's orchestrator: dispatch, assembly, picture-check fixes (Explainers 4.2). */
   orchestrator_model: string;
+  /**
+   * Who runs the build (Steps 3.1–6): 'code' (cost fix 1, 2026-10-28: lib/explainers/render/build.ts runs
+   * the same commands, dispatches and checks with no orchestrator model) or 'agent' (the Sonnet
+   * orchestrator session on orchestrator_model, as before).
+   */
+  build_runner: 'code' | 'agent';
+  /** Explainers 4.2: the director, Session A (both passes) and its one fix session. */
+  director_model: string;
+  /**
+   * The `look: world` and `look: blend` frame builders (`frame-worker-scene`), the mechanism builders'
+   * fallback when tech_frame_worker_model is unset, and the legacy `frame-worker` Real Case uses.
+   */
   frame_worker_model: string;
+  /** Explainers 4.1: the scene builder (world.js, identity.js, the set). */
+  scene_builder_model: string;
+  /** Explainers 4.3: the `look: mechanism` frame builders (frame-worker-tech); world and blend stay on frame_worker_model. */
+  tech_frame_worker_model: string;
+  /** Explainers 4.1: the required picture check, with vision over the shot sequences. */
+  picture_check_model: string;
+  /** Explainers 4.2: the understanding test's two readers and its diagnosis call. */
+  reader_model: string;
   idea_model: string;
+  /** The analogy writer's model (EX3-123): Opus, separate from the idea model. */
+  analogy_model: string;
   music_enabled: boolean;
   sfx_enabled: boolean;
   theme_brief_version: string;
@@ -40,16 +66,28 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   daily_spend_cap_usd: 10,
   pool_size: 25,
   ideas_per_day: 3,
-  dedupe_lookback_days: 45,
+  // Ideas coverage (Lucas, 2026-11-03): dedupe against 120 days; the prompt carries 90.
+  dedupe_lookback_days: 120,
+  prompt_history_days: 90,
   voice_name: 'Lucas Figueroa',
   voice_id: null,
   orchestrator_model: 'claude-sonnet-5-5',
+  build_runner: 'code',
+  // Explainers 4.2 (Lucas, turn 16, option 2): Opus for the director (both passes and the fix) and the
+  // scene builder; Sonnet for every frame builder, the picture check and the readers.
+  director_model: 'claude-opus-5-5',
   frame_worker_model: 'claude-sonnet-5-5',
+  scene_builder_model: 'claude-opus-5-5',
+  tech_frame_worker_model: 'claude-opus-5-5', // mechanism frames on Opus (2026-10-28)
+  picture_check_model: 'claude-haiku-5-5', // one vision call over contact grids (cost fix 2026-10-28)
+  reader_model: 'claude-sonnet-5-5',
   idea_model: 'claude-sonnet-5-5',
+  // Explainers 3.9 (EX3-123; Lucas, 2026-10-25: "Opus").
+  analogy_model: 'claude-opus-5-5',
   music_enabled: true,
   sfx_enabled: true,
-  // Explainers 3.1 (EX3-34). An existing database keeps its stored version until Lucas flips it.
-  theme_brief_version: 'v3',
+  // Explainers 3.9 (EX3-123). An existing database keeps its stored version until Lucas flips it.
+  theme_brief_version: 'v4',
 };
 
 type Parser<K extends SettingKey> = (value: unknown) => ExplainersSettings[K];
@@ -94,11 +132,19 @@ const PARSERS: { [K in SettingKey]: Parser<K> } = {
   pool_size: integer('pool_size', 1),
   ideas_per_day: integer('ideas_per_day', 1),
   dedupe_lookback_days: integer('dedupe_lookback_days', 0),
+  prompt_history_days: integer('prompt_history_days', 0),
   voice_name: text('voice_name'),
   voice_id: (value) => (value === null ? null : text('voice_id')(value)),
   orchestrator_model: text('orchestrator_model'),
+  director_model: text('director_model'),
   frame_worker_model: text('frame_worker_model'),
+  scene_builder_model: text('scene_builder_model'),
+  tech_frame_worker_model: text('tech_frame_worker_model'),
+  build_runner: (value) => (value === 'code' || value === 'agent' ? value : fail('build_runner', 'code or agent', value)),
+  picture_check_model: text('picture_check_model'),
+  reader_model: text('reader_model'),
   idea_model: text('idea_model'),
+  analogy_model: text('analogy_model'),
   music_enabled: bool('music_enabled'),
   sfx_enabled: bool('sfx_enabled'),
   theme_brief_version: text('theme_brief_version'),
@@ -113,8 +159,9 @@ export function parseSetting<K extends SettingKey>(key: K, value: unknown): Expl
 }
 
 /**
- * Stored rows over defaults. Unknown keys are ignored; a stored value that
- * fails validation throws, because these values gate spend.
+ * Stored rows over defaults. Unknown keys are ignored (Explainers 4.2 removed `scene_frame_model` and
+ * `tech_frame_model`: a database that still has them keeps the rows, and nothing reads them); a
+ * stored value that fails validation throws, because these values gate spend.
  */
 export async function loadSettings(db: Queryable): Promise<ExplainersSettings> {
   const { rows } = await db.query<{ key: string; value: unknown }>(
