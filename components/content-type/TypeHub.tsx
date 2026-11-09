@@ -17,6 +17,7 @@ import { MADE_LABEL, type MadeKind, type TypeBenchItem, type TypeCard, type Type
 import type { ProgressItem } from '@/lib/content-type/progress';
 import type { GenerateIdea } from '@/lib/content-type/queue-client';
 import { runStatusText, type RunSnapshot } from '@/lib/content-type/run-status';
+import { TYPE_CONFIG } from '@/lib/content-type/config';
 import { ARCHIVE_ONLY, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import { metricValue } from '@/lib/social-hub/metrics';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
@@ -80,7 +81,9 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
   const [series, setSeries] = useState<string | null>(null);
   const seriesTabs = model.groups.map((name) => ({ name, n: bench.filter((b) => b.idea.group === name).length }));
   const shown = series ? bench.filter((b) => b.idea.group === series) : bench;
-  const events = model.vertical === 'ai_events';
+  const typeConfig = TYPE_CONFIG[model.vertical];
+  // The pool is one week's ranked list (pin or exclude, then rebuild), not a rolling list of ideas.
+  const events = typeConfig.weekPool;
   // The list as the person sees it while a drop is on its way to the server; a fresh read starts from the server's order.
   const [seen, setSeen] = useState<string[] | null>(null);
   const onOrder = useCallback((ids: string[]) => setSeen((prev) => (prev && prev.join() === ids.join() ? prev : ids)), []);
@@ -103,7 +106,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
     return [...held, ...filled].map((sl, i) => ({ ...sl, rank: i + 1 }));
   }, [queueLive, model.slots, model.content, bench, seen]);
   const todayRank = new Map(liveSlots.flatMap((sl) => (sl.idea ? [[sl.idea.id, sl.rank ?? 0] as const] : [])));
-  const groupNoun = events ? 'cities' : 'series';
+  const groupNoun = typeConfig.groupNoun;
   const list = useRef<HTMLDivElement>(null);
   const day = days.find((d) => d.date === dayId) ?? days.find((d) => d.date === today) ?? days.at(-1)!;
   const index = days.indexOf(day);
@@ -271,7 +274,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             </p>
           ) : null}
           {seriesTabs.length ? (
-            <div className="segmented rh-bench-filter" role="group" aria-label={events ? 'Cities' : 'Series'}>
+            <div className="segmented rh-bench-filter" role="group" aria-label={groupNoun === 'cities' ? 'Cities' : 'Series'}>
               <button type="button" className={`segmented__item${series == null ? ' segmented__item--active' : ''}`} aria-pressed={series == null} onClick={() => setSeries(null)}>All {groupNoun} <span className="rh-bench-filter__n">{bench.length}</span></button>
               {seriesTabs.map((t) => (
                 <button key={t.name} type="button" className={`segmented__item${series === t.name ? ' segmented__item--active' : ''}`} aria-pressed={series === t.name} onClick={() => setSeries(t.name)}>
@@ -290,7 +293,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
                 onOrder={onOrder}
                 topN={model.slots.length}
                 generate={generate}
-                enabled={model.vertical !== 'stories' || series != null}
+                enabled={!typeConfig.dragNeedsGroup || series != null}
                 renderRow={(id, handle) => benchRow(shown.find((b) => b.idea.id === id)!, handle)}
               />
             ) : (

@@ -80,6 +80,8 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/stories/')
     || pathname === '/carousels'
     || pathname.startsWith('/carousels/')
+    || pathname === '/field-notes'
+    || pathname.startsWith('/field-notes/')
     || pathname === '/last-few-days'
     || pathname.startsWith('/last-few-days/')
     || pathname === '/ai-events'

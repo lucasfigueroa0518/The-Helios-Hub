@@ -82,6 +82,7 @@ export function offerer(dataset: HubDataset, now: Date, flags: HubFlags = SOCIAL
         typicalCostLabel: label(post.vertical),
         lfdPublishingLive: dataset.lfdPublishingLive === true,
         aiEventsPublishingLive: dataset.aiEventsPublishingLive === true,
+        fieldNotesPublishingLive: dataset.fieldNotesPublishingLive === true,
         ...(QUEUE_LIVE.has(post.vertical) ? { archive: { ideaId: dataset.ideas.find((i) => i.vertical === post.vertical && ideaOwns(i, post))?.id ?? null } } : {}),
       });
       const slots = plans.some((p) => p.kind === 'post' && p.pick === 'slot') ? slotChoices(dataset, post, now) : undefined;

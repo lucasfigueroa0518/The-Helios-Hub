@@ -36,6 +36,16 @@
  * Few Days', under the same 30-minute timeout. Its posts publish and their
  * insights are read here until the single publisher drives the type.
  *
+ * Field Notes (planning/Field Notes/CONTRACT.md) shares this process the same way: at 12:00 PM on its
+ * days (Tuesday and Friday) with its auto_run on (it ships off), a run is queued that picks one tip,
+ * writes the slides (live Claude and Jev, capped at run_cap_usd) and renders the carousel on the photo
+ * pool; while field_notes publishing_live is on, an approved post books the afternoon 2:30–3:30 PM
+ * window. Its runs (the clock, the hub's Generate or Rebuild post) are claimed after AI Events', under
+ * the same 30-minute timeout. Its posts publish and their insights are read here until the single
+ * publisher drives the type. Each poll also runs Field Notes' face check on new uploads (Vercel has no
+ * Chromium): up to 10 photos queued 'pending' at upload, one shared headless browser per batch, no model
+ * call (lib/field-notes/photos/faces-worker.ts).
+ *
  * Nothing is scheduled or published unless social.settings.publishing_live is
  * on. Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
  * Once social_hub.settings publisher_mode is 'live', releasing, posting and
@@ -120,6 +130,16 @@ async function main(): Promise<void> {
   const { liveAiEventsDeps, liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { claimAndPublishAiEvents } = await import('@/lib/ai-events/publish');
   const { releaseDueAiEvents } = await import('@/lib/ai-events/schedule');
+  const fieldNotesSettings = await import('@/lib/field-notes/settings');
+  const fieldNotesStore = await import('@/lib/field-notes/store');
+  const { carryOutFieldNotesRun, withFieldNotesTimeout } = await import('@/lib/field-notes/worker');
+  const { FIELD_NOTES_RUN_TIMEOUT_MS, FIELD_NOTES_SPINE_VERTICAL } = await import('@/lib/field-notes/config');
+  const { firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue: fieldNotesNoonQueue } = await import('@/lib/field-notes/clock');
+  const { liveFieldNotesDeps } = await import('@/lib/field-notes/live');
+  const { claimAndPublishFieldNotes } = await import('@/lib/field-notes/publish');
+  const { releaseDueFieldNotes } = await import('@/lib/field-notes/schedule');
+  const { openLiveFaceDetector, runFacesStep } = await import('@/lib/field-notes/photos/faces-worker');
+  const { PHOTO_BANK_BUCKET } = await import('@/lib/media-library/types');
   const { claimAndRunRevisions, startUpRevisions } = await import('@/lib/revisions/worker');
   const { newAnthropic } = await import('@/lib/anthropic-client');
   const query = await socialQuery();
@@ -292,6 +312,8 @@ async function main(): Promise<void> {
     if (force || lfd.considered > 0) log('lfd_insights_complete', { ...lfd });
     const aiEvents = await pollCarouselInsights(query, client, new Date(), 200, 'ai_events');
     if (force || aiEvents.considered > 0) log('ai_events_insights_complete', { ...aiEvents });
+    const fieldNotes = await pollCarouselInsights(query, client, new Date(), 200, 'field_notes');
+    if (force || fieldNotes.considered > 0) log('field_notes_insights_complete', { ...fieldNotes });
   }
 
   // Targeted Revisions left `running` by the previous process (deploy, OOM, systemd restart) end
@@ -310,7 +332,12 @@ async function main(): Promise<void> {
     // Started after today's noon: check once now, so a Sunday-afternoon restart still runs the week.
     let aiEventsAt = firstAiEventsCheckAt(new Date());
     let lastAiEventsError: string | null = null;
-    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
+    // The same for Field Notes' noon check (auto_run ships off, so it queues nothing until a person turns it on).
+    let fieldNotesAt = firstFieldNotesCheckAt(new Date());
+    let lastFieldNotesError: string | null = null;
+    let lastFieldNotesFacesError: string | null = null;
+    const photoBank = mediaBucket(PHOTO_BANK_BUCKET);
+    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
       if (Date.now() >= runAt.getTime()) {
@@ -363,6 +390,26 @@ async function main(): Promise<void> {
           log('ai_events_run_skipped', { reason: noon.reason });
         }
         aiEventsAt = nextAiEventsRunAt(new Date());
+        continue;
+      }
+
+      if (Date.now() >= fieldNotesAt.getTime()) {
+        // 12:00 PM: on a Field Notes day with its auto_run on, a run is queued. Auto_run ships off.
+        const fn = await fieldNotesSettings.readFieldNotesSettings(lfdQuery).catch((error) => {
+          log('field_notes_settings_failed', { error: errorText(error) });
+          return null;
+        });
+        const fnNoon = fieldNotesNoonQueue(new Date(), fn);
+        if (fnNoon.queue && fn?.runCapUsd != null) {
+          const id = await fieldNotesStore.requestRun(lfdQuery, 'scheduled', fn.runCapUsd).catch((error) => {
+            log('field_notes_request_failed', { error: errorText(error) });
+            return null;
+          });
+          log('field_notes_run_requested', { runId: id, trigger: 'scheduled' });
+        } else {
+          log('field_notes_run_skipped', { reason: fnNoon.reason });
+        }
+        fieldNotesAt = nextFieldNotesRunAt(new Date());
         continue;
       }
 
@@ -484,6 +531,37 @@ async function main(): Promise<void> {
         continue;
       }
 
+      // Field Notes runs (the noon clock, or the hub's Generate and Rebuild post), after AI Events' and in this same process.
+      const fnClaimed = await fieldNotesStore.claimRun(lfdQuery).catch((error) => {
+        // Logged once per distinct error (e.g. before the field_notes schema is applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastFieldNotesError) log('field_notes_claim_failed', { error: text });
+        lastFieldNotesError = text;
+        return null;
+      });
+      if (fnClaimed) {
+        // Past FIELD_NOTES_RUN_TIMEOUT_MS the run is failed and the loop goes on (the cut-off promise is not cancelled).
+        const out = await withFieldNotesTimeout(
+          carryOutFieldNotesRun(
+            {
+              query: lfdQuery,
+              now: () => new Date(),
+              log,
+              engine: (_run, capUsd) => liveFieldNotesDeps(lfdQuery, { capUsd }),
+            },
+            fnClaimed,
+          ).catch((error) => ({ runId: fnClaimed.id, status: 'failed' as const, note: errorText(error) })),
+          FIELD_NOTES_RUN_TIMEOUT_MS,
+          async () => {
+            log('field_notes_run_timeout', { runId: fnClaimed.id });
+            await fieldNotesStore.failRun(lfdQuery, fnClaimed.id, 'timed out after 30 minutes').catch((error) => log('field_notes_fail_failed', { runId: fnClaimed.id, error: errorText(error) }));
+            return { runId: fnClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          },
+        );
+        log('field_notes_run_result', { ...out });
+        continue;
+      }
+
       // Targeted Revisions a person queued from the hub (only those rows; never a sweep): interpret, then ask back or run.
       // Explainer revisions are helios-explainers' (they run a render session in its job folders and memory budget).
       const revised = await claimAndRunRevisions({ q: query, complete: reviseComplete, notify: async (m) => log('revision_notice', { message: m }), now: () => new Date(), log, filter: { exclude: 'explainers' } }).catch((error) => {
@@ -572,6 +650,40 @@ async function main(): Promise<void> {
             continue;
           }
         }
+      }
+
+      // Field Notes posts the same way while the single publisher doesn't drive it.
+      const fnNow = await fieldNotesSettings.readFieldNotesSettings(lfdQuery).catch(() => null);
+      if (fnNow?.publishingLive && !(await publisherOwnsPublishing(query, FIELD_NOTES_SPINE_VERTICAL))) {
+        const due = await releaseDueFieldNotes(query, { requireApproval: fnNow.requireApproval }).catch((error) => {
+          log('field_notes_schedule_release_failed', { error: errorText(error) });
+          return 0;
+        });
+        if (due > 0) log('field_notes_schedule_due', { released: due });
+        if (metaConfigured()) {
+          const published = await claimAndPublishFieldNotes({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+            log('field_notes_publish_failed', { error: errorText(error) });
+            return null;
+          });
+          if (published) {
+            log('field_notes_publish_complete', { ...published });
+            continue;
+          }
+        }
+      }
+
+      // Field Notes face check: new uploads only (finalize queues them 'pending'; Vercel has no Chromium). Up to one
+      // batch per poll, one shared browser opened only when a photo was claimed; never a sweep of older pool rows.
+      const fnFaces = await runFacesStep({ db: query as never, download: (p: string) => photoBank.download(p), openDetector: openLiveFaceDetector }).catch((error) => {
+        // Logged once per distinct error (e.g. before the faces columns are applied), not every poll.
+        const text = errorText(error);
+        if (text !== lastFieldNotesFacesError) log('field_notes_faces_failed', { error: text });
+        lastFieldNotesFacesError = text;
+        return null;
+      });
+      if (fnFaces && fnFaces.claimed > 0) {
+        lastFieldNotesFacesError = null;
+        log('field_notes_faces_batch', { ...fnFaces });
       }
 
       if (Date.now() - lastInsights >= INSIGHTS_EVERY_MS && !(await standDown())) {

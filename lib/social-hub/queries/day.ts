@@ -3,6 +3,7 @@ import type { HubPost } from '@/lib/social-hub/types';
 import { madeMoveIds, type DayQuotas, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { readLfdSettings } from '@/lib/lfd/settings';
 import { readAiEventsSettings } from '@/lib/ai-events/settings';
+import { readFieldNotesSettings } from '@/lib/field-notes/settings';
 import { slotPlan, slotsWithinCap } from '@/lib/social-hub/slots';
 import { readCaps } from '@/lib/social-hub/slots/load';
 import type { SlotsByDate } from '@/lib/social-hub/slots/types';
@@ -16,7 +17,7 @@ import type { Vertical } from '@/lib/social-hub/types';
  */
 
 /** Each type's default when its posts_per_day row is missing (lib/reels/config.ts, lib/social/overnight/config.ts, lib/explainers/publish/config.ts). */
-export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2, last_few_days: 1, ai_events: 2, reel_ai_drama: 1, lfdDays: [] };
+export const DEFAULT_DAY_QUOTAS: DayQuotas = { reels: 3, carousels: 2, explainers: 2, last_few_days: 1, ai_events: 2, field_notes: 1, reel_ai_drama: 1, lfdDays: [] };
 
 type AdjustmentRow = {
   id: string; vertical: IdeaAdjustment['vertical']; idea_id: string; ny_date: string; kind: IdeaAdjustment['kind']; created_at: string;
@@ -111,11 +112,11 @@ export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>,
     const slots: SlotsByDate = Object.fromEntries(plan.byDate);
     const caps = await readCaps(q);
     const count = (v: Vertical) => slotsWithinCap(plan, v, today, caps[v]).made.length;
-    return { reels: count('reels'), carousels: count('carousels'), explainers: count('explainers'), last_few_days: count('last_few_days'), ai_events: count('ai_events'), reel_ai_drama: count('reel_ai_drama'), lfdDays: [], slots };
+    return { reels: count('reels'), carousels: count('carousels'), explainers: count('explainers'), last_few_days: count('last_few_days'), ai_events: count('ai_events'), field_notes: count('field_notes'), reel_ai_drama: count('reel_ai_drama'), lfdDays: [], slots };
   }
   const sql = (schema: string) => `SELECT value FROM ${schema}.settings WHERE key = 'posts_per_day'`;
   const safe = (p: Promise<{ rows: Array<{ value: unknown }> }>) => p.catch(() => ({ rows: [] as Array<{ value: unknown }> }));
-  const [reels, carousels, explainers, lfd, aiEvents, drama] = await Promise.all([
+  const [reels, carousels, explainers, lfd, aiEvents, fieldNotes, drama] = await Promise.all([
     safe(q<{ value: unknown }>(sql('reels'))),
     safe(q<{ value: unknown }>(sql('social'))),
     safe(explainersQ.then((eq) => eq<{ value: unknown }>(sql('explainers')))),
@@ -123,6 +124,8 @@ export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>,
     readLfdSettings(q).catch(() => null),
     // The same for AI Events: unreadable reads as off.
     readAiEventsSettings(q).catch(() => null),
+    // And Field Notes (field_notes.settings).
+    readFieldNotesSettings(q).catch(() => null),
     // AI Drama Reels (opt-in) on the explainers handle: `auto` and `posts_per_day`. Unreadable (schema not applied) reads as off.
     // A plain settings read (reel_ai_drama.settings), kept here so the hub's read code never imports drama's write modules.
     safe(explainersQ.then((eq) => eq<{ value: unknown }>(`SELECT key, value FROM reel_ai_drama.settings WHERE key IN ('auto', 'posts_per_day')`))),
@@ -136,6 +139,8 @@ export async function readDayQuotas(q: HubQuery, explainersQ: Promise<HubQuery>,
     last_few_days: lfdOn ? DEFAULT_DAY_QUOTAS.last_few_days : 0,
     // AI Events asks for its Sunday post only while its auto_run is on (its windows already sit on its days only).
     ai_events: aiEvents?.autoRun === true ? DEFAULT_DAY_QUOTAS.ai_events : 0,
+    // Field Notes asks for its post only while its auto_run is on (it ships off).
+    field_notes: fieldNotes?.autoRun === true ? DEFAULT_DAY_QUOTAS.field_notes : 0,
     // Like Last Few Days and AI Events: AI Drama asks for its posts only while its nightly `auto` is on.
     reel_ai_drama: dramaQuota(drama.rows as Array<{ key?: string; value: unknown }>),
     lfdDays: lfdOn ? lfd!.days : [],

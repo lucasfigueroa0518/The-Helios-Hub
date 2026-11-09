@@ -56,6 +56,7 @@ export const REASON_LABEL: Record<string, string> = {
   reporter_error: "couldn't read this type's data",
   did_not_run: "didn't run",
   no_picks: 'no event cleared the bar, so there was no post',
+  no_tip: 'no tip or photo was ready, so there was no post',
   snapshot_stale: 'the public events calendar has not been republished in over 8 days',
   other: 'unrecognized error',
 };

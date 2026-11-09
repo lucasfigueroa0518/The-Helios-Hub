@@ -15,11 +15,11 @@ export const POOL_STALE_MS = 3 * 86_400_000;
 /** Last Few Days refills twice a week (Friday to Tuesday is four days), so its pool is stale only after five. */
 const LFD_STALE_MS = 5 * 86_400_000;
 
-/** AI Events ranks its pool once a week (Sunday noon), so it is stale only after eight days. */
+/** AI Events ranks its pool once a week (Sunday noon), and Field Notes runs one or two a week, so each is stale only after eight days. */
 export const AI_EVENTS_STALE_MS = 8 * 86_400_000;
 
 export function poolStale(lastRefill: string | null | undefined, now: Date, vertical?: Vertical): boolean {
-  const limit = vertical === 'last_few_days' ? LFD_STALE_MS : vertical === 'ai_events' ? AI_EVENTS_STALE_MS : POOL_STALE_MS;
+  const limit = vertical === 'last_few_days' ? LFD_STALE_MS : (vertical === 'ai_events' || vertical === 'field_notes') ? AI_EVENTS_STALE_MS : POOL_STALE_MS;
   return Boolean(lastRefill) && now.getTime() - Date.parse(lastRefill!) > limit;
 }
 
@@ -73,6 +73,7 @@ export const REFILL_CADENCE: Record<Vertical, string> = {
   stories: 'every night',
   last_few_days: 'twice a week',
   ai_events: 'every Sunday at noon',
+  field_notes: 'on each run (one or two a week)',
   reel_ai_drama: 'Weekly development session (Mondays) while Generate is on; the pool is re-ranked daily.',
 };
 

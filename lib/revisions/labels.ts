@@ -12,5 +12,6 @@ export const VERTICAL_LABELS: Record<Vertical, string> = {
   stories: 'stories',
   last_few_days: 'last few days',
   ai_events: 'AI events',
+  field_notes: 'Field Notes',
   reel_ai_drama: 'AI Drama Reels',
 };

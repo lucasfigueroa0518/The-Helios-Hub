@@ -68,6 +68,7 @@ export const REVISION_REF_KEY: Record<Vertical, string> = {
   stories: 'setId',
   last_few_days: 'lfdPostId',
   ai_events: 'aiEventsPostId',
+  field_notes: 'fieldNotesPostId',
   reel_ai_drama: 'jobId',
 };
 

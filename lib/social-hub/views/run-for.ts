@@ -1,9 +1,9 @@
 import type { AllProgress, ProgressItem } from '@/lib/content-type/progress';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
 
-const TYPES = ['carousels', 'stories', 'explainers', 'last_few_days', 'ai_events', 'reel_ai_drama'] as const;
+const TYPES = ['carousels', 'stories', 'explainers', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'] as const;
 
-const TYPE_LABEL = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days', ai_events: 'AI Events', reel_ai_drama: 'AI Drama Reels' } as const;
+const TYPE_LABEL = { carousels: 'Carousels', stories: 'Stories', explainers: 'Explainers', last_few_days: 'Last Few Days', ai_events: 'AI Events', field_notes: 'Field Notes', reel_ai_drama: 'AI Drama Reels' } as const;
 
 /** Stable id of what the Content page already knows is in flight, so a poll can tell when that changed. */
 export function inFlightKey(runs: AllProgress): string {
@@ -50,8 +50,8 @@ export function runForCandidate(c: QuotaCandidate, runs: AllProgress): ProgressI
   if (c.vertical === 'explainers' || c.vertical === 'reel_ai_drama') return null;
   if (c.vertical === 'stories') return c.series ? items.find((i) => i.label === c.series) ?? null : null;
   // A run that picks its own stories shows on every card; one asked for particular stories (topicId) only on those.
-  // A Last Few Days or AI Events run is always the type's own job: it shows on its card.
-  if (c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events') {
+  // A Last Few Days, AI Events or Field Notes run is always the type's own job: it shows on its card.
+  if (c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events' || c.vertical === 'field_notes') {
     const open = items.filter((i) => !i.topicId);
     return open.find((i) => i.state === 'running') ?? open.find((i) => i.state === 'queued') ?? null;
   }
@@ -80,5 +80,5 @@ export function runOnMadeCard(post: { status: string; idea?: { id: string } | nu
  */
 export function canMakeCard(c: QuotaCandidate): boolean {
   if (c.vertical === 'stories') return Boolean(c.seriesId);
-  return Boolean(c.idea) || c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events';
+  return Boolean(c.idea) || c.vertical === 'carousels' || c.vertical === 'last_few_days' || c.vertical === 'ai_events' || c.vertical === 'field_notes';
 }

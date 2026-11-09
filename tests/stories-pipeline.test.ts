@@ -659,6 +659,8 @@ test('buildSet: the monthly watch skips; a builder error fails the set; a good b
   assert.equal((await getSet(db, b.id))!.set.status, 'failed');
 
   await recordCost(db, { vendor: 'anthropic', component: 'x', usd: 30 });
+  // cost_events.created_at defaults to the real now(): put it on the test's clock, or the month reads empty outside October.
+  await db.query(`UPDATE stories.cost_events SET created_at = $1`, [NOW]);
   const { set: c } = await requestSet(db, { series: 'guess_the_number', nyDate: DATE, trigger: 'click', style: 'homemade' });
   await claimNextRequested(db);
   const watch = await buildSet(base, c.id);

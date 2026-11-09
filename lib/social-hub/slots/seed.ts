@@ -5,8 +5,8 @@ import { DEFAULT_FEED_MODE, DEFAULT_TIMES } from './times';
 import type { SlotQuery, StorySeries, TemplateRow } from './types';
 
 export type { StorySeries } from './types';
-/** `aiEventsDays`: the weekdays of the AI Events evening slot (Sunday when absent). */
-export type SeedInputs = { lfdDays: readonly number[]; storyDays: Record<StorySeries, readonly number[]>; aiEventsDays?: readonly number[] };
+/** `aiEventsDays`: the weekdays of the AI Events evening slot (Sunday when absent). `fieldNotesDays`: Field Notes' afternoon slot (Tuesday and Friday when absent). */
+export type SeedInputs = { lfdDays: readonly number[]; storyDays: Record<StorySeries, readonly number[]>; aiEventsDays?: readonly number[]; fieldNotesDays?: readonly number[] };
 
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6] as const;
 
@@ -14,6 +14,7 @@ const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6] as const;
 export const DEFAULT_SEED_INPUTS: SeedInputs = {
   lfdDays: PLAN.last_few_days[0]!.days ?? [2, 5],
   aiEventsDays: PLAN.ai_events[0]!.days ?? [0],
+  fieldNotesDays: PLAN.field_notes[0]!.days ?? [2, 5],
   storyDays: {
     morning_download: PLAN.stories.find((w) => w.id === 'morning_download')!.days ?? EVERY_DAY,
     guess_the_number: PLAN.stories.find((w) => w.id === 'guess_the_number')!.days ?? EVERY_DAY,
@@ -25,7 +26,7 @@ export const DEFAULT_SEED_INPUTS: SeedInputs = {
  * The first template (spec §Seeding): today's pattern at the default times
  * (times.ts DEFAULT_TIMES). Text on Screen and Explainers every day,
  * LFD on its days (Carousels never post), AI Events on
- * its days (Sunday evening), each Stories series on its days. Reels Trial,
+ * its days (Sunday evening), Field Notes on its days (Tuesday and Friday afternoon), each Stories series on its days. Reels Trial,
  * Explainers Main.
  * tests/slots-resolve.test.ts pins Monday to the default times list.
  */
@@ -39,6 +40,7 @@ export function seedTemplate(input: SeedInputs): TemplateRow[] {
     add(weekday, 'explainers');
     if (input.lfdDays.includes(weekday)) add(weekday, 'last_few_days');
     if ((input.aiEventsDays ?? DEFAULT_AI_EVENTS_SEED_DAYS).includes(weekday)) add(weekday, 'ai_events');
+    if ((input.fieldNotesDays ?? DEFAULT_FIELD_NOTES_SEED_DAYS).includes(weekday)) add(weekday, 'field_notes');
     for (const series of Object.keys(input.storyDays) as StorySeries[]) {
       if (input.storyDays[series].includes(weekday)) add(weekday, 'stories', series);
     }
@@ -47,12 +49,13 @@ export function seedTemplate(input: SeedInputs): TemplateRow[] {
 }
 
 const DEFAULT_AI_EVENTS_SEED_DAYS: readonly number[] = PLAN.ai_events[0]!.days ?? [0];
+const DEFAULT_FIELD_NOTES_SEED_DAYS: readonly number[] = PLAN.field_notes[0]!.days ?? [2, 5];
 
 const isDays = (v: unknown): v is number[] => Array.isArray(v) && v.length > 0 && v.every((d) => Number.isInteger(d) && d >= 0 && d <= 6);
 
 /** Today's LFD, AI Events and Stories series days, read the way their own loaders read them; defaults on any error. SELECT only. */
 export async function readSeedInputs(q: SlotQuery): Promise<SeedInputs> {
-  const out: SeedInputs = { lfdDays: [...DEFAULT_SEED_INPUTS.lfdDays], storyDays: { ...DEFAULT_SEED_INPUTS.storyDays }, aiEventsDays: [...DEFAULT_AI_EVENTS_SEED_DAYS] };
+  const out: SeedInputs = { lfdDays: [...DEFAULT_SEED_INPUTS.lfdDays], storyDays: { ...DEFAULT_SEED_INPUTS.storyDays }, aiEventsDays: [...DEFAULT_AI_EVENTS_SEED_DAYS], fieldNotesDays: [...DEFAULT_FIELD_NOTES_SEED_DAYS] };
   try {
     const { rows } = await q(`SELECT value FROM lfd.settings WHERE key = 'days'`);
     if (isDays(rows[0]?.value)) out.lfdDays = [...new Set(rows[0].value as number[])].sort((a, b) => a - b);
@@ -61,6 +64,10 @@ export async function readSeedInputs(q: SlotQuery): Promise<SeedInputs> {
     const { rows } = await q(`SELECT value FROM ai_events.settings WHERE key = 'days'`);
     if (isDays(rows[0]?.value)) out.aiEventsDays = [...new Set(rows[0].value as number[])].sort((a, b) => a - b);
   } catch { /* no ai_events schema on this handle */ }
+  try {
+    const { rows } = await q(`SELECT value FROM field_notes.settings WHERE key = 'days'`);
+    if (isDays(rows[0]?.value)) out.fieldNotesDays = [...new Set(rows[0].value as number[])].sort((a, b) => a - b);
+  } catch { /* no field_notes schema on this handle */ }
   try {
     const { rows } = await q(`SELECT value FROM stories.settings WHERE key = 'series'`);
     const series = rows[0]?.value as Partial<Record<StorySeries, { window?: { days?: unknown } }>> | undefined;

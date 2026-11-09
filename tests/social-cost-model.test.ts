@@ -107,8 +107,8 @@ test('model: unknown-cost calls are surfaced, never priced as $0 savings', () =>
   const m = costModel(previewCost());
   assert.ok(m.unknownCalls > 0);
   assert.match(m.headline, /On pace for \$\d+/);
-  assert.equal(m.series.type.keys.map((k) => k.label).join(','), 'Text on Screen,Explainer Reels,Carousels,IG Stories,Last Few Days,AI Events This Week,AI Drama Reels');
-  assert.equal(m.budget.length, 7);
+  assert.equal(m.series.type.keys.map((k) => k.label).join(','), 'Text on Screen,Explainer Reels,Carousels,IG Stories,Last Few Days,AI Events This Week,Field Notes,AI Drama Reels');
+  assert.equal(m.budget.length, 8);
 });
 
 test('wasteSets SQL runs against the real schema: rejected stories set and failed reels job are keyed', async () => {

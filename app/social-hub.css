@@ -13,6 +13,8 @@
   --sh-v-last_few_days: #e0529c;
   /* AI Events This Week: dark goldenrod, clear of Signal Orange and the other type hues. */
   --sh-v-ai_events: #b8860b;
+  /* Field Notes: olive, clear of the other type hues and of Signal Orange. */
+  --sh-v-field_notes: #6b7a3a;
   --sh-v-reel_ai_drama: #d1495b;
 
   /* State: only Needs you and Failed carry color (The Quiet State Rule). */

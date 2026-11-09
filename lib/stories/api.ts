@@ -88,13 +88,14 @@ export const NO_OPEN_SLOT = 'No open Stories slot today.';
  * The slot a person's Generate fills (R15, one Stories behaviour everywhere):
  * null while legacy (a set with no slot, as before); in template mode the
  * series' first open Stories slot today (openStorySlots, the slots the 4 AM
- * worker would still request), or 'none' when every slot has its set. The
+ * worker would still request, but a slot whose window has passed still counts:
+ * a click runs whenever it is clicked), or 'none' when every slot has its set. The
  * type page's Generate and Run now both ask here. SELECT only.
  */
 export async function openSlotMinute(db: Queryable, series: Series, now = new Date()): Promise<number | null | 'none'> {
   const slots = await storiesSlotsOn((text, params) => db.query(text, params), nyDate(now)).catch(() => null);
   if (!slots) return null;
-  const next = (await openStorySlots(db, slots, now)).get(series)?.open[0];
+  const next = (await openStorySlots(db, slots, now, { includePast: true })).get(series)?.open[0];
   return next ? next.startMinute : 'none';
 }
 

@@ -1,6 +1,7 @@
 // lib/social-hub/slots/legacy.ts
 import { EXPLAINER_WINDOWS } from '@/lib/explainers/publish/config';
 import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW } from '@/lib/ai-events/config';
+import { FIELD_NOTES_WINDOW } from '@/lib/field-notes/config';
 import { LFD_WINDOW } from '@/lib/lfd/config';
 import { POSTING_SLOTS } from '@/lib/reels/publish/slots';
 import { CAROUSEL_SLOTS } from '@/lib/social/overnight/config';
@@ -21,6 +22,7 @@ const LEGACY_START: Record<Exclude<Vertical, 'stories'>, ReadonlyArray<{ id: str
   carousels: CAROUSEL_SLOTS,
   last_few_days: [LFD_WINDOW],
   ai_events: [AI_EVENTS_WINDOW, AI_EVENTS_NIGHT_WINDOW],
+  field_notes: [FIELD_NOTES_WINDOW],
   // lib/reel-ai-drama/hub.ts DRAMA_WINDOWS, copied so slot code never imports the drama backend (a test pins it).
   reel_ai_drama: [{ id: 'evening', startMinute: 1200 }],
 };
