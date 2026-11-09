@@ -28,9 +28,9 @@ import type { CarouselMetaClient } from './meta';
 export type PublishTrigger = 'approve' | 'auto' | 'force';
 
 /** The spine verticals that post an image set as a feed carousel. */
-export type FeedVertical = 'carousels' | 'last_few_days' | 'ai_events';
+export type FeedVertical = 'carousels' | 'last_few_days' | 'ai_events' | 'field_notes';
 
-const NOUN: Record<FeedVertical, string> = { carousels: 'carousel', last_few_days: 'Last Few Days post', ai_events: 'AI Events post' };
+const NOUN: Record<FeedVertical, string> = { carousels: 'carousel', last_few_days: 'Last Few Days post', ai_events: 'AI Events post', field_notes: 'Field Notes post' };
 
 export type Queued =
   | { queued: true; id: string }

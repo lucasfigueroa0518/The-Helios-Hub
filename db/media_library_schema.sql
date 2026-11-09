@@ -51,6 +51,12 @@ CREATE TABLE IF NOT EXISTS media_library.photos (
     last_seen_at    timestamptz NOT NULL DEFAULT now()
 );
 
+-- Field Notes (planning/Field Notes/CONTRACT.md): photos Tommy and Lucas take themselves.
+-- 'own' is stored with reuse_ok false, so no other type's finder offers one.
+ALTER TABLE media_library.photos DROP CONSTRAINT IF EXISTS photos_licence_check;
+ALTER TABLE media_library.photos ADD CONSTRAINT photos_licence_check
+    CHECK (licence IN ('open', 'government', 'company', 'own', 'unknown'));
+
 CREATE INDEX IF NOT EXISTS idx_media_library_photos_qids ON media_library.photos USING gin (qids);
 CREATE INDEX IF NOT EXISTS idx_media_library_photos_tags ON media_library.photos USING gin (tags);
 CREATE INDEX IF NOT EXISTS idx_media_library_photos_seen ON media_library.photos (status, last_seen_at DESC);

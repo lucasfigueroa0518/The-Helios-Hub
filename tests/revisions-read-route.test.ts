@@ -65,6 +65,7 @@ function registry(q: Query, _itemId?: string, calls = { query: 0 }): () => Promi
     stories: { vertical: 'stories' },
     last_few_days: { vertical: 'last_few_days' },
     ai_events: { vertical: 'ai_events' },
+    field_notes: { vertical: 'field_notes' },
     reel_ai_drama: { vertical: 'reel_ai_drama' },
   });
 }

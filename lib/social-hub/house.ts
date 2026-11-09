@@ -150,6 +150,7 @@ const PUBLISH_CONFIRM: Record<Vertical, string> = {
   stories: 'This set is approved and goes out now, frame by frame.',
   last_few_days: 'This Last Few Days post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
   ai_events: 'This AI Events post goes out now instead of in its Sunday slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
+  field_notes: 'This Field Notes post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
 };
 
 /** Something to post: a video, slides or frames. A render that failed has none. */
@@ -161,9 +162,9 @@ function hasContent(post: HubPost): boolean {
  * The actions a post offers in Content House, with the reason one is unavailable.
  * `lfdPublishingLive`: lfd.settings publishing_live. Last Few Days offers Hard
  * publish only while it is on (unknown counts as off). `aiEventsPublishingLive`
- * is the same for AI Events (ai_events.settings).
+ * is the same for AI Events (ai_events.settings), and `fieldNotesPublishingLive` for Field Notes (field_notes.settings).
  */
-export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null; lfdPublishingLive?: boolean; aiEventsPublishingLive?: boolean; archive?: { ideaId: string | null } }): ActionPlan[] {
+export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null; lfdPublishingLive?: boolean; aiEventsPublishingLive?: boolean; fieldNotesPublishingLive?: boolean; archive?: { ideaId: string | null } }): ActionPlan[] {
   const plans: ActionPlan[] = [];
   const info = verticalInfo(post.vertical);
   const live = post.status !== 'published' && post.status !== 'publishing';
@@ -196,6 +197,14 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
       disabled: post.refs.aiEventsPostId ? null : 'This content can’t be found any more.',
     });
   }
+  if (post.vertical === 'field_notes' && !rejected && !post.approval.approvedAt && (post.status === 'ready' || (post.status === 'scheduled' && post.approval.required))) {
+    // A post in review is approved and booked in the afternoon window (or the next one); a waiting slot is approved where it is.
+    plans.push({
+      kind: 'post', action: 'approveContent', label: 'Approve', endpoint: '/api/social-hub/actions/approve-content',
+      body: { vertical: 'field_notes', refs: { fieldNotesPostId: post.refs.fieldNotesPostId ?? null } },
+      disabled: post.refs.fieldNotesPostId ? null : 'This content can’t be found any more.',
+    });
+  }
   if (post.status === 'scheduled' && post.approval.required && !post.approval.approvedAt) {
     if (post.vertical === 'carousels' && post.refs.scheduleId) {
       plans.push({ kind: 'post', action: 'approveCarousel', label: 'Approve', endpoint: '/api/social-hub/actions/approve-carousel', body: { scheduleId: post.refs.scheduleId }, disabled: null });
@@ -218,7 +227,9 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
             ? { lfdPostId: post.refs.lfdPostId }
             : post.vertical === 'ai_events'
               ? { aiEventsPostId: post.refs.aiEventsPostId }
-              : { setId: post.refs.setId };
+              : post.vertical === 'field_notes'
+                ? { fieldNotesPostId: post.refs.fieldNotesPostId }
+                : { setId: post.refs.setId };
     const missing = Object.values(refs).some((v) => !v);
     // A type on the idea queue (pool standard, 2026-10-21) archives instead of rejecting: the same stop, and the idea is
     // archived too so no refill brings it back.
@@ -268,14 +279,15 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   // A rejected LFD post already returned its stories to the pool: Hard publish is not offered for it,
   // and none is offered while Last Few Days publishing is off (the attempt would wait unclaimed).
   // AI Events follows the same rule with its own publishing_live.
-  if (live && !(post.vertical === 'last_few_days' && (rejected || ctx.lfdPublishingLive !== true)) && !(post.vertical === 'ai_events' && (rejected || ctx.aiEventsPublishingLive !== true))) {
+  if (live && !(post.vertical === 'last_few_days' && (rejected || ctx.lfdPublishingLive !== true)) && !(post.vertical === 'ai_events' && (rejected || ctx.aiEventsPublishingLive !== true)) && !(post.vertical === 'field_notes' && (rejected || ctx.fieldNotesPublishingLive !== true))) {
     const noContent = hasContent(post) ? null : 'Nothing to publish yet. Regenerate first.';
     const ref = post.vertical === 'reels' ? post.refs.videoJobId
       : post.vertical === 'carousels' ? post.refs.postId
         : post.vertical === 'explainers' || post.vertical === 'reel_ai_drama' ? post.refs.jobId
           : post.vertical === 'last_few_days' ? post.refs.lfdPostId
             : post.vertical === 'ai_events' ? post.refs.aiEventsPostId
-              : post.refs.setId;
+              : post.vertical === 'field_notes' ? post.refs.fieldNotesPostId
+                : post.refs.setId;
     const skipped = post.status === 'skipped' ? 'Story sets that miss their window are never reused.' : null;
     plans.push({
       kind: 'post', action: 'hardPublish', label: 'Hard publish', endpoint: '/api/social-hub/actions/hard-publish',
@@ -337,6 +349,8 @@ export function contentRefs(post: HubPost): Record<string, string | undefined> {
       return { lfdPostId: post.refs.lfdPostId };
     case 'ai_events':
       return { aiEventsPostId: post.refs.aiEventsPostId };
+    case 'field_notes':
+      return { fieldNotesPostId: post.refs.fieldNotesPostId };
   }
 }
 

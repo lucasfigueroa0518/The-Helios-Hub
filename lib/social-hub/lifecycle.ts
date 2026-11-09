@@ -34,6 +34,8 @@ export function contentKey(post: HubPost): { kind: 'content' | 'idea'; ref: stri
       return r.lfdPostId ? { kind: 'content', ref: r.lfdPostId } : null;
     case 'ai_events':
       return r.aiEventsPostId ? { kind: 'content', ref: r.aiEventsPostId } : null;
+    case 'field_notes':
+      return r.fieldNotesPostId ? { kind: 'content', ref: r.fieldNotesPostId } : null;
   }
 }
 

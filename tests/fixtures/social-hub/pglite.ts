@@ -10,8 +10,8 @@ import path from 'node:path';
 
 import type { HubQuery } from '@/lib/social-hub/db';
 
-/** networking before ai_events: the AI Events pool references networking.events. */
-const SCHEMAS = ['reels', 'explainers', 'social', 'stories', 'lfd', 'networking', 'ai_events'] as const;
+/** networking before ai_events: the AI Events pool references networking.events. media_library before field_notes: its photo pool references media_library.photos. */
+const SCHEMAS = ['reels', 'explainers', 'social', 'stories', 'lfd', 'networking', 'ai_events', 'media_library', 'field_notes'] as const;
 
 function schemaSql(file: string): string {
   return readFileSync(path.join(process.cwd(), 'db', file), 'utf8')

@@ -39,6 +39,11 @@ export function isAiEventsDay(plan: SlotPlan, nyDate: string): boolean {
   return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'ai_events');
 }
 
+/** Whether the calendar gives Field Notes a slot on this date. */
+export function isFieldNotesDay(plan: SlotPlan, nyDate: string): boolean {
+  return (plan.byDate.get(nyDate) ?? []).some((s) => s.vertical === 'field_notes');
+}
+
 /** Before the calendar: Text on Screen posts as trial reels, Explainers and AI Drama Reels to the main feed. */
 export function legacyFeedMode(vertical: Vertical): FeedMode | null {
   return vertical === 'reels' ? 'trial' : vertical === 'explainers' || vertical === 'reel_ai_drama' ? 'main' : null;

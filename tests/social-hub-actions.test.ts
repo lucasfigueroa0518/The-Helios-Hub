@@ -109,6 +109,7 @@ function registry(o: {
     }),
     last_few_days: { vertical: 'last_few_days' },
     ai_events: { vertical: 'ai_events' },
+    field_notes: { vertical: 'field_notes' },
     reel_ai_drama: { vertical: 'reel_ai_drama' },
   });
 }
@@ -404,9 +405,9 @@ test('today, on deck, types and sources', () => {
   const deck = onDeck(d.posts);
   assert.ok(deck.length > 0 && deck.every((p) => p.status === 'scheduled' || p.status === 'publishing'));
   const rows = typeRows(d.posts, 'views', parseRange({}, FIXTURE_NOW));
-  assert.deepEqual(rows.map((r) => r.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'reel_ai_drama']);
-  // The preview fixture has no Last Few Days, AI Events or AI Drama posts.
-  assert.ok(rows.filter((r) => r.vertical !== 'last_few_days' && r.vertical !== 'ai_events' && r.vertical !== 'reel_ai_drama').every((r) => r.posts > 0 && r.costPerPost != null && r.value != null));
+  assert.deepEqual(rows.map((r) => r.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama']);
+  // The preview fixture has no Last Few Days, AI Events, Field Notes or AI Drama posts.
+  assert.ok(rows.filter((r) => r.vertical !== 'last_few_days' && r.vertical !== 'ai_events' && r.vertical !== 'field_notes' && r.vertical !== 'reel_ai_drama').every((r) => r.posts > 0 && r.costPerPost != null && r.value != null));
   const skip = typeRows(d.posts, 'skipRate', parseRange({}, FIXTURE_NOW));
   assert.equal(skip.find((r) => r.vertical === 'stories')!.value, null, 'a reel-only metric is n/a for Stories');
   const src = sourceRows(d.sources, d.posts, 'views');

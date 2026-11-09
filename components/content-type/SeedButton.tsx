@@ -11,6 +11,7 @@ import '@/components/content-type/type-hub.css';
 import { Drawer } from '@/app/reels/ui';
 import { CarouselSeedForm } from '@/components/content-type/CarouselSeedForm';
 import { ExplainerSeedForm } from '@/components/content-type/ExplainerSeedForm';
+import { FieldNotesSeedForm } from '@/components/field-notes/FieldNotesSeedForm';
 import { LfdSeedForm } from '@/components/content-type/LfdSeedForm';
 import { ReelSeedForm } from '@/components/content-type/ReelSeedForm';
 import { StorySeedForm } from '@/components/content-type/StorySeedForm';
@@ -28,6 +29,7 @@ const FORMS: Record<SeedVertical, ComponentType<SeedFormProps>> = {
   last_few_days: LfdSeedForm,
   stories: StorySeedForm,
   explainers: ExplainerSeedForm,
+  field_notes: FieldNotesSeedForm,
 };
 
 /**

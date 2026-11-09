@@ -40,6 +40,7 @@ export const HUB_NAV: HubNavItem[] = [
       path.startsWith('/explainers') ||
       path.startsWith('/last-few-days') ||
       path.startsWith('/ai-events') ||
+      path.startsWith('/field-notes') ||
       path.startsWith('/reel-ai-drama'),
   },
   {

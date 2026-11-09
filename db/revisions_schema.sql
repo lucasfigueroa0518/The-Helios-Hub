@@ -12,7 +12,7 @@ CREATE SCHEMA IF NOT EXISTS revisions;
 CREATE TABLE IF NOT EXISTS revisions.requests (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     vertical        text NOT NULL
-                      CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events')),
+                      CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'field_notes')),
     item_id         uuid NOT NULL REFERENCES social_hub.content_items (id),
     -- Which parts of the item the instruction points at: [{ kind, key }].
     refs            jsonb NOT NULL DEFAULT '{}'::jsonb,

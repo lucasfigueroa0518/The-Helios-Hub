@@ -92,6 +92,12 @@ export const VERTICAL_FACTORS: Record<Vertical, FactorDef[]> = {
     { id: 'slot', label: 'Posting slot' },
     { id: 'approval', label: 'Approval' },
   ],
+  field_notes: [
+    { id: 'branch', label: 'Kind of tip' },
+    { id: 'slides', label: 'Slide count' },
+    { id: 'slot', label: 'Posting slot' },
+    { id: 'approval', label: 'Approval' },
+  ],
 };
 
 /** Factors on offer: shared ones always; a vertical's native ones only when it alone is in view. */

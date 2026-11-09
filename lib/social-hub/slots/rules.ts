@@ -45,6 +45,7 @@ export const LFD_ONCE = 'Last Few Days runs once a day.';
 export const AI_EVENTS_ONCE = 'AI Events posts at most twice a day (Miami and Boston).';
 /** AE-29: one post per city, Miami and Boston. */
 export const AI_EVENTS_PER_DAY = 2;
+export const FIELD_NOTES_ONCE = 'Field Notes posts once a day.';
 export const NOT_ON_DAY = 'That slot isn’t on this day.';
 export const CAROUSEL_STARTED = 'A Carousel on that day has already started.';
 
@@ -83,6 +84,7 @@ export function canPlace(ctx: DayCtx, s: { vertical: Vertical; startMinute: numb
   const has = (v: Vertical) => others.some((o) => o.vertical === v);
   if (s.vertical === 'carousels' && has('last_few_days')) return refuse(LFD_CAROUSEL_CONFLICT);
   if (s.vertical === 'last_few_days' && has('last_few_days')) return refuse(LFD_ONCE);
+  if (s.vertical === 'field_notes' && has('field_notes')) return refuse(FIELD_NOTES_ONCE);
   if (s.vertical === 'ai_events' && others.filter((o) => o.vertical === 'ai_events').length >= AI_EVENTS_PER_DAY) return refuse(AI_EVENTS_ONCE);
   if (s.vertical === 'last_few_days' && has('carousels')) return refuse(LFD_CAROUSEL_CONFLICT, 'remove-carousels');
   if (others.some((o) => sameSlotKey(o, { vertical: s.vertical, startMinute: minute, series: s.series }))) {
