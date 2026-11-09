@@ -158,8 +158,8 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     generate: {
       label: 'Generate on its days',
       confirm:
-        'Make a Field Notes post at 12:00 PM on its days? Each run writes one post with live Claude and Jev calls (up to the run cap, $0.50 by default). It waits for your approval.',
-      hint: 'Picks the next tip and renders the carousel at 12:00 PM on its days (one or two a week), for the 2:30–3:30 PM slot. It waits for your approval unless auto-publish is on.',
+        'Make a Field Notes post at 2:00 AM on its days? Each run writes one post with live Claude and Jev calls (up to the run cap, $0.50 by default). It waits for your approval.',
+      hint: 'Picks the next tip and renders the carousel at 2:00 AM on its days (one or two a week), for the 2:30–3:30 PM slot. It waits for your approval unless auto-publish is on.',
     },
     perDayMin: 0,
     capPerSeries: false,

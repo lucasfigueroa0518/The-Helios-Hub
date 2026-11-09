@@ -11,9 +11,9 @@ export type Reporter = (q: HubQuery, ctx: ReportContext) => Promise<NightReport>
 
 export function quotaFor(posting: PostingState, night: string): number {
   if (posting.type === 'ai_events' || posting.type === 'field_notes') {
-    // AI Events' Sunday noon run and evening post (Field Notes' noon run and afternoon post, the same shape)
-    // fall in the next night's cycle: night N asks about N−1's slot (or weekday).
-    const sunday = addDays(night, -1);
+    // AI Events' Sunday noon run and evening post fall in the next night's cycle: night N asks about N−1's
+    // slot (or weekday). Field Notes runs at 2 AM, inside its own day's night: night N asks about N.
+    const sunday = posting.type === 'field_notes' ? night : addDays(night, -1);
     const slot = posting.nights?.find((d) => d.nyDate === sunday) ?? posting.schedule?.find((d) => d.nyDate === sunday);
     if (slot) return Math.min(slot.count > 0 ? 1 : 0, posting.cap ?? Number.POSITIVE_INFINITY);
     return posting.days?.includes(weekdayIndex(sunday)) ? 1 : 0;
