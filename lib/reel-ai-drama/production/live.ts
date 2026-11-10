@@ -39,7 +39,7 @@ import { writePost } from '@/lib/reel-ai-drama/writing/post';
 import { editStory } from '@/lib/reel-ai-drama/writing/story-editor';
 import { reviseScript, writeScript } from '@/lib/reel-ai-drama/writing/writer';
 // B4 kit + render
-import { assembleProject, contactSheet, frameSpans, KIT_GUIDE, prepareWorkspace, renderVideo, runVoice } from '@/lib/reel-ai-drama/render';
+import { assembleProject, contactSheet, frameSpans, KIT_GUIDE, prepareWorkspace, renderVideo, reuseWorkspace, runVoice } from '@/lib/reel-ai-drama/render';
 import { pickMoments, sceneChanges } from '@/lib/reel-ai-drama/render/moments';
 import { makeSheets, viewerSheets } from '@/lib/reel-ai-drama/render/sheets';
 import { preflight } from '@/lib/reel-ai-drama/production/preflight';
@@ -152,6 +152,7 @@ export async function liveProductionDeps(input: {
     render: {
       kitGuide: KIT_GUIDE,
       prepareWorkspace,
+      reuseWorkspace,
       writeProjectFiles,
       measurePictures: (inventory, root) => measureInventory(inventory, root),
       runVoice,

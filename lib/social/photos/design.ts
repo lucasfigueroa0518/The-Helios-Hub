@@ -31,7 +31,7 @@ import { DEFAULT_ICON, isIcon } from '@/lib/social/render/icons';
 import type { FilledDraft, VisualRequest } from '@/lib/social/writer/draft';
 
 import { articlePhotosFor } from './article-list';
-import { newSearchContext, searchVisual, type Candidate, type ChainStep, type PhotoDeps, type PhotoSlot, type PhotoTrace } from './find';
+import { newSearchContext, searchVisual, type Candidate, type ChainStep, type Photo, type PhotoDeps, type PhotoSlot, type PhotoTrace } from './find';
 import type { SubjectType } from './identity';
 import type { IdentityCache } from './p18';
 import { choosePivots } from './pivot';
@@ -40,6 +40,8 @@ import { buildSheets } from './sheet';
 import { ICON_SCENES, tuning } from './tuning';
 import type { TileTag } from './tag-sheet';
 import { recordVision, vettedForSlide, type VettedPhoto } from './vetted';
+import { firstUnused, usedReason, type GuardDeps, type GuardView } from '@/lib/photos/used-guard';
+import type { UsedLedger } from '@/lib/photos/used';
 
 /** Where a slide type draws its photo (the review). */
 export function slotFor(type: FilledDraft['slides'][number]['type']): PhotoSlot {
@@ -82,14 +84,14 @@ export async function photosForDraft(
   brief: Brief,
   pages: PageReadOk[],
   deps: PhotoDeps,
-  history: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; storyDate?: string | null; plainCover?: boolean } = {},
+  history: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; storyDate?: string | null; plainCover?: boolean; used?: UsedLedger } = {},
 ): Promise<DraftPhotos> {
   // `plainCover`: the first place is a frame like the others, not a cover (a Stories set whose first frame is a story),
   // so the cover rules (no logo, the 1080 floor, promotion) don't apply to it.
   const coverRules = !history.plainCover;
   const asCover = (r: VisualRequest) => (coverRules ? coverRequest(r) : r);
   const kinds = await subjectKinds(brief, history.identities);
-  const ctx = newSearchContext(brief, pages, { recent: history.recent, lastUsed: history.lastUsed, identities: history.identities, kinds, photos: articlePhotosFor(brief, pages, kinds), storyDate: history.storyDate ?? null });
+  const ctx = newSearchContext(brief, pages, { recent: history.recent, published: history.used ? new Set(history.used.urls) : undefined, lastUsed: history.lastUsed, identities: history.identities, kinds, photos: articlePhotosFor(brief, pages, kinds), storyDate: history.storyDate ?? null });
   // The vision check, recorded (same answers) so the bank knows which candidates passed or failed it.
   const recorder = recordVision(deps.vision);
   deps = { ...deps, vision: recorder.vision };
@@ -241,5 +243,29 @@ export async function photosForDraft(
       cover.steps.push('promotion: no inner photo clears the cover', ...out.steps);
     }
   }
+  // The live pipeline leaves deps.http unset (sources fall back to fetch); so does the hash check, or it never runs.
+  if (history.used) await refuseUsed(traces, places, history.used, { http: deps.http ?? fetch, ...(deps.usedHash ? { hash: deps.usedHash } : {}) });
   return { cover: traces[0]!, slides: traces.slice(1), costUsd: { tags: tagUsd, vision: visionUsd }, vetted };
+}
+
+const guardView = (p: Photo): GuardView => ({ url: p.url, kind: p.source === 'logo' ? 'logo' : null });
+
+/**
+ * CI-32's hash check on the final picks (the search already left out every URL published in the last 20 days): a pick
+ * whose picture was published (a resized copy, another URL) gives way to its slide's next runner-up that passed every
+ * check, else the slide's icon (type-led for a quote), as a C6 failure does. Logos are brand assets and exempt.
+ */
+async function refuseUsed(traces: PhotoTrace[], places: Place[], used: UsedLedger, guard: GuardDeps): Promise<void> {
+  for (const [i, t] of traces.entries()) {
+    if (!t.photo) continue;
+    const why = await usedReason(used, guardView(t.photo), guard);
+    if (!why) continue;
+    const inPost = new Set(traces.flatMap((x) => (x.photo ? [x.photo.url] : [])));
+    const notes: string[] = [`used-photo ledger: ${t.photo.url} ${why}`];
+    const next = await firstUnused(t.alternates.filter((c) => !inPost.has(c.url)), guardView, used, guard, notes);
+    const to = next ? (next.source as ChainStep) : places[i]!.slot.kind === 'quote' ? 'type-led' : 'icon';
+    t.steps.push(...notes, `used-photo ledger → ${next ? `next runner-up (${next.source})` : to}`);
+    t.photo = next;
+    t.via = to;
+  }
 }

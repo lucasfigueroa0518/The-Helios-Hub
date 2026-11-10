@@ -11,10 +11,12 @@ import {
   checkFeedPayload,
   claimFeedAttempt,
   failStaleAttempts,
+  logPublishedPhotos,
   queueFeedAttempt,
   type PublishDeps,
   type PublishTrigger,
   type Queued,
+  type PublishedInfo,
 } from '@/lib/social/overnight/publish';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -48,10 +50,12 @@ export function failStaleFieldNotesAttempts(query: Query): Promise<void> {
   return failStaleAttempts(query, FIELD_NOTES_FEED_VERTICAL);
 }
 
-/** The type's step once Instagram has the post: the post is published and its tip is posted. */
-export async function markFieldNotesPublished(query: Query, postId: string, finishedAt: string): Promise<void> {
+/** The type's step once Instagram has the post: the post is published, its tip is posted, its photos are logged. */
+export async function markFieldNotesPublished(query: Query, postId: string, finishedAt: string, info?: PublishedInfo): Promise<void> {
   await query(`UPDATE field_notes.posts SET status = 'published', published_at = $2::timestamptz, updated_at = now() WHERE id = $1`, [postId, finishedAt]);
   await query(`UPDATE field_notes.tips SET status = 'posted', updated_at = now() WHERE id IN (${POST_TIP_IDS_SQL})`, [postId]);
+  // CI-32: its team photos into the used-photo ledger (a failure only logs).
+  await logPublishedPhotos(query, 'field_notes', postId, finishedAt, info);
 }
 
 /** Carry one claimed attempt to Instagram; on success the post is marked published. */

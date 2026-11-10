@@ -50,8 +50,7 @@ export const AI_EVENTS_WINDOW_FOR: Record<AiEventsPostMetro, PostingWindow> = { 
 /** Storage prefix for the slide JPEGs (lib/social/overnight/slides.ts storeSlideJpegs). */
 export const AI_EVENTS_SLIDE_PREFIX = 'ai-events';
 
-/** Wall-clock limit on one in-process run in the helios-social loop; past it the run is failed and the loop goes on. */
-export const AI_EVENTS_RUN_TIMEOUT_MS = 30 * 60_000;
+// No run time limit: long runs are normal and never failed for length (lib/content-runs/hang-guard.ts; CI decision 2026-11-10).
 
 /** A due slot later than this is cancelled, not posted late (the Last Few Days rule). */
 export const AI_EVENTS_MISSED_AFTER_MINUTES = 60;

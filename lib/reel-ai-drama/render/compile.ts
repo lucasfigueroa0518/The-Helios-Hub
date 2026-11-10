@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -461,7 +462,7 @@ export type CompiledFrameRecord = {
 /** Run kit/compiled-read.mjs in the project: each frame's manifest and what didn't land; with `stills`, a still at its main beat. */
 export function readCompiled(projectDir: string, { stills = null, only = null, run = spawnRunner }: { stills?: string | null; only?: readonly string[] | null; run?: Runner } = {}): CompiledRead {
   const args = ['assets/kit/compiled-read.mjs', ...(stills ? ['--stills', stills] : []), ...(only ?? [])];
-  const res = run(process.execPath, args, { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: 10 * 60 * 1000 });
+  const res = run(process.execPath, args, { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: RUN_HANG_BACKSTOP_MS });
   return jsonOut<CompiledRead>(res) ?? { ok: false, frames: {}, stills: [], skipped: tail(res) };
 }
 
@@ -469,7 +470,7 @@ export function readCompiled(projectDir: string, { stills = null, only = null, r
 export function frameFindings(projectDir: string, frameId: string, { run = spawnRunner }: { run?: Runner } = {}): string[] {
   const out: string[] = [];
   for (const script of ['try', 'bounds', 'screen']) {
-    const res = run(process.execPath, [`assets/kit/${script}.mjs`, frameId], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: 5 * 60 * 1000 });
+    const res = run(process.execPath, [`assets/kit/${script}.mjs`, frameId], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: RUN_HANG_BACKSTOP_MS });
     const parsed = jsonOut<{ errors?: string[] }>(res);
     if (parsed) out.push(...(parsed.errors ?? []).map((e) => `${script}: ${e}`));
     else if (res.status !== 0) out.push(`${script} failed: ${tail(res)}`);

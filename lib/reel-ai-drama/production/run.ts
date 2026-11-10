@@ -1,4 +1,5 @@
 import { garbledAssetIds, reanchor } from '@/lib/reel-ai-drama/harvest/anchors';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -46,7 +47,7 @@ import { applyWishes } from '@/lib/reel-ai-drama/render/wishes';
 import { centralCutoutRequests, cutoutSwaps, stageCutoutRequests, useCutouts, wishCutoutRequests, type CutoutRequest } from '@/lib/reel-ai-drama/harvest/cutouts';
 import { emptyTrace, noOpFlags } from '@/lib/reel-ai-drama/production/noop';
 import type { SoundCues } from '@/lib/reel-ai-drama/render/sound-design';
-import { sameVoices, type VoiceInput, type VoiceResult } from '@/lib/reel-ai-drama/render/voice';
+import { frameVoices, sameVoices, type VoiceInput, type VoiceResult } from '@/lib/reel-ai-drama/render/voice';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type {
   Asset,
@@ -159,6 +160,8 @@ export type ProductionDeps = {
   render: {
     kitGuide: string;
     prepareWorkspace(input: { jobsRoot: string; jobId: string }): Promise<Workspace>;
+    /** A resumed job's workspace as the last run left it, without wiping it; null when there is none. Missing: never reused. */
+    reuseWorkspace?(input: { jobsRoot: string; jobId: string }): Workspace | null;
     writeProjectFiles(projectDir: string, input: { draft: WriterDraft; plan: DirectorPlan; inventory: VisualsInventory }): unknown;
     /** Iter 9: what each picture holds, from its real pixels (keys logos too). Optional so stubbed runs needn't. */
     measurePictures?(inventory: VisualsInventory, root: string): Promise<unknown>;
@@ -234,17 +237,38 @@ async function priorStory(db: Queryable, jobId: string): Promise<{ draft: Writer
  * A resumed job's plan: the latest one, when it was made for the current script (nothing rewrote the script after it). What the
  * director cost isn't paid twice; a plan older than the script is stale, and the director runs.
  */
-async function priorPlan(db: Queryable, jobId: string): Promise<DirectorPlan | null> {
+async function priorPlan(db: Queryable, jobId: string): Promise<{ plan: DirectorPlan; at: Date; checked: boolean } | null> {
   const { rows } = await db.query<{ kind: string; content: string; created_at: string | Date }>(
     `SELECT DISTINCT ON (kind) kind, content, created_at FROM reel_ai_drama.artifacts
-      WHERE job_id = $1 AND kind IN ('writer_draft', 'director_plan') AND content IS NOT NULL ORDER BY kind, created_at DESC`,
+      WHERE job_id = $1 AND kind IN ('writer_draft', 'director_plan', 'integrity_check') AND content IS NOT NULL ORDER BY kind, created_at DESC`,
     [jobId],
   );
   const by = new Map(rows.map((r) => [r.kind, r]));
   const plan = by.get('director_plan');
   const draft = by.get('writer_draft');
   if (!plan || !draft || new Date(plan.created_at).getTime() < new Date(draft.created_at).getTime()) return null;
-  return JSON.parse(plan.content) as DirectorPlan;
+  const at = new Date(plan.created_at);
+  // The image check read this plan when its latest result came after it (its fix keeps the plan before the re-check).
+  const integrity = by.get('integrity_check');
+  const checked = Boolean(integrity && new Date(integrity.created_at).getTime() >= at.getTime());
+  return { plan: JSON.parse(plan.content) as DirectorPlan, at, checked };
+}
+
+/** The last measured breakage a job kept (what the review sheets mark); none kept reads as clean. */
+async function priorBreakage(db: Queryable, jobId: string): Promise<{ ok: boolean; problems: string[] }> {
+  const { rows } = await db.query<{ content: string }>(
+    `SELECT content FROM reel_ai_drama.artifacts WHERE job_id = $1 AND kind = 'breakage' AND content IS NOT NULL ORDER BY created_at DESC LIMIT 10`,
+    [jobId],
+  );
+  for (const r of rows) {
+    try {
+      const b = JSON.parse(r.content) as { ok?: boolean; problems?: unknown };
+      if (Array.isArray(b.problems)) return { ok: b.ok !== false, problems: b.problems.map(String) };
+    } catch {
+      // not a measure round
+    }
+  }
+  return { ok: true, problems: [] };
 }
 
 /** A problem's frame, by the frame ids the compile wrote; null when it names none. Pure. */
@@ -602,7 +626,7 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     const keptPlan = keptStory ? await priorPlan(db, job.id) : null;
     let firstPlan: DirectorPlan;
     if (keptPlan) {
-      firstPlan = keptPlan;
+      firstPlan = keptPlan.plan;
       log('resumed', { jobId: job.id, from: 'director plan' });
     } else {
       firstPlan = await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide }, ctx);
@@ -756,11 +780,19 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     };
     if (deps.render.makeAssets) await runMakes();
 
+    // A resumed job whose plan is the one it left off with keeps the project it already built: each step below is skipped
+    // only while what it made is provably current, and a stale step makes everything after it run again.
+    const samePlan = keptPlan !== null && JSON.stringify(plan) === JSON.stringify(keptPlan.plan);
+
     // Workspace and the project files the kit reads.
     await stage('workspace');
-    ws = await deps.render.prepareWorkspace({ jobsRoot: deps.jobsRoot, jobId: job.id });
+    const kept = samePlan && deps.render.reuseWorkspace ? deps.render.reuseWorkspace({ jobsRoot: deps.jobsRoot, jobId: job.id }) : null;
+    if (kept) log('resumed', { jobId: job.id, from: 'workspace' });
+    ws = kept ?? (await deps.render.prepareWorkspace({ jobsRoot: deps.jobsRoot, jobId: job.id }));
     const projectDir = ws.projectDir;
     const jobDir = ws.jobDir;
+    // What the last run left: the voiced (duration-synced) script and storyboard the rewrite below replaces.
+    const before = kept ? { storyboard: readText(path.join(projectDir, 'STORYBOARD.md')), script: readText(path.join(projectDir, 'SCRIPT.md')) } : null;
     // Asset files are relative to the job dir; the Explainer workspace wipes it, so the harvest wrote beside it.
     fs.cpSync(harvestDir, ws.jobDir, { recursive: true });
     const writeProject = async () => {
@@ -771,6 +803,12 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       await keepFile('storyboard_md', path.join(projectDir, 'STORYBOARD.md'), 'STORYBOARD.md');
     };
     await writeProject();
+    // Voice is current when every frame speaks the same words and each voiced frame's audio is on disk: the synced files go back.
+    const keptVoice = Boolean(before?.storyboard && before.script && sameVoices(before.storyboard, readText(path.join(projectDir, 'STORYBOARD.md')) ?? '') && voicedOnDisk(projectDir, before.storyboard));
+    if (keptVoice && before) {
+      fs.writeFileSync(path.join(projectDir, 'STORYBOARD.md'), before.storyboard!);
+      fs.writeFileSync(path.join(projectDir, 'SCRIPT.md'), before.script!);
+    }
 
     // P6: voice (HeyGen; it reports no price).
     await stage('voice');
@@ -785,62 +823,72 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       const made = await deps.render.runVoice(projectDir, voiceInput);
       for (const note of made?.notes ?? []) await flag('voice', note);
     };
-    await voice();
-    await recordCost(db, { jobId: job.id, pitchId: row.id, mode: job.mode, vendor: 'heygen', component: 'voice', usd: null });
+    if (keptVoice) log('resumed', { jobId: job.id, from: 'voice' });
+    else {
+      await voice();
+      await recordCost(db, { jobId: job.id, pitchId: row.id, mode: job.mode, vendor: 'heygen', component: 'voice', usd: null });
+    }
     // The close stretches to its question's voice (pace.mjs closeLength), so a long question is logged, not flagged.
     const question = closeVoiceSeconds(projectDir);
     if (question !== null && question > CLOSE.maxQuestion) log('close_stretched', { jobId: job.id, questionSeconds: question, closeSeconds: CLOSE.duration });
 
-    // C2: integrity (each image shows what its line claims): one fix via the director, then warn.
-    await stage('integrity_check');
-    const integrityCheck = async (): Promise<Awaited<ReturnType<ProductionDeps['checks']['checkIntegrity']>>> => {
-      try {
-        return await deps.checks.checkIntegrity({ plan, inventory, draft, facts }, ctx);
-      } catch (error) {
-        await flag('integrity', `The image check failed (${errorText(error)}); the pictures ship unchecked.`);
-        return { problems: [] };
-      }
-    };
-    const integrity = await integrityCheck();
-    await keepText('integrity_check', { round: 0, problems: integrity.problems });
-    await settle('integrity check');
-    if (integrity.problems.length > 0) {
-      // A garbled image never stays an anchor: its person's next best portrait takes over before the fix.
-      const reanchored = reanchor(inventory, garbledAssetIds(integrity.problems));
-      if (reanchored.moved.length) {
-        inventory = reanchored.inventory;
-        await keepText('inventory', inventory);
-        for (const m of reanchored.moved) log('reanchored', { jobId: job.id, ...m });
-      }
-      const flagged = [...new Set(integrity.problems.map((p) => p.frame))];
-      let still = integrity.problems;
-      try {
-        const fixed = await arrive(
-          await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'image_check', plan, problems: integrity.problems } }, ctx),
-          'image-check fix',
-        );
-        plan = reconcilePlan(draft, mergeFrames(plan, fixed, flagged));
-        await keepText('director_plan', plan);
-        // Makes the fix asked for exist before the re-check looks at them (they were "not in the inventory").
-        if (deps.render.makeAssets) await runMakes();
-        fs.cpSync(harvestDir, ws.jobDir, { recursive: true });
-        await stage('integrity_check');
-        still = (await integrityCheck()).problems;
-        await keepText('integrity_check', { round: 1, problems: still });
-      } catch (error) {
-        await flag('integrity', `The re-plan on the image check failed (${errorText(error)}); frames ${flagged.join(', ')} keep their plan.`);
-      }
-      await settle('integrity fix');
-      for (const p of still) await flag('integrity', `Frame ${p.frame} (${p.asset_id}): ${p.why}`);
-      // The rewrite must not lose the voice: same lines → assemble re-paces from the voice already made;
-      // different lines → voice them again (MD-58: a frame shorter than its voice cuts the line off).
-      const voiced = fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8');
-      await writeProject();
-      if (!sameVoices(voiced, fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8'))) {
-        await stage('voice');
-        await voice();
+    // C2: integrity (each image shows what its line claims): one fix via the director, then warn. A kept plan the check already
+    // read isn't checked again: its findings are on the job's flags from that run.
+    const keptIntegrity = keptVoice && Boolean(keptPlan?.checked);
+    if (keptIntegrity) log('resumed', { jobId: job.id, from: 'integrity check' });
+    else {
+      await stage('integrity_check');
+      const integrityCheck = async (): Promise<Awaited<ReturnType<ProductionDeps['checks']['checkIntegrity']>>> => {
+        try {
+          return await deps.checks.checkIntegrity({ plan, inventory, draft, facts }, ctx);
+        } catch (error) {
+          await flag('integrity', `The image check failed (${errorText(error)}); the pictures ship unchecked.`);
+          return { problems: [] };
+        }
+      };
+      const integrity = await integrityCheck();
+      await keepText('integrity_check', { round: 0, problems: integrity.problems });
+      await settle('integrity check');
+      if (integrity.problems.length > 0) {
+        // A garbled image never stays an anchor: its person's next best portrait takes over before the fix.
+        const reanchored = reanchor(inventory, garbledAssetIds(integrity.problems));
+        if (reanchored.moved.length) {
+          inventory = reanchored.inventory;
+          await keepText('inventory', inventory);
+          for (const m of reanchored.moved) log('reanchored', { jobId: job.id, ...m });
+        }
+        const flagged = [...new Set(integrity.problems.map((p) => p.frame))];
+        let still = integrity.problems;
+        try {
+          const fixed = await arrive(
+            await deps.writing.directReel({ draft, inventory, facts, kitGuide: deps.render.kitGuide, fix: { kind: 'image_check', plan, problems: integrity.problems } }, ctx),
+            'image-check fix',
+          );
+          plan = reconcilePlan(draft, mergeFrames(plan, fixed, flagged));
+          await keepText('director_plan', plan);
+          // Makes the fix asked for exist before the re-check looks at them (they were "not in the inventory").
+          if (deps.render.makeAssets) await runMakes();
+          fs.cpSync(harvestDir, ws.jobDir, { recursive: true });
+          await stage('integrity_check');
+          still = (await integrityCheck()).problems;
+          await keepText('integrity_check', { round: 1, problems: still });
+        } catch (error) {
+          await flag('integrity', `The re-plan on the image check failed (${errorText(error)}); frames ${flagged.join(', ')} keep their plan.`);
+        }
+        await settle('integrity fix');
+        for (const p of still) await flag('integrity', `Frame ${p.frame} (${p.asset_id}): ${p.why}`);
+        // The rewrite must not lose the voice: same lines → assemble re-paces from the voice already made;
+        // different lines → voice them again (MD-58: a frame shorter than its voice cuts the line off).
+        const voiced = fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8');
+        await writeProject();
+        if (!sameVoices(voiced, fs.readFileSync(path.join(projectDir, 'STORYBOARD.md'), 'utf8'))) {
+          await stage('voice');
+          await voice();
+        }
       }
     }
+    // Nothing since the last run touched the voice or the plan: what was built on them may still stand.
+    const keptBase = keptVoice && JSON.stringify(plan) === JSON.stringify(keptPlan?.plan);
 
     try {
       for (const w of planWarnings(plan, { draft, inventory })) await flag('integrity', `Plan: ${w}`);
@@ -850,7 +898,11 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
 
     // MD-61: the sound designer plans the cues on the final voice timing (cues are word-anchored, so later
     // re-paces keep them in place). It fails open: its problems ship as warnings.
-    if (deps.render.designSound) {
+    const keptSound = keptBase && fs.existsSync(path.join(projectDir, CUES_FILE));
+    if (deps.render.designSound && keptSound) {
+      trace.soundCues = cueCount(readCues(projectDir));
+      log('resumed', { jobId: job.id, from: 'sound design' });
+    } else if (deps.render.designSound) {
       await stage('sound_design');
       const sound = await deps.render.designSound({ projectDir, draft, plan }, ctx).catch((error) => ({ usd: 0, problems: [`the sound designer failed (${errorText(error)}); the kit keeps its default sound`], cues: null }));
       trace.soundCues = sound.cues !== undefined ? cueCount(sound.cues) : cueCount(readCues(projectDir));
@@ -923,45 +975,57 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
       for (const m of misses) await flagOnce('breakage', planMissText(m));
       return result;
     };
-    await compile();
-    let assembled = await measureAndRepair('compiled');
+    // The compiled project is current when the last compile left a fingerprint of these inputs, or, from before fingerprints,
+    // when its frames were all compiled after the plan was kept.
+    const compileKey = () => fingerprint(projectDir, plan);
+    const keptCompile = (keptSound || (keptBase && !deps.render.designSound)) && compiledCurrent(projectDir, compileKey(), keptPlan?.at ?? null);
+    let assembled: { ok: boolean; problems: string[] };
+    if (keptCompile) {
+      log('resumed', { jobId: job.id, from: 'compile' });
+      accepted = readTouches(projectDir);
+      assembled = await priorBreakage(db, job.id);
+    } else {
+      await compile();
+      assembled = await measureAndRepair('compiled');
 
-    // The creative pass watches the compiled reel and may add; each touch is compiled and measured against its frame's clean
-    // baseline, and any new finding removes it. It fails open: an error means no touches and a flag.
-    if (deps.writing.creativePass) {
-      try {
-        await stage('creative_pass');
-        const creative = await deps.writing.creativePass({ draft, plan, projectDir, sources: hookSources(facts) }, ctx);
-        for (const p of creative.problems) await flagOnce('render', `Creative pass: ${p}`);
-        await settle('creative pass');
-        const offered = creative.touches.touches.length + creative.touches.custom.length + (creative.touches.hook_swap ? 1 : 0);
-        if (offered && deps.render.frameFindings) {
-          const findings = deps.render.frameFindings;
-          const idOf = (n: number) => compiledFrames.find((f) => f.n === n)?.id ?? '';
-          const applied = await applyTouches({
-            proposed: creative.touches,
-            compile: async (touches, frame) => {
-              accepted = touches;
-              await compile([frame]);
-            },
-            findings: async (frame) => {
-              const misses = deps.render.readCompiled ? checkPlanCarried({ ...plan, frames: plan.frames.filter((f) => f.n === frame) }, (await deps.render.readCompiled(projectDir)).frames) : [];
-              return [...(await findings(projectDir, idOf(frame))), ...misses.map(planMissText)];
-            },
-          });
-          accepted = applied.accepted;
-          for (const r of applied.removed) await flagOnce('render', `Touch ${r.id} on frame ${r.frame} was removed; the frame stays as compiled: ${r.why}`);
-          fs.mkdirSync(path.dirname(path.join(projectDir, TOUCHES_FILE)), { recursive: true });
-          fs.writeFileSync(path.join(projectDir, TOUCHES_FILE), `${JSON.stringify(accepted, null, 1)}\n`);
-          await keepText('breakage', { round: 'touches', accepted, removed: applied.removed });
-          // Sounds, caption tones and the kit's cues are measured over the whole reel, with what stayed.
-          if (accepted.touches.length + accepted.custom.length || accepted.hook_swap) assembled = await measureAndRepair('with_touches');
+      // The creative pass watches the compiled reel and may add; each touch is compiled and measured against its frame's clean
+      // baseline, and any new finding removes it. It fails open: an error means no touches and a flag.
+      if (deps.writing.creativePass) {
+        try {
+          await stage('creative_pass');
+          const creative = await deps.writing.creativePass({ draft, plan, projectDir, sources: hookSources(facts) }, ctx);
+          for (const p of creative.problems) await flagOnce('render', `Creative pass: ${p}`);
+          await settle('creative pass');
+          const offered = creative.touches.touches.length + creative.touches.custom.length + (creative.touches.hook_swap ? 1 : 0);
+          if (offered && deps.render.frameFindings) {
+            const findings = deps.render.frameFindings;
+            const idOf = (n: number) => compiledFrames.find((f) => f.n === n)?.id ?? '';
+            const applied = await applyTouches({
+              proposed: creative.touches,
+              compile: async (touches, frame) => {
+                accepted = touches;
+                await compile([frame]);
+              },
+              findings: async (frame) => {
+                const misses = deps.render.readCompiled ? checkPlanCarried({ ...plan, frames: plan.frames.filter((f) => f.n === frame) }, (await deps.render.readCompiled(projectDir)).frames) : [];
+                return [...(await findings(projectDir, idOf(frame))), ...misses.map(planMissText)];
+              },
+            });
+            accepted = applied.accepted;
+            for (const r of applied.removed) await flagOnce('render', `Touch ${r.id} on frame ${r.frame} was removed; the frame stays as compiled: ${r.why}`);
+            fs.mkdirSync(path.dirname(path.join(projectDir, TOUCHES_FILE)), { recursive: true });
+            fs.writeFileSync(path.join(projectDir, TOUCHES_FILE), `${JSON.stringify(accepted, null, 1)}\n`);
+            await keepText('breakage', { round: 'touches', accepted, removed: applied.removed });
+            // Sounds, caption tones and the kit's cues are measured over the whole reel, with what stayed.
+            if (accepted.touches.length + accepted.custom.length || accepted.hook_swap) assembled = await measureAndRepair('with_touches');
+          }
+        } catch (error) {
+          // Only a runaway stops a job: the reel ships as compiled, with whatever touches already passed.
+          if (error instanceof ProductionFailure) throw error;
+          await flagOnce('render', `The creative pass failed (${errorText(error)}); the reel ships without its touches.`);
         }
-      } catch (error) {
-        // Only a runaway stops a job: the reel ships as compiled, with whatever touches already passed.
-        if (error instanceof ProductionFailure) throw error;
-        await flagOnce('render', `The creative pass failed (${errorText(error)}); the reel ships without its touches.`);
       }
+      writeFingerprint(projectDir, compileKey());
     }
 
     // P8: render, then the contact sheet the first viewer looks at.
@@ -982,6 +1046,10 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         }
       }
       // The video exists now: nothing after this point may lose it.
+      return sheetFor(video);
+    };
+    async function sheetFor(video: string, resumed = false) {
+      if (resumed) log('resumed', { jobId: job.id, from: 'render' });
       let sheet = '';
       try {
         sheet = await deps.render.contactSheet(projectDir, video);
@@ -989,8 +1057,10 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
         await flag('render', `The contact sheet failed (${errorText(error)}); the reel ships without it or the first viewer's read.`);
       }
       return { video, sheet };
-    };
-    let { video, sheet } = await renderAndSheet(true);
+    }
+    // The render is current when it is newer than everything it was rendered from.
+    const keptVideo = keptCompile ? renderedCurrent(projectDir) : null;
+    let { video, sheet } = keptVideo ? await sheetFor(keptVideo, true) : await renderAndSheet(true);
 
     // C3: the first-time viewer, and beside it the design reviewer on a still of every story frame (MD-129). Their picture
     // findings get one director re-plan of the frames they name, a recompile and a re-render, then warn. Findings that start in
@@ -1197,6 +1267,85 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
 const errorText = errorReason;
 
 /** The sound designer's cues written to the project (CUES_FILE), or null when there is none. */
+function readText(file: string): string | null {
+  try {
+    return fs.readFileSync(file, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/** Every frame the storyboard voices has its audio in audio_meta.json, with a duration and a non-empty file. */
+function voicedOnDisk(projectDir: string, storyboard: string): boolean {
+  let voices: { frame: number; path?: string; duration_s?: number }[];
+  try {
+    voices = (JSON.parse(fs.readFileSync(path.join(projectDir, 'audio_meta.json'), 'utf8')) as { voices?: typeof voices }).voices ?? [];
+  } catch {
+    return false;
+  }
+  const spoken = [...frameVoices(storyboard)].filter(([, text]) => text);
+  if (!spoken.length) return false;
+  return spoken.every(([n]) => {
+    const v = voices.find((x) => Number(x.frame) === n);
+    const file = v?.path ? path.join(projectDir, v.path) : null;
+    return Boolean(v && (v.duration_s ?? 0) > 0 && file && fs.existsSync(file) && fs.statSync(file).size > 0);
+  });
+}
+
+/** Where a compile records what it was built from (plan, inventory, voice timing, storyboard, sound cues). */
+export const COMPILE_FINGERPRINT = 'compiled-from.json';
+function fingerprint(projectDir: string, plan: DirectorPlan): string {
+  const h = createHash('sha256');
+  for (const part of [JSON.stringify(plan), readText(path.join(projectDir, 'audio_meta.json')) ?? '', readText(path.join(projectDir, 'STORYBOARD.md')) ?? '', readText(path.join(projectDir, CUES_FILE)) ?? '']) h.update(part).update('\0');
+  return h.digest('hex');
+}
+function writeFingerprint(projectDir: string, key: string): void {
+  fs.writeFileSync(path.join(projectDir, COMPILE_FINGERPRINT), `${JSON.stringify({ key })}\n`);
+}
+function compiledCurrent(projectDir: string, key: string, planAt: Date | null): boolean {
+  const frames = path.join(projectDir, 'assets', 'frames');
+  const files = fs.existsSync(frames) ? fs.readdirSync(frames).filter((f) => f.endsWith('.js')) : [];
+  if (!files.length || !fs.existsSync(path.join(projectDir, 'index.html'))) return false;
+  const kept = readText(path.join(projectDir, COMPILE_FINGERPRINT));
+  if (kept !== null) {
+    try {
+      return (JSON.parse(kept) as { key?: string }).key === key;
+    } catch {
+      return false;
+    }
+  }
+  // Before fingerprints: every frame compiled after the plan it shows was kept.
+  return planAt !== null && files.every((f) => fs.statSync(path.join(frames, f)).mtimeMs >= planAt.getTime());
+}
+
+/** The newest file's time under these paths (recursive); 0 when none exist. */
+function newestMtime(paths: string[]): number {
+  let newest = 0;
+  const walk = (p: string) => {
+    if (!fs.existsSync(p)) return;
+    const st = fs.statSync(p);
+    if (st.isDirectory()) for (const e of fs.readdirSync(p)) walk(path.join(p, e));
+    else newest = Math.max(newest, st.mtimeMs);
+  };
+  for (const p of paths) walk(p);
+  return newest;
+}
+/** The rendered reel, when it exists, isn't empty, and is newer than every compiled input it was rendered from; else null. */
+function renderedCurrent(projectDir: string): string | null {
+  const video = path.join(projectDir, 'renders', 'video.mp4');
+  if (!fs.existsSync(video) || fs.statSync(video).size === 0) return null;
+  const inputs = ['index.html', 'compositions', path.join('assets', 'frames'), path.join('assets', 'custom'), path.join('assets', 'voice'), 'audio_meta.json', CUES_FILE, TOUCHES_FILE, COMPILE_FINGERPRINT].map((p) => path.join(projectDir, p));
+  return fs.statSync(video).mtimeMs > newestMtime(inputs) ? video : null;
+}
+
+function readTouches(projectDir: string): Touches {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(projectDir, TOUCHES_FILE), 'utf8')) as Touches;
+  } catch {
+    return NO_TOUCHES;
+  }
+}
+
 function readCues(projectDir: string): SoundCues | null {
   try {
     return JSON.parse(fs.readFileSync(path.join(projectDir, CUES_FILE), 'utf8')) as SoundCues;

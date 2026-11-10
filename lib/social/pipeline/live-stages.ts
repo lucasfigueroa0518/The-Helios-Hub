@@ -42,7 +42,10 @@ import { runWriter } from '@/lib/social/writer/writer';
 import { runEditor } from '@/lib/social/editor/editor';
 
 import { createCaptionerStage, type CaptionerRun } from './captioner-stage';
-import { createDesignStage } from './design-stage';
+import type { PhotoDeps as SharedPhotoDeps } from '@/lib/photos/types';
+import type { Query } from '@/lib/social/store/pg';
+
+import { createDesignStage, type SharedPhotoStep } from './design-stage';
 import { createFactCheckStage } from './factcheck-stage';
 import { createMechanicalStage } from './mechanical-stage';
 import { readableDate } from './reporter-stage';
@@ -125,6 +128,17 @@ export type LiveStagesDeps = {
   faces?: PhotoDeps['faces'];
   /** Second photos of a person (photos/second-photo.ts). */
   secondPhotos?: PhotoDeps['secondPhotos'];
+  /**
+   * The shared photo finder (CI-30): the carousel switch (`intake.settings` photo_finders) is read once per run
+   * through `query`; 'shared' puts lib/photos ahead of today's finder. `deps` defaults to lib/photos/live.ts;
+   * `find`/`needs` to lib/photos (tests stub them). Absent: today's finder, no read.
+   */
+  photoFinders?: {
+    query: Query;
+    deps?: () => Promise<SharedPhotoDeps>;
+    find?: SharedPhotoStep['find'];
+    needs?: SharedPhotoStep['needs'];
+  };
   /** The render review (photo spec §5b), for runs that switch it on: its before/after images go under `dir`. */
   renderReview?: { dir: string };
   now: Date;
@@ -133,6 +147,23 @@ export type LiveStagesDeps = {
   /** Safety stop on how many stories the Reporter may start. */
   maxReporterRuns: number;
 };
+
+/**
+ * The carousel's shared finder for this run, or null for today's finder: a switch that isn't 'shared', a read error,
+ * or shared deps that can't be built. Never throws.
+ */
+export async function carouselSharedPhotos(pf: NonNullable<LiveStagesDeps['photoFinders']>): Promise<SharedPhotoStep | null> {
+  try {
+    const [{ readPhotoFinderModes, photoFinderMode }, { PHOTO_PROFILES }] = await Promise.all([import('@/lib/photos/switch'), import('@/lib/photos/profiles')]);
+    const modes = await readPhotoFinderModes({ query: async <T>(text: string, params?: unknown[]) => ({ rows: (await pf.query(text, params)).rows as T[] }) });
+    if (photoFinderMode(modes, 'carousel') !== 'shared') return null;
+    const deps = pf.deps ? await pf.deps() : await (await import('@/lib/photos/live')).livePhotoDeps();
+    return { profile: PHOTO_PROFILES.carousel, deps, ...(pf.find ? { find: pf.find } : {}), ...(pf.needs ? { needs: pf.needs } : {}) };
+  } catch (err) {
+    console.error(`[helios-social] shared photo finder unavailable, today's finder only: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
+}
 
 /** A guard refusal surfaces inside a stage as a service error; report it as the cost cap it is. */
 function capAware<T>(budget: RunBudget, r: StageResult<T>): StageResult<T> {
@@ -166,8 +197,12 @@ export function createLiveStages(deps: LiveStagesDeps): { stages: PipelineStages
   };
   // The render review (photo spec §5b): Haiku on the contact sheet, under the same budget guard.
   const review = deps.renderReview ? createRenderReview({ call: createReviewCall({ create }), dir: deps.renderReview.dir }) : undefined;
+  // CI-30: the carousel switch, read once per run (on the first design), only when the run passes a settings query.
+  const pf = deps.photoFinders;
+  let sharedOnce: Promise<SharedPhotoStep | null> | undefined;
+  const sharedPhotos = pf ? () => (sharedOnce ??= carouselSharedPhotos(pf)) : undefined;
   // The size floors (size.ts) read a photo's size when its source doesn't state one.
-  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, size: createSizeProbe(deps.http ?? fetch), fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}) });
+  const design = createDesignStage({ jev: deps.jev, http: deps.http, vision, tagSheet, faces: deps.faces, secondPhotos: deps.secondPhotos, size: createSizeProbe(deps.http ?? fetch), fitCheck: deps.fitCheck, usedLog: deps.usedLog, now: () => deps.now, identitiesFor, review, ...(deps.bank ? { bank: deps.bank } : {}), ...(sharedPhotos ? { sharedPhotos } : {}) });
 
   const stages: PipelineStages = {
     score: deps.score,

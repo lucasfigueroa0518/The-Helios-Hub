@@ -46,9 +46,10 @@ async function main(): Promise<number> {
     }
 
     const store = await import('@/lib/ai-events/store');
-    const { carryOutAiEventsRun, withAiEventsTimeout } = await import('@/lib/ai-events/worker');
+    const { carryOutAiEventsRun } = await import('@/lib/ai-events/worker');
     const { liveAiEventsDeps, liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
-    const { AI_EVENTS_RUN_TIMEOUT_MS } = await import('@/lib/ai-events/config');
+    const { tapProcessOutput, withHangGuard } = await import('@/lib/content-runs/hang-guard');
+    tapProcessOutput();
 
     const claimed = await store.claimRun(query);
     if (!claimed) {
@@ -56,7 +57,8 @@ async function main(): Promise<number> {
       return 1;
     }
     log('claimed', { ...claimed });
-    const out = await withAiEventsTimeout(
+    // Never cut off for length; only a hung run (no output for 45 min, or the 12 h backstop) is failed.
+    const out = await withHangGuard(
       carryOutAiEventsRun(
         {
           query,
@@ -67,10 +69,11 @@ async function main(): Promise<number> {
         },
         claimed,
       ),
-      AI_EVENTS_RUN_TIMEOUT_MS,
-      async () => {
-        await store.failRun(query, claimed.id, 'timed out after 30 minutes').catch(() => undefined);
-        return { runId: claimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+      {
+        onHang: async (reason) => {
+          await store.failRun(query, claimed.id, reason).catch(() => undefined);
+          return { runId: claimed.id, status: 'failed' as const, note: reason };
+        },
       },
     );
     const row = (await query<{ status: string; jev_usd: number; stop_reason: string | null; error: string | null }>(

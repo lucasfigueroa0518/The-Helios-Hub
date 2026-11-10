@@ -26,7 +26,7 @@ import {
 import { expressionOf, lookAt, placeOf } from './look';
 import { checkedUpscale, isGarbledUpscale, normaliseImage, scaleBoxes } from './media';
 import { measureAsset } from './regions';
-import { recentlyUsed } from './reuse';
+import { usedCandidates } from './reuse';
 import { articleSource, newsroomSource } from './sources/articles';
 import { bankSource } from './sources/bank';
 import { commonsSource } from './sources/commons';
@@ -271,11 +271,24 @@ export function makePipeline(ctx: PipelineCtx): Pipeline {
     }
     const mine = () => batch.filter((c) => !c.reject);
 
-    // The 20-day rule. Character images and logos are exempt from the reuse window (MD-41, MD-45); everything else rests 20 days.
+    // The used-photo rule (CI-32): a photo any post published in the last 20 days is out, by URL and by pHash (a
+    // candidate with no pHash yet is still checked by URL), read from the hub's ledger. Character images and logos are
+    // brand assets, exempt (MD-41).
     const exempt = (c: RawCandidate) => c.character_image || c.kind === 'logo' || c.flags.includes('logo');
-    const reuseKeys = mine().filter((c) => !exempt(c) && c.phash).map((c) => c.phash!);
-    const used = await recentlyUsed(deps.db, reuseKeys, settings.reuse_days, now);
-    for (const c of mine()) if (!exempt(c) && c.phash && used.has(c.phash)) c.reject = `used_within_${settings.reuse_days}_days`;
+    const toCheck = mine().filter((c) => !exempt(c) && (c.url || c.phash));
+    let used = new Map<Cand, string>();
+    if (toCheck.length && settings.reuse_days > 0) {
+      if (!deps.ledgerDb) {
+        const note = 'reuse: no hub database for the used-photo ledger; published photos are not checked';
+        if (!run.notes.includes(note)) run.notes.push(note);
+      } else {
+        used = await usedCandidates(deps.ledgerDb, toCheck, settings.reuse_days, now).catch((err) => {
+          run.notes.push(`reuse: the used-photo ledger could not be read (${err instanceof Error ? err.message.slice(0, 120) : String(err)})`);
+          return new Map<Cand, string>();
+        });
+      }
+    }
+    for (const c of used.keys()) c.reject = `used_within_${settings.reuse_days}_days`;
 
     // The look: every found (not made, not banked) image. A photo-bank hit whose identity matched and whose
     // look the bank already holds reuses that look (no paid look); the verdicts below still judge it.

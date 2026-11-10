@@ -1,5 +1,7 @@
 import sharp from 'sharp';
 
+import { hamming, NEAR_DUPLICATE } from '@/lib/photos/hash-distance';
+
 import { siteOf } from '@/lib/reel-ai-drama/reporting/validate';
 
 import type { RawCandidate } from './types';
@@ -318,8 +320,7 @@ export function upscaleFactor(shortSide: number, floor: number = MIN_SHORT_SIDE)
 
 // ── Perceptual hash and dedupe ─────────────────────────────────────────────
 
-/** Hamming distance at or under which two 64-bit pHashes are the same picture (starting value; tune). */
-export const NEAR_DUPLICATE = 8;
+export { hamming, isPhash, NEAR_DUPLICATE } from '@/lib/photos/hash-distance';
 
 const N = 32;
 const COS = Array.from({ length: 8 }, (_, u) => Array.from({ length: N }, (_, x) => Math.cos(((2 * x + 1) * u * Math.PI) / (2 * N))));
@@ -346,20 +347,6 @@ export async function phash(input: Buffer | string): Promise<string> {
   return hex;
 }
 
-export function hamming(a: string, b: string): number {
-  if (a.length !== b.length) return 64;
-  let d = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    let x = Number.parseInt(a[i], 16) ^ Number.parseInt(b[i], 16);
-    while (x) {
-      d += x & 1;
-      x >>= 1;
-    }
-  }
-  return d;
-}
-
-export const isPhash = (key: string) => /^[0-9a-f]{16}$/.test(key);
 
 /**
  * Groups near-identical images and keeps the best of each group (`better(a, b) > 0` when a is better).

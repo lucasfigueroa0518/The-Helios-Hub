@@ -20,6 +20,7 @@ All times are America/New_York (DST-safe, see `lib/reels/schedule.ts`).
 | AI Events This Week | `ai_events` | `helios-social` (the same process; no unit of its own) | 12:00 PM on its days (`ai_events.settings.days`, Sunday), only with `ai_events.settings.auto_run` on: ranks the coming week's events (Jev `event-pick@1`, capped at `run_cap_usd`) and renders a ranked carousel each for Miami and Boston; a manual run from the hub's Generate or Rebuild post on any day | Sunday: Miami 6:00–7:00 PM, Boston 7:00–8:00 PM | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built |
 | Field Notes | `field_notes` | `helios-social` (the same process; no unit of its own) | 2:00 AM on its days (Tue/Fri, `FIELD_NOTES_AUTO_DAYS`), only with `field_notes.settings.auto_run` on (ships off): picks one tip, writes the slides (live Claude and Jev, capped at `run_cap_usd`) and renders the carousel on the photo pool; a manual run from the hub's Generate or Rebuild post on any day | 2:30–3:30 PM on its days, approved posts only, 1 a day | read with Carousels: every 30 minutes while fresh and the 5:30 sweep | built; `publishing_live` ships off |
 | Intake (shared, not a content type) | `intake` | `helios-social` (the same process; no unit of its own) | 12:00 AM main run and 2:40 AM top-up (`lib/intake/run.ts`): fetches the sources the open orders name, groups them into stories and scores the touched ones. Jev only (caps: main $0.50, top-up $0.15); no open order, nothing fetched. MD/GTN/FvP Generate and manual LFD runs top it up when it is older than 180 minutes | none (no posts) | none | built; schema `db/intake_schema.sql` |
+| Instagram photo read (shared, not a content type) | `social` (`social.ig_media_matches`, `social.used_photos`) | `helios-social` (the same process; no unit of its own) | 11:45 PM (`lib/photos/ig-sync.ts`, CI-32): lists the account's feed posts (21 days back every run; a post is handled once it is new to `social.ig_media_matches`, or again while unmatched and under 3 days old, newest first, so a run cut short resumes next night) and live stories, matches each to the post we built (media id, then caption, then cover image; a Story frame by image only when two frames posted within the hour match the same one set) and logs its photos into the 20-day used-photo ledger at the Instagram time; skipped while Meta is not configured. No model call | none (reads only) | none | built; schema `db/social_used_photos_v2.sql` |
 | Social Hub | `social_hub` | `helios-social` (same worker) | 5:45 account sweep (account insights, demographics, active times, publishing quota); refreshes the hub queues on visit | none (reads only) | 5:45 | built |
 | IG Stories | `stories` | `helios-stories` | 3:00 sets for series with `auto` on (Morning Download daily, Guess the Number Mon/Thu, Free vs. Paid Tue/Sat) | 8:30–10:00 AM, every series; may overlap other types (Stories are not feed posts) | every 2 hours while live, final read at 23 h | built (Lucas); no live set yet |
 
@@ -33,7 +34,7 @@ run stays available (`npx tsx scripts/lfd_run.ts --live`, Tommy).
 
 AI Events This Week (`planning/AI Events/DECISIONS.md`) also runs inside `helios-social`. Its clock is 12:00 PM, after the
 networking ingest's 9:00 AM Sunday refresh on `helios-orch-worker` and hours from every other run, so the per-hour rule
-holds; its runs are claimed after Last Few Days' in the same loop, under the same 30-minute timeout. Engine `lib/ai-events`,
+holds; its runs are claimed after Last Few Days' in the same loop, under the same hang guard (no run time limit; CI-33). Engine `lib/ai-events`,
 schema `ai_events`; its posts are spine items (`vertical 'ai_events'`). A run ranks the coming Monday to Sunday per city
 (the weekly pool, `ai_events.pool`; events already scored are never asked again, AE-05), renders one ranked post per
 city for Miami and Boston (cover, #2 to #4, the locked #1 tease, the closing slide; AE-29) with a drawn look, books Miami
@@ -43,7 +44,7 @@ looks. A slot more than 60 minutes late is cancelled, never posted late. The hum
 `npx tsx scripts/ai_events_once.ts` (it carries out a run queued from the hub; Lucas only).
 
 Field Notes (`planning/Field Notes/CONTRACT.md`) also runs inside `helios-social`. Its clock is 2:00 AM (night schedule v2),
-sharing the hour with the Explainers idea cycle (one video renderer plus one slide renderer); its runs are claimed after AI Events' in the same loop, under the same 30-minute timeout. Engine
+sharing the hour with the Explainers idea cycle (one video renderer plus one slide renderer); its runs are claimed after AI Events' in the same loop, under the same hang guard (no run time limit; CI-33). Engine
 `lib/field-notes`, schema `field_notes` (apply it before redeploying the worker); its posts are spine items (`vertical 'field_notes'`).
 A run picks one tip, pairs it with photos from the pool (the rest rule), renders 4 to 6 slides and waits for a person: nothing posts
 without approval. It books the afternoon window only while `publishing_live` is on. A slot more than 120 minutes late is cancelled,
@@ -314,3 +315,12 @@ In the `social` (carousel) code, "story" means a **news story** (`story_id`,
 2. Add the six contract items to the type's schema file (additive, idempotent).
 3. Add a systemd unit and deploy it to the social worker VM.
 4. Ship with `auto_run` and `publishing_live` off.
+
+## Run time limits (CI-33, 2026-11-10)
+
+No content run is failed or killed for taking long. In-process runs (Last Few Days, its memes stage, AI Events, Field
+Notes) are failed only when hung: no output from the process for 45 minutes (`RUN_QUIET_LIMIT_MS`), or the 12 h
+backstop (`RUN_HANG_BACKSTOP_MS`), both in `lib/content-runs/hang-guard.ts`. Render, compile and voice subprocesses
+(Explainers, Reel AI Drama) have only the 12 h backstop. Runs left `running` by a dead worker are reaped when
+`helios-social` boots (LFD, AI Events, Field Notes) and otherwise by the 12 h age backstop (Carousels, Reels and their
+stage jobs, IG Stories builds, intake, AI Drama). Per-request network timeouts and publishing limits are unchanged.

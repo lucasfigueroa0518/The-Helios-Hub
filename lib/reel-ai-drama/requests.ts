@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 import type { Queryable } from '@/lib/explainers/db';
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { rankScore } from '@/lib/reel-ai-drama/development/pool';
@@ -145,7 +146,7 @@ export async function listDramaRequests(db: Queryable, limit = 20): Promise<Dram
 }
 
 /** Requests a dead worker left running: failed, with why (the same rule as stale jobs). */
-export async function failStaleDramaRequests(db: Queryable, olderThanMinutes = 180): Promise<number> {
+export async function failStaleDramaRequests(db: Queryable, olderThanMinutes = RUN_HANG_BACKSTOP_MINUTES /* hang guard only; long runs are normal */): Promise<number> {
   const { rows } = await db.query(
     `UPDATE reel_ai_drama.requests SET status = 'failed', finished_at = now(), error = 'The worker stopped while this was running.'
       WHERE status = 'running' AND started_at < now() - make_interval(mins => $1) RETURNING id`,
