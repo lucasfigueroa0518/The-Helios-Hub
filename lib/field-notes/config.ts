@@ -43,3 +43,7 @@ export const FIELD_NOTES_MISSED_AFTER_MINUTES = 120;
 
 /** What the budget keeps free for one more Claude call (about max_tokens of output plus the cached prompt, with margin). */
 export const FIELD_NOTES_CALL_RESERVE_USD = 0.1;
+
+/** Candidates one run may score (a guard on top of the cap), shared round-robin across sources. Lives here (not
+ * run.ts) so the intake can read it without pulling in Field Notes' renderer. */
+export const MAX_SCORED_PER_RUN = 25;

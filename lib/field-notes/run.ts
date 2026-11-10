@@ -41,7 +41,7 @@
 import type { FieldNotesBudget } from './budget';
 import { createFieldNotesBudget, FieldNotesBudgetExhausted } from './budget';
 import { buildFieldNotesCaption, withSourceLinks } from './caption';
-import { FIELD_NOTES_SLIDE_PREFIX } from './config';
+import { FIELD_NOTES_SLIDE_PREFIX, MAX_SCORED_PER_RUN } from './config';
 import { asIntakeQuery, saveIntakeTips, type FieldNotesIntakeDeps, type FieldNotesIntakeMode } from './intake';
 import { draftToSlideInputs, layoutsToSlides, splitProblems } from './post';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
@@ -91,8 +91,7 @@ import type { FactChecker } from './write/types';
 export { MIN_POST_PHOTOS };
 /** Rounds of swapping a photo whose slide found no calm region for the text. */
 export const MAX_PHOTO_SWAPS = 3;
-/** Candidates one run may score (a guard on top of the cap), shared round-robin across sources. */
-export const MAX_SCORED_PER_RUN = 25;
+export { MAX_SCORED_PER_RUN };
 export { MAX_CANDIDATES_PER_SOURCE };
 
 export type FieldNotesEngineDeps = {
