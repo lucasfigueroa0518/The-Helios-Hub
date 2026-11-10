@@ -88,6 +88,29 @@ export async function collectedCandidates(headline: string): Promise<SeedCandida
   return rows.map((r) => ({ url: r.canonical_url, headline: r.headline, body: r.body, outlet: r.source_name ?? new URL(r.canonical_url).hostname, source: 'collected' as const }));
 }
 
+/**
+ * Central intake (Phase 2): the same read over `reels.idea_sources_v`, so the intake's kept reels items (which no
+ * longer reach `reels.sources`) count as collected stories. Seeds and dropped members are left out, as above.
+ */
+export async function collectedCandidatesFromView(headline: string): Promise<SeedCandidate[]> {
+  const { rows } = await dbQuery<{ url: string; headline: string; body: string; source_name: string | null; sim: number }>(
+    `SELECT DISTINCT ON (s.url) s.url, s.headline, s.body, s.source_name,
+            greatest(similarity(s.headline, $1), word_similarity(s.headline, $1), word_similarity($1, s.headline)) AS sim
+       FROM reels.idea_sources_v s
+      WHERE NOT s.seeded AND s.adapter_id <> 'seed' AND s.drop_reason IS NULL
+        AND s.url NOT LIKE 'seed://%'
+        AND s.ingest_time > now() - ($2 || ' hours')::interval
+        AND length(s.body) >= $3
+        AND greatest(similarity(s.headline, $1), word_similarity(s.headline, $1), word_similarity($1, s.headline)) > $4
+      ORDER BY s.url`,
+    [headline, String(REFERENCE_POOL_HOURS), MIN_BODY_CHARS, COLLECTED_FLOOR],
+  );
+  return rows
+    .sort((a, b) => Number(b.sim) - Number(a.sim))
+    .slice(0, SEED_MAX_CANDIDATES)
+    .map((r) => ({ url: r.url, headline: r.headline, body: r.body, outlet: r.source_name ?? new URL(r.url).hostname, source: 'collected' as const }));
+}
+
 const gnewsSearchUrl = (query: string) => `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
 
 /** Google News titles end " - Outlet"; split it off. */

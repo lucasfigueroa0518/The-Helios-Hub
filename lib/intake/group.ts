@@ -143,6 +143,38 @@ type Ctx = {
   noAsk: boolean;
 };
 
+/**
+ * Phase 2: an item only Field Notes keeps (a 'field-notes' family item, or one whose other lists all dropped it). It
+ * is never grouped: it is not in the pool, and it becomes its own story. An item a reels adapter or a feed also
+ * keeps is grouped as usual (its Field Notes membership rides along).
+ */
+export const FIELD_NOTES_ONLY_SQL = `(
+  (i.family = 'field-notes' OR i.field_notes_source_id IS NOT NULL)
+  AND NOT (CASE WHEN i.feed_slug IS NOT NULL THEN i.feed_drop_reason IS NULL ELSE i.family = 'feeds' AND i.drop_reason IS NULL END)
+  AND NOT (CASE WHEN i.reels_source_id IS NOT NULL THEN i.reels_drop_reason IS NULL ELSE i.family = 'reels' AND i.drop_reason IS NULL END)
+  AND NOT (i.family IN ('search', 'seed') AND i.drop_reason IS NULL))`;
+
+/** Each new, ungrouped Field-Notes-only item becomes its own story (role primary). Only ungrouped rows: Rule 2. */
+export async function placeFieldNotesItems(q: IntakeQuery, runId: string, now: Date, summary: GroupingResult): Promise<number> {
+  const { rows } = await q.query<{ key: string; headline: string; first_seen_at: Date | string }>(
+    `SELECT i.key, i.headline, i.first_seen_at FROM intake.items i
+      WHERE i.story_id IS NULL AND ${FIELD_NOTES_ONLY_SQL}
+      ORDER BY i.first_seen_at, i.key`,
+  );
+  for (const row of rows) {
+    const { rows: created } = await q.query<{ id: string }>(
+      `INSERT INTO intake.stories (representative_key, headline, first_seen_at, last_joined_at, created_run_id)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id::text AS id`,
+      [row.key, row.headline, new Date(row.first_seen_at), now, runId],
+    );
+    const id = created[0]!.id;
+    await q.query(`UPDATE intake.items SET story_id = $2, role = 'primary', joined_at = $3 WHERE key = $1`, [row.key, id, now]);
+    summary.created += 1;
+    summary.touched.add(id);
+  }
+  return rows.length;
+}
+
 async function loadPool(q: IntakeQuery, now: Date): Promise<PoolRow[]> {
   const cutoff = new Date(now.getTime() - REFERENCE_POOL_HOURS * 3_600_000);
   const { rows } = await q.query<Omit<PoolRow, 'trg'>>(
@@ -151,6 +183,7 @@ async function loadPool(q: IntakeQuery, now: Date): Promise<PoolRow[]> {
        FROM intake.items i
        LEFT JOIN intake.stories s ON s.id = i.story_id
       WHERE i.drop_reason IS NULL
+        AND NOT ${FIELD_NOTES_ONLY_SQL}
         AND i.first_seen_at > $1
         AND (i.story_id IS NULL OR (s.merged_into IS NULL AND s.last_joined_at > $1))
       ORDER BY i.first_seen_at, i.key`,
@@ -482,6 +515,7 @@ export async function groupIntake(
   opts: GroupOptions = {},
 ): Promise<GroupingResult> {
   const summary: GroupingResult = partial ?? { created: 0, joined: 0, merges: 0, pairCalls: 0, cacheHits: 0, touched: new Set(), failures: [] };
+  await placeFieldNotesItems(q, runId, now, summary);
   const poolRows = await loadPool(q, now);
   const rows = new Map(poolRows.map((row) => [row.key, row]));
   let pool: MatchPool | null = null;

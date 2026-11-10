@@ -84,8 +84,7 @@ export async function loadReelsInsights(now = new Date()): Promise<ReelsInsights
     ),
     dbQuery<{ stage: JobError['stage']; at: string; error: string | null; headline: string | null }>(
       `SELECT e.stage, e.at::text, e.error,
-              (SELECT s.headline FROM reels.post_idea_members m
-                 JOIN reels.sources s ON s.id = m.source_id
+              (SELECT m.headline FROM reels.idea_sources_v m
                 WHERE m.post_idea_id = e.post_idea_id
                 ORDER BY CASE m.role WHEN 'primary' THEN 0 ELSE 1 END LIMIT 1) AS headline
          FROM (

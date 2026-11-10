@@ -511,3 +511,39 @@ The intake is shared infrastructure (Jev scoring only) and doesn't count toward 
 - Code: each type's clock constant (AI Drama, Reels, Explainers, Field Notes, Carousels/LFD, Stories) and
   `docs/social-overnight.md` ("one type per hour" becomes "two per hour, never two video renderers"). It ships with the
   Phase 1 deploy; Lucas runs the VM redeploy after a hash check.
+
+## Phase 2 (Lucas, 2026-11-10): Reels, Carousels, Field Notes and the meme lab on intake orders
+Scope: each of the four stops fetching its own sources and reads the intake. Same rules as Phase 1: same stories per
+type, every type independent, every type keeps access to what it has today.
+
+| Type | After Phase 2 |
+|---|---|
+| Reels (1 AM) | Reads stories the 12:00 intake run already screened, grouped and scored (reels-screen, reels-score). Its Claude web search stays Reels' own call; finds are deposited and scored on entry. |
+| Carousels (3 AM, off since Nov 2) | Reads the intake's story-scoring@4 shortlist; "already posted" is checked at pick time, as in Phase 1. |
+| Field Notes (2 AM) | The intake fetches its ~27 sources as their own family and runs `field-notes-score@3` as an intake scorecard; Field Notes reads its candidates. Sources shared with Reels are fetched once. |
+| Meme lab | Reads LFD's intake lanes instead of the legacy reels/carousel lanes. |
+
+Lucas's answers (2026-11-10):
+1. Reels' idea pool: "Ok sure but by the time this phase is done b has to be implemented." → Phase 2 first mirrors
+   intake stories into Reels' tables (step a, readers unchanged), then moves every Reels reader onto the intake directly
+   (step b) and retires the mirror. Phase 2 is not done until (b) ships.
+2. Spend: "You're authorized for $5" (replay plus one real Reels, Carousels and Field Notes run, nothing posted).
+   The build pauses only at the replay review and the test-output review.
+3. Sources stay per type: an order names only the sources the type reads today. Sharing sources across types (for
+   example Field Notes' blogs into LFD's builder lane) is a separate decision after a few weeks of builder picks.
+
+Common-sense patches (no decision needed):
+- Per-type switch with stale and error fallback to the type's own path, as in Phase 1.
+- Equivalence replay: at least 80% of each type's legacy stories per night, gaps explained or fixed.
+- Legacy fetch code stays behind the switches and is deleted after two clean weeks (Phase 1's legacy paths too).
+- Ship gate: build now; ship only after Phase 1's first two nights (including the Nov 10 LFD run) check out clean.
+
+### Phase 2 deploy order (must hold; review must-fix 1)
+Legacy-mode readers now read `reels.idea_sources_v`, and intake reads select Phase 2 columns, so code must never reach
+Vercel or a VM before the schema:
+1. Apply `db/intake_schema.sql` (Phase 2 additions are additive and idempotent) to prod, then
+   `db/reels_intake_views.sql`. Read-only verify both.
+2. Merge; Vercel deploys. Hash the social VM, re-read the worker log, deploy the social worker and the reels worker
+   code (`./scripts/gcp/deploy-social-worker.sh`, `./scripts/gcp/deploy-worker-code.sh`).
+3. Switches stay 'legacy' for reels, carousel and field-notes until one real run of each is reviewed; then flip one
+   type at a time.

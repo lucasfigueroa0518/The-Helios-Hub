@@ -37,7 +37,7 @@ test('reels-score: pass 1 (+ pass 2) on reels and search members only, version f
   assert.ok(out.usd > 0);
 });
 
-test('story-scoring: feeds members only, no already_posted and no recently_posted', async () => {
+test('story-scoring: feeds and reels members (Phase 2 carousel parity), no already_posted and no recently_posted', async () => {
   const { jev, social, reels } = stubJev({ nouls: { ai_main_subject: 0.9, substance: 0.9, news_event: 0.9, commentary: 0.1, skip_weapons_war: 0, skip_death_tragedy: 0, skip_crime_violence: 0, skip_sexual_abuse: 0 } });
   const out = await STORY_SCORING.score(mixed(), jev);
   assert.equal(reels.length, 0);
@@ -47,12 +47,12 @@ test('story-scoring: feeds members only, no already_posted and no recently_poste
   assert.ok(!('already_posted' in call.questions));
   assert.ok(!('recently_posted' in call.state));
   const s = call.state.story as { outlets: string[]; outlet_count: number };
-  assert.deepEqual(s.outlets.sort(), ['The Verge', 'Wired']);
-  assert.equal(s.outlet_count, 2);
+  assert.deepEqual(s.outlets.sort(), ['Hacker News', 'The Verge', 'Wired']);
+  assert.equal(s.outlet_count, 3);
   assert.equal(out.result.kind, 'story-scoring');
   if (out.result.kind === 'story-scoring') {
     assert.equal(out.result.status, 'qualified');
-    assert.equal(out.result.outletCount, 2);
+    assert.equal(out.result.outletCount, 3);
     assert.ok(!('already_posted' in out.result.answers));
   }
 });

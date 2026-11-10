@@ -218,9 +218,8 @@ async function loadPublishedReels(since: Date | null, now: Date, query: string):
           LIMIT 1
        ) copy ON true
        LEFT JOIN LATERAL (
-         SELECT s.headline
-           FROM reels.post_idea_members m
-           JOIN reels.sources s ON s.id = m.source_id
+         SELECT m.headline
+           FROM reels.idea_sources_v m
           WHERE m.post_idea_id = a.post_idea_id
           ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
           LIMIT 1

@@ -67,5 +67,8 @@ test('order definitions', () => {
     ['md', ['reels:*', 'feeds:*'], 4, ['reels-score', 'story-scoring', 'major-news', 'story-builder']],
     ['gtn', ['reels:*', 'feeds:*'], 7, ['reels-score', 'story-scoring']],
     ['fvp', ['reels:*'], 14, ['reels-score']],
+    ['reels', ['reels:*'], 14, ['reels-screen', 'reels-score']],
+    ['carousel', ['feeds:*', 'reels:*'], 2, ['story-scoring']],
+    ['field-notes', ['field-notes:*'], 45, ['field-notes-score']],
   ]);
 });

@@ -42,6 +42,7 @@ import type { FieldNotesBudget } from './budget';
 import { createFieldNotesBudget, FieldNotesBudgetExhausted } from './budget';
 import { buildFieldNotesCaption, withSourceLinks } from './caption';
 import { FIELD_NOTES_SLIDE_PREFIX } from './config';
+import { asIntakeQuery, saveIntakeTips, type FieldNotesIntakeDeps, type FieldNotesIntakeMode } from './intake';
 import { draftToSlideInputs, layoutsToSlides, splitProblems } from './post';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -121,6 +122,12 @@ export type FieldNotesEngineDeps = {
   config?: FieldNotesSourcesConfig;
   /** The fact checker for the writing gates (default: the numeral check). 'model' = the model-backed hard gate, built over the SAME metered client the Writer uses. */
   factCheck?: FactChecker | 'model';
+  /**
+   * Central intake (Phase 2): the 'field-notes' consumer switch and the order's scored stories (live: lib/intake/read).
+   * In 'intake' mode a run neither collects nor scores: it saves the intake's scored stories as candidate tips
+   * (intake.ts). Absent, 'legacy' or 'stale-fallback' (or an intake read that throws): the collect + score path.
+   */
+  intake?: FieldNotesIntakeDeps;
 };
 
 export type FieldNotesRunInput = {
@@ -468,6 +475,9 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
  * MAX_SCORED_PER_RUN slots round-robin across sources in registry order -> only those slots enriched -> each slot
  * scored, then saved with its score and tags. A candidate that is not scored (no slot, the cap, a failed call) is NOT saved, so a later run finds
  * it again. Spend stops at the cap.
+ *
+ * Intake mode (Central Intake Phase 2, `d.intake` says 'intake'): no collect, no enrich, no scoring here; the order's
+ * scored stories not yet stored are saved as candidates (intake.ts saveIntakeTips), then the same selection.
  */
 async function pickScoredTips(
   d: FieldNotesEngineDeps,
@@ -477,6 +487,21 @@ async function pickScoredTips(
   o: { count: number; taken: Tip[] },
 ): Promise<Tip[]> {
   const q = d.query;
+  // Intake mode: the intake already fetched and scored Field Notes' sources; save what is new to field_notes.tips and
+  // select. A failed intake read falls back to the legacy path below (contract: switch + fallback).
+  const mode: FieldNotesIntakeMode = d.intake ? await d.intake.readConsumerMode(asIntakeQuery(q), 'field-notes', d.now).catch(() => 'legacy' as const) : 'legacy';
+  if (mode === 'intake') {
+    const fromIntake = await saveIntakeTips(q, d.intake!, d.now).catch((error: unknown) => {
+      record.intake = { mode, fallback: errorText(error).slice(0, 200) };
+      return null;
+    });
+    if (fromIntake) {
+      record.intake = { mode };
+      const recentWants = await recentPostWants(q);
+      record.found = { ...fromIntake, recentWants };
+      return selectStoredTips(d, input, { count: o.count, taken: o.taken, recentWants, budget, record });
+    }
+  } else if (mode === 'stale-fallback') record.intake = { mode };
   const config = d.config ?? FIELD_NOTES_SOURCES_CONFIG;
   const found = dedupeCandidates(d.collect ? await d.collect() : []);
   const stored = await storedSourceUrls(q, found.map((c) => c.sourceUrl));

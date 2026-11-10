@@ -17,7 +17,7 @@ CREATE SCHEMA IF NOT EXISTS intake;
 
 CREATE TABLE IF NOT EXISTS intake.runs (
     id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    kind         text NOT NULL CHECK (kind IN ('main', 'topup', 'manual')),
+    kind         text NOT NULL CHECK (kind IN ('main', 'topup', 'manual', 'deposit')),
     status       text NOT NULL DEFAULT 'running'
                    CHECK (status IN ('running', 'ok', 'partial', 'skipped', 'failed')),
     stop_reason  text CHECK (stop_reason IN ('cap', 'no-orders', 'error')),
@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS intake.runs (
 );
 
 CREATE INDEX IF NOT EXISTS intake_runs_kind_started_idx ON intake.runs (kind, started_at DESC);
+-- Phase 2: 'deposit' = Reels' 1 AM call that groups and scores the finds it deposited (no fetch).
+ALTER TABLE intake.runs DROP CONSTRAINT IF EXISTS runs_kind_check;
+ALTER TABLE intake.runs ADD CONSTRAINT runs_kind_check CHECK (kind IN ('main', 'topup', 'manual', 'deposit'));
 
 -- ── Stories ────────────────────────────────────────────────────────────────
 -- Items about the same event (grouping-v2). `last_joined_at` moves when a
@@ -48,6 +51,7 @@ CREATE TABLE IF NOT EXISTS intake.stories (
 
 CREATE INDEX IF NOT EXISTS intake_stories_last_joined_idx ON intake.stories (last_joined_at DESC);
 CREATE INDEX IF NOT EXISTS intake_stories_first_seen_idx ON intake.stories (first_seen_at DESC);
+CREATE INDEX IF NOT EXISTS intake_stories_merged_into_idx ON intake.stories (merged_into) WHERE merged_into IS NOT NULL;
 
 -- ── Items ──────────────────────────────────────────────────────────────────
 -- One row per canonical URL, whichever list it came from (a URL on both the
@@ -56,7 +60,7 @@ CREATE INDEX IF NOT EXISTS intake_stories_first_seen_idx ON intake.stories (firs
 
 CREATE TABLE IF NOT EXISTS intake.items (
     key            text PRIMARY KEY,
-    family         text NOT NULL CHECK (family IN ('reels', 'feeds', 'search', 'seed')),
+    family         text NOT NULL CHECK (family IN ('reels', 'feeds', 'search', 'seed', 'field-notes')),
     source_id      text NOT NULL,
     source_name    text NOT NULL,
     source_type    text NOT NULL,
@@ -93,6 +97,21 @@ ALTER TABLE intake.items ADD COLUMN IF NOT EXISTS feed_drop_reason text;
 ALTER TABLE intake.items ADD COLUMN IF NOT EXISTS feed_source_name text;
 ALTER TABLE intake.items ADD COLUMN IF NOT EXISTS reels_source_id text;
 ALTER TABLE intake.items ADD COLUMN IF NOT EXISTS reels_drop_reason text;
+
+-- Phase 2: Field Notes' own sources (lib/field-notes/sources/registry.ts). A Field Notes item is its own story
+-- (never grouped). A URL a reels adapter or a feed stored first gains Field Notes membership here, so it is stored
+-- once. `field_notes_meta` = { kind, label, item, enrich }: the TipCandidate's trusted metadata, so the
+-- field-notes-score scorecard can rebuild the candidate and enrich only what it scores.
+ALTER TABLE intake.items DROP CONSTRAINT IF EXISTS items_family_check;
+ALTER TABLE intake.items ADD CONSTRAINT items_family_check CHECK (family IN ('reels', 'feeds', 'search', 'seed', 'field-notes'));
+ALTER TABLE intake.items ADD COLUMN IF NOT EXISTS field_notes_source_id text;
+ALTER TABLE intake.items ADD COLUMN IF NOT EXISTS field_notes_meta jsonb;
+CREATE INDEX IF NOT EXISTS intake_items_last_seen_idx ON intake.items (last_seen_at);
+-- Phase 2 review: a Field Notes sighting moves only its own last-seen, never the shared `last_seen_at` (Reels'
+-- timeliness and the other orders' windows read that one). Retention keeps an item either list saw recently.
+ALTER TABLE intake.items ADD COLUMN IF NOT EXISTS field_notes_last_seen_at timestamptz;
+-- Seed lookups (reels order open on a pending seed; seed reads by order).
+CREATE INDEX IF NOT EXISTS intake_items_seed_order_idx ON intake.items (seed_order) WHERE seed_order IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS intake_items_story_idx ON intake.items (story_id);
 CREATE INDEX IF NOT EXISTS intake_items_source_seen_idx ON intake.items (source_id, first_seen_at DESC);
@@ -171,6 +190,7 @@ CREATE TABLE IF NOT EXISTS intake.settings (
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Phase 2 adds reels, carousel and field-notes; a missing key reads as 'legacy' (lib/intake/read.ts).
 INSERT INTO intake.settings (key, value)
-VALUES ('consumers', '{"lfd":"legacy","md":"legacy","gtn":"legacy","fvp":"legacy"}'::jsonb)
+VALUES ('consumers', '{"lfd":"legacy","md":"legacy","gtn":"legacy","fvp":"legacy","reels":"legacy","carousel":"legacy","field-notes":"legacy"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;

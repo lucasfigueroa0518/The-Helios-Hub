@@ -52,3 +52,42 @@ Quotes are Lucas's words as recorded in the plan. Where the plan records only th
 - `BUILDER_BAR` is still 0.6 until Lucas sets it from the @2 replay picks.
 - Bar (Lucas, 2026-11-09, after the @2 replays): `BUILDER_BAR` = 0.65. On the example nights (Oct 29, Nov 3, Nov 4)
   his examples scored 0.80–0.90 and the best research paper 0.68; on Nov 7–9 the best paper scored 0.65.
+
+## CI-24: Phase 2 scope and Reels' idea pool (Lucas, 2026-11-10)
+- Reels, Carousels, Field Notes and the meme lab move onto intake orders; their own fetches retire behind switches.
+- Reels: first mirror intake stories into Reels' tables (readers unchanged), then move every Reels reader onto the
+  intake directly. "by the time this phase is done b has to be implemented."
+
+## CI-25: Phase 2 spend (Lucas, 2026-11-10)
+- "You're authorized for $5" for the Phase 2 replay and one real Reels, Carousels and Field Notes run (nothing posted).
+
+## CI-26: Sources stay per type (Lucas, 2026-11-10)
+- Each order names only the sources its type reads today. Cross-type source sharing is decided separately, after a
+  few weeks of real builder-lane picks.
+
+## CI-27: Phase 2 build calls (lead, 2026-11-10; no product change, recorded so specs match code)
+- Reels "timely": a kept reels/search member seen since tonight's main intake run started (if it began ≤12 h before
+  the Reels run). With no successful main run in that window, the night takes the legacy path.
+- Reels registers only stories that carry a reels-score. Reels' own seeds (`seed:reels`) are scored with reels-score;
+  other types' seeds are not.
+- The carousel's story-scoring covers feed and reels-adapter articles (today's carousel scores both). Estimated
+  +115–200 Jev calls a night, about $0.01.
+- Freshness is per order: a type falls back to its legacy path when its own sources were not fetched by a successful
+  intake run in the last 26 h (e.g. Field Notes with auto_run off, then a manual Generate).
+- `reels.idea_sources_v` lists only members a Reels list keeps (CI-26), plus 6 extra columns after the contract's 13.
+  A merged-away idea reads the surviving story's members, so held-out checks and the hub keep working.
+- Link-less Reels seeds keep the legacy write (a Reels-only uuid): the intake keys items by URL.
+- Reels retention keeps intake ideas whenever the intake schema exists, so switching back to legacy deletes nothing.
+- Carousel group ids stay member-URL based (pinned/promote/stored posts depend on them).
+
+## CI-28: Integration tests never run against prod (lead, 2026-11-10)
+- `tests/reels-pipeline.integration.ts` ran against prod by mistake and deleted 30 published reels' idea rows. 29 were
+  restored from the Nov 9 backup (restore-to-new-project, then deleted); 1 was already missing in that backup.
+- That file now refuses to run unless `REELS_INTEGRATION_DB=1` and a localhost DATABASE_URL. Agents run only explicit
+  `tests/*.test.ts` files.
+
+## CI-29: Phase 2 replay accepted (Lucas, 2026-11-10)
+- Replay `replay-2026-11-10-phase2.md`, about $1.02 over four runs: Carousel 88%/92%, Field Notes 90%/100%/90%, Phase 1 types 88–100%.
+  Reels new ideas 70%/70%/55%. Every miss is in the intake pool with a near-identical net, ranked 11–20 (tie-break
+  noise at a tight cutoff), plus one legacy event split into three ideas that the intake groups as one.
+- Lucas: "Yes, accept it".

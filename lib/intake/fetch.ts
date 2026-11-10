@@ -10,6 +10,8 @@
  * tables). Feeds follow the carousel selection's window and code filters.
  * A URL on both lists is stored once (key = canonical URL).
  */
+import type { TipCandidate } from '@/lib/field-notes/sources/candidate';
+import { collectThinCandidates, enrichModeOf, SOURCE_REGISTRY, type CollectDeps, type SourceEntry as FieldNotesSourceEntry } from '@/lib/field-notes/sources/registry';
 import { RANKED_REPEAT_DAYS } from '@/lib/reels/config';
 import { parsePage } from '@/lib/reels/net/html';
 import { canonicalizeUrl, type FetchedPage } from '@/lib/reels/net/http';
@@ -21,6 +23,7 @@ import { codeFilterReason, contentFarmReason } from '@/lib/social/ingest/select/
 import { fetchBodyLive, THIN_BODY_CHARS, type FetchBody } from '@/lib/social/ingest/select/enrich';
 import { inWindow, windowHours } from '@/lib/social/ingest/select/window';
 
+import type { FieldNotesMeta } from './scorecards';
 import type { IntakeJev, IntakeOrder, IntakeQuery, IntakeRunRecord } from './types';
 
 export type SourceEntry = IntakeRunRecord['sources'][number];
@@ -51,22 +54,35 @@ export function intakeItemKey(url: string): string {
 export type FetchPlan = {
   adapters: Adapter[];
   feeds: FeedConfig[];
-  /** Max lookback over the open orders: the first-night window for a reels adapter with no watermark. */
+  /** Max lookback over the open orders that read reels sources: the first-night window for a reels adapter with no watermark. */
   lookbackDays: number;
+  /** Phase 2: the Field Notes registry entries the open orders name (`'field-notes:*'` = all), and their window. */
+  fieldNotes: FieldNotesSourceEntry[];
+  fieldNotesLookbackDays: number;
 };
+
+const isFieldNotesSource = (name: string) => name.startsWith('field-notes:');
+const isReelsSource = (name: string) => !isFieldNotesSource(name) && name !== 'feeds:*' && !name.startsWith('feed:');
 
 export function planSources(
   orders: readonly IntakeOrder[],
   adapters: readonly Adapter[],
   feeds: readonly FeedConfig[] = HELIOS_SOCIAL_FEEDS,
+  fieldNotesEntries: readonly FieldNotesSourceEntry[] = SOURCE_REGISTRY,
 ): FetchPlan {
   const names = new Set(orders.flatMap((order) => order.sources));
   const allReels = names.has('reels:*');
   const allFeeds = names.has('feeds:*');
+  const allFieldNotes = names.has('field-notes:*');
+  const reelsOrders = orders.filter((order) => order.sources.some(isReelsSource));
+  const fieldNotesOrders = orders.filter((order) => order.sources.some(isFieldNotesSource));
   return {
     adapters: adapters.filter((adapter) => allReels || names.has(adapter.id)),
     feeds: feeds.filter((feed) => allFeeds || names.has(`feed:${feed.slug}`)),
-    lookbackDays: Math.max(1, ...orders.map((order) => order.lookbackDays)),
+    // A Field Notes order's 45 days never widen the reels adapters' first-night window.
+    lookbackDays: Math.max(1, ...reelsOrders.map((order) => order.lookbackDays)),
+    fieldNotes: fieldNotesEntries.filter((entry) => allFieldNotes || names.has(`field-notes:${entry.id}`)),
+    fieldNotesLookbackDays: Math.max(1, ...fieldNotesOrders.map((order) => order.lookbackDays)),
   };
 }
 
@@ -527,3 +543,169 @@ export async function enrichThinFeedBodies(q: IntakeQuery, storyIds: readonly st
   return enriched;
 }
 
+
+/* ── Field Notes sources (Phase 2) ────────────────────────────────────── */
+
+/** The network side of Field Notes' collect (live: lib/intake/run.ts liveIntakeDeps; tests: stubs). */
+export type FieldNotesFetchers = Pick<CollectDeps, 'fetchText' | 'fetchJson'> & Partial<Pick<CollectDeps, 'fetchPage' | 'fetchEnrichText' | 'signal'>>;
+
+export type FieldNotesFetchDeps = {
+  query: IntakeQuery;
+  now: Date;
+  runId: string | null;
+  /** The registry entries to read (planSources' `fieldNotes`; default every SOURCE_REGISTRY entry). */
+  entries?: readonly FieldNotesSourceEntry[];
+  /** Window: only items published on or after now − this (undated pass). Default 45 (the field-notes order). */
+  lookbackDays?: number;
+  fetchers: FieldNotesFetchers;
+  /** Stories an existing item joined as a Field Notes member this run (scored with the run's touched stories). */
+  touched?: Set<string>;
+  log?: (line: string) => void;
+};
+
+export type FieldNotesFetchResult = {
+  sources: SourceEntry[];
+  collected: number;
+  stored: number;
+  /** Items another list stored first that gained Field Notes membership. */
+  joined: number;
+  /** Items a Field Notes source already carried (an earlier night): only touched. */
+  alreadySeen: number;
+};
+
+/** A TipCandidate's scraped text split back into headline and body (toCandidate wrote `${headline}\n\n${body}`). */
+function splitContent(content: string): { headline: string; body: string } {
+  const lines = content.split(/\r?\n/);
+  const first = lines.findIndex((l) => l.trim());
+  if (first < 0) return { headline: '', body: '' };
+  return { headline: lines[first]!.trim(), body: lines.slice(first + 1).join('\n').trim() };
+}
+
+/**
+ * Field Notes' own sources into `intake.items` (family 'field-notes', key = canonicalSourceUrl, sourceId =
+ * `field-notes:<registry id>`): collectThinCandidates over the planned registry entries, thin (no README or page is
+ * fetched here; field-notes-score enriches only what it scores). An item another list already stored (same key)
+ * gains Field Notes membership on that row, so it is stored once. A Field Notes item is never grouped: each becomes
+ * its own story (lib/intake/group.ts placeFieldNotesItems). No Jev here. A Field Notes sighting moves only
+ * `field_notes_last_seen_at` (never the shared `last_seen_at` or a story's `last_joined_at`: other orders' windows).
+ */
+export async function fetchFieldNotesItems(deps: FieldNotesFetchDeps): Promise<FieldNotesFetchResult> {
+  const q = deps.query;
+  const entries = deps.entries ?? SOURCE_REGISTRY;
+  const result: FieldNotesFetchResult = { sources: [], collected: 0, stored: 0, joined: 0, alreadySeen: 0 };
+  if (entries.length === 0) return result;
+  const byLabel = new Map(entries.map((entry) => [entry.label, entry]));
+  const stats = new Map<string, SourceEntry>(entries.map((entry) => [entry.id, { id: `field-notes:${entry.id}`, fetched: 0, kept: 0, dropped: {} }]));
+  result.sources = [...stats.values()];
+
+  const since = new Date(deps.now.getTime() - (deps.lookbackDays ?? 45) * 86_400_000);
+  let candidates: TipCandidate[];
+  try {
+    const thin = await collectThinCandidates(entries, { ...deps.fetchers, now: deps.now, since });
+    candidates = thin.candidates;
+    for (const failure of thin.failures) {
+      const entry = stats.get(failure.sourceId);
+      if (entry) entry.error = failure.error;
+    }
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    for (const entry of stats.values()) entry.error = text;
+    return result;
+  }
+  result.collected = candidates.length;
+
+  const existing = await existingItems(q, candidates.map((c) => c.sourceUrl));
+  const resighted: string[] = [];
+  const carried = new Set(
+    (
+      await q.query<{ key: string }>(`SELECT key FROM intake.items WHERE key = ANY($1::text[]) AND field_notes_source_id IS NOT NULL`, [
+        candidates.map((c) => c.sourceUrl),
+      ])
+    ).rows.map((r) => r.key),
+  );
+  for (const c of candidates) {
+    const entry = byLabel.get(c.sourceLabel);
+    if (!entry) continue; // not one of the planned entries
+    const stat = stats.get(entry.id)!;
+    stat.fetched += 1;
+    const key = c.sourceUrl;
+    if (carried.has(key)) {
+      // Field Notes' own last-seen only: the shared last_seen_at drives other orders' windows (Reels timeliness).
+      await q.query(`UPDATE intake.items SET field_notes_last_seen_at = $2 WHERE key = $1`, [key, deps.now]);
+      bump(stat, 'already_seen');
+      result.alreadySeen += 1;
+      resighted.push(key);
+      continue;
+    }
+    stat.kept += 1;
+    const outcome = await storeFieldNotesCandidate(q, c, { id: entry.id, enrich: enrichModeOf(entry) }, deps.now, deps.runId, deps.touched, existing.get(key) ?? null);
+    if (outcome === 'joined') result.joined += 1;
+    else {
+      existing.set(key, { key, first_seen_at: deps.now, drop_reason: null, family: 'field-notes' });
+      result.stored += 1;
+    }
+    carried.add(key);
+  }
+  // The backlog: a re-seen item Field Notes carries whose story has no field-notes-score yet (the per-run cap deferred
+  // it, or the carry chain dropped it) is scored again under the cap. Bounded by tonight's fetch (Rule 2).
+  if (deps.touched && resighted.length > 0) {
+    const { rows } = await q.query<{ story_id: string }>(
+      `SELECT DISTINCT i.story_id::text AS story_id FROM intake.items i
+        WHERE i.key = ANY($1::text[]) AND i.story_id IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM intake.scores s WHERE s.story_id = i.story_id AND s.scorecard = 'field-notes-score')`,
+      [resighted],
+    );
+    for (const row of rows) deps.touched.add(row.story_id);
+  }
+  return result;
+}
+
+/**
+ * One Field Notes candidate into the store. New: a 'field-notes' item (sourceId `field-notes:<entry id>`, headline
+ * and body split from its scraped text). Already stored by another list (`held`, or found by key): that row gains
+ * Field Notes membership (`field_notes_source_id` = the entry id), so the URL is stored once; Field Notes keeps
+ * every item, so the overall verdict clears (but a 'search'/'seed' item's drop reason is its own list's verdict and
+ * stays), and the other lists' memberships are backfilled from `family`. The shared `last_seen_at` and the story's
+ * `last_joined_at` do not move: the story is only touched, so field-notes-score runs on it.
+ */
+export async function storeFieldNotesCandidate(
+  q: IntakeQuery,
+  c: TipCandidate,
+  entry: { id: string; enrich: FieldNotesMeta['enrich'] },
+  now: Date,
+  runId: string | null,
+  touched?: Set<string>,
+  held?: { key: string } | null,
+): Promise<'stored' | 'joined'> {
+  const key = c.sourceUrl;
+  const meta: FieldNotesMeta = { kind: c.sourceKind, label: c.sourceLabel, item: c.item as Record<string, unknown>, enrich: entry.enrich, publishedAt: c.publishedAt };
+  const found = held === undefined ? (await existingItems(q, [key])).get(key) ?? null : held;
+  if (found) {
+    const { rows } = await q.query<{ story_id: string | null }>(
+      `UPDATE intake.items SET
+         field_notes_source_id = $2, field_notes_meta = $3::jsonb, field_notes_last_seen_at = $4,
+         feed_slug = COALESCE(feed_slug, CASE WHEN family = 'feeds' THEN regexp_replace(source_id, '^feed:', '') END),
+         feed_source_name = COALESCE(feed_source_name, CASE WHEN family = 'feeds' THEN source_name END),
+         feed_drop_reason = CASE WHEN feed_slug IS NULL AND family = 'feeds' THEN drop_reason ELSE feed_drop_reason END,
+         reels_source_id = COALESCE(reels_source_id, CASE WHEN family = 'reels' THEN source_id END),
+         reels_drop_reason = CASE WHEN reels_source_id IS NULL AND family = 'reels' THEN drop_reason ELSE reels_drop_reason END,
+         drop_reason = CASE WHEN family IN ('search', 'seed') THEN drop_reason ELSE NULL END
+       WHERE key = $1 RETURNING story_id::text AS story_id`,
+      [key, entry.id, JSON.stringify(meta), now],
+    );
+    // Scored this run (field-notes-score), but the story's last_joined_at stays: it drives other orders' timeliness.
+    const storyId = rows[0]?.story_id ?? null;
+    if (storyId) touched?.add(storyId);
+    return 'joined';
+  }
+  const { headline, body } = splitContent(c.untrustedContent);
+  await q.query(
+    `INSERT INTO intake.items
+       (key, family, source_id, source_name, source_type, headline, body, url, publish_time, first_seen_at, last_seen_at,
+        field_notes_last_seen_at, media_urls, citation_urls, drop_reason, run_id, field_notes_source_id, field_notes_meta)
+     VALUES ($1, 'field-notes', $2, $3, $4, $5, $6, $1, $7, $8, $8, $8, '{}', '{}', NULL, $9, $10, $11::jsonb)
+     ON CONFLICT (key) DO NOTHING`,
+    [key, `field-notes:${entry.id}`, c.sourceLabel, c.sourceKind, headline || key, body, c.publishedAt ? new Date(c.publishedAt) : null, now, runId, entry.id, JSON.stringify(meta)],
+  );
+  return 'stored';
+}

@@ -22,6 +22,17 @@ function loadEnv(): void {
 }
 loadEnv();
 
+// Guard (2026-11-10): this file's cleanup deletes reels rows broadly, so it must never run against prod. It runs only
+// with REELS_INTEGRATION_DB=1 against a local database (localhost / 127.0.0.1 / ::1).
+{
+  const url = process.env.DATABASE_URL ?? '';
+  const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
+  if (process.env.REELS_INTEGRATION_DB !== '1' || !['localhost', '127.0.0.1', '::1', '[::1]'].includes(host)) {
+    console.error(`reels-pipeline.integration: refusing to run (needs REELS_INTEGRATION_DB=1 and a local DATABASE_URL; host is ${host || 'unset'})`);
+    process.exit(1);
+  }
+}
+
 import { closeDbPool, dbQuery } from '@/lib/db';
 import { RecordingJevRunner, type JevTransport } from '@/lib/reels/jev/runner';
 import { SCORING_PASS_1 } from '@/lib/reels/jev/questions/scoring-pass1';
