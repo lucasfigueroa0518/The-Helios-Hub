@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import { HYPERFRAMES_ENV } from '@/lib/explainers/render/workspace';
 import { jsonOut, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
 
@@ -37,9 +38,9 @@ export async function assembleProject(
     if (out.skipped) warnings.push(`${label} skipped: ${out.skipped}`);
     if (res.status !== 0 && !(out.errors ?? []).length) problems.push(`${label} failed: ${tail(res)}`);
   };
-  step('assemble', ['assets/kit/assemble.mjs', ...(music ? [] : ['--no-music'])], 10 * 60 * 1000);
-  step('try', ['assets/kit/try.mjs'], 5 * 60 * 1000);
-  step('bounds', ['assets/kit/bounds.mjs', 'all'], 5 * 60 * 1000);
-  step('screen', ['assets/kit/screen.mjs', 'all'], 10 * 60 * 1000);
+  step('assemble', ['assets/kit/assemble.mjs', ...(music ? [] : ['--no-music'])], RUN_HANG_BACKSTOP_MS);
+  step('try', ['assets/kit/try.mjs'], RUN_HANG_BACKSTOP_MS);
+  step('bounds', ['assets/kit/bounds.mjs', 'all'], RUN_HANG_BACKSTOP_MS);
+  step('screen', ['assets/kit/screen.mjs', 'all'], RUN_HANG_BACKSTOP_MS);
   return { ok: problems.length === 0, problems, warnings };
 }

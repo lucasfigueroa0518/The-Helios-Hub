@@ -1,4 +1,5 @@
 /** lfd.* reads and writes, plus the shared 7-day used-photo read (spec §5, §7.1). */
+import { RUN_HANG_BACKSTOP_INTERVAL } from '@/lib/content-runs/hang-guard';
 import type { HubQuery } from '@/lib/social-hub/db';
 
 export type PreviousPost = { nyDate: string; ideaIds: string[]; stories: Array<{ headline: string; body: string }> };
@@ -29,8 +30,23 @@ export async function recentPhotoUrls(q: HubQuery, now: Date, days = 7): Promise
   return new Set(rows.map((r) => r.url));
 }
 
-/** A run still 'running' after this long died without finishing (crash, killed process); it must not block new runs forever. */
-export const ABANDONED_AFTER = '2 hours';
+/**
+ * Hang guard only; long runs are normal (CI decision 2026-11-10). A run still 'running' after RUN_HANG_BACKSTOP_INTERVAL
+ * is assumed dead. Runs left behind by a crash or restart are reaped sooner, at worker startup (reapRunsAtStartup).
+ */
+export const ABANDONED_AFTER = RUN_HANG_BACKSTOP_INTERVAL;
+
+/**
+ * Called once when helios-social boots, before it claims anything: this vertical's runs only run inside that one
+ * process, so a run still 'running' at boot died with the previous process. Returns how many were failed.
+ */
+export async function reapRunsAtStartup(q: HubQuery): Promise<number> {
+  const { rows } = await q<{ id: string }>(
+    `UPDATE lfd.runs SET status = 'failed', finished_at = now(), stop_reason = 'abandoned'
+      WHERE status = 'running' RETURNING id::text AS id`,
+  );
+  return rows.length;
+}
 
 export async function startRun(q: HubQuery, trigger: 'scheduled' | 'manual', capUsd: number, nyDate: string): Promise<string> {
   await q(

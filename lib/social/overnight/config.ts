@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 /**
  * Carousel overnight constants (docs/social-overnight.md). Times are
  * America/New_York, the same zone and DST handling as Trial Reels.
@@ -36,8 +37,10 @@ export type CarouselSlotId = (typeof CAROUSEL_SLOTS)[number]['id'];
 /** Carousels posted per day (SH-48): a social.settings `posts_per_day` row overrides. */
 export const DEFAULT_POSTS_PER_DAY = 2;
 
-/** A run older than this is assumed dead (the CLI run takes ~15 minutes). */
-export const SOCIAL_STALE_RUN_MINUTES = 90;
+/** A 'running' run older than this is assumed dead. Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop. */
+export const SOCIAL_STALE_RUN_MINUTES = RUN_HANG_BACKSTOP_MINUTES;
+/** A 'requested' run the worker never claimed in this long is failed (not a running run, so not a run limit). */
+export const SOCIAL_UNCLAIMED_REQUEST_MINUTES = 90;
 
 /** The worker run's defaults; both can be changed in social.settings. */
 export const DEFAULT_RUN_STORIES = 2;

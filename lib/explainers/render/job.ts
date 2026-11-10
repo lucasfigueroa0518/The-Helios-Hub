@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -346,8 +347,8 @@ function projectAssembled(projectDir: string): boolean {
  * bind 127.0.0.1 and left no MP4. This runs the pinned CLI in the worker,
  * outside the agent sandbox. Throws when no video is written.
  */
-/** hx-4's soft-3D and lens frames render several times slower than 3.x's flat frames (pre-mortem). */
-export const RENDER_TIMEOUT_MS = 30 * 60 * 1000;
+/** Hang guard only; long renders are normal (CI decision 2026-11-10): the 12 h backstop, never a length limit. */
+export const RENDER_TIMEOUT_MS = RUN_HANG_BACKSTOP_MS;
 
 export function renderProjectVideo(projectDir: string): void {
   const out = path.join(projectDir, 'renders', 'video.mp4');
@@ -370,7 +371,7 @@ function runNode(projectDir: string, script: string, args: string[]): string | n
     cwd: projectDir,
     env: { ...process.env, ...HYPERFRAMES_ENV },
     encoding: 'utf8',
-    timeout: 5 * 60 * 1000,
+    timeout: RUN_HANG_BACKSTOP_MS,
   });
   if (res.status === 0) return null;
   return `${path.basename(script)} exited ${res.status ?? 'with no status'}: ${(res.stderr || res.stdout || '').trim().slice(-300)}`;
@@ -484,7 +485,7 @@ export function runHyperframesLint(projectDir: string): LintViolation[] {
 export function runBoundsCheck(projectDir: string): LintViolation[] {
   const script = path.join(projectDir, 'assets', 'kit', 'bounds.mjs');
   if (!fs.existsSync(script)) return [];
-  const res = spawnSync(process.execPath, [script, 'all'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: 180_000 });
+  const res = spawnSync(process.execPath, [script, 'all'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: RUN_HANG_BACKSTOP_MS });
   try {
     const parsed = JSON.parse(res.stdout) as { errors?: string[] };
     return (parsed.errors ?? []).map((e) => ({
@@ -613,7 +614,7 @@ export type SequenceManifest = { frames: { id: string; number: number; look?: st
 export function runSnapSequences(projectDir: string): SequenceManifest | null {
   const script = path.join(projectDir, 'assets', 'kit', 'snap.mjs');
   if (!fs.existsSync(script)) return null;
-  spawnSync(process.execPath, [script, 'sequences'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: 10 * 60 * 1000 });
+  spawnSync(process.execPath, [script, 'sequences'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: RUN_HANG_BACKSTOP_MS });
   const m = readJson(path.join(projectDir, '.hyperframes', 'sequences', 'manifest.json')) as SequenceManifest | null;
   return m && Array.isArray(m.frames) && m.frames.length ? m : null;
 }
@@ -792,7 +793,7 @@ async function runPictureCheck(ctx: {
 export function runTryCheck(projectDir: string): LintViolation[] {
   const script = path.join(projectDir, 'assets', 'kit', 'try.mjs');
   if (!fs.existsSync(script)) return [];
-  const res = spawnSync(process.execPath, [script, 'all'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: 5 * 60 * 1000 });
+  const res = spawnSync(process.execPath, [script, 'all'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, encoding: 'utf8', timeout: RUN_HANG_BACKSTOP_MS });
   try {
     return tryViolations(JSON.parse(res.stdout));
   } catch {

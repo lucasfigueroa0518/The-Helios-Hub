@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -5,16 +6,8 @@ import { HYPERFRAMES_BIN, HYPERFRAMES_ENV } from '@/lib/explainers/render/worksp
 import { appendStepLog, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
 import { KIT_DIR } from '@/lib/reel-ai-drama/render/workspace';
 
-/**
- * The render's time limit, sized to the reel. The VM draws about 0.8 frames a second, so a 77 s reel (2,322 frames)
- * needs about 50 minutes; a flat 30 minutes killed the first prod job at 58%. 3 minutes per 100 frames at 30 fps,
- * at least 30 and at most 90 minutes; a page whose length can't be read gets 60.
- */
-export const RENDER_TIMEOUT_MS = 30 * 60 * 1000;
-export const RENDER_TIMEOUT_MAX_MS = 90 * 60 * 1000;
-const UNKNOWN_LENGTH_TIMEOUT_MS = 60 * 60 * 1000;
-const FPS = 30;
-const MS_PER_100_FRAMES = 3 * 60 * 1000;
+/** The render's only limit is the 12 h hang backstop: long renders are normal (CI decision 2026-11-10). */
+export const RENDER_TIMEOUT_MS = RUN_HANG_BACKSTOP_MS;
 
 /** The reel's length in seconds: the latest data-start + data-duration on the assembled page, or null. */
 export function projectSeconds(indexHtml: string): number | null {
@@ -27,13 +20,9 @@ export function projectSeconds(indexHtml: string): number | null {
   return end > 0 ? end : null;
 }
 
-/** The time limit for rendering this project (see RENDER_TIMEOUT_MS). */
-export function renderTimeoutMs(projectDir: string): number {
-  const index = path.join(projectDir, 'index.html');
-  const seconds = fs.existsSync(index) ? projectSeconds(fs.readFileSync(index, 'utf8')) : null;
-  if (seconds === null) return UNKNOWN_LENGTH_TIMEOUT_MS;
-  const ms = ((seconds * FPS) / 100) * MS_PER_100_FRAMES;
-  return Math.min(RENDER_TIMEOUT_MAX_MS, Math.max(RENDER_TIMEOUT_MS, Math.ceil(ms)));
+/** Hang guard only; long runs are normal. Not sized to the reel: no render is killed for its length. */
+export function renderTimeoutMs(_projectDir: string): number {
+  return RUN_HANG_BACKSTOP_MS;
 }
 
 /** P8: render the assembled project to renders/video.mp4 with the pinned HyperFrames. Throws on failure. */
@@ -100,7 +89,7 @@ export const LOUDNESS = { I: -14, TP: -1, LRA: 11 };
 export function masterLoudness(video: string, { run = spawnRunner }: { run?: Runner } = {}): boolean {
   const tmp = video.replace(/\.mp4$/, '.master.mp4');
   const res = run('ffmpeg', ['-y', '-v', 'error', '-i', video, '-c:v', 'copy', '-af', `loudnorm=I=${LOUDNESS.I}:TP=${LOUDNESS.TP}:LRA=${LOUDNESS.LRA}`, '-ar', '48000', '-c:a', 'aac', '-b:a', '192k', tmp], {
-    cwd: path.dirname(video), env: process.env, timeoutMs: 5 * 60 * 1000,
+    cwd: path.dirname(video), env: process.env, timeoutMs: RUN_HANG_BACKSTOP_MS,
   });
   if (res.status !== 0 || !fs.existsSync(tmp) || fs.statSync(tmp).size === 0) {
     appendStepLog(path.dirname(path.dirname(video)), 'loudness master', res);
@@ -164,7 +153,7 @@ export async function frameStills(projectDir: string, videoPath: string, deps: {
   const out: FrameStill[] = [];
   const take = (s: FrameSpan, at: number, name: string, opening: boolean) => {
     const file = path.join(dir, name);
-    const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(at), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${FRAME_STILL.W}:${FRAME_STILL.H}`, '-q:v', '3', file], { cwd: projectDir, timeoutMs: 120_000 });
+    const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(at), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${FRAME_STILL.W}:${FRAME_STILL.H}`, '-q:v', '3', file], { cwd: projectDir, timeoutMs: RUN_HANG_BACKSTOP_MS });
     if (res.status !== 0) throw new Error(`frame stills: frame ${s.number} at ${at}s failed: ${tail(res)}`);
     out.push({ number: s.number, name: s.name, treatment: s.treatment, at, file, ...(opening ? { opening: true } : {}) });
   };
@@ -241,11 +230,11 @@ export async function contactSheet(projectDir: string, videoPath: string, deps: 
     const args = i < times.length
       ? ['-v', 'error', '-y', '-ss', String(times[i]), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${W}:${H}`, out]
       : ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x1a1a1a:s=${W}x${H}`, '-frames:v', '1', out];
-    const res = run('ffmpeg', args, { cwd: projectDir, timeoutMs: 120_000 });
+    const res = run('ffmpeg', args, { cwd: projectDir, timeoutMs: RUN_HANG_BACKSTOP_MS });
     if (res.status !== 0) throw new Error(`contact sheet: the still at ${times[i] ?? 'pad'}s failed: ${tail(res)}`);
   }
   const png = path.join(projectDir, 'renders', 'contact-sheet.png');
-  const tiled = run('ffmpeg', ['-v', 'error', '-y', '-framerate', '1', '-i', path.join(dir, 'still-%03d.png'), '-vf', `tile=${cols}x${rows}:padding=8:margin=8:color=0x1a1a1a`, '-frames:v', '1', png], { cwd: projectDir, timeoutMs: 120_000 });
+  const tiled = run('ffmpeg', ['-v', 'error', '-y', '-framerate', '1', '-i', path.join(dir, 'still-%03d.png'), '-vf', `tile=${cols}x${rows}:padding=8:margin=8:color=0x1a1a1a`, '-frames:v', '1', png], { cwd: projectDir, timeoutMs: RUN_HANG_BACKSTOP_MS });
   if (tiled.status !== 0) throw new Error(`contact sheet: tiling failed: ${tail(tiled)}`);
   const stills = times.map((t, i) => `still ${i + 1}: ${stamp(t)}`).join('\n');
   fs.writeFileSync(path.join(projectDir, 'renders', 'contact-sheet.txt'), `${captionTranscript(projectDir)}\nSTILLS (left to right, top to bottom)\n${stills}\n`);

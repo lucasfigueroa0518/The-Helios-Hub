@@ -91,3 +91,15 @@ Quotes are Lucas's words as recorded in the plan. Where the plan records only th
   Reels new ideas 70%/70%/55%. Every miss is in the intake pool with a near-identical net, ranked 11–20 (tie-break
   noise at a tight cutoff), plus one legacy event split into three ideas that the intake groups as one.
 - Lucas: "Yes, accept it".
+
+## CI-30: Content runs are never failed for taking long (Lucas, 2026-11-10)
+- Trigger: an LFD manual run failed "timed out after 30 minutes" because an 18-minute intake refresh counted toward
+  `LFD_RUN_TIMEOUT_MS`; an AI Drama render was killed by a 30-minute HyperFrames limit.
+- Lucas: "up limits for ALL CONTENT RUNS across all verticals, because timeouts shouldn't be a reason why things fail.
+  These are long running processes. Yes, they should be managed so there's not too many running at the same time. But
+  no, they should not be timed out when they are taking a long time."
+- Run-level limits removed; in-process runs fail only on no progress (45 min of silence) or a 12 h backstop. Subprocess
+  render/compile/voice steps get the 12 h backstop. Age reapers move to 12 h; LFD/AI Events/Field Notes runs are also
+  reaped at `helios-social` startup. `lib/content-runs/hang-guard.ts` holds the constants.
+- Kept: per-request network timeouts, the publisher heartbeat and IG publish polling, the outreach worker.
+

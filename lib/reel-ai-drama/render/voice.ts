@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -372,7 +373,7 @@ export async function runVoice(projectDir: string, input: VoiceInput, deps: { ru
   const { script } = prepareTts(projectDir, input.pronounce ?? []);
   const env = { ...process.env, ...HYPERFRAMES_ENV, HEYGEN_API_KEY: input.heygenApiKey, HELIOS_VOICE_ID: input.voiceId };
   const exec: Exec = (label, cmd, args) => {
-    const res = run(cmd, args, { cwd: projectDir, env, timeoutMs: 15 * 60 * 1000 });
+    const res = run(cmd, args, { cwd: projectDir, env, timeoutMs: RUN_HANG_BACKSTOP_MS });
     // The engine prints why it dropped a frame and still exits 0: its output is kept either way.
     if (res.status !== 0 || label === 'audio') appendStepLog(projectDir, `voice ${label}`, res);
     if (res.status !== 0) throw new Error(`voice: ${label} failed: ${tail(res)}`);
@@ -424,7 +425,7 @@ export async function runVoice(projectDir: string, input: VoiceInput, deps: { ru
  * number and its lines; when the frames' lines change, run runVoice again instead.
  */
 export async function repace(projectDir: string, deps: { run?: Runner } = {}): Promise<void> {
-  const res = (deps.run ?? spawnRunner)(process.execPath, ['assets/kit/pace.mjs'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: 5 * 60 * 1000 });
+  const res = (deps.run ?? spawnRunner)(process.execPath, ['assets/kit/pace.mjs'], { cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: RUN_HANG_BACKSTOP_MS });
   if (res.status !== 0) throw new Error(`voice: pace failed: ${tail(res)}`);
 }
 
