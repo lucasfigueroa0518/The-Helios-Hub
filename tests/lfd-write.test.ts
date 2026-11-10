@@ -11,8 +11,8 @@ const copy = (o: Partial<StoryCopy> & { key: string }): StoryCopy => ({ setup: '
 
 test('checkSubmission rejects missing keys, over-long fields and a setup without a colon', () => {
   assert.throws(
-    () => checkSubmission({ stories: [copy({ key: 'a', headline: 'x'.repeat(71), setup: 'No colon here' })] }, ['a', 'b']),
-    (err: Error) => /missing story b/.test(err.message) && /headline is 71/.test(err.message) && /setup must end with ":"/.test(err.message),
+    () => checkSubmission({ stories: [copy({ key: 'a', headline: 'x'.repeat(56), setup: 'No colon here' })] }, ['a', 'b']),
+    (err: Error) => /missing story b/.test(err.message) && /headline is 56/.test(err.message) && /setup must end with ":"/.test(err.message),
   );
 });
 
@@ -126,6 +126,6 @@ test('writeStories sends short ordinal keys and maps the copy back to the real p
 test('checkSubmission measures lengths after normalize trims a final period, a dash and spaces', () => {
   const body = `${'x'.repeat(190)}.`;
   assert.equal(body.length, 191);
-  assert.doesNotThrow(() => checkSubmission({ stories: [copy({ key: 'a', body, headline: ` – ${'H'.repeat(70)} `, setup: ` ${'S'.repeat(89)}: ` })] }, ['a']));
+  assert.doesNotThrow(() => checkSubmission({ stories: [copy({ key: 'a', body, headline: ` – ${'H'.repeat(55)} `, setup: ` ${'S'.repeat(89)}: ` })] }, ['a']));
   assert.throws(() => checkSubmission({ stories: [copy({ key: 'a', body: `${'x'.repeat(191)}.` })] }, ['a']), /body is 191/);
 });

@@ -184,7 +184,7 @@ test('R13: two Morning Download sets of one date never share a story', async () 
   }));
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((x) => ({ key: x.key, headline: `${x.headline} on Thursday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: x.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((x) => ({ key: x.key, headline: `${x.headline} on Thursday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: x.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'newsroom' },
     }),
   });

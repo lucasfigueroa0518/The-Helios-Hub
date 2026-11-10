@@ -180,7 +180,7 @@ test('Morning Download: a carousel photo another story used this week is not kep
   await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/openai.jpg', '2026-10-07T02:00:00Z', 'https://c.test/other-story', 1)`);
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -202,7 +202,7 @@ test('Morning Download: the opener is the photo set\'s cover (searched first); a
   await db.query(`INSERT INTO social.posts (slug, story_id, status, render, origin) VALUES ('gpt6', 'https://c.test/openai', 'review', $1, 'pipeline')`, [JSON.stringify({ slides: [{ photoUrl: 'https://img.test/small.jpg', photoCredit: 'Photo: OpenAI', photoKind: 'scene' }] })]);
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -239,7 +239,7 @@ test('Morning Download: the photo set\'s trace is saved by frame, so an empty fr
   await addIdea(db, slate, { headline: 'Mistral raises money', url: 'https://r.test/b', net: 8 });
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -278,7 +278,7 @@ test('Morning Download: the writer gets short ids, so long Google News keys cann
   await recordHistory(db, 'morning_download', [], null);
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: garble(s.key), headline: `${s.headline} on Sunday.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: garble(s.key), headline: `${s.headline} on Sunday. It matters.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -300,7 +300,7 @@ test('Morning Download: a story the writer leaves out gets the one rewrite, like
   await recordHistory(db, 'morning_download', [], null);
   const write = stubWriter({
     submit_headlines: (params, n) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).filter((s) => n > 1 || !s.headline.startsWith('Mistral')).map((s) => ({ key: s.key, headline: `${s.headline} on Sunday.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).filter((s) => n > 1 || !s.headline.startsWith('Mistral')).map((s) => ({ key: s.key, headline: `${s.headline} on Sunday. It matters.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
