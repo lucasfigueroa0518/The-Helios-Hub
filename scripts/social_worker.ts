@@ -371,13 +371,13 @@ async function main(): Promise<void> {
           log('ig_photo_sync_skipped', { reason: 'META_USER_ACCESS_TOKEN / META_IG_BUSINESS_ACCOUNT_ID not set' });
         } else {
           const { liveIgSyncDeps, syncPublishedPhotos } = await import('@/lib/photos/ig-sync');
-          const out = await withLfdTimeout(
+          // Capped so it can't hold up the midnight builds; a cut-off read resumes the next night (ig-sync.ts).
+          const out = await withHangGuard(
             liveIgSyncDeps(query, (line) => log('ig_photo_sync_note', { line }))
               .then(syncPublishedPhotos)
               .then(({ matches: _matches, ...report }) => ({ ok: true as const, report }))
               .catch((error) => ({ ok: false as const, error: errorText(error) })),
-            cfg.IG_PHOTO_SYNC_TIMEOUT_MS,
-            () => ({ ok: false as const, error: 'timed out after 10 minutes' }),
+            { backstopMs: cfg.IG_PHOTO_SYNC_TIMEOUT_MS, onHang: (reason) => ({ ok: false as const, error: `stopped (${reason}); resumes next night` }) },
           );
           if (out.ok) log('ig_photo_sync_complete', out.report);
           else log('ig_photo_sync_failed', { error: out.error });
