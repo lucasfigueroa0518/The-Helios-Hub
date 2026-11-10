@@ -39,6 +39,7 @@ On Instagram it is a multi-image ("carousel") feed post:
 | LFD-10 | **Its own content type** (a fifth spine vertical), not a kind of Carousels post. | DECIDED |
 | LFD-11 | v1 visuals are photos plus the article's own images. Screenshots of X posts come in v1.1. | DECIDED |
 | LFD-12 | Nothing posts without human approval, the same as every other type. | DECIDED |
+| LFD-13 | Builder lane and central intake (Phase 1, 2026-11-09): with the consumer switch on `intake`, builder stories (`story-builder@1`, event in the last 7 days) compete with majors in one lead queue, uncapped; majors stay at most 3. See §3.5. | DECIDED (Lucas, CI-11, CI-12) |
 
 ## 3. Picking the stories
 
@@ -53,7 +54,8 @@ On Instagram it is a multi-image ("carousel") feed post:
   - `carryover` rows are the reels scorer taking a second look at yesterday's near misses. They are not a different kind of
     story. They don't make an idea eligible, but they count toward its score (§3.2).
   - An idea that first appeared before the window was already available to the previous post. It is excluded.
-- **Read-only sources:** Last Few Days only reads `reels.*`, `social.runs` and the news feeds. It never writes to another type's tables.
+- **Read-only sources:** on the legacy path, Last Few Days only reads `reels.*`, `social.runs` and the news feeds. On the
+  intake path it reads `intake.*` instead (§3.5). It never writes to another type's tables.
 
 ### 3.2 Two lanes
 
@@ -109,6 +111,36 @@ scroll-stopping stories. So a story can get in two ways.
 - The post is never skipped.
 
 **Cost:** SQL, a free feed fetch, about 60 Jev `major-news@2` judgments, and the same-event checks. All of it is Jev or free, and it is metered by the run cap (§9).
+
+### 3.5 Central intake (Phase 1, 2026-11-09)
+
+Plan and decisions: `planning/Central Intake/PLAN.md` and `DECISIONS.md`. Contract: `lib/intake/types.ts`. §3.1–3.4
+describe the legacy path, which stays in place behind the switch below.
+
+- **Consumer switch.** `intake.settings` key `consumers`, entry `lfd`: `legacy` (the default) or `intake`. On `intake`,
+  the run reads pre-scored stories from the intake (`lib/intake/pool-lfd.ts`) and makes no scoring calls at pick time.
+  With no successful intake main run in the last 26 h, the run uses the legacy lanes and records `stale-fallback`. An
+  intake read error also falls back to the legacy lanes for that run. The run record says which path ran.
+- **LFD's order** (`lib/intake/orders.ts`): sources `reels:*` (the reels primary adapters) and `feeds:*` (the 19 feeds),
+  10-day lookback, scorecards `reels-score`, `story-scoring@4`, `major-news@3` and `story-builder@1`. The order opens
+  only from LFD's own state: `auto_run` on, a requested or running run, or an open seed.
+- **Lanes.** The intake path rebuilds the same three lanes (reels rundown by best `net` and blockbuster, carousel
+  shortlist, fresh feed pass) from intake stories, with the same keys, so repeat and archive checks still match.
+- **Picking order.** Seeds (at most 3), then one lead queue by `leadOf` margin, then the rundown, to 6. In the lead
+  queue, majors (`major-news`, bar 0.55) take at most 3 slots and builders are uncapped. A dropped story is replaced from
+  its own lane, then the lead queue, then the rundown.
+- **Builder lane.** `story-builder@1` against `BUILDER_BAR` (0.6 in `lib/stories/scores.ts`, a placeholder until the
+  calibration replay sets it). A builder qualifies only if the event happened in the last 7 days, using the best known
+  date (web search `happened_on`, else the feed's publish date). A story with no date is let in. On the legacy path no
+  builder scores exist, so the lead queue is exactly today's major queue.
+- **Builder photos.** Builder slides use AI Drama's harvest engine, capped at $0.15 a post. Major and rundown slides keep
+  today's finder (§5) until Phase 3.
+- **Posted check.** Carousel-posted stories are dropped at read time, against the carousel's posted list (14 days,
+  read-only). `already_posted` is no longer a scored question.
+- **Seeds.** Adding a seed stays free. In intake mode the run hands each open seed to `addIntakeSeed`, which joins or
+  creates its intake story and scores it once on entry, so the seed carries stored scores at pick time.
+- **Schedule.** Intake main run 12:00 AM, top-up 2:40 AM; LFD keeps 3:00 AM on its days. A manual run calls
+  `ensureIntakeFresh` first, which tops up when the intake is older than 180 minutes and never fails the run.
 
 ## 4. Writing and fact check
 
@@ -274,7 +306,8 @@ Applied with `node scripts/apply_lfd_schema.js`. There is no npm script, because
 ### 7.3 The clock
 
 - **3:00 AM Tuesday and Friday,** run by the existing `helios-social` worker (`scripts/social_worker.ts`).
-  - This is the slot the carousel run would otherwise use, so the "one type per hour" rule still holds.
+  - This is the slot the carousel run would otherwise use, so the per-hour rule (at most two per hour, never two video
+    renderers; night schedule v2) still holds. It shares 3:00 with the IG Stories sets.
   - The carousel run reads `lfd.settings.days` and does not run on those days while Last Few Days `auto_run` is on (LFD-02).
   - **One process, not a new unit:** both types share the worker process, so they can never overlap. This replaces step 3 of
     the "Adding a content type" checklist (a new systemd unit); the clock table records why.

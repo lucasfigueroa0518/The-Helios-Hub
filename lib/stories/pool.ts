@@ -6,12 +6,17 @@
  *   Guess the Number   carousel brief numbers + shortlisted stories without a brief + reels The Number ideas
  *   Free vs. Paid      Ball Knowledge ideas and GitHub Trending (optional hints)
  *
+ * Each series reads either today's sources (legacy) or the central intake
+ * (lib/intake/pool-stories.ts: the same shapes and selection rules, no
+ * dependency on Reels or Carousels having run), per the consumer switch
+ * (lib/stories/pool-intake.ts). The refresh record says which.
+ *
  * Used ideas stay used. An unused idea the latest refresh did not bring back
  * leaves, the way a reels slate replaces the night before. A series whose
  * sources could not be read keeps its list, and its rows age out after the
  * series' freshness window.
  *
- * The builds (the 4:00 AM auto set and Generate) draw from this pool. This
+ * The builds (the 3:00 AM auto set and Generate) draw from this pool. This
  * pass only reads the other pools (CLAUDE.md rule 2: nothing else in the
  * database is swept). It does not score with a model. Morning Download scores
  * every story on one news scale (lib/stories/md-score.ts); the other series
@@ -47,8 +52,15 @@ export const FRESH_MS: Record<Series, number> = {
   free_vs_paid: 14 * 86_400_000,
 };
 
-/** The pool turns over at 4:00 AM New York (the Stories hour, after the 3 AM carousel run). */
-export const POOL_DAY_STARTS_HOUR = 4;
+/** The pool turns over at 3:00 AM New York (the Stories hour, night schedule v2: after the 2:40 intake top-up). */
+export const POOL_DAY_STARTS_HOUR = 3;
+
+/**
+ * Where a series' ideas were read: the intake, today's sources, today's sources because the intake is stale (no main
+ * run in 26 h), or today's sources because the intake read failed for that series ('error-fallback').
+ */
+export type SeriesSource = 'intake' | 'legacy' | 'stale-fallback' | 'error-fallback';
+export type PoolModes = { md: SeriesSource; gtn: SeriesSource; fvp: SeriesSource };
 
 export type PoolReads = {
   morning: () => Promise<{ reels: StoryCandidate[]; carousel: StoryCandidate[] }>;
@@ -56,6 +68,8 @@ export type PoolReads = {
   leads: () => Promise<ToolLead[]>;
   /** When the newest carousel run finished: a run newer than the last refresh saw makes the pool due again. */
   carouselRunAt?: () => Promise<string | null>;
+  /** Which source each series read (the consumer switch); recorded with the refresh. */
+  modes?: () => Promise<PoolModes>;
 };
 
 /** The live reads, all from the shared database (read only). */
@@ -221,28 +235,30 @@ async function capSeries(db: Queryable, series: Series): Promise<number> {
   }
 }
 
-export async function refreshStoryPool(db: Queryable, reads: PoolReads, now: Date): Promise<{ upserted: number; dropped: number; errors: string[] }> {
+export async function refreshStoryPool(db: Queryable, reads: PoolReads, now: Date): Promise<{ upserted: number; dropped: number; errors: string[]; intake?: PoolModes }> {
   // Read the carousel marker before gathering: a run that finishes mid-gather is newer than this and refreshes again.
   const carouselAt = await reads.carouselRunAt?.().catch(() => null) ?? null;
   const gathered = await gatherPool(reads, now);
+  const modes = (await reads.modes?.().catch(() => null)) ?? null;
   const r = await writePool(db, gathered, now);
   await db.query(
     `INSERT INTO stories.settings (key, value, updated_by, updated_at) VALUES ('pool_refreshed', $1::jsonb, 'worker', now())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [JSON.stringify({ day: poolDay(now), at: now.toISOString(), carousel_at: carouselAt, upserted: r.upserted, dropped: r.dropped, errors: gathered.errors })],
+    [JSON.stringify({ day: poolDay(now), at: now.toISOString(), carousel_at: carouselAt, upserted: r.upserted, dropped: r.dropped, errors: gathered.errors, ...(modes ? { intake: modes } : {}) })],
   );
-  return { ...r, errors: gathered.errors };
+  return { ...r, errors: gathered.errors, ...(modes ? { intake: modes } : {}) };
 }
 
-/** The pool's day: the New York date, turning over at 4:00 AM instead of midnight. */
+/** The pool's day: the New York date, turning over at 3:00 AM instead of midnight. */
 export function poolDay(now: Date): string {
   return nyDateOf(new Date(now.getTime() - POOL_DAY_STARTS_HOUR * 3_600_000));
 }
 
 /**
- * Refresh once per pool day (the first worker pass after 4:00 AM, or the first build before it if the
- * pool has none for the day), and again whenever a carousel run has finished since the last refresh
- * read the carousel. The second case is how a late or manually started run's stories reach Morning Download.
+ * Refresh once per pool day (the first worker pass after 3:00 AM, or the first build before it if the
+ * pool has none for the day), and again whenever a carousel run (or, for a series on the intake, an
+ * intake run) has started since the last refresh read it. The second case is how a late or manually
+ * started run's stories reach Morning Download.
  */
 export async function refreshPoolIfDue(db: Queryable, reads: () => PoolReads, now: Date): Promise<Awaited<ReturnType<typeof refreshStoryPool>> | null> {
   const { rows } = await db.query<{ value: { day?: string; carousel_at?: string | null } | null }>(`SELECT value FROM stories.settings WHERE key = 'pool_refreshed'`);

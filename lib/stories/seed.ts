@@ -1,3 +1,5 @@
+import { intakeRef } from '@/lib/intake/pool-stories';
+import type { AddIntakeSeed, IntakeJev, IntakeQuery, ListStories, OrderId } from '@/lib/intake/types';
 import { ApiError } from '@/lib/stories/api';
 import type { Queryable } from '@/lib/stories/db';
 import { morningDownloadScore } from '@/lib/stories/md-score';
@@ -17,6 +19,12 @@ import type { StoryCandidate, ToolLead } from '@/lib/stories/sources/reels';
  *   Free vs. Paid     a tool: its name, link and what it is. The model still pairs it with its counterpart.
  *
  * Guess the Number and Free vs. Paid rank by source order, so a seed sits mid-pool: it competes, it is never bumped.
+ *
+ * Central intake (Phase 1): while Morning Download reads the intake (consumer switch 'intake'), a story seed with a
+ * link is also handed to addIntakeSeed, which reads the page and scores it on entry (major-news and story-builder,
+ * a few Jev calls, the person's click being the go-ahead), so the build's lead queue reads its stored scores. That
+ * hand-off never refuses or fails the seed: on any error the seed stays as it always was. Number and tool seeds are
+ * not stories and stay Stories-only.
  */
 
 export const SEED_PREFIX = 'seed:';
@@ -85,8 +93,22 @@ export async function openSeedCount(db: Queryable, series: Series): Promise<numb
   }
 }
 
-/** Put a typed idea into its series' pool. Free of cost; starts nothing. */
-export async function seedIdea(db: Queryable, body: SeedBody, now = new Date()): Promise<{ key: string; title: string }> {
+/** The intake hand-off for a Morning Download seed (see the header). Tests stub every part. */
+export type SeedIntake = {
+  q: IntakeQuery;
+  seededBy: string;
+  readMode: (q: IntakeQuery, order: OrderId, now: Date) => Promise<'intake' | 'legacy' | 'stale-fallback'>;
+  addSeed: AddIntakeSeed;
+  jev: () => IntakeJev;
+  listStories: ListStories;
+  log?: (line: string) => void;
+};
+
+/** How far back the seeded story is looked up for its stored scores (Morning Download's pool window). */
+const SEED_LOOKUP_MS = 4 * 86_400_000;
+
+/** Put a typed idea into its series' pool. Starts nothing; free unless a Morning Download story seed goes to the intake. */
+export async function seedIdea(db: Queryable, body: SeedBody, now = new Date(), intake?: SeedIntake): Promise<{ key: string; title: string }> {
   const item = seedItem(body, now);
   if ((await openSeedCount(db, item.series)) >= MAX_OPEN_SEEDS) throw new ApiError(409, `You have ${MAX_OPEN_SEEDS} seeded ideas waiting in this series; make or archive one first.`);
   await db.query(
@@ -94,5 +116,19 @@ export async function seedIdea(db: Queryable, body: SeedBody, now = new Date()):
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::timestamptz)`,
     [item.series, item.key, item.origin, item.ref, item.title, JSON.stringify(item.payload), item.score, now.toISOString()],
   );
+  if (intake && item.payload.kind === 'story' && item.payload.url) await seedIntoIntake(db, item, intake, now);
   return { key: item.key, title: item.title };
+}
+
+async function seedIntoIntake(db: Queryable, item: PoolItem, intake: SeedIntake, now: Date): Promise<void> {
+  try {
+    if ((await intake.readMode(intake.q, 'md', now)) !== 'intake' || item.payload.kind !== 'story') return;
+    const story = item.payload.story;
+    const { storyId } = await intake.addSeed(intake.q, intake.jev(), { order: 'md', url: story.url, seededBy: intake.seededBy, headline: story.headline, body: story.body }, now);
+    const found = (await intake.listStories(intake.q, { since: new Date(now.getTime() - SEED_LOOKUP_MS), families: ['seed'] })).find((s) => s.id === storyId);
+    const ref = found ? intakeRef(found) : { storyId, major: null, builder: null, eventDate: null };
+    await db.query(`UPDATE stories.pool SET payload = jsonb_set(payload, '{story,intake}', $3::jsonb) WHERE series = $1 AND key = $2`, [item.series, item.key, JSON.stringify(ref)]);
+  } catch (err) {
+    intake.log?.(`seed ${item.key}: intake hand-off failed, kept as a Stories seed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }

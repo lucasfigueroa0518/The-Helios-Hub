@@ -72,7 +72,7 @@ export async function readOpenSeeds(q: HubQuery, now: Date, archived: ReadonlySe
 
 /** A seed as a run candidate (origin 'seed', the person's own). */
 export function seedCandidate(s: LfdSeed): LfdCandidate {
-  return { key: s.key, refs: [s.key], origin: 'seed', headline: s.headline, sourceName: s.outlet, url: s.url, body: s.body, publishedAt: s.addedAt, net: null, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, yours: true };
+  return { key: s.key, refs: [s.key], origin: 'seed', headline: s.headline, sourceName: s.outlet, url: s.url, body: s.body, publishedAt: s.addedAt, net: null, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, yours: true };
 }
 
 /** Write what a run did with each seed: the outcome, and `made` for one that shipped. A failed seed stays open. */

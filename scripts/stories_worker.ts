@@ -21,6 +21,8 @@
  * published, and before it exits.
  */
 import './stories_env';
+import { createIntakeJev } from '@/lib/intake/jev';
+import { INTAKE_TOPUP_CAP_USD } from '@/lib/intake/types';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
@@ -82,6 +84,8 @@ async function main() {
     meta: () => createLiveStoriesMetaClient(),
     insights: () => createLiveStoryInsightsClient(),
     storage: () => createStoriesStorage(),
+    // A series on the central intake: the pool refresh's posted check asks Jev in the intake's own cost bucket.
+    intake: { jev: () => createIntakeJev(liveJevTransport, sourceDb, null, INTAKE_TOPUP_CAP_USD) },
     log,
   };
 

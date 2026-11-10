@@ -88,12 +88,38 @@ export async function liveLfdDeps(
       },
     };
   }
+  // Central intake (Phase 1): the consumer switch decides per run; the intake Jev (its own cost bucket, top-up cap)
+  // serves the carousel lane's posted check and seed scoring. Built lazily; a failure here means today's lanes.
+  let intake: LfdRunDeps['intake'];
+  try {
+    const { liveIntakeJev } = await import('@/lib/intake/jev');
+    const { INTAKE_TOPUP_CAP_USD } = await import('@/lib/intake/types');
+    intake = { jev: await liveIntakeJev({ query: (text, params) => query(text, params) }, null, INTAKE_TOPUP_CAP_USD) };
+  } catch (err) {
+    console.log(`lfd: intake not wired (${err instanceof Error ? err.message : String(err)}); today's lanes`);
+  }
+  // Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, capped at $0.15 a post inside the run.
+  const { streamingCreate } = await import('@/lib/reel-ai-drama/reporting/llm');
+  const { loadPrompt } = await import('@/lib/reel-ai-drama/prompts');
+  const { liveHarvestPhotoBank } = await import('@/lib/reel-ai-drama/harvest/photo-bank-live');
+  const harvest: import('./photos').BuilderHarvest = {
+    deps: {
+      http: fetch,
+      create: streamingCreate(newAnthropic()),
+      loadPrompt: (name) => loadPrompt(name),
+      serperKey: process.env.SERPER_API_KEY ?? null,
+      photoBank: liveHarvestPhotoBank(process.env).bank,
+      cutouts: [],
+    },
+  };
   return {
     deps: {
       query,
       jev,
       create,
       photos,
+      harvest,
+      ...(intake ? { intake } : {}),
       fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
       fetchBody: fetchBodyLive,
       readPage: (url) => readPage(url),

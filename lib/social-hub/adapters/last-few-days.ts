@@ -182,7 +182,7 @@ export function lfdPosts(read: LfdRead): HubPost[] {
   return foldLifecycle('last_few_days', posts);
 }
 
-type QueueEntry = { key?: string; headline?: string; lane?: string; major?: number | null; net?: number | null; reason?: string; detail?: string };
+type QueueEntry = { key?: string; headline?: string; lane?: string; major?: number | null; builder?: number | null; net?: number | null; reason?: string; detail?: string };
 
 const DROP_REASON: Record<string, string> = {
   'thin-text': 'the article text was too thin',
@@ -223,23 +223,27 @@ export function lfdIdeas(run: LfdRunRow | null, seeds: readonly LfdSeedRow[] = [
     });
   }
   if (!run) return out;
-  const r = (run.record ?? {}) as { window?: { after?: string; through?: string }; picks?: QueueEntry[]; drops?: QueueEntry[]; queues?: { major?: QueueEntry[]; rundown?: QueueEntry[] } };
+  const r = (run.record ?? {}) as { window?: { after?: string; through?: string }; picks?: QueueEntry[]; drops?: QueueEntry[]; queues?: { major?: QueueEntry[]; builder?: QueueEntry[]; rundown?: QueueEntry[] } };
   const window = r.window?.after && r.window.through ? `window ${r.window.after} → ${r.window.through}` : null;
   const at = iso(run.started_at ?? run.requested_at);
   const add = (e: QueueEntry, lane: string, state: HubIdea['state'], note: string | null) => {
     if (!e.key || seen.has(e.key)) return;
     seen.add(e.key);
-    const scored = e.major != null ? `major-news ${e.major.toFixed(2)}` : e.net != null ? `net ${e.net.toFixed(2)}` : null;
-    const laneLabel = lane === 'major' ? 'Major headline' : 'Rundown';
+    // The lane's own score first; a builder shows its major-news score beside it when both were judged.
+    const scored = lane === 'builder' && e.builder != null
+      ? [`builder ${e.builder.toFixed(2)}`, e.major != null ? `major-news ${e.major.toFixed(2)}` : null].filter(Boolean).join(' · ')
+      : e.major != null ? [`major-news ${e.major.toFixed(2)}`, e.builder != null ? `builder ${e.builder.toFixed(2)}` : null].filter(Boolean).join(' · ')
+      : e.net != null ? `net ${e.net.toFixed(2)}` : null;
+    const laneLabel = lane === 'major' ? 'Major headline' : lane === 'builder' ? 'Builder story' : 'Rundown';
     out.push({
       id: `last_few_days:story:${e.key}`,
       vertical: 'last_few_days',
       title: text(e.headline) ?? e.key,
       // Post order, highest first: rankIdeas sorts by score.
       score: -out.length,
-      scoreLabel: 'Order for the post (major headlines first)',
+      scoreLabel: 'Order for the post (lead stories first)',
       breakdown: {
-        formula: 'Up to 3 major headlines (major-news@2 at or above 0.55) lead; Text on Screen ideas fill the rest by best net score.',
+        formula: 'Lead stories go first, by how far each clears its bar: up to 3 major headlines (major-news at or above 0.55) and any number of builder stories (story-builder at or above 0.60, event in the last 7 days); Text on Screen ideas fill the rest by best net score.',
         parts: [{ label: laneLabel, points: null, detail: scored }],
         note: window,
       },
@@ -254,6 +258,7 @@ export function lfdIdeas(run: LfdRunRow | null, seeds: readonly LfdSeedRow[] = [
   for (const p of r.picks ?? []) add(p, p.lane ?? 'rundown', 'content_ready', 'in the post');
   for (const d of r.drops ?? []) add(d, d.lane ?? 'rundown', 'retired', `dropped: ${DROP_REASON[d.reason ?? ''] ?? d.reason ?? 'no reason recorded'}${d.detail ? ` (${d.detail})` : ''}`);
   for (const q of r.queues?.major ?? []) add(q, 'major', 'idea_only', null);
+  for (const q of r.queues?.builder ?? []) add(q, 'builder', 'idea_only', null);
   for (const q of r.queues?.rundown ?? []) add(q, 'rundown', 'idea_only', null);
   return out;
 }

@@ -29,7 +29,7 @@ export type SavedStory = {
   names: string[];
   body: string;
   photo: Photo;
-  photoSource?: 'lead' | 'finder' | 'meme';
+  photoSource?: 'lead' | 'harvest' | 'finder' | 'meme';
   meme?: { templateId: string; memeId: string; rank: number; role: 'cover' | 'slide'; position: number; object: string; text: string[] };
 };
 
@@ -37,7 +37,7 @@ export function readyFromSaved(s: SavedStory): Ready {
   const copy: StoryCopy = { key: s.key, setup: s.setup, headline: s.headline, highlight: s.highlight, names: s.names, body: s.body, photo: { kind: '', query: '', subjects: [], alts: [] } };
   const pick: Pick = {
     key: s.key, refs: [], origin: s.origin, headline: s.headline, sourceName: s.outlet, url: s.url, body: s.body,
-    publishedAt: null, net: s.net, blockbuster: 0, firstSeen: null, alsoFrom: [], major: s.major, lane: s.lane,
+    publishedAt: null, net: s.net, blockbuster: 0, firstSeen: null, alsoFrom: [], major: s.major, builder: null, eventDate: null, lane: s.lane,
   };
   return { pick, copy, photo: s.photo, photoSource: s.photoSource, meme: s.meme };
 }

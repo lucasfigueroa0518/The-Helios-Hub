@@ -180,7 +180,7 @@ test('Morning Download: a carousel photo another story used this week is not kep
   await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/openai.jpg', '2026-10-07T02:00:00Z', 'https://c.test/other-story', 1)`);
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -202,7 +202,7 @@ test('Morning Download: the opener is the photo set\'s cover (searched first); a
   await db.query(`INSERT INTO social.posts (slug, story_id, status, render, origin) VALUES ('gpt6', 'https://c.test/openai', 'review', $1, 'pipeline')`, [JSON.stringify({ slides: [{ photoUrl: 'https://img.test/small.jpg', photoCredit: 'Photo: OpenAI', photoKind: 'scene' }] })]);
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -239,7 +239,7 @@ test('Morning Download: the photo set\'s trace is saved by frame, so an empty fr
   await addIdea(db, slate, { headline: 'Mistral raises money', url: 'https://r.test/b', net: 8 });
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -278,7 +278,7 @@ test('Morning Download: the writer gets short ids, so long Google News keys cann
   await recordHistory(db, 'morning_download', [], null);
   const write = stubWriter({
     submit_headlines: (params) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: garble(s.key), headline: `${s.headline} on Sunday.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: garble(s.key), headline: `${s.headline} on Sunday. It matters.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -300,7 +300,7 @@ test('Morning Download: a story the writer leaves out gets the one rewrite, like
   await recordHistory(db, 'morning_download', [], null);
   const write = stubWriter({
     submit_headlines: (params, n) => ({
-      stories: (materialOf(params) as Array<{ key: string; headline: string }>).filter((s) => n > 1 || !s.headline.startsWith('Mistral')).map((s) => ({ key: s.key, headline: `${s.headline} on Sunday.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
+      stories: (materialOf(params) as Array<{ key: string; headline: string }>).filter((s) => n > 1 || !s.headline.startsWith('Mistral')).map((s) => ({ key: s.key, headline: `${s.headline} on Sunday. It matters.`, source_verb: 'via', source_name: 'Reuters', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
       opener_visual: { kind: 'setting', query: 'data center' },
     }),
   });
@@ -732,7 +732,7 @@ async function setSwitches(db: Awaited<ReturnType<typeof harnessDb>>['db'], s: {
   }
 }
 
-test('worker (approval off, publishing live): auto request at 4 AM → build → self-approve → schedule → publish in order → history, used photos, insights', async () => {
+test('worker (approval off, publishing live): auto request at 3 AM → build → self-approve → schedule → publish in order → history, used photos, insights', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   await setSwitches(db, { requireApproval: false, publishingLive: true });
@@ -746,7 +746,7 @@ test('worker (approval off, publishing live): auto request at 4 AM → build →
     publishingLimit: async () => ({ quotaUsage: 0, quotaTotal: 100 }),
   };
   const st = storage();
-  let clock = new Date('2026-10-08T08:00:00Z'); // 4:00 AM New York
+  let clock = new Date('2026-10-08T07:00:00Z'); // 3:00 AM New York
   const frames = [
     { seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'medium' as const, topic: 'ChatGPT users' } },
     { seq: 2, role: 'question' as const, backdrop: 'black' as const, copy: { role: 'question' as const, family: 'photo' as const, question: 'How many?', photo: { src: 'https://img.test/q.jpg', credit: 'c', kind: 'person' as const } } },
@@ -807,12 +807,12 @@ test('worker: a flagged auto set is not self-approved even with approval off', a
   assert.equal(sets[0]!.flagged, true);
 });
 
-test('worker (defaults): nothing before 4 AM; an auto set waits at ready for Approve; an approved set is not scheduled while publishing is off', async () => {
+test('worker (defaults): nothing before 3 AM; an auto set waits at ready for Approve; an approved set is not scheduled while publishing is off', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   const renderer = await stubRenderer();
   const st = storage();
-  let clock = new Date('2026-10-08T07:30:00Z'); // 3:30 AM New York
+  let clock = new Date('2026-10-08T06:30:00Z'); // 2:30 AM New York
   const frames = [{ seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'low' as const, topic: 't' } }];
   const deps = {
     db, sourceDb: db, now: () => clock,
@@ -822,7 +822,7 @@ test('worker (defaults): nothing before 4 AM; an auto set waits at ready for App
     insights: () => { throw new Error('not used'); },
   };
   assert.deepEqual(await tick(deps), { built: 0, scheduled: 0, published: 0, insights: 0 });
-  clock = new Date('2026-10-08T08:00:00Z'); // 4:00 AM
+  clock = new Date('2026-10-08T07:00:00Z'); // 3:00 AM
   assert.equal((await tick(deps)).built, 1);
   const repo = await import('@/lib/stories/repository');
   const [set] = await repo.listSets(db, { series: 'guess_the_number' });

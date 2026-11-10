@@ -16,6 +16,8 @@ import {
   WEB_SEARCH_SYSTEM,
   buildWebSearchUserPrompt,
 } from '@/lib/reels/prompts/web-search';
+import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
+import { depositFindsQuietly } from '@/lib/intake/deposit';
 import { recentPublishedHeadlines } from '@/lib/reels/copy/held-out';
 import { listRunSources, recentB6Headlines, recordCost } from '@/lib/reels/repository';
 import type { Adapter, AdapterItem } from '@/lib/reels/types';
@@ -43,7 +45,30 @@ export type StoryReport = {
   subject: string;
   claims: Array<{ claim: string; source_url: string }>;
   citation_urls: string[];
+  /** web-search-v3: the date the main event happened (YYYY-MM-DD), or null when the sources do not state it. */
+  happened_on?: string | null;
 };
+
+/** The search window: today's New York date and the date 7 days before it. */
+export function searchWindow(now: Date): { today: string; windowStart: string } {
+  const today = calendarDateKey(now, SOCIAL_TIMEZONE);
+  const start = new Date(`${today}T12:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - 7);
+  return { today, windowStart: start.toISOString().slice(0, 10) };
+}
+
+/**
+ * `happened_on` is model output: kept only when it is a real YYYY-MM-DD date
+ * that is not after today (New York). Noon UTC keeps it on that calendar day.
+ */
+export function parseHappenedOn(value: unknown, now: Date): Date | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return null;
+  const day = value.trim();
+  const at = new Date(`${day}T12:00:00Z`);
+  if (Number.isNaN(at.getTime()) || at.toISOString().slice(0, 10) !== day) return null;
+  if (day > calendarDateKey(now, SOCIAL_TIMEZONE)) return null;
+  return at;
+}
 
 export type GroundingResult = { ok: true } | { ok: false; reason: string };
 
@@ -391,6 +416,14 @@ export const claudeWebSearch: Adapter = {
       listRunSources(runId),
     ]);
 
+    const now = new Date();
+    const { today, windowStart } = searchWindow(now);
+    // Central intake: each find is deposited into intake.items too (a failure only logs).
+    const deliver = async (items: AdapterItem[]): Promise<AdapterItem[]> => {
+      await depositFindsQuietly(items, now);
+      return items;
+    };
+
     const client = newAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const tools: Anthropic.MessageCreateParams['tools'] = [
       { type: 'web_search_20250305', name: 'web_search', max_uses: B6_SEARCH_MAX_USES },
@@ -405,6 +438,8 @@ export const claudeWebSearch: Adapter = {
           tonightHeadlines: tonight
             .filter((source) => source.drop_reason === null)
             .map((source) => source.headline),
+          today,
+          windowStart,
         }),
       },
     ];
@@ -462,7 +497,7 @@ export const claudeWebSearch: Adapter = {
         }
 
         if (accepted.length >= B6_STORIES_PER_NIGHT) {
-          return accepted.slice(0, B6_STORIES_PER_NIGHT).map(toAdapterItem);
+          return await deliver(accepted.slice(0, B6_STORIES_PER_NIGHT).map((report) => toAdapterItem(report, now)));
         }
 
         if (attempt === B6_MAX_ATTEMPTS) break;
@@ -489,7 +524,7 @@ export const claudeWebSearch: Adapter = {
       }
     }
 
-    if (accepted.length > 0) return accepted.map(toAdapterItem);
+    if (accepted.length > 0) return deliver(accepted.map((report) => toAdapterItem(report, now)));
 
     const shape = lastShape ? ` Shape: ${lastShape}` : '';
     throw new Error(`Web-search story failed grounding: ${lastFailure}${shape}`);
@@ -506,9 +541,8 @@ export function storySlug(headline: string, at: Date): string {
   return `${day}-${slug || 'story'}`;
 }
 
-function toAdapterItem(report: StoryReport): AdapterItem {
+export function toAdapterItem(report: StoryReport, now: Date = new Date()): AdapterItem {
   const citations = citationUrlsFor(report);
-  const now = new Date();
   return {
     // Helios wrote this, so it gets its own identity rather than borrowing a
     // cited page's URL. Reusing a citation would auto-merge the story into the
@@ -519,10 +553,11 @@ function toAdapterItem(report: StoryReport): AdapterItem {
     body: storyWithSources(report),
     author: null,
     byline: 'Helios research',
-    publishTime: now,
+    // web-search-v3: the event's own date when the sources state it, else now.
+    publishTime: parseHappenedOn(report.happened_on, now) ?? now,
     citationUrls: citations,
     textIsComplete: true,
     allowRepeat: true,
-    rawPayload: { subject: report.subject, claims: report.claims },
+    rawPayload: { subject: report.subject, claims: report.claims, happened_on: report.happened_on ?? null },
   };
 }

@@ -21,8 +21,8 @@ export const FIELD_NOTES_FEED_VERTICAL = FIELD_NOTES_VERTICAL as unknown as Publ
 /** The run cap when field_notes.settings has no `run_cap_usd` row. */
 export const DEFAULT_FIELD_NOTES_RUN_CAP_USD = FIELD_NOTES_DEFAULT_SETTINGS.runCapUsd;
 
-/** The worker's daily check, 12:00 PM New York (kept for symmetry; auto_run ships off). */
-export const FIELD_NOTES_RUN_HOUR_LOCAL = 12;
+/** The worker's daily check, 2:00 AM New York (night schedule v2, round 4; auto_run ships off). */
+export const FIELD_NOTES_RUN_HOUR_LOCAL = 2;
 export const FIELD_NOTES_RUN_MINUTE_LOCAL = 0;
 
 /** Weekdays (0 = Sunday) an auto run would queue on once auto_run is on: Tuesday and Friday (cadence 1 to 2 a week). Never used while auto_run is off. */

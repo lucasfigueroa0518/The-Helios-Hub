@@ -142,9 +142,13 @@ async function main(): Promise<void> {
   const { PHOTO_BANK_BUCKET } = await import('@/lib/media-library/types');
   const { claimAndRunRevisions, startUpRevisions } = await import('@/lib/revisions/worker');
   const { newAnthropic } = await import('@/lib/anthropic-client');
+  const intakeTypes = await import('@/lib/intake/types');
+  const intakeRun = await import('@/lib/intake/run');
   const query = await socialQuery();
   /** The same connection, typed for lib/lfd (it takes the hub's query shape). */
   const lfdQuery = query as unknown as HubQuery;
+  /** The same connection, typed for the central intake (object with .query). */
+  const intakeQuery: import('@/lib/intake/types').IntakeQuery = { query: (text, params) => lfdQuery(text, params) };
   /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
   const standDown = () => publisherOwnsPublishing(query, 'carousels');
   /** The public calendar snapshot after an AI Events run or post (plan M3). */
@@ -332,14 +336,49 @@ async function main(): Promise<void> {
     // Started after today's noon: check once now, so a Sunday-afternoon restart still runs the week.
     let aiEventsAt = firstAiEventsCheckAt(new Date());
     let lastAiEventsError: string | null = null;
-    // The same for Field Notes' noon check (auto_run ships off, so it queues nothing until a person turns it on).
+    // The same for Field Notes' 2:00 AM check (auto_run ships off, so it queues nothing until a person turns it on).
     let fieldNotesAt = firstFieldNotesCheckAt(new Date());
+    // Central intake (night schedule v2): main at 12:00 AM, top-up at 2:40 AM, Jev only. A worker
+    // that starts before 2:00 AM checks the main run right away; mainRanToday keeps it to once a day.
+    const nextIntakeMain = () => nextRunAt(new Date(), intakeTypes.INTAKE_MAIN_HOUR_NY, 0);
+    const nextIntakeTopup = () => nextRunAt(new Date(), intakeTypes.INTAKE_TOPUP_HOUR_NY, intakeTypes.INTAKE_TOPUP_MINUTE_NY);
+    const nyHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+    let intakeMainAt = nyHour < intakeTypes.INTAKE_TOPUP_HOUR_NY ? new Date() : nextIntakeMain();
+    let intakeTopupAt = nextIntakeTopup();
     let lastFieldNotesError: string | null = null;
     let lastFieldNotesFacesError: string | null = null;
     const photoBank = mediaBucket(PHOTO_BANK_BUCKET);
-    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
+    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextIntakeMainAt: intakeMainAt.toISOString(), nextIntakeTopupAt: intakeTopupAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
+      if (Date.now() >= intakeMainAt.getTime()) {
+        // 12:00 AM: the central intake's main run (fetch, group, score; Jev only, $0.50 cap). Never twice a day.
+        try {
+          if (await intakeRun.mainRanToday(intakeQuery, new Date())) {
+            log('intake_main_skipped', { reason: 'main already ran today' });
+          } else {
+            const { runId, record } = await intakeRun.runIntake(await intakeRun.liveIntakeDeps(intakeQuery, 'main'), 'main');
+            log('intake_main_complete', { runId, orders: record.orders, usd: record.usd, stopReason: record.stopReason ?? null, grouping: record.grouping });
+          }
+        } catch (error) {
+          log('intake_main_failed', { error: errorText(error) });
+        }
+        intakeMainAt = nextIntakeMain();
+        continue;
+      }
+
+      if (Date.now() >= intakeTopupAt.getTime()) {
+        // 2:40 AM: the intake top-up (fresh news for the 3:00 pair; $0.15 cap).
+        try {
+          const { runId, record } = await intakeRun.runIntake(await intakeRun.liveIntakeDeps(intakeQuery, 'topup'), 'topup');
+          log('intake_topup_complete', { runId, orders: record.orders, usd: record.usd, stopReason: record.stopReason ?? null, grouping: record.grouping });
+        } catch (error) {
+          log('intake_topup_failed', { error: errorText(error) });
+        }
+        intakeTopupAt = nextIntakeTopup();
+        continue;
+      }
+
       if (Date.now() >= runAt.getTime()) {
         // 3:00 AM: on a Last Few Days day with its auto_run on, its run takes the carousel run's slot (LFD-02).
         const lfd = await lfdSettings.readLfdSettings(lfdQuery).catch((error) => {
@@ -394,12 +433,17 @@ async function main(): Promise<void> {
       }
 
       if (Date.now() >= fieldNotesAt.getTime()) {
-        // 12:00 PM: on a Field Notes day with its auto_run on, a run is queued. Auto_run ships off.
+        // 2:00 AM: on a Field Notes day with its auto_run on, a run is queued. Auto_run ships off.
         const fn = await fieldNotesSettings.readFieldNotesSettings(lfdQuery).catch((error) => {
           log('field_notes_settings_failed', { error: errorText(error) });
           return null;
         });
-        const fnNoon = fieldNotesNoonQueue(new Date(), fn);
+        // Never twice a day (a restart after the check): a scheduled run already queued today says no.
+        const fnToday = await fieldNotesStore.scheduledRunToday(lfdQuery, calendarDateKey(new Date())).catch((error) => {
+          log('field_notes_today_check_failed', { error: errorText(error) });
+          return null;
+        });
+        const fnNoon = fieldNotesNoonQueue(new Date(), fn, fnToday);
         if (fnNoon.queue && fn?.runCapUsd != null) {
           const id = await fieldNotesStore.requestRun(lfdQuery, 'scheduled', fn.runCapUsd).catch((error) => {
             log('field_notes_request_failed', { error: errorText(error) });

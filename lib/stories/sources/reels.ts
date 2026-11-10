@@ -24,6 +24,11 @@ export type StoryCandidate = {
   photo?: { url: string; credit: string } | null;
   /** Other sources merged into this one (S-03 merge). */
   alsoFrom?: string[];
+  /**
+   * Set when the candidate came from the central intake (lib/intake/pool-stories.ts): its story and the scores the
+   * intake stored for it, so Morning Download's lead queue reads them instead of asking Jev at build time.
+   */
+  intake?: { storyId: string; major: number | null; builder: number | null; eventDate: string | null; memberKeys?: string[] };
 };
 
 export const storyKey = (url: string) => {

@@ -64,6 +64,43 @@ const majorNews = (version: string, roster: JevRoster) => defineQuestionSet({
 /** @3 (S-73, Lucas 2026-10-13): @2's questions with Palantir among the blockbuster companies (roster 2). */
 export const MAJOR_NEWS = majorNews('major-news@3', 2);
 
+/**
+ * story-builder@2 (Lucas, 2026-11-09, replay review): @1 plus `general_interest`,
+ * and `made_or_found` counts achievements only. `routine_launch` and
+ * `speculative` take points away; `speculative` is major-news@3's own question,
+ * reused as is.
+ */
+export const BUILDER = defineQuestionSet({
+  id: 'story-builder',
+  version: 'story-builder@2',
+  questions: {
+    made_or_found: noul(
+      `Is the story centrally about a specific person, team, startup, lab or company that built, discovered or newly applied something using AI: a product, a tool, a project, a scientific or medical finding, or a new use in its field? It must be an achievement: a failure, breach, leak, misuse or harm does not count. ${UNTRUSTED}`,
+      {
+        true: 'The story centers on who built, found or newly applied something with AI, what it is, and it is an achievement.',
+        false: 'It is about AI in general, a trend, a market, a policy or an opinion, or its center is a failure, breach, leak, misuse or harm.',
+      },
+    ),
+    pushes_limits: noul(
+      `Does what they did go beyond what had been done before: a first, a record, a result people thought was out of reach, or AI doing real work in a field that had not used it this way? ${UNTRUSTED}`,
+      { true: 'What they did is new: it goes past what had been done before.', false: 'It repeats or slightly improves what others already do.' },
+    ),
+    shown_working: noul(
+      `Does the story report it working in the real world: a shipped product, a live demo, a measured result, a real case or real users? A plan, a funding round, a hiring push, or a claim with no result does not count. ${UNTRUSTED}`,
+      { true: 'The story reports it in use, demonstrated or measured.', false: 'It is a plan, a promise, money raised, people hired, or a claim with no result reported.' },
+    ),
+    routine_launch: noul(
+      `Is it mainly a routine product, feature, pricing or model launch from an established tech or AI company, rather than a striking result or a first? ${UNTRUSTED}`,
+      { true: 'Its core is a regular release or update from a large, established tech or AI company.', false: 'Its core is a striking result or a first, or it is not a launch from an established tech or AI company.' },
+    ),
+    general_interest: noul(
+      `Would a general audience, not only specialists, understand why this matters and find it remarkable? ${UNTRUSTED}`,
+      { true: 'A non-specialist would grasp why it matters and find it remarkable.', false: 'Its interest is mainly to specialists: researchers, developers or industry insiders.' },
+    ),
+    speculative: MAJOR_NEWS.questions.speculative,
+  },
+});
+
 /** major-news@2 (2026-10-09), kept as the record on roster 1. Superseded by @3. */
 export const MAJOR_NEWS_V2 = majorNews('major-news@2', 1);
 
@@ -218,4 +255,4 @@ export const FVP_PAIR_SCORE = defineQuestionSet({
   },
 });
 
-export const STORIES_QUESTION_SETS = [MAJOR_NEWS, MD_GROUNDING, SAME_EVENT, GTN_CANDIDATE, GTN_GATE, GTN_SAME_SUBJECT, FVP_PAIR_SCORE];
+export const STORIES_QUESTION_SETS = [MAJOR_NEWS, BUILDER, MD_GROUNDING, SAME_EVENT, GTN_CANDIDATE, GTN_GATE, GTN_SAME_SUBJECT, FVP_PAIR_SCORE];

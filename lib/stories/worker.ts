@@ -2,9 +2,11 @@
  * One pass of the Stories worker (plan §4, §7, M8). scripts/stories_worker.ts
  * runs it every 15 seconds; tests run it against PGlite and stubs.
  *
- *   0. pool: the first pass after 4:00 AM refreshes stories.pool from the
- *      reels, carousel and catalog pools (lib/stories/pool.ts; reads only)
- *   1. auto series: request today's set at 4:00 AM (docs/social-overnight.md);
+ *   0. pool: the first pass after 3:00 AM refreshes stories.pool from the
+ *      reels, carousel and catalog pools, or from the central intake for a
+ *      series the consumer switch has on it (lib/stories/pool.ts; reads only)
+ *   1. auto series: request today's set at 3:00 AM (docs/social-overnight.md,
+ *      night schedule v2: after the 2:40 intake top-up);
  *      in template mode one set per Stories slot (a series may post twice)
  *   2. build: claim one `requested` set → build, render, review → `ready`;
  *      an auto set approves itself only when require_approval is off and the
@@ -41,15 +43,17 @@ import {
   recordInsights,
   scheduleSet,
 } from '@/lib/stories/repository';
-import { livePoolReads, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
+import type { IntakeJev } from '@/lib/intake/types';
+import { refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
+import { storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings } from '@/lib/stories/settings';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
 
-/** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md). */
-export const AUTO_REQUEST_AFTER = '04:00';
+/** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md, night schedule v2). */
+export const AUTO_REQUEST_AFTER = '03:00';
 
 export type WorkerDeps = {
   db: StoriesDb;
@@ -65,6 +69,8 @@ export type WorkerDeps = {
   log?: (line: string) => void;
   /** Tests stub the pool's source reads. */
   poolReads?: (now: Date) => PoolReads;
+  /** The central intake for series on it: the posted check's Jev (its own cost bucket) and the mode read. */
+  intake?: { jev?: () => IntakeJev; readMode?: ReadConsumerMode };
 };
 
 const nyClock = (at: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
@@ -78,8 +84,9 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   // 0. The pool, once per pool day, before any auto set is requested or built.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     try {
-      const r = await refreshPoolIfDue(deps.db, () => (deps.poolReads ?? ((at) => livePoolReads(deps.sourceDb, at)))(now), now);
-      if (r) log(`pool: refreshed (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''})`);
+      const reads = deps.poolReads ?? ((at) => storiesPoolReads(deps.sourceDb, at, { readMode: deps.intake?.readMode, intake: { jev: deps.intake?.jev } }));
+      const r = await refreshPoolIfDue(deps.db, () => reads(now), now);
+      if (r) log(`pool: refreshed (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''}${r.intake ? `; sources ${JSON.stringify(r.intake)}` : ''})`);
     } catch (err) {
       log(`pool: refresh failed: ${err instanceof Error ? err.message : String(err)}`);
     }

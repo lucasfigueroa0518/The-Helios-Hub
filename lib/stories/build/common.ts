@@ -25,6 +25,8 @@ export type BuildDeps = {
   nyDate: string;
   /** The series' open ideas from stories.pool. Null only when the pool could not be read: the build then reads its sources directly. */
   pool?: OpenPool | null;
+  /** The series reads the central intake (consumer switch 'intake'): Morning Download ranks by the stored scores and the lead queue. */
+  intake?: boolean;
   /** Reads a cited page (Guess the Number gates). Defaults to readSourcePage; tests stub it by URL. */
   readSource?: (url: string, figure?: string) => Promise<SourcePage>;
 };

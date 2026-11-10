@@ -140,7 +140,7 @@ test('golden: with no seeds and no archives a run picks exactly what it always d
   assert.equal(plain.record.seeds, undefined);
   assert.equal(plain.record.seedError, undefined);
   // The same candidates through a Selector with no forced list.
-  const cand = (key: string, over: Partial<LfdCandidate> = {}): LfdCandidate => ({ key, refs: [key], origin: 'reels', headline: `Thing ${key}`, sourceName: 'x', url: `https://${key}`, body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, ...over });
+  const cand = (key: string, over: Partial<LfdCandidate> = {}): LfdCandidate => ({ key, refs: [key], origin: 'reels', headline: `Thing ${key}`, sourceName: 'x', url: `https://${key}`, body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, ...over });
   const majors = [cand('m1', { major: 0.9 }), cand('m2', { major: 0.7 })];
   const rundown = ['r1', 'r2', 'r3', 'r4', 'r5'].map((k, i) => cand(k, { net: 0.9 - i / 10 }));
   const noForced = await new Selector(majors, rundown, [], jev()).fill();
