@@ -331,17 +331,22 @@ function stateOf(r: Row, made: string | null, rawPath?: string | null): ReelStat
   };
 }
 
+/** The idea's member pages and the pages they cite, members in order (reels.idea_sources_v: legacy or intake). */
+export async function knownUrlsFor(q: Query, postIdeaId: string): Promise<string[]> {
+  const { rows } = await q(
+    `SELECT m.url AS canonical_url, m.citation_urls FROM reels.idea_sources_v m
+      WHERE m.post_idea_id = $1::uuid ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at`,
+    [postIdeaId],
+  );
+  return [...new Set(rows.flatMap((x) => [x.canonical_url as string, ...((x.citation_urls as string[] | null) ?? [])]))];
+}
+
 /** idea_copy.checks as the copy stage computes it (pipeline/copy.ts: checkCopy(report, bucket, knownUrls)). Null stays null. */
 async function checksFor(q: Query, r: Row, onScreenCopy: string): Promise<unknown> {
   if (r.checks == null) return null;
   const [{ checkCopy, ON_SCREEN_WORD_RANGE }] = await Promise.all([import('@/lib/reels/copy/report')]);
   if (!r.bucket || !(r.bucket in ON_SCREEN_WORD_RANGE)) return r.checks;
-  const { rows } = await q(
-    `SELECT src.canonical_url, src.citation_urls FROM reels.post_idea_members m JOIN reels.sources src ON src.id = m.source_id
-      WHERE m.post_idea_id = $1::uuid ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at`,
-    [r.post_idea_id],
-  );
-  const known = [...new Set(rows.flatMap((x) => [x.canonical_url as string, ...((x.citation_urls as string[] | null) ?? [])]))];
+  const known = await knownUrlsFor(q, r.post_idea_id);
   const report: CopyReport = {
     onScreenCopy,
     viewerStake: r.viewer_stake ?? '',

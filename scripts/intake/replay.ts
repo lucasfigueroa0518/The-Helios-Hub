@@ -18,6 +18,9 @@
  *  - groupIntake + scoreForStories (all four orders treated as open) with the
  *    live intake Jev, capped by --cap. IntakeCapReached → stop, partial report.
  *  - consumers, intake vs legacy (legacy read from the real DB, read only).
+ *  - Phase 2 (scripts/intake/replay-phase2.ts): Reels slate vs the intake path per night (on this store), then
+ *    Carousel (last runs ≤ Oct 28) and Field Notes (past runs' tips) in fresh in-memory stores, same ≥ 80% rule,
+ *    inside the same --cap. Plan mode prints their sections too.
  *
  * Real DB: every read happens up front inside ONE `BEGIN READ ONLY` transaction
  * (rolled back), on its own client; a guard refuses anything but SELECT/WITH.
@@ -33,6 +36,18 @@ import type { Questions, SystemOneResult } from '@typesafe-ai/sdk';
 import { zonedTime } from '@/lib/instagram/clock';
 import { candidatesFor, groupIntake, trigrams, type GroupingResult } from '@/lib/intake/group';
 import { createIntakeJev, isIntakeCapReached, type IntakeJevHandle } from '@/lib/intake/jev';
+import {
+  compareReelsNight,
+  loadPhase2Snapshot,
+  planPhase2,
+  renderPhase2Plan,
+  renderPhase2Report,
+  runPhase2,
+  type Phase2Comparison,
+  type Phase2Plan,
+  type Phase2Result,
+  type Phase2Snapshot,
+} from './replay-phase2';
 import { enrichThinFeedBodies, fetchBodyFrom, fetchFeedItems, intakeItemKey, upsertItem, type SourceEntry } from '@/lib/intake/fetch';
 import { INTAKE_ORDERS } from '@/lib/intake/orders';
 import { intakeLanes, type IntakeLanes } from '@/lib/intake/pool-lfd';
@@ -363,7 +378,7 @@ export function planReplay(snapshot: Snapshot, feedCount: number | null = null):
 const money = (usd: number, digits = 4) => `$${usd.toFixed(digits)}`;
 const iso = (d: Date) => d.toISOString().replace('.000Z', 'Z');
 
-export function renderPlan(plan: Plan, capUsd: number): string {
+export function renderPlan(plan: Plan, capUsd: number, phase2?: Phase2Plan): string {
   const lines = ['Intake replay plan (no Jev, no HTTP; the real DB was read in one read-only transaction)', ''];
   for (const n of plan.nights) {
     lines.push(
@@ -376,6 +391,7 @@ export function renderPlan(plan: Plan, capUsd: number): string {
   lines.push('', `Builder calibration (LFD lineups at ${BARS.join(' / ')}): ≤ ${plan.lineupCalls} same-event checks ≈ ${money(plan.lineupUsd)}`);
   lines.push(`Total ≈ ${total} Jev calls ≈ ${money(plan.usd)} (rate ${money(jevUsd(1_000_000), 3)} per million input tokens). Cap: ${money(capUsd, 2)}.`);
   lines.push('Grouping checks are an upper bound; story counts assume one story per item (joins make it fewer).');
+  if (phase2) lines.push(renderPhase2Plan(phase2));
   return lines.join('\n');
 }
 
@@ -510,6 +526,8 @@ export type ReplayResult = {
   totalUsd: number;
   capUsd: number;
   runtimeMs: number;
+  /** Phase 2: Reels slate vs the intake path, per night. */
+  phase2Reels?: Phase2Comparison[];
 };
 
 export type ReplayDeps = {
@@ -521,6 +539,8 @@ export type ReplayDeps = {
   scorecards?: readonly Scorecard[];
   capUsd: number;
   log?: (line: string) => void;
+  /** Phase 2: the Reels slate nights to compare on this store (replay-phase2.ts). */
+  phase2?: Phase2Snapshot;
 };
 
 const emptyTally = (): ScoringTally =>
@@ -647,6 +667,8 @@ export async function runReplay(snapshot: Snapshot, deps: ReplayDeps): Promise<R
       phase.now = 'reads';
       try {
         lastLanes = await compareNight(q, jev, night, newest ? feedArticles : null, inStore, nightResult);
+        const reelsNight = deps.phase2?.reels.find((r) => r.nyDate === night.nyDate);
+        if (reelsNight) (result.phase2Reels ??= []).push(await compareReelsNight(q, reelsNight, (key) => inStore.has(key)));
       } catch (err) {
         if (isIntakeCapReached(err)) stop(`${night.nyDate}, consumer reads (posted check)`, err);
         throw err;
@@ -1010,18 +1032,20 @@ async function main(): Promise<void> {
   const client = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await client.connect();
   let snapshot: Snapshot;
+  let phase2: Phase2Snapshot;
   try {
     // One read-only transaction for every real-DB read (never a session-level SET on the pooler).
     await client.query('BEGIN READ ONLY');
     const db = readOnlyQuery((text, params) => client.query(text, params as unknown[]));
     const nights = args.nights ?? (await defaultNights(db));
     snapshot = await loadSnapshot(db, nights);
+    phase2 = await loadPhase2Snapshot(db, snapshot.nights);
   } finally {
     await client.query('ROLLBACK').catch(() => undefined);
     await client.end().catch(() => undefined);
   }
 
-  console.log(renderPlan(planReplay(snapshot), args.cap));
+  console.log(renderPlan(planReplay(snapshot), args.cap, planPhase2(phase2)));
   if (!args.go) {
     console.log('\nPlan only. Add --go to run the replay (live Jev, capped; feeds fetched once).');
     return;
@@ -1037,11 +1061,27 @@ async function main(): Promise<void> {
       fetchFeeds: () => (args.noFeeds ? Promise.resolve([]) : fetchAllFeeds(HELIOS_SOCIAL_FEEDS)),
       capUsd: args.cap,
       log: (line) => console.log(line),
+      phase2,
     });
+    // Carousel and Field Notes in fresh in-memory stores, with what is left of the same cap.
+    const ledger = await memoryIntake();
+    let p2: Phase2Result = { reels: [], carousel: [], fieldNotes: [], stopped: null };
+    try {
+      const left = args.cap - result.totalUsd;
+      if (left > 0 && !result.stopped) {
+        const jev = createIntakeJev(liveJevTransport, ledger.q, null, left);
+        p2 = await runPhase2(phase2, { store: memoryIntake, jev, log: (line) => console.log(line) });
+        result.totalUsd += jev.usd;
+        result.totalCalls += jev.calls;
+      } else p2.stopped = 'the cap was spent before Phase 2';
+    } finally {
+      await ledger.close();
+    }
+    p2.reels = result.phase2Reels ?? [];
     const now = new Date();
     const out = args.out ?? path.join('planning', 'Central Intake', `replay-${now.toISOString().slice(0, 10)}.md`);
     mkdirSync(path.dirname(out), { recursive: true });
-    writeFileSync(out, renderReport(result, snapshot, now));
+    writeFileSync(out, `${renderReport(result, snapshot, now)}\n\n${renderPhase2Report(p2)}`);
     console.log(`\nReport: ${out}`);
     console.log(`Jev ${result.totalCalls} calls, ${money(result.totalUsd)}; runtime ${(result.runtimeMs / 60_000).toFixed(1)} min${result.stopped ? `; STOPPED at ${result.stopped.at}` : ''}`);
   } finally {

@@ -42,11 +42,10 @@ export async function loadCopyTargets(
     publish_time: string | null;
   }>(
     `SELECT s.post_idea_id, s.rank, s.chosen_bucket, s.chosen_framework,
-            m.role, src.source_name, src.headline, src.body, src.canonical_url,
-            src.citation_urls, src.author, src.byline, src.publish_time::text AS publish_time
+            m.role, m.source_name, m.headline, m.body, m.url AS canonical_url,
+            m.citation_urls, m.author, m.byline, m.publish_time::text AS publish_time
        FROM reels.idea_scores s
-       JOIN reels.post_idea_members m ON m.post_idea_id = s.post_idea_id
-       JOIN reels.sources src ON src.id = m.source_id
+       JOIN reels.idea_sources_v m ON m.post_idea_id = s.post_idea_id
       WHERE s.slate_id = $1
         AND s.chosen_bucket IS NOT NULL
         AND s.chosen_framework IS NOT NULL

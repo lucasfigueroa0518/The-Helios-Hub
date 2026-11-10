@@ -136,7 +136,7 @@ test('addIntakeSeed: creates a story, scores it with the order’s cards (≤ 2 
   await assert.rejects(addSeed(q, jev, { order: 'md', url: 'ftp://nope', seededBy: 'x' }, now), /must start with http/);
   const thin = makeAddIntakeSeed({ fetchBody: async () => 'short' });
   await assert.rejects(thin(q, jev, { order: 'md', url: 'https://example.com/thin', seededBy: 'x' }, now), /couldn’t read/);
-  assert.equal(INTAKE_SCORECARDS.length, 4);
+  assert.equal(INTAKE_SCORECARDS.length, 5); // Phase 2 adds field-notes-score
 });
 
 test('reels-score keeps the best net / blockbuster across re-scores; the latest score stays the score (nit a)', async () => {

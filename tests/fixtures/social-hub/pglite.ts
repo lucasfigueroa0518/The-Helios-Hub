@@ -31,6 +31,9 @@ const ACCOUNT_TABLES = ['account_insights_daily', 'account_demographics_daily', 
 export async function openHubTestDb(opts: { withHubSchema?: boolean; storiesMultiSlot?: boolean } = {}): Promise<{ pg: PGlite; query: HubQuery }> {
   const pg = new PGlite({ extensions: { pg_trgm } });
   for (const schema of SCHEMAS) await pg.exec(schemaSql(`${schema}_schema.sql`));
+  // Central intake Phase 2: Reels readers read idea content through reels.idea_sources_v (legacy + intake rows).
+  await pg.exec(schemaSql('intake_schema.sql'));
+  await pg.exec(schemaSql('reels_intake_views.sql'));
   // The go-live state: two-a-day Stories (db/stories_multi_slot.sql, R25). false = the state before that step.
   if (opts.storiesMultiSlot !== false) await pg.exec(schemaSql('stories_multi_slot.sql'));
   await pg.exec(schemaSql('social_hub_schema.sql'));

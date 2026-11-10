@@ -2,11 +2,14 @@
  * Pure reads over the intake store (lib/intake/types.ts ListStories,
  * LastRuns, the consumer switch). No scoring, no writes, no Jev.
  */
+import type { FieldNotesMember, FieldNotesMeta } from './scorecards';
+import { orderCovers } from './score';
 import {
   INTAKE_FRESH_HOURS,
   type ConsumerSettings,
   type Family,
   type IntakeItem,
+  type IntakeOrder,
   type IntakeQuery,
   type IntakeStory,
   type LastRuns,
@@ -38,6 +41,8 @@ type ItemRow = {
   feed_source_name?: string | null;
   reels_source_id?: string | null;
   reels_drop_reason?: string | null;
+  field_notes_source_id?: string | null;
+  field_notes_meta?: FieldNotesMeta | string | null;
 };
 
 type StoryRow = {
@@ -73,12 +78,19 @@ export function toItem(row: ItemRow): IntakeItem {
     reelsDropReason: row.reels_drop_reason ?? null,
     storyId: row.story_id,
     role: row.role,
-  };
+    // Phase 2 (helper type FieldNotesMember): the Field Notes registry entry id and metadata, when a Field Notes source carries it.
+    ...(row.field_notes_source_id != null
+      ? {
+          fieldNotesSourceId: row.field_notes_source_id,
+          fieldNotesMeta: typeof row.field_notes_meta === 'string' ? (JSON.parse(row.field_notes_meta) as FieldNotesMeta) : (row.field_notes_meta ?? null),
+        }
+      : {}),
+  } as FieldNotesMember;
 }
 
 const ITEM_COLUMNS = `key, family, source_id, source_name, source_type, headline, body, url, publish_time,
   first_seen_at, last_seen_at, engagement, drop_reason, story_id::text AS story_id, role, seeded_by,
-  feed_slug, feed_drop_reason, feed_source_name, reels_source_id, reels_drop_reason`;
+  feed_slug, feed_drop_reason, feed_source_name, reels_source_id, reels_drop_reason, field_notes_source_id, field_notes_meta`;
 
 /**
  * SQL twin of scorecards.ts keptIn: item `m` is a kept member of one of the families in parameter `$n` (fix 1:
@@ -88,7 +100,8 @@ export function keptInSql(n: number, m = 'm'): string {
   const fams = `$${n}::text[]`;
   return `(('feeds' = ANY(${fams}) AND CASE WHEN ${m}.feed_slug IS NOT NULL THEN ${m}.feed_drop_reason IS NULL ELSE ${m}.family = 'feeds' AND ${m}.drop_reason IS NULL END)
       OR ('reels' = ANY(${fams}) AND CASE WHEN ${m}.reels_source_id IS NOT NULL THEN ${m}.reels_drop_reason IS NULL ELSE ${m}.family = 'reels' AND ${m}.drop_reason IS NULL END)
-      OR (${m}.family IN ('search', 'seed') AND ${m}.family = ANY(${fams}) AND ${m}.drop_reason IS NULL))`;
+      OR (${m}.family IN ('search', 'seed') AND ${m}.family = ANY(${fams}) AND ${m}.drop_reason IS NULL)
+      OR ('field-notes' = ANY(${fams}) AND (${m}.field_notes_source_id IS NOT NULL OR ${m}.family = 'field-notes')))`;
 }
 
 const STORY_COLUMNS = `id::text AS id, representative_key, headline, first_seen_at, last_joined_at, merged_into::text AS merged_into`;
@@ -197,6 +210,7 @@ export async function listStories(q: IntakeQuery, input: ListStoriesInput): Prom
     else if (result.kind === 'story-scoring') into['story-scoring'] = result;
     else if (result.kind === 'major-news') into['major-news'] = result.score;
     else if (result.kind === 'story-builder') into['story-builder'] = result.score;
+    else if (result.kind === 'field-notes-score') into['field-notes-score'] = result;
     scores.set(row.story_id, into);
   }
 
@@ -230,16 +244,24 @@ export const lastRuns: LastRuns = async (q) => {
   return { main: of('main'), topup: of('topup') };
 };
 
-/** The newest successful run of any kind (for ensureIntakeFresh). */
+/**
+ * The start of the newest successful main run (SUCCESS above, as readConsumerMode's freshness reads it via lastRuns),
+ * or null when there is none.
+ */
+export async function lastSuccessfulMainStart(q: IntakeQuery): Promise<Date | null> {
+  return (await lastRuns(q)).main?.startedAt ?? null;
+}
+
+/** The newest successful run that fetched (for ensureIntakeFresh): a 'deposit' run fetches nothing, so it does not count. */
 export async function lastSuccessfulRunAt(q: IntakeQuery): Promise<Date | null> {
   const { rows } = await q.query<{ started_at: Date | string }>(
-    `SELECT started_at FROM intake.runs WHERE ${SUCCESS} ORDER BY started_at DESC LIMIT 1`,
+    `SELECT started_at FROM intake.runs WHERE ${SUCCESS} AND kind <> 'deposit' ORDER BY started_at DESC LIMIT 1`,
   );
   return rows[0] ? date(rows[0].started_at) : null;
 }
 
 export async function readConsumerSettings(q: IntakeQuery): Promise<ConsumerSettings> {
-  const fallback: ConsumerSettings = { lfd: 'legacy', md: 'legacy', gtn: 'legacy', fvp: 'legacy' };
+  const fallback: ConsumerSettings = { lfd: 'legacy', md: 'legacy', gtn: 'legacy', fvp: 'legacy', reels: 'legacy', carousel: 'legacy', 'field-notes': 'legacy' };
   const { rows } = await q.query<{ value: Partial<ConsumerSettings> | string }>(
     `SELECT value FROM intake.settings WHERE key = 'consumers'`,
   );
@@ -262,10 +284,80 @@ export async function readConsumerMode(q: IntakeQuery, order: OrderId, now: Date
     if (settings[order] !== 'intake') return 'legacy';
     const { main } = await lastRuns(q);
     if (!main) return 'stale-fallback';
-    return now.getTime() - main.startedAt.getTime() <= INTAKE_FRESH_HOURS * 3_600_000 ? 'intake' : 'stale-fallback';
+    if (now.getTime() - main.startedAt.getTime() > INTAKE_FRESH_HOURS * 3_600_000) return 'stale-fallback';
+    // Per order (Phase 2): the order's own sources were fetched by a successful run in the window. An order closed at
+    // midnight (Field Notes with auto_run off) has nothing fresh, so a later manual build takes the legacy path.
+    return (await orderFetchedSince(q, order, new Date(now.getTime() - INTAKE_FRESH_HOURS * 3_600_000))) ? 'intake' : 'stale-fallback';
   } catch {
     return 'legacy';
   }
+}
+
+/** Orders every run fetched before run records listed their orders (Phase 1). */
+const PHASE1_ORDERS: readonly OrderId[] = ['lfd', 'md', 'gtn', 'fvp'];
+
+/** Whether a successful run that fetched (not a deposit) since `since` had this order open, so fetched its sources. */
+export async function orderFetchedSince(q: IntakeQuery, order: OrderId, since: Date): Promise<boolean> {
+  const { rows } = await q.query<{ orders: unknown }>(
+    `SELECT record->'orders' AS orders FROM intake.runs
+      WHERE ${SUCCESS} AND kind <> 'deposit' AND started_at >= $1
+      ORDER BY started_at DESC LIMIT 50`,
+    [since],
+  );
+  return rows.some((row) => {
+    const raw = typeof row.orders === 'string' ? (JSON.parse(row.orders) as unknown) : row.orders;
+    return Array.isArray(raw) ? raw.includes(order) : PHASE1_ORDERS.includes(order);
+  });
+}
+
+/* ── Phase 2 reads ────────────────────────────────────────────────────── */
+
+/** How deep resolveStoryId follows merged_into (a guard; real chains are one or two links). */
+const MAX_MERGE_CHAIN = 25;
+
+/**
+ * The surviving story for an id: follows `merged_into` to the end of the chain (the Reels idea id of a merged
+ * story is the story it was merged into). Null when the id is not an intake story (e.g. a legacy Reels idea id).
+ */
+export async function resolveStoryId(q: IntakeQuery, id: string): Promise<string | null> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+  const { rows } = await q.query<{ id: string; merged_into: string | null; depth: number }>(
+    `WITH RECURSIVE chain AS (
+       SELECT id, merged_into, 0 AS depth FROM intake.stories WHERE id = $1::uuid
+       UNION ALL
+       SELECT s.id, s.merged_into, c.depth + 1 FROM intake.stories s JOIN chain c ON s.id = c.merged_into
+        WHERE c.depth < $2)
+     SELECT id::text AS id, merged_into::text AS merged_into, depth FROM chain ORDER BY depth DESC LIMIT 1`,
+    [id, MAX_MERGE_CHAIN],
+  );
+  return rows[0]?.id ?? null;
+}
+
+/** The member families an order's sources can reach (seeds always: an order's own seeds are covered). */
+export function orderFamilies(order: Pick<IntakeOrder, 'sources'>): Family[] {
+  const out = new Set<Family>(['seed']);
+  for (const source of order.sources) {
+    if (source === 'feeds:*' || source.startsWith('feed:')) out.add('feeds');
+    else if (source === 'field-notes:*' || source.startsWith('field-notes:')) out.add('field-notes');
+    else {
+      out.add('reels');
+      out.add('search');
+    }
+  }
+  return [...out];
+}
+
+export type ListOrderStoriesInput = Omit<ListStoriesInput, 'families'>;
+
+/**
+ * listStories for one order: only stories with a member the order's sources cover and keep (kept memberships,
+ * per list), its own seeds included. A thin wrapper: no scoring, no writes.
+ */
+export async function listOrderStories(q: IntakeQuery, order: OrderId | IntakeOrder, input: ListOrderStoriesInput): Promise<ScoredStory[]> {
+  const resolved = typeof order === 'string' ? (await import('./orders')).orderById(order) : order;
+  if (!resolved) throw new Error(`unknown intake order ${String(order)}`);
+  const stories = await listStories(q, { ...input, families: orderFamilies(resolved) });
+  return stories.filter((story) => story.members.some((m) => orderCovers(resolved, m)));
 }
 
 /**

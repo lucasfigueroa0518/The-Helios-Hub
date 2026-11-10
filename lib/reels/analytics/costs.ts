@@ -228,8 +228,7 @@ export async function loadCostPage(
       ),
       dbQuery<{ at: string; stage: string; status: string; usd: number; headline: string | null }>(
         `SELECT j.at::text, j.stage, j.status, j.usd::float8 AS usd,
-                (SELECT s.headline FROM reels.post_idea_members m
-                   JOIN reels.sources s ON s.id = m.source_id
+                (SELECT m.headline FROM reels.idea_sources_v m
                   WHERE m.post_idea_id = j.post_idea_id
                   ORDER BY CASE m.role WHEN 'primary' THEN 0 ELSE 1 END
                   LIMIT 1) AS headline

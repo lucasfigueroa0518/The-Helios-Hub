@@ -32,16 +32,18 @@ export type IntakeQuery = {
 };
 
 /** Which family an item comes from. Scorecards read only their family's members (keeps scores equal to today's). */
-export type Family = 'reels' | 'feeds' | 'search' | 'seed';
+/** Phase 2: 'field-notes' = Field Notes' own sources (lib/field-notes/sources/registry.ts); each item is its own story (never grouped). */
+export type Family = 'reels' | 'feeds' | 'search' | 'seed' | 'field-notes';
 
 /** Source ids: a reels adapter id, a feed slug (`feed:<slug>`), `search:b6`, or `seed:<type>`. */
 export type SourceId = string;
 
 /* ── orders ───────────────────────────────────────────────────────────── */
 
-export type OrderId = 'lfd' | 'md' | 'gtn' | 'fvp';
+/** Phase 2 adds 'reels', 'carousel' and 'field-notes' (planning/Central Intake/PHASE2-CONTRACT.md). */
+export type OrderId = 'lfd' | 'md' | 'gtn' | 'fvp' | 'reels' | 'carousel' | 'field-notes';
 
-export type ScorecardId = 'reels-screen' | 'reels-score' | 'story-scoring' | 'major-news' | 'story-builder';
+export type ScorecardId = 'reels-screen' | 'reels-score' | 'story-scoring' | 'major-news' | 'story-builder' | 'field-notes-score';
 
 export type IntakeOrder = {
   id: OrderId;
@@ -120,13 +122,17 @@ export type ScorecardResult =
   | { kind: 'reels-score'; score: InterpretedScore; best_net?: number | null; best_blockbuster?: number | null } // net, blockbuster, chosenBucket, ...; best_* = greatest over re-scores
   | { kind: 'story-scoring'; status: 'qualified' | 'not-qualified' | 'skipped'; probSum: number; outletCount: number; answers: Record<string, number> }
   | { kind: 'major-news'; score: number }
-  | { kind: 'story-builder'; score: number };
+  | { kind: 'story-builder'; score: number }
+  /** Phase 2: field-notes-score@3 on one 'field-notes' item (lib/field-notes/sources/score.ts scoreFromAnswers). */
+  | { kind: 'field-notes-score'; score: number; tags: import('@/lib/field-notes/sources/score').TipTags; answers: Record<string, number> };
 
 export type Scorecard = {
   id: ScorecardId;
   version: ScorecardVersion;
   /** Members this scorecard reads: reels-score → reels+search; story-scoring → feeds; major/builder → all. */
   families: readonly Family[];
+  /** Optional narrower member filter within `families` (reels-score keeps only its own order's seeds). */
+  keepMember?: (m: IntakeItem) => boolean;
   /** Score one story (or, for reels-screen, one item). Must not read per-night state (posted lists, slates, carryover). */
   score(story: IntakeStory, jev: IntakeJev): Promise<{ answers: Record<string, unknown>; result: ScorecardResult; usd: number }>;
 };
@@ -158,10 +164,13 @@ export type IntakeJev = {
 /** Hard cap: when spent, the run stops asking, finishes what is stored, and records `stopReason: 'cap'`. */
 export const INTAKE_MAIN_CAP_USD = 0.5;
 export const INTAKE_TOPUP_CAP_USD = 0.15;
+/** Phase 2: cap for one deposit run (Reels' A4/B6 finds, about 5 items a night). */
+export const INTAKE_DEPOSIT_CAP_USD = 0.15;
 
 /* ── run (lib/intake/run.ts, Owner A) ─────────────────────────────────── */
 
-export type IntakeRunKind = 'main' | 'topup' | 'manual';
+/** Phase 2 'deposit': Reels' 1 AM call that groups and scores items deposited since the last run (no fetch). */
+export type IntakeRunKind = 'main' | 'topup' | 'manual' | 'deposit';
 
 export type IntakeRunRecord = {
   kind: IntakeRunKind;
@@ -181,6 +190,8 @@ export type IntakeRunRecord = {
   unscored?: string[];
   /** How many of the previous run's `unscored` this run took on. */
   carried?: number;
+  /** Phase 2: why a deposit run did nothing (another intake run was still running). */
+  skipped?: string;
   /** Per-scorecard scoring failures (non-cap errors), so they show in the run record. */
   scoringFailures?: Partial<Record<ScorecardId, number>>;
 };
@@ -225,6 +236,8 @@ export type ScoredStory = IntakeStory & {
     'story-scoring': Extract<ScorecardResult, { kind: 'story-scoring' }>;
     'major-news': number;
     'story-builder': number;
+    /** Phase 2: the stored field-notes-score@3 result (score, tags, answers) of the story's Field Notes member. */
+    'field-notes-score': Extract<ScorecardResult, { kind: 'field-notes-score' }>;
   }>;
   /** Event date: a 'search' member's publish time (B6 happened_on), else the EARLIEST member publish time; null when none. */
   eventDate: Date | null;

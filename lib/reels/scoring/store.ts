@@ -82,9 +82,8 @@ export async function slateIdeaIds(nyDate: string): Promise<string[]> {
       )
         -- A rerun for the same date must not rescore a person's seed as a timely idea and so make it unprompted.
         AND NOT EXISTS (
-          SELECT 1 FROM reels.post_idea_members m
-            JOIN reels.sources so ON so.id = m.source_id
-           WHERE m.post_idea_id = s.post_idea_id AND so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+          SELECT 1 FROM reels.idea_sources_v m
+           WHERE m.post_idea_id = s.post_idea_id AND m.seeded
         )`,
     [nyDate],
   );
@@ -130,9 +129,8 @@ export async function loadSlateRanked(
       )
         -- A person's seed is never a carryover: the night does not make it unprompted (a pin or Run now does).
         AND NOT EXISTS (
-          SELECT 1 FROM reels.post_idea_members m
-            JOIN reels.sources so ON so.id = m.source_id
-           WHERE m.post_idea_id = s.post_idea_id AND so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+          SELECT 1 FROM reels.idea_sources_v m
+           WHERE m.post_idea_id = s.post_idea_id AND m.seeded
         )`,
     [nyDate],
   );
@@ -160,10 +158,9 @@ export async function loadIdeaMaterial(ids: readonly string[]): Promise<IdeaMate
     headline: string;
     body: string;
   }>(
-    `SELECT i.id, i.last_joined, m.role, s.source_name, s.headline, s.body
+    `SELECT i.id, i.last_joined, m.role, m.source_name, m.headline, m.body
        FROM reels.post_ideas i
-       JOIN reels.post_idea_members m ON m.post_idea_id = i.id
-       JOIN reels.sources s ON s.id = m.source_id
+       JOIN reels.idea_sources_v m ON m.post_idea_id = i.id
       WHERE i.id = ANY($1::uuid[])
       ORDER BY i.id,
                CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
@@ -353,17 +350,15 @@ export async function loadSlates(
               s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
               s.value_score, s.blockbuster, s.confidence, s.components,
               (
-                SELECT jsonb_agg(src.headline ORDER BY
+                SELECT jsonb_agg(m.headline ORDER BY
                          CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
                          m.joined_at)
-                  FROM reels.post_idea_members m
-                  JOIN reels.sources src ON src.id = m.source_id
+                  FROM reels.idea_sources_v m
                  WHERE m.post_idea_id = s.post_idea_id
               ) AS headlines,
               EXISTS (
-                SELECT 1 FROM reels.post_idea_members m2
-                  JOIN reels.sources so ON so.id = m2.source_id
-                 WHERE m2.post_idea_id = s.post_idea_id AND so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+                SELECT 1 FROM reels.idea_sources_v m2
+                 WHERE m2.post_idea_id = s.post_idea_id AND m2.seeded
               ) AS yours
          FROM reels.idea_scores s
         WHERE s.slate_id = ANY($1::uuid[])

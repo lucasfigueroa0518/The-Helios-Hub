@@ -34,6 +34,7 @@ const emptyTally = (): ScoringTally => ({
   'story-scoring': { scored: 0, cached: 0, usd: 0 },
   'major-news': { scored: 0, cached: 0, usd: 0 },
   'story-builder': { scored: 0, cached: 0, usd: 0 },
+  'field-notes-score': { scored: 0, cached: 0, usd: 0 },
 });
 
 /** sha1 of the sorted member keys (the cache key's member part). */
@@ -42,17 +43,23 @@ export function memberHash(members: readonly Pick<IntakeItem, 'key'>[]): string 
 }
 
 type CoverItem = Pick<IntakeItem, 'family' | 'sourceId'> &
-  Partial<Pick<IntakeItem, 'dropReason' | 'feedSlug' | 'feedDropReason' | 'reelsSourceId' | 'reelsDropReason'>>;
+  Partial<Pick<IntakeItem, 'dropReason' | 'feedSlug' | 'feedDropReason' | 'reelsSourceId' | 'reelsDropReason'>> & { fieldNotesSourceId?: string | null };
 
 /**
  * Whether an order's sources cover an item, through any list that keeps it (fix 1: a URL can be on a reels adapter
  * and a feed): `'reels:*'` covers reels adapters and Claude web search finds (family 'search'); `'feeds:*'` covers
- * every feed; an explicit id covers that source; a seed is covered by its own order.
+ * every feed; `'field-notes:*'` covers every Field Notes source; an explicit id covers that source; a seed is covered
+ * by its own order.
  */
 export function orderCovers(order: Pick<IntakeOrder, 'id' | 'sources'>, item: CoverItem): boolean {
   const kept = keptFamilies({ ...item, dropReason: item.dropReason ?? null });
   return kept.some((family) => {
     if (family === 'seed') return item.sourceId === `seed:${order.id}`;
+    if (family === 'field-notes') {
+      // Phase 2: `'field-notes:*'` = every SOURCE_REGISTRY entry; `field-notes:<entry id>` = that entry.
+      const entryId = item.fieldNotesSourceId ?? item.sourceId.replace(/^field-notes:/, '');
+      return order.sources.includes('field-notes:*') || order.sources.includes(`field-notes:${entryId}`);
+    }
     if (family === 'feeds') {
       const id = item.feedSlug ? `feed:${item.feedSlug}` : item.sourceId;
       return order.sources.includes(id) || order.sources.includes('feeds:*');
@@ -103,7 +110,7 @@ export async function scoreForStories(
     const wanted = wantedScorecards(story, orders);
     for (const card of scorecards) {
       if (!wanted.has(card.id)) continue;
-      const members = membersOf(story, card.families);
+      const members = membersOf(story, card.families).filter((m) => card.keepMember?.(m) ?? true);
       if (members.length === 0) continue; // no row for an empty family subset
       tasks.push({ story, card, hash: memberHash(members) });
     }
