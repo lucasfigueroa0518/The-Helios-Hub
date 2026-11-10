@@ -156,6 +156,8 @@ export const liveStoriesDeps: StoriesDeps = {
       jev: meteredJev(createJevAsk(), m, jevCostUsd),
       create: await meteredStoriesCreate((p: Parameters<typeof client.messages.create>[0]) => client.messages.create(p as never) as never, m),
       runRef: `stories-revision:${setId}:${new Date().toISOString()}`,
+      // CI-32: each pick's picture is checked against the used-photo ledger.
+      used: (await import('@/lib/photos/used-guard')).liveUsedLedger(),
     });
     const shared = m.stopped() ? null : await sharedForSet(setId);
     const photo = await (shared ? shared.wrap(finder, (usd) => m.spend(usd)) : finder).find(request);

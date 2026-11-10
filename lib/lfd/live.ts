@@ -41,7 +41,9 @@ export async function lfdPhotoFinder(
   } catch (err) {
     log(`not built: ${err instanceof Error ? err.message : String(err)}`);
   }
-  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, ...(bank ? { bank } : {}) }), bank };
+  // CI-32: the finder checks each pick's picture against the used-photo ledger (read once per run).
+  const { ledgerFrom } = await import('@/lib/photos/used-guard');
+  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, used: ledgerFrom((text, params) => query(text, params)), ...(bank ? { bank } : {}) }), bank };
 }
 
 /** The run's shared-finder wiring when the 'lfd' switch reads 'shared' (read once); undefined otherwise. Never throws. `make` is for tests. */
@@ -140,6 +142,8 @@ export async function liveLfdDeps(
       create,
       photos,
       harvest,
+      // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.
+      usedPhotos: { http: fetch },
       ...(sharedPhotos ? { sharedPhotos } : {}),
       ...(intake ? { intake } : {}),
       fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),

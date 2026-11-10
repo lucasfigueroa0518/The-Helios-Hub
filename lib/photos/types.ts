@@ -12,6 +12,8 @@ import type { HarvestDeps } from '@/lib/reel-ai-drama/harvest/types';
 import type { ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { Photo } from '@/lib/stories/render/types';
 
+import type { UsedLedger } from './used';
+
 /** The content types that use the shared finder. Field Notes is out (the team's own photos). */
 export type PhotoProfileId = 'lfd' | 'md' | 'gtn' | 'fvp' | 'carousel';
 export const PHOTO_PROFILE_IDS: readonly PhotoProfileId[] = ['lfd', 'md', 'gtn', 'fvp', 'carousel'];
@@ -90,6 +92,11 @@ export type PhotoDeps = {
   /** Parent folder for per-frame job folders (removed afterwards); default the OS tmp dir. */
   workDir?: string;
   now: () => Date;
+  /**
+   * The used-photo ledger (CI-32, lib/photos/used.ts), read once per post: a found photo published by any post in the
+   * last 20 days, by URL or by pHash, is refused (logos aside: brand assets). Absent: only `exclude` applies.
+   */
+  used?: () => Promise<UsedLedger>;
 };
 
 export type FindOptions = {

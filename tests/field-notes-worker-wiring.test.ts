@@ -27,7 +27,7 @@ test('the social worker runs Field Notes in its own loop: the noon clock, claims
 });
 
 test('the single publisher drives Field Notes', () => {
-  assert.match(read('scripts/publisher_worker.ts'), /fieldNotesDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), token \}\)/);
+  assert.match(read('scripts/publisher_worker.ts'), /fieldNotesDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), photoHashes: \{\}, token \}\)/);
 });
 
 test('the deploy guard waits for a running Field Notes run, and joins it only once the table exists', () => {

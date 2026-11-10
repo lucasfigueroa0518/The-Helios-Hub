@@ -5,10 +5,14 @@
  *
  * `bankWrites: false` (the comparison script): the bank is still read (lookup, fetchStored) but never written
  * (offer and flush are no-ops).
+ *
+ * `used`: the used-photo ledger (CI-32) on the hub's database (lib/db.ts, DATABASE_URL), the same pool the photo bank
+ * uses; read once per post by findPhotos.
  */
 import type { HarvestPhotoBank } from '@/lib/reel-ai-drama/harvest/types';
 
 import type { PhotoDeps } from './types';
+import { liveUsedLedger } from './used-guard';
 
 /** The bank, read only: lookups and stored copies pass through; offers are dropped. */
 export function readOnlyPhotoBank(bank: HarvestPhotoBank): HarvestPhotoBank {
@@ -38,5 +42,6 @@ export async function livePhotoDeps(env: NodeJS.ProcessEnv = process.env, opts: 
       cutouts: [],
     },
     now: () => new Date(),
+    used: liveUsedLedger(env),
   };
 }

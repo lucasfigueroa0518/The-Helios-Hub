@@ -76,6 +76,39 @@ test('publishing marks the lfd post, the attempt and the photos, never a carouse
   assert.equal((await q(`SELECT count(*)::int AS n FROM social.posts`)).rows[0].n, 0);
 });
 
+test('CI-32: the publish-time rows carry both hashes, best effort; a photo that cannot be fetched still gets a URL-only row', async () => {
+  const { query } = await openHubTestDb();
+  const q = query as unknown as Query;
+  await q(`ALTER TABLE social.used_photos ADD COLUMN IF NOT EXISTS vertical text, ADD COLUMN IF NOT EXISTS media_id text, ADD COLUMN IF NOT EXISTS phash text, ADD COLUMN IF NOT EXISTS dhash text`);
+  const id = await seedLfdPost(query);
+  await queueLfdPublish(q, id, 'approve');
+  const { meta } = stubMeta();
+  const read = async (ref: string) => {
+    if (ref === 'https://p/haiku.jpg') return Buffer.from('haiku');
+    throw new Error('fetch 404');
+  };
+  const hash = async (b: Buffer) => ({ phash: `p-${b.toString()}`, dhash: `d-${b.toString()}` });
+  const out = await claimAndPublishLfd({ query: q, meta, signImage: sign, sleep: async () => undefined, now: () => Date.parse('2026-10-13T13:40:00Z'), photoHashes: { read, hash } });
+  assert.equal(out?.status, 'published');
+  const photos = (await q(`SELECT url, story_id, vertical, media_id, phash, dhash FROM social.used_photos ORDER BY slide`)).rows;
+  assert.deepEqual(photos.map((p) => [p.url, p.story_id, p.vertical, p.media_id, p.phash, p.dhash]), [
+    ['https://p/haiku.jpg', `lfd:${id}`, 'lfd', 'media-1', 'p-haiku', 'd-haiku'],
+    ['https://p/person.jpg', `lfd:${id}`, 'lfd', 'media-1', null, null],
+  ]);
+});
+
+test('CI-32: recordLfdPhotos hashes through its own http/hash; a failed fetch still writes the row', async () => {
+  const { recordLfdPhotos } = await import('@/lib/lfd/publish');
+  const { query } = await openHubTestDb();
+  const q = query as unknown as Query;
+  await q(`ALTER TABLE social.used_photos ADD COLUMN IF NOT EXISTS vertical text, ADD COLUMN IF NOT EXISTS media_id text, ADD COLUMN IF NOT EXISTS phash text, ADD COLUMN IF NOT EXISTS dhash text`);
+  const id = await seedLfdPost(query);
+  const n = await recordLfdPhotos(q, id, new Date('2026-10-13T13:40:00Z'), null, { read: async () => { throw new Error('offline'); }, hash: async () => ({ phash: 'x', dhash: 'y' }) });
+  assert.equal(n, 2);
+  const rows = (await q(`SELECT phash, dhash FROM social.used_photos`)).rows;
+  assert.deepEqual(rows.map((r) => [r.phash, r.dhash]), [[null, null], [null, null]]);
+});
+
 test('a rejected item fails at carry without making containers', async () => {
   const { query } = await openHubTestDb();
   const q = query as unknown as Query;

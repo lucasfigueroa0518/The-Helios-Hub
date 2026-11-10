@@ -101,7 +101,7 @@ function pages(publishedTime: string | null = '2026-10-04T12:00:00Z'): PageReadO
 }
 
 const web = (over: Partial<FakeWeb> = {}): FakeWeb => ({ ...SIF_WEB, ...over });
-function ctxFor(brief: Brief = briefSuperIntelligenceForce(), withPages = true, opts: { recent?: Set<string> } = {}) {
+function ctxFor(brief: Brief = briefSuperIntelligenceForce(), withPages = true, opts: { recent?: Set<string>; published?: Set<string> } = {}) {
   const kinds = new Map(brief.subjects.map((s) => [s.name, s.type ?? null]));
   const p = withPages ? pages() : [];
   return newSearchContext(brief, p, { photos: articlePhotosFor(brief, p, kinds), kinds, storyDate: '2026-10-04', ...opts });
@@ -178,7 +178,7 @@ test('event and product: article photos naming a tagged subject; the bare query 
   assert.ok(!untagged.candidates.some((c) => c.lane === 'article'), 'no tags: no article photo');
 });
 
-test('7-day rule: a stock photo used in the last 7 days is out; a headshot on a story slide is exempt; a cover never repeats one', async () => {
+test('used-photo rule (CI-32): a stock photo or a headshot published lately is out, on a story slide and on a cover', async () => {
   // The one-pass search these cases pin (keep 2, no deep ladder); the defaults are tested separately.
   (await import('@/lib/social/photos/tuning')).setTuning({ keep: 2, ladder: 'short' }, true);
   try {
@@ -186,8 +186,15 @@ test('7-day rule: a stock photo used in the last 7 days is out; a headshot on a 
   const recent = new Set([stockUrl('wall clock', 1), commonsUrl('Donald Trump official portrait.jpg')]);
   const stock = await searchVisual(v('thematic', 'wall clock'), ctxFor(briefSuperIntelligenceForce(), false, { recent }), { jev: stubJev(), http }, {});
   assert.deepEqual(stock.candidates, []);
-  const story = await searchVisual(v('person', 'Donald Trump'), ctxFor(briefSuperIntelligenceForce(), false, { recent }), { jev: stubJev(), http }, { tags: ['S1'] });
-  assert.equal(story.candidates[0]?.lane, 'headshot');
+  // CI-32: headshots are no longer exempt on story slides (only brand assets are).
+  const story = await searchVisual(v('person', 'Donald Trump'), ctxFor(briefSuperIntelligenceForce(), false, { recent, published: recent }), { jev: stubJev(), http }, { tags: ['S1'] });
+  assert.ok(!story.candidates.some((c) => c.lane === 'headshot'), 'a published headshot is out on a story slide too');
+  // Picked earlier in this run but not published: a headshot may repeat on a story slide (same-night duplicates are fine).
+  const sameRun = await searchVisual(v('person', 'Donald Trump'), ctxFor(briefSuperIntelligenceForce(), false, { recent }), { jev: stubJev(), http }, { tags: ['S1'] });
+  assert.equal(sameRun.candidates[0]?.lane, 'headshot', 'a same-run headshot repeat is allowed on a story slide');
+  // Unpublished, the headshot is still found (so the case above tests the rule, not the fake web).
+  const fresh = await searchVisual(v('person', 'Donald Trump'), ctxFor(briefSuperIntelligenceForce(), false, { recent: new Set() }), { jev: stubJev(), http }, { tags: ['S1'] });
+  assert.equal(fresh.candidates[0]?.lane, 'headshot');
   const cover = await searchVisual(v('person', 'Donald Trump'), ctxFor(briefSuperIntelligenceForce(), false, { recent }), { jev: stubJev(), http }, { tags: ['S1'], cover: true });
   assert.deepEqual(cover.candidates, [], 'the same photo on both covers (fixed case §7)');
   } finally {

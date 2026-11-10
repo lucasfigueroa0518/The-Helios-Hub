@@ -39,7 +39,7 @@ test('the AI Events engine never builds a Claude client', () => {
 
 test('the single publisher drives AI Events with the calendar snapshot', () => {
   const text = read('scripts/publisher_worker.ts');
-  assert.match(text, /aiEventsDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), token, snapshot: liveAiEventsSnapshot\(/);
+  assert.match(text, /aiEventsDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), photoHashes: \{\}, token, snapshot: liveAiEventsSnapshot\(/);
 });
 
 test('a deploy waits for a running AI Events run', () => {

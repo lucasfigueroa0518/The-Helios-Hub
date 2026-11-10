@@ -142,7 +142,9 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
       }
     }
     // Every Jev pick and Haiku photo-vision call the finder makes is metered and refused once the meter stopped.
-    const finder = createLivePhotoFinder({ jev: await meteredJevAsk(m), create: await meteredClaude(m), runRef: `lfd-revision:${pick.key}:${new Date().toISOString()}` });
+    // CI-32: each pick's picture is checked against the used-photo ledger.
+    const used = (await import('@/lib/photos/used-guard')).liveUsedLedger();
+    const finder = createLivePhotoFinder({ jev: await meteredJevAsk(m), create: await meteredClaude(m), runRef: `lfd-revision:${pick.key}:${new Date().toISOString()}`, used });
     const found = await findPhotos(finder, [{ pick, copy }], new Set(exclude));
     if (m.stopped()) m.halt();
     return { photo: found.photos[0] ?? null, trace: [...sharedTrace, ...(found.traces[0] ?? [])] };

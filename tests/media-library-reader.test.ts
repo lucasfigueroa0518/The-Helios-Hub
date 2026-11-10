@@ -1,7 +1,7 @@
 /**
  * The photo bank as a finder source, its reader (DECISIONS_LOG D49): SELECT
  * only, on PGlite with the real schemas. Which photos may answer which
- * request kind, the order, and the 7-day rule.
+ * request kind, the order, and the used-photo rule (CI-32: published in the last 20 days, by URL or dHash).
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -30,6 +30,8 @@ async function photo(query: Query, opts: { urls: Array<{ url: string; lane: stri
   }
   return id;
 }
+
+const idOf = async (query: Query, url: string) => (await query(`SELECT photo_id::text AS id FROM media_library.photo_sources WHERE url = $1`, [url])).rows[0]!.id as string;
 
 const ask = (over: Partial<BankFind>): BankFind => ({ kind: 'thematic', query: 'server racks', qid: null, recent: new Set(), cover: false, limit: 10, ...over });
 
@@ -63,47 +65,66 @@ test('scenes by tag overlap: most shared words first, then the bigger image; onl
   assert.deepEqual(await createBankReader({ query }).find(ask({ query: 'the of a' })), [], 'no words, no match');
 });
 
-test('the 7-day rule: a photo is out when any of its URLs is in the run’s recent set or in social.used_photos this week', async () => {
+test('the used-photo rule: a photo is out when any of its URLs is in the run’s recent set or was published in the last 20 days', async () => {
   const { query } = await openBankTestDb();
   const fresh = await photo(query, { urls: [{ url: 'https://s/fresh.jpg', lane: 'stocksnap' }], tags: ['clock'] });
   await photo(query, { urls: [{ url: 'https://s/a.jpg', lane: 'stocksnap' }, { url: 'https://other/a-copy.jpg', lane: 'openverse' }], tags: ['clock'] });
   await photo(query, { urls: [{ url: 'https://s/recent.jpg', lane: 'stocksnap' }], tags: ['clock'] });
   const old = await photo(query, { urls: [{ url: 'https://s/old-use.jpg', lane: 'stocksnap' }], tags: ['clock'] });
-  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://other/a-copy.jpg', now() - interval '2 days', 's', 2), ('https://s/old-use.jpg', now() - interval '9 days', 's', 2)`);
+  const built = await photo(query, { urls: [{ url: 'https://s/built.jpg', lane: 'stocksnap' }], tags: ['clock'] });
+  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES
+    ('https://other/a-copy.jpg', now() - interval '12 days', 'lfd:p1', 2),
+    ('https://s/old-use.jpg', now() - interval '25 days', 'lfd:p0', 2),
+    ('https://s/built.jpg', now() - interval '1 day', 'carousel-story', 2)`);
   const hits = await createBankReader({ query }).find(ask({ query: 'wall clock', recent: new Set(['https://s/recent.jpg']) }));
-  assert.deepEqual(hits.map((h) => h.photoId).sort(), [fresh, old].sort());
+  // Out: a-copy (published 12 days ago), recent (the run's set). In: old-use (25 days), built (logged at build, never published).
+  assert.deepEqual(hits.map((h) => h.photoId).sort(), [fresh, old, built].sort());
 });
 
-test('people by verified QID only (headshots, second photos); CEO photos never; headshots exempt from 7 days except on a cover', async () => {
+test('the used-photo rule by picture: a bank photo whose dHash matches a published photo is out, whatever its URL', async () => {
+  const { query } = await openBankTestDb();
+  await query(`ALTER TABLE social.used_photos ADD COLUMN IF NOT EXISTS vertical text, ADD COLUMN IF NOT EXISTS media_id text, ADD COLUMN IF NOT EXISTS phash text, ADD COLUMN IF NOT EXISTS dhash text`);
+  const same = await photo(query, { urls: [{ url: 'https://s/same.jpg', lane: 'stocksnap' }], tags: ['clock'] });
+  const other = await photo(query, { urls: [{ url: 'https://s/other.jpg', lane: 'stocksnap' }], tags: ['clock'] });
+  await query(`UPDATE media_library.photos SET dhash = 'f0f0f0f0f0f0f0f1' WHERE id = $1`, [same]);
+  await query(`UPDATE media_library.photos SET dhash = '0f0f0f0f0f0f0f0f' WHERE id = $1`, [other]);
+  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide, vertical, dhash) VALUES ('https://cdn.ig/x.jpg', now() - interval '3 days', 'carousels:p9', 1, 'carousels', 'f0f0f0f0f0f0f0f0')`);
+  const hits = await createBankReader({ query }).find(ask({ query: 'wall clock' }));
+  assert.deepEqual(hits.map((h) => h.photoId), [other]);
+});
+
+test('people by verified QID only (headshots, second photos); CEO photos never; a published headshot is out (CI-32: not a brand asset)', async () => {
   const { query } = await openBankTestDb();
   const head = await photo(query, { urls: [{ url: 'https://c/sam.jpg', lane: 'headshot', source: 'commons' }], qids: ['Q1'] });
   await photo(query, { urls: [{ url: 'https://c/sam-ceo.jpg', lane: 'ceo', source: 'ceo' }], qids: ['Q1'] });
   await photo(query, { urls: [{ url: 'https://c/other.jpg', lane: 'headshot', source: 'commons' }], qids: ['Q2'] });
   await photo(query, { urls: [{ url: 'https://c/sam-second.jpg', lane: 'second', source: 'second' }], qids: ['Q1'] });
-  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://c/sam.jpg', now() - interval '1 day', 's', 3), ('https://c/sam-second.jpg', now() - interval '1 day', 's', 4)`);
   const reader = createBankReader({ query });
-  assert.deepEqual((await reader.find(ask({ kind: 'person', query: 'Sam Altman', qid: 'Q1' }))).map((h) => h.photoId), [head], 'a story slide: the used headshot is fine; a second photo used this week is not');
-  assert.deepEqual(await reader.find(ask({ kind: 'person', query: 'Sam Altman', qid: 'Q1', cover: true })), [], 'a cover never repeats a headshot within 7 days');
+  assert.deepEqual((await reader.find(ask({ kind: 'person', query: 'Sam Altman', qid: 'Q1' }))).map((h) => h.photoId).sort(), [head, (await idOf(query, 'https://c/sam-second.jpg'))].sort(), 'unpublished: both');
+  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://c/sam.jpg', now() - interval '1 day', 'stories:s1', 3), ('https://c/sam-second.jpg', now() - interval '1 day', 'stories:s1', 4)`);
+  const later = createBankReader({ query });
+  assert.deepEqual(await later.find(ask({ kind: 'person', query: 'Sam Altman', qid: 'Q1' })), [], 'a story slide: a published headshot is out too');
+  assert.deepEqual(await later.find(ask({ kind: 'person', query: 'Sam Altman', qid: 'Q1', cover: true })), [], 'and on a cover');
   assert.deepEqual(await reader.find(ask({ kind: 'person', query: 'Sam Altman', qid: null })), [], 'never by name');
   for (const kind of ['event', 'product'] as const) assert.deepEqual(await reader.find(ask({ kind, query: 'server racks', qid: 'Q1' })), [], `${kind}: never`);
 });
 
-test('companies: headquarters by QID; logos exempt from 7 days but only when seen within 90 days', async () => {
+test('companies: headquarters by QID; logos exempt from the used-photo rule but only when seen within 90 days', async () => {
   const { query } = await openBankTestDb();
   const hq = await photo(query, { urls: [{ url: 'https://c/hq.jpg', lane: 'hq', source: 'hq' }], qids: ['Q9'] });
   const logo = await photo(query, { urls: [{ url: 'https://c/logo.png', lane: 'logo', source: 'logo' }], qids: ['Q9'] });
   await photo(query, { urls: [{ url: 'https://c/old-logo.png', lane: 'logo', source: 'logo' }], qids: ['Q8'], seenDaysAgo: 120 });
-  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://c/logo.png', now() - interval '1 day', 's', 1)`);
+  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://c/logo.png', now() - interval '1 day', 'lfd:p1', 1)`);
   const reader = createBankReader({ query });
   assert.deepEqual((await reader.find(ask({ kind: 'company', query: 'OpenAI', qid: 'Q9' }))).map((h) => h.photoId), [hq]);
   assert.deepEqual((await reader.find(ask({ kind: 'logo', query: 'OpenAI', qid: 'Q9' }))).map((h) => h.photoId), [logo], 'used yesterday, still a logo');
   assert.deepEqual(await reader.find(ask({ kind: 'logo', query: 'Old Co', qid: 'Q8' })), [], 'not seen within 90 days');
 });
 
-test('a logo used yesterday is out on a cover but still offered elsewhere (2026-10-12)', async () => {
+test('a logo published yesterday is out on a cover but still offered elsewhere (2026-10-12)', async () => {
   const { query } = await openBankTestDb();
   const logo = await photo(query, { urls: [{ url: 'https://c/logo.png', lane: 'logo', source: 'logo' }], qids: ['Q9'] });
-  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://c/logo.png', now() - interval '1 day', 's', 1)`);
+  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://c/logo.png', now() - interval '1 day', 'lfd:p1', 1)`);
   const reader = createBankReader({ query });
   assert.deepEqual((await reader.find({ ...ask({ kind: 'logo', query: 'OpenAI', qid: 'Q9' }), cover: true })).map((h) => h.photoId), [], 'a cover never repeats a logo');
   assert.deepEqual((await reader.find({ ...ask({ kind: 'logo', query: 'OpenAI', qid: 'Q9' }), cover: false })).map((h) => h.photoId), [logo], 'a story slide still can');

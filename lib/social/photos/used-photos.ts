@@ -1,6 +1,8 @@
 /**
- * Used-photo log and the 7-day rule (spec §5D, Tommy 2026-10-06): no photo
- * is reused within 7 days, from any source, the starter set included.
+ * Used-photo log. The no-repeat rule is now CI-32's (lib/photos/used.ts): a
+ * photo published by any post can't be used again for USED_PHOTO_DAYS (20)
+ * days. The Postgres log reads that one ledger (published rows only); this
+ * file's in-memory and file logs keep their own entries for tests and local runs.
  *
  * Every entry is tagged so reuse stays correct: its source, the verified
  * subject (Wikidata QID and SUBJECTS name) for subject photos, and its
@@ -18,7 +20,10 @@
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
-export const NO_REPEAT_DAYS = 7;
+import { USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
+
+/** The no-repeat window: CI-32's one rule for every content type. */
+export const NO_REPEAT_DAYS = USED_PHOTO_DAYS;
 
 export type UsedPhoto = {
   url: string;
@@ -36,6 +41,8 @@ export type UsedPhoto = {
 export type UsedPhotoLog = {
   /** URLs used within NO_REPEAT_DAYS before `now`. */
   recent(now: Date): Promise<Set<string>>;
+  /** The used-photo ledger (URLs and hashes) as of `now`, for the hash check. Absent: URLs only. */
+  ledger?(now: Date): Promise<UsedLedger>;
   /** When each URL was last used (for least-recently-used choices). */
   lastUsed(): Promise<Map<string, string>>;
   record(entries: UsedPhoto[]): Promise<void>;

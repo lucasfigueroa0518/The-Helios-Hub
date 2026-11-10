@@ -343,3 +343,32 @@ test("find: a building or place photo fills a frame only when the writer asked f
   assert.equal(moment2.photos[0], null);
   assert.match(moment2.traces[0]!.at(-1)!, /a building or place/);
 });
+
+test('find (CI-32): a photo published in the last 20 days is refused by URL or by pHash, the reason in the trace; logos are exempt; the ledger is read once per post', async () => {
+  const usedPhash = 'f0f0f0f0f0f0f0f0';
+  const e = engine([
+    asset({ id: 'M', kind: 'event_photo', phash: 'f0f0f0f0f0f0f0f1', flags: ['key_moment', 'want:moment'] }),
+    asset({ id: 'P', kind: 'event_photo', url: 'https://img.example/published.jpg', source_page: STORY, flags: ['want:article:1', 'source:article'] }),
+    asset({ id: 'O', kind: 'event_photo', phash: '0f0f0f0f0f0f0f0f', flags: ['want:moment'] }),
+  ]);
+  let reads = 0;
+  const d: PhotoDeps = { ...deps(e.run), used: async () => (reads++, { urls: new Set(['https://img.example/published.jpg']), phashes: [usedPhash], dhashes: [] }) };
+  const got = await findPhotos([need(), need({ id: 'n2' })], PHOTO_PROFILES.lfd, d, { exclude: new Set(), budget: budget() });
+  assert.equal(got.photos[0]?.src, 'https://img.example/O.jpg', 'the key moment (same picture) and the story page image (same URL) are out');
+  assert.ok(got.traces[0]!.some((l) => /published in the last 20 days \(same picture\)/.test(l) && /same URL/.test(l)), got.traces[0]!.join('\n'));
+  assert.equal(reads, 1, 'one ledger read for the post');
+
+  const logo = engine([asset({ id: 'L', kind: 'logo', url: 'https://img.example/published.jpg', flags: ['want:company:maya'] })]);
+  const withLogo = await findPhotos([need({ kind: 'logo', specificity: 'subject', subjects: [{ name: 'Maya', type: 'organization' }] })], PHOTO_PROFILES.carousel, { ...deps(logo.run), used: async () => ({ urls: new Set(['https://img.example/published.jpg']), phashes: [], dhashes: [] }) }, { exclude: new Set(), budget: budget() });
+  assert.equal(withLogo.photos[0]?.src, 'https://img.example/published.jpg', 'a logo is a brand asset');
+});
+
+test('find (CI-32): an unreadable ledger leaves every frame to today\'s finder, before any spend', async () => {
+  const e = engine([moment()]);
+  const b = budget();
+  const got = await findPhotos([need(), need({ id: 'n2' })], PHOTO_PROFILES.lfd, { ...deps(e.run), used: async () => { throw new Error('db down'); } }, { exclude: new Set(), budget: b });
+  assert.deepEqual(got.photos, [null, null]);
+  assert.match(got.traces[0]![0]!, /used-photo ledger could not be read/);
+  assert.equal(e.calls.length, 0);
+  assert.equal(b.usd, 0);
+});

@@ -207,10 +207,14 @@ export const liveCarouselsDeps: CarouselsDeps = {
       requests.push(s.visual, s.fallback_visual, ...(s.alt_visuals ?? []));
     }
     const ctx = find.newSearchContext(b, [], { recent: new Set(exclude) });
+    // CI-32: the description already excluded the ledger's URLs; each candidate's picture is checked too.
+    const { firstUnused, liveUsedLedger } = await import('@/lib/photos/used-guard');
+    const used = await liveUsedLedger()().catch(() => null);
     return firstUsable(requests, async (request) => {
       const r = await find.searchVisual(request, ctx, deps, { cover: slide === 1 });
       // Logo cards need the plate chosen from the logo's luminance; a swap only takes a logo that has one.
-      const ok = r.candidates.find((c) => !exclude.has(c.url) && (c.source !== 'logo' || c.plate) && checkPhotoCredit(c, `slide ${slide}`, b).length === 0);
+      const fits = r.candidates.filter((c) => !exclude.has(c.url) && (c.source !== 'logo' || c.plate) && checkPhotoCredit(c, `slide ${slide}`, b).length === 0);
+      const ok = used ? await firstUnused(fits, (c) => ({ url: c.url, kind: c.source === 'logo' ? 'logo' : null }), used, { http: fetch }) : fits[0];
       // A stock photo is banked under the scene it was searched for (the daily runner's used_photos tag).
       return ok ? { ...ok, ...(ok.source === 'stock' ? { scene: request.query } : {}) } : null;
     }, m);

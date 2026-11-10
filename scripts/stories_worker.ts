@@ -40,6 +40,7 @@ import type { Series } from '@/lib/stories/render/types';
 import { nyDate, requestSet } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
+import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
 import { tick } from '@/lib/stories/worker';
 import { liveWriterCreate } from '@/lib/stories/writer';
 import { newAnthropic } from '@/lib/anthropic-client';
@@ -85,7 +86,8 @@ async function main() {
         sourceDb,
         jevTransport: liveJevTransport,
         write: liveWriterCreate(),
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank }),
+        // CI-32: each pick's picture is checked against the used-photo ledger (read once per finder).
+        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),

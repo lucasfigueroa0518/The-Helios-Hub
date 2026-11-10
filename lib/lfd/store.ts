@@ -1,4 +1,5 @@
-/** lfd.* reads and writes, plus the shared 7-day used-photo read (spec §5, §7.1). */
+/** lfd.* reads and writes, plus the shared used-photo read (CI-32: published in the last 20 days; spec §5, §7.1). */
+import { readUsedLedger, USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
 import type { HubQuery } from '@/lib/social-hub/db';
 
 export type PreviousPost = { nyDate: string; ideaIds: string[]; stories: Array<{ headline: string; body: string }> };
@@ -21,12 +22,13 @@ export function usedIdeaIds(previous: PreviousPost[]): Set<string> {
   return new Set(previous.flatMap((p) => p.ideaIds));
 }
 
-export async function recentPhotoUrls(q: HubQuery, now: Date, days = 7): Promise<Set<string>> {
-  const { rows } = await q<{ url: string }>(
-    `SELECT DISTINCT url FROM social.used_photos WHERE used_at > $1::timestamptz - make_interval(days => $2)`,
-    [now.toISOString(), days],
-  );
-  return new Set(rows.map((r) => r.url));
+/** The used-photo ledger (URLs and hashes of photos published in the last `days`). */
+export function recentPhotoLedger(q: HubQuery, now: Date, days = USED_PHOTO_DAYS): Promise<UsedLedger> {
+  return readUsedLedger((text, params) => q(text, params), now, days);
+}
+
+export async function recentPhotoUrls(q: HubQuery, now: Date, days = USED_PHOTO_DAYS): Promise<Set<string>> {
+  return new Set((await recentPhotoLedger(q, now, days)).urls);
 }
 
 /** A run still 'running' after this long died without finishing (crash, killed process); it must not block new runs forever. */

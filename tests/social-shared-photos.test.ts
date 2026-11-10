@@ -257,3 +257,50 @@ test('revision: shared hit for the slide (hint as its query), charged to the met
   const thrown = await sharedFindPhoto(revisionInput(), m, { modes: modes('shared'), photoDeps: async () => stubDeps, find: async () => { throw new Error('boom'); } });
   assert.equal(thrown, null, 'a throwing shared finder leaves the slide to today\'s search');
 });
+
+test('CI-32: a final pick whose picture was published gives way to its runner-up; the check runs with no deps.http (the live pipeline)', async () => {
+  // The article carries more photos of Trump, so a slide has a verified runner-up.
+  const SECOND = 'https://techcrunch.com/wp-content/uploads/2026/09/whitehouse-oval-office.jpg';
+  const THIRD = 'https://techcrunch.com/wp-content/uploads/2026/09/whitehouse-rose-garden.jpg';
+  const withSecond = (): PageReadOk[] => {
+    const [p] = pages();
+    const more = [SECOND, THIRD].map((src, k) => ({ src, caption: `President Trump at the White House, ${k + 1}. (Official White House Photo by Daniel Torok)`, credit: null, alt: null, from: 'figure' as const, width: 1100 }));
+    return [{ ...p!, photos: [...p!.photos, ...more] }];
+  };
+  const run = (over: Partial<DesignDeps> = {}) => {
+    const parsed = briefSuperIntelligenceForce();
+    const submission = sifDraft();
+    const draft: Draft = { storyId: 's1', submission, filled: fillDraft(submission, parsed) };
+    const brief: PipelineBrief = { storyId: 's1', parsed, raw: '', pages: withSecond() };
+    const story = { id: 's1', title: 't', url: TC_URL, outlets: ['TechCrunch'], publishedAt: new Date('2026-10-04T12:00:00Z') } as ScoredCandidate;
+    return createDesignStage({ ...designDeps(), now: () => new Date('2026-10-05T03:00:00Z'), ...over })(draft, brief, story);
+  };
+  const plain = await run();
+  assert.ok(plain.ok);
+  const cover = plain.value.photos[0]!;
+  assert.equal(cover.photo?.url, WH_SRC);
+  const inPost = new Set(plain.value.photos.flatMap((t) => (t.photo ? [t.photo.url] : [])));
+  assert.ok(!inPost.has(THIRD) && cover.alternates.some((a) => a.url === THIRD), 'the cover has a runner-up no slide uses');
+  const HIT = '0'.repeat(16);
+  const MISS = 'f'.repeat(16);
+  const usedLog = { recent: async () => new Set<string>(), lastUsed: async () => new Map<string, string>(), ledger: async () => ({ urls: new Set<string>(), phashes: [HIT], dhashes: [] }) } as unknown as DesignDeps['usedLog'];
+  const http = designDeps().http!;
+  // No http in the deps, as the live pipeline runs: the pick's bytes come through global fetch.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const u = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    return u === WH_SRC ? new Response('PUBLISHED') : http(input, init);
+  }) as typeof fetch;
+  let r: Awaited<ReturnType<typeof run>>;
+  try {
+    r = await run({ http: undefined, usedLog, usedHash: async (b) => (b.toString() === 'PUBLISHED' ? { phash: HIT, dhash: MISS } : { phash: MISS, dhash: MISS }) });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert.ok(r.ok);
+  const t = r.value.photos[0]!;
+  assert.equal(t.photo?.url, THIRD, 'the runner-up took the cover');
+  assert.ok(t.steps.some((s) => s.startsWith(`used-photo ledger: ${WH_SRC} published in the last 20 days (same picture)`)));
+  assert.ok(t.steps.some((s) => /^used-photo ledger → next runner-up/.test(s)));
+  assert.ok(!r.value.render.slides.some((sl) => sl.photoUrl === WH_SRC), 'the published picture is not rendered');
+});

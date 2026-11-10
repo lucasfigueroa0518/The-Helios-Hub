@@ -17,6 +17,14 @@ export const SOCIAL_INSIGHTS_MINUTE_LOCAL = 30;
 export const HUB_SWEEP_HOUR_LOCAL = 5;
 export const HUB_SWEEP_MINUTE_LOCAL = 45;
 
+/**
+ * The nightly Instagram photo read (CI-32, lib/photos/ig-sync.ts): 11:45 PM, before the midnight builds, so
+ * tonight's pickers see what went out today. Capped so a hung read can't stall the worker loop.
+ */
+export const IG_PHOTO_SYNC_HOUR_LOCAL = 23;
+export const IG_PHOTO_SYNC_MINUTE_LOCAL = 45;
+export const IG_PHOTO_SYNC_TIMEOUT_MS = 10 * 60_000;
+
 /** Health tab morning report (spec 2026-10-13 §4.3): after Stories (4:00) and the 5:45 sweep. */
 export const HEALTH_REPORT_HOUR_LOCAL = 7;
 export const HEALTH_REPORT_MINUTE_LOCAL = 30;

@@ -35,7 +35,8 @@ import { judgedPool, leadFor, MAX_SEEDS, MIN_STORIES, mergeSameEvent, PER_COMPAN
 import { arrangeMemes, buildPost, composeCaption, coverMemeOf } from './post';
 import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate, type LfdSeed } from './seeds';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
-import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
+import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoLedger, startRun, usedIdeaIds } from './store';
+import { usedReason, type GuardDeps } from '@/lib/photos/used-guard';
 import type { Drop, EngineMeme, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
 import { checkSlide, VISION_UNAVAILABLE, type SlideVerdict } from './vision';
 import { extendWindow, windowFor } from './window';
@@ -106,6 +107,11 @@ export type LfdRunDeps = {
    * replace) without the builder harvest slice. Absent: today's chain, unchanged.
    */
   sharedPhotos?: LfdSharedPhotos;
+  /**
+   * How the used-photo guard (CI-32, lib/photos/used-guard.ts) downloads and hashes a lead image to check it against
+   * the ledger's published pictures. Absent (tests, replays): the lead image's URL is checked only.
+   */
+  usedPhotos?: GuardDeps;
 };
 
 /** The shared finder's wiring for one run. `find` / `need` default to lib/photos/find.ts and lib/photos/needs.ts (tests inject them). */
@@ -457,7 +463,9 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.vision = vision;
     /** Verdicts by story key + photo: a slide unchanged since the last render is not looked at again. */
     const verdicts = new Map<string, SlideVerdict>();
-    const exclude = await recentPhotoUrls(d.query, d.now);
+    // CI-32: photos published in the last 20 days, by URL (the exclude set) and by picture (the ledger's hashes).
+    const ledger = await recentPhotoLedger(d.query, d.now);
+    const exclude = new Set(ledger.urls);
     // Builder-slide harvests share one budget per post (round 3: $0.15).
     const harvestBudget: HarvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };
     const harvestRecord: { usd: number; slides: Array<{ key: string; found: boolean }> } = { usd: 0, slides: [] };
@@ -562,12 +570,18 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         }
       }
       const leads: Array<Awaited<ReturnType<typeof leadImage>>> = [];
+      const ledgerNotes = new Map<number, string[]>();
       for (const [i, item] of checked.entries()) {
         if (sharedHits.has(i)) {
           leads.push(null);
           continue;
         }
-        const lead = await leadImage(readPage, item.pick, taken);
+        let lead = await leadImage(readPage, item.pick, taken);
+        const used = lead ? await usedReason(ledger, { url: lead.photo.src, kind: lead.photo.kind }, d.usedPhotos ?? {}) : null;
+        if (lead && used) {
+          ledgerNotes.set(i, [`lead image refused by the used-photo ledger: ${used}: ${lead.photo.src}`]);
+          lead = null;
+        }
         if (lead) taken.add(lead.photo.src);
         leads.push(lead);
       }
@@ -577,7 +591,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       for (const [i, item] of checked.entries()) {
         // Shared mode skips the builder-only harvest slice: the shared finder already covered every slide.
         if (leads[i] || item.pick.lane !== 'builder' || !d.harvest || d.sharedPhotos) continue;
-        const got = await harvestBuilderPhoto(d.harvest, item.pick, item.copy, taken, harvestBudget, d.now);
+        const got = await harvestBuilderPhoto(d.harvest, item.pick, item.copy, taken, harvestBudget, d.now, ledger);
         harvestRecord.slides.push({ key: item.pick.key, found: got.photo !== null });
         harvestRecord.usd = harvestBudget.usd;
         if (got.photo) {
@@ -607,7 +621,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
           continue;
         }
         const photo = found.photos[k];
-        const photoTrace = [...(sharedTraces.get(i) ?? []), ...(harvestTraces.get(i) ?? []), ...(found.traces[k] ?? [])];
+        const photoTrace = [...(sharedTraces.get(i) ?? []), ...(ledgerNotes.get(i) ?? []), ...(harvestTraces.get(i) ?? []), ...(found.traces[k] ?? [])];
         k += 1;
         if (photo) ready.push({ ...item, photo, photoSource: 'finder', photoTrace });
         else {

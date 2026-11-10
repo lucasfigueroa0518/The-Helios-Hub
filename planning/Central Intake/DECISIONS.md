@@ -129,3 +129,33 @@ Quotes are Lucas's words as recorded in the plan. Where the plan records only th
   one banked building or lobby photo per company filling frames that asked for a product, a dashboard, a logo or a
   story moment. Examples: the same DSIT lobby photo for every Anthropic frame, and the same street view for every
   OpenAI frame. The look itself said they didn't show the company. The rule is in code, not in a prompt.
+
+## CI-32: One used-photo rule across all content (Lucas, 2026-11-10)
+- **A published photo can't be used again by any post, of any content type, for 20 days.** Lucas: "Once an image is
+  published, it cannot be used in a post for another 20 days. That is a rule across all content types now."
+  It replaces the 7-day news rule and AI Drama's own 20-day render-time rule.
+- **Used means published.** "a photo counts as used once it's published." A built post that never goes out uses up
+  nothing.
+- **Instagram is the source of truth.** A nightly read lists the account's new posts and matches each one back to the
+  post we built; that post's photos are logged from the post's real publish time. Lucas: "reading instagram nightly is
+  the move." Posts the app publishes itself are logged at publish time too.
+- **Matched by URL and by perceptual hash**, so a resized copy or another URL for the same picture counts as used.
+- **Exempt: brand assets only** (logos, meme templates, AI Drama character cutouts). Field Notes team photos are
+  covered: "We are going to grow that pool."
+- **No hold on unpublished posts.** Two posts built the same night may pick the same photo: "This type of duplicate is
+  fine. Don't enforce this."
+- **Build calls (lead, 2026-11-10; local only, ships with Phase 3).**
+  - One ledger: `social.used_photos`, gaining phash, dhash, vertical and media_id (`db/social_used_photos_v2.sql`).
+    Contract in `lib/photos/used.ts`, the hash guard for legacy finders in `lib/photos/used-guard.ts`.
+  - Every picker reads it: the shared finder, today's finders (LFD, Stories, Carousels, revisions), the photo bank
+    (URL + dHash), AI Drama's harvest (in place of its render-time `asset_uses` check), Field Notes' pool (by photo id
+    + dHash) and AI Events' posters.
+  - Writers: each publish hook (LFD, Stories, Carousels, Field Notes, AI Events), plus the nightly Instagram read at
+    11:45 PM NY (`lib/photos/ig-sync.ts`), which also covers hand-posted posts and AI Drama. Matching is by media id,
+    then exact caption, then cover image; a Stories frame matches by image only when two frames posted within an hour
+    agree on one set. The read lists 21 days each night and resumes where a timed-out run stopped.
+  - Removed: the carousel build-time write (`social_daily.ts`) and the revision-time write.
+  - Headshots and CEO portraits lose their exemption from the published rule. A carousel run may still repeat a
+    headshot it picked earlier the same night (same-night duplicates are fine).
+  - Ship order: apply the SQL, run `scripts/photos/ig-sync.ts` dry, then `--go` once, then deploy (Vercel + social
+    VM). Before the SQL the code falls back to LFD and Stories publish rows only.

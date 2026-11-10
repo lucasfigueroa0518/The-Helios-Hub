@@ -208,13 +208,15 @@ export function createDesignStage(deps: DesignDeps): PipelineStages['design'] {
       return res;
     };
     const now = deps.now?.() ?? new Date();
-    // The used-photo check: the last 7 days (the log) plus every photo picked earlier in this run.
-    const recent = new Set([...(deps.usedLog ? await deps.usedLog.recent(now) : []), ...usedThisRun]);
+    // The used-photo check (CI-32): photos published in the last 20 days (the ledger) plus every photo picked earlier
+    // in this run. The ledger's hashes also go to the design path, which checks each final pick's picture.
+    const used = deps.usedLog?.ledger ? await deps.usedLog.ledger(now) : undefined;
+    const recent = new Set([...(used ? used.urls : deps.usedLog ? await deps.usedLog.recent(now) : []), ...usedThisRun]);
     const lastUsed = deps.usedLog ? await deps.usedLog.lastUsed() : new Map<string, string>();
     // The story's date ranks dated photos (photo spec §4 step 3).
     const { bank, sharedPhotos, ...photoDeps } = deps;
     const finderDeps = { ...photoDeps, jev, ...(bank?.reader ? { bank: bank.reader } : {}) };
-    const history = { recent, lastUsed, identities: deps.identitiesFor?.(draft.storyId), storyDate: story.publishedAt.toISOString().slice(0, 10) };
+    const history = { recent, lastUsed, identities: deps.identitiesFor?.(draft.storyId), storyDate: story.publishedAt.toISOString().slice(0, 10), ...(used ? { used } : {}) };
     // CI-30: the shared finder first when the run's carousel switch is 'shared' (else today's call, unchanged).
     const step = sharedPhotos ? await sharedPhotos().catch(() => null) : null;
     let sharedUsd = 0;

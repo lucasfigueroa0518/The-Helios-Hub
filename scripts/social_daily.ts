@@ -342,16 +342,8 @@ async function main() {
   // Shared queue: a promote the run shipped is used; one it didn't is skipped with why (it stays promoted).
   if (promoteLib && promoted.length) await promoteLib.settlePins(store.query!, promoted.map((p) => p.id), result);
 
-  // 7-day rule: a photo counts as used once its post reaches the review queue (today: the preview).
-  // A PREVIEW run doesn't count (Tommy, 2026-10-06: not the acceptance batch).
-  // Each entry carries its bank tags (photo spec §2): source, verified subject, credit, and a stock photo's scene.
-  if (!preview) {
-    await usedLog.record(result.posts.flatMap((p) => p.render.slides.flatMap((sl, i) => {
-      if (!sl.photoUrl) return [];
-      const t = p.photos.find((x) => x.photo?.url === sl.photoUrl);
-      return [{ url: sl.photoUrl, usedAt: now.toISOString(), storyId: p.storyId, slide: i + 1, source: t?.photo?.source, qid: t?.photo?.qid ?? null, subject: t?.photo?.subject ?? null, credit: sl.photoCredit, ...(t?.photo?.source === 'stock' ? { scene: t.request.query } : {}) }];
-    })));
-  }
+  // CI-32: a photo counts as used once its post is published (lib/photos/used.ts), never at build time;
+  // the publish paths and the nightly Instagram read (lib/photos/ig-sync.ts) write the ledger.
   const iconShare = (() => {
     const all = result.posts.flatMap((p) => p.photos);
     return all.length ? all.filter((t) => !t.photo).length / all.length : 0;

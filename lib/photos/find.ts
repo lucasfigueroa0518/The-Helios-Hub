@@ -5,9 +5,10 @@
  * - Frames run serially. Frame i may spend `(capUsd - spent) / (frames left, counting this one)`, so one frame
  *   can't spend the whole post's cap; unused money rolls forward. A harvest that throws keeps its whole allowance
  *   charged (fix 10): its partial spend is unknown.
- * - The harvest's db is a sink (never AI Drama's tables); kept photos still go to the shared photo bank through
- *   `deps.harvest.photoBank`. Its looks are the harvest's own `lookAt` on `settings.vision_model` (no new
- *   messages.create).
+ * - The harvest's db is a sink (never AI Drama's tables) and its reuse_days is 0, on purpose: the shared finder's own
+ *   check against the used-photo ledger (CI-32, `deps.used`, by URL and pHash) replaces AI Drama's render-time rule.
+ *   Kept photos still go to the shared photo bank through `deps.harvest.photoBank`. Its looks are the harvest's own
+ *   `lookAt` on `settings.vision_model` (no new messages.create).
  * - Never throws: a frame it can't fill is null, with a trace saying why, and goes to today's finder.
  * Every trace line starts with `shared:` so adopters and the review page can tell the steps apart.
  */
@@ -16,6 +17,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { hamming, NEAR_DUPLICATE } from '@/lib/reel-ai-drama/harvest/filters';
+import { EMPTY_LEDGER, usedMatch, type UsedLedger } from './used';
 import { planWants, slug } from '@/lib/reel-ai-drama/harvest/plan';
 import { SERPER_IMAGES_URL, SERPER_USD_PER_QUERY } from '@/lib/reel-ai-drama/harvest/sources/serper';
 import type { HarvestDeps } from '@/lib/reel-ai-drama/harvest/types';
@@ -133,15 +135,18 @@ export function isPlacePhoto(a: Asset): boolean {
 }
 
 /** Why an asset can't fill this frame, or null when it can. */
-function refusal(a: Asset, need: PhotoNeed, profile: PhotoProfile, exclude: ReadonlySet<string>, picked: Picked): string | null {
+function refusal(a: Asset, need: PhotoNeed, profile: PhotoProfile, exclude: ReadonlySet<string>, picked: Picked, used: UsedLedger): string | null {
   if (!isWebUrl(a.url)) return 'no web URL';
   if (a.made) return 'made';
   if (!PHOTO_KINDS.has(a.kind)) return 'not a photo';
   if (exclude.has(a.url)) return 'excluded';
+  const logo = isLogo(a);
+  // CI-32: a photo any post published in the last 20 days, by URL or by picture. Logos are brand assets.
+  const published = logo ? null : usedMatch(used, { url: a.url, phash: a.phash });
+  if (published) return published;
   if (picked.urls.has(a.url)) return 'already in the set';
   if (a.phash && picked.hashes.some((h) => hamming(h, a.phash!) <= NEAR_DUPLICATE)) return 'near-duplicate in the set';
   if (isPlacePhoto(a) && !asksForPlace(need)) return "a building or place (the frame didn't ask for a place)";
-  const logo = isLogo(a);
   if (logo && need.cover) return 'logo on the cover';
   if (logo && !profile.allowLogo && need.kind !== 'logo' && need.kind !== 'company') return 'logo not allowed';
   // A logo is exempt from the inner floor (lib/social/photos/size.ts), never from the cover's (no logo covers anyway).
@@ -200,6 +205,7 @@ async function findOne(
   budget: PhotoBudget,
   framesLeft: number,
   picked: Picked,
+  used: UsedLedger,
   accept?: FindOptions['accept'],
 ): Promise<{ photo: Photo | null; trace: string[] }> {
   const left = budget.capUsd - budget.usd;
@@ -234,7 +240,7 @@ async function findOne(
     trace.push(`shared: harvest found ${assets.length}, $${usd.toFixed(3)} (post total $${budget.usd.toFixed(3)})${res.inventory.kill ? `; harvest note: ${res.inventory.kill.reason}` : ''}`);
     const why = new Map<string, number>();
     const usable = assets.filter((a) => {
-      const r = refusal(a, need, profile, exclude, picked);
+      const r = refusal(a, need, profile, exclude, picked, used);
       if (r) why.set(r, (why.get(r) ?? 0) + 1);
       return !r;
     });
@@ -254,6 +260,9 @@ async function findOne(
     }
     picked.urls.add(asset.url!);
     if (asset.phash) picked.hashes.push(asset.phash);
+    // The used-photo ledger's refusals are shown even when another photo filled the frame.
+    const ledgerRefusals = [...why].filter(([r]) => r.startsWith('published in the last'));
+    if (ledgerRefusals.length) trace.push(`shared: refused ${ledgerRefusals.map(([r, n]) => `${n} ${r}`).join(', ')}`);
     trace.push(`shared: picked ${asset.id} ${asset.kind} "${asset.shows}" via ${asset.credit}: ${asset.url}`);
     return { photo: assetToPhoto(asset), trace };
   } catch (err) {
@@ -277,9 +286,19 @@ export async function findPhotos(needs: PhotoNeed[], profile: PhotoProfile, deps
   const photos: Array<Photo | null> = [];
   const traces: string[][] = [];
   const picked: Picked = { urls: new Set(), hashes: [] };
+  // The used-photo ledger, once for the post. Unreadable: every frame goes to today's finder (which checks it too),
+  // so a published photo is never picked here unchecked.
+  let used: UsedLedger = EMPTY_LEDGER;
+  if (deps.used && needs.length) {
+    try {
+      used = await deps.used();
+    } catch (err) {
+      return { photos: needs.map(() => null), traces: needs.map(() => [`shared: the used-photo ledger could not be read (${errText(err)}); today's finder takes over`]) };
+    }
+  }
   for (const [i, need] of needs.entries()) {
     try {
-      const got = await findOne(need, profile, deps, opts.exclude, opts.budget, needs.length - i, picked, opts.accept);
+      const got = await findOne(need, profile, deps, opts.exclude, opts.budget, needs.length - i, picked, used, opts.accept);
       photos.push(got.photo);
       traces.push(got.trace);
     } catch (err) {

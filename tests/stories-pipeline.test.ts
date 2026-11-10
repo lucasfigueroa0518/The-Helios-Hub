@@ -87,8 +87,10 @@ test('carousel: qualified stories from the last 30 hours with their post photo; 
   assert.deepEqual(md[0]!.photo, { url: 'https://img.test/dc.jpg', credit: 'Photo: X' });
   const nums = await carouselNumbers(db, NOW);
   assert.deepEqual(nums.map((n) => [n.value, n.fact, n.sourceName]), [['$30.9B', 'Crusoe is now valued at $30.9B.', 'TechCrunch']]);
-  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 });
-  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 });
+  // A failed fetch still writes a URL-only ledger row; the same row twice is one row.
+  const offline = { http: (async () => new Response('gone', { status: 404 })) as unknown as typeof fetch };
+  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 }, offline);
+  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 }, offline);
   assert.deepEqual([...(await recentUsedPhotoUrls(db, NOW))], ['https://img.test/dc.jpg']);
 });
 
@@ -171,13 +173,13 @@ test('Morning Download: merge across systems, rank, write, ground with one rewri
   assert.equal(req.model, 'claude-sonnet-5-5');
 });
 
-test('Morning Download: a carousel photo another story used this week is not kept; the finder is asked instead', async () => {
+test('Morning Download: a carousel photo another post published lately is not kept; the finder is asked instead', async () => {
   const { db } = await harnessDb();
   const slate = await addSlate(db, DATE);
   await addIdea(db, slate, { headline: 'Nvidia posts record revenue', url: 'https://r.test/nvidia', net: 8 });
   await db.query(`INSERT INTO social.runs (finished_at, record) VALUES ($1, $2)`, ['2026-10-08T02:00:00Z', JSON.stringify({ selection: { scored: [{ id: 'https://c.test/openai', status: 'qualified', outlets: ['Bloomberg'], members: [{ title: 'OpenAI releases GPT-6' }], representative: { title: 'OpenAI releases GPT-6' }, body: 'OpenAI released GPT-6.' }], shortlist: [] } })]);
   await db.query(`INSERT INTO social.posts (slug, story_id, status, render, origin) VALUES ('gpt6', 'https://c.test/openai', 'review', $1, 'pipeline')`, [JSON.stringify({ slides: [{ photoUrl: 'https://img.test/openai.jpg', photoCredit: 'Photo: OpenAI', photoKind: 'scene' }] })]);
-  await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/openai.jpg', '2026-10-07T02:00:00Z', 'https://c.test/other-story', 1)`);
+  await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/openai.jpg', '2026-10-07T02:00:00Z', 'stories:other-set', 1)`);
   const write = stubWriter({
     submit_headlines: (params) => ({
       stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
@@ -753,7 +755,7 @@ test('worker (approval off, publishing live): auto request at 3 AM → build →
     { seq: 3, role: 'answer' as const, backdrop: 'black' as const, copy: { role: 'answer' as const, family: 'photo' as const, number: '800M', label: 'users', meaning: 'm', source: { verb: 'from' as const, name: 'OpenAI' } } },
   ];
   const deps = {
-    db, sourceDb: db, now: () => clock, sleep: async () => {},
+    db, sourceDb: db, now: () => clock, sleep: async () => {}, photoHttp: (async () => new Response("", { status: 404 })) as typeof fetch,
     builder: async () => ({ db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({}), photos: stubPhotos(), renderer, review: cleanReview, storage: st, now: () => clock, builders: { guess_the_number: async () => ({ ok: true as const, payload: {}, frames, candidates: [], historyKeys: ['openai.test/devday'] }) } }),
     meta: () => meta,
     storage: () => st,

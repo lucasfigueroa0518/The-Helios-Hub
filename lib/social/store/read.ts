@@ -15,7 +15,7 @@ export async function getSocialPost(slug: string) {
   return getPostQ(await socialQuery(), slug);
 }
 
-/** Photos used in the last `days` (default 7: the no-repeat window), newest first, with their bank tags. */
+/** Photos logged in the last `days` (default 20, CI-32's window), newest first, with their bank tags. */
 export async function recentUsedPhotos(days?: number) {
   return listUsedPhotosQ(await socialQuery(), { days });
 }

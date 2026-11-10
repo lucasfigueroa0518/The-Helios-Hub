@@ -28,9 +28,13 @@ test('rejected posts do not count as previous posts', async () => {
   assert.deepEqual(await previousPosts(query, 2), []);
 });
 
-test('recent photo urls read social.used_photos for 7 days', async () => {
+test('recent photo urls read the CI-32 ledger: published rows of the last 20 days', async () => {
   const { query } = await openHubTestDb();
-  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://p1', now() - interval '2 days', 's', 1), ('https://p2', now() - interval '9 days', 's', 1)`);
+  await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES
+    ('https://p1', now() - interval '12 days', 'lfd:post-1', 1),
+    ('https://p2', now() - interval '25 days', 'lfd:post-0', 1),
+    ('https://p3', now() - interval '1 day', 'carousel-story', 1)`);
+  // p2 is past 20 days; p3 is a carousel build-time row (not published).
   assert.deepEqual([...await recentPhotoUrls(query, new Date())], ['https://p1']);
 });
 
