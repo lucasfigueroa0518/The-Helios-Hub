@@ -16,7 +16,7 @@ import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import type { FetchedArticle } from '@/lib/social/ingest/fetch-feeds';
 import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import type { JevAsk } from '@/lib/social/jev/client';
-import { storeSlideJpegs } from '@/lib/social/overnight/slides';
+import { SlideImagesFailed, storeSlideJpegs } from '@/lib/social/overnight/slides';
 import type { FitCheck, FitResult } from '@/lib/social/render/fit-check';
 import type { PageRead } from '@/lib/social/reporter/read-page';
 import type { MessagesCreate } from '@/lib/social/reporter/reporter';
@@ -726,7 +726,8 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
 
     /**
      * Render and store the JPEGs. With `replaceBroken`, a story slide whose photo failed to load or that the
-     * vision check rejected throws before anything is uploaded; without it, vision rejections are only recorded.
+     * vision check rejected throws before anything is uploaded; without it, vision rejections are only recorded
+     * (a failed image always throws, from storeSlideJpegs; see renderClean).
      */
     const renderAndStore = async (final: Ready[], replaceBroken: boolean, coverMeme?: { url: string }) => {
       const render = buildPost(final, d.now, undefined, coverMeme ? { coverMeme } : undefined);
@@ -758,9 +759,29 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     let placed = place(await finalOrder());
     let final = placed.ready;
     if (final.length === 0) throw new Error('no stories survived');
+    // A post never ships a broken image: storeSlideJpegs refuses one before uploading. A story whose image still
+    // fails to load is dropped and the post re-rendered; an image no story owns fails the run.
+    const renderClean = async (replaceBroken: boolean) => {
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          return await renderAndStore(final, replaceBroken, placed.coverMeme);
+        } catch (err) {
+          if (!(err instanceof SlideImagesFailed) || attempt >= 2) throw err;
+          const keys = brokenImageKeys(err.fit, final);
+          if (!keys.length) throw err;
+          for (const key of keys) {
+            const [gone] = ready.splice(ready.findIndex((r) => r.pick.key === key), 1);
+            if (gone) drops.push({ key, lane: gone.pick.lane, headline: gone.pick.headline, reason: 'image-failed', detail: 'the image still failed to load at the final render' });
+          }
+          placed = place(final.filter((r) => !keys.includes(r.pick.key)));
+          final = placed.ready;
+          if (final.length === 0) throw new Error('no stories survived');
+        }
+      }
+    };
     let rendered: Awaited<ReturnType<typeof renderAndStore>>;
     try {
-      rendered = await renderAndStore(final, true, placed.coverMeme);
+      rendered = await renderClean(true);
     } catch (err) {
       if (!(err instanceof BrokenImages)) throw err;
       // One extra round: drop each story whose photo failed to load or was rejected, replace it, re-render (whatever fails then is recorded).
@@ -807,7 +828,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       placed = place(await finalOrder());
       final = placed.ready;
       if (final.length === 0) throw new Error('no stories survived');
-      rendered = await renderAndStore(final, false, placed.coverMeme);
+      rendered = await renderClean(false);
     }
 
     const { slideObjects, fit, visionProblems } = rendered;

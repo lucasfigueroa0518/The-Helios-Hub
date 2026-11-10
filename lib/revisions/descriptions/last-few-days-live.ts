@@ -70,6 +70,7 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     // The whole post is drawn (local Chromium, no AI) so slides keep their place; only the listed slides'
     // problems count against the fix, and only their JPEGs are uploaded, each to its own new key.
     await storeSlideJpegs(slug, draw, {
+      failedImagesCheckedPerSlide: true,
       prefix: 'lfd',
       fitCheck: async (p, opts) => {
         const r = await checkRenderFit(p, opts);

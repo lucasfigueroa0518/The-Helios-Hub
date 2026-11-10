@@ -125,6 +125,7 @@ export const liveCarouselsDeps: CarouselsDeps = {
     // The whole post is drawn (local Chromium, no AI) so the slide keeps its place and numbering;
     // only this slide's problems fail it, and only its JPEG is uploaded, to the revision's own key.
     await storeSlideJpegs(slug, post, {
+      failedImagesCheckedPerSlide: true,
       fitCheck: async (p, opts) => {
         const r = await checkRenderFit(p, opts);
         const mine = (x: string) => x.startsWith(`slide ${slide} `) || !/^slide \d+ /.test(x);
