@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -60,7 +61,7 @@ export function stripSvg(lines: string[], height: number): string {
 }
 
 function cutStill(run: Runner, video: string, reel_t: number, file: string, scale: string[]): void {
-  const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(reel_t), '-i', video, '-frames:v', '1', ...scale, '-q:v', '2', file], { cwd: path.dirname(file), timeoutMs: 120_000 });
+  const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(reel_t), '-i', video, '-frames:v', '1', ...scale, '-q:v', '2', file], { cwd: path.dirname(file), timeoutMs: RUN_HANG_BACKSTOP_MS });
   // ffmpeg can exit 0 and write nothing when the time is past the video's end.
   if (res.status !== 0 || !fs.existsSync(file) || fs.statSync(file).size === 0) throw new Error(`the still at ${reel_t}s failed: ${tail(res)}`);
 }

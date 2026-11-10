@@ -35,8 +35,7 @@ export const FIELD_NOTES_WINDOW: PostingWindow = { id: FIELD_NOTES_SLOT, label: 
 /** Storage prefix for the slide JPEGs (storeFieldNotesJpegs). */
 export const FIELD_NOTES_SLIDE_PREFIX = 'field-notes';
 
-/** Wall-clock limit on one in-process run in the helios-social loop; past it the run is failed and the loop goes on. */
-export const FIELD_NOTES_RUN_TIMEOUT_MS = 30 * 60_000;
+// No run time limit: long runs are normal and never failed for length (lib/content-runs/hang-guard.ts; CI decision 2026-11-10).
 
 /** A due slot later than this is cancelled, not posted late. */
 export const FIELD_NOTES_MISSED_AFTER_MINUTES = 120;

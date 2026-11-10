@@ -34,7 +34,7 @@ run stays available (`npx tsx scripts/lfd_run.ts --live`, Tommy).
 
 AI Events This Week (`planning/AI Events/DECISIONS.md`) also runs inside `helios-social`. Its clock is 12:00 PM, after the
 networking ingest's 9:00 AM Sunday refresh on `helios-orch-worker` and hours from every other run, so the per-hour rule
-holds; its runs are claimed after Last Few Days' in the same loop, under the same 30-minute timeout. Engine `lib/ai-events`,
+holds; its runs are claimed after Last Few Days' in the same loop, under the same hang guard (no run time limit; CI-33). Engine `lib/ai-events`,
 schema `ai_events`; its posts are spine items (`vertical 'ai_events'`). A run ranks the coming Monday to Sunday per city
 (the weekly pool, `ai_events.pool`; events already scored are never asked again, AE-05), renders one ranked post per
 city for Miami and Boston (cover, #2 to #4, the locked #1 tease, the closing slide; AE-29) with a drawn look, books Miami
@@ -44,7 +44,7 @@ looks. A slot more than 60 minutes late is cancelled, never posted late. The hum
 `npx tsx scripts/ai_events_once.ts` (it carries out a run queued from the hub; Lucas only).
 
 Field Notes (`planning/Field Notes/CONTRACT.md`) also runs inside `helios-social`. Its clock is 2:00 AM (night schedule v2),
-sharing the hour with the Explainers idea cycle (one video renderer plus one slide renderer); its runs are claimed after AI Events' in the same loop, under the same 30-minute timeout. Engine
+sharing the hour with the Explainers idea cycle (one video renderer plus one slide renderer); its runs are claimed after AI Events' in the same loop, under the same hang guard (no run time limit; CI-33). Engine
 `lib/field-notes`, schema `field_notes` (apply it before redeploying the worker); its posts are spine items (`vertical 'field_notes'`).
 A run picks one tip, pairs it with photos from the pool (the rest rule), renders 4 to 6 slides and waits for a person: nothing posts
 without approval. It books the afternoon window only while `publishing_live` is on. A slot more than 120 minutes late is cancelled,
@@ -315,3 +315,12 @@ In the `social` (carousel) code, "story" means a **news story** (`story_id`,
 2. Add the six contract items to the type's schema file (additive, idempotent).
 3. Add a systemd unit and deploy it to the social worker VM.
 4. Ship with `auto_run` and `publishing_live` off.
+
+## Run time limits (CI-33, 2026-11-10)
+
+No content run is failed or killed for taking long. In-process runs (Last Few Days, its memes stage, AI Events, Field
+Notes) are failed only when hung: no output from the process for 45 minutes (`RUN_QUIET_LIMIT_MS`), or the 12 h
+backstop (`RUN_HANG_BACKSTOP_MS`), both in `lib/content-runs/hang-guard.ts`. Render, compile and voice subprocesses
+(Explainers, Reel AI Drama) have only the 12 h backstop. Runs left `running` by a dead worker are reaped when
+`helios-social` boots (LFD, AI Events, Field Notes) and otherwise by the 12 h age backstop (Carousels, Reels and their
+stage jobs, IG Stories builds, intake, AI Drama). Per-request network timeouts and publishing limits are unchanged.

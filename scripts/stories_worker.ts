@@ -37,7 +37,7 @@ import { createLiveStoriesMetaClient } from '@/lib/stories/publish/meta';
 import { openRenderer, type Renderer } from '@/lib/stories/render/render';
 import { createReviewCall } from '@/lib/stories/render/review';
 import type { Series } from '@/lib/stories/render/types';
-import { nyDate, requestSet } from '@/lib/stories/repository';
+import { nyDate, releaseBuildsAtStartup, requestSet } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
 import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
@@ -61,6 +61,13 @@ async function main() {
     if (!settings.series[series]) throw new Error(`unknown series: ${series}`);
     const { set, created } = await requestSet(db, { series, nyDate: nyDate(), trigger: 'click', style: settings.series[series].style, requestedBy: 'terminal' });
     log(`${created ? 'requested' : 'already have'} ${series} ${set.ny_date} (${set.status})`);
+  }
+
+  // Daemon only (not --once, which may run beside the VM's service): a build still `building` at boot died with the
+  // previous process. Release it now instead of after the 12 h backstop (CI-33).
+  if (!once) {
+    const released = await releaseBuildsAtStartup(db).catch((err) => (log(`startup release failed: ${err instanceof Error ? err.message : String(err)}`), []));
+    if (released.length) log(`startup released ${released.length} build(s): ${released.join(', ')}`);
   }
 
   let renderer: Renderer | null = null;

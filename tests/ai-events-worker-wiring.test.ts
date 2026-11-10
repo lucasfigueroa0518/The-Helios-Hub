@@ -13,14 +13,13 @@ test('the social worker runs AI Events in its own loop: the noon clock, claims, 
   assert.match(text, /const noon = noonQueue\(new Date\(\), ae, aePlan \? isAiEventsDay\(aePlan, aeToday\) : null\)/);
   assert.match(text, /aiEventsStore\.requestRun\(lfdQuery, 'scheduled', ae\.runCapUsd\)/);
   assert.match(text, /aiEventsAt = nextAiEventsRunAt\(new Date\(\)\)/);
-  // Claimed after Last Few Days' claim, inside the timeout wrapper.
+  // Claimed after Last Few Days' claim, inside the hang guard.
   const lfdClaim = text.indexOf('lfdStore.claimRun(lfdQuery)');
   const aeClaim = text.indexOf('aiEventsStore.claimRun(lfdQuery)');
   assert.ok(lfdClaim > 0 && aeClaim > lfdClaim, 'the AI Events claim comes after the Last Few Days claim');
-  assert.match(text, /withAiEventsTimeout\(\s*carryOutAiEventsRun\(/);
-  assert.match(text, /AI_EVENTS_RUN_TIMEOUT_MS/);
-  assert.match(text, /ai_events_run_timeout/);
-  assert.match(text, /aiEventsStore\.failRun\(lfdQuery, aeClaimed\.id, 'timed out after 30 minutes'\)/);
+  assert.match(text, /withHangGuard\(\s*carryOutAiEventsRun\(/);
+  assert.match(text, /ai_events_run_hung/);
+  assert.match(text, /aiEventsStore\.failRun\(lfdQuery, aeClaimed\.id, reason\)/);
   assert.match(text, /engine: \(_run, capUsd\) => liveAiEventsDeps\(lfdQuery, \{ capUsd \}\)/);
   assert.match(text, /snapshot: aiEventsSnapshot/);
   // Release and publish only while the single publisher doesn't drive the type.
