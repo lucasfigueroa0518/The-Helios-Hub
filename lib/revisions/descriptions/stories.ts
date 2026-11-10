@@ -12,14 +12,17 @@
  * frame (its own fit and render checks fail it) → ONE guarded write of the frame and the set payload
  * (repository saveFrameRevision). A JPEG uploaded before a lost guarded write stays in storage
  * unreferenced, by design (the never-delete rule). The whole-set Haiku render review is NOT run: it
- * can only move a backdrop, crop or family, never words, and a person just chose those.
+ * can only move a backdrop, crop or photo, never words, and a person just chose those.
  *
  *   color    the frame's backdrop (black | white | orange | green): render only, 0 model calls
- *   layout   the photo's crop (photo.focus), or a Guess the Number question/answer family: render only
+ *   layout   the photo's crop (photo.focus): render only
  *   wording  Morning Download story headlines only: the writer's length/sentence rule → Jev md-grounding
  *            (bar 0.6) over the frame's words; a miss gets ONE Sonnet md-headlines rewrite, which must
- *            ground again (the build's rule). Guess the Number and Free vs. Paid words came through gates
- *            this path can't re-run (source page checks, the pair score), so they are refused.
+ *            ground again (the build's rule). Free vs. Paid words came through gates this path can't
+ *            re-run (the pair score), so they are refused.
+ *
+ * AI Trivia frames are videos rendered as a pair (lib/stories/trivia/render) and Guess the Number is
+ * retired (AT-14): neither takes a revision; Regenerate makes a new set.
  *   photo    one finder search (createLivePhotoFinder().find) per request, at most two requests, never a
  *            photo another frame of the set shows (the opener counts), the replaced photo, or one in
  *            the 7-day used set
@@ -32,7 +35,7 @@ import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Query } from '@/lib/social/store/pg';
 import type { Queryable } from '@/lib/stories/db';
 import type { PhotoRequest } from '@/lib/stories/photos';
-import { BACKDROPS, GTN_FAMILIES, MAX_JPEG_BYTES, framePhoto, type Backdrop, type Frame, type FrameData, type Photo, type Series, type Style } from '@/lib/stories/render/types';
+import { BACKDROPS, MAX_JPEG_BYTES, VIDEO_SERIES, framePhoto, type Backdrop, type Frame, type FrameData, type Photo, type Series, type Style } from '@/lib/stories/render/types';
 import type { FrameRevisionState, SetStatus } from '@/lib/stories/repository';
 
 import type { ContentTypeDescription, FixKind, PartState, PostSnapshot } from '../types';
@@ -142,7 +145,7 @@ const blocked = (note: string) => ({ ok: false as const, reason: 'blocked' as co
 const failed = (note: string) => ({ ok: false as const, reason: 'failed' as const, note });
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const asDb = (q: Query): Queryable => ({ query: async (text, params) => ({ rows: (await q(text, params)).rows }) });
-const SERIES_NAME: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
+const SERIES_NAME: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid', ai_trivia: 'AI Trivia' };
 
 /** The build's sentence rule (lib/stories/build/common.ts sentenceCount), copied so the registry stays light. */
 function sentenceCount(text: string): number {
@@ -240,19 +243,18 @@ function wordsOf(d: FrameData): string {
     case 'opener': return `the opener: "${d.date}", ${d.storyCount} stories`;
     case 'story': return `${d.headline} (${d.source.verb} ${d.source.name})`;
     case 'closer': return 'the closer: the fixed sign-off';
-    case 'intro': return `the intro${d.difficulty ? `: ${d.difficulty} difficulty` : ''}${d.topic ? `, topic "${d.topic}"` : ''}`;
-    case 'question': return `question: ${d.question}`;
-    case 'answer': return `answer: ${d.number} ${d.label}. ${d.meaning} (${d.source.verb} ${d.source.name})`;
+    case 'intro': return 'the intro';
+    case 'question': return `question: ${d.question} (${d.options.map((o) => `${o.letter}. ${o.text}`).join(', ')})`;
+    case 'answer': return `answer: ${d.correct}. ${d.answerLine}`;
     case 'paid': return `paid tool: ${d.tool}, ${d.price} ${d.period}. ${d.tease}`;
     case 'free': return `free tool: ${d.tool}. ${d.what} ${d.how} (${d.platforms})`;
   }
 }
 
-function layoutOf(d: FrameData, p: Photo | undefined): string {
-  const family = 'family' in d ? `${d.family} layout, ` : '';
-  if (!p) return `${family}no photo`;
-  if (p.kind === 'logo') return `${family}logo shown whole`;
-  return `${family}photo cropped at ${p.focus ? `${Math.round(p.focus.x * 100)}% ${Math.round(p.focus.y * 100)}%` : 'center'}`;
+function layoutOf(p: Photo | undefined): string {
+  if (!p) return 'no photo';
+  if (p.kind === 'logo') return 'logo shown whole';
+  return `photo cropped at ${p.focus ? `${Math.round(p.focus.x * 100)}% ${Math.round(p.focus.y * 100)}%` : 'center'}`;
 }
 
 /** The meter as a billable dep sees it: once it has thrown, `stopped()` is true and every spend re-throws. */
@@ -291,7 +293,7 @@ const REPLACED = /^revision: replaced (\S+) with /;
 /**
  * Photos this frame showed before a "different photo" revision replaced them: from the frame's photo-log
  * steps (`revision: replaced X with Y`) and from the revisions log (applied revisions of this frame,
- * their `before` photo), which also covers sets without a photo log (Guess the Number).
+ * their `before` photo), which also covers sets without a photo log.
  */
 async function rejectedPhotos(q: Query, set: SetRow, label: string, seq: number): Promise<Set<string>> {
   const out = new Set<string>();
@@ -335,7 +337,7 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
         'Only a Morning Download story frame\'s headline can be reworded: args.field is headline and args.value is the exact new headline (one or two sentences).',
       color: 'args.backdrop is the frame\'s new background color: one of black, white, orange or green.',
       layout:
-        'args.crop is where the frame\'s photo is cropped to: one of top, center, bottom, left or right. For a Guess the Number question or answer frame, args.family may instead be photo, marquee or type.',
+        'args.crop is where the frame\'s photo is cropped to: one of top, center, bottom, left or right.',
       photo: 'No args are needed; args.hint is an optional short description of the photo wanted (for example "Dario Amodei on stage").',
     },
 
@@ -352,7 +354,7 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
           ...(p?.src ? { photoUrl: p.src } : {}),
           ...(p?.credit ? { photoCredit: p.credit } : {}),
           color: r.backdrop,
-          layout: layoutOf(r.copy, p),
+          layout: layoutOf(p),
         };
       });
       return { vertical: 'stories', refs, status: statusOf(set.status), parts };
@@ -374,6 +376,8 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
       if (set.status === 'rejected' || set.status === 'failed' || set.status === 'skipped') return blocked(`This ${series} set was ${set.status}, so it was not changed.`);
       if (set.status === 'requested' || set.status === 'building') return failed(`This ${series} set is still being built, so nothing was changed. Try again once it is ready.`);
       if (!WRITABLE.includes(set.status)) return failed(`This ${series} set is ${set.status}; it must be back in review before a frame can change, so nothing was changed.`);
+      if (VIDEO_SERIES.has(set.series)) return blocked(`${series} frames are videos rendered together, so a frame can't be revised on its own; nothing was changed. Regenerate the set instead.`);
+      if (set.series === 'guess_the_number') return blocked('Guess the Number is retired, so its sets are not revised; nothing was changed.');
       const seq = it.part.kind === 'frame' && /^\d+$/.test(it.part.key) ? Number(it.part.key) : 0;
       const row = rows.find((r) => r.seq === seq);
       if (!row) return failed(`There is no frame ${it.part.key} in this set (it has ${rows.length}), so nothing was changed.`);
@@ -382,7 +386,7 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
       const m = metered(meter);
       let copy = clone(row.copy);
       let backdrop = row.backdrop;
-      let template = row.template;
+      const template = row.template;
       let logSteps: { label: string; steps: string[] } | undefined;
       const cur = framePhoto(row.copy);
 
@@ -396,20 +400,11 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
         if (row.role === 'closer' || row.role === 'intro' || row.role === 'paid' || row.role === 'free') {
           return blocked(`Frame ${seq} (the ${row.role}) has a fixed layout with nothing to crop, so it was not changed.`);
         }
-        const family = args.family?.trim().toLowerCase();
         const crop = args.crop?.trim().toLowerCase();
-        if (family) {
-          if (row.copy.role !== 'question' && row.copy.role !== 'answer') return blocked(`Only a Guess the Number question or answer frame has a layout family; frame ${seq} was not changed.`);
-          if (!(GTN_FAMILIES as readonly string[]).includes(family)) return failed(`"${family}" is not a layout I know. Choose photo, marquee or type; nothing was changed.`);
-          if (family === row.copy.family) return failed(`Frame ${seq} already uses the ${family} layout, so nothing was changed.`);
-          if (family !== 'type' && !row.copy.photo) return blocked(`Frame ${seq} has no photo, so it can only use the type layout. Ask for a photo first.`);
-          copy = { ...(copy as typeof row.copy), family: family as (typeof GTN_FAMILIES)[number] };
-          template = family;
-        } else if (crop) {
+        if (crop) {
           if (!(crop in CROPS)) return failed(`"${crop}" is not a crop I know. Choose top, center, bottom, left or right; nothing was changed.`);
           if (!cur?.src) return blocked(`Frame ${seq} has no photo, so there is nothing to crop.`);
           if (cur.kind === 'logo') return blocked(`Frame ${seq}'s picture is a logo, which is always shown whole, so it can't be cropped.`);
-          if ('family' in row.copy && row.copy.family === 'type') return blocked(`Frame ${seq} uses the type layout, which shows no photo, so there is nothing to crop.`);
           const focus = CROPS[crop as keyof typeof CROPS];
           if (same(cur.focus ?? CROPS.center, focus)) return failed(`Frame ${seq}'s photo is already cropped at the ${crop}, so nothing was changed.`);
           copy = withPhoto(row.copy, { ...cur, focus: { ...focus } });
@@ -417,7 +412,6 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
           return failed(`I could not tell how frame ${seq}'s layout should change (a crop: top, center, bottom, left or right), so nothing was changed.`);
         }
       } else if (it.fixKind === 'wording') {
-        if (set.series === 'guess_the_number') return blocked('Guess the Number words come from a number checked against its source page, which a revision can\'t re-check, so they were not changed. Regenerate the set instead.');
         if (set.series === 'free_vs_paid') return blocked('Free vs. Paid words come from the checked tool pair and its prices, which a revision can\'t re-check, so they were not changed. Regenerate the set instead.');
         if (row.copy.role !== 'story') return blocked(`Frame ${seq} (the ${row.role}) has no headline to reword: its words are fixed or follow from the stories, so it was not changed.`);
         const field = args.field?.trim().toLowerCase();
@@ -467,7 +461,6 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
       } else if (it.fixKind === 'photo') {
         if (row.role === 'closer' || row.role === 'intro') return blocked(`Frame ${seq} (the ${row.role}) shows no photo, so there is nothing to replace.`);
         if (row.role === 'paid' || row.role === 'free') return blocked(`Frame ${seq} shows the tool's own logo, so it was not replaced.`);
-        if ('family' in row.copy && row.copy.family === 'type') return blocked(`Frame ${seq} uses the type layout, which shows no photo. Ask for a photo layout first.`);
         // Never a photo another frame shows (the opener counts), the one being replaced, or one used in the last 7 days.
         const exclude = new Set<string>(await deps.heldPhotos(q));
         for (const r of rows) {

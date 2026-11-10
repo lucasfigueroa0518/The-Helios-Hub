@@ -31,7 +31,10 @@ const QUEUE: SetStatus[] = ['requested', 'building', 'ready', 'approved', 'sched
 const HISTORY: SetStatus[] = ['published', 'rejected', 'failed'];
 const TAGS = new Set(['story_choice', 'copy', 'photo', 'design', 'accuracy']);
 
+/** A series that can be requested now (Guess the Number is retired, AT-14). */
 export const isSeries = (s: unknown): s is Series => typeof s === 'string' && (SERIES as string[]).includes(s);
+/** Any series with sets on record, retired ones included: what the queue and history lists filter by. */
+export const isKnownSeries = (s: unknown): s is Series => isSeries(s) || s === 'guess_the_number';
 
 export async function listView(db: Queryable, view: 'queue' | 'history', series?: Series) {
   const sets = await listSets(db, { statuses: view === 'queue' ? QUEUE : HISTORY, series, limit: view === 'queue' ? 30 : 60 });
@@ -161,6 +164,7 @@ export function reject(db: StoriesDb, id: string, body: { tags?: unknown; note?:
 export async function regenerate(db: StoriesDb, id: string, by: string) {
   const got = await getSet(db, id);
   if (!got) throw new ApiError(404, 'No such set.');
+  if (!isSeries(got.set.series)) throw new ApiError(409, 'This series is retired: its sets stay in the history, and no new one is made.');
   await guard(() => rejectSet(db, id, { note: 'regenerated', by }));
   return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by, slotMinute: got.set.slot_minute ?? null });
 }

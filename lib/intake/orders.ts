@@ -65,14 +65,6 @@ export const MD_ORDER: IntakeOrder = {
   isOpen: (q) => seriesOpen(q, 'morning_download'),
 };
 
-export const GTN_ORDER: IntakeOrder = {
-  id: 'gtn',
-  sources: ['reels:*', 'feeds:*'],
-  lookbackDays: 7,
-  scorecards: ['reels-score', 'story-scoring'],
-  isOpen: (q) => seriesOpen(q, 'guess_the_number'),
-};
-
 /** Free vs. Paid: the reels adapters only (github-trending is one of them). */
 export const FVP_ORDER: IntakeOrder = {
   id: 'fvp',
@@ -184,7 +176,7 @@ export const FIELD_NOTES_ORDER: IntakeOrder = {
   isOpen: (q) => fieldNotesOpen(q),
 };
 
-export const INTAKE_ORDERS: readonly IntakeOrder[] = [LFD_ORDER, MD_ORDER, GTN_ORDER, FVP_ORDER, REELS_ORDER, CAROUSEL_ORDER, FIELD_NOTES_ORDER];
+export const INTAKE_ORDERS: readonly IntakeOrder[] = [LFD_ORDER, MD_ORDER, FVP_ORDER, REELS_ORDER, CAROUSEL_ORDER, FIELD_NOTES_ORDER];
 
 export const orderById = (id: OrderId): IntakeOrder => INTAKE_ORDERS.find((o) => o.id === id)!;
 

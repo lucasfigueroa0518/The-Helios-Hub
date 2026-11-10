@@ -92,6 +92,8 @@ function str(value: unknown): string | null {
 export function setHeadline(set: StorySetRow): string | null {
   const p = set.payload;
   if (set.series === 'morning_download') return str(payloadList(p, 'stories')[0]?.headline);
+  if (set.series === 'ai_trivia') return str(((p?.trivia as Record<string, unknown> | undefined)?.q as Record<string, unknown> | undefined)?.question);
+  // Retired (AT-14); its sets on record still read.
   if (set.series === 'guess_the_number') return str(p?.question) ?? str((p?.story as Record<string, unknown> | undefined)?.headline) ?? str(p?.story);
   if (set.series === 'free_vs_paid') {
     const pair = p?.pair as Record<string, unknown> | undefined;

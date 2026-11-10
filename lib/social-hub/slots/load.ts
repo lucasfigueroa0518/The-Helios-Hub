@@ -19,10 +19,12 @@ export async function readSlotSource(q: SlotQuery): Promise<SlotSource> {
 }
 
 const seriesOf = (v: unknown) => (isStorySeries(v) ? v : null);
+/** A Stories row must name a live series: a retired one's rows (Guess the Number, AT-14) are not read. */
+const live = <T extends { vertical: string; series: unknown }>(r: T) => r.vertical !== 'stories' || r.series !== null;
 
 export async function readTemplate(q: SlotQuery): Promise<TemplateRow[]> {
   const { rows } = await q(`SELECT weekday, vertical, start_minute, series, feed_mode FROM social_hub.slot_template`);
-  return rows.map((r) => ({ weekday: Number(r.weekday), vertical: r.vertical, startMinute: Number(r.start_minute), series: seriesOf(r.series), feedMode: r.feed_mode ?? null }));
+  return rows.map((r) => ({ weekday: Number(r.weekday), vertical: r.vertical, startMinute: Number(r.start_minute), series: seriesOf(r.series), feedMode: r.feed_mode ?? null })).filter(live);
 }
 
 export async function readOverrides(q: SlotQuery, from: string, to: string): Promise<OverrideRow[]> {
@@ -34,8 +36,8 @@ export async function readOverrides(q: SlotQuery, from: string, to: string): Pro
   );
   return rows.map((r) => ({
     nyDate: String(r.ny_date).slice(0, 10), vertical: r.vertical, startMinute: Number(r.start_minute), series: seriesOf(r.series), action: r.action, feedMode: r.feed_mode ?? null,
-    setBy: r.set_by === 'person' ? 'person' : 'system',
-  }));
+    setBy: (r.set_by === 'person' ? 'person' : 'system') as OverrideRow['setBy'],
+  })).filter(live);
 }
 
 /** Resolved slots for every date from `from` through `to` (inclusive). */

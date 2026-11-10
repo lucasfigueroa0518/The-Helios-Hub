@@ -5,10 +5,12 @@
  *
  * DRAFT until Lucas approves it on the M1 mock-up (O-1).
  */
+/** Every series' name. Guess the Number is retired (AT-14); its name stays for the sets on record. */
 export const SERIES_LABEL = {
   morning_download: 'Morning Download',
   guess_the_number: 'Guess the Number',
   free_vs_paid: 'Free vs. Paid',
+  ai_trivia: 'AI Trivia',
 } as const;
 
 export const OPENER = {
@@ -22,24 +24,6 @@ export const CLOSER = {
   headline: 'Follow for AI news, updates and lessons.',
   body: 'Helios Group is an AI consultancy. We build your unfair advantage.',
   url: 'heliosgroup.ai',
-};
-
-/** Guess the Number: framed as a game show through the copy (S-45). */
-export const GTN = {
-  /** Intro slide (S-49): Today's "Guess the Number", difficulty, topic. */
-  intro: {
-    today: "Today's",
-    title: 'Guess the Number',
-    difficulty: 'Difficulty',
-    topic: 'Topic',
-    levels: { low: 'Low', medium: 'Medium', high: 'High' },
-    cue: 'Tap to play',
-  },
-  /** The dominant line; the second part takes the accent. */
-  kicker: ['Can you guess', 'the number?'] as const,
-  cue: 'Lock it in. Tap to reveal',
-  reveal: 'The answer is',
-  close: 'How close did you get?',
 };
 
 /** Free vs. Paid: the series title leads both slides (S-46). */
@@ -64,20 +48,6 @@ export const FVP = {
  * no-break space, the way a phone keeps them on one line.
  */
 export const HOMEMADE = {
-  gtn: {
-    today: "Today's",
-    title: '“Guess the Number”\u00A0🎯',
-    difficulty: 'Difficulty',
-    /** Difficulty as chili peppers, the way people rate heat. */
-    spice: { low: '🌶️', medium: '🌶️🌶️', high: '🌶️🌶️🌶️' },
-    topic: 'Topic',
-    play: 'tap to play',
-    kicker: 'Can you guess the number?\u00A0🤔',
-    cue: 'lock it in 🔒 tap to reveal',
-    reveal: 'the answer is…',
-    wow: '🤯',
-    close: 'how close did you get?\u00A0👀',
-  },
   fvp: {
     free: 'FREE',
     vs: 'vs',

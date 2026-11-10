@@ -184,7 +184,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
     OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
-    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid', 'ai_trivia'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
     OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
     OR (vertical = 'field_notes' AND slot IN ('afternoon'))
@@ -296,7 +296,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
     OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
-    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid', 'ai_trivia'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
     OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
     OR (vertical = 'field_notes' AND slot IN ('afternoon'))
@@ -335,7 +335,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
     OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
-    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid', 'ai_trivia'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
     OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
     OR (vertical = 'field_notes' AND slot IN ('afternoon'))
@@ -446,7 +446,7 @@ ALTER TABLE social_hub.slot_template ADD CONSTRAINT slot_template_start_minute_c
     CHECK (start_minute BETWEEN 0 AND 1439 AND start_minute % 15 = 0);
 ALTER TABLE social_hub.slot_template DROP CONSTRAINT IF EXISTS slot_template_series_check;
 ALTER TABLE social_hub.slot_template ADD CONSTRAINT slot_template_series_check CHECK (
-    (vertical = 'stories' AND series IS NOT NULL AND series IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    (vertical = 'stories' AND series IS NOT NULL AND series IN ('morning_download', 'guess_the_number', 'free_vs_paid', 'ai_trivia'))
     OR (vertical <> 'stories' AND series IS NULL)
 );
 -- Trial / Main feed exists only for reel types.
@@ -475,7 +475,7 @@ ALTER TABLE social_hub.slot_override ADD CONSTRAINT slot_override_start_minute_c
     CHECK (start_minute BETWEEN 0 AND 1439 AND start_minute % 15 = 0);
 ALTER TABLE social_hub.slot_override DROP CONSTRAINT IF EXISTS slot_override_series_check;
 ALTER TABLE social_hub.slot_override ADD CONSTRAINT slot_override_series_check CHECK (
-    (vertical = 'stories' AND series IS NOT NULL AND series IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    (vertical = 'stories' AND series IS NOT NULL AND series IN ('morning_download', 'guess_the_number', 'free_vs_paid', 'ai_trivia'))
     OR (vertical <> 'stories' AND series IS NULL)
 );
 ALTER TABLE social_hub.slot_override DROP CONSTRAINT IF EXISTS slot_override_feed_mode_check;
@@ -495,7 +495,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
     OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
-    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid', 'ai_trivia'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
     OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
     OR (vertical = 'field_notes' AND slot IN ('afternoon'))
@@ -537,7 +537,7 @@ ALTER TABLE social_hub.schedule ADD CONSTRAINT schedule_slot_check CHECK (
     (vertical = 'carousels' AND slot IN ('morning', 'afternoon'))
     OR (vertical = 'explainers' AND slot IN ('afternoon', 'late'))
     OR (vertical = 'reels' AND slot IN ('morning', 'midday', 'evening'))
-    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid'))
+    OR (vertical = 'stories' AND slot IN ('morning_download', 'guess_the_number', 'free_vs_paid', 'ai_trivia'))
     OR (vertical = 'last_few_days' AND slot IN ('morning'))
     OR (vertical = 'ai_events' AND slot IN ('evening', 'night'))
     OR (vertical = 'reel_ai_drama' AND slot IN ('evening'))

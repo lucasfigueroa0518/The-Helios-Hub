@@ -125,12 +125,12 @@ test('template: the 3 AM worker requests one set per Stories slot', async () => 
 test('legacy: exactly one set per due series, no slot minute, booked under the series name', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'morning_download', { auto: true });
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
   assert.equal(await storiesSlotsOn(qOf(db), THU), null);
   await tick(idleDeps(db, THU_3AM));
   assert.deepEqual(await minutesOf(db), [null]);
-  assert.deepEqual(await minutesOf(db, 'guess_the_number'), [null]);
+  assert.deepEqual(await minutesOf(db, 'ai_trivia'), [null]);
   assert.deepEqual(await minutesOf(db, 'free_vs_paid'), [], 'not due on Thursday');
 
   const { db: db2 } = await harnessDb();

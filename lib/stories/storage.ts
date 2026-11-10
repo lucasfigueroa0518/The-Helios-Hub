@@ -1,6 +1,7 @@
 /**
  * Stories frame storage (plan §2): a private Supabase Storage bucket
- * `stories`. Frames are uploaded after render; Instagram fetches each one
+ * `stories`. Frames (JPEGs; AI Trivia's MP4s and their poster JPEGs) are
+ * uploaded after render; Instagram fetches each one
  * from a short-lived signed URL when the worker creates its container.
  * Modeled on lib/reels/visual/storage.ts (copied, not imported), over fetch
  * with normal TLS verification.
@@ -22,10 +23,14 @@ export type StoriesStorage = {
   remove(objectPaths: string[]): Promise<void>;
 };
 
-/** Where a frame's JPEG lives: one folder per set. */
-export function frameObjectPath(setId: string, seq: number, role: string): string {
+/** A frame file's kind: the JPEG (an image frame, or a video frame's poster) or a video frame's MP4. */
+export type FrameFileExt = 'jpg' | 'mp4';
+
+/** Where a frame's file lives: one folder per set, `NN-role.jpg` (image or poster) or `NN-role.mp4` (video). */
+export function frameObjectPath(setId: string, seq: number, role: string, ext: FrameFileExt = 'jpg'): string {
   if (!/^[0-9a-f-]{36}$/i.test(setId)) throw new Error(`bad set id: ${setId}`);
-  return `sets/${setId}/${String(seq).padStart(2, '0')}-${role.replace(/[^a-z_]/g, '')}.jpg`;
+  if (ext !== 'jpg' && ext !== 'mp4') throw new Error(`bad frame file type: ${String(ext)}`);
+  return `sets/${setId}/${String(seq).padStart(2, '0')}-${role.replace(/[^a-z_]/g, '')}.${ext}`;
 }
 
 const encodePath = (p: string) => p.split('/').map(encodeURIComponent).join('/');

@@ -10,8 +10,8 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 
 import { openLocalStoriesDb } from '@/lib/stories/local-db';
-import { runRenderStage, wordsOf } from '@/lib/stories/render-stage';
-import { FREE_VS_PAID, GUESS_THE_NUMBER, MORNING_DOWNLOAD } from '@/lib/stories/render/fixtures/m1';
+import { runRenderStage } from '@/lib/stories/render-stage';
+import { FREE_VS_PAID, MORNING_DOWNLOAD } from '@/lib/stories/render/fixtures/m1';
 import { openRenderer, type Renderer } from '@/lib/stories/render/render';
 import type { FrameFlag, ReviewCall } from '@/lib/stories/render/review';
 import { MAX_JPEG_BYTES, SERIES_STYLE, type FrameData, type Series } from '@/lib/stories/render/types';
@@ -73,21 +73,8 @@ test('Morning Download (polished): renders, passes review, saved ready', async (
   }
 });
 
-test('Guess the Number (homemade): a review change re-renders; the words never move', async () => {
-  const flag: FrameFlag = { frame: 2, hard_to_read: true, clipped: false, bad_photo: false, logo_broken: false, out_of_place: false, broken: false, change: 'backdrop', backdrop: 'green', family: null, crop_x: null, crop_y: null, reason: 'stub' };
-  const { db, setId, result, uploads, calls } = await stage('guess_the_number', GUESS_THE_NUMBER.photo, [[flag], []]);
-  await assertJpegs(uploads, 3);
-  assert.equal(calls(), 2);
-  assert.equal(result.flagged, false);
-  const got = await getSet(db, setId);
-  assert.equal(got!.frames[1]!.backdrop, 'green');
-  assert.equal(got!.frames[1]!.review!.change, 'backdrop → green');
-  got!.frames.forEach((f, i) => assert.equal(wordsOf(f.copy), wordsOf(GUESS_THE_NUMBER.photo[i]!)));
-  assert.equal(got!.set.spend_usd, 0.0008);
-});
-
 test('Free vs. Paid (homemade): a frame still failing after its fix goes to Lucas flagged', async () => {
-  const f2 = (patch: Partial<FrameFlag>): FrameFlag => ({ frame: 2, hard_to_read: false, clipped: true, bad_photo: false, logo_broken: false, out_of_place: false, broken: false, change: 'backdrop', backdrop: 'white', family: null, crop_x: null, crop_y: null, reason: 'stub', ...patch });
+  const f2 = (patch: Partial<FrameFlag>): FrameFlag => ({ frame: 2, hard_to_read: false, clipped: true, bad_photo: false, logo_broken: false, out_of_place: false, broken: false, change: 'backdrop', backdrop: 'white', crop_x: null, crop_y: null, reason: 'stub', ...patch });
   const { db, setId, result, uploads } = await stage('free_vs_paid', FREE_VS_PAID, [[f2({})], [f2({ change: 'none', backdrop: null })]]);
   await assertJpegs(uploads, 3);
   assert.equal(result.flagged, true);

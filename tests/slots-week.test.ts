@@ -40,7 +40,7 @@ test('weekFromOverrides: each date\'s person keys are its person overrides only,
 
 test('each Stories chip names its series; other types use their short name', () => {
   assert.deepEqual(chipNames('stories', 'morning_download'), { short: 'Morning Dl', full: 'Morning Download' });
-  assert.deepEqual(chipNames('stories', 'guess_the_number'), { short: 'Guess #', full: 'Guess the Number' });
+  assert.deepEqual(chipNames('stories', 'ai_trivia'), { short: 'Trivia', full: 'AI Trivia' });
   assert.deepEqual(chipNames('stories', 'free_vs_paid'), { short: 'Free/Paid', full: 'Free vs. Paid' });
   assert.deepEqual(chipNames('reels', null), { short: 'Text', full: 'Text on Screen' });
 });

@@ -3,8 +3,13 @@
  * from the pools it draws on:
  *
  *   Morning Download   the reels slate's timely ideas + the carousel run's qualified stories
- *   Guess the Number   carousel brief numbers + shortlisted stories without a brief + reels The Number ideas
  *   Free vs. Paid      Ball Knowledge ideas and GitHub Trending (optional hints)
+ *   AI Trivia          no refresh: the daily writer (lib/stories/trivia/daily.ts) adds its
+ *                      questions itself. `trivia:` rows never leave for not being returned
+ *                      or for age; the series holds TRIVIA_POOL_CAP (20) and a row the cap
+ *                      drops frees its content-map cell (AT-11)
+ *
+ * Guess the Number is retired: nothing refreshes it, and its old rows stay as they are.
  *
  * Each series reads either today's sources (legacy) or the central intake
  * (lib/intake/pool-stories.ts: the same shapes and selection rules, no
@@ -27,15 +32,17 @@ import { POOL_CAP, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import type { ScoreBreakdown } from '@/lib/social-hub/types';
 import { morningDownloadScore, rankBreakdown } from '@/lib/stories/md-score';
 import type { Series } from '@/lib/stories/render/types';
-import { carouselNumbers, latestCarouselRunAt, morningDownloadCarousel, shortlistWithoutBrief, type NumberCandidate } from '@/lib/stories/sources/carousel';
-import { dedupe, freeToolLeads, morningDownloadReels, storyKey, theNumberIdeas, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
+import { latestCarouselRunAt, morningDownloadCarousel } from '@/lib/stories/sources/carousel';
+import { freeToolLeads, morningDownloadReels, storyKey, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
+import { freeCell } from '@/lib/stories/trivia/cells';
+import { TRIVIA_KEY_PREFIX, type TriviaPoolPayload } from '@/lib/stories/trivia/types';
 
-export type PoolEntry = { kind: 'story'; story: StoryCandidate } | { kind: 'number'; number: NumberCandidate } | { kind: 'lead'; lead: ToolLead };
+export type PoolEntry = { kind: 'story'; story: StoryCandidate } | { kind: 'lead'; lead: ToolLead } | TriviaPoolPayload;
 
 export type PoolItem = {
   series: Series;
   key: string;
-  origin: 'reels' | 'carousel' | 'catalog' | 'github' | 'generated';
+  origin: 'reels' | 'carousel' | 'catalog' | 'github' | 'generated' | 'model';
   ref: string;
   title: string;
   /** The source record the build needs, plus `story_key` (what stories.history records for the series). */
@@ -43,14 +50,21 @@ export type PoolItem = {
   score: number | null;
 };
 
-export const POOL_SERIES: Series[] = ['morning_download', 'guess_the_number', 'free_vs_paid'];
+export const POOL_SERIES: Series[] = ['morning_download', 'free_vs_paid', 'ai_trivia'];
 
-/** An unused row no refresh has touched in this long leaves, even when its sources could not be read. */
+/**
+ * An unused row no refresh has touched in this long leaves, even when its sources could not be read. Guess the Number is
+ * retired (not in POOL_SERIES); AI Trivia's `trivia:` rows are exempt from this drop (its value is only a placeholder).
+ */
 export const FRESH_MS: Record<Series, number> = {
   morning_download: 3 * 86_400_000,
   guess_the_number: 7 * 86_400_000,
   free_vs_paid: 14 * 86_400_000,
+  ai_trivia: 365 * 86_400_000,
 };
+
+/** AI Trivia's pool holds at most this many open questions (AT-11); the other series hold POOL_CAP. */
+export const TRIVIA_POOL_CAP = 20;
 
 /** The pool turns over at 3:00 AM New York (the Stories hour, night schedule v2: after the 2:40 intake top-up). */
 export const POOL_DAY_STARTS_HOUR = 3;
@@ -60,11 +74,10 @@ export const POOL_DAY_STARTS_HOUR = 3;
  * run in 26 h), or today's sources because the intake read failed for that series ('error-fallback').
  */
 export type SeriesSource = 'intake' | 'legacy' | 'stale-fallback' | 'error-fallback';
-export type PoolModes = { md: SeriesSource; gtn: SeriesSource; fvp: SeriesSource };
+export type PoolModes = { md: SeriesSource; fvp: SeriesSource };
 
 export type PoolReads = {
   morning: () => Promise<{ reels: StoryCandidate[]; carousel: StoryCandidate[] }>;
-  numbers: () => Promise<{ numbers: NumberCandidate[]; unbriefed: StoryCandidate[] }>;
   leads: () => Promise<ToolLead[]>;
   /** When the newest carousel run finished: a run newer than the last refresh saw makes the pool due again. */
   carouselRunAt?: () => Promise<string | null>;
@@ -79,10 +92,6 @@ export function livePoolReads(sourceDb: Queryable, now: Date): PoolReads {
     morning: async () => {
       const [reels, carousel] = await Promise.all([morningDownloadReels(sourceDb, ny), morningDownloadCarousel(sourceDb, now)]);
       return { reels, carousel };
-    },
-    numbers: async () => {
-      const [numbers, shortlist, theNumber] = await Promise.all([carouselNumbers(sourceDb, now), shortlistWithoutBrief(sourceDb, now), theNumberIdeas(sourceDb, ny)]);
-      return { numbers, unbriefed: dedupe([...shortlist, ...theNumber]) };
     },
     leads: () => freeToolLeads(sourceDb, ny),
     carouselRunAt: () => latestCarouselRunAt(sourceDb),
@@ -120,13 +129,6 @@ export async function gatherPool(reads: PoolReads, now: Date = new Date()): Prom
       return storyItem('morning_download', c, c.key, score, breakdown);
     });
   });
-  await read('guess_the_number', async () => {
-    const { numbers, unbriefed } = await reads.numbers();
-    return [
-      ...sourceRank(numbers, 'Carousel brief numbers').map(([n, score, b]) => numberItem(n, score, b)),
-      ...sourceRank(unbriefed, 'Stories without a brief').map(([c, score, b]) => storyItem('guess_the_number', c, `story:${c.key}`, score, b)),
-    ];
-  });
   await read('free_vs_paid', async () => {
     const leads = (await reads.leads()).filter((l) => l.url);
     // Each source's own order: reels and GitHub newest first.
@@ -148,19 +150,7 @@ function storyItem(series: Series, c: StoryCandidate, key: string, score: number
   return { series, key, origin: c.origin, ref: c.ref, title: c.headline, payload: { kind: 'story', story: c, story_key: c.key, source: c.sourceName, url: c.url, breakdown }, score };
 }
 
-function numberItem(n: NumberCandidate, score: number, breakdown: ScoreBreakdown): PoolItem {
-  return {
-    series: 'guess_the_number',
-    key: n.key,
-    origin: n.origin,
-    ref: n.ref,
-    title: `${n.value}: ${(n.fact || n.storyHeadline).slice(0, 140)}`,
-    payload: { kind: 'number', number: n, story_key: n.storyKey, source: n.sourceName, url: n.url || null, breakdown },
-    score,
-  };
-}
-
-const originLabel = (o: string) => ({ reels: 'Text on Screen', carousel: 'Carousel', catalog: 'Catalog', github: 'GitHub', generated: 'Generated' })[o] ?? o;
+const originLabel = (o: string) => ({ reels: 'Text on Screen', carousel: 'Carousel', catalog: 'Catalog', github: 'GitHub', generated: 'Generated', model: 'AI Trivia writer' })[o] ?? o;
 
 /**
  * Write a fresh gather into stories.pool:
@@ -168,9 +158,9 @@ const originLabel = (o: string) => ({ reels: 'Text on Screen', carousel: 'Carous
  *   2. anything stories.history has shown is used
  *   3. a fully read series drops its unused rows the refresh did not return
  *   4. any unused row past its series' freshness window drops
- *      (a person's own seeds, keyed `seed:`, are never dropped by 3, 4 or 5)
- *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21): the lowest-scored go, never one a
- *      person pinned or dragged; ideas a person archived do not count
+ *      (a person's own seeds, keyed `seed:`, are never dropped by 3, 4 or 5; AI Trivia's `trivia:` rows never by 3 or 4)
+ *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21; AI Trivia TRIVIA_POOL_CAP): the
+ *      lowest-scored go, never one a person pinned or dragged; ideas a person archived do not count
  */
 export async function writePool(db: Queryable, gathered: { items: PoolItem[]; refreshed: Series[] }, now: Date): Promise<{ upserted: number; dropped: number }> {
   const { items, refreshed } = gathered;
@@ -198,22 +188,56 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
     const { rows } = await db.query<{ id: string }>(
       `DELETE FROM stories.pool
         WHERE series = $1 AND used_at IS NULL
-          AND key NOT LIKE 'seed:%'
+          AND key NOT LIKE 'seed:%' AND key NOT LIKE 'trivia:%'
           AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))
         RETURNING id`,
       [series, cutoff, keys],
     );
     dropped += rows.length;
-    dropped += await capSeries(db, series);
+    dropped += series === 'ai_trivia' ? (await capTriviaPool(db, now)).length : (await capSeries(db, series)).length;
   }
   return { upserted: items.length, dropped };
 }
 
-/** Hold one series to the pool standard's cap. Never throws: a database without the moves table keeps its pool as it is. */
-async function capSeries(db: Queryable, series: Series): Promise<number> {
-  if (!QUEUE_LIVE.has('stories')) return 0;
+/**
+ * Hold AI Trivia to TRIVIA_POOL_CAP (AT-11, whether or not the shared queue is live): every question it drops goes to
+ * stories.trivia_archive (reason 'cap') and its content-map cell opens again. Returns the dropped keys. Without the moves
+ * table it caps on score alone.
+ */
+export async function capTriviaPool(db: Queryable, now: Date = new Date()): Promise<string[]> {
+  let dropped: Dropped[];
   try {
-    const { rows } = await db.query<{ id: string }>(
+    dropped = await capSeries(db, 'ai_trivia', TRIVIA_POOL_CAP, true);
+  } catch {
+    const { rows } = await db.query<Dropped>(
+      `DELETE FROM stories.pool p
+        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL
+          AND p.id IN (SELECT r.id FROM (SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
+                         FROM stories.pool p2 WHERE p2.series = 'ai_trivia' AND p2.used_at IS NULL) r WHERE r.n > $1)
+        RETURNING p.key, p.payload`,
+      [TRIVIA_POOL_CAP],
+    );
+    dropped = rows;
+  }
+  for (const { key, payload } of dropped) {
+    if (!key.startsWith(TRIVIA_KEY_PREFIX)) continue;
+    const cellId = key.slice(TRIVIA_KEY_PREFIX.length);
+    await db.query(`INSERT INTO stories.trivia_archive (key, cell_id, payload, reason, archived_at) VALUES ($1, $2, $3::jsonb, 'cap', $4::timestamptz)`, [key, cellId, JSON.stringify(payload ?? {}), now.toISOString()]);
+    await freeCell(db, key);
+  }
+  return dropped.map((d) => d.key);
+}
+
+type Dropped = { key: string; payload: unknown };
+
+/**
+ * Hold one series to its cap; the dropped keys. Never throws unless `rethrow`: a database without the moves table keeps its
+ * pool as it is.
+ */
+async function capSeries(db: Queryable, series: Series, cap: number = POOL_CAP, rethrow = false): Promise<Dropped[]> {
+  if (!rethrow && !QUEUE_LIVE.has('stories')) return [];
+  try {
+    const { rows } = await db.query<Dropped>(
       `DELETE FROM stories.pool p
         WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
           AND p.id IN (
@@ -226,12 +250,13 @@ async function capSeries(db: Queryable, series: Series): Promise<number> {
           AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
                            WHERE a.vertical = 'stories' AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
                              AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)
-        RETURNING p.id`,
-      [series, POOL_CAP],
+        RETURNING p.key, p.payload`,
+      [series, cap],
     );
-    return rows.length;
-  } catch {
-    return 0;
+    return rows;
+  } catch (err) {
+    if (rethrow) throw err;
+    return [];
   }
 }
 
@@ -276,9 +301,11 @@ export async function refreshPoolIfDue(db: Queryable, reads: () => PoolReads, no
 export type PoolMeta = { key: string; score: number | null };
 
 export type OpenPool = {
-  stories: StoryCandidate[]; numbers: NumberCandidate[]; unbriefed: StoryCandidate[]; leads: ToolLead[];
+  stories: StoryCandidate[]; leads: ToolLead[];
+  /** AI Trivia's open questions, best first (absent on a pool built by hand). */
+  trivia?: TriviaPoolPayload[];
   /** Each list's entries' pool key and score, in the same order (set by openPool; a pool built by hand may omit it). */
-  meta?: { stories: PoolMeta[]; numbers: PoolMeta[]; unbriefed: PoolMeta[]; leads: PoolMeta[] };
+  meta?: { stories: PoolMeta[]; leads: PoolMeta[]; trivia?: PoolMeta[] };
 };
 
 /** One series' open ideas, best first: what its build chooses from. */
@@ -287,19 +314,18 @@ export async function openPool(db: Queryable, series: Series): Promise<OpenPool>
     `SELECT key, score, payload FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST, title`,
     [series],
   );
-  const out: OpenPool = { stories: [], numbers: [], unbriefed: [], leads: [], meta: { stories: [], numbers: [], unbriefed: [], leads: [] } };
+  const out = { stories: [] as StoryCandidate[], leads: [] as ToolLead[], trivia: [] as TriviaPoolPayload[], meta: { stories: [] as PoolMeta[], leads: [] as PoolMeta[], trivia: [] as PoolMeta[] } };
   for (const { key, score, payload: p } of rows) {
     const meta: PoolMeta = { key, score: score == null ? null : Number(score) };
     if (p?.kind === 'story' && p.story) {
-      const list = series === 'guess_the_number' ? 'unbriefed' : 'stories';
-      out[list].push(p.story);
-      out.meta![list].push(meta);
-    } else if (p?.kind === 'number' && p.number) {
-      out.numbers.push(p.number);
-      out.meta!.numbers.push(meta);
+      out.stories.push(p.story);
+      out.meta.stories.push(meta);
     } else if (p?.kind === 'lead' && p.lead) {
       out.leads.push(p.lead);
-      out.meta!.leads.push(meta);
+      out.meta.leads.push(meta);
+    } else if (p?.kind === 'trivia' && p.q) {
+      out.trivia.push(p);
+      out.meta.trivia.push(meta);
     }
   }
   return out;

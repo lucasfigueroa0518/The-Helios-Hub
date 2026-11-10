@@ -483,7 +483,7 @@ async function runInFlight(q: IntakeQuery, now: Date): Promise<boolean> {
 export type EnsureFreshResult = { ran: boolean; reason: string; runId?: string };
 
 /**
- * Before a manual LFD run or an MD/GTN/FvP Generate: a top-up when the last
+ * Before a manual LFD run or an MD/FvP Generate: a top-up when the last
  * successful run is older than INTAKE_STALE_AFTER_MINUTES. Never throws: a
  * failure is reported in `reason` and the caller goes on.
  */

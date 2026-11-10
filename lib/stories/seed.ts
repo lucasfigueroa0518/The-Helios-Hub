@@ -6,7 +6,6 @@ import { morningDownloadScore } from '@/lib/stories/md-score';
 import type { PoolItem } from '@/lib/stories/pool';
 import type { Series } from '@/lib/stories/render/types';
 import { SERIES } from '@/lib/stories/settings';
-import type { NumberCandidate } from '@/lib/stories/sources/carousel';
 import type { StoryCandidate, ToolLead } from '@/lib/stories/sources/reels';
 
 /**
@@ -15,16 +14,16 @@ import type { StoryCandidate, ToolLead } from '@/lib/stories/sources/reels';
  * build picks it up like any idea. Nothing here calls a model or the web: a seed costs nothing, and starts no build.
  *
  *   Morning Download  a story: a headline, and a link or notes. Scored on the news scale as any story is.
- *   Guess the Number  a number: the figure and what it counts, and the story it comes from.
  *   Free vs. Paid     a tool: its name, link and what it is. The model still pairs it with its counterpart.
  *
- * Guess the Number and Free vs. Paid rank by source order, so a seed sits mid-pool: it competes, it is never bumped.
+ * Free vs. Paid ranks by source order, so a seed sits mid-pool: it competes, it is never bumped. AI Trivia takes no
+ * seeds: its questions come from the content map.
  *
  * Central intake (Phase 1): while Morning Download reads the intake (consumer switch 'intake'), a story seed with a
  * link is also handed to addIntakeSeed, which reads the page and scores it on entry (major-news and story-builder,
  * a few Jev calls, the person's click being the go-ahead), so the build's lead queue reads its stored scores. That
- * hand-off never refuses or fails the seed: on any error the seed stays as it always was. Number and tool seeds are
- * not stories and stay Stories-only.
+ * hand-off never refuses or fails the seed: on any error the seed stays as it always was. Tool seeds are not
+ * stories and stay Stories-only.
  */
 
 export const SEED_PREFIX = 'seed:';
@@ -60,16 +59,8 @@ export function seedItem(body: SeedBody, now: Date, id: string = crypto.randomUU
     const { score, breakdown } = morningDownloadScore(story, now);
     return { series, key, origin: 'reels', ref: key, title: headline, payload: { kind: 'story', story, story_key: key, source: 'Your seed', url: url || null, breakdown }, score };
   }
-  if (series === 'guess_the_number') {
-    const value = text(body.value, 40);
-    const fact = text(body.fact, 300);
-    if (!value || !fact) throw new ApiError(400, 'Give the number and what it counts.');
-    const url = link(body.url);
-    if (text(body.url, 2000) && !url) throw new ApiError(400, 'The link must start with http:// or https://');
-    const storyHeadline = text(body.storyHeadline, 200) || fact;
-    const number: NumberCandidate = { key, origin: 'generated', ref: key, value, fact, counts: fact, storyHeadline, sourceName: 'Your seed', url, storyKey: key };
-    return { series, key, origin: 'generated', ref: key, title: `${value}: ${fact.slice(0, 140)}`, payload: { kind: 'number', number, story_key: key, source: 'Your seed', url: url || null, breakdown: mid('Your number') }, score: MID_RANK };
-  }
+  // AI Trivia writes its own questions from the content map (AT-14): it takes no typed-in idea.
+  if (series === 'ai_trivia') throw new ApiError(400, 'AI Trivia writes its own questions; it takes no seeds.');
   const name = text(body.toolName, 80);
   const url = link(body.url);
   if (!name || !url) throw new ApiError(400, 'Give the tool’s name and a link that starts with http:// or https://');

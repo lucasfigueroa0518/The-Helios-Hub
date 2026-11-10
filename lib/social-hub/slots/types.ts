@@ -10,9 +10,10 @@ import type { Vertical } from '@/lib/social-hub/types';
 
 export type FeedMode = 'trial' | 'main';
 
-export type StorySeries = 'morning_download' | 'guess_the_number' | 'free_vs_paid';
+/** The Stories series a slot can hold. Guess the Number is retired (AI Trivia AT-14): its old slots are not read. */
+export type StorySeries = 'morning_download' | 'ai_trivia' | 'free_vs_paid';
 
-export const STORY_SERIES: readonly StorySeries[] = ['morning_download', 'guess_the_number', 'free_vs_paid'];
+export const STORY_SERIES: readonly StorySeries[] = ['morning_download', 'ai_trivia', 'free_vs_paid'];
 
 export const isStorySeries = (v: unknown): v is StorySeries => typeof v === 'string' && (STORY_SERIES as readonly string[]).includes(v);
 

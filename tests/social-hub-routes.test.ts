@@ -58,5 +58,5 @@ test('the hub plan mirrors each type’s own posting windows', () => {
   assert.deepEqual(PLAN.reels.map((w) => [w.id, w.startMinute, w.endMinute]), POSTING_SLOTS.map((w) => [w.id, w.startMinute, w.endMinute]));
   assert.deepEqual(PLAN.carousels, [], 'Carousels are opt-in: no routine windows, only the slots a person adds to the calendar');
   assert.deepEqual(PLAN.explainers.map((w) => [w.id, w.startMinute, w.endMinute]), EXPLAINER_WINDOWS.map((w) => [w.id, w.startMinute, w.endMinute]));
-  assert.deepEqual(PLAN.stories.map((w) => w.id), ['morning_download', 'guess_the_number', 'free_vs_paid']);
+  assert.deepEqual(PLAN.stories.map((w) => w.id), ['morning_download', 'ai_trivia', 'free_vs_paid']);
 });

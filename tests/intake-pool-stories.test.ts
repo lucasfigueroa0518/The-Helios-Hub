@@ -14,7 +14,6 @@ import test from 'node:test';
 import { intakePoolReads, type IntakePoolDeps } from '@/lib/intake/pool-stories';
 import type { IntakeItem, IntakeJev, ListStoriesInput, ScoredStory } from '@/lib/intake/types';
 import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
-import { SHORTLIST_MAX } from '@/lib/social/ingest/select/rank';
 import { openLocalStoriesDb } from '@/lib/stories/local-db';
 import { refreshStoryPool, type PoolReads } from '@/lib/stories/pool';
 import { readPoolModes, storiesPoolReads } from '@/lib/stories/pool-intake';
@@ -139,32 +138,7 @@ test('morning(): no posted headlines → no Jev needed; a carousel post photo co
   assert.equal(carousel[0]!.ref, 'https://f.test/pic');
 });
 
-/* ── Guess the Number ─────────────────────────────────────────────── */
-
-test('numbers(): no brief numbers; the day\'s shortlist (rank, company spread, top 25) then The Number ideas, 7 days', async () => {
-  const day = ago(2);
-  const shortlist = Array.from({ length: SHORTLIST_MAX + 2 }, (_, i) => feedStory(`c${i}`, 100 - i, { joined: day, headline: i < 3 ? `OpenAI news ${i}` : `Story ${i}` }));
-  const all = [
-    ...shortlist,
-    feedStory('older', 1, { joined: ago(8 * 24) }), // outside 7 days
-    feedStory('notq', 200, { status: 'not-qualified', joined: day }),
-    reelsStory('num1', 5, { bucket: 'the_number' }),
-    reelsStory('num-old', 9, { bucket: 'the_number', joined: ago(8 * 24) }),
-    reelsStory('shift', 9),
-  ];
-  const { numbers, unbriefed } = await intakePoolReads(q, NOW, deps(all).d).numbers();
-  assert.deepEqual(numbers, []);
-  const got = keys(unbriefed);
-  assert.equal(got.length, SHORTLIST_MAX + 1);
-  // SPREAD_PER_COMPANY: the third OpenAI story waits just below the first 10 places.
-  assert.deepEqual(got.slice(0, 3), ['f.test/c0', 'f.test/c1', 'f.test/c3']);
-  assert.equal(got[10], 'f.test/c2');
-  assert.ok(!got.includes('f.test/c25') && !got.includes('f.test/c26'), 'the shortlist stops at 25');
-  assert.equal(got.at(-1), 'r.test/num1');
-  assert.ok(!got.includes('f.test/older') && !got.includes('r.test/num-old') && !got.includes('r.test/shift'));
-});
-
-/* ── Free vs. Paid ────────────────────────────────────────────────── */
+/* ── Free vs. Paid and the run marker ─────────────────────────────── */
 
 test('leads() ↔ freeToolLeads: Ball Knowledge (14 days) and GitHub Trending items', async () => {
   const all = [
@@ -220,19 +194,17 @@ test('carouselRunAt(): the last successful intake run start', async () => {
 const cand = (key: string): StoryCandidate => ({ key, origin: 'reels', ref: key, headline: key, sourceName: 'Test', url: `https://${key}`, body: '', publishedAt: null, nativeScore: 1 });
 const marked = (tag: string): PoolReads => ({
   morning: async () => ({ reels: [cand(`${tag}/md`)], carousel: [] }),
-  numbers: async () => ({ numbers: [], unbriefed: [cand(`${tag}/gtn`)] }),
   leads: async () => [{ origin: 'catalog', ref: tag, name: tag, url: `https://${tag}.test/fvp`, description: '' }],
   carouselRunAt: async () => (tag === 'legacy' ? '2026-11-09T07:10:00.000Z' : TOPUP.toISOString()),
 });
 
 test('switch: legacy and stale-fallback read today\'s sources; intake reads the intake; an unreadable mode is legacy', async () => {
-  const modes = { md: 'intake', gtn: 'stale-fallback', fvp: 'legacy' } as const;
+  const modes = { md: 'intake', fvp: 'stale-fallback' } as const;
   const reads = storiesPoolReads(q as never, NOW, { readMode: async (_q, order) => modes[order as keyof typeof modes], legacyReads: () => marked('legacy'), intakeReads: () => marked('intake') });
   assert.equal((await reads.morning()).reels[0]!.key, 'intake/md');
-  assert.equal((await reads.numbers()).unbriefed[0]!.key, 'legacy/gtn', 'stale fallback reads today\'s sources');
-  assert.equal((await reads.leads())[0]!.ref, 'legacy');
+  assert.equal((await reads.leads())[0]!.ref, 'legacy', 'stale fallback reads today\'s sources');
   assert.equal(await reads.carouselRunAt!(), TOPUP.toISOString(), 'the newer of the carousel and intake runs');
-  assert.deepEqual(await readPoolModes(q, NOW, async () => { throw new Error('intake.settings missing'); }), { md: 'legacy', gtn: 'legacy', fvp: 'legacy' });
+  assert.deepEqual(await readPoolModes(q, NOW, async () => { throw new Error('intake.settings missing'); }), { md: 'legacy', fvp: 'legacy' });
 
   const all = storiesPoolReads(q as never, NOW, { readMode: async () => 'legacy', legacyReads: () => marked('legacy'), intakeReads: () => marked('intake') });
   assert.equal((await all.morning()).reels[0]!.key, 'legacy/md');
@@ -241,7 +213,7 @@ test('switch: legacy and stale-fallback read today\'s sources; intake reads the 
 
 test('switch: the pool refresh records which source each series read', async () => {
   const { db } = await openLocalStoriesDb();
-  const modes = { md: 'intake', gtn: 'legacy', fvp: 'stale-fallback' } as const;
+  const modes = { md: 'intake', fvp: 'stale-fallback' } as const;
   const reads = storiesPoolReads(db, NOW, { readMode: async (_q, order) => modes[order as keyof typeof modes], legacyReads: () => marked('legacy'), intakeReads: () => marked('intake') });
   const r = await refreshStoryPool(db, reads, NOW);
   assert.deepEqual(r.intake, modes);
@@ -254,9 +226,9 @@ test('switch: a series whose intake read throws reads today\'s sources, recorded
   const broken = (): PoolReads => ({ ...marked('intake'), morning: async () => { throw new Error('intake.scores is missing'); } });
   const reads = storiesPoolReads(db, NOW, { readMode: async () => 'intake', legacyReads: () => marked('legacy'), intakeReads: broken });
   assert.equal((await reads.morning()).reels[0]!.key, 'legacy/md', 'Morning Download falls back');
-  assert.equal((await reads.numbers()).unbriefed[0]!.key, 'intake/gtn', 'Guess the Number stays on the intake');
+  assert.equal((await reads.leads())[0]!.ref, 'intake', 'Free vs. Paid stays on the intake');
   const r = await refreshStoryPool(db, storiesPoolReads(db, NOW, { readMode: async () => 'intake', legacyReads: () => marked('legacy'), intakeReads: broken }), NOW);
-  assert.deepEqual(r.intake, { md: 'error-fallback', gtn: 'intake', fvp: 'intake' });
+  assert.deepEqual(r.intake, { md: 'error-fallback', fvp: 'intake' });
 });
 
 /* ── seeds ────────────────────────────────────────────────────────── */

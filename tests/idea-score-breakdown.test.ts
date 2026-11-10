@@ -79,7 +79,6 @@ test('Morning Download: old or undated stories lose the recency points; a questi
 
 const reads = (morning: StoryCandidate[]): PoolReads => ({
   morning: async () => ({ reels: morning.filter((c) => c.origin === 'reels'), carousel: morning.filter((c) => c.origin === 'carousel') }),
-  numbers: async () => ({ numbers: [], unbriefed: [] }),
   leads: async () => [{ origin: 'catalog', ref: 'gimp', name: 'GIMP', url: 'https://gimp.org', description: 'Free image editor' }],
 });
 

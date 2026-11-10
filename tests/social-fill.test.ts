@@ -105,12 +105,12 @@ test('userPlaced counts only a person’s waiting, posting or posted slots for t
   await slot(q, { vertical: 'carousels', nyDate: TODAY, slot: 'afternoon', source: 'user', status: 'failed' });
   await slot(q, { vertical: 'carousels', nyDate: TOMORROW, slot: 'morning', source: 'user' });
   await slot(q, { vertical: 'explainers', nyDate: TODAY, slot: 'afternoon', source: 'user' });
-  await slot(q, { vertical: 'stories', nyDate: TODAY, slot: 'guess_the_number', source: 'user' });
+  await slot(q, { vertical: 'stories', nyDate: TODAY, slot: 'ai_trivia', source: 'user' });
   assert.equal(await userPlaced(q, 'carousels', TODAY), 2, 'scheduled + published; cancelled and failed never count');
   assert.equal(await userPlaced(q, 'carousels', TOMORROW), 1);
   assert.equal(await userPlaced(q, 'explainers', TODAY), 1);
   assert.equal(await userPlaced(q, 'reels', TODAY), 0);
-  assert.equal(await userPlaced(q, 'stories', TODAY, { slot: 'guess_the_number' }), 1);
+  assert.equal(await userPlaced(q, 'stories', TODAY, { slot: 'ai_trivia' }), 1);
   assert.equal(await userPlaced(q, 'stories', TODAY, { slot: 'morning_download' }), 0);
 
   const fill = await dailyFill(q, 'carousels', TODAY, 2);
@@ -630,40 +630,40 @@ async function storySet(db: Awaited<ReturnType<typeof harnessDb>>['db'], series:
 
 test('stories: a set a person approved or scheduled fills its series’ day; no auto set, one fill_reduced line', async () => {
   const { db } = await harnessDb();
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   await saveSeriesSetting(db, 'morning_download', { auto: true });
-  await storySet(db, 'guess_the_number', TODAY, 'scheduled');
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 1);
+  await storySet(db, 'ai_trivia', TODAY, 'scheduled');
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 1);
   assert.equal(await seriesDayPlaced(db, 'morning_download', TODAY), 0, 'per series');
   const { log, lines } = capture();
   const settings = await loadSettings(db);
   assert.deepEqual(await requestAutoSets(db, settings, STORIES_AT, { log }), ['morning_download']);
   assert.deepEqual(await requestAutoSets(db, settings, STORIES_AT, { log }), []);
-  assert.deepEqual(lines.map((l) => [l.message, l.fields.series, l.fields.quota, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 'guess_the_number', 1, 1, 0]], 'logged once, not every pass');
+  assert.deepEqual(lines.map((l) => [l.message, l.fields.series, l.fields.quota, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 'ai_trivia', 1, 1, 0]], 'logged once, not every pass');
   const sets = (await db.query<{ series: string; trigger: string }>(`SELECT series, trigger FROM stories.sets ORDER BY series`)).rows;
-  assert.deepEqual(sets.map((s) => [s.series, s.trigger]), [['guess_the_number', 'click'], ['morning_download', 'auto']]);
+  assert.deepEqual(sets.map((s) => [s.series, s.trigger]), [['ai_trivia', 'click'], ['morning_download', 'auto']]);
 });
 
 test('stories: a person’s slot on the spine counts; rejected, failed, skipped sets, other days and the night’s own set don’t', async () => {
   const { db } = await harnessDb();
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
-  await storySet(db, 'guess_the_number', TODAY, 'rejected');
-  await storySet(db, 'guess_the_number', TODAY, 'failed');
-  await storySet(db, 'guess_the_number', TODAY, 'skipped');
-  await storySet(db, 'guess_the_number', TOMORROW, 'approved');
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 0);
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await storySet(db, 'ai_trivia', TODAY, 'rejected');
+  await storySet(db, 'ai_trivia', TODAY, 'failed');
+  await storySet(db, 'ai_trivia', TODAY, 'skipped');
+  await storySet(db, 'ai_trivia', TOMORROW, 'approved');
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 0);
   const spine: SpineQuery = (t, p) => db.query(t, p) as ReturnType<SpineQuery>;
   await slot(spine, { vertical: 'stories', nyDate: TODAY, slot: 'morning_download', source: 'user' });
-  await slot(spine, { vertical: 'stories', nyDate: TODAY, slot: 'guess_the_number', source: 'user', status: 'cancelled' });
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 0, 'a cancelled slot never counts');
+  await slot(spine, { vertical: 'stories', nyDate: TODAY, slot: 'ai_trivia', source: 'user', status: 'cancelled' });
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 0, 'a cancelled slot never counts');
   assert.equal(await seriesDayPlaced(db, 'morning_download', TODAY), 1, 'a person’s slot for that series and day');
 
   const { log, lines } = capture();
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_AT, { log }), ['guess_the_number']);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_AT, { log }), ['ai_trivia']);
   assert.deepEqual(lines, []);
   // The night's own set, approved, holds the day as before, but it isn't a person's placement.
   await db.query(`UPDATE stories.sets SET status = 'approved' WHERE trigger = 'auto'`);
-  assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 0);
+  assert.equal(await seriesDayPlaced(db, 'ai_trivia', TODAY), 0);
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_AT, { log }), []);
   assert.deepEqual(lines, []);
 });

@@ -1,6 +1,7 @@
 /**
  * Instagram Graph calls for Stories (plan §7): image containers with
- * `media_type=STORIES`, their status, publish, and the account's publishing
+ * `media_type=STORIES` (`image_url`), video containers for AI Trivia's clips
+ * (`video_url`), their status, publish, and the account's publishing
  * quota. The transport (calls, errors, version) is the shared one
  * (lib/instagram/graph.ts, D44); this file keeps Stories' own container and
  * the shapes the Stories worker reads. Content publishing needs the user
@@ -12,6 +13,8 @@ export type ContainerState = 'FINISHED' | 'IN_PROGRESS' | 'ERROR' | 'EXPIRED' | 
 
 export interface StoriesMetaClient extends Pick<InstagramContainerOps, 'publishingLimit'> {
   createStoryContainer(imageUrl: string): Promise<string>;
+  /** A video Story (AI Trivia's 5-second MP4): `media_type=STORIES` with `video_url`. */
+  createStoryVideoContainer(videoUrl: string): Promise<string>;
   containerStatus(containerId: string): Promise<{ state: ContainerState; status: string | null }>;
   publishContainer(containerId: string): Promise<string>;
   /** Posts published through the API in the last 24 hours, and the cap (100 per Meta's docs). */
@@ -26,6 +29,11 @@ export function createStoriesMetaClient(opts: { token: string; igUserId: string;
   return {
     async createStoryContainer(imageUrl) {
       const body = await call<{ id?: string }>('POST', `/${igUserId}/media`, { media_type: 'STORIES', image_url: imageUrl });
+      if (!body.id) throw new Error('Meta created no container id.');
+      return body.id;
+    },
+    async createStoryVideoContainer(videoUrl) {
+      const body = await call<{ id?: string }>('POST', `/${igUserId}/media`, { media_type: 'STORIES', video_url: videoUrl });
       if (!body.id) throw new Error('Meta created no container id.');
       return body.id;
     },

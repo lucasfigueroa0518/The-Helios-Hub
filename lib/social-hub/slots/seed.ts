@@ -17,7 +17,7 @@ export const DEFAULT_SEED_INPUTS: SeedInputs = {
   fieldNotesDays: PLAN.field_notes[0]!.days ?? [2, 5],
   storyDays: {
     morning_download: PLAN.stories.find((w) => w.id === 'morning_download')!.days ?? EVERY_DAY,
-    guess_the_number: PLAN.stories.find((w) => w.id === 'guess_the_number')!.days ?? EVERY_DAY,
+    ai_trivia: PLAN.stories.find((w) => w.id === 'ai_trivia')!.days ?? EVERY_DAY,
     free_vs_paid: PLAN.stories.find((w) => w.id === 'free_vs_paid')!.days ?? EVERY_DAY,
   },
 };

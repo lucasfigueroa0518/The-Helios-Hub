@@ -102,7 +102,7 @@ export function morningDownloadScore(c: Pick<StoryCandidate, 'origin' | 'headlin
   };
 }
 
-/** Guess the Number and Free vs. Paid keep their source's own order: the breakdown says so. */
+/** Free vs. Paid keeps its source's own order (as Guess the Number did): the breakdown says so. */
 export function rankBreakdown(sourceLabel: string, index: number, total: number): ScoreBreakdown {
   return {
     formula: 'Rank within its own source: first is 1.00, last is near 0. Compare only within this series.',

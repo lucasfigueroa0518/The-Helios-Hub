@@ -16,6 +16,8 @@ export const SCHEMA_PATH = path.join(process.cwd(), 'db', 'stories_schema.sql');
 export const SPINE_SCHEMA_PATH = path.join(process.cwd(), 'db', 'social_hub_schema.sql');
 /** Drops the one-a-day index so a series can post twice a day (R25); run after the worker and hub deploy. */
 export const MULTI_SLOT_PATH = path.join(process.cwd(), 'db', 'stories_multi_slot.sql');
+/** AI Trivia (planning/AI Trivia/CONTRACT.md §2): the series, the content map's cells, video frames. After the spine. */
+export const AI_TRIVIA_PATH = path.join(process.cwd(), 'db', 'stories_ai_trivia.sql');
 export const DEFAULT_LOCAL_DIR = path.join(process.cwd(), '.stories-local', 'pgdata');
 
 /** A schema file minus psql meta-commands (`\set ...`), which PGlite cannot run. */
@@ -51,5 +53,6 @@ export async function openLocalStoriesDb(dataDir?: string, opts: { multiSlot?: b
   await pg.exec(schemaSql());
   if (opts.multiSlot !== false) await pg.exec(schemaSql(MULTI_SLOT_PATH));
   await pg.exec(schemaSql(SPINE_SCHEMA_PATH));
+  await pg.exec(schemaSql(AI_TRIVIA_PATH));
   return { db: pgliteDb(pg), pg };
 }

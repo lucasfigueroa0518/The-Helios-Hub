@@ -432,26 +432,26 @@ test('stories legacy: storiesSlotsOn is null and auto sets follow the series\' o
   const { db } = await harnessDb();
   const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
   assert.equal(await storiesSlotsOn(q, THU), null);
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW), ['guess_the_number']);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW), ['ai_trivia']);
 });
 
 test('stories template: a series has slots on its dates only, and auto sets follow the calendar', async () => {
   const { db } = await harnessDb();
   const q = ((t: string, p?: unknown[]) => db.query(t, p)) as never;
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
   await setSlotSource(q, 'template', 't');
   let dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
-  assert.equal(dueOn('guess_the_number', THU), true, 'seeded from the series\' own days');
+  assert.equal(dueOn('ai_trivia', THU), true, 'seeded from the series\' own days');
   assert.equal(dueOn('free_vs_paid', THU), false);
   await applySlotChanges(q, [
-    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'guess_the_number', action: 'remove', feedMode: null },
+    { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'ai_trivia', action: 'remove', feedMode: null },
     { scope: 'date', op: 'put', nyDate: THU, vertical: 'stories', startMinute: 510, series: 'free_vs_paid', action: 'add', feedMode: null },
   ], { by: 't', now: THU_NOW });
   dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
-  assert.equal(dueOn('guess_the_number', THU), false, 'removed for the day');
+  assert.equal(dueOn('ai_trivia', THU), false, 'removed for the day');
   assert.equal(dueOn('free_vs_paid', THU), true, 'added for the day');
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { slots: await storiesSlotsOn(q, THU) }), ['free_vs_paid']);
 });

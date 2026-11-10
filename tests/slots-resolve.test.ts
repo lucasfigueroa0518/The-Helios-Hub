@@ -37,8 +37,8 @@ test('overrides: remove drops, add inserts, add on a template key replaces it (s
 });
 
 test('Stories key on series too: two series at one minute, one series twice a day', () => {
-  const tpl = [T(1, 'stories', 510, null, 'morning_download'), T(1, 'stories', 510, null, 'guess_the_number')];
-  const ov = [O('2026-10-19', 'stories', 900, 'add', null, 'morning_download'), O('2026-10-19', 'stories', 510, 'remove', null, 'guess_the_number')];
+  const tpl = [T(1, 'stories', 510, null, 'morning_download'), T(1, 'stories', 510, null, 'ai_trivia')];
+  const ov = [O('2026-10-19', 'stories', 900, 'add', null, 'morning_download'), O('2026-10-19', 'stories', 510, 'remove', null, 'ai_trivia')];
   assert.deepEqual(resolveDay(tpl, ov, '2026-10-19').map((s) => `${s.series}@${s.startMinute}`), ['morning_download@510', 'morning_download@900']);
 });
 
@@ -59,7 +59,7 @@ test('validateDay: LFD and Carousels never share a day; feed_mode only on reel t
 test('seed parity: Mon 2026-10-19 resolves to exactly the default times', () => {
   const mon = resolveDay(seedTemplate(DEFAULT_SEED_INPUTS), [], '2026-10-19');
   assert.deepEqual(mon.map((s) => [s.vertical, s.startMinute, s.series, s.feedMode]), [
-    ['stories', 510, 'guess_the_number', null],
+    ['stories', 510, 'ai_trivia', null],
     ['stories', 510, 'morning_download', null],
     ['reels', 525, null, 'trial'],
     ['reels', 675, null, 'trial'],
@@ -85,7 +85,7 @@ test('seed: Tue/Fri LFD at 9 AM instead of Carousels; Stories on their days; eve
 });
 
 test('seed follows custom LFD and Stories days', () => {
-  const tpl = seedTemplate({ lfdDays: [3], storyDays: { morning_download: [1], guess_the_number: [], free_vs_paid: [0] } });
+  const tpl = seedTemplate({ lfdDays: [3], storyDays: { morning_download: [1], ai_trivia: [], free_vs_paid: [0] } });
   const wed = resolveDay(tpl, [], '2026-10-21');
   assert.ok(wed.some((s) => s.vertical === 'last_few_days'));
   assert.ok(!wed.some((s) => s.vertical === 'carousels'));

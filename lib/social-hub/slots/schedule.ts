@@ -20,7 +20,7 @@ export const SCHEDULE_ENTRIES: readonly ScheduleEntry[] = [
   { vertical: 'carousels', series: null, label: 'Carousels' },
   { vertical: 'last_few_days', series: null, label: 'Last Few Days' },
   { vertical: 'stories', series: 'morning_download', label: 'Morning Download' },
-  { vertical: 'stories', series: 'guess_the_number', label: 'Guess the Number' },
+  { vertical: 'stories', series: 'ai_trivia', label: 'AI Trivia' },
   { vertical: 'stories', series: 'free_vs_paid', label: 'Free vs. Paid' },
 ];
 

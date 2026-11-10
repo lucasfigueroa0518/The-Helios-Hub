@@ -3,7 +3,7 @@ import Link from 'next/link';
 import type { ScheduleDay } from '@/lib/content-type/posting';
 
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const SERIES_SHORT: Record<string, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
+const SERIES_SHORT: Record<string, string> = { morning_download: 'Morning Dl', ai_trivia: 'Trivia', free_vs_paid: 'Free/Paid' };
 
 /** This week's slots for one type, read only; the calendar owns when (spec §4). */
 export function ScheduleStrip({ type, days }: { type: string; days: readonly ScheduleDay[] }) {

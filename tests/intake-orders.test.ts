@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { FVP_ORDER, GTN_ORDER, INTAKE_ORDERS, LFD_ORDER, MD_ORDER, openOrders } from '@/lib/intake/orders';
+import { FVP_ORDER, INTAKE_ORDERS, LFD_ORDER, MD_ORDER, openOrders } from '@/lib/intake/orders';
 import type { IntakeQuery } from '@/lib/intake/types';
 
 type World = {
@@ -44,9 +44,10 @@ test('each order opens only from its own settings', async () => {
   assert.deepEqual(await ids({ lfdSeed: true }), ['lfd']);
   assert.deepEqual(await ids({ series: { morning_download: { auto: true } } }), ['md']);
   assert.deepEqual(await ids({ series: { morning_download: { auto: true, enabled: false } } }), []);
-  assert.deepEqual(await ids({ series: { guess_the_number: { auto: true } } }), ['gtn']);
+  // Guess the Number's order is gone with the series (AT-14); AI Trivia opens no order.
+  assert.deepEqual(await ids({ series: { guess_the_number: { auto: true } } }), []);
   assert.deepEqual(await ids({ series: { free_vs_paid: { auto: true } } }), ['fvp']);
-  assert.deepEqual(await ids({ pendingSet: 'guess_the_number' }), ['gtn']);
+  assert.deepEqual(await ids({ pendingSet: 'ai_trivia' }), []);
   assert.deepEqual(await ids({ pendingSet: 'morning_download', lfdAuto: true }), ['lfd', 'md']);
 });
 
@@ -54,7 +55,7 @@ test('isOpen reads only its own type’s tables', async () => {
   const lfd = fake({});
   await LFD_ORDER.isOpen(lfd.q, NOW);
   assert.ok(lfd.reads.every((r) => r.startsWith('lfd.')), lfd.reads.join(','));
-  for (const o of [MD_ORDER, GTN_ORDER, FVP_ORDER]) {
+  for (const o of [MD_ORDER, FVP_ORDER]) {
     const f = fake({});
     await o.isOpen(f.q, NOW);
     assert.ok(f.reads.every((r) => r.startsWith('stories.')), `${o.id}: ${f.reads.join(',')}`);
@@ -65,7 +66,6 @@ test('order definitions', () => {
   assert.deepEqual(INTAKE_ORDERS.map((o) => [o.id, o.sources, o.lookbackDays, o.scorecards]), [
     ['lfd', ['reels:*', 'feeds:*'], 10, ['reels-score', 'story-scoring', 'major-news', 'story-builder']],
     ['md', ['reels:*', 'feeds:*'], 4, ['reels-score', 'story-scoring', 'major-news', 'story-builder']],
-    ['gtn', ['reels:*', 'feeds:*'], 7, ['reels-score', 'story-scoring']],
     ['fvp', ['reels:*'], 14, ['reels-score']],
     ['reels', ['reels:*'], 14, ['reels-screen', 'reels-score']],
     ['carousel', ['feeds:*', 'reels:*'], 2, ['story-scoring']],

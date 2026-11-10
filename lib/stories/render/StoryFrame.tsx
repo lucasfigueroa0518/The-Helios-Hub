@@ -1,9 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { ArrowRight, CircleCheck } from 'lucide-react';
 
-import { CLOSER, FVP, GTN, OPENER, SERIES_LABEL } from './copy';
+import { CLOSER, FVP, OPENER, SERIES_LABEL } from './copy';
 import { fadeMask, fadeStops } from './fades';
-import { framePhoto, type AnswerData, type Backdrop, type Frame, type FreeData, type IntroData, type OpenerData, type PaidData, type Photo, type QuestionData, type SourceTag, type StoryData } from './types';
+import { framePhoto, VIDEO_SERIES, type Backdrop, type Frame, type FreeData, type OpenerData, type PaidData, type Photo, type SourceTag, type StoryData } from './types';
 
 /**
  * One Instagram Story frame, 1080×1920 (S-32). Layout rules, every template:
@@ -29,18 +29,17 @@ import { framePhoto, type AnswerData, type Backdrop, type Frame, type FreeData, 
 export function StoryFrame({ frame, logoSrc }: { frame: Frame; logoSrc: string }) {
   const { data } = frame;
   if (data.role === 'intro' && frame.series === 'morning_download') throw new Error('Morning Download has no intro frame (its opener is the intro)');
+  // AI Trivia's question and answer are videos (lib/stories/trivia/render); Guess the Number is retired (AT-14).
+  if (data.role === 'question' || data.role === 'answer' || VIDEO_SERIES.has(frame.series)) throw new Error(`a ${data.role} frame of ${frame.series} is not an image frame`);
   const photo = framePhoto(data);
-  const variant = data.role === 'question' || data.role === 'answer' ? (data.photo ? data.family : 'type') : data.role === 'story' || data.role === 'opener' ? (data.photo ? 'photo' : 'type') : 'base';
+  const variant = data.role === 'story' || data.role === 'opener' ? (data.photo ? 'photo' : 'type') : 'base';
   return (
     <div className={`st-frame st-bd-${frame.backdrop} st-role-${data.role} st-v-${variant}`} data-role={data.role} data-backdrop={frame.backdrop} data-variant={variant}>
       <div className="st-bg" data-decor="true" aria-hidden="true" />
       {data.role === 'opener' && <Opener frame={frame} data={data} logoSrc={logoSrc} />}
       {data.role === 'story' && <Story frame={frame} data={data} logoSrc={logoSrc} />}
       {data.role === 'closer' && <Closer logoSrc={logoSrc} />}
-      {data.role === 'intro' && frame.series === 'guess_the_number' && <GtnIntro frame={frame} data={data} logoSrc={logoSrc} />}
       {data.role === 'intro' && frame.series === 'free_vs_paid' && <FvpIntro frame={frame} logoSrc={logoSrc} />}
-      {data.role === 'question' && <Question frame={frame} data={data} logoSrc={logoSrc} />}
-      {data.role === 'answer' && <Answer frame={frame} data={data} logoSrc={logoSrc} />}
       {data.role === 'paid' && <Paid frame={frame} data={data} logoSrc={logoSrc} />}
       {data.role === 'free' && <Free frame={frame} data={data} logoSrc={logoSrc} />}
       {photo && <Credit text={photo.credit} />}
@@ -220,134 +219,6 @@ function Closer({ logoSrc }: { logoSrc: string }) {
       <div className="st-closer__url" data-safe="true">
         <span className="st-accent-text">{CLOSER.url}</span>
       </div>
-    </div>
-  );
-}
-
-/* ── Guess the Number: a game show in the copy (S-13, S-45) ───────── */
-
-/** "Can you guess the number?": the line that leads every question frame. */
-function Kicker() {
-  return (
-    <Fit as="h1" className="st-gtn__kicker" min={MIN.kicker}>
-      <span>{GTN.kicker[0]}</span> <span className="st-accent-text">{GTN.kicker[1]}</span>
-    </Fit>
-  );
-}
-
-/** Intro (S-49): Today's "Guess the Number", the difficulty and the topic. */
-function GtnIntro({ frame, data, logoSrc }: { frame: Frame; data: IntroData; logoSrc: string }) {
-  if (!data.difficulty || !data.topic) throw new Error('Guess the Number intro needs a difficulty and a topic');
-  return (
-    <div className="st-gtn st-gtn--intro">
-      <div className="st-glyph" data-decor="true" aria-hidden="true">
-        ?
-      </div>
-      <Masthead frame={frame} logoSrc={logoSrc} label={null} />
-      <div className="st-intro">
-        <div className="st-intro__today" data-safe="true">
-          {GTN.intro.today}
-        </div>
-        <Fit as="h1" className="st-intro__title" min={MIN.kicker}>
-          <span>“Guess the</span> <span className="st-accent-text">Number”</span>
-        </Fit>
-        <div className="st-intro__rows" data-safe="true">
-          <div className="st-intro__row">
-            <div className="st-intro__label">{GTN.intro.difficulty}</div>
-            <div className="st-intro__value st-intro__value--difficulty">{GTN.intro.levels[data.difficulty]}</div>
-          </div>
-          <div className="st-intro__row">
-            <div className="st-intro__label">{GTN.intro.topic}</div>
-            <Fit className="st-intro__value st-intro__value--topic" min={MIN.body + 6}>
-              {data.topic}
-            </Fit>
-          </div>
-        </div>
-        <Cue text={GTN.intro.cue} className="st-intro__cue" />
-      </div>
-    </div>
-  );
-}
-
-function Question({ frame, data, logoSrc }: { frame: Frame; data: QuestionData; logoSrc: string }) {
-  const family = data.photo ? data.family : 'type';
-  const challenge = (
-    <>
-      <Fit as="h2" className="st-gtn__question" min={MIN.question}>
-        {data.question}
-      </Fit>
-      <Cue text={GTN.cue} className="st-gtn__cue" />
-    </>
-  );
-  return (
-    <div className={`st-gtn st-gtn--${family} st-gtn--question`}>
-      {family === 'photo' && <Bleed photo={data.photo!} mode="top" backdrop={frame.backdrop} className="st-gtn__photo" />}
-      {family === 'marquee' && <Bleed photo={data.photo!} mode="window" backdrop={frame.backdrop} className="st-gtn__photo" />}
-      {family === 'type' && (
-        <div className="st-glyph" data-decor="true" aria-hidden="true">
-          ?
-        </div>
-      )}
-      <Masthead frame={frame} logoSrc={logoSrc} onPhoto={family === 'photo'} label={null} />
-      {family === 'marquee' ? (
-        <>
-          <div className="st-gtn__top">
-            <Kicker />
-          </div>
-          <div className="st-gtn__copy">{challenge}</div>
-        </>
-      ) : (
-        <div className="st-gtn__copy">
-          <Kicker />
-          {challenge}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Answer({ frame, data, logoSrc }: { frame: Frame; data: AnswerData; logoSrc: string }) {
-  const family = data.photo ? data.family : 'type';
-  const reveal = (
-    <>
-      <div className="st-gtn__reveal" data-safe="true">
-        {GTN.reveal}
-      </div>
-      <Fit className="st-gtn__number st-accent-text" min={MIN.number}>
-        {data.number}
-      </Fit>
-    </>
-  );
-  const rest = (
-    <>
-      <Fit as="p" className="st-gtn__label" min={MIN.body + 4}>
-        {data.label}
-      </Fit>
-      <Fit as="p" className="st-gtn__meaning" min={MIN.body}>
-        {data.meaning}
-      </Fit>
-      <Fit as="p" className="st-gtn__close" min={MIN.body}>
-        {GTN.close}
-      </Fit>
-      <Source tag={data.source} />
-    </>
-  );
-  return (
-    <div className={`st-gtn st-gtn--${family} st-gtn--answer`}>
-      {family === 'photo' && <Bleed photo={data.photo!} mode="top" backdrop={frame.backdrop} className="st-gtn__photo" />}
-      {family === 'marquee' && <Bleed photo={data.photo!} mode="window" backdrop={frame.backdrop} className="st-gtn__photo" />}
-      <Masthead frame={frame} logoSrc={logoSrc} onPhoto={family === 'photo'} label={null} />
-      {family === 'marquee' ? (
-        <>
-          <div className="st-gtn__top">{reveal}</div>
-          <div className="st-gtn__copy">{rest}</div>
-        </>
-      ) : (
-        <div className="st-gtn__copy">
-          {reveal}
-          {rest}
-        </div>
-      )}
     </div>
   );
 }

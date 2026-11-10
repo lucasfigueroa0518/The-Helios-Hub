@@ -16,7 +16,6 @@ const NOW = new Date('2026-10-09T14:00:00Z');
 const story = (slug: string): StoryCandidate => ({ key: `news.test/${slug}`, origin: 'reels', ref: slug, headline: `Headline ${slug}`, sourceName: 'News Test', url: `https://news.test/${slug}`, body: 'body', publishedAt: null, nativeScore: 1 });
 const reads = (slugs: string[]): PoolReads => ({
   morning: async () => ({ reels: slugs.map(story), carousel: [] }),
-  numbers: async () => ({ numbers: [], unbriefed: [] }),
   leads: async () => [],
 });
 

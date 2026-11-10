@@ -63,7 +63,7 @@ export function madeKind(post: HubPost): MadeKind | null {
 export const MADE_LABEL: Record<MadeKind, string> = { slides: 'Slides ready', frames: 'Stories ready', video: 'Video ready' };
 
 /** Stories series, in the order the bench and its filter list them. */
-export const STORY_SERIES = ['Morning Download', 'Guess the Number', 'Free vs. Paid'] as const;
+export const STORY_SERIES = ['Morning Download', 'AI Trivia', 'Free vs. Paid'] as const;
 
 export type TypeHubModel = {
   vertical: Vertical;

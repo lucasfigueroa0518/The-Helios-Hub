@@ -361,7 +361,7 @@ test('readConsumerSettings has seven keys; readConsumerMode is per order: its so
     JSON.stringify({ md: 'intake', reels: 'intake', carousel: 'intake', 'field-notes': 'intake' }),
   ]);
   const settings = await readConsumerSettings(q);
-  assert.deepEqual(settings, { lfd: 'legacy', md: 'intake', gtn: 'legacy', fvp: 'legacy', reels: 'intake', carousel: 'intake', 'field-notes': 'intake' });
+  assert.deepEqual(settings, { lfd: 'legacy', md: 'intake', fvp: 'legacy', reels: 'intake', carousel: 'intake', 'field-notes': 'intake' });
   await q.query(`INSERT INTO intake.runs (kind, status, started_at, record) VALUES ('main', 'ok', $1, $2::jsonb)`, [new Date(NOW.getTime() - 2 * HOUR), JSON.stringify({ orders: ['md', 'reels', 'carousel'], scored: true })]);
   assert.equal(await readConsumerMode(q, 'md', NOW), 'intake');
   assert.equal(await readConsumerMode(q, 'carousel', NOW), 'intake');
@@ -449,7 +449,7 @@ const P2: Phase2Snapshot = {
 };
 
 test('replay plan output includes the Phase 2 sections (no Jev, no HTTP)', () => {
-  const snapshot: Snapshot = { nights: [{ nyDate: '2026-11-09', runAt: NOW, items: [], legacy: { mdReels: [], mdCarousel: [], gtn: [], fvp: [], lfdReels: [], lfdCarousel: [] }, postedHeadlines: [], feedSince: NOW }], previous: [] };
+  const snapshot: Snapshot = { nights: [{ nyDate: '2026-11-09', runAt: NOW, items: [], legacy: { mdReels: [], mdCarousel: [], fvp: [], lfdReels: [], lfdCarousel: [] }, postedHeadlines: [], feedSince: NOW }], previous: [] };
   const plan = planPhase2(P2);
   assert.deepEqual([plan.carousel[0]!.articles, plan.carousel[0]!.shortlist, plan.fieldNotes[0]!.tips, plan.fieldNotes[0]!.calls], [2, 1, 2, 2]);
   const text = renderPlan(planReplay(snapshot, 0), 1, plan);

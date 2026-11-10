@@ -34,14 +34,14 @@ test('appleEmoji: an emoji with no bundled image stays as text (the font draws i
 test('every emoji in the frame copy has a bundled Apple image', () => {
   const copy = readFileSync(path.join(process.cwd(), 'lib/stories/render/copy.ts'), 'utf8');
   const found = new Set([...copy.matchAll(EMOJI_RUN)].map((m) => emojiKey(m[0])));
-  assert.ok(found.size >= 10, `found ${found.size}`);
+  assert.ok(found.size >= 4, `found ${found.size}`);
   for (const key of found) assert.ok(existsSync(emojiFile(key)), `missing lib/stories/render/assets/emoji-${key}.png`);
 });
 
 test('framesHtml: a homemade frame carries Apple emoji images, not raw emoji', async () => {
-  const frame: Frame = { series: 'guess_the_number', backdrop: 'black', style: 'homemade', index: 1, total: 3, data: { role: 'intro', difficulty: 'high', topic: 'How many people use ChatGPT' } };
+  const frame: Frame = { series: 'free_vs_paid', backdrop: 'black', style: 'homemade', index: 2, total: 3, data: { role: 'paid', tool: 'Adobe Photoshop', price: '$22.99', period: 'a month', tease: 'There’s a free editor that covers most of it.' } };
   const html = await framesHtml([frame]);
-  assert.match(html, /class="hm-emoji" src="[^"]*emoji-1f336\.png"/);
+  assert.match(html, /class="hm-emoji" src="[^"]*emoji-1f62c\.png"/);
   const body = html.slice(html.indexOf('<body>'));
   assert.equal(/>[^<]*\p{Extended_Pictographic}/u.test(body.replace(/<img[^>]*>/g, '')), false);
 });

@@ -26,7 +26,7 @@ export type ProgressItem = {
   typicalSeconds: number | null;
 };
 
-const SERIES: Record<string, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
+const SERIES: Record<string, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid', ai_trivia: 'AI Trivia' };
 
 const median = (xs: number[]): number | null => {
   const s = xs.filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);

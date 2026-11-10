@@ -10,7 +10,7 @@ import { SERIES_LABEL } from '@/lib/stories/render/copy';
 /** The week board's model (spec 2026-10-20-calendar-week-board-redesign): columns, cards, stacking, time and y. Pure. */
 
 /** Stories run three series, so each chip names its series. */
-const SERIES_SHORT: Record<keyof typeof SERIES_LABEL, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
+const SERIES_SHORT: Record<StorySeries, string> = { morning_download: 'Morning Dl', ai_trivia: 'Trivia', free_vs_paid: 'Free/Paid' };
 
 /** A chip's visible name and its full name (for the aria-label). */
 export function chipNames(vertical: Vertical, series: StorySeries | null): { short: string; full: string } {

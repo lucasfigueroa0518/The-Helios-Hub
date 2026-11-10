@@ -195,7 +195,7 @@ test('Stories bookings carry their set\'s mark: a person\'s move of an overnight
   const insert = (id: string, series: string, trigger: string) =>
     pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at, slot_minute) VALUES ($1, $2, $3, 'approved', $4, 'polished', now(), 510)`, [id, series, WED, trigger]);
   await insert(MOVED, 'morning_download', 'auto');
-  await insert(AUTO, 'guess_the_number', 'auto');
+  await insert(AUTO, 'ai_trivia', 'auto');
   await insert(CLICK, 'free_vs_paid', 'click');
   await db.transaction((tx) => scheduleSet(tx, AUTO, new Date('2026-10-21T12:30:00Z')));
   await db.transaction((tx) => scheduleSet(tx, CLICK, new Date('2026-10-21T12:30:00Z')));
@@ -204,7 +204,7 @@ test('Stories bookings carry their set\'s mark: a person\'s move of an overnight
   assert.equal(await markOf('morning_download'), 'system');
   await db.transaction((tx) => rescheduleSet(tx, MOVED, WED, new Date('2026-10-21T13:00:00Z'), 540, 'person'));
   assert.equal(await markOf('morning_download'), 'person', 'a person moved the overnight set');
-  assert.equal(await markOf('guess_the_number'), 'system', 'an untouched overnight set');
+  assert.equal(await markOf('ai_trivia'), 'system', 'an untouched overnight set');
   assert.equal(await markOf('free_vs_paid'), 'system', 'a click-made set booked into its slot: the set says system, so does its booking');
 });
 

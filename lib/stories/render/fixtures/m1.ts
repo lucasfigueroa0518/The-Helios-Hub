@@ -50,61 +50,24 @@ export const MORNING_DOWNLOAD_TYPE: FrameData[] = [
   },
 ];
 
-/** Guess the Number: intro, then question and answer, one set per family (S-13, S-49). */
-export const GUESS_THE_NUMBER: Record<'photo' | 'marquee' | 'type', [FrameData, FrameData, FrameData]> = {
-  photo: [
-    { role: 'intro', difficulty: 'medium', topic: 'How many people use ChatGPT' },
-    {
-      role: 'question',
-      family: 'photo',
-      question: 'How many people use ChatGPT every week?',
-      photo: photo('altman', 'person', { x: 0.62, y: 0.18 }),
-    },
-    {
-      role: 'answer',
-      family: 'photo',
-      number: '800M',
-      label: 'people use ChatGPT every week',
-      meaning: 'That’s about one in ten people on Earth, three years after launch.',
-      source: { verb: 'from', name: 'OpenAI' },
-      photo: photo('openai_hq', 'scene', { x: 0.45, y: 0.5 }),
-    },
-  ],
-  marquee: [
-    { role: 'intro', difficulty: 'high', topic: 'What one AI data center builder is worth' },
-    {
-      role: 'question',
-      family: 'marquee',
-      question: 'What’s AI data center builder Crusoe worth after this week’s raise?',
-      photo: photo('datacenter', 'scene', { x: 0.35, y: 0.55 }),
-    },
-    {
-      role: 'answer',
-      family: 'marquee',
-      number: '$30.9B',
-      label: 'after a $3.9 billion raise',
-      meaning: 'It tripled in 10 months, riding the rush to build AI data centers.',
-      source: { verb: 'via', name: 'TechCrunch' },
-      photo: photo('datacenter', 'scene', { x: 0.75, y: 0.5 }),
-    },
-  ],
-  type: [
-    { role: 'intro', difficulty: 'medium', topic: 'How much of its own R&D Claude now runs' },
-    {
-      role: 'question',
-      family: 'type',
-      question: 'How much of Anthropic’s own R&D is Claude now leading?',
-    },
-    {
-      role: 'answer',
-      family: 'type',
-      number: '26%',
-      label: 'of Anthropic’s R&D work is led by Claude',
-      meaning: 'More than one task in four. The AI is helping build its own successor.',
-      source: { verb: 'reported by', name: 'Bloomberg' },
-    },
-  ],
-};
+/** AI Trivia (CONTRACT §3): a medium question (3 options), then its answer. Rendered as video by lib/stories/trivia/render. */
+export const AI_TRIVIA: [FrameData, FrameData] = (() => {
+  const copy = {
+    question: 'Which company built the first chatbot to pass a million users in five days?',
+    difficulty: 'medium' as const,
+    options: [
+      { letter: 'A' as const, text: 'OpenAI' },
+      { letter: 'B' as const, text: 'Google' },
+      { letter: 'C' as const, text: 'Meta' },
+    ],
+    correct: 'A' as const,
+    answerLine: 'ChatGPT got there in five days, faster than any app before it.',
+  };
+  return [
+    { role: 'question', ...copy, photo: photo('altman', 'person', { x: 0.5, y: 0.3 }) },
+    { role: 'answer', ...copy },
+  ];
+})();
 
 export const FREE_VS_PAID: [FrameData, FrameData, FrameData] = [
   { role: 'intro' },

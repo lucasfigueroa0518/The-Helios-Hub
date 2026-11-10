@@ -95,7 +95,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
   },
   stories: {
     title: 'Stories',
-    benchNote: 'Ideas drawn from the other pools. A set is built for each series that is due. Pick a series, then hold and drag an idea to move it.',
+    benchNote: 'Ideas drawn from the other pools, and AI Trivia’s own questions. A set is built for each series that is due. Pick a series, then hold and drag an idea to move it.',
     maxCap: DEFAULT_MAX_CAP,
     queue: 'live',
     seedable: true,

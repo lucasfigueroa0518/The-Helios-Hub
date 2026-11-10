@@ -71,7 +71,7 @@ test('windowsOn follows the day\'s slot times when given, and the old windows wh
   const lfdWed = slotsFor(['2026-10-21'], [add('2026-10-21', 'last_few_days', 540)]);
   assert.deepEqual(windowsOn('last_few_days', '2026-10-21', [], lfdWed).map((w) => w.id), ['t0540']);
   const stories = windowsOn('stories', '2026-10-22', [], slotsFor(['2026-10-22'], [add('2026-10-22', 'stories', 900, null, 'morning_download')]));
-  assert.deepEqual(stories.map((w) => [w.id, w.label]), [['t0510:guess_the_number', 'Guess the Number'], ['t0510:morning_download', 'Morning Download'], ['t0900:morning_download', 'Morning Download']]);
+  assert.deepEqual(stories.map((w) => [w.id, w.label]), [['t0510:ai_trivia', 'AI Trivia'], ['t0510:morning_download', 'Morning Download'], ['t0900:morning_download', 'Morning Download']]);
   assert.deepEqual(capacityWindows('carousels', '2026-10-21', [3], 1, '2026-10-20', slots).map((w) => w.id), ['t0870']);
 });
 
@@ -310,7 +310,7 @@ test('template: openSlots lists the day\'s slot times, free or taken', async () 
   const md = await planPlacement(q, { vertical: 'stories', nyDate: WED, slot: 'morning_download', now: NOW });
   assert.ok(md.ok);
   assert.equal(md.slot, 't0510:morning_download');
-  const gtn = await planPlacement(q, { vertical: 'stories', nyDate: WED, slot: 'guess_the_number', now: NOW });
+  const gtn = await planPlacement(q, { vertical: 'stories', nyDate: WED, slot: 'ai_trivia', now: NOW });
   assert.equal(gtn.ok, false);
   assert.match((gtn as { note: string }).note, /Add it on the calendar first/);
 });
@@ -432,7 +432,7 @@ test('readPosting carries this week\'s schedule in template mode, and null in le
   assert.deepEqual([reels[0]!.count, reels[0]!.trial, reels[0]!.main], [3, 3, 0]);
   const stories = (await readPosting('stories')).schedule!;
   const monday = stories[0]!;
-  assert.deepEqual(monday.series, ['guess_the_number', 'morning_download'], 'in slot order');
+  assert.deepEqual(monday.series, ['ai_trivia', 'morning_download'], 'in slot order');
   assert.equal(stories.some((d) => d.override), false);
   // The cost line's input: the route works it out from the hub's posts (costPerPost); readPosting leaves it null.
   const explainer = { vertical: 'explainers', nyDate: null, generatedAt: new Date().toISOString(), costMicros: 300_000, costItemKey: 'x' } as HubPost;

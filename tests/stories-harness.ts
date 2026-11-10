@@ -109,3 +109,35 @@ export async function stubRenderer(): Promise<Renderer & { renders: number }> {
   };
   return r;
 }
+
+/** AI Trivia's two frames as a stubbed builder returns them (CONTRACT §3 copy on both; the question has a person photo). */
+export function triviaFrames(cellId = 't01a01') {
+  const copy = {
+    question: 'Which lab released the first public chatbot to reach a million users in five days?',
+    difficulty: 'medium' as const,
+    options: [{ letter: 'A' as const, text: 'OpenAI' }, { letter: 'B' as const, text: 'Google' }, { letter: 'C' as const, text: 'Meta' }],
+    correct: 'A' as const,
+    answerLine: 'ChatGPT got there in five days, faster than any app before it.',
+  };
+  const photo = { src: 'https://img.test/q.jpg', credit: 'Photo: c', kind: 'person' as const };
+  return {
+    frames: [
+      { seq: 1, role: 'question' as const, backdrop: 'black' as const, copy: { role: 'question' as const, ...copy, photo }, photo },
+      { seq: 2, role: 'answer' as const, backdrop: 'black' as const, copy: { role: 'answer' as const, ...copy } },
+    ],
+    payload: { trivia: { q: { cellId, ...copy }, music: { trackId: 'trk-1', url: 'https://music.test/1.mp3', bpm: 96, beatMs: [0, 625], startMs: 0 } }, cellId },
+    historyKeys: [`trivia:${cellId}`],
+  };
+}
+
+/** A clip renderer stub (renderTriviaClips' shape): a tiny MP4 stand-in and a real tiny poster JPEG per frame. */
+export async function stubTriviaClips(): Promise<((frames: Array<{ data: { role: string } }>, music: unknown) => Promise<{ clips: Array<{ role: string; mp4: Buffer; poster: Buffer }> }>) & { calls: Array<{ roles: string[]; music: unknown }> }> {
+  const sharp = (await import('sharp')).default;
+  const poster = await sharp({ create: { width: 108, height: 192, channels: 3, background: '#111' } }).jpeg().toBuffer();
+  const calls: Array<{ roles: string[]; music: unknown }> = [];
+  const fn = async (frames: Array<{ data: { role: string } }>, music: unknown) => {
+    calls.push({ roles: frames.map((f) => f.data.role), music });
+    return { clips: frames.map((f) => ({ role: f.data.role, mp4: Buffer.from(`mp4:${f.data.role}`), poster })) };
+  };
+  return Object.assign(fn, { calls });
+}

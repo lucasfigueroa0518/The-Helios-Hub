@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { FVP_ORDER, GTN_ORDER, LFD_ORDER, MD_ORDER } from '@/lib/intake/orders';
+import { CAROUSEL_ORDER, FVP_ORDER, LFD_ORDER, MD_ORDER } from '@/lib/intake/orders';
 import { listStories } from '@/lib/intake/read';
 import { memberHash, orderCovers, scoreForStories } from '@/lib/intake/score';
 import { INTAKE_SCORECARDS } from '@/lib/intake/scorecards';
@@ -81,10 +81,10 @@ test('only open orders that cover a member choose scorecards; an empty family su
   // FvP covers only reels adapters: a feeds-only story is not scored at all.
   const none = await scoreForStories(q, noJev, [s], [FVP_ORDER], [reelsScore.c, storyScoring.c]);
   assert.equal(none['reels-score'].scored + none['story-scoring'].scored, 0);
-  // GTN covers feeds: story-scoring runs; reels-score has no reels/search members → no row.
-  const gtn = await scoreForStories(q, noJev, [s], [GTN_ORDER], [reelsScore.c, storyScoring.c]);
-  assert.equal(gtn['story-scoring'].scored, 1);
-  assert.equal(gtn['reels-score'].scored, 0);
+  // Carousels cover feeds with story-scoring only: story-scoring runs; reels-score is not its scorecard → no row.
+  const carousel = await scoreForStories(q, noJev, [s], [CAROUSEL_ORDER], [reelsScore.c, storyScoring.c]);
+  assert.equal(carousel['story-scoring'].scored, 1);
+  assert.equal(carousel['reels-score'].scored, 0);
   assert.equal(reelsScore.seen.length, 0);
   // No open order: nothing.
   const closed = await scoreForStories(q, noJev, [s], [], [reelsScore.c, storyScoring.c]);

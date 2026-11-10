@@ -122,9 +122,9 @@ const named = (windows: ReadonlyArray<PostingWindow>, names: Record<string, stri
  * reach). tests/social-hub-placement.test.ts pins the copy to the original;
  * a stories.settings `series` row overrides it, as in loadSettings.
  */
-export const STORY_WINDOW_DEFAULTS: Record<keyof typeof SERIES_LABEL, { start: string; end: string; days: number[] }> = {
+export const STORY_WINDOW_DEFAULTS: Record<StorySeries, { start: string; end: string; days: number[] }> = {
   morning_download: { start: '08:30', end: '10:00', days: [0, 1, 2, 3, 4, 5, 6] },
-  guess_the_number: { start: '08:30', end: '10:00', days: [1, 4] },
+  ai_trivia: { start: '08:30', end: '10:00', days: [0, 1, 4] },
   free_vs_paid: { start: '08:30', end: '10:00', days: [2, 6] },
 };
 

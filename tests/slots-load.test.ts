@@ -36,7 +36,7 @@ test('readTemplate and readOverrides read start minutes and Stories series', asy
   const { pg, q } = await db('template');
   const monday = (await readTemplate(q)).filter((r) => r.weekday === 1);
   assert.deepEqual(monday.filter((r) => r.vertical === 'explainers').map((r) => [r.startMinute, r.series, r.feedMode]), [[780, null, 'main'], [930, null, 'main']]);
-  assert.deepEqual(monday.filter((r) => r.vertical === 'stories').map((r) => [r.startMinute, r.series]).sort(), [[510, 'guess_the_number'], [510, 'morning_download']]);
+  assert.deepEqual(monday.filter((r) => r.vertical === 'stories').map((r) => [r.startMinute, r.series]).sort(), [[510, 'ai_trivia'], [510, 'morning_download']]);
   await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode) VALUES ('2026-10-20', 'stories', 900, 'morning_download', 'add', NULL)`);
   assert.deepEqual(await readOverrides(q, '2026-10-20', '2026-10-20'), [{ nyDate: '2026-10-20', vertical: 'stories', startMinute: 900, series: 'morning_download', action: 'add', feedMode: null, setBy: 'system' }]);
   assert.deepEqual(await readOverrides(q, '2026-10-21', '2026-10-30'), []);
@@ -74,7 +74,7 @@ test('readSeedInputs reads LFD and Stories days, defaults on missing rows', asyn
   const got = await readSeedInputs(q);
   assert.deepEqual(got.lfdDays, [3]);
   assert.deepEqual(got.storyDays.free_vs_paid, [0]);
-  assert.deepEqual(got.storyDays.guess_the_number, DEFAULT_SEED_INPUTS.storyDays.guess_the_number);
+  assert.deepEqual(got.storyDays.ai_trivia, DEFAULT_SEED_INPUTS.storyDays.ai_trivia);
 });
 
 test('quotaFromSlots: null while legacy; template gives min(count, cap), following daily_caps', async () => {

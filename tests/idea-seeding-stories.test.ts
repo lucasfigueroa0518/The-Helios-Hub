@@ -13,24 +13,25 @@ import { MAX_OPEN_SEEDS, isSeedKey, seedIdea, seedItem } from '@/lib/stories/see
 import { harnessDb } from './stories-harness';
 
 const NOW = new Date('2026-10-09T14:00:00Z');
-const empty: PoolReads = { morning: async () => ({ reels: [], carousel: [] }), numbers: async () => ({ numbers: [], unbriefed: [] }), leads: async () => [] };
+const empty: PoolReads = { morning: async () => ({ reels: [], carousel: [] }), leads: async () => [] };
 const refused = (fn: () => unknown, status: number, match: RegExp) => assert.throws(fn, (e: unknown) => e instanceof ApiError && e.status === status && match.test(e.message));
 
 test('each series validates what it needs and says what is missing', () => {
   refused(() => seedItem({ series: 'nope' }, NOW), 400, /series/);
   refused(() => seedItem({ series: 'morning_download', headline: '  ' }, NOW), 400, /headline/);
   refused(() => seedItem({ series: 'morning_download', headline: 'A story', url: 'ftp://x' }, NOW), 400, /http/);
-  refused(() => seedItem({ series: 'guess_the_number', value: '$3.9B' }, NOW), 400, /number and what it counts/);
+  // Guess the Number is retired (AT-14); AI Trivia writes its own questions.
+  refused(() => seedItem({ series: 'guess_the_number', value: '$3.9B', fact: 'x' }, NOW), 400, /series/);
+  refused(() => seedItem({ series: 'ai_trivia', question: 'Q?' }, NOW), 400, /no seeds/);
   refused(() => seedItem({ series: 'free_vs_paid', toolName: 'GIMP' }, NOW), 400, /link/);
 });
 
-test('a story seed is scored on the news scale, a number or tool ranks mid-pool; all are keyed as seeds', () => {
+test('a story seed is scored on the news scale, a tool ranks mid-pool; all are keyed as seeds', () => {
   const story = seedItem({ series: 'morning_download', headline: 'OpenAI launches a new model', notes: 'It is faster.' }, NOW, 'a');
   assert.equal(story.key, 'seed:a');
   assert.ok(isSeedKey(story.key));
   assert.ok((story.score ?? 0) > 0, 'a news-kind headline scores like any story');
   assert.equal(story.payload.kind === 'story' && story.payload.story.body, 'It is faster.');
-  assert.equal(seedItem({ series: 'guess_the_number', value: '$3.9B', fact: 'raised for AI data centers' }, NOW, 'b').score, 0.5);
   const tool = seedItem({ series: 'free_vs_paid', toolName: 'GIMP', url: 'https://gimp.org', description: 'Free image editor' }, NOW, 'c');
   assert.equal(tool.score, 0.5);
   assert.equal(tool.payload.kind === 'lead' && tool.payload.lead.name, 'GIMP');
@@ -39,10 +40,8 @@ test('a story seed is scored on the news scale, a number or tool ranks mid-pool;
 test('a seed enters its series’ open pool and the build’s lists, with no model call', async () => {
   const { db } = await harnessDb();
   await seedIdea(db, { series: 'morning_download', headline: 'Anthropic ships a model', url: 'https://x.test/a' }, NOW);
-  await seedIdea(db, { series: 'guess_the_number', value: '42%', fact: 'of teams use agents' }, NOW);
   await seedIdea(db, { series: 'free_vs_paid', toolName: 'GIMP', url: 'https://gimp.org' }, NOW);
   assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.headline), ['Anthropic ships a model']);
-  assert.deepEqual((await openPool(db, 'guess_the_number')).numbers.map((n) => n.value), ['42%']);
   assert.deepEqual((await openPool(db, 'free_vs_paid')).leads.map((l) => l.name), ['GIMP']);
 });
 
@@ -70,7 +69,7 @@ test('a series holds only so many seeds; the next is refused plainly, another se
   const { db } = await harnessDb();
   for (let i = 0; i < MAX_OPEN_SEEDS; i++) await seedIdea(db, { series: 'morning_download', headline: `Story ${i}` }, NOW);
   await assert.rejects(() => seedIdea(db, { series: 'morning_download', headline: 'One too many' }, NOW), (e: unknown) => e instanceof ApiError && e.status === 409 && /make or archive one/.test(e.message));
-  await seedIdea(db, { series: 'guess_the_number', value: '1', fact: 'a thing' }, NOW);
+  await seedIdea(db, { series: 'free_vs_paid', toolName: 'GIMP', url: 'https://gimp.org' }, NOW);
 });
 
 test('archiving a seed frees its place, so the cap never locks a series for good', async () => {

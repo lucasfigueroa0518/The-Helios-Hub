@@ -1,5 +1,5 @@
 /**
- * The IG Stories pool (Morning Download, Guess the Number, Free vs. Paid) read
+ * The IG Stories pool (Morning Download, Free vs. Paid) read
  * from the central intake instead of the reels slate and the carousel run
  * (Phase 1, round 4: the three series no longer depend on Reels or Carousels
  * having run). Same shapes and the same selection rules as the legacy reads in
@@ -12,9 +12,6 @@
  *   morning().carousel  ↔ morningDownloadCarousel: story-scoring 'qualified', touched in
  *                         the last 30 h, minus what the per-order posted check flags
  *                         against the carousel's posted list; shortlist order first
- *   numbers()           numbers: [] (GTN no longer reads carousel brief numbers, round 4 Q3);
- *                         unbriefed ↔ the carousel shortlist per day (rankQualified +
- *                         spreadByCompany, top SHORTLIST_MAX) over 7 days + theNumberIdeas
  *   leads()             ↔ freeToolLeads: Ball Knowledge (14 days) + GitHub Trending items
  *                         (a bounded read of that source's items, no drop filter, as legacy)
  *   carouselRunAt()     the last successful intake run's start: a newer run refreshes the pool again
@@ -25,10 +22,9 @@
  */
 import * as Scoring from '@/lib/social/jev/questions/story-scoring.v4';
 import type { ScoredGroup } from '@/lib/social/ingest/select/types';
-import { rankQualified, SHORTLIST_MAX, spreadByCompany } from '@/lib/social/ingest/select/rank';
+import { rankQualified, spreadByCompany } from '@/lib/social/ingest/select/rank';
 import type { PoolReads } from '@/lib/stories/pool';
-import type { NumberCandidate } from '@/lib/stories/sources/carousel';
-import { dedupe, MD_REELS_TOP, NOT_NEWS_BUCKETS, storyKey, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
+import { MD_REELS_TOP, NOT_NEWS_BUCKETS, storyKey, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
 
 import { postedCheck as livePostedCheck, readCarouselPosted as liveReadCarouselPosted } from './posted';
 import { lastRuns as liveLastRuns, listSourceItems as liveListSourceItems, listStories as liveListStories } from './read';
@@ -38,10 +34,8 @@ import type { IntakeItem, IntakeJev, IntakeQuery, LastRuns, ListStories, PostedC
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
-/** Legacy windows (lib/stories/sources): carousel runs of the last 30 h; shortlist and The Number 7 days; Free vs. Paid 14 days. */
+/** Legacy windows (lib/stories/sources): carousel runs of the last 30 h; Free vs. Paid 14 days. */
 export const MD_CAROUSEL_HOURS = 30;
-export const GTN_DAYS = 7;
-export const THE_NUMBER_LIMIT = 20;
 export const FVP_DAYS = 14;
 export const FVP_LIMIT = 15;
 export const GITHUB_TRENDING = 'github-trending';
@@ -131,17 +125,11 @@ export function selectMorningReels(stories: readonly ScoredStory[], timelyFrom: 
   return [...top, ...extra].map(reelsCandidate).filter((c): c is StoryCandidate => c !== null);
 }
 
-/** A reels bucket over a window, newest day first and then by net (theNumberIdeas, freeToolLeads order). */
+/** A reels bucket over a window, newest day first and then by net (freeToolLeads order). */
 function bucketed(stories: readonly ScoredStory[], bucket: string, since: Date): ScoredStory[] {
   return stories
     .filter((s) => s.scores['reels-score']?.chosenBucket === bucket && s.lastJoinedAt.getTime() >= since.getTime())
     .sort((a, b) => nyDate(b.lastJoinedAt).localeCompare(nyDate(a.lastJoinedAt)) || byNetDesc(a, b));
-}
-
-/** theNumberIdeas: The Number ideas of the last 7 days, newest day first then by net, at most 20, one per key. */
-export function selectTheNumber(stories: readonly ScoredStory[], now: Date): StoryCandidate[] {
-  const rows = bucketed(stories, 'the_number', new Date(now.getTime() - GTN_DAYS * DAY)).slice(0, THE_NUMBER_LIMIT);
-  return dedupe(rows.map(reelsCandidate).filter((c): c is StoryCandidate => c !== null));
 }
 
 /** freeToolLeads: Ball Knowledge ideas of the last 14 days (15), then GitHub Trending items of the last 14 days (15), newest first. */
@@ -217,25 +205,6 @@ export function selectMorningCarousel(stories: readonly ScoredStory[], posted: R
   return rankCarousel(fresh.filter((s) => !posted.has(s.id))).map((g) => carouselCandidate(g, photos));
 }
 
-/**
- * The carousel shortlists of the last 7 days (shortlistWithoutBrief, without the "never became a post" rule: GTN now
- * extracts its own number from every shortlisted story, round 4 Q3). One shortlist per New York day of the story's
- * last join, as the carousel makes one per run: ranked, spread, top SHORTLIST_MAX. Newest day first.
- */
-export function selectShortlist(stories: readonly ScoredStory[], now: Date): StoryCandidate[] {
-  const since = now.getTime() - GTN_DAYS * DAY;
-  const byDay = new Map<string, ScoredStory[]>();
-  for (const s of stories) {
-    if (s.lastJoinedAt.getTime() < since) continue;
-    const day = nyDate(s.lastJoinedAt);
-    byDay.set(day, [...(byDay.get(day) ?? []), s]);
-  }
-  return [...byDay.keys()]
-    .sort()
-    .reverse()
-    .flatMap((day) => rankCarousel(byDay.get(day)!).slice(0, SHORTLIST_MAX).map((g) => carouselCandidate(g)));
-}
-
 /* ── the reads ────────────────────────────────────────────────────────── */
 
 export function intakePoolReads(q: IntakeQuery, now: Date, deps: IntakePoolDeps = {}): PoolReads {
@@ -265,14 +234,6 @@ export function intakePoolReads(q: IntakeQuery, now: Date, deps: IntakePoolDeps 
       const posted = headlines.length ? await check(qualified, headlines, jev()) : new Set<string>();
       const photos = qualified.length && deps.carouselPhotos ? await deps.carouselPhotos().catch(() => undefined) : undefined;
       return { reels: timelyFrom ? selectMorningReels(reelsSide, timelyFrom) : [], carousel: selectMorningCarousel(qualified, posted, now, photos) };
-    },
-    numbers: async () => {
-      const [carouselSide, reelsSide] = await Promise.all([
-        list(q, { since: daysAgo(GTN_DAYS), families: ['feeds'], needScores: ['story-scoring'] }),
-        list(q, { since: daysAgo(GTN_DAYS), needScores: ['reels-score'] }),
-      ]);
-      const numbers: NumberCandidate[] = [];
-      return { numbers, unbriefed: dedupe([...selectShortlist(carouselSide, now), ...selectTheNumber(reelsSide, now)]) };
     },
     leads: async () => {
       const [ideas, trending] = await Promise.all([

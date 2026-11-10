@@ -72,8 +72,8 @@ import type { FetchBody } from '@/lib/social/ingest/select/enrich';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { chooseLeads, leadFor as mdLeadFor } from '@/lib/stories/build/morning-download';
 import { BUILDER_BAR, leadOf } from '@/lib/stories/scores';
-import { morningDownloadCarousel, shortlistWithoutBrief } from '@/lib/stories/sources/carousel';
-import { dedupe, freeToolLeads, morningDownloadReels, theNumberIdeas, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
+import { morningDownloadCarousel } from '@/lib/stories/sources/carousel';
+import { dedupe, freeToolLeads, morningDownloadReels, type StoryCandidate, type ToolLead } from '@/lib/stories/sources/reels';
 
 /* ── constants and estimates ──────────────────────────────────────────── */
 
@@ -129,7 +129,6 @@ export type LegacyCand = { key: string; headline: string };
 export type LegacyLists = {
   mdReels: LegacyCand[];
   mdCarousel: LegacyCand[];
-  gtn: LegacyCand[];
   fvp: LegacyCand[];
   lfdReels: LegacyCand[];
   lfdCarousel: LegacyCand[];
@@ -248,8 +247,6 @@ export async function loadSnapshot(db: IntakeQuery, nights: string[]): Promise<S
     // One client, one transaction: the reads run one after another.
     const mdReels = await morningDownloadReels(db, nyDate);
     const mdCarousel = await morningDownloadCarousel(db, evalNow);
-    const shortlist = await shortlistWithoutBrief(db, evalNow);
-    const theNumber = await theNumberIdeas(db, nyDate);
     const fvp = await legacyFvpLeads(db, nyDate, evalNow);
     const lfdReels = await reelsLane(hub, w);
     const lfdCarousel = await carouselLane(hub, windowStart, lfdNow.toISOString());
@@ -262,7 +259,6 @@ export async function loadSnapshot(db: IntakeQuery, nights: string[]): Promise<S
       legacy: {
         mdReels: mdReels.map(fromStory),
         mdCarousel: mdCarousel.map(fromStory),
-        gtn: dedupe([...shortlist, ...theNumber]).map(fromStory),
         fvp: fvp.map(fromLead),
         lfdReels: lfdReels.map(fromLfd),
         lfdCarousel: lfdCarousel.map(fromLfd),
@@ -491,7 +487,6 @@ export function compareLists(legacy: readonly LegacyCand[], intake: readonly Int
 export const CONSUMERS = [
   ['mdReels', 'Morning Download, reels side'],
   ['mdCarousel', 'Morning Download, carousel side'],
-  ['gtn', 'Guess the Number (shortlist + The Number)'],
   ['fvp', 'Free vs. Paid leads'],
   ['lfdReels', 'Last Few Days, reels lane'],
   ['lfdCarousel', 'Last Few Days, carousel lane'],
@@ -780,7 +775,6 @@ async function compareNight(
   const posted = async () => night.postedHeadlines;
   const reads = intakePoolReads(q, evalNow, { jev, readCarouselPosted: posted });
   const morning = await reads.morning();
-  const numbers = await reads.numbers();
   const leads = await reads.leads();
   const lanes = await intakeLanes(q, w, lfdNow, jev, { listStories, postedCheck, readCarouselPosted: posted });
 
@@ -793,7 +787,6 @@ async function compareNight(
 
   out.comparisons.mdReels = cmp(night.legacy.mdReels, morning.reels.map(story), evalNow);
   out.comparisons.mdCarousel = cmp(night.legacy.mdCarousel, morning.carousel.map(story), evalNow);
-  out.comparisons.gtn = cmp(night.legacy.gtn, numbers.unbriefed.map(story), evalNow);
   out.comparisons.fvp = cmp(night.legacy.fvp, leads.map(fromIntakeLead(index)), evalNow);
   out.comparisons.lfdReels = cmp(night.legacy.lfdReels, lanes.reels.map(lfd), lfdNow);
   out.comparisons.lfdCarousel = cmp(night.legacy.lfdCarousel, lanes.carousel.map(lfd), lfdNow);

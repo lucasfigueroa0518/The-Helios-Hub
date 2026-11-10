@@ -42,7 +42,7 @@ export const PLAN: Record<Vertical, readonly PlanWindow[]> = {
   reel_ai_drama: [{ id: 'evening', label: 'Evening', startMinute: 20 * 60, endMinute: 20 * 60 + 45 }],
   stories: [
     { id: 'morning_download', label: 'Morning Download', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: EVERY_DAY },
-    { id: 'guess_the_number', label: 'Guess the Number', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [1, 4] },
+    { id: 'ai_trivia', label: 'AI Trivia', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [0, 1, 4] },
     { id: 'free_vs_paid', label: 'Free vs. Paid', startMinute: 8 * 60 + 30, endMinute: 10 * 60, days: [2, 6] },
   ],
 };

@@ -330,16 +330,16 @@ test('Stories: stories.sets moves (day and minute) and the spine is re-projected
 
 test('Stories: their series days and slot, and never a set that is posting', async () => {
   const { pg, q } = await spineDb();
-  await pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at) VALUES ($1, 'guess_the_number', '2026-10-12', 'approved', 'click', 'polished', now())`, [SET]);
+  await pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at) VALUES ($1, 'ai_trivia', '2026-10-12', 'approved', 'click', 'polished', now())`, [SET]);
   const act = stories(pg, q);
-  // Guess the Number posts Mondays and Thursdays; 2026-10-09 is a Friday.
-  assert.equal((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-09', slot: 'guess_the_number' })).note, 'Guess the Number doesn’t post on Fridays (it posts Mon, Thu).');
+  // AI Trivia posts Mondays and Thursdays; 2026-10-09 is a Friday.
+  assert.equal((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-09', slot: 'ai_trivia' })).note, 'AI Trivia doesn’t post on Fridays (it posts Sun, Mon, Thu).');
   assert.match((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-12', slot: 'morning_download' })).note, /posts only in its own slot/);
-  assert.ok((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-12', slot: 'guess_the_number' })).ok);
+  assert.ok((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-12', slot: 'ai_trivia' })).ok);
   await pg.query(`UPDATE stories.sets SET status = 'publishing' WHERE id = $1`, [SET]);
-  assert.equal((await act.reschedule!({ setId: SET }, 'tommy', { nyDate: '2026-10-15', slot: 'guess_the_number' })).note, 'It is posting or has posted, so it can’t move.');
+  assert.equal((await act.reschedule!({ setId: SET }, 'tommy', { nyDate: '2026-10-15', slot: 'ai_trivia' })).note, 'It is posting or has posted, so it can’t move.');
   const slots = await openSlots(q, 'stories', '2026-10-09', { now: NOW });
-  assert.deepEqual(slots.map((x) => [x.slot, x.state]), [['morning_download', 'free'], ['guess_the_number', 'off'], ['free_vs_paid', 'off']]);
+  assert.deepEqual(slots.map((x) => [x.slot, x.state]), [['morning_download', 'free'], ['ai_trivia', 'off'], ['free_vs_paid', 'off']]);
 });
 
 test('the Stories window copy matches lib/stories/settings.ts', () => {

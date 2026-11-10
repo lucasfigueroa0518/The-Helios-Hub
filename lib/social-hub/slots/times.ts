@@ -79,7 +79,7 @@ export const TYPE_NAME: Record<Vertical, { one: string; many: string }> = {
 
 export const SERIES_NAME: Record<StorySeries, { one: string; many: string }> = {
   morning_download: { one: 'Morning Download', many: 'Morning Downloads' },
-  guess_the_number: { one: 'Guess the Number', many: 'Guess the Number sets' },
+  ai_trivia: { one: 'AI Trivia', many: 'AI Trivia sets' },
   free_vs_paid: { one: 'Free vs. Paid', many: 'Free vs. Paid sets' },
 };
 

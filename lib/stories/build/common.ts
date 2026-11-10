@@ -9,7 +9,6 @@ import type { OpenPool } from '@/lib/stories/pool';
 import { BACKDROPS, type Backdrop, type FrameData, type Photo, type Series } from '@/lib/stories/render/types';
 import { recentKeys, sameDayKeys, type NewCandidate, type NewFrame } from '@/lib/stories/repository';
 import type { StoriesSettings } from '@/lib/stories/settings';
-import type { SourcePage } from '@/lib/stories/source-page';
 import type { WriterCreate } from '@/lib/stories/writer';
 
 export type BuildDeps = {
@@ -27,8 +26,6 @@ export type BuildDeps = {
   pool?: OpenPool | null;
   /** The series reads the central intake (consumer switch 'intake'): Morning Download ranks by the stored scores and the lead queue. */
   intake?: boolean;
-  /** Reads a cited page (Guess the Number gates). Defaults to readSourcePage; tests stub it by URL. */
-  readSource?: (url: string, figure?: string) => Promise<SourcePage>;
 };
 
 /**

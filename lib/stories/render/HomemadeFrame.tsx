@@ -2,11 +2,11 @@ import type { CSSProperties, ReactNode } from 'react';
 
 import { FVP, HOMEMADE } from './copy';
 import { arrowPaths, seedOf, strikePath } from './pen';
-import { framePhoto, type AnswerData, type Backdrop, type Frame, type FreeData, type IntroData, type PaidData, type Photo, type QuestionData } from './types';
+import { framePhoto, type Backdrop, type Frame, type FreeData, type PaidData, type Photo } from './types';
 
 /**
- * The homemade style (S-53, exploration): Guess the Number and Free vs. Paid
- * as if someone built them in Instagram's own story editor on their phone.
+ * The homemade style (S-53, exploration): Free vs. Paid
+ * as if someone built it in Instagram's own story editor on their phone.
  *
  *   - Instagram's Classic text (Inter Medium, the stand-in Trial Reels uses
  *     for San Francisco), sentence case, emoji.
@@ -22,18 +22,14 @@ import { framePhoto, type AnswerData, type Backdrop, type Frame, type FreeData, 
  */
 export function HomemadeFrame({ frame }: { frame: Frame }) {
   const { data } = frame;
+  // Guess the Number (the other homemade series) is retired (AT-14); AI Trivia's frames are videos.
+  if (data.role === 'question' || data.role === 'answer') throw new Error(`a ${data.role} frame has no homemade layout`);
   const photo = framePhoto(data);
-  const fullPhoto = (data.role === 'question' || data.role === 'answer') && data.family === 'photo' && data.photo;
-  const t = tones(frame.backdrop, Boolean(fullPhoto));
+  const t = tones(frame.backdrop, false);
   return (
     <div className={`hm-frame hm-bd-${frame.backdrop} hm-role-${data.role}`} data-role={data.role} data-backdrop={frame.backdrop} data-style="homemade">
       <div className="hm-fill" data-decor="true" aria-hidden="true" />
-      {fullPhoto && <img className="hm-photo-bg" src={fullPhoto.src} alt="" style={objectPosition(fullPhoto)} data-boxed-only="true" data-decor="true" />}
-      {fullPhoto && <div className="hm-photo-shade" data-decor="true" aria-hidden="true" />}
-      {data.role === 'intro' && frame.series === 'guess_the_number' && <GtnIntro data={data} t={t} />}
       {data.role === 'intro' && frame.series === 'free_vs_paid' && <FvpIntro t={t} backdrop={frame.backdrop} />}
-      {data.role === 'question' && <Question data={data} t={t} />}
-      {data.role === 'answer' && <Answer data={data} t={t} backdrop={frame.backdrop} />}
       {data.role === 'paid' && <Paid data={data} t={t} backdrop={frame.backdrop} />}
       {data.role === 'free' && <Free data={data} t={t} backdrop={frame.backdrop} />}
       {photo && <Credit text={photo.credit} t={t} />}
@@ -138,115 +134,6 @@ function Struck({ text, box, size, color, tilt = 0 }: { text: string; box: Box; 
       <svg className="hm-pen hm-strike" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true" preserveAspectRatio="none">
         <path d={strikePath(w, h, seedOf(text))} stroke={color} />
       </svg>
-    </div>
-  );
-}
-
-/* ── Guess the Number ─────────────────────────────────────────────── */
-
-function GtnIntro({ data, t }: { data: IntroData; t: Tones }) {
-  if (!data.difficulty || !data.topic) throw new Error('Guess the Number intro needs a difficulty and a topic');
-  return (
-    <div className="hm-stack hm-stack--center">
-      <Line box={t.plain} size={76} tilt={-4} align="left" shift={30}>
-        {HOMEMADE.gtn.today}
-      </Line>
-      <Line box={t.emph} size={132} tilt={-2} maxH={380}>
-        {HOMEMADE.gtn.title}
-      </Line>
-      <div className="hm-gap" />
-      <Line box={t.plain} size={68} tilt={1.5}>
-        {HOMEMADE.gtn.difficulty}: {data.difficulty[0]!.toUpperCase() + data.difficulty.slice(1)}{'\u00A0'}{HOMEMADE.gtn.spice[data.difficulty]}
-      </Line>
-      <Line box={t.plain} size={64} tilt={-1} maxH={280}>
-        {HOMEMADE.gtn.topic}: {data.topic}
-      </Line>
-      <div className="hm-gap hm-gap--big" />
-      <Cue text={HOMEMADE.gtn.play} t={t} />
-    </div>
-  );
-}
-
-function Question({ data, t }: { data: QuestionData; t: Tones }) {
-  const family = data.photo ? data.family : 'type';
-  if (family === 'photo') {
-    return (
-      <div className="hm-stack hm-stack--bottom">
-        <Line box={t.emph} size={92} tilt={-2.5} maxH={250}>
-          {HOMEMADE.gtn.kicker}
-        </Line>
-        <Line box={t.soft} size={52} tilt={0.5} maxH={200}>
-          {data.question}
-        </Line>
-        <Cue text={HOMEMADE.gtn.cue} t={t} />
-      </div>
-    );
-  }
-  if (family === 'marquee') {
-    return (
-      <div className="hm-stack hm-stack--center">
-        <Line box={t.emph} size={92} tilt={-2.5} maxH={250}>
-          {HOMEMADE.gtn.kicker}
-        </Line>
-        <div className="hm-gap hm-gap--big" />
-        <Sticker photo={data.photo!} w={740} h={470} tilt={3} />
-        <div className="hm-gap" />
-        <Line box={t.plain} size={54} tilt={-0.5} maxH={210}>
-          {data.question}
-        </Line>
-        <Cue text={HOMEMADE.gtn.cue} t={t} />
-      </div>
-    );
-  }
-  return (
-    <div className="hm-stack hm-stack--center">
-      <Line box={t.plain} size={128} tilt={-3} maxH={480}>
-        {HOMEMADE.gtn.kicker}
-      </Line>
-      <div className="hm-gap" />
-      <Line box={t.emph} size={60} tilt={1.5} maxH={300}>
-        {data.question}
-      </Line>
-      <div className="hm-gap" />
-      <Cue text={HOMEMADE.gtn.cue} t={t} />
-    </div>
-  );
-}
-
-function Answer({ data, t, backdrop }: { data: AnswerData; t: Tones; backdrop: Backdrop }) {
-  const family = data.photo ? data.family : 'type';
-  const number = (
-    <Line box={accentBox(backdrop)} size={family === 'type' ? 230 : family === 'marquee' ? 160 : 190} min={100} tilt={-3}>
-      {data.number}{'\u00A0'}{HOMEMADE.gtn.wow}
-    </Line>
-  );
-  const source = (
-    <Line box={t.soft} size={30} tilt={0} align="center">
-      {data.source.verb} {data.source.name}
-    </Line>
-  );
-  return (
-    <div className={`hm-stack ${family === 'photo' ? 'hm-stack--bottom' : 'hm-stack--center'}`}>
-      <Line box={t.soft} size={family === 'marquee' ? 48 : 58} tilt={-2} align="left" shift={10}>
-        {HOMEMADE.gtn.reveal}
-      </Line>
-      {number}
-      {family === 'marquee' && (
-        <>
-          <div className="hm-gap" />
-          <Sticker photo={data.photo!} w={620} h={340} tilt={-3} />
-        </>
-      )}
-      <Line box={family === 'photo' ? t.emph : t.plain} size={52} tilt={1} maxH={140}>
-        {data.label}
-      </Line>
-      <Line box={t.soft} size={42} tilt={0} maxH={120}>
-        {data.meaning}
-      </Line>
-      <Line box={t.emph} size={56} tilt={2} shift={30}>
-        {HOMEMADE.gtn.close}
-      </Line>
-      {source}
     </div>
   );
 }

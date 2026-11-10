@@ -261,7 +261,7 @@ export async function lastSuccessfulRunAt(q: IntakeQuery): Promise<Date | null> 
 }
 
 export async function readConsumerSettings(q: IntakeQuery): Promise<ConsumerSettings> {
-  const fallback: ConsumerSettings = { lfd: 'legacy', md: 'legacy', gtn: 'legacy', fvp: 'legacy', reels: 'legacy', carousel: 'legacy', 'field-notes': 'legacy' };
+  const fallback: ConsumerSettings = { lfd: 'legacy', md: 'legacy', fvp: 'legacy', reels: 'legacy', carousel: 'legacy', 'field-notes': 'legacy' };
   const { rows } = await q.query<{ value: Partial<ConsumerSettings> | string }>(
     `SELECT value FROM intake.settings WHERE key = 'consumers'`,
   );
@@ -294,7 +294,7 @@ export async function readConsumerMode(q: IntakeQuery, order: OrderId, now: Date
 }
 
 /** Orders every run fetched before run records listed their orders (Phase 1). */
-const PHASE1_ORDERS: readonly OrderId[] = ['lfd', 'md', 'gtn', 'fvp'];
+const PHASE1_ORDERS: readonly OrderId[] = ['lfd', 'md', 'fvp'];
 
 /** Whether a successful run that fetched (not a deposit) since `since` had this order open, so fetched its sources. */
 export async function orderFetchedSince(q: IntakeQuery, order: OrderId, since: Date): Promise<boolean> {

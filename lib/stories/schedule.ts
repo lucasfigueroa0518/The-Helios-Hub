@@ -3,7 +3,7 @@
  * is uniform across every minute in the window, both ends included, the way
  * lib/reels/publish/slots.ts picks a reel's minute.
  *
- *   - A series is due on a day its window lists (Guess the Number Mon/Thu,
+ *   - A series is due on a day its window lists (AI Trivia Sun/Mon/Thu,
  *     Free vs. Paid Tue/Sat, Morning Download daily).
  *   - Auto series (S-05) get a `requested` set early that day; the worker
  *     builds it, approves it (auto), and schedules it.
@@ -17,7 +17,7 @@ import { zonedTime } from '@/lib/reels/schedule';
 import { consoleFillLog, remainingQuota, reportFill, userPlaced, type DailyFill, type FillLog } from '@/lib/social-hub/fill';
 import { driftMinute } from '@/lib/social-hub/slots/book';
 import { DRIFT } from '@/lib/social-hub/slots/times';
-import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
+import { isStorySeries, type ResolvedSlot } from '@/lib/social-hub/slots/types';
 import type { Queryable } from '@/lib/stories/db';
 import type { Series } from '@/lib/stories/render/types';
 import { nyDate, requestSet, SLOT_MINUTE_SQL, type StorySet } from '@/lib/stories/repository';
@@ -75,7 +75,7 @@ export function pickSetPublishAt(
   rand: (n: number) => number = randomInt,
 ): Date | null {
   if (set.slot_minute == null) return pickPublishAt(seriesWindow, set.ny_date, notBefore, rand);
-  const slot: ResolvedSlot = { vertical: 'stories', startMinute: set.slot_minute, series: set.series, feedMode: null, origin: 'template' };
+  const slot: ResolvedSlot = { vertical: 'stories', startMinute: set.slot_minute, series: isStorySeries(set.series) ? set.series : null, feedMode: null, origin: 'template' };
   return driftMinute(set.ny_date, slot, notBefore, [], rand);
 }
 

@@ -8,9 +8,12 @@ import { SERIES_LABEL } from '@/lib/content-type/story-series';
 
 type SeedFields = Record<string, string>;
 
+/** The series that take a typed-in idea. */
+const SEEDABLE = ['morning_download', 'free_vs_paid'] as const;
+
 /**
- * Stories: type an idea into a series' pool (idea seeding spec, 2026-10-21). A story for Morning Download, a number for
- * Guess the Number, a tool for Free vs. Paid. It costs nothing (no model or web call) and starts no build; it sits in the
+ * Stories: type an idea into a series' pool (idea seeding spec, 2026-10-21). A story for Morning Download, a tool for
+ * Free vs. Paid (AI Trivia writes its own questions and takes no seeds). It costs nothing (no model or web call) and starts no build; it sits in the
  * pool as "Yours" and competes like any idea.
  */
 export function StorySeedForm({ done }: SeedFormProps) {
@@ -19,7 +22,7 @@ export function StorySeedForm({ done }: SeedFormProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** The fields a series needs before it can be added (the same ones the route refuses without). */
-  const valid = series === 'morning_download' ? Boolean(f.headline?.trim()) : series === 'guess_the_number' ? Boolean(f.value?.trim() && f.fact?.trim()) : Boolean(f.toolName?.trim() && f.url?.trim());
+  const valid = series === 'morning_download' ? Boolean(f.headline?.trim()) : Boolean(f.toolName?.trim() && f.url?.trim());
   const set = (key: string) => (e: { target: { value: string } }) => setF((cur) => ({ ...cur, [key]: e.target.value }));
   async function submit() {
     setBusy(true);
@@ -39,21 +42,13 @@ export function StorySeedForm({ done }: SeedFormProps) {
   <form className="ex-form rh-seed-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
     <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
     <select className="helios-field-input" value={series} onChange={(e) => { setSeries(e.target.value); setF({}); }} aria-label="Series">
-      {Object.entries(SERIES_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+      {SEEDABLE.map((id) => <option key={id} value={id}>{SERIES_LABEL[id]}</option>)}
     </select>
     {series === 'morning_download' ? (
       <>
         <input className="helios-field-input" placeholder="The story’s headline" value={f.headline ?? ''} onChange={set('headline')} aria-label="Headline" />
         <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
         <textarea className="ex-textarea" placeholder="What it says, in your words (optional)" value={f.notes ?? ''} onChange={set('notes')} aria-label="Notes" rows={4} />
-      </>
-    ) : null}
-    {series === 'guess_the_number' ? (
-      <>
-        <input className="helios-field-input" placeholder="The number, e.g. $3.9B" value={f.value ?? ''} onChange={set('value')} aria-label="Number" />
-        <input className="helios-field-input" placeholder="What it counts, e.g. raised for AI data centers" value={f.fact ?? ''} onChange={set('fact')} aria-label="What it counts" />
-        <input className="helios-field-input" placeholder="The story it comes from (optional)" value={f.storyHeadline ?? ''} onChange={set('storyHeadline')} aria-label="Story" />
-        <input className="helios-field-input" placeholder="Link (optional)" value={f.url ?? ''} onChange={set('url')} aria-label="Link" />
       </>
     ) : null}
     {series === 'free_vs_paid' ? (

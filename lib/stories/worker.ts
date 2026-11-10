@@ -4,7 +4,10 @@
  *
  *   0. pool: the first pass after 3:00 AM refreshes stories.pool from the
  *      reels, carousel and catalog pools, or from the central intake for a
- *      series the consumer switch has on it (lib/stories/pool.ts; reads only)
+ *      series the consumer switch has on it (lib/stories/pool.ts; reads only);
+ *      then, once per pool day, AI Trivia's writer adds its day's questions
+ *      (runTriviaDaily, lib/stories/trivia/daily.ts; AT-13: every day). It
+ *      renders no video, so the 3:00 hour's one-video-renderer rule holds
  *   1. auto series: request today's set at 3:00 AM (docs/social-overnight.md,
  *      night schedule v2: after the 2:40 intake top-up);
  *      in template mode one set per Stories slot (a series may post twice)
@@ -14,13 +17,15 @@
  *   3. schedule: each approved set gets a minute in its window (S-20), or in
  *      [slot, slot + 15] when it has a slot
  *   4. publish: each due set posts its frames in order (S-59); on success the
- *      history (repeat checks) and Tommy's used-photo log are written (S-24)
+ *      history (repeat checks) and Tommy's used-photo log are written (S-24),
+ *      and an AI Trivia set's content-map cell is closed
  *      Steps 3 and 4 run only while publishing_live is on.
  *   5. insights: poll published frames every 2 hours until the final capture
  */
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import type { StoriesDb } from '@/lib/stories/db';
 import { buildSet, type SetBuilderDeps } from '@/lib/stories/build';
+import { createStoriesJev } from '@/lib/stories/jev';
 import { isFinalCapture, type StoryInsightsClient } from '@/lib/stories/publish/insights';
 import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
 import { publishSet } from '@/lib/stories/publish/publish';
@@ -28,6 +33,8 @@ import type { Series } from '@/lib/stories/render/types';
 import {
   approveSet,
   claimNextRequested,
+  daySpendUsd,
+  monthSpendUsd,
   releaseStaleBuilds,
   dueSets,
   failSet,
@@ -44,13 +51,15 @@ import {
   scheduleSet,
 } from '@/lib/stories/repository';
 import type { IntakeJev } from '@/lib/intake/types';
-import { refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
+import { poolDay, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
 import { storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
-import { loadSettings } from '@/lib/stories/settings';
+import { loadSettings, type StoriesSettings } from '@/lib/stories/settings';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
+import { closeCell } from '@/lib/stories/trivia/cells';
+import { runTriviaDaily } from '@/lib/stories/trivia/daily';
 
 /** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md, night schedule v2). */
 export const AUTO_REQUEST_AFTER = '03:00';
@@ -71,7 +80,12 @@ export type WorkerDeps = {
   poolReads?: (now: Date) => PoolReads;
   /** The central intake for series on it: the posted check's Jev (its own cost bucket) and the mode read. */
   intake?: { jev?: () => IntakeJev; readMode?: ReadConsumerMode };
+  /** AI Trivia's daily writer run; tests stub it. Default: runTriviaDaily with the builder's live clients. */
+  triviaDaily?: (now: Date, settings: StoriesSettings) => Promise<unknown>;
 };
+
+/** stories.settings key where runTriviaDaily records the pool day it last ran (it runs once per pool day). */
+export const TRIVIA_DAILY_KEY = 'trivia_daily';
 
 const nyClock = (at: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
 
@@ -90,6 +104,7 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
     } catch (err) {
       log(`pool: refresh failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+    await triviaDailyIfDue(deps, settings, now);
   }
 
   // 1. Auto series.
@@ -171,7 +186,7 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
     return true;
   }
   const result = await publishSet(
-    got.frames.map((f) => ({ id: f.id, seq: f.seq, storagePath: f.storage_path! })),
+    got.frames.map((f) => ({ id: f.id, seq: f.seq, storagePath: f.storage_path!, media: f.media })),
     {
       meta: deps.meta(),
       // The account gate reads the reserve and records its reading on the spine (D44).
@@ -197,6 +212,49 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
     if (!f.photo?.src || f.photo.kind === 'logo') continue;
     await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
   }
+  if (series === 'ai_trivia') {
+    // The question has run: its content-map cell is never asked again (CONTRACT §2 cell lifecycle).
+    const cellId = ((got.set.payload.trivia as { q?: { cellId?: unknown } } | undefined)?.q?.cellId);
+    if (typeof cellId === 'string') await closeCell(deps.db, cellId).catch((err) => log(`trivia: could not close cell ${cellId}: ${err instanceof Error ? err.message : String(err)}`));
+    else log(`trivia: set ${setId} has no cell id; no cell closed`);
+  }
   log(`published ${series} ${got.set.ny_date}: ${result.mediaIds.length} frames`);
   return true;
 }
+
+/**
+ * AI Trivia's writer after the 3:00 refresh (AT-13: every day, post day or not; the pool cap keeps it at 20).
+ * runTriviaDaily records its pool day in stories.settings 'trivia_daily' and runs once per day; this pass reads
+ * that record first so a done day costs one read, and holds the run while the series is off or the month's watch
+ * or the day's cap is reached, like a build.
+ */
+async function triviaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: Date): Promise<void> {
+  const log = deps.log ?? (() => {});
+  if (!settings.series.ai_trivia.enabled) return;
+  try {
+    const { rows } = await deps.db.query<{ value: { day?: string } | null }>(`SELECT value FROM stories.settings WHERE key = $1`, [TRIVIA_DAILY_KEY]);
+    if (rows[0]?.value?.day === poolDay(now)) return;
+    const spent = await monthSpendUsd(deps.db, now);
+    const today = await daySpendUsd(deps.db, now);
+    const held = spent >= settings.monthlyWatchUsd ? 'monthly watch reached' : today >= settings.dailyCapUsd ? 'daily cap reached' : null;
+    if (held) {
+      once(`${poolDay(now)}:${held}`, () => log(`trivia: daily writer held (${held})`));
+      return;
+    }
+    const run = deps.triviaDaily ?? (async (at: Date, s: StoriesSettings) => {
+      const b = await deps.builder();
+      return runTriviaDaily({ db: b.db, write: b.write, jev: createStoriesJev(b.jevTransport, b.db), settings: s, now: at });
+    });
+    const result = await run(now, settings);
+    log(`trivia: daily writer ${JSON.stringify(result ?? null).slice(0, 300)}`);
+  } catch (err) {
+    log(`trivia: daily writer failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+const logged = new Set<string>();
+const once = (key: string, f: () => void) => {
+  if (logged.has(key)) return;
+  logged.add(key);
+  f();
+};

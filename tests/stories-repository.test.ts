@@ -51,7 +51,7 @@ test('schema applies, and re-applies cleanly', async () => {
   const { pg } = await openLocalStoriesDb();
   await pg.exec(schemaSql());
   const { rows } = await pg.query<{ n: number }>(`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'stories'`);
-  assert.equal(rows[0]!.n, 10);
+  assert.equal(rows[0]!.n, 12, 'the spine plus AI Trivia\'s trivia_cells and trivia_archive');
 });
 
 test('nyDate is the New York calendar date', () => {
@@ -172,28 +172,31 @@ test('settings: defaults, auto off for every series, overrides persist', async (
   const s = await loadSettings(db);
   assert.deepEqual(s, DEFAULT_SETTINGS);
   for (const v of Object.values(s.series)) assert.equal(v.auto, false);
-  assert.equal(s.series.guess_the_number.style, 'homemade');
+  assert.equal(s.series.ai_trivia.style, 'polished');
+  assert.deepEqual(s.series.ai_trivia.window.days, [0, 1, 4]);
+  assert.equal(s.series.guess_the_number.enabled, false, 'Guess the Number is retired (AT-14)');
   assert.equal(s.series.morning_download.style, 'polished');
   assert.deepEqual(s.series.free_vs_paid.window.days, [2, 6]);
   assert.equal(s.models.review, 'claude-haiku-5-5');
-  const next = await saveSeriesSetting(db, 'guess_the_number', { auto: true }, 'lucas');
-  assert.equal(next.series.guess_the_number.auto, true);
+  const next = await saveSeriesSetting(db, 'ai_trivia', { auto: true }, 'lucas');
+  assert.equal(next.series.ai_trivia.auto, true);
   assert.equal(next.series.free_vs_paid.auto, false);
-  assert.equal((await loadSettings(db)).series.guess_the_number.window.start, '08:30');
+  assert.equal((await loadSettings(db)).series.ai_trivia.window.start, '08:30');
   // Every content type requires approval and ships with publishing off (docs/social-overnight.md).
   assert.equal(s.requireApproval, true);
   assert.equal(s.publishingLive, false);
 });
 
-test('candidates accept origin model; the pool still rejects it', async () => {
+test('candidates accept origin model; so does the pool (AI Trivia writes its own questions), and junk origins are refused', async () => {
   const { db, pg } = await openLocalStoriesDb();
-  const { set } = await requestSet(db, { series: 'guess_the_number', nyDate: '2026-10-10', trigger: 'click', style: 'homemade' });
+  const { set } = await requestSet(db, { series: 'ai_trivia', nyDate: '2026-10-10', trigger: 'click', style: 'polished' });
   await claimNextRequested(db);
   await saveBuild(db, set.id, { payload: {}, frames: FRAMES, candidates: [{ origin: 'model', ref: 'idea-1', score: 0.7, chosen: true }] });
   const rows = await pg.query<{ origin: string }>(`SELECT origin FROM stories.candidates WHERE set_id = $1`, [set.id]);
   assert.deepEqual(rows.rows.map((r) => r.origin), ['model']);
+  await pg.query(`INSERT INTO stories.pool (series, key, origin, ref, title) VALUES ('ai_trivia', 'k', 'model', 'r', 't')`);
   await assert.rejects(
-    pg.query(`INSERT INTO stories.pool (series, key, origin, ref, title) VALUES ('guess_the_number', 'k', 'model', 'r', 't')`),
+    pg.query(`INSERT INTO stories.pool (series, key, origin, ref, title) VALUES ('ai_trivia', 'k2', 'bogus', 'r', 't')`),
     /check/i,
   );
 });

@@ -12,19 +12,17 @@ export const SAFE_TOP = 250;
 export const SAFE_BOTTOM = 340;
 /** Image stories: JPEG, 8 MB max (plan §1, verified facts). */
 export const MAX_JPEG_BYTES = 8 * 1024 * 1024;
+/** Video stories (AI Trivia): MP4, at most 60 s; Meta's cap on a Story video file is 100 MB. */
+export const MAX_MP4_BYTES = 100 * 1024 * 1024;
 
 export const BACKDROPS = ['black', 'white', 'orange', 'green'] as const;
 export type Backdrop = (typeof BACKDROPS)[number];
 
-export type Series = 'morning_download' | 'guess_the_number' | 'free_vs_paid';
-
 /**
- * Guess the Number layout families (S-13). Every photo is a bleed fade (S-44):
- * photo-led (the photo bleeds from the top), marquee (the game line on top,
- * the photo fading in below it), type-led (no photo).
+ * `guess_the_number` is retired (AI Trivia AT-14): it stays in the union and the SQL CHECKs so its history still
+ * loads, and nothing new is requested, built or rendered for it.
  */
-export const GTN_FAMILIES = ['photo', 'marquee', 'type'] as const;
-export type GtnFamily = (typeof GTN_FAMILIES)[number];
+export type Series = 'morning_download' | 'guess_the_number' | 'free_vs_paid' | 'ai_trivia';
 
 export type Photo = {
   /** http(s) URL, or a path inside the repo (served locally by the renderer). */
@@ -42,16 +40,24 @@ export type SourceTag = { verb: 'via' | 'reported by' | 'from'; name: string };
 export type OpenerData = { role: 'opener'; /** e.g. "Wednesday, October 8" */ date: string; storyCount: number; photo?: Photo };
 export type StoryData = { role: 'story'; /** One or two full sentences (S-15). */ headline: string; source: SourceTag; photo?: Photo };
 export type CloserData = { role: 'closer' };
-/** Guess the Number's intro (S-49): today's game, its difficulty and topic. */
-export const DIFFICULTIES = ['low', 'medium', 'high'] as const;
-export type Difficulty = (typeof DIFFICULTIES)[number];
+/** Series intro slide (S-50): Free vs. Paid's, fixed copy. */
+export type IntroData = { role: 'intro' };
+/** AI Trivia (planning/AI Trivia/CONTRACT.md §3): the option count follows the difficulty (hard 2, medium 3, easy 4). */
+export type TriviaLetter = 'A' | 'B' | 'C' | 'D';
+export type TriviaCopy = {
+  question: string;
+  difficulty: 'hard' | 'medium' | 'easy';
+  options: Array<{ letter: TriviaLetter; text: string }>;
+  correct: TriviaLetter;
+  /** Why the answer matters to the viewer. */
+  answerLine: string;
+};
 /**
- * Series intro slide (S-49, S-50). Guess the Number's carries the difficulty
- * and the model-written topic; Free vs. Paid's is fixed copy.
+ * AI Trivia's two slides, each a 5-second video (lib/stories/trivia/render): the question, then the answer (the
+ * correct option lights). Both carry the whole question; "AI TRIVIA" and "Tap to reveal" are the renderer's (AT-25).
  */
-export type IntroData = { role: 'intro'; difficulty?: Difficulty; topic?: string };
-export type QuestionData = { role: 'question'; family: GtnFamily; question: string; photo?: Photo };
-export type AnswerData = { role: 'answer'; family: GtnFamily; number: string; label: string; meaning: string; source: SourceTag; photo?: Photo };
+export type QuestionData = { role: 'question'; photo?: Photo } & TriviaCopy;
+export type AnswerData = { role: 'answer'; photo?: Photo } & TriviaCopy;
 export type PaidData = { role: 'paid'; tool: string; price: string; period: string; tease: string; logo?: Photo };
 export type FreeData = {
   role: 'free';
@@ -79,12 +85,16 @@ export type FrameRole = FrameData['role'];
 export const STYLES = ['polished', 'homemade'] as const;
 export type Style = (typeof STYLES)[number];
 
-/** The style each series ships in (S-54): Morning Download polished, the two games homemade. */
+/** The style each series ships in (S-54): Morning Download and AI Trivia polished, Free vs. Paid homemade. */
 export const SERIES_STYLE: Record<Series, Style> = {
   morning_download: 'polished',
   guess_the_number: 'homemade',
   free_vs_paid: 'homemade',
+  ai_trivia: 'polished',
 };
+
+/** Series whose frames are videos (MP4 + a poster JPEG), not images. */
+export const VIDEO_SERIES: ReadonlySet<Series> = new Set<Series>(['ai_trivia']);
 
 export type Frame = {
   series: Series;

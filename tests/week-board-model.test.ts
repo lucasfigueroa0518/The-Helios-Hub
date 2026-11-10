@@ -170,7 +170,7 @@ test('a 4th explainer is over the daily cap; each Stories series counts on its o
   assert.deepEqual(m.cards.filter((c) => c.day === 2).map((c) => c.overCap), [false, false, false, true]);
   assert.equal(m.cards.find((c) => c.day === 2 && c.overCap)!.statusText, 'Over today’s limit, so nothing is made for this slot.');
   days[3]!.slots = [
-    slot('stories', 510, { series: 'morning_download' }), slot('stories', 540, { series: 'guess_the_number' }),
+    slot('stories', 510, { series: 'morning_download' }), slot('stories', 540, { series: 'ai_trivia' }),
     slot('stories', 600, { series: 'morning_download' }), slot('stories', 630, { series: 'morning_download' }),
   ];
   const s = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 3);

@@ -42,8 +42,10 @@ test('Generate: today (New York), one live set per series per day, unknown or di
   assert.equal(a.set.style, 'polished');
   assert.equal((await generate(db, 'morning_download', 'lucas@x', NOW)).created, false);
   await assert.rejects(generate(db, 'reels', 'x'), (e: ApiError) => e.status === 400);
-  await updateSeries(db, { series: 'guess_the_number', enabled: false }, 'lucas@x');
-  await assert.rejects(generate(db, 'guess_the_number', 'x', NOW), (e: ApiError) => e.status === 409);
+  // Guess the Number is retired (AT-14): not requestable. A disabled series is refused with 409.
+  await assert.rejects(generate(db, 'guess_the_number', 'x', NOW), (e: ApiError) => e.status === 400);
+  await updateSeries(db, { series: 'ai_trivia', enabled: false }, 'lucas@x');
+  await assert.rejects(generate(db, 'ai_trivia', 'x', NOW), (e: ApiError) => e.status === 409);
 });
 
 test('Approve, Reject with tags, Regenerate, Publish now', async () => {

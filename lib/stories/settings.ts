@@ -6,7 +6,8 @@
 import type { Queryable } from '@/lib/stories/db';
 import { SERIES_STYLE, type Series, type Style } from '@/lib/stories/render/types';
 
-export const SERIES: Series[] = ['morning_download', 'guess_the_number', 'free_vs_paid'];
+/** The series a person or the worker can request. Guess the Number is retired (AT-14): its settings and history stay. */
+export const SERIES: Series[] = ['morning_download', 'ai_trivia', 'free_vs_paid'];
 
 /** A posting window in America/New_York (S-20); days are 0 = Sunday … 6 = Saturday. */
 export type PostingWindow = { start: string; end: string; days: number[] };
@@ -38,9 +39,12 @@ const MORNING = { start: '08:30', end: '10:00' };
 export const DEFAULT_SETTINGS: StoriesSettings = {
   series: {
     morning_download: { enabled: true, auto: false, style: SERIES_STYLE.morning_download, window: { ...MORNING, days: EVERY_DAY } },
-    // S-01: Guess the Number Monday and Thursday; Free vs. Paid Tuesday and Saturday.
-    guess_the_number: { enabled: true, auto: false, style: SERIES_STYLE.guess_the_number, window: { ...MORNING, days: [1, 4] } },
+    // Retired (AT-14): never requested again; the row stays so its history reads.
+    guess_the_number: { enabled: false, auto: false, style: SERIES_STYLE.guess_the_number, window: { ...MORNING, days: [1, 4] } },
+    // S-01: Free vs. Paid Tuesday and Saturday.
     free_vs_paid: { enabled: true, auto: false, style: SERIES_STYLE.free_vs_paid, window: { ...MORNING, days: [2, 6] } },
+    // AT-13: AI Trivia Sunday, Monday and Thursday.
+    ai_trivia: { enabled: true, auto: false, style: SERIES_STYLE.ai_trivia, window: { ...MORNING, days: [0, 1, 4] } },
   },
   requireApproval: true,
   publishingLive: false,

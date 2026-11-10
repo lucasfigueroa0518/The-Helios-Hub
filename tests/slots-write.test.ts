@@ -95,7 +95,7 @@ test('the first flip to template seeds the default times; later flips do not res
   const first = await setSlotSource(q, 'template', 'tommy@example.com');
   assert.equal(first.seeded, seedTemplate(DEFAULT_SEED_INPUTS).length);
   assert.deepEqual(await dayOf(q, '2026-10-19', 'explainers'), [780, 930]);
-  assert.deepEqual(await dayOf(q, '2026-10-19', 'stories'), ['510:guess_the_number', '510:morning_download']);
+  assert.deepEqual(await dayOf(q, '2026-10-19', 'stories'), ['510:ai_trivia', '510:morning_download']);
   const n = (await readTemplate(q)).length;
   await pg.query(`DELETE FROM social_hub.slot_template WHERE vertical = 'reels' AND weekday = 0`);
   await setSlotSource(q, 'legacy', 'tommy@example.com');
@@ -516,7 +516,7 @@ test('parseChanges reads the new keys and rejects junk with a 400 message', () =
   const ok = parseChanges({ changes: [
     { scope: 'template', op: 'put', weekday: 1, vertical: 'reels', startMinute: 540, series: null, feedMode: 'trial' },
     { scope: 'date', op: 'move', from: { nyDate: '2026-10-20', vertical: 'stories', startMinute: 510, series: 'morning_download' }, to: { startMinute: 600 } },
-    { scope: 'template', op: 'delete', weekday: 1, vertical: 'stories', startMinute: 510, series: 'guess_the_number' },
+    { scope: 'template', op: 'delete', weekday: 1, vertical: 'stories', startMinute: 510, series: 'ai_trivia' },
   ] });
   assert.ok(Array.isArray(ok));
   assert.deepEqual((ok as SlotChange[])[1], { scope: 'date', op: 'move', from: { nyDate: '2026-10-20', vertical: 'stories', startMinute: 510, series: 'morning_download' }, to: { nyDate: '2026-10-20', startMinute: 600 } });

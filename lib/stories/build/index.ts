@@ -9,6 +9,7 @@
  */
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import type { StoriesDb } from '@/lib/stories/db';
+import type { Series } from '@/lib/stories/render/types';
 import { createStoriesJev } from '@/lib/stories/jev';
 import type { PhotoFinder } from '@/lib/stories/photos';
 import type { Renderer } from '@/lib/stories/render/render';
@@ -22,15 +23,15 @@ import { applyMoves, tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/
 import { QUEUE_LIVE, orderForNight } from '@/lib/social-hub/queue';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { storyKey } from '@/lib/stories/sources/reels';
-import { runRenderStage } from '@/lib/stories/render-stage';
+import { runRenderStage, type RenderClips } from '@/lib/stories/render-stage';
 import { daySpendUsd, failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import type { WriterCreate } from '@/lib/stories/writer';
 
 import type { BuildDeps, BuildResult } from './common';
+import { buildAiTrivia } from './ai-trivia';
 import { buildFreeVsPaid } from './free-vs-paid';
-import { buildGuessTheNumber } from './guess-the-number';
 import { buildMorningDownload } from './morning-download';
 
 export type SetBuilderDeps = {
@@ -40,6 +41,8 @@ export type SetBuilderDeps = {
   write: WriterCreate;
   photos: PhotoFinder;
   renderer: Renderer;
+  /** AI Trivia's video renderer (lib/stories/trivia/render); tests stub it. Default: renderTriviaClips. */
+  triviaRender?: RenderClips;
   review: ReviewCall;
   storage: StoriesStorage;
   now?: () => Date;
@@ -52,7 +55,7 @@ export type SetBuilderDeps = {
     readMode?: ReadConsumerMode;
   };
   /** Tests swap a series builder for a stub. */
-  builders?: Partial<Record<'morning_download' | 'guess_the_number' | 'free_vs_paid', (d: BuildDeps) => Promise<BuildResult>>>;
+  builders?: Partial<Record<Series, (d: BuildDeps) => Promise<BuildResult>>>;
 };
 
 export type SetBuildOutcome = { status: 'ready' | 'skipped' | 'failed'; detail: string; flagged?: boolean };
@@ -79,9 +82,14 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     const poolReadAt = new Date();
     const { pool, modes } = await seriesPool(deps, series, now);
     const jev = createStoriesJev(deps.jevTransport, deps.db);
-    const onIntake = modes?.[ORDER_OF[series]] === 'intake';
+    const order = ORDER_OF[series];
+    const onIntake = order ? modes?.[order] === 'intake' : false;
     const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}) };
-    const builder = deps.builders?.[got.set.series] ?? { morning_download: buildMorningDownload, guess_the_number: buildGuessTheNumber, free_vs_paid: buildFreeVsPaid }[got.set.series];
+    const builder = deps.builders?.[series] ?? BUILDERS[series];
+    if (!builder) {
+      await markSkipped(deps.db, setId, `${series} is retired: no new sets are built`);
+      return { status: 'skipped', detail: `${series} is retired` };
+    }
     const result = await builder(bd);
     if (!result.ok) {
       await deps.db.query(`UPDATE stories.sets SET payload = payload || $2::jsonb WHERE id = $1`, [setId, JSON.stringify({ candidates: result.candidates.length })]);
@@ -97,7 +105,7 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     }
     const photoUsd = deps.photos.usd - photoUsdBefore;
     if (photoUsd > 0) await recordCost(deps.db, { setId, vendor: 'jev', component: 'photo-finder', usd: photoUsd });
-    const r = await runRenderStage({ db: deps.db, storage: deps.storage, renderer: deps.renderer, review: deps.review, setId });
+    const r = await runRenderStage({ db: deps.db, storage: deps.storage, renderer: deps.renderer, review: deps.review, setId, ...(deps.triviaRender ? { triviaRender: deps.triviaRender } : {}) });
     return { status: 'ready', detail: r.log.join('; '), flagged: r.flagged };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -106,7 +114,11 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
   }
 }
 
-const ORDER_OF = { morning_download: 'md', guess_the_number: 'gtn', free_vs_paid: 'fvp' } as const;
+/** The intake order each series reads, when it reads one. AI Trivia ingests nothing (its writer runs on the content map). */
+const ORDER_OF: Partial<Record<Series, keyof PoolModes>> = { morning_download: 'md', free_vs_paid: 'fvp' };
+
+/** The live builders. Guess the Number is retired (AT-14): it has none. */
+const BUILDERS: Partial<Record<Series, (d: BuildDeps) => Promise<BuildResult>>> = { morning_download: buildMorningDownload, free_vs_paid: buildFreeVsPaid, ai_trivia: buildAiTrivia };
 
 /**
  * The pool's reads for a build or the worker's refresh: each series from the intake or today's sources (consumer
@@ -125,7 +137,7 @@ export function buildPoolReads(deps: Pick<SetBuilderDeps, 'sourceDb' | 'jevTrans
  * pool when stories.pool cannot be read (schema not applied yet): the build
  * reads its sources directly.
  */
-async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'guess_the_number' | 'free_vs_paid', now: Date): Promise<{ pool: OpenPool | null; modes: PoolModes | null }> {
+async function seriesPool(deps: SetBuilderDeps, series: Series, now: Date): Promise<{ pool: OpenPool | null; modes: PoolModes | null }> {
   let modes: PoolModes | null = null;
   try {
     const reads = buildPoolReads(deps, now);
@@ -168,9 +180,8 @@ async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPo
   if (!moves.length) return pool;
   const order = <T>(list: T[], key: (x: T) => string) => applyMoves(list.map((x) => ({ id: key(x), x })), moves).map((w) => w.x);
   return {
+    ...pool,
     stories: order(pool.stories, (c) => c.key),
-    numbers: order(pool.numbers, (n) => n.key),
-    unbriefed: order(pool.unbriefed, (c) => `story:${c.key}`),
     leads: order(pool.leads, (l) => storyKey(l.url)),
   };
 }
@@ -204,8 +215,6 @@ export async function inQueueOrder(db: SetBuilderDeps['db'], series: string, poo
   return {
     ...pool,
     stories: reorder(pool.stories, pool.meta.stories),
-    numbers: reorder(pool.numbers, pool.meta.numbers),
-    unbriefed: reorder(pool.unbriefed, pool.meta.unbriefed),
     leads: reorder(pool.leads, pool.meta.leads),
   };
 }

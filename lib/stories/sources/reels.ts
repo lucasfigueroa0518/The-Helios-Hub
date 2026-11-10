@@ -89,15 +89,6 @@ export async function morningDownloadReels(db: Queryable, nyDate: string): Promi
   return [...top, ...extra].map(toCandidate);
 }
 
-/** Guess the Number, reels side (S-10, S-26): ideas bucketed as The Number in the last 7 days. */
-export async function theNumberIdeas(db: Queryable, nyDate: string): Promise<StoryCandidate[]> {
-  const { rows } = await db.query<IdeaRow>(
-    `${IDEA_SQL(`s.chosen_bucket = 'the_number' AND sl.ny_date > $1::date - 7 AND sl.ny_date <= $1::date`)} ORDER BY sl.ny_date DESC, s.net DESC NULLS LAST LIMIT 20`,
-    [nyDate],
-  );
-  return dedupe(rows.map(toCandidate));
-}
-
 export type ToolLead = { origin: 'reels' | 'catalog' | 'github'; ref: string; name: string; url: string; description: string };
 
 /**

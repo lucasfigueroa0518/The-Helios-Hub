@@ -20,16 +20,19 @@ if (!url) {
 const windowsPsql = 'C:\\Program Files\\PostgreSQL\\16\\bin\\psql.exe';
 const psql = process.env.PSQL_BIN
   || (process.platform === 'win32' && fs.existsSync(windowsPsql) ? windowsPsql : 'psql');
-const schema = path.join(root, 'db', 'stories_schema.sql');
-const result = spawnSync(psql, ['-d', url, '-v', 'ON_ERROR_STOP=1', '-f', schema], {
-  cwd: root,
-  stdio: 'inherit',
-  env: {
-    ...process.env,
-    PGSSLMODE: process.platform === 'win32' ? 'disable' : (process.env.PGSSLMODE || 'require'),
-  },
-  shell: false,
-});
-if (result.status !== 0) process.exit(result.status ?? 1);
+// db/stories_ai_trivia.sql (AI Trivia: series, cells, video frames) runs after the base schema it alters.
+for (const file of ['stories_schema.sql', 'stories_ai_trivia.sql']) {
+  const schema = path.join(root, 'db', file);
+  const result = spawnSync(psql, ['-d', url, '-v', 'ON_ERROR_STOP=1', '-f', schema], {
+    cwd: root,
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      PGSSLMODE: process.platform === 'win32' ? 'disable' : (process.env.PGSSLMODE || 'require'),
+    },
+    shell: false,
+  });
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
 
 console.log('stories schema applied');

@@ -46,6 +46,10 @@ export type FrameRow = {
   photo: Photo | null;
   storage_path: string | null;
   jpeg_bytes: number | null;
+  /** 'video' for AI Trivia's MP4 frames (storage_path is the MP4, poster_path its JPEG); 'image' everywhere else. */
+  media: 'image' | 'video';
+  poster_path: string | null;
+  media_bytes: number | null;
   review: Record<string, unknown> | null;
   flagged: boolean;
   ig_container_id: string | null;
@@ -76,7 +80,13 @@ export const SET_SLOT_BY_SQL = `CASE WHEN to_jsonb(sets)->>'slot_by' = 'person' 
 
 const SET_COLS = `id, series, to_char(ny_date, 'YYYY-MM-DD') AS ny_date, status, trigger, style, payload, publish_at, ${SLOT_MINUTE_SQL} AS slot_minute, ${SET_SLOT_BY_SQL} AS "slotBy", flagged, error,
   spend_usd::float8 AS spend_usd, created_at, updated_at`;
-const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, review, flagged,
+/**
+ * The video columns (db/stories_ai_trivia.sql) read through the row's JSON, like SLOT_MINUTE_SQL (R12): before that
+ * file is applied every frame reads as an image.
+ */
+const FRAME_MEDIA_COLS = `COALESCE(to_jsonb(frames)->>'media', 'image') AS media, to_jsonb(frames)->>'poster_path' AS poster_path,
+  (to_jsonb(frames)->>'media_bytes')::int AS media_bytes`;
+const FRAME_COLS = `id, set_id, seq, role, template, backdrop, copy, photo, storage_path, jpeg_bytes, ${FRAME_MEDIA_COLS}, review, flagged,
   ig_container_id, ig_media_id, published_at`;
 
 /** The New York calendar date of an instant (posting windows are New York time, S-20). */
@@ -243,7 +253,20 @@ export async function saveBuild(
 export async function saveFrameRender(
   db: Queryable,
   frameId: string,
-  r: { storagePath: string; jpegBytes: number; review?: Record<string, unknown> | null; flagged?: boolean; backdrop?: Backdrop; template?: string | null; copy?: FrameData; photo?: Photo | null },
+  r: {
+    storagePath: string;
+    jpegBytes: number;
+    review?: Record<string, unknown> | null;
+    flagged?: boolean;
+    backdrop?: Backdrop;
+    template?: string | null;
+    copy?: FrameData;
+    photo?: Photo | null;
+    /** A video frame (AI Trivia): storagePath is the MP4, posterPath its JPEG, jpegBytes the poster's size. */
+    media?: 'image' | 'video';
+    posterPath?: string | null;
+    mediaBytes?: number | null;
+  },
 ): Promise<void> {
   await db.query(
     `UPDATE stories.frames SET storage_path = $2, jpeg_bytes = $3, review = $4::jsonb, flagged = $5,
@@ -253,6 +276,10 @@ export async function saveFrameRender(
     [frameId, r.storagePath, r.jpegBytes, r.review ? JSON.stringify(r.review) : null, r.flagged ?? false, r.backdrop ?? null, r.template ?? null,
       r.copy ? JSON.stringify(r.copy) : null, r.photo ? JSON.stringify(r.photo) : null, r.photo !== undefined],
   );
+  // Only a frame that says its media touches the video columns, so image sets keep saving before they exist.
+  if (r.media) {
+    await db.query(`UPDATE stories.frames SET media = $2, poster_path = $3, media_bytes = $4 WHERE id = $1`, [frameId, r.media, r.posterPath ?? null, r.mediaBytes ?? null]);
+  }
 }
 
 /** One frame's settings and render, as a Targeted Revision reads and writes them. */
@@ -363,7 +390,7 @@ export async function recordHistory(db: Queryable, series: Series, keys: string[
   }
 }
 
-/** Keys shown in the last `days` days for a series (3 Morning Download, 30 Guess the Number, 90 Free vs. Paid). */
+/** Keys shown in the last `days` days for a series (3 Morning Download, 90 Free vs. Paid; AI Trivia keys by cell, trivia:<cellId>). */
 export async function recentKeys(db: Queryable, series: Series, days: number, now: Date = new Date()): Promise<Set<string>> {
   const { rows } = await db.query<{ key: string }>(
     `SELECT DISTINCT key FROM stories.history WHERE series = $1 AND shown_at > $2::timestamptz - make_interval(days => $3)`,

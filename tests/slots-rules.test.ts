@@ -27,7 +27,7 @@ test('canPlace: one slot per (type, minute); one series twice at different times
   const stories = day([S('stories', 510, { series: 'morning_download' })]);
   assert.deepEqual(canPlace(stories, { vertical: 'stories', startMinute: 900, series: 'morning_download' }), { ok: true, minute: 900 });
   assert.equal(canPlace(stories, { vertical: 'stories', startMinute: 510, series: 'morning_download' }).ok, false);
-  assert.equal(canPlace(stories, { vertical: 'stories', startMinute: 510, series: 'guess_the_number' }).ok, true);
+  assert.equal(canPlace(stories, { vertical: 'stories', startMinute: 510, series: 'ai_trivia' }).ok, true);
 });
 
 test('canPlace: today, a passed time moves to the next 15-minute mark; no time left is refused', () => {

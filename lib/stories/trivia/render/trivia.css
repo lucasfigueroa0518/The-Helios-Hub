@@ -1,0 +1,70 @@
+/*
+ * AI Trivia slides (AT-33, AT-34): 1080x1920, built as if in Instagram's own story editor.
+ * Classic text is Inter Medium (the Stories homemade stand-in); the editor's highlight is one rounded
+ * box per line, lines touching; the choices sit on a white quiz-sticker-like card. Everything sits
+ * level (AT-37): no element is turned; only the reveal's confetti spins. Orange #FF5E1A is the accent;
+ * the reveal (AT-38) adds a white check and green among the confetti.
+ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #060608; }
+#root { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #060608; }
+.tv-layer { position: absolute; inset: 0; }
+
+.tv-frame { position: absolute; inset: 0; overflow: hidden; color: #FFFFFF; font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; font-weight: 500; -webkit-font-smoothing: antialiased; }
+.tv-frame [data-fit-min] { overflow-wrap: normal; word-break: normal; hyphens: none; }
+
+/* Back: the photo, posted from the camera roll, dimmed. */
+.tv-bg { position: absolute; inset: 0; }
+.tv-photo { position: absolute; inset: 0; will-change: transform; }
+.tv-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tv-dim { position: absolute; inset: 0; }
+
+/* Everything typed sits in the safe band (y 250-1580). */
+.tv-stack { position: absolute; left: 72px; right: 72px; top: 262px; bottom: 352px; display: flex; flex-direction: column; justify-content: center; gap: 34px; }
+
+/* One typed line (or wrapped block) and its highlight. */
+.tv-line { display: block; flex: none; width: fit-content; max-width: 100%; line-height: 1.42; letter-spacing: -0.012em; }
+.tv-hl { padding: 0.05em 0.3em 0.1em; border-radius: 0.24em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.tv-box--orange { background: #FF5E1A; color: #FFFFFF; }
+.tv-box--white { background: #FFFFFF; color: #000000; }
+.tv-box--soft { background: rgba(0, 0, 0, 0.6); color: #FFFFFF; }
+
+.tv-head { font-size: 104px; white-space: nowrap; align-self: flex-start; margin-left: 6px; }
+.tv-q { font-size: 60px; text-align: center; align-self: center; max-height: 350px; }
+
+/* The choices: a white card like a quiz sticker, level; above the answer line so the burst flies over it. */
+.tv-quiz { flex: none; align-self: center; width: 884px; max-width: 100%; display: flex; flex-direction: column; gap: 14px; padding: 26px; border-radius: 40px; background: #FFFFFF; box-shadow: 0 18px 44px rgba(0, 0, 0, 0.32); position: relative; z-index: 2; }
+.tv-opt-wrap { position: relative; transform-origin: 50% 50%; }
+.tv-opt-wrap--correct { z-index: 3; }
+.tv-opt { position: relative; display: flex; align-items: center; gap: 22px; min-height: 104px; padding: 16px 28px 16px 18px; border-radius: 24px; background: #F1F1F1; }
+.tv-opt > :not(.tv-fill) { position: relative; z-index: 1; }
+.tv-chip { position: relative; flex: none; width: 62px; height: 62px; border-radius: 50%; border: 3px solid #C7C7C7; display: flex; align-items: center; justify-content: center; }
+.tv-chip-l { font-size: 30px; line-height: 1; color: #262626; }
+.tv-opt-t { flex: 1; min-width: 0; font-size: 46px; line-height: 1.18; color: #171717; max-height: 112px; }
+
+/* The tap line with a pen-tool arrow on its right, pointing right. */
+.tv-tap { flex: none; display: flex; align-items: center; gap: 8px; align-self: flex-end; }
+.tv-tap-t { font-size: 78px; white-space: nowrap; }
+.tv-pen { flex: none; overflow: visible; }
+.tv-pen path { fill: none; stroke: #FFFFFF; stroke-width: 10; stroke-linecap: round; stroke-linejoin: round; }
+
+.tv-ans { font-size: 52px; text-align: center; align-self: center; max-height: 300px; transform-origin: 50% 50%; }
+
+/* The answer slide: the same family, smaller title and question so the card and the answer lead. */
+.tv--answer .tv-stack { gap: 30px; }
+.tv--answer .tv-head { font-size: 76px; }
+.tv--answer .tv-q { font-size: 46px; max-height: 200px; }
+.tv--answer .tv-opt { min-height: 92px; }
+.tv--answer .tv-opt-t { font-size: 42px; max-height: 100px; }
+
+/* The reveal (AT-38), all hidden until the hit: the orange wipe, the drawn check, the confetti. */
+.tv-fill { position: absolute; inset: 0; border-radius: inherit; background: #FF5E1A; clip-path: inset(0% 100% 0% 0% round 24px); }
+.tv-check { position: absolute; left: 50%; top: 50%; margin: -22px 0 0 -22px; width: 44px; height: 44px; overflow: visible; opacity: 0; transform-origin: 50% 50%; }
+.tv-check path { fill: none; stroke: #FFFFFF; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; }
+.tv-chip-l { transform-origin: 50% 50%; }
+.tv-confetti { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.tv-cf { position: absolute; top: 50%; display: block; transform: scale(0); }
+.tv-cf-in { position: absolute; inset: 0; display: block; }
+
+/* The contrast check hides the text to read the pixels behind it. */
+.tv-hide-text .tv-text { color: transparent !important; }

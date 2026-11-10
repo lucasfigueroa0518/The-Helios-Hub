@@ -1,5 +1,5 @@
 /**
- * The consumer switch for the three Stories series (Phase 1, round 4): each
+ * The consumer switch for the Stories series that read ideas (Phase 1, round 4): each
  * series reads either the central intake or today's sources, per
  * `intake.settings` key 'consumers' (readConsumerMode). 'intake' with no
  * successful main run in 26 h comes back 'stale-fallback' and reads today's
@@ -8,8 +8,9 @@
  * records which source each series read.
  *
  *   Morning Download  order 'md'   morning()
- *   Guess the Number  order 'gtn'  numbers()
  *   Free vs. Paid     order 'fvp'  leads()
+ *
+ * AI Trivia reads nothing here: its writer works from the content map (lib/stories/trivia).
  */
 import { intakePoolReads, type CarouselPhotos, type IntakePoolDeps } from '@/lib/intake/pool-stories';
 import { readConsumerMode as liveReadConsumerMode } from '@/lib/intake/read';
@@ -19,7 +20,7 @@ import { livePoolReads, type PoolModes, type PoolReads, type SeriesSource } from
 import { postPhoto } from '@/lib/stories/sources/carousel';
 import { storyKey } from '@/lib/stories/sources/reels';
 
-export const ALL_LEGACY: PoolModes = { md: 'legacy', gtn: 'legacy', fvp: 'legacy' };
+export const ALL_LEGACY: PoolModes = { md: 'legacy', fvp: 'legacy' };
 
 export type ReadConsumerMode = (q: IntakeQuery, order: OrderId, now: Date) => Promise<SeriesSource>;
 
@@ -35,11 +36,11 @@ export type StoriesPoolOptions = {
 /** Each series' source now. A mode that cannot be read is legacy (today's path). */
 export async function readPoolModes(q: IntakeQuery, now: Date, readMode: ReadConsumerMode = liveReadConsumerMode): Promise<PoolModes> {
   const one = (order: OrderId) => readMode(q, order, now).catch((): SeriesSource => 'legacy');
-  const [md, gtn, fvp] = await Promise.all([one('md'), one('gtn'), one('fvp')]);
-  return { md, gtn, fvp };
+  const [md, fvp] = await Promise.all([one('md'), one('fvp')]);
+  return { md, fvp };
 }
 
-export const anyIntake = (m: PoolModes) => m.md === 'intake' || m.gtn === 'intake' || m.fvp === 'intake';
+export const anyIntake = (m: PoolModes) => m.md === 'intake' || m.fvp === 'intake';
 
 /**
  * The photo each pipeline carousel post of the last 30 hours placed (S-29), by storyKey of its story id: what
@@ -82,13 +83,12 @@ export function storiesPoolReads(sourceDb: Queryable, now: Date, opts: StoriesPo
   return {
     modes,
     morning: () => read('md', (r) => r.morning()),
-    numbers: () => read('gtn', (r) => r.numbers()),
     leads: () => read('fvp', (r) => r.leads()),
     carouselRunAt: async () => {
       const m = await modes();
-      // Legacy Morning Download and Guess the Number read the carousel run; a series on the intake reads its runs.
+      // Legacy Morning Download reads the carousel run; a series on the intake reads its runs.
       const marks = await Promise.all([
-        m.md !== 'intake' || m.gtn !== 'intake' ? legacy.carouselRunAt?.().catch(() => null) : null,
+        m.md !== 'intake' ? legacy.carouselRunAt?.().catch(() => null) : null,
         anyIntake(m) ? intake.carouselRunAt?.().catch(() => null) : null,
       ]);
       const at = marks.filter((x): x is string => Boolean(x)).sort((a, b) => Date.parse(b) - Date.parse(a))[0];

@@ -1,0 +1,3 @@
+reveal-sting.wav (AT-27): card-place-3 (Kenney Casino Audio, CC0), whoosh-short + impact-bass-1 + sparkle (Pixabay, Pixabay Content License; see explainers/design/sfx/pixabay/CREDITS.md). Mixed 2026-11-10: card flip at 0, reversed whoosh rising into the hit at 0.60 s, bass + sparkle on the hit.
+
+ambient-air.ogg (AT-32): sci-fi-sounds/spaceEngineLarge_000 (Kenney Sci-Fi Sounds 1.0, www.kenney.nl, CC0; explainers/design/sfx/kenney/sci-fi-sounds/License.txt), copied unchanged. The render high-passes it at 60 Hz, low-passes it at 9 kHz, loops it with 1 s equal-power crossfades to 10 s and mixes it well under the music (audio.ts).
