@@ -212,9 +212,9 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   // clears a slide's size floor (size.ts, 2026-10-14). Every other frame, including the
   // opener, is found together by that same stage; the opener goes first, so it is the
   // set's cover and gets the cover's rules (no logo, 1080, promotion).
-  // The carousel logs its photos as used when it renders, so the 7-day rule only
-  // holds a kept photo back when another story used it (2026-10-13: every kept photo
-  // was being dropped as "used" by its own carousel post).
+  // CI-32: the ledger holds photos published in the last 20 days. A carousel's photos
+  // are logged only once that carousel is published, so a kept photo stays while its
+  // carousel is unpublished (the same night) and is held once any post published it.
   const uses = await recentPhotoUses(deps.sourceDb, deps.now).catch(() => new Map<string, Set<string>>());
   const held = new Set(uses.keys());
   const keptUrls = new Set<string>();

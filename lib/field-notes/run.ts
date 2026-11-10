@@ -47,7 +47,8 @@ import { draftToSlideInputs, layoutsToSlides, splitProblems } from './post';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { JevTransport } from '@/lib/reels/jev/runner';
-import { checkPhotoPool, MIN_POST_PHOTOS, pickPhotos, pickPostPhotos, pickReplacement } from './photos/pool';
+import { checkPhotoPool, MIN_POST_PHOTOS, pickPhotos, pickPostPhotos, pickReplacement, publishedPhotoIds } from './photos/pool';
+import { readUsedLedger, USED_PHOTO_DAYS } from '@/lib/photos/used';
 import { listPool, recordUse, releaseRested } from './photos/store';
 import type { RenderedPost } from './render/render';
 import { storeFieldNotesJpegs } from './render/render';
@@ -237,12 +238,26 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // (cover + one per tip + Follow), so a draft is never written that cannot be placed.
     const nextSeq = await nextPostSeq(q);
     await releaseRested(q, nextSeq, input.settings.photoRestPosts);
-    const pool = await listPool(q);
+    // CI-32: team photos any post published in the last 20 days sit out too (the ledger, by bank key or dHash).
+    const fullPool = await listPool(q);
+    let published = new Set<string>();
+    try {
+      const ledger = await readUsedLedger(q, d.now);
+      const { rows: hashed } = await q<{ id: string; dhash: string | null }>(`SELECT id::text AS id, dhash FROM media_library.photos WHERE id = ANY($1::uuid[])`, [fullPool.map((p) => p.photoId)]);
+      published = publishedPhotoIds(fullPool, ledger, new Map(hashed.map((r) => [r.id, r.dhash])));
+    } catch (err) {
+      record.photoLedger = `the used-photo ledger could not be read (${err instanceof Error ? err.message : String(err)}); only the rest rule applies`;
+    }
+    if (published.size) record.photosPublishedRecently = [...published];
+    const pool = fullPool.filter((p) => !published.has(p.photoId));
     const available = pickPhotos({ pool, nextSeq, restPosts: input.settings.photoRestPosts, count: 100 });
     record.photosAvailable = available.length;
     record.peoplePhotosAvailable = available.filter((p) => p.kind === 'people').length;
     const poolCheck = checkPhotoPool({ pool, nextSeq, restPosts: input.settings.photoRestPosts });
-    if (!poolCheck.ok) return skipped('photos-short', poolCheck.message);
+    if (!poolCheck.ok) {
+      if (published.size) console.log(`field notes: photo pool short; ${published.size} photo(s) are held back as published in the last ${USED_PHOTO_DAYS} days (CI-32)`);
+      return skipped('photos-short', published.size ? `${poolCheck.message} (${published.size} more are held back: published in the last ${USED_PHOTO_DAYS} days.)` : poolCheck.message);
+    }
     const maxTips = Math.min(TIP_SLIDES_MAX, available.length - 2);
 
     // Only seeds are used while the scoring questions are not approved; with them approved the rest is found and scored.
@@ -372,10 +387,11 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // photo (step 7); a cover with no face gets another people photo.
     const need = draft.slides.length + 2;
     if (available.length < need) {
+      if (published.size) console.log(`field notes: photo pool short for ${need} photos; ${published.size} photo(s) are held back as published in the last ${USED_PHOTO_DAYS} days (CI-32)`);
       await settleUnsavedTips('photos-short');
       return skipped('photos-short', `the post has ${draft.slides.length} tip slides and needs ${need} photos; ${available.length} are ready. Upload more.`);
     }
-    const pick = pickPostPhotos({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, count: need });
+    const pick = pickPostPhotos({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, count: need, published });
     record.photoWarnings = pick.warnings;
     const byId = new Map(available.map((p) => [p.photoId, p]));
     const chosen = pick.photoIds.map((id) => byId.get(id)!);
@@ -411,7 +427,7 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
       let swapped = false;
       for (const i of failed) {
         rejectedPhotoIds.push(photoIds[i]!);
-        const replacement = pickReplacement({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, chosen: photoIds, index: i, exclude: rejectedPhotoIds });
+        const replacement = pickReplacement({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, chosen: photoIds, index: i, exclude: [...rejectedPhotoIds, ...published] });
         if (!replacement) continue;
         record.photoWarnings = [...((record.photoWarnings as string[] | undefined) ?? []), ...replacement.warnings];
         const { rows: found } = await q<{ master_path: string }>(`SELECT master_path FROM media_library.photos WHERE id = $1::uuid`, [replacement.photoId]);

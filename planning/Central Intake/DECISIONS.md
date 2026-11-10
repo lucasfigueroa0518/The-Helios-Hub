@@ -91,3 +91,71 @@ Quotes are Lucas's words as recorded in the plan. Where the plan records only th
   Reels new ideas 70%/70%/55%. Every miss is in the intake pool with a near-identical net, ranked 11–20 (tie-break
   noise at a tight cutoff), plus one legacy event split into three ideas that the intake groups as one.
 - Lucas: "Yes, accept it".
+
+## CI-30: Phase 3, one shared photo finder (Lucas, 2026-11-10, before an unattended overnight build)
+- Scope: "All news types": LFD (every slide), Morning Download, Guess the Number, Free vs Paid, Carousels and
+  Text-on-Screen revisions. Field Notes keeps the team's own photos. Each type sits behind its own switch, default
+  today's finder, until Lucas flips it.
+- Live checks overnight: "Yes, up to $3". New vs old finder on recent posts per type, locally, nothing published
+  and nothing written to prod.
+- Per-post hard cap: "$0.30 per post". Once a post hits the cap, its remaining slides use today's finder.
+- No story-specific photo: "Subject photo, then old finder". LFD's rendered-slide vision check still replaces a
+  story whose slide fails it.
+- Build locally only: no push, deploy or migration in Phase 3 until Lucas reviews.
+
+## CI-31: Phase 3 build calls (lead, 2026-11-10, overnight; Lucas reviews in the morning)
+- **The harvest engine stays in `lib/reel-ai-drama/harvest/`.** `lib/photos/` is the shared API over it. The engine
+  imports AI Drama's own types, settings, cost and LLM modules (13 + 3 + 3 + 6 imports), so moving its files to
+  `lib/photos/engine/` would be cosmetic, and 24 importers would need shims. The move waits for a later split of
+  those dependencies.
+- **Switch location:** `intake.settings` key `photo_finders` (`{ "<type>": "shared" }`, missing → today's finder). This
+  needs no migration. A type's switch covers its revisions too.
+- **Text-on-Screen revisions are out.** That path has no photo finder: Kling video plus a text plate over a made
+  background. There is nothing for the shared finder to replace. If Lucas wants web photos there, that is a new
+  feature.
+- **Kept as is (legacy paths):** the five 7-day used-photo readers, and carousels' Haiku 4.5 vision. The shared path
+  uses the harvest's `claude-haiku-5-5` and the exclude sets the callers already build. Merging the legacy readers is a
+  follow-up once the switches are on.
+- **Comparison "old" = the photo the post shipped with**, read from stored data, at no cost. Only the new finder
+  spends, under a $2.80 global cap, inside Lucas's $3.
+- **Per-frame allowance:** spend left divided by frames left, so the first slide can't take the whole $0.30.
+- **Review fixes (fresh review, 2026-11-10):**
+  - A revision's shared finder spends at most that fix's approved cap (`lib/revisions/caps.ts`).
+  - Serper is held to 40% of each frame's allowance, and the look cap keeps $0.015 of headroom. A frame with less
+    than $0.02 left goes straight to today's finder.
+  - GTN and FvP split the post's budget per frame.
+  - Carousels pass their own rules (no logo, C6) into the find, so a refused candidate gives way to the next one.
+- **A company's building fills a frame only when the writer asked for a place.** Run 1 of the side-by-side showed
+  one banked building or lobby photo per company filling frames that asked for a product, a dashboard, a logo or a
+  story moment. Examples: the same DSIT lobby photo for every Anthropic frame, and the same street view for every
+  OpenAI frame. The look itself said they didn't show the company. The rule is in code, not in a prompt.
+
+## CI-32: One used-photo rule across all content (Lucas, 2026-11-10)
+- **A published photo can't be used again by any post, of any content type, for 20 days.** Lucas: "Once an image is
+  published, it cannot be used in a post for another 20 days. That is a rule across all content types now."
+  It replaces the 7-day news rule and AI Drama's own 20-day render-time rule.
+- **Used means published.** "a photo counts as used once it's published." A built post that never goes out uses up
+  nothing.
+- **Instagram is the source of truth.** A nightly read lists the account's new posts and matches each one back to the
+  post we built; that post's photos are logged from the post's real publish time. Lucas: "reading instagram nightly is
+  the move." Posts the app publishes itself are logged at publish time too.
+- **Matched by URL and by perceptual hash**, so a resized copy or another URL for the same picture counts as used.
+- **Exempt: brand assets only** (logos, meme templates, AI Drama character cutouts). Field Notes team photos are
+  covered: "We are going to grow that pool."
+- **No hold on unpublished posts.** Two posts built the same night may pick the same photo: "This type of duplicate is
+  fine. Don't enforce this."
+- **Build calls (lead, 2026-11-10; local only, ships with Phase 3).**
+  - One ledger: `social.used_photos`, gaining phash, dhash, vertical and media_id (`db/social_used_photos_v2.sql`).
+    Contract in `lib/photos/used.ts`, the hash guard for legacy finders in `lib/photos/used-guard.ts`.
+  - Every picker reads it: the shared finder, today's finders (LFD, Stories, Carousels, revisions), the photo bank
+    (URL + dHash), AI Drama's harvest (in place of its render-time `asset_uses` check), Field Notes' pool (by photo id
+    + dHash) and AI Events' posters.
+  - Writers: each publish hook (LFD, Stories, Carousels, Field Notes, AI Events), plus the nightly Instagram read at
+    11:45 PM NY (`lib/photos/ig-sync.ts`), which also covers hand-posted posts and AI Drama. Matching is by media id,
+    then exact caption, then cover image; a Stories frame matches by image only when two frames posted within an hour
+    agree on one set. The read lists 21 days each night and resumes where a timed-out run stopped.
+  - Removed: the carousel build-time write (`social_daily.ts`) and the revision-time write.
+  - Headshots and CEO portraits lose their exemption from the published rule. A carousel run may still repeat a
+    headshot it picked earlier the same night (same-night duplicates are fine).
+  - Ship order: apply the SQL, run `scripts/photos/ig-sync.ts` dry, then `--go` once, then deploy (Vercel + social
+    VM). Before the SQL the code falls back to LFD and Stories publish rows only.

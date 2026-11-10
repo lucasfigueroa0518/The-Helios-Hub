@@ -177,6 +177,11 @@ export type HarvestDeps = {
   capUsd?: number;
   /** The hub's photo bank: read first, and handed every kept photo. Absent or null: not used (tests, no DATABASE_URL). */
   photoBank?: HarvestPhotoBank | null;
+  /**
+   * The hub's database, where the used-photo ledger lives (CI-32: social.used_photos). The reuse rule reads it, not
+   * `db` (the Explainers database). Absent or null: the rule can't be checked, and the run notes it.
+   */
+  ledgerDb?: Queryable | null;
 };
 
 /** Per-run state every adapter shares. */

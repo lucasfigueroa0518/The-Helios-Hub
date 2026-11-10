@@ -27,7 +27,11 @@ import { liveJevTransport } from '@/lib/reels/jev/client';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
 import { createPhotoBank } from '@/lib/media-library/bank';
+import { buildFreeVsPaid } from '@/lib/stories/build/free-vs-paid';
+import { buildGuessTheNumber } from '@/lib/stories/build/guess-the-number';
+import { buildMorningDownload } from '@/lib/stories/build/morning-download';
 import { createLivePhotoFinder } from '@/lib/stories/photos';
+import { sharedSeriesBuilders } from '@/lib/stories/photos-shared';
 import { createLiveStoryInsightsClient } from '@/lib/stories/publish/insights';
 import { createLiveStoriesMetaClient } from '@/lib/stories/publish/meta';
 import { openRenderer, type Renderer } from '@/lib/stories/render/render';
@@ -36,6 +40,7 @@ import type { Series } from '@/lib/stories/render/types';
 import { nyDate, requestSet } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
+import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
 import { tick } from '@/lib/stories/worker';
 import { liveWriterCreate } from '@/lib/stories/writer';
 import { newAnthropic } from '@/lib/anthropic-client';
@@ -70,15 +75,23 @@ async function main() {
       renderer ??= await openRenderer();
       const settings = await loadSettings(db);
       const client = newAnthropic();
+      // Once per build: series on the shared photo finder get wrapped builders; none, and today's deps are unchanged.
+      const builders = await sharedSeriesBuilders({
+        query: sourceDb,
+        builders: { morning_download: buildMorningDownload, guess_the_number: buildGuessTheNumber, free_vs_paid: buildFreeVsPaid },
+        log: (line) => log(`photo finder: ${line}`),
+      });
       return {
         db,
         sourceDb,
         jevTransport: liveJevTransport,
         write: liveWriterCreate(),
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank }),
+        // CI-32: each pick's picture is checked against the used-photo ledger (read once per finder).
+        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
+        ...(builders ? { builders } : {}),
       };
     },
     meta: () => createLiveStoriesMetaClient(),

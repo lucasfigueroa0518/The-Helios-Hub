@@ -143,6 +143,8 @@ export type PhotoDeps = {
   jev: JevAsk;
   /** Injected for tests; live runs pass fetch. */
   http?: typeof fetch;
+  /** Both hashes of a final pick's bytes, for the used-photo check (CI-32). Absent: hashesOf. Injected for tests. */
+  usedHash?: (bytes: Buffer) => Promise<{ phash: string; dhash: string }>;
   /** Openverse search (both lanes). Absent: the live API. */
   stock?: StockSearch;
   /** Commons file search. Absent: the live API. */
@@ -169,8 +171,10 @@ export type SearchContext = {
   photos: ListedPhoto[];
   /** Each subject's type (identity check, else the Reporter's mark). */
   kinds: Map<string, SubjectType | null>;
-  /** URLs used in the last 7 days or earlier in this run. Never picked (logos and story-slide headshots aside). */
+  /** URLs published in the last 20 days (CI-32) or picked earlier in this run. Never picked (story-slide logos aside). */
   recent: Set<string>;
+  /** The URLs in `recent` that were published (the CI-32 ledger); the rest were picked earlier in this run. */
+  published: Set<string>;
   /** When each URL was last used (the used-photo log): the bank offers the least recently used first. */
   lastUsed: Map<string, string>;
   /** Identity results by subject name (p18.ts), shared with the Writer's availability flags. */
@@ -188,7 +192,7 @@ export type SearchContext = {
 export function newSearchContext(
   brief: Brief,
   pages: PageReadOk[],
-  opts: { recent?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; photos?: ListedPhoto[]; kinds?: Map<string, SubjectType | null>; storyDate?: string | null } = {},
+  opts: { recent?: Set<string>; published?: Set<string>; lastUsed?: Map<string, string>; identities?: IdentityCache; photos?: ListedPhoto[]; kinds?: Map<string, SubjectType | null>; storyDate?: string | null } = {},
 ): SearchContext {
   return {
     brief,
@@ -196,6 +200,7 @@ export function newSearchContext(
     photos: opts.photos ?? [],
     kinds: opts.kinds ?? new Map(brief.subjects.map((s) => [s.name, s.type ?? null])),
     recent: opts.recent ?? new Set(),
+    published: opts.published ?? new Set(),
     lastUsed: opts.lastUsed ?? new Map(),
     identities: opts.identities ?? new Map(),
     orgPools: new Map(),
@@ -208,7 +213,7 @@ export function newSearchContext(
 /**
  * What a source gets: the shared context, the deps, this request's log, and
  * the slide's subject tags. `cover`/`wide`: the slide's needs (the bank
- * applies the 7-day exemptions and the spread rule itself). `stop`: set by
+ * applies the used-photo exemption and the spread rule itself). `stop`: set by
  * the bank in "first" mode once it has enough; the remaining online sources
  * are skipped.
  */
@@ -233,16 +238,19 @@ export const MAX_CANDIDATES = 2;
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 /**
- * Logos skip the 7-day rule on story slides; headshots too (a person has one main photo). A cover never repeats a
- * headshot (photo spec §4), and, since 2026-10-12, never repeats a logo either: Anthropic stories all opened with
- * the one wordmark. A company's other marks, then its other looks, take the cover's place (design.ts).
+ * Logos are brand assets and skip the used-photo rule (CI-32) on story slides. Headshots and CEO portraits don't skip
+ * it any more (CI-32: only brand assets are exempt), but on story slides they may still repeat a pick made earlier in
+ * this run, as before (Lucas: same-night duplicates are fine). A cover never repeats a logo (2026-10-12: Anthropic
+ * stories all opened with the one wordmark); a company's other marks, then its other looks, take the cover's place
+ * (design.ts).
  */
-const SKIPS_SEVEN_DAYS = new Set<Lane>(['logo', 'headshot', 'ceo']);
+const SKIPS_USED_RULE = new Set<Lane>(['logo']);
+const SKIPS_SAME_RUN = new Set<Lane>(['logo', 'headshot', 'ceo']);
 
 /**
  * One request → at most 2 ranked candidates. Every source for the kind is
- * searched; a source error is logged and the others go on. Photos used in the
- * last 7 days are out (logos always allowed; headshots on story slides).
+ * searched; a source error is logged and the others go on. Photos published in the
+ * last 20 days are out (CI-32; logos allowed on story slides).
  */
 export async function searchVisual(
   request: VisualRequest,
@@ -305,9 +313,10 @@ async function searchOnce(
     if (seen.has(c.url)) return false;
     seen.add(c.url);
     if (slide.wide && !(c.width && c.height && c.width / c.height >= SPREAD_MIN_ASPECT)) return false;
-    const exempt = SKIPS_SEVEN_DAYS.has(c.lane) && !slide.cover;
+    const published = ctx.published.has(c.url);
+    const exempt = !slide.cover && (published ? SKIPS_USED_RULE : SKIPS_SAME_RUN).has(c.lane);
     if (!exempt && ctx.recent.has(c.url)) {
-      run.steps.push(`${c.lane} ${c.title.slice(0, 40)}: used in the last 7 days or earlier in this run`);
+      run.steps.push(`${c.lane} ${c.title.slice(0, 40)}: published in the last 20 days or used earlier in this run`);
       return false;
     }
     return true;
@@ -318,8 +327,8 @@ async function searchOnce(
     await search(bankSource);
     usable.push(...found.slice(from).filter(keep));
   }
-  // A cover's logos rotate: the least recently used mark first, a never-used one before any used (the 7-day rule above
-  // already took out the ones used this week). Everything else ranks as before.
+  // A cover's logos rotate: the least recently used mark first, a never-used one before any used (the used-photo rule above
+  // already took out the ones published lately). Everything else ranks as before.
   const ordered = rankCandidates(usable, request.kind, ctx.storyDate, Boolean(slide.cover));
   const rotating = request.kind === 'logo' && Boolean(slide.cover);
   const lru = (c: Candidate) => ctx.lastUsed.get(c.url) ?? '';

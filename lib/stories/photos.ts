@@ -35,6 +35,8 @@ import { priceCall } from '@/lib/stories/cost';
 import type { Brief } from '@/lib/social/reporter/brief';
 import { readPage, type PageReadOk } from '@/lib/social/reporter/read-page';
 import type { Photo } from '@/lib/stories/render/types';
+import { firstUnused, memoLedger } from '@/lib/photos/used-guard';
+import type { UsedLedger } from '@/lib/photos/used';
 
 export type PhotoRequest = {
   kind: string;
@@ -46,7 +48,7 @@ export type PhotoRequest = {
   alts?: Array<{ kind: string; query: string }>;
   /** The frame's own words (its headline), so the set's slide and pivot checks judge a photo against what the frame says, not just the request. */
   copy?: string;
-  /** Never pick these (photos used in the last 7 days, or already in this set). */
+  /** Never pick these (photos published in the last 20 days, CI-32, or already in this set). */
   exclude: Set<string>;
   /**
    * This frame is the set's cover (a Morning Download opener): only on the first request of a set, it gets the
@@ -149,8 +151,16 @@ export function createLivePhotoFinder(
     runRef?: string;
     /** The set's design stage (tests stub it; default photosForDraft). */
     design?: typeof photosForDraft;
+    /**
+     * The used-photo ledger (CI-32; live: liveUsedLedger), read once per finder. A pick whose picture was published in
+     * the last 20 days (another URL, a resized copy) gives way to the next candidate. Absent: the requests' URL
+     * excludes only.
+     */
+    used?: () => Promise<UsedLedger>;
   } = {},
 ): PhotoFinder {
+  const ledger = opts.used ? memoLedger(opts.used) : null;
+  const readLedger = async () => (ledger ? await ledger().catch(() => undefined) : undefined);
   let usd = 0;
   // The photo bank's run: this finder (one Stories build), its requests numbered in order.
   const runRef = opts.runRef ?? `stories-build:${new Date().toISOString()}`;
@@ -244,7 +254,7 @@ export function createLivePhotoFinder(
         ...(vision ? { vision } : {}),
         ...(tagSheet ? { tagSheet } : {}),
         ...(opts.bank ? { bank: opts.bank.reader } : {}),
-      }, { recent: exclude, storyDate, plainCover: !live[0]!.cover });
+      }, { recent: exclude, storyDate, plainCover: !live[0]!.cover, ...(await readLedger().then((used) => (used ? { used } : {}))) });
       const traces = [designed.cover, ...designed.slides];
       const offset = seq;
       seq += live.length;
@@ -283,7 +293,9 @@ export function createLivePhotoFinder(
       const ctx = newSearchContext(minimalBrief(req), pages, { recent: req.exclude, storyDate: req.storyDate });
       const request = { kind: req.kind as VisualKind, query: req.query };
       const { candidates } = await searchVisual(request, ctx, { jev: tallied, http: opts.http ?? fetch, ...(recorder.vision ? { vision: recorder.vision } : {}), ...(opts.bank ? { bank: opts.bank.reader } : {}) });
-      const pick = candidates.find((c) => !req.exclude.has(c.url));
+      const open = candidates.filter((c) => !req.exclude.has(c.url));
+      const used = await readLedger();
+      const pick = used ? await firstUnused(open, (c) => ({ url: c.url, kind: c.lane === 'logo' ? 'logo' : null }), used, { http: opts.http ?? fetch }) : open[0];
       seq++;
       if (opts.bank) {
         try {

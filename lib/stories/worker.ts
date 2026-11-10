@@ -48,6 +48,7 @@ import { refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
 import { storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings } from '@/lib/stories/settings';
+import { isBrandAsset } from '@/lib/photos/used';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
@@ -71,6 +72,8 @@ export type WorkerDeps = {
   poolReads?: (now: Date) => PoolReads;
   /** The central intake for series on it: the posted check's Jev (its own cost bucket) and the mode read. */
   intake?: { jev?: () => IntakeJev; readMode?: ReadConsumerMode };
+  /** Fetches a published photo to hash it for the used-photo ledger (tests stub it). */
+  photoHttp?: typeof fetch;
 };
 
 const nyClock = (at: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
@@ -194,8 +197,8 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
   await recordHistory(deps.db, series, keys, setId);
   const at = deps.now?.() ?? new Date();
   for (const f of got.frames) {
-    if (!f.photo?.src || f.photo.kind === 'logo') continue;
-    await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
+    if (!f.photo?.src || isBrandAsset(f.photo.kind)) continue;
+    await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }, deps.photoHttp ? { http: deps.photoHttp } : {}).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
   }
   log(`published ${series} ${got.set.ny_date}: ${result.mediaIds.length} frames`);
   return true;

@@ -178,6 +178,7 @@ async function main(): Promise<void> {
   const nextSweep = () => nextRunAt(new Date(), cfg.SOCIAL_INSIGHTS_HOUR_LOCAL, cfg.SOCIAL_INSIGHTS_MINUTE_LOCAL);
   const nextHubSweep = () => nextRunAt(new Date(), cfg.HUB_SWEEP_HOUR_LOCAL, cfg.HUB_SWEEP_MINUTE_LOCAL);
   const nextHealthReport = () => nextRunAt(new Date(), cfg.HEALTH_REPORT_HOUR_LOCAL, cfg.HEALTH_REPORT_MINUTE_LOCAL);
+  const nextIgPhotoSync = () => nextRunAt(new Date(), cfg.IG_PHOTO_SYNC_HOUR_LOCAL, cfg.IG_PHOTO_SYNC_MINUTE_LOCAL);
   const health = await import('@/lib/social-hub/health/job');
   const { explainersHubQuery } = await import('@/lib/social-hub/db');
   const { readPosting } = await import('@/lib/content-type/posting');
@@ -329,6 +330,7 @@ async function main(): Promise<void> {
     let sweepAt = nextSweep();
     let hubSweepAt = nextHubSweep();
     let healthAt = nextHealthReport();
+    let igPhotoSyncAt = nextIgPhotoSync();
     let lastInsights = 0;
     let lastRerunError: string | null = null;
     let lastRevisionsError: string | null = null;
@@ -348,9 +350,31 @@ async function main(): Promise<void> {
     let lastFieldNotesError: string | null = null;
     let lastFieldNotesFacesError: string | null = null;
     const photoBank = mediaBucket(PHOTO_BANK_BUCKET);
-    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextIntakeMainAt: intakeMainAt.toISOString(), nextIntakeTopupAt: intakeTopupAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
+    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextIntakeMainAt: intakeMainAt.toISOString(), nextIntakeTopupAt: intakeTopupAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), nextIgPhotoSyncAt: igPhotoSyncAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
+      if (Date.now() >= igPhotoSyncAt.getTime()) {
+        // 11:45 PM: the Instagram photo read (CI-32). Today's published posts' photos go into the 20-day ledger
+        // before the midnight builds pick. Reads Instagram only, no model call; a failure only logs.
+        if (!metaConfigured()) {
+          log('ig_photo_sync_skipped', { reason: 'META_USER_ACCESS_TOKEN / META_IG_BUSINESS_ACCOUNT_ID not set' });
+        } else {
+          const { liveIgSyncDeps, syncPublishedPhotos } = await import('@/lib/photos/ig-sync');
+          const out = await withLfdTimeout(
+            liveIgSyncDeps(query, (line) => log('ig_photo_sync_note', { line }))
+              .then(syncPublishedPhotos)
+              .then(({ matches: _matches, ...report }) => ({ ok: true as const, report }))
+              .catch((error) => ({ ok: false as const, error: errorText(error) })),
+            cfg.IG_PHOTO_SYNC_TIMEOUT_MS,
+            () => ({ ok: false as const, error: 'timed out after 10 minutes' }),
+          );
+          if (out.ok) log('ig_photo_sync_complete', out.report);
+          else log('ig_photo_sync_failed', { error: out.error });
+        }
+        igPhotoSyncAt = nextIgPhotoSync();
+        continue;
+      }
+
       if (Date.now() >= intakeMainAt.getTime()) {
         // 12:00 AM: the central intake's main run (fetch, group, score; Jev only, $0.50 cap). Never twice a day.
         try {
@@ -642,7 +666,7 @@ async function main(): Promise<void> {
         });
         if (due > 0) log('schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('publish_failed', { error: errorText(error) });
             return null;
           });
@@ -662,7 +686,7 @@ async function main(): Promise<void> {
         });
         if (due > 0) log('lfd_schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublishLfd({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublishLfd({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('lfd_publish_failed', { error: errorText(error) });
             return null;
           });
@@ -683,7 +707,7 @@ async function main(): Promise<void> {
         if (due > 0) log('ai_events_schedule_due', { released: due });
         if (metaConfigured()) {
           const published = await claimAndPublishAiEvents(
-            { query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) },
+            { query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} },
             { snapshot: aiEventsSnapshot, log },
           ).catch((error) => {
             log('ai_events_publish_failed', { error: errorText(error) });
@@ -705,7 +729,7 @@ async function main(): Promise<void> {
         });
         if (due > 0) log('field_notes_schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublishFieldNotes({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublishFieldNotes({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('field_notes_publish_failed', { error: errorText(error) });
             return null;
           });

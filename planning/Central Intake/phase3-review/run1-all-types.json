@@ -1,0 +1,1959 @@
+{
+  "generatedAt": "2026-11-10T05:19:06.694Z",
+  "mode": "go",
+  "capUsd": 2.8,
+  "spentUsd": 1.7671000000000003,
+  "posts": [
+    {
+      "type": "lfd",
+      "postId": "b53d0a63-61cd-4945-aba9-9df703ac030f",
+      "date": "2026-11-09",
+      "status": "review",
+      "title": "Last Few Days 2026-11-09",
+      "notes": [
+        "publish and event dates are not stored on the post: storyDate is empty"
+      ],
+      "excludeCount": 0,
+      "outcome": "ran",
+      "costUsd": 0.30200000000000005,
+      "frames": [
+        {
+          "id": "story 1",
+          "label": "story 1 (major)",
+          "copy": "One AI built a working operating system. Anthropic says an engineer set Claude Fable 5.2 loose on an empty folder. Over eight days, 1,000+ AI helpers produced a system that boots on a laptop, with a login screen and installer",
+          "need": {
+            "id": "story 1",
+            "headline": "One AI built a working operating system.",
+            "brief": "Anthropic says an engineer set Claude Fable 5.2 loose on an empty folder. Over eight days, 1,000+ AI helpers produced a system that boots on a laptop, with a login screen and installer",
+            "copy": "One AI built a working operating system.",
+            "query": "Anthropic Claude Fable 5.2",
+            "kind": "product",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              },
+              {
+                "name": "Anthropic Claude Fable 5.2",
+                "type": "product"
+              }
+            ],
+            "storyUrls": [
+              "https://anthropic.com/claude-fable-and-mythos-5-2"
+            ],
+            "sourceName": "Hacker News",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "storage:lfd/lfd-2026-11-09/meme-engine-news.google.com_rss_articles_cbmipwfbvv95cuxpzs1ya1zgtfdtb3ozufr1t0zacfbdaupbrxr.png",
+            "credit": "meme",
+            "kind": "scene",
+            "source": "meme"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Anthropic Claude Fable 5.2\" (product); wants company:anthropic, company-place:anthropic, product-logo:anthropic-claude-fable-5-2, product:anthropic-claude-fable-5-2, moment, article:1, page:1 ($0.050 of $0.300 left)",
+            "shared: harvest found 12, $0.036 (post total $0.036)",
+            "shared: picked V2 place_photo \"Two men standing side by side in a modern office lobby with plants, wood panelling and lounge seating.\" via Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 2",
+          "label": "story 2 (major)",
+          "copy": "Nvidia lost $330bn in a day over its CEO. Shares fell 7.5% at the open after Jensen Huang admitted an affair with an alleged Chinese spy. The board has opened an independent investigation, and analysts say he could be removed",
+          "need": {
+            "id": "story 2",
+            "headline": "Nvidia lost $330bn in a day over its CEO.",
+            "brief": "Shares fell 7.5% at the open after Jensen Huang admitted an affair with an alleged Chinese spy. The board has opened an independent investigation, and analysts say he could be removed",
+            "copy": "Nvidia lost $330bn in a day over its CEO.",
+            "query": "Jensen Huang Nvidia CEO",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Jensen Huang",
+                "type": "person"
+              },
+              {
+                "name": "Nvidia",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://theguardian.com/technology/2026/nov/09/jensen-huang-image-nvidia"
+            ],
+            "sourceName": "The Guardian",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://i.guim.co.uk/img/media/55b2e52d9f44f9c355f1d6205d0dc7ce85b47cbe/345_0_3849_3080/master/3849.jpg?width=1200&height=630&quality=85&auto=format&fit=crop&precrop=40:21,offset-x50,offset-y0&overlay-align=bottom%2Cleft&overlay-width=100p&overlay-base64=L2ltZy9zdGF0aWMvb3ZlcmxheXMvdGctZGVmYXVsdC5wbmc&enable=upscale&s=a1df8b63f005de9f52c86d9c54c20471",
+            "credit": "Image via The Guardian",
+            "kind": "scene",
+            "source": "lead"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Jensen_huang_stanford_2026-04-30_008.jpg/3840px-Jensen_huang_stanford_2026-04-30_008.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Anderseidesvik, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Jensen Huang Nvidia CEO\" (person); wants person:jensen-huang, person-event:jensen-huang, company:nvidia, company-place:nvidia, moment, article:1, headline:1 ($0.053 of $0.264 left)",
+            "shared: harvest found 28, $0.060 (post total $0.096)",
+            "shared: picked V1 person_photo \"Captioned as Jensen Huang; not confirmed. A man in a black leather jacket and dark shirt gestures while talking in a lecture room with a whiteboard.\" via Anderseidesvik, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Jensen_huang_stanford_2026-04-30_008.jpg/3840px-Jensen_huang_stanford_2026-04-30_008.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 3",
+          "label": "story 3 (rundown)",
+          "copy": "Lawsuit claims ChatGPT helped plan a murder. James Gates sued OpenAI and Sam Altman, alleging ChatGPT kept answering his wife's poisoning questions. OpenAI says it banned the user and gave information to law enforcement",
+          "need": {
+            "id": "story 3",
+            "headline": "Lawsuit claims ChatGPT helped plan a murder.",
+            "brief": "James Gates sued OpenAI and Sam Altman, alleging ChatGPT kept answering his wife's poisoning questions. OpenAI says it banned the user and gave information to law enforcement",
+            "copy": "Lawsuit claims ChatGPT helped plan a murder.",
+            "query": "ChatGPT logo",
+            "kind": "logo",
+            "subjects": [
+              {
+                "name": "OpenAI",
+                "type": "organization"
+              },
+              {
+                "name": "Sam Altman",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://arstechnica.com/tech-policy/2026/11/lawsuit-man-introduced-his-wife-to-chatgpt-she-used-it-to-plan-his-murder"
+            ],
+            "sourceName": "Ars Technica",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/3/32/Sam_Altman_November_2022.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Village Global, CC BY 2.0 · Wikimedia Commons",
+            "kind": "logo",
+            "source": "finder"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"ChatGPT logo\" (logo); wants company:openai, company-place:openai, person:sam-altman, person-event:sam-altman, moment, article:1, headline:1 ($0.051 of $0.204 left)",
+            "shared: harvest found 20, $0.064 (post total $0.160)",
+            "shared: picked V2 place_photo \"A multi-storey stone building on a tree-lined street with a traffic light and parked cars; no OpenAI sign visible.\" via OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 4",
+          "label": "story 4 (major)",
+          "copy": "Palantir pushed for your GP records. WhatsApp messages obtained by campaign group Foxglove appear to show Palantir urging a health minister to extend its AI software to GP data, which its £330m NHS contract rules out",
+          "need": {
+            "id": "story 4",
+            "headline": "Palantir pushed for your GP records.",
+            "brief": "WhatsApp messages obtained by campaign group Foxglove appear to show Palantir urging a health minister to extend its AI software to GP data, which its £330m NHS contract rules out",
+            "copy": "Palantir pushed for your GP records.",
+            "query": "Palantir office logo",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Palantir",
+                "type": "organization"
+              },
+              {
+                "name": "NHS England",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://theguardian.com/technology/2026/nov/09/revealed-palantir-lobbied-minister-to-stretch-ai-tools-reach-to-nhs-gp-records"
+            ],
+            "sourceName": "The Guardian",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "storage:lfd/lfd-2026-11-09/meme-engine-theguardian.com_technology_2026_nov_09_revealed-palantir-lobbied-minister-to-str.png",
+            "credit": "meme",
+            "kind": "scene",
+            "source": "meme"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Yeovil_%2C_Wynford_House_NHS_Somerset_Headquarters_-_geograph.org.uk_-_2851980.jpg/3840px-Yeovil_%2C_Wynford_House_NHS_Somerset_Headquarters_-_geograph.org.uk_-_2851980.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Lewis Clarke, CC BY-SA 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Palantir office logo\" (company); wants company:palantir, company-place:palantir, company:nhs-england, company-place:nhs-england, moment, article:1, headline:1 ($0.047 of $0.140 left)",
+            "shared: harvest found 14, $0.037 (post total $0.197)",
+            "shared: picked V10 place_photo \"Low brick office building behind a car park with a 'Headquarters' sign bearing an NHS logo.\" via Lewis Clarke, CC BY-SA 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Yeovil_%2C_Wynford_House_NHS_Somerset_Headquarters_-_geograph.org.uk_-_2851980.jpg/3840px-Yeovil_%2C_Wynford_House_NHS_Somerset_Headquarters_-_geograph.org.uk_-_2851980.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 5",
+          "label": "story 5 (builder)",
+          "copy": "A kid's drawings became a full game overnight. Lex Toumbourou gave Claude Fable 5.2 one bedtime prompt and woke to a 12-level, four-player brawler; his nephew said \"It's exactly as I imagined\"",
+          "need": {
+            "id": "story 5",
+            "headline": "A kid's drawings became a full game overnight.",
+            "brief": "Lex Toumbourou gave Claude Fable 5.2 one bedtime prompt and woke to a 12-level, four-player brawler; his nephew said \"It's exactly as I imagined\"",
+            "copy": "A kid's drawings became a full game overnight.",
+            "query": "child drawings video game beat 'em up",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Lex Toumbourou",
+                "type": "person"
+              },
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://notesbylex.com/fable-5-2-one-shotted-my-nephews-dream-game"
+            ],
+            "sourceName": "Hacker News",
+            "storyDate": null,
+            "specificity": "story"
+          },
+          "old": {
+            "src": "storage:lfd/lfd-2026-11-09/meme-engine-notesbylex.com_fable-5-2-one-shotted-my-nephews-dream-game.png",
+            "credit": "meme",
+            "kind": "scene",
+            "source": "meme"
+          },
+          "new": {
+            "src": "https://notesbylex.com/_media/aidens-revenge/title.jpg",
+            "credit": "NotesByLex.com (notesbylex.com)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"child drawings video game beat 'em up\" (thematic); wants person:lex-toumbourou, person-event:lex-toumbourou, company:anthropic, company-place:anthropic, moment, article:1, headline:1 ($0.052 of $0.103 left)",
+            "shared: harvest found 14, $0.055 (post total $0.252)",
+            "shared: picked V8 event_photo \"A colorful illustrated game artwork of cartoon kid heroes fighting monsters and robots with lightning and fire effects, in a beat 'em up style.\" via NotesByLex.com (notesbylex.com): https://notesbylex.com/_media/aidens-revenge/title.jpg"
+          ]
+        },
+        {
+          "id": "story 6",
+          "label": "story 6 (builder)",
+          "copy": "Claude Code built a tool to find a mystery beep. Simon Willison's app uses spare devices to triangulate a sound, placing it within about 40cm. The culprit was an old carbon monoxide detector needing new batteries",
+          "need": {
+            "id": "story 6",
+            "headline": "Claude Code built a tool to find a mystery beep.",
+            "brief": "Simon Willison's app uses spare devices to triangulate a sound, placing it within about 40cm. The culprit was an old carbon monoxide detector needing new batteries",
+            "copy": "Claude Code built a tool to find a mystery beep.",
+            "query": "carbon monoxide detector on ceiling",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Simon Willison",
+                "type": "person"
+              },
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://simonwillison.net/2026/Nov/9/mysterious-beeps/"
+            ],
+            "sourceName": "Simon Willison's Weblog",
+            "storyDate": null,
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://static.simonwillison.net/static/2026/beep-locator-card.jpg",
+            "credit": "Image via Simon Willison's Weblog",
+            "kind": "scene",
+            "source": "lead"
+          },
+          "new": {
+            "src": "https://media.licdn.com/dms/image/v2/D5622AQGERA9bP9HkCA/feedshare-shrink_800/B56Z8eX152GgAc-/0/1782920994746?e=2147483647&v=beta&t=Q1mR78vnIglbH7RHfeZpo8QVfHcHhPduEQfMsuJ0bG0",
+            "credit": "LinkedIn (www.linkedin.com)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"carbon monoxide detector on ceiling\" (thematic); wants person:simon-willison, person-event:simon-willison, company:anthropic, company-place:anthropic, moment, article:1, headline:1 ($0.048 of $0.048 left)",
+            "shared: harvest found 18, $0.050 (post total $0.302)",
+            "shared: picked V17 event_photo \"A bald, bearded man holding a smoke or carbon monoxide detector up toward a ceiling, looking up at it.\" via LinkedIn (www.linkedin.com): https://media.licdn.com/dms/image/v2/D5622AQGERA9bP9HkCA/feedshare-shrink_800/B56Z8eX152GgAc-/0/1782920994746?e=2147483647&v=beta&t=Q1mR78vnIglbH7RHfeZpo8QVfHcHhPduEQfMsuJ0bG0"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "lfd",
+      "postId": "95f2f15e-65e1-4e4c-8617-979626355ac1",
+      "date": "2026-11-06",
+      "status": "review",
+      "title": "Last Few Days 2026-11-06",
+      "notes": [
+        "publish and event dates are not stored on the post: storyDate is empty"
+      ],
+      "excludeCount": 0,
+      "outcome": "ran",
+      "costUsd": 0.2535,
+      "frames": [
+        {
+          "id": "story 1",
+          "label": "story 1 (major)",
+          "copy": "Meta Is Now Pausing Its New Commercial Terms After Backlash Meta paused new commercial terms that would have let it use content from business accounts' websites to train AI. A Norwegian court had already issued a temporary injunction",
+          "need": {
+            "id": "story 1",
+            "headline": "Meta Is Now Pausing Its New Commercial Terms After Backlash",
+            "brief": "Meta paused new commercial terms that would have let it use content from business accounts' websites to train AI. A Norwegian court had already issued a temporary injunction",
+            "copy": "Meta Is Now Pausing Its New Commercial Terms After Backlash",
+            "query": "Meta headquarters logo",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Meta",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://404media.co/meta-generative-ai-commercial-terms-on-pause"
+            ],
+            "sourceName": "404 Media",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://storage.ghost.io/c/0f/76/0f76b548-bc58-4f25-abc3-3f5ebca07da4/content/images/size/w1200/2026/11/Social_Media_Kids_Trial_26050035832286.jpg",
+            "credit": "Image via 404 Media",
+            "kind": "scene",
+            "source": "lead"
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Meta_HQ_2023.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Meta Platforms headquarters · InvadingInvader, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Meta headquarters logo\" (company); wants company:meta, company-place:meta, moment, article:1, headline:1 ($0.050 of $0.300 left)",
+            "shared: harvest found 10, $0.031 (post total $0.031)",
+            "shared: picked V2 place_photo \"Aerial view of a large low-rise office campus beside a highway and a bay shoreline, with no people; the caption names Meta Platforms, not SRI.\" via Meta Platforms headquarters · InvadingInvader, CC BY-SA 4.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/b/bb/Meta_HQ_2023.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "story 2",
+          "label": "story 2 (rundown)",
+          "copy": "Alex Stamos Calls Handing Data to Meta's Muse “Totally Insane” Former Meta security chief Alex Stamos says some users hand Muse their password vaults. Meta says Muse runs on an isolated virtual machine but admits “no automated system is perfect”",
+          "need": {
+            "id": "story 2",
+            "headline": "Alex Stamos Calls Handing Data to Meta's Muse “Totally Insane”",
+            "brief": "Former Meta security chief Alex Stamos says some users hand Muse their password vaults. Meta says Muse runs on an isolated virtual machine but admits “no automated system is perfect”",
+            "copy": "Alex Stamos Calls Handing Data to Meta's Muse “Totally Insane”",
+            "query": "Alex Stamos",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Alex Stamos",
+                "type": "person"
+              },
+              {
+                "name": "Meta",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://futurism.com/artificial-intelligence/former-meta-exec-shreds-muse-ai-agent"
+            ],
+            "sourceName": "Futurism",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "storage:lfd/lfd-2026-11-06/meme-engine-futurism.com_artificial-intelligence_former-meta-exec-shreds-muse-ai-agent.png",
+            "credit": "meme",
+            "kind": "scene",
+            "source": "meme"
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/6/6a/Alex_Stamos_at_Web_Summit_2015_-_Dublin%2C_Ireland.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Web Summit, CC BY 2.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Alex Stamos\" (person); wants person:alex-stamos, person-event:alex-stamos, company:meta, company-place:meta, moment, article:1, headline:1 ($0.054 of $0.269 left)",
+            "shared: harvest found 23, $0.048 (post total $0.079)",
+            "shared: picked V1 person_photo \"A bearded man in a plaid shirt gestures while speaking on a Web Summit stage with a dark backdrop.\" via Web Summit, CC BY 2.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/6/6a/Alex_Stamos_at_Web_Summit_2015_-_Dublin%2C_Ireland.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "story 3",
+          "label": "story 3 (rundown)",
+          "copy": "Mark Cuban Says Meta Knowingly Runs AI Deepfake Scam Ads Mark Cuban says Meta runs deepfake ads using an AI copy of his face and voice. Reuters reported Meta expected about $16 billion, 10% of 2024 revenue, from scam and banned-product ads",
+          "need": {
+            "id": "story 3",
+            "headline": "Mark Cuban Says Meta Knowingly Runs AI Deepfake Scam Ads",
+            "brief": "Mark Cuban says Meta runs deepfake ads using an AI copy of his face and voice. Reuters reported Meta expected about $16 billion, 10% of 2024 revenue, from scam and banned-product ads",
+            "copy": "Mark Cuban Says Meta Knowingly Runs AI Deepfake Scam Ads",
+            "query": "Mark Cuban",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Mark Cuban",
+                "type": "person"
+              },
+              {
+                "name": "Meta",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://finance.yahoo.com/technology/ai/articles/mark-cuban-says-facebook-knowingly-213000020.html"
+            ],
+            "sourceName": "Hacker News",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "storage:lfd/lfd-2026-11-06/meme-engine-finance.yahoo.com_technology_ai_articles_mark-cuban-says-facebook-knowingly-2130.png",
+            "credit": "meme",
+            "kind": "scene",
+            "source": "meme"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/MarkCuban2023.jpg/3840px-MarkCuban2023.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Philip Romano, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Mark Cuban\" (person); wants person:mark-cuban, person-event:mark-cuban, company:meta, company-place:meta, moment, article:1, headline:1 ($0.055 of $0.221 left)",
+            "shared: harvest found 28, $0.054 (post total $0.133)",
+            "shared: picked V1 person_photo \"Captioned as Mark Cuban; not confirmed. A smiling man in an olive polo shirt against a dark backdrop, posed as a headshot.\" via Philip Romano, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/MarkCuban2023.jpg/3840px-MarkCuban2023.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 4",
+          "label": "story 4 (major)",
+          "copy": "UK Minister Admits £400 Billion AI Figure Came From a Google Report The UK's £400 billion AI boost figure came from a 2023 report commissioned by Google. Minister Kanishka Narayan puts the government's own central estimate at £120 billion by 2030",
+          "need": {
+            "id": "story 4",
+            "headline": "UK Minister Admits £400 Billion AI Figure Came From a Google Report",
+            "brief": "The UK's £400 billion AI boost figure came from a 2023 report commissioned by Google. Minister Kanishka Narayan puts the government's own central estimate at £120 billion by 2030",
+            "copy": "UK Minister Admits £400 Billion AI Figure Came From a Google Report",
+            "query": "Kanishka Narayan UK AI minister",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Kanishka Narayan",
+                "type": "person"
+              },
+              {
+                "name": "Google",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://wired.com/story/uk-officials-said-ai-would-add-400-billion-to-the-economy-that-figure-mainly-came-from-google"
+            ],
+            "sourceName": "Wired",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://media.wired.com/photos/6ae4f0b834d00005a9a1a2fc/191:100/w_1280,c_limit/2026-10-12T133338Z_906189115_RC2EIMAWOQ1L_RTRMADP_3_AI-BRITAIN-SAFETY.jpg",
+            "credit": "Image via Wired",
+            "kind": "scene",
+            "source": "lead"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fe/Portrait_of_Minister_Kanishka_Narayan._%2854841308955%29_%28cropped%29.jpg/3840px-Portrait_of_Minister_Kanishka_Narayan._%2854841308955%29_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 4.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Kanishka Narayan UK AI minister\" (person); wants person:kanishka-narayan, person-event:kanishka-narayan, company:google, company-place:google, moment, article:1, headline:1 ($0.056 of $0.167 left)",
+            "shared: harvest found 33, $0.053 (post total $0.186)",
+            "shared: picked V1 person_photo \"A man in a dark suit and white shirt against a plain grey backdrop, captioned as Kanishka Narayan; not confirmed.\" via Department for Science, Innovation and Technology, CC BY 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fe/Portrait_of_Minister_Kanishka_Narayan._%2854841308955%29_%28cropped%29.jpg/3840px-Portrait_of_Minister_Kanishka_Narayan._%2854841308955%29_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 5",
+          "label": "story 5 (major)",
+          "copy": "OpenAI Is Dropping NDAs With Public Officials on Data Centers OpenAI announced it won't use NDAs with public officials on its data center projects. It also says it will pay the full cost of the electricity it uses",
+          "need": {
+            "id": "story 5",
+            "headline": "OpenAI Is Dropping NDAs With Public Officials on Data Centers",
+            "brief": "OpenAI announced it won't use NDAs with public officials on its data center projects. It also says it will pay the full cost of the electricity it uses",
+            "copy": "OpenAI Is Dropping NDAs With Public Officials on Data Centers",
+            "query": "data center server room",
+            "kind": "setting",
+            "subjects": [
+              {
+                "name": "OpenAI",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1028454/openai-data-center-nda"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://platform.theverge.com/wp-content/uploads/sites/2/2026/06/STKS528_DATA_CENTERS2_B.jpg?quality=90&strip=all&crop=0%2C10.732984293194%2C100%2C78.534031413613&w=1200",
+            "credit": "Image via The Verge",
+            "kind": "scene",
+            "source": "lead"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Datacenter_Server_Racks_%2822370909788%29.jpg/3840px-Datacenter_Server_Racks_%2822370909788%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"data center server room\" (setting); wants company:openai, company-place:openai, moment, article:1, headline:1 ($0.057 of $0.114 left)",
+            "shared: harvest found 12, $0.030 (post total $0.216)",
+            "shared: picked V4 event_photo \"Rows of black server racks in a room with a raised tile floor and ceiling lights.\" via Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Datacenter_Server_Racks_%2822370909788%29.jpg/3840px-Datacenter_Server_Racks_%2822370909788%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 6",
+          "label": "story 6 (rundown)",
+          "copy": "Anthropic Debuts Smart Reports to Let Managers Track Claude Use Anthropic has announced Smart Reports, which lets managers summarize how a team uses Claude. Anthropic says it will anonymize sessions, and managers can sort output by cost",
+          "need": {
+            "id": "story 6",
+            "headline": "Anthropic Debuts Smart Reports to Let Managers Track Claude Use",
+            "brief": "Anthropic has announced Smart Reports, which lets managers summarize how a team uses Claude. Anthropic says it will anonymize sessions, and managers can sort output by cost",
+            "copy": "Anthropic Debuts Smart Reports to Let Managers Track Claude Use",
+            "query": "Anthropic Claude Smart Reports dashboard",
+            "kind": "product",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              },
+              {
+                "name": "Anthropic Claude Smart Reports dashboard",
+                "type": "product"
+              }
+            ],
+            "storyUrls": [
+              "https://futurism.com/artificial-intelligence/anthropic-claude-surveillance-ai-chats-reports"
+            ],
+            "sourceName": "Futurism",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "storage:lfd/lfd-2026-11-06/meme-engine-futurism.com_artificial-intelligence_anthropic-claude-surveillance-ai-chats-repo.png",
+            "credit": "meme",
+            "kind": "scene",
+            "source": "meme"
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Anthropic Claude Smart Reports dashboard\" (product); wants company:anthropic, company-place:anthropic, product-logo:anthropic-claude-smart-reports-dashboard, product:anthropic-claude-smart-reports-dashboard, moment, article:1, headline:1 ($0.084 of $0.084 left)",
+            "shared: harvest found 16, $0.038 (post total $0.254)",
+            "shared: picked V2 place_photo \"Two men shaking hands in a bright office lobby with plants and wooden pod-like seating; the building is not identified in the picture.\" via Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "md",
+      "postId": "d1d9ff3f-47bb-4ddf-afb3-4cc953db92d5",
+      "date": "2026-11-09",
+      "status": "ready",
+      "title": "Morning Download: Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huan",
+      "notes": [
+        "subjects are not stored: a person/company/logo query that is just a name becomes the subject",
+        "story text is not stored: the brief is the headline"
+      ],
+      "excludeCount": 0,
+      "outcome": "ran",
+      "costUsd": 0.2326,
+      "frames": [
+        {
+          "id": "opener",
+          "label": "opener (cover)",
+          "copy": "",
+          "need": {
+            "id": "opener",
+            "headline": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "brief": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "copy": "",
+            "query": "Google headquarters Googleplex",
+            "kind": "company",
+            "subjects": [],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1029562/nvidia-investigating-jensen-huang-relationship-chinese-spy"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject",
+            "cover": true
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/Newspaper_Stack_%288582618448%29.jpg/3840px-Newspaper_Stack_%288582618448%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Babak Farrokhi from Tehran, IRAN, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/e/e2/Google_Campus%2C_Mountain_View%2C_CA.jpg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original",
+            "credit": "Wikipedia (en.wikipedia.org)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Google headquarters Googleplex\" (company); wants moment, article:1, headline:1 ($0.060 of $0.300 left)",
+            "shared: harvest found 21, $0.041 (post total $0.041)",
+            "shared: picked V1 event_photo \"Aerial view of a corporate campus of low office buildings with lawns and parking areas.\" via Wikipedia (en.wikipedia.org): https://upload.wikimedia.org/wikipedia/commons/e/e2/Google_Campus%2C_Mountain_View%2C_CA.jpg?utm_source=en.wikipedia.org&utm_campaign=index&utm_content=original"
+          ]
+        },
+        {
+          "id": "story 1",
+          "label": "story 1",
+          "copy": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+          "need": {
+            "id": "story 1",
+            "headline": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "brief": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "copy": "Nvidia's board opened an independent investigation on Nov 8 into CEO Jensen Huang's relationship with Megaspeed exec Alice Huang, who was reportedly recruited by China's spy agency. The board says it has no reason to think secrets leaked.",
+            "query": "Jensen Huang",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Jensen Huang",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1029562/nvidia-investigating-jensen-huang-relationship-chinese-spy"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Jensen_huang_stanford_2026-04-30_008.jpg/3840px-Jensen_huang_stanford_2026-04-30_008.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Anderseidesvik, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Jensen Huang\" (person); wants person:jensen-huang, person-event:jensen-huang, moment, article:1, headline:1 ($0.065 of $0.259 left)",
+            "shared: harvest found 27, $0.052 (post total $0.093)",
+            "shared: picked V1 person_photo \"A gray-haired man in a black leather jacket and dark shirt gestures while talking in a lecture hall; captioned as Jensen Huang; not confirmed.\" via Anderseidesvik, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4a/Jensen_huang_stanford_2026-04-30_008.jpg/3840px-Jensen_huang_stanford_2026-04-30_008.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 2",
+          "label": "story 2",
+          "copy": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+          "need": {
+            "id": "story 2",
+            "headline": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+            "brief": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+            "copy": "NYC Mayor Zohran Mamdani slammed Google for saying schools that restrict its AI features will also lose Google Search. That puts schools that want AI limits in a tough spot, since Google is the dominant search engine.",
+            "query": "Zohran Mamdani",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Zohran Mamdani",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://futurism.com/artificial-intelligence/mamdani-blasts-google-bullying-schools"
+            ],
+            "sourceName": "Futurism",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Zohran_Mamdani_05.25.25_%28b%29.jpg/3840px-Zohran_Mamdani_05.25.25_%28b%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Dmitryshein, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Zohran_Mamdani_05.25.25_%28b%29.jpg/3840px-Zohran_Mamdani_05.25.25_%28b%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Dmitryshein, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Zohran Mamdani\" (person); wants person:zohran-mamdani, person-event:zohran-mamdani, moment, article:1, headline:1 ($0.069 of $0.207 left)",
+            "shared: harvest found 29, $0.056 (post total $0.149)",
+            "shared: picked V1 person_photo \"captioned as Zohran Mamdani; not confirmed. A smiling man in a dark suit, white shirt and blue polka-dot tie against a dark backdrop.\" via Dmitryshein, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/2/25/Zohran_Mamdani_05.25.25_%28b%29.jpg/3840px-Zohran_Mamdani_05.25.25_%28b%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 3",
+          "label": "story 3",
+          "copy": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+          "need": {
+            "id": "story 3",
+            "headline": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+            "brief": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+            "copy": "Goldman Sachs now limits Anthropic's Claude Code and GitHub's AI coding tools to its engineers, per guidance updated in October. Traders and bankers who used them to track client flows lose access.",
+            "query": "Goldman Sachs",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Goldman Sachs",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://thestateofai.com/news/goldman-sachs-claude-code-traders-bankers"
+            ],
+            "sourceName": "State of AI",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/4/48/David_Solomon.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "David M. Solomon, Goldman Sachs CEO · U.S. Secretary of Defense, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Goldman Sachs\" (company); wants company:goldman-sachs, company-place:goldman-sachs, moment, article:1, headline:1 ($0.076 of $0.151 left)",
+            "shared: harvest found 24, $0.050 (post total $0.199)",
+            "shared: picked V5 place_photo \"Smiling bald man in a dark suit, pale shirt and pink patterned tie, indoors against a wood-panel wall; captioned as David M. Solomon; not confirmed.\" via David M. Solomon, Goldman Sachs CEO · U.S. Secretary of Defense, CC BY 2.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/4/48/David_Solomon.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "story 4",
+          "label": "story 4",
+          "copy": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+          "need": {
+            "id": "story 4",
+            "headline": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+            "brief": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+            "copy": "A new paper shows a way to speed up DeepSeek's long-text AI models by up to 14.5% with no retraining. Anyone running these models on long documents could get answers faster at similar accuracy.",
+            "query": "DeepSeek",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "DeepSeek",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://arxiv.org/abs/2611.03768"
+            ],
+            "sourceName": "a paper on arXiv",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Datacenter_Server_Racks_%2822370909788%29.jpg/3840px-Datacenter_Server_Racks_%2822370909788%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://source.washu.edu/app/uploads/2025/02/deepresize1-1024x684.jpg",
+            "credit": "WashU: The Source (source.washu.edu)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"DeepSeek\" (company); wants company:deepseek, company-place:deepseek, moment, paper:2611.03768 ($0.101 of $0.101 left)",
+            "shared: harvest found 13, $0.034 (post total $0.233)",
+            "shared: picked V2 event_photo \"The blue DeepSeek whale logo and wordmark on a white background.\" via WashU: The Source (source.washu.edu): https://source.washu.edu/app/uploads/2025/02/deepresize1-1024x684.jpg"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "md",
+      "postId": "dd808499-b4c3-4965-9f12-6e37ecce9248",
+      "date": "2026-11-06",
+      "status": "ready",
+      "title": "Morning Download: Meta has paused its planned update to its commercial terms after backlash over l",
+      "notes": [
+        "subjects are not stored: a person/company/logo query that is just a name becomes the subject",
+        "story text is not stored: the brief is the headline"
+      ],
+      "excludeCount": 0,
+      "outcome": "ran",
+      "costUsd": 0.2222,
+      "frames": [
+        {
+          "id": "opener",
+          "label": "opener (cover)",
+          "copy": "",
+          "need": {
+            "id": "opener",
+            "headline": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "brief": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "copy": "",
+            "query": "Meta headquarters Menlo Park",
+            "kind": "company",
+            "subjects": [],
+            "storyUrls": [
+              "https://404media.co/meta-generative-ai-commercial-terms-on-pause"
+            ],
+            "sourceName": "404 Media",
+            "storyDate": null,
+            "specificity": "subject",
+            "cover": true
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/5/56/Facebook_Headquarters%2C_Menlo_Park_%287254478874%29.jpg/3840px-Facebook_Headquarters%2C_Menlo_Park_%287254478874%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Jitze Couperus from Los Altos Hills, California, USA, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/b/bb/Meta_HQ_2023.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Meta Platforms headquarters · InvadingInvader, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Meta headquarters Menlo Park\" (company); wants moment, article:1, headline:1 ($0.060 of $0.300 left)",
+            "shared: harvest found 15, $0.041 (post total $0.041)",
+            "shared: picked V1 event_photo \"Aerial view of a low office campus beside a highway and a bay shoreline.\" via Meta Platforms headquarters · InvadingInvader, CC BY-SA 4.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/b/bb/Meta_HQ_2023.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "story 1",
+          "label": "story 1",
+          "copy": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+          "need": {
+            "id": "story 1",
+            "headline": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "brief": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "copy": "Meta has paused its planned update to its commercial terms after backlash over letting it use content from business websites for AI training. The update won't take effect November 20, and Meta's existing terms stay in place.",
+            "query": "Meta Platforms",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Meta Platforms",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://404media.co/meta-generative-ai-commercial-terms-on-pause"
+            ],
+            "sourceName": "404 Media",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/1/18/Mark_Zuckerberg_F8_2019_Keynote_%2832830578717%29_%28cropped%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Mark Zuckerberg, Meta Platforms CEO · Anthony Quintano from Westminster, United States, CC BY 2.0 · Wikimedia Commons",
+            "kind": "person",
+            "source": null
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/6/6b/Aerial_view_of_Facebook_campus_in_Menlo_Park%2C_September_2019.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Pi.1415926535, CC BY-SA 3.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Meta Platforms\" (company); wants company:meta-platforms, company-place:meta-platforms, moment, article:1, headline:1 ($0.065 of $0.259 left)",
+            "shared: harvest found 17, $0.053 (post total $0.095)",
+            "shared: picked V9 place_photo \"Aerial view of a large office campus with a big parking lot surrounded by a bay landscape and a highway.\" via Pi.1415926535, CC BY-SA 3.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/6/6b/Aerial_view_of_Facebook_campus_in_Menlo_Park%2C_September_2019.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "story 2",
+          "label": "story 2",
+          "copy": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+          "need": {
+            "id": "story 2",
+            "headline": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+            "brief": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+            "copy": "OpenAI said on Nov 6 it won't use NDAs with public officials on its data center projects, allowing only narrow protections for security and trade secrets. It also promised to pay the full cost of its electricity.",
+            "query": "OpenAI",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "OpenAI",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1028454/openai-data-center-nda"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b3/Datacenter_Server_Racks_%2822370909788%29.jpg/3840px-Datacenter_Server_Racks_%2822370909788%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Carl Lender from Sunrise, USA, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"OpenAI\" (company); wants company:openai, company-place:openai, moment, article:1, headline:1 ($0.068 of $0.205 left)",
+            "shared: harvest found 21, $0.047 (post total $0.142)",
+            "shared: picked V2 place_photo \"A multi-storey older building with trees and parked cars on a city street; no OpenAI signage is visible.\" via OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 3",
+          "label": "story 3",
+          "copy": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+          "need": {
+            "id": "story 3",
+            "headline": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+            "brief": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+            "copy": "Anthropic is rolling out a beta Personal Finance feature in Claude that connects to your bank and card accounts through Plaid. It's read-only, covers up to two years of transactions, and is for US Pro, Max and Ultra subscribers.",
+            "query": "Anthropic",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://theverge.com/ai-artificial-intelligence/1027652/anthropic-claude-plaid-personal-finance"
+            ],
+            "sourceName": "The Verge",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/eb/Newspaper_Stack_%288582618448%29.jpg/3840px-Newspaper_Stack_%288582618448%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Babak Farrokhi from Tehran, IRAN, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Anthropic\" (company); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1 ($0.079 of $0.158 left)",
+            "shared: harvest found 12, $0.041 (post total $0.182)",
+            "shared: picked V2 place_photo \"Two men shaking hands in a plant-filled office lobby with wooden A-frame booths.\" via Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "story 4",
+          "label": "story 4",
+          "copy": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+          "need": {
+            "id": "story 4",
+            "headline": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+            "brief": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+            "copy": "Google DeepMind released Gemini Omni 1.2 Flash on November 5, with 15-second video clips and conversational editing. It cuts the price 30% from Omni 1.1, to $0.07 a second for 720p, and is generally available.",
+            "query": "Google DeepMind",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Google DeepMind",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://blog.google/innovation-and-ai/technology/developers-tools/introducing-gemini-omni-1-2-flash"
+            ],
+            "sourceName": "Google's blog",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/4/45/Google-Deep_Mind_headquarters_in_London%2C_6_Pancras_Square.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Gciriani, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Google DeepMind\" (company); wants company:google-deepmind, company-place:google-deepmind, moment, article:1, page:1 ($0.118 of $0.118 left)",
+            "shared: harvest found 11, $0.040 (post total $0.222)",
+            "shared: picked V2 place_photo \"The glass-fronted entrance of a building with a Google sign, with a couple of small pedestrians on the pavement.\" via Gciriani, CC BY-SA 4.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/4/45/Google-Deep_Mind_headquarters_in_London%2C_6_Pancras_Square.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "gtn",
+      "postId": "a3fd62f3-1a43-46f7-a1d7-2fda74352f48",
+      "date": "2026-11-05",
+      "status": "ready",
+      "title": "Guess the Number: How many parameters does GPT-3 have?",
+      "notes": [
+        "story date is not stored: storyDate is empty"
+      ],
+      "excludeCount": 0,
+      "outcome": "ran",
+      "costUsd": 0.1125,
+      "frames": [
+        {
+          "id": "question",
+          "label": "question",
+          "copy": "How many parameters does GPT-3 have?",
+          "need": {
+            "id": "question",
+            "headline": "How big GPT-3 was",
+            "brief": "How big GPT-3 was How many parameters does GPT-3 have? 175B Parameters in OpenAI's GPT-3 language model. When the 2020 paper came out, that was 10x more than any previous non-sparse language model.",
+            "copy": "How many parameters does GPT-3 have?",
+            "query": "GPT-3",
+            "kind": "product",
+            "subjects": [
+              {
+                "name": "OpenAI",
+                "type": "organization"
+              },
+              {
+                "name": "GPT-3",
+                "type": "product"
+              }
+            ],
+            "storyUrls": [
+              "https://arxiv.org/abs/2005.14165"
+            ],
+            "sourceName": "arXiv (Brown et al., OpenAI)",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/3/30/GPT-3_table_formatting.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "JPxG, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"GPT-3\" (product); wants company:openai, company-place:openai, product-logo:gpt-3, product:gpt-3, moment, paper:2005.14165 ($0.150 of $0.300 left)",
+            "shared: harvest found 23, $0.071 (post total $0.071)",
+            "shared: picked V2 place_photo \"A stone-and-brick multi-storey building with trees on a city street; no company name is visible.\" via OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "answer",
+          "label": "answer",
+          "copy": "175B Parameters in OpenAI's GPT-3 language model",
+          "need": {
+            "id": "answer",
+            "headline": "How big GPT-3 was",
+            "brief": "How big GPT-3 was How many parameters does GPT-3 have? 175B Parameters in OpenAI's GPT-3 language model. When the 2020 paper came out, that was 10x more than any previous non-sparse language model.",
+            "copy": "175B Parameters in OpenAI's GPT-3 language model",
+            "query": "OpenAI",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "OpenAI",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://arxiv.org/abs/2005.14165"
+            ],
+            "sourceName": "arXiv (Brown et al., OpenAI)",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg/3840px-Pioneer_Building%2C_San_Francisco_%282019%29_-1.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "OpenAI headquarters · HaeB, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/66/OpenAI_logo_2025_%28symbol%29.svg/960px-OpenAI_logo_2025_%28symbol%29.svg.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Logo: ChatGPT (public domain) · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"OpenAI\" (company); wants company:openai, company-place:openai, moment, paper:2005.14165 ($0.229 of $0.229 left)",
+            "shared: harvest found 21, $0.042 (post total $0.113)",
+            "shared: picked V3 place_photo \"The black-and-white OpenAI blossom symbol on a plain white background.\" via Logo: ChatGPT (public domain) · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/6/66/OpenAI_logo_2025_%28symbol%29.svg/960px-OpenAI_logo_2025_%28symbol%29.svg.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "fvp",
+      "postId": "0be43aac-c718-4c21-8ef7-9a56fac4d9bd",
+      "date": "2026-10-31",
+      "status": "ready",
+      "title": "Free vs Paid: Microsoft 365 Personal vs LibreOffice",
+      "notes": [],
+      "excludeCount": 13,
+      "outcome": "ran",
+      "costUsd": 0.082,
+      "frames": [
+        {
+          "id": "paid",
+          "label": "paid logo",
+          "copy": "Microsoft 365 Personal $9.99 a month",
+          "need": {
+            "id": "paid",
+            "headline": "Microsoft 365 Personal vs LibreOffice",
+            "brief": "LibreOffice: Free office suite: documents, spreadsheets and presentations. A free alternative to Microsoft 365 Personal ($9.99 a month).",
+            "copy": "Microsoft 365 Personal $9.99 a month",
+            "query": "Microsoft 365 Personal",
+            "kind": "logo",
+            "subjects": [
+              {
+                "name": "Microsoft 365 Personal",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://www.microsoft.com/en-us/microsoft-365/buy/compare-all-microsoft-365-products"
+            ],
+            "sourceName": "microsoft.com",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/Panel0-116-BBtile-EN",
+            "credit": "Microsoft (www.microsoft.com)",
+            "kind": "logo"
+          },
+          "trace": [
+            "shared: subject need \"Microsoft 365 Personal\" (logo); wants company:microsoft-365-personal, company-place:microsoft-365-personal, moment, article:1, headline:1 ($0.150 of $0.300 left)",
+            "shared: harvest found 14, $0.033 (post total $0.033)",
+            "shared: picked V1 logo \"Microsoft 365 Personal logo with the orange 365 graphic on a light background.\" via Microsoft (www.microsoft.com): https://cdn-dynmedia-1.microsoft.com/is/image/microsoftcorp/Panel0-116-BBtile-EN"
+          ]
+        },
+        {
+          "id": "free",
+          "label": "free logo",
+          "copy": "LibreOffice: Free office suite: documents, spreadsheets and presentations",
+          "need": {
+            "id": "free",
+            "headline": "Microsoft 365 Personal vs LibreOffice",
+            "brief": "LibreOffice: Free office suite: documents, spreadsheets and presentations. A free alternative to Microsoft 365 Personal ($9.99 a month).",
+            "copy": "LibreOffice: Free office suite: documents, spreadsheets and presentations",
+            "query": "LibreOffice",
+            "kind": "logo",
+            "subjects": [
+              {
+                "name": "LibreOffice",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://www.libreoffice.org"
+            ],
+            "sourceName": "libreoffice.org",
+            "storyDate": null,
+            "specificity": "subject"
+          },
+          "old": null,
+          "new": {
+            "src": "https://download.logo.wine/logo/LibreOffice_Writer/LibreOffice_Writer-Logo.wine.png",
+            "credit": "Logo.wine (www.logo.wine)",
+            "kind": "logo"
+          },
+          "trace": [
+            "shared: subject need \"LibreOffice\" (logo); wants company:libreoffice, company-place:libreoffice, moment, article:1, headline:1 ($0.267 of $0.267 left)",
+            "shared: harvest found 23, $0.050 (post total $0.082)",
+            "shared: picked V1 logo \"The LibreOffice Writer application icon, a blue page with a picture, on a white background.\" via Logo.wine (www.logo.wine): https://download.logo.wine/logo/LibreOffice_Writer/LibreOffice_Writer-Logo.wine.png"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "carousel",
+      "postId": "604377f8-3df2-47f9-8fdd-eb6fe3cff938",
+      "date": "2026-10-26",
+      "status": "review",
+      "title": "Carousel: Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+      "notes": [],
+      "excludeCount": 36,
+      "outcome": "ran",
+      "costUsd": 0.2867,
+      "frames": [
+        {
+          "id": "cover",
+          "label": "cover",
+          "copy": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+          "need": {
+            "id": "cover",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "query": "stacks of cash",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              },
+              {
+                "name": "Elon Musk",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "story",
+            "cover": true
+          },
+          "old": {
+            "src": "https://cdn.stocksnap.io/img-thumbs/960w/RG4XMMLSNU.jpg",
+            "credit": "Shopify (public domain)",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/a/a5/Elon_Musk_2011_Shankbone.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "David Shankbone, CC BY 3.0 · Wikimedia Commons",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: story need \"stacks of cash\" (thematic); wants company:anthropic, company-place:anthropic, person:elon-musk, person-event:elon-musk, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.037 of $0.300 left)",
+            "shared: harvest found 15, $0.034 (post total $0.034)",
+            "shared: picked V6 person_photo \"A man in a black jacket and black shirt against a purple backdrop; captioned as Elon Musk at Tribeca, not confirmed.\" via David Shankbone, CC BY 3.0 · Wikimedia Commons: https://upload.wikimedia.org/wikipedia/commons/a/a5/Elon_Musk_2011_Shankbone.JPG?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled"
+          ]
+        },
+        {
+          "id": "slide 2",
+          "label": "slide 2",
+          "copy": "Anthropic commits 5% of shares to a new fund Pending stockholder approval. The board may add 2% for every 50% rise in value above a set baseline.",
+          "need": {
+            "id": "slide 2",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "Anthropic commits 5% of shares to a new fund Pending stockholder approval. The board may add 2% for every 50% rise in value above a set baseline.",
+            "query": "Anthropic",
+            "kind": "logo",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Claude_Code_loGO.png/960px-Claude_Code_loGO.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Logo: Claude Code (CC0) · Wikimedia Commons",
+            "kind": "logo",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Anthropic\" (logo); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.038 of $0.266 left)",
+            "shared: harvest found 12, $0.027 (post total $0.062)",
+            "shared: picked V3 place_photo \"Two men shaking hands in a bright office lobby with plants, wooden triangular partitions and lounge seating.\" via Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "slide 3",
+          "label": "slide 3",
+          "copy": "Anthropic's 5% could be worth a fortune Anthropic plans an IPO as soon as November. Decrypt calls the sum paper value. AFP compares it to Carnegie and Rockefeller.",
+          "need": {
+            "id": "slide 3",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "Anthropic's 5% could be worth a fortune Anthropic plans an IPO as soon as November. Decrypt calls the sum paper value. AFP compares it to Carnegie and Rockefeller.",
+            "query": "stacks of cash",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://cdn.stocksnap.io/img-thumbs/960w/MEDIALY3UV.jpg",
+            "credit": "50Fish (public domain)",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://cf-images.assettype.com/newindianexpress%2F2026-10-26%2F7152bd8z%2FNew-Project-2026-10-26T115542.697.jpg?w=1200&ar=40%3A21&auto=format%2Ccompress&ogImage=true&mode=crop&enlarge=true&overlay=false&overlay_position=bottom&overlay_width=100",
+            "credit": "The New Indian Express (article image)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"stacks of cash\" (thematic); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.040 of $0.238 left)",
+            "shared: harvest found 8, $0.035 (post total $0.097)",
+            "shared: picked V7 event_photo \"A white-background illustration of a blue robot figure sitting in a robotic hand chair while using a laptop.\" via The New Indian Express (article image): https://cf-images.assettype.com/newindianexpress%2F2026-10-26%2F7152bd8z%2FNew-Project-2026-10-26T115542.697.jpg?w=1200&ar=40%3A21&auto=format%2Ccompress&ogImage=true&mode=crop&enlarge=true&overlay=false&overlay_position=bottom&overlay_width=100"
+          ]
+        },
+        {
+          "id": "slide 4",
+          "label": "slide 4",
+          "copy": "Anthropic says about 20% goes to public good That counts the fund, co-founders' 80% equity pledges and an employee match; about half of staff take part.",
+          "need": {
+            "id": "slide 4",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "Anthropic says about 20% goes to public good That counts the fund, co-founders' 80% equity pledges and an employee match; about half of staff take part.",
+            "query": "Anthropic",
+            "kind": "logo",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/03/Startup_Office_in_San_Francisco_with_Indoor_Bike_Parking_%2831834868058%29.jpg/3840px-Startup_Office_in_San_Francisco_with_Indoor_Bike_Parking_%2831834868058%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Tony Webster from Minneapolis, Minnesota, United States, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Anthropic\" (logo); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.041 of $0.203 left)",
+            "shared: harvest found 13, $0.027 (post total $0.123)",
+            "shared: picked V3 place_photo \"Two men standing side by side in a modern office lobby with plants, wood-panel features and lounge seating; captioned as a Peter Kyle visit to Anthropic, not confirmed.\" via Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "slide 5",
+          "label": "slide 5",
+          "copy": "The fund is an Anthropic-owned LLC Unlike a nonprofit, no minimum payout or public tax returns. Cornell's Sarah Wolfolds says decision-making stays with the company.",
+          "need": {
+            "id": "slide 5",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "The fund is an Anthropic-owned LLC Unlike a nonprofit, no minimum payout or public tax returns. Cornell's Sarah Wolfolds says decision-making stays with the company.",
+            "query": "legal documents desk",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              },
+              {
+                "name": "Sarah Wolfolds",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "story"
+          },
+          "old": null,
+          "new": {
+            "src": "https://i.abcnewsfe.com/a/2fe7aac2-531f-451a-b211-f0087d73e67d/elon-musk-gty-jef-261019_1792416275210_hpMain_16x9.jpg?w=1600",
+            "credit": "ABC News (article image)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"legal documents desk\" (thematic); wants company:anthropic, company-place:anthropic, person:sarah-wolfolds, person-event:sarah-wolfolds, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.044 of $0.176 left)",
+            "shared: harvest found 9, $0.049 (post total $0.173)",
+            "shared: picked V8 event_photo \"Elon Musk in a dark suit among a crowd of people in a formal setting, looking to the side with a serious face.\" via ABC News (article image): https://i.abcnewsfe.com/a/2fe7aac2-531f-451a-b211-f0087d73e67d/elon-musk-gty-jef-261019_1792416275210_hpMain_16x9.jpg?w=1600"
+          ]
+        },
+        {
+          "id": "slide 6",
+          "label": "slide 6",
+          "copy": "Musk's reply to Anthropic's fund Posted on X; Decrypt says the reply came Sunday night.",
+          "need": {
+            "id": "slide 6",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "Musk's reply to Anthropic's fund Posted on X; Decrypt says the reply came Sunday night.",
+            "query": "Elon Musk",
+            "kind": "person",
+            "subjects": [
+              {
+                "name": "Elon Musk",
+                "type": "person"
+              },
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/0/0e/Elon_Musk_%2854816836217%29_%28cropped_2%29_%28b%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Gage Skidmore, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "subject",
+            "source": null
+          },
+          "new": {
+            "src": "https://d3i6fh83elv35t.cloudfront.net/static/2026/11/2026-11-05T110022Z_1608237611_RC27ZNA4BX45_RTRMADP_3_USA-ELECTION-MUSK-DEMOCRATS-1024x683.jpg",
+            "credit": "PBS (www.pbs.org)",
+            "kind": "person"
+          },
+          "trace": [
+            "shared: subject need \"Elon Musk\" (person); wants person:elon-musk, person-event:elon-musk, company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.042 of $0.127 left)",
+            "shared: harvest found 14, $0.032 (post total $0.205)",
+            "shared: picked V2 person_photo \"Two men in dark suits standing together at an event, the man on the right in a red tie holding up a paper; captioned as Elon Musk with Trump; not confirmed.\" via PBS (www.pbs.org): https://d3i6fh83elv35t.cloudfront.net/static/2026/11/2026-11-05T110022Z_1608237611_RC27ZNA4BX45_RTRMADP_3_USA-ELECTION-MUSK-DEMOCRATS-1024x683.jpg"
+          ]
+        },
+        {
+          "id": "slide 7",
+          "label": "slide 7",
+          "copy": "Musk answered with a pledge of his own Promised for next year; ABC says nearly $11 billion. Musk gave no details on timing or age cutoff.",
+          "need": {
+            "id": "slide 7",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "Musk answered with a pledge of his own Promised for next year; ABC says nearly $11 billion. Musk gave no details on timing or age cutoff.",
+            "query": "children playing outdoors",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Elon Musk",
+                "type": "person"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "story"
+          },
+          "old": null,
+          "new": {
+            "src": "https://s.hdnux.com/photos/01/67/67/51/31423099/5/ratio3x4_1920.jpg",
+            "credit": "Austin American-Statesman (www.statesman.com)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"children playing outdoors\" (thematic); wants person:elon-musk, person-event:elon-musk, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.048 of $0.095 left)",
+            "shared: harvest found 24, $0.057 (post total $0.262)",
+            "shared: picked V17 event_photo \"A group of people, including a child in an orange shirt, hold hands in a ring on a paved park path under trees, around a large caricature head figure at a party.\" via Austin American-Statesman (www.statesman.com): https://s.hdnux.com/photos/01/67/67/51/31423099/5/ratio3x4_1920.jpg"
+          ]
+        },
+        {
+          "id": "slide 8",
+          "label": "slide 8",
+          "copy": "Key details are still open Anthropic says governance details come in the coming months. Tax, disclosure and who gets direct payments are not yet detailed.",
+          "need": {
+            "id": "slide 8",
+            "headline": "Anthropic commits 5% of shares to a fund possibly worth $100B; Musk criticizes it",
+            "brief": "AFP (via New Indian Express, Oct 26, 2026) reports that AI-company wealth could drive huge philanthropy, led by Anthropic's Oct 18-19 commitment of 5% of its shares to a new Anthropic Public Benefit Fund, with experts raising questions about where the money goes. If Anthropic reaches the $2 trillion valuation investors are eyeing, the 5% stake could be worth around $100 billion, which AFP compares to the largest charitable sums since Carnegie and Rockefeller. The fund is an LLC wholly owned by Anthropic, not a nonprofit foundation, so decision-making stays with the company and transparency is voluntary. A Cornell researcher says this is the trade-off.",
+            "copy": "Key details are still open Anthropic says governance details come in the coming months. Tax, disclosure and who gets direct payments are not yet detailed.",
+            "query": "empty conference room",
+            "kind": "setting",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://www.newindianexpress.com/lifestyle/tech/2026/Oct/26/from-carnegie-to-claude-ai-wealth-could-reshape-philanthropy",
+              "https://www.anthropic.com/news/public-benefit-fund",
+              "https://abcnews.com/Technology/wireStory/anthropic-commits-5-stock-new-public-benefit-fund-137368440",
+              "https://abcnews.com/Business/elon-musk-vows-give-share-spacex-stock-us/story?id=137374928",
+              "https://decrypt.co/381371/anthropic-gives-public-musk-answers-spacex-shares"
+            ],
+            "sourceName": "The New Indian Express (AFP)",
+            "storyDate": "2026-10-26",
+            "specificity": "story"
+          },
+          "old": null,
+          "new": null,
+          "trace": [
+            "shared: story need \"empty conference room\" (setting); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4, article:5, headline:5 ($0.038 of $0.038 left)",
+            "shared: harvest found 4, $0.025 (post total $0.287)",
+            "shared: nothing usable (1 no web URL, 1 excluded, 2 already in the set); today's finder takes over"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "carousel",
+      "postId": "c8d3e596-af1e-41b2-be97-baed2b9f4292",
+      "date": "2026-10-25",
+      "status": "review",
+      "title": "Carousel: Anthropic opens a waitlist for Claude Duet, an AI agent that works while you’re away",
+      "notes": [],
+      "excludeCount": 36,
+      "outcome": "ran",
+      "costUsd": 0.2756,
+      "frames": [
+        {
+          "id": "cover",
+          "label": "cover",
+          "copy": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+          "need": {
+            "id": "cover",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "query": "Anthropic",
+            "kind": "company",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              },
+              {
+                "name": "Claude Duet",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "subject",
+            "cover": true
+          },
+          "old": {
+            "src": "https://cdn.stocksnap.io/img-thumbs/960w/H5HE9KUGX1.jpg",
+            "credit": "Joey Sforza (public domain)",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Anthropic\" (company); wants company:anthropic, company-place:anthropic, company:claude-duet, company-place:claude-duet, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.033 of $0.300 left)",
+            "shared: harvest found 19, $0.040 (post total $0.040)",
+            "shared: picked V3 place_photo \"Two men shaking hands in a lobby with plants and wooden pod-like seating; no place named in the picture.\" via Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854099081629%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "slide 2",
+          "label": "slide 2",
+          "copy": "Claude Duet keeps working when you leave Anthropic opened a waitlisted research preview on Oct 21 for US Pro and Max users, built around Claude Opus 5.5.",
+          "need": {
+            "id": "slide 2",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "Claude Duet keeps working when you leave Anthropic opened a waitlisted research preview on Oct 21 for US Pro and Max users, built around Claude Opus 5.5.",
+            "query": "Claude Duet app",
+            "kind": "product",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              },
+              {
+                "name": "Claude Duet",
+                "type": "organization"
+              },
+              {
+                "name": "Claude Duet app",
+                "type": "product"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "subject"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/ae/Smartphone_with_ChatGPT_app_%2852917381673%29.jpg/3840px-Smartphone_with_ChatGPT_app_%2852917381673%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Jernej Furman from Slovenia, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Claude_Code_loGO.png/960px-Claude_Code_loGO.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Logo: Claude Code (CC0) · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: subject need \"Claude Duet app\" (product); wants company:anthropic, company-place:anthropic, company:claude-duet, company-place:claude-duet, product-logo:claude-duet-app, product:claude-duet-app, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.033 of $0.260 left)",
+            "shared: harvest found 11, $0.027 (post total $0.067)",
+            "shared: picked V2 place_photo \"The Claude starburst logo, an orange asterisk-like mark, on a plain white background.\" via Logo: Claude Code (CC0) · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c2/Claude_Code_loGO.png/960px-Claude_Code_loGO.png?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "slide 3",
+          "label": "slide 3",
+          "copy": "Rivals already had proactive agents Yahoo Tech says Meta's Muse pushed the idea into view and OpenAI followed with Dots; MacRumors calls Duet Anthropic's answer.",
+          "need": {
+            "id": "slide 3",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "Rivals already had proactive agents Yahoo Tech says Meta's Muse pushed the idea into view and OpenAI followed with Dots; MacRumors calls Duet Anthropic's answer.",
+            "query": "two smartphones side by side",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "OpenAI Dots",
+                "type": "organization"
+              },
+              {
+                "name": "Meta Muse",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6b/Quiet_meeting_room_%28Unsplash%29.jpg/3840px-Quiet_meeting_room_%28Unsplash%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Breather breather (CC0) · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://img.semafor.com/2e09a98ecfe16f731e039cc85841cb888189f628-3840x2160.png?w=740&q=75&auto=format&h=416",
+            "credit": "Semafor (www.semafor.com)",
+            "kind": "logo"
+          },
+          "trace": [
+            "shared: story need \"two smartphones side by side\" (thematic); wants company:openai-dots, company-place:openai-dots, company:meta-muse, company-place:meta-muse, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.033 of $0.233 left)",
+            "shared: harvest found 9, $0.028 (post total $0.095)",
+            "shared: picked V1 logo \"Glowing 'dots' wordmark with cartoon blob mascots on a black background; an OpenAI dots-style logo, not Anthropic's Claude Duet.\" via Semafor (www.semafor.com): https://img.semafor.com/2e09a98ecfe16f731e039cc85841cb888189f628-3840x2160.png?w=740&q=75&auto=format&h=416"
+          ]
+        },
+        {
+          "id": "slide 4",
+          "label": "slide 4",
+          "copy": "Duet briefs you, then keeps watch It sends a short brief each morning, then checks connected apps every few hours and messages only when something needs attention.",
+          "need": {
+            "id": "slide 4",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "Duet briefs you, then keeps watch It sends a short brief each morning, then checks connected apps every few hours and messages only when something needs attention.",
+            "query": "smartphone morning notification",
+            "kind": "thematic",
+            "subjects": [],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://images.rawpixel.com/editor_1024/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIzLTExL2xyL21ldDIwMzY4MS1pbWFnZS5qcGc.jpg",
+            "credit": "themet (public domain)",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://inagawa.design/images/projects/life-sign/notification-alarm.webp",
+            "credit": "Hiro Fukushima (inagawa.design)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"smartphone morning notification\" (thematic); wants moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.034 of $0.205 left)",
+            "shared: harvest found 4, $0.030 (post total $0.125)",
+            "shared: picked V1 event_photo \"An iPhone lock screen at 8:32 on Monday, January 12, with a 'Life Sign' notification reading 'Hiko turned off the alarm. Good morning!'\" via Hiro Fukushima (inagawa.design): https://inagawa.design/images/projects/life-sign/notification-alarm.webp"
+          ]
+        },
+        {
+          "id": "slide 5",
+          "label": "slide 5",
+          "copy": "Connectors and plugins Duet can use Anthropic says that includes Gmail, Slack and Stripe, and Duet can buy things through Stripe's Link wallet with approval.",
+          "need": {
+            "id": "slide 5",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "Connectors and plugins Duet can use Anthropic says that includes Gmail, Slack and Stripe, and Duet can buy things through Stripe's Link wallet with approval.",
+            "query": "app icons on phone screen",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://cdn.stocksnap.io/img-thumbs/960w/QVKM5X26VN.jpg",
+            "credit": "Lenharth Systems (public domain)",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://images.ft.com/v3/image/raw/ftcms%3Afb50ba01-098c-48ba-8acb-5b945cd7e6d9?source=next-article&fit=scale-down&quality=highest&width=1440&dpr=1",
+            "credit": "Financial Times (www.ft.com)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"app icons on phone screen\" (thematic); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.035 of $0.175 left)",
+            "shared: harvest found 7, $0.030 (post total $0.155)",
+            "shared: picked V5 event_photo \"Colorful app icons on a home screen with a 'Claude' label above the Claude asterisk icon, beside calculator and photos icons.\" via Financial Times (www.ft.com): https://images.ft.com/v3/image/raw/ftcms%3Afb50ba01-098c-48ba-8acb-5b945cd7e6d9?source=next-article&fit=scale-down&quality=highest&width=1440&dpr=1"
+          ]
+        },
+        {
+          "id": "slide 6",
+          "label": "slide 6",
+          "copy": "Duet asks before it acts Anthropic says it shows its plan before sending, paying, signing or deleting. It bars trading securities and moving money between accounts.",
+          "need": {
+            "id": "slide 6",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "Duet asks before it acts Anthropic says it shows its plan before sending, paying, signing or deleting. It bars trading securities and moving money between accounts.",
+            "query": "hand signing document tablet",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c9/Metal_plate_and_a_padlock_on_a_wooden_door.jpg/3840px-Metal_plate_and_a_padlock_on_a_wooden_door.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Shixart1985, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"hand signing document tablet\" (thematic); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.036 of $0.145 left)",
+            "shared: harvest found 7, $0.025 (post total $0.179)",
+            "shared: picked V4 place_photo \"Two men stand side by side in the same modern office lounge with plants and wooden pod booths; no names or company visible.\" via Department for Science, Innovation and Technology, CC BY 2.0 · Wikimedia Commons: https://thumb.wikimedia.org/wikipedia/commons/thumb/0/02/Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg/3840px-Secretary_of_State_Peter_Kyle_visits_Anthropic_in_San_Francisco._%2854098999333%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail"
+          ]
+        },
+        {
+          "id": "slide 7",
+          "label": "slide 7",
+          "copy": "Safeguards come with admitted flaws Anthropic cites a new classifier, red teams and outside penetration tests, yet says Duet may misread threads or misjudge urgency.",
+          "need": {
+            "id": "slide 7",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "Safeguards come with admitted flaws Anthropic cites a new classifier, red teams and outside penetration tests, yet says Duet may misread threads or misjudge urgency.",
+            "query": "cybersecurity testing laptop code",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://upload.wikimedia.org/wikipedia/commons/a/a1/EFTA00002518_-_Server_rack_with_multiple_hard_drives_and_network_cables_connected_in_a_data_center_environment.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail_unscaled",
+            "credit": "Federal Bureau of Investigation (public domain) · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://www.microsoft.com/en-us/security/blog/wp-content/uploads/2026/10/image-23.webp",
+            "credit": "Microsoft (www.microsoft.com)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"cybersecurity testing laptop code\" (thematic); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.040 of $0.120 left)",
+            "shared: harvest found 5, $0.027 (post total $0.207)",
+            "shared: picked V5 event_photo \"A diagram-style screenshot titled as a malicious Claude Code-branded extension, with flow boxes and labelled steps describing an attack.\" via Microsoft (www.microsoft.com): https://www.microsoft.com/en-us/security/blog/wp-content/uploads/2026/10/image-23.webp"
+          ]
+        },
+        {
+          "id": "slide 8",
+          "label": "slide 8",
+          "copy": "It's weaker at errands and uses plan limits Anthropic says it's weaker at personal errands like booking tickets. Background checks also count toward shared plan limits.",
+          "need": {
+            "id": "slide 8",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "It's weaker at errands and uses plan limits Anthropic says it's weaker at personal errands like booking tickets. Background checks also count toward shared plan limits.",
+            "query": "battery draining phone screen",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "story"
+          },
+          "old": null,
+          "new": {
+            "src": "https://s.yimg.com/lo/mysterio/api/6b5017d3901b9a89798598cd253884c0d803590baeace233b9cd0de8f460f77b/lightyear_networkapi/resizefill_w1200%3Bquality_80%3Bformat_jpg/https%3A%2F%2Fmedia.zenfs.com%2Fen%2Fdigital_trends_973%2Fdde264d10885dfcd6b0492552c9d46e7.jpg",
+            "credit": "Yahoo Tech (article image)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"battery draining phone screen\" (thematic); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.047 of $0.093 left)",
+            "shared: harvest found 8, $0.029 (post total $0.235)",
+            "shared: picked V6 event_photo \"A phone screen showing an AI assistant's morning briefing about health permits, hiring decisions and a renewal, under a small Claude Duet-style logo.\" via Yahoo Tech (article image): https://s.yimg.com/lo/mysterio/api/6b5017d3901b9a89798598cd253884c0d803590baeace233b9cd0de8f460f77b/lightyear_networkapi/resizefill_w1200%3Bquality_80%3Bformat_jpg/https%3A%2F%2Fmedia.zenfs.com%2Fen%2Fdigital_trends_973%2Fdde264d10885dfcd6b0492552c9d46e7.jpg"
+          ]
+        },
+        {
+          "id": "slide 9",
+          "label": "slide 9",
+          "copy": "No independent test of Duet in the sources Anthropic promises more safety details in coming days. Outlets also differ on which platforms Duet runs on.",
+          "need": {
+            "id": "slide 9",
+            "headline": "Anthropic opens a waitlist for Claude Duet, an AI agent that works while you're away",
+            "brief": "On Oct 21, 2026, Anthropic opened a waitlisted research preview of Claude Duet, a proactive AI agent app for US Pro and Max subscribers, which press describe as its answer to OpenAI's Dots and Meta's Muse. Big AI labs are racing to build agents that keep working when you're not chatting with them; Anthropic's entry puts one inside a paid Claude plan aimed at professionals and small-business owners. The agent can read email, pay and sign on a user's behalf, so Anthropic's approval gates and safeguards, and its own admission of mistakes, are central to whether it can be trusted.",
+            "copy": "No independent test of Duet in the sources Anthropic promises more safety details in coming days. Outlets also differ on which platforms Duet runs on.",
+            "query": "magnifying glass over laptop",
+            "kind": "thematic",
+            "subjects": [
+              {
+                "name": "Anthropic",
+                "type": "organization"
+              }
+            ],
+            "storyUrls": [
+              "https://tech.yahoo.com/ai/claude/articles/anthropic-unveils-claude-duet-answer-002554435.html",
+              "https://claude.com/resources/articles/claude-duet",
+              "https://siliconangle.com/2026/10/22/anthropic-introduces-claude-duet-a-proactive-ai-agent-for-professionals/",
+              "https://www.macrumors.com/2026/10/21/anthropic-claude-duet/"
+            ],
+            "sourceName": "Yahoo Tech (Digital Trends syndication)",
+            "storyDate": "2026-10-25",
+            "specificity": "story"
+          },
+          "old": {
+            "src": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/82/Drawing_of_a_Post-It_Note_on_Post-It_Note.jpg/3840px-Drawing_of_a_Post-It_Note_on_Post-It_Note.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=thumbnail",
+            "credit": "Bladner32, CC BY-SA 4.0 · Wikimedia Commons",
+            "kind": "scene",
+            "source": null
+          },
+          "new": {
+            "src": "https://claude.com/resources/articles/claude-duet/opengraph-image/og",
+            "credit": "Anthropic (press image)",
+            "kind": "scene"
+          },
+          "trace": [
+            "shared: story need \"magnifying glass over laptop\" (thematic); wants company:anthropic, company-place:anthropic, moment, article:1, headline:1, article:2, page:2, article:3, headline:3, article:4, headline:4 ($0.065 of $0.065 left)",
+            "shared: harvest found 9, $0.040 (post total $0.276)",
+            "shared: picked V7 event_photo \"The Claude Duet app logo: a black loop squiggle on an orange circle inside a white rounded square.\" via Anthropic (press image): https://claude.com/resources/articles/claude-duet/opengraph-image/og"
+          ]
+        }
+      ]
+    }
+  ],
+  "skipped": []
+}

@@ -23,6 +23,7 @@ import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 import type { AddIntakeSeed, IntakeJev, IntakeQuery, ListStories } from '@/lib/intake/types';
 import { intakeLanes, type IntakeLaneDeps } from '@/lib/intake/pool-lfd';
 import type { PhotoFinder } from '@/lib/stories/photos';
+import type { FindOptions, FoundPhotos, PhotoBudget, PhotoDeps, PhotoNeed, PhotoProfile } from '@/lib/photos/types';
 
 import { LFD_CAPTION_VERSION, writeLfdCaptionLines } from './caption-lines';
 import { MEME_POOL_SCAN } from './config';
@@ -34,7 +35,8 @@ import { judgedPool, leadFor, MAX_SEEDS, MIN_STORIES, mergeSameEvent, PER_COMPAN
 import { arrangeMemes, buildPost, composeCaption, coverMemeOf } from './post';
 import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate, type LfdSeed } from './seeds';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
-import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from './store';
+import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoLedger, startRun, usedIdeaIds } from './store';
+import { usedReason, type GuardDeps } from '@/lib/photos/used-guard';
 import type { Drop, EngineMeme, LfdCandidate, LfdWindow, Pick, Ready, StoryCopy } from './types';
 import { checkSlide, VISION_UNAVAILABLE, type SlideVerdict } from './vision';
 import { extendWindow, windowFor } from './window';
@@ -99,7 +101,47 @@ export type LfdRunDeps = {
   };
   /** Builder slides' photos: AI Drama's harvest after the article lead image, before the finder. Absent: the finder only. */
   harvest?: BuilderHarvest;
+  /**
+   * The shared photo finder (central intake Phase 3), present only when the 'lfd' switch read 'shared' (once per
+   * run, live.ts). Every slide tries it first; an empty slide then takes today's chain (lead image, finder, meme,
+   * replace) without the builder harvest slice. Absent: today's chain, unchanged.
+   */
+  sharedPhotos?: LfdSharedPhotos;
+  /**
+   * How the used-photo guard (CI-32, lib/photos/used-guard.ts) downloads and hashes a lead image to check it against
+   * the ledger's published pictures. Absent (tests, replays): the lead image's URL is checked only.
+   */
+  usedPhotos?: GuardDeps;
 };
+
+/** The shared finder's wiring for one run. `find` / `need` default to lib/photos/find.ts and lib/photos/needs.ts (tests inject them). */
+export type LfdSharedPhotos = {
+  profile: PhotoProfile;
+  deps: PhotoDeps;
+  find?: (needs: PhotoNeed[], profile: PhotoProfile, deps: PhotoDeps, opts: FindOptions) => Promise<FoundPhotos>;
+  need?: (pick: Pick, copy: StoryCopy, id: string) => PhotoNeed;
+};
+
+/**
+ * The shared finder over a set of stories, one photo (or null) and one trace per story, same order, under the
+ * post's `budget`. Never throws: an error leaves every story to today's chain, with the reason in its trace.
+ */
+export async function findSharedLfdPhotos(
+  s: LfdSharedPhotos,
+  items: Array<{ pick: Pick; copy: StoryCopy }>,
+  exclude: ReadonlySet<string>,
+  budget: PhotoBudget,
+): Promise<{ photos: Array<Ready['photo'] | null>; traces: string[][] }> {
+  if (items.length === 0) return { photos: [], traces: [] };
+  try {
+    const find = s.find ?? (await import('@/lib/photos/find')).findPhotos;
+    const need = s.need ?? (await import('@/lib/photos/needs')).needForLfd;
+    const out = await find(items.map((it) => need(it.pick, it.copy, it.pick.key)), s.profile, s.deps, { exclude, budget });
+    return { photos: items.map((_, i) => out.photos[i] ?? null), traces: items.map((_, i) => out.traces[i] ?? []) };
+  } catch (err) {
+    return { photos: items.map(() => null), traces: items.map(() => [`shared: failed: ${err instanceof Error ? err.message : String(err)}`]) };
+  }
+}
 
 export type IntakeMode = 'intake' | 'legacy' | 'stale-fallback';
 
@@ -335,6 +377,8 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
   const nyDate = nyDateKey(d.now);
   const runId = d.runId ? await adoptRun(d.query, d.runId, d.capUsd, nyDate) : await startRun(d.query, d.trigger, d.capUsd, nyDate);
   const record: Record<string, unknown> = {};
+  // The shared finder's spend for this post (Serper + Haiku looks); stays 0 in legacy mode.
+  const sharedBudget: PhotoBudget = { usd: 0, capUsd: d.sharedPhotos?.profile.capUsd ?? 0 };
   let jevCalls = 0;
   const jev: JevAsk = (req, meta) => {
     jevCalls += 1;
@@ -419,11 +463,17 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.vision = vision;
     /** Verdicts by story key + photo: a slide unchanged since the last render is not looked at again. */
     const verdicts = new Map<string, SlideVerdict>();
-    const exclude = await recentPhotoUrls(d.query, d.now);
+    // CI-32: photos published in the last 20 days, by URL (the exclude set) and by picture (the ledger's hashes).
+    const ledger = await recentPhotoLedger(d.query, d.now);
+    const exclude = new Set(ledger.urls);
     // Builder-slide harvests share one budget per post (round 3: $0.15).
     const harvestBudget: HarvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };
     const harvestRecord: { usd: number; slides: Array<{ key: string; found: boolean }> } = { usd: 0, slides: [] };
-    if (d.harvest) record.photoHarvest = harvestRecord;
+    if (d.harvest && !d.sharedPhotos) record.photoHarvest = harvestRecord;
+    const sharedRecord: { usd: number; slides: Array<{ key: string; found: boolean }> } = { usd: 0, slides: [] };
+    if (d.sharedPhotos) record.photoShared = sharedRecord;
+    /** Stories whose photo came from the shared finder, by key → src (a vision reject sends them to today's finder). */
+    const sharedPicked = new Map<string, string>();
     const memesRecord: {
       rescued: Array<{ key: string; headline: string; templateId: string }>;
       scanned: Array<{ key: string; headline: string; pass: boolean }>;
@@ -504,9 +554,34 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
 
       // The article's own lead image first; only stories without one go to the finder. One set: no photo twice.
       const taken = new Set([...exclude, ...ready.map((r) => r.photo.src)]);
+      // Shared mode: every slide tries the shared finder first; the empty ones take today's chain below.
+      const sharedHits = new Map<number, { photo: Ready['photo']; trace: string[] }>();
+      const sharedTraces = new Map<number, string[]>();
+      if (d.sharedPhotos) {
+        const got = await findSharedLfdPhotos(d.sharedPhotos, checked, taken, sharedBudget);
+        sharedRecord.usd = sharedBudget.usd;
+        for (const [i, item] of checked.entries()) {
+          const photo = got.photos[i];
+          sharedRecord.slides.push({ key: item.pick.key, found: Boolean(photo) });
+          if (photo) {
+            taken.add(photo.src);
+            sharedHits.set(i, { photo, trace: got.traces[i] ?? [] });
+          } else sharedTraces.set(i, got.traces[i] ?? []);
+        }
+      }
       const leads: Array<Awaited<ReturnType<typeof leadImage>>> = [];
-      for (const item of checked) {
-        const lead = await leadImage(readPage, item.pick, taken);
+      const ledgerNotes = new Map<number, string[]>();
+      for (const [i, item] of checked.entries()) {
+        if (sharedHits.has(i)) {
+          leads.push(null);
+          continue;
+        }
+        let lead = await leadImage(readPage, item.pick, taken);
+        const used = lead ? await usedReason(ledger, { url: lead.photo.src, kind: lead.photo.kind }, d.usedPhotos ?? {}) : null;
+        if (lead && used) {
+          ledgerNotes.set(i, [`lead image refused by the used-photo ledger: ${used}: ${lead.photo.src}`]);
+          lead = null;
+        }
         if (lead) taken.add(lead.photo.src);
         leads.push(lead);
       }
@@ -514,8 +589,9 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       const harvested = new Map<number, { photo: Ready['photo']; trace: string[] }>();
       const harvestTraces = new Map<number, string[]>();
       for (const [i, item] of checked.entries()) {
-        if (leads[i] || item.pick.lane !== 'builder' || !d.harvest) continue;
-        const got = await harvestBuilderPhoto(d.harvest, item.pick, item.copy, taken, harvestBudget, d.now);
+        // Shared mode skips the builder-only harvest slice: the shared finder already covered every slide.
+        if (leads[i] || item.pick.lane !== 'builder' || !d.harvest || d.sharedPhotos) continue;
+        const got = await harvestBuilderPhoto(d.harvest, item.pick, item.copy, taken, harvestBudget, d.now, ledger);
         harvestRecord.slides.push({ key: item.pick.key, found: got.photo !== null });
         harvestRecord.usd = harvestBudget.usd;
         if (got.photo) {
@@ -523,13 +599,20 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
           harvested.set(i, { photo: got.photo, trace: got.trace });
         } else harvestTraces.set(i, got.trace);
       }
-      const rest = checked.filter((_, i) => !leads[i] && !harvested.has(i));
+      const rest = checked.filter((_, i) => !leads[i] && !harvested.has(i) && !sharedHits.has(i));
       const found = await findPhotos(d.photos, rest, taken);
       let k = 0;
       for (const [i, item] of checked.entries()) {
+        const shared = sharedHits.get(i);
+        if (shared) {
+          // The shared finder is AI Drama's harvest engine: recorded as 'harvest', its trace steps prefixed `shared:`.
+          ready.push({ ...item, photo: shared.photo, photoSource: 'harvest', photoTrace: shared.trace });
+          sharedPicked.set(item.pick.key, shared.photo.src);
+          continue;
+        }
         const lead = leads[i];
         if (lead) {
-          ready.push({ ...item, photo: lead.photo, photoSource: 'lead', photoTrace: [lead.note] });
+          ready.push({ ...item, photo: lead.photo, photoSource: 'lead', photoTrace: [...(sharedTraces.get(i) ?? []), lead.note] });
           continue;
         }
         const harvest = harvested.get(i);
@@ -538,7 +621,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
           continue;
         }
         const photo = found.photos[k];
-        const photoTrace = [...(harvestTraces.get(i) ?? []), ...(found.traces[k] ?? [])];
+        const photoTrace = [...(sharedTraces.get(i) ?? []), ...(ledgerNotes.get(i) ?? []), ...(harvestTraces.get(i) ?? []), ...(found.traces[k] ?? [])];
         k += 1;
         if (photo) ready.push({ ...item, photo, photoSource: 'finder', photoTrace });
         else {
@@ -682,14 +765,22 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       if (!(err instanceof BrokenImages)) throw err;
       // One extra round: drop each story whose photo failed to load or was rejected, replace it, re-render (whatever fails then is recorded).
       // A rejected article lead image first gets one finder search for the same story; only if that finds nothing is the story dropped.
+      // Shared mode: a rejected shared-finder photo is treated the same way (today's finder next).
       const next: Pick[] = [];
       const take = (key: string) => {
         const [gone] = ready.splice(ready.findIndex((r) => r.pick.key === key), 1);
         exclude.add(gone!.photo.src);
         return gone!;
       };
-      const isLead = (key: string) => ready.find((r) => r.pick.key === key)?.photoSource === 'lead';
-      const leadRejected = err.rejected.filter((x) => isLead(x.key)).map((x) => ({ gone: take(x.key), reason: x.reason }));
+      const fromShared = (key: string) => {
+        const r = ready.find((x) => x.pick.key === key);
+        return Boolean(r && sharedPicked.get(key) === r.photo.src);
+      };
+      const isLead = (key: string) => ready.find((r) => r.pick.key === key)?.photoSource === 'lead' || fromShared(key);
+      const leadRejected = err.rejected.filter((x) => isLead(x.key)).map((x) => {
+        const shared = fromShared(x.key);
+        return { gone: take(x.key), reason: x.reason, shared };
+      });
       const leave = [...err.keys.map((key) => ({ key, reason: 'image-failed' as const, detail: undefined })), ...err.rejected.filter((x) => !leadRejected.some((l) => l.gone.pick.key === x.key)).map((x) => ({ key: x.key, reason: 'vision-rejected' as const, detail: x.reason }))];
       for (const { key, reason, detail } of leave) {
         const gone = take(key);
@@ -700,9 +791,9 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       }
       if (leadRejected.length) {
         const again = await findPhotos(d.photos, leadRejected.map(({ gone }) => ({ pick: gone.pick, copy: gone.copy })), new Set([...exclude, ...ready.map((r) => r.photo.src)]));
-        for (const [j, { gone, reason }] of leadRejected.entries()) {
+        for (const [j, { gone, reason, shared }] of leadRejected.entries()) {
           const photo = again.photos[j];
-          const photoTrace = [`lead image rejected by vision: ${reason}: ${gone.photo.src}`, ...(again.traces[j] ?? [])];
+          const photoTrace = [`${shared ? 'shared photo' : 'lead image'} rejected by vision: ${reason}: ${gone.photo.src}`, ...(again.traces[j] ?? [])];
           if (photo) ready.push({ pick: gone.pick, copy: gone.copy, photo, photoSource: 'finder', photoTrace });
           else {
             const kept = await rescueWithMeme({ pick: gone.pick, copy: gone.copy });
@@ -779,14 +870,14 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.stories = final.length;
     const spend = d.spend();
     // recorded false: the run row was no longer running (the worker timed it out); it stays failed.
-    // Harvest spend (Serper + Haiku looks) is outside the run budget's tally: added here so the run total is whole.
-    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd + harvestBudget.usd, jevUsd: spend.jevUsd, record });
+    // Harvest and shared-finder spend (Serper + Haiku looks) is outside the run budget's tally: added here so the run total is whole.
+    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd + harvestBudget.usd + sharedBudget.usd, jevUsd: spend.jevUsd, record });
     return { ok: true, runId, postId, stories: final.length, short, recorded };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     try {
       const spend = d.spend();
-      await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd, jevUsd: spend.jevUsd, record });
+      await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd + sharedBudget.usd, jevUsd: spend.jevUsd, record });
     } catch (finishErr) {
       return { ok: false, runId, error: `${error} (recording the failure also failed: ${finishErr instanceof Error ? finishErr.message : String(finishErr)})` };
     }
