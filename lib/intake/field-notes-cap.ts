@@ -6,6 +6,7 @@
  * run's `unscored` and the next run carries them (the Phase 1 carry, never a sweep). A story whose stored score
  * already matches (same version and member) is a cache hit and takes no slot.
  */
+import { MAX_SCORED_PER_RUN } from '@/lib/field-notes/config';
 import { scoringOrder } from '@/lib/field-notes/sources/select';
 import type { TipCandidate } from '@/lib/field-notes/sources/candidate';
 
@@ -15,9 +16,8 @@ import type { IntakeQuery, IntakeStory, Scorecard } from './types';
 
 export type FieldNotesPick = { selected: IntakeStory[]; deferred: string[] };
 
-/** Field Notes' MAX_SCORED_PER_RUN, read from lib/field-notes/run.ts (loaded lazily: it pulls in rendering). */
+/** Field Notes' MAX_SCORED_PER_RUN (lib/field-notes/config.ts: no renderer in the web bundle). */
 export async function fieldNotesSlots(): Promise<number> {
-  const { MAX_SCORED_PER_RUN } = await import('@/lib/field-notes/run');
   return MAX_SCORED_PER_RUN;
 }
 
