@@ -36,7 +36,7 @@
  * Few Days', under the same 30-minute timeout. Its posts publish and their
  * insights are read here until the single publisher drives the type.
  *
- * Field Notes (planning/Field Notes/CONTRACT.md) shares this process the same way: at 12:00 PM on its
+ * Field Notes (planning/Field Notes/CONTRACT.md) shares this process the same way: at 2:00 AM on its
  * days (Tuesday and Friday) with its auto_run on (it ships off), a run is queued that picks one tip,
  * writes the slides (live Claude and Jev, capped at run_cap_usd) and renders the carousel on the photo
  * pool; while field_notes publishing_live is on, an approved post books the afternoon 2:30–3:30 PM

@@ -747,8 +747,20 @@ export function useBoardState(initial: LoadedWorkspace) {
         createdById: me.id,
         createdAt: now,
       };
-      setCards((prev) => [next, ...prev]);
-      setActiveCardId(id);
+      setCards((prev) => {
+        // Land at the bottom of this list, matching the position written
+        // to the database, so the new card sits just above the composer.
+        let insertAt = prev.length;
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].listId === listId) {
+            insertAt = i + 1;
+            break;
+          }
+        }
+        const copy = prev.slice();
+        copy.splice(insertAt, 0, next);
+        return copy;
+      });
       persist(
         "createCard",
         cardActions.createCard({

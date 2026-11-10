@@ -98,7 +98,14 @@ fi
 
 ARCHIVE="$(mktemp -t helios-worker-XXXXXX).tgz"
 trap 'rm -f "${ARCHIVE}"' EXIT
-tar -czf "${ARCHIVE}" \
+# macOS tar adds a "._name" AppleDouble file for every file with an extended attribute (all of them:
+# com.apple.provenance). They start with NUL bytes; an explainer render that copied the kit read one and
+# failed (invalid byte sequence 0x00). COPYFILE_DISABLE stops them; the ._* exclude is for other tars.
+# The local worktrees are whole repo copies the workers never use.
+COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
+  --exclude='._*' \
+  --exclude='./.worktrees' \
+  --exclude='./.claude/worktrees' \
   --exclude='./.git' \
   --exclude='./node_modules' \
   --exclude='./.next' \

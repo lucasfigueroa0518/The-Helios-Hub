@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   MessageCircle,
@@ -13,9 +13,10 @@ import {
   Trash2,
   CheckCircle2,
   Circle,
+  Plus,
 } from "lucide-react";
 import { cn, dueState, formatCurrency, formatDate } from "@/lib/trello/utils";
-import { AvatarStack } from "@/components/trello/ui/Avatar";
+import { Avatar, AvatarStack } from "@/components/trello/ui/Avatar";
 import type { Board, Card, FieldDef, User } from "@/lib/trello/types";
 
 type Props = {
@@ -26,12 +27,28 @@ type Props = {
   onOpen: () => void;
   onArchive?: () => void;
   onToggleComplete?: () => void;
+  quickAssign?: boolean;
+  members?: User[];
+  onToggleAssignee?: (userId: string) => void;
   isDragging?: boolean;
   isOverlay?: boolean;
 };
 
 export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
-  { card, board, users, meId, onOpen, onArchive, onToggleComplete, isDragging, isOverlay },
+  {
+    card,
+    board,
+    users,
+    meId,
+    onOpen,
+    onArchive,
+    onToggleComplete,
+    quickAssign,
+    members,
+    onToggleAssignee,
+    isDragging,
+    isOverlay,
+  },
   ref
 ) {
   const isTracking = meId ? card.trackerIds.includes(meId) : false;
@@ -50,6 +67,14 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
 
   const dstate = dueState(card.due, card.complete);
   const shownFields = board.fields.slice(0, 2);
+  const assignCandidates = (members ?? []).filter(
+    (u) => !card.assigneeIds.includes(u.id)
+  );
+  const showQuickAssign =
+    !isOverlay &&
+    !!quickAssign &&
+    !!onToggleAssignee &&
+    assignCandidates.length > 0;
 
   return (
     <motion.div
@@ -159,9 +184,11 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
         </div>
       )}
 
-      {/* Meta row */}
-      <div className="mt-2.5 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-ink-mute">
+      {/* Meta row. Suggestions, people already on the card, and the plus
+          share one row so the suggestions grow into free space instead of
+          painting over the avatars. */}
+      <div className="mt-2.5 flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2 text-ink-mute">
           {card.due && (
             <DueBadge state={dstate} label={formatDate(card.due)} />
           )}
@@ -203,17 +230,120 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
             </span>
           )}
         </div>
-        {assignees.length > 0 && (
-          <AvatarStack
-            names={assignees.map((a) => a.name)}
-            hues={assignees.map((a) => a.hue)}
-            size="sm"
+        {(assignees.length > 0 || showQuickAssign) && (
+          <MemberRow
+            assignees={assignees}
+            candidates={assignCandidates}
+            showQuickAssign={showQuickAssign}
+            onToggle={onToggleAssignee}
           />
         )}
       </div>
     </motion.div>
   );
 });
+
+function MemberRow({
+  assignees,
+  candidates,
+  showQuickAssign,
+  onToggle,
+}: {
+  assignees: User[];
+  candidates: User[];
+  showQuickAssign: boolean;
+  onToggle?: (userId: string) => void;
+}) {
+  const [pinned, setPinned] = useState(false);
+  const [hover, setHover] = useState(false);
+  const expanded = showQuickAssign && (pinned || hover);
+
+  return (
+    <div
+      className="ml-auto flex min-w-0 flex-1 items-center justify-end"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div
+        className={cn(
+          "flex min-w-0 justify-end overflow-hidden transition-[flex-grow,opacity,margin] duration-200 ease-out",
+          expanded ? "mr-1 flex-1 opacity-100" : "mr-0 w-0 flex-none opacity-0"
+        )}
+      >
+        <div className="flex max-w-full items-center gap-0.5 overflow-x-auto rounded-full bg-white/95 px-1 py-0.5 shadow-sm ring-1 ring-neutral-200/80 dark:bg-neutral-900/95 dark:ring-neutral-700">
+          {candidates.map((member) => (
+            <button
+              key={member.id}
+              type="button"
+              title={`Add ${member.name}`}
+              aria-label={`Add ${member.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle?.(member.id);
+              }}
+              className="flex shrink-0 items-center gap-1 rounded-full py-0.5 pl-0.5 pr-1.5 text-ink-mid transition-colors hover:bg-neutral-100 hover:text-ink-hi dark:hover:bg-neutral-800"
+            >
+              <Avatar name={member.name} hue={member.hue} size="xs" tooltip={false} />
+              <span className="max-w-[68px] truncate text-[11px] leading-none">
+                {member.firstName || member.name}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {assignees.length > 0 && (
+        onToggle ? (
+          <div className="flex shrink-0 items-center -space-x-1">
+            {assignees.map((member) => (
+              <button
+                key={member.id}
+                type="button"
+                title={`Remove ${member.name}`}
+                aria-label={`Remove ${member.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(member.id);
+                }}
+                className="rounded-full outline-none transition-transform hover:z-10 hover:scale-105 focus-visible:ring-2 focus-visible:ring-helios-500/60"
+              >
+                <Avatar name={member.name} hue={member.hue} size="sm" stacked tooltip={false} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <AvatarStack
+            names={assignees.map((a) => a.name)}
+            hues={assignees.map((a) => a.hue)}
+            size="sm"
+          />
+        )
+      )}
+      {showQuickAssign && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={expanded ? "Hide members" : "Add members"}
+          title="Add members"
+          onClick={(e) => {
+            e.stopPropagation();
+            setPinned((open) => !open);
+          }}
+          className={cn(
+            "ml-1 grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border text-neutral-400/70 transition-all",
+            "border-neutral-400/40 bg-white/50 opacity-60 hover:border-neutral-500/60 hover:bg-white/95 hover:text-ink-mid hover:opacity-100",
+            "dark:border-neutral-500/40 dark:bg-neutral-900/30 dark:hover:bg-neutral-900/80 dark:hover:text-neutral-200",
+            expanded &&
+              "border-neutral-400/70 bg-white text-ink-mid opacity-100 dark:border-neutral-500 dark:bg-neutral-900 dark:text-neutral-200"
+          )}
+        >
+          <Plus className="h-3 w-3" strokeWidth={2} />
+        </button>
+      )}
+    </div>
+  );
+}
 
 function FieldChip({
   field,

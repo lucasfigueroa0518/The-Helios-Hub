@@ -7,10 +7,9 @@ import type { FailureEvent } from '@/lib/social-hub/health/types';
 type RunRow = { id: string; status: string; stop_reason: string | null; error: string | null; total_usd: number; cap_usd: number; at: string };
 
 /**
- * Field Notes' night. Its 12:00 PM run and its 2:30–3:30 PM post both fall in the next
- * night's cycle (night N runs 08:00 on N−1 to 07:30 on N), so that night reports them: the
- * scheduled builds in the cycle, and the slot as "yesterday" (publishingFor reads N−1).
- * quotaFor maps the same way (the AI Events shape). A manual Generate or Rebuild post is a
+ * Field Notes' night (night N runs 08:00 on N−1 to 07:30 on N). Its 2:00 AM run on day N falls in
+ * night N, so that night reports the scheduled builds and quotaFor asks about day N. Its
+ * afternoon post falls in night N+1, which reports the slot as "yesterday" (publishingFor reads N−1). A manual Generate or Rebuild post is a
  * person's, not the night's. A scheduled run skipped because a post already waits (a person
  * made it, or the cap on pending drafts) counts as made; one skipped for want of a tip or a
  * photo is a warning, not a fault.

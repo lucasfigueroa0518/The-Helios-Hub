@@ -283,6 +283,39 @@ export async function loadWorkspace(): Promise<LoadedWorkspace> {
   };
   if (!users.some((u) => u.id === meId)) users.unshift(me);
 
+  // Workspace members can exist without an outreach.users row (local data
+  // does this). They still need to be assignable on a card.
+  const knownUserIds = new Set(users.map((u) => u.id));
+  const missingMemberIds = [
+    ...new Set(workspaceMembersRows.rows.map((m) => m.user_id)),
+  ].filter((id) => !knownUserIds.has(id));
+  if (missingMemberIds.length) {
+    const { rows: profileRows } = await dbQuery<{
+      user_id: string;
+      first_name: string | null;
+      last_name: string | null;
+      role: string | null;
+      hue: number | null;
+    }>(
+      `SELECT user_id, first_name, last_name, role, hue
+         FROM boards.user_profiles
+        WHERE user_id = ANY($1::uuid[])`,
+      [missingMemberIds],
+    );
+    for (const p of profileRows) {
+      const first = p.first_name ?? '';
+      const last = p.last_name ?? '';
+      users.push({
+        id: p.user_id,
+        firstName: first,
+        lastName: last,
+        name: `${first} ${last}`.trim() || 'Member',
+        role: p.role ?? '',
+        hue: p.hue ?? hueFromString(p.user_id),
+      });
+    }
+  }
+
   const workspaces: Workspace[] = workspacesRows.rows
     .filter((w) => visibleWorkspaceIds.has(w.id))
     .map((w) => ({
