@@ -133,7 +133,7 @@ export function fitForDelivery(video: string, { run = spawnRunner, maxBytes = DE
     if (videoKbps < 500) break;
     const res = run('ffmpeg', [
       '-y', '-v', 'error', '-i', video,
-      '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-maxrate', `${videoKbps}k`, '-bufsize', `${videoKbps * 2}k`, '-pix_fmt', 'yuv420p',
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-maxrate', `${videoKbps}k`, '-bufsize', `${videoKbps * 2}k`, '-pix_fmt', 'yuv420p',
       '-c:a', 'copy', '-movflags', '+faststart', tmp,
     ], { cwd: path.dirname(video), env: process.env, timeoutMs: RUN_HANG_BACKSTOP_MS });
     const afterBytes = res.status === 0 && fs.existsSync(tmp) ? fs.statSync(tmp).size : 0;
