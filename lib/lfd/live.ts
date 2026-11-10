@@ -13,6 +13,10 @@
  * 'story', runRef `lfd:<run id>`) while capture is on. It fails open: no
  * database, a bank that can't be reached or built, or the switches off, and
  * the finder works exactly as without it.
+ *
+ * The shared photo finder (central intake Phase 3): the `photo_finders` switch is read once per run, here. 'shared'
+ * adds `sharedPhotos` (every slide tries it first); 'legacy', a read error, or deps that can't be built leave it
+ * out, and the run is today's.
  */
 import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -38,6 +42,22 @@ export async function lfdPhotoFinder(
     log(`not built: ${err instanceof Error ? err.message : String(err)}`);
   }
   return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, ...(bank ? { bank } : {}) }), bank };
+}
+
+/** The run's shared-finder wiring when the 'lfd' switch reads 'shared' (read once); undefined otherwise. Never throws. `make` is for tests. */
+export async function lfdSharedPhotos(
+  query: HubQuery,
+  make?: import('@/lib/stories/photos-shared').SharedMake,
+  log: (line: string) => void = (line) => console.log(`lfd: ${line}`),
+): Promise<LfdRunDeps['sharedPhotos']> {
+  try {
+    const { sharedPhotoSetup } = await import('@/lib/stories/photos-shared');
+    const setup = await sharedPhotoSetup({ query: (text, params) => query(text, params) }, 'lfd', make, log);
+    return setup ?? undefined;
+  } catch (err) {
+    log(`shared photo finder not wired (${err instanceof Error ? err.message : String(err)}); today's finder`);
+    return undefined;
+  }
 }
 
 export async function liveLfdDeps(
@@ -98,6 +118,7 @@ export async function liveLfdDeps(
   } catch (err) {
     console.log(`lfd: intake not wired (${err instanceof Error ? err.message : String(err)}); today's lanes`);
   }
+  const sharedPhotos = await lfdSharedPhotos(query);
   // Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, capped at $0.15 a post inside the run.
   const { streamingCreate } = await import('@/lib/reel-ai-drama/reporting/llm');
   const { loadPrompt } = await import('@/lib/reel-ai-drama/prompts');
@@ -119,6 +140,7 @@ export async function liveLfdDeps(
       create,
       photos,
       harvest,
+      ...(sharedPhotos ? { sharedPhotos } : {}),
       ...(intake ? { intake } : {}),
       fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
       fetchBody: fetchBodyLive,

@@ -9,6 +9,9 @@
  *
  * Costs also land in stories.cost_events for the set (as the build's do): the writer and Stories Jev
  * record their own rows.
+ *
+ * Shared photo finder (central intake Phase 3): when the set's series switch (`photo_finders`) reads 'shared', the
+ * frame tries the shared finder first, its spend charged to the meter before today's finder runs; else today's path.
  */
 import type { StoriesDeps, Metered } from './stories';
 
@@ -24,6 +27,26 @@ async function meteredStoriesCreate<C extends (params: never) => Promise<unknown
       return priceCall(asked, r.usage).usd;
     }
   });
+}
+
+/** The set's series on the shared photo finder (switch read once per revision), or null: today's finder. Never throws. */
+async function sharedForSet(setId: string) {
+  try {
+    const [{ liveStoriesDb }, { createSharedPhotoFinder, sharedPhotoSetup, SERIES_PROFILE }] = await Promise.all([import('@/lib/stories/db'), import('@/lib/stories/photos-shared')]);
+    const { rows } = await liveStoriesDb.query<{ series: import('@/lib/stories/render/types').Series }>(`SELECT series FROM stories.sets WHERE id = $1::uuid`, [setId]);
+    const series = rows[0]?.series;
+    const id = series ? SERIES_PROFILE[series] : undefined;
+    const setup = id ? await sharedPhotoSetup(liveStoriesDb, id) : null;
+    if (!setup) return null;
+    // A revision's shared finder spends at most the fix's approved cap (lib/revisions/caps.ts), not the post's $0.30.
+    const fixCap = (await import('@/lib/revisions/caps')).capFor('stories', 'photo')?.capUsd ?? 0;
+    const budget = { usd: 0, capUsd: Math.min(setup.profile.capUsd, fixCap) };
+    return {
+      wrap: (fallback: import('@/lib/stories/photos').PhotoFinder, onSpend: (usd: number) => void) => createSharedPhotoFinder({ ...setup, fallback, onSpend, budget }),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export const liveStoriesDeps: StoriesDeps = {
@@ -134,7 +157,8 @@ export const liveStoriesDeps: StoriesDeps = {
       create: await meteredStoriesCreate((p: Parameters<typeof client.messages.create>[0]) => client.messages.create(p as never) as never, m),
       runRef: `stories-revision:${setId}:${new Date().toISOString()}`,
     });
-    const photo = await finder.find(request);
+    const shared = m.stopped() ? null : await sharedForSet(setId);
+    const photo = await (shared ? shared.wrap(finder, (usd) => m.spend(usd)) : finder).find(request);
     if (m.stopped()) m.halt();
     return photo;
   },

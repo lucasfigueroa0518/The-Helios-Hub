@@ -7,7 +7,13 @@
  * goes through a metered wrapper that refuses BEFORE paying once the meter has stopped, and the
  * request loop breaks out as soon as it has (the description then re-throws the stored error).
  */
-import type { CarouselsDeps, Metered } from './carousels';
+import type { PhotoDeps as SharedPhotoDeps, PhotoFinderModes } from '@/lib/photos/types';
+import type { findPhotos } from '@/lib/photos/find';
+import type { needsForDraft } from '@/lib/photos/needs';
+import type { Brief } from '@/lib/social/reporter/brief';
+import type { FilledDraft } from '@/lib/social/writer/draft';
+
+import type { CarouselsDeps, FoundPhoto, Metered } from './carousels';
 
 type AnyCreate = (params: never) => Promise<unknown>;
 
@@ -40,6 +46,68 @@ export async function firstUsable<R, P>(requests: readonly R[], searchOne: (r: R
     if (found) return found;
   }
   return null;
+}
+
+/** What the shared step reads; every field defaults to the live one (tests stub them all). */
+export type SharedFindDeps = {
+  /** The per-type switch; default `intake.settings` through the shared pg pool. */
+  modes?: () => Promise<PhotoFinderModes>;
+  /** Default lib/photos/live.ts. */
+  photoDeps?: () => Promise<SharedPhotoDeps>;
+  find?: typeof findPhotos;
+  needs?: typeof needsForDraft;
+};
+
+/**
+ * The shared photo finder for one revised slide (CI-30), ahead of today's search: only when the carousel switch is
+ * 'shared' (a read error means today's finder). One need (the slide's, its query replaced by the reviewer's hint),
+ * one post budget ($0.30), charged to the meter after the call. A pick that is excluded, a logo (no plate), or fails
+ * C6 leaves the slide to today's search. Errors from the shared finder never reach the revision; the meter's do.
+ */
+export async function sharedFindPhoto(
+  input: { brief: Brief; filled: FilledDraft; slide: number; exclude: ReadonlySet<string>; hint?: string },
+  m: Metered,
+  o: SharedFindDeps = {},
+): Promise<FoundPhoto | null> {
+  if (m.stopped()) return null;
+  let mods: [typeof import('@/lib/photos/switch'), typeof import('@/lib/photos/profiles')];
+  try {
+    mods = await Promise.all([import('@/lib/photos/switch'), import('@/lib/photos/profiles')]);
+  } catch {
+    return null; // today's search
+  }
+  const [{ photoFinderMode, readPhotoFinderModes }, { PHOTO_PROFILES }] = mods;
+  const liveModes = async () => {
+    const { dbQuery } = await import('@/lib/db');
+    return readPhotoFinderModes({ query: async <T>(text: string, params?: unknown[]) => ({ rows: (await dbQuery(text, params)).rows as T[] }) });
+  };
+  const modes = await (o.modes ?? liveModes)().catch(() => null);
+  if (photoFinderMode(modes, 'carousel') !== 'shared') return null;
+  const profile = PHOTO_PROFILES.carousel;
+  const budget = { usd: 0, capUsd: 0 };
+  let photo: import('@/lib/stories/render/types').Photo | null = null;
+  try {
+    // A revision's shared finder spends at most the fix's approved cap (lib/revisions/caps.ts), not the post's $0.30.
+    budget.capUsd = Math.min(profile.capUsd, (await import('@/lib/revisions/caps')).capFor('carousels', 'photo')?.capUsd ?? 0);
+    const { sharedPickProblem: problem } = await import('@/lib/social/pipeline/design-stage');
+    const needsMod = await import('@/lib/photos/needs');
+    const entry = (o.needs ?? needsMod.needsForDraft)(input.filled, input.brief).find((e) => needsMod.draftSlotIndex(e.slot) === input.slide - 1);
+    if (entry) {
+      const hint = input.hint?.trim();
+      const need = hint ? { ...entry.need, query: hint } : entry.need;
+      const deps = await (o.photoDeps ?? (async () => (await import('@/lib/photos/live')).livePhotoDeps()))();
+      const find = o.find ?? (await import('@/lib/photos/find')).findPhotos;
+      // The slide's own rules (no logo, C6) go into the find, so a refused pick gives way to the next-ranked one.
+      const accept = (p: import('@/lib/stories/render/types').Photo) => problem(p, `slide ${input.slide}`, input.brief);
+      photo = (await find([need], profile, deps, { exclude: input.exclude, budget, accept })).photos[0] ?? null;
+    }
+  } catch {
+    photo = null;
+  }
+  if (budget.usd > 0) m.spend(budget.usd);
+  if (m.stopped() || !photo || input.exclude.has(photo.src)) return null;
+  const { carouselPhoto, sharedPickProblem } = await import('@/lib/social/pipeline/design-stage');
+  return sharedPickProblem(photo, `slide ${input.slide}`, input.brief) ? null : carouselPhoto(photo);
 }
 
 export const liveCarouselsDeps: CarouselsDeps = {
@@ -119,6 +187,10 @@ export const liveCarouselsDeps: CarouselsDeps = {
     type VisionCreate = Parameters<typeof createVisionCheck>[0]['create'];
     const b = brief as B;
     const filled = fillDraft(draft as D, b);
+    // CI-30: the shared finder first when the carousel switch is 'shared'; else (or nothing usable) today's search.
+    const shared = await sharedFindPhoto({ brief: b, filled, slide, exclude, ...(hint ? { hint } : {}) }, m);
+    if (shared) return shared;
+    if (m.stopped()) return null;
     const client = newAnthropic();
     // Every Haiku vision call and every Jev call is charged as it is made, and refused once the meter stopped.
     const create = meteredCreate(((params) => client.messages.create(params as never)) as VisionCreate, m, (res, params) =>

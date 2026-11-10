@@ -287,6 +287,8 @@ async function main() {
     // One attempt per story plus three spares (Tommy, 2026-10-12: the 3:00 AM run made nothing after three attempts
     // all failed, $1.50 spent); an extra attempt is about $0.40, paid for by the run cap's extra 50 cents.
     maxReporterRuns: stories + 3,
+    // Phase 3 shared photo finder: reads the 'carousel' photo_finders switch once per run (legacy when unset or unreadable).
+    ...(store.query ? { photoFinders: { query: store.query } } : {}),
   });
   if (onlyRank !== undefined) {
     const score = stages.score;

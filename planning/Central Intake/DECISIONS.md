@@ -91,3 +91,41 @@ Quotes are Lucas's words as recorded in the plan. Where the plan records only th
   Reels new ideas 70%/70%/55%. Every miss is in the intake pool with a near-identical net, ranked 11–20 (tie-break
   noise at a tight cutoff), plus one legacy event split into three ideas that the intake groups as one.
 - Lucas: "Yes, accept it".
+
+## CI-30: Phase 3, one shared photo finder (Lucas, 2026-11-10, before an unattended overnight build)
+- Scope: "All news types": LFD (every slide), Morning Download, Guess the Number, Free vs Paid, Carousels and
+  Text-on-Screen revisions. Field Notes keeps the team's own photos. Each type sits behind its own switch, default
+  today's finder, until Lucas flips it.
+- Live checks overnight: "Yes, up to $3". New vs old finder on recent posts per type, locally, nothing published
+  and nothing written to prod.
+- Per-post hard cap: "$0.30 per post". Once a post hits the cap, its remaining slides use today's finder.
+- No story-specific photo: "Subject photo, then old finder". LFD's rendered-slide vision check still replaces a
+  story whose slide fails it.
+- Build locally only: no push, deploy or migration in Phase 3 until Lucas reviews.
+
+## CI-31: Phase 3 build calls (lead, 2026-11-10, overnight; Lucas reviews in the morning)
+- **The harvest engine stays in `lib/reel-ai-drama/harvest/`.** `lib/photos/` is the shared API over it. The engine
+  imports AI Drama's own types, settings, cost and LLM modules (13 + 3 + 3 + 6 imports), so moving its files to
+  `lib/photos/engine/` would be cosmetic, and 24 importers would need shims. The move waits for a later split of
+  those dependencies.
+- **Switch location:** `intake.settings` key `photo_finders` (`{ "<type>": "shared" }`, missing → today's finder). This
+  needs no migration. A type's switch covers its revisions too.
+- **Text-on-Screen revisions are out.** That path has no photo finder: Kling video plus a text plate over a made
+  background. There is nothing for the shared finder to replace. If Lucas wants web photos there, that is a new
+  feature.
+- **Kept as is (legacy paths):** the five 7-day used-photo readers, and carousels' Haiku 4.5 vision. The shared path
+  uses the harvest's `claude-haiku-5-5` and the exclude sets the callers already build. Merging the legacy readers is a
+  follow-up once the switches are on.
+- **Comparison "old" = the photo the post shipped with**, read from stored data, at no cost. Only the new finder
+  spends, under a $2.80 global cap, inside Lucas's $3.
+- **Per-frame allowance:** spend left divided by frames left, so the first slide can't take the whole $0.30.
+- **Review fixes (fresh review, 2026-11-10):**
+  - A revision's shared finder spends at most that fix's approved cap (`lib/revisions/caps.ts`).
+  - Serper is held to 40% of each frame's allowance, and the look cap keeps $0.015 of headroom. A frame with less
+    than $0.02 left goes straight to today's finder.
+  - GTN and FvP split the post's budget per frame.
+  - Carousels pass their own rules (no logo, C6) into the find, so a refused candidate gives way to the next one.
+- **A company's building fills a frame only when the writer asked for a place.** Run 1 of the side-by-side showed
+  one banked building or lobby photo per company filling frames that asked for a product, a dashboard, a logo or a
+  story moment. Examples: the same DSIT lobby photo for every Anthropic frame, and the same street view for every
+  OpenAI frame. The look itself said they didn't show the company. The rule is in code, not in a prompt.
