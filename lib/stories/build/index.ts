@@ -1,7 +1,8 @@
 /**
  * Build one requested set end to end (plan §4): watch check (plan §9) →
  * the series' open ideas from stories.pool (refreshed first if the pool has
- * no refresh for the day) → series builder (M3, M6, M7) → save → render
+ * no refresh for the day; each series from the intake or today's sources per
+ * the consumer switch, the intake topped up first when it is stale) → series builder (M3, M6, M7) → save → render
  * stage (M2) → the ideas it used are marked used in the pool. The worker calls
  * this for each set it claims. A click on Generate (or an auto series) is the
  * approval boundary for these live calls (rule 0.1).
@@ -12,7 +13,11 @@ import { createStoriesJev } from '@/lib/stories/jev';
 import type { PhotoFinder } from '@/lib/stories/photos';
 import type { Renderer } from '@/lib/stories/render/render';
 import type { ReviewCall } from '@/lib/stories/render/review';
-import { leadKeysForPair, livePoolReads, markPoolUsed, openPool, refreshPoolIfDue, type OpenPool } from '@/lib/stories/pool';
+import { createIntakeJev } from '@/lib/intake/jev';
+import { ensureIntakeFresh } from '@/lib/intake/run';
+import { INTAKE_TOPUP_CAP_USD, type IntakeJev } from '@/lib/intake/types';
+import { leadKeysForPair, markPoolUsed, openPool, refreshPoolIfDue, type OpenPool, type PoolModes } from '@/lib/stories/pool';
+import { anyIntake, storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { applyMoves, tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 import { QUEUE_LIVE, orderForNight } from '@/lib/social-hub/queue';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
@@ -39,6 +44,13 @@ export type SetBuilderDeps = {
   storage: StoriesStorage;
   now?: () => Date;
   log?: (line: string) => void;
+  /** The central intake (consumer switch): the posted check's Jev, the freshness top-up, the mode read. Tests stub them. */
+  intake?: {
+    jev?: () => IntakeJev;
+    /** ensureIntakeFresh (never throws): run before the pool is read when any series is on the intake. */
+    ensureFresh?: () => Promise<unknown>;
+    readMode?: ReadConsumerMode;
+  };
   /** Tests swap a series builder for a stub. */
   builders?: Partial<Record<'morning_download' | 'guess_the_number' | 'free_vs_paid', (d: BuildDeps) => Promise<BuildResult>>>;
 };
@@ -65,9 +77,10 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
   try {
     const series = got.set.series;
     const poolReadAt = new Date();
-    const pool = await seriesPool(deps, series, now);
+    const { pool, modes } = await seriesPool(deps, series, now);
     const jev = createStoriesJev(deps.jevTransport, deps.db);
-    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool };
+    const onIntake = modes?.[ORDER_OF[series]] === 'intake';
+    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}) };
     const builder = deps.builders?.[got.set.series] ?? { morning_download: buildMorningDownload, guess_the_number: buildGuessTheNumber, free_vs_paid: buildFreeVsPaid }[got.set.series];
     const result = await builder(bd);
     if (!result.ok) {
@@ -93,19 +106,40 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
   }
 }
 
+const ORDER_OF = { morning_download: 'md', guess_the_number: 'gtn', free_vs_paid: 'fvp' } as const;
+
+/**
+ * The pool's reads for a build or the worker's refresh: each series from the intake or today's sources (consumer
+ * switch). The posted check's Jev is the intake's own (its cost bucket), made only when a qualified story needs it.
+ */
+export function buildPoolReads(deps: Pick<SetBuilderDeps, 'sourceDb' | 'jevTransport' | 'intake'>, now: Date) {
+  const jev = deps.intake?.jev ?? (() => createIntakeJev(deps.jevTransport, deps.sourceDb, null, INTAKE_TOPUP_CAP_USD));
+  return storiesPoolReads(deps.sourceDb, now, { readMode: deps.intake?.readMode, intake: { jev } });
+}
+
 /**
  * The series' open ideas. The pool refreshes first when it has no refresh for
- * the day (a Generate before the 4:00 AM pass). Null when stories.pool cannot
- * be read (schema not applied yet): the build reads its sources directly.
+ * the day (a Generate before the 3:00 AM pass), or when an intake or carousel
+ * run started since it last read. Before that, a series on the intake gets
+ * ensureIntakeFresh (a top-up when the last run is over 180 minutes old). Null
+ * pool when stories.pool cannot be read (schema not applied yet): the build
+ * reads its sources directly.
  */
-async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'guess_the_number' | 'free_vs_paid', now: Date): Promise<OpenPool | null> {
+async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'guess_the_number' | 'free_vs_paid', now: Date): Promise<{ pool: OpenPool | null; modes: PoolModes | null }> {
+  let modes: PoolModes | null = null;
   try {
-    const r = await refreshPoolIfDue(deps.db, () => livePoolReads(deps.sourceDb, now), now);
-    if (r) deps.log?.(`pool: refreshed before build (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''})`);
-    return await inDayOrder(deps.db, series, await openPool(deps.db, series), now);
+    const reads = buildPoolReads(deps, now);
+    modes = await reads.modes();
+    if (anyIntake(modes)) {
+      const fresh = await (deps.intake?.ensureFresh ?? (() => ensureIntakeFresh(deps.sourceDb)))().catch((err: unknown) => ({ ran: false, reason: err instanceof Error ? err.message : String(err) }));
+      deps.log?.(`intake: ${JSON.stringify(fresh)}`);
+    }
+    const r = await refreshPoolIfDue(deps.db, () => reads, now);
+    if (r) deps.log?.(`pool: refreshed before build (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''}${r.intake ? `; sources ${JSON.stringify(r.intake)}` : ''})`);
+    return { pool: await inDayOrder(deps.db, series, await openPool(deps.db, series), now), modes };
   } catch (err) {
     deps.log?.(`pool: unavailable, reading sources directly: ${err instanceof Error ? err.message : String(err)}`);
-    return null;
+    return { pool: null, modes };
   }
 }
 

@@ -5,7 +5,8 @@ import type { Photo } from '@/lib/stories/render/types';
 export type LfdWindow = { after: string; through: string };
 
 export type Origin = 'reels' | 'carousel' | 'feed' | 'seed';
-export type Lane = 'major' | 'rundown';
+/** `builder`: a story-builder@2 lead (central intake); legacy runs never produce it. */
+export type Lane = 'major' | 'builder' | 'rundown';
 
 export type LfdCandidate = {
   /** storyKey(url): one key per article. */
@@ -26,6 +27,10 @@ export type LfdCandidate = {
   alsoFrom: string[];
   /** major-news@2 score once judged; null when not judged. */
   major: number | null;
+  /** story-builder@2 score from the central intake; null when not scored (legacy lanes never carry one). */
+  builder: number | null;
+  /** Best known event date (YYYY-MM-DD or ISO) from the intake; null when unknown or legacy. Gates the builder lane (7 days). */
+  eventDate: string | null;
   /** A person seeded this story (lib/lfd/seeds.ts): it is taken before the lanes and bypasses the repeat and company checks. */
   yours?: boolean;
 };
@@ -52,13 +57,13 @@ export type StoryCopy = {
 
 /**
  * A story with its photo. `photoSource`: the article's own lead image, or the
- * Stories finder. `photoTrace`: how that photo was chosen (finder steps, or the
+ * Stories finder, or (builder slides) AI Drama's harvest engine. `photoTrace`: how that photo was chosen (finder steps, or the
  * lead-image note), saved on the post for the review screen.
  */
 /** A meme the engine used as the story's picture (photo-fail rescue or pool scan). */
 export type EngineMeme = { templateId: string; memeId: string; rank: number; role: 'cover' | 'slide'; position: number; object: string; text: string[] };
 
-export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo; photoSource?: 'lead' | 'finder' | 'meme'; photoTrace?: string[]; meme?: EngineMeme };
+export type Ready = { pick: Pick; copy: StoryCopy; photo: Photo; photoSource?: 'lead' | 'harvest' | 'finder' | 'meme'; photoTrace?: string[]; meme?: EngineMeme };
 
 /** A story that left the post, and why (the run record, spec §7.1). `unfinished`: still pending when the rounds ran out. */
 export type Drop = {

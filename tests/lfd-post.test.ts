@@ -6,7 +6,7 @@ import { arrangeMemes, buildPost, captionFor, composeCaption, coverMemeOf, LFD_H
 import type { Ready } from '@/lib/lfd/types';
 
 const ready = (i: number): Ready => ({
-  pick: { key: `k${i}`, refs: [`r${i}`], origin: 'reels', headline: `H${i}`, sourceName: `Outlet ${i}`, url: `https://o${i}.com/a`, body: '', publishedAt: '2026-10-12T00:00:00Z', net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: i === 0 ? 'major' : 'rundown' },
+  pick: { key: `k${i}`, refs: [`r${i}`], origin: 'reels', headline: `H${i}`, sourceName: `Outlet ${i}`, url: `https://o${i}.com/a`, body: '', publishedAt: '2026-10-12T00:00:00Z', net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: i === 0 ? 'major' : 'rundown' },
   copy: { key: `k${i}`, setup: i === 1 ? 'Setup line:' : '', headline: `Story ${i} Just Dropped`, highlight: i === 0 ? 'Just Dropped' : '', names: [], body: `Body ${i} sentence one. Two`, photo: { kind: 'logo', query: 'q', subjects: [], alts: [] } },
   photo: { src: `https://img/${i}.jpg`, credit: `Credit ${i}`, kind: 'scene', focus: { x: 0.5, y: 0.3 } },
 });

@@ -12,7 +12,7 @@ import test, { after, before } from 'node:test';
 
 import { createFieldNotesBudget, FieldNotesBudgetExhausted } from '@/lib/field-notes/budget';
 import { buildFieldNotesCaption, CAPTION_MAX_CHARS, FIELD_NOTES_FOLLOW_LINE, parseHowToTry } from '@/lib/field-notes/caption';
-import { firstFieldNotesCheckAt, noonQueue } from '@/lib/field-notes/clock';
+import { firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue } from '@/lib/field-notes/clock';
 import { FIELD_NOTES_SLIDE_PREFIX } from '@/lib/field-notes/config';
 import { queueManualFieldNotesRun } from '@/lib/field-notes/manual';
 import { checkPhotoPool, MAX_PER_KIND, pickPostPhotos, pickReplacement } from '@/lib/field-notes/photos/pool';
@@ -22,7 +22,7 @@ import { FOLLOW_HAND_TEXT } from '@/lib/field-notes/render/layout';
 import { runFieldNotes } from '@/lib/field-notes/run';
 import { approveFieldNotesPost, hardPublishFieldNotesPost, rejectFieldNotesPost } from '@/lib/field-notes/schedule';
 import { parseFieldNotesSettings, readFieldNotesSettings } from '@/lib/field-notes/settings';
-import { claimRun, expireOldTips, getPost, getTip, insertPost, listSelectableTips, nextPostSeq, pendingDraftCount, recentPostWants, requestRun, saveCandidateTip, saveSeededLink, setTipContent } from '@/lib/field-notes/store';
+import { claimRun, expireOldTips, getPost, getTip, insertPost, listSelectableTips, nextPostSeq, pendingDraftCount, recentPostWants, requestRun, saveCandidateTip, saveSeededLink, scheduledRunToday, setTipContent } from '@/lib/field-notes/store';
 import type { TipTags } from '@/lib/field-notes/sources/score';
 import { tipToCandidate } from '@/lib/field-notes/run';
 import type { Want } from '@/lib/field-notes/types';
@@ -892,16 +892,52 @@ test('auto_run false means the clock says off, whatever the day', () => {
   const off = parseFieldNotesSettings([{ key: 'auto_run', value: false }]);
   assert.equal(off.autoRun, false);
   for (const day of ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-06']) {
-    const d = noonQueue(new Date(`${day}T17:00:00Z`), off);
+    const d = noonQueue(new Date(`${day}T07:00:00Z`), off);
     assert.equal(d.queue, false);
     assert.equal(d.reason, 'Field Notes auto_run is off');
   }
   assert.equal(noonQueue(NOW, null).queue, false);
   const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
-  assert.equal(noonQueue(new Date('2026-11-03T17:00:00Z'), on).queue, true, 'Tuesday');
-  assert.equal(noonQueue(new Date('2026-11-04T17:00:00Z'), on).queue, false, 'Wednesday');
-  assert.equal(noonQueue(new Date('2026-11-03T17:00:00Z'), parseFieldNotesSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }])).queue, false);
+  assert.equal(noonQueue(new Date('2026-11-03T07:00:00Z'), on).queue, true, 'Tuesday');
+  assert.equal(noonQueue(new Date('2026-11-04T07:00:00Z'), on).queue, false, 'Wednesday');
+  assert.equal(noonQueue(new Date('2026-11-03T07:00:00Z'), parseFieldNotesSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }])).queue, false);
   assert.ok(firstFieldNotesCheckAt(NOW).getTime() >= NOW.getTime());
+});
+
+test('the 2:00 AM check never queues twice a day: a scheduled run today, or a check over 2 h late, says no (fix 8)', async () => {
+  const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
+  const tuesday2am = new Date('2026-11-03T07:00:00Z');
+  assert.equal(noonQueue(tuesday2am, on, false).queue, true);
+  assert.equal(noonQueue(tuesday2am, on, null).queue, true, 'unknown: the check goes on');
+  const again = noonQueue(tuesday2am, on, true);
+  assert.equal(again.queue, false);
+  assert.match(again.reason, /already exists for 2026-11-03/);
+  assert.equal(noonQueue(new Date('2026-11-03T08:59:00Z'), on, false).queue, true, '3:59 AM: still catching up');
+  const restart = noonQueue(new Date('2026-11-03T09:01:00Z'), on, false);
+  assert.equal(restart.queue, false, '4:01 AM: a restart later in the day does not run it');
+  assert.match(restart.reason, /catch-up only within 2 h/);
+  assert.equal(noonQueue(new Date('2026-11-04T03:00:00Z'), on, false).queue, false, '10 PM restart: no run');
+
+  const { query } = await freshDb();
+  assert.equal(await scheduledRunToday(query, '2026-11-03'), false);
+  await query(`INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_at) VALUES ('scheduled', 'build', 'ok', 0.5, $1)`, [tuesday2am]);
+  assert.equal(await scheduledRunToday(query, '2026-11-03'), true);
+  assert.equal(await scheduledRunToday(query, '2026-11-04'), false);
+  await query(`INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_at) VALUES ('manual', 'build', 'ok', 0.5, '2026-11-04T08:00:00Z')`);
+  assert.equal(await scheduledRunToday(query, '2026-11-04'), false, 'a person\'s Generate is not the clock');
+});
+
+test('the Field Notes check runs at 2:00 AM New York (night schedule v2)', () => {
+  // 2026-11-03 is a Tuesday; 07:00Z is 2:00 AM EST.
+  assert.equal(nextFieldNotesRunAt(new Date('2026-11-03T05:30:00Z')).toISOString(), '2026-11-03T07:00:00.000Z', '12:30 AM -> 2:00 AM today');
+  assert.equal(nextFieldNotesRunAt(new Date('2026-11-03T07:00:00Z')).toISOString(), '2026-11-04T07:00:00.000Z', 'at 2:00 -> tomorrow');
+  assert.equal(nextFieldNotesRunAt(new Date('2026-11-03T17:00:00Z')).toISOString(), '2026-11-04T07:00:00.000Z', 'noon -> tomorrow 2:00 AM');
+  // A worker starting before today's 2:00 waits for it; after it, it checks right away (once).
+  assert.equal(firstFieldNotesCheckAt(new Date('2026-11-03T06:00:00Z')).toISOString(), '2026-11-03T07:00:00.000Z', '1:00 AM start waits');
+  const late = new Date('2026-11-03T08:00:00Z');
+  assert.equal(firstFieldNotesCheckAt(late).toISOString(), late.toISOString(), '3:00 AM start checks now');
+  const evening = new Date('2026-11-04T03:00:00Z'); // 10:00 PM Nov 3
+  assert.equal(firstFieldNotesCheckAt(evening).toISOString(), evening.toISOString(), '10 PM start checks now');
 });
 
 

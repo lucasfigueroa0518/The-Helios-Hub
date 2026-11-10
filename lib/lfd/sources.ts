@@ -64,6 +64,8 @@ export async function reelsLane(q: HubQuery, w: LfdWindow): Promise<LfdCandidate
     firstSeen: r.first_timely,
     alsoFrom: [],
     major: null,
+    builder: null,
+    eventDate: null,
   }));
 }
 
@@ -113,6 +115,8 @@ export async function carouselLane(q: HubQuery, sinceIso: string, untilIso?: str
         firstSeen: null,
         alsoFrom: outlets.slice(1),
         major: null,
+    builder: null,
+    eventDate: null,
       });
     }
   }
@@ -158,5 +162,7 @@ export async function freshFeedLane(fetch: () => Promise<FetchedArticle[]>, sinc
       firstSeen: null,
       alsoFrom: [],
       major: null,
+    builder: null,
+    eventDate: null,
     }));
 }

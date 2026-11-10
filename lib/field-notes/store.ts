@@ -47,6 +47,18 @@ export async function requestRun(
   return rows[0]?.id ?? null;
 }
 
+/** Whether a scheduled run was already queued for this New York date (the clock's no-double-run guard, fix 8). */
+export async function scheduledRunToday(q: HubQuery, nyDate: string): Promise<boolean> {
+  const { rows } = await q<{ id: string }>(
+    `SELECT id::text AS id FROM field_notes.runs
+      WHERE trigger = 'scheduled'
+        AND (ny_date = $1::date OR (requested_at AT TIME ZONE 'America/New_York')::date = $1::date)
+      LIMIT 1`,
+    [nyDate],
+  );
+  return rows.length > 0;
+}
+
 /** Claim the queued run when none is running. A run left running past ABANDONED_AFTER is failed first. */
 export async function claimRun(q: HubQuery, now = new Date()): Promise<ClaimedRun | null> {
   await q(ABANDON_SQL);

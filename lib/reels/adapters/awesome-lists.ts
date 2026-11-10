@@ -21,6 +21,7 @@ import {
   type CatalogEntry,
 } from '@/lib/reels/repository';
 import type { Adapter, AdapterItem } from '@/lib/reels/types';
+import { A4_DEPOSIT, depositFindsQuietly } from '@/lib/intake/deposit';
 
 /** The three named lists (D-004, D-050). */
 export const A4_LISTS = [
@@ -189,6 +190,8 @@ export const awesomeLists: Adapter = {
     }
 
     await markCatalogIngested(ingested);
+    // Central intake: the night's finds are deposited into intake.items too (a failure only logs).
+    await depositFindsQuietly(items, new Date(), A4_DEPOSIT);
 
     // A floor that can be missed without anyone noticing is not a floor. The
     // editor can legitimately find nothing worth raising, but picks that fail

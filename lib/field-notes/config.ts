@@ -21,7 +21,7 @@ export const FIELD_NOTES_FEED_VERTICAL = FIELD_NOTES_VERTICAL as unknown as Publ
 /** The run cap when field_notes.settings has no `run_cap_usd` row. */
 export const DEFAULT_FIELD_NOTES_RUN_CAP_USD = FIELD_NOTES_DEFAULT_SETTINGS.runCapUsd;
 
-/** The worker's daily check, 2:00 AM New York, overnight with the other types (was 12:00 PM). */
+/** The worker's daily check, 2:00 AM New York (night schedule v2, round 4; auto_run ships off). */
 export const FIELD_NOTES_RUN_HOUR_LOCAL = 2;
 export const FIELD_NOTES_RUN_MINUTE_LOCAL = 0;
 

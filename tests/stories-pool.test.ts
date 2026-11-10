@@ -67,15 +67,15 @@ test('pool refresh: used keys stay used, an unused key the refresh did not retur
   assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 1);
 });
 
-test('pool refresh runs once per pool day, which turns over at 4:00 AM New York', async () => {
+test('pool refresh runs once per pool day, which turns over at 3:00 AM New York', async () => {
   const { db } = await openLocalStoriesDb();
   let refreshes = 0;
   const counted = () => ({ ...reads([story('a')]), morning: async () => (refreshes++, { reels: [story('a')], carousel: [] }) });
   assert.ok(await refreshPoolIfDue(db, counted, NOW));
   assert.equal(await refreshPoolIfDue(db, counted, new Date(NOW.getTime() + 3_600_000)), null);
   assert.equal(refreshes, 1);
-  assert.equal(poolDay(new Date('2026-10-10T07:30:00Z')), '2026-10-09', '3:30 AM is still the previous pool day');
-  assert.equal(poolDay(new Date('2026-10-10T08:30:00Z')), '2026-10-10');
+  assert.equal(poolDay(new Date('2026-10-10T06:30:00Z')), '2026-10-09', '2:30 AM is still the previous pool day');
+  assert.equal(poolDay(new Date('2026-10-10T07:30:00Z')), '2026-10-10', '3:30 AM is the new pool day');
   assert.ok(await refreshPoolIfDue(db, counted, new Date('2026-10-10T08:30:00Z')));
   assert.equal(refreshes, 2);
 });
@@ -85,7 +85,7 @@ test('pool refresh runs again when a carousel run finishes after the day\'s refr
   let runAt: string | null = '2026-10-09T03:07:00Z';
   const withRun = (morning: StoryCandidate[]): PoolReads => ({ ...reads(morning), carouselRunAt: async () => runAt });
 
-  // The 4 AM refresh sees the 3 AM run, which brought no stories.
+  // The 3 AM refresh sees the 2:40 run, which brought no stories.
   assert.ok(await refreshPoolIfDue(db, () => withRun([story('a')]), NOW));
   assert.equal(await refreshPoolIfDue(db, () => withRun([story('a')]), new Date(NOW.getTime() + 60_000)), null, 'nothing new: no refresh');
 

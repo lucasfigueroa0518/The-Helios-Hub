@@ -91,6 +91,12 @@ Pass the top few in the pool's own order: numbers with their value, fact, counts
 headline, outlet and URL; unbriefed stories as headline, outlet, URL and trimmed text, so the
 call finds the number itself (this replaces `gtn-extract@1`, S-26's separate step).
 
+**Central intake (Phase 1, 2026-11-09).** With GTN's consumer switch on `intake`, the pool has no carousel brief
+numbers: GTN is independent of Carousels (round 4, answer 3). Every shortlisted story, from the same sources and the
+same `story-scoring@4` ranking the carousel uses, comes in as an unbriefed story, plus the reels The Number ideas, and
+this step finds the number itself. The legacy path above is unchanged behind the switch. See
+`planning/Stories/BUILD_PLAN.md` §5.5 and `planning/Central Intake/PLAN.md`.
+
 ### 2. `gtn-pick@1` (one call)
 
 Through `writeStructured` (`lib/stories/writer.ts`), which already handles caching, the strict

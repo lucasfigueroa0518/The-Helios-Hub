@@ -34,6 +34,11 @@ New file `lib/lfd/seeds.ts` (reads open seeds, archived keys, and writes outcome
 3. **Never silently dropped:** `record.seeds` lists each taken seed and its outcome (`in the post`, or `thin-text`, `not-grounded`, `no-photo` and the other existing drop reasons, or `waiting: this run already had 3`). The Ideas view prints it. A seed that shipped is marked made; one that failed stays open until it expires or is archived.
 4. **No seeds, no archives: nothing changes.** `forced` is empty, the extra candidates list is empty, the used set is unchanged; the only addition is two SELECTs. A test asserts identical picks.
 
+**Central intake (Phase 1, 2026-11-09).** With LFD's consumer switch on `intake`, step 1 changes: the run hands each
+open seed to `addIntakeSeed`, which joins or creates its intake story and scores it once on entry with LFD's
+scorecards, instead of a `scoreMajor` call at pick time. Seeds still go first, at most 3. Adding a seed stays
+free. See `docs/superpowers/specs/2026-10-13-last-few-days-design.md` §3.5 and `planning/Central Intake/PLAN.md`.
+
 ### Cost and Rule 1 (question 4)
 
 - Adding a seed: no model, no search, $0. The button says so.
