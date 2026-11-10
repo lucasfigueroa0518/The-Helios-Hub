@@ -11,7 +11,8 @@
  * the build.
  */
 import type { Queryable } from '@/lib/stories/db';
-import { hashesOf, readUsedLedger, recordUsedPhotos, USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
+import { hashesOf } from '@/lib/photos/used-hash';
+import { readUsedLedger, recordUsedPhotos, USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
 
 import { storyKey, type StoryCandidate } from './reels';
 

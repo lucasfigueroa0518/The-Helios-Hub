@@ -12,7 +12,7 @@
  * every publish path writes through `recordUsedPhotos`.
  */
 import type { Query } from '@/lib/social/store/pg';
-import { hamming, NEAR_DUPLICATE } from '@/lib/reel-ai-drama/harvest/filters';
+import { hamming, NEAR_DUPLICATE } from './hash-distance';
 
 /** How long a published photo stays off limits, for every content type. */
 export const USED_PHOTO_DAYS = 20;
@@ -102,12 +102,7 @@ export function usedMatch(ledger: UsedLedger, c: { url?: string | null; phash?: 
   return null;
 }
 
-/** Both hashes of an image's bytes. */
-export async function hashesOf(bytes: Buffer): Promise<{ phash: string; dhash: string }> {
-  const [{ phash }, { dhashOf }] = await Promise.all([import('@/lib/reel-ai-drama/harvest/filters'), import('@/lib/media-library/ingest')]);
-  const [p, d] = await Promise.all([phash(bytes), dhashOf(bytes)]);
-  return { phash: p, dhash: d };
-}
+/** Hashing an image lives in ./used-hash.ts (server only: it loads sharp). */
 
 /** True when the ledger already holds rows for this post (a post is logged once). */
 export async function postLogged(query: Query, vertical: UsedVertical, postId: string): Promise<boolean> {

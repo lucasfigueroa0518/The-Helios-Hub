@@ -16,7 +16,8 @@ import { carouselCaption } from '@/lib/social/overnight/publish';
 import type { Query } from '@/lib/social/store/pg';
 import { STORIES_BUCKET } from '@/lib/stories/storage';
 
-import { hashesOf, isBrandAsset, mediaLibraryKey, recordUsedPhotos, type UsedPhotoEntry, type UsedVertical } from './used';
+import { hashesOf } from './used-hash';
+import { isBrandAsset, mediaLibraryKey, recordUsedPhotos, type UsedPhotoEntry, type UsedVertical } from './used';
 
 /** A file in our own Storage, written `storage:<bucket>/<path>` (the convention LFD's meme slides already use). */
 export const storageRef = (bucket: string, path: string) => `storage:${bucket}/${path}`;

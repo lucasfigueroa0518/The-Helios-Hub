@@ -9,7 +9,8 @@
  */
 import type { Query } from '@/lib/social/store/pg';
 
-import { EMPTY_LEDGER, hashesOf, isBrandAsset, readUsedLedger, usedMatch, type UsedLedger } from './used';
+import { hashesOf } from './used-hash';
+import { EMPTY_LEDGER, isBrandAsset, readUsedLedger, usedMatch, type UsedLedger } from './used';
 
 /** Hash hits a pick may give way to before the slot goes without a photo. */
 export const GUARD_RETRIES = 2;

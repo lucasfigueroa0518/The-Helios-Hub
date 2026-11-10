@@ -19,7 +19,8 @@ import { hamming, NEAR_DUPLICATE } from '@/lib/reel-ai-drama/harvest/filters';
 import type { Query } from '@/lib/social/store/pg';
 
 import { entriesFor, parseStorageRef, publishedPostAdapters, withHashes, type CandidatePost, type PublishedPostAdapter } from './published-posts';
-import { hashesOf, postLogged, recordUsedPhotos, USED_PHOTO_DAYS } from './used';
+import { hashesOf } from './used-hash';
+import { postLogged, recordUsedPhotos, USED_PHOTO_DAYS } from './used';
 
 /** Days read back on every run: the whole rule's window, plus a day. */
 export const IG_SYNC_LOOKBACK_DAYS = USED_PHOTO_DAYS + 1;
