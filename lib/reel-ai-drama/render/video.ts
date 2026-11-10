@@ -100,6 +100,53 @@ export function masterLoudness(video: string, { run = spawnRunner }: { run?: Run
   return true;
 }
 
+/**
+ * The largest reel we upload. Storage refuses files over its limit (413), and Instagram re-encodes every reel to a few
+ * Mbps anyway, so a reel above this is re-encoded smaller before delivery.
+ */
+export const DELIVERY_MAX_BYTES = 45_000_000;
+/** Audio bitrate kept by the delivery encode (masterLoudness writes 192k AAC). */
+const DELIVERY_AUDIO_KBPS = 192;
+
+/** The video's length in seconds (ffprobe), or null. */
+function probeSeconds(video: string, run: Runner): number | null {
+  const res = run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', video], { cwd: path.dirname(video), env: process.env, timeoutMs: 60_000 });
+  const seconds = Number.parseFloat(res.stdout.trim());
+  return res.status === 0 && Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+export type DeliveryFit = { changed: boolean; fits: boolean; beforeBytes: number; afterBytes: number; videoKbps?: number };
+
+/**
+ * Re-encode the reel in place when it is over `maxBytes`: H.264 at CRF 18 with its bitrate capped so the file fits
+ * (audio copied). A second, tighter try runs if the first still doesn't fit. Fails open: the reel stays as it was if
+ * ffmpeg fails, and `fits` says whether the upload can work.
+ */
+export function fitForDelivery(video: string, { run = spawnRunner, maxBytes = DELIVERY_MAX_BYTES }: { run?: Runner; maxBytes?: number } = {}): DeliveryFit {
+  const beforeBytes = fs.statSync(video).size;
+  if (beforeBytes <= maxBytes) return { changed: false, fits: true, beforeBytes, afterBytes: beforeBytes };
+  const seconds = probeSeconds(video, run);
+  if (!seconds) return { changed: false, fits: false, beforeBytes, afterBytes: beforeBytes };
+  const tmp = video.replace(/\.mp4$/, '.delivery.mp4');
+  for (const share of [0.9, 0.75]) {
+    const videoKbps = Math.floor((maxBytes * 8 * share) / seconds / 1000) - DELIVERY_AUDIO_KBPS;
+    if (videoKbps < 500) break;
+    const res = run('ffmpeg', [
+      '-y', '-v', 'error', '-i', video,
+      '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-maxrate', `${videoKbps}k`, '-bufsize', `${videoKbps * 2}k`, '-pix_fmt', 'yuv420p',
+      '-c:a', 'copy', '-movflags', '+faststart', tmp,
+    ], { cwd: path.dirname(video), env: process.env, timeoutMs: RUN_HANG_BACKSTOP_MS });
+    const afterBytes = res.status === 0 && fs.existsSync(tmp) ? fs.statSync(tmp).size : 0;
+    if (afterBytes > 0 && afterBytes <= maxBytes) {
+      fs.renameSync(tmp, video);
+      return { changed: true, fits: true, beforeBytes, afterBytes, videoKbps };
+    }
+    if (res.status !== 0) appendStepLog(path.dirname(path.dirname(video)), 'delivery encode', res);
+  }
+  fs.rmSync(tmp, { force: true });
+  return { changed: false, fits: false, beforeBytes, afterBytes: beforeBytes };
+}
+
 export type FrameSpan = { number: number; name: string; treatment: string; start: number; end: number };
 
 /** The storyboard's frames with their reel start and end (from the paced `- duration:` lines). */

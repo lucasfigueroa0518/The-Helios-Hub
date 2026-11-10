@@ -179,6 +179,8 @@ export type ProductionDeps = {
     frameFindings?(projectDir: string, frameId: string): Promise<string[]> | string[];
     assembleProject(projectDir: string): Promise<{ ok: boolean; problems: string[] }>;
     renderVideo(projectDir: string): Promise<string>;
+    /** Shrink the reel in place when it is over the upload limit (render/video.ts fitForDelivery). Missing: uploaded as rendered. */
+    fitForDelivery?(videoPath: string): { changed: boolean; fits: boolean; beforeBytes: number; afterBytes: number };
     contactSheet(projectDir: string, videoPath: string): Promise<string>;
     /** The rendered reel's moments on sheets: unlabelled for the first viewer, labelled for the design reviewer. `findings` are the measured checks' lines. */
     reviewSheets?(projectDir: string, videoPath: string, findings: string[]): Promise<{ viewer: Sheet[]; design: Sheet[] }>;
@@ -1186,6 +1188,10 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
 
     // P9: deliver — the files, the post text (MD-50), the reuse record (MD-45), the report.
     await stage('deliver');
+    // Storage refuses a file over its limit: a reel that big is re-encoded smaller first, also for a job resumed with an old render.
+    const fit = deps.render.fitForDelivery?.(video);
+    if (fit?.changed) log('video_fit', { jobId: job.id, beforeBytes: fit.beforeBytes, afterBytes: fit.afterBytes });
+    if (fit && !fit.fits) await flag('render', `The video is ${(fit.beforeBytes / 1e6).toFixed(1)} MB and could not be re-encoded under the upload limit.`);
     const videoKey = await keepFile('video', video, 'video.mp4');
     if (!videoKey) throw new ProductionFailure('The render produced no video file.');
     const sheetKey = await keepFile('contact_sheet', sheet, `contact-sheet${path.extname(sheet) || '.png'}`);
