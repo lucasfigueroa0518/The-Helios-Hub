@@ -5,8 +5,36 @@ import { HYPERFRAMES_BIN, HYPERFRAMES_ENV } from '@/lib/explainers/render/worksp
 import { appendStepLog, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
 import { KIT_DIR } from '@/lib/reel-ai-drama/render/workspace';
 
-/** HyperFrames' render can take a while on the VM; the Explainer job allows 30 minutes too. */
+/**
+ * The render's time limit, sized to the reel. The VM draws about 0.8 frames a second, so a 77 s reel (2,322 frames)
+ * needs about 50 minutes; a flat 30 minutes killed the first prod job at 58%. 3 minutes per 100 frames at 30 fps,
+ * at least 30 and at most 90 minutes; a page whose length can't be read gets 60.
+ */
 export const RENDER_TIMEOUT_MS = 30 * 60 * 1000;
+export const RENDER_TIMEOUT_MAX_MS = 90 * 60 * 1000;
+const UNKNOWN_LENGTH_TIMEOUT_MS = 60 * 60 * 1000;
+const FPS = 30;
+const MS_PER_100_FRAMES = 3 * 60 * 1000;
+
+/** The reel's length in seconds: the latest data-start + data-duration on the assembled page, or null. */
+export function projectSeconds(indexHtml: string): number | null {
+  let end = 0;
+  for (const tag of indexHtml.match(/<[a-z][^>]*\bdata-duration="[^"]*"[^>]*>/gi) ?? []) {
+    const dur = Number(/\bdata-duration="([\d.]+)"/.exec(tag)?.[1]);
+    const start = Number(/\bdata-start="([\d.]+)"/.exec(tag)?.[1] ?? 0);
+    if (Number.isFinite(dur) && Number.isFinite(start)) end = Math.max(end, start + dur);
+  }
+  return end > 0 ? end : null;
+}
+
+/** The time limit for rendering this project (see RENDER_TIMEOUT_MS). */
+export function renderTimeoutMs(projectDir: string): number {
+  const index = path.join(projectDir, 'index.html');
+  const seconds = fs.existsSync(index) ? projectSeconds(fs.readFileSync(index, 'utf8')) : null;
+  if (seconds === null) return UNKNOWN_LENGTH_TIMEOUT_MS;
+  const ms = ((seconds * FPS) / 100) * MS_PER_100_FRAMES;
+  return Math.min(RENDER_TIMEOUT_MAX_MS, Math.max(RENDER_TIMEOUT_MS, Math.ceil(ms)));
+}
 
 /** P8: render the assembled project to renders/video.mp4 with the pinned HyperFrames. Throws on failure. */
 export async function renderVideo(projectDir: string, deps: { run?: Runner; bin?: string } = {}): Promise<string> {
@@ -16,7 +44,7 @@ export async function renderVideo(projectDir: string, deps: { run?: Runner; bin?
   // gsap ships with the project, so a render needs no network at all (ITERATION-12 §1).
   localizeGsap(projectDir);
   const res = run(deps.bin ?? HYPERFRAMES_BIN, ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'], {
-    cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: RENDER_TIMEOUT_MS,
+    cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: renderTimeoutMs(projectDir),
   });
   if (res.status !== 0) {
     appendStepLog(projectDir, 'hyperframes render', res);
