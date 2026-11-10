@@ -69,6 +69,7 @@ async function setup() {
   const stories = HEADLINES.map((h, i) => story(i, h));
   const postId = await insertPost(query, { runId: null, slug: 'lfd-2026-10-13', nyDate: '2026-10-13', ideaIds: [], stories, render: {}, caption: 'c', slideObjects: ['lfd/lfd-2026-10-13/slide-01.jpg'], fitProblems: [], short: false });
   const uploads: string[] = [];
+  const downloads: string[] = [];
   const seen: string[][] = [];
   const logs: string[] = [];
   const deps: PostMemesDeps = {
@@ -76,12 +77,13 @@ async function setup() {
     openRenderer: async () => ({ render: async () => [], close: async () => undefined }),
     fitCheck: async () => ({ ok: true, violations: [], problems: [], slideText: [] }),
     upload: async (p) => { uploads.push(p); },
+    download: async (p) => { downloads.push(p); return sharp({ create: { width: 8, height: 6, channels: 3, background: '#f00' } }).png().toBuffer(); },
     fetchBody: async () => null,
     storeSlides: async (slug, render) => (render as { slides: unknown[] }).slides.map((_, i) => `lfd/${slug}/slide-${String(i + 1).padStart(2, '0')}.jpg`),
     now: () => NOW, log: (m) => { logs.push(m); }, capUsd: 1,
     evidence: evidence(), runRequest: fakeRun(seen),
   };
-  return { query, postId, deps, uploads, seen, logs };
+  return { query, postId, deps, uploads, downloads, seen, logs };
 }
 
 test('a post gets memes on its gated stories: the cover meme, the story moved first, the post row updated', async () => {
@@ -102,6 +104,21 @@ test('a post gets memes on its gated stories: the cover meme, the story moved fi
   assert.equal(post.render.slides[0]!.lfdCover?.meme?.url, 'storage:lfd/lfd-2026-10-13/meme-1.png');
   assert.ok(!JSON.stringify(post.render).includes('data:image'));
   assert.equal(post.slide_objects.length, 7);
+});
+
+test('a meme the run already placed is re-rendered from its stored image, never from its storage address', async () => {
+  const { query, deps, downloads } = await setup();
+  const object = 'lfd/lfd-2026-10-14/meme-engine-s0.png';
+  const stories = HEADLINES.map((h, i) => (i === 0 ? { ...story(i, h), photoSource: 'meme' as const, photo: { src: `storage:${object}`, credit: '', kind: 'scene' as const } } : story(i, h)));
+  const postId = await insertPost(query, { runId: null, slug: 'lfd-2026-10-14', nyDate: '2026-10-14', ideaIds: [], stories, render: {}, caption: 'c', slideObjects: [], fitProblems: [], short: false });
+  let drawn = '';
+  const res = await addMemesToPost({ ...deps, storeSlides: async (slug, render) => { drawn = JSON.stringify(render); return deps.storeSlides(slug, render); } }, postId);
+  assert.ok(res.placed >= 1, JSON.stringify(res));
+  assert.deepEqual(downloads, [object]);
+  assert.ok(drawn.includes('data:image'), 'the re-render carries the meme image');
+  assert.ok(!drawn.includes('storage:'), 'a render never gets a storage: address');
+  const { rows } = await query<{ render: unknown }>(`SELECT render FROM lfd.posts WHERE id = $1`, [postId]);
+  assert.ok(JSON.stringify(rows[0]!.render).includes(`storage:${object}`), 'the saved render keeps the storage address');
 });
 
 test('templates used in posts of the last 90 days are blocked; rejected posts block nothing', async () => {

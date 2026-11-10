@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { finishRun, insertPost, previousPosts, recentPhotoUrls, startRun, usedIdeaIds } from '@/lib/lfd/store';
-import { storeSlideJpegs } from '@/lib/social/overnight/slides';
+import { SlideImagesFailed, storeSlideJpegs } from '@/lib/social/overnight/slides';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -90,4 +90,23 @@ test('finishRun only finishes a running run: a stray finish after the timeout ke
   const live = await startRun(query, 'manual', 1, '2026-10-13');
   assert.equal(await finishRun(query, live, { status: 'ok', claudeUsd: 0.4, jevUsd: 0.1, record: {} }), true);
   assert.equal((await query<{ status: string }>(`SELECT status FROM lfd.runs WHERE id = $1`, [live])).rows[0]!.status, 'ok');
+});
+
+test('storeSlideJpegs uploads nothing when a slide image failed to load', async () => {
+  const fs = await import('node:fs/promises');
+  const sharp = (await import('sharp')).default;
+  const png = await sharp({ create: { width: 4, height: 4, channels: 3, background: '#000' } }).png().toBuffer();
+  const uploads: string[] = [];
+  await assert.rejects(
+    storeSlideJpegs('lfd-2026-10-13', { slides: [] } as never, {
+      prefix: 'lfd',
+      fitCheck: async (_post, opts) => {
+        await fs.writeFile(`${opts!.screenshotDir}/slide-slide-01.png`, png);
+        return { ok: false, violations: [], problems: ['image failed to load: storage:lfd/x/meme.png'], slideText: [] };
+      },
+      upload: async (p) => { uploads.push(p); },
+    }),
+    (err) => err instanceof SlideImagesFailed && err.failed[0] === 'image failed to load: storage:lfd/x/meme.png',
+  );
+  assert.deepEqual(uploads, []);
 });

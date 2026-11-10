@@ -29,6 +29,7 @@ export function liveMemesForPost(query: HubQuery, log: (message: string, fields?
         openRenderer: openMemeRenderer,
         fitCheck: checkRenderFit,
         upload: (p, body, type) => bucket.upload(p, body, type),
+        download: (p) => bucket.download(p),
         fetchBody: fetchBodyLive,
         storeSlides: (slug, render) => storeSlideJpegs(slug, render as never, { prefix: 'lfd', fitCheck: checkRenderFit, upload: (p, b) => bucket.upload(p, b, 'image/jpeg') }),
         now: () => new Date(),
