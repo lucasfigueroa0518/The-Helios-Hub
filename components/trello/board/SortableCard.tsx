@@ -13,6 +13,9 @@ export function SortableCard({
   onOpen,
   onArchive,
   onToggleComplete,
+  quickAssign,
+  members,
+  onToggleAssignee,
 }: {
   card: Card;
   board: Board;
@@ -21,6 +24,9 @@ export function SortableCard({
   onOpen: () => void;
   onArchive?: () => void;
   onToggleComplete?: () => void;
+  quickAssign?: boolean;
+  members?: User[];
+  onToggleAssignee?: (userId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
@@ -50,6 +56,9 @@ export function SortableCard({
         onOpen={onOpen}
         onArchive={onArchive}
         onToggleComplete={onToggleComplete}
+        quickAssign={quickAssign}
+        members={members}
+        onToggleAssignee={onToggleAssignee}
         isDragging={isDragging}
       />
     </div>
