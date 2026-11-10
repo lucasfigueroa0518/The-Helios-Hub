@@ -33,7 +33,9 @@ type Props = {
   onOpenCard: (id: string) => void;
   onArchiveCard?: (id: string) => void;
   onToggleCompleteCard?: (id: string) => void;
-  onAddCard: (listId: string, title: string) => void;
+  onToggleAssignee?: (cardId: string, userId: string) => void;
+  members?: User[];
+  onAddCard: (listId: string, title: string) => string | null | void;
   onAddList: (boardId: string, name: string) => void;
   onMoveCard: (cardId: string, toListId: string, toIndex: number) => void;
   onReorderLists: (boardId: string, orderedIds: string[]) => void;
@@ -53,6 +55,8 @@ export function Board({
   onOpenCard,
   onArchiveCard,
   onToggleCompleteCard,
+  onToggleAssignee,
+  members,
   onAddCard,
   onAddList,
   onMoveCard,
@@ -63,9 +67,22 @@ export function Board({
   draftListId,
   setDraftListId,
 }: Props) {
+  const [freshCardIds, setFreshCardIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<"card" | "list" | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  function handleAddCard(listId: string, title: string) {
+    const id = onAddCard(listId, title);
+    if (!id) return;
+    setFreshCardIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }
 
   function handleAddList(boardId: string, name: string) {
     onAddList(boardId, name);
@@ -303,7 +320,10 @@ export function Board({
                 onOpenCard={onOpenCard}
                 onArchiveCard={onArchiveCard}
                 onToggleCompleteCard={onToggleCompleteCard}
-                onAddCard={onAddCard}
+                onToggleAssignee={onToggleAssignee}
+                freshCardIds={freshCardIds}
+                members={members}
+                onAddCard={handleAddCard}
                 onRenameList={onRenameList}
                 onDeleteList={onDeleteList}
                 onSortCards={onSortCards}
