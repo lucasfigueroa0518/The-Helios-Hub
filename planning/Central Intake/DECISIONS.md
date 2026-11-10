@@ -92,7 +92,7 @@ Quotes are Lucas's words as recorded in the plan. Where the plan records only th
   noise at a tight cutoff), plus one legacy event split into three ideas that the intake groups as one.
 - Lucas: "Yes, accept it".
 
-## CI-30: Content runs are never failed for taking long (Lucas, 2026-11-10)
+## CI-33: Content runs are never failed for taking long (Lucas, 2026-11-10)
 - Trigger: an LFD manual run failed "timed out after 30 minutes" because an 18-minute intake refresh counted toward
   `LFD_RUN_TIMEOUT_MS`; an AI Drama render was killed by a 30-minute HyperFrames limit.
 - Lucas: "up limits for ALL CONTENT RUNS across all verticals, because timeouts shouldn't be a reason why things fail.
@@ -101,5 +101,11 @@ Quotes are Lucas's words as recorded in the plan. Where the plan records only th
 - Run-level limits removed; in-process runs fail only on no progress (45 min of silence) or a 12 h backstop. Subprocess
   render/compile/voice steps get the 12 h backstop. Age reapers move to 12 h; LFD/AI Events/Field Notes runs are also
   reaped at `helios-social` startup. `lib/content-runs/hang-guard.ts` holds the constants.
+- Startup reaping (every deploy restarts all VM workers): each content daemon, before claiming, releases or fails the
+  rows it left running, with that table's own reaper semantics. helios-social: LFD, AI Events, Field Notes and carousel
+  (`social.runs`) runs failed. helios-stories: `building` sets released to `requested` (rebuilt the same day).
+  helios-reels: night run and copy/frame/video/song-pick stages failed. helios-explainers: running jobs failed (already
+  so). helios-reel-ai-drama: running jobs and requests failed at age 0 (jobs resume from what they paid for). `--once`
+  runs never reap at age 0. `intake.runs` keeps only the 12 h backstop: several workers write it, with no owner column.
 - Kept: per-request network timeouts, the publisher heartbeat and IG publish polling, the outreach worker.
 

@@ -43,6 +43,23 @@ export async function releaseStaleRuns(query: Query, now = new Date()): Promise<
   return rows.length;
 }
 
+/**
+ * Called once when helios-social boots, before it claims anything: carousel runs run only as that daemon's child, so a
+ * run still `running` at boot died with the previous process (deploy restart). Failed with releaseStaleRuns' wording;
+ * `requested` runs are left queued. Returns how many were failed.
+ */
+export async function reapRunsAtStartup(query: Query, now = new Date()): Promise<number> {
+  const { rows } = await query(
+    `UPDATE social.runs
+        SET status = 'failed', finished_at = $1::timestamptz,
+            error = coalesce(error, 'The worker stopped while this run was in progress.')
+      WHERE status = 'running'
+      RETURNING id`,
+    [now.toISOString()],
+  );
+  return rows.length;
+}
+
 /** Claim the queued run when nothing else is running. */
 export async function claimRun(query: Query, now = new Date()): Promise<{ id: string; capUsd: number; hookPass: boolean; storyIds: string[]; trigger: string } | null> {
   await releaseStaleRuns(query, now);

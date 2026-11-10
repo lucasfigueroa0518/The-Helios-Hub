@@ -71,6 +71,14 @@ async function main(): Promise<void> {
       return;
     }
 
+    // Daemon only (--once may run beside the VM's service): rows still 'running' at boot died with the previous process.
+    const { reapReelsAtStartup } = await import('@/lib/reels/startup-reap');
+    const reaped = await reapReelsAtStartup().catch((error) => {
+      log('startup_reap_failed', { error: error instanceof Error ? error.message : String(error) });
+      return {};
+    });
+    if (Object.keys(reaped).length) log('startup_reaped', reaped);
+
     let scheduledFor = nextRunAt(new Date());
     let songsFor = nextSongsAt();
     let insightsFor = nextInsightsAt();

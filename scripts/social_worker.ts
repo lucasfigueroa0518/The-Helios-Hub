@@ -161,6 +161,9 @@ async function main(): Promise<void> {
     const reaped = await store.reapRunsAtStartup(lfdQuery).catch((error) => (log(`${name}_startup_reap_failed`, { error: errorText(error) }), 0));
     if (reaped) log(`${name}_startup_reaped`, { runs: reaped });
   }
+  // Carousel (social.runs) runs are this daemon's children too (CI-33).
+  const carouselReaped = await runs.reapRunsAtStartup(query).catch((error) => (log('carousel_startup_reap_failed', { error: errorText(error) }), 0));
+  if (carouselReaped) log('carousel_startup_reaped', { runs: carouselReaped });
   /**
    * Targeted Revisions: the live Haiku call behind the interpreter. Its system block arrives
    * already cached (lib/revisions/interpret.ts, cachedSystemText); the client is made on first use.

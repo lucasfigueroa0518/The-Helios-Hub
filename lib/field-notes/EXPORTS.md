@@ -30,7 +30,7 @@ Not provided (ai_events has them, Field Notes has no counterpart): `pool.ts`/`po
 ```
 claimRun(q) -> carryOutFieldNotesRun({query, now, log, engine: (run, cap) => liveFieldNotesDeps(query, {capUsd: cap})}, run)
 ```
-wrapped in `withHangGuard(..., { onHang: fail the run })` (lib/content-runs/hang-guard.ts; no run time limit, CI-30). The clock: `noonQueue(now, await readFieldNotesSettings(q), await scheduledRunToday(q, nyDate))`, then `requestRun(q, 'scheduled', cap)`; it always says no while auto_run is false. Publisher: `releaseDueFieldNotes(query, {requireApproval})` and `claimAndPublishFieldNotes(deps)`, only while `publishingLive`. Hub actions: `queueManualFieldNotesRun`, `approveFieldNotesPost`, `rejectFieldNotesPost`, `unscheduleFieldNotesPost`, `hardPublishFieldNotesPost`.
+wrapped in `withHangGuard(..., { onHang: fail the run })` (lib/content-runs/hang-guard.ts; no run time limit, CI-33). The clock: `noonQueue(now, await readFieldNotesSettings(q), await scheduledRunToday(q, nyDate))`, then `requestRun(q, 'scheduled', cap)`; it always says no while auto_run is false. Publisher: `releaseDueFieldNotes(query, {requireApproval})` and `claimAndPublishFieldNotes(deps)`, only while `publishingLive`. Hub actions: `queueManualFieldNotesRun`, `approveFieldNotesPost`, `rejectFieldNotesPost`, `unscheduleFieldNotesPost`, `hardPublishFieldNotesPost`.
 
 ## Run behavior (v2, 2026-11-05: one run = one post of 3-6 tips (TIP_SLIDES_MAX raised to 6 on 2026-11-08), one tip per slide; see planning/Field Notes/CONTRACT-v2.md)
 

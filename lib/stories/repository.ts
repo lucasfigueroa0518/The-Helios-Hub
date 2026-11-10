@@ -181,6 +181,15 @@ export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = RUN_H
   return rows.map((r) => r.id);
 }
 
+/**
+ * Called once when helios-stories boots, before it claims anything: builds run only inside that one daemon, so a set
+ * still `building` at boot died with the previous process (deploy restart). Handed back now, not after the 12 h
+ * backstop, so the set is rebuilt the same day. Returns the released ids.
+ */
+export async function releaseBuildsAtStartup(db: StoriesDb): Promise<string[]> {
+  return releaseStaleBuilds(db, 0);
+}
+
 export async function getSet(db: Queryable, setId: string): Promise<{ set: StorySet; frames: FrameRow[] } | null> {
   const { rows } = await db.query<StorySet>(`SELECT ${SET_COLS} FROM stories.sets WHERE id = $1`, [setId]);
   if (!rows[0]) return null;
