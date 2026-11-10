@@ -27,15 +27,20 @@ import { liveJevTransport } from '@/lib/reels/jev/client';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
 import { createPhotoBank } from '@/lib/media-library/bank';
+import { buildFreeVsPaid } from '@/lib/stories/build/free-vs-paid';
+import { buildAiTrivia } from '@/lib/stories/build/ai-trivia';
+import { buildMorningDownload } from '@/lib/stories/build/morning-download';
 import { createLivePhotoFinder } from '@/lib/stories/photos';
+import { sharedSeriesBuilders } from '@/lib/stories/photos-shared';
 import { createLiveStoryInsightsClient } from '@/lib/stories/publish/insights';
 import { createLiveStoriesMetaClient } from '@/lib/stories/publish/meta';
 import { openRenderer, type Renderer } from '@/lib/stories/render/render';
 import { createReviewCall } from '@/lib/stories/render/review';
 import type { Series } from '@/lib/stories/render/types';
-import { nyDate, requestSet } from '@/lib/stories/repository';
+import { nyDate, releaseBuildsAtStartup, requestSet } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
+import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
 import { tick } from '@/lib/stories/worker';
 import { liveWriterCreate } from '@/lib/stories/writer';
 import { newAnthropic } from '@/lib/anthropic-client';
@@ -58,6 +63,13 @@ async function main() {
     log(`${created ? 'requested' : 'already have'} ${series} ${set.ny_date} (${set.status})`);
   }
 
+  // Daemon only (not --once, which may run beside the VM's service): a build still `building` at boot died with the
+  // previous process. Release it now instead of after the 12 h backstop (CI-33).
+  if (!once) {
+    const released = await releaseBuildsAtStartup(db).catch((err) => (log(`startup release failed: ${err instanceof Error ? err.message : String(err)}`), []));
+    if (released.length) log(`startup released ${released.length} build(s): ${released.join(', ')}`);
+  }
+
   let renderer: Renderer | null = null;
   let stopping = false;
   process.on('SIGTERM', () => (stopping = true));
@@ -70,15 +82,23 @@ async function main() {
       renderer ??= await openRenderer();
       const settings = await loadSettings(db);
       const client = newAnthropic();
+      // Once per build: series on the shared photo finder get wrapped builders; none, and today's deps are unchanged.
+      const builders = await sharedSeriesBuilders({
+        query: sourceDb,
+        builders: { morning_download: buildMorningDownload, ai_trivia: (d) => buildAiTrivia(d), free_vs_paid: buildFreeVsPaid },
+        log: (line) => log(`photo finder: ${line}`),
+      });
       return {
         db,
         sourceDb,
         jevTransport: liveJevTransport,
         write: liveWriterCreate(),
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank }),
+        // CI-32: each pick's picture is checked against the used-photo ledger (read once per finder).
+        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
+        ...(builders ? { builders } : {}),
       };
     },
     meta: () => createLiveStoriesMetaClient(),

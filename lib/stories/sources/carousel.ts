@@ -4,12 +4,15 @@
  * Built against his schema on feature/helios-social-rebuild
  * (db/social_schema.sql); his rows arrive when his daily runner writes them.
  * Read-only, except the one write his storage spec allows: a
- * `social.used_photos` row for a photo Stories actually published (S-24).
+ * `social.used_photos` row for a photo Stories actually published (S-24),
+ * written through the one used-photo ledger (CI-32, lib/photos/used.ts).
  *
  * The JSON is read defensively: a missing field drops that candidate, never
  * the build.
  */
 import type { Queryable } from '@/lib/stories/db';
+import { hashesOf } from '@/lib/photos/used-hash';
+import { readUsedLedger, recordUsedPhotos, USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
 
 import { storyKey, type StoryCandidate } from './reels';
 
@@ -85,32 +88,58 @@ export async function latestCarouselRunAt(db: Queryable): Promise<string | null>
   return at ? new Date(at).toISOString() : null;
 }
 
-/** Photos used in the last `days` (Tommy's 7-day no-repeat rule, S-24). */
-export async function recentUsedPhotoUrls(db: Queryable, now: Date, days = 7): Promise<Set<string>> {
-  const { rows } = await db.query<{ url: string }>(`SELECT DISTINCT url FROM social.used_photos WHERE used_at > $1::timestamptz - make_interval(days => $2)`, [now.toISOString(), days]);
-  return new Set(rows.map((r) => r.url));
+const ledgerQuery = (db: Queryable) => (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
+
+/** The used-photo ledger (CI-32): photos any post published in the last `days`, by URL and by hash. */
+export function recentPhotoLedger(db: Queryable, now: Date, days = USED_PHOTO_DAYS): Promise<UsedLedger> {
+  return readUsedLedger(ledgerQuery(db), now, days);
 }
 
-/** Photos used in the last `days`, each with the stories that used it (story_id), so a story's own photo isn't held against it. */
-export async function recentPhotoUses(db: Queryable, now: Date, days = 7): Promise<Map<string, Set<string>>> {
-  const { rows } = await db.query<{ url: string; story_id: string | null }>(`SELECT DISTINCT url, story_id FROM social.used_photos WHERE used_at > $1::timestamptz - make_interval(days => $2)`, [now.toISOString(), days]);
-  const out = new Map<string, Set<string>>();
-  for (const r of rows) {
-    const set = out.get(r.url) ?? new Set<string>();
-    set.add(r.story_id ?? '');
-    out.set(r.url, set);
-  }
-  return out;
+/** Photos published in the last `days` (CI-32's one rule; was Tommy's 7-day rule, S-24). */
+export async function recentUsedPhotoUrls(db: Queryable, now: Date, days = USED_PHOTO_DAYS): Promise<Set<string>> {
+  return new Set((await recentPhotoLedger(db, now, days)).urls);
 }
 
-/** The one write into Tommy's tables (plan rule 6): a photo Stories actually published. */
+/**
+ * Photos published in the last `days`, each with who used it. Since CI-32 every ledger row is a published post's
+ * (`<vertical>:<post id>`, never a story ref), so a story's own carousel photo is held once that carousel is
+ * published; the set is keyed '' for "a published post".
+ */
+export async function recentPhotoUses(db: Queryable, now: Date, days = USED_PHOTO_DAYS): Promise<Map<string, Set<string>>> {
+  return new Map([...(await recentUsedPhotoUrls(db, now, days))].map((url) => [url, new Set([''])]));
+}
+
+/**
+ * The one write into Tommy's tables (plan rule 6): a photo Stories actually published, logged in the used-photo
+ * ledger (vertical 'stories', the set id from `stories:<setId>`). Its hashes are best effort: a fetch or hash failure
+ * still writes a URL-only row. `http`/`hash` are for tests.
+ */
 export async function recordPublishedPhoto(
   db: Queryable,
   p: { url: string; usedAt: Date; storyId: string; slide: number; source?: string | null; qid?: string | null; subject?: string | null; credit?: string | null; scene?: string | null },
+  o: { http?: typeof fetch; hash?: (bytes: Buffer) => Promise<{ phash: string; dhash: string }> } = {},
 ): Promise<void> {
-  await db.query(
-    `INSERT INTO social.used_photos (url, used_at, story_id, slide, source, qid, subject, credit, scene)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT DO NOTHING`,
-    [p.url, p.usedAt.toISOString(), p.storyId, p.slide, p.source ?? 'stories', p.qid ?? null, p.subject ?? null, p.credit ?? null, p.scene ?? null],
-  );
+  let hashes: { phash: string; dhash: string } | null = null;
+  try {
+    const res = await (o.http ?? fetch)(p.url, { signal: AbortSignal.timeout(10_000) });
+    if (res.ok) hashes = await (o.hash ?? hashesOf)(Buffer.from(await res.arrayBuffer()));
+  } catch {
+    hashes = null;
+  }
+  const postId = p.storyId.startsWith('stories:') ? p.storyId.slice('stories:'.length) : p.storyId;
+  await recordUsedPhotos(ledgerQuery(db), [
+    {
+      url: p.url,
+      usedAt: p.usedAt,
+      vertical: 'stories',
+      postId,
+      slide: p.slide,
+      source: p.source ?? 'stories',
+      qid: p.qid ?? null,
+      subject: p.subject ?? null,
+      credit: p.credit ?? null,
+      scene: p.scene ?? null,
+      ...(hashes ? hashes : {}),
+    },
+  ]);
 }

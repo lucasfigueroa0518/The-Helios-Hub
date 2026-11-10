@@ -1,3 +1,4 @@
+import type { PhotoHashDeps } from '@/lib/photos/published-posts';
 import { failStaleLfdAttempts, carryLfdAttempt } from '@/lib/lfd/publish';
 import { releaseDueLfd } from '@/lib/lfd/schedule';
 import { readLfdSettings } from '@/lib/lfd/settings';
@@ -16,6 +17,8 @@ export function lastFewDaysDriver(deps: {
   query: Query;
   meta: () => CarouselMetaClient;
   signImage: (objectPath: string, expiresIn: number) => Promise<string>;
+  /** The publish-time used-photo write's reader (CI-32); `{}` = live. Absent: no download. */
+  photoHashes?: PhotoHashDeps;
   token: () => string;
 }): PublishDriver {
   const settings = () => readLfdSettings(deps.query).catch(() => null);
@@ -26,7 +29,7 @@ export function lastFewDaysDriver(deps: {
     requireApproval: async () => (await settings())?.requireApproval !== false,
     failStale: () => failStaleLfdAttempts(deps.query),
     releaseDue: async () => releaseDueLfd(deps.query, { requireApproval: await driver.requireApproval() }),
-    carry: (id) => carryLfdAttempt({ query: deps.query, meta: deps.meta(), signImage: deps.signImage }, id),
+    carry: (id) => carryLfdAttempt({ query: deps.query, meta: deps.meta(), signImage: deps.signImage, photoHashes: deps.photoHashes }, id),
     pollInsights: () => pollCarouselInsights(deps.query, createCarouselInsightsClient({ token: deps.token() }), new Date(), 200, 'last_few_days'),
   };
   return driver;

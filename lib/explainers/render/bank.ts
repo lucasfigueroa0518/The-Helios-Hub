@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -50,7 +51,7 @@ export function kitOnlyImports(source: string): string | null {
 
 /** Run the kit's own check on the project's new drawings. */
 function findProps(projectDir: string): { props: FoundProp[]; error: string | null } {
-  const run = spawnSync(process.execPath, [path.join('assets', 'kit', 'try.mjs'), 'props'], { cwd: projectDir, encoding: 'utf8', timeout: 60_000 });
+  const run = spawnSync(process.execPath, [path.join('assets', 'kit', 'try.mjs'), 'props'], { cwd: projectDir, encoding: 'utf8', timeout: RUN_HANG_BACKSTOP_MS });
   try {
     const parsed = JSON.parse(run.stdout) as { props?: FoundProp[] };
     return { props: parsed.props ?? [], error: null };

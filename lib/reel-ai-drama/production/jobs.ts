@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 import type { Queryable } from '@/lib/explainers/db';
 import type { StorageLocation } from '@/lib/explainers/storage';
 import { failureClass } from '@/lib/reel-ai-drama/retry';
@@ -283,7 +284,7 @@ export async function harnessFailureStreak(db: Queryable, window = 5): Promise<n
 }
 
 /** Jobs left running by a worker that died: failed, with why. */
-export async function failStaleJobs(db: Queryable, reason: string, olderThanMinutes = 240): Promise<number> {
+export async function failStaleJobs(db: Queryable, reason: string, olderThanMinutes = RUN_HANG_BACKSTOP_MINUTES /* hang guard only; long renders are normal */): Promise<number> {
   // Quiet that long since it started or last kept anything, longer than any render or passing outage: another worker may be
   // running a job right now (parallel workers, 2026-10-28), and failing it would kill a live render.
   const { rows } = await db.query<{ id: string }>(

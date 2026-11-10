@@ -65,11 +65,11 @@ async function main(): Promise<void> {
   const slideBucket = mediaBucket(SLIDE_BUCKET);
   const token = () => process.env.META_USER_ACCESS_TOKEN!;
   const drivers: PublishDriver[] = [
-    carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
-    lastFewDaysDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
+    carouselsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token }),
+    lastFewDaysDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token }),
     // A published AI Events post publishes the public calendar snapshot again (plan M3/M4).
-    aiEventsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token, snapshot: liveAiEventsSnapshot(query as unknown as HubQuery), log }),
-    fieldNotesDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), token }),
+    aiEventsDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token, snapshot: liveAiEventsSnapshot(query as unknown as HubQuery), log }),
+    fieldNotesDriver({ query, meta: createLiveCarouselClient, signImage: (p, s) => slideBucket.sign(p, s), photoHashes: {}, token }),
     reelsDriver({ meta: createLiveMetaClient }),
   ];
 

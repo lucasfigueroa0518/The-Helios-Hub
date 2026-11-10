@@ -2,7 +2,17 @@
  * The photo pool's rules, pure (CONTRACT.md section 2): a photo sits out the `restPosts` posts after
  * its use, then may return; the pick is newest-uploaded first. Nothing here touches a database.
  */
+import { mediaLibraryKey, usedMatch, type UsedLedger } from '@/lib/photos/used';
+
 import type { PhotoKind, PoolPhoto } from '../types';
+
+/**
+ * CI-32: the pool photos any post published in the last 20 days, by their ledger key (`media-library:<id>`) or by
+ * picture (`dhashes`: photo id → the bank's dHash). These sit out on top of the rest rule. Pure.
+ */
+export function publishedPhotoIds(pool: readonly PoolPhoto[], ledger: UsedLedger, dhashes: ReadonlyMap<string, string | null> = new Map()): Set<string> {
+  return new Set(pool.filter((p) => usedMatch(ledger, { url: mediaLibraryKey(p.photoId), dhash: dhashes.get(p.photoId) ?? null })).map((p) => p.photoId));
+}
 
 /** Rest has ended once `restPosts` posts have been made since the photo's last use. */
 export function restEnded(photo: PoolPhoto, nextSeq: number, restPosts: number): boolean {
@@ -171,8 +181,9 @@ export function checkPhotoPool(o: { pool: PoolPhoto[]; nextSeq: number; restPost
  * neighbours of one kind when the pool allows (kind used least so far wins, then newest upload); Follow takes the
  * calmest left. Every relaxation lands in `warnings`.
  */
-export function pickPostPhotos(o: { pool: PoolPhoto[]; nextSeq: number; restPosts: number; count: number }): PostPhotoPick {
-  const available = availableSorted(o.pool, o.nextSeq, o.restPosts);
+export function pickPostPhotos(o: { pool: PoolPhoto[]; nextSeq: number; restPosts: number; count: number; published?: ReadonlySet<string> }): PostPhotoPick {
+  // `published` (publishedPhotoIds): photos the used-photo ledger holds are never offered (CI-32).
+  const available = availableSorted(o.pool, o.nextSeq, o.restPosts).filter((p) => !o.published?.has(p.photoId));
   const n = Math.min(Math.max(0, o.count), available.length);
   const chosen: PoolPhoto[] = [];
   const left = () => available.filter((p) => !chosen.includes(p));

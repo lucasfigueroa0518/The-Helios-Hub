@@ -18,6 +18,7 @@ import { planWants } from '@/lib/reel-ai-drama/harvest/plan';
 import type { HarvestDeps, Want } from '@/lib/reel-ai-drama/harvest/types';
 import { DEFAULT_SETTINGS, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { Asset, Pitch } from '@/lib/reel-ai-drama/types';
+import { usedMatch, type UsedLedger } from '@/lib/photos/used';
 import { findSetOrEach, type PhotoFinder, type PhotoRequest } from '@/lib/stories/photos';
 import type { Photo } from '@/lib/stories/render/types';
 
@@ -68,8 +69,8 @@ export const BUILDER_HARVEST_CAP_USD = 0.15;
 /**
  * AI Drama's harvest engine as a builder slide uses it. Every outside call goes through `deps`
  * (`http` for Wikidata/Commons/Serper/articles/downloads, `serperKey`, `create` for the Haiku look,
- * `photoBank`); tests stub them all. The harvest's database is a sink (LFD keeps its own 7-day
- * reuse rule and never writes AI Drama's tables), and its spend cap is the post's remaining budget.
+ * `photoBank`); tests stub them all. The harvest's database is a sink (its reuse_days is 0: LFD checks the
+ * used-photo ledger itself, CI-32, and never writes AI Drama's tables), and its spend cap is the post's remaining budget.
  */
 export type BuilderHarvest = {
   deps: Omit<HarvestDeps, 'db' | 'capUsd'>;
@@ -113,9 +114,12 @@ export function builderWants(pitch: Pitch): Want[] {
 
 const isWebUrl = (u: string | null): u is string => !!u && /^https?:\/\//i.test(u);
 
-/** The slide's photo from the harvest's usable assets: what the writer asked for first (a person, else the key moment). */
-export function chooseAsset(assets: readonly Asset[], copy: StoryCopy, exclude: ReadonlySet<string>): Asset | null {
-  const usable = assets.filter((a) => isWebUrl(a.url) && !a.made && !exclude.has(a.url));
+/**
+ * The slide's photo from the harvest's usable assets: what the writer asked for first (a person, else the key moment).
+ * `used`: the ledger (CI-32); an asset published in the last 20 days, by URL or by pHash, is out.
+ */
+export function chooseAsset(assets: readonly Asset[], copy: StoryCopy, exclude: ReadonlySet<string>, used?: UsedLedger): Asset | null {
+  const usable = assets.filter((a) => isWebUrl(a.url) && !a.made && !exclude.has(a.url) && !(used && usedMatch(used, { url: a.url, phash: a.phash })));
   const people = copy.photo.subjects.filter((s) => s.type === 'person').map((s) => s.name);
   const portraits = people.flatMap((name) => usable.filter((a) => a.kind === 'person_photo' && a.people.includes(name)));
   const moment = usable.filter((a) => a.flags.includes('key_moment'));
@@ -143,6 +147,7 @@ export async function harvestBuilderPhoto(
   exclude: ReadonlySet<string>,
   budget: HarvestBudget,
   now: Date,
+  used?: UsedLedger,
 ): Promise<{ photo: Photo | null; trace: string[] }> {
   const left = budget.capUsd - budget.usd;
   if (left <= 0) return { photo: null, trace: [`harvest: skipped, the post's $${budget.capUsd.toFixed(2)} harvest cap is spent`] };
@@ -164,7 +169,7 @@ export async function harvestBuilderPhoto(
     );
     const usd = Number(res.inventory.usd) || 0;
     budget.usd = before + usd;
-    const asset = chooseAsset(res.inventory.assets, copy, exclude);
+    const asset = chooseAsset(res.inventory.assets, copy, exclude, used);
     trace.push(`harvest: ${res.inventory.assets.length} usable, $${usd.toFixed(3)} (post total $${budget.usd.toFixed(3)})`);
     if (!asset) return { photo: null, trace: [...trace, 'harvest: nothing usable for the slide; the finder takes over'] };
     trace.push(`harvest: ${asset.id} ${asset.kind} "${asset.shows}" via ${asset.credit}: ${asset.url}`);

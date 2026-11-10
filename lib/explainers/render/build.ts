@@ -13,6 +13,7 @@
  * message (identical content, no Read), and the builders' world requests come back as a fixed line
  * (`WORLD REQUEST: …`, frame-worker.md § Acting) that code parses.
  */
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -64,7 +65,7 @@ export const WORLD_REQUEST = /^\s*[-*]?\s*`?WORLD REQUEST:\s*(.+?)`?\s*$/gim;
 
 /** The default command runner: node scripts with this Node, hyperframes from the pinned CLI. */
 export function defaultExec(projectDir: string, env: Record<string, string>): Exec {
-  return (program, args, timeoutMs = 10 * 60 * 1000) => {
+  return (program, args, timeoutMs = RUN_HANG_BACKSTOP_MS) => {
     const bin = program === 'node' ? process.execPath : HYPERFRAMES_BIN;
     const res = spawnSync(bin, args, { cwd: projectDir, env: env as NodeJS.ProcessEnv, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
     return { status: res.status, stdout: res.stdout ?? '', stderr: res.stderr ?? (res.error ? String(res.error) : '') };
@@ -311,7 +312,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildOutcome> {
       outcome.stopped = true;
       return outcome;
     }
-    const audio = node(skill('audio.mjs'), ['--script', './SCRIPT.md', '--storyboard', './STORYBOARD.md', '--hyperframes', '.', '--out', './audio_meta.json', '--voice', deps.voiceId], 30 * 60 * 1000);
+    const audio = node(skill('audio.mjs'), ['--script', './SCRIPT.md', '--storyboard', './STORYBOARD.md', '--hyperframes', '.', '--out', './audio_meta.json', '--voice', deps.voiceId], RUN_HANG_BACKSTOP_MS);
     if (audio.status !== 0 || !fs.existsSync(metaFile)) {
       notes.push(`audio.mjs failed, so nothing could be built: ${tail(audio)}`);
       log('build_stopped', { reason: 'audio failed' });
@@ -400,7 +401,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildOutcome> {
     const m = node(kit('mount.mjs'));
     if (m.status !== 0) notes.push(`mount.mjs: ${errorsOf(m).join('; ') || tail(m)}`);
   };
-  const buildChecks = () => ({ tried: byFrame(tryErrors(node(kit('try.mjs'), ['all']))), bounds: byFrame(errorsOf(node(kit('bounds.mjs'), ['all'], 5 * 60 * 1000))) });
+  const buildChecks = () => ({ tried: byFrame(tryErrors(node(kit('try.mjs'), ['all']))), bounds: byFrame(errorsOf(node(kit('bounds.mjs'), ['all'], RUN_HANG_BACKSTOP_MS))) });
   mountAll();
   let checks = buildChecks();
   const failing = (c: typeof checks) => [...new Set([...c.tried.keys(), ...c.bounds.keys()])].filter((n) => n > 0);
@@ -471,7 +472,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildOutcome> {
   if (verify.status !== 0) notes.push(`transitions.mjs verify: ${tail(verify)}`);
   const finalize = () => {
     const lint = exec('hyperframes', ['lint', '--json']);
-    const check = exec('hyperframes', ['check', '--json'], 15 * 60 * 1000);
+    const check = exec('hyperframes', ['check', '--json'], RUN_HANG_BACKSTOP_MS);
     log('build_step', { step: 'hyperframes lint+check', lint: lint.status, check: check.status });
     return finalizeFailures(lint.stdout, check.stdout);
   };

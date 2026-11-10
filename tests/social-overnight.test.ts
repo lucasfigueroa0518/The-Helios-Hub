@@ -131,7 +131,7 @@ test('runs: a run running past the stale limit is released', async () => {
   const id = await requestRun(query, 'scheduled', { capUsd: 2, hookPass: true });
   await claimRun(query, new Date('2026-10-08T07:00:00Z'));
   await requestRun(query, 'manual', { capUsd: 2, hookPass: true });
-  const next = await claimRun(query, new Date('2026-10-08T09:00:00Z'));
+  const next = await claimRun(query, new Date('2026-10-08T20:00:00Z')); // past the 12 h hang backstop
   assert.ok(next && next.id !== id);
   assert.equal((await query(`SELECT status FROM social.runs WHERE id = $1`, [id])).rows[0].status, 'failed');
 });

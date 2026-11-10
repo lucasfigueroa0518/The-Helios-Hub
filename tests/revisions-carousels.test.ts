@@ -56,8 +56,12 @@ async function seed(q: Query, status = 'review') {
     [SLUG, status, JSON.stringify(BRIEF), JSON.stringify(DRAFT), JSON.stringify(r), r.caption, JSON.stringify(OBJECTS)],
   );
   const id = rows[0]!.id as string;
-  // 7-day rule: one photo used two days ago, one used ten days ago (free again).
-  await q(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/recent.jpg', now() - interval '2 days', 'story-0', 2), ('https://img.test/old.jpg', now() - interval '10 days', 'story-0', 2)`);
+  // CI-32: one photo published two days ago, one published 25 days ago (free again), and one a carousel build logged
+  // yesterday without publishing (not a ledger row).
+  await q(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES
+    ('https://img.test/recent.jpg', now() - interval '2 days', 'lfd:post-0', 2),
+    ('https://img.test/old.jpg', now() - interval '25 days', 'lfd:post-0', 2),
+    ('https://img.test/built.jpg', now() - interval '1 day', 'story-0', 2)`);
   return { id, render: r };
 }
 
@@ -217,7 +221,7 @@ test('new words missing from the rendered slide fail the fix (dropped-text check
   assert.deepEqual(after.slide_objects, OBJECTS);
 });
 
-test('photo fix excludes every URL already in the post and the 7-day used_photos set', async () => {
+test('photo fix excludes every URL already in the post and the used-photo ledger (published, 20 days)', async () => {
   const q = await openDb();
   const p = await seed(q);
   const { desc, calls } = setup({ photo: photo('https://img.test/new.jpg', { source: 'commons-search' }) });
@@ -228,6 +232,7 @@ test('photo fix excludes every URL already in the post and the 7-day used_photos
   const ex = calls.photos[0]!.exclude;
   for (const u of ['https://img.test/cover.jpg', 'https://img.test/scene.jpg', 'https://img.test/recent.jpg']) assert.ok(ex.has(u), u);
   assert.equal(ex.has('https://img.test/old.jpg'), false);
+  assert.equal(ex.has('https://img.test/built.jpg'), false, 'a build-time row is not a published photo');
   assert.equal(calls.photos[0]!.hint, 'a data center');
   assert.ok(m.spent > 0);
   const after = await row(q, p.id);
@@ -236,9 +241,9 @@ test('photo fix excludes every URL already in the post and the 7-day used_photos
   assert.equal(s2.photoCredit, 'OPENVERSE · CC0');
   assert.equal(s2.photoKind, 'scene');
   assert.deepEqual(after.render.slides[0], p.render.slides[0]);
-  // The new photo now counts for the 7-day rule.
-  const used = (await q(`SELECT story_id, slide, post_id::text AS post_id FROM social.used_photos WHERE url = 'https://img.test/new.jpg'`)).rows;
-  assert.deepEqual(used, [{ story_id: 'story-1', slide: 2, post_id: p.id }]);
+  // CI-32: a post in review is unpublished, so the new photo is not logged as used.
+  const used = (await q(`SELECT story_id FROM social.used_photos WHERE url = 'https://img.test/new.jpg'`)).rows;
+  assert.deepEqual(used, []);
   if (res.ok) assert.equal((res.before.photo as { photoUrl?: string }).photoUrl, 'https://img.test/scene.jpg');
 });
 
@@ -538,14 +543,14 @@ test('a layout fix on a slide with a set design (template) is refused and nothin
   assert.deepEqual(await row(q, p.id), start);
 });
 
-test('a stock photo is logged in used_photos with the scene it was found for', async () => {
+test('a revision writes nothing to used_photos: used means published (CI-32)', async () => {
   const q = await openDb();
   const p = await seed(q);
+  const before = (await q(`SELECT count(*)::int AS n FROM social.used_photos`)).rows[0]!.n;
   const { desc } = setup({ photo: photo('https://img.test/stock.jpg', { scene: 'data center' }) });
   const res = await desc.revise({ q, refs: { postId: p.id }, interpretation: interp(slide(2), 'photo'), meter: meter() });
   assert.equal(res.ok, true);
-  const used = (await q(`SELECT scene, source, credit FROM social.used_photos WHERE url = 'https://img.test/stock.jpg'`)).rows;
-  assert.deepEqual(used, [{ scene: 'data center', source: 'stock', credit: 'OPENVERSE · CC0' }]);
+  assert.equal((await q(`SELECT count(*)::int AS n FROM social.used_photos`)).rows[0]!.n, before);
 });
 
 test('undo out of order: swap slide 2, swap slide 3, undo slide 2 keeps slide 3\'s new credit', async () => {

@@ -113,8 +113,10 @@ async function main(): Promise<void> {
   const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const lfdSettings = await import('@/lib/lfd/settings');
   const lfdStore = await import('@/lib/lfd/store');
-  const { carryOutLfdRun, withLfdTimeout } = await import('@/lib/lfd/worker');
-  const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
+  const { carryOutLfdRun } = await import('@/lib/lfd/worker');
+  const { tapProcessOutput, withHangGuard } = await import('@/lib/content-runs/hang-guard');
+  // Every log line counts as progress for the content-run hang guard.
+  tapProcessOutput();
   const { threeAmQueue } = await import('@/lib/lfd/clock');
   const { isAiEventsDay, isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
   const { readSlotSource } = await import('@/lib/social-hub/slots/load');
@@ -124,16 +126,16 @@ async function main(): Promise<void> {
   const { releaseDueLfd } = await import('@/lib/lfd/schedule');
   const aiEventsSettings = await import('@/lib/ai-events/settings');
   const aiEventsStore = await import('@/lib/ai-events/store');
-  const { carryOutAiEventsRun, withAiEventsTimeout } = await import('@/lib/ai-events/worker');
-  const { AI_EVENTS_RUN_TIMEOUT_MS, AI_EVENTS_SPINE_VERTICAL } = await import('@/lib/ai-events/config');
+  const { carryOutAiEventsRun } = await import('@/lib/ai-events/worker');
+  const { AI_EVENTS_SPINE_VERTICAL } = await import('@/lib/ai-events/config');
   const { firstAiEventsCheckAt, nextAiEventsRunAt, noonQueue } = await import('@/lib/ai-events/clock');
   const { liveAiEventsDeps, liveAiEventsSnapshot } = await import('@/lib/ai-events/live');
   const { claimAndPublishAiEvents } = await import('@/lib/ai-events/publish');
   const { releaseDueAiEvents } = await import('@/lib/ai-events/schedule');
   const fieldNotesSettings = await import('@/lib/field-notes/settings');
   const fieldNotesStore = await import('@/lib/field-notes/store');
-  const { carryOutFieldNotesRun, withFieldNotesTimeout } = await import('@/lib/field-notes/worker');
-  const { FIELD_NOTES_RUN_TIMEOUT_MS, FIELD_NOTES_SPINE_VERTICAL } = await import('@/lib/field-notes/config');
+  const { carryOutFieldNotesRun } = await import('@/lib/field-notes/worker');
+  const { FIELD_NOTES_SPINE_VERTICAL } = await import('@/lib/field-notes/config');
   const { firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue: fieldNotesNoonQueue } = await import('@/lib/field-notes/clock');
   const { liveFieldNotesDeps } = await import('@/lib/field-notes/live');
   const { claimAndPublishFieldNotes } = await import('@/lib/field-notes/publish');
@@ -153,6 +155,15 @@ async function main(): Promise<void> {
   const standDown = () => publisherOwnsPublishing(query, 'carousels');
   /** The public calendar snapshot after an AI Events run or post (plan M3). */
   const aiEventsSnapshot = liveAiEventsSnapshot(lfdQuery);
+  // LFD, AI Events and Field Notes runs only run inside this process: any still 'running' at boot died with the last one.
+  // Reaped here instead of by age, so a long live run is never failed for taking long (CI decision 2026-11-10).
+  for (const [name, store] of [['lfd', lfdStore], ['ai_events', aiEventsStore], ['field_notes', fieldNotesStore]] as const) {
+    const reaped = await store.reapRunsAtStartup(lfdQuery).catch((error) => (log(`${name}_startup_reap_failed`, { error: errorText(error) }), 0));
+    if (reaped) log(`${name}_startup_reaped`, { runs: reaped });
+  }
+  // Carousel (social.runs) runs are this daemon's children too (CI-33).
+  const carouselReaped = await runs.reapRunsAtStartup(query).catch((error) => (log('carousel_startup_reap_failed', { error: errorText(error) }), 0));
+  if (carouselReaped) log('carousel_startup_reaped', { runs: carouselReaped });
   /**
    * Targeted Revisions: the live Haiku call behind the interpreter. Its system block arrives
    * already cached (lib/revisions/interpret.ts, cachedSystemText); the client is made on first use.
@@ -178,6 +189,7 @@ async function main(): Promise<void> {
   const nextSweep = () => nextRunAt(new Date(), cfg.SOCIAL_INSIGHTS_HOUR_LOCAL, cfg.SOCIAL_INSIGHTS_MINUTE_LOCAL);
   const nextHubSweep = () => nextRunAt(new Date(), cfg.HUB_SWEEP_HOUR_LOCAL, cfg.HUB_SWEEP_MINUTE_LOCAL);
   const nextHealthReport = () => nextRunAt(new Date(), cfg.HEALTH_REPORT_HOUR_LOCAL, cfg.HEALTH_REPORT_MINUTE_LOCAL);
+  const nextIgPhotoSync = () => nextRunAt(new Date(), cfg.IG_PHOTO_SYNC_HOUR_LOCAL, cfg.IG_PHOTO_SYNC_MINUTE_LOCAL);
   const health = await import('@/lib/social-hub/health/job');
   const { explainersHubQuery } = await import('@/lib/social-hub/db');
   const { readPosting } = await import('@/lib/content-type/posting');
@@ -329,6 +341,7 @@ async function main(): Promise<void> {
     let sweepAt = nextSweep();
     let hubSweepAt = nextHubSweep();
     let healthAt = nextHealthReport();
+    let igPhotoSyncAt = nextIgPhotoSync();
     let lastInsights = 0;
     let lastRerunError: string | null = null;
     let lastRevisionsError: string | null = null;
@@ -348,9 +361,31 @@ async function main(): Promise<void> {
     let lastFieldNotesError: string | null = null;
     let lastFieldNotesFacesError: string | null = null;
     const photoBank = mediaBucket(PHOTO_BANK_BUCKET);
-    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextIntakeMainAt: intakeMainAt.toISOString(), nextIntakeTopupAt: intakeTopupAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), pollMs: POLL_MS });
+    log('scheduled', { nextRunAt: runAt.toISOString(), nextAiEventsRunAt: aiEventsAt.toISOString(), nextFieldNotesRunAt: fieldNotesAt.toISOString(), nextIntakeMainAt: intakeMainAt.toISOString(), nextIntakeTopupAt: intakeTopupAt.toISOString(), nextInsightsAt: sweepAt.toISOString(), nextHealthReportAt: healthAt.toISOString(), nextIgPhotoSyncAt: igPhotoSyncAt.toISOString(), pollMs: POLL_MS });
 
     while (!stopping) {
+      if (Date.now() >= igPhotoSyncAt.getTime()) {
+        // 11:45 PM: the Instagram photo read (CI-32). Today's published posts' photos go into the 20-day ledger
+        // before the midnight builds pick. Reads Instagram only, no model call; a failure only logs.
+        if (!metaConfigured()) {
+          log('ig_photo_sync_skipped', { reason: 'META_USER_ACCESS_TOKEN / META_IG_BUSINESS_ACCOUNT_ID not set' });
+        } else {
+          const { liveIgSyncDeps, syncPublishedPhotos } = await import('@/lib/photos/ig-sync');
+          // Capped so it can't hold up the midnight builds; a cut-off read resumes the next night (ig-sync.ts).
+          const out = await withHangGuard(
+            liveIgSyncDeps(query, (line) => log('ig_photo_sync_note', { line }))
+              .then(syncPublishedPhotos)
+              .then(({ matches: _matches, ...report }) => ({ ok: true as const, report }))
+              .catch((error) => ({ ok: false as const, error: errorText(error) })),
+            { backstopMs: cfg.IG_PHOTO_SYNC_TIMEOUT_MS, onHang: (reason) => ({ ok: false as const, error: `stopped (${reason}); resumes next night` }) },
+          );
+          if (out.ok) log('ig_photo_sync_complete', out.report);
+          else log('ig_photo_sync_failed', { error: out.error });
+        }
+        igPhotoSyncAt = nextIgPhotoSync();
+        continue;
+      }
+
       if (Date.now() >= intakeMainAt.getTime()) {
         // 12:00 AM: the central intake's main run (fetch, group, score; Jev only, $0.50 cap). Never twice a day.
         try {
@@ -517,10 +552,10 @@ async function main(): Promise<void> {
       });
       if (lfdClaimed) {
         // The engine is built with the cap carryOutLfdRun read and validated (lfd.settings.run_cap_usd).
-        // A hung run must not stall this loop (3:00, publishing, insights, hub sweeps): past LFD_RUN_TIMEOUT_MS
-        // it is failed and the loop goes on. The cut-off promise is not cancelled and may keep running in the
-        // background (accepted; real runs take 3–8 minutes).
-        const out = await withLfdTimeout(
+        // Long runs are normal and never cut off (CI decision, 2026-11-10). Only a HUNG run is failed, so it can't
+        // stall this loop (3:00, publishing, insights, hub sweeps): no output for RUN_QUIET_LIMIT_MS (45 min), or the
+        // 12 h backstop (lib/content-runs/hang-guard.ts). The hung promise is not cancelled.
+        const out = await withHangGuard(
           carryOutLfdRun(
             {
               query: lfdQuery,
@@ -532,11 +567,12 @@ async function main(): Promise<void> {
             },
             lfdClaimed,
           ).catch((error) => ({ runId: lfdClaimed.id, status: 'failed' as const, note: errorText(error) })),
-          LFD_RUN_TIMEOUT_MS,
-          async () => {
-            log('lfd_run_timeout', { runId: lfdClaimed.id });
-            await lfdStore.failRun(lfdQuery, lfdClaimed.id, 'timed out after 30 minutes').catch((error) => log('lfd_fail_failed', { runId: lfdClaimed.id, error: errorText(error) }));
-            return { runId: lfdClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          {
+            onHang: async (reason) => {
+              log('lfd_run_hung', { runId: lfdClaimed.id, reason });
+              await lfdStore.failRun(lfdQuery, lfdClaimed.id, reason).catch((error) => log('lfd_fail_failed', { runId: lfdClaimed.id, error: errorText(error) }));
+              return { runId: lfdClaimed.id, status: 'failed' as const, note: reason };
+            },
           },
         );
         log('lfd_run_result', { ...out });
@@ -552,8 +588,8 @@ async function main(): Promise<void> {
         return null;
       });
       if (aeClaimed) {
-        // Past AI_EVENTS_RUN_TIMEOUT_MS the run is failed and the loop goes on (the cut-off promise is not cancelled).
-        const out = await withAiEventsTimeout(
+        // Never cut off for length; only a hung run (no progress for 45 min, or the 12 h backstop) is failed.
+        const out = await withHangGuard(
           carryOutAiEventsRun(
             {
               query: lfdQuery,
@@ -564,11 +600,12 @@ async function main(): Promise<void> {
             },
             aeClaimed,
           ).catch((error) => ({ runId: aeClaimed.id, status: 'failed' as const, note: errorText(error) })),
-          AI_EVENTS_RUN_TIMEOUT_MS,
-          async () => {
-            log('ai_events_run_timeout', { runId: aeClaimed.id });
-            await aiEventsStore.failRun(lfdQuery, aeClaimed.id, 'timed out after 30 minutes').catch((error) => log('ai_events_fail_failed', { runId: aeClaimed.id, error: errorText(error) }));
-            return { runId: aeClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          {
+            onHang: async (reason) => {
+              log('ai_events_run_hung', { runId: aeClaimed.id, reason });
+              await aiEventsStore.failRun(lfdQuery, aeClaimed.id, reason).catch((error) => log('ai_events_fail_failed', { runId: aeClaimed.id, error: errorText(error) }));
+              return { runId: aeClaimed.id, status: 'failed' as const, note: reason };
+            },
           },
         );
         log('ai_events_run_result', { ...out });
@@ -584,8 +621,8 @@ async function main(): Promise<void> {
         return null;
       });
       if (fnClaimed) {
-        // Past FIELD_NOTES_RUN_TIMEOUT_MS the run is failed and the loop goes on (the cut-off promise is not cancelled).
-        const out = await withFieldNotesTimeout(
+        // Never cut off for length; only a hung run (no progress for 45 min, or the 12 h backstop) is failed.
+        const out = await withHangGuard(
           carryOutFieldNotesRun(
             {
               query: lfdQuery,
@@ -595,11 +632,12 @@ async function main(): Promise<void> {
             },
             fnClaimed,
           ).catch((error) => ({ runId: fnClaimed.id, status: 'failed' as const, note: errorText(error) })),
-          FIELD_NOTES_RUN_TIMEOUT_MS,
-          async () => {
-            log('field_notes_run_timeout', { runId: fnClaimed.id });
-            await fieldNotesStore.failRun(lfdQuery, fnClaimed.id, 'timed out after 30 minutes').catch((error) => log('field_notes_fail_failed', { runId: fnClaimed.id, error: errorText(error) }));
-            return { runId: fnClaimed.id, status: 'failed' as const, note: 'timed out after 30 minutes' };
+          {
+            onHang: async (reason) => {
+              log('field_notes_run_hung', { runId: fnClaimed.id, reason });
+              await fieldNotesStore.failRun(lfdQuery, fnClaimed.id, reason).catch((error) => log('field_notes_fail_failed', { runId: fnClaimed.id, error: errorText(error) }));
+              return { runId: fnClaimed.id, status: 'failed' as const, note: reason };
+            },
           },
         );
         log('field_notes_run_result', { ...out });
@@ -642,7 +680,7 @@ async function main(): Promise<void> {
         });
         if (due > 0) log('schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublish({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('publish_failed', { error: errorText(error) });
             return null;
           });
@@ -662,7 +700,7 @@ async function main(): Promise<void> {
         });
         if (due > 0) log('lfd_schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublishLfd({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublishLfd({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('lfd_publish_failed', { error: errorText(error) });
             return null;
           });
@@ -683,7 +721,7 @@ async function main(): Promise<void> {
         if (due > 0) log('ai_events_schedule_due', { released: due });
         if (metaConfigured()) {
           const published = await claimAndPublishAiEvents(
-            { query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) },
+            { query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} },
             { snapshot: aiEventsSnapshot, log },
           ).catch((error) => {
             log('ai_events_publish_failed', { error: errorText(error) });
@@ -705,7 +743,7 @@ async function main(): Promise<void> {
         });
         if (due > 0) log('field_notes_schedule_due', { released: due });
         if (metaConfigured()) {
-          const published = await claimAndPublishFieldNotes({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs) }).catch((error) => {
+          const published = await claimAndPublishFieldNotes({ query, meta: createLiveCarouselClient(), signImage: (p: string, secs: number) => slideBucket.sign(p, secs), photoHashes: {} }).catch((error) => {
             log('field_notes_publish_failed', { error: errorText(error) });
             return null;
           });

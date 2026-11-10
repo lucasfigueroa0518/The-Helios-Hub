@@ -27,6 +27,81 @@ export interface InstagramContainerOps {
   liveMediaIds?(since: Date): Promise<Set<string>>;
 }
 
+/** One Instagram post as the nightly photo read sees it (lib/photos/ig-sync.ts). */
+export type IgMediaChild = { id: string; mediaType: string | null; mediaUrl: string | null };
+export type IgMedia = {
+  id: string;
+  surface: 'feed' | 'story';
+  timestamp: string;
+  caption: string | null;
+  mediaType: string | null;
+  mediaUrl: string | null;
+  thumbnailUrl: string | null;
+  permalink: string | null;
+  children: IgMediaChild[];
+};
+
+/** Read-only listings for matching published posts back to the posts we built. */
+export interface IgMediaListing {
+  /** Feed posts (carousels, images, reels) back to `since`, newest first. */
+  feedMedia(since: Date): Promise<IgMedia[]>;
+  /** The stories live now (Instagram keeps them 24 hours). */
+  liveStories(): Promise<IgMedia[]>;
+}
+
+export const IG_MEDIA_FIELDS = 'id,timestamp,caption,media_type,media_url,thumbnail_url,permalink,children{id,media_type,media_url}';
+
+type RawMedia = {
+  id: string;
+  timestamp?: string;
+  caption?: string;
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
+  permalink?: string;
+  children?: { data?: Array<{ id: string; media_type?: string; media_url?: string }> };
+};
+type MediaPage = { data?: RawMedia[]; paging?: { next?: string } };
+
+const toMedia = (m: RawMedia, surface: IgMedia['surface']): IgMedia => ({
+  id: m.id,
+  surface,
+  timestamp: m.timestamp ?? '',
+  caption: m.caption ?? null,
+  mediaType: m.media_type ?? null,
+  mediaUrl: m.media_url ?? null,
+  thumbnailUrl: m.thumbnail_url ?? null,
+  permalink: m.permalink ?? null,
+  children: (m.children?.data ?? []).map((c) => ({ id: c.id, mediaType: c.media_type ?? null, mediaUrl: c.media_url ?? null })),
+});
+
+/** The listings on one Graph transport. Bounded: at most `maxPages` pages of 50. */
+export function createMediaListing(call: GraphCall, igUserId: string, maxPages = 10): IgMediaListing {
+  async function pages(first: string, surface: IgMedia['surface'], since: Date | null): Promise<IgMedia[]> {
+    const out: IgMedia[] = [];
+    let next: string | null = first;
+    for (let page = 0; next && page < maxPages; page += 1) {
+      const body: MediaPage = await call('GET', next, next.startsWith('http') ? {} : { fields: IG_MEDIA_FIELDS, limit: '50' });
+      const data = body.data ?? [];
+      let pastSince = false;
+      for (const m of data) {
+        const at = Date.parse(m.timestamp ?? '');
+        if (since && Number.isFinite(at) && at < since.getTime()) {
+          pastSince = true;
+          continue;
+        }
+        out.push(toMedia(m, surface));
+      }
+      next = pastSince ? null : body.paging?.next ?? null;
+    }
+    return out;
+  }
+  return {
+    feedMedia: (since) => pages(`/${igUserId}/media`, 'feed', since),
+    liveStories: () => pages(`/${igUserId}/stories`, 'story', null),
+  };
+}
+
 export class MetaNotConfiguredError extends Error {
   constructor() {
     super('Meta is not configured: META_USER_ACCESS_TOKEN and META_IG_BUSINESS_ACCOUNT_ID must be set.');
@@ -53,7 +128,7 @@ export function createGraph(
   fetchImpl: typeof fetch = fetch,
   /** Explicit credentials (a client built with its own token in tests); the env otherwise. */
   creds?: { token: string; igUserId: string },
-): { call: GraphCall; igUserId: string; ops: InstagramContainerOps } {
+): { call: GraphCall; igUserId: string; ops: InstagramContainerOps; listing: IgMediaListing } {
   const token = creds?.token ?? process.env.META_USER_ACCESS_TOKEN;
   const igUserId = creds?.igUserId ?? process.env.META_IG_BUSINESS_ACCOUNT_ID;
   if (!token || !igUserId) throw new MetaNotConfiguredError();
@@ -114,5 +189,5 @@ export function createGraph(
     },
   };
 
-  return { call, igUserId, ops };
+  return { call, igUserId, ops, listing: createMediaListing(call, igUserId) };
 }

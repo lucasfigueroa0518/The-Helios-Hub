@@ -8,6 +8,7 @@
  * (per stage, see runIntakeWith).
  * The intake never reads or writes `reels.*` or `social.*` run tables.
  */
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 import { randomUUID } from 'node:crypto';
 
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
@@ -443,7 +444,8 @@ export async function runIntakeDeposit(q: IntakeQuery, deps: DepositDeps = {}): 
 }
 
 /** A run still 'running' after this long died (crash, killed process). */
-export const INTAKE_ABANDONED_AFTER_HOURS = 2;
+/** Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop. */
+export const INTAKE_ABANDONED_AFTER_HOURS = RUN_HANG_BACKSTOP_MINUTES / 60;
 
 /** Mark runs stuck 'running' for over INTAKE_ABANDONED_AFTER_HOURS as failed, so a dead run never blocks the day's main. */
 export async function reapStaleRuns(q: IntakeQuery, now: Date): Promise<number> {

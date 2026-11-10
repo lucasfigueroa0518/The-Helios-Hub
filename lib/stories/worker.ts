@@ -55,6 +55,7 @@ import { poolDay, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
 import { storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings, type StoriesSettings } from '@/lib/stories/settings';
+import { isBrandAsset } from '@/lib/photos/used';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
@@ -82,6 +83,8 @@ export type WorkerDeps = {
   intake?: { jev?: () => IntakeJev; readMode?: ReadConsumerMode };
   /** AI Trivia's daily writer run; tests stub it. Default: runTriviaDaily with the builder's live clients. */
   triviaDaily?: (now: Date, settings: StoriesSettings) => Promise<unknown>;
+  /** Fetches a published photo to hash it for the used-photo ledger (tests stub it). */
+  photoHttp?: typeof fetch;
 };
 
 /** stories.settings key where runTriviaDaily records the pool day it last ran (it runs once per pool day). */
@@ -209,8 +212,8 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
   await recordHistory(deps.db, series, keys, setId);
   const at = deps.now?.() ?? new Date();
   for (const f of got.frames) {
-    if (!f.photo?.src || f.photo.kind === 'logo') continue;
-    await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
+    if (!f.photo?.src || isBrandAsset(f.photo.kind)) continue;
+    await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }, deps.photoHttp ? { http: deps.photoHttp } : {}).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
   }
   if (series === 'ai_trivia') {
     // The question has run: its content-map cell is never asked again (CONTRACT §2 cell lifecycle).

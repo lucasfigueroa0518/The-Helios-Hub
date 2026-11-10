@@ -161,7 +161,7 @@ test('insights: poll live frames every 2 hours until a final capture', async () 
 
 test('a build that died is handed back to requested', async () => {
   const { db, set } = await builtSet();
-  await db.query(`UPDATE stories.sets SET claimed_at = now() - interval '2 hours' WHERE id = $1`, [set.id]);
+  await db.query(`UPDATE stories.sets SET claimed_at = now() - interval '13 hours' WHERE id = $1`, [set.id]);
   assert.deepEqual(await releaseStaleBuilds(db), [set.id]);
   assert.equal((await getSet(db, set.id))?.set.status, 'requested');
   assert.deepEqual(await releaseStaleBuilds(db), []);

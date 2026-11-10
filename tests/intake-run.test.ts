@@ -449,8 +449,8 @@ test('fix 11: per-scorecard scoring failures are recorded in the run record', as
   assert.ok(lines.some((l) => l.includes('Jev 500')), 'the score step got the log');
 });
 
-test('a run stuck running for over 2 h is reaped, so it does not block the day\'s main', async () => {
-  const later = new Date(NOW.getTime() + 3 * 3_600_000); // 3:00 AM New York, same date
+test('a run stuck running past the 12 h hang backstop is reaped, so it does not block the day\'s main', async () => {
+  const later = new Date(NOW.getTime() + 13 * 3_600_000); // 13 h later, same New York date
   await q.query(`INSERT INTO intake.runs (kind, status, started_at) VALUES ('main', 'running', $1)`, [NOW]);
   assert.equal(await mainRanToday(q, later), false, 'the stuck main is reaped');
   assert.equal(await count(`SELECT count(*)::int AS n FROM intake.runs WHERE status = 'failed' AND error LIKE 'abandoned%'`), 1);

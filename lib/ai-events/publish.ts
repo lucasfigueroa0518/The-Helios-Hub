@@ -10,10 +10,12 @@ import {
   checkFeedPayload,
   claimFeedAttempt,
   failStaleAttempts,
+  logPublishedPhotos,
   queueFeedAttempt,
   type PublishDeps,
   type PublishTrigger,
   type Queued,
+  type PublishedInfo,
 } from '@/lib/social/overnight/publish';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -43,9 +45,11 @@ export function failStaleAiEventsAttempts(query: Query): Promise<void> {
   return failStaleAttempts(query, AI_EVENTS_VERTICAL);
 }
 
-/** The type's step once Instagram has the post. */
-export async function markAiEventsPublished(query: Query, postId: string, finishedAt: string): Promise<void> {
+/** The type's step once Instagram has the post: the post is published, its photos are logged. */
+export async function markAiEventsPublished(query: Query, postId: string, finishedAt: string, info?: PublishedInfo): Promise<void> {
   await query(`UPDATE ai_events.posts SET status = 'published', published_at = $2::timestamptz, updated_at = now() WHERE id = $1`, [postId, finishedAt]);
+  // CI-32: its organizer posters into the used-photo ledger (a failure only logs).
+  await logPublishedPhotos(query, 'ai_events', postId, finishedAt, info);
 }
 
 /**

@@ -11,13 +11,12 @@ test('the social worker runs Field Notes in its own loop: the noon clock, claims
   assert.match(text, /let fieldNotesAt = firstFieldNotesCheckAt\(new Date\(\)\)/);
   assert.match(text, /fieldNotesStore\.requestRun\(lfdQuery, 'scheduled', fn\.runCapUsd\)/);
   assert.match(text, /fieldNotesAt = nextFieldNotesRunAt\(new Date\(\)\)/);
-  // Claimed after AI Events' claim, inside the timeout wrapper.
+  // Claimed after AI Events' claim, inside the hang guard.
   const aeClaim = text.indexOf('aiEventsStore.claimRun(lfdQuery)');
   const fnClaim = text.indexOf('fieldNotesStore.claimRun(lfdQuery)');
   assert.ok(aeClaim > 0 && fnClaim > aeClaim, 'the Field Notes claim comes after the AI Events claim');
-  assert.match(text, /withFieldNotesTimeout\(\s*carryOutFieldNotesRun\(/);
-  assert.match(text, /FIELD_NOTES_RUN_TIMEOUT_MS/);
-  assert.match(text, /fieldNotesStore\.failRun\(lfdQuery, fnClaimed\.id, 'timed out after 30 minutes'\)/);
+  assert.match(text, /withHangGuard\(\s*carryOutFieldNotesRun\(/);
+  assert.match(text, /fieldNotesStore\.failRun\(lfdQuery, fnClaimed\.id, reason\)/);
   assert.match(text, /engine: \(_run, capUsd\) => liveFieldNotesDeps\(lfdQuery, \{ capUsd \}\)/);
   // Release and publish only while the single publisher doesn't drive the type.
   assert.match(text, /fnNow\?\.publishingLive && !\(await publisherOwnsPublishing\(query, FIELD_NOTES_SPINE_VERTICAL\)\)/);
@@ -27,7 +26,7 @@ test('the social worker runs Field Notes in its own loop: the noon clock, claims
 });
 
 test('the single publisher drives Field Notes', () => {
-  assert.match(read('scripts/publisher_worker.ts'), /fieldNotesDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), token \}\)/);
+  assert.match(read('scripts/publisher_worker.ts'), /fieldNotesDriver\(\{ query, meta: createLiveCarouselClient, signImage: \(p, s\) => slideBucket\.sign\(p, s\), photoHashes: \{\}, token \}\)/);
 });
 
 test('the deploy guard waits for a running Field Notes run, and joins it only once the table exists', () => {
@@ -96,8 +95,8 @@ test('the local runner never leaves its own run row running: signals, crashes an
   assert.match(text, /await failRun\(run\.query, run\.runId, why\)/);
   assert.match(text, /for \(const id of run\.writtenTipIds\) await recordTipAttempt\(run\.query, id, why\)/);
   assert.match(text, /onWriteStarted: \(tipIds: string\[\]\) => void \(run\.writtenTipIds = tipIds\)/);
-  // The timeout and a thrown error both go through it.
-  assert.match(text, /await abandonRun\(`local run timed out after \$\{FIELD_NOTES_RUN_TIMEOUT_MS\} ms`\)/);
+  // A hang and a thrown error both go through it.
+  assert.match(text, /await abandonRun\(`local run \$\{reason\}`\)/);
   assert.match(text, /await abandonRun\(`local run error: \$\{message\}`\)/);
   // The checks (dry or not) need attempts and reject_reason on field_notes.tips, before any insert.
   assert.match(text, /column_name IN \('attempts', 'reject_reason'\)/);

@@ -48,6 +48,8 @@ export type PostMemesDeps = {
   fitCheck: FitCheck;
   /** Storage upload (the slide bucket), the same one the engine used for this post's slides. */
   upload: (objectPath: string, body: Buffer, contentType: string) => Promise<void>;
+  /** Storage download (the same bucket): a meme the run already placed is saved as `storage:<object>`, which a render can't load. */
+  download: (objectPath: string) => Promise<Buffer>;
   fetchBody: (url: string) => Promise<string | null>;
   storeSlides: (slug: string, render: unknown) => Promise<string[]>;
   now: () => Date;
@@ -172,6 +174,16 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
     key: s.key,
     memeId: picks.get(s.key)?.memeId ?? s.meme?.memeId ?? (s.photoSource === 'meme' ? s.meme?.memeId ?? `engine:${s.key}` : null),
   })));
+  // A render can't load a saved `storage:` address (the run's own memes are saved that way): each one is read back
+  // from the bucket for the re-render, while the saved render keeps the address.
+  const stored = new Map<string, MemeImage>();
+  const fromStorage = async (src: string): Promise<MemeImage> => {
+    const object = src.slice('storage:'.length);
+    if (!stored.has(object)) stored.set(object, await memeImageOf(await d.download(object)));
+    return stored.get(object)!;
+  };
+  const isStored = (src: string | undefined): src is string => Boolean(src?.startsWith('storage:'));
+  const drawable = await Promise.all(stories.map(async (s) => (isStored(s.photo.src) ? { ...s, photo: { ...s.photo, src: (await fromStorage(s.photo.src)).url } } : s)));
   const images = new Map<string, MemeImage>();
   const objects = new Map<string, string>();
   const byKey = new Map(stories.map((s) => [s.key, s]));
@@ -186,11 +198,12 @@ export async function addMemesToPost(d: PostMemesDeps, postId: string): Promise<
       continue;
     }
     const existing = byKey.get(p.key);
-    if (existing?.photoSource === 'meme' && existing.photo.src) images.set(p.memeId, { url: existing.photo.src });
-    if (existing?.meme?.object) objects.set(p.memeId, existing.meme.object);
+    const object = existing?.meme?.object ?? (isStored(existing?.photo.src) ? existing.photo.src.slice('storage:'.length) : undefined);
+    if (object) objects.set(p.memeId, object);
+    if (existing?.photoSource === 'meme' && existing.photo.src) images.set(p.memeId, isStored(existing.photo.src) ? await fromStorage(existing.photo.src) : { url: existing.photo.src });
   }
   fs.rmSync(renderDir, { recursive: true, force: true });
-  const render = postWithMemes(stories, placement, (id) => images.get(id) ?? { url: '' }, d.now());
+  const render = postWithMemes(drawable, placement, (id) => images.get(id) ?? { url: '' }, d.now());
   const slideObjects = await d.storeSlides(post.slug, render);
   // The saved render keeps each meme's storage object, not the image: the hub lists posts with their render.
   const savedRender = postWithMemes(stories, placement, (id) => ({ ...images.get(id), url: `storage:${objects.get(id) ?? ''}` }), d.now());

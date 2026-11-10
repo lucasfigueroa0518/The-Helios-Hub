@@ -153,6 +153,9 @@ export async function liveHarvestDeps(
       sketch: env.OPENAI_API_KEY ? openAiSketch(env.OPENAI_API_KEY) : null,
       readWords: ocr ? tesseractWords(ocr) : null,
       photoBank: photoBank.bank,
+      // CI-32: the reuse rule reads the one used-photo ledger on the hub's database (lib/db.ts; DATABASE_URL or
+      // DIRECT_DATABASE_URL, as liveUsedLedger accepts).
+      ledgerDb: env.DATABASE_URL?.trim() || env.DIRECT_DATABASE_URL?.trim() ? { query: async (text, params) => (await import('@/lib/db')).dbQuery(text, params) as never } : null,
       root: opts.root,
     },
     notes,

@@ -7,6 +7,7 @@
  *   requested → building → ready → approved → scheduled → publishing → published
  *                   ↘ failed / skipped     ↘ rejected            ↘ failed
  */
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 import { hasColumn } from '@/lib/social-hub/slots/columns';
 import type { SetBy } from '@/lib/social-hub/slots/types';
 import type { Queryable, StoriesDb } from '@/lib/stories/db';
@@ -179,7 +180,7 @@ export async function claimNextRequested(db: StoriesDb): Promise<StorySet | null
 }
 
 /** A build that died mid-way stays `building` and blocks the day. Hand it back so the next pass tries again. */
-export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = 45): Promise<string[]> {
+export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = RUN_HANG_BACKSTOP_MINUTES /* hang guard only; long builds are normal */): Promise<string[]> {
   const { rows } = await db.query<{ id: string }>(
     `UPDATE stories.sets
         SET status = 'requested', error = 'the previous build stopped before it finished; trying again', updated_at = now()
@@ -188,6 +189,15 @@ export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = 45): 
     [olderThanMinutes],
   );
   return rows.map((r) => r.id);
+}
+
+/**
+ * Called once when helios-stories boots, before it claims anything: builds run only inside that one daemon, so a set
+ * still `building` at boot died with the previous process (deploy restart). Handed back now, not after the 12 h
+ * backstop, so the set is rebuilt the same day. Returns the released ids.
+ */
+export async function releaseBuildsAtStartup(db: StoriesDb): Promise<string[]> {
+  return releaseStaleBuilds(db, 0);
 }
 
 export async function getSet(db: Queryable, setId: string): Promise<{ set: StorySet; frames: FrameRow[] } | null> {

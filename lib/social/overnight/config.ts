@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 /**
  * Carousel overnight constants (docs/social-overnight.md). Times are
  * America/New_York, the same zone and DST handling as Trial Reels.
@@ -16,6 +17,14 @@ export const SOCIAL_INSIGHTS_MINUTE_LOCAL = 30;
 /** Social Hub account sweep, after the per-type sweeps (docs/social-overnight.md clock; P2-M1). */
 export const HUB_SWEEP_HOUR_LOCAL = 5;
 export const HUB_SWEEP_MINUTE_LOCAL = 45;
+
+/**
+ * The nightly Instagram photo read (CI-32, lib/photos/ig-sync.ts): 11:45 PM, before the midnight builds, so
+ * tonight's pickers see what went out today. Capped so a hung read can't stall the worker loop.
+ */
+export const IG_PHOTO_SYNC_HOUR_LOCAL = 23;
+export const IG_PHOTO_SYNC_MINUTE_LOCAL = 45;
+export const IG_PHOTO_SYNC_TIMEOUT_MS = 10 * 60_000;
 
 /** Health tab morning report (spec 2026-10-13 §4.3): after Stories (4:00) and the 5:45 sweep. */
 export const HEALTH_REPORT_HOUR_LOCAL = 7;
@@ -36,8 +45,10 @@ export type CarouselSlotId = (typeof CAROUSEL_SLOTS)[number]['id'];
 /** Carousels posted per day (SH-48): a social.settings `posts_per_day` row overrides. */
 export const DEFAULT_POSTS_PER_DAY = 2;
 
-/** A run older than this is assumed dead (the CLI run takes ~15 minutes). */
-export const SOCIAL_STALE_RUN_MINUTES = 90;
+/** A 'running' run older than this is assumed dead. Hang guard only; long runs are normal (CI decision 2026-11-10): 12 h backstop. */
+export const SOCIAL_STALE_RUN_MINUTES = RUN_HANG_BACKSTOP_MINUTES;
+/** A 'requested' run the worker never claimed in this long is failed (not a running run, so not a run limit). */
+export const SOCIAL_UNCLAIMED_REQUEST_MINUTES = 90;
 
 /** The worker run's defaults; both can be changed in social.settings. */
 export const DEFAULT_RUN_STORIES = 2;
