@@ -11,15 +11,15 @@ const NOW = new Date('2026-11-20T12:00:00Z');
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86_400_000).toISOString();
 const id = (n: number) => `0000000${n}-0000-4000-8000-000000000000`;
 
-test('delivered jobs go after 2 days, failed after 14; running, recent and unknown folders stay', async () => {
+test('delivered jobs go after 1 day, failed after 5; running, recent and unknown folders stay', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'drama-jobs-'));
   const jobs: Record<string, { status: string; finished_at: string | null }> = {
-    [id(1)]: { status: 'ok', finished_at: daysAgo(3) },
-    [id(2)]: { status: 'ok', finished_at: daysAgo(1) },
-    [id(3)]: { status: 'failed', finished_at: daysAgo(5) },
-    [id(4)]: { status: 'failed', finished_at: daysAgo(15) },
+    [id(1)]: { status: 'ok', finished_at: daysAgo(1.5) },
+    [id(2)]: { status: 'ok', finished_at: daysAgo(0.5) },
+    [id(3)]: { status: 'failed', finished_at: daysAgo(4) },
+    [id(4)]: { status: 'failed', finished_at: daysAgo(6) },
     [id(5)]: { status: 'running', finished_at: null },
-    [id(6)]: { status: 'killed', finished_at: daysAgo(3) },
+    [id(6)]: { status: 'killed', finished_at: daysAgo(1.5) },
   };
   for (const j of [...Object.keys(jobs), id(7)]) {
     fs.mkdirSync(path.join(root, j, 'render'), { recursive: true });

@@ -11,9 +11,9 @@ import path from 'node:path';
 import type { Queryable } from '@/lib/explainers/db';
 
 /** Days a delivered or killed job's folder stays. */
-export const FINISHED_KEEP_DAYS = 2;
+export const FINISHED_KEEP_DAYS = 1;
 /** Days a failed job's folder stays, for a retry. */
-export const FAILED_KEEP_DAYS = 14;
+export const FAILED_KEEP_DAYS = 5;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
