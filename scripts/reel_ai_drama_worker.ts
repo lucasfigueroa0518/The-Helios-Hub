@@ -108,6 +108,19 @@ async function main(): Promise<void> {
   const staleRequests = await failStaleDramaRequests(db, startupAge);
   if (staleRequests) log('stale_requests_failed', { count: staleRequests });
 
+  // Finished jobs' folders leave the disk once their files are in the bucket (production/disk.ts).
+  const { sweepJobFolders } = await import('@/lib/reel-ai-drama/production/disk');
+  const sweep = async () => {
+    if (storage !== 'bucket') return;
+    try {
+      const removed = await sweepJobFolders(db, dramaJobsDir());
+      if (removed.length) log('job_folders_removed', { count: removed.length, jobIds: removed });
+    } catch (error) {
+      log('job_folder_sweep_failed', { error: errorText(error) });
+    }
+  };
+  await sweep();
+
   let stopping = false;
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
     process.on(signal, () => {
@@ -148,6 +161,7 @@ async function main(): Promise<void> {
       }
     } finally {
       release();
+      await sweep();
     }
     return true;
   };
