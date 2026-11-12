@@ -29,9 +29,8 @@ test('a slot on the calendar for a type whose auto switch is off is a failure', 
   assert.ok(s.some((x) => x.level === 'fail' && /Stories morning_download/.test(x.text)));
 });
 
-test('Field Notes skips at the pending limit, not above it: 3 waiting with a limit of 3 is a failure', () => {
-  assert.equal(hasFailure(judge({ ...base, fieldNotesPending: 3 })), true);
-  assert.equal(hasFailure(judge({ ...base, fieldNotesPending: 2 })), false);
+test('Field Notes posts waiting for review never fail the pre-flight', () => {
+  assert.equal(hasFailure(judge({ ...base, fieldNotesPending: 9 })), false);
 });
 
 test('a daily Explainers cap below the per-reel cap, and failures still in the last report, are failures', () => {

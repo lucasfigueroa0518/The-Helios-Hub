@@ -396,7 +396,7 @@ test('the cap stops a run before the first call, and a spent cap skips the Edito
   }
 });
 
-test('max_pending_drafts: a full review queue refuses Generate and skips the run; approving one makes room', async () => {
+test('max_pending_drafts: a full review queue refuses the Generate button, but never stops a run that is already queued (the nightly one)', async () => {
   const { query } = await freshDb();
   await addPool(query, 6);
   const dummy = (n: number) => insertPost(query, `field-notes-2026-10-0${n}`, { runId: null, tipIds: [], nyDate: `2026-10-0${n}`, slides: [], photoIds: [], caption: 'c', slideObjects: ['a', 'b'], fitProblems: [], renderProblems: [], softNotes: [] });
@@ -405,14 +405,7 @@ test('max_pending_drafts: a full review queue refuses Generate and skips the run
   const refused = await queueManualFieldNotesRun(query, 'tommy');
   assert.equal(refused.ok, false);
   assert.match(refused.note, /waiting for review \(the limit is 3\)/);
-  // The engine itself refuses too (a run queued before the queue filled).
   const [tipId] = await seedSet(query, 3);
-  const engine = stubEngine(query);
-  const { w } = worker(query, engine);
-  const r = await carryOutFieldNotesRun(w, await claim(query, tipId));
-  assert.equal(r.status, 'skipped');
-  assert.match((await runRow(query, r.runId)).stop_reason ?? '', /^pending-drafts:/);
-  assert.equal(engine.claudeStub.calls.length, 0);
   // A person approves one: it no longer waits on anyone.
   const out = await approveFieldNotesPost(query, ids[0]!, NOW, 'lucas');
   assert.equal(out.scheduled, false);
@@ -421,6 +414,13 @@ test('max_pending_drafts: a full review queue refuses Generate and skips the run
   // A lower setting counts the same way.
   await setSetting(query, 'max_pending_drafts', 2);
   assert.equal((await readFieldNotesSettings(query)).maxPendingDrafts, 2);
+  // The run itself ignores the limit: posts waiting for review are a safety net, not a reason to skip the night.
+  await setSetting(query, 'max_pending_drafts', 1);
+  assert.ok((await pendingDraftCount(query)) > 1);
+  const [tip2] = await seedSet(query, 3, 'second');
+  const { w } = worker(query, stubEngine(query));
+  const r = await carryOutFieldNotesRun(w, await claim(query, tip2));
+  assert.doesNotMatch((await runRow(query, r.runId)).stop_reason ?? '', /^pending-drafts:/);
 });
 
 test('the photo rest rule: used photos sit out the next 8 posts, newest first, and come back after', async () => {

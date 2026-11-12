@@ -57,8 +57,7 @@ export function judge(i: PreflightInput): Finding[] {
   }
 
   if (expected.includes('field_notes')) {
-    if (i.fieldNotesPending >= i.fieldNotesMaxPending) out.push({ level: 'fail', text: `Field Notes: ${i.fieldNotesPending} posts are waiting for review (the run skips at ${i.fieldNotesMaxPending}); approve or reject some first.` });
-    else out.push({ level: 'ok', text: `Field Notes: ${i.fieldNotesPending} waiting for review, room for a draft (limit ${i.fieldNotesMaxPending}).` });
+    out.push({ level: 'ok', text: `Field Notes: ${i.fieldNotesPending} waiting for review; that does not stop the nightly run.` });
   }
   if (i.storiesReadyUnapproved > 0) out.push({ level: 'warn', text: `${i.storiesReadyUnapproved} Stories set(s) are built but unapproved; they cannot post until a person approves them.` });
 

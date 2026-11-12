@@ -1,7 +1,7 @@
 /**
  * One Field Notes run (a person's Generate; auto_run ships off): one post from TIP_SLIDES_MIN to TIP_SLIDES_MAX (3 to 6) tips, one per tip slide.
  *
- *   room for a draft (max_pending_drafts) -> expire old unused tips -> the tips:
+ *   expire old unused tips -> the tips:
  *     a person's seeded tip goes first (no scoring; it keeps the seeder's leaf and want), then other
  *     unused seeds oldest first, under the same post rules as found tips (DISTINCT subjects, at most half the post
  *     (rounded up, never under two) of one want: sources/select admitSeeds; a seed that does not fit waits for a later post), then, only when
@@ -66,7 +66,6 @@ import {
   listSelectableTips,
   listUnusedSeedTips,
   nextPostSeq,
-  pendingDraftCount,
   postedSourceUrls,
   postedSubjects,
   recentPostWants,
@@ -206,11 +205,8 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
   };
 
   try {
-    // 1. Room for a draft (the review queue is never allowed to pile up).
-    const pending = await pendingDraftCount(q);
-    if (pending >= input.settings.maxPendingDrafts) {
-      return skipped('pending-drafts', `${pending} Field Notes posts are waiting for review (the limit is ${input.settings.maxPendingDrafts}); approve or reject one first.`);
-    }
+    // 1. Posts waiting for review do not stop a run: they are a safety net, not a reason to skip the night. (The Generate
+    // button still refuses at max_pending_drafts, in manual.ts.)
 
     // 2. Unused tips older than the expiry go (housekeeping on the type's own candidates).
     record.expiredTips = await expireOldTips(q, d.now, input.settings.tipExpiryDays);
