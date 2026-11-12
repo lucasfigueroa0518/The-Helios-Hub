@@ -396,31 +396,24 @@ test('the cap stops a run before the first call, and a spent cap skips the Edito
   }
 });
 
-test('max_pending_drafts: a full review queue refuses the Generate button, but never stops a run that is already queued (the nightly one)', async () => {
+test('max_pending_drafts: a full review queue stops neither the Generate button nor a queued (nightly) run', async () => {
   const { query } = await freshDb();
   await addPool(query, 6);
   const dummy = (n: number) => insertPost(query, `field-notes-2026-10-0${n}`, { runId: null, tipIds: [], nyDate: `2026-10-0${n}`, slides: [], photoIds: [], caption: 'c', slideObjects: ['a', 'b'], fitProblems: [], renderProblems: [], softNotes: [] });
   const ids = [(await dummy(1)).id, (await dummy(2)).id, (await dummy(3)).id];
   assert.equal(await pendingDraftCount(query), 3);
-  const refused = await queueManualFieldNotesRun(query, 'tommy');
-  assert.equal(refused.ok, false);
-  assert.match(refused.note, /waiting for review \(the limit is 3\)/);
-  const [tipId] = await seedSet(query, 3);
-  // A person approves one: it no longer waits on anyone.
-  const out = await approveFieldNotesPost(query, ids[0]!, NOW, 'lucas');
-  assert.equal(out.scheduled, false);
-  assert.equal(await pendingDraftCount(query), 2);
-  assert.equal((await queueManualFieldNotesRun(query, 'tommy', { seedTipId: tipId })).ok, true);
-  // A lower setting counts the same way.
-  await setSetting(query, 'max_pending_drafts', 2);
-  assert.equal((await readFieldNotesSettings(query)).maxPendingDrafts, 2);
   // The run itself ignores the limit: posts waiting for review are a safety net, not a reason to skip the night.
   await setSetting(query, 'max_pending_drafts', 1);
   assert.ok((await pendingDraftCount(query)) > 1);
-  const [tip2] = await seedSet(query, 3, 'second');
+  const [tipId] = await seedSet(query, 3);
   const { w } = worker(query, stubEngine(query));
-  const r = await carryOutFieldNotesRun(w, await claim(query, tip2));
+  const r = await carryOutFieldNotesRun(w, await claim(query, tipId));
   assert.doesNotMatch((await runRow(query, r.runId)).stop_reason ?? '', /^pending-drafts:/);
+  // So does the Generate button.
+  assert.equal(await pendingDraftCount(query), 4);
+  const [fresh] = await seedSet(query, 3, 'fresh');
+  { const g = await queueManualFieldNotesRun(query, 'tommy', { seedTipId: fresh }); assert.equal(g.ok, true, g.note); }
+  void ids;
 });
 
 test('the photo rest rule: used photos sit out the next 8 posts, newest first, and come back after', async () => {

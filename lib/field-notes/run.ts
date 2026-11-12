@@ -205,8 +205,7 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
   };
 
   try {
-    // 1. Posts waiting for review do not stop a run: they are a safety net, not a reason to skip the night. (The Generate
-    // button still refuses at max_pending_drafts, in manual.ts.)
+    // 1. Posts waiting for review do not stop a run: they are a safety net, not a reason to skip the night.
 
     // 2. Unused tips older than the expiry go (housekeeping on the type's own candidates).
     record.expiredTips = await expireOldTips(q, d.now, input.settings.tipExpiryDays);
