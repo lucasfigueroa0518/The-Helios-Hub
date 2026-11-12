@@ -40,9 +40,11 @@ export function lastFieldNotesCheckAt(now: Date): Date {
  * off, another weekday or a bad run cap queue nothing, and the reason says which. Never twice a day
  * (fix 8): nothing is queued when a scheduled run already exists for today's New York date
  * (`scheduledToday`, store.scheduledRunToday; null = unknown), or when the check is more than
- * FIELD_NOTES_CATCH_UP_MS past today's 2:00 AM (a worker restarted later in the day).
+ * FIELD_NOTES_CATCH_UP_MS past today's 2:00 AM (a worker restarted later in the day). In template mode
+ * (`calendarDay` given) a calendar slot on today's date makes it a Field Notes day on any weekday, and no
+ * slot makes it none; auto_run, the run cap, once-a-day and the catch-up window still apply.
  */
-export function noonQueue(now: Date, s: ParsedFieldNotesSettings | null, scheduledToday: boolean | null = null): NoonDecision {
+export function noonQueue(now: Date, s: ParsedFieldNotesSettings | null, scheduledToday: boolean | null = null, calendarDay: boolean | null = null): NoonDecision {
   const nyDate = calendarDateKey(now, SOCIAL_TIMEZONE);
   if (scheduledToday) return { queue: false, reason: `a scheduled Field Notes run already exists for ${nyDate}` };
   const late = now.getTime() - lastFieldNotesCheckAt(now).getTime();
@@ -51,9 +53,12 @@ export function noonQueue(now: Date, s: ParsedFieldNotesSettings | null, schedul
   }
   if (!s) return { queue: false, reason: 'the Field Notes settings could not be read; no Field Notes run' };
   if (!s.autoRun) return { queue: false, reason: 'Field Notes auto_run is off' };
-  if (!FIELD_NOTES_AUTO_DAYS.includes(weekdayOf(nyDate))) return { queue: false, reason: `${nyDate} is not a Field Notes day` };
+  // Template mode (`calendarDay` given): the calendar says whether today has a Field Notes slot, a person's or the
+  // standard week's, instead of the fixed days. Legacy mode (null) keeps the fixed days.
+  const isDay = calendarDay ?? FIELD_NOTES_AUTO_DAYS.includes(weekdayOf(nyDate));
+  if (!isDay) return { queue: false, reason: `${nyDate} is not a Field Notes day` };
   if (s.runCapUsd == null) {
     return { queue: false, reason: `field_notes.settings.run_cap_usd is not a positive number (${JSON.stringify(s.runCapRaw)}); no Field Notes run` };
   }
-  return { queue: true, reason: 'a Field Notes day' };
+  return { queue: true, reason: calendarDay === true ? 'a Field Notes slot on the calendar' : 'a Field Notes day' };
 }

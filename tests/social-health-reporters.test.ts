@@ -140,6 +140,32 @@ test('stories: failed set is a failure, watch-reached skip is a cap warning', as
   assert.equal(r.spendUsd, 0.4);
 });
 
+test('stories: a 402 out-of-credits failure has its own cause, not "unrecognized error"', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO stories.sets (series, ny_date, trigger, style, status, error, spend_usd) VALUES
+      ('morning_download', '2026-10-13', 'auto', 'polished', 'failed', '402 Your organization has no available TypeSafe API credits. Please add more credits and/or set up auto-reload at https://console.typesafe.ai/settings/billing', 0);
+  `);
+  const series = [{ id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [0, 1, 2, 3, 4, 5, 6] }];
+  const r = await reportStories(query, { night: NIGHT, posting: posting({ type: 'stories', perDay: null, series } as never), now: NOW });
+  assert.equal(r.failures[0]?.reason, 'out_of_credits');
+});
+
+test('stories: a built set still waiting on a person is built, with a visible heads-up that it cannot post yet', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO stories.sets (series, ny_date, trigger, style, status, flagged, spend_usd) VALUES
+      ('morning_download', '2026-10-13', 'auto', 'polished', 'ready', true, 0.1);
+  `);
+  const series = [{ id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [0, 1, 2, 3, 4, 5, 6] }];
+  const r = await reportStories(query, { night: NIGHT, posting: posting({ type: 'stories', perDay: null, series } as never), now: NOW });
+  assert.equal(r.made, 1, 'it was built');
+  const waiting = r.failures.find((f) => f.reason === 'awaiting_approval');
+  assert.ok(waiting, 'the heads-up is there');
+  assert.equal(waiting!.severity, 'warning');
+  assert.match(waiting!.rawError ?? '', /flagged/);
+});
+
 test('feed staleness counts distinct days, not rows', async () => {
   const { pg, query } = await openHubTestDb();
   await pg.exec(`
@@ -203,6 +229,23 @@ test('explainers: capped job is cap_hit; unknown-cost HeyGen rows are counted, n
   assert.equal(r.unknownCostCalls, 1);
   assert.equal(r.spendUsd, 4.5);
   assert.equal(r.funnel[0]!.in, 12);
+});
+
+test('explainers: development-mode cycles, jobs and costs are the real pipeline and count (the setting ships as development)', async () => {
+  const { pg, query } = await openHubTestDb();
+  await pg.exec(`
+    INSERT INTO explainers.topics (id, title, scope, source_url, origin, status, audience_fit, teachability_45s, analogy_potential, visual_potential, accuracy_under_simplification, hook_strength, weighted_score)
+      VALUES ('00000000-0000-0000-0000-0000000000e2', 'Caching', NULL, NULL, 'generated', 'queued', 3, 3, 3, 3, 3, 3, 70);
+    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool) VALUES ('ok', 'development', '2026-10-13', 3, 3);
+    INSERT INTO explainers.jobs (id, topic_id, status, stage, trigger, mode, spend_usd, spend_cap_usd, capped, error, orchestrator_model, frame_worker_model, requested_at, finished_at) VALUES
+      ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000e2', 'failed', 'session_b_done', 'auto', 'development', 5.57, 5, true, 'Spend cap $5.00 reached in session B.', 'claude-opus-5-5', 'claude-opus-5-5', '2026-10-13T06:01:00Z', '2026-10-13T06:19:00Z');
+    INSERT INTO explainers.cost_events (job_id, mode, vendor, component, usd, usd_known, created_at) VALUES
+      ('00000000-0000-0000-0000-0000000000f2', 'development', 'anthropic', 'session_b:claude-opus-5-5', 5.57, true, '2026-10-13T06:10:00Z');
+  `);
+  const r = await reportExplainers(query, { night: NIGHT, posting: posting({ type: 'explainers', perDay: 1 }), now: NOW });
+  assert.equal(r.ran, true, 'the cycle ran: not "did not run"');
+  assert.equal(r.failures[0]?.reason, 'cap_hit', 'the cause shows');
+  assert.equal(r.spendUsd, 5.57);
 });
 
 test('carousels: no quota on a Last Few Days night while Last Few Days auto_run is on', async () => {

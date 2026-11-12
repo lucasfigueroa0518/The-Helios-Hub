@@ -1,5 +1,7 @@
 /** Raw error → reason code (spec §4.2). Order matters: first match wins. No model involved. */
 const RULES: ReadonlyArray<[RegExp, string]> = [
+  // Before auth and cap rules: a 402 / empty balance is its own fix (add credits), not a sign-in problem.
+  [/\b402\b|no available .{0,30}credits|out of credits|insufficient (credit|fund|balance)|credit balance is too low|payment required/i, 'out_of_credits'],
   [/watch reached|spend cap|cost.?cap|budget|capped/i, 'cap_hit'],
   [/timed? ?out|timeout|ETIMEDOUT/i, 'timeout'],
   [/rate.?limit|\b429\b/i, 'rate_limited'],
@@ -37,6 +39,8 @@ export function carouselReason(code: string): string {
 }
 
 export const REASON_LABEL: Record<string, string> = {
+  out_of_credits: 'ran out of API credits',
+  awaiting_approval: 'is built but waiting for a person to approve it',
   cap_hit: 'hit its spend cap',
   timeout: 'timed out',
   rate_limited: 'was rate limited',

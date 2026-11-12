@@ -904,6 +904,28 @@ test('auto_run false means the clock says off, whatever the day', () => {
   assert.ok(firstFieldNotesCheckAt(NOW).getTime() >= NOW.getTime());
 });
 
+test('template mode: the calendar, not the Tuesday/Friday days, decides whether the 2:00 AM check queues a run', () => {
+  const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
+  const wednesday2am = new Date('2026-11-11T07:00:00Z');
+  const tuesday2am = new Date('2026-11-10T07:00:00Z');
+  // A slot a person placed on a Wednesday queues a run, though Wednesday is not an auto day.
+  const placed = noonQueue(wednesday2am, on, false, true);
+  assert.equal(placed.queue, true);
+  assert.match(placed.reason, /calendar/);
+  // No calendar slot on a Tuesday means no run, though Tuesday is an auto day.
+  const none = noonQueue(tuesday2am, on, false, false);
+  assert.equal(none.queue, false);
+  assert.match(none.reason, /not a Field Notes day/);
+  // Legacy mode (null): the weekday rule stands as before.
+  assert.equal(noonQueue(tuesday2am, on, false, null).queue, true);
+  assert.equal(noonQueue(wednesday2am, on, false, null).queue, false);
+  // A calendar slot never overrides the safety rails: auto_run off, a run already queued today, a bad cap, a late restart.
+  assert.equal(noonQueue(wednesday2am, parseFieldNotesSettings([{ key: 'auto_run', value: false }]), false, true).queue, false);
+  assert.equal(noonQueue(wednesday2am, on, true, true).queue, false, 'one scheduled run a day');
+  assert.equal(noonQueue(wednesday2am, parseFieldNotesSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }]), false, true).queue, false);
+  assert.equal(noonQueue(new Date('2026-11-11T09:01:00Z'), on, false, true).queue, false, '4:01 AM restart: no run');
+});
+
 test('the 2:00 AM check never queues twice a day: a scheduled run today, or a check over 2 h late, says no (fix 8)', async () => {
   const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
   const tuesday2am = new Date('2026-11-03T07:00:00Z');

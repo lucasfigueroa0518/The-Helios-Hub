@@ -8,6 +8,10 @@ type Cycle = { id: string; status: string; error: string | null; generated: numb
 type Job = { id: string; status: string; stage: string | null; error: string | null; capped: boolean; spend: number; at: string };
 
 /**
+ * The mode column is not a filter: the Explainers setting ships as 'development' and every real
+ * cycle, job and cost row carries it, so a production-only read saw none of them (a night that
+ * ran and spent money read "did not run"). Every row in these tables is the real pipeline.
+ *
  * `q` here reads the Explainers database; `hubQ` reads social_hub (publishing).
  * They are the same handle in tests and when Explainers share Supabase.
  */
@@ -17,17 +21,17 @@ export function makeExplainersReporter(hubQ?: HubQuery) {
     const range = [start.toISOString(), end.toISOString()];
     const cycles = (await q<Cycle>(
       `SELECT id::text, status, error, ideas_generated AS generated, ideas_entering_pool AS pool, started_at::text AS at
-         FROM explainers.idea_cycles WHERE ny_date = $1::date AND mode = 'production'`,
+         FROM explainers.idea_cycles WHERE ny_date = $1::date`,
       [night],
     )).rows;
     const jobs = (await q<Job>(
       `SELECT id::text, status, stage, error, capped, spend_usd::float8 AS spend, COALESCE(finished_at, requested_at)::text AS at
-         FROM explainers.jobs WHERE mode = 'production' AND requested_at >= $1 AND requested_at < $2`,
+         FROM explainers.jobs WHERE requested_at >= $1 AND requested_at < $2`,
       range,
     )).rows;
     const cost = (await q<{ usd: number; unknown: number }>(
       `SELECT COALESCE(sum(usd) FILTER (WHERE usd_known), 0)::float8 AS usd, count(*) FILTER (WHERE NOT usd_known)::int AS unknown
-         FROM explainers.cost_events WHERE mode = 'production' AND created_at >= $1 AND created_at < $2`,
+         FROM explainers.cost_events WHERE created_at >= $1 AND created_at < $2`,
       range,
     )).rows[0] ?? { usd: 0, unknown: 0 };
 

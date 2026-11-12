@@ -118,7 +118,7 @@ async function main(): Promise<void> {
   // Every log line counts as progress for the content-run hang guard.
   tapProcessOutput();
   const { threeAmQueue } = await import('@/lib/lfd/clock');
-  const { isAiEventsDay, isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
+  const { isAiEventsDay, isFieldNotesDay, isLfdDay, slotPlan } = await import('@/lib/social-hub/slots');
   const { readSlotSource } = await import('@/lib/social-hub/slots/load');
   const { liveLfdDeps } = await import('@/lib/lfd/live');
   const { liveMemesForPost } = await import('@/lib/memes/lfd-post-live');
@@ -478,7 +478,10 @@ async function main(): Promise<void> {
           log('field_notes_today_check_failed', { error: errorText(error) });
           return null;
         });
-        const fnNoon = fieldNotesNoonQueue(new Date(), fn, fnToday);
+        // Template mode: the calendar says whether today has a Field Notes slot (null while legacy).
+        const fnDate = calendarDateKey(new Date());
+        const fnPlan = await slotPlan(lfdQuery, fnDate, 1).catch(() => null);
+        const fnNoon = fieldNotesNoonQueue(new Date(), fn, fnToday, fnPlan ? isFieldNotesDay(fnPlan, fnDate) : null);
         if (fnNoon.queue && fn?.runCapUsd != null) {
           const id = await fieldNotesStore.requestRun(lfdQuery, 'scheduled', fn.runCapUsd).catch((error) => {
             log('field_notes_request_failed', { error: errorText(error) });

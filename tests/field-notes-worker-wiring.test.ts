@@ -11,6 +11,8 @@ test('the social worker runs Field Notes in its own loop: the noon clock, claims
   assert.match(text, /let fieldNotesAt = firstFieldNotesCheckAt\(new Date\(\)\)/);
   assert.match(text, /fieldNotesStore\.requestRun\(lfdQuery, 'scheduled', fn\.runCapUsd\)/);
   assert.match(text, /fieldNotesAt = nextFieldNotesRunAt\(new Date\(\)\)/);
+  // Template mode: a calendar slot, not only Tuesday/Friday, makes it a Field Notes day.
+  assert.match(text, /fieldNotesNoonQueue\(new Date\(\), fn, fnToday, fnPlan \? isFieldNotesDay\(fnPlan, fnDate\) : null\)/);
   // Claimed after AI Events' claim, inside the hang guard.
   const aeClaim = text.indexOf('aiEventsStore.claimRun(lfdQuery)');
   const fnClaim = text.indexOf('fieldNotesStore.claimRun(lfdQuery)');
