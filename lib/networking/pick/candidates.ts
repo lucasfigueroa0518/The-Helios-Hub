@@ -1,9 +1,10 @@
 /**
  * Candidates for the weekly ranking (plan M2 step 1): per metro, the events starting in the
  * coming week (week.ts) that are scheduled, in the tech or both bucket, and in person or hybrid
- * (the events table holds no online-only rows). Each city is capped at CANDIDATE_CAP by a
- * cheap prior so a busy week never fans out into hundreds of Jev calls; pinned and excluded
- * pool rows are always kept so a person's call stays visible.
+ * (the events table holds no online-only rows). Every event is scored (AE-35): a busy week is a
+ * few hundred Jev calls, about $0.10, each event asked once and cached, under the run cap.
+ * `capCandidates` keeps the cheap prior for callers that pass a cap; pinned and excluded pool
+ * rows are always kept so a person's call stays visible.
  */
 import { listKeptEvents, type NetworkingQuery } from '@/lib/networking/repository';
 import type { Metro, StoredNetworkingEvent } from '@/lib/networking/types';
@@ -11,7 +12,8 @@ import type { Metro, StoredNetworkingEvent } from '@/lib/networking/types';
 import { ATTENDANCE_POINTS, attendanceTerm, rosterTerm } from './terms';
 import { metroWindow, type ComingWeek, type MetroWindow } from './week';
 
-export const CANDIDATE_CAP = 30;
+/** No cap: every event in the week is ranked (AE-35). */
+export const CANDIDATE_CAP = Number.POSITIVE_INFINITY;
 
 /** Prior weights. A description matters most: without one Jev has only the title to read. */
 export const PRIOR_WEIGHTS = { attendance: 1, roster: 1, requiresApproval: 0.2, description: 0.5 } as const;

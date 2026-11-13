@@ -239,8 +239,8 @@ export function buildAiEventsCityPost(input: AiEventsCityPostInput): RenderPost 
   };
 }
 
-/** The deepest rank the post reads (lib/networking/pick/picks.ts RANK_DEPTH). */
-export const MAX_RANKED = 20;
+/** The deepest rank the post reads: the city's top 10 (lib/networking/pick/picks.ts RANK_DEPTH, AE-38). */
+export const MAX_RANKED = 10;
 
 /**
  * 3–4 teasers from a list of `n` ranked events (#1 held back). Always starts at #2 and always

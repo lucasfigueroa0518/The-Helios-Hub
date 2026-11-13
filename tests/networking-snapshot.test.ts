@@ -21,6 +21,7 @@ import {
 } from '@/lib/networking/public-feed-storage';
 import {
   EVENTS_FEED_STATE_ID,
+  MAX_PICKS_PER_METRO,
   SUMMARY_MAX_CHARS,
   buildPublicFeed,
   chooseWeek,
@@ -103,7 +104,7 @@ function stored(overrides: Partial<StoredNetworkingEvent> = {}): StoredNetworkin
 
 const EVENT_KEYS = [
   'access', 'address', 'city', 'demand', 'end', 'hosts', 'id', 'metro', 'organizer', 'pick', 'price',
-  'rsvpUrl', 'start', 'summary', 'tags', 'timezone', 'title', 'venue',
+  'rsvpUrl', 'start', 'summary', 'tags', 'timezone', 'title', 'venue', 'weekRank',
 ].sort();
 
 // ---------- Mapper and scrubbing ----------
@@ -252,7 +253,7 @@ test('weeks: the coming Mon-Sun and the week in progress, in New York time', () 
   assert.equal(snapshotWeeks(new Date('2026-10-26T05:00:00Z')).current.key, '2026-W44');
 });
 
-test('picks attach to the coming week first, with ranks 1..3 per city', () => {
+test('picks attach to the coming week first, with ranks 1..10 per city', () => {
   const rows = [
     stored({ metro: 'boston', startAt: inDays(6) }),
     stored({ metro: 'boston', startAt: inDays(7) }),
@@ -275,9 +276,40 @@ test('picks attach to the coming week first, with ranks 1..3 per city', () => {
   assert.deepEqual(pickOf(1), { rank: 1, week: '2026-W44' });
   assert.deepEqual(pickOf(0), { rank: 2, week: '2026-W44' });
   assert.deepEqual(pickOf(3), { rank: 3, week: '2026-W44' });
-  assert.equal(pickOf(4), null, 'a fourth Boston pick is not shown');
+  assert.deepEqual(pickOf(4), { rank: 4, week: '2026-W44' }, 'ranks past the medals are badged too (AE-37)');
   assert.deepEqual(pickOf(2), { rank: 1, week: '2026-W44' });
   assert.equal(pickOf(5), null, 'last week\'s picks give way to the coming week');
+});
+
+test('only the top 10 per city are badged (AE-37)', () => {
+  const rows = Array.from({ length: 11 }, (_, i) => stored({ metro: 'boston', startAt: inDays(6 + (i % 5)) }));
+  const picks: PoolPick[] = rows.map((r, i) => ({ weekKey: '2026-W44', eventId: r.id, metro: 'boston', rank: i + 1, pickRank: i + 1 }));
+  assert.equal(MAX_PICKS_PER_METRO, 10);
+  const feed = buildPublicFeed(rows, picks, NOW);
+  const ranks = rows.map((r) => feed.events.find((e) => e.id === publicEventId(r.fingerprint))?.pick?.rank ?? null);
+  assert.deepEqual(ranks, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, null]);
+});
+
+test('every ranked event gets its place in the city (AE-40): picks first, then the pool by score, gated last', () => {
+  const rows = Array.from({ length: 5 }, (_, i) => stored({ metro: 'boston', startAt: inDays(6 + i) }));
+  const nyc = stored({ metro: 'nyc', startAt: inDays(6) });
+  const unranked = stored({ metro: 'boston', startAt: inDays(6) });
+  const pool: PoolPick[] = [
+    { weekKey: '2026-W44', eventId: rows[0].id, metro: 'boston', rank: 4, pickRank: 1 }, // a pin
+    { weekKey: '2026-W44', eventId: rows[1].id, metro: 'boston', rank: 1, pickRank: 2 },
+    { weekKey: '2026-W44', eventId: rows[2].id, metro: 'boston', rank: 5, pickRank: null, picked: false }, // gated: ranked last
+    { weekKey: '2026-W44', eventId: rows[3].id, metro: 'boston', rank: 2, pickRank: null, picked: false },
+    { weekKey: '2026-W44', eventId: rows[4].id, metro: 'boston', rank: 3, pickRank: null, picked: false },
+    { weekKey: '2026-W44', eventId: nyc.id, metro: 'nyc', rank: 1, pickRank: null, picked: false },
+  ];
+  const feed = buildPublicFeed([...rows, nyc, unranked], pool, NOW);
+  const of = (r: { fingerprint: string }) => feed.events.find((e) => e.id === publicEventId(r.fingerprint))!;
+  assert.deepEqual(rows.map((r) => of(r).weekRank), [1, 2, 5, 3, 4]);
+  assert.deepEqual(rows.map((r) => of(r).pick?.rank ?? null), [1, 2, null, null, null], 'only the picks are badged');
+  assert.equal(of(nyc).weekRank, 1, 'each city counts from 1');
+  assert.equal(of(nyc).pick, null, 'a city with no picks has no badges');
+  assert.equal(of(unranked).weekRank, null, 'an event outside the pool has no place');
+  assert.equal(buildPublicFeed(rows, pool.filter((p) => p.picked === false), NOW).week?.picksPublished, false, 'unpicked rows alone publish no week');
 });
 
 test('pick ranks follow the carousel pick order (pins first), not the pool score order', () => {
@@ -465,13 +497,14 @@ function recordingFetch(recorded: Recorded[], status = 200): typeof fetch {
   }) as typeof fetch;
 }
 
-test('pool picks: absent table means no picks; excluded rows never count', async () => {
+test('pool rows: absent table means none; unpicked rows load for the order; excluded rows never count', async () => {
   const { pg, query } = await openDb();
   try {
     assert.deepEqual(await loadPoolPicks(query, ['2026-W44']), []);
 
     const a = await insertEvent(query, { startAt: inDays(6) });
     const b = await insertEvent(query, { startAt: inDays(7) });
+    const c = await insertEvent(query, { startAt: inDays(8) });
     await pg.exec(`
       CREATE SCHEMA ai_events;
       CREATE TABLE ai_events.pool (
@@ -480,10 +513,13 @@ test('pool picks: absent table means no picks; excluded rows never count', async
       );`);
     await query(
       `INSERT INTO ai_events.pool (week_key, event_id, metro, rank, picked, excluded_at)
-       VALUES ('2026-W44', $1, 'boston', 1, true, NULL), ('2026-W44', $2, 'boston', 2, true, now())`,
-      [a, b],
+       VALUES ('2026-W44', $1, 'boston', 1, true, NULL), ('2026-W44', $2, 'boston', 2, true, now()), ('2026-W44', $3, 'boston', 3, false, NULL)`,
+      [a, b, c],
     );
-    assert.deepEqual(await loadPoolPicks(query, ['2026-W44']), [{ weekKey: '2026-W44', eventId: a, metro: 'boston', rank: 1, pickRank: null }]);
+    assert.deepEqual(await loadPoolPicks(query, ['2026-W44']), [
+      { weekKey: '2026-W44', eventId: a, metro: 'boston', rank: 1, pickRank: null, picked: true },
+      { weekKey: '2026-W44', eventId: c, metro: 'boston', rank: 3, pickRank: null, picked: false },
+    ]);
   } finally {
     await pg.close();
   }
