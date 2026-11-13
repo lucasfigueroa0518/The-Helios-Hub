@@ -28,6 +28,10 @@ sources).
    a finding. When someone faces allegations, record their public response or denial if one exists.
    [D-69, D-68]
 5. **Nothing from memory.** Every fact cites at least one source you found in this session.
+6. **Every name is said right.** For each cast member, `pronounce` lists every word of their name that an
+   American English voice could say wrong (most names from outside English, and English names with an
+   unexpected sound or stress), each with how it is actually said and the source that says so. Never from
+   memory and never from how the spelling looks: a word no source settles stays out of the list.
 
 ## How to work
 
@@ -49,22 +53,29 @@ sources).
    it was beyond its part in this story, and what it is now. For each product: what it was and what became of it. This lets the story tie people, companies
    and events to each other and to the present. Each piece is its own fact, sourced like any other
    (HARD CONSTRAINT 5); what you can't source, leave out.
-6. **Record the places** the story happens in, with an address and coordinates when the record gives
+6. **Find how each name is said.** For every cast name an English voice could get wrong, look it up: one
+   or two searches a name. The best evidence, in order: the person saying or spelling out their own name
+   (an interview transcript, a talk, their own site or profile: "pronounced …"); the name's IPA or
+   respelling in an encyclopedia entry (the entry in the name's own language marks the stress); a
+   pronunciation guide or a broadcaster's guide that states it. Aim for how the person says the name to
+   English speakers; when nothing records that, give the name as said in its own language, in English
+   sounds. Add the page you used to `sources` like any other.
+7. **Record the places** the story happens in, with an address and coordinates when the record gives
    them (for the maps), each place's role in the story, and the facts that put it there.
-7. **Record the relations** the record shows between the people and places: who works for, rivals,
+8. **Record the relations** the record shows between the people and places: who works for, rivals,
    invited or funded whom; which places are near or across from each other; which events happened the
    same day or week. These let the story place each new part relative to one already set.
-8. **Record the artifacts** the viewer could see: posts, statements, documents, headlines, papers,
+9. **Record the artifacts** the viewer could see: posts, statements, documents, headlines, papers,
    filings — the exact words, the source, the URL and the date. These are the evidence the director
    will show.
-9. **Note disputes honestly.** When good sources conflict, record the fact as `disputed` and say who
+10. **Note disputes honestly.** When good sources conflict, record the fact as `disputed` and say who
    says what. A disputed core claim means the story doesn't hold as pitched (HARD CONSTRAINT 3).
-10. **Write the sheet for the writer, not as working notes.** Each fact is a plain claim about the world,
+11. **Write the sheet for the writer, not as working notes.** Each fact is a plain claim about the world,
     stated once. Who reported it lives in `source_ids`, so the text doesn't trace how a report reached you
     or list the outlets that carry it; only a disputed or one-source fact says who says it. A quote's or
     artifact's words live in the quote or artifact: a fact doesn't restate them. What the pitch got wrong
     goes in `summary`, never in a fact, a role or a context line.
-11. **Submit once**, at the end, with `submit_fact_sheet`.
+12. **Submit once**, at the end, with `submit_fact_sheet`.
 
 ## The fact sheet (every field)
 
@@ -80,12 +91,15 @@ sources).
 - `artifacts` — `{ id: "A1"…, kind, text, source_id, url, date }`; `kind` is `post`, `statement`,
   `document`, `headline`, `paper`, `filing` or `other`. An artifact is the original as it ran; a parody,
   a recreation or an altered repost is not one.
-- `cast` — `{ name, role, kind, player_id, want, qid, background, later, context_fact_ids }`; `kind` is `person`,
+- `cast` — `{ name, role, kind, player_id, want, qid, background, later, context_fact_ids, pronounce }`; `kind` is `person`,
   `company` or `product` [MD-135]; `role` is
   their role at the time of the story, and `want` includes the reason the record gives. `background` is
   who they were before (for a company, what it was beyond this story) and `later` what they did after or
   are now, as of today; each is a short phrase, or `null` when the record is silent. `context_fact_ids`
-  are the facts behind the member's role, background and later.
+  are the facts behind the member's role, background and later. `pronounce` is `{ word, say, source_id }`
+  for each word of the name the voice could get wrong (HARD CONSTRAINT 6): `word` exactly as written in
+  `name`, `say` a plain English respelling, syllables joined by hyphens with the stressed one in capitals
+  ("Tchaikovsky" → "chy-KOFF-skee"), `source_id` the source it came from. Empty when no word needs it.
 - `places` — `{ name, address, lat, lon, role, fact_ids }`.
 - `relations` — `{ a, relation, b, fact_ids }`: `a` and `b` are cast or place names, `relation` a few
   plain words (works for, rival of, same week as).

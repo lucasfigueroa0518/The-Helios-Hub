@@ -94,6 +94,35 @@ function fetchedText(url: string | null | undefined, fetched: ReadonlyMap<string
 }
 
 /**
+ * A member's pronunciations, kept only when researched: each needs a real source and a `word` that is a word of the
+ * member's name (the voice swaps whole words). Duplicates of a word keep the first. Older sheets have none.
+ */
+export function sourcedPronounce<M extends FactSheet['cast'][number]>(m: M, sourceIds: ReadonlySet<string>, problems: string[]): M {
+  if (!Array.isArray(m.pronounce)) return m;
+  const nameWords = new Set(String(m.name ?? '').split(/[^\p{L}\p{N}'’-]+/u).map((w) => w.toLowerCase()).filter(Boolean));
+  const seen = new Set<string>();
+  const kept: NonNullable<M['pronounce']> = [];
+  for (const p of m.pronounce) {
+    const word = String(p?.word ?? '').trim();
+    const say = String(p?.say ?? '').trim();
+    const sourceId = String(p?.source_id ?? '').trim();
+    if (!word || !say || word.toLowerCase() === say.toLowerCase()) continue;
+    if (!sourceIds.has(sourceId)) {
+      problems.push(`cast "${m.name}": how "${word}" is said names no real source; dropped`);
+      continue;
+    }
+    if (!nameWords.has(word.toLowerCase())) {
+      problems.push(`cast "${m.name}": "${word}" is not a word of the name; its pronunciation was dropped`);
+      continue;
+    }
+    if (seen.has(word.toLowerCase())) continue;
+    seen.add(word.toLowerCase());
+    kept.push({ word, say, source_id: sourceId });
+  }
+  return { ...m, pronounce: kept };
+}
+
+/**
  * Reporting never judges who the public knows: the sheet's cast takes `widely_known` from the pitch, where selection
  * decided it. Someone reporting added has no answer, which reads as not known.
  */
@@ -178,7 +207,7 @@ export function validateFactSheet(raw: FactSheet, opts: ValidateOptions = {}): V
 
   // The larger context (MD-119) is sourced like any fact: a member's before/after rests on remaining facts,
   // else the text is dropped. Old sheets without the fields stay without.
-  const cast = !Array.isArray(raw.cast) ? raw.cast : raw.cast.map((m) => {
+  const cast = !Array.isArray(raw.cast) ? raw.cast : raw.cast.map((m) => (m ? sourcedPronounce(m, sourceIds, problems) : m)).map((m) => {
     if (!m || !Array.isArray(m.context_fact_ids)) return m;
     const unknown = m.context_fact_ids.filter((id) => !factIds.has(id));
     if (unknown.length) problems.push(`cast "${m.name}" names unknown context facts ${unknown.join(', ')}`);

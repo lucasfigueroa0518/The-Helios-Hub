@@ -21,6 +21,25 @@ export function heygenTtsScript(projectDir: string): string {
   return path.join(scriptsDir(projectDir), '..', '..', 'media-use', 'audio', 'scripts', 'heygen-tts.mjs');
 }
 
+type Say = { word: string; say: string };
+
+/**
+ * What the voice respells: the reporter's researched pronunciations of the cast's names, then the writer's own
+ * respellings for every other word. A researched word wins over the writer's entry for it, including the
+ * writer's possessive of it ("X's"), which would otherwise go first as the longer word.
+ */
+export function voicePronounce(writer: readonly Say[] | undefined, cast: readonly { pronounce?: readonly Say[] }[] | undefined): Say[] {
+  const researched = new Map<string, Say>();
+  for (const m of cast ?? []) {
+    for (const p of m.pronounce ?? []) {
+      const key = p.word.trim().toLowerCase();
+      if (key && p.say.trim() && !researched.has(key)) researched.set(key, { word: p.word.trim(), say: p.say.trim() });
+    }
+  }
+  const base = (w: string) => w.trim().toLowerCase().replace(/['’]s$/u, '');
+  return [...researched.values(), ...(writer ?? []).filter((p) => !researched.has(base(p.word)))];
+}
+
 export type VoiceInput = {
   voiceId: string;
   heygenApiKey: string;

@@ -201,7 +201,17 @@ export type FactSheet = {
    * after or are now, as of the reporter's today. `context_fact_ids` are the facts that source the member's
    * line; a context fact is an ordinary fact, so the writer cites it like any other.
    */
-  cast: (CastMember & { qid: string | null; background?: string | null; later?: string | null; context_fact_ids?: string[] })[];
+  cast: (CastMember & {
+    qid: string | null;
+    background?: string | null;
+    later?: string | null;
+    context_fact_ids?: string[];
+    /**
+     * How the words of the name are said, researched with a source (never guessed): the voice says `say` in place
+     * of `word`. Only the words an English voice could get wrong; absent on older sheets.
+     */
+    pronounce?: { word: string; say: string; source_id: string }[];
+  })[];
   /** `fact_ids` (optional on old sheets): the facts that place it in the story. */
   places: { name: string; address: string | null; lat: number | null; lon: number | null; role: string; fact_ids?: string[] }[];
   /**
