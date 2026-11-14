@@ -4,10 +4,8 @@ import { StateBadge, TypeMark } from '@/components/social-hub/ui/marks';
 import { Thumb } from '@/components/social-hub/ui/Thumb';
 import { clock, displayName } from '@/lib/social-hub/views/format';
 import type { Offerer } from '@/lib/social-hub/views/offer';
-import { metricWithTypical } from '@/lib/social-hub/views/typical';
-import type { HubPost, MetricKey } from '@/lib/social-hub/types';
-
-const LEAD_METRIC: Record<HubPost['format'], MetricKey> = { reel: 'views', feed: 'views', story: 'reach' };
+import { LEAD_METRIC, metricWithTypical } from '@/lib/social-hub/views/typical';
+import type { HubPost } from '@/lib/social-hub/types';
 
 /**
  * One piece of content in a list (BRIEFS.md §1): time, thumbnail, type,

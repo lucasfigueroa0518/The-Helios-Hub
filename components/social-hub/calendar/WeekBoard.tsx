@@ -168,8 +168,10 @@ export function WeekBoard(props: {
     () => boardModel({ days: state.days, posts: state.posts, now, caps }),
     [state, now, caps],
   );
-  const topOf = useMemo(() => stackOffsets(model.cards, AXIS), [model.cards]);
-  const byDay = useMemo(() => model.columns.map((_, i) => model.cards.filter((c) => c.day === i)), [model]);
+  // A past day shows only what went out: its posted cards, each opening the post's analytics.
+  const shown = useMemo(() => model.cards.filter((c) => !model.columns[c.day]?.folded || c.status === 'posted'), [model]);
+  const topOf = useMemo(() => stackOffsets(shown, AXIS), [shown]);
+  const byDay = useMemo(() => model.columns.map((_, i) => shown.filter((c) => c.day === i)), [model.columns, shown]);
 
   const [toast, setToast] = useState<Toast | null>(null);
   const [ask, setAsk] = useState<Ask | null>(null);
@@ -554,7 +556,7 @@ export function WeekBoard(props: {
 
   // ── Layout ──
 
-  const cols = model.columns.map((c) => (c.folded ? '76px' : 'minmax(var(--sh-col-min), 1fr)')).join(' ');
+  const cols = model.columns.map(() => 'minmax(var(--sh-col-min), 1fr)').join(' ');
   // A crowded stack can run past 9 PM (R27). Each day keeps one card of room below the axis (an 8:45 PM card);
   // a card drawn lower than 9 PM grows every day by the rest, so nothing clips. The axis (and minuteForY) is unchanged.
   const overrun = Math.max(0, ...[...topOf.values()].map((t) => t - AXIS)) / AXIS;
@@ -684,10 +686,33 @@ export function WeekBoard(props: {
             const label = `${WEEKDAY_SHORT[c.weekday]} ${Number(c.nyDate.slice(8))}`;
             const spoken = `${WEEKDAY_LONG[c.weekday]} ${dayShortLabel(c.nyDate).slice(4)}`;
             if (c.folded) {
+              // Looking back: the day's posted cards at their times, read-only; a click opens the post drawer.
               return (
-                <section key={i} className="sh-board__day is-folded" aria-label={`${spoken}, past: ${c.count} posted`}>
-                  <header className="sh-board__dhead"><span className="sh-board__dname">{label}</span></header>
-                  <p className="sh-board__fold">{c.count} posted</p>
+                <section key={i} className="sh-board__day is-past" aria-label={`${spoken}, past: ${c.count} posted`}>
+                  <header className="sh-board__dhead">
+                    <span className="sh-board__dname">{label}<span className="sh-board__count">{c.count}</span></span>
+                    <span className="sh-board__badges"><span className="sh-board__badge">Posted</span></span>
+                  </header>
+                  <div className="sh-board__axis" data-day={i}>
+                    {HOURS.map((m) => <span key={m} className={`sh-board__line${m === 720 ? ' is-noon' : ''}`} style={{ top: pct(m) }} aria-hidden="true" />)}
+                    {cards.length === 0 ? <p className="sh-board__empty">Nothing posted.</p> : null}
+                    {cards.map((card) => (
+                      <SlotCard
+                        key={card.key}
+                        card={card}
+                        top={topOf.get(card.key) ?? yForMinute(card.startMinute, AXIS)}
+                        when={when(i)}
+                        editable={false}
+                        dimmed={props.dim !== null && props.dim !== card.vertical}
+                        faded={false}
+                        open={false}
+                        dragProps={{ draggable: false }}
+                        select={null}
+                        onOpen={() => {}}
+                        onFlip={() => {}}
+                      />
+                    ))}
+                  </div>
                 </section>
               );
             }
@@ -747,6 +772,7 @@ export function WeekBoard(props: {
         <li><span className="sh-board__mark" aria-hidden="true" />a post is booked</li>
         <li><span className="sh-board__badge sh-board__badge--edited">Edited</span>you changed this date</li>
         <li>{editable ? 'Click a slot for details · drag to move · drag back onto the row above to remove · Select changes several at once' : 'Click a slot for details'}</li>
+        <li>Click a posted post for its analytics · go back a week to look further</li>
         <li>Times are New York.</li>
       </ul>
 
