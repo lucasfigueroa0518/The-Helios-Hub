@@ -1,6 +1,9 @@
 /**
  * Pre-flight for the coming overnight run. Read-only: SELECTs only, no model, search or Meta calls (CLAUDE.md Rule 1),
  * no writes. Compares what the calendar expects on the target date with what each type's switches and queues allow.
+ * The date given is the night's run day; a type made ahead (Bald-Eagle D4, lib/social-hub/lead.ts: Text on
+ * Screen, Explainers, AI Drama, Field Notes, Guess the Number, Free vs. Paid) is checked against the slots on
+ * run day + 2, the date that night fills for it; the rest against the run day.
  *
  *   npx tsx scripts/preflight_night.ts              the next night (tomorrow's date after noon, today's before)
  *   npx tsx scripts/preflight_night.ts 2026-11-13   a given New York date
@@ -16,6 +19,7 @@ import { addCalendarDays } from '@/lib/instagram/window';
 import { hasFailure, judge, type PreflightInput } from '@/lib/preflight/night';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { slotPlan } from '@/lib/social-hub/slots';
+import { leadDaysFor, targetDateFor } from '@/lib/social-hub/lead';
 import type { Vertical } from '@/lib/social-hub/types';
 
 const SETTINGS: Array<{ vertical: Vertical; schema: string; auto: string | null }> = [
@@ -43,8 +47,13 @@ async function main() {
   const nyHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: SOCIAL_TIMEZONE, hour: '2-digit', hourCycle: 'h23' }).format(now));
   const date = process.argv[2] ?? (nyHour >= 12 ? addCalendarDays(today, 1) : today);
 
-  const plan = await slotPlan(liveHubQuery, date, 1);
-  const slots = plan ? (plan.byDate.get(date) ?? []).map((s) => ({ vertical: s.vertical, series: s.series ?? null })) : [];
+  // Each type's slots on the date this night fills for it (the run day, or run day + lead).
+  const lead = Math.max(...SETTINGS.map((t) => leadDaysFor(t.vertical)), leadDaysFor('stories', 'guess_the_number'), leadDaysFor('stories', 'free_vs_paid'));
+  const plan = await slotPlan(liveHubQuery, date, 1 + lead);
+  const slots = plan
+    ? [...plan.byDate.entries()].flatMap(([d, list]) =>
+        list.filter((s) => targetDateFor(date, s.vertical, s.series ?? null) === d).map((s) => ({ vertical: s.vertical, series: s.series ?? null })))
+    : [];
 
   const autoOn: PreflightInput['autoOn'] = {};
   const publishingLive: PreflightInput['publishingLive'] = {};
@@ -82,7 +91,7 @@ async function main() {
   });
 
   const mark = { ok: 'OK    ', warn: 'WARN  ', fail: 'FAIL  ', manual: 'CHECK ' } as const;
-  console.log(`Pre-flight for the night making ${date} (calendar: ${plan ? 'template' : 'legacy'})\n`);
+  console.log(`Pre-flight for the night of ${date}: same-day types make ${date}, types made ahead make ${targetDateFor(date, 'field_notes')} (calendar: ${plan ? 'template' : 'legacy'})\n`);
   for (const f of findings) console.log(`${mark[f.level]} ${f.text}`);
   const bad = hasFailure(findings);
   console.log(`\n${bad ? 'NOT READY: fix the FAIL lines.' : 'No failures found. The CHECK lines are yours to confirm.'}`);

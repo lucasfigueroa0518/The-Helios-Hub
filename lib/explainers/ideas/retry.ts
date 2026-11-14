@@ -1,4 +1,5 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { jobDaySql } from '@/lib/explainers/lead';
 
 /** A day's 2 AM idea cycle may run twice: the first try and one retry after a failure. */
 export const MAX_CYCLE_ATTEMPTS = 2;
@@ -7,10 +8,10 @@ export const CYCLE_RETRY_DELAY_MS = 10 * 60_000;
 
 export type RetryGate = { run: true } | { run: false; reason: 'retry_wait' | 'retry_exhausted' | 'render_already_requested' };
 
-const NY_TZ = 'America/New_York';
-
 /**
- * Whether the day may start another idea cycle. Only a `failed` row on the
+ * Whether the day may start another idea cycle. `day` is the date the cycle
+ * fills (Bald-Eagle D4: the night's target date, which keys idea_cycles.ny_date;
+ * the night's renders for it carry it as `target_date`). Only a `failed` row on the
  * day matters (the unique index covers running/ok rows, so a failed row never
  * blocks a new one). Counted from the table itself, so a worker restart cannot
  * reset it: at most MAX_CYCLE_ATTEMPTS rows a day, the next try no sooner than
@@ -24,8 +25,8 @@ export async function cycleRetryGate(db: Queryable, day: string, now: Date = new
             (SELECT count(*) FROM explainers.idea_cycles WHERE ny_date = $1::date AND status <> 'failed') AS live,
             (SELECT max(COALESCE(finished_at, started_at)) FROM explainers.idea_cycles
               WHERE ny_date = $1::date AND status = 'failed') AS last_end,
-            (SELECT count(*) FROM explainers.jobs
-              WHERE trigger = 'auto' AND (requested_at AT TIME ZONE '${NY_TZ}')::date = $1::date) AS auto_jobs`,
+            (SELECT count(*) FROM explainers.jobs j
+              WHERE j.trigger = 'auto' AND ${jobDaySql('j')} = $1::date) AS auto_jobs`,
     [day],
   );
   const attempts = Number(rows[0]?.failed ?? 0);

@@ -9,10 +9,11 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), 'utf
 test('the social worker runs Field Notes in its own loop: the noon clock, claims, publishing, insights', () => {
   const text = read('scripts/social_worker.ts');
   assert.match(text, /let fieldNotesAt = firstFieldNotesCheckAt\(new Date\(\)\)/);
-  assert.match(text, /fieldNotesStore\.requestRun\(lfdQuery, 'scheduled', fn\.runCapUsd\)/);
+  // Bald-Eagle D4: the run carries its target date (the earliest unfilled Field Notes day in the next 2 days).
+  assert.match(text, /fieldNotesStore\.requestRun\(lfdQuery, 'scheduled', fn\.runCapUsd, \{ nyDate: fnNoon\.target \?\? null \}\)/);
   assert.match(text, /fieldNotesAt = nextFieldNotesRunAt\(new Date\(\)\)/);
-  // Template mode: a calendar slot, not only Tuesday/Friday, makes it a Field Notes day.
-  assert.match(text, /fieldNotesNoonQueue\(new Date\(\), fn, fnToday, fnPlan \? isFieldNotesDay\(fnPlan, fnDate\) : null\)/);
+  // Template mode: a calendar slot, not only Tuesday/Friday, makes it a Field Notes day; filled dates are skipped.
+  assert.match(text, /fieldNotesNoonQueue\(new Date\(\), fn, fnToday, fnPlan \? \(d: string\) => isFieldNotesDay\(fnPlan, d\) : null, fnFilled\)/);
   // Claimed after AI Events' claim, inside the hang guard.
   const aeClaim = text.indexOf('aiEventsStore.claimRun(lfdQuery)');
   const fnClaim = text.indexOf('fieldNotesStore.claimRun(lfdQuery)');

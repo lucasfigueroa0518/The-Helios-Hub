@@ -5,9 +5,7 @@ import {
   candidateOrigins,
   carryoverMisses,
   heldFromCarryover,
-  earlierNyDateKey,
   nyDateKey,
-  previousNyDateKey,
   rankForSlate,
   selectTopThree,
   type RankedIdea,
@@ -16,7 +14,9 @@ import { applyPass2, interpretPass1, type InterpretedScore } from '@/lib/reels/s
 import { buildPass1State, buildPass2State } from '@/lib/reels/scoring/state';
 import { rerankSlate } from '@/lib/reels/locks';
 import { errorText, guardItem } from '@/lib/reels/pipeline/guard';
+import { addDays } from '@/lib/social-hub/time';
 import {
+  ideasCommittedElsewhere,
   insertSlate,
   listTimelyIdeas,
   loadIdeaMaterial,
@@ -85,18 +85,41 @@ export function switchTwinDrops(
  * The candidate reads of scoreRun: tonight's timely ideas, a same-day rerun's earlier slate and the carryover window.
  * Intake mode adds the merge resolution, the stored scores and the switch-night twin check; its read errors throw
  * here, before anything is scored.
+ *
+ * Lead time (Bald-Eagle D4): the slate is keyed by its posting date, `target` (default: the run's own New York day,
+ * as before). Text on Screen's night makes the slates for day+1 (cutover only) and day+2, so:
+ *   - the carryover window is the two slates before the target (target−1, target−2): the slates the previous two
+ *     nights made, whose bench missed its day. Same-day (target = run day) this is yesterday and two days ago, as before;
+ *   - a selected idea on a day that has passed since (run day −1, −2) but never posted carries too, when those days
+ *     fall before the window (D55 reuse still reaches it);
+ *   - an idea already committed to a posting day (on the clock, or selected on another not-yet-passed slate) is never
+ *     offered, so the cutover night's two slates and the steady-state slates never pick the same idea.
+ * Freshness (which ideas are timely) stays measured from the run time.
  */
-export async function planCandidates(runStartedAt: Date, intake?: IntakeScoreSource): Promise<CandidatePlan> {
-  const today = nyDateKey(runStartedAt);
-  const yesterday = previousNyDateKey(runStartedAt);
-  const twoDaysAgo = earlierNyDateKey(runStartedAt, 2);
+export async function planCandidates(runStartedAt: Date, intake?: IntakeScoreSource, target?: string): Promise<CandidatePlan> {
+  const runDay = nyDateKey(runStartedAt);
+  const today = target ?? runDay;
+  const yesterday = addDays(today, -1);
+  const twoDaysAgo = addDays(today, -2);
+  // Days that have passed since the run started but sit before the carryover window (only when made ahead).
+  const passed = [addDays(runDay, -1), addDays(runDay, -2)].filter((day) => day < twoDaysAgo);
 
-  const [timely, sameDayIds, yesterdayRanked, olderRanked] = await Promise.all([
+  const [timely, sameDayIds, windowYesterday, windowOlder, committed, ...passedRanked] = await Promise.all([
     listTimelyIdeas(),
     slateIdeaIds(today),
     loadSlateRanked(yesterday),
     loadSlateRanked(twoDaysAgo),
+    ideasCommittedElsewhere(today, runDay),
+    ...passed.map((day) => loadSlateRanked(day)),
   ]);
+  // A passed day's selected idea that never posted (and is not on the clock) carries; its bench already did.
+  const lateMisses = (rows: typeof windowYesterday, skip: ReadonlySet<string>) => {
+    const held = new Set(heldFromCarryover(rows));
+    return rows.filter((row) => row.selected && !held.has(row.id) && !skip.has(row.id));
+  };
+  const onWindow = new Set([...windowYesterday, ...windowOlder].map((row) => row.id));
+  const yesterdayRanked = [...windowYesterday, ...lateMisses(passedRanked[0] ?? [], onWindow)];
+  const olderRanked = [...windowOlder, ...lateMisses(passedRanked[1] ?? [], new Set([...onWindow, ...yesterdayRanked.map((row) => row.id)]))];
 
   const selectedYesterday = heldFromCarryover(yesterdayRanked);
   const selectedTwoDaysAgo = heldFromCarryover(olderRanked);
@@ -120,6 +143,7 @@ export async function planCandidates(runStartedAt: Date, intake?: IntakeScoreSou
     sameDayIds: sameDay,
     carryoverIds,
   });
+  for (const id of committed) origins.delete(id);
 
   if (!intake) return { intake: false, today, origins, stored: new Map(), twinsDropped: [] };
 
@@ -193,7 +217,8 @@ export async function scoreOneIdea(
 
 /**
  * Score tonight's timely ideas and the carryover window, then keep the top 3
- * (D-080, D-227). The window is yesterday's 20 best misses. A miss from two
+ * (D-080, D-227). The slate is stored under its posting date (`target`,
+ * Bald-Eagle D4: Text on Screen's night makes day+2's slate). The window is yesterday's 20 best misses. A miss from two
  * days ago joins when its stored net lands in the first 10. A same-day rerun
  * re-scores today's earlier slate instead of carrying from it. Question sets
  * P-08 and P-09 are approved.
@@ -209,17 +234,31 @@ export async function scoreRun(
   intake?: IntakeScoreSource,
   /** Candidates already read (planCandidates); read here when absent. */
   plan?: CandidatePlan,
+  /** The posting date the slate is for (Bald-Eagle D4); default the run's own New York day. Ignored with `plan`. */
+  target?: string,
+  /**
+   * Scores this run already paid for, by idea id: reused instead of asking Jev again, and filled with what this call
+   * scores. The cutover night's second slate (D8) re-offers many of the first one's ideas.
+   */
+  scoredTonight?: Map<string, InterpretedScore>,
 ): Promise<ScoringSummary> {
-  const { today, origins, stored, intake: intakeNight } = plan ?? (await planCandidates(runStartedAt, intake));
+  const { today, origins, stored, intake: intakeNight } = plan ?? (await planCandidates(runStartedAt, intake, target));
   const candidateIds = [...origins.keys()];
   const material = await loadIdeaMaterial(candidateIds.filter((id) => !stored.has(id)));
   const interpreted = new Map<string, InterpretedScore>();
   const failures: string[] = [];
 
   for (const idea of material) {
+    const cached = scoredTonight?.get(idea.id);
+    if (cached) {
+      interpreted.set(idea.id, cached);
+      continue;
+    }
     const headline = idea.members[0]?.headline ?? idea.id;
     const failure = await guardItem(headline, async () => {
-      interpreted.set(idea.id, await scoreOneIdea(runId, jev, idea));
+      const result = await scoreOneIdea(runId, jev, idea);
+      interpreted.set(idea.id, result);
+      scoredTonight?.set(idea.id, result);
     });
     if (failure) failures.push(failure);
   }

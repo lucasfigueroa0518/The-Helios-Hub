@@ -136,6 +136,8 @@ export type FieldNotesRunInput = {
   seedTipId: string | null;
   capUsd: number;
   settings: Pick<ParsedFieldNotesSettings, 'photoRestPosts' | 'maxPendingDrafts' | 'tipExpiryDays' | 'darkenCap'>;
+  /** The New York date the post is for (Bald-Eagle D4: the clock's target, 2 days ahead). Absent: today (postDateFor). */
+  nyDate?: string;
 };
 
 export type FieldNotesRunRecord = Record<string, unknown> & { kind: RunKind; seedTipId: string | null };
@@ -147,7 +149,7 @@ export type FieldNotesRunResult =
   | ({ ok: true; outcome: 'skipped'; stopReason: string; note: string; record: FieldNotesRunRecord } & Spend)
   | ({ ok: false; error: string; stopReason?: string; record: FieldNotesRunRecord } & Spend);
 
-/** The day a post is dated: today in New York. */
+/** Today in New York: the run day. Freshness (scoring's `today`) is measured from it; a post is dated with its run's target (input.nyDate). */
 export function postDateFor(now: Date): string {
   return calendarDateKey(now, SOCIAL_TIMEZONE);
 }
@@ -174,7 +176,8 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
   const finalRecord = () => ({ ...record, spend: { ...spend(), totalUsd: budget.spent(), capUsd: budget.capUsd, calls: budget.calls() } });
   const skipped = (stopReason: string, note: string): FieldNotesRunResult => ({ ok: true, outcome: 'skipped', stopReason: `${stopReason}: ${note}`, note, record: finalRecord(), ...spend() });
   const failed = (error: string, stopReason?: string): FieldNotesRunResult => ({ ok: false, error, ...(stopReason ? { stopReason } : {}), record: finalRecord(), ...spend() });
-  const nyDate = postDateFor(d.now);
+  // The date the post is FOR (Bald-Eagle D4: the clock's target, 2 days ahead); today when none is given.
+  const nyDate = input.nyDate ?? postDateFor(d.now);
   // A paid run that saves no post settles its tips so the next Generate does not pay for them forever: a tip the
   // Writer skipped is already rejected; every other attempted tip (seeds included) counts an attempt with the reason
   // (store.recordTipAttempt: set aside, with that reason, at MAX_TIP_ATTEMPTS). Never a bare reject: one failed write

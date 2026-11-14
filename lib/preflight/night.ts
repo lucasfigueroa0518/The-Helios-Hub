@@ -4,6 +4,8 @@
  * with SELECTs only. It never calls Claude, Jev, TypeSafe or Meta (CLAUDE.md Rule 1), so the one thing it cannot
  * see, the API credit balance, is always printed as a manual check.
  */
+import { targetDateFor } from '@/lib/social-hub/lead';
+import type { StorySeries } from '@/lib/social-hub/slots/types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 export type Level = 'ok' | 'warn' | 'fail' | 'manual';
@@ -43,13 +45,16 @@ export function judge(i: PreflightInput): Finding[] {
     if (v === 'stories') {
       for (const s of i.slots.filter((x) => x.vertical === 'stories')) {
         const on = i.storiesSeriesAuto[s.series ?? ''];
-        out.push(on ? { level: 'ok', text: `Stories ${s.series}: slot on ${i.date}, auto is on.` } : { level: 'fail', text: `Stories ${s.series}: the calendar has a slot on ${i.date}, but this series' auto is off, so no set will be made.` });
+        const d = targetDateFor(i.date, 'stories', (s.series ?? null) as StorySeries | null);
+        out.push(on ? { level: 'ok', text: `Stories ${s.series}: slot on ${d}, auto is on.` } : { level: 'fail', text: `Stories ${s.series}: the calendar has a slot on ${d}, but this series' auto is off, so no set will be made.` });
       }
       continue;
     }
     const on = i.autoOn[v];
-    if (on === false) out.push({ level: 'fail', text: `${label(v)}: the calendar has a slot on ${i.date}, but its auto switch is off, so nothing will be made.` });
-    else out.push({ level: 'ok', text: `${label(v)}: slot on ${i.date}${on === undefined ? '' : ', auto is on'}.` });
+    // Bald-Eagle D4: a type made ahead is checked (and named) on the date this night fills for it.
+    const d = targetDateFor(i.date, v, null);
+    if (on === false) out.push({ level: 'fail', text: `${label(v)}: the calendar has a slot on ${d}, but its auto switch is off, so nothing will be made.` });
+    else out.push({ level: 'ok', text: `${label(v)}: slot on ${d}${on === undefined ? '' : ', auto is on'}.` });
   }
 
   for (const v of expected) {

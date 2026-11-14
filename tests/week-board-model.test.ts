@@ -40,7 +40,7 @@ test('an empty Wed explainer says which run makes it and on which day', () => {
   const m = boardModel({ days: week(), posts: [], now: NOW, caps: DEFAULT_CAPS });
   const c = m.cards.find((x) => x.day === 2 && x.vertical === 'explainers' && x.startMinute === 780)!;
   assert.equal(c.status, 'empty');
-  assert.equal(c.statusText, 'Empty for now. The 2 AM run makes it on Wed Oct 21.');
+  assert.equal(c.statusText, 'Empty for now. The 2 AM run makes it on Mon Oct 19.', 'Explainers are made 2 days ahead (Bald-Eagle D4)');
   assert.equal(c.locked, false);
 });
 

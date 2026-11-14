@@ -182,6 +182,11 @@ test("the generator request carries only tonight's buckets' renders from the las
   await topic(db, { title: 'Old retrieval', bucket: 'retrieval-and-memory', status: 'rendered', daysAgo: 100 });
   await topic(db, { title: 'Older safety', bucket: 'reliability-and-safety', status: 'rendered', daysAgo: 150 });
   await topic(db, { title: 'Pool one', bucket: 'how-llms-work', status: 'pool' });
+  // Lead time (Bald-Eagle D4, D8): earlier nights filled today and tomorrow, so this night runs one cycle (for day+2).
+  for (const n of [0, 1]) {
+    const d = new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [d]);
+  }
   const model = ideas();
   const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev() });
   assert.equal(result.status, 'ok');

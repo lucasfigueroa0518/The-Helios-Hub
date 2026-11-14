@@ -23,12 +23,12 @@ import { QUEUE_LIVE, orderForNight } from '@/lib/social-hub/queue';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { storyKey } from '@/lib/stories/sources/reels';
 import { runRenderStage } from '@/lib/stories/render-stage';
-import { daySpendUsd, failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
+import { failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import type { WriterCreate } from '@/lib/stories/writer';
 
-import type { BuildDeps, BuildResult } from './common';
+import { capSpendUsd, type BuildDeps, type BuildResult } from './common';
 import { buildFreeVsPaid } from './free-vs-paid';
 import { buildGuessTheNumber } from './guess-the-number';
 import { buildMorningDownload } from './morning-download';
@@ -68,7 +68,8 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     await markSkipped(deps.db, setId, `monthly watch reached ($${spent.toFixed(2)} of $${settings.monthlyWatchUsd})`);
     return { status: 'skipped', detail: 'monthly watch reached' };
   }
-  const today = await daySpendUsd(deps.db, now);
+  // The daily cap counts against the day the set posts for a series made ahead (Bald-Eagle D4); the run day otherwise.
+  const today = await capSpendUsd(deps.db, got.set.series, got.set.ny_date, now);
   if (today >= settings.dailyCapUsd) {
     await markSkipped(deps.db, setId, `daily cap reached ($${today.toFixed(2)} of $${settings.dailyCapUsd})`);
     return { status: 'skipped', detail: 'daily cap reached' };

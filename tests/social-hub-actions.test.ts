@@ -321,7 +321,7 @@ test('hard regenerate for carousels queues a one-story rerun (D51); for Trial Re
   assert.deepEqual(requestRerun.calls, [['the-query', U, 'tommy@helios.test']]);
   const r = await POST(req({ vertical: 'reels', refs: { postIdeaId: U, videoJobId: V } }));
   assert.equal(r.status, 200);
-  assert.match((await r.json()).note, /Rebuilding today’s video/);
+  assert.match((await r.json()).note, /Rebuilding this idea’s video for its day/);
   assert.deepEqual(todaySlate.calls, [[U]]);
   assert.deepEqual(findReelLock.calls, [[V, U]]);
   assert.deepEqual(requestFinish.calls, [[U, V]], 'requestFinish(idea, today’s slate)');

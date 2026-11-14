@@ -13,6 +13,8 @@ import { BUILDER_WINDOW_DAYS, type LeadOf } from '@/lib/intake/types';
 export const MAJOR_NEWS_WEIGHTS = { happened: 0.3, news_kind: 0.25, blockbuster_entity: 0.2, global_relevance: 0.15, political_relevance: 0.1, speculative: -0.35 } as const;
 export const MAJOR_NEWS_BAR = 0.55;
 export const SAME_EVENT_BAR = 0.7;
+/** md-development@1 `new_event` (Bald-Eagle 2026-11-12, D2): a story we already ran comes back at or above this. First value, to calibrate. */
+export const DEVELOPMENT_BAR = 0.6;
 
 /**
  * story-builder@2: the positive weights sum to 1; `routine_launch` and `speculative` take points away.

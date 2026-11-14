@@ -371,6 +371,32 @@ export async function recordHistory(db: Queryable, series: Series, keys: string[
   for (const key of new Set(keys.map((k) => k.trim()).filter(Boolean))) {
     await db.query(`INSERT INTO stories.history (series, key, set_id) VALUES ($1, $2, $3)`, [series, key, setId]);
   }
+  if (series === 'morning_download' && setId) await recordWhatWeSaid(db, setId);
+}
+
+/**
+ * Morning Download remembers what it said (Bald-Eagle 2026-11-12, D2): each history row of a published set gets the
+ * headline its story frame ran (the set's own headline when the frame has none) and its intake story id, which
+ * lib/stories/md-development.ts compares new coverage against. Only once db/bald_eagle_2026_11_12_md.sql has added
+ * the columns; never fails the publish.
+ */
+async function recordWhatWeSaid(db: Queryable, setId: string): Promise<void> {
+  try {
+    if (!(await hasColumn(db, 'stories', 'history', 'headline')) || !(await hasColumn(db, 'stories', 'history', 'intake_story_id'))) return;
+    await db.query(
+      `UPDATE stories.history h
+          SET headline = COALESCE(
+                (SELECT f.copy->>'headline' FROM stories.frames f WHERE f.set_id = s.id AND f.role = 'story' ORDER BY f.seq OFFSET st.ord - 1 LIMIT 1),
+                st.v->>'headline'),
+              intake_story_id = st.v->>'storyId'
+         FROM stories.sets s,
+              LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.payload->'stories') = 'array' THEN s.payload->'stories' ELSE '[]'::jsonb END) WITH ORDINALITY AS st(v, ord)
+        WHERE s.id = $1::uuid AND h.set_id = s.id AND h.series = 'morning_download' AND st.v->>'key' = h.key AND h.headline IS NULL`,
+      [setId],
+    );
+  } catch {
+    // The headline is a later set's comparison aid; the publish already happened.
+  }
 }
 
 /** Keys shown in the last `days` days for a series (3 Morning Download, 30 Guess the Number, 90 Free vs. Paid). */

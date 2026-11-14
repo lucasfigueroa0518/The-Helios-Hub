@@ -147,7 +147,7 @@ async function main() {
   const { detectFacesLive } = await import('@/lib/social/photos/faces');
   const { createSecondPhotos } = await import('@/lib/social/photos/second-photo');
   const store = await createSocialStore();
-  const usedLog = store.usedPhotos;
+  let usedLog = store.usedPhotos;
   const { createPhotoBank } = await import('@/lib/media-library/bank');
   const bank = store.query ? createPhotoBank({ query: store.query, log: (line) => console.log(`photo bank: ${line}`) }) : undefined;
   type Selection = import('@/lib/social/ingest/select/select').Selection;
@@ -165,6 +165,8 @@ async function main() {
   const rerunLib = rerunPostArg ? await import('@/lib/social/overnight/rerun') : null;
   const rerun = rerunPostArg && rerunLib ? await rerunLib.loadRerunStory(store.query!, rerunPostArg) : null;
   if (rerunPostArg && !rerun) throw new Error(`--rerun-post ${rerunPostArg}: no such post with a saved brief`);
+  // Bald-Eagle D3: the post a rerun replaces still waits in review; its photos don't block its own remake.
+  if (rerun && store.query) usedLog = (await import('@/lib/social/store/pg')).createPgUsedPhotoLog(store.query, { excludeItem: { vertical: 'carousels', id: rerun.postId } });
   // Named stories: the stored groups from earlier selections. Not found fails the run; no other story takes its place.
   const pinnedLib = pinnedIds.length ? await import('@/lib/social/overnight/pinned') : null;
   const pinned = pinnedLib ? await pinnedLib.loadPinnedCandidates(store.query!, pinnedIds) : null;

@@ -1,5 +1,5 @@
 /** lfd.* reads and writes, plus the shared used-photo read (CI-32: published in the last 20 days; spec §5, §7.1). */
-import { readUsedLedger, USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
+import { readUsedLedger, USED_PHOTO_DAYS, type LedgerReadOptions, type UsedLedger } from '@/lib/photos/used';
 import { RUN_HANG_BACKSTOP_INTERVAL } from '@/lib/content-runs/hang-guard';
 import type { HubQuery } from '@/lib/social-hub/db';
 
@@ -24,8 +24,8 @@ export function usedIdeaIds(previous: PreviousPost[]): Set<string> {
 }
 
 /** The used-photo ledger (URLs and hashes of photos published in the last `days`). */
-export function recentPhotoLedger(q: HubQuery, now: Date, days = USED_PHOTO_DAYS): Promise<UsedLedger> {
-  return readUsedLedger((text, params) => q(text, params), now, days);
+export function recentPhotoLedger(q: HubQuery, now: Date, days = USED_PHOTO_DAYS, opts: LedgerReadOptions = {}): Promise<UsedLedger> {
+  return readUsedLedger((text, params) => q(text, params), now, days, opts);
 }
 
 export async function recentPhotoUrls(q: HubQuery, now: Date, days = USED_PHOTO_DAYS): Promise<Set<string>> {

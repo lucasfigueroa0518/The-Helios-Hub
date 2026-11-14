@@ -10,6 +10,10 @@
  *
  * CONTRACT (frozen for the CI-32 build): every picker reads `readUsedLedger` and refuses what `usedMatch` names;
  * every publish path writes through `recordUsedPhotos`.
+ *
+ * Bald-Eagle D3 (the photo hold): `readUsedLedger` also holds the photos of every item that is built but not yet
+ * posted, of any type (./pending.ts), so two items waiting for review never share a picture. An item rebuilding or
+ * re-rendering its own photos passes `excludeItem`, so its own picks don't block it. Nothing is written for them.
  */
 import type { Query } from '@/lib/social/store/pg';
 import { hamming, NEAR_DUPLICATE } from './hash-distance';
@@ -49,6 +53,8 @@ export type UsedLedger = {
   urls: ReadonlySet<string>;
   phashes: readonly string[];
   dhashes: readonly string[];
+  /** Bald-Eagle D3: the URLs held only because an item waiting to post chose them (for the refusal's wording). */
+  pendingUrls?: ReadonlySet<string>;
 };
 
 export const EMPTY_LEDGER: UsedLedger = { urls: new Set(), phashes: [], dhashes: [] };
@@ -64,8 +70,35 @@ const LEGACY_ROWS = `(story_id LIKE 'lfd:%' OR story_id LIKE 'stories:%')`;
 
 const isMissingColumn = (err: unknown) => (err as { code?: string } | null)?.code === '42703';
 
-/** The ledger as of `now`: photos published in the last `days` days. */
-export async function readUsedLedger(query: Query, now: Date, days = USED_PHOTO_DAYS): Promise<UsedLedger> {
+/**
+ * Options for a ledger read (Bald-Eagle D3). `excludeItem`: the item being rebuilt (or the waiting items a remake
+ * replaces), whose own photos don't count.
+ */
+export type LedgerReadOptions = { excludeItem?: { vertical: string; id: string } | readonly { vertical: string; id: string }[] | null };
+
+/**
+ * The ledger as of `now`: photos published in the last `days` days, plus the photos of every item built in that
+ * window and still waiting to post (Bald-Eagle D3, ./pending.ts), except `excludeItem`'s own.
+ */
+export async function readUsedLedger(query: Query, now: Date, days = USED_PHOTO_DAYS, opts: LedgerReadOptions = {}): Promise<UsedLedger> {
+  const published = await readPublishedLedger(query, now, days);
+  const { pendingPhotos } = await import('./pending');
+  return mergeLedgers(published, await pendingPhotos(query, now, { days, excludeItem: opts.excludeItem ?? null }));
+}
+
+/** Both ledgers in one: every URL, every hash once. */
+export function mergeLedgers(a: UsedLedger, b: UsedLedger): UsedLedger {
+  if (!b.urls.size && !b.phashes.length && !b.dhashes.length) return a;
+  return {
+    urls: new Set([...a.urls, ...b.urls]),
+    phashes: [...new Set([...a.phashes, ...b.phashes])],
+    dhashes: [...new Set([...a.dhashes, ...b.dhashes])],
+    pendingUrls: new Set([...(a.pendingUrls ?? []), ...[...b.urls].filter((u) => !a.urls.has(u))]),
+  };
+}
+
+/** Photos published in the last `days` days only (the CI-32 rule, without the waiting items). */
+export async function readPublishedLedger(query: Query, now: Date, days = USED_PHOTO_DAYS): Promise<UsedLedger> {
   const params = [now.toISOString(), days];
   let rows: Array<{ url: string | null; phash?: string | null; dhash?: string | null }>;
   try {
@@ -96,6 +129,7 @@ export async function readUsedLedger(query: Query, now: Date, days = USED_PHOTO_
 /** Why a candidate is off limits, or null when it may be used. Pass whatever the candidate has. */
 export function usedMatch(ledger: UsedLedger, c: { url?: string | null; phash?: string | null; dhash?: string | null }): string | null {
   const why = `published in the last ${USED_PHOTO_DAYS} days`;
+  if (c.url && ledger.pendingUrls?.has(c.url)) return `chosen by an item waiting to post (same URL)`;
   if (c.url && ledger.urls.has(c.url)) return `${why} (same URL)`;
   if (c.phash && ledger.phashes.some((h) => hamming(h, c.phash!) <= NEAR_DUPLICATE)) return `${why} (same picture)`;
   if (c.dhash && ledger.dhashes.some((h) => hamming(h, c.dhash!) <= NEAR_DUPLICATE)) return `${why} (same picture)`;

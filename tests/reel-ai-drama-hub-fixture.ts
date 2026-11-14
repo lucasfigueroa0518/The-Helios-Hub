@@ -53,13 +53,14 @@ export async function pitch(db: ExplainersDb, opts: { title?: string; status?: s
 /** A finished job for a fresh pitch: its video artifact (bucket by default) and its post text. */
 export async function finishedJob(
   db: ExplainersDb,
-  opts: { location?: 'local' | 'bucket'; post?: unknown; trigger?: 'auto' | 'click'; pitchId?: string; title?: string } = {},
+  /** `nightDate`: a night job made for that date (its target date, Bald-Eagle D4); trigger 'auto' then by default. */
+  opts: { location?: 'local' | 'bucket'; post?: unknown; trigger?: 'auto' | 'click'; pitchId?: string; title?: string; nightDate?: string } = {},
 ): Promise<{ jobId: string; pitchId: string }> {
   const pitchId = opts.pitchId ?? (await pitch(db, { status: 'made', title: opts.title }));
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO reel_ai_drama.jobs (pitch_id, status, trigger, mode, spend_cap_usd, started_at, finished_at)
-     VALUES ($1, 'ok', $2, 'production', 8, now() - interval '1 hour', now()) RETURNING id`,
-    [pitchId, opts.trigger ?? 'click'],
+    `INSERT INTO reel_ai_drama.jobs (pitch_id, status, trigger, mode, spend_cap_usd, started_at, finished_at, night_date)
+     VALUES ($1, 'ok', $2, 'production', 8, now() - interval '1 hour', now(), $3::date) RETURNING id`,
+    [pitchId, opts.trigger ?? (opts.nightDate ? 'auto' : 'click'), opts.nightDate ?? null],
   );
   const jobId = rows[0].id;
   await db.query(

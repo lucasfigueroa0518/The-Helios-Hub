@@ -76,7 +76,7 @@ export async function buildFreeVsPaid(deps: BuildDeps, leads?: () => Promise<Too
   const candidates: NewCandidate[] = [];
   const shown = await keysToAvoid(deps, 'free_vs_paid', 90);
   const pooled = deps.pool;
-  const found = await (leads ?? (pooled ? async () => pooled.leads : () => freeToolLeads(deps.sourceDb, deps.nyDate)))().catch(() => []);
+  const found = await (leads ?? (pooled ? async () => pooled.leads : () => freeToolLeads(deps.sourceDb, deps.now)))().catch(() => []);
   const rec: FvpSkipRecord = {
     gate: 'model-proposed-none',
     leadsOffered: found.length,

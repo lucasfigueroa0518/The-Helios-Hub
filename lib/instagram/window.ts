@@ -49,19 +49,21 @@ export function uniformIndex(count: number): number {
   return randomInt(0, count);
 }
 
-/** The earliest open, untaken day's window, up to `throughDate` (default 14 days ahead). */
+/** The earliest open, untaken day's window, from `fromDate` (default today) up to `throughDate` (default 14 days ahead). */
 export function chooseWindow(
   w: PostingWindow,
   now: Date,
   taken: ReadonlySet<string>,
   rng: (count: number) => number = uniformIndex,
   throughDate?: string,
+  fromDate?: string,
 ): WindowChoice | null {
   const start = calendarDateKey(now, SOCIAL_TIMEZONE);
   const last = throughDate ?? addCalendarDays(start, 13);
   for (let day = 0; day < 14; day += 1) {
     const nyDate = addCalendarDays(start, day);
     if (nyDate > last) break;
+    if (fromDate && nyDate < fromDate) continue;
     if (taken.has(nyDate)) continue;
     const open = openWindowRange(w, nyDate, now);
     if (!open) continue;
@@ -100,7 +102,9 @@ export function spacedOffsets(
 /**
  * Several windows a day (SH-46, SH-48): the earliest open window whose
  * `nyDate|slot` is not taken and that still has a minute ≥ 30 minutes from
- * every other feed post; the minute is drawn uniformly from those.
+ * every other feed post; the minute is drawn uniformly from those. Dates
+ * before `fromDate` are skipped: a cushion type books only its item's target
+ * date (`fromDate = throughDate = target`; Bald-Eagle D4, lib/social-hub/lead.ts).
  */
 export function chooseFromWindows(
   windows: readonly PostingWindow[],
@@ -109,12 +113,14 @@ export function chooseFromWindows(
   busy: readonly Date[],
   rng: (count: number) => number = uniformIndex,
   throughDate?: string,
+  fromDate?: string,
 ): WindowChoice | null {
   const start = calendarDateKey(now, SOCIAL_TIMEZONE);
   const last = throughDate ?? addCalendarDays(start, 13);
   for (let day = 0; day < 14; day += 1) {
     const nyDate = addCalendarDays(start, day);
     if (nyDate > last) break;
+    if (fromDate && nyDate < fromDate) continue;
     for (const w of windows) {
       if (takenSlots.has(slotTakenKey(nyDate, w.id))) continue;
       const open = openWindowRange(w, nyDate, now);

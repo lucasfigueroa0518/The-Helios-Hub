@@ -106,3 +106,11 @@ test('pitches become ideas with the pitch id, state and run', () => {
   assert.equal(onDeck!.state, 'on_deck');
   assert.ok(idle!.breakdown);
 });
+
+test('lead time (Bald-Eagle D4): an unbooked night reel shows on the date it was made for; a person’s reel has no date', () => {
+  const [ahead] = dramaPosts(read({ jobs: [job({ night_date: '2026-11-11' })] }));
+  assert.equal(ahead!.status, 'ready');
+  assert.equal(ahead!.nyDate, '2026-11-11', 'made Monday night for Wednesday: shown on Wednesday');
+  const [mine] = dramaPosts(read({ jobs: [job({ trigger: 'click', night_date: null })] }));
+  assert.equal(mine!.nyDate, null);
+});

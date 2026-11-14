@@ -160,6 +160,8 @@ export function createLivePhotoFinder(
   } = {},
 ): PhotoFinder {
   const ledger = opts.used ? memoLedger(opts.used) : null;
+  // One finder per build: the bank reader's cached ledger (a minute per process) is read fresh for it.
+  opts.bank?.reader.invalidate?.();
   const readLedger = async () => (ledger ? await ledger().catch(() => undefined) : undefined);
   let usd = 0;
   // The photo bank's run: this finder (one Stories build), its requests numbered in order.
@@ -292,10 +294,21 @@ export function createLivePhotoFinder(
       }
       const ctx = newSearchContext(minimalBrief(req), pages, { recent: req.exclude, storyDate: req.storyDate });
       const request = { kind: req.kind as VisualKind, query: req.query };
-      const { candidates } = await searchVisual(request, ctx, { jev: tallied, http: opts.http ?? fetch, ...(recorder.vision ? { vision: recorder.vision } : {}), ...(opts.bank ? { bank: opts.bank.reader } : {}) });
-      const open = candidates.filter((c) => !req.exclude.has(c.url));
+      const deps = { jev: tallied, http: opts.http ?? fetch, ...(recorder.vision ? { vision: recorder.vision } : {}), ...(opts.bank ? { bank: opts.bank.reader } : {}) };
+      const first = await searchVisual(request, ctx, deps);
       const used = await readLedger();
-      const pick = used ? await firstUnused(open, (c) => ({ url: c.url, kind: c.lane === 'logo' ? 'logo' : null }), used, { http: opts.http ?? fetch }) : open[0];
+      const choose = async (list: Candidate[]) => {
+        const open = list.filter((c) => !req.exclude.has(c.url));
+        return used ? await firstUnused(open, (c) => ({ url: c.url, kind: c.lane === 'logo' ? 'logo' : null }), used, { http: opts.http ?? fetch }) : open[0];
+      };
+      let candidates = first.candidates;
+      let pick = await choose(candidates);
+      // Bald-Eagle D9 (finder_source "first"): the bank answered alone and none of its candidates held up → search online once.
+      if (!pick && first.bankOnly) {
+        const again = await searchVisual(request, ctx, deps, { online: true });
+        candidates = [...candidates, ...again.candidates];
+        pick = await choose(again.candidates);
+      }
       seq++;
       if (opts.bank) {
         try {

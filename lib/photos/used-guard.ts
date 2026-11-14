@@ -10,7 +10,7 @@
 import type { Query } from '@/lib/social/store/pg';
 
 import { hashesOf } from './used-hash';
-import { EMPTY_LEDGER, isBrandAsset, readUsedLedger, usedMatch, type UsedLedger } from './used';
+import { EMPTY_LEDGER, isBrandAsset, readUsedLedger, usedMatch, type LedgerReadOptions, type UsedLedger } from './used';
 
 /** Hash hits a pick may give way to before the slot goes without a photo. */
 export const GUARD_RETRIES = 2;
@@ -39,18 +39,24 @@ export function memoLedger(load: () => Promise<UsedLedger>): () => Promise<UsedL
   };
 }
 
-/** The ledger from a query function, as of now. */
-export const ledgerFrom = (query: Query, now: () => Date = () => new Date()) => () => readUsedLedger(query, now());
+/**
+ * The ledger from a query function, as of now: published photos plus every waiting item's (Bald-Eagle D3).
+ * `opts.excludeItem`: the item being rebuilt, whose own photos don't count.
+ */
+export const ledgerFrom =
+  (query: Query, now: () => Date = () => new Date(), opts: LedgerReadOptions = {}) =>
+  () =>
+    readUsedLedger(query, now(), undefined, opts);
 
 /**
  * The ledger on the hub's database (lib/db.ts, DATABASE_URL), read fresh on every call (callers memoize per post).
- * No database configured: the empty ledger.
+ * No database configured: the empty ledger. `opts.excludeItem` as in ledgerFrom.
  */
-export function liveUsedLedger(env: NodeJS.ProcessEnv = process.env): () => Promise<UsedLedger> {
+export function liveUsedLedger(env: NodeJS.ProcessEnv = process.env, opts: LedgerReadOptions = {}): () => Promise<UsedLedger> {
   return async () => {
     if (!env.DATABASE_URL?.trim() && !env.DIRECT_DATABASE_URL?.trim()) return EMPTY_LEDGER;
     const { dbQuery } = await import('@/lib/db');
-    return readUsedLedger((text, params) => dbQuery(text, params), new Date());
+    return readUsedLedger((text, params) => dbQuery(text, params), new Date(), undefined, opts);
   };
 }
 

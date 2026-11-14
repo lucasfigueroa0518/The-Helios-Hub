@@ -137,6 +137,7 @@ async function main(): Promise<void> {
   const { carryOutFieldNotesRun } = await import('@/lib/field-notes/worker');
   const { FIELD_NOTES_SPINE_VERTICAL } = await import('@/lib/field-notes/config');
   const { firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue: fieldNotesNoonQueue } = await import('@/lib/field-notes/clock');
+  const { fillDates, leadDaysFor } = await import('@/lib/social-hub/lead');
   const { liveFieldNotesDeps } = await import('@/lib/field-notes/live');
   const { claimAndPublishFieldNotes } = await import('@/lib/field-notes/publish');
   const { releaseDueFieldNotes } = await import('@/lib/field-notes/schedule');
@@ -468,26 +469,33 @@ async function main(): Promise<void> {
       }
 
       if (Date.now() >= fieldNotesAt.getTime()) {
-        // 2:00 AM: on a Field Notes day with its auto_run on, a run is queued. Auto_run ships off.
+        // 2:00 AM: with its auto_run on, a run is queued for the earliest unfilled Field Notes day in the next
+        // 2 days (Bald-Eagle D4, lib/field-notes/clock.ts). Auto_run ships off.
         const fn = await fieldNotesSettings.readFieldNotesSettings(lfdQuery).catch((error) => {
           log('field_notes_settings_failed', { error: errorText(error) });
           return null;
         });
-        // Never twice a day (a restart after the check): a scheduled run already queued today says no.
+        // Never twice a night (a restart after the check): a scheduled run already queued today says no.
         const fnToday = await fieldNotesStore.scheduledRunToday(lfdQuery, calendarDateKey(new Date())).catch((error) => {
           log('field_notes_today_check_failed', { error: errorText(error) });
           return null;
         });
-        // Template mode: the calendar says whether today has a Field Notes slot (null while legacy).
+        // Template mode: the calendar says which dates in the fill window have a Field Notes slot (null while legacy).
         const fnDate = calendarDateKey(new Date());
-        const fnPlan = await slotPlan(lfdQuery, fnDate, 1).catch(() => null);
-        const fnNoon = fieldNotesNoonQueue(new Date(), fn, fnToday, fnPlan ? isFieldNotesDay(fnPlan, fnDate) : null);
+        const fnDates = fillDates(fnDate, leadDaysFor('field_notes'));
+        const fnPlan = await slotPlan(lfdQuery, fnDate, 1 + leadDaysFor('field_notes')).catch(() => null);
+        // Dates in the window that already have a post, booking or queued run: skipped (one post per Field Notes day).
+        const fnFilled = await fieldNotesStore.fieldNotesFilledDates(lfdQuery, fnDates).catch((error) => {
+          log('field_notes_filled_check_failed', { error: errorText(error) });
+          return new Set(fnDates);
+        });
+        const fnNoon = fieldNotesNoonQueue(new Date(), fn, fnToday, fnPlan ? (d: string) => isFieldNotesDay(fnPlan, d) : null, fnFilled);
         if (fnNoon.queue && fn?.runCapUsd != null) {
-          const id = await fieldNotesStore.requestRun(lfdQuery, 'scheduled', fn.runCapUsd).catch((error) => {
+          const id = await fieldNotesStore.requestRun(lfdQuery, 'scheduled', fn.runCapUsd, { nyDate: fnNoon.target ?? null }).catch((error) => {
             log('field_notes_request_failed', { error: errorText(error) });
             return null;
           });
-          log('field_notes_run_requested', { runId: id, trigger: 'scheduled' });
+          log('field_notes_run_requested', { runId: id, trigger: 'scheduled', nyDate: fnNoon.target });
         } else {
           log('field_notes_run_skipped', { reason: fnNoon.reason });
         }

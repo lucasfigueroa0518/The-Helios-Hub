@@ -5,9 +5,11 @@
  *   0. pool: the first pass after 3:00 AM refreshes stories.pool from the
  *      reels, carousel and catalog pools, or from the central intake for a
  *      series the consumer switch has on it (lib/stories/pool.ts; reads only)
- *   1. auto series: request today's set at 3:00 AM (docs/social-overnight.md,
- *      night schedule v2: after the 2:40 intake top-up);
- *      in template mode one set per Stories slot (a series may post twice)
+ *   1. auto series: request the night's sets at 3:00 AM (docs/social-overnight.md,
+ *      night schedule v2: after the 2:40 intake top-up): Morning Download for
+ *      today; Guess the Number and Free vs. Paid 2 days ahead (Bald-Eagle D4,
+ *      lib/social-hub/lead.ts); in template mode one set per Stories slot of
+ *      each target date (a series may post twice)
  *   2. build: claim one `requested` set → build, render, review → `ready`;
  *      an auto set approves itself only when require_approval is off and the
  *      review did not flag it (S-05, S-33); otherwise it waits for Approve
@@ -19,6 +21,7 @@
  *   5. insights: poll published frames every 2 hours until the final capture
  */
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
+import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import type { StoriesDb } from '@/lib/stories/db';
 import { buildSet, type SetBuilderDeps } from '@/lib/stories/build';
 import { isFinalCapture, type StoryInsightsClient } from '@/lib/stories/publish/insights';
@@ -36,7 +39,6 @@ import {
   listSets,
   markPublished,
   markPublishing,
-  nyDate,
   recordFrameContainer,
   recordFramePublished,
   recordHistory,
@@ -98,9 +100,14 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   // 1. Auto series.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     // Daily fill (D54): a series day someone already filled gets no auto set; logged once as fill_reduced.
-    // Template mode: one set per Stories slot today, capped per series (null while legacy, or unreadable: each series' own days).
-    const slots = await storiesSlotsOn((t, p) => deps.db.query(t, p), nyDate(now)).catch(() => null);
-    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), slots });
+    // Template mode: one set per Stories slot of each target date, capped per series (null while legacy, or
+    // unreadable: each series' own days). One slot read per date per pass.
+    const read = new Map<string, Promise<readonly ResolvedSlot[] | null>>();
+    const slotsFor = (date: string) => {
+      if (!read.has(date)) read.set(date, storiesSlotsOn((t, p) => deps.db.query(t, p), date).catch(() => null));
+      return read.get(date)!;
+    };
+    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), slotsFor });
     if (requested.length) log(`auto: requested ${requested.join(', ')}`);
   }
 

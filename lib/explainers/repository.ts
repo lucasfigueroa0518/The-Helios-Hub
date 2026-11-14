@@ -1,4 +1,5 @@
 import type { ExplainersDb, Queryable } from '@/lib/explainers/db';
+import { jobDaySql, jobsHaveTargetDate, jobTargetSql } from '@/lib/explainers/lead';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
 import { syncExplainerApproval } from '@/lib/explainers/publish/items';
 import {
@@ -254,13 +255,20 @@ export async function recordCost(db: Queryable, event: CostEventInput): Promise<
   );
 }
 
-/** Production spend on one Eastern-time day: renders plus the idea pipeline (A-4). */
+/**
+ * Production spend counted against one Eastern-time day: renders plus the idea pipeline (A-4). Lead time (Bald-Eagle
+ * D4, D8): a cost counts against the date its render was made FOR (`target_date`), or its idea cycle's date (the date
+ * that cycle filled), else the day it was spent. So the night's spend for a date two days ahead is that date's, and the
+ * cutover night may spend up to one cap per date it fills.
+ */
 export async function productionSpendForDay(db: Queryable, day: string): Promise<number> {
   const { rows } = await db.query<{ usd: unknown }>(
-    `SELECT COALESCE(SUM(usd), 0) AS usd
-       FROM explainers.cost_events
-      WHERE mode = 'production'
-        AND (created_at AT TIME ZONE '${NY_TZ}')::date = $1::date`,
+    `SELECT COALESCE(SUM(e.usd), 0) AS usd
+       FROM explainers.cost_events e
+       LEFT JOIN explainers.jobs j ON j.id = e.job_id
+       LEFT JOIN explainers.idea_cycles c ON c.id = e.idea_cycle_id
+      WHERE e.mode = 'production'
+        AND COALESCE(${jobTargetSql('j')}, c.ny_date, (e.created_at AT TIME ZONE '${NY_TZ}')::date) = $1::date`,
     [day],
   );
   return num(rows[0].usd);
@@ -284,12 +292,13 @@ async function topicPublished(db: Queryable, topicId: string): Promise<boolean> 
   return rows.length > 0;
 }
 
+/** Production renders counted against a day: made for it (the night's target date), or requested on it (a click). */
 async function productionRendersForDay(db: Queryable, day: string): Promise<number> {
   const { rows } = await db.query<{ n: unknown }>(
     `SELECT count(*) AS n
-       FROM explainers.jobs
-      WHERE mode = 'production'
-        AND (requested_at AT TIME ZONE '${NY_TZ}')::date = $1::date`,
+       FROM explainers.jobs j
+      WHERE j.mode = 'production'
+        AND ${jobDaySql('j')} = $1::date`,
     [day],
   );
   return num(rows[0].n);
@@ -335,7 +344,15 @@ export async function typicalRenderCostUsd(db: Queryable, settings: Pick<Explain
  */
 export async function requestRender(
   db: ExplainersDb,
-  input: { topicId: string; trigger: JobTrigger; settings: ExplainersSettings; now?: Date; overrideCaps?: boolean },
+  input: {
+    topicId: string;
+    trigger: JobTrigger;
+    settings: ExplainersSettings;
+    now?: Date;
+    overrideCaps?: boolean;
+    /** The night's render: the date it is made FOR (Bald-Eagle D4), stamped on the job; the caps are that date's. Absent: today. */
+    targetDate?: string | null;
+  },
 ): Promise<RenderRequest> {
   const { topicId, trigger, settings } = input;
   return db.transaction(async (tx) => {
@@ -353,7 +370,7 @@ export async function requestRender(
     // A person's confirmed click may go over the day's caps (it is one render, and the spend is recorded as any render's);
     // the night never does.
     if (settings.mode === 'production' && !(trigger === 'click' && input.overrideCaps)) {
-      const day = nyDate(input.now);
+      const day = input.targetDate ?? nyDate(input.now);
       if ((await productionRendersForDay(tx, day)) >= settings.daily_render_cap) {
         return { ok: false, reason: 'daily_render_cap' } as const;
       }
@@ -378,6 +395,10 @@ export async function requestRender(
       ],
     );
     if (!rows[0]) return { ok: false, reason: 'already_in_flight' } as const;
+    // The target date, where the column exists (db/bald_eagle_2026_11_12_leadtime.sql); without it the render counts as today's.
+    if (input.targetDate && (await jobsHaveTargetDate(tx))) {
+      await tx.query(`UPDATE explainers.jobs SET target_date = $2::date WHERE id = $1`, [rows[0].id, input.targetDate]);
+    }
 
     await tx.query(
       `UPDATE explainers.topics SET status = 'queued', updated_at = now() WHERE id = $1`,

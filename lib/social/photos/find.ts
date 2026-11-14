@@ -248,6 +248,19 @@ const SKIPS_USED_RULE = new Set<Lane>(['logo']);
 const SKIPS_SAME_RUN = new Set<Lane>(['logo', 'headshot', 'ceo']);
 
 /**
+ * A slide's needs for one search. `online` (Bald-Eagle D9): the photo bank's "first" mode already answered this
+ * request and none of its candidates survived the later checks (contact sheet, fit, close-up, used-photo hold), so
+ * this search asks the online sources only (the bank's "first" call is skipped; its fallback role is unchanged).
+ */
+export type SearchSlide = { cover?: boolean; tags?: string[]; wide?: boolean; online?: boolean };
+
+/**
+ * `bankOnly`: the online sources were skipped because the bank alone had enough ("first" mode). A caller whose
+ * later checks then leave the request without a photo searches it once more with `online: true` (Bald-Eagle D9).
+ */
+export type SearchResult = { candidates: Candidate[]; steps: string[]; identity: IdentityNote | null; bankOnly: boolean };
+
+/**
  * One request → at most 2 ranked candidates. Every source for the kind is
  * searched; a source error is logged and the others go on. Photos published in the
  * last 20 days are out (CI-32; logos allowed on story slides).
@@ -256,8 +269,8 @@ export async function searchVisual(
   request: VisualRequest,
   ctx: SearchContext,
   deps: PhotoDeps,
-  slide: { cover?: boolean; tags?: string[]; wide?: boolean } = {},
-): Promise<{ candidates: Candidate[]; steps: string[]; identity: IdentityNote | null }> {
+  slide: SearchSlide = {},
+): Promise<SearchResult> {
   const first = await searchOnce(request, ctx, deps, slide);
   // The deep ladder (tuning.ts): a scene that found nothing is retried with its last two words, then its head noun.
   if (first.candidates.length || tuning().ladder !== 'deep' || !SCENE_KINDS.has(request.kind)) return first;
@@ -265,7 +278,7 @@ export async function searchVisual(
   for (const query of ladderQueries(request.query)) {
     const next = await searchOnce({ kind: request.kind, query }, ctx, deps, slide);
     steps.push(`ladder → "${query}"`, ...next.steps);
-    if (next.candidates.length) return { candidates: next.candidates, steps, identity: first.identity };
+    if (next.candidates.length) return { candidates: next.candidates, steps, identity: first.identity, bankOnly: next.bankOnly };
   }
   return { ...first, steps };
 }
@@ -277,12 +290,12 @@ async function searchOnce(
   request: VisualRequest,
   ctx: SearchContext,
   deps: PhotoDeps,
-  slide: { cover?: boolean; tags?: string[]; wide?: boolean },
-): Promise<{ candidates: Candidate[]; steps: string[]; identity: IdentityNote | null }> {
+  slide: SearchSlide,
+): Promise<SearchResult> {
   const run: SourceRun = { ctx, deps, steps: [], tags: slide.tags ?? [], identity: null, cover: Boolean(slide.cover), wide: Boolean(slide.wide) };
   if (!request.query.trim()) {
     run.steps.push(`${request.kind}: no request (dropped by the Writer check)`);
-    return { candidates: [], steps: run.steps, identity: null };
+    return { candidates: [], steps: run.steps, identity: null, bankOnly: false };
   }
   const found: Candidate[] = [];
   const search = async (source: Source) => {
@@ -296,7 +309,7 @@ async function searchOnce(
   const bankAt = deps.bank ? BANK_ROUTE[request.kind] : undefined;
   // Asked first (so "first" mode can skip the rest), listed last: the same URL found online keeps its fresh details.
   let banked: Candidate[] = [];
-  if (bankAt === 'first') {
+  if (bankAt === 'first' && !slide.online) {
     await search(bankSource);
     banked = found.splice(0);
   }
@@ -334,5 +347,5 @@ async function searchOnce(
   const lru = (c: Candidate) => ctx.lastUsed.get(c.url) ?? '';
   const ranked = (rotating ? ordered.map((c, i) => ({ c, i })).sort((a, b) => lru(a.c).localeCompare(lru(b.c)) || a.i - b.i).map((x) => x.c) : ordered).slice(0, tuning().keep);
   run.steps.push(`${request.kind}: "${request.query}" → ${found.length} found, ${ranked.length} kept${ranked.length ? ` (${ranked.map((c) => `${c.lane}${c.date ? ` ${c.date}` : ''} ${c.width ?? '?'}×${c.height ?? '?'}`).join('; ')})` : ''}`);
-  return { candidates: ranked, steps: run.steps, identity: run.identity };
+  return { candidates: ranked, steps: run.steps, identity: run.identity, bankOnly: Boolean(run.stop) };
 }

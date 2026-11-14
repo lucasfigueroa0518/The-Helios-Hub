@@ -178,7 +178,8 @@ export function quotaCandidates(
     const ownIdea = vertical === 'last_few_days' ? `lfd:${today}` : vertical === 'ai_events' ? `ai_events:${today}` : `field_notes:${today}`;
     const mine = data.posts.filter((p) => p.vertical === vertical && !isRejected(p));
     const held = mine.filter((p) => p.nyDate === today && HOLDS.has(p.status)).sort((a, b) => at(a).localeCompare(at(b)) || a.id.localeCompare(b.id));
-    const made = mine.filter((p) => !held.includes(p) && p.idea?.id === ownIdea && (p.status === 'generating' || (p.status === 'ready' && hasMedia(p))));
+    // Made for today: its own idea id, or (a cushion type, Bald-Eagle D4) an unbooked post stamped with today as its target date.
+    const made = mine.filter((p) => !held.includes(p) && (p.idea?.id === ownIdea || p.nyDate === today) && (p.status === 'generating' || (p.status === 'ready' && hasMedia(p))));
     const posts: Array<HubPost | null> = [...held, ...made].slice(0, quota);
     if (!posts.length) posts.push(null);
     return posts.map((post) => ({ vertical, idea: null, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null }));

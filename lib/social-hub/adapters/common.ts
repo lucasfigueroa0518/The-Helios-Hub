@@ -124,6 +124,21 @@ export function nyDateFor(...candidates: Array<string | null | undefined>): stri
   return null;
 }
 
+const DAY_KEY = /^\d{4}-\d{2}-\d{2}/;
+
+/**
+ * The New York day the board shows an item on (Bald-Eagle D4). Posted: the day it posted. Booked:
+ * its slot's day. Unbooked: its target-date stamp (`target`, the 'YYYY-MM-DD' date a cushion type
+ * made it FOR, read as a calendar date, never through a time zone), else the day it was made
+ * (`madeAt`, an instant). A same-day type passes no `target` and gets the old nyDateFor order.
+ */
+export function boardDate(o: { postedAt?: string | null; publishAt?: string | null; target?: string | null; madeAt?: string | null }): string | null {
+  const fixed = nyDateFor(o.postedAt, o.publishAt);
+  if (fixed) return fixed;
+  const target = typeof o.target === 'string' && DAY_KEY.test(o.target) ? o.target.slice(0, 10) : null;
+  return target ?? nyDateFor(o.madeAt);
+}
+
 export function firstLine(value: string | null | undefined): string | null {
   return value?.split('\n').map((part) => part.trim()).find(Boolean) ?? null;
 }

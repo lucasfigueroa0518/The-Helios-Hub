@@ -25,12 +25,14 @@ test('quota: perDay for most types; enabled series that run that weekday for Sto
     { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [1, 4] },
     { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [2] },
   ];
-  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series } as never), NIGHT), 1); // Tue: MD only (FP disabled)
+  // Tue night: MD for Tue; GN is made 2 days ahead (Bald-Eagle D4), and Thursday is a GN day; FP disabled.
+  assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series } as never), NIGHT), 2);
 });
 
 test('quota in template mode: the night\'s own slots from the week schedule, else the derived fields', () => {
   const day = (nyDate: string, count: number, series: string[] = []) => ({ nyDate, count, trial: 0, main: 0, series, override: false });
-  const schedule = [day('2026-10-12', 2), day(NIGHT, 1, ['guess_the_number', 'free_vs_paid'])];
+  // GN and FP are made 2 days ahead (Bald-Eagle D4): Tuesday's night fills their Thursday (Oct 15) slots.
+  const schedule = [day('2026-10-12', 2), day(NIGHT, 1), day('2026-10-15', 1, ['guess_the_number', 'free_vs_paid'])];
   // perDay is today's count (say 2); the night reads its own day.
   assert.equal(quotaFor(posting({ perDay: 2, schedule }), NIGHT), 1);
   assert.equal(quotaFor(posting({ perDay: 2, schedule }), '2026-10-20'), 2, 'outside the week: perDay');
@@ -41,12 +43,12 @@ test('quota in template mode: the night\'s own slots from the week schedule, els
     { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [] },
     { id: 'free_vs_paid', label: 'FP', enabled: false, generate: true, days: [] },
   ];
-  // Tuesday's slots are GN and FP: GN counts, FP is disabled, MD has no slot that night.
+  // Thursday's slots are GN and FP: GN counts, FP is disabled; MD has no slot on Tuesday.
   assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule } as never), NIGHT), 1);
   // The daily limit: the night makes no more than it, whatever the slots (Stories: per series).
   assert.equal(quotaFor(posting({ perDay: 1, cap: 1, schedule: [day(NIGHT, 3)] }), NIGHT), 1);
   assert.equal(quotaFor(posting({ perDay: 1, cap: 0, schedule: [day(NIGHT, 3)] }), NIGHT), 0);
-  const twice = [day(NIGHT, 3, ['guess_the_number', 'guess_the_number', 'guess_the_number'])];
+  const twice = [day(NIGHT, 0), day('2026-10-15', 3, ['guess_the_number', 'guess_the_number', 'guess_the_number'])];
   assert.equal(quotaFor(posting({ type: 'stories', perDay: null, series, schedule: twice, cap: 2 } as never), NIGHT), 2);
 });
 
@@ -127,11 +129,13 @@ test('stories: failed set is a failure, watch-reached skip is a cap warning', as
   await pg.exec(`
     INSERT INTO stories.sets (series, ny_date, trigger, style, status, error, spend_usd) VALUES
       ('morning_download', '2026-10-13', 'auto', 'polished', 'failed', 'Request timed out', 0.4),
-      ('guess_the_number', '2026-10-13', 'auto', 'polished', 'skipped', 'monthly watch reached (25)', 0);
+      ('guess_the_number', '2026-10-15', 'auto', 'polished', 'skipped', 'monthly watch reached (25)', 0),
+      ('guess_the_number', '2026-10-13', 'auto', 'polished', 'failed', 'made by an earlier night', 0);
   `);
+  // GN is made 2 days ahead (Bald-Eagle D4): Tuesday's night made Thursday's GN set; Tuesday's own GN set was an earlier night's.
   const series = [
     { id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [0, 1, 2, 3, 4, 5, 6] },
-    { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [2] },
+    { id: 'guess_the_number', label: 'GN', enabled: true, generate: true, days: [4] },
   ];
   const r = await reportStories(query, { night: NIGHT, posting: posting({ type: 'stories', perDay: null, series } as never), now: NOW });
   assert.equal(r.made, 0);
@@ -216,7 +220,7 @@ test('explainers: capped job is cap_hit; unknown-cost HeyGen rows are counted, n
   await pg.exec(`
     INSERT INTO explainers.topics (id, title, scope, source_url, origin, status, audience_fit, teachability_45s, analogy_potential, visual_potential, accuracy_under_simplification, hook_strength, weighted_score)
       VALUES ('00000000-0000-0000-0000-0000000000e1', 'Webhooks', NULL, NULL, 'generated', 'queued', 3, 3, 3, 3, 3, 3, 70);
-    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool) VALUES ('ok', 'production', '2026-10-13', 12, 6);
+    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool, started_at) VALUES ('ok', 'production', '2026-10-13', 12, 6, '2026-10-13T06:00:00Z');
     INSERT INTO explainers.jobs (id, topic_id, status, stage, trigger, mode, spend_usd, spend_cap_usd, capped, error, orchestrator_model, frame_worker_model, requested_at, finished_at) VALUES
       ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000e1', 'failed', 'render', 'auto', 'production', 5, 5, true, 'spend cap reached', 'claude-opus-5-5', 'claude-sonnet-5-5', '2026-10-13T06:00:00Z', '2026-10-13T06:40:00Z');
     INSERT INTO explainers.cost_events (job_id, mode, vendor, component, usd, usd_known, created_at) VALUES
@@ -236,7 +240,7 @@ test('explainers: development-mode cycles, jobs and costs are the real pipeline 
   await pg.exec(`
     INSERT INTO explainers.topics (id, title, scope, source_url, origin, status, audience_fit, teachability_45s, analogy_potential, visual_potential, accuracy_under_simplification, hook_strength, weighted_score)
       VALUES ('00000000-0000-0000-0000-0000000000e2', 'Caching', NULL, NULL, 'generated', 'queued', 3, 3, 3, 3, 3, 3, 70);
-    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool) VALUES ('ok', 'development', '2026-10-13', 3, 3);
+    INSERT INTO explainers.idea_cycles (status, mode, ny_date, ideas_generated, ideas_entering_pool, started_at) VALUES ('ok', 'development', '2026-10-13', 3, 3, '2026-10-13T06:00:00Z');
     INSERT INTO explainers.jobs (id, topic_id, status, stage, trigger, mode, spend_usd, spend_cap_usd, capped, error, orchestrator_model, frame_worker_model, requested_at, finished_at) VALUES
       ('00000000-0000-0000-0000-0000000000f2', '00000000-0000-0000-0000-0000000000e2', 'failed', 'session_b_done', 'auto', 'development', 5.57, 5, true, 'Spend cap $5.00 reached in session B.', 'claude-opus-5-5', 'claude-opus-5-5', '2026-10-13T06:01:00Z', '2026-10-13T06:19:00Z');
     INSERT INTO explainers.cost_events (job_id, mode, vendor, component, usd, usd_known, created_at) VALUES
@@ -289,8 +293,9 @@ test('template mode: a Sunday night reported on Monday uses Sunday\'s slots, not
     const MON_EARLY = new Date('2026-10-19T10:00:00Z'); // Mon Oct 19, 6:00 AM New York: before the 7:30 report, so Sunday's night
     const p = await readPosting('reels', MON_EARLY);
     assert.equal(p.perDay, 3, 'Monday has 3');
-    assert.equal(quotaFor(p, '2026-10-18'), 1);
-    assert.equal(quotaFor(p, '2026-10-19'), 3);
+    // Text on Screen is made 2 days ahead (Bald-Eagle D4): Friday's night fills Sunday, Saturday's fills Monday.
+    assert.equal(quotaFor(p, '2026-10-16'), 1);
+    assert.equal(quotaFor(p, '2026-10-17'), 3);
     assert.equal(p.schedule!.length, 7, 'the type page still gets this Monday–Sunday week');
     assert.equal(p.schedule![0]!.nyDate, '2026-10-19');
   });
@@ -301,8 +306,9 @@ test('template mode: a backfilled night 20 days back uses its own slots', async 
     await setSlotSource(query as never, 'template', 't');
     await pg.exec(removeReels('2026-09-29', ['evening'])); // Tue Sep 29: 2 reels slots
     const p = await readPosting('reels', new Date('2026-10-19T14:00:00Z'));
-    assert.equal(quotaFor(p, '2026-09-29'), 2);
-    assert.equal(quotaFor(p, '2026-09-30'), 3);
+    // Made 2 days ahead (Bald-Eagle D4): the night of Sep 27 fills Sep 29.
+    assert.equal(quotaFor(p, '2026-09-27'), 2);
+    assert.equal(quotaFor(p, '2026-09-28'), 3);
   });
 });
 

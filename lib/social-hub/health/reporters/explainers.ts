@@ -21,8 +21,9 @@ export function makeExplainersReporter(hubQ?: HubQuery) {
     const range = [start.toISOString(), end.toISOString()];
     const cycles = (await q<Cycle>(
       `SELECT id::text, status, error, ideas_generated AS generated, ideas_entering_pool AS pool, started_at::text AS at
-         FROM explainers.idea_cycles WHERE ny_date = $1::date`,
-      [night],
+         FROM explainers.idea_cycles WHERE started_at >= $1 AND started_at < $2`,
+      // Bald-Eagle D4: a cycle's ny_date is the date it fills (two days after it ran), so the night's cycles are read by when they started.
+      range,
     )).rows;
     const jobs = (await q<Job>(
       `SELECT id::text, status, stage, error, capped, spend_usd::float8 AS spend, COALESCE(finished_at, requested_at)::text AS at

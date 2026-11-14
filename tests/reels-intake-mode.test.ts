@@ -35,6 +35,7 @@ async function db(opts: { withSlate?: boolean } = {}): Promise<{ pg: PGlite; q: 
   const pg = await reelsDb({ withSlate: opts.withSlate ?? false });
   await pg.exec(sql('intake_schema.sql'));
   await pg.exec(sql('reels_intake_views.sql'));
+  await pg.exec(sql('bald_eagle_2026_11_12_leadtime_reels.sql')); // the cutover night makes two slates in one run (Bald-Eagle D8)
   const q: IntakeQuery = { query: async <T,>(text: string, params?: unknown[]) => ({ rows: (await pg.query(text, params)).rows as T[] }) };
   return { pg, q };
 }
@@ -181,9 +182,13 @@ test('intake night: no primary fetch, derived finds deposit (no reels.sources), 
   assert.ok(!ideas.some((i) => i.id === dropped), 'a story with no kept reels/search member is not an idea');
   assert.ok(!ideas.some((i) => i.id === mine), 'a seed-only story is registered by the seed, not by the night');
 
+  // A scheduled night makes Text on Screen 2 days ahead (Bald-Eagle D4): the cutover night scores the run day, day+1
+  // and day+2 (fillDates, integration review M1). Nothing was made (the copy stub refuses), so the same story is
+  // offered on each; each row is the same.
   const slate = (await pg.query<{ post_idea_id: string; origin: string; net: number }>(
-    `SELECT post_idea_id::text AS post_idea_id, origin, net FROM reels.idea_scores`,
+    `SELECT DISTINCT post_idea_id::text AS post_idea_id, origin, net FROM reels.idea_scores`,
   )).rows;
+  assert.equal(await count(pg, 'reels.score_slates'), 3);
   assert.deepEqual(slate.map((r) => [r.post_idea_id, r.origin]), [[a, 'timely']]);
   assert.equal(slate[0]!.net, scoreA.net);
   assert.equal(await count(pg, `reels.jev_logs WHERE component LIKE 'scoring%' AND run_id = '${run.id}'`), 0, 'no scoring call for an intake-scored story');

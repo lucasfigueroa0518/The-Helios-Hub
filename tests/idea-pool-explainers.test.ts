@@ -53,6 +53,8 @@ function stubIdeas(): IdeaModel {
 async function explainersOn(): Promise<ExplainersDb> {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
+  // Lead time (Bald-Eagle D4, D8): earlier nights filled today and tomorrow (Oct 8, 9), so tonight fills one date (Oct 10).
+  await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', '2026-10-08'), ('ok', 'development', '2026-10-09')`);
   return db;
 }
 

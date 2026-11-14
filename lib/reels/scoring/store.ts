@@ -90,6 +90,31 @@ export async function slateIdeaIds(nyDate: string): Promise<string[]> {
   return rows.map((row) => row.post_idea_id);
 }
 
+/**
+ * Ideas already committed to a posting day, so a slate for `target` must not offer them again (Bald-Eagle D4: Text
+ * on Screen is made 2 days ahead, and the cutover night makes two slates). Committed: a waiting or posting Text on
+ * Screen booking (any date, the target's own included: its slot already counts toward the quota), or selected on
+ * the newest slate of another date whose day has not passed (`ny_date >= runDay`).
+ */
+export async function ideasCommittedElsewhere(target: string, runDay: string): Promise<Set<string>> {
+  const { rows } = await dbQuery<{ id: string }>(
+    `SELECT s.idea_ref AS id
+       FROM social_hub.schedule s
+      WHERE s.vertical = 'reels' AND s.status IN ('scheduled', 'publishing')
+        AND s.idea_ref IS NOT NULL
+     UNION
+     SELECT sc.post_idea_id::text AS id
+       FROM reels.idea_scores sc
+       JOIN (SELECT DISTINCT ON (ny_date) id
+               FROM reels.score_slates
+              WHERE ny_date >= $2::date AND ny_date <> $1::date
+              ORDER BY ny_date, scored_at DESC) latest ON latest.id = sc.slate_id
+      WHERE sc.selected`,
+    [target, runDay],
+  );
+  return new Set(rows.map((row) => row.id));
+}
+
 /** Yesterday's scored ideas, in the shape the carryover rule ranks. */
 export async function loadSlateRanked(
   nyDate: string,
@@ -195,6 +220,24 @@ export type ScoreInsert = {
 };
 
 export async function insertSlate(input: {
+  runId: string;
+  nyDate: string;
+  pass1Version: string;
+  pass2Version: string;
+  scores: readonly ScoreInsert[];
+}): Promise<string> {
+  try {
+    return await insertSlateRows(input);
+  } catch (error) {
+    // One run makes two slates on the cutover night (Bald-Eagle D8); before the SQL is applied the database allows one.
+    if ((error as { constraint?: string })?.constraint === 'idx_reels_score_slates_run' || String((error as Error)?.message).includes('idx_reels_score_slates_run')) {
+      throw new Error(`This run already has a slate, and the database allows one slate per run: apply db/bald_eagle_2026_11_12_leadtime_reels.sql so one run can make the ${input.nyDate} slate too.`);
+    }
+    throw error;
+  }
+}
+
+async function insertSlateRows(input: {
   runId: string;
   nyDate: string;
   pass1Version: string;

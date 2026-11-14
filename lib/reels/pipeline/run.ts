@@ -15,7 +15,10 @@ import {
   tonightSources,
   type IntakeRunDeps,
 } from '@/lib/reels/pipeline/intake';
-import { planCandidates, scoreRun, type CandidatePlan } from '@/lib/reels/pipeline/scoring';
+import { planCandidates, scoreRun, type CandidatePlan, type IntakeScoreSource } from '@/lib/reels/pipeline/scoring';
+import { nyDateKey } from '@/lib/reels/scoring/decide';
+import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
+import type { DailyFill } from '@/lib/social-hub/fill';
 import {
   claimRequestedRun,
   clearIntakeTonight,
@@ -85,8 +88,15 @@ export async function claimAndRun(deps?: Partial<RunDeps>): Promise<RunOutcome |
 
 /**
  * One night: ingest, group, score, write the day's two or three reels, clean up.
- * The reels people placed for today count toward the night's three (daily
+ * The reels already placed for a day count toward the night's three (daily
  * fill, D54); a carryover idea's finished, unposted video is reused (D55).
+ *
+ * Lead time (Bald-Eagle D4, D8): the scheduled night makes Text on Screen 2
+ * days ahead. Ingest and grouping run once; then one slate per date in
+ * fillDates(runDay, 2) that still has room, each keyed by its posting date,
+ * filled and booked on that date (the cutover night: day+1 then day+2; after
+ * that: day+2 only). A person's Run now (trigger 'manual') makes the day it
+ * was clicked, as before. See nightTargets.
  *
  * The spend watch is checked before any adapter runs (FND-05 / D-023). A run
  * already under way is never aborted partway for budget: a half-ingested night
@@ -112,7 +122,7 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
 
   const runStartedAt = new Date(run.started_at ?? run.requested_at);
   const now = new Date();
-  const night: Night = { run, deps, jev, ingestDeps, primary, derived, runStartedAt, now };
+  const night: Night = { run, deps, jev, ingestDeps, primary, derived, runStartedAt, now, scored: new Map() };
 
   const intake = intakeRunDeps(deps?.intake);
   const mode = await intake.readMode(intake.query, 'reels', now).catch(() => 'legacy' as const);
@@ -155,7 +165,48 @@ type Night = {
   derived: Adapter[];
   runStartedAt: Date;
   now: Date;
+  /** Legacy scores already paid for tonight: a second slate (the cutover night, D8) reuses them, no second Jev call. */
+  scored: Map<string, InterpretedScore>;
+  /** Intake mode: where every slate's stored scores come from (the second slate of the cutover night too). */
+  intakeSource?: IntakeScoreSource;
 };
+
+/** One posting date the night makes a slate for (Bald-Eagle D4). `fill`/`openWindows` absent: read when it is made. */
+type Target = { nyDate: string; lead: number; fill?: DailyFill; openWindows?: number };
+
+/**
+ * The dates tonight makes slates for (Bald-Eagle D4, D8). The scheduled night: each date fillDates(runDay, lead)
+ * lists (lib/social-hub/lead.ts) whose quota still leaves room. A date is full when its bookings plus the reels
+ * already made or being made for it (its newest slate's selected reels with a video or a walk in progress, even
+ * unbooked: publishing off or a failed booking; reelsLeadFill) cover the quota, or no window is left on it. So a
+ * steady-state night skips day+1 (and the run day, when fillDates lists it) and makes day+2; the cutover night
+ * finds the earlier dates empty and makes them too. The last date is always scored, so tonight's ideas reach a
+ * slate and carry even when every date is full (as a full day did before). Run now: its own day only, unchanged.
+ * A date whose fill can't be read is kept: its own fill read then fails where it always did (copyNote).
+ */
+export async function nightTargets(trigger: RunTrigger, runDay: string, now = new Date()): Promise<Target[]> {
+  const { reelsRunDates, reelsLeadFill, reelsTonight } = await import('@/lib/reels/pipeline/fill');
+  const { windowsStillOpen } = await import('@/lib/reels/publish/schedule');
+  const { dates, lead } = reelsRunDates(runDay, trigger);
+  if (lead === 0) return dates.map((nyDate) => ({ nyDate, lead }));
+  const out: Target[] = [];
+  for (const [index, nyDate] of dates.entries()) {
+    const last = index === dates.length - 1;
+    try {
+      const fill = await reelsLeadFill(now, nyDate, lead);
+      const openWindows = await windowsStillOpen(now, nyDate);
+      if (reelsTonight(openWindows, fill) < 1 && !last) {
+        log('target_filled', { nyDate, quota: fill.quota, placedOrMade: fill.userPlaced, openWindows });
+        continue;
+      }
+      out.push({ nyDate, lead, fill, openWindows });
+    } catch (error) {
+      log('target_fill_unread', { nyDate, error: errorText(error) });
+      out.push({ nyDate, lead });
+    }
+  }
+  return out;
+}
 
 /** Today's night, unchanged. `fallback` is set only when the intake switch is on but this night cannot use it. */
 async function executeLegacyNight(
@@ -185,7 +236,7 @@ async function executeLegacyNight(
     const grouping = await groupRun(run.id, runStartedAt, { jev });
     const groupingNote = failureNote('Grouping failed for', grouping.failures);
 
-    const slate = await scoreAndMake(night);
+    const slate = await makeTargets(night, await nightTargets(run.trigger, nyDateKey(runStartedAt), now));
 
     const retention = fallback?.keepIntakeIdeas
       ? await runRetention(undefined, { keepIntakeIdeas: true })
@@ -250,37 +301,72 @@ type SlateOutcome = {
   fillNote?: string;
 };
 
-/** Score the slate, then fill, copy and schedule (everything after the slate is the same on both paths). */
-async function scoreAndMake(night: Night, plan?: CandidatePlan): Promise<SlateOutcome> {
+/**
+ * Every target's slate in date order (the cutover night: day+1, then day+2, so the second slate sees the first's
+ * picks and never repeats them; scoring.ts planCandidates). The first target can take a plan read beforehand
+ * (intake mode's read-before-spend); later ones read their own. Counts add up; notes carry their date when the night
+ * made more than one slate.
+ */
+async function makeTargets(night: Night, targets: readonly Target[], firstPlan?: CandidatePlan): Promise<SlateOutcome> {
+  const total: SlateOutcome = { scored: 0, selected: 0, copyWritten: 0 };
+  const notes: Record<'scoringNote' | 'copyNote' | 'fillNote', string[]> = { scoringNote: [], copyNote: [], fillNote: [] };
+  for (const [index, target] of targets.entries()) {
+    const one = await scoreAndMake(night, target, index === 0 ? firstPlan : undefined);
+    total.scored += one.scored;
+    total.selected += one.selected;
+    total.copyWritten += one.copyWritten;
+    for (const key of ['scoringNote', 'copyNote', 'fillNote'] as const) {
+      const note = one[key];
+      if (note) notes[key].push(targets.length > 1 ? `${target.nyDate}: ${note}` : note);
+    }
+  }
+  for (const key of ['scoringNote', 'copyNote', 'fillNote'] as const) {
+    if (notes[key].length) total[key] = notes[key].join(' ');
+  }
+  return total;
+}
+
+/** Score one target's slate, then fill, copy and schedule it on its date (everything after the slate is the same on both paths). */
+async function scoreAndMake(night: Night, target: Target, plan?: CandidatePlan): Promise<SlateOutcome> {
   const { run, deps, jev, runStartedAt } = night;
   const out: SlateOutcome = { scored: 0, selected: 0, copyWritten: 0 };
+  const sameDay = target.lead === 0;
   try {
-    const scoring = await scoreRun(run.id, runStartedAt, jev, undefined, plan);
+    const scoring = await scoreRun(run.id, runStartedAt, jev, night.intakeSource, plan, target.nyDate, night.scored);
     out.scored = scoring.scored;
     out.selected = scoring.selected;
     out.scoringNote = failureNote('Scoring failed for', scoring.failures);
-    log('run_scored', scoring);
+    log('run_scored', { ...scoring, nyDate: target.nyDate });
 
     if (scoring.slateId) {
+      const slateId = scoring.slateId;
+      // Nothing made: no idea stays "selected" on a slate it was not made for (it would read as committed to that day).
+      const unselect = () => import('@/lib/reels/locks').then(({ selectFilledIdeas }) => selectFilledIdeas(slateId, [])).catch(() => undefined);
       try {
         const { generatePassingReels } = await import('@/lib/reels/pipeline/slots');
         const { scheduleSelectedSlate, windowsStillOpen } = await import('@/lib/reels/publish/schedule');
-        const { reelsFill, reelsTonight } = await import('@/lib/reels/pipeline/fill');
+        const { reelsLeadFill, reelsTonight } = await import('@/lib/reels/pipeline/fill');
         const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
-        // Daily fill (D54): reels people placed for today count toward the night's quota.
-        const fill = await reelsFill();
-        const openWindows = await windowsStillOpen();
+        // Daily fill (D54): what is already placed for the date counts toward the night's quota (every booking when made ahead).
+        const at = new Date();
+        const fill = target.fill ?? (await reelsLeadFill(at, target.nyDate, target.lead));
+        const openWindows = target.openWindows ?? (await windowsStillOpen(at, target.nyDate));
         const count = reelsTonight(openWindows, fill);
         reportFill(fill, log, { runId: run.id, openWindows, count });
+        const carry = sameDay ? 'the ideas carry to tomorrow' : 'the ideas carry to the next slate';
         if (count < 1 && fill.making < 1) {
-          // Not a failure: people filled the day. The ideas carry to tomorrow as on a day with no window left.
-          out.fillNote = `${quotaFilledNote(fill, 'reel')} No reel was written or rendered; the ideas carry to tomorrow.`;
+          await unselect();
+          // Not a failure: the day is already filled. The ideas carry as on a day with no window left.
+          out.fillNote = `${quotaFilledNote(fill, 'reel')} No reel was written or rendered; ${carry}.`;
         } else if (count < 1) {
-          out.copyNote = 'No posting window is still open today, so no reel was rendered. The ideas carry to tomorrow.';
+          await unselect();
+          out.copyNote = sameDay
+            ? 'No posting window is still open today, so no reel was rendered. The ideas carry to tomorrow.'
+            : `No posting window is open on ${target.nyDate}, so no reel was rendered. The ideas carry to the next slate.`;
         } else {
           const copy = await generatePassingReels({
             runId: run.id,
-            slateId: scoring.slateId,
+            slateId,
             count,
             client: deps?.copyClient,
             signal: deps?.signal,
@@ -298,21 +384,21 @@ async function scoreAndMake(night: Night, plan?: CandidatePlan): Promise<SlateOu
               : undefined,
           ].filter((note): note is string => note != null);
           if (notes.length > 0) out.copyNote = notes.join(' ');
-          log('run_copy', copy);
-          const scheduled = await scheduleSelectedSlate(scoring.slateId).catch((error) => {
-            log('schedule_failed', { error: errorText(error) });
+          log('run_copy', { ...copy, nyDate: target.nyDate });
+          const scheduled = await scheduleSelectedSlate(slateId).catch((error) => {
+            log('schedule_failed', { error: errorText(error), nyDate: target.nyDate });
             return { scheduled: 0 };
           });
-          if (scheduled.scheduled > 0) log('run_scheduled', scheduled);
+          if (scheduled.scheduled > 0) log('run_scheduled', { ...scheduled, nyDate: target.nyDate });
         }
       } catch (error) {
         out.copyNote = `Copy failed: ${errorText(error)}`;
-        log('copy_failed', { error: out.copyNote });
+        log('copy_failed', { error: out.copyNote, nyDate: target.nyDate });
       }
     }
   } catch (error) {
     out.scoringNote = `Scoring failed: ${error instanceof Error ? error.message : String(error)}`;
-    log('scoring_failed', { error: out.scoringNote });
+    log('scoring_failed', { error: out.scoringNote, nyDate: target.nyDate });
   }
   return out;
 }
@@ -385,17 +471,20 @@ async function executeIntakeNight(
     // finds replayed, so B6 is not paid twice) instead of a night with no slate.
     let registered: Awaited<ReturnType<typeof registerIntakeIdeas>>;
     let plan: CandidatePlan;
+    // The dates tonight fills (Bald-Eagle D4). Not an intake read: its own errors are handled per date.
+    const targets = await nightTargets(run.trigger, nyDateKey(runStartedAt), now);
+    const source = intakeScoreSource(intake);
     try {
       const stories = await listReelsStories(intake, now);
       registered = await registerIntakeIdeas(q, stories, timelyFrom);
       log('intake_registered', { ...registered, timelyFrom: timelyFrom.toISOString() });
-      plan = await planCandidates(runStartedAt, intakeScoreSource(intake));
+      plan = await planCandidates(runStartedAt, source, targets[0]?.nyDate);
     } catch (error) {
       return { fallback: errorText(error), replay: replay() };
     }
     if (plan.twinsDropped.length) log('intake_switch_twins_dropped', { ids: plan.twinsDropped });
 
-    const slate = await scoreAndMake(night, plan);
+    const slate = await makeTargets({ ...night, intakeSource: source }, targets, plan);
 
     const retention = await runRetention(undefined, { keepIntakeIdeas: true });
     await extendLogRetention();

@@ -2,6 +2,8 @@
  * The helios-social worker's Field Notes step: carry out a claimed run, put its post on the
  * spine, and record the outcome and its spend on the run. The post waits for a person: nothing is
  * booked at run time (approval books it, schedule.ts), so a run never touches the calendar.
+ * The post is dated with the run's target date (Bald-Eagle D4): the date the 2:00 AM clock queued it for
+ * (clock.ts, 2 days ahead), or today for a person's Generate, which has none.
  * The worker runs this in the same loop as the other types, so no two runs ever overlap.
  */
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
@@ -35,7 +37,8 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 
 export async function carryOutFieldNotesRun(w: CarryOutDeps, claimed: ClaimedRun): Promise<CarryOutResult> {
   const now = w.now();
-  const nyDate = calendarDateKey(now, SOCIAL_TIMEZONE);
+  // The date the post is for: the clock's target, else (a person's Generate) today.
+  const nyDate = claimed.nyDate ?? calendarDateKey(now, SOCIAL_TIMEZONE);
   const finish = async (o: Parameters<typeof finishRun>[2]) => {
     if (!(await finishRun(w.query, claimed.id, o))) w.log('field_notes_run_finish_ignored', { runId: claimed.id, status: o.status });
   };
@@ -64,6 +67,7 @@ export async function carryOutFieldNotesRun(w: CarryOutDeps, claimed: ClaimedRun
         kind: claimed.kind,
         seedTipId: claimed.seedTipId,
         capUsd: cap,
+        nyDate,
         settings: { photoRestPosts: settings.photoRestPosts, maxPendingDrafts: settings.maxPendingDrafts, tipExpiryDays: settings.tipExpiryDays, darkenCap: settings.darkenCap },
       },
     );

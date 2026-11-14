@@ -130,8 +130,10 @@ test('legacy: exactly one set per due series, no slot minute, booked under the s
   assert.equal(await storiesSlotsOn(qOf(db), THU), null);
   await tick(idleDeps(db, THU_3AM));
   assert.deepEqual(await minutesOf(db), [null]);
+  // Guess the Number and Free vs. Paid are made 2 days ahead (Bald-Eagle D4): Thursday's night fills Thu–Sat,
+  // so Thursday's Guess the Number (its window still ahead) and Saturday's Free vs. Paid, still without a slot minute.
   assert.deepEqual(await minutesOf(db, 'guess_the_number'), [null]);
-  assert.deepEqual(await minutesOf(db, 'free_vs_paid'), [], 'not due on Thursday');
+  assert.deepEqual(await minutesOf(db, 'free_vs_paid'), [null], 'Saturday, 2 days ahead');
 
   const { db: db2 } = await harnessDb();
   await saveSeriesSetting(db2, 'morning_download', { auto: true });
