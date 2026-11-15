@@ -153,14 +153,22 @@ export function contentFor(idea: HubIdea, posts: readonly HubPost[]): HubPost | 
 
 const at = (p: HubPost) => p.postedAt ?? p.publishAt ?? '';
 
-/** One type's quota candidates for the day `now` falls on. */
+/**
+ * One type's quota candidates for a day: the day `now` falls on, or `day` (a later New York date, the Content
+ * page's look-ahead tabs). A later day shows only what is already made or booked for it (made-ahead posts carry
+ * their target date, lib/social-hub/lead.ts) and leaves the rest as open slots: its night run picks those ideas,
+ * so no ranking is shown for it (the ranking is today's).
+ */
 export function quotaCandidates(
   data: { posts: readonly HubPost[]; ideas: readonly HubIdea[]; adjustments?: readonly IdeaAdjustment[]; dayQuotas?: DayQuotas | null },
   vertical: Vertical,
   now: Date,
+  day?: string,
 ): QuotaCandidate[] {
-  const today = nyDateOf(now)!;
-  const windows = capacityWindows(vertical, today, data.dayQuotas?.lfdDays ?? [], placedCount(data.posts, vertical, today), today, data.dayQuotas?.slots ?? null);
+  const actual = nyDateOf(now)!;
+  const today = day && day > actual ? day : actual;
+  const ahead = today !== actual;
+  const windows = capacityWindows(vertical, today, data.dayQuotas?.lfdDays ?? [], placedCount(data.posts, vertical, today), actual, data.dayQuotas?.slots ?? null);
   if (vertical === 'stories') {
     // A Stories slot is one series' set for the day; its ideas feed the build.
     return windows.map((w) => {
@@ -191,6 +199,18 @@ export function quotaCandidates(
     .filter((p) => p.vertical === vertical && p.nyDate === today && HOLDS.has(p.status) && (p.status === 'published' || hasMedia(p)))
     .sort((a, b) => at(a).localeCompare(at(b)) || a.id.localeCompare(b.id))
     .slice(0, quota);
+  if (ahead) {
+    // A later day: its booked posts, then posts made for it with no slot yet, then open slots.
+    const madeFor = data.posts
+      .filter((p) => p.vertical === vertical && p.nyDate === today && !locked.includes(p) && !isRejected(p) && (p.status === 'generating' || (p.status === 'ready' && hasMedia(p))))
+      .sort((a, b) => (a.generatedAt ?? '').localeCompare(b.generatedAt ?? '') || a.id.localeCompare(b.id));
+    const posts: Array<HubPost | null> = [...locked, ...madeFor].slice(0, quota);
+    while (posts.length < quota) posts.push(null);
+    return posts.map((post) => {
+      const idea = post ? data.ideas.find((i) => i.vertical === vertical && ideaOwns(i, post)) ?? null : null;
+      return { vertical, idea, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null };
+    });
+  }
   const full = dayRanking(data.ideas, vertical, data.adjustments ?? [], now);
   // The queue decides (2026-10-21 pool standard): the day's open slots are the top of the ranking, each with its
   // content if it has any. Content made for an idea that is not in the top no longer jumps the queue.
@@ -227,7 +247,7 @@ export function orderCards(cards: readonly QuotaCandidate[]): QuotaCandidate[] {
 
 export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 
-/** Every type's quota candidates for today, as the day's cards in posting order. */
-export function allQuotaCandidates(data: Parameters<typeof quotaCandidates>[0], now: Date): QuotaCandidate[] {
-  return orderCards(DAY_TYPES.flatMap((v) => quotaCandidates(data, v, now)));
+/** Every type's quota candidates for today (or a later `day`), as the day's cards in posting order. */
+export function allQuotaCandidates(data: Parameters<typeof quotaCandidates>[0], now: Date, day?: string): QuotaCandidate[] {
+  return orderCards(DAY_TYPES.flatMap((v) => quotaCandidates(data, v, now, day)));
 }
