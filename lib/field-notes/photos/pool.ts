@@ -2,7 +2,7 @@
  * The photo pool's rules, pure (CONTRACT.md section 2): a photo sits out the `restPosts` posts after
  * its use, then may return; the pick is newest-uploaded first. Nothing here touches a database.
  */
-import { mediaLibraryKey, usedMatch, type UsedLedger } from '@/lib/photos/used';
+import { mediaLibraryKey, usedMatch, type UsedLedger } from '@/lib/photos/used-match';
 
 import type { PhotoKind, PoolPhoto } from '../types';
 
