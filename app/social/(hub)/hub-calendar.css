@@ -158,6 +158,8 @@
 .sh-board__day.is-past { border-style: dashed; background: transparent; }
 .sh-board__dhead { display: flex; flex-direction: column; justify-content: center; gap: 2px; height: 56px; padding: 0 12px; }
 .sh-board__gutter .sh-board__dhead { padding: 0; }
+/* The hours stay in view while the days scroll sideways (a phone shows about two days). */
+.sh-board__gutter { position: sticky; left: 0; z-index: 5; background: var(--color-bg, var(--color-surface)); }
 .sh-board__dname { font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); white-space: nowrap; }
 .sh-board__count { margin-left: 6px; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-weight: var(--font-weight-regular); font-variant-numeric: tabular-nums; }
 .sh-board__badges { display: flex; align-items: center; gap: 6px; min-height: 18px; }
@@ -316,6 +318,11 @@ a.sh-board__open { color: inherit; text-decoration: none; cursor: pointer; }
 .sh-sched__msgs--warn { background: var(--color-surface-hover); color: var(--color-text); }
 .sh-sched__foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; border-top: 1px solid var(--sh-hairline); }
 .sh-sched__foot .sh-btn--primary { gap: 6px; }
+
+/* Touch: a taller axis, so a 30-minute card is a ~44px tap target (posted cards open their analytics). */
+@media (pointer: coarse) {
+  .sh-board { --sh-axis-h: 1250px; }
+}
 
 @media (max-width: 640px) {
   .sh-board__panel { left: 12px; right: 12px; bottom: 12px; }

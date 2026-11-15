@@ -517,6 +517,17 @@ export function WeekBoard(props: {
 
   const grid = useRef<HTMLDivElement>(null);
   const ghost = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
+
+  // A narrow screen (a phone) shows two days at a time: open on today, with the past one swipe to the right away.
+  // A board that fits needs no scroll; another week opens at its start.
+  useEffect(() => {
+    const s = scroller.current;
+    const today = s?.querySelector<HTMLElement>('.sh-board__day.is-today');
+    if (!s || s.scrollWidth <= s.clientWidth) return;
+    const gutter = s.querySelector<HTMLElement>('.sh-board__gutter')?.offsetWidth ?? 0;
+    s.scrollLeft = today ? Math.max(0, today.offsetLeft - gutter - 6) : 0;
+  }, [props.monday]);
 
   const preview = useCallback((source: DragSource, day: number, raw: number, prev: Drop | null): Drop | null => {
     const s = stateRef.current;
@@ -673,7 +684,7 @@ export function WeekBoard(props: {
         </div>
       ) : null}
 
-      <div className="sh-board__scroll">
+      <div ref={scroller} className="sh-board__scroll">
         <div ref={grid} className="sh-board__grid" style={{ gridTemplateColumns: `44px ${cols}`, '--sh-stack-over': overrun } as CSSProperties} role="group" aria-label="This week">
           <div className="sh-board__gutter" aria-hidden="true">
             <div className="sh-board__dhead" />

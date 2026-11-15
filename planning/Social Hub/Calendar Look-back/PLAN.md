@@ -53,3 +53,14 @@ Status: Built and verified offline (Stage 7), 2026-11-14. Waiting on the user's 
 - Fixture preview (`/social/preview/calendar`): 14 posted cards are links; a click opens the drawer at
   `/social/preview/post/…` with Performance and the daily chart. Screens in `screens/`.
 - Cost: reads only. No Claude API, `web_search` or Instagram calls, no DB writes, no worker change (no redeploy needed).
+
+## Mobile pass (2026-11-15)
+User: "Is this optimized for mobile?" Checked on an emulated iPhone 14 (fixture preview).
+- The post drawer was already fine on a phone: full screen, readable.
+- Fixed: the board opened at Monday, so today was off-screen (worse once past days became full columns). It now
+  opens scrolled to today when the board overflows; swipe right for past days. A board that fits doesn't scroll.
+- Fixed: the hour labels scrolled away sideways. The gutter is now sticky.
+- Fixed: cards were 29px tall on touch screens. On `pointer: coarse` the axis is 1250px, so a card is about 44px.
+  Desktop is unchanged (29px, no scroll).
+- Verified: on the phone the board starts scrolled to today, posted cards are 44px, and a tap opens the drawer.
+  Desktop: no scroll, unchanged. `tsc` 0 errors; board + lead tests 64/64.
