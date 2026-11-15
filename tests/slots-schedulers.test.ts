@@ -423,6 +423,8 @@ test('carousel health: a failed slot read falls back to legacy (ruling P2)', asy
 
 const THU = '2026-10-08';
 const THU_NOW = new Date('2026-10-08T05:00:00Z'); // 1:00 AM New York, Thursday Oct 8
+/** Guess the Number and Free vs. Paid are made 2 days ahead (Bald-Eagle D4): Tuesday's night fills Tue through Thu. */
+const TUE_NOW = new Date('2026-10-06T05:00:00Z');
 
 /** Which series have a Stories slot on one date (the Run now list's rule). */
 const dueFrom = (slots: Awaited<ReturnType<typeof storiesSlotsOn>>, date: string) => (series: string, nyDate: string) =>
@@ -434,7 +436,7 @@ test('stories legacy: storiesSlotsOn is null and auto sets follow the series\' o
   assert.equal(await storiesSlotsOn(q, THU), null);
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW), ['guess_the_number']);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), TUE_NOW), ['guess_the_number', 'free_vs_paid'], 'Thursday (Tuesday + 2) is a GTN day; Tuesday itself an FvP day');
 });
 
 test('stories template: a series has slots on its dates only, and auto sets follow the calendar', async () => {
@@ -453,5 +455,7 @@ test('stories template: a series has slots on its dates only, and auto sets foll
   dueOn = dueFrom(await storiesSlotsOn(q, THU), THU);
   assert.equal(dueOn('guess_the_number', THU), false, 'removed for the day');
   assert.equal(dueOn('free_vs_paid', THU), true, 'added for the day');
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), THU_NOW, { slots: await storiesSlotsOn(q, THU) }), ['free_vs_paid']);
+  // Tuesday's own seeded FvP slot and Thursday's added one; Thursday's GTN slot was removed.
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), TUE_NOW, { slotsFor: (d) => storiesSlotsOn(q, d) }), ['free_vs_paid', 'free_vs_paid']);
+  assert.deepEqual((await db.query<{ d: string }>(`SELECT ny_date::text AS d FROM stories.sets ORDER BY ny_date`)).rows.map((r) => r.d.slice(0, 10)), ['2026-10-06', THU]);
 });

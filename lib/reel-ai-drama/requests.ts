@@ -24,29 +24,45 @@ export const DRAMA_REFUSAL_TEXT: Record<DramaRefusal, string> = {
 
 export const nyDateOf = (at: Date = new Date()): string => calendarDateKey(at);
 
-/** Jobs requested on a New York day (killed ones don't hold a place: a kill is refilled). */
+/**
+ * The New York day a job counts against for the daily caps (Bald-Eagle D4, lib/social-hub/lead.ts): the date the night
+ * made it FOR (`night_date`, its target date, two days ahead), else the day it was requested (a person's click).
+ */
+const JOB_DAY = (j: string) => `COALESCE(${j}.night_date, (${j}.requested_at AT TIME ZONE 'America/New_York')::date)`;
+
+/** Jobs counted against a New York day: made for it, or clicked on it (killed ones don't hold a place: a kill is refilled). */
 export async function dramaJobsRequestedOn(db: Queryable, nyDate: string): Promise<number> {
   const { rows } = await db.query<{ n: unknown }>(
-    `SELECT count(*) AS n FROM reel_ai_drama.jobs
-      WHERE status <> 'killed' AND (requested_at AT TIME ZONE 'America/New_York')::date = $1::date`,
+    `SELECT count(*) AS n FROM reel_ai_drama.jobs j
+      WHERE j.status <> 'killed' AND ${JOB_DAY('j')} = $1::date`,
     [nyDate],
   );
   return Number(rows[0]?.n ?? 0);
 }
 
-/** Production spend (every cost a job recorded) on a New York day, all modes. */
+/**
+ * Production spend (every cost a job recorded) counted against a New York day, all modes. A cost counts against its
+ * job's day (JOB_DAY): the night's spend for a date two days ahead is that date's (D8: the cutover night may spend up to
+ * one cap per date it fills); a person's click spends today's.
+ */
 export async function dramaSpendOn(db: Queryable, nyDate: string): Promise<number> {
   const { rows } = await db.query<{ usd: unknown }>(
-    `SELECT COALESCE(SUM(usd), 0) AS usd FROM reel_ai_drama.cost_events
-      WHERE job_id IS NOT NULL AND (created_at AT TIME ZONE 'America/New_York')::date = $1::date`,
+    `SELECT COALESCE(SUM(e.usd), 0) AS usd FROM reel_ai_drama.cost_events e
+       LEFT JOIN reel_ai_drama.jobs j ON j.id = e.job_id
+      WHERE e.job_id IS NOT NULL
+        AND COALESCE(j.night_date, (e.created_at AT TIME ZONE 'America/New_York')::date) = $1::date`,
     [nyDate],
   );
   return Number(rows[0]?.usd ?? 0);
 }
 
-/** The day's caps, checked before a job is queued. Null: room for one more. */
-export async function dramaCapRefusal(db: Queryable, settings: ReelAiDramaSettings, now: Date): Promise<'daily_render_cap' | 'daily_spend_cap' | null> {
-  const day = nyDateOf(now);
+/** The caps of a day (default: today; the night passes its target date), checked before a job is queued. Null: room for one more. */
+export async function dramaCapRefusal(
+  db: Queryable,
+  settings: ReelAiDramaSettings,
+  now: Date,
+  day: string = nyDateOf(now),
+): Promise<'daily_render_cap' | 'daily_spend_cap' | null> {
   if ((await dramaJobsRequestedOn(db, day)) >= settings.daily_render_cap) return 'daily_render_cap';
   if ((await dramaSpendOn(db, day)) >= settings.daily_spend_cap_usd) return 'daily_spend_cap';
   return null;
@@ -60,6 +76,7 @@ async function lockDayCaps(tx: Queryable): Promise<void> {
   await tx.query(`SELECT pg_advisory_xact_lock(hashtext('reel_ai_drama:day_caps'))`);
 }
 
+/** `nightDate`: the night's job, the date it is made FOR (its target date; Bald-Eagle D4). A person's click passes none: today. */
 type MakeInput = { pitchId: string; by: string; now?: Date; trigger?: 'click' | 'auto'; nightDate?: string | null };
 
 /**
@@ -75,7 +92,7 @@ export async function requestDramaJob(db: Queryable, input: MakeInput): Promise<
     const { rows } = await tx.query<{ status: string }>('SELECT status FROM reel_ai_drama.pitches WHERE id = $1 FOR UPDATE', [input.pitchId]);
     if (!rows[0]) return { ok: false as const, reason: 'not_found' as const };
     await lockDayCaps(tx);
-    const capped = await dramaCapRefusal(tx, settings, now);
+    const capped = await dramaCapRefusal(tx, settings, now, input.nightDate ?? nyDateOf(now));
     if (capped) {
       // A pitch that couldn't be made anyway says so first.
       const trigger = input.trigger ?? 'click';
@@ -292,7 +309,9 @@ export async function retryDramaJob(db: Queryable, jobId: string, now: Date = ne
   const settings = await loadSettings(db);
   const outcome = await inTransaction(db, async (tx) => {
     await lockDayCaps(tx);
-    const capped = await dramaCapRefusal(tx, settings, now);
+    // A retried night job keeps the date it was made for, and counts against that date's caps.
+    const { rows: own } = await tx.query<{ day: string | null }>(`SELECT night_date::text AS day FROM reel_ai_drama.jobs WHERE id = $1`, [jobId]);
+    const capped = await dramaCapRefusal(tx, settings, now, own[0]?.day?.slice(0, 10) ?? nyDateOf(now));
     if (capped) return capped;
     if (!(await requeueJob(tx, jobId))) return false;
     await tx.query(`UPDATE reel_ai_drama.jobs SET requested_at = $2 WHERE id = $1`, [jobId, now.toISOString()]);
@@ -310,7 +329,7 @@ export async function retryDramaJob(db: Queryable, jobId: string, now: Date = ne
 
 /**
  * What the worker does when a job finishes ok: write the posting caption from the post text, and (night jobs only,
- * while live) book today's next open slot unapproved (§5). A video not in the bucket is never booked.
+ * while live) book a slot on the date it was made for, unapproved (§5; Bald-Eagle D4). A video not in the bucket is never booked.
  */
 export async function afterDramaJob(
   db: Queryable,

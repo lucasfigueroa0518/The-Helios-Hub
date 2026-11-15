@@ -7,6 +7,7 @@
  */
 import { JSDOM } from 'jsdom';
 
+import { parsePage } from '@/lib/reels/net/html';
 import { isGoogleNewsUrl, resolveGoogleNewsUrl, type ResolvedGoogleNewsUrl } from '@/lib/social/ingest/resolve-google-news';
 import {
   fetchHtmlLive,
@@ -114,4 +115,53 @@ export function gateExcerpt(text: string, answer: string, max: number = GATE_EXC
   const centre = map[hit] + Math.floor(needle.length / 2);
   const start = Math.max(0, Math.min(text.length - max, centre - Math.floor(max / 2)));
   return text.slice(start, start + max);
+}
+
+/** True when the page text holds the answer's figure (separators ignored). An answer with no digits always counts. */
+export function pageHasFigure(text: string, answer: string): boolean {
+  const needle = figureNeedle(answer);
+  return !needle || stripDigitCommas(text).stripped.includes(needle);
+}
+
+/** One link the fallback reader tried and what it found: read (gated on it), or why it moved on. */
+export type SourceTry = { url: string; result: 'read' | 'paywalled' | 'no figure' | string };
+
+/**
+ * Bald-Eagle D7 (GTN readable sources): read links in the order given and keep the first readable page that
+ * contains the answer's figure. Pages flagged paywalled (Text on Screen's detector, lib/reels/net/html.ts) are
+ * skipped. When no page holds the figure, the first readable one is kept so the gate still judges it. No page
+ * readable at all: not ok, with the last error. Every link tried is returned, in order. Code only, no AI.
+ */
+export async function readFirstWithFigure(
+  urls: readonly string[],
+  answer: string,
+  read: (url: string, figure?: string) => Promise<SourcePage>,
+): Promise<{ page: SourcePage; tried: SourceTry[] }> {
+  const tried: SourceTry[] = [];
+  let firstReadable: { page: Extract<SourcePage, { ok: true }>; at: number } | null = null;
+  let lastError = 'no link to read';
+  for (const url of urls) {
+    const page: SourcePage = await read(url, answer).catch((err: unknown) => ({ ok: false as const, url, error: err instanceof Error ? err.message : String(err) }));
+    if (!page.ok) {
+      tried.push({ url, result: page.error });
+      lastError = page.error;
+      continue;
+    }
+    if (parsePage(page.text).paywalled) {
+      tried.push({ url, result: 'paywalled' });
+      lastError = 'paywalled';
+      continue;
+    }
+    if (pageHasFigure(page.text, answer)) {
+      tried.push({ url, result: 'read' });
+      return { page, tried };
+    }
+    firstReadable ??= { page, at: tried.length };
+    tried.push({ url, result: 'no figure' });
+  }
+  if (firstReadable) {
+    tried[firstReadable.at] = { url: tried[firstReadable.at]!.url, result: 'read (no page had the figure)' };
+    return { page: firstReadable.page, tried };
+  }
+  return { page: { ok: false, url: urls[0] ?? '', error: lastError }, tried };
 }

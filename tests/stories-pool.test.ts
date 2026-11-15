@@ -40,7 +40,7 @@ async function poolRows(db: Awaited<ReturnType<typeof openLocalStoriesDb>>['db']
   return rows;
 }
 
-test('pool refresh: used keys stay used, an unused key the refresh did not return drops', async () => {
+test('pool refresh: Morning Download reopens what the refresh returns (the build decides repeats), an unused key the refresh did not return drops', async () => {
   const { db } = await openLocalStoriesDb();
   await refreshStoryPool(db, reads([story('a'), story('b'), story('c', 'carousel')]), NOW);
   assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/b', 'news.test/c']);
@@ -55,10 +55,12 @@ test('pool refresh: used keys stay used, an unused key the refresh did not retur
   assert.equal(r.dropped, 1);
   const rows = await poolRows(db);
   assert.deepEqual(rows.filter((x) => x.series === 'morning_download'), [
-    { series: 'morning_download', key: 'news.test/a', used: true },
-    { series: 'morning_download', key: 'news.test/b', used: true },
+    { series: 'morning_download', key: 'news.test/a', used: false },
+    { series: 'morning_download', key: 'news.test/b', used: false },
   ]);
-  assert.deepEqual((await openPool(db, 'morning_download')).stories, [], 'used ideas never come back as open');
+  // Bald-Eagle D2: an intake story keeps its key while new articles join it, so a Morning Download story the
+  // refresh still returns is open again; md-development.ts decides whether it is news again.
+  assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/b']);
 
   // A series whose source could not be read keeps its list (it ages out on its freshness window instead).
   const broken: PoolReads = { ...reads([]), leads: async () => { throw new Error('reels.sources unreachable'); } };

@@ -76,10 +76,32 @@ export type FinishStart = {
 };
 
 /**
- * Today's newest slate that scored this idea, or null when the idea isn't on
- * today's slate (Social Hub Regenerate rebuilds only today's reel, D52).
+ * The slate Regenerate rebuilds an idea on (D52): its own slate while its posting day is today or later. Text on
+ * Screen is made 2 days ahead (Bald-Eagle D4), so a person reviewing a reel for day+2 can rebuild it. Of the slates
+ * dated today or later that scored the idea, the one whose newest slate for that day selected it, earliest day
+ * first; else (a bench idea) the earliest such day's newest slate. Null when no slate from today on scored it: a day
+ * that has passed is never rebuilt (SH-59). The name stays for its callers (lib/publishing/actions/live.ts).
  */
 export async function todaySlateFor(postIdeaId: string, now = new Date()): Promise<string | null> {
+  const { rows } = await dbQuery<{ id: string }>(
+    `SELECT d.id FROM (
+       SELECT DISTINCT ON (sl.ny_date) sl.id::text AS id, sl.ny_date, s.selected
+         FROM reels.score_slates sl
+         JOIN reels.idea_scores s ON s.slate_id = sl.id AND s.post_idea_id = $1::uuid
+        WHERE sl.ny_date >= $2::date
+        ORDER BY sl.ny_date, sl.scored_at DESC) d
+      ORDER BY d.selected DESC, d.ny_date
+      LIMIT 1`,
+    [postIdeaId, calendarDateKey(now)],
+  );
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * The newest slate for exactly this New York day that scored the idea, or null. Run now builds on the day it was
+ * clicked, never a day ahead (lib/content-type/run-today-live.ts).
+ */
+export async function slateOnDayFor(postIdeaId: string, nyDate: string): Promise<string | null> {
   const { rows } = await dbQuery<{ id: string }>(
     `SELECT sl.id::text AS id
        FROM reels.score_slates sl
@@ -87,7 +109,7 @@ export async function todaySlateFor(postIdeaId: string, now = new Date()): Promi
       WHERE sl.ny_date = $2::date
       ORDER BY sl.scored_at DESC
       LIMIT 1`,
-    [postIdeaId, calendarDateKey(now)],
+    [postIdeaId, nyDate],
   );
   return rows[0]?.id ?? null;
 }

@@ -3,39 +3,60 @@ import type { HubQuery } from '@/lib/social-hub/db';
 import { reasonFor } from '@/lib/social-hub/health/reasons';
 import { weekdayIndex } from '@/lib/social-hub/health/time';
 import type { FailureEvent, FunnelStep, NightReport } from '@/lib/social-hub/health/types';
+import { leadDaysFor } from '@/lib/social-hub/lead';
+import type { StorySeries } from '@/lib/social-hub/slots/types';
 import { addDays } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 
 export type ReportContext = { night: string; posting: PostingState; now: Date };
 export type Reporter = (q: HubQuery, ctx: ReportContext) => Promise<NightReport>;
 
+/**
+ * The date a night's run fills for a type (Bald-Eagle D4, lib/social-hub/lead.ts): the night itself for a
+ * same-day type, night + 2 for a type made ahead (Stories: per series). The run day stays `night` for what
+ * ran; the quota and the bookings it is measured against are the target date's.
+ */
+export function quotaDay(night: string, vertical: Vertical, series?: StorySeries | null): string {
+  return addDays(night, leadDaysFor(vertical, series));
+}
+
 export function quotaFor(posting: PostingState, night: string): number {
   if (posting.type === 'ai_events' || posting.type === 'field_notes') {
     // AI Events' Sunday noon run and evening post fall in the next night's cycle: night N asks about N−1's
-    // slot (or weekday). Field Notes runs at 2 AM, inside its own day's night: night N asks about N.
-    const sunday = posting.type === 'field_notes' ? night : addDays(night, -1);
+    // slot (or weekday). Field Notes runs at 2 AM inside night N and (lead 2) makes N+2's post: night N asks
+    // about N+2 (the steady state; the cutover night's extra N+1 post is not counted as owed).
+    const sunday = posting.type === 'field_notes' ? quotaDay(night, 'field_notes') : addDays(night, -1);
     const slot = posting.nights?.find((d) => d.nyDate === sunday) ?? posting.schedule?.find((d) => d.nyDate === sunday);
     if (slot) return Math.min(slot.count > 0 ? 1 : 0, posting.cap ?? Number.POSITIVE_INFINITY);
     return posting.days?.includes(weekdayIndex(sunday)) ? 1 : 0;
   }
-  // Template mode: the night's own slots (the recent nights, else this week's; perDay is today's count),
-  // never more than the daily limit (Stories: per series), as the overnight runs make them.
-  const slots = posting.nights?.find((d) => d.nyDate === night) ?? posting.schedule?.find((d) => d.nyDate === night);
-  if (slots) {
-    const cap = posting.cap ?? Number.POSITIVE_INFINITY;
-    if (posting.type === 'last_few_days') return Math.min(slots.count > 0 ? 1 : 0, cap);
-    if (posting.type === 'stories') {
-      return (posting.series ?? [])
-        .filter((s) => s.enabled && s.generate)
-        .reduce((n, s) => n + Math.min(slots.series.filter((x) => x === s.id).length, cap), 0);
+  // Template mode: the slots of the date the night fills (quotaDay: the night itself, or 2 days on for a type
+  // made ahead; the recent nights, else this week's; perDay is today's count), never more than the daily limit
+  // (Stories: per series, each series on its own target date), as the overnight runs make them.
+  const slotsOn = (day: string) => posting.nights?.find((d) => d.nyDate === day) ?? posting.schedule?.find((d) => d.nyDate === day);
+  const cap = posting.cap ?? Number.POSITIVE_INFINITY;
+  if (posting.type === 'stories') {
+    const series = (posting.series ?? []).filter((s) => s.enabled && s.generate);
+    if (posting.nights || posting.schedule) {
+      return series.reduce((n, s) => {
+        const slots = slotsOn(quotaDay(night, 'stories', s.id as StorySeries));
+        if (slots) return n + Math.min(slots.series.filter((x) => x === s.id).length, cap);
+        return n + (s.days.includes(weekdayIndex(quotaDay(night, 'stories', s.id as StorySeries))) ? 1 : 0);
+      }, 0);
     }
+    return series.filter((s) => s.days.includes(weekdayIndex(quotaDay(night, 'stories', s.id as StorySeries)))).length;
+  }
+  const day = quotaDay(night, posting.type as Vertical);
+  const slots = slotsOn(day);
+  if (slots) {
+    if (posting.type === 'last_few_days') return Math.min(slots.count > 0 ? 1 : 0, cap);
     return Math.min(slots.count, cap);
   }
   // Last Few Days: one post on each of its days (spec §7.4).
-  if (posting.days) return posting.days.includes(weekdayIndex(night)) ? 1 : 0;
+  if (posting.days) return posting.days.includes(weekdayIndex(day)) ? 1 : 0;
   if (posting.series) {
-    const day = weekdayIndex(night);
-    return posting.series.filter((s) => s.enabled && s.generate && s.days.includes(day)).length;
+    const wd = weekdayIndex(day);
+    return posting.series.filter((s) => s.enabled && s.generate && s.days.includes(wd)).length;
   }
   return posting.perDay ?? 0;
 }
@@ -68,7 +89,11 @@ export type Publishing = {
 
 type SlotRow = { id: string; status: string; error: string | null; publish_at: string; content_item_id: string | null; failed_attempts: number; last_error: string | null };
 
-export async function publishingFor(q: HubQuery, vertical: Vertical, night: string): Promise<Publishing> {
+/**
+ * What was posted yesterday (night − 1, the run day's neighbor, whatever the lead) and what is already booked
+ * on the date the night fills (`target`, default the night itself; a type made ahead passes quotaDay).
+ */
+export async function publishingFor(q: HubQuery, vertical: Vertical, night: string, target: string = quotaDay(night, vertical)): Promise<Publishing> {
   const yesterday = addDays(night, -1);
   const { rows } = await q<SlotRow>(
     `SELECT s.id::text, s.status, s.error, s.publish_at::text, s.content_item_id::text,
@@ -99,7 +124,7 @@ export async function publishingFor(q: HubQuery, vertical: Vertical, night: stri
   const today = await q<{ source: string; n: number }>(
     `SELECT source, count(*)::int AS n FROM social_hub.schedule
       WHERE vertical = $1 AND ny_date = $2::date AND status <> 'cancelled' GROUP BY source`,
-    [vertical, night],
+    [vertical, target],
   );
   const count = (source: string) => today.rows.find((r) => r.source === source)?.n ?? 0;
   return { scheduledYesterday: rows.length, postedYesterday: posted, retriedOk, failures, placedToday: count('user'), filledAutoToday: count('auto') };

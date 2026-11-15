@@ -12,7 +12,8 @@ import test, { after, before } from 'node:test';
 
 import { createFieldNotesBudget, FieldNotesBudgetExhausted } from '@/lib/field-notes/budget';
 import { buildFieldNotesCaption, CAPTION_MAX_CHARS, FIELD_NOTES_FOLLOW_LINE, parseHowToTry } from '@/lib/field-notes/caption';
-import { firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue } from '@/lib/field-notes/clock';
+import { fieldNotesTarget, firstFieldNotesCheckAt, nextFieldNotesRunAt, noonQueue } from '@/lib/field-notes/clock';
+import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { FIELD_NOTES_SLIDE_PREFIX } from '@/lib/field-notes/config';
 import { queueManualFieldNotesRun } from '@/lib/field-notes/manual';
 import { checkPhotoPool, MAX_PER_KIND, pickPostPhotos, pickReplacement } from '@/lib/field-notes/photos/pool';
@@ -22,7 +23,7 @@ import { FOLLOW_HAND_TEXT } from '@/lib/field-notes/render/layout';
 import { runFieldNotes } from '@/lib/field-notes/run';
 import { approveFieldNotesPost, hardPublishFieldNotesPost, rejectFieldNotesPost } from '@/lib/field-notes/schedule';
 import { parseFieldNotesSettings, readFieldNotesSettings } from '@/lib/field-notes/settings';
-import { claimRun, expireOldTips, getPost, getTip, insertPost, listSelectableTips, nextPostSeq, pendingDraftCount, recentPostWants, requestRun, saveCandidateTip, saveSeededLink, scheduledRunToday, setTipContent } from '@/lib/field-notes/store';
+import { claimRun, expireOldTips, getPost, getTip, insertPost, listSelectableTips, nextPostSeq, pendingDraftCount, recentPostWants, requestRun, saveCandidateTip, saveSeededLink, scheduledRunToday, setTipContent, fieldNotesFilledDates } from '@/lib/field-notes/store';
 import type { TipTags } from '@/lib/field-notes/sources/score';
 import { tipToCandidate } from '@/lib/field-notes/run';
 import type { Want } from '@/lib/field-notes/types';
@@ -396,31 +397,24 @@ test('the cap stops a run before the first call, and a spent cap skips the Edito
   }
 });
 
-test('max_pending_drafts: a full review queue refuses Generate and skips the run; approving one makes room', async () => {
+test('max_pending_drafts: a full review queue stops neither the Generate button nor a queued (nightly) run', async () => {
   const { query } = await freshDb();
   await addPool(query, 6);
   const dummy = (n: number) => insertPost(query, `field-notes-2026-10-0${n}`, { runId: null, tipIds: [], nyDate: `2026-10-0${n}`, slides: [], photoIds: [], caption: 'c', slideObjects: ['a', 'b'], fitProblems: [], renderProblems: [], softNotes: [] });
   const ids = [(await dummy(1)).id, (await dummy(2)).id, (await dummy(3)).id];
   assert.equal(await pendingDraftCount(query), 3);
-  const refused = await queueManualFieldNotesRun(query, 'tommy');
-  assert.equal(refused.ok, false);
-  assert.match(refused.note, /waiting for review \(the limit is 3\)/);
-  // The engine itself refuses too (a run queued before the queue filled).
+  // The run itself ignores the limit: posts waiting for review are a safety net, not a reason to skip the night.
+  await setSetting(query, 'max_pending_drafts', 1);
+  assert.ok((await pendingDraftCount(query)) > 1);
   const [tipId] = await seedSet(query, 3);
-  const engine = stubEngine(query);
-  const { w } = worker(query, engine);
+  const { w } = worker(query, stubEngine(query));
   const r = await carryOutFieldNotesRun(w, await claim(query, tipId));
-  assert.equal(r.status, 'skipped');
-  assert.match((await runRow(query, r.runId)).stop_reason ?? '', /^pending-drafts:/);
-  assert.equal(engine.claudeStub.calls.length, 0);
-  // A person approves one: it no longer waits on anyone.
-  const out = await approveFieldNotesPost(query, ids[0]!, NOW, 'lucas');
-  assert.equal(out.scheduled, false);
-  assert.equal(await pendingDraftCount(query), 2);
-  assert.equal((await queueManualFieldNotesRun(query, 'tommy', { seedTipId: tipId })).ok, true);
-  // A lower setting counts the same way.
-  await setSetting(query, 'max_pending_drafts', 2);
-  assert.equal((await readFieldNotesSettings(query)).maxPendingDrafts, 2);
+  assert.doesNotMatch((await runRow(query, r.runId)).stop_reason ?? '', /^pending-drafts:/);
+  // So does the Generate button.
+  assert.equal(await pendingDraftCount(query), 4);
+  const [fresh] = await seedSet(query, 3, 'fresh');
+  { const g = await queueManualFieldNotesRun(query, 'tommy', { seedTipId: fresh }); assert.equal(g.ok, true, g.note); }
+  void ids;
 });
 
 test('the photo rest rule: used photos sit out the next 8 posts, newest first, and come back after', async () => {
@@ -891,40 +885,114 @@ test('the budget meter prices every call and refuses past the cap', async () => 
 test('auto_run false means the clock says off, whatever the day', () => {
   const off = parseFieldNotesSettings([{ key: 'auto_run', value: false }]);
   assert.equal(off.autoRun, false);
-  for (const day of ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-06']) {
+  for (const day of ['2026-11-08', '2026-11-09', '2026-11-11', '2026-11-14']) {
     const d = noonQueue(new Date(`${day}T07:00:00Z`), off);
     assert.equal(d.queue, false);
     assert.equal(d.reason, 'Field Notes auto_run is off');
   }
   assert.equal(noonQueue(NOW, null).queue, false);
   const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
-  assert.equal(noonQueue(new Date('2026-11-03T07:00:00Z'), on).queue, true, 'Tuesday');
-  assert.equal(noonQueue(new Date('2026-11-04T07:00:00Z'), on).queue, false, 'Wednesday');
-  assert.equal(noonQueue(new Date('2026-11-03T07:00:00Z'), parseFieldNotesSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }])).queue, false);
+  // Bald-Eagle D4: the run is 2 days ahead, so Sunday's check makes Tuesday's post and Wednesday's makes Friday's.
+  const sunday = noonQueue(new Date('2026-11-08T07:00:00Z'), on);
+  assert.equal(sunday.queue, true, 'Sunday makes Tuesday');
+  assert.equal(sunday.target, '2026-11-10');
+  assert.equal(noonQueue(new Date('2026-11-11T07:00:00Z'), on).target, '2026-11-13', 'Wednesday makes Friday');
+  assert.equal(noonQueue(new Date('2026-11-14T07:00:00Z'), on).queue, false, 'Saturday: no Field Notes day on Sun or Mon');
+  assert.equal(noonQueue(new Date('2026-11-08T07:00:00Z'), parseFieldNotesSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }])).queue, false);
   assert.ok(firstFieldNotesCheckAt(NOW).getTime() >= NOW.getTime());
 });
 
-test('the 2:00 AM check never queues twice a day: a scheduled run today, or a check over 2 h late, says no (fix 8)', async () => {
+test('template mode: the calendar, not the Tuesday/Friday days, decides which date the 2:00 AM check makes', () => {
   const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
-  const tuesday2am = new Date('2026-11-03T07:00:00Z');
-  assert.equal(noonQueue(tuesday2am, on, false).queue, true);
-  assert.equal(noonQueue(tuesday2am, on, null).queue, true, 'unknown: the check goes on');
-  const again = noonQueue(tuesday2am, on, true);
+  const wednesday2am = new Date('2026-11-11T07:00:00Z');
+  const tuesday2am = new Date('2026-11-10T07:00:00Z');
+  // A slot a person placed on a Thursday (Wednesday + 1) queues a run for it, though Thursday is not an auto day.
+  const placed = noonQueue(wednesday2am, on, false, (d) => d === '2026-11-12');
+  assert.equal(placed.queue, true);
+  assert.equal(placed.target, '2026-11-12');
+  assert.match(placed.reason, /calendar/);
+  // No calendar slot in the window means no run, though Friday is an auto day.
+  const none = noonQueue(wednesday2am, on, false, () => false);
+  assert.equal(none.queue, false);
+  assert.match(none.reason, /no unfilled Field Notes day/);
+  // Legacy mode (null): the weekday rule stands (Wednesday's window holds Friday; Tuesday's holds Tuesday itself,
+  // already made by Sunday's run, then Wed and Thu).
+  assert.equal(noonQueue(wednesday2am, on, false, null).target, '2026-11-13');
+  assert.equal(noonQueue(tuesday2am, on, false, null, new Set(['2026-11-10'])).queue, false);
+  // A calendar slot never overrides the safety rails: auto_run off, a run already queued today, a bad cap, a late restart.
+  const slot = (d: string) => d === '2026-11-12';
+  assert.equal(noonQueue(wednesday2am, parseFieldNotesSettings([{ key: 'auto_run', value: false }]), false, slot).queue, false);
+  assert.equal(noonQueue(wednesday2am, on, true, slot).queue, false, 'one scheduled run a night');
+  assert.equal(noonQueue(wednesday2am, parseFieldNotesSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }]), false, slot).queue, false);
+  assert.equal(noonQueue(new Date('2026-11-11T09:01:00Z'), on, false, slot).queue, false, '4:01 AM restart: no run');
+});
+
+test('lead time: the run targets the earliest unfilled Field Notes day among the run day and the next 2; the cutover fills the earliest first', () => {
+  const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
+  const both = (d: string) => d === '2026-11-12' || d === '2026-11-13';
+  const wed = new Date('2026-11-11T07:00:00Z');
+  // Cutover night (D8): Thursday and Friday are both unfilled: Thursday (day+1) first.
+  assert.equal(fieldNotesTarget('2026-11-11', both), '2026-11-12');
+  assert.equal(noonQueue(wed, on, false, both).target, '2026-11-12');
+  // Steady state: day+1 was made the night before, so only day+2 is made.
+  assert.equal(noonQueue(wed, on, false, both, new Set(['2026-11-12'])).target, '2026-11-13');
+  // Everything in the window filled: nothing is queued.
+  assert.equal(noonQueue(wed, on, false, both, new Set(['2026-11-12', '2026-11-13'])).queue, false);
+  // The run day itself counts (its 2:30 PM window is still ahead at 2:00 AM; integration review M1); never past day+2.
+  assert.equal(fieldNotesTarget('2026-11-11', (d) => d === '2026-11-11' || d === '2026-11-14'), '2026-11-11');
+  assert.equal(fieldNotesTarget('2026-11-11', (d) => d === '2026-11-14'), null);
+});
+
+test('the 2:00 AM check never queues twice a night: a scheduled run requested today, or a check over 2 h late, says no (fix 8)', async () => {
+  const on = parseFieldNotesSettings([{ key: 'auto_run', value: true }]);
+  const sunday2am = new Date('2026-11-08T07:00:00Z');
+  assert.equal(noonQueue(sunday2am, on, false).queue, true);
+  assert.equal(noonQueue(sunday2am, on, null).queue, true, 'unknown: the check goes on');
+  const again = noonQueue(sunday2am, on, true);
   assert.equal(again.queue, false);
-  assert.match(again.reason, /already exists for 2026-11-03/);
-  assert.equal(noonQueue(new Date('2026-11-03T08:59:00Z'), on, false).queue, true, '3:59 AM: still catching up');
-  const restart = noonQueue(new Date('2026-11-03T09:01:00Z'), on, false);
+  assert.match(again.reason, /already queued on 2026-11-08/);
+  assert.equal(noonQueue(new Date('2026-11-08T08:59:00Z'), on, false).queue, true, '3:59 AM: still catching up');
+  const restart = noonQueue(new Date('2026-11-08T09:01:00Z'), on, false);
   assert.equal(restart.queue, false, '4:01 AM: a restart later in the day does not run it');
   assert.match(restart.reason, /catch-up only within 2 h/);
-  assert.equal(noonQueue(new Date('2026-11-04T03:00:00Z'), on, false).queue, false, '10 PM restart: no run');
+  assert.equal(noonQueue(new Date('2026-11-09T03:00:00Z'), on, false).queue, false, '10 PM restart: no run');
 
   const { query } = await freshDb();
+  const tuesday2am = new Date('2026-11-03T07:00:00Z');
   assert.equal(await scheduledRunToday(query, '2026-11-03'), false);
   await query(`INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_at) VALUES ('scheduled', 'build', 'ok', 0.5, $1)`, [tuesday2am]);
   assert.equal(await scheduledRunToday(query, '2026-11-03'), true);
   assert.equal(await scheduledRunToday(query, '2026-11-04'), false);
   await query(`INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_at) VALUES ('manual', 'build', 'ok', 0.5, '2026-11-04T08:00:00Z')`);
   assert.equal(await scheduledRunToday(query, '2026-11-04'), false, 'a person\'s Generate is not the clock');
+  // A run made two days ahead FOR Nov 6 (ny_date) never blocks Nov 6's own check.
+  await query(`INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_at, ny_date) VALUES ('scheduled', 'build', 'ok', 0.5, '2026-11-04T07:00:00Z', '2026-11-06')`);
+  assert.equal(await scheduledRunToday(query, '2026-11-06'), false);
+});
+
+test('lead time: a clock run dates its post with its target; the filled check and approval book that date, not today', async () => {
+  const { query } = await freshDb();
+  await addPool(query, 6);
+  const tipIds = await seedSet(query, 3, 'lead');
+  const target = '2026-11-20';
+  await requestRun(query, 'scheduled', 0.5, { nyDate: target, seedTipId: tipIds[0] });
+  const claimed = (await claimRun(query, NOW))!;
+  assert.equal(claimed.nyDate, target, 'the claim carries the target date');
+  assert.deepEqual([...(await fieldNotesFilledDates(query, [target]))], [target], 'a running run is not a post yet, but it holds its date');
+  const r = await carryOutFieldNotesRun(worker(query, stubEngine(query)).w, claimed);
+  assert.equal(r.status, 'ok', r.note);
+  const row = (await query<{ ny_date: string }>(`SELECT ny_date::text AS ny_date FROM field_notes.posts WHERE id = $1`, [r.postId])).rows[0]!;
+  assert.equal(row.ny_date.slice(0, 10), target, 'the post is for the target date, not the run day');
+  const run = (await query<{ ny_date: string }>(`SELECT ny_date::text AS ny_date FROM field_notes.runs WHERE id = $1`, [claimed.id])).rows[0]!;
+  assert.equal(run.ny_date.slice(0, 10), target);
+  assert.deepEqual([...(await fieldNotesFilledDates(query, ['2026-11-19', target]))], [target], 'one post per Field Notes day');
+  // A person's Generate (no target) is dated today, as before.
+  const manual = await seedSet(query, 3, 'manual');
+  await query(`UPDATE field_notes.pool SET status = 'live', last_used_post_seq = NULL`);
+  const r2 = await carryOutFieldNotesRun(worker(query, stubEngine(query)).w, await claim(query, manual[0]));
+  assert.equal(r2.status, 'ok', r2.note);
+  const row2 = (await query<{ ny_date: string }>(`SELECT ny_date::text AS ny_date FROM field_notes.posts WHERE id = $1`, [r2.postId])).rows[0]!;
+  assert.equal(row2.ny_date.slice(0, 10), calendarDateKey(NOW, SOCIAL_TIMEZONE));
 });
 
 test('the Field Notes check runs at 2:00 AM New York (night schedule v2)', () => {

@@ -164,8 +164,10 @@ const originLabel = (o: string) => ({ reels: 'Text on Screen', carousel: 'Carous
 
 /**
  * Write a fresh gather into stories.pool:
- *   1. upsert each returned idea (a used row is never touched)
- *   2. anything stories.history has shown is used
+ *   1. upsert each returned idea (a used row is never touched, except Morning Download's: a story the
+ *      intake still returns is reopened, because new articles keep joining the same intake story and
+ *      md-development.ts decides whether it is news again; Bald-Eagle D2)
+ *   2. anything stories.history has shown is used (not Morning Download, for the same reason)
  *   3. a fully read series drops its unused rows the refresh did not return
  *   4. any unused row past its series' freshness window drops
  *      (a person's own seeds, keyed `seed:`, are never dropped by 3, 4 or 5)
@@ -180,14 +182,15 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::timestamptz)
        ON CONFLICT (series, key) DO UPDATE SET
          origin = EXCLUDED.origin, ref = EXCLUDED.ref, title = EXCLUDED.title,
-         payload = EXCLUDED.payload, score = EXCLUDED.score, refreshed_at = EXCLUDED.refreshed_at
-       WHERE stories.pool.used_at IS NULL`,
+         payload = EXCLUDED.payload, score = EXCLUDED.score, refreshed_at = EXCLUDED.refreshed_at,
+         used_at = CASE WHEN stories.pool.series = 'morning_download' THEN NULL ELSE stories.pool.used_at END
+       WHERE stories.pool.used_at IS NULL OR stories.pool.series = 'morning_download'`,
       [item.series, item.key, item.origin, item.ref, item.title, JSON.stringify(item.payload), item.score, now.toISOString()],
     );
   }
   await db.query(
     `UPDATE stories.pool p SET used_at = $1::timestamptz
-      WHERE p.used_at IS NULL
+      WHERE p.used_at IS NULL AND p.series <> 'morning_download'
         AND EXISTS (SELECT 1 FROM stories.history h WHERE h.series = p.series AND (h.key = p.key OR h.key = p.payload->>'story_key'))`,
     [now.toISOString()],
   );

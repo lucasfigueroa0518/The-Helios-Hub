@@ -122,8 +122,10 @@ test('readUsedLedger: a 42703 falls back to URL-only rows written by a publish p
   };
   const l = await readUsedLedger(query as never, new Date('2026-11-10T00:00:00Z'));
   assert.deepEqual([[...l.urls], l.phashes, l.dhashes], [['https://img.test/a.jpg'], [], []]);
-  assert.equal(asked.length, 2);
-  assert.match(asked[1]!, /story_id LIKE 'lfd:%' OR story_id LIKE 'stories:%'/, 'the legacy read keeps published rows only');
+  // Two published reads (new columns, then legacy); the waiting-items read (Bald-Eagle D3) fails soft after them.
+  const ledgerReads = asked.filter((t) => t.includes('FROM social.used_photos'));
+  assert.equal(ledgerReads.length, 2);
+  assert.match(ledgerReads[1]!, /story_id LIKE 'lfd:%' OR story_id LIKE 'stories:%'/, 'the legacy read keeps published rows only');
   // Any other error is not swallowed.
   await assert.rejects(readUsedLedger((async () => { throw Object.assign(new Error('down'), { code: '08006' }); }) as never, new Date()), /down/);
 });

@@ -1,5 +1,5 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { readUsedLedger, usedMatch } from '@/lib/photos/used';
+import { readUsedLedger, usedMatch, type LedgerReadOptions } from '@/lib/photos/used';
 
 import { isPhash } from './filters';
 
@@ -29,15 +29,34 @@ export async function usedCandidates<T extends { url?: string | null; phash?: st
   cands: readonly T[],
   reuseDays: number,
   now: Date,
+  opts: LedgerReadOptions = {},
 ): Promise<Map<T, string>> {
   const out = new Map<T, string>();
   if (!cands.length || reuseDays <= 0) return out;
-  const ledger = await readUsedLedger((text, params) => db.query(text, params) as Promise<{ rows: any[] }>, now, reuseDays);
+  const ledger = await readUsedLedger((text, params) => db.query(text, params) as Promise<{ rows: any[] }>, now, reuseDays, opts);
   for (const c of cands) {
     const why = usedMatch(ledger, { url: c.url, phash: c.phash });
     if (why) out.set(c, why);
   }
   return out;
+}
+
+/**
+ * The item a remake must not be blocked by (Bald-Eagle D3 photo hold, lib/photos/pending.ts): the ledger holds the
+ * photos of the pitch's newest finished reel while it waits to post, and a remake of that pitch (this job) would
+ * otherwise refuse its own earlier pictures. That reel is the pitch's newest ok job (this one, when it is ok and the
+ * newest), in the hold's own order. `db` is the drama database. Null: no earlier reel, or no job.
+ */
+export async function ownHeldItem(db: Queryable, jobId: string | null): Promise<{ vertical: 'reel_ai_drama'; id: string } | null> {
+  if (!jobId) return null;
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT o.id::text AS id FROM reel_ai_drama.jobs me
+       JOIN reel_ai_drama.jobs o ON o.pitch_id = me.pitch_id AND o.status = 'ok'
+      WHERE me.id = $1
+      ORDER BY coalesce(o.finished_at, o.requested_at) DESC, o.id DESC LIMIT 1`,
+    [jobId],
+  );
+  return rows[0] ? { vertical: 'reel_ai_drama', id: rows[0].id } : null;
 }
 
 /**

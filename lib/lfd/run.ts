@@ -464,7 +464,9 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     /** Verdicts by story key + photo: a slide unchanged since the last render is not looked at again. */
     const verdicts = new Map<string, SlideVerdict>();
     // CI-32: photos published in the last 20 days, by URL (the exclude set) and by picture (the ledger's hashes).
-    const ledger = await recentPhotoLedger(d.query, d.now);
+    // Bald-Eagle D3: the day's earlier post still waiting in review is what this run replaces; its photos don't count.
+    const { waitingItemsOn } = await import('@/lib/photos/pending');
+    const ledger = await recentPhotoLedger(d.query, d.now, undefined, { excludeItem: await waitingItemsOn((text, params) => d.query(text, params), 'lfd', nyDate) });
     const exclude = new Set(ledger.urls);
     // Builder-slide harvests share one budget per post (round 3: $0.15).
     const harvestBudget: HarvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };

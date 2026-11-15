@@ -54,7 +54,11 @@ import {
   type IdeaModel,
   type PayloadRequest,
 } from '@/lib/explainers/ideas/generator';
-import { getTopic, listPool, listTopics } from '@/lib/explainers/repository';
+import { getTopic, listPool, listTopics, nyDate } from '@/lib/explainers/repository';
+import { fillDates } from '@/lib/social-hub/lead';
+import { addDays } from '@/lib/social-hub/time';
+import { explainerJobTarget, jobsHaveTargetDate } from '@/lib/explainers/lead';
+import { bookFinishedRender } from '@/lib/explainers/publish/schedule';
 import { weightedScore } from '@/lib/explainers/scoring';
 import { saveSetting } from '@/lib/explainers/settings';
 import { GAP_KEYS, type AnalogyCandidate, type AnalogyNote, type GapCandidate, type GapNote, type GapScores, type IdeaScoreKey } from '@/lib/explainers/types';
@@ -235,6 +239,16 @@ function stubIdeas(
       };
     },
   };
+}
+
+/**
+ * Lead time (Bald-Eagle D4, D8): earlier nights filled today and tomorrow, so a run fills only day+2, as on every night
+ * after the cutover. Tests of one night's cycle start here; the cutover has its own test.
+ */
+async function steadyState(db: ExplainersDb, now: Date = new Date()) {
+  for (const d of [nyDate(now), addDays(nyDate(now), 1)]) {
+    await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [d]);
+  }
 }
 
 async function seedPool(db: ExplainersDb, entries: [string, Scores][], origin: 'manual' | 'seeded' = 'seeded') {
@@ -496,6 +510,7 @@ test('the daily cycle generates, dedupes, promotes, queues, and logs telemetry o
   const { db } = await scratchExplainersDb();
   await seedPool(db, [['Primary keys', GOOD]]);
   await saveSetting(db, 'auto_render', true);
+  await steadyState(db);
 
   const ideas = stubIdeas([[
     ['APIs', 'Explain an API call.'],
@@ -516,8 +531,12 @@ test('the daily cycle generates, dedupes, promotes, queues, and logs telemetry o
   assert.equal(promoted?.status, 'queued');
   assert.ok(result.render?.ok);
   if (result.render?.ok) assert.equal(result.render.job.trigger, 'auto');
+  const day2 = addDays(nyDate(), 2);
+  const { rows: [job] } = await db.query<{ d: string }>(`SELECT target_date::text AS d FROM explainers.jobs`);
+  assert.equal(job?.d, day2, 'the render carries the date it is made for');
 
-  const { rows: [cycle] } = await db.query<Record<string, unknown>>('SELECT * FROM explainers.idea_cycles');
+  const { rows: [cycle] } = await db.query<Record<string, unknown>>('SELECT *, ny_date::text AS d FROM explainers.idea_cycles WHERE id = $1', [result.cycleId]);
+  assert.equal(cycle.d, day2, 'the cycle is keyed by the date it filled');
   assert.equal(cycle.status, 'ok');
   assert.equal(cycle.ideas_generated, 3);
   assert.equal(cycle.ideas_surviving_dedupe, 2);
@@ -537,8 +556,17 @@ test('production: the idea run is skipped once the day has spent its cap', async
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
   await saveSetting(db, 'mode', 'production');
+  await steadyState(db);
+  // The date the night fills (day+2) has spent its cap: a render made for it cost 10.
+  const [seeded] = await seedPool(db, [['Primary keys', GOOD]]);
+  const { rows: [job] } = await db.query<{ id: string }>(
+    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, target_date)
+     VALUES ($1, 'ok', 'auto', 'production', 5, 'm', 'm', $2::date) RETURNING id`,
+    [seeded!.topicId, addDays(nyDate(), 2)],
+  );
   await db.query(
-    `INSERT INTO explainers.cost_events (mode, vendor, component, usd) VALUES ('production', 'anthropic', 'render', 10)`,
+    `INSERT INTO explainers.cost_events (job_id, mode, vendor, component, usd) VALUES ($1, 'production', 'anthropic', 'render', 10)`,
+    [job!.id],
   );
   const ideas = stubIdeas([]);
   const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev({}).transport });
@@ -556,6 +584,80 @@ test('a failed generator call marks the cycle failed and keeps the pool', async 
 });
 
 
+test('lead time (Bald-Eagle D4, D8): the cutover night fills day+1 and day+2, each once; later nights only day+2; a forced run fills today', async () => {
+  const { db } = await scratchExplainersDb();
+  await seedPool(db, [['Primary keys', GOOD]]);
+  await saveSetting(db, 'auto_render', true);
+  const MON = new Date('2026-10-12T06:00:00Z'); // Monday 2:00 AM New York
+  // The cutover night: nothing is filled yet, so every date fillDates names (through day+2) gets a cycle of its own.
+  const DATES = fillDates('2026-10-12', 2);
+  assert.deepEqual(DATES, ['2026-10-12', '2026-10-13', '2026-10-14'], 'the run day too: an unfilled run day is filled on the cutover');
+  const ideas = stubIdeas(['APIs', 'Hashing', 'Sorting'].map((t) => [[t, `Explain ${t}.`]]));
+  const { transport } = stubJev({ APIs: STRONG, Hashing: STRONG, Sorting: STRONG });
+  const cutover = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: transport, now: MON });
+  assert.equal(cutover.status, 'ok');
+  if (cutover.status !== 'ok') return;
+  assert.deepEqual(cutover.dates?.map((d) => [d.nyDate, d.status]), DATES.map((d) => [d, 'ok']));
+  assert.equal(ideas.requests.length, DATES.length, 'one idea call per date filled');
+  const cycles = async () => (await db.query<{ d: string; status: string }>(`SELECT ny_date::text AS d, status FROM explainers.idea_cycles ORDER BY ny_date`)).rows;
+  assert.deepEqual(await cycles(), DATES.map((d) => ({ d, status: 'ok' })));
+  // Every night render carries one of the dates filled.
+  const jobs = async () => (await db.query<{ d: string; trigger: string }>(`SELECT target_date::text AS d, trigger FROM explainers.jobs ORDER BY target_date, seq`)).rows;
+  const made = await jobs();
+  assert.ok(made.length >= 2);
+  assert.ok(made.every((j) => j.trigger === 'auto' && DATES.includes(j.d)), JSON.stringify(made));
+  assert.deepEqual(await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: transport, now: MON }), { status: 'skipped', reason: 'already_ran_today' });
+
+  // Tuesday: the 14th was filled Monday, so only the 15th.
+  const TUE = new Date('2026-10-13T06:00:00Z');
+  const next = await runIdeaCycle({ db, ideaModel: stubIdeas([[['Caching', 'Explain a cache.']]]), jevTransport: stubJev({ Caching: STRONG }).transport, now: TUE });
+  assert.equal(next.status, 'ok');
+  if (next.status === 'ok') assert.deepEqual(next.dates?.filter((d) => d.status === 'ok').map((d) => d.nyDate), ['2026-10-15']);
+  assert.deepEqual((await cycles()).map((c) => c.d), [...DATES, '2026-10-15']);
+
+  // A person's "Run the idea cycle now" stays on the day clicked.
+  const forced = await scratchExplainersDb();
+  await seedPool(forced.db, [['Primary keys', GOOD]]);
+  const run = await runIdeaCycle({ db: forced.db, ideaModel: stubIdeas([[['APIs', 'Explain an API call.']]]), jevTransport: stubJev({ APIs: STRONG }).transport, now: TUE, force: true });
+  assert.equal(run.status, 'ok');
+  const { rows: own } = await forced.db.query<{ d: string; t: string | null }>(
+    `SELECT c.ny_date::text AS d, (SELECT j.target_date::text FROM explainers.jobs j LIMIT 1) AS t FROM explainers.idea_cycles c`);
+  assert.deepEqual(own, [{ d: '2026-10-13', t: null }], 'today, and its render is today’s (no target date)');
+});
+
+test('lead time before the SQL is applied (no target_date column): a night render still books the date its cycle fills', async () => {
+  const { db } = await scratchExplainersDb();
+  await db.query(`ALTER TABLE explainers.jobs DROP COLUMN target_date`);
+  assert.equal(await jobsHaveTargetDate(db), false);
+  await seedPool(db, [['Primary keys', GOOD]]);
+  await saveSetting(db, 'auto_render', true);
+  await steadyState(db);
+  const result = await runIdeaCycle({
+    db,
+    ideaModel: stubIdeas([[['APIs', 'Explain an API call.']]]),
+    jevTransport: stubJev({ APIs: STRONG }).transport,
+  });
+  assert.equal(result.status, 'ok');
+  const day2 = addDays(nyDate(), 2);
+  const { rows: [job] } = await db.query<{ id: string }>(`SELECT id::text AS id FROM explainers.jobs WHERE trigger = 'auto' LIMIT 1`);
+  assert.equal(await explainerJobTarget(db, job!.id), day2, 'read from the idea cycle that requested it');
+
+  // It finishes; with publishing live its finish booking takes day+2, not today's leftover window.
+  await db.query(`UPDATE explainers.jobs SET status = 'ok', finished_at = now() WHERE id = $1`, [job!.id]);
+  await db.query(`INSERT INTO explainers.artifacts (job_id, kind, storage_path, bytes, storage_location) VALUES ($1, 'video', 'v.mp4', 10, 'bucket')`, [job!.id]);
+  await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  const booked = await bookFinishedRender(db, { id: job!.id, trigger: 'auto' }, new Date(), () => 0);
+  assert.equal(booked?.scheduled, true);
+  const { rows: slots } = await db.query<{ d: string }>(`SELECT ny_date::text AS d FROM social_hub.schedule WHERE vertical = 'explainers'`);
+  assert.deepEqual(slots.map((r) => r.d), [day2]);
+
+  // A person's render (no cycle) has no target: today.
+  const { rows: [click] } = await db.query<{ id: string }>(
+    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model)
+     SELECT topic_id, 'ok', 'click', mode, 5, 'm', 'm' FROM explainers.jobs WHERE id = $1 RETURNING id::text AS id`, [job!.id]);
+  assert.equal(await explainerJobTarget(db, click!.id), null);
+});
+
 // ── Retrying a failed night ─────────────────────────────────────────────────
 
 import { CYCLE_RETRY_DELAY_MS, nextCycleTry } from '@/lib/explainers/ideas/retry';
@@ -566,10 +668,11 @@ test('a failed cycle may run once more, after the delay, and the failed row stay
   const { db } = await scratchExplainersDb();
   await seedPool(db, [['Primary keys', GOOD]]);
   await saveSetting(db, 'auto_render', true);
+  await steadyState(db, NIGHT);
 
   const first = await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: NIGHT });
   assert.equal(first.status, 'failed');
-  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1`, [NIGHT]); // the table stamps real time; pin it to the test clock
+  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1 WHERE status = 'failed'`, [NIGHT]); // the table stamps real time; pin it to the test clock
 
   const tooSoon = new Date(NIGHT.getTime() + CYCLE_RETRY_DELAY_MS - 60_000);
   const waiting = await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: tooSoon });
@@ -584,7 +687,7 @@ test('a failed cycle may run once more, after the delay, and the failed row stay
   });
   assert.equal(retry.status, 'ok');
 
-  const { rows } = await db.query<{ status: string }>('SELECT status FROM explainers.idea_cycles ORDER BY started_at');
+  const { rows } = await db.query<{ status: string }>(`SELECT status FROM explainers.idea_cycles WHERE ny_date = '2026-10-15' ORDER BY started_at`);
   assert.deepEqual(rows.map((r) => r.status).sort(), ['failed', 'ok']);
   const again = await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: later });
   assert.deepEqual(again, { status: 'skipped', reason: 'already_ran_today' });
@@ -593,14 +696,15 @@ test('a failed cycle may run once more, after the delay, and the failed row stay
 test('a night that failed twice is not tried a third time', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
+  await steadyState(db, NIGHT);
   const run = (now: Date) => runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now });
   assert.equal((await run(NIGHT)).status, 'failed');
-  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1`, [NIGHT]);
+  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1 WHERE status = 'failed'`, [NIGHT]);
   const second = new Date(NIGHT.getTime() + CYCLE_RETRY_DELAY_MS + 1000);
   assert.equal((await run(second)).status, 'failed');
   const third = new Date(second.getTime() + 3 * CYCLE_RETRY_DELAY_MS);
   assert.deepEqual(await run(third), { status: 'skipped', reason: 'retry_exhausted' });
-  const { rows } = await db.query('SELECT 1 FROM explainers.idea_cycles');
+  const { rows } = await db.query(`SELECT 1 FROM explainers.idea_cycles WHERE status = 'failed'`);
   assert.equal(rows.length, 2);
 });
 
@@ -608,12 +712,14 @@ test('a failed night that already has an auto render requested is not retried', 
   const { db } = await scratchExplainersDb();
   await seedPool(db, [['Primary keys', GOOD]]);
   await saveSetting(db, 'auto_render', true);
+  await steadyState(db, NIGHT);
   assert.equal((await runIdeaCycle({ db, ideaModel: stubIdeas([]), jevTransport: stubJev({}).transport, now: NIGHT })).status, 'failed');
-  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1`, [NIGHT]);
+  await db.query(`UPDATE explainers.idea_cycles SET finished_at = $1 WHERE status = 'failed'`, [NIGHT]);
   const { rows: [topic] } = await db.query<{ id: string }>('SELECT id FROM explainers.topics LIMIT 1');
+  // An auto render made for the failed date (day+2) holds its retry.
   await db.query(
-    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, requested_at)
-     VALUES ($1, 'requested', 'auto', 'development', 5, 'm', 'm', $2)`,
+    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, requested_at, target_date)
+     VALUES ($1, 'requested', 'auto', 'development', 5, 'm', 'm', $2, '2026-10-15')`,
     [topic.id, new Date(NIGHT.getTime() + 1000)],
   );
   const later = new Date(NIGHT.getTime() + CYCLE_RETRY_DELAY_MS + 1000);

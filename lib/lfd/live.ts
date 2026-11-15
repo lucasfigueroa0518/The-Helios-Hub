@@ -41,9 +41,15 @@ export async function lfdPhotoFinder(
   } catch (err) {
     log(`not built: ${err instanceof Error ? err.message : String(err)}`);
   }
-  // CI-32: the finder checks each pick's picture against the used-photo ledger (read once per run).
-  const { ledgerFrom } = await import('@/lib/photos/used-guard');
-  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, used: ledgerFrom((text, params) => query(text, params)), ...(bank ? { bank } : {}) }), bank };
+  // CI-32: the finder checks each pick's picture against the used-photo ledger (read once per run). Bald-Eagle D3: the
+  // day's earlier post still waiting in review is what "Make Last Few Days now" replaces, so its photos don't count.
+  const used = async () => {
+    const [{ readUsedLedger }, { waitingItemsOn }, { nyDateKey }] = await Promise.all([import('@/lib/photos/used'), import('@/lib/photos/pending'), import('@/lib/reels/scoring/decide')]);
+    const q = (text: string, params?: unknown[]) => query(text, params);
+    const now = new Date();
+    return readUsedLedger(q, now, undefined, { excludeItem: await waitingItemsOn(q, 'lfd', nyDateKey(now)) });
+  };
+  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, used, ...(bank ? { bank } : {}) }), bank };
 }
 
 /** The run's shared-finder wiring when the 'lfd' switch reads 'shared' (read once); undefined otherwise. Never throws. `make` is for tests. */

@@ -2,6 +2,7 @@ import type { Queryable } from '@/lib/explainers/db';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
+import { explainerJobTarget } from '@/lib/explainers/lead';
 import { POOL_ORDER_BY, REJECTED_SLOT_NOTE } from '@/lib/explainers/repository';
 import { queueOrder } from '@/lib/social-hub/queue';
 import type { IdeaAdjustment } from '@/lib/social-hub/views/moves';
@@ -48,18 +49,41 @@ export async function postsPerDay(db: Queryable): Promise<number> {
 export type ScheduleOutcome = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
 
 /**
+ * The days a booking may use (Bald-Eagle D4, lib/social-hub/lead.ts). An explicit `fromDate` wins (the night placing a
+ * surviving render on the date it fills). Otherwise a render made for a date still ahead books from that date, never
+ * before it: a bounded booking (Approve, the finish booking: `throughDate` today) takes the target date only, an
+ * unbounded one (scheduleApproved) the target date or later. A render with no target, or whose date has passed,
+ * books as before: from today, through `throughDate`.
+ */
+export async function bookingDays(
+  db: Queryable,
+  jobId: string,
+  now: Date,
+  throughDate?: string,
+  fromDate?: string,
+): Promise<{ fromDate?: string; throughDate?: string }> {
+  if (fromDate) return { fromDate, throughDate };
+  const target = await explainerJobTarget(db, jobId);
+  if (!target || target <= calendarDateKey(now, SOCIAL_TIMEZONE)) return { throughDate };
+  return { fromDate: target, throughDate: throughDate === undefined ? undefined : throughDate > target ? throughDate : target };
+}
+
+/**
  * Book a render into the next free explainer window, or return its waiting
  * slot. `throughDate` (a New York day, YYYY-MM-DD) is the last day it may
  * book: Approve and the finish booking pass today (B1, B2); without it the
- * search runs two weeks ahead (the worker's scheduleApproved, the 2 AM fill).
+ * search runs two weeks ahead (the worker's scheduleApproved). `fromDate` is
+ * the first (the 2 AM fill passes the date it fills). A render the night made
+ * ahead books on its target date (bookingDays), never today's leftover window.
  */
 export async function scheduleJob(
   db: Queryable,
   jobId: string,
   source: 'auto' | 'user',
   now = new Date(),
-  throughDate?: string,
+  throughDateIn?: string,
   rng: (count: number) => number = uniformIndex,
+  fromDateIn?: string,
 ): Promise<ScheduleOutcome> {
   const itemId = await explainerItemId(db, jobId);
   if (!itemId) return { scheduled: false, note: 'The render is gone.' };
@@ -70,6 +94,7 @@ export async function scheduleJob(
     )).rows[0];
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
+  const { fromDate, throughDate } = await bookingDays(db, jobId, now, throughDateIn, fromDateIn);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
@@ -88,15 +113,18 @@ export async function scheduleJob(
       );
       const takenKeys = new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot)));
       const windows = EXPLAINER_WINDOWS.slice(0, Math.max(1, Math.min(await postsPerDay(db), EXPLAINER_WINDOWS.length)));
-      choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate);
+      choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate, fromDate);
     } else {
       // The calendar: its slots within the daily cap (not posts_per_day), at [slot, slot + 15]; Main slots spaced from feed posts.
-      const picked = await chooseTemplateSlot(spacing, plan, 'explainers', { now, busy, rng, throughDate });
+      const picked = await chooseTemplateSlot(spacing, plan, 'explainers', { now, busy, rng, throughDate, fromDate });
       choice = picked;
       feedMode = picked?.feedMode ?? null;
     }
     if (!choice) {
-      return { scheduled: false, note: throughDate ? `No explainer window is open through ${throughDate}.` : 'No explainer window is open in the next two weeks.' };
+      const note = fromDate && throughDate === fromDate
+        ? `No explainer window is open on ${fromDate}.`
+        : throughDate ? `No explainer window is open through ${throughDate}.` : 'No explainer window is open in the next two weeks.';
+      return { scheduled: false, note };
     }
     try {
       const booked = await bookSlot(spineOf(db), { vertical: 'explainers', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source, ...(feedMode ? { feedMode } : {}) });
@@ -111,10 +139,12 @@ export async function scheduleJob(
 }
 
 /**
- * B2: when the 2 AM run (trigger 'auto') finishes a render, it takes today's
- * next open window as a system slot (source 'auto'), unapproved: it still
+ * B2: when the 2 AM run (trigger 'auto') finishes a render, it takes a window
+ * on the date it was made for (Bald-Eagle D4: two days ahead; scheduleJob reads
+ * its target date) as a system slot (source 'auto'), unapproved: it still
  * needs Approve, and without one releaseDueSchedules cancels it at its time.
- * Today only; nothing left today books nothing. A person's render
+ * That date only (a render with no target date: today only); nothing left
+ * there books nothing. A person's render
  * (Regenerate, Make it) waits for Approve, which books it. Only while
  * publishing is live, like every other booking. Booking only, never
  * queuePublish. Null: not booked by rule.
@@ -153,7 +183,8 @@ SELECT j.id, j.topic_id, f.created_at AS reviewed_at, j.finished_at
 /**
  * Finished, unposted, unscheduled renders with their video in Storage: the
  * approved ones, oldest approval first; with require_approval off, also the
- * ones nobody reviewed (never a rejected one).
+ * ones nobody reviewed (never a rejected one). A render made for a date still
+ * ahead books on that date or later (bookingDays).
  */
 export async function scheduleApproved(db: Queryable, now = new Date(), rng?: (count: number) => number): Promise<number> {
   const approvalNeeded = await requireApproval(db);

@@ -5,6 +5,7 @@ import { clockLabel, DAY_END, DAY_START, DRIFT, FEED_GAP, isFeedSlot, isUsual, n
 import { sameSlotKey, slotId, slotKeyString, type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
+import { runDayFor } from '@/lib/social-hub/lead';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
 /** The week board's model (spec 2026-10-20-calendar-week-board-redesign): columns, cards, stacking, time and y. Pure. */
@@ -213,7 +214,8 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
       const statusText = status === 'empty'
         ? overCap
           ? STATUS_TEXT.overCap
-          : `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(d.nyDate)}.`
+          // A cushion type's slot is made by the night `lead` days before it (Bald-Eagle D4).
+          : `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(runDayFor(d.nyDate, s.vertical, s.series))}.`
         : STATUS_TEXT[status];
       return {
         key: `${day}|${slotKeyString(s)}`,

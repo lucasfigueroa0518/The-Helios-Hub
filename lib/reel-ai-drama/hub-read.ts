@@ -28,7 +28,7 @@ const SOURCES = `COALESCE((SELECT jsonb_agg(jsonb_build_object('url', s->>'url',
 export const DRAMA_JOBS_SQL = `
 SELECT j.id::text AS job_id, j.pitch_id::text AS pitch_id, j.status, j.trigger, j.mode, j.stage,
        j.spend_usd, j.spend_cap_usd, j.requested_at::text AS requested_at, j.started_at::text AS started_at, j.finished_at::text AS finished_at,
-       j.error, j.kill_reason,
+       j.error, j.kill_reason, j.night_date::text AS night_date,
        CASE WHEN jsonb_typeof(j.flags) = 'array' THEN jsonb_array_length(j.flags) ELSE 0 END AS flags,
        p.title, COALESCE(p.pitch->>'brief', p.pitch->>'pitch') AS brief, p.pitch->>'story_type' AS story_type, p.pitch->>'era' AS era,
        p.central_player_id, p.rank_score, p.drama_score, p.material_score, p.visuals_grade,
@@ -75,6 +75,8 @@ export type DramaJobRow = {
   job_id: string; pitch_id: string; status: string; trigger: string; mode: string; stage: string | null;
   spend_usd: number | string; spend_cap_usd: number | string; requested_at: string; started_at: string | null; finished_at: string | null;
   error: string | null; kill_reason: string | null; flags: number;
+  /** The date the night made it FOR (its target date, Bald-Eagle D4); null for a person's job. */
+  night_date?: string | null;
   title: string; brief: string | null; story_type: string | null; era: string | null; central_player_id: string | null;
   rank_score: number | string | null; drama_score: number | string | null; material_score: number | string | null; visuals_grade: string | null;
   sources: Array<{ url: string; title: string | null }>;
@@ -104,13 +106,17 @@ export type DramaNightHealth = {
   cost: { usd: number; unknown: number };
 };
 
+/**
+ * What ran in a night's window [start, end). The fill rows are read by when they ran, not by `ny_date`: since lead
+ * time (Bald-Eagle D4) a row's `ny_date` is the date it filled, two days after the night that ran it.
+ */
 export async function readDramaNightHealth(q: DramaQuery, w: { nyDate: string; start: string; end: string }): Promise<DramaNightHealth> {
   const [nights, jobs, requests, cost] = await Promise.all([
     q(
       `SELECT id::text AS id, status, quota, CASE WHEN jsonb_typeof(requested) = 'array' THEN jsonb_array_length(requested) ELSE 0 END AS requested,
               skip_reason, error, started_at::text AS at
-         FROM reel_ai_drama.nights WHERE ny_date = $1::date ORDER BY started_at`,
-      [w.nyDate],
+         FROM reel_ai_drama.nights WHERE started_at >= $1::timestamptz AND started_at < $2::timestamptz ORDER BY started_at`,
+      [w.start, w.end],
     ),
     q(
       `SELECT id::text AS id, status, stage, error, capped, spend_usd, trigger, requested_at::text AS at

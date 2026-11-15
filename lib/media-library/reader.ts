@@ -78,6 +78,8 @@ export type BankHit = {
 export type BankReader = {
   mode(): Promise<FinderSourceMode>;
   find(q: BankFind): Promise<BankHit[]>;
+  /** Drop the cached used-photo ledger, so the next find reads it fresh (a new build or post: an earlier one's picks count). */
+  invalidate?(): void;
 };
 
 type Plan = { lanes: readonly string[]; byQid: boolean; byTags: boolean; visionPass: boolean; logoWindow: boolean };
@@ -114,6 +116,9 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
     return ledger.value;
   };
   return {
+    invalidate() {
+      ledger = null;
+    },
     async mode() {
       const s = await settings();
       return s.present ? s.finderSource : 'off';

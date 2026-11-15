@@ -54,9 +54,20 @@ async function ownBookings(query: Query, fromDate: string): Promise<{ taken: Set
   };
 }
 
+/** The date a post was made for (field_notes.posts.ny_date); undefined when unreadable (then: from today, as before). */
+async function postDate(query: Query, postId: string): Promise<string | undefined> {
+  const { rows } = await query(`SELECT ny_date::text AS ny_date FROM field_notes.posts WHERE id = $1`, [postId]).catch(() => ({ rows: [] as Array<{ ny_date?: string }> }));
+  const d = rows[0]?.ny_date;
+  return typeof d === 'string' ? d.slice(0, 10) : undefined;
+}
+
 /**
- * Put a post into the earliest open Field Notes window (through `throughDate` when given). A post
- * already on the clock keeps its slot. A person scheduling (`user`) approves it.
+ * Put a post into the earliest open Field Notes window on or after the date it was made for (its
+ * ny_date; Bald-Eagle D4: the clock makes it 2 days ahead, so approving never moves it to today), through
+ * `throughDate` when given. The clock only makes posts for a Field Notes day with no post, so that day's
+ * window is the one it takes; a post whose day is taken (or a person's Generate made on a day with no
+ * window) takes the next open one. A post already on the clock keeps its slot. A person scheduling
+ * (`user`) approves it.
  */
 export async function scheduleFieldNotesPost(
   query: Query,
@@ -76,6 +87,7 @@ export async function scheduleFieldNotesPost(
     )).rows[0];
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
+  const fromDate = await postDate(query, postId);
 
   // Template mode: the calendar's Field Notes slots. A failed slot read throws: it must not
   // silently book by the old rules (ruling P2).
@@ -85,8 +97,8 @@ export async function scheduleFieldNotesPost(
     const own = await ownBookings(query, today);
     const busy = [...(await busyFeedTimes(query, now, null)), ...own.times];
     const choice = plan
-      ? await chooseTemplateSlot(query, plan, FIELD_NOTES_SLOT_VERTICAL, { now, busy, rng, throughDate })
-      : chooseFromWindows([FIELD_NOTES_WINDOW], now, own.taken, busy, rng, throughDate);
+      ? await chooseTemplateSlot(query, plan, FIELD_NOTES_SLOT_VERTICAL, { now, busy, rng, throughDate, fromDate })
+      : chooseFromWindows([FIELD_NOTES_WINDOW], now, own.taken, busy, rng, throughDate, fromDate);
     if (!choice) return { scheduled: false, note: FIELD_NOTES_NO_WINDOW_NOTE };
     try {
       const booked = await bookSlot(query, { vertical: FIELD_NOTES_SPINE_VERTICAL, itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source });

@@ -16,7 +16,8 @@ import { CONTENT_LEAVES, KNOW_HOW_TIERS, PURPOSES, TIP_SOURCE_KINDS, TIP_STATUSE
 export type RunTrigger = 'scheduled' | 'manual';
 export type RunKind = 'build' | 'rebuild';
 
-export type ClaimedRun = { id: string; trigger: RunTrigger; kind: RunKind; requestedBy: string | null; seedTipId: string | null };
+/** `nyDate`: the date the run's post is FOR when the clock set it at request time (Bald-Eagle D4); null for a person's Generate. */
+export type ClaimedRun = { id: string; trigger: RunTrigger; kind: RunKind; requestedBy: string | null; seedTipId: string | null; nyDate?: string | null };
 
 /**
  * Hang guard only; long runs are normal (CI decision 2026-11-10). A run still 'running' after RUN_HANG_BACKSTOP_INTERVAL
@@ -52,34 +53,60 @@ export async function requestRun(
   q: HubQuery,
   trigger: RunTrigger,
   capUsd: number,
-  o: { kind?: RunKind; requestedBy?: string | null; seedTipId?: string | null } = {},
+  o: { kind?: RunKind; requestedBy?: string | null; seedTipId?: string | null; nyDate?: string | null } = {},
 ): Promise<string | null> {
   const record = o.seedTipId ? { seedTipId: o.seedTipId } : {};
+  // `nyDate`: the clock's target date (Bald-Eagle D4), the date the run's post is for; a person's Generate leaves it to the run.
   const { rows } = await q<{ id: string }>(
-    `INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_by, record)
-     VALUES ($1, $2, 'requested', $3, $4, $5::jsonb) ON CONFLICT DO NOTHING RETURNING id::text AS id`,
-    [trigger, o.kind ?? 'build', capUsd, o.requestedBy ?? null, JSON.stringify(record)],
+    `INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_by, record, ny_date)
+     VALUES ($1, $2, 'requested', $3, $4, $5::jsonb, $6::date) ON CONFLICT DO NOTHING RETURNING id::text AS id`,
+    [trigger, o.kind ?? 'build', capUsd, o.requestedBy ?? null, JSON.stringify(record), o.nyDate ?? null],
   );
   return rows[0]?.id ?? null;
 }
 
-/** Whether a scheduled run was already queued for this New York date (the clock's no-double-run guard, fix 8). */
+/**
+ * Whether a scheduled run was already queued ON this New York date (the clock's no-double-run guard, fix 8).
+ * By the day it was requested only: a run's ny_date is now the date its post is FOR (Bald-Eagle D4), two
+ * days later, so it must not block that day's own check.
+ */
 export async function scheduledRunToday(q: HubQuery, nyDate: string): Promise<boolean> {
   const { rows } = await q<{ id: string }>(
     `SELECT id::text AS id FROM field_notes.runs
       WHERE trigger = 'scheduled'
-        AND (ny_date = $1::date OR (requested_at AT TIME ZONE 'America/New_York')::date = $1::date)
+        AND (requested_at AT TIME ZONE 'America/New_York')::date = $1::date
       LIMIT 1`,
     [nyDate],
   );
   return rows.length > 0;
 }
 
+/**
+ * Of `dates`, those that already have a Field Notes post made for them (in review or published; a 'preview'
+ * row is a throwaway nothing writes today and never reaches review, and a rejected post frees its day), a booking on them
+ * (waiting, posting or posted), or a scheduled run still queued or running for them: the clock skips them
+ * (one post per Field Notes day, Bald-Eagle D4).
+ */
+export async function fieldNotesFilledDates(q: HubQuery, dates: readonly string[]): Promise<Set<string>> {
+  if (!dates.length) return new Set();
+  const { rows } = await q<{ d: string }>(
+    `SELECT ny_date::text AS d FROM field_notes.posts WHERE ny_date = ANY($1::date[]) AND status IN ('review', 'published')
+     UNION
+     SELECT ny_date::text AS d FROM social_hub.schedule
+      WHERE vertical = 'field_notes' AND ny_date = ANY($1::date[]) AND status IN ('scheduled', 'publishing', 'published')
+     UNION
+     SELECT ny_date::text AS d FROM field_notes.runs
+      WHERE trigger = 'scheduled' AND status IN ('requested', 'running') AND ny_date = ANY($1::date[])`,
+    [[...dates]],
+  );
+  return new Set(rows.map((r) => String(r.d).slice(0, 10)));
+}
+
 /** Claim the queued run when none is running. A run left running past ABANDONED_AFTER is failed first. */
 export async function claimRun(q: HubQuery, now = new Date()): Promise<ClaimedRun | null> {
   await q(ABANDON_SQL);
   try {
-    const { rows } = await q<{ id: string; trigger: RunTrigger; kind: RunKind; requested_by: string | null; seed: string | null }>(
+    const { rows } = await q<{ id: string; trigger: RunTrigger; kind: RunKind; requested_by: string | null; seed: string | null; ny_date: string | null }>(
       `UPDATE field_notes.runs SET status = 'running', started_at = $1::timestamptz
         WHERE id = (
           SELECT id FROM field_notes.runs
@@ -88,11 +115,11 @@ export async function claimRun(q: HubQuery, now = new Date()): Promise<ClaimedRu
            ORDER BY requested_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1)
-        RETURNING id::text AS id, trigger, kind, requested_by, record->>'seedTipId' AS seed`,
+        RETURNING id::text AS id, trigger, kind, requested_by, record->>'seedTipId' AS seed, ny_date::text AS ny_date`,
       [now.toISOString()],
     );
     const r = rows[0];
-    return r ? { id: r.id, trigger: r.trigger, kind: r.kind, requestedBy: r.requested_by, seedTipId: r.seed && UUID.test(r.seed) ? r.seed : null } : null;
+    return r ? { id: r.id, trigger: r.trigger, kind: r.kind, requestedBy: r.requested_by, seedTipId: r.seed && UUID.test(r.seed) ? r.seed : null, nyDate: r.ny_date ? r.ny_date.slice(0, 10) : null } : null;
   } catch (err) {
     if ((err as { code?: string }).code === '23505') return null;
     throw err;

@@ -10,11 +10,14 @@ type Queued = { queued: boolean; note?: string; status?: number };
 type Place = (q: SpineQuery, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 /**
- * Trial Reels (lib/reels/publish): approve the idea's slot, reject, Force post,
- * place or move the idea's slot (D50: slots belong to the idea; a move keeps
- * the slot's approval), and regenerate: today's video for the idea is built
- * again (copy → frame → video, `requestFinish`, D52). Only today's: a
- * re-winning idea on a later day is produced fresh, never carried (SH-59).
+ * Text on Screen (lib/reels/publish): approve the idea's slot (it keeps, or books,
+ * the reel's own posting day: Bald-Eagle D4), reject, Force post, place or move
+ * the idea's slot (D50: slots belong to the idea; a move keeps the slot's
+ * approval), and regenerate: the idea's video is built again on its own slate
+ * (copy → frame → video, `requestFinish`, D52) while that slate's posting day
+ * is today or later, so a reel made 2 days ahead can be rebuilt during review.
+ * A day that has passed is not rebuilt: a re-winning idea on a later day is
+ * produced fresh, never carried (SH-59).
  */
 export function reelActions(deps: {
   schedulePostIdea: (postIdeaId: string, source: 'user', videoJobId: string | null) => Promise<Outcome>;
@@ -25,6 +28,7 @@ export function reelActions(deps: {
   itemId: (videoJobId: string) => Promise<string | null>;
   placeItem: Place;
   rescheduleItem: Place;
+  /** The idea's own slate while its posting day is today or later (lib/reels/visual/finish.ts todaySlateFor), else null. */
   todaySlate: (postIdeaId: string) => Promise<string | null>;
   findReelLock: (slateId: string, postIdeaId: string) => Promise<{ nyDate: string } | null>;
   requestFinish: (postIdeaId: string, slateId: string) => Promise<{ status: 'active' | 'done' | 'failed'; note: string }>;
@@ -55,7 +59,7 @@ export function reelActions(deps: {
       const postIdeaId = need(t, 'postIdeaId');
       const slateId = await deps.todaySlate(postIdeaId);
       if (!slateId) {
-        return { ok: false, note: 'This idea isn’t on today’s slate. Trial Reels make each day’s reels fresh, so only today’s video can be rebuilt.' };
+        return { ok: false, note: 'This idea isn’t on today’s slate or a later day’s. Text on Screen makes each day’s reels fresh, so only a reel whose day hasn’t passed can be rebuilt.' };
       }
       const lock = await deps.findReelLock(slateId, postIdeaId);
       if (lock) return { ok: false, note: `This reel is locked for ${lock.nyDate} and stays as it is.` };
@@ -63,7 +67,7 @@ export function reelActions(deps: {
       if (out.status === 'failed') return { ok: false, note: out.note };
       // Idea pool standard (2026-10-21): the video being rebuilt comes off the calendar and out of approval once the rebuild is accepted.
       const off = await deps.unscheduleIdea(postIdeaId).catch(() => null);
-      return { ok: true, note: `Rebuilding today’s video for this idea. ${off?.ok ? 'The old one is unscheduled and no longer approved; approve the new one when it is ready. ' : ''}${out.note}` };
+      return { ok: true, note: `Rebuilding this idea’s video for its day. ${off?.ok ? 'The old one is unscheduled and no longer approved; approve the new one when it is ready. ' : ''}${out.note}` };
     },
     async unschedule(t) {
       const out = await deps.unscheduleIdea(need(t, 'postIdeaId'));

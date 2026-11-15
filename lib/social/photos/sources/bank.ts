@@ -21,7 +21,9 @@
  *
  * "compete": bank candidates join the online ones and the ranking decides.
  * "first": once the bank alone has MAX_CANDIDATES usable ones, the online
- * sources for that request are skipped.
+ * sources for that request are skipped (searchVisual's `bankOnly`). When none
+ * of them then survives the later checks, the caller searches that request
+ * online once and picks again (design.ts, lib/stories/photos.ts; Bald-Eagle D9).
  */
 import type { BankHit } from '@/lib/media-library/reader';
 import type { VisualKind, VisualRequest } from '@/lib/social/writer/draft';

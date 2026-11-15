@@ -24,6 +24,7 @@ import { loadSettings, loadThemeBrief } from '@/lib/explainers/settings';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { quotaFromSlots } from '@/lib/social-hub/slots';
 import { consoleFillLog, dailyFillOrQuota, reportFill, type DailyFill, type FillLog } from '@/lib/social-hub/fill';
+import { fillDates, leadDaysFor } from '@/lib/social-hub/lead';
 import { markPromoteUsed, readMoves, recordPromoteSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
@@ -60,8 +61,11 @@ export type Allocation = {
   scheduled: ScheduleOutcome | null;
 };
 
-export type IdeaCycleResult =
-  | { status: 'skipped'; reason: 'auto_render_off' | 'daily_spend_cap' | 'already_ran_today' | 'retry_wait' | 'retry_exhausted' | 'render_already_requested' }
+export type IdeaCycleSkip = 'auto_render_off' | 'daily_spend_cap' | 'already_ran_today' | 'retry_wait' | 'retry_exhausted' | 'render_already_requested';
+
+/** One date's cycle (Bald-Eagle D4: the night fills each date it makes ahead with a cycle of its own). */
+export type IdeaCycleDateResult =
+  | { status: 'skipped'; reason: IdeaCycleSkip }
   | { status: 'skipped'; reason: 'quota_filled'; fill: DailyFill }
   | {
       status: 'ok';
@@ -76,6 +80,13 @@ export type IdeaCycleResult =
       allocated: Allocation[];
     }
   | { status: 'failed'; cycleId: string; error: string };
+
+/**
+ * The run's outcome over the dates it fills. A failed date wins (the worker retries it), then a date waiting for its
+ * retry, then the dates that ran (summed; `cycleId`/`fill`: the last of them; `dates`: what happened on each date),
+ * else the skip of the last date that had a reason other than "already filled".
+ */
+export type IdeaCycleResult = IdeaCycleDateResult & { dates?: Array<{ nyDate: string } & IdeaCycleDateResult> };
 
 function survivedDedupe(e: Evaluation): boolean {
   return e.outcome !== 'rejected_history_duplicate' && e.outcome !== 'lost_head_to_head';
@@ -117,14 +128,23 @@ async function archivedTopics(db: ExplainersDb, moves: readonly IdeaAdjustment[]
  * pool_size, then promote the best and queue its render. In production the
  * day's spend so far, including earlier idea runs, must be under the cap (A-4).
  *
- * Daily fill (D54): the night fills the day's `posts_per_day`, less the
- * explainers people placed for that New York day. Nothing left: the cycle is
- * skipped (no idea call, no spend). Otherwise the top `quota − placed`
- * candidates, ranked together (pool topics and topics whose approved render
- * hasn't posted, `fillCandidates`), are taken: a surviving render is placed
- * (scheduleJob, while publishing is live) instead of rendered again; a pool
- * topic is promoted and rendered, at most `daily_render_cap` of them, under
- * the spend caps as before.
+ * Lead time (Bald-Eagle D4, D8; lib/social-hub/lead.ts): the night fills the dates it makes ahead,
+ * `fillDates(runDay, 2)` (the run day through day+2), each with a cycle of its own keyed by that date
+ * (`idea_cycles.ny_date` = the date filled; the unique index then means each date is filled once, and
+ * the run happens once a night: the cutover night finds day+1 and day+2 unfilled and fills them, plus
+ * the run day unless the old same-day cycle already filled it (same key); every later night finds the
+ * run day and day+1 filled by the two nights before and fills only day+2). A person's "Run the idea cycle
+ * now" (`force`) fills today, the day clicked, as before. Freshness (the ideas' coverage window, the
+ * history the prompt carries) is measured from the run time.
+ *
+ * Daily fill (D54): a date's quota, less every explainer already booked on it
+ * (lead time: the night's own too; a forced run: what people placed, as before).
+ * Nothing left: that date is skipped (no idea call, no spend). Otherwise the top
+ * `quota − placed` candidates, ranked together (pool topics and topics whose approved
+ * render hasn't posted, `fillCandidates`), are taken: a surviving render is placed
+ * on that date (scheduleJob, while publishing is live) instead of rendered again; a
+ * pool topic is promoted and rendered for that date (`target_date`), at most
+ * `daily_render_cap` of them, under that date's spend caps.
  */
 export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult> {
   const { db } = deps;
@@ -135,11 +155,74 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   const settings = await loadSettings(db);
   if (!settings.auto_render && !deps.force) return { status: 'skipped', reason: 'auto_render_off' };
 
-  const day = nyDate(deps.now);
+  const runDay = nyDate(deps.now);
+  const lead = deps.force ? 0 : leadDaysFor('explainers');
+  const st: RunState = { movesQ, settings, placedJobs: new Set(), pinsChecked: false, capped: false };
+  const dates: Array<{ nyDate: string } & IdeaCycleDateResult> = [];
+  for (const day of fillDates(runDay, lead)) {
+    const out = await runCycleFor(deps, st, day, lead);
+    dates.push({ nyDate: day, ...out });
+    // A failed date stops the run: the worker retries it (and reaches the later date then).
+    if (out.status === 'failed') break;
+  }
+
+  const ok = dates.filter((d): d is { nyDate: string } & Extract<IdeaCycleDateResult, { status: 'ok' }> => d.status === 'ok');
+  // The run made its picks: hand placements are used up and the ideas compete by score again (a failed run never
+  // reaches its picks, so a hand move is not undone by a night that did nothing for it). A night that was capped left
+  // ideas it chose unmade: their placements stay for the next night.
+  if (ok.length && !st.capped) await finishNightPlacements(movesQ, 'explainers', undefined, movesReadAt);
+
+  const strip = ({ nyDate: _d, ...rest }: { nyDate: string } & IdeaCycleDateResult): IdeaCycleDateResult => rest as IdeaCycleDateResult;
+  const failed = dates.find((d) => d.status === 'failed');
+  if (failed) return strip(failed);
+  const waiting = dates.find((d) => d.status === 'skipped' && d.reason === 'retry_wait');
+  if (waiting) return strip(waiting);
+  if (ok.length) {
+    const last = ok[ok.length - 1]!;
+    return {
+      status: 'ok',
+      cycleId: last.cycleId,
+      evaluations: ok.flatMap((d) => d.evaluations),
+      promotedTopicId: ok.find((d) => d.promotedTopicId)?.promotedTopicId ?? null,
+      render: ok.find((d) => d.render)?.render ?? null,
+      fill: last.fill,
+      renders: ok.flatMap((d) => d.renders),
+      allocated: ok.flatMap((d) => d.allocated),
+      dates,
+    };
+  }
+  const told = dates.filter((d) => !(d.status === 'skipped' && d.reason === 'already_ran_today'));
+  const pick = told[told.length - 1] ?? dates[dates.length - 1];
+  return pick ? strip(pick) : { status: 'skipped', reason: 'already_ran_today' };
+}
+
+type RunState = {
+  movesQ: MovesQuery;
+  settings: Awaited<ReturnType<typeof loadSettings>>;
+  /** Surviving renders this run already placed (on an earlier date): never placed twice in one run. */
+  placedJobs: Set<string>;
+  pinsChecked: boolean;
+  capped: boolean;
+};
+
+/** One date's cycle: fill `day` once (lead > 0: a date made ahead; 0: today, a person's forced run). */
+async function runCycleFor(deps: IdeaCycleDeps, st: RunState, day: string, lead: number): Promise<IdeaCycleDateResult> {
+  const { db } = deps;
+  const { movesQ, settings } = st;
   const fillLog = deps.log ?? consoleFillLog;
+  // A date an earlier night already filled (or is filling) is passed over quietly: lead time revisits the run day and
+  // day+1 every night, and a fill line for them would be noise. The insert below stays the real guard.
+  if ((await db.query(`SELECT 1 FROM explainers.idea_cycles WHERE ny_date = $1::date AND status IN ('running', 'ok') LIMIT 1`, [day])).rows.length) {
+    return { status: 'skipped', reason: 'already_ran_today' };
+  }
   // A failed read of the placements never stops the night: it fills the whole quota, as before the rule.
-  const fill = await dailyFillOrQuota(spineOf(db), 'explainers', day, await explainersQuota(db, day), (error) =>
-    fillLog('fill_failed', { vertical: 'explainers', nyDate: day, error: error instanceof Error ? error.message : String(error) }),
+  const fill = await dailyFillOrQuota(
+    spineOf(db),
+    'explainers',
+    day,
+    await explainersQuota(db, day),
+    (error) => fillLog('fill_failed', { vertical: 'explainers', nyDate: day, error: error instanceof Error ? error.message : String(error) }),
+    lead > 0 ? { lead } : {},
   );
   reportFill(fill, fillLog, { dailyRenderCap: settings.daily_render_cap });
   if (fill.making < 1) return { status: 'skipped', reason: 'quota_filled', fill };
@@ -247,12 +330,15 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     // A surviving render is placed, not rendered again; at most `daily_render_cap` pool topics are rendered
     // (SH-49: two a day), and requestRender still enforces both caps.
     const approvalNeeded = await requireApproval(db);
-    const candidates = await fillCandidates(db, approvalNeeded, moves);
+    const candidates = (await fillCandidates(db, approvalNeeded, moves)).filter((c) => !(c.jobId && st.placedJobs.has(c.jobId)));
     // A pin that can no longer be made (not a pool topic or a placeable render any more) steps aside with why on the move; the
-    // rest of the queue goes on. Never blocks the night.
-    const makeable = new Set(candidates.map((c) => ideaOfTopic(c.topicId)));
-    for (const pin of tonightMoves(moves, 'explainers').pins) {
-      if (!makeable.has(pin.ideaId)) await recordPromoteSkip(movesQ, 'explainers', pin.ideaId, EXPLAINER_GONE);
+    // rest of the queue goes on. Never blocks the night. Checked once a run.
+    if (!st.pinsChecked) {
+      st.pinsChecked = true;
+      const makeable = new Set(candidates.map((c) => ideaOfTopic(c.topicId)));
+      for (const pin of tonightMoves(moves, 'explainers').pins) {
+        if (!makeable.has(pin.ideaId)) await recordPromoteSkip(movesQ, 'explainers', pin.ideaId, EXPLAINER_GONE);
+      }
     }
     const chosen = candidates.slice(0, fill.making);
     const handMoved = new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => m.ideaId));
@@ -265,7 +351,10 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
     let capped = false;
     for (const candidate of chosen) {
       if (candidate.jobId) {
-        const scheduled = live ? await scheduleJob(db, candidate.jobId, 'auto', deps.now ?? new Date()) : null;
+        // A surviving render is placed on the date this cycle fills (lead time); a forced run books as before.
+        const now = deps.now ?? new Date();
+        const scheduled = live ? await (lead > 0 ? scheduleJob(db, candidate.jobId, 'auto', now, day, undefined, day) : scheduleJob(db, candidate.jobId, 'auto', now)) : null;
+        st.placedJobs.add(candidate.jobId);
         allocated.push({ topicId: candidate.topicId, jobId: candidate.jobId, scheduled });
         if (handMoved.has(ideaOfTopic(candidate.topicId))) await markPromoteUsed(movesQ, 'explainers', ideaOfTopic(candidate.topicId));
         continue;
@@ -277,7 +366,7 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
       );
       best ??= candidate.topicId;
       renders.push(candidate.topicId);
-      const requested = await requestRender(db, { topicId: candidate.topicId, trigger: 'auto', settings, now: deps.now });
+      const requested = await requestRender(db, { topicId: candidate.topicId, trigger: 'auto', settings, now: deps.now, ...(lead > 0 ? { targetDate: day } : {}) });
       render ??= requested;
       if (!requested.ok) capped = true;
       if (handMoved.has(ideaOfTopic(candidate.topicId))) {
@@ -287,10 +376,8 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
         else console.info(`[explainers] ${candidate.topicId} not rendered tonight (${requested.reason.replace(/_/g, ' ')}); kept for next night`);
       }
     }
-    // The night ran with auto-render on and made its picks: hand placements are used up and the ideas compete by score
-    // again (a failed run never reaches here, so a hand move is not undone by a night that did nothing for it).
-    // A night that was capped left ideas it chose unmade: their placements stay for the next night.
-    if (!capped) await finishNightPlacements(movesQ, 'explainers', undefined, movesReadAt);
+    // Hand placements are used up once the run is over (runIdeaCycle); a capped date keeps them for the next night.
+    if (capped) st.capped = true;
 
     await db.query(
       `UPDATE explainers.idea_cycles c

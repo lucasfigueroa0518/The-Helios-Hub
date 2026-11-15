@@ -26,7 +26,7 @@ import {
 import { expressionOf, lookAt, placeOf } from './look';
 import { checkedUpscale, isGarbledUpscale, normaliseImage, scaleBoxes } from './media';
 import { measureAsset } from './regions';
-import { usedCandidates } from './reuse';
+import { ownHeldItem, usedCandidates } from './reuse';
 import { articleSource, newsroomSource } from './sources/articles';
 import { bankSource } from './sources/bank';
 import { commonsSource } from './sources/commons';
@@ -282,7 +282,9 @@ export function makePipeline(ctx: PipelineCtx): Pipeline {
         const note = 'reuse: no hub database for the used-photo ledger; published photos are not checked';
         if (!run.notes.includes(note)) run.notes.push(note);
       } else {
-        used = await usedCandidates(deps.ledgerDb, toCheck, settings.reuse_days, now).catch((err) => {
+        // A remake is not blocked by the pitch's own earlier reel, held while it waits to post (Bald-Eagle D3).
+        const excludeItem = await ownHeldItem(deps.db, jobId).catch(() => null);
+        used = await usedCandidates(deps.ledgerDb, toCheck, settings.reuse_days, now, { excludeItem }).catch((err) => {
           run.notes.push(`reuse: the used-photo ledger could not be read (${err instanceof Error ? err.message.slice(0, 120) : String(err)})`);
           return new Map<Cand, string>();
         });

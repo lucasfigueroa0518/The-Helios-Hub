@@ -95,7 +95,10 @@ test('Morning Download, intake mode: two candidates of one intake story merge in
   assert.deepEqual((r.payload.stories as Array<{ key: string }>).map((s) => s.key), ['x.test/0', 'x.test/1']);
 });
 
-test('Morning Download: an intake story shown under another member\'s link is used (every member key is checked, nit c)', async () => {
+// Bald-Eagle D2: a story we ran now goes through the development test; this row has no set (no headline we can
+// compare against), so the story stays out exactly as under the old 3-day rule. tests/stories-md-development.test.ts
+// covers it coming back.
+test('Morning Download: an intake story shown under another member\'s link is recognized as ran (every member key is checked, nit c)', async () => {
   const shownBefore = { ...cand(0, 0.9, null), intake: { ...cand(0, 0.9, null).intake!, memberKeys: ['x.test/0', 'old.test/same-event'] } };
   const { deps } = await mdDeps(true, [shownBefore, cand(1, 0.8, null), cand(2, 0.7, null)]);
   await deps.db.query(`INSERT INTO stories.history (series, key, shown_at) VALUES ('morning_download', 'old.test/same-event', $1)`, [new Date(NOW.getTime() - 86_400_000)]);

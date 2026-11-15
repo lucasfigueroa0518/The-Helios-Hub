@@ -8,8 +8,9 @@ type RunRow = { id: string; status: string; stop_reason: string | null; error: s
 
 /**
  * Field Notes' night (night N runs 08:00 on N−1 to 07:30 on N). Its 2:00 AM run on day N falls in
- * night N, so that night reports the scheduled builds and quotaFor asks about day N. Its
- * afternoon post falls in night N+1, which reports the slot as "yesterday" (publishingFor reads N−1). A manual Generate or Rebuild post is a
+ * night N, so that night reports the scheduled builds; the run makes N+2's post (Bald-Eagle D4), so
+ * quotaFor asks about day N+2 and the bookings read are N+2's. Its afternoon post falls in night N+1,
+ * which reports the slot as "yesterday" (publishingFor reads N−1). A manual Generate or Rebuild post is a
  * person's, not the night's. A scheduled run skipped because a post already waits (a person
  * made it, or the cap on pending drafts) counts as made; one skipped for want of a tip or a
  * photo is a warning, not a fault.

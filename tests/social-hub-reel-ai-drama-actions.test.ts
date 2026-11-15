@@ -48,7 +48,7 @@ test('approve books a slot while publishing is live, and holds off while it is o
   const off = await actions({ publishingLive: async () => false }).a.approve!(T, 'lucas');
   assert.match(off.note, /Publishing is switched off/);
   const full = await actions({ scheduleJob: async () => ({ scheduled: false }) }).a.approve!(T, 'lucas');
-  assert.match(full.note, /No window is left today/);
+  assert.match(full.note, /No slot is left on its day/);
 });
 
 test('reject passes the review tags and note', async () => {

@@ -22,7 +22,9 @@
  * The photo bank (DECISIONS_LOG D49): `vetted` lists what the checks learned
  * about every candidate they looked at (vetted.ts), as pure data for the
  * design stage to offer to the bank. The vision check is wrapped in a
- * recorder for that; the pick is unchanged.
+ * recorder for that; the pick is unchanged. In "first" mode a request the bank
+ * answered alone, whose candidates then all fail the checks, is searched online
+ * once and picked again (Bald-Eagle D9: a photo on every slide).
  */
 import * as PhotoFit from '@/lib/social/jev/questions/photo-fit.v2';
 import type { Brief } from '@/lib/social/reporter/brief';
@@ -35,7 +37,7 @@ import { newSearchContext, searchVisual, type Candidate, type ChainStep, type Ph
 import type { SubjectType } from './identity';
 import type { IdentityCache } from './p18';
 import { choosePivots } from './pivot';
-import { newPickState, pickForSlide, type PickSlot, type PickWords, type Scored } from './pick';
+import { newPickState, pickForSlide, type PickOutcome, type PickSlot, type PickWords, type Scored } from './pick';
 import { buildSheets } from './sheet';
 import { ICON_SCENES, tuning } from './tuning';
 import type { TileTag } from './tag-sheet';
@@ -90,6 +92,9 @@ export async function photosForDraft(
   // so the cover rules (no logo, the 1080 floor, promotion) don't apply to it.
   const coverRules = !history.plainCover;
   const asCover = (r: VisualRequest) => (coverRules ? coverRequest(r) : r);
+  // The bank reader's used-photo ledger is cached a minute per process: a new post or set reads it fresh, so the
+  // picks of one built moments ago (now held while unposted) count by picture too, not only by URL.
+  deps.bank?.invalidate?.();
   const kinds = await subjectKinds(brief, history.identities);
   const ctx = newSearchContext(brief, pages, { recent: history.recent, published: history.used ? new Set(history.used.urls) : undefined, lastUsed: history.lastUsed, identities: history.identities, kinds, photos: articlePhotosFor(brief, pages, kinds), storyDate: history.storyDate ?? null });
   // The vision check, recorded (same answers) so the bank knows which candidates passed or failed it.
@@ -167,6 +172,28 @@ export async function photosForDraft(
       // The bank's record never changes the post.
     }
     const searchSteps = found[i]!.flatMap((r) => r.steps);
+    // Bald-Eagle D9 (finder_source "first"): a request the photo bank answered alone (its online sources skipped) whose
+    // candidates all failed the checks above is searched online once and picked again, the pivot's way (the pick's
+    // own checks; no second contact sheet). Same after the pivot and the icon scene below. Never in "compete"/"off".
+    const onlineAgain = async (prior: PickOutcome, tried: Array<{ request: VisualRequest; bankOnly: boolean }>, opts: { tags?: string[]; slideFitMin?: number } = {}): Promise<PickOutcome> => {
+      const redo = tried.filter((r) => r.bankOnly);
+      if (prior.winner || !redo.length) return prior;
+      const searched = [];
+      for (const { request } of redo) {
+        const r = await searchVisual(request, ctx, deps, { cover: i === 0, ...(opts.tags ? { tags: opts.tags } : {}), online: true });
+        searchSteps.push(`photo bank's candidates didn't pass → online search: ${request.kind} "${request.query}"`, ...r.steps);
+        searched.push({ request, scored: r.candidates.map((cand): Scored => ({ cand, tags: null, fit: null })) });
+      }
+      const again = await pickForSlide({ slot: p.slot, requests: searched, words: p.words, ...(opts.slideFitMin !== undefined ? { slideFitMin: opts.slideFitMin } : {}) }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN, brief.the_news.text);
+      visionUsd += again.visionUsd;
+      try {
+        vetted.push(...vettedForSlide({ slide: i + 1, requests: searched.map((r) => ({ request: r.request, candidates: r.scored.map((x) => x.cand) })), winner: again.winner?.cand ?? null, alternates: again.alternates, tagsByUrl, fitByKey, verdicts: recorder.verdicts, fitMin: PhotoFit.THRESHOLDS.FIT_MIN }));
+      } catch {
+        // The bank's record never changes the post.
+      }
+      return again.winner ? { ...again, steps: [...prior.steps, ...again.steps] } : { ...prior, steps: [...prior.steps, ...again.steps] };
+    };
+    out = await onlineAgain(out, found[i]!, { tags: p.tags });
     // Pivot (tuning.ts): both requests left the slide without a photo → Jev picks which of the Writer's alt visuals
     // (other parts of the slide's own copy) are worth searching; each is searched and picked like any request.
     if (!out.winner && tuning().pivot && deps.jev && p.slot.kind !== 'quote' && p.alts.length) {
@@ -175,10 +202,12 @@ export async function photosForDraft(
       searchSteps.push(...pivot.steps);
       if (pivot.chosen.length) {
         const searched = [];
+        const pivotTried: Array<{ request: VisualRequest; bankOnly: boolean }> = [];
         for (const request of pivot.chosen) {
           const r = await searchVisual(request, ctx, deps, { cover: i === 0, tags: p.tags });
           searchSteps.push(`pivot → ${request.kind}: "${request.query}"`, ...r.steps);
           searched.push({ request, scored: r.candidates.map((cand): Scored => ({ cand, tags: null, fit: null })) });
+          pivotTried.push({ request, bankOnly: r.bankOnly });
         }
         const again = await pickForSlide({ slot: p.slot, requests: searched, words: p.words }, state, deps, subjects, PhotoFit.THRESHOLDS.FIT_MIN, brief.the_news.text);
         visionUsd += again.visionUsd;
@@ -189,6 +218,7 @@ export async function photosForDraft(
           // The bank's record never changes the post.
         }
         out = again.winner ? { ...again, steps: [...out.steps, ...again.steps] } : { ...out, steps: [...out.steps, ...again.steps] };
+        out = await onlineAgain(out, pivotTried, { tags: p.tags });
       }
     }
     // Icon scene (tuning.ts): both requests left the slide without a photo → one more search for its icon's plain scene.
@@ -200,6 +230,7 @@ export async function photosForDraft(
       visionUsd += again.visionUsd;
       searchSteps.push(`icon scene (${p.icon}) → "${iconScene}"`, ...extra.steps);
       out = again.winner ? { ...again, steps: [...out.steps, ...again.steps] } : { ...out, steps: [...out.steps, ...again.steps] };
+      out = await onlineAgain(out, [{ request, bankOnly: extra.bankOnly }], { slideFitMin: tuning().iconSceneFitMin });
     }
     const identity = found[i]!.find((r) => r.identity)?.identity ?? null;
     traces.push({

@@ -94,13 +94,14 @@ export function explainerActions(deps: {
       if (!(await deps.publishingLive(db))) {
         return { ok: true, note: 'Approved. Publishing is switched off, so it gets a time once publishing is back on.' };
       }
-      // B1: today's next open window, as a system slot (source 'auto', so tonight's quota is untouched).
-      // A render that already has a slot keeps it. Booking only: the slot posts at its time, never now.
+      // B1: a system slot (source 'auto'). A render the night made ahead keeps (or books) the window of the date it was
+      // made for, never today's leftover one (Bald-Eagle D4: scheduleJob reads its target date); a person's render:
+      // today's next open window. A render that already has a slot keeps it. Booking only: the slot posts at its time.
       const now = deps.now?.() ?? new Date();
       const booked = await deps.scheduleJob(db, jobId, 'auto', now, nyDateOf(now)!);
       return booked.scheduled
         ? { ok: true, note: `Approved. It posts ${formatPlacement(new Date(booked.publishAt))}.` }
-        : { ok: true, note: 'Approved. No window is left today, so it takes the next open window after today; Post now can still post it today.' };
+        : { ok: true, note: 'Approved. No window is left on its day, so it takes the next open window after that; Post now can still post it today.' };
     },
     async reject(t, by, input) {
       const review = {

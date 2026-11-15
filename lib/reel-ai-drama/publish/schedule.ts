@@ -56,18 +56,47 @@ async function videoInBucket(db: Queryable, jobId: string): Promise<boolean> {
   return rows[0]?.location === 'bucket';
 }
 
+/** The date the night made a reel FOR (its target date, `night_date`; Bald-Eagle D4). Null: a person's job. */
+export async function dramaJobTarget(db: Queryable, jobId: string): Promise<string | null> {
+  const { rows } = await db.query<{ d: string | null }>(`SELECT night_date::text AS d FROM reel_ai_drama.jobs WHERE id = $1`, [jobId]);
+  const d = rows[0]?.d;
+  return typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d) ? d.slice(0, 10) : null;
+}
+
+/**
+ * The days a booking may use (Bald-Eagle D4, lib/social-hub/lead.ts). An explicit `fromDate` wins (the night placing a
+ * surviving reel on the date it fills). Otherwise a reel made for a date still ahead books from that date, never
+ * before it: a bounded booking (Approve, the finish booking: `throughDate` today) takes the target date only, an
+ * unbounded one (scheduleApprovedDrama) the target date or later. A reel with no target, or whose date has passed,
+ * books as before: from today, through `throughDate`.
+ */
+export async function dramaBookingDays(
+  db: Queryable,
+  jobId: string,
+  now: Date,
+  throughDate?: string,
+  fromDate?: string,
+): Promise<{ fromDate?: string; throughDate?: string }> {
+  if (fromDate) return { fromDate, throughDate };
+  const target = await dramaJobTarget(db, jobId);
+  if (!target || target <= calendarDateKey(now, SOCIAL_TIMEZONE)) return { throughDate };
+  return { fromDate: target, throughDate: throughDate === undefined ? undefined : throughDate > target ? throughDate : target };
+}
+
 /**
  * Book a reel into the next free AI Drama slot, or return its waiting slot. `throughDate` (NY YYYY-MM-DD) is the last
  * day it may book (Approve and the night's finish booking pass today); without it the search runs two weeks ahead.
- * A video that isn't in Storage is never booked: nothing could post it.
+ * `fromDate` is the first (the night passes the date it fills). A reel the night made ahead books on its target date
+ * (dramaBookingDays), never today's leftover slot. A video that isn't in Storage is never booked: nothing could post it.
  */
 export async function scheduleDramaJob(
   db: Queryable,
   jobId: string,
   source: 'auto' | 'user',
   now = new Date(),
-  throughDate?: string,
+  throughDateIn?: string,
   rng: (count: number) => number = uniformIndex,
+  fromDateIn?: string,
 ): Promise<DramaScheduleOutcome> {
   const itemId = await dramaItemId(db, jobId);
   if (!itemId) return { scheduled: false, note: 'The reel is gone.' };
@@ -79,6 +108,7 @@ export async function scheduleDramaJob(
   const existing = await active();
   if (existing) return { scheduled: true, id: existing.id, publishAt: new Date(existing.publish_at).toISOString() };
   if (!(await videoInBucket(db, jobId))) return { scheduled: false, note: DRAMA_NOT_IN_BUCKET_NOTE };
+  const { fromDate, throughDate } = await dramaBookingDays(db, jobId, now, throughDateIn, fromDateIn);
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const spacing = (text: string, params?: unknown[]) => db.query<Record<string, unknown>>(text, params);
@@ -95,14 +125,17 @@ export async function scheduleDramaJob(
       );
       const takenKeys = new Set(takenRows.map((r) => slotTakenKey(r.d, r.slot)));
       const windows = DRAMA_WINDOWS.slice(0, Math.max(1, Math.min(await dramaPostsPerDay(db), DRAMA_WINDOWS.length)));
-      choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate);
+      choice = chooseFromWindows(windows, now, takenKeys, busy, rng, throughDate, fromDate);
     } else {
-      const picked = await chooseTemplateSlot(spacing, plan, 'reel_ai_drama', { now, busy, rng, throughDate });
+      const picked = await chooseTemplateSlot(spacing, plan, 'reel_ai_drama', { now, busy, rng, throughDate, fromDate });
       choice = picked;
       feedMode = picked?.feedMode ?? null;
     }
     if (!choice) {
-      return { scheduled: false, note: throughDate ? `No AI Drama slot is open through ${throughDate}.` : 'No AI Drama slot is open in the next two weeks.' };
+      const note = fromDate && throughDate === fromDate
+        ? `No AI Drama slot is open on ${fromDate}.`
+        : throughDate ? `No AI Drama slot is open through ${throughDate}.` : 'No AI Drama slot is open in the next two weeks.';
+      return { scheduled: false, note };
     }
     try {
       const booked = await bookSlot(spineOf(db), { vertical: 'reel_ai_drama', itemId, nyDate: choice.nyDate, slot: choice.slot, publishAt: choice.publishAt, source, ...(feedMode ? { feedMode } : {}) });
@@ -117,8 +150,9 @@ export async function scheduleDramaJob(
 }
 
 /**
- * When the night's job (trigger 'auto') finishes, it takes today's next open slot unapproved (B2): it still needs
- * Approve, and without one dramaReleaseDue cancels it at its time. A person's job waits for Approve. Only while live.
+ * When the night's job (trigger 'auto') finishes, it takes a slot on the date it was made for, unapproved (B2;
+ * Bald-Eagle D4: two days ahead, never today's leftover slot): it still needs Approve, and without one dramaReleaseDue
+ * cancels it at its time. A person's job waits for Approve. Only while live.
  */
 export async function bookFinishedDrama(
   db: Queryable,
@@ -156,7 +190,10 @@ SELECT j.id, j.pitch_id, f.created_at AS reviewed_at, j.finished_at
    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
    AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))`;
 
-/** Approved (or, with approval off, unreviewed), unbooked reels with their video in Storage: booked, oldest approval first. Only while live. */
+/**
+ * Approved (or, with approval off, unreviewed), unbooked reels with their video in Storage: booked, oldest approval
+ * first. Only while live. A reel made for a date still ahead books on that date or later (dramaBookingDays).
+ */
 export async function scheduleApprovedDrama(db: Queryable, now = new Date(), rng?: (count: number) => number): Promise<number> {
   if (!(await dramaPublishingLive(db))) return 0;
   const approvalNeeded = await dramaRequireApproval(db);

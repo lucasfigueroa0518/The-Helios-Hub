@@ -14,15 +14,15 @@ import path from 'node:path';
 import type { Queryable } from '@/lib/explainers/db';
 import { pollExplainerInsights, type ExplainerInsightsClient } from '@/lib/explainers/publish/insights';
 import { explainerItemId } from '@/lib/explainers/publish/items';
-import { saveFeedback } from '@/lib/explainers/repository';
+import { productionSpendForDay, saveFeedback } from '@/lib/explainers/repository';
 import type { ReelMetaClient } from '@/lib/explainers/publish/meta';
 import { claimAndPublish, publishReadiness, queuePublish } from '@/lib/explainers/publish/publish';
-import { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved } from '@/lib/explainers/publish/schedule';
+import { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved, scheduleJob } from '@/lib/explainers/publish/schedule';
 import { bucketArtifactStore, localArtifactStore } from '@/lib/explainers/storage';
 
 import { scratchExplainersDb } from './explainers-pglite';
 
-async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'rejected' | null; location?: 'local' | 'bucket'; caption?: string | null; title?: string; trigger?: 'click' | 'auto' } = {}) {
+async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'rejected' | null; location?: 'local' | 'bucket'; caption?: string | null; title?: string; trigger?: 'click' | 'auto'; target?: string } = {}) {
   const { rows: t } = await db.query<{ id: string }>(
     `INSERT INTO explainers.topics (title, origin, status) VALUES ($1, 'manual', 'rendered') RETURNING id`,
     [opts.title ?? 'What is an API?'],
@@ -33,6 +33,7 @@ async function renderedJob(db: Queryable, opts: { verdict?: 'approved' | 'reject
     [t[0]!.id, opts.trigger ?? 'click'],
   );
   const jobId = j[0]!.id;
+  if (opts.target) await db.query(`UPDATE explainers.jobs SET target_date = $2::date WHERE id = $1`, [jobId, opts.target]);
   await db.query(
     `INSERT INTO explainers.artifacts (job_id, kind, storage_path, bytes, storage_location) VALUES ($1, 'video', $2, 5000000, $3)`,
     [jobId, `jobs/${jobId}/video.mp4`, opts.location ?? 'bucket'],
@@ -263,4 +264,55 @@ test('B2: nothing is booked while publishing is off, or once today’s windows a
   const late = await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, new Date('2026-10-08T21:30:00Z'), () => 0); // 5:30 PM New York
   assert.equal(late?.scheduled, false);
   assert.deepEqual(await explainerSlots(db), []);
+});
+
+// ── Lead time (Bald-Eagle D4, D8): made two days ahead ──────────────────────
+
+test('lead time: a night render books on its target date when it finishes and when approved, never today’s leftover window', async () => {
+  const { db } = await scratchExplainersDb();
+  await liveOn(db);
+  // Made Thursday night (Oct 8) for Saturday (Oct 10); Thursday's and Friday's windows are open, and it books Saturday.
+  const jobId = await renderedJob(db, { verdict: null, trigger: 'auto', target: '2026-10-10' });
+  const out = await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0);
+  assert.equal(out?.scheduled, true);
+  assert.deepEqual((await explainerSlots(db)).map((s) => [s.d, s.slot, s.source]), [['2026-10-10', 'afternoon', 'auto']]);
+  // Approve (the hub passes today as the bound) keeps its slot.
+  assert.deepEqual(await scheduleJob(db, jobId, 'auto', FINISHED_3AM, '2026-10-08', () => 0), out);
+
+  // Unbooked: Approve books the target date only; both of Saturday's windows taken means nothing, not Thursday.
+  const second = await renderedJob(db, { verdict: null, trigger: 'auto', target: '2026-10-10', title: 'Second' });
+  assert.equal((await scheduleJob(db, second, 'auto', FINISHED_3AM, '2026-10-08', () => 0)).scheduled, true);
+  const third = await renderedJob(db, { trigger: 'auto', target: '2026-10-10', title: 'Third' });
+  const refused = await scheduleJob(db, third, 'auto', FINISHED_3AM, '2026-10-08', () => 0);
+  assert.equal(refused.scheduled, false);
+  if (!refused.scheduled) assert.match(refused.note, /2026-10-10/);
+  // The worker's booking of approved renders: the target date or later, never before it.
+  assert.equal(await scheduleApproved(db, FINISHED_3AM, () => 0), 1);
+  const slots = await db.query<{ d: string }>(
+    `SELECT s.ny_date::text AS d FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id WHERE ci.native_ref = $1`, [third]);
+  assert.deepEqual(slots.rows.map((r) => r.d), ['2026-10-11']);
+
+  // A person's render (no target date) books today, as before.
+  const mine = await renderedJob(db, { trigger: 'click', title: 'Mine' });
+  assert.equal((await scheduleJob(db, mine, 'auto', FINISHED_3AM, '2026-10-08', () => 0)).scheduled, true);
+  const own = await db.query<{ d: string }>(
+    `SELECT s.ny_date::text AS d FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id WHERE ci.native_ref = $1`, [mine]);
+  assert.deepEqual(own.rows.map((r) => r.d), ['2026-10-08']);
+});
+
+test('lead time: the daily spend cap counts a cost against its render’s target date (else its idea cycle’s date, else the day spent)', async () => {
+  const { db } = await scratchExplainersDb();
+  const night = await renderedJob(db, { trigger: 'auto', target: '2026-10-10' });
+  const click = await renderedJob(db, { trigger: 'click', title: 'Click' });
+  const { rows: [cycle] } = await db.query<{ id: string }>(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'production', '2026-10-09') RETURNING id`);
+  const cost = (fields: { job?: string; cycle?: string }, usd: number) =>
+    db.query(`INSERT INTO explainers.cost_events (job_id, idea_cycle_id, mode, vendor, component, usd, created_at) VALUES ($1, $2, 'production', 'anthropic', 'render', $3, '2026-10-08T12:00:00Z')`,
+      [fields.job ?? null, fields.cycle ?? null, usd]);
+  await cost({ job: night }, 4);
+  await cost({ job: click }, 2);
+  await cost({ cycle: cycle!.id }, 1);
+  await cost({}, 0.5);
+  assert.equal(await productionSpendForDay(db, '2026-10-10'), 4);
+  assert.equal(await productionSpendForDay(db, '2026-10-09'), 1);
+  assert.equal(await productionSpendForDay(db, '2026-10-08'), 2.5);
 });

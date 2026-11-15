@@ -12,7 +12,7 @@
  */
 import type { Queryable } from '@/lib/stories/db';
 import { hashesOf } from '@/lib/photos/used-hash';
-import { readUsedLedger, recordUsedPhotos, USED_PHOTO_DAYS, type UsedLedger } from '@/lib/photos/used';
+import { readPublishedLedger, readUsedLedger, recordUsedPhotos, USED_PHOTO_DAYS, type LedgerReadOptions, type UsedLedger } from '@/lib/photos/used';
 
 import { storyKey, type StoryCandidate } from './reels';
 
@@ -155,23 +155,38 @@ export async function shortlistWithoutBrief(db: Queryable, now: Date): Promise<S
 
 const ledgerQuery = (db: Queryable) => (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
 
-/** The used-photo ledger (CI-32): photos any post published in the last `days`, by URL and by hash. */
-export function recentPhotoLedger(db: Queryable, now: Date, days = USED_PHOTO_DAYS): Promise<UsedLedger> {
-  return readUsedLedger(ledgerQuery(db), now, days);
+/**
+ * The used-photo ledger (CI-32): photos any post published in the last `days`, by URL and by hash, plus the photos
+ * of every item of any type built in that window and still waiting to post (Bald-Eagle D3). `opts.excludeItem`:
+ * the set (or other item) being rebuilt, whose own photos don't count.
+ */
+export function recentPhotoLedger(db: Queryable, now: Date, days = USED_PHOTO_DAYS, opts: LedgerReadOptions = {}): Promise<UsedLedger> {
+  return readUsedLedger(ledgerQuery(db), now, days, opts);
 }
 
-/** Photos published in the last `days` (CI-32's one rule; was Tommy's 7-day rule, S-24). */
-export async function recentUsedPhotoUrls(db: Queryable, now: Date, days = USED_PHOTO_DAYS): Promise<Set<string>> {
-  return new Set((await recentPhotoLedger(db, now, days)).urls);
+/** Photos published in the last `days` or held by a waiting item (CI-32's one rule plus Bald-Eagle D3). */
+export async function recentUsedPhotoUrls(db: Queryable, now: Date, days = USED_PHOTO_DAYS, opts: LedgerReadOptions = {}): Promise<Set<string>> {
+  return new Set((await recentPhotoLedger(db, now, days, opts)).urls);
 }
 
 /**
- * Photos published in the last `days`, each with who used it. Since CI-32 every ledger row is a published post's
- * (`<vertical>:<post id>`, never a story ref), so a story's own carousel photo is held once that carousel is
- * published; the set is keyed '' for "a published post".
+ * Photos published in the last `days` or held by a waiting item, each with who holds it. Every ledger row is a
+ * published post's, labelled '' ("a published post"). A photo a waiting item chose (Bald-Eagle D3) is labelled by
+ * that item: a Carousels post by its news story id (the `ref` of that story's carousel candidate, so Morning
+ * Download can keep the photo its own story's carousel chose, S-29), any other item `<vertical>:<id>`.
  */
-export async function recentPhotoUses(db: Queryable, now: Date, days = USED_PHOTO_DAYS): Promise<Map<string, Set<string>>> {
-  return new Map([...(await recentUsedPhotoUrls(db, now, days))].map((url) => [url, new Set([''])]));
+export async function recentPhotoUses(db: Queryable, now: Date, days = USED_PHOTO_DAYS, opts: LedgerReadOptions = {}): Promise<Map<string, Set<string>>> {
+  const q = ledgerQuery(db);
+  const published = await readPublishedLedger(q, now, days);
+  const { pendingHold } = await import('@/lib/photos/pending');
+  const waiting = await pendingHold(q, now, { days, excludeItem: opts.excludeItem ?? null });
+  const out = new Map<string, Set<string>>();
+  const label = (url: string, id: string) => out.set(url, (out.get(url) ?? new Set<string>()).add(id));
+  for (const url of published.urls) label(url, '');
+  for (const [url, owners] of waiting.owners) {
+    for (const o of owners) label(url, o.vertical === 'carousels' && o.idea ? o.idea : `${o.vertical}:${o.id}`);
+  }
+  return out;
 }
 
 /**

@@ -11,7 +11,7 @@ import { explainersDb } from '@/lib/explainers/connection';
 import { requestRender } from '@/lib/explainers/repository';
 import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings';
 import { pendingRun, requestRun } from '@/lib/reels/repository';
-import { requestFinish, todaySlateFor } from '@/lib/reels/visual/finish';
+import { requestFinish, slateOnDayFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { isAiEventsDay, isFieldNotesDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
@@ -205,6 +205,7 @@ export async function requestStorySets(series: readonly string[], by: string, no
  */
 export async function runToday(by: string, now = new Date(), only?: Vertical, target?: string): Promise<{ plan: RunPlan; results: StepResult[] }> {
   const plan = await livePlan(now, { lfdAnyDay: only === 'last_few_days', aiEventsAnyDay: only === 'ai_events', fieldNotesAnyDay: only === 'field_notes' });
+  const today = nyDateOf(now)!;
   const results: StepResult[] = [];
   for (const step of stepsFor(plan, only, target)) {
     if (step.action === 'none') continue;
@@ -214,7 +215,8 @@ export async function runToday(by: string, now = new Date(), only?: Vertical, ta
         const notes: string[] = [];
         let started = 0;
         for (const ideaId of step.targets) {
-          const slateId = await todaySlateFor(ideaId, now);
+          // Run now makes the day it was clicked (Bald-Eagle D4): today's slate only, never one made ahead.
+          const slateId = await slateOnDayFor(ideaId, today);
           if (!slateId) {
             notes.push('one idea is not on today’s slate');
             continue;
