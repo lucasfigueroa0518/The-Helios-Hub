@@ -676,3 +676,30 @@ test('reset day never deletes a tie whose hand-set partner has already started t
   assert.ok(early.ok && !early.noop);
   assert.deepEqual(early.changes.map((c) => (c as { startMinute: number }).startMinute).sort(), [570, 690]);
 });
+
+/* Calendar look-back (planning/Social Hub/Calendar Look-back/PLAN.md): past days show what went out, each card opening its analytics. */
+
+test('look-back: a past post whose slot is gone still shows on its day, at its booked time', () => {
+  const moved = post({ id: 'gone', slotId: 't0615', nyDate: MON, status: 'published' }); // 10:15 AM: no Monday explainer slot there
+  const m = boardModel({ days: week(), posts: [moved], now: NOW, caps: DEFAULT_CAPS });
+  const c = m.cards.find((x) => x.booked?.id === 'gone')!;
+  assert.equal(c.day, 0);
+  assert.equal(c.startMinute, 615);
+  assert.equal(c.status, 'posted');
+  assert.equal(c.locked, true);
+  assert.equal(m.columns[0]!.count, 1);
+});
+
+test('look-back: a past post with no slot id is placed at the time it went out (15-minute floor, New York)', () => {
+  const p = { ...post({ id: 'free', slotId: 'x', nyDate: MON, status: 'published' }), slot: null, postedAt: '2026-10-19T19:07:00Z' } as unknown as HubPost; // 3:07 PM NY
+  const c = boardModel({ days: week(), posts: [p], now: NOW, caps: DEFAULT_CAPS }).cards.find((x) => x.booked?.id === 'free')!;
+  assert.equal(c.startMinute, 900);
+});
+
+test('look-back: a post on its own slot is not doubled, and today never gets the extra cards', () => {
+  const onSlot = post({ id: 'on', slotId: 't0780', nyDate: MON, status: 'published' });
+  const todayMoved = post({ id: 'today', slotId: 't0615', nyDate: '2026-10-20', status: 'published' });
+  const m = boardModel({ days: week(), posts: [onSlot, todayMoved], now: NOW, caps: DEFAULT_CAPS });
+  assert.equal(m.cards.filter((x) => x.booked?.id === 'on').length, 1);
+  assert.equal(m.cards.filter((x) => x.booked?.id === 'today').length, 0);
+});
