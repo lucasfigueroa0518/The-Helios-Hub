@@ -48,9 +48,9 @@ export type PoolEvent = RankInput & {
 export type CityRanking = {
   metro: Metro;
   ranked: PoolEvent[];
-  /** In pick order (rank 1 first), at most PICKS_PER_CITY. */
+  /** In pick order (rank 1 first), at most PICKS_PER_CITY: the city's top 10 (AE-36). */
   picks: PoolEvent[];
-  /** The post's ranked list: the picks, then the next eligible events, at most RANK_DEPTH (rank order). */
+  /** The post's ranked list: the top 10, at most RANK_DEPTH (rank order, AE-38). */
   deck: PoolEvent[];
   /** The history bar tier the picks cleared (AE-28) and its score, null when no bar applied. */
   tier: BarTier;
@@ -194,7 +194,6 @@ export async function rankWeek(input: RankWeekInput): Promise<RankWeekResult> {
       gate: s.gate,
       organizerKey: organizerKey(c.event),
       startAt: c.event.startAt,
-      localDay: c.day,
       going: c.event.guestCount,
       pinned: pinned.has(c.event.id),
       excluded: excluded.has(c.event.id),

@@ -131,7 +131,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
   ai_events: {
     title: 'AI Events This Week',
     benchNote:
-      'The week’s ranked events, city by city: the top 3 per city go into the carousel. Gated and excluded events stay listed with the reason. Open a row to see where its score comes from.',
+      'The week’s ranked events, city by city: each city’s top 10 is badged on the site and the post teases from it. Gated and excluded events stay listed with the reason. Open a row to see where its score comes from.',
     maxCap: 2,
     queue: 'none',
     seedable: false,
