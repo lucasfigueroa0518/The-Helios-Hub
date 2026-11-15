@@ -64,3 +64,31 @@ User: "Is this optimized for mobile?" Checked on an emulated iPhone 14 (fixture 
   Desktop is unchanged (29px, no scroll).
 - Verified: on the phone the board starts scrolled to today, posted cards are 44px, and a tap opens the drawer.
   Desktop: no scroll, unchanged. `tsc` 0 errors; board + lead tests 64/64.
+
+## Align 2026-11-15: the whole calendar on phones
+User: "Seems like the whole calendar isn't optimized for mobile". Audit (iPhone 14, fixture preview):
+Week board is the problem (header wraps to 3 rows, drag-in chips fill the first screen and dragging barely works
+on touch, 2 of 7 days visible with sideways scrolling, an hour grid that's mostly empty space, 35×19 Trial/Main tags). Slot
+panel (already a bottom sheet), Schedules menu, Ready to place, Month, day sheet and post drawer are fine or nearly.
+
+### Decisions (2026-11-15)
+- **Phone Week = one day at a time** (user picked "One day at a time"): a Mon–Sun strip (tap or swipe), the
+  day's slots as full-width rows (time, type, post name, number when posted). A tap opens details or analytics.
+  No hour grid. Desktop unchanged.
+- **Editing on phone = look + tap actions** (user picked "Look + tap actions"): no drag-in chips or Select on phones.
+  Slot details (move, remove, Trial/Main), Place… and Schedules still work.
+- **Default on phone = Week, on today** (user picked "Week, on today").
+
+### Built (2026-11-15)
+- `components/social-hub/calendar/DayAgenda.tsx` (new): day strip (Mon–Sun, count per day, today marked, past
+  days dashed) + the chosen day's rows in time order. Opens on today. A tap or a sideways swipe changes day. Posted rows
+  are `PostLink`s (drawer, with the number). Other rows open the existing `SlotPanel` (bottom sheet). The Trial/Main tag
+  is a 36px button.
+- `WeekBoard.tsx`: renders `DayAgenda` from the same model (`byDay`), the same `setOpen` and the same `doEdit`, so there's no
+  second source of truth. "Ready to place" copy mentions Place….
+- `hub-calendar.css`: under 640px the agenda shows, and the grid, drag-in chips, Select and key hide. Above 640px
+  (desktop, iPad) nothing changes.
+- Verified (iPhone 14 emulation, fixture): no sideways page scroll; opens on Thu (today); swipe → Wed; slot details
+  open as a bottom sheet; a posted row opens the drawer; past rows in time order; no page errors. Desktop + iPad Mini:
+  agenda hidden, grid as before. `tsc` 0 errors; calendar/social-hub/slots suites 610/610.
+- Not changed: Month view (already fits), day sheet and drawer (already good).

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSPrope
 
 import { createHistory, undoChunks, type Command, type Tab } from '@/components/social-hub/calendar/history';
 import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
+import { DayAgenda } from '@/components/social-hub/calendar/DayAgenda';
 import { DayTimePicker, Floating, SlotCard, SlotPanel, TIME_OPTIONS, type SlimPost } from '@/components/social-hub/calendar/SlotCard';
 import { Menu } from '@/components/social-hub/ui/Menu';
 import { sourceSeries, sourceVertical, useBoardDrag, type DragSource } from '@/components/social-hub/calendar/useBoardDrag';
@@ -684,6 +685,16 @@ export function WeekBoard(props: {
         </div>
       ) : null}
 
+      {/* Phones: one day at a time (CSS shows this under 640px and hides the grid). */}
+      <DayAgenda
+        columns={model.columns}
+        byDay={byDay}
+        editable={editable}
+        dim={props.dim}
+        onOpen={(card, anchor) => setOpen((o) => (o?.key === card.key ? null : { key: card.key, anchor }))}
+        onFlip={(card) => card.feedMode && doEdit({ op: 'mode', day: card.day, key: { vertical: card.vertical, startMinute: card.startMinute, series: card.series }, feedMode: card.feedMode === 'trial' ? 'main' : 'trial' })}
+      />
+
       <div ref={scroller} className="sh-board__scroll">
         <div ref={grid} className="sh-board__grid" style={{ gridTemplateColumns: `44px ${cols}`, '--sh-stack-over': overrun } as CSSProperties} role="group" aria-label="This week">
           <div className="sh-board__gutter" aria-hidden="true">
@@ -791,7 +802,7 @@ export function WeekBoard(props: {
         <div className="sh-board__below">
           <section className="sh-panel sh-board__section" aria-labelledby="sh-board-ready">
             <h2 className="sh-title" id="sh-board-ready">Ready to place <span className="sh-count">{ready.length}</span></h2>
-            <p className="sh-subtle">Made, with no slot yet. Drag one onto a day and time.</p>
+            <p className="sh-subtle">Made, with no slot yet. Drag one onto a day and time, or use Place….</p>
             {ready.length ? (
               <ul className="sh-board__ready">
                 {ready.map((r) => (

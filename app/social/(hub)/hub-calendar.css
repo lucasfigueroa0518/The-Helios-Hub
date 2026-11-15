@@ -331,3 +331,37 @@ a.sh-board__open { color: inherit; text-decoration: none; cursor: pointer; }
   .sh-board__chip { min-height: 40px; }
   .sh-board__actions .sh-menu__list { max-height: 50vh; }
 }
+
+/* ── The Week on a phone: one day at a time (DayAgenda; Calendar Look-back PLAN, 2026-11-15) ── */
+.sh-agenda { display: none; }
+.sh-agenda__strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.sh-agenda__day { display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 60px; padding: 6px 0; border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font: inherit; cursor: pointer; }
+.sh-agenda__day[data-past='true'] { border-style: dashed; background: transparent; }
+.sh-agenda__day[data-today='true'] { border-color: var(--color-text); }
+.sh-agenda__day[aria-selected='true'] { border-color: var(--color-text); background: var(--color-text); color: var(--color-text-inverse); }
+.sh-agenda__wd { font-size: var(--sh-fs-label); opacity: 0.75; }
+.sh-agenda__dn { font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-agenda__n { font-size: 11px; opacity: 0.65; font-variant-numeric: tabular-nums; }
+.sh-agenda__body { display: flex; flex-direction: column; gap: 10px; min-height: 50vh; padding-top: 14px; }
+.sh-agenda__title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); }
+.sh-agenda__empty { margin: 0; padding: 24px 12px; border: 1px dashed var(--sh-hairline); border-radius: var(--radius-md); color: var(--color-text-subtle); text-align: center; }
+.sh-agenda__list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sh-agenda__row { display: flex; align-items: center; min-height: 56px; border: 1px solid color-mix(in srgb, var(--sh-color) 32%, var(--sh-hairline)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sh-color) 5%, var(--color-surface)); }
+.sh-agenda__row[data-status='posted'] { background: var(--color-surface-2); }
+.sh-agenda__row[data-status='empty'] { border-style: dashed; background: var(--color-surface); }
+.sh-agenda__row[data-dimmed='true'] { opacity: 0.4; }
+.sh-agenda__open { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; min-height: 56px; padding: 10px 8px 10px 12px; border: 0; border-radius: var(--radius-md); background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.sh-agenda__open:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--sh-focus); }
+.sh-agenda__time { flex: none; width: 66px; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-variant-numeric: tabular-nums; }
+.sh-agenda__main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.sh-agenda__type { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-size: var(--sh-fs-label); }
+.sh-agenda__name { overflow: hidden; color: var(--color-text); font-weight: var(--font-weight-semibold); white-space: nowrap; text-overflow: ellipsis; }
+.sh-agenda__line { color: var(--color-text-muted); font-size: var(--sh-fs-small); font-variant-numeric: tabular-nums; }
+.sh-agenda__go { flex: none; color: var(--color-text-subtle); }
+.sh-agenda__tag { min-height: 36px; margin-right: 10px; padding: 0 12px; font-size: var(--sh-fs-small); }
+
+@media (max-width: 640px) {
+  .sh-agenda { display: block; }
+  /* The grid, the drag-in chips and Select are desktop tools (decision: look + tap actions on a phone). */
+  .sh-board__scroll, .sh-board__tray, .sh-board__selectbar, .sh-board__key { display: none; }
+}
