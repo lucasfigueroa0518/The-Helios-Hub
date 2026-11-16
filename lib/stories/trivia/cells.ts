@@ -11,7 +11,7 @@
  */
 import type { Queryable } from '@/lib/stories/db';
 
-import { allCells, cellOf, type Cell } from './map';
+import { allCells, cellOf, isActive, type Cell } from './map';
 import { TRIVIA_KEY_PREFIX } from './types';
 
 export type CellState = 'open' | 'reserved' | 'closed';
@@ -40,7 +40,8 @@ export async function openCellIds(db: Queryable): Promise<Set<string>> {
 
 /** `n` random open cells that are on the map. `rand` is injectable for tests. */
 export async function sampleOpenCells(db: Queryable, n: number, rand: () => number = Math.random): Promise<Cell[]> {
-  const open = [...(await openCellIds(db))].map(cellOf).filter((c): c is Cell => c !== null);
+  // AT-63: retired themes and angles are never offered.
+  const open = [...(await openCellIds(db))].map(cellOf).filter((c): c is Cell => c !== null && isActive(c));
   for (let i = open.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [open[i], open[j]] = [open[j]!, open[i]!];

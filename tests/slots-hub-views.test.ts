@@ -71,7 +71,7 @@ test('windowsOn follows the day\'s slot times when given, and the old windows wh
   const lfdWed = slotsFor(['2026-10-21'], [add('2026-10-21', 'last_few_days', 540)]);
   assert.deepEqual(windowsOn('last_few_days', '2026-10-21', [], lfdWed).map((w) => w.id), ['t0540']);
   const stories = windowsOn('stories', '2026-10-22', [], slotsFor(['2026-10-22'], [add('2026-10-22', 'stories', 900, null, 'morning_download')]));
-  assert.deepEqual(stories.map((w) => [w.id, w.label]), [['t0510:ai_trivia', 'AI Trivia'], ['t0510:morning_download', 'Morning Download'], ['t0900:morning_download', 'Morning Download']]);
+  assert.deepEqual(stories.map((w) => [w.id, w.label]), [['t0510:ai_trivia', 'Are you smarter than AI?'], ['t0510:morning_download', 'Morning Download'], ['t0900:morning_download', 'Morning Download']]);
   assert.deepEqual(capacityWindows('carousels', '2026-10-21', [3], 1, '2026-10-20', slots).map((w) => w.id), ['t0870']);
 });
 

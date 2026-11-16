@@ -9,8 +9,9 @@
  * every frame's words are exactly what the build wrote; a change that touched
  * them would throw (it can't by construction; the check keeps it that way).
  *
- * AI Trivia (VIDEO_SERIES) renders each frame as a 5-second MP4 instead
- * (renderTriviaClips, lib/stories/trivia/render): the same review runs on the
+ * AI Trivia (VIDEO_SERIES) renders its two frames as MP4s instead (the
+ * question 10 s, the answer 5 s; renderTriviaClips, lib/stories/trivia/render,
+ * one fixed sound, no music or photos): the same review runs on the
  * clips' posters, a change re-renders the clips, and each frame uploads its
  * MP4 (storage_path, what Instagram fetches) and its poster JPEG
  * (poster_path, what the hub shows), media = 'video'.
@@ -43,17 +44,17 @@ export type RenderStageResult = { flagged: boolean; jpegBytes: number[]; reviewU
 
 /** One rendered video frame: the MP4 Instagram posts and the poster JPEG the review and the hub look at. */
 export type VideoClip = { role: string; mp4: Buffer; poster: Buffer };
-/** AI Trivia's clip renderer (renderTriviaClips' shape, CONTRACT §4 B). `music` is the build's plan (payload.trivia.music). */
-export type RenderClips = (frames: Frame[], music: unknown) => Promise<{ clips: VideoClip[] }>;
+/** AI Trivia's clip renderer (renderTriviaClips' shape, CONTRACT-2 §3): the set's frames in, one clip per frame out. */
+export type RenderClips = (frames: Frame[]) => Promise<{ clips: VideoClip[] }>;
 
 /** The live renderer, loaded only when a video set renders (HyperFrames and ffmpeg stay out of every other path). */
-const liveRenderClips: RenderClips = async (frames, music) => {
+const liveRenderClips: RenderClips = async (frames) => {
   const { renderTriviaClips } = await import('@/lib/stories/trivia/render');
   const input = frames.map((f) => {
     if (f.data.role !== 'question' && f.data.role !== 'answer') throw new Error(`an AI Trivia set has no ${f.data.role} frame`);
-    return { role: f.data.role, copy: f.data, photo: framePhoto(f.data) ?? null };
+    return { role: f.data.role, copy: f.data };
   });
-  return renderTriviaClips(input, music as Parameters<typeof renderTriviaClips>[1]);
+  return renderTriviaClips(input);
 };
 
 export type RenderStageDeps = { db: StoriesDb; storage: StoriesStorage; renderer: RendererHandle; review: ReviewCall; setId: string; triviaRender?: RenderClips };
@@ -108,12 +109,10 @@ async function finish(deps: Pick<RenderStageDeps, 'db' | 'setId'>, out: ReviewOu
  * poster → save each frame as media 'video'.
  */
 async function runVideoStage(deps: RenderStageDeps, got: { set: StorySet; frames: FrameRow[] }, frames: Frame[]): Promise<RenderStageResult> {
-  const music = (got.set.payload.trivia as { music?: unknown } | undefined)?.music;
-  if (!music) throw new Error('no music plan on the set (payload.trivia.music)');
   const renderClips = deps.triviaRender ?? liveRenderClips;
   const clipsOf = new Map<RenderResult, VideoClip[]>();
   const render = async (f: Frame[]): Promise<RenderResult> => {
-    const { clips } = await renderClips(f, music);
+    const { clips } = await renderClips(f);
     if (clips.length !== f.length) throw new Error(`the clip renderer returned ${clips.length} clips for ${f.length} frames`);
     const result: RenderResult = {
       ok: true,

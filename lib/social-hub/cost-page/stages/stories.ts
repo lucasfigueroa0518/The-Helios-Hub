@@ -6,7 +6,7 @@ export const STORIES_STAGES: Record<string, Stage> = {
   // Guess the Number is retired (AT-14); its components stay so its past spend still sorts.
   'gtn-prescore': 'research', 'gtn-rescore': 'research', 'gtn-extract': 'research', 'gtn-question': 'writing',
   'gtn-pick': 'research', 'gtn-gate': 'research', 'gtn-same-subject': 'research',
-  'trivia-write': 'writing', 'trivia-score': 'research', 'trivia-check': 'research', 'trivia-music': 'visuals',
+  'trivia-write': 'writing', 'trivia-score': 'research', 'trivia-check': 'research',
   'fvp-score': 'research', 'fvp-pair': 'research', 'fvp-verify': 'writing', 'fvp-copy': 'writing',
   'photo-finder': 'visuals', 'stories-render-review': 'visuals',
   search: 'research',

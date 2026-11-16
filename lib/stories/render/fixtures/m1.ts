@@ -50,11 +50,10 @@ export const MORNING_DOWNLOAD_TYPE: FrameData[] = [
   },
 ];
 
-/** AI Trivia (CONTRACT §3): a medium question (3 options), then its answer. Rendered as video by lib/stories/trivia/render. */
+/** AI Trivia (CONTRACT §3): a question (3 options), then its answer. Rendered as video by lib/stories/trivia/render. */
 export const AI_TRIVIA: [FrameData, FrameData] = (() => {
   const copy = {
     question: 'Which company built the first chatbot to pass a million users in five days?',
-    difficulty: 'medium' as const,
     options: [
       { letter: 'A' as const, text: 'OpenAI' },
       { letter: 'B' as const, text: 'Google' },

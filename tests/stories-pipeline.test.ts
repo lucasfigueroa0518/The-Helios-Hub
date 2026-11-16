@@ -462,7 +462,7 @@ async function setSwitches(db: Awaited<ReturnType<typeof harnessDb>>['db'], s: {
   }
 }
 
-test('worker (approval off, publishing live): auto request at 3 AM → build → self-approve → schedule → publish in order → history, used photos, insights, cell closed', async () => {
+test('worker (approval off, publishing live): auto request at 3 AM → build → self-approve → schedule → publish in order → history, no photos, insights, cell closed', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   await setSwitches(db, { requireApproval: false, publishingLive: true });
@@ -518,7 +518,7 @@ test('worker (approval off, publishing live): auto request at 3 AM → build →
   assert.deepEqual([...(await recentKeys(db, 'ai_trivia', 30, clock))], ['trivia:t03a07']);
   assert.equal((await db.query<{ state: string }>(`SELECT state FROM stories.trivia_cells WHERE cell_id = 't03a07'`)).rows[0]!.state, 'closed');
   // Only the published person photo goes into Tommy's used-photo log (S-24).
-  assert.deepEqual([...(await recentUsedPhotoUrls(db, clock))], ['https://img.test/q.jpg']);
+  assert.deepEqual([...(await recentUsedPhotoUrls(db, clock))], [], 'an Are you smarter than AI? set carries no photo (CONTRACT-2 §3)');
 
   // The same pass polled the new frames' first insights; a minute later nothing is due.
   assert.equal(second.insights, 2);

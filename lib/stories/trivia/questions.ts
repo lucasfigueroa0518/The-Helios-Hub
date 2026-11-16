@@ -1,49 +1,28 @@
 /**
- * trivia-score@1 (AT-8, AT-10): the pool's "will viewers care" scorecard.
- * DRAFT until Lucas approves the wording; bump the version on any change.
- *
- * One wording, two readers: Jev answers these questions for each new
- * question, and the writer (trivia-write@1) answers the same text on the same
- * 0–1 scale in its own output. The writer prompt renders SCORECARD, so the
- * wording lives only here.
+ * trivia-score@3 (AT-55, AT-56): Jev's scorecard, tests 1 to 4 of what a good
+ * question is. The wording lives only in quality.ts; the writer answers the
+ * same questions on the same 0–1 scale in its own output. Both readers see the
+ * viewer from TRIVIA_AUDIENCE. Bump the version on any change.
  */
 import { noul } from '@typesafe-ai/sdk';
 
 import { defineQuestionSet } from '@/lib/reels/jev/question-set';
 
-import type { Scorecard } from './types';
+import { TRIVIA_AUDIENCE } from './audience';
+import { QUALITY_TESTS, type QualityKey } from './quality';
 
-type Item = { instructions: string; yes: string; no: string };
+const STATE = `${TRIVIA_AUDIENCE} The state holds one question of "Are you smarter than AI?", an Instagram Story trivia series, as this viewer sees it: the question, its options, the correct option, and the answer line shown after the reveal.`;
 
-/** The three questions, in Scorecard key order. */
-export const SCORECARD: Record<keyof Scorecard, Item> = {
-  surprise: {
-    instructions: 'Would most viewers who follow AI on Instagram expect a different answer from the true one, so that the reveal surprises them?',
-    yes: 'Most viewers would pick a wrong option or expect something else, and the true answer lands as a surprise.',
-    no: 'Most viewers would pick the right option, or the answer is what they would expect.',
-  },
-  about_you: {
-    instructions: "Does the fact touch the viewer's own life: something they use, do, pay for, believe, or are?",
-    yes: 'A viewer would recognize their own habits, tools, beliefs or situation in it.',
-    no: "It is about something far from the viewer's own life.",
-  },
-  social_currency: {
-    instructions: 'Would a viewer want to repeat this fact to someone else, because knowing it makes them look sharp or in the know?',
-    yes: 'It is the kind of fact people pass on, and saying it makes the teller look informed.',
-    no: 'Few viewers would bother mentioning it to anyone.',
-  },
-};
-
-const STATE = 'The state holds one AI Trivia question as the viewer sees it: the question, its options, the correct option, and the answer line shown after the reveal.';
-
-const q = (i: Item) => noul(`${i.instructions} ${STATE}`, { true: i.yes, false: i.no });
+/** The viewer comes first, so "most viewers" reads against the profile above. */
+const q = (k: QualityKey) => noul(`${STATE} ${QUALITY_TESTS[k].check}`, { true: QUALITY_TESTS[k].yes, false: QUALITY_TESTS[k].no });
 
 export const TRIVIA_SCORE = defineQuestionSet({
   id: 'trivia-score',
-  version: 'trivia-score@1',
+  version: 'trivia-score@3',
   questions: {
-    surprise: q(SCORECARD.surprise),
-    about_you: q(SCORECARD.about_you),
-    social_currency: q(SCORECARD.social_currency),
+    clear: q('clear'),
+    real_guess: q('real_guess'),
+    point: q('point'),
+    worth_knowing: q('worth_knowing'),
   },
 });

@@ -145,7 +145,7 @@ const blocked = (note: string) => ({ ok: false as const, reason: 'blocked' as co
 const failed = (note: string) => ({ ok: false as const, reason: 'failed' as const, note });
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const asDb = (q: Query): Queryable => ({ query: async (text, params) => ({ rows: (await q(text, params)).rows }) });
-const SERIES_NAME: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid', ai_trivia: 'AI Trivia' };
+const SERIES_NAME: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid', ai_trivia: 'Are you smarter than AI?' };
 
 /** The build's sentence rule (lib/stories/build/common.ts sentenceCount), copied so the registry stays light. */
 function sentenceCount(text: string): number {

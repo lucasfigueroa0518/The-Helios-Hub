@@ -10,7 +10,7 @@ export const SERIES_LABEL = {
   morning_download: 'Morning Download',
   guess_the_number: 'Guess the Number',
   free_vs_paid: 'Free vs. Paid',
-  ai_trivia: 'AI Trivia',
+  ai_trivia: 'Are you smarter than AI?',
 } as const;
 
 export const OPENER = {

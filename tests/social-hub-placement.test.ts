@@ -333,7 +333,7 @@ test('Stories: their series days and slot, and never a set that is posting', asy
   await pg.query(`INSERT INTO stories.sets (id, series, ny_date, status, trigger, style, approved_at) VALUES ($1, 'ai_trivia', '2026-10-12', 'approved', 'click', 'polished', now())`, [SET]);
   const act = stories(pg, q);
   // AI Trivia posts Mondays and Thursdays; 2026-10-09 is a Friday.
-  assert.equal((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-09', slot: 'ai_trivia' })).note, 'AI Trivia doesn’t post on Fridays (it posts Sun, Mon, Thu).');
+  assert.equal((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-09', slot: 'ai_trivia' })).note, 'Are you smarter than AI? doesn’t post on Fridays (it posts Sun, Mon, Thu).');
   assert.match((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-12', slot: 'morning_download' })).note, /posts only in its own slot/);
   assert.ok((await act.place!({ setId: SET }, 'tommy', { nyDate: '2026-10-12', slot: 'ai_trivia' })).ok);
   await pg.query(`UPDATE stories.sets SET status = 'publishing' WHERE id = $1`, [SET]);

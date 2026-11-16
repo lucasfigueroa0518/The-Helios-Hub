@@ -42,11 +42,10 @@ export type StoryData = { role: 'story'; /** One or two full sentences (S-15). *
 export type CloserData = { role: 'closer' };
 /** Series intro slide (S-50): Free vs. Paid's, fixed copy. */
 export type IntroData = { role: 'intro' };
-/** AI Trivia (planning/AI Trivia/CONTRACT.md §3): the option count follows the difficulty (hard 2, medium 3, easy 4). */
+/** AI Trivia: the writer always gives three options (AT-54); the renderer lays out two to four. */
 export type TriviaLetter = 'A' | 'B' | 'C' | 'D';
 export type TriviaCopy = {
   question: string;
-  difficulty: 'hard' | 'medium' | 'easy';
   options: Array<{ letter: TriviaLetter; text: string }>;
   correct: TriviaLetter;
   /** Why the answer matters to the viewer. */

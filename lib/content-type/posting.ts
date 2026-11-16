@@ -93,7 +93,7 @@ export type PostingPatch = {
   cap?: number;
 };
 
-const SERIES_LABEL: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid', ai_trivia: 'AI Trivia' };
+const SERIES_LABEL: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid', ai_trivia: 'Are you smarter than AI?' };
 
 type Row = { query: (t: string, p?: unknown[]) => Promise<{ rows: any[] }> };
 const rowOf = async (db: Row, table: string, key: string) => (await db.query(`SELECT value FROM ${table} WHERE key = $1`, [key])).rows[0]?.value;

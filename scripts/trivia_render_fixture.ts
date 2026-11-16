@@ -1,86 +1,92 @@
 /**
- * AI Trivia: render the fixture set locally (opt-in, free: no model, no network unless --heygen).
+ * "Are you smarter than AI?": render a fixture set locally (opt-in, free: no model, no network; local
+ * HyperFrames + ffmpeg only).
  *
- *   npx tsx scripts/trivia_render_fixture.ts --track <local.mp3> [--out .stories-local/trivia-fixture]
- *   npx tsx scripts/trivia_render_fixture.ts --heygen          (one free HeyGen catalog search + download)
+ *   npx tsx scripts/trivia_render_fixture.ts [--options 2|3|4] [--out .stories-local/trivia-fixture]
  *
- * Picks the music window with pickTriviaMusic (the track as a one-item catalog when --track is given),
- * renders both clips with renderTriviaClips, writes 01-question.mp4/.jpg and 02-answer.mp4/.jpg, then
- * prints the acceptance checks (CONTRACT §5 B): length, size, fps, audio, reveal on the sting hit and
- * on a beat, contrast.
+ * Renders both clips with renderTriviaClips (no music, no photos: the fixed show sound), writes
+ * 01-question.mp4/.jpg and 02-answer.mp4/.jpg, then prints the acceptance checks (CONTRACT-2 §5 A): length,
+ * size, fps, audio, and how closely each clip's sound matches its slice of show-master.flac.
  */
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { decodePcm } from '@/lib/reels/music/audio';
-import { pickTriviaMusic, type CatalogTrack } from '@/lib/stories/trivia/music';
-import { beatGrid } from '@/lib/stories/trivia/render/beats';
-import { renderTriviaClips, type TriviaFrameInput } from '@/lib/stories/trivia/render/clip';
-import { CLIP_MS, FPS, HIT_MS } from '@/lib/stories/trivia/render/timeline';
+import { MASTER_FILE } from '@/lib/stories/trivia/render/audio';
+import { renderTriviaClips, type TriviaCopy, type TriviaFrameInput } from '@/lib/stories/trivia/render/clip';
+import { CLIP_S, MASTER_AT } from '@/lib/stories/trivia/render/timeline';
 
 const arg = (name: string) => {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 ? process.argv[i + 1] : undefined;
 };
 
-const FIXTURE = {
-  question: 'ELIZA, the 1966 chatbot people confided in like a therapist, was written at which university?',
-  options: [
-    { letter: 'A' as const, text: 'Stanford' },
-    { letter: 'B' as const, text: 'MIT' },
-    { letter: 'C' as const, text: 'Harvard' },
-    { letter: 'D' as const, text: 'Carnegie Mellon' },
-  ],
-  correct: 'B' as const,
-  answerLine: 'Joseph Weizenbaum wrote it at MIT, then spent years warning how fast people trusted it.',
+/** Sample copy by option count (the mock's three questions). 3 is the default fixture. */
+const SAMPLES: Record<2 | 3 | 4, TriviaCopy> = {
+  2: {
+    question: 'Was the first chatbot built before or after the moon landing?',
+    options: [{ letter: 'A', text: 'Before' }, { letter: 'B', text: 'After' }],
+    correct: 'A',
+    answerLine: 'ELIZA chatted in 1966, three years before Apollo 11.',
+  },
+  3: {
+    question: 'Which company built the first AI to beat a world champion at Go?',
+    options: [{ letter: 'A', text: 'Google DeepMind' }, { letter: 'B', text: 'OpenAI' }, { letter: 'C', text: 'IBM' }],
+    correct: 'A',
+    answerLine: 'AlphaGo did it in 2016, about ten years before experts thought it could.',
+  },
+  4: {
+    question: 'Which year did ChatGPT launch?',
+    options: [{ letter: 'A', text: '2020' }, { letter: 'B', text: '2021' }, { letter: 'C', text: '2022' }, { letter: 'D', text: '2023' }],
+    correct: 'C',
+    answerLine: 'It reached 100 million users in about two months.',
+  },
 };
+
+/** Mono 8 kHz samples of `file` from `ss` for `t` seconds (ffmpeg). */
+function pcm(file: string, ss: number, t: number): Float32Array {
+  // No -ss at 0: an input seek on AAC drops its first packet (1024 samples) and would misalign the comparison.
+  const r = spawnSync('ffmpeg', ['-v', 'error', ...(ss > 0 ? ['-ss', String(ss)] : []), '-t', String(t), '-i', file, '-ac', '1', '-ar', '8000', '-f', 'f32le', '-'], { maxBuffer: 64 * 1024 * 1024 });
+  if (r.status !== 0) throw new Error(`ffmpeg decode ${file}: ${r.stderr}`);
+  const b = r.stdout as Buffer;
+  return new Float32Array(b.buffer, b.byteOffset, Math.floor(b.length / 4));
+}
+
+/** Normalised correlation of two signals at zero lag (1 = the same sound). */
+function correlation(a: Float32Array, b: Float32Array): number {
+  const n = Math.min(a.length, b.length);
+  let ab = 0, aa = 0, bb = 0;
+  for (let i = 0; i < n; i++) {
+    ab += a[i]! * b[i]!;
+    aa += a[i]! * a[i]!;
+    bb += b[i]! * b[i]!;
+  }
+  return ab / Math.sqrt(aa * bb || 1);
+}
 
 async function main() {
   const out = path.resolve(arg('out') ?? '.stories-local/trivia-fixture');
-  const track = arg('track');
-  const heygen = process.argv.includes('--heygen');
-  if (!track && !heygen) throw new Error('pass --track <local.mp3> or --heygen');
+  const n = Number(arg('options') ?? 3);
+  if (n !== 2 && n !== 3 && n !== 4) throw new Error('--options must be 2, 3 or 4');
+  const copy = SAMPLES[n];
   fs.mkdirSync(out, { recursive: true });
   const log = (l: string) => console.log(l);
 
-  const local: CatalogTrack[] | null = track ? [{ id: `local:${path.basename(track)}`, name: path.basename(track), audio_url: path.resolve(track) }] : null;
-  const music = await pickTriviaMusic({
-    recentTrackIds: async () => [],
-    ...(local ? { search: async () => local, download: async (url: string, dest: string) => fs.copyFileSync(url, dest) } : {}),
-    log,
-  });
-  fs.writeFileSync(path.join(out, 'music.json'), `${JSON.stringify(music, null, 2)}\n`);
-
   const frames: TriviaFrameInput[] = [
-    { role: 'question', copy: FIXTURE, photo: { src: 'lib/stories/render/fixtures/photos/datacenter.jpg', credit: 'Photo: fixture', kind: 'scene' } },
-    { role: 'answer', copy: FIXTURE, photo: { src: 'lib/stories/render/fixtures/photos/openai_hq.jpg', credit: 'Photo: fixture', kind: 'scene' } },
+    { role: 'question', copy },
+    { role: 'answer', copy },
   ];
   const t0 = Date.now();
-  const { clips } = await renderTriviaClips(frames, music, {
-    workDir: path.join(out, 'work'),
-    log,
-    ...(local ? { download: async (url: string, dest: string) => fs.copyFileSync(url, dest) } : {}),
-  });
+  const { clips } = await renderTriviaClips(frames, { workDir: path.join(out, 'work'), log });
   console.log(`rendered in ${Math.round((Date.now() - t0) / 1000)} s`);
   for (const [i, c] of clips.entries()) {
     const base = path.join(out, `${String(i + 1).padStart(2, '0')}-${c.role}`);
     fs.writeFileSync(`${base}.mp4`, c.mp4);
     fs.writeFileSync(`${base}.jpg`, c.poster);
-    const p = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate:format=duration', '-of', 'compact=p=0', `${base}.mp4`], { encoding: 'utf8' });
-    console.log(`${base}.mp4\n${p.stdout.trim()}`);
+    const p = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,bit_rate:format=duration', '-of', 'compact=p=0', `${base}.mp4`], { encoding: 'utf8' });
+    const r = correlation(pcm(`${base}.mp4`, 0, CLIP_S[c.role]), pcm(MASTER_FILE, MASTER_AT[c.role], CLIP_S[c.role]));
+    console.log(`${base}.mp4\n${p.stdout.trim()}\naudio vs show-master.flac ${MASTER_AT[c.role]}–${MASTER_AT[c.role] + CLIP_S[c.role]} s: correlation ${r.toFixed(3)}`);
   }
-
-  // The reveal: clip 2 frame round(HIT_MS / frame) is the hit; in track time that is startMs + CLIP_MS + HIT_MS.
-  const revealFrame = Math.round((HIT_MS / 1000) * FPS);
-  const hitTrackMs = music.startMs + CLIP_MS + HIT_MS;
-  const nearestListed = Math.min(...music.beatMs.map((b) => Math.abs(b - hitTrackMs)));
-  // An independent check: a fresh grid over the track, and the nearest beat to the hit.
-  const src = path.join(out, 'work', 'track.mp3');
-  const grid = beatGrid(await decodePcm(src), 48_000);
-  const nearest = Math.min(...grid.beatsMs.map((b) => Math.abs(b - hitTrackMs)));
-  const frameMs = 1000 / FPS;
-  console.log(`reveal: clip 2 frame ${revealFrame} (${(revealFrame / FPS).toFixed(3)} s) = sting hit +0.600 s; track ${hitTrackMs} ms; nearest listed beat ${nearestListed.toFixed(1)} ms away; fresh grid (${grid.bpm} BPM) ${nearest.toFixed(1)} ms away; within ±1 frame: ${nearest <= frameMs ? 'yes' : 'NO'}`);
 }
 
 main().catch((err) => {

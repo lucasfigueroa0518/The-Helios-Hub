@@ -1,61 +1,101 @@
 /**
- * AI Trivia preflight, before HyperFrames records anything: the composition is opened in headless
- * Chromium (Playwright, as the Stories renderer does, on a private origin) and checked:
+ * "Are you smarter than AI?" preflight, before HyperFrames records anything: the composition is opened in
+ * headless Chromium (Playwright, on a private origin, nothing off it) and measured. Fit only: there is no
+ * photo, so there is no contrast check.
  *
- *   1. Fonts: Inter Medium (Instagram's Classic text, AT-34) loaded; the photo loaded.
- *   2. Text fit (the Stories text-fit.ts): every region fits at or above its minimum size, no
- *      mid-word breaks. The sizes found are handed back so the composition bakes them in.
- *   3. Contrast on moving frames (PLAN AT-15 note): at each of SAMPLE_TIMES the timeline is seeked,
- *      the text hidden (its highlight box stays) and the pixels behind each visible text line read; the Field Notes WCAG rule
- *      (contrast.ts: mean clears 3:1 for type ≥ 40 px, 4.5:1 below, worst percentile ≥ 3:1) must hold.
+ *   1. Fonts (Bowlby One, Inter 700–900) loaded; the GSAP timeline registered as "main".
+ *   2. The stack's content (sign, question, choices) at every question size (QUESTION_PX), and whether a word
+ *      of the question is wider than the safe area at each, so the fit rule (layout.ts) can pick one.
+ *   3. The page's own boxes at its baked size (relative to the stage): sign, question, choices, footer slot
+ *      and each option pill, so the render can prove both clips put them on the same pixels and start the
+ *      confetti on the correct pill.
+ *   4. Problems no size step fixes: a word wider than its pill, the tap row wider than the stage, the answer
+ *      line taller than the 210 px footer slot.
  */
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 
-import { colorPasses, sampleRegion, type RawImage } from '@/lib/field-notes/render/contrast';
-import { fitText, type TextFitFailure } from '@/lib/stories/render/text-fit';
-
-import { SAMPLE_TIMES } from './timeline';
+import { FOOT_H, LINE_PX, QUESTION_PX, SAFE, type Box, type Measured } from './layout';
 
 const ORIGIN = 'http://trivia.local';
 const MIME: Record<string, string> = {
-  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png',
   '.otf': 'font/otf', '.woff2': 'font/woff2', '.ttf': 'font/ttf',
 };
-export const FONTS = ['500 40px Inter'];
+export const FONTS = ['400 94px "Bowlby One"', '900 68px Inter', '800 66px Inter', '700 54px Inter', '700 76px Inter'];
 
-export type ContrastReading = { t: number; text: string; px: number; ink: string; mean: number; worst: number; required: number; ok: boolean };
-export type PreflightResult = { sizes: Record<string, number>; problems: string[]; contrast: ContrastReading[] };
-/** Check one project (its index.html) at `times`. */
-export type Preflight = (projectDir: string, times?: number[]) => Promise<PreflightResult>;
+export type PageBoxes = { sign: Box; question: Box; choices: Box; foot: Box; options: Box[] };
+export type PreflightResult = {
+  problems: string[];
+  /** The stack's content at each question size, by px. */
+  measures: Record<number, Measured>;
+  /** The answer line's height at each LINE_PX size (empty on clip 1). */
+  lineHeights?: Record<number, number>;
+  /** The page's boxes at its baked question size. */
+  boxes: PageBoxes;
+};
+/** Check one project (its index.html). */
+export type Preflight = (projectDir: string) => Promise<PreflightResult>;
 
-type TextBox = { text: string; px: number; ink: string; opacity: number; x: number; y: number; w: number; h: number };
+type PageArgs = { fonts: string[]; sizes: number[]; lineSizes: number[]; safeW: number; footH: number };
 
-/** "rgb(255, 94, 26)" / "rgba(...)" / "#ff5e1a" → "#FF5E1A" (alpha ignored: text is drawn solid). */
-export function cssToHex(c: string): string {
-  if (c.startsWith('#')) return c.length === 4 ? `#${[...c.slice(1)].map((x) => x + x).join('')}`.toUpperCase() : c.slice(0, 7).toUpperCase();
-  const m = /rgba?\(\s*([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)/.exec(c);
-  if (!m) return '#FFFFFF';
-  return `#${[m[1], m[2], m[3]].map((v) => Math.round(Number(v)).toString(16).padStart(2, '0')).join('')}`.toUpperCase();
-}
-
-/** Judge each visible text block on the pixels behind it (text hidden). */
-export function judgeContrast(t: number, boxes: TextBox[], img: RawImage): ContrastReading[] {
-  return boxes
-    .filter((b) => b.opacity >= 0.5 && b.w > 2 && b.h > 2)
-    .map((b) => {
-      const samples = sampleRegion(img, { x: b.x, y: b.y, w: b.w, h: b.h });
-      const c = colorPasses(samples, b.ink, { large: b.px >= 40 });
-      return { t, text: b.text.slice(0, 40), px: b.px, ink: b.ink, mean: Math.round(c.mean * 100) / 100, worst: Math.round(c.worst * 100) / 100, required: c.required, ok: c.ok };
+/** Runs in the page: everything above, as plain data. Self-contained (no closures). */
+function measurePage(a: PageArgs): Promise<{ problems: string[]; measures: Record<number, Measured>; lineHeights: Record<number, number>; boxes: PageBoxes }> {
+  return (async () => {
+    await Promise.all(a.fonts.map((f) => document.fonts.load(f)));
+    await document.fonts.ready;
+    const problems: string[] = [];
+    for (const f of a.fonts) if (!document.fonts.check(f)) problems.push(`font did not load: ${f}`);
+    if (!(window as unknown as { __timelines?: Record<string, unknown> }).__timelines?.main) problems.push('no GSAP timeline registered as "main"');
+    const stage = document.getElementById('tv-stage')!;
+    const el = (id: string) => document.getElementById(id) as HTMLElement;
+    const base = stage.getBoundingClientRect();
+    const box = (e: Element) => {
+      const r = e.getBoundingClientRect();
+      return { x: r.left - base.left, y: r.top - base.top, w: r.width, h: r.height };
+    };
+    const size = (e: Element) => {
+      const r = e.getBoundingClientRect();
+      return { w: r.width, h: r.height };
+    };
+    const own = stage.style.getPropertyValue('--qpx');
+    const measures: Record<number, Measured> = {};
+    for (const px of a.sizes) {
+      stage.style.setProperty('--qpx', `${px}px`);
+      const q = el('tv-q');
+      const qs = size(q);
+      measures[px] = { sign: size(el('tv-sign')), question: qs, choices: size(el('tv-choices')), questionWide: qs.w > a.safeW + 1 || q.scrollWidth > q.clientWidth + 1 };
+    }
+    stage.style.setProperty('--qpx', own);
+    const sign = el('tv-sign');
+    const options = [...document.querySelectorAll('#tv-choices .ch')];
+    options.forEach((o, i) => {
+      if (o.scrollWidth > o.clientWidth + 1) problems.push(`option ${i + 1}: a word is wider than its pill`);
     });
+    const tap = document.getElementById('tv-tap');
+    if (tap && tap.scrollWidth > tap.clientWidth + 1) problems.push('the tap row is wider than the stage');
+    const line = document.getElementById('tv-line');
+    const lineHeights: Record<number, number> = {};
+    if (line) {
+      const ownL = stage.style.getPropertyValue('--lpx');
+      for (const px of a.lineSizes) {
+        stage.style.setProperty('--lpx', `${px}px`);
+        lineHeights[px] = line.getBoundingClientRect().height;
+      }
+      stage.style.setProperty('--lpx', ownL);
+      const h = line.getBoundingClientRect().height;
+      if (h > a.footH + 1) problems.push(`the answer line is ${Math.round(h)} px tall, over the ${a.footH} px footer slot`);
+      if (line.scrollWidth > line.clientWidth + 1) problems.push('a word of the answer line is wider than the stage');
+    }
+    return { problems, measures, lineHeights, boxes: { sign: box(sign), question: box(el('tv-q')), choices: box(el('tv-choices')), foot: box(el('tv-foot')), options: options.map(box) } };
+  })();
 }
 
 export async function openPreflight(): Promise<{ check: Preflight; close: () => Promise<void> }> {
   const { chromium } = await import('playwright');
-  const sharp = (await import('sharp')).default;
   const browser = await chromium.launch();
 
-  const check: Preflight = async (projectDir, times = SAMPLE_TIMES) => {
+  const check: Preflight = async (projectDir) => {
     const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
     const root = path.resolve(projectDir);
     try {
@@ -75,43 +115,8 @@ export async function openPreflight(): Promise<{ check: Preflight; close: () => 
       // Anything off the private origin (a CDN) is refused: the composition must be self-contained.
       await page.route(/^(?!http:\/\/trivia\.local\/).*/, (route) => route.abort());
       await page.goto(`${ORIGIN}/index.html`, { waitUntil: 'load', timeout: 60_000 });
-      const problems = (await page.evaluate(async (fonts) => {
-        await Promise.all(fonts.map((f) => document.fonts.load(f)));
-        await document.fonts.ready;
-        await Promise.all([...document.images].map((img) => (img.complete ? null : new Promise((r) => { img.onload = img.onerror = r; }))));
-        const out: string[] = [];
-        for (const f of fonts) if (!document.fonts.check(f)) out.push(`font did not load: ${f}`);
-        for (const img of document.images) if (!img.naturalWidth) out.push(`image failed to load: ${img.getAttribute('src')}`);
-        if (!(window as unknown as { __timelines?: Record<string, unknown> }).__timelines?.main) out.push('no GSAP timeline registered as "main"');
-        return out;
-      }, FONTS)) as string[];
-      const fit = (await page.evaluate(`(${fitText.toString()})(document)`)) as TextFitFailure[];
-      for (const f of fit) problems.push(`text fit: ${f.element} "${f.text}" (${f.reason}, min ${f.minPx}px)`);
-      const sizes = (await page.evaluate(() => Object.fromEntries([...document.querySelectorAll<HTMLElement>('[data-fit-id]')].map((el) => [el.dataset.fitId!, Number(el.dataset.fitPx)])))) as Record<string, number>;
-
-      const contrast: ContrastReading[] = [];
-      for (const t of times) {
-        const boxes = (await page.evaluate((at) => {
-          const tl = (window as unknown as { __timelines: Record<string, { seek: (t: number, s?: boolean) => void }> }).__timelines.main;
-          tl.seek(at, false);
-          // A highlight is one box per line: each line is judged on its own box, not their bounding union.
-          return [...document.querySelectorAll<HTMLElement>('.tv-text')].flatMap((el) => {
-            let opacity = 1;
-            for (let e: HTMLElement | null = el; e; e = e.parentElement) opacity *= Number(getComputedStyle(e).opacity);
-            const cs = getComputedStyle(el);
-            const rects = cs.display === 'inline' ? [...el.getClientRects()] : [el.getBoundingClientRect()];
-            return rects.map((r) => ({ text: (el.textContent ?? '').trim(), px: parseFloat(cs.fontSize), ink: el.dataset.ink ?? cs.color, opacity, x: r.left, y: r.top, w: r.width, h: r.height }));
-          });
-        }, t)) as TextBox[];
-        await page.evaluate(() => document.body.classList.add('tv-hide-text'));
-        const png = await page.screenshot({ type: 'png' });
-        await page.evaluate(() => document.body.classList.remove('tv-hide-text'));
-        const { data, info } = await sharp(png).removeAlpha().raw().toBuffer({ resolveWithObject: true });
-        const img: RawImage = { data: new Uint8Array(data), width: info.width, height: info.height, channels: info.channels as 3 };
-        contrast.push(...judgeContrast(t, boxes.map((b) => ({ ...b, ink: cssToHex(b.ink) })), img));
-      }
-      for (const c of contrast.filter((x) => !x.ok)) problems.push(`contrast at ${c.t}s: "${c.text}" ${c.mean}:1 (worst ${c.worst}:1, needs ${c.required}:1)`);
-      return { sizes, problems, contrast };
+      const args: PageArgs = { fonts: FONTS, sizes: [...QUESTION_PX], lineSizes: [...LINE_PX], safeW: SAFE.w, footH: FOOT_H };
+      return (await page.evaluate(`(${measurePage.toString()})(${JSON.stringify(args)})`)) as PreflightResult;
     } finally {
       await page.close();
     }

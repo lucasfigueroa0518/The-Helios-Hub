@@ -7,7 +7,7 @@
  * data. Each prompt has one strict output tool.
  */
 import { HUMANIZER_TEXT } from '@/lib/stories/copy/humanizer.generated';
-import { TRIVIA_CHECK, TRIVIA_WRITE } from '@/lib/stories/trivia/prompts';
+import { TRIVIA_CHECK, TRIVIA_SHORTEN, TRIVIA_WRITE } from '@/lib/stories/trivia/prompts';
 
 const VOICE = `Voice (S-17): as casual as it can be while staying professional. Loose, plain, specific, never weird or unprofessional. No emoji, no exclamation marks, no hype words, no em dashes. Apply the humanizer guide below to everything you write.`;
 
@@ -133,7 +133,7 @@ ${HUMANIZER_TEXT}
 export type FvpCopyOut = { tease: string };
 
 /** Every Stories prompt in use; AI Trivia's live in lib/stories/trivia/prompts.ts. */
-export const STORIES_PROMPTS = [MD_HEADLINES, FVP_PAIR, FVP_VERIFY, FVP_COPY, TRIVIA_WRITE, TRIVIA_CHECK];
+export const STORIES_PROMPTS = [MD_HEADLINES, FVP_PAIR, FVP_VERIFY, FVP_COPY, TRIVIA_WRITE, TRIVIA_SHORTEN, TRIVIA_CHECK];
 
 /** Wrap the day's material as untrusted data. */
 export function material(o: unknown): string {

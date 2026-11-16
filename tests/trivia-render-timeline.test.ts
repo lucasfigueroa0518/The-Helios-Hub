@@ -1,357 +1,154 @@
-/** AI Trivia motion and layout rules (M1–M7, AT-30, AT-31, AT-33–AT-38, PLAN timing), checked on the timeline data and the slide markup. */
+/** "Are you smarter than AI?" motion (CONTRACT-2 §1–§2): durations, the timer and its ticks, the bulbs, and the reveal on the hit at +0.5 s. */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 
-import { STING_FILE } from '@/lib/stories/trivia/render/audio';
-import { compositionHtml } from '@/lib/stories/trivia/render/clip';
-import { CONFETTI_COLORS, CONFETTI_SEED, confettiPieces } from '@/lib/stories/trivia/render/confetti';
-import { arrowPaths, seedOf } from '@/lib/stories/trivia/render/pen';
-import { ANSWER_ELEMENTS, HEADLINE, QUESTION_ELEMENTS, TAP_LINE, type SlideInput } from '@/lib/stories/trivia/render/TriviaSlide';
+import { MASTER_FILE } from '@/lib/stories/trivia/render/audio';
+import { CONFETTI_COLORS, CONFETTI_COUNT, confettiPieces } from '@/lib/stories/trivia/render/confetti';
 import {
-  ambientAt, ambientEase, ambientTweens, answerTimeline, CLIP_S, DIM_OPACITY, DIM_SCALE, FPS, GREEN, HIT_S, lastMotion, ORANGE, POSTER_AT, PUNCH_S, PUNCH_SCALE, punchEase,
-  questionTimeline, REVEAL_AT, REVEAL_FRAME, SETTLED_S, SOUND_CUES, STING_RISE_S, timelineScript, wipeClip, WIPE_S, type Tween,
+  answerTimeline, BEAT_S, bezier, BULB_OFF, BULB_ON, BULB_STEP_S, CLIP_S, digitAt, EASES, FPS, GREEN, LINE_S, MASTER_S, POP_PEAK, POP_REST, POP_S,
+  POSTER_AT, questionTimeline, REVEAL_S, SOUND, timelineScript, type Tween,
 } from '@/lib/stories/trivia/render/timeline';
 
-const all = (n: number) => [...ambientTweens(0), ...questionTimeline(n), ...ambientTweens(1), ...answerTimeline(n, 1)];
+const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) <= eps;
+const frames = (s: number) => Array.from({ length: Math.round(s * FPS) }, (_, f) => f / FPS);
 
-test('M4: nothing moves linearly', () => {
-  for (const n of [2, 3, 4]) for (const t of all(n)) assert.ok(!/^(none|linear)/.test(t.ease), `${t.target} is linear`);
+test('durations: clip 1 is 10.0 s, clip 2 is 5.0 s, 30 fps; posters at 2.0 s and 0.9 s', () => {
+  assert.deepEqual(CLIP_S, { question: 10, answer: 5 });
+  assert.equal(FPS, 30);
+  assert.equal(MASTER_S, 15);
+  assert.deepEqual(POSTER_AT, { question: 2, answer: 0.9 });
 });
 
-const FRAME = 1 / FPS;
-const clips = (n: number, c: number) => [
-  { role: 'question' as const, tweens: [...ambientTweens(0), ...questionTimeline(n)] },
-  { role: 'answer' as const, tweens: [...ambientTweens(1), ...answerTimeline(n, c)] },
-];
+test('show-master.flac on disk is exactly 15.0 s, 48 kHz', { skip: spawnSync('ffprobe', ['-version']).status !== 0 && 'no ffprobe' }, () => {
+  const p = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration:stream=sample_rate', '-of', 'json', MASTER_FILE], { encoding: 'utf8' });
+  const j = JSON.parse(p.stdout) as { format: { duration: string }; streams: Array<{ sample_rate: string }> };
+  assert.ok(near(Number(j.format.duration), 15, 0.005), `master is ${j.format.duration} s`);
+  assert.equal(j.streams[0]!.sample_rate, '48000');
+});
 
-/** Glow layers inside a card: lighting, never part of what must be visible. */
-const GLOW_LAYER = /\.tv-(bloom|sheen)$/;
-/** Frame-0 values that leave an element fully visible and in place. */
-const NEUTRAL: Record<string, number> = { opacity: 1, x: 0, y: 0, xPercent: 0, yPercent: 0, scale: 1, scaleX: 1, scaleY: 1, rotate: 0, rotateX: 0, rotateY: 0 };
+test('timer: the digit shows 10 − floor(t) on every frame of clip 1 and changes only on the whole-second ticks', () => {
+  const tl = questionTimeline();
+  for (const t of frames(CLIP_S.question)) assert.equal(digitAt(tl, t), 10 - Math.floor(t + 1e-9), `frame at ${t.toFixed(3)} s`);
+  const changes = [...new Set(tl.filter((t) => t.target.startsWith('#tv-d-') && t.dur === 0).map((t) => t.at))].sort((a, b) => a - b);
+  assert.deepEqual(changes, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  for (const c of changes) assert.ok((SOUND.ticks as readonly number[]).includes(c), `digit change at ${c} s lands on a tick`);
+});
 
-/**
- * The frame-0 state of everything under `ids`: timelineScript makes each (target, property)'s first
- * tween a fromTo, so its `from` shows on frame 0 wherever the tween starts. Returns what is not neutral.
- */
-function hiddenAtZero(tweens: Tween[], ids: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const t of [...tweens].sort((x, y) => x.at - y.at)) {
-    const [id, ...rest] = t.target.split(' ');
-    for (const k of Object.keys(t.from ?? t.to)) {
-      const key = `${t.target}|${k}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (!ids.includes(id!) || GLOW_LAYER.test(rest.join(' ')) || !(k in NEUTRAL)) continue;
-      const v = t.from?.[k];
-      if (v !== undefined && v !== NEUTRAL[k]) out.push(`${t.target} ${k}=${v} at frame 0`);
-    }
+test('timer: the ring drains linearly over the full 10 s; digits 3, 2, 1 pulse 1.45 → 1 over 0.35 s on the beeps (7, 8, 9 s)', () => {
+  const tl = questionTimeline();
+  const ring = tl.filter((t) => t.target === '#tv-timer');
+  assert.deepEqual(ring, [{ target: '#tv-timer', at: 0, dur: 10, ease: 'none', from: { '--p': '100%' }, to: { '--p': '0%' }, sound: 'tick' }]);
+  const pulses = tl.filter((t) => t.target.startsWith('#tv-d-') && t.dur > 0);
+  assert.deepEqual(pulses.map((p) => [p.target, p.at]), [['#tv-d-3', 7], ['#tv-d-2', 8], ['#tv-d-1', 9]]);
+  assert.deepEqual(pulses.map((p) => p.at), [...SOUND.beeps]);
+  for (const p of pulses) {
+    assert.deepEqual([p.from, p.to, p.dur, p.ease], [{ scale: 1.45 }, { scale: 1 }, 0.35, 'pop']);
+    // Each pulse lands on the second its digit appears.
+    assert.equal(digitAt(tl, p.at), Number(p.target.slice('#tv-d-'.length)));
   }
-  return out;
+});
+
+function bulbs(tl: Tween[]) {
+  return tl.filter((t) => t.target.startsWith('.bulb'));
 }
 
-test('AT-30: slide 1 has header, question, every option and the tap line fully visible and still from frame 0', () => {
-  for (const n of [2, 3, 4]) {
-    const opts = Array.from({ length: n }, (_, i) => `#tv-opt-${i}`);
-    const q = [...ambientTweens(0), ...questionTimeline(n)];
-    assert.deepEqual(hiddenAtZero(q, ['#tv-head', '#tv-q', '#tv-opts', ...opts, '#tv-tap', '#tv-arrow']), []);
-    // Nothing on slide 1 moves except light and the photo drift: no entrance at any time.
-    assert.deepEqual(q.filter((t) => !t.light && t.target !== '#tv-photo').map((t) => t.target), []);
-  }
-});
-
-test('AT-30: slide 2 has the options visible from frame 0; the answer line arrives on the hit with the orange wipe', () => {
-  for (const [n, c] of [[2, 0], [3, 2], [4, 1]] as const) {
-    const opts = Array.from({ length: n }, (_, i) => `#tv-opt-${i}`);
-    const a = [...ambientTweens(1), ...answerTimeline(n, c)];
-    assert.deepEqual(hiddenAtZero(a, ['#tv-head', '#tv-q', '#tv-opts', ...opts]), []);
-    for (const id of ['#tv-ans']) {
-      const first = a.filter((t) => t.target === id).sort((x, y) => x.at - y.at)[0]!;
-      assert.ok(Math.abs(first.at - HIT_S) <= FRAME + 1e-9, `${id} starts at ${first.at}`);
+test('bulbs: lighting only (no sound), chasing in 0.5 s steps on clip 1 (the beat) and flashing in 0.25 s steps on clip 2', () => {
+  assert.deepEqual(BULB_STEP_S, { question: BEAT_S, answer: BEAT_S / 2 });
+  for (const [role, tl] of [['question', questionTimeline()], ['answer', answerTimeline(3, 1)]] as const) {
+    const b = bulbs(tl);
+    const step = BULB_STEP_S[role];
+    const times = [...new Set(b.map((t) => t.at))].sort((x, y) => x - y);
+    assert.equal(times.length, CLIP_S[role] / step - 1);
+    times.forEach((t, k) => assert.ok(near(t, (k + 1) * step), `${role} step ${k + 1} at ${t}`));
+    for (const t of b) {
+      assert.equal(t.light, true);
+      assert.equal(t.sound, undefined);
+      assert.equal(t.dur, 0);
     }
-    const wipe = a.find((t) => t.target === `#tv-opt-${c} .tv-fill`)!;
-    assert.ok(Math.abs(wipe.at - HIT_S) <= FRAME + 1e-9, 'the row fills orange on the hit');
-  }
-});
-
-test('AT-31: every non-lighting motion starts on a sound cue (within ±1 frame); lighting needs none', () => {
-  for (const [n, c] of [[2, 1], [3, 0], [4, 3]] as const) {
-    for (const { role, tweens } of clips(n, c)) {
-      for (const t of tweens) {
-        if (t.light) continue;
-        assert.ok(t.sound, `${role}: ${t.target} at ${t.at}s moves with no sound`);
-        const cue = SOUND_CUES[role].find((q) => q.id === t.sound);
-        assert.ok(cue, `${role}: ${t.target} names ${t.sound}, which this clip does not play`);
-        assert.ok(Math.abs(cue.at - t.at) <= FRAME + 1e-9, `${role}: ${t.target} starts at ${t.at}s, its sound at ${cue.at}s`);
-        assert.ok(!t.repeat, `${role}: ${t.target} repeats, and its repeats have no sound`);
-      }
+    // At every step the two sets are opposite: one on, one dim.
+    for (const at of times) {
+      const p0 = b.find((t) => t.at === at && t.target === '.bulb.p0')!.to.opacity;
+      const p1 = b.find((t) => t.at === at && t.target === '.bulb.p1')!.to.opacity;
+      assert.deepEqual([p0, p1].sort(), [BULB_OFF, BULB_ON].sort());
     }
   }
-  // Lighting stays lighting: the only light is the letter ring turning white; it moves nothing.
-  for (const { tweens } of clips(4, 2)) {
-    for (const t of tweens.filter((x) => x.light)) {
-      assert.match(t.target, /\.tv-chip$/);
-      assert.deepEqual(Object.keys(t.to), ['borderColor']);
-    }
-  }
-  // The reveal's new movers are motion on the hit, never passed off as lighting: the check mark and every confetti piece.
-  for (const [n, c] of [[2, 0], [4, 3]] as const) {
-    const a = answerTimeline(n, c);
-    const movers = a.filter((t) => /^#tv-check|^#tv-cf-\d+/.test(t.target) || t.target.endsWith('.tv-fill'));
-    const pieces = new Set(movers.filter((t) => t.target.startsWith('#tv-cf-')).map((t) => t.target.split(' ')[0]));
-    assert.equal(pieces.size, confettiPieces().length, 'every confetti piece moves on the hit');
-    assert.ok(movers.some((t) => t.target === '#tv-check') && movers.some((t) => t.target === '#tv-check path'), 'the check mark pops and draws on the hit');
-    for (const t of movers) {
-      assert.ok(!t.light, `${t.target} is marked as lighting`);
-      assert.equal(t.sound, 'sting-hit', `${t.target} has no sound`);
-      assert.ok(Math.abs(t.at - HIT_S) <= FRAME + 1e-9, `${t.target} starts at ${t.at}s, off the hit`);
-    }
-  }
+  // Clip 1's steps all land on the 120 BPM grid (the ticks and tocks).
+  const grid = new Set<number>([...SOUND.ticks, ...SOUND.tocks]);
+  for (const t of bulbs(questionTimeline())) assert.ok(grid.has(t.at), `bulb step ${t.at} on the grid`);
 });
 
-/** RMS (dBFS) per video frame of a 16-bit PCM WAV, channels averaged. */
-function frameRms(file: string): number[] {
-  const b = fs.readFileSync(file);
-  let off = 12, ch = 2, rate = 48000, bits = 16, data: Buffer | null = null;
-  while (off + 8 <= b.length) {
-    const id = b.toString('ascii', off, off + 4), size = b.readUInt32LE(off + 4);
-    if (id === 'fmt ') { ch = b.readUInt16LE(off + 10); rate = b.readUInt32LE(off + 12); bits = b.readUInt16LE(off + 22); }
-    if (id === 'data') { data = b.subarray(off + 8, off + 8 + size); break; }
-    off += 8 + size + (size % 2);
-  }
-  assert.ok(data && bits === 16, 'reveal-sting.wav is 16-bit PCM');
-  const per = Math.round(rate / FPS), frames = Math.floor(data.length / 2 / ch / per);
-  return Array.from({ length: frames }, (_, f) => {
-    let s = 0;
-    for (let i = f * per; i < (f + 1) * per; i++) {
-      let v = 0;
-      for (let k = 0; k < ch; k++) v += data!.readInt16LE((i * ch + k) * 2) / 32768;
-      s += (v / ch) ** 2;
-    }
-    return 10 * Math.log10(s / per + 1e-12);
-  });
-}
-
-test('the sting cues match reveal-sting.wav: the whoosh rises on frame 9, the hit lands on frame 18', () => {
-  assert.equal(path.basename(STING_FILE), 'reveal-sting.wav');
-  const r = frameRms(STING_FILE);
-  const rise = r.findIndex((v, i) => i > 0 && v > -30 && v - r[i - 1]! >= 10);
-  assert.ok(Math.abs(rise - Math.round(STING_RISE_S * FPS)) <= 1, `whoosh audible from frame ${rise}`);
-  let hit = 1;
-  for (let i = 1; i < r.length; i++) if (r[i]! - r[i - 1]! > r[hit]! - r[hit - 1]!) hit = i;
-  assert.equal(hit, REVEAL_FRAME);
-  // Before the rise the sting is far under the music: nothing is cued to it.
-  assert.ok(Math.max(...r.slice(0, rise - 1)) < -40);
+test('reveal: every reveal layer starts on the hit at +0.5 s (frame 15); the answer line rises in at +0.6 s', () => {
+  const tl = answerTimeline(4, 2);
+  assert.equal(REVEAL_S, SOUND.hit);
+  assert.equal(REVEAL_S, 0.5);
+  assert.equal(REVEAL_S * FPS, 15, 'the hit is a whole frame');
+  const reveal = tl.filter((t) => !t.light);
+  const line = reveal.filter((t) => t.target === '#tv-line');
+  assert.deepEqual(line.map((t) => [t.at, t.dur, t.ease, t.from, t.to]), [[LINE_S, 0.35, 'rise', { opacity: 0, y: 30, scale: 0.9 }, { opacity: 1, y: 0, scale: 1 }]]);
+  assert.equal(LINE_S, 0.6);
+  const pop2 = reveal.find((t) => t.target === '#tv-opt-2' && t.to.scale === POP_REST)!;
+  for (const t of reveal) if (t !== pop2 && t.target !== '#tv-line') assert.equal(t.at, REVEAL_S, `${t.target} starts on the hit`);
+  // The correct pill turns green with a check, and its letter gives way, on the hit.
+  assert.deepEqual(reveal.find((t) => t.target === '#tv-opt-2' && t.dur === 0)!.to, { backgroundColor: GREEN, color: '#FFFFFF' });
+  assert.deepEqual(reveal.find((t) => t.target === '#tv-opt-2 b')!.to, { backgroundColor: '#FFFFFF', color: GREEN });
+  assert.deepEqual(reveal.find((t) => t.target === '#tv-check')!.to, { opacity: 1 });
+  assert.deepEqual(reveal.find((t) => t.target === '#tv-opt-2 .tv-l')!.to, { opacity: 0 });
+  // The pop: 1 → 1.12 by 45 % of 0.55 s, then → 1.05 at 0.55 s, both on the mock's overshoot curve.
+  const pop1 = reveal.find((t) => t.target === '#tv-opt-2' && t.to.scale === POP_PEAK)!;
+  assert.deepEqual([pop1.from, POP_PEAK, POP_REST], [{ scale: 1 }, 1.12, 1.05]);
+  assert.ok(near(pop1.at + pop1.dur, pop2.at) && near(pop2.at + pop2.dur, REVEAL_S + POP_S));
+  assert.ok(near(pop1.dur, 0.2475));
+  // The wrong pills fade to 50 % over 0.4 s; the correct one does not fade.
+  const fades = reveal.filter((t) => t.to.opacity === 0.5);
+  assert.deepEqual(fades.map((t) => t.target).sort(), ['#tv-opt-0', '#tv-opt-1', '#tv-opt-3']);
+  for (const f of fades) assert.deepEqual([f.dur, f.ease], [0.4, 'ease']);
 });
 
-test('AT-36: only editor-native motion: no glows, no light sweeps, nothing on slide 1 but the photo drift', () => {
-  for (const [n, c] of [[2, 0], [4, 3]] as const) {
-    assert.deepEqual(questionTimeline(n), []);
-    for (const { tweens } of clips(n, c)) assert.deepEqual(tweens.filter((t) => /glow|sheen|bloom|light|sweep/.test(t.target)).map((t) => t.target), []);
-  }
+test('confetti: 30 pieces in white, green and dark, flung from the pill on the hit, as the mock throws them', () => {
+  const pieces = confettiPieces();
+  assert.equal(pieces.length, CONFETTI_COUNT);
+  assert.equal(CONFETTI_COUNT, 30);
+  assert.deepEqual([...new Set(pieces.map((p) => p.color))], [...CONFETTI_COLORS]);
+  assert.deepEqual([...CONFETTI_COLORS], ['#FFFFFF', '#138510', '#170b04']);
+  assert.deepEqual(pieces[0], { color: '#FFFFFF', dx: 240, dy: 160, rot: 0 }, 'every piece also falls, so none rests on the correct pill');
+  assert.ok(pieces.every((p) => Math.abs(p.dy) >= 80 || Math.abs(p.dx) >= 470), 'no piece settles inside the pill row');
+  assert.deepEqual(confettiPieces(), pieces, 'the same burst every render');
+  const tl = answerTimeline(3, 0).filter((t) => t.target.startsWith('#tv-cf-'));
+  assert.equal(tl.length, 60);
+  for (const t of tl) assert.deepEqual([t.at, t.ease], [REVEAL_S, 'conf']);
+  const flights = tl.filter((t) => 'x' in t.to);
+  assert.ok(flights.every((t) => t.dur === 1.6 && t.from?.scale === 0.2 && t.to.scale === 1));
 });
 
-/** power3.out progress of a tween at `s`. */
-const progress = (t: Tween, s: number) => {
-  const p = Math.min(1, Math.max(0, (s - t.at) / t.dur));
-  return 1 - (1 - p) ** 3;
-};
-
-test('AT-38/M2: every reveal layer starts within a frame of the sting hit; the hit frame already shows it', () => {
-  assert.equal(REVEAL_FRAME, Math.round(HIT_S * FPS));
-  assert.ok(Math.abs(REVEAL_AT - HIT_S) <= FRAME + 1e-9 && REVEAL_AT <= HIT_S, 'sight may lead the hit by a frame, never trail it');
-  for (const [n, c] of [[2, 0], [3, 2], [4, 1]] as const) {
-    const a = answerTimeline(n, c);
-    for (const t of a) assert.ok(Math.abs(t.at - HIT_S) <= FRAME + 1e-9, `${t.target} starts at ${t.at}s, not on the hit`);
-    // The wipe: orange, left to right, ease-out, 150–200 ms; under way on the hit frame, untouched before it.
-    const wipe = a.find((t) => t.target === `#tv-opt-${c} .tv-fill`)!;
-    assert.match(wipe.ease, /^(power[2-4]|expo|circ)\.out$/);
-    assert.ok(WIPE_S >= 0.15 && WIPE_S <= 0.2 && wipe.dur === WIPE_S);
-    assert.deepEqual([wipe.from!.clipPath, wipe.to.clipPath], [wipeClip(100), wipeClip(0)], 'covers from the left edge to the right');
-    assert.ok(progress(wipe, REVEAL_FRAME / FPS) > 0.3, 'the wipe is under way on the hit frame');
-    assert.equal(progress(wipe, (REVEAL_FRAME - 1) / FPS), 0, 'nothing before the frame ahead of the hit');
-    assert.equal(a.filter((t) => t.target.endsWith('.tv-fill')).length, 1, 'only the correct row fills');
-    // The punch: one tween on the correct row, peak about 1.08, back to 1 by PUNCH_S.
-    const punch = a.filter((t) => t.target === `#tv-opt-${c}`);
-    assert.equal(punch.length, 1);
-    assert.deepEqual([punch[0]!.ease, punch[0]!.from, punch[0]!.to, punch[0]!.dur], ['punch', { scale: 1 }, { scale: PUNCH_SCALE }, PUNCH_S]);
-    // The wrong rows shrink slightly and fade; the correct one never does.
-    for (let i = 0; i < n; i++) {
-      const fades = a.filter((t) => t.target === `#tv-opt-${i}` && t.to.opacity === DIM_OPACITY && t.to.scale === DIM_SCALE);
-      assert.equal(fades.length, i === c ? 0 : 1);
-    }
-    assert.ok(DIM_OPACITY >= 0.35 && DIM_OPACITY <= 0.45 && DIM_SCALE < 1 && DIM_SCALE >= 0.94);
-    // The letter gives way to the check mark, which pops (overshoot) and draws on.
-    assert.deepEqual(a.find((t) => t.target === `#tv-opt-${c} .tv-chip-l`)!.to, { opacity: 0, scale: 0.4 });
-    assert.match(a.find((t) => t.target === '#tv-check')!.ease, /^back\.out/);
-    assert.deepEqual(a.find((t) => t.target === '#tv-check path')!.to, { strokeDashoffset: 0 });
-  }
+test("eases: the page's cubic-bezier matches CSS (ease at 0.5 ≈ 0.802); the pop overshoots and lands on 1", () => {
+  const ease = bezier(...EASES.ease);
+  assert.ok(near(ease(0.5), 0.8024, 0.001), `ease(0.5) = ${ease(0.5)}`);
+  const pop = bezier(...EASES.pop);
+  const peak = Math.max(...Array.from({ length: 101 }, (_, i) => pop(i / 100)));
+  assert.ok(peak > 1.05, `pop overshoots (${peak})`);
+  assert.equal(pop(0), 0);
+  assert.equal(pop(1), 1);
+  for (let i = 0; i <= 100; i++) assert.ok(Number.isFinite(bezier(...EASES.conf)(i / 100)));
 });
 
-test('AT-38: the punch overshoots to about 1.08 fast, springs back softly, and rests at 1 by 0.5 s after the hit', () => {
-  const scale = (p: number) => 1 + (PUNCH_SCALE - 1) * punchEase(p);
-  assert.equal(punchEase(0), 0);
-  assert.equal(punchEase(1), 0);
-  const samples = Array.from({ length: 501 }, (_, i) => scale(i / 500));
-  const peak = Math.max(...samples), at = samples.indexOf(peak) / 500;
-  assert.ok(Math.abs(peak - 1.08) < 1e-6 && at * PUNCH_S <= 0.12, `peak ${peak} at ${(at * PUNCH_S).toFixed(3)} s`);
-  assert.ok(Math.min(...samples) > 0.98, 'a soft spring: at most a small dip under 1');
-  // No jumps between frames: every frame-to-frame step is small.
-  for (let f = 1; f <= PUNCH_S * FPS; f++) assert.ok(Math.abs(scale(f / (PUNCH_S * FPS)) - scale((f - 1) / (PUNCH_S * FPS))) < 0.05);
-  assert.ok(Math.abs(scale(0.9) - 1) < 0.003, 'settled in the last tenth');
-});
-
-test('AT-38: the confetti is a seeded 30–50 piece burst in orange, white and green, with spin and gravity, over within 1.2 s', () => {
-  const p = confettiPieces();
-  assert.ok(p.length >= 30 && p.length <= 50, `${p.length} pieces`);
-  assert.deepEqual(confettiPieces(), p, 'the same seed throws the same burst');
-  assert.notDeepEqual(confettiPieces(CONFETTI_SEED + 1), p, 'another seed throws another');
-  assert.deepEqual(CONFETTI_COLORS.map((c) => c.color), [ORANGE, '#FFFFFF', GREEN]);
-  assert.deepEqual(new Set(p.map((x) => x.color)), new Set([ORANGE, '#FFFFFF', GREEN]));
-  for (const x of p) {
-    assert.ok(x.w <= 20 && x.h <= 34, 'small pieces');
-    assert.ok(x.up > 0 && x.fall > 0 && Math.abs(x.spin) >= 180, 'thrown up, pulled down, spinning');
-  }
-  assert.ok(p.some((x) => x.dx < -150) && p.some((x) => x.dx > 150), 'both ways off the row');
-  const a = answerTimeline(4, 1);
-  const cf = a.filter((t) => t.target.startsWith('#tv-cf-'));
-  assert.equal(cf.length, p.length * 4);
-  for (const t of cf) assert.ok(t.at + t.dur - HIT_S <= 1.2 + 1e-9, `${t.target} still flying at ${t.at + t.dur}s`);
-  // Gravity: the drop accelerates (ease-in) while the throw decelerates (ease-out); they fade out at the end.
-  assert.ok(cf.filter((t) => 'y' in t.to && t.target.endsWith('.tv-cf-in')).every((t) => /\.in$/.test(t.ease)));
-  assert.ok(cf.filter((t) => 'x' in t.to).every((t) => /\.out$/.test(t.ease) && 'rotation' in t.to));
-  assert.ok(cf.filter((t) => 'opacity' in t.to).every((t) => t.to.opacity === 0));
-  // Hidden until the hit: each piece starts at scale 0.
-  assert.ok(cf.filter((t) => 'scale' in t.to).every((t) => t.from!.scale === 0));
-});
-
-test('M5: the answer clip holds a settled final 1.5 s, with no light sweep (AT-36)', () => {
-  const a = answerTimeline(4, 3);
-  assert.ok(lastMotion(a) <= SETTLED_S + 1e-9, `last motion at ${lastMotion(a)}`);
-  assert.ok(CLIP_S - SETTLED_S >= 1.5);
-  assert.equal(a.filter((t) => t.target.endsWith('.tv-sheen')).length, 0);
-});
-
-test('M6: the ambient drift spans both clips on one curve, continuous in speed, still moving at the end', () => {
-  const e0 = ambientEase(0), e1 = ambientEase(1);
-  assert.equal(e0(0), 0);
-  assert.ok(Math.abs(e0(1) - 1) < 1e-12 && Math.abs(e1(1) - 1) < 1e-12);
-  const h = 1e-4;
-  const v = (s: number) => (ambientAt('photo', s + h).x! - ambientAt('photo', s - h).x!) / (2 * h);
-  assert.ok(Math.abs(v(CLIP_S - 2 * h) - v(CLIP_S + 2 * h)) < 0.05, 'no jolt at the clip boundary');
-  assert.ok(Math.abs(v(2 * CLIP_S - 2 * h)) > 0.5, 'still drifting at the last frame');
-  // Clip 2's ambient tweens start where clip 1's end.
-  const end0 = ambientTweens(0).find((t) => t.target === '#tv-photo')!.to;
-  const start1 = ambientTweens(1).find((t) => t.target === '#tv-photo')!.from;
-  assert.deepEqual(start1, end0);
-});
-
-test('timelineScript: fromTo for each first state, to after it, the ambient eases, registered as "main"', () => {
-  const s = timelineScript([...ambientTweens(1), ...answerTimeline(3, 1)]);
-  assert.match(s, /window\.__timelines\["main"\] = tl;/);
-  assert.match(s, /ease: EASE\.ambient1/);
-  assert.match(s, /tl\.fromTo\("#tv-opt-1", \{"scale":1\}, \{ \.\.\.\{"scale":1\.08\}, duration: 0\.5, ease: EASE\.punch \}/);
-  assert.match(s, /punch: \(p\) => \{/);
-  assert.match(s, /tl\.fromTo\("#tv-opt-0", \{"opacity":1,"scale":1\}, \{ \.\.\.\{"opacity":0\.4,"scale":0\.96\}/);
-  assert.match(s, /tl\.fromTo\("#tv-cf-0", \{"scale":0\}/);
-  assert.match(s, /tl\.fromTo\("#tv-ans", \{"opacity":0,"scale":0\.6\}/);
-  assert.match(s, /tl\.set\(\{\}, \{\}, 5\);/);
-  assert.doesNotMatch(s, /Math\.random|Date\.now/);
-});
-
-const SLIDE: Omit<SlideInput, 'role'> = {
-  question: 'Which lab built the first program to beat a Go champion?',
-  options: [{ letter: 'A', text: 'OpenAI' }, { letter: 'B', text: 'DeepMind' }, { letter: 'C', text: 'Meta AI' }],
-  correct: 'B', answerLine: 'DeepMind did it with Go in 2016.', photo: 'assets/photo.jpg', dim: 0.5,
-};
-/** The drawn body of a composition: the slide markup only. */
-const bodyOf = (html: string) => html.slice(html.indexOf('<body>'), html.indexOf('<script>', html.indexOf('<body>')));
-const elementsOf = (html: string) => [...html.matchAll(/data-el="([a-z]+)"/g)].map((m) => m[1]);
-const textOf = (html: string) => html.replace(/<svg[\s\S]*?<\/svg>/g, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-
-test('AT-33/AT-35: slide 1 draws exactly five elements (title, question, choices, tap line, arrow right of it) and no credit', async () => {
-  const body = bodyOf(await compositionHtml({ ...SLIDE, role: 'question' }));
-  assert.deepEqual(elementsOf(body), [...QUESTION_ELEMENTS]);
-  // Nothing else carries text: the drawn words are exactly the five elements' words.
-  const want = [HEADLINE, SLIDE.question, ...SLIDE.options.flatMap((o) => [o.letter, o.text]), TAP_LINE].join(' ');
-  assert.equal(textOf(body), want);
-  assert.doesNotMatch(body, /credit|Photo:/i);
-  // The arrow follows the tap line inside one row, and its head is at the right end, pointing right.
-  assert.match(body, /id="tv-tap"[^>]*>\s*<span[^>]*data-el="tap"[\s\S]*?<\/span>\s*<\/span>\s*<svg id="tv-arrow"/);
-  const svg = /<svg id="tv-arrow"[^>]*width="(\d+)"[\s\S]*?<\/svg>/.exec(body)!;
-  const head = [...svg[0].matchAll(/<path d="([^"]+)"/g)][1]![1]!;
-  const xs = [...head.matchAll(/[ML]([\d.]+) /g)].map((m) => Number(m[1]));
-  assert.ok(xs[1]! === Math.max(...xs) && xs[1]! > Number(svg[1]) * 0.85, `arrow head tip at x ${xs[1]} of ${svg[1]}`);
-});
-
-test('AT-33/AT-34/AT-35: slide 2 draws title, question, choices and the answer line, no credit; Classic text only', async () => {
-  const q = await compositionHtml({ ...SLIDE, role: 'question' });
-  const a = await compositionHtml({ ...SLIDE, role: 'answer' });
-  assert.deepEqual(elementsOf(bodyOf(a)), [...ANSWER_ELEMENTS]);
-  assert.doesNotMatch(bodyOf(a), /credit|Photo:|Tap to reveal/i);
-  for (const html of [q, a]) {
-    assert.match(html, /font-family: 'Inter'; src: url\('assets\/fonts\/Inter-Medium\.ttf'\); font-weight: 500/);
-    assert.doesNotMatch(html, /Pragmatica|Roboto/);
-  }
-});
-
-/** The page's CSS and markup (the GSAP script left out). */
-const drawnOf = (html: string) => html.slice(0, html.lastIndexOf('<script>'));
-
-test('AT-37: everything is level on both slides: no rotation or skew in the styles, the markup or the timeline (only confetti spins)', async () => {
-  for (const role of ['question', 'answer'] as const) {
-    const html = await compositionHtml({ ...SLIDE, role });
-    const drawn = drawnOf(html);
-    assert.doesNotMatch(drawn, /rotate|skew|matrix\(|tilt/i, `${role}: something is turned in the styles or markup`);
-  }
-  const ROT = /^(rotation|rotate|rotationZ|rotateZ|rotationX|rotationY|rotateX|rotateY|skewX|skewY|skew|transform)$/;
-  for (const [n, c] of [[2, 0], [3, 1], [4, 3]] as const) {
-    for (const { role, tweens } of clips(n, c)) {
-      for (const t of tweens) {
-        const turned = [...Object.keys(t.from ?? {}), ...Object.keys(t.to)].filter((k) => ROT.test(k));
-        if (/^#tv-cf-\d+$/.test(t.target)) continue; // confetti pieces spin (AT-38)
-        assert.deepEqual(turned, [], `${role}: ${t.target} turns`);
-      }
-    }
-  }
-  // The pen arrow is level: its shaft starts and ends on one line, its head strokes mirror each other.
-  const { shaft, head } = arrowPaths(190, 100, seedOf(TAP_LINE));
-  const ys = [...shaft.matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map((m) => Number(m[2]));
-  assert.equal(ys[0], ys.at(-1));
-  const hp = [...head.matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-  assert.equal(hp[0]![0], hp[2]![0]);
-  assert.ok(Math.abs(hp[0]![1] + hp[2]![1] - 2 * hp[1]![1]) < 0.11, 'head strokes mirror about the shaft');
-});
-
-test('AT-38: the reveal parts live only in the answer slide\'s correct row; the check is a drawn stroke; slide 1 is untouched', async () => {
-  const q = bodyOf(await compositionHtml({ ...SLIDE, role: 'question' }));
-  assert.doesNotMatch(q, /tv-fill|tv-check|tv-confetti|tv-cf/);
-  const a = bodyOf(await compositionHtml({ ...SLIDE, role: 'answer' }));
-  const rows = a.split(/(?=<div id="tv-opt-\d")/).slice(1);
-  rows.forEach((row, i) => {
-    const right = SLIDE.options[i]!.letter === SLIDE.correct;
-    assert.equal(/class="tv-fill"/.test(row), right, `row ${i} fill`);
-    assert.equal(/id="tv-check"/.test(row), right, `row ${i} check`);
-    assert.equal(/id="tv-confetti"/.test(row), right, `row ${i} confetti`);
-  });
-  // A white stroked path, not a glyph or an emoji.
-  const check = /<svg id="tv-check"[\s\S]*?<\/svg>/.exec(a)![0];
-  assert.match(check, /<path d="M[\d. ]+L[\d. ]+L[\d. ]+" pathLength="1"/);
-  assert.doesNotMatch(check.replace(/<[^>]+>/g, ''), /\S/, 'no text inside the check');
-  const html = await compositionHtml({ ...SLIDE, role: 'answer' });
-  assert.match(html, /\.tv-check path \{ fill: none; stroke: #FFFFFF;/);
-  assert.match(html, /\.tv-fill \{[^}]*background: #FF5E1A;[^}]*clip-path: inset\(0% 100% 0% 0% round 24px\)/);
-  // The markup and the timeline throw the same seeded burst.
-  const pieces = [...a.matchAll(/id="tv-cf-(\d+)"/g)].length;
-  const seed = seedOf(SLIDE.question);
-  assert.equal(pieces, confettiPieces(seed).length);
-  assert.match(html, new RegExp(`tl\\.fromTo\\("#tv-cf-0", \\{"x":0,"y":0,"rotation":${confettiPieces(seed)[0]!.rot0}\\}`));
-  assert.equal(await compositionHtml({ ...SLIDE, role: 'answer' }), html, 'renders repeat exactly');
-});
-
-test('AT-38: clip 2\'s poster lands mid-confetti, so the still shows the reveal', () => {
-  const flights = answerTimeline(4, 1).filter((t) => t.target.startsWith('#tv-cf-') && 'opacity' in t.to);
-  assert.ok(POSTER_AT.answer > REVEAL_AT + 0.2 && flights.every((t) => t.at + t.dur > POSTER_AT.answer + 0.2), `poster at ${POSTER_AT.answer}s`);
+test('timelineScript: sets for instant changes, fromTo for first states, the mock eases, padded to the clip and registered as "main"', () => {
+  const q = timelineScript(questionTimeline(), CLIP_S.question);
+  assert.match(q, /tl\.fromTo\("#tv-timer", \{"--p":"100%"\}, \{ \.\.\.\{"--p":"0%"\}, duration: 10, ease: "none" \}, 0\);/);
+  assert.match(q, /tl\.set\("#tv-d-9", \{"opacity":1\}, 1\);/);
+  assert.match(q, /tl\.fromTo\("#tv-d-3", \{"scale":1\.45\}, \{ \.\.\.\{"scale":1\}, duration: 0\.35, ease: EASE\.pop \}, 7\);/);
+  assert.match(q, /tl\.set\(\{\}, \{\}, 10\);/);
+  assert.match(q, /window\.__timelines\["main"\] = tl;/);
+  const a = timelineScript(answerTimeline(3, 1), CLIP_S.answer);
+  assert.match(a, /const EASE = \{ pop: bez\(0\.2, 1\.6, 0\.4, 1\), rise: bez\(0\.2, 1\.4, 0\.4, 1\), conf: bez\(0\.1, 0\.7, 0\.3, 1\), ease: bez\(0\.25, 0\.1, 0\.25, 1\) \};/);
+  assert.match(a, /tl\.fromTo\("#tv-opt-1", \{"scale":1\}, \{ \.\.\.\{"scale":1\.12\}, duration: 0\.2475\d*, ease: EASE\.pop \}, 0\.5\);/);
+  assert.match(a, /tl\.to\("#tv-opt-1", \{ \.\.\.\{"scale":1\.05\}/);
+  assert.match(a, /tl\.set\(\{\}, \{\}, 5\);/);
+  // The script runs: the eases evaluate and every tween is handed to a timeline.
+  const calls: string[] = [];
+  const stub = { fromTo: () => calls.push('fromTo'), to: () => calls.push('to'), set: () => calls.push('set'), seek: () => undefined };
+  const win: { __timelines?: Record<string, unknown> } = {};
+  new Function('gsap', 'window', a)({ timeline: () => stub }, win);
+  assert.equal(win.__timelines?.main, stub);
+  assert.equal(calls.length, answerTimeline(3, 1).length + 1);
 });

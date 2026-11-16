@@ -1,137 +1,120 @@
 import type { CSSProperties } from 'react';
 
-import type { TriviaOption } from '@/lib/stories/trivia/types';
+import type { TriviaCopy } from '@/lib/stories/render/types';
 
-import { confettiPieces, CONFETTI_SEED } from './confetti';
-import { arrowPaths, seedOf } from './pen';
+type TriviaOption = TriviaCopy['options'][number];
+
+import { confettiPieces } from './confetti';
+import type { LinePx, QuestionPx, SlideRole } from './layout';
+import { TIMER_S } from './timeline';
 
 /**
- * One AI Trivia slide, 1080×1920, as static markup for a HyperFrames composition (AT-33–AT-35):
- * built the way someone would in Instagram's own story editor (the Stories homemade style is the
- * reference): Classic text (Inter Medium) in the editor's highlight boxes, a quiz-sticker-like white
- * card for the choices, a pen-tool arrow. Everything sits level (AT-37: no tilt anywhere). No credit,
- * no logo, no decoration: the dimmed photo is the only backdrop.
- *
- *   question slide  exactly five elements: "AI Trivia", the question, the choices, "Tap to reveal",
- *                   and a pen arrow to the right of it, pointing right (AT-33)
- *   answer slide    "AI Trivia", the question, the choices and the answer line in a white box. The
- *                   correct row carries the reveal's parts (AT-38), all invisible until the hit: an
- *                   orange fill for the wipe, a drawn check mark in its letter circle, and the confetti
- *
- * Every element carries `data-el` (the tests count them). Every text leaf is `.tv-text` (the contrast
- * check reads them; `data-ink` names the colour to judge). Regions with `data-fit-min` shrink to fit
- * (text-fit.ts); the sizes found are baked in through `sizes`.
+ * One "Are you smarter than AI?" slide, 1080×1920, as static markup for a HyperFrames composition: the approved
+ * mock (marquee-create.html) with its preview scaffolding removed. A centred stack: the marquee sign with its
+ * bulbs, the question, the choices, and the fixed footer slot (the timer, "Tap to reveal" and the arrow on
+ * clip 1; the answer line on clip 2). The answer slide also carries the reveal's parts, hidden until the
+ * hit: the correct pill's check, and the confetti.
  */
-export const HEADLINE = 'AI Trivia';
+export const SIGN_COPY = 'Are you smarter than AI?';
 export const TAP_LINE = 'Tap to reveal';
-/** What each slide may show (AT-33), in order. */
-export const QUESTION_ELEMENTS = ['title', 'question', 'choices', 'tap', 'arrow'] as const;
-export const ANSWER_ELEMENTS = ['title', 'question', 'choices', 'answer'] as const;
+const LETTERS = ['A', 'B', 'C', 'D'] as const;
+/** Bulbs along the sign's top and bottom edges (the mock's bulbs(12)), and down each side. */
+export const BULBS_ACROSS = 12;
+export const BULBS_DOWN = 3;
 
-export type SlideRole = 'question' | 'answer';
 export type SlideInput = {
   role: SlideRole;
   question: string;
   options: TriviaOption[];
   correct: TriviaOption['letter'];
   answerLine: string;
-  /** Path of the photo inside the project (e.g. assets/photo.jpg), or null for a plain backdrop. */
-  photo: string | null;
-  focus?: { x: number; y: number };
-  /** Black overlay strength over the photo, 0–1. */
-  dim: number;
-  /** Fitted font sizes (px) by `data-fit-id`. */
-  sizes?: Record<string, number>;
-  /** The confetti's seed (answer slide); the timeline must use the same one. */
-  confettiSeed?: number;
+  /** The question's font size (the fit rule's pick, the same on both clips). */
+  questionPx: QuestionPx;
+  /** The answer line's font size (its own fit, clip 2). Default 54. */
+  linePx?: LinePx;
+  /** The correct pill's centre on the stage (answer slide): where the confetti starts. */
+  confettiAt?: { x: number; y: number };
 };
 
-const px = (sizes: SlideInput['sizes'], id: string): CSSProperties | undefined => (sizes?.[id] ? { fontSize: `${sizes[id]}px` } : undefined);
+const ARROW_PATHS = ['M8 50 C52 34 100 58 150 42', 'M118 14 L154 42 L120 72'];
+const CHECK_PATH = 'M12 27 L22 37 L40 15';
 
-/** The pen-tool arrow, drawn to the right: the side people tap to go on. */
-function PenArrow({ w = 190, h = 100 }: { w?: number; h?: number }) {
-  const { shaft, head } = arrowPaths(w, h, seedOf(TAP_LINE));
+/** The mock's bulbs(n): top left to right, right side down, bottom right to left, left side up. */
+export function bulbStyles(n: number = BULBS_ACROSS): Array<Record<string, string>> {
+  const out: Array<Record<string, string>> = [];
+  const pct = (i: number, of: number) => `calc(${((i + 0.5) / of) * 100}% - 15px)`;
+  for (let i = 0; i < n; i++) out.push({ left: pct(i, n), top: '-15px' });
+  for (let i = 0; i < BULBS_DOWN; i++) out.push({ right: '-15px', top: pct(i, BULBS_DOWN) });
+  for (let i = n - 1; i >= 0; i--) out.push({ left: pct(i, n), bottom: '-15px' });
+  for (let i = BULBS_DOWN - 1; i >= 0; i--) out.push({ left: '-15px', top: pct(i, BULBS_DOWN) });
+  return out;
+}
+
+function Arrow() {
   return (
-    <svg id="tv-arrow" className="tv-pen" data-el="arrow" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <path d={shaft} />
-      <path d={head} />
+    <svg viewBox="0 0 170 90" fill="none" stroke="currentColor" strokeWidth={10} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {ARROW_PATHS.map((d) => <path key={d} d={d} />)}
     </svg>
   );
 }
 
-/** The check mark, a drawn stroke (not a glyph), pathLength 1 so the timeline can draw it on. */
-function CheckMark() {
+function Check() {
   return (
-    <svg id="tv-check" className="tv-check" width={40} height={40} viewBox="0 0 40 40" aria-hidden="true">
-      <path d="M9.5 21 L17 28.5 L31 13" pathLength={1} />
+    <svg id="tv-check" viewBox="0 0 52 52" fill="none" stroke="currentColor" strokeWidth={8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={CHECK_PATH} />
     </svg>
   );
 }
 
-/** The burst's pieces, stacked at their launch points on the row; the timeline flings them. */
-function Confetti({ seed }: { seed: number }) {
+function Timer() {
+  const digits = Array.from({ length: TIMER_S }, (_, i) => TIMER_S - i);
   return (
-    <div id="tv-confetti" className="tv-confetti" aria-hidden="true">
-      {confettiPieces(seed).map((p, k) => (
-        <i key={k} id={`tv-cf-${k}`} className="tv-cf" style={{ left: `${p.left}%`, width: `${p.w}px`, height: `${p.h}px`, marginLeft: `${-p.w / 2}px`, marginTop: `${-p.h / 2}px` }}>
-          <i className="tv-cf-in" style={{ background: p.color, borderRadius: p.round ? '50%' : '3px' }} />
-        </i>
-      ))}
-    </div>
+    <span id="tv-timer" className="timer">
+      {digits.map((d) => <b key={d} id={`tv-d-${d}`} className={d === TIMER_S ? 'on' : undefined}>{d}</b>)}
+    </span>
   );
 }
 
 export function TriviaSlide({ s }: { s: SlideInput }) {
   const answer = s.role === 'answer';
-  const focus = s.focus ? `${Math.round(s.focus.x * 100)}% ${Math.round(s.focus.y * 100)}%` : '50% 50%';
+  const at = s.confettiAt ?? { x: 540, y: 960 };
   return (
-    <div className={`tv-frame ${answer ? 'tv--answer' : 'tv--question'}`}>
-      <div className="tv-bg">
-        <div id="tv-photo" className="tv-photo" style={{ transformOrigin: focus }}>
-          {s.photo ? <img src={s.photo} alt="" style={{ objectPosition: focus }} /> : null}
-        </div>
-        <div className="tv-dim" style={{ background: `rgba(6,6,8,${s.dim})` }} />
+    <div id="tv-stage" className={`stage ${answer ? 'a' : 'q'}`} style={{ '--qpx': `${s.questionPx}px`, '--lpx': `${s.linePx ?? 54}px` } as CSSProperties}>
+      <div id="tv-sign" className="title">
+        {bulbStyles().map((st, i) => <i key={i} className={`bulb p${i % 2}`} style={st} />)}
+        {SIGN_COPY}
       </div>
-      <div className="tv-stack">
-        <div id="tv-head" className="tv-line tv-head" data-el="title" data-fit-min={answer ? 48 : 60} data-fit-id="head" style={px(s.sizes, 'head')}>
-          <span className="tv-hl tv-box--orange tv-text" data-ink="#FFFFFF">{HEADLINE}</span>
-        </div>
-        <div id="tv-q" className="tv-line tv-q" data-el="question" data-fit-min={answer ? 36 : 44} data-fit-id="q" style={px(s.sizes, 'q')}>
-          <span className="tv-hl tv-box--soft tv-text" data-ink="#FFFFFF">{s.question}</span>
-        </div>
-        <div id="tv-opts" className="tv-quiz" data-el="choices">
-          {s.options.map((o, i) => {
-            const right = answer && o.letter === s.correct;
-            return (
-              <div key={o.letter} id={`tv-opt-${i}`} className={`tv-opt-wrap${right ? ' tv-opt-wrap--correct' : ''}`}>
-                <div className="tv-opt">
-                  {right ? <span className="tv-fill" /> : null}
-                  <span className="tv-chip">
-                    <span className="tv-chip-l tv-ink tv-text">{o.letter}</span>
-                    {right ? <CheckMark /> : null}
-                  </span>
-                  <span className="tv-opt-t tv-ink tv-text" data-fit-min={34} data-fit-id={`opt${i}`} style={px(s.sizes, `opt${i}`)}>
-                    {o.text}
-                  </span>
-                </div>
-                {right ? <Confetti seed={s.confettiSeed ?? CONFETTI_SEED} /> : null}
-              </div>
-            );
-          })}
-        </div>
+      <div id="tv-q" className="question">{s.question}</div>
+      <div id="tv-choices" className="choices">
+        {s.options.map((o, i) => {
+          const right = answer && o.letter === s.correct;
+          return (
+            <div key={o.letter} id={`tv-opt-${i}`} className="ch">
+              <b>
+                <span className="tv-l">{LETTERS[i]}</span>
+                {right ? <Check /> : null}
+              </b>
+              <span className="tv-t">{o.text}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div id="tv-foot" className="foot">
         {answer ? (
-          <div id="tv-ans" className="tv-line tv-ans" data-el="answer" data-fit-min={36} data-fit-id="ans" style={px(s.sizes, 'ans')}>
-            <span className="tv-hl tv-box--white tv-text" data-ink="#000000">{s.answerLine}</span>
-          </div>
+          <div id="tv-line" className="line">{s.answerLine}</div>
         ) : (
-          <div id="tv-tap" className="tv-tap">
-            <span className="tv-line tv-tap-t" data-el="tap">
-              <span className="tv-hl tv-box--soft tv-text" data-ink="#FFFFFF">{TAP_LINE}</span>
-            </span>
-            <PenArrow />
+          <div id="tv-tap" className="tap">
+            <Timer />
+            <span>{TAP_LINE}</span>
+            <Arrow />
           </div>
         )}
       </div>
+      {answer
+        ? confettiPieces().map((p, k) => (
+            <i key={k} id={`tv-cf-${k}`} className="conf" style={{ left: `${Math.round(at.x)}px`, top: `${Math.round(at.y)}px`, background: p.color }} />
+          ))
+        : null}
     </div>
   );
 }

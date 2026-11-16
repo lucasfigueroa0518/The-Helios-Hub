@@ -4,24 +4,24 @@ Cells = theme × angle (20 × 20 = 400). The writer gets 12 random open cells a 
 anchors each question to one. A cell closes for good when its question posts.
 **Lucas approves the 20 themes; the angles are shown so the cells make sense.**
 
-## Themes (for approval)
+## Themes (approved; 6, 11, 15, 16, 17 replaced 2026-11-15, AT-53)
 1. The chatbots people use every day
 2. AI hiding inside your phone
 3. AI in the apps you already use (streaming, maps, shopping, social feeds)
 4. Firsts and origins in AI history
 5. Famous AI blunders and fails
-6. The people who built AI
+6. AI at work: the jobs and tasks it's changing
 7. Robots and machines with bodies
 8. AI in games and sports
 9. AI in movies and books versus reality
 10. How AI learns: data and training
-11. Chips, power and the cost of running AI
+11. Scams, fakes and deepfakes
 12. AI in medicine and health
 13. AI in art, music and writing
 14. Self-driving cars and transport
-15. AI and money: the companies and the deals
-16. The words of AI: where the terms came from
-17. AI rules, laws and lawsuits
+15. AI at home: speakers, cameras and smart gadgets
+16. AI in school and homework
+17. AI in dating, friendships and social life
 18. AI versus the human brain
 19. AI and internet culture
 20. Discoveries AI made in science
