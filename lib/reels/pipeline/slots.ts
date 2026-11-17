@@ -19,7 +19,6 @@ import { reelClosings, shipStoredCopy, writeTargetCopy, type IdeaCopyOutcome } f
 import { placedIdeas, reusableVideos } from '@/lib/reels/pipeline/fill';
 import { putOnSlate, reelsMovesQuery, REEL_SKIP } from '@/lib/reels/pipeline/promote';
 import { markPromoteUsed, readMoves, recordPromoteSkip, withSkip } from '@/lib/social-hub/moves-store';
-import { QUEUE_LIVE } from '@/lib/social-hub/queue';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { ideaRef, NO_MOVES, tonightMoves, type TonightMoves } from '@/lib/social-hub/views/moves';
 import { requestFinish } from '@/lib/reels/visual/finish';
@@ -85,7 +84,6 @@ export async function generatePassingReels(input: {
   // one Promote and the Demotes last). An older pinned idea joins tonight's slate from its stored scores (no re-scoring).
   // A pin that can't be made (gone, held out, placed by a person, no scores) steps aside in the same run, with why on the
   // move, and the rest stay. A failed read is no moves: the night runs as before.
-  const queued = QUEUE_LIVE.has('reels');
   const movesReadAt = new Date();
   let moveList = input.dailyFill ? await readMoves(reelsMovesQuery, 'reels') : [];
   let tonight: TonightMoves = moveList.length ? tonightMoves(moveList, 'reels') : NO_MOVES;
@@ -182,9 +180,7 @@ export async function generatePassingReels(input: {
     },
     onPenalty: (idea, penalty) => saveDayPenalty(input.slateId, nyDate, idea.id, penalty),
     reusable: new Set(reusable.keys()),
-    moves: queued
-      ? { promote: pinIds[0] ?? null, demoted: new Set<string>(), pins: pinIds, placed: new Map([...tonight.placed].map(([id, key]) => [ideaRef(id), key] as const)), archived }
-      : { promote: pinIds[0] ?? null, demoted: new Set([...tonight.demoted].map(ideaRef)) },
+    moves: { promote: pinIds[0] ?? null, demoted: new Set<string>(), pins: pinIds, placed: new Map([...tonight.placed].map(([id, key]) => [ideaRef(id), key] as const)), archived },
     onFallback: async (idea, line) => {
       penalties.delete(idea.id);
       await clearDayPenalty(input.slateId, nyDate, idea.id);
@@ -216,7 +212,7 @@ export async function generatePassingReels(input: {
     console.info(`[reels] tonight's pin ${id}: ${made ? 'made' : `skipped (${why})`}`);
   }
   // The night ran and made its picks: hand placements are used up and the ideas compete by score again.
-  if (queued && input.dailyFill) {
+  if (input.dailyFill) {
     await finishNightPlacements(reelsMovesQuery, 'reels', undefined, movesReadAt);
   }
 

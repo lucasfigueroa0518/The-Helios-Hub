@@ -41,7 +41,7 @@ test('hover compares each series to its own previous-7-day average; zero history
   const exp = h.parts.find((p) => p.label === 'Explainer Reels')!;
   assert.equal(exp.change, 'up');
   assert.equal(exp.pct, 200);
-  assert.equal(h.parts.find((p) => p.label === 'IG Stories')!.change, 'new');
+  assert.equal(h.parts.find((p) => p.label === 'Morning Download')!.change, 'new');
   const flat = hoverCompare(dailySeries([...days.map((d) => row(d, 3_000_000))], days, 'type'), 7);
   assert.equal(flat.parts.find((p) => p.label === 'Explainer Reels')!.change, 'same');
 });
@@ -100,15 +100,15 @@ test('caching follows the type and mode filters; Reels and Carousels are not cov
   assert.deepEqual(cacheCovered('carousels'), []);
   assert.deepEqual(costModel({ ...previewCost(), vertical: 'reels' }).caching.covered, []);
   assert.deepEqual(costModel({ ...previewCost(), vertical: 'stories' }).caching.covered, ['stories']);
-  assert.deepEqual(costModel(previewCost()).caching.covered, ['explainers', 'stories', 'reel_ai_drama']);
+  assert.deepEqual(costModel(previewCost()).caching.covered, ['explainers', 'stories', 'ai_trivia', 'real_or_ai', 'reel_ai_drama']);
 });
 
 test('model: unknown-cost calls are surfaced, never priced as $0 savings', () => {
   const m = costModel(previewCost());
   assert.ok(m.unknownCalls > 0);
   assert.match(m.headline, /On pace for \$\d+/);
-  assert.equal(m.series.type.keys.map((k) => k.label).join(','), 'Text on Screen,Explainer Reels,Carousels,IG Stories,Last Few Days,AI Events This Week,Field Notes,AI Drama Reels');
-  assert.equal(m.budget.length, 8);
+  assert.equal(m.series.type.keys.map((k) => k.label).join(','), 'Text on Screen,Explainer Reels,Carousels,Morning Download,Are you smarter than AI?,Real or AI?,Last Few Days,AI Events This Week,Field Notes,AI Drama Reels');
+  assert.equal(m.budget.length, 10);
 });
 
 test('wasteSets SQL runs against the real schema: rejected stories set and failed reels job are keyed', async () => {

@@ -32,7 +32,7 @@
  * keep each source's own rank. Each row carries its breakdown for the hub.
  */
 import type { Queryable } from '@/lib/stories/db';
-import { POOL_CAP, QUEUE_LIVE } from '@/lib/social-hub/queue';
+import { POOL_CAP } from '@/lib/social-hub/queue';
 import { verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { ScoreBreakdown } from '@/lib/social-hub/types';
 import { morningDownloadScore } from '@/lib/stories/md-score';
@@ -144,26 +144,39 @@ function storyItem(series: Series, c: StoryCandidate, key: string, score: number
  *      intake still returns is reopened, because new articles keep joining the same intake story and
  *      md-development.ts decides whether it is news again; Bald-Eagle D2)
  *   2. anything stories.history has shown is used (not Morning Download, for the same reason)
- *   3. a fully read series drops its unused rows the refresh did not return
- *   4. any unused row past its series' freshness window drops
- *      (a person's own seeds, keyed `seed:`, are never dropped by 3, 4 or 5; AI Trivia's `trivia:` and Real or AI?'s `roa:`
+ *   3. a fully read series archives its unused rows the refresh did not return
+ *   4. any unused row past its series' freshness window is archived
+ *      (a person's own seeds, keyed `seed:`, are never archived by 3, 4 or 5; AI Trivia's `trivia:` and Real or AI?'s `roa:`
  *      rows never by 3 or 4)
- *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21; AI Trivia TRIVIA_POOL_CAP): the
- *      lowest-scored go, never one a person pinned or dragged; ideas a person archived do not count
+ *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21): the lowest-scored are archived,
+ *      except AI Trivia (TRIVIA_POOL_CAP) and Real or AI? (ROA_POOL_CAP), whose over-cap rows move to their own archive tables;
+ *      never one a person pinned or dragged; ideas a person archived do not count
+ *
+ * Archive, not delete (Tommy, 2026-11-16: "Yes, archive them"): steps 3 to 5 stamp `archived_at` and why. A row the
+ * refresh itself archived (stale, not-returned, over-cap) is reopened when the intake returns it again, as a deleted
+ * row used to be re-inserted. A person's Archive lives in social_hub.idea_adjustments, not here: it keeps the idea out
+ * of the hub's list (dayRanking), the build's order (inQueueOrder) and openPool whatever this row says. An archived
+ * row is never offered to a build (openPool) and never counts toward the cap. Until db/stories_pool_archive.sql is
+ * applied the column is missing and the rows are deleted as before. `upserted` counts the rows actually written.
  */
 export async function writePool(db: Queryable, gathered: { items: PoolItem[]; refreshed: Series[] }, now: Date): Promise<{ upserted: number; dropped: number }> {
   const { items, refreshed } = gathered;
+  const archive = await hasArchiveColumn(db);
+  let upserted = 0;
   for (const item of items) {
-    await db.query(
+    const { rows } = await db.query<{ id: string }>(
       `INSERT INTO stories.pool (series, key, origin, ref, title, payload, score, refreshed_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::timestamptz)
        ON CONFLICT (series, key) DO UPDATE SET
          origin = EXCLUDED.origin, ref = EXCLUDED.ref, title = EXCLUDED.title,
          payload = EXCLUDED.payload, score = EXCLUDED.score, refreshed_at = EXCLUDED.refreshed_at,
-         used_at = CASE WHEN stories.pool.series = 'morning_download' THEN NULL ELSE stories.pool.used_at END
-       WHERE stories.pool.used_at IS NULL OR stories.pool.series = 'morning_download'`,
+         used_at = CASE WHEN stories.pool.series = 'morning_download' THEN NULL ELSE stories.pool.used_at END${archive ? `,
+         archived_at = NULL, archived_reason = NULL` : ''}
+       WHERE ${archive ? `(stories.pool.archived_at IS NULL OR stories.pool.archived_reason IN (${REFRESH_ARCHIVE_REASONS.map((r) => `'${r}'`).join(', ')})) AND ` : ''}(stories.pool.used_at IS NULL OR stories.pool.series = 'morning_download')
+       RETURNING id`,
       [item.series, item.key, item.origin, item.ref, item.title, JSON.stringify(item.payload), item.score, now.toISOString()],
     );
+    upserted += rows.length;
   }
   await db.query(
     `UPDATE stories.pool p SET used_at = $1::timestamptz
@@ -175,21 +188,25 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
   for (const series of POOL_SERIES) {
     const cutoff = new Date(now.getTime() - FRESH_MS[series]).toISOString();
     const keys = refreshed.includes(series) ? items.filter((i) => i.series === series).map((i) => i.key) : null;
-    const { rows } = await db.query<{ id: string }>(
-      `DELETE FROM stories.pool
-        WHERE series = $1 AND used_at IS NULL
+    const stale = `series = $1 AND used_at IS NULL
           AND key NOT LIKE 'seed:%' AND key NOT LIKE 'trivia:%' AND key NOT LIKE 'roa:%'
-          AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))
-        RETURNING id`,
-      [series, cutoff, keys],
-    );
+          AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))`;
+    const { rows } = archive
+      ? await db.query<{ id: string }>(
+        `UPDATE stories.pool SET archived_at = $4::timestamptz,
+                archived_reason = CASE WHEN refreshed_at < $2::timestamptz THEN 'stale' ELSE 'not-returned' END
+          WHERE archived_at IS NULL AND ${stale}
+          RETURNING id`,
+        [series, cutoff, keys, now.toISOString()],
+      )
+      : await db.query<{ id: string }>(`DELETE FROM stories.pool WHERE ${stale} RETURNING id`, [series, cutoff, keys]);
     dropped += rows.length;
     dropped +=
       series === 'ai_trivia' ? (await capTriviaPool(db, now)).length
       : series === ROA_SERIES ? (await capRoaPool(db, now)).length
-      : (await capSeries(db, series)).length;
+      : await capSeries(db, series, archive ? now : null);
   }
-  return { upserted: items.length, dropped };
+  return { upserted, dropped };
 }
 
 /**
@@ -200,7 +217,7 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
 export async function capTriviaPool(db: Queryable, now: Date = new Date()): Promise<string[]> {
   let dropped: Dropped[];
   try {
-    dropped = await capSeries(db, 'ai_trivia', TRIVIA_POOL_CAP, true);
+    dropped = await capDeleting(db, 'ai_trivia', TRIVIA_POOL_CAP);
   } catch {
     const { rows } = await db.query<Dropped>(
       `DELETE FROM stories.pool p
@@ -228,7 +245,7 @@ export async function capTriviaPool(db: Queryable, now: Date = new Date()): Prom
 export async function capRoaPool(db: Queryable, now: Date = new Date()): Promise<string[]> {
   let dropped: Dropped[];
   try {
-    dropped = await capSeries(db, ROA_SERIES, ROA_POOL_CAP, true);
+    dropped = await capDeleting(db, ROA_SERIES, ROA_POOL_CAP);
   } catch {
     const { rows } = await db.query<Dropped>(
       `DELETE FROM stories.pool p
@@ -255,34 +272,77 @@ export async function archiveRoa(db: Queryable, key: string, payload: unknown, r
 type Dropped = { key: string; payload: unknown };
 
 /**
- * Hold one series to its cap; the dropped keys. Never throws unless `rethrow`: a database without the moves table keeps its
- * pool as it is.
+ * Hold AI Trivia or Real or AI? to its own cap by deleting the rows past it and returning them (key and payload), so the
+ * caller can file them in the type's archive table. Throws when the moves table is missing (the callers fall back).
  */
-async function capSeries(db: Queryable, series: Series, cap: number = POOL_CAP, rethrow = false): Promise<Dropped[]> {
+async function capDeleting(db: Queryable, series: Series, cap: number): Promise<Dropped[]> {
   // The hub files a series' moves under its type (SS-21).
   const vertical = verticalOfSeries(series);
-  if (!rethrow && !QUEUE_LIVE.has(vertical)) return [];
+  const { rows } = await db.query<Dropped>(
+    `DELETE FROM stories.pool p
+      WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
+        AND p.id IN (
+          SELECT r.id FROM (
+            SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
+              FROM stories.pool p2
+             WHERE p2.series = $1 AND p2.used_at IS NULL
+               AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = $3 AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)
+          ) r WHERE r.n > $2)
+        AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
+                         WHERE a.vertical = $3 AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
+                           AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)
+      RETURNING p.key, p.payload`,
+    [series, cap, vertical],
+  );
+  return rows;
+}
+
+/** Why the refresh itself archives a row (writePool, capSeries): only these come back when the intake returns the idea. */
+export const REFRESH_ARCHIVE_REASONS = ['stale', 'not-returned', 'over-cap'] as const;
+
+/** Whether stories.pool has the archive column yet (db/stories_pool_archive.sql). */
+export async function hasArchiveColumn(db: Queryable): Promise<boolean> {
   try {
-    const { rows } = await db.query<Dropped>(
-      `DELETE FROM stories.pool p
-        WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
+    const { rows } = await db.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_schema = 'stories' AND table_name = 'pool' AND column_name = 'archived_at'`,
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hold one series to the pool standard's cap: the open ideas past it are archived (`archiveAt`), or deleted on a database
+ * without the archive column (`archiveAt` null). Rows already archived, by the refresh or by a person, never count.
+ * Never throws: a database without the moves table keeps its pool as it is.
+ */
+async function capSeries(db: Queryable, series: Series, archiveAt: Date | null): Promise<number> {
+  // The hub files a series' moves under its type (SS-21).
+  const vertical = verticalOfSeries(series);
+  const live = archiveAt ? 'AND p2.archived_at IS NULL' : '';
+  const v = archiveAt ? '$4' : '$3';
+  const over = `p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
           AND p.id IN (
             SELECT r.id FROM (
               SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
                 FROM stories.pool p2
-               WHERE p2.series = $1 AND p2.used_at IS NULL
-                 AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = $3 AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)
+               WHERE p2.series = $1 AND p2.used_at IS NULL ${live}
+                 AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = ${v} AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)
             ) r WHERE r.n > $2)
           AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
-                           WHERE a.vertical = $3 AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
-                             AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)
-        RETURNING p.key, p.payload`,
-      [series, cap, vertical],
-    );
-    return rows;
-  } catch (err) {
-    if (rethrow) throw err;
-    return [];
+                           WHERE a.vertical = ${v} AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
+                             AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)`;
+  try {
+    const { rows } = archiveAt
+      ? await db.query<{ id: string }>(
+        `UPDATE stories.pool p SET archived_at = $3::timestamptz, archived_reason = 'over-cap' WHERE p.archived_at IS NULL AND ${over} RETURNING p.id`,
+        [series, POOL_CAP, archiveAt.toISOString(), vertical],
+      )
+      : await db.query<{ id: string }>(`DELETE FROM stories.pool p WHERE ${over} RETURNING p.id`, [series, POOL_CAP, vertical]);
+    return rows.length;
+  } catch {
+    return 0;
   }
 }
 
@@ -336,12 +396,22 @@ export type OpenPool = {
   meta?: { stories: PoolMeta[]; leads: PoolMeta[]; trivia?: PoolMeta[]; roa?: PoolMeta[] };
 };
 
-/** One series' open ideas, best first: what its build chooses from. */
+/**
+ * One series' open ideas, best first: what its build chooses from. Archived rows are never offered: neither one the
+ * refresh archived nor one a person archived (social_hub.idea_adjustments, the hub's `stories:pool:<series>:<key>` id).
+ * A database without the moves table reads the pool without that check.
+ */
 export async function openPool(db: Queryable, series: Series): Promise<OpenPool> {
-  const { rows } = await db.query<{ key: string; score: string | number | null; payload: PoolItem['payload'] }>(
-    `SELECT key, score, payload FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST, title`,
-    [series],
+  const live = (await hasArchiveColumn(db)) ? 'AND p.archived_at IS NULL' : '';
+  type Row = { key: string; score: string | number | null; payload: PoolItem['payload'] };
+  const read = (personal: string, extra: unknown[]) => db.query<Row>(
+    `SELECT p.key, p.score, p.payload FROM stories.pool p WHERE p.series = $1 AND p.used_at IS NULL ${live} ${personal} ORDER BY p.score DESC NULLS LAST, p.title`,
+    [series, ...extra],
   );
+  const { rows } = await read(
+    `AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = $2 AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)`,
+    [verticalOfSeries(series)],
+  ).catch(() => read('', []));
   const out = {
     stories: [] as StoryCandidate[], leads: [] as ToolLead[], trivia: [] as TriviaPoolPayload[], roa: [] as RoaPoolPayload[],
     meta: { stories: [] as PoolMeta[], leads: [] as PoolMeta[], trivia: [] as PoolMeta[], roa: [] as PoolMeta[] },

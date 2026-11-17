@@ -1,6 +1,5 @@
 import { ideaOfType } from '@/lib/content-type/story-series';
 import type { ContentActions } from '@/lib/publishing/actions/types';
-import { ARCHIVE_ONLY, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import type { ActionSpec } from '@/lib/social-hub/action-route';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -13,7 +12,7 @@ import { parseTarget, type Parsed } from '../content-action';
  * posted is refused by the type's verb. Body: `{ vertical, refs, ideaId }` (`ideaId` null when the idea is gone).
  */
 
-const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days):[A-Za-z_]+:[^\s]{1,2000}$/;
+const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days|reel_ai_drama|field_notes|ai_events):[A-Za-z_]+:[^\s]{1,2000}$/;
 
 export type ArchiveBody = Parsed & { ideaId: string | null };
 
@@ -28,8 +27,7 @@ export function archiveContent(
       const ideaId = (body as { ideaId?: unknown } | null)?.ideaId ?? null;
       if (!parsed) return null;
       if (ideaId !== null && (typeof ideaId !== 'string' || !IDEA_ID.test(ideaId) || !ideaOfType(parsed.vertical, ideaId))) return null;
-      // A type whose night does not follow the queue yet gets the post stopped, not an idea archive it would ignore.
-      return { ...parsed, ideaId: QUEUE_LIVE.has(parsed.vertical) || ARCHIVE_ONLY.has(parsed.vertical) ? ideaId : null };
+      return { ...parsed, ideaId };
     },
     run: async ({ vertical, target, input, ideaId }, ctx) => {
       const reject = (await actions())[vertical].reject;

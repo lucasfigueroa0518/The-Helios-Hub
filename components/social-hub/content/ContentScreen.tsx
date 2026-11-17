@@ -5,13 +5,15 @@ import { RunsRefresh } from '@/components/social-hub/content/RunsRefresh';
 import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
 import { DataNotes } from '@/components/social-hub/DataNotes';
+import { HubLink } from '@/components/social-hub/nav/HubNav';
 import { PageHead } from '@/components/social-hub/ui/PageHead';
 import { TypeMark } from '@/components/social-hub/ui/marks';
 import type { AllProgress } from '@/lib/content-type/progress';
 import type { RunMisses } from '@/lib/content-type/run-misses';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { firstDeadline } from '@/lib/social-hub/health/approvals';
-import { clock, plural, relative, when } from '@/lib/social-hub/views/format';
+import { clock, dayWord, plural, relative, when } from '@/lib/social-hub/views/format';
+import { addDays } from '@/lib/social-hub/time';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
 import { offerer } from '@/lib/social-hub/views/offer';
 import { poolStale, poolSummaries, type PoolSummary } from '@/lib/social-hub/views/pools';
@@ -23,53 +25,86 @@ import { typeHref, verticalInfo } from '@/lib/social-hub/verticals';
 /**
  * Content (BRIEFS.md §1): the morning check. What needs a person, what's
  * going out today, then how full the tank is.
+ *
+ * Look-ahead tabs (2026-11-15): Today and the next AHEAD_DAYS days, the window made-ahead types fill
+ * (lib/social-hub/lead.ts), so a person can review and approve them early. `?ahead=1|2`; not `?day`,
+ * which old links use for the calendar. Run now fills today, so it shows on Today only.
  */
-export function ContentScreen({ dataset, base, now, libraries, progress, misses, controls = true }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; misses?: RunMisses; controls?: boolean }) {
+export const AHEAD_DAYS = 2;
+
+/** `?ahead=` → 0 (today) … AHEAD_DAYS; anything else is today. */
+export function aheadParam(value: string | undefined): number {
+  const n = value && /^\d$/.test(value) ? Number(value) : 0;
+  return n >= 0 && n <= AHEAD_DAYS ? n : 0;
+}
+
+export function ContentScreen({ dataset, base, now, libraries, progress, misses, controls = true, ahead = 0 }: { dataset: HubDataset; base: string; now: Date; libraries: LibrariesModel; progress?: AllProgress; misses?: RunMisses; controls?: boolean; /** Days after today shown in the strip (0: today). */ ahead?: number }) {
   const runs: AllProgress = progress ?? { carousels: [], stories: [], explainers: [], last_few_days: [], ai_events: [], field_notes: [] };
   const inFlight = Object.values(runs).some((items) => items.length > 0);
   const summary = runningSummary(runs);
   const m = contentModel(dataset, now);
   const o = offerer(dataset, now);
-  // Every type's quota candidates for today: what holds its slots, then the top of its ranking (Promote / Demote applied).
-  const today = allQuotaCandidates(dataset, now);
+  const day = addDays(m.today, ahead);
+  const later = ahead > 0;
+  // Every type's quota candidates for the day: what holds its slots, then the top of its ranking (Promote / Demote applied);
+  // a later day shows only what is made or booked for it.
+  const today = allQuotaCandidates(dataset, now, later ? day : undefined);
   // The count is today's cards still waiting on approval, so it matches the cards' Needs you badges (2026-10-13).
   const waiting = today.flatMap((c) => (c.post && o.offer(c.post).state.id === 'needs_you' ? [c.post] : []));
   const toApprove = waiting.length;
   // The soonest of those deadlines (a slot's time, else the type's last window today), so the morning check says how long there is.
   const first = firstDeadline(waiting, now);
-  const todayLabel = new Date(`${m.today}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
+  const dateLabel = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(',', '');
+  const dayName = later ? dayWord(day, now) : 'Today';
+  // "Tomorrow · Mon Nov 16"; a day two out is already a date ("Tue Nov 17"), so no second copy.
+  const todayLabel = dayName === dateLabel(day) ? undefined : dateLabel(day);
+  const stripTitle = !later ? 'Today’s Content' : dayName === 'Tomorrow' ? 'Tomorrow’s Content' : `Content for ${dayName}`;
+  const booked = today.filter((c) => c.locked).length;
+  const tabs = Array.from({ length: AHEAD_DAYS + 1 }, (_, i) => ({ i, label: i === 0 ? 'Today' : dayWord(addDays(m.today, i), now) }));
 
   return (
     <>
       <PageHead
-        title="Today"
+        title={dayName}
         aside={todayLabel}
-        actions={controls ? <><HubSettingsButton /><RunTodayButton /></> : undefined}
+        actions={controls ? <><HubSettingsButton />{later ? null : <RunTodayButton />}</> : undefined}
         meta={(
           <>
-            <strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled
+            {later ? <><strong>{booked}</strong> of {today.length} slots booked</> : <><strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled</>}
             {' · '}
             {toApprove ? <><span className="sh-needs-count">{toApprove} to approve</span>{first ? ` · first by ${clock(first.toISOString())}` : null}</> : 'nothing to approve'}
             {summary.length ? <> · <strong>{summary.join(' · ')}</strong></> : null}
           </>
         )}
       />
+      <nav className="sh-pills sh-day-tabs" aria-label="Day">
+        {tabs.map((t) => (
+          <HubLink key={t.i} className="sh-pill" href={t.i ? `${base}?ahead=${t.i}` : base} aria-current={t.i === ahead ? 'page' : undefined} history="replace">{t.label}</HubLink>
+        ))}
+      </nav>
       <DataNotes dataset={dataset} />
       <RunsRefresh active={inFlight} known={inFlightKey(runs)} runs={inFlightRuns(runs)} />
 
       <section className="sh-section" aria-labelledby="today-strip">
         <div className="sh-section__head">
-          <h2 className="sh-title" id="today-strip">Today’s Content<span className="sh-count">{today.length}</span></h2>
-          <Link className="sh-out" href={`${base}/calendar`}>Calendar <ArrowRight size={14} aria-hidden="true" /></Link>
+          <h2 className="sh-title" id="today-strip">{stripTitle}<span className="sh-count">{today.length}</span></h2>
+          <Link className="sh-out" href={later ? `${base}/calendar?week=${weekOf(day)}` : `${base}/calendar`}>Calendar <ArrowRight size={14} aria-hidden="true" /></Link>
         </div>
         {today.length === 0 ? (
-          <div className="sh-panel sh-empty">
-            <strong>No candidates for today yet</strong>
-            {m.next ? <>Next post: {when(m.next.publishAt, now)}. </> : null}
-            {controls ? 'Run now makes what today’s quotas still need.' : null}
-          </div>
+          later ? (
+            <div className="sh-panel sh-empty">
+              <strong>No slots on {dateLabel(day)}</strong>
+              The calendar has nothing scheduled that day.
+            </div>
+          ) : (
+            <div className="sh-panel sh-empty">
+              <strong>No candidates for today yet</strong>
+              {m.next ? <>Next post: {when(m.next.publishAt, now)}. </> : null}
+              {controls ? 'Run now makes what today’s quotas still need.' : null}
+            </div>
+          )
         ) : (
-          <TodayStrip candidates={today} o={o} now={now} runs={runs} misses={misses} controls={controls} />
+          <TodayStrip candidates={today} o={o} now={now} runs={runs} misses={misses} controls={controls} day={later ? day : undefined} label={stripTitle} />
         )}
       </section>
 
@@ -156,4 +191,10 @@ function LibraryRow({ href, icon, title, line }: { href: string; icon: React.Rea
       </Link>
     </li>
   );
+}
+
+/** The Monday that starts `nyDate`'s calendar week (the calendar's `?week=`). */
+function weekOf(nyDate: string): string {
+  const dow = new Date(`${nyDate}T12:00:00Z`).getUTCDay();
+  return addDays(nyDate, -((dow + 6) % 7));
 }

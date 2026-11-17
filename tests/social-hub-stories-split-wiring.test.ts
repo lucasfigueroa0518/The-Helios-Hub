@@ -11,7 +11,6 @@ import test from 'node:test';
 
 import { maxCapFor } from '@/lib/content-type/caps';
 import { TYPE_CONFIG } from '@/lib/content-type/config';
-import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { parseQueueAction } from '@/lib/content-type/idea-queue';
 import { NO_MISSES } from '@/lib/content-type/run-misses';
 import { ideaOfType, seriesLabel } from '@/lib/content-type/story-series';
@@ -65,7 +64,6 @@ test('every per-type record and calendar list has both new keys', () => {
     assert.ok(VERTICAL_LABELS[v], v);
     assert.deepEqual(CAPS[v], CAPS.stories, `${v} keeps the Stories revision caps`);
     assert.equal(descriptionFor(v)?.vertical, v);
-    assert.equal(TYPE_CONFIG[v].queue, 'live');
     assert.equal(isSeedable(v), false, `${v} has no seed path`);
     assert.equal(isFeedSlot({ vertical: v, feedMode: null }), false);
     assert.deepEqual(SCHEDULE_ENTRIES.filter((e) => e.vertical === v).map((e) => e.series), [v]);
@@ -97,8 +95,7 @@ test('ids keep the stories: namespace for every Stories-format type (D46); idea 
   assert.equal(ideaOfType('stories', 'stories:pool:morning_download:k1'), true);
   assert.equal(seriesLabel('ai_trivia'), 'Are you smarter than AI?');
   const ideaId = 'stories:pool:ai_trivia:k1';
-  assert.deepEqual(parseRankMove({ vertical: 'ai_trivia', ideaId, kind: 'promote' }), { vertical: 'ai_trivia', ideaId, kind: 'promote' });
-  assert.throws(() => parseRankMove({ vertical: 'real_or_ai', ideaId, kind: 'promote' }), /Unknown idea/);
+  assert.throws(() => parseQueueAction({ action: 'pin', vertical: 'real_or_ai', ideaId }), /Unknown idea/);
   assert.equal(parseQueueAction({ action: 'pin', vertical: 'ai_trivia', ideaId }).vertical, 'ai_trivia');
 });
 

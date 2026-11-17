@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock: standard pool screen (Explainers)</title>
+<style>
+  :root {
+    --orange: #ff5e1a; --orange-hover: #e54e0f; --orange-ink: #b8410c; --orange-soft: #ffece3;
+    --type-explainers: #4169e1;
+    --failed-ink: #b42318; --failed-soft: #feeae9;
+    --canvas: #fafafa; --surface: #fff; --sunken: #f5f5f5; --hover: #f0f0f0;
+    --hair: #e5e5e5; --hair-strong: #d4d4d4;
+    --ink: #171717; --muted: #525252; --subtle: #737373;
+    --r-sm: 6px; --r-md: 12px; --pill: 9999px;
+    --ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --float: 0 8px 24px -8px rgba(0,0,0,.1);
+    --overlay: 0 12px 40px -12px rgba(0,0,0,.15);
+    --z-sticky: 10; --z-backdrop: 30; --z-drawer: 40; --z-toast: 50;
+    --sans: Roboto, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    --display: "Pragmatica Extended", Roboto, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--canvas); color: var(--ink); font: 400 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  :focus-visible { outline: 2px solid var(--orange-ink); outline-offset: 2px; }
+
+  /* Mock chrome: not part of the design */
+  .mockbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 24px; background: var(--ink); color: #e5e5e5; font-size: 12px; }
+  .mockbar strong { color: #fff; font-weight: 500; margin-right: 4px; }
+  .mockbar button { background: transparent; border: 1px solid #525252; color: #e5e5e5; border-radius: var(--pill); height: 24px; padding: 0 10px; cursor: pointer; font-size: 12px; }
+  .mockbar button[aria-pressed="true"] { background: #fff; color: var(--ink); border-color: #fff; }
+  .mockbar .note { margin-left: auto; color: #a3a3a3; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px 96px; }
+  .crumbs { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .crumbs b { color: var(--ink); font-weight: 500; }
+  h1 { font: 700 24px/1.2 var(--display); letter-spacing: -0.01em; margin: 0; display: flex; align-items: center; gap: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--type-explainers); flex: none; }
+  .sum { margin: 6px 0 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 12px; flex-wrap: wrap; }
+  .seg { display: inline-flex; background: var(--sunken); border: 1px solid var(--hair); border-radius: var(--r-sm); padding: 2px; }
+  .seg button { border: 0; background: transparent; height: 28px; padding: 0 14px; border-radius: var(--r-sm); color: var(--muted); font-weight: 500; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+  .seg button[aria-selected="true"] { background: var(--orange); color: #fff; }
+  .seg .n { font-variant-numeric: tabular-nums; opacity: .8; }
+  .btn { height: 32px; padding: 0 12px; border-radius: var(--r-sm); border: 1px solid var(--hair-strong); background: var(--surface); cursor: pointer; display: inline-flex; gap: 6px; align-items: center; font-weight: 500; white-space: nowrap; transition: background-color 150ms var(--ease); }
+  .btn:hover { background: var(--hover); }
+  .btn[disabled] { opacity: .55; cursor: not-allowed; }
+  .btn--primary { background: var(--orange); border-color: var(--orange); color: #fff; }
+  .btn--primary:hover { background: var(--orange-hover); }
+  .btn--sm { height: 28px; padding: 0 10px; font-size: 14px; }
+  .icon-btn { width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid transparent; background: transparent; display: inline-grid; place-items: center; color: var(--muted); cursor: pointer; transition: background-color 150ms var(--ease), color 150ms var(--ease); }
+  .icon-btn:hover { background: var(--hover); color: var(--ink); }
+  .icon-btn[aria-pressed="true"] { color: var(--ink); }
+  .icon-btn[aria-pressed="true"] svg { fill: currentColor; }
+  .icon-btn[disabled] { opacity: .4; cursor: not-allowed; }
+  .why-off { font-size: 12px; color: var(--muted); }
+  .note { font-size: 14px; color: var(--muted); margin: 0 0 12px; max-width: 70ch; }
+
+  .panel { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-md); overflow: hidden; }
+  .band { display: flex; align-items: baseline; gap: 8px; padding: 10px 16px; background: var(--sunken); border-bottom: 1px solid var(--hair); font: 600 14px/1.3 var(--sans); }
+  .band span { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .band--later { border-top: 1px solid var(--hair); }
+  ol { list-style: none; margin: 0; padding: 0; }
+
+  .row { display: grid; grid-template-columns: 20px 24px minmax(0,1fr) 136px 48px 148px; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--hair); background: var(--surface); cursor: pointer; transition: background-color 150ms var(--ease), opacity 200ms var(--ease), transform 200ms var(--ease); }
+  .row:last-child { border-bottom: 0; }
+  .row:hover { background: var(--hover); }
+  .row.is-dragging { opacity: .4; }
+  .row.drop-above { box-shadow: inset 0 2px 0 var(--ink); }
+  .row.leaving { opacity: 0; transform: translateX(12px); }
+  .grip { color: var(--subtle); cursor: grab; display: grid; place-items: center; }
+  .pos { color: var(--subtle); font-variant-numeric: tabular-nums; text-align: right; font-size: 14px; }
+  .main { min-width: 0; display: flex; flex-direction: column; }
+  .title > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+  .title .pin-mark { color: var(--ink); }
+  .meta { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+  .day { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; color: var(--ink); }
+  .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .acts { display: flex; align-items: center; gap: 2px; justify-content: flex-end; min-width: 148px; }
+  .acts .btn { margin-left: 6px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: var(--pill); border: 1px solid var(--hair); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .badge--failed { background: var(--failed-soft); border-color: transparent; color: var(--failed-ink); }
+  .badge--you { background: var(--orange-soft); border-color: transparent; color: var(--orange-ink); }
+  .spin { animation: spin 900ms linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .confirm { grid-column: 3 / -1; grid-row: 2; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; color: var(--muted); padding-top: 4px; }
+
+  /* Made tab */
+  .row--made { grid-template-columns: 40px minmax(0,1fr) 136px auto; }
+  .thumb { width: 40px; height: 56px; border-radius: var(--r-sm); background: linear-gradient(var(--sunken), var(--hover)); border: 1px solid var(--hair); display: grid; place-items: center; color: var(--subtle); }
+
+  /* Skeleton + empty */
+  .sk { height: 52px; border-bottom: 1px solid var(--hair); padding: 12px 16px; display: grid; grid-template-columns: 24px 1fr 80px; gap: 12px; }
+  .sk i { display: block; height: 10px; border-radius: var(--r-sm); background: var(--hover); animation: pulse 1.4s ease-in-out infinite; }
+  .sk i:nth-child(2) { height: 12px; }
+  @keyframes pulse { 50% { opacity: .5; } }
+  .empty { padding: 48px 24px; text-align: center; }
+  .empty h3 { margin: 0 0 4px; font: 600 16px/1.3 var(--sans); }
+  .empty p { margin: 0 auto 16px; color: var(--muted); max-width: 46ch; }
+
+  /* Drawer */
+  .backdrop { position: fixed; inset: 0; background: rgba(23,23,23,.18); opacity: 0; pointer-events: none; transition: opacity 250ms var(--ease); z-index: var(--z-backdrop); }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: var(--surface); box-shadow: var(--overlay); border-left: 1px solid var(--hair); transform: translateX(100%); transition: transform 250ms var(--ease); z-index: var(--z-drawer); display: flex; flex-direction: column; }
+  .drawer.open { transform: none; }
+  .drawer header { display: flex; align-items: flex-start; gap: 12px; padding: 20px 24px 16px; border-bottom: 1px solid var(--hair); }
+  .drawer header h2 { font: 600 16px/1.35 var(--sans); margin: 0; flex: 1; text-wrap: balance; }
+  .drawer .body { padding: 16px 24px; overflow: auto; flex: 1; }
+  .drawer .foot { padding: 12px 24px; border-top: 1px solid var(--hair); display: flex; gap: 8px; flex-wrap: wrap; }
+  .dl { display: grid; grid-template-columns: 112px 1fr; gap: 6px 12px; margin: 16px 0; font-size: 14px; }
+  .dl dt { color: var(--muted); }
+  .dl dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .why { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .why td { padding: 4px 0; border-bottom: 1px solid var(--hair); }
+  .why td:last-child { text-align: right; }
+  .err { margin-top: 12px; border-radius: var(--r-sm); background: var(--failed-soft); color: var(--failed-ink); padding: 10px 12px; font-size: 14px; }
+  .err code { display: block; margin-top: 6px; font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--ink); word-break: break-word; }
+  .preview { width: 160px; aspect-ratio: 9/16; border-radius: var(--r-sm); background: var(--sunken); border: 1px solid var(--hair); display: grid; place-items: center; color: var(--subtle); font-size: 12px; text-align: center; padding: 12px; }
+  .sec { font: 600 14px/1.3 var(--sans); margin: 20px 0 8px; }
+
+  /* Toast */
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 16px); opacity: 0; background: var(--ink); color: #fff; border-radius: var(--r-sm); padding: 8px 8px 8px 14px; display: flex; gap: 12px; align-items: center; box-shadow: var(--float); transition: opacity 200ms var(--ease), transform 200ms var(--ease); z-index: var(--z-toast); max-width: calc(100vw - 32px); pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  .toast span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toast button { background: transparent; border: 1px solid #525252; color: #fff; border-radius: var(--r-sm); height: 28px; padding: 0 10px; cursor: pointer; }
+
+  @media (max-width: 640px) {
+    main { padding: 20px 12px 96px; }
+    .row { grid-template-columns: 20px minmax(0,1fr) auto; grid-template-areas: "grip main main" "grip badge acts"; row-gap: 6px; }
+    .row .title { white-space: normal; }
+    .row .title > span:last-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .row .grip { grid-area: grip; }
+    .row .pos, .row .num { display: none; }
+    .row .main { grid-area: main; }
+    .row .badge-cell { grid-area: badge; }
+    .row .acts { grid-area: acts; min-width: 0; }
+    .row .acts .btn .lbl { display: none; }
+    .row--made { grid-template-columns: 40px minmax(0,1fr) auto; grid-template-areas: "thumb main main" "thumb badge acts"; }
+    .row--made .thumb { grid-area: thumb; }
+    .row--made .main { grid-area: main; }
+    .row--made .badge-cell { grid-area: badge; }
+    .drawer { width: 100vw; border-left: 0; }
+    .mockbar .note { display: none; }
+  }
+  /* Three-day board */
+  .days-head { display: flex; align-items: center; gap: 8px; margin: 24px 0 12px; }
+  .days-head h2 { font: 600 16px/1.3 var(--sans); margin: 0; }
+  .days-head .range { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .days-head .step { margin-left: auto; display: flex; gap: 4px; }
+  .days { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .daycol { background: var(--surface); border: 1px solid var(--hair); border-radius: var(--r-md); padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .daycol header { display: flex; align-items: baseline; gap: 6px; padding: 0 4px 4px; }
+  .daycol header b { font-weight: 600; }
+  .daycol header span { font-size: 12px; color: var(--muted); }
+  .daycol header .today { margin-left: auto; height: 20px; padding: 0 8px; border-radius: var(--pill); background: var(--ink); color: var(--surface); font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; }
+  .slot { display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 10px; align-items: start; padding: 8px; border-radius: var(--r-sm); border: 1px solid var(--hair); cursor: pointer; transition: background-color 150ms var(--ease); background: var(--surface); text-align: left; width: 100%; }
+  .slot:hover { background: var(--hover); }
+  .slot .thumb { width: 36px; height: 50px; }
+  .slot--idea .thumb { background: var(--surface); border-style: dashed; border-color: var(--hair-strong); }
+  .slot--empty { cursor: default; color: var(--subtle); font-size: 12px; border-style: dashed; display: block; padding: 12px; }
+  .slot--empty:hover { background: var(--surface); }
+  .slot .t { font-weight: 500; font-size: 14px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .slot .when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
+  .slot .badge { margin-top: 6px; }
+  @media (max-width: 640px) {
+    .days { grid-template-columns: repeat(3, 78%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+    .daycol { scroll-snap-align: start; }
+  }
+  @media (max-width: 640px) { .confirm { grid-column: 2 / -1; grid-row: 3; } }
+  @media (prefers-reduced-motion: reduce) {
+    .drawer { transition: opacity 200ms linear; transform: none; opacity: 0; pointer-events: none; }
+    .drawer.open { opacity: 1; pointer-events: auto; }
+    .row, .toast { transition: opacity 150ms linear; transform: none !important; }
+    .spin, .sk i { animation: none; }
+  }
+
+  /* Orange pops (Tommy 2026-11-15: "some orange highlights or pops") */
+  .runway { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .runway .track { display: block; width: 120px; height: 6px; border-radius: var(--pill); background: var(--hover); overflow: hidden; }
+  .runway .fill { display: block; height: 100%; border-radius: var(--pill); background: var(--orange); transform-origin: left; animation: grow 700ms var(--ease) both; }
+  .runway b { color: var(--orange-ink); font-weight: 600; }
+  @keyframes grow { from { transform: scaleX(0); } }
+  .daycol.is-today { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-soft); }
+  .daycol header .today { background: var(--orange); color: #fff; }
+  .band--up { background: var(--orange-soft); }
+  .band--up .live { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); align-self: center; animation: beat 2s ease-in-out infinite; }
+  @keyframes beat { 50% { box-shadow: 0 0 0 4px rgba(255,94,26,.18); } }
+  #ol-up .pos { color: var(--orange-ink); font-weight: 600; }
+  .icon-btn[aria-pressed="true"], .title .pin-mark { color: var(--orange); }
+  .pop svg { animation: pop 360ms var(--ease); }
+  @keyframes pop { 40% { transform: scale(1.35) rotate(-12deg); } }
+  .row.flash, .slot.flash { animation: flash 900ms var(--ease); }
+  @keyframes flash { 0% { background: var(--orange-soft); box-shadow: inset 0 0 0 1px var(--orange); } 100% { background: var(--surface); box-shadow: none; } }
+  .row.drop-above { box-shadow: inset 0 2px 0 var(--orange); }
+  .row.is-dragging { opacity: .5; }
+  .btn--primary:hover { box-shadow: 0 0 0 4px var(--orange-soft); }
+  .acts .btn:hover { border-color: var(--orange); color: var(--orange-ink); }
+  .badge--making { border-color: var(--orange-soft); background: var(--orange-soft); color: var(--orange-ink); }
+  .toast button { border-color: var(--orange); color: var(--orange); font-weight: 500; }
+  .toast .tick { color: var(--orange); }
+  .seg button[aria-selected="true"] .n { color: #fff; opacity: 1; font-weight: 600; }
+  @media (prefers-reduced-motion: reduce) {
+    .runway .fill, .band--up .live, .pop svg, .row.flash, .slot.flash { animation: none; }
+  }
+
+  /* Post panel (matches the live PostDetail sections) */
+  .status { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; font-size: 14px; color: var(--muted); }
+  .actbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; padding-bottom: 16px; border-bottom: 1px solid var(--hair); }
+  .player { position: relative; width: 220px; aspect-ratio: 9/16; border-radius: var(--r-md); background: #262626; display: grid; place-items: center; overflow: hidden; }
+  .player .ph { position: absolute; bottom: 40px; color: #a3a3a3; font-size: 12px; }
+  .playbtn { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--orange); color: #fff; display: grid; place-items: center; cursor: pointer; transition: transform 150ms var(--ease), box-shadow 150ms var(--ease); }
+  .playbtn:hover { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(255,94,26,.25); }
+  .playbtn svg { width: 18px; height: 18px; fill: currentColor; }
+  .dur { position: absolute; right: 8px; bottom: 8px; background: rgba(0,0,0,.6); color: #fff; font-size: 12px; padding: 0 6px; border-radius: var(--r-sm); font-variant-numeric: tabular-nums; }
+  .cap { white-space: pre-wrap; margin: 0; max-width: 65ch; }
+  .sample { color: var(--subtle); font-size: 12px; }
+  .notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+  .notes li { display: flex; gap: 6px; align-items: center; }
+  .notes svg { color: var(--orange); }
+  .drawer a { color: var(--orange-ink); }
+</style>
+</head>
+<body>
+<div class="mockbar" role="toolbar" aria-label="Mock controls">
+  <strong>Mock states</strong>
+  <button data-mode="default" aria-pressed="true">Default</button>
+  <button data-mode="loading" aria-pressed="false">Loading</button>
+  <button data-mode="empty" aria-pressed="false">Empty</button>
+  <button data-mode="full" aria-pressed="false">Pool full (30)</button>
+  <span class="note">Mock only. Topics are real Explainers ideas; scores, costs and dates are samples.</span>
+</div>
+
+<main>
+  <div class="crumbs">Content › <b>Explainers</b></div>
+  <h1><span class="dot" aria-hidden="true"></span>Explainers</h1>
+  <p class="sum" id="sum"></p>
+  <div class="runway" id="runway"></div>
+
+  <div class="days-head">
+    <h2>Next three days</h2><span class="range" id="range"></span>
+    <span class="step"><button class="icon-btn" id="prev" aria-label="Earlier days"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button><button class="icon-btn" id="next" aria-label="Later days"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button></span>
+  </div>
+  <div class="days" id="days"></div>
+
+  <div class="bar">
+    <div class="seg" role="tablist" aria-label="Pool">
+      <button role="tab" id="tab-ideas" aria-selected="true">Ideas <span class="n" id="n-ideas"></span></button>
+      <button role="tab" id="tab-made" aria-selected="false">Made <span class="n" id="n-made"></span></button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="why-off" id="seed-why" hidden>The pool holds 30 topics. Archive one to seed another.</span>
+      <button class="btn" id="seed"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Seed a topic</button>
+    </div>
+  </div>
+  <p class="note" id="note"></p>
+  <div class="panel" id="list" aria-live="polite"></div>
+</main>
+
+<div class="backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" aria-hidden="true">
+  <header><h2 id="d-title"></h2><button class="icon-btn" id="d-close" aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></header>
+  <div class="body" id="d-body"></div>
+  <div class="foot" id="d-foot"></div>
+</aside>
+<div class="toast" id="toast" role="status"><span id="toast-msg"></span><button id="toast-undo">Undo</button></div>
+
+<script>
+const I = {
+  grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
+  pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/>',
+  play: '<polygon points="6 3 20 12 6 21 6 3"/>',
+  loader: '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+  alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>',
+  idea: '<circle cx="12" cy="12" r="10"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+  hand: '<path d="M18 11V6a2 2 0 0 0-4 0v5M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+  spark: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/>',
+};
+const svg = (k, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${I[k]}</svg>`;
+
+// Explainers posts at 12:00 PM and 7:00 PM (sample). Today is Sun Nov 15 (day 0).
+const DAYS = ['Fri Nov 13', 'Sat Nov 14', 'Sun Nov 15', 'Mon Nov 16', 'Tue Nov 17', 'Wed Nov 18', 'Thu Nov 19', 'Fri Nov 20'];
+const D0 = 2; // index of today in DAYS
+const TIMES = ['12:00 PM', '7:00 PM'];
+const short = (d) => d === 0 ? 'Today' : d === 1 ? 'Mon' : DAYS[D0 + d].slice(0, 3);
+const nightFor = (d) => d <= 2 ? 'not made yet' : d === 3 ? 'makes tonight' : d === 4 ? 'makes Mon night' : 'makes Tue night';
+let start = 0; // first day shown, relative to today
+
+let ideas = [
+  { id: 'a', title: 'How does an LLM write an answer one word at a time?', brief: 'Explain that next-token prediction is how a language model scores every possible next token, picks one, appends it to the text, and repeats.', src: 'Written by the night', added: 6, state: 'idea', pinned: true, score: 0.91 },
+  { id: 'b', title: 'What is a webhook?', brief: 'Explain that a webhook is an automatic message one system sends to a web address you provide when an event happens, so you do not have to keep checking for updates.', src: 'Seeded by you', added: 2, state: 'making', pinned: false, score: 0.88 },
+  { id: 'c', title: 'How does an LLM pick its next word?', brief: 'Explain that a language model scores every possible next token with a probability, then samples one.', src: 'Written by the night', added: 9, state: 'failed', pinned: false, score: 0.86, error: 'Worker restarted while this render was running.' },
+  { id: 'd', title: 'What is a relational database?', brief: 'Explain that a relational database stores data in tables of rows and columns and links those tables through shared keys.', src: 'Seeded by you', added: 3, state: 'idea', pinned: false, score: 0.84 },
+  { id: 'e', title: 'Why does a database need a primary key?', brief: 'Explain how a primary key gives every row in a table a unique, stable identifier so records can be found, updated and referenced without ambiguity.', src: 'Seeded by you', added: 3, state: 'idea', pinned: false, score: 0.81 },
+  { id: 'f', title: 'How does vector search find similar ideas instead of matching words?', brief: 'Explain how vector search turns text into numeric representations of meaning and returns the items whose numbers sit closest.', src: 'Seeded by you', added: 4, state: 'idea', pinned: false, score: 0.79 },
+  { id: 'g', title: 'What is the difference between an AI agent and a workflow?', brief: 'Explain that a workflow follows steps fixed in advance by a developer while an agent lets the model decide its next step at runtime.', src: 'Seeded by you', added: 5, state: 'idea', pinned: false, score: 0.77 },
+  { id: 'h', title: 'What does “running locally” actually mean?', brief: 'Explain that running locally means software executes on your own computer rather than on a remote server.', src: 'Seeded by you', added: 5, state: 'idea', pinned: false, score: 0.74 },
+  { id: 'i', title: 'How does an LLM choose its next word?', brief: 'Explain that a language model scores every possible next token as a probability, then picks one from the top.', src: 'Written by the night', added: 9, state: 'failed', pinned: false, score: 0.72, error: 'Spend cap $5.00 reached in session B.' },
+  { id: 'j', title: 'What is a database index?', brief: 'Explain that a database index is a separate lookup structure that lets the database jump to matching rows.', src: 'Seeded by you', added: 11, state: 'failed', pinned: false, score: 0.70, error: '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons' },
+];
+const made = [
+  { id: 'm5', title: 'What is human-in-the-loop for AI agents?', state: 'published', day: 0, slot: 0, when: 'Posted today, 12:00 PM', madeAgo: 2, left: 28 },
+  { id: 'm1', title: 'What is an embedding, and how does text become numbers?', state: 'scheduled', day: 0, slot: 1, when: 'Posts today, 7:00 PM', madeAgo: 2, left: 28 },
+  { id: 'm2', title: 'What is an environment variable and why do apps use them?', state: 'you', day: 1, slot: 0, when: 'For Mon 12:00 PM · approve by 11:00 AM', madeAgo: 1, left: 29 },
+  { id: 'm4', title: 'How does an AI model actually call a tool?', state: 'scheduled', day: 1, slot: 1, when: 'Posts Mon, 7:00 PM', madeAgo: 1, left: 29 },
+  { id: 'm3', title: 'What is a cache and why do apps use one?', state: 'scheduled', day: 2, slot: 0, when: 'Posts Tue, 12:00 PM', madeAgo: 0, left: 30 },
+  { id: 'm6', title: 'What is a database index and why does it speed up searches?', state: 'failed', day: -1, slot: 1, when: 'Posting failed Sat Nov 14', madeAgo: 3, left: 27, error: 'Instagram returned an error while publishing. Open for details.' },
+];
+const madeAt = (d, k) => made.find((m) => m.day === d && m.slot === k);
+// The queue fills open future slots in order, so the board and the list always agree.
+function fills() {
+  const out = []; let q = 0;
+  for (let d = 0; d < DAYS.length - D0 && q < ideas.length; d++)
+    for (let k = 0; k < TIMES.length && q < ideas.length; k++)
+      if (!madeAt(d, k)) out.push({ day: d, slot: k, id: ideas[q++].id });
+  return out;
+}
+
+const UP = 3;
+let tab = 'ideas', mode = 'default', confirming = null, lastArchived = null, toastTimer = null;
+const $ = (id) => document.getElementById(id);
+
+function badge(state) {
+  switch (state) {
+    case 'idea': return `<span class="badge">${svg('idea')}Idea</span>`;
+    case 'making': return `<span class="badge badge--making">${svg('loader', 'spin')}Making</span>`;
+    case 'failed': return `<span class="badge badge--failed">${svg('alert')}Failed, try again</span>`;
+    case 'scheduled': return `<span class="badge">${svg('clock')}Scheduled</span>`;
+    case 'you': return `<span class="badge badge--you">${svg('hand')}Needs you</span>`;
+    case 'published': return `<span class="badge">${svg('check')}Published</span>`;
+  }
+}
+
+function header() {
+  const n = mode === 'empty' ? 0 : ideas.length;
+  $('sum').textContent = `${n} topics waiting · ${made.length} made in the last 30 days`;
+  $('n-ideas').textContent = n;
+  $('n-made').textContent = made.length;
+  const daysCovered = Math.floor(n / TIMES.length); const pct = Math.min(100, Math.round(daysCovered / 7 * 100));
+  $('runway').innerHTML = n ? `<span class="track"><span class="fill" style="width:${pct}%"></span></span><span>Enough topics for <b>${daysCovered} days</b> of posts</span>` : '<span>No topics left for upcoming posts</span>';
+  $('tab-ideas').setAttribute('aria-selected', tab === 'ideas');
+  $('tab-made').setAttribute('aria-selected', tab === 'made');
+  const full = mode === 'full';
+  $('seed').disabled = full; $('seed-why').hidden = !full;
+  $('seed').style.display = tab === 'ideas' ? '' : 'none';
+  $('seed-why').style.display = tab === 'ideas' ? '' : 'none';
+  $('note').textContent = tab === 'ideas'
+    ? 'Topics waiting to be made, best first. The top three fill the next open slots. Hold and drag a topic to move it; drop it above the pins to pin it.'
+    : 'Posts made from this pool. Each one is archived 30 days after it was made; nothing is deleted.';
+}
+
+function ideaRow(t, i) {
+  const pinned = t.pinned;
+  const f = fills().slice(0, UP).find((x) => x.id === t.id);
+  const meta = [f ? `<span class="day">${short(f.day)} ${TIMES[f.slot]}</span> · ${nightFor(f.day)}` : null, t.src, `added ${t.added} d ago`].filter(Boolean).join(' · ');
+  const canMake = t.state === 'idea' || t.state === 'failed';
+  const busy = t.state === 'making';
+  const conf = confirming === t.id ? `<div class="confirm" data-no-open>Make this now? It spends about $0.40 of today’s $5.00 cap.
+      <button class="btn btn--primary btn--sm" data-act="make-yes">Make it</button><button class="btn btn--sm" data-act="make-no">Cancel</button></div>` : '';
+  return `<li class="row" draggable="${!busy}" data-id="${t.id}" tabindex="0" aria-label="${t.title}">
+    <span class="grip" title="Hold and drag">${svg('grip')}</span>
+    <span class="pos">${i + 1}</span>
+    <span class="main"><span class="title">${pinned ? `<span class="pin-mark" title="Pinned">${svg('pin')}</span>` : ''}<span>${t.title}</span></span><span class="meta">${meta}</span></span>
+    <span class="badge-cell">${badge(t.state)}</span>
+    <span class="num" title="Score">${t.score.toFixed(2)}</span>
+    <span class="acts" data-no-open>
+      <button class="icon-btn" data-act="pin" aria-pressed="${pinned}" aria-label="${pinned ? 'Unpin' : 'Pin'}" title="${pinned ? 'Unpin' : 'Pin'}" ${busy ? 'disabled' : ''}>${svg('pin')}</button>
+      <button class="icon-btn" data-act="archive" aria-label="Archive" title="Archive" ${busy ? 'disabled' : ''}>${svg('archive')}</button>
+      ${canMake ? `<button class="btn btn--sm" data-act="make">${svg('spark')}<span class="lbl">Make it</span></button>` : '<span style="width:86px"></span>'}
+    </span>
+    ${conf}
+  </li>`;
+}
+
+function madeRow(m) {
+  return `<li class="row row--made" data-id="${m.id}" tabindex="0" aria-label="${m.title}">
+    <span class="thumb">${svg('play')}</span>
+    <span class="main"><span class="title"><span>${m.title}</span></span><span class="meta">${m.when} · made ${m.madeAgo === 0 ? 'today' : m.madeAgo + ' d ago'} · archives in ${m.left} d</span></span>
+    <span class="badge-cell">${badge(m.state)}</span>
+    <span class="acts" data-no-open>${m.state === 'you' ? '<button class="btn btn--primary btn--sm" data-act="open">Review</button>' : ''}</span>
+  </li>`;
+}
+
+function renderBoard() {
+  const B = $('days');
+  $('range').textContent = `${DAYS[D0 + start]} to ${DAYS[D0 + start + 2]}`;
+  $('prev').disabled = start <= -D0; $('next').disabled = start + 3 >= DAYS.length - D0;
+  if (mode === 'loading') { B.innerHTML = [0,1,2].map(() => '<div class="daycol"><div class="sk" style="border:0"><i></i><i></i><i></i></div></div>').join(''); return; }
+  const f = mode === 'empty' ? [] : fills();
+  B.innerHTML = [0, 1, 2].map((o) => {
+    const d = start + o;
+    const slots = TIMES.map((time, k) => {
+      const m = madeAt(d, k);
+      if (m) return `<button class="slot" data-open="${m.id}"><span class="thumb">${svg('play')}</span><span><div class="when">${time}</div><div class="t">${m.title}</div>${badge(m.state)}</span></button>`;
+      const q = f.find((x) => x.day === d && x.slot === k);
+      if (q && d >= 0) { const t = ideas.find((x) => x.id === q.id);
+        return `<button class="slot slot--idea" data-open="${t.id}"><span class="thumb">${svg('idea')}</span><span><div class="when">${time} · ${nightFor(d)}</div><div class="t">${t.title}</div>${badge(t.state)}</span></button>`; }
+      return `<div class="slot slot--empty">${time} · ${d < 0 ? 'Nothing posted' : 'Open. The pool has no topic for it.'}</div>`;
+    }).join('');
+    return `<section class="daycol${d === 0 ? ' is-today' : ''}" aria-label="${DAYS[D0 + d]}"><header><b>${DAYS[D0 + d].slice(0, 3)}</b><span>${DAYS[D0 + d].slice(4)}</span>${d === 0 ? '<span class="today">Today</span>' : ''}</header>${slots}</section>`;
+  }).join('');
+}
+$('days').addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) openDrawer(b.dataset.open); });
+$('prev').addEventListener('click', () => { start--; renderBoard(); });
+$('next').addEventListener('click', () => { start++; renderBoard(); });
+
+function render() {
+  header(); renderBoard();
+  const L = $('list');
+  if (mode === 'loading') { L.innerHTML = Array.from({ length: 6 }, () => '<div class="sk"><i></i><i></i><i></i></div>').join(''); return; }
+  if (tab === 'made') { L.innerHTML = `<ol>${made.map(madeRow).join('')}</ol>`; return; }
+  if (mode === 'empty') {
+    L.innerHTML = `<div class="empty"><h3>No topics waiting</h3><p>The nights have nothing to make for Wednesday on. Seed a topic, or the Monday refill adds new ones.</p><button class="btn btn--primary">${svg('spark')}Seed a topic</button></div>`;
+    return;
+  }
+  const up = ideas.slice(0, UP), later = ideas.slice(UP);
+  const f = fills().slice(0, UP); const span = [...new Set(f.map((x) => short(x.day)))].join(', ');
+  L.innerHTML = `<div class="band band--up"><i class="live" aria-hidden="true"></i>Up next <span>Fills the open slots on ${span}</span></div>
+    <ol id="ol-up">${up.map((t, i) => ideaRow(t, i)).join('')}</ol>
+    ${later.length ? `<div class="band band--later">Later <span>${later.length} topics</span></div><ol id="ol-later">${later.map((t, i) => ideaRow(t, i + UP)).join('')}</ol>` : ''}`;
+}
+
+function flash(id, extra) {
+  requestAnimationFrame(() => document.querySelectorAll(`.row[data-id="${id}"], .slot[data-open="${id}"]`).forEach((el) => {
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+    if (extra) el.querySelector(extra)?.classList.add('pop');
+  }));
+}
+function sortPins() { ideas = [...ideas.filter((t) => t.pinned), ...ideas.filter((t) => !t.pinned)]; }
+
+// Clicks
+$('list').addEventListener('click', (e) => {
+  const row = e.target.closest('.row'); if (!row) return;
+  const id = row.dataset.id; const act = e.target.closest('[data-act]')?.dataset.act;
+  const t = ideas.find((x) => x.id === id);
+  if (act === 'pin') { t.pinned = !t.pinned; sortPins(); render(); if (t.pinned) flash(id, '[data-act="pin"]'); return; }
+  if (act === 'archive') return archive(id);
+  if (act === 'make') { confirming = id; render(); return; }
+  if (act === 'make-no') { confirming = null; render(); return; }
+  if (act === 'make-yes') { t.state = 'making'; confirming = null; render(); flash(id); return; }
+  if (e.target.closest('[data-no-open]') && act !== 'open') return;
+  openDrawer(id);
+});
+$('list').addEventListener('keydown', (e) => {
+  const row = e.target.closest('.row'); if (!row || e.target !== row) return;
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDrawer(row.dataset.id); }
+  if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault(); const i = ideas.findIndex((x) => x.id === row.dataset.id); const j = e.key === 'ArrowUp' ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= ideas.length) return; const [m] = ideas.splice(i, 1); ideas.splice(j, 0, m);
+    render(); flash(m.id); document.querySelector(`.row[data-id="${m.id}"]`)?.focus();
+  }
+});
+
+function archive(id) {
+  const i = ideas.findIndex((x) => x.id === id); const el = document.querySelector(`.row[data-id="${id}"]`);
+  el?.classList.add('leaving');
+  setTimeout(() => {
+    lastArchived = { item: ideas[i], index: i }; ideas.splice(i, 1); render();
+    $('toast-msg').innerHTML = `<span class="tick">${svg('check')}</span> Archived “${lastArchived.item.title}”`; $('toast').classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('show'), 5000);
+  }, 200);
+}
+$('toast-undo').addEventListener('click', () => {
+  if (!lastArchived) return; const back = lastArchived.item.id; ideas.splice(lastArchived.index, 0, lastArchived.item); lastArchived = null;
+  $('toast').classList.remove('show'); render(); flash(back);
+});
+
+// Drag (the real build keeps dnd-kit's 180 ms hold; the mock uses native drag)
+let dragId = null;
+$('list').addEventListener('dragstart', (e) => { const r = e.target.closest('.row'); if (!r) return; dragId = r.dataset.id; r.classList.add('is-dragging'); e.dataTransfer.effectAllowed = 'move'; });
+$('list').addEventListener('dragend', () => { dragId = null; document.querySelectorAll('.row').forEach((r) => r.classList.remove('is-dragging', 'drop-above')); });
+$('list').addEventListener('dragover', (e) => {
+  const r = e.target.closest('.row'); if (!r || !dragId) return; e.preventDefault();
+  document.querySelectorAll('.drop-above').forEach((x) => x.classList.remove('drop-above')); r.classList.add('drop-above');
+});
+$('list').addEventListener('drop', (e) => {
+  const r = e.target.closest('.row'); if (!r || !dragId) return; e.preventDefault();
+  const from = ideas.findIndex((x) => x.id === dragId); const [m] = ideas.splice(from, 1);
+  let to = ideas.findIndex((x) => x.id === r.dataset.id); if (to < 0) to = ideas.length;
+  const pinsBefore = ideas.slice(0, to).filter((x) => x.pinned).length;
+  m.pinned = to <= ideas.filter((x) => x.pinned).length && (pinsBefore === to);
+  if (ideas[to]?.pinned) m.pinned = true;
+  ideas.splice(to, 0, m); render(); flash(m.id);
+});
+
+// Drawer
+function openDrawer(id) {
+  const t = ideas.find((x) => x.id === id), m = made.find((x) => x.id === id);
+  $('d-title').textContent = (t || m).title;
+  if (t) {
+    $('d-body').innerHTML = `${badge(t.state)}
+      <p style="margin:12px 0 0;max-width:65ch">${t.brief}</p>
+      <dl class="dl"><dt>Where from</dt><dd>${t.src}</dd><dt>Added</dt><dd>${t.added} days ago</dd><dt>Score</dt><dd>${t.score.toFixed(2)}</dd></dl>
+      <div class="sec">Where the score comes from</div>
+      <table class="why"><tr><td>Fits the audience</td><td>0.34</td></tr><tr><td>Not covered lately</td><td>0.30</td></tr><tr><td>Explains in 45 seconds</td><td>${(t.score - 0.64).toFixed(2)}</td></tr><tr><td><b>Total</b></td><td><b>${t.score.toFixed(2)}</b></td></tr></table>
+      ${t.state === 'failed' ? `<div class="err"><b>The last try stopped.</b> Make it starts a fresh one.<code>${t.error}</code></div>` : ''}`;
+    $('d-foot').innerHTML = `${t.state === 'idea' || t.state === 'failed' ? `<button class="btn btn--primary">${svg('spark')}Make it</button>` : ''}
+      <button class="btn">${svg('pin')}${t.pinned ? 'Unpin' : 'Pin'}</button><button class="btn">${svg('archive')}Archive</button>`;
+  } else {
+    const A = {
+      scheduled: { primary: ['Publish now'], secondary: ['Unschedule', 'Regenerate'], more: ['Reject'] },
+      you: { primary: ['Approve'], secondary: ['Regenerate', 'Reject'], more: [] },
+      published: { primary: [], secondary: [], more: [] },
+      failed: { primary: ['Try again'], secondary: ['Regenerate'], more: ['Archive'] },
+    }[m.state];
+    const status = { scheduled: `Scheduled for ${m.when.replace('Posts ', '')}`, you: 'Waiting for your approval', published: m.when, failed: 'Posting failed' }[m.state];
+    const bar = [...A.primary.map((l) => `<button class="btn btn--primary">${l}</button>`), ...A.secondary.map((l) => `<button class="btn">${l}</button>`), ...A.more.map((l) => `<button class="btn">${l}</button>`)].join('');
+    $('d-body').innerHTML = `
+      <p class="status">${badge(m.state)} <span>${status} · 12:00 PM–7:00 PM slots</span></p>
+      ${m.error ? `<div class="err" style="margin-top:0"><b>${m.error}</b><code>(sample) Instagram Graph API: media container not ready after 5 checks</code></div>` : ''}
+      ${bar ? `<div class="actbar">${bar}</div>` : ''}
+      <div class="player"><button class="playbtn" aria-label="Play the reel">${svg('play')}</button><span class="dur">0:42</span><span class="ph">Finished reel plays here</span></div>
+      <div class="sec">Caption</div>
+      <p class="cap">Every app you use turns words into numbers before it can “understand” them. That list of numbers is an embedding, and it’s why search finds what you meant, not just what you typed. 🧠\n\nSave this for the next time someone says AI “reads” text.\n\n#ai #machinelearning #embeddings <span class="sample">(sample caption)</span></p>
+      <p class="meta" style="margin:8px 0 0">Made 2 days ago by the night run · archives in ${m.left} days</p>
+      <div class="sec">Checks</div>
+      <ul class="notes"><li>${svg('check')}Fact check passed (3 claims, 3 sources)</li><li>${svg('check')}Hook rewritten once for length</li><li>${svg('check')}No slide repeats</li></ul>
+      <div class="sec">Details</div>
+      <dl class="dl" style="margin-top:0"><dt>Length</dt><dd>0:42</dd><dt>Words</dt><dd>118</dd><dt>Voice</dt><dd>Narrator A</dd><dt>Music</dt><dd>Calm Pulse (library)</dd><dt>Cost to make</dt><dd>$0.38</dd><dt>Render time</dt><dd>6 min</dd></dl>
+      <div class="sec">Where the score comes from</div>
+      <table class="why"><tr><td>Fits the audience</td><td>0.34</td></tr><tr><td>Not covered lately</td><td>0.30</td></tr><tr><td>Explains in 45 seconds</td><td>0.19</td></tr><tr><td><b>Total</b></td><td><b>0.83</b></td></tr></table>
+      <p style="margin:16px 0 0;font-size:12px;color:var(--muted)">Sources: <a href="#" onclick="return false">Google ML Crash Course: Embeddings</a>, <a href="#" onclick="return false">OpenAI docs: Embeddings</a></p>`;
+    $('d-foot').innerHTML = `<button class="btn">Open the full post</button>${m.state === 'published' ? '<button class="btn">View on Instagram</button>' : ''}`;
+  }
+  $('drawer').classList.add('open'); $('drawer').setAttribute('aria-hidden', 'false'); $('backdrop').classList.add('open'); $('d-close').focus();
+}
+function closeDrawer() { $('drawer').classList.remove('open'); $('drawer').setAttribute('aria-hidden', 'true'); $('backdrop').classList.remove('open'); }
+$('d-close').addEventListener('click', closeDrawer); $('backdrop').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+
+// Tabs and mock states
+$('tab-ideas').addEventListener('click', () => { tab = 'ideas'; render(); });
+$('tab-made').addEventListener('click', () => { tab = 'made'; render(); });
+document.querySelectorAll('.mockbar [data-mode]').forEach((b) => b.addEventListener('click', () => {
+  mode = b.dataset.mode;
+  ideas = ideas.filter((t) => !t.filler);
+  if (mode === 'full') for (let k = ideas.length + 1; k <= 30; k++)
+    ideas.push({ id: 'f' + k, filler: true, title: `Sample topic ${k} (filler so the pool shows its cap of 30)`, brief: 'Filler row for the mock.', src: 'Written by the night', added: 1 + (k % 9), state: 'idea', pinned: false, score: Math.max(0.2, 0.7 - k * 0.015) });
+  document.querySelectorAll('.mockbar [data-mode]').forEach((x) => x.setAttribute('aria-pressed', x === b)); render();
+}));
+render();
+</script>
+</body>
+</html>

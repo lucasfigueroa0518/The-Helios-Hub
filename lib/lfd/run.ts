@@ -12,6 +12,8 @@ import path from 'node:path';
 import { nyDateKey } from '@/lib/reels/scoring/decide';
 import { companyKey } from '@/lib/social/ingest/select/companies';
 import type { HubQuery } from '@/lib/social-hub/db';
+import { markPromoteUsed, recordPromoteSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
+import { finishNightPlacements, readNightQueue } from '@/lib/social-hub/queue-store';
 import type { ClosingsLog } from '@/lib/social/captions/closings-store';
 import type { FetchedArticle } from '@/lib/social/ingest/fetch-feeds';
 import type { FetchBody } from '@/lib/social/ingest/select/enrich';
@@ -31,7 +33,7 @@ import { grounded, REWRITE_NOTE } from './ground';
 import { leadImage } from './lead-image';
 import { leadOrder } from './lead';
 import { BUILDER_HARVEST_CAP_USD, findPhotos, harvestBuilderPhoto, REFUSED_ICON_SCENE, type BuilderHarvest, type HarvestBudget } from './photos';
-import { judgedPool, leadFor, MAX_SEEDS, MIN_STORIES, mergeSameEvent, PER_COMPANY, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
+import { type LfdQueue, judgedPool, leadFor, MAX_SEEDS, MIN_STORIES, mergeSameEvent, PER_COMPANY, RUNDOWN_POOL, rundownOrder, scoreMajor, Selector, slideOrder, withoutUsed } from './pick';
 import { arrangeMemes, buildPost, composeCaption, coverMemeOf } from './post';
 import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate, type LfdSeed } from './seeds';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
@@ -49,8 +51,18 @@ const PREVIOUS_POSTS = 2;
 /** Each lane queue's head kept in the run record (spec §8 Ideas view). */
 const QUEUE_TOP = 10;
 
+/** The hub's idea id for a Last Few Days story is `last_few_days:story:<key>` (lib/social-hub/adapters/last-few-days.ts). */
+export const LFD_STORY_IDEA = 'last_few_days:story:';
+/** Why a pinned story could not go on tonight's post (shown on the pin in the hub). */
+export const LFD_PIN_GONE = 'the story is not among this run’s candidates (outside the window, already posted, or merged into another)';
+
 export type LfdRunDeps = {
   query: HubQuery;
+  /**
+   * The hub's queue by story key (pins, drags, archives; Tommy, 2026-11-16: Last Few Days follows the queue). Absent:
+   * read from social_hub.idea_adjustments (never for a replay); an unreadable moves table is an empty queue.
+   */
+  queue?: LfdQueue & { readAt?: Date };
   jev: JevAsk;
   create: MessagesCreate;
   photos: PhotoFinder;
@@ -449,7 +461,15 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     record.pool = pools.counts;
     if (pools.feedError) record.feedError = pools.feedError;
 
-    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev, pools.forced, d.now);
+    const movesQ = d.query as unknown as MovesQuery;
+    const night = d.queue ?? (d.replay ? undefined : await readNightQueue(movesQ, 'last_few_days', LFD_STORY_IDEA));
+    const selector = new Selector(pools.majors, pools.rundown, previous[0]?.stories ?? [], jev, pools.forced, d.now, night);
+    if (night && (night.pins.length || night.placed.size || night.archived.size)) {
+      const found = new Set(selector.pinned.flatMap((c) => [c.key, ...c.refs]));
+      const gone = night.pins.filter((id) => !found.has(id));
+      record.queue = { pinned: selector.pinned.map((c) => c.key), pinsGone: gone, placed: night.placed.size, archived: night.archived.size };
+      for (const id of gone) await recordPromoteSkip(movesQ, 'last_few_days', `${LFD_STORY_IDEA}${id}`, LFD_PIN_GONE);
+    }
     // `builder` only when scored (intake), so a legacy record keeps today's shape.
     const queueRow = (c: LfdCandidate) => ({ key: c.key, headline: c.headline, major: c.major, net: c.net, ...(c.builder != null ? { builder: c.builder } : {}) });
     record.queues = { major: selector.top('major', QUEUE_TOP).map(queueRow), builder: selector.top('builder', QUEUE_TOP).map(queueRow), rundown: selector.top('rundown', QUEUE_TOP).map(queueRow) };
@@ -891,6 +911,14 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     }
     record.picks = final.map((r) => ({ key: r.pick.key, lane: r.pick.lane, headline: r.pick.headline, origin: r.pick.origin, major: r.pick.major, ...(r.pick.builder != null ? { builder: r.pick.builder } : {}), net: r.pick.net, lead: leadScores.get(r.pick.key) ?? null }));
     record.stories = final.length;
+    // The queue's moves on the stories this post used are spent; a scheduled run uses up the placements it read.
+    if (night) {
+      const hand = new Set([...night.pins, ...night.placed.keys()]);
+      for (const r of final) {
+        for (const id of new Set([r.pick.key, ...r.pick.refs])) if (hand.has(id)) await markPromoteUsed(movesQ, 'last_few_days', `${LFD_STORY_IDEA}${id}`);
+      }
+      if (d.trigger === 'scheduled') await finishNightPlacements(movesQ, 'last_few_days', undefined, night.readAt);
+    }
     const spend = d.spend();
     // recorded false: the run row was no longer running (the worker timed it out); it stays failed.
     // Harvest and shared-finder spend (Serper + Haiku looks) is outside the run budget's tally: added here so the run total is whole.

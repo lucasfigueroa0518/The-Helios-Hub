@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Settings } from 'lucide-react';
 
-import { GenerateConfirm } from '@/components/content-type/GenerateConfirm';
 import type { GenerateOutcome } from '@/lib/content-type/queue-client';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 import { Drawer } from '@/app/reels/ui';
@@ -220,17 +219,6 @@ export async function explainerGenerate(ideaId: string, overrideCaps: boolean): 
   return { ok: false, message: json.error ?? `Request failed (${res.status})` };
 }
 
-export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: string }) {
-  const router = useRouter();
-  const [asking, setAsking] = useState(false);
-  return (
-    <>
-      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" onClick={() => setAsking(true)}>Generate</button>
-      {asking ? <GenerateConfirm generate={explainerGenerate} ideaId={ideaId} title={title} reason="click" onDone={() => { setAsking(false); void refreshHubPage(router); }} /> : null}
-    </>
-  );
-}
-
 // ── Carousels: seed a story ─────────────────────────────────────────────────
 
 // ── Stories: seed an idea ───────────────────────────────────────────────────
@@ -438,15 +426,26 @@ export async function dramaGenerate(ideaId: string): Promise<GenerateOutcome> {
   }
 }
 
-export function DramaMakeIt({ ideaId, title }: { ideaId: string; title: string }) {
-  const router = useRouter();
-  const [asking, setAsking] = useState(false);
-  return (
-    <>
-      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" onClick={() => setAsking(true)}>Make it</button>
-      {asking ? <GenerateConfirm generate={dramaGenerate} ideaId={ideaId} title={title} reason="click" onDone={() => { setAsking(false); void refreshHubPage(router); }} /> : null}
-    </>
-  );
+// ── Field Notes: make one tip ───────────────────────────────────────────────
+
+/**
+ * Make it on one Field Notes tip (POST /api/field-notes/tips/:id/make): queues one run that puts this tip first, for
+ * the social worker to claim. The click approves that run's capped spend (field_notes.settings run_cap_usd). A refusal
+ * (archived, used, a run already queued, the cap not set) comes back as a 409 with its note.
+ */
+export async function fieldNotesMake(ideaId: string): Promise<GenerateOutcome> {
+  const tipId = ideaId.replace(/^field_notes:tip:/, '');
+  try {
+    const res = await fetch(`/api/field-notes/tips/${encodeURIComponent(tipId)}/make`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (res.ok) {
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
+      return { ok: true };
+    }
+    return { ok: false, message: json.error ?? `Request failed (${res.status})` };
+  } catch (e) {
+    return { ok: false, message: msg(e) };
+  }
 }
 
 /**

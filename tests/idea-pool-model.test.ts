@@ -66,17 +66,42 @@ test('a regenerated idea lists its made versions newest first, and the older one
   assert.equal(one.versions[ready!.idea!.id], undefined, 'one version has no toggle');
 });
 
-test('a type whose night does not follow the queue yet keeps Promote and Demote: one promote a night, demotes last', async () => {
+test('Last Few Days follows the queue: a pin goes first, flagged Pinned, and nothing is sunk by an old demote', async () => {
   const { dayRanking } = await import('@/lib/social-hub/views/day-rank');
-  const { poolList } = await import('@/lib/social-hub/views/pools');
   const idea = (n: number, score: number) => ({ id: `last_few_days:story:${n}`, vertical: 'last_few_days' as const, title: `Story ${n}`, score, scoreLabel: 'Score', state: 'idea_only' as const, hasContent: false, versionCount: 0, generatedAt: null, createdAt: null, detail: null });
   const ideas = [idea(1, 4), idea(2, 3), idea(3, 2), idea(4, 1)];
-  const mv = (n: number, kind: 'promote' | 'demote', at: string): IdeaAdjustment => ({ id: `c${n}${kind}`, vertical: 'last_few_days', ideaId: `last_few_days:story:${n}`, nyDate: '2026-10-08', kind, createdAt: at });
-  const moves = [mv(3, 'promote', '2026-10-08T01:00:00Z'), mv(4, 'promote', '2026-10-08T02:00:00Z'), mv(1, 'demote', '2026-10-08T03:00:00Z')];
-  const order = dayRanking(ideas, 'last_few_days', moves, FIXTURE_NOW).map((r) => r.idea.title);
-  assert.deepEqual(order, ['Story 3', 'Story 2', 'Story 4', 'Story 1']);
-  assert.deepEqual(poolList(ideas, 'last_few_days', 'open', moves).map((i) => i.title), order);
-  assert.equal(dayRanking(ideas, 'last_few_days', moves, FIXTURE_NOW)[0]!.tag?.text, 'Tonight');
+  const pin: IdeaAdjustment = { id: 'lfd-pin', vertical: 'last_few_days', ideaId: 'last_few_days:story:4', nyDate: '2026-10-08', kind: 'pin', createdAt: '2026-10-08T01:00:00Z' };
+  const ranked = dayRanking(ideas, 'last_few_days', [pin], FIXTURE_NOW);
+  assert.deepEqual(ranked.map((r) => r.idea.title), ['Story 4', 'Story 1', 'Story 2', 'Story 3']);
+  assert.equal(ranked[0]!.pinned, true);
+  assert.equal(ranked[0]!.tag?.text, 'Pinned');
+});
+
+test('AI Events rows follow the queue within each city: a pin leads its city, a drag moves, the gated stay listed with their chip', () => {
+  const ev = (n: number, city: string, score: number, over: Record<string, unknown> = {}) => ({
+    id: `ai_events:event:${n}`, vertical: 'ai_events' as const, title: `Event ${n}`, score, scoreLabel: 'Score', state: 'idea_only' as const,
+    hasContent: false, versionCount: 0, generatedAt: null, createdAt: null, detail: null, group: city, ...over,
+  });
+  const ideas = [
+    ev(1, 'Miami', 9), ev(2, 'Miami', 8), ev(3, 'Miami', 7),
+    ev(4, 'Boston', 6), ev(5, 'Boston', 5),
+    ev(6, 'Miami', 9.5, { state: 'retired', detail: 'Gated out: too far' }),
+  ];
+  const data = { ...base, ideas: [...base.ideas.filter((i) => i.vertical !== 'ai_events'), ...ideas], posts: base.posts.filter((p) => p.vertical !== 'ai_events') };
+  const ae = (adjustments: IdeaAdjustment[]) => typeHubModel({ ...data, adjustments }, 'ai_events', FIXTURE_NOW).bench;
+  const at = (ideaId: string, kind: IdeaAdjustment['kind'], extra: Partial<IdeaAdjustment> = {}): IdeaAdjustment => ({
+    id: `ae${++n}`, vertical: 'ai_events', ideaId, nyDate: '2026-10-08', kind, createdAt: new Date(Date.UTC(2026, 9, 8, 12, 0, n)).toISOString(), ...extra,
+  });
+  const ids = (rows: ReturnType<typeof ae>) => rows.map((r) => `${r.idea.id.split(':').at(-1)}@${r.rank}`);
+  assert.deepEqual(ids(ae([])), ['1@1', '2@2', '3@3', '6@4', '4@1', '5@2'], 'score order, the gated event after its city\'s open ones');
+  const pinned = ae([at('ai_events:event:3', 'pin')]);
+  assert.deepEqual(ids(pinned), ['3@1', '1@2', '2@3', '6@4', '4@1', '5@2']);
+  assert.equal(pinned[0]!.pinned, true);
+  assert.equal(pinned[0]!.chip, 'In the pool');
+  assert.equal(pinned.find((r) => r.idea.id === 'ai_events:event:6')!.chip, 'Gated out');
+  const dragged = ae([at('ai_events:event:5', 'place', { sortKey: 6.5 })]);
+  assert.deepEqual(ids(dragged), ['1@1', '2@2', '3@3', '6@4', '5@1', '4@2']);
+  assert.equal(dragged.find((r) => r.idea.id === 'ai_events:event:5')!.placed, true);
 });
 
 test('the page shows at most 30 open ideas; pinned, dragged, yours and made ideas are never cut', async () => {

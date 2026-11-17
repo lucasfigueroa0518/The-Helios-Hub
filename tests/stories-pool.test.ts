@@ -35,7 +35,8 @@ const reads = (morning: StoryCandidate[]): PoolReads => ({
 });
 
 async function poolRows(db: Awaited<ReturnType<typeof openLocalStoriesDb>>['db']) {
-  const { rows } = await db.query<{ series: string; key: string; used: boolean }>(`SELECT series, key, used_at IS NOT NULL AS used FROM stories.pool ORDER BY series, key`);
+  // Archived rows (Tommy, 2026-11-16: the refresh archives instead of deleting) are out of the pool.
+  const { rows } = await db.query<{ series: string; key: string; used: boolean }>(`SELECT series, key, used_at IS NOT NULL AS used FROM stories.pool WHERE archived_at IS NULL ORDER BY series, key`);
   return rows;
 }
 
@@ -57,6 +58,9 @@ test('pool refresh: Morning Download reopens what the refresh returns (the build
     { series: 'morning_download', key: 'news.test/a', used: false },
     { series: 'morning_download', key: 'news.test/b', used: false },
   ]);
+  // c is archived, not deleted, and says why.
+  const c = (await db.query<{ archived_reason: string | null }>(`SELECT archived_reason FROM stories.pool WHERE series = 'morning_download' AND key = 'news.test/c'`)).rows;
+  assert.deepEqual(c, [{ archived_reason: 'not-returned' }]);
   // Bald-Eagle D2: an intake story keeps its key while new articles join it, so a Morning Download story the
   // refresh still returns is open again; md-development.ts decides whether it is news again.
   assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/b']);

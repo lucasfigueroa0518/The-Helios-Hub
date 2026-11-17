@@ -11,6 +11,5 @@ export function isTimedHubPath(pathname: string): boolean {
   if (path === '/social/analytics' || path.startsWith('/social/analytics/')) return true;
   if (path === '/social/health' || path.startsWith('/social/health/')) return true;
   if (path.startsWith('/social/post/')) return true;
-  if (path.startsWith('/social/content/pools/')) return true;
   return false;
 }

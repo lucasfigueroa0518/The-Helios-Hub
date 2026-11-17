@@ -90,7 +90,6 @@ export function crumbsFor(base: string, href: string): Crumb[] {
     trail.push({ label: 'Content', href: base }, { label: verticalInfo(typePageOf(parts[0])!).label, href: `/${parts[0]}` });
   } else {
     push('Content', '');
-    if (parts[0] === 'content' && parts[1] === 'pools' && isVertical(parts[2])) push(`${verticalInfo(parts[2]).label} pool`, `/content/pools/${parts[2]}`);
     if (parts[0] === 'content' && parts[1] === 'library' && parts[2] && LIBRARY_LABEL[parts[2]]) push(LIBRARY_LABEL[parts[2]]!, `/content/library/${parts[2]}`);
   }
   if (trail.length) trail[trail.length - 1] = { ...trail[trail.length - 1]!, href: null };
