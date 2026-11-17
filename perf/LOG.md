@@ -69,3 +69,13 @@ Reverted:
 - F7 brand font `preload: false`: **reverted** (LCP worse; see above).
 - Not done, by design: virtualizing the music list (it would mean a client component and different DOM), and Trello lazy-loading activity and comments (behavior change). Both are proposed in REPORT.
 - **size-limit was dropped** (Phase 6). It discovers its plugins only through `package.json` devDependencies, and the repo pins that file. `perf/lib/bundle-sizes.mjs --check perf/budgets.json` does the same job (a per-route budget in KB gz that fails with a non-zero exit). It also counts every layout chunk on the route, which a flat size-limit file list can't express without generated config.
+
+## Phase 7: verification
+
+- **Full test suite** (`npm test`, final code): 5868 tests, **5853 pass**, 4 fail, 3 cancelled, 7 skipped, 1 todo. Every failure is pre-existing and reproduces identically on the untouched baseline code (worktree at `0d5ca11`), in areas this branch does not touch:
+  - `explainers-code-frames` (3 tests) and `explainers-render` ("the workspace holds the project…"). These likely need gitignored local skill or asset folders.
+  - `reels-visual` ("the text engine keeps a short break…"). It needs the Python text-engine venv.
+  - `revisions-explainers` ("start-up recovery isolates a job…").
+  - `reel-ai-drama-premortem-stage` (a file-level failure, which also causes the 3 cancelled tests).
+  - The `# TODO` Stories gradient test, which is declared and waiting on Lucas.
+- The `tests/social-hub-scope.test.ts` dependency pin passes again, after the measurement tools moved out of `package.json`.
