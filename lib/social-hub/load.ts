@@ -44,7 +44,7 @@ function explainersShareMain(q: HubQuery): boolean {
 const SPINE_WITH_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'explainers', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 const SPINE_WITHOUT_EXPLAINERS: readonly Vertical[] = ['carousels', 'reels', 'last_few_days', 'ai_events', 'field_notes'];
 
-type SpineLazy = { get: () => Promise<SpineRead> };
+type SpineLazy = { get: () => Promise<SpineRead>; stories: () => ReturnType<typeof readStories> };
 const spineSlot = new AsyncLocalStorage<SpineLazy>();
 
 /**
@@ -55,7 +55,10 @@ const spineSlot = new AsyncLocalStorage<SpineLazy>();
 export function withSharedSpine<T>(q: HubQuery, run: () => Promise<T>): Promise<T> {
   const verticals = explainersShareMain(q) ? SPINE_WITH_EXPLAINERS : SPINE_WITHOUT_EXPLAINERS;
   let pending: Promise<SpineRead> | null = null;
-  return spineSlot.run({ get: () => (pending ??= readSpine(q, verticals)) }, run);
+  // The three Stories-format types (Stories, AI Trivia, Real or AI?) read the same Stories
+  // engine; in one rebuild that is one read, not three (about 0.4 s of SQL on a cold miss).
+  let stories: ReturnType<typeof readStories> | null = null;
+  return spineSlot.run({ get: () => (pending ??= readSpine(q, verticals)), stories: () => (stories ??= readStories(q)) }, run);
 }
 
 async function spineFor(q: HubQuery, vertical: Vertical): Promise<SpineRead> {
@@ -71,7 +74,7 @@ async function spineFor(q: HubQuery, vertical: Vertical): Promise<SpineRead> {
  * the same spine as the other types.
  */
 export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(), explainersQ?: Promise<HubQuery>): Promise<NonNullable<VerticalReads[Vertical]>> {
-  if (isStoryVertical(vertical)) return storiesFor(await readStories(q), vertical);
+  if (isStoryVertical(vertical)) return storiesFor(await (spineSlot.getStore()?.stories() ?? readStories(q)), vertical);
   if (vertical === 'explainers') {
     const eq = await (explainersQ ?? explainersHandle(q));
     const spine = explainersShareMain(q) ? await spineFor(q, 'explainers') : await readSpine(eq, ['explainers']);
