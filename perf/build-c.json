@@ -1,0 +1,602 @@
+{
+  "out": "build-c",
+  "startedAt": "2026-11-17T21:46:27.315Z",
+  "commit": "29f8c1c",
+  "settings": {
+    "runs": 30,
+    "coldCycles": 0,
+    "warmup": 3,
+    "dbOneWayMs": 2.5,
+    "budget": {
+      "ttfbMs": 150,
+      "totalMs": 500,
+      "apiServerMs": 150,
+      "jsKB": 150
+    }
+  },
+  "routes": [
+    {
+      "id": "api:GET:/api/campaigns/[id]/outreach-stats",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/campaigns/[id]/outreach-stats",
+      "url": "/api/campaigns/fc123e21-f5b4-478e-a655-47c6e6266ad2/outreach-stats",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/campaigns",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/campaigns",
+      "url": "/api/campaigns",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/send-queue",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/send-queue",
+      "url": "/api/send-queue",
+      "auth": "session"
+    },
+    {
+      "id": "page:/dashboards",
+      "kind": "page",
+      "method": "GET",
+      "path": "/dashboards",
+      "url": "/dashboards",
+      "auth": "session"
+    },
+    {
+      "id": "page:/events",
+      "kind": "page",
+      "method": "GET",
+      "path": "/events",
+      "url": "/events",
+      "auth": "session"
+    },
+    {
+      "id": "page:/",
+      "kind": "page",
+      "method": "GET",
+      "path": "/",
+      "url": "/",
+      "auth": "public"
+    },
+    {
+      "id": "page:/seo",
+      "kind": "page",
+      "method": "GET",
+      "path": "/seo",
+      "url": "/seo",
+      "auth": "session"
+    },
+    {
+      "id": "page:/social/calendar",
+      "kind": "page",
+      "method": "GET",
+      "path": "/social/calendar",
+      "url": "/social/calendar?view=week",
+      "auth": "session"
+    }
+  ],
+  "warm": {
+    "api:GET:/api/campaigns/[id]/outreach-stats": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1049,
+      "ttfb": {
+        "p50": 45.6,
+        "p95": 51.9,
+        "p99": 55.1
+      },
+      "total": {
+        "p50": 45.8,
+        "p95": 52.1,
+        "p99": 55.3
+      }
+    },
+    "api:GET:/api/campaigns": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 84932,
+      "ttfb": {
+        "p50": 56.6,
+        "p95": 70.5,
+        "p99": 70.6
+      },
+      "total": {
+        "p50": 56.9,
+        "p95": 70.8,
+        "p99": 70.8
+      }
+    },
+    "api:GET:/api/send-queue": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 9417084,
+      "ttfb": {
+        "p50": 260,
+        "p95": 315.9,
+        "p99": 318.4
+      },
+      "total": {
+        "p50": 267.6,
+        "p95": 323.9,
+        "p99": 325.7
+      }
+    },
+    "page:/dashboards": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 22510,
+      "ttfb": {
+        "p50": 14.1,
+        "p95": 18.8,
+        "p99": 21.3
+      },
+      "total": {
+        "p50": 18.5,
+        "p95": 24,
+        "p99": 25.6
+      }
+    },
+    "page:/events": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 19843,
+      "ttfb": {
+        "p50": 15,
+        "p95": 18.9,
+        "p99": 20.9
+      },
+      "total": {
+        "p50": 17.3,
+        "p95": 21.7,
+        "p99": 23.3
+      }
+    },
+    "page:/": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 9182,
+      "ttfb": {
+        "p50": 7.3,
+        "p95": 10.8,
+        "p99": 11.1
+      },
+      "total": {
+        "p50": 8.6,
+        "p95": 12.6,
+        "p99": 13
+      }
+    },
+    "page:/seo": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 18891,
+      "ttfb": {
+        "p50": 13,
+        "p95": 18.5,
+        "p99": 19
+      },
+      "total": {
+        "p50": 14.7,
+        "p95": 20.8,
+        "p99": 21.9
+      }
+    },
+    "page:/social/calendar": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 144315,
+      "ttfb": {
+        "p50": 65.4,
+        "p95": 85.6,
+        "p99": 91.5
+      },
+      "total": {
+        "p50": 107,
+        "p95": 132.7,
+        "p99": 133.5
+      }
+    }
+  },
+  "cold": {},
+  "trace": {
+    "api:GET:/api/campaigns/[id]/outreach-stats": {
+      "cold": {
+        "ms": 87.2,
+        "queryCount": 3,
+        "queryMs": 50.1,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "WITH failed_items AS ( SELECT q.drafting_item_id, q.recipient_name, q.to_email, q.updated_at FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'failed' AND NOT EXISTS ( SELECT 1 FROM outreach.email_sends s WHERE s.drafting_item_id = q.drafting_item_id AND s.status = 'sent' ) ), retry_items AS ( SELECT i.id AS drafting_item_id FROM outreach.drafting_items i JOIN outreach.draf",
+            "ms": 24.64,
+            "rows": 1
+          },
+          {
+            "sql": "-- Bounced sends per campaign, counted once for every campaign instead of one -- items-to-sends walk per campaign row (~1.2 ms x every campaign, and JIT on top). WITH bounced AS ( SELECT w.campaign_id, count(*)::int AS n FROM outreach.email_sends s JOIN outreach.drafting_items i ON i.id = s.drafting_item_id JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id WHERE s.status = 'bounced' OR ",
+            "ms": 18.95,
+            "rows": 1
+          },
+          {
+            "sql": "WITH days AS ( SELECT gs::date AS day FROM generate_series(($2::date - 13), $2::date, interval '1 day') AS gs ), sent AS ( SELECT q.schedule_date AS day, count(*)::int AS n FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'sent' AND q.schedule_date BETWEEN ($2::date - 13) AND $2::date GROUP BY q.schedule_date ), attached AS ( SELECT cl.sourced_on AS day, count(*)::int AS n ",
+            "ms": 6.52,
+            "rows": 14
+          }
+        ]
+      },
+      "warm": {
+        "ms": 41.6,
+        "queryCount": 3,
+        "queryMs": 30.2,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "WITH failed_items AS ( SELECT q.drafting_item_id, q.recipient_name, q.to_email, q.updated_at FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'failed' AND NOT EXISTS ( SELECT 1 FROM outreach.email_sends s WHERE s.drafting_item_id = q.drafting_item_id AND s.status = 'sent' ) ), retry_items AS ( SELECT i.id AS drafting_item_id FROM outreach.drafting_items i JOIN outreach.draf",
+            "ms": 16.34,
+            "rows": 1
+          },
+          {
+            "sql": "-- Bounced sends per campaign, counted once for every campaign instead of one -- items-to-sends walk per campaign row (~1.2 ms x every campaign, and JIT on top). WITH bounced AS ( SELECT w.campaign_id, count(*)::int AS n FROM outreach.email_sends s JOIN outreach.drafting_items i ON i.id = s.drafting_item_id JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id WHERE s.status = 'bounced' OR ",
+            "ms": 8.22,
+            "rows": 1
+          },
+          {
+            "sql": "WITH days AS ( SELECT gs::date AS day FROM generate_series(($2::date - 13), $2::date, interval '1 day') AS gs ), sent AS ( SELECT q.schedule_date AS day, count(*)::int AS n FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'sent' AND q.schedule_date BETWEEN ($2::date - 13) AND $2::date GROUP BY q.schedule_date ), attached AS ( SELECT cl.sourced_on AS day, count(*)::int AS n ",
+            "ms": 5.66,
+            "rows": 14
+          }
+        ]
+      }
+    },
+    "api:GET:/api/campaigns": {
+      "cold": {
+        "ms": 74,
+        "queryCount": 1,
+        "queryMs": 50.2,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "-- Bounced sends per campaign, counted once for every campaign instead of one -- items-to-sends walk per campaign row (~1.2 ms x every campaign, and JIT on top). WITH bounced AS ( SELECT w.campaign_id, count(*)::int AS n FROM outreach.email_sends s JOIN outreach.drafting_items i ON i.id = s.drafting_item_id JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id WHERE s.status = 'bounced' OR ",
+            "ms": 50.23,
+            "rows": 47
+          }
+        ]
+      },
+      "warm": {
+        "ms": 56.5,
+        "queryCount": 1,
+        "queryMs": 44.5,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "-- Bounced sends per campaign, counted once for every campaign instead of one -- items-to-sends walk per campaign row (~1.2 ms x every campaign, and JIT on top). WITH bounced AS ( SELECT w.campaign_id, count(*)::int AS n FROM outreach.email_sends s JOIN outreach.drafting_items i ON i.id = s.drafting_item_id JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id WHERE s.status = 'bounced' OR ",
+            "ms": 44.52,
+            "rows": 47
+          }
+        ]
+      }
+    },
+    "api:GET:/api/send-queue": {
+      "cold": {
+        "ms": 352.8,
+        "queryCount": 6,
+        "queryMs": 211.4,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT q.id::text, q.owner_id::text, q.drafting_item_id::text, q.campaign_id::text, q.status, q.handoff_date::text, q.handed_off_at::text, q.lane_id::text, q.smartlead_lead_id::text, q.handoff_attempts, q.waiting_reason, q.to_email, q.subject, q.recipient_name, q.orchestration_job_id::text, q.error_message, q.sender_identity_id::text, q.sender_inbox_id::text, q.from_email, q.created_at::text, q.up",
+            "ms": 176.96,
+            "rows": 8289
+          },
+          {
+            "sql": "SELECT scope_key, to_char(day, 'YYYY-MM-DD') AS day, detail FROM outreach.inbox_health_daily WHERE source = 'forecast' AND day BETWEEN $1::date AND $2::date ORDER BY day ASC",
+            "ms": 9.97,
+            "rows": 1046
+          },
+          {
+            "sql": "SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug, i.display_name AS identity_display_name, lower(ib.email) AS email, ib.domain, ib.sort_order, ib.is_primary, ib.enabled, ib.lifecycle_stage, ib.stage_entered_at, ib.stage_plan, ib.rest_reason, ib.rest_cycles, ib.from_name, ib.signature_html, ib.provisioning_checklist, ib.smartlead_email_account_id, ib.sl_status, ib.sl_max_email_per_",
+            "ms": 7.46,
+            "rows": 34
+          },
+          {
+            "sql": "SELECT ib.id::text AS inbox_id, (es.sent_at AT TIME ZONE $3)::date::text AS day, CASE WHEN es.sequence_number = 1 THEN 1 ELSE 2 END AS step, count(*)::text AS n FROM outreach.email_sends es JOIN outreach.sender_inboxes ib ON ib.smartlead_email_account_id = es.smartlead_email_account_id WHERE es.status = 'sent' AND (es.sent_at AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date GROUP BY 1, 2, 3",
+            "ms": 7.21,
+            "rows": 22
+          },
+          {
+            "sql": "SELECT key, value FROM outreach.org_settings WHERE key = ANY($1::text[])",
+            "ms": 5.36,
+            "rows": 4
+          }
+        ]
+      },
+      "warm": {
+        "ms": 245.1,
+        "queryCount": 6,
+        "queryMs": 181.5,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT q.id::text, q.owner_id::text, q.drafting_item_id::text, q.campaign_id::text, q.status, q.handoff_date::text, q.handed_off_at::text, q.lane_id::text, q.smartlead_lead_id::text, q.handoff_attempts, q.waiting_reason, q.to_email, q.subject, q.recipient_name, q.orchestration_job_id::text, q.error_message, q.sender_identity_id::text, q.sender_inbox_id::text, q.from_email, q.created_at::text, q.up",
+            "ms": 149.13,
+            "rows": 8289
+          },
+          {
+            "sql": "SELECT scope_key, to_char(day, 'YYYY-MM-DD') AS day, detail FROM outreach.inbox_health_daily WHERE source = 'forecast' AND day BETWEEN $1::date AND $2::date ORDER BY day ASC",
+            "ms": 7.48,
+            "rows": 1046
+          },
+          {
+            "sql": "SELECT ib.id::text AS inbox_id, (es.sent_at AT TIME ZONE $3)::date::text AS day, CASE WHEN es.sequence_number = 1 THEN 1 ELSE 2 END AS step, count(*)::text AS n FROM outreach.email_sends es JOIN outreach.sender_inboxes ib ON ib.smartlead_email_account_id = es.smartlead_email_account_id WHERE es.status = 'sent' AND (es.sent_at AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date GROUP BY 1, 2, 3",
+            "ms": 7.38,
+            "rows": 22
+          },
+          {
+            "sql": "SELECT c.id::text AS id, c.name, c.delivery_settings, c.queue_color, COALESCE(c.sender_identity_slug, 'lucas') AS identity_slug, ( SELECT l.status FROM outreach.campaign_lanes l WHERE l.campaign_id = c.id ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DESC LIMIT 1 ) AS lane_status FROM outreach.campaigns c WHERE c.status = 'active' AND ( (COALESCE(c.kin",
+            "ms": 6.2,
+            "rows": 4
+          },
+          {
+            "sql": "SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug, i.display_name AS identity_display_name, lower(ib.email) AS email, ib.domain, ib.sort_order, ib.is_primary, ib.enabled, ib.lifecycle_stage, ib.stage_entered_at, ib.stage_plan, ib.rest_reason, ib.rest_cycles, ib.from_name, ib.signature_html, ib.provisioning_checklist, ib.smartlead_email_account_id, ib.sl_status, ib.sl_max_email_per_",
+            "ms": 5.9,
+            "rows": 34
+          }
+        ]
+      }
+    },
+    "page:/dashboards": {
+      "cold": {
+        "ms": 115.3,
+        "queryCount": 1,
+        "queryMs": 19.6,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT COUNT(*)::text AS n FROM dashboards.github_tokens WHERE added_by_user_id = $1::uuid",
+            "ms": 19.55,
+            "rows": 1
+          }
+        ]
+      },
+      "warm": {
+        "ms": 23.9,
+        "queryCount": 1,
+        "queryMs": 6.6,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT COUNT(*)::text AS n FROM dashboards.github_tokens WHERE added_by_user_id = $1::uuid",
+            "ms": 6.58,
+            "rows": 1
+          }
+        ]
+      }
+    },
+    "page:/events": {
+      "cold": {
+        "ms": 51.5,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      },
+      "warm": {
+        "ms": 24,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      }
+    },
+    "page:/": {
+      "cold": {
+        "ms": 26.9,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      },
+      "warm": {
+        "ms": 12.2,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      }
+    },
+    "page:/seo": {
+      "cold": {
+        "ms": 42.4,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      },
+      "warm": {
+        "ms": 20.3,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      }
+    },
+    "page:/social/calendar": {
+      "cold": {
+        "ms": 1136.6,
+        "queryCount": 81,
+        "queryMs": 1947.6,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT value FROM stories.settings WHERE key = 'series'",
+            "ms": 445.18,
+            "rows": 0
+          },
+          {
+            "sql": "SELECT a.id AS attempt_id, a.vertical, CASE WHEN ci.native_ref ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ci.native_ref END AS content_ref, COALESCE(a.payload->>'post_idea_id', ci.idea_ref) AS idea_ref, a.status, a.trigger, a.requested_at::text AS requested_at, a.finished_at::text AS finished_at, a.media_id, a.permalink, a.error, a.caption, a.payload, s.id AS schedule_",
+            "ms": 123.27,
+            "rows": 648
+          },
+          {
+            "sql": "SELECT media_id, ny_date::text AS ny_date, vertical, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate, follows, profile_visits FROM social_hub.media_insights WHERE vertical = ANY($1::text[]) ORDER BY media_id, ny_date",
+            "ms": 92.64,
+            "rows": 4536
+          },
+          {
+            "sql": "SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style, -- The build log (photo_log and the rest) is for the stories worker. Pages read stories, story, pair, question, url. (s.payload - 'photo_log' - 'historyKeys' - 'fvpSkip' - 'gtn' - 'gtnSkip' - 'triviaSkip' - 'log' - 'pool') AS payload, s.publish_at::text AS publish_at, (to_jsonb(s)->>'slot_minute')::int AS sl",
+            "ms": 91.75,
+            "rows": 175
+          },
+          {
+            "sql": "SELECT value FROM lfd.settings WHERE key = 'days'",
+            "ms": 88.13,
+            "rows": 1
+          }
+        ]
+      },
+      "warm": {
+        "ms": 111.2,
+        "queryCount": 10,
+        "queryMs": 49.8,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT key, value FROM lfd.settings",
+            "ms": 5.79,
+            "rows": 8
+          },
+          {
+            "sql": "SELECT weekday, vertical, start_minute, series, feed_mode FROM social_hub.slot_template",
+            "ms": 5.7,
+            "rows": 6
+          },
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "ms": 5.32,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 5.15,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM ai_events.settings WHERE key = 'days'",
+            "ms": 4.9,
+            "rows": 1
+          }
+        ]
+      }
+    }
+  },
+  "lighthouse": {
+    "page:/dashboards": {
+      "runs": 1,
+      "finalUrl": "http://127.0.0.1:3100/dashboards",
+      "score": 0.9,
+      "fcp": 764.7,
+      "lcp": 1234.9,
+      "tbt": 340.2,
+      "cls": 0,
+      "si": 1020,
+      "ttfbServer": 28,
+      "jsTransferKB": 163.2,
+      "jsRequests": 16,
+      "totalTransferKB": 562.2
+    },
+    "page:/events": {
+      "runs": 1,
+      "finalUrl": "http://127.0.0.1:3100/events",
+      "score": 1,
+      "fcp": 627,
+      "lcp": 1359.1,
+      "tbt": 120.5,
+      "cls": 0,
+      "si": 853,
+      "ttfbServer": 28,
+      "jsTransferKB": 169,
+      "jsRequests": 15,
+      "totalTransferKB": 460.8
+    },
+    "page:/": {
+      "runs": 1,
+      "finalUrl": "http://127.0.0.1:3100/",
+      "score": 1,
+      "fcp": 777.2,
+      "lcp": 777.2,
+      "tbt": 184.4,
+      "cls": 0,
+      "si": 1803,
+      "ttfbServer": 25,
+      "jsTransferKB": 276.6,
+      "jsRequests": 20,
+      "totalTransferKB": 600.2
+    },
+    "page:/seo": {
+      "runs": 1,
+      "finalUrl": "http://127.0.0.1:3100/seo",
+      "score": 0.9,
+      "fcp": 625.8,
+      "lcp": 1740.4,
+      "tbt": 409.6,
+      "cls": 0,
+      "si": 1573,
+      "ttfbServer": 19,
+      "jsTransferKB": 159.8,
+      "jsRequests": 12,
+      "totalTransferKB": 459.7
+    },
+    "page:/social/calendar": {
+      "runs": 1,
+      "finalUrl": "http://127.0.0.1:3100/social/calendar?view=week",
+      "score": 1,
+      "fcp": 698.7,
+      "lcp": 1033.7,
+      "tbt": 146.3,
+      "cls": 0,
+      "si": 927,
+      "ttfbServer": 90,
+      "jsTransferKB": 207.3,
+      "jsRequests": 22,
+      "totalTransferKB": 536.3
+    }
+  },
+  "verdicts": {
+    "api:GET:/api/campaigns/[id]/outreach-stats": "pass",
+    "api:GET:/api/campaigns": "pass",
+    "api:GET:/api/send-queue": "pass",
+    "page:/dashboards": "pass",
+    "page:/events": "pass",
+    "page:/": "pass",
+    "page:/seo": "pass",
+    "page:/social/calendar": "pass"
+  }
+}

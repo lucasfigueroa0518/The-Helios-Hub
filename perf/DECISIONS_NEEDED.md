@@ -31,6 +31,12 @@ Not changed here, because the playbook forbids behavior changes in this branch. 
 - **Why**: in the local profile (Postgres 16, default `jit = on`), the campaign list query spends **39 ms of its 152 ms compiling JIT code** (`EXPLAIN ANALYZE` → `JIT: Emission 34 ms`). Every plan whose cost is over `jit_above_cost` (100 000) pays this, which includes the campaign list, analytics, and hub dataset reads. Upstream PostgreSQL has since changed the default to off, and the commit notes that most large deployments already turn it off.
 - **Ask**: run `psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SHOW jit; ROLLBACK;"`. If it says `on`, consider `ALTER DATABASE postgres SET jit = off;` (reversible with `RESET`). That is a database-wide setting, so it's your call. `perf/REPORT.md` has the measured effect of JIT on the local profile. All code changes in this branch were measured with JIT **on**, the same as the baseline.
 
+## D7. Serve the brand font as WOFF2 (licensing check)
+
+- **Why**: `app/fonts/PragmaticaExtended-Bold.otf` is 244 KB (about 105 KB gzipped on the wire), and `next/font` preloads it on **every** page for one title. A lossless WOFF2 conversion of the same file keeps all 707 glyphs and every table, and is **79 KB**. Turning the preload off instead is no good: LCP got worse by up to 476 ms (`perf/experiments/font-preload.json`), so the bytes are what has to shrink. A Latin-only subset would be smaller still.
+- **Why it's your call**: the font is ParaType's commercial Pragmatica. Its license URL is `paratype.com/eula`, and its embedding flags allow preview and print embedding only. Some desktop EULAs forbid format conversion or subsetting, and web use may need a web license. I didn't convert it.
+- **Ask**: confirm the Helios license covers web embedding and WOFF2 conversion (and subsetting, if wanted). If yes, the change is: convert with `fonttools` (`TTFont(...).flavor = 'woff2'; save`), add `app/fonts/PragmaticaExtended-Bold.woff2`, and point `localFont({ src })` in `app/layout.tsx` at it. About 165 KB less of the uncompressed file on each first visit.
+
 ## D5. Production APM
 
 - The app has structured logs and `Server-Timing`, but no tracing backend. Sentry Performance or Datadog would give real p95 per route in production, but both are paid. Vercel's built-in Speed Insights and Observability are the cheapest options. Your call.

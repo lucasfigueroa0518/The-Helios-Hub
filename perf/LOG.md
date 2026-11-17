@@ -51,3 +51,20 @@ Reverted:
 
 - **Index `email_send_queue (campaign_id, status, schedule_date)`**. The planner used it (the per-campaign probe went 0.28 → 0.014 ms × 47), and the campaign-list statement got about 20% faster under `EXPLAIN ANALYZE`. But back to back, 40 runs each, the routes didn't improve: `/api/campaigns` p50 128 ms without versus 132 ms with, and outreach-stats p50 44 versus 46 ms. JIT (39 ms) and the other per-campaign subplans dominate. Rule 2: dropped. The migration was never committed, and the local DB has it rolled back.
 - **Hub-read cap** (hub reads limited to pool size − 1, so one slot is always free): measured after single-flight. Probe tail under a burst improved modestly (p99 ≈118 → 97 ms, max 592 → 491 ms; `perf/experiments/contention-burst-B-cap.json`). But a full cold rebuild got about 14% slower (median 522–533 → 603 ms, function benchmark), and users wait on that rebuild on a cold hub page. Single-flight already removed the cause (25 → 3 rebuilds). The remaining gain does not clearly beat the cost, so it was reverted.
+- **Brand font `preload: false`** (Phase 4F, "preload the primary font only"): reverted. Lighthouse median of 3 (`perf/experiments/font-preload.json`): FCP improved by about 70 ms, and pages that never render the display face stopped downloading it (−105 KB on `/events`, `/seo`, `/hub/conversations`). But LCP got worse on every page tested, +476 ms on `/` where the greeting title is the LCP element. The real fix is a smaller file: lossless WOFF2 is 79 KB, against 244 KB for the OTF. That conversion is a licensing call (DECISIONS D7).
+
+## Phase 3, continued, on Build C (perf/build-c.json)
+
+- `businessDaysBetween` counts whole weeks instead of walking days. A CPU profile showed it was about half of `/api/send-queue`. Route warm p95 807 → 324 ms. Identical results on 51,992 date pairs.
+- Campaign list: a bounced-count CTE plus the send-queue `campaign_id` index. Each alone did nothing at the route level (JIT kept firing); together the plan drops under `jit_above_cost`. Statement 157 → 56 ms, route warm p95 223 → 71 ms. The index came back as `db/perf_2026_11_17_indexes.sql`, with the rollback beside it.
+
+## Phase 4 (frontend), on Build C and Build D (perf/build-c.json, perf/build-d.json; Lighthouse is the median of 3 for Build D)
+
+- F1 LazyMotion in the sidebar: −27.5 KB gz of initial JS on every page; pages within 150 KB went from 0 to 40 of 55.
+- F2 Anthropic SDK out of the client: `/campaigns/[id]/draft` 179 → 163 KB, `/prospect` 158 → 142 KB.
+- F3 Trello view splitting: 255 → 229 KB. LCP is unmoved, because the document is the bottleneck.
+- F4 hub streams campaigns: `/hub` LCP 2169 → 1785 ms, TBT 385 → 155 ms.
+- F5 dashboards drop the duplicate font: −113 KB, `/dashboards` LCP 1141 → 657 ms.
+- F6 `content-visibility` on stacked tables: music library LCP 6222 → 4290 ms, TBT 4506 → 3102 ms.
+- F7 brand font `preload: false`: **reverted** (LCP worse; see above).
+- Not done, by design: virtualizing the music list (it would mean a client component and different DOM), and Trello lazy-loading activity and comments (behavior change). Both are proposed in REPORT.
