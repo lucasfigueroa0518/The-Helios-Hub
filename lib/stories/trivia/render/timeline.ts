@@ -8,8 +8,9 @@
  *                            1.45 → 1 over 0.35 s. The sign's bulbs chase in 0.5 s steps (on the beat).
  *   Clip 2 (answer, 5 s)     the bulbs flash in 0.25 s steps. On the hit (+0.5 s, crash + ding) the correct
  *                            pill turns green, its letter gives way to a check, and it pops 1 → 1.12 → 1.05;
- *                            the wrong pills fade to 50 %; 30 confetti burst from the pill. The answer line
- *                            rises in at +0.6 s.
+ *                            the wrong pills turn to outlines; 30 confetti burst from the pill. The question
+ *                            fades and the answer line rises into its slot at +0.6 s; the website call to
+ *                            action rises into the tap row's place at +1.2 s.
  *
  * Bulbs are lighting, so they carry no sound cue. Everything else names the cue it lands on (SOUND).
  */
@@ -59,9 +60,16 @@ export const POP_S = 0.55;
 export const POP_PEAK_AT = 0.45;
 export const POP_PEAK = 1.12;
 export const POP_REST = 1.05;
-/** The wrong pills fade to this over 0.4 s. */
-export const WRONG_OPACITY = 0.5;
+/** The wrong pills turn to outlines (no fill, a white ring, white text) at this opacity over 0.4 s. */
+export const WRONG_OPACITY = 0.75;
 export const WRONG_S = 0.4;
+export const RING_OFF = 'inset 0 0 0 4px rgba(255, 255, 255, 0)';
+export const RING_ON = 'inset 0 0 0 4px rgba(255, 255, 255, 0.6)';
+/** The question fades out on the hit, before the answer line rises into its slot. */
+export const QUESTION_OUT_S = 0.1;
+/** The website call to action rises in after the answer line. */
+export const CTA_S = 1.2;
+export const CTA_IN_S = 0.4;
 export const LINE_IN_S = 0.35;
 /** Clip 2 opens on clip 1's tap row (ring empty, digit 1); it fades out on the hit. */
 export const TAP_OUT_S = 0.2;
@@ -169,7 +177,9 @@ export function answerTimeline(n: number, correct: number, opponent = false): Tw
     { target: c, ...hit, dur: POP_S * POP_PEAK_AT, ease: 'pop', from: { scale: 1 }, to: { scale: POP_PEAK } },
     { target: c, at: REVEAL_S + POP_S * POP_PEAK_AT, dur: POP_S * (1 - POP_PEAK_AT), ease: 'pop', to: { scale: POP_REST } },
     { target: '#tv-tap', ...hit, dur: TAP_OUT_S, ease: 'ease', from: { opacity: 1 }, to: { opacity: 0 } },
+    { target: '#tv-q', ...hit, dur: QUESTION_OUT_S, ease: 'ease', from: { opacity: 1 }, to: { opacity: 0 } },
     { target: '#tv-line', at: LINE_S, dur: LINE_IN_S, ease: 'rise', from: { opacity: 0, y: 30, scale: 0.9 }, to: { opacity: 1, y: 0, scale: 1 }, sound: 'hit' },
+    { target: '#tv-cta', at: CTA_S, dur: CTA_IN_S, ease: 'rise', from: { opacity: 0, y: 30, scale: 0.9 }, to: { opacity: 1, y: 0, scale: 1 } },
   ];
   if (opponent) {
     t.push(
@@ -178,7 +188,11 @@ export function answerTimeline(n: number, correct: number, opponent = false): Tw
     );
   }
   for (let i = 0; i < n; i++) {
-    if (i !== correct) t.push({ target: `#tv-opt-${i}`, ...hit, dur: WRONG_S, ease: 'ease', from: { opacity: 1 }, to: { opacity: WRONG_OPACITY } });
+    if (i === correct) continue;
+    t.push(
+      { target: `#tv-opt-${i}`, ...hit, dur: WRONG_S, ease: 'ease', from: { opacity: 1, backgroundColor: 'rgba(255, 255, 255, 1)', color: 'rgb(17, 17, 17)', boxShadow: RING_OFF }, to: { opacity: WRONG_OPACITY, backgroundColor: 'rgba(255, 255, 255, 0)', color: 'rgb(255, 255, 255)', boxShadow: RING_ON } },
+      { target: `#tv-opt-${i} b`, ...hit, dur: WRONG_S, ease: 'ease', from: { backgroundColor: 'rgba(0, 0, 0, 1)', boxShadow: RING_OFF }, to: { backgroundColor: 'rgba(0, 0, 0, 0)', boxShadow: RING_ON } },
+    );
   }
   confettiPieces().forEach((p, k) => {
     const id = `#tv-cf-${k}`;

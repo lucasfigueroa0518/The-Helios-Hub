@@ -14,7 +14,7 @@ import { OPPONENT_TAG } from '../opponent';
  * One "Are you smarter than AI?" slide, 1080×1920, as static markup for a HyperFrames composition: the approved
  * mock (marquee-create.html) with its preview scaffolding removed. A centred stack: the marquee sign with its
  * bulbs, the question, the choices, and the fixed footer slot (the timer, "Tap to reveal" and the arrow on
- * clip 1; the answer line on clip 2). The answer slide also carries the reveal's parts, hidden until the
+ * clip 1; the website call to action on clip 2). On clip 2 the answer line takes the question's slot. The answer slide also carries the reveal's parts, hidden until the
  * hit: the correct pill's check, and the confetti.
  */
 export const SIGN_COPY = 'Are you smarter than AI?';
@@ -43,32 +43,32 @@ export type SlideInput = {
 };
 
 /**
- * The opponent's label in the room above the sign, on the left (the critter stands on the right). Before the
- * reveal it names the opponent; on clip 2 the reveal swaps it for the result: green with a check when its pick
- * was right, red with a cross when not.
+ * The opponent's speech bubble, right next to the critter (it stands on the sign's right; the bubble's tail points
+ * at it). Before the reveal it names the opponent; on clip 2 the reveal swaps it for the result: green with a
+ * check when its pick was right, red with a cross when not ("GPT-5 nano selected B").
  */
 function OpponentLabel({ s, answer }: { s: SlideInput; answer: boolean }) {
   const o = s.opponent!;
   const right = o.picked === s.correct;
   return (
     <div id="tv-opp" className="opp">
-      <div id="tv-opp-pre" className="opp-pre">
-        <span className="opp-k">Opponent:</span>
+      <div id="tv-opp-pre" className="opp-pre bubble">
         <span className="opp-n">{o.label}</span>
         <span className="opp-t">{OPPONENT_TAG}</span>
       </div>
       {answer ? (
-        <div id="tv-opp-post" className={`opp-post ${right ? 'ok' : 'no'}`}>
+        <div id="tv-opp-post" className={`opp-post bubble ${right ? 'ok' : 'no'}`}>
           <b>{right ? <Check /> : <Cross />}</b>
-          <span>
-            <span className="opp-n">{o.label}</span>
-            <span className="opp-s">selected {o.picked}</span>
-          </span>
+          <span className="opp-n">{o.label} selected {o.picked}</span>
         </div>
       ) : null}
     </div>
   );
 }
+
+/** The website call to action on the answer slide (in the tap row's place once the reveal lands). */
+export const CTA_COPY = { main: 'New game daily. Play now', sub: 'link in bio' } as const;
+const UP_LEFT_PATH = 'M38 38 L12 12 M12 30 L12 12 L30 12';
 
 const ARROW_PATHS = ['M8 50 C52 34 100 58 150 42', 'M118 14 L154 42 L120 72'];
 const CHECK_PATH = 'M12 27 L22 37 L40 15';
@@ -83,6 +83,14 @@ export function bulbStyles(n: number = BULBS_ACROSS): Array<Record<string, strin
   for (let i = n - 1; i >= 0; i--) out.push({ left: pct(i, n), bottom: '-15px' });
   for (let i = BULBS_DOWN - 1; i >= 0; i--) out.push({ left: '-15px', top: pct(i, BULBS_DOWN) });
   return out;
+}
+
+function UpLeft() {
+  return (
+    <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={UP_LEFT_PATH} />
+    </svg>
+  );
 }
 
 function Arrow() {
@@ -131,7 +139,11 @@ export function TriviaSlide({ s }: { s: SlideInput }) {
         {SIGN_COPY}
         {s.opponent ? <OpponentLabel s={s} answer={answer} /> : null}
       </div>
-      <div id="tv-q" className="question">{s.question}</div>
+      {/* The question's slot: on clip 2 the answer line takes it over as the question fades (nothing below moves). */}
+      <div id="tv-qslot" className="qslot">
+        <div id="tv-q" className="question">{s.question}</div>
+        {answer ? <div id="tv-lslot" className="lslot"><div id="tv-line" className="line">{s.answerLine}</div></div> : null}
+      </div>
       <div id="tv-choices" className="choices">
         {s.options.map((o, i) => {
           const right = answer && o.letter === s.correct;
@@ -153,7 +165,14 @@ export function TriviaSlide({ s }: { s: SlideInput }) {
           <span>{TAP_LINE}</span>
           <Arrow />
         </div>
-        {answer ? <div id="tv-line" className="line">{s.answerLine}</div> : null}
+        {answer ? (
+          <div id="tv-cta" className="cta">
+            <div className="cta-card">
+              <span className="cta-m">{CTA_COPY.main}</span>
+              <span className="cta-s"><UpLeft />{CTA_COPY.sub}</span>
+            </div>
+          </div>
+        ) : null}
       </div>
       {answer
         ? confettiPieces().map((p, k) => (
