@@ -370,6 +370,31 @@ test('stories still pending after the last round are recorded as unfinished; no 
   assert.equal((await d.query<{ n: number }>(`SELECT count(*)::int AS n FROM lfd.posts`)).rows[0]!.n, 0);
 });
 
+test('an image that still fails at the final render drops its story; a post never ships a broken image', async () => {
+  const base = await deps();
+  let checks = 0;
+  const uploads: string[] = [];
+  const d: LfdRunDeps = {
+    ...base,
+    upload: async (p, b, t) => { uploads.push(p); return base.upload(p, b, t); },
+    fitCheck: async (post, opts) => {
+      checks += 1;
+      const r = await base.fitCheck(post, opts);
+      return checks <= 2 ? { ...r, ok: false, problems: ['slide 3 image failed to load'] } : r;
+    },
+  };
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.equal(checks, 3, 'the final render is redrawn without the broken story');
+  const rec = await recordOf(d, res.runId);
+  const broken = rec.drops.filter((x) => x.reason === 'image-failed');
+  assert.equal(broken.length, 2);
+  assert.ok(broken.some((x) => /final render/.test((x as { detail?: string }).detail ?? '')));
+  const { rows } = await d.query<{ stories: Array<{ key: string }>; render_problems: string[] }>(`SELECT stories, render_problems FROM lfd.posts`);
+  assert.ok(!rows[0]!.stories.some((s) => broken.some((b) => b.key === s.key)));
+  assert.ok(!rows[0]!.render_problems.some((p) => /image failed to load/.test(p)));
+});
+
 test('a story slide whose image failed to load is replaced; every render problem is kept', async () => {
   const base = await deps();
   let checks = 0;
@@ -381,7 +406,7 @@ test('a story slide whose image failed to load is replaced; every render problem
       return {
         ...r,
         ok: false,
-        problems: ['slide 3 image failed to load', 'Roboto font did not load', 'slide 2 text fit: p.lfd-body "x" (overflow, min 31px)'],
+        problems: [...(checks === 1 ? ['slide 3 image failed to load'] : []), 'Roboto font did not load', 'slide 2 text fit: p.lfd-body "x" (overflow, min 31px)'],
         violations: [{ slide: 4, element: 'h2.lfd-headline', text: 'Wide', over: { left: 0, top: 0, right: 12, bottom: 0 } }],
       };
     },
@@ -396,7 +421,7 @@ test('a story slide whose image failed to load is replaced; every render problem
   const { rows } = await d.query<{ stories: Array<{ key: string }>; fit_problems: string[]; render_problems: string[] }>(`SELECT stories, fit_problems, render_problems FROM lfd.posts`);
   assert.ok(!rows[0]!.stories.some((s) => s.key === broken[0]!.key));
   assert.deepEqual(rows[0]!.fit_problems, ['slide 2 text fit: p.lfd-body "x" (overflow, min 31px)']);
-  assert.ok(rows[0]!.render_problems.includes('slide 3 image failed to load'), rows[0]!.render_problems.join('\n'));
+  assert.ok(!rows[0]!.render_problems.some((p) => /image failed to load/.test(p)), rows[0]!.render_problems.join('\n'));
   assert.ok(rows[0]!.render_problems.includes('Roboto font did not load'));
   assert.ok(rows[0]!.render_problems.some((p) => /^slide 4 bounds: h2\.lfd-headline/.test(p)));
 });

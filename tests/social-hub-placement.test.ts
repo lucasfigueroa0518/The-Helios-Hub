@@ -595,7 +595,7 @@ test('explainers Approve after today’s last window approves, books nothing, ne
   await publishingOn(pg);
   const e = await explainer(pg);
   const out = await explainerLayer(pg, new Date('2026-10-08T21:30:00Z')).approve!({ jobId: e.job }, 'tommy', {}); // 5:30 PM New York
-  assert.deepEqual(out, { ok: true, note: 'Approved. No window is left today, so it takes the next open window after today; Post now can still post it today.' });
+  assert.deepEqual(out, { ok: true, note: 'Approved. No window is left on its day, so it takes the next open window after that; Post now can still post it today.' });
   assert.deepEqual(await explainerSlots(pg), []);
   assert.equal((await getFeedback(explainersDb(pg), e.job))?.verdict, 'approved', 'the approval stands');
 });

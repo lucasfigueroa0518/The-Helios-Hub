@@ -159,9 +159,8 @@ const SCORE_LATERAL = `
           LIMIT 1
        ) copy ON true
        LEFT JOIN LATERAL (
-         SELECT s.headline
-           FROM reels.post_idea_members m
-           JOIN reels.sources s ON s.id = m.source_id
+         SELECT m.headline
+           FROM reels.idea_sources_v m
           WHERE m.post_idea_id = %IDEA%
           ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
           LIMIT 1
@@ -214,12 +213,12 @@ export const REEL_IDEAS_SQL = `
 WITH latest AS (
   SELECT id, scored_at FROM reels.score_slates ORDER BY scored_at DESC LIMIT 1
 ),
--- A person's typed-in ideas (design 2026-10-26-text-on-screen-seeding): sources marked adapter 'seed', theirs for a week.
+-- A person's typed-in ideas (design 2026-10-26-text-on-screen-seeding): seed members (legacy adapter 'seed', or an
+-- intake Reels seed), theirs for a week.
 seeds AS (
-  SELECT m.post_idea_id, so.ingest_time, (so.ingest_time > now() - interval '7 days') AS open
-    FROM reels.post_idea_members m
-    JOIN reels.sources so ON so.id = m.source_id
-   WHERE so.adapter_id = 'seed' AND so.drop_reason = 'seed'
+  SELECT m.post_idea_id, m.ingest_time, (m.ingest_time > now() - interval '7 days') AS open
+    FROM reels.idea_sources_v m
+   WHERE m.seeded
 ),
 pool AS (
   SELECT s.post_idea_id, s.net, s.rank, s.selected, s.origin, latest.scored_at AS scored_at, true AS on_latest,
@@ -261,9 +260,8 @@ SELECT s.post_idea_id, src.headline, s.net, s.rank, s.selected, s.origin, s.scor
   FROM pool s
   LEFT JOIN reels.published_status ps ON ps.post_idea_id = s.post_idea_id
   LEFT JOIN LATERAL (
-    SELECT so.headline
-      FROM reels.post_idea_members m
-      JOIN reels.sources so ON so.id = m.source_id
+    SELECT m.headline
+      FROM reels.idea_sources_v m
      WHERE m.post_idea_id = s.post_idea_id
      ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
      LIMIT 1
@@ -289,9 +287,8 @@ SELECT DISTINCT ON (v.post_idea_id) v.post_idea_id::text AS post_idea_id, v.id::
  ORDER BY v.post_idea_id, v.finished_at DESC NULLS LAST, v.created_at DESC`;
 
 export const REEL_SOURCES_SQL = `
-SELECT DISTINCT m.post_idea_id, s.canonical_url AS url, s.headline
-  FROM reels.post_idea_members m
-  JOIN reels.sources s ON s.id = m.source_id
+SELECT DISTINCT m.post_idea_id, m.url, m.headline
+  FROM reels.idea_sources_v m
  WHERE m.role <> 'merged_duplicate'
    AND m.post_idea_id = ANY($1::uuid[])`;
 

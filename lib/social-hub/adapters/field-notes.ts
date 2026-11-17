@@ -1,4 +1,4 @@
-import { attemptStatus, cancelNote, historyByMedia, iso, latest, nyDateFor, scheduleStatus, slotCategory, slotText, text } from '@/lib/social-hub/adapters/common';
+import { attemptStatus, boardDate, cancelNote, historyByMedia, iso, latest, nyDateFor, scheduleStatus, slotCategory, slotText, text } from '@/lib/social-hub/adapters/common';
 import { LEAF_LABEL } from '@/components/field-notes/constants';
 import { PLACEHOLDER_USE } from '@/lib/field-notes/types';
 import { hubId } from '@/lib/social-hub/ids';
@@ -175,7 +175,8 @@ export function fieldNotesPosts(read: FieldNotesRead): HubPost[] {
       statusNote: 'In review, not scheduled',
       postedAt: null,
       publishAt: null,
-      nyDate: null,
+      // Bald-Eagle D4: an unbooked post shows on the day it was made for (its ny_date), not the day it was made.
+      nyDate: boardDate({ target: row.ny_date }),
       permalink: null,
       metrics: {},
       history: [],

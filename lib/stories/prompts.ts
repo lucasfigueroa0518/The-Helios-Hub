@@ -18,10 +18,10 @@ const obj = (properties: Record<string, unknown>) => ({ type: 'object', properti
 const visual = obj({ kind: { type: 'string', enum: ['person', 'company', 'logo', 'product', 'event', 'thematic', 'setting'] }, query: { type: 'string' } });
 const subjects = { type: 'array', items: obj({ name: { type: 'string' }, type: { type: 'string', enum: ['person', 'organization'] } }) };
 
-/* ── md-headlines@4: Morning Download story frames (S-15), hook first ── */
+/* ── md-headlines@5: Morning Download story frames (S-15), hook first; @5 (Bald-Eagle 2026-11-12, D2): a returning story leads with what is new ── */
 
 export const MD_HEADLINES = {
-  id: 'md-headlines@4',
+  id: 'md-headlines@5',
   system: `You write the story frames of "Helios Morning Download", a daily Instagram Story from Helios Group, an AI consultancy, with the day's major AI news.
 
 One story is one frame. Never split one story or one event into several frames, and never write two frames about the same event.
@@ -31,6 +31,7 @@ For each story in the material, write exactly one frame:
   - The first sentence is the hook, at most 60 characters, shown in bold: why the viewer should care, not what was announced. Pick the angle with the most pull: what this changes for them, what they can now do, a number that sounds hard to believe, or a sharp contrast inside the story. A company or product the viewer knows can be the subject, but the verb carries the payoff. Never use an announcement verb: launches, unveils, announces, releases, introduces, debuts, rolls out. Use "you" or "your" when the story really reaches the viewer.
   - The second sentence proves the hook: who did what, with the hard detail (a number, a name) that makes it real. Leave out the day or date unless the date is the point.
   - Truth beats pull. Every claim, the hook's angle included, must be stated in the source or follow directly from it, and a hedged source (reported, in talks, alleged) gets a hedged hook. Framing a true fact so it lands is the job; inflating it is not allowed. Inside the headline, attribute only a claim that is disputed, exclusive or a company's own; every other credit belongs on the source line.
+  - A story with we_already_said ran on an earlier day under that headline, and its text starts with what was reported since then. Its headline leads with that new development; the earlier part appears only as far as the viewer needs it to follow the new one, and the headline never restates what we already said.
 - source_verb and source_name: how the story is credited on the frame, naming one outlet: "via" an outlet that reported it ("via The Verge"), "reported by" an outlet with its own reporting ("reported by Reuters"), or "from" a first-party post, blog, paper or repository ("from OpenAI's blog", "from a post by @handle", "from GitHub").
 - subjects: the people and organizations the story is about, with their exact names.
 - visual: one photo request for the frame. ${VISUAL}
@@ -114,10 +115,10 @@ export type GtnQuestionOut = {
   questions: Array<{ candidate_key: string; question: string; answer: string; label: string; meaning: string; topic: string; source_verb: 'via' | 'reported by' | 'from'; source_name: string; subjects: Array<{ name: string; type: 'person' | 'organization' }>; visual: { kind: string; query: string }; answer_visual: { kind: string; query: string } }>;
 };
 
-/* ── gtn-pick@1: one call that picks and writes three candidates (DRAFT, awaiting Lucas) ── */
+/* ── gtn-pick@2: one call that picks and writes three candidates (DRAFT, awaiting Lucas; Bald-Eagle D7 links, D10 second try) ── */
 
 export const GTN_PICK = {
-  id: 'gtn-pick@1',
+  id: 'gtn-pick@2',
   system: `You make "Guess the Number", an Instagram Story game from Helios Group, an AI consultancy. Each set asks one question whose answer is a number. Viewers guess, then tap to see the answer. The frames already say "Can you guess the number?", "Lock it in. Tap to reveal", "The answer is" and "How close did you get?". You write only the parts below.
 
 Scope. AI only, in the broad sense: the technology, the companies that build it, the people who use it, what the public thinks of it, and its history. Nothing outside AI.
@@ -136,6 +137,8 @@ Sourcing. These rules are mandatory.
 - Confirm every figure with web search in this call, including pool numbers and anything you think you know. Never answer from memory. Figures change after your training, and a wrong answer credited to a real company is the worst failure this game can have.
 - Use the most current figure the sources give.
 - Cite one page whose plain text states the figure, and quote the exact line. The figure must not appear only in an image, chart, video or PDF, and the page must not be paywalled.
+- Cite a page you opened in this call, by that page's own address. Never cite a news-aggregator link that redirects to another site.
+- No two candidates cite the same page.
 - When the first-party page (the company, the lab, the study's authors) states the figure, cite it rather than coverage of it.
 
 Writing. These rules are mandatory.
@@ -148,6 +151,8 @@ Writing. These rules are mandatory.
 - topic: the intro frame's line, at most 50 characters, naming the subject without giving the number away.
 - source_verb and source_name: credit for the page you cite. Use "from" for a first-party page, "reported by" for an outlet with its own reporting, and "via" for an outlet passing it on.
 - visual and answer_visual: a photo request for the question frame and a second, different one for the answer frame. ${VISUAL}
+
+A second try. When the material holds "retry", an earlier pick for this set failed every check. It lists each failed question, the check it failed and why, and the links already tried. Do not resubmit those questions, steer clear of what made them fail, and cite no link already tried.
 
 Return exactly three candidates, ranked best first by how much a viewer would want to guess and how far the answer lands from their guess. At least one comes from the pool (origin pool, with its id as pool_id) and at least one is your own idea (origin model, pool_id empty). If the pool is empty, all three are your own.
 
@@ -173,7 +178,10 @@ export type GtnPickMaterial = {
   today: string;
   pool: Array<{ id: string; kind: 'number'; value: string; fact: string; counts: string; story: string; outlet: string; url: string } | { id: string; kind: 'story'; headline: string; outlet: string; url: string; text: string }>;
   recent: Array<{ date: string; question: string; answer: string; topic: string }>;
+  /** Only on the second try (Bald-Eagle D10): the first round's failures and every link it tried. */
+  retry?: GtnPickRetry;
 };
+export type GtnPickRetry = { failures: Array<{ question: string; failed_gate: string; reason: string }>; links_tried: string[] };
 
 /* ── fvp-pair@2: find and source tool pairs, with web search (S-22) ── */
 

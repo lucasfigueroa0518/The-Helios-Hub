@@ -1,7 +1,7 @@
 /**
  * One Field Notes run (a person's Generate; auto_run ships off): one post from TIP_SLIDES_MIN to TIP_SLIDES_MAX (3 to 6) tips, one per tip slide.
  *
- *   room for a draft (max_pending_drafts) -> expire old unused tips -> the tips:
+ *   expire old unused tips -> the tips:
  *     a person's seeded tip goes first (no scoring; it keeps the seeder's leaf and want), then other
  *     unused seeds oldest first, under the same post rules as found tips (DISTINCT subjects, at most half the post
  *     (rounded up, never under two) of one want: sources/select admitSeeds; a seed that does not fit waits for a later post), then, only when
@@ -41,12 +41,16 @@
 import type { FieldNotesBudget } from './budget';
 import { createFieldNotesBudget, FieldNotesBudgetExhausted } from './budget';
 import { buildFieldNotesCaption, withSourceLinks } from './caption';
-import { FIELD_NOTES_SLIDE_PREFIX } from './config';
+import { FIELD_NOTES_SLIDE_PREFIX, MAX_SCORED_PER_RUN } from './config';
+import { asIntakeQuery, saveIntakeTips, type FieldNotesIntakeDeps, type FieldNotesIntakeMode } from './intake';
 import { draftToSlideInputs, layoutsToSlides, splitProblems } from './post';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
+import { markPromoteUsed, recordPromoteSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
+import { finishNightPlacements, readNightQueue } from '@/lib/social-hub/queue-store';
 import type { JevTransport } from '@/lib/reels/jev/runner';
-import { checkPhotoPool, MIN_POST_PHOTOS, pickPhotos, pickPostPhotos, pickReplacement } from './photos/pool';
+import { checkPhotoPool, MIN_POST_PHOTOS, pickPhotos, pickPostPhotos, pickReplacement, publishedPhotoIds } from './photos/pool';
+import { readUsedLedger, USED_PHOTO_DAYS } from '@/lib/photos/used';
 import { listPool, recordUse, releaseRested } from './photos/store';
 import type { RenderedPost } from './render/render';
 import { storeFieldNotesJpegs } from './render/render';
@@ -55,7 +59,7 @@ import type { TipCandidate } from './sources/candidate';
 import { FIELD_NOTES_SOURCES_CONFIG, type FieldNotesSourcesConfig } from './sources/config';
 import { dedupeCandidates } from './sources/candidate';
 import { scoreCandidate } from './sources/score';
-import { admitSeeds, MAX_CANDIDATES_PER_SOURCE, scoringOrder, selectTips } from './sources/select';
+import { admitSeeds, MAX_CANDIDATES_PER_SOURCE, scoringOrder, selectTips, type SelectQueue } from './sources/select';
 import {
   expireOldTips,
   freeSlug,
@@ -64,7 +68,6 @@ import {
   listSelectableTips,
   listUnusedSeedTips,
   nextPostSeq,
-  pendingDraftCount,
   postedSourceUrls,
   postedSubjects,
   recentPostWants,
@@ -76,6 +79,7 @@ import {
   setTipSubject,
   storedSourceUrls,
   type RunKind,
+  type RunTrigger,
   type StoredTip,
 } from './store';
 import type { ParsedFieldNotesSettings } from './settings';
@@ -90,8 +94,7 @@ import type { FactChecker } from './write/types';
 export { MIN_POST_PHOTOS };
 /** Rounds of swapping a photo whose slide found no calm region for the text. */
 export const MAX_PHOTO_SWAPS = 3;
-/** Candidates one run may score (a guard on top of the cap), shared round-robin across sources. */
-export const MAX_SCORED_PER_RUN = 25;
+export { MAX_SCORED_PER_RUN };
 export { MAX_CANDIDATES_PER_SOURCE };
 
 export type FieldNotesEngineDeps = {
@@ -121,6 +124,12 @@ export type FieldNotesEngineDeps = {
   config?: FieldNotesSourcesConfig;
   /** The fact checker for the writing gates (default: the numeral check). 'model' = the model-backed hard gate, built over the SAME metered client the Writer uses. */
   factCheck?: FactChecker | 'model';
+  /**
+   * Central intake (Phase 2): the 'field-notes' consumer switch and the order's scored stories (live: lib/intake/read).
+   * In 'intake' mode a run neither collects nor scores: it saves the intake's scored stories as candidate tips
+   * (intake.ts). Absent, 'legacy' or 'stale-fallback' (or an intake read that throws): the collect + score path.
+   */
+  intake?: FieldNotesIntakeDeps;
 };
 
 export type FieldNotesRunInput = {
@@ -130,7 +139,25 @@ export type FieldNotesRunInput = {
   seedTipId: string | null;
   capUsd: number;
   settings: Pick<ParsedFieldNotesSettings, 'photoRestPosts' | 'maxPendingDrafts' | 'tipExpiryDays' | 'darkenCap'>;
+  /** The New York date the post is for (Bald-Eagle D4: the clock's target, 2 days ahead). Absent: today (postDateFor). */
+  nyDate?: string;
+  /**
+   * What started the run: the night's clock ('scheduled') or a person (Generate, Make it: 'manual'). Only a scheduled run
+   * uses up the drags it read (as Last Few Days' night does), so a person's Generate never wipes the order. Absent: read
+   * from field_notes.runs by runId (unknown reads as manual).
+   */
+  trigger?: RunTrigger;
+  /**
+   * The shared idea queue by tip id (pins, drags, archives). Set by runFieldNotes from social_hub.idea_adjustments
+   * (readNightQueue); a caller may pass one (tests). Absent: read here.
+   */
+  queue?: SelectQueue;
 };
+
+/** The hub's idea id for a tip is `field_notes:tip:<tip id>` (lib/social-hub/adapters/field-notes.ts). */
+export const FIELD_NOTES_TIP_IDEA = 'field_notes:tip:';
+/** Why a pinned tip could not go on a post (shown on the pin in the hub). */
+export const PIN_NOT_WAITING = 'the tip is no longer waiting (used, rejected or expired)';
 
 export type FieldNotesRunRecord = Record<string, unknown> & { kind: RunKind; seedTipId: string | null };
 
@@ -141,7 +168,7 @@ export type FieldNotesRunResult =
   | ({ ok: true; outcome: 'skipped'; stopReason: string; note: string; record: FieldNotesRunRecord } & Spend)
   | ({ ok: false; error: string; stopReason?: string; record: FieldNotesRunRecord } & Spend);
 
-/** The day a post is dated: today in New York. */
+/** Today in New York: the run day. Freshness (scoring's `today`) is measured from it; a post is dated with its run's target (input.nyDate). */
 export function postDateFor(now: Date): string {
   return calendarDateKey(now, SOCIAL_TIMEZONE);
 }
@@ -160,15 +187,32 @@ export function tipToCandidate(t: Tip & { publishedAt?: string | null }): TipCan
   };
 }
 
+/** What started a run: the input's trigger, else the run row's. Unreadable reads as manual (a drag is never wiped by doubt). */
+async function runTrigger(q: FieldNotesEngineDeps['query'], input: FieldNotesRunInput): Promise<RunTrigger> {
+  if (input.trigger) return input.trigger;
+  try {
+    const { rows } = await q<{ trigger: RunTrigger }>(`SELECT trigger FROM field_notes.runs WHERE id::text = $1`, [input.runId]);
+    return rows[0]?.trigger === 'scheduled' ? 'scheduled' : 'manual';
+  } catch {
+    return 'manual';
+  }
+}
+
 export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRunInput): Promise<FieldNotesRunResult> {
   const q = d.query;
+  const movesQ = q as unknown as MovesQuery;
+  // The shared queue (Tommy, 2026-11-16: Field Notes joins the live queue): pins first, then the dragged order; archived
+  // tips are never picked. An unreadable moves table is an empty queue (the run as before).
+  const night = input.queue ? { ...input.queue, readAt: d.now } : await readNightQueue(movesQ, 'field_notes', FIELD_NOTES_TIP_IDEA);
+  input = { ...input, queue: night };
   const budget: FieldNotesBudget = createFieldNotesBudget({ capUsd: input.capUsd });
   const record: FieldNotesRunRecord = { kind: input.kind, seedTipId: input.seedTipId };
   const spend = (): Spend => ({ claudeUsd: budget.claudeUsd(), jevUsd: budget.jevUsd() });
   const finalRecord = () => ({ ...record, spend: { ...spend(), totalUsd: budget.spent(), capUsd: budget.capUsd, calls: budget.calls() } });
   const skipped = (stopReason: string, note: string): FieldNotesRunResult => ({ ok: true, outcome: 'skipped', stopReason: `${stopReason}: ${note}`, note, record: finalRecord(), ...spend() });
   const failed = (error: string, stopReason?: string): FieldNotesRunResult => ({ ok: false, error, ...(stopReason ? { stopReason } : {}), record: finalRecord(), ...spend() });
-  const nyDate = postDateFor(d.now);
+  // The date the post is FOR (Bald-Eagle D4: the clock's target, 2 days ahead); today when none is given.
+  const nyDate = input.nyDate ?? postDateFor(d.now);
   // A paid run that saves no post settles its tips so the next Generate does not pay for them forever: a tip the
   // Writer skipped is already rejected; every other attempted tip (seeds included) counts an attempt with the reason
   // (store.recordTipAttempt: set aside, with that reason, at MAX_TIP_ATTEMPTS). Never a bare reject: one failed write
@@ -199,11 +243,7 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
   };
 
   try {
-    // 1. Room for a draft (the review queue is never allowed to pile up).
-    const pending = await pendingDraftCount(q);
-    if (pending >= input.settings.maxPendingDrafts) {
-      return skipped('pending-drafts', `${pending} Field Notes posts are waiting for review (the limit is ${input.settings.maxPendingDrafts}); approve or reject one first.`);
-    }
+    // 1. Posts waiting for review do not stop a run: they are a safety net, not a reason to skip the night.
 
     // 2. Unused tips older than the expiry go (housekeeping on the type's own candidates).
     record.expiredTips = await expireOldTips(q, d.now, input.settings.tipExpiryDays);
@@ -218,7 +258,19 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
       if (!seed || seed.status !== 'candidate') return skipped('seed-unavailable', `the seeded tip ${input.seedTipId} is missing or already used.`);
       seeds.push(seed);
     }
-    for (const seed of await listUnusedSeedTips(q)) if (!seeds.some((t) => t.id === seed.id)) seeds.push(seed);
+    // Pinned tips next, in the order pinned (a pin is a person's "make this", like a seed): no scoring, the post rules apply.
+    // A pin whose tip is no longer waiting steps aside with why on the pin.
+    const pinnedIds: string[] = [];
+    for (const id of night.pins) {
+      if (seeds.some((t) => t.id === id)) continue;
+      const tip = await getTip(q, id).catch(() => null);
+      if (tip && tip.status === 'candidate') {
+        seeds.push(tip);
+        pinnedIds.push(id);
+      } else await recordPromoteSkip(movesQ, 'field_notes', `${FIELD_NOTES_TIP_IDEA}${id}`, PIN_NOT_WAITING);
+    }
+    for (const seed of await listUnusedSeedTips(q)) if (!seeds.some((t) => t.id === seed.id) && !night.archived.has(seed.id)) seeds.push(seed);
+    if (night.pins.length || night.placed.size || night.archived.size) record.queue = { pinned: pinnedIds, placed: night.placed.size, archived: night.archived.size };
     const seedFit = admitSeeds(seeds, TIP_SLIDES_MAX);
     let tips: Tip[] = seedFit.admitted;
     if (seedFit.waiting.length) record.seedsWaiting = seedFit.waiting.map((t) => t.id);
@@ -231,12 +283,26 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // (cover + one per tip + Follow), so a draft is never written that cannot be placed.
     const nextSeq = await nextPostSeq(q);
     await releaseRested(q, nextSeq, input.settings.photoRestPosts);
-    const pool = await listPool(q);
+    // CI-32: team photos any post published in the last 20 days sit out too (the ledger, by bank key or dHash).
+    const fullPool = await listPool(q);
+    let published = new Set<string>();
+    try {
+      const ledger = await readUsedLedger(q, d.now);
+      const { rows: hashed } = await q<{ id: string; dhash: string | null }>(`SELECT id::text AS id, dhash FROM media_library.photos WHERE id = ANY($1::uuid[])`, [fullPool.map((p) => p.photoId)]);
+      published = publishedPhotoIds(fullPool, ledger, new Map(hashed.map((r) => [r.id, r.dhash])));
+    } catch (err) {
+      record.photoLedger = `the used-photo ledger could not be read (${err instanceof Error ? err.message : String(err)}); only the rest rule applies`;
+    }
+    if (published.size) record.photosPublishedRecently = [...published];
+    const pool = fullPool.filter((p) => !published.has(p.photoId));
     const available = pickPhotos({ pool, nextSeq, restPosts: input.settings.photoRestPosts, count: 100 });
     record.photosAvailable = available.length;
     record.peoplePhotosAvailable = available.filter((p) => p.kind === 'people').length;
     const poolCheck = checkPhotoPool({ pool, nextSeq, restPosts: input.settings.photoRestPosts });
-    if (!poolCheck.ok) return skipped('photos-short', poolCheck.message);
+    if (!poolCheck.ok) {
+      if (published.size) console.log(`field notes: photo pool short; ${published.size} photo(s) are held back as published in the last ${USED_PHOTO_DAYS} days (CI-32)`);
+      return skipped('photos-short', published.size ? `${poolCheck.message} (${published.size} more are held back: published in the last ${USED_PHOTO_DAYS} days.)` : poolCheck.message);
+    }
     const maxTips = Math.min(TIP_SLIDES_MAX, available.length - 2);
 
     // Only seeds are used while the scoring questions are not approved; with them approved the rest is found and scored.
@@ -366,10 +432,11 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // photo (step 7); a cover with no face gets another people photo.
     const need = draft.slides.length + 2;
     if (available.length < need) {
+      if (published.size) console.log(`field notes: photo pool short for ${need} photos; ${published.size} photo(s) are held back as published in the last ${USED_PHOTO_DAYS} days (CI-32)`);
       await settleUnsavedTips('photos-short');
       return skipped('photos-short', `the post has ${draft.slides.length} tip slides and needs ${need} photos; ${available.length} are ready. Upload more.`);
     }
-    const pick = pickPostPhotos({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, count: need });
+    const pick = pickPostPhotos({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, count: need, published });
     record.photoWarnings = pick.warnings;
     const byId = new Map(available.map((p) => [p.photoId, p]));
     const chosen = pick.photoIds.map((id) => byId.get(id)!);
@@ -405,7 +472,7 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
       let swapped = false;
       for (const i of failed) {
         rejectedPhotoIds.push(photoIds[i]!);
-        const replacement = pickReplacement({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, chosen: photoIds, index: i, exclude: rejectedPhotoIds });
+        const replacement = pickReplacement({ pool: await listPool(q), nextSeq, restPosts: input.settings.photoRestPosts, chosen: photoIds, index: i, exclude: [...rejectedPhotoIds, ...published] });
         if (!replacement) continue;
         record.photoWarnings = [...((record.photoWarnings as string[] | undefined) ?? []), ...replacement.warnings];
         const { rows: found } = await q<{ master_path: string }>(`SELECT master_path FROM media_library.photos WHERE id = $1::uuid`, [replacement.photoId]);
@@ -449,6 +516,11 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // Each tip's subject becomes its slide's headline, so the same feature found again elsewhere is not posted twice.
     for (const sl of draft.slides) await setTipSubject(q, sl.tipId, sl.name);
     record.post = { id: saved.id, seq: saved.seq, slug, slides: slideObjects.length };
+    // The queue's moves on the tips this post used are spent; the scheduled night (not a person's Generate or chosen tip)
+    // uses up every placement it read, as Last Few Days' night does (lib/lfd/run.ts). Never fails the run.
+    const handMoved = new Set([...night.pins, ...night.placed.keys()]);
+    for (const id of tipIds) if (handMoved.has(id)) await markPromoteUsed(movesQ, 'field_notes', `${FIELD_NOTES_TIP_IDEA}${id}`);
+    if (!input.seedTipId && (await runTrigger(q, input)) === 'scheduled') await finishNightPlacements(movesQ, 'field_notes', undefined, night.readAt);
     return { ok: true, outcome: 'saved', postId: saved.id, seq: saved.seq, slug, slides: slideObjects.length, tipId: tipIds[0]!, tipIds, record: finalRecord(), ...spend() };
   } catch (error) {
     await settleUnsavedTips(`error: ${errorText(error).slice(0, 120)}`);
@@ -468,6 +540,9 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
  * MAX_SCORED_PER_RUN slots round-robin across sources in registry order -> only those slots enriched -> each slot
  * scored, then saved with its score and tags. A candidate that is not scored (no slot, the cap, a failed call) is NOT saved, so a later run finds
  * it again. Spend stops at the cap.
+ *
+ * Intake mode (Central Intake Phase 2, `d.intake` says 'intake'): no collect, no enrich, no scoring here; the order's
+ * scored stories not yet stored are saved as candidates (intake.ts saveIntakeTips), then the same selection.
  */
 async function pickScoredTips(
   d: FieldNotesEngineDeps,
@@ -477,6 +552,21 @@ async function pickScoredTips(
   o: { count: number; taken: Tip[] },
 ): Promise<Tip[]> {
   const q = d.query;
+  // Intake mode: the intake already fetched and scored Field Notes' sources; save what is new to field_notes.tips and
+  // select. A failed intake read falls back to the legacy path below (contract: switch + fallback).
+  const mode: FieldNotesIntakeMode = d.intake ? await d.intake.readConsumerMode(asIntakeQuery(q), 'field-notes', d.now).catch(() => 'legacy' as const) : 'legacy';
+  if (mode === 'intake') {
+    const fromIntake = await saveIntakeTips(q, d.intake!, d.now).catch((error: unknown) => {
+      record.intake = { mode, fallback: errorText(error).slice(0, 200) };
+      return null;
+    });
+    if (fromIntake) {
+      record.intake = { mode };
+      const recentWants = await recentPostWants(q);
+      record.found = { ...fromIntake, recentWants };
+      return selectStoredTips(d, input, { count: o.count, taken: o.taken, recentWants, budget, record });
+    }
+  } else if (mode === 'stale-fallback') record.intake = { mode };
   const config = d.config ?? FIELD_NOTES_SOURCES_CONFIG;
   const found = dedupeCandidates(d.collect ? await d.collect() : []);
   const stored = await storedSourceUrls(q, found.map((c) => c.sourceUrl));
@@ -535,7 +625,8 @@ async function selectStoredTips(
   const recentWants = o.recentWants;
   // A tip already on the post is never a candidate for another of its slots.
   const takenIds = new Set(o.taken.map((t) => t.id));
-  let tips = (await listSelectableTips(q)).filter((t) => !takenIds.has(t.id));
+  // An archived tip is never picked, nor asked about (the dupe check below costs a Jev call).
+  let tips = (await listSelectableTips(q)).filter((t) => !takenIds.has(t.id) && !input.queue?.archived.has(t.id));
   // Reworded duplicates (field-notes-dupe@1, Tommy 2026-11-08): the top candidates each get one cheap question,
   // "the same feature as anything already posted?"; a yes sets the tip aside for good. Only this run's top picks.
   if (o.budget && d.jev && o.budget.canSpend()) {
@@ -560,8 +651,9 @@ async function selectStoredTips(
         .map((t) => ({
           candidate: tipToCandidate(t), score: t.score as number, answers: {}, usd: 0, questionSetVersion: '',
           leaf: t.leaf, want: t.want, tier: t.tier, purposes: t.purposes, fresh: t.fresh,
-          firstSeenAt: t.createdAt, subject: t.subject,
+          firstSeenAt: t.createdAt, subject: t.subject, id: t.id,
         })),
+      ...(input.queue ? { queue: input.queue } : {}),
       now: d.now,
       tipExpiryDays: input.settings.tipExpiryDays,
       postedUrls: await postedSourceUrls(q),

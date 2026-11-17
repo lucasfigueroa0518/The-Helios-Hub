@@ -4,8 +4,10 @@
  * the lab then shows candidates only. Never writes lfd.posts.
  */
 import { nyDate } from '@/lib/explainers/repository';
+import type { IntakeLanes } from '@/lib/intake/pool-lfd';
+import type { IntakeJev, IntakeQuery } from '@/lib/intake/types';
 import { carouselLane, reelsLane } from '@/lib/lfd/sources';
-import type { LfdCandidate } from '@/lib/lfd/types';
+import type { LfdCandidate, LfdWindow } from '@/lib/lfd/types';
 import { windowFor } from '@/lib/lfd/window';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { storyKey } from '@/lib/stories/sources/reels';
@@ -181,18 +183,54 @@ export async function previousNyDate(q: HubQuery): Promise<string | null> {
   return rows?.[0]?.ny_date ?? null;
 }
 
-/** Reels + carousel lanes for today's LFD window. No Jev, no feed fetch (feeds are slow on a page load). */
-export async function listCandidates(q: HubQuery, now: Date = new Date()): Promise<LabStoryItem[]> {
+/** The lab's candidate reads, injectable for tests. Live: the 'lfd' consumer switch and the intake's LFD lanes. */
+export type CandidateDeps = {
+  mode: (q: IntakeQuery, now: Date) => Promise<'intake' | 'legacy' | 'stale-fallback'>;
+  intakeLanes: (q: IntakeQuery, window: LfdWindow, now: Date) => Promise<Pick<IntakeLanes, 'reels' | 'carousel'>>;
+};
+
+/** A page load never asks Jev: the carousel lane's posted check sees no posted list and no model. */
+const NO_JEV: IntakeJev = {
+  asReelsRunner: () => { throw new Error('the meme lab asks no model'); },
+  asSocialAsk: () => { throw new Error('the meme lab asks no model'); },
+  usd: 0,
+  calls: 0,
+};
+
+const liveCandidateDeps: CandidateDeps = {
+  mode: async (q, now) => (await import('@/lib/intake/read')).readConsumerMode(q, 'lfd', now),
+  intakeLanes: async (q, window, now) =>
+    (await import('@/lib/intake/pool-lfd')).intakeLanes(q, window, now, NO_JEV, {
+      postedCheck: async () => new Set<string>(),
+      readCarouselPosted: async () => [],
+    }),
+};
+
+/**
+ * Reels + carousel lanes for today's LFD window. No Jev, no feed fetch (feeds are slow on a page load).
+ * When LFD's switch is 'intake' (and the intake is fresh) the lanes come from the intake, as LFD's own run reads
+ * them; otherwise, or when that read fails, today's lanes.
+ */
+export async function listCandidates(q: HubQuery, now: Date = new Date(), deps: Partial<CandidateDeps> = {}): Promise<LabStoryItem[]> {
+  const d: CandidateDeps = { ...liveCandidateDeps, ...deps };
   const today = nyDate(now);
   const window = windowFor(today, await previousNyDate(q));
-  const sinceIso = `${window.after}T04:00:00Z`;
-  const [reels, carousel] = await Promise.all([
-    reelsLane(q, window).catch(() => [] as LfdCandidate[]),
-    carouselLane(q, sinceIso).catch(() => [] as LfdCandidate[]),
-  ]);
+  const iq: IntakeQuery = { query: (text, params) => q(text, params) };
+  let lanes: LfdCandidate[] | null = null;
+  if ((await d.mode(iq, now).catch(() => 'legacy' as const)) === 'intake') {
+    lanes = await d.intakeLanes(iq, window, now).then((l) => [...l.reels, ...l.carousel], () => null);
+  }
+  if (!lanes) {
+    const sinceIso = `${window.after}T04:00:00Z`;
+    const [reels, carousel] = await Promise.all([
+      reelsLane(q, window).catch(() => [] as LfdCandidate[]),
+      carouselLane(q, sinceIso).catch(() => [] as LfdCandidate[]),
+    ]);
+    lanes = [...reels, ...carousel];
+  }
   const seen = new Set<string>();
   const out: LabStoryItem[] = [];
-  for (const c of [...reels, ...carousel]) {
+  for (const c of lanes) {
     if (!c.headline || seen.has(c.key)) continue;
     seen.add(c.key);
     out.push(candidateItem(c));

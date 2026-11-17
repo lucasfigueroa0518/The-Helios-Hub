@@ -149,7 +149,9 @@ export function uniformIndex(count: number): number {
  * counts, and the minute is drawn from the minutes still ahead. `taken` holds
  * `nyDate:slot` keys. `rng` receives how many minutes are still open and
  * returns an index into that remainder. `throughDate` stops the search on
- * that calendar day, so turning Live on late does not fill tomorrow.
+ * that calendar day, so turning Live on late does not fill tomorrow; days
+ * before `fromDate` are skipped, so a reel made ahead books only its own
+ * posting day (`fromDate = throughDate = target`, Bald-Eagle D4).
  */
 export function chooseSlot(
   now: Date,
@@ -157,12 +159,14 @@ export function chooseSlot(
   rng: (count: number) => number = uniformIndex,
   timeZone = POSTING_TIME_ZONE,
   throughDate?: string,
+  fromDate?: string,
 ): SlotChoice | null {
   const start = calendarDateKey(now, timeZone);
   const last = throughDate ?? addCalendarDays(start, 13);
   for (let day = 0; day < 14; day += 1) {
     const nyDate = addCalendarDays(start, day);
     if (nyDate > last) break;
+    if (fromDate && nyDate < fromDate) continue;
     for (const slot of POSTING_SLOTS) {
       if (taken.has(slotKey(nyDate, slot.id))) continue;
       const open = openMinuteRange(nyDate, slot.id, now, timeZone);

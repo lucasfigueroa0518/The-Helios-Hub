@@ -22,7 +22,7 @@
  *            this path can't re-run (source page checks, the pair score), so they are refused.
  *   photo    one finder search (createLivePhotoFinder().find) per request, at most two requests, never a
  *            photo another frame of the set shows (the opener counts), the replaced photo, or one in
- *            the 7-day used set
+ *            the used-photo ledger (CI-32: published in the last 20 days)
  *
  * Parts: `{ kind: 'frame', key: '<seq>' }` (the frame's real seq, 1-based).
  */
@@ -88,7 +88,7 @@ export type StoriesDeps = {
    * safe zones, contrast). No model call, no cost.
    */
   renderFrame: (input: { frame: Frame; key: string }) => Promise<{ file: string; bytes: number; problems: string[] }>;
-  /** Photo URLs used in the last 7 days (social.used_photos; the build's `held` set). Free. */
+  /** Photo URLs published in the last 20 days (the CI-32 ledger; the build's `held` set). Free. */
   heldPhotos: (q: Query) => Promise<Set<string>>;
   /** The story's article text (its stories.pool entry, else the page), or null when it can't be read. Free. */
   sourceText: (q: Query, story: { key: string; url: string }) => Promise<string | null>;
@@ -468,7 +468,7 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
         if (row.role === 'closer' || row.role === 'intro') return blocked(`Frame ${seq} (the ${row.role}) shows no photo, so there is nothing to replace.`);
         if (row.role === 'paid' || row.role === 'free') return blocked(`Frame ${seq} shows the tool's own logo, so it was not replaced.`);
         if ('family' in row.copy && row.copy.family === 'type') return blocked(`Frame ${seq} uses the type layout, which shows no photo. Ask for a photo layout first.`);
-        // Never a photo another frame shows (the opener counts), the one being replaced, or one used in the last 7 days.
+        // Never a photo another frame shows (the opener counts), the one being replaced, or one published in the last 20 days.
         const exclude = new Set<string>(await deps.heldPhotos(q));
         for (const r of rows) {
           for (const p of [framePhoto(r.copy), r.photo]) if (p?.src) exclude.add(p.src);
@@ -533,7 +533,7 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
           break;
         }
         if (!found) {
-          return failed(`I searched for another photo for frame ${seq} (${tried.join('; ')}) and couldn't find a different usable one (not shown on another frame of this set, turned down before, or used in the last 7 days), so the original was kept.`);
+          return failed(`I searched for another photo for frame ${seq} (${tried.join('; ')}) and couldn't find a different usable one (not shown on another frame of this set, turned down before, or published in the last 20 days), so the original was kept.`);
         }
         copy = withPhoto(row.copy, found);
         const old = logOf(set, label)?.steps ?? [];

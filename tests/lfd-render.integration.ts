@@ -7,7 +7,7 @@ import { checkRenderFit } from '@/lib/social/render/fit-check';
 
 const svg = (w: number, h: number) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#556"/></svg>`)}`;
 const ready = (i: number, o: { setup?: string; headline?: string; body?: string } = {}): Ready => ({
-  pick: { key: `k${i}`, refs: [], origin: 'reels', headline: '', sourceName: 'S', url: 'https://s.com', body: '', publishedAt: null, net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' },
+  pick: { key: `k${i}`, refs: [], origin: 'reels', headline: '', sourceName: 'S', url: 'https://s.com', body: '', publishedAt: null, net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' },
   copy: { key: `k${i}`, setup: o.setup ?? '', headline: o.headline ?? 'Google Just Dropped Nano Banana 2.1', highlight: 'Nano Banana 2.1', names: ['Google'], body: o.body ?? 'Google says it beats its earlier image models. API images cost half what Nano Banana 2 charged', photo: { kind: 'product', query: 'q', subjects: [], alts: [] } },
   photo: { src: svg(i % 2 ? 900 : 1600, i % 2 ? 1200 : 900), credit: 'C', kind: 'scene' },
 });

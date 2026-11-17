@@ -61,6 +61,28 @@ export function metricWithTypical(post: HubPost, metric: MetricKey, typical: Typ
   return `${formatMetricKey(value, metric)} ${metricSpec(metric).label.toLowerCase()}${vs ? ` · ${vs}` : ''}`;
 }
 
+/** The one number a posted post leads with (LineupItem uses the same). */
+export const LEAD_METRIC: Record<HubPost['format'], MetricKey> = { reel: 'views', feed: 'views', story: 'reach' };
+
+/**
+ * A posted post's lead number for a one-line card: "13.6K" with "2.1×" (or
+ * "≈" when about typical), and the full words for its label. Null before it
+ * posts, or before its first insights reading.
+ */
+export function leadNumber(post: HubPost, typical: Typicals): { value: string; vs: string | null; label: string } | null {
+  if (post.status !== 'published') return null;
+  const metric = LEAD_METRIC[post.format];
+  const value = postMetric(post, metric);
+  if (value == null) return null;
+  const vs = vsTypical(value, typical(post.vertical, metric), metric);
+  const shown = formatMetricKey(value, metric);
+  return {
+    value: shown,
+    vs: vs == null ? null : vs === 'about typical' ? '≈' : vs.replace(' typical', ''),
+    label: `${shown} ${metricSpec(metric).label.toLowerCase()}${vs ? `, ${vs}` : ''}`,
+  };
+}
+
 /**
  * The type's typical path for a metric by days since posting (index 0 = the
  * day it posted): the median of the type's published posts over the last 30

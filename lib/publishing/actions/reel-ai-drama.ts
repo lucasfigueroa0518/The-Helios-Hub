@@ -48,7 +48,7 @@ function safe(what: string, fn: ActionFn): ActionFn {
 /**
  * AI Drama Reels (lib/reel-ai-drama/hub.ts), the Explainers verbs one for one
  * (lib/publishing/actions/explainers.ts): approve sets the review verdict and books
- * today's next open slot (B1); reject sets it too (mirrored onto the spine, with the
+ * its slot (B1: the date the night made it for, else today's next open slot); reject sets it too (mirrored onto the spine, with the
  * review's tags and note); Hard publish counts as approval (SH-17); regenerate queues
  * a new job for the pitch under the daily caps and takes the replaced version off the
  * calendar; place and reschedule put the job on the calendar (D50). The drama handle
@@ -98,12 +98,14 @@ export function reelAiDramaActions(deps: {
       if (!(await deps.publishingLive(db))) {
         return { ok: true, note: 'Approved. Publishing is switched off, so it gets a time once publishing is back on.' };
       }
-      // B1: today's next open slot, as a system slot (source 'auto', so tonight's quota is untouched).
+      // B1: a system slot (source 'auto'). A reel the night made ahead keeps (or books) the slot of the date it was made
+      // for, never today's leftover one (Bald-Eagle D4: scheduleDramaJob reads its target date); a person's reel: today's
+      // next open slot. A reel that already has a slot keeps it.
       const now = deps.now?.() ?? new Date();
       const booked = await deps.scheduleJob(db, jobId, 'auto', now, nyDateOf(now)!);
       return booked.scheduled
         ? { ok: true, note: `Approved. It posts ${formatPlacement(new Date(booked.publishAt))}.` }
-        : { ok: true, note: 'Approved. No window is left today, so it takes the next open window after today; Post now can still post it today.' };
+        : { ok: true, note: 'Approved. No slot is left on its day, so it takes the next open slot after that; Post now can still post it today.' };
     },
     async reject(t, by, input) {
       const review = {

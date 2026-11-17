@@ -116,8 +116,9 @@ async function main(): Promise<void> {
   active = { query, runId, writtenTipIds: [] };
   log('run_inserted', { runId, capUsd: settings.runCapUsd });
 
-  const { carryOutFieldNotesRun, withFieldNotesTimeout } = await import('@/lib/field-notes/worker');
-  const { FIELD_NOTES_RUN_TIMEOUT_MS } = await import('@/lib/field-notes/config');
+  const { carryOutFieldNotesRun } = await import('@/lib/field-notes/worker');
+  const { tapProcessOutput, withHangGuard } = await import('@/lib/content-runs/hang-guard');
+  tapProcessOutput();
   const { liveFieldNotesDeps } = await import('@/lib/field-notes/live');
   const run = active;
   const engine = async (_run: unknown, capUsd: number) => ({
@@ -125,18 +126,20 @@ async function main(): Promise<void> {
     onWriteStarted: (tipIds: string[]) => void (run.writtenTipIds = tipIds),
   });
 
-  const out = await withFieldNotesTimeout(
+  // Never cut off for length; only a hung run (no output for 45 min, or the 12 h backstop) is abandoned.
+  const out = await withHangGuard(
     carryOutFieldNotesRun(
       { query, now: () => new Date(), log, engine },
       { id: runId, trigger: 'manual', kind: 'build', requestedBy: 'local', seedTipId: seed },
     ),
-    FIELD_NOTES_RUN_TIMEOUT_MS,
-    async () => {
-      await abandonRun(`local run timed out after ${FIELD_NOTES_RUN_TIMEOUT_MS} ms`);
-      return { runId, status: 'failed' as const, note: 'timed out' };
+    {
+      onHang: async (reason) => {
+        await abandonRun(`local run ${reason}`);
+        return { runId, status: 'failed' as const, note: reason };
+      },
     },
   );
-  // Finished (or cut off and already failed): nothing is left for a signal handler to fail.
+  // Finished (or judged hung and already failed): nothing is left for a signal handler to fail.
   if (!stopping) active = null;
 
   const spend = await query<{ claude_usd: number; jev_usd: number; total_usd: number; stop_reason: string | null }>(

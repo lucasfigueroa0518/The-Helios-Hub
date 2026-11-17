@@ -13,7 +13,7 @@ import { HOOK_KEYS } from '@/lib/ai-events/hooks';
 import { excludePoolEvent, clearPoolEvent, pinPoolEvent, poolWeekKey, queueRebuild, shownPoolWeekKey } from '@/lib/ai-events/pool';
 import { postDateFor } from '@/lib/ai-events/run';
 import { claimRun, requestRun, type ClaimedRun } from '@/lib/ai-events/store';
-import { carryOutAiEventsRun, withAiEventsTimeout, type CarryOutDeps } from '@/lib/ai-events/worker';
+import { carryOutAiEventsRun, type CarryOutDeps } from '@/lib/ai-events/worker';
 import type { HubQuery } from '@/lib/social-hub/db';
 
 import { addEvent, openAiEventsDb, seedAiEventsPost, stubEngine, stubJev, SUN_NOON, WEEK, type StubEngine } from './fixtures/ai-events/seed';
@@ -315,12 +315,6 @@ test('a snapshot failure never fails the run; it is recorded', async () => {
   assert.ok(logs.includes('ai_events_snapshot_failed'));
   const record = (await query<{ record: { snapshot: { ok: boolean; error: string } } }>(`SELECT record FROM ai_events.runs`)).rows[0]!.record;
   assert.deepEqual(record.snapshot, { ok: false, error: 'bucket not found' });
-});
-
-test('withAiEventsTimeout answers with onTimeout when the work hangs', async () => {
-  const hung = new Promise<string>(() => undefined);
-  assert.equal(await withAiEventsTimeout(hung, 5, () => 'timed out'), 'timed out');
-  assert.equal(await withAiEventsTimeout(Promise.resolve('done'), 1000, () => 'timed out'), 'done');
 });
 
 test('mid-week pool actions act on the week the hub shows, never a week the event is not in', async () => {

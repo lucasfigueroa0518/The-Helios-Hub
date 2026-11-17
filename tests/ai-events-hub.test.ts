@@ -238,6 +238,13 @@ test('readDayQuotas asks for the Sunday posts only while auto_run is on', async 
 
 const posting: PostingState = { type: 'ai_events', live: false, generate: true, autoPublish: false, perDay: null, maxPerDay: null, series: null, days: [0], schedule: null, nights: null, cap: null, costPerPostMicros: null };
 
+test('health: Field Notes runs at 2 AM and is made 2 days ahead (Bald-Eagle D4), so night N asks about day N+2', () => {
+  const fn: PostingState = { ...posting, type: 'field_notes', days: [2, 5] };
+  assert.equal(quotaFor(fn, '2026-10-25'), 1, 'Sunday’s 2 AM run makes Tuesday’s post');
+  assert.equal(quotaFor(fn, '2026-10-27'), 0, 'Tuesday’s night asks about Thursday, not Tuesday');
+  assert.equal(quotaFor({ ...fn, nights: [{ nyDate: '2026-10-30', count: 1, trial: 0, main: 0, series: [], override: false }], cap: 1 }, '2026-10-28'), 1, 'template: the slot two days on');
+});
+
 test('health: the Sunday run and post are Monday’s night; a failed scheduled run is a run failure', async () => {
   assert.equal(quotaFor(posting, '2026-10-26'), 1, 'Monday asks about Sunday');
   assert.equal(quotaFor(posting, '2026-10-25'), 0, 'Sunday asks about Saturday');

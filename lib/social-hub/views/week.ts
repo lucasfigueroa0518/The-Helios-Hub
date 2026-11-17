@@ -2,9 +2,10 @@ import { addDays, nyDateOf, WEEKDAY_SHORT, weekdayOf } from '@/lib/social-hub/ti
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { isLocked } from '@/lib/social-hub/slots/rules';
 import { clockLabel, DAY_END, DAY_START, DRIFT, FEED_GAP, isFeedSlot, isUsual, nyMinuteOf, RUN_HOUR_LABEL } from '@/lib/social-hub/slots/times';
-import { sameSlotKey, slotId, slotKeyString, type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
+import { parseSlotId, sameSlotKey, slotId, slotKeyString, type FeedMode, type OverrideRow, type ResolvedSlot, type SlotKey, type StorySeries, type TemplateRow } from '@/lib/social-hub/slots/types';
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
+import { runDayFor } from '@/lib/social-hub/lead';
 import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
 /** The week board's model (spec 2026-10-20-calendar-week-board-redesign): columns, cards, stacking, time and y. Pure. */
@@ -126,11 +127,11 @@ export type BoardColumn = {
   weekday: number;
   past: boolean;
   isToday: boolean;
-  /** A past day folds into a slim "N posted" column. */
+  /** A past day is read-only: it shows only what went out (each posted card opens the post), and takes no drops or edits. */
   folded: boolean;
   /** The person edited this date (it has a person override); a system pin doesn't count. */
   edited: boolean;
-  /** Folded: the posts that went out. Otherwise: the day's slots. */
+  /** Past: the posts that went out. Otherwise: the day's slots. */
   count: number;
 };
 
@@ -139,6 +140,8 @@ export type BoardPost = Pick<HubPost, 'id' | 'vertical' | 'nyDate' | 'slot' | 's
   approval: Pick<HubPost['approval'], 'required' | 'approvedAt'>;
   /** When the booking posts; the details say so when it is later than the slot's drift (spec §Backend, feed spacing). */
   publishAt?: string | null;
+  /** When it went out; places a posted post whose slot isn't on the day any more. */
+  postedAt?: string | null;
 };
 
 export type BoardCard<P extends BoardPost = HubPost> = {
@@ -213,7 +216,8 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
       const statusText = status === 'empty'
         ? overCap
           ? STATUS_TEXT.overCap
-          : `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(d.nyDate)}.`
+          // A cushion type's slot is made by the night `lead` days before it (Bald-Eagle D4).
+          : `Empty for now. The ${RUN_HOUR_LABEL[s.vertical]} run makes it on ${dayShortLabel(runDayFor(d.nyDate, s.vertical, s.series))}.`
         : STATUS_TEXT[status];
       return {
         key: `${day}|${slotKeyString(s)}`,
@@ -232,6 +236,7 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
         mine: d.personKeys.some((k) => sameSlotKey(k, s)),
       };
     });
+    if (past) dayCards.push(...unslottedPosted(input.posts, d.nyDate, day, dayCards));
     columns.push({
       nyDate: d.nyDate,
       weekday: d.weekday,
@@ -244,6 +249,41 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
     cards.push(...dayCards);
   });
   return { columns, cards };
+}
+
+/**
+ * A past day's posts that went out but match none of its slots (the slot was
+ * moved or removed after it posted, or it posted outside the calendar): each
+ * becomes a posted card at its booked time, else the time it went out, so
+ * looking back shows everything that posted. Never on today or later.
+ */
+function unslottedPosted<P extends BoardPost>(posts: readonly P[], nyDate: string, day: number, dayCards: readonly BoardCard<P>[]): BoardCard<P>[] {
+  const shown = new Set(dayCards.map((c) => c.booked?.id).filter(Boolean));
+  const out: BoardCard<P>[] = [];
+  for (const p of posts) {
+    if (p.status !== 'published' || p.nyDate !== nyDate || shown.has(p.id)) continue;
+    const parsed = p.slot ? parseSlotId(p.slot.id) : null;
+    const at = p.postedAt ? new Date(p.postedAt) : null;
+    const startMinute = parsed?.startMinute ?? (at && !Number.isNaN(at.getTime()) ? Math.floor(nyMinuteOf(at) / 15) * 15 : null);
+    if (startMinute == null) continue;
+    out.push({
+      key: `${day}|posted|${p.id}`,
+      day,
+      vertical: p.vertical,
+      series: parsed?.series ?? null,
+      startMinute,
+      feedMode: null,
+      origin: 'override',
+      booked: p,
+      status: 'posted',
+      statusText: STATUS_TEXT.posted,
+      locked: true,
+      overCap: false,
+      outsideUsual: !isUsual(p.vertical, startMinute),
+      mine: false,
+    });
+  }
+  return out;
 }
 
 /**

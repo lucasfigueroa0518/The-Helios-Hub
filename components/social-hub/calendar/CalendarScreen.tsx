@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Hand, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 import { Delta } from '@/components/social-hub/analytics/KpiStrip';
@@ -28,10 +29,11 @@ import { actionEnabled, SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { metricSpec } from '@/lib/social-hub/metrics';
 import { addDays, dayLabel, isDayKey, monthLabel, monthOf, nyDateOf, shiftMonth, WEEKDAY_SHORT } from '@/lib/social-hub/time';
-import { isVertical, verticalInfo, VERTICAL_IDS } from '@/lib/social-hub/verticals';
+import { isVertical, typeHref, verticalInfo, VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import { daySlots, monthModel, totalLabel, type DayCell, type DaySlot } from '@/lib/social-hub/views/calendar';
 import { displayName, plural, shortDate, whenInline } from '@/lib/social-hub/views/format';
 import { offerer } from '@/lib/social-hub/views/offer';
+import { leadNumber, typicals, type Typicals } from '@/lib/social-hub/views/typical';
 import { minuteLabel, windowRange } from '@/lib/social-hub/views/plan';
 import { mondayOf, weekLabel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
 import type { HubPost, MetricKey, Vertical } from '@/lib/social-hub/types';
@@ -93,9 +95,9 @@ function ViewToggle({ path, view }: { path: string; view: 'week' | 'month' }) {
 const ON_BOARD = new Set(['scheduled', 'publishing', 'published', 'ready']);
 
 /** A post as the board needs it: small enough to send to the client. */
-function slim(p: HubPost): SlimPost {
+function slim(p: HubPost, typical?: Typicals): SlimPost {
   const refs = Object.fromEntries(Object.entries(contentRefs(p)).filter((e): e is [string, string] => typeof e[1] === 'string'));
-  return { id: p.id, vertical: p.vertical, nyDate: p.nyDate, slot: p.slot, status: p.status, publishAt: p.publishAt, approval: { required: p.approval.required, approvedAt: p.approval.approvedAt }, name: displayName(p), refs, thumb: thumbOf(p.media).src };
+  return { id: p.id, vertical: p.vertical, nyDate: p.nyDate, slot: p.slot, status: p.status, publishAt: p.publishAt, postedAt: p.postedAt, approval: { required: p.approval.required, approvedAt: p.approval.approvedAt }, name: displayName(p), refs, thumb: thumbOf(p.media).src, lead: typical ? leadNumber(p, typical) : null };
 }
 
 /** Ready to place (decision 16): made, approved or not, with no slot (the Content page's "Made, waiting for a slot"). */
@@ -117,7 +119,9 @@ function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset;
   const legacy = week.source === 'legacy';
   const editable = actionEnabled('editSlots') && !week.readOnly && !legacy;
   const dates = new Set(week.days.map((d) => d.nyDate).filter(Boolean));
-  const posts = dataset.posts.filter((p) => p.nyDate && dates.has(p.nyDate) && p.slot && ON_BOARD.has(p.status)).map(slim);
+  const typical = typicals(dataset.posts, now);
+  // A post that went out shows on its past day even without a slot (boardModel places it by when it posted).
+  const posts = dataset.posts.filter((p) => p.nyDate && dates.has(p.nyDate) && (p.slot || p.status === 'published') && ON_BOARD.has(p.status)).map((p) => slim(p, typical));
   const ready = !editable || !actionEnabled('reschedule') ? [] : readyItems(dataset.posts, now);
   const sandbox = week.sandbox === true;
   const boardProps = {
@@ -315,7 +319,7 @@ function DayList({ posts, day, types, now, o, base, carouselOff, slots: calendar
             <div className="sh-item__meta"><TypeMark vertical={s.vertical} /><span className="sh-state">Open slot</span></div>
             <span className="sh-item__name sh-muted">{s.window.label} · {windowRange(s.window)}</span>
           </div>
-          <ReadyFor posts={posts} slot={s} o={o} poolHref={`${base}/content/pools/${s.vertical}`} />
+          <ReadyFor posts={posts} slot={s} o={o} poolHref={typeHref(s.vertical, base)} />
         </li>
       ))}
     </ul>
@@ -331,7 +335,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
   if (ready.length === 0) {
     return (
       <p className="sh-item__ready-none sh-subtle">
-        Nothing of this type is made and waiting; tonight’s run fills open slots. <HubLink className="sh-link" href={poolHref}>See the pool</HubLink>
+        Nothing of this type is made and waiting; tonight’s run fills open slots. <Link className="sh-link" href={poolHref}>See the pool</Link>
       </p>
     );
   }
@@ -339,7 +343,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
   if (!actionEnabled('reschedule')) {
     return (
       <p className="sh-item__ready-none sh-subtle">
-        {plural(ready.length, 'post')} of this type {ready.length === 1 ? 'is' : 'are'} made and could go here once scheduling from the hub is on. <HubLink className="sh-link" href={poolHref}>See the pool</HubLink>
+        {plural(ready.length, 'post')} of this type {ready.length === 1 ? 'is' : 'are'} made and could go here once scheduling from the hub is on. <Link className="sh-link" href={poolHref}>See the pool</Link>
       </p>
     );
   }
@@ -358,7 +362,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
           </li>
         ))}
       </ul>
-      <p className="sh-item__ready-more"><HubLink className="sh-link" href={poolHref}>See the whole pool</HubLink></p>
+      <p className="sh-item__ready-more"><Link className="sh-link" href={poolHref}>See the whole pool</Link></p>
     </details>
   );
 }

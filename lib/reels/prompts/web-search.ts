@@ -3,7 +3,10 @@
  *
  * APPROVED 2026-09-22 as `web-search-v1` (D-070). `web-search-v2` (D-236)
  * asks for two stories, leans toward one person, and requires each fact to
- * name its publication. Changing any wording below means a new version and a
+ * name its publication. `web-search-v3` (central intake, round 3b) puts today's
+ * date and the 7-day window in the user turn (the cached system text is
+ * unchanged) and adds a required `happened_on` field to the report schema.
+ * Changing any wording below means a new version and a
  * new registry row: old records must keep meaning what they said. The adapter
  * still refuses to run unless REELS_B6_PROMPT_APPROVED=true, so the flag stays
  * the operational switch.
@@ -20,7 +23,7 @@
  *    the per-night memory goes in the user turn.
  */
 
-export const WEB_SEARCH_PROMPT_VERSION = 'web-search-v2';
+export const WEB_SEARCH_PROMPT_VERSION = 'web-search-v3';
 
 export const WEB_SEARCH_SYSTEM = `You are a researcher for Helios, an AI consulting firm. Once a night you find two true stories worth telling and write them up.
 
@@ -51,6 +54,10 @@ Rules:
 export function buildWebSearchUserPrompt(input: {
   recentHeadlines: string[];
   tonightHeadlines: string[];
+  /** Today's New York date, YYYY-MM-DD. */
+  today: string;
+  /** Today minus 7 days, YYYY-MM-DD. */
+  windowStart: string;
 }): string {
   const avoid = [...input.recentHeadlines, ...input.tonightHeadlines];
   const lines = [
@@ -59,6 +66,8 @@ export function buildWebSearchUserPrompt(input: {
     'At least one should be about one person: a turn in their work or life, two facts that should not belong to the same life, or a path from something unlikely to what followed.',
     'Name the publication in the sentence that uses its fact.',
     'Call report_story once for each story.',
+    '',
+    `Today is ${input.today}. Find stories whose main event happened on or after ${input.windowStart}.`,
     '',
     'Do not write about anything already covered below. Pick different stories.',
   ];
@@ -109,7 +118,11 @@ export const REPORT_STORY_TOOL = {
         description: 'Every URL you read and relied on.',
         items: { type: 'string' },
       },
+      happened_on: {
+        type: ['string', 'null'],
+        description: 'The date the main event happened, as YYYY-MM-DD, as stated in the sources. Null when the sources do not state it.',
+      },
     },
-    required: ['headline', 'story', 'subject', 'claims', 'citation_urls'],
+    required: ['headline', 'story', 'subject', 'claims', 'citation_urls', 'happened_on'],
   },
 };

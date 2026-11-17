@@ -6,19 +6,24 @@
  *   Guess the Number   carousel brief numbers + shortlisted stories without a brief + reels The Number ideas
  *   Free vs. Paid      Ball Knowledge ideas and GitHub Trending (optional hints)
  *
+ * Each series reads either today's sources (legacy) or the central intake
+ * (lib/intake/pool-stories.ts: the same shapes and selection rules, no
+ * dependency on Reels or Carousels having run), per the consumer switch
+ * (lib/stories/pool-intake.ts). The refresh record says which.
+ *
  * Used ideas stay used. An unused idea the latest refresh did not bring back
  * leaves, the way a reels slate replaces the night before. A series whose
  * sources could not be read keeps its list, and its rows age out after the
  * series' freshness window.
  *
- * The builds (the 4:00 AM auto set and Generate) draw from this pool. This
+ * The builds (the 3:00 AM auto set and Generate) draw from this pool. This
  * pass only reads the other pools (CLAUDE.md rule 2: nothing else in the
  * database is swept). It does not score with a model. Morning Download scores
  * every story on one news scale (lib/stories/md-score.ts); the other series
  * keep each source's own rank. Each row carries its breakdown for the hub.
  */
 import type { Queryable } from '@/lib/stories/db';
-import { POOL_CAP, QUEUE_LIVE } from '@/lib/social-hub/queue';
+import { POOL_CAP } from '@/lib/social-hub/queue';
 import type { ScoreBreakdown } from '@/lib/social-hub/types';
 import { morningDownloadScore, rankBreakdown } from '@/lib/stories/md-score';
 import type { Series } from '@/lib/stories/render/types';
@@ -47,8 +52,15 @@ export const FRESH_MS: Record<Series, number> = {
   free_vs_paid: 14 * 86_400_000,
 };
 
-/** The pool turns over at 4:00 AM New York (the Stories hour, after the 3 AM carousel run). */
-export const POOL_DAY_STARTS_HOUR = 4;
+/** The pool turns over at 3:00 AM New York (the Stories hour, night schedule v2: after the 2:40 intake top-up). */
+export const POOL_DAY_STARTS_HOUR = 3;
+
+/**
+ * Where a series' ideas were read: the intake, today's sources, today's sources because the intake is stale (no main
+ * run in 26 h), or today's sources because the intake read failed for that series ('error-fallback').
+ */
+export type SeriesSource = 'intake' | 'legacy' | 'stale-fallback' | 'error-fallback';
+export type PoolModes = { md: SeriesSource; gtn: SeriesSource; fvp: SeriesSource };
 
 export type PoolReads = {
   morning: () => Promise<{ reels: StoryCandidate[]; carousel: StoryCandidate[] }>;
@@ -56,6 +68,8 @@ export type PoolReads = {
   leads: () => Promise<ToolLead[]>;
   /** When the newest carousel run finished: a run newer than the last refresh saw makes the pool due again. */
   carouselRunAt?: () => Promise<string | null>;
+  /** Which source each series read (the consumer switch); recorded with the refresh. */
+  modes?: () => Promise<PoolModes>;
 };
 
 /** The live reads, all from the shared database (read only). */
@@ -150,30 +164,45 @@ const originLabel = (o: string) => ({ reels: 'Text on Screen', carousel: 'Carous
 
 /**
  * Write a fresh gather into stories.pool:
- *   1. upsert each returned idea (a used row is never touched)
- *   2. anything stories.history has shown is used
- *   3. a fully read series drops its unused rows the refresh did not return
- *   4. any unused row past its series' freshness window drops
- *      (a person's own seeds, keyed `seed:`, are never dropped by 3, 4 or 5)
- *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21): the lowest-scored go, never one a
- *      person pinned or dragged; ideas a person archived do not count
+ *   1. upsert each returned idea (a used row is never touched, except Morning Download's: a story the
+ *      intake still returns is reopened, because new articles keep joining the same intake story and
+ *      md-development.ts decides whether it is news again; Bald-Eagle D2)
+ *   2. anything stories.history has shown is used (not Morning Download, for the same reason)
+ *   3. a fully read series archives its unused rows the refresh did not return
+ *   4. any unused row past its series' freshness window is archived
+ *      (a person's own seeds, keyed `seed:`, are never archived by 3, 4 or 5)
+ *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21): the lowest-scored are archived,
+ *      never one a person pinned or dragged; ideas a person archived do not count
+ *
+ * Archive, not delete (Tommy, 2026-11-16: "Yes, archive them"): steps 3 to 5 stamp `archived_at` and why. A row the
+ * refresh itself archived (stale, not-returned, over-cap) is reopened when the intake returns it again, as a deleted
+ * row used to be re-inserted. A person's Archive lives in social_hub.idea_adjustments, not here: it keeps the idea out
+ * of the hub's list (dayRanking), the build's order (inQueueOrder) and openPool whatever this row says. An archived
+ * row is never offered to a build (openPool) and never counts toward the cap. Until db/stories_pool_archive.sql is
+ * applied the column is missing and the rows are deleted as before. `upserted` counts the rows actually written.
  */
 export async function writePool(db: Queryable, gathered: { items: PoolItem[]; refreshed: Series[] }, now: Date): Promise<{ upserted: number; dropped: number }> {
   const { items, refreshed } = gathered;
+  const archive = await hasArchiveColumn(db);
+  let upserted = 0;
   for (const item of items) {
-    await db.query(
+    const { rows } = await db.query<{ id: string }>(
       `INSERT INTO stories.pool (series, key, origin, ref, title, payload, score, refreshed_at)
        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::timestamptz)
        ON CONFLICT (series, key) DO UPDATE SET
          origin = EXCLUDED.origin, ref = EXCLUDED.ref, title = EXCLUDED.title,
-         payload = EXCLUDED.payload, score = EXCLUDED.score, refreshed_at = EXCLUDED.refreshed_at
-       WHERE stories.pool.used_at IS NULL`,
+         payload = EXCLUDED.payload, score = EXCLUDED.score, refreshed_at = EXCLUDED.refreshed_at,
+         used_at = CASE WHEN stories.pool.series = 'morning_download' THEN NULL ELSE stories.pool.used_at END${archive ? `,
+         archived_at = NULL, archived_reason = NULL` : ''}
+       WHERE ${archive ? `(stories.pool.archived_at IS NULL OR stories.pool.archived_reason IN (${REFRESH_ARCHIVE_REASONS.map((r) => `'${r}'`).join(', ')})) AND ` : ''}(stories.pool.used_at IS NULL OR stories.pool.series = 'morning_download')
+       RETURNING id`,
       [item.series, item.key, item.origin, item.ref, item.title, JSON.stringify(item.payload), item.score, now.toISOString()],
     );
+    upserted += rows.length;
   }
   await db.query(
     `UPDATE stories.pool p SET used_at = $1::timestamptz
-      WHERE p.used_at IS NULL
+      WHERE p.used_at IS NULL AND p.series <> 'morning_download'
         AND EXISTS (SELECT 1 FROM stories.history h WHERE h.series = p.series AND (h.key = p.key OR h.key = p.payload->>'story_key'))`,
     [now.toISOString()],
   );
@@ -181,68 +210,94 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
   for (const series of POOL_SERIES) {
     const cutoff = new Date(now.getTime() - FRESH_MS[series]).toISOString();
     const keys = refreshed.includes(series) ? items.filter((i) => i.series === series).map((i) => i.key) : null;
-    const { rows } = await db.query<{ id: string }>(
-      `DELETE FROM stories.pool
-        WHERE series = $1 AND used_at IS NULL
+    const stale = `series = $1 AND used_at IS NULL
           AND key NOT LIKE 'seed:%'
-          AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))
-        RETURNING id`,
-      [series, cutoff, keys],
-    );
+          AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))`;
+    const { rows } = archive
+      ? await db.query<{ id: string }>(
+        `UPDATE stories.pool SET archived_at = $4::timestamptz,
+                archived_reason = CASE WHEN refreshed_at < $2::timestamptz THEN 'stale' ELSE 'not-returned' END
+          WHERE archived_at IS NULL AND ${stale}
+          RETURNING id`,
+        [series, cutoff, keys, now.toISOString()],
+      )
+      : await db.query<{ id: string }>(`DELETE FROM stories.pool WHERE ${stale} RETURNING id`, [series, cutoff, keys]);
     dropped += rows.length;
-    dropped += await capSeries(db, series);
+    dropped += await capSeries(db, series, archive ? now : null);
   }
-  return { upserted: items.length, dropped };
+  return { upserted, dropped };
 }
 
-/** Hold one series to the pool standard's cap. Never throws: a database without the moves table keeps its pool as it is. */
-async function capSeries(db: Queryable, series: Series): Promise<number> {
-  if (!QUEUE_LIVE.has('stories')) return 0;
+/** Why the refresh itself archives a row (writePool, capSeries): only these come back when the intake returns the idea. */
+export const REFRESH_ARCHIVE_REASONS = ['stale', 'not-returned', 'over-cap'] as const;
+
+/** Whether stories.pool has the archive column yet (db/stories_pool_archive.sql). */
+export async function hasArchiveColumn(db: Queryable): Promise<boolean> {
   try {
-    const { rows } = await db.query<{ id: string }>(
-      `DELETE FROM stories.pool p
-        WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
+    const { rows } = await db.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_schema = 'stories' AND table_name = 'pool' AND column_name = 'archived_at'`,
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Hold one series to the pool standard's cap: the open ideas past it are archived (`archiveAt`), or deleted on a database
+ * without the archive column (`archiveAt` null). Rows already archived, by the refresh or by a person, never count.
+ * Never throws: a database without the moves table keeps its pool as it is.
+ */
+async function capSeries(db: Queryable, series: Series, archiveAt: Date | null): Promise<number> {
+  const live = archiveAt ? 'AND p2.archived_at IS NULL' : '';
+  const over = `p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
           AND p.id IN (
             SELECT r.id FROM (
               SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
                 FROM stories.pool p2
-               WHERE p2.series = $1 AND p2.used_at IS NULL
+               WHERE p2.series = $1 AND p2.used_at IS NULL ${live}
                  AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = 'stories' AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)
             ) r WHERE r.n > $2)
           AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
                            WHERE a.vertical = 'stories' AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
-                             AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)
-        RETURNING p.id`,
-      [series, POOL_CAP],
-    );
+                             AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)`;
+  try {
+    const { rows } = archiveAt
+      ? await db.query<{ id: string }>(
+        `UPDATE stories.pool p SET archived_at = $3::timestamptz, archived_reason = 'over-cap' WHERE p.archived_at IS NULL AND ${over} RETURNING p.id`,
+        [series, POOL_CAP, archiveAt.toISOString()],
+      )
+      : await db.query<{ id: string }>(`DELETE FROM stories.pool p WHERE ${over} RETURNING p.id`, [series, POOL_CAP]);
     return rows.length;
   } catch {
     return 0;
   }
 }
 
-export async function refreshStoryPool(db: Queryable, reads: PoolReads, now: Date): Promise<{ upserted: number; dropped: number; errors: string[] }> {
+export async function refreshStoryPool(db: Queryable, reads: PoolReads, now: Date): Promise<{ upserted: number; dropped: number; errors: string[]; intake?: PoolModes }> {
   // Read the carousel marker before gathering: a run that finishes mid-gather is newer than this and refreshes again.
   const carouselAt = await reads.carouselRunAt?.().catch(() => null) ?? null;
   const gathered = await gatherPool(reads, now);
+  const modes = (await reads.modes?.().catch(() => null)) ?? null;
   const r = await writePool(db, gathered, now);
   await db.query(
     `INSERT INTO stories.settings (key, value, updated_by, updated_at) VALUES ('pool_refreshed', $1::jsonb, 'worker', now())
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-    [JSON.stringify({ day: poolDay(now), at: now.toISOString(), carousel_at: carouselAt, upserted: r.upserted, dropped: r.dropped, errors: gathered.errors })],
+    [JSON.stringify({ day: poolDay(now), at: now.toISOString(), carousel_at: carouselAt, upserted: r.upserted, dropped: r.dropped, errors: gathered.errors, ...(modes ? { intake: modes } : {}) })],
   );
-  return { ...r, errors: gathered.errors };
+  return { ...r, errors: gathered.errors, ...(modes ? { intake: modes } : {}) };
 }
 
-/** The pool's day: the New York date, turning over at 4:00 AM instead of midnight. */
+/** The pool's day: the New York date, turning over at 3:00 AM instead of midnight. */
 export function poolDay(now: Date): string {
   return nyDateOf(new Date(now.getTime() - POOL_DAY_STARTS_HOUR * 3_600_000));
 }
 
 /**
- * Refresh once per pool day (the first worker pass after 4:00 AM, or the first build before it if the
- * pool has none for the day), and again whenever a carousel run has finished since the last refresh
- * read the carousel. The second case is how a late or manually started run's stories reach Morning Download.
+ * Refresh once per pool day (the first worker pass after 3:00 AM, or the first build before it if the
+ * pool has none for the day), and again whenever a carousel run (or, for a series on the intake, an
+ * intake run) has started since the last refresh read it. The second case is how a late or manually
+ * started run's stories reach Morning Download.
  */
 export async function refreshPoolIfDue(db: Queryable, reads: () => PoolReads, now: Date): Promise<Awaited<ReturnType<typeof refreshStoryPool>> | null> {
   const { rows } = await db.query<{ value: { day?: string; carousel_at?: string | null } | null }>(`SELECT value FROM stories.settings WHERE key = 'pool_refreshed'`);
@@ -265,12 +320,21 @@ export type OpenPool = {
   meta?: { stories: PoolMeta[]; numbers: PoolMeta[]; unbriefed: PoolMeta[]; leads: PoolMeta[] };
 };
 
-/** One series' open ideas, best first: what its build chooses from. */
+/**
+ * One series' open ideas, best first: what its build chooses from. Archived rows are never offered: neither one the
+ * refresh archived nor one a person archived (social_hub.idea_adjustments, the hub's `stories:pool:<series>:<key>` id).
+ * A database without the moves table reads the pool without that check.
+ */
 export async function openPool(db: Queryable, series: Series): Promise<OpenPool> {
-  const { rows } = await db.query<{ key: string; score: string | number | null; payload: PoolItem['payload'] }>(
-    `SELECT key, score, payload FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST, title`,
+  const live = (await hasArchiveColumn(db)) ? 'AND p.archived_at IS NULL' : '';
+  type Row = { key: string; score: string | number | null; payload: PoolItem['payload'] };
+  const read = (personal: string) => db.query<Row>(
+    `SELECT p.key, p.score, p.payload FROM stories.pool p WHERE p.series = $1 AND p.used_at IS NULL ${live} ${personal} ORDER BY p.score DESC NULLS LAST, p.title`,
     [series],
   );
+  const { rows } = await read(
+    `AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = 'stories' AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)`,
+  ).catch(() => read(''));
   const out: OpenPool = { stories: [], numbers: [], unbriefed: [], leads: [], meta: { stories: [], numbers: [], unbriefed: [], leads: [] } };
   for (const { key, score, payload: p } of rows) {
     const meta: PoolMeta = { key, score: score == null ? null : Number(score) };

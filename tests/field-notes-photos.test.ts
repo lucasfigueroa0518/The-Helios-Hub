@@ -13,7 +13,8 @@ import { facesInline, ingestPhoto, hamming, NEAR_DUPLICATE_MAX_DISTANCE } from '
 import { FACES_LEASE_MINUTES, FACES_MAX_ATTEMPTS, runFacesStep } from '@/lib/field-notes/photos/faces-worker';
 import { isHeif, toJpeg } from '@/lib/field-notes/photos/heic';
 import { parseExif } from '@/lib/field-notes/photos/exif';
-import { isAvailable, markUsed, pickPhotos, pickPostPhotos, checkPhotoPool, pickReplacement, poolVariety, rejectPhoto, releaseIfRested, restorePhoto } from '@/lib/field-notes/photos/pool';
+import { isAvailable, markUsed, pickPhotos, pickPostPhotos, checkPhotoPool, pickReplacement, poolVariety, publishedPhotoIds, rejectPhoto, releaseIfRested, restorePhoto } from '@/lib/field-notes/photos/pool';
+import { mediaLibraryKey } from '@/lib/photos/used';
 import { listPool, recordUse, releaseRested, restorePhotoToPool, retirePhoto, setPhotoTags } from '@/lib/field-notes/photos/store';
 import { masterPath, type Query } from '@/lib/media-library/types';
 import type { PhotoKind, PoolPhoto } from '@/lib/field-notes/types';
@@ -1101,4 +1102,20 @@ test('picker: the cover prefers a tagger-confirmed face photo and never takes on
   const noConfirmed = pickPostPhotos({ pool: pool.filter((p) => p.photoId !== 'confirmed'), ...R, count: 5 });
   assert.equal(noConfirmed.photoIds[0], 'star-unchecked');
   assert.ok(noConfirmed.warnings.some((w) => /not confirmed by the face tagger/.test(w)));
+});
+
+test('CI-32: a team photo published in the last 20 days (by its bank key or its dHash) is skipped; the rest rule still holds', () => {
+  const at = (h: number) => new Date(Date.UTC(2026, 10, 1, h)).toISOString();
+  const p = (id: string, kind: PhotoKind, h: number, o: Partial<PoolPhoto> = {}): PoolPhoto => ({ photoId: id, uploadedBy: 't', uploadedAt: at(h), status: 'live', lastUsedPostSeq: null, rejectReason: null, kind, opener: false, ...o });
+  const pool = [p('face-new', 'people', 9), p('face-old', 'people', 1), p('w1', 'working', 8), p('w2', 'working', 7), p('s1', 'scenery', 6), p('e1', 'event', 5), p('rest', 'scenery', 4, { status: 'resting', lastUsedPostSeq: 19 })];
+  const ledger = { urls: new Set([mediaLibraryKey('face-new')]), phashes: [], dhashes: ['f0f0f0f0f0f0f0f0'] };
+  const published = publishedPhotoIds(pool, ledger, new Map([['w1', 'f0f0f0f0f0f0f0f1'], ['w2', '0f0f0f0f0f0f0f0f']]));
+  assert.deepEqual([...published].sort(), ['face-new', 'w1'], 'by key and by a near dHash');
+  const pick = pickPostPhotos({ pool, nextSeq: 20, restPosts: 8, count: 5, published });
+  assert.equal(pick.photoIds[0], 'face-old', 'the newest Faces photo was published, so the next one opens');
+  for (const id of ['face-new', 'w1', 'rest']) assert.ok(!pick.photoIds.includes(id), id);
+  // Too few left: today's shortage behaviour (fewer photos, a plain warning).
+  const short = pickPostPhotos({ pool, nextSeq: 20, restPosts: 8, count: 6, published });
+  assert.equal(short.photoIds.length, 4);
+  assert.ok(short.warnings.some((w) => /pool too narrow/.test(w)));
 });

@@ -87,8 +87,10 @@ test('carousel: qualified stories from the last 30 hours with their post photo; 
   assert.deepEqual(md[0]!.photo, { url: 'https://img.test/dc.jpg', credit: 'Photo: X' });
   const nums = await carouselNumbers(db, NOW);
   assert.deepEqual(nums.map((n) => [n.value, n.fact, n.sourceName]), [['$30.9B', 'Crusoe is now valued at $30.9B.', 'TechCrunch']]);
-  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 });
-  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 });
+  // A failed fetch still writes a URL-only ledger row; the same row twice is one row.
+  const offline = { http: (async () => new Response('gone', { status: 404 })) as unknown as typeof fetch };
+  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 }, offline);
+  await recordPublishedPhoto(db, { url: 'https://img.test/dc.jpg', usedAt: NOW, storyId: 'stories:x', slide: 2 }, offline);
   assert.deepEqual([...(await recentUsedPhotoUrls(db, NOW))], ['https://img.test/dc.jpg']);
 });
 
@@ -171,13 +173,13 @@ test('Morning Download: merge across systems, rank, write, ground with one rewri
   assert.equal(req.model, 'claude-sonnet-5-5');
 });
 
-test('Morning Download: a carousel photo another story used this week is not kept; the finder is asked instead', async () => {
+test('Morning Download: a carousel photo another post published lately is not kept; the finder is asked instead', async () => {
   const { db } = await harnessDb();
   const slate = await addSlate(db, DATE);
   await addIdea(db, slate, { headline: 'Nvidia posts record revenue', url: 'https://r.test/nvidia', net: 8 });
   await db.query(`INSERT INTO social.runs (finished_at, record) VALUES ($1, $2)`, ['2026-10-08T02:00:00Z', JSON.stringify({ selection: { scored: [{ id: 'https://c.test/openai', status: 'qualified', outlets: ['Bloomberg'], members: [{ title: 'OpenAI releases GPT-6' }], representative: { title: 'OpenAI releases GPT-6' }, body: 'OpenAI released GPT-6.' }], shortlist: [] } })]);
   await db.query(`INSERT INTO social.posts (slug, story_id, status, render, origin) VALUES ('gpt6', 'https://c.test/openai', 'review', $1, 'pipeline')`, [JSON.stringify({ slides: [{ photoUrl: 'https://img.test/openai.jpg', photoCredit: 'Photo: OpenAI', photoKind: 'scene' }] })]);
-  await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/openai.jpg', '2026-10-07T02:00:00Z', 'https://c.test/other-story', 1)`);
+  await db.query(`INSERT INTO social.used_photos (url, used_at, story_id, slide) VALUES ('https://img.test/openai.jpg', '2026-10-07T02:00:00Z', 'stories:other-set', 1)`);
   const write = stubWriter({
     submit_headlines: (params) => ({
       stories: (materialOf(params) as Array<{ key: string; headline: string }>).map((s) => ({ key: s.key, headline: `${s.headline} on Monday. It matters.`, source_verb: 'via', source_name: 'Wired', subjects: [], visual: { kind: 'company', query: s.headline.split(' ')[0] }, alt_visuals: [] })),
@@ -311,7 +313,9 @@ test('Morning Download: a story the writer leaves out gets the one rewrite, like
   assert.deepEqual((materialOf(write.calls[1]!) as Array<{ headline: string }>).map((s) => s.headline), ['Mistral raises money']);
 });
 
-test('Morning Download: stories shown in the last 3 days are dropped; fewer than 2 left skips the day', async () => {
+// Bald-Eagle D2: "shown in the last 3 days → dropped" became the development test. A story we ran with nothing to
+// compare against (no set, so no headline) stays out as before, and is now recorded as a candidate with the reason.
+test('Morning Download: stories we ran lately stay out without a new event; fewer than 2 left skips the day', async () => {
   const { db } = await harnessDb();
   const slate = await addSlate(db, DATE);
   await addIdea(db, slate, { headline: 'A', url: 'https://r.test/a', net: 9 });
@@ -319,7 +323,10 @@ test('Morning Download: stories shown in the last 3 days are dropped; fewer than
   await recordHistory(db, 'morning_download', [storyKey('https://r.test/b')], null);
   const deps = await buildDeps(db, 'morning_download');
   const r = await buildMorningDownload(deps);
-  assert.deepEqual(r, { ok: false, skip: 'only 1 new stories in the pool', candidates: [] });
+  assert.equal(r.ok, false);
+  if (r.ok) return;
+  assert.equal(r.skip, 'only 1 new stories in the pool');
+  assert.deepEqual(r.candidates.map((c) => [c.payload?.url, c.chosen, c.reason]), [['https://r.test/b', false, 'ran before; no stored headline to compare']]);
 });
 
 /* ── Guess the Number (M6) ───────────────────────────────────────── */
@@ -508,18 +515,20 @@ test('Guess the Number: the same subject as a recent set fails same-subject', as
   assert.deepEqual(same[0]!.state, { candidate: { question: EMBED.question, label: EMBED.label }, recent: { question: 'How long is an embedding vector?', label: 'Embedding length' } });
 });
 
-test('Guess the Number: nothing passes → skipped, gtnSkip recorded on the set', async () => {
+test('Guess the Number: nothing passes in either round → skipped, gtnSkip (both rounds) recorded on the set', async () => {
   const { db } = await harnessDb();
   await CHATGPT_POST(db);
-  const { deps } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev: stubJev((k) => (k === 'verifiable' ? 0.2 : DEFAULT_GATE(k))) });
+  const { deps, write } = await gtnDeps(db, [EMBED, POOLED, THIRD], { jev: stubJev((k) => (k === 'verifiable' ? 0.2 : DEFAULT_GATE(k))) });
   const r = await buildGuessTheNumber(deps, { numbers: () => carouselNumbers(db, NOW), unbriefed: async () => [] });
   assert.equal(r.ok, false);
   if (r.ok) return;
-  assert.match(r.skip, /no candidate passed the gates/);
-  assert.equal(r.candidates.length, 3);
+  assert.match(r.skip, /no candidate passed the gates in 2 rounds/);
+  assert.equal(write.calls.length, 2, 'Bald-Eagle D10: one second try before skipping');
+  assert.equal(r.candidates.length, 6);
   assert.ok(r.candidates.every((c) => !c.chosen && c.reason === 'verifiable'));
-  const { rows } = await db.query<{ considered: Array<{ failedGate: string }> }>(`SELECT payload->'gtnSkip'->'considered' AS considered FROM stories.sets WHERE id = $1`, [deps.setId]);
-  assert.deepEqual(rows[0]!.considered.map((c) => c.failedGate), ['verifiable', 'verifiable', 'verifiable']);
+  const { rows } = await db.query<{ rec: { considered: Array<{ round: number; failedGate: string }>; rounds: Array<{ round: number; considered: unknown[] }> } }>(`SELECT payload->'gtnSkip' AS rec FROM stories.sets WHERE id = $1`, [deps.setId]);
+  assert.deepEqual(rows[0]!.rec.considered.map((c) => [c.round, c.failedGate]), [1, 1, 1, 2, 2, 2].map((n) => [n, 'verifiable']));
+  assert.deepEqual(rows[0]!.rec.rounds.map((x) => [x.round, x.considered.length]), [[1, 3], [2, 3]]);
 });
 
 test('Guess the Number: contract breaks are logged, not fatal', async () => {
@@ -686,14 +695,18 @@ test('schedule: windows in New York time, a uniform minute, never late', () => {
   assert.equal(isDueOn(DEFAULT_SETTINGS.series.free_vs_paid.window, DATE), false);
 });
 
+/** Guess the Number is made 2 days ahead (Bald-Eagle D4): Tuesday's night (1:00 AM here) fills Thursday, DATE. */
+const GTN_NIGHT = new Date('2026-10-06T05:00:00Z');
+
 test('auto sets: only for series switched to auto, due today, still before the window closes', async () => {
   const { db } = await harnessDb();
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), NOW), []);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), GTN_NIGHT), []);
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
   const s = await loadSettings(db);
-  assert.deepEqual(await requestAutoSets(db, s, NOW), ['guess_the_number']);
-  assert.deepEqual(await requestAutoSets(db, s, NOW), []);
+  // GTN for Thursday (made 2 days ahead); FvP for Tuesday itself, whose window is still ahead at 1 AM.
+  assert.deepEqual(await requestAutoSets(db, s, GTN_NIGHT), ['guess_the_number', 'free_vs_paid']);
+  assert.deepEqual(await requestAutoSets(db, s, GTN_NIGHT), []);
 });
 
 test('auto sets: a skipped auto set is not requested again on every tick (the 1,126-sets-in-six-hours loop); a person can still Generate', async () => {
@@ -701,13 +714,13 @@ test('auto sets: a skipped auto set is not requested again on every tick (the 1,
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   const s = await loadSettings(db);
   const count = async () => Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.sets WHERE series = 'guess_the_number' AND ny_date = $1::date`, [DATE])).rows[0]!.n);
-  assert.deepEqual(await requestAutoSets(db, s, NOW), ['guess_the_number']);
+  assert.deepEqual(await requestAutoSets(db, s, GTN_NIGHT), ['guess_the_number']);
   // The build found nothing that cleared the bar: the set is skipped.
   await db.query(`UPDATE stories.sets SET status = 'skipped', error = 'no pair cleared the bar and its checks' WHERE series = 'guess_the_number'`);
-  for (let tick = 0; tick < 50; tick++) assert.deepEqual(await requestAutoSets(db, s, NOW), [], 'no new auto set');
+  for (let tick = 0; tick < 50; tick++) assert.deepEqual(await requestAutoSets(db, s, GTN_NIGHT), [], 'no new auto set');
   assert.equal(await count(), 1, 'fifty ticks made no new sets');
-  // The next day the series is due (Monday) is a new day: it is tried again.
-  assert.deepEqual(await requestAutoSets(db, s, new Date('2026-10-12T12:00:00Z')), ['guess_the_number']);
+  // The next day the series is due (Monday, made on Saturday night) is a new day: it is tried again.
+  assert.deepEqual(await requestAutoSets(db, s, new Date('2026-10-10T12:00:00Z')), ['guess_the_number']);
   assert.equal(await count(), 1, 'Thursday still has its one skipped set');
 });
 
@@ -716,10 +729,10 @@ test('auto sets: errors are retried, but only up to the daily limit', async () =
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   const s = await loadSettings(db);
   for (let attempt = 1; attempt <= MAX_AUTO_FAILURES_PER_DAY; attempt++) {
-    assert.deepEqual(await requestAutoSets(db, s, NOW), ['guess_the_number'], `attempt ${attempt}`);
+    assert.deepEqual(await requestAutoSets(db, s, GTN_NIGHT), ['guess_the_number'], `attempt ${attempt}`);
     await db.query(`UPDATE stories.sets SET status = 'failed', error = 'render: boom' WHERE series = 'guess_the_number' AND status = 'requested'`);
   }
-  for (let tick = 0; tick < 20; tick++) assert.deepEqual(await requestAutoSets(db, s, NOW), []);
+  for (let tick = 0; tick < 20; tick++) assert.deepEqual(await requestAutoSets(db, s, GTN_NIGHT), []);
   assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.sets WHERE series = 'guess_the_number'`)).rows[0]!.n), MAX_AUTO_FAILURES_PER_DAY);
 });
 
@@ -732,7 +745,7 @@ async function setSwitches(db: Awaited<ReturnType<typeof harnessDb>>['db'], s: {
   }
 }
 
-test('worker (approval off, publishing live): auto request at 4 AM → build → self-approve → schedule → publish in order → history, used photos, insights', async () => {
+test('worker (approval off, publishing live): auto request at 3 AM → build → self-approve → schedule → publish in order → history, used photos, insights', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   await setSwitches(db, { requireApproval: false, publishingLive: true });
@@ -746,14 +759,14 @@ test('worker (approval off, publishing live): auto request at 4 AM → build →
     publishingLimit: async () => ({ quotaUsage: 0, quotaTotal: 100 }),
   };
   const st = storage();
-  let clock = new Date('2026-10-08T08:00:00Z'); // 4:00 AM New York
+  let clock = new Date('2026-10-06T07:00:00Z'); // 3:00 AM New York, Tuesday: Thursday's set is made 2 days ahead
   const frames = [
     { seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'medium' as const, topic: 'ChatGPT users' } },
     { seq: 2, role: 'question' as const, backdrop: 'black' as const, copy: { role: 'question' as const, family: 'photo' as const, question: 'How many?', photo: { src: 'https://img.test/q.jpg', credit: 'c', kind: 'person' as const } } },
     { seq: 3, role: 'answer' as const, backdrop: 'black' as const, copy: { role: 'answer' as const, family: 'photo' as const, number: '800M', label: 'users', meaning: 'm', source: { verb: 'from' as const, name: 'OpenAI' } } },
   ];
   const deps = {
-    db, sourceDb: db, now: () => clock, sleep: async () => {},
+    db, sourceDb: db, now: () => clock, sleep: async () => {}, photoHttp: (async () => new Response("", { status: 404 })) as typeof fetch,
     builder: async () => ({ db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({}), photos: stubPhotos(), renderer, review: cleanReview, storage: st, now: () => clock, builders: { guess_the_number: async () => ({ ok: true as const, payload: {}, frames, candidates: [], historyKeys: ['openai.test/devday'] }) } }),
     meta: () => meta,
     storage: () => st,
@@ -793,7 +806,7 @@ test('worker: a flagged auto set is not self-approved even with approval off', a
   const flagging: ReviewCall = async () => ({ error: 'review call failed: 529', usage: null });
   const st = storage();
   const deps = {
-    db, sourceDb: db, now: () => new Date('2026-10-08T08:00:00Z'),
+    db, sourceDb: db, now: () => new Date('2026-10-06T08:00:00Z'),
     builder: async () => ({ db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({}), photos: stubPhotos(), renderer, review: flagging, storage: st, builders: { guess_the_number: async () => ({ ok: true as const, payload: {}, frames: [{ seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'low' as const, topic: 't' } }], candidates: [], historyKeys: [] }) } }),
     meta: () => { throw new Error('not used'); },
     storage: () => st,
@@ -807,12 +820,12 @@ test('worker: a flagged auto set is not self-approved even with approval off', a
   assert.equal(sets[0]!.flagged, true);
 });
 
-test('worker (defaults): nothing before 4 AM; an auto set waits at ready for Approve; an approved set is not scheduled while publishing is off', async () => {
+test('worker (defaults): nothing before 3 AM; an auto set waits at ready for Approve; an approved set is not scheduled while publishing is off', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'guess_the_number', { auto: true });
   const renderer = await stubRenderer();
   const st = storage();
-  let clock = new Date('2026-10-08T07:30:00Z'); // 3:30 AM New York
+  let clock = new Date('2026-10-06T06:30:00Z'); // 2:30 AM New York, Tuesday (Thursday's GTN night)
   const frames = [{ seq: 1, role: 'intro' as const, backdrop: 'black' as const, copy: { role: 'intro' as const, difficulty: 'low' as const, topic: 't' } }];
   const deps = {
     db, sourceDb: db, now: () => clock,
@@ -822,7 +835,7 @@ test('worker (defaults): nothing before 4 AM; an auto set waits at ready for App
     insights: () => { throw new Error('not used'); },
   };
   assert.deepEqual(await tick(deps), { built: 0, scheduled: 0, published: 0, insights: 0 });
-  clock = new Date('2026-10-08T08:00:00Z'); // 4:00 AM
+  clock = new Date('2026-10-06T07:00:00Z'); // 3:00 AM
   assert.equal((await tick(deps)).built, 1);
   const repo = await import('@/lib/stories/repository');
   const [set] = await repo.listSets(db, { series: 'guess_the_number' });

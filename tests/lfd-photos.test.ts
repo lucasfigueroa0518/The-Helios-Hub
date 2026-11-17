@@ -5,7 +5,7 @@ import { findPhotos, requestFor } from '@/lib/lfd/photos';
 import type { Pick, StoryCopy } from '@/lib/lfd/types';
 import type { PhotoFinder, PhotoRequest } from '@/lib/stories/photos';
 
-const pick = { key: 'a', refs: [], origin: 'reels', headline: 'H', sourceName: 'S', url: 'https://s.com/a', body: '', publishedAt: '2026-10-12T10:00:00Z', net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' } satisfies Pick;
+const pick = { key: 'a', refs: [], origin: 'reels', headline: 'H', sourceName: 'S', url: 'https://s.com/a', body: '', publishedAt: '2026-10-12T10:00:00Z', net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' } satisfies Pick;
 const copy: StoryCopy = { key: 'a', setup: '', headline: 'Bose Brought Back Wired Earbuds', highlight: '', names: [], body: 'b', photo: { kind: 'product', query: 'Bose wired earbuds', subjects: [{ name: 'Bose', type: 'organization' }], alts: [{ kind: 'logo', query: 'Bose logo' }] } };
 
 test('a request carries the writer photo ask, the source page, the date and the 7-day exclude set', () => {

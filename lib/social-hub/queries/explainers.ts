@@ -1,3 +1,4 @@
+import { jobTargetSql } from '@/lib/explainers/lead';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { forVertical, insightRows, type SpineRead } from '@/lib/social-hub/queries/spine';
 import { settingIsOn, type InsightRow } from '@/lib/social-hub/queries/reels';
@@ -14,6 +15,8 @@ export type ExplainerJobRow = {
   requested_at: string;
   finished_at: string | null;
   error: string | null;
+  /** The date the night made it FOR (Bald-Eagle D4, db/bald_eagle_2026_11_12_leadtime.sql); null for a person's render. */
+  target_date?: string | null;
   title: string;
   scope: string | null;
   source_url: string | null;
@@ -101,6 +104,7 @@ export type ExplainersRead = {
 export const EXPLAINER_JOBS_SQL = `
 SELECT j.id AS job_id, j.topic_id, j.status, j.trigger, j.mode, j.spend_usd,
        j.requested_at::text AS requested_at, j.finished_at::text AS finished_at, j.error,
+       ${jobTargetSql('j')}::text AS target_date,
        t.title, t.scope, t.source_url, t.origin,
        t.audience_fit, t.teachability_45s, t.analogy_potential, t.visual_potential,
        t.accuracy_under_simplification, t.hook_strength, t.weighted_score,

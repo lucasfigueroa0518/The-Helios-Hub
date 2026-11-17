@@ -18,11 +18,14 @@ import {
   buildStoryFollowUp,
   checkGrounding,
   judgeReportedStories,
+  parseHappenedOn,
+  searchWindow,
   storySlug,
   storyWithSources,
+  toAdapterItem,
   type StoryReport,
 } from '@/lib/reels/adapters/web-search';
-import { WEB_SEARCH_PROMPT_VERSION, WEB_SEARCH_SYSTEM } from '@/lib/reels/prompts/web-search';
+import { REPORT_STORY_TOOL, WEB_SEARCH_PROMPT_VERSION, WEB_SEARCH_SYSTEM, buildWebSearchUserPrompt } from '@/lib/reels/prompts/web-search';
 import { HIGH_CONFIDENCE } from '@/lib/reels/config';
 import { excerpt } from '@/lib/reels/jev/state';
 import { mergeSets } from '@/lib/reels/jev/runner';
@@ -488,13 +491,39 @@ test('a grounded story is stored with the sources that passed the check', () => 
 });
 
 test('the nightly search asks for two stories and does not show the grading rubric (D-236)', () => {
-  assert.equal(WEB_SEARCH_PROMPT_VERSION, 'web-search-v2');
+  assert.equal(WEB_SEARCH_PROMPT_VERSION, 'web-search-v3');
   assert.match(WEB_SEARCH_SYSTEM, /two true stories/);
   assert.match(WEB_SEARCH_SYSTEM, /At least one of the two stories should be about a single person/);
   assert.match(WEB_SEARCH_SYSTEM, /name the publication/i);
   assert.doesNotMatch(WEB_SEARCH_SYSTEM, /personal profile/i);
   assert.doesNotMatch(WEB_SEARCH_SYSTEM, /content bucket/i);
   assert.doesNotMatch(WEB_SEARCH_SYSTEM, /scored/);
+});
+
+test('web-search-v3: the user turn carries today and the 7-day window; the system text carries no date (cached)', () => {
+  const prompt = buildWebSearchUserPrompt({ recentHeadlines: ['Old story'], tonightHeadlines: [], today: '2026-11-09', windowStart: '2026-11-02' });
+  assert.match(prompt, /Today is 2026-11-09\. Find stories whose main event happened on or after 2026-11-02\./);
+  assert.ok(prompt.indexOf('Today is') < prompt.indexOf('- Old story'), 'the window comes before the avoid list');
+  assert.doesNotMatch(WEB_SEARCH_SYSTEM, /Today is/);
+  assert.match(WEB_SEARCH_SYSTEM, /Never invent a quote, a date/);
+  const props = REPORT_STORY_TOOL.input_schema.properties as Record<string, { type: unknown; description: string }>;
+  assert.deepEqual(props.happened_on.type, ['string', 'null']);
+  assert.equal(props.happened_on.description, 'The date the main event happened, as YYYY-MM-DD, as stated in the sources. Null when the sources do not state it.');
+  assert.ok(REPORT_STORY_TOOL.input_schema.required.includes('happened_on'));
+});
+
+test('web-search-v3: happened_on becomes publishTime when it is a real past date, else now', () => {
+  const now = new Date('2026-11-09T06:00:00Z'); // 1:00 AM New York, Nov 9
+  assert.deepEqual(searchWindow(now), { today: '2026-11-09', windowStart: '2026-11-02' });
+  assert.equal(parseHappenedOn('2026-11-05', now)?.toISOString(), '2026-11-05T12:00:00.000Z');
+  assert.equal(parseHappenedOn('2026-11-09', now)?.toISOString().slice(0, 10), '2026-11-09');
+  assert.equal(parseHappenedOn('2026-11-10', now), null, 'future');
+  assert.equal(parseHappenedOn('2026-02-30', now), null, 'not a date');
+  assert.equal(parseHappenedOn('Nov 5', now), null);
+  assert.equal(parseHappenedOn(null, now), null);
+  assert.equal(toAdapterItem(report({ happened_on: '2026-11-04' }), now).publishTime?.toISOString(), '2026-11-04T12:00:00.000Z');
+  assert.equal(toAdapterItem(report({ happened_on: null }), now).publishTime?.toISOString(), now.toISOString());
+  assert.equal(toAdapterItem(report({ happened_on: '2027-01-01' }), now).publishTime?.toISOString(), now.toISOString());
 });
 
 test('judgeReportedStories keeps a grounded story and rejects one with no citations', () => {

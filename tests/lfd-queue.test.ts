@@ -56,7 +56,7 @@ test('runs: one queued at a time; the worker claims it when none is running', as
 
 test('runs: an abandoned running run is failed so a queued one can start; adopting needs a running run', async () => {
   const { query } = await openHubTestDb();
-  await query(`INSERT INTO lfd.runs (trigger, status, started_at) VALUES ('manual', 'running', now() - interval '3 hours')`);
+  await query(`INSERT INTO lfd.runs (trigger, status, started_at) VALUES ('manual', 'running', now() - interval '13 hours')`);
   const id = await requestRun(query, 'scheduled', 1);
   assert.deepEqual(await claimRun(query), { id, trigger: 'scheduled' });
   assert.equal(await adoptRun(query, id!, 0.8, '2026-10-13'), id);

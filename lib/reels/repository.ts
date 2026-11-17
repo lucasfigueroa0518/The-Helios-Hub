@@ -318,7 +318,26 @@ export type PoolSource = {
   post_idea_id: string | null;
 };
 
+/**
+ * Central intake, Phase 2 (planning/Central Intake/PHASE2-CONTRACT.md, Owner B). In intake mode Reels fetches no
+ * primary adapter and writes no `reels.sources` rows, so "tonight's sources" (what A4's news peg and B6's "do not
+ * repeat tonight" read through `listRunSources` / `catalogMatchingHeadlines`) are the intake's kept reels items seen
+ * tonight. The intake night registers them here for its run id and clears them when done; a run id with nothing
+ * registered (every legacy night) reads `reels.sources` exactly as before.
+ */
+const intakeTonight = new Map<string, PoolSource[]>();
+
+export function setIntakeTonight(runId: string, sources: readonly PoolSource[]): void {
+  intakeTonight.set(runId, [...sources]);
+}
+
+export function clearIntakeTonight(runId: string): void {
+  intakeTonight.delete(runId);
+}
+
 export async function listRunSources(runId: string): Promise<PoolSource[]> {
+  const tonight = intakeTonight.get(runId);
+  if (tonight) return tonight.map((source) => ({ ...source }));
   const { rows } = await dbQuery<PoolSource>(
     `SELECT s.id, s.canonical_url, s.headline, s.body, s.source_name, s.source_type,
             s.adapter_id, s.bucket, s.publish_time, s.ingest_time, s.engagement,
@@ -378,7 +397,24 @@ export async function recentB6Headlines(nights: number): Promise<string[]> {
       ORDER BY ingest_time DESC`,
     [String(nights)],
   );
-  return rows.map((row) => row.headline);
+  const headlines = rows.map((row) => row.headline);
+  // Intake night: B6 finds are deposited into intake.items only, so its memory reads them there too.
+  if (intakeTonight.size === 0) return headlines;
+  const seen = new Set(headlines);
+  const deposited = await dbQuery<{ headline: string }>(
+    `SELECT headline FROM intake.items
+      WHERE source_id = 'search:b6'
+        AND first_seen_at > now() - ($1 || ' days')::interval
+      ORDER BY first_seen_at DESC`,
+    [String(nights)],
+  ).catch(() => ({ rows: [] as Array<{ headline: string }> }));
+  for (const row of deposited.rows) {
+    if (!seen.has(row.headline)) {
+      seen.add(row.headline);
+      headlines.push(row.headline);
+    }
+  }
+  return headlines;
 }
 
 // ── Candidate shortlist (GRP-01 / D-055) ─────────────────────────────────────
@@ -1101,6 +1137,25 @@ export async function catalogMatchingHeadlines(
   runId: string,
   limit: number,
 ): Promise<CatalogEntry[]> {
+  const tonight = intakeTonight.get(runId);
+  if (tonight) {
+    const { rows } = await dbQuery<CatalogEntry>(
+      `SELECT DISTINCT c.*
+         FROM reels.list_catalog c
+         JOIN unnest($2::text[]) AS s(headline)
+           ON length(c.entry_name) >= 4
+          AND s.headline ILIKE '%' || c.entry_name || '%'
+        WHERE ${toolsOnly('c')}
+        LIMIT $1`,
+      [
+        limit,
+        tonight
+          .filter((source) => source.drop_reason === null && source.source_type !== 'A4')
+          .map((source) => source.headline),
+      ],
+    );
+    return rows;
+  }
   const { rows } = await dbQuery<CatalogEntry>(
     `SELECT DISTINCT c.*
        FROM reels.list_catalog c
@@ -1142,7 +1197,21 @@ export type RetentionResult = {
   jevLogsDeleted: number;
 };
 
-export async function runRetention(retentionDays = RETENTION_DAYS): Promise<RetentionResult> {
+export async function runRetention(
+  retentionDays = RETENTION_DAYS,
+  /**
+   * Central intake (Phase 2): an intake idea's registry row has no `post_idea_members` (its members are intake
+   * items, read through `reels.idea_sources_v`), so it is kept while the intake holds its story or items. Unset, it
+   * is on whenever the intake schema exists, so switching Reels back to 'legacy' never deletes intake ideas (and their
+   * cascading scores, copy and videos). Legacy ids are never intake story ids, so legacy rows behave as before.
+   */
+  options: { keepIntakeIdeas?: boolean } = {},
+): Promise<RetentionResult> {
+  const keepIntakeIdeas =
+    options.keepIntakeIdeas ??
+    Boolean(
+      (await dbQuery<{ ok: boolean }>(`SELECT to_regclass('intake.stories') IS NOT NULL AS ok`)).rows[0]?.ok,
+    );
   // Fingerprints are written at ingest and never deleted here, so a URL that
   // ages out cannot be re-ingested as new.
   const sources = await dbQuery(
@@ -1159,7 +1228,9 @@ export async function runRetention(retentionDays = RETENTION_DAYS): Promise<Rete
         AND NOT EXISTS (
               SELECT 1 FROM reels.published_status p
                WHERE p.post_idea_id = i.id AND p.published
-            )`,
+            )${keepIntakeIdeas ? `
+        AND NOT EXISTS (SELECT 1 FROM intake.items it WHERE it.story_id = i.id)
+        AND NOT EXISTS (SELECT 1 FROM intake.stories st WHERE st.id = i.id)` : ''}`,
   );
 
   // Logs outlive the idea by the retention window (D-030).

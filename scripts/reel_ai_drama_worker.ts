@@ -99,10 +99,27 @@ async function main(): Promise<void> {
   if (storage !== 'bucket') log('storage_local_only', { note: 'Videos stay on this disk: nothing this worker makes can be booked or published (set EXPLAINERS_STORAGE=bucket).' });
 
   const store = artifactStoreFromEnv();
-  const stale = await failStaleJobs(db, 'Worker restarted while this job was running.');
+  // The VM daemon is the only one: anything still running at boot died with the previous process, so fail it now
+  // (age 0; a failed job resumes from what it paid for). --once may run beside the daemon (local parallel workers),
+  // so it keeps the 12 h backstop and never kills a live job (CI-33).
+  const startupAge = once ? undefined : 0;
+  const stale = await failStaleJobs(db, 'Worker restarted while this job was running.', startupAge);
   if (stale) log('stale_jobs_failed', { count: stale });
-  const staleRequests = await failStaleDramaRequests(db);
+  const staleRequests = await failStaleDramaRequests(db, startupAge);
   if (staleRequests) log('stale_requests_failed', { count: staleRequests });
+
+  // Finished jobs' folders leave the disk once their files are in the bucket (production/disk.ts).
+  const { sweepJobFolders } = await import('@/lib/reel-ai-drama/production/disk');
+  const sweep = async () => {
+    if (storage !== 'bucket') return;
+    try {
+      const removed = await sweepJobFolders(db, dramaJobsDir());
+      if (removed.length) log('job_folders_removed', { count: removed.length, jobIds: removed });
+    } catch (error) {
+      log('job_folder_sweep_failed', { error: errorText(error) });
+    }
+  };
+  await sweep();
 
   let stopping = false;
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {
@@ -144,6 +161,7 @@ async function main(): Promise<void> {
       }
     } finally {
       release();
+      await sweep();
     }
     return true;
   };

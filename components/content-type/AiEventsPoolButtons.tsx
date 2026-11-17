@@ -2,13 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Ban, Pin, RefreshCw, X } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 
 /**
- * The AI Events pool's controls (AE-04): Pin, Exclude and Clear on one event
- * of the coming week, and Rebuild post. They post to the type's own route
+ * The AI Events pool's own controls (AE-04): Rebuild post, and Clear for a
+ * pin left by the retired Pin / Exclude buttons (the shared pool row covers
+ * Pin and Archive now). They post to the type's own route
  * (/api/ai-events/pool), which writes only the pin and exclude columns of
  * ai_events.pool or queues a rebuild; the social worker re-renders the post
  * from the scores it already has. No model call from any of them.
@@ -37,47 +38,11 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export const eventIdOf = (ideaId: string): string => ideaId.replace(/^ai_events:event:/, '');
 
 /**
- * Pin / Exclude / Clear on one bench row. `hold` is the event's current pin
- * or exclude. `editable` is false once the shown week's post is out (the
- * buttons only change the coming week).
+ * Clear an event's old pin or exclude (ai_events.pool, set by the retired Pin / Exclude buttons). The pool screen calls
+ * it when Unpin is pressed on a row the night still holds as pinned, so such a pin can be seen and removed.
  */
-export function PoolButtons({ ideaId, hold, editable, compact = false }: { ideaId: string; hold: 'pinned' | 'excluded' | null | undefined; editable: boolean; compact?: boolean }) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  async function act(action: 'pin' | 'exclude' | 'clear') {
-    setBusy(true);
-    setNote(null);
-    try {
-      setNote(await send({ action, eventId: eventIdOf(ideaId) }));
-      void refreshHubPage(router);
-    } catch (e) {
-      setNote(msg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (!editable) return null;
-  return (
-    <span className="rh-rank ae-pool__buttons" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-      {hold !== 'pinned' ? (
-        <button type="button" className="rh-btn rh-rank__btn" disabled={busy} onClick={() => act('pin')} title="Pin: it goes into its city on the next build or Rebuild post" aria-label="Pin into its city">
-          <Pin size={13} />{compact ? null : ' Pin'}
-        </button>
-      ) : null}
-      {hold !== 'excluded' ? (
-        <button type="button" className="rh-btn rh-rank__btn" disabled={busy} onClick={() => act('exclude')} title="Exclude: it stays out of the post" aria-label="Exclude from the post">
-          <Ban size={13} />{compact ? null : ' Exclude'}
-        </button>
-      ) : null}
-      {hold ? (
-        <button type="button" className="rh-btn rh-rank__btn" disabled={busy} onClick={() => act('clear')} title="Clear: the ranking decides again" aria-label={`Clear the ${hold === 'pinned' ? 'pin' : 'exclude'}`}>
-          <X size={13} />{compact ? null : ' Clear'}
-        </button>
-      ) : null}
-      {note ? <span className={compact ? 'rh-rank__error' : 'rh-muted'} role="status">{note}</span> : null}
-    </span>
-  );
+export async function clearOldHold(ideaId: string): Promise<void> {
+  await send({ action: 'clear', eventId: eventIdOf(ideaId) });
 }
 
 /** Rebuild post: re-render the coming week's post from the pool with today's pins and excludes. */

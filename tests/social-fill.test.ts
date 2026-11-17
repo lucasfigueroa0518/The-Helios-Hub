@@ -356,6 +356,9 @@ const jobsFor = async (db: ExplainersDb, topicId: string) =>
 async function explainersOn(): Promise<ExplainersDb> {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
+  // Lead time (Bald-Eagle D4): a night fills today through day+2. These tests check one date's fill rules, so the
+  // later two dates already ran and the night fills TODAY only (the lead-time tests cover the multi-date night).
+  await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date, finished_at) VALUES ('ok', 'development', $1, now()), ('ok', 'development', $2, now())`, [TOMORROW, '2026-10-10']);
   return db;
 }
 
@@ -622,7 +625,8 @@ test('trial reels: the nightly generation reuses the carried video (no copy, no 
 
 // ── IG Stories (4 AM auto sets) ─────────────────────────────────────────────
 
-const STORIES_AT = new Date('2026-10-08T08:00:00Z'); // 4:00 AM New York, Thursday
+/** Guess the Number is made 2 days ahead (Bald-Eagle D4): Tuesday's night fills Thursday (TODAY); Morning Download fills Tuesday. */
+const STORIES_RUN = new Date('2026-10-06T08:00:00Z');
 
 async function storySet(db: Awaited<ReturnType<typeof harnessDb>>['db'], series: string, nyDate: string, status: string, trigger: 'click' | 'auto' = 'click') {
   await db.query(`INSERT INTO stories.sets (series, ny_date, status, trigger, style) VALUES ($1, $2, $3, $4, 'polished')`, [series, nyDate, status, trigger]);
@@ -637,8 +641,8 @@ test('stories: a set a person approved or scheduled fills its series’ day; no 
   assert.equal(await seriesDayPlaced(db, 'morning_download', TODAY), 0, 'per series');
   const { log, lines } = capture();
   const settings = await loadSettings(db);
-  assert.deepEqual(await requestAutoSets(db, settings, STORIES_AT, { log }), ['morning_download']);
-  assert.deepEqual(await requestAutoSets(db, settings, STORIES_AT, { log }), []);
+  assert.deepEqual(await requestAutoSets(db, settings, STORIES_RUN, { log }), ['morning_download']);
+  assert.deepEqual(await requestAutoSets(db, settings, STORIES_RUN, { log }), []);
   assert.deepEqual(lines.map((l) => [l.message, l.fields.series, l.fields.quota, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 'guess_the_number', 1, 1, 0]], 'logged once, not every pass');
   const sets = (await db.query<{ series: string; trigger: string }>(`SELECT series, trigger FROM stories.sets ORDER BY series`)).rows;
   assert.deepEqual(sets.map((s) => [s.series, s.trigger]), [['guess_the_number', 'click'], ['morning_download', 'auto']]);
@@ -659,11 +663,11 @@ test('stories: a person’s slot on the spine counts; rejected, failed, skipped 
   assert.equal(await seriesDayPlaced(db, 'morning_download', TODAY), 1, 'a person’s slot for that series and day');
 
   const { log, lines } = capture();
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_AT, { log }), ['guess_the_number']);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_RUN, { log }), ['guess_the_number']);
   assert.deepEqual(lines, []);
   // The night's own set, approved, holds the day as before, but it isn't a person's placement.
   await db.query(`UPDATE stories.sets SET status = 'approved' WHERE trigger = 'auto'`);
   assert.equal(await seriesDayPlaced(db, 'guess_the_number', TODAY), 0);
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_AT, { log }), []);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), STORIES_RUN, { log }), []);
   assert.deepEqual(lines, []);
 });

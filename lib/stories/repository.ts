@@ -7,6 +7,7 @@
  *   requested → building → ready → approved → scheduled → publishing → published
  *                   ↘ failed / skipped     ↘ rejected            ↘ failed
  */
+import { RUN_HANG_BACKSTOP_MINUTES } from '@/lib/content-runs/hang-guard';
 import { hasColumn } from '@/lib/social-hub/slots/columns';
 import type { SetBy } from '@/lib/social-hub/slots/types';
 import type { Queryable, StoriesDb } from '@/lib/stories/db';
@@ -169,7 +170,7 @@ export async function claimNextRequested(db: StoriesDb): Promise<StorySet | null
 }
 
 /** A build that died mid-way stays `building` and blocks the day. Hand it back so the next pass tries again. */
-export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = 45): Promise<string[]> {
+export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = RUN_HANG_BACKSTOP_MINUTES /* hang guard only; long builds are normal */): Promise<string[]> {
   const { rows } = await db.query<{ id: string }>(
     `UPDATE stories.sets
         SET status = 'requested', error = 'the previous build stopped before it finished; trying again', updated_at = now()
@@ -178,6 +179,15 @@ export async function releaseStaleBuilds(db: StoriesDb, olderThanMinutes = 45): 
     [olderThanMinutes],
   );
   return rows.map((r) => r.id);
+}
+
+/**
+ * Called once when helios-stories boots, before it claims anything: builds run only inside that one daemon, so a set
+ * still `building` at boot died with the previous process (deploy restart). Handed back now, not after the 12 h
+ * backstop, so the set is rebuilt the same day. Returns the released ids.
+ */
+export async function releaseBuildsAtStartup(db: StoriesDb): Promise<string[]> {
+  return releaseStaleBuilds(db, 0);
 }
 
 export async function getSet(db: Queryable, setId: string): Promise<{ set: StorySet; frames: FrameRow[] } | null> {
@@ -360,6 +370,32 @@ export async function recordFramePublished(db: Queryable, frameId: string, media
 export async function recordHistory(db: Queryable, series: Series, keys: string[], setId: string | null): Promise<void> {
   for (const key of new Set(keys.map((k) => k.trim()).filter(Boolean))) {
     await db.query(`INSERT INTO stories.history (series, key, set_id) VALUES ($1, $2, $3)`, [series, key, setId]);
+  }
+  if (series === 'morning_download' && setId) await recordWhatWeSaid(db, setId);
+}
+
+/**
+ * Morning Download remembers what it said (Bald-Eagle 2026-11-12, D2): each history row of a published set gets the
+ * headline its story frame ran (the set's own headline when the frame has none) and its intake story id, which
+ * lib/stories/md-development.ts compares new coverage against. Only once db/bald_eagle_2026_11_12_md.sql has added
+ * the columns; never fails the publish.
+ */
+async function recordWhatWeSaid(db: Queryable, setId: string): Promise<void> {
+  try {
+    if (!(await hasColumn(db, 'stories', 'history', 'headline')) || !(await hasColumn(db, 'stories', 'history', 'intake_story_id'))) return;
+    await db.query(
+      `UPDATE stories.history h
+          SET headline = COALESCE(
+                (SELECT f.copy->>'headline' FROM stories.frames f WHERE f.set_id = s.id AND f.role = 'story' ORDER BY f.seq OFFSET st.ord - 1 LIMIT 1),
+                st.v->>'headline'),
+              intake_story_id = st.v->>'storyId'
+         FROM stories.sets s,
+              LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.payload->'stories') = 'array' THEN s.payload->'stories' ELSE '[]'::jsonb END) WITH ORDINALITY AS st(v, ord)
+        WHERE s.id = $1::uuid AND h.set_id = s.id AND h.series = 'morning_download' AND st.v->>'key' = h.key AND h.headline IS NULL`,
+      [setId],
+    );
+  } catch {
+    // The headline is a later set's comparison aid; the publish already happened.
   }
 }
 

@@ -13,6 +13,10 @@
  * 'story', runRef `lfd:<run id>`) while capture is on. It fails open: no
  * database, a bank that can't be reached or built, or the switches off, and
  * the finder works exactly as without it.
+ *
+ * The shared photo finder (central intake Phase 3): the `photo_finders` switch is read once per run, here. 'shared'
+ * adds `sharedPhotos` (every slide tries it first); 'legacy', a read error, or deps that can't be built leave it
+ * out, and the run is today's.
  */
 import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -37,7 +41,31 @@ export async function lfdPhotoFinder(
   } catch (err) {
     log(`not built: ${err instanceof Error ? err.message : String(err)}`);
   }
-  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, ...(bank ? { bank } : {}) }), bank };
+  // CI-32: the finder checks each pick's picture against the used-photo ledger (read once per run). Bald-Eagle D3: the
+  // day's earlier post still waiting in review is what "Make Last Few Days now" replaces, so its photos don't count.
+  const used = async () => {
+    const [{ readUsedLedger }, { waitingItemsOn }, { nyDateKey }] = await Promise.all([import('@/lib/photos/used'), import('@/lib/photos/pending'), import('@/lib/reels/scoring/decide')]);
+    const q = (text: string, params?: unknown[]) => query(text, params);
+    const now = new Date();
+    return readUsedLedger(q, now, undefined, { excludeItem: await waitingItemsOn(q, 'lfd', nyDateKey(now)) });
+  };
+  return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, used, ...(bank ? { bank } : {}) }), bank };
+}
+
+/** The run's shared-finder wiring when the 'lfd' switch reads 'shared' (read once); undefined otherwise. Never throws. `make` is for tests. */
+export async function lfdSharedPhotos(
+  query: HubQuery,
+  make?: import('@/lib/stories/photos-shared').SharedMake,
+  log: (line: string) => void = (line) => console.log(`lfd: ${line}`),
+): Promise<LfdRunDeps['sharedPhotos']> {
+  try {
+    const { sharedPhotoSetup } = await import('@/lib/stories/photos-shared');
+    const setup = await sharedPhotoSetup({ query: (text, params) => query(text, params) }, 'lfd', make, log);
+    return setup ?? undefined;
+  } catch (err) {
+    log(`shared photo finder not wired (${err instanceof Error ? err.message : String(err)}); today's finder`);
+    return undefined;
+  }
 }
 
 export async function liveLfdDeps(
@@ -88,12 +116,42 @@ export async function liveLfdDeps(
       },
     };
   }
+  // Central intake (Phase 1): the consumer switch decides per run; the intake Jev (its own cost bucket, top-up cap)
+  // serves the carousel lane's posted check and seed scoring. Built lazily; a failure here means today's lanes.
+  let intake: LfdRunDeps['intake'];
+  try {
+    const { liveIntakeJev } = await import('@/lib/intake/jev');
+    const { INTAKE_TOPUP_CAP_USD } = await import('@/lib/intake/types');
+    intake = { jev: await liveIntakeJev({ query: (text, params) => query(text, params) }, null, INTAKE_TOPUP_CAP_USD) };
+  } catch (err) {
+    console.log(`lfd: intake not wired (${err instanceof Error ? err.message : String(err)}); today's lanes`);
+  }
+  const sharedPhotos = await lfdSharedPhotos(query);
+  // Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, capped at $0.15 a post inside the run.
+  const { streamingCreate } = await import('@/lib/reel-ai-drama/reporting/llm');
+  const { loadPrompt } = await import('@/lib/reel-ai-drama/prompts');
+  const { liveHarvestPhotoBank } = await import('@/lib/reel-ai-drama/harvest/photo-bank-live');
+  const harvest: import('./photos').BuilderHarvest = {
+    deps: {
+      http: fetch,
+      create: streamingCreate(newAnthropic()),
+      loadPrompt: (name) => loadPrompt(name),
+      serperKey: process.env.SERPER_API_KEY ?? null,
+      photoBank: liveHarvestPhotoBank(process.env).bank,
+      cutouts: [],
+    },
+  };
   return {
     deps: {
       query,
       jev,
       create,
       photos,
+      harvest,
+      // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.
+      usedPhotos: { http: fetch },
+      ...(sharedPhotos ? { sharedPhotos } : {}),
+      ...(intake ? { intake } : {}),
       fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
       fetchBody: fetchBodyLive,
       readPage: (url) => readPage(url),

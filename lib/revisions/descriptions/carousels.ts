@@ -7,15 +7,15 @@
  *
  * Order (nothing is written on any non-ok path): checks → the one billable call (fact-check or
  * photo chain) → render + fit check of that slide → ONE guarded UPDATE of `render`, `draft` and
- * `slide_objects` together (the publisher reads both `slide_objects` and `render.caption`), which
- * also logs a new photo in `social.used_photos` (the 7-day rule) in the same statement.
+ * `slide_objects` together (the publisher reads both `slide_objects` and `render.caption`). A new photo
+ * is not logged here: it counts as used once the post is published (CI-32).
  *
  *   color    canvas only: render + fit check, 0 model calls
  *   layout   layoutVariant (text|image) / photoPlacement / photoTreatment / photoBleed: render only, 0 calls
  *   wording  the silent fixes and copy limits (mechanical/checks.ts) → ONE fact-check call (Sonnet)
  *            → render, and the new words must show on the rendered slide (C7, dropped text)
  *   photo    ONE photo-chain call (Jev + Haiku vision) that never returns a photo already in the post,
- *            in the 7-day used_photos set, or the one being replaced → render (faces-under-text and
+ *            published in the last 20 days (the CI-32 ledger), or the one being replaced → render (faces-under-text and
  *            the other fit rules are the render check's)
  *
  * Part keys are 1-based slide numbers ("2" = the second slide; the cover is 1), the numbering the
@@ -23,7 +23,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { NO_REPEAT_DAYS } from '@/lib/social/photos/used-photos';
+import { readUsedLedger, USED_PHOTO_DAYS } from '@/lib/photos/used';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Photo } from '@/lib/social/photos/find';
 import type { Post as RenderPost, SlideCopy, SpanRun } from '@/lib/social/render/types';
@@ -228,18 +228,16 @@ const bleedable = (s: SlideCopy) => Boolean(s.photoUrl) && ((s.photoKind ?? 'sce
 export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDescription {
   const newId = deps.newId ?? (() => randomUUID().replace(/-/g, '').slice(0, 10));
 
-  /** Write render + draft + slide_objects in one statement, only if the post is still as read (and revisable). */
-  async function save(q: Query, post: PostRow, render: RenderPost, draft: Draft | null, objects: string[], used?: { photo: FoundPhoto; slide: number }): Promise<boolean> {
+  /**
+   * Write render + draft + slide_objects in one statement, only if the post is still as read (and revisable). A post in
+   * review is unpublished, so nothing goes into the used-photo ledger here (CI-32: used means published).
+   */
+  async function save(q: Query, post: PostRow, render: RenderPost, draft: Draft | null, objects: string[]): Promise<boolean> {
     const { rows } = await q(
       `WITH up AS (
          UPDATE social.posts SET render = $2::jsonb, draft = $3::jsonb, slide_objects = $4::jsonb
           WHERE id = $1::uuid AND status IN ('preview', 'review') AND render = $5::jsonb AND slide_objects IS NOT DISTINCT FROM $6::jsonb
-          RETURNING id, story_id),
-       logged AS (
-         INSERT INTO social.used_photos (url, used_at, story_id, slide, source, qid, subject, credit, scene, post_id)
-         SELECT $7::text, now(), coalesce(up.story_id, up.id::text), $8::int, $9::text, $10::text, $11::text, $12::text, $13::text, up.id FROM up WHERE $7::text IS NOT NULL
-         ON CONFLICT (url, used_at, story_id, slide) DO NOTHING
-         RETURNING 1)
+          RETURNING id)
        SELECT count(*)::int AS n FROM up`,
       [
         post.id,
@@ -248,13 +246,6 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         JSON.stringify(objects),
         JSON.stringify(post.render),
         post.slide_objects === null ? null : JSON.stringify(post.slide_objects),
-        used?.photo.url ?? null,
-        used?.slide ?? null,
-        used?.photo.source ?? null,
-        used?.photo.qid ?? null,
-        used?.photo.subject ?? null,
-        used?.photo.credit ?? null,
-        used?.photo.scene ?? null,
       ],
     );
     return Number(rows[0]?.n ?? 0) === 1;
@@ -344,7 +335,6 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
       const args = it.args ?? {};
       const m = metered(meter);
       const check = m.check;
-      let usedPhoto: FoundPhoto | undefined;
       let mustShow: string | null = null;
       let flat: ((s: string) => string) | null = null;
 
@@ -415,16 +405,13 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         if (old.panoramaSide) return blocked(`Slide ${n} is half of a two-slide photo spread, so its photo was not changed (it would break the spread).`);
         if (!post.brief || !draft || !draftLine(draft, n)) return failed(`This carousel has no saved brief and draft for slide ${n}, so I could not search for another photo; nothing was changed.`);
         const exclude = new Set<string>(render.slides.map((s) => s.photoUrl).filter((u): u is string => !!u));
-        const recent = await q(
-          `SELECT DISTINCT url FROM social.used_photos WHERE used_at <= now() AND used_at > now() - make_interval(days => $1)`,
-          [NO_REPEAT_DAYS],
-        );
-        for (const r of recent.rows) exclude.add(r.url as string);
+        // CI-32: every photo any post published in the last 20 days (the live finder also checks each pick's picture).
+        for (const url of (await readUsedLedger(q, new Date())).urls) exclude.add(url);
         const hint = args.hint?.trim();
         const found = await deps.findPhoto({ brief: post.brief, draft, slide: n, exclude, ...(hint ? { hint } : {}) }, m);
         check();
         if (!found || exclude.has(found.url) || !found.credit?.trim()) {
-          return failed(`I searched for another photo for slide ${n} and couldn't find a different usable photo (one not already in this post or used in the last ${NO_REPEAT_DAYS} days), so the original was kept.`);
+          return failed(`I searched for another photo for slide ${n} and couldn't find a different usable photo (one not already in this post or published in the last ${USED_PHOTO_DAYS} days), so the original was kept.`);
         }
         const { canBleedPerson, photoKindOf, LOGO_WIDE_ASPECT } = await import('@/lib/social/render/from-draft');
         const kind = photoKindOf(found);
@@ -445,7 +432,6 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         const block = await creditsBlock(render);
         if (block) render.attributionBlock = block;
         else delete render.attributionBlock;
-        usedPhoto = found;
       } else {
         return blocked(`${it.fixKind} fixes are not available for carousels.`);
       }
@@ -463,7 +449,7 @@ export function createCarouselsDescription(deps: CarouselsDeps): ContentTypeDesc
         return failed(`The new words did not all fit on slide ${n} when it was drawn, so the original was kept. Try shorter words.`);
       }
       objects[n - 1] = out.file;
-      if (!(await save(q, post, render, draft, objects, usedPhoto ? { photo: usedPhoto, slide: n } : undefined))) {
+      if (!(await save(q, post, render, draft, objects))) {
         return failed('The carousel changed or left review while the fix ran, so it was not changed.');
       }
       return { ok: true, before, after: stateOf({ render, draft }, n, out.file) };

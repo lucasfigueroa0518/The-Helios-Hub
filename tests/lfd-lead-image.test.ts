@@ -5,7 +5,7 @@ import { leadImage } from '@/lib/lfd/lead-image';
 import type { Pick } from '@/lib/lfd/types';
 import type { ArticlePhoto, PageRead } from '@/lib/social/reporter/read-page';
 
-const pick = { key: 'a', refs: [], origin: 'reels', headline: 'H', sourceName: 'The Verge', url: 'https://s.com/a', body: '', publishedAt: null, net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' } satisfies Pick;
+const pick = { key: 'a', refs: [], origin: 'reels', headline: 'H', sourceName: 'The Verge', url: 'https://s.com/a', body: '', publishedAt: null, net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' } satisfies Pick;
 
 const page = (photos: ArticlePhoto[]): PageRead => ({ ok: true, url: pick.url, resolvedUrl: pick.url, title: 'T', byline: null, publishedTime: null, text: 'x', truncated: false, photos });
 const fig = (src: string, credit: string | null, width: number | null): ArticlePhoto => ({ src, caption: null, credit, alt: null, from: 'figure', width });

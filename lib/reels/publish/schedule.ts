@@ -168,9 +168,38 @@ async function takenSlots(fromDate: string): Promise<Set<string>> {
 }
 
 /**
- * Reserve the earliest window that has not ended. `throughDate` limits the
- * search to that Eastern calendar day. A reel that already has a clock time
- * keeps it.
+ * The posting day a reel was made for (Bald-Eagle D4: Text on Screen is made 2 days ahead, and its slate is
+ * keyed by that day): the earliest New York date from today on whose newest slate scoring this idea selected
+ * it. Null when no slate from today on selected it (the bench, or a day that has passed).
+ */
+export async function reelTargetDate(postIdeaId: string, now = new Date()): Promise<string | null> {
+  const { rows } = await dbQuery<{ ny_date: string }>(
+    `SELECT d.ny_date FROM (
+       SELECT DISTINCT ON (sl.ny_date) sl.ny_date::text AS ny_date, s.selected
+         FROM reels.idea_scores s
+         JOIN reels.score_slates sl ON sl.id = s.slate_id
+        WHERE s.post_idea_id = $1::uuid AND sl.ny_date >= $2::date
+        ORDER BY sl.ny_date, sl.scored_at DESC) d
+      WHERE d.selected
+      ORDER BY d.ny_date
+      LIMIT 1`,
+    [postIdeaId, calendarDateKey(now)],
+  );
+  return rows[0]?.ny_date ?? null;
+}
+
+/** The 409 note when nothing could be booked in the range asked for. */
+function noSlotNote(today: string, throughDate?: string): string {
+  if (!throughDate) return 'No posting slot is open in the next two weeks.';
+  if (throughDate === today) return 'No posting window is still open today.';
+  return `No posting slot is open on ${throughDate}.`;
+}
+
+/**
+ * Reserve the earliest window that has not ended, from `fromDate` (default today) through `throughDate`
+ * (default two weeks ahead). A reel that already has a clock time keeps it. A person's Approve with no
+ * range given books the reel's own posting day when that day is still ahead (reelTargetDate; Bald-Eagle D4:
+ * approving keeps the target date and never moves the reel to today).
  */
 export async function schedulePostIdea(
   postIdeaId: string,
@@ -178,6 +207,7 @@ export async function schedulePostIdea(
   videoJobId: string | null,
   now = new Date(),
   throughDate?: string,
+  fromDate?: string,
 ): Promise<ScheduleOutcome> {
   const existing = await activeSchedule(postIdeaId);
   if (existing) {
@@ -191,30 +221,32 @@ export async function schedulePostIdea(
   }
   const itemId = videoJobId ? await reelItemId(videoJobId) : null;
   if (source === 'user' && videoJobId) await approveReel(videoJobId, 'user');
+  const today = calendarDateKey(now);
+  if (throughDate === undefined && fromDate === undefined) {
+    const target = await reelTargetDate(postIdeaId, now);
+    if (target && target > today) {
+      fromDate = target;
+      throughDate = target;
+    }
+  }
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
-    const fromDate = calendarDateKey(now);
     // A failed slot read throws: it must not silently book by the old rules (ruling P2).
-    const plan = await slotPlan(hubQ, fromDate);
+    const plan = await slotPlan(hubQ, today);
     let choice: { nyDate: string; slot: SlotId; publishAt: Date } | null;
     // Template: the mode of the slot chosen, from the plan in hand (no second read).
     let feedMode: FeedMode | null = null;
     if (!plan) {
       // Trial Reels are exempt from the cross-type feed spacing (D33 revises SH-47).
-      choice = chooseSlot(now, await takenSlots(fromDate), uniformIndex, POSTING_TIME_ZONE, throughDate);
+      choice = chooseSlot(now, await takenSlots(today), uniformIndex, POSTING_TIME_ZONE, throughDate, fromDate);
     } else {
       // The calendar: its slots within the daily cap, at [slot, slot + 15]; Main slots space against feed posts.
       const busy = [...(await busyFeedTimes(hubQ, now, 'reels')), ...(await ownFeedTimes(hubQ, 'reels', now))];
-      const picked = await chooseTemplateSlot(hubQ, plan, 'reels', { now, busy, rng: uniformIndex, throughDate });
+      const picked = await chooseTemplateSlot(hubQ, plan, 'reels', { now, busy, rng: uniformIndex, throughDate, fromDate });
       choice = picked ? { nyDate: picked.nyDate, slot: picked.slot as SlotId, publishAt: picked.publishAt } : null;
       feedMode = picked?.feedMode ?? null;
     }
-    if (!choice) {
-      const note = throughDate
-        ? 'No posting window is still open today.'
-        : 'No posting slot is open in the next two weeks.';
-      return { scheduled: false, status: 409, note };
-    }
+    if (!choice) return { scheduled: false, status: 409, note: noSlotNote(today, throughDate) };
     try {
       const booked = await bookSlot(reelsSpine, {
         vertical: 'reels',
@@ -239,63 +271,51 @@ export async function schedulePostIdea(
 }
 
 export const BENCH_SCHEDULE_NOTE =
-  'Only the reels selected for today go on the clock. The rest stay on the bench.';
+  'Only the reels selected for a day go on the clock. The rest stay on the bench.';
 
 export const MISSED_TODAY_NOTE =
   'This reel missed today’s windows. It carries to tomorrow at its score, instead of being scheduled late.';
 
-/** True when this idea was selected for today's reels. Rank alone leaves it on the bench. */
+/** True when this idea was selected for a day's reels. Rank alone leaves it on the bench. */
 export function isPostingRank(selected: boolean): boolean {
   return selected;
 }
 
-async function selectedOnDate(postIdeaId: string, nyDate: string): Promise<boolean> {
-  const { rows } = await dbQuery<{ selected: boolean }>(
-    `SELECT s.selected
-       FROM reels.idea_scores s
-       JOIN reels.score_slates sl ON sl.id = s.slate_id
-      WHERE s.post_idea_id = $1::uuid
-        AND sl.ny_date = $2::date
-      ORDER BY sl.scored_at DESC
-      LIMIT 1`,
-    [postIdeaId, nyDate],
-  );
-  return rows[0]?.selected === true;
-}
-
-/** How many of today's windows can still take a reel. A started window counts until it ends. */
-export async function windowsStillOpen(now = new Date()): Promise<number> {
-  const today = calendarDateKey(now);
+/**
+ * How many of a New York day's windows can still take a reel (default today). A started window counts
+ * until it ends; a day ahead (Bald-Eagle D4) has every untaken window open.
+ */
+export async function windowsStillOpen(now = new Date(), nyDate = calendarDateKey(now)): Promise<number> {
   // A failed slot read throws: it must not silently book by the old rules (ruling P2).
-  const plan = await slotPlan(hubQ, today, 1);
+  const plan = await slotPlan(hubQ, nyDate, 1);
   if (plan) {
-    // Template mode: today's reels slots within the cap, untaken, with a drift minute still ahead.
+    // Template mode: the day's reels slots within the cap, untaken, with a drift minute still ahead.
     const { byDate, taken } = await templateSlots(hubQ, plan, 'reels');
-    return (byDate.get(today) ?? []).filter(
-      (slot) => !taken.has(`${today}|${slotId(slot.startMinute, slot.series)}`) && driftMinute(today, slot, now, [], () => 0) != null,
+    return (byDate.get(nyDate) ?? []).filter(
+      (slot) => !taken.has(`${nyDate}|${slotId(slot.startMinute, slot.series)}`) && driftMinute(nyDate, slot, now, [], () => 0) != null,
     ).length;
   }
-  const taken = await takenSlots(today);
+  const taken = await takenSlots(nyDate);
   return POSTING_SLOTS.filter(
-    (slot) => !taken.has(slotKey(today, slot.id)) && openMinuteRange(today, slot.id, now) != null,
+    (slot) => !taken.has(slotKey(nyDate, slot.id)) && openMinuteRange(nyDate, slot.id, now) != null,
   ).length;
 }
 
 /**
- * A person can put one of today's selected reels into a window still open
- * today. The bench is not scheduled. A day with no window left is a miss,
- * not a tomorrow slot.
+ * A person can put a selected reel into a window on its own posting day (today, or the day it was made
+ * ahead for: reelTargetDate, Bald-Eagle D4). The bench is not scheduled. Today with no window left is a
+ * miss, not a tomorrow slot.
  */
 export async function scheduleVideo(videoJobId: string, now = new Date()): Promise<ScheduleOutcome> {
   const ready = await publishReadiness(videoJobId);
   if (!ready.ok) return { scheduled: false, status: ready.status, note: ready.note };
   const today = calendarDateKey(now);
-  const selected = await selectedOnDate(ready.postIdeaId, today);
-  if (!isPostingRank(selected)) {
+  const target = await reelTargetDate(ready.postIdeaId, now);
+  if (!isPostingRank(target != null)) {
     return { scheduled: false, status: 409, note: BENCH_SCHEDULE_NOTE };
   }
-  const result = await schedulePostIdea(ready.postIdeaId, 'user', videoJobId, now, today);
-  if (!result.scheduled && result.note === 'No posting window is still open today.') {
+  const result = await schedulePostIdea(ready.postIdeaId, 'user', videoJobId, now, target!, target!);
+  if (!result.scheduled && target === today && result.note === 'No posting window is still open today.') {
     return { scheduled: false, status: result.status, note: MISSED_TODAY_NOTE };
   }
   return result;
@@ -303,7 +323,8 @@ export async function scheduleVideo(videoJobId: string, now = new Date()): Promi
 
 /**
  * The reels selected for this slate, best rank first, one per window still
- * open on that slate's Eastern day. A later reel is not scheduled once the
+ * open on that slate's Eastern day (its posting date: a slate made ahead
+ * books only that day, Bald-Eagle D4). A later reel is not scheduled once the
  * day has no window left. Does nothing while publishing is not live.
  */
 export async function scheduleSelectedSlate(slateId: string, now = new Date()): Promise<{ scheduled: number }> {
@@ -324,24 +345,26 @@ export async function scheduleSelectedSlate(slateId: string, now = new Date()): 
   const nyDate = rows[0]?.ny_date;
   let scheduled = 0;
   for (const row of rows) {
-    const result = await schedulePostIdea(row.post_idea_id, 'auto', null, now, nyDate);
+    const result = await schedulePostIdea(row.post_idea_id, 'auto', null, now, nyDate, nyDate);
     if (result.scheduled) scheduled += 1;
   }
   return { scheduled };
 }
 
-/** Today's latest slate, when Live is switched on after the night has already run. */
+/**
+ * When Live is switched on after the night has already run: the latest slate of today and of every day
+ * ahead (Text on Screen is made 2 days ahead, Bald-Eagle D4), each booked on its own day.
+ */
 export async function scheduleLatestToday(now = new Date()): Promise<{ scheduled: number }> {
   const { rows } = await dbQuery<{ id: string }>(
-    `SELECT id FROM reels.score_slates
-      WHERE ny_date = $1::date
-      ORDER BY scored_at DESC
-      LIMIT 1`,
+    `SELECT DISTINCT ON (ny_date) id FROM reels.score_slates
+      WHERE ny_date >= $1::date
+      ORDER BY ny_date, scored_at DESC`,
     [calendarDateKey(now)],
   );
-  const id = rows[0]?.id;
-  if (!id) return { scheduled: 0 };
-  return scheduleSelectedSlate(id, now);
+  let scheduled = 0;
+  for (const row of rows) scheduled += (await scheduleSelectedSlate(row.id, now)).scheduled;
+  return { scheduled };
 }
 
 async function readyVideo(postIdeaId: string, videoJobId: string | null): Promise<string | null> {

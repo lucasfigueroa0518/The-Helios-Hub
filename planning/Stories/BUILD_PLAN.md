@@ -117,11 +117,11 @@ Vercel (Next.js)                          Stories worker (Lucas's Mac in isolati
 ─────────────────                         ─────────────────────────────────────────
 /stories (tabs)                           npm run stories:worker
   Queue · History · Settings                scripts/stories_worker.ts
-/api/stories/* (queue + read only)          after the nightly reels run (≈ 1 AM ET) and on demand:
+/api/stories/* (queue + read only)          at 3:00 AM ET (night schedule v2, §5.5) and on demand:
         │                                     build due sets → render (React → Chromium)
         │                                     → Haiku 5.5 review → upload → wait for slot
         ▼                                     publish frames in order → poll insights
-Supabase Postgres  schema `stories`         reads reels.* and social.* (read-only)
+Supabase Postgres  schema `stories`         reads reels.* and social.*, or intake.* (§5.5) (read-only)
 Supabase Storage   bucket `stories`         writes social.used_photos (published photos only)
 ```
 
@@ -144,7 +144,7 @@ The app never builds or publishes a set. It inserts rows (Generate, Approve, Pub
 
 **Frames:** opener → 2 to 5 story frames → closer (4 to 7 frames).
 
-**Pool (built after the nightly reels run):**
+**Pool, legacy path (built after the nightly reels run; the intake path is §5.5):**
 1. Trial Reels: the latest slate's timely ideas, top 15 by `net`, plus every idea in that slate with `blockbuster > 0`.
 2. Carousel: every `qualified` story in `selection.scored` from carousel runs that finished in the last 30 hours (shortlist first). Empty when no run happened (O-4).
 3. Drop anything already in a Morning Download in the last 3 days (`stories.history`).
@@ -174,7 +174,7 @@ Redesigned 2026-10-19 (S-74 to S-78). Spec: `docs/superpowers/specs/2026-10-19-g
 **What a good number is.** About AI, broad: the technology, the companies, the people using it, public opinion about it, and its history (S-75). A reader has a gut guess before thinking, the true answer lands away from most guesses, and one source page states it plainly. A price or spec someone would just look up is not a good number. When the source shows the figure was just announced or changed, the copy says so. The figure always comes from a web search in the call, never from the model's memory.
 
 **The run:**
-1. **Pool finalists (code).** From the pool (or the live sources when there is none): carousel `brief.numbers`, Trial Reels `the_number` ideas, and shortlisted carousel stories without a brief. Anything whose story was a Guess the Number in the last 30 days is dropped. The call sees the top 8 pool numbers and 4 unbriefed stories (headline, outlet, URL and the first 6,000 characters of text), so it finds the number itself. This replaces the `gtn-extract@1` step (S-26).
+1. **Pool finalists (code).** On the intake path the pool has no carousel brief numbers; see §5.5. On the legacy path: from the pool (or the live sources when there is none): carousel `brief.numbers`, Trial Reels `the_number` ideas, and shortlisted carousel stories without a brief. Anything whose story was a Guess the Number in the last 30 days is dropped. The call sees the top 8 pool numbers and 4 unbriefed stories (headline, outlet, URL and the first 6,000 characters of text), so it finds the number itself. This replaces the `gtn-extract@1` step (S-26).
 2. **Pick and write (`gtn-pick@1`, one Sonnet 5.5 call, approved by Tommy 2026-10-19, cached).** Web search up to 5 uses, web fetch up to 3. It also sees the last ~30 days of Guess the Number topics, so it doesn't repeat one. It returns three finished candidates ranked best first: question, answer, label, meaning, topic, the cited page and the quoted line, the source verb and name, subjects, and the photo requests. At least one is a pool item and at least one is its own idea (`model`); with an empty pool, three of its own (S-74). If it breaks that rule, the run logs it and gates what came back.
 3. **Fetch (code, no model).** The worker reads each cited page with Stories' own reader (`lib/stories/source-page.ts`): Readability first, then plain page text when the figure sits outside the article, as in a docs page or a model card. A page that can't be read fails the candidate as `unreadable`. The gates read this text, never the model's quote.
 4. **Gate (`gtn-gate@1` plus `gtn-same-subject@1`, Jev).** Per candidate, over the fetched text and the written copy: `verifiable` (the page states this answer) and `want_to_guess` must clear their floors; `newly_changed` and `copy_says_new` fail a candidate that was just announced or changed but doesn't say so; `gtn-same-subject@1` fails a candidate about the same subject as a Guess the Number set of the last 30 days, even with a different number (S-76). `guessable` and `surprise` only label the difficulty chip. Jev gates and labels. It never ranks. Floors and the recency window are provisional (S-78).
@@ -191,7 +191,7 @@ Redesigned 2026-10-19 (S-74 to S-78). Spec: `docs/superpowers/specs/2026-10-19-g
 
 **Frames:** intro (S-50, fixed copy) → paid tool + price + tease → free tool + what it does + how to get it.
 
-**Pool:** Ball Knowledge ideas from the last 14 days (their copy names what a tool replaces), GitHub Trending sources, and `reels.list_catalog`, filtered to tools a general user can install (S-08).
+**Pool (legacy path; the intake path reads the same two sources from the intake, §5.5):** Ball Knowledge ideas from the last 14 days (their copy names what a tool replaces), GitHub Trending sources, and `reels.list_catalog`, filtered to tools a general user can install (S-08).
 
 **Pairing** (`fvp-pair@1`, DRAFT, cached Sonnet with `web_search`, at most 5 searches): proposes up to 3 pairs, each with the paid tool's current price page, the free tool's official page, platforms, and the install path. Then a verification pass checks the price and the install path on the pages found (S-22).
 
@@ -206,6 +206,43 @@ Redesigned 2026-10-19 (S-74 to S-78). Spec: `docs/superpowers/specs/2026-10-19-g
 Stories calls `searchVisual` with a minimal `Brief`: the story's subjects (typed person or organization by Tommy's identity check), its date, and read pages for its source URLs (Tommy's `read-page`). A visual request (`kind`, `query`) is written in the same call that writes the copy, using Tommy's kinds (`person`, `company`, `logo`, `product`, `event`, `thematic`, `setting`). Recent photos from `social.used_photos` are excluded (S-24), with one exception: a story frame may reuse the photo the carousel post placed for that same story (S-29). The pick uses the photo-fit check and the close-up vision check as the carousel does. Every placed photo carries its credit on the frame (S-23).
 
 For the Morning Download opener, a "second photo" means: for a person, Tommy's second-photo search (Commons depicts by Wikidata ID, title match, one face); for anything else, the finder's second-ranked candidate. Either is used only when it clears the fit bar.
+
+### 5.5 Central intake (Phase 1, 2026-11-09)
+
+Plan and decisions: `planning/Central Intake/PLAN.md` and `DECISIONS.md`. Contract: `lib/intake/types.ts`. The pools
+in §5.1–5.3 are the legacy path, which stays in place behind the switch below.
+
+- **Consumer switch.** `intake.settings` key `consumers`, one entry per series (`md`, `gtn`, `fvp`): `legacy` (the
+  default) or `intake` (`lib/stories/pool-intake.ts`). On `intake`, the pool refresh reads pre-scored stories from the
+  intake (`lib/intake/pool-stories.ts`), in the same shapes, so the builds downstream don't change. With no successful
+  intake main run in the last 26 h, the series reads its legacy sources (`stale-fallback`). An intake read error does
+  the same for that series (`error-fallback`). The refresh record says which source each series read.
+- **Orders** (`lib/intake/orders.ts`). Each opens only from its own series' settings (enabled with auto on) or a
+  requested or building set, never because another type is on.
+  - Morning Download: sources `reels:*` and `feeds:*`, 4-day lookback, scorecards `reels-score`, `story-scoring@4`,
+    `major-news@3`, `story-builder@1`.
+  - Guess the Number: sources `reels:*` and `feeds:*`, 7-day lookback, scorecards `reels-score` (The Number) and
+    `story-scoring@4` (the carousel shortlist ranking).
+  - Free vs. Paid: sources `reels:*` (GitHub Trending is one of them), 14-day lookback, scorecard `reels-score`
+    (Ball Knowledge).
+- **No dependency on Reels or Carousels running.** The intake fetches the sources and runs the scorecards whenever an
+  order is open. Carousels off no longer empties MD's carousel side or GTN's shortlist.
+- **Morning Download on the intake.** No rank call at build time. Stored `major-news` and `story-builder` scores feed one
+  lead queue by `leadOf` margin: up to 5, builders at most 2 of 5, at least 2 (S-04 unchanged). A pool row without
+  stored scores (a seed, a legacy row) still gets the one `major-news` call. A story seed with a link is also read and
+  scored into the intake while MD reads it; that never fails the seed.
+- **Builder lane (MD).** `story-builder@1` against `BUILDER_BAR` (0.6 in `lib/stories/scores.ts`, a placeholder until the
+  calibration replay sets it). The event must have happened in the last 7 days (web search `happened_on`, else the
+  feed's publish date); a story with no date is let in. MD's 4-day pool window still bounds it.
+- **Posted check.** The carousel's `already_posted` question is no longer scored. MD's carousel side drops stories that
+  the per-order posted check matches against the carousel's posted list (14 days, read-only) at read time. The 3-day
+  `stories.history` repeat check is unchanged.
+- **Guess the Number on the intake** (round 4, answer 3: "Fully independent."). GTN no longer reads carousel brief
+  numbers. Every shortlisted story (same sources, same `story-scoring@4` ranking the carousel uses) goes to GTN's own
+  number finding, plus the reels The Number ideas. GTN's numbers may differ from the carousel's for the same story.
+- **Schedule.** Intake main run 12:00 AM, top-up 2:40 AM. Auto sets for all three series are requested at 3:00 AM
+  (they were after 1:30 AM, then 4:00 AM; S-79). Before a build reads the pool while any series is on the intake, it
+  calls `ensureIntakeFresh`, which tops up when the intake is older than 180 minutes and never fails the build.
 
 ## 6. Rendering, VM, and deploy
 
@@ -271,7 +308,7 @@ Decisions after kickoff go here, numbered from S-34.
 | S-66 | **Sonnet calls carry the server-side refusal fallback** (`fallbacks: "default"`, beta server-side-fallback-2026-07-01, the Claude API reference's default for Sonnet 5.5): a refusal is retried on another model inside the same call; the cost is priced by the model that answered. `tool_choice` is auto with a strict tool (Sonnet 5.5 rejects a forced tool). | Agent, M3 |
 | S-67 | **The photo finder runs without Tommy's vision, face and contact-sheet steps** in v1 (they live inside his design stage): Stories calls `searchVisual` with a minimal brief, the read source pages and Jev identity checks, and takes the top candidate not used in 7 days. The render review and Lucas's review of the first sets are the look checks. | Agent, M3 |
 | S-68 | **History is written when a set publishes**, not when it builds, so a rejected set never blocks its stories. Tommy's `social.used_photos` gets one row per published non-logo photo (S-24). | Agent, M8 |
-| S-69 | **Worker rules (M8):** auto sets are requested after 1:30 AM New York; an auto set approves itself only when the review didn't flag it; an approved set whose window has passed stays approved (the Hub offers Publish now or Reject; risk 6). `STORIES_DB=local` keeps the `stories` tables in PGlite until the schema is applied. | Agent, M8 |
+| S-69 | **Worker rules (M8):** auto sets are requested at 3:00 AM New York (S-79; was after 1:30 AM); an auto set approves itself only when the review didn't flag it; an approved set whose window has passed stays approved (the Hub offers Publish now or Reject; risk 6). `STORIES_DB=local` keeps the `stories` tables in PGlite until the schema is applied. | Agent, M8 |
 | S-70 | **The photo finder's close-up vision check runs on Haiku 5.5** (`claude-haiku-5-5`): Tommy's `createVisionCheck` is called with that model (his code unchanged), and Stories prices each call itself. Supersedes the vision part of S-67. | Lucas, 2026-10-08 |
 | S-71 | **The `stories` schema is applied to Supabase** (2026-10-08, Lucas's go-ahead; S-61). Verified read-only: 9 tables, every auto switch off. Stories scripts load `.env.local` through `scripts/stories_env.ts`. | Lucas, 2026-10-08 |
 | S-72 | **Morning Download is recent, concrete AI news** (model releases, major-company announcements, government and political developments, advances big or small, big business moves, product launches, pivots and limits), not warnings, forecasts or opinion. (1) The pool score is no longer each source's rank: one 0–1 news score for both sources, in code (`lib/stories/md-score.ts`): news kind +0.45 + major player +0.25 + recency (+0.30 within 24h, +0.15 within 48h) − 0.45 for speculation; the source adds nothing, a story is judged on its own merit; each pool row stores its breakdown. (2) Text on Screen sends its top 10 timely ideas (was 15) plus blockbusters, leaving out The Warning and The Callout. (3) Ranking moves to `major-news@2`: score = 0.30·happened + 0.25·news_kind + 0.20·blockbuster_entity + 0.15·global_relevance + 0.10·political_relevance − 0.35·speculative, no bump for either source; bar stays 0.55. Supersedes S-63's weights. | Lucas, 2026-10-09 |
@@ -281,6 +318,7 @@ Decisions after kickoff go here, numbered from S-34.
 | S-76 | **Jev gates and labels, never ranks.** `want_to_guess` and `verifiable` are pass/fail gates, not averaged. If the page shows a figure was just announced or changed, the copy must say so (`newly_changed`, `copy_says_new`). `guessable` and `surprise` only feed the difficulty chip (Low / Medium / High, the same formula as before). The model's rank decides among candidates that pass. **Repeat means same subject**, not just the same news event: `gtn-same-subject@1` compares each candidate's question and label with Guess the Number sets of the last 30 days. Resolves O-10. | Tommy, 2026-10-19 |
 | S-77 | **`stories.candidates.origin` gains `model`** for an idea the call came up with itself. Pool items keep `carousel` or `reels` (an unbriefed carousel story is `carousel`). A model idea's history key is `model:` plus its normalized label. A one-line CHECK migration; `stories.pool` is unchanged. | Tommy approved, 2026-10-19 (no Lucas go-ahead needed) |
 | S-78 | **Provisional values, to calibrate on the first runs.** `GATE_FLOORS` in `lib/stories/build/guess-the-number.ts`: `verifiable` 0.7, `want_to_guess` 0.6, `newly_changed` 0.5, `copy_says_new` 0.5, `same_subject` 0.7. "Just announced or changed" means within about 30 days (Jev's state carries today's date and the page's published time when found). The call sees 8 pool numbers and 4 unbriefed stories (6,000 characters of text each), with 5 searches and 3 fetches. Recent-topic and no-repeat windows are 30 days. Replaces S-64's values. Lucas calibrates; every change is logged here. | Agent, provisional, 2026-10-19 |
+| S-79 | **Central intake, Phase 1.** All three series read pre-scored stories from the central intake behind the `intake.settings` consumer switch (default `legacy`), with a builder lane in Morning Download and GTN independent of carousel briefs. Auto sets move to 3:00 AM (night schedule v2: at most two content types per hour, never two video renderers). Supersedes S-69's "after 1:30 AM". Details: §5.5; register: `planning/Central Intake/DECISIONS.md`. | Lucas, 2026-11-09 |
 
 ### 8.2 Prompt and question-set registry
 
@@ -387,5 +425,5 @@ At the merge, Tommy's scheduler and publisher can replace the last two, his rend
 2. **Chromium:** Playwright's headless Chromium build 1243 is installed (S-42). On another machine: `npx playwright install chromium`.
 3. **Worker:** `npm run stories:worker` (leave it running; it polls every 15 seconds). One pass: `npm run stories:run`.
 4. **First set of a series (M5, M6, M7):** click Generate on `/stories`, or `npm run stories:run -- --request morning_download` (`guess_the_number`, `free_vs_paid`). The worker builds it (live calls, about $0.08–0.45), renders, reviews, and the set shows as Ready. Approve to post in its window, Publish now to post at once, or Reject with tags.
-5. **Auto (M8):** after one or two good sets, turn a series' Auto on in Settings. Auto sets build after 1:30 AM and post in their window; a set the review flags waits for you.
+5. **Auto (M8):** after one or two good sets, turn a series' Auto on in Settings. Auto sets build at 3:00 AM (S-79) and post in their window; a set the review flags waits for you.
 6. **Env names used:** `ANTHROPIC_API_KEY`, `ANTHROPIC_WORKSPACE_ID`, `TYPESAFE_API_KEY` (Jev), `META_USER_ACCESS_TOKEN`, `META_IG_BUSINESS_ACCOUNT_ID`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL` (and `DIRECT_DATABASE_URL` for the schema script).

@@ -163,35 +163,18 @@ test('booking reads the clock after the run: a run finishing after 10:00 books n
   assert.deepEqual([slot.d, slot.slot], ['2026-10-13', 'morning']);
 });
 
-test('a Last Few Days run that never settles is cut off at the limit; one that finishes in time is returned as is', async () => {
-  const { withLfdTimeout } = await import('@/lib/lfd/worker');
-  let timedOut = 0;
-  const hung = await withLfdTimeout(new Promise<string>(() => undefined), 20, async () => {
-    timedOut += 1;
-    return 'timed out';
-  });
-  assert.equal(hung, 'timed out');
-  assert.equal(timedOut, 1);
-  const done = await withLfdTimeout(Promise.resolve('ok'), 1_000, () => {
-    timedOut += 1;
-    return 'timed out';
-  });
-  assert.equal(done, 'ok');
-  assert.equal(timedOut, 1, 'onTimeout is not called for a run that finished');
+test('no Last Few Days run limit is left: the config exports none', async () => {
+  const cfg = await import('@/lib/lfd/config');
+  assert.equal('LFD_RUN_TIMEOUT_MS' in cfg, false);
 });
 
-test('the in-process run limit is 30 minutes', async () => {
-  const { LFD_RUN_TIMEOUT_MS } = await import('@/lib/lfd/config');
-  assert.equal(LFD_RUN_TIMEOUT_MS, 30 * 60_000);
-});
-
-test('a run whose finish was ignored (the worker already timed it out) is logged, and its row stays failed', async () => {
+test('a run whose finish was ignored (the worker already judged it hung) is logged, and its row stays failed', async () => {
   const { query } = await openHubTestDb();
   const run = await claimed(query, 'manual');
   const { w, logs } = worker(query, {
     run: async (d) => {
       const postId = await seedLfdPost(query, { nyDate: '2026-10-13' });
-      await query(`UPDATE lfd.runs SET status = 'failed', error = 'timed out after 30 minutes' WHERE id = $1`, [d.runId]);
+      await query(`UPDATE lfd.runs SET status = 'failed', error = 'no progress for 45 minutes (hung)' WHERE id = $1`, [d.runId]);
       const recorded = await finishRun(query, d.runId!, { status: 'ok', claudeUsd: 0.2, jevUsd: 0.05, record: {} });
       return { ok: true as const, runId: d.runId!, postId, stories: 6, short: false, recorded };
     },

@@ -594,10 +594,10 @@ test('requeue: not while the pitch has another live job', async () => {
 test('stale jobs: quiet is measured from the last thing a job kept, so a long-running job is left alone', async () => {
   const db = await scratch();
   const { job } = await freshJob(db);
-  await db.query(`UPDATE reel_ai_drama.jobs SET started_at = now() - interval '10 hours' WHERE id = $1`, [job.id]);
+  await db.query(`UPDATE reel_ai_drama.jobs SET started_at = now() - interval '20 hours' WHERE id = $1`, [job.id]);
   await db.query(`INSERT INTO reel_ai_drama.artifacts (job_id, kind, content) VALUES ($1, 'writer_draft', '{}')`, [job.id]);
   assert.equal(await failStaleJobs(db, 'Worker restarted while this job was running.'), 0);
-  await db.query(`UPDATE reel_ai_drama.artifacts SET created_at = now() - interval '5 hours' WHERE job_id = $1`, [job.id]);
+  await db.query(`UPDATE reel_ai_drama.artifacts SET created_at = now() - interval '13 hours' WHERE job_id = $1`, [job.id]);
   assert.equal(await failStaleJobs(db, 'Worker restarted while this job was running.'), 1);
 });
 

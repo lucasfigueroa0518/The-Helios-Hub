@@ -36,11 +36,12 @@ const reads = (morning: StoryCandidate[]): PoolReads => ({
 });
 
 async function poolRows(db: Awaited<ReturnType<typeof openLocalStoriesDb>>['db']) {
-  const { rows } = await db.query<{ series: string; key: string; used: boolean }>(`SELECT series, key, used_at IS NOT NULL AS used FROM stories.pool ORDER BY series, key`);
+  // Archived rows (Tommy, 2026-11-16: the refresh archives instead of deleting) are out of the pool.
+  const { rows } = await db.query<{ series: string; key: string; used: boolean }>(`SELECT series, key, used_at IS NOT NULL AS used FROM stories.pool WHERE archived_at IS NULL ORDER BY series, key`);
   return rows;
 }
 
-test('pool refresh: used keys stay used, an unused key the refresh did not return drops', async () => {
+test('pool refresh: Morning Download reopens what the refresh returns (the build decides repeats), an unused key the refresh did not return drops', async () => {
   const { db } = await openLocalStoriesDb();
   await refreshStoryPool(db, reads([story('a'), story('b'), story('c', 'carousel')]), NOW);
   assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/b', 'news.test/c']);
@@ -55,10 +56,15 @@ test('pool refresh: used keys stay used, an unused key the refresh did not retur
   assert.equal(r.dropped, 1);
   const rows = await poolRows(db);
   assert.deepEqual(rows.filter((x) => x.series === 'morning_download'), [
-    { series: 'morning_download', key: 'news.test/a', used: true },
-    { series: 'morning_download', key: 'news.test/b', used: true },
+    { series: 'morning_download', key: 'news.test/a', used: false },
+    { series: 'morning_download', key: 'news.test/b', used: false },
   ]);
-  assert.deepEqual((await openPool(db, 'morning_download')).stories, [], 'used ideas never come back as open');
+  // c is archived, not deleted, and says why.
+  const c = (await db.query<{ archived_reason: string | null }>(`SELECT archived_reason FROM stories.pool WHERE series = 'morning_download' AND key = 'news.test/c'`)).rows;
+  assert.deepEqual(c, [{ archived_reason: 'not-returned' }]);
+  // Bald-Eagle D2: an intake story keeps its key while new articles join it, so a Morning Download story the
+  // refresh still returns is open again; md-development.ts decides whether it is news again.
+  assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.key).sort(), ['news.test/a', 'news.test/b']);
 
   // A series whose source could not be read keeps its list (it ages out on its freshness window instead).
   const broken: PoolReads = { ...reads([]), leads: async () => { throw new Error('reels.sources unreachable'); } };
@@ -67,15 +73,15 @@ test('pool refresh: used keys stay used, an unused key the refresh did not retur
   assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 1);
 });
 
-test('pool refresh runs once per pool day, which turns over at 4:00 AM New York', async () => {
+test('pool refresh runs once per pool day, which turns over at 3:00 AM New York', async () => {
   const { db } = await openLocalStoriesDb();
   let refreshes = 0;
   const counted = () => ({ ...reads([story('a')]), morning: async () => (refreshes++, { reels: [story('a')], carousel: [] }) });
   assert.ok(await refreshPoolIfDue(db, counted, NOW));
   assert.equal(await refreshPoolIfDue(db, counted, new Date(NOW.getTime() + 3_600_000)), null);
   assert.equal(refreshes, 1);
-  assert.equal(poolDay(new Date('2026-10-10T07:30:00Z')), '2026-10-09', '3:30 AM is still the previous pool day');
-  assert.equal(poolDay(new Date('2026-10-10T08:30:00Z')), '2026-10-10');
+  assert.equal(poolDay(new Date('2026-10-10T06:30:00Z')), '2026-10-09', '2:30 AM is still the previous pool day');
+  assert.equal(poolDay(new Date('2026-10-10T07:30:00Z')), '2026-10-10', '3:30 AM is the new pool day');
   assert.ok(await refreshPoolIfDue(db, counted, new Date('2026-10-10T08:30:00Z')));
   assert.equal(refreshes, 2);
 });
@@ -85,7 +91,7 @@ test('pool refresh runs again when a carousel run finishes after the day\'s refr
   let runAt: string | null = '2026-10-09T03:07:00Z';
   const withRun = (morning: StoryCandidate[]): PoolReads => ({ ...reads(morning), carouselRunAt: async () => runAt });
 
-  // The 4 AM refresh sees the 3 AM run, which brought no stories.
+  // The 3 AM refresh sees the 2:40 run, which brought no stories.
   assert.ok(await refreshPoolIfDue(db, () => withRun([story('a')]), NOW));
   assert.equal(await refreshPoolIfDue(db, () => withRun([story('a')]), new Date(NOW.getTime() + 60_000)), null, 'nothing new: no refresh');
 

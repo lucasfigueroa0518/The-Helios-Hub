@@ -343,7 +343,6 @@ function cand(id: string, score: number | null, o: Partial<RankInput> = {}): Ran
     gate: score == null ? 'vendor_pitch' : null,
     organizerKey: `org:${id}`,
     startAt: '2026-10-27T22:00:00.000Z',
-    localDay: o.localDay ?? `2026-10-${26 + (id.charCodeAt(0) % 5)}`,
     going: null,
     pinned: false,
     excluded: false,
@@ -353,35 +352,28 @@ function cand(id: string, score: number | null, o: Partial<RankInput> = {}): Ran
 
 const ids = (list: RankInput[]) => list.map((e) => e.eventId);
 
-test('picks: top 4 by score above the bar, at most 4', () => {
-  const events = [cand('a', 6, { localDay: 'd1' }), cand('b', 5, { localDay: 'd2' }), cand('c', 4, { localDay: 'd3' }), cand('d', 3.5, { localDay: 'd4' }), cand('e', 3, { localDay: 'd5' })];
-  assert.equal(PICKS_PER_CITY, 4);
-  assert.deepEqual(ids(choosePicks(events)), ['a', 'b', 'c', 'd']);
+test('picks: the top 10 by score above the bar, at most 10 (AE-36)', () => {
+  const events = Array.from({ length: 12 }, (_, i) => cand(`e${i}`, 12 - i));
+  assert.equal(PICKS_PER_CITY, 10);
+  assert.deepEqual(ids(choosePicks(events)), ids(events.slice(0, 10)));
+  assert.deepEqual(ids(choosePicks(events, 5)), ids(events.slice(0, 8)), 'the bar cuts the list short');
 });
 
-test('the post deck (AE-33): the same 4 picks, then later gate-passers, one per organizer, including under the bar', () => {
-  const events = [
-    cand('a', 6, { localDay: 'd1' }),
-    cand('b', 5, { localDay: 'd1' }),
-    cand('c', 4.8, { localDay: 'd1' }),
-    cand('d', 4.5, { localDay: 'd1' }),
-    cand('e', 4.4, { localDay: 'd2' }),
-    cand('f', 4.2, { localDay: 'd3', organizerKey: 'org:a' }),
-    cand('g', 4, { localDay: 'd3' }),
-    cand('h', 2, { localDay: 'd4' }),
-  ];
-  const picks = ids(choosePicks(events, 3));
-  assert.deepEqual(picks, ['a', 'b', 'c', 'e'], 'the day-spread swap still acts on the 4th');
-  const deck = ids(extendDeck(choosePicks(events, 3), events));
-  assert.deepEqual(deck.slice(0, PICKS_PER_CITY), picks);
-  assert.deepEqual(deck, ['a', 'b', 'c', 'e', 'd', 'g', 'h']);
-  assert.equal(RANK_DEPTH, 20);
+test('the post deck (AE-38): the top 10 and nothing past it; under-the-bar events fill a short list', () => {
+  assert.equal(RANK_DEPTH, 10);
+  const many = Array.from({ length: 14 }, (_, i) => cand(`e${i}`, 14 - i));
+  const picks = choosePicks(many, 3);
+  assert.equal(picks.length, 10);
+  assert.deepEqual(ids(extendDeck(picks, many)), ids(picks), 'nothing past #10');
+  const short = [cand('a', 6), cand('b', 5), cand('c', 2), cand('d', 1)];
+  assert.deepEqual(ids(choosePicks(short, 3)), ['a', 'b']);
+  assert.deepEqual(ids(extendDeck(choosePicks(short, 3), short)), ['a', 'b', 'c', 'd']);
 });
 
 test('picks: a bar keeps out what is under it; a city with nothing above it has no picks', () => {
   assert.deepEqual(ids(choosePicks([cand('a', 2.99), cand('b', 1)], 3)), []);
-  assert.deepEqual(ids(choosePicks([cand('a', 3, { localDay: 'd1' }), cand('b', 2.9, { localDay: 'd2' })], 3)), ['a']);
-  assert.deepEqual(ids(choosePicks([cand('a', 3, { localDay: 'd1' }), cand('b', 2.9, { localDay: 'd2' })], null)), ['a', 'b'], 'no bar: anything past the gates');
+  assert.deepEqual(ids(choosePicks([cand('a', 3), cand('b', 2.9)], 3)), ['a']);
+  assert.deepEqual(ids(choosePicks([cand('a', 3), cand('b', 2.9)], null)), ['a', 'b'], 'no bar: anything past the gates');
 });
 
 test('picks: gated events never pick on their own', () => {
@@ -390,46 +382,44 @@ test('picks: gated events never pick on their own', () => {
 
 test('picks: pins go first, whatever their score or gate; excludes are dropped', () => {
   const events = [
-    cand('top', 8, { localDay: 'd1', excluded: true }),
-    cand('second', 7, { localDay: 'd2' }),
-    cand('third', 6, { localDay: 'd3' }),
-    cand('lowpin', 1, { localDay: 'd4', pinned: true }),
-    cand('gatedpin', null, { localDay: 'd5', pinned: true }),
+    cand('top', 8, { excluded: true }),
+    cand('second', 7),
+    cand('third', 6),
+    cand('lowpin', 1, { pinned: true }),
+    cand('gatedpin', null, { pinned: true }),
   ];
   assert.deepEqual(ids(choosePicks(events)), ['lowpin', 'gatedpin', 'second', 'third']);
 });
 
-test('picks: pins order by score and fill at most 4', () => {
-  const events = [cand('p1', 4, { pinned: true }), cand('p2', 5, { pinned: true }), cand('p3', 3.2, { pinned: true }), cand('p4', 3.1, { pinned: true }), cand('p5', 3, { pinned: true }), cand('x', 9)];
-  assert.deepEqual(ids(choosePicks(events)), ['p2', 'p1', 'p3', 'p4']);
+test('picks: pins order by score and fill at most 10', () => {
+  const pins = Array.from({ length: 11 }, (_, i) => cand(`p${i}`, i + 1, { pinned: true }));
+  assert.deepEqual(ids(choosePicks([...pins, cand('x', 99)])), ids(pins.slice(1).reverse()));
 });
 
 test('picks: partners go to the top after pins, by score, past the gates and the bar (AE-27)', () => {
   const events = [
-    cand('best', 9, { localDay: 'd1' }),
-    cand('emerge', 2, { localDay: 'd2', partner: 'eMerge Americas' }),
-    cand('hub', 4, { localDay: 'd3', partner: 'Miami AI Hub' }),
-    cand('gatedpartner', null, { localDay: 'd4', partner: 'Purple Horizons' }),
-    cand('pin', 1, { localDay: 'd5', pinned: true }),
-    cand('next', 8, { localDay: 'd6' }),
+    cand('best', 9),
+    cand('emerge', 2, { partner: 'eMerge Americas' }),
+    cand('hub', 4, { partner: 'Miami AI Hub' }),
+    cand('gatedpartner', null, { partner: 'Purple Horizons' }),
+    cand('pin', 1, { pinned: true }),
+    cand('next', 8),
   ];
-  assert.deepEqual(ids(choosePicks(events, 8.5)), ['pin', 'hub', 'emerge', 'gatedpartner']);
+  assert.deepEqual(ids(choosePicks(events, 8.5)), ['pin', 'hub', 'emerge', 'gatedpartner', 'best']);
   assert.deepEqual(ids(choosePicks(events.filter((e) => e.eventId !== 'pin'), 8.5)), ['hub', 'emerge', 'gatedpartner', 'best']);
   const excluded = events.map((e) => (e.eventId === 'hub' ? { ...e, excluded: true } : e));
   assert.ok(!ids(choosePicks(excluded)).includes('hub'), 'an exclude still drops a partner');
 });
 
-test('picks: one per organizer', () => {
+test('picks: one organizer may hold several picks (AE-36)', () => {
   const events = [
-    cand('a', 7, { organizerKey: 'name:masstlc', localDay: 'd1' }),
-    cand('b', 6, { organizerKey: 'name:masstlc', localDay: 'd2' }),
-    cand('c', 5, { organizerKey: null, localDay: 'd3' }),
-    cand('d', 4, { organizerKey: null, localDay: 'd4' }),
-    cand('e', 3, { organizerKey: null, localDay: 'd5' }),
+    cand('a', 7, { organizerKey: 'name:masstlc' }),
+    cand('b', 6, { organizerKey: 'name:masstlc' }),
+    cand('c', 5, { organizerKey: null }),
   ];
-  assert.deepEqual(ids(choosePicks(events)), ['a', 'c', 'd', 'e'], 'an unknown organizer never collides');
-  const pinnedOrg = [cand('p', 2, { pinned: true, organizerKey: 'name:x', localDay: 'd1' }), cand('q', 9, { organizerKey: 'name:x', localDay: 'd2' }), cand('r', 5, { localDay: 'd3' })];
-  assert.deepEqual(ids(choosePicks(pinnedOrg)), ['p', 'r'], 'a pin claims its organizer');
+  assert.deepEqual(ids(choosePicks(events)), ['a', 'b', 'c']);
+  const pinnedOrg = [cand('p', 2, { pinned: true, organizerKey: 'name:x' }), cand('q', 9, { organizerKey: 'name:x' }), cand('r', 5)];
+  assert.deepEqual(ids(choosePicks(pinnedOrg)), ['p', 'q', 'r'], 'a pin does not block its organizer');
 });
 
 test('organizer identity: normalized name, else series key', () => {
@@ -438,25 +428,11 @@ test('organizer identity: normalized name, else series key', () => {
   assert.equal(organizerKey({ organizerName: null, seriesKey: null }), null);
 });
 
-test('picks: day spread swaps the last pick for a new day within 15%', () => {
-  const head = [cand('a', 6, { localDay: 'tue' }), cand('b', 5.5, { localDay: 'wed' }), cand('b2', 5.2, { localDay: 'fri' })];
-  const sameDay = [...head, cand('c', 5, { localDay: 'tue' }), cand('d', 4.3, { localDay: 'thu' })];
-  assert.deepEqual(ids(choosePicks(sameDay)), ['a', 'b', 'b2', 'd'], '4.3 >= 0.85 × 5 = 4.25');
-  const tooFar = [...head, cand('c', 5, { localDay: 'tue' }), cand('d', 4.2, { localDay: 'thu' })];
-  assert.deepEqual(ids(choosePicks(tooFar)), ['a', 'b', 'b2', 'c'], '4.2 is more than 15% below');
-  const spread = [...head, cand('c', 5, { localDay: 'thu' }), cand('d', 4.9, { localDay: 'sat' })];
-  assert.deepEqual(ids(choosePicks(spread)), ['a', 'b', 'b2', 'c'], 'the last is already on a new day');
-  const pinnedLast = [...head.map((e) => ({ ...e, pinned: true })), cand('c', 5, { localDay: 'tue', pinned: true }), cand('d', 5, { localDay: 'thu' })];
-  assert.deepEqual(ids(choosePicks(pinnedLast)), ['a', 'b', 'b2', 'c'], 'a pinned last pick is never swapped');
-  const belowBar = [...head, cand('c', 3.2, { localDay: 'tue' }), cand('d', 2.9, { localDay: 'thu' })];
-  assert.deepEqual(ids(choosePicks(belowBar, 3)), ['a', 'b', 'b2', 'c'], 'a swap must still clear the bar');
-});
-
 test('ties break on going, then start time', () => {
   const events = [
-    cand('late', 5, { going: 40, startAt: '2026-10-29T22:00:00.000Z', localDay: 'd1' }),
-    cand('early', 5, { going: 40, startAt: '2026-10-27T22:00:00.000Z', localDay: 'd2' }),
-    cand('crowd', 5, { going: 90, startAt: '2026-10-30T22:00:00.000Z', localDay: 'd3' }),
+    cand('late', 5, { going: 40, startAt: '2026-10-29T22:00:00.000Z' }),
+    cand('early', 5, { going: 40, startAt: '2026-10-27T22:00:00.000Z' }),
+    cand('crowd', 5, { going: 90, startAt: '2026-10-30T22:00:00.000Z' }),
     cand('gated', null),
   ];
   assert.deepEqual(ids(rankCity(events)), ['crowd', 'early', 'late', 'gated']);
@@ -487,25 +463,25 @@ test('the history bar is a percentile of past scores: top 30% is the 70th percen
   assert.deepEqual(BAR_TIERS.map((t) => t.tier), ['top30', 'top40', 'top50', 'gates']);
 });
 
-test('the bar steps down top 30% → 40% → 50% → gates until the city has 4 picks (AE-28)', () => {
+test('the bar steps down top 30% → 40% → 50% → gates until the city has 10 picks (AE-28)', () => {
   const history = Array.from({ length: 11 }, (_, i) => i); // bars: 7, 6, 5
-  const week = (scores: number[]) => scores.map((sc, i) => cand(`e${i}`, sc, { localDay: `d${i}` }));
-  const strict = chooseCityPicks(week([9, 8.5, 8, 7.5, 1]), history);
+  const week = (scores: number[]) => scores.map((sc, i) => cand(`e${i}`, sc));
+  const nine = Array<number>(9).fill(8);
+  const strict = chooseCityPicks(week([...nine, 7.5, 1]), history);
   assert.equal(strict.tier, 'top30');
   assert.equal(strict.bar, 7);
-  assert.equal(strict.picks.length, 4);
-  assert.equal(chooseCityPicks(week([9, 8, 7, 6.5, 1]), history).tier, 'top40');
-  assert.equal(chooseCityPicks(week([9, 8, 7, 5.5, 1]), history).tier, 'top50');
+  assert.equal(strict.picks.length, 10);
+  assert.equal(chooseCityPicks(week([...nine, 6.5, 1]), history).tier, 'top40');
+  assert.equal(chooseCityPicks(week([...nine, 5.5, 1]), history).tier, 'top50');
   const loose = chooseCityPicks(week([9, 2, 1.5, 1]), history);
   assert.equal(loose.tier, 'gates');
   assert.equal(loose.bar, null);
   assert.deepEqual(ids(loose.picks), ['e0', 'e1', 'e2', 'e3']);
   const thin = chooseCityPicks(week([9, 2]), history);
-  assert.equal(thin.tier, 'gates', 'fewer than 4 past the gates: all of them');
+  assert.equal(thin.tier, 'gates', 'fewer than 10 past the gates: all of them');
   assert.equal(thin.picks.length, 2);
-  const partnersOnly = chooseCityPicks([...week([1, 1]), cand('p1', 0.5, { partner: 'Miami AI Hub' }), cand('p2', 0.4, { partner: 'eMerge Americas' }), cand('p3', null, { partner: 'Purple Horizons' }), cand('p4', 0.2, { partner: 'Tony Jimenez' })], history);
-  assert.equal(partnersOnly.tier, 'top30', 'partners fill the post before the bar ever loosens');
-  assert.deepEqual(ids(partnersOnly.picks), ['p1', 'p2', 'p4', 'p3']);
+  const partnersFirst = chooseCityPicks([...week([1, 1]), cand('p1', 0.5, { partner: 'Miami AI Hub' }), cand('p2', 0.4, { partner: 'eMerge Americas' }), cand('p3', null, { partner: 'Purple Horizons' }), cand('p4', 0.2, { partner: 'Tony Jimenez' })], history);
+  assert.deepEqual(ids(partnersFirst.picks), ['p1', 'p2', 'p4', 'p3', 'e0', 'e1'], 'partners lead whatever their score; the rest follow');
   assert.equal(chooseCityPicks(week([9, 8, 7, 6]), []).tier, 'gates', 'no history: the gates');
 });
 
@@ -540,19 +516,20 @@ test("each metro's window runs local midnight to local midnight, across the DST 
   assert.equal(localDay('2026-11-02T07:30:00Z', 'America/Los_Angeles'), '2026-11-01');
 });
 
-test('candidates are capped at 30 by the prior; pins and excludes are always kept', () => {
-  assert.equal(CANDIDATE_CAP, 30);
+test('every candidate is scored (AE-35); a cap, when passed, keeps the best priors plus pins and excludes', () => {
+  assert.equal(CANDIDATE_CAP, Number.POSITIVE_INFINITY);
   const strong = Array.from({ length: 31 }, (_, i) => makeEvent({ guestCount: 50 + i, description: 'Talks and demos.' }));
   const weak = makeEvent({ guestCount: null });
-  const chosen = capCandidates([...strong, weak]);
+  assert.equal(capCandidates([...strong, weak]).length, 32, 'no cap by default');
+  const chosen = capCandidates([...strong, weak], new Set(), 30);
   assert.equal(chosen.length, 30);
   assert.ok(!chosen.includes(weak));
   assert.ok(!chosen.includes(strong[0]!), 'the lowest prior drops');
-  const kept = capCandidates([...strong, weak], new Set([weak.id]));
+  const kept = capCandidates([...strong, weak], new Set([weak.id]), 30);
   assert.equal(kept.length, 31);
   assert.ok(kept.includes(weak));
   const roster = makeEvent({ organizerName: 'MassTLC', guestCount: null, description: 'Panel.' });
-  assert.ok(capCandidates([...strong, roster]).includes(roster), 'a roster organizer with a description outranks a crowd of 50');
+  assert.ok(capCandidates([...strong, roster], new Set(), 30).includes(roster), 'a roster organizer with a description outranks a crowd of 50');
 });
 
 // ── State ───────────────────────────────────────────────────────────────────

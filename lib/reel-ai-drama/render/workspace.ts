@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { normalHistory } from '@/explainers/reel-ai-drama/kit/music.mjs';
-import { EXPLAINERS_DIR, prepareWorkspace as prepareExplainerWorkspace, type MusicHistory, type Workspace } from '@/lib/explainers/render/workspace';
+import { EXPLAINERS_DIR, prepareWorkspace as prepareExplainerWorkspace, workspacePaths, type MusicHistory, type Workspace } from '@/lib/explainers/render/workspace';
 import type { TopicRow } from '@/lib/explainers/types';
 import { spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
 
@@ -144,6 +144,19 @@ export type PrepareDeps = {
   buildFrame?: (projectDir: string, presetDir: string) => void;
   kitDir?: string;
 };
+
+/**
+ * A resumed job's workspace as its last run left it (voice, compiled frames, render), nothing wiped; null when no project
+ * was built there. The caller decides which of its steps are still current.
+ */
+export function reuseWorkspace({ jobsRoot, jobId }: { jobsRoot: string; jobId: string }): Workspace | null {
+  const jobDir = path.join(path.resolve(jobsRoot), jobId);
+  const ws = workspacePaths(jobDir, 'render');
+  if (!fs.existsSync(path.join(ws.projectDir, 'STORYBOARD.md'))) return null;
+  const tmpDir = path.join(os.tmpdir(), `hx-${jobId.replace(/[^a-z0-9]/gi, '').slice(0, 8)}`);
+  fs.mkdirSync(tmpDir, { recursive: true });
+  return { jobDir, projectDir: ws.projectDir, homeDir: ws.homeDir, tmpDir };
+}
 
 /** The job's workspace: the Explainer prepare one level down in the job folder, then the overlay. */
 export async function prepareWorkspace({ jobsRoot, jobId }: { jobsRoot: string; jobId: string }, deps: PrepareDeps = {}): Promise<Workspace> {

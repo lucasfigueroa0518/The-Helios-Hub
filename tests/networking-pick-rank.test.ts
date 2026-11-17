@@ -159,12 +159,12 @@ test('rankWeek scores, gates with stored reasons, picks, writes the pool, and lo
   assert.equal(result.jev.calls, 6);
   assert.ok(Math.abs(result.jev.usd - (6 * 1000 * 0.042) / 1e6) < 1e-12);
 
-  // Picks: Same org outscores Strong but shares its organizer; gated ones never pick. With no score
-  // history and only three eligible events, the bar steps down to the gates (AE-28), so Weak is in.
-  assert.deepEqual(boston.picks.map((p) => p.event.title), ['Same org', 'Good', 'Weak']);
+  // Picks: Same org and Strong share an organizer and both go in (AE-36); gated ones never pick.
+  // With no score history and only four eligible events, the bar steps down to the gates (AE-28).
+  assert.deepEqual(boston.picks.map((p) => p.event.title), ['Same org', 'Strong', 'Good', 'Weak']);
   assert.equal(boston.tier, 'gates');
   assert.equal(boston.bar, null);
-  assert.equal(boston.remainingCount, 6 - 3);
+  assert.equal(boston.remainingCount, 6 - 4);
   const pitchRow = boston.ranked.find((p) => p.eventId === pitch)!;
   assert.equal(pitchRow.gate, 'vendor_pitch');
   assert.equal(pitchRow.score, null);
@@ -188,8 +188,8 @@ test('rankWeek scores, gates with stored reasons, picks, writes the pool, and lo
   );
   assert.equal(pool.rows.length, 6);
   assert.deepEqual(pool.rows.map((r) => r.rank), [1, 2, 3, 4, 5, 6]);
-  assert.deepEqual(pool.rows.filter((r) => r.picked).map((r) => r.event_id).sort(), [good, sameOrg, weak].sort());
-  assert.equal(pool.rows.find((r) => r.event_id === strong)!.picked, false, 'one per organizer');
+  assert.deepEqual(pool.rows.filter((r) => r.picked).map((r) => r.event_id).sort(), [good, sameOrg, strong, weak].sort());
+  assert.equal(pool.rows.find((r) => r.event_id === strong)!.picked, true, 'an organizer may hold several picks (AE-36)');
 
   // Logs: one row per question set per call; one cost row per call, with week and run.
   const logs = await q<{ question_set_version: string; n: number }>(
@@ -271,17 +271,18 @@ test('past weeks set the bar (top 30% → 50%), only v2 gated-in scores count, a
   const history = await loadScoreHistory(q, ['boston'], '2026-W44');
   assert.equal(history.get('boston')!.length, 20);
 
-  // Four strong events (about 6.05 with Tough Tech Week) and one weak one (about 2.85).
-  for (const [i, day] of ['27', '28', '29', '30'].entries()) await addEvent(q, { title: `Strong ${i}`, startAt: `2026-10-${day}T22:00:00Z`, guests: 250 });
+  // Ten strong events (about 6.05 with Tough Tech Week) and one weak one (about 2.85).
+  const slots = ['27', '28', '29', '30'].flatMap((day) => ['14', '18', '22'].map((h) => `2026-10-${day}T${h}:00:00Z`)).slice(0, 10);
+  for (const [i, startAt] of slots.entries()) await addEvent(q, { title: `Strong ${i}`, startAt, guests: 250 });
   await addEvent(q, { title: 'Weak', startAt: '2026-10-31T16:00:00Z', guests: 250 });
   await addEvent(q, { title: 'Hub night', metro: 'miami', startAt: '2026-10-28T23:00:00Z', organizer: 'Miami AI Hub', timezone: 'America/New_York' });
   const jev = stubTransport({ Weak: { value: 0.1 }, 'Hub night': { value: 0.1, vendor_pitch: 0.9 } });
   const result = await rankWeek({ q, ask: jev, runId: null, now: NOW });
 
   const boston = result.cities.find((c) => c.metro === 'boston')!;
-  assert.equal(boston.tier, 'top50', 'nothing clears 6.65 or 5.7; four clear 4.75');
+  assert.equal(boston.tier, 'top50', 'nothing clears 6.65 or 5.7; ten clear 4.75');
   assert.ok(Math.abs(boston.bar! - 4.75) < 1e-9);
-  assert.deepEqual(boston.picks.map((p) => p.event.title).sort(), ['Strong 0', 'Strong 1', 'Strong 2', 'Strong 3']);
+  assert.deepEqual(boston.picks.map((p) => p.event.title).sort(), slots.map((_, i) => `Strong ${i}`).sort());
 
   const miami = result.cities.find((c) => c.metro === 'miami')!;
   assert.deepEqual(miami.picks.map((p) => p.event.title), ['Hub night'], 'a gated partner event still goes in');

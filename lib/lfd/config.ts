@@ -11,11 +11,10 @@ export const DEFAULT_LFD_RUN_CAP_USD = 1;
 export const LFD_SLOT = 'morning';
 export const LFD_WINDOW: PostingWindow = { id: LFD_SLOT, label: '9:00–10:00 AM', startMinute: 9 * 60, endMinute: 10 * 60 };
 
-/** social.used_photos `story_id` prefix for a published post's photos (spec §5, the shared 7-day rule). */
+/** social.used_photos `story_id` prefix for a published post's photos (spec §5; the CI-32 used-photo ledger). */
 export const LFD_PHOTO_STORY_PREFIX = 'lfd:';
 
-/** Wall-clock limit on one in-process run in the helios-social loop (real runs take 3–8 minutes); past it the run is failed and the loop goes on. */
-export const LFD_RUN_TIMEOUT_MS = 30 * 60_000;
+// No run time limit: long runs are normal and never failed for length (lib/content-runs/hang-guard.ts; CI decision 2026-11-10).
 
 /** The meme stage's spend cap when lfd.settings has no memes_cap_usd: 3 briefs and 3 meme runs come to about $0.50. */
 export const DEFAULT_LFD_MEMES_CAP_USD = 1;

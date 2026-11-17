@@ -7,7 +7,6 @@ import { cardActions, type CardActions } from '@/lib/social-hub/views/card-actio
 import { dayWord } from '@/lib/social-hub/views/format';
 import { windowRange, windowsOn } from '@/lib/social-hub/views/plan';
 import { ideaOwns } from '@/lib/social-hub/views/day-rank';
-import { QUEUE_LIVE } from '@/lib/social-hub/queue';
 import { addDays, nyDateOf, nyDayStart } from '@/lib/social-hub/time';
 import { approvalOffState, postState, type PostState } from '@/lib/social-hub/views/state';
 import { typicals, type Typicals } from '@/lib/social-hub/views/typical';
@@ -24,16 +23,19 @@ export type Offerer = { offer: (post: HubPost) => Offer; placeHere: (post: HubPo
 const ACTIVE = new Set(['scheduled', 'publishing', 'published']);
 
 /**
- * Today's remaining posting windows for the type (place and reschedule, D50; today only, D12): what's
+ * The remaining posting windows for the type (place and reschedule, D50): today's, or a made-ahead post's own day. What's
  * free, what's taken, and where this post already sits. The server checks
  * again when the move is made (spacing, quota, a slot taken meanwhile).
  */
 export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days = 1): SlotChoice[] {
   const today = nyDateOf(now)!;
+  // A post made ahead (its target date is later, lib/social-hub/lead.ts) is offered its own day's windows, never today's:
+  // placing or approving it must not pull it onto today (Bald-Eagle D4).
+  const first = post.nyDate && post.nyDate > today ? post.nyDate : today;
   const placed = dataset.posts.filter((p) => p.vertical === post.vertical && ACTIVE.has(p.status) && p.nyDate);
   const out: SlotChoice[] = [];
   for (let i = 0; i < days; i++) {
-    const day = addDays(today, i);
+    const day = addDays(first, i);
     const onDay = placed.filter((p) => p.nyDate === day);
     windowsOn(post.vertical, day, dataset.dayQuotas?.lfdDays ?? [], dataset.dayQuotas?.slots ?? null).forEach((w, index) => {
       const closes = nyDayStart(day).getTime() + w.endMinute * 60_000;
@@ -83,7 +85,7 @@ export function offerer(dataset: HubDataset, now: Date, flags: HubFlags = SOCIAL
         lfdPublishingLive: dataset.lfdPublishingLive === true,
         aiEventsPublishingLive: dataset.aiEventsPublishingLive === true,
         fieldNotesPublishingLive: dataset.fieldNotesPublishingLive === true,
-        ...(QUEUE_LIVE.has(post.vertical) ? { archive: { ideaId: dataset.ideas.find((i) => i.vertical === post.vertical && ideaOwns(i, post))?.id ?? null } } : {}),
+        archive: { ideaId: dataset.ideas.find((i) => i.vertical === post.vertical && ideaOwns(i, post))?.id ?? null },
       });
       const slots = plans.some((p) => p.kind === 'post' && p.pick === 'slot') ? slotChoices(dataset, post, now) : undefined;
       const menu = actionMenu(post, state, plans, enabled, slots);

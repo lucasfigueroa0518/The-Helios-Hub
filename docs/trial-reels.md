@@ -141,7 +141,7 @@ after that prompt is approved.
 
 Measured on the first nights: about **$0.02 of Jev** for a full night (roughly
 350 ingest, grouping, and editor calls) and **$0.25 to $0.35 for one B6
-story**. `web-search-v2` writes two stories a night (D-236), so that part of
+story**. `web-search-v3` writes two stories a night (D-236; v3 adds a 7-day window and a `happened_on` date), so that part of
 the bill is about twice the single-story nights.
 
 The spend watch is **$100/month** (`MONTHLY_WATCH_USD` in `lib/reels/config.ts`; D-023 set the first $50). It is checked once before a run

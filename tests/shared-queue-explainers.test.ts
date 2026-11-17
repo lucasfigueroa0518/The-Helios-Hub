@@ -60,6 +60,9 @@ function stubIdeas(): IdeaModel {
 async function explainersOn(): Promise<ExplainersDb> {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
+  // Lead time (Bald-Eagle D4, D8): earlier nights filled today and tomorrow (Oct 8, 9), so tonight fills one date (Oct 10), as on
+  // every night after the cutover. These tests are about one night's queue.
+  await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', '2026-10-08'), ('ok', 'development', '2026-10-09')`);
   return db;
 }
 
@@ -160,8 +163,9 @@ test('a promote whose render does not start tonight is transient: no skip is rec
   await saveSetting(db, 'daily_render_cap', 1);
   const earlier = await topic(db, 'Earlier', 50, 'rendered');
   await db.query(
-    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, requested_at)
-     VALUES ($1, 'ok', 'auto', 'production', 5, 'm', 'm', '2026-10-08T05:00:00Z')`,
+    // A render already made for the date tonight fills (Oct 10): that date's render cap is used up (lead time, D4).
+    `INSERT INTO explainers.jobs (topic_id, status, trigger, mode, spend_cap_usd, orchestrator_model, frame_worker_model, requested_at, target_date)
+     VALUES ($1, 'ok', 'auto', 'production', 5, 'm', 'm', '2026-10-08T05:00:00Z', '2026-10-10')`,
     [earlier],
   );
   const p = await topic(db, 'P', 10);

@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import path from 'node:path';
 
 import type { CompiledFrameRecord } from '@/lib/reel-ai-drama/render/compile';
@@ -130,7 +131,7 @@ export function pickMoments(input: { spans: FrameSpan[]; records: Record<string,
 export function sceneChanges(videoPath: string, deps: { run?: Runner } = {}): number[] {
   const run = deps.run ?? spawnRunner;
   const video = path.resolve(videoPath);
-  const res = run('ffmpeg', ['-hide_banner', '-nostats', '-i', video, '-an', '-vf', `scale=270:-2,select='gt(scene,${SCENE_THRESHOLD})',showinfo`, '-f', 'null', '-'], { cwd: path.dirname(video), timeoutMs: 5 * 60 * 1000 });
+  const res = run('ffmpeg', ['-hide_banner', '-nostats', '-i', video, '-an', '-vf', `scale=270:-2,select='gt(scene,${SCENE_THRESHOLD})',showinfo`, '-f', 'null', '-'], { cwd: path.dirname(video), timeoutMs: RUN_HANG_BACKSTOP_MS });
   if (res.status !== 0) return [];
   return [...res.stderr.matchAll(/pts_time:\s*(\d+(?:\.\d+)?)/g)].map((m) => round(Number(m[1])));
 }

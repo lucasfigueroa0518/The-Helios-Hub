@@ -155,9 +155,11 @@
 
 .sh-board__day { position: relative; display: flex; flex-direction: column; min-width: 0; padding-bottom: calc(var(--sh-card-h) + var(--sh-axis-h) * var(--sh-stack-over, 0)); border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-surface-2) 55%, var(--color-surface)); }
 .sh-board__day.is-today { border-color: var(--color-text); background: var(--color-surface); }
-.sh-board__day.is-folded { padding-bottom: 0; border-style: dashed; background: transparent; }
+.sh-board__day.is-past { border-style: dashed; background: transparent; }
 .sh-board__dhead { display: flex; flex-direction: column; justify-content: center; gap: 2px; height: 56px; padding: 0 12px; }
 .sh-board__gutter .sh-board__dhead { padding: 0; }
+/* The hours stay in view while the days scroll sideways (a phone shows about two days). */
+.sh-board__gutter { position: sticky; left: 0; z-index: 5; background: var(--color-bg, var(--color-surface)); }
 .sh-board__dname { font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); white-space: nowrap; }
 .sh-board__count { margin-left: 6px; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-weight: var(--font-weight-regular); font-variant-numeric: tabular-nums; }
 .sh-board__badges { display: flex; align-items: center; gap: 6px; min-height: 18px; }
@@ -165,7 +167,6 @@
 .sh-board__badge--today { background: var(--color-text); color: var(--color-text-inverse); }
 .sh-board__badge--edited { background: var(--sh-needs-wash); color: var(--sh-needs-ink); }
 .sh-board__lnk { padding: 0; border: 0; background: none; color: var(--sh-needs-ink); font: inherit; font-size: var(--sh-fs-label); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.sh-board__fold { margin: 0; padding: 0 12px; color: var(--color-text-muted); font-size: var(--sh-fs-small); white-space: nowrap; }
 
 /* A day's timeline: hour lines, hint bands, the now line and the cards, all placed by time. */
 .sh-board__axis { position: relative; height: var(--sh-axis-h); }
@@ -200,6 +201,12 @@
 .sh-board__card[data-status='posted'] { background: var(--color-surface-2); box-shadow: none; }
 .sh-board__card[data-status='posted'] .sh-board__time, .sh-board__card[data-status='posted'] .sh-board__short { color: var(--color-text-muted); }
 .sh-board__card[data-locked='true'] { box-shadow: none; }
+/* A posted card is a link to its analytics (the post drawer): it reads as clickable, with its lead number at the end. */
+.sh-board__card[data-status='posted'] { cursor: pointer; }
+.sh-board__card[data-status='posted']:hover { background: var(--color-surface-hover); }
+a.sh-board__open { color: inherit; text-decoration: none; cursor: pointer; }
+.sh-board__lead { display: inline-flex; align-items: baseline; gap: 4px; flex: none; margin-left: auto; padding-right: 4px; color: var(--color-text); font-size: var(--sh-fs-label); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sh-board__vs { color: var(--color-text-muted); font-weight: var(--font-weight-regular); }
 .sh-board__card[data-over-cap='true'] { border-style: dashed; background: var(--color-surface); }
 .sh-board__card[data-dimmed='true'] { opacity: 0.35; }
 .sh-board__card[data-faded='true'] { opacity: 0.3; }
@@ -312,10 +319,49 @@
 .sh-sched__foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; border-top: 1px solid var(--sh-hairline); }
 .sh-sched__foot .sh-btn--primary { gap: 6px; }
 
+/* Touch: a taller axis, so a 30-minute card is a ~44px tap target (posted cards open their analytics). */
+@media (pointer: coarse) {
+  .sh-board { --sh-axis-h: 1250px; }
+}
+
 @media (max-width: 640px) {
   .sh-board__panel { left: 12px; right: 12px; bottom: 12px; }
   .sh-board__panel .sh-menu__list { top: auto; bottom: calc(100% + 6px); max-height: 50vh; }
   .sh-board__tray { padding: 8px 10px; }
   .sh-board__chip { min-height: 40px; }
   .sh-board__actions .sh-menu__list { max-height: 50vh; }
+}
+
+/* ── The Week on a phone: one day at a time (DayAgenda; Calendar Look-back PLAN, 2026-11-15) ── */
+.sh-agenda { display: none; }
+.sh-agenda__strip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.sh-agenda__day { display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 60px; padding: 6px 0; border: 1px solid var(--sh-hairline); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text); font: inherit; cursor: pointer; }
+.sh-agenda__day[data-past='true'] { border-style: dashed; background: transparent; }
+.sh-agenda__day[data-today='true'] { border-color: var(--color-text); }
+.sh-agenda__day[aria-selected='true'] { border-color: var(--color-text); background: var(--color-text); color: var(--color-text-inverse); }
+.sh-agenda__wd { font-size: var(--sh-fs-label); opacity: 0.75; }
+.sh-agenda__dn { font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); font-variant-numeric: tabular-nums; }
+.sh-agenda__n { font-size: 11px; opacity: 0.65; font-variant-numeric: tabular-nums; }
+.sh-agenda__body { display: flex; flex-direction: column; gap: 10px; min-height: 50vh; padding-top: 14px; }
+.sh-agenda__title { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0; font-size: var(--sh-fs-section); font-weight: var(--font-weight-semibold); }
+.sh-agenda__empty { margin: 0; padding: 24px 12px; border: 1px dashed var(--sh-hairline); border-radius: var(--radius-md); color: var(--color-text-subtle); text-align: center; }
+.sh-agenda__list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sh-agenda__row { display: flex; align-items: center; min-height: 56px; border: 1px solid color-mix(in srgb, var(--sh-color) 32%, var(--sh-hairline)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--sh-color) 5%, var(--color-surface)); }
+.sh-agenda__row[data-status='posted'] { background: var(--color-surface-2); }
+.sh-agenda__row[data-status='empty'] { border-style: dashed; background: var(--color-surface); }
+.sh-agenda__row[data-dimmed='true'] { opacity: 0.4; }
+.sh-agenda__open { display: flex; align-items: center; gap: 12px; flex: 1 1 auto; min-width: 0; min-height: 56px; padding: 10px 8px 10px 12px; border: 0; border-radius: var(--radius-md); background: none; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.sh-agenda__open:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--sh-focus); }
+.sh-agenda__time { flex: none; width: 66px; color: var(--color-text-muted); font-size: var(--sh-fs-small); font-variant-numeric: tabular-nums; }
+.sh-agenda__main { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0; }
+.sh-agenda__type { display: inline-flex; align-items: center; gap: 6px; color: var(--color-text-muted); font-size: var(--sh-fs-label); }
+.sh-agenda__name { overflow: hidden; color: var(--color-text); font-weight: var(--font-weight-semibold); white-space: nowrap; text-overflow: ellipsis; }
+.sh-agenda__line { color: var(--color-text-muted); font-size: var(--sh-fs-small); font-variant-numeric: tabular-nums; }
+.sh-agenda__go { flex: none; color: var(--color-text-subtle); }
+.sh-agenda__tag { min-height: 36px; margin-right: 10px; padding: 0 12px; font-size: var(--sh-fs-small); }
+
+@media (max-width: 640px) {
+  .sh-agenda { display: block; }
+  /* The grid, the drag-in chips and Select are desktop tools (decision: look + tap actions on a phone). */
+  .sh-board__scroll, .sh-board__tray, .sh-board__selectbar, .sh-board__key { display: none; }
 }

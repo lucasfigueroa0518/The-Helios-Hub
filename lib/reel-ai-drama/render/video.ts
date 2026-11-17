@@ -1,3 +1,4 @@
+import { RUN_HANG_BACKSTOP_MS } from '@/lib/content-runs/hang-guard';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -5,8 +6,24 @@ import { HYPERFRAMES_BIN, HYPERFRAMES_ENV } from '@/lib/explainers/render/worksp
 import { appendStepLog, spawnRunner, tail, type Runner } from '@/lib/reel-ai-drama/render/runner';
 import { KIT_DIR } from '@/lib/reel-ai-drama/render/workspace';
 
-/** HyperFrames' render can take a while on the VM; the Explainer job allows 30 minutes too. */
-export const RENDER_TIMEOUT_MS = 30 * 60 * 1000;
+/** The render's only limit is the 12 h hang backstop: long renders are normal (CI decision 2026-11-10). */
+export const RENDER_TIMEOUT_MS = RUN_HANG_BACKSTOP_MS;
+
+/** The reel's length in seconds: the latest data-start + data-duration on the assembled page, or null. */
+export function projectSeconds(indexHtml: string): number | null {
+  let end = 0;
+  for (const tag of indexHtml.match(/<[a-z][^>]*\bdata-duration="[^"]*"[^>]*>/gi) ?? []) {
+    const dur = Number(/\bdata-duration="([\d.]+)"/.exec(tag)?.[1]);
+    const start = Number(/\bdata-start="([\d.]+)"/.exec(tag)?.[1] ?? 0);
+    if (Number.isFinite(dur) && Number.isFinite(start)) end = Math.max(end, start + dur);
+  }
+  return end > 0 ? end : null;
+}
+
+/** Hang guard only; long runs are normal. Not sized to the reel: no render is killed for its length. */
+export function renderTimeoutMs(_projectDir: string): number {
+  return RUN_HANG_BACKSTOP_MS;
+}
 
 /** P8: render the assembled project to renders/video.mp4 with the pinned HyperFrames. Throws on failure. */
 export async function renderVideo(projectDir: string, deps: { run?: Runner; bin?: string } = {}): Promise<string> {
@@ -16,7 +33,7 @@ export async function renderVideo(projectDir: string, deps: { run?: Runner; bin?
   // gsap ships with the project, so a render needs no network at all (ITERATION-12 §1).
   localizeGsap(projectDir);
   const res = run(deps.bin ?? HYPERFRAMES_BIN, ['render', '--quality', 'high', '--workers', 'auto', '--output', 'renders/video.mp4'], {
-    cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: RENDER_TIMEOUT_MS,
+    cwd: projectDir, env: { ...process.env, ...HYPERFRAMES_ENV }, timeoutMs: renderTimeoutMs(projectDir),
   });
   if (res.status !== 0) {
     appendStepLog(projectDir, 'hyperframes render', res);
@@ -72,7 +89,7 @@ export const LOUDNESS = { I: -14, TP: -1, LRA: 11 };
 export function masterLoudness(video: string, { run = spawnRunner }: { run?: Runner } = {}): boolean {
   const tmp = video.replace(/\.mp4$/, '.master.mp4');
   const res = run('ffmpeg', ['-y', '-v', 'error', '-i', video, '-c:v', 'copy', '-af', `loudnorm=I=${LOUDNESS.I}:TP=${LOUDNESS.TP}:LRA=${LOUDNESS.LRA}`, '-ar', '48000', '-c:a', 'aac', '-b:a', '192k', tmp], {
-    cwd: path.dirname(video), env: process.env, timeoutMs: 5 * 60 * 1000,
+    cwd: path.dirname(video), env: process.env, timeoutMs: RUN_HANG_BACKSTOP_MS,
   });
   if (res.status !== 0 || !fs.existsSync(tmp) || fs.statSync(tmp).size === 0) {
     appendStepLog(path.dirname(path.dirname(video)), 'loudness master', res);
@@ -81,6 +98,53 @@ export function masterLoudness(video: string, { run = spawnRunner }: { run?: Run
   }
   fs.renameSync(tmp, video);
   return true;
+}
+
+/**
+ * The largest reel we upload. Storage refuses files over its limit (413), and Instagram re-encodes every reel to a few
+ * Mbps anyway, so a reel above this is re-encoded smaller before delivery.
+ */
+export const DELIVERY_MAX_BYTES = 45_000_000;
+/** Audio bitrate kept by the delivery encode (masterLoudness writes 192k AAC). */
+const DELIVERY_AUDIO_KBPS = 192;
+
+/** The video's length in seconds (ffprobe), or null. */
+function probeSeconds(video: string, run: Runner): number | null {
+  const res = run('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', video], { cwd: path.dirname(video), env: process.env, timeoutMs: 60_000 });
+  const seconds = Number.parseFloat(res.stdout.trim());
+  return res.status === 0 && Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+}
+
+export type DeliveryFit = { changed: boolean; fits: boolean; beforeBytes: number; afterBytes: number; videoKbps?: number };
+
+/**
+ * Re-encode the reel in place when it is over `maxBytes`: H.264 at CRF 18 with its bitrate capped so the file fits
+ * (audio copied). A second, tighter try runs if the first still doesn't fit. Fails open: the reel stays as it was if
+ * ffmpeg fails, and `fits` says whether the upload can work.
+ */
+export function fitForDelivery(video: string, { run = spawnRunner, maxBytes = DELIVERY_MAX_BYTES }: { run?: Runner; maxBytes?: number } = {}): DeliveryFit {
+  const beforeBytes = fs.statSync(video).size;
+  if (beforeBytes <= maxBytes) return { changed: false, fits: true, beforeBytes, afterBytes: beforeBytes };
+  const seconds = probeSeconds(video, run);
+  if (!seconds) return { changed: false, fits: false, beforeBytes, afterBytes: beforeBytes };
+  const tmp = video.replace(/\.mp4$/, '.delivery.mp4');
+  for (const share of [0.9, 0.75]) {
+    const videoKbps = Math.floor((maxBytes * 8 * share) / seconds / 1000) - DELIVERY_AUDIO_KBPS;
+    if (videoKbps < 500) break;
+    const res = run('ffmpeg', [
+      '-y', '-v', 'error', '-i', video,
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-maxrate', `${videoKbps}k`, '-bufsize', `${videoKbps * 2}k`, '-pix_fmt', 'yuv420p',
+      '-c:a', 'copy', '-movflags', '+faststart', tmp,
+    ], { cwd: path.dirname(video), env: process.env, timeoutMs: RUN_HANG_BACKSTOP_MS });
+    const afterBytes = res.status === 0 && fs.existsSync(tmp) ? fs.statSync(tmp).size : 0;
+    if (afterBytes > 0 && afterBytes <= maxBytes) {
+      fs.renameSync(tmp, video);
+      return { changed: true, fits: true, beforeBytes, afterBytes, videoKbps };
+    }
+    if (res.status !== 0) appendStepLog(path.dirname(path.dirname(video)), 'delivery encode', res);
+  }
+  fs.rmSync(tmp, { force: true });
+  return { changed: false, fits: false, beforeBytes, afterBytes: beforeBytes };
 }
 
 export type FrameSpan = { number: number; name: string; treatment: string; start: number; end: number };
@@ -136,7 +200,7 @@ export async function frameStills(projectDir: string, videoPath: string, deps: {
   const out: FrameStill[] = [];
   const take = (s: FrameSpan, at: number, name: string, opening: boolean) => {
     const file = path.join(dir, name);
-    const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(at), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${FRAME_STILL.W}:${FRAME_STILL.H}`, '-q:v', '3', file], { cwd: projectDir, timeoutMs: 120_000 });
+    const res = run('ffmpeg', ['-v', 'error', '-y', '-ss', String(at), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${FRAME_STILL.W}:${FRAME_STILL.H}`, '-q:v', '3', file], { cwd: projectDir, timeoutMs: RUN_HANG_BACKSTOP_MS });
     if (res.status !== 0) throw new Error(`frame stills: frame ${s.number} at ${at}s failed: ${tail(res)}`);
     out.push({ number: s.number, name: s.name, treatment: s.treatment, at, file, ...(opening ? { opening: true } : {}) });
   };
@@ -213,11 +277,11 @@ export async function contactSheet(projectDir: string, videoPath: string, deps: 
     const args = i < times.length
       ? ['-v', 'error', '-y', '-ss', String(times[i]), '-i', videoPath, '-frames:v', '1', '-vf', `scale=${W}:${H}`, out]
       : ['-v', 'error', '-y', '-f', 'lavfi', '-i', `color=c=0x1a1a1a:s=${W}x${H}`, '-frames:v', '1', out];
-    const res = run('ffmpeg', args, { cwd: projectDir, timeoutMs: 120_000 });
+    const res = run('ffmpeg', args, { cwd: projectDir, timeoutMs: RUN_HANG_BACKSTOP_MS });
     if (res.status !== 0) throw new Error(`contact sheet: the still at ${times[i] ?? 'pad'}s failed: ${tail(res)}`);
   }
   const png = path.join(projectDir, 'renders', 'contact-sheet.png');
-  const tiled = run('ffmpeg', ['-v', 'error', '-y', '-framerate', '1', '-i', path.join(dir, 'still-%03d.png'), '-vf', `tile=${cols}x${rows}:padding=8:margin=8:color=0x1a1a1a`, '-frames:v', '1', png], { cwd: projectDir, timeoutMs: 120_000 });
+  const tiled = run('ffmpeg', ['-v', 'error', '-y', '-framerate', '1', '-i', path.join(dir, 'still-%03d.png'), '-vf', `tile=${cols}x${rows}:padding=8:margin=8:color=0x1a1a1a`, '-frames:v', '1', png], { cwd: projectDir, timeoutMs: RUN_HANG_BACKSTOP_MS });
   if (tiled.status !== 0) throw new Error(`contact sheet: tiling failed: ${tail(tiled)}`);
   const stills = times.map((t, i) => `still ${i + 1}: ${stamp(t)}`).join('\n');
   fs.writeFileSync(path.join(projectDir, 'renders', 'contact-sheet.txt'), `${captionTranscript(projectDir)}\nSTILLS (left to right, top to bottom)\n${stills}\n`);

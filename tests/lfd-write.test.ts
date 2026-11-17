@@ -50,7 +50,7 @@ test('the tool and system prompt are static (cacheable) and the tool is strict-s
 });
 
 test('writeStories sends the cached system prompt and returns normalized copy', async () => {
-  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' } satisfies Pick;
+  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' } satisfies Pick;
   let sent: Anthropic.MessageCreateParamsNonStreaming | null = null;
   const create = async (p: Anthropic.MessageCreateParamsNonStreaming) => {
     sent = p;
@@ -80,7 +80,7 @@ test('checkSubmission flags a story missing names or with a malformed photo inst
 });
 
 test('writeStories retries once when the first submission omits names, and returns the valid retry', async () => {
-  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown' } satisfies Pick;
+  const pick = { key: 'a', refs: ['r'], origin: 'reels', headline: 'H', sourceName: 'Verge', url: 'https://v.com/a', body: 'b', publishedAt: null, net: 0.5, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown' } satisfies Pick;
   const usage = { input_tokens: 10, output_tokens: 10, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
   const reply = (input: unknown) => ({
     id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'tool_use', stop_sequence: null, usage,
@@ -98,7 +98,7 @@ test('writeStories retries once when the first submission omits names, and retur
 
 const longPick = (i: number): Pick => ({
   key: `news.google.com/rss/articles/${'CBMi'.repeat(45)}${i}`, refs: [`r${i}`], origin: 'feed', headline: `H${i}`, sourceName: 'Verge',
-  url: `https://v.com/${i}`, body: 'b', publishedAt: null, net: null, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, lane: 'rundown',
+  url: `https://v.com/${i}`, body: 'b', publishedAt: null, net: null, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: 'rundown',
 });
 
 test('writeStories sends short ordinal keys and maps the copy back to the real pick keys', async () => {

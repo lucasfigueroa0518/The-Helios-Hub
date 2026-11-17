@@ -7,6 +7,7 @@
  */
 import type { HubQuery } from '@/lib/social-hub/db';
 
+import type { FieldNotesIntakeDeps } from './intake';
 import type { FieldNotesEngineDeps } from './run';
 import type { TipCandidate } from './sources/candidate';
 
@@ -25,6 +26,15 @@ export async function liveFieldNotesDeps(query: HubQuery, o: { capUsd: number; n
   const { PAGE_MAX_BYTES } = await import('./sources/enrich');
   const { FIELD_NOTES_SOURCES_CONFIG } = await import('./sources/config');
   const { parseDocsPage } = await import('./sources/docs-adapter');
+  // Central intake reads (pure SQL, no model). listOrderStories is Owner A's Phase 2 helper: until it lands, the
+  // switch reads as 'legacy' so a run never takes intake mode without it.
+  const intakeRead = (await import('@/lib/intake/read')) as typeof import('@/lib/intake/read') & {
+    listOrderStories?: FieldNotesIntakeDeps['listOrderStories'];
+  };
+  const listOrderStories = intakeRead.listOrderStories;
+  const intake: FieldNotesIntakeDeps | undefined = listOrderStories
+    ? { readConsumerMode: (q, order, at) => intakeRead.readConsumerMode(q, order, at), listOrderStories: (q, order, opts) => listOrderStories(q, order, opts) }
+    : undefined;
 
   const now = o.now ?? new Date();
   const anthropic = newAnthropic();
@@ -71,5 +81,6 @@ export async function liveFieldNotesDeps(query: HubQuery, o: { capUsd: number; n
     upload: (p, b) => slides.upload(p, b, 'image/jpeg'),
     now,
     config: FIELD_NOTES_SOURCES_CONFIG,
+    ...(intake ? { intake } : {}),
   };
 }

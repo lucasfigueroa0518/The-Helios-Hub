@@ -1,12 +1,12 @@
 import {
   attemptStatus,
+  boardDate,
   cancelNote,
   category,
   historyByMedia,
   iso,
   latest,
   num,
-  nyDateFor,
   scheduleStatus,
   slotCategory,
   slotText,
@@ -141,7 +141,8 @@ function attemptPost(row: ExplainerAttemptRow, job: ExplainerJobRow, read: Expla
     statusNote: status === 'failed' ? text(row.error) : null,
     postedAt: status === 'published' ? finished : null,
     publishAt: iso(row.publish_at),
-    nyDate: nyDateFor(status === 'published' ? finished : null, row.publish_at, row.requested_at),
+    // An attempt is on the day it posted, or its slot's, or the day it was queued (a Post now is today, not the target date).
+    nyDate: boardDate({ postedAt: status === 'published' ? finished : null, publishAt: row.publish_at, madeAt: row.requested_at }),
     permalink: row.permalink,
     metrics: latest(snapshots),
     history: snapshots,
@@ -198,7 +199,8 @@ export function explainerPosts(read: ExplainersRead): HubPost[] {
       statusNote: job.verdict === 'approved' ? 'Approved, waiting for a free slot' : 'Waiting for review',
       postedAt: null,
       publishAt: null,
-      nyDate: null,
+      // Bald-Eagle D4: a render the night made ahead shows on the date it was made for; a person's render has no date.
+      nyDate: boardDate({ target: job.target_date }),
       permalink: null,
       metrics: {},
       history: [],

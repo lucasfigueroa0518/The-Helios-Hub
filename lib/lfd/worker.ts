@@ -5,6 +5,7 @@
  * is on, into its own day's 9:00–10:00 AM window. The worker runs this in the
  * same loop as the carousel run, so the two never overlap.
  */
+import { withHangGuard } from '@/lib/content-runs/hang-guard';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { dailyFill, quotaFilledNote } from '@/lib/social-hub/fill';
@@ -27,13 +28,11 @@ export type CarryOutDeps = {
   run?: (deps: LfdRunDeps) => ReturnType<typeof runLastFewDays>;
   /**
    * Memes for the finished post (lib/memes/lfd-post.ts), while lfd.settings.memes is on. It never fails the run:
-   * an error or a timeout leaves the post as the engine made it.
+   * an error or a hang leaves the post as the engine made it.
    */
   memes?: (postId: string, o: { capUsd: number; deps: LfdRunDeps }) => Promise<{ placed: number; gated: number; costUsd: number; skipped?: string }>;
 };
 
-/** The meme stage's own time limit: it must leave the 30-minute run timeout room. */
-export const LFD_MEMES_TIMEOUT_MS = 12 * 60_000;
 
 export type CarryOutResult = { runId: string; status: 'ok' | 'partial' | 'failed' | 'skipped'; postId?: string; scheduled?: string | null; note?: string };
 
@@ -70,14 +69,14 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
       w.log('lfd_run_failed', { runId: claimed.id, error: res.error });
       return { runId: claimed.id, status: 'failed', note: res.error };
     }
-    // A run that finished after the worker timed it out: its row stays failed (lib/lfd/store.ts finishRun).
+    // A run that finished after the worker judged it hung: its row stays failed (lib/lfd/store.ts finishRun).
     if (res.recorded === false) w.log('lfd_run_finish_ignored', { runId: claimed.id, status: res.short ? 'partial' : 'ok', postId: res.postId });
     // Memes go in before the post is placed, so what gets scheduled is the final post.
     if (w.memes && settings.memes && res.recorded !== false) {
-      const out = await withLfdTimeout(
+      // No time limit on the meme stage; only a hung one (no progress for 45 min, or the 12 h backstop) is skipped.
+      const out = await withHangGuard(
         w.memes(res.postId, { capUsd: settings.memesCapUsd, deps }).catch((error) => ({ placed: 0, gated: 0, costUsd: 0, skipped: `error: ${errorText(error)}` })),
-        LFD_MEMES_TIMEOUT_MS,
-        () => ({ placed: 0, gated: 0, costUsd: 0, skipped: 'timed out' }),
+        { onHang: (reason) => ({ placed: 0, gated: 0, costUsd: 0, skipped: reason }) },
       );
       w.log('lfd_memes_result', { runId: claimed.id, postId: res.postId, ...out });
       if (out.costUsd > 0) await recordMemesSpend(w.query, claimed.id, out).catch((error) => w.log('lfd_memes_spend_failed', { runId: claimed.id, error: errorText(error) }));
@@ -102,20 +101,3 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
   }
 }
 
-/**
- * `work`, or `onTimeout()` once `ms` pass first. The worker runs a Last Few
- * Days run in its own loop, so a hung await must not stall carousels,
- * publishing or insights. The cut-off promise is not cancelled: it may keep
- * running in the background (accepted; the run row is already failed).
- */
-export function withLfdTimeout<T>(work: Promise<T>, ms: number, onTimeout: () => Promise<T> | T): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<T>((resolve, reject) => {
-    timer = setTimeout(() => {
-      Promise.resolve()
-        .then(onTimeout)
-        .then(resolve, reject);
-    }, ms);
-  });
-  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
-}

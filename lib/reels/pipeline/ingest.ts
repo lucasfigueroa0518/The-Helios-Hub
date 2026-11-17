@@ -177,6 +177,57 @@ export async function ingestAdapter(
   return result;
 }
 
+/**
+ * Central intake, Phase 2 (PHASE2-CONTRACT.md, Owner B step 2). A derived adapter (A4 awesome lists, B6 Claude web
+ * search) runs as it does tonight (same watermark, same context), and its `fetchItems` deposits each find into
+ * `intake.items` (lib/intake/deposit.ts). Nothing is stored in `reels.sources`: no screen, no body read, no
+ * fingerprint. The finds are returned so a night that falls back to the legacy path can ingest them without a
+ * second fetch (and so without paying for B6 twice).
+ */
+export async function fetchDerivedForIntake(
+  adapter: Adapter,
+  deps: IngestDeps,
+  options: IngestOptions,
+): Promise<{ result: SourceResult; items: AdapterItem[] | null }> {
+  const result: SourceResult = {
+    adapterId: adapter.id,
+    name: adapter.name,
+    status: 'ok',
+    fetched: 0,
+    ingested: 0,
+    dropped: 0,
+    refreshed: 0,
+  };
+
+  const watermark = await getWatermark(adapter.id);
+  const since =
+    watermark ?? new Date(options.now.getTime() - FIRST_NIGHT_LOOKBACK_HOURS * 3600_000);
+
+  await markWatermarkAttempt(adapter.id);
+
+  let items: AdapterItem[];
+  try {
+    items = await adapter.fetchItems({
+      since,
+      now: options.now,
+      runId: options.runId,
+      signal: options.signal,
+      jev: deps.jev,
+    });
+  } catch (error) {
+    result.status = 'failed';
+    result.error = error instanceof Error ? error.message : String(error);
+    return { result, items: null };
+  }
+
+  result.fetched = items.length;
+  // Deposited: the intake screens, groups and scores them in the deposit run.
+  result.ingested = dedupeByUrl(items).length;
+  result.dropped = items.length - result.ingested;
+  await markWatermarkSuccess(adapter.id, options.now);
+  return { result, items };
+}
+
 function dedupeByUrl(items: AdapterItem[]): AdapterItem[] {
   const seen = new Set<string>();
   const out: AdapterItem[] = [];

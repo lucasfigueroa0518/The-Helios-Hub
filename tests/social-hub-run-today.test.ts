@@ -7,11 +7,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
 import { narrowStep, parseRunBody, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
-import { applyMoves, dayRanking, madeMoveIds, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
+import { dayRanking, madeMoveIds, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { todaysContent } from '@/lib/social-hub/views/today';
 
 const NOW = new Date('2026-10-09T14:00:00Z');
@@ -32,7 +31,6 @@ test('Pinned ideas lead the queue, in the order pinned (a Promote row reads as a
   assert.deepEqual(titles([move(3, 'promote', 't1'), move(3, 'demote', 't2')]), ['Idea 1', 'Idea 2', 'Idea 4', 'Idea 3'], 'the latest move wins: promoted, then demoted, sinks');
   assert.deepEqual(titles([move(3, 'promote', 't1'), move(4, 'promote', 't2')]), ['Idea 3', 'Idea 4', 'Idea 1', 'Idea 2'], 'any number of pins, in the order pinned');
   assert.deepEqual(titles([{ ...move(3, 'promote', 't1'), nyDate: '2026-10-08' }]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4'], 'a move from yesterday still steers until its idea is made (B8)');
-  assert.deepEqual(applyMoves([{ id: 'a' }, { id: 'b' }], [{ ideaId: 'b', kind: 'demote' }]).map((x) => x.id), ['a', 'b'], 'the last idea stays last');
 });
 
 const reelPost = (n: number, over: Partial<HubPost> = {}): HubPost => {
@@ -118,15 +116,6 @@ test('a type’s day counts what holds it and names what is missing', () => {
   const d = typeDay(quotaCandidates(data, 'reels', NOW), 2);
   assert.equal(d.held, 1);
   assert.deepEqual(d.missing.map((m) => m.ref), ['00000002-0000-4000-8000-000000000000']);
-});
-
-test('a rank move must name a known type, a kind, and an idea of that type', () => {
-  assert.deepEqual(parseRankMove({ vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'promote' }), { vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'promote' });
-  assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: 'explainers:topic:x', kind: 'promote' }), /Unknown idea/);
-  assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'boost' }), /promote or demote/);
-  assert.ok(parseRankMove({ vertical: 'carousels', ideaId: 'carousels:story:https://www.theverge.com/x', kind: 'demote' }));
-  // Google News story ids are 500-character URLs.
-  assert.ok(parseRankMove({ vertical: 'carousels', ideaId: `carousels:story:https://news.google.com/rss/articles/${'A'.repeat(480)}`, kind: 'promote' }));
 });
 
 // ── Explainers: what the night made today holds the day's place (2026-10-13) ──

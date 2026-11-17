@@ -9,6 +9,7 @@
  */
 import type { FeedHealthEntry, FeedHealthLog } from '@/lib/social/ingest/select/feed-health';
 import { POSTED_LOOKBACK_DAYS, type PostedRecord, type PostedStories } from '@/lib/social/ingest/select/posted';
+import { readUsedLedger, type LedgerReadOptions } from '@/lib/photos/used';
 import { NO_REPEAT_DAYS, type UsedPhoto, type UsedPhotoLog } from '@/lib/social/photos/used-photos';
 import { dayKey, type SetAsideEntry, type SetAsideLog } from '@/lib/social/pipeline/set-aside-log';
 import { REASON_KIND } from '@/lib/social/pipeline/types';
@@ -22,15 +23,15 @@ const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v));
 
 // ── The pipeline's logs ────────────────────────────────────────────────────
 
-export function createPgUsedPhotoLog(query: Query): UsedPhotoLog {
+/** `opts.excludeItem` (Bald-Eagle D3): a rerun's own earlier post, whose waiting photos don't block the remake. */
+export function createPgUsedPhotoLog(query: Query, opts: LedgerReadOptions = {}): UsedPhotoLog {
   return {
+    // CI-32: the one ledger (published photos, USED_PHOTO_DAYS, plus photos waiting items chose), not every row this
+    // pipeline logged at build time.
     async recent(now) {
-      const { rows } = await query(
-        `SELECT DISTINCT url FROM social.used_photos WHERE used_at <= $1 AND used_at > $1::timestamptz - make_interval(days => $2)`,
-        [now.toISOString(), NO_REPEAT_DAYS],
-      );
-      return new Set(rows.map((r) => r.url as string));
+      return new Set((await readUsedLedger(query, now, undefined, opts)).urls);
     },
+    ledger: (now) => readUsedLedger(query, now, undefined, opts),
     async lastUsed() {
       const { rows } = await query(`SELECT url, max(used_at) AS used_at FROM social.used_photos GROUP BY url`);
       return new Map(rows.map((r) => [r.url as string, iso(r.used_at)]));

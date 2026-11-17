@@ -1,4 +1,5 @@
 import { dbQuery } from '@/lib/db';
+import type { IntakeQuery, IntakeRunRecord } from '@/lib/intake/types';
 import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { ADAPTERS, adapterById } from '@/lib/reels/adapters';
 import { metaConfigured } from '@/lib/reels/music/meta';
@@ -69,6 +70,49 @@ function nyMidnightFromKey(key: string): Date {
   return zonedTime(year, month, day, 0, 0, RUN_TIMEZONE);
 }
 
+/** The app's database as an IntakeQuery. */
+const healthIntakeQuery: IntakeQuery = {
+  async query<T = Record<string, unknown>>(text: string, params?: unknown[]) {
+    return { rows: (await dbQuery(text, params)).rows as T[] };
+  },
+};
+
+type IntakeSourceCounts = {
+  /** Per source id (a reels adapter id): fetched and kept in the newest successful main intake run. */
+  counts: Map<string, { fetched: number; kept: number; error?: string }>;
+  /** intake.watermarks last_success_at per source id. */
+  success: Map<string, string | null>;
+};
+
+/**
+ * Central intake (Phase 2): with the 'reels' switch on and the intake fresh, Reels no longer writes reels.sources
+ * for the primary adapters; the intake fetches them. Their counts come from the newest successful main intake run's
+ * record instead. Null on a legacy (or stale-fallback) night, or when any intake read fails: the page reads as today.
+ */
+async function intakeSourceCounts(now: Date): Promise<IntakeSourceCounts | null> {
+  try {
+    const read = await import('@/lib/intake/read');
+    if ((await read.readConsumerMode(healthIntakeQuery, 'reels', now)) !== 'intake') return null;
+    const { main } = await read.lastRuns(healthIntakeQuery);
+    if (!main) return null;
+    const [record, marks] = await Promise.all([
+      dbQuery<{ record: IntakeRunRecord | string | null }>(`SELECT record FROM intake.runs WHERE id = $1::uuid`, [main.id]),
+      dbQuery<{ source_id: string; last_success_at: string | null }>(
+        `SELECT source_id, last_success_at::text FROM intake.watermarks`,
+      ),
+    ]);
+    const raw = record.rows[0]?.record ?? null;
+    const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as IntakeRunRecord | null;
+    const counts = new Map((parsed?.sources ?? []).map((entry) => [entry.id, { fetched: entry.fetched, kept: entry.kept, error: entry.error }]));
+    return { counts, success: new Map(marks.rows.map((row) => [row.source_id, row.last_success_at])) };
+  } catch {
+    return null;
+  }
+}
+
+const later = (a: string | null, b: string | null): string | null =>
+  a == null ? b : b == null ? a : new Date(a).getTime() >= new Date(b).getTime() ? a : b;
+
 export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<HealthPage> {
   const days = windowDays === 30 ? 30 : 7;
   const since = new Date(now.getTime() - days * 86_400_000).toISOString();
@@ -94,12 +138,11 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
       [since],
     ),
     dbQuery<{ adapter_id: string; published: number }>(
-      `SELECT s.adapter_id, count(DISTINCT s.id)::int AS published
-         FROM reels.sources s
-         JOIN reels.post_idea_members m ON m.source_id = s.id
+      `SELECT m.adapter_id, count(DISTINCT m.member_key)::int AS published
+         FROM reels.idea_sources_v m
          JOIN reels.published_status p ON p.post_idea_id = m.post_idea_id AND p.published
-        WHERE s.ingest_time >= $1
-        GROUP BY s.adapter_id`,
+        WHERE m.ingest_time >= $1
+        GROUP BY m.adapter_id`,
       [since],
     ),
     dbQuery<{ stage: string; n: number }>(
@@ -157,6 +200,7 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
     publishingLive(),
     publishMix(),
   ]);
+  const intake = await intakeSourceCounts(now);
 
   const latest = run.rows[0] ?? null;
   const results = new Map((latest?.source_results ?? []).map((result) => [result.adapterId, result]));
@@ -166,16 +210,24 @@ export async function loadHealthPage(windowDays = 7, now = new Date()): Promise<
   const shipped = new Map(published.rows.map((row) => [row.adapter_id, row.published]));
 
   const sources: HealthSource[] = ADAPTERS.map((adapter) => {
-    const result = results.get(adapter.id) ?? null;
-    const lastSuccessAt = success.get(adapter.id) ?? null;
+    // Intake mode: a primary adapter is the intake's (its main run record and watermark); a derived adapter is still
+    // fetched by the Reels night, which deposits its finds (tonight's source result, no reels.sources rows).
+    const fromIntake = intake && adapter.phase !== 'derived' ? intake.counts.get(adapter.id) ?? { fetched: 0, kept: 0 } : null;
+    const result = fromIntake
+      ? (fromIntake.error ? ({ status: 'failed', error: fromIntake.error } as Pick<SourceResult, 'status' | 'error'>) : null)
+      : results.get(adapter.id) ?? null;
+    const lastSuccessAt = fromIntake
+      ? later(intake!.success.get(adapter.id) ?? null, success.get(adapter.id) ?? null)
+      : success.get(adapter.id) ?? null;
     const tone = sourceTone(lastSuccessAt, result?.status ?? null, now);
+    const derivedTonight = intake && !fromIntake ? results.get(adapter.id) ?? null : null;
     return {
       id: adapter.id,
       name: adapter.name,
       phase: adapter.phase === 'derived' ? 'derived' : 'primary',
       tone,
-      ingested: ingested.get(adapter.id) ?? 0,
-      seen: seen.get(adapter.id) ?? 0,
+      ingested: fromIntake ? fromIntake.kept : derivedTonight ? derivedTonight.ingested : ingested.get(adapter.id) ?? 0,
+      seen: fromIntake ? fromIntake.fetched : derivedTonight ? derivedTonight.fetched : seen.get(adapter.id) ?? 0,
       published: shipped.get(adapter.id) ?? 0,
       lastSuccessAt,
       lastError: result?.status === 'failed' ? result.error ?? 'failed' : null,

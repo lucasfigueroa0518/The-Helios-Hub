@@ -142,20 +142,3 @@ export async function carryOutAiEventsRun(w: CarryOutDeps, claimed: ClaimedRun):
     return { runId: claimed.id, status: 'failed', note: message };
   }
 }
-
-/**
- * `work`, or `onTimeout()` once `ms` pass first. A hung await must not stall the social
- * worker's loop (carousels, publishing, insights). The cut-off promise is not cancelled: it may
- * keep running in the background (accepted; the run row is already failed).
- */
-export function withAiEventsTimeout<T>(work: Promise<T>, ms: number, onTimeout: () => Promise<T> | T): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeout = new Promise<T>((resolve, reject) => {
-    timer = setTimeout(() => {
-      Promise.resolve()
-        .then(onTimeout)
-        .then(resolve, reject);
-    }, ms);
-  });
-  return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
-}

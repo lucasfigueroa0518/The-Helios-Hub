@@ -6,6 +6,9 @@
  * from the calls they make, so a CeilingReached thrown inside a paid call would be swallowed and the
  * search would keep paying. Every paid call goes through meteredCreate / meteredJev, which refuse
  * BEFORE paying once the meter has stopped; each dep re-throws the stored error when it returns.
+ *
+ * Shared photo finder (central intake Phase 3): when the 'lfd' switch (`photo_finders`) reads 'shared', the story
+ * tries the shared finder first, its spend charged to the meter before today's finder runs; else today's path.
  */
 import type { LastFewDaysDeps, Metered } from './last-few-days';
 
@@ -27,6 +30,16 @@ async function meteredClaude(m: Metered) {
 async function meteredJevAsk(m: Metered) {
   const [{ createJevAsk, jevCostUsd }, { meteredJev }] = await Promise.all([import('@/lib/social/jev/client'), import('./carousels-live')]);
   return meteredJev(createJevAsk(), m, jevCostUsd);
+}
+
+/** The 'lfd' shared-finder wiring (switch read once per revision), or null: today's finder. Never throws. */
+async function sharedLfd() {
+  try {
+    const [{ liveHubQuery }, { sharedPhotoSetup }] = await Promise.all([import('@/lib/social-hub/db'), import('@/lib/stories/photos-shared')]);
+    return await sharedPhotoSetup({ query: (text, params) => liveHubQuery(text, params) }, 'lfd');
+  } catch {
+    return null;
+  }
 }
 
 export const liveLastFewDaysDeps: LastFewDaysDeps = {
@@ -57,6 +70,7 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     // The whole post is drawn (local Chromium, no AI) so slides keep their place; only the listed slides'
     // problems count against the fix, and only their JPEGs are uploaded, each to its own new key.
     await storeSlideJpegs(slug, draw, {
+      failedImagesCheckedPerSlide: true,
       prefix: 'lfd',
       fitCheck: async (p, opts) => {
         const r = await checkRenderFit(p, opts);
@@ -113,11 +127,28 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
 
   async findPhoto({ pick, copy, exclude }, m) {
     const [{ createLivePhotoFinder }, { findPhotos }] = await Promise.all([import('@/lib/stories/photos'), import('@/lib/lfd/photos')]);
+    let sharedTrace: string[] = [];
+    if (!m.stopped()) {
+      const shared = await sharedLfd();
+      if (shared) {
+        const { findSharedLfdPhotos } = await import('@/lib/lfd/run');
+        // A revision's shared finder spends at most the fix's approved cap (lib/revisions/caps.ts), not the post's $0.30.
+        const fixCap = (await import('@/lib/revisions/caps')).capFor('last_few_days', 'photo')?.capUsd ?? 0;
+        const budget = { usd: 0, capUsd: Math.min(shared.profile.capUsd, fixCap) };
+        const got = await findSharedLfdPhotos(shared, [{ pick, copy }], new Set(exclude), budget);
+        if (budget.usd > 0) m.spend(budget.usd);
+        if (m.stopped()) m.halt();
+        if (got.photos[0]) return { photo: got.photos[0], trace: got.traces[0] ?? [] };
+        sharedTrace = got.traces[0] ?? [];
+      }
+    }
     // Every Jev pick and Haiku photo-vision call the finder makes is metered and refused once the meter stopped.
-    const finder = createLivePhotoFinder({ jev: await meteredJevAsk(m), create: await meteredClaude(m), runRef: `lfd-revision:${pick.key}:${new Date().toISOString()}` });
+    // CI-32: each pick's picture is checked against the used-photo ledger.
+    const used = (await import('@/lib/photos/used-guard')).liveUsedLedger();
+    const finder = createLivePhotoFinder({ jev: await meteredJevAsk(m), create: await meteredClaude(m), runRef: `lfd-revision:${pick.key}:${new Date().toISOString()}`, used });
     const found = await findPhotos(finder, [{ pick, copy }], new Set(exclude));
     if (m.stopped()) m.halt();
-    return { photo: found.photos[0] ?? null, trace: found.traces[0] ?? [] };
+    return { photo: found.photos[0] ?? null, trace: [...sharedTrace, ...(found.traces[0] ?? [])] };
   },
 
   async vision(png, story, m) {

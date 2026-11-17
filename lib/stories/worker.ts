@@ -2,10 +2,14 @@
  * One pass of the Stories worker (plan §4, §7, M8). scripts/stories_worker.ts
  * runs it every 15 seconds; tests run it against PGlite and stubs.
  *
- *   0. pool: the first pass after 4:00 AM refreshes stories.pool from the
- *      reels, carousel and catalog pools (lib/stories/pool.ts; reads only)
- *   1. auto series: request today's set at 4:00 AM (docs/social-overnight.md);
- *      in template mode one set per Stories slot (a series may post twice)
+ *   0. pool: the first pass after 3:00 AM refreshes stories.pool from the
+ *      reels, carousel and catalog pools, or from the central intake for a
+ *      series the consumer switch has on it (lib/stories/pool.ts; reads only)
+ *   1. auto series: request the night's sets at 3:00 AM (docs/social-overnight.md,
+ *      night schedule v2: after the 2:40 intake top-up): Morning Download for
+ *      today; Guess the Number and Free vs. Paid 2 days ahead (Bald-Eagle D4,
+ *      lib/social-hub/lead.ts); in template mode one set per Stories slot of
+ *      each target date (a series may post twice)
  *   2. build: claim one `requested` set → build, render, review → `ready`;
  *      an auto set approves itself only when require_approval is off and the
  *      review did not flag it (S-05, S-33); otherwise it waits for Approve
@@ -17,6 +21,7 @@
  *   5. insights: poll published frames every 2 hours until the final capture
  */
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
+import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
 import type { StoriesDb } from '@/lib/stories/db';
 import { buildSet, type SetBuilderDeps } from '@/lib/stories/build';
 import { isFinalCapture, type StoryInsightsClient } from '@/lib/stories/publish/insights';
@@ -34,22 +39,24 @@ import {
   listSets,
   markPublished,
   markPublishing,
-  nyDate,
   recordFrameContainer,
   recordFramePublished,
   recordHistory,
   recordInsights,
   scheduleSet,
 } from '@/lib/stories/repository';
-import { livePoolReads, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
+import type { IntakeJev } from '@/lib/intake/types';
+import { refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
+import { storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
 import { loadSettings } from '@/lib/stories/settings';
+import { isBrandAsset } from '@/lib/photos/used';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
 
-/** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md). */
-export const AUTO_REQUEST_AFTER = '04:00';
+/** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md, night schedule v2). */
+export const AUTO_REQUEST_AFTER = '03:00';
 
 export type WorkerDeps = {
   db: StoriesDb;
@@ -65,6 +72,10 @@ export type WorkerDeps = {
   log?: (line: string) => void;
   /** Tests stub the pool's source reads. */
   poolReads?: (now: Date) => PoolReads;
+  /** The central intake for series on it: the posted check's Jev (its own cost bucket) and the mode read. */
+  intake?: { jev?: () => IntakeJev; readMode?: ReadConsumerMode };
+  /** Fetches a published photo to hash it for the used-photo ledger (tests stub it). */
+  photoHttp?: typeof fetch;
 };
 
 const nyClock = (at: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
@@ -78,8 +89,9 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   // 0. The pool, once per pool day, before any auto set is requested or built.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     try {
-      const r = await refreshPoolIfDue(deps.db, () => (deps.poolReads ?? ((at) => livePoolReads(deps.sourceDb, at)))(now), now);
-      if (r) log(`pool: refreshed (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''})`);
+      const reads = deps.poolReads ?? ((at) => storiesPoolReads(deps.sourceDb, at, { readMode: deps.intake?.readMode, intake: { jev: deps.intake?.jev } }));
+      const r = await refreshPoolIfDue(deps.db, () => reads(now), now);
+      if (r) log(`pool: refreshed (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''}${r.intake ? `; sources ${JSON.stringify(r.intake)}` : ''})`);
     } catch (err) {
       log(`pool: refresh failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -88,9 +100,14 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   // 1. Auto series.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     // Daily fill (D54): a series day someone already filled gets no auto set; logged once as fill_reduced.
-    // Template mode: one set per Stories slot today, capped per series (null while legacy, or unreadable: each series' own days).
-    const slots = await storiesSlotsOn((t, p) => deps.db.query(t, p), nyDate(now)).catch(() => null);
-    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), slots });
+    // Template mode: one set per Stories slot of each target date, capped per series (null while legacy, or
+    // unreadable: each series' own days). One slot read per date per pass.
+    const read = new Map<string, Promise<readonly ResolvedSlot[] | null>>();
+    const slotsFor = (date: string) => {
+      if (!read.has(date)) read.set(date, storiesSlotsOn((t, p) => deps.db.query(t, p), date).catch(() => null));
+      return read.get(date)!;
+    };
+    const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), slotsFor });
     if (requested.length) log(`auto: requested ${requested.join(', ')}`);
   }
 
@@ -187,8 +204,8 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
   await recordHistory(deps.db, series, keys, setId);
   const at = deps.now?.() ?? new Date();
   for (const f of got.frames) {
-    if (!f.photo?.src || f.photo.kind === 'logo') continue;
-    await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
+    if (!f.photo?.src || isBrandAsset(f.photo.kind)) continue;
+    await recordPublishedPhoto(deps.sourceDb, { url: f.photo.src, usedAt: at, storyId: `stories:${setId}`, slide: f.seq, credit: f.photo.credit, scene: f.role }, deps.photoHttp ? { http: deps.photoHttp } : {}).catch((err) => log(`used_photos: ${err instanceof Error ? err.message : String(err)}`));
   }
   log(`published ${series} ${got.set.ny_date}: ${result.mediaIds.length} frames`);
   return true;

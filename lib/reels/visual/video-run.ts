@@ -24,6 +24,7 @@ import { routeHook } from '@/lib/reels/visual/hook-route';
 import { motionRecord } from '@/lib/reels/visual/motion-prompt';
 import { writeMotion, type MotionClient } from '@/lib/reels/visual/motion-writer';
 import { muxHookSfx, overlayPlate, probeVideo } from '@/lib/reels/visual/overlay';
+import { memberBucket } from '@/lib/reels/visual/run';
 import { keepCleanClip } from '@/lib/reels/visual/clean-clip';
 import { downloadFrameObject, signFrameObject, uploadFrameObject } from '@/lib/reels/visual/storage';
 import type { Bucket, MemberRole } from '@/lib/reels/types';
@@ -152,7 +153,7 @@ type VideoTarget = {
   colorProfile: ReturnType<typeof colorProfileOrNoir>;
 };
 
-async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
+export async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
   const { rows } = await dbQuery<{
     post_idea_id: string;
     scene: string | null;
@@ -164,16 +165,16 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     role: MemberRole;
     headline: string;
     body: string;
-    source_bucket: Bucket;
+    source_bucket: Bucket | null;
+    adapter_id: string;
   }>(
     `SELECT j.post_idea_id, v.scene, v.background_storage_path, v.render,
             c.on_screen_copy, c.full_story_cue, c.caption,
-            m.role, src.headline, src.body, src.bucket AS source_bucket
+            m.role, m.headline, m.body, m.bucket AS source_bucket, m.adapter_id
        FROM reels.video_jobs j
        JOIN reels.visual_jobs v ON v.id = j.visual_job_id
        JOIN reels.idea_copy c ON c.post_idea_id = j.post_idea_id AND c.slate_id = j.slate_id
-       JOIN reels.post_idea_members m ON m.post_idea_id = j.post_idea_id
-       JOIN reels.sources src ON src.id = m.source_id
+       JOIN reels.idea_sources_v m ON m.post_idea_id = j.post_idea_id
       WHERE j.id = $1
       ORDER BY CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at`,
     [jobId],
@@ -185,7 +186,7 @@ async function loadVideoTarget(jobId: string): Promise<VideoTarget | null> {
     sourceName: '',
     headline: row.headline,
     body: row.body,
-    sourceBucket: row.source_bucket,
+    sourceBucket: memberBucket(row.source_bucket, row.adapter_id),
   }));
   return {
     postIdeaId: first.post_idea_id,

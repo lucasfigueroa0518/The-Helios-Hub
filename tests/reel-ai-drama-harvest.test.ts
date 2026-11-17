@@ -32,6 +32,7 @@ import { contactSheet, lookAt } from '@/lib/reel-ai-drama/harvest/look';
 import { geocode, mapSource, nominatimGate } from '@/lib/reel-ai-drama/harvest/places';
 import { planWants } from '@/lib/reel-ai-drama/harvest/plan';
 import { recentlyUsed, recordUses } from '@/lib/reel-ai-drama/harvest/reuse';
+import { openBankTestDb } from './fixtures/media-library/pglite';
 import { boxesToImagePixels } from '@/lib/reel-ai-drama/harvest/screens';
 import { articleSource, newsroomSource, parsePageImages } from '@/lib/reel-ai-drama/harvest/sources/articles';
 import { bankSource } from '@/lib/reel-ai-drama/harvest/sources/bank';
@@ -339,17 +340,33 @@ async function freshJob() {
   return { db, jobId: job.id };
 }
 
-test('reuse: a photo used within 20 days (or a near copy of it) is blocked; older uses and character images are not', async () => {
+/** The hub's used-photo ledger (CI-32) on PGlite: social.used_photos with the v2 columns. */
+async function ledgerDb(rows: Array<{ url: string; phash?: string | null; daysAgo: number; storyId?: string }> = []): Promise<Queryable> {
+  const { query } = await openBankTestDb({ withBank: false });
+  await query(`ALTER TABLE social.used_photos ADD COLUMN IF NOT EXISTS vertical text, ADD COLUMN IF NOT EXISTS media_id text, ADD COLUMN IF NOT EXISTS phash text, ADD COLUMN IF NOT EXISTS dhash text`);
+  for (const [i, r] of rows.entries()) {
+    const storyId = r.storyId ?? `reel_ai_drama:job-${i}`;
+    await query(`INSERT INTO social.used_photos (url, used_at, story_id, slide, vertical, phash) VALUES ($1, $2, $3, $4, $5, $6)`, [r.url, new Date(NOW.getTime() - r.daysAgo * 86_400_000).toISOString(), storyId, i + 1, storyId.split(':')[0], r.phash ?? null]);
+  }
+  return { query: async (text: string, params?: unknown[]) => query(text, params) } as Queryable;
+}
+
+test('reuse (CI-32): a photo any post published within 20 days (or a near copy of it) is blocked; older ones, and reels only rendered, are not', async () => {
   const { db, jobId } = await freshJob();
-  const day = 86_400_000;
   const used = await phash(await makeJpeg(21));
   const near = await phash(await nearCopy(await makeJpeg(21)));
-  await recordUses(db, jobId, [{ assetKey: used, purpose: 'hero', characterImage: false }], new Date(NOW.getTime() - 5 * day));
-  await recordUses(db, jobId, [{ assetKey: 'https://x/cutout.png', purpose: 'character', characterImage: true }], new Date(NOW.getTime() - day));
-  await recordUses(db, jobId, [{ assetKey: 'https://x/old.jpg', purpose: 'b-roll', characterImage: false }], new Date(NOW.getTime() - 30 * day));
-  const hits = await recentlyUsed(db, [used, near, 'https://x/cutout.png', 'https://x/old.jpg', 'https://x/new.jpg'], 20, NOW);
-  assert.deepEqual([...hits].sort(), [...new Set([near, used])].sort());
-  assert.equal((await recentlyUsed(db, [used], 4, NOW)).size, 0);
+  const rendered = await phash(await makeJpeg(33));
+  const old = await phash(await makeJpeg(44));
+  // A reel only rendered (asset_uses) no longer holds a photo back: used means published.
+  await recordUses(db, jobId, [{ assetKey: rendered, purpose: 'hero', characterImage: false }], new Date(NOW.getTime() - 86_400_000));
+  const ledger = await ledgerDb([
+    { url: 'https://cdn.ig/lfd-cover.jpg', phash: used, daysAgo: 5, storyId: 'lfd:post-1' },
+    { url: 'https://x/old.jpg', phash: old, daysAgo: 30 },
+    { url: 'https://x/by-url.jpg', daysAgo: 2, storyId: 'carousels:p2' },
+  ]);
+  const hits = await recentlyUsed(ledger, [used, near, rendered, old, 'https://x/by-url.jpg', 'https://x/new.jpg'], 20, NOW);
+  assert.deepEqual([...hits].sort(), [...new Set([near, used, 'https://x/by-url.jpg'])].sort());
+  assert.equal((await recentlyUsed(ledger, [used], 4, NOW)).size, 0);
 });
 
 // ── Looks ───────────────────────────────────────────────────────────────────
@@ -451,9 +468,10 @@ test('a full stubbed harvest builds the inventory, saves files, writes every can
   const { db, jobId } = await freshJob();
   const jobDir = tmp('rad-job-');
   const office = await phash(await makeJpeg(seedOf('https://upload.wikimedia.org/c/OpenAI_office.jpg')));
-  await recordUses(db, jobId, [{ assetKey: office, purpose: 'b-roll', characterImage: false }], new Date(NOW.getTime() - 3 * 86_400_000));
+  // CI-32: the office photo was published 3 days ago (the hub's ledger), so the reuse rule rejects it.
+  const ledger = await ledgerDb([{ url: 'https://cdn.ig/office.jpg', phash: office, daysAgo: 3, storyId: 'stories:s1' }]);
   nominatimGate.last = 0;
-  const result = await runHarvest(await harvestDeps(db, storyRule), { pitch, facts: facts(), jobDir, jobId, mode: 'production', settings: { ...DEFAULT_SETTINGS, min_visuals: 10 } });
+  const result = await runHarvest({ ...(await harvestDeps(db, storyRule)), ledgerDb: ledger }, { pitch, facts: facts(), jobDir, jobId, mode: 'production', settings: { ...DEFAULT_SETTINGS, min_visuals: 10 } });
   const inv = result.inventory;
   assert.equal(inv.kill, null, JSON.stringify({ usable: inv.usable_count, notes: result.notes }));
   assert.ok(inv.usable_count >= 10, `usable ${inv.usable_count}`);
@@ -476,6 +494,18 @@ test('a full stubbed harvest builds the inventory, saves files, writes every can
   assert.ok(Math.abs((await spendFor(db, { jobId })) - inv.usd) < 1e-6);
   assert.ok(result.notes.some((n) => /upscale/.test(n)) || reasons.some((r) => /too_small/.test(r)));
   assert.ok(!fs.existsSync(path.join(jobDir, 'media', 'tmp')));
+});
+
+test('reuse (CI-32): a URL-only ledger row (no hash) refuses the AI Drama candidate with that URL', async () => {
+  const { db, jobId } = await freshJob();
+  const OFFICE = 'https://upload.wikimedia.org/c/OpenAI_office.jpg';
+  const ledger = await ledgerDb([{ url: OFFICE, phash: null, daysAgo: 4, storyId: 'carousels:p9' }]);
+  nominatimGate.last = 0;
+  const result = await runHarvest({ ...(await harvestDeps(db, storyRule)), ledgerDb: ledger }, { pitch, facts: facts(), jobDir: tmp('rad-job-'), jobId, mode: 'production', settings: { ...DEFAULT_SETTINGS, min_visuals: 10 } });
+  const office = result.rejected.filter((r) => r.url === OFFICE);
+  assert.ok(office.length, `the office photo was a candidate: ${result.rejected.map((r) => r.url).join(' ')}`);
+  assert.ok(office.some((r) => r.reason === 'used_within_20_days'), office.map((r) => r.reason).join(' | '));
+  assert.ok(!result.inventory.assets.some((a) => a.url === OFFICE), 'never kept');
 });
 
 test('kill rules: too few usable visuals, or no image of the key moment', async () => {

@@ -21,8 +21,8 @@ export const FIELD_NOTES_FEED_VERTICAL = FIELD_NOTES_VERTICAL as unknown as Publ
 /** The run cap when field_notes.settings has no `run_cap_usd` row. */
 export const DEFAULT_FIELD_NOTES_RUN_CAP_USD = FIELD_NOTES_DEFAULT_SETTINGS.runCapUsd;
 
-/** The worker's daily check, 12:00 PM New York (kept for symmetry; auto_run ships off). */
-export const FIELD_NOTES_RUN_HOUR_LOCAL = 12;
+/** The worker's daily check, 2:00 AM New York (night schedule v2, round 4; auto_run ships off). */
+export const FIELD_NOTES_RUN_HOUR_LOCAL = 2;
 export const FIELD_NOTES_RUN_MINUTE_LOCAL = 0;
 
 /** Weekdays (0 = Sunday) an auto run would queue on once auto_run is on: Tuesday and Friday (cadence 1 to 2 a week). Never used while auto_run is off. */
@@ -35,11 +35,14 @@ export const FIELD_NOTES_WINDOW: PostingWindow = { id: FIELD_NOTES_SLOT, label: 
 /** Storage prefix for the slide JPEGs (storeFieldNotesJpegs). */
 export const FIELD_NOTES_SLIDE_PREFIX = 'field-notes';
 
-/** Wall-clock limit on one in-process run in the helios-social loop; past it the run is failed and the loop goes on. */
-export const FIELD_NOTES_RUN_TIMEOUT_MS = 30 * 60_000;
+// No run time limit: long runs are normal and never failed for length (lib/content-runs/hang-guard.ts; CI decision 2026-11-10).
 
 /** A due slot later than this is cancelled, not posted late. */
 export const FIELD_NOTES_MISSED_AFTER_MINUTES = 120;
 
 /** What the budget keeps free for one more Claude call (about max_tokens of output plus the cached prompt, with margin). */
 export const FIELD_NOTES_CALL_RESERVE_USD = 0.1;
+
+/** Candidates one run may score (a guard on top of the cap), shared round-robin across sources. Lives here (not
+ * run.ts) so the intake can read it without pulling in Field Notes' renderer. */
+export const MAX_SCORED_PER_RUN = 25;

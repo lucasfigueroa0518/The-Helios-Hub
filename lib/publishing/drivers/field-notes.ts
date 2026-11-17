@@ -1,3 +1,4 @@
+import type { PhotoHashDeps } from '@/lib/photos/published-posts';
 import { FIELD_NOTES_SPINE_VERTICAL } from '@/lib/field-notes/config';
 import { carryFieldNotesAttempt, failStaleFieldNotesAttempts } from '@/lib/field-notes/publish';
 import { releaseDueFieldNotes } from '@/lib/field-notes/schedule';
@@ -17,6 +18,8 @@ export function fieldNotesDriver(deps: {
   query: Query;
   meta: () => CarouselMetaClient;
   signImage: (objectPath: string, expiresIn: number) => Promise<string>;
+  /** The publish-time used-photo write's reader (CI-32); `{}` = live. Absent: no download. */
+  photoHashes?: PhotoHashDeps;
   token: () => string;
 }): PublishDriver {
   const settings = () => readFieldNotesSettings(deps.query).catch(() => null);
@@ -27,7 +30,7 @@ export function fieldNotesDriver(deps: {
     requireApproval: async () => (await settings())?.requireApproval !== false,
     failStale: () => failStaleFieldNotesAttempts(deps.query),
     releaseDue: async () => releaseDueFieldNotes(deps.query, { requireApproval: await driver.requireApproval() }),
-    carry: (id) => carryFieldNotesAttempt({ query: deps.query, meta: deps.meta(), signImage: deps.signImage }, id),
+    carry: (id) => carryFieldNotesAttempt({ query: deps.query, meta: deps.meta(), signImage: deps.signImage, photoHashes: deps.photoHashes }, id),
     pollInsights: () => pollCarouselInsights(deps.query, createCarouselInsightsClient({ token: deps.token() }), new Date(), 200, 'field_notes'),
   };
   return driver;

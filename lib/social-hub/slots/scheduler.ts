@@ -59,13 +59,17 @@ export async function templateSlots(q: SlotQuery, plan: SlotPlan, vertical: Feed
   return { byDate, taken };
 }
 
-/** The earliest bookable slot and its drifted minute (chooseSlotTime over templateSlots). */
+/**
+ * The earliest bookable slot and its drifted minute (chooseSlotTime over templateSlots), on or after
+ * `fromDate` and through `throughDate` when given. A cushion type passes both as its item's target
+ * date (Bald-Eagle D4, lib/social-hub/lead.ts).
+ */
 export async function chooseTemplateSlot(
   q: SlotQuery,
   plan: SlotPlan,
   vertical: FeedVertical,
-  opts: { now: Date; busy: readonly Date[]; rng: (count: number) => number; throughDate?: string },
+  opts: { now: Date; busy: readonly Date[]; rng: (count: number) => number; throughDate?: string; fromDate?: string },
 ): Promise<SlotChoice | null> {
   const { byDate, taken } = await templateSlots(q, plan, vertical);
-  return chooseSlotTime(byDate, opts.now, taken, opts.busy, opts.rng, opts.throughDate);
+  return chooseSlotTime(byDate, opts.now, taken, opts.busy, opts.rng, opts.throughDate, opts.fromDate);
 }

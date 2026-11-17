@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 
-import { ContentScreen } from '@/components/social-hub/content/ContentScreen';
+import { aheadParam, ContentScreen } from '@/components/social-hub/content/ContentScreen';
 import { LoadError } from '@/components/social-hub/LoadError';
 import { SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { HUB_BASE, toParams, type RawSearchParams } from '@/lib/social-hub/links';
@@ -48,6 +48,6 @@ export default function Page({ searchParams }: { searchParams: Promise<RawSearch
     // Today's cards are the frames on screen, including the next frame a card preloads. Signed once, outside the shared cache.
     const shown = new Set(allQuotaCandidates(loaded, now).flatMap((c) => (c.post ? [c.post.id] : [])));
     const dataset = await timeHub('sign', () => signVisibleStoryFrames(loaded, shown));
-    return <ContentScreen dataset={dataset} base={HUB_BASE} now={now} libraries={libraries} progress={progress} misses={misses} />;
+    return <ContentScreen dataset={dataset} base={HUB_BASE} now={now} libraries={libraries} progress={progress} misses={misses} ahead={aheadParam(params.ahead)} />;
   });
 }

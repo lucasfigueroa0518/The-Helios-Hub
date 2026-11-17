@@ -70,7 +70,7 @@ export type AiEventsCityPostInput = {
   weekStart: string;
   weekEnd: string;
   metro: AiEventsMetro;
-  /** Rank order: picks[0] is #1 (held back for the site), picks[1..3] are the spotlights. */
+  /** Rank order: picks[0] is #1 (held back for the site); the spotlights come from picks[1..9] (top 10, AE-38). */
   picks: PickedEvent[];
   /** Events on the website calendar for this city this week. */
   totalCount: number;
