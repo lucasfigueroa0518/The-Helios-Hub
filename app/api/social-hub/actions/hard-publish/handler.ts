@@ -12,6 +12,6 @@ export function hardPublish(actions: () => Promise<Record<Vertical, ContentActio
     flag: 'hardPublish',
     verb: 'publishNow',
     actions,
-    legacy: refBody({ reels: 'videoJobId', carousels: 'postId', explainers: 'jobId', stories: 'setId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', field_notes: 'fieldNotesPostId', reel_ai_drama: 'jobId' }),
+    legacy: refBody({ reels: 'videoJobId', carousels: 'postId', explainers: 'jobId', stories: 'setId', ai_trivia: 'setId', real_or_ai: 'setId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', field_notes: 'fieldNotesPostId', reel_ai_drama: 'jobId' }),
   });
 }

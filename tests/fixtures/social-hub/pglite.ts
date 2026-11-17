@@ -37,6 +37,12 @@ export async function openHubTestDb(opts: { withHubSchema?: boolean; storiesMult
   // The go-live state: two-a-day Stories (db/stories_multi_slot.sql, R25). false = the state before that step.
   if (opts.storiesMultiSlot !== false) await pg.exec(schemaSql('stories_multi_slot.sql'));
   await pg.exec(schemaSql('social_hub_schema.sql'));
+  // AI Trivia (AT-13): the ai_trivia series, its content map cells and the video frame columns.
+  await pg.exec(schemaSql('stories_ai_trivia.sql'));
+  // Real or AI? (planning/Real or AI/CONTRACT.md §2): the real_or_ai series, its still roles, archive and lab.
+  await pg.exec(schemaSql('stories_real_or_ai.sql'));
+  // Stories Split (SS-21): AI Trivia and Real or AI? become hub types of their own; the CHECKs take both.
+  await pg.exec(schemaSql('stories_split.sql'));
   if (!opts.withHubSchema) {
     for (const table of ACCOUNT_TABLES) await pg.exec(`DROP TABLE social_hub.${table}`);
   }

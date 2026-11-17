@@ -62,7 +62,9 @@ export type FetchPlan = {
 };
 
 const isFieldNotesSource = (name: string) => name.startsWith('field-notes:');
-const isReelsSource = (name: string) => !isFieldNotesSource(name) && name !== 'feeds:*' && !name.startsWith('feed:');
+/** SS-30: `search:<id>` names deposits (lib/intake/deposit.ts): nothing to fetch, and no widening of the reels window. */
+const isDepositSource = (name: string) => name.startsWith('search:');
+const isReelsSource = (name: string) => !isFieldNotesSource(name) && !isDepositSource(name) && name !== 'feeds:*' && !name.startsWith('feed:');
 
 export function planSources(
   orders: readonly IntakeOrder[],

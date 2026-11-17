@@ -29,35 +29,36 @@
  * views and tests can all use it.
  */
 import type { StorySeries } from '@/lib/social-hub/slots/types';
+import { isStoryVertical, verticalOfSeries } from '@/lib/social-hub/story-types';
 import { addDays } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 
-export type LeadKey = Vertical | `stories:${StorySeries}`;
-
 /**
- * Days between the night a post is made and the New York day it posts.
- * 2: Text on Screen (`reels`), Explainers, AI Drama, Field Notes, Guess the Number, Free vs. Paid.
- * 0: Carousels, Last Few Days, Morning Download, and AI Events (already made a week ahead by its own clock; untouched).
- * `stories` alone (no series) reads as the same-day default; a Stories caller passes its series.
+ * Days between the night a post is made and the New York day it posts, per content type (SS-1: the
+ * Stories series became types of their own, so the `stories:<series>` keys went away).
+ * 2: Text on Screen (`reels`), Explainers, AI Drama, Field Notes, Are you smarter than AI? (`ai_trivia`), Real or AI? (`real_or_ai`).
+ * 0: Carousels, Last Few Days, Morning Download (`stories`), and AI Events (already made a week ahead by its own clock; untouched).
  */
-export const LEAD_DAYS: Readonly<Record<LeadKey, number>> = Object.freeze({
+export const LEAD_DAYS: Readonly<Record<Vertical, number>> = Object.freeze({
   reels: 2,
   explainers: 2,
   reel_ai_drama: 2,
   field_notes: 2,
-  'stories:guess_the_number': 2,
-  'stories:free_vs_paid': 2,
+  ai_trivia: 2,
+  real_or_ai: 2,
   carousels: 0,
   last_few_days: 0,
   ai_events: 0,
   stories: 0,
-  'stories:morning_download': 0,
 });
 
-/** A type's lead days. Stories go by series (`leadDaysFor('stories', 'guess_the_number')` is 2); unknown keys read as 0. */
-export function leadDaysFor(vertical: Vertical, series?: StorySeries | null): number {
-  const key: LeadKey = vertical === 'stories' && series ? `stories:${series}` : vertical;
-  return LEAD_DAYS[key] ?? 0;
+/**
+ * A type's lead days. The Stories engine still calls with its series (`leadDaysFor('stories', 'ai_trivia')` is 2):
+ * for a Stories-format type a series names the type it belongs to (SS-1). Unknown keys read as 0.
+ */
+export function leadDaysFor(vertical: Vertical, series?: StorySeries | string | null): number {
+  const key = isStoryVertical(vertical) && series ? verticalOfSeries(series) : vertical;
+  return (LEAD_DAYS as Readonly<Record<string, number>>)[key] ?? 0;
 }
 
 /**
@@ -73,12 +74,12 @@ export function fillDates(runDay: string, lead: number): string[] {
   return Array.from({ length: n + 1 }, (_, i) => addDays(runDay, i));
 }
 
-/** The steady-state target of a night run: runDay + lead (Morning Download: runDay; Guess the Number: runDay + 2). */
-export function targetDateFor(runDay: string, vertical: Vertical, series?: StorySeries | null): string {
+/** The steady-state target of a night run: runDay + lead (Morning Download: runDay; Are you smarter than AI?: runDay + 2). */
+export function targetDateFor(runDay: string, vertical: Vertical, series?: StorySeries | string | null): string {
   return addDays(runDay, leadDaysFor(vertical, series));
 }
 
 /** The night that makes a target date in the steady state: target − lead (the board's "the 2 AM run makes it on …"). */
-export function runDayFor(targetDay: string, vertical: Vertical, series?: StorySeries | null): string {
+export function runDayFor(targetDay: string, vertical: Vertical, series?: StorySeries | string | null): string {
   return addDays(targetDay, -leadDaysFor(vertical, series));
 }

@@ -30,8 +30,8 @@ import { harnessDb } from './stories-harness';
 
 test('LEAD_DAYS: the six cushion types are 2 days ahead; Morning Download, Last Few Days, Carousels and AI Events same-day', () => {
   for (const v of ['reels', 'explainers', 'reel_ai_drama', 'field_notes'] as const) assert.equal(leadDaysFor(v), 2, v);
-  assert.equal(leadDaysFor('stories', 'guess_the_number'), 2);
-  assert.equal(leadDaysFor('stories', 'free_vs_paid'), 2);
+  assert.equal(leadDaysFor('stories', 'ai_trivia'), 2);
+  assert.equal(leadDaysFor('stories', 'real_or_ai'), 2);
   assert.equal(leadDaysFor('stories', 'morning_download'), 0);
   assert.equal(leadDaysFor('stories'), 0, 'Stories without a series reads as same-day');
   for (const v of ['carousels', 'last_few_days', 'ai_events'] as const) assert.equal(leadDaysFor(v), 0, v);
@@ -50,7 +50,7 @@ test('fillDates: lead 0 fills the run day; lead 2 fills the run day through day+
   assert.throws(() => fillDates('Nov 12', 2), /YYYY-MM-DD/);
   assert.equal(targetDateFor('2026-11-12', 'explainers'), '2026-11-14');
   assert.equal(targetDateFor('2026-11-12', 'stories', 'morning_download'), '2026-11-12');
-  assert.equal(runDayFor('2026-11-14', 'stories', 'guess_the_number'), '2026-11-12');
+  assert.equal(runDayFor('2026-11-14', 'stories', 'ai_trivia'), '2026-11-12');
 });
 
 // ── booking with a start date ───────────────────────────────────────────────
@@ -114,7 +114,7 @@ test('board: an unbooked item shows on its target date; a booked or posted one o
 
 // ── health ──────────────────────────────────────────────────────────────────
 
-test('health: night N’s quota is the date it fills: N for same-day types, N+2 for types made ahead (Stories per series)', () => {
+test('health: night N’s quota is the date it fills: N for same-day types, N+2 for types made ahead (each Stories-format type on its own, SS-1)', () => {
   const base = { live: true, generate: true, autoPublish: false, perDay: null, maxPerDay: null, series: null, schedule: null, cap: 5, costPerPostMicros: null };
   const day = (nyDate: string, count: number, series: string[] = []) => ({ nyDate, count, series }) as never;
   const explainers = { ...base, type: 'explainers', nights: [day('2026-11-12', 1), day('2026-11-14', 3)] } as unknown as PostingState;
@@ -122,16 +122,16 @@ test('health: night N’s quota is the date it fills: N for same-day types, N+2 
   assert.equal(quotaFor(explainers, '2026-11-12'), 3);
   const carousels = { ...explainers, type: 'carousels' } as unknown as PostingState;
   assert.equal(quotaFor(carousels, '2026-11-12'), 1);
-  const series = [
-    { id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [0, 1, 2, 3, 4, 5, 6] },
-    { id: 'guess_the_number', label: 'GTN', enabled: true, generate: true, days: [1, 4] },
-  ];
-  const stories = { ...base, type: 'stories', series, nights: [day('2026-11-12', 1, ['morning_download']), day('2026-11-14', 2, ['morning_download', 'guess_the_number'])] } as unknown as PostingState;
-  assert.equal(quotaFor(stories, '2026-11-12'), 2, 'MD on the 12th, GTN on the 14th');
-  const legacyStories = { ...base, type: 'stories', series, nights: null } as unknown as PostingState;
-  // Legacy days: Thu Nov 12 → MD daily; GTN for Sat Nov 14 is not a GTN day; Sat Nov 14's run makes Mon Nov 16 (a GTN day).
-  assert.equal(quotaFor(legacyStories, '2026-11-12'), 1);
-  assert.equal(quotaFor(legacyStories, '2026-11-14'), 2);
+  // Morning Download is made the same day; Trivia two days ahead (its own type, days-based, cap 1).
+  const md = { ...base, type: 'stories', cap: 1, days: [0, 1, 2, 3, 4, 5, 6], nights: [day('2026-11-12', 1, ['morning_download']), day('2026-11-14', 0)] } as unknown as PostingState;
+  assert.equal(quotaFor(md, '2026-11-12'), 1, 'MD on the 12th');
+  const trivia = { ...base, type: 'ai_trivia', cap: 1, days: [0, 1, 4], nights: [day('2026-11-12', 0), day('2026-11-14', 1, ['ai_trivia'])] } as unknown as PostingState;
+  assert.equal(quotaDay('2026-11-12', 'ai_trivia'), '2026-11-14');
+  assert.equal(quotaFor(trivia, '2026-11-12'), 1, 'Trivia for the 14th');
+  // Legacy days: Thu Nov 12's night fills Sat Nov 14 (not a Trivia day); Sat Nov 14's fills Mon Nov 16 (a Trivia day).
+  const legacyTrivia = { ...trivia, nights: null } as unknown as PostingState;
+  assert.equal(quotaFor(legacyTrivia, '2026-11-12'), 0);
+  assert.equal(quotaFor(legacyTrivia, '2026-11-14'), 1);
 });
 
 // ── Stories ─────────────────────────────────────────────────────────────────
@@ -142,26 +142,26 @@ const SAT_11AM = new Date('2026-10-10T15:00:00Z'); // after the 8:30-10:00 windo
 const setsOf = async (db: Db) => (await db.query<{ series: string; ny_date: string }>(`SELECT series, ny_date::text AS ny_date FROM stories.sets ORDER BY series, ny_date`)).rows.map((r) => [r.series, r.ny_date.slice(0, 10)]);
 
 async function allAuto(db: Db) {
-  for (const s of ['morning_download', 'guess_the_number', 'free_vs_paid'] as const) await saveSeriesSetting(db, s, { auto: true });
+  for (const s of ['morning_download', 'ai_trivia', 'real_or_ai'] as const) await saveSeriesSetting(db, s, { auto: true });
 }
 
-test('stories: the 3 AM request makes Morning Download for today and Guess the Number / Free vs. Paid for the run day through 2 days on', async () => {
+test('stories: the 3 AM request makes Morning Download for today and AI Trivia / Real or AI? for the run day through 2 days on', async () => {
   const { db } = await harnessDb();
   await allAuto(db);
-  // Cutover Saturday: MD for Sat; GTN (Mon/Thu) finds Mon Oct 12 in Sat–Mon; FvP (Tue/Sat) finds Sat itself, whose window is still ahead.
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), SAT_3AM), ['morning_download', 'guess_the_number', 'free_vs_paid']);
-  assert.deepEqual(await setsOf(db), [['free_vs_paid', '2026-10-10'], ['guess_the_number', '2026-10-12'], ['morning_download', '2026-10-10']]);
+  // Cutover Saturday: MD for Sat; Trivia (Sun/Mon/Thu, SS-1) finds Sun Oct 11 and Mon Oct 12 in Sat–Mon; Real or AI? (Tue/Sat) finds Sat itself, whose window is still ahead.
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), SAT_3AM), ['morning_download', 'ai_trivia', 'ai_trivia', 'real_or_ai']);
+  assert.deepEqual(await setsOf(db), [['ai_trivia', '2026-10-11'], ['ai_trivia', '2026-10-12'], ['morning_download', '2026-10-10'], ['real_or_ai', '2026-10-10']]);
   assert.deepEqual(await requestAutoSets(db, await loadSettings(db), SAT_3AM), [], 'one live set per series day');
-  // Steady state: Sunday's night finds Sat-made sets holding Mon; only Tue (FvP, +2) is new.
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), new Date('2026-10-11T07:00:00Z')), ['morning_download', 'free_vs_paid']);
-  assert.deepEqual((await setsOf(db)).filter(([s]) => s === 'free_vs_paid'), [['free_vs_paid', '2026-10-10'], ['free_vs_paid', '2026-10-13']]);
+  // Steady state: Sunday's night finds Sat-made sets holding Sun and Mon; only Tue (Real or AI?, +2) is new.
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), new Date('2026-10-11T07:00:00Z')), ['morning_download', 'real_or_ai']);
+  assert.deepEqual((await setsOf(db)).filter(([s]) => s === 'real_or_ai'), [['real_or_ai', '2026-10-10'], ['real_or_ai', '2026-10-13']]);
 });
 
 test('stories: "window passed, skip" applies only to the run day; a set 2 days ahead is still requested late in the day', async () => {
   const { db } = await harnessDb();
   await allAuto(db);
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), SAT_11AM), ['guess_the_number'], 'MD’s and FvP’s Saturday windows have passed; GTN’s Monday has not');
-  assert.deepEqual(await setsOf(db), [['guess_the_number', '2026-10-12']]);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), SAT_11AM), ['ai_trivia', 'ai_trivia'], 'MD’s and Real or AI?’s Saturday windows have passed; Trivia’s Sunday and Monday have not');
+  assert.deepEqual(await setsOf(db), [['ai_trivia', '2026-10-11'], ['ai_trivia', '2026-10-12']]);
 });
 
 test('stories template: each series reads the slots of its own target date', async () => {
@@ -170,12 +170,12 @@ test('stories template: each series reads the slots of its own target date', asy
   const asked: string[] = [];
   const slotsFor = async (d: string): Promise<ResolvedSlot[]> => {
     asked.push(d);
-    return d === '2026-10-11' ? [{ vertical: 'stories', startMinute: 600, series: 'free_vs_paid', feedMode: null, origin: 'template' }] : [];
+    return d === '2026-10-11' ? [{ vertical: 'stories', startMinute: 600, series: 'real_or_ai', feedMode: null, origin: 'template' }] : [];
   };
-  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), SAT_3AM, { slotsFor }), ['free_vs_paid']);
+  assert.deepEqual(await requestAutoSets(db, await loadSettings(db), SAT_3AM, { slotsFor }), ['real_or_ai']);
   assert.deepEqual([...new Set(asked)].sort(), ['2026-10-10', '2026-10-11', '2026-10-12']);
   const rows = (await db.query<{ series: string; ny_date: string; m: number }>(`SELECT series, ny_date::text AS ny_date, slot_minute AS m FROM stories.sets`)).rows;
-  assert.deepEqual(rows.map((r) => [r.series, r.ny_date.slice(0, 10), Number(r.m)]), [['free_vs_paid', '2026-10-11', 600]]);
+  assert.deepEqual(rows.map((r) => [r.series, r.ny_date.slice(0, 10), Number(r.m)]), [['real_or_ai', '2026-10-11', 600]]);
 });
 
 test('stories: keysToAvoid sees a built-but-unposted set on a neighboring date (GTN/FvP); Morning Download keeps the same-date rule', async () => {
@@ -183,12 +183,12 @@ test('stories: keysToAvoid sees a built-but-unposted set on a neighboring date (
   const put = async (series: string, nyDate: string, keys: string[], status = 'ready', slotMinute: number | null = null) =>
     (await db.query<{ id: string }>(`INSERT INTO stories.sets (series, ny_date, status, trigger, style, payload, slot_minute) VALUES ($1, $2, $3, 'auto', 'polished', $4::jsonb, $5) RETURNING id::text AS id`,
       [series, nyDate, status, JSON.stringify({ historyKeys: keys }), slotMinute])).rows[0]!.id;
-  const me = await put('guess_the_number', '2026-10-12', [], 'building');
-  await put('guess_the_number', '2026-10-11', ['k-neighbor']);
-  await put('guess_the_number', '2026-10-14', ['k-two-ahead']);
-  await put('guess_the_number', '2026-10-15', ['k-far']);
-  await put('guess_the_number', '2026-10-13', ['k-rejected'], 'rejected');
-  const gtn = await keysToAvoid({ db, now: SAT_3AM, nyDate: '2026-10-12', setId: me }, 'guess_the_number', 30);
+  const me = await put('ai_trivia', '2026-10-12', [], 'building');
+  await put('ai_trivia', '2026-10-11', ['k-neighbor']);
+  await put('ai_trivia', '2026-10-14', ['k-two-ahead']);
+  await put('ai_trivia', '2026-10-15', ['k-far']);
+  await put('ai_trivia', '2026-10-13', ['k-rejected'], 'rejected');
+  const gtn = await keysToAvoid({ db, now: SAT_3AM, nyDate: '2026-10-12', setId: me }, 'ai_trivia', 30);
   assert.deepEqual([...gtn].sort(), ['k-neighbor', 'k-two-ahead']);
 
   const md = await put('morning_download', '2026-10-12', [], 'building', 510);
@@ -202,11 +202,11 @@ test('stories: a series made ahead counts the daily cap against its target date;
   const set = async (series: string, nyDate: string) =>
     (await db.query<{ id: string }>(`INSERT INTO stories.sets (series, ny_date, status, trigger, style) VALUES ($1, $2, 'ready', 'auto', 'polished') RETURNING id::text AS id`, [series, nyDate])).rows[0]!.id;
   const cost = (setId: string, usd: number) => db.query(`INSERT INTO stories.cost_events (set_id, vendor, component, usd, created_at) VALUES ($1, 'anthropic', 't', $2, $3)`, [setId, usd, SAT_3AM.toISOString()]);
-  await cost(await set('guess_the_number', '2026-10-12'), 1.5);
-  await cost(await set('free_vs_paid', '2026-10-11'), 0.4);
+  await cost(await set('ai_trivia', '2026-10-12'), 1.5);
+  await cost(await set('real_or_ai', '2026-10-11'), 0.4);
   await cost(await set('morning_download', '2026-10-10'), 0.3);
-  assert.equal(await capSpendUsd(db, 'guess_the_number', '2026-10-12', SAT_3AM), 1.5);
-  assert.equal(await capSpendUsd(db, 'free_vs_paid', '2026-10-11', SAT_3AM), 0.4, 'the cutover night spends up to one cap per date it fills');
+  assert.equal(await capSpendUsd(db, 'ai_trivia', '2026-10-12', SAT_3AM), 1.5);
+  assert.equal(await capSpendUsd(db, 'real_or_ai', '2026-10-11', SAT_3AM), 0.4, 'the cutover night spends up to one cap per date it fills');
   assert.ok(Math.abs((await capSpendUsd(db, 'morning_download', '2026-10-10', SAT_3AM)) - 0.3) < 1e-9, 'MD: the run day’s same-day spend only, never the builds for later dates');
 });
 

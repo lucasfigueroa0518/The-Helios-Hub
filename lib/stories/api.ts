@@ -18,8 +18,9 @@ import {
   type StorySet,
 } from '@/lib/stories/repository';
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
+import { isStoryVertical, SERIES_OF_VERTICAL, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { approvalNote as approvalNoteFor, openStorySlots, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
-import { SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
+import { SERIES, loadSettings, saveSeriesSetting, saveTypeSetting, seriesTypeSettings, type TypeSettings } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -31,9 +32,36 @@ const QUEUE: SetStatus[] = ['requested', 'building', 'ready', 'approved', 'sched
 const HISTORY: SetStatus[] = ['published', 'rejected', 'failed'];
 const TAGS = new Set(['story_choice', 'copy', 'photo', 'design', 'accuracy']);
 
+/** A series that can be requested now (Guess the Number, AT-14, and Free vs. Paid are retired). */
 export const isSeries = (s: unknown): s is Series => typeof s === 'string' && (SERIES as string[]).includes(s);
+/** Any series with sets on record, retired ones included: what the queue and history lists filter by. */
+export const isKnownSeries = (s: unknown): s is Series => isSeries(s) || s === 'guess_the_number' || s === 'free_vs_paid';
 
-export async function listView(db: Queryable, view: 'queue' | 'history', series?: Series) {
+/**
+ * The series a request names (SS-25): its Stories-format type's one series (`vertical`), or the series itself; when
+ * both are given they must agree. Throws a 400 for an unknown or retired one.
+ */
+export function requestedSeries(body: { vertical?: unknown; series?: unknown }): Series {
+  if (body.vertical !== undefined && body.vertical !== null) {
+    if (!isStoryVertical(body.vertical)) throw new ApiError(400, 'Unknown content type.');
+    const series = SERIES_OF_VERTICAL[body.vertical] as Series;
+    if (body.series !== undefined && body.series !== null && body.series !== series) throw new ApiError(400, 'That series is not this content type’s.');
+    return series;
+  }
+  if (!isSeries(body.series)) throw new ApiError(400, 'Unknown series.');
+  return body.series;
+}
+
+/** The series a list asks for (SS-25): a type's, with Morning Download's retired series' history; or one series; or all. */
+export function listedSeries(q: { vertical?: string | null; series?: string | null }): Series | Series[] | undefined {
+  if (q.vertical && isStoryVertical(q.vertical)) {
+    const vertical: StoryVertical = q.vertical;
+    return ([...SERIES, 'guess_the_number', 'free_vs_paid'] as Series[]).filter((s) => verticalOfSeries(s) === vertical);
+  }
+  return isKnownSeries(q.series) ? q.series : undefined;
+}
+
+export async function listView(db: Queryable, view: 'queue' | 'history', series?: Series | Series[]) {
   const sets = await listSets(db, { statuses: view === 'queue' ? QUEUE : HISTORY, series, limit: view === 'queue' ? 30 : 60 });
   const ids = sets.map((s) => s.id);
   const frames = ids.length
@@ -133,9 +161,11 @@ export async function approve(db: Queryable, id: string, now = new Date()): Prom
   try {
     const settings = await loadSettings(db);
     const window = settings.series[set.series].window;
+    // Publishing-live is the set's type's switch (SS-22).
+    const live = seriesTypeSettings(settings, set.series).publishingLive;
     // A set with a slot (template mode) posts in [slot, slot + 15]; one without, in its series' window.
-    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, settings.publishingLive);
-    const minute = settings.publishingLive && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
+    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, live);
+    const minute = live && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
     if (minute) {
       out = await scheduleSet(db, id, minute);
       approvalNote = `Approved. It posts at ${NY_TIME.format(minute)}.`;
@@ -161,6 +191,7 @@ export function reject(db: StoriesDb, id: string, body: { tags?: unknown; note?:
 export async function regenerate(db: StoriesDb, id: string, by: string) {
   const got = await getSet(db, id);
   if (!got) throw new ApiError(404, 'No such set.');
+  if (!isSeries(got.set.series)) throw new ApiError(409, 'This series is retired: its sets stay in the history, and no new one is made.');
   await guard(() => rejectSet(db, id, { note: 'regenerated', by }));
   return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by, slotMinute: got.set.slot_minute ?? null });
 }
@@ -174,17 +205,32 @@ export async function publishNow(db: Queryable, id: string, now = new Date()) {
   return guard(() => scheduleSet(db, id, now));
 }
 
-/** Settings (plan §8): enabled and the auto switch; turning auto on needs `confirm` (S-05). */
-export async function updateSeries(db: Queryable, body: { series?: unknown; enabled?: unknown; auto?: unknown; confirm?: unknown }, by: string) {
-  if (!isSeries(body.series)) throw new ApiError(400, 'Unknown series.');
+/**
+ * Settings (plan §8; SS-25): one Stories-format type, named by `vertical` (or its `series`). Its series' enabled and
+ * auto switches (turning auto on needs `confirm`, S-05), and the type's own approval, publishing-live and daily cap.
+ */
+export async function updateSeries(
+  db: Queryable,
+  body: { vertical?: unknown; series?: unknown; enabled?: unknown; auto?: unknown; confirm?: unknown; requireApproval?: unknown; publishingLive?: unknown; dailyCapUsd?: unknown },
+  by: string,
+) {
+  const series = requestedSeries(body);
   const patch: { enabled?: boolean; auto?: boolean } = {};
   if (typeof body.enabled === 'boolean') patch.enabled = body.enabled;
   if (typeof body.auto === 'boolean') {
     if (body.auto && body.confirm !== true) throw new ApiError(400, 'Turning auto on needs confirmation.');
     patch.auto = body.auto;
   }
-  if (!Object.keys(patch).length) throw new ApiError(400, 'Nothing to change.');
-  return saveSeriesSetting(db, body.series, patch, by);
+  const type: Partial<TypeSettings> = {};
+  if (typeof body.requireApproval === 'boolean') type.requireApproval = body.requireApproval;
+  if (typeof body.publishingLive === 'boolean') type.publishingLive = body.publishingLive;
+  if (body.dailyCapUsd !== undefined) {
+    if (!(typeof body.dailyCapUsd === 'number' && Number.isFinite(body.dailyCapUsd) && body.dailyCapUsd > 0)) throw new ApiError(400, 'A daily cap is a dollar amount above zero.');
+    type.dailyCapUsd = body.dailyCapUsd;
+  }
+  if (!Object.keys(patch).length && !Object.keys(type).length) throw new ApiError(400, 'Nothing to change.');
+  if (Object.keys(type).length) await saveTypeSetting(db, verticalOfSeries(series), type, by);
+  return Object.keys(patch).length ? saveSeriesSetting(db, series, patch, by) : loadSettings(db);
 }
 
 export async function monthOverview(db: Queryable, now = new Date()) {

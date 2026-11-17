@@ -6,7 +6,7 @@ import test from 'node:test';
 import { photoFinderMode, readPhotoFinderModes } from '@/lib/photos/switch';
 import { PHOTO_FINDERS_SETTINGS_KEY, PHOTO_PROFILE_IDS, type PhotoFinderModes } from '@/lib/photos/types';
 
-const ALL_LEGACY: PhotoFinderModes = { lfd: 'legacy', md: 'legacy', gtn: 'legacy', fvp: 'legacy', carousel: 'legacy' };
+const ALL_LEGACY: PhotoFinderModes = { lfd: 'legacy', md: 'legacy', trivia: 'legacy', roa: 'legacy', carousel: 'legacy' };
 
 function stub(rows: Array<{ value: unknown }> | Error) {
   const calls: Array<{ text: string; params?: unknown[] }> = [];
@@ -31,8 +31,8 @@ test('switch: a missing row reads as all legacy; the query reads only the photo_
 });
 
 test("switch: 'shared' values turn on only their types; missing keys and other values stay legacy", async () => {
-  const modes = await readPhotoFinderModes(stub([{ value: { lfd: 'shared', md: 'legacy', carousel: 'shared', gtn: 'SHARED', fvp: true, reels: 'shared' } }]).q);
-  assert.deepEqual(modes, { lfd: 'shared', md: 'legacy', gtn: 'legacy', fvp: 'legacy', carousel: 'shared' });
+  const modes = await readPhotoFinderModes(stub([{ value: { lfd: 'shared', md: 'legacy', carousel: 'shared', trivia: 'SHARED', roa: true, gtn: 'shared', reels: 'shared' } }]).q);
+  assert.deepEqual(modes, { lfd: 'shared', md: 'legacy', trivia: 'legacy', roa: 'legacy', carousel: 'shared' }, 'retired gtn is ignored; trivia and roa default legacy');
   assert.deepEqual(Object.keys(modes).sort(), [...PHOTO_PROFILE_IDS].sort(), 'only the profile ids');
   // A JSON string (a text column, or a driver that doesn't parse jsonb) reads the same.
   assert.deepEqual(await readPhotoFinderModes(stub([{ value: JSON.stringify({ md: 'shared' }) }]).q), { ...ALL_LEGACY, md: 'shared' });
@@ -50,8 +50,8 @@ test('switch: a read error or a missing intake.settings table reads as all legac
 });
 
 test('photoFinderMode: one type, legacy unless the modes say shared', () => {
-  assert.equal(photoFinderMode({ ...ALL_LEGACY, gtn: 'shared' }, 'gtn'), 'shared');
-  assert.equal(photoFinderMode({ ...ALL_LEGACY, gtn: 'shared' }, 'md'), 'legacy');
+  assert.equal(photoFinderMode({ ...ALL_LEGACY, roa: 'shared' }, 'roa'), 'shared');
+  assert.equal(photoFinderMode({ ...ALL_LEGACY, roa: 'shared' }, 'trivia'), 'legacy');
   assert.equal(photoFinderMode(null, 'lfd'), 'legacy');
   assert.equal(photoFinderMode(undefined, 'carousel'), 'legacy');
   assert.equal(photoFinderMode({ lfd: 'weird' } as unknown as PhotoFinderModes, 'lfd'), 'legacy');

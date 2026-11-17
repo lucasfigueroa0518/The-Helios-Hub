@@ -3,9 +3,8 @@ import Link from 'next/link';
 import type { ScheduleDay } from '@/lib/content-type/posting';
 
 const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const SERIES_SHORT: Record<string, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
 
-/** This week's slots for one type, read only; the calendar owns when (spec §4). */
+/** This week's slots for one type, read only; the calendar owns when (spec §4). A Stories-format type has one series (SS-26), so it counts like any other. */
 export function ScheduleStrip({ type, days }: { type: string; days: readonly ScheduleDay[] }) {
   const reel = type === 'reels' || type === 'explainers' || type === 'reel_ai_drama';
   return (
@@ -17,7 +16,7 @@ export function ScheduleStrip({ type, days }: { type: string; days: readonly Sch
           return (
             <li key={d.nyDate} className={`rh-schedule__day${d.override ? ' rh-schedule__day--override' : ''}`} aria-label={`${weekday}: ${d.count} slot${d.count === 1 ? '' : 's'}${d.override ? ', changed for this date' : ''}`}>
               <span className="rh-schedule__weekday">{weekday}</span>
-              <strong>{type === 'stories' ? (d.series.map((s) => SERIES_SHORT[s] ?? s).join(', ') || '—') : d.count}</strong>
+              <strong>{d.count}</strong>
               {reel && d.count ? <span className="rh-schedule__mode">{d.trial ? `${d.trial} trial` : ''}{d.trial && d.main ? ' · ' : ''}{d.main ? `${d.main} main` : ''}</span> : null}
             </li>
           );

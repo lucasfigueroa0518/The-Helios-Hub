@@ -59,9 +59,9 @@ const portrait = () => asset({ id: 'R', people: ['Maya Chen'], flags: ['want:per
 test('profiles: every type, editorial credited, the $0.30 cap, the contract floors and logo rules', () => {
   assert.deepEqual(Object.keys(PHOTO_PROFILES).sort(), [...PHOTO_PROFILE_IDS].sort());
   const shape = Object.fromEntries(Object.values(PHOTO_PROFILES).map((p) => [p.id, [p.minShortSide, p.coverMinShortSide, p.allowLogo]]));
-  assert.deepEqual(shape, { lfd: [600, 600, false], md: [600, 1080, false], gtn: [600, 1080, false], fvp: [600, 1080, true], carousel: [600, 1080, true] });
+  assert.deepEqual(shape, { lfd: [600, 600, false], md: [600, 1080, false], trivia: [600, 1080, false], roa: [0, 0, false], carousel: [600, 1080, true] });
   for (const p of Object.values(PHOTO_PROFILES)) {
-    assert.equal(p.licence, 'editorial_credited');
+    assert.equal(p.licence, p.id === 'roa' ? 'open_or_government' : 'editorial_credited');
     assert.equal(p.capUsd, 0.3);
   }
 });

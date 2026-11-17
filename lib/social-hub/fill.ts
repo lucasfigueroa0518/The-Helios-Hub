@@ -16,16 +16,27 @@
  *      so a night never over-makes a date an earlier night already filled.
  *
  * This file only counts and logs. It reads `social_hub.schedule` (SELECT
- * only) and imports nothing, so any worker, and hub read code, can use it.
+ * only) and imports only pure type maps, so any worker, and hub read code, can use it.
  */
+import { parseSlotId } from '@/lib/social-hub/slots/types';
+import { isStoryVertical, verticalOfSeries } from '@/lib/social-hub/story-types';
 
 /** The query shape every type's database handle already offers. */
 export type FillQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
 
-export type FillVertical = 'carousels' | 'explainers' | 'reels' | 'stories' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama';
+export type FillVertical = 'carousels' | 'explainers' | 'reels' | 'stories' | 'ai_trivia' | 'real_or_ai' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama';
 
 /** Slot statuses that hold a day's place: waiting, posting, or posted. Cancelled and failed never count. */
 export const PLACED_STATUSES = ['scheduled', 'publishing', 'published'] as const;
+
+/**
+ * The type a Stories booking counts under (SS-1): the Stories engine asks as `stories` with its series as the
+ * slot, and the series names the type (`ai_trivia` → Are you smarter than AI?). Every other type is itself.
+ */
+function bookingType(vertical: FillVertical, slot: string | null | undefined): FillVertical {
+  if (!isStoryVertical(vertical) || !slot) return vertical;
+  return verticalOfSeries(parseSlotId(slot)?.series ?? slot);
+}
 
 /**
  * How many slots a person placed for this type on this New York day.
@@ -42,7 +53,7 @@ export async function userPlaced(
       WHERE vertical = $1 AND ny_date = $2::date AND source = 'user'
         AND status = ANY($4::text[])
         AND ($3::text IS NULL OR slot = $3::text)`,
-    [vertical, nyDate, opts.slot ?? null, [...PLACED_STATUSES]],
+    [bookingType(vertical, opts.slot), nyDate, opts.slot ?? null, [...PLACED_STATUSES]],
   );
   return Number(rows[0]?.n ?? 0);
 }
@@ -63,7 +74,7 @@ export async function bookedOn(
       WHERE vertical = $1 AND ny_date = $2::date
         AND status = ANY($4::text[])
         AND ($3::text IS NULL OR slot = $3::text)`,
-    [vertical, nyDate, opts.slot ?? null, [...PLACED_STATUSES]],
+    [bookingType(vertical, opts.slot), nyDate, opts.slot ?? null, [...PLACED_STATUSES]],
   );
   return Number(rows[0]?.n ?? 0);
 }

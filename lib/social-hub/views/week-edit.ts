@@ -3,6 +3,7 @@ import { ALREADY_STARTED, applyMove, applyPlace, applyRemove, canPlace, isLocked
 import { clockLabel, DAY_START, DEFAULT_FEED_MODE, GRID, isUsual, LAST_START, nextOpenMinute, nyMinuteOf, SERIES_NAME, snapMinute, TYPE_NAME, USUAL } from '@/lib/social-hub/slots/times';
 import { isReelType, MAX_CHANGES, parseSlotId, sameSlotKey, slotId, type FeedMode, type ResolvedSlot, type SlotKey, type StorySeries } from '@/lib/social-hub/slots/types';
 import type { SlotChange } from '@/lib/social-hub/slots/write';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { dayShortLabel, WEEKDAY_LONG, type BoardPost, type WeekDayInput } from '@/lib/social-hub/views/week';
@@ -129,7 +130,7 @@ export type Drop = {
   confirm?: 'remove-carousels';
 };
 
-const capName = (vertical: Vertical, series: StorySeries | null) => (vertical === 'stories' && series ? SERIES_NAME[series].many : TYPE_NAME[vertical].many);
+const capName = (vertical: Vertical, series: StorySeries | null) => (isStoryVertical(vertical) && series ? SERIES_NAME[series].many : TYPE_NAME[vertical].many);
 
 export const TAKEN = 'That slot is taken.';
 
@@ -165,7 +166,7 @@ export function dropState(input: {
       if (isLocked(ctx, existing)) return refused(ALREADY_STARTED);
       if (input.ready.taken(snap.minute)) return refused(TAKEN);
       minute = snap.minute;
-    } else if (vertical === 'stories') {
+    } else if (isStoryVertical(vertical)) {
       return refused(`${clockLabel(snap.minute)} isn’t a ${series ? SERIES_NAME[series].one : 'Stories'} slot.`);
     } else {
       const r = canPlace(ctx, { vertical, startMinute: snap.minute, series });
@@ -185,7 +186,7 @@ export function dropState(input: {
 
   const time = clockLabel(minute);
   const cap = input.caps[vertical];
-  const count = ctx.slots.filter((s) => s.vertical === vertical && (vertical !== 'stories' || s.series === series) && !(input.ignore && sameSlotKey(s, input.ignore))).length;
+  const count = ctx.slots.filter((s) => s.vertical === vertical && (!isStoryVertical(vertical) || s.series === series) && !(input.ignore && sameSlotKey(s, input.ignore))).length;
   const fills = input.ready && ctx.slots.some((s) => sameSlotKey(s, { vertical, startMinute: minute, series }));
   const snappedTo = minute === snap.minute ? snap.snappedTo : null;
   if (!fills && count >= cap) return { minute, snappedTo, tone: 'cap', tag: `${time} · At the daily limit for ${capName(vertical, series)} (${cap})`, reason: null };
@@ -302,7 +303,7 @@ export function bookedHits<P extends BoardPost>(before: BoardState<P>, after: Bo
     const carried = now.nyDate !== post.nyDate || now.slot?.id !== post.slot.id;
     const is = slotAt(after, now.nyDate, now.slot?.id, post.vertical);
     if (!is) hits.push({ post, why: 'removed' });
-    else if (carried && post.vertical === 'stories') hits.push({ post, why: 'cannot-move' });
+    else if (carried && isStoryVertical(post.vertical)) hits.push({ post, why: 'cannot-move' });
     else if (!carried && isReelType(post.vertical) && was.feedMode !== is.feedMode) hits.push({ post, why: 'feed-mode' });
   }
   return hits;
@@ -383,7 +384,7 @@ export function planReady<P extends BoardPost>(
   const ctx = dayCtx(state, day, clock);
   const nyDate = state.days[day]!.nyDate;
   const taken = readyTakenAt(state, post, series, nyDate);
-  const d = dropState({ ctx, vertical: post.vertical, series, raw: minute, caps: { reels: 99, explainers: 99, carousels: 99, last_few_days: 99, stories: 99, ai_events: 99, field_notes: 99, reel_ai_drama: 99 }, ready: { taken } });
+  const d = dropState({ ctx, vertical: post.vertical, series, raw: minute, caps: { reels: 99, explainers: 99, carousels: 99, last_few_days: 99, stories: 99, ai_trivia: 99, real_or_ai: 99, ai_events: 99, field_notes: 99, reel_ai_drama: 99 }, ready: { taken } });
   if (d.tone === 'refused' || d.tone === 'confirm') return { ok: false, reason: d.reason ?? TAKEN };
   const at = d.minute;
   const key: SlotKey = { vertical: post.vertical, startMinute: at, series };
@@ -426,8 +427,8 @@ export function defaultPlaceMinute(ctx: DateCtx, vertical: Vertical): number | n
  */
 export function readyMinutes(ctx: DateCtx, vertical: Vertical, series: StorySeries | null): number[] {
   const open = openMinutes(ctx);
-  if (vertical !== 'stories') return open;
-  return ctx.slots.filter((s) => s.vertical === 'stories' && s.series === series && open.includes(s.startMinute)).map((s) => s.startMinute).sort((a, b) => a - b);
+  if (!isStoryVertical(vertical)) return open;
+  return ctx.slots.filter((s) => s.vertical === vertical && s.series === series && open.includes(s.startMinute)).map((s) => s.startMinute).sort((a, b) => a - b);
 }
 
 // ── Batch select (spec 2026-10-21 §2) ──

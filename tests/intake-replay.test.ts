@@ -55,7 +55,6 @@ function snapshot(): Snapshot {
         legacy: {
           mdReels: [{ key: A.key, headline: A.headline }, OLD],
           mdCarousel: [],
-          gtn: [],
           fvp: [],
           lfdReels: [{ key: A.key, headline: A.headline }, { key: C.key, headline: C.headline }],
           lfdCarousel: [],

@@ -109,7 +109,7 @@ test('cap spent: a post whose budget is gone sends every frame to today\'s finde
   const e = engine([[asset({ id: 'A' })]]);
   const f = fallback();
   const budget = { usd: 0.3, capUsd: 0.3 };
-  const finder = createSharedPhotoFinder({ profile: PHOTO_PROFILES.gtn, deps: deps(e.run), fallback: f.photos, budget });
+  const finder = createSharedPhotoFinder({ profile: PHOTO_PROFILES.trivia, deps: deps(e.run), fallback: f.photos, budget });
   const trace: string[][] = [];
   const got = await finder.findSet!([req('Ann Lee'), req('Bo Park')], trace);
   assert.equal(e.calls.length, 0);
@@ -126,7 +126,7 @@ test('find: a shared hit returns it; a miss asks today\'s finder with the same r
   const e = engine([[asset({ id: 'A', people: ['Ann Lee'] })], []], 0.2);
   const f = fallback();
   const budget = { usd: 0, capUsd: 0.3 };
-  const finder = createSharedPhotoFinder({ profile: PHOTO_PROFILES.gtn, deps: deps(e.run), fallback: f.photos, budget });
+  const finder = createSharedPhotoFinder({ profile: PHOTO_PROFILES.trivia, deps: deps(e.run), fallback: f.photos, budget });
   assert.equal((await finder.find(req('Ann Lee')))?.src, 'https://img.example/A.jpg');
   assert.equal(f.finds.length, 0);
   const r = req('Bo Park');
@@ -162,7 +162,7 @@ function stubBuilders() {
     await d.photos.find(req('Bo Park'));
     return { ok: false, skip: 'stub', candidates: [] };
   };
-  return { seen, builders: { morning_download: mk('morning_download'), guess_the_number: mk('guess_the_number'), free_vs_paid: mk('free_vs_paid') } };
+  return { seen, builders: { morning_download: mk('morning_download'), ai_trivia: mk('ai_trivia'), real_or_ai: mk('real_or_ai') } };
 }
 
 test('legacy (default, garbage, or a read error): no wrapped builders, and the shared deps are never built', async () => {
@@ -187,13 +187,13 @@ test('shared for one series: only that series is wrapped, its finds share one pe
     query: noQuery,
     builders,
     recordCost: async (d, usd) => { costs.push({ setId: d.setId, usd }); },
-    make: { readModes: async () => ({ ...allLegacy(), gtn: 'shared' }), profiles: PHOTO_PROFILES, deps: async () => deps(e.run) },
+    make: { readModes: async () => ({ ...allLegacy(), trivia: 'shared', roa: 'shared' }), profiles: PHOTO_PROFILES, deps: async () => deps(e.run) },
   });
-  assert.deepEqual(Object.keys(wrapped ?? {}), ['guess_the_number'], 'MD and FvP keep today\'s builder (no key)');
+  assert.deepEqual(Object.keys(wrapped ?? {}), ['ai_trivia'], 'MD keeps today\'s builder; Real or AI? finds its photos in its daily run, never wrapped (no key)');
   const today = fallback();
   const d = { photos: today.photos, setId: 'set-1' } as unknown as BuildDeps;
-  await wrapped!.guess_the_number!(d);
-  assert.equal(seen[0]!.series, 'guess_the_number');
+  await wrapped!.ai_trivia!(d);
+  assert.equal(seen[0]!.series, 'ai_trivia');
   assert.notEqual(seen[0]!.photos, today.photos, 'the build sees the shared finder in front');
   assert.equal(e.calls.length, 2);
   assert.equal(today.finds.length, 1, 'only the shared miss went to today\'s finder');
@@ -203,7 +203,7 @@ test('shared for one series: only that series is wrapped, its finds share one pe
   assert.ok(Math.abs(seen[0]!.photos.usd - (today.photos.usd + 0.1)) < 1e-9, 'the build\'s photo usd covers both');
 });
 
-test('review fix 3: single find calls split the post budget across the frames to come (GTN/FvP: 2 frames)', async () => {
+test('review fix 3: single find calls split the post budget across the frames to come (AI Trivia: 2 frames)', async () => {
   const caps: number[] = [];
   const run = async (d: HarvestDeps): Promise<HarvestResult> => {
     caps.push(d.capUsd ?? 0);
@@ -211,7 +211,7 @@ test('review fix 3: single find calls split the post budget across the frames to
   };
   const budget = { usd: 0, capUsd: 0.3 };
   const f = fallback();
-  const finder = createSharedPhotoFinder({ profile: PHOTO_PROFILES.gtn, deps: deps(run), fallback: f.photos, budget, frames: 2 });
+  const finder = createSharedPhotoFinder({ profile: PHOTO_PROFILES.trivia, deps: deps(run), fallback: f.photos, budget, frames: 2 });
   await finder.find(req('question'));
   await finder.find(req('answer'));
   assert.equal(caps.length, 2, 'both frames reach the shared finder');

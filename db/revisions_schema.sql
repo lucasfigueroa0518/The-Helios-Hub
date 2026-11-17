@@ -12,7 +12,7 @@ CREATE SCHEMA IF NOT EXISTS revisions;
 CREATE TABLE IF NOT EXISTS revisions.requests (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     vertical        text NOT NULL
-                      CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'field_notes')),
+                      CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'ai_trivia', 'real_or_ai')),
     item_id         uuid NOT NULL REFERENCES social_hub.content_items (id),
     -- Which parts of the item the instruction points at: [{ kind, key }].
     refs            jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -50,4 +50,4 @@ CREATE INDEX IF NOT EXISTS idx_revisions_requests_queue
 -- AI Drama Reels (reel_ai_drama), planning/AI Mini Docs/HUB-WIRING-CONTRACT.md
 ALTER TABLE revisions.requests DROP CONSTRAINT IF EXISTS requests_vertical_check;
 ALTER TABLE revisions.requests ADD CONSTRAINT requests_vertical_check
-    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'reel_ai_drama'));
+    CHECK (vertical IN ('carousels', 'explainers', 'reels', 'stories', 'last_few_days', 'ai_events', 'reel_ai_drama', 'ai_trivia', 'real_or_ai'));

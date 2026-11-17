@@ -102,6 +102,9 @@ export async function intakeDb(): Promise<{ q: IntakeQuery; usedFixture: boolean
   const real = path.join(process.cwd(), 'db', 'intake_schema.sql');
   const usedFixture = !fs.existsSync(real);
   await pg.exec(usedFixture ? FIXTURE_SCHEMA : schemaSql(real));
+  // Stories split (SS-30): the consumer switch's trivia key.
+  const split = path.join(process.cwd(), 'db', 'intake_stories_split.sql');
+  if (!usedFixture && fs.existsSync(split)) await pg.exec(schemaSql(split));
   const q: IntakeQuery = { query: async <T,>(text: string, params?: unknown[]) => ({ rows: (await pg.query<T>(text, params)).rows }) };
   return { q, usedFixture };
 }

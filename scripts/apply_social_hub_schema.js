@@ -40,4 +40,17 @@ const result = spawnSync(psql, ['-d', url, '-1', '-v', 'ON_ERROR_STOP=1', '-f', 
 });
 if (result.status !== 0) process.exit(result.status ?? 1);
 
+// The Stories split (ai_trivia and real_or_ai as their own types): its own transaction, re-applies cleanly, and moves
+// any trivia or Real or AI? row still filed under 'stories'. Always after the base schema.
+const split = spawnSync(psql, ['-d', url, '-v', 'ON_ERROR_STOP=1', '-f', path.join(root, 'db', 'stories_split.sql')], {
+  cwd: root,
+  stdio: 'inherit',
+  env: {
+    ...process.env,
+    PGSSLMODE: process.platform === 'win32' ? 'disable' : (process.env.PGSSLMODE || 'require'),
+  },
+  shell: false,
+});
+if (split.status !== 0) process.exit(split.status ?? 1);
+
 console.log('social_hub schema applied');

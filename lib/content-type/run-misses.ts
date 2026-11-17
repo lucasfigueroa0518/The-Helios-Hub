@@ -3,7 +3,8 @@ import type { HubQuery } from '@/lib/social-hub/db';
 import { nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import type { QuotaCandidate } from '@/lib/social-hub/views/day-rank';
-import { SERIES_LABEL } from '@/lib/stories/render/copy';
+import { SERIES_LABEL } from '@/lib/content-type/story-series';
+import { isStoryVertical, STORY_VERTICALS, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { readDramaMisses } from '@/lib/reel-ai-drama/hub-read';
 
 /**
@@ -25,7 +26,7 @@ import { readDramaMisses } from '@/lib/reel-ai-drama/hub-read';
 export type RunMiss = { key: string | null; title: string; detail: string | null };
 export type RunMisses = Record<Vertical, RunMiss[]>;
 
-export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], last_few_days: [], ai_events: [], field_notes: [], reel_ai_drama: [] };
+export const NO_MISSES: RunMisses = { reels: [], carousels: [], explainers: [], stories: [], ai_trivia: [], real_or_ai: [], last_few_days: [], ai_events: [], field_notes: [], reel_ai_drama: [] };
 export const MISS_TITLE = 'Run didn’t finish';
 
 const DETAIL_MAX = 140;
@@ -34,7 +35,7 @@ const short = (text: string | null | undefined): string | null => {
   if (!t) return null;
   return t.length > DETAIL_MAX ? `${t.slice(0, DETAIL_MAX - 1)}…` : t;
 };
-const SERIES: Record<string, string> = SERIES_LABEL;
+const SERIES: Readonly<Record<string, string>> = SERIES_LABEL;
 
 export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunMisses> {
   const today = nyDateOf(now)!;
@@ -94,10 +95,11 @@ export async function readRunMisses(q: HubQuery, now = new Date()): Promise<RunM
     reel_ai_drama: drama.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
     explainers: explainers.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
     reels: reels.map((r) => ({ key: r.key, title: MISS_TITLE, detail: short(r.reason) })),
-    stories: stories.map((r) => {
+    // Each Stories-format type gets its own series' misses (SS-1; a set's key is its series).
+    ...Object.fromEntries(STORY_VERTICALS.map((v) => [v, stories.filter((r) => verticalOfSeries(r.key) === v).map((r) => {
       const why = short(r.reason);
       return { key: r.key, title: MISS_TITLE, detail: `${SERIES[r.key] ?? r.key}: ${r.status}${why ? `, ${why}` : ''}` };
-    }),
+    })])) as Record<StoryVertical, RunMiss[]>,
     carousels: carousels
       .filter((r) => r.status === 'failed')
       .map((r) => ({
@@ -129,7 +131,7 @@ export function missFor(c: QuotaCandidate, misses: RunMisses, run: ProgressItem 
   if (c.post || run) return null;
   const list = misses[c.vertical] ?? [];
   if (c.vertical === 'carousels' || c.vertical === 'ai_events' || c.vertical === 'field_notes') return list[0] ?? null;
-  if (c.vertical === 'stories') return c.seriesId ? list.find((m) => m.key === c.seriesId) ?? null : null;
+  if (isStoryVertical(c.vertical)) return c.seriesId ? list.find((m) => m.key === c.seriesId) ?? null : null;
   const ideaId = c.idea?.id;
   if (!ideaId) return null;
   return list.find((m) => m.key != null && (ideaId === m.key || ideaId.endsWith(`:${m.key}`))) ?? null;

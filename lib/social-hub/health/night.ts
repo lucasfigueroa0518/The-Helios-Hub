@@ -9,7 +9,7 @@ import { makeExplainersReporter } from '@/lib/social-hub/health/reporters/explai
 import { makeReelAiDramaReporter } from '@/lib/social-hub/health/reporters/reel-ai-drama';
 import { reportReels } from '@/lib/social-hub/health/reporters/reels';
 import { emptyReport, type Reporter } from '@/lib/social-hub/health/reporters/shared';
-import { reportStories } from '@/lib/social-hub/health/reporters/stories';
+import { makeStoriesReporter, reportStories } from '@/lib/social-hub/health/reporters/stories';
 import type { NightReport, StoredReport, Tone } from '@/lib/social-hub/health/types';
 import { nightVerdict } from '@/lib/social-hub/health/verdict';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -22,6 +22,8 @@ export const REPORTERS: Record<Vertical, (h: Handles) => Promise<{ q: HubQuery; 
   reels: async (h) => ({ q: h.q, run: reportReels }),
   carousels: async (h) => ({ q: h.q, run: reportCarousels }),
   stories: async (h) => ({ q: h.q, run: reportStories }),
+  ai_trivia: async (h) => ({ q: h.q, run: makeStoriesReporter('ai_trivia') }),
+  real_or_ai: async (h) => ({ q: h.q, run: makeStoriesReporter('real_or_ai') }),
   last_few_days: async (h) => ({ q: h.q, run: reportLastFewDays }),
   ai_events: async (h) => ({ q: h.q, run: reportAiEvents }),
   field_notes: async (h) => ({ q: h.q, run: reportFieldNotes }),

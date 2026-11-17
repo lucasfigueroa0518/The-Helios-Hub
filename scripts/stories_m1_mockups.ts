@@ -3,14 +3,16 @@
  * fixture sets (no model calls), write JPEGs and contact sheets.
  *
  *   npm run stories:mockups [-- --out exports/stories/m1]
- *   npm run stories:mockups -- --homemade    (S-53: Guess the Number and
- *     Free vs. Paid in the homemade style, to exports/stories/m1-homemade)
+ *   npm run stories:mockups -- --homemade    (S-53: Free vs. Paid in the
+ *     homemade style, to exports/stories/m1-homemade)
+ *
+ * AI Trivia's frames are videos (lib/stories/trivia/render), not drawn here.
  */
 import path from 'node:path';
 
 import { contactSheet, openRenderer, type FrameReport } from '../lib/stories/render/render';
-import { BACKDROPS, FREE_VS_PAID, GUESS_THE_NUMBER, MORNING_DOWNLOAD, MORNING_DOWNLOAD_TYPE, asSet } from '../lib/stories/render/fixtures/m1';
-import type { Frame, Style } from '../lib/stories/render/types';
+import { BACKDROPS, FREE_VS_PAID, MORNING_DOWNLOAD, MORNING_DOWNLOAD_TYPE, asSet } from '../lib/stories/render/fixtures/m1';
+import type { Frame } from '../lib/stories/render/types';
 
 const HOMEMADE = process.argv.includes('--homemade');
 const outArg = process.argv.indexOf('--out');
@@ -18,17 +20,7 @@ const OUT = path.resolve(outArg > 0 ? process.argv[outArg + 1]! : HOMEMADE ? 'ex
 
 type Job = { sheet: string; title: string; cols: number; sets: Array<{ name: string; frames: Frame[]; labels: string[] }> };
 
-/** Each family is its own set (intro, question, answer); the intro is shown once. */
-const gtn = (backdrop: (typeof BACKDROPS)[number], style: Style = 'polished') =>
-  (['photo', 'marquee', 'type'] as const).flatMap((family, i) => asSet('guess_the_number', backdrop, GUESS_THE_NUMBER[family], style).slice(i === 0 ? 0 : 1));
-
 const homemadeJobs: Job[] = [
-  {
-    sheet: 'guess-the-number-homemade',
-    title: 'HOMEMADE · Guess the Number: intro, then question + answer (full-screen photo, photo sticker, text only). Rows: black, white, orange, green fills',
-    cols: 7,
-    sets: BACKDROPS.map((b) => ({ name: `guess-the-number/${b}/gtn`, frames: gtn(b, 'homemade'), labels: ['intro', 'photo · Q', 'photo · A', 'sticker · Q', 'sticker · A', 'text · Q', 'text · A'].map((l) => `${b} · ${l}`) })),
-  },
   {
     sheet: 'free-vs-paid-homemade',
     title: 'HOMEMADE · Free vs. Paid: intro, paid, free',
@@ -52,12 +44,6 @@ const polishedJobs: Job[] = [
       const frames = asSet('morning_download', b, [...MORNING_DOWNLOAD_TYPE, { role: 'closer' }]).slice(0, 2);
       return { name: `morning-download/${b}/md-type`, frames, labels: [`${b} · opener`, `${b} · story`] };
     }),
-  },
-  {
-    sheet: 'guess-the-number',
-    title: 'Guess the Number: intro, then question + answer in three families (photo-led, marquee, type-led). Rows: black, white, orange, green',
-    cols: 7,
-    sets: BACKDROPS.map((b) => ({ name: `guess-the-number/${b}/gtn`, frames: gtn(b), labels: ['intro', 'photo · Q', 'photo · A', 'marquee · Q', 'marquee · A', 'type · Q', 'type · A'].map((l) => `${b} · ${l}`) })),
   },
   {
     sheet: 'free-vs-paid',

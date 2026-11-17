@@ -254,7 +254,7 @@ export function TypeHub({ model, title, headerActions, progress, nav, benchActio
             })}
           </div>
         ) : day.cards.length === 0 ? (
-          <p className="rh-empty">{day.date > today ? `Nothing is scheduled for this day.` : `No ${events ? 'AI Events' : info.label.toLowerCase()} posts on this day.`}</p>
+          <p className="rh-empty">{day.date > today ? `Nothing is scheduled for this day.` : (info.label.includes('?') ? 'Nothing posted on this day.' : `No ${events ? 'AI Events' : info.label.toLowerCase()} posts on this day.`)}</p>
         ) : (
           <div className="rh-top">
             {day.cards.map((card) => {

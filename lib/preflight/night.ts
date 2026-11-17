@@ -7,6 +7,7 @@
 import { targetDateFor } from '@/lib/social-hub/lead';
 import type { StorySeries } from '@/lib/social-hub/slots/types';
 import type { Vertical } from '@/lib/social-hub/types';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 export type Level = 'ok' | 'warn' | 'fail' | 'manual';
 export type Finding = { level: Level; text: string };
@@ -31,7 +32,7 @@ export type PreflightInput = {
 };
 
 const LABEL: Record<string, string> = {
-  stories: 'Stories', reels: 'Trial Reels', carousels: 'Carousels', last_few_days: 'Last Few Days', ai_events: 'AI Events',
+  stories: 'Morning Download', ai_trivia: 'AI Trivia', real_or_ai: 'Real or AI?', reels: 'Trial Reels', carousels: 'Carousels', last_few_days: 'Last Few Days', ai_events: 'AI Events',
   field_notes: 'Field Notes', explainers: 'Explainers', reel_ai_drama: 'AI Drama',
 };
 const label = (v: string) => LABEL[v] ?? v;
@@ -42,11 +43,12 @@ export function judge(i: PreflightInput): Finding[] {
   if (!expected.length) out.push({ level: 'warn', text: `The calendar has nothing on ${i.date}.` });
 
   for (const v of expected) {
-    if (v === 'stories') {
-      for (const s of i.slots.filter((x) => x.vertical === 'stories')) {
+    // SS-1: each Stories-format type is checked on its own; its one series carries the auto switch.
+    if (isStoryVertical(v)) {
+      for (const s of i.slots.filter((x) => x.vertical === v)) {
         const on = i.storiesSeriesAuto[s.series ?? ''];
-        const d = targetDateFor(i.date, 'stories', (s.series ?? null) as StorySeries | null);
-        out.push(on ? { level: 'ok', text: `Stories ${s.series}: slot on ${d}, auto is on.` } : { level: 'fail', text: `Stories ${s.series}: the calendar has a slot on ${d}, but this series' auto is off, so no set will be made.` });
+        const d = targetDateFor(i.date, v, (s.series ?? null) as StorySeries | null);
+        out.push(on ? { level: 'ok', text: `${label(v)}: slot on ${d}, auto is on.` } : { level: 'fail', text: `${label(v)}: the calendar has a slot on ${d}, but its auto is off, so no set will be made.` });
       }
       continue;
     }

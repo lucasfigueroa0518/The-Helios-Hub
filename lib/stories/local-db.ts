@@ -16,7 +16,16 @@ export const SCHEMA_PATH = path.join(process.cwd(), 'db', 'stories_schema.sql');
 export const SPINE_SCHEMA_PATH = path.join(process.cwd(), 'db', 'social_hub_schema.sql');
 /** Drops the one-a-day index so a series can post twice a day (R25); run after the worker and hub deploy. */
 export const MULTI_SLOT_PATH = path.join(process.cwd(), 'db', 'stories_multi_slot.sql');
+/** AI Trivia (planning/AI Trivia/CONTRACT.md §2): the series, the content map's cells, video frames. After the spine. */
+export const AI_TRIVIA_PATH = path.join(process.cwd(), 'db', 'stories_ai_trivia.sql');
+/** Real or AI? (planning/Real or AI/CONTRACT.md §2): the series, the still roles, the archive and the lab. After AI Trivia. */
+export const REAL_OR_AI_PATH = path.join(process.cwd(), 'db', 'stories_real_or_ai.sql');
 export const DEFAULT_LOCAL_DIR = path.join(process.cwd(), '.stories-local', 'pgdata');
+/**
+ * Stories Split (planning/Stories Split/CONTRACT.md §4): the spine's CHECKs widened for `ai_trivia` and `real_or_ai`,
+ * so a trivia or Real or AI? set projects under its own type (SS-21). After Real or AI?; applied when present.
+ */
+export const STORIES_SPLIT_PATH = path.join(process.cwd(), 'db', 'stories_split.sql');
 
 /** A schema file minus psql meta-commands (`\set ...`), which PGlite cannot run. */
 export function schemaSql(file: string = SCHEMA_PATH): string {
@@ -51,5 +60,8 @@ export async function openLocalStoriesDb(dataDir?: string, opts: { multiSlot?: b
   await pg.exec(schemaSql());
   if (opts.multiSlot !== false) await pg.exec(schemaSql(MULTI_SLOT_PATH));
   await pg.exec(schemaSql(SPINE_SCHEMA_PATH));
+  await pg.exec(schemaSql(AI_TRIVIA_PATH));
+  await pg.exec(schemaSql(REAL_OR_AI_PATH));
+  if (fs.existsSync(STORIES_SPLIT_PATH)) await pg.exec(schemaSql(STORIES_SPLIT_PATH));
   return { db: pgliteDb(pg), pg };
 }

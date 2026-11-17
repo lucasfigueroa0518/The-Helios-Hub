@@ -17,6 +17,7 @@ import { DEFAULT_RUN_CAP_USD } from '@/lib/social/overnight/config';
 import { DEFAULT_LFD_RUN_CAP_USD } from '@/lib/lfd/config';
 import { DEFAULT_AI_EVENTS_RUN_CAP_USD } from '@/lib/ai-events/config';
 import { DEFAULT_FIELD_NOTES_RUN_CAP_USD } from '@/lib/field-notes/config';
+import { SERIES_OF_VERTICAL, type StoryVertical } from '@/lib/social-hub/story-types';
 import { readDramaDailySpendCap } from '@/lib/reel-ai-drama/hub-read';
 
 export { parseCostParams } from '@/lib/social-hub/cost-page/params';
@@ -25,7 +26,13 @@ export type { CostParams, CostRange } from '@/lib/social-hub/cost-page/params';
 type Params = { get(name: string): string | null };
 
 /** Defaults when a setting is missing or unreadable (lib/stories/settings.ts, lib/explainers/settings.ts). */
-const STORIES_WATCH_USD = 25;
+/**
+ * Each Stories-format type's default posting weekdays (0 = Sunday), as in lib/stories/settings.ts DEFAULT_SETTINGS. Copied,
+ * not imported: that module also writes stories.settings, and hub read code never reaches a write (social-hub-scope test).
+ */
+const STORY_DEFAULT_DAYS: Record<StoryVertical, number[]> = { stories: [0, 1, 2, 3, 4, 5, 6], ai_trivia: [0, 1, 4], real_or_ai: [2, 6] };
+/** A Stories-format type's daily cap (lib/stories/settings.ts DEFAULT_TYPE, SS-1). */
+const STORY_TYPE_DAILY_CAP_USD = 2;
 const EXPLAINERS_DAILY_CAP_USD = 10;
 const DRAMA_DAILY_CAP_USD = 20;
 
@@ -46,14 +53,38 @@ async function settingNumber(q: HubQuery | null, sql: string): Promise<number | 
 /** Each type's monthly watch. Types with only a daily cap use cap × days in the month of `to`. */
 async function watches(eq: HubQuery | null, to: string): Promise<Record<Vertical, number>> {
   const days = new Date(Date.UTC(Number(to.slice(0, 4)), Number(to.slice(5, 7)), 0)).getUTCDate();
-  const [stories, explainersCap, runCap, lfdCap, aiEventsCap, fieldNotesCap, dramaCap] = await Promise.all([
-    settingNumber(liveHubQuery, `SELECT value FROM stories.settings WHERE key = 'monthly_watch_usd'`),
+  // A Stories-format type's cap: its own `types` entry, else the engine-wide daily cap (SS-1, SS-22).
+  const storyTypeCap = (v: StoryVertical) => settingNumber(liveHubQuery, `SELECT coalesce(
+      (SELECT value->'${v}'->'dailyCapUsd' FROM stories.settings WHERE key = 'types'),
+      (SELECT value FROM stories.settings WHERE key = 'daily_cap_usd')) AS value`);
+  // The days in the month a Stories-format type posts: its series' window days (stories.settings `series`), else the default.
+  const storyDays = async (v: StoryVertical): Promise<number> => {
+    const series = SERIES_OF_VERTICAL[v];
+    let weekdays: number[] = STORY_DEFAULT_DAYS[v];
+    try {
+      const got = (await liveHubQuery<{ value: unknown }>(`SELECT value->'${series}'->'window'->'days' AS value FROM stories.settings WHERE key = 'series'`)).rows[0]?.value;
+      if (Array.isArray(got) && got.every((d) => Number.isInteger(d))) weekdays = got as number[];
+    } catch {
+      /* the default days */
+    }
+    const [y, m] = [Number(to.slice(0, 4)), Number(to.slice(5, 7))];
+    let n = 0;
+    for (let d = 1; d <= days; d++) if (weekdays.includes(new Date(Date.UTC(y, m - 1, d)).getUTCDay())) n++;
+    return n;
+  };
+  const [mdCap, explainersCap, runCap, lfdCap, aiEventsCap, fieldNotesCap, dramaCap, triviaCap, roaCap, mdDays, triviaDays, roaDays] = await Promise.all([
+    storyTypeCap('stories'),
     settingNumber(eq, `SELECT value FROM explainers.settings WHERE key = 'daily_spend_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM social.settings WHERE key = 'run_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM lfd.settings WHERE key = 'run_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM ai_events.settings WHERE key = 'run_cap_usd'`),
     settingNumber(liveHubQuery, `SELECT value FROM field_notes.settings WHERE key = 'run_cap_usd'`),
     eq ? readDramaDailySpendCap(eq).then((v) => (v != null && v > 0 ? v : null)).catch(() => null) : null,
+    storyTypeCap('ai_trivia'),
+    storyTypeCap('real_or_ai'),
+    storyDays('stories'),
+    storyDays('ai_trivia'),
+    storyDays('real_or_ai'),
   ]);
   return {
     // Two posts a week: its cap for each one this month can hold.
@@ -63,7 +94,11 @@ async function watches(eq: HubQuery | null, to: string): Promise<Record<Vertical
     // Two posts a week at most: its cap for each one this month can hold.
     field_notes: (fieldNotesCap ?? DEFAULT_FIELD_NOTES_RUN_CAP_USD) * Math.ceil((days * 2) / 7),
     reels: MONTHLY_WATCH_USD,
-    stories: stories ?? STORIES_WATCH_USD,
+    // Each Stories-format type watches its own daily cap × the days it posts this month (SS-22). The engine-wide
+    // monthly watch (stories.settings monthly_watch_usd) is a guard over all three together, not any one type's budget.
+    stories: (mdCap ?? STORY_TYPE_DAILY_CAP_USD) * mdDays,
+    ai_trivia: (triviaCap ?? STORY_TYPE_DAILY_CAP_USD) * triviaDays,
+    real_or_ai: (roaCap ?? STORY_TYPE_DAILY_CAP_USD) * roaDays,
     explainers: (explainersCap ?? EXPLAINERS_DAILY_CAP_USD) * days,
     carousels: (runCap ?? DEFAULT_RUN_CAP_USD) * days,
     // Daily production cap (reel_ai_drama.settings daily_spend_cap_usd, launch default $20) × days.

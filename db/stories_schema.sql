@@ -294,3 +294,8 @@ ALTER TABLE stories.sets ADD CONSTRAINT stories_sets_mode_check CHECK (mode IN (
 ALTER TABLE stories.candidates DROP CONSTRAINT IF EXISTS candidates_origin_check;
 ALTER TABLE stories.candidates ADD CONSTRAINT candidates_origin_check
     CHECK (origin IN ('reels', 'carousel', 'catalog', 'github', 'generated', 'model'));
+
+-- AI Trivia's opponent (AT-75) is GPT-5 nano on OpenAI, or Llama 3.1 8B on fal: their costs are recorded too.
+ALTER TABLE stories.cost_events DROP CONSTRAINT IF EXISTS cost_events_vendor_check;
+ALTER TABLE stories.cost_events ADD CONSTRAINT cost_events_vendor_check
+    CHECK (vendor IN ('anthropic', 'jev', 'web_search', 'openai', 'fal'));

@@ -14,4 +14,7 @@ export const VERTICAL_LABELS: Record<Vertical, string> = {
   ai_events: 'AI events',
   field_notes: 'Field Notes',
   reel_ai_drama: 'AI Drama Reels',
+  // SS-1: the Stories split's two types of their own.
+  ai_trivia: 'AI Trivia',
+  real_or_ai: 'Real or AI?',
 };

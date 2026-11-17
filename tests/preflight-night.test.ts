@@ -26,7 +26,7 @@ test('a slot on the calendar for a type whose auto switch is off is a failure', 
   const f = judge({ ...base, autoOn: { field_notes: false, explainers: true } });
   assert.ok(f.some((x) => x.level === 'fail' && /Field Notes.*auto switch is off/.test(x.text)));
   const s = judge({ ...base, storiesSeriesAuto: { morning_download: false } });
-  assert.ok(s.some((x) => x.level === 'fail' && /Stories morning_download/.test(x.text)));
+  assert.ok(s.some((x) => x.level === 'fail' && /Morning Download: the calendar has a slot/.test(x.text)));
 });
 
 test('Field Notes posts waiting for review never fail the pre-flight', () => {

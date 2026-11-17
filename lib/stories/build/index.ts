@@ -9,6 +9,7 @@
  */
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import type { StoriesDb } from '@/lib/stories/db';
+import type { Series } from '@/lib/stories/render/types';
 import { createStoriesJev } from '@/lib/stories/jev';
 import type { PhotoFinder } from '@/lib/stories/photos';
 import type { Renderer } from '@/lib/stories/render/render';
@@ -16,30 +17,35 @@ import type { ReviewCall } from '@/lib/stories/render/review';
 import { createIntakeJev } from '@/lib/intake/jev';
 import { ensureIntakeFresh } from '@/lib/intake/run';
 import { INTAKE_TOPUP_CAP_USD, type IntakeJev } from '@/lib/intake/types';
-import { leadKeysForPair, markPoolUsed, openPool, refreshPoolIfDue, type OpenPool, type PoolModes } from '@/lib/stories/pool';
+import { markPoolUsed, openPool, refreshPoolIfDue, type OpenPool, type PoolModes } from '@/lib/stories/pool';
 import { anyIntake, storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { applyMoves, tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
 import { QUEUE_LIVE, orderForNight } from '@/lib/social-hub/queue';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { storyKey } from '@/lib/stories/sources/reels';
-import { runRenderStage } from '@/lib/stories/render-stage';
+import { runRenderStage, type RenderClips } from '@/lib/stories/render-stage';
 import { failSet, getSet, markSkipped, monthSpendUsd, recordCost, saveBuild } from '@/lib/stories/repository';
-import { loadSettings } from '@/lib/stories/settings';
+import { loadSettings, seriesTypeSettings } from '@/lib/stories/settings';
+import { verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import type { WriterCreate } from '@/lib/stories/writer';
 
 import { capSpendUsd, type BuildDeps, type BuildResult } from './common';
-import { buildFreeVsPaid } from './free-vs-paid';
-import { buildGuessTheNumber } from './guess-the-number';
+import { buildAiTrivia } from './ai-trivia';
 import { buildMorningDownload } from './morning-download';
+import { buildRealOrAi } from './real-or-ai';
 
 export type SetBuilderDeps = {
   db: StoriesDb;
   sourceDb: StoriesDb;
   jevTransport: JevTransport;
   write: WriterCreate;
+  /** AI Trivia's opponent (AT-74/75): GPT-5 nano on OpenAI, Llama 3.1 8B on fal. Absent: no opponent. */
+  opponent?: import('@/lib/stories/trivia/opponent').OpponentClient;
   photos: PhotoFinder;
   renderer: Renderer;
+  /** AI Trivia's video renderer (lib/stories/trivia/render); tests stub it. Default: renderTriviaClips. */
+  triviaRender?: RenderClips;
   review: ReviewCall;
   storage: StoriesStorage;
   now?: () => Date;
@@ -52,7 +58,7 @@ export type SetBuilderDeps = {
     readMode?: ReadConsumerMode;
   };
   /** Tests swap a series builder for a stub. */
-  builders?: Partial<Record<'morning_download' | 'guess_the_number' | 'free_vs_paid', (d: BuildDeps) => Promise<BuildResult>>>;
+  builders?: Partial<Record<Series, (d: BuildDeps) => Promise<BuildResult>>>;
 };
 
 export type SetBuildOutcome = { status: 'ready' | 'skipped' | 'failed'; detail: string; flagged?: boolean };
@@ -68,10 +74,12 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     await markSkipped(deps.db, setId, `monthly watch reached ($${spent.toFixed(2)} of $${settings.monthlyWatchUsd})`);
     return { status: 'skipped', detail: 'monthly watch reached' };
   }
-  // The daily cap counts against the day the set posts for a series made ahead (Bald-Eagle D4); the run day otherwise.
+  // The daily cap is the set's type's (SS-1); it counts against the day the set posts for a type made ahead
+  // (Bald-Eagle D4), the run day otherwise.
+  const cap = seriesTypeSettings(settings, got.set.series).dailyCapUsd;
   const today = await capSpendUsd(deps.db, got.set.series, got.set.ny_date, now);
-  if (today >= settings.dailyCapUsd) {
-    await markSkipped(deps.db, setId, `daily cap reached ($${today.toFixed(2)} of $${settings.dailyCapUsd})`);
+  if (today >= cap) {
+    await markSkipped(deps.db, setId, `daily cap reached ($${today.toFixed(2)} of $${cap})`);
     return { status: 'skipped', detail: 'daily cap reached' };
   }
   const photoUsdBefore = deps.photos.usd;
@@ -80,9 +88,14 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     const poolReadAt = new Date();
     const { pool, modes } = await seriesPool(deps, series, now);
     const jev = createStoriesJev(deps.jevTransport, deps.db);
-    const onIntake = modes?.[ORDER_OF[series]] === 'intake';
-    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}) };
-    const builder = deps.builders?.[got.set.series] ?? { morning_download: buildMorningDownload, guess_the_number: buildGuessTheNumber, free_vs_paid: buildFreeVsPaid }[got.set.series];
+    const order = ORDER_OF[series];
+    const onIntake = order ? modes?.[order] === 'intake' : false;
+    const bd: BuildDeps = { db: deps.db, sourceDb: deps.sourceDb, jev, write: deps.write, ...(deps.opponent ? { opponent: deps.opponent } : {}), photos: deps.photos, settings, now, setId, nyDate: got.set.ny_date, pool, ...(onIntake ? { intake: true } : {}) };
+    const builder = deps.builders?.[series] ?? BUILDERS[series];
+    if (!builder) {
+      await markSkipped(deps.db, setId, `${series} is retired: no new sets are built`);
+      return { status: 'skipped', detail: `${series} is retired` };
+    }
     const result = await builder(bd);
     if (!result.ok) {
       await deps.db.query(`UPDATE stories.sets SET payload = payload || $2::jsonb WHERE id = $1`, [setId, JSON.stringify({ candidates: result.candidates.length })]);
@@ -91,14 +104,14 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
     }
     await saveBuild(deps.db, setId, { payload: { ...result.payload, historyKeys: result.historyKeys }, frames: result.frames, candidates: result.candidates });
     if (pool) {
-      const used = series === 'free_vs_paid' ? leadKeysForPair(pool.leads, (result.payload.pair ?? {}) as Record<string, unknown>) : result.historyKeys;
-      await markPoolUsed(deps.db, series, used, now).catch((err) => deps.log?.(`pool: could not mark used: ${err instanceof Error ? err.message : String(err)}`));
-      // The series' set is built from the pool: hand placements for this series are used up and its ideas compete by score again.
-      if (QUEUE_LIVE.has('stories')) await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, 'stories', `stories:pool:${series}:`, poolReadAt);
+      await markPoolUsed(deps.db, series, result.historyKeys, now).catch((err) => deps.log?.(`pool: could not mark used: ${err instanceof Error ? err.message : String(err)}`));
+      // The series' set is built from the pool: hand placements for this series (under its type, SS-1) are used up and its ideas compete by score again.
+      const vertical = verticalOfSeries(series);
+      if (QUEUE_LIVE.has(vertical)) await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, vertical, `stories:pool:${series}:`, poolReadAt);
     }
     const photoUsd = deps.photos.usd - photoUsdBefore;
     if (photoUsd > 0) await recordCost(deps.db, { setId, vendor: 'jev', component: 'photo-finder', usd: photoUsd });
-    const r = await runRenderStage({ db: deps.db, storage: deps.storage, renderer: deps.renderer, review: deps.review, setId });
+    const r = await runRenderStage({ db: deps.db, storage: deps.storage, renderer: deps.renderer, review: deps.review, setId, ...(deps.triviaRender ? { triviaRender: deps.triviaRender } : {}) });
     return { status: 'ready', detail: r.log.join('; '), flagged: r.flagged };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -107,7 +120,17 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
   }
 }
 
-const ORDER_OF = { morning_download: 'md', guess_the_number: 'gtn', free_vs_paid: 'fvp' } as const;
+/**
+ * The intake order each series reads into its pool, when it reads one. AI Trivia's pool is its own writer's;
+ * Free vs. Paid is retired (SS-1).
+ */
+const ORDER_OF: Partial<Record<Series, keyof PoolModes>> = { morning_download: 'md' };
+
+/**
+ * The live builders. Guess the Number (AT-14) and Free vs. Paid (replaced by Real or AI?) are retired: they have
+ * none, so a set still requested for them is skipped.
+ */
+const BUILDERS: Partial<Record<Series, (d: BuildDeps) => Promise<BuildResult>>> = { morning_download: buildMorningDownload, ai_trivia: buildAiTrivia, real_or_ai: buildRealOrAi };
 
 /**
  * The pool's reads for a build or the worker's refresh: each series from the intake or today's sources (consumer
@@ -126,7 +149,7 @@ export function buildPoolReads(deps: Pick<SetBuilderDeps, 'sourceDb' | 'jevTrans
  * pool when stories.pool cannot be read (schema not applied yet): the build
  * reads its sources directly.
  */
-async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'guess_the_number' | 'free_vs_paid', now: Date): Promise<{ pool: OpenPool | null; modes: PoolModes | null }> {
+async function seriesPool(deps: SetBuilderDeps, series: Series, now: Date): Promise<{ pool: OpenPool | null; modes: PoolModes | null }> {
   let modes: PoolModes | null = null;
   try {
     const reads = buildPoolReads(deps, now);
@@ -153,25 +176,25 @@ async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'gu
 export async function activeStoryMoves(db: SetBuilderDeps['db'], series: string, now = new Date()): Promise<Array<{ ideaId: string; kind: 'promote' | 'demote' }>> {
   const prefix = `stories:pool:${series}:`;
   type Row = { idea_id: string; kind: 'promote' | 'demote' };
+  // The hub files a series' moves under its type (SS-1).
   const read = (where: string, params: unknown[]) =>
-    db.query<Row>(`SELECT idea_id, kind FROM social_hub.idea_adjustments WHERE vertical = 'stories' AND idea_id LIKE $1 ${where} ORDER BY created_at`, [`${prefix}%`, ...params]);
+    db.query<Row>(`SELECT idea_id, kind FROM social_hub.idea_adjustments WHERE vertical = $2 AND idea_id LIKE $1 ${where} ORDER BY created_at`, [`${prefix}%`, verticalOfSeries(series), ...params]);
   const { rows } = await read('AND consumed_at IS NULL', []).catch(() => {
     const nyDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
-    return read('AND ny_date = $2::date', [nyDate]).catch(() => ({ rows: [] as Row[] }));
+    return read('AND ny_date = $3::date', [nyDate]).catch(() => ({ rows: [] as Row[] }));
   });
   return rows.map((r) => ({ ideaId: r.idea_id.slice(prefix.length), kind: r.kind }));
 }
 
 /** The series' pool in the shared queue's order (views/moves.ts): its oldest promote first, demoted ideas last. */
 async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool, now: Date): Promise<OpenPool> {
-  if (QUEUE_LIVE.has('stories')) return inQueueOrder(db, series, pool);
+  if (QUEUE_LIVE.has(verticalOfSeries(series))) return inQueueOrder(db, series, pool);
   const moves = await activeStoryMoves(db, series, now);
   if (!moves.length) return pool;
   const order = <T>(list: T[], key: (x: T) => string) => applyMoves(list.map((x) => ({ id: key(x), x })), moves).map((w) => w.x);
   return {
+    ...pool,
     stories: order(pool.stories, (c) => c.key),
-    numbers: order(pool.numbers, (n) => n.key),
-    unbriefed: order(pool.unbriefed, (c) => `story:${c.key}`),
     leads: order(pool.leads, (l) => storyKey(l.url)),
   };
 }
@@ -183,21 +206,22 @@ async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPo
 export async function inQueueOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool): Promise<OpenPool> {
   if (!pool.meta) return pool;
   const prefix = `stories:pool:${series}:`;
+  const vertical = verticalOfSeries(series);
   type Row = { idea_id: string; kind: IdeaAdjustment['kind']; sort_key: number | string | null; skip_reason: string | null; created_at: string };
   let rows: Row[];
   try {
     rows = (await db.query<Row>(
       `SELECT idea_id, kind, sort_key, skip_reason, created_at::text AS created_at FROM social_hub.idea_adjustments
-        WHERE vertical = 'stories' AND idea_id LIKE $1 AND consumed_at IS NULL ORDER BY created_at, id`,
-      [`${prefix}%`],
+        WHERE vertical = $2 AND idea_id LIKE $1 AND consumed_at IS NULL ORDER BY created_at, id`,
+      [`${prefix}%`, vertical],
     )).rows;
   } catch {
     return pool;
   }
   if (!rows.length) return pool;
   const night = tonightMoves(
-    rows.map((r) => ({ id: r.idea_id, vertical: 'stories' as const, ideaId: r.idea_id.slice(prefix.length), nyDate: '', kind: r.kind, createdAt: r.created_at, sortKey: r.sort_key == null ? null : Number(r.sort_key), skipReason: r.skip_reason })),
-    'stories',
+    rows.map((r) => ({ id: r.idea_id, vertical, ideaId: r.idea_id.slice(prefix.length), nyDate: '', kind: r.kind, createdAt: r.created_at, sortKey: r.sort_key == null ? null : Number(r.sort_key), skipReason: r.skip_reason })),
+    vertical,
   );
   const ids = { pins: night.pins.map((p) => p.ideaId), placed: night.placed, archived: night.archived, demoted: night.demoted };
   const reorder = <T,>(list: T[], meta: Array<{ key: string; score: number | null }>) =>
@@ -205,8 +229,6 @@ export async function inQueueOrder(db: SetBuilderDeps['db'], series: string, poo
   return {
     ...pool,
     stories: reorder(pool.stories, pool.meta.stories),
-    numbers: reorder(pool.numbers, pool.meta.numbers),
-    unbriefed: reorder(pool.unbriefed, pool.meta.unbriefed),
     leads: reorder(pool.leads, pool.meta.leads),
   };
 }

@@ -1,5 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import { nyDateOf } from '@/lib/social-hub/time';
+import { ideaOfType } from '@/lib/content-type/story-series';
 import type { Vertical } from '@/lib/social-hub/types';
 
 /**
@@ -10,7 +11,7 @@ import type { Vertical } from '@/lib/social-hub/types';
  * idea. A move lasts until its idea is made (B8; lib/social-hub/queries/day.ts consumeMoves).
  */
 
-const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'reel_ai_drama'];
+const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'ai_trivia', 'real_or_ai', 'reel_ai_drama'];
 /** A hub idea id: `<vertical>:<kind>:<ref>`, refs as the adapters make them. */
 const IDEA_ID = /^(reels|carousels|explainers|stories|reel_ai_drama):[A-Za-z_]+:[^\s]{1,2000}$/;
 
@@ -20,7 +21,7 @@ export function parseRankMove(body: unknown): RankMove {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!VERTICALS.includes(b.vertical as Vertical)) throw new Error('Unknown content type.');
   if (b.kind !== 'promote' && b.kind !== 'demote') throw new Error('kind must be promote or demote.');
-  if (typeof b.ideaId !== 'string' || !IDEA_ID.test(b.ideaId) || !b.ideaId.startsWith(`${b.vertical}:`)) throw new Error('Unknown idea.');
+  if (typeof b.ideaId !== 'string' || !IDEA_ID.test(b.ideaId) || !ideaOfType(b.vertical as Vertical, b.ideaId)) throw new Error('Unknown idea.');
   return { vertical: b.vertical as Vertical, ideaId: b.ideaId, kind: b.kind };
 }
 

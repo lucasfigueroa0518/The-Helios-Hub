@@ -6,8 +6,9 @@ import { getSocialSetting, setSocialSetting } from '@/lib/social/overnight/setti
 import * as carouselCfg from '@/lib/social/overnight/config';
 import { EXPLAINER_WINDOWS, DEFAULT_POSTS_PER_DAY as EXPLAINER_DEFAULT_PER_DAY } from '@/lib/explainers/publish/config';
 import { liveStoriesDb } from '@/lib/stories/db';
-import { loadSettings as loadStories, saveSeriesSetting, SERIES } from '@/lib/stories/settings';
+import { loadSettings as loadStories, saveSeriesSetting, saveTypeSetting, typeSettings } from '@/lib/stories/settings';
 import type { Series } from '@/lib/stories/render/types';
+import { isStoryVertical, SERIES_OF_VERTICAL } from '@/lib/social-hub/story-types';
 import { PLAN } from '@/lib/social-hub/views/plan';
 import { dbQuery } from '@/lib/db';
 import { readLfdSettings } from '@/lib/lfd/settings';
@@ -32,24 +33,32 @@ import { DRAMA_WINDOWS, readDramaPosting, writeDramaPosting } from '@/lib/reel-a
  *
  * Live is the master: while it is off, nothing is scheduled or posted.
  * The quota (`perDay`) is how many a day are generated, scheduled and
- * posted; it can't pass the type's posting windows. Stories have no quota:
- * each series has its own days of the week.
+ * posted; it can't pass the type's posting windows. The days-based types
+ * (Last Few Days, AI Events, Field Notes and the three Stories-format types)
+ * have no quota: they post on their days of the week.
+ *
+ * Stories Split (SS-24): Morning Download (`stories`), AI Trivia (`ai_trivia`)
+ * and Real or AI? (`real_or_ai`) each have the standard days-based state from
+ * their one engine series: Generate is the series' auto switch, Auto-publish
+ * and Live are the type's own switches in stories.settings `types`, days are
+ * the series' window days.
  *
  * With the calendar (slot_source 'template') the calendar owns when: the
- * quota and series days can't be set here, `schedule` shows this week's
- * slots for the type instead, and perDay / days / series days are read from
- * those slots so older readers keep working. The type's daily limit (`cap`,
- * the hidden safety cap the overnight runs never pass; week board spec
- * §Safety cap) is set here, a person's decision, never automatic.
+ * quota can't be set here, `schedule` shows this week's slots for the type
+ * instead, and perDay / days are read from those slots so older readers keep
+ * working. The type's daily limit (`cap`, the hidden safety cap the overnight
+ * runs never pass; week board spec §Safety cap) is set here, a person's
+ * decision, never automatic.
  */
-export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama';
+export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'ai_trivia' | 'real_or_ai' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama';
 
-export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
+export const POSTING_TYPES: readonly ContentType[] = ['reels', 'carousels', 'explainers', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 export const isPostingType = (v: unknown): v is ContentType => POSTING_TYPES.includes(v as ContentType);
 
-/** One day of a type's week on the calendar: its slot count, Trial / Main split (reel types), Stories' series, and whether a date override touched it. */
+/** One day of a type's week on the calendar: its slot count, Trial / Main split (reel types), a Stories-format type's series, and whether a date override touched it. */
 export type ScheduleDay = { nyDate: string; count: number; trial: number; main: number; series: string[]; override: boolean };
 
+/** @deprecated Stories Split (SS-24): every type now reads `series: null`; kept so older readers still compile. */
 export type SeriesState = { id: Series; label: string; enabled: boolean; generate: boolean; days: number[] };
 
 export type PostingState = {
@@ -59,8 +68,9 @@ export type PostingState = {
   autoPublish: boolean;
   perDay: number | null;
   maxPerDay: number | null;
+  /** Always null since the Stories split (SS-24): each Stories-format type reads like the other days-based types. */
   series: SeriesState[] | null;
-  /** Last Few Days, AI Events and Field Notes: the weekdays it posts once (0 = Sunday). Absent for the other types. */
+  /** Last Few Days, AI Events and the Stories-format types: the weekdays it posts (0 = Sunday); Field Notes null. Absent for the other types. */
   days?: number[] | null;
   /** Template mode: this Monday–Sunday week's slots for the type. Null while legacy (the controls above decide). */
   schedule: ScheduleDay[] | null;
@@ -70,7 +80,7 @@ export type PostingState = {
    * backfill) check each night against its own day. Null while legacy.
    */
   nights: ScheduleDay[] | null;
-  /** Template mode: the daily limit, the most the overnight run makes a day (Stories: per series). Null while legacy. */
+  /** Template mode: the daily limit, the most the overnight run makes a day. Null while legacy. */
   cap: number | null;
   /** What one more post a night costs: the average cost of the type's posts over the last COST_DAYS days; null when unknown. */
   costPerPostMicros: number | null;
@@ -88,12 +98,15 @@ export type PostingPatch = {
   generate?: boolean;
   autoPublish?: boolean;
   perDay?: number;
-  series?: { id: string; enabled?: boolean; generate?: boolean; days?: number[] };
-  /** The daily limit (template mode), a whole number from 0 to 10 (Last Few Days and AI Events 0–1). */
+  /** The daily limit (template mode), a whole number from 0 to 10 (Last Few Days, Field Notes and the Stories-format types 0–1). */
   cap?: number;
 };
 
-const SERIES_LABEL: Record<Series, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
+/** A calendar slot that belongs to a type: a Stories-format type's slot by its series (SS-24), any other by its vertical. */
+function slotOfType(s: ResolvedSlot, type: ContentType): boolean {
+  if (!isStoryVertical(type)) return s.vertical === type;
+  return isStoryVertical(s.vertical) && (s.series ?? SERIES_OF_VERTICAL[s.vertical]) === SERIES_OF_VERTICAL[type];
+}
 
 type Row = { query: (t: string, p?: unknown[]) => Promise<{ rows: any[] }> };
 const rowOf = async (db: Row, table: string, key: string) => (await db.query(`SELECT value FROM ${table} WHERE key = $1`, [key])).rows[0]?.value;
@@ -133,13 +146,13 @@ async function calendarPlan(now: Date): Promise<{ today: string; week: SlotPlan;
 /** A plan's calendar slots for a type, one entry per date. */
 function weekSchedule(type: ContentType, plan: SlotPlan): ScheduleDay[] {
   return [...plan.byDate].map(([nyDate, all]) => {
-    const slots = all.filter((s) => s.vertical === type);
+    const slots = all.filter((s) => slotOfType(s, type));
     return {
       nyDate,
       count: slots.length,
       trial: slots.filter((s) => s.feedMode === 'trial').length,
       main: slots.filter((s) => s.feedMode === 'main').length,
-      series: type === 'stories' ? slots.map((s) => s.series!) : [],
+      series: isStoryVertical(type) ? slots.map(() => SERIES_OF_VERTICAL[type]) : [],
       override: slots.some((s) => s.origin === 'override'),
     };
   });
@@ -154,18 +167,13 @@ function weekdaysWith(plan: SlotPlan, has: (s: ResolvedSlot) => boolean): number
 /**
  * Template mode (spec §4): the cadence fields come from the calendar, so
  * every reader that still uses them sees the slots. perDay is today's slot
- * count under the daily limit (what the night makes); Last Few Days' and AI
- * Events' days and each Stories series' days are this week's weekdays with
- * that slot.
+ * count under the daily limit (what the night makes); the days-based types'
+ * days (Last Few Days, AI Events, Field Notes, the Stories-format types) are
+ * this week's weekdays with their slot.
  */
 function withCalendar(state: TypeFields, plan: SlotPlan, today: string, cap: number): TypeFields {
   const type = state.type;
-  if (type === 'last_few_days') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'last_few_days') };
-  if (type === 'ai_events') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'ai_events') };
-  if (type === 'field_notes') return { ...state, days: weekdaysWith(plan, (s) => s.vertical === 'field_notes') };
-  if (type === 'stories') {
-    return { ...state, series: (state.series ?? []).map((x) => ({ ...x, days: weekdaysWith(plan, (s) => s.vertical === 'stories' && s.series === x.id) })) };
-  }
+  if (type === 'last_few_days' || type === 'ai_events' || type === 'field_notes' || isStoryVertical(type)) return { ...state, days: weekdaysWith(plan, (s) => slotOfType(s, type)) };
   return { ...state, perDay: slotsWithinCap(plan, type, today, cap).made.length };
 }
 
@@ -234,17 +242,15 @@ async function readTypePosting(type: ContentType): Promise<TypeFields> {
     // One post on each calendar day it holds a slot (1-2 a week): no per-day quota to set.
     return { type, live: s.publishingLive, generate: s.autoRun, autoPublish: !s.requireApproval, perDay: null, maxPerDay: null, series: null, days: null };
   }
+  // A Stories-format type (SS-24): the standard days-based state from its one series and its own switches.
   const s = await loadStories(liveStoriesDb);
-  return {
-    type,
-    live: s.publishingLive,
-    generate: null,
-    autoPublish: !s.requireApproval,
-    perDay: null,
-    maxPerDay: null,
-    series: SERIES.map((id) => ({ id, label: SERIES_LABEL[id], enabled: s.series[id].enabled, generate: s.series[id].auto, days: [...s.series[id].window.days].sort() })),
-  };
+  const own = typeSettings(s, type);
+  const series = s.series[SERIES_OF_VERTICAL[type] as Series];
+  return { type, live: own.publishingLive, generate: series.auto, autoPublish: !own.requireApproval, perDay: null, maxPerDay: null, series: null, days: [...series.window.days].sort((a, b) => a - b) };
 }
+
+/** AI Trivia and Real or AI? post at most once a day (SS-24); Morning Download keeps its two-a-day slots (R25). */
+const STORY_MAX_CAP = 1;
 
 function quota(patch: PostingPatch, max: number | null, min: number): number | null {
   if (patch.perDay === undefined) return null;
@@ -257,21 +263,17 @@ function quota(patch: PostingPatch, max: number | null, min: number): number | n
 function validate(type: ContentType, patch: PostingPatch): void {
   for (const k of ['live', 'generate', 'autoPublish'] as const) if (patch[k] !== undefined && typeof patch[k] !== 'boolean') throw new Error(`${k} must be true or false.`);
   if (patch.perDay !== undefined) {
-    if (type === 'stories') throw new Error('Stories have no daily quota; each series has its own days.');
+    if (isStoryVertical(type)) throw new Error('This type has no daily quota; it posts once on each of its days.');
     if (type === 'last_few_days') throw new Error('Last Few Days has no daily quota; it posts once on each of its days.');
     if (type === 'ai_events') throw new Error('AI Events has no daily quota; it posts Miami and Boston on each of its days.');
     if (type === 'field_notes') throw new Error('Field Notes has no daily quota; it posts once on each day the calendar gives it.');
     if (type === 'reel_ai_drama') quota(patch, DRAMA_WINDOWS.length, 1);
     else quota(patch, type === 'carousels' ? carouselCfg.CAROUSEL_SLOTS.length : type === 'explainers' ? EXPLAINER_WINDOWS.length : windows('reels'), type === 'explainers' ? 1 : 0);
   }
-  if (patch.series) {
-    if (type !== 'stories') throw new Error('Only Stories have series.');
-    if (!(SERIES as string[]).includes(patch.series.id)) throw new Error('Unknown series.');
-    const { days } = patch.series;
-    if (days !== undefined && (!Array.isArray(days) || days.length === 0 || !days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6))) throw new Error('Pick at least one day of the week.');
-  }
+  if ('series' in (patch as Record<string, unknown>)) throw new Error('Series settings moved: each Stories-format type has its own Generate, Auto-publish and Live.');
   if (patch.cap !== undefined) {
     if (!Number.isInteger(patch.cap) || patch.cap < 0 || patch.cap > MAX_CAP) throw new Error(`A daily limit is a whole number from 0 to ${MAX_CAP}.`);
+    if (isStoryVertical(type) && type !== 'stories' && patch.cap > STORY_MAX_CAP) throw new Error('This type posts once a day, so its daily limit is 0 or 1.');
     if (patch.cap > maxCapFor(type)) {
       throw new Error(type === 'ai_events' ? 'AI Events posts Miami and Boston, so its daily limit is 0 to 2.' : type === 'field_notes' ? 'Field Notes posts once a day, so its daily limit is 0 or 1.' : type === 'reel_ai_drama' ? 'AI Drama reels are costly to make, so the daily limit is 0 to 3.' : 'Last Few Days runs once a day, so its daily limit is 0 or 1.');
     }
@@ -281,9 +283,9 @@ function validate(type: ContentType, patch: PostingPatch): void {
 export async function writePosting(type: ContentType, patch: PostingPatch, by: string): Promise<PostingState> {
   validate(type, patch);
   // The calendar owns when in template mode; legacy keeps these controls, since they still drive the workers.
-  if (patch.perDay !== undefined || patch.series?.days !== undefined || patch.cap !== undefined) {
+  if (patch.perDay !== undefined || patch.cap !== undefined) {
     const template = (await readSlotSource(appQuery)) === 'template';
-    if (template && (patch.perDay !== undefined || patch.series?.days !== undefined)) throw new Error('Cadence moved to the calendar.');
+    if (template && patch.perDay !== undefined) throw new Error('Cadence moved to the calendar.');
     // The daily limit caps the calendar's slots, so it means something only once the calendar is on.
     if (!template && patch.cap !== undefined) throw new Error('The daily limit applies once the calendar is on.');
   }
@@ -364,27 +366,14 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
     if (patch.generate !== undefined) await set('auto_run', patch.generate);
     if (patch.autoPublish !== undefined) await set('require_approval', !patch.autoPublish);
     if (patch.live !== undefined) await set('publishing_live', patch.live);
-  } else {
-    const upsert = (key: string, value: unknown) =>
-      liveStoriesDb.query(
-        `INSERT INTO stories.settings (key, value, updated_by) VALUES ($1, $2::jsonb, $3)
-         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()`,
-        [key, JSON.stringify(value), by],
-      );
-    if (patch.autoPublish !== undefined) await upsert('require_approval', !patch.autoPublish);
-    if (patch.live !== undefined) await upsert('publishing_live', patch.live);
-    if (patch.series) {
-      const { id, enabled, generate, days } = patch.series;
-      if (!(SERIES as string[]).includes(id)) throw new Error('Unknown series.');
-      const change: { enabled?: boolean; auto?: boolean; days?: number[] } = {};
-      if (enabled !== undefined) change.enabled = enabled;
-      if (generate !== undefined) change.auto = generate;
-      if (days !== undefined) {
-        if (!Array.isArray(days) || days.length === 0 || !days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) throw new Error('Pick at least one day of the week.');
-        change.days = [...new Set(days)].sort();
-      }
-      await saveSeriesSetting(liveStoriesDb, id as Series, change, by);
-    }
+  } else if (isStoryVertical(type)) {
+    // A Stories-format type (SS-24): Generate is its series' auto switch; Auto-publish and Live are the type's own.
+    if (patch.generate !== undefined) await saveSeriesSetting(liveStoriesDb, SERIES_OF_VERTICAL[type] as Series, { auto: patch.generate }, by);
+    const own = {
+      ...(patch.autoPublish !== undefined ? { requireApproval: !patch.autoPublish } : {}),
+      ...(patch.live !== undefined ? { publishingLive: patch.live } : {}),
+    };
+    if (Object.keys(own).length) await saveTypeSetting(liveStoriesDb, type, own, by);
   }
   return readPosting(type);
 }

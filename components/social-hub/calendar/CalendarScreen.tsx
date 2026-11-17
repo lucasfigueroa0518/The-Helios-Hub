@@ -37,6 +37,7 @@ import { minuteLabel, windowRange } from '@/lib/social-hub/views/plan';
 import { mondayOf, weekLabel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
 import type { HubPost, MetricKey, Vertical } from '@/lib/social-hub/types';
 import { needsGroups } from '@/lib/social-hub/views/today';
+import { isStoryVertical, SERIES_OF_VERTICAL } from '@/lib/social-hub/story-types';
 
 const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
 
@@ -105,8 +106,10 @@ function readyItems(posts: readonly HubPost[], now: Date): ReadyItem[] {
   return unplaced.map((p) => {
     const f = p.factorValues.series;
     const key = f && f.kind === 'category' ? f.key : null;
-    return { ...slim(p), series: p.vertical === 'stories' && isStorySeries(key) ? key : null, made: p.generatedAt ? `Made ${shortDate(p.generatedAt)}` : 'Made' };
-  }).filter((r) => r.vertical !== 'stories' || r.series !== null);
+    // SS-1: a Stories-format type's one series; Morning Download's comes from the post (a retired series has no tray).
+    const series = p.vertical === 'stories' ? (isStorySeries(key) ? key : null) : isStoryVertical(p.vertical) ? SERIES_OF_VERTICAL[p.vertical] : null;
+    return { ...slim(p), series, made: p.generatedAt ? `Made ${shortDate(p.generatedAt)}` : 'Made' };
+  }).filter((r) => !isStoryVertical(r.vertical) || r.series !== null);
 }
 
 function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week: CalendarWeek }) {
@@ -250,7 +253,7 @@ function MonthScreen({ dataset, base, params, now, weekFailed = false }: { datas
           <li><span className="sh-cell__needs" aria-hidden="true"><Hand size={11} />1</span>needs you</li>
           <li><span className="sh-key__heat" aria-hidden="true" />darker day, more {metricLabel}</li>
         </ul>
-        <p className="sh-subtle">Dots run in type order: Text on Screen, Explainer Reels, Carousels, IG Stories. Day totals add up {metricLabel} across what posted that day.</p>
+        <p className="sh-subtle">Dots run in type order: Text on Screen, Explainer Reels, Carousels, then the story types. Day totals add up {metricLabel} across what posted that day.</p>
       </div>
 
       {day ? (

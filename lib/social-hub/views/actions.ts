@@ -42,7 +42,7 @@ type Rank = 'primary' | 'secondary' | 'more' | 'hide';
 const OFF = 'Turned off for now.';
 
 /** Pipelines with their own review page outside the hub (carousels are reviewed only here). */
-const OWN_PAGE: Partial<Record<HubPost['vertical'], string>> = { reels: '/reels', explainers: '/explainers/reels', stories: '/stories' };
+const OWN_PAGE: Partial<Record<HubPost['vertical'], string>> = { reels: '/reels', explainers: '/explainers/reels', stories: '/morning-download', ai_trivia: '/ai-trivia', real_or_ai: '/real-or-ai' }; // SS-1
 
 function rankFor(state: PostState['id'], action: PostPlan['action']): Rank {
   const approve = action === 'approveCarousel' || action === 'approveTrialReel' || action === 'approveContent';

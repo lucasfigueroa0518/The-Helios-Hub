@@ -205,10 +205,10 @@ test('explainers: an approved due slot is still released; with require_approval 
 
 // ── Stories ─────────────────────────────────────────────────────────────────
 
-/** A Free vs. Paid set built and waiting at `ready` (Saturday 2026-10-10 is one of its days). */
+/** A Real or AI? set built and waiting at `ready` (Saturday 2026-10-10 is one of its days). */
 async function readyStorySet() {
   const { db } = await harnessDb();
-  const { set } = await generate(db, 'free_vs_paid', 'lucas@x', new Date('2026-10-10T12:00:00Z'));
+  const { set } = await generate(db, 'real_or_ai', 'lucas@x', new Date('2026-10-10T12:00:00Z'));
   await claimNextRequested(db);
   await saveBuild(db, set.id, { payload: {}, frames: [{ seq: 1, role: 'intro', backdrop: 'black', copy: { role: 'intro' } }], candidates: [] });
   await markReady(db, set.id, false);

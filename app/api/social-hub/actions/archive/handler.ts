@@ -1,3 +1,4 @@
+import { ideaOfType } from '@/lib/content-type/story-series';
 import type { ContentActions } from '@/lib/publishing/actions/types';
 import { ARCHIVE_ONLY, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import type { ActionSpec } from '@/lib/social-hub/action-route';
@@ -26,7 +27,7 @@ export function archiveContent(
       const parsed = parseTarget(body);
       const ideaId = (body as { ideaId?: unknown } | null)?.ideaId ?? null;
       if (!parsed) return null;
-      if (ideaId !== null && (typeof ideaId !== 'string' || !IDEA_ID.test(ideaId) || !ideaId.startsWith(`${parsed.vertical}:`))) return null;
+      if (ideaId !== null && (typeof ideaId !== 'string' || !IDEA_ID.test(ideaId) || !ideaOfType(parsed.vertical, ideaId))) return null;
       // A type whose night does not follow the queue yet gets the post stopped, not an idea archive it would ignore.
       return { ...parsed, ideaId: QUEUE_LIVE.has(parsed.vertical) || ARCHIVE_ONLY.has(parsed.vertical) ? ideaId : null };
     },

@@ -14,6 +14,7 @@
  *
  * Bounded work: the look-back window only, never a sweep of whole tables (CLAUDE.md Rule 2). No model calls.
  */
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { IgMedia, IgMediaListing } from '@/lib/instagram/graph';
 import { hamming, NEAR_DUPLICATE } from '@/lib/reel-ai-drama/harvest/filters';
 import type { Query } from '@/lib/social/store/pg';
@@ -165,7 +166,7 @@ export async function syncPublishedPhotos(deps: IgSyncDeps): Promise<IgSyncRepor
     const ts = Date.parse(m.timestamp);
     return pool.filter((p) => {
       const built = p.builtAt.getTime();
-      return (p.vertical === 'stories' || !claimed.has(key(p))) && built <= ts + 3_600_000 && built >= ts - IG_SYNC_BUILT_BEFORE_DAYS * 86_400_000;
+      return (isStoryVertical(p.vertical) || !claimed.has(key(p))) && built <= ts + 3_600_000 && built >= ts - IG_SYNC_BUILT_BEFORE_DAYS * 86_400_000;
     });
   };
 
@@ -193,8 +194,8 @@ export async function syncPublishedPhotos(deps: IgSyncDeps): Promise<IgSyncRepor
     if (!igHash) return [];
     const close: CandidatePost[] = [];
     for (const p of await candidates(m)) {
-      if ((p.vertical === 'stories') !== (m.surface === 'story')) continue;
-      const renders = p.vertical === 'stories' ? p.frameRenders ?? [] : p.coverRender ? [p.coverRender] : [];
+      if ((isStoryVertical(p.vertical)) !== (m.surface === 'story')) continue;
+      const renders = isStoryVertical(p.vertical) ? p.frameRenders ?? [] : p.coverRender ? [p.coverRender] : [];
       for (const r of renders) {
         const h = await phashOf(r);
         if (h && hamming(h, igHash) <= NEAR_DUPLICATE) {
@@ -227,13 +228,13 @@ export async function syncPublishedPhotos(deps: IgSyncDeps): Promise<IgSyncRepor
 
   async function match(m: IgMedia): Promise<{ post: CandidatePost; how: Exclude<MatchHow, 'none'> } | null> {
     for (const a of adapters) {
-      if ((a.vertical === 'stories') !== (m.surface === 'story')) continue;
+      if ((isStoryVertical(a.vertical)) !== (m.surface === 'story')) continue;
       const post = await a.byMediaId(m.id);
       if (post) return { post, how: 'media_id' };
     }
     const ig = normalizeCaption(m.caption);
     if (m.surface === 'feed' && ig) {
-      const post = single((await candidates(m)).filter((p) => p.vertical !== 'stories' && captionsMatch(ig, normalizeCaption(p.caption))));
+      const post = single((await candidates(m)).filter((p) => !isStoryVertical(p.vertical) && captionsMatch(ig, normalizeCaption(p.caption))));
       if (post) return { post, how: 'caption' };
     }
     const post = await matchByImage(m);

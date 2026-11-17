@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { PLACED_STATUSES } from '@/lib/social-hub/fill';
 import { quotaFrom, type Quota } from '@/lib/social-hub/house';
@@ -77,7 +78,7 @@ export function slotsForDay(posts: readonly HubPost[], nyDate: string, dayQuotas
   let filled = 0;
   for (const vertical of VERTICAL_IDS) {
     const windows = capacityWindows(vertical, nyDate, dayQuotas?.lfdDays ?? [], placedCount(posts, vertical, nyDate), undefined, dayQuotas?.slots ?? null).length;
-    const configured = vertical === 'stories' || !dayQuotas ? windows : dayQuotas[vertical] ?? windows;
+    const configured = isStoryVertical(vertical) || !dayQuotas ? windows : dayQuotas[vertical] ?? windows;
     const quota = Math.min(Math.max(0, configured), windows);
     slots += quota;
     const held = posts.filter((p) => p.vertical === vertical && p.nyDate === nyDate && HOLDS_SLOT.has(p.status)).length;

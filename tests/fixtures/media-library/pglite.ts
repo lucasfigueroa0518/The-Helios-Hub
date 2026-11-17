@@ -1,7 +1,7 @@
 /**
  * Offline database for the photo bank tests: PGlite loaded with the real,
  * unmodified schema files (db/social_schema.sql for social.used_photos, and
- * db/media_library_schema.sql). Plus offline stand-ins: test images made
+ * db/media_library_schema.sql, then db/media_library_stories_split.sql, SS-24). Plus offline stand-ins: test images made
  * with sharp, an HTTP stub that serves them, and an in-memory bucket.
  */
 import { PGlite } from '@electric-sql/pglite';
@@ -20,7 +20,10 @@ function schemaSql(file: string): string {
 async function open(opts: { withBank?: boolean; withSocial?: boolean }): Promise<{ pg: PGlite; query: Query }> {
   const pg = new PGlite();
   if (opts.withSocial !== false) await pg.exec(schemaSql('social_schema.sql'));
-  if (opts.withBank !== false) await pg.exec(schemaSql('media_library_schema.sql'));
+  if (opts.withBank !== false) {
+    await pg.exec(schemaSql('media_library_schema.sql'));
+    await pg.exec(schemaSql('media_library_stories_split.sql'));
+  }
   const query: Query = async (text, params) => ({ rows: (await pg.query(text, params as unknown[])).rows as any[] });
   return { pg, query };
 }

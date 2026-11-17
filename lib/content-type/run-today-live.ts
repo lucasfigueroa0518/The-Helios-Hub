@@ -6,7 +6,8 @@
  */
 import { dbQuery } from '@/lib/db';
 import { loadSettings as loadCarouselSettings, requestManualRun } from '@/lib/carousels/overview';
-import { readPosting } from '@/lib/content-type/posting';
+import { readPosting, type ContentType, type PostingState } from '@/lib/content-type/posting';
+import { seriesLabel } from '@/lib/content-type/story-series';
 import { explainersDb } from '@/lib/explainers/connection';
 import { requestRender } from '@/lib/explainers/repository';
 import { loadSettings as loadExplainerSettings } from '@/lib/explainers/settings';
@@ -16,6 +17,7 @@ import { liveHubQuery } from '@/lib/social-hub/db';
 import { isAiEventsDay, isFieldNotesDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
 import { aiEventsDueToday, fieldNotesDueToday, lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
+import { SERIES_OF_VERTICAL, STORY_VERTICALS, verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { DEFAULT_DAY_QUOTAS } from '@/lib/social-hub/queries/day';
 import { nyDateOf } from '@/lib/social-hub/time';
@@ -124,9 +126,10 @@ async function liveFieldNotes(today: string, anyDay: boolean): Promise<{ day: Ru
 export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean; fieldNotesAnyDay?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
   const [lfd, aiEvents, fieldNotes] = await Promise.all([liveLfd(today, opts.lfdAnyDay === true), liveAiEvents(today, opts.aiEventsAnyDay === true, now), liveFieldNotes(today, opts.fieldNotesAnyDay === true)]);
-  const [dataset, stories, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
+  const [dataset, storyPostings, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
     loadDataset(liveHubQuery, now),
-    readPosting('stories', now),
+    // Each Stories-format type's own settings (SS-1); one that can't be read makes nothing today.
+    Promise.all(STORY_VERTICALS.map((v) => readPosting(v as ContentType, now).catch(() => null))),
     storiesSlotsOn(liveHubQuery, today).catch(() => null),
     pendingRun(),
     dbQuery<{ post_idea_id: string }>(`SELECT post_idea_id::text FROM reels.finish_requests WHERE status = 'active'`),
@@ -149,7 +152,7 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
   const open = storySlots ? await openStorySlots(liveStoriesDb, storySlots, now).catch(() => null) : null;
   const dueOn = open ? (id: string) => (open.get(id as Series)?.open.length ?? 0) > 0 : null;
   const held = open ? new Set<string>() : new Set(sets.rows.map((r) => r.series));
-  const series = seriesDueToday(stories.series ?? [], today, held, dueOn);
+  const series = seriesDueToday(storySeriesStates(storyPostings), today, held, dueOn);
   return planFrom({
     today,
     reels: { ...day('reels'), slateToday: Number(slate.rows[0]?.n ?? 0) > 0 },
@@ -172,6 +175,22 @@ export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; ai
     },
     cost: { reelsNight: REELS_NIGHT_USD, reelBuild: REEL_BUILD_USD, carouselCap: carouselSettings.runCapUsd, explainerCap: exSettings.per_reel_cap_usd, storySet: STORY_SET_USD, lfdCap: lfd.cap, aiEventsCap: aiEvents.cap, fieldNotesCap: fieldNotes.cap, dramaCap: drama.cap },
   });
+}
+
+/**
+ * The series Run now considers, one per Stories-format type (SS-1): a type's posting state names its series'
+ * days (and, where it still lists its series, their switches). Unread types are left out.
+ */
+export function storySeriesStates(postings: ReadonlyArray<PostingState | null>): Array<{ id: string; label: string; enabled: boolean; days: readonly number[] }> {
+  const out = new Map<string, { id: string; label: string; enabled: boolean; days: readonly number[] }>();
+  const listedAll = postings.flatMap((p) => p?.series ?? []);
+  STORY_VERTICALS.forEach((vertical, i) => {
+    const id = SERIES_OF_VERTICAL[vertical];
+    const listed = listedAll.find((s) => s.id === id && verticalOfSeries(s.id) === vertical);
+    if (listed) out.set(id, { id, label: seriesLabel(id), enabled: listed.enabled, days: listed.days });
+    else if (postings[i]) out.set(id, { id, label: seriesLabel(id), enabled: true, days: postings[i]!.days ?? [] });
+  });
+  return [...out.values()];
 }
 
 export type StepResult = { vertical: PlanStep['vertical']; label: string; ok: boolean; note: string };

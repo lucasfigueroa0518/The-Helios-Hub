@@ -1,4 +1,5 @@
 // lib/social-hub/slots/seed.ts
+import { SERIES_OF_VERTICAL, verticalOfSeries } from '@/lib/social-hub/story-types';
 import { PLAN } from '@/lib/social-hub/views/plan';
 
 import { DEFAULT_FEED_MODE, DEFAULT_TIMES } from './times';
@@ -16,9 +17,9 @@ export const DEFAULT_SEED_INPUTS: SeedInputs = {
   aiEventsDays: PLAN.ai_events[0]!.days ?? [0],
   fieldNotesDays: PLAN.field_notes[0]!.days ?? [2, 5],
   storyDays: {
-    morning_download: PLAN.stories.find((w) => w.id === 'morning_download')!.days ?? EVERY_DAY,
-    guess_the_number: PLAN.stories.find((w) => w.id === 'guess_the_number')!.days ?? EVERY_DAY,
-    free_vs_paid: PLAN.stories.find((w) => w.id === 'free_vs_paid')!.days ?? EVERY_DAY,
+    morning_download: PLAN.stories.find((w) => w.id === SERIES_OF_VERTICAL.stories)!.days ?? EVERY_DAY,
+    ai_trivia: PLAN.ai_trivia.find((w) => w.id === SERIES_OF_VERTICAL.ai_trivia)!.days ?? EVERY_DAY,
+    real_or_ai: PLAN.real_or_ai.find((w) => w.id === SERIES_OF_VERTICAL.real_or_ai)!.days ?? EVERY_DAY,
   },
 };
 
@@ -26,7 +27,8 @@ export const DEFAULT_SEED_INPUTS: SeedInputs = {
  * The first template (spec §Seeding): today's pattern at the default times
  * (times.ts DEFAULT_TIMES). Text on Screen and Explainers every day,
  * LFD on its days (Carousels never post), AI Events on
- * its days (Sunday evening), Field Notes on its days (Tuesday and Friday afternoon), each Stories series on its days. Reels Trial,
+ * its days (Sunday evening), Field Notes on its days (Tuesday and Friday afternoon), each Stories-format type (its one series,
+ * SS-1) on its days. Reels Trial,
  * Explainers Main.
  * tests/slots-resolve.test.ts pins Monday to the default times list.
  */
@@ -42,7 +44,7 @@ export function seedTemplate(input: SeedInputs): TemplateRow[] {
     if ((input.aiEventsDays ?? DEFAULT_AI_EVENTS_SEED_DAYS).includes(weekday)) add(weekday, 'ai_events');
     if ((input.fieldNotesDays ?? DEFAULT_FIELD_NOTES_SEED_DAYS).includes(weekday)) add(weekday, 'field_notes');
     for (const series of Object.keys(input.storyDays) as StorySeries[]) {
-      if (input.storyDays[series].includes(weekday)) add(weekday, 'stories', series);
+      if (input.storyDays[series].includes(weekday)) add(weekday, verticalOfSeries(series), series);
     }
   }
   return rows;

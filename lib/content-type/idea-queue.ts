@@ -2,6 +2,7 @@ import { dbQuery } from '@/lib/db';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { ARCHIVE_ONLY, QUEUE_LIVE, dropKeyBetween, queueOrder, runLead } from '@/lib/social-hub/queue';
 import { archiveIdea, pinIdea, placeIdea, reorderPins, unpinIdea } from '@/lib/social-hub/queue-store';
+import { ideaOfType } from '@/lib/content-type/story-series';
 import type { Vertical } from '@/lib/social-hub/types';
 import { isUnscoredSeed } from '@/lib/reels/seeds';
 
@@ -11,7 +12,7 @@ import { isUnscoredSeed } from '@/lib/reels/seeds';
  * drag's key from the neighbours the browser saw, never from a number the browser sends.
  */
 
-const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'reel_ai_drama'];
+const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'reel_ai_drama'];
 const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days|reel_ai_drama):[A-Za-z_]+:[^\s]{1,2000}$/;
 
 export type QueueAction =
@@ -26,7 +27,7 @@ export function parseQueueAction(body: unknown): QueueAction {
   // A hand move on a type whose night does not follow the queue would promise what the night will not do.
   if (!QUEUE_LIVE.has(vertical) && !(ARCHIVE_ONLY.has(vertical) && b.action === 'archive')) throw new Error(ARCHIVE_ONLY.has(vertical) ? 'This type only takes Archive.' : 'This type does not take pins, drags or archives yet.');
   const idea = (v: unknown, what: string) => {
-    if (typeof v !== 'string' || !IDEA_ID.test(v) || !v.startsWith(`${vertical}:`)) throw new Error(`Unknown ${what}.`);
+    if (typeof v !== 'string' || !IDEA_ID.test(v) || !ideaOfType(vertical, v)) throw new Error(`Unknown ${what}.`);
     return v;
   };
   const neighbour = (v: unknown) => (v == null ? null : idea(v, 'neighbour'));

@@ -99,16 +99,6 @@ export function freshnessDay(runAt: Date | string): string {
   return typeof runAt === 'string' ? runAt.slice(0, 10) : calendarDateKey(runAt, SOCIAL_TIMEZONE);
 }
 
-/** Guess the Number, reels side (S-10, S-26): ideas bucketed as The Number in the 7 days through the run day. */
-export async function theNumberIdeas(db: Queryable, runAt: Date | string): Promise<StoryCandidate[]> {
-  const nyDate = freshnessDay(runAt);
-  const { rows } = await db.query<IdeaRow>(
-    `${IDEA_SQL(`s.chosen_bucket = 'the_number' AND sl.ny_date > $1::date - 7 AND sl.ny_date <= $1::date`)} ORDER BY sl.ny_date DESC, s.net DESC NULLS LAST LIMIT 20`,
-    [nyDate],
-  );
-  return dedupe(rows.map(toCandidate));
-}
-
 export type ToolLead = { origin: 'reels' | 'catalog' | 'github'; ref: string; name: string; url: string; description: string };
 
 /**

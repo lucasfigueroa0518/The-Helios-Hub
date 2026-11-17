@@ -35,7 +35,7 @@ test('approvalNote: before and inside the window it posts; after, it will not', 
 
 async function ready(nyNow: Date) {
   const { db } = await harnessDb();
-  const { set } = await generate(db, 'free_vs_paid', 'lucas@x', nyNow);
+  const { set } = await generate(db, 'real_or_ai', 'lucas@x', nyNow);
   await claimNextRequested(db);
   await saveBuild(db, set.id, { payload: {}, frames: [{ seq: 1, role: 'intro', backdrop: 'black', copy: { role: 'intro' } }], candidates: [] });
   await markReady(db, set.id, true);
@@ -73,7 +73,8 @@ test('approve with publishing live books today’s window at once (B1); the spin
   const t = new Date(done.publish_at as unknown as string).getTime();
   assert.ok(t >= Date.parse('2026-10-10T12:30:00Z') && t <= Date.parse('2026-10-10T14:00:00Z'), 'inside 8:30–10:00 AM');
   assert.match(done.approvalNote, /^Approved\. It posts at \d{1,2}:\d{2} AM\.$/);
-  const slots = (await s.db.query<{ status: string }>(`SELECT status FROM social_hub.schedule WHERE vertical = 'stories'`)).rows;
+  // A Real or AI? set books under its own content type (SS-21).
+  const slots = (await s.db.query<{ status: string }>(`SELECT status FROM social_hub.schedule WHERE vertical = 'real_or_ai'`)).rows;
   assert.deepEqual(slots.map((r) => r.status), ['scheduled']);
   assert.equal((await s.db.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n, 0, 'booking only');
 });

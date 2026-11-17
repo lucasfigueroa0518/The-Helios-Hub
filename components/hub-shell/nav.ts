@@ -37,6 +37,9 @@ export const HUB_NAV: HubNavItem[] = [
       path.startsWith('/carousels') ||
       path.startsWith('/reels') ||
       path.startsWith('/stories') ||
+      path.startsWith('/morning-download') ||
+      path.startsWith('/ai-trivia') ||
+      path.startsWith('/real-or-ai') ||
       path.startsWith('/explainers') ||
       path.startsWith('/last-few-days') ||
       path.startsWith('/ai-events') ||

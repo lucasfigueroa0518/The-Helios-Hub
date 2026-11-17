@@ -15,6 +15,7 @@ import { crumbsFor } from '@/lib/social-hub/views/nav';
 import { IDEA_STATE_LABEL, poolList, poolStale, poolSummary, REFILL_CADENCE, type PoolFilter } from '@/lib/social-hub/views/pools';
 import { moveTags } from '@/lib/social-hub/views/moves';
 import type { HubIdea, IdeaState, Vertical } from '@/lib/social-hub/types';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 const FILTERS: Array<{ id: PoolFilter; label: string }> = [
   { id: 'open', label: 'Waiting' },
@@ -27,7 +28,10 @@ const HOW: Record<Vertical, string> = {
   reels: 'Scored each night at 1:00 AM; the top three get videos and slots.',
   explainers: 'Refilled at 2:00 AM; the two best topics are rendered when auto-render is on.',
   carousels: 'The 3:00 AM run shortlists stories; the top two become posts. A finished post keeps its rank and is reused.',
-  stories: 'Built at 4:00 AM from the other pools, one set per series that is due.',
+  stories: 'Built at 4:00 AM from the other pools: one Morning Download set each day.',
+  // SS-1: Trivia and Real or AI? are made two days ahead on their own days.
+  ai_trivia: 'Researched through the central intake; at 4:00 AM on Sunday, Monday and Thursday the night writes a set of questions for two days later.',
+  real_or_ai: 'Real photos come from the shared photo finder and the AI look-alikes are made for them; at 4:00 AM on Tuesday and Saturday the night makes a set for two days later.',
   last_few_days: 'Picked at 3:00 AM on Tuesdays and Fridays: up to 3 major headlines, then the best Text on Screen ideas. This is the latest post’s queue, its picks and what it dropped.',
   field_notes: 'Tips for posts, from vendor docs, GitHub, Hacker News, RSS and the ones you seed. Each run picks one tip, pairs it with photos from the pool and renders the carousel; a post is made at 12:00 PM on its days and waits for approval.',
   reel_ai_drama: 'Pitched in a weekly development session and re-ranked daily; at 12:00 AM the night makes the best pitches for the day’s slots when Generate is on.',
@@ -105,7 +109,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
       ) : null}
       <DataNotes dataset={dataset} />
       <p className="sh-note">
-        {HOW[vertical]}{QUEUE_LIVE.has(vertical) && vertical !== 'stories' ? ' Hold and drag any idea to move it.' : ''}
+        {HOW[vertical]}{QUEUE_LIVE.has(vertical) && !isStoryVertical(vertical) ? ' Hold and drag any idea to move it.' : ''}
         {ideas.length > 1 && !stateVaries ? ` All ${ideas.length} are ${ALL_ARE[ideas[0]!.state]}.` : ''}
         {ideas.length > 1 && !addedVaries && addedOf(ideas[0]!) !== '—' ? ` All added ${addedOf(ideas[0]!).replace(/^(Today|Tomorrow|Yesterday)/, (w) => w.toLowerCase())}.` : ''}
       </p>
@@ -123,7 +127,7 @@ export function PoolScreen({ dataset, base, vertical, params, now, embeddedIn }:
       ) : (
         <div className="sh-panel">
           {queueLive ? (
-            <PoolList vertical={vertical} rows={queueRows} scoreLabel={summary.scoreLabel ?? 'Score'} canDrag={vertical !== 'stories'} />
+            <PoolList vertical={vertical} rows={queueRows} scoreLabel={summary.scoreLabel ?? 'Score'} canDrag={!isStoryVertical(vertical)} />
           ) : (
           <div className="sh-table-wrap">
             <table className="sh-table sh-table--stack">

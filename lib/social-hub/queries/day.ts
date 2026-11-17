@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { HubQuery } from '@/lib/social-hub/db';
 import type { HubPost } from '@/lib/social-hub/types';
 import { madeMoveIds, type DayQuotas, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
@@ -74,12 +75,12 @@ export async function readAdjustments(q: HubQuery, nyDate: string): Promise<Idea
 export async function consumeMoves(q: HubQuery, adjustments: readonly IdeaAdjustment[], posts: readonly HubPost[]): Promise<IdeaAdjustment[]> {
   if (!adjustments.length) return [];
   const used = new Set(madeMoveIds(adjustments, posts));
-  if (adjustments.some((a) => a.vertical === 'stories')) {
+  if (adjustments.some((a) => isStoryVertical(a.vertical))) {
     const { rows } = await q<{ id: string }>(
       `SELECT a.id::text AS id
          FROM social_hub.idea_adjustments a
          JOIN stories.pool p ON a.idea_id = 'stories:pool:' || p.series || ':' || p.key
-        WHERE a.vertical = 'stories' AND a.consumed_at IS NULL AND p.used_at IS NOT NULL`,
+        WHERE a.vertical IN ('stories', 'ai_trivia', 'real_or_ai') AND a.consumed_at IS NULL AND p.used_at IS NOT NULL`,
     );
     for (const r of rows) used.add(r.id);
   }

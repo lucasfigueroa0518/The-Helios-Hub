@@ -1,7 +1,8 @@
 import { formatPlacement, type Planned, type PlacementRules } from '@/lib/social-hub/placement';
 import { parseSlotId, type SetBy } from '@/lib/social-hub/slots/types';
 import type { SpineQuery } from '@/lib/social-hub/spine';
-import { SERIES_LABEL } from '@/lib/stories/render/copy';
+import { SERIES_LABEL } from '@/lib/content-type/story-series';
+import { verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { reviseVerbs } from '@/lib/revisions/actions';
 
 import { deleteVerb } from './delete';
@@ -10,20 +11,20 @@ import { need, needPlacement, type ActionFn, type ActionOutcome, type ContentAct
 type StorySetView = { status: string; series: string; ny_date: string; publish_at: string | null };
 type Plan = (
   query: SpineQuery,
-  input: { vertical: 'stories'; nyDate: string; slot: string; rules?: PlacementRules; moving?: { scheduleId: string; publishAt: Date } | null },
+  input: { vertical: StoryVertical; nyDate: string; slot: string; rules?: PlacementRules; moving?: { scheduleId: string; publishAt: Date } | null },
 ) => Promise<Planned>;
 
 const SERIES_NAME: Record<string, string> = SERIES_LABEL;
 
-/** A story set's spine item (its native ref is the set id). */
+/** A story set's spine item (its native ref is the set id), under whichever Stories-format type holds it (SS-1). */
 async function storyItemOf(q: SpineQuery, setId: string): Promise<string | null> {
-  return (await q(`SELECT id FROM social_hub.content_items WHERE vertical = 'stories' AND native_ref = $1`, [setId])).rows[0]?.id ?? null;
+  return (await q(`SELECT id FROM social_hub.content_items WHERE vertical IN ('stories', 'ai_trivia', 'real_or_ai') AND native_ref = $1`, [setId])).rows[0]?.id ?? null;
 }
 
 const isUniqueViolation = (error: unknown) => (error as { code?: string } | null)?.code === '23505';
 
 /**
- * IG Stories (lib/stories/api): Lucas's own approve, reject, publish now (a
+ * A Stories-format type's sets (lib/stories/api; SS-1: one instance per type, `vertical`): Lucas's own approve, reject, publish now (a
  * schedule at now) and regenerate; and place / reschedule (D50): the set's
  * day and minute change in stories.sets, its source of truth
  * (repository `rescheduleSet`, which re-projects the set onto the spine). The
@@ -31,6 +32,8 @@ const isUniqueViolation = (error: unknown) => (error as { code?: string } | null
  * own series' slot, only once approved, and never once it is posting.
  */
 export function storyActions(deps: {
+  /** The type these actions serve (Morning Download's `stories` when left out). */
+  vertical?: StoryVertical;
   approve: (setId: string) => Promise<unknown>;
   reject: (setId: string, by: string) => Promise<unknown>;
   publishNow: (setId: string) => Promise<unknown>;
@@ -62,7 +65,8 @@ export function storyActions(deps: {
       // Its series' slot: the series id, or (the calendar's free times) a slot id of that series, `t0900:morning_download`.
       if (at.slot !== set.series && parseSlotId(at.slot)?.series !== set.series) return { ok: false, note: `A ${SERIES_NAME[set.series] ?? set.series} set posts only in its own slot (${set.series}).` };
       const own = mode === 'reschedule' ? await deps.slotOf(setId) : null;
-      const plan = await deps.plan(deps.query, { vertical: 'stories', ...at, moving: own ? { scheduleId: own.id, publishAt: own.publishAt } : null });
+      // The set's own type plans its slot (its series names the type).
+      const plan = await deps.plan(deps.query, { vertical: verticalOfSeries(set.series), ...at, moving: own ? { scheduleId: own.id, publishAt: own.publishAt } : null });
       if (!plan.ok) return plan;
       try {
         const slotMinute = plan.calendar ? (parseSlotId(plan.slot)?.startMinute ?? null) : null;
@@ -76,8 +80,9 @@ export function storyActions(deps: {
       }
       return { ok: true, note: `${mode === 'place' ? 'Scheduled for' : 'Moved to'} ${formatPlacement(plan.publishAt)}.` };
     };
+  const vertical = deps.vertical ?? 'stories';
   return {
-    vertical: 'stories',
+    vertical,
     async approve(t) {
       const done = await deps.approve(need(t, 'setId'));
       const note = (done as { approvalNote?: unknown } | null)?.approvalNote;
@@ -106,6 +111,6 @@ export function storyActions(deps: {
     }),
     place: placement('place'),
     reschedule: placement('reschedule'),
-    ...reviseVerbs({ vertical: 'stories', query: async () => deps.query, itemOf: (q, t) => storyItemOf(q, need(t, 'setId')) }),
+    ...reviseVerbs({ vertical, query: async () => deps.query, itemOf: (q, t) => storyItemOf(q, need(t, 'setId')) }),
   };
 }

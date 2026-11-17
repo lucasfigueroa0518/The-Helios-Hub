@@ -48,6 +48,9 @@ const message = (error: unknown) => (error instanceof Error ? error.message : St
 export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
   carousels: defineParts({ actions: () => <><CarouselRunButton /><SeedButton vertical="carousels" /></> }),
   stories: defineParts({ actions: () => <><StoriesGenerate /><SeedButton vertical="stories" /></> }),
+  // SS-1: Trivia and Real or AI? generate on their own days and have no seed path; Real or AI? keeps its lab.
+  ai_trivia: defineParts({ actions: () => <StoriesGenerate type="ai_trivia" /> }),
+  real_or_ai: defineParts({ actions: () => <><StoriesGenerate type="real_or_ai" /><Link className="rh-btn" href="/real-or-ai/lab">Lab</Link></> }),
   last_few_days: defineParts({ actions: () => <><LfdRunButton /><SeedButton vertical="last_few_days" /></> }),
   ai_events: defineParts({
     // Rebuild post re-renders the coming week's post from the pool; with none waiting there is nothing to rebuild.

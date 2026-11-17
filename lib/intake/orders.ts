@@ -9,6 +9,7 @@ import { parseLfdSettings } from '@/lib/lfd/settings';
 import type { Series } from '@/lib/stories/render/types';
 import { loadSettings } from '@/lib/stories/settings';
 
+import { TRIVIA_SOURCE_ID } from './deposit';
 import type { IntakeOrder, IntakeQuery, OrderId, ScorecardId } from './types';
 
 const FULL: readonly ScorecardId[] = ['reels-score', 'story-scoring', 'major-news', 'story-builder'];
@@ -37,10 +38,10 @@ export async function lfdOpen(q: IntakeQuery, now: Date): Promise<boolean> {
 }
 
 /** A Stories series: enabled with its auto switch on, or a Generate (or auto) set waiting to build. */
-export async function seriesOpen(q: IntakeQuery, series: Series): Promise<boolean> {
+export async function seriesOpen(q: IntakeQuery, series: Series, o: { enabledOnly?: boolean } = {}): Promise<boolean> {
   const auto = await safe(async () => {
     const s = (await loadSettings(q)).series[series];
-    return s.enabled && s.auto;
+    return s.enabled && (o.enabledOnly || s.auto);
   });
   if (auto) return true;
   return safe(async () => {
@@ -65,22 +66,29 @@ export const MD_ORDER: IntakeOrder = {
   isOpen: (q) => seriesOpen(q, 'morning_download'),
 };
 
-export const GTN_ORDER: IntakeOrder = {
-  id: 'gtn',
-  sources: ['reels:*', 'feeds:*'],
-  lookbackDays: 7,
-  scorecards: ['reels-score', 'story-scoring'],
-  isOpen: (q) => seriesOpen(q, 'guess_the_number'),
+// SS-31: Free vs. Paid's order ('fvp') is retired with the series; run records and consumer rows naming it still read.
+
+/**
+ * "Are you smarter than AI?" (SS-30): the pages its daily writer cited, deposited under `search:trivia`
+ * (lib/intake/deposit.ts TRIVIA_DEPOSIT) and read back as research in intake mode (lib/stories/trivia/research.ts).
+ * No scorecard: every existing one judges news (reels-score, story-scoring, major-news, story-builder) or a Field
+ * Notes tip, none judges a fact page, and the questions written from them are scored by trivia-score@3 anyway. So the
+ * order is a pass-through: no Jev is spent on its items (and they are never grouped, SS-32). Open when the ai_trivia
+ * series is on (enabled with auto, or a set waiting to build), read the way seriesOpen reads Morning Download.
+ */
+export const TRIVIA_ORDER: IntakeOrder = {
+  id: 'trivia',
+  sources: [TRIVIA_SOURCE_ID],
+  lookbackDays: 30,
+  scorecards: [],
+  // Open while AI Trivia is on: its daily writer runs on `enabled` alone (worker.ts), auto or not.
+  isOpen: (q) => seriesOpen(q, 'ai_trivia', { enabledOnly: true }),
 };
 
-/** Free vs. Paid: the reels adapters only (github-trending is one of them). */
-export const FVP_ORDER: IntakeOrder = {
-  id: 'fvp',
-  sources: ['reels:*'],
-  lookbackDays: 14,
-  scorecards: ['reels-score'],
-  isOpen: (q) => seriesOpen(q, 'free_vs_paid'),
-};
+/*
+ * Real or AI? has no intake order (SS-30): it reads no news. Its "scrapes" are photo requests (real photos from
+ * Commons and NASA) through the shared photo finder and the photo bank (lib/photos, owner D of the Stories split).
+ */
 
 /* ── Phase 2 orders ───────────────────────────────────────────────────── */
 
@@ -184,7 +192,7 @@ export const FIELD_NOTES_ORDER: IntakeOrder = {
   isOpen: (q) => fieldNotesOpen(q),
 };
 
-export const INTAKE_ORDERS: readonly IntakeOrder[] = [LFD_ORDER, MD_ORDER, GTN_ORDER, FVP_ORDER, REELS_ORDER, CAROUSEL_ORDER, FIELD_NOTES_ORDER];
+export const INTAKE_ORDERS: readonly IntakeOrder[] = [LFD_ORDER, MD_ORDER, REELS_ORDER, CAROUSEL_ORDER, FIELD_NOTES_ORDER, TRIVIA_ORDER];
 
 export const orderById = (id: OrderId): IntakeOrder => INTAKE_ORDERS.find((o) => o.id === id)!;
 

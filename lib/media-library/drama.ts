@@ -13,7 +13,8 @@
  *             verified sighting per identity-verified person (QID, name), so
  *             the photo's qids/subjects carry them.
  *   lookups   lookupForDrama: by QIDs (any lane) or by tag overlap with the
- *             want's words; ANY licence (the reel credits every photo it
+ *             want's words; ANY licence but `generated` (Real or AI?'s AI
+ *             images are never served to another type, SS-24; the reel credits every photo it
  *             runs; carousels read through reader.ts, cleared photos only).
  *             The freshest source URL is offered when it was fetched within
  *             SOURCE_FRESH_DAYS (the reader's rule); otherwise the bank copy's
@@ -163,7 +164,7 @@ export async function lookupForDrama(query: Query, q: DramaLookup, now: Date = n
               WHERE a.photo_id = p.id AND g.run_kind = 'reel_ai_drama' AND (g.vision ->> 'pass') = 'true' AND g.vision -> 'verdict' -> 'look' IS NOT NULL
               ORDER BY g.at DESC LIMIT 1) AS verdict
        FROM media_library.photos p
-      WHERE p.status = 'stored'
+      WHERE p.status = 'stored' AND p.licence <> 'generated'
         AND (p.qids && $1::text[]
              OR (cardinality($2::text[]) > 0 AND cardinality(ARRAY(SELECT unnest(p.tags) INTERSECT SELECT unnest($2::text[]))) >= $3))
       ORDER BY by_qid DESC, overlap DESC, (p.width::bigint * p.height) DESC, p.id
