@@ -28,8 +28,9 @@ Not changed here, because the playbook forbids behavior changes in this branch. 
 
 ## D6. Check whether Postgres JIT is on in production (Supabase)
 
-- **Why**: in the local profile (Postgres 16, default `jit = on`), the campaign list query spends **39 ms of its 152 ms compiling JIT code** (`EXPLAIN ANALYZE` → `JIT: Emission 34 ms`). Every plan whose cost is over `jit_above_cost` (100 000) pays this, which includes the campaign list, analytics, and hub dataset reads. Upstream PostgreSQL has since changed the default to off, and the commit notes that most large deployments already turn it off.
-- **Ask**: run `psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SHOW jit; ROLLBACK;"`. If it says `on`, consider `ALTER DATABASE postgres SET jit = off;` (reversible with `RESET`). That is a database-wide setting, so it's your call. `perf/REPORT.md` has the measured effect of JIT on the local profile. All code changes in this branch were measured with JIT **on**, the same as the baseline.
+- **Why**: at the baseline, JIT compiling was most of the time in the slowest statements. `loadSlates` spent 627 of 632 ms on it, outreach-stats 160 of 161 ms, and the campaign list 54 of 143 ms (`perf/slow-queries.md`). Upstream PostgreSQL has since changed the default to off.
+- **After this branch**: those statements were rewritten so their plans stay under the JIT threshold, and they now win whether JIT is on or off. Measured on the final build with `jit = off` (`perf/experiments/jit-off.json`, local only, reset afterwards), most routes are within noise. The ones that still gain are `/reels/analytics` 189 → 129 ms, `/api/analytics/summary` 324 → 295 ms, and `/social/analytics/cost` 369 → 329 ms.
+- **Ask**: run `psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SHOW jit; ROLLBACK;"`. If it says `on`, `ALTER DATABASE postgres SET jit = off;` is a small, reversible win (undo with `RESET`). It is database-wide, so it's your call. Low priority now.
 
 ## D7. Serve the brand font as WOFF2 (licensing check)
 

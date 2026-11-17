@@ -1,0 +1,55 @@
+{
+  "experiment": "Same final build and data, ALTER DATABASE helios SET jit = off (local only, reset afterwards); warm p95 ms, 30 runs",
+  "routes": {
+    "api:GET:/api/analytics/drilldown": {
+      "baselineJitOn": 371.5,
+      "finalJitOn": 321.9,
+      "finalJitOff": 360.5
+    },
+    "api:GET:/api/analytics/summary": {
+      "baselineJitOn": 447.3,
+      "finalJitOn": 324,
+      "finalJitOff": 294.8
+    },
+    "api:GET:/api/campaigns/[id]/outreach-stats": {
+      "baselineJitOn": 236.7,
+      "finalJitOn": 53.9,
+      "finalJitOff": 58
+    },
+    "api:GET:/api/campaigns": {
+      "baselineJitOn": 222.8,
+      "finalJitOn": 78.6,
+      "finalJitOff": 78.9
+    },
+    "api:GET:/api/content-type/run-today": {
+      "baselineJitOn": 770.1,
+      "finalJitOn": 560.6,
+      "finalJitOff": 591.6
+    },
+    "api:GET:/api/hub/warm": {
+      "baselineJitOn": 167.3,
+      "finalJitOn": 127.3,
+      "finalJitOff": 158.2
+    },
+    "api:GET:/api/reels/overview": {
+      "baselineJitOn": 1499.6,
+      "finalJitOn": 135.9,
+      "finalJitOff": 138.8
+    },
+    "api:GET:/api/send-queue": {
+      "baselineJitOn": 807.3,
+      "finalJitOn": 290.6,
+      "finalJitOff": 325.4
+    },
+    "page:/reels/analytics": {
+      "baselineJitOn": 197.8,
+      "finalJitOn": 189.2,
+      "finalJitOff": 128.9
+    },
+    "page:/social/analytics/cost": {
+      "baselineJitOn": 858.6,
+      "finalJitOn": 368.6,
+      "finalJitOff": 328.7
+    }
+  }
+}

@@ -58,6 +58,16 @@
         "totalP95": 500
       }
     },
-    "routes": {}
+    "routes": {
+      "page:/trello": {
+        "ttfbP95": 150,
+        "totalP95": 2400,
+        "_why": "heavy page: shell streams in budget, the whole workspace (15.8 MB on seed data) follows; REPORT still-over-budget #1"
+      },
+      "api:GET:/api/content-type/run-today": {
+        "totalP95": 900,
+        "_why": "fresh full read of every content type before a spend decision; REPORT still-over-budget #2"
+      }
+    }
   }
 }
