@@ -18,8 +18,8 @@ import { ensureIntakeFresh } from '@/lib/intake/run';
 import { INTAKE_TOPUP_CAP_USD, type IntakeJev } from '@/lib/intake/types';
 import { leadKeysForPair, markPoolUsed, openPool, refreshPoolIfDue, type OpenPool, type PoolModes } from '@/lib/stories/pool';
 import { anyIntake, storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
-import { applyMoves, tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
-import { QUEUE_LIVE, orderForNight } from '@/lib/social-hub/queue';
+import { tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves';
+import { orderForNight } from '@/lib/social-hub/queue';
 import { finishNightPlacements } from '@/lib/social-hub/queue-store';
 import { storyKey } from '@/lib/stories/sources/reels';
 import { runRenderStage } from '@/lib/stories/render-stage';
@@ -94,7 +94,7 @@ export async function buildSet(deps: SetBuilderDeps, setId: string): Promise<Set
       const used = series === 'free_vs_paid' ? leadKeysForPair(pool.leads, (result.payload.pair ?? {}) as Record<string, unknown>) : result.historyKeys;
       await markPoolUsed(deps.db, series, used, now).catch((err) => deps.log?.(`pool: could not mark used: ${err instanceof Error ? err.message : String(err)}`));
       // The series' set is built from the pool: hand placements for this series are used up and its ideas compete by score again.
-      if (QUEUE_LIVE.has('stories')) await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, 'stories', `stories:pool:${series}:`, poolReadAt);
+      await finishNightPlacements((text, params) => deps.db.query(text, params as never) as never, 'stories', `stories:pool:${series}:`, poolReadAt);
     }
     const photoUsd = deps.photos.usd - photoUsdBefore;
     if (photoUsd > 0) await recordCost(deps.db, { setId, vendor: 'jev', component: 'photo-finder', usd: photoUsd });
@@ -137,43 +137,11 @@ async function seriesPool(deps: SetBuilderDeps, series: 'morning_download' | 'gu
     }
     const r = await refreshPoolIfDue(deps.db, () => reads, now);
     if (r) deps.log?.(`pool: refreshed before build (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''}${r.intake ? `; sources ${JSON.stringify(r.intake)}` : ''})`);
-    return { pool: await inDayOrder(deps.db, series, await openPool(deps.db, series), now), modes };
+    return { pool: await inQueueOrder(deps.db, series, await openPool(deps.db, series)), modes };
   } catch (err) {
     deps.log?.(`pool: unavailable, reading sources directly: ${err instanceof Error ? err.message : String(err)}`);
     return { pool: null, modes };
   }
-}
-
-/**
- * A series' active Promote / Demote moves (social_hub.idea_adjustments, the
- * hub's `stories:pool:<series>:<key>` ids), oldest first, as pool keys. A
- * move steers until its pool entry is used (B8; the hub marks it consumed),
- * not until midnight. Before consumed_at exists: today's moves, as before.
- */
-export async function activeStoryMoves(db: SetBuilderDeps['db'], series: string, now = new Date()): Promise<Array<{ ideaId: string; kind: 'promote' | 'demote' }>> {
-  const prefix = `stories:pool:${series}:`;
-  type Row = { idea_id: string; kind: 'promote' | 'demote' };
-  const read = (where: string, params: unknown[]) =>
-    db.query<Row>(`SELECT idea_id, kind FROM social_hub.idea_adjustments WHERE vertical = 'stories' AND idea_id LIKE $1 ${where} ORDER BY created_at`, [`${prefix}%`, ...params]);
-  const { rows } = await read('AND consumed_at IS NULL', []).catch(() => {
-    const nyDate = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
-    return read('AND ny_date = $2::date', [nyDate]).catch(() => ({ rows: [] as Row[] }));
-  });
-  return rows.map((r) => ({ ideaId: r.idea_id.slice(prefix.length), kind: r.kind }));
-}
-
-/** The series' pool in the shared queue's order (views/moves.ts): its oldest promote first, demoted ideas last. */
-async function inDayOrder(db: SetBuilderDeps['db'], series: string, pool: OpenPool, now: Date): Promise<OpenPool> {
-  if (QUEUE_LIVE.has('stories')) return inQueueOrder(db, series, pool);
-  const moves = await activeStoryMoves(db, series, now);
-  if (!moves.length) return pool;
-  const order = <T>(list: T[], key: (x: T) => string) => applyMoves(list.map((x) => ({ id: key(x), x })), moves).map((w) => w.x);
-  return {
-    stories: order(pool.stories, (c) => c.key),
-    numbers: order(pool.numbers, (n) => n.key),
-    unbriefed: order(pool.unbriefed, (c) => `story:${c.key}`),
-    leads: order(pool.leads, (l) => storyKey(l.url)),
-  };
 }
 
 /**

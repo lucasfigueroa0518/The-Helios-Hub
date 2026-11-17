@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ARCHIVE_ONLY_TYPES, QUEUE_LIVE_TYPES, TYPE_CONFIG, type PoolConfig } from '@/lib/content-type/config';
+import { TYPE_CONFIG, type PoolConfig } from '@/lib/content-type/config';
 import { madeRowState, poolFreshness, poolRowState, POOL_STATE_WORDS, storySeriesOf, type PoolRowState } from '@/lib/content-type/pool-rules';
 import { leadDaysFor } from '@/lib/social-hub/lead';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
@@ -28,27 +28,11 @@ test('every type has a pool block matching the contract table', () => {
     assert.equal(pool.noun.one, want.noun, `${type} noun`);
     assert.ok(pool.noun.many.startsWith(want.noun.slice(0, -1)), `${type} plural ${pool.noun.many}`);
     assert.equal(pool.order, want.order, `${type} order`);
-    assert.deepEqual(pool.moves, { pin: true, drag: true, archive: true, make: want.make, rank: false, exclude: false }, `${type} moves`);
+    assert.deepEqual(pool.moves, { pin: true, drag: true, archive: true, make: want.make }, `${type} moves`);
   }
   assert.deepEqual(TYPE_CONFIG.explainers.pool.noun, { one: 'topic', many: 'topics' });
   assert.deepEqual(TYPE_CONFIG.reel_ai_drama.pool.noun, { one: 'pitch', many: 'pitches' });
   assert.deepEqual(TYPE_CONFIG.carousels.pool.noun, { one: 'story', many: 'stories' });
-});
-
-test('the moves agree with the queue mode: live → pin, drag, archive; archive_only → archive only', () => {
-  for (const type of TYPES) {
-    const { queue, pool } = TYPE_CONFIG[type];
-    const live = queue === 'live';
-    assert.equal(pool.moves.pin, live, `${type} pin`);
-    assert.equal(pool.moves.drag, live, `${type} drag`);
-    assert.equal(pool.moves.archive, live || queue === 'archive_only', `${type} archive`);
-  }
-});
-
-test('every pool is on the live queue (Tommy, 2026-11-16); the old sets still export', () => {
-  for (const type of TYPES) assert.equal(TYPE_CONFIG[type].queue, 'live', type);
-  assert.deepEqual([...QUEUE_LIVE_TYPES].sort(), [...TYPES].sort());
-  assert.equal(ARCHIVE_ONLY_TYPES.size, 0);
 });
 
 const idea = (over: Partial<HubIdea> = {}): HubIdea => ({

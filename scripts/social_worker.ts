@@ -97,7 +97,6 @@ async function main(): Promise<void> {
   const { quotaFilledNote, reportFill } = await import('@/lib/social-hub/fill');
   const { readTonightMoves } = await import('@/lib/social-hub/moves-store');
   const { finishNightPlacements } = await import('@/lib/social-hub/queue-store');
-  const { QUEUE_LIVE } = await import('@/lib/social-hub/queue');
   const { ideaRef } = await import('@/lib/social-hub/views/moves');
   const { claimAndPublish } = await import('@/lib/social/overnight/publish');
   const { createLiveCarouselClient, metaConfigured } = await import('@/lib/social/overnight/meta');
@@ -298,7 +297,7 @@ async function main(): Promise<void> {
     const status = (await query(`SELECT status FROM social.runs WHERE id = $1`, [run.id])).rows[0]?.status;
     log('run_complete', { runId: run.id, exitCode: code, status });
     // The scheduled night ran to a finish: hand placements are used up and the stories compete by score again (a run that died keeps them).
-    if (!rerun && !pinned.length && run.trigger === 'scheduled' && code === 0 && status !== 'failed' && QUEUE_LIVE.has('carousels')) await finishNightPlacements(query, 'carousels', undefined, movesReadAt);
+    if (!rerun && !pinned.length && run.trigger === 'scheduled' && code === 0 && status !== 'failed') await finishNightPlacements(query, 'carousels', undefined, movesReadAt);
 
     for (const post of await runs.postsMissingSlides(query, run.id)) {
       try {

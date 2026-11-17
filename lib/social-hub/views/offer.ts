@@ -7,7 +7,6 @@ import { cardActions, type CardActions } from '@/lib/social-hub/views/card-actio
 import { dayWord } from '@/lib/social-hub/views/format';
 import { windowRange, windowsOn } from '@/lib/social-hub/views/plan';
 import { ideaOwns } from '@/lib/social-hub/views/day-rank';
-import { QUEUE_LIVE } from '@/lib/social-hub/queue';
 import { addDays, nyDateOf, nyDayStart } from '@/lib/social-hub/time';
 import { approvalOffState, postState, type PostState } from '@/lib/social-hub/views/state';
 import { typicals, type Typicals } from '@/lib/social-hub/views/typical';
@@ -86,7 +85,7 @@ export function offerer(dataset: HubDataset, now: Date, flags: HubFlags = SOCIAL
         lfdPublishingLive: dataset.lfdPublishingLive === true,
         aiEventsPublishingLive: dataset.aiEventsPublishingLive === true,
         fieldNotesPublishingLive: dataset.fieldNotesPublishingLive === true,
-        ...(QUEUE_LIVE.has(post.vertical) ? { archive: { ideaId: dataset.ideas.find((i) => i.vertical === post.vertical && ideaOwns(i, post))?.id ?? null } } : {}),
+        archive: { ideaId: dataset.ideas.find((i) => i.vertical === post.vertical && ideaOwns(i, post))?.id ?? null },
       });
       const slots = plans.some((p) => p.kind === 'post' && p.pick === 'slot') ? slotChoices(dataset, post, now) : undefined;
       const menu = actionMenu(post, state, plans, enabled, slots);

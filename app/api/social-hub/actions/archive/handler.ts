@@ -1,5 +1,4 @@
 import type { ContentActions } from '@/lib/publishing/actions/types';
-import { ARCHIVE_ONLY, QUEUE_LIVE } from '@/lib/social-hub/queue';
 import type { ActionSpec } from '@/lib/social-hub/action-route';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -27,8 +26,7 @@ export function archiveContent(
       const ideaId = (body as { ideaId?: unknown } | null)?.ideaId ?? null;
       if (!parsed) return null;
       if (ideaId !== null && (typeof ideaId !== 'string' || !IDEA_ID.test(ideaId) || !ideaId.startsWith(`${parsed.vertical}:`))) return null;
-      // A type whose night does not follow the queue yet gets the post stopped, not an idea archive it would ignore.
-      return { ...parsed, ideaId: QUEUE_LIVE.has(parsed.vertical) || ARCHIVE_ONLY.has(parsed.vertical) ? ideaId : null };
+      return { ...parsed, ideaId };
     },
     run: async ({ vertical, target, input, ideaId }, ctx) => {
       const reject = (await actions())[vertical].reject;

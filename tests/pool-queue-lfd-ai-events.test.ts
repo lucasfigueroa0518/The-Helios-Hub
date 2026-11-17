@@ -15,7 +15,7 @@ import { Selector } from '@/lib/lfd/pick';
 import type { LfdCandidate } from '@/lib/lfd/types';
 import { choosePicks, rankCity, type RankInput } from '@/lib/networking/pick/picks';
 import { weekHolds } from '@/lib/networking/pick/rank';
-import { nightQueue, QUEUE_LIVE } from '@/lib/social-hub/queue';
+import { nightQueue } from '@/lib/social-hub/queue';
 import type { JevAsk } from '@/lib/social/jev/client';
 
 const NOW = new Date('2026-11-16T08:00:00Z');
@@ -99,14 +99,9 @@ test('AI Events without shared moves: the columns alone, as before', () => {
 
 // ── the queue API ────────────────────────────────────────────────────────────
 
-test('parseQueueAction takes Field Notes, Last Few Days and AI Events ideas (pin, place, reorder-pins, archive) once they are live', () => {
+test('parseQueueAction takes Field Notes, Last Few Days and AI Events ideas (pin, place, reorder-pins, archive)', () => {
   const ids = { field_notes: 'field_notes:tip:11111111-1111-4111-8111-111111111111', last_few_days: 'last_few_days:story:news.test/a', ai_events: 'ai_events:event:22222222-2222-4222-8222-222222222222' } as const;
   for (const [vertical, ideaId] of Object.entries(ids)) {
-    if (!QUEUE_LIVE.has(vertical)) {
-      // Builder A's config.ts change makes them live; until then the gate answers, never "Unknown content type".
-      assert.throws(() => parseQueueAction({ vertical, action: 'pin', ideaId }), (e: Error) => !/Unknown content type|Unknown idea/.test(e.message));
-      continue;
-    }
     assert.deepEqual(parseQueueAction({ vertical, action: 'pin', ideaId }), { action: 'pin', vertical, ideaId });
     assert.deepEqual(parseQueueAction({ vertical, action: 'archive', ideaId }), { action: 'archive', vertical, ideaId });
     assert.deepEqual(parseQueueAction({ vertical, action: 'place', ideaId, aboveId: null, belowId: ideaId, up: true }), { action: 'place', vertical, ideaId, aboveId: null, belowId: ideaId, up: true });

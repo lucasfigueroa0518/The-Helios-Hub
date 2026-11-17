@@ -23,7 +23,7 @@
  * keep each source's own rank. Each row carries its breakdown for the hub.
  */
 import type { Queryable } from '@/lib/stories/db';
-import { POOL_CAP, QUEUE_LIVE } from '@/lib/social-hub/queue';
+import { POOL_CAP } from '@/lib/social-hub/queue';
 import type { ScoreBreakdown } from '@/lib/social-hub/types';
 import { morningDownloadScore, rankBreakdown } from '@/lib/stories/md-score';
 import type { Series } from '@/lib/stories/render/types';
@@ -249,7 +249,6 @@ export async function hasArchiveColumn(db: Queryable): Promise<boolean> {
  * Never throws: a database without the moves table keeps its pool as it is.
  */
 async function capSeries(db: Queryable, series: Series, archiveAt: Date | null): Promise<number> {
-  if (!QUEUE_LIVE.has('stories')) return 0;
   const live = archiveAt ? 'AND p2.archived_at IS NULL' : '';
   const over = `p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
           AND p.id IN (
