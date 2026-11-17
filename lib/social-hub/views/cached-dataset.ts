@@ -50,7 +50,8 @@ const sharedCosts = unstable_cache(
   { revalidate: 600, tags: [HUB_COST_TAG] },
 );
 
-async function cachedCostPart(): Promise<CostPart> {
+/** The cost part every hub page uses (10 min, dropped when a run finishes). */
+export async function cachedCostPart(): Promise<CostPart> {
   try {
     return await sharedCosts();
   } catch (error) {
