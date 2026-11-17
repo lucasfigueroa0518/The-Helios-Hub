@@ -31,3 +31,23 @@ What was tried, what was measured, what was kept. Newest last.
 - **Payloads**: `/trello` sends 15.4 MB of HTML (the entire workspace, including 30 K activity rows), `/api/send-queue` sends 9.2 MB of JSON, and the music library sends 1.9 MB of HTML (800 rows).
 - **Frontend**: Next's "First Load JS" leaves out the root layout's chunks. Every signed-in page carries about 57 KB more than reported, including framer-motion (37 KB gz), which only the sidebar's mobile drawer uses. `@anthropic-ai/sdk` (16 KB gz) is shipped to `/campaigns/[id]/draft` and `/prospect` through a pure helper's module. The brand font is a 244 KB OTF, preloaded on every page and downloaded **twice** on dashboards pages.
 - **Measurement tools are not devDependencies.** Adding them changed `package.json` and `package-lock.json`, which broke `tests/social-hub-scope.test.ts`. That test pins both files' hashes on purpose (the baseline is in `planning/Social Hub/scope-baseline.json`). Both files are back to their originals, and `perf/tools.sh` installs the pinned tools with `npm install --no-save`. I dropped autocannon: `perf/measure.mjs` and `perf/lib/contention.mjs` do the timing and load work themselves.
+
+## Phase 3 (backend), measured on Build A (perf/build-a.json) plus function-level A/B benchmarks
+
+Kept (one commit each, numbers in the commit messages and REPORT.md):
+
+1. progress N+1, memoized per key: with a 40-set backlog, 51 → 14 queries and 111 → 28 ms. Unchanged with realistic data.
+2. reels `loadSlates`, set-based: `/api/reels/overview` warm p95 1500 → 122 ms. The statement went 632 → 5 ms (it had been 627 ms of JIT).
+3. outreach-stats daily series, grouped reads: warm p95 237 → 49 ms.
+4. analytics summary in two waves: warm p95 447 → 260 ms.
+5. cost page in one wave: warm p95 859 → 320 ms.
+6. run-today uses the cached cost part: warm p95 770 → 530 ms, 103 → 89 queries.
+7. render-path signing timeout of 1.5 s: against a 5 s Storage stub, 5040 → 1505 ms.
+8. one Stories read per rebuild: full cold rebuild 888 → 522 ms (function benchmark).
+9. reel facts headline read once: statement 92 → 18 ms with JIT gone. Rebuild wall time is unchanged (it runs off the critical path); kept for DB CPU.
+10. single-flight hub rebuild: under burst load, rebuilds 25 → 3 in 3 minutes and probe p99 1296 → 118 ms. The probe's p50 moved 20 → 55 ms only because of the shared 250 ms cadence; with an offset cadence (237 ms) it is 18.5 ms, the same as no load.
+
+Reverted:
+
+- **Index `email_send_queue (campaign_id, status, schedule_date)`**. The planner used it (the per-campaign probe went 0.28 → 0.014 ms × 47), and the campaign-list statement got about 20% faster under `EXPLAIN ANALYZE`. But back to back, 40 runs each, the routes didn't improve: `/api/campaigns` p50 128 ms without versus 132 ms with, and outreach-stats p50 44 versus 46 ms. JIT (39 ms) and the other per-campaign subplans dominate. Rule 2: dropped. The migration was never committed, and the local DB has it rolled back.
+- **Hub-read cap** (hub reads limited to pool size − 1, so one slot is always free): measured after single-flight. Probe tail under a burst improved modestly (p99 ≈118 → 97 ms, max 592 → 491 ms; `perf/experiments/contention-burst-B-cap.json`). But a full cold rebuild got about 14% slower (median 522–533 → 603 ms, function benchmark), and users wait on that rebuild on a cold hub page. Single-flight already removed the cause (25 → 3 rebuilds). The remaining gain does not clearly beat the cost, so it was reverted.

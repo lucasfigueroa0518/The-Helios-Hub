@@ -1,0 +1,1438 @@
+{
+  "out": "build-a",
+  "startedAt": "2026-11-17T20:30:27.504Z",
+  "commit": "0d5ca11",
+  "settings": {
+    "runs": 30,
+    "coldCycles": 30,
+    "warmup": 3,
+    "dbOneWayMs": 2.5,
+    "budget": {
+      "ttfbMs": 150,
+      "totalMs": 500,
+      "apiServerMs": 150,
+      "jsKB": 150
+    }
+  },
+  "routes": [
+    {
+      "id": "page:/ai-events",
+      "kind": "page",
+      "method": "GET",
+      "path": "/ai-events",
+      "url": "/ai-events",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/analytics/summary",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/analytics/summary",
+      "url": "/api/analytics/summary?period=week",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/campaigns/[id]/outreach-stats",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/campaigns/[id]/outreach-stats",
+      "url": "/api/campaigns/fc123e21-f5b4-478e-a655-47c6e6266ad2/outreach-stats",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/campaigns",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/campaigns",
+      "url": "/api/campaigns",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/content-type/progress",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/content-type/progress",
+      "url": "/api/content-type/progress?type=all",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/content-type/run-today",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/content-type/run-today",
+      "url": "/api/content-type/run-today",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/hub/warm",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/hub/warm",
+      "url": "/api/hub/warm?path=%2Fsocial",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/inboxes/[id]",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/inboxes/[id]",
+      "url": "/api/inboxes/02f92a46-8b11-4610-8836-12024f694aa9",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/reels/overview",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/reels/overview",
+      "url": "/api/reels/overview",
+      "auth": "session"
+    },
+    {
+      "id": "api:GET:/api/send-queue",
+      "kind": "api",
+      "method": "GET",
+      "path": "/api/send-queue",
+      "url": "/api/send-queue",
+      "auth": "session"
+    },
+    {
+      "id": "page:/carousels",
+      "kind": "page",
+      "method": "GET",
+      "path": "/carousels",
+      "url": "/carousels",
+      "auth": "session"
+    },
+    {
+      "id": "page:/morning-download",
+      "kind": "page",
+      "method": "GET",
+      "path": "/morning-download",
+      "url": "/morning-download",
+      "auth": "session"
+    },
+    {
+      "id": "page:/social/analytics/cost",
+      "kind": "page",
+      "method": "GET",
+      "path": "/social/analytics/cost",
+      "url": "/social/analytics/cost",
+      "auth": "session"
+    },
+    {
+      "id": "page:/social",
+      "kind": "page",
+      "method": "GET",
+      "path": "/social",
+      "url": "/social",
+      "auth": "session"
+    }
+  ],
+  "warm": {
+    "page:/ai-events": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 81255,
+      "ttfb": {
+        "p50": 53.9,
+        "p95": 67,
+        "p99": 113.7
+      },
+      "total": {
+        "p50": 76.5,
+        "p95": 90.8,
+        "p99": 135.7
+      }
+    },
+    "api:GET:/api/analytics/summary": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 313605,
+      "ttfb": {
+        "p50": 216.2,
+        "p95": 259.5,
+        "p99": 263.1
+      },
+      "total": {
+        "p50": 217.2,
+        "p95": 260.1,
+        "p99": 263.7
+      }
+    },
+    "api:GET:/api/campaigns/[id]/outreach-stats": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1049,
+      "ttfb": {
+        "p50": 38.4,
+        "p95": 49.2,
+        "p99": 49.8
+      },
+      "total": {
+        "p50": 38.6,
+        "p95": 49.3,
+        "p99": 50
+      }
+    },
+    "api:GET:/api/campaigns": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 84932,
+      "ttfb": {
+        "p50": 131.8,
+        "p95": 157.5,
+        "p99": 157.5
+      },
+      "total": {
+        "p50": 132,
+        "p95": 157.7,
+        "p99": 158.1
+      }
+    },
+    "api:GET:/api/content-type/progress": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1005,
+      "ttfb": {
+        "p50": 29.4,
+        "p95": 32.8,
+        "p99": 33.3
+      },
+      "total": {
+        "p50": 29.5,
+        "p95": 32.9,
+        "p99": 33.4
+      }
+    },
+    "api:GET:/api/content-type/run-today": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 2315,
+      "ttfb": {
+        "p50": 473.5,
+        "p95": 529.5,
+        "p99": 573.3
+      },
+      "total": {
+        "p50": 473.7,
+        "p95": 529.6,
+        "p99": 573.4
+      }
+    },
+    "api:GET:/api/hub/warm": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        204
+      ],
+      "bytes": 0,
+      "ttfb": {
+        "p50": 45.2,
+        "p95": 59.8,
+        "p99": 60.3
+      },
+      "total": {
+        "p50": 45.3,
+        "p95": 59.8,
+        "p99": 60.3
+      }
+    },
+    "api:GET:/api/inboxes/[id]": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1196,
+      "ttfb": {
+        "p50": 13.9,
+        "p95": 18.1,
+        "p99": 18.6
+      },
+      "total": {
+        "p50": 14.1,
+        "p95": 18.2,
+        "p99": 18.7
+      }
+    },
+    "api:GET:/api/reels/overview": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 260838,
+      "ttfb": {
+        "p50": 114.5,
+        "p95": 121.8,
+        "p99": 122.4
+      },
+      "total": {
+        "p50": 115.1,
+        "p95": 122.2,
+        "p99": 122.8
+      }
+    },
+    "api:GET:/api/send-queue": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 9417084,
+      "ttfb": {
+        "p50": 561.9,
+        "p95": 668,
+        "p99": 705.7
+      },
+      "total": {
+        "p50": 573.5,
+        "p95": 675.8,
+        "p99": 712
+      }
+    },
+    "page:/carousels": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 482702,
+      "ttfb": {
+        "p50": 53.7,
+        "p95": 73.5,
+        "p99": 74.2
+      },
+      "total": {
+        "p50": 146.2,
+        "p95": 181.5,
+        "p99": 197.8
+      }
+    },
+    "page:/morning-download": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1072260,
+      "ttfb": {
+        "p50": 49.1,
+        "p95": 64.8,
+        "p99": 75
+      },
+      "total": {
+        "p50": 214.9,
+        "p95": 285.5,
+        "p99": 303
+      }
+    },
+    "page:/social/analytics/cost": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 520782,
+      "ttfb": {
+        "p50": 56.1,
+        "p95": 73.3,
+        "p99": 74.2
+      },
+      "total": {
+        "p50": 277.3,
+        "p95": 320.1,
+        "p99": 339.9
+      }
+    },
+    "page:/social": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 98327,
+      "ttfb": {
+        "p50": 53.7,
+        "p95": 75.1,
+        "p99": 109.3
+      },
+      "total": {
+        "p50": 86.4,
+        "p95": 116.2,
+        "p99": 140.8
+      }
+    }
+  },
+  "cold": {
+    "page:/ai-events": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 81255,
+      "ttfb": {
+        "p50": 70,
+        "p95": 122.6,
+        "p99": 122.6
+      },
+      "total": {
+        "p50": 102,
+        "p95": 1211.5,
+        "p99": 1283.8
+      }
+    },
+    "api:GET:/api/analytics/summary": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 313605,
+      "ttfb": {
+        "p50": 333.1,
+        "p95": 423.9,
+        "p99": 449.4
+      },
+      "total": {
+        "p50": 333.7,
+        "p95": 424.4,
+        "p99": 449.9
+      }
+    },
+    "api:GET:/api/campaigns/[id]/outreach-stats": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1049,
+      "ttfb": {
+        "p50": 55.6,
+        "p95": 76.5,
+        "p99": 99.9
+      },
+      "total": {
+        "p50": 55.8,
+        "p95": 77,
+        "p99": 100
+      }
+    },
+    "api:GET:/api/campaigns": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 84932,
+      "ttfb": {
+        "p50": 163.6,
+        "p95": 204.2,
+        "p99": 211.1
+      },
+      "total": {
+        "p50": 164,
+        "p95": 204.8,
+        "p99": 211.8
+      }
+    },
+    "api:GET:/api/content-type/progress": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1005,
+      "ttfb": {
+        "p50": 39.1,
+        "p95": 67,
+        "p99": 78.7
+      },
+      "total": {
+        "p50": 39.4,
+        "p95": 67.2,
+        "p99": 78.9
+      }
+    },
+    "api:GET:/api/content-type/run-today": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 2315,
+      "ttfb": {
+        "p50": 767.7,
+        "p95": 1011.9,
+        "p99": 1179.5
+      },
+      "total": {
+        "p50": 767.9,
+        "p95": 1012.3,
+        "p99": 1180
+      }
+    },
+    "api:GET:/api/hub/warm": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        204
+      ],
+      "bytes": 0,
+      "ttfb": {
+        "p50": 53.4,
+        "p95": 766.6,
+        "p99": 946.4
+      },
+      "total": {
+        "p50": 54.3,
+        "p95": 766.7,
+        "p99": 946.5
+      }
+    },
+    "api:GET:/api/inboxes/[id]": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1196,
+      "ttfb": {
+        "p50": 26.3,
+        "p95": 49.7,
+        "p99": 51.8
+      },
+      "total": {
+        "p50": 26.4,
+        "p95": 49.9,
+        "p99": 51.9
+      }
+    },
+    "api:GET:/api/reels/overview": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 260838,
+      "ttfb": {
+        "p50": 135.5,
+        "p95": 183.7,
+        "p99": 206.4
+      },
+      "total": {
+        "p50": 135.8,
+        "p95": 184.4,
+        "p99": 207.2
+      }
+    },
+    "api:GET:/api/send-queue": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 9417084,
+      "ttfb": {
+        "p50": 578.4,
+        "p95": 843.9,
+        "p99": 862.4
+      },
+      "total": {
+        "p50": 589.5,
+        "p95": 854.9,
+        "p99": 875.9
+      }
+    },
+    "page:/carousels": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 482702,
+      "ttfb": {
+        "p50": 68,
+        "p95": 102.8,
+        "p99": 113.8
+      },
+      "total": {
+        "p50": 159.9,
+        "p95": 1141.2,
+        "p99": 1158.2
+      }
+    },
+    "page:/morning-download": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1072258,
+      "ttfb": {
+        "p50": 80.6,
+        "p95": 168.5,
+        "p99": 179.6
+      },
+      "total": {
+        "p50": 267.5,
+        "p95": 1337.5,
+        "p99": 1386.6
+      }
+    },
+    "page:/social/analytics/cost": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 520782,
+      "ttfb": {
+        "p50": 91.9,
+        "p95": 115.6,
+        "p99": 122.6
+      },
+      "total": {
+        "p50": 470.4,
+        "p95": 1586.2,
+        "p99": 1622.6
+      }
+    },
+    "page:/social": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 98327,
+      "ttfb": {
+        "p50": 90.3,
+        "p95": 148.3,
+        "p99": 159.8
+      },
+      "total": {
+        "p50": 214.2,
+        "p95": 1269.3,
+        "p99": 1362.8
+      }
+    }
+  },
+  "trace": {
+    "page:/ai-events": {
+      "cold": {
+        "ms": 1090.6,
+        "queryCount": 75,
+        "queryMs": 1369.4,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT a.id AS attempt_id, a.vertical, CASE WHEN ci.native_ref ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ci.native_ref END AS content_ref, COALESCE(a.payload->>'post_idea_id', ci.idea_ref) AS idea_ref, a.status, a.trigger, a.requested_at::text AS requested_at, a.finished_at::text AS finished_at, a.media_id, a.permalink, a.error, a.caption, a.payload, s.id AS schedule_",
+            "ms": 182.96,
+            "rows": 648
+          },
+          {
+            "sql": "SELECT media_id, ny_date::text AS ny_date, vertical, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate, follows, profile_visits FROM social_hub.media_insights WHERE vertical = ANY($1::text[]) ORDER BY media_id, ny_date",
+            "ms": 136.73,
+            "rows": 4536
+          },
+          {
+            "sql": "SELECT DISTINCT m.post_idea_id, m.url, m.headline FROM reels.idea_sources_v m WHERE m.role <> 'merged_duplicate' AND m.post_idea_id = ANY($1::uuid[])",
+            "ms": 63.59,
+            "rows": 144
+          },
+          {
+            "sql": "SELECT p.id::text AS post_id, p.run_id::text AS run_id, p.week_key, p.slug, p.ny_date::text AS ny_date, p.status, p.hook, p.look, p.caption, p.cities, cardinality(p.event_ids) AS event_count, p.created_at::text AS created_at, p.updated_at::text AS updated_at, p.published_at::text AS published_at, -- Slide outline the hub paints: layout, alt, and the city / pick titles. Cities stay on p.cities. CAS",
+            "ms": 57.4,
+            "rows": 20
+          },
+          {
+            "sql": "SELECT id, run_id, component, vendor, (created_at >= COALESCE((SELECT (value #>> '{}')::timestamptz FROM reels.settings WHERE key = 'prod_spend_since'), '2026-09-30T04:00:00Z'::timestamptz)) AS production, usd::text AS usd, to_char((created_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD') AS ny_date FROM reels.cost_events",
+            "ms": 56.6,
+            "rows": 6000
+          }
+        ]
+      },
+      "warm": {
+        "ms": 101.9,
+        "queryCount": 4,
+        "queryMs": 21.2,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 5.54,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT key, value FROM ai_events.settings",
+            "ms": 5.28,
+            "rows": 6
+          },
+          {
+            "sql": "SELECT (SELECT max(finished_at)::text FROM social_hub.refreshes WHERE status IN ('ok', 'partial')) AS last, EXISTS (SELECT 1 FROM social_hub.refreshes WHERE status IN ('requested', 'running')) AS pending",
+            "ms": 5.26,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "ms": 5.09,
+            "rows": 1
+          }
+        ]
+      }
+    },
+    "api:GET:/api/analytics/summary": {
+      "cold": {
+        "ms": 347.8,
+        "queryCount": 25,
+        "queryMs": 426.7,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "WITH params AS ( SELECT $1::timestamptz AS win_from, $2::timestamptz AS win_to ), filtered_campaigns AS ( SELECT c.id, c.owner_id, coalesce(c.kind, 'manual') AS kind FROM outreach.campaigns c WHERE c.id = ANY($3::uuid[]) ), enrichment_targets AS ( SELECT DISTINCT job.id AS job_id, cl.lead_id, r.campaign_id, fc.owner_id, job.actual_cost_usd AS job_cost FROM outreach.company_research_jobs job JOIN L",
+            "ms": 199.38,
+            "rows": 6388
+          },
+          {
+            "sql": "SELECT c.id::text AS campaign_id, c.owner_id::text AS user_id, u.email AS user_email, u.display_name AS user_name, si.slug AS identity_slug, lower(s.from_email) AS from_email, count(*) FILTER ( WHERE i.delivery_snapshot ? 'sentAt' OR i.delivery_snapshot ? 'gmailMessageId' OR s.status = 'sent' )::text AS emails_sent, count(*) FILTER (WHERE s.status = 'sent' AND s.bounced_at IS NULL)::text AS emails",
+            "ms": 46.77,
+            "rows": 277
+          },
+          {
+            "sql": "SELECT c.id::text AS id, c.name, c.owner_id::text AS owner_id, u.display_name AS owner_name, u.email AS owner_email, c.created_at, COALESCE((SELECT array_agg(ct.tag ORDER BY ct.tag) FROM outreach.campaign_tags ct WHERE ct.campaign_id = c.id), '{}'::text[]) AS tags, COALESCE((SELECT json_agg(json_build_object('tag', ct.tag, 'color', ct.color) ORDER BY ct.tag) FROM outreach.campaign_tags ct WHERE ct",
+            "ms": 34.88,
+            "rows": 60
+          },
+          {
+            "sql": "SELECT c.id::text AS campaign_id, c.owner_id::text AS user_id, count(*)::text AS jobs_total, count(*) FILTER (WHERE coalesce(j.attempt_count, 1) > 1)::text AS jobs_retried FROM outreach.drafting_jobs j JOIN outreach.drafting_items i ON i.id = j.drafting_item_id JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id JOIN outreach.campaigns c ON c.id = w.campaign_id WHERE j.created_at >= $1::t",
+            "ms": 26.1,
+            "rows": 57
+          },
+          {
+            "sql": "SELECT DISTINCT cl.lead_id::text AS lead_id FROM outreach.campaign_leads cl WHERE cl.run_id = ANY($1::uuid[]) UNION SELECT DISTINCT l.id::text AS lead_id FROM outreach.leads l WHERE l.source_run_id = ANY($1::uuid[])",
+            "ms": 8.91,
+            "rows": 2545
+          }
+        ]
+      },
+      "warm": {
+        "ms": 240.7,
+        "queryCount": 25,
+        "queryMs": 344.5,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "WITH params AS ( SELECT $1::timestamptz AS win_from, $2::timestamptz AS win_to ), filtered_campaigns AS ( SELECT c.id, c.owner_id, coalesce(c.kind, 'manual') AS kind FROM outreach.campaigns c WHERE c.id = ANY($3::uuid[]) ), enrichment_targets AS ( SELECT DISTINCT job.id AS job_id, cl.lead_id, r.campaign_id, fc.owner_id, job.actual_cost_usd AS job_cost FROM outreach.company_research_jobs job JOIN L",
+            "ms": 141.65,
+            "rows": 6388
+          },
+          {
+            "sql": "SELECT c.id::text AS campaign_id, c.owner_id::text AS user_id, u.email AS user_email, u.display_name AS user_name, si.slug AS identity_slug, lower(s.from_email) AS from_email, count(*) FILTER ( WHERE i.delivery_snapshot ? 'sentAt' OR i.delivery_snapshot ? 'gmailMessageId' OR s.status = 'sent' )::text AS emails_sent, count(*) FILTER (WHERE s.status = 'sent' AND s.bounced_at IS NULL)::text AS emails",
+            "ms": 42.31,
+            "rows": 277
+          },
+          {
+            "sql": "SELECT c.id::text AS id, c.name, c.owner_id::text AS owner_id, u.display_name AS owner_name, u.email AS owner_email, c.created_at, COALESCE((SELECT array_agg(ct.tag ORDER BY ct.tag) FROM outreach.campaign_tags ct WHERE ct.campaign_id = c.id), '{}'::text[]) AS tags, COALESCE((SELECT json_agg(json_build_object('tag', ct.tag, 'color', ct.color) ORDER BY ct.tag) FROM outreach.campaign_tags ct WHERE ct",
+            "ms": 22.32,
+            "rows": 60
+          },
+          {
+            "sql": "SELECT c.id::text AS campaign_id, c.owner_id::text AS user_id, count(*)::text AS jobs_total, count(*) FILTER (WHERE coalesce(j.attempt_count, 1) > 1)::text AS jobs_retried FROM outreach.drafting_jobs j JOIN outreach.drafting_items i ON i.id = j.drafting_item_id JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id JOIN outreach.campaigns c ON c.id = w.campaign_id WHERE j.created_at >= $1::t",
+            "ms": 19.69,
+            "rows": 57
+          },
+          {
+            "sql": "SELECT DISTINCT cl.lead_id::text AS lead_id FROM outreach.campaign_leads cl WHERE cl.run_id = ANY($1::uuid[]) UNION SELECT DISTINCT l.id::text AS lead_id FROM outreach.leads l WHERE l.source_run_id = ANY($1::uuid[])",
+            "ms": 8.19,
+            "rows": 2545
+          }
+        ]
+      }
+    },
+    "api:GET:/api/campaigns/[id]/outreach-stats": {
+      "cold": {
+        "ms": 52,
+        "queryCount": 3,
+        "queryMs": 34.6,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "WITH failed_items AS ( SELECT q.drafting_item_id, q.recipient_name, q.to_email, q.updated_at FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'failed' AND NOT EXISTS ( SELECT 1 FROM outreach.email_sends s WHERE s.drafting_item_id = q.drafting_item_id AND s.status = 'sent' ) ), retry_items AS ( SELECT i.id AS drafting_item_id FROM outreach.drafting_items i JOIN outreach.draf",
+            "ms": 18.98,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment, COALESCE(c.kind, 'manual') AS kind, c.auto_status, c.auto_error, c.emails_per_day, c.follow_up_enabled, c.sender_identity_slug, c.delivery_settings, ( SELECT l.status FROM outreach.campaign_lanes l WHERE l.campaign_id = c.id ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DE",
+            "ms": 9.77,
+            "rows": 1
+          },
+          {
+            "sql": "WITH days AS ( SELECT gs::date AS day FROM generate_series(($2::date - 13), $2::date, interval '1 day') AS gs ), sent AS ( SELECT q.schedule_date AS day, count(*)::int AS n FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'sent' AND q.schedule_date BETWEEN ($2::date - 13) AND $2::date GROUP BY q.schedule_date ), attached AS ( SELECT cl.sourced_on AS day, count(*)::int AS n ",
+            "ms": 5.84,
+            "rows": 14
+          }
+        ]
+      },
+      "warm": {
+        "ms": 39.8,
+        "queryCount": 3,
+        "queryMs": 29.2,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "WITH failed_items AS ( SELECT q.drafting_item_id, q.recipient_name, q.to_email, q.updated_at FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'failed' AND NOT EXISTS ( SELECT 1 FROM outreach.email_sends s WHERE s.drafting_item_id = q.drafting_item_id AND s.status = 'sent' ) ), retry_items AS ( SELECT i.id AS drafting_item_id FROM outreach.drafting_items i JOIN outreach.draf",
+            "ms": 16.06,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment, COALESCE(c.kind, 'manual') AS kind, c.auto_status, c.auto_error, c.emails_per_day, c.follow_up_enabled, c.sender_identity_slug, c.delivery_settings, ( SELECT l.status FROM outreach.campaign_lanes l WHERE l.campaign_id = c.id ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DE",
+            "ms": 7.7,
+            "rows": 1
+          },
+          {
+            "sql": "WITH days AS ( SELECT gs::date AS day FROM generate_series(($2::date - 13), $2::date, interval '1 day') AS gs ), sent AS ( SELECT q.schedule_date AS day, count(*)::int AS n FROM outreach.email_send_queue q WHERE q.campaign_id = $1 AND q.status = 'sent' AND q.schedule_date BETWEEN ($2::date - 13) AND $2::date GROUP BY q.schedule_date ), attached AS ( SELECT cl.sourced_on AS day, count(*)::int AS n ",
+            "ms": 5.46,
+            "rows": 14
+          }
+        ]
+      }
+    },
+    "api:GET:/api/campaigns": {
+      "cold": {
+        "ms": 134.1,
+        "queryCount": 1,
+        "queryMs": 118.5,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment, COALESCE(c.kind, 'manual') AS kind, c.auto_status, c.auto_error, c.emails_per_day, c.follow_up_enabled, c.sender_identity_slug, c.delivery_settings, ( SELECT l.status FROM outreach.campaign_lanes l WHERE l.campaign_id = c.id ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DE",
+            "ms": 118.53,
+            "rows": 47
+          }
+        ]
+      },
+      "warm": {
+        "ms": 147.2,
+        "queryCount": 1,
+        "queryMs": 136.6,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment, COALESCE(c.kind, 'manual') AS kind, c.auto_status, c.auto_error, c.emails_per_day, c.follow_up_enabled, c.sender_identity_slug, c.delivery_settings, ( SELECT l.status FROM outreach.campaign_lanes l WHERE l.campaign_id = c.id ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DE",
+            "ms": 136.62,
+            "rows": 47
+          }
+        ]
+      }
+    },
+    "api:GET:/api/content-type/progress": {
+      "cold": {
+        "ms": 38,
+        "queryCount": 11,
+        "queryMs": 55.5,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT extract(epoch FROM finished_at - started_at) AS secs FROM explainers.jobs WHERE status = 'ok' AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15",
+            "ms": 5.9,
+            "rows": 15
+          },
+          {
+            "sql": "SELECT j.id::text, j.topic_id::text AS topic_id, j.status, j.stage, j.error, j.requested_at::text AS requested_at, j.started_at::text AS started_at, t.title FROM explainers.jobs j JOIN explainers.topics t ON t.id = j.topic_id WHERE j.id IN ( SELECT DISTINCT ON (topic_id) id FROM explainers.jobs ORDER BY topic_id, requested_at DESC, seq DESC ) AND j.status IN ('requested', 'running', 'failed') AND ",
+            "ms": 5.85,
+            "rows": 33
+          },
+          {
+            "sql": "SELECT id::text, series, status, created_at::text AS requested_at, claimed_at::text AS started_at FROM stories.sets WHERE status IN ('requested', 'building') ORDER BY created_at",
+            "ms": 5.49,
+            "rows": 0
+          },
+          {
+            "sql": "SELECT id::text, status, story_ids, requested_at::text AS requested_at, started_at::text AS started_at FROM social.runs WHERE kind = 'daily' AND status IN ('requested', 'running') ORDER BY requested_at",
+            "ms": 5.28,
+            "rows": 0
+          },
+          {
+            "sql": "SELECT id::text, kind, status, requested_at::text AS requested_at, started_at::text AS started_at FROM ai_events.runs WHERE status IN ('requested', 'running') ORDER BY requested_at",
+            "ms": 5.21,
+            "rows": 0
+          }
+        ]
+      },
+      "warm": {
+        "ms": 28,
+        "queryCount": 11,
+        "queryMs": 53.6,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT j.id::text AS id, j.pitch_id::text AS pitch_id, p.title, j.status, j.stage, j.error, j.requested_at::text AS requested_at, j.started_at::text AS started_at FROM reel_ai_drama.jobs j JOIN reel_ai_drama.pitches p ON p.id = j.pitch_id WHERE j.status IN ('queued', 'running') OR (j.status = 'failed' AND j.finished_at > now() - interval '12 hours') ORDER BY j.seq",
+            "ms": 5.84,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT id::text, kind, status, requested_at::text AS requested_at, started_at::text AS started_at FROM field_notes.runs WHERE status IN ('requested', 'running') ORDER BY requested_at",
+            "ms": 5.5,
+            "rows": 0
+          },
+          {
+            "sql": "SELECT id::text, kind, status, requested_at::text AS requested_at, started_at::text AS started_at FROM ai_events.runs WHERE status IN ('requested', 'running') ORDER BY requested_at",
+            "ms": 5.42,
+            "rows": 0
+          },
+          {
+            "sql": "SELECT id::text, status, requested_at::text AS requested_at, started_at::text AS started_at FROM lfd.runs WHERE status IN ('requested', 'running') ORDER BY requested_at",
+            "ms": 5.26,
+            "rows": 0
+          },
+          {
+            "sql": "SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY s)::float8 AS median FROM ( SELECT extract(epoch FROM finished_at - started_at) AS s FROM reel_ai_drama.jobs WHERE status = 'ok' AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 10) t",
+            "ms": 5.08,
+            "rows": 1
+          }
+        ]
+      }
+    },
+    "api:GET:/api/content-type/run-today": {
+      "cold": {
+        "ms": 726.9,
+        "queryCount": 89,
+        "queryMs": 1171.9,
+        "repeated": [
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "n": 8
+          }
+        ],
+        "slowest": [
+          {
+            "sql": "SELECT a.id AS attempt_id, a.vertical, CASE WHEN ci.native_ref ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ci.native_ref END AS content_ref, COALESCE(a.payload->>'post_idea_id', ci.idea_ref) AS idea_ref, a.status, a.trigger, a.requested_at::text AS requested_at, a.finished_at::text AS finished_at, a.media_id, a.permalink, a.error, a.caption, a.payload, s.id AS schedule_",
+            "ms": 108.76,
+            "rows": 648
+          },
+          {
+            "sql": "SELECT media_id, ny_date::text AS ny_date, vertical, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate, follows, profile_visits FROM social_hub.media_insights WHERE vertical = ANY($1::text[]) ORDER BY media_id, ny_date",
+            "ms": 88.43,
+            "rows": 4536
+          },
+          {
+            "sql": "SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style, -- The build log (photo_log and the rest) is for the stories worker. Pages read stories, story, pair, question, url. (s.payload - 'photo_log' - 'historyKeys' - 'fvpSkip' - 'gtn' - 'gtnSkip' - 'triviaSkip' - 'log' - 'pool') AS payload, s.publish_at::text AS publish_at, (to_jsonb(s)->>'slot_minute')::int AS sl",
+            "ms": 86.67,
+            "rows": 175
+          },
+          {
+            "sql": "SELECT f.id AS frame_id, f.set_id, f.seq, f.role, f.template, f.backdrop, f.storage_path, f.flagged, f.ig_media_id, f.published_at::text AS published_at FROM stories.frames f JOIN stories.sets s ON s.id = f.set_id WHERE s.status NOT IN ('requested', 'building', 'rejected') ORDER BY f.set_id, f.seq",
+            "ms": 51.33,
+            "rows": 1048
+          },
+          {
+            "sql": "SELECT j.id::text AS job_id, j.pitch_id::text AS pitch_id, j.status, j.trigger, j.mode, j.stage, j.spend_usd, j.spend_cap_usd, j.requested_at::text AS requested_at, j.started_at::text AS started_at, j.finished_at::text AS finished_at, j.error, j.kill_reason, j.night_date::text AS night_date, CASE WHEN jsonb_typeof(j.flags) = 'array' THEN jsonb_array_length(j.flags) ELSE 0 END AS flags, p.title, CO",
+            "ms": 40.25,
+            "rows": 319
+          }
+        ]
+      },
+      "warm": {
+        "ms": 478.6,
+        "queryCount": 89,
+        "queryMs": 671.8,
+        "repeated": [
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "n": 8
+          }
+        ],
+        "slowest": [
+          {
+            "sql": "SELECT a.id AS attempt_id, a.vertical, CASE WHEN ci.native_ref ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ci.native_ref END AS content_ref, COALESCE(a.payload->>'post_idea_id', ci.idea_ref) AS idea_ref, a.status, a.trigger, a.requested_at::text AS requested_at, a.finished_at::text AS finished_at, a.media_id, a.permalink, a.error, a.caption, a.payload, s.id AS schedule_",
+            "ms": 44.15,
+            "rows": 648
+          },
+          {
+            "sql": "SELECT p.id AS post_id, p.run_id, p.slug, p.story_id, p.title, p.status, p.caption, p.created_at::text AS created_at, p.published_at::text AS published_at, -- The hub reads source, story type, source URL, and each slide's copy. The rest of the render stays in the row. CASE WHEN p.render IS NULL THEN NULL ELSE jsonb_strip_nulls(jsonb_build_object( 'source', p.render->'source', 'storyType', p.render",
+            "ms": 31.6,
+            "rows": 150
+          },
+          {
+            "sql": "SELECT p.id::text AS pitch_id, p.title, COALESCE(p.pitch->>'brief', p.pitch->>'pitch') AS brief, p.status, p.origin, p.rank_score, p.drama_score, p.material_score, p.visuals_grade, p.event_date::text AS event_date, p.central_player_id, p.created_at::text AS created_at, (SELECT count(*)::int FROM reel_ai_drama.jobs o WHERE o.pitch_id = p.id AND o.status = 'ok') AS ok_jobs, (SELECT max(o.finished_at",
+            "ms": 25.05,
+            "rows": 166
+          },
+          {
+            "sql": "SELECT media_id, ny_date::text AS ny_date, vertical, views, reach, likes, comments, saved, shares, reposts, total_interactions, avg_watch_time_ms, total_watch_time_ms, skip_rate, follows, profile_visits FROM social_hub.media_insights WHERE vertical = ANY($1::text[]) ORDER BY media_id, ny_date",
+            "ms": 23.53,
+            "rows": 4536
+          },
+          {
+            "sql": "SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger, s.style, -- The build log (photo_log and the rest) is for the stories worker. Pages read stories, story, pair, question, url. (s.payload - 'photo_log' - 'historyKeys' - 'fvpSkip' - 'gtn' - 'gtnSkip' - 'triviaSkip' - 'log' - 'pool') AS payload, s.publish_at::text AS publish_at, (to_jsonb(s)->>'slot_minute')::int AS sl",
+            "ms": 19.47,
+            "rows": 175
+          }
+        ]
+      }
+    },
+    "api:GET:/api/hub/warm": {
+      "cold": {
+        "ms": 52,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      },
+      "warm": {
+        "ms": 41.9,
+        "queryCount": 0,
+        "queryMs": 0,
+        "repeated": [],
+        "slowest": []
+      }
+    },
+    "api:GET:/api/inboxes/[id]": {
+      "cold": {
+        "ms": 30.7,
+        "queryCount": 1,
+        "queryMs": 7.2,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug, i.display_name AS identity_display_name, lower(ib.email) AS email, ib.domain, ib.sort_order, ib.is_primary, ib.enabled, ib.lifecycle_stage, ib.stage_entered_at, ib.stage_plan, ib.rest_reason, ib.rest_cycles, ib.from_name, ib.signature_html, ib.provisioning_checklist, ib.smartlead_email_account_id, ib.sl_status, ib.sl_max_email_per_",
+            "ms": 7.22,
+            "rows": 1
+          }
+        ]
+      },
+      "warm": {
+        "ms": 15.3,
+        "queryCount": 1,
+        "queryMs": 6.1,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug, i.display_name AS identity_display_name, lower(ib.email) AS email, ib.domain, ib.sort_order, ib.is_primary, ib.enabled, ib.lifecycle_stage, ib.stage_entered_at, ib.stage_plan, ib.rest_reason, ib.rest_cycles, ib.from_name, ib.signature_html, ib.provisioning_checklist, ib.smartlead_email_account_id, ib.sl_status, ib.sl_max_email_per_",
+            "ms": 6.14,
+            "rows": 1
+          }
+        ]
+      }
+    },
+    "api:GET:/api/reels/overview": {
+      "cold": {
+        "ms": 138.7,
+        "queryCount": 43,
+        "queryMs": 276.4,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "WITH scores AS ( SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected, s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score, s.value_score, s.blockbuster, s.confidence, s.components FROM reels.idea_scores s WHERE s.slate_id = ANY($1::uuid[]) AND ($2::boolean = false OR s.selected) ), members AS ( SELECT m.post_idea_id, jsonb_agg(m.headline ORDER BY CASE m.role WHEN '",
+            "ms": 12.84,
+            "rows": 132
+          },
+          {
+            "sql": "SELECT DISTINCT ON (ny_date) id, ny_date::text AS ny_date, scored_at, (SELECT count(*)::int FROM reels.idea_scores s WHERE s.slate_id = sl.id) AS score_count, (SELECT count(*)::int FROM reels.idea_scores s WHERE s.slate_id = sl.id AND s.selected) AS selected_count FROM reels.score_slates sl ORDER BY ny_date DESC, scored_at DESC",
+            "ms": 12.43,
+            "rows": 28
+          },
+          {
+            "sql": "SELECT value FROM reels.settings WHERE key = $1",
+            "ms": 10.32,
+            "rows": 1
+          },
+          {
+            "sql": "WITH scores AS ( SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected, s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score, s.value_score, s.blockbuster, s.confidence, s.components FROM reels.idea_scores s WHERE s.slate_id = ANY($1::uuid[]) AND ($2::boolean = false OR s.selected) ), members AS ( SELECT m.post_idea_id, jsonb_agg(m.headline ORDER BY CASE m.role WHEN '",
+            "ms": 10.18,
+            "rows": 16
+          },
+          {
+            "sql": "SELECT EXISTS ( SELECT 1 FROM reels.copy_jobs WHERE status IN ('requested', 'running') ) AS found",
+            "ms": 9.54,
+            "rows": 1
+          }
+        ]
+      },
+      "warm": {
+        "ms": 127.8,
+        "queryCount": 43,
+        "queryMs": 273,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT DISTINCT ON (ny_date) id, ny_date::text AS ny_date, scored_at, (SELECT count(*)::int FROM reels.idea_scores s WHERE s.slate_id = sl.id) AS score_count, (SELECT count(*)::int FROM reels.idea_scores s WHERE s.slate_id = sl.id AND s.selected) AS selected_count FROM reels.score_slates sl ORDER BY ny_date DESC, scored_at DESC",
+            "ms": 14.51,
+            "rows": 28
+          },
+          {
+            "sql": "SELECT e.stage, e.at::text, e.error, (SELECT m.headline FROM reels.idea_sources_v m WHERE m.post_idea_id = e.post_idea_id ORDER BY CASE m.role WHEN 'primary' THEN 0 ELSE 1 END LIMIT 1) AS headline FROM ( SELECT 'copy' AS stage, finished_at AS at, error, post_idea_id FROM reels.copy_jobs WHERE status = 'failed' AND finished_at >= now() - interval '7 days' UNION ALL SELECT 'frame', finished_at, erro",
+            "ms": 13.26,
+            "rows": 12
+          },
+          {
+            "sql": "WITH scores AS ( SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected, s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score, s.value_score, s.blockbuster, s.confidence, s.components FROM reels.idea_scores s WHERE s.slate_id = ANY($1::uuid[]) AND ($2::boolean = false OR s.selected) ), members AS ( SELECT m.post_idea_id, jsonb_agg(m.headline ORDER BY CASE m.role WHEN '",
+            "ms": 12.09,
+            "rows": 16
+          },
+          {
+            "sql": "WITH scores AS ( SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected, s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score, s.value_score, s.blockbuster, s.confidence, s.components FROM reels.idea_scores s WHERE s.slate_id = ANY($1::uuid[]) AND ($2::boolean = false OR s.selected) ), members AS ( SELECT m.post_idea_id, jsonb_agg(m.headline ORDER BY CASE m.role WHEN '",
+            "ms": 11.84,
+            "rows": 132
+          },
+          {
+            "sql": "SELECT DISTINCT ON (video_job_id) video_job_id, status, trigger, error, permalink, finished_at::text FROM ( SELECT a.id, a.content_item_id, CASE WHEN ci.native_ref ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN ci.native_ref::uuid END AS video_job_id, ci.idea_ref::uuid AS post_idea_id, (a.payload->>'song_pick_id')::uuid AS song_pick_id, a.trigger, a.status, a.requested_at,",
+            "ms": 7.97,
+            "rows": 0
+          }
+        ]
+      }
+    },
+    "api:GET:/api/send-queue": {
+      "cold": {
+        "ms": 599.5,
+        "queryCount": 6,
+        "queryMs": 255.1,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT q.id::text, q.owner_id::text, q.drafting_item_id::text, q.campaign_id::text, q.status, q.handoff_date::text, q.handed_off_at::text, q.lane_id::text, q.smartlead_lead_id::text, q.handoff_attempts, q.waiting_reason, q.to_email, q.subject, q.recipient_name, q.orchestration_job_id::text, q.error_message, q.sender_identity_id::text, q.sender_inbox_id::text, q.from_email, q.created_at::text, q.up",
+            "ms": 220.46,
+            "rows": 8289
+          },
+          {
+            "sql": "SELECT ib.id::text AS inbox_id, (es.sent_at AT TIME ZONE $3)::date::text AS day, CASE WHEN es.sequence_number = 1 THEN 1 ELSE 2 END AS step, count(*)::text AS n FROM outreach.email_sends es JOIN outreach.sender_inboxes ib ON ib.smartlead_email_account_id = es.smartlead_email_account_id WHERE es.status = 'sent' AND (es.sent_at AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date GROUP BY 1, 2, 3",
+            "ms": 10.43,
+            "rows": 22
+          },
+          {
+            "sql": "SELECT scope_key, to_char(day, 'YYYY-MM-DD') AS day, detail FROM outreach.inbox_health_daily WHERE source = 'forecast' AND day BETWEEN $1::date AND $2::date ORDER BY day ASC",
+            "ms": 8.65,
+            "rows": 1046
+          },
+          {
+            "sql": "SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug, i.display_name AS identity_display_name, lower(ib.email) AS email, ib.domain, ib.sort_order, ib.is_primary, ib.enabled, ib.lifecycle_stage, ib.stage_entered_at, ib.stage_plan, ib.rest_reason, ib.rest_cycles, ib.from_name, ib.signature_html, ib.provisioning_checklist, ib.smartlead_email_account_id, ib.sl_status, ib.sl_max_email_per_",
+            "ms": 6.22,
+            "rows": 34
+          },
+          {
+            "sql": "SELECT c.id::text AS id, c.name, c.delivery_settings, c.queue_color, COALESCE(c.sender_identity_slug, 'lucas') AS identity_slug, ( SELECT l.status FROM outreach.campaign_lanes l WHERE l.campaign_id = c.id ORDER BY CASE WHEN l.identity_slug = c.sender_identity_slug THEN 0 ELSE 1 END, l.updated_at DESC LIMIT 1 ) AS lane_status FROM outreach.campaigns c WHERE c.status = 'active' AND ( (COALESCE(c.kin",
+            "ms": 4.79,
+            "rows": 4
+          }
+        ]
+      },
+      "warm": {
+        "ms": 579.7,
+        "queryCount": 6,
+        "queryMs": 190.8,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT q.id::text, q.owner_id::text, q.drafting_item_id::text, q.campaign_id::text, q.status, q.handoff_date::text, q.handed_off_at::text, q.lane_id::text, q.smartlead_lead_id::text, q.handoff_attempts, q.waiting_reason, q.to_email, q.subject, q.recipient_name, q.orchestration_job_id::text, q.error_message, q.sender_identity_id::text, q.sender_inbox_id::text, q.from_email, q.created_at::text, q.up",
+            "ms": 160.82,
+            "rows": 8289
+          },
+          {
+            "sql": "SELECT ib.id::text AS inbox_id, (es.sent_at AT TIME ZONE $3)::date::text AS day, CASE WHEN es.sequence_number = 1 THEN 1 ELSE 2 END AS step, count(*)::text AS n FROM outreach.email_sends es JOIN outreach.sender_inboxes ib ON ib.smartlead_email_account_id = es.smartlead_email_account_id WHERE es.status = 'sent' AND (es.sent_at AT TIME ZONE $3)::date BETWEEN $1::date AND $2::date GROUP BY 1, 2, 3",
+            "ms": 6.93,
+            "rows": 22
+          },
+          {
+            "sql": "SELECT scope_key, to_char(day, 'YYYY-MM-DD') AS day, detail FROM outreach.inbox_health_daily WHERE source = 'forecast' AND day BETWEEN $1::date AND $2::date ORDER BY day ASC",
+            "ms": 6.7,
+            "rows": 1046
+          },
+          {
+            "sql": "SELECT ib.id::text, ib.identity_id::text, i.slug AS identity_slug, i.display_name AS identity_display_name, lower(ib.email) AS email, ib.domain, ib.sort_order, ib.is_primary, ib.enabled, ib.lifecycle_stage, ib.stage_entered_at, ib.stage_plan, ib.rest_reason, ib.rest_cycles, ib.from_name, ib.signature_html, ib.provisioning_checklist, ib.smartlead_email_account_id, ib.sl_status, ib.sl_max_email_per_",
+            "ms": 5.94,
+            "rows": 34
+          },
+          {
+            "sql": "SELECT key, value FROM outreach.org_settings WHERE key = ANY($1::text[])",
+            "ms": 5.5,
+            "rows": 4
+          }
+        ]
+      }
+    },
+    "page:/carousels": {
+      "cold": {
+        "ms": 171.8,
+        "queryCount": 7,
+        "queryMs": 40.5,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT value FROM social.settings WHERE key = $1",
+            "ms": 6.83,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social.settings WHERE key = $1",
+            "ms": 6.82,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 6.68,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "ms": 5.82,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social.settings WHERE key = $1",
+            "ms": 5.79,
+            "rows": 1
+          }
+        ]
+      },
+      "warm": {
+        "ms": 127.5,
+        "queryCount": 7,
+        "queryMs": 39.9,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 6.54,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social.settings WHERE key = $1",
+            "ms": 6.5,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social.settings WHERE key = $1",
+            "ms": 6.48,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social.settings WHERE key = $1",
+            "ms": 5.35,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social.settings WHERE key = $1",
+            "ms": 5.21,
+            "rows": 1
+          }
+        ]
+      }
+    },
+    "page:/morning-download": {
+      "cold": {
+        "ms": 234.8,
+        "queryCount": 4,
+        "queryMs": 47.3,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 14.41,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "ms": 14.1,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT key, value FROM stories.settings",
+            "ms": 13.86,
+            "rows": 3
+          },
+          {
+            "sql": "SELECT (SELECT max(finished_at)::text FROM social_hub.refreshes WHERE status IN ('ok', 'partial')) AS last, EXISTS (SELECT 1 FROM social_hub.refreshes WHERE status IN ('requested', 'running')) AS pending",
+            "ms": 4.95,
+            "rows": 1
+          }
+        ]
+      },
+      "warm": {
+        "ms": 215.5,
+        "queryCount": 4,
+        "queryMs": 20.2,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT value FROM social_hub.settings WHERE key = 'slot_source'",
+            "ms": 5.21,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT key, value FROM stories.settings",
+            "ms": 5.1,
+            "rows": 3
+          },
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 4.94,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT (SELECT max(finished_at)::text FROM social_hub.refreshes WHERE status IN ('ok', 'partial')) AS last, EXISTS (SELECT 1 FROM social_hub.refreshes WHERE status IN ('requested', 'running')) AS pending",
+            "ms": 4.9,
+            "rows": 1
+          }
+        ]
+      }
+    },
+    "page:/social/analytics/cost": {
+      "cold": {
+        "ms": 331.2,
+        "queryCount": 46,
+        "queryMs": 277,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT id, run_id, component, vendor, (created_at >= COALESCE((SELECT (value #>> '{}')::timestamptz FROM reels.settings WHERE key = 'prod_spend_since'), '2026-09-30T04:00:00Z'::timestamptz)) AS production, usd::text AS usd, to_char((created_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD') AS ny_date FROM reels.cost_events",
+            "ms": 18.74,
+            "rows": 6000
+          },
+          {
+            "sql": "SELECT e.id, e.set_id, e.component, e.vendor, e.usd::text AS usd, to_char((e.created_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD') AS ny_date, (COALESCE(s.mode, 'production') = 'production') AS production, s.series FROM stories.cost_events e LEFT JOIN stories.sets s ON s.id = e.set_id",
+            "ms": 15.68,
+            "rows": 4000
+          },
+          {
+            "sql": "SELECT DISTINCT sl.run_id, to_char((r.requested_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD') AS run_day, v.post_idea_id, v.slate_id FROM reels.video_jobs v JOIN reels.score_slates sl ON sl.id = v.slate_id JOIN reels.runs r ON r.id = sl.run_id WHERE v.status = 'ok'",
+            "ms": 11.15,
+            "rows": 157
+          },
+          {
+            "sql": "SELECT e.id, e.job_id, e.component, e.vendor, (e.mode = 'production') AS production, (NOT e.usd_known) AS unknown, e.usd::text AS usd, COALESCE(c.ny_date::text, to_char((e.created_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD')) AS ny_date FROM explainers.cost_events e LEFT JOIN explainers.idea_cycles c ON c.id = e.idea_cycle_id",
+            "ms": 10.5,
+            "rows": 2000
+          },
+          {
+            "sql": "SELECT (SELECT max(finished_at)::text FROM social_hub.refreshes WHERE status IN ('ok', 'partial')) AS last, EXISTS (SELECT 1 FROM social_hub.refreshes WHERE status IN ('requested', 'running')) AS pending",
+            "ms": 8.64,
+            "rows": 1
+          }
+        ]
+      },
+      "warm": {
+        "ms": 297,
+        "queryCount": 46,
+        "queryMs": 289,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT id, run_id, component, vendor, (created_at >= COALESCE((SELECT (value #>> '{}')::timestamptz FROM reels.settings WHERE key = 'prod_spend_since'), '2026-09-30T04:00:00Z'::timestamptz)) AS production, usd::text AS usd, to_char((created_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD') AS ny_date FROM reels.cost_events",
+            "ms": 14.4,
+            "rows": 6000
+          },
+          {
+            "sql": "SELECT sl.run_id, j.post_idea_id, j.slate_id, sum(j.usd)::text AS usd FROM (SELECT post_idea_id, slate_id, usd FROM reels.copy_jobs UNION ALL SELECT post_idea_id, slate_id, usd FROM reels.visual_jobs UNION ALL SELECT post_idea_id, slate_id, usd FROM reels.video_jobs) j JOIN reels.score_slates sl ON sl.id = j.slate_id GROUP BY sl.run_id, j.post_idea_id, j.slate_id",
+            "ms": 12.86,
+            "rows": 934
+          },
+          {
+            "sql": "SELECT id, post_idea_id, slate_id, (finished_at >= COALESCE((SELECT (value #>> '{}')::timestamptz FROM reels.settings WHERE key = 'prod_spend_since'), '2026-09-30T04:00:00Z'::timestamptz)) AS production, ((CASE WHEN finished_at >= '2026-10-06T04:00:00.000Z'::timestamptz THEN 0.42000000000000004 ELSE 0.672 END))::text AS usd, to_char((finished_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD'",
+            "ms": 12.56,
+            "rows": 198
+          },
+          {
+            "sql": "SELECT DISTINCT sl.run_id, to_char((r.requested_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD') AS run_day, v.post_idea_id, v.slate_id FROM reels.video_jobs v JOIN reels.score_slates sl ON sl.id = v.slate_id JOIN reels.runs r ON r.id = sl.run_id WHERE v.status = 'ok'",
+            "ms": 10.78,
+            "rows": 157
+          },
+          {
+            "sql": "SELECT e.id, e.set_id, e.component, e.vendor, e.usd::text AS usd, to_char((e.created_at AT TIME ZONE 'America/New_York')::date, 'YYYY-MM-DD') AS ny_date, (COALESCE(s.mode, 'production') = 'production') AS production, s.series FROM stories.cost_events e LEFT JOIN stories.sets s ON s.id = e.set_id",
+            "ms": 10.76,
+            "rows": 4000
+          }
+        ]
+      }
+    },
+    "page:/social": {
+      "cold": {
+        "ms": 157.5,
+        "queryCount": 26,
+        "queryMs": 146.4,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT s.audio_id, s.audio_type, s.title, s.display_artist, s.ig_username, s.cover_artwork_thumbnail_uri, s.duration_in_ms, s.trending_rank, s.first_ingested_at::text, s.last_seen_trending_at::text, s.genre, s.bpm, s.vibes, s.instruments, s.tagged_at IS NOT NULL AS tagged, coalesce(u.uses, 0)::int AS uses, u.last_used::text FROM reels.songs s LEFT JOIN ( SELECT picked_audio_id, count(*) AS uses, m",
+            "ms": 10.41,
+            "rows": 800
+          },
+          {
+            "sql": "SELECT count(*)::int AS stored, count(*) FILTER (WHERE reuse_ok)::int AS reusable, count(*) FILTER (WHERE first_seen_at > now() - interval '7 days')::int AS recent, max(first_seen_at) AS last FROM media_library.photos WHERE status = 'stored'",
+            "ms": 8.24,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT s.source AS value, count(DISTINCT p.id)::int AS count FROM media_library.photos p JOIN media_library.photo_sources s ON s.photo_id = p.id WHERE p.status = 'stored' AND s.source IS NOT NULL GROUP BY s.source ORDER BY s.source",
+            "ms": 6.96,
+            "rows": 4
+          },
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 6.44,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT extract(epoch FROM finished_at - started_at) AS secs FROM explainers.jobs WHERE status = 'ok' AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15",
+            "ms": 6.21,
+            "rows": 15
+          }
+        ]
+      },
+      "warm": {
+        "ms": 84.9,
+        "queryCount": 2,
+        "queryMs": 10.1,
+        "repeated": [],
+        "slowest": [
+          {
+            "sql": "SELECT to_regclass('social_hub.refreshes') IS NOT NULL AS ok",
+            "ms": 5.15,
+            "rows": 1
+          },
+          {
+            "sql": "SELECT (SELECT max(finished_at)::text FROM social_hub.refreshes WHERE status IN ('ok', 'partial')) AS last, EXISTS (SELECT 1 FROM social_hub.refreshes WHERE status IN ('requested', 'running')) AS pending",
+            "ms": 4.93,
+            "rows": 1
+          }
+        ]
+      }
+    }
+  },
+  "lighthouse": {},
+  "verdicts": {
+    "page:/ai-events": "pass",
+    "api:GET:/api/analytics/summary": "pass",
+    "api:GET:/api/campaigns/[id]/outreach-stats": "pass",
+    "api:GET:/api/campaigns": "pass",
+    "api:GET:/api/content-type/progress": "pass",
+    "api:GET:/api/content-type/run-today": "fail",
+    "api:GET:/api/hub/warm": "pass",
+    "api:GET:/api/inboxes/[id]": "pass",
+    "api:GET:/api/reels/overview": "pass",
+    "api:GET:/api/send-queue": "fail",
+    "page:/carousels": "pass",
+    "page:/morning-download": "pass",
+    "page:/social/analytics/cost": "pass",
+    "page:/social": "pass"
+  }
+}
