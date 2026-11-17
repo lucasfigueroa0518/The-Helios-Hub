@@ -38,6 +38,19 @@ async function typical(sql: string, params: unknown[] = []): Promise<number | nu
   return median(rows.map((r) => Number(r.secs)));
 }
 
+/** The usual running time depends only on the key (series or run kind), so ask once per key, not once per item in flight. */
+function typicalByKey(sql: string): (key: string) => Promise<number | null> {
+  const seen = new Map<string, Promise<number | null>>();
+  return (key) => {
+    let secs = seen.get(key);
+    if (!secs) {
+      secs = typical(sql, [key]);
+      seen.set(key, secs);
+    }
+    return secs;
+  };
+}
+
 export async function readProgress(type: Vertical): Promise<ProgressItem[]> {
   // Each Stories-format type shows its own series' sets (SS-1); a retired series' set reads as Morning Download's.
   if (isStoryVertical(type)) {
@@ -46,12 +59,12 @@ export async function readProgress(type: Vertical): Promise<ProgressItem[]> {
          FROM stories.sets WHERE status IN ('requested', 'building') ORDER BY created_at`,
     );
     const out: ProgressItem[] = [];
+    const typicalFor = typicalByKey(
+      `SELECT extract(epoch FROM built_at - claimed_at) AS secs FROM stories.sets
+        WHERE series = $1 AND built_at IS NOT NULL AND claimed_at IS NOT NULL ORDER BY created_at DESC LIMIT 15`,
+    );
     for (const r of rows.filter((x) => verticalOfSeries(x.series) === type)) {
-      const secs = await typical(
-        `SELECT extract(epoch FROM built_at - claimed_at) AS secs FROM stories.sets
-          WHERE series = $1 AND built_at IS NOT NULL AND claimed_at IS NOT NULL ORDER BY created_at DESC LIMIT 15`,
-        [r.series],
-      );
+      const secs = await typicalFor(r.series);
       out.push({ id: r.id, label: seriesLabel(r.series), state: r.status === 'building' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
     }
     return out;
@@ -115,12 +128,12 @@ export async function readProgress(type: Vertical): Promise<ProgressItem[]> {
     if (!rows.length) return [];
     // A rebuild re-renders from cached scores, so it times against other rebuilds; a build against builds.
     const out: ProgressItem[] = [];
+    const typicalFor = typicalByKey(
+      `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM ai_events.runs
+        WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
+    );
     for (const r of rows) {
-      const secs = await typical(
-        `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM ai_events.runs
-          WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
-        [r.kind],
-      );
+      const secs = await typicalFor(r.kind);
       out.push({ id: r.id, label: r.kind === 'rebuild' ? 'AI Events rebuild' : 'AI Events run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
     }
     return out;
@@ -133,12 +146,12 @@ export async function readProgress(type: Vertical): Promise<ProgressItem[]> {
     if (!rows.length) return [];
     // A rebuild only re-renders, so it times against other rebuilds; a build against builds.
     const out: ProgressItem[] = [];
+    const typicalFor = typicalByKey(
+      `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM field_notes.runs
+        WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
+    );
     for (const r of rows) {
-      const secs = await typical(
-        `SELECT extract(epoch FROM finished_at - started_at) AS secs FROM field_notes.runs
-          WHERE kind = $1 AND status IN ('ok', 'partial') AND started_at IS NOT NULL AND finished_at IS NOT NULL ORDER BY started_at DESC LIMIT 15`,
-        [r.kind],
-      );
+      const secs = await typicalFor(r.kind);
       out.push({ id: r.id, label: r.kind === 'rebuild' ? 'Field Notes rebuild' : 'Field Notes run', state: r.status === 'running' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
     }
     return out;
