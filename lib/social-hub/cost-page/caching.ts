@@ -1,3 +1,4 @@
+import { isStoryVertical, verticalOfSeries } from '@/lib/social-hub/story-types';
 import { cacheReadMultiplier, ratesForModel } from '@/lib/anthropic-pricing';
 import { readDramaCacheTokens } from '@/lib/reel-ai-drama/hub-read';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -19,8 +20,8 @@ export function cacheSavings(rows: readonly CacheRow[]): { savedMicros: number; 
   return { savedMicros: Math.round(saved * 1e6), withoutMicros: Math.round(readFull * 1e6) };
 }
 
-/** Only Explainers, Stories and AI Drama Reels record cache tokens today (spec §7). */
-export const CACHE_COVERED: readonly Vertical[] = ['explainers', 'stories', 'reel_ai_drama'];
+/** Only Explainers, the Stories-format types (one engine, SS-1) and AI Drama Reels record cache tokens today (spec §7). */
+export const CACHE_COVERED: readonly Vertical[] = ['explainers', 'stories', 'ai_trivia', 'real_or_ai', 'reel_ai_drama'];
 
 /** The covered types the Cost page's type filter selects: both for "All types", none for Reels/Carousels. */
 export function cacheCovered(vertical: Vertical | null): Vertical[] {
@@ -37,15 +38,19 @@ export type CacheScope = { vertical: Vertical | null; mode: 'production' | 'deve
 export async function readCacheRows(q: HubQuery, eq: HubQuery | null, from: string, to: string, scope: CacheScope): Promise<CacheRow[]> {
   const out: CacheRow[] = [];
   const covered = cacheCovered(scope.vertical);
-  if (covered.includes('stories')) {
-    const s = await q<{ model: string | null; r: number; w: number }>(
-      `SELECT e.model, sum(e.cache_read_tokens)::float8 AS r, sum(e.cache_write_tokens)::float8 AS w
+  if (covered.some(isStoryVertical)) {
+    // One engine table; each row counts under its set's type (a set-less row under Morning Download, as in the ledger).
+    const s = await q<{ model: string | null; series: string | null; r: number; w: number }>(
+      `SELECT e.model, s.series, sum(e.cache_read_tokens)::float8 AS r, sum(e.cache_write_tokens)::float8 AS w
          FROM stories.cost_events e LEFT JOIN stories.sets s ON s.id = e.set_id
         WHERE e.vendor = 'anthropic' AND e.created_at >= $1 AND e.created_at < $2
           AND COALESCE(s.mode, 'production') = $3
-        GROUP BY e.model`, [from, to, scope.mode],
+        GROUP BY e.model, s.series`, [from, to, scope.mode],
     );
-    for (const r of s.rows) out.push({ vertical: 'stories', model: r.model ?? 'claude-sonnet-5-5', readTokens: r.r, writeTokens: r.w });
+    for (const r of s.rows) {
+      const vertical = verticalOfSeries(r.series);
+      if (covered.includes(vertical)) out.push({ vertical, model: r.model ?? 'claude-sonnet-5-5', readTokens: r.r, writeTokens: r.w });
+    }
   }
   if (eq && covered.includes('explainers')) {
     const e = await eq<{ model: string | null; r: number; w: number }>(

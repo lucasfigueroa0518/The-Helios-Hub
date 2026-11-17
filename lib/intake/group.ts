@@ -34,6 +34,7 @@ import { excerpt } from '@/lib/reels/jev/state';
 import { resolveAction, resolveIdeaMerge, storedAction } from '@/lib/reels/pipeline/grouping';
 import type { GroupingAction } from '@/lib/reels/types';
 
+import { TRIVIA_SOURCE_ID } from './deposit';
 import { isIntakeCapReached } from './jev';
 import type { IntakeQuery, IntakeRunRecord } from './types';
 
@@ -154,11 +155,21 @@ export const FIELD_NOTES_ONLY_SQL = `(
   AND NOT (CASE WHEN i.reels_source_id IS NOT NULL THEN i.reels_drop_reason IS NULL ELSE i.family = 'reels' AND i.drop_reason IS NULL END)
   AND NOT (i.family IN ('search', 'seed') AND i.drop_reason IS NULL))`;
 
-/** Each new, ungrouped Field-Notes-only item becomes its own story (role primary). Only ungrouped rows: Rule 2. */
+/**
+ * SS-32: a page AI Trivia's writer cited (lib/intake/deposit.ts TRIVIA_SOURCE_ID) is research, not news. Like a Field
+ * Notes item it is never grouped: no pair call is spent on it, it never joins a news story another type reads, and it
+ * becomes its own story. A page that a feed, Reels or Field Notes also brings in is news again and is grouped as usual.
+ */
+export const TRIVIA_ONLY_SQL = `(i.family = 'search' AND i.source_id = '${TRIVIA_SOURCE_ID}' AND i.reels_source_id IS NULL AND i.feed_slug IS NULL AND i.field_notes_source_id IS NULL)`;
+
+/** Items that are never grouped: each becomes its own story. */
+const NEVER_GROUPED_SQL = `(${FIELD_NOTES_ONLY_SQL} OR ${TRIVIA_ONLY_SQL})`;
+
+/** Each new, ungrouped Field-Notes-only or AI Trivia item becomes its own story (role primary). Only ungrouped rows: Rule 2. */
 export async function placeFieldNotesItems(q: IntakeQuery, runId: string, now: Date, summary: GroupingResult): Promise<number> {
   const { rows } = await q.query<{ key: string; headline: string; first_seen_at: Date | string }>(
     `SELECT i.key, i.headline, i.first_seen_at FROM intake.items i
-      WHERE i.story_id IS NULL AND ${FIELD_NOTES_ONLY_SQL}
+      WHERE i.story_id IS NULL AND ${NEVER_GROUPED_SQL}
       ORDER BY i.first_seen_at, i.key`,
   );
   for (const row of rows) {
@@ -183,7 +194,7 @@ async function loadPool(q: IntakeQuery, now: Date): Promise<PoolRow[]> {
        FROM intake.items i
        LEFT JOIN intake.stories s ON s.id = i.story_id
       WHERE i.drop_reason IS NULL
-        AND NOT ${FIELD_NOTES_ONLY_SQL}
+        AND NOT ${NEVER_GROUPED_SQL}
         AND i.first_seen_at > $1
         AND (i.story_id IS NULL OR (s.merged_into IS NULL AND s.last_joined_at > $1))
       ORDER BY i.first_seen_at, i.key`,

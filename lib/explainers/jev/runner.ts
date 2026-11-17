@@ -80,8 +80,8 @@ export class RecordingExplainersJevRunner implements ExplainersJevRunner {
       mode: this.context.mode,
       vendor: 'jev',
       component: request.component,
-      inputTokens: result.usage.input_tokens,
-      outputTokens: result.usage.output_tokens,
+      inputTokens: result.usage.input_tokens ?? undefined,
+      outputTokens: result.usage.output_tokens ?? undefined,
       usd,
     });
     return result;

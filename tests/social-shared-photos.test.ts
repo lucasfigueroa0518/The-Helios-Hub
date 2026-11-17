@@ -229,7 +229,7 @@ const revisionInput = (over: { exclude?: Set<string>; hint?: string } = {}) => {
   const parsed = briefSuperIntelligenceForce();
   return { brief: parsed, filled: fillDraft(sifDraft(), parsed), slide: 3, exclude: over.exclude ?? new Set<string>(), ...(over.hint ? { hint: over.hint } : {}) };
 };
-const modes = (carousel: 'shared' | 'legacy') => async () => ({ lfd: 'legacy', md: 'legacy', gtn: 'legacy', fvp: 'legacy', carousel }) as PhotoFinderModes;
+const modes = (carousel: 'shared' | 'legacy') => async () => ({ lfd: 'legacy', md: 'legacy', trivia: 'legacy', roa: 'legacy', carousel }) as PhotoFinderModes;
 
 test('revision: legacy never calls the shared finder; a read error is legacy', async () => {
   const calls = newCalls();

@@ -17,7 +17,10 @@ export const VERTICALS: readonly VerticalInfo[] = [
   { id: 'reels', label: 'Text on Screen', short: 'Text', format: 'reel', colorVar: '--sh-v-reels', href: '/reels', reviewHref: '/reels' },
   { id: 'explainers', label: 'Explainer Reels', short: 'Explainer', format: 'reel', colorVar: '--sh-v-explainers', href: '/explainers', reviewHref: '/explainers/reels' },
   { id: 'carousels', label: 'Carousels', short: 'Carousel', format: 'feed', colorVar: '--sh-v-carousels', href: '/carousels', reviewHref: '/social' },
-  { id: 'stories', label: 'IG Stories', short: 'Story', format: 'story', colorVar: '--sh-v-stories', href: '/stories', reviewHref: '/stories' },
+  // Stories Split (SS-1): "IG Stories" became three Stories-format types on one engine (lib/social-hub/story-types.ts).
+  { id: 'stories', label: 'Morning Download', short: 'Morning', format: 'story', colorVar: '--sh-v-stories', href: '/morning-download', reviewHref: '/morning-download' },
+  { id: 'ai_trivia', label: 'Are you smarter than AI?', short: 'Trivia', format: 'story', colorVar: '--sh-v-ai_trivia', href: '/ai-trivia', reviewHref: '/ai-trivia' },
+  { id: 'real_or_ai', label: 'Real or AI?', short: 'Real/AI', format: 'story', colorVar: '--sh-v-real_or_ai', href: '/real-or-ai', reviewHref: '/real-or-ai' },
   { id: 'last_few_days', label: 'Last Few Days', short: 'LFD', format: 'feed', colorVar: '--sh-v-last_few_days', href: '/last-few-days', reviewHref: '/last-few-days' },
   { id: 'ai_events', label: 'AI Events This Week', short: 'AI Events', format: 'feed', colorVar: '--sh-v-ai_events', href: '/ai-events', reviewHref: '/ai-events' },
   { id: 'field_notes', label: 'Field Notes', short: 'Field Notes', format: 'feed', colorVar: '--sh-v-field_notes', href: '/field-notes', reviewHref: '/field-notes' },
@@ -49,9 +52,9 @@ export function isVertical(value: unknown): value is Vertical {
 }
 
 /** The content types that have a page of their own (their idea pool, posts and settings): all of them. */
-export const TYPE_PAGE_IDS: readonly Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
+export const TYPE_PAGE_IDS: readonly Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 
-/** A content type's own page (its `href`): /reels, /carousels, /stories, /explainers, /last-few-days, /ai-events, /field-notes and /reel-ai-drama. */
+/** A content type's own page (its `href`): /reels, /carousels, /morning-download, /ai-trivia, /real-or-ai, /explainers, /last-few-days, /ai-events, /field-notes and /reel-ai-drama. */
 export function typeHref(vertical: Vertical, base = '/social'): string {
   // The fixture preview has its own mirror of the hub-hosted pages; Text on Screen is a separate app page.
   return base === '/social/preview' && vertical !== 'reels' ? `${base}/type/${vertical}` : verticalInfo(vertical).href;

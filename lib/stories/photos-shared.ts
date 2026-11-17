@@ -17,10 +17,16 @@ export type SharedFind = (needs: PhotoNeed[], profile: PhotoProfile, deps: Photo
 /** lib/photos/needs.ts needFromRequest. */
 export type NeedFromRequest = (req: PhotoRequest, id: string, extra?: { headline?: string; brief?: string; sourceName?: string | null }) => PhotoNeed;
 
-/** Each Stories series' shared-finder profile. */
-export const SERIES_PROFILE: Record<Series, PhotoProfileId> = { morning_download: 'md', guess_the_number: 'gtn', free_vs_paid: 'fvp' };
+/**
+ * Each Stories series' shared-finder profile (SS-20). AI Trivia's 'trivia' keeps Guess the Number's old values; retired
+ * series (guess_the_number, free_vs_paid) have none. Real or AI?'s 'roa' switch is read by its daily run
+ * (lib/stories/roa/daily.ts), which finds its photos before any set is built: its builder is never wrapped here.
+ */
+export const SERIES_PROFILE: Partial<Record<Series, PhotoProfileId>> = { morning_download: 'md', ai_trivia: 'trivia', real_or_ai: 'roa' };
+/** Series whose photos come in through the pool, not the set builder's finder. */
+const POOL_PHOTO_SERIES: ReadonlySet<Series> = new Set<Series>(['real_or_ai']);
 /** Frames a set asks for through single `find` calls (the per-frame allowance); MD finds its set with `findSet`. */
-export const SERIES_SINGLE_FRAMES: Record<Series, number> = { morning_download: 1, guess_the_number: 2, free_vs_paid: 2 };
+export const SERIES_SINGLE_FRAMES: Partial<Record<Series, number>> = { morning_download: 1, ai_trivia: 2 };
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -40,7 +46,7 @@ export function createSharedPhotoFinder(o: {
   fallback: PhotoFinder;
   budget?: PhotoBudget;
   /**
-   * Frames one post asks for through single `find` calls (Guess the Number, Free vs Paid call `find` once per frame).
+   * Frames one post asks for through single `find` calls (AI Trivia calls `find` once per frame).
    * Each single call gets its share of what is left (left / frames still to come), so the first frame can't spend the
    * whole post's cap. Absent or 1: a single call may use all that is left.
    */
@@ -165,14 +171,14 @@ type SeriesBuilder = (d: BuildDeps) => Promise<BuildResult>;
  */
 export async function sharedSeriesBuilders(o: {
   query: Query;
-  builders: Record<Series, SeriesBuilder>;
+  builders: Partial<Record<Series, SeriesBuilder>>;
   /** Default: a stories.cost_events row for the set (vendor anthropic: Haiku looks dominate, Serper included; component photo-finder-shared). */
   recordCost?: (d: BuildDeps, usd: number) => Promise<void>;
   log?: (line: string) => void;
   make?: SharedMake;
 }): Promise<Partial<Record<Series, SeriesBuilder>> | undefined> {
   const modes = await readModes(o.query, o.make);
-  const series = (Object.keys(SERIES_PROFILE) as Series[]).filter((s) => modes?.[SERIES_PROFILE[s]] === 'shared');
+  const series = (Object.keys(SERIES_PROFILE) as Series[]).filter((s) => !POOL_PHOTO_SERIES.has(s) && o.builders[s] && modes?.[SERIES_PROFILE[s]!] === 'shared');
   if (!series.length) return undefined;
   let loaded: Awaited<ReturnType<typeof loadShared>>;
   try {
@@ -189,11 +195,11 @@ export async function sharedSeriesBuilders(o: {
     });
   const out: Partial<Record<Series, SeriesBuilder>> = {};
   for (const s of series) {
-    const profile = loaded.profiles[SERIES_PROFILE[s]];
-    const build = o.builders[s];
+    const profile = loaded.profiles[SERIES_PROFILE[s]!];
+    const build = o.builders[s]!;
     out[s] = async (d) => {
       const budget: PhotoBudget = { usd: 0, capUsd: profile.capUsd };
-      const photos = createSharedPhotoFinder({ profile, deps: loaded.deps, fallback: d.photos, budget, frames: SERIES_SINGLE_FRAMES[s], find: o.make?.find, need: o.make?.need });
+      const photos = createSharedPhotoFinder({ profile, deps: loaded.deps, fallback: d.photos, budget, frames: SERIES_SINGLE_FRAMES[s] ?? 2, find: o.make?.find, need: o.make?.need });
       try {
         return await build({ ...d, photos });
       } finally {

@@ -1,5 +1,7 @@
 import { dbQuery } from '@/lib/db';
-import type { ContentType } from '@/lib/content-type/posting';
+import { seriesLabel } from '@/lib/content-type/story-series';
+import { isStoryVertical, verticalOfSeries } from '@/lib/social-hub/story-types';
+import type { Vertical } from '@/lib/social-hub/types';
 import { explainersHubQuery } from '@/lib/social-hub/db';
 import { readDramaProgress } from '@/lib/reel-ai-drama/hub-read';
 
@@ -26,8 +28,6 @@ export type ProgressItem = {
   typicalSeconds: number | null;
 };
 
-const SERIES: Record<string, string> = { morning_download: 'Morning Download', guess_the_number: 'Guess the Number', free_vs_paid: 'Free vs. Paid' };
-
 const median = (xs: number[]): number | null => {
   const s = xs.filter((n) => Number.isFinite(n) && n > 0).sort((a, b) => a - b);
   return s.length >= 2 ? Math.round(s[Math.floor(s.length / 2)]!) : null;
@@ -38,20 +38,21 @@ async function typical(sql: string, params: unknown[] = []): Promise<number | nu
   return median(rows.map((r) => Number(r.secs)));
 }
 
-export async function readProgress(type: ContentType): Promise<ProgressItem[]> {
-  if (type === 'stories') {
+export async function readProgress(type: Vertical): Promise<ProgressItem[]> {
+  // Each Stories-format type shows its own series' sets (SS-1); a retired series' set reads as Morning Download's.
+  if (isStoryVertical(type)) {
     const { rows } = await dbQuery(
       `SELECT id::text, series, status, created_at::text AS requested_at, claimed_at::text AS started_at
          FROM stories.sets WHERE status IN ('requested', 'building') ORDER BY created_at`,
     );
     const out: ProgressItem[] = [];
-    for (const r of rows) {
+    for (const r of rows.filter((x) => verticalOfSeries(x.series) === type)) {
       const secs = await typical(
         `SELECT extract(epoch FROM built_at - claimed_at) AS secs FROM stories.sets
           WHERE series = $1 AND built_at IS NOT NULL AND claimed_at IS NOT NULL ORDER BY created_at DESC LIMIT 15`,
         [r.series],
       );
-      out.push({ id: r.id, label: SERIES[r.series] ?? r.series, state: r.status === 'building' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
+      out.push({ id: r.id, label: seriesLabel(r.series), state: r.status === 'building' ? 'running' : 'queued', stage: null, error: null, topicId: null, requestedAt: r.requested_at, startedAt: r.started_at, typicalSeconds: secs });
     }
     return out;
   }
@@ -159,11 +160,14 @@ export type AllProgress = Record<'carousels' | 'stories' | 'explainers', Progres
   ai_events?: ProgressItem[];
   field_notes?: ProgressItem[];
   reel_ai_drama?: ProgressItem[];
+  /** The Stories-format types split out of Stories (SS-1); missing reads as none. */
+  ai_trivia?: ProgressItem[];
+  real_or_ai?: ProgressItem[];
 };
 
 /** Every type's runs in flight, for the Content page's cards and tiles. A type that cannot be read shows nothing in flight. */
 export async function readAllProgress(): Promise<AllProgress> {
-  const one = (t: ContentType) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
-  const [carousels, stories, explainers, lastFewDays, aiEvents, fieldNotes, drama] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events'), one('field_notes'), one('reel_ai_drama')]);
-  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes, reel_ai_drama: drama };
+  const one = (t: Vertical) => readProgress(t).then((items) => items.filter((i) => i.state !== 'failed')).catch(() => [] as ProgressItem[]);
+  const [carousels, stories, explainers, lastFewDays, aiEvents, fieldNotes, drama, trivia, roa] = await Promise.all([one('carousels'), one('stories'), one('explainers'), one('last_few_days'), one('ai_events'), one('field_notes'), one('reel_ai_drama'), one('ai_trivia'), one('real_or_ai')]);
+  return { carousels, stories, explainers, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes, reel_ai_drama: drama, ai_trivia: trivia, real_or_ai: roa };
 }

@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Hand, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 import { Delta } from '@/components/social-hub/analytics/KpiStrip';
@@ -28,7 +29,7 @@ import { actionEnabled, SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { metricSpec } from '@/lib/social-hub/metrics';
 import { addDays, dayLabel, isDayKey, monthLabel, monthOf, nyDateOf, shiftMonth, WEEKDAY_SHORT } from '@/lib/social-hub/time';
-import { isVertical, verticalInfo, VERTICAL_IDS } from '@/lib/social-hub/verticals';
+import { isVertical, typeHref, verticalInfo, VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import { daySlots, monthModel, totalLabel, type DayCell, type DaySlot } from '@/lib/social-hub/views/calendar';
 import { displayName, plural, shortDate, whenInline } from '@/lib/social-hub/views/format';
 import { offerer } from '@/lib/social-hub/views/offer';
@@ -37,6 +38,7 @@ import { minuteLabel, windowRange } from '@/lib/social-hub/views/plan';
 import { mondayOf, weekLabel, type SwitchFacts, type WeekDayInput } from '@/lib/social-hub/views/week';
 import type { HubPost, MetricKey, Vertical } from '@/lib/social-hub/types';
 import { needsGroups } from '@/lib/social-hub/views/today';
+import { isStoryVertical, SERIES_OF_VERTICAL } from '@/lib/social-hub/story-types';
 
 const METRICS: MetricKey[] = ['views', 'reach', 'shares', 'totalInteractions'];
 
@@ -105,8 +107,10 @@ function readyItems(posts: readonly HubPost[], now: Date): ReadyItem[] {
   return unplaced.map((p) => {
     const f = p.factorValues.series;
     const key = f && f.kind === 'category' ? f.key : null;
-    return { ...slim(p), series: p.vertical === 'stories' && isStorySeries(key) ? key : null, made: p.generatedAt ? `Made ${shortDate(p.generatedAt)}` : 'Made' };
-  }).filter((r) => r.vertical !== 'stories' || r.series !== null);
+    // SS-1: a Stories-format type's one series; Morning Download's comes from the post (a retired series has no tray).
+    const series = p.vertical === 'stories' ? (isStorySeries(key) ? key : null) : isStoryVertical(p.vertical) ? SERIES_OF_VERTICAL[p.vertical] : null;
+    return { ...slim(p), series, made: p.generatedAt ? `Made ${shortDate(p.generatedAt)}` : 'Made' };
+  }).filter((r) => !isStoryVertical(r.vertical) || r.series !== null);
 }
 
 function WeekScreen({ dataset, base, params, now, week }: { dataset: HubDataset; base: string; params: HubParams; now: Date; week: CalendarWeek }) {
@@ -250,7 +254,7 @@ function MonthScreen({ dataset, base, params, now, weekFailed = false }: { datas
           <li><span className="sh-cell__needs" aria-hidden="true"><Hand size={11} />1</span>needs you</li>
           <li><span className="sh-key__heat" aria-hidden="true" />darker day, more {metricLabel}</li>
         </ul>
-        <p className="sh-subtle">Dots run in type order: Text on Screen, Explainer Reels, Carousels, IG Stories. Day totals add up {metricLabel} across what posted that day.</p>
+        <p className="sh-subtle">Dots run in type order: Text on Screen, Explainer Reels, Carousels, then the story types. Day totals add up {metricLabel} across what posted that day.</p>
       </div>
 
       {day ? (
@@ -318,7 +322,7 @@ function DayList({ posts, day, types, now, o, base, carouselOff, slots: calendar
             <div className="sh-item__meta"><TypeMark vertical={s.vertical} /><span className="sh-state">Open slot</span></div>
             <span className="sh-item__name sh-muted">{s.window.label} · {windowRange(s.window)}</span>
           </div>
-          <ReadyFor posts={posts} slot={s} o={o} poolHref={`${base}/content/pools/${s.vertical}`} />
+          <ReadyFor posts={posts} slot={s} o={o} poolHref={typeHref(s.vertical, base)} />
         </li>
       ))}
     </ul>
@@ -334,7 +338,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
   if (ready.length === 0) {
     return (
       <p className="sh-item__ready-none sh-subtle">
-        Nothing of this type is made and waiting; tonight’s run fills open slots. <HubLink className="sh-link" href={poolHref}>See the pool</HubLink>
+        Nothing of this type is made and waiting; tonight’s run fills open slots. <Link className="sh-link" href={poolHref}>See the pool</Link>
       </p>
     );
   }
@@ -342,7 +346,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
   if (!actionEnabled('reschedule')) {
     return (
       <p className="sh-item__ready-none sh-subtle">
-        {plural(ready.length, 'post')} of this type {ready.length === 1 ? 'is' : 'are'} made and could go here once scheduling from the hub is on. <HubLink className="sh-link" href={poolHref}>See the pool</HubLink>
+        {plural(ready.length, 'post')} of this type {ready.length === 1 ? 'is' : 'are'} made and could go here once scheduling from the hub is on. <Link className="sh-link" href={poolHref}>See the pool</Link>
       </p>
     );
   }
@@ -361,7 +365,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
           </li>
         ))}
       </ul>
-      <p className="sh-item__ready-more"><HubLink className="sh-link" href={poolHref}>See the whole pool</HubLink></p>
+      <p className="sh-item__ready-more"><Link className="sh-link" href={poolHref}>See the whole pool</Link></p>
     </details>
   );
 }

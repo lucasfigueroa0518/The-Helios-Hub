@@ -134,7 +134,7 @@ test('with auto_run on, a Tuesday with no carousel offers and shows no carousel 
   assert.equal(contentModel(d, NOW).plan.types.find((t) => t.vertical === 'carousels')!.windows.length, 0);
   assert.deepEqual(daySlots(d.posts, '2026-10-13', new Set<Vertical>(['carousels']), NOW, [2, 5], d.dayQuotas!.slots), []);
   // A Tuesday carousel gets no slot choices.
-  const ready = { ...d.posts[0], vertical: 'carousels' } as HubPost;
+  const ready = { ...d.posts[0], vertical: 'carousels', nyDate: '2026-10-13' } as HubPost; // made for Tuesday (a later date would be offered its own day)
   assert.deepEqual(slotChoices(d, ready, NOW), []);
   // Wednesday still offers both.
   assert.equal(slotChoices(d, ready, new Date('2026-10-14T12:00:00Z')).length, 2);

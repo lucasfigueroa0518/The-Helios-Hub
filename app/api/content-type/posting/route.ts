@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   }
 }
 
-/** Body: `{ type, ...patch }` where the patch is live, generate, autoPublish, perDay, cap (the daily limit) or one series' change. A person's click is the decision. */
+/** Body: `{ type, ...patch }` where the patch is live, generate, autoPublish, perDay, or cap (the daily limit). Each Stories-format type has its own switches (SS-24); a series patch is refused. A person's click is the decision. */
 export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

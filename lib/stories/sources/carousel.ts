@@ -13,6 +13,7 @@
 import type { Queryable } from '@/lib/stories/db';
 import { hashesOf } from '@/lib/photos/used-hash';
 import { readPublishedLedger, readUsedLedger, recordUsedPhotos, USED_PHOTO_DAYS, type LedgerReadOptions, type UsedLedger } from '@/lib/photos/used';
+import type { StoryVertical } from '@/lib/social-hub/story-types';
 
 import { storyKey, type StoryCandidate } from './reels';
 
@@ -88,71 +89,6 @@ export async function latestCarouselRunAt(db: Queryable): Promise<string | null>
   return at ? new Date(at).toISOString() : null;
 }
 
-export type NumberCandidate = {
-  key: string;
-  origin: 'carousel' | 'reels' | 'generated';
-  ref: string;
-  value: string;
-  fact: string;
-  counts: string;
-  storyHeadline: string;
-  sourceName: string;
-  url: string;
-  storyKey: string;
-  photo?: { url: string; credit: string } | null;
-};
-
-/** Guess the Number, carousel side (S-10, S-12, S-26): every brief number from posts of the last 7 days. */
-export async function carouselNumbers(db: Queryable, now: Date): Promise<NumberCandidate[]> {
-  const { rows } = await db.query<PostRow>(
-    `SELECT slug, story_id, status, brief, render, created_at::text FROM social.posts
-      WHERE status IN ('review', 'published') AND origin = 'pipeline' AND created_at > $1::timestamptz - interval '7 days' ORDER BY created_at DESC`,
-    [now.toISOString()],
-  );
-  const out: NumberCandidate[] = [];
-  for (const p of rows) {
-    const brief = p.brief ?? {};
-    const news = str((brief.the_news as Json | undefined)?.text) ?? '';
-    const src = (arr(brief.sources) as Json[])[0] ?? {};
-    const facts = arr(brief.facts) as Json[];
-    for (const n of arr(brief.numbers) as Json[]) {
-      const value = str(n.value);
-      const id = str(n.id);
-      if (!value || !id) continue;
-      // The fact sentence the number appears in, else the news line.
-      const fact = str(facts.find((f) => arr(f.ids).includes(id) || (str(f.text) ?? '').includes(value))?.text) ?? news;
-      out.push({
-        key: `${p.slug}#${id}`,
-        origin: 'carousel',
-        ref: p.slug,
-        value,
-        fact,
-        counts: str(n.counts) ?? '',
-        storyHeadline: news,
-        sourceName: str(src.outlet) ?? 'unknown',
-        url: str(src.url) ?? '',
-        storyKey: storyKey(str(src.url) ?? p.slug),
-        photo: postPhoto(p.render),
-      });
-    }
-  }
-  return out;
-}
-
-/** Shortlisted stories from the last 7 days that never became a post: Stories extracts their numbers (S-26). */
-export async function shortlistWithoutBrief(db: Queryable, now: Date): Promise<StoryCandidate[]> {
-  const runs = await db.query<{ record: Json }>(`SELECT record FROM social.runs WHERE trigger <> 'cli' AND finished_at > $1::timestamptz - interval '7 days'`, [now.toISOString()]);
-  const posted = new Set((await db.query<{ story_id: string }>(`SELECT story_id FROM social.posts WHERE story_id IS NOT NULL`)).rows.map((r) => r.story_id));
-  const out: StoryCandidate[] = [];
-  for (const { record } of runs.rows) {
-    for (const g of arr(((record?.selection ?? {}) as Json).shortlist) as Json[]) {
-      const c = groupToCandidate(g, 0);
-      if (c && !posted.has(c.ref)) out.push(c);
-    }
-  }
-  return out;
-}
-
 const ledgerQuery = (db: Queryable) => (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
 
 /**
@@ -191,12 +127,12 @@ export async function recentPhotoUses(db: Queryable, now: Date, days = USED_PHOT
 
 /**
  * The one write into Tommy's tables (plan rule 6): a photo Stories actually published, logged in the used-photo
- * ledger (vertical 'stories', the set id from `stories:<setId>`). Its hashes are best effort: a fetch or hash failure
+ * ledger under the set's type (`vertical`, default 'stories' = Morning Download; the set id from `stories:<setId>`). Its hashes are best effort: a fetch or hash failure
  * still writes a URL-only row. `http`/`hash` are for tests.
  */
 export async function recordPublishedPhoto(
   db: Queryable,
-  p: { url: string; usedAt: Date; storyId: string; slide: number; source?: string | null; qid?: string | null; subject?: string | null; credit?: string | null; scene?: string | null },
+  p: { url: string; usedAt: Date; storyId: string; vertical?: StoryVertical; slide: number; source?: string | null; qid?: string | null; subject?: string | null; credit?: string | null; scene?: string | null },
   o: { http?: typeof fetch; hash?: (bytes: Buffer) => Promise<{ phash: string; dhash: string }> } = {},
 ): Promise<void> {
   let hashes: { phash: string; dhash: string } | null = null;
@@ -211,7 +147,7 @@ export async function recordPublishedPhoto(
     {
       url: p.url,
       usedAt: p.usedAt,
-      vertical: 'stories',
+      vertical: p.vertical ?? 'stories',
       postId,
       slide: p.slide,
       source: p.source ?? 'stories',

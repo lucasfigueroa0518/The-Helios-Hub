@@ -27,6 +27,8 @@ export const liveJevTransport: JevTransport = {
     state: EntryType,
     questions: Q,
   ): Promise<SystemOneResult<Q>> {
+    // SDK 0.7.0: EntryType admits null (instructions only); a state is never null.
+    if (state === null) throw new Error('Jev state is null');
     return getClient().systemOne({ state, questions });
   },
 };

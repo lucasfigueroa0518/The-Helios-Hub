@@ -70,6 +70,9 @@ export const REVISION_REF_KEY: Record<Vertical, string> = {
   ai_events: 'aiEventsPostId',
   field_notes: 'fieldNotesPostId',
   reel_ai_drama: 'jobId',
+  // SS-1: every Stories-format type revises a set (lib/publishing/actions/stories.ts).
+  ai_trivia: 'setId',
+  real_or_ai: 'setId',
 };
 
 /** The refs a post's revision box sends, or null when the post has no such ref (the box is not shown). */

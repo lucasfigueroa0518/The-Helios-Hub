@@ -40,8 +40,13 @@ export type SourceId = string;
 
 /* ── orders ───────────────────────────────────────────────────────────── */
 
-/** Phase 2 adds 'reels', 'carousel' and 'field-notes' (planning/Central Intake/PHASE2-CONTRACT.md). */
-export type OrderId = 'lfd' | 'md' | 'gtn' | 'fvp' | 'reels' | 'carousel' | 'field-notes';
+/**
+ * Phase 2 adds 'reels', 'carousel' and 'field-notes' (planning/Central Intake/PHASE2-CONTRACT.md). The Stories split
+ * (SS-30) adds 'trivia': "Are you smarter than AI?" deposits the pages its writer cited and, in intake mode, reads
+ * them back as research. Free vs. Paid's 'fvp' is retired with the series (SS-31); old rows naming it still read.
+ * Real or AI? has no order (its scrapes are photo requests, lib/intake/orders.ts).
+ */
+export type OrderId = 'lfd' | 'md' | 'reels' | 'carousel' | 'field-notes' | 'trivia';
 
 export type ScorecardId = 'reels-screen' | 'reels-score' | 'story-scoring' | 'major-news' | 'story-builder' | 'field-notes-score';
 
@@ -212,7 +217,7 @@ export type RunIntakeDeps = {
 /** runIntake(deps, kind) → run id + record. No open order ⇒ fetch nothing, record `no-orders`. */
 export type RunIntake = (deps: RunIntakeDeps, kind: IntakeRunKind) => Promise<{ runId: string; record: IntakeRunRecord }>;
 
-/** Before a manual LFD run or MD/GTN/FvP Generate: run a top-up when the last successful run is older than 180 min. Never throws. */
+/** Before a manual LFD run or an MD Generate: run a top-up when the last successful run is older than 180 min. Never throws. */
 export const INTAKE_STALE_AFTER_MINUTES = 180;
 
 /* ── deposits and seeds (Owner A: depositFind; Owner B: addIntakeSeed) ── */

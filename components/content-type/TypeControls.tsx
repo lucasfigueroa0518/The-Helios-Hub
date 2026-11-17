@@ -4,11 +4,10 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Settings } from 'lucide-react';
 
-import { GenerateConfirm } from '@/components/content-type/GenerateConfirm';
 import type { GenerateOutcome } from '@/lib/content-type/queue-client';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
 import { Drawer } from '@/app/reels/ui';
-import { SERIES_LABEL } from '@/lib/content-type/story-series';
+import { isStoryVertical, STORY_TYPE_LABEL, type StoryVertical } from '@/lib/social-hub/story-types';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { ScheduleStrip } from '@/components/content-type/ScheduleStrip';
 import type { ScheduleDay } from '@/lib/content-type/posting';
@@ -129,34 +128,31 @@ export function AiEventsRunButton() {
   );
 }
 
-// ── Stories ─────────────────────────────────────────────────────────────────
+// ── Stories-format types (Morning Download, AI Trivia, Real or AI?) ─────────
 
-
-export function StoriesGenerate() {
+/** Generate: one set of this page's own Stories-format type (SS-26); the click is the approval for that set's live calls. */
+export function StoriesGenerate({ type = 'stories' }: { type?: StoryVertical }) {
   const router = useRouter();
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  async function generate(series: string) {
-    if (!confirm(`Generate ${SERIES_LABEL[series]}? This makes live model and web calls for that one set.`)) return;
-    setBusy(series);
+  const label = STORY_TYPE_LABEL[type];
+  async function generate() {
+    if (!confirm(`Generate ${label}? This makes live model and web calls for that one set.`)) return;
+    setBusy(true);
     try {
-      await call('/api/stories/generate', { series });
+      await call('/api/stories/generate', { vertical: type });
       window.dispatchEvent(new Event(PROGRESS_EVENT));
-      setNote(`${SERIES_LABEL[series]}: requested. The worker picks it up within a minute.`);
+      setNote(`${label}: requested. The worker picks it up within a minute.`);
       void refreshHubPage(router);
     } catch (e) {
       setNote(msg(e));
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
   return (
     <div>
-      <div className="rh__head-actions">
-        {Object.entries(SERIES_LABEL).map(([id, label]) => (
-          <button key={id} type="button" className="rh-btn" disabled={busy !== null} onClick={() => generate(id)}>Generate {label}</button>
-        ))}
-      </div>
+      <button type="button" className="rh-btn rh-btn--primary" disabled={busy} onClick={generate}>Generate</button>
       <Note text={note} />
     </div>
   );
@@ -223,17 +219,6 @@ export async function explainerGenerate(ideaId: string, overrideCaps: boolean): 
   return { ok: false, message: json.error ?? `Request failed (${res.status})` };
 }
 
-export function ExplainerGenerate({ ideaId, title }: { ideaId: string; title: string }) {
-  const router = useRouter();
-  const [asking, setAsking] = useState(false);
-  return (
-    <>
-      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" onClick={() => setAsking(true)}>Generate</button>
-      {asking ? <GenerateConfirm generate={explainerGenerate} ideaId={ideaId} title={title} reason="click" onDone={() => { setAsking(false); void refreshHubPage(router); }} /> : null}
-    </>
-  );
-}
-
 // ── Carousels: seed a story ─────────────────────────────────────────────────
 
 // ── Stories: seed an idea ───────────────────────────────────────────────────
@@ -262,16 +247,20 @@ type Posting = {
   autoPublish: boolean;
   perDay: number | null;
   maxPerDay: number | null;
-  series: Array<{ id: string; label: string; enabled: boolean; generate: boolean; days: number[] }> | null;
+  /** The days-based types (Last Few Days, AI Events, the Stories-format types): the weekdays it posts. */
+  days?: number[] | null;
   /** The calendar's week for this type (template mode); null while each type sets its own cadence. */
   schedule: ScheduleDay[] | null;
-  /** The daily limit (template mode; Stories: per series); null while legacy. */
+  /** The daily limit (template mode); null while legacy. */
   cap: number | null;
   /** About what one more post a night costs; null when unknown. */
   costPerPostMicros: number | null;
 };
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** The most a daily limit can be: AI Trivia and Real or AI? post once a day (SS-24); Morning Download (two a day, R25) and the rest by their config. */
+const capMax = (type: Posting['type']) => (isStoryVertical(type) && type !== 'stories' ? Math.min(1, maxCapFor(type)) : maxCapFor(type));
 
 function Switch({ checked, onChange, children, hint }: { checked: boolean; onChange: (on: boolean) => void; children: ReactNode; hint?: string }) {
   return (
@@ -299,7 +288,7 @@ function DailyLimit({ type, cap, costMicros, onSave }: { type: Posting['type']; 
         <span className="rh-quota__label">Daily limit</span>
         <button type="button" className="rh-btn rh-btn--xs" disabled={cap <= 0} onClick={() => onSave(cap - 1)} aria-label="One fewer a night">−</button>
         <strong className="rh-quota__n">{cap}</strong>
-        <button type="button" className="rh-btn rh-btn--xs" disabled={cap >= maxCapFor(type)} onClick={() => onSave(cap + 1)} aria-label="One more a night">+</button>
+        <button type="button" className="rh-btn rh-btn--xs" disabled={cap >= capMax(type)} onClick={() => onSave(cap + 1)} aria-label="One more a night">+</button>
       </div>
       <p className="rh-settings__note">The most {noun} the overnight run makes a day{TYPE_CONFIG[type].capPerSeries ? ', per series' : ''}, however many slots the calendar has.</p>
       {costMicros != null ? <p className="rh-settings__note">One more a night costs about {formatUsd(costMicros)}.</p> : null}
@@ -328,7 +317,7 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
   if (error) return <p className="rh-empty">{error}</p>;
   if (!data) return <p className="rh-muted">Loading…</p>;
   const noun = TYPE_CONFIG[type].postsNoun;
-  // With the calendar, when a type posts is set there: the quota and series days give way to its week, read only.
+  // With the calendar, when a type posts is set there: the quota gives way to its week, read only.
   const calendar = data.schedule ?? null;
   return (
     <div className="rh-settings">
@@ -374,45 +363,8 @@ export function PostingSettings({ type }: { type: Posting['type'] }) {
           <p className="rh-settings__note">How many {noun} are made, scheduled and posted each day. Up to {data.maxPerDay}: one per posting window.</p>
         </div>
       ) : null}
-      {data.series ? (
-        <>
-          {calendar ? null : <p className="rh-settings__note">Each series has its own days of the week. A set is made for each series on its days.</p>}
-          {data.series.map((s) => (
-            <div key={s.id} className="rh-series">
-              <strong>{s.label}</strong>
-              {calendar ? null : <div className="rh-series__days" role="group" aria-label={`${s.label} days`}>
-                {DAY_NAMES.map((name, d) => {
-                  const on = s.days.includes(d);
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      className={`rh-btn rh-btn--xs${on ? ' rh-btn--primary' : ''}`}
-                      aria-pressed={on}
-                      onClick={() => {
-                        const days = on ? s.days.filter((x) => x !== d) : [...s.days, d];
-                        if (days.length === 0) { setNote('Pick at least one day.'); return; }
-                        void save({ series: { id: s.id, days } });
-                      }}
-                    >
-                      {name}
-                    </button>
-                  );
-                })}
-              </div>}
-              <Switch checked={s.enabled} onChange={(on) => void save({ series: { id: s.id, enabled: on } })}>Enabled</Switch>
-              <Switch
-                checked={s.generate}
-                onChange={(on) => {
-                  if (on && !confirm(`Make ${s.label} automatically on its days? Each build makes live model and web calls.`)) return;
-                  void save({ series: { id: s.id, generate: on } });
-                }}
-              >
-                Generate on its days
-              </Switch>
-            </div>
-          ))}
-        </>
+      {!calendar && isStoryVertical(type) && data.days?.length ? (
+        <p className="rh-settings__note">Posts on {data.days.map((d) => DAY_NAMES[d]).join(', ')}.</p>
       ) : null}
       <Note text={note} />
     </div>
@@ -474,15 +426,26 @@ export async function dramaGenerate(ideaId: string): Promise<GenerateOutcome> {
   }
 }
 
-export function DramaMakeIt({ ideaId, title }: { ideaId: string; title: string }) {
-  const router = useRouter();
-  const [asking, setAsking] = useState(false);
-  return (
-    <>
-      <button type="button" className="rh-btn rh-btn--primary rh-btn--xs" onClick={() => setAsking(true)}>Make it</button>
-      {asking ? <GenerateConfirm generate={dramaGenerate} ideaId={ideaId} title={title} reason="click" onDone={() => { setAsking(false); void refreshHubPage(router); }} /> : null}
-    </>
-  );
+// ── Field Notes: make one tip ───────────────────────────────────────────────
+
+/**
+ * Make it on one Field Notes tip (POST /api/field-notes/tips/:id/make): queues one run that puts this tip first, for
+ * the social worker to claim. The click approves that run's capped spend (field_notes.settings run_cap_usd). A refusal
+ * (archived, used, a run already queued, the cap not set) comes back as a 409 with its note.
+ */
+export async function fieldNotesMake(ideaId: string): Promise<GenerateOutcome> {
+  const tipId = ideaId.replace(/^field_notes:tip:/, '');
+  try {
+    const res = await fetch(`/api/field-notes/tips/${encodeURIComponent(tipId)}/make`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (res.ok) {
+      window.dispatchEvent(new Event(PROGRESS_EVENT));
+      return { ok: true };
+    }
+    return { ok: false, message: json.error ?? `Request failed (${res.status})` };
+  } catch (e) {
+    return { ok: false, message: msg(e) };
+  }
 }
 
 /**

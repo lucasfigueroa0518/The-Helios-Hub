@@ -26,6 +26,7 @@
  */
 import type { ContentLeaf, Want } from '@/lib/field-notes/types';
 import type { ScoredCandidate } from './score';
+import { orderForNight } from '@/lib/social-hub/queue';
 import { candidateTitle, canonicalSourceUrl, githubRepoOf, type TipCandidate } from './candidate';
 
 /**
@@ -63,13 +64,25 @@ export const FEATURE_LEAVES = ['coding_agent_feature', 'llm_app_feature', 'techn
 export const isRepoLeaf = (leaf: ContentLeaf | null | undefined): boolean => !!leaf && (REPO_LEAVES as readonly string[]).includes(leaf);
 export const isFeatureLeaf = (leaf: ContentLeaf | null | undefined): boolean => !!leaf && (FEATURE_LEAVES as readonly string[]).includes(leaf);
 
+/** The shared queue as the selector reads it (lib/social-hub/queue.ts NightQueue, by tip id). */
+export type SelectQueue = { pins: readonly string[]; placed: ReadonlyMap<string, number>; archived: ReadonlySet<string>; demoted?: ReadonlySet<string> };
+
 export type SelectInput = {
   scored: readonly (ScoredCandidate & {
     /** When we first saw it (tips.created_at). Expiry counts from this only; absent means never expired. */
     firstSeenAt?: string | null;
     /** The stored subject: a seeder's name for a seed; for a found tip only a placeholder (its title is the key). */
     subject?: string | null;
+    /** The stored tip's id (field_notes.tips.id): how `queue` names it. Absent: the queue does not apply to it. */
+    id?: string | null;
   })[];
+  /**
+   * The shared idea queue (Tommy, 2026-11-16: Field Notes runs like the other live types), by tip id. Archived tips are
+   * never picked. Pinned tips go on first, in the order pinned (still one per subject and never one already posted; the
+   * post's caps count them but never refuse them). Every other tip is taken in queue order: a dragged tip at its key among
+   * the scores; the tie band and the post's caps work on that order. Absent: score order, as before.
+   */
+  queue?: SelectQueue;
   now: Date;
   tipExpiryDays: number;
   /** Subjects of tips already on a post (drafted, approved, posted): a candidate whose title matches is skipped. */
@@ -212,7 +225,11 @@ export function selectTips(input: SelectInput, count: number): ScoredCandidate[]
   const names = postedNames(input.postedSubjects ?? [], input.postedUrls ?? []);
   const cutoff = input.now.getTime() - input.tipExpiryDays * 86_400_000;
 
+  const queue = input.queue;
+  const idOf = (s: { id?: string | null }) => s.id ?? '';
   const eligible = input.scored.filter((s) => {
+    // A person archived it: never on a post.
+    if (queue && s.id && queue.archived.has(s.id)) return false;
     // A score of 0 is a no from the AI gate (field-notes-score@3) or a no to everything: never on a post, not even to reach minTotal.
     if (!(s.score > 0)) return false;
     const seen = ms(s.firstSeenAt);
@@ -230,6 +247,14 @@ export function selectTips(input: SelectInput, count: number): ScoredCandidate[]
     return Number.isFinite(t) ? t : ms(s.firstSeenAt) || 0;
   };
   eligible.sort((a, b) => b.score - a.score || newest(b) - newest(a) || a.candidate.sourceUrl.localeCompare(b.candidate.sourceUrl));
+  // The shared queue's order (pins first, then each dragged tip where its key sorts among the scores). The tie band
+  // compares effective scores (a dragged tip's key), so a drag is never undone by the want-variety rule.
+  if (queue) {
+    const ordered = orderForNight(eligible, idOf, (s) => s.score, { pins: queue.pins, placed: queue.placed, archived: queue.archived, demoted: queue.demoted });
+    eligible.splice(0, eligible.length, ...ordered);
+  }
+  const effective = (s: { id?: string | null; score: number }) => (queue && s.id ? queue.placed.get(s.id) : undefined) ?? s.score;
+  const pinned = new Set(queue?.pins ?? []);
 
   const recent = new Map<Want, number>();
   for (const w of input.recentWants ?? []) recent.set(w, (recent.get(w) ?? 0) + 1);
@@ -271,6 +296,14 @@ export function selectTips(input: SelectInput, count: number): ScoredCandidate[]
     return features.find(underWantCap) ?? features[0] ?? null;
   };
 
+  // Pinned tips first, in the order pinned: a person's choice beats the post's caps (they still count toward them).
+  if (pinned.size) {
+    for (const s of eligible) {
+      if (out.length >= count) break;
+      if (pinned.has(idOf(s)) && free(s)) take(s);
+    }
+  }
+
   let pool = eligible;
   while (out.length < count) {
     // Whatever can still go on this post, best first.
@@ -292,7 +325,7 @@ export function selectTips(input: SelectInput, count: number): ScoredCandidate[]
     };
     let pick = top;
     for (const s of pool) {
-      if (top.score - s.score > WANT_TIE_BAND) break;
+      if (effective(top) - effective(s) > WANT_TIE_BAND) break;
       if (better(s, pick)) pick = s;
     }
     take(pick);

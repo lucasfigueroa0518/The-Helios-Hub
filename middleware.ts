@@ -30,6 +30,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === '/api/webhooks/agentmail') return true;
   if (pathname === '/api/webhooks/gcp-billing') return true;
   if (pathname.startsWith('/api/public/sender-headshots/')) return true;
+  // The web game export: Bearer HUB_GAME_EXPORT_TOKEN, checked in the route.
+  if (pathname === '/api/public/trivia-game/days') return true;
   // Private reel review. The token in the path is the gate. No Auth.js session.
   if (pathname.startsWith('/watch/')) return true;
   if (pathname.startsWith('/api/watch/')) return true;
@@ -78,6 +80,13 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/reels/')
     || pathname === '/stories'
     || pathname.startsWith('/stories/')
+    // SS-1: the three Stories-format type pages.
+    || pathname === '/morning-download'
+    || pathname.startsWith('/morning-download/')
+    || pathname === '/ai-trivia'
+    || pathname.startsWith('/ai-trivia/')
+    || pathname === '/real-or-ai'
+    || pathname.startsWith('/real-or-ai/')
     || pathname === '/carousels'
     || pathname.startsWith('/carousels/')
     || pathname === '/field-notes'
@@ -161,6 +170,12 @@ export const config = {
     '/reels/:path*',
     '/stories',
     '/stories/:path*',
+    '/morning-download',
+    '/morning-download/:path*',
+    '/ai-trivia',
+    '/ai-trivia/:path*',
+    '/real-or-ai',
+    '/real-or-ai/:path*',
     '/social',
     '/social/:path*',
     '/memes',

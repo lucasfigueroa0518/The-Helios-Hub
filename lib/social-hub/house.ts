@@ -1,6 +1,7 @@
 import { costOfPosts } from '@/lib/social-hub/cost';
 import { mean, metricSpec, postMetric } from '@/lib/social-hub/metrics';
 import { addDays, dateTimeLabel, inRange } from '@/lib/social-hub/time';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { VERTICALS, verticalInfo } from '@/lib/social-hub/verticals';
 import { needsPerson } from '@/lib/social-hub/views/state';
 import type { DateRange, HubIdea, HubPost, HubSource, MetricKey, Vertical } from '@/lib/social-hub/types';
@@ -148,6 +149,8 @@ const PUBLISH_CONFIRM: Record<Vertical, string> = {
   explainers: 'This reel goes out now instead of in its slot. Publishing counts as your approval unless it was rejected in review.',
   reel_ai_drama: 'This reel goes out now instead of in its slot. Publishing counts as your approval unless it was rejected in review.',
   stories: 'This set is approved and goes out now, frame by frame.',
+  ai_trivia: 'This set is approved and goes out now, frame by frame.',
+  real_or_ai: 'This set is approved and goes out now, frame by frame.',
   last_few_days: 'This Last Few Days post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
   ai_events: 'This AI Events post goes out now instead of in its Sunday slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
   field_notes: 'This Field Notes post goes out now instead of in its slot. Publishing counts as your approval, and its waiting slot is released so it can’t post twice.',
@@ -214,7 +217,7 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   }
   // A failed post can go again (Phase B, B7): Reschedule into one of today's windows, or Reject.
   // Not a Story set (a failed set is final; Regenerate builds a new one), and not a render with nothing to post.
-  const failedRetry = post.status === 'failed' && post.vertical !== 'stories' && hasContent(post) && !/\brejected\b/i.test(post.approval.note ?? '');
+  const failedRetry = post.status === 'failed' && !isStoryVertical(post.vertical) && hasContent(post) && !/\brejected\b/i.test(post.approval.note ?? '');
   // Reject (D47): content that hasn't posted yet never will, for every type (2026-10-13: explainers too).
   if (post.status === 'ready' || post.status === 'scheduled' || failedRetry) {
     const refs = post.vertical === 'carousels'
@@ -245,7 +248,7 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
           confirm: 'It won’t post, and its slot opens for something else.',
         });
   }
-  if ((post.vertical === 'explainers' || post.vertical === 'reel_ai_drama' || post.vertical === 'stories') && post.status === 'ready' && !post.approval.approvedAt) {
+  if ((post.vertical === 'explainers' || post.vertical === 'reel_ai_drama' || isStoryVertical(post.vertical)) && post.status === 'ready' && !post.approval.approvedAt) {
     const byJob = post.vertical === 'explainers' || post.vertical === 'reel_ai_drama';
     const ref = byJob ? post.refs.jobId : post.refs.setId;
     plans.push({
@@ -319,13 +322,13 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
       confirm: 'The post is rebuilt from this week’s pool with your pins and excludes, from the scores it already has (no new model spend). Its hook, look, approval and slot stay.',
     });
   }
-  if (post.vertical === 'stories' || post.vertical === 'explainers' || post.vertical === 'reel_ai_drama') {
-    const ref = post.vertical === 'stories' ? post.refs.setId : post.vertical === 'reel_ai_drama' ? post.refs.pitchId : post.refs.topicId;
+  if (isStoryVertical(post.vertical) || post.vertical === 'explainers' || post.vertical === 'reel_ai_drama') {
+    const ref = isStoryVertical(post.vertical) ? post.refs.setId : post.vertical === 'reel_ai_drama' ? post.refs.pitchId : post.refs.topicId;
     plans.push({
       kind: 'post', action: 'hardRegenerate', label: 'Hard regenerate', endpoint: '/api/social-hub/actions/hard-regenerate',
       body: { vertical: post.vertical, ref: ref ?? null },
-      disabled: !ref ? 'The idea behind this can’t be found any more.' : post.vertical === 'stories' && post.status === 'published' ? 'A posted Story set isn’t rebuilt.' : null,
-      confirm: post.vertical === 'stories'
+      disabled: !ref ? 'The idea behind this can’t be found any more.' : isStoryVertical(post.vertical) && post.status === 'published' ? 'A posted Story set isn’t rebuilt.' : null,
+      confirm: isStoryVertical(post.vertical)
         ? `A new set is built for the same day. Typical cost ${ctx.typicalCostLabel ?? 'unknown'} a set. The current set is set aside and kept in history.`
         : `A new version is rendered. Typical cost ${ctx.typicalCostLabel ?? 'unknown'} a reel. It replaces the current one when it finishes, the old one stays in history, and the daily render and spend caps still apply.`,
     });
@@ -344,6 +347,8 @@ export function contentRefs(post: HubPost): Record<string, string | undefined> {
     case 'reel_ai_drama':
       return { jobId: post.refs.jobId };
     case 'stories':
+    case 'ai_trivia':
+    case 'real_or_ai':
       return { setId: post.refs.setId };
     case 'last_few_days':
       return { lfdPostId: post.refs.lfdPostId };

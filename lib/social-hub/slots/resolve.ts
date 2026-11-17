@@ -1,13 +1,14 @@
 // lib/social-hub/slots/resolve.ts
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { weekdayOf } from '@/lib/social-hub/time';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 
 import { clockLabel } from './times';
 import { isReelType, isSlotMinute, slotKeyString, type OverrideRow, type ResolvedSlot, type TemplateRow } from './types';
 
-/** Series only on Stories, and required there; a row that breaks this isn't a slot. */
+/** Series only on the Stories-format types (SS-1), and required there; a row that breaks this isn't a slot. */
 const wellFormed = (r: Pick<TemplateRow, 'vertical' | 'startMinute' | 'series'>) =>
-  isSlotMinute(r.startMinute) && (r.vertical === 'stories') === (r.series !== null);
+  isSlotMinute(r.startMinute) && isStoryVertical(r.vertical) === (r.series !== null);
 
 /**
  * What runs on a New York date: that weekday's template rows, then that

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Play, Settings, X } from 'lucide-react';
 
 import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 /** Mark the shared hub read stale, then re-render (see POST /api/content-type/progress). */
 async function refreshHubPage(refresh: () => void): Promise<void> {
@@ -141,7 +142,10 @@ const TYPES: Array<{ id: string; label: string; min: number }> = [
   { id: 'reels', label: 'Text on Screen', min: 0 },
   { id: 'carousels', label: 'Carousels', min: 0 },
   { id: 'explainers', label: 'Explainer Reels', min: 1 },
-  { id: 'stories', label: 'IG Stories', min: 0 },
+  { id: 'stories', label: 'Morning Download', min: 0 },
+  // SS-1: the Stories split's two types of their own.
+  { id: 'ai_trivia', label: 'AI Trivia', min: 0 },
+  { id: 'real_or_ai', label: 'Real or AI?', min: 0 },
   { id: 'last_few_days', label: 'Last Few Days', min: 0 },
   { id: 'ai_events', label: 'AI Events This Week', min: 0 },
   { id: 'field_notes', label: 'Field Notes', min: 0 },
@@ -229,12 +233,8 @@ export function HubSettingsButton() {
                     <>
                       <Switch on={p.live} label="Live" hint={p.live ? 'Scheduling and posting to Instagram.' : 'Off: nothing is scheduled or posted.'} disabled={saving === t.id || pending} onChange={(v) => setLive(t.id, t.label, v)} />
                       {p.generate != null ? (
-                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : t.id === 'ai_events' ? 'Makes the week’s carousel at 12:00 PM on Sundays.' : t.id === 'field_notes' ? 'Makes one post at 12:00 PM on its days (1–2 a week).' : t.id === 'reel_ai_drama' ? 'Fills the day’s slots at 12:00 AM; develops pitches on Mondays.' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id || pending} onChange={(v) => setNightly(t.id, t.label, v)} />
+                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : t.id === 'ai_events' ? 'Makes the week’s carousel at 12:00 PM on Sundays.' : t.id === 'field_notes' ? 'Makes one post at 12:00 PM on its days (1–2 a week).' : t.id === 'reel_ai_drama' ? 'Fills the day’s slots at 12:00 AM; develops pitches on Mondays.' : isStoryVertical(t.id) ? 'Makes a set at 4:00 AM on its days.' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id || pending} onChange={(v) => setNightly(t.id, t.label, v)} />
                       ) : null}
-                      {p.series?.map((s) => (
-                        <Switch key={s.id} on={s.generate} label={`${s.label}: nightly`} hint={s.enabled ? `Made at 4:00 AM on its days.` : 'This series is turned off.'} disabled={saving === t.id || pending || !s.enabled}
-                          onChange={(v) => { if (!v || window.confirm(`Make ${s.label} automatically at 4:00 AM on its days? Each set makes live model calls.`)) void save(t.id, { series: { id: s.id, generate: v } }); }} />
-                      ))}
                       {p.perDay != null && p.maxPerDay != null ? (
                         <div className="sh-setting__quota">
                           <span>Posts per day</span>

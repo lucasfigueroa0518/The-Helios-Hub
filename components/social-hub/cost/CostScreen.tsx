@@ -113,7 +113,7 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
       <section aria-labelledby="h-budget">
         <div className="sh-ops-sechead is-start">
           <h2 id="h-budget">Budget</h2>
-          <InfoPop title="Budget">Each type&apos;s spend this month against its monthly watch. Types with only a daily cap use the cap × days in the month.</InfoPop>
+          <InfoPop title="Budget">Each type&apos;s spend this month against its monthly watch. Types with only a daily cap use the cap × days in the month; Morning Download, Are you smarter than AI? and Real or AI? each use their own daily cap × the days they post.</InfoPop>
         </div>
         <p className="sh-ops-sub">Each type against its monthly watch. Click a card to filter the page to that type.</p>
         <div className="sh-cost-budget">

@@ -9,8 +9,21 @@ import type { Vertical } from '@/lib/social-hub/types';
  * components/content-type/type-parts.tsx, keyed the same way.
  */
 
-/** How a type's pool answers a person's moves: `live` follows the queue (pin, drag, archive), `archive_only` takes Archive only, `none` has neither. */
-export type QueueMode = 'live' | 'archive_only' | 'none';
+/**
+ * The pool screen's per-type settings (pool UI contract 2026-11-15 §2). Everything else about the pool screen is
+ * fixed by the standard. Every type's pool is on the shared queue (lib/social-hub/queue.ts), so pin, drag and archive are on for all.
+ */
+export type PoolConfig = {
+  /** What one entry is called: { one: 'topic', many: 'topics' }. */
+  noun: { one: string; many: string };
+  /** The number column: score (2 decimals), rank (1, 2, 3), or none. List order: score and rank best first, newest by createdAt. */
+  order: 'score' | 'rank' | 'newest';
+  /** Which buttons a row offers. */
+  moves: { pin: boolean; drag: boolean; archive: boolean; make: boolean };
+};
+
+/** Pin, hold-and-drag and Archive, with or without Make it (every pool is on the live queue, Tommy 2026-11-16). */
+const liveMoves = (make: boolean): PoolConfig['moves'] => ({ pin: true, drag: true, archive: true, make });
 
 /** The words of the Generate switch in the settings drawer. */
 export type GenerateCopy = { label: string; confirm: string; hint: string };
@@ -22,7 +35,6 @@ export type TypeConfig = {
   benchNote: string | null;
   /** The most a daily limit may be set to (week board spec §Safety cap). */
   maxCap: number;
-  queue: QueueMode;
   /** Whether the pool has a "Seed an idea" path. */
   seedable: boolean;
   /** What a post of this type is called in settings sentences ("Auto-publish: <noun> are scheduled…"). */
@@ -39,6 +51,8 @@ export type TypeConfig = {
   groupNoun: 'series' | 'cities';
   /** A drag in the bench needs a group picked first (each series is its own queue). */
   dragNeedsGroup: boolean;
+  /** The pool screen's settings: noun, number column, row buttons. */
+  pool: PoolConfig;
 };
 
 /** slots/write.ts writeCaps takes 0–10. */
@@ -55,7 +69,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'Text on Screen',
     benchNote: null,
     maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
     seedable: true,
     postsNoun: 'reels',
     generate: null,
@@ -64,12 +77,12 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'idea', many: 'ideas' }, order: 'score', moves: liveMoves(false) },
   },
   explainers: {
     title: 'Explainers',
     benchNote: 'Topics waiting to be rendered, best score first. Generate renders one reel. Hold and drag any topic to move it.',
     maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
     seedable: true,
     postsNoun: 'explainers',
     generate: null,
@@ -78,12 +91,12 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'topic', many: 'topics' }, order: 'score', moves: liveMoves(true) },
   },
   carousels: {
     title: 'Carousels',
     benchNote: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels. Hold and drag any story to move it.',
     maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
     seedable: true,
     postsNoun: 'carousels',
     generate: null,
@@ -92,28 +105,65 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'story', many: 'stories' }, order: 'score', moves: liveMoves(false) },
   },
+  // The Stories-format types (SS-1): one Stories engine, one series each, so no series tabs and a plain daily limit.
   stories: {
-    title: 'Stories',
-    benchNote: 'Ideas drawn from the other pools. A set is built for each series that is due. Pick a series, then hold and drag an idea to move it.',
-    maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
+    title: 'Morning Download',
+    benchNote: 'Ideas drawn from the other pools: the morning’s news, ranked by the news score. Hold and drag an idea to move it.',
+    maxCap: DEFAULT_MAX_CAP, // Morning Download keeps its two-a-day slots (R25); only Trivia and Real or AI? post once a day
     seedable: true,
-    postsNoun: 'story sets',
+    postsNoun: 'Morning Download sets',
     generate: null,
     perDayMin: 0,
-    capPerSeries: true,
+    capPerSeries: false,
     weekPool: false,
     groupNoun: 'series',
-    dragNeedsGroup: true,
+    dragNeedsGroup: false,
+    pool: { noun: { one: 'idea', many: 'ideas' }, order: 'score', moves: liveMoves(false) },
   },
-  // Its pool is the last run's record, so there is no queue to steer; Last Few Days runs once a day.
+  ai_trivia: {
+    title: 'Are you smarter than AI?',
+    benchNote: 'The questions written for “Are you smarter than AI?”. Hold and drag a question to move it.',
+    maxCap: 1, // SS-24: a Stories-format type posts at most once a day
+    seedable: false,
+    postsNoun: 'Are you smarter than AI? sets',
+    generate: {
+      label: 'Generate on its days',
+      confirm: 'Make “Are you smarter than AI?” sets on their days, two days ahead? Each set makes live model and web calls (up to its daily cap).',
+      hint: 'Makes a set two days before each of its days, so there is a full day to review it.',
+    },
+    perDayMin: 0,
+    capPerSeries: false,
+    weekPool: false,
+    groupNoun: 'series',
+    dragNeedsGroup: false,
+    pool: { noun: { one: 'question', many: 'questions' }, order: 'score', moves: liveMoves(false) },
+  },
+  real_or_ai: {
+    title: 'Real or AI?',
+    benchNote: 'Rounds of a real photo and an AI image, from the pool the engine screens. Hold and drag a round to move it.',
+    maxCap: 1, // SS-24: a Stories-format type posts at most once a day
+    seedable: false,
+    postsNoun: 'Real or AI? sets',
+    generate: {
+      label: 'Generate on its days',
+      confirm: 'Make “Real or AI?” sets on their days, two days ahead? Each set makes live model and image calls (up to its daily cap).',
+      hint: 'Makes a set two days before each of its days, so there is a full day to review it.',
+    },
+    perDayMin: 0,
+    capPerSeries: false,
+    weekPool: false,
+    groupNoun: 'series',
+    dragNeedsGroup: false,
+    pool: { noun: { one: 'round', many: 'rounds' }, order: 'score', moves: liveMoves(false) },
+  },
+  // Last Few Days runs once a day; its night picks stories in queue order (pins first, then drag order; Tommy, 2026-11-16).
   last_few_days: {
     title: 'Last Few Days',
     benchNote:
       'The latest run’s queue: the stories in its post, the ones it dropped and why, and what was next in line. Major headlines lead; Text on Screen ideas fill the rest.',
     maxCap: 1,
-    queue: 'archive_only',
     seedable: true,
     postsNoun: 'Last Few Days posts',
     generate: {
@@ -126,6 +176,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'story', many: 'stories' }, order: 'rank', moves: liveMoves(false) },
   },
   // At most twice a day (Miami and Boston, AE-29). No seed path yet (decided 2026-11-02: not built).
   ai_events: {
@@ -133,7 +184,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     benchNote:
       'The week’s ranked events, city by city: each city’s top 10 is badged on the site and the post teases from it. Gated and excluded events stay listed with the reason. Open a row to see where its score comes from.',
     maxCap: 2,
-    queue: 'none',
     seedable: false,
     postsNoun: 'AI Events posts',
     generate: {
@@ -146,13 +196,13 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: true,
     groupNoun: 'cities',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'event', many: 'events' }, order: 'rank', moves: liveMoves(false) },
   },
   field_notes: {
     title: 'Field Notes',
     benchNote:
       'Tips waiting for a post, newest first: from vendor docs, GitHub, Hacker News, RSS and the ones you seed. Generate picks one, pairs it with photos from the pool and renders the carousel. A tip that already made a post shows that post.',
     maxCap: 1,
-    queue: 'none',
     seedable: true,
     postsNoun: 'Field Notes posts',
     generate: {
@@ -166,13 +216,13 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'tip', many: 'tips' }, order: 'score', moves: liveMoves(true) },
   },
   // Pitches come from weekly development sessions, not seeds; the night makes up to three a day.
   reel_ai_drama: {
     title: 'AI Drama Reels',
     benchNote: 'Story pitches waiting to be made, best rank first. Make it produces one reel. Hold and drag any pitch to move it.',
     maxCap: 3,
-    queue: 'live',
     seedable: false,
     postsNoun: 'AI Drama reels',
     generate: {
@@ -186,6 +236,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'pitch', many: 'pitches' }, order: 'rank', moves: liveMoves(true) },
   },
 };
 
@@ -203,11 +254,3 @@ export function generateCopy(type: Vertical): GenerateCopy {
     }
   );
 }
-
-const idsWhere = (test: (c: TypeConfig) => boolean): ReadonlySet<string> =>
-  new Set((Object.keys(TYPE_CONFIG) as Vertical[]).filter((id) => test(TYPE_CONFIG[id])));
-
-/** Types whose nights follow the queue (see lib/social-hub/queue.ts QUEUE_LIVE). */
-export const QUEUE_LIVE_TYPES: ReadonlySet<string> = idsWhere((c) => c.queue === 'live');
-/** Types that take Archive but not Pin or drag. */
-export const ARCHIVE_ONLY_TYPES: ReadonlySet<string> = idsWhere((c) => c.queue === 'archive_only');

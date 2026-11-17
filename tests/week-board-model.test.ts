@@ -163,18 +163,19 @@ test('edited is true only when the date has a person\'s own edit; a system pin o
   assert.ok(m.cards.filter((c) => c.day !== 3).every((c) => !c.mine));
 });
 
-test('a 4th explainer is over the daily cap; each Stories series counts on its own', () => {
+test('a 4th explainer is over the daily cap; each Stories-format type counts on its own (SS-1)', () => {
   const days = week();
   days[2]!.slots = [slot('explainers', 780), slot('explainers', 840), slot('explainers', 930), slot('explainers', 1000)];
   const m = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS });
   assert.deepEqual(m.cards.filter((c) => c.day === 2).map((c) => c.overCap), [false, false, false, true]);
   assert.equal(m.cards.find((c) => c.day === 2 && c.overCap)!.statusText, 'Over today’s limit, so nothing is made for this slot.');
   days[3]!.slots = [
-    slot('stories', 510, { series: 'morning_download' }), slot('stories', 540, { series: 'guess_the_number' }),
+    slot('stories', 510, { series: 'morning_download' }), slot('ai_trivia', 540, { series: 'ai_trivia' }),
     slot('stories', 600, { series: 'morning_download' }), slot('stories', 630, { series: 'morning_download' }),
   ];
   const s = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 3);
-  assert.deepEqual(s.map((c) => c.overCap), [false, false, false, true]);
+  // Morning Download posts twice a day (R25); Trivia's slot counts against its own limit.
+  assert.deepEqual(s.map((c) => [c.vertical, c.overCap]), [['stories', false], ['ai_trivia', false], ['stories', false], ['stories', true]]);
 });
 
 test('outsideUsual flags a time away from the usual windows', () => {
@@ -214,12 +215,12 @@ test('stack: a pushed card pushes the next; a card past the stack is left alone;
 test('stack: Stories at one minute in different series stack in stable key order', () => {
   const cards = [
     { key: '1|stories|t0510:morning_download', day: 1, startMinute: 510 },
-    { key: '1|stories|t0510:free_vs_paid', day: 1, startMinute: 510 },
+    { key: '1|stories|t0510:real_or_ai', day: 1, startMinute: 510 },
   ];
   for (const list of [cards, [...cards].reverse()]) {
     const tops = stackOffsets(list, 780);
-    assert.equal(near(tops.get('1|stories|t0510:free_vs_paid')), 30);
-    assert.equal(near(tops.get('1|stories|t0510:morning_download')), 60);
+    assert.equal(near(tops.get('1|stories|t0510:morning_download')), 30);
+    assert.equal(near(tops.get('1|stories|t0510:real_or_ai')), 60);
   }
 });
 
@@ -505,7 +506,7 @@ test('place picker: a Ready Story is offered only its series’ open slots on th
   const s = state();
   const wed = dayCtx(s, WED, CLOCK);
   assert.deepEqual(readyMinutes(wed, 'stories', 'morning_download'), [510]);
-  assert.deepEqual(readyMinutes(wed, 'stories', 'free_vs_paid'), [], 'no Free vs. Paid on Wednesday');
+  assert.deepEqual(readyMinutes(wed, 'stories', 'real_or_ai'), [], 'no Real or AI? on Wednesday');
   assert.deepEqual(readyMinutes(dayCtx(s, 1, CLOCK), 'stories', 'morning_download'), [], 'today’s 8:30 has started');
   assert.deepEqual(readyMinutes(wed, 'explainers', null), openMinutes(wed), 'other types take any open time');
   const off = dropState({ ctx: wed, vertical: 'stories', series: 'morning_download', raw: 720, caps: DEFAULT_CAPS, ready: { taken: () => false } });

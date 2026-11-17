@@ -49,6 +49,10 @@ export type RankInput = {
   excluded: boolean;
   /** The partner hosting it (AE-27), or null. */
   partner?: string | null;
+  /** Where a person dragged it in the hub's queue (the key its drop left it at, on the score scale), or null. Orders only; the bar reads `score`. */
+  sortKey?: number | null;
+  /** Its place among the pins, 0 first (the order pinned in the hub's queue), or null: pins with none follow, in rank order. */
+  pinOrder?: number | null;
 };
 
 /** Organizer identity (shown in the hub): the organizer name, else the series key. */
@@ -58,10 +62,10 @@ export function organizerKey(event: { organizerName: string | null; seriesKey: s
   return event.seriesKey ? `series:${event.seriesKey}` : null;
 }
 
-/** Score (null last), then going, then start. */
+/** Score (a dragged event's key in place of its score; null last), then going, then start. */
 export function compareRank(a: RankInput, b: RankInput): number {
-  const sa = a.score ?? Number.NEGATIVE_INFINITY;
-  const sb = b.score ?? Number.NEGATIVE_INFINITY;
+  const sa = a.sortKey ?? a.score ?? Number.NEGATIVE_INFINITY;
+  const sb = b.sortKey ?? b.score ?? Number.NEGATIVE_INFINITY;
   if (sa !== sb) return sb - sa;
   const ga = a.going ?? 0;
   const gb = b.going ?? 0;
@@ -98,7 +102,9 @@ const special = (e: RankInput) => e.pinned || e.partner != null;
  */
 export function choosePicks<T extends RankInput>(events: readonly T[], bar: number | null = null, depth: number = PICKS_PER_CITY): T[] {
   const ranked = rankCity(events.filter((e) => !e.excluded));
-  const picks: T[] = [...ranked.filter((e) => e.pinned), ...ranked.filter((e) => !e.pinned && e.partner != null)].slice(0, PICKS_PER_CITY);
+  const pinRank = (e: RankInput) => e.pinOrder ?? Number.POSITIVE_INFINITY;
+  const pins = ranked.filter((e) => e.pinned).map((e, i) => ({ e, i })).sort((a, b) => pinRank(a.e) - pinRank(b.e) || a.i - b.i).map((x) => x.e);
+  const picks: T[] = [...pins, ...ranked.filter((e) => !e.pinned && e.partner != null)].slice(0, PICKS_PER_CITY);
   const eligible = (e: RankInput) => !e.excluded && !special(e) && e.gate == null && e.score != null && (bar == null || e.score >= bar);
   const pool = ranked.filter(eligible);
   for (const event of pool) {

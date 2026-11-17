@@ -83,6 +83,8 @@ function registry(q: Query, itemId: string): () => Promise<Record<Vertical, Cont
     ai_events: { vertical: 'ai_events' },
     field_notes: { vertical: 'field_notes' },
     reel_ai_drama: { vertical: 'reel_ai_drama' },
+    ai_trivia: { vertical: 'ai_trivia' },
+    real_or_ai: { vertical: 'real_or_ai' },
   });
 }
 

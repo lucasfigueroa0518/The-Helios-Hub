@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { clock, relative, timeLeft, whenInline } from '@/lib/social-hub/views/format';
 import type { HubPost } from '@/lib/social-hub/types';
@@ -87,7 +88,7 @@ export function isRejected(post: HubPost): boolean {
 
 /** A Stories set built for a day already gone: approving it can't post it (the worker never schedules a past day). */
 function pastStorySet(post: HubPost, now: Date): boolean {
-  return post.vertical === 'stories' && post.nyDate != null && post.nyDate < nyDateOf(now)!;
+  return isStoryVertical(post.vertical) && post.nyDate != null && post.nyDate < nyDateOf(now)!;
 }
 
 /**

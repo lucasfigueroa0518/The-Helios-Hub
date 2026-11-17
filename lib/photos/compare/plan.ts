@@ -9,10 +9,7 @@
  * - Morning Download: `stories.sets.payload.stories[]` (key, headline, url, source) in story-frame order, and
  *   `payload.photo_log[]` whose first step per frame is the writer's request (`<kind>: "<query>"`; design stage).
  *   Subjects are not stored. The shipped photos are `stories.frames.photo` (opener, then story frames).
- * - Guess the Number: the chosen `stories.candidates` row's payload is the writer's output (question, visual,
- *   answer_visual, subjects, source_url). Shipped photos: the question and answer frames.
- * - Free vs Paid: `stories.sets.payload.pair` (paid_tool, paid_price_url, free_tool, free_url); the finder asked
- *   for each tool's logo. Shipped logos: the paid and free frames' `photo`.
+ * - Guess the Number and Free vs Paid retired with their profiles (SS-20); AI Trivia and Real or AI? have no replay yet.
  * - Carousels: `social.posts.brief` (the Reporter's brief) and `social.posts.draft` (the final draft submission,
  *   the same pair scripts/social_daily.ts copies out of the run record), filled with `fillDraft`. Shipped photos:
  *   `social.posts.render.slides[]` (cover first, then the draft's slides, in the design stage's slot order).
@@ -59,7 +56,8 @@ export type SkippedPost = { type: PhotoProfileId; postId: string; reason: string
 
 export type PlanPart = { posts: ComparePost[]; skipped: SkippedPost[] };
 
-export const DEFAULT_POSTS: Record<PhotoProfileId, number> = { lfd: 2, md: 2, carousel: 2, gtn: 1, fvp: 1 };
+/** Trivia and Real or AI? have no replay yet (SS-20): 0 posts unless asked; loadType reports them as skipped. */
+export const DEFAULT_POSTS: Record<PhotoProfileId, number> = { lfd: 2, md: 2, carousel: 2, trivia: 0, roa: 0 };
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Json) : null);
@@ -144,7 +142,8 @@ export function lfdPlan(row: LfdPostRow): ComparePost | SkippedPost {
 export type StoryFrameRow = { seq: number; role: string; copy: unknown; photo: unknown };
 export type StorySetRow = { id: string; series: string; ny_date: unknown; created_at: unknown; status: string; payload: unknown; frames: unknown; chosen?: unknown };
 
-const SERIES: Record<string, PhotoProfileId> = { morning_download: 'md', guess_the_number: 'gtn', free_vs_paid: 'fvp' };
+/** Series the replay rebuilds. Guess the Number and Free vs. Paid retired with their profiles (SS-20). */
+const SERIES: Record<string, PhotoProfileId> = { morning_download: 'md' };
 
 export function storySetPlan(row: StorySetRow): ComparePost | SkippedPost {
   const type = SERIES[row.series];
@@ -152,7 +151,7 @@ export function storySetPlan(row: StorySetRow): ComparePost | SkippedPost {
   const frames = arr(row.frames).map((f) => f as StoryFrameRow).sort((a, b) => a.seq - b.seq);
   const payload = obj(row.payload) ?? {};
   const head = { type, postId: row.id, date: day(row.ny_date), builtAt: iso(row.created_at), status: row.status };
-  const out = type === 'md' ? mdFrames(payload, frames) : type === 'gtn' ? gtnFrames(obj(row.chosen), frames) : fvpFrames(payload, frames);
+  const out = mdFrames(payload, frames);
   if ('reason' in out) return { type, postId: row.id, reason: out.reason };
   return { ...head, title: out.title, frames: out.frames, notes: out.notes };
 }
@@ -188,43 +187,6 @@ function mdFrames(payload: Json, frames: StoryFrameRow[]): Built {
   });
   if (guessed) notes.push(`${guessed} frame(s) kept a carousel photo, so no request was stored: kind 'event', query = the headline`);
   return { title: `Morning Download: ${str(first.headline).slice(0, 80)}`, frames: out, notes };
-}
-
-function gtnFrames(chosen: Json | null, frames: StoryFrameRow[]): Built {
-  if (!chosen) return { reason: 'no chosen candidate stored' };
-  const visual = obj(chosen.visual);
-  const answerVisual = obj(chosen.answer_visual);
-  const url = str(chosen.source_url);
-  if (!visual || !answerVisual || !url) return { reason: 'the chosen candidate lacks visual/answer_visual/source_url' };
-  const subjects = arr(chosen.subjects).map(obj).filter((x): x is Json => !!x).map((x) => ({ name: str(x.name), type: (x.type === 'person' ? 'person' : 'organization') as 'person' | 'organization' }));
-  const question = str(chosen.question);
-  const answer = [str(chosen.answer), str(chosen.label)].filter(Boolean).join(' ');
-  const brief = [str(chosen.topic), question, `${answer}.`, str(chosen.meaning)].filter(Boolean).join(' ');
-  const sourceName = strOrNull(chosen.source_name);
-  const frame = (role: string) => frames.find((f) => f.role === role);
-  const make = (id: 'question' | 'answer', v: Json, copy: string): CompareFrame => {
-    const req = request({ kind: str(v.kind), query: str(v.query), subjects, storyDate: null, sourceUrls: [url], copy });
-    return { id, label: id, copy, need: needFromRequest(req, id, { headline: str(chosen.topic) || question, brief, sourceName }), old: oldFrom(frame(id)?.photo) };
-  };
-  return { title: `Guess the Number: ${question}`, frames: [make('question', visual, question), make('answer', answerVisual, answer)], notes: ['story date is not stored: storyDate is empty'] };
-}
-
-function fvpFrames(payload: Json, frames: StoryFrameRow[]): Built {
-  const pair = obj(payload.pair);
-  if (!pair || !str(pair.paid_tool) || !str(pair.free_tool)) return { reason: 'payload.pair is missing its tools' };
-  const frame = (role: string) => frames.find((f) => f.role === role);
-  const make = (id: 'paid' | 'free', tool: string, url: string, copy: string): CompareFrame => {
-    const req = request({ kind: 'logo', query: tool, subjects: [{ name: tool, type: 'organization' }], storyDate: null, sourceUrls: url ? [url] : [], copy });
-    return { id, label: `${id} logo`, copy, need: needFromRequest(req, id, { headline: `${str(pair.paid_tool)} vs ${str(pair.free_tool)}`, brief: `${str(pair.free_tool)}: ${str(pair.what_it_does)}. A free alternative to ${str(pair.paid_tool)} (${str(pair.paid_price)} ${str(pair.price_period)}).` }), old: oldFrom(frame(id)?.photo) };
-  };
-  return {
-    title: `Free vs Paid: ${str(pair.paid_tool)} vs ${str(pair.free_tool)}`,
-    frames: [
-      make('paid', str(pair.paid_tool), str(pair.paid_price_url), `${str(pair.paid_tool)} ${str(pair.paid_price)} ${str(pair.price_period)}`.trim()),
-      make('free', str(pair.free_tool), str(pair.free_url), `${str(pair.free_tool)}: ${str(pair.what_it_does)}`),
-    ],
-    notes: [],
-  };
 }
 
 // ── Carousels ─────────────────────────────────────────────────────────────
@@ -280,7 +242,7 @@ export const SQL = {
   usedBefore: `SELECT DISTINCT url FROM social.used_photos WHERE used_at > $1::timestamptz - interval '7 days' AND used_at < $1::timestamptz`,
 } as const;
 
-const SERIES_OF: Partial<Record<PhotoProfileId, string>> = { md: 'morning_download', gtn: 'guess_the_number', fvp: 'free_vs_paid' };
+const SERIES_OF: Partial<Record<PhotoProfileId, string>> = { md: 'morning_download' };
 
 /**
  * The newest `n` posts of a type that can be rebuilt. Reads up to 3n rows so a skipped post doesn't shrink the
@@ -288,6 +250,7 @@ const SERIES_OF: Partial<Record<PhotoProfileId, string>> = { md: 'morning_downlo
  */
 export async function loadType(q: ReadQuery, type: PhotoProfileId, n: number): Promise<PlanPart> {
   const limit = Math.max(n * 3, n);
+  if (type !== 'lfd' && type !== 'carousel' && !SERIES_OF[type]) return { posts: [], skipped: n > 0 ? [{ type, postId: '-', reason: `no replay for ${type} yet` }] : [] };
   const rows =
     type === 'lfd' ? (await q<LfdPostRow>(SQL.lfd, [limit])).rows.map(lfdPlan)
     : type === 'carousel' ? (await q<CarouselPostRow>(SQL.carousel, [limit])).rows.map(carouselPlan)

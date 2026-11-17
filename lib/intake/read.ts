@@ -261,7 +261,8 @@ export async function lastSuccessfulRunAt(q: IntakeQuery): Promise<Date | null> 
 }
 
 export async function readConsumerSettings(q: IntakeQuery): Promise<ConsumerSettings> {
-  const fallback: ConsumerSettings = { lfd: 'legacy', md: 'legacy', gtn: 'legacy', fvp: 'legacy', reels: 'legacy', carousel: 'legacy', 'field-notes': 'legacy' };
+  // SS-31: keys of retired orders (gtn, fvp) on older rows are ignored; a missing key reads 'legacy'.
+  const fallback: ConsumerSettings = { lfd: 'legacy', md: 'legacy', reels: 'legacy', carousel: 'legacy', 'field-notes': 'legacy', trivia: 'legacy' };
   const { rows } = await q.query<{ value: Partial<ConsumerSettings> | string }>(
     `SELECT value FROM intake.settings WHERE key = 'consumers'`,
   );
@@ -293,8 +294,8 @@ export async function readConsumerMode(q: IntakeQuery, order: OrderId, now: Date
   }
 }
 
-/** Orders every run fetched before run records listed their orders (Phase 1). */
-const PHASE1_ORDERS: readonly OrderId[] = ['lfd', 'md', 'gtn', 'fvp'];
+/** Orders every run fetched before run records listed their orders (Phase 1; the retired 'fvp' dropped, SS-31). */
+const PHASE1_ORDERS: readonly OrderId[] = ['lfd', 'md'];
 
 /** Whether a successful run that fetched (not a deposit) since `since` had this order open, so fetched its sources. */
 export async function orderFetchedSince(q: IntakeQuery, order: OrderId, since: Date): Promise<boolean> {
@@ -339,6 +340,7 @@ export function orderFamilies(order: Pick<IntakeOrder, 'sources'>): Family[] {
   for (const source of order.sources) {
     if (source === 'feeds:*' || source.startsWith('feed:')) out.add('feeds');
     else if (source === 'field-notes:*' || source.startsWith('field-notes:')) out.add('field-notes');
+    else if (source.startsWith('search:')) out.add('search'); // SS-30: a deposit source (AI Trivia's search:trivia)
     else {
       out.add('reels');
       out.add('search');

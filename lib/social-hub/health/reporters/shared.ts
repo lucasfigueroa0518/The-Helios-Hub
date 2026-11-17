@@ -13,7 +13,7 @@ export type Reporter = (q: HubQuery, ctx: ReportContext) => Promise<NightReport>
 
 /**
  * The date a night's run fills for a type (Bald-Eagle D4, lib/social-hub/lead.ts): the night itself for a
- * same-day type, night + 2 for a type made ahead (Stories: per series). The run day stays `night` for what
+ * same-day type, night + 2 for a type made ahead (each Stories-format type by its own lead, SS-1). The run day stays `night` for what
  * ran; the quota and the bookings it is measured against are the target date's.
  */
 export function quotaDay(night: string, vertical: Vertical, series?: StorySeries | null): string {
@@ -32,20 +32,10 @@ export function quotaFor(posting: PostingState, night: string): number {
   }
   // Template mode: the slots of the date the night fills (quotaDay: the night itself, or 2 days on for a type
   // made ahead; the recent nights, else this week's; perDay is today's count), never more than the daily limit
-  // (Stories: per series, each series on its own target date), as the overnight runs make them.
+  // (a Stories-format type on its own target date), as the overnight runs make them.
   const slotsOn = (day: string) => posting.nights?.find((d) => d.nyDate === day) ?? posting.schedule?.find((d) => d.nyDate === day);
   const cap = posting.cap ?? Number.POSITIVE_INFINITY;
-  if (posting.type === 'stories') {
-    const series = (posting.series ?? []).filter((s) => s.enabled && s.generate);
-    if (posting.nights || posting.schedule) {
-      return series.reduce((n, s) => {
-        const slots = slotsOn(quotaDay(night, 'stories', s.id as StorySeries));
-        if (slots) return n + Math.min(slots.series.filter((x) => x === s.id).length, cap);
-        return n + (s.days.includes(weekdayIndex(quotaDay(night, 'stories', s.id as StorySeries))) ? 1 : 0);
-      }, 0);
-    }
-    return series.filter((s) => s.days.includes(weekdayIndex(quotaDay(night, 'stories', s.id as StorySeries)))).length;
-  }
+  // SS-1/SS-24: a Stories-format type is days-based like the others (PostingState.series is always null now).
   const day = quotaDay(night, posting.type as Vertical);
   const slots = slotsOn(day);
   if (slots) {
@@ -54,10 +44,6 @@ export function quotaFor(posting: PostingState, night: string): number {
   }
   // Last Few Days: one post on each of its days (spec §7.4).
   if (posting.days) return posting.days.includes(weekdayIndex(day)) ? 1 : 0;
-  if (posting.series) {
-    const wd = weekdayIndex(day);
-    return posting.series.filter((s) => s.enabled && s.generate && s.days.includes(wd)).length;
-  }
   return posting.perDay ?? 0;
 }
 

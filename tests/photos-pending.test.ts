@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { PENDING_ITEMS_SQL, PENDING_UNDATED_DAYS, pendingPhotos, pendingPhotoUrls, waitingItemsOn } from '@/lib/photos/pending';
+import { PENDING_ITEMS_SQL, PENDING_UNDATED_DAYS, pendingCandidate, pendingHold, pendingPhotos, pendingPhotoUrls, waitingItemsOn } from '@/lib/photos/pending';
 import { mediaLibraryKey, readPublishedLedger, readUsedLedger, usedMatch, USED_PHOTO_DAYS } from '@/lib/photos/used';
 import { ledgerFrom, usedReason } from '@/lib/photos/used-guard';
 import { recentPhotoUses, recentUsedPhotoUrls } from '@/lib/stories/sources/carousel';
@@ -258,4 +258,28 @@ test('S3: stale items hold nothing; today’s and later ones do; undated Carouse
   assert.ok(!remake.has('https://img.test/today-lfd.jpg'));
   assert.ok(remake.has('https://img.test/today-set.jpg'));
   await pg.close();
+});
+
+test('SS-23: AI Trivia and Real or AI? sets are held under their own types; Real or AI? by stable storage key and original URL', async () => {
+  assert.match(PENDING_ITEMS_SQL, /CASE WHEN s\.series IN \('ai_trivia', 'real_or_ai'\) THEN s\.series ELSE 'stories' END/);
+  assert.match(PENDING_ITEMS_SQL, /i\.vertical IN \('ai_trivia', 'real_or_ai'\) AND ci\.vertical = 'stories'/);
+  const signed = (token: string) => `https://proj.supabase.co/storage/v1/object/sign/stories/roa/candidates/abc.jpg?token=${token}`;
+  const roa = pendingCandidate({
+    vertical: 'real_or_ai', id: 'set-r', built_at: '2026-11-16T10:00:00Z',
+    doc: {
+      series: 'real_or_ai',
+      frames: [{ seq: 1, role: 'roa_question', photo: { src: signed('a'), credit: '', kind: 'scene' } }, { seq: 2, role: 'roa_reveal', photo: { src: signed('b'), credit: '', kind: 'scene' } }],
+      rounds: [{ key: 'roa:abc', truth: 'real', provenance: { kind: 'commons', url: 'https://commons.wikimedia.org/wiki/File:A.jpg', licence: 'CC BY 4.0', credit: 'A', src: 'https://upload.test/a.jpg' } }, { key: 'roa:def', truth: 'ai', provenance: { kind: 'generated', model: 'm', prompt: 'p', createdAt: 'x' } }],
+    },
+  })!;
+  assert.equal(roa.vertical, 'real_or_ai');
+  assert.deepEqual(roa.photos.map((p) => p.url), ['storage:stories/roa/candidates/abc.jpg', 'https://upload.test/a.jpg']);
+  const trivia = pendingCandidate({ vertical: 'ai_trivia', id: 'set-t', built_at: '2026-11-16T10:00:00Z', doc: { series: 'ai_trivia', frames: [{ seq: 2, role: 'question', photo: { src: 'https://w/q.jpg', credit: 'Q', kind: 'scene' } }] } })!;
+  assert.deepEqual([trivia.vertical, trivia.photos.map((p) => p.url)], ['ai_trivia', ['https://w/q.jpg']]);
+
+  const query = async () => ({ rows: [{ vertical: 'ai_trivia', id: 'set-t', built_at: '2026-11-16T10:00:00Z', doc: { series: 'ai_trivia', frames: [{ seq: 2, role: 'question', photo: { src: 'https://w/q.jpg', credit: 'Q', kind: 'scene' } }] } }] });
+  const hold = await pendingHold(query as never, new Date('2026-11-16T12:00:00Z'));
+  assert.deepEqual(hold.owners.get('https://w/q.jpg'), [{ vertical: 'ai_trivia', id: 'set-t', idea: null }]);
+  const skipped = await pendingHold(query as never, new Date('2026-11-16T12:00:00Z'), { excludeItem: { vertical: 'ai_trivia', id: 'set-t' } });
+  assert.equal(skipped.urls.size, 0, 'a rebuild of its own set is not blocked');
 });

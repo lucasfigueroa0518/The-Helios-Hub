@@ -191,6 +191,8 @@ CREATE TABLE IF NOT EXISTS intake.settings (
 );
 
 -- Phase 2 adds reels, carousel and field-notes; a missing key reads as 'legacy' (lib/intake/read.ts).
+-- The retired gtn and fvp keys are left out for new installs only (SS-31); an existing row keeps them and they read
+-- as nothing. db/intake_stories_split.sql adds trivia.
 INSERT INTO intake.settings (key, value)
-VALUES ('consumers', '{"lfd":"legacy","md":"legacy","gtn":"legacy","fvp":"legacy","reels":"legacy","carousel":"legacy","field-notes":"legacy"}'::jsonb)
+VALUES ('consumers', '{"lfd":"legacy","md":"legacy","reels":"legacy","carousel":"legacy","field-notes":"legacy"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;

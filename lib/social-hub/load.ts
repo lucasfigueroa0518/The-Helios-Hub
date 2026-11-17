@@ -14,7 +14,8 @@ import { readLatestQuota } from '@/lib/social-hub/queries/quota';
 import { latestQuotaSnapshot } from '@/lib/social-hub/refresh';
 import { readReels } from '@/lib/social-hub/queries/reels';
 import { forVertical, readSpine, type SpineRead } from '@/lib/social-hub/queries/spine';
-import { readStories } from '@/lib/social-hub/queries/stories';
+import { readStories, storiesFor } from '@/lib/social-hub/queries/stories';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { consumeMoves, readAdjustments, readDayQuotas } from '@/lib/social-hub/queries/day';
 import { readLfdSettings } from '@/lib/lfd/settings';
@@ -64,12 +65,13 @@ async function spineFor(q: HubQuery, vertical: Vertical): Promise<SpineRead> {
 }
 
 /**
- * One content type (an action refresh). Stories have no spine. Explainers on
+ * One content type (an action refresh). The Stories-format types have no spine: each reads the Stories
+ * engine and keeps its own series (SS-1). Explainers on
  * their own database read their spine there; on the shared database they use
  * the same spine as the other types.
  */
 export async function readOne(q: HubQuery, vertical: Vertical, now = new Date(), explainersQ?: Promise<HubQuery>): Promise<NonNullable<VerticalReads[Vertical]>> {
-  if (vertical === 'stories') return readStories(q);
+  if (isStoryVertical(vertical)) return storiesFor(await readStories(q), vertical);
   if (vertical === 'explainers') {
     const eq = await (explainersQ ?? explainersHandle(q));
     const spine = explainersShareMain(q) ? await spineFor(q, 'explainers') : await readSpine(eq, ['explainers']);
@@ -100,17 +102,21 @@ export async function readAll(q: HubQuery = liveHubQuery, explainersQ: Promise<H
   mainSpine.catch(() => undefined); // each reader reports the failure itself
   const explainersSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['explainers']));
   const dramaSpine = (eq: HubQuery) => (shared ? mainSpine : readSpine(eq, ['reel_ai_drama']));
-  const [reels, explainers, carousels, stories, lastFewDays, aiEvents, fieldNotes, reelAiDrama] = await Promise.all([
+  const storiesRead = readStories(q);
+  storiesRead.catch(() => undefined); // each Stories-format type reports the failure itself
+  const [reels, explainers, carousels, stories, aiTrivia, realOrAi, lastFewDays, aiEvents, fieldNotes, reelAiDrama] = await Promise.all([
     settle(mainSpine.then((spine) => readReels(q, spine))),
     settle(explainersQ.then(async (eq) => readExplainers(eq, await explainersSpine(eq)))),
     settle(mainSpine.then((spine) => readCarousels(q, spine))),
-    settle(readStories(q)),
+    settle(storiesRead.then((r) => storiesFor(r, 'stories'))),
+    settle(storiesRead.then((r) => storiesFor(r, 'ai_trivia'))),
+    settle(storiesRead.then((r) => storiesFor(r, 'real_or_ai'))),
     settle(mainSpine.then((spine) => readLastFewDays(q, spine))),
     settle(mainSpine.then((spine) => readAiEvents(q, spine, now))),
     settle(mainSpine.then((spine) => readFieldNotes(q, spine))),
     settle(explainersQ.then(async (eq) => readReelAiDramaIfReady(eq, await dramaSpine(eq)))),
   ]);
-  return { reels, explainers, carousels, stories, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes, reel_ai_drama: reelAiDrama };
+  return { reels, explainers, carousels, stories, ai_trivia: aiTrivia, real_or_ai: realOrAi, last_few_days: lastFewDays, ai_events: aiEvents, field_notes: fieldNotes, reel_ai_drama: reelAiDrama };
 }
 
 /** Read and allocate the cost ledger on its own (it is cached apart from the content; views/cached-dataset.ts). */

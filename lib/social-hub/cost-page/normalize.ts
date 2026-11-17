@@ -29,7 +29,7 @@ const STAGE_RULES: ReadonlyArray<[RegExp, Stage]> = [
   [/score|rank|idea|research|search|dedupe|duplicate|select|jev|generator|feed|story-match|reporter/i, 'research'],
   [/copy|writ|caption|script|hook|line|edit|fact|session|cue|story|draft/i, 'writing'],
 ];
-const BY_TYPE: Partial<Record<Vertical, Record<string, Stage>>> = { reels: REELS_STAGES, explainers: EXPLAINERS_STAGES, stories: STORIES_STAGES, reel_ai_drama: REEL_AI_DRAMA_STAGES };
+const BY_TYPE: Partial<Record<Vertical, Record<string, Stage>>> = { reels: REELS_STAGES, explainers: EXPLAINERS_STAGES, stories: STORIES_STAGES, ai_trivia: STORIES_STAGES, real_or_ai: STORIES_STAGES, reel_ai_drama: REEL_AI_DRAMA_STAGES };
 
 /** Exact name, then the name before a `:` or `@` suffix, then the keyword table. */
 export function stageOf(vertical: Vertical, label: string): Stage {

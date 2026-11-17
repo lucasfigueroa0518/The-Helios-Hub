@@ -8,8 +8,11 @@ import { hamming, NEAR_DUPLICATE } from './hash-distance';
 /** How long a published photo stays off limits, for every content type. */
 export const USED_PHOTO_DAYS = 20;
 
-/** The content types whose published posts carry photos. Story ids in the ledger are `<vertical>:<post id>`. */
-export type UsedVertical = 'lfd' | 'stories' | 'carousels' | 'reel_ai_drama' | 'field_notes' | 'ai_events';
+/**
+ * The content types whose published posts carry photos. Story ids in the ledger are `<vertical>:<post id>`.
+ * Stories Split (SS-23): AI Trivia's and Real or AI?'s sets log under their own types; Morning Download keeps `stories`.
+ */
+export type UsedVertical = 'lfd' | 'stories' | 'ai_trivia' | 'real_or_ai' | 'carousels' | 'reel_ai_drama' | 'field_notes' | 'ai_events';
 
 /** Ledger key for a photo-bank photo that has no web URL (Field Notes team photos). */
 export const mediaLibraryKey = (photoId: string) => `media-library:${photoId}`;

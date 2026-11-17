@@ -21,6 +21,7 @@ import type { VettedPhoto } from '@/lib/social/photos/vetted';
 import { importUsedPhotos } from './backfill';
 import { runIngest } from './ingest';
 import { planDramaOffer, type DramaOfferInput } from './drama';
+import { storeHeld, type HeldOfferInput } from './held';
 import { licenceOf, shouldStore, storedLicence } from './policy';
 import { createBankReader, type BankReader } from './reader';
 import { cachedBankSettings, type BankSettings } from './settings';
@@ -50,6 +51,11 @@ export type PhotoBank = {
 export type FullPhotoBank = PhotoBank & {
   /** Reel AI Drama's harvest photos (lib/media-library/drama.ts); same rules as offer(): synchronous, never throws, gated by capture. */
   offerDrama(input: DramaOfferInput): void;
+  /**
+   * Photos whose bytes the caller holds (lib/media-library/held.ts; Real or AI?'s pooled candidates, SS-24): stored
+   * without a download. Same rules as offer(): synchronous, never throws, gated by capture; drain() waits for it.
+   */
+  offerHeld(input: HeldOfferInput): void;
   readonly query: Query;
   settings(): Promise<BankSettings>;
 };
@@ -181,6 +187,28 @@ export function createPhotoBank(deps: PhotoBankDeps): FullPhotoBank {
     },
     offerDrama(input) {
       queue(`reel_ai_drama ${input?.runRef}`, () => planDramaOffer(input));
+    },
+    offerHeld(input) {
+      const label = `${input?.runKind} ${input?.runRef}`;
+      const items = Array.isArray(input?.items) ? input.items.filter((i) => i?.url && i.bytes?.length) : [];
+      if (!items.length) return;
+      writes = writes
+        .then(async () => {
+          const s = await settings();
+          if (!s.capture) return;
+          const held = { query: deps.query, bucket: (bucket ??= mediaBucket(PHOTO_BANK_BUCKET)) };
+          let stored = 0;
+          for (const item of items) {
+            try {
+              await storeHeld(held, input, item);
+              stored++;
+            } catch (err) {
+              log(`offer ${label}: ${item.url.slice(0, 120)}: ${errText(err)}`);
+            }
+          }
+          log(`offer ${label}: ${stored} of ${items.length} held photos stored`);
+        })
+        .catch((err) => log(`offer ${label}: ${errText(err)}`));
     },
     async drain(ms) {
       const deadline = Date.now() + Math.max(0, ms);

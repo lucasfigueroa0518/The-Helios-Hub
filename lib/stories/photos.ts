@@ -22,6 +22,7 @@
 import { createSizeProbe, type SizeProbe } from '@/lib/social/photos/size';
 import type Anthropic from '@anthropic-ai/sdk';
 import type { PhotoBank } from '@/lib/media-library/bank';
+import type { RunKind } from '@/lib/media-library/types';
 import { createJevAsk, type JevAsk } from '@/lib/social/jev/client';
 import { photosForDraft } from '@/lib/social/photos/design';
 import { detectFacesLive } from '@/lib/social/photos/faces';
@@ -149,6 +150,8 @@ export function createLivePhotoFinder(
     create?: (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
     bank?: PhotoBank;
     runRef?: string;
+    /** The bank sightings' run kind (SS-24): 'ai_trivia' for an AI Trivia build; default 'story' (Morning Download). */
+    runKind?: Extract<RunKind, 'story' | 'ai_trivia'>;
     /** The set's design stage (tests stub it; default photosForDraft). */
     design?: typeof photosForDraft;
     /**
@@ -263,7 +266,7 @@ export function createLivePhotoFinder(
       if (opts.bank) {
         try {
           opts.bank.offer({
-            runKind: 'story',
+            runKind: opts.runKind ?? 'story',
             runRef,
             subjects: subjects.map((s) => s.name),
             organizations: subjects.filter((s) => s.type === 'organization').map((s) => s.name),
@@ -313,7 +316,7 @@ export function createLivePhotoFinder(
       if (opts.bank) {
         try {
           opts.bank.offer({
-            runKind: 'story',
+            runKind: opts.runKind ?? 'story',
             runRef,
             subjects: req.subjects.map((s) => s.name),
             organizations: req.subjects.filter((s) => s.type === 'organization').map((s) => s.name),

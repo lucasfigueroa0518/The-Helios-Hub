@@ -13,12 +13,12 @@ import { pg_trgm } from '@electric-sql/pglite/contrib/pg_trgm';
 
 import type { SourceEntry as FieldNotesSourceEntry } from '@/lib/field-notes/sources/registry';
 import { FIELD_NOTES_SCORE } from '@/lib/field-notes/sources/questions';
-import { depositFindAs, A4_DEPOSIT } from '@/lib/intake/deposit';
+import { depositFindAs, A4_DEPOSIT, TRIVIA_DEPOSIT } from '@/lib/intake/deposit';
 import { fetchFieldNotesItems, planSources, upsertItem, type FieldNotesFetchers } from '@/lib/intake/fetch';
 import { pickFieldNotesStories } from '@/lib/intake/field-notes-cap';
 import { groupIntake, type GroupingResult } from '@/lib/intake/group';
 import { createIntakeJev } from '@/lib/intake/jev';
-import { CAROUSEL_ORDER, FIELD_NOTES_ORDER, openOrders, REELS_ORDER } from '@/lib/intake/orders';
+import { CAROUSEL_ORDER, FIELD_NOTES_ORDER, openOrders, REELS_ORDER, TRIVIA_ORDER } from '@/lib/intake/orders';
 import { lastSuccessfulMainStart, listOrderStories, loadStories, readConsumerMode, readConsumerSettings, resolveStoryId } from '@/lib/intake/read';
 import { pruneIntake, retentionDays } from '@/lib/intake/retention';
 import { previousUnscored, runIntakeDeposit, runIntakeWith, type IntakeRunDeps, type ScoreForStories } from '@/lib/intake/run';
@@ -223,6 +223,29 @@ test('grouping skips Field Notes items: each is its own story, never in a groupi
   assert.equal(await count(`SELECT count(*)::int AS n FROM intake.items WHERE story_id = $1`, [fn.story_id]), 1);
 });
 
+test('SS-32: an AI Trivia deposit is never grouped: its own story, no pair call; it widens no reels fetch', async () => {
+  const { created } = await depositFindAs(q, { canonicalUrl: 'https://example.com/trivia-acme', headline: 'Acme launches Rocket model', body: 'Acme launched Rocket in 2019.', publishTime: null }, NOW, TRIVIA_DEPOSIT);
+  assert.equal(created, true);
+  await upsertItem(q, { key: 'https://example.com/reels-acme', family: 'reels', sourceId: 'hacker-news', sourceName: 'HN', sourceType: 'B1', headline: 'Acme launches Rocket model today', body: `Acme.${LONG}`, url: 'https://example.com/reels-acme', publishTime: NOW, dropReason: null, runId: null }, NOW);
+  await upsertItem(q, { key: 'https://example.com/reels-acme-2', family: 'reels', sourceId: 'the-verge', sourceName: 'Verge', sourceType: 'B1', headline: 'Acme Rocket model launch', body: `Acme.${LONG}`, url: 'https://example.com/reels-acme-2', publishTime: NOW, dropReason: null, runId: null }, NOW);
+  const calls = { grouping: [] as string[][], other: 0 };
+  const jev = createIntakeJev(stubTransport(calls), q, null, 1);
+  const summary: GroupingResult = { created: 0, joined: 0, merges: 0, pairCalls: 0, cacheHits: 0, touched: new Set(), failures: [] };
+  await groupIntake(q, jev.asReelsRunner(), uid(78), NOW, summary);
+  const rows = (await q.query<{ key: string; story_id: string; source_id: string; family: string }>(`SELECT key, story_id::text AS story_id, source_id, family FROM intake.items ORDER BY key`)).rows;
+  const trivia = rows.find((r) => r.key.endsWith('trivia-acme'))!;
+  const reels = rows.filter((r) => r.key.includes('reels-acme'));
+  assert.deepEqual([trivia.family, trivia.source_id], ['search', 'search:trivia']);
+  assert.ok(trivia.story_id && reels.every((r) => r.story_id === reels[0]!.story_id), 'the two reels items grouped');
+  assert.notEqual(trivia.story_id, reels[0]!.story_id, 'the trivia page is its own story');
+  assert.ok(calls.grouping.every((pair) => !pair.includes('Acme launches Rocket model')), 'no pair asked about the trivia page');
+  assert.ok(summary.touched.has(trivia.story_id));
+  // Its order names a deposit source: nothing to fetch, and the reels adapters' first-night window stays the reels order's.
+  const plan = planSources([REELS_ORDER, TRIVIA_ORDER], [], [], []);
+  assert.deepEqual([plan.adapters.length, plan.feeds.length, plan.fieldNotes.length, plan.lookbackDays], [0, 0, 0, REELS_ORDER.lookbackDays]);
+  assert.equal(planSources([TRIVIA_ORDER], [], [], []).lookbackDays, 1);
+});
+
 /* ── 4. FIELD_NOTES_CARD ──────────────────────────────────────────────── */
 
 test('FIELD_NOTES_CARD: Field Notes’ own version; scores one member, enriches only what it scores and keeps the enriched body', async () => {
@@ -341,19 +364,22 @@ test('resolveStoryId follows the merge chain; unknown or non-uuid ids are null',
 });
 
 test('listOrderStories: each order gets the stories its sources cover and keep (its own seeds included)', async () => {
-  for (const n of [1, 2, 3, 4, 5, 6]) await insertStory(uid(n));
+  for (const n of [1, 2, 3, 4, 5, 6, 7]) await insertStory(uid(n));
   await insertItem('reels-kept', uid(1), { reels_source_id: 'hacker-news' });
   await insertItem('feed-only', uid(2), { family: 'feeds', source_id: 'feed:techcrunch', feed_slug: 'techcrunch' });
   await insertItem('fn-only', uid(3), { family: 'field-notes', source_id: 'field-notes:x', field_notes_source_id: 'x', field_notes_meta: '{}' });
   await insertItem('seed-reels', uid(4), { family: 'seed', source_id: 'seed:reels' });
   await insertItem('reels-dropped-feed-kept', uid(5), { reels_source_id: 'hacker-news', reels_drop_reason: 'off_topic', feed_slug: 'verge' });
   await insertItem('search-find', uid(6), { family: 'search', source_id: 'search:b6' });
-  const ids = async (order: 'reels' | 'carousel' | 'field-notes' | 'lfd') =>
+  // SS-30: a page AI Trivia's writer cited is read by the trivia order only.
+  await insertItem('trivia-page', uid(7), { family: 'search', source_id: 'search:trivia' });
+  const ids = async (order: 'reels' | 'carousel' | 'field-notes' | 'lfd' | 'trivia') =>
     (await listOrderStories(q, order, { since: new Date(NOW.getTime() - DAY) })).map((s) => s.members[0]!.key).sort();
   assert.deepEqual(await ids('reels'), ['reels-kept', 'search-find', 'seed-reels']);
   assert.deepEqual(await ids('carousel'), ['feed-only', 'reels-dropped-feed-kept', 'reels-kept', 'search-find']);
   assert.deepEqual(await ids('field-notes'), ['fn-only']);
   assert.deepEqual(await ids('lfd'), ['feed-only', 'reels-dropped-feed-kept', 'reels-kept', 'search-find']);
+  assert.deepEqual(await ids('trivia'), ['trivia-page']);
 });
 
 test('readConsumerSettings has seven keys; readConsumerMode is per order: its sources must be fetched in the window', async () => {
@@ -361,7 +387,7 @@ test('readConsumerSettings has seven keys; readConsumerMode is per order: its so
     JSON.stringify({ md: 'intake', reels: 'intake', carousel: 'intake', 'field-notes': 'intake' }),
   ]);
   const settings = await readConsumerSettings(q);
-  assert.deepEqual(settings, { lfd: 'legacy', md: 'intake', gtn: 'legacy', fvp: 'legacy', reels: 'intake', carousel: 'intake', 'field-notes': 'intake' });
+  assert.deepEqual(settings, { lfd: 'legacy', md: 'intake', reels: 'intake', carousel: 'intake', 'field-notes': 'intake', trivia: 'legacy' });
   await q.query(`INSERT INTO intake.runs (kind, status, started_at, record) VALUES ('main', 'ok', $1, $2::jsonb)`, [new Date(NOW.getTime() - 2 * HOUR), JSON.stringify({ orders: ['md', 'reels', 'carousel'], scored: true })]);
   assert.equal(await readConsumerMode(q, 'md', NOW), 'intake');
   assert.equal(await readConsumerMode(q, 'carousel', NOW), 'intake');
@@ -449,7 +475,7 @@ const P2: Phase2Snapshot = {
 };
 
 test('replay plan output includes the Phase 2 sections (no Jev, no HTTP)', () => {
-  const snapshot: Snapshot = { nights: [{ nyDate: '2026-11-09', runAt: NOW, items: [], legacy: { mdReels: [], mdCarousel: [], gtn: [], fvp: [], lfdReels: [], lfdCarousel: [] }, postedHeadlines: [], feedSince: NOW }], previous: [] };
+  const snapshot: Snapshot = { nights: [{ nyDate: '2026-11-09', runAt: NOW, items: [], legacy: { mdReels: [], mdCarousel: [], fvp: [], lfdReels: [], lfdCarousel: [] }, postedHeadlines: [], feedSince: NOW }], previous: [] };
   const plan = planPhase2(P2);
   assert.deepEqual([plan.carousel[0]!.articles, plan.carousel[0]!.shortlist, plan.fieldNotes[0]!.tips, plan.fieldNotes[0]!.calls], [2, 1, 2, 2]);
   const text = renderPlan(planReplay(snapshot, 0), 1, plan);

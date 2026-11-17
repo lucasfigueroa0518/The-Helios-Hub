@@ -7,6 +7,7 @@ import { money, perUnit } from '@/components/social-hub/cost/format';
 import type { WorthModel } from '@/lib/social-hub/cost-page/model';
 import type { HubMetrics, MetricKey, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 export type WorthPost = { id: string; vertical: Vertical; name: string; costMicros: number; metrics: HubMetrics };
 
@@ -44,7 +45,7 @@ export function WorthDrill({ byType, posts, base }: { byType: WorthModel['byType
           >
             <span className="sh-cost-list__name">
               <i className="sh-ops-mark" style={{ background: `var(${verticalInfo(t.vertical).colorVar})` }} aria-hidden />
-              {t.label} <span className="sh-ops-meta">· {t.interactions.toLocaleString('en-US')} {t.vertical === 'stories' ? 'replies, shares, follows, profile visits' : 'interactions'}</span>
+              {t.label} <span className="sh-ops-meta">· {t.interactions.toLocaleString('en-US')} {isStoryVertical(t.vertical) ? 'replies, shares, follows, profile visits' : 'interactions'}</span>
             </span>
             <span className="sh-ops-num">{perUnit(t.cpiMicros)}</span>
           </button>

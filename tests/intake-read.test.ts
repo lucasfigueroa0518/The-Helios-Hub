@@ -9,7 +9,8 @@ import test, { after, before, beforeEach } from 'node:test';
 
 import { PGlite } from '@electric-sql/pglite';
 
-import { eventDate, lastRuns, listStories, readConsumerMode } from '@/lib/intake/read';
+import { eventDate, lastRuns, listStories, orderFamilies, readConsumerMode, readConsumerSettings } from '@/lib/intake/read';
+import { TRIVIA_ORDER } from '@/lib/intake/orders';
 import type { IntakeItem, IntakeQuery } from '@/lib/intake/types';
 
 let pg: PGlite;
@@ -142,4 +143,35 @@ test('listStories families: membership per list (fix 1), a feed URL first stored
   assert.ok(feeds.some((s) => s.id === S2), 'reels-dropped but feed-kept: a feeds member');
   const reels = await listStories(q, { since: hoursAgo(48), families: ['reels'] });
   assert.ok(!reels.some((s) => s.id === S2), 'not a reels member: the reels screen dropped it');
+});
+
+test('SS-30/31: db/intake_stories_split.sql adds trivia=legacy without touching a live row; retired keys still read', async () => {
+  const split = readFileSync(path.join(process.cwd(), 'db', 'intake_stories_split.sql'), 'utf8')
+    .split(/\r?\n/)
+    .filter((line) => !line.startsWith('\\'))
+    .join('\n');
+  // The beforeEach row is an old production row: it still carries the retired gtn and fvp keys.
+  await q.query(`UPDATE intake.settings SET value = jsonb_set(value, '{md}', '"intake"') WHERE key = 'consumers'`);
+  await pg.exec(split);
+  await pg.exec(split); // re-appliable
+  const { rows } = await q.query<{ value: Record<string, string> }>(`SELECT value FROM intake.settings WHERE key = 'consumers'`);
+  assert.deepEqual(rows[0]!.value, { lfd: 'legacy', md: 'intake', gtn: 'legacy', fvp: 'legacy', trivia: 'legacy' }, 'only the missing key is added');
+  assert.deepEqual(await readConsumerSettings(q), { lfd: 'legacy', md: 'intake', reels: 'legacy', carousel: 'legacy', 'field-notes': 'legacy', trivia: 'legacy' });
+  // A value Lucas flipped survives a re-apply.
+  await q.query(`UPDATE intake.settings SET value = jsonb_set(value, '{trivia}', '"intake"') WHERE key = 'consumers'`);
+  await pg.exec(split);
+  assert.equal((await readConsumerSettings(q)).trivia, 'intake');
+});
+
+test('SS-30: readConsumerMode for trivia needs a fresh main run that had the trivia order open', async () => {
+  assert.equal(await readConsumerMode(q, 'trivia', NOW), 'legacy', 'default');
+  await q.query(`UPDATE intake.settings SET value = value || '{"trivia":"intake"}' WHERE key = 'consumers'`);
+  assert.equal(await readConsumerMode(q, 'trivia', NOW), 'stale-fallback', 'no main run');
+  await q.query(`INSERT INTO intake.runs (kind, status, started_at, record) VALUES ('main', 'ok', $1, '{"scored":true,"orders":["lfd","md"]}')`, [hoursAgo(3)]);
+  assert.equal(await readConsumerMode(q, 'trivia', NOW), 'stale-fallback', 'the order was closed in that run');
+  await q.query(`INSERT INTO intake.runs (kind, status, started_at, record) VALUES ('main', 'ok', $1, '{"scored":true}')`, [hoursAgo(2)]);
+  assert.equal(await readConsumerMode(q, 'trivia', NOW), 'stale-fallback', 'a Phase 1 record (no orders) never counts for trivia');
+  await q.query(`INSERT INTO intake.runs (kind, status, started_at, record) VALUES ('main', 'ok', $1, '{"scored":true,"orders":["trivia"]}')`, [hoursAgo(1)]);
+  assert.equal(await readConsumerMode(q, 'trivia', NOW), 'intake');
+  assert.deepEqual(orderFamilies(TRIVIA_ORDER).sort(), ['search', 'seed'], 'the trivia order reads search members only (plus its seeds)');
 });

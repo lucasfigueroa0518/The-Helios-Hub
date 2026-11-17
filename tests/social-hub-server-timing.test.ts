@@ -24,7 +24,7 @@ test('timed hub paths are the pages that seal a header', () => {
   assert.equal(isTimedHubPath('/social/calendar'), true);
   assert.equal(isTimedHubPath('/social/analytics/stories'), true);
   assert.equal(isTimedHubPath('/social/post/stories%3Aset%3Aa'), true);
-  assert.equal(isTimedHubPath('/social/content/pools/stories'), true);
+  assert.equal(isTimedHubPath('/social/content/pools/stories'), false, 'the old pool page only redirects to the type page');
   assert.equal(isTimedHubPath('/social/render'), false);
   assert.equal(isTimedHubPath('/social/preview/analytics'), false);
   assert.equal(isTimedHubPath('/dashboards'), false);

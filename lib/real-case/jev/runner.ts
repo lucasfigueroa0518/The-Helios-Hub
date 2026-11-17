@@ -68,8 +68,8 @@ export class RecordingRealCaseJevRunner implements RealCaseJevRunner {
       mode: this.context.mode,
       vendor: 'jev',
       component: request.component,
-      inputTokens: result.usage.input_tokens,
-      outputTokens: result.usage.output_tokens,
+      inputTokens: result.usage.input_tokens ?? undefined,
+      outputTokens: result.usage.output_tokens ?? undefined,
       usd: jevUsd(result.usage.input_tokens),
     });
     return result;

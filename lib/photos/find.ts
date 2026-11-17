@@ -11,12 +11,16 @@
  *   `lookAt` on `settings.vision_model` (no new messages.create).
  * - Never throws: a frame it can't fill is null, with a trace saying why, and goes to today's finder.
  * Every trace line starts with `shared:` so adopters and the review page can tell the steps apart.
+ *
+ * Stories Split (SS-22): a profile with `sources: 'archives'` (Real or AI?) takes the free archives path instead
+ * (./archive.ts: the photo bank, Commons Featured/Quality, NASA); the harvest never runs for it.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { hamming, NEAR_DUPLICATE } from '@/lib/reel-ai-drama/harvest/filters';
+import { findFromArchives } from './archive';
 import { EMPTY_LEDGER, usedMatch, type UsedLedger } from './used';
 import { planWants, slug } from '@/lib/reel-ai-drama/harvest/plan';
 import { SERPER_IMAGES_URL, SERPER_USD_PER_QUERY } from '@/lib/reel-ai-drama/harvest/sources/serper';
@@ -175,7 +179,7 @@ export function rankAssets(usable: readonly Asset[], need: PhotoNeed): Asset[] {
   const moment = [...usable.filter((a) => a.flags.includes('key_moment')), ...usable.filter((a) => fromStoryPage(a, need.storyUrls))];
   const personAsk = need.kind === 'person';
   const order =
-    need.specificity === 'story'
+    need.specificity !== 'subject'
       ? [...moment, ...portraits, ...subjectThings]
       : personAsk || things.length === 0
         ? [...portraits, ...subjectThings, ...moment]
@@ -200,7 +204,7 @@ const errText = (err: unknown) => (err instanceof Error ? err.message.slice(0, 1
 async function findOne(
   need: PhotoNeed,
   profile: PhotoProfile,
-  deps: PhotoDeps,
+  deps: PhotoDeps & { harvest: NonNullable<PhotoDeps['harvest']> },
   exclude: ReadonlySet<string>,
   budget: PhotoBudget,
   framesLeft: number,
@@ -283,6 +287,9 @@ async function findOne(
  * today's finder. No two frames share a photo by URL or by pHash. Never throws.
  */
 export async function findPhotos(needs: PhotoNeed[], profile: PhotoProfile, deps: PhotoDeps, opts: FindOptions): Promise<FoundPhotos> {
+  if (profile.sources === 'archives') return findFromArchives(needs, profile, deps, opts);
+  const harvest = deps.harvest;
+  if (!harvest) return { photos: needs.map(() => null), traces: needs.map(() => [`shared: no harvest wired; today's finder takes over`]) };
   const photos: Array<Photo | null> = [];
   const traces: string[][] = [];
   const picked: Picked = { urls: new Set(), hashes: [] };
@@ -298,7 +305,7 @@ export async function findPhotos(needs: PhotoNeed[], profile: PhotoProfile, deps
   }
   for (const [i, need] of needs.entries()) {
     try {
-      const got = await findOne(need, profile, deps, opts.exclude, opts.budget, needs.length - i, picked, used, opts.accept);
+      const got = await findOne(need, profile, { ...deps, harvest }, opts.exclude, opts.budget, needs.length - i, picked, used, opts.accept);
       photos.push(got.photo);
       traces.push(got.trace);
     } catch (err) {

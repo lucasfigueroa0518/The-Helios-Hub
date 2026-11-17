@@ -1,4 +1,3 @@
-import { ARCHIVE_ONLY_TYPES, QUEUE_LIVE_TYPES } from '@/lib/content-type/config';
 import type { IdeaAdjustment, MoveTag } from '@/lib/social-hub/views/moves';
 
 /**
@@ -14,25 +13,6 @@ import type { IdeaAdjustment, MoveTag } from '@/lib/social-hub/views/moves';
 
 /** Open ideas a type keeps (Stories: per series). Pinned, Yours, Placed and Generated ideas are never dropped for it. */
 export const POOL_CAP = 30;
-
-/**
- * The types whose nights already follow the queue (pins, drags, archive). The page shows the new controls only
- * for these; the others keep Promote and Demote until their night workers are converted, so a control never
- * promises what the night will not do. Add a type here in the same change that converts its worker.
- */
-export const QUEUE_LIVE: ReadonlySet<string> = QUEUE_LIVE_TYPES;
-
-/**
- * Types that take Archive but not Pin or drag (Last Few Days: its pool is the last run's record, so there is no queue to steer,
- * but a story a person archives is kept out of every later run). Everything else about them is as for a type not on the queue.
- */
-export const ARCHIVE_ONLY: ReadonlySet<string> = ARCHIVE_ONLY_TYPES;
-
-/** The ideas a person archived, taken out (for the views of a type whose order is not the queue's). */
-export function withoutArchived<T extends { id: string }>(ideas: readonly T[], moves: ReadonlyArray<{ ideaId: string; kind: string }>): T[] {
-  const gone = new Set(moves.filter((m) => m.kind === 'archive').map((m) => m.ideaId));
-  return gone.size ? ideas.filter((i) => !gone.has(i.id)) : [...ideas];
-}
 
 /** A drop lands this far above or below its neighbour's effective score. */
 const STEP = 0.01;
@@ -189,6 +169,35 @@ export function orderForNight<T>(
     out.splice(at < 0 ? out.length : at, 0, x);
   }
   return [...pinned, ...out, ...sunk];
+}
+
+/** A night's view of a type's queue, by native id: pins in the order pinned, dragged keys, archived and (old) demoted ideas. */
+export type NightQueue = { pins: string[]; placed: Map<string, number>; archived: Set<string>; demoted: Set<string> };
+
+export const EMPTY_NIGHT: NightQueue = { pins: [], placed: new Map(), archived: new Set(), demoted: new Set() };
+
+/**
+ * A type's queue for its night worker, from its active moves (oldest first), with each idea id's `prefix` stripped (moves
+ * on other prefixes are ignored). The same rule as views/moves tonightMoves (every type is on the queue; Field Notes,
+ * Last Few Days and AI Events read it through here, Tommy, 2026-11-16). A pin with a recorded skip steps
+ * aside; an archived idea is never pinned or placed; a pin outranks a placement.
+ */
+export function nightQueue(
+  moves: ReadonlyArray<{ ideaId: string; kind: string; sortKey?: number | null; skipReason?: string | null }>,
+  prefix = '',
+): NightQueue {
+  const mine = moves.filter((m) => m.ideaId.startsWith(prefix)).map((m) => ({ ...m, id: m.ideaId.slice(prefix.length) }));
+  const archived = new Set(mine.filter((m) => m.kind === 'archive').map((m) => m.id));
+  const lastPin = new Map<string, { skipReason?: string | null }>();
+  const demoted = new Set<string>();
+  for (const m of mine) {
+    if (m.kind === 'pin' || m.kind === 'promote') { lastPin.delete(m.id); lastPin.set(m.id, m); demoted.delete(m.id); }
+    else if (m.kind === 'demote') { lastPin.delete(m.id); demoted.add(m.id); }
+  }
+  const pins = [...lastPin.entries()].filter(([id, m]) => m.skipReason == null && !archived.has(id)).map(([id]) => id);
+  const placed = new Map<string, number>();
+  for (const m of mine) if (m.kind === 'place' && m.sortKey != null && !lastPin.has(m.id) && !archived.has(m.id)) placed.set(m.id, m.sortKey);
+  return { pins, placed, archived, demoted: new Set([...demoted].filter((id) => !archived.has(id))) };
 }
 
 /**

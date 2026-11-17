@@ -25,6 +25,7 @@ import { aiEventsDueOn, type AiEventsSettings } from '@/lib/ai-events/settings';
 import { FIELD_NOTES_AUTO_DAYS } from '@/lib/field-notes/config';
 import type { FieldNotesSettings } from '@/lib/field-notes/types';
 import { lfdDueOn, type LfdSettings } from '@/lib/lfd/settings';
+import { STORY_VERTICALS, verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { quotaCandidates, type QuotaCandidate } from '@/lib/social-hub/views/day-rank';
@@ -38,7 +39,7 @@ export type RunInputs = {
   reels: TypeDay & { slateToday: boolean };
   carousels: TypeDay;
   explainers: TypeDay;
-  /** Series due today and whether each already has today's set. */
+  /** Series due today and whether each already has today's set; each makes its own type's step (SS-1). */
   series: Array<{ id: string; label: string; held: boolean }>;
   /** Last Few Days: due today (its days; any day from its own button) and whether today's post exists. Missing: no step. */
   lastFewDays?: { due: boolean; made: boolean };
@@ -159,11 +160,13 @@ export function planFrom(i: RunInputs): RunPlan {
     else steps.push({ ...base, action: 'explainer_renders', targets: missing.map((m) => m.ref), note: `Renders ${titles(missing)}.`, estimateUsd: missing.length * i.cost.explainerCap });
   }
 
-  {
-    const missing = i.series.filter((s) => !s.held);
-    const base = { vertical: 'stories' as const, label: label('stories'), quota: i.series.length, held: i.series.length - missing.length, needed: missing.length };
-    if (!i.series.length) steps.push({ ...base, action: 'none', targets: [], note: 'No series is due today.', estimateUsd: 0 });
-    else if (!missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Every series due today has its set.', estimateUsd: 0 });
+  // One step per Stories-format type (SS-1), each over its own series.
+  for (const vertical of STORY_VERTICALS) {
+    const due = i.series.filter((s) => verticalOfSeries(s.id) === vertical);
+    const missing = due.filter((s) => !s.held);
+    const base = { vertical, label: label(vertical), quota: due.length, held: due.length - missing.length, needed: missing.length };
+    if (!due.length) steps.push({ ...base, action: 'none', targets: [], note: 'No set is due today.', estimateUsd: 0 });
+    else if (!missing.length) steps.push({ ...base, action: 'none', targets: [], note: 'Today’s set is made.', estimateUsd: 0 });
     else steps.push({ ...base, action: 'story_sets', targets: missing.map((s) => s.id), note: `Makes ${missing.map((s) => s.label).join(', ')}.`, estimateUsd: missing.length * i.cost.storySet });
   }
 
@@ -230,7 +233,7 @@ export function stepsFor(plan: RunPlan, only?: Vertical, target?: string): PlanS
   return only && target ? steps.map((s) => narrowStep(s, target)) : steps;
 }
 
-const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
+const RUN_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 const TARGET_MAX = 2048;
 
 /**

@@ -26,6 +26,28 @@ import { answerProbabilities, SCORE_FORMULA, SCORE_VERSION, scoreEvent, type Eve
 import { buildEventState } from './state';
 import { loadAnchors } from './tech-weeks';
 import { codeTerms, imputeTerms, termMedians, type CodeTerms } from './terms';
+import { readNightQueue } from '@/lib/social-hub/queue-store';
+import type { MovesQuery } from '@/lib/social-hub/moves-store';
+import { EMPTY_NIGHT, type NightQueue } from '@/lib/social-hub/queue';
+
+/** The hub's idea id for an AI Events pool event is `ai_events:event:<event id>` (lib/social-hub/adapters/ai-events.ts). */
+export const AI_EVENTS_EVENT_IDEA = 'ai_events:event:';
+
+/**
+ * Pins and excludes for a week: ai_events.pool's own pinned_at / excluded_at (the AE-04 buttons) together with the shared
+ * idea queue (Tommy, 2026-11-16: AI Events gets Pin, drag and Archive; Archive is what Exclude did). A shared pin is a pin,
+ * a shared archive an exclude; pins order by the order pinned (column pins after, by pin time). Pure.
+ */
+export function weekHolds(poolRows: ReadonlyArray<{ event_id: string; pinned_at: Date | string | null; excluded_at: Date | string | null }>, night: Pick<NightQueue, 'pins' | 'archived' | 'placed'>): { pinned: Set<string>; excluded: Set<string>; pinOrder: Map<string, number>; placed: Map<string, number> } {
+  const excluded = new Set([...poolRows.filter((r) => r.excluded_at != null).map((r) => r.event_id), ...night.archived]);
+  const at = (v: Date | string | null) => (v == null ? Infinity : new Date(v).getTime());
+  const columnPins = poolRows.filter((r) => r.pinned_at != null && !excluded.has(r.event_id)).sort((a, b) => at(a.pinned_at) - at(b.pinned_at)).map((r) => r.event_id);
+  const order = [...night.pins.filter((id) => !excluded.has(id)), ...columnPins];
+  const pinOrder = new Map<string, number>();
+  for (const id of order) if (!pinOrder.has(id)) pinOrder.set(id, pinOrder.size);
+  const placed = new Map([...night.placed].filter(([id]) => !excluded.has(id) && !pinOrder.has(id)));
+  return { pinned: new Set(pinOrder.keys()), excluded, pinOrder, placed };
+}
 import { comingWeek, localDay, weekFromKey, type ComingWeek } from './week';
 
 export const JEV_CONCURRENCY = 6;
@@ -84,6 +106,8 @@ export type RankWeekInput = {
   metros?: readonly Metro[];
   /** Curated anchors to merge with networking.anchors (tests). Defaults to TECH_WEEKS. */
   curatedAnchors?: readonly EventAnchor[];
+  /** The hub's queue by event id. Absent: read from social_hub.idea_adjustments (an unreadable table is an empty queue). */
+  queue?: Pick<NightQueue, 'pins' | 'archived' | 'placed'>;
   /**
    * False for a rebuild (AE-04): only events with cached answers are ranked and Jev is never
    * asked; an event not scored yet waits for the next build. Defaults to true.
@@ -105,8 +129,8 @@ export async function rankWeek(input: RankWeekInput): Promise<RankWeekResult> {
   const weekEvents = await loadWeekEvents(q, week, metros);
   const anchors = await loadAnchors(q, week.startDate, week.endDate, input.curatedAnchors);
   const poolRows = (await q<PoolRow>(`SELECT event_id, pinned_at, excluded_at FROM ai_events.pool WHERE week_key = $1`, [weekKey])).rows;
-  const pinned = new Set(poolRows.filter((r) => r.pinned_at != null).map((r) => r.event_id));
-  const excluded = new Set(poolRows.filter((r) => r.excluded_at != null).map((r) => r.event_id));
+  const night = input.queue ?? (await readNightQueue(q as unknown as MovesQuery, 'ai_events', AI_EVENTS_EVENT_IDEA).catch(() => EMPTY_NIGHT));
+  const { pinned, excluded, pinOrder, placed } = weekHolds(poolRows, night);
   const held = new Set([...pinned, ...excluded]);
 
   type Candidate = { event: StoredNetworkingEvent; terms: CodeTerms; day: string; partner: string | null };
@@ -197,6 +221,8 @@ export async function rankWeek(input: RankWeekInput): Promise<RankWeekResult> {
       going: c.event.guestCount,
       pinned: pinned.has(c.event.id),
       excluded: excluded.has(c.event.id),
+      pinOrder: pinOrder.get(c.event.id) ?? null,
+      sortKey: placed.get(c.event.id) ?? null,
       partner: c.partner,
       event: c.event,
       metro: c.event.metro,

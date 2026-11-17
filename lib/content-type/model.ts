@@ -1,10 +1,11 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows } from '@/lib/social-hub/views/plan';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { offerer, type Offer } from '@/lib/social-hub/views/offer';
 import { poolSummary } from '@/lib/social-hub/views/pools';
-import { contentFor, dayRanking, ideaOwns, quotaCandidates } from '@/lib/social-hub/views/day-rank';
+import { contentFor, dayRanking, ideaOwns, quotaCandidates, type RankedIdea } from '@/lib/social-hub/views/day-rank';
 import type { MoveTag } from '@/lib/social-hub/views/moves';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 import { AI_EVENTS_CITY_TABS, weekLabel } from '@/lib/social-hub/adapters/ai-events';
@@ -63,7 +64,7 @@ export function madeKind(post: HubPost): MadeKind | null {
 export const MADE_LABEL: Record<MadeKind, string> = { slides: 'Slides ready', frames: 'Stories ready', video: 'Video ready' };
 
 /** Stories series, in the order the bench and its filter list them. */
-export const STORY_SERIES = ['Morning Download', 'Guess the Number', 'Free vs. Paid'] as const;
+export const STORY_SERIES = ['Morning Download', 'Are you smarter than AI?', 'Real or AI?'] as const;
 
 export type TypeHubModel = {
   vertical: Vertical;
@@ -181,18 +182,20 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     idea, rank, card, made: card ? madeKind(card.post) : null, moved: movedOf.get(idea.id) ?? null, tag: tagOf.get(idea.id) ?? null, inQuota: quotaIdeas.has(idea.id),
     pinned: handOf.get(idea.id)?.pinned ?? false, placed: handOf.get(idea.id)?.placed ?? false,
   });
-  const rows: TypeBenchItem[] = vertical === 'stories'
+  // Each Stories-format type holds one series (SS-1); bySeries keeps Morning Download's ranking per series as before.
+  const rows: TypeBenchItem[] = isStoryVertical(vertical)
     ? bySeries(open).map(({ idea, rank }) => row(idea, rank, forIdea(idea)))
     : vertical === 'ai_events'
-      // The week's whole pool, retired events included (their gate or exclude is the point), ranked within each city.
-      ? byCity(dataset.ideas.filter((i) => i.vertical === 'ai_events')).map(({ idea, rank }) => ({ ...row(idea, rank, null), chip: eventChip(idea) }))
+      // The week's whole pool, retired events included (their gate or exclude is the point), city by city in the
+      // queue's order (pins, then drags: what the night follows, lib/networking/pick/rank.ts), ranked within each city.
+      ? byCity(dataset.ideas.filter((i) => i.vertical === 'ai_events'), ranking).map(({ idea, rank }) => ({ ...row(idea, rank, null), chip: eventChip(idea) }))
       : open.slice(0, 50).map((idea, i) => row(idea, i + 1, forIdea(idea)));
   // Content whose idea is no longer open still needs a person: keep it on the bench under its own name.
   for (const card of ready) {
     if (matched.has(card.post.id)) continue;
     // AI Events: the week's post leads the bench, outside the city tabs (rank 0 shows no number).
     const group = vertical === 'ai_events' ? null : card.post.idea?.label ?? null;
-    const rank = vertical === 'ai_events' ? 0 : vertical === 'stories' ? rows.filter((r) => r.idea.group === group).length + 1 : rows.length + 1;
+    const rank = vertical === 'ai_events' ? 0 : isStoryVertical(vertical) ? rows.filter((r) => r.idea.group === group).length + 1 : rows.length + 1;
     const item = row({ id: card.post.id, vertical, title: card.post.name, score: null, scoreLabel: '', state: 'content_ready', hasContent: true, versionCount: 1, generatedAt: card.post.generatedAt, createdAt: card.post.generatedAt, detail: null, group }, rank, card);
     if (vertical === 'ai_events') rows.unshift(item);
     else rows.push(item);
@@ -213,7 +216,8 @@ export function typeHubModel(dataset: HubDataset, vertical: Vertical, now: Date)
     scoreLabel: summary.scoreLabel ?? null,
     lastRefill: summary.lastRefill ?? null,
     poolOpen: summary.open,
-    groups: vertical === 'stories' ? STORY_SERIES : vertical === 'ai_events' ? AI_EVENTS_CITY_TABS : [],
+    // No series tabs (SS-1): each Stories-format page shows its own series only.
+    groups: vertical === 'ai_events' ? AI_EVENTS_CITY_TABS : [],
     scoreMax: vertical === 'ai_events' ? EVENT_SCORE_MAX : null,
     ...(vertical === 'ai_events'
       ? { poolWeek: dataset.aiEventsWeek ? { label: weekLabel(dataset.aiEventsWeek.startDate, dataset.aiEventsWeek.endDate), editable: dataset.aiEventsWeek.editable } : null }
@@ -242,15 +246,20 @@ const EVENT_TIER: Record<string, number> = { content_ready: 0, idea_only: 1, ret
 /**
  * AI Events: one list, city by city in post order (AE-02), each city ranked on
  * its own (a city's scores mean nothing against another's), rank within the city.
+ * Within a city the open events come in the queue's order (`ranking`, from dayRanking: pins, drags, archives
+ * applied), then the rest of the week's pool (gated, excluded, archived, past the cap) by tier and score.
  */
-export function byCity(ideas: readonly HubIdea[]): Array<{ idea: HubIdea; rank: number }> {
+export function byCity(ideas: readonly HubIdea[], ranking: readonly Pick<RankedIdea, 'idea'>[] = []): Array<{ idea: HubIdea; rank: number }> {
   const order = [...AI_EVENTS_CITY_TABS, ...new Set(ideas.map((i) => i.group ?? 'Other').filter((g) => !AI_EVENTS_CITY_TABS.includes(g)))];
-  return order.flatMap((city) =>
-    ideas
-      .filter((i) => (i.group ?? 'Other') === city)
-      .sort((a, b) => (EVENT_TIER[a.state] ?? 3) - (EVENT_TIER[b.state] ?? 3) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title))
-      .map((idea, i) => ({ idea, rank: i + 1 })),
-  );
+  const queued = ranking.map((r) => r.idea).filter((i) => i.vertical === 'ai_events');
+  const inQueue = new Set(queued.map((i) => i.id));
+  return order.flatMap((city) => {
+    const inCity = (i: HubIdea) => (i.group ?? 'Other') === city;
+    const rest = ideas
+      .filter((i) => inCity(i) && !inQueue.has(i.id))
+      .sort((a, b) => (EVENT_TIER[a.state] ?? 3) - (EVENT_TIER[b.state] ?? 3) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title));
+    return [...queued.filter(inCity), ...rest].map((idea, i) => ({ idea, rank: i + 1 }));
+  });
 }
 
 /** An AI Events row's chip: in the post, pinned, excluded, gated out, out of the candidates, or waiting. */
@@ -285,7 +294,7 @@ function bySeries(open: readonly HubIdea[]): Array<{ idea: HubIdea; rank: number
 
 /** Today's quota slots for a type with an idea queue: each candidate's idea with its card if it has content, else an open slot. */
 function slotsOf(candidates: ReturnType<typeof quotaCandidates>, cardOf: ReadonlyMap<string, TypeCard>, vertical: Vertical): TypeSlot[] {
-  if (vertical === 'stories' || vertical === 'last_few_days') return [];
+  if (isStoryVertical(vertical) || vertical === 'last_few_days') return [];
   return candidates.map((c) => ({
     rank: c.rank,
     idea: c.idea,

@@ -6,7 +6,7 @@
  *
  *   npm run stories:worker
  *   npm run stories:run                        one pass
- *   npm run stories:run -- --request free_vs_paid    ask for today's set (a Generate click from the terminal)
+ *   npm run stories:run -- --request real_or_ai  ask for today's set (a Generate click from the terminal)
  *
  * STORIES_DB=local keeps the `stories` tables in PGlite at .stories-local/
  * (until the schema is applied to Supabase, S-61). reels.* and social.* are
@@ -27,8 +27,7 @@ import { liveJevTransport } from '@/lib/reels/jev/client';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
 import { createPhotoBank } from '@/lib/media-library/bank';
-import { buildFreeVsPaid } from '@/lib/stories/build/free-vs-paid';
-import { buildGuessTheNumber } from '@/lib/stories/build/guess-the-number';
+import { buildAiTrivia } from '@/lib/stories/build/ai-trivia';
 import { buildMorningDownload } from '@/lib/stories/build/morning-download';
 import { createLivePhotoFinder } from '@/lib/stories/photos';
 import { sharedSeriesBuilders } from '@/lib/stories/photos-shared';
@@ -43,7 +42,9 @@ import { createStoriesStorage } from '@/lib/stories/storage';
 import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
 import { tick } from '@/lib/stories/worker';
 import { liveWriterCreate } from '@/lib/stories/writer';
+
 import { newAnthropic } from '@/lib/anthropic-client';
+import { liveOpponentClient } from '@/lib/stories/trivia/opponent';
 
 const POLL_MS = 15_000;
 const once = process.argv.includes('--once');
@@ -78,14 +79,15 @@ async function main() {
   const deps = {
     db,
     sourceDb,
-    builder: async () => {
+    builder: async (series?: Series) => {
       renderer ??= await openRenderer();
       const settings = await loadSettings(db);
       const client = newAnthropic();
       // Once per build: series on the shared photo finder get wrapped builders; none, and today's deps are unchanged.
       const builders = await sharedSeriesBuilders({
         query: sourceDb,
-        builders: { morning_download: buildMorningDownload, guess_the_number: buildGuessTheNumber, free_vs_paid: buildFreeVsPaid },
+        // Free vs. Paid is retired (Real or AI? replaces it, and makes its own images): neither is here.
+        builders: { morning_download: buildMorningDownload, ai_trivia: (d) => buildAiTrivia(d) },
         log: (line) => log(`photo finder: ${line}`),
       });
       return {
@@ -93,8 +95,11 @@ async function main() {
         sourceDb,
         jevTransport: liveJevTransport,
         write: liveWriterCreate(),
+        // AI Trivia's opponent (AT-74/75): GPT-5 nano (OPENAI_API_KEY), Llama 3.1 8B on fal (FAL_API_KEY) if it is retired.
+        opponent: liveOpponentClient(),
         // CI-32: each pick's picture is checked against the used-photo ledger (read once per finder).
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()) }),
+        // A trivia build's picks are logged under its own run kind (SS-28).
+        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()), ...(series === 'ai_trivia' ? { runKind: 'ai_trivia' as const } : {}) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),

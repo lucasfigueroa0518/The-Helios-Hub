@@ -19,9 +19,10 @@ export const SCHEDULE_ENTRIES: readonly ScheduleEntry[] = [
   { vertical: 'reel_ai_drama', series: null, label: 'AI Drama Reels' },
   { vertical: 'carousels', series: null, label: 'Carousels' },
   { vertical: 'last_few_days', series: null, label: 'Last Few Days' },
+  // The Stories-format types (SS-1), each with its one series.
   { vertical: 'stories', series: 'morning_download', label: 'Morning Download' },
-  { vertical: 'stories', series: 'guess_the_number', label: 'Guess the Number' },
-  { vertical: 'stories', series: 'free_vs_paid', label: 'Free vs. Paid' },
+  { vertical: 'ai_trivia', series: 'ai_trivia', label: 'Are you smarter than AI?' },
+  { vertical: 'real_or_ai', series: 'real_or_ai', label: 'Real or AI?' },
 ];
 
 export type ScheduleTime = { minute: number; feedMode: FeedMode | null };

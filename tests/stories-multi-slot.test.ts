@@ -52,6 +52,9 @@ async function setSwitches(db: Db, publishingLive: boolean) {
 
 const idleDeps = (db: Db, now: Date) => ({
   db, sourceDb: db, now: () => now, sleep: async () => {},
+  // Real or AI?'s daily candidate run makes images and AI Trivia's intake calls the model; never from a test.
+  roaDaily: async () => null,
+  triviaDaily: async () => null,
   builder: async () => ({ db, sourceDb: db, jevTransport: stubJev(), write: stubWriter({}), photos: stubPhotos(), builders: { morning_download: async () => ({ ok: false as const, skip: 'test: nothing to build', candidates: [] }) } }) as never,
   meta: () => { throw new Error('nothing may publish'); },
   storage: () => { throw new Error('not used'); },
@@ -125,15 +128,16 @@ test('template: the 3 AM worker requests one set per Stories slot', async () => 
 test('legacy: exactly one set per due series, no slot minute, booked under the series name', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'morning_download', { auto: true });
-  await saveSeriesSetting(db, 'guess_the_number', { auto: true });
-  await saveSeriesSetting(db, 'free_vs_paid', { auto: true });
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveSeriesSetting(db, 'real_or_ai', { auto: true });
   assert.equal(await storiesSlotsOn(qOf(db), THU), null);
   await tick(idleDeps(db, THU_3AM));
   assert.deepEqual(await minutesOf(db), [null]);
-  // Guess the Number and Free vs. Paid are made 2 days ahead (Bald-Eagle D4): Thursday's night fills Thu–Sat,
-  // so Thursday's Guess the Number (its window still ahead) and Saturday's Free vs. Paid, still without a slot minute.
-  assert.deepEqual(await minutesOf(db, 'guess_the_number'), [null]);
-  assert.deepEqual(await minutesOf(db, 'free_vs_paid'), [null], 'Saturday, 2 days ahead');
+  assert.deepEqual(await minutesOf(db, 'ai_trivia'), [null]);
+  assert.deepEqual(await minutesOf(db, 'real_or_ai'), [null]);
+  // Morning Download is made the same day; Trivia (Sun/Mon/Thu) and Real or AI? (Tue/Sat) up to 2 days ahead.
+  const days = (await db.query<{ d: string }>(`SELECT series || '@' || ny_date::text AS d FROM stories.sets ORDER BY series`)).rows.map((r) => r.d);
+  assert.deepEqual(days, ['ai_trivia@2026-10-08', 'morning_download@2026-10-08', 'real_or_ai@2026-10-10']);
 
   const { db: db2 } = await harnessDb();
   await saveSeriesSetting(db2, 'morning_download', { auto: true });

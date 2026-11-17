@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { FVP_ORDER, GTN_ORDER, LFD_ORDER, MD_ORDER } from '@/lib/intake/orders';
+import { CAROUSEL_ORDER, LFD_ORDER, MD_ORDER, REELS_ORDER, TRIVIA_ORDER } from '@/lib/intake/orders';
 import { listStories } from '@/lib/intake/read';
 import { memberHash, orderCovers, scoreForStories } from '@/lib/intake/score';
 import { INTAKE_SCORECARDS } from '@/lib/intake/scorecards';
@@ -78,13 +78,13 @@ test('only open orders that cover a member choose scorecards; an empty family su
   const storyScoring = card('story-scoring', ['feeds']);
   const s = story(F, [item({ key: 'f1', family: 'feeds', role: 'primary' })]);
 
-  // FvP covers only reels adapters: a feeds-only story is not scored at all.
-  const none = await scoreForStories(q, noJev, [s], [FVP_ORDER], [reelsScore.c, storyScoring.c]);
+  // Reels covers only reels adapters: a feeds-only story is not scored at all.
+  const none = await scoreForStories(q, noJev, [s], [REELS_ORDER], [reelsScore.c, storyScoring.c]);
   assert.equal(none['reels-score'].scored + none['story-scoring'].scored, 0);
-  // GTN covers feeds: story-scoring runs; reels-score has no reels/search members → no row.
-  const gtn = await scoreForStories(q, noJev, [s], [GTN_ORDER], [reelsScore.c, storyScoring.c]);
-  assert.equal(gtn['story-scoring'].scored, 1);
-  assert.equal(gtn['reels-score'].scored, 0);
+  // Carousels cover feeds with story-scoring only: story-scoring runs; reels-score is not its scorecard → no row.
+  const carousel = await scoreForStories(q, noJev, [s], [CAROUSEL_ORDER], [reelsScore.c, storyScoring.c]);
+  assert.equal(carousel['story-scoring'].scored, 1);
+  assert.equal(carousel['reels-score'].scored, 0);
   assert.equal(reelsScore.seen.length, 0);
   // No open order: nothing.
   const closed = await scoreForStories(q, noJev, [s], [], [reelsScore.c, storyScoring.c]);
@@ -172,4 +172,24 @@ test('orderCovers: through any list that keeps the item (fix 1)', () => {
   assert.equal(orderCovers(feedsOnly, both), true, 'kept by its feed');
   assert.equal(orderCovers(reelsOnly, both), false, 'dropped by the reels screen');
   assert.equal(orderCovers({ id: 'md', sources: ['feed:techcrunch-ai'] }, both), true, 'an explicit feed slug');
+});
+
+test('SS-30: AI Trivia deposits are covered only by the trivia order, which spends no scorecard on them', async () => {
+  const { q } = await intakeDb();
+  const trivia = item({ key: 't1', family: 'search', sourceId: 'search:trivia' });
+  const b6 = item({ key: 'b1', family: 'search', sourceId: 'search:b6' });
+  for (const o of [LFD_ORDER, MD_ORDER, REELS_ORDER, CAROUSEL_ORDER]) {
+    assert.equal(orderCovers(o, trivia), false, `${o.id} must not read trivia research`);
+    assert.equal(orderCovers(o, b6), true, `${o.id} still reads B6 finds`);
+  }
+  assert.equal(orderCovers(TRIVIA_ORDER, trivia), true);
+  assert.equal(orderCovers(TRIVIA_ORDER, b6), false);
+
+  const id = uid(40);
+  await insertStory(q, id);
+  const reelsScore = card('reels-score', ['reels', 'search']);
+  const major = card('major-news', ['reels', 'feeds', 'search', 'seed']);
+  const tally = await scoreForStories(q, noJev, [story(id, [trivia])], [LFD_ORDER, MD_ORDER, REELS_ORDER, TRIVIA_ORDER], [reelsScore.c, major.c]);
+  assert.equal(tally['reels-score'].scored + tally['major-news'].scored, 0, 'no Jev on a trivia-only story');
+  assert.deepEqual([...reelsScore.seen, ...major.seen], []);
 });
