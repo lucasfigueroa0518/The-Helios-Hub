@@ -631,13 +631,32 @@ export async function loadOutreachSuccess(campaignId: string): Promise<OutreachB
     [campaignId, today],
   );
   const days = await dbQuery<{ date: string; sent: number; attached: number }>(
-    `SELECT to_char(gs::date, 'YYYY-MM-DD') AS date,
-            (SELECT count(*)::int FROM outreach.email_send_queue q
-              WHERE q.campaign_id = $1 AND q.status = 'sent' AND q.schedule_date = gs::date) AS sent,
-            (SELECT count(*)::int FROM outreach.campaign_leads cl
-              WHERE cl.campaign_id = $1 AND cl.sourced_on = gs::date) AS attached
-       FROM generate_series(($2::date - 13), $2::date, interval '1 day') AS gs
-      ORDER BY gs ASC`,
+    // One grouped read per table over the 14 days, joined to the calendar, instead of two
+    // counts per day: 28 correlated scans priced high enough to trigger JIT (~150 ms of compile).
+    `WITH days AS (
+       SELECT gs::date AS day FROM generate_series(($2::date - 13), $2::date, interval '1 day') AS gs
+     ),
+     sent AS (
+       SELECT q.schedule_date AS day, count(*)::int AS n
+         FROM outreach.email_send_queue q
+        WHERE q.campaign_id = $1 AND q.status = 'sent'
+          AND q.schedule_date BETWEEN ($2::date - 13) AND $2::date
+        GROUP BY q.schedule_date
+     ),
+     attached AS (
+       SELECT cl.sourced_on AS day, count(*)::int AS n
+         FROM outreach.campaign_leads cl
+        WHERE cl.campaign_id = $1
+          AND cl.sourced_on BETWEEN ($2::date - 13) AND $2::date
+        GROUP BY cl.sourced_on
+     )
+     SELECT to_char(d.day, 'YYYY-MM-DD') AS date,
+            COALESCE(s.n, 0) AS sent,
+            COALESCE(a.n, 0) AS attached
+       FROM days d
+       LEFT JOIN sent s ON s.day = d.day
+       LEFT JOIN attached a ON a.day = d.day
+      ORDER BY d.day ASC`,
     [campaignId, today],
   );
   const row = rows[0];
