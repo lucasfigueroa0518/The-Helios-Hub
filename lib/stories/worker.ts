@@ -66,6 +66,7 @@ import { accountBusy } from '@/lib/stories/spine';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import { runTriviaDaily } from '@/lib/stories/trivia/daily';
 import { runRoaDaily } from '@/lib/stories/roa/daily';
+import { buildGameDay, dayToBuild, lockDue, readLaunch } from '@/lib/stories/trivia/game-days';
 import { createBankReader } from '@/lib/media-library/reader';
 
 /** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md, night schedule v2). */
@@ -90,6 +91,8 @@ export type WorkerDeps = {
   intake?: { jev?: () => IntakeJev; readMode?: ReadConsumerMode };
   /** AI Trivia's daily writer run; tests stub it. Default: runTriviaDaily with the builder's live clients. */
   triviaDaily?: (now: Date, settings: StoriesSettings) => Promise<unknown>;
+  /** The web game's day builder; tests stub it. Default: buildGameDay with the builder's live clients. */
+  triviaGame?: (now: Date, settings: StoriesSettings, date: string, launch: string) => Promise<unknown>;
   /** Real or AI?'s daily candidate run; tests stub it. Default: runRoaDaily with the builder's live clients. */
   roaDaily?: (now: Date, settings: StoriesSettings) => Promise<unknown>;
   /** Fetches a published photo to hash it for the used-photo ledger (tests stub it). */
@@ -121,6 +124,8 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
     await triviaDailyIfDue(deps, settings, now);
     await roaDailyIfDue(deps, settings, now);
   }
+  // 0b. The web game (HUB-PLAN.md): lock what is due (any hour), then build the next day under the type's spend cap.
+  await triviaGameIfDue(deps, settings, now);
 
   // 1. Auto series.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
@@ -265,6 +270,39 @@ async function triviaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now
     log(`trivia: daily writer ${JSON.stringify(result ?? null).slice(0, 300)}`);
   } catch (err) {
     log(`trivia: daily writer failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * "Are you Smarter Than AI?" web game days (AT-76 to AT-79): lock every full day whose 11 pm has come, then build the
+ * next day (lib/stories/trivia/game-days.ts) while a launch date is set. The build is held like the daily writer: the
+ * month's watch or AI Trivia's daily cap; MAX_GAME_CHECKS caps the fact-checks one day may spend.
+ */
+async function triviaGameIfDue(deps: WorkerDeps, settings: StoriesSettings, now: Date): Promise<void> {
+  const log = deps.log ?? (() => {});
+  try {
+    const launch = await readLaunch(deps.db);
+    if (!launch) return;
+    const locked = await lockDue(deps.db, now);
+    if (locked.locked.length || locked.missed.length) log(`trivia-game: ${JSON.stringify(locked)}`);
+    const date = await dayToBuild(deps.db, launch, now);
+    if (!date) return;
+    const held = await spendHeld(deps, settings, 'ai_trivia', now);
+    if (held) {
+      once(`game:${date}:${held}`, () => log(`trivia-game: ${date} held (${held})`));
+      return;
+    }
+    const run = deps.triviaGame ?? (async (at: Date, s: StoriesSettings, day: string, l: string) => {
+      const b = await deps.builder();
+      return buildGameDay({ db: b.db, write: b.write, opponent: b.opponent, settings: s, now: at, log }, day, l);
+    });
+    const r = await run(now, settings, date, launch);
+    const line = `trivia-game: ${JSON.stringify(r)}`;
+    once(`game:${line}`, () => log(line));
+    const after = await lockDue(deps.db, now);
+    if (after.locked.length) log(`trivia-game: ${JSON.stringify(after)}`);
+  } catch (err) {
+    log(`trivia-game: failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
