@@ -132,6 +132,9 @@ async function waitForServer(timeoutMs = 60_000) {
 
 async function startServer({ trace = null } = {}) {
   await stopServer();
+  if (await request('/api/health', {}).then(() => true, () => false)) {
+    throw new Error(`port ${PORT} is already serving; stop the stray server first (pkill -f next-server)`);
+  }
   // Port 6543 + VERCEL=1 reproduce production's pool: transaction mode, max 3 per isolate (lib/db.ts).
   const env = { ...process.env, PORT: String(PORT), NODE_ENV: 'production', VERCEL: '1', DATABASE_URL: proxiedDbUrl, DIRECT_DATABASE_URL: proxiedDbUrl };
   if (trace) {
@@ -139,9 +142,11 @@ async function startServer({ trace = null } = {}) {
     env.NODE_OPTIONS = `${env.NODE_OPTIONS ?? ''} --require ${path.join(PERF_DIR, 'lib', 'pg-trace.cjs')}`.trim();
   }
   serverLog = fs.createWriteStream(path.join(RUN_DIR, 'server.log'), { flags: 'a' });
+  // Own process group: `next start` forks a `next-server` child, and both must go on stop.
   server = spawn(path.join(ROOT, 'node_modules', '.bin', 'next'), ['start', '-p', String(PORT), '-H', '127.0.0.1'], {
-    cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true,
   });
+  server.once('exit', (code) => { if (code && code !== 0 && code !== 143) console.error(`next start exited with ${code} (see ${path.relative(ROOT, RUN_DIR)}/server.log)`); });
   server.stdout.pipe(serverLog);
   server.stderr.pipe(serverLog);
   await waitForServer();
@@ -153,12 +158,18 @@ async function stopServer() {
   server = null;
   await new Promise((resolve) => {
     proc.once('exit', resolve);
-    proc.kill('SIGTERM');
-    setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* gone */ } }, 5000);
+    try { process.kill(-proc.pid, 'SIGTERM'); } catch { proc.kill('SIGTERM'); }
+    setTimeout(() => { try { process.kill(-proc.pid, 'SIGKILL'); } catch { /* gone */ } }, 5000);
   });
+  // The forked next-server can outlive the parent briefly; wait until the port is free.
+  for (let i = 0; i < 100; i += 1) {
+    const busy = await request('/api/health', {}).then(() => true, () => false);
+    if (!busy) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
 }
 
-process.on('SIGINT', async () => { await stopServer(); proxy?.kill(); process.exit(130); });
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, async () => { await stopServer(); proxy?.kill(); process.exit(130); });
 
 // ---------- timing ----------
 const agent = new http.Agent({ keepAlive: false });

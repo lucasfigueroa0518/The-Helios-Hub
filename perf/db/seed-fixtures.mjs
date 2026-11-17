@@ -46,6 +46,26 @@ async function main() {
       WHERE "${t.column_name}" IS NOT NULL AND abs(hashtext(ctid::text)) % 100 < 92`).catch((e) => console.warn(`tombstone ${t.table_name}.${t.column_name}:`, e.message));
   }
 
+  // 0b. In-flight states are rare in a live system: settle ~99% of queued/running rows
+  // to a terminal status allowed by the table's own CHECK list.
+  const { rows: statusChecks } = await client.query(`
+    SELECT n.nspname AS schema, c.relname AS table, a.attname AS col, pg_get_constraintdef(k.oid) AS def
+      FROM pg_constraint k JOIN pg_class c ON c.oid = k.conrelid JOIN pg_namespace n ON n.oid = c.relnamespace
+      JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = k.conkey[1]
+     WHERE k.contype = 'c' AND array_length(k.conkey, 1) = 1 AND a.attname IN ('status', 'state')
+       AND n.nspname = ANY($1)`, [['outreach', 'social', 'social_hub', 'reels', 'boards', 'reel_ai_drama', 'memes', 'stories', 'explainers', 'networking', 'real_case', 'intake', 'seo', 'field_notes', 'dashboards', 'ai_events', 'media_library', 'lfd', 'revisions']]);
+  const INFLIGHT = /^(requested|running|building|queued|claimed|processing|publishing|creating|in_progress|generating|rendering|handing_off|leased|retrying)$/;
+  const TERMINAL = ['ok', 'done', 'succeeded', 'success', 'published', 'built', 'complete', 'completed', 'finished', 'sent', 'posted', 'rendered', 'ready', 'handed_off', 'failed'];
+  for (const sc of statusChecks) {
+    const vals = [...sc.def.matchAll(/'((?:[^']|'')*)'::/g)].map((m) => m[1]);
+    const inflight = vals.filter((v) => INFLIGHT.test(v));
+    const terminal = TERMINAL.find((t) => vals.includes(t));
+    if (!inflight.length || !terminal) continue;
+    await client.query(`UPDATE "${sc.schema}"."${sc.table}" SET "${sc.col}" = $1
+      WHERE "${sc.col}" = ANY($2) AND abs(hashtext(ctid::text)) % 100 <> 0`, [terminal, inflight])
+      .catch((e) => console.warn(`settle ${sc.schema}.${sc.table}:`, e.message.slice(0, 120)));
+  }
+
   // 1. The perf user and their profile.
   await client.query(
     `INSERT INTO outreach.users (id, email, display_name, last_login_at) VALUES ($1, $2, 'Perf Tester', now())
@@ -161,11 +181,14 @@ async function main() {
   await client.query(`DELETE FROM social_hub.media_insights`);
   await client.query(`DELETE FROM social_hub.schedule`);
   await client.query(`
-    WITH items AS (SELECT id, vertical, row_number() OVER (PARTITION BY vertical ORDER BY created_at, id) AS rn FROM social_hub.content_items WHERE deleted_at IS NULL),
+    WITH items AS (SELECT id, vertical, row_number() OVER (PARTITION BY vertical ORDER BY created_at, id) AS rn,
+                          count(*) OVER (PARTITION BY vertical) AS total
+                     FROM social_hub.content_items WHERE deleted_at IS NULL),
     placed AS (
       SELECT id, rn, vertical, CASE vertical WHEN 'carousels' THEN 'morning' WHEN 'reels' THEN 'midday'
           WHEN 'last_few_days' THEN 'morning' WHEN 'ai_events' THEN 'evening' WHEN 'field_notes' THEN 'afternoon' ELSE 'late' END AS slot,
-             (current_date - 440 + rn::int) AS ny_date
+             -- One post per type per day: history up to today, plus three days already planned.
+             (current_date + 3 - (total - rn)::int) AS ny_date
         FROM items
     )
     INSERT INTO social_hub.schedule (content_item_id, vertical, ny_date, slot, publish_at, status, source, slot_by)
