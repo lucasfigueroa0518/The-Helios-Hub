@@ -23,12 +23,16 @@ export const FOOT_H = 210;
 export const FOOT_MARGIN = 6;
 /** The question's font size steps (px), largest first. */
 export const QUESTION_PX = [66, 60, 54, 48] as const;
-/** The answer line's sizes, largest first: it steps down until it fits the footer slot (clip 2 only; nothing else moves). */
+/** The answer line's sizes, largest first: it steps down until it fits its slot (clip 2 only; nothing else moves). */
 export const LINE_PX = [54, 48, 42, 38] as const;
 export type LinePx = (typeof LINE_PX)[number];
-/** The largest answer-line size whose measured height fits the footer slot, or null when none does. */
-export function fitLinePx(heights: Partial<Record<number, number>>): LinePx | null {
-  for (const px of LINE_PX) { const h = heights[px]; if (h !== undefined && h <= FOOT_H + 1) return px; }
+/** How far the answer line's slot reaches into the gaps above and below the question (trivia.css --lpad). */
+export const LINE_PAD = 32;
+/** The answer line's slot on clip 2: the question's box plus LINE_PAD above and below. */
+export const lineSlotH = (questionH: number) => questionH + 2 * LINE_PAD;
+/** The largest answer-line size whose measured height fits its slot (`slotH`), or null when none does. */
+export function fitLinePx(heights: Partial<Record<number, number>>, slotH: number): LinePx | null {
+  for (const px of LINE_PX) { const h = heights[px]; if (h !== undefined && h <= slotH + 1) return px; }
   return null;
 }
 export type QuestionPx = (typeof QUESTION_PX)[number];

@@ -183,18 +183,18 @@ const DIRECTION: CritterDirection = {
   answer: [{ at: 0.2, mood: 'focused' }, { at: 0.5, mood: 'surprised' }, { at: 2, mood: 'proud' }],
 };
 
-test('the label: "Opponent: <model> (no web search)" on both clips; clip 2 adds the result pill, hidden until the hit', async () => {
+test('the speech bubble: "<model> (no web search)" by the critter on both clips; clip 2 adds "<model> selected X", hidden until the hit', async () => {
   for (const [picked, cls, mark] of [['B', 'opp-post ok', 'M12 27'], ['A', 'opp-post no', 'M15 15']] as const) {
     const opponent = { label: 'GPT-5 nano', picked };
     const q = await compositionHtml({ role: 'question', ...COPY, opponent, questionPx: 66 });
     const a = await compositionHtml({ role: 'answer', ...COPY, opponent, questionPx: 66, linePx: 48 });
     for (const html of [q, a]) {
-      assert.match(html, /Opponent:<\/span><span class="opp-n">GPT-5 nano<\/span><span class="opp-t">\(no web search\)<\/span>/);
+      assert.match(html, /id="tv-opp-pre" class="opp-pre bubble"><span class="opp-n">GPT-5 nano<\/span><span class="opp-t">\(no web search\)<\/span>/);
       assert.match(html, /--room:250px/, 'the room above the sign is kept for the label');
     }
     assert.doesNotMatch(q, /tv-opp-post/);
-    assert.match(a, new RegExp(`id="tv-opp-post" class="${cls}"`));
-    assert.match(a, new RegExp(`selected ${picked}<`));
+    assert.match(a, new RegExp(`id="tv-opp-post" class="${cls.replace('opp-post', 'opp-post bubble')}"`));
+    assert.match(a, new RegExp(`<span class="opp-n">GPT-5 nano selected ${picked}</span>`));
     assert.match(a, new RegExp(mark));
   }
   assert.doesNotMatch(await compositionHtml({ role: 'answer', ...COPY, questionPx: 66, linePx: 48 }), /tv-opp/);

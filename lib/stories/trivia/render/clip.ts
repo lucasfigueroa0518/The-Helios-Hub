@@ -26,7 +26,7 @@ import { EMOJI_RUN } from '@/lib/stories/render/emoji';
 import type { TriviaCopy as RenderTriviaCopy } from '@/lib/stories/render/types';
 
 import { deliveryProblems, masterProblems, MASTER_FILE, muxArgs, parseProbe, posterArgs, probeArgs } from './audio';
-import { boxDelta, fitLinePx, fitQuestionPx, LINE_PX, QUESTION_PX, slideLayout, type LinePx, type QuestionPx, type SlideRole } from './layout';
+import { boxDelta, fitLinePx, fitQuestionPx, LINE_PX, lineSlotH, QUESTION_PX, slideLayout, type LinePx, type QuestionPx, type SlideRole } from './layout';
 import { critterModule, critterProblems, KIT_FILES, kitDir } from './critter';
 import { openPreflight, type PageBoxes, type Preflight, type SeamShots } from './preflight';
 import { answerTimeline, CLIP_S, FPS, POSTER_AT, questionTimeline, SEAM_T, timelineScript } from './timeline';
@@ -202,11 +202,14 @@ export async function renderTriviaClips(frames: TriviaFrameInput[], deps: Render
     if (first.problems.length) throw new Error(`question clip: ${first.problems.join('; ')}`);
     const fit = fitQuestionPx(first.measures);
     if (!fit) throw new Error(`the stack does not fit the safe area even with the question at ${QUESTION_PX.at(-1)} px`);
+    // The answer line sits in the question's slot, so it is measured at the question's fitted size.
+    await write('answer', fit.px, LINE_PX[LINE_PX.length - 1]!);
     const lineRun = await preflight(dirs.answer);
     if (lineRun.problems.length) throw new Error(`answer clip: ${lineRun.problems.join('; ')}`);
     // A preflight that reports no line heights (a stub) keeps the largest size.
-    const linePx = lineRun.lineHeights ? fitLinePx(lineRun.lineHeights) : LINE_PX[0];
-    if (!linePx) throw new Error(`the answer line does not fit its footer slot even at ${LINE_PX.at(-1)} px`);
+    const slotH = lineRun.lineSlot ?? lineSlotH(fit.content.question.h);
+    const linePx = lineRun.lineHeights ? fitLinePx(lineRun.lineHeights, slotH) : LINE_PX[0];
+    if (!linePx) throw new Error(`the answer line does not fit the question's slot (${Math.round(slotH)} px) even at ${LINE_PX.at(-1)} px`);
     for (const role of ROLES) await write(role, fit.px, linePx);
     const page = {} as Record<SlideRole, PageBoxes>;
     for (const role of ROLES) {
