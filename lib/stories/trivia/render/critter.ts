@@ -79,9 +79,9 @@ export type CritterDirection = {
 /** The kit modules the critter needs (cast.js and everything it and motion.js import). */
 export const KIT_FILES = ['cast.js', 'wear.js', 'core.js', 'motion.js', 'draw.js', 'seams.js', 'hershey-sans.js'];
 
-/** Where the kit is read from: TRIVIA_KIT_DIR when set, else this checkout's explainers/world-kit. */
+/** Where the kit is read from: TRIVIA_KIT_DIR when set, else the renderer's own pinned copy (./kit, vendored from the hx5 world-kit at 64bd3953, so Explainers kit changes can't break it). */
 export function kitDir(): string {
-  return process.env.TRIVIA_KIT_DIR || path.join(process.cwd(), 'explainers', 'world-kit');
+  return process.env.TRIVIA_KIT_DIR || path.join(process.cwd(), 'lib', 'stories', 'trivia', 'render', 'kit');
 }
 
 /** What is wrong with a direction (empty when it may be drawn). */
