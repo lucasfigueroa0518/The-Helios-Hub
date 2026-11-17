@@ -37,6 +37,12 @@ Not changed here, because the playbook forbids behavior changes in this branch. 
 - **Why it's your call**: the font is ParaType's commercial Pragmatica. Its license URL is `paratype.com/eula`, and its embedding flags allow preview and print embedding only. Some desktop EULAs forbid format conversion or subsetting, and web use may need a web license. I didn't convert it.
 - **Ask**: confirm the Helios license covers web embedding and WOFF2 conversion (and subsetting, if wanted). If yes, the change is: convert with `fonttools` (`TTFont(...).flavor = 'woff2'; save`), add `app/fonts/PragmaticaExtended-Bold.woff2`, and point `localFont({ src })` in `app/layout.tsx` at it. About 165 KB less of the uncompressed file on each first visit.
 
+## D8. Deploy steps after merging (I did not run these)
+
+1. **Index migration**: `psql "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/perf_2026_11_17_indexes.sql`. It is additive, `CREATE INDEX CONCURRENTLY`, so writes are not blocked. The rollback is `db/perf_2026_11_17_indexes_down.sql`. Without it, the campaign-list rewrite still returns the same rows, but its query stays near 127 ms instead of 56 ms.
+2. **Worker sync (CLAUDE.md)**: the workers import files changed here. `lib/db.ts` gets slow-query logging. `lib/campaigns.ts`, `lib/auto-campaigns/*` and `lib/inboxes/capacity.ts` give the same results, faster. `lib/reels/scoring/store.ts` and `lib/stories/storage.ts` give the same results, with the storage timeout defaulting to 60 s as before. Redeploy `helios-orch-worker` with `./scripts/gcp/deploy-worker-code.sh` and `helios-social-worker` with `./scripts/gcp/deploy-social-worker.sh` in the same session as the merge.
+3. **Slow-query log volume**: workers run batch queries that can legitimately exceed 100 ms. If `db/slow_query` lines are too noisy in the VM journal, set `DB_SLOW_QUERY_MS=500` (or `0` to turn it off) in the worker env. Leave the web app at the default of 100.
+
 ## D5. Production APM
 
 - The app has structured logs and `Server-Timing`, but no tracing backend. Sentry Performance or Datadog would give real p95 per route in production, but both are paid. Vercel's built-in Speed Insights and Observability are the cheapest options. Your call.
