@@ -24,4 +24,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// `ANALYZE=true npm run build` writes bundle reports to .next/analyze/ (perf/README.md).
+function withBundleAnalyzer(config: NextConfig): NextConfig {
+  if (process.env.ANALYZE !== 'true') return config;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const analyzer = require('@next/bundle-analyzer') as (opts: { enabled: boolean; openAnalyzer: boolean }) => (c: NextConfig) => NextConfig;
+  return analyzer({ enabled: true, openAnalyzer: false })(config);
+}
+
+export default withBundleAnalyzer(nextConfig);

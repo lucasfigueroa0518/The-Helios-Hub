@@ -1,0 +1,6070 @@
+[
+  {
+    "id": "page:/ai-events",
+    "kind": "page",
+    "method": "GET",
+    "path": "/ai-events",
+    "file": "app/ai-events/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/content-type/posting readPosting"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/ai-events"
+    },
+    "notes": "force-dynamic; NOT in middleware matcher (page-level getSession redirect); ContentTypePage(ai_events): full hub dataset via unstable_cache (60s/600s, ~3MB gz) + readPosting; only write is consumeMoves housekeeping; client polls /api/content-type/progress"
+  },
+  {
+    "id": "page:/ai-trivia",
+    "kind": "page",
+    "method": "GET",
+    "path": "/ai-trivia",
+    "file": "app/ai-trivia/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/content-type/posting readPosting"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/ai-trivia"
+    },
+    "notes": "force-dynamic; ContentTypePage(ai_trivia) full hub dataset (unstable_cache) + readPosting; client GameDayPanel fetches /api/stories/trivia-game on mount; TypeHub polls /api/content-type/progress"
+  },
+  {
+    "id": "api:POST:/api/ai-events/pool",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/ai-events/pool",
+    "file": "app/api/ai-events/pool/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/ai-events/pool",
+      "db:ai_events.pool/runs"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/ai-events/pool",
+      "body": {
+        "action": "pin",
+        "eventId": "{eventId}"
+      }
+    },
+    "notes": "force-dynamic; pin/exclude/clear update pool row; rebuild queues a cached-score rebuild run for the social worker (no Jev call)"
+  },
+  {
+    "id": "api:POST:/api/ai-events/run",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/ai-events/run",
+    "file": "app/api/ai-events/run/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/content-type/run-today-live runType"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/ai-events/run",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues a manual AI Events build (Jev spend, capped by run_cap_usd) for the social worker"
+  },
+  {
+    "id": "api:GET:/api/ai-events/slides/[postId]/[n]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/ai-events/slides/[postId]/[n]",
+    "file": "app/api/ai-events/slides/[postId]/[n]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "db:ai_events.posts.slide_objects",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/ai-events/slides/{postId}/0"
+    },
+    "notes": "force-dynamic; 302 to 10-min signed URL"
+  },
+  {
+    "id": "api:GET:/api/analytics/drilldown",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/analytics/drilldown",
+    "file": "app/api/analytics/drilldown/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/analytics-drilldown getMetricDrilldown",
+      "db:outreach sends/costs"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/analytics/drilldown",
+      "query": {
+        "metricKey": "emails_sent",
+        "period": "week"
+      }
+    },
+    "notes": "per-day metric series; shares heavy analytics aggregation code"
+  },
+  {
+    "id": "api:POST:/api/analytics/runs/exclude",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/analytics/runs/exclude",
+    "file": "app/api/analytics/runs/exclude/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/analytics excludeAnalyticsRuns"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/analytics/runs/exclude",
+      "body": {
+        "runIds": [
+          "{runId}"
+        ],
+        "reason": "perf test"
+      }
+    }
+  },
+  {
+    "id": "api:POST:/api/analytics/runs/include",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/analytics/runs/include",
+    "file": "app/api/analytics/runs/include/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/analytics includeAnalyticsRuns"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/analytics/runs/include",
+      "body": {
+        "runIds": [
+          "{runId}"
+        ]
+      }
+    }
+  },
+  {
+    "id": "api:GET:/api/analytics/runs",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/analytics/runs",
+    "file": "app/api/analytics/runs/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/analytics listAnalyticsRuns"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/analytics/runs"
+    },
+    "notes": "lists all analytics runs (no paging)"
+  },
+  {
+    "id": "api:GET:/api/analytics/summary",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/analytics/summary",
+    "file": "app/api/analytics/summary/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/analytics getAnalyticsSummary",
+      "db:outreach campaigns/sends/costs",
+      "lib/smartlead/costs"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/analytics/summary",
+      "query": {
+        "period": "week"
+      }
+    },
+    "notes": "~500-line aggregate (spend, delivery, cost ledgers) with several sequential awaits; prefetched by every hub tab"
+  },
+  {
+    "id": "api:GET:/api/auth/[...nextauth]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/auth/[...nextauth]",
+    "file": "app/api/auth/[...nextauth]/route.ts",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "auth.ts handlers (JWT)"
+    ],
+    "measure": false,
+    "measureReason": "Auth.js handler (session/csrf/OAuth redirects), not app data",
+    "sample": {
+      "path": "/api/auth/session"
+    },
+    "notes": "GET /api/auth/signin/google redirects to Google OAuth"
+  },
+  {
+    "id": "api:POST:/api/auth/[...nextauth]",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/auth/[...nextauth]",
+    "file": "app/api/auth/[...nextauth]/route.ts",
+    "auth": "public",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "auth.ts handlers",
+      "external:google-oauth"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/auth/signin/google",
+      "body": {}
+    },
+    "notes": "sign-in upserts outreach.users via callback"
+  },
+  {
+    "id": "api:POST:/api/auth/login",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/auth/login",
+    "file": "app/api/auth/login/route.ts",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/auth/login",
+      "body": {}
+    },
+    "notes": "retired: always 410"
+  },
+  {
+    "id": "api:POST:/api/auth/logout",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/auth/logout",
+    "file": "app/api/auth/logout/route.ts",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "auth.ts signOut"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/auth/logout",
+      "body": {}
+    },
+    "notes": "clears Auth.js cookie"
+  },
+  {
+    "id": "api:GET:/api/auth/me",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/auth/me",
+    "file": "app/api/auth/me/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "db:outreach.users"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/auth/me"
+    },
+    "notes": "public at middleware (/api/auth prefix) but route requires getSession -> 401; single-row lookup; good auth()+DB baseline"
+  },
+  {
+    "id": "api:GET:/api/billing-guard",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/billing-guard",
+    "file": "app/api/billing-guard/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/billing-guard getCloudWorkerSpendState"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/billing-guard"
+    }
+  },
+  {
+    "id": "api:POST:/api/billing-guard",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/billing-guard",
+    "file": "app/api/billing-guard/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/billing-guard clearBillingGuard"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/billing-guard",
+      "body": {
+        "action": "clear",
+        "confirm": true
+      }
+    },
+    "notes": "also needs x-billing-guard-clear header secret"
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/cost-estimate",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/cost-estimate",
+    "file": "app/api/campaigns/[id]/cost-estimate/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getCampaign",
+      "lib/campaign-cost-cap buildCampaignCostGate",
+      "db:outreach.uploads/campaign_leads"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/cost-estimate"
+    },
+    "notes": "4-5 sequential queries"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/drafting/approve-leads",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/drafting/approve-leads",
+    "file": "app/api/campaigns/[id]/drafting/approve-leads/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/repository approveDraftingLeadsBulk -> reconcileDraftingWorkspaceQueue"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting/approve-leads",
+      "body": {
+        "item_ids": [
+          "{itemId}"
+        ]
+      }
+    },
+    "notes": "approving leads enqueues drafting (Claude) work"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/drafting/cancel-run",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/drafting/cancel-run",
+    "file": "app/api/campaigns/[id]/drafting/cancel-run/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting/repository cancelDraftingRun"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting/cancel-run",
+      "body": {}
+    }
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/drafting/export",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/drafting/export",
+    "file": "app/api/campaigns/[id]/drafting/export/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting/repository exportMailCsv/exportCoworkMarkdown/exportUnverifiedLeadsCsv"
+    ],
+    "measure": false,
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting/export",
+      "query": {
+        "type": "mail"
+      }
+    },
+    "notes": "file download (CSV/markdown); approved-row load may refresh stale timeliness audits (UPDATE)",
+    "measureReason": "needs export-ready approved drafts; on seed data it exits early with 409, which is not a representative timing"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/drafting/pause",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/drafting/pause",
+    "file": "app/api/campaigns/[id]/drafting/pause/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting/repository pauseDraftingWorkspace"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting/pause",
+      "body": {}
+    }
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/drafting/rescue",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/drafting/rescue",
+    "file": "app/api/campaigns/[id]/drafting/rescue/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/rescue rescueDraftingWorkspace"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting/rescue",
+      "body": {}
+    },
+    "notes": "re-enqueues stranded drafting jobs"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/drafting/resume",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/drafting/resume",
+    "file": "app/api/campaigns/[id]/drafting/resume/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/repository resumeDraftingWorkspace"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting/resume",
+      "body": {}
+    },
+    "notes": "resumes queued drafting work"
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/drafting",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/drafting",
+    "file": "app/api/campaigns/[id]/drafting/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/repository getWorkspaceSnapshot",
+      "lib/drafting/rescue resolveRescueForUi",
+      "db:outreach.drafting_*"
+    ],
+    "measure": false,
+    "measureReason": "GET can auto-rescue (re-enqueue drafting jobs) and UPDATE timeliness audits",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting",
+      "query": {
+        "filter": "to_review",
+        "limit": "100"
+      }
+    },
+    "notes": "maxDuration=60; HOT: DraftWorkspace polls every few seconds; ~12 parallel reads incl. all item states + page of rows; warmStaleDraftTimeliness UPDATEs; auto-rescue when stranded items found. High-value measure candidate if seeded with a settled workspace and no worker attached"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/drafting",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/drafting",
+    "file": "app/api/campaigns/[id]/drafting/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/repository startDraftingWorkspace"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting",
+      "body": {
+        "sender_profile_id": "{profileId}"
+      }
+    },
+    "notes": "maxDuration=60; starts drafting (Claude) after cost-cap check"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/drafting/send",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/drafting/send",
+    "file": "app/api/campaigns/[id]/drafting/send/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/repository sendCampaignApprovedDrafts"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/drafting/send",
+      "body": {}
+    },
+    "notes": "sends approved emails"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/merge",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/merge",
+    "file": "app/api/campaigns/[id]/merge/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/campaigns mergeCampaigns"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/merge",
+      "body": {
+        "source_campaign_id": "{campaignId2}"
+      }
+    }
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/outreach-stats",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/outreach-stats",
+    "file": "app/api/campaigns/[id]/outreach-stats/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getCampaign",
+      "lib/auto-campaigns/repository loadOutreachSuccess"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns/{autoCampaignId}/outreach-stats"
+    }
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/pre-enriched/ingest",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/pre-enriched/ingest",
+    "file": "app/api/campaigns/[id]/pre-enriched/ingest/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/pre-enriched-ingest getPreEnrichedLaunchProgress"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/pre-enriched/ingest"
+    },
+    "notes": "maxDuration=60 (for POST); progress poll"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/pre-enriched/ingest",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/pre-enriched/ingest",
+    "file": "app/api/campaigns/[id]/pre-enriched/ingest/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/pre-enriched-ingest acceptPreEnrichedIngest"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/pre-enriched/ingest",
+      "body": {
+        "sender_profile_id": "{profileId}"
+      }
+    },
+    "notes": "maxDuration=60; launches drafting for pre-enriched leads"
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/prospect",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/prospect",
+    "file": "app/api/campaigns/[id]/prospect/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/auto-campaigns/repository loadProspectWorkspace/loadProspectDayLeads"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns/{autoCampaignId}/prospect"
+    },
+    "notes": "auto campaigns only; getCampaign -> workspace -> day leads sequential"
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]",
+    "file": "app/api/campaigns/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getCampaign"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns/{campaignId}"
+    }
+  },
+  {
+    "id": "api:PATCH:/api/campaigns/[id]",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/campaigns/[id]",
+    "file": "app/api/campaigns/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/campaigns update*",
+      "lib/drafting refillCustomCampaignUnsentDrafts",
+      "external:smartlead"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}",
+      "body": {
+        "name": "Perf test campaign"
+      }
+    },
+    "notes": "delivery/status changes can sync Smartlead"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/runs",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/runs",
+    "file": "app/api/campaigns/[id]/runs/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/runs queueEnrichmentRun"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/runs",
+      "body": {}
+    },
+    "notes": "queues extraction/enrichment run (vision + web research)"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/sheet/replace",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/sheet/replace",
+    "file": "app/api/campaigns/[id]/sheet/replace/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "db:outreach.campaign_leads (transaction)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/sheet/replace",
+      "body": {
+        "_multipart": {
+          "file": "sheet.csv"
+        }
+      }
+    },
+    "notes": "multipart form upload (CSV/XLSX) replacing sheet rows in a transaction"
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/sheet",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/sheet",
+    "file": "app/api/campaigns/[id]/sheet/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/sheet-sync syncCampaignSheet",
+      "lib/campaign-sheet loadCampaignSheetRows"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/sheet",
+      "query": {
+        "sync": "0"
+      }
+    },
+    "notes": "default runs syncCampaignSheet first (conditional identity-resolution writes; pass sync=0 to skip); format=xlsx builds ExcelJS workbook in memory; loads all rows (no paging)"
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/tags",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/tags",
+    "file": "app/api/campaigns/[id]/tags/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getCampaignTags"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/tags"
+    }
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/tags",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/tags",
+    "file": "app/api/campaigns/[id]/tags/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/campaigns addCampaignTag"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/tags",
+      "body": {
+        "tag": "perf-test"
+      }
+    }
+  },
+  {
+    "id": "api:DELETE:/api/campaigns/[id]/tags",
+    "kind": "api",
+    "method": "DELETE",
+    "path": "/api/campaigns/[id]/tags",
+    "file": "app/api/campaigns/[id]/tags/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/campaigns removeCampaignTag"
+    ],
+    "measure": false,
+    "measureReason": "DELETE mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/tags",
+      "query": {
+        "tag": "perf-test"
+      },
+      "body": {}
+    }
+  },
+  {
+    "id": "api:GET:/api/campaigns/[id]/uploads",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns/[id]/uploads",
+    "file": "app/api/campaigns/[id]/uploads/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/uploads listCampaignUploads/seedLeadCountsForStagedUploads",
+      "lib/runs getCampaignRunState",
+      "external:supabase-storage"
+    ],
+    "measure": false,
+    "measureReason": "downloads staged files from Supabase storage to count people (and writes counts)",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/uploads"
+    },
+    "notes": "many sequential awaits (run state, uploads, optional seeding, reviewable check, cost snapshot re-lists uploads); polled by CampaignUploads; measurable if all uploads already people_counted"
+  },
+  {
+    "id": "api:POST:/api/campaigns/[id]/uploads",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns/[id]/uploads",
+    "file": "app/api/campaigns/[id]/uploads/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/uploads createUploadIntent(s)",
+      "external:supabase-storage signed upload"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/uploads",
+      "body": {
+        "file_name": "leads.csv",
+        "mime_type": "text/csv",
+        "byte_size": 1024
+      }
+    }
+  },
+  {
+    "id": "api:PATCH:/api/campaigns/[id]/uploads",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/campaigns/[id]/uploads",
+    "file": "app/api/campaigns/[id]/uploads/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/uploads markUploadComplete/seedLeadCountsForStagedUploads",
+      "external:supabase-storage"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/uploads",
+      "body": {
+        "upload_id": "{uploadId}",
+        "success": true
+      }
+    }
+  },
+  {
+    "id": "api:DELETE:/api/campaigns/[id]/uploads",
+    "kind": "api",
+    "method": "DELETE",
+    "path": "/api/campaigns/[id]/uploads",
+    "file": "app/api/campaigns/[id]/uploads/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/uploads removeUpload",
+      "external:supabase-storage remove"
+    ],
+    "measure": false,
+    "measureReason": "DELETE mutation",
+    "sample": {
+      "path": "/api/campaigns/{campaignId}/uploads",
+      "query": {
+        "upload_id": "{uploadId}"
+      },
+      "body": {}
+    }
+  },
+  {
+    "id": "api:GET:/api/campaigns",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/campaigns",
+    "file": "app/api/campaigns/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns listCampaigns",
+      "db:outreach.campaigns"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/campaigns"
+    },
+    "notes": "hub landing list; prefetched by hub tabs"
+  },
+  {
+    "id": "api:POST:/api/campaigns",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/campaigns",
+    "file": "app/api/campaigns/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/campaigns createCampaign",
+      "lib/auto-campaigns/enqueue enqueueAutoCycleJob"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/campaigns",
+      "body": {
+        "name": "Perf test",
+        "kind": "manual"
+      }
+    },
+    "notes": "live auto campaigns enqueue a prospect/draft cycle"
+  },
+  {
+    "id": "api:GET:/api/carousels/overview",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/carousels/overview",
+    "file": "app/api/carousels/overview/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/carousels loadCarouselsOverview"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/carousels/overview"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/carousels/run",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/carousels/run",
+    "file": "app/api/carousels/run/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/content-type/run-today-live runType"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/carousels/run",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues carousel generation run"
+  },
+  {
+    "id": "api:POST:/api/carousels/seed",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/carousels/seed",
+    "file": "app/api/carousels/seed/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/carousels addCarouselSeed",
+      "external:source URL fetch",
+      "Jev ask"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/carousels/seed",
+      "body": {
+        "url": "https://example.com/article",
+        "headline": "Test"
+      }
+    },
+    "notes": "force-dynamic; fetches source body and asks Jev (paid)"
+  },
+  {
+    "id": "api:GET:/api/carousels/settings",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/carousels/settings",
+    "file": "app/api/carousels/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/carousels loadSettings"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/carousels/settings"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/carousels/settings",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/carousels/settings",
+    "file": "app/api/carousels/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/carousels updateSettings"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/carousels/settings",
+      "body": {
+        "posts_per_day": 1
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/content-type/idea-queue",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/content-type/idea-queue",
+    "file": "app/api/content-type/idea-queue/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/content-type recordQueueAction",
+      "loadHubDataset"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/content-type/idea-queue",
+      "body": {
+        "action": "pin",
+        "vertical": "carousels",
+        "ideaId": "{ideaId}"
+      }
+    },
+    "notes": "force-dynamic; loads full hub dataset to validate, writes move, revalidateTag(social-hub:data)"
+  },
+  {
+    "id": "api:GET:/api/content-type/posting",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/content-type/posting",
+    "file": "app/api/content-type/posting/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/content-type/posting readPosting",
+      "loadHubDataset (unstable_cache)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/content-type/posting",
+      "query": {
+        "type": "carousels"
+      }
+    },
+    "notes": "force-dynamic; loads the full hub dataset just to compute costPerPost; consumeMoves housekeeping write only"
+  },
+  {
+    "id": "api:POST:/api/content-type/posting",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/content-type/posting",
+    "file": "app/api/content-type/posting/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/content-type/posting writePosting"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/content-type/posting",
+      "body": {
+        "type": "carousels",
+        "live": false
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/content-type/progress",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/content-type/progress",
+    "file": "app/api/content-type/progress/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/content-type readProgress/readAllProgress"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/content-type/progress",
+      "query": {
+        "type": "all"
+      }
+    },
+    "notes": "force-dynamic; polled by every ContentTypePage and Today screen"
+  },
+  {
+    "id": "api:POST:/api/content-type/progress",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/content-type/progress",
+    "file": "app/api/content-type/progress/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "next/cache revalidateTag"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/content-type/progress",
+      "body": {}
+    },
+    "notes": "force-dynamic; only revalidates hub data+cost tags (forces next dataset rebuild)"
+  },
+  {
+    "id": "api:GET:/api/content-type/run-today",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/content-type/run-today",
+    "file": "app/api/content-type/run-today/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/run-today livePlan",
+      "loadHubDataset"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/content-type/run-today"
+    },
+    "notes": "force-dynamic; plan over full hub dataset; consumeMoves housekeeping only"
+  },
+  {
+    "id": "api:POST:/api/content-type/run-today",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/content-type/run-today",
+    "file": "app/api/content-type/run-today/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/social-hub/run-today runToday"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/content-type/run-today",
+      "body": {
+        "only": [
+          "carousels"
+        ]
+      }
+    },
+    "notes": "force-dynamic; queues today's generation runs"
+  },
+  {
+    "id": "api:POST:/api/conversations/[itemId]/reply",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/conversations/[itemId]/reply",
+    "file": "app/api/conversations/[itemId]/reply/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting sendHumanReply",
+      "external:agentmail/smartlead"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/conversations/{itemId}/reply",
+      "body": {
+        "body_text": "Thanks!"
+      }
+    },
+    "notes": "sends an email reply"
+  },
+  {
+    "id": "api:GET:/api/conversations/[itemId]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/conversations/[itemId]",
+    "file": "app/api/conversations/[itemId]/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/drafting/conversations getConversationThread"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/conversations/{itemId}"
+    },
+    "notes": "up to 2 thread lookups (item id, then email-send id fallback)"
+  },
+  {
+    "id": "api:GET:/api/conversations",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/conversations",
+    "file": "app/api/conversations/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/drafting/conversations listConversations"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/conversations",
+      "query": {
+        "filter": "all"
+      }
+    },
+    "notes": "polled by conversations hub"
+  },
+  {
+    "id": "api:GET:/api/dashboards/deck/[token]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/dashboards/deck/[token]",
+    "file": "app/api/dashboards/deck/[token]/route.ts",
+    "auth": "token",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/dashboards findProjectByAccessToken",
+      "external:supabase-storage",
+      "external:vercel-blob (legacy)"
+    ],
+    "measure": false,
+    "measureReason": "streams PDF binary from Supabase storage / legacy blob",
+    "sample": {
+      "path": "/api/dashboards/deck/{token}"
+    }
+  },
+  {
+    "id": "api:DELETE:/api/dashboards/tokens/[id]",
+    "kind": "api",
+    "method": "DELETE",
+    "path": "/api/dashboards/tokens/[id]",
+    "file": "app/api/dashboards/tokens/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/dashboards/repository deleteGithubToken"
+    ],
+    "measure": false,
+    "measureReason": "DELETE mutation",
+    "sample": {
+      "path": "/api/dashboards/tokens/{tokenId}",
+      "body": {}
+    }
+  },
+  {
+    "id": "api:GET:/api/dashboards/tokens",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/dashboards/tokens",
+    "file": "app/api/dashboards/tokens/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/dashboards/repository listGithubTokenMeta"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/dashboards/tokens"
+    }
+  },
+  {
+    "id": "api:POST:/api/dashboards/tokens",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/dashboards/tokens",
+    "file": "app/api/dashboards/tokens/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "external:github /user",
+      "lib/dashboards/repository save token"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/dashboards/tokens",
+      "body": {
+        "githubHandle": "example",
+        "token": "{githubPat}"
+      }
+    },
+    "notes": "validates PAT against GitHub then encrypts + inserts"
+  },
+  {
+    "id": "api:POST:/api/drafting/items/[itemId]/approve-lead",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/drafting/items/[itemId]/approve-lead",
+    "file": "app/api/drafting/items/[itemId]/approve-lead/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/repository approveDraftingLead"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/drafting/items/{itemId}/approve-lead",
+      "body": {
+        "expected_revision": 1
+      }
+    },
+    "notes": "enqueues drafting for the lead"
+  },
+  {
+    "id": "api:PATCH:/api/drafting/items/[itemId]",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/drafting/items/[itemId]",
+    "file": "app/api/drafting/items/[itemId]/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting updateDraftingItemInput"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/drafting/items/{itemId}",
+      "body": {
+        "expected_revision": 1,
+        "fields": {
+          "title": "CTO"
+        }
+      }
+    }
+  },
+  {
+    "id": "api:DELETE:/api/drafting/items/[itemId]",
+    "kind": "api",
+    "method": "DELETE",
+    "path": "/api/drafting/items/[itemId]",
+    "file": "app/api/drafting/items/[itemId]/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting removeDraftingItem"
+    ],
+    "measure": false,
+    "measureReason": "DELETE mutation",
+    "sample": {
+      "path": "/api/drafting/items/{itemId}",
+      "body": {
+        "expected_revision": 1
+      }
+    }
+  },
+  {
+    "id": "api:POST:/api/drafting/items/[itemId]",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/drafting/items/[itemId]",
+    "file": "app/api/drafting/items/[itemId]/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting removeDraftingItem"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/drafting/items/{itemId}",
+      "body": {
+        "action": "remove",
+        "expected_revision": 1
+      }
+    }
+  },
+  {
+    "id": "api:PATCH:/api/drafts/[draftId]",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/drafts/[draftId]",
+    "file": "app/api/drafts/[draftId]/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting saveDraft"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/drafts/{draftId}",
+      "body": {
+        "expected_content_revision": 1,
+        "subject": "Hello",
+        "body_text": "Hi"
+      }
+    }
+  },
+  {
+    "id": "api:POST:/api/drafts/[draftId]",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/drafts/[draftId]",
+    "file": "app/api/drafts/[draftId]/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting approveDraft/requestDraftRewrite/sendApprovedDraft"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/drafts/{draftId}",
+      "body": {
+        "action": "approve",
+        "expected_content_revision": 1,
+        "expected_input_fingerprint": "{fingerprint}"
+      }
+    },
+    "notes": "rewrite queues Claude; send sends email"
+  },
+  {
+    "id": "api:GET:/api/explainers/artifacts/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/explainers/artifacts/[id]",
+    "file": "app/api/explainers/artifacts/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "explainersDb explainers.artifacts",
+      "local artifact store",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "streams local artifact file or redirects to signed bucket URL",
+    "sample": {
+      "path": "/api/explainers/artifacts/{artifactId}"
+    },
+    "notes": "force-dynamic; byte-range streaming"
+  },
+  {
+    "id": "api:GET:/api/explainers/idea-cycle",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/explainers/idea-cycle",
+    "file": "app/api/explainers/idea-cycle/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/explainers ideaCycleStatus",
+      "explainersDb"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/explainers/idea-cycle"
+    },
+    "notes": "force-dynamic; separate explainers DB handle"
+  },
+  {
+    "id": "api:POST:/api/explainers/idea-cycle",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/explainers/idea-cycle",
+    "file": "app/api/explainers/idea-cycle/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/explainers requestIdeaCycle"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/explainers/idea-cycle",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues idea cycle for explainers worker"
+  },
+  {
+    "id": "api:POST:/api/explainers/jobs/[id]/feedback",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/explainers/jobs/[id]/feedback",
+    "file": "app/api/explainers/jobs/[id]/feedback/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/explainers saveFeedback"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/explainers/jobs/{jobId}/feedback",
+      "body": {
+        "verdict": "approved",
+        "tags": []
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/explainers/jobs/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/explainers/jobs/[id]",
+    "file": "app/api/explainers/jobs/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/explainers loadJobDetail",
+      "explainersDb"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/explainers/jobs/{jobId}"
+    },
+    "notes": "force-dynamic; polled by ReelsView"
+  },
+  {
+    "id": "api:GET:/api/explainers/settings",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/explainers/settings",
+    "file": "app/api/explainers/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/explainers loadSettings",
+      "explainersDb"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/explainers/settings"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:PATCH:/api/explainers/settings",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/explainers/settings",
+    "file": "app/api/explainers/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/explainers saveSetting"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/explainers/settings",
+      "body": {
+        "changes": {
+          "pool_size": 10
+        }
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/explainers/topics/[id]/generate",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/explainers/topics/[id]/generate",
+    "file": "app/api/explainers/topics/[id]/generate/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/explainers requestRender"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/explainers/topics/{topicId}/generate",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues a render job (paid)"
+  },
+  {
+    "id": "api:POST:/api/explainers/topics/[id]/reject",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/explainers/topics/[id]/reject",
+    "file": "app/api/explainers/topics/[id]/reject/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/explainers rejectTopic"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/explainers/topics/{topicId}/reject",
+      "body": {
+        "reason": "test"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/explainers/topics",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/explainers/topics",
+    "file": "app/api/explainers/topics/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/explainers addAndEvaluateTopics",
+      "Anthropic idea model",
+      "Jev"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/explainers/topics",
+      "body": {
+        "title": "Test topic"
+      }
+    },
+    "notes": "force-dynamic; calls Claude + Jev inline to evaluate topics"
+  },
+  {
+    "id": "api:POST:/api/field-notes/photos/finalize",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/field-notes/photos/finalize",
+    "file": "app/api/field-notes/photos/finalize/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/field-notes/photos ingestPhoto",
+      "external:supabase-storage download/remove"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/field-notes/photos/finalize",
+      "body": {
+        "path": "{uploadPath}",
+        "name": "photo.jpg"
+      }
+    },
+    "notes": "force-dynamic; maxDuration=60; image processing (+optional local Playwright face detection)"
+  },
+  {
+    "id": "api:POST:/api/field-notes/photos/sign",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/field-notes/photos/sign",
+    "file": "app/api/field-notes/photos/sign/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "external:supabase-storage signed upload"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/field-notes/photos/sign",
+      "body": {
+        "name": "photo.jpg",
+        "type": "image/jpeg",
+        "size": 1024
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/field-notes/pool",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/field-notes/pool",
+    "file": "app/api/field-notes/pool/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/field-notes pool retire/restore/tag"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/field-notes/pool",
+      "body": {
+        "action": "restore",
+        "photoId": "{photoId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/field-notes/run",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/field-notes/run",
+    "file": "app/api/field-notes/run/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/content-type/run-today-live runType"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/field-notes/run",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues a Field Notes run"
+  },
+  {
+    "id": "api:POST:/api/field-notes/seed",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/field-notes/seed",
+    "file": "app/api/field-notes/seed/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "app/api/field-notes/seed/handler saveSeededLink"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/field-notes/seed",
+      "body": {
+        "url": "https://github.com/example/repo"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/field-notes/settings",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/field-notes/settings",
+    "file": "app/api/field-notes/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "db:field_notes.settings"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/field-notes/settings"
+    },
+    "notes": "force-dynamic; export const GET = () => settingsGet(env)"
+  },
+  {
+    "id": "api:POST:/api/field-notes/settings",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/field-notes/settings",
+    "file": "app/api/field-notes/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "db:field_notes.settings",
+      "lib/content-type/posting writePosting"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/field-notes/settings",
+      "body": {
+        "auto_run": false
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/field-notes/slides/[postId]/[n]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/field-notes/slides/[postId]/[n]",
+    "file": "app/api/field-notes/slides/[postId]/[n]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "db:field_notes.posts.slide_objects",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/field-notes/slides/{postId}/0"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/field-notes/tips/[id]/make",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/field-notes/tips/[id]/make",
+    "file": "app/api/field-notes/tips/[id]/make/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/field-notes queueTipFieldNotesRun"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/field-notes/tips/{tipId}/make",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues a run for one tip"
+  },
+  {
+    "id": "api:GET:/api/health",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/health",
+    "file": "app/api/health/route.ts",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "db: SELECT 1"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/health"
+    },
+    "notes": "no auth; pure DB round-trip baseline"
+  },
+  {
+    "id": "api:GET:/api/hub/warm",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/hub/warm",
+    "file": "app/api/hub/warm/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/hub/warm-data warmHubData",
+      "loadHubDataset / loadHome"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/hub/warm",
+      "query": {
+        "path": "/social"
+      }
+    },
+    "notes": "force-dynamic; returns 204; fills unstable_cache for hub dataset or home; consumeMoves housekeeping only; cold call = full dataset rebuild"
+  },
+  {
+    "id": "api:GET:/api/inboxes/[id]/health",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/inboxes/[id]/health",
+    "file": "app/api/inboxes/[id]/health/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/inboxes getInboxById",
+      "external:smartlead",
+      "db:outreach send history"
+    ],
+    "measure": false,
+    "measureReason": "calls Smartlead API live (warmup stats) and persists rows",
+    "sample": {
+      "path": "/api/inboxes/{inboxId}/health"
+    }
+  },
+  {
+    "id": "api:GET:/api/inboxes/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/inboxes/[id]",
+    "file": "app/api/inboxes/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/inboxes getInboxById"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/inboxes/{inboxId}"
+    }
+  },
+  {
+    "id": "api:PATCH:/api/inboxes/[id]",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/inboxes/[id]",
+    "file": "app/api/inboxes/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/inboxes updateInbox",
+      "external:smartlead updateEmailAccount"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/inboxes/{inboxId}",
+      "body": {
+        "enabled": true
+      }
+    }
+  },
+  {
+    "id": "api:POST:/api/inboxes/[id]/stage",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/inboxes/[id]/stage",
+    "file": "app/api/inboxes/[id]/stage/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/inboxes requestStage",
+      "external:smartlead lanes/handoffs"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/inboxes/{inboxId}/stage",
+      "body": {
+        "stage": "warmup"
+      }
+    }
+  },
+  {
+    "id": "api:GET:/api/inboxes",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/inboxes",
+    "file": "app/api/inboxes/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/inboxes/roster buildInboxRoster",
+      "external:smartlead",
+      "db:outreach.inboxes/health"
+    ],
+    "measure": false,
+    "measureReason": "buildInboxRoster lists Smartlead accounts and syncs warmup live, writes mirror rows",
+    "sample": {
+      "path": "/api/inboxes"
+    },
+    "notes": "best-effort Smartlead calls before DB reads; slow when Smartlead is slow; prefetched by hub tabs"
+  },
+  {
+    "id": "api:POST:/api/inboxes",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/inboxes",
+    "file": "app/api/inboxes/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/inboxes createInbox"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/inboxes",
+      "body": {
+        "email": "perf@example.com",
+        "identity_slug": "lucas"
+      }
+    }
+  },
+  {
+    "id": "api:PATCH:/api/inboxes",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/inboxes",
+    "file": "app/api/inboxes/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/org-settings setOrgSetting",
+      "lib/inboxes applyStagePlanPatchToAll",
+      "buildInboxRoster (Smartlead)"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/inboxes",
+      "body": {
+        "stage_plan_default": {}
+      }
+    }
+  },
+  {
+    "id": "api:POST:/api/inboxes/sync",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/inboxes/sync",
+    "file": "app/api/inboxes/sync/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/inboxes detectAndLinkSmartleadAccounts",
+      "enqueueWork smartlead.reconcile"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/inboxes/sync",
+      "body": {}
+    }
+  },
+  {
+    "id": "api:POST:/api/last-few-days/run",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/last-few-days/run",
+    "file": "app/api/last-few-days/run/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/content-type/run-today-live runType"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/last-few-days/run",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues LFD run"
+  },
+  {
+    "id": "api:POST:/api/last-few-days/seed",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/last-few-days/seed",
+    "file": "app/api/last-few-days/seed/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/lfd addLfdSeed",
+      "external:source URL fetch"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/last-few-days/seed",
+      "body": {
+        "url": "https://example.com/article",
+        "headline": "Test"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/last-few-days/slides/[postId]/[n]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/last-few-days/slides/[postId]/[n]",
+    "file": "app/api/last-few-days/slides/[postId]/[n]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "db:lfd.posts.slide_objects",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/last-few-days/slides/{postId}/0"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/media-library/thumb/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/media-library/thumb/[id]",
+    "file": "app/api/media-library/thumb/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "db:photo bank",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/media-library/thumb/{photoId}"
+    },
+    "notes": "force-dynamic; one request per thumbnail on the photos page"
+  },
+  {
+    "id": "api:POST:/api/memes/attach",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/attach",
+    "file": "app/api/memes/attach/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes attach (local PGlite lab DB)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/attach",
+      "body": {
+        "memeId": "{memeId}",
+        "postRef": "{postRef}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:DELETE:/api/memes/attach",
+    "kind": "api",
+    "method": "DELETE",
+    "path": "/api/memes/attach",
+    "file": "app/api/memes/attach/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes detach (local PGlite lab DB)"
+    ],
+    "measure": false,
+    "measureReason": "DELETE mutation",
+    "sample": {
+      "path": "/api/memes/attach",
+      "body": {
+        "memeId": "{memeId}",
+        "postRef": "{postRef}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/memes/briefs",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/briefs",
+    "file": "app/api/memes/briefs/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/memes requestBriefs",
+      "Anthropic messages.create"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/briefs",
+      "body": {
+        "storyIds": [
+          "{storyId}"
+        ]
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/memes/generate",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/generate",
+    "file": "app/api/memes/generate/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/memes generate",
+      "kickRunner (Claude + Jev + renderer)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/generate",
+      "body": {
+        "kind": "story",
+        "storyIds": [
+          "{storyId}"
+        ]
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/image/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/image/[id]",
+    "file": "app/api/memes/image/[id]/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes memeImage",
+      "labDb PGlite"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab (local PGlite DB; open runs UPDATE + catalog sync)",
+    "sample": {
+      "path": "/api/memes/image/{memeId}"
+    },
+    "notes": "force-dynamic; streams PNG"
+  },
+  {
+    "id": "api:POST:/api/memes/lfd-sims/[id]/grade",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/lfd-sims/[id]/grade",
+    "file": "app/api/memes/lfd-sims/[id]/grade/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes/lfd-sim gradeSim"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/lfd-sims/{simId}/grade",
+      "body": {
+        "rating": 3
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/lfd-sims/[id]/image",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/lfd-sims/[id]/image",
+    "file": "app/api/memes/lfd-sims/[id]/image/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "local sim files"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab; streams local image file",
+    "sample": {
+      "path": "/api/memes/lfd-sims/{simId}/image",
+      "query": {
+        "f": "slide-01.jpg"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/lfd-sims/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/lfd-sims/[id]",
+    "file": "app/api/memes/lfd-sims/[id]/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes/lfd-sim getSim",
+      "simDb PGlite"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab (local PGlite DB, schema ensure on open)",
+    "sample": {
+      "path": "/api/memes/lfd-sims/{simId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/lfd-sims/days",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/lfd-sims/days",
+    "file": "app/api/memes/lfd-sims/days/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/memes/lfd-sim replayDays",
+      "liveHubQuery read-only"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab",
+    "sample": {
+      "path": "/api/memes/lfd-sims/days"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/memes/lfd-sims/fill",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/lfd-sims/fill",
+    "file": "app/api/memes/lfd-sims/fill/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/memes/lfd-sim fillStories",
+      "Anthropic + Jev"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/lfd-sims/fill",
+      "body": {
+        "urls": [
+          "https://example.com/article"
+        ]
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/lfd-sims",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/lfd-sims",
+    "file": "app/api/memes/lfd-sims/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/memes/lfd-sim listSims",
+      "kickSimRunner"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab; GET kicks the paid sim runner when a sim is requested",
+    "sample": {
+      "path": "/api/memes/lfd-sims"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/memes/lfd-sims",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/lfd-sims",
+    "file": "app/api/memes/lfd-sims/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/memes/lfd-sim createSim",
+      "kickSimRunner"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/lfd-sims",
+      "body": {
+        "asOf": "{date}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/memes/lfd-sims/settings",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/lfd-sims/settings",
+    "file": "app/api/memes/lfd-sims/settings/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes/lfd-sim updateSettings"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/lfd-sims/settings",
+      "body": {}
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/lfd-sims/stats",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/lfd-sims/stats",
+    "file": "app/api/memes/lfd-sims/stats/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes/lfd-sim simStats"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab (local PGlite DB)",
+    "sample": {
+      "path": "/api/memes/lfd-sims/stats"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/memes/picks",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/memes/picks",
+    "file": "app/api/memes/picks/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes pick"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/memes/picks",
+      "body": {
+        "memeId": "{memeId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/preview",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/preview",
+    "file": "app/api/memes/preview/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes previewPost"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab (local PGlite DB)",
+    "sample": {
+      "path": "/api/memes/preview",
+      "query": {
+        "postRef": "{postRef}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/results",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/results",
+    "file": "app/api/memes/results/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes labResults"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab (local PGlite DB)",
+    "sample": {
+      "path": "/api/memes/results"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/runs/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/runs/[id]",
+    "file": "app/api/memes/runs/[id]/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes getRun"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab (local PGlite DB)",
+    "sample": {
+      "path": "/api/memes/runs/{memeRunId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/runs",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/runs",
+    "file": "app/api/memes/runs/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes listRuns"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab (local PGlite DB)",
+    "sample": {
+      "path": "/api/memes/runs"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/memes/stories",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/memes/stories",
+    "file": "app/api/memes/stories/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/memes listStories",
+      "liveStorySource refreshAndList"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab; refreshes local PGlite cache from hub DB",
+    "sample": {
+      "path": "/api/memes/stories"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/networking/events",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/networking/events",
+    "file": "app/api/networking/events/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/networking/repository listKeptEvents/eventCounts/latestIngestRun"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/networking/events",
+      "query": {
+        "from": "{date}"
+      }
+    },
+    "notes": "3 parallel queries"
+  },
+  {
+    "id": "api:POST:/api/networking/import-url",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/networking/import-url",
+    "file": "app/api/networking/import-url/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/networking/ingest importUrl",
+      "external:event page fetch"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/networking/import-url",
+      "body": {
+        "url": "https://example.com/event"
+      }
+    }
+  },
+  {
+    "id": "api:POST:/api/networking/ingest",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/networking/ingest",
+    "file": "app/api/networking/ingest/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "enqueueWorkBatch networking.weekly_ingest"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/networking/ingest",
+      "body": {}
+    },
+    "notes": "queues weekly ingest (worker scrapes event sources)"
+  },
+  {
+    "id": "api:POST:/api/networking/publish",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/networking/publish",
+    "file": "app/api/networking/publish/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/networking publishSnapshot",
+      "external:supabase-storage",
+      "external:deploy hook"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/networking/publish",
+      "body": {}
+    }
+  },
+  {
+    "id": "api:POST:/api/personality/lab",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/personality/lab",
+    "file": "app/api/personality/lab/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/personality/lab runComment",
+      "Anthropic messages.create"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/personality/lab",
+      "body": {
+        "postId": "{labPostId}",
+        "comment": "Nice post"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/public/sender-headshots/[profileId]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/public/sender-headshots/[profileId]",
+    "file": "app/api/public/sender-headshots/[profileId]/route.ts",
+    "auth": "public",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "db:outreach.sender_profiles",
+      "external:supabase-storage download"
+    ],
+    "measure": false,
+    "measureReason": "streams image binary from Supabase storage (or local file)",
+    "sample": {
+      "path": "/api/public/sender-headshots/{profileId}"
+    },
+    "notes": "Cache-Control public 1 day; embedded in email signatures"
+  },
+  {
+    "id": "api:GET:/api/public/trivia-game/days",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/public/trivia-game/days",
+    "file": "app/api/public/trivia-game/days/route.ts",
+    "auth": "bearer",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/stories/trivia/game-days exportDays",
+      "db:stories"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/public/trivia-game/days",
+      "query": {
+        "after": "{date}"
+      },
+      "headers": {
+        "authorization": "Bearer perf-local-game-export-token"
+      }
+    },
+    "notes": "force-dynamic; requires Authorization: Bearer {gameExportToken} (HUB_GAME_EXPORT_TOKEN); no-store; perf: HUB_GAME_EXPORT_TOKEN is a local-only value set in perf/env.sh"
+  },
+  {
+    "id": "api:GET:/api/real-case/artifacts/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/real-case/artifacts/[id]",
+    "file": "app/api/real-case/artifacts/[id]/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "explainersDb real_case.artifacts",
+      "local artifact store"
+    ],
+    "measure": false,
+    "measureReason": "streams local artifact file (dev lab)",
+    "sample": {
+      "path": "/api/real-case/artifacts/{artifactId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/real-case/bank/[kind]/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/real-case/bank/[kind]/[id]",
+    "file": "app/api/real-case/bank/[kind]/[id]/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social-hub/logo-bank",
+      "repo files"
+    ],
+    "measure": false,
+    "measureReason": "streams local PNG from repo (dev lab)",
+    "sample": {
+      "path": "/api/real-case/bank/logo/{logoId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/real-case/find",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/real-case/find",
+    "file": "app/api/real-case/find/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/real-case findNewsStories",
+      "Anthropic story scout (web search)",
+      "Jev"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/real-case/find",
+      "body": {}
+    },
+    "notes": "force-dynamic; maxDuration=300"
+  },
+  {
+    "id": "api:GET:/api/real-case/lab",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/real-case/lab",
+    "file": "app/api/real-case/lab/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/real-case labData",
+      "explainersDb"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab page data (ensureRealCaseSchema DDL on explainersDb)",
+    "sample": {
+      "path": "/api/real-case/lab"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/real-case/make",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/real-case/make",
+    "file": "app/api/real-case/make/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/real-case requestStoryRender"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/real-case/make",
+      "body": {
+        "storyId": "{storyId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/real-case/settings",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/real-case/settings",
+    "file": "app/api/real-case/settings/route.ts",
+    "auth": "dev-only-public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/real-case saveRealCaseSetting"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/real-case/settings",
+      "body": {
+        "key": "{settingKey}",
+        "value": 1
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reel-ai-drama/artifacts/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reel-ai-drama/artifacts/[id]",
+    "file": "app/api/reel-ai-drama/artifacts/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "explainersDb reel_ai_drama.artifacts",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "streams local artifact or redirects to signed bucket URL",
+    "sample": {
+      "path": "/api/reel-ai-drama/artifacts/{artifactId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/calibrate",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/calibrate",
+    "file": "app/api/reel-ai-drama/calibrate/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reel-ai-drama queueDramaRequest calibrate"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/calibrate",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues Jev calibration"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/develop",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/develop",
+    "file": "app/api/reel-ai-drama/develop/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reel-ai-drama queueDramaRequest develop"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/develop",
+      "body": {}
+    },
+    "notes": "force-dynamic; queues development session (weekly cap)"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/jobs/[id]/cancel",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/jobs/[id]/cancel",
+    "file": "app/api/reel-ai-drama/jobs/[id]/cancel/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/reel-ai-drama cancelDramaJob"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/jobs/{jobId}/cancel",
+      "body": {}
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/jobs/[id]/retry",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/jobs/[id]/retry",
+    "file": "app/api/reel-ai-drama/jobs/[id]/retry/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reel-ai-drama retryDramaJob"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/jobs/{jobId}/retry",
+      "body": {}
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reel-ai-drama/lab",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reel-ai-drama/lab",
+    "file": "app/api/reel-ai-drama/lab/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/reel-ai-drama labData",
+      "explainersDb (EXPLAINERS_DATABASE_URL)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/reel-ai-drama/lab"
+    },
+    "notes": "force-dynamic; ensureReelAiDramaSchema once per process (DDL only in dev) then reads; polled by lab page"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/make",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/make",
+    "file": "app/api/reel-ai-drama/make/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reel-ai-drama requestDramaJob"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/make",
+      "body": {
+        "pitchId": "{pitchId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/pitches/[id]/reject",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/pitches/[id]/reject",
+    "file": "app/api/reel-ai-drama/pitches/[id]/reject/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/reel-ai-drama rejectPitch"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/pitches/{pitchId}/reject",
+      "body": {
+        "note": "test"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/pitches/[id]/revive",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/pitches/[id]/revive",
+    "file": "app/api/reel-ai-drama/pitches/[id]/revive/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/reel-ai-drama revivePitch"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/pitches/{pitchId}/revive",
+      "body": {}
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reel-ai-drama/settings",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reel-ai-drama/settings",
+    "file": "app/api/reel-ai-drama/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/reel-ai-drama loadSettingsReport",
+      "explainersDb"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/reel-ai-drama/settings"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reel-ai-drama/settings",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reel-ai-drama/settings",
+    "file": "app/api/reel-ai-drama/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/reel-ai-drama saveSettings"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reel-ai-drama/settings",
+      "body": {
+        "values": {}
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/copy",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/copy",
+    "file": "app/api/reels/copy/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reels queueCopyJob"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/copy",
+      "body": {
+        "post_idea_id": "{postIdeaId}",
+        "slate_id": "{slateId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/finish",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/finish",
+    "file": "app/api/reels/finish/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reels/visual/finish requestFinish"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/finish",
+      "body": {
+        "post_idea_id": "{postIdeaId}",
+        "slate_id": "{slateId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/flags",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/flags",
+    "file": "app/api/reels/flags/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/reels addReviewFlag"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/flags",
+      "body": {
+        "kind": "junk_source",
+        "source_id": "{sourceId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reels/frames/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reels/frames/[id]",
+    "file": "app/api/reels/frames/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels loadFrameObject",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/reels/frames/{frameId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/frames",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/frames",
+    "file": "app/api/reels/frames/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reels queueVisualFrame"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/frames",
+      "body": {
+        "post_idea_id": "{postIdeaId}",
+        "slate_id": "{slateId}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reels/health",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reels/health",
+    "file": "app/api/reels/health/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/reels/health loadHealthPage"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/reels/health",
+      "query": {
+        "days": "7"
+      }
+    },
+    "notes": "force-dynamic; ~8 parallel aggregates; polled by health view"
+  },
+  {
+    "id": "api:POST:/api/reels/insights",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/insights",
+    "file": "app/api/reels/insights/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels/media-insights pollDueInsights",
+      "external:instagram-graph"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/insights",
+      "body": {}
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reels/overview",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reels/overview",
+    "file": "app/api/reels/overview/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/reels/overview loadReelsOverview",
+      "db:reels.*"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/reels/overview"
+    },
+    "notes": "force-dynamic; polled by ReelsHub"
+  },
+  {
+    "id": "api:POST:/api/reels/post-ideas/[id]",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/post-ideas/[id]",
+    "file": "app/api/reels/post-ideas/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/reels detachMember/setPublished"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/post-ideas/{postIdeaId}",
+      "body": {
+        "action": "set_published",
+        "published": false
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/publish",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/publish",
+    "file": "app/api/reels/publish/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels scheduleVideo/queuePublish",
+      "external:instagram-graph"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/publish",
+      "body": {
+        "video_job_id": "{videoJobId}"
+      }
+    },
+    "notes": "force-dynamic; schedules or force-publishes to Instagram"
+  },
+  {
+    "id": "api:POST:/api/reels/run",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/run",
+    "file": "app/api/reels/run/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/content-type/run-today-live runType"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/run",
+      "body": {}
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/seed",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/seed",
+    "file": "app/api/reels/seed/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reels addReelSeed",
+      "Jev runner"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/seed",
+      "body": {
+        "headline": "Test",
+        "url": "https://example.com"
+      }
+    },
+    "notes": "force-dynamic; maxDuration=120"
+  },
+  {
+    "id": "api:POST:/api/reels/settings",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/settings",
+    "file": "app/api/reels/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/reels setSetting/scheduleLatestToday"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/settings",
+      "body": {
+        "review_open": true
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reels/sfx/review",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reels/sfx/review",
+    "file": "app/api/reels/sfx/review/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "static review JSON allowlist",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/reels/sfx/review",
+      "query": {
+        "path": "{sfxObjectPath}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/songs/pick",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/songs/pick",
+    "file": "app/api/reels/songs/pick/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reels/music queueSongPick"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/songs/pick",
+      "body": {
+        "video_job_id": "{videoJobId}"
+      }
+    },
+    "notes": "force-dynamic; queues a song pick job for the worker"
+  },
+  {
+    "id": "api:GET:/api/reels/songs/preview/[audioId]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reels/songs/preview/[audioId]",
+    "file": "app/api/reels/songs/preview/[audioId]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels songPreviewPath",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/reels/songs/preview/{audioId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/reels/video/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/reels/video/[id]",
+    "file": "app/api/reels/video/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels loadVideoObject",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/reels/video/{videoJobId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/reels/video",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/reels/video",
+    "file": "app/api/reels/video/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/reels queueVideoJob"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/reels/video",
+      "body": {
+        "post_idea_id": "{postIdeaId}",
+        "slate_id": "{slateId}"
+      }
+    },
+    "notes": "force-dynamic; queues video render (paid generation)"
+  },
+  {
+    "id": "api:PATCH:/api/runs/[id]",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/runs/[id]",
+    "file": "app/api/runs/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/runs cancelEnrichmentRun/submitPriorEnrichmentDecision"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/runs/{runId}",
+      "body": {
+        "action": "cancel"
+      }
+    },
+    "notes": "re_enrich decision resumes paid enrichment"
+  },
+  {
+    "id": "api:GET:/api/send-queue/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/send-queue/[id]",
+    "file": "app/api/send-queue/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/drafting/send-queue getSendQueueDetail"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/send-queue/{queueItemId}"
+    }
+  },
+  {
+    "id": "api:POST:/api/send-queue/retry",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/send-queue/retry",
+    "file": "app/api/send-queue/retry/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/send-queue retryFailedQueueItems"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/send-queue/retry",
+      "body": {
+        "ids": [
+          "{queueItemId}"
+        ]
+      }
+    },
+    "notes": "re-queues email sends"
+  },
+  {
+    "id": "api:GET:/api/send-queue",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/send-queue",
+    "file": "app/api/send-queue/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/drafting/send-queue listSendQueue",
+      "db:outreach send queue"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/send-queue"
+    },
+    "notes": "board window of queue items; prefetched by hub tabs"
+  },
+  {
+    "id": "api:PATCH:/api/send-queue",
+    "kind": "api",
+    "method": "PATCH",
+    "path": "/api/send-queue",
+    "file": "app/api/send-queue/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting/send-queue moveSendQueueItems"
+    ],
+    "measure": false,
+    "measureReason": "PATCH mutation",
+    "sample": {
+      "path": "/api/send-queue",
+      "body": {
+        "ids": [
+          "{queueItemId}"
+        ],
+        "target_date": "{date}"
+      }
+    }
+  },
+  {
+    "id": "api:DELETE:/api/send-queue",
+    "kind": "api",
+    "method": "DELETE",
+    "path": "/api/send-queue",
+    "file": "app/api/send-queue/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting/send-queue cancelSendQueueItems"
+    ],
+    "measure": false,
+    "measureReason": "DELETE mutation",
+    "sample": {
+      "path": "/api/send-queue",
+      "body": {
+        "ids": [
+          "{queueItemId}"
+        ]
+      }
+    }
+  },
+  {
+    "id": "api:POST:/api/send-queue/send-now",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/send-queue/send-now",
+    "file": "app/api/send-queue/send-now/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/drafting/send-queue sendNowQueueItems"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/send-queue/send-now",
+      "body": {
+        "ids": [
+          "{queueItemId}"
+        ]
+      }
+    },
+    "notes": "sends emails now"
+  },
+  {
+    "id": "api:POST:/api/sender-profiles/headshot",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/sender-profiles/headshot",
+    "file": "app/api/sender-profiles/headshot/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/storage uploadStoredObject",
+      "lib/sender-profiles"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/sender-profiles/headshot",
+      "body": {
+        "_multipart": {
+          "file": "headshot.jpg"
+        }
+      }
+    }
+  },
+  {
+    "id": "api:GET:/api/sender-profiles",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/sender-profiles",
+    "file": "app/api/sender-profiles/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/sender-profiles listSenderProfiles"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/sender-profiles"
+    }
+  },
+  {
+    "id": "api:POST:/api/sender-profiles",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/sender-profiles",
+    "file": "app/api/sender-profiles/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/sender-profiles upsertSenderProfile"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/sender-profiles",
+      "body": {
+        "display_name": "Test",
+        "work_email": "test@example.com",
+        "title": "Tester"
+      }
+    }
+  },
+  {
+    "id": "api:GET:/api/seo/properties",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/seo/properties",
+    "file": "app/api/seo/properties/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/seo listProperties"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/seo/properties"
+    }
+  },
+  {
+    "id": "api:GET:/api/seo/rows",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/seo/rows",
+    "file": "app/api/seo/rows/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/seo listDimensionRows",
+      "db:seo.*"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/seo/rows",
+      "query": {
+        "property": "{seoPropertyId}",
+        "dimension": "query",
+        "period": "3m"
+      }
+    },
+    "notes": "sequential property -> latest date -> rows"
+  },
+  {
+    "id": "api:GET:/api/seo/summary",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/seo/summary",
+    "file": "app/api/seo/summary/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/seo getSummary/listProperties/latestSyncRun"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/seo/summary",
+      "query": {
+        "property": "{seoPropertyId}",
+        "period": "3m"
+      }
+    },
+    "notes": "3 parallel then 2 sequential queries"
+  },
+  {
+    "id": "api:GET:/api/seo/sync",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/seo/sync",
+    "file": "app/api/seo/sync/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "db:seo.daily_totals",
+      "db:outreach.orchestration_jobs"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/seo/sync"
+    },
+    "notes": "COUNT(*) over seo.daily_totals each call"
+  },
+  {
+    "id": "api:POST:/api/seo/sync",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/seo/sync",
+    "file": "app/api/seo/sync/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "enqueueWorkBatch seo.gsc_daily_sync"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/seo/sync",
+      "body": {}
+    },
+    "notes": "queues Google Search Console sync"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/approve-carousel",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/approve-carousel",
+    "file": "app/api/social-hub/actions/approve-carousel/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/publishing/actions approve (carousels)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/approve-carousel",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        }
+      }
+    },
+    "notes": "force-dynamic; export const POST = actionRoute(...); JSON content-type required; approval schedules Instagram publish; revalidates hub tags"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/approve-content",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/approve-content",
+    "file": "app/api/social-hub/actions/approve-content/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/publishing/actions approve"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/approve-content",
+      "body": {
+        "vertical": "explainers",
+        "refs": {
+          "jobId": "{jobId}"
+        }
+      }
+    },
+    "notes": "force-dynamic; actionRoute; approval schedules publish; revalidates hub tags"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/approve-trial-reel",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/approve-trial-reel",
+    "file": "app/api/social-hub/actions/approve-trial-reel/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/publishing/actions approve (reels)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/approve-trial-reel",
+      "body": {
+        "vertical": "reels",
+        "refs": {
+          "videoJobId": "{videoJobId}"
+        }
+      }
+    },
+    "notes": "force-dynamic; actionRoute; schedules IG trial reel"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/archive",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/archive",
+    "file": "app/api/social-hub/actions/archive/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/publishing/actions reject",
+      "archiveIdea"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/archive",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        }
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/continue-revision",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/continue-revision",
+    "file": "app/api/social-hub/actions/continue-revision/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/revisions continueRevision"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/continue-revision",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        },
+        "revisionId": "{revisionId}",
+        "overrideUsd": 0.5
+      }
+    },
+    "notes": "force-dynamic; continues a targeted AI revision"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/hard-publish",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/hard-publish",
+    "file": "app/api/social-hub/actions/hard-publish/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/publishing/actions publishNow"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/hard-publish",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        }
+      }
+    },
+    "notes": "force-dynamic; publishes to Instagram now"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/hard-regenerate",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/hard-regenerate",
+    "file": "app/api/social-hub/actions/hard-regenerate/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/publishing/actions regenerate"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/hard-regenerate",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        }
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/place",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/place",
+    "file": "app/api/social-hub/actions/place/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/publishing/actions place"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/place",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        },
+        "nyDate": "{date}",
+        "slot": "afternoon"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/reject",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/reject",
+    "file": "app/api/social-hub/actions/reject/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/publishing/actions reject"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/reject",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        }
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/reschedule",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/reschedule",
+    "file": "app/api/social-hub/actions/reschedule/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/publishing/actions reschedule"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/reschedule",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        },
+        "nyDate": "{date}",
+        "slot": "afternoon"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/revise",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/revise",
+    "file": "app/api/social-hub/actions/revise/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/revisions revise (worker interprets with Claude)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/revise",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        },
+        "instruction": "Shorten the headline"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/social-hub/actions/revisions",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/social-hub/actions/revisions",
+    "file": "app/api/social-hub/actions/revisions/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/revisions recentForItem",
+      "db:revisions.requests"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/social-hub/actions/revisions",
+      "query": {
+        "vertical": "carousels",
+        "postId": "{postId}"
+      }
+    },
+    "notes": "force-dynamic; export const GET = actionReadRoute(...); refresh=1 also revalidates the vertical tag; polled by RevisionBox; no-store"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/undo-revision",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/undo-revision",
+    "file": "app/api/social-hub/actions/undo-revision/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/revisions undoRevision"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/undo-revision",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        },
+        "part": {
+          "kind": "caption",
+          "key": "caption"
+        }
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/social-hub/actions/unschedule",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/actions/unschedule",
+    "file": "app/api/social-hub/actions/unschedule/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/publishing/actions unschedule"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/actions/unschedule",
+      "body": {
+        "vertical": "carousels",
+        "refs": {
+          "postId": "{postId}"
+        }
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/social-hub/slots",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/social-hub/slots",
+    "file": "app/api/social-hub/slots/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social-hub/slots loadSlots/readSlotSource/readCaps"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/social-hub/slots",
+      "query": {
+        "from": "{date}",
+        "to": "{date}"
+      }
+    },
+    "notes": "force-dynamic; from/to YYYY-MM-DD, <=62 days"
+  },
+  {
+    "id": "api:POST:/api/social-hub/slots",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/slots",
+    "file": "app/api/social-hub/slots/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/slots applySlotChanges (transaction)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/slots",
+      "body": {
+        "changes": [
+          {
+            "scope": "date",
+            "op": "move",
+            "nyDate": "{date}"
+          }
+        ]
+      }
+    },
+    "notes": "force-dynamic; change ops validated by lib/social-hub/slots/write parseOne"
+  },
+  {
+    "id": "api:GET:/api/social-hub/slots/schedule",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/social-hub/slots/schedule",
+    "file": "app/api/social-hub/slots/schedule/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social-hub/slots readSchedules"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/social-hub/slots/schedule"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/social-hub/slots/schedule",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/slots/schedule",
+    "file": "app/api/social-hub/slots/schedule/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/slots saveSchedule"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/slots/schedule",
+      "body": {
+        "schedule": {
+          "entry": {
+            "vertical": "carousels"
+          },
+          "times": []
+        }
+      }
+    },
+    "notes": "force-dynamic; refuses unless slot source is template"
+  },
+  {
+    "id": "api:POST:/api/social-hub/slots/source",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social-hub/slots/source",
+    "file": "app/api/social-hub/slots/source/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/slots setSlotSource"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social-hub/slots/source",
+      "body": {
+        "source": "template"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/social/generated/[slug]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/social/generated/[slug]",
+    "file": "app/api/social/generated/[slug]/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social/render/local-store",
+      "db:social posts (optional)"
+    ],
+    "measure": false,
+    "measureReason": "local-only render preview API (404 on Vercel)",
+    "sample": {
+      "path": "/api/social/generated/{slug}"
+    }
+  },
+  {
+    "id": "api:GET:/api/social/generated",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/social/generated",
+    "file": "app/api/social/generated/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social/render/local-store listGeneratedSlugs",
+      "db:social listPosts(500)"
+    ],
+    "measure": false,
+    "measureReason": "local-only render preview API (404 on Vercel)",
+    "sample": {
+      "path": "/api/social/generated"
+    }
+  },
+  {
+    "id": "api:GET:/api/social/slides/[postId]/[n]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/social/slides/[postId]/[n]",
+    "file": "app/api/social/slides/[postId]/[n]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "db:social.posts.slide_objects",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/social/slides/{postId}/0"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/social/template-reviews",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/social/template-reviews",
+    "file": "app/api/social/template-reviews/route.ts",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "file:lib/social/render/drafts/reviews.json"
+    ],
+    "measure": false,
+    "measureReason": "local-only tool reading a repo JSON file (404 on Vercel)",
+    "sample": {
+      "path": "/api/social/template-reviews"
+    }
+  },
+  {
+    "id": "api:POST:/api/social/template-reviews",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/social/template-reviews",
+    "file": "app/api/social/template-reviews/route.ts",
+    "auth": "public",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "file:lib/social/render/drafts/reviews.json (fs write)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/social/template-reviews",
+      "body": {
+        "id": "{templateId}",
+        "choice": "old"
+      }
+    },
+    "notes": "writes a repo file, not the DB; public in middleware, local-only in code"
+  },
+  {
+    "id": "api:GET:/api/stories/frames/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/stories/frames/[id]",
+    "file": "app/api/stories/frames/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "db:stories.frames",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/stories/frames/{frameId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/stories/generate",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/stories/generate",
+    "file": "app/api/stories/generate/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/stories generateNow"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/stories/generate",
+      "body": {
+        "vertical": "stories"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/stories/roa-lab",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/stories/roa-lab",
+    "file": "app/api/stories/roa-lab/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/stories/roa/lab labGet",
+      "external:supabase-storage signMany"
+    ],
+    "measure": false,
+    "measureReason": "starts a lab batch and signs Supabase storage URLs",
+    "sample": {
+      "path": "/api/stories/roa-lab"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/stories/roa-lab",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/stories/roa-lab",
+    "file": "app/api/stories/roa-lab/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/stories/roa/lab recordGuess"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/stories/roa-lab",
+      "body": {
+        "batchId": "{roaBatchId}",
+        "imageKey": "{roaImageKey}",
+        "guess": "real",
+        "ms": 1200
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/stories/seed",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/stories/seed",
+    "file": "app/api/stories/seed/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/stories seedIdea",
+      "Jev intake (capped)"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/stories/seed",
+      "body": {
+        "vertical": "stories",
+        "url": "https://example.com/article"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/stories/sets/[id]/[action]",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/stories/sets/[id]/[action]",
+    "file": "app/api/stories/sets/[id]/[action]/route.ts",
+    "auth": "session",
+    "sideEffects": "spend",
+    "dataSources": [
+      "lib/stories approve/reject/regenerate/publishNow"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/stories/sets/{setId}/approve",
+      "body": {}
+    },
+    "notes": "force-dynamic; regenerate = paid generation; publish-now = Instagram"
+  },
+  {
+    "id": "api:GET:/api/stories/sets/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/stories/sets/[id]",
+    "file": "app/api/stories/sets/[id]/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/stories setDetail"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/stories/sets/{setId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/stories/sets",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/stories/sets",
+    "file": "app/api/stories/sets/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/stories listView/monthOverview"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/stories/sets",
+      "query": {
+        "view": "queue"
+      }
+    },
+    "notes": "force-dynamic; two sequential reads (list then month spend)"
+  },
+  {
+    "id": "api:GET:/api/stories/settings",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/stories/settings",
+    "file": "app/api/stories/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/stories loadSettings"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/stories/settings"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/stories/settings",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/stories/settings",
+    "file": "app/api/stories/settings/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/stories updateSeries"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/stories/settings",
+      "body": {
+        "series": "morning_download"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/stories/trivia-game",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/stories/trivia-game",
+    "file": "app/api/stories/trivia-game/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/stories/trivia readLaunch/readDays"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/stories/trivia-game"
+    },
+    "notes": "force-dynamic; two sequential reads"
+  },
+  {
+    "id": "api:POST:/api/stories/trivia-game",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/stories/trivia-game",
+    "file": "app/api/stories/trivia-game/route.ts",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/stories/trivia saveLaunch/pullQuestion"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/stories/trivia-game",
+      "body": {
+        "action": "launch",
+        "date": "{date}"
+      }
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/tags",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/tags",
+    "file": "app/api/tags/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getAllTags"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/tags"
+    }
+  },
+  {
+    "id": "api:GET:/api/traffic/summary",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/traffic/summary",
+    "file": "app/api/traffic/summary/route.ts",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/traffic loadTrafficSummary",
+      "external:vercel api"
+    ],
+    "measure": false,
+    "measureReason": "requires external Vercel Analytics API",
+    "sample": {
+      "path": "/api/traffic/summary",
+      "query": {
+        "period": "7d"
+      }
+    }
+  },
+  {
+    "id": "api:GET:/api/users",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/users",
+    "file": "app/api/users/route.ts",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns listAllUsers",
+      "db:outreach.users"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/api/users"
+    }
+  },
+  {
+    "id": "api:GET:/api/watch/[token]/audio/[audioId]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/watch/[token]/audio/[audioId]",
+    "file": "app/api/watch/[token]/audio/[audioId]/route.ts",
+    "auth": "token",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels/review reviewAudioStoragePath",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/watch/{reviewToken}/audio/{audioId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:GET:/api/watch/[token]/video/[id]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/watch/[token]/video/[id]",
+    "file": "app/api/watch/[token]/video/[id]/route.ts",
+    "auth": "token",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels/review reviewVideoStoragePath",
+      "external:supabase-storage sign"
+    ],
+    "measure": false,
+    "measureReason": "redirects to Supabase signed URL",
+    "sample": {
+      "path": "/api/watch/{reviewToken}/video/{videoJobId}"
+    },
+    "notes": "force-dynamic"
+  },
+  {
+    "id": "api:POST:/api/webhooks/agentmail",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/webhooks/agentmail",
+    "file": "app/api/webhooks/agentmail/route.ts",
+    "auth": "token",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/drafting/agentmail-engagement applyAgentMailWebhookEvent"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/webhooks/agentmail",
+      "body": {
+        "event_type": "message.received"
+      }
+    },
+    "notes": "public in middleware; svix signature or shared secret checked in route"
+  },
+  {
+    "id": "api:POST:/api/webhooks/gcp-billing",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/webhooks/gcp-billing",
+    "file": "app/api/webhooks/gcp-billing/route.ts",
+    "auth": "token",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/billing-guard recordCloudWorkerSpend"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/webhooks/gcp-billing",
+      "query": {
+        "token": "{gcpBillingToken}"
+      },
+      "body": {
+        "message": {
+          "data": ""
+        }
+      }
+    },
+    "notes": "public in middleware; token via ?token= or x-helios-billing-token"
+  },
+  {
+    "id": "api:POST:/api/webhooks/resend",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/webhooks/resend",
+    "file": "app/api/webhooks/resend/route.ts",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/webhooks/resend",
+      "body": {}
+    },
+    "notes": "retired: always 410"
+  },
+  {
+    "id": "api:POST:/api/webhooks/smartlead/[token]",
+    "kind": "api",
+    "method": "POST",
+    "path": "/api/webhooks/smartlead/[token]",
+    "file": "app/api/webhooks/smartlead/[token]/route.ts",
+    "auth": "token",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/smartlead/webhook applySmartleadEvent",
+      "lib/org-settings"
+    ],
+    "measure": false,
+    "measureReason": "POST mutation",
+    "sample": {
+      "path": "/api/webhooks/smartlead/{smartleadToken}",
+      "body": {
+        "event_type": "EMAIL_SENT"
+      }
+    },
+    "notes": "force-dynamic; path token + IP allowlist/HMAC in route; NOTE: not in middleware isPublicPath, so requests without a session get 401 before the route runs"
+  },
+  {
+    "id": "api:GET:/api/webhooks/smartlead/[token]",
+    "kind": "api",
+    "method": "GET",
+    "path": "/api/webhooks/smartlead/[token]",
+    "file": "app/api/webhooks/smartlead/[token]/route.ts",
+    "auth": "token",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "webhook health ping; blocked by middleware without session",
+    "sample": {
+      "path": "/api/webhooks/smartlead/{smartleadToken}"
+    },
+    "notes": "force-dynamic; path-token check only"
+  },
+  {
+    "id": "page:/campaigns/[id]/draft",
+    "kind": "page",
+    "method": "GET",
+    "path": "/campaigns/[id]/draft",
+    "file": "app/campaigns/[id]/draft/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getCampaign",
+      "lib/campaign-review campaignHasDraftingWorkspace/ReviewableData"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/campaigns/{campaignId}/draft"
+    },
+    "notes": "force-dynamic; 1 sequential + 2 parallel light queries server-side; client DraftWorkspace polls /api/campaigns/{id}/drafting every few seconds (heavy endpoint)"
+  },
+  {
+    "id": "page:/campaigns/[id]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/campaigns/[id]",
+    "file": "app/campaigns/[id]/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getCampaign",
+      "lib/campaign-review"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/campaigns/{campaignId}"
+    },
+    "notes": "force-dynamic; manual campaigns only (auto redirects to /prospect); client CampaignUploads polls /api/campaigns/{id}/uploads and /api/runs/{id}"
+  },
+  {
+    "id": "page:/campaigns/[id]/prospect",
+    "kind": "page",
+    "method": "GET",
+    "path": "/campaigns/[id]/prospect",
+    "file": "app/campaigns/[id]/prospect/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/campaigns getCampaign"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/campaigns/{autoCampaignId}/prospect"
+    },
+    "notes": "force-dynamic; auto campaigns only (manual redirects); client ProspectWorkspace polls /api/campaigns/{id}/prospect"
+  },
+  {
+    "id": "page:/campaigns/[id]/review",
+    "kind": "page",
+    "method": "GET",
+    "path": "/campaigns/[id]/review",
+    "file": "app/campaigns/[id]/review/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/sheet-sync syncCampaignSheet",
+      "lib/campaign-sheet loadCampaignSheetRows",
+      "db:outreach.campaign_leads"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/campaigns/{campaignId}/review"
+    },
+    "notes": "force-dynamic; needs_enrichment campaigns only; awaits syncCampaignSheet (identity-resolution writes only when unresolved extracted uploads exist; seed runs with stats.people_resolved=true) then loads ALL sheet rows server-side (no paging); ReviewTable may poll"
+  },
+  {
+    "id": "page:/carousels",
+    "kind": "page",
+    "method": "GET",
+    "path": "/carousels",
+    "file": "app/carousels/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/content-type/posting readPosting"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/carousels"
+    },
+    "notes": "force-dynamic; NOT in middleware matcher (page-level getSession redirect); ContentTypePage(carousels): full hub dataset via unstable_cache + readPosting; consumeMoves housekeeping write only; client polls /api/content-type/progress"
+  },
+  {
+    "id": "page:/d/[token]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/d/[token]",
+    "file": "app/d/[token]/page.tsx",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only legacy route",
+    "sample": {
+      "path": "/d/{token}"
+    },
+    "notes": "permanentRedirect to /dashboards/d/[token]"
+  },
+  {
+    "id": "page:/dashboards",
+    "kind": "page",
+    "method": "GET",
+    "path": "/dashboards",
+    "file": "app/dashboards/(admin)/(main)/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/dashboards/admin-data getAdminProjects",
+      "lib/dashboards/repository countTokensForUser"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/dashboards"
+    },
+    "notes": "force-dynamic; admin layout calls getSession; renders PAT gate unless user has >=1 GitHub token row (seed one); sequential: token count then projects"
+  },
+  {
+    "id": "page:/dashboards/projects/[id]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/dashboards/projects/[id]",
+    "file": "app/dashboards/(admin)/(main)/projects/[id]/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/dashboards/admin-data getAdminProject/getAllClients",
+      "lib/dashboards/repository latestUpdateGeneratedAt"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/dashboards/projects/{projectId}"
+    },
+    "notes": "force-dynamic; maxDuration=60 (server actions); token gate -> parallel project+clients -> sequential latestUpdateGeneratedAt"
+  },
+  {
+    "id": "page:/dashboards/projects/new",
+    "kind": "page",
+    "method": "GET",
+    "path": "/dashboards/projects/new",
+    "file": "app/dashboards/(admin)/(main)/projects/new/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/dashboards/admin-data getAllClients"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/dashboards/projects/new"
+    },
+    "notes": "no dynamic export (dynamic via getSession); maxDuration=60 for form server actions (GitHub link + AI summary happen in actions, not on GET)"
+  },
+  {
+    "id": "page:/dashboards/tokens",
+    "kind": "page",
+    "method": "GET",
+    "path": "/dashboards/tokens",
+    "file": "app/dashboards/(admin)/tokens/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/dashboards/repository listGithubTokenMeta"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/dashboards/tokens"
+    },
+    "notes": "force-dynamic; single query"
+  },
+  {
+    "id": "page:/dashboards/d/[token]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/dashboards/d/[token]",
+    "file": "app/dashboards/d/[token]/page.tsx",
+    "auth": "token",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/dashboards/data getDashboardData",
+      "db:dashboards projects/updates/commits"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/dashboards/d/{token}"
+    },
+    "notes": "force-dynamic; public client dashboard gated by project access_token (isPublicPath); token lookup then parallel latest update + recent commits from DB (no live GitHub call)"
+  },
+  {
+    "id": "page:/events",
+    "kind": "page",
+    "method": "GET",
+    "path": "/events",
+    "file": "app/events/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/networking/events"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/events"
+    },
+    "notes": "no dynamic export; server only checks session; client NetworkingCalendar fetches /api/networking/events on mount"
+  },
+  {
+    "id": "page:/explainers",
+    "kind": "page",
+    "method": "GET",
+    "path": "/explainers",
+    "file": "app/explainers/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/explainers explainersDb loadSettingsView"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/explainers"
+    },
+    "notes": "force-dynamic; ContentTypePage(explainers) full hub dataset (unstable_cache) + readPosting + explainersDb settings view (separate EXPLAINERS_DATABASE_URL/PGlite handle); consumeMoves housekeeping only; client polls /api/content-type/progress"
+  },
+  {
+    "id": "page:/explainers/reels",
+    "kind": "page",
+    "method": "GET",
+    "path": "/explainers/reels",
+    "file": "app/explainers/reels/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/explainers/overview loadReelsView",
+      "explainersDb (EXPLAINERS_DATABASE_URL)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/explainers/reels"
+    },
+    "notes": "force-dynamic; reads separate explainers DB handle (PGlite fallback applies DDL on first open; point EXPLAINERS_DATABASE_URL at local PG); client ReelsView polls /api/explainers/jobs/{id}"
+  },
+  {
+    "id": "page:/explainers/settings",
+    "kind": "page",
+    "method": "GET",
+    "path": "/explainers/settings",
+    "file": "app/explainers/settings/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/explainers/settings"
+    },
+    "notes": "redirect to /explainers?tab=settings"
+  },
+  {
+    "id": "page:/field-notes",
+    "kind": "page",
+    "method": "GET",
+    "path": "/field-notes",
+    "file": "app/field-notes/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "components/field-notes FieldNotesTop loadPanelData"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/field-notes"
+    },
+    "notes": "force-dynamic; NOT in middleware matcher (page-level getSession redirect); FieldNotesTop server component does an extra loadPanelData DB read + ContentTypePage full hub dataset (unstable_cache); consumeMoves housekeeping only"
+  },
+  {
+    "id": "page:/hub/analytics",
+    "kind": "page",
+    "method": "GET",
+    "path": "/hub/analytics",
+    "file": "app/hub/analytics/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/analytics/summary, /api/analytics/runs"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/hub/analytics"
+    },
+    "notes": "server only checks session; client AnalyticsHub fetches /api/analytics/summary (heavy) + /api/analytics/runs on mount via hubGetJson (20s client cache)"
+  },
+  {
+    "id": "page:/hub/conversations",
+    "kind": "page",
+    "method": "GET",
+    "path": "/hub/conversations",
+    "file": "app/hub/conversations/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/conversations"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/hub/conversations"
+    },
+    "notes": "server only checks session; Suspense; client ConversationsHub fetches/polls /api/conversations and /api/conversations/{id}"
+  },
+  {
+    "id": "page:/hub/inboxes",
+    "kind": "page",
+    "method": "GET",
+    "path": "/hub/inboxes",
+    "file": "app/hub/inboxes/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/inboxes"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/hub/inboxes"
+    },
+    "notes": "server only checks session; client InboxesHub fetches /api/inboxes on mount (that API calls Smartlead live)"
+  },
+  {
+    "id": "page:/hub",
+    "kind": "page",
+    "method": "GET",
+    "path": "/hub",
+    "file": "app/hub/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/campaigns"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/hub"
+    },
+    "notes": "server only checks session; client CampaignHub fetches /api/campaigns (+tags) and polls; HUB_TAB_PREFETCH warms other tab APIs"
+  },
+  {
+    "id": "page:/hub/queue",
+    "kind": "page",
+    "method": "GET",
+    "path": "/hub/queue",
+    "file": "app/hub/queue/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/send-queue"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/hub/queue"
+    },
+    "notes": "server only checks session; client SendQueueHub fetches /api/send-queue on mount"
+  },
+  {
+    "id": "page:/last-few-days",
+    "kind": "page",
+    "method": "GET",
+    "path": "/last-few-days",
+    "file": "app/last-few-days/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/content-type/posting readPosting"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/last-few-days"
+    },
+    "notes": "force-dynamic; NOT in middleware matcher (page-level getSession redirect); ContentTypePage(last_few_days) full hub dataset via unstable_cache + readPosting; consumeMoves housekeeping only"
+  },
+  {
+    "id": "page:/memes/lab",
+    "kind": "page",
+    "method": "GET",
+    "path": "/memes/lab",
+    "file": "app/memes/lab/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/memes constants"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab page",
+    "sample": {
+      "path": "/memes/lab"
+    },
+    "notes": "force-dynamic; client MemeLab fetches/polls /api/memes/* (local PGlite lab DB)"
+  },
+  {
+    "id": "page:/memes/lfd-lab",
+    "kind": "page",
+    "method": "GET",
+    "path": "/memes/lfd-lab",
+    "file": "app/memes/lfd-lab/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "dev-only lab page",
+    "sample": {
+      "path": "/memes/lfd-lab"
+    },
+    "notes": "force-dynamic; client LfdLab polls /api/memes/lfd-sims (GET can kick a paid sim runner)"
+  },
+  {
+    "id": "page:/memes",
+    "kind": "page",
+    "method": "GET",
+    "path": "/memes",
+    "file": "app/memes/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/memes"
+    },
+    "notes": "redirect to /memes/lab"
+  },
+  {
+    "id": "page:/morning-download",
+    "kind": "page",
+    "method": "GET",
+    "path": "/morning-download",
+    "file": "app/morning-download/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/content-type/posting readPosting"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/morning-download"
+    },
+    "notes": "force-dynamic; ContentTypePage(vertical=stories): full hub dataset via unstable_cache (data 60s, cost 600s, gzip-packed ~3MB) + readPosting; only write is idempotent consumeMoves housekeeping UPDATE; client TypeHub polls /api/content-type/progress"
+  },
+  {
+    "id": "page:/",
+    "kind": "page",
+    "method": "GET",
+    "path": "/",
+    "file": "app/page.tsx",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/home/loadHome (boards, admin projects, listCampaigns, display name, week send stats)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/"
+    },
+    "notes": "force-dynamic; login form when signed out; signed in: loadHome runs 5 loaders in parallel (trello boards, dashboards projects, campaigns, send-queue week stats); measure with a session cookie"
+  },
+  {
+    "id": "page:/personality/lab",
+    "kind": "page",
+    "method": "GET",
+    "path": "/personality/lab",
+    "file": "app/personality/lab/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/personality/lab readSoul (file)"
+    ],
+    "measure": false,
+    "measureReason": "dev-only lab page",
+    "sample": {
+      "path": "/personality/lab"
+    },
+    "notes": "force-dynamic; not in middleware matcher; client posts to /api/personality/lab (Claude)"
+  },
+  {
+    "id": "page:/real-case/lab",
+    "kind": "page",
+    "method": "GET",
+    "path": "/real-case/lab",
+    "file": "app/real-case/lab/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "dev-only lab page",
+    "sample": {
+      "path": "/real-case/lab"
+    },
+    "notes": "force-dynamic; client polls /api/real-case/lab (explainersDb + ensure schema)"
+  },
+  {
+    "id": "page:/real-or-ai/lab",
+    "kind": "page",
+    "method": "GET",
+    "path": "/real-or-ai/lab",
+    "file": "app/real-or-ai/lab/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/stories/roa-lab"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/real-or-ai/lab"
+    },
+    "notes": "force-dynamic; server only checks session; client RoaLab fetches /api/stories/roa-lab (signs Supabase storage URLs)"
+  },
+  {
+    "id": "page:/real-or-ai",
+    "kind": "page",
+    "method": "GET",
+    "path": "/real-or-ai",
+    "file": "app/real-or-ai/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/content-type/posting readPosting"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/real-or-ai"
+    },
+    "notes": "force-dynamic; ContentTypePage(vertical=real_or_ai): full hub dataset via unstable_cache (data 60s, cost 600s, gzip-packed ~3MB) + readPosting; only write is idempotent consumeMoves housekeeping UPDATE; client TypeHub polls /api/content-type/progress"
+  },
+  {
+    "id": "page:/reel-ai-drama/lab",
+    "kind": "page",
+    "method": "GET",
+    "path": "/reel-ai-drama/lab",
+    "file": "app/reel-ai-drama/lab/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/reel-ai-drama/lab, /api/reel-ai-drama/settings"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/reel-ai-drama/lab"
+    },
+    "notes": "force-dynamic; middleware protects /reel-ai-drama; server only checks session; client polls /api/reel-ai-drama/lab"
+  },
+  {
+    "id": "page:/reel-ai-drama",
+    "kind": "page",
+    "method": "GET",
+    "path": "/reel-ai-drama",
+    "file": "app/reel-ai-drama/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/content-type/posting readPosting"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/reel-ai-drama"
+    },
+    "notes": "force-dynamic; ContentTypePage(vertical=reel_ai_drama): full hub dataset via unstable_cache (data 60s, cost 600s, gzip-packed ~3MB) + readPosting; only write is idempotent consumeMoves housekeeping UPDATE; client TypeHub polls /api/content-type/progress"
+  },
+  {
+    "id": "page:/reels/analytics",
+    "kind": "page",
+    "method": "GET",
+    "path": "/reels/analytics",
+    "file": "app/reels/analytics/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/reels/analytics/costs loadCostPage",
+      "db:reels cost ledger"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/reels/analytics",
+      "query": {
+        "period": "30d"
+      }
+    },
+    "notes": "force-dynamic; server-side cost ledger aggregation"
+  },
+  {
+    "id": "page:/reels/analytics/performance",
+    "kind": "page",
+    "method": "GET",
+    "path": "/reels/analytics/performance",
+    "file": "app/reels/analytics/performance/page.tsx",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels/analytics/performance-store loadPerformancePage",
+      "lib/reels/media-insights beginInsightsRefresh"
+    ],
+    "measure": false,
+    "measureReason": "visit may claim insights poll and call Instagram Graph API in after()",
+    "sample": {
+      "path": "/reels/analytics/performance"
+    },
+    "notes": "force-dynamic; beginInsightsRefresh claims a DB lock if last poll >30 min and runs pollDueInsights (IG API) via after(); measurable only if INSIGHTS_POLL_SETTING seeded fresh"
+  },
+  {
+    "id": "page:/reels/health",
+    "kind": "page",
+    "method": "GET",
+    "path": "/reels/health",
+    "file": "app/reels/health/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/reels/health loadHealthPage",
+      "db:reels.runs/sources/jobs"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/reels/health",
+      "query": {
+        "days": "7"
+      }
+    },
+    "notes": "force-dynamic; ~8 parallel aggregate queries over reels.sources/jobs; client HealthView polls /api/reels/health"
+  },
+  {
+    "id": "page:/reels",
+    "kind": "page",
+    "method": "GET",
+    "path": "/reels",
+    "file": "app/reels/page.tsx",
+    "auth": "session",
+    "sideEffects": "external-call",
+    "dataSources": [
+      "lib/reels/overview loadReelsOverview",
+      "lib/social-hub/live loadForPage",
+      "lib/reels/review ensureReviewToken"
+    ],
+    "measure": false,
+    "measureReason": "visit may trigger Instagram insights poll (after()) and writes review token",
+    "sample": {
+      "path": "/reels"
+    },
+    "notes": "force-dynamic; parallel: beginInsightsRefresh (IG Graph API via after() if stale) + loadReelsOverview + ensureReviewToken (INSERT on first visit) + full hub dataset; client ReelsHub polls /api/reels/overview"
+  },
+  {
+    "id": "page:/seo",
+    "kind": "page",
+    "method": "GET",
+    "path": "/seo",
+    "file": "app/seo/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/seo/summary, /api/seo/rows"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/seo"
+    },
+    "notes": "no dynamic export; server only checks session; client SeoPerformance fetches /api/seo/summary + /api/seo/rows"
+  },
+  {
+    "id": "page@drawer:/social/post/[id]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/post/[id]",
+    "file": "app/social/(hub)/@drawer/(.)post/[id]/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)"
+    ],
+    "measure": false,
+    "measureReason": "parallel/intercepting slot, measured via parent route",
+    "sample": {
+      "path": "/social/post/carousels:{postId}"
+    },
+    "notes": "force-dynamic; intercepted drawer render of /social/post/[id] during client nav; same loadForPage + signOpenedPost work as the full page"
+  },
+  {
+    "id": "page@drawer:/social/[...rest]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/[...rest]",
+    "file": "app/social/(hub)/@drawer/[...rest]/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "parallel/intercepting slot, measured via parent route",
+    "sample": {
+      "path": "/social/{rest}"
+    },
+    "notes": "@drawer slot catch-all returns null"
+  },
+  {
+    "id": "page@drawer:/social",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social",
+    "file": "app/social/(hub)/@drawer/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "parallel/intercepting slot, measured via parent route",
+    "sample": {
+      "path": "/social"
+    },
+    "notes": "@drawer slot root returns null"
+  },
+  {
+    "id": "page@drawer:/social/preview/post/[id]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/post/[id]",
+    "file": "app/social/(hub)/@drawer/preview/(.)post/[id]/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub preview dataset"
+    ],
+    "measure": false,
+    "measureReason": "parallel/intercepting slot, measured via parent route",
+    "sample": {
+      "path": "/social/preview/post/{previewPostId}"
+    },
+    "notes": "force-dynamic; dev-only fixture drawer"
+  },
+  {
+    "id": "page:/social/analytics/[type]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/analytics/[type]",
+    "file": "app/social/(hub)/analytics/[type]/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/social-hub/views/story-frames signVisibleStoryFrames"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/analytics/carousels"
+    },
+    "notes": "force-dynamic; withHubTiming; full hub dataset + in-JS KPI/table filtering; best-effort Supabase signing of visible story frames (skipped on error/no frames); [type] in reels|explainers|carousels|stories|ai_trivia|real_or_ai|last_few_days|ai_events|field_notes|reel_ai_drama"
+  },
+  {
+    "id": "page:/social/analytics/compare",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/analytics/compare",
+    "file": "app/social/(hub)/analytics/compare/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/analytics/compare",
+      "query": {
+        "ids": "carousels:{postId}"
+      }
+    },
+    "notes": "force-dynamic; full hub dataset then filter <=6 posts in JS; best-effort story-frame signing"
+  },
+  {
+    "id": "page:/social/analytics/cost",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/analytics/cost",
+    "file": "app/social/(hub)/analytics/cost/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/cost-page/load loadCostPage",
+      "db:cost ledger"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/analytics/cost"
+    },
+    "notes": "force-dynamic; reads full cost ledger (loadCostPage, not the slimmed cache) and builds cost model in JS; known slow path (~0.7s ledger read per comments)"
+  },
+  {
+    "id": "page:/social/analytics",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/analytics",
+    "file": "app/social/(hub)/analytics/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/analytics"
+    },
+    "notes": "force-dynamic; full hub dataset + overviewKpis in JS + best-effort story-frame signing"
+  },
+  {
+    "id": "page:/social/calendar",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/calendar",
+    "file": "app/social/(hub)/calendar/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)",
+      "lib/social-hub/slots readTemplate/readOverrides/readCaps"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/calendar",
+      "query": {
+        "view": "week"
+      }
+    },
+    "notes": "force-dynamic; dataset load in parallel with week template (slot source -> template/caps/overrides, several sequential reads); best-effort frame signing; client polls slots APIs"
+  },
+  {
+    "id": "page:/social/content/library/music",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/content/library/music",
+    "file": "app/social/(hub)/content/library/music/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social-hub/queries/music readMusic",
+      "db:reels.songs"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/content/library/music"
+    },
+    "notes": "force-dynamic; to_regclass check then songs + ingest queries"
+  },
+  {
+    "id": "page:/social/content/library/photos",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/content/library/photos",
+    "file": "app/social/(hub)/content/library/photos/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/media-library/read listLibrary/librarySummary",
+      "db:field_notes photo bank"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/content/library/photos"
+    },
+    "notes": "force-dynamic; paged list + summary in parallel; thumbnails load via /api/media-library/thumb (signed storage redirects)"
+  },
+  {
+    "id": "page:/social/content/pools/[type]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/content/pools/[type]",
+    "file": "app/social/(hub)/content/pools/[type]/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/social/content/pools/carousels"
+    },
+    "notes": "permanentRedirect to the type page"
+  },
+  {
+    "id": "page:/social/health/night/[date]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/health/night/[date]",
+    "file": "app/social/(hub)/health/night/[date]/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social-hub/health/store readReports",
+      "db:social_hub health reports"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/health/night/{date}"
+    },
+    "notes": "force-dynamic; reads lookback window of nightly reports; [date] = YYYY-MM-DD with a stored report"
+  },
+  {
+    "id": "page:/social/health",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/health",
+    "file": "app/social/(hub)/health/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/social-hub/health/load loadHealthPage"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/health",
+      "query": {
+        "nights": "14"
+      }
+    },
+    "notes": "force-dynamic; 14/30-night health window"
+  },
+  {
+    "id": "page:/social/house",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/house",
+    "file": "app/social/(hub)/house/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/social/house"
+    },
+    "notes": "legacy redirect"
+  },
+  {
+    "id": "page:/social",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social",
+    "file": "app/social/(hub)/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/views/cached-dataset loadHubDataset",
+      "lib/social-hub/views/cached-extras (libraries/progress/misses)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social"
+    },
+    "notes": "force-dynamic; Today screen: loadHubDataset (unstable_cache, gzip pack/unpack ~20ms) || cached extras + refresh state; then best-effort Supabase signing of story frames for quota candidates; consumeMoves housekeeping write; client polls /api/content-type/progress"
+  },
+  {
+    "id": "page:/social/post/[id]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/post/[id]",
+    "file": "app/social/(hub)/post/[id]/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "lib/social-hub/live loadForPage",
+      "unstable_cache social-hub dataset (all pipeline schemas)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/social/post/carousels:{postId}"
+    },
+    "notes": "force-dynamic; full hub dataset to render one post (find in JS) + best-effort signing; [id] is a hub id like carousels:<uuid> (URL-encode the colon if needed); RevisionBox polls /api/social-hub/actions/revisions"
+  },
+  {
+    "id": "page:/social/preview/analytics/[type]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/analytics/[type]",
+    "file": "app/social/(hub)/preview/analytics/[type]/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/analytics/carousels"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/analytics/compare",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/analytics/compare",
+    "file": "app/social/(hub)/preview/analytics/compare/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/analytics/compare"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/analytics/cost",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/analytics/cost",
+    "file": "app/social/(hub)/preview/analytics/cost/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/analytics/cost"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/analytics",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/analytics",
+    "file": "app/social/(hub)/preview/analytics/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/analytics"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/calendar",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/calendar",
+    "file": "app/social/(hub)/preview/calendar/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/calendar"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/content/library/music",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/content/library/music",
+    "file": "app/social/(hub)/preview/content/library/music/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/content/library/music"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/content/library/photos",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/content/library/photos",
+    "file": "app/social/(hub)/preview/content/library/photos/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/content/library/photos"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/content/pools/[type]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/content/pools/[type]",
+    "file": "app/social/(hub)/preview/content/pools/[type]/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/content/pools/carousels"
+    },
+    "notes": "redirect-only fixture route"
+  },
+  {
+    "id": "page:/social/preview/health/night/[date]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/health/night/[date]",
+    "file": "app/social/(hub)/preview/health/night/[date]/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/health/night/{date}"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/health",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/health",
+    "file": "app/social/(hub)/preview/health/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/health"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/house",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/house",
+    "file": "app/social/(hub)/preview/house/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/house"
+    },
+    "notes": "redirect-only fixture route"
+  },
+  {
+    "id": "page:/social/preview",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview",
+    "file": "app/social/(hub)/preview/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/post/[id]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/post/[id]",
+    "file": "app/social/(hub)/preview/post/[id]/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/post/{previewPostId}"
+    },
+    "notes": "force-dynamic; fixture data only, no DB"
+  },
+  {
+    "id": "page:/social/preview/type/[type]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/preview/type/[type]",
+    "file": "app/social/(hub)/preview/type/[type]/page.tsx",
+    "auth": "dev-only-public",
+    "sideEffects": "none",
+    "dataSources": [
+      "tests/fixtures/social-hub fixtures"
+    ],
+    "measure": false,
+    "measureReason": "dev-only fixture preview (notFound() in production)",
+    "sample": {
+      "path": "/social/preview/type/carousels"
+    },
+    "notes": "force-dynamic; fixture TypeHub; [type] any vertical except reels"
+  },
+  {
+    "id": "page:/social/render/preview/ai-events",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/render/preview/ai-events",
+    "file": "app/social/render/preview/ai-events/page.tsx",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "fixtures/social/ai-events-posts"
+    ],
+    "measure": false,
+    "measureReason": "client-only local template preview (fixtures)",
+    "sample": {
+      "path": "/social/render/preview/ai-events"
+    },
+    "notes": "'use client' page; renders slide templates from fixtures; /social/render is excluded from page protection"
+  },
+  {
+    "id": "page:/social/render/preview/canvases",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/render/preview/canvases",
+    "file": "app/social/render/preview/canvases/page.tsx",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "fixtures/social"
+    ],
+    "measure": false,
+    "measureReason": "client-only local template preview (fixtures)",
+    "sample": {
+      "path": "/social/render/preview/canvases"
+    },
+    "notes": "'use client' page; fixture canvases"
+  },
+  {
+    "id": "page:/social/render/preview",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/render/preview",
+    "file": "app/social/render/preview/page.tsx",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/social/generated"
+    ],
+    "measure": false,
+    "measureReason": "client-only local template preview (fixtures)",
+    "sample": {
+      "path": "/social/render/preview"
+    },
+    "notes": "'use client'; fetches /api/social/generated(+/{slug}) on mount (local only)"
+  },
+  {
+    "id": "page:/social/render/templates-review",
+    "kind": "page",
+    "method": "GET",
+    "path": "/social/render/templates-review",
+    "file": "app/social/render/templates-review/page.tsx",
+    "auth": "public",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/social/template-reviews"
+    ],
+    "measure": false,
+    "measureReason": "client-only local template review tool",
+    "sample": {
+      "path": "/social/render/templates-review"
+    },
+    "notes": "'use client'; polls /api/social/template-reviews (local JSON file)"
+  },
+  {
+    "id": "page:/stories/history",
+    "kind": "page",
+    "method": "GET",
+    "path": "/stories/history",
+    "file": "app/stories/history/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/stories/history"
+    },
+    "notes": "force-dynamic; redirect to /morning-download"
+  },
+  {
+    "id": "page:/stories",
+    "kind": "page",
+    "method": "GET",
+    "path": "/stories",
+    "file": "app/stories/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/stories"
+    },
+    "notes": "force-dynamic; redirect to /morning-download"
+  },
+  {
+    "id": "page:/stories/roa-lab",
+    "kind": "page",
+    "method": "GET",
+    "path": "/stories/roa-lab",
+    "file": "app/stories/roa-lab/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/stories/roa-lab"
+    },
+    "notes": "force-dynamic; redirect to /real-or-ai/lab"
+  },
+  {
+    "id": "page:/stories/settings",
+    "kind": "page",
+    "method": "GET",
+    "path": "/stories/settings",
+    "file": "app/stories/settings/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [],
+    "measure": false,
+    "measureReason": "redirect-only route",
+    "sample": {
+      "path": "/stories/settings"
+    },
+    "notes": "force-dynamic; redirect to /morning-download?tab=settings"
+  },
+  {
+    "id": "page:/traffic",
+    "kind": "page",
+    "method": "GET",
+    "path": "/traffic",
+    "file": "app/traffic/page.tsx",
+    "auth": "session",
+    "sideEffects": "none",
+    "dataSources": [
+      "client: /api/traffic/summary"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/traffic"
+    },
+    "notes": "server only checks session; client TrafficPerformance fetches /api/traffic/summary (Vercel API, external)"
+  },
+  {
+    "id": "page:/trello",
+    "kind": "page",
+    "method": "GET",
+    "path": "/trello",
+    "file": "app/trello/page.tsx",
+    "auth": "session",
+    "sideEffects": "db-write",
+    "dataSources": [
+      "app/trello/actions/loadWorkspace",
+      "db:boards.* (all tables)"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/trello"
+    },
+    "notes": "force-dynamic; layout getSession; Suspense loader: ensureTrelloProfile (first-visit INSERTs + idempotent membership upsert) then ~20 parallel UNBOUNDED full-table selects (all cards, comments, attachments, activity across every board) serialized to client"
+  },
+  {
+    "id": "page:/watch/[token]",
+    "kind": "page",
+    "method": "GET",
+    "path": "/watch/[token]",
+    "file": "app/watch/[token]/page.tsx",
+    "auth": "token",
+    "sideEffects": "none",
+    "dataSources": [
+      "lib/reels/review loadReviewClips",
+      "db:reels settings + video jobs"
+    ],
+    "measure": true,
+    "sample": {
+      "path": "/watch/{reviewToken}"
+    },
+    "notes": "force-dynamic, revalidate=0, fetchCache='force-no-store'; token compared to reels setting; media URLs go through /api/watch/* (signed storage redirects)"
+  }
+]

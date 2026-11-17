@@ -91,3 +91,7 @@ explainers/design/intros/.out/
 # Local scratch (not for the repo)
 .tmp/
 /.hyperframes/
+
+# Performance tooling: machine-local state and run outputs
+perf/.local/
+perf/runs/
