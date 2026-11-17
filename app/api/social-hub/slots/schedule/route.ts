@@ -10,6 +10,7 @@ import type { SlotQuery } from '@/lib/social-hub/slots/types';
 import { rescheduleSet } from '@/lib/stories/repository';
 import type { Queryable } from '@/lib/stories/db';
 import { getSession } from '@/lib/session';
+import { noteHubDataChanged } from '@/lib/social-hub/views/cache-tags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
     now: new Date(),
   });
   if (out.status === 200 || (out.body.toReady as number) > 0) {
+    noteHubDataChanged();
     try { revalidateTag('social-hub:data'); } catch { /* outside a Next request */ }
   }
   return NextResponse.json(out.body, { status: out.status });

@@ -3,7 +3,7 @@ import { revalidateTag } from 'next/cache';
 import { actionEnabled, SOCIAL_HUB_FLAGS, type ActionFlag, type HubFlags } from '@/lib/social-hub/flags';
 import { getSession } from '@/lib/session';
 import type { Vertical } from '@/lib/social-hub/types';
-import { HUB_DATA_TAG, hubDataTag } from '@/lib/social-hub/views/cache-tags';
+import { HUB_DATA_TAG, hubDataTag, noteHubDataChanged } from '@/lib/social-hub/views/cache-tags';
 
 /**
  * Flag-gated action routes (BUILD_PLAN §S1.5, §S5). The flag is checked
@@ -69,6 +69,7 @@ export function actionRoute<B>(spec: ActionSpec<B>, env: ActionEnv = {}): (req: 
  * other types cached. The global tag drops every slice.
  */
 function refreshHubData(vertical: Vertical | null, revalidate: (tag: string) => void): void {
+  noteHubDataChanged();
   try {
     revalidate(vertical ? hubDataTag(vertical) : HUB_DATA_TAG);
   } catch {

@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { parseQueueAction, recordQueueAction } from '@/lib/content-type/idea-queue';
 import { getSession } from '@/lib/session';
 import { HUB_DATA_TAG, loadHubDataset } from '@/lib/social-hub/views/cached-dataset';
+import { noteHubDataChanged } from '@/lib/social-hub/views/cache-tags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
   }
   try {
     await recordQueueAction(move, session.email, await loadHubDataset());
+    noteHubDataChanged();
     revalidateTag(HUB_DATA_TAG);
     return NextResponse.json({ ok: true });
   } catch (error) {

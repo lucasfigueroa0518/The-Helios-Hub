@@ -5,6 +5,7 @@ import { livePlan, runToday } from '@/lib/content-type/run-today-live';
 import { parseRunBody } from '@/lib/social-hub/run-today';
 import { HUB_DATA_TAG } from '@/lib/social-hub/views/cached-dataset';
 import { getSession } from '@/lib/session';
+import { noteHubDataChanged } from '@/lib/social-hub/views/cache-tags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
   const { only, target } = parsed;
   try {
     const out = await runToday(session.email, new Date(), only, target);
+    noteHubDataChanged();
     revalidateTag(HUB_DATA_TAG);
     return NextResponse.json(out);
   } catch (error) {

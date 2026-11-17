@@ -9,7 +9,7 @@ import { loadCostPart, loadDataset, readOne, withSharedSpine } from '@/lib/socia
 import type { Vertical } from '@/lib/social-hub/types';
 import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 
-import { HUB_COST_TAG, HUB_DATA_TAG, hubDataTag } from '@/lib/social-hub/views/cache-tags';
+import { HUB_COST_TAG, HUB_DATA_TAG, hubDataChangedAt, hubDataTag } from '@/lib/social-hub/views/cache-tags';
 import { logHubDatasetRebuild, logHubDatasetServe } from '@/lib/observability/hub-dataset-telemetry';
 import { finishDatasetLoad } from '@/lib/social-hub/views/stale-dataset';
 
@@ -114,13 +114,31 @@ async function cachedReads(): Promise<VerticalReads> {
   return Object.fromEntries(entries) as VerticalReads;
 }
 
+/**
+ * One rebuild at a time per process. When the minute is up, every hub request that
+ * finds the entry stale asks for a background rebuild; under a burst (hover warms,
+ * several tabs) they overlapped (25 rebuilds in 3 minutes, ~80 reads each) and held
+ * every pool slot, stalling unrelated requests for seconds. A caller that arrives
+ * while one is running shares it, unless hub data changed in this process after that
+ * rebuild began (an action's refresh must not get the state from before the action).
+ */
+let rebuilding: { startedAt: number; promise: Promise<string> } | null = null;
+
 const shared = unstable_cache(
-  async () => {
-    logHubDatasetRebuild();
-    // The spine is read once for whichever types miss. Types still in cache are not read again.
-    const dataset = await withSharedSpine(liveHubQuery, async () => loadDataset(liveHubQuery, new Date(), cachedCostPart(), await cachedReads()));
-    if (dataset.errors.length > 0) throw new PartialRead(dataset);
-    return pack(slim(dataset));
+  () => {
+    const running = rebuilding;
+    if (running && running.startedAt > hubDataChangedAt()) return running.promise;
+    const promise: Promise<string> = (async () => {
+      logHubDatasetRebuild();
+      // The spine is read once for whichever types miss. Types still in cache are not read again.
+      const dataset = await withSharedSpine(liveHubQuery, async () => loadDataset(liveHubQuery, new Date(), cachedCostPart(), await cachedReads()));
+      if (dataset.errors.length > 0) throw new PartialRead(dataset);
+      return pack(slim(dataset));
+    })().finally(() => {
+      if (rebuilding?.promise === promise) rebuilding = null;
+    });
+    rebuilding = { startedAt: Date.now(), promise };
+    return promise;
   },
   ['social-hub-dataset', deployment, 'v5-parts'],
   { revalidate: 60, tags: [HUB_DATA_TAG, ...VERTICAL_IDS.map(hubDataTag)] },
