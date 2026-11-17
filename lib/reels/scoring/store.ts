@@ -389,23 +389,30 @@ export async function loadSlates(
       headlines: string[] | null;
       yours: boolean;
     }>(
-      `SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected,
-              s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
-              s.value_score, s.blockbuster, s.confidence, s.components,
-              (
-                SELECT jsonb_agg(m.headline ORDER BY
-                         CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
-                         m.joined_at)
-                  FROM reels.idea_sources_v m
-                 WHERE m.post_idea_id = s.post_idea_id
-              ) AS headlines,
-              EXISTS (
-                SELECT 1 FROM reels.idea_sources_v m2
-                 WHERE m2.post_idea_id = s.post_idea_id AND m2.seeded
-              ) AS yours
-         FROM reels.idea_scores s
-        WHERE s.slate_id = ANY($1::uuid[])
-          AND ($2::boolean = false OR s.selected)
+      // idea_sources_v resolves intake merges with a recursive CTE, so it is read
+      // once for every idea on these slates and grouped, not once per score row
+      // (two correlated reads per row cost ~0.6 s, almost all of it JIT, on 130 rows).
+      `WITH scores AS (
+         SELECT s.slate_id, s.post_idea_id, s.origin, s.net, s.rank, s.selected,
+                s.chosen_bucket, s.chosen_framework, s.psychology, s.bucket_score,
+                s.value_score, s.blockbuster, s.confidence, s.components
+           FROM reels.idea_scores s
+          WHERE s.slate_id = ANY($1::uuid[])
+            AND ($2::boolean = false OR s.selected)
+       ),
+       members AS (
+         SELECT m.post_idea_id,
+                jsonb_agg(m.headline ORDER BY
+                  CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END,
+                  m.joined_at) AS headlines,
+                COALESCE(bool_or(m.seeded), false) AS yours
+           FROM reels.idea_sources_v m
+          WHERE m.post_idea_id IN (SELECT post_idea_id FROM scores)
+          GROUP BY m.post_idea_id
+       )
+       SELECT s.*, m.headlines, COALESCE(m.yours, false) AS yours
+         FROM scores s
+         LEFT JOIN members m ON m.post_idea_id = s.post_idea_id
         ORDER BY s.rank NULLS LAST, s.net DESC NULLS LAST`,
       [slateIds, options?.selectedOnly === true],
     ),
