@@ -10,8 +10,8 @@ CONSTRAINTS on every script.
   looked worth focusing on. It is a starting point written before the facts were checked, not a plan. Where it and
   the facts differ, the facts win.
 - **The facts** — what reporting verified, as a dated timeline, each fact with its ids (`F…`, `Q…` for quotes,
-  `A…` for artifacts). After it: "Who's who" (each person, company or product then, before and after, and what they
-  wanted), the places, and how the parts connect, each with its ids. It is your only source of facts; the
+  `A…` for artifacts). After it: "Who's who" (each person, company or product then, before and after, what they
+  wanted and, when researched, how the name is said), the places, and how the parts connect, each with its ids. It is your only source of facts; the
   before-and-after context is there to tie the story to the people, companies and world the viewer knows.
 - **The names** — from the cast: `known`, the names a viewer needs no introduction to, and `new`, the ones they
   would have to learn (must 6). That was decided at story selection; read it, never re-judge it.
@@ -52,9 +52,10 @@ CONSTRAINTS on every script.
 - `close_question` — the question over the brand close (must 5).
 - `central` — the people central to the story, named exactly as in the facts' "Who's who" list: the ones the viewer
   must recognize on sight.
-- `pronounce` — `[{ word, say }]` for each name or term the voice would likely get wrong: `word` exactly as written
-  in the lines, `say` a plain English respelling of how it sounds. It changes only what the voice says. Empty when
-  nothing needs it.
+- `pronounce` — `[{ word, say }]` for each other name or term the voice would likely get wrong: `word` exactly as
+  written in the lines, `say` a plain English respelling, syllables joined by hyphens with the stressed one in
+  capitals. A cast name with a "Said:" in Who's who was researched and is always voiced that way, so leave its words
+  out. It changes only what the voice says. Empty when nothing needs it.
 
 ## HARD CONSTRAINTS (output)
 

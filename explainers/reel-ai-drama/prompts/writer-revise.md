@@ -34,8 +34,8 @@ Each note names its lines and says why; it may suggest a fix.
   or `null`; `pause_after` is `null` or the one pause the musts allow.
 - `close_question` — only when your changes make it stale; otherwise `null`.
 - `purposes` — `[{ rung_id, purpose }]` for each rung whose beat your changes alter; otherwise empty.
-- `pronounce` — `[{ word, say }]` for any name or term in your replacements the voice would get wrong; empty when
-  nothing needs it.
+- `pronounce` — `[{ word, say }]` for any name or term in your replacements the voice would get wrong, other than
+  the cast names with a "Said:" in Who's who (those are already voiced as researched); empty when nothing needs it.
 
 ## HARD CONSTRAINTS (output)
 

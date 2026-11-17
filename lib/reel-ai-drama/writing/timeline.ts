@@ -172,6 +172,7 @@ export function factTimeline(facts: FactSheet): string {
         clean(m.background) && `Before: ${stripNotes(m.background!)}`,
         clean(m.later) && `After: ${stripNotes(m.later!)}`,
         clean(m.want) && `Wanted: ${stripNotes(m.want!)}`,
+        (m.pronounce ?? []).length > 0 && `Said: ${m.pronounce!.map((p) => `${clean(p.word)} = ${clean(p.say)}`).join(', ')}`,
       ].filter(Boolean).map((p) => sentence(p as string));
       const ids = (m.context_fact_ids ?? []).filter((id) => factById.has(id)).map((id) => `${id}${strength(factById.get(id)!, sources)}`);
       out.push(`- ${clean(m.name)}${parts.length ? ` — ${parts.join(' ')}` : ''}${ids.length ? ` (${ids.join(', ')})` : ''}`);

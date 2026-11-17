@@ -46,7 +46,7 @@ import { applyWishes } from '@/lib/reel-ai-drama/render/wishes';
 import { centralCutoutRequests, cutoutSwaps, stageCutoutRequests, useCutouts, wishCutoutRequests, type CutoutRequest } from '@/lib/reel-ai-drama/harvest/cutouts';
 import { emptyTrace, noOpFlags } from '@/lib/reel-ai-drama/production/noop';
 import type { SoundCues } from '@/lib/reel-ai-drama/render/sound-design';
-import { sameVoices, type VoiceInput, type VoiceResult } from '@/lib/reel-ai-drama/render/voice';
+import { sameVoices, voicePronounce, type VoiceInput, type VoiceResult } from '@/lib/reel-ai-drama/render/voice';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type {
   Asset,
@@ -777,7 +777,8 @@ export async function runJob(deps: ProductionDeps, job: Job): Promise<RunOutcome
     const voiceInput: VoiceInput = {
       voiceId,
       heygenApiKey: deps.secrets.heygenApiKey,
-      pronounce: draft.pronounce ?? [],
+      // Researched names first (reporting); the writer's respellings cover everything else.
+      pronounce: voicePronounce(draft.pronounce, facts.cast),
       tempo: settings.voice_tempo,
       silentBeatMax: settings.silent_beat_max,
     };

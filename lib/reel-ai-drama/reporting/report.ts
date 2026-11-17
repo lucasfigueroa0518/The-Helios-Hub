@@ -15,8 +15,9 @@ import type { FactSheet, Mode, Pitch } from '@/lib/reel-ai-drama/types';
  * (validate.ts). `verdict.holds = false` kills the story (`facts_dont_hold`); the caller acts on it.
  */
 
-export const MAX_SEARCHES = 25;
-export const MAX_FETCHES = 30;
+// A few above the story's own research: how each cast name is said is looked up too (one or two searches a name).
+export const MAX_SEARCHES = 30;
+export const MAX_FETCHES = 35;
 export const MAX_CONTINUATIONS = 4;
 export const MAX_TOKENS = 32000;
 
@@ -73,6 +74,7 @@ export const SUBMIT_FACT_SHEET_TOOL = {
         background: nullableStr,
         later: nullableStr,
         context_fact_ids: strList,
+        pronounce: { type: 'array', items: obj({ word: str, say: str, source_id: str }) },
       }),
     },
     places: { type: 'array', items: obj({ name: str, address: nullableStr, lat: nullableNum, lon: nullableNum, role: str, fact_ids: strList }) },
