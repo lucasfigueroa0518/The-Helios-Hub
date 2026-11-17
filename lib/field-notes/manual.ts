@@ -41,3 +41,29 @@ export function queueManualFieldNotesRun(
   return queueFieldNotesRun(q, { kind: 'build', requestedBy, seedTipId: o.seedTipId ?? null });
 }
 
+/** Why Make it refuses a tip (shown as the button's note). */
+export const TIP_MAKE_REFUSALS = {
+  missing: 'That tip is not in Field Notes.',
+  archived: 'You archived that tip, so it stays out of the posts.',
+  used: 'That tip is not waiting any more (it is on a post, set aside or expired).',
+} as const;
+
+/**
+ * Make it on a chosen tip (Tommy, 2026-11-16: Field Notes runs like the other live types): queue one manual run that puts
+ * this tip first, the same run Generate queues (same cap check, one run at a time; the social worker runs it). The run
+ * fills the post's other slides from the queue. An archived or used tip is refused before anything is queued. Nothing
+ * here calls a model; the person's click approves the run's spend up to field_notes.settings.run_cap_usd.
+ */
+export async function queueTipFieldNotesRun(q: HubQuery, tipId: string, requestedBy: string | null): Promise<{ ok: boolean; note: string; capUsd: number | null }> {
+  const tip = await getTip(q, tipId).catch(() => null);
+  if (!tip) return { ok: false, note: TIP_MAKE_REFUSALS.missing, capUsd: null };
+  const { rows: archived } = await q(
+    `SELECT 1 FROM social_hub.idea_adjustments WHERE vertical = 'field_notes' AND idea_id = $1 AND kind = 'archive' LIMIT 1`,
+    [`field_notes:tip:${tipId}`],
+  ).catch(() => ({ rows: [] as unknown[] }));
+  if (archived.length) return { ok: false, note: TIP_MAKE_REFUSALS.archived, capUsd: null };
+  if (tip.status !== 'candidate') return { ok: false, note: TIP_MAKE_REFUSALS.used, capUsd: null };
+  const s = await readFieldNotesSettings(q);
+  const out = await queueFieldNotesRun(q, { kind: 'build', requestedBy, seedTipId: tipId });
+  return { ...out, capUsd: s.runCapUsd };
+}

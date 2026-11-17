@@ -1,5 +1,6 @@
 import type { Vertical } from '@/lib/social-hub/types';
-import type { MovesQuery } from '@/lib/social-hub/moves-store';
+import { readMoves, type MovesQuery } from '@/lib/social-hub/moves-store';
+import { EMPTY_NIGHT, nightQueue, type NightQueue } from '@/lib/social-hub/queue';
 
 /**
  * The write side of the idea pool standard (spec 2026-10-21-idea-pool-standard-design):
@@ -97,5 +98,19 @@ export async function finishNightPlacements(q: MovesQuery, vertical: Vertical, s
     await expireOldPlacements(q, vertical);
   } catch {
     // Degrade: the night's own result stands.
+  }
+}
+
+/**
+ * A night worker's read of its type's queue (pins, drags, archives), by native id (`prefix` stripped, e.g.
+ * `field_notes:tip:`), and when it was read (for finishNightPlacements). Never throws: an unreadable moves table is an
+ * empty queue, so the night runs as it did before the queue.
+ */
+export async function readNightQueue(q: MovesQuery, vertical: Vertical, prefix: string): Promise<NightQueue & { readAt: Date }> {
+  const readAt = new Date();
+  try {
+    return { ...nightQueue(await readMoves(q, vertical), prefix), readAt };
+  } catch {
+    return { ...EMPTY_NIGHT, placed: new Map(), archived: new Set(), demoted: new Set(), readAt };
   }
 }

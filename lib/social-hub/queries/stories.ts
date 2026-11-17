@@ -127,15 +127,19 @@ SELECT i.frame_id, i.captured_at::text AS captured_at, i.final, i.reach, i.views
   FROM stories.insights i
  ORDER BY i.frame_id, i.captured_at`;
 
-/** The open pool: what the next build of each series chooses from. */
-export const STORY_POOL_SQL = `
+const storyPoolSql = (live: string) => `
 SELECT p.id AS pool_id, p.series, p.key, p.origin, p.ref, p.title, p.payload->>'source' AS source,
        p.score, p.refreshed_at::text AS refreshed_at, p.payload->'breakdown' AS breakdown,
        CASE WHEN p.series = 'morning_download' THEN p.payload->'story' END AS story
   FROM stories.pool p
- WHERE p.used_at IS NULL
+ WHERE p.used_at IS NULL${live}
  ORDER BY p.series, p.score DESC NULLS LAST, p.title
  LIMIT 600`;
+
+/** The open pool: what the next build of each series chooses from. Rows the refresh archived (stale, not returned, over the cap) are not in it. */
+export const STORY_POOL_SQL = storyPoolSql(' AND p.archived_at IS NULL');
+/** The same before db/stories_pool_archive.sql adds archived_at (the refresh still deletes then). */
+export const STORY_POOL_LEGACY_SQL = storyPoolSql('');
 
 export async function readStories(q: HubQuery): Promise<StoriesRead> {
   const [sets, frames, insights, pool] = await Promise.all([
@@ -143,8 +147,11 @@ export async function readStories(q: HubQuery): Promise<StoriesRead> {
     q<StoryFrameRow>(STORY_FRAMES_SQL),
     q<StoryInsightRow>(STORY_INSIGHTS_SQL),
     // The pool table arrives with the schema (db/stories_schema.sql); until then the bench is empty, not the vertical broken.
-    q<StoryPoolRow>(STORY_POOL_SQL).catch((err: unknown) => {
-      if (/stories\.pool|does not exist/.test(err instanceof Error ? err.message : String(err))) return { rows: [] as StoryPoolRow[] };
+    q<StoryPoolRow>(STORY_POOL_SQL).catch(async (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      // No archive column yet: the pool as it was read before archiving (nothing is archived then).
+      if (/archived_at/.test(message)) return q<StoryPoolRow>(STORY_POOL_LEGACY_SQL).catch(() => ({ rows: [] as StoryPoolRow[] }));
+      if (/stories\.pool|does not exist/.test(message)) return { rows: [] as StoryPoolRow[] };
       throw err;
     }),
   ]);

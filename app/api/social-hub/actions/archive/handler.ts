@@ -12,7 +12,7 @@ import { parseTarget, type Parsed } from '../content-action';
  * posted is refused by the type's verb. Body: `{ vertical, refs, ideaId }` (`ideaId` null when the idea is gone).
  */
 
-const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days):[A-Za-z_]+:[^\s]{1,2000}$/;
+const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days|reel_ai_drama|field_notes|ai_events):[A-Za-z_]+:[^\s]{1,2000}$/;
 
 export type ArchiveBody = Parsed & { ideaId: string | null };
 

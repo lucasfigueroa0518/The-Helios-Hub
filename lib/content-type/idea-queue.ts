@@ -11,8 +11,10 @@ import { isUnscoredSeed } from '@/lib/reels/seeds';
  * drag's key from the neighbours the browser saw, never from a number the browser sends.
  */
 
-const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'reel_ai_drama'];
-const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days|reel_ai_drama):[A-Za-z_]+:[^\s]{1,2000}$/;
+// Field Notes (`field_notes:tip:<id>`), Last Few Days (`last_few_days:story:<key>`) and AI Events (`ai_events:event:<id>`)
+// take pins, drags and archives once config.ts has them on the live queue (Tommy, 2026-11-16).
+const VERTICALS: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'reel_ai_drama', 'field_notes', 'ai_events'];
+const IDEA_ID = /^(reels|carousels|explainers|stories|last_few_days|reel_ai_drama|field_notes|ai_events):[A-Za-z_]+:[^\s]{1,2000}$/;
 
 export type QueueAction =
   | { action: 'pin' | 'unpin' | 'archive'; vertical: Vertical; ideaId: string }

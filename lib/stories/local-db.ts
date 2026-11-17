@@ -16,6 +16,8 @@ export const SCHEMA_PATH = path.join(process.cwd(), 'db', 'stories_schema.sql');
 export const SPINE_SCHEMA_PATH = path.join(process.cwd(), 'db', 'social_hub_schema.sql');
 /** Drops the one-a-day index so a series can post twice a day (R25); run after the worker and hub deploy. */
 export const MULTI_SLOT_PATH = path.join(process.cwd(), 'db', 'stories_multi_slot.sql');
+/** The pool's archive column (Tommy, 2026-11-16: the refresh archives instead of deleting). */
+export const POOL_ARCHIVE_PATH = path.join(process.cwd(), 'db', 'stories_pool_archive.sql');
 export const DEFAULT_LOCAL_DIR = path.join(process.cwd(), '.stories-local', 'pgdata');
 
 /** A schema file minus psql meta-commands (`\set ...`), which PGlite cannot run. */
@@ -44,12 +46,14 @@ export function pgliteDb(pg: PGlite): StoriesDb {
  * Open PGlite and apply the schema (idempotent). `dataDir` undefined means in-memory.
  * `multiSlot` (default true) also applies db/stories_multi_slot.sql, the go-live state;
  * false keeps the one-a-day index, the state between the schema apply and that step.
+ * `poolArchive` (default true) also applies db/stories_pool_archive.sql; false is the state before it.
  */
-export async function openLocalStoriesDb(dataDir?: string, opts: { multiSlot?: boolean } = {}): Promise<{ db: StoriesDb; pg: PGlite }> {
+export async function openLocalStoriesDb(dataDir?: string, opts: { multiSlot?: boolean; poolArchive?: boolean } = {}): Promise<{ db: StoriesDb; pg: PGlite }> {
   if (dataDir) fs.mkdirSync(dataDir, { recursive: true });
   const pg = new PGlite(dataDir);
   await pg.exec(schemaSql());
   if (opts.multiSlot !== false) await pg.exec(schemaSql(MULTI_SLOT_PATH));
+  if (opts.poolArchive !== false) await pg.exec(schemaSql(POOL_ARCHIVE_PATH));
   await pg.exec(schemaSql(SPINE_SCHEMA_PATH));
   return { db: pgliteDb(pg), pg };
 }

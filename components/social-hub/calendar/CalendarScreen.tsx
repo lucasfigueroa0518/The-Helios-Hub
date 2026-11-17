@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Hand, TriangleAlert } from 'lucide-react';
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 
 import { Delta } from '@/components/social-hub/analytics/KpiStrip';
@@ -28,7 +29,7 @@ import { actionEnabled, SOCIAL_HUB_FLAGS } from '@/lib/social-hub/flags';
 import { withParams, type HubParams } from '@/lib/social-hub/links';
 import { metricSpec } from '@/lib/social-hub/metrics';
 import { addDays, dayLabel, isDayKey, monthLabel, monthOf, nyDateOf, shiftMonth, WEEKDAY_SHORT } from '@/lib/social-hub/time';
-import { isVertical, verticalInfo, VERTICAL_IDS } from '@/lib/social-hub/verticals';
+import { isVertical, typeHref, verticalInfo, VERTICAL_IDS } from '@/lib/social-hub/verticals';
 import { daySlots, monthModel, totalLabel, type DayCell, type DaySlot } from '@/lib/social-hub/views/calendar';
 import { displayName, plural, shortDate, whenInline } from '@/lib/social-hub/views/format';
 import { offerer } from '@/lib/social-hub/views/offer';
@@ -318,7 +319,7 @@ function DayList({ posts, day, types, now, o, base, carouselOff, slots: calendar
             <div className="sh-item__meta"><TypeMark vertical={s.vertical} /><span className="sh-state">Open slot</span></div>
             <span className="sh-item__name sh-muted">{s.window.label} · {windowRange(s.window)}</span>
           </div>
-          <ReadyFor posts={posts} slot={s} o={o} poolHref={`${base}/content/pools/${s.vertical}`} />
+          <ReadyFor posts={posts} slot={s} o={o} poolHref={typeHref(s.vertical, base)} />
         </li>
       ))}
     </ul>
@@ -334,7 +335,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
   if (ready.length === 0) {
     return (
       <p className="sh-item__ready-none sh-subtle">
-        Nothing of this type is made and waiting; tonight’s run fills open slots. <HubLink className="sh-link" href={poolHref}>See the pool</HubLink>
+        Nothing of this type is made and waiting; tonight’s run fills open slots. <Link className="sh-link" href={poolHref}>See the pool</Link>
       </p>
     );
   }
@@ -342,7 +343,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
   if (!actionEnabled('reschedule')) {
     return (
       <p className="sh-item__ready-none sh-subtle">
-        {plural(ready.length, 'post')} of this type {ready.length === 1 ? 'is' : 'are'} made and could go here once scheduling from the hub is on. <HubLink className="sh-link" href={poolHref}>See the pool</HubLink>
+        {plural(ready.length, 'post')} of this type {ready.length === 1 ? 'is' : 'are'} made and could go here once scheduling from the hub is on. <Link className="sh-link" href={poolHref}>See the pool</Link>
       </p>
     );
   }
@@ -361,7 +362,7 @@ function ReadyFor({ posts, slot, o, poolHref }: { posts: HubDataset['posts']; sl
           </li>
         ))}
       </ul>
-      <p className="sh-item__ready-more"><HubLink className="sh-link" href={poolHref}>See the whole pool</HubLink></p>
+      <p className="sh-item__ready-more"><Link className="sh-link" href={poolHref}>See the whole pool</Link></p>
     </details>
   );
 }

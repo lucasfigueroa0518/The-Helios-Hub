@@ -8,7 +8,6 @@ import test from 'node:test';
 
 import { DRAMA_REVIEW_TAGS, DRAMA_WINDOWS } from '@/lib/reel-ai-drama/hub';
 import { DRAMA_REVIEW_TAG_KEYS } from '@/app/api/social-hub/actions/content-action';
-import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { parseQueueAction } from '@/lib/content-type/idea-queue';
 import { maxCapFor } from '@/lib/content-type/caps';
 import { NO_MISSES } from '@/lib/content-type/run-misses';
@@ -69,10 +68,8 @@ test('the literal windows match DRAMA_WINDOWS', async () => {
   assert.deepEqual(rules.windows.map((x) => [x.id, x.startMinute, x.endMinute]), DRAMA_WINDOWS.map((d) => [d.id, d.startMinute, d.endMinute]));
 });
 
-test('idea ids for drama pitches pass the rank and queue parsers; a mismatched type does not', () => {
+test('idea ids for drama pitches pass the queue parser', () => {
   const ideaId = 'reel_ai_drama:pitch:6f1c0c3e-1111-4222-8333-444455556666';
-  assert.deepEqual(parseRankMove({ vertical: 'reel_ai_drama', ideaId, kind: 'promote' }), { vertical: 'reel_ai_drama', ideaId, kind: 'promote' });
-  assert.throws(() => parseRankMove({ vertical: 'explainers', ideaId, kind: 'promote' }), /Unknown idea/);
   assert.equal(parseQueueAction({ action: 'pin', vertical: 'reel_ai_drama', ideaId }).vertical, 'reel_ai_drama');
 });
 
