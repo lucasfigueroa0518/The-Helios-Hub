@@ -19,7 +19,9 @@ All budgets live in `perf/budgets.json`. A route with no entry gets the defaults
 ## Run it locally
 
 ```bash
-# once per machine: Postgres 16 with the full schema (loopback only)
+# once per machine: measurement tools (not devDependencies: the repo pins its
+# dependency files, tests/social-hub-scope.test.ts), and Postgres 16 with the full schema
+perf/tools.sh
 perf/db/setup-local.sh
 source perf/env.sh
 node perf/db/seed.mjs            # ~0.6 M synthetic rows (perf/db/volumes.json); --scale 0.5 for a faster run
