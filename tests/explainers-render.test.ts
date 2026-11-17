@@ -898,7 +898,7 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
   assert.match(brief, /## Analogy\n\nThe analogy the idea phase picked \(two writers, Jev's pick\)\. Stage the anchor scene from it; never swap in another\.\n\nName: A mailbox with a flag\n\nA letter drops in and the flag pops up\. You never walk out to look\.\n\n\| Analogy \| Concept \|\n\|---\|---\|\n\| the mailbox \| the webhook URL \|\n\| the flag popping up \| the notification \|\n\| walking over to look \| polling \|\n\nThe reel shows the first three or four rows\./);
   assert.doesNotMatch(brief, /Scene:|Elements:|Actor:|Hook \(|Steps \(/);
   // EX6-14 (D124): the default opener is silent, so the brief gives no line and says so.
-  assert.match(brief, /## Opener line\n\nSilent\. Frame 1 is the silent visual hook/);
+  assert.match(brief, /## Opener line\n\nSilent\. Frame 1 is the opener over the AI 101 card: no opener line/);
   assert.doesNotMatch(brief, /In the next minute/);
   // 'spoken' brings the line back; the opener's facts (EX3-130): an ai_focus under 2.5 is a tech concept.
   const spokenBrief = briefMarkdown({ title: 'What is an API?', scope: 'Explain an API call.', source_url: null, source_text: null, jev_notes: { ai_focus: 1.5 } }, null, null, { openerVoice: 'spoken' });
