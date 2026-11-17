@@ -22,6 +22,7 @@ import { pathToFileURL } from 'node:url';
 
 import { projectFrames } from './frames.mjs';
 import { loadLibrary } from './sfx-library.mjs';
+import { motionFor, offBeat, soundShape, syncTime } from './sync.mjs';
 
 export const LIBRARY = 'assets/sfx-library';
 export const OUT = 'assets/sfx/events.wav';
@@ -370,9 +371,12 @@ export function eventsToCues(frames, eventsById, catalog) {
  * Resolve cues to library sounds: rotating variants, level-matched, quieter under speech.
  * @param {any[]} catalog
  * @param {any[]} cues
- * @param {{ speech?: { start: number, end: number }[] }} [options]
+ * Each sound starts so that its measured hit lands on the cue's time: a whoosh's peak, any other
+ * sound's onset (`shapeOf(sound)` -> { onset, peak } seconds into the file; without it, a whoosh is
+ * assumed to peak 45% in and anything else to start at once). A pitched sound's hit moves by its rate.
+ * @param {{ speech?: { start: number, end: number }[], shapeOf?: (s: any) => ({ onset: number, peak: number } | null) }} [options]
  */
-export function resolveCues(catalog, cues, { speech = [], opener, state = varietyState({ opener }) } = {}) {
+export function resolveCues(catalog, cues, { speech = [], opener, state = varietyState({ opener }), shapeOf = () => null } = {}) {
   const out = [];
   const missing = [];
   for (const c of cues) {
@@ -385,13 +389,17 @@ export function resolveCues(catalog, cues, { speech = [], opener, state = variet
       continue;
     }
     const seed = (state.uses.get(sound.file) ?? 1) - 1;
-    const offset = k.at === 'peak' ? sound.duration * 0.45 : 0;
+    const shape = c.dur ? null : shapeOf(sound);
+    const hit = c.dur ? 0 : shape ? (k.at === 'peak' ? shape.peak : shape.onset) : k.at === 'peak' ? sound.duration * 0.45 : 0;
+    const offset = hit / (rate || 1);
+    // a hit earlier than the file's lead-in allows: cut the head instead of landing late
+    const head = offset > c.t ? r3((offset - c.t) * (rate || 1)) : 0;
     const underSpeech = speech.some((s) => c.t >= s.start && c.t <= s.end);
     const peak = Number.isFinite(sound.peakDb) ? sound.peakDb : REF_PEAK_DB;
     const level = Math.pow(10, Math.min(MAX_BOOST_DB, REF_PEAK_DB - peak) / 20);
     // A sustained event plays `dur` seconds of the bed, from a point that rotates with use.
     const trim = c.dur ? { from: r3(((seed * 1.37) % 1) * Math.max(0, sound.duration - c.dur)), len: r3(Math.min(c.dur, sound.duration)) } : null;
-    out.push({ ...c, sound, underSpeech, ...(trim ? { trim } : {}), ...(rate ? { rate } : {}), start: r3(Math.max(0, c.t - offset)), volume: r3(k.gain * (underSpeech ? UNDER_SPEECH : 1) * level) });
+    out.push({ ...c, sound, underSpeech, ...(trim ? { trim } : {}), ...(rate ? { rate } : {}), ...(head ? { head } : {}), hitAt: r3(c.t), start: r3(Math.max(0, c.t - offset)), volume: r3(k.gain * (underSpeech ? UNDER_SPEECH : 1) * level) });
   }
   return { resolved: out, missing, variety: varietyReport(out, state) };
 }
@@ -410,9 +418,10 @@ export function mixArgs(resolved, total, out, root) {
   resolved.forEach((r) => args.push('-i', join(root, r.sound.file)));
   const chains = resolved.map((r, i) => {
     const ms = Math.round(r.start * 1000);
+    const head = r.head && !r.trim ? `atrim=start=${r.head},asetpts=PTS-STARTPTS,afade=t=in:d=0.01,` : '';
     const trim = r.trim ? `atrim=start=${r.trim.from}:duration=${r.trim.len},asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=${Math.max(0, r3(r.trim.len - 0.12))}:d=0.12,` : '';
     const pitch = r.rate && r.rate !== 1 ? `asetrate=${Math.round(48000 * r.rate)},aresample=48000,` : '';
-    return `[${i}:a]${trim}aformat=sample_rates=48000:channel_layouts=stereo,${pitch}volume=${r.volume},adelay=${ms}|${ms}[a${i}]`;
+    return `[${i}:a]${head}${trim}aformat=sample_rates=48000:channel_layouts=stereo,${pitch}volume=${r.volume},adelay=${ms}|${ms}[a${i}]`;
   });
   const mix = `${resolved.map((_, i) => `[a${i}]`).join('')}amix=inputs=${resolved.length}:normalize=0:dropout_transition=0,alimiter=limit=0.89:level=false,apad=whole_dur=${total}[out]`;
   args.push('-filter_complex', [...chains, mix].join(';'), '-map', '[out]', '-t', String(total), '-ar', '48000', '-ac', '2', out);
@@ -438,7 +447,7 @@ export function withEventsTrack(meta, total) {
 }
 
 /** Design and place the reel's sound effects for the project at `root`. */
-export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
+export function placeSound(root, { ffmpeg = 'ffmpeg', motion } = {}) {
   const errors = [];
   const catalogFile = join(root, LIBRARY, 'catalog.json');
   if (!existsSync(catalogFile)) return { ok: false, errors: [`${LIBRARY}/catalog.json is missing`], events: 0, placed: 0, dropped: [] };
@@ -452,6 +461,9 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
   const total = r3(at);
   const eventsById = {};
   let events = 0;
+  // Every event sits on the motion it belongs to (sync.mjs measures each frame's picture).
+  const curves = motion ?? motionFor(root);
+  const synced = [];
   for (const f of frames) {
     const file = join(root, 'assets', 'frames', `${f.id}.events.json`);
     if (!existsSync(file)) continue;
@@ -459,7 +471,13 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
       const list = JSON.parse(readFileSync(file, 'utf8'));
       const problems = eventProblems(list, f.duration);
       if (problems.length) errors.push(...problems.map((p) => `${f.id}: ${p}`));
-      eventsById[f.id] = Array.isArray(list) ? list.filter((e) => eventProblems([e], f.duration).length === 0) : [];
+      eventsById[f.id] = (Array.isArray(list) ? list.filter((e) => eventProblems([e], f.duration).length === 0) : []).map((e) => {
+        const s = syncTime(curves[f.id]?.curve, e, curves[f.id]?.fps);
+        if (!s.moved) return e;
+        const t = r3(Math.min(Math.max(0, s.t), Math.max(0, f.duration - 0.05)));
+        synced.push({ frame: f.id, kind: e.kind, ...(e.what ? { what: e.what } : {}), from: e.t, to: t });
+        return { ...e, t };
+      });
       events += eventsById[f.id].length;
     } catch (e) {
       errors.push(`${f.id}.events.json is not valid JSON: ${e?.message ?? e}`);
@@ -470,10 +488,11 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
   const { cues, dropped } = eventsToCues(frames, eventsById, catalog);
   const ids = new Set(catalog.map((s) => s.id));
   const unknown = [...new Set(cues.filter((c) => c.sound && !ids.has(c.sound)).map((c) => c.sound))];
-  const { resolved, missing, variety } = resolveCues(catalog, cues, { speech: speechIntervals(frames, meta.voices), opener: openerContext(meta, catalog, frames) });
+  const { resolved, missing, variety } = resolveCues(catalog, cues, { speech: speechIntervals(frames, meta.voices), opener: openerContext(meta, catalog, frames), shapeOf: (s) => soundShape(join(root, LIBRARY, s.file), ffmpeg) });
   for (const m of missing) dropped.push({ frame: '', event: m, why: 'no library sound for this search' });
   if (unknown.length) variety.unknownSounds = unknown; // chosen by kind and words instead
-  if (resolved.length === 0) return { ok: errors.length === 0, errors, events, placed: 0, dropped, variety };
+  const sync = { measured: Object.keys(curves).length, moved: synced };
+  if (resolved.length === 0) return { ok: errors.length === 0, errors, events, placed: 0, dropped, variety, sync };
 
   mkdirSync(join(root, 'assets', 'sfx'), { recursive: true });
   const res = spawnSync(ffmpeg, mixArgs(resolved, total, join(root, OUT), join(root, LIBRARY)), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -482,7 +501,8 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
     return { ok: false, errors, events, placed: 0, dropped };
   }
   writeFileSync(metaFile, `${JSON.stringify(withEventsTrack(meta, total), null, 2)}\n`);
-  return { ok: errors.length === 0, errors, events, placed: resolved.length, dropped, variety };
+  sync.offBeat = offBeat(join(root, OUT), resolved, ffmpeg);
+  return { ok: errors.length === 0, errors, events, placed: resolved.length, dropped, variety, sync };
 }
 
 /**
