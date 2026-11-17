@@ -116,11 +116,18 @@ export const PICTURE_GRID_EXTRA =
 export const GRID_INTRO =
   'Each image is a contact grid: every frame is a block headed by its id, its stills in play order left to right (the time in each corner), the first of each shot just after a cut. Read each block as one sequence of consecutive moments of that frame.';
 
+/**
+ * The vision call's output cap. 4,000 was hit on every call in the hx8 renders (2026-11-17): the
+ * model's thinking used it up before any JSON, so the check fell back to the slower agent. The JSON
+ * itself is ~3–5k tokens for eight frames; the rest is room to think.
+ */
+export const PICTURE_GRID_MAX_TOKENS = 16000;
+
 /** The one vision call's request: the instructions are the cached prefix; the grids and lines follow. */
 export function pictureGridParams(model: string, frames: ManifestFrame[], jpegs: Buffer[]): Anthropic.MessageCreateParamsNonStreaming {
   return {
     model,
-    max_tokens: 4000,
+    max_tokens: PICTURE_GRID_MAX_TOKENS,
     system: cachedSystemText([PICTURE_CHECK_VIEWER, GRID_INTRO, PICTURE_CHECK_QUESTIONS, PICTURE_GRID_EXTRA].join(' ')),
     messages: [
       {
@@ -142,8 +149,10 @@ export type PictureVision = (params: Anthropic.MessageCreateParamsNonStreaming) 
 
 export function anthropicPictureVision(client: Anthropic): PictureVision {
   return async (params) => {
-    const message = await client.messages.create(params);
+    // streamed: a long reply on a non-streaming call can hit the SDK's request timeout
+    const message = await client.messages.stream(params).finalMessage();
     const text = message.content.map((b) => (b.type === 'text' ? b.text : '')).join('\n');
+    if (message.stop_reason === 'max_tokens' && !text.includes('{')) throw new Error(`the vision reply hit max_tokens (${params.max_tokens}) before any JSON`);
     const usd = Number(priceAnthropicUsage(usageBucketsFromMessage({ usage: message.usage }, '1h'), { modelId: message.model }).costUsd);
     return { text, model: message.model, usage: message.usage, usd };
   };

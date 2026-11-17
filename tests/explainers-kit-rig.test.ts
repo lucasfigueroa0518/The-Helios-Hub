@@ -43,17 +43,19 @@ test('act: reach targets the near hand, leans toward effort and away from fear, 
   const r = act({ reach: [150, -150], effort: 0.8 });
   assert.ok(r.tilt > 0, 'leans toward the reach');
   assert.ok(r.look[0] > 0 && r.look[1] < 0, 'looks up and to the right');
-  // the lean is undone for the target: the drawn hand lands on the reach target (or the reach limit toward it)
+  // hx-6: the rig aims the hand at the target; critter D's stub decides the length (D_STUB), so the
+  // drawn mitten points toward the reach without stretching to it
   const h = handAt(0, 0, r).r;
-  const toT = Math.hypot(150 - h[0], -150 - h[1]);
-  assert.ok(toT < 40, `hand near the target (${toT.toFixed(1)})`);
+  const rest = handAt(0, 0, { ...r, arms: 'down' }).r;
+  assert.ok(Math.hypot(150 - h[0], -150 - h[1]) < Math.hypot(150 - rest[0], -150 - rest[1]) - 20, 'the hand moves toward the target');
   const rec = act({ recoil: [200, -100] });
   assert.ok(rec.tilt < 0, 'leans away from a threat on the right');
   assert.equal(rec.mood, 'surprised');
   // screen targets with a frame: same intent from a flipped critter at (500, 800)
   const f = act({ reach: [500 - 120, 800 - 90] }, { x: 500, y: 800, flip: true });
   const hf = handAt(500, 800, { ...f, flip: true });
-  assert.ok(Math.min(d(hf.l, [380, 710]), d(hf.r, [380, 710])) < 1, 'a flipped critter reaches a screen point');
+  const hf0 = handAt(500, 800, { ...f, arms: 'down', flip: true });
+  assert.ok(Math.min(d(hf.l, [380, 710]), d(hf.r, [380, 710])) < Math.min(d(hf0.l, [380, 710]), d(hf0.r, [380, 710])) - 20, 'a flipped critter reaches toward a screen point (D\'s stub decides the length)');
 });
 
 test('moods never override arms; an explicit arms option or intent always wins', async () => {
@@ -68,15 +70,13 @@ test('moods never override arms; an explicit arms option or intent always wins',
   assert.deepEqual(solveArms(o).hands, solveArms({ ...o, mood: 'neutral' }).hands);
 });
 
-test('every face draws eyes, brows and a mouth; neutral is calm, not blank', async () => {
+test('every face draws critter D\'s two eyes; mouth and brows are accepted and ignored (hx-6)', async () => {
   const { cast } = await kit();
   const { critter, MOODS, riggedProblems } = cast;
-  const strokes = (svg: string) => (svg.match(/stroke-width="5\.5"/g) ?? []).length;
-  const mouths = (svg: string) => (svg.match(/stroke-width="5\.2"|<ellipse[^>]*rx="9" ry="11"|Q 0 18 20 -6 Z/g) ?? []).length;
   for (const mood of [...Object.keys(MOODS), undefined]) {
     const svg = critter(0, 0, mood ? { mood } : {});
-    assert.equal(strokes(svg), 2, `${mood ?? 'no mood'}: two brows`);
-    assert.ok(mouths(svg) >= 1, `${mood ?? 'no mood'}: a mouth`);
+    assert.equal((svg.match(/<ellipse cx="(74|126)" cy="96"/g) ?? []).length, 2, `${mood ?? 'no mood'}: two eyes`);
+    assert.ok(!/stroke-width="5\.[25]"/.test(svg), `${mood ?? 'no mood'}: no brows or mouth`);
   }
   assert.equal(MOODS.neutral.mouth, 'calm');
   assert.equal(MOODS.neutral.brows, 'calm');
@@ -171,19 +171,15 @@ test('outfits: the apron reads as a kitchen; scrub-colored sleeves under it are 
 
 // ── 4.1 Phase 2: bodies, views, the resting hand ────────────────────────────────────────────
 
-test('bodies: the light palette bodies draw soft-3D in their own color; an unknown body throws', async () => {
+test('bodies: critter D\'s four flat bodies; main\'s paper and light bodies draw white; an unknown body throws (hx-6)', async () => {
   const { cast } = await kit();
-  const D: any = await import('../explainers/world-kit/draw.js');
-  assert.deepEqual([...cast.BODIES].sort(), ['blue', 'green', 'ink', 'lilac', 'orange', 'paper', 'teal', 'yellow']);
-  const inkSvg = cast.critter(0, 0, { body: 'ink' });
-  for (const b of ['yellow', 'blue', 'teal', 'lilac', 'green']) {
-    const svg = cast.critter(0, 0, { body: b });
-    assert.notEqual(svg, inkSvg, `${b} is not ink`);
-    assert.ok(svg.includes(D.T[`${b}-lit`]) && svg.includes(D.T[b]), `${b} is shaded from its own ramp`);
-    assert.equal(cast.bodyOf(b).base, D.T[`${b}-lit`]);
+  assert.deepEqual([...cast.BODIES].sort(), ['blue', 'green', 'ink', 'lilac', 'orange', 'paper', 'teal', 'white', 'yellow']);
+  for (const [b, hex] of [['orange', '#FF5E1A'], ['green', '#138510'], ['ink', '#171717'], ['white', '#FFFFFF'], ['paper', '#FFFFFF'], ['blue', '#FFFFFF']]) {
+    assert.ok(cast.critter(0, 0, { body: b }).includes(`rx="46" fill="${hex}"`), `${b} draws ${hex}`);
+    assert.equal(cast.bodyOf(b).base, hex);
   }
   assert.throws(() => cast.critter(0, 0, { body: 'red' }), /body "red" must be one of/);
-  assert.throws(() => cast.critter(0, 0, { body: 'purple' }), /must be one of .*yellow/);
+  assert.throws(() => cast.critter(0, 0, { body: 'purple' }), /must be one of orange, green, ink, white/);
 });
 
 test('views (4.2): front or back only; back turns it away and is never flagged; three-quarter is gone and says so', async () => {
@@ -194,8 +190,8 @@ test('views (4.2): front or back only; back turns it away and is never flagged; 
   // a flipped critter told side 'right' still turns right on screen
   assert.equal(cast.viewOf({ view: 'back', side: 'right', flip: true }).k, -1);
   assert.equal(cast.viewOf({ view: 'back', flip: true }).k, 1, 'no side: forward');
-  // the back: no mouth or brows of the front face, the lost profile, the apron's bow, data-view
-  assert.ok(back.includes('data-view="back"') && back.includes('data-face="lost-profile"'));
+  // the back (hx-6): critter D's tile with no eyes, data-view
+  assert.ok(back.includes('data-view="back"') && !/cy="96"/.test(back));
   assert.ok(!back.includes('data-outfit="front"'), 'no front garment layer');
   assert.deepEqual(cast.riggedProblems({ body: 'paper', view: 'back', arms: 'hold', hold: { both: 'box' } }), []);
   assert.ok(!/data-rig=/.test(back));

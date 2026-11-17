@@ -1,7 +1,7 @@
 // The close's timing and sound (Explainers 3.3, EX3-95), shared by the close itself (close.js,
 // in the browser) and the Node tools that pace, write and check it. No imports.
 //
-// 2.5s, no voice: the Helios logo animates in at the centre of the screen, then "AI BRAIN BREAK"
+// 2.5s, no voice: the Helios logo animates in at the centre of the screen, then "AI 101"
 // writes itself beneath it in the kit's print handwriting, then a still hold to read.
 
 export const CLOSE = {

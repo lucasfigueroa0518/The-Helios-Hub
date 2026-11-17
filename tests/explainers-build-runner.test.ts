@@ -84,7 +84,7 @@ test('cost fix 1: code runs the build in order, by look, with each one fix round
   const out = await runBuild({ projectDir: dir, voiceId: 'v1', dispatch: dispatch as never, overCap: () => false, log: () => undefined, exec });
 
   // the order of work (SKILL.md Steps 3.1–6)
-  const order = ['audio.mjs', 'audio.mjs sync-durations', 'pace.mjs', 'music.mjs', 'music.mjs', 'opener-sfx.mjs', 'frame-packets.mjs', 'try.mjs world', 'try.mjs props', 'try.mjs world', 'try.mjs props', 'try.mjs world', 'pace.mjs handoff', 'mount.mjs', 'try.mjs all', 'bounds.mjs all', 'mount.mjs 05-payoff', 'try.mjs all', 'bounds.mjs all', 'sound.mjs', 'sound.mjs', 'captions.mjs build', 'assemble-index.mjs', 'transitions.mjs inject', 'transitions.mjs verify', 'hyperframes lint', 'hyperframes check'];
+  const order = ['audio.mjs', 'audio.mjs sync-durations', 'pace.mjs', 'music.mjs', 'music.mjs', 'opener-sfx.mjs', 'frame-packets.mjs', 'try.mjs world', 'try.mjs props', 'try.mjs world', 'try.mjs props', 'try.mjs world', 'pace.mjs handoff', 'mount.mjs', 'try.mjs all', 'bounds.mjs all', 'mount.mjs 05-payoff', 'try.mjs all', 'bounds.mjs all', 'sound.mjs', 'sound.mjs', 'caption-scrim.mjs', 'captions.mjs build', 'assemble-index.mjs', 'transitions.mjs inject', 'transitions.mjs verify', 'hyperframes lint', 'hyperframes check'];
   assert.deepEqual(steps, order);
   // the scene builder: first, then once with the exact errors, then once with the world request
   const scene = dispatched.filter((d) => d.agent === 'scene-builder');
@@ -92,10 +92,10 @@ test('cost fix 1: code runs the build in order, by look, with each one fix round
   assert.match(scene[0].prompt, /^Build the reel's world\. Read \.claude\/skills\/helios-explainer-director\/scene-builder\.md and follow it\./);
   assert.match(scene[1].prompt, /world: VIEWS is missing/);
   assert.match(scene[2].prompt, /04-analogy: pose puppy: sits with its head tilted/);
-  // frames 1, 2, 4, 5, 6, 7 by look (never 3 or 8), packets inline
+  // frames 2, 4, 5, 6, 7 by look (never 1, 3 or 8: code's, hx-6), packets inline
   const firsts = dispatched.filter((d) => d.agent !== 'scene-builder' && !/Your module|missing|added what you asked|Rewrite your events|finalize/.test(d.prompt));
-  assert.deepEqual(firsts.map((d) => /packet \(\.hyperframes\/frame-packets\/([\w-]+)\.md\)/.exec(d.prompt)![1]), ['01-opener', '02-define', '04-analogy', '05-payoff', '06-example', '07-tie']);
-  assert.deepEqual(firsts.map((d) => d.agent), ['frame-worker-scene', 'frame-worker-tech', 'frame-worker-scene', 'frame-worker-scene', 'frame-worker-tech', 'frame-worker-scene']);
+  assert.deepEqual(firsts.map((d) => /packet \(\.hyperframes\/frame-packets\/([\w-]+)\.md\)/.exec(d.prompt)![1]), ['02-define', '04-analogy', '05-payoff', '06-example', '07-tie']);
+  assert.deepEqual(firsts.map((d) => d.agent), ['frame-worker-tech', 'frame-worker-scene', 'frame-worker-scene', 'frame-worker-tech', 'frame-worker-scene']);
   assert.ok(firsts.every((d) => d.prompt.includes('ROLE TEXT') && /PACKET \d\d-/.test(d.prompt) && /never Read them/.test(d.prompt)));
   assert.ok(!dispatched.some((d) => /frame-packets\/0[38]-/.test(d.prompt)), 'never frame 3 or 8');
   // re-dispatches: the missing events file, the world request, the check round (with try's exact error), the dropped sounds (two or more)

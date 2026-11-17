@@ -5,20 +5,21 @@ description: >
   The tools layer of a Helios Explainer Reel: the frame and its safe area, the palette tokens and type
   styles the kit resolves, the world kit's API (what it builds and how to call it), and the build
   checks code runs. No taste: craft.md teaches how to choose, house-style.md holds what Helios has
-  chosen, minimums.md what every reel must contain. Decisions: planning/Explainer Reels/DECISIONS.md.
+  chosen, minimums.md what every reel must contain. Decisions: planning/Explainer Reels/DECISIONS.md;
+  visual system 6: planning/Explainer Reels/VISUAL_SYSTEM_6.md.
 unit: the frame — 1080×1920 (9:16); every scene is SVG in frame pixels, every world entity placed in centimetres
 
 colors:
-  paper: "#F4EFE7"
-  paper-lit: "#FEF9F3"
-  paper-shade: "#DCD5C9"
-  paper-dark: "#CAC1B3"
+  paper: "#F3F0EA"
+  paper-lit: "#FBFAF6"
+  paper-shade: "#E2DACB"
+  paper-dark: "#CFC5B3"
   paper-sweep: "#EFE9DF"
   canvas: "#FFFFFF"
-  ink: "#1F1915"
-  ink-lit: "#322D29"
-  ink-shade: "#150E08"
-  ink-dark: "#0B0401"
+  ink: "#171717"
+  ink-lit: "#2B2926"
+  ink-shade: "#101010"
+  ink-dark: "#0A0A0A"
   text-secondary: "#525252"
   text-tertiary: "#737373"
   orange: "#FF5E1A"
@@ -30,26 +31,49 @@ colors:
   green-lit: "#5D9831"
   green-shade: "#036A29"
   green-dark: "#013D1F"
-  yellow: "#F1C45E"
-  yellow-lit: "#FFDFB2"
-  yellow-shade: "#CFAE45"
-  yellow-dark: "#99862B"
-  blue: "#5A98CB"
-  blue-lit: "#82AFDF"
-  blue-shade: "#3E81AF"
-  blue-dark: "#17597B"
-  teal: "#57AFAF"
-  teal-lit: "#80C7BF"
-  teal-shade: "#3D959B"
-  teal-dark: "#1D6972"
-  lilac: "#A482BE"
-  lilac-lit: "#BF9BCE"
-  lilac-shade: "#886BA6"
-  lilac-dark: "#5B4778"
-  red: "#CA5551"
-  red-lit: "#DB7867"
-  red-shade: "#AD3D42"
-  red-dark: "#771929"
+  yellow: "#E0AB3E"
+  yellow-lit: "#F3C65E"
+  yellow-shade: "#C38F29"
+  yellow-dark: "#8F6418"
+  blue: "#6684B0"
+  blue-lit: "#86A1C8"
+  blue-shade: "#4F6B94"
+  blue-dark: "#34496A"
+  teal: "#46978F"
+  teal-lit: "#5DB5AE"
+  teal-shade: "#357A74"
+  teal-dark: "#24534F"
+  lilac: "#6684B0"
+  lilac-lit: "#86A1C8"
+  lilac-shade: "#4F6B94"
+  lilac-dark: "#34496A"
+  red: "#B4473A"
+  red-lit: "#D27665"
+  red-shade: "#91372D"
+  red-dark: "#5F231C"
+  slate: "#6684B0"
+  slate-lit: "#86A1C8"
+  slate-shade: "#4F6B94"
+  slate-dark: "#34496A"
+  mustard: "#E0AB3E"
+  mustard-lit: "#F3C65E"
+  mustard-shade: "#C38F29"
+  mustard-dark: "#8F6418"
+  wood: "#9A7250"
+  wood-lit: "#B48A62"
+  wood-shade: "#7E5B3E"
+  wood-dark: "#5E432D"
+  leaf: "#5F8F48"
+  leaf-lit: "#7FAE62"
+  leaf-shade: "#4A7438"
+  leaf-dark: "#355428"
+  wall: "#F1E9DA"
+  wainscot: "#E4D8C3"
+  trim: "#CDBFA6"
+  floor: "#E2DACB"
+  board: "#D3C9B6"
+  window: "#BFD3EC"
+  white: "#FFFFFF"
   stage-top: "#161616"
   stage-bottom: "#0B0B0B"
   stage-orange: "#FF6A2A"
@@ -106,9 +130,12 @@ sections below for the calls):
 - **Moods:** day, evening, night and dark, per frame, in a colour script; lamps, windows, screens and
   signs as practical lights; light that moves (a wedge through a door, a glint, a glow, a level
   change). § Light and mood.
-- **Critters:** any role, its outfit drawn for the role; seen from the front or the back; acting by
-  intent (reach, point, hold, carry, inspect, look at, recoil, walk, gestures) with a face for every
-  mood; props held in a hand. § Critters.
+- **Critters:** critter D in four bodies, each in one of the kit's roles (a head piece and a hand
+  prop) or bare; seen from the front or the back; acting by intent (reach, point, hold, carry,
+  inspect, look at, recoil, walk, gestures) with a pose for every mood; props held in a hand.
+  § Critters, § Roles.
+- **The analogy room:** a front-on room on the `room` ground, flat, with the drawn library's
+  animals and organic things and a dusk room for dark beats. § The analogy room.
 - **Objects:** 18 real things with states and one accent part (laptop, phone, tablet, screen, server,
   rack, chip, database, router, cloud, document, folder, envelope, box, key, lock, card, speaker); an
   element that travels between them (a request, a packet, a file, a message, or any object, small);
@@ -133,10 +160,11 @@ sections below for the calls):
   centimetres (x right, y away from the camera, z up).
 - **Keep-outs** (Instagram, measured in the app): y 0–250 (the Reels header), y 250–570 (the caption
   band), y 1600–1920 (the username, caption and audio line), x 940–1080 (the action buttons).
-- **Safe area:** x 96–940, y 570–1600 (`SAFE` in `explain.js` and `lens.js`). Text a viewer reads,
-  and every subject, lands and holds inside it; the world may run full-bleed behind the keep-outs.
-  `framingProblems` (lens.js), `placeInSafe(part)`, `fitToSafe(box)` and `safeProblems(boxes)`
-  (explain.js) measure it.
+- **Safe area:** x 96–940, y 570–1600 (`SAFE` in `explain.js`, `lens.js` and `layout.js`). Text a
+  viewer reads, and every subject, lands and holds inside it; the world may run full-bleed behind the
+  keep-outs. `framingProblems` (lens.js), `placeInSafe(part)`, `fitToSafe(box)` and
+  `safeProblems(boxes)` (explain.js) measure it; `layout.js` places into it (§ Solids, labels and
+  drawing: placed text).
 
 ## Colours
 
@@ -147,6 +175,12 @@ draws from them, at any opacity. `resolveTone(name)` and `toneHex(name)` (`core.
 or ramp name (`toneNames()` lists them; `TONE_ALIASES` reads `white` as `canvas`); `set.js` `tone()`
 also takes a `MATERIALS` name. An unknown name throws with the allowed list; a scene never writes a
 hex of its own.
+
+The families (visual system 6, `planning/Explainer Reels/VISUAL_SYSTEM_6.md` § 2): `slate` (systems)
+and `mustard` (data and key objects) carry the same values as the older names `blue` and `yellow`,
+which still draw; `lilac` is retired and draws in the slate values; `teal` is the payoff, `red` small
+accents, `wood` furniture, `leaf` plants; `wall`, `wainscot`, `trim`, `floor`, `board`, `window` and
+`white` are single room tones. Which family goes on what is `house-style.md` § Palette and orange.
 
 ## Type
 
@@ -162,10 +196,14 @@ hex of its own.
 ## Grounds
 
 `GROUNDS` (`core.js`): `paper` (the studio sweep, its key light top right), `stage` (the premium lit
-stage) and `white` (the close). `night` and `forest` are read as `stage` (`GROUND_ALIASES`). A frame
+stage), `room` (the analogy frames' ground: clean paper with the faint 72 px drafting grid, no grain,
+§ The analogy room) and `white` (the close). No ground draws grain. `night` and `forest` are read as `stage` (`GROUND_ALIASES`). A frame
 module's `ground` equals its storyboard `ground:`, and `scope(prefix, ground)` (`draw.js`) sets it.
 A mood carries its ground: `mood(name).ground` is `paper` for day and evening and `stage` for night
-and dark, so a frame's `ground:` is the one its mood in the colour script gives.
+and dark, so a frame's `ground:` is the one its mood in the colour script gives; an analogy frame
+(the anchor scene's `look: world` frames that stage the analogy) is `room` in every mood (its dark
+beat is the dusk room, § The analogy room). Blend, mechanism and real-example frames keep `paper` or
+`stage`.
 
 ## The frame module
 
@@ -215,30 +253,14 @@ export default {
   `not`), drawn with `propFrom(NEW_PROPS, name, x, y, { s, state, focal, flip })` (`props.js`).
 - **Events:** `assets/frames/<frame id>.events.json`, § Sound events.
 
-### The hook module (frame 1)
-Frame 1's storyboard `src` is `01-opener`: code writes `01-opener.js`, which plays the opener named
-in `assets/opener.json` over the hook, and its timing file is `assets/timing/01-opener.json`. The
-builder writes only `assets/frames/01-hook.js` (snap id `01-hook`), with no events file:
-
-```js
-export const shots = [ /* camera shots with no move, so the opener can find the hero on the page */ ];
-/** The hook's critter hero: its world id, its CAST look, and its static lens (the shot's camera as P,
- *  its feet in cm, the shot's rig). A hero not drawn with critterAt() exports { at, s, box }
- *  instead of lens; an object-led reel ("hero": "object" in assets/opener.json) exports no hero. */
-export const hero = { who: HERO_ID, critter: CAST[HERO_ID], lens: { P: HOOK_LENS, at: LAYOUT[HERO_ID].at, rig: HOOK_RIG } };
-export default {
-  ground: GROUND,
-  shots,
-  draw(t, { hideHero = false, heroPose = {} } = {}) { /* heroPose goes last into the hero's critter options */ },
-};
-```
-
-The opener uncovers the hook at `HOOK_REVEAL` (`openers/bank.js`); `t` runs from the frame's start.
+### The opener (frame 1)
+Frame 1 is code's: its storyboard `src` is `01-opener`, and code writes `01-opener.js` (the opener
+named in `assets/opener.json`) and `01-hook.js` (the AI 101 card it lands on). Nobody builds frame 1.
 
 ### The hand-off (frame 3)
 Code writes `03-handoff.js` and its events from `assets/handoff.json` (the job's pick from the
-hand-off bank, `handoff-bank.js`): `handoffFrame()` (`handoff.js`) draws the card "today's AI Brain
-Break: <term>", which appears with its first words, over frame 4's first shot (frame 4's own
+hand-off bank, `handoff-bank.js`): `handoffFrame()` (`handoff.js`) draws the card "today's AI
+Lesson: <term>", which appears with its first words, over frame 4's first shot (frame 4's own
 `draw(0)`: its camera, place and object states), so the cut into frame 4 continues the picture; it
 renders the storyboard's `handoff_parts:` (`LENS` ids) on their own. Code rewrites `03-handoff.js`
 once frame 4 is built. Nobody builds frame 3. Without a frame 4 it draws the world's first `VIEWS`
@@ -278,9 +300,22 @@ into constants.
   `shotFrame(t, shots, (shot, local, i, { P }) => parts)` draws the frame under its shot list;
   `shotAt(t, shots)` and `shotLensAt(shot, local, length)` give the shot and its camera at a moment.
   `inShot(shot, id)` and `castItems(shot, items)` keep a shot to its `cast`.
-- **HARD CONSTRAINT — the locked set** (`setlock.js`): every shot of a place draws that place's
-  dressing with `dressedItems(world, place, P, R, { t, states, poses })` among its `render()` items
-  (a `cast` never drops them). A shot changes a dressing object's state (`states[id]`: open, lit,
+- **The kit frames each camera shot for you** (`scene-fit.js`, applied to the render and the try
+  alike): state the shot's `kind` and `subject`, and the kit fits the camera so the subject is whole
+  inside the safe area (x 96–940, y 570–1600) at its kind's size (it slides the picture, or aims at
+  the subject and dollies), turns it around the subject (15–45°, or higher) when a nearer thing
+  hides it, and moves a thing that would appear within 0.3 s after a cut to the cut itself. Aim the
+  camera roughly; do not hand-tune offsets. Opt a shot out with `fit: false` (or `fit: { orbit:
+  false }`, `fit: { frame: false }`), a cut with `popIn: false`.
+- **HARD CONSTRAINT — a critter stays in its place:** a critter a shot of a place casts is in the
+  cast of every later shot of that place until a shot lists it in `away: [<id>]` (it left on
+  screen); `shotFrame` keeps it drawn whatever a cast says (an object an earlier shot cast too), so
+  the camera, not the cast, decides what shows. In an insert or a close it reads one way: whole, or as a glimpse of its body at the
+  frame's edge with the set hiding its legs and its head out of frame; never cut through the face.
+- **HARD CONSTRAINT — the locked set** (`setlock.js`): every camera shot of a place draws that
+  place's whole `DRESSING`: `render()` adds any piece you did not pass, at its declared spot and state.
+  Call `dressedItems(world, place, P, R, { t, states, poses })` only to change a piece's state or pose;
+  `undress: [<id>]` on a shot leaves a piece out there (rare). A shot changes a dressing object's state (`states[id]`: open, lit,
   plugged) or pose, never adds or drops one; a `STORY` object enters or leaves inside a shot, on screen.
 - **HARD CONSTRAINT — the fill:** in every frame the subject covers about 25–50% of the frame. A lone
   small object on an empty ground never holds for more than 1 s: bring the camera in, or show the
@@ -290,8 +325,17 @@ into constants.
 - **HARD CONSTRAINT — nothing is glimpsed:** every thing the viewer sees (a critter, an object, an
   icon, a card) stays on screen at least 1.2 s, its first look included: a thing that turns into another
   shows its first form for 1.2 s before the change. Show it long enough to read, or leave it out (`brief`).
-- **A crop shot** (flat frames): `{ at, kind, on: [x, y], zoom?, push? }`, `on` the subject's point in
-  the drawing at zoom 1, placed at `SUBJECT_AT` (x 518, y 1085); `push` ≤ 1.2.
+- **A crop shot** (flat frames): `{ at, kind, on: [x, y], zoom?, push?, picture? }`, `on` the
+  subject's point in the drawing at zoom 1, placed at `SUBJECT_AT` (x 518, y 1085); `push` ≤ 1.2.
+  A shot that draws its own composition (each shot laid out for its own frame) names it with
+  `picture: '<name>'`: a cut to another picture is a cut to a new subject. Shots that reframe one
+  drawing share a `picture` (or none).
+- **The cut rule is the kit's** (`snapCuts`, applied by `shotFrame`): on the same picture or subject
+  a cut goes in to at least 2× or out to at most ½. Declare each shot's kind and the size it is
+  composed for; when a cut is short of 2×, the kit pulls the wider shot of the two back (a crop's zoom,
+  never below 1; a camera along its line to the subject, the angle kept), and the tighter shot keeps
+  your size. A cut it cannot fix that way (two zooms near 1) is reported: name each composition with
+  `picture`, or compose the close for a real close (at least 2× the shot before it).
 - **The isometric camera** (`space.js`): `scene({ ppcm, origin, P })`, `plane(at, origin, u, v)`,
   `depthSort(items)`; no parallax and no focus (`frame()` throws on them).
 - **Seams** (`seams.js`): `zoomThrough(t, dur, { at, to })` on an outgoing frame's last moments and
@@ -315,13 +359,12 @@ into constants.
 | `LENS` | `{ <entity id>: (P, R, state, pose) => ({ id, at, svg }) }`; `''` when off stage |
 | `DRESSING` | `{ <place id>: [{ id, at, state? }] }`: each place's set dressing, declared once (`LENS` or `OBJ` ids) |
 | `STORY` | `[<id>]`: the objects that enter or leave on screen (never in `DRESSING`) |
-| `CAST` | `{ <critter id>: { body, outfit, view } }` |
-| `LAYOUT` | `{ <entity id>: { at: [x, y, z], face? } }` |
+| `CAST` | `{ <critter id>: { body, role, view } }` (`role` a `ROLES` name or `'bare'`; an older `outfit` is read as a role, § Roles) |
+| `LAYOUT` | `{ <entity id>: { at: [x, y, z], face? } }`; a thing a critter handles sits within reach of its spot (`reachProblems`, § Critters) |
 | `SIZES` | `{ <entity id>: { w, d, h, scale? } }` in cm; `scale` is `'cheat'` or a factor |
 | `ENTITIES` | `{ <entity id>: '<the real part it stands for>' }` |
 | `STATES` | each variable's start value and its value at the end of each beat |
 | `STEPS` | `[{ analogy, technical }]`, in order |
-| `HOOK` | the picked hook, in one line |
 
 `assets/world/identity.js` default-exports `identity({ <conceptId>: { icon?, color?, shape?, label?,
 object?, tone? } })` (`explain.js`), one entry per concept, each in one or both forms:
@@ -373,6 +416,26 @@ orange. It returns the registry `reg` (§ Mechanism primitives). A mapped concep
   `{ by, shots, at(t), cutAt, end, dir, path }`: camera shots to put in the frame's list, and where the
   traveller is at frame time `t` (`{ place, pos, heading, flip, view, walking, u }`).
 
+## The analogy room
+
+The analogy frames' tools (`house-style.md` § The analogy frame says when):
+
+- `frontCamera({ back, eye, dist, fov, horizon, x })` (`set.js`): the level, front-on camera, its
+  vanishing point centred.
+- `frontRoom(P, R, { back, x, near, h, wainscot, boards, windows, rug, pendants, mood })` (`set.js`)
+  → `{ env }`: the back wall, wainscot, skirting and perspective floor in the room tones, flat.
+  `mood` is `day` or `dusk` (the dark beat: slate walls, lamps lit, windows dark); without it the
+  rig's mood name is used. `roomMood(name)` (`analogy.js`) gives that mood's room tones.
+- `pillSvg(text, x, y, { kind, size, who })` (`analogy.js`): a Helios label pill, `kind` `white` (a
+  name), `ink` (the contrast case) or `green` (a status).
+- **Drawn subjects** (`drawn.js`, the library in `subjects/`, listed by `SUBJECTS`): every animal and
+  organic thing the kit ships, jointed where it moves, flat. `drawnSvg(spec, o)` (a study cell),
+  `drawn(spec, x, y, o)` (on screen, base at `(x, y)`) and `drawnAt(P, spec, wx, wy, wz, o)` (a
+  `render()` item in the world); `spec` is a spec or a library name (`subject(name)`); `o` takes the
+  view, the pose, the state, `flip` and the scale. A small subject is cheated up so it reads. A
+  subject the library lacks is a new spec in the same shape (`drawn.js`), exported from the props
+  file that uses it.
+
 ## Light and mood
 
 - **Moods** (`light.js`): `mood(name, over)` resolves one of `MOOD_NAMES` (day, evening, night,
@@ -391,16 +454,20 @@ orange. It returns the registry `reg` (§ Mechanism primitives). A mapped concep
 ## Critters
 
 `critter(x, y, options)` (`cast.js`), or through the camera `critterAt(P, x, y, z, options, R)` →
-`{ svg, s, feet, at, dist }`. Options:
+`{ svg, s, feet, at, dist }`. The kit draws critter D: a flat tile body, white eyes with plain ink
+pupils and lids in the body colour, ink stub arms with mitten ends, ink legs, and the floor shadow.
+Options:
 
-- `body`: one of `BODIES` (an unknown body throws).
-- `outfit`: `{ top: { kind, color, trim, neck, pocket, under, print, pattern }, sleeves, pants, shoes,
-  head: { kind, color }, items, custom }`, its names from `TOP_KINDS`, `NECKS`, `HEAD_KINDS` and
-  `ITEMS` (an unknown name throws). `ROLE_GUIDE[role]` holds starters; `outfitReads(outfit)` →
-  `{ kind, reads, clashes }`. `custom(ctx)` draws a garment the kinds do not cover.
-- `view`: one of `VIEWS` (`front`, `back`); `side` one of `SIDES` for a back view.
+- `body`: one of `BODIES`: `orange` (the hero), `green`, `ink`, `white` (`paper` draws as `white`; an
+  unknown body throws).
+- `role`, `head`, `hand`, `bowtie`: what it wears and holds (§ Roles). An `outfit` (or `WEAR`) is
+  accepted and read as the role it matches, else bare; no garment is drawn on the body.
+- `view`: one of `VIEWS` (`front`, `back`); the back view has no eyes. `side` one of `SIDES` for a
+  back view.
 - `who`: its world id.
-- The pose, from `act` or `actAt` (below), and `mood`: one of `MOODS`.
+- The pose, from `act` or `actAt` (below), and `mood`: one of `MOODS`. A mood sets the lids, the
+  pupils and the tilt; `mouth` and `brows` are accepted and ignored. Its idle and mood loops (blink,
+  glance, a lid switch) hold and snap.
 
 **Acting through the rig:** `act({ gesture, reach, point, hand, hands, hold, carry, inspect, lookAt,
 recoil, effort, lean, walk, mood }, frame)` → a pose, where `frame = { x, y, s, flip }` (the feet on
@@ -409,7 +476,56 @@ is a `PROPS` name, `{ kind, color }` or a custom `{ draw, box, upright, follow, 
 `actAt(t, keys, frame)` performs a list of `{ at, blend?, …intent }` over time.
 `blendRig(a, b, u)` mixes two poses; `heldScale(propCm, drawnPx, cheat)` sizes a held prop;
 `gripAt(x, y, options, side)` and `heldProp(x, y, options)` give a held prop as its own layer.
-`riggedProblems(options)` names a broken rig (`critter()` writes it as `data-rig`).
+`riggedProblems(options)` names a broken rig (`critter()` writes it as `data-rig`). The rig solves
+the arm angles; critter D draws its stub arms at them.
+
+**Hands on things** (`cast.js`, world cm, keys for a world actor's `pose.keys`): D's stub arm is
+short (`REACH_CM`: side, up, depth from its feet); a hand sent further stops short.
+`reachProblems(standAt, target)` says why a critter cannot touch a point, and `reachSpot(target, { hand })`
+is where its feet go so it can.
+
+- **HARD CONSTRAINT — a placed thing rides in the hand:** a critter that puts something somewhere
+  uses `handPlace({ hold, to, at, dur, hand, standAt, grip })` → `{ keys, release, thingAt(t) }`:
+  the arm reaches `to` with the thing held, lets go there, and the thing is drawn only at
+  `thingAt(t)` (null while in the hand). When `to` is out of reach, the same call tosses it: the
+  arm swings toward `to`, lets go at the end of its reach, and `thingAt(t)` flies it there on an
+  arc (`lands` is when it arrives). Never move a placed thing on its own.
+- **HARD CONSTRAINT — marks grow under a tool:** a critter that writes or draws uses
+  `handWrite({ from, to, at, dur, tool, hand, standAt })` → `{ keys, u(t), tipAt(t) }`: `u(t)`
+  drives the marks (from `from` to `to`), `keys` keep the held tool's point on their growing end,
+  and a world tool in an insert sits at `tipAt(t)`. Marks never grow with no tool on them, and the
+  tool is the same one in every shot.
+
+**The acting track:** `actingAt(t, track)` → the pose at time t of a performance, a list of beats
+`{ at, emotion, intensity?, blend?, hold?, look?, pose?, accent?, state? }`: `emotion` is a `MOODS`
+or `D.MOODS` name, `pose` a `D.ARM_POSES` name or `[left, right]`, `accent` a `D.ACCENTS` name (a
+gesture, eye behaviour or body move that plays once). A feeling persists until the next beat; changes
+blend; a seeded life layer (blinks, glances, breath) runs underneath. Spread the pose into
+`critter()` or pass it as `act({ acting })`. `actingProblems(track)` flags emote spam (short holds,
+too many changes, accents over the cap); keep it empty.
+
+## Roles
+
+`wear.js`:
+
+- `HEADS`: `toque`, `hardhat`, `nursecap`, `cap`, `beanie`, `gradcap`, `beret`, `fedora`, `sunhat`,
+  `headphones`, `glasses`.
+- `HANDS`: `cup`, `briefcase`, `book`, `palette`, `tray`, `football`, `docbag`, `magnifier`,
+  `envelope`, `wateringcan`, `flask`, `camera`. The kit draws each one held: `cup`, `book`, `flask`,
+  `camera` and `football` in front of the mitten (`FRONT`), the rest gripped by a handle or an edge
+  (`GRIP`).
+- `ROLES`: role name → `{ head?, hand?, bowtie?, headTone? }`, the kit's 17 named roles. A critter
+  takes one of them, or `'bare'`:
+  chef (toque) · builder (hardhat) · nurse (nursecap) · doctor (docbag) · waiter (tray, bow tie) ·
+  office worker (briefcase) · developer (headphones) · librarian (glasses, book) · barista (cup) ·
+  coach (cap, football) · student (gradcap) · artist (beret, palette) · detective (fedora,
+  magnifier) · mail carrier (cap, envelope) · gardener (sunhat, wateringcan) · scientist (glasses,
+  flask) · photographer (camera).
+- `wearProblems(wear, beats)` → string[]: more than two signifiers, a name outside the lists, or a
+  hand prop still held in a beat that uses the hands with no put-down beat before it.
+- `wear({ role, head, hand, bowtie, headTone })` resolves a critter's pieces: `role` gives them, an
+  explicit piece overrides one, and `hand: null` puts the role's prop down for that beat (a critter
+  after its put-down beat is drawn with `hand: null`).
 
 ## Objects and the courier
 
@@ -499,6 +615,13 @@ other frame.
   `focal(P, at, size, svg, { name })` marks the beat's focal.
 - **Labels:** `labelFor(id, text, { P, shot, at, height, lift, size, u })` anchors a label in world
   space to its entity, hides it when the entity leaves the shot, and keeps it inside the safe area.
+- **HARD CONSTRAINT — placed text** (`layout.js`): a word that belongs to a thing is drawn inside
+  that thing's group (its page, magnet, screen or chip). Every other text, label, chip, bubble or
+  small card is placed by code, never at hand-picked coordinates: `placeText({ w, h }, { near,
+  avoid })` gives the spot nearest `near` that keeps `MIN_GAP` off every `avoid` box (the boxes of
+  the objects on screen) inside the safe area; `inSafe(box)` moves a box you laid out into it. Inside
+  `shotFrame`'s draw both work in the drawing's coordinates under the shot's crop (`viewSafe()` is
+  the safe area there), so what they place stays in the safe area at that shot's zoom.
 - **Space** (`space.js`): `container({ clip, back, contents, front })` on the isometric camera;
   `magnifier({ from, at, r, zoom, draw })` enlarges one small thing.
 - **Drawing** (`draw.js`): `scope`, `el`, `g`, `handwrite`, `shock(x, y, u)`.
@@ -535,7 +658,8 @@ time) and returns `{ svg, box }`; the primitives refuse to draw an empty contain
 - **HARD CONSTRAINT — UI spacing** (`layout.js`): icons, numbers and buttons placed side by side or
   stacked by hand are laid out with `row(items, { x, y, width, align })` or `column(items, { x, y })`,
   which keep at least `MIN_GAP` px between neighbours; a row that does not fit (`fits: false`) is
-  rewritten shorter, never squeezed.
+  rewritten shorter, never squeezed. Every spot a piece comes to rest in (a token's slot, a chip's
+  place in a tray) comes from `row`/`column`; a piece on its way there may pass over others.
 
 ## Motion
 
@@ -551,9 +675,10 @@ time) and returns `{ svg, box }`; the primitives refuse to draw an empty contain
 ## Sound events
 
 `assets/frames/<frame id>.events.json`: a JSON array of `{ "t": <frame seconds>, "kind": <kind>,
-"what"?: <plain words>, "dur"?: <seconds> }`, `t` on the landing frame, from 0 to the frame's
-`duration`. `sound.mjs` mixes every frame's events into `assets/sfx/events.wav` and lists what it
-dropped; `opener-sfx.mjs` places the opener's sound and the 1→2 hit, which no events file declares.
+"what"?: <plain words>, "dur"?: <seconds>, "sound"?: <library id>, "motif"?: <name> }`, `t` on the
+landing frame, from 0 to the frame's `duration`. `sound.mjs` mixes every frame's events into
+`assets/sfx/events.wav` and lists what it dropped and what it varied; `opener-sfx.mjs` places the
+opener's sound and the 1→2 hit, which no events file declares.
 
 | kind | for |
 |---|---|
@@ -582,6 +707,19 @@ with no known word is dropped):
   footstep, door open, door close, creak, bell, glass, plate, metal, wood, knife, cloth, leather,
   drop, throw, shove, grab, handle, place, lay, switch, toggle, keyboard typing, chime.
 
+**Finding sounds:** `node assets/kit/sfx-find.mjs <words>` lists the library families those words
+reach; `--kind <kind> [words]` lists what one kind can reach, and `--families` lists the whole
+library. Give every event a `what`, whatever its kind: its words choose among that kind's sounds
+(an impact on glass, a click on a metal latch). `sound` plays one exact id from that list; use it
+only when no words reach the sound you need.
+
+**Variety is enforced in code.** In each reel `sound.mjs` rotates variants within a family. It plays
+no file more than 2–4 times, never the same sound twice in a row for a kind or on two accents in a
+row, and never an opener sound again as an accent. A blocked pick becomes the nearest sound of the
+same family. So describe each action as it is and leave the variation to code. `motif` (one short
+name shared by those events) keeps one exact sound for a recurring concept (`craft.md` § 11), for up
+to five plays. Use it only for that.
+
 ## Self-review
 
 - `node assets/kit/snap.mjs world`: the world at its start states through `VIEWS`, to
@@ -604,17 +742,26 @@ turns whatever is left into warnings and still renders.
 
 - **Every frame:** the module loads and `draw(t)` returns clean SVG at every moment (`load`, `draw`),
   on its storyboard ground (`ground`), with valid sound events (`events`); the dictionary card on
-  the frame with `definition:` (`cards`); the hook's contract (`hook`); a shot list that can play
-  (`shots`); no critter drawn twice at one moment or vanishing mid-shot (`cast`); one look per concept:
+  the frame with `definition:` (`cards`); a shot list that can play
+  (`shots`); no critter drawn twice at one moment, vanishing mid-shot, or left out of a later shot's
+  cast of the place it is in (`cast`); nothing a critter lets go of travelling on with no hand on it
+  (`hands`); one look per concept:
   `CAST` looks, no two critters alike, every concept as `identity.js` gives it (`identity`); the rig: no
   hand or held prop over a face (`rig`); nothing worn over the eyes or mouth (`outfit`); no container
-  shown empty (`empty`); `objectProblems` (`objects`).
+  shown empty (`empty`); `objectProblems` (`objects`); on every frame a builder draws, orange only on
+  the hero and at most one more thing (`orange`).
+- **The world's wear** (`wear`): each `CAST` critter's role, head piece and hand prop from `wear.js`'s
+  lists, and `wearProblems` against the storyboard's beats (a hand prop held into a beat that uses the
+  hands). In the render, one vision check on the cast draws a critter whose role does not read bare.
 - **Jump cuts** (`jump_cut`, `jumpCutProblems`): two consecutive shots of the same subject change its
   size on screen by at least 2× (in) or to at most ½ (out), measured on the last video frame before
-  the cut and the first after it. The cut between two frames is held to the same rule when both
-  shots name the same subject (`edgeCutProblems`, in `try.mjs all`).
-- **Every frame, layout:** no read text, label or card over an object, except a label pinned on its
-  own object (`overlap`); no UI texts overlapping or running into an icon or button edge (`ui`); the
+  the cut and the first after it, on the shot list as `snapCuts` draws it. A crop cut that keeps the
+  very same framing jumps nothing and is not one. The cut between two frames is held to the same rule
+  when both shots name the same subject (`edgeCutProblems`, in `try.mjs all`).
+- **Every frame, layout:** no read text, label or card at rest over an object, except a text written
+  on its own object (inside its group: a label on it, a word on its page or magnet, even where that
+  object lies on another) (`overlap`); no UI texts at rest overlapping or running into an icon or
+  button edge (`ui`); the
   frame shows something within its first 0.5 s (`open`); in a builder's frame, content never covers
   under 6% of the frame for more than 1 s (`fill`).
 - **Through the camera** (any lens picture): the shot's subject whole and inside the safe area, at
@@ -623,7 +770,8 @@ turns whatever is left into warnings and still renders.
   critter mostly hidden behind a nearer one (`occlusion`); every `DRESSING` object of the shot's place
   drawn, and nothing undeclared appearing or vanishing across a cut in one place (`set_lock`); no
   `close` or `insert` whose only thing in frame is one label or text (`close`). `render()` leaves out a
-  set-dressing piece that would show under 15% of itself at a frame edge.
+  set-dressing piece that would show under 15% of itself at a frame edge (still counted as drawn).
+  The kit's own fixes (dressing, framing, unblocking, pop-in) run before these checks.
 - **`world` and `blend` frames:** labels on their entities and inside the safe area (`label`), the
   set's breakage (`set`).
 - **`mechanism` and `blend` frames:** read text at least `READ_MIN` and, at rest, inside the safe area

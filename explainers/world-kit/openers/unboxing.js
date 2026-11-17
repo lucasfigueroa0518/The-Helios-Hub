@@ -1,7 +1,7 @@
-// Unboxing: the top of a taped cardboard box with "AI BRAIN BREAK" on it, seen from above. A box
+// Unboxing: the top of a taped cardboard box with "AI 101" on it, seen from above. A box
 // cutter slices the tape, the flaps burst open, and the camera dives into the box, where the hook
 // is.
-import { T, g, el, id, ref, defs, seg, lerp, E, scene, title, wordmark, fill, shake, shaken, softShape, gloss, roundRect } from './common.js';
+import { T, g, el, id, ref, defs, seg, lerp, E, scene, title, wordmark, fill, shake, shaken, softShape, gloss, roundRect, silentMark } from './common.js';
 
 const INNER = { x: 200, y: 360, w: 680, h: 1200 };
 const SC = INNER.w / 1080;
@@ -74,6 +74,7 @@ export default function draw(t, ctx) {
   if (su < 1) parts.push(flap(plain, under, 'T', su, 'y', 0), flap(plain, under, 'B', su, 'y', 1920));
   const lu = seg(t, open[0], open[1], E.out);
   if (lu < 1) parts.push(flap(lid(t, cut), under, 'L', lu, 'x', 0), flap(lid(t, cut), under, 'R', lu, 'x', 1080));
+  parts.push(silentMark(t, ctx));
   parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

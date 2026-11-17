@@ -2,7 +2,7 @@
  * Instagram caption shape for Explainer Reels.
  *
  * The writer stores the body only. Code prepends
- * `AI Brain Break Episode N:` when the reel actually publishes, so N is
+ * `AI 101 Episode N:` when the reel actually publishes, so N is
  * how many explainers have gone out, plus this one.
  */
 
@@ -21,11 +21,11 @@ export const CAPTION_MAX_TAGS = 5;
 const HOOK_EPISODE_BUDGET = 999;
 
 const EPISODE_PREFIX =
-  /^(?:AI BRAIN BREAK\s*[-–—]?\s*EPISODE\s+\d+:|AI Brain Break Episode\s+\d+:)\s*/i;
+  /^(?:AI BRAIN BREAK\s*[-–—]?\s*EPISODE\s+\d+:|AI Brain Break Episode\s+\d+:|AI 101 Episode\s+\d+:)\s*/i;
 
 export function episodeLine(episode: number): string {
   if (!Number.isInteger(episode) || episode < 1) throw new Error('episode must be a positive integer');
-  return `AI Brain Break Episode ${episode}:`;
+  return `AI 101 Episode ${episode}:`;
 }
 
 /** Drop a baked-in episode line (old or new wording) so publish can stamp the real number. */
@@ -47,7 +47,7 @@ export function stampCaption(body: string, episode: number): string {
 
 /** Review drawer: the number is a dash until publish fills it in. */
 export function reviewCaption(body: string): string {
-  return `AI Brain Break Episode —:\n\n${stripEpisodePrefix(body)}`;
+  return `AI 101 Episode —:\n\n${stripEpisodePrefix(body)}`;
 }
 
 export function hookPreviewLimit(episode = HOOK_EPISODE_BUDGET): number {

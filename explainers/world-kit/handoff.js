@@ -1,11 +1,11 @@
 // The hand-off (Explainers 4.3): frame 3, built by code like the opener and the close. The card
-// "today's AI Brain Break: <term>" is the calm focus while the voice says the hand-off line, and the
+// "today's AI Lesson: <term>" (hx-6; was "AI Brain Break") with the house scholar beside its title is the calm focus while the voice says the hand-off line, and the
 // reel's OWN analogy world leaks in around it through one of the bank's templates (handoff-bank.js).
 // Code writes assets/frames/03-handoff.js (frames.mjs writeHandoff) as one call to handoffFrame();
 // nobody builds frame 3.
 //
 //   handoffCard(t, o)          the card (round-3 look): paper, ink outline, "today's" and
-//                              "AI Brain Break:" handwritten, the term in Pragmatica, orange,
+//                              "AI Lesson:" handwritten, the scholar right of it, the term in Pragmatica, orange,
 //                              underlined; an optional glint
 //   handoffFrame(key, o)       frame 3's scene module: { ground, handoff, draw(t) }; `next` is
 //                              frame 4's module: its first shot (draw(0)) is the backdrop, so the
@@ -21,6 +21,7 @@ import { T, el, g, id, ref, scope, handwrite } from './draw.js';
 import { textWidth } from './cards.js';
 import { lens, rig, render } from './lens.js';
 import { critter } from './cast.js';
+import { SCHOLAR } from './openers/lesson.js';
 import { FALLBACK_HANDOFF, HANDOFF_FRAME, handoffByKey, handoffTiming, MAX_PARTS } from './handoff-bank.js';
 
 export { HANDOFF_KEYS } from './handoff-bank.js';
@@ -61,7 +62,8 @@ function termLayout(term, maxW) {
 
 /**
  * The hand-off card (round-3 look, Lucas-approved): a paper card with an ink outline and a soft
- * shadow; "today's" and "AI Brain Break:" write themselves by hand, then the term lands in
+ * shadow; "today's" and "AI Lesson:" write themselves by hand (hx-6), with the house scholar (orange,
+ * graduate cap, big round glasses, a book) standing right of the title, then the term lands in
  * Pragmatica, orange, with an ink underline. `write` is [start, end] of the writing; `glint` 0..1
  * sweeps one soft glint across it. Returns the group (data-role="title").
  */
@@ -77,7 +79,9 @@ export function handoffCard(t, { term = '', write = [0.15, 1.3], glint = null, b
     el('rect', { x: x0 + 10, y: y0 + 22, width: w, height: h, rx: 34, fill: T['shadow-warm'], opacity: 0.18 }),
     el('rect', { x: x0, y: y0, width: w, height: h, rx: 34, fill: T['paper-lit'], stroke: T.ink, 'stroke-width': 4 }),
     handwrite("today's", x0 + 70, y0 + 120, 46, p1, { color: T.ink }),
-    handwrite('AI Brain Break:', x0 + 70, y0 + 230, 70, p2, { color: T.ink }),
+    handwrite('AI Lesson:', x0 + 70, y0 + 230, 70, p2, { color: T.ink }),
+    // the scholar, right of the title on the card, in from the first frame (the card is never blank)
+    g({ 'data-role': 'lesson-scholar' }, critter(x0 + w - 128, y0 + 250, { ...SCHOLAR, s: 0.92, mood: 'happy', look: [-0.6, 0.3], who: 'scholar', lid: t > 0.9 && t < 1.0 ? 1 : 0 })),
   ];
   if (p3 > 0 && term) {
     const { lines, size } = termLayout(term, w - 140);

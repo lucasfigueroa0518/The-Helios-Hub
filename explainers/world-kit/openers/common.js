@@ -16,10 +16,11 @@
 //   ctx.M      the opener's timing (bank.js openerTiming): voiceAt, voice, duration, its moments
 //   ctx.term   the storyboard's term (4.3: unused by the openers; the card moved to frame 3)
 //
-// So the same opener takes on each reel's scene and critter. The first text an opener shows is
-// "AI BRAIN BREAK" alone (Lucas, 2026-10-19). Explainers 4.3: the title card with the term no
-// longer plays in the opener; the visual hook owns the opening shot, and the card
-// ("today's AI Brain Break: <term>") shows on frame 3's hand-off (handoff.js).
+// hx-6 (Lucas, 2026-11-16): there is no teaser scene. `ctx.hook` is code's AI 101 card
+// (lesson.js lessonScene: "AI 101" with the opener's education icon, or the house scholar as its
+// hero), so every opener lands on it and frame 2 (the definition) follows. The first text an opener
+// shows is "AI 101" alone; the card with the term ("today's AI Lesson: <term>") is frame 3's
+// hand-off (handoff.js).
 
 import { T, g, el, ref, handwrite, handwriteWidth, shock, softShape, gloss } from '../draw.js';
 import { soften } from '../props/kit.js';
@@ -144,21 +145,21 @@ export function title(ctx, t, from = ctx.M?.titleAt) {
   return titleCard(t - from, { term: ctx.term, to: Math.max(0.6, voiceAt + voice - 0.1 - from) });
 }
 
-/** "AI BRAIN BREAK", hand-lettered big and centred on (cx, cy); never the term. */
+/** The wordmark's text (hx-6: was "AI BRAIN BREAK"). */
+export const WORDMARK = 'AI 101';
+
+/** "AI 101", hand-lettered big on one line and centred on (cx, cy); never the term. `size` is the
+ *  old two-line mark's letter size: one line of AI 101 is drawn 1.3x that, so it fills the same space. */
 export function wordmark(cx, cy, size, progress = 1, { color = T.ink, weight = 1.4, plate = false, tilt = 0 } = {}) {
-  const lineH = size * 1.45;
+  const S = size * 1.3;
   const out = [];
   if (plate) {
     // a soft paper plate behind the letters, so they read over the drawing
-    const w = handwriteWidth('AI BRAIN', size) + size * 1.1;
-    const top = cy - lineH / 2 - size * 1.35;
-    const h = lineH + size * 1.35 + size * 0.75;
-    out.push(card(cx - w / 2, top, w, h, { r: 26 }));
+    const w = handwriteWidth(WORDMARK, S) + S * 1.0;
+    const h = S * 2.1;
+    out.push(card(cx - w / 2, cy - h / 2, w, h, { r: 26 }));
   }
-  out.push(
-    handwrite('AI BRAIN', cx, cy - lineH / 2, size, clamp01(progress * 2), { color, align: 'center', weight }),
-    handwrite('BREAK', cx, cy + lineH / 2, size, clamp01(progress * 2 - 1), { color, align: 'center', weight }),
-  );
+  out.push(handwrite(WORDMARK, cx, cy + S * 0.36, S, clamp01(progress), { color, align: 'center', weight }));
   const body = out.join('');
   return tilt ? g({ transform: `rotate(${tilt} ${cx} ${cy})` }, body) : body;
 }
@@ -188,11 +189,24 @@ export function burst(x, y, u, scale = 2) {
   return shock(x, y, u, scale, rays);
 }
 
-/** The wordmark bursting in big at `at`, holding, then shrinking away as the title card writes. */
+/** The wordmark bursting in big at `at`, holding, then shrinking away as the title card writes.
+ *  `hold: Infinity` keeps it to the frame's end (a silent hook, D125). */
 export function slamMark(t, at, { cy = 620, size = 112, from = 2.3, tilt = -3, hold = 1.0 } = {}) {
   if (t < at - 0.04) return '';
   const w = seg(t, at - 0.04, at + 0.24, E.spring);
-  const gone = seg(t, at + hold, at + hold + 0.3, E.in);
+  const gone = Number.isFinite(hold) ? seg(t, at + hold, at + hold + 0.3, E.in) : 0;
   if (gone >= 1) return '';
   return g({ transform: `translate(540 ${cy}) scale(${(lerp(from, 1, w) * lerp(1, 0.3, gone)).toFixed(3)}) translate(-540 ${-cy})`, opacity: ((1 - gone) * Math.min(1, w * 3)).toFixed(3) }, wordmark(540, cy, size, 1, { plate: true, tilt }));
+}
+
+/**
+ * A silent hook's wordmark (D125): an opener whose own wordmark leaves before the cut (the bank's
+ * `slamAt`) slams it over the hook there and holds it to the end of frame 1. Nothing when the
+ * opener is spoken (ctx.M.silent unset) or declares no slamAt.
+ */
+export function silentMark(t, ctx, o = {}) {
+  const at = ctx.M?.slamAt;
+  // hx-6: the AI 101 card already shows the title, so nothing is slammed over it
+  if (ctx.hook?.lesson) return '';
+  return ctx.M?.silent && Number.isFinite(at) ? slamMark(t, at, { ...o, hold: Infinity }) : '';
 }

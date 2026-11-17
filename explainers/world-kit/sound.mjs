@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { projectFrames } from './frames.mjs';
+import { loadLibrary } from './sfx-library.mjs';
 
 export const LIBRARY = 'assets/sfx-library';
 export const OUT = 'assets/sfx/events.wav';
@@ -102,6 +103,195 @@ export function findSfx(catalog, { all = [], any = [], not = [], weights = {}, s
   return variants[seed % variants.length];
 }
 
+// ── The library and its reach ─────────────────────────────────────────────────────────────────
+// The central library (design/sfx/library.mjs, linked here as sfx-library.mjs; every content type
+// reads it): the bank (catalog.json), Lucas's drop-ins (catalog-inbox.json, written by
+// design/sfx/tools/ingest-inbox.mjs) and the bank's measured acoustics load as one catalog.
+
+/** The library catalog at `dir`: the bank, the drop-ins and the measured acoustics, merged (the shared library, sfx-library.mjs). */
+export function loadCatalog(dir) {
+  return loadLibrary(dir);
+}
+
+const has = (s, t) => s.tags.includes(t);
+const inGroup = (re) => (s) => re.test(s.group);
+const ofKind = (kind) => (s) => s.kind === kind;
+
+/**
+ * What each event kind can reach. `core` lists the default palette in order of preference (one
+ * predicate per rank); `wide` adds sounds that only a matching `what` word reaches (an impact on
+ * glass, a click on a metal latch). Drop-ins join the kind their names point to.
+ */
+export const POOLS = {
+  impact: {
+    core: [(s) => has(s, 'impact') && (has(s, 'soft') || has(s, 'punch')) && (has(s, 'heavy') || has(s, 'medium')), (s) => has(s, 'impact') && has(s, 'bass'), ofKind('impact')],
+    wide: (s) => has(s, 'impact') && !has(s, 'whoosh') && !has(s, 'footstep'),
+  },
+  whoosh: {
+    core: [(s) => has(s, 'whoosh'), ofKind('whoosh'), inGroup(/^rpg-audio\/cloth$/)],
+    wide: inGroup(/^interface-sounds\/(maximize|minimize)$/),
+  },
+  pop: {
+    core: [inGroup(/^pixabay\/pop$/), inGroup(/^interface-sounds\/drop$/), ofKind('pop'), inGroup(/^interface-sounds\/(open|pluck)$/)],
+    wide: inGroup(/^(ui-audio\/rollover|interface-sounds\/(bong|glass))$/),
+  },
+  tick: {
+    core: [inGroup(/^pixabay\/click-soft$/), inGroup(/^interface-sounds\/tick$/), ofKind('tick'), inGroup(/^(interface-sounds\/select|ui-audio\/mouse(click|release))$/)],
+    wide: inGroup(/^(pixabay\/key-press|interface-sounds\/(click|scroll))$/),
+  },
+  click: {
+    core: [inGroup(/^(pixabay\/click|ui-audio\/click)$/), inGroup(/^interface-sounds\/(click|switch|toggle)$/), ofKind('click'), inGroup(/^ui-audio\/switch$/)],
+    wide: inGroup(/^rpg-audio\/(metalClick|metalLatch)$/),
+  },
+  sting: {
+    core: [inGroup(/^pixabay\/(chime|sparkle|ping|notification)$/), inGroup(/^music-jingles\/jingles_(PIZZI|STEEL)$/), ofKind('sting'), inGroup(/^interface-sounds\/confirmation$/)],
+    wide: (s) => has(s, 'sting') || has(s, 'chime'),
+  },
+};
+
+// ── Variety (Lucas, 2026-11-17: "really, really repeated") ────────────────────────────────────
+// Per reel, no file plays more than CAPS[kind] times (a `motif` up to MOTIF_CAP), never twice in a row
+// for the same kind, and never on two consecutive accents (impact, sting, whoosh). The opener's
+// own sounds (its stem and the 1→2 hit) never return as an accent, and no other kind plays them in
+// frame 2's first OPENER_GAP seconds. A blocked pick is replaced by the nearest sound of the
+// same family (same group first, then the kind's palette or the same words), by meaning and by
+// measured sound; if none is left the pick plays anyway, slightly re-pitched, and is reported.
+// Variety never blocks a reel.
+
+/** The most times one file may play in a reel, per kind (sustained beds: `sustain`). */
+export const CAPS = { impact: 2, sting: 2, whoosh: 3, pop: 3, tick: 4, click: 4, foley: 3, sustain: 4 };
+/** A motif's exact sound plays at most this many times; later events rotate within its family. */
+export const MOTIF_CAP = 5;
+/** Kinds whose consecutive uses must differ across kinds too (the accents). */
+const ACCENTS = new Set(['impact', 'sting', 'whoosh']);
+/** After frame 2 starts, the opener's own sounds stay out for this long (seconds). */
+export const OPENER_GAP = 3;
+/** Re-pitch for a repeat nothing could replace (rate per extra use). */
+const REPITCH = [0.94, 1.06, 0.9, 1.1];
+
+/** How different two sounds are (0 = alike), from length, level, brightness and attack. */
+export function soundDistance(a, b) {
+  const ln = (x, y) => Math.abs(Math.log(Math.max(1e-3, x) / Math.max(1e-3, y)));
+  let d = ln(a.duration, b.duration) * 0.5;
+  if (Number.isFinite(a.meanDb) && Number.isFinite(b.meanDb)) d += Math.abs(a.meanDb - a.peakDb - (b.meanDb - b.peakDb)) / 12;
+  if (a.centroid > 0 && b.centroid > 0) d += ln(a.centroid, b.centroid) * 0.5;
+  if (Number.isFinite(a.attack) && Number.isFinite(b.attack)) d += ln(a.attack + 5, b.attack + 5) * 0.2;
+  return Math.round(d * 1000) / 1000;
+}
+
+/** A fresh per-reel variety state; `opener`: { files: catalog files the opener played, hit, until }. */
+export function varietyState({ opener } = {}) {
+  const uses = new Map();
+  const openerFiles = new Set(opener?.files ?? []);
+  for (const f of openerFiles) uses.set(f, (uses.get(f) ?? 0) + 1);
+  return { uses, last: new Map(), lastAccent: opener?.hit ?? null, anchors: new Map(), motifs: new Map(), openerFiles, openerUntil: opener?.until ?? -Infinity, substitutions: [], repeats: [] };
+}
+
+/** Why `s` may not play for cue `c` now, or null. */
+function blockedWhy(s, c, state, cap) {
+  if ((state.uses.get(s.file) ?? 0) >= cap) return `already played ${state.uses.get(s.file)} times (cap ${cap})`;
+  if (state.last.get(c.kind) === s.file) return `the previous ${c.kind} was the same sound`;
+  if (ACCENTS.has(c.kind) && state.lastAccent === s.file) return 'the previous accent was the same sound';
+  if (state.openerFiles.has(s.file) && (ACCENTS.has(c.kind) || c.t < state.openerUntil)) return 'the opener played it';
+  return null;
+}
+
+/**
+ * The candidates for a cue, best first: [{ s, score, rank }] where `score` is the meaning match
+ * and `rank` the palette preference. `tier` holds the top-scored ones; `family` the wider set a
+ * blocked pick may be replaced from.
+ */
+export function candidatesFor(catalog, c) {
+  const sustained = Boolean(c.dur);
+  const fits = (s) => (sustained ? has(s, 'sustain') : !has(s, 'sustain') && s.duration <= 3.5);
+  const scoreOf = (s) => Object.entries(c.weights ?? {}).reduce((n, [t, w]) => n + (has(s, t) ? w : 0), 0);
+  const byScore = (a, b) => b.score - a.score || a.rank - b.rank || a.s.tags.length - b.s.tags.length || a.s.id.localeCompare(b.s.id);
+  if (c.kind === 'foley') {
+    // a sustained action prefers a bed (`sustain`), at least as long as it; any sound of the words
+    // will do (it plays once)
+    let all = catalog
+      .filter((s) => sustained || fits(s))
+      .map((s) => ({ s, words: scoreOf(s), rank: 0 }))
+      .filter((h) => h.words > 0)
+      .map((h) => ({ ...h, score: h.words + (sustained && has(h.s, 'sustain') ? 1 : 0) }));
+    if (sustained) {
+      const long = all.filter((h) => h.s.duration >= c.dur);
+      if (long.length) all = long; // a bed at least as long as the action; else a shorter one plays once
+    }
+    all.sort(byScore);
+    if (!all.length) return { tier: [], family: [] };
+    const top = all[0].score;
+    return { tier: all.filter((h) => h.score >= top - 1e-9), family: all.filter((h) => h.score >= top * 0.5) };
+  }
+  const pool = POOLS[c.kind];
+  const oneShot = (s) => fits(s) && (!has(s, 'freesound') || s.kind === c.kind);
+  const rankOf = (s) => pool.core.findIndex((p) => p(s));
+  const core = catalog.filter(oneShot).map((s) => ({ s, rank: rankOf(s) })).filter((h) => h.rank >= 0).map((h) => ({ ...h, score: scoreOf(h.s) }));
+  const wide = catalog.filter((s) => oneShot(s) && rankOf(s) < 0 && pool.wide(s)).map((s) => ({ s, rank: pool.core.length, score: scoreOf(s) }));
+  const all = [...core, ...wide].sort(byScore);
+  const top = all[0]?.score ?? 0;
+  // `what` words that name a sound in the kind's reach pick among those; otherwise the palette
+  const tier = top > 0 ? all.filter((h) => h.score >= top - 1e-9) : core.sort(byScore);
+  const family = top > 0 ? [...all.filter((h) => h.score >= top * 0.5), ...core.filter((h) => h.score < top * 0.5)] : core;
+  return { tier, family };
+}
+
+/** Choose the sound for cue `c` with variety; updates `state`. Returns { sound, rate?, note? }. */
+export function pickSound(catalog, c, state) {
+  const capKey = c.dur ? 'sustain' : c.kind;
+  const cap = CAPS[capKey] ?? 3;
+  if (c.motif && state.motifs.has(c.motif) && (state.uses.get(state.motifs.get(c.motif).file) ?? 0) < MOTIF_CAP) {
+    const sound = state.motifs.get(c.motif);
+    state.uses.set(sound.file, (state.uses.get(sound.file) ?? 0) + 1);
+    return { sound };
+  }
+  let { tier, family } = candidatesFor(catalog, c);
+  const named = c.sound ? catalog.find((s) => s.id === c.sound) : null;
+  if (named) {
+    tier = [{ s: named, score: 1, rank: 0 }];
+    family = [...catalog.filter((s) => s.group === named.group && s !== named).map((s) => ({ s, score: 1, rank: 0 })), ...family];
+  }
+  if (!tier.length) return { sound: null };
+  const anchorKey = c.anchor ?? c.kind;
+  const anchor = state.anchors.get(anchorKey) ?? null;
+  const wanted = anchor && tier.some((h) => h.s === anchor) ? anchor : tier[0].s;
+  const cost = (h, ref) => {
+    let n = (state.uses.get(h.s.file) ?? 0) * 1.5 + h.rank * 0.4;
+    if (ref) n += soundDistance(h.s, ref) + (h.s.group === ref.group ? 0 : 0.6);
+    return n;
+  };
+  const best = (list, ref) => {
+    const open = list.filter((h) => !blockedWhy(h.s, c, state, cap));
+    open.sort((a, b) => cost(a, ref) - cost(b, ref) || a.s.id.localeCompare(b.s.id));
+    return open[0]?.s ?? null;
+  };
+  // the top tier first (a named sound plays as named), rotating to the least-played variant
+  const whyNot = blockedWhy(wanted, c, state, cap);
+  let sound = named ? (whyNot ? null : named) : best(tier, anchor ?? tier[0].s);
+  // the whole tier is blocked: the nearest open sound of the same family stands in
+  if (!sound) sound = best(family.filter((h) => !tier.includes(h)), wanted);
+  let note = null;
+  let rate;
+  if (sound && sound !== wanted && whyNot) {
+    note = { t: c.t, kind: c.kind, wanted: wanted.id, used: sound.id, why: whyNot };
+    state.substitutions.push(note);
+  }
+  if (!sound) {
+    // nothing left: play the least-played top pick, re-pitched, and say so
+    const pool = [...tier].sort((a, b) => (state.uses.get(a.s.file) ?? 0) - (state.uses.get(b.s.file) ?? 0) || (state.last.get(c.kind) === a.s.file) - (state.last.get(c.kind) === b.s.file));
+    sound = pool[0].s;
+    rate = REPITCH[((state.uses.get(sound.file) ?? 0) + REPITCH.length - 1) % REPITCH.length];
+    note = { t: c.t, kind: c.kind, wanted: wanted.id, used: sound.id, why: `${blockedWhy(sound, c, state, cap)}; nothing similar left, re-pitched ×${rate}` };
+    state.repeats.push(note);
+  }
+  state.uses.set(sound.file, (state.uses.get(sound.file) ?? 0) + 1);
+  state.last.set(c.kind, sound.file);
+  if (ACCENTS.has(c.kind)) state.lastAccent = sound.file;
+  if (!state.anchors.has(anchorKey)) state.anchors.set(anchorKey, sound);
+  if (c.motif && !state.motifs.has(c.motif)) state.motifs.set(c.motif, sound);
+  return { sound, ...(rate ? { rate } : {}), ...(note ? { note } : {}) };
+}
+
 /** Problems with one frame's events (try.mjs uses this too). */
 export function eventProblems(events, duration) {
   if (!Array.isArray(events)) return ['the events file is not a JSON array'];
@@ -112,6 +302,8 @@ export function eventProblems(events, duration) {
     if (!EVENT_KINDS.includes(e?.kind)) out.push(`${where}: kind "${e?.kind}" is not one of ${EVENT_KINDS.join(', ')}`);
     if (e?.kind === 'foley' && !(typeof e.what === 'string' && e.what.trim())) out.push(`${where}: a foley event needs "what" in plain words`);
     if (e?.dur !== undefined && !(e?.kind === 'foley' && typeof e.dur === 'number' && e.dur >= 0.2 && e.dur <= MAX_DUR)) out.push(`${where}: "dur" is only for foley, from 0.2 to ${MAX_DUR} seconds`);
+    if (e?.sound !== undefined && !(typeof e.sound === 'string' && e.sound.trim())) out.push(`${where}: "sound" is a library id from sfx-find.mjs`);
+    if (e?.motif !== undefined && !(typeof e.motif === 'string' && e.motif.trim())) out.push(`${where}: "motif" is a short name shared by the events that must sound the same`);
     return out;
   });
 }
@@ -133,16 +325,20 @@ export function eventsToCues(frames, eventsById, catalog) {
         dropped.push({ frame: f.id, event: e, why: `unknown kind "${e.kind}"` });
         continue;
       }
+      const extra = { ...(typeof e.sound === 'string' ? { sound: e.sound } : {}), ...(typeof e.motif === 'string' ? { motif: e.motif } : {}) };
       if (e.kind === 'foley') {
         const q = foleyQuery(e.what, counts);
-        if (!q) {
+        if (!q && !extra.sound) {
           dropped.push({ frame: f.id, event: e, why: `no library sound matches "${e.what}"` });
           continue;
         }
-        cues.push({ t, kind: 'foley', what: e.what, ...q, ...(e.dur ? { dur: e.dur } : {}) });
+        const words = q ? q.any.filter((w) => w !== 'sustain') : [];
+        cues.push({ t, kind: 'foley', what: e.what, ...(q ?? { all: [], any: [], weights: {}, some: true }), anchor: `foley:${[...words].sort().join(' ')}${e.dur ? ':bed' : ''}`, ...(e.dur ? { dur: e.dur } : {}), ...extra });
         continue;
       }
-      cues.push({ t, kind: e.kind });
+      // other kinds: `what` words rank the kind's own sounds (the kind's name says nothing more)
+      const q = typeof e.what === 'string' ? foleyQuery(e.what.replace(new RegExp(`\\b${e.kind}s?\\b`, 'gi'), ' '), counts) : null;
+      cues.push({ t, kind: e.kind, ...(e.what ? { what: e.what } : {}), ...(q ? { weights: q.weights } : {}), ...extra });
     }
   }
   cues.sort((a, b) => a.t - b.t || a.kind.localeCompare(b.kind));
@@ -176,36 +372,36 @@ export function eventsToCues(frames, eventsById, catalog) {
  * @param {any[]} cues
  * @param {{ speech?: { start: number, end: number }[] }} [options]
  */
-export function resolveCues(catalog, cues, { speech = [] } = {}) {
-  const uses = new Map();
+export function resolveCues(catalog, cues, { speech = [], opener, state = varietyState({ opener }) } = {}) {
   const out = [];
   const missing = [];
   for (const c of cues) {
     const k = KINDS[c.kind];
-    const all = c.all ?? k.all;
-    const any = c.any ?? k.any;
-    const not = k.not ?? [];
-    // A sustained event wants a bed at least as long as it; a one-shot wants a short hit.
-    const extra = { not, weights: c.weights ?? {}, some: c.some ?? false };
-    const query = c.dur ? { all, any: [...any, 'sustain'], ...extra, minDur: c.dur } : { all, any, ...extra, not: [...not, 'sustain'], maxDur: 3.5 };
-    const key = JSON.stringify({ all, any, sustain: Boolean(c.dur) }); // variants rotate per sound, whatever the length
-    const seed = uses.get(key) ?? 0;
-    uses.set(key, seed + 1);
-    let sound = findSfx(catalog, { ...query, seed });
-    if (!sound && c.dur) sound = findSfx(catalog, { all, any: [...any, 'sustain'], ...extra, seed }); // shorter bed: it plays once
+    // A sustained event wants a bed at least as long as it (a shorter one plays once); a one-shot
+    // wants a short hit. pickSound enforces the reel's variety (see CAPS).
+    const { sound, rate } = pickSound(catalog, c, state);
     if (!sound) {
       missing.push(c);
       continue;
     }
+    const seed = (state.uses.get(sound.file) ?? 1) - 1;
     const offset = k.at === 'peak' ? sound.duration * 0.45 : 0;
     const underSpeech = speech.some((s) => c.t >= s.start && c.t <= s.end);
     const peak = Number.isFinite(sound.peakDb) ? sound.peakDb : REF_PEAK_DB;
     const level = Math.pow(10, Math.min(MAX_BOOST_DB, REF_PEAK_DB - peak) / 20);
     // A sustained event plays `dur` seconds of the bed, from a point that rotates with use.
     const trim = c.dur ? { from: r3(((seed * 1.37) % 1) * Math.max(0, sound.duration - c.dur)), len: r3(Math.min(c.dur, sound.duration)) } : null;
-    out.push({ ...c, sound, underSpeech, ...(trim ? { trim } : {}), start: r3(Math.max(0, c.t - offset)), volume: r3(k.gain * (underSpeech ? UNDER_SPEECH : 1) * level) });
+    out.push({ ...c, sound, underSpeech, ...(trim ? { trim } : {}), ...(rate ? { rate } : {}), start: r3(Math.max(0, c.t - offset)), volume: r3(k.gain * (underSpeech ? UNDER_SPEECH : 1) * level) });
   }
-  return { resolved: out, missing };
+  return { resolved: out, missing, variety: varietyReport(out, state) };
+}
+
+/** What the reel's effects used: distinct files, the most-played one, substitutions, repeats. */
+export function varietyReport(resolved, state) {
+  const counts = new Map();
+  for (const r of resolved) counts.set(r.sound.file, (counts.get(r.sound.file) ?? 0) + 1);
+  const [top, n] = [...counts].sort((a, b) => b[1] - a[1])[0] ?? [null, 0];
+  return { placed: resolved.length, distinct: counts.size, mostPlayed: top ? { file: top, times: n } : null, substituted: state.substitutions.length, repitched: state.repeats.length, notes: [...state.substitutions, ...state.repeats].slice(0, 12) };
 }
 
 /** The ffmpeg arguments that mix resolved cues into one 48 kHz stereo track of `total` seconds. */
@@ -215,7 +411,8 @@ export function mixArgs(resolved, total, out, root) {
   const chains = resolved.map((r, i) => {
     const ms = Math.round(r.start * 1000);
     const trim = r.trim ? `atrim=start=${r.trim.from}:duration=${r.trim.len},asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st=${Math.max(0, r3(r.trim.len - 0.12))}:d=0.12,` : '';
-    return `[${i}:a]${trim}aformat=sample_rates=48000:channel_layouts=stereo,volume=${r.volume},adelay=${ms}|${ms}[a${i}]`;
+    const pitch = r.rate && r.rate !== 1 ? `asetrate=${Math.round(48000 * r.rate)},aresample=48000,` : '';
+    return `[${i}:a]${trim}aformat=sample_rates=48000:channel_layouts=stereo,${pitch}volume=${r.volume},adelay=${ms}|${ms}[a${i}]`;
   });
   const mix = `${resolved.map((_, i) => `[a${i}]`).join('')}amix=inputs=${resolved.length}:normalize=0:dropout_transition=0,alimiter=limit=0.89:level=false,apad=whole_dur=${total}[out]`;
   args.push('-filter_complex', [...chains, mix].join(';'), '-map', '[out]', '-t', String(total), '-ar', '48000', '-ac', '2', out);
@@ -245,7 +442,7 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
   const errors = [];
   const catalogFile = join(root, LIBRARY, 'catalog.json');
   if (!existsSync(catalogFile)) return { ok: false, errors: [`${LIBRARY}/catalog.json is missing`], events: 0, placed: 0, dropped: [] };
-  const catalog = JSON.parse(readFileSync(catalogFile, 'utf8'));
+  const catalog = loadCatalog(join(root, LIBRARY));
   let at = 0;
   const frames = projectFrames(root).map((f) => {
     const start = at;
@@ -271,9 +468,12 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
   const metaFile = join(root, 'audio_meta.json');
   const meta = existsSync(metaFile) ? JSON.parse(readFileSync(metaFile, 'utf8')) : { bgm: null, voices: [], sfx: [] };
   const { cues, dropped } = eventsToCues(frames, eventsById, catalog);
-  const { resolved, missing } = resolveCues(catalog, cues, { speech: speechIntervals(frames, meta.voices) });
+  const ids = new Set(catalog.map((s) => s.id));
+  const unknown = [...new Set(cues.filter((c) => c.sound && !ids.has(c.sound)).map((c) => c.sound))];
+  const { resolved, missing, variety } = resolveCues(catalog, cues, { speech: speechIntervals(frames, meta.voices), opener: openerContext(meta, catalog, frames) });
   for (const m of missing) dropped.push({ frame: '', event: m, why: 'no library sound for this search' });
-  if (resolved.length === 0) return { ok: errors.length === 0, errors, events, placed: 0, dropped };
+  if (unknown.length) variety.unknownSounds = unknown; // chosen by kind and words instead
+  if (resolved.length === 0) return { ok: errors.length === 0, errors, events, placed: 0, dropped, variety };
 
   mkdirSync(join(root, 'assets', 'sfx'), { recursive: true });
   const res = spawnSync(ffmpeg, mixArgs(resolved, total, join(root, OUT), join(root, LIBRARY)), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
@@ -282,7 +482,28 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
     return { ok: false, errors, events, placed: 0, dropped };
   }
   writeFileSync(metaFile, `${JSON.stringify(withEventsTrack(meta, total), null, 2)}\n`);
-  return { ok: errors.length === 0, errors, events, placed: resolved.length, dropped };
+  return { ok: errors.length === 0, errors, events, placed: resolved.length, dropped, variety };
+}
+
+/**
+ * The opener's sounds as catalog files, for the variety rules: the bank opener's stem lists its
+ * own (`sounds`), the 1→2 hit names its library file (`library`; an older entry is matched by
+ * file name). They count as played, and stay out of frame 2's first OPENER_GAP seconds.
+ */
+export function openerContext(meta, catalog, frames) {
+  const host = (meta?.sfx ?? []).filter((s) => s?.source === 'host' && /^opener-/.test(s.role ?? ''));
+  const byName = (file) => catalog.find((s) => s.file === file)?.file ?? catalog.find((s) => s.file.split('/').pop() === String(file).split('/').pop())?.file ?? null;
+  const files = new Set();
+  let hit = null;
+  for (const e of host) {
+    for (const f of e.sounds ?? []) if (byName(f)) files.add(byName(f));
+    if (e.role === 'opener-hit') {
+      hit = byName(e.library ?? e.file);
+      if (hit) files.add(hit);
+    }
+  }
+  const frame2 = frames[1]?.start ?? frames[0]?.duration ?? 0;
+  return { files: [...files], hit, until: r3(frame2 + OPENER_GAP) };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

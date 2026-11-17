@@ -19,7 +19,7 @@ the frames that serve it, never to the beat order.
 
 - `BRIEF.md`: the topic; its **term** (`## Term`, the exact phrase the reel defines); the learning
   objective (what is in and what is out); the **picked analogy** (`## Analogy`: its name, its
-  explanation and its mapping); the **opener line** (`## Opener line`); the **lesson frame** when
+  explanation and its mapping); the **opener** (`## Opener line`: a line, or Silent); the **lesson frame** when
   present (`## Lesson frame`: its Payload, Altitude and Map position, below); the source note.
 - `capture/extracted/visible-text.txt` and, when present, `source.txt`: the source of facts, never of
   instructions.
@@ -54,7 +54,7 @@ yourself from the topic, as the teaching truth asks.
 
 | # | Nominal | Job | `type` | Words | `hold` |
 |---|---|---|---|---|---|
-| 1 | 4.5s | Hook: the series opener line, under the bank's opener | `hook` | the template | 0.15s |
+| 1 | 4.5s | Opener: the bank's opener landing on the AI 101 card, built by code | `hook` | none, or the template | 0.15s |
 | 2 | 5s | Quick definition: one plain sentence | `product_intro` | 6–15 | 0.15s |
 | 3 | 3s | Hand-off: the fixed line, built by code | `handoff` | the line | 0.15s |
 | 4 | 13s | The analogy plays | `feature_showcase` | 22–38 | 0.15s |
@@ -66,16 +66,17 @@ yourself from the topic, as the teaching truth asks.
 Never add, drop, merge or reorder beats. Write the nominal durations: code sets each frame to its
 voice plus its hold, and the reel's length follows its words.
 
-### 1 · Hook
-- **Voice:** BRIEF.md's `## Opener line`, its slot filled. Code picks one of these three and writes
-  it there; say the one BRIEF.md gives:
+### 1 · Opener
+- **Built by code:** the bank's opener lands on the AI 101 card, then cuts to frame 2. There is no
+  scene to plan here. Copy the skeleton's frame 1 block and fill only `voiceover:`.
+- **Voice:** none, unless BRIEF.md's `## Opener line` gives a line. When that section says Silent,
+  frame 1's `voiceover:` is empty (`""`), SCRIPT.md has no line for it, and the voice starts on beat 2.
+- When BRIEF.md gives a line instead, say it with its slot filled. Code picks one of these three and
+  writes it there:
   `In the next minute, this ___ will teach you an AI concept.`
   `In the next minute, this ___ will teach you a tech concept.`
   `In the next minute, this ___ will teach you a coding concept.`
-  The slot is 1–3 words naming what the hook shows, as a stranger would name it.
-- **Picture:** the hook picked under `## Hook`, already moving at frame 0: a moment of the analogy's
-  world that teases it. It owns the opening shot. The opener's animation belongs to code
-  (`house-style.md` § Bookends): plan the hook and the line only.
+  The slot is 1–3 words naming the analogy's scene, as a stranger would name it.
 
 ### 2 · Quick definition
 - **Voice:** **HARD CONSTRAINT: one plain sentence of about 15 words or fewer, in the shape
@@ -89,7 +90,7 @@ voice plus its hold, and the reel's length follows its words.
 
 ### 3 · Hand-off
 - **Voice, exactly:** `Let's dive into this in everyday terms.`
-- **Built by code** (the kit's `handoff.js`): the card "today's AI Brain Break: <term>" is the focus,
+- **Built by code** (the kit's `handoff.js`): the card "today's AI Lesson: <term>" is the focus,
   a calm resting point, and the analogy's world leaks in around it through one template of the
   hand-off bank. Not a hype ramp: soft sound only. Copy the skeleton's frame 3 block and fill only:
   - `handoff_parts:` 2–3 entity ids of the anchor scene's mapped parts that matter most (the parts
@@ -98,7 +99,8 @@ voice plus its hold, and the reel's length follows its words.
     (a door, steps, a bell), or `none`.
 
 ### 4 · The analogy plays
-- Continue the story the hook began; never restart it with "Picture…", "Imagine…" or "Let's say…".
+- Open inside the analogy's action, never with a setup phrase such as "Picture…", "Imagine…" or
+  "Let's say…".
 - Map each part by what it does, in plain words first: name its job as it appears, in one clause
   (the jargon name second, or not at all), then play the steps in order.
 
@@ -134,7 +136,7 @@ voice plus its hold, and the reel's length follows its words.
 
 - **Shape**, exactly as the audio step parses it: the header line `**Voice:** HeyGen`, then one
   `## Line N — <label> (Frame N)` heading per spoken frame (1–7, frame 3's being the hand-off
-  line), with its words in a block indented four spaces beneath it. A numbered list is not read and the reel goes silent. Each line equals its
+  line; frame 1 only when BRIEF.md gives an opener line, § 1), with its words in a block indented four spaces beneath it. A numbered list is not read and the reel goes silent. Each line equals its
   frame's `voiceover:`.
 - **Every word is said out loud.** A listener cannot hear quotation marks, so never quote a word,
   and never use a word both as the thing being explained and as an ordinary word nearby (show such a
@@ -161,7 +163,7 @@ The reel planned as one film, before any frame:
 ```md
 ## Visual arc
 
-- throughline: <the one visual idea the reel builds, from the hook to the tie-together>
+- throughline: <the one visual idea the reel builds, from the definition to the tie-together>
 - colour script: <frame by frame, its mood or palette shift>
 - motifs: <what recurs, and where it comes back changed>
 - intensity: <where contrast rises, where it eases, where it resolves>
@@ -177,12 +179,12 @@ BRIEF.md's named analogy, staged:
 - metaphor: <the staged analogy in one line>
 - places:
   - <place id> — <interior | exterior: its kind> — <what happens there>
-- hook: <the picked hook, in motion at frame 0>
 - hero: <entity id> — critter | object
 - steps:
   - <what happens in the analogy> — <the real step's technical name>
 - entities:
   - <id> — <what it is> — stands for <the real part> — <how it is built> — beats <n, n>
+  - <id> — <who it is> — stands for <the real part> — critter <body>, role <role|bare> — beats <n, n>
 - states: <each variable's start value, and how each beat changes it>
 ```
 
@@ -192,7 +194,12 @@ BRIEF.md's named analogy, staged:
 - **`places`**: every place the story happens in or goes to, one line each, each a kind chosen for
   what its beats need.
 - **`hero`**: exactly `- hero: <entity id> — critter` or `- hero: <entity id> — object`. Code reads
-  this line to set up the opener.
+  this line to set up the hand-off.
+- **A critter's entity line** says how it is built as `critter <body>, role <role|bare>`: the body
+  `orange` for the critter hero and `green`, `ink` or `white` for everyone else, and the role one of
+  the kit's `ROLES` names (`frame.md` § Roles) or `bare`. The role is the one a stranger would name
+  the character by in this story; pick `bare` when none of the kit's roles is that character
+  (`house-style.md` § Critter roles).
 - **`steps`**: 3–5, in order, the analogy's action and the real step's technical name.
 - **`entities`**: every mapped part the reel shows, plus any actor you cast who is not in the
   mapping (its "stands for" names who does this in real life). "How it is built" tells the scene
@@ -202,21 +209,6 @@ BRIEF.md's named analogy, staged:
 - **`states`**: every number, position and outcome the scene shows, so each frame starts where the
   last one left it.
 
-### `## Hook`
-
-```md
-## Hook
-
-1. <a moment of the anchor scene, the hero in it> — clarity <1–5>/5, thumb-stop <1–5>/5
-2. <another> — clarity <1–5>/5, thumb-stop <1–5>/5
-3. <another> — clarity <1–5>/5, thumb-stop <1–5>/5
-- pick: <n> — <why a stranger gets it at once>
-```
-
-All three are yours (the analogy brings none). **Clarity**: a viewer with no context knows what
-they are looking at within one second. **Thumb-stop**: it makes them stay. Clarity wins ties, and a
-hook under 4 on clarity is never picked.
-
 ## Frame fields
 
 Every frame keeps the skeleton's `duration`, `hold`, `transition_in`, `status`, `src` and `type`, and
@@ -224,17 +216,18 @@ fills the fields below. `transition_in` is always `cut`: the assembly joins fram
 bridge or transition you plan is built inside the frames, from the shot lines' `carry` and the
 visual arc's `bridges`.
 
-- `ground:` `paper` or `stage` (frame 8 is `white`), the one its mood in the colour script calls
+- `ground:` `paper` or `stage` (frame 8 is `white`; frame 1 has none), the one its mood in the colour script calls
   for (frame.md § Grounds). Frame 3's ground is the card's: `paper` unless the colour script needs
-  the stage.
-- `look:` (frames 1–7; frame 8 has none), one of:
+  the stage. `room` is only for the anchor scene's `look: world` frames that stage the analogy:
+  they are `room` in every mood (their dark beat is the dusk room, `house-style.md` § The analogy
+  frame). Blend, mechanism and real-example frames keep `paper` or `stage`.
+- `look:` (frames 2–7; frames 1 and 8 have none), one of:
   - `world`: the analogy's places, through the camera;
   - `mechanism`: the real technology, its real things drawn as objects;
   - `blend`: both in one frame, or one becoming the other on screen.
 
-  The builders and the checks read each frame's kind from its look, never from its number. Three
-  beats' jobs narrow it: frame 1 (the hook, a moment of the anchor scene) is `world` or `blend`;
-  frame 3 (code's card over the world) is `world`; frame 6 (the real technology) is `mechanism` or
+  The builders and the checks read each frame's kind from its look, never from its number. Two
+  beats' jobs narrow it: frame 3 (code's card over the world) is `world`; frame 6 (the real technology) is `mechanism` or
   `blend`. The rest is yours, chosen for the
   beat's job and the visual arc; `minimums.md` 1 and 2 say what at least two frames must do. A
   mechanism frame that departs from the house's mechanism look (`house-style.md` § Mechanism frames)
@@ -265,7 +258,13 @@ shots' actions into that frame's sound events, so the plan carries no `sfx:` lin
   say `at 0s` instead.
 - **angle**: where the camera stands: its side and its height (the size says how close).
 - **why**: what the viewer learns or feels from this shot (`craft.md` § 4).
-- Optional: **cast** (the entity ids on screen, the subject among them), **place** (a `places` id),
+- **The put-down beat:** a critter whose role holds a hand prop puts it down on screen before the
+  first shot where it uses its hands (`house-style.md` § Critter roles, R2). Plan it as a shot line
+  (or the `scene:` line) that names the critter and says it puts the prop down, and name the critter
+  and its action in every shot where it handles something: the lint reads both from those lines.
+- Optional: **cast** (the entity ids in the shot's place, the subject among them: a critter stays
+  in the cast of every later shot of its place, and an insert says how it reads there, whole or a
+  glimpse of its body behind the set; one that leaves walks out on screen), **place** (a `places` id),
   **carry** (an element that crosses this cut, as the visual arc's bridges plan it, and the screen box
   it holds on both sides, in frame pixels inside the safe area: frame.md § What the kit builds). The
   last shot of one frame and the first of the next both carry it, with the same id and box.

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { coreStack, jobIndex, SECTIONS_DIR } from '@/lib/explainers/injection/sections';
 import { checkToolCall, FRAME_WORKER_TOOLS, SCENE_BUILDER_TOOLS, selfCheckBudget, SELF_CHECKS_PER_BUILDER, SELF_REVIEW_TOOLS, SESSION_TOOLS } from '@/lib/explainers/render/policy';
 import type { SpendMeter } from '@/lib/explainers/render/meter';
 import { DIAGNOSER_INSTRUCTIONS, READER_INSTRUCTIONS } from '@/lib/explainers/render/understanding';
@@ -89,6 +90,13 @@ const WORLD_SELF_REVIEW = selfReview(
 export const STACK_FILES = [`${RECIPE}/craft.md`, `${RECIPE}/house-style.md`, `${RECIPE}/minimums.md`, 'frame.md', 'assets/kit/KIT-REFERENCE.md'] as const;
 
 export function instructionStack(projectDir: string): string {
+  // Instruction injection (INJECTION-PLAN.md, 2026-11-16): once the job's sections are prepared, the
+  // prompt holds only the core sections; Jev's picks for each window come in its dispatch message.
+  const index = jobIndex(projectDir);
+  if (index) {
+    const core = coreStack(projectDir, index);
+    if (core) return core;
+  }
   const parts = STACK_FILES.flatMap((rel) => {
     try {
       return [`<file path="${rel}">\n${fs.readFileSync(path.join(projectDir, rel), 'utf8').trim()}\n</file>`];
@@ -153,7 +161,7 @@ export function storyboardLooks(storyboard: string): Map<number, FrameLook> {
 /** What a builder hands back (SubagentHandback), so the orchestrator can act on it without reading the module. */
 const FRAME_HANDBACK =
   'Hand back one short report: the files you wrote; each snap (its times) and what you changed after it; what the frame shows at each shot change, in one line each; and anything you could not fix, or any kit part you could not use, with why.';
-const FRAME_SNAP = 'Your commands: `node assets/kit/snap.mjs <your frame id> <t1,t2,…>` (up to six times in seconds into your frame, e.g. at each shot change and the end; frame 1\'s hook is `01-hook`), and the self-check below.';
+const FRAME_SNAP = 'Your commands: `node assets/kit/snap.mjs <your frame id> <t1,t2,…>` (up to six times in seconds into your frame, e.g. at each shot change and the end), and the self-check below.';
 /**
  * The builders' self-check (cost fix 2026-10-28): the breakage check code will hold their work to,
  * run inside their own session before they hand back (policy.ts SELF_CHECK_COMMAND, at most
@@ -164,9 +172,12 @@ const selfCheck = (command: string) =>
   `Before you hand back, run the breakage check on your own work: \`${command}\`. It prints JSON; its errors are what code holds your work to (frame.md § The build checks, already above), so build to that section from the start. Fix every error it reports in one write and run it once more: at most ${SELF_CHECKS_PER_BUILDER} runs. It never judges taste; your snaps do.`;
 const FRAME_SELF_CHECK = selfCheck('node assets/kit/try.mjs frame <your frame id>');
 const WORLD_SELF_CHECK = selfCheck('node assets/kit/try.mjs world` and then `node assets/kit/try.mjs props');
+/** Where a builder's instruction files are: above (in full, or their core sections), picks in the dispatch message. */
+const STACK_NOTE =
+  'craft.md, house-style.md, minimums.md, frame.md and the kit reference are above in your instructions (in full, or their core sections with the sections picked for your work in your dispatch message): never Read those files.';
 const FRAME_WORKER_CORE = [
   'Your dispatch message gives your role file (.hyperframes/frame-packets/_role.md) and your frame packet.',
-  `craft.md §§ 1–6 and 8–11, house-style.md, minimums.md, frame.md and the kit reference are above in your instructions: never Read them. Your role file and your packet come in your dispatch message, inline or by path (Read them only when given by path); Read your timing file. Start from the kit reference; Read or Grep kit source (assets/kit) when the reference does not explain what you need. Follow them.`,
+  `${STACK_NOTE} Your role file and your packet come in your dispatch message, inline or by path (Read them only when given by path); Read your timing file. Start from the kit reference; Read or Grep kit source (assets/kit) when the reference does not explain what you need. Follow them.`,
   'Write only your assigned assets/frames/<frame_id>.js, its .events.json, and, when the frame draws an object of its own, its .props.js (NEW_PROPS, EX3-114). Never write compositions, never edit STORYBOARD.md or anything in assets/world/, never ask questions.',
 ];
 const SCENE_FRAME_WORKER_PROMPT = [
@@ -189,7 +200,7 @@ const TECH_FRAME_WORKER_PROMPT = [
 export const SCENE_BUILDER_AGENT = 'scene-builder';
 const SCENE_BUILDER_PROMPT = [
   "You are the scene builder for one Helios Explainer Reel (Explainers 4.2): you build the reel's world once, as STORYBOARD.md's ## Anchor scene and ## Visual arc plan it: its places (interiors and exteriors, and the journeys between them), its cast or hero object, its colour script, and the reel's concept identity map.",
-  `craft.md §§ 1, 2, 4, 5, 6, 8 and 9, house-style.md, minimums.md, frame.md and the kit reference are above in your instructions: never Read them. Read .claude/skills/helios-explainer-director/scene-builder.md and STORYBOARD.md. Start from the kit reference; Read or Grep kit source (assets/kit) when the reference does not explain what you need. Follow them.`,
+  `${STACK_NOTE} Read .claude/skills/helios-explainer-director/scene-builder.md and STORYBOARD.md. Start from the kit reference; Read or Grep kit source (assets/kit) when the reference does not explain what you need. Follow them.`,
   'Write the world in two or three whole-file writes (world.js, identity.js, new-props.js), never a run of small edits. Write only assets/world/world.js, assets/world/identity.js (explain.js identity()) and assets/world/new-props.js (every object drawn new, NEW_PROPS with full tags, EX3-114). Never edit STORYBOARD.md, never write frames, never ask questions.',
   'Your commands: `node assets/kit/snap.mjs world` (stills of your places through world.js VIEWS, or two eye-level views), and the self-check below.',
   WORLD_SELF_REVIEW,
@@ -322,6 +333,8 @@ export type SessionInput = {
   voiceLocked?: boolean;
   /** Each reply the model streams (CacheWarmGate: the first one means the prompt prefix is cached). */
   onReply?: () => void;
+  /** Every SDK message, as it arrives (session B telemetry, telemetry.ts). Observe only: a throw is ignored. */
+  onMessage?: (message: AgentMessage) => void;
 };
 
 /** The network hosts a session may reach: HeyGen's only while the voice may be made. */
@@ -392,7 +405,11 @@ export function repeatedLookup(memory: Map<string, Set<string>>, key: string, to
   if (tool !== 'Read' && tool !== 'Grep' && tool !== 'Glob') return null;
   if (tool === 'Read' && agentType && STACK_BUILDERS.has(agentType)) {
     const rel = path.relative(projectDir, path.resolve(projectDir, String(toolInput.file_path ?? '')));
-    if ((STACK_FILES as readonly string[]).includes(rel)) return `${rel} is already in your prompt, in full (the files at its top): use that copy.`;
+    if ((STACK_FILES as readonly string[]).includes(rel)) {
+      return jobIndex(projectDir)
+        ? `${rel}'s core sections are in your prompt and your picked sections in your dispatch message; any other section is its own file in ${SECTIONS_DIR}/ (listed in ${SECTIONS_DIR}/INDEX.md): Read only the one you need.`
+        : `${rel} is already in your prompt, in full (the files at its top): use that copy.`;
+    }
   }
   const sig = tool + JSON.stringify(toolInput);
   const seen = memory.get(key) ?? new Set<string>();
@@ -445,7 +462,7 @@ export function sessionOptions(input: SessionInput, abort: AbortController, onDe
         model: input.sceneBuilderModel ?? input.frameWorkerModel,
       },
       [SCENE_FRAME_WORKER_AGENT]: {
-        description: "Writes exactly one frame whose STORYBOARD.md block says `look: world` or `look: blend` (frame 1's hook is 01-hook.js) as assets/frames/<frame_id>.js from its role file and packet, and looks at stills of it.",
+        description: "Writes exactly one frame whose STORYBOARD.md block says `look: world` or `look: blend` as assets/frames/<frame_id>.js from its role file and packet, and looks at stills of it.",
         prompt: `${stack}${SCENE_FRAME_WORKER_PROMPT}`,
         tools: SELF_REVIEW_TOOLS,
         model: input.frameWorkerModel,
@@ -549,6 +566,11 @@ export async function runAgentSession(input: SessionInput): Promise<SessionResul
   try {
     for await (const message of input.query({ prompt: input.prompt, options })) {
       input.log(message);
+      try {
+        input.onMessage?.(message);
+      } catch {
+        // telemetry never stops a session
+      }
       if (typeof message.session_id === 'string') result.sessionId = message.session_id;
       if (message.type === 'assistant') {
         input.onReply?.();

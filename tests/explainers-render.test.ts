@@ -696,9 +696,10 @@ test('salvage counts only frames\' own modules, never code\'s opener or a frame\
   fs.mkdirSync(frames, { recursive: true });
   fs.writeFileSync(path.join(frames, '01-opener.js'), '');
   for (const n of [2, 3, 4, 5, 6, 7]) fs.writeFileSync(path.join(frames, `0${n}-beat.js`), '');
-  fs.writeFileSync(path.join(frames, '01-hook.props.js'), '');
-  assert.equal(frameModulesWritten(dir), false, 'the hook itself is missing');
-  fs.writeFileSync(path.join(frames, '01-hook.js'), '');
+  // hx-6: frame 1 (01-opener, 01-hook) is code's; frames 2-7 are the builders'
+  fs.rmSync(path.join(frames, '04-beat.js'));
+  assert.equal(frameModulesWritten(dir), false, 'a builder frame is missing');
+  fs.writeFileSync(path.join(frames, '04-beat.js'), '');
   assert.equal(frameModulesWritten(dir), true);
 });
 
@@ -761,7 +762,7 @@ test('a placeholder index.html with no frames still fails without rendering', as
   const outcome = await runRenderJob(d, job);
   assert.equal(outcome.status, 'failed');
   assert.match(outcome.status === 'failed' ? outcome.error : '', /without a video \(success\)/);
-  assert.match(outcome.status === 'failed' ? outcome.error : '', /Missing frames 1, 2, 3, 4, 5, 6, 7, 8/);
+  assert.match(outcome.status === 'failed' ? outcome.error : '', /Missing frames 2, 4, 5, 6, 7\./);
   assert.equal(rendered, 0);
 });
 
@@ -896,8 +897,12 @@ test('the workspace holds the project, pinned skills, director, recipe, preset, 
   // The named analogy (EX3-123): its name, its explanation, and the mapping table the director stages from.
   assert.match(brief, /## Analogy\n\nThe analogy the idea phase picked \(two writers, Jev's pick\)\. Stage the anchor scene from it; never swap in another\.\n\nName: A mailbox with a flag\n\nA letter drops in and the flag pops up\. You never walk out to look\.\n\n\| Analogy \| Concept \|\n\|---\|---\|\n\| the mailbox \| the webhook URL \|\n\| the flag popping up \| the notification \|\n\| walking over to look \| polling \|\n\nThe reel shows the first three or four rows\./);
   assert.doesNotMatch(brief, /Scene:|Elements:|Actor:|Hook \(|Steps \(/);
-  // The opener's facts (EX3-130): an ai_focus under 2.5 is a tech concept.
-  assert.match(brief, /## Opener line\n\nIn the next minute, this ___ will teach you a tech concept\.\n/);
+  // EX6-14 (D124): the default opener is silent, so the brief gives no line and says so.
+  assert.match(brief, /## Opener line\n\nSilent\. Frame 1 is the silent visual hook/);
+  assert.doesNotMatch(brief, /In the next minute/);
+  // 'spoken' brings the line back; the opener's facts (EX3-130): an ai_focus under 2.5 is a tech concept.
+  const spokenBrief = briefMarkdown({ title: 'What is an API?', scope: 'Explain an API call.', source_url: null, source_text: null, jev_notes: { ai_focus: 1.5 } }, null, null, { openerVoice: 'spoken' });
+  assert.match(spokenBrief, /## Opener line\n\nIn the next minute, this ___ will teach you a tech concept\.\n/);
   assert.match(brief, /fixed eight-beat structure/);
   assert.match(brief, /^length: 60s$/m);
   assert.doesNotMatch(brief, /45/);
@@ -1255,7 +1260,7 @@ test('the understanding test (4.2): code builds what a viewer meets, two readers
   assert.notEqual(newcomer.term, curious.term);
   assert.doesNotMatch(newcomer.reelTest, /webhook/i, 'the term is replaced everywhere');
   assert.match(newcomer.reelTest, new RegExp(`Voice: A ${newcomer.term} is a message one app sends`));
-  assert.match(newcomer.reelTest, new RegExp(`a card that reads "today.s AI Brain Break: ${newcomer.term}"`));
+  assert.match(newcomer.reelTest, new RegExp(`a card that reads "today.s AI Lesson: ${newcomer.term}"`));
   assert.match(curious.reelTest, /Voice: A webhook is a message one app sends to another app the moment something happens\./);
   for (const r of readers.reads) {
     for (let n = 1; n <= 8; n += 1) assert.match(r.reelTest, new RegExp(`^## Beat ${n}$`, 'm'));

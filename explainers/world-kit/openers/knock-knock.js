@@ -1,6 +1,6 @@
 // Knock Knock: the hook's critter pops up huge against the screen, knocks twice on the glass,
-// points up as "AI BRAIN BREAK" writes itself, then ducks away to show its scene; the wordmark
-// lifts away and the title card with the term lands in its place (EX3-102).
+// points up as "AI 101" writes itself, then ducks away to show the AI 101 card, where it stands
+// beside the title (hx-6); the written wordmark lifts away as the card shows.
 import { T, g, el, defs, seg, lerp, E, scene, heroCritter, title, wordmark, shake, shaken, shock } from './common.js';
 
 const S = 7.4;
@@ -26,7 +26,8 @@ export default function draw(t, ctx) {
   const lean = knock !== undefined ? 1 + 0.05 * Math.sin(Math.PI * seg(t, knock - 0.08, knock + 0.12, (x) => x)) : 1;
   const parts = [defs()];
   // the scene behind, dimmed until the critter leaves
-  parts.push(shaken(offset, scene(ctx, t)));
+  // the card's own scholar stays hidden while the big one is knocking (one scholar on screen)
+  parts.push(shaken(offset, scene(ctx, t, { hideHero: t < duck[1], bare: t < duck[0] })));
   parts.push(el('rect', { x: 0, y: 0, width: 1080, height: 1920, fill: T.ink, opacity: (0.55 * (1 - seg(t, duck[0], duck[1] + 0.1, (x) => x))).toFixed(3) }));
   if (t < duck[1]) {
     const pose = { mood: t >= point ? 'happy' : 'surprised', arms: t >= point ? 'point' : knock !== undefined ? 'push' : 'hold', look: t >= point ? [0.2, -0.8] : [0, 0] };
@@ -36,7 +37,9 @@ export default function draw(t, ctx) {
   const { titleAt } = ctx.M;
   if (t >= writeAt[0]) {
     // the wordmark holds over the duck, then lifts away as the title card slides into the band
-    const gone = seg(t, titleAt - 0.05, titleAt + 0.2, E.in);
+    // a silent hook keeps it to the cut (D125)
+    // hx-6: over the AI 101 card it lifts away as the critter ducks, so the card's title is the one
+    const gone = ctx.hook.lesson ? seg(t, duck[0], duck[1], E.in) : ctx.M.silent ? 0 : seg(t, titleAt - 0.05, titleAt + 0.2, E.in);
     if (gone < 1) {
       const lift = g({ transform: `translate(540 420) scale(${lerp(1, 0.4, gone).toFixed(3)}) translate(-540 -420)`, opacity: (1 - gone).toFixed(3) }, wordmark(540, 420, 92, seg(t, writeAt[0], writeAt[1], (x) => x), { color: t < duck[1] ? T['paper-lit'] : T.ink, plate: t >= duck[1] }));
       parts.push(lift);

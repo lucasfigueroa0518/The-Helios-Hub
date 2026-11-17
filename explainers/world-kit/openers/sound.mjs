@@ -15,6 +15,7 @@ import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { OBJECT_HERO_OPENERS, openerByKey, openerTiming, pickOpener, storyboardHeroKind } from './bank.js';
+import { applyPalette, BREAK, openingProblems, projectPalette, SWISH } from './palette.mjs';
 
 const REF_PEAK_DB = -6;
 const MAX_BOOST_DB = 18;
@@ -30,11 +31,9 @@ export const CHOICE = 'assets/opener.json';
 
 // ── Synthesized breaks (commas escaped for the filtergraph) ──────────────────────────────────
 const esc = (s) => s.replace(/,/g, '\\,');
+// No sub-bass synths (a 46 Hz boom and a sub swell were removed 2026-11-17): the same synthesized
+// "mmmm" under every opener, then again at the cut, was the back-to-back boom Lucas rejected.
 export const SYNTH = {
-  /** a sub-bass swell that rises in pitch and volume over d seconds */
-  subSwell: (d) => ({ expr: esc(`0.9*sin(2*PI*(34*t+46*t*t))*pow(t/${d},2)`), dur: d }),
-  /** a deep boom with a fast thump on top */
-  boom: () => ({ expr: esc('0.95*sin(2*PI*46*t)*exp(-2.8*t)+0.6*sin(2*PI*92*t)*exp(-7*t)+0.35*(random(0)*2-1)*exp(-30*t)'), dur: 1.5 }),
   /** rubber stretching as a balloon takes a gulp of air: a buzzy rising tone */
   stretch: (d, f0 = 150, f1 = 260) => ({ expr: esc(`0.28*(sin(2*PI*(${f0}*t+${(f1 - f0) / 2 / d}*t*t+5*sin(2*PI*24*t)))+0.4*sin(4*PI*(${f0}*t+${(f1 - f0) / 2 / d}*t*t)))*pow(sin(PI*t/${d}),0.5)`), dur: d }),
 };
@@ -44,7 +43,14 @@ const sfx = (file, at, gain = 0.8, o = {}) => ({ src: file, at, gain, ...o });
 const synth = (s, at, gain = 1, o = {}) => ({ synth: s, at, gain, ...o });
 /** The moment the bed comes in (not a clip: the bed itself is unmuted there). */
 const bed = (at) => ({ bed: true, at });
-const HIT = (at, gain = 0.9) => [sfx('pixabay/impact-bass-2.mp3', at, gain), synth(SYNTH.boom(), at, 0.45)];
+// The opening's one heavy hit is the reel's palette break (palette.mjs), never a fixed file: two fixed
+// bass hits made every reel open on the same sound, twice (Lucas 2026-11-17).
+// One sub-bass event per opening (Lucas 2026-11-17: the low "mmmm" played twice back to back): the
+// break is the only sound with sub-bass. No synthesized boom or sub swell is layered under it, and
+// every other stem sound is high-passed at SUB_CUT_HZ (placeOpener), the cut's sweep at CUT_SWEEP_HZ.
+export const SUB_CUT_HZ = 120;
+export const CUT_SWEEP_HZ = 250;
+const HIT = (at, gain = 0.9) => [sfx(BREAK, at, gain)];
 
 /** A record scratch made from the bed itself: fast forward and back over the same spot. */
 function scratch(at, pos, gain = BED_LOUD * 1.6) {
@@ -70,8 +76,7 @@ export const SCORES = {
     sfx('freesound/paper-crumple/173939-2.mp3', 0.05, 0.25),
     sfx('freesound/paper-tear/272028-1.mp3', M.breakAt - 0.06, 1.1, { dur: 0.8, fadeOut: 0.2 }),
     sfx('freesound/paper-tear/158526-6.mp3', M.breakAt, 0.8),
-    sfx('pixabay/impact-bass-2.mp3', M.breakAt, 0.9),
-    synth(SYNTH.boom(), M.breakAt, 0.5),
+    sfx(BREAK, M.breakAt, 0.9),
     bed(M.breakAt),
   ],
   'record-scratch': (M) => [
@@ -81,21 +86,21 @@ export const SCORES = {
     sfx('kenney/impact-sounds/Audio/impactGeneric_light_002.ogg', M.voiceAt, 0.5),
     sfx(MARKER, M.voiceAt + 0.12, 0.6, { dur: 0.48, fadeOut: 0.1 }),
     sfx('pixabay/whoosh-short.mp3', M.unfreezeAt - 0.18, 0.5),
-    sfx('pixabay/impact-bass-1.mp3', M.unfreezeAt, 0.8),
+    sfx(BREAK, M.unfreezeAt, 0.8),
     bed(M.unfreezeAt),
   ],
   typewriter: (M) => [
     ...M.keys.map((k, i) => sfx(TYPE_KEYS[i % TYPE_KEYS.length], k, 0.85, { dur: 0.25, fadeOut: 0.05 })),
     sfx('pixabay/ping.mp3', M.breakAt, 0.9),
     sfx(SLIDE, M.dropAt, 0.8),
-    sfx('pixabay/whoosh.mp3', M.dropAt, 0.5),
-    sfx('pixabay/impact-bass-1.mp3', M.dropAt + 0.3, 0.6),
+    sfx(SWISH, M.dropAt, 0.5),
+    sfx(BREAK, M.dropAt + 0.3, 0.6),
     bed(M.dropAt + 0.3),
   ],
   'big-bang': (M) => [
-    synth(SYNTH.subSwell(M.breakAt), 0, 0.8),
-    synth(SYNTH.boom(), M.breakAt, 0.9),
-    sfx('pixabay/impact-bass-2.mp3', M.breakAt, 1.0),
+    // the build is a bright riser (high-passed like the rest); the break alone carries the bass
+    sfx('pixabay/riser.mp3', 0, 0.7, { dur: M.breakAt, fadeIn: 0.25 }),
+    sfx(BREAK, M.breakAt, 1.0),
     bed(M.breakAt),
   ],
   'knock-knock': (M) => [
@@ -104,14 +109,14 @@ export const SCORES = {
     ...M.knocks.map((k, i) => sfx(`kenney/impact-sounds/Audio/impactGlass_light_00${i + 1}.ogg`, k, 1.1)),
     ...M.knocks.map((k) => sfx('kenney/impact-sounds/Audio/impactGeneric_light_001.ogg', k, 0.7)),
     sfx(MARKER, M.writeAt[0], 0.6, { dur: M.writeAt[1] - M.writeAt[0], fadeOut: 0.08 }),
-    sfx('pixabay/whoosh.mp3', M.duck[0], 0.6),
-    sfx('pixabay/impact-bass-1.mp3', M.duck[0] + 0.22, 0.7),
+    sfx(SWISH, M.duck[0], 0.6),
+    sfx(BREAK, M.duck[0] + 0.22, 0.7),
     bed(M.duck[0] + 0.22),
   ],
   'eye-zoom': (M) => [
     ...[0.0, 0.12, 0.26].map((at) => sfx('kenney/interface-sounds/Audio/tick_002.ogg', at, 0.45)),
     sfx('kenney/impact-sounds/Audio/impactSoft_medium_001.ogg', M.blink[0] + 0.05, 0.6),
-    sfx('pixabay/whoosh.mp3', M.zoom[0] - 0.05, 0.9),
+    sfx(SWISH, M.zoom[0] - 0.05, 0.9),
     sfx('pixabay/whoosh-short.mp3', M.zoom[0] + 0.15, 0.6),
     ...HIT(M.landAt, 1.0),
     bed(M.landAt),
@@ -127,7 +132,7 @@ export const SCORES = {
     ...M.lands.map((at, i) => sfx(WOOD(i), at, 0.75)),
     sfx('kenney/rpg-audio/Audio/creak2.ogg', M.wobble[0], 0.7, { dur: M.breakAt - M.wobble[0] + 0.05, fadeOut: 0.05 }),
     ...[0.12, 0.2, 0.3, 0.42].map((d, i) => sfx(`kenney/impact-sounds/Audio/impactWood_medium_00${i}.ogg`, M.breakAt + d, 0.6)),
-    sfx('pixabay/impact-bass-1.mp3', M.breakAt, 0.85),
+    sfx(BREAK, M.breakAt, 0.85),
     bed(M.breakAt),
   ],
   unboxing: (M) => [
@@ -136,7 +141,7 @@ export const SCORES = {
     sfx('freesound/cardboard/135014-1.mp3', M.open[0], 1.0),
     sfx('freesound/cardboard/95561-1.mp3', M.open[0] + 0.03, 0.8),
     sfx('freesound/cardboard/364932-1.mp3', M.open[0] + 0.14, 0.6),
-    sfx('pixabay/whoosh.mp3', M.dive[0], 0.7),
+    sfx(SWISH, M.dive[0], 0.7),
     ...HIT(M.dive[1], 0.9),
     bed(M.open[0]),
   ],
@@ -145,7 +150,7 @@ export const SCORES = {
     sfx('pixabay/whoosh-short.mp3', M.breakAt - 0.22, 0.6),
     sfx('kenney/impact-sounds/Audio/impactSoft_heavy_001.ogg', M.breakAt, 1.1),
     sfx('freesound/paper-crumple/106127-2.mp3', M.breakAt, 0.7, { dur: 0.3, fadeOut: 0.08 }),
-    sfx('pixabay/impact-bass-1.mp3', M.breakAt, 0.85),
+    sfx(BREAK, M.breakAt, 0.85),
     sfx('freesound/paper-fold/367683-2.mp3', M.unfold[0], 0.8, { dur: 0.5, fadeOut: 0.1 }),
     sfx('freesound/tape/369915-3.mp3', M.peel[0], 0.6),
     sfx('freesound/paper-flutter/382654-4.mp3', M.peel[0] + 0.1, 0.6),
@@ -157,7 +162,7 @@ export const SCORES = {
     sfx(SLIDE, M.lift[0] + 0.08, 0.6),
     sfx('pixabay/whoosh-short.mp3', M.drop[0], 0.5),
     sfx('pixabay/pop.mp3', M.drop[1], 0.8),
-    sfx('pixabay/impact-bass-1.mp3', M.drop[1], 0.8),
+    sfx(BREAK, M.drop[1], 0.8),
     bed(M.lift[0]),
   ],
 };
@@ -249,6 +254,19 @@ export function ensureOpener(root, rand = Math.random) {
   return pick;
 }
 
+/**
+ * Whether frame 1 speaks (D124): assets/opener.json's `voice`, which the job writes from the
+ * `opener_voice` setting. 'silent' only when it says so; a choice without one (a job from before
+ * D124, or pace's own draw) is 'spoken', as it was.
+ */
+export function openerVoice(root) {
+  try {
+    return JSON.parse(readFileSync(join(root, CHOICE), 'utf8'))?.voice === 'silent' ? 'silent' : 'spoken';
+  } catch {
+    return 'spoken';
+  }
+}
+
 /** Frame 1's line without the opener's lead: { voice (seconds), words (from the line's start) }. */
 export function openerLine(meta) {
   const v = (meta?.voices ?? []).find((x) => Number(x.frame) === 1);
@@ -268,13 +286,22 @@ export function placeOpener(root, { ffmpeg = 'ffmpeg' } = {}) {
   const metaFile = join(root, 'audio_meta.json');
   if (!existsSync(metaFile)) return { ok: false, errors: ['audio_meta.json is missing'], sfx: [] };
   const meta = JSON.parse(readFileSync(metaFile, 'utf8'));
-  const line = openerLine(meta);
-  if (!line || !(line.voice > 0)) return { ok: false, errors: ['frame 1 has no voice in audio_meta.json'], sfx: [] };
-  const M = openerTiming(key, line.voice, line.words);
-  const { clips, bedAt } = openerScore(key, M);
+  // a silent hook (D124) has no line: its timing is the opener's own (the music and sounds stay)
+  const silent = openerVoice(root) === 'silent';
+  const line = silent ? null : openerLine(meta);
+  if (!silent && (!line || !(line.voice > 0))) return { ok: false, errors: ['frame 1 has no voice in audio_meta.json'], sfx: [] };
+  const M = silent ? openerTiming(key, 0, [], { silent: true }) : openerTiming(key, line.voice, line.words);
+  const scored = openerScore(key, M);
+  const bedAt = scored.bedAt;
   const library = join(root, 'assets', 'sfx-library');
+  // the whole library (bank + drop-ins, with peaks), and this reel's palette for the break, swish and cut
+  const { catalog: lib, palette } = projectPalette(root);
   const catalogFile = join(library, 'catalog.json');
-  const catalog = existsSync(catalogFile) ? JSON.parse(readFileSync(catalogFile, 'utf8')) : [];
+  const catalog = lib.length ? lib : existsSync(catalogFile) ? JSON.parse(readFileSync(catalogFile, 'utf8')) : [];
+  // the break keeps its bass; every other sound is high-passed so the opening has one low event
+  const clips = applyPalette(scored.clips, palette).map((c) =>
+    c.src === 'music' || (palette.break && c.src === palette.break.file) ? c : { ...c, highpass: Math.max(c.highpass ?? 0, SUB_CUT_HZ) },
+  );
   const errors = [];
 
   // The bed: the fitted track, silent until the drop (kept beside the original, rebuilt each run).
@@ -299,7 +326,11 @@ export function placeOpener(root, { ffmpeg = 'ffmpeg' } = {}) {
   const r = spawnSync(ffmpeg, mixArgs(playable, M.duration, tmp, { sfx: library, music: bedFile }, catalog, bedScale), { encoding: 'utf8' });
   if (r.status !== 0) return { ok: false, errors: [...errors, `the opener stem failed: ${String(r.stderr).trim().slice(0, 400)}`], sfx: [] };
   renameSync(tmp, out);
-  const entry = { frame: 1, file: STEM, offset_s: 0, duration_s: M.duration, volume: 1, source: 'host', role: 'opener-stem', opener: key };
+  // the library sounds the stem plays: sound.mjs keeps them out of the reel's accents (variety)
+  const sounds = [...new Set(playable.filter((c) => c.src && c.src !== 'music').map((c) => resolveFile(c.src, catalog)))];
+  const cut = palette.cut?.file ?? null;
+  const problems = openingProblems([...sounds.filter((f) => !/^freesound\//.test(f)), ...(cut ? [cut] : [])], catalog);
+  const entry = { frame: 1, file: STEM, offset_s: 0, duration_s: M.duration, volume: 1, source: 'host', role: 'opener-stem', opener: key, sounds, palette: { seed: palette.seed, break: palette.break?.file ?? null, swish: palette.swish?.file ?? null, cut }, ...(problems.length ? { problems } : {}) };
   meta.sfx = [entry, ...(meta.sfx ?? []).filter((s) => !(s?.source === 'host' && /^opener-/.test(s.role ?? '')))];
   writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
   return { ok: errors.length === 0, errors, sfx: [entry], opener: key, bedAt };

@@ -1,0 +1,54 @@
+{
+ "file": "383dbef3-new-props.js",
+ "job": "383dbef3-9f48-4d95-a11d-ca8d1f749a20",
+ "topic": "reinforcement learning",
+ "added_at": "2026-11-17T02:00:18.384Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "dog biscuit treat": {
+   "source_name": "dog biscuit treat",
+   "tags": {
+    "is": "a bone-shaped dog biscuit, the reward a puppy earns for sitting",
+    "setting": "a family living room, a trainer's treat pouch, the rug where it drops",
+    "material": "baked biscuit, matte, warm golden brown with docking dots",
+    "parts": [
+     "two round lobes at each end",
+     "a short bar between them",
+     "docking dots on top"
+    ],
+    "not": [
+     "a real brand",
+     "a face",
+     "orange"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "chewed sneaker": {
+   "source_name": "chewed sneaker",
+   "tags": {
+    "is": "a lilac canvas sneaker with bite marks at the heel, chewed by a puppy",
+    "setting": "lying on a living-room rug",
+    "material": "lilac canvas upper, white rubber sole and toe cap",
+    "parts": [
+     "sole",
+     "upper",
+     "toe cap",
+     "laces",
+     "collar",
+     "bite marks"
+    ],
+    "not": [
+     "a logo",
+     "a brand",
+     "a face"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

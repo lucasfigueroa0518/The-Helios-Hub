@@ -8,7 +8,7 @@
 //   dictionaryCard(t, o)             frame 5's card (4.3; frame 3's before): headword, part of speech, rule, and the
 //                                    definition filling in word by word on its voice times
 //   titleCard(t, o)                  a worker-built frame 1's top-band card (before 4.3; 4.3's
-//                                    card is handoff.js handoffCard, frame 3): "today's brain break:" and the
+//                                    card is handoff.js handoffCard, frame 3): "today's AI lesson:" and the
 //                                    term, handwritten in Hershey Sans while the opener line plays,
 //                                    animating from the reel's first frame (EX3-93)
 //   textBox(text, x, y, o)           text inside a shape (a speech or chat bubble, a note, a sign,
@@ -143,7 +143,7 @@ export const TITLE_BAND = { x: 150, y: 250, w: 780, h: 280 };
 /**
  * Frame 1's title card (EX3-61, EX3-79, EX3-93): a frosted glass card in the top band that starts
  * sliding in on the reel's first frame, lands by TITLE_LANDS, and writes itself while the opener
- * line plays, "today's brain break:" in ink and the term in orange beneath it, finished by `to`
+ * line plays, "today's AI lesson:" in ink and the term in orange beneath it, finished by `to`
  * (the line's end). The hook keeps playing below, undimmed. Returns the group
  * (data-role="title"). `from` (when the writing starts) is at most TITLE_LANDS.
  * @param {number} t
@@ -155,7 +155,7 @@ export function titleCard(t, { term, from = TITLE_LANDS, to, band = TITLE_BAND, 
   let { h } = band;
   const slide = seg(t, 0, Math.max(0.12, from), easeUI);
   if (slide <= 0) return '';
-  const kicker = "today's brain break:";
+  const kicker = "today's AI lesson:";
   const kSize = Math.min(54, ((w - 80) * 0.95 * 662) / Math.max(1, handwriteWidth(kicker, 662)));
   // The term on one line when it fits at a readable size, else on two lines split at a space.
   const fit = (str) => Math.min(104, ((w - 80) * 662) / Math.max(1, handwriteWidth(str, 662)));

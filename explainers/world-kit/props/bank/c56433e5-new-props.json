@@ -1,0 +1,39 @@
+{
+ "file": "c56433e5-new-props.js",
+ "job": "c56433e5-10b1-4a9f-abdc-9af6d3adae79",
+ "topic": "model routing",
+ "added_at": "2026-11-17T02:00:18.392Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "hospital emergency-room double door": {
+   "source_name": "hospital emergency-room double door",
+   "tags": {
+    "is": "a pair of hospital emergency-room swing doors in a dark frame, each leaf with a round porthole window and a push plate, under a small \"ER\" plaque",
+    "setting": [
+     "hospital emergency department",
+     "hospital corridor"
+    ],
+    "material": "painted wood leaves in a dark frame",
+    "parts": [
+     "two door leaves",
+     "round porthole windows",
+     "push plates",
+     "kick plates",
+     "dark frame",
+     "ER plaque on top"
+    ],
+    "not": [
+     "front door of a house",
+     "elevator door",
+     "saloon door",
+     "fridge",
+     "garage door",
+     "single office door"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

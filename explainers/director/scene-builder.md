@@ -27,6 +27,8 @@ story travels between two places, make both journey-ready (their doors, their pa
 `lanes.walk`): the frame builders call `journey()`. The first place is `SET`; every other place is in `SETS`
 under its place id, so a shot's `place:` finds it. Export `ROOM`, `LIGHTS`, `VIEWS` (a camera for
 each place, the frames' main angles among them) and `fit` as frame.md § The world module shows.
+A place the analogy frames stand in is a front-on room (`house-style.md` § The analogy frame; frame.md
+§ The analogy room).
 
 **HARD CONSTRAINT — the locked set.** Every object that stands in a place (a laptop, a drawer of
 cables, a speaker, a phone, a second laptop) is declared once in that place's `DRESSING` list with
@@ -45,10 +47,8 @@ skies. `minimums.md` 6 holds in every mood.
 ## Step 3 · The hero and the cast
 Design each from the anchor scene's entity lines (`craft.md` § 9, `house-style.md` § Heroes,
 critters and objects):
-- **A critter**: `CAST[id] = { body, outfit, view }`, its body chosen as `house-style.md`
-  § Palette and orange says for a hero and for everyone else. Start its outfit from
-  `ROLE_GUIDE[role]` when the role is there, fit it to this reel, and check it with
-  `outfitReads(outfit)` (it reads as the role, with no clashes). Give each critter a `LENS` function
+- **A critter**: `CAST[id] = { body, role, view }`, its body and role the ones its entity line
+  names (`house-style.md` § Critter roles; frame.md § Roles). Give each critter a `LENS` function
   that takes its pose as an intent with world targets in cm and solves it through the rig, so frame
   builders never place an arm:
 
@@ -76,15 +76,17 @@ critters and objects):
   ```
 
   Every prop a critter holds in the story gets a hold-ready drawing (`hold`), so it is in the hand
-  in every frame.
+  in every frame. A role's hand prop goes down in the put-down beat the storyboard plans (pass
+  `hand: null` from then on).
 - **An object hero, or any object that acts in the world**: when it is one of `OBJECTS`, stand it
   in the world with `worldObject()` and give it a `LENS` entry that draws it through `lensObject()`
   with the frame's moves (frame.md § Objects and the courier), so frame builders move it with the
   verbs. A thing `OBJECTS` lacks is built from lens solids, with a `LENS` function whose poses are the
   motions its story needs (a hop, a slide, a tilt toward something, a reaction, a settle), built with
   `craft.md` § 5 in mind.
-- **An animal** (`house-style.md` § Heroes, critters and objects): a `LENS` entry that draws
-  `animal()` at its spot (or `animalFrom()` for a species the kit lacks), its `s` from `P.scaleAt`
+- **An animal** (`house-style.md` § Heroes, critters and objects): a `LENS` entry that draws it at
+  its spot; in an analogy frame from the drawn library (`drawnAt`, frame.md § The analogy room), else
+  `animal()` (or `animalFrom()` for a species the kit lacks), its `s` from `P.scaleAt`
   as a critter's, its pose as `view`, `flip`, `t` and `action`. Never a `CAST` critter.
 - **Every other entity**: built from `OBJECTS` (`worldObject()`) or lens solids, wrapped with `entity()` so labels and
   checks can find it, with the poses its mechanism needs (filling, opening, tipping, jamming) and
@@ -92,7 +94,7 @@ critters and objects):
 - Size every entity in `SIZES` for how it must read on a phone (`house-style.md` § Scale), and
   place each one in `LAYOUT`.
 
-Also export `ENTITIES`, `STATES`, `STEPS` and `HOOK` (frame.md § The world module). An entity the kit
+Also export `ENTITIES`, `STATES` and `STEPS` (frame.md § The world module). An entity the kit
 cannot build as described: draw the nearest buildable thing that still reads as it, and say so.
 
 ## Step 4 · Every planned shot has its place

@@ -1,0 +1,96 @@
+{
+  "_about": "First-try lesson rules (lib/explainers/injection/lessons.ts). Each rule matches one kind of first-try self-check error (`match`, a case-insensitive regex on the error with its frame prefix removed). When the ledger sees a kind recur, the builder gets the rule's plain `rule` text, never another reel's error text. `retired: true` means code now prevents the kind (`codeFix` says how): it is never injected, and if it shows up again the lessons report flags the code fix as leaking. Errors no rule matches are still logged and, when they recur, injected as their normalized text (names and numbers removed); the lessons report lists them so a rule can be written. Edit freely: ids must stay stable once used, since the ledger counts by id.",
+  "rules": [
+    {
+      "id": "set-dressing-drawn",
+      "match": "^set: .*(set dressing|DRESSING).*not drawn|^set: .* is in shot \\d+ of .* and gone in shot",
+      "rule": "Draw every place's set dressing in every shot of that place: the things world.js DRESSING declares never vanish between shots or times.",
+      "codeFix": "lens.js render() adds any DRESSING piece the frame left out (setlock.js completeDressing); continuity.js keeps cast objects",
+      "retired": true
+    },
+    {
+      "id": "subject-unblocked",
+      "match": "^occlusion:",
+      "rule": "Keep the line between the camera and each shot's subject clear: no critter, prop or set piece stands in front of the subject.",
+      "codeFix": "scene-fit.js orbits the camera around the subject until the blocker clears",
+      "retired": true
+    },
+    {
+      "id": "subject-framed-whole",
+      "match": "^framing: the subject .* (leaves the safe area|is cut by the)",
+      "rule": "Frame each shot's subject whole and inside the safe area (x 96–940, y 570–1600) for the whole shot, including while it moves.",
+      "codeFix": "scene-fit.js slides or dollies the camera to bring the subject inside the safe area",
+      "retired": true
+    },
+    {
+      "id": "subject-size-fits-shot",
+      "match": "^framing: shot \\d+'s subject .* covers",
+      "rule": "Size each shot's subject for its shot type: a close or insert fills at least 10% of the frame, a wide shows the place around it.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "present-at-cut",
+      "match": "^pop_in:",
+      "rule": "Everything a shot shows is in the shot from its cut; anything arriving later enters on screen at least 0.3 s after the cut.",
+      "codeFix": "scene-fit.js starts the shot slightly later in its action so anything appearing within 0.3 s of a cut is there at the cut",
+      "retired": true
+    },
+    {
+      "id": "text-clear-of-objects",
+      "match": "^text: .* sits over",
+      "rule": "Place on-screen text in a clear zone with layout.js placeText(), or pin it on its own object; text never sits over another object.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "text-in-safe-area",
+      "match": "^read: the text .* leaves the safe area",
+      "rule": "Keep all readable text inside the safe area (x 96–940, y 570–1600) at every moment.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "ui-spacing",
+      "match": "^ui: .* runs into",
+      "rule": "Lay out UI words, icons and buttons with layout.js row()/column() so every pair keeps MIN_GAP.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "no-jump-cut",
+      "match": "jump cut",
+      "rule": "Every cut on the same subject changes its size at least 2× (in to 2× or more, out to 0.5× or less), or cuts to a new subject.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "container-with-content",
+      "match": "^empty:",
+      "rule": "A container (phone, screen, card, box) appears together with its first content, never empty.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "face-uncovered",
+      "match": "^rig: .* covers its face",
+      "rule": "Pose critters with act() so a held prop never covers the face.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "events-file-written",
+      "match": "events\\.json does not exist",
+      "rule": "Write the frame's events file (every moment of motion has a sound event) before the first self-check.",
+      "codeFix": null,
+      "retired": false
+    },
+    {
+      "id": "module-written-first",
+      "match": "\\.js does not exist",
+      "rule": "Write the module before running the self-check on it.",
+      "codeFix": null,
+      "retired": false
+    }
+  ]
+}

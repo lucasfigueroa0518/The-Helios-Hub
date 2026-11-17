@@ -14,20 +14,20 @@ export const VERSION = 'hx-4';
 export const FRAME = { w: 1080, h: 1920, safe: { x0: 96, x1: 940, y0: 570, y1: 1600 } };
 
 // ── Palette (V-T1; hx-4 widens it, still 06) ──────────────────────────────────────────────
-// Every color is a ramp: lit, base, shade, dark (OKLCH: lit +0.07 L, shade −0.07 L, dark −0.19 L;
-// warmer in the light, cooler in the shade). Orange stays the hero's.
+// Every color is a ramp: lit, base, shade, dark. hx-6 (VISUAL_SYSTEM_6 §2): the names stay, the
+// values are the approved palette; lilac is retired and draws as slate. Orange stays the hero's.
 export const TOKENS = {
-  paper: '#F4EFE7',
-  'paper-lit': '#FEF9F3',
-  'paper-shade': '#DCD5C9',
-  'paper-dark': '#CAC1B3',
+  paper: '#F3F0EA',
+  'paper-lit': '#FBFAF6',
+  'paper-shade': '#E2DACB',
+  'paper-dark': '#CFC5B3',
   /** The studio sweep's low end (the paper ground, hx-4). */
   'paper-sweep': '#EFE9DF',
   canvas: '#FFFFFF',
-  ink: '#1F1915',
-  'ink-lit': '#322D29',
-  'ink-shade': '#150E08',
-  'ink-dark': '#0B0401',
+  ink: '#171717',
+  'ink-lit': '#2B2926',
+  'ink-shade': '#101010',
+  'ink-dark': '#0A0A0A',
   'text-secondary': '#525252',
   'text-tertiary': '#737373',
   orange: '#FF5E1A',
@@ -40,28 +40,55 @@ export const TOKENS = {
   'green-shade': '#036A29',
   'green-dark': '#013D1F',
   // The four colors the brand already owns (still 06): sun yellow, royal blue, reels teal, stories lilac.
-  yellow: '#F1C45E',
-  'yellow-lit': '#FFDFB2',
-  'yellow-shade': '#CFAE45',
-  'yellow-dark': '#99862B',
-  blue: '#5A98CB',
-  'blue-lit': '#82AFDF',
-  'blue-shade': '#3E81AF',
-  'blue-dark': '#17597B',
-  teal: '#57AFAF',
-  'teal-lit': '#80C7BF',
-  'teal-shade': '#3D959B',
-  'teal-dark': '#1D6972',
-  lilac: '#A482BE',
-  'lilac-lit': '#BF9BCE',
-  'lilac-shade': '#886BA6',
-  'lilac-dark': '#5B4778',
+  yellow: '#E0AB3E',
+  'yellow-lit': '#F3C65E',
+  'yellow-shade': '#C38F29',
+  'yellow-dark': '#8F6418',
+  blue: '#6684B0',
+  'blue-lit': '#86A1C8',
+  'blue-shade': '#4F6B94',
+  'blue-dark': '#34496A',
+  teal: '#46978F',
+  'teal-lit': '#5DB5AE',
+  'teal-shade': '#357A74',
+  'teal-dark': '#24534F',
+  lilac: '#6684B0',
+  'lilac-lit': '#86A1C8',
+  'lilac-shade': '#4F6B94',
+  'lilac-dark': '#34496A',
   // Red (4.1), from the status-error / stage-red family: for the things that are red in the real
   // place (a tomato, a fire extinguisher, a stop sign), never a ground and never the hero's accent.
-  red: '#CA5551',
-  'red-lit': '#DB7867',
-  'red-shade': '#AD3D42',
-  'red-dark': '#771929',
+  red: '#B4473A',
+  'red-lit': '#D27665',
+  'red-shade': '#91372D',
+  'red-dark': '#5F231C',
+  // hx-6 (VISUAL_SYSTEM_6 §2): the approved palette's own names. slate and mustard are blue and
+  // yellow under their new names (same values); wood and leaf are new ramps; the room tones.
+  slate: '#6684B0',
+  'slate-lit': '#86A1C8',
+  'slate-shade': '#4F6B94',
+  'slate-dark': '#34496A',
+  mustard: '#E0AB3E',
+  'mustard-lit': '#F3C65E',
+  'mustard-shade': '#C38F29',
+  'mustard-dark': '#8F6418',
+  wood: '#9A7250',
+  'wood-lit': '#B48A62',
+  'wood-shade': '#7E5B3E',
+  'wood-dark': '#5E432D',
+  leaf: '#5F8F48',
+  'leaf-lit': '#7FAE62',
+  'leaf-shade': '#4A7438',
+  'leaf-dark': '#355428',
+  /** Room walls, with their wainscot and trim. */
+  wall: '#F1E9DA',
+  wainscot: '#E4D8C3',
+  trim: '#CDBFA6',
+  /** Room floors, with their board lines. */
+  floor: '#E2DACB',
+  board: '#D3C9B6',
+  window: '#BFD3EC',
+  white: '#FFFFFF',
   night: '#171717',
   // The Helios premium stage (premium.css): charcoal under a warm glow, a red bloom low.
   'stage-top': '#161616',
@@ -82,7 +109,7 @@ export const TOKENS = {
 };
 
 /** The palette colors that have a 4-step ramp, by name. */
-export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac', 'red'];
+export const PALETTE = ['paper', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac', 'red', 'slate', 'mustard', 'wood', 'leaf'];
 
 /** A palette color's ramp: { lit, base, shade, dark }. */
 export function ramp(name) {
@@ -167,6 +194,9 @@ export const GROUNDS = {
   stage: { fill: TOKENS['stage-top'], dark: true },
   // Explainers 3.0: the close is a white screen with only the logo (EX3-19). No grid, no grain.
   white: { fill: TOKENS.canvas, dark: false },
+  // hx-6 (VISUAL_SYSTEM_6 §5): the analogy frames' room ground, clean paper with the faint drafting
+  // grid (72 px, ink at 4.5%), no grain. draw.js ground() paints it.
+  room: { fill: TOKENS.paper, dark: false },
 };
 /** Grounds 4.0 retired, drawn as the stage so old projects still render (a storyboard naming
  *  them is a lint error). */

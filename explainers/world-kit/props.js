@@ -132,8 +132,10 @@ const CORE = {
 import { BATCH_A } from './props/batch-a.js';
 import { BATCH_B } from './props/batch-b.js';
 import { BATCH_C } from './props/batch-c.js';
+import { BATCH_D } from './props/batch-d.js';
+import { BATCH_E } from './props/batch-e.js';
 
-const LIBRARY = { ...CORE, ...BATCH_A, ...BATCH_B, ...BATCH_C };
+const LIBRARY = { ...CORE, ...BATCH_A, ...BATCH_B, ...BATCH_C, ...BATCH_D, ...BATCH_E };
 /** Every asset with its tags: the library (tags from props/tags.js), then the bank (tags in its files). */
 export const PROPS = {
   ...Object.fromEntries(Object.entries(LIBRARY).map(([name, p]) => [name, { ...p, tags: TAGS[name] }])),

@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { projectFrames } from './frames.mjs';
+import { loadLibrary } from './sfx-library.mjs';
 
 export const LIBRARY = 'assets/sfx-library';
 export const OUT = 'assets/sfx/events.wav';
@@ -245,7 +246,8 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
   const errors = [];
   const catalogFile = join(root, LIBRARY, 'catalog.json');
   if (!existsSync(catalogFile)) return { ok: false, errors: [`${LIBRARY}/catalog.json is missing`], events: 0, placed: 0, dropped: [] };
-  const catalog = JSON.parse(readFileSync(catalogFile, 'utf8'));
+  // The central library (sfx-library.mjs): the bank, Lucas's drop-ins and the measured acoustics.
+  const catalog = loadLibrary(join(root, LIBRARY));
   let at = 0;
   const frames = projectFrames(root).map((f) => {
     const start = at;

@@ -12,6 +12,9 @@
 //   subjectOcclusionProblems the shot's subject more than 40% hidden by a thing drawn in front of it
 //   shotTimingProblems       a shot shorter than 0.8 s, or a cut within 0.5 s of the frame's start or end
 //   popInProblems            a thing appearing from nothing within 0.3 s after a cut
+//
+// And the storyboard reading the wear rule needs (handBeats), shared by try.mjs and the storyboard
+// lint so both read a beat's hands the same way.
 
 const W = 1080;
 const H = 1920;
@@ -67,19 +70,74 @@ function thingsOf(svg, scan, framed) {
   return out.filter((o) => area(clip(o.box)) < AREA * 0.45 && area(clip(o.box)) > 0);
 }
 
+/** Every named thing's box in a sample: its framed box (any kind), else the union of the shapes
+ *  drawn inside a group that names it (data-object, data-who, …; texts left out): who → box. */
+function namedBoxesOf(svg, scan, framed) {
+  const out = new Map();
+  for (const b of framed ?? []) if (b.who && !out.has(b.who)) out.set(b.who, toArr(b.box));
+  const drawn = new Map();
+  for (const e of scan.elements) {
+    if (!e.box || e.tag === 'text' || e.opacity < 0.3 || e.ground || !e.names?.length) continue;
+    const b = toArr(e.box);
+    for (const key of e.names) {
+      if (out.has(key)) continue;
+      const u = drawn.get(key);
+      drawn.set(key, u ? [Math.min(u[0], b[0]), Math.min(u[1], b[1]), Math.max(u[2], b[2]), Math.max(u[3], b[3])] : b);
+    }
+  }
+  for (const [k, b] of drawn) out.set(k, b);
+  return out;
+}
+
+/** In transit: moved more than this (px, any edge) since or until a sample this near in time. */
+const TRANSIT_PX = 3;
+const TRANSIT_DT = 0.25;
+const sameBox = (a, b) => a.every((v, k) => Math.abs(v - b[k]) <= TRANSIT_PX);
 /**
- * Texts, labels and cards over objects: a read text (opacity ≥ 0.5, not decor) whose box is more
- * than a quarter covered by an object's box, unless the text belongs to that object (a label pinned
- * on it, a word on its screen); the dictionary or title card over any object.
- * `scanOf(svg)` is try.mjs drawnElements, `framedOf(svg)` lens.js framedBoxes.
+ * Which of a sample's items are at rest: an item (keyed by `keyOf`) is in transit when a sample
+ * within TRANSIT_DT before or after it holds the same key at another box, and no such sample holds
+ * it at the same box (a thing passing by, a chip flying to its slot). Layout is judged at rest;
+ * motion is the animator's. A sample with no near neighbour is at rest.
+ * @returns {(k: number, key: string, box: number[]) => boolean}
+ */
+function restingIn(rows) {
+  return (k, key, box) => {
+    let moved = false;
+    for (const j of [k - 1, k + 1]) {
+      const r = rows[j];
+      if (!r || Math.abs(r.t - rows[k].t) > TRANSIT_DT) continue;
+      const there = r.boxes.get(key);
+      if (!there) continue;
+      if (there.some((b) => sameBox(b, box))) return true;
+      moved = true;
+    }
+    return !moved;
+  };
+}
+const pushBox = (m, key, box) => (m.has(key) ? m.get(key).push(box) : m.set(key, [box]));
+
+/**
+ * Texts, labels and cards over objects: a read text (opacity ≥ 0.5, not decor) at rest whose box is
+ * more than a quarter covered by an object's box at rest, unless the text belongs to that object (a
+ * label pinned on it, a word on its screen) or is written on its own object that sits on that one
+ * (a word on a magnet on the fridge, a line on a page in the binder); the dictionary or title card
+ * over any object. `scanOf(svg)` is try.mjs drawnElements, `framedOf(svg)` lens.js framedBoxes.
  */
 export function textOverObjectProblems(samples, { scanOf, framedOf = () => null } = {}) {
   const { out, say } = once();
-  for (const { t, svg } of samples ?? []) {
+  const rows = [...(samples ?? [])].sort((a, b) => (a.t ?? 0) - (b.t ?? 0)).map(({ t, svg }) => {
     const s = String(svg);
     const scan = scanOf(s);
-    const things = thingsOf(s, scan, framedOf(s));
-    if (!things.length) continue;
+    const framed = framedOf(s);
+    const boxes = new Map();
+    for (const e of scan.elements) if (e.tag === 'text' && e.box) pushBox(boxes, `text:${e.text}`, toArr(e.box));
+    const named = namedBoxesOf(s, scan, framed);
+    for (const [who, b] of named) pushBox(boxes, `thing:${who}`, b);
+    return { t, scan, things: thingsOf(s, scan, framed), named, boxes };
+  });
+  const resting = restingIn(rows);
+  rows.forEach(({ t, scan, things, named }, k) => {
+    if (!things.length) return;
     // the cards: the union of their elements
     scan.containers.forEach((c, k) => {
       if ((c.kind !== 'definition' && c.kind !== 'title') || !c.box || c.opacity < 0.5) return;
@@ -91,15 +149,24 @@ export function textOverObjectProblems(samples, { scanOf, framedOf = () => null 
     });
     for (const e of scan.elements) {
       if (e.tag !== 'text' || !e.box || e.opacity < 0.5 || e.decor || e.ground) continue;
-      if (e.containers.some((k) => ['definition', 'title'].includes(scan.containers[k]?.kind))) continue;
+      if (e.containers.some((c) => ['definition', 'title'].includes(scan.containers[c]?.kind))) continue;
       const tb = toArr(e.box);
+      if (!resting(k, `text:${e.text}`, tb)) continue; // a word in flight is motion, not placement
+      // what the text is written on: the smallest shape of its own object (or that object's box)
+      // holding most of it (a word on its magnet, a line on its page)
+      const holds = (b) => b && area(inter(tb, b)) >= area(tb) * 0.75;
+      const mine = (x) => x !== e && x.tag !== 'text' && x.box && x.opacity >= 0.3 && !x.ground && x.names?.some((n) => e.names.includes(n));
+      const own = [...e.names.map((n) => named.get(n)), ...scan.elements.filter(mine).map((x) => toArr(x.box))]
+        .filter(holds).sort((a, b) => area(a) - area(b))[0] ?? null;
       for (const th of things) {
         if (e.names.includes(th.who)) continue; // pinned on its own object
+        if (own && area(inter(own, th.box)) >= area(own) * 0.5) continue; // its object sits on this one
+        if (!resting(k, `thing:${th.who}`, toArr(th.box))) continue; // an object passing under it
         const ov = area(inter(tb, th.box));
-        if (ov > area(tb) * 0.25) say(`text:${e.text}:${th.who}`, `text: "${e.text.slice(0, 40)}" sits over "${th.who}"${at(t)}: move the text to a clear zone, or pin it on its own object`);
+        if (ov > area(tb) * 0.25) say(`text:${e.text}:${th.who}`, `text: "${e.text.slice(0, 40)}" sits over "${th.who}"${at(t)}: place it with layout.js placeText(size, { near, avoid: object boxes }) in a clear zone, or pin it on its own object`);
       }
     }
-  }
+  });
   return out;
 }
 
@@ -194,15 +261,26 @@ export function blankOpenProblems(samples, { scanOf } = {}) {
 /**
  * UI collisions in glass and mechanism pictures: two different read texts whose boxes overlap, or
  * a text that straddles the edge of an icon or button (a rect, circle or ellipse in the same UI:
- * more than 10% of the text inside it and less than 90%). Space them with layout.js row()/column().
+ * more than 10% of the text inside it and less than 90%), both at rest: a chip flying past a label to
+ * its slot is motion, not spacing. Space them with layout.js row()/column().
  */
 export function uiCollisionProblems(samples, { scanOf } = {}) {
   const { out, say } = once();
-  for (const { t, svg } of samples ?? []) {
+  const shapeKey = (e) => `shape:${e.tag}:${e.ui.join('/')}:${e.names.join('/')}`;
+  const rows = [...(samples ?? [])].sort((a, b) => (a.t ?? 0) - (b.t ?? 0)).map(({ t, svg }) => {
     const scan = scanOf(String(svg));
     const ui = scan.elements.filter((e) => e.box && e.ui?.length && !e.decor && !e.ground && e.opacity >= 0.5);
     const texts = ui.filter((e) => e.tag === 'text');
     const shapes = ui.filter((e) => ['rect', 'circle', 'ellipse'].includes(e.tag) && area(toArr(e.box)) < AREA * 0.05 && area(toArr(e.box)) > 200);
+    const boxes = new Map();
+    for (const e of texts) pushBox(boxes, `text:${e.text}`, toArr(e.box));
+    for (const e of shapes) pushBox(boxes, shapeKey(e), toArr(e.box));
+    return { t, texts, shapes, boxes };
+  });
+  const resting = restingIn(rows);
+  rows.forEach(({ t, texts: all, shapes: allShapes }, k) => {
+    const texts = all.filter((e) => resting(k, `text:${e.text}`, toArr(e.box)));
+    const shapes = allShapes.filter((e) => resting(k, shapeKey(e), toArr(e.box)));
     for (let i = 0; i < texts.length; i++) {
       const a = toArr(texts[i].box);
       for (let j = i + 1; j < texts.length; j++) {
@@ -216,7 +294,7 @@ export function uiCollisionProblems(samples, { scanOf } = {}) {
         if (ov > 0.1 && ov < 0.9) say(`ts:${texts[i].text}:${sh.ui.join('/')}`, `ui: "${texts[i].text.slice(0, 30)}" runs into an icon or button edge (${sh.ui[sh.ui.length - 1]})${at(t)}: space them with layout.js row()/column() (MIN_GAP)`);
       }
     }
-  }
+  });
   return out;
 }
 
@@ -238,11 +316,12 @@ export function drawnThings(svg) {
 /**
  * The set-lock problems of one frame's samples ({ t, svg }): `placeAt(t)` gives the place of the
  * shot at t ('main' by default), `shotAt(t)` its index, `dressing` the world's DRESSING, `story`
- * the ids allowed to come and go (critters, the cast's story objects). A declared dressing object
+ * the ids allowed to come and go (critters, the cast's story objects), `undressAt(t)` the dressing
+ * ids the shot at t opts out (shot.undress). A declared dressing object
  * missing from a sample of its place, or an undeclared thing present in one shot and gone in the
  * next shot of the same place (or the other way round), is a problem.
  */
-export function setLockProblems(samples, { placeAt = () => 'main', shotAt = () => 0, dressing = {}, story = [] } = {}) {
+export function setLockProblems(samples, { placeAt = () => 'main', shotAt = () => 0, dressing = {}, story = [], undressAt = () => [] } = {}) {
   const out = [];
   const seen = new Set();
   const say = (m) => !seen.has(m) && seen.add(m) && out.push(m);
@@ -253,7 +332,8 @@ export function setLockProblems(samples, { placeAt = () => 'main', shotAt = () =
     const declared = (Array.isArray(dressing?.[place]) ? dressing[place] : []).map((d) => d.id);
     const drawn = drawnDressing(svg);
     if (declared.length) {
-      for (const id of declared) if (!drawn.has(id)) say(`set: "${id}" is ${place}'s set dressing (world.js DRESSING) but is not drawn at ${t.toFixed(2)}s: draw the place's dressing with dressedItems(world, '${place}', P, R, …) in every shot of it`);
+      const skip = new Set(undressAt(t) ?? []);
+      for (const id of declared) if (!drawn.has(id) && !skip.has(id)) say(`set: "${id}" is ${place}'s set dressing (world.js DRESSING) but is not drawn at ${t.toFixed(2)}s: draw the place's dressing with dressedItems(world, '${place}', P, R, …) in every shot of it`);
     }
     const k = shotAt(t);
     const cur = shots.get(k) ?? { place, ids: new Set(), first: t };
@@ -490,6 +570,62 @@ export function loneCloseProblems(samples, { shotAt = () => ({ i: 0, shot: null 
   const out = [];
   for (const [i, c] of per) {
     if (c.lone && c.who) out.push(`close: shot ${i + 1} (from ${c.t.toFixed(2)}s) shows "${c.who}" alone, only a label: a close shows two related things, or the subject and what it acts on`);
+  }
+  return out;
+}
+
+// ── Hands: which beats free a critter's hands, and which use them ──────────────────────────────
+
+/** A beat that puts a held thing down: "puts down", "sets the … down", "tucks it away", "leaves it on …". */
+export const PUT_DOWN_RE = /\b(?:puts?|putting|sets?|setting|lays?|laying|places?|placing|drops?|dropping|parks?|parking|stows?|stowing|tucks?|tucking)\b[^.;!?\n]{0,40}?\b(?:down|away|aside)\b|\b(?:leaves?|leaving)\s+(?:it|them|(?:its|his|her|their|the)\s+[\w-]+)\s+(?:on|in|at|by|behind)\b/i;
+/** A beat whose action needs the hands: a verb of handling (not a gesture: pointing and waving
+ *  leave a held thing where it is). */
+export const HANDS_RE = /\b(?:(?:with|uses?|using)\s+(?:its|his|her|their|both)\s+hands|picks?\s+up|picking\s+up|hands?\s+(?:over|it|them|the|a|an)\b|grabs?|grabbing|lifts?|lifting|carr(?:y|ies|ying)|types?|typing|press(?:es|ing)?|push(?:es|ing)?|pulls?|pulling|opens?|opening|clos(?:es|ing)|writes?|writing|catch(?:es|ing)|throws?|throwing|tosses|tossing|pass(?:es|ing)|takes?|taking|gives?|giving|taps?|tapping|stamps?|stamping|sorts?|sorting|pours?|pouring|stacks?|stacking|unpacks?|unpacking|packs?|packing|turns?\s+the|flips?|flipping|plugs?|plugging|scans?|scanning|holds?\s+up|reaches\s+(?:for|into))\b/i;
+
+/** A shot line's tagged parts (its cue, camera, reason, cast, place and carry) say nothing about
+ *  what happens: only its size and subject do. */
+const SHOT_TAG_PART = /^(?:cast|place|carry|angle|why)\s*:|^on\s+["“]|^at\s+\d/i;
+const shotAction = (line) => line.split(/\s+[—–]\s+/).filter((part) => !SHOT_TAG_PART.test(part.trim())).join(' — ');
+
+/** The text of a storyboard frame block that says what happens on screen: its `scene:` line and its
+ *  `shots:` lines' sizes and subjects (the voiceover, timing, the other fields and each shot's tagged
+ *  parts are left out). */
+export function frameActionText(block) {
+  const lines = String(block ?? '').split(/\r?\n/);
+  const out = [];
+  let inShots = false;
+  for (const line of lines) {
+    const field = /^-\s*([\w ]+?):\s*(.*)$/.exec(line);
+    if (field) {
+      const name = field[1].trim().toLowerCase();
+      inShots = name === 'shots';
+      if (name === 'scene') out.push(field[2]);
+      if (name === 'shots') out.push(...field[2].split(/\s*;\s*/).map(shotAction).filter(Boolean));
+      continue;
+    }
+    if (inShots && /^\s+-\s+\S/.test(line)) out.push(shotAction(line.replace(/^\s+-\s+/, '')));
+    else if (!/^\s/.test(line)) inShots = false;
+  }
+  return out.join('\n');
+}
+
+/**
+ * The beats of one critter for the wear rule ([{ frame, usesHands, putsDown }], wear.js
+ * wearProblems): per frame (`frames`: [{ number, text }], the text frameActionText gives), whether a
+ * sentence naming the critter (`names`: its id and any other words it goes by, matched as whole
+ * words) puts a held thing down, and whether one has it handle something. Frames whose text never
+ * names it are left out.
+ */
+export function handBeats(frames, names) {
+  const words = [...new Set([].concat(names ?? []).map((n) => String(n ?? '').trim().toLowerCase()).filter(Boolean).flatMap((n) => [n, n.replace(/[-_]+/g, ' ')]))];
+  if (!words.length) return [];
+  const esc = (w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '[\\s_-]+');
+  const named = new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${words.map(esc).join('|')})(?![\\p{L}\\p{N}])`, 'iu');
+  const out = [];
+  for (const { number, text } of frames ?? []) {
+    const said = String(text ?? '').split(/(?<=[.;!?])\s+|\n+/).filter((s) => named.test(s));
+    if (!said.length) continue;
+    out.push({ frame: number, usesHands: said.some((s) => HANDS_RE.test(s)), putsDown: said.some((s) => PUT_DOWN_RE.test(s)) });
   }
   return out;
 }

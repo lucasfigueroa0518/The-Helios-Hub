@@ -1,0 +1,33 @@
+{
+ "file": "01e8b881-new-props.js",
+ "job": "01e8b881-2e3a-49f4-b582-e248ba2ab42b",
+ "topic": "MCP",
+ "added_at": "2026-11-17T02:00:18.377Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "teal calendar page": {
+   "source_name": "teal calendar page",
+   "tags": {
+    "is": "a teal desk calendar with a grid of days, optionally a lilac connector socket on its right side",
+    "setting": "a glass studio",
+    "material": "paper and plastic",
+    "parts": [
+     "rings",
+     "teal back",
+     "page",
+     "day grid",
+     "lilac socket",
+     "meeting block"
+    ],
+    "not": [
+     "a face",
+     "text",
+     "orange"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

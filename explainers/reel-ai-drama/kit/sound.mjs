@@ -34,6 +34,7 @@ import { join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { projectFrames } from './frames.mjs';
+import { asStinger, loadLibrary, stingerKindOf } from './sfx-library.mjs';
 
 export const LIBRARY = 'assets/sfx-library';
 export const OUT = 'assets/sfx/events.wav';
@@ -434,10 +435,21 @@ export function anchorTime(clock, at) {
   return r3(t + (Number.isFinite(at.offset) ? at.offset : 0));
 }
 
-/** The library entry a designed stinger plays (its own id when listed for its kind, else the default). */
-export function stingerEntry(kind, id) {
+/**
+ * The library entry a designed stinger plays: its own id when listed for its kind, or a drop-in of
+ * that kind in `catalog` (the shared library's stingerKindOf), else the kind's default.
+
+ * @param {string} kind
+ * @param {string | null | undefined} id
+ * @param {any[] | null} [catalog]
+ */
+export function stingerEntry(kind, id, catalog = null) {
   const list = STINGER_LIBRARY[kind] ?? [];
-  return list.find((e) => e.id === id) ?? list[0] ?? null;
+  const listed = list.find((e) => e.id === id);
+  if (listed) return listed;
+  const dropin = id && catalog ? catalog.find((s) => s.id === id) : null;
+  if (dropin && stingerKindOf(dropin) === kind) return asStinger(dropin);
+  return list[0] ?? null;
 }
 
 /**
@@ -518,7 +530,7 @@ export function yieldToDesign(cues, designed) {
 /**
  * Designed stingers and ambience → resolved sounds in resolveCues' shape (mixArgs takes both). Every
  * placement is exact: a hit's land point on `t`, a riser's crest on `t`, a whoosh's peak on `t`.
- * `catalog`: catalog.json plus ambience-catalog.json. Returns { resolved, missing }.
+ * `catalog`: the library with its ambience beds (loadLibrary(dir, { ambience: true })). Returns { resolved, missing }.
  * @param {any} catalog
  * @param {any} designed
  * @param {{ speech?: { start: number, end: number }[] }} [opts]
@@ -537,7 +549,7 @@ export function resolveDesigned(catalog, designed, { speech = [] } = {}) {
       push(c, { id: 'bed:room', procedural: BEDS.room.src, duration: len, peakDb: REF_PEAK_DB }, { start: c.t, trim: { from: 0, len }, volume: SILENCE_ROOM, fade: 0.05 });
       continue;
     }
-    const entry = stingerEntry(c.kind, c.id);
+    const entry = stingerEntry(c.kind, c.id, catalog);
     const sound = entry ? byId.get(entry.id) : null;
     if (!sound) {
       missing.push(c);
@@ -586,12 +598,9 @@ export function placeSound(root, { ffmpeg = 'ffmpeg' } = {}) {
   const errors = [];
   const catalogFile = join(root, LIBRARY, 'catalog.json');
   if (!existsSync(catalogFile)) return { ok: false, errors: [`${LIBRARY}/catalog.json is missing`], events: 0, placed: 0, dropped: [] };
-  // The ambience beds live in their own catalog (ambience-catalog.json) so no Explainer lookup ever sees them.
-  const ambienceFile = join(root, LIBRARY, 'ambience-catalog.json');
-  const catalog = [
-    ...JSON.parse(readFileSync(catalogFile, 'utf8')),
-    ...(existsSync(ambienceFile) ? JSON.parse(readFileSync(ambienceFile, 'utf8')) : []),
-  ];
+  // The central library (sfx-library.mjs): the bank, Lucas's drop-ins and the measured acoustics, plus
+  // the ambience beds (their own catalog, so no Explainer lookup ever sees them).
+  const catalog = loadLibrary(join(root, LIBRARY), { ambience: true });
   let at = 0;
   const frames = projectFrames(root).map((f) => {
     const start = at;

@@ -182,8 +182,8 @@ test('caption skin: pages are clamped to two lines, the typewriter stays', () =>
   const script = skin.split('<script>')[1].split('</script>')[0];
   // Run the paging in a tiny fake DOM and read back the pages it built.
   const made: { id: string; text: string; children: unknown[] }[] = [];
-  const node = (): { id: string; className: string; textContent: string; children: unknown[]; appendChild: (c: unknown) => void } => {
-    const n = { id: '', className: '', textContent: '', children: [] as unknown[], appendChild: (c: unknown) => { n.children.push(c); } };
+  const node = (): { id: string; className: string; textContent: string; style: Record<string, string>; children: unknown[]; appendChild: (c: unknown) => void; setAttribute: () => void } => {
+    const n = { id: '', className: '', textContent: '', style: {} as Record<string, string>, children: [] as unknown[], appendChild: (c: unknown) => { n.children.push(c); }, setAttribute: () => {} };
     return n;
   };
   const els = new Map<string, unknown>();

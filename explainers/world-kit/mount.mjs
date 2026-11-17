@@ -45,12 +45,23 @@ export const FONTS = `
 export const domKey = (id) => `f${id.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
 /** The composition for one frame. `id` is the storyboard frame id; `duration` in seconds. */
-export function frameHtml(id, duration, ground = 'paper') {
+export function frameHtml(id, duration, ground = 'paper', { fit = false, world = false } = {}) {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) throw new Error(`mount: frame id ${id} must be lowercase letters, digits, dashes`);
   if (!(duration > 0)) throw new Error(`mount: frame ${id} needs a positive duration`);
   // an old name (night, forest) mounts as written; the kit draws it as the stage
   if (!GROUND_NAMES.includes(groundKey(ground))) throw new Error(`mount: frame ${id} ground "${ground}" must be ${GROUND_NAMES.join(', ')}`);
   const key = domKey(id);
+  // The first-try fixes (scene-fit.js), built as plain strings: an import line inside a nested
+  // template would read as a kit import to workspace.ts kitImportClosure and fail every prepare.
+  const fitLines = !fit
+    ? ''
+    : [
+        '',
+        "      import { prepareScene } from './assets/kit/scene-fit.js';",
+        ...(world ? ["      import * as reelWorld from './assets/world/world.js';"] : []),
+        '      // the first-try fixes (scene-fit.js): the same frame the try checked',
+        `      const scene = prepareScene(frameScene, { duration: ${duration}${world ? ', world: reelWorld' : ''} });`,
+      ].join('\n');
   return `<template>
   <div id="root" data-composition-id="${id}" data-width="1080" data-height="1920" data-start="0" data-duration="${duration}">
     <script src="${GSAP}"></script>
@@ -66,8 +77,8 @@ export function frameHtml(id, duration, ground = 'paper') {
     <div id="${key}-ground" class="clip" data-start="0" data-duration="${duration}" data-track-index="0"></div>
     <div id="${key}-world" data-layout-allow-overflow></div>
     <script type="module">
-      import scene from './assets/frames/${id}.js';
-      import { underlay } from './assets/kit/motion.js';
+      import ${fit ? 'frameScene' : 'scene'} from './assets/frames/${id}.js';
+      import { underlay } from './assets/kit/motion.js';${fitLines}
       // One clock (seek-safe): a single tween drives t; the frame is a pure function of t.
       const svg = (inner) => '<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>';
       document.getElementById('${key}-ground').innerHTML = svg(underlay('u${key}-', '${ground}'));
@@ -115,7 +126,7 @@ export function mountFrames(root, only = null) {
     try {
       const out = join(root, 'compositions', 'frames', `${f.id}.html`);
       mkdirSync(dirname(out), { recursive: true });
-      writeFileSync(out, frameHtml(f.id, f.duration, frameGround(f)));
+      writeFileSync(out, frameHtml(f.id, f.duration, frameGround(f), { fit: existsSync(join(root, 'assets', 'kit', 'scene-fit.js')), world: existsSync(join(root, 'assets', 'world', 'world.js')) }));
       mounted.push(f.id);
     } catch (e) {
       errors.push(e instanceof Error ? e.message : String(e));
@@ -148,7 +159,8 @@ export function darkWindows(frames) {
 const round = (n) => Math.round(n * 1000) / 1000;
 
 /** Where captions step aside (EX3-79; 4.3): all of frame 1 (the opener owns it while its line
- *  plays), all of the frame whose block has `definition:` (its dictionary card writes the definition
+ *  plays; a silent hook, D124, has no line and so no captions there), all of the frame whose block
+ *  has `definition:` (its dictionary card writes the definition
  *  as it is said: frame 5 in 4.3, frame 3 before), and the close
  *  (EX3-95: no captions, and the last line's page never lingers over the logo). Frame 3's hand-off
  *  card shows the term, not the line, so its captions stay. */

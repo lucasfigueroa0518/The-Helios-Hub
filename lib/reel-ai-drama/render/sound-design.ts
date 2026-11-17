@@ -14,8 +14,8 @@ import {
   STINGER_GAIN,
   STINGER_KINDS,
   STINGER_LIBRARY,
-  stingerEntry,
 } from '@/explainers/reel-ai-drama/kit/sound.mjs';
+import { dropinStingers, findLibraryDir, loadAmbience, loadLibrary } from '@/explainers/design/sfx/library.mjs';
 import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
 import type { MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { Queryable } from '@/lib/explainers/db';
@@ -84,15 +84,22 @@ function readJson<T>(file: string): T | null {
   }
 }
 
-/** The library the designer may pick from: stingers present in the catalog, and the ambience beds. */
+type Stinger = { id: string; land: number; about: string };
+
+/**
+ * The library the designer may pick from: the hand-measured stingers present in the catalog, then
+ * Lucas's drop-ins that play each kind (a capped menu per kind, from the central library,
+ * explainers/design/sfx/library.mjs), and the ambience beds.
+ */
 export function soundLibrary(projectDir: string, root: string = process.cwd()) {
-  const dirs = [path.join(projectDir, 'assets', 'sfx-library'), path.join(root, REPO_LIBRARY)];
-  const catalog = dirs.map((d) => readJson<{ id: string }[]>(path.join(d, 'catalog.json'))).find(Boolean) ?? [];
-  const ambience = dirs.map((d) => readJson<Ambience[]>(path.join(d, 'ambience-catalog.json'))).find(Boolean) ?? [];
+  const dir = findLibraryDir([path.join(projectDir, 'assets', 'sfx-library'), path.join(root, REPO_LIBRARY)]);
+  const catalog = (dir ? loadLibrary(dir) : []) as { id: string }[];
+  const ambience = (dir ? loadAmbience(dir) : []) as Ambience[];
   const have = new Set(catalog.map((s) => s.id));
+  const dropins = dropinStingers(catalog) as Record<string, Stinger[]>;
   const stingers = Object.fromEntries(
-    Object.entries(STINGER_LIBRARY as Record<string, { id: string; land: number; about: string }[]>).map(([kind, list]) => [kind, list.filter((e) => have.has(e.id))]),
-  ) as Record<string, { id: string; land: number; about: string }[]>;
+    Object.entries(STINGER_LIBRARY as Record<string, Stinger[]>).map(([kind, list]) => [kind, [...list.filter((e) => have.has(e.id)), ...(dropins[kind] ?? [])]]),
+  ) as Record<string, Stinger[]>;
   return { stingers, ambience: ambience.map((a) => ({ id: a.id, tags: a.tags ?? [], duration: a.duration })) };
 }
 export type SoundLibrary = ReturnType<typeof soundLibrary>;
@@ -326,7 +333,7 @@ export function validateCues(raw: RawCues, reel: Reel, lib: SoundLibrary): { cue
       }
     }
     const [lo, hi] = DUR[kind];
-    let dur = kind === 'riser' ? Math.min(hi, (stingerEntry(kind, id) as { land: number } | null)?.land ?? hi) : hi;
+    let dur = kind === 'riser' ? Math.min(hi, (lib.stingers[kind] ?? []).find((e) => e.id === id)?.land ?? hi) : hi;
     dur = kind === 'hit' || kind === 'sub' || kind === 'spot' ? 0 : clamp(c.dur, lo, dur, lo);
     if (kind === 'riser' && t - dur < 0) {
       if (t < lo) {

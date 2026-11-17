@@ -164,6 +164,9 @@ function frameGlow(color, alpha, fx, fy, rx, ry, end = 0.72) {
  *  right, a white lift top left, a red bloom low, a warm pool where the scene stands), `white` the
  *  close. Draw once, under the world. `night` and `forest` draw the stage. */
 export function ground(name = 'paper') {
+  // `room` (VISUAL_SYSTEM_6 §5): the analogy frame's clean paper with the faint drafting grid
+  // (72 px cells, ink at 4.5%); flat, no grain, no glow.
+  if (name === 'room') return roomGround();
   const gr = groundOf(name);
   if (gr.name === 'white') return el('rect', { x: 0, y: 0, width: W, height: H, fill: GROUNDS.white.fill });
   if (gr.name === 'stage') {
@@ -187,6 +190,15 @@ export function ground(name = 'paper') {
     frameGlow(T['shadow-warm'], 0.05, 0, 1, 0.55, 0.3, 0.9),
     frameGlow(T['shadow-warm'], 0.035, 1, 1, 0.5, 0.26, 0.9),
   ].join('');
+}
+
+/* The `room` ground: paper (T.paper), a 72 px grid in ink at 4.5%. */
+function roomGround() {
+  const fill = T.paper;
+  let d = '';
+  for (let x = 72; x < W; x += 72) d += `M${x},0V${H}`;
+  for (let y = 72; y < H; y += 72) d += `M0,${y}H${W}`;
+  return el('rect', { x: 0, y: 0, width: W, height: H, fill }) + el('path', { d, fill: 'none', stroke: T.ink, 'stroke-opacity': 0.045, 'stroke-width': 1.5, 'data-grid': 'room' });
 }
 
 /** hx-4 has no drafting grid: always ''. The signature stays for older callers. */

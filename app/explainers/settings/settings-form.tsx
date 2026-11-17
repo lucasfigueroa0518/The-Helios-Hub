@@ -35,6 +35,7 @@ const FIELDS: Field[] = [
   { key: 'analogy_model', label: 'Analogy writer model', help: 'EX3-123: two calls per topic, a third when neither passes.', kind: 'text' },
   { key: 'music_enabled', label: 'Background music', help: 'E-20.', kind: 'bool' },
   { key: 'sfx_enabled', label: 'Sound effects', help: 'E-20.', kind: 'bool' },
+  { key: 'opener_voice', label: 'Opener voice', help: 'EX6-14: "silent" opens on the silent visual hook; "spoken" brings back the line "In the next minute, this ___ will teach you…".', kind: 'text' },
 ];
 
 const MODE_OPTIONS = [

@@ -91,3 +91,10 @@ explainers/design/intros/.out/
 # Local scratch (not for the repo)
 .tmp/
 /.hyperframes/
+
+# Sound library drop-ins: originals, converted MP3s (kept in an outside store) and the ingest cache stay off git
+explainers/design/sfx/inbox/*
+!explainers/design/sfx/inbox/README.md
+explainers/design/sfx/dropins
+explainers/design/sfx/.ingest-cache.json
+explainers/design/sfx/tools/*/

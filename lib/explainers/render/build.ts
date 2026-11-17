@@ -37,8 +37,8 @@ export type BuildDeps = {
   projectDir: string;
   /** The voice the narration must use ($HELIOS_VOICE_ID); empty stops the build, as the workflow says. */
   voiceId: string;
-  /** One builder session (the caller picks its model and records its cost); null when it threw. */
-  dispatch: (agent: BuilderAgent, prompt: string) => Promise<SessionResult | null>;
+  /** One builder session (the caller picks its model and records its cost); null when it threw. `label` names the round (`frame:checks:05-payoff`, `scene-builder:fix`, `repair:05-payoff`) for session B telemetry. */
+  dispatch: (agent: BuilderAgent, prompt: string, label?: string) => Promise<SessionResult | null>;
   /** True once the job's spend cap is reached: no more dispatches. */
   overCap: () => boolean;
   log: (event: string, data?: Record<string, unknown>) => void;
@@ -51,10 +51,11 @@ export type BuildOutcome = { capped: boolean; stopped: boolean; notes: string[];
 
 const SKILL_SCRIPTS = path.join('.claude', 'skills', 'faceless-explainer', 'scripts');
 const PACKETS = path.join('.hyperframes', 'frame-packets');
-/** Frames code builds itself (the hand-off, frame 3; the close, frame 8): never dispatched. */
-const CODE_FRAMES = new Set([3, 8]);
+/** Frames code builds itself (the opener on its AI 101 card, frame 1, hx-6; the hand-off, frame 3;
+ *  the close, frame 8): never dispatched. */
+const CODE_FRAMES = new Set([1, 3, 8]);
 /** The frames a builder writes. */
-export const BUILDER_FRAMES = [1, 2, 4, 5, 6, 7] as const;
+export const BUILDER_FRAMES = [2, 4, 5, 6, 7] as const;
 /** "When a frame has several dropped events": two or more (what the orchestrator acted on). */
 export const DROPPED_EVENTS_THRESHOLD = 2;
 
@@ -294,7 +295,7 @@ export async function runBuild(deps: BuildDeps): Promise<BuildOutcome> {
     outcome.dispatches++;
     log('build_dispatch', { agent, label });
     try {
-      const r = await deps.dispatch(agent, prompt);
+      const r = await deps.dispatch(agent, prompt, label);
       if (r?.capped) outcome.capped = true;
       return r;
     } catch (error) {
@@ -456,6 +457,9 @@ export async function runBuild(deps: BuildDeps): Promise<BuildOutcome> {
   for (const [n, ev] of dropped) if (ev.length >= DROPPED_EVENTS_THRESHOLD) notes.push(`Frame ${ids.get(n) ?? n}: sound events still dropped: ${ev.join('; ')}`);
 
   // ── Step 5.7–5.8: captions, assemble; mark the frames animated ───────────────────────────────
+  // The white gradient behind the captions, only where the picture clashes with them (Lucas 2026-11-17).
+  const scrim = node(kit('caption-scrim.mjs'));
+  if (scrim.status !== 0) notes.push(`caption-scrim.mjs: ${errorsOf(scrim).join('; ') || tail(scrim)}`);
   const captions = node(skill('captions.mjs'), ['build', '--storyboard', './STORYBOARD.md', '--audio-meta', './audio_meta.json', '--hyperframes', '.', '--out', './caption_groups.json']);
   if (captions.status !== 0) notes.push(`captions.mjs: ${tail(captions)}`);
   const assemble = () => {
@@ -508,7 +512,7 @@ export async function repairBuild(deps: BuildDeps, missing: readonly number[]): 
       outcome.dispatches++;
       const look = looks.get(n);
       try {
-        const r = await deps.dispatch(look ? frameWorkerForLook(look) : SCENE_FRAME_WORKER_AGENT, builderMessage(projectDir, ids.get(n)!, `Frame ${ids.get(n)} is missing from compositions/frames/: write your module and its events file.`));
+        const r = await deps.dispatch(look ? frameWorkerForLook(look) : SCENE_FRAME_WORKER_AGENT, builderMessage(projectDir, ids.get(n)!, `Frame ${ids.get(n)} is missing from compositions/frames/: write your module and its events file.`), `repair:${ids.get(n)}`);
         if (r?.capped) outcome.capped = true;
       } catch (error) {
         log('build_dispatch_failed', { label: `repair:${ids.get(n)}`, error: error instanceof Error ? error.message : String(error) });
@@ -518,6 +522,7 @@ export async function repairBuild(deps: BuildDeps, missing: readonly number[]): 
   const run = (args: string[]) => exec('node', args);
   run([path.join('assets', 'kit', 'mount.mjs')]);
   run([path.join('assets', 'kit', 'sound.mjs')]);
+  run([path.join('assets', 'kit', 'caption-scrim.mjs')]);
   run([path.join(SKILL_SCRIPTS, 'captions.mjs'), 'build', '--storyboard', './STORYBOARD.md', '--audio-meta', './audio_meta.json', '--hyperframes', '.', '--out', './caption_groups.json']);
   run([path.join(SKILL_SCRIPTS, 'assemble-index.mjs'), '--storyboard', './STORYBOARD.md', '--hyperframes', '.']);
   run([path.join(SKILL_SCRIPTS, 'transitions.mjs'), 'inject', '--storyboard', './STORYBOARD.md', '--hyperframes', '.']);

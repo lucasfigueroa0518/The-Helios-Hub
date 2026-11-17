@@ -14,7 +14,6 @@ music: none
 - metaphor: a critter writes the same long instructions on every request, and every finished line drops a coin
 - setting: table
 - ground: paper
-- hook: the pen races through the last lines while coins pour onto a tall stack
 - steps:
   - the pen writes the instructions — the model reads the prompt
   - a coin drops per line — input tokens are billed

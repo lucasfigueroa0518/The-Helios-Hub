@@ -19,7 +19,7 @@ the workflow turns your plan into the reel.
 4. `.claude/skills/faceless-explainer/references/story-design.md`: the format (the beats, the
    plan's blocks, the fields).
 5. `frame.md` § What the kit builds: what you can plan for (places, moods, critters, objects,
-   cameras, carries, sound).
+   cameras, carries, sound), and § Roles: the roles a critter can take.
 
 This file says what to do and in what order; every rule it relies on lives in those files. When two
 of them seem to conflict, minimums win, then the format (story-design.md), then house style, then
@@ -62,11 +62,11 @@ One author, two passes, then the answer key.
    (`.media/recipes/helios-explainer/storyboard-skeleton.md`). Research where it helps.
 2. Read BRIEF.md's `## Lesson frame` when it has one, then find the teaching truth (story-design.md
    § Inputs) before writing a line.
-3. Stage the analogy: `## Anchor scene` (its places may stay rough until pass 2) and the three hook
-   candidates and the pick (`## Hook`) (story-design.md § The plan's blocks).
+3. Stage the analogy: `## Anchor scene` (its places may stay rough until pass 2) (story-design.md
+   § The plan's blocks).
 4. Write the whole voiceover in `SCRIPT.md` (story-design.md § The script), beat by beat to each
    beat's job, for `craft.md` § 7's priorities in their order. Settle story-design.md's fixed lines
-   first: the opener line (§ 1), the quick definition (§ 2), the hand-off line (§ 3) and the
+   first: the opener (§ 1: silent unless BRIEF.md gives a line), the quick definition (§ 2), the hand-off line (§ 3) and the
    restated definition (§ 5).
 5. Read it back as a listener would hear it, once, and tighten it. Then copy each line into its
    frame's `voiceover:` in `STORYBOARD.md`, with the frontmatter and every frame block from the
@@ -75,10 +75,13 @@ One author, two passes, then the answer key.
 ### Pass 2: the visual director
 1. Plan the reel as one film, with every section of `craft.md` in mind:
    - `## Visual arc` (its throughline, colour script, motifs, intensity and bridges);
-   - the anchor scene's `places`, each chosen for what its beats need;
+   - the anchor scene's `places`, each chosen for what its beats need, and each critter's body and
+     role (story-design.md § The plan's blocks);
    - each frame's `look` and `scene:` line, and frame 3's `handoff_parts:` and `world_sounds:`;
    - every shot (story-design.md § Shot lines), on the voice's cue words, each with its `why`;
-     carries, each with its screen box on both sides of its cut, where the arc plans a bridge.
+     carries, each with its screen box on both sides of its cut, where the arc plans a bridge;
+   - a put-down beat, shown on screen, before any shot where a critter holding its role's prop
+     must use its hands (story-design.md § Shot lines).
 2. Where a line cannot be shown well, look for a better picture first; if none serves, change the
    wording only as `craft.md` § 7 allows, in both `SCRIPT.md` and `STORYBOARD.md`. Frame 1's and
    frame 3's lines never change.
@@ -110,7 +113,7 @@ One author, two passes, then the answer key.
    Code never shows the key to a reader. You never run the reel test: after you stop, code has two
    first-time readers read the reel and checks their answers against the key.
 5. **Stop.** No audio, no scene code, no `hyperframes` command. Your last message: the term; the
-   thesis; the anchor scene and the picked hook; then anything a check left open
+   thesis; the anchor scene; then anything a check left open
    and any conflict between the recipe files.
 
 ## Phase: fix
