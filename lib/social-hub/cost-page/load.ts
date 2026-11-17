@@ -111,22 +111,29 @@ export async function loadCostPage(email: string, params: Params, now: Date): Pr
   try {
     const p = parseCostParams(params, now);
     const eq: HubQuery | null = await explainersHubQuery().catch(() => null);
-    const reads = await readCosts(liveHubQuery, eq ?? Promise.reject(new Error('Explainers database not available')));
+    const scope = { vertical: p.vertical, mode: p.mode };
+    // Every read below needs only the params and the Explainers handle, so they run as one wave
+    // instead of seven round trips in a row.
+    const [reads, { rows: stages }, loaded, sets, cacheRows, watchUsd, readiness] = await Promise.all([
+      readCosts(liveHubQuery, eq ?? Promise.reject(new Error('Explainers database not available'))),
+      liveHubQuery<{ id: string; s: Record<string, number> | null; claude: number; jev: number | null; total: number }>(
+        `SELECT id::text, record->'result'->'costByStage' AS s, claude_usd::float8 AS claude, (record->'jev'->>'costUsd')::float8 AS jev, total_usd::float8 AS total
+           FROM social.runs WHERE status IN ('ok', 'partial', 'failed')`,
+      ),
+      loadForPage(email),
+      wasteSets(liveHubQuery, eq),
+      readCacheRows(liveHubQuery, eq, nyDayStart(p.from).toISOString(), nyDayStart(addDays(p.to, 1)).toISOString(), scope),
+      watches(eq, p.to),
+      readinessFor(liveHubQuery, now),
+    ]);
     const { rows, pools } = buildLedger(reads);
     const ledger = allocate(rows, pools);
-    const stages = (await liveHubQuery<{ id: string; s: Record<string, number> | null; claude: number; jev: number | null; total: number }>(
-      `SELECT id::text, record->'result'->'costByStage' AS s, claude_usd::float8 AS claude, (record->'jev'->>'costUsd')::float8 AS jev, total_usd::float8 AS total
-         FROM social.runs WHERE status IN ('ok', 'partial', 'failed')`,
-    )).rows;
     const cRows = toCostRows(
       ledger,
       stages.map((r): CarouselStageSplit => ({ runId: r.id, byStage: r.s ?? {} })),
       stages.map((r): CarouselVendorSplit => ({ runId: r.id, claude: r.claude, jev: r.jev ?? 0, total: r.total })),
     );
-    const loaded = await loadForPage(email);
     const posts = 'error' in loaded ? [] : loaded.posts;
-    const sets = await wasteSets(liveHubQuery, eq);
-    const scope = { vertical: p.vertical, mode: p.mode };
 
     const spendMicros = scopedSpend(cRows, scope, p.from, p.to);
     const published = new Set(posts.filter((x) => x.status === 'published' && x.costItemKey).map((x) => x.costItemKey!));
@@ -153,10 +160,10 @@ export async function loadCostPage(email: string, params: Params, now: Date): Pr
       if (cpis.length) bestEverCpi[v] = Math.min(...cpis);
     }
 
-    const caching = cacheSavings(await readCacheRows(liveHubQuery, eq, nyDayStart(p.from).toISOString(), nyDayStart(addDays(p.to, 1)).toISOString(), scope));
+    const caching = cacheSavings(cacheRows);
     return {
-      rows: cRows, from: p.from, to: p.to, now, vertical: p.vertical, mode: p.mode, watchUsd: await watches(eq, p.to), posts, waste, prevWastePct,
-      readiness: await readinessFor(liveHubQuery, now), caching,
+      rows: cRows, from: p.from, to: p.to, now, vertical: p.vertical, mode: p.mode, watchUsd, posts, waste, prevWastePct,
+      readiness, caching,
       monthTotals: scopedMonthTotals(cRows, scope), bestEverCpi,
     };
   } catch (error) {
