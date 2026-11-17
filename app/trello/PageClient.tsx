@@ -1,22 +1,51 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Topbar } from "@/components/trello/shell/Topbar";
-import { Board } from "@/components/trello/board/Board";
-import { CardDetail } from "@/components/trello/card/CardDetail";
-import { NewBoardDialog } from "@/components/trello/board/NewBoardDialog";
-import { MyCardsView } from "@/components/trello/views/MyCardsView";
-import { DueThisWeekView } from "@/components/trello/views/DueThisWeekView";
-import { ActivityView } from "@/components/trello/views/ActivityView";
-import { ArchivedBoardsView } from "@/components/trello/views/ArchivedBoardsView";
-import { ProfileView } from "@/components/trello/views/ProfileView";
 import { HomeView } from "@/components/trello/views/HomeView";
 import { useBoardState } from "@/lib/trello/useBoardState";
 import { parseTrelloSearch, trelloHref } from "@/lib/trello/viewUrl";
 import { usersInWorkspace, usersNotInWorkspace } from "@/lib/trello/workspace-access";
 import type { LoadedWorkspace } from "@/app/trello/actions/loadWorkspace";
+
+// Home is the default view and ships with the page. The other views, the card
+// detail and the new-board dialog load as their own chunks (still server-rendered
+// when a link opens on them), and every one of them is prefetched once the
+// browser is idle, so switching stays instant.
+const Board = dynamic(() => import("@/components/trello/board/Board").then((m) => m.Board));
+const CardDetail = dynamic(() => import("@/components/trello/card/CardDetail").then((m) => m.CardDetail));
+const NewBoardDialog = dynamic(() => import("@/components/trello/board/NewBoardDialog").then((m) => m.NewBoardDialog));
+const MyCardsView = dynamic(() => import("@/components/trello/views/MyCardsView").then((m) => m.MyCardsView));
+const DueThisWeekView = dynamic(() => import("@/components/trello/views/DueThisWeekView").then((m) => m.DueThisWeekView));
+const ActivityView = dynamic(() => import("@/components/trello/views/ActivityView").then((m) => m.ActivityView));
+const ArchivedBoardsView = dynamic(() => import("@/components/trello/views/ArchivedBoardsView").then((m) => m.ArchivedBoardsView));
+const ProfileView = dynamic(() => import("@/components/trello/views/ProfileView").then((m) => m.ProfileView));
+// Same modules as above (webpack gives each one chunk), fetched once the browser is idle.
+const PREFETCH = [
+  () => import("@/components/trello/board/Board"),
+  () => import("@/components/trello/card/CardDetail"),
+  () => import("@/components/trello/board/NewBoardDialog"),
+  () => import("@/components/trello/views/MyCardsView"),
+  () => import("@/components/trello/views/DueThisWeekView"),
+  () => import("@/components/trello/views/ActivityView"),
+  () => import("@/components/trello/views/ArchivedBoardsView"),
+  () => import("@/components/trello/views/ProfileView"),
+];
+
+function usePrefetchWhenIdle(loaders: ReadonlyArray<() => Promise<unknown>>) {
+  useEffect(() => {
+    const run = () => { for (const load of loaders) void load().catch(() => undefined); };
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(run, { timeout: 2000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(run, 200);
+    return () => window.clearTimeout(id);
+  }, [loaders]);
+}
 
 const paneEnter = {
   initial: { opacity: 0, y: 8 },
@@ -31,6 +60,7 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
   const searchParams = useSearchParams();
   const [newBoardOpen, setNewBoardOpen] = useState(false);
   const [newBoardWorkspaceId, setNewBoardWorkspaceId] = useState<string | null>(null);
+  usePrefetchWhenIdle(PREFETCH);
 
   const search = searchParams?.toString() ?? "";
 
