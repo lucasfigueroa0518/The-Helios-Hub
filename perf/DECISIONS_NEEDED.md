@@ -26,6 +26,11 @@ Not changed here, because the playbook forbids behavior changes in this branch. 
 2. **Smartlead webhook is unreachable**: `/api/webhooks/smartlead/[token]` is not in `middleware.ts` `isPublicPath`, so middleware returns 401 to Smartlead before the route's own token check runs. If Smartlead events are expected, add the prefix to `isPublicPath`.
 3. **Pages outside the middleware matcher**: `/carousels`, `/field-notes`, `/last-few-days`, `/ai-events` and `/personality` are listed in `isProtectedPage` but missing from `config.matcher`, so middleware never runs for them. Each page does check the session itself, so this isn't open access today. Add them to the matcher for defense in depth.
 
+## D6. Check whether Postgres JIT is on in production (Supabase)
+
+- **Why**: in the local profile (Postgres 16, default `jit = on`), the campaign list query spends **39 ms of its 152 ms compiling JIT code** (`EXPLAIN ANALYZE` → `JIT: Emission 34 ms`). Every plan whose cost is over `jit_above_cost` (100 000) pays this, which includes the campaign list, analytics, and hub dataset reads. Upstream PostgreSQL has since changed the default to off, and the commit notes that most large deployments already turn it off.
+- **Ask**: run `psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SHOW jit; ROLLBACK;"`. If it says `on`, consider `ALTER DATABASE postgres SET jit = off;` (reversible with `RESET`). That is a database-wide setting, so it's your call. `perf/REPORT.md` has the measured effect of JIT on the local profile. All code changes in this branch were measured with JIT **on**, the same as the baseline.
+
 ## D5. Production APM
 
 - The app has structured logs and `Server-Timing`, but no tracing backend. Sentry Performance or Datadog would give real p95 per route in production, but both are paid. Vercel's built-in Speed Insights and Observability are the cheapest options. Your call.

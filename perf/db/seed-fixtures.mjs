@@ -66,6 +66,10 @@ async function main() {
       .catch((e) => console.warn(`settle ${sc.schema}.${sc.table}:`, e.message.slice(0, 120)));
   }
 
+  // 0c. Analytics exclusions are a handful of test runs, not most of them.
+  await client.query(`DELETE FROM outreach.analytics_run_exclusions WHERE run_id NOT IN (
+    SELECT run_id FROM outreach.analytics_run_exclusions ORDER BY run_id LIMIT 8)`);
+
   // 1. The perf user and their profile.
   await client.query(
     `INSERT INTO outreach.users (id, email, display_name, last_login_at) VALUES ($1, $2, 'Perf Tester', now())

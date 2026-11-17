@@ -151,6 +151,10 @@
     "reel_ai_drama.settings": 1,
     "reel_ai_drama.worker_state": 1,
     "explainers.idea_cycles": 200,
-    "revisions.requests": 1500
+    "revisions.requests": 1500,
+    "outreach.analytics_run_exclusions": 8,
+    "social_hub.idea_adjustments": 20,
+    "social_hub.refreshes": 60,
+    "social_hub.slot_override": 10
   }
 }

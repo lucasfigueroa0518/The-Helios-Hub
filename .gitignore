@@ -95,3 +95,4 @@ explainers/design/intros/.out/
 # Performance tooling: machine-local state and run outputs
 perf/.local/
 perf/runs/
+.lighthouseci/

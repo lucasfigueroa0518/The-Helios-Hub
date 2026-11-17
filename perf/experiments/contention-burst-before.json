@@ -1,0 +1,23 @@
+{
+  "seconds": 180,
+  "probe": "/api/inboxes/02f92a46-8b11-4610-8836-12024f694aa9",
+  "hub": "/api/hub/warm?path=/social",
+  "hubEveryMs": 250,
+  "probeLatency": {
+    "n": 654,
+    "errors": 0,
+    "p50": 19.6,
+    "p95": 79.6,
+    "p99": 1295.9,
+    "max": 2739
+  },
+  "hubLatency": {
+    "n": 706,
+    "errors": 0,
+    "p50": 51.1,
+    "p95": 121.9,
+    "p99": 436.7,
+    "max": 593
+  },
+  "over1s": 7
+}

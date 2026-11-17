@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 
 import { mintSessionCookie } from './lib/session.mjs';
+import { markdown } from './lib/table.mjs';
 
 const PERF_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(PERF_DIR);
@@ -169,6 +170,10 @@ async function stopServer() {
   }
 }
 
+// Lighthouse can throw protocol errors from inside its own event handlers ("Session
+// closed"); those must not kill a run that holds an hour of measurements.
+process.on('uncaughtException', (error) => console.warn(`uncaught (continuing): ${String(error?.message ?? error).slice(0, 200)}`));
+process.on('unhandledRejection', (error) => console.warn(`unhandled rejection (continuing): ${String(error?.message ?? error).slice(0, 200)}`));
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, async () => { await stopServer(); proxy?.kill(); process.exit(130); });
 
 // ---------- timing ----------
@@ -338,10 +343,11 @@ async function lighthousePhase(cookie) {
   const { default: lighthouse } = await import('lighthouse');
   const chromeLauncher = await import('chrome-launcher');
   await startServer();
-  const chrome = await chromeLauncher.launch({
+  const launch = () => chromeLauncher.launch({
     chromePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1243/chrome-linux/chrome',
     chromeFlags: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
   });
+  let chrome = await launch();
   const out = {};
   try {
     for (const route of pages) {
@@ -349,43 +355,21 @@ async function lighthousePhase(cookie) {
       for (let i = 0; i < 2; i += 1) await timeOne(route, cookie);
       const runs = [];
       for (let i = 0; i < LH_RUNS; i += 1) {
-        const result = await lighthouse(`${BASE}${route.url}`, {
-          port: chrome.port,
-          output: 'json',
-          logLevel: 'error',
-          onlyCategories: ['performance'],
-          formFactor: 'mobile',
-          screenEmulation: { mobile: true, width: 412, height: 823, deviceScaleFactor: 1.75, disabled: false },
-          throttlingMethod: 'devtools',
-          // Chrome DevTools "Fast 4G" preset + 4x CPU slowdown (perf/PROFILE.md).
-          throttling: {
-            requestLatencyMs: 165,
-            downloadThroughputKbps: 8100,
-            uploadThroughputKbps: 1350,
-            cpuSlowdownMultiplier: 4,
-            rttMs: 165,
-            throughputKbps: 8100,
-          },
-          extraHeaders: route.auth === 'public' ? {} : { Cookie: cookie },
-          disableStorageReset: false,
-        });
-        const lhr = result.lhr;
-        const scripts = (lhr.audits['network-requests']?.details?.items ?? [])
-          .filter((it) => it.resourceType === 'Script');
-        runs.push({
-          finalUrl: lhr.finalDisplayedUrl,
-          score: lhr.categories.performance.score,
-          fcp: lhr.audits['first-contentful-paint']?.numericValue ?? null,
-          lcp: lhr.audits['largest-contentful-paint']?.numericValue ?? null,
-          tbt: lhr.audits['total-blocking-time']?.numericValue ?? null,
-          cls: lhr.audits['cumulative-layout-shift']?.numericValue ?? null,
-          si: lhr.audits['speed-index']?.numericValue ?? null,
-          ttfbServer: lhr.audits['server-response-time']?.numericValue ?? null,
-          jsTransferKB: Math.round(scripts.reduce((s, it) => s + (it.transferSize ?? 0), 0) / 102.4) / 10,
-          jsRequests: scripts.length,
-          totalTransferKB: Math.round((lhr.audits['total-byte-weight']?.numericValue ?? 0) / 102.4) / 10,
-        });
+        let result;
+        // A Chrome protocol error on one page must not lose the run: relaunch and retry once.
+        for (let attempt = 0; attempt < 2 && !result; attempt += 1) {
+          try {
+            result = await lighthouseOnce(route);
+          } catch (error) {
+            console.warn(`  lighthouse ${route.id} attempt ${attempt + 1} failed: ${String(error?.message ?? error).slice(0, 160)}`);
+            try { await chrome.kill(); } catch { /* gone */ }
+            chrome = await launch();
+          }
+        }
+        if (!result) continue;
+        runs.push(result);
       }
+      if (runs.length === 0) { out[route.id] = { runs: 0, error: 'lighthouse failed' }; continue; }
       const med = (key) => pct(runs.map((r) => r[key]).filter((v) => v !== null), 50);
       out[route.id] = {
         runs: runs.length,
@@ -403,6 +387,53 @@ async function lighthousePhase(cookie) {
     await stopServer();
   }
   return out;
+
+  async function lighthouseOnce(route) {
+    {
+      {
+        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('lighthouse timed out after 120 s')), 120_000));
+        const result = await Promise.race([timeout, lighthouse(`${BASE}${route.url}`, {
+          port: chrome.port,
+          output: 'json',
+          logLevel: 'error',
+          onlyCategories: ['performance'],
+          formFactor: 'mobile',
+          screenEmulation: { mobile: true, width: 412, height: 823, deviceScaleFactor: 1.75, disabled: false },
+          throttlingMethod: 'devtools',
+          // Chrome DevTools "Fast 4G" preset + 4x CPU slowdown (perf/PROFILE.md).
+          throttling: {
+            requestLatencyMs: 165,
+            downloadThroughputKbps: 8100,
+            uploadThroughputKbps: 1350,
+            cpuSlowdownMultiplier: 4,
+            rttMs: 165,
+            throughputKbps: 8100,
+          },
+          extraHeaders: route.auth === 'public' ? {} : { Cookie: cookie },
+          // Pages that poll never go network-idle; cap the wait so one page can't take minutes.
+          maxWaitForLoad: Number(args['lh-max-wait'] ?? 45_000),
+          disableStorageReset: false,
+        })]);
+        const lhr = result.lhr;
+        if (lhr.runtimeError) throw new Error(lhr.runtimeError.message);
+        const scripts = (lhr.audits['network-requests']?.details?.items ?? [])
+          .filter((it) => it.resourceType === 'Script');
+        return ({
+          finalUrl: lhr.finalDisplayedUrl,
+          score: lhr.categories.performance.score,
+          fcp: lhr.audits['first-contentful-paint']?.numericValue ?? null,
+          lcp: lhr.audits['largest-contentful-paint']?.numericValue ?? null,
+          tbt: lhr.audits['total-blocking-time']?.numericValue ?? null,
+          cls: lhr.audits['cumulative-layout-shift']?.numericValue ?? null,
+          si: lhr.audits['speed-index']?.numericValue ?? null,
+          ttfbServer: lhr.audits['server-response-time']?.numericValue ?? null,
+          jsTransferKB: Math.round(scripts.reduce((s, it) => s + (it.transferSize ?? 0), 0) / 102.4) / 10,
+          jsRequests: scripts.length,
+          totalTransferKB: Math.round((lhr.audits['total-byte-weight']?.numericValue ?? 0) / 102.4) / 10,
+        });
+      }
+    }
+  }
 }
 
 // ---------- pg_stat_statements ----------
@@ -415,7 +446,8 @@ async function pgss(action) {
       SELECT left(regexp_replace(query, '\\s+', ' ', 'g'), 600) AS query, calls::int,
              round(total_exec_time::numeric, 1)::float AS total_ms, round(mean_exec_time::numeric, 2)::float AS mean_ms,
              round(max_exec_time::numeric, 1)::float AS max_ms, rows::bigint AS rows,
-             shared_blks_hit + shared_blks_read AS blocks
+             shared_blks_hit + shared_blks_read AS blocks,
+             round(((jit_generation_time + jit_inlining_time + jit_optimization_time + jit_emission_time) / nullif(calls, 0))::numeric, 1)::float AS jit_ms
         FROM pg_stat_statements
        WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
          AND query !~* '^(BEGIN|COMMIT|ROLLBACK|SET|SHOW|SELECT pg_stat_statements|SELECT 1)'
@@ -439,31 +471,6 @@ function verdict(route, warm, lh) {
   return serverOk ? 'pass' : 'fail';
 }
 
-function fmt(v) { return v === null || v === undefined ? '–' : String(Math.round(v)); }
-
-function markdown(result) {
-  const rows = [
-    `# Perf run: ${result.out}`,
-    '',
-    `${result.startedAt} · commit ${result.commit} · ${result.routes.length} routes · warm ${RUNS} runs · cold ${COLD_CYCLES} cycles · DB one-way delay ${process.env.PERF_DB_ONE_WAY_MS ?? '0'} ms`,
-    '',
-    `Budget: page warm p95 TTFB ≤ ${BUDGET.ttfbMs} ms and full HTML ≤ ${BUDGET.totalMs} ms; API warm p95 ≤ ${BUDGET.totalMs} ms (server target ${BUDGET.apiServerMs} ms).`,
-    '',
-    '| Route | Warm TTFB p50/p95 | Warm total p50/p95/p99 | Cold TTFB p95 | Cold total p95 | Queries (warm/cold) | LCP | TBT | JS KB | Verdict |',
-    '|---|---|---|---|---|---|---|---|---|---|',
-  ];
-  for (const route of result.routes) {
-    const w = result.warm[route.id];
-    const c = result.cold[route.id];
-    const t = result.trace[route.id];
-    const l = result.lighthouse[route.id];
-    rows.push(`| \`${route.method} ${route.url}\` | ${fmt(w?.ttfb.p50)}/${fmt(w?.ttfb.p95)} | ${fmt(w?.total.p50)}/${fmt(w?.total.p95)}/${fmt(w?.total.p99)} | ${fmt(c?.ttfb.p95)} | ${fmt(c?.total.p95)} | ${t?.warm?.queryCount ?? '–'}/${t?.cold?.queryCount ?? '–'} | ${fmt(l?.lcp)} | ${fmt(l?.tbt)} | ${l?.jsTransferKB ?? '–'} | ${result.verdicts[route.id]} |`);
-  }
-  const pass = Object.values(result.verdicts).filter((v) => v === 'pass').length;
-  rows.push('', `**${pass}/${result.routes.length} routes meet the warm budget.**`);
-  return rows.join('\n') + '\n';
-}
-
 // ---------- main ----------
 async function main() {
   const startedAt = new Date().toISOString();
@@ -477,10 +484,13 @@ async function main() {
   await startProxy();
   await pgss('reset');
   const phases = String(args.phases ?? 'warm,cold,trace,lighthouse').split(',');
-  const warm = phases.includes('warm') ? await warmPhase(cookie) : {};
-  const trace = phases.includes('trace') ? await tracePhase(cookie) : {};
-  const cold = phases.includes('cold') ? await coldPhase(cookie) : {};
-  const lh = phases.includes('lighthouse') ? await lighthousePhase(cookie) : {};
+  // Each phase is saved as it finishes, so a stopped run keeps what it measured.
+  const partial = (name, value) => { fs.writeFileSync(path.join(RUN_DIR, `${name}.json`), JSON.stringify(value, null, 2)); return value; };
+  const warm = phases.includes('warm') ? partial('warm', await warmPhase(cookie)) : {};
+  const traceFile = path.join(RUN_DIR, 'trace-summary.json');
+  const trace = phases.includes('trace') ? await tracePhase(cookie) : (fs.existsSync(traceFile) ? JSON.parse(fs.readFileSync(traceFile, 'utf8')) : {});
+  const cold = phases.includes('cold') ? partial('cold', await coldPhase(cookie)) : {};
+  const lh = phases.includes('lighthouse') ? partial('lighthouse', await lighthousePhase(cookie)) : {};
   const statements = await pgss('dump');
   if (statements) fs.writeFileSync(path.join(RUN_DIR, 'pg_stat_statements.json'), JSON.stringify(statements, null, 2));
   const verdicts = Object.fromEntries(routes.map((r) => [r.id, verdict(r, warm[r.id], lh[r.id])]));
