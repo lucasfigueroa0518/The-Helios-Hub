@@ -7,7 +7,7 @@ import { MASTER_FILE } from '@/lib/stories/trivia/render/audio';
 import { CONFETTI_COLORS, CONFETTI_COUNT, confettiPieces } from '@/lib/stories/trivia/render/confetti';
 import {
   answerTimeline, BEAT_S, bezier, BULB_OFF, BULB_ON, BULB_STEP_S, CLIP_S, digitAt, EASES, FPS, GREEN, LINE_S, MASTER_S, POP_PEAK, POP_REST, POP_S,
-  POSTER_AT, questionTimeline, REVEAL_S, SEAM_T, SOUND, timelineScript, type Tween, bulbsSwapOnAnswer,
+  POSTER_AT, questionTimeline, REVEAL_S, SEAM_T, SOUND, timelineScript, type Tween, bulbsSwapOnAnswer, CTA_IN_S, CTA_S, RING_OFF, RING_ON, WRONG_OPACITY,
 } from '@/lib/stories/trivia/render/timeline';
 
 const near = (a: number, b: number, eps = 1e-9) => Math.abs(a - b) <= eps;
@@ -78,7 +78,7 @@ test('bulbs: lighting only (no sound), chasing in 0.5 s steps on clip 1 (the bea
   for (const t of bulbs(questionTimeline())) assert.ok(grid.has(t.at), `bulb step ${t.at} on the grid`);
 });
 
-test('reveal: every reveal layer starts on the hit at +0.5 s (frame 15); the answer line rises in at +0.6 s', () => {
+test('reveal: every reveal layer starts on the hit at +0.5 s (frame 15); the answer line rises in at +0.6 s, the call to action at +1.2 s', () => {
   const tl = answerTimeline(4, 2);
   assert.equal(REVEAL_S, SOUND.hit);
   assert.equal(REVEAL_S, 0.5);
@@ -88,7 +88,14 @@ test('reveal: every reveal layer starts on the hit at +0.5 s (frame 15); the ans
   assert.deepEqual(line.map((t) => [t.at, t.dur, t.ease, t.from, t.to]), [[LINE_S, 0.35, 'rise', { opacity: 0, y: 30, scale: 0.9 }, { opacity: 1, y: 0, scale: 1 }]]);
   assert.equal(LINE_S, 0.6);
   const pop2 = reveal.find((t) => t.target === '#tv-opt-2' && t.to.scale === POP_REST)!;
-  for (const t of reveal) if (t !== pop2 && t.target !== '#tv-line') assert.equal(t.at, REVEAL_S, `${t.target} starts on the hit`);
+  const cta = reveal.filter((t) => t.target === '#tv-cta');
+  assert.deepEqual(cta.map((t) => [t.at, t.dur, t.ease, t.from, t.to]), [[CTA_S, CTA_IN_S, 'rise', { opacity: 0, y: 30, scale: 0.9 }, { opacity: 1, y: 0, scale: 1 }]]);
+  assert.ok(CTA_S > LINE_S + 0.35, 'the call to action comes after the answer line lands');
+  // The question fades out on the hit, before the answer line rises into its slot.
+  const qOut = reveal.find((t) => t.target === '#tv-q')!;
+  assert.deepEqual([qOut.at, qOut.from, qOut.to], [REVEAL_S, { opacity: 1 }, { opacity: 0 }]);
+  assert.ok(qOut.at + qOut.dur <= LINE_S + 1e-9);
+  for (const t of reveal) if (t !== pop2 && t.target !== '#tv-line' && t.target !== '#tv-cta') assert.equal(t.at, REVEAL_S, `${t.target} starts on the hit`);
   // The correct pill turns green with a check, and its letter gives way, on the hit.
   assert.deepEqual(reveal.find((t) => t.target === '#tv-opt-2' && t.dur === 0)!.to, { backgroundColor: GREEN, color: '#FFFFFF' });
   assert.deepEqual(reveal.find((t) => t.target === '#tv-opt-2 b')!.to, { backgroundColor: '#FFFFFF', color: GREEN });
@@ -99,10 +106,16 @@ test('reveal: every reveal layer starts on the hit at +0.5 s (frame 15); the ans
   assert.deepEqual([pop1.from, POP_PEAK, POP_REST], [{ scale: 1 }, 1.12, 1.05]);
   assert.ok(near(pop1.at + pop1.dur, pop2.at) && near(pop2.at + pop2.dur, REVEAL_S + POP_S));
   assert.ok(near(pop1.dur, 0.2475));
-  // The wrong pills fade to 50 % over 0.4 s; the correct one does not fade.
-  const fades = reveal.filter((t) => t.to.opacity === 0.5);
+  // The wrong pills turn to outlines over 0.4 s (no fill, a white ring, white text, their badges too); the correct one does not.
+  const fades = reveal.filter((t) => t.to.opacity === WRONG_OPACITY);
   assert.deepEqual(fades.map((t) => t.target).sort(), ['#tv-opt-0', '#tv-opt-1', '#tv-opt-3']);
-  for (const f of fades) assert.deepEqual([f.dur, f.ease], [0.4, 'ease']);
+  for (const f of fades) {
+    assert.deepEqual([f.dur, f.ease], [0.4, 'ease']);
+    assert.deepEqual([f.to.backgroundColor, f.to.color, f.to.boxShadow], ['rgba(255, 255, 255, 0)', 'rgb(255, 255, 255)', RING_ON]);
+    assert.equal(f.from!.boxShadow, RING_OFF, 'the ring is there but invisible before the hit, so the seam frame is unchanged');
+  }
+  const badges = reveal.filter((t) => / b$/.test(t.target) && t.to.boxShadow === RING_ON);
+  assert.deepEqual(badges.map((t) => t.target).sort(), ['#tv-opt-0 b', '#tv-opt-1 b', '#tv-opt-3 b']);
 });
 
 test('confetti: 30 pieces in white, green and dark, flung from the pill on the hit, as the mock throws them', () => {

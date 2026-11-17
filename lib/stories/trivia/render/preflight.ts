@@ -34,6 +34,8 @@ export type PreflightResult = {
   measures: Record<number, Measured>;
   /** The answer line's height at each LINE_PX size (empty on clip 1). */
   lineHeights?: Record<number, number>;
+  /** The answer line's slot height (clip 2: the question's box plus its padding). */
+  lineSlot?: number;
   /** The page's boxes at its baked question size. */
   boxes: PageBoxes;
 };
@@ -45,7 +47,7 @@ export type SeamShots = (a: { dir: string; t: number }, b: { dir: string; t: num
 type PageArgs = { fonts: string[]; sizes: number[]; lineSizes: number[]; safeW: number; footH: number };
 
 /** Runs in the page: everything above, as plain data. Self-contained (no closures). */
-function measurePage(a: PageArgs): Promise<{ problems: string[]; measures: Record<number, Measured>; lineHeights: Record<number, number>; boxes: PageBoxes }> {
+function measurePage(a: PageArgs): Promise<{ problems: string[]; measures: Record<number, Measured>; lineHeights: Record<number, number>; lineSlot?: number; boxes: PageBoxes }> {
   return (async () => {
     await Promise.all(a.fonts.map((f) => document.fonts.load(f)));
     await document.fonts.ready;
@@ -94,6 +96,9 @@ function measurePage(a: PageArgs): Promise<{ problems: string[]; measures: Recor
     }
     const line = document.getElementById('tv-line');
     const lineHeights: Record<number, number> = {};
+    let lineSlot: number | undefined;
+    const cta = document.getElementById('tv-cta');
+    if (cta && cta.scrollWidth > cta.clientWidth + 1) problems.push('the call to action is wider than the stage');
     if (line) {
       const ownL = stage.style.getPropertyValue('--lpx');
       for (const px of a.lineSizes) {
@@ -102,10 +107,12 @@ function measurePage(a: PageArgs): Promise<{ problems: string[]; measures: Recor
       }
       stage.style.setProperty('--lpx', ownL);
       const h = line.getBoundingClientRect().height;
-      if (h > a.footH + 1) problems.push(`the answer line is ${Math.round(h)} px tall, over the ${a.footH} px footer slot`);
+      const slotH = document.getElementById('tv-lslot')?.clientHeight ?? a.footH;
+      lineSlot = slotH;
+      if (h > slotH + 1) problems.push(`the answer line is ${Math.round(h)} px tall, over its ${slotH} px slot (the question's)`);
       if (line.scrollWidth > line.clientWidth + 1) problems.push('a word of the answer line is wider than the stage');
     }
-    return { problems, measures, lineHeights, boxes: { sign: box(sign), question: box(el('tv-q')), choices: box(el('tv-choices')), foot: box(el('tv-foot')), options: options.map(box) } };
+    return { problems, measures, lineHeights, lineSlot, boxes: { sign: box(sign), question: box(el('tv-q')), choices: box(el('tv-choices')), foot: box(el('tv-foot')), options: options.map(box) } };
   })();
 }
 
