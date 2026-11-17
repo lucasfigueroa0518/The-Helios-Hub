@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, LazyMotion, m } from 'framer-motion';
 import {
   CalendarDays,
   ChevronDown,
@@ -28,6 +28,8 @@ import type { ComponentProps } from 'react';
 
 import { HUB_NAV, type HubNavItem } from '@/components/hub-shell/nav';
 import { WarmLink } from '@/components/hub-shell/warm-link';
+
+const loadMotionFeatures = () => import('@/components/hub-shell/motion-features').then((mod) => mod.default);
 import { useMobileNav } from '@/components/hub-shell/MobileNavContext';
 
 /** On screen, prefetch stays partial. Hover loads the full route, and the click uses that response. */
@@ -230,128 +232,130 @@ export function HubSidebar({ email }: { email: string }) {
       </aside>
 
       {/* Mobile Slide-Over Navigation Drawer */}
-      <AnimatePresence>
-        {isOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              className="hub-mobile-drawer-overlay"
-              onClick={closeMobileNav}
-            />
-            <motion.div
-              initial={{ x: '-100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '-100%' }}
-              transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-              className="hub-mobile-drawer-panel"
-            >
-              <div className="hub-mobile-drawer__header">
-                <MenuLink href="/" onClick={closeMobileNav} className="hub-sidebar__brand" aria-label="The Helios Hub">
-                  <div className="hub-sidebar__logo-wrap">
-                    <Image
-                      src="/trello/helios-logo-sm.png"
-                      alt=""
-                      width={22}
-                      height={22}
-                      className="hub-sidebar__logo"
-                      priority
-                    />
-                  </div>
-                  <span className="hub-sidebar__brand-copy">
-                    <span className="hub-sidebar__brand-title">Helios Hub</span>
-                    <span className="hub-sidebar__brand-sub">Workspace</span>
-                  </span>
-                </MenuLink>
-                <button
-                  type="button"
-                  className="hub-mobile-drawer__close"
-                  onClick={closeMobileNav}
-                  aria-label="Close navigation menu"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <nav className="hub-sidebar__nav flex-1" aria-label="Mobile Navigation">
-                <div className="hub-sidebar__nav-section-label">Navigation</div>
-                {HUB_NAV.map((item) => {
-                  const Icon = ICONS[item.id];
-                  const active = item.match(pathname);
-                  const open = Boolean(item.children?.length) && mobileExpandedId === item.id;
-                  return (
-                    <div
-                      key={item.id}
-                      className={`hub-nav-item${active ? ' is-active' : ''}${open ? ' is-open' : ''}${item.children ? ' has-children' : ''}`}
-                    >
-                      <MenuLink
-                        href={item.href}
-                        className="hub-nav-item__row"
-                        aria-expanded={item.children ? open : undefined}
-                        onClick={(event) => {
-                          if (!item.children) {
-                            closeMobileNav();
-                            return;
-                          }
-                          event.preventDefault();
-                          setMobileExpandedId((current) => (current === item.id ? null : item.id));
-                        }}
-                      >
-                        <span className="hub-nav-item__icon">
-                          <Icon size={18} aria-hidden="true" />
-                        </span>
-                        <span className="hub-nav-item__label">
-                          {item.label}
-                          {item.badge ? <span className="hub-nav-item__badge">{item.badge}</span> : null}
-                        </span>
-                        {item.children && (
-                          <ChevronDown size={14} className="hub-nav-item__caret" aria-hidden="true" />
-                        )}
-                      </MenuLink>
-                      {item.children && (
-                        <div className="hub-nav-item__sub">
-                          <div className="hub-nav-item__sub-inner">
-                            {item.children.map((child) => (
-                              <MenuLink
-                                key={child.href}
-                                href={child.href}
-                                className={`hub-nav-item__sub-link${child.match(pathname, search) ? ' is-active' : ''}`}
-                                onClick={closeMobileNav}
-                              >
-                                {child.label}
-                              </MenuLink>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+      <LazyMotion features={loadMotionFeatures}>
+        <AnimatePresence>
+          {isOpen && (
+            <>
+              <m.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                className="hub-mobile-drawer-overlay"
+                onClick={closeMobileNav}
+              />
+              <m.div
+                initial={{ x: '-100%' }}
+                animate={{ x: 0 }}
+                exit={{ x: '-100%' }}
+                transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+                className="hub-mobile-drawer-panel"
+              >
+                <div className="hub-mobile-drawer__header">
+                  <MenuLink href="/" onClick={closeMobileNav} className="hub-sidebar__brand" aria-label="The Helios Hub">
+                    <div className="hub-sidebar__logo-wrap">
+                      <Image
+                        src="/trello/helios-logo-sm.png"
+                        alt=""
+                        width={22}
+                        height={22}
+                        className="hub-sidebar__logo"
+                        priority
+                      />
                     </div>
-                  );
-                })}
-              </nav>
-
-              <div className="hub-sidebar__footer">
-                <div className="hub-sidebar__profile-card">
-                  <div className="hub-sidebar__avatar" aria-hidden="true">
-                    {initial}
-                  </div>
-                  <span className="hub-sidebar__email" title={email}>{email}</span>
+                    <span className="hub-sidebar__brand-copy">
+                      <span className="hub-sidebar__brand-title">Helios Hub</span>
+                      <span className="hub-sidebar__brand-sub">Workspace</span>
+                    </span>
+                  </MenuLink>
                   <button
                     type="button"
-                    className="hub-sidebar__signout"
-                    aria-label="Sign out"
-                    title="Sign out"
-                    onClick={() => void signOut({ callbackUrl: '/' })}
+                    className="hub-mobile-drawer__close"
+                    onClick={closeMobileNav}
+                    aria-label="Close navigation menu"
                   >
-                    <LogOut size={16} />
+                    <X size={18} />
                   </button>
                 </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+
+                <nav className="hub-sidebar__nav flex-1" aria-label="Mobile Navigation">
+                  <div className="hub-sidebar__nav-section-label">Navigation</div>
+                  {HUB_NAV.map((item) => {
+                    const Icon = ICONS[item.id];
+                    const active = item.match(pathname);
+                    const open = Boolean(item.children?.length) && mobileExpandedId === item.id;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`hub-nav-item${active ? ' is-active' : ''}${open ? ' is-open' : ''}${item.children ? ' has-children' : ''}`}
+                      >
+                        <MenuLink
+                          href={item.href}
+                          className="hub-nav-item__row"
+                          aria-expanded={item.children ? open : undefined}
+                          onClick={(event) => {
+                            if (!item.children) {
+                              closeMobileNav();
+                              return;
+                            }
+                            event.preventDefault();
+                            setMobileExpandedId((current) => (current === item.id ? null : item.id));
+                          }}
+                        >
+                          <span className="hub-nav-item__icon">
+                            <Icon size={18} aria-hidden="true" />
+                          </span>
+                          <span className="hub-nav-item__label">
+                            {item.label}
+                            {item.badge ? <span className="hub-nav-item__badge">{item.badge}</span> : null}
+                          </span>
+                          {item.children && (
+                            <ChevronDown size={14} className="hub-nav-item__caret" aria-hidden="true" />
+                          )}
+                        </MenuLink>
+                        {item.children && (
+                          <div className="hub-nav-item__sub">
+                            <div className="hub-nav-item__sub-inner">
+                              {item.children.map((child) => (
+                                <MenuLink
+                                  key={child.href}
+                                  href={child.href}
+                                  className={`hub-nav-item__sub-link${child.match(pathname, search) ? ' is-active' : ''}`}
+                                  onClick={closeMobileNav}
+                                >
+                                  {child.label}
+                                </MenuLink>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </nav>
+
+                <div className="hub-sidebar__footer">
+                  <div className="hub-sidebar__profile-card">
+                    <div className="hub-sidebar__avatar" aria-hidden="true">
+                      {initial}
+                    </div>
+                    <span className="hub-sidebar__email" title={email}>{email}</span>
+                    <button
+                      type="button"
+                      className="hub-sidebar__signout"
+                      aria-label="Sign out"
+                      title="Sign out"
+                      onClick={() => void signOut({ callbackUrl: '/' })}
+                    >
+                      <LogOut size={16} />
+                    </button>
+                  </div>
+                </div>
+              </m.div>
+            </>
+          )}
+        </AnimatePresence>
+      </LazyMotion>
     </>
   );
 }
