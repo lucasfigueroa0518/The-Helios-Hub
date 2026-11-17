@@ -114,6 +114,9 @@ CREATE TABLE IF NOT EXISTS stories.trivia_game_days (
     built_at    timestamptz DEFAULT now(),
     locked_at   timestamptz
 );
+-- Questions that passed their fact-check but were not chosen (the other kind was over-represented): kept so a
+-- later pass can swap them in without paying for the check again. Not reserved; dropped once no longer open.
+ALTER TABLE stories.trivia_game_days ADD COLUMN IF NOT EXISTS bench jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 -- ── Video frames ────────────────────────────────────────────────────────────
 -- An AI Trivia frame is a 5-second MP4 (storage_path) with a poster JPEG
