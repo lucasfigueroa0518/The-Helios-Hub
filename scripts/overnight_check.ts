@@ -19,10 +19,10 @@ try {
   if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
 }
 
-const TYPES = ['reels', 'carousels', 'explainers', 'stories'] as const;
-const LABEL: Record<(typeof TYPES)[number], string> = { reels: 'Text on Screen', carousels: 'Carousels', explainers: 'Explainers', stories: 'Stories' };
+const TYPES = ['reels', 'carousels', 'explainers', 'stories', 'ai_trivia', 'real_or_ai'] as const;
+const LABEL: Record<(typeof TYPES)[number], string> = { reels: 'Text on Screen', carousels: 'Carousels', explainers: 'Explainers', stories: 'Morning Download', ai_trivia: 'Are you smarter than AI?', real_or_ai: 'Real or AI?' };
 /** When each type's windows open (New York), from docs/social-overnight.md. */
-const FIRST_WINDOW: Record<(typeof TYPES)[number], string> = { reels: '8:45 AM', carousels: '9:00 AM', explainers: '1:00 PM', stories: '8:30 AM' };
+const FIRST_WINDOW: Record<(typeof TYPES)[number], string> = { reels: '8:45 AM', carousels: '9:00 AM', explainers: '1:00 PM', stories: '8:30 AM', ai_trivia: '8:30 AM', real_or_ai: '8:30 AM' };
 
 const ok = (s: string) => console.log(`  ✔ ${s}`);
 const warn = (s: string) => console.log(`  ⚠ ${s}`);
@@ -67,11 +67,10 @@ async function main() {
   console.log('\nSwitches (what a person can change in each page\'s Settings)');
   for (const t of TYPES) {
     const p = await readPosting(t);
-    const parts = `Live ${p.live ? 'on' : 'OFF'} · Generate ${p.generate === null ? 'per series' : p.generate ? 'on' : 'OFF'} · Auto-publish ${p.autoPublish ? 'ON' : 'off (needs your approval)'}${p.perDay != null ? ` · ${p.perDay}/day` : ''}`;
+    const parts = `Live ${p.live ? 'on' : 'OFF'} · Generate ${p.generate ? 'on' : 'OFF'} · Auto-publish ${p.autoPublish ? 'ON' : 'off (needs your approval)'}${p.perDay != null ? ` · ${p.perDay}/day` : ''}`;
     console.log(`  ${LABEL[t]}: ${parts}`);
     if (!p.live) bad(`${LABEL[t]}: Live is off, so nothing is scheduled or posted automatically`);
     if (p.generate === false) warn(`${LABEL[t]}: Generate every morning is off, so no overnight run will make content`);
-    if (t === 'stories' && p.series) for (const s of p.series) if (!s.generate) warn(`Stories: ${s.label} will not be made automatically`);
     if (p.autoPublish) warn(`${LABEL[t]}: Auto-publish is ON: what is made posts without review`);
   }
 

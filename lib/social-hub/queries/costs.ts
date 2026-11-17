@@ -1,4 +1,5 @@
 import type { HubQuery } from '@/lib/social-hub/db';
+import { typeOfSetlessComponent, verticalOfSeries } from '@/lib/social-hub/story-types';
 import { toMicros, type LedgerRow, type Pool } from '@/lib/social-hub/cost';
 import { klingClipUsdSql } from '@/lib/reels/insights';
 import { readDramaCosts, type DramaCostEventRow, type DramaRenderedRow } from '@/lib/reel-ai-drama/hub-read';
@@ -37,8 +38,9 @@ export type CostReads = {
     ny_date: string;
     posts: Array<{ storyId?: string; costUsd?: number }> | null;
   }>;
-  storyEvents: Array<{ id: string; set_id: string | null; component: string; vendor: string; production: boolean; usd: string; ny_date: string }>;
-  storySets: Array<{ set_id: string; ny_date: string; spend_usd: string }>;
+  /** `series`: the event's set's series (null without a set, or in an older fixture), which names its type (SS-1). */
+  storyEvents: Array<{ id: string; set_id: string | null; component: string; vendor: string; production: boolean; usd: string; ny_date: string; series?: string | null }>;
+  storySets: Array<{ set_id: string; ny_date: string; spend_usd: string; series?: string | null }>;
   /** Last Few Days runs with the post each made (null: it made none). Optional: older callers build reads without it. */
   lfdRuns?: Array<{ id: string; claude_usd: string; jev_usd: string; ny_date: string; post_id: string | null }>;
   /** AI Events runs with the week's post (null: it made none). Optional the same way. */
@@ -88,9 +90,9 @@ export const COST_SQL = {
                         END AS posts
                    FROM social.runs WHERE status IN ('ok', 'partial', 'failed')`,
   storyEvents: `SELECT e.id, e.set_id, e.component, e.vendor, e.usd::text AS usd, ${day('e.created_at')} AS ny_date,
-                       (COALESCE(s.mode, 'production') = 'production') AS production
+                       (COALESCE(s.mode, 'production') = 'production') AS production, s.series
                   FROM stories.cost_events e LEFT JOIN stories.sets s ON s.id = e.set_id`,
-  storySets: `SELECT id AS set_id, ny_date::text AS ny_date, spend_usd::text AS spend_usd
+  storySets: `SELECT id AS set_id, ny_date::text AS ny_date, spend_usd::text AS spend_usd, series
                 FROM stories.sets WHERE status NOT IN ('requested', 'building')`,
   lfdRuns: `SELECT r.id::text AS id, r.claude_usd::text AS claude_usd, r.jev_usd::text AS jev_usd,
                    ${day('COALESCE(r.started_at, r.requested_at)')} AS ny_date,
@@ -234,17 +236,24 @@ export function buildLedger(r: CostReads): { rows: LedgerRow[]; pools: Pool[] } 
     }
   }
 
-  // ── Stories: rows with a set are direct; rows without split across that day's sets.
-  const setsByDay = new Map<string, string[]>();
-  for (const s of r.storySets) setsByDay.set(s.ny_date, [...(setsByDay.get(s.ny_date) ?? []), `stories:${s.set_id}`]);
-  for (const [d, items] of setsByDay) pools.push({ key: `stories:day:${d}`, items: items.map((item) => ({ item })) });
+  // ── Stories engine (SS-1): a row with a set is direct and counts under its set's type (its series' type); a row
+  // without a set counts under its component's type (AI Trivia's daily writer, Real or AI?'s candidate maker; the
+  // rest is Morning Download's) and splits across that type's sets that day. Morning Download keeps its pool key.
+  const storyPool = (v: string, d: string) => (v === 'stories' ? `stories:day:${d}` : `${v}:day:${d}`);
+  const setsByPool = new Map<string, string[]>();
+  for (const s of r.storySets) {
+    const key = storyPool(verticalOfSeries(s.series), s.ny_date);
+    setsByPool.set(key, [...(setsByPool.get(key) ?? []), `stories:${s.set_id}`]);
+  }
+  for (const [key, items] of setsByPool) pools.push({ key, items: items.map((item) => ({ item })) });
   for (const e of r.storyEvents) {
+    const type = e.set_id ? verticalOfSeries(e.series) : typeOfSetlessComponent(e.component);
     rows.push({
       id: `stories:ce:${e.id}`,
-      vertical: 'stories',
+      vertical: type,
       nyDate: e.ny_date,
       micros: toMicros(e.usd),
-      target: e.set_id ? { kind: 'item', item: `stories:${e.set_id}` } : { kind: 'pool', pool: `stories:day:${e.ny_date}` },
+      target: e.set_id ? { kind: 'item', item: `stories:${e.set_id}` } : { kind: 'pool', pool: storyPool(type, e.ny_date) },
       label: e.component,
       vendor: e.vendor,
       mode: mode(e.production),

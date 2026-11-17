@@ -184,7 +184,7 @@ test('makesText: lead 2 vs lead 0, Stories by series', () => {
   assert.equal(makesText('carousels', TODAY, TODAY), 'not made yet');
   assert.equal(makesText('carousels', '2026-11-16', TODAY), 'makes tonight');
   assert.equal(makesText('carousels', '2026-11-17', TODAY), 'makes Mon night');
-  assert.equal(makesText('stories', '2026-11-18', TODAY, 'Guess the Number'), 'makes tonight');
+  assert.equal(makesText('ai_trivia', '2026-11-18', TODAY), 'makes tonight');
   assert.equal(makesText('stories', '2026-11-18', TODAY, 'Morning Download'), 'makes Tue night');
 });
 
@@ -193,9 +193,9 @@ test('Stories: a series slot takes the next idea of its own series', () => {
   const ideas = [s('md1', 'Morning Download', 0.9), s('md2', 'Morning Download', 0.8), s('gn1', 'Guess the Number', 0.7)];
   const { model, source, now } = build({ ideas, vertical: 'stories', now: new Date('2026-11-15T12:00:00Z') }); // 7:00 AM
   const board = poolBoard(model, TODAY, 2, { ...source, now });
-  // Sunday has Morning Download only; Monday has Morning Download and Guess the Number.
+  // Stories split (SS-1): Morning Download is the type's one series, so a Guess the Number idea never takes its slot.
   assert.deepEqual(board[0]!.slots.map((x) => [x.series, x.idea?.id]), [['Morning Download', 'md1']]);
-  assert.deepEqual(board[1]!.slots.map((x) => [x.series, x.idea?.id]).sort(), [['Guess the Number', 'gn1'], ['Morning Download', 'md2']]);
+  assert.deepEqual(board[1]!.slots.map((x) => [x.series, x.idea?.id]), [['Morning Download', 'md2']]);
 });
 
 test('Last Few Days and AI Events: posts are built from the whole list, so no one idea fills a slot', () => {

@@ -124,6 +124,10 @@ function fakeMeta(opts: { quota?: { used: number; total: number } | null; states
       log.push(`create ${url}`);
       return `c${++n}`;
     },
+    async createStoryVideoContainer(url) {
+      log.push(`create video ${url}`);
+      return `c${++n}`;
+    },
     async containerStatus(id) {
       const i = polls.get(id) ?? 0;
       polls.set(id, i + 1);

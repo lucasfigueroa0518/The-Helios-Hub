@@ -49,6 +49,9 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
   carousels: defineParts({ actions: () => <CarouselRunButton /> }),
   stories: defineParts({ actions: () => <StoriesGenerate /> }),
   last_few_days: defineParts({ actions: () => <LfdRunButton /> }),
+  // SS-1: Trivia and Real or AI? generate on their own days; Real or AI? keeps its lab.
+  ai_trivia: defineParts({ actions: () => <StoriesGenerate type="ai_trivia" /> }),
+  real_or_ai: defineParts({ actions: () => <><StoriesGenerate type="real_or_ai" /><Link className="rh-btn" href="/real-or-ai/lab">Lab</Link></> }),
   ai_events: defineParts({
     // Rebuild post re-renders the coming week's post from the pool; with none waiting there is nothing to rebuild.
     actions: (page) => (

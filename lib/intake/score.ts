@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 
 import { mapPool } from '@/lib/async-pool';
 
+import { OWN_DEPOSIT_SOURCES } from './deposit';
 import { IntakeCapReached } from './jev';
 import { keptFamilies, membersOf } from './scorecards';
 import type { IntakeItem, IntakeJev, IntakeOrder, IntakeQuery, IntakeStory, Scorecard, ScorecardId } from './types';
@@ -47,9 +48,10 @@ type CoverItem = Pick<IntakeItem, 'family' | 'sourceId'> &
 
 /**
  * Whether an order's sources cover an item, through any list that keeps it (fix 1: a URL can be on a reels adapter
- * and a feed): `'reels:*'` covers reels adapters and Claude web search finds (family 'search'); `'feeds:*'` covers
- * every feed; `'field-notes:*'` covers every Field Notes source; an explicit id covers that source; a seed is covered
- * by its own order.
+ * and a feed): `'reels:*'` covers reels adapters and Claude web search finds (family 'search'), except a type's own
+ * deposits (SS-30: AI Trivia's `search:trivia`, which only an order naming it covers); `'feeds:*'` covers every feed;
+ * `'field-notes:*'` covers every Field Notes source; an explicit id covers that source; a seed is covered by its own
+ * order.
  */
 export function orderCovers(order: Pick<IntakeOrder, 'id' | 'sources'>, item: CoverItem): boolean {
   const kept = keptFamilies({ ...item, dropReason: item.dropReason ?? null });
@@ -65,7 +67,8 @@ export function orderCovers(order: Pick<IntakeOrder, 'id' | 'sources'>, item: Co
       return order.sources.includes(id) || order.sources.includes('feeds:*');
     }
     const id = family === 'reels' ? item.reelsSourceId ?? item.sourceId : item.sourceId;
-    return order.sources.includes(id) || order.sources.includes('reels:*');
+    if (order.sources.includes(id)) return true;
+    return order.sources.includes('reels:*') && !(family === 'search' && OWN_DEPOSIT_SOURCES.has(id));
   });
 }
 

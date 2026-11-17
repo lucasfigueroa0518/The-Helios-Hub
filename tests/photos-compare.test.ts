@@ -7,7 +7,7 @@ import test from 'node:test';
 
 import { isReadOnlySql, readOnlyQuery, type ReadClient, type ReadPool } from '@/lib/photos/compare/db';
 import { esc, renderHtml, webUrl } from '@/lib/photos/compare/html';
-import { carouselPlan, lfdPlan, requestFromStep, storySetPlan, subjectsFromQuery, type ComparePost } from '@/lib/photos/compare/plan';
+import { carouselPlan, DEFAULT_POSTS, lfdPlan, loadType, requestFromStep, storySetPlan, subjectsFromQuery, type ComparePost } from '@/lib/photos/compare/plan';
 import { planLines, runComparison, type FindFn } from '@/lib/photos/compare/run';
 import type { Photo } from '@/lib/stories/render/types';
 
@@ -168,22 +168,15 @@ test('storySetPlan (Morning Download) reads the requests from photo_log and matc
   assert.match((storySetPlan({ ...row, frames: [frame(1, 'opener')] }) as { reason: string }).reason, /story frame/);
 });
 
-test('storySetPlan (GTN) uses the chosen candidate; (FvP) the stored pair', () => {
-  const gtn = storySetPlan({
-    id: 'g-1', series: 'guess_the_number', ny_date: '2026-11-05', created_at: '2026-11-05T10:00:00Z', status: 'ready', payload: {},
-    chosen: { question: 'How many parameters does GPT-3 have?', answer: '175B', label: 'parameters', topic: 'GPT-3 size', meaning: 'Big.', source_url: 'https://arxiv.org/abs/1', source_name: 'arXiv', visual: { kind: 'product', query: 'GPT-3' }, answer_visual: { kind: 'company', query: 'OpenAI' }, subjects: [{ name: 'OpenAI', type: 'organization' }] },
-    frames: [frame(1, 'intro'), frame(2, 'question', { src: 'https://q.jpg', credit: 'Q', kind: 'scene' }), frame(3, 'answer')],
-  }) as ComparePost;
-  assert.deepEqual(gtn.frames.map((f) => [f.id, f.need.kind, f.need.query, f.old?.src ?? null]), [['question', 'product', 'GPT-3', 'https://q.jpg'], ['answer', 'company', 'OpenAI', null]]);
-  assert.match((storySetPlan({ id: 'g-2', series: 'guess_the_number', ny_date: '', created_at: '', status: 'ready', payload: {}, frames: [] }) as { reason: string }).reason, /no chosen candidate/);
-
-  const fvp = storySetPlan({
-    id: 'f-1', series: 'free_vs_paid', ny_date: '2026-10-31', created_at: '2026-10-31T10:00:00Z', status: 'ready',
-    payload: { pair: { paid_tool: 'Microsoft 365', paid_price: '$9.99', price_period: 'a month', paid_price_url: 'https://microsoft.com/p', free_tool: 'LibreOffice', free_url: 'https://libreoffice.org', what_it_does: 'Office suite' } },
-    frames: [frame(1, 'intro'), frame(2, 'paid', { src: 'https://ms-logo.png', credit: 'MS', kind: 'logo' }), frame(3, 'free')],
-  }) as ComparePost;
-  assert.deepEqual(fvp.frames.map((f) => [f.id, f.need.kind, f.need.query, f.need.specificity]), [['paid', 'logo', 'Microsoft 365', 'subject'], ['free', 'logo', 'LibreOffice', 'subject']]);
-  assert.equal(fvp.frames[0]!.old?.kind, 'logo');
+test('storySetPlan: retired series (GTN, FvP) have no profile any more (SS-20); loadType skips trivia and roa', async () => {
+  assert.throws(() => storySetPlan({ id: 'g-1', series: 'guess_the_number', ny_date: '', created_at: '', status: 'ready', payload: {}, frames: [] }), /unknown series/);
+  assert.throws(() => storySetPlan({ id: 'f-1', series: 'free_vs_paid', ny_date: '', created_at: '', status: 'ready', payload: {}, frames: [] }), /unknown series/);
+  const none = async () => { throw new Error('no query expected'); };
+  const part = await loadType(none as never, 'roa', 1);
+  assert.deepEqual(part.posts, []);
+  assert.match(part.skipped[0]!.reason, /no replay for roa/);
+  assert.equal(DEFAULT_POSTS.trivia, 0);
+  assert.equal(DEFAULT_POSTS.roa, 0);
 });
 
 const brief = {

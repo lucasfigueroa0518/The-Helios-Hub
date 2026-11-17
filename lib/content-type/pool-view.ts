@@ -1,4 +1,5 @@
 import { TYPE_CONFIG } from '@/lib/content-type/config';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { TypeHubModel } from '@/lib/content-type/model';
 import { madeRowState, poolRowState, POOL_STATE_WORDS, storySeriesOf, type PoolRowState } from '@/lib/content-type/pool-rules';
 import { leadDaysFor } from '@/lib/social-hub/lead';
@@ -157,7 +158,7 @@ const postsOf = (model: TypeHubModel, source?: PoolSource) =>
  * "not made yet" (Make it by hand); tomorrow's run is "makes tonight"; a later run is named for the evening before.
  */
 export function makesText(vertical: Vertical, slotDate: string, today: string, group?: string | null): string {
-  const runDay = addDays(slotDate, -leadDaysFor(vertical, vertical === 'stories' ? storySeriesOf(group) : null));
+  const runDay = addDays(slotDate, -leadDaysFor(vertical, isStoryVertical(vertical) ? storySeriesOf(group) : null));
   const ahead = daysBetween(today, runDay);
   if (ahead <= 0) return 'not made yet';
   if (ahead === 1) return 'makes tonight';
@@ -206,7 +207,7 @@ function dayWindows(vertical: Vertical, date: string, today: string, onDay: numb
   // With the calendar (template mode) a type's quota is TODAY's slot count under its daily limit (readDayQuotas), so it
   // cuts today only; other days show their calendar slots. Without the calendar (legacy) it is posts per day, every day.
   const quotaApplies = !quotas?.slots || date === today;
-  const quota = vertical === 'stories' || !quotaApplies ? undefined : quotas?.[vertical as keyof DayQuotas];
+  const quota = isStoryVertical(vertical) || !quotaApplies ? undefined : quotas?.[vertical as keyof DayQuotas];
   return typeof quota === 'number' ? windows.slice(0, Math.max(quota, Math.min(onDay, windows.length))) : windows;
 }
 
@@ -227,7 +228,7 @@ function seat(posts: readonly HubPost[], windows: readonly PlanWindow[], date: s
     const hit = windows.find((w) => !seated.has(w.id) && (
       (m != null && m >= w.startMinute && m <= w.endMinute)
       || p.slot?.id === w.id
-      || (vertical === 'stories' && p.idea?.label != null && p.idea.label === w.label)
+      || (isStoryVertical(vertical) && p.idea?.label != null && p.idea.label === w.label)
     ));
     if (hit) seated.set(hit.id, p);
     else left.push(p);
@@ -269,7 +270,7 @@ function fillBoard(model: TypeHubModel, now: Date, rows: ReadonlyArray<{ idea: H
     const seated = seat(mine, windows, date, vertical);
     const slots: BoardSlot[] = windows.map((w) => {
       const time = clockLabel(w.startMinute);
-      const base = { id: w.id, date, startMinute: w.startMinute, time, label: `${dayShort(date, today)} ${time}`, series: vertical === 'stories' ? w.label : null };
+      const base = { id: w.id, date, startMinute: w.startMinute, time, label: `${dayShort(date, today)} ${time}`, series: isStoryVertical(vertical) ? w.label : null };
       const past = nyDayStart(date).getTime() + w.startMinute * 60_000 <= now.getTime();
       const post = seated.get(w.id) ?? null;
       if (post) {
@@ -277,7 +278,7 @@ function fillBoard(model: TypeHubModel, now: Date, rows: ReadonlyArray<{ idea: H
         return { ...base, past, kind: 'post', post, idea: null, state, stateWord: POOL_STATE_WORDS[state], makes: null, position: null };
       }
       const next = date >= today && !past
-        ? queue.find((r) => !used.has(r.idea.id) && (vertical !== 'stories' || (r.idea.group ?? null) === w.label))
+        ? queue.find((r) => !used.has(r.idea.id) && (!isStoryVertical(vertical) || (r.idea.group ?? null) === w.label))
         : undefined;
       if (!next) return { ...base, past, kind: 'open', post: null, idea: null, state: null, stateWord: null, makes: null, position: null };
       used.add(next.idea.id);
@@ -303,7 +304,7 @@ const numberOf = (vertical: Vertical, idea: HubIdea, groupPosition: number): str
  */
 export function poolIdeas(model: TypeHubModel, now: Date, source?: PoolSource): PoolIdeaRow[] {
   const base = ideaBase(model, now, source);
-  const grouped = model.vertical === 'stories' || model.vertical === 'ai_events';
+  const grouped = isStoryVertical(model.vertical) || model.vertical === 'ai_events';
   const inGroup = new Map<string, number>();
   const through = addDays(model.today, HORIZON_DAYS);
   const { slotOf } = base.length ? fillBoard(model, now, base, model.today, through, source) : { slotOf: new Map<string, PoolSlotRef>() };

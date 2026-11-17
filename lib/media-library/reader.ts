@@ -22,6 +22,10 @@
  * news photos, lib/media-library/drama.ts); this reader never offers them.
  *
  * Gated by media_library.settings.finder_source (off by default).
+ *
+ * AI images (Stories Split, SS-24): Real or AI?'s generated images are banked with licence `generated` (reuse_ok
+ * false). They are never offered to any caller unless it asks with `allowGenerated: true`, which only Real or AI?
+ * does. The rule reads the licence alone, so it holds before db/media_library_stories_split.sql adds `truth`.
  */
 import type { FaceBox } from '@/lib/social/render/fit-check';
 import type { Lane } from '@/lib/social/photos/find';
@@ -31,7 +35,7 @@ import { EMPTY_LEDGER, readUsedLedger, usedMatch, USED_PHOTO_DAYS, type UsedLedg
 
 import { REUSABLE_LICENCES, SCENE_LANES, words } from './policy';
 import { cachedBankSettings, type BankSettings } from './settings';
-import type { FinderSourceMode, Query } from './types';
+import { REAL_OR_AI_LANE, type FinderSourceMode, type Query } from './types';
 
 /** The used-photo window (CI-32: one rule for every content type). */
 export const BANK_USED_PHOTO_DAYS = USED_PHOTO_DAYS;
@@ -52,6 +56,8 @@ export type BankFind = {
   /** A cover never repeats a logo. */
   cover: boolean;
   limit: number;
+  /** Real or AI? only (SS-24): AI images (licence `generated`) may come back too. Every other caller leaves it unset. */
+  allowGenerated?: boolean;
 };
 
 export type BankHit = {
@@ -62,6 +68,8 @@ export type BankHit = {
   source: string;
   lane: Lane;
   credit: string;
+  /** The photo's licence class: open or government, or `generated` (allowGenerated callers only). */
+  licence?: string;
   title: string;
   date: string | null;
   width: number;
@@ -132,14 +140,16 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
       const at = deps.now?.() ?? new Date();
       const used = await usedLedger(at);
       const now = at.toISOString();
-      const params: unknown[] = [[...plan.lanes], now, want, q.qid, plan.visionPass, plan.logoWindow, Math.max(1, q.limit) * 3, SOURCE_FRESH_DAYS, LOGO_SEEN_DAYS, [...REUSABLE_LICENCES]];
+      // AI images sit in Real or AI?'s own lane: it joins the request's lanes only for an allowGenerated caller.
+      const lanes = q.allowGenerated === true && plan.byTags ? [...plan.lanes, REAL_OR_AI_LANE] : [...plan.lanes];
+      const params: unknown[] = [lanes, now, want, q.qid, plan.visionPass, plan.logoWindow, Math.max(1, q.limit) * 3, SOURCE_FRESH_DAYS, LOGO_SEEN_DAYS, [...REUSABLE_LICENCES], q.allowGenerated === true];
       const { rows } = await deps.query(
         `WITH offer AS (
            SELECT s.photo_id, s.url, s.source, s.lane, s.credit, s.title, s.date, s.last_ok_at
              FROM media_library.photo_sources s
             WHERE s.status = 'stored' AND s.photo_id IS NOT NULL AND s.lane = ANY($1::text[])
               AND s.last_ok_at > $2::timestamptz - make_interval(days => $8))
-         SELECT p.id, p.width, p.height, p.tags, p.qids, p.subjects, p.dhash,
+         SELECT p.id, p.width, p.height, p.licence, p.tags, p.qids, p.subjects, p.dhash,
                 cardinality(ARRAY(SELECT unnest(p.tags) INTERSECT SELECT unnest($3::text[]))) AS overlap,
                 (SELECT row_to_json(o) FROM offer o WHERE o.photo_id = p.id ORDER BY o.last_ok_at DESC, o.url LIMIT 1) AS pick,
                 (SELECT array_agg(a.url ORDER BY a.url) FROM media_library.photo_sources a WHERE a.photo_id = p.id) AS urls,
@@ -148,7 +158,8 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
                 (SELECT g.plate FROM media_library.sightings g JOIN media_library.photo_sources a ON a.url = g.url
                   WHERE a.photo_id = p.id AND g.plate IS NOT NULL ORDER BY g.at DESC LIMIT 1) AS plate
            FROM media_library.photos p
-          WHERE p.status = 'stored' AND p.reuse_ok AND p.licence = ANY($10::text[])
+          WHERE p.status = 'stored'
+            AND ((p.reuse_ok AND p.licence = ANY($10::text[])) OR ($11::boolean AND p.licence = 'generated'))
             AND EXISTS (SELECT 1 FROM offer o WHERE o.photo_id = p.id)
             AND ($4::text IS NULL OR $4::text = ANY(p.qids))
             AND ($5::boolean IS NOT TRUE OR p.vision_pass)
@@ -174,6 +185,7 @@ export function createBankReader(deps: { query: Query; settings?: () => Promise<
           source: pick.source ?? 'stock',
           lane: pick.lane as Lane,
           credit: pick.credit ?? '',
+          licence: String(r.licence ?? ''),
           title: pick.title ?? '',
           date: pick.date ?? null,
           width: Number(r.width),

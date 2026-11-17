@@ -3,11 +3,11 @@
  * is uniform across every minute in the window, both ends included, the way
  * lib/reels/publish/slots.ts picks a reel's minute.
  *
- *   - A series is due on a day its window lists (Guess the Number Mon/Thu,
- *     Free vs. Paid Tue/Sat, Morning Download daily).
+ *   - A series is due on a day its window lists (AI Trivia Sun/Mon/Thu,
+ *     Real or AI? Tue/Sat, Morning Download daily).
  *   - Auto series (S-05) get a `requested` set early in the night that makes
  *     them; the worker builds it, approves it (auto), and schedules it.
- *     Bald-Eagle D4: Guess the Number and Free vs. Paid are made 2 days
+ *     Bald-Eagle D4: AI Trivia and Real or AI? are made 2 days
  *     ahead (lib/social-hub/lead.ts), so the 3:00 AM request on day R is for
  *     the due days among R, R+1 and R+2 that have no set yet (in the
  *     steady state only R+2; `ny_date` = the day the set posts);
@@ -15,6 +15,9 @@
  *   - A set approved by hand is scheduled for its day's window; if the window
  *     has passed, Lucas's "Publish now" is the only way out (risk 6: a missed
  *     window is skipped, not posted late).
+ *
+ * Stories Split (SS-21): each series is its own hub content type (verticalOfSeries), so the calendar's slots, the
+ * spine's bookings and the daily fill are read under that type; the engine still keys sets by series.
  */
 import { randomInt } from 'node:crypto';
 
@@ -23,7 +26,8 @@ import { bookedOn, consoleFillLog, remainingQuota, reportFill, userPlaced, type 
 import { fillDates, leadDaysFor } from '@/lib/social-hub/lead';
 import { driftMinute } from '@/lib/social-hub/slots/book';
 import { DRIFT } from '@/lib/social-hub/slots/times';
-import type { ResolvedSlot } from '@/lib/social-hub/slots/types';
+import { isStorySeries, type ResolvedSlot } from '@/lib/social-hub/slots/types';
+import { isStoryVertical, SERIES_OF_VERTICAL, verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { Queryable } from '@/lib/stories/db';
 import type { Series } from '@/lib/stories/render/types';
 import { nyDate, requestSet, SLOT_MINUTE_SQL, type StorySet } from '@/lib/stories/repository';
@@ -81,7 +85,7 @@ export function pickSetPublishAt(
   rand: (n: number) => number = randomInt,
 ): Date | null {
   if (set.slot_minute == null) return pickPublishAt(seriesWindow, set.ny_date, notBefore, rand);
-  const slot: ResolvedSlot = { vertical: 'stories', startMinute: set.slot_minute, series: set.series, feedMode: null, origin: 'template' };
+  const slot: ResolvedSlot = { vertical: verticalOfSeries(set.series), startMinute: set.slot_minute, series: isStorySeries(set.series) ? set.series : null, feedMode: null, origin: 'template' };
   return driftMinute(set.ny_date, slot, notBefore, [], rand);
 }
 
@@ -143,7 +147,14 @@ export async function seriesDayPlaced(db: Queryable, series: Series, date: strin
  */
 function placedOnSpine(db: Queryable, series: Series, date: string): Promise<number> {
   const q = (text: string, params?: unknown[]) => db.query(text, params);
-  return leadDaysFor('stories', series) > 0 ? bookedOn(q, 'stories', date, { slot: series }) : userPlaced(q, 'stories', date, { slot: series });
+  const vertical = verticalOfSeries(series);
+  return leadDaysFor('stories', series) > 0 ? bookedOn(q, vertical, date, { slot: series }) : userPlaced(q, vertical, date, { slot: series });
+}
+
+/** The series a calendar slot is for: its own, or its Stories-format type's one series; null for any other type's slot. */
+export function slotSeries(slot: Pick<ResolvedSlot, 'vertical' | 'series'>): Series | null {
+  if (!isStoryVertical(slot.vertical)) return null;
+  return (slot.series ?? SERIES_OF_VERTICAL[slot.vertical]) as Series;
 }
 
 /** Series days already reported as filled, per database handle, so the 15-second loop logs each once. */
@@ -263,7 +274,7 @@ async function requestSeriesDay(db: Queryable, cfg: StoriesSettings['series'][Se
   // Too late to build and post that day: skip, not post late (only ever true for the run day).
   if (now > windowBounds(cfg.window, date).end) return false;
   const placed = await seriesDayPlaced(db, s, date);
-  const fill: DailyFill = { vertical: 'stories', nyDate: date, quota: SERIES_DAY_QUOTA, userPlaced: placed, making: remainingQuota(SERIES_DAY_QUOTA, placed) };
+  const fill: DailyFill = { vertical: verticalOfSeries(s), nyDate: date, quota: SERIES_DAY_QUOTA, userPlaced: placed, making: remainingQuota(SERIES_DAY_QUOTA, placed) };
   if (fill.making < 1) {
     once(reportedFills, db, `${s}:${date}`, () => reportFill(fill, log, { series: s }));
     return false;
@@ -298,7 +309,7 @@ export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot
   const date = opts.date ?? nyDate(now);
   const out = new Map<Series, SeriesSlotDay>();
   for (const s of SERIES) {
-    const mine = slots.filter((x) => x.vertical === 'stories' && x.series === s).sort((a, b) => a.startMinute - b.startMinute);
+    const mine = slots.filter((x) => slotSeries(x) === s).sort((a, b) => a.startMinute - b.startMinute);
     if (!mine.length) continue;
     const { rows } = await db.query<{ m: number | null }>(
       `SELECT ${SLOT_MINUTE_SQL} AS m FROM stories.sets WHERE series = $1 AND ny_date = $2::date AND status NOT IN ('rejected', 'failed', 'skipped')`,
@@ -314,7 +325,7 @@ export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot
     const allowance = Math.max(0, mine.length - live);
     const free = mine.filter((x) => !minutes.has(x.startMinute)).slice(loose);
     const open = free.filter((x) => opts.includePast || now <= windowBounds(slotWindow(x.startMinute), date).end).slice(0, allowance);
-    out.set(s, { open, slotted: minutes.size, loose, fill: { vertical: 'stories', nyDate: date, quota: mine.length, userPlaced: loose, making: allowance } });
+    out.set(s, { open, slotted: minutes.size, loose, fill: { vertical: verticalOfSeries(s), nyDate: date, quota: mine.length, userPlaced: loose, making: allowance } });
   }
   return out;
 }
@@ -322,7 +333,7 @@ export async function openStorySlots(db: Queryable, slots: readonly ResolvedSlot
 /** Template mode: one set per open slot of one series on one date. Returns the series once per set requested. */
 async function requestSlotSets(db: Queryable, cfg: StoriesSettings['series'][Series], s: Series, date: string, now: Date, slots: readonly ResolvedSlot[], log: FillLog): Promise<Series[]> {
   const out: Series[] = [];
-  const day = (await openStorySlots(db, slots.filter((x) => x.series === s), now, { date })).get(s);
+  const day = (await openStorySlots(db, slots.filter((x) => slotSeries(x) === s), now, { date })).get(s);
   if (!day) return out;
   // A person's set without a slot took one of the day's slots: logged once with the series day's totals.
   if (day.loose > 0) once(reportedFills, db, `${s}:${date}`, () => reportFill(day.fill, log, { series: s, slotted: day.slotted }));

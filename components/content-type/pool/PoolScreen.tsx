@@ -1,5 +1,6 @@
 'use client';
 
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { useRouter } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check } from 'lucide-react';
@@ -52,7 +53,7 @@ const WHOLE_LIST = new Set(['last_few_days', 'ai_events']);
  * Stories, per series: lib/stories/pool.ts). Only these can be "full"; every other type's list is a view capped at 30
  * over a longer pool, so its length never switches Seed off.
  */
-const TRIMMED = new Set(['explainers', 'stories']);
+const TRIMMED = new Set(['explainers', 'stories', 'ai_trivia', 'real_or_ai']);
 
 type Open = { kind: 'idea'; id: string } | { kind: 'post'; id: string } | null;
 type Toast = { kind: 'archive'; id: string; title: string } | { kind: 'note'; text: string } | null;
@@ -169,7 +170,7 @@ export function PoolScreen({ model, data, readOnly = false, make, generate, seed
   // picked it is off only when every series is full.
   const seriesFull = (name: string) => rows.filter((r) => r.idea.group === name).length >= POOL_CAP;
   const full = !TRIMMED.has(vertical) ? false
-    : vertical === 'stories' ? (group ? seriesFull(group) : model.groups.length > 0 && model.groups.every(seriesFull))
+    : isStoryVertical(vertical) ? (group ? seriesFull(group) : model.groups.length > 0 && model.groups.every(seriesFull))
       : model.poolOpen - hidden.size >= POOL_CAP;
 
   const stateOf = (row: PoolIdeaRow): PoolRowState => {

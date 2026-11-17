@@ -47,7 +47,7 @@ test('old hub URLs redirect to their new places', () => {
   assert.equal(legacyRootRedirect(B, { month: '2026-10' }), '/social/calendar?month=2026-10');
   assert.equal(legacyRootRedirect(B, { post: 'reels:abc', day: '2026-10-08' }), `/social/post/reels%3Aabc?from=${encodeURIComponent('/social/calendar?day=2026-10-08')}`);
   assert.equal(legacyHouseRedirect(B, {}), '/social');
-  assert.equal(legacyHouseRedirect(B, { tab: 'ideas', v: 'stories' }), '/stories', 'ideas go to the type page, which holds its pool');
+  assert.equal(legacyHouseRedirect(B, { tab: 'ideas', v: 'stories' }), '/morning-download', 'ideas go to the type page, which holds its pool');
   assert.equal(legacyHouseRedirect(B, { tab: 'ideas' }), '/reels');
   assert.equal(legacyHouseRedirect('/social/preview', { tab: 'ideas', v: 'carousels' }), '/social/preview/type/carousels');
   assert.equal(legacyHouseRedirect(B, { tab: 'types' }), '/social/analytics');

@@ -1,4 +1,5 @@
 // lib/social-hub/slots/rules.ts
+import { isStoryVertical, SERIES_OF_VERTICAL } from '@/lib/social-hub/story-types';
 import { WEEKDAY_SHORT } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -71,8 +72,9 @@ export function canPlace(ctx: DayCtx, s: { vertical: Vertical; startMinute: numb
   if (isPastDay(ctx)) return refuse(PAST_DAY);
   if (!isSlotMinute(s.startMinute)) return refuse(OFF_GRID);
   if (s.startMinute < DAY_START || s.startMinute > LAST_START) return refuse(OUTSIDE_DAY);
-  if (s.vertical === 'stories' && !s.series) return refuse(NEEDS_SERIES);
-  if (s.vertical !== 'stories' && s.series) return refuse(NO_SERIES);
+  // A Stories-format type's slot names its one series (SS-1).
+  if (isStoryVertical(s.vertical) && s.series !== SERIES_OF_VERTICAL[s.vertical]) return refuse(NEEDS_SERIES);
+  if (!isStoryVertical(s.vertical) && s.series) return refuse(NO_SERIES);
 
   let minute = s.startMinute;
   if (ctx.nyDate !== null && ctx.nyDate === ctx.today && minute <= ctx.nowMinute) {
@@ -204,7 +206,8 @@ export function gapsFor(ctx: DayCtx, standard: readonly ResolvedSlot[], caps: Re
   if (!slots.some((s) => s.vertical === 'explainers')) {
     gaps.push({ kind: 'no-explainer', text: `${day} has no Explainer.`, fix: placeFix(ctx, 'explainers', DEFAULT_TIMES.explainers[0]!, null) });
   }
-  if (!slots.some((s) => s.vertical === 'stories')) {
+  // Any Stories-format type counts (SS-1); the fix places the daily Morning Download.
+  if (!slots.some((s) => isStoryVertical(s.vertical))) {
     gaps.push({ kind: 'no-stories', text: `${day} has no Stories.`, fix: placeFix(ctx, 'stories', DEFAULT_TIMES.stories[0]!, 'morning_download') });
   }
   if (slots.length < standard.length) {
@@ -213,7 +216,7 @@ export function gapsFor(ctx: DayCtx, standard: readonly ResolvedSlot[], caps: Re
 
   const counts = new Map<string, { name: { one: string; many: string }; n: number; cap: number }>();
   for (const s of slots) {
-    const k = s.vertical === 'stories' ? `stories|${s.series}` : s.vertical;
+    const k = s.vertical;
     const c = counts.get(k) ?? { name: nameOf(s), n: 0, cap: caps[s.vertical] };
     c.n += 1;
     counts.set(k, c);

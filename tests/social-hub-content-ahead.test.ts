@@ -73,7 +73,7 @@ test('an open slot names the night that makes it: the day minus the type’s lea
   const slot = (vertical: QuotaCandidate['vertical'], seriesId?: string): QuotaCandidate => ({ vertical, idea: null, post: null, locked: false, rank: null, moved: null, ...(seriesId ? { seriesId, series: seriesId } : {}) });
   assert.equal(nightFor(slot('reels'), '2026-11-18'), '2026-11-16', 'Text on Screen: two days ahead');
   assert.equal(nightFor(slot('field_notes'), '2026-11-17'), '2026-11-15');
-  assert.equal(nightFor(slot('stories', 't0510:guess_the_number'), '2026-11-16'), '2026-11-14', 'Guess the Number goes by its series');
+  assert.equal(nightFor(slot('ai_trivia', 't0510:ai_trivia'), '2026-11-16'), '2026-11-14', 'Are you smarter than AI? is made two days ahead');
   assert.equal(nightFor(slot('stories', 't0480:morning_download'), '2026-11-16'), '2026-11-16', 'Morning Download is made the day of');
   assert.equal(nightFor(slot('last_few_days'), '2026-11-17'), '2026-11-17');
 });

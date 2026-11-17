@@ -75,7 +75,7 @@ export function createFieldNotesBudget(o: { capUsd: number; reserveUsd?: number 
         const res = await transport.systemOne(state, questions);
         const usd = jevUsd(res.usage.input_tokens);
         jev += usd;
-        log.push({ stage: 'jev', model: 'jev', usd, inputTokens: res.usage.input_tokens, outputTokens: Number((res.usage as { output_tokens?: number }).output_tokens ?? 0) });
+        log.push({ stage: 'jev', model: 'jev', usd, inputTokens: res.usage.input_tokens ?? 0, outputTokens: Number((res.usage as { output_tokens?: number }).output_tokens ?? 0) });
         return res;
       },
     }),

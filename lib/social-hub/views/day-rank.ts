@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
 import { nyDateOf } from '@/lib/social-hub/time';
 import { capacityWindows, placedCount } from '@/lib/social-hub/views/plan';
@@ -85,7 +86,7 @@ export function dayRanking(ideas: readonly HubIdea[], vertical: Vertical, adjust
   const tags = queueTags(moves, present);
   const groups = new Map<string, HubIdea[]>();
   for (const idea of open) {
-    const g = vertical === 'stories' || vertical === 'ai_events' ? idea.group ?? '' : '';
+    const g = isStoryVertical(vertical) || vertical === 'ai_events' ? idea.group ?? '' : '';
     groups.set(g, [...(groups.get(g) ?? []), idea]);
   }
   const out: RankedIdea[] = [];
@@ -114,7 +115,7 @@ export function ideaOwns(idea: HubIdea, post: HubPost): boolean {
  */
 export function madeMoveIds(adjustments: readonly IdeaAdjustment[], posts: readonly HubPost[]): string[] {
   return adjustments
-    .filter((a) => a.kind !== 'archive' && a.vertical !== 'stories' && posts.some((p) =>
+    .filter((a) => a.kind !== 'archive' && !isStoryVertical(a.vertical) && posts.some((p) =>
       p.vertical === a.vertical
       && p.status !== 'generating'
       && ownsIdeaId(a.ideaId, p)
@@ -160,10 +161,10 @@ export function quotaCandidates(
   const today = day && day > actual ? day : actual;
   const ahead = today !== actual;
   const windows = capacityWindows(vertical, today, data.dayQuotas?.lfdDays ?? [], placedCount(data.posts, vertical, today), actual, data.dayQuotas?.slots ?? null);
-  if (vertical === 'stories') {
-    // A Stories slot is one series' set for the day; its ideas feed the build.
+  if (isStoryVertical(vertical)) {
+    // A Stories-format slot is its type's one series' set for the day (SS-1); its ideas feed the build.
     return windows.map((w) => {
-      const sets = data.posts.filter((p) => p.vertical === 'stories' && p.nyDate === today && p.idea?.label === w.label && !['failed', 'skipped', 'cancelled'].includes(p.status));
+      const sets = data.posts.filter((p) => p.vertical === vertical && p.nyDate === today && p.idea?.label === w.label && !['failed', 'skipped', 'cancelled'].includes(p.status));
       const post = sets.find((p) => HOLDS.has(p.status)) ?? sets.find((p) => p.status === 'generating' || hasMedia(p)) ?? null;
       return { vertical, idea: null, post, locked: Boolean(post && HOLDS.has(post.status)), rank: null, moved: null, series: w.label, seriesId: w.id };
     });
@@ -236,7 +237,7 @@ export function orderCards(cards: readonly QuotaCandidate[]): QuotaCandidate[] {
     .map((x) => x.c);
 }
 
-export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
+export const DAY_TYPES: readonly Vertical[] = ['reels', 'carousels', 'explainers', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
 
 /** Every type's quota candidates for today (or a later `day`), as the day's cards in posting order. */
 export function allQuotaCandidates(data: Parameters<typeof quotaCandidates>[0], now: Date, day?: string): QuotaCandidate[] {

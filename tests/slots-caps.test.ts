@@ -6,6 +6,8 @@
  * Offline PGlite.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import test, { afterEach } from 'node:test';
 
 import type { Queryable } from '@/lib/explainers/db';
@@ -146,8 +148,12 @@ test('reels template retry: a Main reel takes a minute that keeps 30 minutes fro
 
 // ---- Explainers ----
 
+const splitSql = () => readFileSync(path.join(process.cwd(), 'db', 'stories_split.sql'), 'utf8').split(/\r?\n/).filter((l) => !l.startsWith('\\')).join('\n');
+
 async function explainersDb(n: number): Promise<{ db: Queryable; q: never; jobs: string[] }> {
-  const { db } = await scratchExplainersDb();
+  const { db, pg } = await scratchExplainersDb();
+  // The Explainers scratch DB loads the spine without db/stories_split.sql; the template seed writes the split's types (SS-21).
+  await pg.exec(splitSql());
   const jobs: string[] = [];
   for (let i = 0; i < n; i += 1) {
     const { rows: t } = await db.query<{ id: string }>(`INSERT INTO explainers.topics (title, origin, status) VALUES ($1, 'manual', 'rendered') RETURNING id`, [`Topic ${i}`]);

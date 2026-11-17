@@ -6,19 +6,18 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { BACKDROPS, FREE_VS_PAID, GUESS_THE_NUMBER, MORNING_DOWNLOAD, MORNING_DOWNLOAD_TYPE, asSet } from '@/lib/stories/render/fixtures/m1';
+import { BACKDROPS, FREE_VS_PAID, MORNING_DOWNLOAD, MORNING_DOWNLOAD_TYPE, asSet } from '@/lib/stories/render/fixtures/m1';
 import { fadeAlpha, fadeMask, fadeStops } from '@/lib/stories/render/fades';
 import { framesHtml, toStoryJpeg } from '@/lib/stories/render/render';
 import { splitLead } from '@/lib/stories/render/StoryFrame';
 import { MAX_JPEG_BYTES, SAFE_BOTTOM, SAFE_TOP, framePhoto, type Backdrop, type Frame, type FrameData } from '@/lib/stories/render/types';
 
-const ALL: FrameData[] = [...MORNING_DOWNLOAD, ...MORNING_DOWNLOAD_TYPE, ...Object.values(GUESS_THE_NUMBER).flat(), ...FREE_VS_PAID];
+const ALL: FrameData[] = [...MORNING_DOWNLOAD, ...MORNING_DOWNLOAD_TYPE, ...FREE_VS_PAID];
 
-/** Every fixture frame, each under its own series. */
+/** Every still-image fixture frame, each under its own series (AI Trivia's frames are clips: lib/stories/trivia/render). */
 const allFrames = (b: Backdrop): Frame[] => [
   ...asSet('morning_download', b, MORNING_DOWNLOAD),
   ...asSet('morning_download', b, MORNING_DOWNLOAD_TYPE),
-  ...Object.values(GUESS_THE_NUMBER).flatMap((set) => asSet('guess_the_number', b, set)),
   ...asSet('free_vs_paid', b, FREE_VS_PAID),
 ];
 
@@ -50,17 +49,12 @@ test('framesHtml: every role on every backdrop renders, with fonts and no model 
   for (const b of BACKDROPS) {
     const html = await framesHtml(allFrames(b));
     assert.equal((html.match(/class="st-host"/g) ?? []).length, ALL.length);
-    for (const role of ['opener', 'story', 'closer', 'intro', 'question', 'answer', 'paid', 'free']) assert.match(html, new RegExp(`st-role-${role}`));
-    // Both intros (S-49, S-50) and the closer line (no "every morning").
-    assert.match(html, /st-gtn--intro/);
-    assert.match(html, /Difficulty/);
-    assert.match(html, /How many people use ChatGPT/);
+    for (const role of ['opener', 'story', 'closer', 'intro', 'paid', 'free']) assert.match(html, new RegExp(`st-role-${role}`));
+    // The Free vs. Paid intro (S-50) and the closer line (no "every morning").
     assert.match(html, /st-fvp--intro/);
     assert.match(html, /Free Vs\. Paid is our series where we give you guys open source or free tools/);
     assert.match(html, /Follow for AI news, updates and lessons\./);
     assert.doesNotMatch(html, /every morning/);
-    // No hints on Guess the Number (S-51).
-    assert.doesNotMatch(html, /Hint/);
     assert.match(html, new RegExp(`st-bd-${b}`));
     assert.match(html, /font-family: 'Pragmatica Extended'; src: url\('http:\/\/stories\.local\/__assets\/PragmaticaExtended-Bold\.otf'\)/);
     // Local photos are served from the private origin, never as file paths.
@@ -116,24 +110,18 @@ test('an intro frame on Morning Download fails loudly (its opener is the intro)'
 
 test('homemade style (S-53): same data, Instagram-editor look; every line on a full photo is boxed', async () => {
   const frames = [
-    ...Object.values(GUESS_THE_NUMBER).flatMap((set) => asSet('guess_the_number', 'black', set, 'homemade')),
     ...asSet('free_vs_paid', 'black', FREE_VS_PAID, 'homemade'),
   ];
   const html = await framesHtml(frames);
   assert.equal((html.match(/class="hm-frame /g) ?? []).length, frames.length);
   assert.doesNotMatch(html, /class="st-frame /);
   assert.match(html, /font-family: 'Inter'; src: url\('http:\/\/stories\.local\/__assets\/Inter-Medium\.ttf'\)/);
-  // Instagram's highlight boxes, pen arrows, stickers, emoji.
+  // Instagram's highlight boxes, pen arrows, emoji.
   assert.match(html, /hm-hl hm-box--white/);
   assert.match(html, /class="hm-pen"/);
-  assert.match(html, /data-sticker="true"/);
-  assert.match(html, /class="hm-emoji" src="[^"]*emoji-1f914\.png"/); // Apple emoji image, not the font glyph
+  assert.match(html, /class="hm-emoji" src="[^"]*emoji-1f62c\.png"/); // Apple emoji image, not the font glyph
   // No logo or masthead in the homemade look.
   assert.doesNotMatch(html, /helios-logo\.png/);
-  // Lines over a full-screen photo carry a box.
-  const photoFrame = /<div class="hm-frame[^"]*hm-role-question"[\s\S]*?data-boxed-only="true"[\s\S]*?(?=<div class="st-host"|$)/.exec(html)?.[0] ?? '';
-  assert.ok(photoFrame.includes("Can you guess"), "found the full-photo question frame");
-  for (const line of photoFrame.match(/<div class="hm-line[^>]*>/g) ?? []) assert.match(line, /data-boxed="true"/);
 });
 
 test('pen strokes are seeded: same text, same stroke', async () => {

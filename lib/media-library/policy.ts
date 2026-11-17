@@ -41,7 +41,7 @@ export const IDENTITY_STORE_LANES = new Set<string>(['headshot', 'second', 'ceo'
 /** Searched scenes: what a thematic or setting request may get back from the bank. */
 export const SCENE_LANES = ['stocksnap', 'openverse', 'commons-search'] as const;
 
-const LICENCE_RANK: Record<Licence, number> = { open: 3, government: 2, company: 1, unknown: 0 };
+const LICENCE_RANK: Record<Licence, number> = { open: 3, government: 2, company: 1, unknown: 0, generated: 0 };
 
 export type LicenceVerdict = { licence: Licence; reuseOk: boolean; reason: string } | { licence: null; reuseOk: false; reason: string };
 
@@ -177,13 +177,16 @@ const uniq = (xs: Array<string | null | undefined>) => [...new Set(xs.filter((x)
  * whether it ever passed the close-up check.
  */
 export function metaOf(sources: MetaSource[], sightings: MetaSighting[]): PhotoMeta {
-  const best = [...sources].sort((a, b) => LICENCE_RANK[b.licence ?? 'unknown'] - LICENCE_RANK[a.licence ?? 'unknown'] || time(b.last_ok_at) - time(a.last_ok_at))[0];
+  // An AI image stays one (SS-24): once any source says `generated`, a later sighting of the same bytes under an
+  // open or unknown URL never turns it into a photo another type may be served.
+  const generated = sources.find((s) => s.licence === 'generated');
+  const best = generated ?? [...sources].sort((a, b) => LICENCE_RANK[b.licence ?? 'unknown'] - LICENCE_RANK[a.licence ?? 'unknown'] || time(b.last_ok_at) - time(a.last_ok_at))[0];
   const vetted = sightings.filter((s) => s.outcome !== 'rejected');
   const sceneLanes = new Set(sources.map((s) => s.lane).filter((l) => l && (SCENE_LANES as readonly string[]).includes(l)));
   return {
     credit: best?.credit?.trim() || 'Unknown source',
     licence: best?.licence ?? 'unknown',
-    reuse_ok: Boolean(best?.reuse_ok && best.licence && best.licence !== 'unknown' && best.licence !== 'company'),
+    reuse_ok: Boolean(best?.reuse_ok && best.licence && best.licence !== 'unknown' && best.licence !== 'company' && best.licence !== 'generated'),
     qids: uniq(vetted.filter((s) => s.verified).map((s) => s.qid)),
     subjects: uniq(vetted.filter((s) => s.verified).map((s) => s.subject)),
     scenes: uniq(vetted.filter((s) => (s.request_kind ? SCENE_KINDS.has(s.request_kind) : !s.qid && sceneLanes.size > 0)).map((s) => s.request_query)),

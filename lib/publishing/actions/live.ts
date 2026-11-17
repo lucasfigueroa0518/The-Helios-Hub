@@ -1,3 +1,4 @@
+import { STORY_VERTICALS, type StoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { carouselActions } from './carousels';
@@ -120,7 +121,9 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       findReelLock: reelLocks.findReelLock,
       requestFinish: (postIdeaId, slateId) => reelFinish.requestFinish(postIdeaId, slateId),
     }),
-    stories: storyActions({
+    // One engine, one set of verbs per Stories-format type (SS-1).
+    ...Object.fromEntries(STORY_VERTICALS.map((vertical) => [vertical, storyActions({
+      vertical,
       approve: (id) => stories.approve(db, id),
       reject: (id, by) => stories.reject(db, id, {}, by),
       publishNow: (id) => stories.publishNow(db, id),
@@ -128,11 +131,11 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       unscheduleSet: (id) => db.transaction((tx) => storiesRepo.unscheduleSet(tx, id)),
       query: storiesSpine,
       getSet: (id) => storiesRepo.getSet(db, id),
-      slotOf: (id) => placement.activeSlotByRef(storiesSpine, 'stories', id),
+      slotOf: (id) => placement.activeSlotByRef(storiesSpine, vertical, id),
       plan: placement.planPlacement,
       // The set's move and its re-projection onto the spine commit together.
       rescheduleSet: (id, nyDate, publishAt, slotMinute, slotBy) => db.transaction((tx) => storiesRepo.rescheduleSet(tx, id, nyDate, publishAt, slotMinute, slotBy)),
-    }),
+    })])) as Record<StoryVertical, ContentActions>,
     last_few_days: lastFewDaysActions({
       query: socialQuery,
       approvePost: (q, postId) => lfdSchedule.approveLfdPost(q, postId),

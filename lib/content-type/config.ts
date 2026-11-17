@@ -107,19 +107,56 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     dragNeedsGroup: false,
     pool: { noun: { one: 'story', many: 'stories' }, order: 'score', moves: liveMoves(false) },
   },
+  // The Stories-format types (SS-1): one Stories engine, one series each, so no series tabs and a plain daily limit.
   stories: {
-    title: 'Stories',
-    benchNote: 'Ideas drawn from the other pools. A set is built for each series that is due. Pick a series, then hold and drag an idea to move it.',
-    maxCap: DEFAULT_MAX_CAP,
+    title: 'Morning Download',
+    benchNote: 'Ideas drawn from the other pools: the morning’s news, ranked by the news score. Hold and drag an idea to move it.',
+    maxCap: DEFAULT_MAX_CAP, // Morning Download keeps its two-a-day slots (R25); only Trivia and Real or AI? post once a day
     seedable: true,
-    postsNoun: 'story sets',
+    postsNoun: 'Morning Download sets',
     generate: null,
     perDayMin: 0,
-    capPerSeries: true,
+    capPerSeries: false,
     weekPool: false,
     groupNoun: 'series',
-    dragNeedsGroup: true,
+    dragNeedsGroup: false,
     pool: { noun: { one: 'idea', many: 'ideas' }, order: 'score', moves: liveMoves(false) },
+  },
+  ai_trivia: {
+    title: 'Are you smarter than AI?',
+    benchNote: 'The questions written for “Are you smarter than AI?”. Hold and drag a question to move it.',
+    maxCap: 1, // SS-24: a Stories-format type posts at most once a day
+    seedable: false,
+    postsNoun: 'Are you smarter than AI? sets',
+    generate: {
+      label: 'Generate on its days',
+      confirm: 'Make “Are you smarter than AI?” sets on their days, two days ahead? Each set makes live model and web calls (up to its daily cap).',
+      hint: 'Makes a set two days before each of its days, so there is a full day to review it.',
+    },
+    perDayMin: 0,
+    capPerSeries: false,
+    weekPool: false,
+    groupNoun: 'series',
+    dragNeedsGroup: false,
+    pool: { noun: { one: 'question', many: 'questions' }, order: 'score', moves: liveMoves(false) },
+  },
+  real_or_ai: {
+    title: 'Real or AI?',
+    benchNote: 'Rounds of a real photo and an AI image, from the pool the engine screens. Hold and drag a round to move it.',
+    maxCap: 1, // SS-24: a Stories-format type posts at most once a day
+    seedable: false,
+    postsNoun: 'Real or AI? sets',
+    generate: {
+      label: 'Generate on its days',
+      confirm: 'Make “Real or AI?” sets on their days, two days ahead? Each set makes live model and image calls (up to its daily cap).',
+      hint: 'Makes a set two days before each of its days, so there is a full day to review it.',
+    },
+    perDayMin: 0,
+    capPerSeries: false,
+    weekPool: false,
+    groupNoun: 'series',
+    dragNeedsGroup: false,
+    pool: { noun: { one: 'round', many: 'rounds' }, order: 'score', moves: liveMoves(false) },
   },
   // Last Few Days runs once a day; its night picks stories in queue order (pins first, then drag order; Tommy, 2026-11-16).
   last_few_days: {

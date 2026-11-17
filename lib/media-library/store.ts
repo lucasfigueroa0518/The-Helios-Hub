@@ -8,8 +8,9 @@
 import { metaOf, type MetaSighting, type MetaSource } from './policy';
 import type { BankRows, Query, SightingRow, SourceRow } from './types';
 
-/** open > government > company > unknown, as SQL (a re-offer only ever widens a source's licence). */
-const rank = (col: string) => `(CASE ${col} WHEN 'open' THEN 3 WHEN 'government' THEN 2 WHEN 'company' THEN 1 ELSE 0 END)`;
+/** open > government > company > unknown (and generated), as SQL (a re-offer only ever widens a source's licence). */
+export const licenceRankSql = (col: string) => `(CASE ${col} WHEN 'open' THEN 3 WHEN 'government' THEN 2 WHEN 'company' THEN 1 ELSE 0 END)`;
+const rank = licenceRankSql;
 const RETRY_ON_SIGHT = `s.status IN ('failed', 'gone', 'skipped')`;
 
 const OUTCOME_RANK: Record<string, number> = { used: 5, picked: 4, passed: 3, verified: 2, rejected: 1 };

@@ -8,9 +8,9 @@ import type { StoriesJev } from '@/lib/stories/jev';
 import type { PhotoFinder, PhotoRequest } from '@/lib/stories/photos';
 import type { OpenPool } from '@/lib/stories/pool';
 import { BACKDROPS, type Backdrop, type FrameData, type Photo, type Series } from '@/lib/stories/render/types';
-import { nyDate, recentKeys, sameDayKeys, type NewCandidate, type NewFrame } from '@/lib/stories/repository';
+import { verticalOfSeries } from '@/lib/social-hub/story-types';
+import { costTypeSql, recentKeys, sameDayKeys, typeDaySpendUsd, type NewCandidate, type NewFrame } from '@/lib/stories/repository';
 import type { StoriesSettings } from '@/lib/stories/settings';
-import type { SourcePage } from '@/lib/stories/source-page';
 import type { WriterCreate } from '@/lib/stories/writer';
 
 export type BuildDeps = {
@@ -19,6 +19,8 @@ export type BuildDeps = {
   sourceDb: StoriesDb;
   jev: StoriesJev;
   write: WriterCreate;
+  /** AI Trivia's opponent (AT-74/75, lib/stories/trivia/opponent.ts): OpenAI and fal. Absent (tests): the set has no opponent. */
+  opponent?: import('@/lib/stories/trivia/opponent').OpponentClient;
   photos: PhotoFinder;
   settings: StoriesSettings;
   now: Date;
@@ -28,8 +30,6 @@ export type BuildDeps = {
   pool?: OpenPool | null;
   /** The series reads the central intake (consumer switch 'intake'): Morning Download ranks by the stored scores and the lead queue. */
   intake?: boolean;
-  /** Reads a cited page (Guess the Number gates). Defaults to readSourcePage; tests stub it by URL. */
-  readSource?: (url: string, figure?: string) => Promise<SourcePage>;
 };
 
 /**
@@ -70,33 +70,23 @@ export async function nearbyKeys(db: StoriesDb, series: Series, nyDate: string, 
 }
 
 /**
- * Spend counted against a set's daily cap. A same-day series (Morning Download) counts what Stories
- * spent on the run day on same-day sets (and on spend tied to no set), as before, but never the builds
- * for later dates that run the same night. A series made ahead (Bald-Eagle D4) counts what was spent on the
- * sets FOR its target date (stories.cost_events joined to their set's ny_date), so the cutover night
- * that fills two dates may spend up to one cap per date (D8), and a night's builds for day + 2 never
- * eat the run day's cap.
+ * Spend counted against a set's daily cap, which is its type's (SS-1: each Stories-format type has its own cap;
+ * one type over it never holds another). A same-day type (Morning Download) counts what it spent on the run day
+ * (its sets, and the spend tied to no set that is its own; costTypeSql). A type made ahead (Bald-Eagle D4) counts
+ * what was spent on its sets FOR the target date (stories.cost_events joined to their set's ny_date), so the
+ * cutover night that fills two dates may spend up to one cap per date (D8), and a night's builds for day + 2
+ * never eat the run day's cap.
  */
 export async function capSpendUsd(db: StoriesDb, series: Series, targetDate: string, now: Date): Promise<number> {
-  if (leadDaysFor('stories', series) === 0) {
-    const { rows } = await db.query<{ usd: number }>(
-      `SELECT COALESCE(sum(c.usd), 0)::float8 AS usd FROM stories.cost_events c LEFT JOIN stories.sets s ON s.id = c.set_id
-        WHERE (c.created_at AT TIME ZONE 'America/New_York')::date = $1::date
-          AND (s.id IS NULL OR NOT (s.series = ANY($2::text[])))`,
-      [nyDate(now), LEAD_SERIES],
-    );
-    return rows[0]?.usd ?? 0;
-  }
+  const vertical = verticalOfSeries(series);
+  if (leadDaysFor('stories', series) === 0) return typeDaySpendUsd(db, vertical, now);
   const { rows } = await db.query<{ usd: number }>(
     `SELECT COALESCE(sum(c.usd), 0)::float8 AS usd FROM stories.cost_events c JOIN stories.sets s ON s.id = c.set_id
-      WHERE s.series = ANY($2::text[]) AND s.ny_date = $1::date`,
-    [targetDate, LEAD_SERIES],
+      WHERE s.ny_date = $1::date AND ${costTypeSql()} = $2`,
+    [targetDate, vertical],
   );
   return rows[0]?.usd ?? 0;
 }
-
-/** The Stories series made ahead (lead > 0); their sets share a target date's cap. */
-const LEAD_SERIES: readonly Series[] = (['morning_download', 'guess_the_number', 'free_vs_paid'] as const).filter((s) => leadDaysFor('stories', s) > 0);
 
 export type BuildResult =
   | { ok: true; payload: Record<string, unknown>; frames: NewFrame[]; candidates: NewCandidate[]; historyKeys: string[] }

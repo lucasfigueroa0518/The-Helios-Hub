@@ -15,13 +15,13 @@ import { STORY_POOL_SQL } from '@/lib/social-hub/queries/stories';
 
 const NOW = new Date('2026-11-16T14:00:00Z');
 const story = (slug: string): StoryCandidate => ({ key: `news.test/${slug}`, origin: 'reels', ref: slug, headline: `Headline ${slug}`, sourceName: 'News Test', url: `https://news.test/${slug}`, body: 'body', publishedAt: null, nativeScore: 1 });
-const reads = (slugs: string[], fvp: 'ok' | 'broken' = 'ok'): PoolReads => ({
-  morning: async () => ({ reels: slugs.map(story), carousel: [] }),
-  numbers: async () => ({ numbers: [], unbriefed: [] }),
-  leads: async () => {
-    if (fvp === 'broken') throw new Error('unreachable');
-    return [{ origin: 'catalog', ref: 'gimp', name: 'GIMP', url: 'https://gimp.org', description: 'Free image editor' }];
+// Free vs. Paid is retired (SS-27): the refresh reads only Morning Download; `broken` makes its sources unreadable.
+const reads = (slugs: string[], md: 'ok' | 'broken' = 'ok'): PoolReads => ({
+  morning: async () => {
+    if (md === 'broken') throw new Error('unreachable');
+    return { reels: slugs.map(story), carousel: [] };
   },
+  leads: async () => [],
 });
 type Db = Awaited<ReturnType<typeof openLocalStoriesDb>>['db'];
 const rows = async (db: Db, series = 'morning_download') =>
@@ -33,7 +33,7 @@ const rows = async (db: Db, series = 'morning_download') =>
 test('a key the refresh did not return is archived, not deleted, and a later refresh that finds it again reopens it', async () => {
   const { db } = await openLocalStoriesDb();
   const first = await refreshStoryPool(db, reads(['a', 'b', 'c']), NOW);
-  assert.equal(first.upserted, 4, 'three stories and the Free vs. Paid lead');
+  assert.equal(first.upserted, 3, 'three stories');
   const r = await refreshStoryPool(db, reads(['a', 'b']), new Date(NOW.getTime() + 86_400_000));
   assert.equal(r.dropped, 1);
   assert.deepEqual(await rows(db), [
@@ -44,7 +44,7 @@ test('a key the refresh did not return is archived, not deleted, and a later ref
   assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.ref), ['a', 'b']);
   // c comes back in the sources: the refresh archived it, so the refresh reopens it, and the hub's read shows it again.
   const back = await refreshStoryPool(db, reads(['a', 'b', 'c']), new Date(NOW.getTime() + 2 * 86_400_000));
-  assert.equal(back.upserted, 4, 'c is written again with a, b and the lead');
+  assert.equal(back.upserted, 3, 'c is written again with a and b');
   assert.deepEqual((await rows(db)).find((x) => x.key === 'news.test/c'), { key: 'news.test/c', archived: false, reason: null });
   assert.deepEqual((await openPool(db, 'morning_download')).stories.map((s) => s.ref).sort(), ['a', 'b', 'c']);
   const hub = (await db.query<{ key: string }>(STORY_POOL_SQL)).rows.filter((x) => x.key.startsWith('news.test/')).map((x) => x.key).sort();
@@ -53,12 +53,12 @@ test('a key the refresh did not return is archived, not deleted, and a later ref
 
 test('a stale row the intake returns again is reopened', async () => {
   const { db } = await openLocalStoriesDb();
-  await refreshStoryPool(db, reads([]), NOW);
-  await refreshStoryPool(db, reads([], 'broken'), new Date(NOW.getTime() + FRESH_MS.free_vs_paid + 3_600_000));
-  assert.deepEqual((await rows(db, 'free_vs_paid')).map((x) => [x.archived, x.reason]), [[true, 'stale']]);
-  await refreshStoryPool(db, reads([]), new Date(NOW.getTime() + FRESH_MS.free_vs_paid + 7_200_000));
-  assert.deepEqual((await rows(db, 'free_vs_paid')).map((x) => [x.archived, x.reason]), [[false, null]]);
-  assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 1);
+  await refreshStoryPool(db, reads(['a']), NOW);
+  await refreshStoryPool(db, reads([], 'broken'), new Date(NOW.getTime() + FRESH_MS.morning_download + 3_600_000));
+  assert.deepEqual((await rows(db)).map((x) => [x.archived, x.reason]), [[true, 'stale']]);
+  await refreshStoryPool(db, reads(['a']), new Date(NOW.getTime() + FRESH_MS.morning_download + 7_200_000));
+  assert.deepEqual((await rows(db)).map((x) => [x.archived, x.reason]), [[false, null]]);
+  assert.equal((await openPool(db, 'morning_download')).stories.length, 1);
 });
 
 test('a row archived for another reason is not touched by the refresh, and upserted counts only the rows written', async () => {
@@ -66,8 +66,8 @@ test('a row archived for another reason is not touched by the refresh, and upser
   await refreshStoryPool(db, reads(['a', 'b']), NOW);
   await db.query(`UPDATE stories.pool SET archived_at = $1::timestamptz, archived_reason = 'manual' WHERE key = 'news.test/b'`, [NOW.toISOString()]);
   const r = await refreshStoryPool(db, reads(['a', 'b']), new Date(NOW.getTime() + 3_600_000));
-  // a (morning download) and the Free vs. Paid lead are written; b is left archived.
-  assert.equal(r.upserted, 2);
+  // a is written; b is left archived.
+  assert.equal(r.upserted, 1);
   assert.deepEqual((await rows(db)).find((x) => x.key === 'news.test/b'), { key: 'news.test/b', archived: true, reason: 'manual' });
 });
 
@@ -85,11 +85,11 @@ test('a person\'s Archive (idea_adjustments) keeps a reopened row out of the bui
 
 test('a stale row (sources unreadable past the freshness window) is archived as stale', async () => {
   const { db } = await openLocalStoriesDb();
-  await refreshStoryPool(db, reads([]), NOW);
-  assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 1);
-  await refreshStoryPool(db, reads([], 'broken'), new Date(NOW.getTime() + FRESH_MS.free_vs_paid + 3_600_000));
-  assert.deepEqual((await rows(db, 'free_vs_paid')).map((x) => [x.archived, x.reason]), [[true, 'stale']]);
-  assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 0);
+  await refreshStoryPool(db, reads(['a']), NOW);
+  assert.equal((await openPool(db, 'morning_download')).stories.length, 1);
+  await refreshStoryPool(db, reads([], 'broken'), new Date(NOW.getTime() + FRESH_MS.morning_download + 3_600_000));
+  assert.deepEqual((await rows(db)).map((x) => [x.archived, x.reason]), [[true, 'stale']]);
+  assert.equal((await openPool(db, 'morning_download')).stories.length, 0);
 });
 
 test('over the 30 cap: the lowest-scored are archived; archived rows never count toward the cap', async () => {

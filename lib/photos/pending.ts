@@ -14,8 +14,10 @@
  * URL and pHash. Brand assets (logos, meme templates, cutouts) are left out there, as in the ledger.
  *
  *   type              items                waiting when                                 day           photos
- *   Stories (MD, GTN)  stories.sets        ready/approved/scheduled/publishing          ny_date       stories.frames.photo.src
- *                                          (Free vs. Paid: logos only, skipped)
+ *   Stories-format    stories.sets        ready/approved/scheduled/publishing          ny_date       stories.frames.photo.src
+ *   (Morning Download,                     (Free vs. Paid: logos only, skipped)                       (+ Real or AI?'s
+ *   AI Trivia,                             each set under its own type (SS-23)                         real rounds'
+ *   Real or AI?)                                                                                      provenance.src)
  *   Carousels          social.posts        review, origin pipeline                      (built ≤ 3d)  render.slides[].photoUrl
  *   Last Few Days      lfd.posts           review                                       ny_date       stories[].photo.src
  *   Field Notes        field_notes.posts   review                                       ny_date       photo_ids → media_library.photos
@@ -68,8 +70,9 @@ export const PENDING_ITEMS_SQL = `
 WITH win AS (SELECT $1::timestamptz AS hi, $1::timestamptz - make_interval(days => $2) AS lo,
                     ($1::timestamptz AT TIME ZONE 'America/New_York')::date AS today),
 items AS (
-  SELECT 'stories'::text AS vertical, s.id::text AS id, coalesce(s.built_at, s.created_at) AS built_at, NULL::text AS idea,
-         jsonb_build_object('series', s.series, 'frames', coalesce((
+  SELECT (CASE WHEN s.series IN ('ai_trivia', 'real_or_ai') THEN s.series ELSE 'stories' END)::text AS vertical,
+         s.id::text AS id, coalesce(s.built_at, s.created_at) AS built_at, NULL::text AS idea,
+         jsonb_build_object('series', s.series, 'rounds', s.payload->'roa'->'rounds', 'frames', coalesce((
            SELECT jsonb_agg(jsonb_build_object('seq', f.seq, 'role', f.role, 'photo', f.photo))
              FROM stories.frames f WHERE f.set_id = s.id AND f.photo IS NOT NULL), '[]'::jsonb)) AS doc
     FROM stories.sets s, win
@@ -118,7 +121,10 @@ SELECT i.vertical, i.id, i.built_at, i.idea, i.doc
  WHERE NOT EXISTS (
    SELECT 1 FROM social_hub.content_items ci
      LEFT JOIN social_hub.approvals ap ON ap.content_item_id = ci.id
-    WHERE ci.vertical = (CASE i.vertical WHEN 'lfd' THEN 'last_few_days' ELSE i.vertical END) AND ci.native_ref = i.id
+    WHERE (ci.vertical = (CASE i.vertical WHEN 'lfd' THEN 'last_few_days' ELSE i.vertical END)
+           -- SS-23: a Trivia or Real or AI? item made before db/stories_split.sql moved it off the 'stories' vertical
+           OR (i.vertical IN ('ai_trivia', 'real_or_ai') AND ci.vertical = 'stories'))
+      AND ci.native_ref = i.id
       AND (ci.deleted_at IS NOT NULL OR ap.decision = 'rejected'
            OR EXISTS (SELECT 1 FROM social_hub.schedule sc WHERE sc.content_item_id = ci.id AND sc.status = 'published')))`;
 
@@ -143,8 +149,10 @@ export function pendingCandidate(row: PendingRow): CandidatePost | null {
   const base = { id, caption: null, created_at: row.built_at, slide_objects: null };
   switch (row.vertical) {
     case 'stories':
+    case 'ai_trivia':
+    case 'real_or_ai':
       return storiesCandidate(
-        { id, series: String(doc.series ?? ''), built_at: row.built_at },
+        { id, series: String(doc.series ?? ''), built_at: row.built_at, rounds: doc.rounds },
         arr(doc.frames).map((f) => {
           const fr = obj(f);
           return { set_id: id, seq: Number(fr.seq) || 0, role: typeof fr.role === 'string' ? fr.role : null, photo: fr.photo, storage_path: null };

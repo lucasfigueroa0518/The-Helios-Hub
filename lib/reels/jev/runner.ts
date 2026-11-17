@@ -30,8 +30,9 @@ export interface JevTransport {
   ): Promise<SystemOneResult<Q>>;
 }
 
-export function jevUsd(inputTokens: number): number {
-  return (inputTokens / 1_000_000) * JEV_USD_PER_MTOK;
+/** SDK 0.7.0 reports a missing token count as null; it costs nothing. */
+export function jevUsd(inputTokens: number | null): number {
+  return ((inputTokens ?? 0) / 1_000_000) * JEV_USD_PER_MTOK;
 }
 
 /**
@@ -68,7 +69,7 @@ export class RecordingJevRunner implements JevRunner {
         resolvedModel: result.model,
         state: request.state,
         answers: own,
-        inputTokens: result.usage.input_tokens,
+        inputTokens: result.usage.input_tokens ?? 0,
         sourceId: request.sourceId ?? null,
         postIdeaId: request.postIdeaId ?? null,
       });
@@ -78,8 +79,8 @@ export class RecordingJevRunner implements JevRunner {
       runId: request.runId,
       vendor: 'jev',
       component: request.component,
-      inputTokens: result.usage.input_tokens,
-      outputTokens: result.usage.output_tokens,
+      inputTokens: result.usage.input_tokens ?? 0,
+      outputTokens: result.usage.output_tokens ?? undefined,
       usd: jevUsd(result.usage.input_tokens),
     });
 

@@ -319,7 +319,7 @@ export function holdStartedToday(before: State, s: State, today: string, nowMinu
 
 // ── Bookings ──
 
-const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', field_notes: 'fieldNotesPostId', stories: 'setId', reels: 'postIdeaId', reel_ai_drama: 'jobId' };
+const REF_KEY: Record<Vertical, string> = { carousels: 'postId', explainers: 'jobId', last_few_days: 'lfdPostId', ai_events: 'aiEventsPostId', field_notes: 'fieldNotesPostId', stories: 'setId', ai_trivia: 'setId', real_or_ai: 'setId', reels: 'postIdeaId', reel_ai_drama: 'jobId' };
 
 /** Types whose booking is the social_hub.schedule row (placement.rescheduleItem); Stories' minute lives in stories.sets. */
 const MOVE_HERE: ReadonlySet<Vertical> = new Set(['carousels', 'last_few_days', 'ai_events', 'field_notes', 'reels', 'explainers', 'reel_ai_drama']);

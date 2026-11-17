@@ -5,6 +5,7 @@ import test from 'node:test';
 import { resolveDay, validateDay, LFD_CAROUSEL_CONFLICT } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate, type StorySeries } from '@/lib/social-hub/slots/seed';
 import type { OverrideRow, TemplateRow } from '@/lib/social-hub/slots/types';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 // Mon 2026-10-19 … Sun 2026-10-25.
 const WEEK = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'];
@@ -37,8 +38,8 @@ test('overrides: remove drops, add inserts, add on a template key replaces it (s
 });
 
 test('Stories key on series too: two series at one minute, one series twice a day', () => {
-  const tpl = [T(1, 'stories', 510, null, 'morning_download'), T(1, 'stories', 510, null, 'guess_the_number')];
-  const ov = [O('2026-10-19', 'stories', 900, 'add', null, 'morning_download'), O('2026-10-19', 'stories', 510, 'remove', null, 'guess_the_number')];
+  const tpl = [T(1, 'stories', 510, null, 'morning_download'), T(1, 'stories', 510, null, 'ai_trivia')];
+  const ov = [O('2026-10-19', 'stories', 900, 'add', null, 'morning_download'), O('2026-10-19', 'stories', 510, 'remove', null, 'ai_trivia')];
   assert.deepEqual(resolveDay(tpl, ov, '2026-10-19').map((s) => `${s.series}@${s.startMinute}`), ['morning_download@510', 'morning_download@900']);
 });
 
@@ -51,7 +52,7 @@ test('validateDay: LFD and Carousels never share a day; feed_mode only on reel t
   assert.deepEqual(validateDay(day([T(2, 'last_few_days', 540), T(2, 'carousels', 870)])), [LFD_CAROUSEL_CONFLICT]);
   assert.deepEqual(validateDay(day([T(2, 'last_few_days', 540), T(2, 'reels', 525, 'trial')])), []);
   assert.deepEqual(validateDay(day([T(2, 'reels', 525, null)])), ['Text on Screen (8:45 AM) needs Trial or Main feed.']);
-  assert.deepEqual(validateDay(day([T(2, 'stories', 510, 'main', 'morning_download')])), ['IG Stories posts aren’t reels, so they have no Trial or Main feed.']);
+  assert.deepEqual(validateDay(day([T(2, 'stories', 510, 'main', 'morning_download')])), ['Morning Download posts aren’t reels, so they have no Trial or Main feed.']);
   // Two of one type at different free times is fine (no per-window limit any more).
   assert.deepEqual(validateDay(day([T(2, 'explainers', 720, 'main'), T(2, 'explainers', 780, 'main')])), []);
 });
@@ -59,7 +60,7 @@ test('validateDay: LFD and Carousels never share a day; feed_mode only on reel t
 test('seed parity: Mon 2026-10-19 resolves to exactly the default times', () => {
   const mon = resolveDay(seedTemplate(DEFAULT_SEED_INPUTS), [], '2026-10-19');
   assert.deepEqual(mon.map((s) => [s.vertical, s.startMinute, s.series, s.feedMode]), [
-    ['stories', 510, 'guess_the_number', null],
+    ['ai_trivia', 510, 'ai_trivia', null],
     ['stories', 510, 'morning_download', null],
     ['reels', 525, null, 'trial'],
     ['reels', 675, null, 'trial'],
@@ -75,17 +76,18 @@ test('seed: Tue/Fri LFD at 9 AM instead of Carousels; Stories on their days; eve
     if (r.vertical === 'reels') assert.equal(r.feedMode, 'trial');
     else if (r.vertical === 'explainers') assert.equal(r.feedMode, 'main');
     else assert.equal(r.feedMode, null);
-    assert.equal(r.series !== null, r.vertical === 'stories');
+    assert.equal(r.series !== null, isStoryVertical(r.vertical));
   }
   for (const date of WEEK) assert.deepEqual(validateDay(resolveDay(tpl, [], date)), [], date);
   const tue = resolveDay(tpl, [], '2026-10-20');
   assert.deepEqual(tue.filter((s) => s.vertical === 'last_few_days').map((s) => s.startMinute), [540]);
   assert.ok(!tue.some((s) => s.vertical === 'carousels'));
-  assert.deepEqual(tue.filter((s) => s.vertical === 'stories').map((s) => s.series), ['free_vs_paid', 'morning_download']);
+  // SS-1: each Stories-format type books its own one series.
+  assert.deepEqual(tue.filter((s) => isStoryVertical(s.vertical)).map((s) => [s.vertical, s.series]).sort(), [['real_or_ai', 'real_or_ai'], ['stories', 'morning_download']]);
 });
 
 test('seed follows custom LFD and Stories days', () => {
-  const tpl = seedTemplate({ lfdDays: [3], storyDays: { morning_download: [1], guess_the_number: [], free_vs_paid: [0] } });
+  const tpl = seedTemplate({ lfdDays: [3], storyDays: { morning_download: [1], ai_trivia: [], real_or_ai: [0] } });
   const wed = resolveDay(tpl, [], '2026-10-21');
   assert.ok(wed.some((s) => s.vertical === 'last_few_days'));
   assert.ok(!wed.some((s) => s.vertical === 'carousels'));

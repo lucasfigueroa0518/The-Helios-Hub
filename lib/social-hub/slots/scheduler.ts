@@ -1,4 +1,5 @@
 // lib/social-hub/slots/scheduler.ts
+import type { StoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { chooseSlotTime, type SlotChoice } from './book';
@@ -21,7 +22,8 @@ import { legacyKey } from './legacy';
  * free-time slot it became. SELECT only.
  */
 
-export type FeedVertical = Exclude<Vertical, 'stories'>;
+/** Every type but the Stories-format ones (SS-1): those book through the Stories engine. */
+export type FeedVertical = Exclude<Vertical, StoryVertical>;
 
 export type TemplateSlots = {
   /** Bookable slots per New York date: within the cap, minus full days and Carousels on LFD days. */

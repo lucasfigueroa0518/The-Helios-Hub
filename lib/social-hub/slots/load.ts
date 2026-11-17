@@ -1,10 +1,11 @@
 // lib/social-hub/slots/load.ts
 import { addCalendarDays } from '@/lib/instagram/window';
+import { isStoryVertical, SERIES_OF_VERTICAL, verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
 import { resolveDay } from './resolve';
 import { DEFAULT_CAPS } from './times';
-import { isStorySeries, type OverrideRow, type ResolvedSlot, type SlotQuery, type SlotSource, type TemplateRow } from './types';
+import { isStorySeries, type OverrideRow, type StorySeries, type ResolvedSlot, type SlotQuery, type SlotSource, type TemplateRow } from './types';
 
 /** SELECT only (tests/social-hub-scope.test.ts): hub read code and every worker may use it. */
 
@@ -19,10 +20,17 @@ export async function readSlotSource(q: SlotQuery): Promise<SlotSource> {
 }
 
 const seriesOf = (v: unknown) => (isStorySeries(v) ? v : null);
+/**
+ * A Stories-format row's type is its series' type (SS-1): a row written before db/stories_split.sql moved it
+ * (`vertical = 'stories'`, series `ai_trivia`) reads as Are you smarter than AI?'s.
+ */
+const typeOf = (vertical: Vertical, series: StorySeries | null): Vertical => (isStoryVertical(vertical) && series ? verticalOfSeries(series) : vertical);
+/** A Stories-format row must name its type's live series: a retired one's rows (Guess the Number, AT-14) are not read. */
+const live = <T extends { vertical: Vertical; series: StorySeries | null }>(r: T) => !isStoryVertical(r.vertical) || (r.series !== null && SERIES_OF_VERTICAL[r.vertical] === r.series);
 
 export async function readTemplate(q: SlotQuery): Promise<TemplateRow[]> {
   const { rows } = await q(`SELECT weekday, vertical, start_minute, series, feed_mode FROM social_hub.slot_template`);
-  return rows.map((r) => ({ weekday: Number(r.weekday), vertical: r.vertical, startMinute: Number(r.start_minute), series: seriesOf(r.series), feedMode: r.feed_mode ?? null }));
+  return rows.map((r) => ({ weekday: Number(r.weekday), vertical: typeOf(r.vertical, seriesOf(r.series)), startMinute: Number(r.start_minute), series: seriesOf(r.series), feedMode: r.feed_mode ?? null })).filter(live);
 }
 
 export async function readOverrides(q: SlotQuery, from: string, to: string): Promise<OverrideRow[]> {
@@ -33,9 +41,9 @@ export async function readOverrides(q: SlotQuery, from: string, to: string): Pro
     [from, to],
   );
   return rows.map((r) => ({
-    nyDate: String(r.ny_date).slice(0, 10), vertical: r.vertical, startMinute: Number(r.start_minute), series: seriesOf(r.series), action: r.action, feedMode: r.feed_mode ?? null,
-    setBy: r.set_by === 'person' ? 'person' : 'system',
-  }));
+    nyDate: String(r.ny_date).slice(0, 10), vertical: typeOf(r.vertical, seriesOf(r.series)), startMinute: Number(r.start_minute), series: seriesOf(r.series), action: r.action, feedMode: r.feed_mode ?? null,
+    setBy: (r.set_by === 'person' ? 'person' : 'system') as OverrideRow['setBy'],
+  })).filter(live);
 }
 
 /** Resolved slots for every date from `from` through `to` (inclusive). */
@@ -51,7 +59,7 @@ const isCap = (n: unknown): n is number => Number.isInteger(n) && (n as number) 
 /**
  * Each type's daily safety cap (spec §Safety cap), from social_hub.settings
  * 'daily_caps'. A missing row, a bad value or any read error gives that
- * type's default (times.ts DEFAULT_CAPS). Stories: per series.
+ * type's default (times.ts DEFAULT_CAPS). Each Stories-format type has its own (SS-1).
  */
 export async function readCaps(q: SlotQuery): Promise<Record<Vertical, number>> {
   const out = { ...DEFAULT_CAPS };

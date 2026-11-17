@@ -1,7 +1,7 @@
 /**
  * B6 Claude web search finds → the intake (lib/intake/types.ts DepositFind).
- * The one inbound link from Reels: its nightly web search (its own ideation,
- * exempt) deposits each find here like a seed. The find is stored ungrouped;
+ * Reels' nightly web search (its own ideation, exempt) deposits each find here
+ * like a seed; AI Trivia's writer deposits the pages it cited (SS-30). The find is stored ungrouped;
  * the next intake run groups and scores it. One insert, no Jev, no fetch.
  */
 import { canonicalizeUrl } from '@/lib/reels/net/http';
@@ -15,6 +15,16 @@ export const SEARCH_SOURCE_ID = 'search:b6';
 export type DepositSource = { sourceId: string; sourceName: string; sourceType: 'B6' | 'A4' };
 export const B6_DEPOSIT: DepositSource = { sourceId: SEARCH_SOURCE_ID, sourceName: 'Claude web search', sourceType: 'B6' };
 export const A4_DEPOSIT: DepositSource = { sourceId: 'search:a4', sourceName: 'Awesome lists', sourceType: 'A4' };
+
+/**
+ * SS-30: "Are you smarter than AI?" deposits the pages its writer cited (lib/stories/trivia/research.ts), family
+ * 'search' under its own sub-source. Only TRIVIA_ORDER reads them: 'reels:*' does not cover this source (score.ts
+ * orderCovers), and they are never grouped with news (SS-32, group.ts), so Reels, LFD, MD and Carousels never see them.
+ */
+export const TRIVIA_SOURCE_ID = 'search:trivia';
+export const TRIVIA_DEPOSIT: DepositSource = { sourceId: TRIVIA_SOURCE_ID, sourceName: 'AI Trivia web search', sourceType: 'B6' };
+/** Deposit sources an order must name explicitly ('reels:*' leaves them out). */
+export const OWN_DEPOSIT_SOURCES: ReadonlySet<string> = new Set([TRIVIA_SOURCE_ID]);
 
 export const depositFind: DepositFind = (q, item, now) => depositFindAs(q, item, now, B6_DEPOSIT);
 

@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { HubQuery } from '@/lib/social-hub/db';
 
 export type Waste = { rejected: number; failed: number; expired: number; selection: number; spend: number };
@@ -38,7 +39,7 @@ export async function wasteSets(q: HubQuery, eq: HubQuery | null): Promise<{ rej
   for (const r of spine.rows) {
     if (r.vertical === 'explainers') rejected.add(`explainers:${r.native_ref}`);
     if (r.vertical === 'reel_ai_drama') rejected.add(`reel_ai_drama:${r.native_ref}`);
-    if (r.vertical === 'stories') rejected.add(`stories:${r.native_ref}`);
+    if (isStoryVertical(r.vertical)) rejected.add(`stories:${r.native_ref}`);
     if (r.vertical === 'carousels' && r.idea_ref) rejected.add(`carousels:story:${r.idea_ref}`);
     if (r.vertical === 'reels') reelVideoIds.push(r.native_ref);
   }

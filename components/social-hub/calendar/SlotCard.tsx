@@ -10,6 +10,7 @@ import { clockLabel, GRID, LAST_START, DAY_START } from '@/lib/social-hub/slots/
 import type { FeedMode } from '@/lib/social-hub/slots/types';
 import { chipNames, CARD_MINUTES, laterNote, type BoardCard, type BoardColumn, type BoardPost } from '@/lib/social-hub/views/week';
 import { WEEKDAY_LONG } from '@/lib/social-hub/views/week-edit';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 /**
  * One slot on the week board (spec decisions 3, 4, 9): a one-line card at its
@@ -279,7 +280,7 @@ export function SlotPanel({ card, column, anchor, flip, editable, dayOptions, ti
   const [to, setTo] = useState(card.day);
   const [minute, setMinute] = useState(card.startMinute);
   const canEdit = editable && !card.locked;
-  const what = card.vertical === 'stories' ? `Story · ${names.full}` : names.full;
+  const what = isStoryVertical(card.vertical) ? `Story · ${names.full}` : names.full;
   const later = laterNote(card);
   return (
     <Floating anchor={anchor} flip={flip} label={what} onClose={onClose}>

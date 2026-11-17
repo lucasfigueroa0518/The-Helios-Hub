@@ -48,7 +48,7 @@ async function main() {
   const date = process.argv[2] ?? (nyHour >= 12 ? addCalendarDays(today, 1) : today);
 
   // Each type's slots on the date this night fills for it (the run day, or run day + lead).
-  const lead = Math.max(...SETTINGS.map((t) => leadDaysFor(t.vertical)), leadDaysFor('stories', 'guess_the_number'), leadDaysFor('stories', 'free_vs_paid'));
+  const lead = Math.max(...SETTINGS.map((t) => leadDaysFor(t.vertical)), leadDaysFor('ai_trivia'), leadDaysFor('real_or_ai'));
   const plan = await slotPlan(liveHubQuery, date, 1 + lead);
   const slots = plan
     ? [...plan.byDate.entries()].flatMap(([d, list]) =>
@@ -67,6 +67,13 @@ async function main() {
     if (t.vertical === 'stories') {
       const series = (s.get('series') ?? {}) as Record<string, { auto?: boolean; enabled?: boolean }>;
       storiesSeriesAuto = Object.fromEntries(Object.entries(series).map(([id, v]) => [id, Boolean(v.auto && v.enabled)]));
+      // SS-1: publishing-live is per type in the `types` row; the old engine-wide row is each type's fallback.
+      const types = (s.get('types') ?? {}) as Record<string, { publishingLive?: boolean }>;
+      for (const v of ['stories', 'ai_trivia', 'real_or_ai'] as const) {
+        const own = types[v]?.publishingLive;
+        if (typeof own === 'boolean') publishingLive[v] = own;
+        else if (s.has('publishing_live')) publishingLive[v] = truthy(s.get('publishing_live'));
+      }
     }
     if (t.vertical === 'field_notes') fieldNotesMax = num(s.get('max_pending_drafts'), 3);
     if (t.vertical === 'explainers') explainers = { perReelCapUsd: num(s.get('per_reel_cap_usd'), 0), dailySpendCapUsd: num(s.get('daily_spend_cap_usd'), 0) };

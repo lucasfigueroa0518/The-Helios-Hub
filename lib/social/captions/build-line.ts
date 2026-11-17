@@ -32,7 +32,7 @@ export const BUILD_FIT = {
 } as const;
 
 /** The headline is scraped too, so it sits inside untrusted_content with the text, both capped. */
-export function buildFitState(story: { headline: string; text: string }): EntryType {
+export function buildFitState(story: { headline: string; text: string }): NonNullable<EntryType> {
   return {
     helios: HELIOS_CONTEXT,
     story: { untrusted_content: { headline: story.headline.slice(0, HEADLINE_CHARS), text: story.text.slice(0, STORY_CHARS) } },

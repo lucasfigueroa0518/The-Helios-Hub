@@ -1,3 +1,4 @@
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { formatUsd } from '@/lib/social-hub/cost';
 import type { HubDataset } from '@/lib/social-hub/dataset';
 import { ACTION_FLAGS, actionEnabled, SOCIAL_HUB_FLAGS, type ActionFlag, type HubFlags } from '@/lib/social-hub/flags';
@@ -40,7 +41,7 @@ export function slotChoices(dataset: HubDataset, post: HubPost, now: Date, days 
     windowsOn(post.vertical, day, dataset.dayQuotas?.lfdDays ?? [], dataset.dayQuotas?.slots ?? null).forEach((w, index) => {
       const closes = nyDayStart(day).getTime() + w.endMinute * 60_000;
       if (closes <= now.getTime()) return;
-      const holder = post.vertical === 'stories' ? onDay[index] : onDay.find((p) => p.slot?.id === w.id);
+      const holder = isStoryVertical(post.vertical) ? onDay[index] : onDay.find((p) => p.slot?.id === w.id);
       out.push({
         nyDate: day,
         dayLabel: dayWord(day, now),

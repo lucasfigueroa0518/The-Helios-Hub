@@ -13,6 +13,7 @@ import { PHOTO_BANK_BUCKET } from '@/lib/media-library/types';
 import { isPhash } from '@/lib/reel-ai-drama/harvest/filters';
 import { SLIDE_BUCKET } from '@/lib/social/overnight/config';
 import { carouselCaption } from '@/lib/social/overnight/publish';
+import { SERIES_OF_VERTICAL, STORY_VERTICALS, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import type { Query } from '@/lib/social/store/pg';
 import { STORIES_BUCKET } from '@/lib/stories/storage';
 
@@ -68,6 +69,8 @@ export type PublishedPostAdapter = {
 export const SPINE_VERTICAL: Record<UsedVertical, string> = {
   lfd: 'last_few_days',
   stories: 'stories',
+  ai_trivia: 'ai_trivia',
+  real_or_ai: 'real_or_ai',
   carousels: 'carousels',
   reel_ai_drama: 'reel_ai_drama',
   field_notes: 'field_notes',
@@ -160,51 +163,88 @@ export async function lfdPostPhotos(query: Query, postId: string): Promise<Candi
   return rows[0] ? lfdCandidate(rows[0]) : null;
 }
 
-// ── IG Stories (Morning Download, Guess the Number, Free vs. Paid) ───────────
+// ── Stories-format types (Morning Download, AI Trivia, Real or AI?; retired Guess the Number, Free vs. Paid) ──
 
 type FrameRow = { set_id: string; seq: number; role: string | null; photo: unknown; storage_path: string | null };
 
-/** One set: every frame's photo (slide = frame seq). Free vs. Paid frames show logos only, so it logs none. */
-export function storiesCandidate(set: { id: string; series: string; built_at: unknown }, frames: readonly FrameRow[]): CandidatePost {
+/**
+ * A photo in our own Storage as its stable ledger key (SS-23): a Supabase signed or public object URL
+ * (`…/storage/v1/object/sign/<bucket>/<path>?token=…`) becomes `storage:<bucket>/<path>`, so a re-signed URL is the same
+ * photo. Any other URL is returned as is.
+ */
+export function stableStorageKey(src: string): string {
+  const m = /^https?:\/\/[^/]+\/storage\/v1\/object\/(?:sign|public|authenticated)\/([^/?#]+)\/([^?#]+)/.exec(src);
+  return m ? storageRef(m[1]!, decodeURIComponent(m[2]!)) : src;
+}
+
+/** Real or AI?'s real rounds: each found photo's original image URL (`provenance.src`), logged next to its frames. */
+const REAL_ROUND_SLIDE = 100;
+
+/**
+ * One set: every frame's photo (slide = frame seq), under the set's own type (SS-23: verticalOfSeries). Free vs. Paid
+ * frames show logos only, so it logs none. Real or AI? frames show its own stored candidates (a signed URL, logged by its
+ * stable storage key, once per set) plus, for a real round, the original image URL it was found at, so no other type
+ * reuses that photo while it is held or published.
+ */
+export function storiesCandidate(set: { id: string; series: string; built_at: unknown; rounds?: unknown }, frames: readonly FrameRow[]): CandidatePost {
   const ordered = [...frames].sort((a, b) => a.seq - b.seq);
+  const vertical = verticalOfSeries(set.series);
   const photos: PostPhoto[] = [];
   if (set.series !== 'free_vs_paid') {
     for (const f of ordered) {
       const photo = obj(f.photo);
-      const src = str(photo.src);
-      if (!src || isBrandAsset(str(photo.kind))) continue;
+      const raw = str(photo.src);
+      if (!raw || isBrandAsset(str(photo.kind))) continue;
+      const src = vertical === 'real_or_ai' ? stableStorageKey(raw) : raw;
+      if (vertical === 'real_or_ai' && photos.some((p) => p.url === src)) continue;
       photos.push({ url: src, slide: f.seq, kind: str(photo.kind), credit: str(photo.credit), source: str(photo.source) ?? 'stories', qid: str(photo.qid), scene: f.role });
     }
   }
+  if (vertical === 'real_or_ai') {
+    for (const [i, round] of arr(set.rounds).entries()) {
+      const prov = obj(obj(round).provenance);
+      const src = str(prov.src);
+      if (!src || !['bank', 'commons', 'nasa'].includes(String(prov.kind)) || photos.some((p) => p.url === src)) continue;
+      photos.push({ url: src, slide: REAL_ROUND_SLIDE + i + 1, kind: 'scene', credit: str(prov.credit), source: 'real_or_ai', qid: null, scene: 'roa_round' });
+    }
+  }
   const renders = ordered.flatMap((f) => (f.storage_path ? [storageRef(STORIES_BUCKET, f.storage_path)] : []));
-  return { vertical: 'stories', postId: String(set.id), caption: null, builtAt: at(set.built_at), coverRender: renders[0] ?? null, frameRenders: renders, photos };
+  return { vertical, postId: String(set.id), caption: null, builtAt: at(set.built_at), coverRender: renders[0] ?? null, frameRenders: renders, photos };
 }
 
-function storiesAdapter(query: Query): PublishedPostAdapter {
+/** The series one Stories-format type's adapter reads: its own, and (Morning Download) every retired or unknown one. */
+function seriesFilter(vertical: StoryVertical): { sql: string; series: string[] } {
+  const own = STORY_VERTICALS.filter((v) => v !== 'stories').map((v) => SERIES_OF_VERTICAL[v] as string);
+  return vertical === 'stories' ? { sql: `NOT (series = ANY($3::text[]))`, series: own } : { sql: `series = ANY($3::text[])`, series: [SERIES_OF_VERTICAL[vertical]] };
+}
+
+function storiesAdapter(query: Query, vertical: StoryVertical = 'stories'): PublishedPostAdapter {
   async function load(setIds: string[]): Promise<CandidatePost[]> {
     if (!setIds.length) return [];
     const sets = (await query(
-      `SELECT id::text AS id, series, coalesce(built_at, created_at) AS built_at FROM stories.sets WHERE id::text = ANY($1::text[]) ORDER BY coalesce(built_at, created_at) DESC`,
+      `SELECT id::text AS id, series, coalesce(built_at, created_at) AS built_at, payload->'roa'->'rounds' AS rounds
+         FROM stories.sets WHERE id::text = ANY($1::text[]) ORDER BY coalesce(built_at, created_at) DESC`,
       [setIds],
-    )).rows as Array<{ id: string; series: string; built_at: unknown }>;
+    )).rows as Array<{ id: string; series: string; built_at: unknown; rounds: unknown }>;
     const frames = (await query(
       `SELECT set_id::text AS set_id, seq, role, photo, storage_path FROM stories.frames WHERE set_id::text = ANY($1::text[])`,
       [setIds],
     )).rows as FrameRow[];
-    return sets.map((s) => storiesCandidate(s, frames.filter((f) => f.set_id === s.id)));
+    return sets.filter((s) => verticalOfSeries(s.series) === vertical).map((s) => storiesCandidate(s, frames.filter((f) => f.set_id === s.id)));
   }
+  const filter = seriesFilter(vertical);
   return {
-    vertical: 'stories',
+    vertical,
     byPostId: async (id) => (await load([id]))[0] ?? null,
     async byMediaId(mediaId) {
       const frame = (await query(`SELECT set_id::text AS set_id FROM stories.frames WHERE ig_media_id = $1 LIMIT 1`, [mediaId])).rows[0];
-      const setId = (frame?.set_id as string | undefined) ?? (await spineRefFor(query, 'stories', mediaId));
+      const setId = (frame?.set_id as string | undefined) ?? (await spineRefFor(query, vertical, mediaId));
       return setId ? (await load([setId]))[0] ?? null : null;
     },
     async candidates(from, to) {
       const { rows } = await query(
-        `SELECT id::text AS id FROM stories.sets WHERE built_at BETWEEN $1 AND $2 ORDER BY built_at DESC LIMIT ${CANDIDATE_LIMIT}`,
-        [from.toISOString(), to.toISOString()],
+        `SELECT id::text AS id FROM stories.sets WHERE built_at BETWEEN $1 AND $2 AND ${filter.sql} ORDER BY built_at DESC LIMIT ${CANDIDATE_LIMIT}`,
+        [from.toISOString(), to.toISOString(), filter.series],
       );
       return load(rows.map((r) => r.id as string));
     },
@@ -417,7 +457,7 @@ function aiEventsAdapter(query: Query): PublishedPostAdapter {
 
 /** One adapter per content type that publishes photos. */
 export function publishedPostAdapters(query: Query): PublishedPostAdapter[] {
-  return [lfdAdapter(query), storiesAdapter(query), carouselsAdapter(query), dramaAdapter(query), fieldNotesAdapter(query), aiEventsAdapter(query)];
+  return [lfdAdapter(query), ...STORY_VERTICALS.map((v) => storiesAdapter(query, v)), carouselsAdapter(query), dramaAdapter(query), fieldNotesAdapter(query), aiEventsAdapter(query)];
 }
 
 // ── Hashes and the publish-time write ────────────────────────────────────────

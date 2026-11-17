@@ -78,6 +78,13 @@ function isProtectedPage(pathname: string): boolean {
     || pathname.startsWith('/reels/')
     || pathname === '/stories'
     || pathname.startsWith('/stories/')
+    // SS-1: the three Stories-format type pages.
+    || pathname === '/morning-download'
+    || pathname.startsWith('/morning-download/')
+    || pathname === '/ai-trivia'
+    || pathname.startsWith('/ai-trivia/')
+    || pathname === '/real-or-ai'
+    || pathname.startsWith('/real-or-ai/')
     || pathname === '/carousels'
     || pathname.startsWith('/carousels/')
     || pathname === '/field-notes'
@@ -161,6 +168,12 @@ export const config = {
     '/reels/:path*',
     '/stories',
     '/stories/:path*',
+    '/morning-download',
+    '/morning-download/:path*',
+    '/ai-trivia',
+    '/ai-trivia/:path*',
+    '/real-or-ai',
+    '/real-or-ai/:path*',
     '/social',
     '/social/:path*',
     '/memes',

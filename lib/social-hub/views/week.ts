@@ -6,16 +6,14 @@ import { parseSlotId, sameSlotKey, slotId, slotKeyString, type FeedMode, type Ov
 import type { HubPost, Vertical } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 import { runDayFor } from '@/lib/social-hub/lead';
-import { SERIES_LABEL } from '@/lib/stories/render/copy';
 
 /** The week board's model (spec 2026-10-20-calendar-week-board-redesign): columns, cards, stacking, time and y. Pure. */
 
-/** Stories run three series, so each chip names its series. */
-const SERIES_SHORT: Record<keyof typeof SERIES_LABEL, string> = { morning_download: 'Morning Dl', guess_the_number: 'Guess #', free_vs_paid: 'Free/Paid' };
-
-/** A chip's visible name and its full name (for the aria-label). */
-export function chipNames(vertical: Vertical, series: StorySeries | null): { short: string; full: string } {
-  if (vertical === 'stories' && series) return { short: SERIES_SHORT[series], full: SERIES_LABEL[series] };
+/**
+ * A chip's visible name and its full name (for the aria-label). Each Stories-format type holds one series
+ * (SS-1), so its own short name and label name the chip; `series` stays in the signature for the board's callers.
+ */
+export function chipNames(vertical: Vertical, _series?: StorySeries | null): { short: string; full: string } {
   const info = verticalInfo(vertical);
   return { short: info.short, full: info.label };
 }
@@ -201,7 +199,7 @@ export function boardModel<P extends BoardPost = HubPost>(input: {
     const ctx = { nyDate: d.nyDate, weekday: d.weekday, slots, today, nowMinute };
     const seen = new Map<string, number>();
     const dayCards: BoardCard<P>[] = slots.map((s) => {
-      const capKey = s.vertical === 'stories' ? `stories|${s.series ?? ''}` : s.vertical;
+      const capKey = s.vertical;
       const index = seen.get(capKey) ?? 0;
       seen.set(capKey, index + 1);
       const overCap = index >= Math.max(0, caps[s.vertical]);

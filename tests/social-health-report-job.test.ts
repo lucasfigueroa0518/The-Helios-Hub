@@ -12,8 +12,7 @@ import { openHubTestDb } from './fixtures/social-hub/pglite';
 
 const NOW = new Date('2026-10-13T11:31:00Z');
 const posting = async (v: string): Promise<PostingState> =>
-  ({ type: v, live: true, generate: true, autoPublish: false, perDay: v === 'stories' ? null : 1, maxPerDay: 3,
-     series: v === 'stories' ? [{ id: 'morning_download', label: 'MD', enabled: true, generate: true, days: [0, 1, 2, 3, 4, 5, 6] }] : null }) as PostingState;
+  ({ type: v, live: true, generate: true, autoPublish: false, perDay: v === 'stories' ? null : 1, maxPerDay: 3, series: null }) as PostingState;
 
 test('a reporter that throws does not break the night: that type reads as unknown', async () => {
   const { query } = await openHubTestDb();
@@ -22,7 +21,7 @@ test('a reporter that throws does not break the night: that type reads as unknow
   const exp = night.reports.find((r) => r.vertical === 'explainers')!;
   assert.match(exp.reportError ?? '', /unreachable/);
   assert.equal(night.verdict.types.find((t) => t.vertical === 'explainers')!.tone, 'short');
-  assert.equal(night.reports.length, 8);
+  assert.equal(night.reports.length, 10, 'every type, AI Trivia and Real or AI? included');
 });
 
 test('failures on a type that met its target are downgraded to warnings', async () => {
@@ -68,7 +67,7 @@ test('morning report: a multi-night backfill reads each type\'s posting state on
   const out = await runMorningReport({ q: query, explainersQ: async () => query, posting: counted as never }, NOW, 5);
   assert.equal(out.backfilled, 4, '5 nights built');
   assert.deepEqual([...calls.values()], [...calls.keys()].map(() => 1));
-  assert.equal(calls.size, 8, 'every type, once');
+  assert.equal(calls.size, 10, 'every type, once');
   // A new run reads fresh state.
   await runMorningReport({ q: query, explainersQ: async () => query, posting: counted as never }, NOW, 5);
   assert.deepEqual([...new Set(calls.values())], [2]);

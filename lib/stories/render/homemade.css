@@ -27,11 +27,6 @@
 .hm-bd-orange .hm-fill { background: #FF5E1A; }
 .hm-bd-green .hm-fill { background: #138510; }
 
-/* Posted from the camera roll: the photo fills the screen, see-through over
-   the fill and darkened so the typed lines read (S-55). */
-.hm-photo-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0.6; }
-.hm-photo-shade { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.4); }
-
 /* Everything typed sits in the safe band. */
 .hm-stack {
   position: absolute;

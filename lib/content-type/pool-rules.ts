@@ -1,4 +1,5 @@
 import { leadDaysFor } from '@/lib/social-hub/lead';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 import { SERIES_NAME } from '@/lib/social-hub/slots/times';
 import type { StorySeries } from '@/lib/social-hub/slots/types';
 import type { HubIdea, HubPost, Vertical } from '@/lib/social-hub/types';
@@ -86,5 +87,5 @@ export type PoolFreshness = 'evergreen' | 'time_sensitive';
  * keeps its own tip expiry (expireOldTips).
  */
 export function poolFreshness(type: Vertical, series?: StorySeries | string | null): PoolFreshness {
-  return leadDaysFor(type, type === 'stories' ? storySeriesOf(series) : null) > 0 ? 'evergreen' : 'time_sensitive';
+  return leadDaysFor(type, isStoryVertical(type) ? storySeriesOf(series) : null) > 0 ? 'evergreen' : 'time_sensitive';
 }

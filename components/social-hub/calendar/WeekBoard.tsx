@@ -94,8 +94,9 @@ const TRAY: Array<{ vertical: Vertical; series: StorySeries | null; label: strin
   { vertical: 'ai_events', series: null, label: 'AI Events' },
   { vertical: 'field_notes', series: null, label: 'Field Notes' },
   { vertical: 'stories', series: 'morning_download', label: SERIES_NAME.morning_download.one },
-  { vertical: 'stories', series: 'guess_the_number', label: SERIES_NAME.guess_the_number.one },
-  { vertical: 'stories', series: 'free_vs_paid', label: SERIES_NAME.free_vs_paid.one },
+  // SS-1: Trivia and Real or AI? are types of their own; each tray item books its one series.
+  { vertical: 'ai_trivia', series: 'ai_trivia', label: SERIES_NAME.ai_trivia.one },
+  { vertical: 'real_or_ai', series: 'real_or_ai', label: SERIES_NAME.real_or_ai.one },
 ];
 
 const HOURS = Array.from({ length: 12 }, (_, i) => (9 + i) * 60);

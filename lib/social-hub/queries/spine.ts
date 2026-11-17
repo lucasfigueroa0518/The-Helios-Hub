@@ -97,6 +97,9 @@ const METRICS: Record<Vertical, readonly string[]> = {
   explainers: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'avg_watch_time_ms', 'total_watch_time_ms', 'skip_rate'],
   reels: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'reposts', 'total_interactions', 'avg_watch_time_ms', 'total_watch_time_ms', 'skip_rate'],
   stories: ['views', 'reach', 'shares', 'follows', 'profile_visits', 'total_interactions'],
+  // SS-1: the other Stories-format types carry the same story metrics.
+  ai_trivia: ['views', 'reach', 'shares', 'follows', 'profile_visits', 'total_interactions'],
+  real_or_ai: ['views', 'reach', 'shares', 'follows', 'profile_visits', 'total_interactions'],
   last_few_days: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'],
   ai_events: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'],
   field_notes: ['views', 'reach', 'likes', 'comments', 'saved', 'shares', 'total_interactions', 'follows', 'profile_visits'],

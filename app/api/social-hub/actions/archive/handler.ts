@@ -1,3 +1,4 @@
+import { ideaOfType } from '@/lib/content-type/story-series';
 import type { ContentActions } from '@/lib/publishing/actions/types';
 import type { ActionSpec } from '@/lib/social-hub/action-route';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -25,7 +26,7 @@ export function archiveContent(
       const parsed = parseTarget(body);
       const ideaId = (body as { ideaId?: unknown } | null)?.ideaId ?? null;
       if (!parsed) return null;
-      if (ideaId !== null && (typeof ideaId !== 'string' || !IDEA_ID.test(ideaId) || !ideaId.startsWith(`${parsed.vertical}:`))) return null;
+      if (ideaId !== null && (typeof ideaId !== 'string' || !IDEA_ID.test(ideaId) || !ideaOfType(parsed.vertical, ideaId))) return null;
       return { ...parsed, ideaId };
     },
     run: async ({ vertical, target, input, ideaId }, ctx) => {

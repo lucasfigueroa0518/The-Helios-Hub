@@ -52,13 +52,13 @@ export function createIntakeJev(
     }
   };
 
-  const record = async (component: string, inputTokens: number) => {
+  const record = async (component: string, inputTokens: number | null) => {
     const cost = jevUsd(inputTokens);
     usd += cost;
     calls += 1;
     await query.query(
       `INSERT INTO intake.cost_events (run_id, component, input_tokens, usd) VALUES ($1, $2, $3, $4)`,
-      [runId, component, inputTokens, cost],
+      [runId, component, inputTokens ?? 0, cost],
     );
   };
 
@@ -84,7 +84,7 @@ export function createIntakeJev(
       else throw new Error(`Jev answer ${id} is ${answer.type}; Social sets use noul and choice only`);
     }
     await record(meta.version, res.usage.input_tokens);
-    return { answers, usage: { input_tokens: res.usage.input_tokens, output_tokens: res.usage.output_tokens }, model: res.model };
+    return { answers, usage: { input_tokens: res.usage.input_tokens ?? 0, output_tokens: res.usage.output_tokens ?? 0 }, model: res.model };
   };
 
   return {

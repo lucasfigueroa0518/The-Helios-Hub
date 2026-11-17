@@ -12,6 +12,8 @@ const EXPECTED: Record<Vertical, { noun: PoolConfig['noun']['one']; order: PoolC
   explainers: { noun: 'topic', order: 'score', make: true },
   carousels: { noun: 'story', order: 'score', make: false },
   stories: { noun: 'idea', order: 'score', make: false },
+  ai_trivia: { noun: 'question', order: 'score', make: false },
+  real_or_ai: { noun: 'round', order: 'score', make: false },
   last_few_days: { noun: 'story', order: 'rank', make: false },
   field_notes: { noun: 'tip', order: 'score', make: true },
   ai_events: { noun: 'event', order: 'rank', make: false },
@@ -21,7 +23,7 @@ const EXPECTED: Record<Vertical, { noun: PoolConfig['noun']['one']; order: PoolC
 const TYPES = Object.keys(TYPE_CONFIG) as Vertical[];
 
 test('every type has a pool block matching the contract table', () => {
-  assert.equal(TYPES.length, 8);
+  assert.equal(TYPES.length, 10);
   for (const type of TYPES) {
     const pool = TYPE_CONFIG[type].pool;
     const want = EXPECTED[type];
@@ -87,15 +89,16 @@ test('one word per state, and no word is an error', () => {
 });
 
 test('freshness comes from lead days: made ahead → evergreen, same day → time_sensitive; Stories by series', () => {
-  const evergreen: Vertical[] = ['reels', 'explainers', 'reel_ai_drama', 'field_notes'];
+  const evergreen: Vertical[] = ['reels', 'explainers', 'reel_ai_drama', 'field_notes', 'ai_trivia', 'real_or_ai'];
   const timely: Vertical[] = ['carousels', 'last_few_days', 'ai_events', 'stories'];
   for (const t of evergreen) assert.equal(poolFreshness(t), 'evergreen', t);
   for (const t of timely) assert.equal(poolFreshness(t), 'time_sensitive', t);
   for (const t of TYPES) assert.equal(poolFreshness(t) === 'evergreen', leadDaysFor(t) > 0, t);
-  assert.equal(poolFreshness('stories', 'guess_the_number'), 'evergreen');
-  assert.equal(poolFreshness('stories', 'Free vs. Paid'), 'evergreen');
+  // Stories split (SS-1): the made-ahead series are their own types now; Morning Download stays same-day.
+  assert.equal(poolFreshness('ai_trivia', 'ai_trivia'), 'evergreen');
+  assert.equal(poolFreshness('real_or_ai', 'real_or_ai'), 'evergreen');
   assert.equal(poolFreshness('stories', 'Morning Download'), 'time_sensitive');
   assert.equal(poolFreshness('stories', 'morning_download'), 'time_sensitive');
-  assert.equal(storySeriesOf('Guess the Number'), 'guess_the_number');
+  assert.equal(storySeriesOf('Morning Download'), 'morning_download');
   assert.equal(storySeriesOf('Nope'), null);
 });

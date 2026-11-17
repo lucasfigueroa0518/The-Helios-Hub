@@ -91,7 +91,8 @@ test('today’s strip is only post ideas holding a slot; failed and never-made i
     post({ id: 'guess-failed', status: 'failed', idea: { id: 'guess', label: 'Guess' } }),
     post({ id: 'free-skipped', status: 'skipped', generatedAt: null, idea: { id: 'free', label: 'Free' } }),
     post({ id: 'no-idea', idea: null, status: 'scheduled' }),
-    post({ id: 'making', status: 'generating', generatedAt: null, idea: { id: 'download', label: 'Download' }, publishAt: null }),
+    // SS-1: Morning Download has one window a day, so the second set made today is Trivia's (a Thursday).
+    post({ id: 'making', vertical: 'ai_trivia', status: 'generating', generatedAt: null, idea: { id: 'download', label: 'Download' }, publishAt: null }),
     post({ id: 'made', status: 'scheduled', idea: { id: 'guess2', label: 'Guess 2' } }),
   ], '2026-10-08').map((p) => p.id);
   assert.deepEqual(ids, ['made', 'making']);
@@ -128,7 +129,7 @@ test('the Content model leads with what needs a person and orders today by time'
 
 test('pools come in the fixed type order and rank within a type only', () => {
   const pools = poolSummaries(d.ideas);
-  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama']);
+  assert.deepEqual(pools.map((p) => p.vertical), ['reels', 'explainers', 'carousels', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama']);
   for (const p of pools) {
     const scores = p.next.map((i) => i.score ?? -Infinity);
     assert.deepEqual(scores, [...scores].sort((a, b) => b - a));

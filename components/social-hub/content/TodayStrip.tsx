@@ -18,6 +18,7 @@ import type { StorySeries } from '@/lib/social-hub/slots/types';
 import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import type { Offerer } from '@/lib/social-hub/views/offer';
 import { canMakeCard, runForCandidate, runOnMadeCard } from '@/lib/social-hub/views/run-for';
+import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 /**
  * Today's Content (spec 2026-10-13 §2): the day's cards in one row, in posting
@@ -81,7 +82,7 @@ function Made({ post, o, now, run, controls }: { post: HubPost; o: Offerer; now:
 function Pending({ c, run, miss, controls }: { c: QuotaCandidate; run: ProgressItem | null; miss: RunMiss | null; controls: boolean }) {
   const Icon = TYPE_ICON[c.vertical];
   const tag = c.rank == null ? null : `#${c.rank} in the queue${c.tag ? ` · ${c.tag.text}` : ''}`;
-  const target = c.vertical === 'stories' ? c.seriesId : c.idea ? ideaRef(c.idea.id) : undefined;
+  const target = isStoryVertical(c.vertical) ? c.seriesId : c.idea ? ideaRef(c.idea.id) : undefined;
   return (
     <li className="sh-panel sh-strip__card sh-gallery__card is-pending" style={{ listStyle: 'none' }}>
       <span className={`sh-strip__art sh-gallery__art${c.vertical === 'carousels' ? '' : ' is-tall'}`}>
@@ -104,7 +105,7 @@ function Pending({ c, run, miss, controls }: { c: QuotaCandidate; run: ProgressI
 
 /** The night (New York date) whose run makes this slot's post: the day minus the type's lead days. */
 export function nightFor(c: QuotaCandidate, day: string): string {
-  const series = c.vertical === 'stories' ? ((c.seriesId?.split(':').pop() ?? null) as StorySeries | null) : null;
+  const series = isStoryVertical(c.vertical) ? ((c.seriesId?.split(':').pop() ?? null) as StorySeries | null) : null;
   return addDays(day, -leadDaysFor(c.vertical, series));
 }
 
