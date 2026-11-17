@@ -4,7 +4,6 @@ import test from 'node:test';
 
 import { keyFor, parseQueueAction } from '@/lib/content-type/idea-queue';
 import type { HubDataset } from '@/lib/social-hub/dataset';
-import { ARCHIVE_ONLY } from '@/lib/social-hub/queue';
 
 const A = 'explainers:topic:a';
 const B = 'explainers:topic:b';
@@ -18,11 +17,8 @@ test('parseQueueAction accepts each action and rejects other types’ ideas, bad
   assert.throws(() => parseQueueAction({ vertical: 'explainers', action: 'delete', ideaId: A }), /action must be/);
   assert.throws(() => parseQueueAction({ vertical: 'explainers', action: 'reorder-pins', order: new Array(201).fill(A) }), /order must/);
   assert.throws(() => parseQueueAction(null), /Unknown content type/);
-  // Last Few Days moves to the live queue (Tommy, 2026-11-16); until config.ts says so it takes Archive only.
-  if (ARCHIVE_ONLY.has('last_few_days')) {
-    assert.throws(() => parseQueueAction({ vertical: 'last_few_days', action: 'pin', ideaId: 'last_few_days:story:x' }), /only takes Archive/, 'Last Few Days has no queue to pin within');
-    assert.throws(() => parseQueueAction({ vertical: 'last_few_days', action: 'place', ideaId: 'last_few_days:story:x', aboveId: null, belowId: null, up: true }), /only takes Archive/);
-  }
+  // Every type is on the shared queue (Tommy, 2026-11-16): Last Few Days takes pins and archives like the rest.
+  assert.deepEqual(parseQueueAction({ vertical: 'last_few_days', action: 'pin', ideaId: 'last_few_days:story:x' }), { action: 'pin', vertical: 'last_few_days', ideaId: 'last_few_days:story:x' });
   assert.deepEqual(parseQueueAction({ vertical: 'last_few_days', action: 'archive', ideaId: 'last_few_days:story:x' }), { action: 'archive', vertical: 'last_few_days', ideaId: 'last_few_days:story:x' });
 });
 

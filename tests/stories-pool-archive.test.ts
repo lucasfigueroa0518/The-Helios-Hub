@@ -12,7 +12,6 @@ import { openLocalStoriesDb } from '@/lib/stories/local-db';
 import { FRESH_MS, openPool, refreshStoryPool, type PoolReads } from '@/lib/stories/pool';
 import type { StoryCandidate } from '@/lib/stories/sources/reels';
 import { STORY_POOL_SQL } from '@/lib/social-hub/queries/stories';
-import { QUEUE_LIVE } from '@/lib/social-hub/queue';
 
 const NOW = new Date('2026-11-16T14:00:00Z');
 const story = (slug: string): StoryCandidate => ({ key: `news.test/${slug}`, origin: 'reels', ref: slug, headline: `Headline ${slug}`, sourceName: 'News Test', url: `https://news.test/${slug}`, body: 'body', publishedAt: null, nativeScore: 1 });
@@ -93,7 +92,7 @@ test('a stale row (sources unreadable past the freshness window) is archived as 
   assert.equal((await openPool(db, 'free_vs_paid')).leads.length, 0);
 });
 
-test('over the 30 cap: the lowest-scored are archived; archived rows never count toward the cap', { skip: !QUEUE_LIVE.has('stories') }, async () => {
+test('over the 30 cap: the lowest-scored are archived; archived rows never count toward the cap', async () => {
   const { db } = await openLocalStoriesDb();
   const slugs = Array.from({ length: 34 }, (_, i) => `s${String(i).padStart(2, '0')}`);
   await refreshStoryPool(db, reads(slugs), NOW);

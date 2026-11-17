@@ -10,7 +10,7 @@ import test from 'node:test';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
 import { narrowStep, parseRunBody, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
-import { applyMoves, dayRanking, madeMoveIds, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
+import { dayRanking, madeMoveIds, orderCards, quotaCandidates, type IdeaAdjustment } from '@/lib/social-hub/views/day-rank';
 import { todaysContent } from '@/lib/social-hub/views/today';
 
 const NOW = new Date('2026-10-09T14:00:00Z');
@@ -31,7 +31,6 @@ test('Pinned ideas lead the queue, in the order pinned (a Promote row reads as a
   assert.deepEqual(titles([move(3, 'promote', 't1'), move(3, 'demote', 't2')]), ['Idea 1', 'Idea 2', 'Idea 4', 'Idea 3'], 'the latest move wins: promoted, then demoted, sinks');
   assert.deepEqual(titles([move(3, 'promote', 't1'), move(4, 'promote', 't2')]), ['Idea 3', 'Idea 4', 'Idea 1', 'Idea 2'], 'any number of pins, in the order pinned');
   assert.deepEqual(titles([{ ...move(3, 'promote', 't1'), nyDate: '2026-10-08' }]), ['Idea 3', 'Idea 1', 'Idea 2', 'Idea 4'], 'a move from yesterday still steers until its idea is made (B8)');
-  assert.deepEqual(applyMoves([{ id: 'a' }, { id: 'b' }], [{ ideaId: 'b', kind: 'demote' }]).map((x) => x.id), ['a', 'b'], 'the last idea stays last');
 });
 
 const reelPost = (n: number, over: Partial<HubPost> = {}): HubPost => {

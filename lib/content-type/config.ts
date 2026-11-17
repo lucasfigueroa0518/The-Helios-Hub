@@ -9,12 +9,9 @@ import type { Vertical } from '@/lib/social-hub/types';
  * components/content-type/type-parts.tsx, keyed the same way.
  */
 
-/** How a type's pool answers a person's moves: `live` follows the queue (pin, drag, archive), `archive_only` takes Archive only, `none` has neither. */
-export type QueueMode = 'live' | 'archive_only' | 'none';
-
 /**
  * The pool screen's per-type settings (pool UI contract 2026-11-15 §2). Everything else about the pool screen is
- * fixed by the standard. `moves.pin/drag/archive` agree with `queue` (tests/pool-rules.test.ts checks it).
+ * fixed by the standard. Every type's pool is on the shared queue (lib/social-hub/queue.ts), so pin, drag and archive are on for all.
  */
 export type PoolConfig = {
   /** What one entry is called: { one: 'topic', many: 'topics' }. */
@@ -22,11 +19,11 @@ export type PoolConfig = {
   /** The number column: score (2 decimals), rank (1, 2, 3), or none. List order: score and rank best first, newest by createdAt. */
   order: 'score' | 'rank' | 'newest';
   /** Which buttons a row offers. */
-  moves: { pin: boolean; drag: boolean; archive: boolean; make: boolean; rank: boolean; exclude: boolean };
+  moves: { pin: boolean; drag: boolean; archive: boolean; make: boolean };
 };
 
 /** Pin, hold-and-drag and Archive, with or without Make it (every pool is on the live queue, Tommy 2026-11-16). */
-const liveMoves = (make: boolean): PoolConfig['moves'] => ({ pin: true, drag: true, archive: true, make, rank: false, exclude: false });
+const liveMoves = (make: boolean): PoolConfig['moves'] => ({ pin: true, drag: true, archive: true, make });
 
 /** The words of the Generate switch in the settings drawer. */
 export type GenerateCopy = { label: string; confirm: string; hint: string };
@@ -38,7 +35,6 @@ export type TypeConfig = {
   benchNote: string | null;
   /** The most a daily limit may be set to (week board spec §Safety cap). */
   maxCap: number;
-  queue: QueueMode;
   /** Whether the pool has a "Seed an idea" path. */
   seedable: boolean;
   /** What a post of this type is called in settings sentences ("Auto-publish: <noun> are scheduled…"). */
@@ -73,7 +69,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'Text on Screen',
     benchNote: null,
     maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
     seedable: true,
     postsNoun: 'reels',
     generate: null,
@@ -88,7 +83,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'Explainers',
     benchNote: 'Topics waiting to be rendered, best score first. Generate renders one reel. Hold and drag any topic to move it.',
     maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
     seedable: true,
     postsNoun: 'explainers',
     generate: null,
@@ -103,7 +97,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'Carousels',
     benchNote: 'Stories the 3:00 AM run shortlisted, best first. The top two become carousels. Hold and drag any story to move it.',
     maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
     seedable: true,
     postsNoun: 'carousels',
     generate: null,
@@ -118,7 +111,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'Stories',
     benchNote: 'Ideas drawn from the other pools. A set is built for each series that is due. Pick a series, then hold and drag an idea to move it.',
     maxCap: DEFAULT_MAX_CAP,
-    queue: 'live',
     seedable: true,
     postsNoun: 'story sets',
     generate: null,
@@ -135,7 +127,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     benchNote:
       'The latest run’s queue: the stories in its post, the ones it dropped and why, and what was next in line. Major headlines lead; Text on Screen ideas fill the rest.',
     maxCap: 1,
-    queue: 'live',
     seedable: true,
     postsNoun: 'Last Few Days posts',
     generate: {
@@ -156,7 +147,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     benchNote:
       'The week’s ranked events, city by city: each city’s top 10 is badged on the site and the post teases from it. Gated and excluded events stay listed with the reason. Open a row to see where its score comes from.',
     maxCap: 2,
-    queue: 'live',
     seedable: false,
     postsNoun: 'AI Events posts',
     generate: {
@@ -176,7 +166,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     benchNote:
       'Tips waiting for a post, newest first: from vendor docs, GitHub, Hacker News, RSS and the ones you seed. Generate picks one, pairs it with photos from the pool and renders the carousel. A tip that already made a post shows that post.',
     maxCap: 1,
-    queue: 'live',
     seedable: true,
     postsNoun: 'Field Notes posts',
     generate: {
@@ -197,7 +186,6 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'AI Drama Reels',
     benchNote: 'Story pitches waiting to be made, best rank first. Make it produces one reel. Hold and drag any pitch to move it.',
     maxCap: 3,
-    queue: 'live',
     seedable: false,
     postsNoun: 'AI Drama reels',
     generate: {
@@ -229,11 +217,3 @@ export function generateCopy(type: Vertical): GenerateCopy {
     }
   );
 }
-
-const idsWhere = (test: (c: TypeConfig) => boolean): ReadonlySet<string> =>
-  new Set((Object.keys(TYPE_CONFIG) as Vertical[]).filter((id) => test(TYPE_CONFIG[id])));
-
-/** Types whose nights follow the queue (see lib/social-hub/queue.ts QUEUE_LIVE). */
-export const QUEUE_LIVE_TYPES: ReadonlySet<string> = idsWhere((c) => c.queue === 'live');
-/** Types that take Archive but not Pin or drag. Empty since every pool went live (2026-11-16); kept so callers compile. */
-export const ARCHIVE_ONLY_TYPES: ReadonlySet<string> = idsWhere((c) => c.queue === 'archive_only');
