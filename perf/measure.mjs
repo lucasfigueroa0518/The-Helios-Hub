@@ -344,7 +344,7 @@ async function lighthousePhase(cookie) {
   const chromeLauncher = await import('chrome-launcher');
   await startServer();
   const launch = () => chromeLauncher.launch({
-    chromePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium-1243/chrome-linux/chrome',
+    chromePath: process.env.CHROME_PATH || '/opt/pw-browsers/chromium',
     chromeFlags: ['--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
   });
   let chrome = await launch();

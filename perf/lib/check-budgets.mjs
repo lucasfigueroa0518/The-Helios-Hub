@@ -14,7 +14,9 @@ let failed = 0;
 for (const route of result.routes) {
   const warm = result.warm[route.id];
   if (!warm) continue;
-  const limit = { ...budgets.defaults[route.kind], ...(budgets.routes[route.id] ?? {}) };
+  const scale = process.env.CI === 'true' ? Number(budgets.ciScale ?? 1) : 1;
+  const raw = { ...budgets.defaults[route.kind], ...(budgets.routes[route.id] ?? {}) };
+  const limit = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, Math.round(v * scale)]));
   const problems = [];
   if (warm.errors === warm.n) problems.push('every request failed');
   if (limit.ttfbP95 && warm.ttfb.p95 > limit.ttfbP95) problems.push(`TTFB p95 ${warm.ttfb.p95} > ${limit.ttfbP95}`);

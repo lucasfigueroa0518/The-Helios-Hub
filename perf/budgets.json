@@ -1,0 +1,63 @@
+{
+  "_comment": "Performance budgets (perf/README.md). bundles: true first-load JS per page in KB gz (layouts included, perf/lib/bundle-sizes.mjs); 150 is the playbook budget, a larger number is a documented exception (perf/REPORT.md) set just above today so it cannot grow. latency: warm p95 ms per perf/measure.mjs; defaults are the playbook budgets, routes{} are documented exceptions. ciScale multiplies latency limits when CI=true (GitHub runners are slower than the reference machine in perf/PROFILE.md).",
+  "bundles": {
+    "/ai-events": 193,
+    "/ai-trivia": 194,
+    "/campaigns/[id]/draft": 166,
+    "/campaigns/[id]": 150,
+    "/campaigns/[id]/prospect": 150,
+    "/campaigns/[id]/review": 150,
+    "/carousels": 193,
+    "/dashboards": 150,
+    "/dashboards/projects/[id]": 150,
+    "/dashboards/projects/new": 150,
+    "/dashboards/tokens": 150,
+    "/dashboards/d/[token]": 150,
+    "/events": 150,
+    "/explainers": 193,
+    "/explainers/reels": 150,
+    "/field-notes": 199,
+    "/hub/analytics": 150,
+    "/hub/conversations": 150,
+    "/hub/inboxes": 150,
+    "/hub": 157,
+    "/hub/queue": 150,
+    "/last-few-days": 193,
+    "/morning-download": 193,
+    "/": 150,
+    "/real-or-ai/lab": 150,
+    "/real-or-ai": 193,
+    "/reel-ai-drama/lab": 150,
+    "/reel-ai-drama": 193,
+    "/reels/analytics": 150,
+    "/reels/health": 150,
+    "/seo": 150,
+    "/social/analytics/[type]": 150,
+    "/social/analytics/compare": 150,
+    "/social/analytics/cost": 150,
+    "/social/analytics": 150,
+    "/social/calendar": 172,
+    "/social/content/library/music": 150,
+    "/social/content/library/photos": 150,
+    "/social/health/night/[date]": 150,
+    "/social/health": 150,
+    "/social": 150,
+    "/social/post/[id]": 150,
+    "/traffic": 150,
+    "/trello": 233,
+    "/watch/[token]": 150
+  },
+  "latency": {
+    "ciScale": 1.5,
+    "defaults": {
+      "page": {
+        "ttfbP95": 150,
+        "totalP95": 500
+      },
+      "api": {
+        "totalP95": 500
+      }
+    },
+    "routes": {}
+  }
+}

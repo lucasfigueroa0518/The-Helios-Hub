@@ -68,3 +68,4 @@ Reverted:
 - F6 `content-visibility` on stacked tables: music library LCP 6222 → 4290 ms, TBT 4506 → 3102 ms.
 - F7 brand font `preload: false`: **reverted** (LCP worse; see above).
 - Not done, by design: virtualizing the music list (it would mean a client component and different DOM), and Trello lazy-loading activity and comments (behavior change). Both are proposed in REPORT.
+- **size-limit was dropped** (Phase 6). It discovers its plugins only through `package.json` devDependencies, and the repo pins that file. `perf/lib/bundle-sizes.mjs --check perf/budgets.json` does the same job (a per-route budget in KB gz that fails with a non-zero exit). It also counts every layout chunk on the route, which a flat size-limit file list can't express without generated config.

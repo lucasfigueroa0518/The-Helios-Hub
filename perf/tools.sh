@@ -8,6 +8,4 @@ cd "$(dirname "$0")/.."
 npm install --no-save --no-audit --no-fund \
   lighthouse@13.6.0 \
   @lhci/cli@0.16.1 \
-  size-limit@14.3.0 \
-  @size-limit/file@14.3.0 \
   @next/bundle-analyzer@15.5.25

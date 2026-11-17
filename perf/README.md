@@ -9,7 +9,7 @@ The method is in `PROFILE.md`. The results and every change are in `REPORT.md`.
 |---|---|---|
 | Page server response | warm p95 TTFB ≤ 150 ms, full HTML ≤ 500 ms | `perf/lib/check-budgets.mjs` (CI) |
 | API route | warm p95 ≤ 500 ms (server target ≤ 150 ms) | `perf/lib/check-budgets.mjs` (CI) |
-| Initial JS per route | ≤ 150 KB gzipped, **including layouts** (documented exceptions in `budgets.json`) | `perf/lib/bundle-sizes.mjs --check`, `size-limit` (CI) |
+| Initial JS per route | ≤ 150 KB gzipped, **including layouts** (documented exceptions in `budgets.json`) | `perf/lib/bundle-sizes.mjs --check` (CI). This replaces size-limit, which only finds its plugins through `package.json` devDependencies, and the repo pins that file. |
 | Lighthouse server response | ≤ 150 ms; LCP, TBT and CLS are warnings | `lighthouserc.js` (CI) |
 
 All budgets live in `perf/budgets.json`. A route with no entry gets the defaults. A route that can't meet the default has its own entry, set a little above its current number so it can't get worse, and is listed under "still over budget" in `REPORT.md`.
