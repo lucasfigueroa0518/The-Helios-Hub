@@ -53,8 +53,8 @@ for f in $ORDER; do
 done
 psql "$URL" -q -v ON_ERROR_STOP=1 -v drafting_data_schema=outreach -v drafting_function_schema=public \
   -f db/drafting_cost_persistence.sql >/dev/null 2>/tmp/perf-schema-cost.err || { cat /tmp/perf-schema-cost.err; exit 1; }
-# Additive perf migrations (perf/db/migrations/*.up.sql), in name order.
-if compgen -G "perf/db/migrations/*.up.sql" >/dev/null; then
-  for f in perf/db/migrations/*.up.sql; do psql "$URL" -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null; done
+# Additive perf migrations from this branch (db/perf_*.sql, not the *_down rollbacks).
+if compgen -G "db/perf_*.sql" >/dev/null; then
+  for f in $(ls db/perf_*.sql | grep -v _down); do psql "$URL" -q -v ON_ERROR_STOP=1 -f "$f" >/dev/null; done
 fi
 echo "local schema ready: $URL"

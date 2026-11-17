@@ -169,6 +169,16 @@ function mapCampaignRow(row: CampaignQueryRow): Campaign {
 export const CAMPAIGN_VISIBILITY_WHERE = `(c.owner_id = $1 OR (COALESCE(c.kind, 'manual') = 'auto' AND c.status = 'active'))`;
 
 const campaignSelect = `
+  -- Bounced sends per campaign, counted once for every campaign instead of one
+  -- items-to-sends walk per campaign row (~1.2 ms x every campaign, and JIT on top).
+  WITH bounced AS (
+    SELECT w.campaign_id, count(*)::int AS n
+      FROM outreach.email_sends s
+      JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
+      JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
+     WHERE s.status = 'bounced' OR s.bounced_at IS NOT NULL
+     GROUP BY w.campaign_id
+  )
   SELECT
     c.id, c.name, c.status, c.owner_id, c.merged_into_id, c.needs_enrichment,
     COALESCE(c.kind, 'manual') AS kind,
@@ -192,13 +202,7 @@ const campaignSelect = `
     c.created_at, c.updated_at,
     (SELECT count(*)::int FROM outreach.campaign_leads cl WHERE cl.campaign_id = c.id) AS lead_count,
     qs.sent_count,
-    GREATEST(0, qs.sent_count - (
-      SELECT count(*)::int
-        FROM outreach.email_sends s
-        JOIN outreach.drafting_items i ON i.id = s.drafting_item_id
-        JOIN outreach.drafting_workspaces w ON w.id = i.workspace_id
-       WHERE w.campaign_id = c.id AND (s.status = 'bounced' OR s.bounced_at IS NOT NULL)
-    )) AS delivered_count,
+    GREATEST(0, qs.sent_count - COALESCE(bounced.n, 0)) AS delivered_count,
     (SELECT max(r.started_at) FROM outreach.runs r WHERE r.campaign_id = c.id) AS last_run_at,
     COALESCE(
       (SELECT array_agg(ct.tag ORDER BY ct.tag)
@@ -226,6 +230,7 @@ const campaignSelect = `
       FROM outreach.email_send_queue q
      WHERE q.campaign_id = c.id
   ) qs
+  LEFT JOIN bounced ON bounced.campaign_id = c.id
   WHERE ${CAMPAIGN_VISIBILITY_WHERE}`;
 
 export async function listCampaigns(ownerId: string): Promise<Campaign[]> {
