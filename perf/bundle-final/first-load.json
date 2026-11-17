@@ -1,0 +1,494 @@
+[
+  {
+    "page": "/trello/page",
+    "route": "/trello",
+    "kb": 229.4,
+    "pageOnlyKb": 103.6
+  },
+  {
+    "page": "/field-notes/page",
+    "route": "/field-notes",
+    "kb": 195.4,
+    "pageOnlyKb": 69.8
+  },
+  {
+    "page": "/reels/page",
+    "route": "/reels",
+    "kb": 194,
+    "pageOnlyKb": 67.2
+  },
+  {
+    "page": "/ai-trivia/page",
+    "route": "/ai-trivia",
+    "kb": 190.8,
+    "pageOnlyKb": 65.2
+  },
+  {
+    "page": "/explainers/page",
+    "route": "/explainers",
+    "kb": 189.5,
+    "pageOnlyKb": 63.7
+  },
+  {
+    "page": "/reel-ai-drama/page",
+    "route": "/reel-ai-drama",
+    "kb": 189.5,
+    "pageOnlyKb": 63.7
+  },
+  {
+    "page": "/ai-events/page",
+    "route": "/ai-events",
+    "kb": 189.4,
+    "pageOnlyKb": 63.7
+  },
+  {
+    "page": "/carousels/page",
+    "route": "/carousels",
+    "kb": 189.4,
+    "pageOnlyKb": 63.7
+  },
+  {
+    "page": "/last-few-days/page",
+    "route": "/last-few-days",
+    "kb": 189.4,
+    "pageOnlyKb": 63.7
+  },
+  {
+    "page": "/morning-download/page",
+    "route": "/morning-download",
+    "kb": 189.4,
+    "pageOnlyKb": 63.7
+  },
+  {
+    "page": "/real-or-ai/page",
+    "route": "/real-or-ai",
+    "kb": 189.4,
+    "pageOnlyKb": 63.7
+  },
+  {
+    "page": "/social/(hub)/preview/type/[type]/page",
+    "route": "/social/preview/type/[type]",
+    "kb": 183.2,
+    "pageOnlyKb": 53.4
+  },
+  {
+    "page": "/social/(hub)/calendar/page",
+    "route": "/social/calendar",
+    "kb": 168.9,
+    "pageOnlyKb": 39.1
+  },
+  {
+    "page": "/social/(hub)/preview/calendar/page",
+    "route": "/social/preview/calendar",
+    "kb": 168.9,
+    "pageOnlyKb": 39.1
+  },
+  {
+    "page": "/social/render/preview/page",
+    "route": "/social/render/preview",
+    "kb": 165.3,
+    "pageOnlyKb": 39.7
+  },
+  {
+    "page": "/campaigns/[id]/draft/page",
+    "route": "/campaigns/[id]/draft",
+    "kb": 162.7,
+    "pageOnlyKb": 37.1
+  },
+  {
+    "page": "/personality/lab/page",
+    "route": "/personality/lab",
+    "kb": 161.3,
+    "pageOnlyKb": 35.7
+  },
+  {
+    "page": "/social/render/preview/ai-events/page",
+    "route": "/social/render/preview/ai-events",
+    "kb": 154.5,
+    "pageOnlyKb": 28.9
+  },
+  {
+    "page": "/hub/page",
+    "route": "/hub",
+    "kb": 153.2,
+    "pageOnlyKb": 25.5
+  },
+  {
+    "page": "/social/render/templates-review/page",
+    "route": "/social/render/templates-review",
+    "kb": 150.5,
+    "pageOnlyKb": 24.9
+  },
+  {
+    "page": "/social/(hub)/page",
+    "route": "/social",
+    "kb": 147.9,
+    "pageOnlyKb": 18.1
+  },
+  {
+    "page": "/social/(hub)/preview/page",
+    "route": "/social/preview",
+    "kb": 147.9,
+    "pageOnlyKb": 18.1
+  },
+  {
+    "page": "/social/render/preview/canvases/page",
+    "route": "/social/render/preview/canvases",
+    "kb": 147.1,
+    "pageOnlyKb": 21.5
+  },
+  {
+    "page": "/campaigns/[id]/page",
+    "route": "/campaigns/[id]",
+    "kb": 146.9,
+    "pageOnlyKb": 21.3
+  },
+  {
+    "page": "/events/page",
+    "route": "/events",
+    "kb": 143.2,
+    "pageOnlyKb": 17.1
+  },
+  {
+    "page": "/social/(hub)/@drawer/(.)post/[id]/page",
+    "route": "/social/(.)post/[id]",
+    "kb": 142.3,
+    "pageOnlyKb": 12.4
+  },
+  {
+    "page": "/social/(hub)/@drawer/preview/(.)post/[id]/page",
+    "route": "/social/preview/(.)post/[id]",
+    "kb": 142.3,
+    "pageOnlyKb": 12.4
+  },
+  {
+    "page": "/social/(hub)/post/[id]/page",
+    "route": "/social/post/[id]",
+    "kb": 142.3,
+    "pageOnlyKb": 12.4
+  },
+  {
+    "page": "/social/(hub)/preview/post/[id]/page",
+    "route": "/social/preview/post/[id]",
+    "kb": 142.3,
+    "pageOnlyKb": 12.4
+  },
+  {
+    "page": "/campaigns/[id]/prospect/page",
+    "route": "/campaigns/[id]/prospect",
+    "kb": 142.2,
+    "pageOnlyKb": 16.6
+  },
+  {
+    "page": "/social/(hub)/analytics/cost/page",
+    "route": "/social/analytics/cost",
+    "kb": 141.4,
+    "pageOnlyKb": 8.5
+  },
+  {
+    "page": "/social/(hub)/preview/analytics/cost/page",
+    "route": "/social/preview/analytics/cost",
+    "kb": 141.4,
+    "pageOnlyKb": 8.5
+  },
+  {
+    "page": "/hub/inboxes/page",
+    "route": "/hub/inboxes",
+    "kb": 141.2,
+    "pageOnlyKb": 13.5
+  },
+  {
+    "page": "/hub/analytics/page",
+    "route": "/hub/analytics",
+    "kb": 140.7,
+    "pageOnlyKb": 13
+  },
+  {
+    "page": "/memes/lfd-lab/page",
+    "route": "/memes/lfd-lab",
+    "kb": 139.7,
+    "pageOnlyKb": 14.1
+  },
+  {
+    "page": "/campaigns/[id]/review/page",
+    "route": "/campaigns/[id]/review",
+    "kb": 138.3,
+    "pageOnlyKb": 12.7
+  },
+  {
+    "page": "/social/(hub)/analytics/page",
+    "route": "/social/analytics",
+    "kb": 138.2,
+    "pageOnlyKb": 7.9
+  },
+  {
+    "page": "/social/(hub)/preview/analytics/page",
+    "route": "/social/preview/analytics",
+    "kb": 138.2,
+    "pageOnlyKb": 7.9
+  },
+  {
+    "page": "/social/(hub)/analytics/[type]/page",
+    "route": "/social/analytics/[type]",
+    "kb": 137.6,
+    "pageOnlyKb": 7.3
+  },
+  {
+    "page": "/social/(hub)/preview/analytics/[type]/page",
+    "route": "/social/preview/analytics/[type]",
+    "kb": 137.6,
+    "pageOnlyKb": 7.3
+  },
+  {
+    "page": "/social/(hub)/health/page",
+    "route": "/social/health",
+    "kb": 136.1,
+    "pageOnlyKb": 6.3
+  },
+  {
+    "page": "/social/(hub)/preview/health/page",
+    "route": "/social/preview/health",
+    "kb": 136.1,
+    "pageOnlyKb": 6.3
+  },
+  {
+    "page": "/hub/queue/page",
+    "route": "/hub/queue",
+    "kb": 136,
+    "pageOnlyKb": 8.3
+  },
+  {
+    "page": "/page",
+    "route": "/",
+    "kb": 135.5,
+    "pageOnlyKb": 9.9
+  },
+  {
+    "page": "/dashboards/(admin)/tokens/page",
+    "route": "/dashboards/tokens",
+    "kb": 135.3,
+    "pageOnlyKb": 8.3
+  },
+  {
+    "page": "/seo/page",
+    "route": "/seo",
+    "kb": 134.9,
+    "pageOnlyKb": 9.1
+  },
+  {
+    "page": "/social/(hub)/preview/analytics/compare/page",
+    "route": "/social/preview/analytics/compare",
+    "kb": 134.9,
+    "pageOnlyKb": 1.9
+  },
+  {
+    "page": "/social/(hub)/analytics/compare/page",
+    "route": "/social/analytics/compare",
+    "kb": 134.9,
+    "pageOnlyKb": 1.9
+  },
+  {
+    "page": "/reels/analytics/performance/page",
+    "route": "/reels/analytics/performance",
+    "kb": 134.6,
+    "pageOnlyKb": 7.8
+  },
+  {
+    "page": "/hub/conversations/page",
+    "route": "/hub/conversations",
+    "kb": 134.4,
+    "pageOnlyKb": 6.7
+  },
+  {
+    "page": "/explainers/reels/page",
+    "route": "/explainers/reels",
+    "kb": 134.2,
+    "pageOnlyKb": 8.4
+  },
+  {
+    "page": "/social/(hub)/health/night/[date]/page",
+    "route": "/social/health/night/[date]",
+    "kb": 133.9,
+    "pageOnlyKb": 4.1
+  },
+  {
+    "page": "/social/(hub)/preview/health/night/[date]/page",
+    "route": "/social/preview/health/night/[date]",
+    "kb": 133.9,
+    "pageOnlyKb": 4.1
+  },
+  {
+    "page": "/traffic/page",
+    "route": "/traffic",
+    "kb": 133.5,
+    "pageOnlyKb": 7.7
+  },
+  {
+    "page": "/dashboards/(admin)/(main)/projects/[id]/page",
+    "route": "/dashboards/projects/[id]",
+    "kb": 132.7,
+    "pageOnlyKb": 5.2
+  },
+  {
+    "page": "/social/(hub)/content/library/photos/page",
+    "route": "/social/content/library/photos",
+    "kb": 132.4,
+    "pageOnlyKb": 2.6
+  },
+  {
+    "page": "/social/(hub)/preview/content/library/photos/page",
+    "route": "/social/preview/content/library/photos",
+    "kb": 132.4,
+    "pageOnlyKb": 2.6
+  },
+  {
+    "page": "/reel-ai-drama/lab/page",
+    "route": "/reel-ai-drama/lab",
+    "kb": 132,
+    "pageOnlyKb": 6.2
+  },
+  {
+    "page": "/memes/lab/page",
+    "route": "/memes/lab",
+    "kb": 131.8,
+    "pageOnlyKb": 6.2
+  },
+  {
+    "page": "/reels/analytics/page",
+    "route": "/reels/analytics",
+    "kb": 131.8,
+    "pageOnlyKb": 5
+  },
+  {
+    "page": "/social/(hub)/content/library/music/page",
+    "route": "/social/content/library/music",
+    "kb": 131.4,
+    "pageOnlyKb": 1.6
+  },
+  {
+    "page": "/social/(hub)/preview/content/library/music/page",
+    "route": "/social/preview/content/library/music",
+    "kb": 131.4,
+    "pageOnlyKb": 1.6
+  },
+  {
+    "page": "/reels/health/page",
+    "route": "/reels/health",
+    "kb": 131.1,
+    "pageOnlyKb": 4.3
+  },
+  {
+    "page": "/social/(hub)/@drawer/page",
+    "route": "/social",
+    "kb": 130.4,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/social/(hub)/@drawer/[...rest]/page",
+    "route": "/social/[...rest]",
+    "kb": 130.4,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/social/(hub)/house/page",
+    "route": "/social/house",
+    "kb": 130.4,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/social/(hub)/content/pools/[type]/page",
+    "route": "/social/content/pools/[type]",
+    "kb": 130.4,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/social/(hub)/preview/house/page",
+    "route": "/social/preview/house",
+    "kb": 130.4,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/social/(hub)/preview/content/pools/[type]/page",
+    "route": "/social/preview/content/pools/[type]",
+    "kb": 130.4,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/dashboards/(admin)/(main)/projects/new/page",
+    "route": "/dashboards/projects/new",
+    "kb": 130.2,
+    "pageOnlyKb": 2.7
+  },
+  {
+    "page": "/watch/[token]/page",
+    "route": "/watch/[token]",
+    "kb": 130.1,
+    "pageOnlyKb": 3.9
+  },
+  {
+    "page": "/real-case/lab/page",
+    "route": "/real-case/lab",
+    "kb": 129.4,
+    "pageOnlyKb": 3.8
+  },
+  {
+    "page": "/dashboards/(admin)/(main)/page",
+    "route": "/dashboards",
+    "kb": 129,
+    "pageOnlyKb": 1.5
+  },
+  {
+    "page": "/real-or-ai/lab/page",
+    "route": "/real-or-ai/lab",
+    "kb": 127.6,
+    "pageOnlyKb": 2
+  },
+  {
+    "page": "/dashboards/d/[token]/page",
+    "route": "/dashboards/d/[token]",
+    "kb": 126.9,
+    "pageOnlyKb": 1.1
+  },
+  {
+    "page": "/explainers/settings/page",
+    "route": "/explainers/settings",
+    "kb": 126.3,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/d/[token]/page",
+    "route": "/d/[token]",
+    "kb": 126.2,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/memes/page",
+    "route": "/memes",
+    "kb": 126.2,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/stories/history/page",
+    "route": "/stories/history",
+    "kb": 126.2,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/stories/settings/page",
+    "route": "/stories/settings",
+    "kb": 126.2,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/stories/roa-lab/page",
+    "route": "/stories/roa-lab",
+    "kb": 126.2,
+    "pageOnlyKb": 0.5
+  },
+  {
+    "page": "/stories/page",
+    "route": "/stories",
+    "kb": 126.2,
+    "pageOnlyKb": 0.5
+  }
+]
