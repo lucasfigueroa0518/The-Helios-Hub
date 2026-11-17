@@ -12,6 +12,22 @@ import type { Vertical } from '@/lib/social-hub/types';
 /** How a type's pool answers a person's moves: `live` follows the queue (pin, drag, archive), `archive_only` takes Archive only, `none` has neither. */
 export type QueueMode = 'live' | 'archive_only' | 'none';
 
+/**
+ * The pool screen's per-type settings (pool UI contract 2026-11-15 §2). Everything else about the pool screen is
+ * fixed by the standard. `moves.pin/drag/archive` agree with `queue` (tests/pool-rules.test.ts checks it).
+ */
+export type PoolConfig = {
+  /** What one entry is called: { one: 'topic', many: 'topics' }. */
+  noun: { one: string; many: string };
+  /** The number column: score (2 decimals), rank (1, 2, 3), or none. List order: score and rank best first, newest by createdAt. */
+  order: 'score' | 'rank' | 'newest';
+  /** Which buttons a row offers. */
+  moves: { pin: boolean; drag: boolean; archive: boolean; make: boolean; rank: boolean; exclude: boolean };
+};
+
+/** Pin, hold-and-drag and Archive, with or without Make it (every pool is on the live queue, Tommy 2026-11-16). */
+const liveMoves = (make: boolean): PoolConfig['moves'] => ({ pin: true, drag: true, archive: true, make, rank: false, exclude: false });
+
 /** The words of the Generate switch in the settings drawer. */
 export type GenerateCopy = { label: string; confirm: string; hint: string };
 
@@ -39,6 +55,8 @@ export type TypeConfig = {
   groupNoun: 'series' | 'cities';
   /** A drag in the bench needs a group picked first (each series is its own queue). */
   dragNeedsGroup: boolean;
+  /** The pool screen's settings: noun, number column, row buttons. */
+  pool: PoolConfig;
 };
 
 /** slots/write.ts writeCaps takes 0–10. */
@@ -64,6 +82,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'idea', many: 'ideas' }, order: 'score', moves: liveMoves(false) },
   },
   explainers: {
     title: 'Explainers',
@@ -78,6 +97,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'topic', many: 'topics' }, order: 'score', moves: liveMoves(true) },
   },
   carousels: {
     title: 'Carousels',
@@ -92,6 +112,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'story', many: 'stories' }, order: 'score', moves: liveMoves(false) },
   },
   stories: {
     title: 'Stories',
@@ -106,14 +127,15 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: true,
+    pool: { noun: { one: 'idea', many: 'ideas' }, order: 'score', moves: liveMoves(false) },
   },
-  // Its pool is the last run's record, so there is no queue to steer; Last Few Days runs once a day.
+  // Last Few Days runs once a day; its night picks stories in queue order (pins first, then drag order; Tommy, 2026-11-16).
   last_few_days: {
     title: 'Last Few Days',
     benchNote:
       'The latest run’s queue: the stories in its post, the ones it dropped and why, and what was next in line. Major headlines lead; Text on Screen ideas fill the rest.',
     maxCap: 1,
-    queue: 'archive_only',
+    queue: 'live',
     seedable: true,
     postsNoun: 'Last Few Days posts',
     generate: {
@@ -126,6 +148,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'story', many: 'stories' }, order: 'rank', moves: liveMoves(false) },
   },
   // At most twice a day (Miami and Boston, AE-29). No seed path yet (decided 2026-11-02: not built).
   ai_events: {
@@ -133,7 +156,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     benchNote:
       'The week’s ranked events, city by city: each city’s top 10 is badged on the site and the post teases from it. Gated and excluded events stay listed with the reason. Open a row to see where its score comes from.',
     maxCap: 2,
-    queue: 'none',
+    queue: 'live',
     seedable: false,
     postsNoun: 'AI Events posts',
     generate: {
@@ -146,13 +169,14 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: true,
     groupNoun: 'cities',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'event', many: 'events' }, order: 'rank', moves: liveMoves(false) },
   },
   field_notes: {
     title: 'Field Notes',
     benchNote:
       'Tips waiting for a post, newest first: from vendor docs, GitHub, Hacker News, RSS and the ones you seed. Generate picks one, pairs it with photos from the pool and renders the carousel. A tip that already made a post shows that post.',
     maxCap: 1,
-    queue: 'none',
+    queue: 'live',
     seedable: true,
     postsNoun: 'Field Notes posts',
     generate: {
@@ -166,6 +190,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'tip', many: 'tips' }, order: 'score', moves: liveMoves(true) },
   },
   // Pitches come from weekly development sessions, not seeds; the night makes up to three a day.
   reel_ai_drama: {
@@ -186,6 +211,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     weekPool: false,
     groupNoun: 'series',
     dragNeedsGroup: false,
+    pool: { noun: { one: 'pitch', many: 'pitches' }, order: 'rank', moves: liveMoves(true) },
   },
 };
 
@@ -209,5 +235,5 @@ const idsWhere = (test: (c: TypeConfig) => boolean): ReadonlySet<string> =>
 
 /** Types whose nights follow the queue (see lib/social-hub/queue.ts QUEUE_LIVE). */
 export const QUEUE_LIVE_TYPES: ReadonlySet<string> = idsWhere((c) => c.queue === 'live');
-/** Types that take Archive but not Pin or drag. */
+/** Types that take Archive but not Pin or drag. Empty since every pool went live (2026-11-16); kept so callers compile. */
 export const ARCHIVE_ONLY_TYPES: ReadonlySet<string> = idsWhere((c) => c.queue === 'archive_only');

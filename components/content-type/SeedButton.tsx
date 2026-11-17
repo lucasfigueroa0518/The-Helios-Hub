@@ -5,9 +5,6 @@ import { useEffect, useState, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus } from 'lucide-react';
 
-import '@/app/reels/reels.css';
-import '@/components/content-type/type-hub.css';
-
 import { Drawer } from '@/app/reels/ui';
 import { CarouselSeedForm } from '@/components/content-type/CarouselSeedForm';
 import { ExplainerSeedForm } from '@/components/content-type/ExplainerSeedForm';
@@ -37,7 +34,15 @@ const FORMS: Record<SeedVertical, ComponentType<SeedFormProps>> = {
  * Only the form inside the drawer differs by type (what that type needs and what it costs). Nothing is made by a seed.
  * Renders nothing for a pool with no seed path (AI Events).
  */
-export function SeedButton({ vertical }: { vertical: Vertical }) {
+export function SeedButton({ vertical, label = SEED_BUTTON.label, disabled = false, buttonClass = 'rh-btn' }: {
+  vertical: Vertical;
+  /** The button's words where the pool names its items ("Seed a topic"); the drawer keeps its own title. */
+  label?: string;
+  /** Off, with the reason shown beside it by the page (the pool is at its cap). */
+  disabled?: boolean;
+  /** The page's own button class (the pool screen uses `pl-btn`). */
+  buttonClass?: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -55,8 +60,8 @@ export function SeedButton({ vertical }: { vertical: Vertical }) {
   return (
     <>
       <span className="rh rh--scope">
-        <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
-          <Plus size={15} /> {SEED_BUTTON.label}
+        <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}>
+          <Plus size={15} /> {label}
         </button>
       </span>
       {mounted && (open || note)

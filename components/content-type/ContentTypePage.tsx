@@ -7,7 +7,8 @@ import { GenerationProgress } from '@/components/content-type/GenerationProgress
 import { RunProgressProvider } from '@/components/content-type/run-progress';
 import { TypeHub } from '@/components/content-type/TypeHub';
 import { LoadError } from '@/components/social-hub/LoadError';
-import { readPosting } from '@/lib/content-type/posting';
+import { poolPageData } from '@/components/content-type/pool/pool-data';
+import { costPerPost, readPosting } from '@/lib/content-type/posting';
 import { TYPE_CONFIG, type PageVertical } from '@/lib/content-type/config';
 import { typeHubModel } from '@/lib/content-type/model';
 import { loadForPage } from '@/lib/social-hub/live';
@@ -18,12 +19,12 @@ import '@/app/explainers/explainers.css';
 import '@/app/social-hub.css';
 import '@/app/social/(hub)/hub-content.css';
 import './type-hub.css';
+import './pool/pool.css';
 
 /**
- * A content type's page (Carousels, Stories, Explainers, Last Few Days, AI Events, Field Notes, AI Drama) in the Text on
- * Screen format: title and the Live switch up top, a row of days, that day's
- * posts, and the bench. The generate buttons, Live and settings write, so they
- * are built here, outside the read-only hub code.
+ * A content type's page (Carousels, Stories, Explainers, Last Few Days, AI Events, Field Notes, AI Drama): title and
+ * the header controls (Run, Settings, Live) up top, then the standard pool screen (next three days, Ideas | Made,
+ * the panels). The generate buttons, Live and settings write, so they are built here, outside the read-only hub code.
  */
 export async function ContentTypePage({ vertical, top, openSettings = false }: { vertical: PageVertical; top?: ReactNode; openSettings?: boolean }) {
   const session = await getSession();
@@ -38,7 +39,10 @@ export async function ContentTypePage({ vertical, top, openSettings = false }: {
   ]);
   if ('error' in loaded) return <div className="rh"><div className="rh__inner"><LoadError message={loaded.error} /></div></div>;
 
-  const model = typeHubModel(loaded, vertical, new Date());
+  // One `now` for the model and the pool screen, so the board and Up next agree.
+  const now = new Date();
+  const model = typeHubModel(loaded, vertical, now);
+  const pool = poolPageData(loaded, vertical, now, costPerPost(loaded.posts, vertical, now));
 
   const Hub = parts.hub ?? TypeHub;
   return (
@@ -58,7 +62,7 @@ export async function ContentTypePage({ vertical, top, openSettings = false }: {
           </>
         }
         progress={<GenerationProgress />}
-        benchNote={config.benchNote ?? undefined}
+        pool={pool}
       />
     </RunProgressProvider>
   );

@@ -15,6 +15,7 @@ import { MAJOR_NEWS, SAME_EVENT } from '@/lib/stories/questions';
 import { leadOf } from '@/lib/stories/scores';
 import { companyKey } from '@/lib/social/ingest/select/companies';
 import type { JevAsk } from '@/lib/social/jev/client';
+import { orderForNight, type NightQueue } from '@/lib/social-hub/queue';
 
 import type { Lane, LfdCandidate, Pick } from './types';
 
@@ -160,7 +161,47 @@ export function slideOrder(picks: Pick[], now: Date = new Date()): Pick[] {
   return [...leads, ...rundown];
 }
 
-type LeadEntry = { c: LfdCandidate; lane: 'major' | 'builder'; margin: number };
+export type LeadEntry = { c: LfdCandidate; lane: 'major' | 'builder'; margin: number };
+
+/** The shared queue as the Selector reads it, by story key (lib/social-hub/queue.ts NightQueue, `last_few_days:story:` stripped). */
+export type LfdQueue = { pins: NightQueue['pins']; placed: NightQueue['placed']; archived: NightQueue['archived']; demoted?: ReadonlySet<string> };
+
+const named = (c: LfdCandidate, ids: ReadonlySet<string> | ReadonlyMap<string, unknown>) => ids.has(c.key) || c.refs.some((r) => ids.has(r));
+/** The queue id a candidate answers to: its key, or a source id the hub named it by. */
+const queueId = (c: LfdCandidate, ids: ReadonlySet<string> | ReadonlyMap<string, unknown>) => (ids.has(c.key) ? c.key : c.refs.find((r) => ids.has(r)) ?? c.key);
+
+/**
+ * The lanes in the shared queue's order (Tommy, 2026-11-16: Last Few Days follows the queue). Pins leave the lanes (the
+ * Selector takes them first, after seeds); archived stories are gone; a dragged story moves within its lane to where its
+ * key sorts. The hub's Ideas view scores the last run's queue by position (0, -1, -2, ... in post order, leads before the
+ * rundown: lib/social-hub/adapters/last-few-days.ts), so tonight's lanes are scored the same way to place a drag among them.
+ */
+export function applyLfdQueue(leads: LeadEntry[], rundown: LfdCandidate[], queue: LfdQueue): { leads: LeadEntry[]; rundown: LfdCandidate[]; pinned: Array<{ c: LfdCandidate; at: number }> } {
+  const pinSet = new Set(queue.pins);
+  const pinAt = new Map(queue.pins.map((id, i) => [id, i]));
+  const pinned: Array<{ c: LfdCandidate; at: number }> = [];
+  const keep = (c: LfdCandidate) => {
+    if (named(c, queue.archived)) return false;
+    if (named(c, pinSet)) {
+      if (!pinned.some((p) => p.c.key === c.key)) pinned.push({ c, at: pinAt.get(queueId(c, pinSet))! });
+      return false;
+    }
+    return true;
+  };
+  const liveLeads = leads.filter((x) => keep(x.c));
+  const liveRundown = rundown.filter(keep);
+  // Position scores over the combined list, leads first: the hub's scale.
+  const position = new Map<LfdCandidate, number>();
+  [...liveLeads.map((x) => x.c), ...liveRundown].forEach((c, i) => position.set(c, -i));
+  const placed = new Map<string, number>();
+  for (const c of [...liveLeads.map((x) => x.c), ...liveRundown]) if (named(c, queue.placed)) placed.set(c.key, queue.placed.get(queueId(c, queue.placed))!);
+  const night = { pins: [], placed, archived: new Set<string>(), demoted: new Set([...liveLeads.map((x) => x.c), ...liveRundown].filter((c) => queue.demoted && named(c, queue.demoted)).map((c) => c.key)) };
+  return {
+    leads: orderForNight(liveLeads, (x) => x.c.key, (x) => position.get(x.c)!, night),
+    rundown: orderForNight(liveRundown, (c) => c.key, (c) => position.get(c)!, night),
+    pinned: pinned.sort((a, b) => a.at - b.at),
+  };
+}
 
 export class Selector {
   readonly picks: Pick[] = [];
@@ -169,6 +210,8 @@ export class Selector {
   private readonly rundown: LfdCandidate[];
   private readonly tried = new Set<string>();
   private readonly forced: LfdCandidate[];
+  /** Stories a person pinned in the hub's queue, in the order pinned: taken after the seeds, before the lanes. */
+  readonly pinned: LfdCandidate[] = [];
   /** Seeds taken that the last post already covered (they are taken anyway; the run records it). */
   readonly repeats = new Set<string>();
 
@@ -182,14 +225,25 @@ export class Selector {
     forced: LfdCandidate[] = [],
     /** The builder window (7 days) is measured from here. */
     private readonly now: Date = new Date(),
+    /** The hub's queue (pins, drags, archives) by story key. Absent: the lanes' own order, as before. */
+    queue?: LfdQueue,
   ) {
     this.forced = forced.slice(0, MAX_SEEDS);
-    this.leads = leads
+    const byMargin = leads
       .map((c) => ({ c, lead: leadFor(c, now) }))
       .filter((x): x is { c: LfdCandidate; lead: NonNullable<ReturnType<typeof leadFor>> } => x.lead !== null)
       .map(({ c, lead }) => ({ c, lane: lead.lane, margin: lead.margin }))
       .sort((a, b) => b.margin - a.margin);
-    this.rundown = [...rundown].sort(rundownOrder);
+    const byNet = [...rundown].sort(rundownOrder);
+    if (queue && (queue.pins.length || queue.placed.size || queue.archived.size || queue.demoted?.size)) {
+      const q = applyLfdQueue(byMargin, byNet, queue);
+      this.leads = q.leads;
+      this.rundown = q.rundown;
+      this.pinned = q.pinned.map((p) => p.c);
+    } else {
+      this.leads = byMargin;
+      this.rundown = byNet;
+    }
   }
 
   /** The lane a seed takes: its lead lane, else the rundown. */
@@ -199,6 +253,14 @@ export class Selector {
 
   async fill(): Promise<Pick[]> {
     for (const c of this.forced) {
+      if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) continue;
+      this.tried.add(c.key);
+      if (await this.coveredLastTime(c)) this.repeats.add(c.key);
+      this.picks.push({ ...c, lane: this.laneOf(c) });
+    }
+    // Pins next, in the order pinned: a person's call, like a seed (no company cap; a repeat is taken and recorded).
+    for (const c of this.pinned) {
+      if (this.picks.length >= MAX_STORIES) break;
       if (this.picks.some((p) => p.key === c.key || p.refs.some((r) => c.refs.includes(r)))) continue;
       this.tried.add(c.key);
       if (await this.coveredLastTime(c)) this.repeats.add(c.key);

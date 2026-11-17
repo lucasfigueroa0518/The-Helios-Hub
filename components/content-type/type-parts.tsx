@@ -3,9 +3,9 @@ import type { ReactNode } from 'react';
 
 import { SettingsForm } from '@/app/explainers/settings/settings-form';
 import { RebuildPostButton } from '@/components/content-type/AiEventsPoolButtons';
-import { SeedButton } from '@/components/content-type/SeedButton';
 import { AiEventsRunButton, CarouselRunButton, DramaDevelopButton, IdeaCycleButton, LfdRunButton, StoriesGenerate } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
+import { FieldNotesHub } from '@/components/content-type/FieldNotesHub';
 import { ReelAiDramaHub } from '@/components/content-type/ReelAiDramaHub';
 import { ReelAiDramaSettingsForm } from '@/components/content-type/ReelAiDramaSettingsForm';
 import type { TypeHub } from '@/components/content-type/TypeHub';
@@ -26,11 +26,11 @@ import type { LoadedPage } from '@/lib/social-hub/live';
 export type TypeParts<D = undefined> = {
   /** Read once, alongside the page data, for the settings section. */
   load?: () => Promise<D>;
-  /** The header buttons that make or seed content. */
+  /** The header buttons that make content (Seed sits beside the pool's tabs, drawn by TypeHub). */
   actions: (page: LoadedPage) => ReactNode;
   /** The one extra section under the common settings. */
   settingsSection?: (data: D) => ReactNode;
-  /** A thin client wrapper of TypeHub that adds a per-idea button (functions can't cross to the client). Default: TypeHub. */
+  /** A thin client wrapper of TypeHub that hands in the type's Make it (functions can't cross to the client). Default: TypeHub. */
   hub?: typeof TypeHub;
 };
 
@@ -46,9 +46,9 @@ type RenderingView = { error: string } | Awaited<ReturnType<typeof loadSettingsV
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
-  carousels: defineParts({ actions: () => <><CarouselRunButton /><SeedButton vertical="carousels" /></> }),
-  stories: defineParts({ actions: () => <><StoriesGenerate /><SeedButton vertical="stories" /></> }),
-  last_few_days: defineParts({ actions: () => <><LfdRunButton /><SeedButton vertical="last_few_days" /></> }),
+  carousels: defineParts({ actions: () => <CarouselRunButton /> }),
+  stories: defineParts({ actions: () => <StoriesGenerate /> }),
+  last_few_days: defineParts({ actions: () => <LfdRunButton /> }),
   ai_events: defineParts({
     // Rebuild post re-renders the coming week's post from the pool; with none waiting there is nothing to rebuild.
     actions: (page) => (
@@ -58,11 +58,11 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
       </>
     ),
   }),
-  // Generate picks one tip and renders its carousel on the pool's photos; the click approves that run's capped spend.
-  field_notes: defineParts({ actions: () => <><FieldNotesRunButton /><SeedButton vertical="field_notes" /></> }),
+  // Generate picks the next tip and renders its carousel on the pool's photos; Make it on a row makes that tip. Each click approves that run's capped spend.
+  field_notes: defineParts({ actions: () => <FieldNotesRunButton />, hub: FieldNotesHub }),
   explainers: defineParts<RenderingView>({
     load: () => explainersDb().then(loadSettingsView).catch((error: unknown) => ({ error: message(error) })),
-    actions: () => <><SeedButton vertical="explainers" /><IdeaCycleButton /></>,
+    actions: () => <IdeaCycleButton />,
     hub: ExplainersHub,
     settingsSection: (view) =>
       'error' in view ? (

@@ -191,6 +191,35 @@ export function orderForNight<T>(
   return [...pinned, ...out, ...sunk];
 }
 
+/** A night's view of a type's queue, by native id: pins in the order pinned, dragged keys, archived and (old) demoted ideas. */
+export type NightQueue = { pins: string[]; placed: Map<string, number>; archived: Set<string>; demoted: Set<string> };
+
+export const EMPTY_NIGHT: NightQueue = { pins: [], placed: new Map(), archived: new Set(), demoted: new Set() };
+
+/**
+ * A type's queue for its night worker, from its active moves (oldest first), with each idea id's `prefix` stripped (moves
+ * on other prefixes are ignored). The same rule as views/moves tonightMoves for a type on the queue, without its QUEUE_LIVE
+ * gate: Field Notes, Last Few Days and AI Events follow their queue (Tommy, 2026-11-16). A pin with a recorded skip steps
+ * aside; an archived idea is never pinned or placed; a pin outranks a placement.
+ */
+export function nightQueue(
+  moves: ReadonlyArray<{ ideaId: string; kind: string; sortKey?: number | null; skipReason?: string | null }>,
+  prefix = '',
+): NightQueue {
+  const mine = moves.filter((m) => m.ideaId.startsWith(prefix)).map((m) => ({ ...m, id: m.ideaId.slice(prefix.length) }));
+  const archived = new Set(mine.filter((m) => m.kind === 'archive').map((m) => m.id));
+  const lastPin = new Map<string, { skipReason?: string | null }>();
+  const demoted = new Set<string>();
+  for (const m of mine) {
+    if (m.kind === 'pin' || m.kind === 'promote') { lastPin.delete(m.id); lastPin.set(m.id, m); demoted.delete(m.id); }
+    else if (m.kind === 'demote') { lastPin.delete(m.id); demoted.add(m.id); }
+  }
+  const pins = [...lastPin.entries()].filter(([id, m]) => m.skipReason == null && !archived.has(id)).map(([id]) => id);
+  const placed = new Map<string, number>();
+  for (const m of mine) if (m.kind === 'place' && m.sortKey != null && !lastPin.has(m.id) && !archived.has(m.id)) placed.set(m.id, m.sortKey);
+  return { pins, placed, archived, demoted: new Set([...demoted].filter((id) => !archived.has(id))) };
+}
+
 /**
  * The queue as a page shows it: the cap's overflow removed (lowest-ranked unprotected ideas), so a type whose pool is not
  * stored by us (a scored slate, a run's shortlist) still shows no more than POOL_CAP open ideas. Pinned, dragged, yours and

@@ -7,7 +7,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseRankMove } from '@/lib/content-type/idea-rank';
 import { reelPosts } from '@/lib/social-hub/adapters/reels';
 import { narrowStep, parseRunBody, planFrom, stepsFor, typeDay, type RunInputs } from '@/lib/social-hub/run-today';
 import type { HubIdea, HubPost } from '@/lib/social-hub/types';
@@ -118,15 +117,6 @@ test('a type’s day counts what holds it and names what is missing', () => {
   const d = typeDay(quotaCandidates(data, 'reels', NOW), 2);
   assert.equal(d.held, 1);
   assert.deepEqual(d.missing.map((m) => m.ref), ['00000002-0000-4000-8000-000000000000']);
-});
-
-test('a rank move must name a known type, a kind, and an idea of that type', () => {
-  assert.deepEqual(parseRankMove({ vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'promote' }), { vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'promote' });
-  assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: 'explainers:topic:x', kind: 'promote' }), /Unknown idea/);
-  assert.throws(() => parseRankMove({ vertical: 'reels', ideaId: IDEAS[0]!.id, kind: 'boost' }), /promote or demote/);
-  assert.ok(parseRankMove({ vertical: 'carousels', ideaId: 'carousels:story:https://www.theverge.com/x', kind: 'demote' }));
-  // Google News story ids are 500-character URLs.
-  assert.ok(parseRankMove({ vertical: 'carousels', ideaId: `carousels:story:https://news.google.com/rss/articles/${'A'.repeat(480)}`, kind: 'promote' }));
 });
 
 // ── Explainers: what the night made today holds the day's place (2026-10-13) ──

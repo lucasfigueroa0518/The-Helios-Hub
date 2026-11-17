@@ -46,6 +46,8 @@ import { asIntakeQuery, saveIntakeTips, type FieldNotesIntakeDeps, type FieldNot
 import { draftToSlideInputs, layoutsToSlides, splitProblems } from './post';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
+import { markPromoteUsed, recordPromoteSkip, type MovesQuery } from '@/lib/social-hub/moves-store';
+import { finishNightPlacements, readNightQueue } from '@/lib/social-hub/queue-store';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 import { checkPhotoPool, MIN_POST_PHOTOS, pickPhotos, pickPostPhotos, pickReplacement, publishedPhotoIds } from './photos/pool';
 import { readUsedLedger, USED_PHOTO_DAYS } from '@/lib/photos/used';
@@ -57,7 +59,7 @@ import type { TipCandidate } from './sources/candidate';
 import { FIELD_NOTES_SOURCES_CONFIG, type FieldNotesSourcesConfig } from './sources/config';
 import { dedupeCandidates } from './sources/candidate';
 import { scoreCandidate } from './sources/score';
-import { admitSeeds, MAX_CANDIDATES_PER_SOURCE, scoringOrder, selectTips } from './sources/select';
+import { admitSeeds, MAX_CANDIDATES_PER_SOURCE, scoringOrder, selectTips, type SelectQueue } from './sources/select';
 import {
   expireOldTips,
   freeSlug,
@@ -77,6 +79,7 @@ import {
   setTipSubject,
   storedSourceUrls,
   type RunKind,
+  type RunTrigger,
   type StoredTip,
 } from './store';
 import type { ParsedFieldNotesSettings } from './settings';
@@ -138,7 +141,23 @@ export type FieldNotesRunInput = {
   settings: Pick<ParsedFieldNotesSettings, 'photoRestPosts' | 'maxPendingDrafts' | 'tipExpiryDays' | 'darkenCap'>;
   /** The New York date the post is for (Bald-Eagle D4: the clock's target, 2 days ahead). Absent: today (postDateFor). */
   nyDate?: string;
+  /**
+   * What started the run: the night's clock ('scheduled') or a person (Generate, Make it: 'manual'). Only a scheduled run
+   * uses up the drags it read (as Last Few Days' night does), so a person's Generate never wipes the order. Absent: read
+   * from field_notes.runs by runId (unknown reads as manual).
+   */
+  trigger?: RunTrigger;
+  /**
+   * The shared idea queue by tip id (pins, drags, archives). Set by runFieldNotes from social_hub.idea_adjustments
+   * (readNightQueue); a caller may pass one (tests). Absent: read here.
+   */
+  queue?: SelectQueue;
 };
+
+/** The hub's idea id for a tip is `field_notes:tip:<tip id>` (lib/social-hub/adapters/field-notes.ts). */
+export const FIELD_NOTES_TIP_IDEA = 'field_notes:tip:';
+/** Why a pinned tip could not go on a post (shown on the pin in the hub). */
+export const PIN_NOT_WAITING = 'the tip is no longer waiting (used, rejected or expired)';
 
 export type FieldNotesRunRecord = Record<string, unknown> & { kind: RunKind; seedTipId: string | null };
 
@@ -168,8 +187,24 @@ export function tipToCandidate(t: Tip & { publishedAt?: string | null }): TipCan
   };
 }
 
+/** What started a run: the input's trigger, else the run row's. Unreadable reads as manual (a drag is never wiped by doubt). */
+async function runTrigger(q: FieldNotesEngineDeps['query'], input: FieldNotesRunInput): Promise<RunTrigger> {
+  if (input.trigger) return input.trigger;
+  try {
+    const { rows } = await q<{ trigger: RunTrigger }>(`SELECT trigger FROM field_notes.runs WHERE id::text = $1`, [input.runId]);
+    return rows[0]?.trigger === 'scheduled' ? 'scheduled' : 'manual';
+  } catch {
+    return 'manual';
+  }
+}
+
 export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRunInput): Promise<FieldNotesRunResult> {
   const q = d.query;
+  const movesQ = q as unknown as MovesQuery;
+  // The shared queue (Tommy, 2026-11-16: Field Notes joins the live queue): pins first, then the dragged order; archived
+  // tips are never picked. An unreadable moves table is an empty queue (the run as before).
+  const night = input.queue ? { ...input.queue, readAt: d.now } : await readNightQueue(movesQ, 'field_notes', FIELD_NOTES_TIP_IDEA);
+  input = { ...input, queue: night };
   const budget: FieldNotesBudget = createFieldNotesBudget({ capUsd: input.capUsd });
   const record: FieldNotesRunRecord = { kind: input.kind, seedTipId: input.seedTipId };
   const spend = (): Spend => ({ claudeUsd: budget.claudeUsd(), jevUsd: budget.jevUsd() });
@@ -223,7 +258,19 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
       if (!seed || seed.status !== 'candidate') return skipped('seed-unavailable', `the seeded tip ${input.seedTipId} is missing or already used.`);
       seeds.push(seed);
     }
-    for (const seed of await listUnusedSeedTips(q)) if (!seeds.some((t) => t.id === seed.id)) seeds.push(seed);
+    // Pinned tips next, in the order pinned (a pin is a person's "make this", like a seed): no scoring, the post rules apply.
+    // A pin whose tip is no longer waiting steps aside with why on the pin.
+    const pinnedIds: string[] = [];
+    for (const id of night.pins) {
+      if (seeds.some((t) => t.id === id)) continue;
+      const tip = await getTip(q, id).catch(() => null);
+      if (tip && tip.status === 'candidate') {
+        seeds.push(tip);
+        pinnedIds.push(id);
+      } else await recordPromoteSkip(movesQ, 'field_notes', `${FIELD_NOTES_TIP_IDEA}${id}`, PIN_NOT_WAITING);
+    }
+    for (const seed of await listUnusedSeedTips(q)) if (!seeds.some((t) => t.id === seed.id) && !night.archived.has(seed.id)) seeds.push(seed);
+    if (night.pins.length || night.placed.size || night.archived.size) record.queue = { pinned: pinnedIds, placed: night.placed.size, archived: night.archived.size };
     const seedFit = admitSeeds(seeds, TIP_SLIDES_MAX);
     let tips: Tip[] = seedFit.admitted;
     if (seedFit.waiting.length) record.seedsWaiting = seedFit.waiting.map((t) => t.id);
@@ -469,6 +516,11 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // Each tip's subject becomes its slide's headline, so the same feature found again elsewhere is not posted twice.
     for (const sl of draft.slides) await setTipSubject(q, sl.tipId, sl.name);
     record.post = { id: saved.id, seq: saved.seq, slug, slides: slideObjects.length };
+    // The queue's moves on the tips this post used are spent; the scheduled night (not a person's Generate or chosen tip)
+    // uses up every placement it read, as Last Few Days' night does (lib/lfd/run.ts). Never fails the run.
+    const handMoved = new Set([...night.pins, ...night.placed.keys()]);
+    for (const id of tipIds) if (handMoved.has(id)) await markPromoteUsed(movesQ, 'field_notes', `${FIELD_NOTES_TIP_IDEA}${id}`);
+    if (!input.seedTipId && (await runTrigger(q, input)) === 'scheduled') await finishNightPlacements(movesQ, 'field_notes', undefined, night.readAt);
     return { ok: true, outcome: 'saved', postId: saved.id, seq: saved.seq, slug, slides: slideObjects.length, tipId: tipIds[0]!, tipIds, record: finalRecord(), ...spend() };
   } catch (error) {
     await settleUnsavedTips(`error: ${errorText(error).slice(0, 120)}`);
@@ -573,7 +625,8 @@ async function selectStoredTips(
   const recentWants = o.recentWants;
   // A tip already on the post is never a candidate for another of its slots.
   const takenIds = new Set(o.taken.map((t) => t.id));
-  let tips = (await listSelectableTips(q)).filter((t) => !takenIds.has(t.id));
+  // An archived tip is never picked, nor asked about (the dupe check below costs a Jev call).
+  let tips = (await listSelectableTips(q)).filter((t) => !takenIds.has(t.id) && !input.queue?.archived.has(t.id));
   // Reworded duplicates (field-notes-dupe@1, Tommy 2026-11-08): the top candidates each get one cheap question,
   // "the same feature as anything already posted?"; a yes sets the tip aside for good. Only this run's top picks.
   if (o.budget && d.jev && o.budget.canSpend()) {
@@ -598,8 +651,9 @@ async function selectStoredTips(
         .map((t) => ({
           candidate: tipToCandidate(t), score: t.score as number, answers: {}, usd: 0, questionSetVersion: '',
           leaf: t.leaf, want: t.want, tier: t.tier, purposes: t.purposes, fresh: t.fresh,
-          firstSeenAt: t.createdAt, subject: t.subject,
+          firstSeenAt: t.createdAt, subject: t.subject, id: t.id,
         })),
+      ...(input.queue ? { queue: input.queue } : {}),
       now: d.now,
       tipExpiryDays: input.settings.tipExpiryDays,
       postedUrls: await postedSourceUrls(q),

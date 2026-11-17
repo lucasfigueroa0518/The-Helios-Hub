@@ -41,11 +41,14 @@ test('/ai-events with an empty week: four city tabs at zero, the empty-pool line
   assert.deepEqual(model.groups, ['Miami', 'Boston', 'NYC', 'SF']);
   assert.deepEqual(model.poolWeek, { label: 'Oct 26–Nov 1', editable: true });
   assert.match(html, /aria-label="Cities"/);
-  assert.match(html, /All cities <span class="rh-bench-filter__n">0<\/span>/);
-  for (const city of ['Miami', 'Boston', 'NYC', 'SF']) assert.match(html, new RegExp(`>${city} <span class="rh-bench-filter__n">0</span>`));
+  // The standard pool screen (2026-11-15): city pills, Ideas | Made at zero, the empty-pool line, no post on the board.
+  assert.match(html, /All cities <span class="pl-pill__n">0<\/span>/);
+  for (const city of ['Miami', 'Boston', 'NYC', 'SF']) assert.match(html, new RegExp(`>${city} <span class="pl-pill__n">0</span>`));
+  assert.match(html, /Ideas <span class="pl-seg__n">0<\/span>/);
+  assert.match(html, /Made <span class="pl-seg__n">0<\/span>/);
   assert.match(html, /The pool is empty until the Sunday run ranks the coming week\./);
-  assert.match(html, /Week of Oct 26–Nov 1\. Pin or exclude events, then Rebuild post\./);
-  assert.match(html, /No AI Events posts on this day\./);
+  assert.match(html, /Week of Oct 26–Nov 1\. Pin or archive events, then Rebuild post\./);
+  assert.doesNotMatch(html, /class="pl-slot"[^>]*data-post/);
 });
 
 test('/ai-events with a full week: the post is today’s card, cities ranked with chips, pool buttons and the score bar', async () => {
@@ -59,17 +62,17 @@ test('/ai-events with a full week: the post is today’s card, cities ranked wit
   // Sunday: the week's post is today's card, so the bench is the pool alone, Miami before Boston (AE-02).
   assert.deepEqual(model.bench.map((r) => r.idea.id), [`ai_events:event:${b}`, `ai_events:event:${a}`]);
   assert.deepEqual(model.days.find((d) => d.date === '2026-10-25')?.cards.map((c) => c.post.id), [`ai_events:${id}`]);
-  assert.match(html, /All cities <span class="rh-bench-filter__n">2<\/span>/);
-  assert.match(html, />Miami <span class="rh-bench-filter__n">1<\/span>/);
-  assert.match(html, />Boston <span class="rh-bench-filter__n">1<\/span>/);
-  assert.match(html, /In the post/);
-  assert.match(html, /ae-chip--out">Excluded</);
-  assert.match(html, /aria-label="Pin into its city"/);
-  assert.match(html, /aria-label="Clear the exclude"/);
-  assert.match(html, /class="ae-pool__bar"/);
-  assert.match(html, /Where the score comes from/);
-  // Sunday: the week's post is today's card.
-  assert.match(html, /AI Events This Week · Oct 26–Nov 1/);
+  // The standard pool screen (2026-11-15): the event in the post stays listed (the post is built from the whole list);
+  // the excluded one is archived, so it leaves the list. The week's post is in Made.
+  assert.match(html, /Ideas <span class="pl-seg__n">1<\/span>/);
+  assert.match(html, /All cities <span class="pl-pill__n">1<\/span>/);
+  assert.match(html, />Boston <span class="pl-pill__n">1<\/span>/);
+  assert.match(html, />Miami <span class="pl-pill__n">0<\/span>/);
+  assert.match(html, /AI Tinkerers Boston/);
+  assert.doesNotMatch(html, /Miami AI Night/);
+  assert.match(html, /Made <span class="pl-seg__n">1<\/span>/);
+  assert.match(html, /aria-label="Pin"/);
+  assert.match(html, /aria-label="Archive"/);
 });
 
 test('Rebuild post is offered only for the coming week’s post while it waits (final review)', async () => {

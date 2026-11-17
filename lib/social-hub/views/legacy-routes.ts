@@ -1,4 +1,4 @@
-import { isVertical } from '@/lib/social-hub/verticals';
+import { isVertical, typeHref } from '@/lib/social-hub/verticals';
 import type { HubParams } from '@/lib/social-hub/links';
 
 /**
@@ -29,7 +29,7 @@ export function legacyHouseRedirect(base: string, params: HubParams): string {
   const v = isVertical(params.v) ? params.v : null;
   switch (params.tab) {
     case 'ideas':
-      return `${base}/content/pools/${v ?? 'reels'}`;
+      return typeHref(v ?? 'reels', base);
     case 'all':
     case 'types':
     case 'sources':
