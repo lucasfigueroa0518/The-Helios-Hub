@@ -21,7 +21,7 @@ How to use this document:
 ## 0. What we are building, in one paragraph
 
 A daily trivia game at **heliosgroup.ai/free-tools/smarter-than-ai**. Every day at midnight New York time a new
-game appears: **5 questions**, shown **one at a time**, **10 seconds each**, 3 options each. The player plays
+game appears: **5 questions**, shown **one at a time**, **15 seconds each**, 3 options each. The player plays
 against **the AI** (GPT-5 nano with no web search), whose real answers were recorded in advance. The AI is shown
 as the **Helios critter** (the same character as our Instagram stories). After each answer the game reveals
 right/wrong, what the AI picked, and a one-line explanation, then moves on by itself. At the end: who won (You 4 ·
@@ -36,7 +36,7 @@ offered in the social-landing popup next to the AI networking events calendar.
 | # | Decision | Lucas's choice |
 |---|---|---|
 | D1 | Questions per day | 5, shown one by one |
-| D2 | Time per question | 10 seconds. Running out counts as wrong |
+| D2 | Time per question | 15 seconds (was 10; Lucas, 2026-11-17). Running out counts as wrong |
 | D3 | Plays per day | One per device per day (like Wordle) |
 | D4 | The AI opponent | Real answers from GPT-5 nano (no web search), recorded when the day is made. Its pick is revealed **after** the player answers each question, with a running score "You 2 · AI 1" |
 | D5 | Scoring | Correct count only: You X/5 vs AI X/5 → win, tie or lose. The timer adds pressure, not points |
@@ -81,7 +81,7 @@ These principles decide every detail below. When unsure, pick the option that se
    answers get bigger rewards than wrong ones get punishments; the end gets the biggest celebration.
    (Jonasson & Purho, "Juice it or lose it", GDC Europe 2012; Steve Swink, *Game Feel*, 2008.) → §5.8.
 7. **No information vomit.** One idea per screen. No tutorial: the first question teaches the game. No
-   paragraphs anywhere. The only explanatory sentence is "5 questions. 10 seconds each. Beat the AI."
+   paragraphs anywhere. The only explanatory sentence is "5 questions. 15 seconds each. Beat the AI."
 
 ---
 
@@ -104,8 +104,8 @@ Key rules:
   time with no `correct` field; the server checks the answer and only then returns the correct letter, the AI's
   pick and the explanation.
 - **The server owns the timer.** It records when each question was served; an answer arriving more than
-  11.5 s later (10 s + 1.5 s grace for network) counts as a timeout. Refreshing the page mid-question does not
-  give a new 10 seconds.
+  16.5 s later (15 s + 1.5 s grace for network) counts as a timeout. Refreshing the page mid-question does not
+  give a new 15 seconds.
 - **The browser never talks to Supabase.** No Supabase client in `src/`. Only `/api` functions use
   `@supabase/supabase-js` with the service role key. All `game` tables have RLS on and no policies.
 - **The site pulls from the hub** (D: "the Helios site will fetch the questions … from the hub"): a sync
@@ -211,7 +211,7 @@ Inside the normal site `Layout` (header and footer visible). Content, top to bot
 1. Label: `DAY 12 · NOV 16` (day number and NY date).
 2. The critter, waving (§5.7), about 180 px tall.
 3. Title (Pragmatica, uppercase, 34 px, two lines): `ARE YOU SMARTER THAN AI?`
-4. One line (Roboto 18 px, 85% opacity): `5 questions. 10 seconds each. Beat the AI.`
+4. One line (Roboto 18 px, 85% opacity): `5 questions. 15 seconds each. Beat the AI.`
 5. AI chip (ink pill): `Opponent: GPT-5 nano (no web search)`. The model label comes from the day's data
    (`aiLabel`), never hard-coded.
 6. Big button, full width, white with orange text, 64 px tall: `PLAY`.
@@ -236,7 +236,7 @@ Layout, top to bottom:
 
 1. **Top bar:** 5 progress dots (current one larger and white; answered ones filled green or red), and the
    score `YOU 0 · AI 0` (ink pill for the AI part).
-2. **Timer bar:** full width, 8 px tall, white, draining linearly from 100% to 0% over 10 s, with the whole
+2. **Timer bar:** full width, 8 px tall, white, draining linearly from 100% to 0% over 15 s, with the whole
    seconds left as a small number at its right end. In the last 3 seconds the bar turns `#E63946`, the number
    pulses (scale 1 → 1.15 → 1 each second) and a tick plays each second.
 3. **The critter**, top-right of the question card, about 110 px, thinking (§5.7). When its staged lock-in
@@ -246,7 +246,7 @@ Layout, top to bottom:
    zone). Each shows its letter in a small circle and the text. Keyboard: `1`/`2`/`3` and `A`/`B`/`C` pick.
 
 Entrance: the question card slides up 24 px and fades in (250 ms, ease-out); the options follow with a 60 ms
-stagger. **The 10 seconds start when the last option has finished appearing**, and the client calls
+stagger. **The 15 seconds start when the last option has finished appearing**, and the client calls
 `/api/game/next` (which starts the server's clock) just before that moment.
 
 On tap: the tapped button scales 0.97 for 80 ms, a tap sound plays, `navigator.vibrate?.(12)`, all buttons lock
@@ -566,20 +566,20 @@ Serves the next question and starts its server clock.
 
 - Load the play (must belong to `x-player-id`, else 404). If finished → `409 { error: 'finished' }`.
 - Find the lowest position with no `game.answers` row. If an earlier served question has no answer and its
-  window (11.5 s) has passed, it must already be recorded as a timeout — run `closeExpired(play)` first: for any
-  answers row with `answered_at IS NULL` and `served_at + 11.5 s < now()`, set `answered_at = served_at + 10 s`,
+  window (16.5 s) has passed, it must already be recorded as a timeout — run `closeExpired(play)` first: for any
+  answers row with `answered_at IS NULL` and `served_at + 16.5 s < now()`, set `answered_at = served_at + 15 s`,
   `choice = null`, `is_correct = false`.
 - If there is an open question still inside its window (served, unanswered, not expired), return it again with
   `secondsLeft` reduced accordingly (a refresh does not reset the clock).
 - Otherwise insert `answers (play_id, position, served_at = now())` and return
-  `{ position, questionId, question, options, lockInSeconds, secondsLeft: 10 }`. **Never include `correct`,
+  `{ position, questionId, question, options, lockInSeconds, secondsLeft: 15 }`. **Never include `correct`,
   `ai_picked` or `answer_line`.**
 - If all 5 are answered, finish the play (§8.6) and return `{ done: true, result: <Result> }`.
 
 ### 8.5 `POST /api/game/answer` — body `{ playId, position, choice }` (`choice` is `'A'|'B'|'C'|null`)
 
 - The answers row for `(playId, position)` must exist and be unanswered, else 409.
-- `late = now() > served_at + 11.5 s`. If late, treat as a timeout (`choice = null`).
+- `late = now() > served_at + 16.5 s`. If late, treat as a timeout (`choice = null`).
 - Set `answered_at = now()`, `choice`, `is_correct = (choice === correct)`.
 - Respond `{ position, choice, correct, isCorrect, aiPicked, aiCorrect, answerLine, score: { you, ai } }`, where
   `score` counts the answers so far (the AI's score counts its correct picks for the positions answered so far).
@@ -825,7 +825,7 @@ again imports 0 and changes nothing; a day with 4 questions (try it by editing t
 `streakFrom`, `nyDate`, `msUntilNextNyMidnight`, `shareText`, `lockInSeconds`. **Accept (with curl or a small
 script):** a full play of today returns 5 questions one at a time, none containing `correct`; answers return the
 correct letter, AI pick and `answerLine`; a sixth `next` returns `done`; a second `start` for today returns the
-finished play; an answer sent 12 s after `next` is a timeout; `next` called twice without answering returns the
+finished play; an answer sent 17 s after `next` is a timeout; `next` called twice without answering returns the
 same question with fewer seconds left.
 
 ### M4 — Start, question and reveal screens (no critter yet: a grey 110 px placeholder box)
@@ -850,7 +850,7 @@ shows results without percentile or streak and does not change the streak; it ca
 
 ### M8 — Free Tools, popup, nav, sitemap, analytics
 - `src/app/data/freeTools.ts`: add (first in the list, the game is the newer, lighter hook):
-  `{ slug: 'smarter-than-ai', name: 'Are you Smarter Than AI?', blurb: '5 questions a day against the AI. 10 seconds each. One shot. Can you beat it?', icon: Brain (lucide), route: '/free-tools/smarter-than-ai', cta: "Play today's game", tags: ['New every day', '1 minute', 'Free'] }`.
+  `{ slug: 'smarter-than-ai', name: 'Are you Smarter Than AI?', blurb: '5 questions a day against the AI. 15 seconds each. One shot. Can you beat it?', icon: Brain (lucide), route: '/free-tools/smarter-than-ai', cta: "Play today's game", tags: ['New every day', '1 minute', 'Free'] }`.
   With two tools, `hasSingleFreeTool` is false and links switch to the `/free-tools` index on their own (read the
   comment in that file).
 - `vercel.json` (§8.9) and `public/sitemap.xml`: add `/free-tools` and `/free-tools/smarter-than-ai`.
