@@ -11,7 +11,14 @@ import { serviceHeaders } from '@/lib/supabase-service-headers';
 
 export const STORIES_BUCKET = 'stories';
 
-export type StorageConfig = { baseUrl: string; serviceRole: string; fetch?: typeof fetch; sleep?: (ms: number) => Promise<void> };
+export type StorageConfig = {
+  baseUrl: string;
+  serviceRole: string;
+  fetch?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+  /** Per-request timeout. Uploads from the workers keep the 60 s default; page renders pass a short one. */
+  timeoutMs?: number;
+};
 
 export type StoriesStorage = {
   upload(objectPath: string, body: Buffer, contentType?: string): Promise<void>;
@@ -61,7 +68,7 @@ export function createStoriesStorage(cfg: StorageConfig = liveStorageConfig()): 
       method,
       headers: { ...serviceHeaders(cfg.serviceRole), ...headers },
       body: body as BodyInit | undefined,
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(cfg.timeoutMs ?? 60_000),
     });
   const json = (o: unknown) => ({ body: JSON.stringify(o), headers: { 'content-type': 'application/json' } });
 
