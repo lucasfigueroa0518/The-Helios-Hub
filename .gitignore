@@ -92,6 +92,11 @@ explainers/design/intros/.out/
 .tmp/
 /.hyperframes/
 
+# Performance tooling: machine-local state and run outputs
+perf/.local/
+perf/runs/
+.lighthouseci/
+
 # Sound library drop-ins: originals, converted MP3s (kept in an outside store) and the ingest cache stay off git
 explainers/design/sfx/inbox/*
 !explainers/design/sfx/inbox/README.md

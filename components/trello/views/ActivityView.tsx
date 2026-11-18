@@ -5,6 +5,8 @@ import { Avatar } from "@/components/trello/ui/Avatar";
 import { ViewShell } from "./ViewShell";
 import { cn } from "@/lib/trello/utils";
 import type { ActivityEntry, Board, Card, List, User } from "@/lib/trello/types";
+import { localFeedRows, mergeFeed } from "@/lib/trello/card-details";
+import { useActivityFeed } from "@/lib/trello/useActivityFeed";
 import {
   CheckCircle2,
   CircleUserRound,
@@ -17,11 +19,15 @@ import {
 /**
  * Flattened stream of every activity event across every card, plus
  * every comment (comments live on card.comments and read as
- * activity from the user's point of view). Grouped by day.
+ * activity from the user's point of view). Grouped by day. The newest
+ * 200 come from the server (cards carry only counts until opened),
+ * merged with what this session holds.
  */
 
 type Props = {
   cards: Card[];
+  /** The top bar's search, so the server matches the same cards. */
+  search: string;
   lists: List[];
   boards: Board[];
   users: User[];
@@ -49,6 +55,7 @@ const timeLabel = new Intl.DateTimeFormat("en-US", {
 
 export function ActivityView({
   cards,
+  search,
   lists,
   boards,
   users,
@@ -71,33 +78,13 @@ export function ActivityView({
     [cards]
   );
 
-  const rows = useMemo<Row[]>(() => {
-    const list: Row[] = [];
-    for (const c of cards) {
-      for (const a of c.activity) {
-        list.push({
-          id: `${c.id}:${a.id}`,
-          authorId: a.authorId,
-          kind: a.kind,
-          detail: a.detail,
-          at: a.at,
-          cardId: c.id,
-        });
-      }
-      for (const cm of c.comments) {
-        list.push({
-          id: `${c.id}:${cm.id}`,
-          authorId: cm.authorId,
-          kind: "commented",
-          detail: cm.body,
-          at: cm.at,
-          cardId: c.id,
-        });
-      }
-    }
-    list.sort((a, b) => (a.at < b.at ? 1 : -1));
-    return list.slice(0, 200); // don't render an infinite scroll from day one
-  }, [cards]);
+  const server = useActivityFeed({ query: search, limit: 200 });
+  const loading = server === null;
+  const rows = useMemo<Row[]>(
+    // don't render an infinite scroll from day one
+    () => mergeFeed(server ?? [], localFeedRows(cards), new Set(cardById.keys()), 200),
+    [server, cards, cardById]
+  );
 
   const groups = useMemo(() => {
     const map = new Map<string, Row[]>();
@@ -118,11 +105,13 @@ export function ActivityView({
       eyebrow="View"
       title="Activity"
       description={
-        rows.length === 0
-          ? "Nothing has happened yet."
-          : `${rows.length} recent events across all boards`
+        loading
+          ? "Loading…"
+          : rows.length === 0
+            ? "Nothing has happened yet."
+            : `${rows.length} recent events across all boards`
       }
-      empty={rows.length === 0}
+      empty={!loading && rows.length === 0}
     >
       <div className="space-y-8">
         {groups.map((g) => (

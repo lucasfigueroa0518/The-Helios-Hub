@@ -5,6 +5,7 @@ import { isPostingType } from '@/lib/content-type/posting';
 import { readAllProgress, readProgress } from '@/lib/content-type/progress';
 import { getSession } from '@/lib/session';
 import { HUB_COST_TAG, HUB_DATA_TAG } from '@/lib/social-hub/views/cached-dataset';
+import { noteHubDataChanged } from '@/lib/social-hub/views/cache-tags';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
 export async function POST() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  noteHubDataChanged();
   revalidateTag(HUB_DATA_TAG);
   // A run that finished may have spent money: re-read the cost too (actions only mark the content).
   revalidateTag(HUB_COST_TAG);

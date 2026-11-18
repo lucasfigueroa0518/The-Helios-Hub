@@ -16,7 +16,7 @@ const roboto = Roboto({
 });
 
 const pragmatica = localFont({
-  src: './fonts/PragmaticaExtended-Bold.otf',
+  src: './fonts/PragmaticaExtended-Bold.woff2',
   weight: '700',
   style: 'normal',
   variable: '--font-pragmatica',

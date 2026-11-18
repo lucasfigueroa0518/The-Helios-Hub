@@ -9,6 +9,8 @@ import { cn, initials } from "@/lib/trello/utils";
 import { HUE_PRESETS, type Availability, type UserProfile } from "@/lib/trello/types";
 import type { Board, Card, List, User } from "@/lib/trello/types";
 import { cardAssociatedWithUser } from "@/lib/trello/card-filter";
+import { localFeedRows, mergeFeed, weekStats, type WeekStatsRows } from "@/lib/trello/card-details";
+import { useActivityFeed, useMyWeekStats } from "@/lib/trello/useActivityFeed";
 import type { ProfileEditPatch } from "@/lib/trello/useBoardState";
 import {
   Bell,
@@ -45,6 +47,8 @@ type Props = {
   me: User;
   profile: UserProfile;
   cards: Card[];
+  /** The top bar's search, so the server matches the same cards. */
+  search: string;
   lists: List[];
   boards: Board[];
   favoriteBoardIds: string[];
@@ -67,6 +71,7 @@ const enter = (i: number) => ({
 });
 
 export function ProfileView({
+  search,
   me,
   profile,
   cards,
@@ -77,12 +82,14 @@ export function ProfileView({
   onToggleFavoriteBoard,
   onOpenCard,
 }: Props) {
-  const stats = useStats(cards, me.id);
+  const weekRows = useMyWeekStats();
+  const stats = useStats(cards, me.id, weekRows);
   const touched = useMemo(() => {
     const set = new Set(cards.filter((c) => cardAssociatedWithUser(c, me.id)).map((c) => c.boardId));
     return boards.filter((b) => set.has(b.id));
   }, [cards, boards, me.id]);
-  const recent = useRecentActivity(cards, me.id, 10);
+  const recentServer = useActivityFeed({ query: search, authorId: me.id, limit: 10 });
+  const recent = useRecentActivity(cards, me.id, 10, recentServer);
 
   return (
     <ViewShell eyebrow="Profile" title={me.name}>
@@ -760,34 +767,12 @@ function BioCard({
    STATS
    ───────────────────────────────────────────────────────────── */
 
-function useStats(cards: Card[], userId: string) {
-  return useMemo(() => {
-    const now = new Date();
-    const weekAgo = new Date();
-    weekAgo.setDate(now.getDate() - 7);
-
-    let open = 0;
-    let doneThisWeek = 0;
-    let commentsThisWeek = 0;
-    let overdue = 0;
-
-    for (const c of cards) {
-      const mine = cardAssociatedWithUser(c, userId);
-      if (mine && !c.complete) open++;
-      if (mine && c.complete) {
-        // Best-effort: use most recent "checked" activity by this user
-        const last = [...c.activity].reverse().find((a) => a.authorId === userId && a.kind === "checked");
-        if (last && new Date(last.at) >= weekAgo) doneThisWeek++;
-      }
-      if (mine && c.due && !c.complete) {
-        if (new Date(c.due) < now) overdue++;
-      }
-      for (const cm of c.comments) {
-        if (cm.authorId === userId && new Date(cm.at) >= weekAgo) commentsThisWeek++;
-      }
-    }
-    return { open, doneThisWeek, commentsThisWeek, overdue };
-  }, [cards, userId]);
+/** Week tiles; comments and "checked" events come from the server until a card's details load. */
+function useStats(cards: Card[], userId: string, server: WeekStatsRows | null) {
+  return useMemo(
+    () => weekStats(cards, userId, server, (c) => cardAssociatedWithUser(c, userId)),
+    [cards, userId, server]
+  );
 }
 
 function StatsRow({
@@ -881,22 +866,17 @@ function BoardTile({
 
 type ActivityRow = { id: string; kind: string; at: string; cardId: string };
 
-function useRecentActivity(cards: Card[], userId: string, limit: number) {
-  return useMemo<ActivityRow[]>(() => {
-    const rows: ActivityRow[] = [];
-    for (const c of cards) {
-      for (const a of c.activity) {
-        if (a.authorId !== userId) continue;
-        rows.push({ id: `${c.id}:${a.id}`, kind: a.kind, at: a.at, cardId: c.id });
-      }
-      for (const cm of c.comments) {
-        if (cm.authorId !== userId) continue;
-        rows.push({ id: `${c.id}:${cm.id}`, kind: "commented", at: cm.at, cardId: c.id });
-      }
-    }
-    rows.sort((a, b) => (a.at < b.at ? 1 : -1));
-    return rows.slice(0, limit);
-  }, [cards, userId, limit]);
+function useRecentActivity(cards: Card[], userId: string, limit: number, server: ReturnType<typeof useActivityFeed>) {
+  return useMemo<ActivityRow[]>(
+    () =>
+      mergeFeed(server ?? [], localFeedRows(cards, userId), new Set(cards.map((c) => c.id)), limit).map((r) => ({
+        id: r.id,
+        kind: r.kind,
+        at: r.at,
+        cardId: r.cardId,
+      })),
+    [cards, userId, limit, server]
+  );
 }
 
 function VerbGlyph({ kind }: { kind: string }) {

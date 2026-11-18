@@ -1,0 +1,314 @@
+{
+  "out": "build-d",
+  "startedAt": "2026-11-17T21:53:30.693Z",
+  "commit": "9308548",
+  "settings": {
+    "runs": 30,
+    "coldCycles": 0,
+    "warmup": 3,
+    "dbOneWayMs": 2.5,
+    "budget": {
+      "ttfbMs": 150,
+      "totalMs": 500,
+      "apiServerMs": 150,
+      "jsKB": 150
+    }
+  },
+  "routes": [
+    {
+      "id": "page:/campaigns/[id]/draft",
+      "kind": "page",
+      "method": "GET",
+      "path": "/campaigns/[id]/draft",
+      "url": "/campaigns/5a161b20-499b-44aa-a793-1af136b0e8f4/draft",
+      "auth": "session"
+    },
+    {
+      "id": "page:/campaigns/[id]/prospect",
+      "kind": "page",
+      "method": "GET",
+      "path": "/campaigns/[id]/prospect",
+      "url": "/campaigns/fc123e21-f5b4-478e-a655-47c6e6266ad2/prospect",
+      "auth": "session"
+    },
+    {
+      "id": "page:/dashboards",
+      "kind": "page",
+      "method": "GET",
+      "path": "/dashboards",
+      "url": "/dashboards",
+      "auth": "session"
+    },
+    {
+      "id": "page:/dashboards/d/[token]",
+      "kind": "page",
+      "method": "GET",
+      "path": "/dashboards/d/[token]",
+      "url": "/dashboards/d/perf-dashboard-token-000000000000000000000001",
+      "auth": "token"
+    },
+    {
+      "id": "page:/hub",
+      "kind": "page",
+      "method": "GET",
+      "path": "/hub",
+      "url": "/hub",
+      "auth": "session"
+    },
+    {
+      "id": "page:/social/content/library/music",
+      "kind": "page",
+      "method": "GET",
+      "path": "/social/content/library/music",
+      "url": "/social/content/library/music",
+      "auth": "session"
+    },
+    {
+      "id": "page:/trello",
+      "kind": "page",
+      "method": "GET",
+      "path": "/trello",
+      "url": "/trello",
+      "auth": "session"
+    }
+  ],
+  "warm": {
+    "page:/campaigns/[id]/draft": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 28148,
+      "ttfb": {
+        "p50": 19.5,
+        "p95": 28.4,
+        "p99": 33.3
+      },
+      "total": {
+        "p50": 34.8,
+        "p95": 41.6,
+        "p99": 49
+      }
+    },
+    "page:/campaigns/[id]/prospect": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 27436,
+      "ttfb": {
+        "p50": 14.9,
+        "p95": 18.2,
+        "p99": 20.4
+      },
+      "total": {
+        "p50": 24.4,
+        "p95": 28,
+        "p99": 28.1
+      }
+    },
+    "page:/dashboards": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 22510,
+      "ttfb": {
+        "p50": 15.5,
+        "p95": 18.6,
+        "p99": 20
+      },
+      "total": {
+        "p50": 19.5,
+        "p95": 23.9,
+        "p99": 24.3
+      }
+    },
+    "page:/dashboards/d/[token]": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 37449,
+      "ttfb": {
+        "p50": 13.8,
+        "p95": 18.9,
+        "p99": 20.8
+      },
+      "total": {
+        "p50": 33.7,
+        "p95": 40,
+        "p99": 41.1
+      }
+    },
+    "page:/hub": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 113454,
+      "ttfb": {
+        "p50": 20.6,
+        "p95": 27.4,
+        "p99": 28.7
+      },
+      "total": {
+        "p50": 76.6,
+        "p95": 95.5,
+        "p99": 104.1
+      }
+    },
+    "page:/social/content/library/music": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 1946830,
+      "ttfb": {
+        "p50": 17.1,
+        "p95": 28.6,
+        "p99": 38.2
+      },
+      "total": {
+        "p50": 274.6,
+        "p95": 390.1,
+        "p99": 396.7
+      }
+    },
+    "page:/trello": {
+      "n": 30,
+      "errors": 0,
+      "statuses": [
+        200
+      ],
+      "bytes": 15808537,
+      "ttfb": {
+        "p50": 21,
+        "p95": 28.9,
+        "p99": 32.3
+      },
+      "total": {
+        "p50": 1097.7,
+        "p95": 1356.3,
+        "p99": 1390.1
+      }
+    }
+  },
+  "cold": {},
+  "trace": {},
+  "lighthouse": {
+    "page:/campaigns/[id]/draft": {
+      "runs": 3,
+      "finalUrl": "http://127.0.0.1:3100/campaigns/5a161b20-499b-44aa-a793-1af136b0e8f4/draft",
+      "score": 1,
+      "fcp": 665.3,
+      "lcp": 665.3,
+      "tbt": 223.9,
+      "cls": 0,
+      "si": 706,
+      "ttfbServer": 26,
+      "jsTransferKB": 192.1,
+      "jsRequests": 17,
+      "totalTransferKB": 556.9
+    },
+    "page:/campaigns/[id]/prospect": {
+      "runs": 3,
+      "finalUrl": "http://127.0.0.1:3100/campaigns/fc123e21-f5b4-478e-a655-47c6e6266ad2/prospect",
+      "score": 1,
+      "fcp": 673.7,
+      "lcp": 673.7,
+      "tbt": 98.7,
+      "cls": 0,
+      "si": 1115,
+      "ttfbServer": 27,
+      "jsTransferKB": 171.9,
+      "jsRequests": 18,
+      "totalTransferKB": 587.4
+    },
+    "page:/dashboards": {
+      "runs": 3,
+      "finalUrl": "http://127.0.0.1:3100/dashboards",
+      "score": 1,
+      "fcp": 656.5,
+      "lcp": 656.5,
+      "tbt": 171.2,
+      "cls": 0,
+      "si": 703,
+      "ttfbServer": 21,
+      "jsTransferKB": 163.4,
+      "jsRequests": 16,
+      "totalTransferKB": 455.6
+    },
+    "page:/dashboards/d/[token]": {
+      "runs": 3,
+      "finalUrl": "http://127.0.0.1:3100/dashboards/d/perf-dashboard-token-000000000000000000000001",
+      "score": 1,
+      "fcp": 701.8,
+      "lcp": 931.2,
+      "tbt": 104.5,
+      "cls": 0,
+      "si": 792,
+      "ttfbServer": 22,
+      "jsTransferKB": 131.2,
+      "jsRequests": 10,
+      "totalTransferKB": 534.9
+    },
+    "page:/hub": {
+      "runs": 3,
+      "finalUrl": "http://127.0.0.1:3100/hub",
+      "score": 1,
+      "fcp": 602.4,
+      "lcp": 1784.5,
+      "tbt": 155.3,
+      "cls": 0,
+      "si": 1471,
+      "ttfbServer": 25,
+      "jsTransferKB": 220.1,
+      "jsRequests": 19,
+      "totalTransferKB": 783.5
+    },
+    "page:/social/content/library/music": {
+      "runs": 3,
+      "finalUrl": "http://127.0.0.1:3100/social/content/library/music",
+      "score": 0.6,
+      "fcp": 722.2,
+      "lcp": 4289.7,
+      "tbt": 3101.7,
+      "cls": 0,
+      "si": 2631,
+      "ttfbServer": 17,
+      "jsTransferKB": 168.4,
+      "jsRequests": 18,
+      "totalTransferKB": 942.4
+    },
+    "page:/trello": {
+      "runs": 3,
+      "finalUrl": "http://127.0.0.1:3100/trello",
+      "score": 0.5,
+      "fcp": 7943.8,
+      "lcp": 9169.8,
+      "tbt": 210.7,
+      "cls": 0,
+      "si": 8506,
+      "ttfbServer": 24,
+      "jsTransferKB": 280.2,
+      "jsRequests": 25,
+      "totalTransferKB": 4194.2
+    }
+  },
+  "verdicts": {
+    "page:/campaigns/[id]/draft": "pass",
+    "page:/campaigns/[id]/prospect": "pass",
+    "page:/dashboards": "pass",
+    "page:/dashboards/d/[token]": "pass",
+    "page:/hub": "pass",
+    "page:/social/content/library/music": "pass",
+    "page:/trello": "fail"
+  }
+}

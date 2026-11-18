@@ -84,6 +84,16 @@ export type Card = {
   activity: ActivityEntry[];
   createdById: UserId;
   createdAt: string;
+  /**
+   * False while the card's checklists, attachments, comments and full activity are
+   * still to load (they load when it opens). Until then `activity` holds only the last
+   * 14 days on cards the viewer tracks, for notifications. Absent means loaded.
+   */
+  detailsLoaded?: boolean;
+  /** The face's badge counts while details are still to load. */
+  counts?: { checklistItems: number; checklistDone: number; comments: number; attachments: number };
+  /** The viewer's latest activity on this card, sent with the workspace (Home's recent boards). */
+  myLastActivityAt?: string | null;
 };
 
 export type List = {

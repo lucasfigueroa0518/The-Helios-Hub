@@ -10,3 +10,19 @@ export const HUB_COST_TAG = 'social-hub:cost';
 export function hubDataTag(vertical: Vertical): string {
   return `${HUB_DATA_TAG}:${vertical}`;
 }
+
+const changes = globalThis as typeof globalThis & { __hubDataChangedAt?: number };
+
+/**
+ * Note, in this process, that hub data just changed (an action or a finished run
+ * revalidated a hub tag). A dataset rebuild that began before this is not shared with
+ * the requests that come after it (views/cached-dataset.ts), so they never see the
+ * state from before the change.
+ */
+export function noteHubDataChanged(): void {
+  changes.__hubDataChangedAt = Date.now();
+}
+
+export function hubDataChangedAt(): number {
+  return changes.__hubDataChangedAt ?? 0;
+}

@@ -296,11 +296,31 @@ async function queryWithConnectPolicy<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/** A statement slower than this (ms, from checkout to result) is logged as `db/slow_query`. 0 turns it off. */
+export function slowQueryThresholdMs(env: DbEnv = process.env): number {
+  const parsed = Number(env.DB_SLOW_QUERY_MS ?? 100);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 100;
+}
+
+/** The statement's shape for a log line: whitespace collapsed, cut short. Parameters are never logged. */
+export function slowQueryLabel(text: string): string {
+  return text.replace(/--[^\n]*/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
 export async function dbQuery<T extends QueryResultRow = QueryResultRow>(
   text: string,
   params?: unknown[],
 ): Promise<QueryResult<T>> {
-  return withDbSlot(() => queryWithConnectPolicy(() => getPool().query<T>(text, params)));
+  const threshold = slowQueryThresholdMs();
+  if (threshold === 0) return withDbSlot(() => queryWithConnectPolicy(() => getPool().query<T>(text, params)));
+  const started = performance.now();
+  const result = await withDbSlot(() => queryWithConnectPolicy(() => getPool().query<T>(text, params)));
+  const durationMs = Math.round(performance.now() - started);
+  if (durationMs >= threshold) {
+    // Includes the wait for a pool slot, so pool pressure shows up here too (perf/README.md).
+    logWarn({ component: 'db', event: 'slow_query', durationMs, rows: result.rowCount ?? null, sql: slowQueryLabel(text) });
+  }
+  return result;
 }
 
 /** Run related writes atomically. Roll back automatically when the callback throws. */

@@ -140,7 +140,7 @@ export type ReelsRead = {
   requireApproval: boolean;
 };
 
-const SCORE_LATERAL = `
+const SCORE_COPY_LATERAL = `
        LEFT JOIN LATERAL (
          SELECT s.chosen_framework, s.chosen_bucket, s.blockbuster, s.net, s.origin
            FROM reels.idea_scores s
@@ -157,7 +157,9 @@ const SCORE_LATERAL = `
             AND c.status = 'ok'
           ORDER BY (v.slate_id IS NOT NULL AND c.slate_id = v.slate_id) DESC, sl.scored_at DESC
           LIMIT 1
-       ) copy ON true
+       ) copy ON true`;
+
+const SCORE_LATERAL = `${SCORE_COPY_LATERAL}
        LEFT JOIN LATERAL (
          SELECT m.headline
            FROM reels.idea_sources_v m
@@ -172,6 +174,14 @@ const SCORE_LATERAL = `
  * video's own slate as before.
  */
 export const REEL_FACTS_SQL = `
+WITH heads AS (
+  -- The lead headline per idea, read once for every idea here. idea_sources_v resolves intake
+  -- merges with a recursive CTE; a correlated LIMIT 1 per row priced the plan into JIT (~80 ms).
+  SELECT DISTINCT ON (m.post_idea_id) m.post_idea_id, m.headline
+    FROM reels.idea_sources_v m
+   WHERE m.post_idea_id = ANY($1::uuid[])
+   ORDER BY m.post_idea_id, CASE m.role WHEN 'primary' THEN 0 WHEN 'supporting' THEN 1 ELSE 2 END, m.joined_at
+)
 SELECT r.idea::text AS post_idea_id, r.video::text AS video_job_id,
        left(v.motion_prompt, 500) AS motion_prompt, v.video_storage_path,
        v.finished_at::text AS video_finished_at, v.slate_id AS video_slate_id, vis.render AS visual_render,
@@ -180,7 +190,8 @@ SELECT r.idea::text AS post_idea_id, r.video::text AS video_job_id,
   FROM unnest($1::uuid[], $2::uuid[]) AS r(idea, video)
   LEFT JOIN reels.video_jobs v ON v.id = r.video
   LEFT JOIN reels.visual_jobs vis ON vis.id = v.visual_job_id
-  ${SCORE_LATERAL.replaceAll('%IDEA%', 'r.idea')}`;
+  ${SCORE_COPY_LATERAL.replaceAll('%IDEA%', 'r.idea')}
+  LEFT JOIN heads src ON src.post_idea_id = r.idea`;
 
 export const REEL_MADE_SQL = `
 SELECT DISTINCT ON (v.post_idea_id)

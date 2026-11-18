@@ -1,0 +1,64 @@
+{
+  "experiment": "Pragmatica next/font preload on (current) vs off; Lighthouse mobile Fast 4G 4x CPU, median of 3",
+  "preloadOn": {
+    "page:/events": {
+      "lcp": 1330,
+      "fcp": 598,
+      "tbt": 90,
+      "cls": 0,
+      "totalKB": 461
+    },
+    "page:/hub/conversations": {
+      "lcp": 1403,
+      "fcp": 612,
+      "tbt": 95,
+      "cls": 0,
+      "totalKB": 616.3
+    },
+    "page:/": {
+      "lcp": 666,
+      "fcp": 666,
+      "tbt": 92,
+      "cls": 0,
+      "totalKB": 574.7
+    },
+    "page:/seo": {
+      "lcp": 1391,
+      "fcp": 601,
+      "tbt": 134,
+      "cls": 0,
+      "totalKB": 459.9
+    }
+  },
+  "preloadOff": {
+    "page:/events": {
+      "lcp": 1396,
+      "fcp": 516,
+      "tbt": 126,
+      "cls": 0,
+      "totalKB": 356.2
+    },
+    "page:/hub/conversations": {
+      "lcp": 1443,
+      "fcp": 544,
+      "tbt": 152,
+      "cls": 0,
+      "totalKB": 510.4
+    },
+    "page:/": {
+      "lcp": 1142,
+      "fcp": 659,
+      "tbt": 169,
+      "cls": 0,
+      "totalKB": 574.6
+    },
+    "page:/seo": {
+      "lcp": 1475,
+      "fcp": 529,
+      "tbt": 206,
+      "cls": 0,
+      "totalKB": 355.1
+    }
+  },
+  "decision": "reverted: LCP worse on every page (+476 ms on / where the title is the LCP element)"
+}

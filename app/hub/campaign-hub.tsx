@@ -6,7 +6,7 @@ import { signOut } from 'next-auth/react';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { MoreHorizontal, X } from 'lucide-react';
 import { HubPlaneFlight } from '@/app/components/plane-flight';
-import { hubGetJson, invalidateHubCache } from '@/app/hub/hub-data';
+import { hubGetJson, invalidateHubCache, primeHubCache } from '@/app/hub/hub-data';
 import { HubLoadingSpinner } from '@/app/hub/hub-loading';
 import { LeadListTutorial } from '@/app/hub/lead-list-tutorial';
 
@@ -72,7 +72,7 @@ function formatDate(value: string | null) {
   );
 }
 
-export function CampaignHub({ email }: { email: string }) {
+export function CampaignHub({ email, initialCampaigns }: { email: string; initialCampaigns?: Promise<Campaign[] | null> }) {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,8 +141,26 @@ export function CampaignHub({ email }: { email: string }) {
   loadCampaignsRef.current = loadCampaigns;
 
   useEffect(() => {
-    void loadCampaignsRef.current();
-  }, []);
+    if (!initialCampaigns) {
+      void loadCampaignsRef.current();
+      return;
+    }
+    let cancelled = false;
+    void initialCampaigns.then((rows) => {
+      if (cancelled) return;
+      if (!rows) {
+        void loadCampaignsRef.current();
+        return;
+      }
+      primeHubCache('/api/campaigns', { campaigns: rows });
+      setCampaigns(rows);
+      setError(null);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialCampaigns]);
 
   useEffect(() => {
     if (dialog !== 'create' && dialog !== 'delivery') return;

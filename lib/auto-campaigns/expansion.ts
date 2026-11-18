@@ -1,4 +1,4 @@
-import { industryKeywordQueue } from '@/lib/auto-campaigns/filter-map';
+import { industryKeywordQueue } from '@/lib/auto-campaigns/keyword-queue';
 import { locationsAtHop } from '@/lib/auto-campaigns/geography';
 import { APOLLO_SENIORITIES, type PeopleSearchParams } from '@/lib/auto-campaigns/types';
 

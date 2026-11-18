@@ -18,6 +18,7 @@ import {
 import { cn, dueState, formatCurrency, formatDate } from "@/lib/trello/utils";
 import { Avatar, AvatarStack } from "@/components/trello/ui/Avatar";
 import type { Board, Card, FieldDef, User } from "@/lib/trello/types";
+import { badgeCounts } from "@/lib/trello/card-details";
 
 type Props = {
   card: Card;
@@ -59,11 +60,10 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
     .map((id) => board.labels.find((l) => l.id === id))
     .filter((l): l is NonNullable<typeof l> => !!l);
 
-  const checklistTotal = card.checklists.reduce((a, c) => a + c.items.length, 0);
-  const checklistDone = card.checklists.reduce(
-    (a, c) => a + c.items.filter((i) => i.done).length,
-    0
-  );
+  // From the card's details once it has been opened, from the workspace counts before.
+  const counts = badgeCounts(card);
+  const checklistTotal = counts.checklistItems;
+  const checklistDone = counts.checklistDone;
 
   const dstate = dueState(card.due, card.complete);
   const shownFields = board.fields.slice(0, 2);
@@ -208,16 +208,16 @@ export const CardFace = forwardRef<HTMLDivElement, Props>(function CardFace(
               complete={checklistDone === checklistTotal}
             />
           )}
-          {card.comments.length > 0 && (
+          {counts.comments > 0 && (
             <span className="flex items-center gap-1 text-[11px] tabular-nums">
               <MessageCircle className="h-3 w-3" />
-              {card.comments.length}
+              {counts.comments}
             </span>
           )}
-          {card.attachments.length > 0 && (
+          {counts.attachments > 0 && (
             <span className="flex items-center gap-1 text-[11px] tabular-nums">
               <Paperclip className="h-3 w-3" />
-              {card.attachments.length}
+              {counts.attachments}
             </span>
           )}
           {isTracking && (

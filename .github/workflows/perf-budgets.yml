@@ -1,0 +1,80 @@
+name: perf-budgets
+
+# Fails a PR that pushes a budgeted route or bundle over its limit (perf/README.md).
+# Runs entirely offline from paid APIs: no keys are configured, stub modes are on,
+# and the database is a local Postgres seeded with synthetic data (CLAUDE.md Rule 1).
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: perf-budgets-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  budgets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      NEXT_TELEMETRY_DISABLED: 1
+      PERF_PGDATA: ${{ runner.temp }}/pgdata
+      CHROME_PATH: /usr/bin/google-chrome
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          perf/tools.sh
+
+      - name: Local Postgres 16 with the full schema
+        run: perf/db/setup-local.sh
+
+      - name: Seed synthetic data (half scale)
+        run: |
+          source perf/env.sh
+          node perf/db/seed.mjs --scale 0.5
+          node perf/db/seed-fixtures.mjs
+          npx tsx perf/db/seed-shapes.ts
+
+      - name: Production build
+        run: |
+          source perf/env.sh
+          npm run build
+
+      - name: Bundle budgets (true first-load JS per route, gzip)
+        run: node perf/lib/bundle-sizes.mjs --check perf/budgets.json
+
+      - name: Latency budgets (warm p95, 15 runs per route)
+        run: |
+          source perf/env.sh
+          node perf/measure.mjs --out ci --runs 15 --warmup 2 --phases warm
+          node perf/lib/check-budgets.mjs perf/ci.json perf/budgets.json
+
+      - name: Lighthouse CI (key pages)
+        run: |
+          source perf/env.sh
+          export PERF_COOKIE="$(node -e "import('./perf/lib/session.mjs').then(async (m) => process.stdout.write(await m.mintSessionCookie()))")"
+          node perf/lib/serve.mjs &
+          npx lhci autorun --config=lighthouserc.js
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-reports
+          path: |
+            perf/ci.md
+            perf/ci.json
+            .lighthouseci/
+          if-no-files-found: ignore

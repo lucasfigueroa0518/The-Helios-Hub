@@ -11,6 +11,8 @@ export type HubNavItem = {
   badge?: string;
   match: (path: string) => boolean;
   children?: HubSubItem[];
+  /** Load the full page when the hub is idle so the click shows it at once (WarmLink `eager`). */
+  eager?: boolean;
 };
 
 export const HUB_NAV: HubNavItem[] = [
@@ -31,6 +33,8 @@ export const HUB_NAV: HubNavItem[] = [
     href: '/social',
     label: 'Social Hub',
     badge: 'Beta',
+    // Its Content page must land in under 100 ms from the click (2026-11-18).
+    eager: true,
     match: (path) =>
       path === '/social' ||
       (path.startsWith('/social/') && !path.startsWith('/social/render')) ||
