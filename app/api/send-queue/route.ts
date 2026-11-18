@@ -23,6 +23,30 @@ function isUuid(value: string): boolean {
   return UUID.test(value);
 }
 
+/**
+ * Item fields the send-queue board never reads. The board is every item across ~3
+ * weeks (4 700 items, 9 MB on the perf seed), so they are left out of this response
+ * only; listSendQueue and the item routes are unchanged.
+ */
+const UNREAD_ITEM_FIELDS = [
+  'owner_id', 'drafting_item_id', 'lane_id', 'orchestration_job_id', 'sender_identity_id',
+  'sender_inbox_id', 'from_email', 'handoff_attempts', 'identity_slug', 'created_at', 'updated_at',
+] as const;
+
+function forBoard<T extends { days: Array<{ items: object[] }> }>(result: T): T {
+  return {
+    ...result,
+    days: result.days.map((day) => ({
+      ...day,
+      items: day.items.map((item) => {
+        const out: Record<string, unknown> = { ...item };
+        for (const key of UNREAD_ITEM_FIELDS) delete out[key];
+        return out;
+      }),
+    })),
+  };
+}
+
 export async function GET(request: NextRequest) {
   const session = await getSession();
   if (!session) return draftingJson({ error: 'Unauthorized' }, 401);
@@ -51,7 +75,7 @@ export async function GET(request: NextRequest) {
       inboxEmails,
     });
     return draftingJson({
-      ...result,
+      ...forBoard(result),
       owner_id: session.userId,
     });
   } catch (error) {
