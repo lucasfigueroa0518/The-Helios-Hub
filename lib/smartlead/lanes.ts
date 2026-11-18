@@ -258,19 +258,32 @@ export type EnsureLaneOptions = {
  * against the next day the mailboxes can actually send, so a weekend sync
  * does not publish 0 and block Monday.
  */
+/**
+ * Smartlead's schedule call rejects a daily cap below 1. A capacity share
+ * comes out at 0 while an identity has no live sending capacity (mailboxes
+ * still warming), which failed every lane_ensure. The hub's hand-off already
+ * sends nothing at 0 capacity, so 1 here only satisfies Smartlead.
+ */
+export function smartleadScheduleCap(cap: number | null | undefined): number | undefined {
+  if (cap == null || !Number.isFinite(cap)) return undefined;
+  return Math.max(1, Math.floor(cap));
+}
+
 async function smartleadDailyCap(
   campaignId: string,
   identitySlug: IdentitySlug,
   settings: DeliverySettings,
 ): Promise<number | undefined> {
-  if (settings.capacity_pct == null) return settings.max_new_leads_per_day ?? undefined;
+  if (settings.capacity_pct == null) return smartleadScheduleCap(settings.max_new_leads_per_day);
   const { campaignDailyQuota } = await import('@/lib/inboxes/send-share');
-  return campaignDailyQuota({
-    campaignId,
-    identitySlug,
-    capacityPct: settings.capacity_pct,
-    standing: true,
-  });
+  return smartleadScheduleCap(
+    await campaignDailyQuota({
+      campaignId,
+      identitySlug,
+      capacityPct: settings.capacity_pct,
+      standing: true,
+    }),
+  );
 }
 
 /**
