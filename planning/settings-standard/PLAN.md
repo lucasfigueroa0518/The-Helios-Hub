@@ -48,6 +48,9 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
   - Code state on `main` (f940369, 2026-11-18 12:33; this branch is level with it): Free vs Paid and Guess the Number have no pages, pools, refills or settings rows in the hub. What's left in code only shows their past posts (`lib/stories/render`, `adapters/stories.ts`) and has their defaults set to off (`lib/stories/settings.ts`). The saved DB row overrides those defaults and still says on, so the cleanup is limited to the DB.
   - The other 10 types in `Vertical` are active, or paused in the case of Carousels. `lib/memes` is still used (43 references), so it isn't retired.
 
+- **D12 (2026-11-18): Lucas replied "Yes to all"** to Tommy's text asking three things: switch off the retired series' settings, archive their 58 ideas, and drop `helios_social`. **Carousels' Live was not part of that text**, so it is still open.
+  Correction from the full count: `helios_social` is **not** empty. `article_queue` has 1,000 rows of old v1 carousel stories (hooks, plans, copy, review status) and `image_cache` has 4. The other four tables are empty. There are no views, foreign keys or functions outside the schema that depend on it. The repo mentions it only in `docs/superpowers/specs/2026-10-08-social-storage.md` ("dropping it is Tommy's call") and in comments in `fixtures/social/example-post.ts`.
+
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
 | Type | Generate now | Newest pool refill | Verdict |
 |---|---|---|---|
