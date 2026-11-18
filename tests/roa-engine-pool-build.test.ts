@@ -13,7 +13,7 @@ import type { StoriesDb } from '@/lib/stories/db';
 import { openLocalStoriesDb } from '@/lib/stories/local-db';
 import { capRoaPool, openPool, writePool } from '@/lib/stories/pool';
 import type { RoaRevealData, RoaPoolPayload, Subject, Truth } from '@/lib/stories/roa/types';
-import { SUBJECTS } from '@/lib/stories/roa/types';
+import { ROA_POOL_CAP, SUBJECTS } from '@/lib/stories/roa/types';
 import { DEFAULT_SETTINGS } from '@/lib/stories/settings';
 
 const NOW = new Date('2026-11-17T12:00:00Z');
@@ -62,23 +62,23 @@ function seeded(seed: number): () => number {
 
 const sign = async (path: string) => `https://storage.test/${path}`;
 
-test('pool: 21 rows → the 20 hardest stay; the dropped one is in roa_archive (cap); roa rows never age out', async () => {
+test('pool: one row over the cap → the hardest ROA_POOL_CAP stay; the dropped one is in roa_archive (cap); roa rows never age out', async () => {
   const { db } = await openLocalStoriesDb();
-  for (let i = 0; i < 21; i++) await addRow(db, payload(i + 1, i % 2 ? 'ai' : 'real', SUBJECTS[i % SUBJECTS.length]!, 0.3 + i * 0.01));
+  for (let i = 0; i <= ROA_POOL_CAP; i++) await addRow(db, payload(i + 1, i % 2 ? 'ai' : 'real', SUBJECTS[i % SUBJECTS.length]!, 0.3 + i * 0.01));
   const dropped = await capRoaPool(db, NOW);
   assert.deepEqual(dropped, [`roa:${hex(1)}`], 'the easiest goes');
   const left = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.pool WHERE series = 'real_or_ai' AND used_at IS NULL`);
-  assert.equal(left.rows[0]!.n, 20);
+  assert.equal(left.rows[0]!.n, ROA_POOL_CAP);
   const arch = await db.query<{ key: string; reason: string }>(`SELECT key, reason FROM stories.roa_archive`);
   assert.deepEqual(arch.rows, [{ key: `roa:${hex(1)}`, reason: 'cap' }]);
 
   // A refresh a year later neither drops stale roa: rows nor ones it did not return.
   await writePool(db, { items: [], refreshed: ['real_or_ai'] }, new Date('2027-10-01T12:00:00Z'));
   const after = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.pool WHERE series = 'real_or_ai'`);
-  assert.equal(after.rows[0]!.n, 20);
+  assert.equal(after.rows[0]!.n, ROA_POOL_CAP);
   const open = await openPool(db, 'real_or_ai');
-  assert.equal(open.roa?.length, 20);
-  assert.equal(open.meta?.roa?.[0]?.key, `roa:${hex(21)}`, 'hardest first');
+  assert.equal(open.roa?.length, ROA_POOL_CAP);
+  assert.equal(open.meta?.roa?.[0]?.key, `roa:${hex(ROA_POOL_CAP + 1)}`, 'hardest first');
 });
 
 test('builder: 4 frames in order, hardest of each drawn truth, different subjects, payload.roa and history keys', async () => {

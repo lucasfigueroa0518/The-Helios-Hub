@@ -6,6 +6,9 @@
  *            score order; the opponent's stored answer (asked once where missing); trivia-check@4 on the kind the day
  *            still needs (a fail archives the question); at most MAX_GAME_CHECKS fact-checks a day. Chosen questions
  *            are reserved (pool used_at) so the IG story never takes them; a question swapped out is released.
+ *            A question any locked day already holds is never chosen again (the game serves each question once).
+ *   serve    once a locked day's date has passed, its questions are released to the pool (once, logged 'served'),
+ *            so later IG stories can use what the game already served and the pool keeps growing.
  *   lock     a full day locks at 11 pm New York the night before (a day already under way locks as soon as it is full).
  *            A past day still short is released and logged as missed; it is never exported.
  *   pull     a person removes a draft question: it is archived and the builder fills the gap on its next pass.
@@ -126,6 +129,19 @@ async function release(db: Queryable, keys: string[]): Promise<void> {
   if (keys.length) await db.query(`UPDATE stories.pool SET used_at = NULL WHERE series = $1 AND key = ANY($2::text[])`, [TRIVIA_SERIES, keys]);
 }
 
+/** Keys every locked game day other than `except` holds: the game never serves a question twice. */
+async function gameKeys(db: Queryable, except: string): Promise<string[]> {
+  const { rows } = await db.query<{ key: string }>(
+    `SELECT DISTINCT q->>'key' AS key FROM stories.trivia_game_days d, jsonb_array_elements(d.questions) q
+      WHERE d.status = 'locked' AND d.ny_date <> $1::date`,
+    [except],
+  );
+  return rows.map((r) => r.key).filter(Boolean);
+}
+
+/** The log entry that marks a past locked day's questions as handed back to the IG story pool. */
+export const SERVED_DETAIL = 'served: questions released to the IG story pool';
+
 /* ── Build ───────────────────────────────────────────────────────────── */
 
 export type GameBuildDeps = {
@@ -185,7 +201,8 @@ export async function buildGameDay(deps: GameBuildDeps, date: string, launch: st
     ...(existing?.questions ?? []).map((g) => g.payload),
     ...(existing?.bench ?? []).filter((g) => openKeys.has(g.key)).map((g) => g.payload),
   ];
-  const seen = new Set([...passed.map((p) => poolKeyOf(p.q)), ...log.filter((l) => l.kind === 'skip' || l.kind === 'check').map((l) => l.key!).filter(Boolean)]);
+  const served = await gameKeys(db, date);
+  const seen = new Set([...served, ...passed.map((p) => poolKeyOf(p.q)), ...log.filter((l) => l.kind === 'skip' || l.kind === 'check').map((l) => l.key!).filter(Boolean)]);
   let checks = checksOf(log);
 
   for (const cand of open) {
@@ -252,12 +269,12 @@ export async function buildGameDay(deps: GameBuildDeps, date: string, launch: st
 
 /* ── Lock ────────────────────────────────────────────────────────────── */
 
-/** Lock every full draft whose time has come; release and log a past day that is still short. */
-export async function lockDue(db: Queryable, now: Date): Promise<{ locked: string[]; missed: string[] }> {
+/** Lock every full draft whose time has come; release and log a past day that is still short; hand served days' questions to the IG pool. */
+export async function lockDue(db: Queryable, now: Date): Promise<{ locked: string[]; missed: string[]; served: string[] }> {
   const today = nyDate(now);
   const tomorrow = addDays(today, 1);
   const lockable = (date: string) => date <= today || (date === tomorrow && nyClock(now) >= GAME_LOCK_AT);
-  const out = { locked: [] as string[], missed: [] as string[] };
+  const out = { locked: [] as string[], missed: [] as string[], served: [] as string[] };
   for (const d of await readDays(db, { status: 'draft' })) {
     if (!lockable(d.ny_date)) continue;
     if (d.questions.length === GAME_SIZE) {
@@ -277,6 +294,16 @@ export async function lockDue(db: Queryable, now: Date): Promise<{ locked: strin
       );
       out.missed.push(d.ny_date);
     }
+  }
+  // Served days: a locked day whose date has passed gives its questions back to the pool once, so IG stories may use them.
+  for (const d of await readDays(db, { status: 'locked' })) {
+    if (d.ny_date >= today || d.log.some((l) => l.kind === 'release' && l.detail === SERVED_DETAIL)) continue;
+    await release(db, d.questions.map((q) => q.key));
+    await db.query(
+      `UPDATE stories.trivia_game_days SET log = log || $2::jsonb WHERE ny_date = $1::date`,
+      [d.ny_date, JSON.stringify([{ at: now.toISOString(), kind: 'release', detail: SERVED_DETAIL }])],
+    );
+    out.served.push(d.ny_date);
   }
   return out;
 }

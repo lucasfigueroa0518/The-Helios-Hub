@@ -284,7 +284,7 @@ async function triviaGameIfDue(deps: WorkerDeps, settings: StoriesSettings, now:
     const launch = await readLaunch(deps.db);
     if (!launch) return;
     const locked = await lockDue(deps.db, now);
-    if (locked.locked.length || locked.missed.length) log(`trivia-game: ${JSON.stringify(locked)}`);
+    if (locked.locked.length || locked.missed.length || locked.served.length) log(`trivia-game: ${JSON.stringify(locked)}`);
     const date = await dayToBuild(deps.db, launch, now);
     if (!date) return;
     const held = await spendHeld(deps, settings, 'ai_trivia', now);

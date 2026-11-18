@@ -153,9 +153,9 @@ export const ROA_KEY_PREFIX = 'roa:';
 export const roaPoolKey = (imageKey: string) => `${ROA_KEY_PREFIX}${imageKey}`;
 export const roaStoragePath = (imageKey: string) => `roa/candidates/${imageKey}.jpg`;
 /** The pool holds at most this many open candidates. */
-export const ROA_POOL_CAP = 20;
+export const ROA_POOL_CAP = 40;
 /** Candidates made per pool day (RA-16). */
-export const ROA_PER_DAY = 4;
+export const ROA_PER_DAY = 8;
 /** Rounds per set (RA-9). */
 export const ROA_ROUNDS = 2;
 /** The swipe lab: the engine passes a batch when Lucas scores at or below this (RA-7). */

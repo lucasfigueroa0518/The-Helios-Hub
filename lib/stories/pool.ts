@@ -10,7 +10,7 @@
  *                      drops frees its content-map cell (AT-11)
  *   Real or AI?        no refresh: the daily run (lib/stories/roa/daily.ts) adds its images
  *                      itself. `roa:` rows never leave for not being returned or for age; the
- *                      series holds ROA_POOL_CAP (20) by difficulty and a row the cap drops goes
+ *                      series holds ROA_POOL_CAP (40) by difficulty and a row the cap drops goes
  *                      to stories.roa_archive (reason 'cap')
  *
  * Guess the Number is retired: nothing refreshes it, and its old rows stay as they are.
