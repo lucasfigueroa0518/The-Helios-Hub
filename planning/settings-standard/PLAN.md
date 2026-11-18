@@ -20,6 +20,19 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
 - **D7 (2026-11-18): Stored setting names stay as they are.** Standardize only the UI and the spec, through the existing mapping in `lib/content-type/posting.ts`. User: "yes".
 - Out of scope: the committed `.env.local.bak.*` file. User: "Lucas is handling it".
 
+- **D8 (2026-11-18): Settings live inside each content type's idea pool menu.** User: "This would be a section within the individual content type's idea pool menu".
+  Today Settings is a gear button that opens a drawer on the type's page (`components/content-type/TypeControls.tsx` `SettingsButton` / `PostingSettings`), while the pool has its own Ideas | Made tabs (`components/content-type/pool/PoolTabs.tsx`).
+  Proposed, awaiting the user's answer: a third tab, **Ideas | Made | Settings**, laid out like this:
+
+  ```
+  Settings
+  ① Refill    [on/off]  how often · pool size · spend cap per refill
+  ② Generate  [on/off]  posts per day (or days) · run spend cap
+  ③ Approval  [on/off]  "a person approves every post"
+  ④ Live      [on/off]  posting windows · days
+  ─ This type only ─  (e.g. AI Drama's extra form, Stories series, AI Events cities)
+  ```
+
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
 | Type | Generate now | Newest pool refill | Verdict |
 |---|---|---|---|
