@@ -202,7 +202,7 @@ export function kitImportClosure(kitDir: string, entries: readonly string[]): { 
     const specifiers = [
       ...src.matchAll(/^\s*(?:import|export)\b[^'";]*?\bfrom\s*['"](\.{1,2}\/[^'"]+)['"]/gm),
       ...src.matchAll(/^\s*import\s*['"](\.{1,2}\/[^'"]+)['"]/gm),
-      ...src.matchAll(/\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g),
+      ...src.matchAll(/\bimport\(\s*(?:\/\*[^*]*\*\/\s*)?['"](\.{1,2}\/[^'"]+)['"]\s*\)/g),
     ].map((m) => m[1]);
     for (const spec of specifiers) {
       const target = path.normalize(path.join(path.dirname(rel), spec));

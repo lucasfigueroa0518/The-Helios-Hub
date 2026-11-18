@@ -234,7 +234,7 @@ export async function checkBounds(root, only = null) {
       if (isBankOpener(root, f)) continue;
       let scene;
       try {
-        scene = (await import(`${pathToFileURL(file).href}?bounds`)).default;
+        scene = (await import(/* webpackIgnore: true */ `${pathToFileURL(file).href}?bounds`)).default;
         if (typeof scene?.draw === 'function') scene = await preparedScene(root, scene, f.duration); // as mount.mjs draws it
       } catch (e) {
         problems.push(problemOf(f.id, 'load', `failed to load: ${e?.message ?? e}`));

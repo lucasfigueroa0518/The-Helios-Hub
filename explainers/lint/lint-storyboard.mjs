@@ -410,7 +410,7 @@ export const CRITTER_BODIES = ['orange', 'green', 'ink', 'white'];
  * `wear` option overrides it; the command line waits for it (wearReady).
  */
 let WEAR_KIT = null;
-export const wearReady = import('../world-kit/wear.js').then((m) => (WEAR_KIT = m), () => null);
+export const wearReady = import(/* webpackIgnore: true */ '../world-kit/wear.js').then((m) => (WEAR_KIT = m), () => null);
 /** The kit's wear.js as loaded so far (null before wearReady settles, or with no wear.js). */
 export const wearKit = () => WEAR_KIT;
 
