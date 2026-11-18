@@ -1,0 +1,32 @@
+# Keeps the production site warm (perf). Calls /api/cron/warm right after each successful
+# Vercel production deploy (the shared hub cache starts empty per deployment) and every
+# 10 minutes. Does nothing until both repository secrets exist:
+#   HUB_URL         https://<your production domain>   (no trailing slash)
+#   HUB_WARM_TOKEN  the same random value (32+ chars) as the HUB_WARM_TOKEN env var in Vercel
+name: warm
+on:
+  deployment_status:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  warm:
+    if: github.event_name != 'deployment_status' || (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Warm
+        env:
+          HUB_URL: ${{ secrets.HUB_URL }}
+          HUB_WARM_TOKEN: ${{ secrets.HUB_WARM_TOKEN }}
+        run: |
+          if [ -z "$HUB_URL" ] || [ -z "$HUB_WARM_TOKEN" ]; then echo "HUB_URL / HUB_WARM_TOKEN not set; skipping"; exit 0; fi
+          for i in 1 2 3; do
+            code=$(curl -sS -o out.json -w '%{http_code}' --max-time 60 -H "Authorization: Bearer $HUB_WARM_TOKEN" "$HUB_URL/api/cron/warm" || echo 000)
+            echo "attempt $i: $code $(cat out.json 2>/dev/null)"
+            [ "$code" = "200" ] && exit 0
+            sleep 10
+          done
+          exit 1

@@ -26,6 +26,8 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api/dashboards/deck/')) return true;
   if (pathname.startsWith('/api/auth')) return true;
   if (pathname === '/api/health') return true;
+  // Keep-warm calls from GitHub Actions: Bearer HUB_WARM_TOKEN, checked in the route.
+  if (pathname === '/api/cron/warm') return true;
   if (pathname === '/api/webhooks/resend') return true;
   if (pathname === '/api/webhooks/agentmail') return true;
   if (pathname === '/api/webhooks/gcp-billing') return true;
