@@ -12,6 +12,10 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
 - **D1 (2026-11-18): "Live" means only "posts actually go to Instagram"** (`publishing_live`). Generating gets its own name, for example "making posts". User: "1 yes".
 - **D2 (2026-11-18): Pool refill is its own switch, separate from Generate**, with a small spend cap for each type. User: "2 yes".
 
+- **D3 (2026-11-18): Refill runs even when the day's quota is full.** User: "yes".
+- **D4 (2026-11-18): Retired series (Free vs Paid, Guess the Number) stop refilling as part of the build, not sooner.** User: "yes".
+- Out of scope: the committed `.env.local.bak.*` file. User: "Lucas is handling it".
+
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
 | Type | Generate now | Newest pool refill | Verdict |
 |---|---|---|---|
