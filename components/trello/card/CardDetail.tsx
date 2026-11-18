@@ -31,6 +31,7 @@ import { AttachmentPicker } from "@/components/trello/card/rail/pickers/Attachme
 import { CopyAction } from "@/components/trello/card/rail/actions/CopyAction";
 import { ArchiveAction } from "@/components/trello/card/rail/actions/ArchiveAction";
 import type { Board, Card, List, User } from "@/lib/trello/types";
+import { detailsPending } from "@/lib/trello/card-details";
 
 type Props = {
   card: Card;
@@ -91,6 +92,8 @@ export function CardDetail({
     .filter((l): l is NonNullable<typeof l> => !!l);
   const createdBy = users.find((u) => u.id === card.createdById);
   const dstate = dueState(card.due, card.complete);
+  // Comments and activity arrive a moment after the card opens.
+  const loading = detailsPending(card);
 
   return (
     <Dialog.Root open onOpenChange={(o) => !o && onClose()}>
@@ -285,7 +288,7 @@ export function CardDetail({
                     <Tabs.List className="flex gap-4 border-b border-neutral-200">
                       <TabTrigger value="comments">
                         Comments
-                        {card.comments.length > 0 && (
+                        {!loading && card.comments.length > 0 && (
                           <span className="ml-1.5 text-[11px] tabular-nums text-ink-mute">
                             {card.comments.length}
                           </span>
@@ -293,7 +296,7 @@ export function CardDetail({
                       </TabTrigger>
                       <TabTrigger value="activity">
                         Activity
-                        {card.activity.length > 0 && (
+                        {!loading && card.activity.length > 0 && (
                           <span className="ml-1.5 text-[11px] tabular-nums text-ink-mute">
                             {card.activity.length}
                           </span>
@@ -303,12 +306,17 @@ export function CardDetail({
                     <Tabs.Content value="comments" className="pt-4">
                       <CommentComposer onSubmit={onAddComment} />
                       <ul className="mt-4 flex flex-col gap-4">
-                        {card.comments.length === 0 && (
+                        {loading && (
+                          <li className="text-[12.5px] text-ink-mute">
+                            Loading…
+                          </li>
+                        )}
+                        {!loading && card.comments.length === 0 && (
                           <li className="text-[12.5px] text-ink-mute">
                             No comments yet.
                           </li>
                         )}
-                        {card.comments.map((cm) => {
+                        {!loading && card.comments.map((cm) => {
                           const author = users.find((u) => u.id === cm.authorId);
                           return (
                             <li key={cm.id} className="flex gap-3">
@@ -337,12 +345,17 @@ export function CardDetail({
                     </Tabs.Content>
                     <Tabs.Content value="activity" className="pt-4">
                       <ul className="flex flex-col gap-3">
-                        {card.activity.length === 0 && (
+                        {loading && (
+                          <li className="text-[12.5px] text-ink-mute">
+                            Loading…
+                          </li>
+                        )}
+                        {!loading && card.activity.length === 0 && (
                           <li className="text-[12.5px] text-ink-mute">
                             Nothing to show yet.
                           </li>
                         )}
-                        {card.activity
+                        {!loading && card.activity
                           .slice()
                           .reverse()
                           .map((ac) => {

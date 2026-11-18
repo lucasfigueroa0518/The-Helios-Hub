@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Board as BoardType,
   BoardId,
@@ -12,6 +12,8 @@ import type {
 } from "@/lib/trello/types";
 import { type UserProfile } from "@/lib/trello/types";
 import { cardAssociatedWithUser, cardMatchesUserFilter } from "@/lib/trello/card-filter";
+import { detailsPending, withDetails } from "@/lib/trello/card-details";
+import { loadCardDetails } from "@/app/trello/actions/cardDetails";
 
 /**
  * Patch shape accepted by useBoardState.updateProfile. Widens
@@ -1061,6 +1063,8 @@ export function useBoardState(initial: LoadedWorkspace) {
       ],
       createdAt: now,
       createdById: me.id,
+      // Details not loaded yet: the copy starts with no comments, like a loaded copy.
+      ...(src.counts ? { counts: { ...src.counts, comments: 0 }, myLastActivityAt: now } : {}),
     };
     setCards((prev) => {
       // Insert directly after the source card in the same list.
@@ -1264,6 +1268,22 @@ export function useBoardState(initial: LoadedWorkspace) {
     () => cards.find((c) => c.id === activeCardId) ?? null,
     [cards, activeCardId]
   );
+
+  // A card's checklists, attachments, comments and activity load when it opens
+  // (the workspace carries only their counts). Once per card; a failed read is
+  // retried the next time the card opens.
+  const detailRequests = useRef(new Set<string>());
+  useEffect(() => {
+    if (!activeCard || !detailsPending(activeCard) || detailRequests.current.has(activeCard.id)) return;
+    const cardId = activeCard.id;
+    detailRequests.current.add(cardId);
+    loadCardDetails(cardId)
+      .then((details) => setCards((prev) => prev.map((c) => (c.id === cardId ? withDetails(c, details) : c))))
+      .catch((err) => {
+        detailRequests.current.delete(cardId);
+        console.error("[loadCardDetails]", err);
+      });
+  }, [activeCard]);
 
   return {
     me,

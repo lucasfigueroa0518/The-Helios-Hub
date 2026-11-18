@@ -222,6 +222,7 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
               {s.activeView === "sv_activity" && (
                 <ActivityView
                   cards={s.allCards}
+                  search={s.search}
                   lists={s.allLists}
                   boards={s.boards}
                   users={s.users}
@@ -243,6 +244,7 @@ export default function PageClient({ initial }: { initial: LoadedWorkspace }) {
                   me={me}
                   profile={s.profile}
                   cards={s.allCards}
+                  search={s.search}
                   lists={s.allLists}
                   boards={s.boards}
                   favoriteBoardIds={s.myFavoriteBoardIds}
