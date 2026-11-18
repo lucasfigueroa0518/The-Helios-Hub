@@ -20,6 +20,9 @@ import { mintSessionCookie } from './session.mjs';
 const PERF_DIR = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, cur, i, all) => (cur.startsWith('--') ? [...acc, [cur.slice(2), all[i + 1]]] : acc), []));
 const FROM = args.from ?? '/hub';
+// Any sidebar link: --href /trello --ready 'button[class*="h-[128px]"]' (default: Social Hub's Content page).
+const HREF = args.href ?? '/social';
+const READY = args.ready ?? '#today-strip';
 const RUNS = Number(args.runs ?? 10);
 const HOVER = Number(args.hover ?? 250);
 const PORT = Number(args.port ?? 3100);
@@ -27,7 +30,7 @@ const DIR = path.resolve(args.dir ?? '.');
 const proxied = new URL(process.env.DATABASE_URL);
 const target = `${proxied.hostname}:${proxied.port || 5432}`;
 proxied.port = '6543';
-const procs = [spawn(process.execPath, [path.join(PERF_DIR, 'lib/latency-proxy.mjs'), '--listen', '6543', '--target', target, '--one-way-ms', '2.5'], { stdio: 'ignore' })];
+const procs = [spawn(process.execPath, [path.join(PERF_DIR, 'lib/latency-proxy.mjs'), '--listen', '6543', '--target', target, '--one-way-ms', String(args['db-ms'] ?? 2.5)], { stdio: 'ignore' })];
 procs.push(spawn(path.join(DIR, 'node_modules/.bin/next'), ['start', '-p', String(PORT), '-H', '127.0.0.1'], {
   cwd: DIR, stdio: 'ignore', detached: true,
   env: { ...process.env, NODE_ENV: 'production', VERCEL: '1', DATABASE_URL: proxied.toString(), DIRECT_DATABASE_URL: proxied.toString() },
@@ -49,18 +52,18 @@ for (let run = 0; run < RUNS + 1; run += 1) {
   await page.goto(`http://127.0.0.1:${PORT}${FROM}`, { waitUntil: 'networkidle', timeout: 120000 });
   await page.waitForTimeout(Number(args.settle ?? 1500)); // the page as a person sees it before reaching for the menu
   if (args.precss) await page.evaluate((hrefs) => Promise.all(hrefs.split(',').map((h) => new Promise((r) => { const l = document.createElement('link'); l.rel = args_mode(); l.as = 'style'; l.href = h; l.onload = l.onerror = r; document.head.appendChild(l); function args_mode() { return 'preload'; } }))), args.precss);
-  const link = page.locator('a.hub-nav-item__row[href="/social"]').first();
+  const link = page.locator(`a.hub-nav-item__row[href="${HREF}"]`).first();
   await link.hover();
   await page.waitForTimeout(HOVER);
-  const ms = await page.evaluate(() => new Promise((resolve) => {
-    const link = document.querySelector('a.hub-nav-item__row[href="/social"]');
+  const ms = await page.evaluate(([HREF, READY]) => new Promise((resolve) => {
+    const link = document.querySelector(`a.hub-nav-item__row[href="${HREF}"]`);
     const t0 = performance.now();
     window.__t0 = t0;
     window.__long = [];
     new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__long.push([Math.round(e.startTime - t0), Math.round(e.duration)]); }).observe({ type: 'longtask' });
     const done = () => {
-      if (location.pathname !== '/social') return false;
-      if (!document.querySelector('#today-strip')) return false;
+      if (location.pathname !== HREF) return false;
+      if (!document.querySelector(READY)) return false;
       if (document.querySelector('.sh-loading, [data-hub-loading], [aria-busy="true"]')) return false;
       const imgs = [...document.querySelectorAll('.sh img')];
       return imgs.every((img) => img.complete);
@@ -68,16 +71,16 @@ for (let run = 0; run < RUNS + 1; run += 1) {
     const marks = {};
     const mark = (k, ok) => { if (ok && marks[k] == null) marks[k] = Math.round(performance.now() - t0); };
     const tick = () => {
-      mark('url', location.pathname === '/social');
+      mark('url', location.pathname === HREF);
       mark('skeleton', Boolean(document.querySelector('.sh-page-loading')));
       mark('shRoot', Boolean(document.querySelector('.sh')));
-      mark('strip', Boolean(document.querySelector('#today-strip')));
-      mark('notBusy', location.pathname === '/social' && !document.querySelector('[aria-busy="true"]'));
+      mark('ready', Boolean(document.querySelector(READY)));
+      mark('notBusy', location.pathname === HREF && !document.querySelector('[aria-busy="true"]'));
       if (done()) { window.__marks = marks; resolve(performance.now() - t0); } else requestAnimationFrame(tick);
     };
     link.click();
     requestAnimationFrame(tick);
-  }));
+  }), [HREF, READY]);
   if (run > 0) results.push(ms); // first run warms the server's caches and code
   const rsc = await page.evaluate((args_all) => performance.getEntriesByType('resource')
     .filter((e) => args_all || e.name.includes('_rsc=') || e.name.includes('/api/hub/warm'))
@@ -90,7 +93,7 @@ for (let run = 0; run < RUNS + 1; run += 1) {
 await browser.close();
 const sorted = [...results].sort((a, b) => a - b);
 const pick = (q) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))];
-const summary = { from: FROM, hoverMs: HOVER, runs: RUNS, p50: +pick(0.5).toFixed(1), p95: +pick(0.95).toFixed(1), max: +sorted.at(-1).toFixed(1), all: results.map((x) => +x.toFixed(1)) };
+const summary = { from: FROM, href: HREF, hoverMs: HOVER, runs: RUNS, p50: +pick(0.5).toFixed(1), p95: +pick(0.95).toFixed(1), max: +sorted.at(-1).toFixed(1), all: results.map((x) => +x.toFixed(1)) };
 console.log(JSON.stringify(summary));
 if (args.out) fs.writeFileSync(args.out, JSON.stringify(summary, null, 2));
 stop();
