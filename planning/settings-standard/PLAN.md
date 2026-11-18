@@ -41,6 +41,12 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
   - Paused: the code stays, all four switches are off, and the type collapses to a "Paused" row in the hub with one "Bring back" button.
   - Retired: the code is gone, the saved settings are switched off, and leftover pool rows are archived with reason `retired`. History is kept and nothing is deleted.
 
+- **D11 (2026-11-18): The build cleans up leftovers from every retired type, not just the two Stories series.** User: "And other retired types".
+  Inventory (read-only check, 2026-11-18):
+  - Free vs Paid and Guess the Number: still listed in `stories.settings.series` with `auto: true`, and 58 rows still open in `stories.pool`. Plan: switch them off and archive the rows with reason `retired`.
+  - `helios_social` schema: 6 tables (`posts`, `post_assets`, `post_slides`, `judge_shadow_ledger`, `article_queue`, `image_cache`), `posts` is empty, and nothing in the code reads it. Looks like an abandoned early version. Dropping it is destructive, so it needs the user's explicit go-ahead.
+  - The other 10 types in `Vertical` are active, or paused in the case of Carousels. `lib/memes` is still used (43 references), so it isn't retired.
+
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
 | Type | Generate now | Newest pool refill | Verdict |
 |---|---|---|---|
