@@ -201,8 +201,8 @@ export async function motionCurves(root) {
   const todo = frames.filter((f) => cache.frames?.[f.id]?.key !== frameKey(root, f));
   const result = { frames: Object.fromEntries(frames.filter((f) => !todo.includes(f)).map((f) => [f.id, cache.frames[f.id]])) };
   if (!todo.length) return { ok: true, measured: 0, ...result };
-  const { driver, findChrome } = await import('./bounds.mjs');
-  const { preparedScene } = await import('./try.mjs');
+  const { driver, findChrome } = await import(/* webpackIgnore: true */ './bounds.mjs'); // the web app bundles sound.mjs: keep the browser kit out
+  const { preparedScene } = await import(/* webpackIgnore: true */ './try.mjs');
   const drv = await driver();
   const exe = drv && findChrome();
   if (!drv || !exe) return { ok: true, measured: 0, skipped: !drv ? 'no browser driver' : 'no headless Chrome', ...result };
@@ -215,7 +215,7 @@ export async function motionCurves(root) {
     for (const f of todo) {
       let scene;
       try {
-        scene = (await import(`${pathToFileURL(join(root, 'assets', 'frames', `${f.id}.js`)).href}?sync`)).default;
+        scene = (await import(/* webpackIgnore: true */ `${pathToFileURL(join(root, 'assets', 'frames', `${f.id}.js`)).href}?sync`)).default;
         if (typeof scene?.draw === 'function') scene = await preparedScene(root, scene, f.duration);
       } catch (e) {
         errors.push(`${f.id}: failed to load (${e?.message ?? e})`);
