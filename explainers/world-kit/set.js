@@ -39,6 +39,7 @@ import { FACE_KEEPOUT } from './outfits.js';
 import { T, el, g, id, isDark, TONES, tonesOf } from './draw.js';
 import { blurDef, hashId, V3, glow, lightColor, irradiance, mood as moodOf, hazed } from './light.js';
 import * as K from './lens.js';
+import { roomMood, tok as roomTok } from './analogy.js';
 
 const { add, sub, mul, dot, cross, norm, len } = V3;
 const add3 = add;
@@ -2809,3 +2810,77 @@ function inConvex(p, poly) {
 }
 
 export { CONTENT_KINDS };
+
+// ── The analogy room (VISUAL_SYSTEM_6 §5) ─────────────────────────────────────────────────
+// Additive: only analogy frames use these. Flat planes in the room tones (analogy.js roomMood);
+// no gradient, filter, glow or outline.
+
+const FRONT_CAMERA = { back: 300, eye: 333, dist: 975, fov: 40, horizon: 510 };
+// Analogy (VS6 §5): frontRoom's level lens.
+export function frontCamera(o = {}) {
+  const { back, eye, dist, fov, horizon, x } = { ...FRONT_CAMERA, x: 0, ...o };
+  return { pos: [x, back - dist, eye], target: [x, back, eye], fov, cy: horizon };
+}
+
+// Analogy (VS6 §5): the front-on room, mood day | dusk (slate walls, lamps lit, windows dark) → { env }.
+export function frontRoom(P, R, o = {}) {
+  const { back = FRONT_CAMERA.back, x = [-420, 420], near = -900, h = 270, wainscot = 70, boards = 15, windows = [], rug = null, pendants = [], mood: md } = o;
+  const MR = roomMood(md ?? (['day', 'dusk'].includes(R?.mood?.name) ? R.mood.name : 'day'));
+  const dark = MR.windows === 'dark';
+  const [x0, x1] = x;
+  const k = P.scaleAt(0, back, 0);
+  const env = [];
+  const wq = (a0, a1, z0, z1, fill) => K.quad(P, [[a0, back, z1], [a1, back, z1], [a1, back, z0], [a0, back, z0]], fill);
+  const fl = [K.quad(P, [[x0 * 2.2, back, 0], [x1 * 2.2, back, 0], [x1 * 2.2, near, 0], [x0 * 2.2, near, 0]], MR.floor)];
+  const span = x1 - x0;
+  let d = '';
+  for (let i = -boards; i <= boards * 2; i++) {
+    const X = x0 + (i * span) / boards;
+    const cut = K.clipNear(P, [[X, back, 0], [X, near, 0], [X + 0.01, near, 0], [X + 0.01, back, 0]]);
+    if (cut.screen.length < 2) continue;
+    const a = P(X, back, 0);
+    const b = cut.screen.reduce((m, q) => (q[1] > m[1] ? q : m), cut.screen[0]);
+    d += `M${n1(a[0])},${n1(a[1])}L${n1(b[0])},${n1(b[1])}`;
+  }
+  for (const yy of [back - 120, back - 260, back - 430]) {
+    const a = P(x0 * 2.2, yy, 0);
+    const b = P(x1 * 2.2, yy, 0);
+    if (a[2] > (P.near ?? 5) + 1) d += `M${n1(a[0])},${n1(a[1])}L${n1(b[0])},${n1(b[1])}`;
+  }
+  fl.push(el('path', { d, stroke: MR.board, 'stroke-width': n2(Math.max(1.5, 1.1 * k)), fill: 'none' }));
+  env.push({ svg: g({ 'data-set-part': 'floor' }, fl), at: [0, (back + near) / 2, 0], part: 'floor' });
+  if (rug) {
+    const [rx0, rx1] = rug.x;
+    const [ry0, ry1] = rug.y;
+    const inset = 12;
+    env.push({ svg: K.quad(P, [[rx0, ry1, 0.3], [rx1, ry1, 0.3], [rx1, ry0, 0.3], [rx0, ry0, 0.3]], roomTok('slate-shade')) + K.quad(P, [[rx0 + inset, ry1 - inset, 0.4], [rx1 - inset, ry1 - inset, 0.4], [rx1 - inset, ry0 + inset, 0.4], [rx0 + inset, ry0 + inset, 0.4]], roomTok('slate')), at: [(rx0 + rx1) / 2, (ry0 + ry1) / 2, 0], part: 'rug' });
+  }
+  const w = [wq(x0, x1, 0, h, MR.wall), wq(x0, x1, 0, wainscot, MR.wainscot)];
+  const panel = (span * 0.81) / 6.2;
+  let pd = '';
+  for (let i = 0; i < 7; i++) {
+    const a0 = x0 + 11 + i * panel * 1.25;
+    if (a0 + panel > x1) break;
+    const q = [P(a0, back, wainscot * 0.84), P(a0 + panel, back, wainscot * 0.84), P(a0 + panel, back, wainscot * 0.23), P(a0, back, wainscot * 0.23)];
+    pd += `M${q.map((p) => `${n1(p[0])},${n1(p[1])}`).join('L')}Z`;
+  }
+  w.push(el('path', { d: pd, fill: 'none', stroke: MR.trim, 'stroke-width': n2(Math.max(2, 1.5 * k)), 'stroke-linejoin': 'round' }));
+  w.push(wq(x0, x1, wainscot, wainscot + 3.7, MR.trim));
+  w.push(wq(x0, x1, 0, 9, roomTok('wood')));
+  for (const win of windows) {
+    const { x: wx, z: wz = 120, w: ww = 90, h: wh = 100 } = win;
+    const fr = 3.7;
+    w.push(wq(wx - fr, wx + ww + fr, wz - fr, wz + wh + fr, MR.trim));
+    w.push(wq(wx, wx + ww, wz, wz + wh, dark ? MR.window : roomTok('window')));
+    w.push(wq(wx + ww / 2 - 1.85, wx + ww / 2 + 1.85, wz, wz + wh, MR.trim) + wq(wx, wx + ww, wz + wh / 2 - 1.85, wz + wh / 2 + 1.85, MR.trim));
+  }
+  env.push({ svg: g({ 'data-set-part': 'wall' }, w), at: [0, back, h / 2], part: 'wall' });
+  for (const pnd of pendants) {
+    const top = P(pnd.x, back - 40, h);
+    const at = P(pnd.x, back - 40, pnd.z ?? 200);
+    const sc = P.scaleAt(pnd.x, back - 40, pnd.z ?? 200);
+    const shade = MR.lamps ? roomTok('mustard-lit') : roomTok('mustard');
+    env.push({ svg: el('path', { d: `M${n1(top[0])},${n1(top[1])}V${n1(at[1])}`, stroke: roomTok('ink'), 'stroke-width': n2(Math.max(2, 1.5 * sc)) }) + el('polygon', { points: [[at[0] - 7 * sc, at[1]], [at[0] + 7 * sc, at[1]], [at[0] + 15 * sc, at[1] + 15 * sc], [at[0] - 15 * sc, at[1] + 15 * sc]].map((q) => `${n1(q[0])},${n1(q[1])}`).join(' '), fill: shade }), at: [pnd.x, back - 40, pnd.z ?? 200], part: 'lamp' });
+  }
+  return { env };
+}

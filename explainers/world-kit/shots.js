@@ -15,6 +15,11 @@
 //                                  draw(shot, local) returns the scene's parts (in a lens.js
 //                                  perspective shot, o.lens, possibly as { bg, mid, fg })
 //   validateShots(shots, dur)      the shot list's shape, as error strings (kinds, order, push)
+//   snapCuts(shots)                the cut rule as geometry: a cut that stays on the same picture
+//                                  (crop) or subject (camera) gets its wider shot pulled back to 2×;
+//                                  shotFrame applies it (the tighter shot is never pushed in)
+//   shot.picture                   a crop shot that draws its own composition names it (any
+//                                  string): a cut to another picture is a cut to a new subject
 //
 // 4.1 camera shots (a shot carries its lens camera; see "Cut grammar" below):
 //   shotLensAt(shot, local, len)   its camera with its one eased move
@@ -36,6 +41,8 @@ import { frame, E } from './motion.js';
 import { T, el, g, id, ref, groundName } from './draw.js';
 import { GROUNDS } from './core.js';
 import { lens, cameraAt, worldAt, framedBoxes, framedLabels, SAFE } from './lens.js';
+import { placeCast, setPlaceKeep, staysInPlace, shotCameraOverride } from './continuity.js';
+import { setView } from './layout.js';
 
 /** Shot kinds (EX3-90): cameras on the one scene. */
 export const SHOT_KINDS = {
@@ -112,14 +119,33 @@ const LAYERS = ['bg', 'mid', 'fg'];
  * what is in view. `o` passes through to frame() (pivot, lens); `seam` as frame().
  */
 export function shotFrame(t, shots, draw, o = {}, seam = null) {
-  const { i, shot, local, length } = shotAt(t, shots);
+  // the cut rule is geometry, not a check: a cut on the same picture or subject is snapped to 2× in
+  // or ½ out before anything is framed (snapCuts; the try measures the same snapped list)
+  const snapped = snapCuts(shots);
+  const { i, shot: listed, local, length } = shotAt(t, snapped);
+  // 2026-11-17: a camera shot fitted by scene-fit.js (subject clear of blockers, whole in the safe
+  // area at its kind's size) is drawn with its fitted camera
+  const fitted = isCameraShot(listed) ? shotCameraOverride(shots, i) : null;
+  const shot = fitted ? { ...listed, camera: fitted } : listed;
   // a camera shot (4.1) is framed by its lens alone: draw(shot, local, i, { P, cam, inShot })
   // draws through P, and no 2D crop is stacked on it
   const lensShot = isCameraShot(shot);
   const cam = lensShot ? shotLensAt(shot, local, length) : null;
   const P = lensShot ? lens(cam) : null;
   const camera = lensShot ? { x: 0, y: 0, zoom: 1, rot: 0, tilt: 0 } : shotCamera(shot, local, length, o.pivot ?? [540, 960]);
-  const parts = draw(shot, local, i, lensShot ? { P, cam, inShot: (id) => inShot(shot, id) } : undefined);
+  // while the shot draws, layout.js knows its crop (viewSafe, inSafe, placeText work in the drawing's
+  // coordinates and land on screen inside the safe area)
+  const prev = setView(lensShot ? null : { on: shot.on ?? SUBJECT_AT, zoom: camera.zoom, at: SUBJECT_AT });
+  // a critter still in the shot's place stays drawn whatever its cast says (castItems and
+  // render() read it; the camera decides whether it shows)
+  const prevKeep = setPlaceKeep(lensShot ? placeCast(snapped, i) : null);
+  let parts;
+  try {
+    parts = draw(shot, local, i, lensShot ? { P, cam, inShot: (id) => inShot(shot, id) } : undefined);
+  } finally {
+    setView(prev);
+    setPlaceKeep(prevKeep);
+  }
   // hx-4.1: a perspective shot's scene may come as its stack { bg, mid, fg } (the same in every
   // shot; frame() refuses it on the iso camera, which has no depth). Anything else is a layer the
   // shot added.
@@ -149,6 +175,7 @@ export function validateShots(shots, duration) {
     else if (!SHOT_KINDS[s.kind]) errors.push(`shot ${k + 1}: unknown kind "${s.kind}" (${Object.keys(SHOT_KINDS).join(', ')})`);
     if (!(s.at >= 0) || (k > 0 && s.at <= shots[k - 1].at)) errors.push(`shot ${k + 1}: starts at ${s.at}s; shots run in order from 0`);
     if ((s.push ?? 1) > MAX_PUSH) errors.push(`shot ${k + 1}: push ${s.push}× is over ${MAX_PUSH}×`);
+    if (s.picture !== undefined && (typeof s.picture !== 'string' || !s.picture)) errors.push(`shot ${k + 1}: picture names the composition it draws (a non-empty string)`);
   });
   if (shots[0]?.at !== 0) errors.push('the first shot starts at 0s');
   errors.push(...cutProblems(shots, { duration }));
@@ -365,11 +392,157 @@ export function jumpCutProblems(shots, { samples = null, duration } = {}) {
   return out;
 }
 
+// ── The cut rule as geometry (snapCuts) ──────────────────────────────────────────────────
+//
+// The builder states the intent (each shot's kind, subject and size); code keeps the cut rule. A
+// cut that stays on one picture (crop shots) or one subject (camera shots) goes in at least
+// JUMP_CUT_RATIO or out to at most its inverse. snapCuts only ever widens: on a cut in, the
+// outgoing (wider) shot is pulled back; on a cut out, the incoming (wider) one is. The tighter shot
+// keeps the size it was composed for, so a snap never pushes a text or a face out of frame. A pull
+// back past SNAP_FLOOR_ZOOM (a crop: the drawing would shrink, and its text with it) or past
+// MAX_PULL_BACK (a camera) is not made: the check names that cut.
+
+/** Two crop views of one drawing that overlap by this share of the smaller show the same picture. */
+const SAME_PICTURE = 0.5;
+/** A snapped crop never goes wider than this zoom (the drawing as composed, never shrunk). */
+const SNAP_FLOOR_ZOOM = 1;
+/** A snapped camera is pulled back at most this many times its distance to the subject. */
+const MAX_PULL_BACK = 1.6;
+/** Snapped sizes clear the rule by this margin (a camera's by more: the try reads it off boxes). */
+const SNAP_MARGIN = 1.02;
+const SNAP_MARGIN_CAMERA = 1.08;
+const KIND_RANK = { wide: 0, medium: 1, close: 2, insert: 3, reaction: 4 };
+
+/** The part of the drawing a crop shot shows at `zoom` ([x0, y0, x1, y1], drawing px). */
+function cropView(shot, zoom) {
+  const [ox, oy] = shot?.on ?? SUBJECT_AT;
+  return [ox - SUBJECT_AT[0] / zoom, oy - SUBJECT_AT[1] / zoom, ox + (1080 - SUBJECT_AT[0]) / zoom, oy + (1920 - SUBJECT_AT[1]) / zoom];
+}
+const boxArea = (b) => Math.max(0, b[2] - b[0]) * Math.max(0, b[3] - b[1]);
+const overlapShare = (a, b) => boxArea([Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]) / Math.max(1e-9, Math.min(boxArea(a), boxArea(b)));
+/** A planned bridge (another place, a carry, a change of look) is never a jump cut. */
+const bridged = (a, b) => (a.place ?? 'main') !== (b.place ?? 'main') || !!a.carry || !!b.carry || (!!a.look && !!b.look && a.look !== b.look);
+/** In (true) or out (false): the declared size change, else the kinds' order, else in. */
+const goesIn = (r, a, b) => (r > 1 + 1e-4 ? true : r < 1 - 1e-4 ? false : (KIND_RANK[b.kind] ?? 1) >= (KIND_RANK[a.kind] ?? 1));
+const inBand = (r) => r < JUMP_CUT_RATIO - 1e-3 && r > 1 / JUMP_CUT_RATIO + 1e-3;
+
+/**
+ * True when a crop cut keeps its framing: no jump cut. The outgoing shot's last zoom and the
+ * incoming one's first agree within 1%, `on` within SAME_VIEW_PX: nothing on screen jumps. Either
+ * the drawing goes on (the cut does not show) or the shot draws a new composition (name it with
+ * `picture`).
+ */
+export function sameFraming(a, b, lenA = 3, lenB = 3) {
+  if (!a || !b || isCameraShot(a) || isCameraShot(b)) return false;
+  const za = shotCamera(a, lenA, lenA).zoom;
+  const zb = shotCamera(b, 0, lenB).zoom;
+  const [pa, pb] = [a.on ?? SUBJECT_AT, b.on ?? SUBJECT_AT];
+  return Math.abs(zb / za - 1) < 0.01 && Math.hypot(pa[0] - pb[0], pa[1] - pb[1]) < SAME_VIEW_PX;
+}
+
+/** The size ratio (incoming ÷ outgoing) of a cut the rule measures, or null (a bridge, a new picture
+ *  or subject, the same framing, crop and camera mixed, or not measurable). */
+function cutRatio(a, b, lenA, lenB) {
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || bridged(a, b)) return null;
+  const ca = isCameraShot(a);
+  const cb = isCameraShot(b);
+  if (!ca && !cb) {
+    if ((a.picture ?? null) !== (b.picture ?? null) || sameFraming(a, b, lenA, lenB)) return null;
+    const za = shotCamera(a, lenA, lenA).zoom;
+    const zb = shotCamera(b, 0, lenB).zoom;
+    if (overlapShare(cropView(a, za), cropView(b, zb)) < SAME_PICTURE) return null; // another part of the drawing
+    return zb / za;
+  }
+  if (ca && cb) {
+    const s = subjectOf(a);
+    if (!s || s !== subjectOf(b)) return null;
+    const s0 = cameraSize(a, lenA, lenA);
+    const s1 = cameraSize(b, 0, lenB);
+    return s0 && s1 ? s1 / s0 : null;
+  }
+  return null;
+}
+
+/** `shot` made `f` (> 1) times wider: a crop's zoom ÷ f, a camera pulled back along its line to the
+ *  subject × f (the angle kept). Null past SNAP_FLOOR_ZOOM or MAX_PULL_BACK. */
+function widen(shot, f) {
+  if (isCameraShot(shot)) {
+    if (!shot.camera?.pos || !shot.camera?.target || f > MAX_PULL_BACK) return null;
+    const S = shot.subjectAt ?? shot.camera.target;
+    const p = [S[0], S[1], S[2] ?? 0];
+    const q = shot.camera.pos;
+    const pos = [0, 1, 2].map((k) => Number((p[k] + ((q[k] ?? 0) - p[k]) * f).toFixed(2)));
+    return { ...shot, camera: { ...shot.camera, pos }, snapped: shot.snapped ?? { pos: q } };
+  }
+  const base = shot.zoom ?? (SHOT_KINDS[shot.kind] ?? SHOT_KINDS.medium).zoom;
+  const zoom = base / f;
+  if (zoom < SNAP_FLOOR_ZOOM - 1e-6) return null;
+  return { ...shot, zoom: Number(zoom.toFixed(4)), snapped: shot.snapped ?? { zoom: base } };
+}
+
+/** The cut a → b brought to the rule by widening `which` ('a' or 'b'), or null. A camera's size is
+ *  not exactly 1/distance off its axis: measured again, up to three times. */
+function fixCut(a, b, lenA, lenB, which, want) {
+  let [x, y] = [a, b];
+  let r = cutRatio(x, y, lenA, lenB);
+  let f = 1;
+  for (let n = 0; n < 3 && r !== null && inBand(r); n++) {
+    f *= which === 'a' ? want / r : r / want;
+    const w = widen(which === 'a' ? a : b, f);
+    if (!w) return null;
+    [x, y] = which === 'a' ? [w, b] : [a, w];
+    r = cutRatio(x, y, lenA, lenB);
+  }
+  return r !== null && !inBand(r) ? (which === 'a' ? x : y) : null;
+}
+
+const SNAPPED = new WeakMap();
+/**
+ * The shot list with the cut rule applied, as shotFrame draws it and the try measures it. Each
+ * cut that stays on the same picture (crop shots: the same `picture`, views overlapping by
+ * SAME_PICTURE, not the very same framing) or the same subject (camera shots: shot.subject, else
+ * its cast's first) and changes its size by less than JUMP_CUT_RATIO either way has its wider shot
+ * pulled back to 2× (with a small margin): on a cut in the outgoing shot, on a cut out the incoming
+ * one, never past SNAP_FLOOR_ZOOM or MAX_PULL_BACK, and never so that the cut before it breaks. A
+ * snapped shot keeps what it was in `snapped`. Pure; the same list in gives the same list out.
+ */
+export function snapCuts(shots) {
+  if (!Array.isArray(shots) || shots.length < 2) return shots;
+  const hit = SNAPPED.get(shots);
+  if (hit) return hit;
+  const out = shots.slice();
+  const len = (k) => (out[k + 1]?.at ?? Infinity) - (out[k]?.at ?? 0);
+  for (let k = 1; k < out.length; k++) {
+    const [a, b] = [out[k - 1], out[k]];
+    if (!Number.isFinite(a?.at) || !Number.isFinite(b?.at)) continue;
+    const r = cutRatio(a, b, len(k - 1), len(k));
+    if (r === null || !inBand(r)) continue;
+    const margin = isCameraShot(a) ? SNAP_MARGIN_CAMERA : SNAP_MARGIN;
+    if (goesIn(r, a, b)) {
+      const wa = fixCut(a, b, len(k - 1), len(k), 'a', JUMP_CUT_RATIO * margin);
+      if (!wa) continue;
+      // the cut into the pulled-back shot must still hold
+      if (k >= 2) {
+        const before = cutRatio(out[k - 2], a, len(k - 2), len(k - 1));
+        const after = cutRatio(out[k - 2], wa, len(k - 2), len(k - 1));
+        if (after !== null && inBand(after) && !(before !== null && inBand(before))) continue;
+      }
+      out[k - 1] = wa;
+    } else {
+      const wb = fixCut(a, b, len(k - 1), len(k), 'b', 1 / (JUMP_CUT_RATIO * margin));
+      if (wb) out[k] = wb;
+    }
+  }
+  SNAPPED.set(shots, out);
+  return out;
+}
+
 /** True when entity `id` is in the shot's cast (a crop shot, which has no cast, shows everything). */
 export const inShot = (shot, id) => !Array.isArray(shot?.cast) || shot.cast.includes(id);
 /** Only the items the shot shows: items with an `id` outside its cast are dropped (set pieces
- *  without an id stay; they are the room). */
-export const castItems = (shot, items) => items.filter((it) => !it || typeof it !== 'object' || !it.id || inShot(shot, it.id));
+ *  without an id stay; they are the room), except a critter still in the place of the shot
+ *  shotFrame is drawing (placeCast): the camera, not the cast, decides whether it shows. */
+export const castItems = (shot, items) => items.filter((it) => !it || typeof it !== 'object' || !it.id || inShot(shot, it.id) || staysInPlace(it));
 
 /**
  * Labels belong to things (labelFor in lens.js), as error strings: each label's entity is visible

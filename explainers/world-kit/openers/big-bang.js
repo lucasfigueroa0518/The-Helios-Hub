@@ -1,5 +1,5 @@
 // Big Bang: empty paper, one small orange dot pulsing faster on a rising sub-bass; BOOM, the dot
-// bursts with shock rings and the hook springs out of it; "AI BRAIN BREAK" bursts out with it.
+// bursts with shock rings and the AI 101 card springs out of it (its title and chalkboard).
 import { T, g, el, defs, seg, lerp, E, scene, title, fill, shake, burst, slamMark, softShape, gloss } from './common.js';
 
 // four quarter arcs through the dot's extremes, so its drawn box is the whole dot
@@ -22,5 +22,5 @@ export default function draw(t, ctx) {
     const u = seg(t, BOOM + d, BOOM + d + 0.6, E.out);
     return u > 0 && u < 1 ? el('circle', { cx: 540, cy: 960, r: (40 + 1100 * u).toFixed(1), fill: 'none', stroke: d ? T['orange-lit'] : T.orange, 'stroke-width': (22 * (1 - u)).toFixed(1), opacity: (1 - u).toFixed(3) }) : '';
   }).join('');
-  return defs() + fill(T['paper-lit']) + springs + rings + burst(540, 960, seg(t, BOOM, BOOM + 0.45, (x) => x), 5) + slamMark(t, BOOM, { cy: 640, size: 116, from: 2.2 }) + title(ctx, t, ctx.M.titleAt);
+  return defs() + fill(T['paper-lit']) + springs + rings + burst(540, 960, seg(t, BOOM, BOOM + 0.45, (x) => x), 5) + (ctx.hook.lesson ? '' : slamMark(t, BOOM, { cy: 640, size: 116, from: 2.2, hold: ctx.M.silent ? Infinity : 1.0 })) + title(ctx, t, ctx.M.titleAt);
 }

@@ -1,6 +1,6 @@
-// Balloon Pop: an orange balloon with "AI BRAIN BREAK" on it inflates in wobbly gulps until it
+// Balloon Pop: an orange balloon with "AI 101" on it inflates in wobbly gulps until it
 // fills the screen, then POPS into paper confetti, and the hook is right there behind it.
-import { T, g, el, defs, seg, lerp, E, scene, title, wordmark, fill, shake, shaken, burst, softShape, gloss } from './common.js';
+import { T, g, el, defs, seg, lerp, E, scene, title, wordmark, fill, shake, shaken, burst, softShape, gloss, silentMark } from './common.js';
 
 // confetti: paper bits flung out from the middle
 const BITS = Array.from({ length: 46 }, (_, i) => {
@@ -62,6 +62,7 @@ export default function draw(t, ctx) {
   });
   parts.push(fill(T['paper-lit'], 0.85 * (1 - seg(t, POP, POP + 0.08, (x) => x))));
   parts.push(burst(540, 960, seg(t, POP, POP + 0.4, (x) => x), 5));
+  parts.push(silentMark(t, ctx));
   parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

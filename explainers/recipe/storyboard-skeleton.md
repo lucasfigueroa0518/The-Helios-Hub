@@ -13,7 +13,7 @@ music: none
 ## Visual arc
 
 - throughline: <fill in: the one visual idea the reel builds from the first frame to the tie-together, in one line>
-- colour script: <fill in: frame by frame, its mood or palette shift (1: …; 2: …; through 7)>
+- colour script: <fill in: frame by frame, its mood or palette shift (2: …; 3: …; through 7)>
 - motifs: <fill in: what recurs (a shape, a colour, a prop or a framing), and where it comes back changed>
 - intensity: <fill in: where contrast rises, where it eases, and where it resolves>
 - bridges: <fill in: each cut that is a bridge or a carry (frame N to M: the element and how it carries), or none>
@@ -23,19 +23,15 @@ music: none
 - metaphor: <fill in: BRIEF.md's named analogy, staged, in one line>
 - places:
   - <fill in: place id> — <interior or exterior: its kind> — <what happens there>
-- hook: <fill in: the picked hook from ## Hook, in motion at frame 0>
 - hero: <fill in: entity id> — <critter or object>
 - steps:
   - <fill in: what happens in the analogy> — <the real step's technical name>
 - entities:
   - <fill in: id> — <what it is> — stands for <the real part> — <how it is built> — beats <the beats it appears in>
+  - <fill in: id, for each critter> — <who it is> — stands for <the real part> — critter <body>, role <role or bare> — beats <the beats it appears in>
 - states: <fill in: each variable's start value, and how each beat changes it>
 
-## Hook
-
-<fill in: three hook candidates, each a moment in the anchor scene with the hero in it, rated 1–5 on standalone clarity and thumb-stop, then "- pick: <n> — <why>". See story-design.md § The plan's blocks.>
-
-## Frame 1 — Hook
+## Frame 1 — Opener
 
 - duration: 4.5s
 - hold: 0.15s
@@ -43,12 +39,7 @@ music: none
 - status: outline
 - src: compositions/frames/01-opener.html
 - type: hook
-- ground: <fill in: paper or stage>
-- look: <fill in: world or blend>
-- voiceover: "<fill in: BRIEF.md's ## Opener line, its ___ filled>"
-- shots:
-  - <fill in: one line per shot, as story-design.md § Shot lines writes it>
-- scene: <fill in: what the viewer sees, as a viewer would say it>
+- voiceover: "<fill in: empty unless BRIEF.md's ## Opener line gives a line (story-design.md § 1)>"
 
 ## Frame 2 — Quick definition
 
@@ -58,7 +49,7 @@ music: none
 - status: outline
 - src: compositions/frames/02-define.html
 - type: product_intro
-- ground: <fill in: paper or stage>
+- ground: <fill in: paper or stage; room only for an anchor-scene look: world frame staging the analogy>
 - look: <fill in: world, mechanism or blend>
 - voiceover: "<fill in: one plain sentence, about 15 words or fewer: [Term] is when …>"
 - shots:
@@ -78,7 +69,7 @@ music: none
 - voiceover: "Let's dive into this in everyday terms."
 - handoff_parts: <fill in: 2–3 entity ids of the analogy's mapped parts that matter most, or none>
 - world_sounds: <fill in: 1–2 foley words the analogy's world makes, from frame.md § Sound events, or none>
-- scene: The card "today's AI Brain Break: <the term>", the analogy's world showing around it
+- scene: The card "today's AI Lesson: <the term>", the analogy's world showing around it
 
 ## Frame 4 — The analogy plays
 
@@ -88,9 +79,9 @@ music: none
 - status: outline
 - src: compositions/frames/04-analogy.html
 - type: feature_showcase
-- ground: <fill in: paper or stage>
+- ground: <fill in: paper or stage; room only for an anchor-scene look: world frame staging the analogy>
 - look: <fill in: world, mechanism or blend>
-- voiceover: "<fill in: the analogy plays, continuing the hook's story>"
+- voiceover: "<fill in: the analogy plays, opening inside its action>"
 - shots:
   - <fill in: one line per shot>
 - scene: <fill in: what the viewer sees>
@@ -103,7 +94,7 @@ music: none
 - status: outline
 - src: compositions/frames/05-payoff.html
 - type: feature_showcase
-- ground: <fill in: paper or stage>
+- ground: <fill in: paper or stage; room only for an anchor-scene look: world frame staging the analogy>
 - look: <fill in: world, mechanism or blend>
 - definition: "<fill in: the term restated with the analogy attached, word for word as the voiceover's first sentence>"
 - part_of_speech: <fill in: usually noun>
@@ -135,7 +126,7 @@ music: none
 - status: outline
 - src: compositions/frames/07-tie.html
 - type: benefit_highlight
-- ground: <fill in: paper or stage>
+- ground: <fill in: paper or stage; room only for an anchor-scene look: world frame staging the analogy>
 - look: <fill in: world, mechanism or blend>
 - voiceover: "<fill in: the analogy's trait on the real example, then what it means for the viewer>"
 - shots:
@@ -150,6 +141,6 @@ music: none
 - src: compositions/frames/08-close.html
 - type: branding
 - ground: white
-- scene: White screen; the Helios logo animates in and AI BRAIN BREAK writes itself beneath it, centred together
+- scene: White screen; the Helios logo animates in and AI 101 writes itself beneath it, centred together
 
 The close is fixed and built by code (the kit's close.js): no voiceover, no hold, no look, no shots. Copy this block as it is.

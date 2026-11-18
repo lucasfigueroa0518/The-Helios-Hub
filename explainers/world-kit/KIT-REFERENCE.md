@@ -7,8 +7,8 @@ _The Explainers world kit, core (hx-4, visual system 4.0; from Explainer 2.0): t
 
 - `VERSION` = "hx-4"
 - `FRAME` = { w, h, safe }
-- `TOKENS` = { paper, paper-lit, paper-shade, paper-dark, paper-sweep, canvas, ink, ink-lit, ink-shade, ink-dark, text-secondary, text-tertiary, orange, orange-lit, orange-shade, orange-dark, orange-text, green, green-lit, green-shade, green-dark, yellow, yellow-lit, yellow-shade, yellow-dark, blue, blue-lit, blue-shade, blue-dark, teal, teal-lit, teal-shade, teal-dark, lilac, lilac-lit, lilac-shade, lilac-dark, red, red-lit, red-shade, red-dark, night, stage-top, stage-bottom, stage-orange, stage-red, sun-to… } (54 keys)
-- `PALETTE` = [paper, ink, orange, green, yellow, blue, teal, lilac, red] — The palette colors that have a 4-step ramp, by name.
+- `TOKENS` = { paper, paper-lit, paper-shade, paper-dark, paper-sweep, canvas, ink, ink-lit, ink-shade, ink-dark, text-secondary, text-tertiary, orange, orange-lit, orange-shade, orange-dark, orange-text, green, green-lit, green-shade, green-dark, yellow, yellow-lit, yellow-shade, yellow-dark, blue, blue-lit, blue-shade, blue-dark, teal, teal-lit, teal-shade, teal-dark, lilac, lilac-lit, lilac-shade, lilac-dark, red, red-lit, red-shade, red-dark, slate, slate-lit, slate-shade, slate-dark, mustard, mustard-lit… } (77 keys)
+- `PALETTE` = [paper, ink, orange, green, yellow, blue, teal, lilac, red, slate, mustard, wood, leaf] — The palette colors that have a 4-step ramp, by name.
 - `ramp(name)` — A palette color's ramp: { lit, base, shade, dark }.
 - `mixHex(a, b, t)` — Two hex colors mixed in linear light (t = share of b), as hex: the tints and falloffs a soft volume needs between the steps of one ramp.
 - `TONE_ALIASES` = { white } — Names a tone may also go by: `white` is the canvas (the outfits palette says white).
@@ -19,7 +19,7 @@ _The Explainers world kit, core (hx-4, visual system 4.0; from Explainer 2.0): t
 - `tok(name)`
 - `mix(a, b, t)` — A mix of exactly two palette tokens (V-T1).
 - `alpha(a, opacity)` — A palette token at an opacity, 0..1.
-- `GROUNDS` = { paper, stage, white } — The grounds (hx-4): `paper` the warm studio sweep (default), `stage` the Helios premium lit stage (the one dark ground), `white` the close only.
+- `GROUNDS` = { paper, stage, white, room } — The grounds (hx-4): `paper` the warm studio sweep (default), `stage` the Helios premium lit stage (the one dark ground), `white` the close only.
 - `GROUND_ALIASES` = { night, forest } — Grounds 4.0 retired, drawn as the stage so old projects still render (a storyboard naming them is a lint error).
 - `groundOf(name = 'paper')` — A ground by name, aliases resolved: { name, fill, dark }.
 - `LIGHT` = { key, ambient, bounce } — key: the screen direction the key light comes FROM (toward the top right); ambient: the share of light a face turned away still gets; bounce: the war…
@@ -94,7 +94,7 @@ _The Explainers world kit, drawing (hx-4, visual system 4.0: Soft 3D, still 08):
 - `ring(P, s, x, y, z, r0, r1, u, { color = line() } = {})` — A pulse ring lying flat on an iso plane, at a point of contact (u: 0..1 through it).
 - `shock(x, y, u, scale = 1, rays = [[-0.95, -0.55], [-0.35, -1], [0.35, -1.05]])` — Cartoon shock marks: three short tapered strokes that pop out and fade (u: 0..1).
 - `icon(name, x, y, size = 64, { color = line(), sw = 2 } = {})` — A 24-unit line icon (Lucide style), centered at (x, y), size px wide.
-- `T` = { paper, paper-lit, paper-shade, paper-dark, paper-sweep, canvas, ink, ink-lit, ink-shade, ink-dark, text-secondary, text-tertiary, orange, orange-lit, orange-shade, orange-dark, orange-text, green, green-lit, green-shade, green-dark, yellow, yellow-lit, yellow-shade, yellow-dark, blue, blue-lit, blue-shade, blue-dark, teal, teal-lit, teal-shade, teal-dark, lilac, lilac-lit, lilac-shade, lilac-dark, red, red-lit, red-shade, red-dark, night, stage-top, stage-bottom, stage-orange, stage-red, sun-to… } (54 keys) — re-exported
+- `T` = { paper, paper-lit, paper-shade, paper-dark, paper-sweep, canvas, ink, ink-lit, ink-shade, ink-dark, text-secondary, text-tertiary, orange, orange-lit, orange-shade, orange-dark, orange-text, green, green-lit, green-shade, green-dark, yellow, yellow-lit, yellow-shade, yellow-dark, blue, blue-lit, blue-shade, blue-dark, teal, teal-lit, teal-shade, teal-dark, lilac, lilac-lit, lilac-shade, lilac-dark, red, red-lit, red-shade, red-dark, slate, slate-lit, slate-shade, slate-dark, mustard, mustard-lit… } (77 keys) — re-exported
 
 ## motion.js
 _The Explainers world kit (from Explainer 2.0), motion (hx-4): timing helpers and the frame every shot draws_
@@ -173,12 +173,14 @@ _The Explainers world kit, lens (hx-4.1; approved still 13 "depth & camera"): a 
 - `dedupeDefs(svg)` — Ids here are named from their content, so a gradient, clip or filter drawn by many solids is the same element many times: keep the first of each id, …
 - `byDistance(P, items)` — Items in draw order (farthest first), for tests and tools: the same order render() paints.
 - `boundsOf(it, P = null)`
+- `FLAT_CM` = 8 — Flat things (a sheet, a card, a folder, a tray, a desk) are at most this tall (cm), or lower than 0.6 of their width (a sheet tilted up as it is deal…
 - `paintOrder(P, list)`
     The paint order of render()'s items (4.1): farthest first by each item's `at`, corrected for
     things with extent. An item may give `bounds` (its world box; setBuilder gives its fixtures
     theirs); two items whose boxes a plane separates are painted back to front across that plane,
     so a long counter no longer paints over the critter in front of it, and a pin on a table's top
-    is never covered by the table. A topological sort over those pairs, ties by distance.
+    is never covered by the table; flat things that overlap lie in height order (stacked). A
+    topological sort over those pairs, ties by distance.
     @param {any} P  @param {Array<{ it: any, i: number, d: number }>} list
 - `SAFE` = { x0, x1, y0, y1 } — The safe area (FRAME.safe): x 96–940, y 570–1600.
 - `screenBox(P, at, size)` — The screen box of a world box (corner `at`, `size` [w, d, h] cm) through the lens.
@@ -310,6 +312,8 @@ _The Explainers world kit, set design (4.1, craft § 8; 4.2 exteriors): a place 
 - `setMetaFromSvg(svg)` — The set's meta from a drawn SVG (tags setBuilder leaves), so try.mjs can check a frame.
 - `setProblems(input, _SET = null, _o = {})` — The set check (try.mjs), 4.2: breakage only.
 - `faceCutProblems(samples)` — Faces cut by the set (principles §2, "faces are always whole"): in a drawn lens frame (or samples [{ t, svg }]), each critter facing the lens (view f…
+- `frontCamera(o = {})`
+- `frontRoom(P, R, o = {})`
 - `CONTENT_KINDS` = [books, binders, boxes, jars, files, goods, servers, folded, none] — re-exported
 
 ## shots.js
@@ -337,8 +341,10 @@ _The Explainers world kit, shots (Explainers 3.2, EX3-83; a camera only in 3.3, 
 - `cutAngle(a, b, p)` — The angle (deg) and height change (deg) between two cameras around the subject at p (a measuring helper; 4.2 checks no angle).
 - `cutProblems(shots, { duration, samples = null } = {})` — A shot's shape, as error strings (breakage only, 4.2): a camera shot reframes one way only (its lens, never a crop on top), has a camera with pos and…
 - `jumpCutProblems(shots, { samples = null, duration } = {})` — Jump cuts (4.2, Lucas: "avoid jump cuts like the plague"), as error strings: two consecutive shots in the same place on the same subject must change …
+- `sameFraming(a, b, lenA = 3, lenB = 3)` — True when a crop cut keeps its framing: no jump cut.
+- `snapCuts(shots)` — The shot list with the cut rule applied, as shotFrame draws it and the try measures it.
 - `inShot(shot, id)` — True when entity `id` is in the shot's cast (a crop shot, which has no cast, shows everything).
-- `castItems(shot, items)` — Only the items the shot shows: items with an `id` outside its cast are dropped (set pieces without an id stay; they are the room).
+- `castItems(shot, items)` — Only the items the shot shows: items with an `id` outside its cast are dropped (set pieces without an id stay; they are the room), except a critter s…
 - `labelProblems(samples, shots = null, { safe = SAFE, slack = 2 } = {})` — Labels belong to things (labelFor in lens.js), as error strings: each label's entity is visible in the sample and in the shot's cast, the label sits …
 - `sideCamera(a, b, { side = 'right', dist = 520, height = 120, look = 50, fov = 40, focus = null } = {})` — A lens camera side-on to the segment a → b (world points on the floor), so a traveller going from a to b crosses the screen to the `side` given ('rig…
 - `journey(from, to, o = {})` — A trip between two places (4.2, a tool): the voice says someone goes somewhere, and the picture shows the going. → to.
@@ -378,57 +384,54 @@ The camera is the only reframing: no `on`, `zoom` or `push` crop on top of it.
 ```
 
 ## cast.js
-_The Explainers world kit, cast (hx-4, Critter 2.0; from hx-3 / Explainers 3.2, EX3-77): critters,_
+_The Explainers world kit, cast (hx-6, VISUAL_SYSTEM_6 §3): critter D behind main's critter API._
 
 - `CRITTER_CM` = 72 — A critter's real height in cm: the ruler every world size is measured against.
 - `CRITTER_PX` = 142 — A critter's drawn height at scale 1, feet to crown (px).
 - `PX_PER_CM` = 1.9722222222222223 — Pixels per cm next to a scale-1 critter.
 - `heldScale(propCm, drawnPx = CRITTER_PX, cheat = undefined)` — The scale for a held prop of real size `propCm`: apply it to a prop drawing that is `drawnPx` tall at scale 1 (default: a drawing as tall as a critte…
-- `BODIES` = [orange, paper, ink, yellow, blue, teal, lilac, green] — The bodies a critter may have: ink (the default cast), paper, orange (the hero) and the light palette bodies.
-- `bodyOf(body = 'ink')` — The body's ramp { base, lit, shade, dark, bounce }; an unknown body throws with the list.
-- `BODY_D` = "M 66 -86 L 65.91 -75.28 L 65.66 -69.7 L 65.23 -65.2 L 64.63 -61.32 L 63.85 -57.85 L 62.91 -54.71 L 61.79 -51.84 L 60.4… — The body: 132 × 112, x ±66, y −142…−30 (the hx-3 footprint).
-- `eyes(cx, cy, { gap = 34, r = 15, look = [0, 0], lid = 0, lidTilt = 0, pupil = K('ink'), pr = 0.5, lash = null, rim = null, body = 'paper', lidColor = 'currentColor', D = null, L = 1, squeeze = null } = {})` — Two glossy eyes with pupils looking toward look = [x, y] in -1..1; lid 0 open … 1 closed (a blink draws a lash line in `lash`).
+- `BODIES` = [orange, green, ink, white, paper, yellow, blue, teal, lilac] — The bodies: orange (the hero), green, ink, white; then main's names, drawn white.
+- `bodyOf(body = 'ink')` — A body's flat colour, as main's ramp keys; an unknown body throws.
+- `BODY_D` = "M -26.16 -142 H 26.16 A 42.97 42.97 0 0 1 69.13 -99.03 V -57.92 A 42.97 42.97 0 0 1 26.16 -14.95 H -26.16 A 42.97 42.9… — The body outline (feet at 0, s 1).
+- `eyes(cx, cy, { gap = 34, r = 15, look = [0, 0], lid = 0, lidTilt = 0, pr = 0.5, body = 'paper', lidColor = null } = {})` — Two D eyes at (cx, cy).
 - `ARM_POSES` = { down, up, flail, push, carry, reach, feel, point, hold, offer, write, wave, shrug, think, cover, cheer, hips } (17 keys)
-- `MOODS` = { neutral, happy, confident, proud, sly, confused, worried, panicked, surprised, sad, angry, focused, pained, relieved, curious } (15 keys) — Named expressions.
-- `FACE_KEYS` = [look, lid, lidTilt, pr, mouth, brows] — The face keys a mood may set; anything else in a mood is ignored.
+- `MOODS` = { neutral, happy, confident, proud, sly, confused, worried, panicked, surprised, sad, angry, focused, pained, relieved, curious, sleepy } (16 keys) — Moods: each draws as its nearest D mood (`d`).
+- `FACE_KEYS` = [look, lid, lidTilt, pr, mouth, brows]
 - `MOUTHS` = [calm, o, flat, smile, grin, smirk, frown, wobble, grit]
 - `BROWS` = [calm, flat, up, high, worried, angry, raised]
 - `moodFace(mood)` — A mood's face settings only.
 - `WEAR` = [cap, tophat, chef, gradcap, glasses, headset, apron, backpack, bowtie, scarf]
 - `WEAR_ON_EYES` = [glasses] — The accessories that are allowed over the eyes.
-- `wearDrawing(wear, { body = 'ink', wearColor = null } = {})` — Just the accessories, as critter() draws them on a critter at the origin at scale 1 (for the face keep-out test and sheets): { behind, front, defs } …
-- `lookKey({ body = 'ink', wear = [], wearColor = null, outfit = null } = {})` — A critter's look, the part that never changes during a reel (EX3-107): its body, its outfit and any stock accessories.
+- `wearDrawing(wear, { body = 'ink' } = {})` — Stock wear as drawn: { front, behind } SVG (in the 200-unit tile) of the wear.js pieces they translate to; '' for the ones that draw bare.
+- `lookKey({ body = 'ink', wear = [], wearColor = null, outfit = null, role, head, bowtie, headTone } = {})` — A critter's look (data-look), the same in every frame: `body|wear+wear|wearColor`, then `|<outfit key>` when it wears an outfit, then `|role=<role>.<…
+- `D` = { INK, WHITE, GREY, BODY_COLORS, BODY_ALIASES, TILE, DK, f, MOODS, ARM_POSES, STATES, ACCENTS, LIMITS, lifeOf, faceOf, tile, bodyName, dMood, wearOf, WEAR_TO_ROLE, OUTFIT_HEAD_TO_ROLE, tileScale } (22 keys) — Critter D's internals (tile, 30 moods, 30 arm poses, 15 states, the acting accents and limits, wear translation), for wear.js, sheets and tests.
 - `VIEWS` = [front, back] — The ways a critter can face the lens.
 - `SIDES` = [left, right]
 - `REMOVED_VIEWS` = { three-quarter } — Views the kit had and removed, and what to use instead (viewOf names it when one is asked for).
 - `viewOf({ view = 'front', side = null, flip = false } = {})` — A critter's view and the local direction it turns (k = +1 toward local +x, its "forward"): `side` is on SCREEN (so a flipped critter told side 'right…
 - `faceKeepoutFor(view = 'front', _k = 1)` — The face keep-outs for a view (local units): the front ones; none in a back view (no face is seen).
 - `critter(x, y, opts = {})`
-    A critter: a soft-3D block body on two stubby legs, a face, arms. (x, y) is the feet.
-      body:   'ink' (the default cast), 'paper' (a second, light cast member), 'orange', or a light
-              palette body: yellow, blue, teal, lilac, green (BODIES; any other throws). Which body
-              a character gets is a design call (house style); the kit only draws it. On the stage
-              an ink critter stays ink and is picked out by the rim light
-      view:   'front' (default) or 'back' (VIEWS); side: 'left' | 'right', the screen side a back
-              view's lost profile shows on (default: forward). A back view shows the back of the
-              body and outfit and the lost profile on `side`: the head turned away, never faceless
-      mood:   a MOODS name; its settings apply first, then any explicit option
-      arms:   an ARM_POSES name or { l: [x, y], r: [x, y] } hand positions relative to the feet
-              (shoulders at ±60, −100); hands inside the body outline are drawn in front of it
-              (behind it in a back view)
-      legs:   a preset (stand, kick, hop, sit, tiptoe) or { l, r } rotations in degrees (walk())
-      brows:  flat, up, high, worried, angry, raised (one up)
-      mouth:  o, flat, smile, gr…
-- `bodyRims(C, rims, { s = 1, tilt = 0, L = 1, sq = 0, squash = null } = {})` — The rims of light on a critter's body (4.2): bands just inside and a hair outside its outline on the side each light comes from, in the critter's own…
+    A critter (critter D, VISUAL_SYSTEM_6 §3), feet at (x, y).
+      body:   orange (hero), green, ink (default), white; paper and old bodies draw white
+      view:   front | back (no eyes); mood: a MOODS name (lids, pupils, tilt)
+      arms:   an ARM_POSES name or { l, r } hand targets (rig-solved); legs: preset or { l, r }
+      role:   a wear.js ROLES name, or head / hand / bowtie / headTone; hand: null puts it down
+      outfit, wear: translated to a role piece or nothing (never drawn); hold: { l, r, both }
+      look, lid, pr, tilt, sq, squash, s, flip; who: data-who / data-look for try.mjs
+    @param {number} x
+    @param {number} y
+    @param {Record<string, any>} [opts]
+- `bodyRims(C, rims, { s = 1, tilt = 0, L = 1, sq = 0, squash = null } = {})` — Light rims on the body: bands just inside its outline on the side each light comes from, drawn right after the body so the face and the arms are pain…
 - `handAt(x, y, opts = {})` — Where a critter's hands are on screen, for the same (x, y, options) as critter(): draw a held prop at a hand after the critter (in front) or before i…
 - `walk(t, { pace = 2.4, stride = 26, until = Infinity } = {})` — A walk cycle at time t: legs swing, the body bobs, arms counter-swing.
 - `above(x, y, d, tilt)` — Where a point `d` above the feet ends up when the body is tilted (SVG degrees): for things that ride on a critter's head (a tag, a thought).
-- `outfitShapes(outfit, { arms = 'down' } = {})` — For tests and sheets: an outfit's silhouettes on a critter at the origin at scale 1 ({ part, pts } fills, { part, line, w } strokes), sleeves include…
-- `outfitColors(outfit)` — The palette colors an outfit draws on a critter: garments, sleeves, trousers, shoes, head, items (the arm and held ones too) and its custom garment.
+- `outfitShapes(_outfit, _o = {})` — For tests and sheets: an outfit's silhouettes on a critter.
+- `outfitColors(outfit)` — The palette colors an outfit draws on a critter.
 - `RIG` = { shoulder, bone, reach, minReach, hand, arm, mouthY, restHold, restHeavy, eyes } (10 keys) — The arm's build.
 - `clearOfFace(p, zones = FACE_KEEPOUT)` — A hand target moved out of the face keep-out (the eye and mouth zones plus the hand's radius) by the smallest move: down below the mouth, out to the …
 - `solveArm(side, target, { shoulder = null, zones = FACE_KEEPOUT } = {})` — One arm by two-bone IK: the shoulder, the elbow and the hand for a hand target.
-- `solveArms(opts = {})` — The arms for any critter() options.
+- `D_STUB` = 34 — Critter D's stub: the longest a drawn arm runs from its shoulder to the mitten (local px; D's longest pose, `up`, is ~37 tile units).
+- `solveArms(opts = {})` — The arms for any critter() options: main's rig solves the intent (named ARM_POSES draw as before, hand targets { l, r } are kept off the face), then …
 - `PROPS` = { mug, cup, carton, box, parcel, clipboard, card, phone, pen, glass, bottle, book, envelope, plate, tote, bag } (16 keys) — The held-prop library. → SVG, box: {x,y,w,h}, upright?, follow?, grips? }.
 - `propOf(spec)` — A prop spec ('mug', { kind: 'mug', color }, or a custom { draw, box, … }) → its definition.
 - `unmirrorText(svg)` — A prop in a hand that points it the other way is drawn mirrored (scale(−1 1)), so it points away from the body on that side too; but printed text nev…
@@ -455,6 +458,8 @@ _The Explainers world kit, cast (hx-4, Critter 2.0; from hx-3 / Explainers 3.2, 
         walk?:   { t, pace?, stride? }  walking: legs and bob from walk(), free arms swing
         mood?:   MOODS name        the face…
 - `blendRig(A, B, u, ug = u)` — Two act() results mixed: hands travel on a slight arc, the gaze can lead (`ug`), the face and the held things switch at the middle of the move.
+- `actingAt(t, track, opts = {})` — Critter D acting (acting.js): the resolved pose at time t of a performance, beats [{ at, emotion, hold?, intensity?, blend?, look?, pose?, accent?, s…
+- `actingProblems(track)` — Emote spam in a track (acting.js): [{ code, at, detail }] for short holds, too many feeling changes, accents over the rate cap or cooldown, unknown n…
 - `actAt(t, keys, frame = null)`
     The pose at time t from time-keyed intents: [{ at, blend?, ...intent }] (seconds; blend is
     the move's length, default 0.4). Each move eases in and out; the eyes start toward the next
@@ -462,6 +467,12 @@ _The Explainers world kit, cast (hx-4, Critter 2.0; from hx-3 / Explainers 3.2, 
     @param {number} t
     @param {Array<Record<string, any>>} keys
     @param {{ x: number, y: number, s?: number, flip?: boolean } | null} [frame]
+- `REACH_CM` = { side, up, depth } — D's reach from its feet, world cm.
+- `reachProblems(standAt, target)` — Why a critter with its feet at `standAt` cannot touch `target` ([] when it can).
+- `reachSpot(target, { hand = 'r', gap = 12 } = {})` — Where a critter's feet go to put its `hand` on `target`.
+- `reachToward(standAt, target)` — The furthest point toward `target` a critter at `standAt` can reach (world cm).
+- `handPlace({ hold, to, at, dur = 0.6, hand = 'r', standAt, grip = [0, 0, 0], lookAt = null, back = 0.45, arc = null } = {})` — A critter places what it holds at `to`.
+- `handWrite({ from, to, at, dur, tool, hand = 'r', standAt, grip = [0, 0, 5], approach = 0.35, strokes = 6 } = {})` — A critter writes (or draws) marks from `from` to `to` with a held tool.
 - `RIG_DRAWN_CODES` = [faceless, unknown-mood, unknown-view, hand-over-eyes, hand-on-mouth, arm-across-face, hand-above-mouth, prop-on-face] — The riggedProblems codes critter() writes as data-rig on a drawn critter (overreach is clamped, so it draws fine).
 - `riggedProblems(state = {})`
 - `FACE_KEEPOUT` = [{"part":"eyes","x":-51,"y":-134,"w":102,"h":62}, {"part":"mouth","x":-32,"y":-74,"w":64,"h":35}] — re-exported
@@ -527,7 +538,7 @@ _The Explainers world kit, outfits (hx-4, Critter 2.0; approved still 03 "drawn 
 - `drawArmItems(C, o, side, [x0, y0, cx, cy, x1, y1])` — Items on an arm: the towel over the left forearm, the wristband at the left wrist.
 - `drawHeld(C, o, hands)` — Items held in a hand: the tray on the right hand, the clipboard in the left.
 - `outfitBack(C, outfit)` — The back of an outfit (4.1), for a critter seen from behind (cast.js view 'back'): the top's back panel from the shoulders down (no neckline round a …
-- `outfitLayers(C, outfit, { face = '#1F1915' } = {})`
+- `outfitLayers(C, outfit, { face = '#171717' } = {})`
     Everything worn on the front of the body, at the origin at scale 1: the top, the head, the items
     and the custom garment. Returns { behind, front, glasses, shapes } with shapes = the silhouettes
     ({ part, pts } fills and { part, line, w } strokes) for the keep-out test.
@@ -624,7 +635,9 @@ _Cables plugged in at both ends (4.3 visual fixes, 2026-10-28). A cable runs fro
 ## setlock.js
 _The locked set (4.3 visual fixes, 2026-10-28). Each place of the world declares its_
 
-- `dressedItems(world, place, P, R, { t = 0, states = {}, poses = {} } = {})` — A place's dressing as render() items, `set: true` (no cast drops them).
+- `dressedItems(world, place, P, R, { t = 0, states = {}, poses = {}, only = null } = {})` — A place's dressing as render() items, `set: true` (no cast drops them).
+- `useWorld(world)` — Use `world` (world.js's exports) for the dressing render() draws by itself.
+- `completeDressing(P, R, place, items, undress = [])` — The items of a camera shot of `place` with its declared dressing complete: given items keep their order; a hand-drawn dressing piece gets `set: true`…
 
 ## glass.js
 _The Explainers world kit, glass and gloss (hx-4, approved still 10, EX3-134…146): the real-tech_
@@ -676,6 +689,11 @@ _The Explainers world kit, glass and gloss (hx-4, approved still 10, EX3-134…1
 _UI spacing: neighbours never closer than MIN_GAP (4.3 visual fixes, 2026-10-28). An icon, a number_
 
 - `MIN_GAP` = 24 — The least gap between UI neighbours (px).
+- `SAFE` = { x0, x1, y0, y1 } — The safe area on screen (core.js FRAME.safe).
+- `setView(view)` — Set by shotFrame (the crop it draws under), not by frames. Returns the previous.
+- `viewSafe(safe = SAFE)` — The safe area in drawing coordinates under the active crop shot (the screen's outside shotFrame).
+- `inSafe(box, { pad = 0, safe = viewSafe() } = {})` — `box` moved inside the safe area, never shrunk. Returns { x, y, w, h, dx, dy }.
+- `placeText(size, { near = null, avoid = [], gap = MIN_GAP, safe = viewSafe(), step = 12 } = {})` — Where a free text, label, chip or small card of size { w, h } goes: nearest `near`, `gap` clear of the `avoid` boxes, inside the safe area. Returns {…
 - `row(items, o = {})` — Items [{ w, h? }] in a row, at least MIN_GAP apart. Returns { at: [{ x, y, w, h }], width, fits } (fits: false when the row is wider than `width`).
 - `column(items, { x = 0, y = 0, gap = MIN_GAP } = {})` — Items [{ h, w? }] in a column, at least MIN_GAP apart. Returns { at, height }.
 - `clearZone(boxes, h, o = {})` — The y where a card of height h is clear of the things on screen. Returns the y.
@@ -759,7 +777,7 @@ _The Explainers world kit, cards (Explainers 3.2, EX3-80; glass and gloss in hx-
 ## props.js
 _The Explainers world kit, props (Explainers 3.2, EX3-78; 3.6, EX3-112 to EX3-114): the asset bank,_
 
-- `PROPS` = { chair, jar, light switch, laptop, lamp, door, table, shelf, bed, box, bucket, cup, bottle, clock, bell, house, plant, tree, ladder, book, notebook, pencil, pen, eraser, paper sheet, sticky note, envelope, mailbox, stamp, map, pin, coin, piggy bank, phone, key, padlock, magnifier, sign, flag, ball, car, bicycle, truck, flashlight, backpack, monitor, keyboard, yellow library request slip, hardback library book with lilac spine tag, store support chat window } (50 keys) — Every asset with its tags: the library (tags from props/tags.js), then the bank (tags in its files).
+- `PROPS` = { chair, jar, light switch, laptop, lamp, door, table, shelf, bed, box, bucket, cup, bottle, clock, bell, house, plant, tree, ladder, book, notebook, pencil, pen, eraser, paper sheet, sticky note, envelope, mailbox, stamp, map, pin, coin, piggy bank, phone, key, padlock, magnifier, sign, flag, ball, car, bicycle, truck, flashlight, backpack, monitor, keyboard, plate, bowl, toaster, cutting board, cooking pot, microwave, stove, apple, loaf of bread, egg, drinking glass, recipe card, filing cabinet… } (150 keys) — Every asset with its tags: the library (tags from props/tags.js), then the bank (tags in its files).
 - `propNames()`
 - `prop(name, x, y, o = {})` — Draw a library prop standing with its base center at screen (x, y).
 - `propFrom(defs, name, x, y, { s = 1, state, focal = false, flip = false } = {})`
@@ -798,10 +816,10 @@ _The Explainers world kit (from Explainer 2.0), the mark (hx-4): the Helios logo
 _The close (Explainers 3.3, EX3-95): the last frame, the same in every reel, built by code (no_
 
 - `GROUND` = "white"
-- `WORDMARK` = "AI BRAIN BREAK" — The words under the logo.
-- `WORD_SIZE` = 56.027505950806656 — The wordmark's cap height.
+- `WORDMARK` = "AI 101" — The words under the logo.
+- `WORD_SIZE` = 84 — The wordmark's cap height.
 - `LOGO` = { cx, cy, w }
-- `WORD_BASELINE` = 1237.1030653266332 — The words' baseline.
+- `WORD_BASELINE` = 1250.39 — The words' baseline.
 - re-exported: `default`
 
 ## examples.js

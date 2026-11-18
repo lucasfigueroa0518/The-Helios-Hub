@@ -8,6 +8,7 @@ import { gapMarkdown } from '@/lib/explainers/ideas/gap';
 import { topicAiFocus } from '@/lib/explainers/scoring';
 import type { AnalogyCandidate, GapNote, TopicRow } from '@/lib/explainers/types';
 import { OPENER_TEMPLATES } from '../../../explainers/lint/lint-storyboard.mjs';
+import type { OpenerVoice } from '@/lib/explainers/settings';
 import { bankDir, catalogEntries, catalogMarkdown } from '../../../explainers/world-kit/props/catalog.mjs';
 
 /**
@@ -143,7 +144,7 @@ export const KIT_VERSION_FILE = 'VERSION';
  * (objects.js, CONTRACT-4.2 § Kit API C). D's exteriors, journeys, moods and carry-over live in
  * set.js, lens.js and light.js, so the same closure pins them.
  */
-export const KIT_ENTRIES = ['set.js', 'explain.js', 'snap.mjs', 'try.mjs', 'objects.js', 'kit-reference.mjs'];
+export const KIT_ENTRIES = ['set.js', 'explain.js', 'snap.mjs', 'try.mjs', 'objects.js', 'kit-reference.mjs', 'caption-scrim.mjs'];
 /** @deprecated The 4.1 name of KIT_ENTRIES. */
 export const KIT_41_ENTRIES = KIT_ENTRIES;
 
@@ -201,7 +202,7 @@ export function kitImportClosure(kitDir: string, entries: readonly string[]): { 
     const specifiers = [
       ...src.matchAll(/^\s*(?:import|export)\b[^'";]*?\bfrom\s*['"](\.{1,2}\/[^'"]+)['"]/gm),
       ...src.matchAll(/^\s*import\s*['"](\.{1,2}\/[^'"]+)['"]/gm),
-      ...src.matchAll(/\bimport\(\s*['"](\.{1,2}\/[^'"]+)['"]\s*\)/g),
+      ...src.matchAll(/\bimport\(\s*(?:\/\*[^*]*\*\/\s*)?['"](\.{1,2}\/[^'"]+)['"]\s*\)/g),
     ].map((m) => m[1]);
     for (const spec of specifiers) {
       const target = path.normalize(path.join(path.dirname(rel), spec));
@@ -276,7 +277,13 @@ function lessonFrameLines(topic: { lesson_payload?: string | null; lesson_altitu
   return ['## Lesson frame', `Payload: ${payload}`, `Altitude: ${altitude}`, `Map position: ${map}`, ''];
 }
 
-/** BRIEF.md for an autonomous Helios run (brief-format.md), with the term (EX3-86), the opener line (EX3-130), the picked analogy (EX3-15, EX3-123), and a curiosity gap only when one is passed (4.3 reels pass none). */
+/**
+ * BRIEF.md's `## Opener line` with a silent opener (EX6-14, D124): no line. Its first word is the
+ * marker the lint reads (lint-storyboard.mjs briefOpenerVoice); story-design.md owns the rule.
+ */
+export const SILENT_OPENER_BRIEF = 'Silent. Frame 1 is the opener over the AI 101 card: no opener line, and its voiceover is empty. The voice starts on frame 2.';
+
+/** BRIEF.md for an autonomous Helios run (brief-format.md), with the term (EX3-86), the opener line (EX3-130; none with a silent hook, EX6-14), the picked analogy (EX3-15, EX3-123), and a curiosity gap only when one is passed (4.3 reels pass none). */
 export function briefMarkdown(
   topic: Pick<TopicRow, 'title' | 'scope' | 'source_url' | 'source_text'> & {
     term?: string | null;
@@ -287,6 +294,7 @@ export function briefMarkdown(
   },
   analogy: AnalogyCandidate | null = null,
   gap: GapNote | null = null,
+  { openerVoice = 'silent' }: { openerVoice?: OpenerVoice } = {},
 ): string {
   const gapBody = gap ? gapMarkdown(gap) : '';
   const message = (topic.scope ?? topic.title).replace(/"/g, "'");
@@ -323,7 +331,7 @@ export function briefMarkdown(
     '',
     '## Opener line',
     '',
-    openerLineFor(topic),
+    openerVoice === 'spoken' ? openerLineFor(topic) : SILENT_OPENER_BRIEF,
     '',
     '## Analogy',
     '',
@@ -372,6 +380,8 @@ export function prepareWorkspace(input: {
   sourceText: string | null;
   analogy?: AnalogyCandidate | null;
   gap?: GapNote | null;
+  /** Frame 1's voice (settings opener_voice, EX6-14): 'silent' unless given. */
+  openerVoice?: OpenerVoice;
 }): Workspace {
   const ws = workspacePaths(input.jobsRoot, input.jobId);
   fs.rmSync(ws.jobDir, { recursive: true, force: true });
@@ -440,7 +450,7 @@ export function prepareWorkspace(input: {
   fs.writeFileSync(path.join(ws.projectDir, 'music-avoid.json'), `${JSON.stringify(readMusicHistory(input.jobsRoot))}\n`);
 
   // Brief, source, and the synthetic capture package (faceless Step 1).
-  fs.writeFileSync(path.join(ws.projectDir, 'BRIEF.md'), briefMarkdown(input.topic, input.analogy ?? null, input.gap ?? null));
+  fs.writeFileSync(path.join(ws.projectDir, 'BRIEF.md'), briefMarkdown(input.topic, input.analogy ?? null, input.gap ?? null, { openerVoice: input.openerVoice ?? 'silent' }));
   if (input.sourceText) fs.writeFileSync(path.join(ws.projectDir, 'source.txt'), input.sourceText);
   const extracted = path.join(ws.projectDir, 'capture', 'extracted');
   fs.mkdirSync(extracted, { recursive: true });

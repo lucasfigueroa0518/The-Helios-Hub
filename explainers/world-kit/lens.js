@@ -25,6 +25,7 @@ import { T, TONES, el, g, id, isDark, roundedPath, tonesOf } from './draw.js';
 import { blurDef, hashId, V3, irradiance, lightColor, untag, lit, castShadow, mood as moodOf } from './light.js';
 import { E } from './motion.js';
 import { critter, BODY_D, handAt, heldBoxes, gripAt } from './cast.js';
+import { staysInPlace, dresser } from './continuity.js';
 
 const { add, sub, mul, dot, cross, norm, len } = V3;
 const n2 = (v) => Number(v.toFixed(2));
@@ -194,6 +195,9 @@ export function cameraAt(t, start, moves = []) {
 
 // ── Light rig ─────────────────────────────────────────────────────────────────────────────
 
+// The rig made last (render() lights the dressing it adds with it).
+let LAST_RIG = null;
+
 /**
  * The lights of a shot. Every light has a source in the shot or stated in the storyboard (the
  * studio key, the window's moonlight, the open fridge): `dirs` are directional lights
@@ -225,6 +229,7 @@ export function rig(P, { mood: md = null, ground, ambient, key, dirs = [], point
     R.mood = M;
     R.critterFill = M.critterFill ?? 0;
   }
+  LAST_RIG = R;
   return R;
 }
 
@@ -1005,10 +1010,18 @@ export function render(P, { env = [], items: given = [], focus: rawFocus = null,
   // 4.1: given a camera shot (shots.js), only its cast is drawn and depth of field is by intent:
   // sharp unless shot.focus { reason, on, to? } names it, and the entity in focus is never blurred
   const camShot = !!shot?.camera;
-  // the place's set dressing (setlock.js dressedItems, `set: true`) is always drawn: a cast never drops it
-  const cast = camShot && Array.isArray(shot.cast) ? given.filter((it) => !it || typeof it !== 'object' || !it.id || it.set === true || shot.cast.includes(it.id)) : given;
+  // 2026-11-17: a camera shot draws its place's whole dressing (setlock.js completeDressing): a
+  // declared piece the frame left out is added at its spot; `shot.undress: [ids]` opts pieces out
+  const dress = camShot ? dresser() : null;
+  const all = dress ? dress(P, LAST_RIG, shot.place ?? 'main', given, [].concat(shot.undress ?? [])) : given;
+  // the place's set dressing (setlock.js dressedItems, `set: true`) is always drawn: a cast never drops it,
+  // nor a thing still in the shot's place (shots.js placeCast: the camera decides whether it shows)
+  const cast = camShot && Array.isArray(shot.cast) ? all.filter((it) => !it || typeof it !== 'object' || !it.id || it.set === true || shot.cast.includes(it.id) || staysInPlace(it)) : all;
   // a set-dressing piece only barely in frame at an edge (a sliver of a picture frame) is not drawn
-  const items = cast.filter((it) => !(it && typeof it === 'object' && it.set === true && edgeSliver(P, it)));
+  const sliver = (it) => it && typeof it === 'object' && it.set === true && edgeSliver(P, it);
+  const items = cast.filter((it) => !sliver(it));
+  // a culled sliver is still on the set, out of frame: leave its dressing mark (set-lock check)
+  const culled = cast.filter(sliver).map((it) => String(it.svg ?? '').match(/data-dressing="([^"]+)"/)?.[1]).filter(Boolean).map((d) => `<g data-dressing="${d}" data-culled="sliver"></g>`).join('');
   let focus = camShot ? null : rawFocus;
   let keep = null;
   if (camShot && shot.focus?.on) {
@@ -1057,7 +1070,7 @@ export function render(P, { env = [], items: given = [], focus: rawFocus = null,
   // marked as a lens picture, so frame() (and the try's framing check) know it was drawn
   // through a lens even when the frame passes no { lens }
   const camKey = [...P.pos, ...P.target, P.fov].map((v) => Math.round(v)).join(' ');
-  return g({ 'data-lensed': '1' }, dedupeDefs(el('g', { 'data-cam': camKey }) + (defs ? el('defs', {}, defs) : '') + back.join('') + sorted.join('')));
+  return g({ 'data-lensed': '1' }, dedupeDefs(el('g', { 'data-cam': camKey }) + (defs ? el('defs', {}, defs) : '') + back.join('') + sorted.join('') + culled));
 }
 
 /** Ids here are named from their content, so a gradient, clip or filter drawn by many solids is

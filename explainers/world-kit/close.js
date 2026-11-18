@@ -1,5 +1,5 @@
 // The close (Explainers 3.3, EX3-95): the last frame, the same in every reel, built by code (no
-// worker). A white screen; the Helios logo animates in and "AI BRAIN BREAK" writes itself beneath
+// worker). A white screen; the Helios logo animates in and "AI 101" writes itself beneath
 // it in the kit's print handwriting, the two centred on the screen together. No voice, no
 // captions. Its sounds are close-timing.js's CLOSE_EVENTS.
 //
@@ -12,7 +12,7 @@ import { CLOSE } from './close-timing.js';
 
 export const GROUND = 'white';
 /** The words under the logo. */
-export const WORDMARK = 'AI BRAIN BREAK';
+export const WORDMARK = 'AI 101';
 /** The wordmark's width on screen, and the gap between the logo and its cap line. */
 const WORD_W = 640;
 const GAP = 70;

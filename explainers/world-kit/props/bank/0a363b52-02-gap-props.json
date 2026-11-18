@@ -1,0 +1,71 @@
+{
+ "file": "0a363b52-02-gap-props.js",
+ "job": "0a363b52-42a9-4e1e-9509-55aeb573777c",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.378Z",
+ "from": "assets/frames/02-gap.props.js",
+ "props": {
+  "smartphone lying flat on a table, screen up": {
+   "source_name": "a smartphone lying flat on a table, screen up",
+   "tags": {
+    "is": "a modern smartphone lying flat and face up on a table, a thin slab with rounded dark screen, a camera dot, a home bar, and an empty dashed place where an app card sits",
+    "setting": [
+     "table",
+     "desk",
+     "everyday phone use"
+    ],
+    "material": "paper-flat body, dark glass screen",
+    "parts": [
+     "thin rounded slab body",
+     "dark screen",
+     "dashed card slot",
+     "status lines",
+     "camera dot",
+     "home bar"
+    ],
+    "not": [
+     "tablet",
+     "remote control",
+     "calculator",
+     "book",
+     "wallet",
+     "walkie-talkie"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "server tower with a status screen and three drive bays": {
+   "source_name": "a server tower with a status screen and three drive bays",
+   "tags": {
+    "is": "a tall upright server computer tower with a small status screen at the top showing a level bar, three drive bays with a status light, and vent slits on its side and base",
+    "setting": [
+     "server room",
+     "data centre",
+     "backend of an app"
+    ],
+    "material": "paper-flat metal case, small lit screen",
+    "parts": [
+     "tall box case",
+     "status screen with a level bar",
+     "three drive bays",
+     "status light",
+     "front vents",
+     "side vents"
+    ],
+    "not": [
+     "refrigerator",
+     "filing cabinet",
+     "locker",
+     "desktop pc",
+     "speaker",
+     "wardrobe"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

@@ -137,9 +137,9 @@ test('end to end: a due slot is released, published as a feed reel, and marked; 
   const out = await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined });
   assert.equal(out?.status, 'published');
   assert.equal(calls[0], `reel https://signed/jobs/${jobId}/video.mp4 feed=true`);
-  assert.equal(calls[1], 'caption AI Brain Break Episode 1:\n\nThe door between two programs.');
+  assert.equal(calls[1], 'caption AI 101 Episode 1:\n\nThe door between two programs.');
   const attempt = (await db.query<{ status: string; media_id: string; caption: string }>(`SELECT status, media_id, caption FROM social_hub.publish_attempts`)).rows[0]!;
-  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'AI Brain Break Episode 1:\n\nThe door between two programs.']);
+  assert.deepEqual([attempt.status, attempt.media_id, attempt.caption], ['published', 'media-9', 'AI 101 Episode 1:\n\nThe door between two programs.']);
   assert.equal((await db.query<{ status: string }>(`SELECT status FROM social_hub.schedule`)).rows[0]!.status, 'published');
   const again = await queuePublish(db, jobId, 'force');
   assert.equal(again.queued, false);
@@ -162,8 +162,8 @@ test('the episode number is how many explainers have published, stamped on the w
   await queuePublish(db, second, 'approve');
   assert.equal((await claimAndPublish({ db, meta, signVideo, sleep: async () => undefined }))?.status, 'published');
   assert.deepEqual(captions, [
-    'AI Brain Break Episode 1:\n\nFirst body.',
-    'AI Brain Break Episode 2:\n\nSecond body.',
+    'AI 101 Episode 1:\n\nFirst body.',
+    'AI 101 Episode 2:\n\nSecond body.',
   ]);
 });
 

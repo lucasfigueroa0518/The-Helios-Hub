@@ -25,10 +25,20 @@ const NO_HAND = /feTurbulence|feDisplacementMap|wobble|grain|stipple/;
 test('hx-4: the version, and every new color with its ramp as the spec gives it', () => {
   assert.equal(HX.VERSION, 'hx-4');
   const want: Record<string, string> = {
-    yellow: '#F1C45E', 'yellow-lit': '#FFDFB2', 'yellow-shade': '#CFAE45', 'yellow-dark': '#99862B',
-    blue: '#5A98CB', 'blue-lit': '#82AFDF', 'blue-shade': '#3E81AF', 'blue-dark': '#17597B',
-    teal: '#57AFAF', 'teal-lit': '#80C7BF', 'teal-shade': '#3D959B', 'teal-dark': '#1D6972',
-    lilac: '#A482BE', 'lilac-lit': '#BF9BCE', 'lilac-shade': '#886BA6', 'lilac-dark': '#5B4778',
+    // hx-6 (VISUAL_SYSTEM_6 §2): main's names, the approved palette's values; lilac draws as slate
+    ink: '#171717', 'ink-lit': '#2B2926', 'ink-shade': '#101010', 'ink-dark': '#0A0A0A',
+    paper: '#F3F0EA', 'paper-lit': '#FBFAF6', 'paper-shade': '#E2DACB', 'paper-dark': '#CFC5B3',
+    yellow: '#E0AB3E', 'yellow-lit': '#F3C65E', 'yellow-shade': '#C38F29', 'yellow-dark': '#8F6418',
+    blue: '#6684B0', 'blue-lit': '#86A1C8', 'blue-shade': '#4F6B94', 'blue-dark': '#34496A',
+    teal: '#46978F', 'teal-lit': '#5DB5AE', 'teal-shade': '#357A74', 'teal-dark': '#24534F',
+    red: '#B4473A', 'red-lit': '#D27665', 'red-shade': '#91372D', 'red-dark': '#5F231C',
+    lilac: '#6684B0', 'lilac-lit': '#86A1C8', 'lilac-shade': '#4F6B94', 'lilac-dark': '#34496A',
+    slate: '#6684B0', 'slate-lit': '#86A1C8', 'slate-shade': '#4F6B94', 'slate-dark': '#34496A',
+    mustard: '#E0AB3E', 'mustard-lit': '#F3C65E', 'mustard-shade': '#C38F29', 'mustard-dark': '#8F6418',
+    wood: '#9A7250', 'wood-lit': '#B48A62', 'wood-shade': '#7E5B3E', 'wood-dark': '#5E432D',
+    leaf: '#5F8F48', 'leaf-lit': '#7FAE62', 'leaf-shade': '#4A7438', 'leaf-dark': '#355428',
+    wall: '#F1E9DA', wainscot: '#E4D8C3', trim: '#CDBFA6', floor: '#E2DACB', board: '#D3C9B6', window: '#BFD3EC', white: '#FFFFFF',
+    orange: '#FF5E1A', green: '#138510', night: '#171717', 'shadow-warm': '#3B2A16',
     'stage-top': '#161616', 'stage-bottom': '#0B0B0B', 'stage-orange': '#FF6A2A', 'stage-red': '#E8413B',
     'sun-top': '#FDC60F', 'sun-mid': '#F48C3F', 'sun-bottom': '#EA3C3A',
   };
@@ -47,16 +57,18 @@ test('hx-4: the version, and every new color with its ramp as the spec gives it'
   assert.equal(HX.mixHex('#000000', '#FFFFFF', 1), '#FFFFFF');
 });
 
-test('hx-4: the grounds are paper, stage and white; night and forest resolve to the stage', () => {
-  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'stage', 'white']);
+test('hx-4: the grounds are paper, stage and white (hx-6 adds room); night and forest resolve to the stage', () => {
+  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'stage', 'white', 'room']);
+  assert.equal(HX.GROUNDS.room.fill, '#F3F0EA');
+  assert.equal(HX.GROUNDS.room.dark, false);
   assert.equal(HX.GROUNDS.stage.dark, true);
   assert.equal(HX.GROUNDS.paper.dark, false);
   assert.equal(HX.GROUNDS.white.fill, '#FFFFFF');
   for (const old of ['night', 'forest']) assert.deepEqual(HX.groundOf(old), { name: 'stage', ...HX.GROUNDS.stage });
   assert.equal(HX.groundOf('paper').name, 'paper');
-  assert.throws(() => HX.groundOf('mud'), /ground must be paper, stage, white/);
+  assert.throws(() => HX.groundOf('mud'), /ground must be paper, stage, white, room/);
   // mount: the names, dark windows for the stage (and its old names), an alias still mounts
-  assert.deepEqual(GROUND_NAMES, ['paper', 'stage', 'white']);
+  assert.deepEqual(GROUND_NAMES, ['paper', 'stage', 'white', 'room']);
   const f = (d: number, ground: string) => ({ duration: d, fields: { ground } });
   assert.deepEqual(darkWindows([f(4, 'paper'), f(5, 'stage'), f(5, 'night'), f(3, 'white')] as never), [[4, 14]]);
   assert.match(frameHtml('02-scene', 6, 'stage'), /underlay\('uf02_scene-', 'stage'\)/);

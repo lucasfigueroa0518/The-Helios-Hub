@@ -13,6 +13,8 @@ palette tokens, the type styles, the safe area and the kit's API).
 
 ## The look
 
+This section is the look of every frame except the analogy frames, which § The analogy frame sets.
+
 - **Premium, modern, tactile, full of effort:** each reel should feel made by an amazing animation
   team.
 - **Soft 3D.** Every solid is a soft volume: its faces graded through its colour ramp, rounded lit
@@ -46,10 +48,16 @@ palette tokens, the type styles, the safe area and the kit's API).
 
 - **Only the Helios palette:** the tokens `frame.md` lists, their ramps, a mix of two of them, or a
   gradient the kit draws from them. The kit resolves nothing else.
-- **Paper and ink are the quiet base.** Yellow, blue, teal, lilac, green and red are the range the
-  director draws places, things, outfits and moods from, planned per reel in the colour script.
-  Red is for things that are red in real life; as a status it means error (below). It is never a
-  ground.
+- **Paper and ink are the quiet base.** Every other family has one job, in every frame, and the
+  colour script plans where each lands:
+  - slate: systems (servers, routers, machines);
+  - mustard: data and key objects;
+  - teal: the payoff (the answer, the result, the thing that wins);
+  - red: small accents (a cross, a stamp, a thing that is red in real life); as a status it means
+    error (below). It is never a ground;
+  - wood: furniture; leaf: plants; the room tones (wall, wainscot, trim, floor, board): rooms;
+  - green: Helios status and structure;
+  - ink and white: line, text, cards, pills and the cast.
 - **Status colours** (error red, success green, warning yellow, information blue) carry their
   universal meaning only, on the signal itself, one at a time. They are never a ground, a
   decoration or a large area.
@@ -63,7 +71,8 @@ palette tokens, the type styles, the safe area and the kit's API).
 - **The one exception is a critter hero,** which keeps the orange Helios critter body for the whole
   reel. It is the character the viewer follows. While it is on screen it is the orange, so nothing
   else in that shot is orange. An object hero takes no fixed orange, and no other critter is
-  orange.
+  orange. Nothing a critter wears or holds is orange (§ Critter roles).
+- Analogy frames hold a stricter rule (§ The analogy frame).
 
 ## Mechanism frames
 
@@ -86,32 +95,90 @@ palette tokens, the type styles, the safe area and the kit's API).
 
 - **The hero is a critter or an object;** the director decides. Critters are optional, and an
   object hero is just as good.
-- **Critters are Critter 2.0:** soft-3D bodies with glossy eyes and two catchlights; on the stage,
-  a warm rim and a cool counter-rim.
-- **Critters face the camera or turn their back: front or back views only.** An over-the-shoulder
-  shot uses the back view.
+- **Critter D is the only character design,** drawn by the kit exactly and never redrawn: one tile
+  body, white eyes with plain ink pupils and lids in the body colour, ink stub arms with mitten
+  ends, ink legs. **HARD CONSTRAINT: no mouth, no brows, and nothing worn on the body but a role's
+  bow tie** (a role lives on the head and in the hands, § Critter roles).
+- **Bodies:** orange for the critter hero, one per frame; green, ink or white for everyone else.
+- **Moods live in the lids, the pupils, the arms and the tilt;** there is no face to change. Frame
+  the critter big enough that its eyes and its arm pose read on a phone.
+- **The critter acts.** It holds a feeling for as long as the story does, changes only when the
+  story turns (each change a blend, never a cut), and uses accents (a nod, a hop, a clap) sparingly.
+- **Critters face the camera or turn their back: front or back views only.** The back view has no
+  eyes: body, arms and legs. An over-the-shoulder shot uses the back view.
 - **HARD CONSTRAINT: in an over-the-shoulder shot, the foreground body sits at the frame's side,
   covers at most a third of the frame, and never covers the subject.**
 - **HARD CONSTRAINT: critters are the only characters.** Never a person, a figure built from
   solids, a hand or any other body part, on its own or as an actor.
-- **HARD CONSTRAINT: nothing a critter wears covers or crowds its eyes or mouth.** Leave real
-  negative space around them. Glasses are the exception.
-- **Outfits are drawn for the role:** the one or two garments a stranger knows the job by, built
-  for this reel. A stock garment is used only when it fits exactly.
 - **In the voice and the captions, a critter is named by its role,** never called a "critter".
 - **HARD CONSTRAINT: an object never gets a face.** No eyes, brows or mouth on an object, ever. An
   object that acts does it through motion alone: hops, slides, tilts, nods, reactions, settling,
   breathing.
 - **HARD CONSTRAINT: an animal is its own category, never a critter and never a character.** A
-  real animal the analogy needs (a dog, a bird, a horse) is drawn with the kit's `animal()`, or
-  composed the same way from `ANIMAL_PARTS` with `animalFrom()` (`animals.js`): six to twelve soft
-  volumes in the species' true proportions, the one or two marks a stranger knows it by, a coat from
-  one palette ramp, a soft contact shadow. Side view first; front when it looks at or walks toward
-  the camera; never a back or three-quarter view.
-- **HARD CONSTRAINT: an animal wears nothing and has no face beyond its glossy bead eyes.** No
+  real animal in an analogy frame is a drawn subject (§ The analogy frame); anywhere else it is
+  drawn with the kit's `animal()`, or composed the same way from `ANIMAL_PARTS` with `animalFrom()`
+  (`animals.js`): six to twelve soft volumes in the species' true proportions, the one or two marks a
+  stranger knows it by, a coat from one palette ramp, a soft contact shadow. Side view first; front
+  when it looks at or walks toward the camera; never a back or three-quarter view.
+- **HARD CONSTRAINT: an animal wears nothing and has no face beyond its bead eyes.** No
   outfit, accessory, held prop or text; no eye whites, brows, mouth or expression; no human pose. It
   acts as that animal really does, one natural action at a time (a tail wag, a head tilt, a hop, a
   peck, a head toss, a step).
+
+## Critter roles
+
+Critter D has no mouth, no neck and no torso, so anything worn on the body reads as a face part or as
+nothing. A role lives in two places: one small piece on the head and one prop in a hand. These
+standards hold wherever a critter appears.
+
+- **R1 · Head and hands.** A role is one head piece and/or one hand prop from the kit's closed
+  lists; the bow tie is the only body piece. Every role is one of the kit's named roles, or the
+  critter is bare. **HARD CONSTRAINT: at most two signifiers per critter,** and no piece outside the
+  kit.
+- **R2 · Hands only when free.** **HARD CONSTRAINT: a critter holds its hand prop only while the
+  beat does not need its hands.** Before it touches, holds or uses anything in the scene, it puts the
+  prop down on screen (on a surface, or out of frame) in a put-down beat the storyboard plans. A
+  critter whose prop would always be in the way starts with it already put down, or is bare.
+- **R3 · Props are held right.** A hand prop is drawn big enough to name at a glance and may break
+  the critter's outline. A prop held by its body sits in front of the mitten, with the mitten
+  peeking out; a handled or flat prop shows the whole mitten gripping its handle or edge. The hand
+  never passes through an object.
+- **R4 · Headwear stays small:** about a fifth of the body's height, narrower than the top of the
+  head, one colour and at most one detail.
+- **R5 · Nothing reads as a face.** **HARD CONSTRAINT: nothing covers the eyes or lids** (glasses,
+  the one exception, frame them without hiding the pupils), nothing is louder than the eyes, and
+  nothing but the bow tie sits in the strip just under the eyes.
+- **R6 · A weak design falls back.** The reel's cast passes the kit's wear rules and a visual wear
+  check in the render; a critter whose role does not read is drawn bare for the whole reel.
+- **R7 · Props read at a glance.** A hand prop a builder makes: its silhouette alone names it at
+  small size; real proportions made plump and appealing, with no thin spikes; one defining detail;
+  held as R3 says.
+- **Wear colour:** ink by default (white on an ink body); a job colour only when the colour is the
+  signal; never orange and never the body's colour.
+
+## The analogy frame
+
+Frames that stage the analogy (the anchor scene's `look: world` frames) take this look; every other
+frame keeps § The look.
+
+- **The room is seen front-on:** the vanishing point centred, a back wall with wainscot and
+  skirting, a perspective floor, and the cast on the floor in front of the wall.
+- **Flat finish:** every solid is flat tones, its top lit, its front mid and its side darker. No
+  gloss, rim, glow or gradient.
+- **Ground `room`:** clean paper with the faint drafting grid, and no grain.
+- **Drawn things:** animals and organic props come from the kit's drawn library, in the same flat
+  finish; built things stay built from the kit's solids.
+- **Labels are Helios pills:** white for a name, ink for the contrast case, green for a status.
+- **Colour with purpose:** colour goes to what the narration is about, plus at most one supporting
+  family to separate groups. Walls, floors and big furniture keep the room tones, and paper shows
+  through. **HARD CONSTRAINT: teal and red never cover a large area** (a wall, a floor, a rug, a big
+  piece of furniture).
+- **HARD CONSTRAINT: orange is the hero's, plus at most one more thing.** A critter hero keeps the
+  orange Helios body; an object hero keeps its own colours and wears orange on its accent part.
+  Besides the hero, the frame holds at most one more orange thing (a UI's one action, or the one
+  active thing). Orange is never the set, a ground, a wall, a floor, a label, a concept's identity
+  or a decoration. try.mjs checks this on `ground: room` frames only.
+- **A dark beat is the dusk room:** slate walls, lamps lit, windows dark; never the dark stage.
 
 ## Scale
 
@@ -123,8 +190,8 @@ palette tokens, the type styles, the safe area and the kit's API).
 - **The opener bank, the hand-off card, the dictionary card and the logo close stay exactly as they
   are,** handwritten feel and all. The contrast between the handwritten bookends and the Soft-3D
   body is intended.
-- The opener's visual hook owns the opening shot: no title card there. The card "today's AI Brain
-  Break: <term>" is the hand-off's (frame 3).
+- The opener lands on the AI 101 card and cuts to frame 2: no scene of the analogy there. The card
+  "today's AI Lesson: <term>" is the hand-off's (frame 3).
 - They are built by code, the opener bank and the hand-off bank; no builder redraws them (a builder
   draws only the dictionary card's call, `frame.md` § The dictionary card). The Helios logo itself
   is never changed.
@@ -147,6 +214,9 @@ palette tokens, the type styles, the safe area and the kit's API).
   nearly everything on screen carries meaning, the soundtrack is full. A continuous action gets a
   sound that lasts as long as the motion. Never thin the sound out; a short, deliberate drop before a
   reveal (`craft.md` § 11) is contrast, not thinning.
+- **Varied, never repeated:** a dense track draws on many sounds. No single hit, pop or tick recurs
+  so often the ear notices it, and the reel never opens on a hit and lands the next frame on that
+  same hit. Code enforces this (`frame.md` § Sound events).
 - **Paper, pen and writing foley comes first:** pencil scratches, pen clicks, page turns, paper
   slides, crumples and stamps are the signature of the style. Other materials get their own
   families.

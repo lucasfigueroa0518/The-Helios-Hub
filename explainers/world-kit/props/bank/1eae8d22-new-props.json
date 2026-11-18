@@ -1,0 +1,40 @@
+{
+ "file": "1eae8d22-new-props.js",
+ "job": "1eae8d22-3316-4b06-b43d-820dde2d9722",
+ "topic": "prompt",
+ "added_at": "2026-11-17T02:00:18.381Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "wire hamster cage with an empty food bowl": {
+   "source_name": "wire hamster cage with an empty food bowl",
+   "tags": {
+    "is": "a small-pet wire cage on a dark plastic tray, with an exercise wheel and an empty ceramic food bowl",
+    "setting": [
+     "classroom",
+     "home",
+     "pet shop"
+    ],
+    "material": "steel wire, plastic tray, ceramic bowl",
+    "parts": [
+     "wire bars",
+     "flat wire roof",
+     "dark tray",
+     "exercise wheel",
+     "empty food bowl"
+    ],
+    "not": [
+     "bird cage",
+     "dog crate",
+     "aquarium",
+     "prison cell",
+     "shopping basket",
+     "trap",
+     "lantern"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

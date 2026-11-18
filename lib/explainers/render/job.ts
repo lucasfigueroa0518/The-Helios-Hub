@@ -8,9 +8,16 @@ import { analogyBelowBar, chooseAnalogy, leastBadAnalogy, NO_ANALOGY_REASON, top
 import { harvestNewProps, type HarvestResult } from '@/lib/explainers/render/bank';
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
-import { defaultExec, repairBuild, runBuild, type BuildDeps, type BuildOutcome, type Exec } from '@/lib/explainers/render/build';
-import { CacheWarmGate, frameWorkerForLook, PICTURE_CHECK_FILE, runAgentSession, SCENE_BUILDER_AGENT, scrubbedEnv, TECH_FRAME_WORKER_AGENT, type AgentQuery, type FrameLook, type MainAgent, type SessionResult } from '@/lib/explainers/render/agent';
+import { InjectionRun } from '@/lib/explainers/injection/recorder';
+import { catalogMissWatcher, CATALOG_MISS, PLANNER_LOOK, PLANNER_ROLE, restoreCatalog, trimCatalog } from '@/lib/explainers/injection/catalog';
+import { defaultExec, frameNumberOf, repairBuild, runBuild, type BuildDeps, type BuildOutcome, type Exec } from '@/lib/explainers/render/build';
+import { finishSessionBTelemetry, rewriteSessionBTelemetry, SessionBTelemetry } from '@/lib/explainers/render/telemetry';
+import { CacheWarmGate, frameWorkerForLook, PICTURE_CHECK_FILE, runAgentSession, SCENE_BUILDER_AGENT, scrubbedEnv, storyboardLooks, TECH_FRAME_WORKER_AGENT, type AgentQuery, type FrameLook, type MainAgent, type SessionResult } from '@/lib/explainers/render/agent';
+import type Anthropic from '@anthropic-ai/sdk';
+
+import { cachedSystemText } from '@/lib/anthropic-cache';
 import { gridFrames, gridLayout, pictureFixNeeded, pictureGridParams, renderGrids, type PictureVision } from '@/lib/explainers/render/picture';
+import { CONFUSING_PIECE_MAX, READS_AS_ROLE_MIN, WEAR_QUESTIONS, wearPasses } from '@/lib/explainers/jev/questions/wear-check';
 import { SpendMeter } from '@/lib/explainers/render/meter';
 import {
   ANSWER_KEY_FILE,
@@ -55,16 +62,19 @@ import {
   setJobHandoff,
   setJobOpener,
   setJobStage,
+  loadFirstTryLog,
+  saveFirstTryLog,
 } from '@/lib/explainers/repository';
-import { loadSettings, loadThemeBrief, type ExplainersSettings } from '@/lib/explainers/settings';
+import { loadSettings, loadThemeBrief, type ExplainersSettings, type OpenerVoice } from '@/lib/explainers/settings';
 import type { ArtifactStore } from '@/lib/explainers/storage';
 import type { ArtifactKind, JobRow, LintViolation, Mode, TopicRow } from '@/lib/explainers/types';
 import { CaptionError, writeExplainerCaption, type CaptionDraft, type CaptionFacts, type CaptionOptions } from '@/lib/explainers/caption';
 import type { JevTransport } from '@/lib/reels/jev/runner';
-import { eventsFromDir, lintStoryboard } from '../../../explainers/lint/lint-storyboard.mjs';
+import { briefOpenerVoice, critterLooks, eventsFromDir, lintStoryboard, section, wearKit, wearReady } from '../../../explainers/lint/lint-storyboard.mjs';
 import { mountFrames } from '../../../explainers/world-kit/mount.mjs';
+import { HOOK_ID, lessonModule } from '../../../explainers/world-kit/frames.mjs';
 import { hasOpenerSfx, placeOpenerSfx } from '../../../explainers/world-kit/opener-sfx.mjs';
-import { HISTORY as OPENER_HISTORY, OBJECT_HERO_OPENERS, openerByKey, pickOpener } from '../../../explainers/world-kit/openers/bank.js';
+import { HISTORY as OPENER_HISTORY, openerByKey, pickOpener } from '../../../explainers/world-kit/openers/bank.js';
 import { FALLBACK_HANDOFF, HANDOFF_FRAME, HANDOFF_HISTORY, handoffByKey, listField, pickHandoff } from '../../../explainers/world-kit/handoff-bank.js';
 import { pace } from '../../../explainers/world-kit/pace.mjs';
 import { OUT as EVENTS_TRACK, placeSound } from '../../../explainers/world-kit/sound.mjs';
@@ -122,6 +132,13 @@ export type RenderDeps = {
    * picture_check_model. Without it, or when it fails, the legacy picture-checker session runs.
    */
   pictureVision?: PictureVision;
+  /**
+   * The wear check (VISUAL_SYSTEM_6.md § 4, § 6): one vision call per reel on picture_check_model, on a
+   * contact sheet of the cast in their roles. Defaults to pictureVision; with neither it does not run.
+   */
+  wearVision?: PictureVision;
+  /** Swappable for tests: the wear check's contact sheet (renderWearSheet otherwise). */
+  wearSheet?: WearSheet;
   /**
    * The understanding test's readers and diagnosis (Explainers 4.2): direct Messages API calls on
    * reader_model. Without it the test does not run and the reel says so (`understanding:not_run`).
@@ -183,9 +200,10 @@ export async function assignOpener(
   db: ExplainersDb,
   jobId: string,
   projectDir: string,
-  { resuming = false, random = Math.random, hero = 'critter' }: { resuming?: boolean; random?: () => number; hero?: 'critter' | 'object' } = {},
+  { resuming = false, random = Math.random, hero = 'critter', voice = 'silent' }: { resuming?: boolean; random?: () => number; hero?: 'critter' | 'object'; voice?: OpenerVoice } = {},
 ): Promise<string | null> {
-  const pool = hero === 'object' ? OBJECT_HERO_OPENERS : undefined;
+  // hx-6: the openers no longer touch the reel's hero (their critter is the house scholar), so an
+  // object-led reel draws from the whole bank too; `hero` stays on the choice file for the sound
   const file = path.join(projectDir, OPENER_CHOICE);
   const onFile = (): string | null => {
     try {
@@ -200,18 +218,36 @@ export async function assignOpener(
     const legacy = resuming && !fs.existsSync(file) && fs.existsSync(path.join(projectDir, 'assets', 'frames', '01-opener.js'));
     if (legacy) return null;
     try {
-      key = pickOpener(await recentOpeners(db, jobId, OPENER_HISTORY), { rand: random, ...(pool ? { pool } : {}) }) as string;
+      key = pickOpener(await recentOpeners(db, jobId, OPENER_HISTORY), { rand: random }) as string;
       await setJobOpener(db, jobId, key);
     } catch (error) {
       // A database without the `opener` column yet (db/explainers_schema.sql, EX3-102): the reel
       // still gets an opener, drawn without the history, and the render goes on.
       if ((error as { code?: string })?.code !== '42703') throw error;
-      key = pickOpener([], { rand: random, ...(pool ? { pool } : {}) }) as string;
+      key = pickOpener([], { rand: random }) as string;
     }
   }
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify({ key, name: openerByKey(key)?.name ?? key, hero }, null, 1)}\n`);
+  fs.writeFileSync(file, `${JSON.stringify({ key, name: openerByKey(key)?.name ?? key, hero, voice }, null, 1)}\n`);
+  // hx-6: frame 1 lands on code's AI 101 card (no teaser scene), written now so frame 1 is whole
+  // from the start; mount.mjs writes the same module again with the opener.
+  const frames = path.join(projectDir, 'assets', 'frames');
+  fs.mkdirSync(frames, { recursive: true });
+  fs.writeFileSync(path.join(frames, `${HOOK_ID}.js`), lessonModule(key));
   return key;
+}
+
+/**
+ * Frame 1's voice for the job in `projectDir` (EX6-14): its BRIEF.md's, the plan having been written
+ * from it (a job resumed after the setting changed keeps the brief it planned with), else `fallback`
+ * (the opener_voice setting).
+ */
+export function openerVoiceOf(projectDir: string, fallback: OpenerVoice): OpenerVoice {
+  try {
+    return briefOpenerVoice(fs.readFileSync(path.join(projectDir, 'BRIEF.md'), 'utf8')) as OpenerVoice;
+  } catch {
+    return fallback;
+  }
 }
 
 /** Where a job's workspace names its hand-off (world-kit/frames.mjs HANDOFF_CHOICE). */
@@ -331,9 +367,10 @@ export function frameModulesWritten(projectDir: string): boolean {
   const dir = path.join(projectDir, 'assets', 'frames');
   if (!fs.existsSync(dir)) return false;
   // A frame's own module: NN-<name>.js. Not code's opener (01-opener.js) and not a frame's new props (*.props.js).
+  // hx-6: frame 1 is all code's (the opener on its AI 101 card), so it is not a worker's to salvage.
   const own = fs.readdirSync(dir).filter((f) => /^\d+-[^.]+\.js$/.test(f) && f !== '01-opener.js');
   const have = new Set(own.map((f) => Number(/^(\d+)/.exec(f)?.[1])));
-  return [1, 2, 3, 4, 5, 6, 7].every((n) => have.has(n));
+  return [2, 3, 4, 5, 6, 7].every((n) => have.has(n));
 }
 
 /** Init writes a placeholder index.html. A reel is assembled only once all eight frames exist. */
@@ -784,6 +821,156 @@ async function runPictureCheck(ctx: {
   write();
 }
 
+// ── The wear check (VISUAL_SYSTEM_6.md § 4, § 6; D89) ──────────────────────────────────────────────
+
+/** A critter the wear check looks at: its entity id, body and role (lint-storyboard.mjs critterLooks). */
+export type WearCritter = { id: string; body: string; role: string };
+/** The wear check's contact sheet: each critter alone on paper, numbered from 1; null when it cannot be drawn. */
+export type WearSheet = (projectDir: string, critters: WearCritter[]) => Promise<Buffer | null>;
+
+const WEAR_CELL = { w: 480, h: 440, scale: 1.6, perRow: 3 };
+
+/**
+ * The real contact sheet: the job's kit (assets/kit/cast.js critter) draws each critter in its role,
+ * neutral, on paper (a node child, as the kit's other checks run), and sharp turns the sheet into a
+ * JPEG. Null when the kit cannot draw them (the check is then skipped).
+ */
+export async function renderWearSheet(projectDir: string, critters: WearCritter[]): Promise<Buffer | null> {
+  const cast = path.join(projectDir, 'assets', 'kit', 'cast.js');
+  if (!fs.existsSync(cast) || !critters.length) return null;
+  const script = "import { pathToFileURL } from 'node:url'; const K = await import(pathToFileURL(process.argv[1]).href); const list = JSON.parse(process.argv[2]); process.stdout.write(JSON.stringify(list.map((c) => String(K.critter(0, 0, { body: c.body, mood: 'neutral', role: c.role })))));";
+  const res = spawnSync(process.execPath, ['--input-type=module', '-e', script, cast, JSON.stringify(critters)], { cwd: projectDir, encoding: 'utf8', timeout: 60_000 });
+  let svgs: string[];
+  try {
+    svgs = JSON.parse(res.stdout) as string[];
+  } catch {
+    return null;
+  }
+  const perRow = Math.min(WEAR_CELL.perRow, critters.length);
+  const rows = Math.ceil(critters.length / perRow);
+  const cells = svgs.map((svg, i) => {
+    const x = (i % perRow) * WEAR_CELL.w;
+    const y = Math.floor(i / perRow) * WEAR_CELL.h;
+    return `<text x="${x + 18}" y="${y + 44}" font-size="34" font-family="sans-serif" font-weight="700" fill="#171717">${i + 1}</text><g transform="translate(${x + WEAR_CELL.w / 2} ${y + WEAR_CELL.h - 40}) scale(${WEAR_CELL.scale})">${svg}</g>`;
+  });
+  const sheet = `<svg xmlns="http://www.w3.org/2000/svg" width="${perRow * WEAR_CELL.w}" height="${rows * WEAR_CELL.h}"><rect width="100%" height="100%" fill="#F3F0EA"/>${cells.join('')}</svg>`;
+  const sharp = (await import('sharp')).default;
+  return sharp(Buffer.from(sheet)).jpeg({ quality: 85 }).toBuffer();
+}
+
+/** The wear check's instructions: the cached prefix (stable for every reel; the roles come after). */
+export const WEAR_CHECK_INSTRUCTIONS = [
+  'You check how cartoon characters read in a short explainer video. The image is a contact sheet: each character stands alone on paper under its number. A character is a simple rounded body with two eyes and two mitten hands; by design it has no mouth, no eyebrows and no clothes, so its role shows only in what it wears on its head and holds in its hands (and at most a bow tie).',
+  'For each character, answer two yes/no questions, each as the probability from 0 to 1 that the answer is yes. {role} is the role listed for that character.',
+  `reads_as_role: ${WEAR_QUESTIONS.reads_as_role.question} ${WEAR_QUESTIONS.reads_as_role.judge}`,
+  `confusing_piece: ${WEAR_QUESTIONS.confusing_piece.question} ${WEAR_QUESTIONS.confusing_piece.judge}`,
+  'Reply with JSON only: {"critters": [{"n": <its number>, "reads_as_role": <0 to 1>, "confusing_piece": <0 to 1>, "why": "<one short line: what a viewer would call it, and any confusing piece>"}]}, one entry per character.',
+].join('\n\n');
+
+/** The wear check's one vision call: the instructions are the cached prefix; the sheet and the roles follow. */
+export function wearCheckParams(model: string, critters: WearCritter[], jpeg: Buffer): Anthropic.MessageCreateParamsNonStreaming {
+  return {
+    model,
+    max_tokens: 800,
+    system: cachedSystemText(WEAR_CHECK_INSTRUCTIONS, '5m'), // one call per reel: the 5m TTL
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpeg.toString('base64') } },
+          { type: 'text', text: ['The roles, by number:', ...critters.map((c, i) => `${i + 1}: ${c.role}`)].join('\n') },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * A storyboard whose critter `id` is drawn bare: in its entity line, the role named in its look (the
+ * parts after "stands for") becomes `bare`; a look that names no role gets `bare` added before its
+ * beats. Every other line is kept.
+ */
+export function bareCritter(storyboard: string, id: string, role: string): string {
+  const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '[\\s_-]+');
+  const lineRe = new RegExp(`^(\\s+-\\s+\`?${esc(id)}\`?\\s+[—–]\\s+.*)$`, 'im');
+  return storyboard.replace(lineRe, (line) => {
+    const k = line.search(/stands for/i);
+    if (k < 0) return line;
+    const head = line.slice(0, k);
+    const tail = line.slice(k);
+    const roleRe = new RegExp(`(^|[^\\p{L}\\p{N}])${esc(role)}(?![\\p{L}\\p{N}])`, 'giu');
+    const parts = tail.split(/(\s+[—–]\s+)/);
+    // the "stands for" part keeps its words (it names the real thing); the look after it goes bare
+    let changed = false;
+    for (let i = 2; i < parts.length; i += 2) {
+      if (/^beats?\b/i.test(parts[i].trim())) continue;
+      if (roleRe.test(parts[i])) {
+        parts[i] = parts[i].replace(roleRe, '$1bare');
+        changed = true;
+      }
+      roleRe.lastIndex = 0;
+    }
+    if (changed) return head + parts.join('');
+    const beats = tail.search(/\s+[—–]\s+beats?\b/i);
+    const note = ' — bare (its role did not read in the wear check)';
+    return beats < 0 ? line + note : head + tail.slice(0, beats) + note + tail.slice(beats);
+  });
+}
+
+export type WearCheckResult = {
+  storyboard: string;
+  bare: { id: string; role: string; reason: string }[];
+  ran: boolean;
+  vision?: { model: string; usage: unknown; usd: number };
+};
+
+/**
+ * The wear check (VISUAL_SYSTEM_6.md § 4, § 6; D89): after the plan names the cast and before anything is
+ * built, the cast's critters that wear a role are drawn on one contact sheet and judged in ONE vision
+ * call (WEAR_CHECK's two questions per critter, on `model`, the picture check's). A critter that reads
+ * as its role under READS_AS_ROLE_MIN, or carries a confusing piece at CONFUSING_PIECE_MAX or more, or
+ * that the reply leaves out, is drawn bare for the whole reel: its look line in the storyboard says
+ * `bare`, and the reason comes back for the job's log. It runs only inside runRenderJob, the render a
+ * human started (CLAUDE.md Rule 1); tests pass a stubbed `vision`. Throws on a failed call or an
+ * unreadable reply; the caller fails open.
+ */
+export async function runWearCheck(ctx: {
+  projectDir: string;
+  storyboard: string;
+  model: string;
+  vision: PictureVision;
+  sheet?: WearSheet;
+  roles: string[];
+}): Promise<WearCheckResult> {
+  const cast = critterLooks(section(ctx.storyboard, 'Anchor scene'), ctx.roles) as { id: string; body: string | null; role: string | null }[];
+  const critters: WearCritter[] = cast.filter((c) => c.body && c.role && c.role !== 'bare').map((c) => ({ id: c.id, body: c.body!, role: c.role! }));
+  if (!critters.length) return { storyboard: ctx.storyboard, bare: [], ran: false };
+  const jpeg = await (ctx.sheet ?? renderWearSheet)(ctx.projectDir, critters);
+  if (!jpeg) return { storyboard: ctx.storyboard, bare: [], ran: false };
+  const reply = await ctx.vision(wearCheckParams(ctx.model, critters, jpeg));
+  const parsed = jsonInText(reply.text, 'wear check') as { critters?: { n?: unknown; reads_as_role?: unknown; confusing_piece?: unknown; why?: unknown }[] };
+  if (!Array.isArray(parsed?.critters)) throw new Error('the wear check replied with no critters');
+  const byN = new Map(parsed.critters.map((r) => [Number(r.n), r]));
+  let storyboard = ctx.storyboard;
+  const bare: WearCheckResult['bare'] = [];
+  critters.forEach((c, i) => {
+    const r = byN.get(i + 1);
+    const answers = { reads_as_role: Number(r?.reads_as_role), confusing_piece: Number(r?.confusing_piece) };
+    const read = Number.isFinite(answers.reads_as_role) && Number.isFinite(answers.confusing_piece);
+    if (read && wearPasses(answers)) return;
+    const why = typeof r?.why === 'string' && r.why.trim() ? ` (${r.why.trim()})` : '';
+    const reason = !read
+      ? 'the wear check gave no reading for it'
+      : [
+          answers.reads_as_role < READS_AS_ROLE_MIN ? `it reads as a ${c.role} at ${answers.reads_as_role.toFixed(2)} (needs ${READS_AS_ROLE_MIN})` : '',
+          answers.confusing_piece >= CONFUSING_PIECE_MAX ? `a confusing piece at ${answers.confusing_piece.toFixed(2)} (under ${CONFUSING_PIECE_MAX})` : '',
+        ].filter(Boolean).join('; ') + why;
+    bare.push({ id: c.id, role: c.role, reason });
+    storyboard = bareCritter(storyboard, c.id, c.role);
+  });
+  return { storyboard, bare, ran: true, vision: { model: reply.model, usage: reply.usage, usd: reply.usd } };
+}
+
 /**
  * The kit's breakage checks (try.mjs, Explainers 4.2: fail open) run once more after session B, on the
  * built frames: whatever the builders' one fix round left becomes a `breakage:<check>` warning, and the
@@ -1184,6 +1371,8 @@ export async function rebuildScene(
     const final = lintStoryboard({
       storyboard: read(storyboardFile) ?? '',
       script: read(scriptFile) ?? '',
+      // the brief says whether frame 1 speaks (EX6-14)
+      brief: read(path.join(ws.projectDir, 'BRIEF.md')),
       frameSource: frameModulesByNumber(ws.projectDir),
       audioMeta: readJson(path.join(ws.projectDir, 'audio_meta.json')),
       frameEvents: eventsFromDir(path.join(ws.projectDir, 'assets', 'frames')),
@@ -1284,7 +1473,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       ws = existing;
       log('resume', { jobId: job.id });
     } else {
-      ws = (deps.prepare ?? prepareWorkspace)({ jobsRoot: deps.jobsRoot, jobId: job.id, topic, sourceText, analogy });
+      ws = (deps.prepare ?? prepareWorkspace)({ jobsRoot: deps.jobsRoot, jobId: job.id, topic, sourceText, analogy, openerVoice: settings.opener_voice });
       await keepText('brief', read(path.join(ws.projectDir, 'BRIEF.md')));
     }
 
@@ -1295,17 +1484,19 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     // the job's frame_worker_model, except mechanism builders on tech_frame_worker_model; the picture check
     // on picture_check_model.
     const warmGate = new CacheWarmGate();
-    const session = async (prompt: string, model: string = job.orchestrator_model, agent?: MainAgent) => {
+    type OnMessage = Parameters<typeof runAgentSession>[0]['onMessage'];
+    const session = async (prompt: string, model: string = job.orchestrator_model, agent?: MainAgent, onMessage?: OnMessage) => {
       const gate = await warmGate.enter(`${model}|${agent ?? 'main'}`);
       try {
-        return await runSession(prompt, model, agent, gate.onReply);
+        return await runSession(prompt, model, agent, gate.onReply, onMessage);
       } finally {
         gate.onEnd();
       }
     };
-    const runSession = (prompt: string, model: string, agent: MainAgent | undefined, onReply: () => void) =>
+    const runSession = (prompt: string, model: string, agent: MainAgent | undefined, onReply: () => void, onMessage?: OnMessage) =>
       runAgentSession({
         onReply,
+        onMessage,
         mainAgent: agent,
         readerModel: settings.reader_model,
         query: deps.query,
@@ -1323,6 +1514,22 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
         log: transcript,
       });
 
+    // Instruction injection (INJECTION-PLAN.md, approved 2026-11-16): one per render; the planner's
+    // catalog trim below, the builders' sections in session B (code build only).
+    const codeRunner = (settings.build_runner ?? 'code') === 'code';
+    const injectionJev = deps.analogy ? new RecordingExplainersJevRunner(deps.analogy.jevTransport, db, { mode: job.mode, jobId: job.id }) : null;
+    const injection = new InjectionRun({
+      projectDir: ws.projectDir,
+      jobId: job.id,
+      telemetryDir: path.join(ws.jobDir, 'telemetry'),
+      ledgerFile: path.join(deps.jobsRoot, 'injection-ledger.json'),
+      jev: injectionJev,
+      topicId: topic.id,
+      log: (event, data) => log(event, { jobId: job.id, ...(data ?? {}) }),
+      // every render's first-try log lives in the DB (prod too), and the ledger learns from it
+      store: { load: () => loadFirstTryLog(db), save: (render) => saveFirstTryLog(db, render) },
+    });
+
     // Session A: plan (a resumed job already has its plan).
     let storyboard: string;
     let script: string;
@@ -1331,7 +1538,18 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       script = read(path.join(ws.projectDir, 'SCRIPT.md')) ?? '';
     } else {
       await stage('session_a');
-      const a = await session(PLAN_PROMPT, settings.director_model);
+      // The planner sees only the catalog entries Jev says this reel could use (fails open: all).
+      const trim = await trimCatalog({
+        projectDir: ws.projectDir,
+        jev: injectionJev,
+        ledger: injection.ledgerNow,
+        state: { topic: topic.title ?? '', analogy: analogy.name, brief: (read(path.join(ws.projectDir, 'BRIEF.md')) ?? '').slice(0, 6000) },
+        topicId: topic.id,
+      }).catch((err: unknown) => ({ trimmed: false, kept: 0, total: 0, reason: (err as Error).message }));
+      log('catalog_trim', { jobId: job.id, ...trim });
+      const watch = catalogMissWatcher();
+      const a = await session(PLAN_PROMPT, settings.director_model, undefined, watch.onMessage).finally(() => restoreCatalog(ws!.projectDir));
+      if (trim.trimmed) injection.addContext({ label: 'session_a', role: PLANNER_ROLE, look: PLANNER_LOOK, frame: null, injected: ['catalog:picked'], scores: {}, misses: watch.missed() ? [CATALOG_MISS] : [], firstTry: null });
       await stage('session_a_done', { sessionAId: a.sessionId ?? undefined });
       await recordSessionCost(db, job, job.mode, 'session_a', a);
       if (a.capped) throw new RenderFailure(`Spend cap $${job.spend_cap_usd.toFixed(2)} reached in session A.`, true);
@@ -1369,7 +1587,7 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     }
 
     // Frame 1's opener, drawn from the bank once the plan names the hero (EX3-102, EX3-128).
-    const opener = await assignOpener(db, job.id, ws.projectDir, { resuming, random: deps.random, hero: storyboardHero(storyboard) });
+    const opener = await assignOpener(db, job.id, ws.projectDir, { resuming, random: deps.random, hero: storyboardHero(storyboard), voice: openerVoiceOf(ws.projectDir, settings.opener_voice) });
     log('opener', { jobId: job.id, opener });
 
     // Frame 3's hand-off (4.3): a template from the bank that fits the plan (its hero, the mapped
@@ -1385,6 +1603,34 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     await addLintViolations(db, job.id, (checkpoint.violations as LintViolation[]).map((v) => (v.severity === 'error' ? asReelWarning(v, 'lint') : v)));
     await keepText('lint_report', JSON.stringify({ phase: 'checkpoint', ...checkpoint }, null, 2));
 
+    // The wear check (VISUAL_SYSTEM_6.md § 4, § 6; D89): once the plan names the cast, before anything is
+    // built, one vision call on the cast in their roles; a critter whose wear does not read is drawn
+    // bare for the whole reel (its look line says so before session B) and the reason is on the reel.
+    // Only here, in the render a human started (CLAUDE.md Rule 1). Fails open.
+    const wearVision = deps.wearVision ?? deps.pictureVision;
+    if (!resuming && wearVision) {
+      try {
+        await stage('wear_check');
+        await wearReady;
+        const roles = Object.keys(((wearKit() as { ROLES?: Record<string, unknown> } | null)?.ROLES) ?? {});
+        const wear = await runWearCheck({ projectDir: ws.projectDir, storyboard, model: settings.picture_check_model, vision: wearVision, sheet: deps.wearSheet, roles });
+        if (wear.vision) {
+          meter.charge(wear.vision.usd);
+          const u = (wear.vision.usage ?? {}) as { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null };
+          await recordCost(db, { jobId: job.id, mode: job.mode, vendor: 'anthropic', component: `wear_check:${wear.vision.model}`, inputTokens: u.input_tokens ?? 0, outputTokens: u.output_tokens ?? 0, cacheReadTokens: u.cache_read_input_tokens ?? 0, cacheWriteTokens: u.cache_creation_input_tokens ?? 0, usd: wear.vision.usd });
+        }
+        log('wear_check', { jobId: job.id, ran: wear.ran, bare: wear.bare });
+        if (wear.bare.length) {
+          fs.writeFileSync(path.join(ws.projectDir, 'STORYBOARD.md'), wear.storyboard);
+          storyboard = wear.storyboard;
+          await keepText('storyboard', storyboard);
+          await addLintViolations(db, job.id, wear.bare.map((b) => ({ source: 'storyboard' as const, rule: 'wear:bare', frame: null, severity: 'warning' as const, detail: `The ${b.role} critter "${b.id}" is drawn bare for the whole reel: ${b.reason}.` })));
+        }
+      } catch (error) {
+        log('wear_check_failed', { jobId: job.id, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+
     if (deps.stopAt === 'session_b') {
       const error = 'Stopped before session B (stopAt: the plan is ready to build from a copy).';
       await finishJob(db, job.id, { status: 'failed', error, capped: false });
@@ -1396,7 +1642,45 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     // dispatches each builder as its own session, each recorded as session_b:<model>; build_runner
     // 'agent' brings back the orchestrator session.
     await stage('session_b');
-    const codeRunner = (settings.build_runner ?? 'code') === 'code';
+    // Session B cost telemetry (telemetry.ts): observe and write only, never spend.
+    const telemetry = new SessionBTelemetry({ dir: path.join(ws.jobDir, 'telemetry'), jobId: job.id });
+    // Telemetry fails open: a broken observer never stops a build (observe, onMessage, end).
+    const observeSafe = (label: string, model: string): { onMessage: (m: Parameters<ReturnType<SessionBTelemetry['observe']>['onMessage']>[0]) => void; end: (r?: SessionResult | null) => void } => {
+      let seen: ReturnType<SessionBTelemetry['observe']> | null = null;
+      try {
+        seen = telemetry.observe(label, model);
+      } catch (err) {
+        log('telemetry_failed', { jobId: job.id, step: 'observe', error: (err as Error).message });
+      }
+      return {
+        onMessage: (m) => {
+          try {
+            seen?.onMessage(m);
+          } catch {
+            /* fail open */
+          }
+        },
+        end: (r) => {
+          try {
+            seen?.end(r);
+          } catch (err) {
+            log('telemetry_failed', { jobId: job.id, step: 'end', error: (err as Error).message });
+          }
+        },
+      };
+    };
+    // Instruction injection (INJECTION-PLAN.md, approved 2026-11-16): builders get the core sections in
+    // their system prompt and Jev's picks (plus the ledger's promotions and first-try lessons) in each
+    // dispatch message. Code build only; fails open to the full stack.
+    if (codeRunner) {
+      log('injection', { jobId: job.id, active: injection.prepare() });
+      await injection.loadHistory();
+    }
+    const looks = storyboardLooks(storyboard);
+    const lookOfLabel = (label: string): string => {
+      const n = frameNumberOf(label.split(':').pop() ?? '');
+      return n === null ? 'world' : (looks.get(n) ?? 'world');
+    };
     const buildDeps = (): BuildDeps => {
       const env = scrubbedEnv({ projectDir: ws!.projectDir, homeDir: ws!.homeDir, tmpDir: ws!.tmpDir, secrets: { ...deps.secrets, voiceId: settings.voice_id ?? '' } });
       delete env.ANTHROPIC_API_KEY;
@@ -1404,8 +1688,16 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       return {
         projectDir: ws!.projectDir,
         voiceId: settings.voice_id ?? '',
-        dispatch: async (agent, prompt) => {
-          const r = await session(prompt, builderModel(settings, job.frame_worker_model, agent), agent);
+        dispatch: async (agent, prompt, label) => {
+          const model = builderModel(settings, job.frame_worker_model, agent);
+          const inj = codeRunner ? await injection.dispatch(agent, prompt, label ?? agent, lookOfLabel(label ?? agent)) : null;
+          const seen = observeSafe(label ?? agent, model);
+          const r = await session(inj?.prompt ?? prompt, model, agent, (m) => {
+            seen.onMessage(m);
+            inj?.onMessage(m);
+          });
+          seen.end(r);
+          inj?.end();
           await recordSessionCost(db, job, job.mode, 'session_b', r);
           return r;
         },
@@ -1422,10 +1714,14 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       log('build_notes', { jobId: job.id, notes: built.notes });
       b = asSession(built);
     } else {
-      b = await session(resuming ? `${RESUME_PROMPT}${deps.resumeNote ? ` ${deps.resumeNote}` : ''}` : BUILD_PROMPT);
+      const seen = observeSafe('orchestrator', job.orchestrator_model);
+      b = await session(resuming ? `${RESUME_PROMPT}${deps.resumeNote ? ` ${deps.resumeNote}` : ''}` : BUILD_PROMPT, undefined, undefined, seen.onMessage);
+      seen.end(b);
     }
     await stage('session_b_done', { sessionBId: b.sessionId ?? undefined });
     if (!codeRunner) await recordSessionCost(db, job, job.mode, 'session_b', b);
+    await finishSessionBTelemetry(telemetry, db);
+    log('injection_summary', { jobId: job.id, ...((await injection.finish()) ?? {}) });
     // A cap in session B (or its repair) keeps the reel when it is already rendered, or when the frames
     // are written and the voice exists: the worker assembles and renders them with no model (hx-4
     // pre-mortem: a capped job used to throw away every finished frame). The cap and the salvage are
@@ -1454,9 +1750,14 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
       if (codeRunner) {
         b = asSession(await repairBuild(buildDeps(), missing));
       } else {
-        b = await session(repairPrompt(missing));
+        const seen = observeSafe('repair', job.orchestrator_model);
+        b = await session(repairPrompt(missing), undefined, undefined, seen.onMessage);
+        seen.end(b);
         await recordSessionCost(db, job, job.mode, 'repair', b);
       }
+      // The summary again, now with the repair rounds; the breakdown rows are replaced, not added to.
+      await rewriteSessionBTelemetry(telemetry, db, job.id);
+      log('injection_summary', { jobId: job.id, ...((await injection.finish()) ?? {}) });
       if (b.capped) await capped('while repairing missing frames');
     }
 

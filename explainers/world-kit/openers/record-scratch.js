@@ -1,6 +1,6 @@
 // Record Scratch Freeze: the hook in full motion with the music loud; a record scratch, the music
 // cuts, the frame freezes ink-only and a red marker circles the critter; the voice starts in the
-// silence; "AI BRAIN BREAK" slaps on as a sticker; it unfreezes on the line's "this", the sticker
+// silence; "AI 101" slaps on as a sticker (over the AI 101 card it peels away on the unfreeze); it unfreezes on the line's "this", the sticker
 // peels away and the title card with the term lands (EX3-102).
 import { T, g, el, id, ref, defs, seg, lerp, E, scene, heroAt, zoomed, wordmark, burst, card, title } from './common.js';
 
@@ -22,7 +22,8 @@ function sticker(t, at, off) {
   if (t < at) return '';
   const u = seg(t, at, at + 0.16, E.spring);
   // it peels off up and away when the frame unfreezes, clearing the band for the title card
-  const p = seg(t, off - 0.05, off + 0.2, E.in);
+  // (a silent hook keeps it to the cut, D125: off is Infinity)
+  const p = Number.isFinite(off) ? seg(t, off - 0.05, off + 0.2, E.in) : 0;
   if (p >= 1) return '';
   return g({ transform: `translate(540 ${(420 - 260 * p).toFixed(1)}) rotate(${(-5 - 10 * p).toFixed(2)}) scale(${(lerp(1.6, 1, u) * lerp(1, 0.6, p)).toFixed(3)})`, opacity: (1 - p).toFixed(3) }, [
     card(-372, -170, 744, 330, { r: 22, lift: 1.2 }),
@@ -35,11 +36,13 @@ export default function draw(t, ctx) {
   const live = t < FREEZE || t >= UNFREEZE;
   const at = t < FREEZE ? t : t < UNFREEZE ? FREEZE : t; // back on the voice clock after the freeze
   const parts = [defs()];
-  if (live) parts.push(scene(ctx, at));
+  // over the AI 101 card, the card's title waits for the sticker to peel (one AI 101 at a time)
+  const hideTitle = Boolean(ctx.hook.lesson) && t < UNFREEZE + 0.15;
+  if (live) parts.push(scene(ctx, at, { hideTitle }));
   else {
     const punch = 1.07;
     parts.push(el('defs', {}, el('filter', { id: id('desat') }, el('feColorMatrix', { type: 'saturate', values: '0' }) + el('feComponentTransfer', {}, ['R', 'G', 'B'].map((c) => el(`feFunc${c}`, { type: 'linear', slope: 1.1, intercept: -0.05 })).join('')))));
-    parts.push(g({ filter: ref('desat') }, zoomed(scene(ctx, FREEZE), [540, 960], punch)));
+    parts.push(g({ filter: ref('desat') }, zoomed(scene(ctx, FREEZE, { hideTitle }), [540, 960], punch)));
     // circle the critter (or the middle of the shot, when the hook has none)
     const h = heroAt(ctx, FREEZE);
     const [mx, my] = h ? h.mid : [518, 1085];
@@ -60,7 +63,8 @@ export default function draw(t, ctx) {
       if (a >= 1) parts.push(el('path', { d: `M ${(ex + side * 15).toFixed(1)} ${(ey - 50).toFixed(1)} L ${ex.toFixed(1)} ${ey.toFixed(1)} L ${(ex + side * 50).toFixed(1)} ${(ey - 15).toFixed(1)}`, fill: 'none', stroke: RED, 'stroke-width': 11, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
     }
   }
-  parts.push(sticker(t, voiceAt, ctx.M.titleAt));
+  // hx-6: over the AI 101 card the sticker peels on the unfreeze, leaving the card's own title
+  parts.push(sticker(t, voiceAt, ctx.hook.lesson ? UNFREEZE : ctx.M.silent ? Infinity : ctx.M.titleAt));
   parts.push(burst(540, 960, seg(t, UNFREEZE, UNFREEZE + 0.35, (x) => x), 3));
   parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');

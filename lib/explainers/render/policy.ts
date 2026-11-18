@@ -122,6 +122,8 @@ const READ_ONLY_DIRS = [
   path.join('assets', 'kit'),
   path.join('.hyperframes', 'snaps'),
   path.join('.hyperframes', 'sequences'),
+  // The instruction sections (injection, 2026-11-16): code writes them; builders Read them.
+  path.join('.hyperframes', 'sections'),
 ];
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'NotebookEdit']);
 

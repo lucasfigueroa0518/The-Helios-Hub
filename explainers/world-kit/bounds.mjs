@@ -32,7 +32,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { isBankOpener, projectFrames } from './frames.mjs';
 import { FONTS } from './mount.mjs';
-import './try.mjs'; // registers the hooks that let frame modules load in Node
+import { preparedScene } from './try.mjs'; // also registers the hooks that let frame modules load in Node
 
 /** Seconds between measurements. */
 export const STEP = 0.2;
@@ -234,7 +234,8 @@ export async function checkBounds(root, only = null) {
       if (isBankOpener(root, f)) continue;
       let scene;
       try {
-        scene = (await import(`${pathToFileURL(file).href}?bounds`)).default;
+        scene = (await import(/* webpackIgnore: true */ `${pathToFileURL(file).href}?bounds`)).default;
+        if (typeof scene?.draw === 'function') scene = await preparedScene(root, scene, f.duration); // as mount.mjs draws it
       } catch (e) {
         problems.push(problemOf(f.id, 'load', `failed to load: ${e?.message ?? e}`));
         continue;

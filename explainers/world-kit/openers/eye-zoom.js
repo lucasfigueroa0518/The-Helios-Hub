@@ -1,6 +1,6 @@
 // Eye Zoom-Out: one giant eye of the hook's critter fills the screen. It looks left, right, then
 // straight at you, and blinks. Whoosh: a crash zoom out to the whole hook lands on a bass hit, and
-// "AI BRAIN BREAK" slams in as it lands.
+// it lands on the AI 101 card (the scholar beside the title).
 import { T, el, defs, seg, lerp, E, scene, heroAt, zoomed, zoomOut, title, shake, shaken, burst, slamMark } from './common.js';
 
 const CLOSE = 24;
@@ -32,7 +32,8 @@ export default function draw(t, ctx) {
       parts.push(el('line', { x1: (540 + Math.cos(a) * r0).toFixed(1), y1: (960 + Math.sin(a) * r0).toFixed(1), x2: (540 + Math.cos(a) * r1).toFixed(1), y2: (960 + Math.sin(a) * r1).toFixed(1), stroke: T.ink, 'stroke-width': 7, 'stroke-linecap': 'round', opacity: (0.7 * (1 - u)).toFixed(3) }));
     }
   }
-  parts.push(slamMark(t, landAt, { cy: 600, tilt: 3, from: 2.4, hold: 1.05 }));
+  // hx-6: the AI 101 card shows the title; the slam is for a hook that has none
+  if (!ctx.hook.lesson) parts.push(slamMark(t, landAt, { cy: 600, tilt: 3, from: 2.4, hold: ctx.M.silent ? Infinity : 1.05 }));
   parts.push(burst(540, 960, seg(t, landAt, landAt + 0.4, (x) => x), 4.5));
   parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');

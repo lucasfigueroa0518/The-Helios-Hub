@@ -18,7 +18,7 @@ const KIT = path.join(process.cwd(), 'explainers', 'world-kit');
 /** shots.js jumpCutProblems (builder D's), typed for these calls. */
 type JumpCuts = (shots: unknown[], o?: { samples?: unknown[] | null; duration?: number }) => string[];
 
-type Frame = { number: number; source: string; look?: string; anchor?: string; duration?: number; shots?: string[] };
+type Frame = { number: number; source: string; ground?: string; look?: string; anchor?: string; duration?: number; shots?: string[] };
 type Problem = { frame: string | null; check: string; rule: string; message: string };
 type TryOut = { ok: boolean; errors: string[]; problems?: Problem[] };
 
@@ -31,7 +31,7 @@ function project(frames: Record<string, Frame>, o: { world?: string; identity?: 
   for (const [file, src] of Object.entries(o.kit ?? {})) fs.writeFileSync(path.join(root, 'assets', 'kit', file), src);
   const board = ['# STORYBOARD', ''];
   for (const [id, f] of Object.entries(frames)) {
-    board.push(`## Frame ${f.number} — F${f.number}`, '', `- duration: ${f.duration ?? 4}s`, `- src: compositions/frames/${id}.html`, '- ground: paper', '- voiceover: "A line."');
+    board.push(`## Frame ${f.number} — F${f.number}`, '', `- duration: ${f.duration ?? 4}s`, `- src: compositions/frames/${id}.html`, `- ground: ${f.ground ?? 'paper'}`, '- voiceover: "A line."');
     if (f.look) board.push(`- look: ${f.look}`);
     if (f.anchor) board.push(`- anchor: ${f.anchor}`);
     if (f.shots) board.push('- shots:', ...f.shots.map((line) => `  - ${line}`));
@@ -93,8 +93,19 @@ test('every check id is breakage: snake_case, and no 4.1 taste check is register
   const ids = Object.keys(CHECKS);
   for (const id of ids) assert.match(id, /^[a-z]+(_[a-z]+)*$/, id);
   // the fill rule is breakage again (a lone small object on an empty ground for more than 1 s)
-  for (const kept of ['face_cut', 'rig', 'text', 'empty', 'identity', 'objects', 'jump_cut', 'shots', 'set', 'framing', 'label', 'fill', 'close']) assert.ok(ids.includes(kept), kept);
-  for (const gone of ['crowd', 'focus', 'dof', 'technique', 'orange', 'frame7', 'hero', 'scale', 'cut']) assert.ok(!ids.includes(gone), gone);
+  for (const kept of ['orange', 'face_cut', 'rig', 'text', 'empty', 'identity', 'objects', 'jump_cut', 'shots', 'set', 'framing', 'label', 'fill', 'close']) assert.ok(ids.includes(kept), kept);
+  for (const gone of ['crowd', 'focus', 'dof', 'technique', 'frame7', 'hero', 'scale', 'cut']) assert.ok(!ids.includes(gone), gone);
+});
+
+test('orange (hx-6, VISUAL_SYSTEM_6.md § 6): hero + one more runs only on analogy frames (ground: room)', () => {
+  const O = '#FF5E1A';
+  const two = `<g data-ui="a"><rect x="100" y="100" width="300" height="300" fill="${O}"/></g><g data-ui="b"><rect x="500" y="900" width="300" height="300" fill="${O}"/></g>${readable}`;
+  const roomStill = `\nexport default { ground: 'room', draw: () => ${JSON.stringify(two)} };\n`;
+  const orangeErrors = (r: { out: TryOut }) => r.out.errors.filter((e) => /orange: /.test(e));
+  const plain = tryRun(project({ '04-analogy': { number: 4, look: 'world', source: still(two) } }));
+  assert.deepEqual(orangeErrors(plain), [], 'a paper frame keeps main: no orange check');
+  const room = tryRun(project({ '04-analogy': { number: 4, look: 'world', ground: 'room', source: roomStill } }));
+  assert.ok(orangeErrors(room).some((e) => /2 things outside the hero are orange/.test(e)), JSON.stringify(room.out.errors));
 });
 
 // ── Fail open: the output ─────────────────────────────────────────────────────

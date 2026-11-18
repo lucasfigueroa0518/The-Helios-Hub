@@ -1,0 +1,40 @@
+{
+ "file": "9170aa82-new-props.js",
+ "job": "9170aa82-a9a7-488b-bd77-d51207397f7a",
+ "topic": "hallucinations",
+ "added_at": "2026-11-17T02:00:18.386Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "teal hardcover novel with a bookmark": {
+   "source_name": "teal hardcover novel with a bookmark",
+   "tags": {
+    "is": "a thick teal hardcover novel, shut with a yellow bookmark at the front, or lying open at its last page, 180",
+    "setting": [
+     "bedroom desk",
+     "classroom",
+     "teacher desk",
+     "library",
+     "home"
+    ],
+    "material": "paper and cloth board",
+    "parts": [
+     "front cover",
+     "page block",
+     "spine",
+     "bookmark",
+     "last page",
+     "page number 180"
+    ],
+    "not": [
+     "a notebook",
+     "a report",
+     "a magazine",
+     "a tablet"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

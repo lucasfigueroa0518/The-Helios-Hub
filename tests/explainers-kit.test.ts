@@ -90,10 +90,11 @@ test('the calm camera refuses big zooms, roll past 3°, and tilt (V-7)', () => {
   assert.throws(() => HX.validateLegs([{ at: 0, dur: 1, to: { zoom: 1.5 }, polarity: 'glide' }], 2), /within 1.2/);
 });
 
-test('colors are palette tokens; the grounds are paper, stage, and white for the close; night and forest read as stage (hx-4)', () => {
-  assert.equal(HX.tok('paper'), '#F4EFE7');
+test('colors are palette tokens; the grounds are paper, stage, white for the close and room for the analogy (hx-6); night and forest read as stage (hx-4)', () => {
+  assert.equal(HX.tok('paper'), '#F3F0EA');
   assert.throws(() => HX.mix('orange', '#00FF00', 0.5), /unknown token/);
-  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'stage', 'white']);
+  assert.deepEqual(Object.keys(HX.GROUNDS), ['paper', 'stage', 'white', 'room']);
+  assert.deepEqual(HX.groundOf('room'), { name: 'room', fill: '#F3F0EA', dark: false });
   assert.equal(HX.groundOf('night').name, 'stage');
   assert.equal(HX.groundOf('forest').name, 'stage');
   assert.equal(HX.GROUNDS.white.fill, '#FFFFFF');
@@ -627,21 +628,23 @@ test('textBox sizes its shape around the measured text, wraps long text, and tag
   for (const b of [short, long, typed]) assert.ok(!/NaN|undefined/.test(b.svg));
 });
 
-test('the close: the logo and AI BRAIN BREAK centred together, the words writing, fixed sounds, 2.5s (EX3-95)', async () => {
+test('the close: the logo and AI 101 centred together, the words writing, fixed sounds, 2.5s (EX3-95)', async () => {
   await import('../explainers/world-kit/try.mjs');
   const close = (await import('../explainers/world-kit/close.js')).default;
-  const { LOGO, WORDMARK, WORD_BASELINE } = await import('../explainers/world-kit/close.js');
+  const { LOGO, WORDMARK, WORD_BASELINE, WORD_SIZE } = await import('../explainers/world-kit/close.js');
   const { CLOSE, CLOSE_EVENTS } = await import('../explainers/world-kit/close-timing.js');
   assert.equal(CLOSE.duration, CLOSE_DURATION);
   assert.equal(close.ground, 'white');
   // The logo and the words, top of the logo to the words' baseline, are centred together.
   assert.equal(LOGO.cx, 540);
-  assert.ok(Math.abs((LOGO.cy - LOGO.w / 2 + WORD_BASELINE) / 2 - 960) < 6, 'centred (to the visible circle and ink)');
+  // the visible circle's top (the PNG keeps a 2.05% margin) to the bottom of the ink (half the pen line)
+  const ink = (WORD_SIZE * 0.08 * 1.25) / 2;
+  assert.ok(Math.abs((LOGO.cy - LOGO.w / 2 + LOGO.w * 0.0205 + WORD_BASELINE + ink) / 2 - 960) < 1, 'centred (to the visible circle and ink)');
   assert.ok(LOGO.cy < 960, 'the logo sits above the centre');
-  assert.equal(WORDMARK, 'AI BRAIN BREAK');
+  assert.equal(WORDMARK, 'AI 101');
   const start = close.draw(0.02);
   assert.match(start, /data-role="logo"/);
-  assert.match(close.draw(1.0), /data-text="AI BRAIN BREAK"/);
+  assert.match(close.draw(1.0), /data-text="AI 101"/);
   const end = close.draw(2.4);
   assert.match(end, new RegExp(`href="assets/Helios-logo\\.png" x="320" y="${LOGO.cy - LOGO.w / 2}" width="440" height="440"`));
   assert.ok((end.match(/<path/g) ?? []).length > (close.draw(1.0).match(/<path/g) ?? []).length, 'the words write on');
@@ -759,7 +762,7 @@ test('the look check: a critter keeps its CAST look in every frame; only the her
   // CAST itself: required, and at most one orange critter.
   assert.match(castShapeProblems(undefined)[0], /must export CAST/);
   assert.match(castShapeProblems({ a: { body: 'orange' }, b: { body: 'orange' } })[0], /2 orange critters/);
-  assert.match(castShapeProblems({ a: { body: 'blue' } })[0], /must be ink, paper or orange/);
+  assert.match(castShapeProblems({ a: { body: 'blue' } })[0], /body "blue" must be one of orange, green, ink, white/);
   assert.deepEqual(castShapeProblems(cast), []);
 });
 
@@ -813,8 +816,10 @@ test('critters: poses, moods, accessories, and hands that hold props', async () 
   for (const mood of Object.keys(MOODS)) assert.ok(!/NaN|undefined/.test(critter(0, 0, { mood })), mood);
   assert.ok(!/NaN|undefined/.test(critter(0, 0, { wear: WEAR })));
   const h = handAt(100, 500, { arms: 'reach', s: 2 });
-  assert.deepEqual(h.r, [100 + 156 * 2, 500 - 98 * 2]);
-  assert.deepEqual(handAt(100, 500, { arms: 'reach', s: 2, flip: true }).r, [100 - 156 * 2, 500 - 98 * 2]);
+  // critter D: a reach points up and out but stays a short stub (cast.js D_STUB), mirrored when flipped
+  assert.ok(h.r[0] > 100 && h.r[1] < 500, 'reach goes up and out');
+  const hf = handAt(100, 500, { arms: 'reach', s: 2, flip: true });
+  assert.ok(Math.abs((hf.r[0] - 100) + (h.r[0] - 100)) < 1e-6 && Math.abs(hf.r[1] - h.r[1]) < 1e-6, 'flip mirrors the hand');
   const w = walk(0.2);
   assert.ok(w.legs.l === -w.legs.r && w.steps[0] > 0);
 });
@@ -887,19 +892,33 @@ function inkInBox(svg: string, box: Box): string[] {
 test('critter accessories never cover or crowd the eyes or mouth (EX3-103); glasses sit on the eyes', async () => {
   await import('../explainers/world-kit/try.mjs');
   const { scope } = await import('../explainers/world-kit/draw.js');
-  const { WEAR, WEAR_ON_EYES, FACE_KEEPOUT, wearDrawing, critter } = await import('../explainers/world-kit/cast.js');
+  const { WEAR, WEAR_ON_EYES, FACE_KEEPOUT, wearDrawing, critter, D } = (await import('../explainers/world-kit/cast.js')) as any;
+  const { WEAR_TO_ROLE, DK } = D;
   const zones = FACE_KEEPOUT as Box[];
   assert.deepEqual(zones.map((z) => z.part), ['eyes', 'mouth']);
   assert.deepEqual(WEAR_ON_EYES, ['glasses']);
+  // hx-6: main's stock wear draws as the wear.js piece it translates to (critter D), or bare
+  const tileY = (localY: number) => localY / DK + 192;
+  const eyeTop = tileY(zones[0].y);
   for (const ground of ['paper', 'night']) {
     scope('f-', ground);
     for (const item of WEAR as string[]) {
       for (const body of ['ink', 'paper', 'orange']) {
         const { front } = wearDrawing([item], { body });
-        assert.ok(front.length > 0 || item === 'backpack', item);
-        for (const zone of zones) {
-          if (zone.part === 'eyes' && (WEAR_ON_EYES as string[]).includes(item)) continue;
-          assert.deepEqual(inkInBox(front, zone), [], `${item} on a ${body} critter (${ground}) is in the ${zone.part} keep-out`);
+        const t = WEAR_TO_ROLE[item];
+        assert.equal(front.length > 0, !!t, item);
+        if (t?.head && !['glasses', 'headphones'].includes(t.head)) {
+          // a hat sits on the flat top of the tile, above the eye keep-out
+          const ys = [...front.matchAll(/(?:^|[^\w-])(?:y|cy)="([\d.]+)"/g)].map((m) => Number(m[1]));
+          for (const y of ys) assert.ok(y < eyeTop, `${item}: ${y} is above the eyes (${eyeTop.toFixed(1)})`);
+        }
+        if (t?.head === 'headphones') {
+          // the cups ride the sides, outside the eye keep-out
+          for (const m of front.matchAll(/<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)"/g)) {
+            const x0 = (Number(m[1]) - 100) * DK;
+            const x1 = (Number(m[1]) + Number(m[2]) - 100) * DK;
+            assert.ok(x1 < zones[0].x || x0 > zones[0].x + zones[0].w, `headphones cup ${x0}..${x1} clear of the eyes`);
+          }
         }
       }
       // critter() draws exactly these accessories

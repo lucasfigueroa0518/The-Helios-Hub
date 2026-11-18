@@ -13,7 +13,7 @@ export const NEW_PROPS = {
       parts: ['striped scalloped awning header', 'tall message area', 'message entry bar', 'round send dot'],
       not: ['phone', 'laptop', 'speech bubble', 'email inbox', 'window of a house', 'shop front with door'],
     },
-    size: [210, 350],
+    size: [290, 360],
     states: ['default'],
     // Origin: bottom center of the window; it stands y -330..0, x -98..98.
     draw: ({ focal }) => {
@@ -64,7 +64,7 @@ export const NEW_PROPS = {
       parts: ['square body', 'printed die square', 'notch dot', 'short pins on two sides'],
       not: ['cookie', 'sd card', 'microwave', 'big server', 'brain'],
     },
-    size: [150, 80],
+    size: [218, 86],
     states: ['default'],
     draw: ({ focal }) => {
       const pins = [];

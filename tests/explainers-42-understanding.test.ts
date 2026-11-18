@@ -99,8 +99,8 @@ test('the reel test is what a viewer meets: scenes, shot subjects, the voice, th
   assert.match(t.text, /Shots: the phone; the loading bar\n/, '"=" and everything after it are cut; why, cast and angle never appear');
   assert.deepEqual(t.leakedScenes, [1], 'only scene lines are flagged');
   // 4.3: the opener shows only the wordmark; the card with the term is frame 3's hand-off.
-  assert.match(t.text, /## Beat 1\n[\s\S]*?Words on screen: "AI BRAIN BREAK"\.\n/);
-  assert.match(t.text, /Words on screen: a card that reads "today's AI Brain Break: cache"\./);
+  assert.match(t.text, /## Beat 1\n[\s\S]*?Words on screen: "AI 101"\.\n/);
+  assert.match(t.text, /Words on screen: a card that reads "today's AI Lesson: cache"\./);
   assert.match(t.text, /Words on screen: a dictionary card: "cache" \(noun\): A cache is a nearby store of things you used recently\./);
   assert.match(t.text, /Voice: In the next minute, this fridge will teach you a tech concept\./, "the storyboard's voiceover when SCRIPT.md has no line");
   assert.match(t.text, /Voice: Your phone opens a page once slowly, then instantly\. Why\?/, "SCRIPT.md's line wins");
@@ -113,7 +113,7 @@ test('the reel test is what a viewer meets: scenes, shot subjects, the voice, th
   const n = reelTestMarkdown({ storyboard: BOARD, script: SCRIPT, term: 'cache', standIn: word });
   assert.doesNotMatch(n.text, /cache/i);
   assert.match(n.text, new RegExp(`Voice: A ${word} is a nearby store of things you used recently\\. ${word[0].toUpperCase()}${word.slice(1)}s save trips\\.`));
-  assert.match(n.text, new RegExp(`a card that reads "today's AI Brain Break: ${word}"`));
+  assert.match(n.text, new RegExp(`a card that reads "today's AI Lesson: ${word}"`));
 });
 
 test('the stand-in word: invented, never already in the text; the term replaced in any form', () => {

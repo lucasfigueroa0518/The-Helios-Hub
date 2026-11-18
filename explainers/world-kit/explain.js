@@ -615,7 +615,9 @@ export function meter(x, y, w, { value = 0, color = 'teal', name = '', readout =
   const ty = y + size * 0.85;
   if (name) out.push(text(name, x, ty, size, { face: 'roboto-700' }));
   if (readout) out.push(text(readout, x + w, ty, size, { face: 'roboto-700', anchor: 'end', color: mixText(color) }));
-  const by = y + (name || readout ? size * 1.35 : 0);
+  // the track sits clear of its name: the fill's end glow (h tall, centred on the track) reaches
+  // h / 2 above it, so the track drops by that much more under the name
+  const by = y + (name || readout ? size * 1.35 + h / 2 : 0);
   out.push(glassPanel(x, by, w, h, h / 2, { shadow: 0.4, strength: 1.1 }));
   out.push(el('path', { d: roundRect(x, by, w, h, h / 2), fill: 'none', stroke: hair(), 'stroke-opacity': 0.1, 'stroke-width': 1.2 }));
   if (v > 0) {

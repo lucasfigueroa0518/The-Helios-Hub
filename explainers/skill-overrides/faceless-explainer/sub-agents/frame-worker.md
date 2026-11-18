@@ -12,7 +12,8 @@ to it, whatever the frame's number.
   § Places, § Light and mood, § Critters, § Objects and the courier, § Carry and § Solids, labels
   and drawing. Draw the places with world.js's `ROOM` (a shot's `place:` names which), light each
   shot with `LIGHTS` and the frame's mood from `COLOUR_SCRIPT`, and draw every entity with its
-  `LENS` function.
+  `LENS` function. A frame that stages the analogy takes the analogy frame's look (`house-style.md`
+  § The analogy frame; frame.md § The analogy room).
 - **`mechanism`**: the real technology. Use frame.md § Objects and the courier, § Mechanism
   primitives, § Cameras and shots (its flat-frame part), § Motion and § Carry. Before you draw,
   **name the mechanism in one sentence: what changes, and how.** Something may travel, split,
@@ -35,6 +36,8 @@ the map's own options (`accent`, `emph`, `dim`).
 - **Critters act through the rig.** Give a world critter its `LENS` pose as an intent with world
   targets in cm (one moment), or as `keys` over time; a critter of your own acts through `act` and
   `actAt` the same way. The rig solves the arms, the lean and the gaze: never place an arm by hand.
+  A critter in a role keeps its hand prop only until the storyboard's put-down beat (frame.md
+  § Roles: `hand: null` from then on).
 - **Objects act through motion alone**, through the verbs (`hopTo`, `slideTo`, `lookAt`, `react`,
   `nod`, `shake`, `openHinge`, `closeHinge`, `settle`, `breathe`, `setState`): on screen, an
   `object()` on its own pins; in the world, a `worldObject()`, whose `LENS` entry takes your moves as
@@ -67,9 +70,8 @@ the map's own options (`accent`, `emph`, `dim`).
 
 ## Frames with a contract of their own
 
-- **Frame 1** writes only `assets/frames/01-hook.js`: the picked hook, under the bank's opener
-  (frame.md § The hook module). Its timing file is `assets/timing/01-opener.json`.
-- **Frame 3** is code's (the hand-off over the world): nobody builds it.
+- **Frames 1 and 3** are code's (the opener over the AI 101 card, and the hand-off over the world):
+  nobody builds them.
 - **Frame 5** draws the dictionary card over its picture (frame.md § The dictionary card).
 - **Frame 8** is code's: nobody builds it.
 

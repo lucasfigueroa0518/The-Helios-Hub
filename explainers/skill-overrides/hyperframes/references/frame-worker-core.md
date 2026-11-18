@@ -25,7 +25,7 @@ them again. Read:
    it does not answer, and then only that function's doc comment.
 
 Your frame id is the basename of your storyboard `src` (`compositions/frames/04-analogy.html` →
-`04-analogy`); frame 1's is the exception in frame.md § The hook module.
+`04-analogy`).
 
 ## What you write
 

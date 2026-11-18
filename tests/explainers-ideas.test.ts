@@ -746,7 +746,7 @@ const registerText = () => fs.readFileSync(path.join(process.cwd(), 'planning', 
 test('analogy writer v8 is the golden-set prompt, with the no-real-names line and JSON output (EX3-123)', () => {
   assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v9');
   assert.equal(ANALOGY_CALLS, 2);
-  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /^You write the analogy at the heart of a one-minute "AI Brain Break" reel/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /^You write the analogy at the heart of a one-minute "AI 101" reel/);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend\./);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- Its name is the whole picture\./);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /- It is one idea, not a scene\./);

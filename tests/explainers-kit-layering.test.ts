@@ -1,6 +1,6 @@
 /**
- * Explainers 4.2 layering (tonight's live renders): the critter's body stack (body, its light, the
- * outfit's torso, the face as one group, sleeved arms over the torso, held props) and the world's
+ * Explainers 4.2 layering (tonight's live renders; hx-6 critter D): the critter's body stack (body,
+ * its light, the face as one group, arms over the body, held props) and the world's
  * paint order (a critter beside a tall fridge; a car behind a fence). Offline: no model, no browser.
  */
 import assert from 'node:assert/strict';
@@ -22,49 +22,44 @@ async function kit(): Promise<any> {
 const at = (svg: string, part: string) => svg.indexOf(`data-part="${part}"`);
 const COAT = { top: { kind: 'coat', color: 'lilac' } };
 
-test('1, 5, 6: the body light is drawn on the body, under the outfit, the face and the arms', async () => {
+test('1, 5, 6: the body light is drawn on the body, under the face and the arms (critter D: no outfit, no rim filter)', async () => {
   const { draw, lens: K } = await kit();
   draw.scope('lay1-', 'stage');
   const P = K.lens({ pos: [0, -400, 90], target: [0, 0, 40], fov: 40 });
   const R = K.rig(P, { mood: 'night', points: [{ pos: [80, 60, 120], level: 0.8, reach: 200, color: 'warm' }] });
   const svg = K.critterAt(P, 0, 0, 0, { who: 'x', body: 'orange', outfit: COAT, arms: 'wave' }, R).svg;
-  const order = ['body', 'body-light', 'outfit', 'face', 'arm-l', 'arm-r'].map((p) => at(svg, p));
+  const order = ['body', 'body-light', 'face', 'arm-l', 'arm-r'].map((p) => at(svg, p));
   assert.ok(order.every((i) => i >= 0), `every layer is drawn: ${order}`);
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'body < its light < outfit < face < arms');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'body < its light < face < arms');
   assert.equal((svg.match(/data-light="rim"/g) ?? []).length, 1, 'the rims live inside the critter, once');
-  // the stage's rim filter lights the body alone, never the outfit
-  const body = svg.slice(at(svg, 'body'), at(svg, 'body-light'));
-  assert.match(body, /data-part="body" filter="url\(#/);
-  assert.ok(!/data-part="outfit"[^>]*filter=/.test(svg));
+  // critter D is flat: no rim filter on the body, and no garment is drawn (VISUAL_SYSTEM_6 §3)
+  assert.doesNotMatch(svg, /data-part="body" filter=/);
+  assert.ok(at(svg, 'outfit') < 0, 'no outfit layer');
 });
 
-test('4, 6: both arms are always over the torso, sleeved in the outfit colour, whatever the hands do', async () => {
+test('4, 6: both arms are always over the body, whatever the hands do', async () => {
   const { draw, cast } = await kit();
   draw.scope('lay4-', 'paper');
   for (const arms of ['down', 'wave', 'point', 'hold', 'out', { l: [-70, -10], r: [90, -60] }, { l: [-30, -40], r: [30, -40] }]) {
     const svg = cast.critter(0, 0, { body: 'ink', outfit: COAT, arms, rig: typeof arms === 'object' });
-    const o = at(svg, 'outfit');
-    for (const side of ['l', 'r']) assert.ok(at(svg, `arm-${side}`) > o, `${JSON.stringify(arms)}: the ${side} arm over the torso`);
+    const o = at(svg, 'body');
+    for (const side of ['l', 'r']) assert.ok(at(svg, `arm-${side}`) > o, `${JSON.stringify(arms)}: the ${side} arm over the body`);
   }
-  // a sleeveless top now sleeves its arms in its own colour (short); a given sleeves wins
+  // outfits.js still normalises an outfit (it is translated to a role, never drawn)
   assert.equal(cast.normalizeOutfit({ top: { kind: 'apron', color: 'yellow' } }).sleeves, 'yellow');
   assert.equal(cast.normalizeOutfit({ top: { kind: 'apron', color: 'yellow' } }).sleeveLen, 'short');
   assert.equal(cast.normalizeOutfit({ top: { kind: 'vest', color: 'yellow', under: 'blue' } }).sleeves, 'blue');
   assert.equal(cast.normalizeOutfit({ top: { kind: 'apron', color: 'yellow' }, sleeves: false }).sleeves, false);
-  // a raised arm beside the head keeps its sleeve (only an arm crossing the body stops short of the face)
-  const raised = cast.critter(0, 0, { body: 'ink', outfit: COAT, arms: { l: [-74, -50], r: [70, -150] }, rig: true });
-  const armR = raised.slice(at(raised, 'arm-r'));
-  assert.ok(armR.includes('stroke-linejoin="round"'), 'the raised arm is sleeved');
 });
 
-test('the face is one group: eyes, brows, mouth and head garment together, after the torso', async () => {
+test('the face is one group: the eyes and the head piece together, after the body, before the arms', async () => {
   const { draw, cast } = await kit();
   draw.scope('lay5-', 'paper');
   const svg = cast.critter(0, 0, { body: 'paper', outfit: { ...COAT, head: { kind: 'beanie', color: 'blue' } } });
   const face = svg.slice(at(svg, 'face'), at(svg, 'arm-l'));
-  assert.ok(/data-outfit="head"/.test(face), 'the head garment rides with the face');
+  assert.ok(/cy="96"/.test(face) && /rotate\(18 128 44\)/.test(face), 'the eyes and the beanie (the outfit head, translated) ride with the face');
   assert.ok(!/data-part="arm-/.test(face), 'no arm inside the face group');
-  assert.ok(at(svg, 'outfit') < at(svg, 'face'));
+  assert.ok(at(svg, 'body') < at(svg, 'face'));
 });
 
 test('2: a critter beside a tall fridge, the lens level with the fridge side, paints in front of it, and stays there as it steps', async () => {

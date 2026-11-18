@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { CLOSE_EVENTS } from './close-timing.js';
 import { openerByKey } from './openers/bank.js';
 import { HANDOFF_FRAME, handoffByKey, handoffEvents } from './handoff-bank.js';
-import { chosenOpener, openerLine } from './openers/sound.mjs';
+import { chosenOpener, openerLine, openerVoice } from './openers/sound.mjs';
 
 /** `- key: value` fields of one frame block, keys lowercased. */
 export function blockFields(block) {
@@ -71,10 +71,31 @@ export function writeClose(root, f) {
   writeFileSync(join(dir, `${f.id}.events.json`), `${JSON.stringify(CLOSE_EVENTS, null, 1)}\n`);
 }
 
-/** The opener is frame 1 (EX3-102): the bank's opener over the worker's hook. */
+/** The opener is frame 1 (EX3-102): the bank's opener, landing on the AI 101 card (hx-6). */
 export const OPENER_FRAME = 1;
-/** The hook's scene module, which the frame worker writes for frame 1. */
+/** Frame 1's scene module under the opener: code writes it as the AI 101 card (openers/lesson.js). */
 export const HOOK_ID = '01-hook';
+/** The first line of a code-written frame-1 card (try.mjs skips the worker's hook contract on it). */
+export const LESSON_MARK = '// Frame 1 AI 101 card (hx-6)';
+
+/** Frame 1's scene module for opener `key`: the AI 101 card, written by code. */
+export const lessonModule = (key) => [
+  `${LESSON_MARK}: what the "${key}" opener lands on. Written by code; never edit.`,
+  "import { lessonScene } from '../kit/openers/lesson.js';",
+  '',
+  `const card = lessonScene(${JSON.stringify(key)});`,
+  'export const LESSON = true;',
+  'export const hero = card.hero;',
+  'export const shots = card.shots;',
+  'export default card;',
+  '',
+].join('\n');
+
+/** True when the project's 01-hook.js is code's AI 101 card (not a worker's hook). */
+export function isLessonHook(root) {
+  const file = join(root, 'assets', 'frames', `${HOOK_ID}.js`);
+  return existsSync(file) && readFileSync(file, 'utf8').startsWith(LESSON_MARK);
+}
 
 /** The storyboard's `term:` (its front matter), or ''. */
 export function storyboardTerm(root) {
@@ -95,19 +116,23 @@ export const isBankOpener = (root, f) => Boolean(f) && f.number === OPENER_FRAME
 export function writeOpener(root, f) {
   const key = chosenOpener(root);
   if (!key || !f?.id) return null;
+  // a silent hook (D124): no line, and the opener holds its wordmark to the cut
+  const silent = openerVoice(root) === 'silent';
   const metaFile = join(root, 'audio_meta.json');
-  const line = existsSync(metaFile) ? openerLine(JSON.parse(readFileSync(metaFile, 'utf8'))) : null;
-  const voice = line?.voice > 0 ? line.voice : 3.8;
+  const line = !silent && existsSync(metaFile) ? openerLine(JSON.parse(readFileSync(metaFile, 'utf8'))) : null;
+  const voice = silent ? 0 : line?.voice > 0 ? line.voice : 3.8;
   const words = (line?.words ?? []).map((w) => ({ text: String(w.text ?? '').trim(), start: w.start, end: w.end }));
   const dir = join(root, 'assets', 'frames');
   mkdirSync(dir, { recursive: true });
+  // hx-6: no teaser scene; the opener lands on the AI 101 card, which code writes as the hook
+  writeFileSync(join(dir, `${HOOK_ID}.js`), lessonModule(key));
   const module = [
-    `// Frame 1 (EX3-102): the bank's "${openerByKey(key).name}" opener over the hook (${HOOK_ID}.js).`,
-    '// Written by code from assets/opener.json; never edit. The frame worker writes only the hook.',
+    `// Frame 1 (EX3-102): the bank's "${openerByKey(key).name}" opener, landing on the AI 101 card (${HOOK_ID}.js).`,
+    '// Written by code from assets/opener.json; never edit. Nobody builds frame 1.',
     `import * as hook from './${HOOK_ID}.js';`,
     "import { openerFrame } from '../kit/openers/index.js';",
     '',
-    `export default openerFrame(${JSON.stringify(key)}, { hook, voice: ${voice}, words: ${JSON.stringify(words)}, term: ${JSON.stringify(storyboardTerm(root))} });`,
+    `export default openerFrame(${JSON.stringify(key)}, { hook, voice: ${voice}, words: ${JSON.stringify(words)}, term: ${JSON.stringify(storyboardTerm(root))}${silent ? ', silent: true' : ''} });`,
     '',
   ].join('\n');
   writeFileSync(join(dir, `${f.id}.js`), module);

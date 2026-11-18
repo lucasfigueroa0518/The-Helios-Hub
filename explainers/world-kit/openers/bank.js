@@ -14,6 +14,15 @@ export const HISTORY = 8;
 
 /** Frame 1's hold after the line (pace.mjs HOLD). */
 const HOLD = 0.15;
+/** A silent hook (D125, `opener_voice: 'silent'`): the AI 101 wordmark stays readable this
+ *  long before the cut, once fully on screen. */
+export const WORDMARK_READ = 1.5;
+/** A silent hook never runs shorter than this (D125: about 3–4 s, long enough to draw the viewer in). */
+export const SILENT_MIN = 3.0;
+/** A silent opener with no wordmark keeps its last picture this long after its animation. */
+export const NO_MARK_TAIL = 0.6;
+/** slamMark (common.js) is fully on screen this long after its `at`. */
+export const SLAM_IN = 0.24;
 const r3 = (n) => Math.round(n * 1000) / 1000;
 
 /** When the opener line's first "this" starts (the template's slot word), from the line's start. */
@@ -22,7 +31,7 @@ function thisAt(words, fallback = 1.36) {
   return Number.isFinite(w?.start) ? w.start : fallback;
 }
 
-/** Twelve beats in a row (the letters of AI BRAIN BREAK, the blocks, the snips…). */
+/** Beats in a row (the letters of AI 101, the blocks, the snips…). */
 const beats = (n, first, every) => Array.from({ length: n }, (_, i) => r3(first + i * every));
 
 export const OPENERS = [
@@ -32,6 +41,8 @@ export const OPENERS = [
     voiceAt: 0.4,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.breakAt + 0.25,
+    end: (m) => m.breakAt + 0.55,
+    slamAt: (m) => m.breakAt + 0.3,
     timing: () => ({ breakAt: 0.4 }),
   },
   {
@@ -40,7 +51,10 @@ export const OPENERS = [
     voiceAt: 1.0,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.unfreezeAt + 0.15,
-    timing: (voice, words) => ({ breakAt: 0.7, unfreezeAt: r3(1.0 + thisAt(words)) }),
+    end: (m) => m.unfreezeAt + 0.35,
+    wordmarkAt: (m) => m.voiceAt + 0.16,
+    // silent (no line, so no "this"): it unfreezes 1s after the sticker
+    timing: (voice, words, silent) => ({ breakAt: 0.7, unfreezeAt: silent ? 2.0 : r3(1.0 + thisAt(words)) }),
   },
   {
     key: 'typewriter',
@@ -48,8 +62,11 @@ export const OPENERS = [
     voiceAt: 0,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.zipEnd,
+    end: (m) => m.zipEnd,
+    slamAt: (m) => m.zipEnd - 0.1,
     timing: () => {
-      const keys = beats(12, 0.06, 0.072);
+      // the five letters of AI 101 (hx-6; was the twelve of AI BRAIN BREAK)
+      const keys = beats(5, 0.08, 0.15);
       const ding = r3(keys[keys.length - 1] + 0.1);
       return { breakAt: ding, keys, dropAt: r3(ding + 0.04), zipEnd: r3(ding + 0.36) };
     },
@@ -60,6 +77,8 @@ export const OPENERS = [
     voiceAt: 0.6,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.breakAt + 1.1,
+    end: (m) => m.breakAt + 0.76,
+    wordmarkAt: (m) => m.breakAt + SLAM_IN,
     timing: () => ({ breakAt: 0.6 }),
   },
   {
@@ -68,6 +87,8 @@ export const OPENERS = [
     voiceAt: 0.62,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.duck[1] + 0.1,
+    end: (m) => m.duck[1] + 0.1,
+    wordmarkAt: (m) => m.writeAt[1],
     timing: () => ({ breakAt: 0.32, knocks: [0.32, 0.52], point: 0.66, writeAt: [0.68, 1.15], duck: [1.18, 1.42] }),
   },
   {
@@ -76,6 +97,8 @@ export const OPENERS = [
     voiceAt: 0.5,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.landAt + 1.15,
+    end: (m) => m.landAt + 0.4,
+    wordmarkAt: (m) => m.landAt + SLAM_IN,
     timing: () => ({ breakAt: 0.5, blink: [0.34, 0.46], zoom: [0.5, 0.92], landAt: 0.92 }),
   },
   {
@@ -84,6 +107,8 @@ export const OPENERS = [
     voiceAt: 0.72,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.breakAt + 0.25,
+    end: (m) => m.breakAt + 0.9,
+    slamAt: (m) => m.breakAt + 0.3,
     timing: () => ({ breakAt: 0.72, gulps: [[0, 0.22, 0.45], [0.24, 0.44, 0.75], [0.46, 0.68, 1.12]] }),
   },
   {
@@ -92,8 +117,11 @@ export const OPENERS = [
     voiceAt: 0,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.breakAt + 0.3,
+    end: (m) => m.breakAt + 0.9,
+    slamAt: (m) => m.breakAt + 0.35,
     timing: () => {
-      const lands = beats(12, 0.1, 0.085);
+      // five blocks: 1 0 1, then A I on top (hx-6)
+      const lands = beats(5, 0.1, 0.16);
       const last = lands[lands.length - 1];
       const wobble = [r3(last + 0.12), r3(last + 0.42)];
       return { breakAt: wobble[1], lands, fall: 0.13, wobble };
@@ -105,6 +133,8 @@ export const OPENERS = [
     voiceAt: 0.48,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.dive[1],
+    end: (m) => m.dive[1] + 0.3,
+    slamAt: (m) => m.dive[1],
     timing: () => ({ breakAt: 0.48, cut: [0.1, 0.42], open: [0.48, 0.66], short: [0.56, 0.76], dive: [0.82, 1.22] }),
   },
   {
@@ -113,6 +143,8 @@ export const OPENERS = [
     voiceAt: 0.46,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.peel[0] + 0.2,
+    end: (m) => m.peel[1],
+    slamAt: (m) => m.peel[1] - 0.1,
     timing: () => ({ breakAt: 0.46, unfold: [0.74, 0.98], peel: [1.42, 1.8] }),
   },
   {
@@ -121,6 +153,8 @@ export const OPENERS = [
     voiceAt: 0.08,
     /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
     title: (m) => m.drop[1] - 0.1,
+    end: (m) => m.drop[1] + 0.35,
+    wordmarkAt: () => null,
     timing: () => ({ breakAt: 0.86, snips: beats(8, 0.1, 0.095), lift: [0.86, 1.0], fall: [0.92, 1.3], drop: [1.02, 1.42] }),
   },
 ];
@@ -175,11 +209,28 @@ export function storyboardHeroKind(storyboard) {
  * timing(), plus `voiceAt`, `voice` (the line's length), `duration` (frame 1's length, as
  * pace.mjs makes it: the lead, the line, the hold) and `titleAt` (when the title card with the
  * term starts, after the break; it lands cards.js TITLE_LANDS later).
+ *
+ * `silent` (D124, D125; settings `opener_voice: 'silent'`): frame 1 has no line. `voice` is 0, and
+ * frame 1 lasts the opener's animation (`end`), or the wordmark fully on screen (`wordmarkAt`) plus
+ * WORDMARK_READ, whichever is later, plus HOLD; an opener with no wordmark lasts its `end` plus
+ * NO_MARK_TAIL. An opener whose own wordmark leaves before the end (paper-rip, typewriter…) declares
+ * `slamAt`: it slams the wordmark over the hook there (common.js silentMark), held to the cut, and
+ * its `wordmarkAt` is slamAt + SLAM_IN. M then also carries `silent`, `end`, `wordmarkAt`, `slamAt`.
  */
 /** @returns {{ key: string, voiceAt: number, voice: number, duration: number, breakAt: number, titleAt: number, [moment: string]: any }} */
-export function openerTiming(key, voice, words = []) {
+export function openerTiming(key, voice, words = [], { silent = false } = {}) {
   const o = openerByKey(key);
   if (!o) throw new Error(`no opener "${key}" in the bank (${OPENER_KEYS.join(', ')})`);
+  if (silent) {
+    const base = { key, voiceAt: o.voiceAt, voice: 0, ...o.timing(0, [], true) };
+    const end = r3(o.end(base));
+    const slamAt = o.slamAt ? r3(o.slamAt(base)) : null;
+    const markAt = slamAt !== null ? r3(slamAt + SLAM_IN) : o.wordmarkAt(base);
+    const wordmarkAt = Number.isFinite(markAt) ? r3(markAt) : null;
+    const duration = r3(Math.max(SILENT_MIN, wordmarkAt !== null ? Math.max(end, wordmarkAt + WORDMARK_READ) + HOLD : end + NO_MARK_TAIL));
+    const M = { ...base, duration, silent: true, end, wordmarkAt, slamAt };
+    return { ...M, titleAt: r3(o.title(M)) };
+  }
   const M = { key, voiceAt: o.voiceAt, voice: r3(voice), duration: r3(o.voiceAt + voice + HOLD), ...o.timing(voice, words) };
   // every opener ends on the title card with the term (EX3-102): `titleAt` is when it starts
   return { ...M, titleAt: r3(o.title(M)) };

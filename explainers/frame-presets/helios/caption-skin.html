@@ -18,7 +18,9 @@
   paper and white grounds, paper-lit on night and forest. Two Helios holes that
   assets/kit/mount.mjs fills from STORYBOARD.md before captions.mjs runs: `var DARK = [];` (the
   dark-ground windows) and `var QUIET = [];` (the title card and the dictionary card, where
-  captions step aside).
+  captions step aside). A third, `var SCRIM = [];`, is filled by assets/kit/caption-scrim.mjs: the
+  moments where the picture clashes with the caption band (Lucas 2026-11-17). There a white gradient
+  fades in over the top of the picture and the words are set in ink, whatever the ground.
 -->
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
 
@@ -69,6 +71,20 @@
   .caption-stage.on-dark .caption-line {
     color: #fbfaf6;
   }
+  /* Only where caption-scrim.mjs found the picture clashing with the band: a white gradient over the
+     top of the frame, ink words on it (on a dark ground too). */
+  .caption-scrim {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1080px;
+    height: 640px;
+    opacity: 0;
+    background: linear-gradient(to bottom, rgba(251, 250, 246, 0.96) 0%, rgba(251, 250, 246, 0.92) 62%, rgba(251, 250, 246, 0) 100%);
+  }
+  .caption-stage.on-scrim .caption-line {
+    color: #171717;
+  }
   .caption-stage.is-quiet {
     visibility: hidden;
   }
@@ -94,6 +110,7 @@
   data-height="0"
 >
   <div class="caption-layer" aria-hidden="true">
+    <div id="caption-scrim" class="caption-scrim"></div>
     <div id="caption-stage" class="caption-stage"></div>
   </div>
 </div>
@@ -106,6 +123,8 @@
   var DARK = [];
   // mount.mjs injects the quiet windows here (title card, dictionary card).
   var QUIET = [];
+  // caption-scrim.mjs injects the clashing windows here: [[start, end], …] in seconds.
+  var SCRIM = [];
 
   (function () {
     var MAX_WORDS = 7;
@@ -212,11 +231,21 @@
     var marks = [];
     DARK.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
     QUIET.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
+    SCRIM.forEach(function (win) { marks.push(Number(win[0]), Number(win[1])); });
     marks = marks.filter(function (t, i, a) { return a.indexOf(t) === i; }).sort(function (a, b) { return a - b; });
     var inside = function (wins, t) { return wins.some(function (w) { return t >= Number(w[0]) && t < Number(w[1]); }); };
     [0].concat(marks).forEach(function (t) {
-      var cls = "caption-stage" + (inside(DARK, t) ? " on-dark" : "") + (inside(QUIET, t) ? " is-quiet" : "");
+      var cls = "caption-stage" + (inside(DARK, t) ? " on-dark" : "") + (inside(SCRIM, t) ? " on-scrim" : "") + (inside(QUIET, t) ? " is-quiet" : "");
       tl.set(stage, { className: cls }, Math.max(0, t));
+    });
+    // The scrim fades in just before its window and out as it ends (seek-safe: timeline tweens).
+    var scrim = document.getElementById("caption-scrim");
+    var SCRIM_RAMP = 0.25;
+    SCRIM.forEach(function (win) {
+      var a = Number(win[0]);
+      var b = Number(win[1]);
+      tl.fromTo(scrim, { opacity: 0 }, { opacity: 1, duration: SCRIM_RAMP, ease: "none", immediateRender: false }, Math.max(0, a - SCRIM_RAMP));
+      tl.fromTo(scrim, { opacity: 1 }, { opacity: 0, duration: SCRIM_RAMP, ease: "none", immediateRender: false }, b);
     });
 
     pages.forEach(function (pg, p) {

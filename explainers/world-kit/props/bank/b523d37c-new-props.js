@@ -19,7 +19,7 @@ export const NEW_PROPS = {
       parts: ['lilac rubber pad', 'honey-wood block', 'dark-wood neck', 'squat rounded handle'],
       not: ['postage stamp', 'wax seal', 'notary seal', 'approve button', 'hammer', 'checkmark stamp', 'office approval stamp'],
     },
-    size: [100, 150],
+    size: [114, 150],
     states: ['default'],
     draw: ({ focal }) => [
       shadow(0, 6, 48, 18),
@@ -56,7 +56,7 @@ export const NEW_PROPS = {
       parts: ['wooden foot', 'column', 'framed map board', 'ten shelf rows', 'entrance-hall outline', 'one lit aisle'],
       not: ['road map', 'treasure map', 'blueprint', 'whiteboard', 'screen', 'museum sign', 'menu board', 'mall directory with text'],
     },
-    size: [200, 300],
+    size: [200, 336],
     states: ['dark', 'lit'],
     draw: ({ state, focal }) => {
       const art = [el('rect', { x: 6, y: 6, width: 168, height: 128, rx: 4, fill: T['blue-shade'] })];

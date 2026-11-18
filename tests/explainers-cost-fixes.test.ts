@@ -9,7 +9,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { checkToolCall, selfCheckBudget, SELF_CHECKS_PER_BUILDER } from '@/lib/explainers/render/policy';
-import { frameRisk, GRID_MAX, gridFrames, gridLayout, pictureGridParams, renderGrids, RISKY_AT, TILE, type ManifestFrame } from '@/lib/explainers/render/picture';
+import { anthropicPictureVision, frameRisk, GRID_MAX, gridFrames, gridLayout, PICTURE_GRID_MAX_TOKENS, pictureGridParams, renderGrids, RISKY_AT, TILE, type ManifestFrame } from '@/lib/explainers/render/picture';
 import { pictureFixAgent } from '@/lib/explainers/render/job';
 import { findChrome } from '@/lib/explainers/render/workspace';
 import type { LintViolation } from '@/lib/explainers/types';
@@ -93,4 +93,15 @@ test('picture fix agent by look; findChrome reads the cache walk', () => {
   fs.writeFileSync(bin, '');
   fs.chmodSync(bin, 0o755);
   assert.equal(findChrome([fs.mkdtempSync(path.join(os.tmpdir(), 'empty-')), home]), bin);
+});
+
+test('the picture grid call has room to think and still answer, streams, and names a max_tokens stop (hx8, 2026-11-17)', async () => {
+  const f: ManifestFrame = { id: '02-define', number: 2, look: 'world', kind: 'scene', voiceover: 'x', stills: [] } as never;
+  assert.equal(pictureGridParams('claude-haiku-5-5', [f], []).max_tokens, PICTURE_GRID_MAX_TOKENS);
+  assert.ok(PICTURE_GRID_MAX_TOKENS >= 16000);
+  const fake = (message: object) => ({ messages: { stream: () => ({ finalMessage: async () => message }) } }) as never;
+  const usage = { input_tokens: 1, output_tokens: 1 };
+  await assert.rejects(anthropicPictureVision(fake({ content: [], stop_reason: 'max_tokens', model: 'claude-haiku-5-5', usage }))(pictureGridParams('claude-haiku-5-5', [f], [])), /hit max_tokens \(16000\) before any JSON/);
+  const ok = await anthropicPictureVision(fake({ content: [{ type: 'text', text: '{"frames": []}' }], stop_reason: 'end_turn', model: 'claude-haiku-5-5', usage }))(pictureGridParams('claude-haiku-5-5', [f], []));
+  assert.equal(ok.text, '{"frames": []}');
 });

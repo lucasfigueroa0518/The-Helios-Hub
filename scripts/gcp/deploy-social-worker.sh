@@ -117,7 +117,22 @@ COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
   --exclude='./Claude outputs' \
   --exclude='./.explainers-local' \
   --exclude='./explainers/smoke/.out' \
+  --exclude='./explainers/design/sfx/dropins' \
   .
+
+# Sound drop-ins (explainers/design/sfx/dropins, a link to a local folder of packs; catalog-inbox.json
+# names their files): they live on the VM in /opt/helios-social/sfx-dropins, outside the app folder
+# every deploy replaces, and the app links them in below. SYNC_SFX_DROPINS=1 uploads the local packs
+# (about 165 MB, once and whenever packs are added); without it the VM keeps the packs it has.
+DROPINS_ARCHIVE=""
+REMOTE_DROPINS="/tmp/helios-sfx-dropins-${STAMP}.tgz"
+if [[ "${SYNC_SFX_DROPINS:-}" == "1" ]]; then
+  [[ -d explainers/design/sfx/dropins/ ]] || { echo "SYNC_SFX_DROPINS=1 but explainers/design/sfx/dropins is missing" >&2; exit 1; }
+  DROPINS_ARCHIVE="$(mktemp -t helios-sfx-dropins-XXXXXX).tgz"
+  trap 'rm -rf "${ARCHIVE}" "${UNIT_STAGE}" "${DROPINS_ARCHIVE}"' EXIT
+  COPYFILE_DISABLE=1 tar -czf "${DROPINS_ARCHIVE}" --exclude='._*' -C explainers/design/sfx/dropins/ .
+  gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" "${DROPINS_ARCHIVE}" "${INSTANCE}:${REMOTE_DROPINS}"
+fi
 
 gcloud compute scp ${IAP} --zone="${ZONE}" --project="${PROJECT}" \
   "${ARCHIVE}" "${INSTANCE}:${REMOTE_ARCHIVE}"
@@ -172,6 +187,17 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   sudo rm -rf /opt/helios-social/app
   sudo mkdir -p /opt/helios-social/app /opt/helios-social/explainers/jobs /opt/helios-social/explainers/storage \${H} \${PW}
   sudo tar -xzf ${REMOTE_ARCHIVE} -C /opt/helios-social/app --no-same-owner
+  # the sound drop-ins: replaced when this deploy uploaded them, then linked into the app's library
+  if [[ -f ${REMOTE_DROPINS} ]]; then
+    sudo rm -rf /opt/helios-social/sfx-dropins.new && sudo mkdir -p /opt/helios-social/sfx-dropins.new
+    sudo tar -xzf ${REMOTE_DROPINS} -C /opt/helios-social/sfx-dropins.new --no-same-owner
+    sudo rm -rf /opt/helios-social/sfx-dropins && sudo mv /opt/helios-social/sfx-dropins.new /opt/helios-social/sfx-dropins
+    rm -f ${REMOTE_DROPINS}
+  fi
+  if [[ -d /opt/helios-social/sfx-dropins ]]; then
+    sudo chown -R helios:helios /opt/helios-social/sfx-dropins
+    sudo ln -sfn /opt/helios-social/sfx-dropins /opt/helios-social/app/explainers/design/sfx/dropins
+  fi
   sudo chown -R helios:helios /opt/helios-social/app /opt/helios-social/explainers \${H} \${PW}
   sudo chmod -R go-w /opt/helios-social/app && sudo chmod 755 /opt/helios-social/app
   AS_HELIOS=\"sudo -u helios env HOME=\${H} PLAYWRIGHT_BROWSERS_PATH=\${PW} HYPERFRAMES_NO_TELEMETRY=1\"

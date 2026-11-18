@@ -52,7 +52,17 @@ export type ExplainersSettings = {
   music_enabled: boolean;
   sfx_enabled: boolean;
   theme_brief_version: string;
+  /**
+   * Frame 1's voice (EX6-14, D124): 'silent' (the default) opens on the silent visual hook, with music,
+   * the opener's sounds and the AI 101 wordmark held readable before the cut (D125), straight
+   * into the quick definition; 'spoken' restores the opener line ("In the next minute, this ___ will
+   * teach you an AI concept.") exactly as before.
+   */
+  opener_voice: OpenerVoice;
 };
+
+export type OpenerVoice = 'silent' | 'spoken';
+export const OPENER_VOICES: readonly OpenerVoice[] = ['silent', 'spoken'];
 
 export type SettingKey = keyof ExplainersSettings;
 
@@ -88,6 +98,8 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   sfx_enabled: true,
   // Explainers 3.9 (EX3-123). An existing database keeps its stored version until Lucas flips it.
   theme_brief_version: 'v4',
+  // EX6-14 (D124; Lucas, round 30): no spoken opener line. 'spoken' brings it back.
+  opener_voice: 'silent',
 };
 
 type Parser<K extends SettingKey> = (value: unknown) => ExplainersSettings[K];
@@ -148,6 +160,8 @@ const PARSERS: { [K in SettingKey]: Parser<K> } = {
   music_enabled: bool('music_enabled'),
   sfx_enabled: bool('sfx_enabled'),
   theme_brief_version: text('theme_brief_version'),
+  opener_voice: (value) =>
+    OPENER_VOICES.includes(value as OpenerVoice) ? (value as OpenerVoice) : fail('opener_voice', OPENER_VOICES.join(' or '), value),
 };
 
 export function isSettingKey(key: string): key is SettingKey {
