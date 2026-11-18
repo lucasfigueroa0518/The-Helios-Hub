@@ -4,31 +4,37 @@
     {
       "label": "home (incl. notification bell)",
       "same": true,
+      "sameLines": false,
       "chars": 699
     },
     {
       "label": "activity view",
       "same": false,
+      "sameLines": true,
       "chars": 26089
     },
     {
       "label": "profile",
       "same": true,
+      "sameLines": false,
       "chars": 568
     },
     {
       "label": "my cards",
       "same": true,
+      "sameLines": false,
       "chars": 336
     },
     {
       "label": "due this week",
       "same": true,
+      "sameLines": false,
       "chars": 166384
     },
     {
       "label": "board",
       "same": true,
+      "sameLines": false,
       "chars": 586
     }
   ]
