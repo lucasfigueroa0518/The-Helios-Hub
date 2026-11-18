@@ -80,6 +80,9 @@ type Hit = {
   provenance: RealPhoto['provenance'];
   about: RealPhoto['about'];
   portrait: boolean;
+  /** Pixel size when the source says (0 or absent: unknown, checked after download). */
+  width?: number;
+  height?: number;
   /** More about a photo that was kept (best effort): its camera and place. */
   more?: () => Promise<{ camera?: Camera; place?: string }>;
 };
@@ -107,6 +110,8 @@ export function hitOf(f: ArchiveFind): Hit {
     provenance,
     about: { title: f.title, description: f.description, year: f.year },
     portrait: f.portrait,
+    width: f.width,
+    height: f.height,
     ...(f.more ? { more: f.more } : {}),
   };
 }
@@ -123,6 +128,8 @@ async function bankHits(deps: RealDeps, words: string): Promise<Hit[]> {
       provenance: { kind: 'bank' as const, url: h.url, licence: `open or government licence (${h.source})`, credit: h.credit.trim(), ...(yearOf(h.date) ? { year: yearOf(h.date)! } : {}) },
       about: { title: h.title || undefined, description: h.tags.length ? h.tags.join(', ') : undefined, year: yearOf(h.date) },
       portrait: h.height >= h.width,
+      width: h.width,
+      height: h.height,
     }));
 }
 
@@ -144,11 +151,15 @@ const ledgerOnUrls = (used: UsedLedger | null | undefined, h: Hit): string | nul
   return null;
 };
 
+/** A hit whose source size is already wider than MAX_WIDE: dropped before any download. */
+export const tooWide = (h: { width?: number; height?: number }): boolean => Boolean(h.width && h.height && h.width / h.height > MAX_WIDE);
+
 type Collect = { out: RealPhoto[]; seen: Set<string>; limit: number };
 
 /** Download, check and cut one hit; pushes it to `c.out` when it is usable. */
 async function take(deps: RealDeps, name: string, h: Hit, c: Collect): Promise<void> {
   if (deps.avoidUrls.has(h.url) || deps.avoidUrls.has(h.imageUrl) || c.seen.has(h.url)) return;
+  if (tooWide(h)) return; // never downloaded: the 9:16 cut would keep too little of it
   const onUrl = ledgerOnUrls(deps.used, h);
   if (onUrl) {
     deps.log?.(`real ${name} ${h.url}: ${onUrl}, skipped`);

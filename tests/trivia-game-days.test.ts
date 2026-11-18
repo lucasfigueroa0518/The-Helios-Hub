@@ -105,9 +105,9 @@ test('build: 5 questions, AI right on 3, easiest first, reserved from the story;
 test('lock: not before 11 pm the night before; then locked and exported in the contract', async () => {
   const { db } = await seeded();
   await buildGameDay(deps(db, checker()), LAUNCH, LAUNCH);
-  assert.deepEqual(await lockDue(db, MORNING), { locked: [], missed: [] });
+  assert.deepEqual(await lockDue(db, MORNING), { locked: [], missed: [], served: [] });
   assert.deepEqual((await exportDays(db, null)).days, []);
-  assert.deepEqual(await lockDue(db, NIGHT), { locked: [LAUNCH], missed: [] });
+  assert.deepEqual(await lockDue(db, NIGHT), { locked: [LAUNCH], missed: [], served: [] });
   const { days } = await exportDays(db, null);
   assert.equal(days.length, 1);
   const d = days[0]!;
@@ -151,7 +151,7 @@ test('a past day still short is released and logged as missed, never exported', 
   await addQ(db, 't01a01', 0.9, 'B');
   await buildGameDay(deps(db, checker(), new Date('2026-11-16T15:00:00Z')), '2026-11-16', '2026-11-16');
   const out = await lockDue(db, MORNING);
-  assert.deepEqual(out, { locked: [], missed: ['2026-11-16'] });
+  assert.deepEqual(out, { locked: [], missed: ['2026-11-16'], served: [] });
   const open = await db.query(`SELECT 1 FROM stories.pool WHERE used_at IS NULL`);
   assert.equal(open.rows.length, 1, 'its question is offered again');
   assert.deepEqual((await exportDays(db, null)).days, []);
@@ -174,4 +174,25 @@ test('export token: Bearer only, constant-time, refused when unset', () => {
   assert.equal(exportAuthorized(null, 'abc'), false);
   assert.equal(exportAuthorized('Bearer abc', undefined), false);
   assert.equal(exportAuthorized('Bearer ', ''), false);
+});
+
+test('served: once a locked day has passed, its questions go back to the IG pool once, and the game never serves them again', async () => {
+  const { db } = await seeded();
+  await buildGameDay(deps(db, checker()), LAUNCH, LAUNCH);
+  await lockDue(db, NIGHT);
+  const keys = (await db.query<{ key: string }>(`SELECT key FROM stories.pool WHERE series = 'ai_trivia' AND used_at IS NOT NULL`)).rows.map((r) => r.key);
+  assert.equal(keys.length, 5);
+  const DAY_AFTER = new Date('2026-11-19T15:00:00Z');
+  assert.deepEqual((await lockDue(db, DAY_AFTER)).served, [LAUNCH]);
+  const open = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.pool WHERE series = 'ai_trivia' AND key = ANY($1::text[]) AND used_at IS NULL`, [keys]);
+  assert.equal(open.rows[0]!.n, 5, 'served questions are open for stories');
+  // A story uses one; the next pass must not hand it back again.
+  await db.query(`UPDATE stories.pool SET used_at = now() WHERE series = 'ai_trivia' AND key = $1`, [keys[0]]);
+  assert.deepEqual((await lockDue(db, DAY_AFTER)).served, []);
+  const still = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.pool WHERE key = $1 AND used_at IS NOT NULL`, [keys[0]]);
+  assert.equal(still.rows[0]!.n, 1);
+  // The next game day skips every question the launch day served.
+  await buildGameDay(deps(db, checker()), '2026-11-20', LAUNCH);
+  const next = (await db.query<{ k: string }>(`SELECT q->>'key' AS k FROM stories.trivia_game_days d, jsonb_array_elements(d.questions) q WHERE d.ny_date = '2026-11-20'`)).rows.map((r) => r.k);
+  assert.ok(next.every((k) => !keys.includes(k)), 'no served question is served again');
 });

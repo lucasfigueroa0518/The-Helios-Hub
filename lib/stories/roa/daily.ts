@@ -1,6 +1,6 @@
 /**
- * The Real or AI? daily run (CONTRACT.md §4 Owner A, RA-16): four candidates a
- * pool day, two real and two AI.
+ * The Real or AI? daily run (CONTRACT.md §4 Owner A, RA-16): ROA_PER_DAY candidates a
+ * pool day (8 since 2026-11-18), half real and half AI.
  *
  *   specs   one roa-write@3 call (Sonnet, settings.models.copy, no web search); validate.ts keeps the balance
  *   images  AI: gpt-image-2 portrait. Real: the bank, then Commons Featured/Quality and NASA. Twin: the real photo,
@@ -8,7 +8,7 @@
  *           that fails the screen is made once more from the same prompt (RA-22: lost AI images left the sets
  *           mostly real, which made the answer guessable)
  *   intake  screen (Jev), reveal, validate, store, pool (intake.ts)
- *   cap     the pool holds the 20 hardest; the rest go to stories.roa_archive (reason 'cap')
+ *   cap     the pool holds the ROA_POOL_CAP (40) hardest; the rest go to stories.roa_archive (reason 'cap')
  *
  * Stories Split (SS-22..SS-24): the real photos come through the shared photo finder when
  * `photo_finders.roa = 'shared'` (else this series' own path), both refuse what the used-photo ledger (CI-32)
@@ -221,7 +221,7 @@ export async function runRoaDaily(deps: RoaDailyDeps): Promise<RoaDailyResult> {
       }
     }
 
-    // 4. The cap: the 20 hardest stay.
+    // 4. The cap: the ROA_POOL_CAP hardest stay.
     rec.dropped = await capRoaPool(db, now);
     // 5. The photo bank's stores, within a bound (drain never throws; what it leaves stays for the next run).
     if (photoBank?.drain) await photoBank.drain(BANK_DRAIN_MS).catch(() => undefined);

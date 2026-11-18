@@ -27,7 +27,7 @@ const subjectList = SUBJECTS.map((s) => `- ${s}: ${SUBJECT_TEXT[s]}`).join('\n')
 const trapList = WRITER_TRAPS.map((t) => `- ${t} (${t === 'twin' ? 'real + AI' : TRAP_TRUTH[t] === 'real' ? 'real' : 'AI'}): ${TRAP_TEXT[t]}`).join('\n');
 const half = ROA_PER_DAY / 2;
 
-/* ── roa-write@3: four images a day, balanced real and AI ── */
+/* ── roa-write@3: ROA_PER_DAY images a day (8 since 2026-11-18), balanced real and AI ── */
 
 export const ROA_WRITE = {
   id: 'roa-write@3',
