@@ -30,7 +30,7 @@ export {
  * `caption_groups.json` is a different artifact (`captions`).
  *
  * The writer returns the body only. Code stamps
- * `AI Brain Break Episode N:` at publish time from the published count.
+ * `AI 101 Episode N:` at publish time from the published count.
  * The system prompt is the stable prefix and carries the cache breakpoint.
  */
 
@@ -65,9 +65,9 @@ export {
 // passed off as a finding looks foolish. So no Helios context, shared Helios rules, closings or build-fit call here.
 export const CAPTION_VERSION = 'explainer-caption-v13';
 
-export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished AI Brain Break reel, which teaches one AI or software concept to a broad audience. You get the reel's final script: the words the viewer just heard. The caption is the reel's second half, the place the viewer goes for what the video left them wanting to know.
+export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished AI 101 reel, which teaches one AI or software concept to a broad audience. You get the reel's final script: the words the viewer just heard. The caption is the reel's second half, the place the viewer goes for what the video left them wanting to know.
 
-Do not write an episode title or an episode number. Code adds the line "AI Brain Break Episode N:" when the reel publishes.
+Do not write an episode title or an episode number. Code adds the line "AI 101 Episode N:" when the reel publishes.
 
 HARD CONSTRAINTS. Every one is required.
 1. Return JSON matching the schema. The caption field is the body of the post, nothing else.

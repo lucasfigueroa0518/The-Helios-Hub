@@ -290,15 +290,15 @@ test('stage tags, fix kinds, args guide and estimates; registered in the static 
 
 // ── load ───────────────────────────────────────────────────────────────────
 
-test('load lists the worker-made scenes (the hook, not the bank opener) and the caption, and maps status', async () => {
+test('load lists the worker-made scenes (frame 1 under a bank opener is code\'s, hx-6) and the caption, and maps status', async () => {
   const fx = await fixture();
   const d = createExplainersDescription(depsFor(fx));
   const snap = await d.load(fx.q, refs);
   assert.ok(snap);
-  assert.deepEqual(snap.parts.map((p) => `${p.ref.kind}:${p.ref.key}`), ['scene:01-hook', 'scene:02-gap', 'scene:03-dictionary', 'caption:caption']);
-  assert.match(snap.parts[1]!.text!, /Frame 2/);
-  assert.match(snap.parts[1]!.text!, /peeks out of the window/);
-  assert.match(snap.parts[3]!.text!, /mailbox flag of software/);
+  assert.deepEqual(snap.parts.map((p) => `${p.ref.kind}:${p.ref.key}`), ['scene:02-gap', 'scene:03-dictionary', 'caption:caption']);
+  assert.match(snap.parts[0]!.text!, /Frame 2/);
+  assert.match(snap.parts[0]!.text!, /peeks out of the window/);
+  assert.match(snap.parts[2]!.text!, /mailbox flag of software/);
   assert.equal(snap.status, 'review');
 
   await saveFeedback(fx.db, { jobId: JOB, verdict: 'approved', tags: [] });

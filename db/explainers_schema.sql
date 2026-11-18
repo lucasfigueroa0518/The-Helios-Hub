@@ -282,7 +282,9 @@ INSERT INTO explainers.settings (key, value) VALUES
     ('sfx_enabled',          'true'::jsonb),
     -- Explainers 3.9 (EX3-123): a new database starts on v4. An existing one keeps its stored
     -- version until Lucas flips it (see the theme brief v4 note below).
-    ('theme_brief_version',  '"v4"'::jsonb)
+    ('theme_brief_version',  '"v4"'::jsonb),
+    -- EX6-14 (D124): frame 1 is the silent visual hook; '"spoken"' brings back the opener line.
+    ('opener_voice',         '"silent"'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- E-14 theme brief v1, copied verbatim from planning/Explainer Reels/KICKOFF_DECISIONS.md.
@@ -619,3 +621,52 @@ ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS lesson_map text;
 INSERT INTO explainers.settings (key, value) VALUES ('prompt_history_days', '90'::jsonb) ON CONFLICT (key) DO NOTHING;
 -- Raise the old default only; a value someone set by hand is kept.
 UPDATE explainers.settings SET value = '120'::jsonb, updated_at = now() WHERE key = 'dedupe_lookback_days' AND value = '45'::jsonb;
+
+-- ── Session B cost breakdown (telemetry) ────────────────────────────────────
+-- Per-agent and per-round detail of what cost_events already counts. Kept in
+-- its own table so nothing that sums explainers.cost_events.usd (jobs.spend_usd,
+-- daily spend, cost pages) ever counts it twice. Written once at the end of
+-- session B (lib/explainers/render/telemetry.ts); usd is priced from per-turn
+-- usage and is an attribution, not spend.
+CREATE TABLE IF NOT EXISTS explainers.cost_breakdown (
+    id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id              uuid REFERENCES explainers.jobs (id) ON DELETE CASCADE,
+    component           text NOT NULL,
+    model               text,
+    turns               integer NOT NULL DEFAULT 0,
+    input_tokens        integer NOT NULL DEFAULT 0,
+    output_tokens       integer NOT NULL DEFAULT 0,
+    cache_read_tokens   integer NOT NULL DEFAULT 0,
+    cache_write_tokens  integer NOT NULL DEFAULT 0,
+    usd                 numeric(12, 6) NOT NULL DEFAULT 0,
+    wall_ms             integer NOT NULL DEFAULT 0,
+    detail              jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at          timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_explainers_cost_breakdown_job
+    ON explainers.cost_breakdown (job_id) WHERE job_id IS NOT NULL;
+
+-- ── First-try log (instruction injection's learning loop) ────────────────────
+-- One row per builder window of every render (Lucas 2026-11-17: log the first-try
+-- lessons for every reel, production included, so they accumulate and can be pulled
+-- to a local machine). lib/explainers/injection/recorder.ts writes a render's rows
+-- at the end of session B (replacing that job's rows on the repair pass); the
+-- ledger reads the last renders from here. first_try is null when the window never
+-- ran a self-check; lessons are the lesson ids it was given (explainers/injection/lessons.json).
+CREATE TABLE IF NOT EXISTS explainers.first_try_log (
+    id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id      uuid REFERENCES explainers.jobs (id) ON DELETE CASCADE,
+    render_at   timestamptz NOT NULL,
+    label       text NOT NULL,
+    role        text NOT NULL,
+    look        text NOT NULL,
+    frame       text,
+    injected    text[] NOT NULL DEFAULT '{}',
+    scores      jsonb NOT NULL DEFAULT '{}'::jsonb,
+    misses      text[] NOT NULL DEFAULT '{}',
+    lessons     text[] NOT NULL DEFAULT '{}',
+    first_try   jsonb,
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_explainers_first_try_log_job ON explainers.first_try_log (job_id);
+CREATE INDEX IF NOT EXISTS idx_explainers_first_try_log_render_at ON explainers.first_try_log (render_at DESC);

@@ -7,9 +7,84 @@
 //
 // The frame check (layout-checks.mjs uiCollisionProblems) fails a frame whose UI texts overlap each
 // other or straddle an icon or button edge.
+//
+// Text placement (2026-11-17, first-try lessons): free text never sits over an object and never
+// leaves the safe area, by construction. Inside shotFrame's draw these work in the drawing's
+// coordinates under the active crop shot, so what they place lands inside the safe area on screen:
+//   viewSafe()                         the safe area in the drawing's coordinates for this shot
+//   inSafe(box, { pad })               the box moved (never shrunk) inside it
+//   placeText({ w, h }, { near, avoid }) the nearest spot to `near` clear of the `avoid` boxes (the
+//                                      scene's objects) by MIN_GAP, inside the safe area
 
 /** The least gap between UI neighbours (px). */
 export const MIN_GAP = 24;
+/** The safe area on screen (core.js FRAME.safe). */
+export const SAFE = Object.freeze({ x0: 96, x1: 940, y0: 570, y1: 1600 });
+
+/** The crop shot being drawn ({ on, zoom, at }: the drawing point `on` sits at screen `at`, ×zoom), or null. */
+let VIEW = null;
+/** Set by shotFrame (the crop it draws under), not by frames. Returns the previous. */
+export function setView(view) {
+  const prev = VIEW;
+  VIEW = view && Number(view.zoom) > 0 ? view : null;
+  return prev;
+}
+
+/** The safe area in drawing coordinates under the active crop shot (the screen's outside shotFrame). */
+export function viewSafe(safe = SAFE) {
+  if (!VIEW) return { ...safe };
+  const { on, zoom, at } = VIEW;
+  const x = (X) => on[0] + (X - at[0]) / zoom;
+  const y = (Y) => on[1] + (Y - at[1]) / zoom;
+  return { x0: x(safe.x0), x1: x(safe.x1), y0: y(safe.y0), y1: y(safe.y1) };
+}
+
+const asBox = (b) => (Array.isArray(b) ? { x: b[0], y: b[1], w: b[2] - b[0], h: b[3] - b[1] } : b?.box ? asBox(b.box) : b);
+
+/**
+ * `box` moved inside the safe area, never shrunk. The box is { x, y, w, h } or [x0, y0, x1, y1]; the
+ * area is the view's, inset by `pad`; a box wider or taller than it is centred on it.
+ * Returns { x, y, w, h, dx, dy }.
+ */
+export function inSafe(box, { pad = 0, safe = viewSafe() } = {}) {
+  const b = asBox(box);
+  const fit = (v, len, lo, hi) => (len > hi - lo ? lo + (hi - lo - len) / 2 : Math.min(Math.max(v, lo), hi - len));
+  const x = fit(b.x, b.w, safe.x0 + pad, safe.x1 - pad);
+  const y = fit(b.y, b.h, safe.y0 + pad, safe.y1 - pad);
+  return { x, y, w: b.w, h: b.h, dx: x - b.x, dy: y - b.y };
+}
+
+/**
+ * Where a free text, label, chip or small card of size { w, h } goes: nearest `near`, `gap` clear of
+ * the `avoid` boxes, inside the safe area. `near` is its wished centre (default the safe area's
+ * middle); `avoid` the objects on screen ([x0, y0, x1, y1], { x, y, w, h } or { box }); when no spot
+ * is clear, the one crossing least. Returns { x, y, w, h, cx, cy, clear } (x, y its top-left).
+ */
+export function placeText(size, { near = null, avoid = [], gap = MIN_GAP, safe = viewSafe(), step = 12 } = {}) {
+  const w = Math.max(0, Number(size?.w) || 0);
+  const h = Math.max(0, Number(size?.h) || 0);
+  const boxes = (avoid ?? []).filter(Boolean).map(asBox).filter((b) => b && b.w > 0 && b.h > 0);
+  const [nx, ny] = near ?? [(safe.x0 + safe.x1) / 2, (safe.y0 + safe.y1) / 2];
+  const span = (lo, hi, len) => (len > hi - lo ? [lo + (hi - lo - len) / 2, lo + (hi - lo - len) / 2] : [lo, hi - len]);
+  const [xa, xb] = span(safe.x0, safe.x1, w);
+  const [ya, yb] = span(safe.y0, safe.y1, h);
+  const cost = (x, y) => boxes.reduce((s, b) => {
+    const ix = Math.min(x + w + gap, b.x + b.w) - Math.max(x - gap, b.x);
+    const iy = Math.min(y + h + gap, b.y + b.h) - Math.max(y - gap, b.y);
+    return s + (ix > 0 && iy > 0 ? ix * iy : 0);
+  }, 0);
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const cands = [[clamp(nx - w / 2, xa, xb), clamp(ny - h / 2, ya, yb)]];
+  for (let x = xa; x <= xb + 1e-6; x += step) for (let y = ya; y <= yb + 1e-6; y += step) cands.push([x, y]);
+  cands.push([xb, ya], [xa, yb], [xb, yb]);
+  let best = null;
+  for (const [x, y] of cands) {
+    const c = cost(x, y);
+    const d = Math.hypot(x + w / 2 - nx, y + h / 2 - ny);
+    if (!best || c < best.c - 1e-6 || (Math.abs(c - best.c) <= 1e-6 && d < best.d)) best = { x, y, c, d };
+  }
+  return { x: best.x, y: best.y, w, h, cx: best.x + w / 2, cy: best.y + h / 2, clear: best.c === 0 };
+}
 
 /**
  * Items [{ w, h? }] in a row, at least MIN_GAP apart. From x, centred on y; with

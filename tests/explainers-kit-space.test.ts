@@ -621,7 +621,8 @@ test('try: outfit colors (no orange on a non-hero), the world\'s LENS/ROOM/LIGHT
   const cast = await import('../explainers/world-kit/cast.js');
   const { outfitColorProblems, lensWorldProblems } = tryMod as unknown as { outfitColorProblems: (c: unknown, k: unknown) => string[]; lensWorldProblems: (m: unknown) => Promise<string[]> };
   assert.deepEqual(outfitColorProblems({ hero: { body: 'orange', outfit: { top: { kind: 'tee', color: 'orange' } } }, nurse: { body: 'paper', outfit: { top: { kind: 'scrubs', color: 'teal' } } } }, cast), []);
-  assert.match(outfitColorProblems({ nurse: { body: 'paper', outfit: { top: { kind: 'scrubs', color: 'teal' }, items: ['clipboard'], sleeves: 'orange' } } }, cast)[0] ?? '', /CAST\.nurse\.outfit draws orange/);
+  // hx-6: critter D draws no garment (an outfit becomes a role piece or nothing), so an orange sleeve draws no orange
+  assert.deepEqual(outfitColorProblems({ nurse: { body: 'paper', outfit: { top: { kind: 'scrubs', color: 'teal' }, items: ['clipboard'], sleeves: 'orange' } } }, cast), []);
   assert.deepEqual(outfitColorProblems({ nurse: { body: 'ink', outfit: 'none' } }, cast), []);
   const { box, quad } = await import('../explainers/world-kit/lens.js');
   const good = await lensWorldProblems({

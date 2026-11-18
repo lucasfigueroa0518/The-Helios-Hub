@@ -1,25 +1,15 @@
-// The Explainers world kit, cast (hx-4, Critter 2.0; from hx-3 / Explainers 3.2, EX3-77): critters,
-// the cast of every reel. Every character is a critter: never a person, a figure built from
-// solids, or a body part. When an analogy has someone doing something, a critter does it.
-// Personality comes from body language and expressions: anticipation, squash, gaze, brows, blinks.
-//
-// Critter 2.0 (approved still 12, SOFT 3D): the same footprint, eyes, limbs and face kit, drawn as
-// a soft volume with no outline, in five layers: a volume gradient lit from the top right, a form
-// shadow and edge falloff, a warm floor bounce, a soft and a sharp gloss, and glossy eyes with two
-// catchlights; limbs are soft tubes; a soft contact shadow grounds it. On the dark `stage` ground
-// a warm key rim lights its top-right edge and a cool counter-rim its left, so an ink critter
-// never vanishes (still 09).
+// The Explainers world kit, cast (hx-6, VISUAL_SYSTEM_6 §3): critter D behind main's critter API.
+// Every character is a critter: never a person, a figure built from solids, or a body part. The
+// drawing is critter D (reference/critter-d/critter_d.py: a flat tile on ink legs, two big eyes with
+// lids, ink stub arms with mitten ends; no mouth, brows, gloss or garment). main's API is unchanged:
+// moods by main's names (each its nearest D mood), the rig's arms, views, held props, act/actAt.
 //
 //   critter(x, y, o)       draw one (x, y = the feet); options below
 //   handAt(x, y, o)        where its hands are on screen, so it can hold a prop (pen, card, key…)
-//   heldScale(cm, px, cheat) the scale for a held prop of that real size (CRITTER_CM, still 02),
-//                          cheated bigger with 'cheat' or a factor (4.2); hold specs take scale too
+//   heldScale(cm, px, cheat) the scale for a held prop of that real size (CRITTER_CM)
 //   walk(t, o)             a walk cycle: { legs, bob, arms } to pass back into critter()
-//   MOODS                  named expressions (confident, confused, panicked, proud, sly…)
-//   ARM_POSES              the arm presets
-//   outfit                 garments drawn for the role (still 03; outfits.js): top, sleeves,
-//                          pants, shoes, head, items, custom
-//   WEAR                   the old stock accessories: only on an exact match
+//   MOODS, ARM_POSES       main's names; D (critter D's tile, moods, poses, wear translation)
+//   role / head / hand     wear.js pieces (§4); main's outfit and WEAR become one or nothing
 //   FACE_KEEPOUT           the eye and mouth zones nothing worn may enter (EX3-103)
 
 import * as CORE from './core.js';
@@ -44,13 +34,16 @@ import {
   softShape,
 } from './outfits.js';
 
+import { wear as resolveWear, headSvg, bowtieSvg, heldPropSvg, heldPropBox, handPoint, HAND_POSE } from './wear.js';
+import { MOODS_X, ARMS_X, STATES_X, ACCENTS, ACTING_LIMITS, FACE_VEC, lifeOf, actingSystem } from './acting.js';
+
 export { FACE_KEEPOUT, normalizeOutfit, outfitKey, isNoOutfit };
 export { TOP_KINDS, NECKS, HEAD_KINDS, ITEMS, PALETTE, TOP_READS, ROLE_GUIDE, SCRUB_COLORS, outfitReads } from './outfits.js';
 
 const r2 = (v) => Math.round(v * 100) / 100;
 // Every color is a palette token (V-T1). The hx-4 tokens are read by name, with their own values
 // as the fallback while an older core.js is loaded.
-const FALLBACK = { canvas: '#FFFFFF', paper: '#F4EFE7', 'paper-lit': '#FEF9F3', 'paper-shade': '#DCD5C9', 'paper-dark': '#CAC1B3', ink: '#171717', 'ink-lit': '#322D29', 'ink-shade': '#150E08', 'ink-dark': '#0B0401', 'text-secondary': '#525252', 'text-tertiary': '#737373', orange: '#FF5E1A', 'orange-lit': '#FF9462', 'orange-shade': '#E24213', 'orange-dark': '#A02B02', 'shadow-warm': '#3B2A16', 'sun-bottom': '#EA3C3A', 'teal-lit': '#80C7BF' };
+const FALLBACK = { canvas: '#FFFFFF', paper: '#F3F0EA', 'paper-lit': '#FBFAF6', 'paper-shade': '#E2DACB', 'paper-dark': '#CFC5B3', ink: '#171717', 'ink-lit': '#2B2926', 'ink-shade': '#101010', 'ink-dark': '#0A0A0A', 'text-secondary': '#525252', 'text-tertiary': '#737373', orange: '#FF5E1A', 'orange-lit': '#FF9462', 'orange-shade': '#E24213', 'orange-dark': '#A02B02', green: '#138510', 'shadow-warm': '#3B2A16', 'sun-bottom': '#EA3C3A', 'teal-lit': '#5DB5AE', 'yellow-lit': '#F3C65E' };
 const K = (name) => T?.[name] ?? FALLBACK[name];
 
 // ── Scale (still 01/02) ───────────────────────────────────────────────────────────────────
@@ -74,111 +67,347 @@ export function heldScale(propCm, drawnPx = CRITTER_PX, cheat = undefined) {
   return ((propCm * PX_PER_CM) / drawnPx) * CORE.propScale(cheat, propCm);
 }
 
-// ── The body's material (still 12, SOFT 3D) ───────────────────────────────────────────────
-// The light palette bodies (4.1): a cast member in the palette's own light colors, shaded like
-// orange (base the color's lit step, lit toward white, shade the color, dark its shade step), so a
-// light patient or a blue visitor reads as a soft volume. Orange stays the hero's only.
-const lightBody = (n) => ({ base: K(`${n}-lit`), lit: CORE.mixHex(K(`${n}-lit`), K('canvas'), 0.35), shade: K(n), dark: K(`${n}-shade`), bounce: K('paper-lit') });
-const BODY = {
-  orange: { base: K('orange'), lit: K('orange-lit'), shade: K('orange-shade'), dark: K('orange-dark'), bounce: K('paper-lit') },
-  paper: { base: K('paper-lit'), lit: K('canvas'), shade: K('paper'), dark: K('paper-dark'), bounce: K('canvas') },
-  ink: { base: K('ink-lit'), lit: K('text-secondary'), shade: K('ink'), dark: K('ink-dark'), bounce: K('text-tertiary') },
-  yellow: lightBody('yellow'),
-  blue: lightBody('blue'),
-  teal: lightBody('teal'),
-  lilac: lightBody('lilac'),
-  green: lightBody('green'),
-};
-/** The bodies a critter may have: ink (the default cast), paper, orange (the hero) and the light
- *  palette bodies. Any other body throws: it used to fall back to ink without a word. */
-export const BODIES = Object.keys(BODY);
-/** The body's ramp { base, lit, shade, dark, bounce }; an unknown body throws with the list. */
-export function bodyOf(body = 'ink') {
-  const B = BODY[body];
-  if (!B) throw new Error(`HX: critter body "${body}" must be one of ${BODIES.join(', ')} (orange is the hero's only)`);
-  return B;
-}
-const LIMB = K('ink-lit');
-/** The face's ink: brows, mouth, lashes. */
-const faceInk = (body) => (body === 'ink' ? K('paper-lit') : K('ink'));
+// ── Critter D (hx-6, VISUAL_SYSTEM_6 §3) ───────────────────────────────────────────────────
+// The drawing is critter D (reference/critter-d/critter_d.py, variant d, pupils plain): a flat
+// rounded tile on two ink legs, two big eyes with lids, ink stub arms with mitten ends. No mouth,
+// no brows, no gloss, no catch-lights, no outline (a white body keeps a thin ink edge), no garment.
+// critterTile() is the reference drawing byte for byte (tests/explainers-kit-cast.test.ts holds
+// that); critter() draws the same tile in main's local frame (feet at 0, CRITTER_PX tall), with
+// the arms main's rig solves (stub arms in D's ink and mitten, at the solved angles and hands).
 
-/** A superellipse (squircle) centred on (cx, cy): the body. */
-function squircle(cx, cy, a, b, n = 3.3, N = 96) {
-  const pts = [];
-  for (let i = 0; i < N; i++) {
-    const t = (i / N) * Math.PI * 2;
-    const c = Math.cos(t);
-    const s = Math.sin(t);
-    pts.push(`${r2(cx + a * Math.sign(c) * Math.abs(c) ** (2 / n))} ${r2(cy + b * Math.sign(s) * Math.abs(s) ** (2 / n))}`);
-  }
-  return `M ${pts.join(' L ')} Z`;
+/** Ink: lines, legs, arms, pupils (the reference's own hex). */
+const INK = '#171717';
+/** White: eye whites and the white body. */
+const WHITE = '#FFFFFF';
+/** The eye whites of a white critter (E5E5E5: white mixed with ink), so they read on its body. */
+const GREY = CORE.mixHex(WHITE, INK, 0.218);
+/** The bodies critter D has: orange (the hero, one per frame), green, ink, white. */
+const BODY_COLORS = { orange: K('orange'), green: K('green'), ink: INK, white: WHITE };
+/** main's other bodies, drawn as a D body so old scenes still render: paper is white (§3); the
+ *  retired light palette bodies draw white too (D has no coloured cast bodies but green). */
+const BODY_ALIASES = { paper: 'white', yellow: 'white', blue: 'white', teal: 'white', lilac: 'white' };
+/** The bodies: orange (the hero), green, ink, white; then main's names, drawn white. */
+export const BODIES = [...Object.keys(BODY_COLORS), ...Object.keys(BODY_ALIASES)];
+/** The D body a body name draws as ('paper' → 'white'); an unknown body throws with the list. */
+function bodyName(body = 'ink') {
+  if (BODY_COLORS[body]) return body;
+  if (BODY_ALIASES[body]) return BODY_ALIASES[body];
+  throw new Error(`HX: critter body "${body}" must be one of ${BODIES.join(', ')} (orange is the hero's only)`);
 }
-/** The body: 132 × 112, x ±66, y −142…−30 (the hx-3 footprint). */
-export const BODY_D = squircle(0, -86, 66, 56);
+/** A body's flat colour, as main's ramp keys; an unknown body throws. */
+export function bodyOf(body = 'ink') {
+  const c = BODY_COLORS[bodyName(body)];
+  return { base: c, lit: c, shade: c, dark: c, bounce: c, color: c };
+}
+
+/** The tile: 200 units square, feet at y 192, the top of the body at y 40. */
+const TILE = { size: 200, feet: 192, top: 40, cx: 100 };
+/** Local px per tile unit at s 1 (the body top lands at −CRITTER_PX). */
+const DK = CRITTER_PX / (TILE.feet - TILE.top);
+/** Screen px per tile unit at scale s. */
+const tileScale = (s = 1) => DK * s;
+/** A tile point → main's local frame (feet at 0, s 1). */
+const tl = ([x, y]) => [(x - TILE.cx) * DK, (y - TILE.feet) * DK];
+/** A local point → the tile. */
+const lt = ([x, y]) => [x / DK + TILE.cx, y / DK + TILE.feet];
+/** The tile drawn in the local frame. */
+const TILE_TF = `scale(${DK.toFixed(4)}) translate(-100 -192)`;
+
+/** A number as the reference writes it: Python's f"{x:.1f}" (round half to even on the exact
+ *  value), trailing zeros and point dropped. */
+function f(x) {
+  const ax = Math.abs(x);
+  let s;
+  if (Number.isInteger(ax * 4) && !Number.isInteger(ax * 2)) {
+    const fl = Math.floor(ax * 10);
+    const n = fl % 2 === 0 ? fl : fl + 1;
+    s = (n / 10).toFixed(1);
+  } else s = ax.toFixed(1);
+  if (x < 0 || Object.is(x, -0)) s = `-${s}`;
+  return s.replace(/0+$/, '').replace(/\.$/, '');
+}
+
+/**
+ * D's thirty moods: critter_d.py M's ten (drawn byte for byte) and acting.js MOODS_X's twenty. The ten: the pupils' offset `p`, the lids `lid` [outer, inner] (0 open …
+ * 1 shut), happy crescents `cr`, the eyes' scale `es` [left, right], the body's `tilt` (degrees),
+ * the arm pose `arms` [left, right] (critterTile only: critter() takes main's arms) and `small` pupils.
+ */
+const D_MOODS = {
+  neutral: { p: [0, 0], lid: [0.06, 0.06], cr: false, es: [1, 1], tilt: 0, arms: ['down', 'down'] },
+  happy: { p: [0, -2], lid: [0, 0], cr: true, es: [1, 1], tilt: 0, arms: ['up', 'up'] },
+  curious: { p: [6, -6], lid: [0, 0], cr: false, es: [0.92, 1.14], tilt: -7, arms: ['down', 'point'] },
+  focused: { p: [0, 3], lid: [0.38, 0.38], cr: false, es: [1, 1], tilt: 0, arms: ['down', 'chin'], small: true },
+  surprised: { p: [0, 0], lid: [0, 0], cr: false, es: [1.16, 1.16], tilt: 0, arms: ['shrug', 'shrug'], small: true },
+  sly: { p: [8, 2], lid: [0.5, 0.42], cr: false, es: [1, 1], tilt: 4, arms: ['hips', 'chin'] },
+  worried: { p: [-1, 5], lid: [0.42, 0.04], cr: false, es: [1, 1], tilt: 0, arms: ['cheek', 'cheek'] },
+  angry: { p: [0, 4], lid: [0.08, 0.55], cr: false, es: [1, 1], tilt: 0, arms: ['fist', 'fist'] },
+  proud: { p: [0, -3], lid: [0.34, 0.34], cr: true, es: [1, 1], tilt: -3, arms: ['hips', 'hips'] },
+  sleepy: { p: [0, 6], lid: [0.64, 0.64], cr: false, es: [1, 1], tilt: 2, arms: ['droop', 'droop'] },
+  ...MOODS_X,
+};
+/** D's arm poses (critter_d.py ARM): the left arm [shoulder, control, hand] in tile units; the
+ *  right mirrors it (x → 200 − x). critterTile and wear.js use them. */
+const D_ARM_POSES = {
+  down: [[33, 116], [19, 134], [23, 152]],
+  up: [[35, 104], [15, 86], [20, 60]],
+  hips: [[33, 110], [6, 126], [31, 150]],
+  cheek: [[34, 120], [20, 104], [44, 90]],
+  point: [[33, 112], [16, 104], [4, 86]],
+  fist: [[33, 114], [24, 128], [15, 144]],
+  chin: [[34, 122], [50, 166], [80, 148]],
+  shrug: [[33, 110], [14, 112], [10, 90]],
+  droop: [[33, 120], [28, 142], [31, 160]],
+  wave: [[35, 104], [15, 86], [20, 60]],
+  ...ARMS_X,
+};
+/** The reference's animation states (critterTile only): the arms and the class hooks of its sheet. */
+const STATES = {
+  idle: { mood: 'neutral', look: 'look', bob: 'bob', arms: null },
+  think: { mood: 'neutral', look: 'think', bob: 'bob', arms: ['down', 'chin'] },
+  work: { mood: 'focused', look: 'scan', bob: 'bob-fast', arms: ['down', 'down'], steps: true },
+  wait: { mood: 'surprised', look: 'waitlook', bob: 'hop', arms: ['down', 'wave'] },
+  done: { mood: 'happy', look: '', bob: 'bounce', arms: ['up', 'up'], noBlink: true },
+  ...STATES_X,
+};
+const D_EYES = [[74, 96, -1], [126, 96, 1]];
+const cls = (c) => (c ? ` class="${c}"` : '');
+
+/** One D eye (critter_d.py eye(), pupils plain): the white, the pupil, the lids, a crescent. */
+function dEye(cx, cy, side, m, color, s, { blink = null, look = '', eyew = WHITE, gaze = null } = {}) {
+  const o = [`<g${cls(blink?.cls)}${blink?.tf ? ` transform="${blink.tf(cx, cy)}"` : ''}>`];
+  const [px, py] = m.p;
+  const rx = 20 * s;
+  const ry = 24 * s;
+  const r = 11.5 * s * (m.small ? 0.7 : 1);
+  o.push(`<ellipse cx="${f(cx)}" cy="${f(cy)}" rx="${f(rx)}" ry="${f(ry)}" fill="${eyew}"></ellipse>`);
+  const gz = gaze ? ` transform="translate(${f(gaze[0])} ${f(gaze[1])})"` : '';
+  o.push(`<g${cls(look)}${gz}><circle cx="${f(cx + px * 0.8)}" cy="${f(cy + py * 0.8)}" r="${f(r)}" fill="${INK}"></circle></g>`);
+  const [lo, li] = m.lid;
+  if (lo > 0 || li > 0) {
+    const y0 = cy - ry - 3;
+    const H = 2 * ry + 6;
+    const [yl, yr] = side < 0 ? [y0 + lo * H, y0 + li * H] : [y0 + li * H, y0 + lo * H];
+    const xl = cx - rx - 4;
+    const xr = cx + rx + 4;
+    o.push(`<polygon points="${f(xl)},${f(y0 - 2)} ${f(xr)},${f(y0 - 2)} ${f(xr)},${f(yr)} ${f(xl)},${f(yl)}" fill="${color}"></polygon>`);
+  }
+  if (m.cr) o.push(`<ellipse cx="${f(cx)}" cy="${f(cy + ry * 1.05)}" rx="${f(rx * 1.45)}" ry="${f(ry * 0.82)}" fill="${color}"></ellipse>`);
+  o.push('</g>');
+  return o.join('');
+}
+
+/** One D arm (critter_d.py arm()) from a pose, in the tile: side −1 left, +1 right. */
+function dArm(pose, side, c = '', extra = '') {
+  let pts = D_ARM_POSES[pose];
+  if (side > 0) pts = pts.map(([x, y]) => [200 - x, y]);
+  const [a0, b0] = pts[0];
+  pts = pts.map(([x, y]) => [a0 + (x - a0) * 0.82, b0 + (y - b0) * 0.82]);
+  const [[a, b], [cx, cy], [e, gg]] = pts;
+  return `<g${cls(c)}${extra}><path d="M${f(a)} ${f(b)} Q${f(cx)} ${f(cy)} ${f(e)} ${f(gg)}" fill="none" stroke="${INK}" stroke-width="20" stroke-linecap="round"></path>`
+    + `<circle cx="${f(e)}" cy="${f(gg)}" r="12" fill="${INK}"></circle></g>`;
+}
+
+/** The eye shape keys only the added moods and the acting track use (the ten draw as before). */
+const isX = (m) => m.low != null || m.curve != null || m.ey != null || m.pr != null || m.lidR != null || typeof m.cr === 'number' || m.sq != null;
+const ACT = actingSystem({ moods: D_MOODS, poses: D_ARM_POSES, states: STATES, alias: (m) => dMood(m), known: (m) => !!D_MOODS[m] || !!MOODS[m] });
+
+/** One D eye from a face vector (acting.js FACE_VEC): the white, a pupil kept inside it, curved
+ *  upper lids, a lower lid and a crescent, all in the body colour; nothing above or below the eye. */
+function dEyeV(cx, cy, side, F, color, eyew, gaze = null, hk = {}) {
+  const R = side < 0;
+  const s = R ? F.esl : F.esr;
+  const rx = 20 * s;
+  const ry = 24 * s * F.ey;
+  const r = 11.5 * s * F.pr;
+  const o = [`<g${cls(hk.blink)}><ellipse cx="${f(cx)}" cy="${f(cy)}" rx="${f(rx)}" ry="${f(ry)}" fill="${eyew}"></ellipse>`];
+  let dx = F.px * 0.8 + (gaze ? gaze[0] : 0);
+  let dy = F.py * 0.8 + (gaze ? gaze[1] : 0);
+  const ax = Math.max(0.5, rx - r - 1);
+  const ay = Math.max(0.5, ry - r - 1);
+  const e = Math.hypot(dx / ax, dy / ay);
+  if (e > 1) { dx /= e; dy /= e; }
+  o.push(`<g${cls(hk.look)}><circle cx="${f(cx + dx)}" cy="${f(cy + dy)}" r="${f(r)}" fill="${INK}"></circle></g>`);
+  const [lo, li] = R ? [F.lo, F.li] : [F.ro, F.ri];
+  const xl = cx - rx - 4;
+  const xr = cx + rx + 4;
+  const H = 2 * ry + 6;
+  if (lo > 0.001 || li > 0.001) {
+    const y0 = cy - ry - 3;
+    const [yl, yr] = R ? [y0 + lo * H, y0 + li * H] : [y0 + li * H, y0 + lo * H];
+    const sag = F.curve * 28 * s * Math.min(1, Math.max(lo, li) * 4);
+    o.push(`<path d="M${f(xl)} ${f(y0 - 2)} H${f(xr)} V${f(yr)} Q${f(cx)} ${f((yl + yr) / 2 + sag)} ${f(xl)} ${f(yl)} Z" fill="${color}"></path>`);
+  }
+  if (F.low > 0.001) {
+    const y1 = cy + ry + 3;
+    const yb = y1 - F.low * H;
+    o.push(`<path d="M${f(xl)} ${f(y1 + 2)} H${f(xr)} V${f(yb)} Q${f(cx)} ${f(yb - F.low * 8)} ${f(xl)} ${f(yb)} Z" fill="${color}"></path>`);
+  }
+  if (F.cr > 0.001) o.push(`<ellipse cx="${f(cx)}" cy="${f(cy + ry * (2.05 - F.cr))}" rx="${f(Math.min(rx * 1.45, 29))}" ry="${f(ry * 0.82)}" fill="${color}"></ellipse>`);
+  o.push('</g>');
+  return o.join('');
+}
+
+/** A hand point kept within D's stub from its shoulder and clear of both eyes (tile units). */
+function stubHand(S, H) {
+  let [x, y] = H;
+  const d = Math.hypot(x - S[0], y - S[1]);
+  const max = D_STUB / DK;
+  if (d > max) { x = S[0] + ((x - S[0]) * max) / d; y = S[1] + ((y - S[1]) * max) / d; }
+  for (const [ex, ey] of D_EYES) {
+    const RX = 20 * 1.2 + 13;
+    const RY = 24 * 1.2 * 1.12 + 13;
+    const k = Math.hypot((x - ex) / RX, (y - ey) / RY);
+    if (k < 1) { x = ex + (x - ex) / (k || 1e-3); y = ey + (y - ey) / (k || 1e-3); if (k === 0) y = ey + RY; }
+  }
+  return [x, y];
+}
+/** An arm from three points (screen tile units, before D's 0.82 stub scaling): the drawn quad. */
+function armQuadTile(pts) {
+  const [a0, b0] = pts[0];
+  const sc = pts.map(([x, y]) => [a0 + (x - a0) * 0.82, b0 + (y - b0) * 0.82]);
+  sc[2] = stubHand(sc[0], sc[2]);
+  return sc;
+}
+function dArmPts(pts) {
+  const [[a, b], [cx, cy], [e, gg]] = armQuadTile(pts);
+  return `<g><path d="M${f(a)} ${f(b)} Q${f(cx)} ${f(cy)} ${f(e)} ${f(gg)}" fill="none" stroke="${INK}" stroke-width="20" stroke-linecap="round"></path>`
+    + `<circle cx="${f(e)}" cy="${f(gg)}" r="12" fill="${INK}"></circle></g>`;
+}
+
+/** A face vector with main's explicit lid (a blink) on top. */
+function applyLid(F, opts) {
+  if (opts.lid == null) return F;
+  const lv = Number(opts.lid) || 0;
+  return { ...F, lo: Math.max(F.lo, lv), li: Math.max(F.li, lv), ro: Math.max(F.ro, lv), ri: Math.max(F.ri, lv) };
+}
+
+/** A face vector for a mood name (actingAt's face for a held mood at full intensity, no life). */
+function faceOf(mood) { return ACT.moodVec(mood); }
+
+/** The tile drawn from an acting face vector (critterTile with `face`): body, eyes, arms, wear. */
+function tileActing(o, F, hk = {}) {
+  const body = bodyName(o.body ?? 'ink');
+  const color = BODY_COLORS[body];
+  const W = wearOf(o);
+  const eyew = color === WHITE ? GREY : WHITE;
+  const edge = color === WHITE ? ` stroke="${INK}" stroke-width="3"` : '';
+  const lift = F.lift * 8;
+  const sx = 1 + F.sq;
+  const sy = 1 - F.sq;
+  // squash in the body's own frame (inside the tilt), so a tilted squash never shears
+  const out = [`<g${cls(hk.bob)} transform="translate(${f(F.dx)} ${f(F.hop ? -F.hop : 0)}) rotate(${f(F.tilt + (Number(o.tilt) || 0))} 100 110)">`];
+  out.push(`<g transform="translate(0 ${f(lift ? -lift : 0)}) translate(100 192) scale(${sx.toFixed(4)} ${sy.toFixed(4)}) translate(-100 -192)">`);
+  [[68, F.legL], [112, F.legR]].forEach(([lx, rt]) => {
+    const rr = `<rect${cls(hk.steps ? (lx < 100 ? 'step-l' : 'step-r') : '')} x="${lx}" y="158" width="20" height="${f(32 + lift)}" rx="10" fill="${INK}"></rect>`;
+    out.push(Math.abs(rt) > 0.05 ? `<g transform="rotate(${f(rt)} ${lx + 10} 160)">${rr}</g>` : rr);
+  });
+  out.push(BODY_TILE(color, edge));
+  if (o.view !== 'back') D_EYES.forEach(([cx, cy, side]) => out.push(dEyeV(cx, cy, side, F, color, eyew, null, hk)));
+  if (W.bowtie && o.view !== 'back') out.push(bowtieSvg(body));
+  out.push(dArmPts(F.aL));
+  const held = W.hand ? (o.handPose ?? HAND_POSE[W.hand]) : null;
+  out.push(held ? dArm(held, 1) : dArmPts(F.aR));
+  if (held) out.push(heldPropSvg(W.hand, body, held));
+  if (o._overlay) out.push(o._overlay);
+  if (W.head && !(o.view === 'back' && W.head === 'glasses')) out.push(headSvg(W.head, body, W.headTone));
+  out.push('</g></g>');
+  return out.join('');
+}
+
+const LEGS_TILE = (lc = '', rc = '') => `<rect${cls(lc)} x="68" y="158" width="20" height="32" rx="10" fill="${INK}"></rect><rect${cls(rc)} x="112" y="158" width="20" height="32" rx="10" fill="${INK}"></rect>`;
+const BODY_TILE = (color, edge = '') => `<rect x="26" y="40" width="148" height="136" rx="46" fill="${color}"${edge}></rect>`;
+
+/**
+ * The critter in its own 200-unit tile (feet at y 192, body top at y 40), without its shadow:
+ * exactly critter_d.py's drawing for the same D mood and body. Options: body (D's four or an
+ * alias), mood (a D_MOODS name, or a main MOODS name mapped to its D mood), arms (a D_ARM_POSES
+ * name or [left, right]), state (STATES), role / head / hand / bowtie (wear.js), tilt, `_overlay`
+ * (drawn where the reference draws its accessory; sheets and tests only).
+ */
+function critterTile(o = {}) {
+  if (o.face || o.pose) {
+    const P = o.pose ?? null;
+    return tileActing(o, P ? P.face : o.face);
+  }
+  const body = bodyName(o.body ?? 'ink');
+  const color = BODY_COLORS[body];
+  const st = o.state ?? null;
+  if (st !== null && !STATES[st]) throw new Error(`HX: critter state "${st}" must be one of ${Object.keys(STATES).join(', ')}`);
+  const S = st ? STATES[st] : null;
+  const dm = dMood(o.mood ?? S?.mood ?? 'neutral');
+  const m = D_MOODS[dm];
+  let arms = S?.arms ? [...S.arms] : [...m.arms];
+  if (isX(m) || D_MOODS[S?.mood] && isX(D_MOODS[S.mood]) || ARMS_X[arms[0]] || ARMS_X[arms[1]] || [].concat(o.arms ?? []).some((a) => ARMS_X[a])) {
+    // the added moods and poses draw through the acting path (the reference ten stay byte for byte)
+    const F = faceOf(dm);
+    const A = o.arms != null ? (Array.isArray(o.arms) ? o.arms : [o.arms, o.arms]) : arms;
+    A.forEach((p) => { if (!D_ARM_POSES[p]) throw new Error(`HX: critter arm pose "${p}" must be one of ${Object.keys(D_ARM_POSES).join(', ')}`); });
+    const mir = (n, sd) => D_ARM_POSES[n].map(([x, y]) => [sd > 0 ? 200 - x : x, y]);
+    const an = !!S || !!o.anim;
+    const hk = { bob: an ? (S ? S.bob : 'bob') : '', look: an ? (S ? S.look : 'look') : '', blink: an && !S?.noBlink ? 'blink' : '', steps: an && S?.steps };
+    return tileActing(o, { ...F, aL: mir(A[0], -1), aR: mir(A[1], 1) }, hk);
+  }
+  if (o.arms != null) {
+    const a = Array.isArray(o.arms) ? o.arms : [o.arms, o.arms];
+    a.forEach((p) => { if (!D_ARM_POSES[p]) throw new Error(`HX: critter arm pose "${p}" must be one of ${Object.keys(D_ARM_POSES).join(', ')}`); });
+    arms = [a[0], a[1]];
+  }
+  const W = wearOf(o);
+  if (W.hand) arms[1] = o.handPose ?? HAND_POSE[W.hand];
+  const anim = !!S || !!o.anim;
+  const look = anim ? (S ? S.look : 'look') : '';
+  const blink = { cls: anim && !S?.noBlink ? 'blink' : '', tf: null };
+  const bob = anim ? (S ? S.bob : 'bob') : '';
+  const steps = anim && S?.steps;
+  const eyew = color === WHITE ? GREY : WHITE;
+  const edge = color === WHITE ? ` stroke="${INK}" stroke-width="3"` : '';
+  const tilt = m.tilt + (Number(o.tilt) || 0);
+  const out = [`<g${cls(bob)}><g transform="rotate(${Number.isInteger(tilt) ? tilt : f(tilt)} 100 110)">`];
+  out.push(LEGS_TILE(steps ? 'step-l' : '', steps ? 'step-r' : ''));
+  out.push(BODY_TILE(color, edge));
+  if (o.view !== 'back') D_EYES.forEach(([cx, cy, side], i) => out.push(dEye(cx, cy, side, m, color, m.es[i], { blink, look, eyew })));
+  if (W.bowtie && o.view !== 'back') out.push(bowtieSvg(body));
+  out.push(dArm(arms[0], -1));
+  const wave = arms[1] === 'wave' && !W.hand;
+  out.push(dArm(arms[1], 1, wave ? 'wave' : ''));
+  if (W.hand) out.push(heldPropSvg(W.hand, body, arms[1]));
+  if (o._overlay) out.push(o._overlay);
+  if (W.head && !(o.view === 'back' && W.head === 'glasses')) out.push(headSvg(W.head, body, W.headTone));
+  out.push('</g></g>');
+  return out.join('');
+}
+
+/** The body outline (feet at 0, s 1). */
+export const BODY_D = (() => {
+  const [x0, y0] = tl([26, 40]);
+  const [x1, y1] = tl([174, 176]);
+  const r = 46 * DK;
+  const n = (v) => r2(v);
+  return `M ${n(x0 + r)} ${n(y0)} H ${n(x1 - r)} A ${n(r)} ${n(r)} 0 0 1 ${n(x1)} ${n(y0 + r)} V ${n(y1 - r)} A ${n(r)} ${n(r)} 0 0 1 ${n(x1 - r)} ${n(y1)} H ${n(x0 + r)} A ${n(r)} ${n(r)} 0 0 1 ${n(x0)} ${n(y1 - r)} V ${n(y0 + r)} A ${n(r)} ${n(r)} 0 0 1 ${n(x0 + r)} ${n(y0)} Z`;
+})();
 
 // ── Eyes ──────────────────────────────────────────────────────────────────────────────────
 /**
- * Two glossy eyes with pupils looking toward look = [x, y] in -1..1; lid 0 open … 1 closed (a
- * blink draws a lash line in `lash`). Soft 3D: an eyeball set into the body with a socket shadow,
- * a pupil with two catchlights, a glassy sheen; the lid is the body's own color (`lidColor`, or
- * currentColor). `L` −1 mirrors the light for a flipped critter. `D` is the defs bag (one is made
- * and returned inline when absent).
+ * Two D eyes at (cx, cy). `gap` between their centres,
+ * `r` their half width, look [x, y] in −1..1 (the pupils glance), lid 0 open … 1 shut, lidTilt,
+ * pr (a pupil size under 0.42 draws D's small pupils), body (its lids take the body colour).
+ * The other options of main's soft eyes are accepted and ignored.
  */
-export function eyes(cx, cy, { gap = 34, r = 15, look = [0, 0], lid = 0, lidTilt = 0, pupil = K('ink'), pr = 0.5, lash = null, rim = null, body = 'paper', lidColor = 'currentColor', D = null, L = 1, squeeze = null } = {}) {
-  const own = !D;
-  const bag = D ?? defsBag();
-  const all = [];
-  const B = BODY[body] ?? BODY.paper;
-  const dark = body === 'ink';
-  [-1, 1].forEach((side, si) => {
-    // `squeeze` [left, right] narrows an eye about its centre (a turned head foreshortens it)
-    const out = [];
-    const ex = cx + side * gap * 0.5;
-    const f = squeeze?.[si] ?? 1;
-    const done = () => all.push(f === 1 ? out.join('') : g({ transform: `translate(${r2(ex)} 0) scale(${f} 1) translate(${r2(-ex)} 0)` }, out));
-    // the socket: a soft shadow the eyeball sits in
-    out.push(el('circle', { cx: ex, cy: r2(cy + 1.8), r: r2(r + 1.2), fill: dark ? K('ink-dark') : B.dark, opacity: dark ? 0.55 : 0.32, filter: bag.blur(1.8) }));
-    if (lid >= 0.92) {
-      // closed: the lid over the socket, and the lash line
-      out.push(el('circle', { cx: ex, cy, r, fill: lidColor }));
-      if (lash) out.push(el('path', { d: `M ${r2(ex - r * 0.85)} ${cy + 1} Q ${ex} ${r2(cy + r * 0.6)} ${r2(ex + r * 0.85)} ${cy + 1}`, fill: 'none', stroke: lash, 'stroke-width': 4.5, 'stroke-linecap': 'round' }));
-      done();
-      return;
-    }
-    out.push(el('circle', { cx: ex, cy, r, fill: bag.rg([[0, K('canvas')], [0.55, K('paper-lit')], [0.85, K('paper-shade')], [1, K('paper-dark')]], L > 0 ? 0.58 : 0.42, 0.34, 0.72), stroke: rim ?? undefined, 'stroke-width': rim ? 2 : undefined }));
-    // the brow of the socket shades the top of the eyeball
-    const ec = bag.clip(el('circle', { cx: 0, cy: 0, r }));
-    out.push(g({ transform: `translate(${ex} ${cy})`, 'clip-path': ec }, el('ellipse', { cx: 0, cy: r2(-r * 0.95), rx: r, ry: r2(r * 0.42), fill: K('shadow-warm'), opacity: 0.2, filter: bag.blur(2.2) })));
-    const px = ex + look[0] * r * 0.42;
-    const py = cy + look[1] * r * 0.42;
-    const pR = r * pr;
-    out.push(el('circle', { cx: r2(px), cy: r2(py), r: r2(pR), fill: pupil === K('ink') ? bag.rg([[0, K('text-secondary')], [0.45, K('ink')], [1, K('ink-dark')]], L > 0 ? 0.62 : 0.38, 0.3, 0.78) : pupil }));
-    // two catchlights: the key (top right) and a small fill (bottom left)
-    const kx = px + pR * 0.34 * L;
-    const ky = py - pR * 0.4;
-    out.push(el('ellipse', { cx: r2(kx), cy: r2(ky), rx: r2(pR * 0.4), ry: r2(pR * 0.32), fill: '#FFFFFF', transform: `rotate(${-20 * L} ${r2(kx)} ${r2(ky)})` }));
-    out.push(el('circle', { cx: r2(px - pR * 0.36 * L), cy: r2(py + pR * 0.38), r: r2(pR * 0.16), fill: '#FFFFFF', opacity: 0.9 }));
-    // a glassy sheen across the eyeball
-    const s0 = [ex - r * 0.62 * L, cy - r * 0.35];
-    const s1 = [ex + r * 0.1 * L, cy - r * 0.8];
-    out.push(el('path', { d: `M ${r2(s0[0])} ${r2(s0[1])} A ${r2(r * 0.78)} ${r2(r * 0.78)} 0 0 ${L > 0 ? 1 : 0} ${r2(s1[0])} ${r2(s1[1])}`, fill: 'none', stroke: '#FFFFFF', 'stroke-width': 2.2, 'stroke-linecap': 'round', opacity: 0.7 }));
-    if (lid > 0) {
-      const ly = cy - r + 2 * r * lid;
-      const tilt = side * lidTilt;
-      const lc = bag.clip(el('circle', { cx: ex, cy, r: r + 0.3 }));
-      out.push(g({ 'clip-path': lc }, [
-        el('path', { d: `M ${ex - r - 3} ${r2(ly - tilt)} L ${ex + r + 3} ${r2(ly + tilt)} L ${ex + r + 3} ${cy - r - 5} L ${ex - r - 3} ${cy - r - 5} Z`, fill: lidColor }),
-        el('path', { d: `M ${ex - r - 3} ${r2(ly - tilt + 2)} L ${ex + r + 3} ${r2(ly + tilt + 2)}`, stroke: K('ink-dark'), 'stroke-opacity': 0.22, 'stroke-width': 4, filter: bag.blurU(1.6) }),
-      ]));
-    }
-    done();
-  });
-  return (own ? bag.xml() : '') + all.join('');
+export function eyes(cx, cy, { gap = 34, r = 15, look = [0, 0], lid = 0, lidTilt = 0, pr = 0.5, body = 'paper', lidColor = null } = {}) {
+  const color = lidColor && lidColor !== 'currentColor' ? lidColor : BODY_COLORS[bodyName(body)];
+  const s = r / 20;
+  const t = (Number(lidTilt) || 0) * 0.02;
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const m = { p: [0, 0], lid: [clamp(lid - t), clamp(lid + t)], cr: false, small: pr < 0.42 };
+  const gaze = look && (look[0] || look[1]) ? [look[0] * 6 * s, look[1] * 5 * s] : null;
+  const eyew = color === WHITE ? GREY : WHITE;
+  return [-1, 1].map((side) => dEye(cx + (side * gap) / 2, cy, side, m, color, s, { eyew, gaze })).join('');
 }
 
-// ── Arms ──────────────────────────────────────────────────────────────────────────────────
-// Each preset: [[shoulder x, y, hand x, y] left, [...] right], relative to the feet (body spans
-// x ±66, y −142…−30). `front` lists the arms drawn over the body (a hand in front of it).
+// ── Arms (main's rig poses, local units) ──────────────────────────────────────────────────
+// Each preset: [[shoulder x, y, hand x, y] left, [...] right], relative to the feet (the body
+// spans x ±69, y −142…−15). `front` lists the arms drawn over the body (a hand in front of it).
+// The rig (below) solves them; critter D draws each as an ink stub arm with a mitten end.
 export const ARM_POSES = {
   down: { arms: [[-62, -86, -78, -52], [62, -86, 78, -52]] },
   up: { arms: [[-60, -110, -92, -168], [60, -110, 92, -168]] },
@@ -213,28 +442,27 @@ export const ARM_POSES = {
 
 // ── Faces ─────────────────────────────────────────────────────────────────────────────────
 /**
- * Named expressions. A mood is the face only (4.1): eyes, lids, pupils, brows, mouth. It never
- * sets the arms, the legs or the body's tilt; a pose comes from `arms` or an intent (act()).
- * Every mood has a mouth and brows: a neutral face is calm, never blank.
+ * Moods: each draws as its nearest D mood (`d`). `mouth` and `brows` are accepted and ignored (critter D has neither); the face keys
+ * stay for callers that read them (moodFace). A mood never sets the arms.
  */
 export const MOODS = {
-  neutral: { mouth: 'calm', brows: 'calm' },
-  happy: { mouth: 'smile', brows: 'up' },
-  confident: { lid: 0.32, lidTilt: 3, mouth: 'smile', brows: 'flat' },
-  proud: { lid: 0.55, mouth: 'grin', brows: 'up' },
-  sly: { lid: 0.45, lidTilt: -4, mouth: 'smirk', brows: 'raised', look: [0.6, 0] },
-  confused: { mouth: 'wobble', brows: 'raised', look: [0.4, -0.5] },
-  worried: { mouth: 'wobble', brows: 'worried', look: [-0.3, 0.2] },
-  panicked: { mouth: 'o', brows: 'worried', pr: 0.32 },
-  surprised: { mouth: 'o', brows: 'high', pr: 0.36 },
-  sad: { mouth: 'frown', brows: 'worried', look: [0, 0.6], lid: 0.25 },
-  angry: { mouth: 'grit', brows: 'angry' },
-  focused: { lid: 0.3, mouth: 'flat', brows: 'angry', look: [0.6, 0.3] },
-  pained: { lid: 0.42, lidTilt: -3, mouth: 'grit', brows: 'worried' },
-  relieved: { lid: 0.5, mouth: 'smile', brows: 'up', look: [0, -0.2] },
-  curious: { mouth: 'calm', brows: 'raised', pr: 0.56 },
+  neutral: { mouth: 'calm', brows: 'calm', d: 'neutral' },
+  happy: { mouth: 'smile', brows: 'up', d: 'happy' },
+  confident: { lid: 0.32, lidTilt: 3, mouth: 'smile', brows: 'flat', d: 'proud' },
+  proud: { lid: 0.55, mouth: 'grin', brows: 'up', d: 'proud' },
+  sly: { lid: 0.45, lidTilt: -4, mouth: 'smirk', brows: 'raised', look: [0.6, 0], d: 'sly' },
+  confused: { mouth: 'wobble', brows: 'raised', look: [0.4, -0.5], d: 'confused' },
+  worried: { mouth: 'wobble', brows: 'worried', look: [-0.3, 0.2], d: 'worried' },
+  panicked: { mouth: 'o', brows: 'worried', pr: 0.32, d: 'panicked' },
+  surprised: { mouth: 'o', brows: 'high', pr: 0.36, d: 'surprised' },
+  sad: { mouth: 'frown', brows: 'worried', look: [0, 0.6], lid: 0.25, d: 'disappointed' },
+  angry: { mouth: 'grit', brows: 'angry', d: 'angry' },
+  focused: { lid: 0.3, mouth: 'flat', brows: 'angry', look: [0.6, 0.3], d: 'focused' },
+  pained: { lid: 0.42, lidTilt: -3, mouth: 'grit', brows: 'worried', d: 'worried' },
+  relieved: { lid: 0.5, mouth: 'smile', brows: 'up', look: [0, -0.2], d: 'relieved' },
+  curious: { mouth: 'calm', brows: 'raised', pr: 0.56, d: 'curious' },
+  sleepy: { lid: 0.64, mouth: 'calm', brows: 'calm', look: [0, 0.5], d: 'sleepy' },
 };
-/** The face keys a mood may set; anything else in a mood is ignored. */
 export const FACE_KEYS = ['look', 'lid', 'lidTilt', 'pr', 'mouth', 'brows'];
 export const MOUTHS = ['calm', 'o', 'flat', 'smile', 'grin', 'smirk', 'frown', 'wobble', 'grit'];
 export const BROWS = ['calm', 'flat', 'up', 'high', 'worried', 'angry', 'raised'];
@@ -243,236 +471,102 @@ export function moodFace(mood) {
   const m = MOODS[mood] ?? MOODS.neutral;
   return Object.fromEntries(Object.entries(m).filter(([k]) => FACE_KEYS.includes(k)));
 }
-
-function mouthPath(kind, mx, my, face, D) {
-  const o = { fill: 'none', stroke: face, 'stroke-width': 5.2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
-  mx = r2(mx);
-  switch (kind) {
-    case 'o': return el('ellipse', { cx: mx, cy: my + 2, rx: 9, ry: 11, fill: face }) + el('ellipse', { cx: mx, cy: my + 7, rx: 5, ry: 3.5, fill: K('sun-bottom'), opacity: face === K('paper-lit') ? 0 : 0.75 });
-    case 'flat': return el('path', { ...o, d: `M ${mx - 12} ${my} L ${mx + 12} ${my + 2}` });
-    case 'smile': return el('path', { ...o, d: `M ${mx - 14} ${my - 4} Q ${mx} ${my + 10} ${mx + 14} ${my - 4}` });
-    case 'grin': {
-      // a grin with a small tongue, clipped inside the mouth
-      const cp = D.clip(el('path', { d: 'M -20 -6 Q 0 18 20 -6 Z' }));
-      return g({ transform: `translate(${mx} ${my})` }, el('path', { d: 'M -20 -6 Q 0 18 20 -6 Z', fill: face }) + g({ 'clip-path': cp }, el('ellipse', { cx: 2, cy: 9, rx: 10, ry: 6, fill: K('sun-bottom'), opacity: face === K('paper-lit') ? 0.7 : 0.8 })));
-    }
-    case 'smirk': return el('path', { ...o, d: `M ${mx - 12} ${my + 2} Q ${mx + 4} ${my + 6} ${mx + 16} ${my - 6}` });
-    case 'frown': return el('path', { ...o, d: `M ${mx - 14} ${my + 6} Q ${mx} ${my - 6} ${mx + 14} ${my + 6}` });
-    case 'wobble': return el('path', { ...o, d: `M ${mx - 16} ${my + 2} Q ${mx - 8} ${my - 5} ${mx} ${my + 2} Q ${mx + 8} ${my + 9} ${mx + 16} ${my + 2}` });
-    case 'grit': return el('path', { ...o, d: `M ${mx - 16} ${my + 2} L ${mx - 6} ${my - 3} L ${mx + 4} ${my + 3} L ${mx + 14} ${my - 3}` });
-    // calm: a small relaxed curve, the face at rest (and the fallback: a face always has a mouth)
-    default: return el('path', { ...o, d: `M ${mx - 10} ${my - 1} Q ${mx} ${my + 5} ${mx + 10} ${my - 1}` });
-  }
+/** The D mood a mood name draws as (a D_MOODS name stays itself); unknown names draw neutral. */
+function dMood(mood = 'neutral') {
+  if (D_MOODS[mood]) return mood;
+  return MOODS[mood]?.d ?? 'neutral';
 }
 
-function browPaths(kind, cy, gap, face) {
-  const o = { fill: 'none', stroke: face, 'stroke-width': 5.5, 'stroke-linecap': 'round' };
-  const y = cy - 27;
-  const L = -gap / 2;
-  const R = gap / 2;
-  const pair = (l, r) => el('path', { ...o, d: `M ${L - 12} ${y + l[0]} L ${L + 10} ${y + l[1]}` }) + el('path', { ...o, d: `M ${R - 10} ${y + r[0]} L ${R + 12} ${y + r[1]}` });
-  switch (kind) {
-    case 'flat': return pair([0, 0], [0, 0]);
-    case 'up': return pair([-2, -6], [-6, -2]);
-    case 'high': return pair([-10, -14], [-14, -10]);
-    case 'worried': return pair([-2, -10], [-10, -2]);
-    case 'angry': return pair([-8, 2], [2, -8]);
-    case 'raised': return pair([0, 0], [-12, -8]);
-    // calm: level and a touch soft at the outer ends (the fallback: a face always has brows)
-    default: return pair([1, -2], [-2, 1]);
-  }
-}
-
-// ── Old stock accessories (WEAR): an exact match only ─────────────────────────────────────
-// The hx-3 role accessories, kept so old projects still render and so a role that is exactly
-// "a chef" or "a graduate" can still use them. New reels draw an `outfit` for the role (still 03:
-// "the bank is only used if there's an exact match"). Drawn soft-shaded, no ink outline.
-//
-// HARD CONSTRAINT (EX3-103, Lucas): nothing a critter wears covers or crowds its eyes or mouth.
-// Every accessory stays outside FACE_KEEPOUT: hats sit above the brows, the headset mic stops at
-// the cheek, the backpack strap runs along the body's edge, and the scarf, bowtie and apron sit at
-// the base, below the mouth. Glasses are the one exception: they are worn over the eyes.
-// tests/explainers-kit.test.ts measures every accessory against these zones.
+// ── Wear: main's WEAR and outfits translated to a role (§3, §4) ───────────────────────────
+// No garment is ever drawn on a critter D body. main's stock accessories and outfits are accepted
+// and translated to wear.js pieces when one obviously matches; the rest is dropped (bare).
 export const WEAR = ['cap', 'tophat', 'chef', 'gradcap', 'glasses', 'headset', 'apron', 'backpack', 'bowtie', 'scarf'];
 /** The accessories that are allowed over the eyes. */
 export const WEAR_ON_EYES = ['glasses'];
+/** main's WEAR → the wear.js piece it becomes (tophat, apron, backpack and scarf: none, bare). */
+const WEAR_TO_ROLE = { cap: { head: 'cap' }, chef: { head: 'toque' }, gradcap: { head: 'gradcap' }, glasses: { head: 'glasses' }, headset: { head: 'headphones' }, bowtie: { bowtie: true } };
+/** An outfit's head kind → the wear.js head piece it becomes (others: none). */
+const OUTFIT_HEAD_TO_ROLE = { chef: 'toque', 'hard-hat': 'hardhat', beanie: 'beanie', peaked: 'cap', headphones: 'headphones', 'scrub-cap': 'nursecap' };
 
-/** The colors a critter's accessories are drawn in, from its body and wearColor. */
-function wearContext(body, wearColor, D) {
-  const light = body !== 'ink';
-  const accName = wearColor === 'orange' ? 'orange' : light ? 'ink' : 'paper';
-  const R = ramp(accName);
-  return {
-    acc: R.base,
-    accFill: D.lg([[0, R.lit], [0.5, R.base], [1, R.shade]], 0.85, 0, 0.15, 1),
-    dark: R.dark,
-    face: light ? K('ink') : K('paper-lit'),
-    // a detail in the accent (the tophat band, the tassel): yellow, never orange (EX3-139)
-    contrast: accName === 'orange' ? K('ink') : ramp('yellow').base,
-  };
-}
-
-function wearBehind(items, ctx) {
-  const out = [];
-  if (items.includes('backpack')) {
-    out.push(el('rect', { x: -86, y: -136, width: 70, height: 92, rx: 18, fill: ctx.accFill }));
-    out.push(el('rect', { x: -80, y: -96, width: 44, height: 34, rx: 8, fill: 'none', stroke: ctx.dark, 'stroke-width': 2.5, opacity: 0.6 }));
-  }
-  return out;
-}
-
-function wearFront(items, ctx, by) {
-  const { acc, accFill, dark, face, contrast } = ctx;
-  const detail = { fill: 'none', stroke: dark, 'stroke-width': 2.5, opacity: 0.6 };
-  const out = [];
-  // The base, below the mouth: a waist apron hanging over the tops of the legs, a scarf wrapped
-  // round the bottom of the body with its tail down one side, a small bowtie at the hem.
-  if (items.includes('apron')) {
-    out.push(el('path', { d: `M -42 ${by + 109} L 42 ${by + 109} L 46 ${by + 136} Q 0 ${by + 142} -46 ${by + 136} Z`, fill: accFill }));
-    out.push(el('rect', { x: -14, y: by + 116, width: 28, height: 12, rx: 3, ...detail }));
-    out.push(el('rect', { x: -52, y: by + 105, width: 104, height: 8, rx: 4, fill: accFill }));
-  }
-  if (items.includes('scarf')) {
-    out.push(el('path', { d: `M 26 ${by + 114} L 34 ${by + 150} L 52 ${by + 146} L 46 ${by + 110} Z`, fill: accFill }));
-    out.push(el('path', { d: `M 33 ${by + 142} L 51 ${by + 138}`, ...detail }));
-    out.push(el('path', { d: `M -62 ${by + 100} Q 0 ${by + 116} 62 ${by + 100} L 62 ${by + 114} Q 0 ${by + 130} -62 ${by + 114} Z`, fill: accFill }));
-  }
-  if (items.includes('bowtie')) {
-    out.push(el('path', { d: `M 0 ${by + 112} L -24 ${by + 105} L -24 ${by + 119} Z M 0 ${by + 112} L 24 ${by + 105} L 24 ${by + 119} Z`, fill: accFill }));
-    out.push(el('circle', { cx: 0, cy: by + 112, r: 5.5, fill: acc }));
-  }
-  if (items.includes('backpack')) {
-    out.push(el('path', { d: `M -57 ${by + 20} Q -64 ${by + 58} -56 ${by + 100}`, fill: 'none', stroke: acc, 'stroke-width': 9, 'stroke-linecap': 'round' }));
-  }
-  if (items.includes('glasses')) {
-    const gy = by + 44;
-    const rim = face === K('paper-lit') ? K('paper-lit') : K('ink');
-    out.push(el('circle', { cx: -25, cy: gy, r: 21, fill: 'none', stroke: rim, 'stroke-width': 4.5 }));
-    out.push(el('circle', { cx: 25, cy: gy, r: 21, fill: 'none', stroke: rim, 'stroke-width': 4.5 }));
-    out.push(el('path', { d: `M -5 ${gy - 2} Q 0 ${gy - 6} 5 ${gy - 2}`, fill: 'none', stroke: rim, 'stroke-width': 4 }));
-  }
-  if (items.includes('headset')) {
-    // the mic sits out at the cheek, clear of the mouth
-    out.push(el('path', { d: `M -70 ${by + 40} Q -70 ${by - 26} 0 ${by - 26} Q 70 ${by - 26} 70 ${by + 40}`, fill: 'none', stroke: acc, 'stroke-width': 8, 'stroke-linecap': 'round' }));
-    out.push(el('rect', { x: 58, y: by + 28, width: 22, height: 34, rx: 8, fill: accFill }));
-    out.push(el('path', { d: `M 68 ${by + 60} Q 66 ${by + 84} 50 ${by + 86}`, fill: 'none', stroke: acc, 'stroke-width': 5, 'stroke-linecap': 'round' }));
-    out.push(el('circle', { cx: 45, cy: by + 86, r: 6, fill: acc }));
-  }
-  // Hats sit on the crown, above the brows.
-  if (items.includes('cap')) {
-    out.push(el('path', { d: `M -56 ${by + 2} Q -54 ${by - 46} 0 ${by - 48} Q 54 ${by - 46} 56 ${by + 2} Z`, fill: accFill }));
-    out.push(el('path', { d: `M 22 ${by - 2} L 104 ${by - 6} Q 108 ${by + 2} 96 ${by + 4} L 22 ${by + 4} Z`, fill: accFill }));
-    out.push(el('circle', { cx: 0, cy: by - 48, r: 6, fill: acc }));
-  }
-  if (items.includes('tophat')) {
-    out.push(el('rect', { x: -80, y: by - 14, width: 160, height: 16, rx: 6, fill: accFill }));
-    out.push(el('rect', { x: -48, y: by - 104, width: 96, height: 92, rx: 4, fill: accFill }));
-    out.push(el('rect', { x: -48, y: by - 38, width: 96, height: 14, fill: contrast }));
-  }
-  if (items.includes('chef')) {
-    const P = ramp('paper');
-    const pf = `url(#${id('kchefw')})`;
-    out.push(el('linearGradient', { id: id('kchefw'), x1: 0.85, y1: 0, x2: 0.15, y2: 1 }, el('stop', { offset: 0, 'stop-color': K('canvas') }) + el('stop', { offset: 0.6, 'stop-color': P.base }) + el('stop', { offset: 1, 'stop-color': P.shade })));
-    out.push(el('rect', { x: -46, y: by - 34, width: 92, height: 38, rx: 4, fill: pf }));
-    out.push(el('path', { d: `M -46 ${by - 30} Q -78 ${by - 64} -40 ${by - 84} Q -30 ${by - 116} 0 ${by - 104} Q 30 ${by - 120} 42 ${by - 86} Q 80 ${by - 66} 46 ${by - 30} Z`, fill: pf }));
-  }
-  if (items.includes('gradcap')) {
-    out.push(el('path', { d: `M -40 ${by - 4} L -40 ${by - 28} L 40 ${by - 28} L 40 ${by - 4} Z`, fill: accFill }));
-    out.push(el('path', { d: `M -96 ${by - 40} L 0 ${by - 70} L 96 ${by - 40} L 0 ${by - 12} Z`, fill: accFill }));
-    out.push(el('path', { d: `M 0 ${by - 41} L 70 ${by - 34} L 74 ${by + 10}`, fill: 'none', stroke: contrast, 'stroke-width': 4, 'stroke-linecap': 'round' }));
-    out.push(el('circle', { cx: 74, cy: by + 14, r: 7, fill: contrast }));
-  }
-  return out;
-}
-
-/** Just the accessories, as critter() draws them on a critter at the origin at scale 1 (for the
- *  face keep-out test and sheets): { behind, front, defs } SVG strings. */
-export function wearDrawing(wear, { body = 'ink', wearColor = null } = {}) {
-  const D = defsBag();
-  const ctx = wearContext(body, wearColor, D);
-  return { behind: wearBehind(wear, ctx).join(''), front: wearFront(wear, ctx, BY).join(''), defs: D.xml() };
-}
-
-// ── The look (EX3-107) ────────────────────────────────────────────────────────────────────
 /**
- * A critter's look, the part that never changes during a reel (EX3-107): its body, its outfit and
- * any stock accessories. Pose, mood, scale and gaze change; this does not.
- * `body|wear+wear|wearColor`, then `|<outfit key>` when it wears an outfit.
- * @param {{ body?: string, wear?: string[] | string, wearColor?: string | null, outfit?: object | null }} [look]
+ * A critter's resolved wear (wear.js wear()): `role` / head / hand / bowtie / headTone as given,
+ * then main's `wear` list and `outfit` translated (WEAR_TO_ROLE, OUTFIT_HEAD_TO_ROLE, the outfit's
+ * glasses and bowtie items) for what is still free, at most two signifiers. Unknown names throw.
+ * @returns {{ role: string|null, head: string|null, hand: string|null, bowtie: boolean, headTone: string|null }}
+ */
+function wearOf(o = {}) {
+  const W = resolveWear({ role: o.role ?? null, head: o.head, hand: o.hand, bowtie: o.bowtie, headTone: o.headTone });
+  const old = {};
+  for (const w of [].concat(o.wear ?? [])) {
+    const t = WEAR_TO_ROLE[w];
+    if (t?.head && !old.head) old.head = t.head;
+    if (t?.bowtie) old.bowtie = true;
+  }
+  if (!isNoOutfit(o.outfit)) {
+    let fit = null;
+    try { fit = normalizeOutfit(o.outfit); } catch { fit = null; }
+    if (fit) {
+      const h = OUTFIT_HEAD_TO_ROLE[fit.head.kind];
+      if (h && !old.head) old.head = h;
+      if (fit.items.includes('glasses') && !old.head) old.head = 'glasses';
+      if (fit.items.includes('bowtie') || fit.items.includes('tie')) old.bowtie = true;
+    }
+  }
+  if (o.head === undefined && !W.head && old.head) W.head = old.head;
+  if (o.bowtie === undefined && !W.bowtie && old.bowtie) W.bowtie = true;
+  if ([W.head, W.hand, W.bowtie].filter(Boolean).length > 2) W.bowtie = false;
+  return W;
+}
+
+/**
+ * Stock wear as drawn: { front, behind } SVG (in the 200-unit tile)
+ * of the wear.js pieces they translate to; '' for the ones that draw bare.
+ */
+export function wearDrawing(wear, { body = 'ink' } = {}) {
+  const W = wearOf({ wear, body });
+  const b = bodyName(body);
+  const front = (W.bowtie ? bowtieSvg(b) : '') + (W.head ? headSvg(W.head, b, W.headTone) : '');
+  return { front, behind: '' };
+}
+
+/**
+ * A critter's look (data-look), the same in every frame:
+ * `body|wear+wear|wearColor`, then `|<outfit key>` when it wears an outfit, then
+ * `|role=<role>.<head>.<bowtie>.<tone>` when it has a role or a wear.js piece (the hand prop is
+ * left out: it is held or put down beat by beat).
+ * @param {{ body?: string, wear?: string[] | string, wearColor?: string | null, outfit?: object | null, role?: string, head?: string, bowtie?: boolean, headTone?: string }} [look]
  * @returns {string}
  */
-export function lookKey({ body = 'ink', wear = [], wearColor = null, outfit = null } = {}) {
+export function lookKey({ body = 'ink', wear = [], wearColor = null, outfit = null, role, head, bowtie, headTone } = {}) {
   const base = `${body}|${[].concat(wear ?? []).map(String).sort().join('+')}|${wearColor ?? ''}`;
-  return isNoOutfit(outfit) ? base : `${base}|${outfitKey(outfit)}`;
+  const withFit = isNoOutfit(outfit) ? base : `${base}|${outfitKey(outfit)}`;
+  if (role == null && head == null && bowtie == null && headTone == null) return withFit;
+  let W;
+  try { W = resolveWear({ role: role ?? null, head, bowtie, headTone }); } catch { W = { role, head, bowtie, headTone }; }
+  return `${withFit}|role=${W.role ?? ''}.${W.head ?? ''}.${W.bowtie ? 'bowtie' : ''}.${W.headTone ?? ''}`;
 }
+
+/** Critter D's internals (tile, 30 moods, 30 arm poses, 15 states, the acting accents and limits, wear translation), for wear.js, sheets and tests. */
+export const D = { INK, WHITE, GREY, BODY_COLORS, BODY_ALIASES, TILE, DK, f, MOODS: D_MOODS, ARM_POSES: D_ARM_POSES, STATES, ACCENTS, LIMITS: ACTING_LIMITS, lifeOf, faceOf: (m) => faceOf(m), tile: critterTile, bodyName, dMood, wearOf, WEAR_TO_ROLE, OUTFIT_HEAD_TO_ROLE, tileScale };
 
 // ── Pieces of the critter ─────────────────────────────────────────────────────────────────
 const armQuad = ([x0, y0, x1, y1]) => [x0, y0, (x0 + x1) / 2 + (x1 > 0 ? 8 : -8), (y0 + y1) / 2 - 10, x1, y1];
+/** D's arm stroke and mitten radius in local units. */
+const ARM_W = r2(20 * DK);
+const MITTEN_R = r2(12 * DK);
+/** How far below the rig's shoulder D's drawn arm starts (local px): D's shoulder is at tile y ~116. */
+const SHOULDER_DROP = 15;
 
-function drawArm(C, quad, { over = false, body, sleeve = '', after = '' }) {
-  const { D, L } = C;
+/** A D stub arm along a solved quad (local units): an ink stroke, a mitten at the hand. */
+function drawArm(quad, shoulder = null) {
   const [x0, y0, cx, cy, x1, y1] = quad;
-  const d = `M ${x0} ${y0} Q ${r2(cx)} ${r2(cy)} ${x1} ${y1}`;
-  const cap = { fill: 'none', 'stroke-linecap': 'round' };
-  const out = [];
-  if (over) out.push(el('path', { d, ...cap, stroke: body === 'ink' ? K('ink-dark') : K('shadow-warm'), 'stroke-opacity': body === 'ink' ? 0.6 : 0.3, 'stroke-width': body === 'ink' ? 22 : 18, transform: `translate(${-3 * L} ${body === 'ink' ? 4 : 5})`, filter: D.blurU(3) }));
-  // on an ink body an arm in front gets a faint lit edge, so ink on ink still reads as an arm
-  if (over && body === 'ink') out.push(el('path', { d, ...cap, stroke: K('text-secondary'), 'stroke-width': 20 }));
-  out.push(el('path', { d, ...cap, stroke: LIMB, 'stroke-width': 17 }));
-  out.push(el('path', { d, ...cap, stroke: K('text-tertiary'), 'stroke-opacity': 0.75, 'stroke-width': 5, transform: `translate(${1.5 * L} -3.5)`, filter: D.blurU(1.6) }));
-  out.push(sleeve);
-  out.push(after);
-  out.push(drawHand(C, x1, y1, { over, body }));
-  return out.join('');
+  const [sx, sy] = shoulder ?? [x0, y0];
+  return `<path d="M ${r2(sx)} ${r2(sy)} Q ${r2(cx)} ${r2(cy)} ${r2(x1)} ${r2(y1)}" fill="none" stroke="${INK}" stroke-width="${ARM_W}" stroke-linecap="round"></path>` + drawHand(null, x1, y1);
 }
 
-/** The hand: a round mitten a little wider than the arm, so it can grip a prop. */
-function drawHand(C, x1, y1, { over = false, body = 'ink' } = {}) {
-  const { D, L } = C;
-  x1 = r2(x1);
-  y1 = r2(y1);
-  const out = [];
-  if (over && body === 'ink') out.push(el('circle', { cx: x1, cy: y1, r: 14, fill: K('text-secondary') }));
-  out.push(el('circle', { cx: x1, cy: y1, r: 12.5, fill: D.rg([[0, K('text-tertiary')], [0.4, K('ink-lit')], [1, K('ink-shade')]], L > 0 ? 0.66 : 0.34, 0.3, 0.8) }));
-  out.push(el('ellipse', { cx: r2(x1 + 4 * L), cy: r2(y1 - 5), rx: 4, ry: 2.6, fill: K('canvas'), opacity: 0.45, transform: `rotate(${-25 * L} ${r2(x1 + 4 * L)} ${r2(y1 - 5)})` }));
-  return out.join('');
-}
-
-function drawBody(C, body, { view = 'front', k = 1 } = {}) {
-  const { D, L, dark } = C;
-  const B = bodyOf(body);
-  const ink = body === 'ink';
-  const paper = body === 'paper';
-  const out = [];
-  out.push(el('path', { d: BODY_D, fill: D.rg([[0, B.lit], [0.45, B.base], [1, B.shade]], L > 0 ? 0.72 : 0.28, 0.16, 1) }));
-  out.push(g({ 'clip-path': C.bodyClip }, [
-    // form shadow: the edge falls off, the low side away from the light is in shade
-    el('path', { d: BODY_D, fill: 'none', stroke: B.dark, 'stroke-width': 20, opacity: ink ? 0.85 : paper ? 0.34 : 0.32, filter: D.blur(9) }),
-    el('ellipse', { cx: -52 * L, cy: -40, rx: 70, ry: 40, fill: B.dark, opacity: ink ? 0.8 : paper ? 0.32 : 0.34, filter: D.blur(16) }),
-    // bounce: the floor lights the base (warm on the stage), the key light the crown
-    el('ellipse', { cx: 6 * L, cy: -28, rx: 50, ry: 7, fill: dark ? K('orange-lit') : B.bounce, opacity: dark ? (ink ? 0.4 : 0.3) : ink ? 0.55 : body === 'orange' ? 0.42 : 0.6, filter: D.blur(4.5) }),
-    el('ellipse', { cx: 16 * L, cy: -134, rx: 52, ry: 18, fill: dark ? K('paper-lit') : K('canvas'), opacity: ink ? (dark ? 0.16 : 0.12) : 0.3, filter: D.blur(10) }),
-  ]));
-  // gloss: a soft specular and a sharp one, top right
-  out.push(el('ellipse', { cx: 34 * L, cy: -122, rx: 17, ry: 9, transform: `rotate(${-26 * L} ${34 * L} -122)`, fill: K('canvas'), opacity: ink ? 0.42 : paper ? 0.95 : 0.7, filter: D.blur(3.2) }));
-  out.push(el('ellipse', { cx: 38 * L, cy: -125, rx: 7, ry: 3.2, transform: `rotate(${-26 * L} ${38 * L} -125)`, fill: K('canvas'), opacity: ink ? 0.55 : 0.85, filter: D.blur(0.8) }));
-  return out.join('');
-}
-
-function drawLegs(C, legRot, legLen, O) {
-  const { D, L } = C;
-  const out = [];
-  [[-26, legRot[0]], [26, legRot[1]]].forEach(([lx, rot]) => {
-    const x = lx - 10.5;
-    const fill = D.lg(L > 0 ? [[0, K('ink-shade')], [0.55, K('ink-lit')], [1, K('text-secondary')]] : [[0, K('text-secondary')], [0.45, K('ink-lit')], [1, K('ink-shade')]], 0, 0, 1, 0);
-    const inner = [
-      el('rect', { x, y: -34, width: 21, height: legLen + 2, rx: 10, fill }),
-      el('rect', { x: L > 0 ? x + 11 : x + 5, y: -28, width: 5, height: legLen - 12, rx: 2.5, fill: K('text-tertiary'), opacity: 0.45, filter: D.blur(1.4) }),
-      O ? drawLeg(C, O, x, legLen) : '',
-    ];
-    out.push(g({ transform: `rotate(${rot} ${lx} -32)` }, inner));
-  });
-  return out.join('');
+/** The hand: D's ink mitten. (`C` and the options are accepted for main's callers.) */
+function drawHand(_C, x1, y1) {
+  return `<circle cx="${r2(x1)}" cy="${r2(y1)}" r="${MITTEN_R}" fill="${INK}"></circle>`;
 }
 
 function contactShadow(D, dark) {
@@ -485,32 +579,9 @@ function contactShadow(D, dark) {
   ].join('');
 }
 
-/** The stage's rim light (still 09): a warm key rim on the top-right edge of the silhouette, a
- *  cool counter-rim on the left. A filter on the whole critter, so garments and limbs get it too. */
-function rimFilter(D, s, L) {
-  const k = r2(Math.max(0.6, 2.4 * s));
-  const c = r2(Math.max(0.5, 2 * s));
-  const b = r2(Math.max(0.3, 0.7 * s));
-  return D.raw('rim', `${k}|${c}|${b}|${L}`, (n) => el('filter', { id: n, x: '-25%', y: '-25%', width: '150%', height: '150%', 'color-interpolation-filters': 'sRGB' }, [
-    el('feOffset', { in: 'SourceAlpha', dx: -k * L, dy: k, result: 'ks' }),
-    el('feComposite', { in: 'SourceAlpha', in2: 'ks', operator: 'out', result: 'ke' }),
-    el('feGaussianBlur', { in: 'ke', stdDeviation: b, result: 'kb' }),
-    el('feFlood', { 'flood-color': K('orange-lit'), 'flood-opacity': 0.85, result: 'kc' }),
-    el('feComposite', { in: 'kc', in2: 'kb', operator: 'in', result: 'key' }),
-    el('feOffset', { in: 'SourceAlpha', dx: c * L, dy: 0, result: 'cs' }),
-    el('feComposite', { in: 'SourceAlpha', in2: 'cs', operator: 'out', result: 'ce' }),
-    el('feGaussianBlur', { in: 'ce', stdDeviation: b, result: 'cb' }),
-    el('feFlood', { 'flood-color': K('teal-lit'), 'flood-opacity': 0.6, result: 'cc' }),
-    el('feComposite', { in: 'cc', in2: 'cb', operator: 'in', result: 'cool' }),
-    el('feMerge', {}, el('feMergeNode', { in: 'SourceGraphic' }) + el('feMergeNode', { in: 'key' }) + el('feMergeNode', { in: 'cool' })),
-  ].join('')));
-}
-
-// ── Views (4.2: front or back only) ──────────────────────────────────────────────────────
-/** The ways a critter can face the lens. front: the approved Critter 2.0 face; back: turned away
- *  (over-the-shoulder shots), the back of its body and outfit with the lost profile (the edge of
- *  one eye and brow) on `side`. A back view is not faceless: the head is turned away. The 4.1
- *  three-quarter view was removed in 4.2 (Lucas: front or back only). */
+// ── Views (front or back) ─────────────────────────────────────────────────────────────────
+/** The ways a critter can face the lens. front: critter D; back: turned away (over-the-shoulder
+ *  shots), D's tile with no eyes (body, arms, legs). `side` stays a flip. */
 export const VIEWS = ['front', 'back'];
 export const SIDES = ['left', 'right'];
 /** Views the kit had and removed, and what to use instead (viewOf names it when one is asked for). */
@@ -537,136 +608,126 @@ export function faceKeepoutFor(view = 'front', _k = 1) {
 
 // ── The critter ───────────────────────────────────────────────────────────────────────────
 /**
- * A critter: a soft-3D block body on two stubby legs, a face, arms. (x, y) is the feet.
- *   body:   'ink' (the default cast), 'paper' (a second, light cast member), 'orange', or a light
- *           palette body: yellow, blue, teal, lilac, green (BODIES; any other throws). Which body
- *           a character gets is a design call (house style); the kit only draws it. On the stage
- *           an ink critter stays ink and is picked out by the rim light
- *   view:   'front' (default) or 'back' (VIEWS); side: 'left' | 'right', the screen side a back
- *           view's lost profile shows on (default: forward). A back view shows the back of the
- *           body and outfit and the lost profile on `side`: the head turned away, never faceless
- *   mood:   a MOODS name; its settings apply first, then any explicit option
- *   arms:   an ARM_POSES name or { l: [x, y], r: [x, y] } hand positions relative to the feet
- *           (shoulders at ±60, −100); hands inside the body outline are drawn in front of it
- *           (behind it in a back view)
- *   legs:   a preset (stand, kick, hop, sit, tiptoe) or { l, r } rotations in degrees (walk())
- *   brows:  flat, up, high, worried, angry, raised (one up)
- *   mouth:  o, flat, smile, grin, smirk, frown, wobble, grit
- *   outfit: garments drawn for the role (outfits.js; still 03): { top: { kind, color, trim, neck,
- *           pocket }, sleeves, pants, shoes, head: { kind, color }, items: [...], custom }.
- *           Nothing worn enters FACE_KEEPOUT (EX3-103); glasses sit on the eyes
- *   wear:   the old stock accessories, any of WEAR, for an exact match only; wearColor 'orange'
- *           makes them the focal accent
- *   look, lid, lidTilt, pr (pupil size), tilt (degrees, about the feet),
- *   sq (squash > 0, stretch < 0), squash { sx, sy } (motion.js squash(), about the feet),
- *   s (scale), flip (face left; the light stays top right)
- *   who:    the critter's world id (world.js entity id; a group's members "<id>-1", "<id>-2"…),
- *           written as data-who so try.mjs can check that no critter is drawn twice at once or
- *           vanishes mid-frame (EX3-90). Its look (body, outfit, wear, wearColor; lookKey) is
- *           written as data-look so try.mjs can check it is the same in every frame (EX3-107).
- *           A view other than front is written as data-view, so a face check can skip a back
+ * A critter (critter D, VISUAL_SYSTEM_6 §3), feet at (x, y).
+ *   body:   orange (hero), green, ink (default), white; paper and old bodies draw white
+ *   view:   front | back (no eyes); mood: a MOODS name (lids, pupils, tilt)
+ *   arms:   an ARM_POSES name or { l, r } hand targets (rig-solved); legs: preset or { l, r }
+ *   role:   a wear.js ROLES name, or head / hand / bowtie / headTone; hand: null puts it down
+ *   outfit, wear: translated to a role piece or nothing (never drawn); hold: { l, r, both }
+ *   look, lid, pr, tilt, sq, squash, s, flip; who: data-who / data-look for try.mjs
  * @param {number} x
  * @param {number} y
  * @param {Record<string, any>} [opts]
  */
 export function critter(x, y, opts = {}) {
   const o = { ...moodFace(opts.mood), ...opts };
-  const { body = 'ink', s = 1, look = [0, 0], lid = 0, lidTilt = 0, mouth = null, brows = null, tilt = 0, legs = 'stand', flip = false, sq = 0, squash = null, pr = 0.5, wear = [], wearColor = null, outfit = null, who = null, hold = null } = o;
+  const { body = 'ink', s = 1, tilt = 0, legs = 'stand', flip = false, sq = 0, squash = null, wear = [], wearColor = null, outfit = null, who = null, hold = null } = o;
   const dark = isDark();
   const L = flip ? -1 : 1;
   const D = defsBag();
-  const B = bodyOf(body);
-  const { view, k } = viewOf(o);
+  const bname = bodyName(body);
+  const color = BODY_COLORS[bname];
+  const { view } = viewOf(o);
   const back = view === 'back';
-  const face = faceInk(body);
-  const C = { D, L, dark, bodyClip: D.clip(el('path', { d: BODY_D })), fill: B.base };
-  const fit = isNoOutfit(outfit) ? null : outfitLayers(C, outfit, { face });
-  const O = fit?.o ?? null;
-  const wearList = [].concat(wear ?? []);
-  const wctx = wearList.length ? wearContext(body, wearColor, D) : null;
+  const W = wearOf(opts);
+  const C = { D, L, dark, bodyClip: null, fill: color };
 
+  // the D mood, with main's explicit face options on top (a blink, a gaze, a pupil size); an
+  // acting pose (actingAt) or an added mood draws from its face vector
+  const m = { ...D_MOODS[dMood(opts.mood)] };
+  const F = opts.face ?? (isX(m) ? faceOf(dMood(opts.mood)) : null);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  if (opts.lid != null) {
+    const lv = Number(opts.lid) || 0;
+    const t = (Number(opts.lidTilt) || 0) * 0.02;
+    m.lid = [clamp(Math.max(m.lid[0], lv) - t), clamp(Math.max(m.lid[1], lv) + t)];
+  }
+  if (opts.pr != null) m.small = Number(opts.pr) < 0.42;
+  const lk = opts.look;
+  const gaze = Array.isArray(lk) && (lk[0] || lk[1]) ? [lk[0] * 6, lk[1] * 5] : null;
+  const dTilt = F ? r2(F.tilt) : m.tilt;
+  const lift = F ? F.lift * 8 : 0;
+
+  // legs: D's two ink legs, swung about their tops (walk())
   const LEGS = { stand: [0, 0], kick: [-20, 28], hop: [8, -8], sit: [-78, -70], tiptoe: [0, 0] };
-  const legRot = typeof legs === 'object' ? [legs.l, legs.r] : LEGS[legs] ?? LEGS.stand;
-  const legLen = legs === 'tiptoe' ? 44 : 34;
+  const legRot = typeof legs === 'object' ? [legs.l ?? 0, legs.r ?? 0] : LEGS[legs] ?? LEGS.stand;
+  const legH = (legs === 'tiptoe' ? 42 : 32) + lift;
+  const legSvg = [[68, legRot[0]], [112, legRot[1]]].map(([lx, rot]) => {
+    const r = `<rect x="${lx}" y="158" width="20" height="${legH}" rx="10" fill="${INK}"></rect>`;
+    return rot ? `<g transform="rotate(${r2(rot)} ${lx + 10} 160)">${r}</g>` : r;
+  }).join('');
+  const eyew = color === WHITE ? GREY : WHITE;
+  // a white body keeps its thin ink edge; an ink body on the dark stage gets a thin paper one so it
+  // never vanishes (D has no rim light or glow)
+  const edge = color === WHITE ? ` stroke="${INK}" stroke-width="3"` : dark && bname === 'ink' ? ` stroke="${K('ink-lit')}" stroke-width="4"` : '';
+  const tileOpen = `<g transform="${TILE_TF}"><g transform="rotate(${dTilt} 100 110)">`;
+  const bodyTile = g({ 'data-part': 'body' }, tileOpen + legSvg + BODY_TILE(color, edge) + '</g></g>');
+  const faceTile = [];
+  if (!back) {
+    D_EYES.forEach(([cx, cy, side], i) => faceTile.push(F ? dEyeV(cx, cy, side, applyLid(F, opts), color, eyew, gaze) : dEye(cx, cy, side, m, color, m.es[i], { eyew, gaze })));
+    if (W.bowtie) faceTile.push(bowtieSvg(bname));
+  }
+  if (W.head && !(back && W.head === 'glasses')) faceTile.push(headSvg(W.head, bname, W.headTone));
+  const face = faceTile.length ? g({ 'data-part': 'face' }, tileOpen + faceTile.join('') + '</g></g>') : '';
+
+  // the arms main's rig solves; each shoulder rides the body's D tilt so the arm stays attached
   const sol = solveArms(o);
-  const armPaths = sol.paths;
   const front = sol.front;
-  const arm = (side, i, over) => {
-    const q = sol.quads[i];
-    // the sleeve stops short of the face only on an arm that crosses in front of the body
-    const sl = O ? drawSleeve(C, O, q, { front: over && sol.front.includes(side) }) : { svg: '' };
-    const after = O ? drawArmItems(C, O, side, q) : '';
-    return drawArm(C, q, { over, body, sleeve: sl.svg, after });
+  const pivot = tl([100, 110]);
+  // D's shoulders sit below the eyes (tile y 110–122): the drawn arm starts SHOULDER_DROP below the
+  // rig's shoulder (the rig, the hands and everything they hold are unchanged)
+  const shoulderOf = (q) => {
+    const p = rot([q[0] - pivot[0], q[1] + SHOULDER_DROP - pivot[1]], dTilt);
+    return [p[0] + pivot[0], p[1] + pivot[1]];
   };
-  // in a back view a hand in front of the belly is hidden behind the body, with what it holds
+  const arm = (side, i) => g({ 'data-part': `arm-${side}` }, drawArm(sol.quads[i], shoulderOf(sol.quads[i])));
   const holdSides = hold ? ['both', 'l', 'r'].filter((sd) => hold[sd]) : [];
-  // (a thing carried in both hands, or a hand within the body's width, is in front of it)
   const inside = (i) => Math.abs(sol.hands[i][0]) < 62;
   const hidden = (sd) => back && (sd === 'both' || front.includes(sd) || inside(sd === 'l' ? 0 : 1));
   const holdsOf = (pick) => {
     const hs = holdSides.filter(pick);
     return hs.length ? drawHolds(C, sol, Object.fromEntries(hs.map((sd) => [sd, hold[sd]])), { tilt, L, body }) : '';
   };
-  const WEAR_HATS = ['cap', 'tophat', 'chef', 'gradcap'];
+  // the wear.js hand prop, in the solved right hand (in the tile's units, GRIP applied)
+  const handProp = W.hand ? g({ 'data-held': W.hand, transform: TILE_TF }, heldPropSvg(W.hand, bname, null, lt(sol.hands[1]))) : '';
 
-  // The stack, back to front (4.2, Lucas's layering notes): what is behind the critter; the body;
-  // the body's own light (its rims, on the body only); the outfit's torso; the face as one group
-  // (eyes, brows, mouth, head garment, glasses: nothing passes between a face and its light);
-  // the arms, sleeved, always over the torso (never flickering under it as the hands move); what
-  // the hands hold. A deliberate reach in front of the face is the rig's call (cover). A back view
-  // keeps its own order: what the critter holds in front of it is hidden behind its body.
   const under = [];
   const over = [];
-  if (wctx && !back) under.push(...wearBehind(wearList, wctx));
-  if (fit && !back) under.push(fit.behind);
   if (back) {
-    // seen from behind, what is in front of the critter is furthest: before its legs and body
-    ['l', 'r'].forEach((side, i) => { if (front.includes(side)) under.push(arm(side, i, false)); });
-    if (O && front.length) under.push(drawHeld(C, O, { l: armPaths[0].slice(2), r: armPaths[1].slice(2) }));
+    ['l', 'r'].forEach((side, i) => { if (front.includes(side)) under.push(arm(side, i)); });
     under.push(holdsOf(hidden));
+    if (W.hand) under.push(handProp);
   }
-  under.push(drawLegs(C, legRot, legLen, O));
-  if (back) ['l', 'r'].forEach((side, i) => { if (!front.includes(side)) under.push(arm(side, i, false)); });
-  // the body and its light: the stage's rim filter and the shot's rims light the body alone
-  const bodySvg = g({ 'data-part': 'body', filter: dark ? rimFilter(D, 1, L) : undefined }, drawBody(C, body, { view, k }));
-  const rims = bodyRims(C, o.light?.rims ?? [], { s, tilt, L, sq, squash });
+  const bodySvg = bodyTile;
   if (back) {
-    over.push(lostProfile(C, body, k, { brows, face, D }));
-    if (fit) over.push(g({ 'data-part': 'outfit' }, outfitBack(C, O)));
-    if (wctx) over.push(...wearBehind(wearList, wctx), ...wearFront(wearList.filter((w) => WEAR_HATS.includes(w)), wctx, BY));
+    ['l', 'r'].forEach((side, i) => { if (!front.includes(side)) over.push(arm(side, i)); });
+    over.push(face);
   } else {
-    if (fit) over.push(g({ 'data-part': 'outfit' }, fit.front));
-    const fp = [];
-    if (fit) fp.push(fit.head);
-    fp.push(eyes(0, BY + 44, { gap: 50, r: 16, look, lid, lidTilt, pr, lash: face, body, lidColor: B.base, D, L }));
-    fp.push(browPaths(brows, BY + 44, 50, face));
-    fp.push(mouthPath(mouth, look[0] * 4, BY + 82, face, D));
-    if (fit) fp.push(fit.glasses);
-    if (wctx) fp.push(...wearFront(wearList, wctx, BY));
-    over.push(g({ 'data-part': 'face' }, fp));
-    // both arms over the torso, always: the shadow and lit edge an arm casts on the body still
-    // follow whether its hand is in front of the body
-    ['l', 'r'].forEach((side, i) => over.push(g({ 'data-part': `arm-${side}` }, arm(side, i, front.includes(side) || inside(i)))));
-  }
-  if (O && !(back && front.length)) {
-    const hands = { l: armPaths[0].slice(2), r: armPaths[1].slice(2) };
-    over.push(drawHeld(C, O, hands));
+    over.push(face);
+    ['l', 'r'].forEach((side, i) => over.push(arm(side, i)));
+    if (W.hand) over.push(handProp);
   }
   if (hold) over.push(holdsOf((sd) => !hidden(sd)));
+  const rims = bodyRims(C, o.light?.rims ?? [], { s, tilt, L, sq, squash });
 
   const qx = squash?.sx ?? 1;
   const qy = squash?.sy ?? 1;
   const sx = s * (1 + sq) * qx * L;
   const sy = s * (1 - sq) * qy;
   const shadow = g({ transform: `scale(${(Math.abs(sx)).toFixed(4)} ${s.toFixed(4)})` }, contactShadow(D, dark));
-  // the shot's light (o.light.wrap, lens.js: how much light reaches it) wraps the painted layers
-  // but never the rims, which are light themselves
-  const wrap = typeof o.light?.wrap === 'function' ? o.light.wrap : (x) => x;
+  const wrap = typeof o.light?.wrap === 'function' ? o.light.wrap : (v) => v;
   const figure = g({ transform: `scale(${sx.toFixed(4)} ${sy.toFixed(4)})` }, rims ? [wrap(under.join('') + bodySvg), rims, wrap(over.join(''))] : [wrap(under.join('') + bodySvg + over.join(''))]);
-  const lit = g({ transform: `rotate(${tilt.toFixed(2)})` }, figure);
-  const tag = who ? { 'data-who': String(who), 'data-look': lookKey({ body, wear: wearList, wearColor, outfit }) } : {};
+  const hopT = F ? `translate(${r2(F.dx * DK)} ${r2(-(F.hop + lift) * DK)}) ` : '';
+  const lit = g({ transform: `${hopT}rotate(${tilt.toFixed(2)})` }, figure);
+  const tag = who ? { 'data-who': String(who), 'data-look': lookKey({ body, wear: [].concat(wear ?? []), wearColor, outfit, role: opts.role, head: opts.head, bowtie: opts.bowtie, headTone: opts.headTone }) } : {};
+  tag['data-critter'] = bname;
   if (view !== 'front') tag['data-view'] = view;
-  // try.mjs reads the pose's rig problems here (the SVG alone cannot say where a hand was aimed).
+  if (who) {
+    // the hands on screen and what they hold, for the checks (try.mjs handProblems)
+    const onScreen = toScreen(x, y, o);
+    tag['data-hands'] = sol.hands.map((h) => onScreen(h).map(r2).join(' ')).join(' ');
+    if (holdSides.length) tag['data-holds'] = holdSides.join(' ');
+  }
   if (who) {
     const rig = [...new Set(riggedProblems(opts).map((p) => p.code).filter((c) => RIG_DRAWN_CODES.includes(c)))];
     if (rig.length) tag['data-rig'] = rig.join(' ');
@@ -675,9 +736,8 @@ export function critter(x, y, opts = {}) {
 }
 
 /**
- * The rims of light on a critter's body (4.2): bands just inside and a hair outside its outline on the
- * side each light comes from, in the critter's own frame, drawn right after the body so the outfit,
- * the face and the arms are painted over them (light belongs to the body, under the clothes).
+ * Light rims on the body: bands just inside its outline on the side
+ * each light comes from, drawn right after the body so the face and the arms are painted over them.
  * `rims` [{ side: [x, y] (screen direction toward the light), color (hex), level 0..1, width (screen
  * px) }]. Returns '' when there are none.
  */
@@ -693,11 +753,11 @@ export function bodyRims(C, rims, { s = 1, tilt = 0, L = 1, sq = 0, squash = nul
     const ry = (r.side[0] / l) * Math.sin(a) + (r.side[1] / l) * Math.cos(a);
     const dx = rx * Math.sign(sx);
     const dy = ry * Math.sign(sy);
-    const c = [0, -86];
+    const c = [0, -78];
     const col = r.color ?? K('yellow-lit');
     const lv = Math.max(0, Math.min(1, r.level));
     const key = `${r2(dx)}|${r2(dy)}|${col}|${r2(lv)}`;
-    const id = C.D.raw('rimg', key, (n) => el('linearGradient', { id: n, gradientUnits: 'userSpaceOnUse', x1: r2(c[0] - dx * 66), y1: r2(c[1] - dy * 56), x2: r2(c[0] + dx * 66), y2: r2(c[1] + dy * 56) }, [
+    const id = C.D.raw('rimg', key, (n) => el('linearGradient', { id: n, gradientUnits: 'userSpaceOnUse', x1: r2(c[0] - dx * 69), y1: r2(c[1] - dy * 64), x2: r2(c[0] + dx * 69), y2: r2(c[1] + dy * 64) }, [
       el('stop', { offset: 0, 'stop-color': col, 'stop-opacity': 0 }),
       el('stop', { offset: 0.55, 'stop-color': col, 'stop-opacity': 0 }),
       el('stop', { offset: 0.85, 'stop-color': col, 'stop-opacity': r2(lv * 0.55) }),
@@ -707,23 +767,6 @@ export function bodyRims(C, rims, { s = 1, tilt = 0, L = 1, sq = 0, squash = nul
   }));
 }
 
-/** The lost profile of a critter turned away (a back view): the outer edge of its near eye and
- *  brow just inside the silhouette on side k, as an animator draws a head seen from behind, so
- *  the turn reads as a head turned away and not a blank. */
-function lostProfile(C, body, k, { brows = null, face, D }) {
-  const B = bodyOf(body);
-  const ex = 58 * k;
-  const ey = BY + 44;
-  const clip = C.bodyClip;
-  const eye = g({ 'clip-path': clip }, [
-    el('ellipse', { cx: r2(ex + 2 * k), cy: r2(ey + 1.5), rx: 8, ry: 16.5, fill: B.dark, opacity: body === 'ink' ? 0.55 : 0.3, filter: D.blur(1.6) }),
-    el('ellipse', { cx: r2(ex + 3 * k), cy: ey, rx: 5.5, ry: 15, fill: K('paper-lit') }),
-    el('ellipse', { cx: r2(ex + 5 * k), cy: r2(ey + 1), rx: 2.6, ry: 7, fill: K('ink') }),
-  ]);
-  const by = ey - 27 + (brows === 'worried' || brows === 'high' ? -6 : brows === 'angry' ? 3 : 0);
-  const brow = el('path', { d: `M ${r2(ex - 5 * k)} ${r2(by + 1)} L ${r2(ex + 7 * k)} ${r2(by - 1)}`, fill: 'none', stroke: face, 'stroke-width': 5, 'stroke-linecap': 'round', 'clip-path': clip });
-  return g({ 'data-face': 'lost-profile' }, eye + brow);
-}
 
 /**
  * Where a critter's hands are on screen, for the same (x, y, options) as critter(): draw a held
@@ -790,42 +833,27 @@ export const above = (x, y, d, tilt) => {
   return [x + d * Math.sin(a), y - d * Math.cos(a)];
 };
 
-/** For tests and sheets: an outfit's silhouettes on a critter at the origin at scale 1
- *  ({ part, pts } fills, { part, line, w } strokes), sleeves included for the given arms. */
-export function outfitShapes(outfit, { arms = 'down' } = {}) {
-  if (isNoOutfit(outfit)) return [];
-  const D = defsBag();
-  const C = { D, L: 1, dark: false, bodyClip: null, fill: BODY.ink.base };
-  const fit = outfitLayers(C, outfit);
-  const pose = typeof arms === 'object' ? null : ARM_POSES[arms] ?? ARM_POSES.down;
-  const armPaths = pose ? pose.arms : [[-60, -100, arms.l[0], arms.l[1]], [60, -100, arms.r[0], arms.r[1]]];
-  const front = pose ? pose.front ?? [] : [];
-  const shapes = [...fit.shapes];
-  ['l', 'r'].forEach((side, i) => {
-    const sl = drawSleeve(C, fit.o, armQuad(armPaths[i]), { front: front.includes(side) });
-    if (sl.shape && front.includes(side)) shapes.push(sl.shape);
-  });
-  return shapes;
+/** For tests and sheets: an outfit's silhouettes on a critter. Critter D draws no garment
+ *  (VISUAL_SYSTEM_6 §3: an outfit becomes a role or nothing), so there are none: []. */
+export function outfitShapes(_outfit, _o = {}) {
+  return [];
 }
 export { ON_EYES };
 
 /**
- * The palette colors an outfit draws on a critter: garments, sleeves, trousers, shoes, head,
- * items (the arm and held ones too) and its custom garment. A Set of palette names (metal is not
- * one); empty for no outfit. try.mjs uses it to keep orange the hero's body alone (EX3-139).
+ * The palette colors an outfit draws on a critter. Critter D draws no garment (§3): an outfit is
+ * translated to wear.js pieces (wearOf), which are ink, white or their job colour and never orange.
+ * So: the colours of the pieces it translates to (as palette names), empty for none.
  * @param {object | null | 'none'} outfit
  * @returns {Set<string>}
  */
 export function outfitColors(outfit) {
-  return colorsOf(outfit, {
-    draw: (C, o) => {
-      const q = armQuad(ARM_POSES.down.arms[0]);
-      drawSleeve(C, o, q);
-      drawArmItems(C, o, 'l', q);
-      drawLeg(C, o, -36.5, 34);
-      drawHeld(C, o, { l: [-78, -52], r: [78, -52] });
-    },
-  });
+  const out = new Set();
+  if (isNoOutfit(outfit)) return out;
+  const W = wearOf({ outfit });
+  if (W.head === 'hardhat') out.add('mustard');
+  if (W.head || W.bowtie) out.add('ink');
+  return out;
 }
 
 // ── The rig (4.1): pose from intent ───────────────────────────────────────────────────────
@@ -949,8 +977,14 @@ export function solveArm(side, target, { shoulder = null, zones = FACE_KEEPOUT }
  * kept out of the face (unless `cover: true`, the deliberate hands-to-face) and the arms solved.
  * @returns {{ rigged: boolean, paths: number[][], quads: number[][], hands: number[][], elbows: number[][], front: string[], requested: number[][], clamped: boolean[] }}
  */
-export function solveArms(opts = {}) {
-  const arms = opts.arms ?? 'down';
+function solveArmsRig(opts = {}) {
+  let arms = opts.arms ?? 'down';
+  // a held wear.js hand prop (§4) with no arms given: the right hand takes D's pose for that prop
+  if (opts.arms == null && (opts.role || opts.hand)) {
+    let W = null;
+    try { W = wearOf(opts); } catch { W = null; }
+    if (W?.hand) arms = { l: ARM_POSES.down.arms[0].slice(2), r: tl(handPoint(HAND_POSE[W.hand], 1)) };
+  }
   const pose = typeof arms === 'string' ? ARM_POSES[arms] ?? ARM_POSES.down : null;
   if (pose && !opts.rig) {
     const quads = pose.arms.map(armQuad);
@@ -988,6 +1022,71 @@ export function solveArms(opts = {}) {
     requested: req,
     clamped: sol.map((a) => a.clamped),
   };
+}
+
+/** Critter D's stub: the longest a drawn arm runs from its shoulder to the mitten (local px; D's
+ *  longest pose, `up`, is ~37 tile units). The rig decides the direction; D decides the length. */
+export const D_STUB = 34;
+/**
+ * The arms for any critter() options: main's rig solves the intent (named ARM_POSES draw as
+ * before, hand targets { l, r } are kept off the face), then each arm is clamped to critter D's
+ * stub (D_STUB from the drawn shoulder, SHOULDER_DROP below the rig's) along the solved direction,
+ * so the hands, grips and held props are where D's mittens are drawn.
+ * @returns {{ rigged: boolean, paths: number[][], quads: number[][], hands: number[][], elbows: number[][], front: string[], requested: number[][], clamped: boolean[] }}
+ */
+export function solveArms(opts = {}) {
+  const sol = solveArmsRig(opts);
+  const cover = opts.cover ?? opts.arms === 'cover';
+  let zones = FACE_KEEPOUT;
+  try { const vw = viewOf(opts); zones = faceKeepoutFor(vw.view, vw.k); } catch { zones = FACE_KEEPOUT; }
+  const quads = [];
+  const hands = [];
+  const elbows = [];
+  const paths = [];
+  sol.quads.forEach((q, i) => {
+    const S = [q[0], q[1] + SHOULDER_DROP];
+    let H = [q[4], q[5]];
+    const d = dist(S, H);
+    // a hand in front of the body (D's chin / hold reach across it) keeps the rig's spot below the mouth
+    const across = sol.front.includes(i === 0 ? 'l' : 'r') || Math.abs(H[0]) < 62;
+    if (d > D_STUB && !across) {
+      H = [S[0] + ((H[0] - S[0]) * D_STUB) / d, S[1] + ((H[1] - S[1]) * D_STUB) / d];
+      // shortened onto the face: swing it outward round the drawn shoulder until it is clear
+      const side = i === 0 ? 'l' : 'r';
+      let def = null;
+      try { def = propOf(opts.hold?.[side]); } catch { def = null; }
+      const blocked = (P) => handOnFace(P, RIG.hand + 0.5, zones).length > 0
+        || (def && propOverFace(propPlacement({ hands: i === 0 ? [P, sol.hands[1]] : [sol.hands[0], P], elbows: [S, S], paths: [[S[0], S[1]], [S[0], S[1]]] }, side, def, { tilt: opts.tilt ?? 0, L: opts.flip ? -1 : 1 }), zones).length > 0);
+      if (!cover && blocked(H)) {
+        const base = Math.atan2(H[1] - S[1], H[0] - S[0]);
+        const away = i === 0 ? -1 : 1;
+        for (let a = 3; a <= 180; a += 3) {
+          const t = base + (((Math.cos(base) * away >= 0 ? 1 : -1) * a * Math.PI) / 180) * (H[1] < S[1] ? -away : away);
+          const P = [S[0] + Math.cos(t) * D_STUB, S[1] + Math.sin(t) * D_STUB];
+          if (!blocked(P)) { H = P; break; }
+        }
+      }
+    }
+    if (across || d <= D_STUB) {
+      // within D's reach (or across the body): the rig's own arm, unchanged
+      quads.push(q);
+      hands.push([q[4], q[5]]);
+      elbows.push(sol.elbows[i]);
+      paths.push(sol.paths[i]);
+      return;
+    }
+    const out = i === 0 ? -1 : 1;
+    const len = Math.max(1, dist(S, H));
+    // a chubby bend outward, like D's own arms
+    const n = [-(H[1] - S[1]) / len, (H[0] - S[0]) / len];
+    const k = n[0] * out >= 0 ? 1 : -1;
+    const C = [(S[0] + H[0]) / 2 + n[0] * k * len * 0.28, (S[1] + H[1]) / 2 + n[1] * k * len * 0.28];
+    quads.push([q[0], q[1], C[0], C[1], H[0], H[1]]);
+    hands.push(H);
+    elbows.push(quadAt([S[0], S[1], C[0], C[1], H[0], H[1]], 0.5));
+    paths.push([q[0], q[1], H[0], H[1]]);
+  });
+  return { ...sol, quads, hands, elbows, paths };
 }
 
 // ── Held props ────────────────────────────────────────────────────────────────────────────
@@ -1269,6 +1368,19 @@ export function gripAt(x, y, opts = {}, side = 'r') {
  */
 export function heldBoxes(x, y, opts = {}) {
   const out = {};
+  let W = null;
+  try { W = wearOf(opts); } catch { W = null; }
+  if (W?.hand && !opts.hold?.r) {
+    // the wear.js hand prop in the right hand (§4)
+    const sol = solveArms(opts);
+    const at = toScreen(x, y, opts);
+    const [bx0, by0, bx1, by1] = heldPropBox(W.hand, null, lt(sol.hands[1]));
+    const pts = [[bx0, by0], [bx1, by0], [bx1, by1], [bx0, by1]].map((p) => at(tl(p)));
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    const box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    out.r = { box, at: [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], kind: W.hand };
+  }
   if (!opts.hold) return out;
   const sol = solveArms(opts);
   const L = opts.flip ? -1 : 1;
@@ -1353,7 +1465,8 @@ export function act(intent = {}, frame = null) {
     const [rx, ry] = rot([p[0] - frame.x, p[1] - frame.y], -tilt);
     return [rx / (s * L), ry / s];
   };
-  const G = GESTURES[I.gesture] ?? (ARM_POSES[I.gesture] ? { l: ARM_POSES[I.gesture].arms[0].slice(2), r: ARM_POSES[I.gesture].arms[1].slice(2), cover: I.gesture === 'cover' } : GESTURES.calm);
+  const AP = I.acting ?? null;
+  const G = AP && I.gesture === undefined ? { l: AP.arms.l, r: AP.arms.r, sq: AP.sq } : GESTURES[I.gesture] ?? (ARM_POSES[I.gesture] ? { l: ARM_POSES[I.gesture].arms[0].slice(2), r: ARM_POSES[I.gesture].arms[1].slice(2), cover: I.gesture === 'cover' } : GESTURES.calm);
   const effort = clampN(I.effort ?? 0.4, 0, 1);
   const hold = I.hold ? { ...I.hold } : null;
   const holds = (side) => !!(hold && (hold[side] || hold.both));
@@ -1480,7 +1593,7 @@ export function act(intent = {}, frame = null) {
   // stretch up to recoil or to look high; settle under a carried load
   const up = look && lookV ? clampN(-lookV[1] - 0.6, 0, 0.4) * 0.08 : 0;
   const sq = (G.sq ?? 0) + (T.recoil ? -0.04 : 0) - up + (hold?.both ? 0.03 * effort : 0);
-  const mood = I.mood ?? G.mood ?? (T.recoil ? 'surprised' : 'neutral');
+  const mood = I.mood ?? AP?.mood ?? G.mood ?? (T.recoil ? 'surprised' : 'neutral');
   const res = {
     arms: { l: hands.l.map(r2), r: hands.r.map(r2) },
     rig: true,
@@ -1495,6 +1608,7 @@ export function act(intent = {}, frame = null) {
   };
   if (moving.length) res.reaching = moving;
   if (lookV) res.look = lookV;
+  if (AP && !I.mood) res.face = AP.face;
   return res;
 }
 
@@ -1527,8 +1641,39 @@ export function blendRig(A, B, u, ug = u) {
     // mid-move, a hand that travels to or from a reach or a point (a pick-up, a put-down) is
     // reaching: riggedProblems lets it pass the mouth line in front of the body
     reaching: [...new Set([...(A.reaching ?? []), ...(B.reaching ?? [])])],
+    ...(A.face && B.face ? { face: mixFace(A.face, B.face, u) } : {}),
   };
 }
+const mixFace = (A, B, u) => {
+  const o = { ...B };
+  for (const k of FACE_VEC) o[k] = mixN(A[k], B[k], u);
+  o.aL = A.aL.map((p, i) => mixP(p, B.aL[i], u));
+  o.aR = A.aR.map((p, i) => mixP(p, B.aR[i], u));
+  return o;
+};
+
+/**
+ * Critter D acting (acting.js): the resolved pose at time t of a performance, beats
+ * [{ at, emotion, hold?, intensity?, blend?, look?, pose?, accent?, state? }] (or { beats, seed }).
+ * A feeling holds until the next beat; changes blend; accents play once; a seeded life layer runs under it.
+ * Returns critter() options (face, arms, rig, legs, sq, mood) plus { face, armPts, accents }; act({ acting }) takes it too.
+ * @param {number} t
+ * @param {Array<Record<string, any>> | { beats: Array<Record<string, any>>, seed?: string|number }} track
+ * @param {{ seed?: string|number, life?: boolean }} [opts]
+ */
+export function actingAt(t, track, opts = {}) {
+  const P = ACT.actingAt(t, track, opts);
+  // the rig's hand target: D's stub hand, kept within D_STUB of the rig's drawn shoulder
+  const hand = (pts, k) => {
+    const H = tl(armQuadTile(pts)[2]);
+    const S = [k * RIG.shoulder[0], RIG.shoulder[1] + SHOULDER_DROP];
+    const d = dist(S, H);
+    return (d > D_STUB ? [S[0] + ((H[0] - S[0]) * D_STUB) / d, S[1] + ((H[1] - S[1]) * D_STUB) / d] : H).map(r2);
+  };
+  return { ...P, arms: { l: hand(P.face.aL, -1), r: hand(P.face.aR, 1) }, rig: true, legs: { l: r2(P.face.legL), r: r2(P.face.legR) }, sq: r2(P.face.sq) };
+}
+/** Emote spam in a track (acting.js): [{ code, at, detail }] for short holds, too many feeling changes, accents over the rate cap or cooldown, unknown names. */
+export const actingProblems = (track) => ACT.actingProblems(track);
 
 /**
  * The pose at time t from time-keyed intents: [{ at, blend?, ...intent }] (seconds; blend is
@@ -1565,6 +1710,151 @@ export function actAt(t, keys, frame = null) {
   return out;
 }
 
+// ── Hands on things (world cm): reach, place, write ─────────────────────────────────────────
+// A thing a critter places travels in its hand and is let go at its spot; marks a critter writes
+// grow under its tool's tip. One spec drives both the acting keys and the thing (or the marks),
+// so neither ever moves on its own. Coordinates are world cm [x, y, z] (feet on z 0), as a world
+// actor's keys take them; "in front" is −y, toward a front camera, and the right hand is on +x.
+const r1 = (v) => Math.round(v * 10) / 10;
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const lerp3 = (a, b, u) => [mixN(a[0], b[0], u), mixN(a[1], b[1], u), mixN(a[2], b[2], u)];
+const is3 = (p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite);
+/** D's reach from its feet, world cm. `side` from the centre line, `up` above the floor, `depth` in front or behind. */
+export const REACH_CM = Object.freeze({
+  side: r1((RIG.shoulder[0] + D_STUB + RIG.hand) / PX_PER_CM),
+  up: r1((-RIG.shoulder[1] - SHOULDER_DROP + D_STUB + RIG.hand) / PX_PER_CM),
+  depth: 35,
+});
+
+/**
+ * Why a critter with its feet at `standAt` cannot touch `target` ([] when it can). A hand sent past
+ * its reach stops short, and whatever it was meant to touch moves alone.
+ * @param {number[]} standAt @param {number[]} target @returns {string[]}
+ */
+export function reachProblems(standAt, target) {
+  if (!is3(standAt) || !is3(target)) return ['reach: standAt and the target are world points [x, y, z] in cm'];
+  const out = [];
+  const side = Math.abs(target[0] - standAt[0]);
+  const depth = Math.abs(target[1] - standAt[1]);
+  const up = target[2] - standAt[2];
+  const at = `[${target.map(r1).join(', ')}]`;
+  if (side > REACH_CM.side) out.push(`${at} is ${r1(side)} cm to the side of the critter's feet; its hand reaches ${REACH_CM.side} cm: stand it at reachSpot(target)`);
+  if (depth > REACH_CM.depth) out.push(`${at} is ${r1(depth)} cm in front of or behind the critter; its hand reaches ${REACH_CM.depth} cm: stand it at reachSpot(target)`);
+  if (up > REACH_CM.up) out.push(`${at} is ${r1(up)} cm up; the critter's hand reaches ${REACH_CM.up} cm: lower the spot, or stand the critter on something`);
+  if (up < 0) out.push(`${at} is below the critter's feet`);
+  return out;
+}
+
+/** Where a critter's feet go to put its `hand` on `target`. Beside it on the hand's side, `gap` cm in front (−y). */
+export function reachSpot(target, { hand = 'r', gap = 12 } = {}) {
+  if (!is3(target)) throw new Error('reachSpot: target is a world point [x, y, z] in cm');
+  const k = hand === 'l' ? -1 : 1;
+  return [r1(target[0] - k * REACH_CM.side * 0.45), r1(target[1] - gap), 0];
+}
+
+const needReach = (verb, standAt, target) => {
+  if (!is3(standAt)) throw new Error(`${verb}: standAt (the critter's feet, world cm) is required, so the hand can get there`);
+  const bad = reachProblems(standAt, target);
+  if (bad.length) throw new Error(`${verb}: out of reach: ${bad.join('; ')}`);
+};
+
+/** The furthest point toward `target` a critter at `standAt` can reach (world cm). */
+export function reachToward(standAt, target) {
+  const d = [target[0] - standAt[0], target[1] - standAt[1], target[2] - standAt[2]];
+  // shrink the offset until every axis is inside the reach box (side, depth, up)
+  const lim = [REACH_CM.side, REACH_CM.depth, REACH_CM.up];
+  let k = 1;
+  for (let i = 0; i < 3; i++) if (Math.abs(d[i]) > lim[i] * 0.95) k = Math.min(k, (lim[i] * 0.95) / Math.abs(d[i]));
+  const p = [standAt[0] + d[0] * k, standAt[1] + d[1] * k, Math.max(0, standAt[2] + d[2] * k)];
+  return p.map(r1);
+}
+
+/**
+ * A critter places what it holds at `to`. Within reach, the arm reaches `to` with the thing in the
+ * hand, lets go there at `release`, and comes back. Out of reach (Lucas, 2026-11-17), it tosses:
+ * the arm winds back, swings toward `to`, lets go at the end of its reach, and the thing flies the
+ * rest of the way on an arc and lands at `to`. Draw the thing only from `thingAt(t)` (null while
+ * it is in the hand, where `hold` draws it); never animate it separately.
+ * @param {{ hold: any, to: number[], at: number, dur?: number, hand?: 'l'|'r', standAt: number[], grip?: number[], lookAt?: number[], back?: number, arc?: number }} o
+ *   `hold` the held drawing (a PROPS name or custom); `to` the thing's resting centre, world cm;
+ *   the arm travels for `dur` s from `at`; `grip` the hand's offset from the thing's centre (cm);
+ *   `arc` a toss's peak height above the straight line (cm).
+ * @returns {{ keys: object[], release: number, lands: number, tossed: boolean, held: (t: number) => boolean, thingAt: (t: number) => number[] | null, hand: string }}
+ */
+export function handPlace({ hold, to, at, dur = 0.6, hand = 'r', standAt, grip = [0, 0, 0], lookAt = null, back = 0.45, arc = null } = {}) {
+  if (!hold) throw new Error('handPlace: hold (what the hand carries) is required');
+  if (!is3(to) || !Number.isFinite(at)) throw new Error('handPlace: to (world cm) and at (s) are required');
+  if (!is3(standAt)) throw new Error("handPlace: standAt (the critter's feet, world cm) is required, so the hand can get there");
+  const reach = add3(to, grip);
+  const look = lookAt ?? to;
+  const LET = 0.06;
+  if (!reachProblems(standAt, reach).length) {
+    const release = at + dur + LET / 2;
+    const keys = [
+      { at, blend: dur, hand, reach, hold: { [hand]: hold }, lookAt: look, effort: 0.6 },
+      { at: at + dur, blend: LET, hand, reach, hold: {}, lookAt: look, effort: 0.4 },
+      { at: at + dur + LET + 0.2, blend: back, gesture: 'calm', lookAt: look },
+    ];
+    return { keys, release, lands: release, tossed: false, hand, held: (t) => t < release, thingAt: (t) => (t < release ? null : [...to]) };
+  }
+  // A toss: wind back (away from the target), swing to the end of the reach, let go, fly, land.
+  const tip = reachToward(standAt, reach);
+  const away = [standAt[0] - (tip[0] - standAt[0]) * 0.35, standAt[1] - (tip[1] - standAt[1]) * 0.35, Math.max(standAt[2] + REACH_CM.up * 0.55, 0)];
+  const wind = Math.max(0.18, dur * 0.4);
+  const swing = Math.max(0.14, dur * 0.3);
+  const release = at + wind + swing;
+  const from = add3(tip, grip.map((g) => -g));
+  const dist = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
+  const flight = clampN(dist / 260, 0.25, 0.8);
+  const peak = arc ?? clampN(dist * 0.25, 8, 40);
+  const lands = release + flight;
+  const keys = [
+    { at, blend: wind, hand, reach: away, hold: { [hand]: hold }, lookAt: look, effort: 0.5 },
+    { at: at + wind, blend: swing, hand, reach: tip, hold: { [hand]: hold }, lookAt: look, effort: 0.9 },
+    { at: release, blend: LET, hand, reach: tip, hold: {}, lookAt: look, effort: 0.5 },
+    { at: lands + 0.15, blend: back, gesture: 'calm', lookAt: look },
+  ];
+  const thingAt = (t) => {
+    if (t < release) return null;
+    if (t >= lands) return [...to];
+    const u = (t - release) / flight;
+    const p = lerp3(from, to, u);
+    return [p[0], p[1], p[2] + peak * 4 * u * (1 - u)];
+  };
+  return { keys, release, lands, tossed: true, hand, held: (t) => t < release, thingAt };
+}
+
+/**
+ * A critter writes (or draws) marks from `from` to `to` with a held tool. `u(t)` is how much of the marks is down (0..1, give it to the drawing of the marks), `tipAt(t)`
+ * is the tool's point (a world tool in an insert sits there), and `keys` move the hand with the
+ * tool so its point is on the marks' growing end. Marks never grow with no tool on them.
+ * @param {{ from: number[], to: number[], at: number, dur: number, tool: any, hand?: 'l'|'r', standAt: number[], grip?: number[], approach?: number, strokes?: number }} o
+ *   `tool` the held tool (a PROPS name such as 'pen', or custom); `grip` the hand above the point (cm).
+ */
+export function handWrite({ from, to, at, dur, tool, hand = 'r', standAt, grip = [0, 0, 5], approach = 0.35, strokes = 6 } = {}) {
+  if (!tool) throw new Error('handWrite: tool (the held pen or pencil) is required: marks never appear with no tool');
+  if (!is3(from) || !is3(to) || !Number.isFinite(at) || !(dur > 0)) throw new Error('handWrite: from, to (world cm), at and dur (s) are required');
+  needReach('handWrite', standAt, add3(from, grip));
+  needReach('handWrite', standAt, add3(to, grip));
+  const u = (t) => clampN((t - at) / dur, 0, 1);
+  // the point runs along the line with a small lift between letters
+  const tipAt = (t) => {
+    const k = u(t);
+    const p = lerp3(from, to, k);
+    const bob = k > 0 && k < 1 ? 0.6 * Math.abs(Math.sin(k * Math.PI * strokes)) : 0;
+    return [p[0], p[1], p[2] + bob];
+  };
+  const H = { [hand]: tool };
+  const n = Math.max(2, Math.ceil(dur / 0.1));
+  const keys = [{ at: at - approach, blend: approach, hand, reach: add3(from, grip), hold: H, lookAt: from, effort: 0.3 }];
+  for (let i = 0; i < n; i++) {
+    const tk = at + ((i + 1) * dur) / n;
+    keys.push({ at: at + (i * dur) / n, blend: dur / n, hand, reach: add3(tipAt(tk), grip), hold: H, lookAt: tipAt(tk), effort: 0.3 });
+  }
+  keys.push({ at: at + dur, blend: 0.3, hand, reach: add3(to, [grip[0], grip[1], grip[2] + 6]), hold: H, lookAt: to, effort: 0.3 });
+  return { keys, u, tipAt, writing: (t) => t >= at && t <= at + dur, hand };
+}
+
 // ── Checks ────────────────────────────────────────────────────────────────────────────────
 /**
  * What is wrong with a pose, for checks (pure; no drawing). `state` is critter() options, or
@@ -1585,7 +1875,7 @@ export function riggedProblems(state = {}) {
   const raw = inner ? { ...restState, ...inner } : restState;
   const o = { ...moodFace(raw.mood), ...raw };
   const out = [];
-  if (raw.mood && !MOODS[raw.mood]) out.push({ code: 'unknown-mood', detail: `mood "${raw.mood}" is not one of ${Object.keys(MOODS).join(', ')}` });
+  if (raw.mood && !MOODS[raw.mood] && !D_MOODS[raw.mood]) out.push({ code: 'unknown-mood', detail: `mood "${raw.mood}" is not one of ${Object.keys(MOODS).join(', ')}` });
   if (o.mouth != null && !MOUTHS.includes(o.mouth)) out.push({ code: 'faceless', detail: `mouth "${o.mouth}" is not one of ${MOUTHS.join(', ')}` });
   if (o.brows != null && !BROWS.includes(o.brows)) out.push({ code: 'faceless', detail: `brows "${o.brows}" is not one of ${BROWS.join(', ')}` });
   const sol = solveArms(o);

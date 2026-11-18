@@ -36,6 +36,7 @@ const EDITABLE = new Set<SettingKey>([
   'analogy_model',
   'music_enabled',
   'sfx_enabled',
+  'opener_voice',
 ]);
 
 function errorMessage(error: unknown) {

@@ -247,7 +247,9 @@ test('render drops a set-dressing piece that shows only as an edge sliver (< 15%
   while (x > -600 && !L.edgeSliver(P, piece(x, 'p'))) x -= 1; // slides left until a sliver
   assert.ok(x > -600, 'some position leaves only a sliver in frame');
   const svg = L.render(P, { items: [piece(x, 'sliver'), piece(0, 'whole')] });
-  assert.doesNotMatch(svg, /data-dressing="sliver"/, 'the sliver is dropped');
+  assert.doesNotMatch(svg, /data-dressing="sliver"><rect/, 'the sliver is dropped');
+  // its dressing mark stays (it is on the set, out of frame), so the set-lock check counts it drawn
+  assert.match(svg, /<g data-dressing="sliver" data-culled="sliver"><\/g>/);
   assert.match(svg, /data-dressing="whole"/, 'a piece in frame stays');
   assert.equal(L.edgeSliver(P, piece(0, 'in')), false);
   // a cast item (not set dressing) at the same spot is never dropped

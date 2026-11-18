@@ -1,5 +1,5 @@
 // The hand-off bank (Explainers 4.3): frame 3's calm resting point. The voice says "Let's dive into
-// this in everyday terms."; the card "today's AI Brain Break: <term>" is the focus, and the reel's
+// this in everyday terms."; the card "today's AI Lesson: <term>" is the focus, and the reel's
 // own analogy world leaks in around it (Lucas approved the nine round-3 directions of
 // .explainers-local/4.2-plan/ramps/ramps-r3.mjs). Not a hype ramp: soft sound only, no risers or
 // punches.

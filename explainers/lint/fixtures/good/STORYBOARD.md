@@ -23,7 +23,6 @@ music: none
 - metaphor: a mailbox whose flag pops up the instant a letter lands, so nobody walks out to check it
 - places:
   - lawn — exterior: a curbside lawn at the end of a short gravel drive, the house behind — the carrier delivers and the flag goes up
-- hook: the carrier sprints up the drive, the letter flies into the mailbox, and the flag slams up before the carrier stops
 - hero: carrier — critter
 - steps:
   - something happens at the store — the event fires
@@ -34,15 +33,8 @@ music: none
   - mailbox — a mailbox on a post — stands for your app's webhook URL — prop: mailbox (exact: an American rural curbside mailbox on a post, in a house curb) — beats 1, 4, 5
   - letter — a letter — stands for the webhook message, the event's payload — a thin paper sheet folded in thirds, cheated big so it reads — beats 1, 4, 5, 6
   - flag — the mailbox flag — stands for the notification your app receives — a slab on a hinge — beats 1, 3, 4, 5, 7
-  - carrier — a mail carrier critter — stands for the other app sending the event — a critter in a mail carrier's uniform with a mailbag across the body — beats 1, 4, 5
+  - carrier — a mail carrier critter — stands for the other app sending the event — critter orange, role mail carrier — beats 1, 4, 5
 - states: letters delivered 0 → 1; flag down → up; trips to check 0 the whole time
-
-## Hook
-
-1. the carrier sprints up the drive, the letter flies into the mailbox, and the flag slams up before the carrier stops — clarity 4/5, thumb-stop 4/5
-2. a critter peeks out of the house window at an empty mailbox, again and again — clarity 5/5, thumb-stop 3/5
-3. the flag pops up on its own while the critter sleeps in a chair — clarity 4/5, thumb-stop 3/5
-- pick: 1 — a mail carrier racing to a mailbox reads at a glance, and the flag snapping up on its own makes you ask why
 
 ## Frame 1 — Series opener
 
@@ -52,12 +44,7 @@ music: none
 - status: outline
 - src: compositions/frames/01-opener.html
 - type: hook
-- ground: paper
-- look: world
 - voiceover: "In the next minute, this little mailbox will teach you a tech concept."
-- shots:
-  - medium — the carrier racing to the mailbox — at 0s — angle: low at the drive's edge, the mailbox ahead and the house behind — why: a race to a mailbox reads at once, and the flag going up on its own makes you wonder why — cast: carrier, mailbox, letter — place: lawn
-- scene: The carrier sprints up the drive and the flag slams up mid-stride
 
 ## Frame 2 — Quick definition
 
@@ -88,7 +75,7 @@ music: none
 - voiceover: "Let's dive into this in everyday terms."
 - handoff_parts: mailbox, letter, flag
 - world_sounds: footstep, creak
-- scene: The card "today's AI Brain Break: webhook", the lawn and its mailbox showing around it
+- scene: The card "today's AI Lesson: webhook", the lawn and its mailbox showing around it
 
 ## Frame 4 — Everyday analogy
 
@@ -166,4 +153,4 @@ music: none
 - src: compositions/frames/08-close.html
 - type: branding
 - ground: white
-- scene: White screen; the Helios logo animates in and AI BRAIN BREAK writes itself beneath it, centred together
+- scene: White screen; the Helios logo animates in and AI 101 writes itself beneath it, centred together

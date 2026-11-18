@@ -299,7 +299,7 @@ export function goldenExample(g: GoldenAnalogy): string {
 }
 
 /** The writer's system prompt (analogy-writer-v9: the Lesson line, 2026-11-03). `{EXAMPLES}` is the golden set minus what Jev hid. */
-export const ANALOGY_WRITER_INSTRUCTIONS = `You write the analogy at the heart of a one-minute "AI Brain Break" reel, a simple cartoon/paper animation that teaches one AI or software concept to business owners and curious professionals. Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend.
+export const ANALOGY_WRITER_INSTRUCTIONS = `You write the analogy at the heart of a one-minute "AI 101" reel, a simple cartoon/paper animation that teaches one AI or software concept to business owners and curious professionals. Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend.
 
 What the best analogies have in common:
 - Its name is the whole picture. Two to five words a viewer could repeat, naming something they can see in their head.
@@ -382,7 +382,7 @@ export const GAPS_PER_TOPIC = 3;
 export const GAP_MIN_WORDS = 18;
 export const GAP_MAX_WORDS = 36;
 
-export const GAP_WRITER_INSTRUCTIONS = `You write the curiosity gap for a Helios educational "brain break" reel: a one-minute, 9:16 animated reel that teaches one computer-science, software, or AI concept to a broad audience. The reel opens on a short moment from its analogy; then a sound hit and a cut, and the narrator speaks your line, the reel's first spoken words about the real technology. The term's definition comes right after it; then the analogy plays out, and the reel's payoff answers your question in real terms. The theme brief below defines the audience. It is binding.
+export const GAP_WRITER_INSTRUCTIONS = `You write the curiosity gap for a Helios educational "AI 101" reel: a one-minute, 9:16 animated reel that teaches one computer-science, software, or AI concept to a broad audience. The reel opens on a short moment from its analogy; then a sound hit and a cut, and the narrator speaks your line, the reel's first spoken words about the real technology. The term's definition comes right after it; then the analogy plays out, and the reel's payoff answers your question in real terms. The theme brief below defines the audience. It is binding.
 
 Your goal is engagement. Write the opening question with the most pull for this topic: the one a stranger scrolling past would most want answered, and would stay for, comment on, or send to a friend. A curiosity gap is never confusion: the viewer knows exactly what they are missing, and wants it.
 

@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
   briefOpenerLine,
+  briefOpenerVoice,
   BEAT_SHEET,
   LOOKS,
   BEAT_LOOKS,
@@ -42,6 +43,9 @@ import {
   TRIP_RE,
   visualArc,
   VISUAL_ARC_FIELDS,
+  critterLooks,
+  castLookProblems,
+  CRITTER_BODIES,
 } from '../explainers/lint/lint-storyboard.mjs';
 
 const dir = path.join(process.cwd(), 'explainers', 'lint');
@@ -68,8 +72,8 @@ test('the beat sheet is eight beats of about a minute in the planned order (EX3-
   assert.deepEqual(BEAT_SHEET.map((b) => b.hold), [0.15, 0.15, 0.15, 0.15, 0.15, 0.15, 0.15, null]);
   assert.equal(BEAT_SHEET[7].seconds, 2.5);
   assert.equal(BEAT_SHEET[7].words, null);
-  // A shot list on every spoken frame but code's hand-off and the definition card's (one framing is fine there); no count.
-  assert.deepEqual(BEAT_SHEET.map((b) => b.shots), [1, 1, 0, 1, 0, 1, 1, 0]);
+  // A shot list on every spoken frame but code's opener (hx-6) and hand-off and the definition card's (one framing is fine there); no count.
+  assert.deepEqual(BEAT_SHEET.map((b) => b.shots), [0, 1, 0, 1, 0, 1, 1, 0]);
   assert.deepEqual(BEAT_SHEET.map((b) => b.type), [
     'hook', 'product_intro', 'handoff', 'feature_showcase', 'feature_showcase', 'social_proof', 'benefit_highlight', 'branding',
   ]);
@@ -118,7 +122,6 @@ test('the recipe skeleton passes the structural checks', () => {
 test('a storyboard that breaks the plan reports each rule', () => {
   const { violations } = lintStoryboard({ storyboard: fixture('bad') });
   assert.deepEqual(rules(violations as Violation[]), [
-    'anchor_scene@-', // no hook
     'anchor_scene@-', // no places (4.2)
     'anchor_scene@-', // no steps
     'anchor_scene@-', // a hand is an entity (EX3-77)
@@ -136,8 +139,7 @@ test('a storyboard that breaks the plan reports each rule', () => {
     'hold@1',
     'hold@2',
     'hold@3',
-    'hook@-', // no ## Hook block
-    'look@1', // "scene" is no look
+    'look@1', // the opener is code's and has no look (hx-6)
     'look@2', // no look
     'look@3', // the hand-off is code's card over the world
     'minimum:1@-', // no world frame (a warning)
@@ -296,17 +298,17 @@ test('4.2 every spoken frame declares its look; the pipeline reads it, never the
   assert.deepEqual(LOOKS, ['world', 'mechanism', 'blend']);
   assert.equal(lookOf('blend — the store and the mailbox share the frame'), 'blend');
   assert.equal(lookOf('scene'), '');
-  assert.deepEqual([...frameLooks(fixture('good'))], [[1, 'world'], [2, 'mechanism'], [3, 'world'], [4, 'world'], [5, 'world'], [6, 'mechanism'], [7, 'blend']]);
+  assert.deepEqual([...frameLooks(fixture('good'))], [[1, ''], [2, 'mechanism'], [3, 'world'], [4, 'world'], [5, 'world'], [6, 'mechanism'], [7, 'blend']]);
   const SIX = '- type: social_proof\n- ground: paper\n- look: mechanism';
   assert.deepEqual(rules(lintOf(swapIn(SIX, '- type: social_proof\n- ground: paper'))), ['look@6']);
   assert.deepEqual(rules(lintOf(swapIn(SIX, '- type: social_proof\n- ground: paper\n- look: own'))), ['look@6']);
   // Most beats take any look: a mechanism frame 4 or a world frame 7 is the director's call.
-  assert.deepEqual(BEAT_LOOKS, { 1: ['world', 'blend'], 3: ['world'], 6: ['mechanism', 'blend'] });
+  assert.deepEqual(BEAT_LOOKS, { 3: ['world'], 6: ['mechanism', 'blend'] });
   assert.deepEqual(lintOf(swapIn('- type: feature_showcase\n- ground: paper\n- look: world\n- voiceover: "This mailbox', '- type: feature_showcase\n- ground: paper\n- look: mechanism\n- voiceover: "This mailbox')), []);
-  // Three beats' jobs narrow it: the real technology (6), code's card over the world (3) and the hook through the camera (1).
+  // Two beats' jobs narrow it: the real technology (6) and code's card over the world (3).
   assert.deepEqual(lintOf(swapIn(SIX, '- type: social_proof\n- ground: paper\n- look: world')).map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['look@6:warning']);
-  assert.deepEqual(lintOf(swapIn('- type: hook\n- ground: paper\n- look: world', '- type: hook\n- ground: paper\n- look: mechanism')).map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['look@1:error']);
-  // The close has none.
+  // The opener (hx-6) and the close are code's and have none.
+  assert.deepEqual(lintOf(swapIn('- type: hook\n', '- type: hook\n- look: world\n')).map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['look@1:warning']);
   const close = lintOf(swapIn('- type: branding\n- ground: white', '- type: branding\n- ground: white\n- look: world'));
   assert.deepEqual(close.map((v) => `${v.rule}@${v.frame}:${v.severity}`), ['look@8:warning']);
   // Retired fields are warnings that name what replaced them.
@@ -402,15 +404,17 @@ test('4.3 writing rules: no scene restart, the quick definition, the hand-off, t
   assert.deepEqual(flagged(swapIn('- definition: "A webhook is a letter one app drops', '- definition: "A webhook is a note one app drops')), ['definition@5']);
   assert.deepEqual(flagged(swapIn('- hold: 0.15s', '- hold: 0.6s')), ['hold@1']);
   assert.deepEqual(flagged(swapIn('term: webhook\n', 'term: event stream\n')), ['concept@-', 'definition_term@5', 'quick_definition@2']);
-  assert.deepEqual(flagged(swapIn('## Hook\n', '## Hooks\n')), ['hook@-']);
+  // A leftover ## Hook block (hx-6: no teaser scene) is a warning.
+  assert.deepEqual(flagged(swapIn('## Frame 1 — Series opener', '## Hook\n\n1. a moment\n\n## Frame 1 — Series opener')), ['hook@-']);
   assert.deepEqual(flagged(swapIn('  - carrier — a mail carrier critter — stands for', '  - carrier — a mail carrier man — stands for')), ['anchor_scene@-']);
   assert.deepEqual(flagged(swapIn('- transition_in: cut\n- status: outline\n- src: compositions/frames/04', '- transition_in: zoom-through\n- status: outline\n- src: compositions/frames/04')), ['transition_kind@4']);
   // No "where it breaks" beat (4.3): a frame 5 with no limit is clean.
   assert.deepEqual(flagged(swapIn('It works because the sender raises the flag', 'It works because the sender itself raises the flag')), []);
 });
 
-test('grounds are paper, stage, and white for the close; night and forest are retired (hx-4)', () => {
-  assert.deepEqual(GROUNDS, ['paper', 'stage', 'white']);
+test('grounds are paper, stage, room (hx-6 analogy) and white for the close; night and forest are retired (hx-4)', () => {
+  assert.deepEqual(GROUNDS, ['paper', 'stage', 'white', 'room']);
+  assert.equal(groundProblem('room'), null);
   assert.deepEqual(RETIRED_GROUNDS, { night: 'stage', forest: 'stage' });
   assert.equal(groundProblem('paper'), null);
   assert.equal(groundProblem('Stage'), null);
@@ -430,8 +434,63 @@ test('grounds are paper, stage, and white for the close; night and forest are re
   }
   // Any spoken frame may stand on the stage (4.2: no ground is fixed to a frame number).
   for (const n of [2, 3, 4, 6, 7]) assert.deepEqual(ground(n, 'stage'), [], `frame ${n}`);
+  // The analogy frames stand on the room ground (VISUAL_SYSTEM_6.md § 5).
+  assert.deepEqual(ground(4, 'room'), []);
   assert.deepEqual(ground(4, 'white').map((x) => x.detail), ['only the last frame is white']);
   assert.deepEqual(ground(8, 'paper').map((x) => x.detail), ['the last frame is white']);
+});
+
+/** A stand-in wear.js: the roles these tests use, and wearProblems' put-down rule. */
+const WEAR = {
+  ROLES: { chef: { head: 'toque' }, barista: { hand: 'cup' }, 'mail carrier': { head: 'cap', hand: 'envelope' }, 'office worker': { hand: 'briefcase' } },
+  wearProblems: (w: { hand?: string }, beats: { frame: number; usesHands: boolean; putsDown?: boolean }[]) => {
+    const first = beats.find((b) => b.usesHands);
+    return w.hand && first && !beats.some((b) => b.putsDown && b.frame <= first.frame) ? [`frame ${first.frame} uses the hands while it holds the ${w.hand}`] : [];
+  },
+};
+
+test('critter looks: each critter names a body and a role from the closed list, or bare', () => {
+  const block = [
+    '- hero: barista — critter',
+    '- entities:',
+    '  - barista — the barista — stands for the app — critter: orange body, barista — beats 1, 4',
+    '  - clerk — a clerk — stands for the server — critter: ink body, Office-Worker — beats 4',
+    '  - dog — a dog critter — stands for the cache — critter: green, bare — beats 4',
+    '  - cup — a cup — stands for the request — a mustard paper cup — beats 4',
+  ].join('\n');
+  assert.deepEqual(critterLooks(block, Object.keys(WEAR.ROLES)).map((c: { id: string; body: string | null; role: string | null }) => [c.id, c.body, c.role]), [
+    ['barista', 'orange', 'barista'],
+    ['clerk', 'ink', 'office worker'],
+    ['dog', 'green', 'bare'],
+  ]);
+  assert.deepEqual(CRITTER_BODIES, ['orange', 'green', 'ink', 'white']);
+  const problems = (b: string) => castLookProblems('', b, WEAR).map(([sev, , rule, detail]: [string, number | null, string, string]) => `${sev} ${rule}: ${detail}`);
+  assert.deepEqual(problems(block), []);
+  // no role, no body, a second orange, a hero that is not orange
+  assert.match(problems(block.replace('Office-Worker', 'pirate')).join('|'), /"clerk" names no role: its look names one of chef, barista, mail carrier, office worker, or bare/);
+  assert.match(problems(block.replace('green, bare', 'bare')).join('|'), /"dog" names no body/);
+  assert.match(problems(block.replace('ink body', 'orange body')).join('|'), /2 orange critters \(barista, clerk\): only the hero is orange/);
+  assert.match(problems(block.replace('- hero: barista', '- hero: clerk')).join('|'), /the hero "clerk" is a ink critter: the hero is the one orange critter/);
+  assert.match(problems(block.replace('- hero: barista — critter', '- hero: cup — object')).join('|'), /"barista" is orange, but the hero is an object/);
+  // without a wear kit, the roles are not checked (an older kit)
+  assert.deepEqual(castLookProblems('', block.replace('Office-Worker', 'pirate'), null), []);
+});
+
+test('put-down: a critter holding its role\'s hand prop puts it down before a beat that uses its hands (a warning)', () => {
+  const good = fixture('good');
+  const lint = (sb: string) => (lintStoryboard({ storyboard: sb, wear: WEAR }).violations as Violation[]).filter((v) => v.rule === 'put_down');
+  assert.deepEqual(lint(good), [], 'the carrier never handles anything');
+  const grabs = good.replace('- scene: The mailbox on the lawn; the carrier walks in, the letter drops in, and the flag snaps up', '- scene: The mailbox on the lawn; the carrier walks in and opens the mailbox, the letter drops in, and the flag snaps up');
+  assert.notEqual(grabs, good);
+  const v = lint(grabs);
+  assert.deepEqual(v.map((x) => `${x.frame}:${x.severity}`), ['4:warning']);
+  assert.match(v[0].detail, /"carrier" \(mail carrier, holding its envelope\): frame 4 uses the hands while it holds the envelope; or cast it bare/);
+  // a put-down beat first (an earlier frame, or the same one) clears it
+  const putDown = grabs.replace('- scene: One laptop sends a single envelope to a second laptop, which lights up as it lands', '- scene: One laptop sends a single envelope to a second laptop while the carrier sets its envelope down on the post');
+  assert.deepEqual(lint(putDown), []);
+  assert.deepEqual(lint(grabs.replace('the carrier walks in and opens the mailbox', 'the carrier walks in, puts the envelope down and opens the mailbox')), []);
+  // bare, or a role with no hand prop: nothing to put down
+  assert.deepEqual(lint(grabs.replace('critter orange, role mail carrier', 'critter: orange body, bare')), []);
 });
 
 test('the anchor block names its hero, critter or object; its entities are never people (EX3-110, EX3-77)', () => {
@@ -624,11 +683,9 @@ test('try.mjs: grounds and their aliases, the sizes, and outfits clear of the fa
   assert.match(one({ ...nurse, head: { kind: 'baseball-cap' } })[0], /head\.kind "baseball-cap" must be one of .*drawn once with custom/);
   assert.match(one({ ...nurse, items: ['mailbag'] })[0], /item "mailbag" must be one of/);
   assert.match(one({ ...nurse, top: { kind: 'vest', color: 'orange' } })[0], /never an outfit color/);
-  // A custom garment, drawn on the critter by the kit: never over the face (the kit would clip it away).
-  assert.deepEqual(one({ ...nurse, custom: () => '<path d="M -60 -20 L 60 -20 L 60 20 L -60 20 Z" fill="#000"/>' }), []);
-  assert.match(one({ ...nurse, custom: () => '<rect x="-40" y="-130" width="80" height="40"/>' })[0], /custom draws a piece over the face \(the eyes\)/);
-  assert.match(one({ ...nurse, custom: () => '<rect width="NaN"/>' })[0], /custom: the SVG contains "NaN"/);
-  assert.match(one({ ...nurse, custom: () => { throw new Error('boom'); } })[0], /custom threw: boom/);
+  // hx-6: critter D draws no garment (an outfit becomes a role piece or nothing), so a custom garment
+  // is never drawn and never covers the face.
+  assert.deepEqual(one({ ...nurse, custom: () => '<rect x="-40" y="-130" width="80" height="40"/>' }).filter((p: string) => /over the face/.test(p)), []);
   // No two critters on screen look alike.
   const { twinProblems } = await import('../explainers/world-kit/try.mjs');
   const draw = (who: string, outfit: object | null) => kit.critter(0, 0, { who, body: 'paper', outfit });
@@ -651,4 +708,58 @@ test('a paired term\'s headword may join its words with vs, /, & or "and"', () =
   const hw = (src: string) => (lintStoryboard({ storyboard: paired, frameSource: new Map([[5, src]]) }).violations as Violation[]).filter((v) => v.rule === 'headword_term');
   assert.deepEqual(hw("headword: 'frontend / backend'"), []);
   assert.equal(hw("headword: 'frontend'").length, 1);
+});
+
+test('try.mjs (hx-6): the wear check on CAST, and orange only on the hero and one more thing', async () => {
+  const T = await import('../explainers/world-kit/try.mjs');
+  const kit = {
+    ROLES: { barista: { hand: 'cup' }, chef: { head: 'toque' } },
+    HEADS: ['toque'],
+    HANDS: ['cup'],
+    wearProblems: (w: { hand?: string }, beats: { usesHands: boolean; putsDown?: boolean }[]) => (w.hand && beats.some((b) => b.usesHands) && !beats.some((b) => b.putsDown) ? ['holds its cup into a beat that uses the hands'] : []),
+  };
+  assert.deepEqual(T.wearCastProblems({ a: { body: 'orange', role: 'Barista' }, b: { body: 'green', role: 'bare' }, c: { body: 'ink' } }, kit), []);
+  assert.match(T.wearCastProblems({ a: { body: 'ink', role: 'pirate' } }, kit)[0], /role "pirate" is not a role the kit draws/);
+  assert.match(T.wearCastProblems({ a: { body: 'ink', role: 'barista' } }, kit, () => [{ frame: 4, usesHands: true, putsDown: false }])[0], /holds its cup/);
+  assert.deepEqual(T.wearCastProblems({ a: { role: 'pirate' } }, null), [], 'no wear kit, nothing checked');
+  assert.deepEqual(T.castShapeProblems({ a: { body: 'orange' }, b: { body: 'green' }, c: { body: 'white' }, d: { body: 'paper' } }), []);
+  const O = '#FF5E1A';
+  const svg = (...parts: string[]) => [{ t: 0, svg: `<svg>${parts.join('')}</svg>` }];
+  const hero = `<g data-who="hero"><rect fill="${O}"/></g>`;
+  assert.deepEqual(T.strayOrangeProblems(svg(hero, `<g data-ui="go"><rect fill="${O}"/></g>`), { heroIds: ['hero'] }), []);
+  assert.match(T.strayOrangeProblems(svg(hero, `<g data-ui="a"><rect fill="${O}"/></g>`, `<g data-ui="b"><rect fill="${O}"/></g>`), { heroIds: ['hero'] }).join('|'), /2 things outside the hero are orange/);
+  assert.match(T.strayOrangeProblems(svg(hero, `<g data-who="clerk"><rect fill="${O}"/></g>`), { heroIds: ['hero'] }).join('|'), /"clerk" is drawn with orange/);
+});
+
+
+test('a silent hook (EX6-14): BRIEF.md says Silent, frame 1 has no voice, and the opener line check is off', async () => {
+  const { SILENT_OPENER_BRIEF, briefMarkdown } = await import('@/lib/explainers/render/workspace');
+  const silentBrief = briefMarkdown({ title: 'What is a webhook?', scope: null, source_url: null, source_text: null });
+  assert.match(silentBrief, new RegExp(`## Opener line\\n\\n${SILENT_OPENER_BRIEF.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n`));
+  assert.doesNotMatch(silentBrief, /In the next minute/);
+  assert.equal(briefOpenerVoice(silentBrief), 'silent');
+  assert.equal(briefOpenerLine(silentBrief), null);
+  // a spoken brief, a brief without the section and no brief at all keep the line (as before EX6-14)
+  const spokenBrief = briefMarkdown({ title: 'What is a webhook?', scope: null, source_url: null, source_text: null, jev_notes: { ai_focus: 1 } }, null, null, { openerVoice: 'spoken' });
+  assert.equal(briefOpenerVoice(spokenBrief), 'spoken');
+  assert.equal(briefOpenerVoice('# Brief\n\n## Analogy\n\nx\n'), 'spoken');
+  assert.equal(briefOpenerVoice(null), 'spoken');
+
+  const good = fixture('good');
+  const silentBoard = good.replace(/(## Frame 1[^\n]*\n[\s\S]*?- voiceover: )"[^"\n]*"/, '$1""');
+  assert.notEqual(silentBoard, good);
+  const rules = (storyboard: string, brief: string | null) => (lintStoryboard({ storyboard, brief }).violations as Violation[]).filter((v) => v.frame === 1 && /^opener_/.test(v.rule));
+  // silent: an empty frame 1 passes, and no opener_line check runs
+  assert.deepEqual(rules(silentBoard, silentBrief), []);
+  const errorsOf = (storyboard: string, brief: string | null) => (lintStoryboard({ storyboard, brief }).violations as Violation[]).filter((v) => v.severity === 'error').map((v) => v.rule);
+  assert.deepEqual(errorsOf(silentBoard, silentBrief), errorsOf(good, null), 'the silent plan is as clean as the spoken fixture');
+  // silent: a line on frame 1 is an error
+  const spoke = rules(good, silentBrief);
+  assert.deepEqual(spoke.map((v) => [v.rule, v.severity]), [['opener_silent', 'error']]);
+  // spoken: unchanged; an empty frame 1 still misses the opener line
+  assert.deepEqual(rules(good, spokenBrief), []);
+  assert.deepEqual(rules(silentBoard, spokenBrief).map((v) => v.rule), ['opener_line']);
+  // the beat sheet keeps eight frames, frame 1 still the hook
+  assert.equal(BEAT_SHEET.length, 8);
+  assert.equal(BEAT_SHEET[0].type, 'hook');
 });

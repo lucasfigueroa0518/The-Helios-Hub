@@ -137,7 +137,7 @@ async function main(): Promise<void> {
     // The picture check: one vision call over contact grids (falls back to the agent session on error).
     const pictureVision = anthropicPictureVision(anthropic);
     const outcome = await runRenderJob(
-      { db, query, store, jobsRoot, secrets, analogy, understanding, pictureVision, log: (event, fields) => log(event, fields) },
+      { db, query, store, jobsRoot, secrets, analogy, understanding, pictureVision, resume: process.env.HX_RESUME === '1', log: (event, fields) => log(event, fields) },
       job,
     );
     log('job_finished', { jobId: job.id, ...outcome });

@@ -1,6 +1,6 @@
-// Paper Rip: a full-screen sheet lettered "AI BRAIN BREAK" bulges, rips down the middle, and its
+// Paper Rip: a full-screen sheet lettered "AI 101" bulges, rips down the middle, and its
 // halves fly off to show the hook. Sound: a creak, then RIP + a sub hit; the beat drops on the tear.
-import { T, g, el, id, ref, defs, seg, E, scene, title, wordmark, fill, shake, shaken, burst } from './common.js';
+import { T, g, el, id, ref, defs, seg, E, scene, title, wordmark, fill, shake, shaken, burst, silentMark } from './common.js';
 
 // the jagged tear, top to bottom
 const TEAR = Array.from({ length: 26 }, (_, i) => [540 + (i % 2 ? 1 : -1) * (10 + ((i * 37) % 26)), -80 + i * 82]);
@@ -31,6 +31,7 @@ export default function draw(t, ctx) {
     el('defs', {}, el('clipPath', { id: id('tearL') }, el('polygon', { points: pts(left) })) + el('clipPath', { id: id('tearR') }, el('polygon', { points: pts(right) }))),
     u < 1 ? half(-1, 'tearL') + half(1, 'tearR') : '',
     burst(540, 960, seg(t, RIP, RIP + 0.45, (x) => x), 3.2),
+    silentMark(t, ctx),
     title(ctx, t, ctx.M.titleAt),
   ].join('');
 }

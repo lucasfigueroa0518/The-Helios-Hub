@@ -1,0 +1,30 @@
+{
+ "file": "bdbd97f6-03-define-props.js",
+ "job": "bdbd97f6-8fee-45b9-8f14-9a4536d1412d",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.390Z",
+ "from": "assets/frames/03-define.props.js",
+ "props": {
+  "small paper result slip with a tick": {
+   "source_name": "small paper result slip with a tick",
+   "tags": {
+    "is": "a small slip of paper carrying a result: a thin slab with a tick and two lines on its top face",
+    "setting": "the result of a request travelling from stored copy to the software",
+    "material": "paper-and-ink solid, thin slab",
+    "parts": [
+     "thin paper slab",
+     "tick mark",
+     "two ink lines"
+    ],
+    "not": [
+     "an envelope",
+     "a ticket",
+     "a banknote"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

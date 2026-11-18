@@ -355,17 +355,16 @@ The twelve principles of animation, applied to simple characters and objects:
   personality instantly.
 - Vary size and proportion inside a design (one big, one medium, one small mass). Equal-sized
   parts look dull and read poorly at small size.
-- A critter's face is what the viewer relates to: eyes, brows and a mouth, simplified toward the
-  features that carry expression, never away from them. A simple face invites the viewer to
-  identify with it. Objects have no face (house style); they carry feeling through motion (below).
-- Make expressions read at phone size. The kit draws the face; you choose the mood and frame the
-  critter big enough that its gaze and brows read (the brows carry the emotion, the pupils show
-  where it looks). Test each expression at about 10% of the frame.
+- A critter's face and its moods are the kit's: `house-style.md` § Heroes, critters and objects
+  says what the critter is and where a mood lives. Objects have no face (house style); they carry
+  feeling through motion (below).
+- Make expressions read at phone size: frame the critter big enough that its mood reads. Test each
+  expression at about 10% of the frame.
 - Pose with one clear line of action, the limbs separated from the body in silhouette, and no
   symmetrical "twinning". A pose the viewer must decode reads as weird; a pose that reads as a
   shape reads as intent.
-- State a role at a glance with one iconic costume piece or held tool, not a detailed outfit. One
-  strong signifier reads faster than many small ones.
+- State a role at a glance with one strong signifier (`house-style.md` § Critter roles says what a
+  role wears and holds). One strong signifier reads faster than many small ones.
 - Build appeal from clarity, coherent proportions and a hint of personality, not prettiness.
   Appeal is what makes a simple design pleasant to watch for a whole reel.
 - A hero object stays a pure object: its personality comes only from motion (timing, anticipation,
@@ -451,7 +450,11 @@ mix and keeps effects under the voice.
 - Give each recurring concept or state a short, distinct sound (arrives, succeeds, fails,
   transforms), keep it fixed, and vary it only as the concept changes. A fixed sound-meaning pair
   works like fixed color coding. Each frame is built on its own, so describe that concept's sound
-  in the same words in every frame; the library then returns the same family.
+  in the same words in every frame; the library then returns the same family. Code varies the
+  variants inside the family so nothing grates; give those events one shared `motif` only when the
+  sound must be the exact same file.
+- Vary everything else. The same effect heard over and over sounds cheap, and the ear tunes it
+  out. A family is a palette, not one file, and a reel draws on many families.
 - Treat the voice as the priority layer: it carries the meaning and must stay intelligible. Let the
   densest clusters of effects fall between phrases.
 - Build density without mud: spread layers across kinds (voice, foley, music) rather than stacking

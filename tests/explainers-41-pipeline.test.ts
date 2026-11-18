@@ -141,8 +141,9 @@ test('agent types (4.2): scene builder on its setting, both frame builders on fr
   for (const name of SNAPPERS) {
     assert.ok(a[name].tools.includes('Bash'), name);
     assert.ok(!a[name].tools.includes('WebSearch') && !a[name].tools.includes('Agent'), name);
-    assert.match(a[name].prompt, /craft\.md §§/, name);
-    assert.match(a[name].prompt, /never Read them/, name);
+    // Instruction injection (2026-11-16): the stack is in full or its core sections; picks come in the dispatch.
+    assert.match(a[name].prompt, /craft\.md/, name);
+    assert.match(a[name].prompt, /never Read those files/, name);
     assert.match(a[name].prompt, /house-style\.md/, name);
     assert.match(a[name].prompt, /minimums\.md/, name);
     assert.doesNotMatch(a[name].prompt, /principles\.md|technique|true scale|real size|at most three critters|try\.mjs checks/, name);
@@ -151,9 +152,9 @@ test('agent types (4.2): scene builder on its setting, both frame builders on fr
     assert.match(a[name].prompt, /in a single Write of the whole file/, name);
     assert.match(a[name].prompt, /Hand back one short report/, name);
   }
-  // Each role reads its craft sections (CONTRACT-4.2 § Craft section ids).
-  assert.match(a['scene-builder'].prompt, /craft\.md §§ 1, 2, 4, 5, 6, 8 and 9/);
-  for (const name of ['frame-worker-scene', 'frame-worker-tech']) assert.match(a[name].prompt, /craft\.md §§ 1–6 and 8–11/, name);
+  // Each role's craft sections are picked per window by Jev (instruction injection, 2026-11-16;
+  // supersedes CONTRACT-4.2 § Craft section ids in the prompts).
+  for (const name of SNAPPERS) assert.match(a[name].prompt, /sections picked for your work in your dispatch message/, name);
   assert.match(a['scene-builder'].prompt, /assets\/world\/identity\.js/);
   // A mechanism frame is named and shown the way it best reads, never narrowed to one travelling thing.
   assert.match(a['frame-worker-tech'].prompt, /Name the mechanism and how it best shows on screen \(it may travel, split, combine, change state, be compared before and after, grow or shrink/);

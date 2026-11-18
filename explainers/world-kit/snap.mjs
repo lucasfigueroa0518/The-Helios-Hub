@@ -36,7 +36,7 @@ import { HOOK_ID, isBankOpener, isClose, projectFrames } from './frames.mjs';
 import { HOOK_REVEAL } from './openers/bank.js';
 import { chosenOpener } from './openers/sound.mjs';
 import { FONTS } from './mount.mjs';
-import { frameKind, frameLook } from './try.mjs'; // also registers the hooks that let frame modules load in Node
+import { frameKind, frameLook, preparedScene } from './try.mjs'; // also registers the hooks that let frame modules load in Node
 
 export const MAX_TIMES = 6;
 /** A first look, two revisions and a last look at the second revision (round 2: with 3 the last revision went unseen). */
@@ -176,10 +176,11 @@ function pageHtml() {
 const svgOf = (inner) => `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
 
 /**
- * Draw `jobs` ([{ file (project-relative png), ground, draw: () => svg }]) in one browser.
+ * Draw `jobs` ([{ file (project-relative png), ground, draw: () => svg }]) in one browser; a job with
+ * `take(buffer, page)` (and an optional `clip`) is handed the PNG instead of writing a file.
  * Returns { files, errors, skipped? }.
  */
-async function shoot(root, jobs) {
+export async function shoot(root, jobs) {
   const drv = await driver();
   const chrome = findChrome();
   if (!drv || !chrome) return { files: [], errors: [], skipped: drv ? 'no headless Chrome found (HyperFrames downloads one on first render)' : 'no browser driver (puppeteer-core or playwright-core) is installed' };
@@ -208,6 +209,11 @@ async function shoot(root, jobs) {
         document.getElementById('g').innerHTML = gs;
         document.getElementById('w').innerHTML = ws;
       }, [ground, world]);
+      // a job with `take` gets the still (or its `clip`) as a PNG buffer instead of a file (caption-scrim.mjs)
+      if (job.take) {
+        await job.take(await page.screenshot({ type: 'png', clip: job.clip ?? { x: 0, y: 0, width: W, height: H } }), page);
+        continue;
+      }
       mkdirSync(join(root, job.file, '..'), { recursive: true });
       await page.screenshot({ path: join(root, job.file), clip: { x: 0, y: 0, width: W, height: H } });
       files.push(job.file);
@@ -250,7 +256,7 @@ function takeCall(root, id) {
   return { left: callsFor(id) - used - 1 };
 }
 
-const groundOf = (entry) => (entry?.fields?.ground ?? '').trim().toLowerCase() || 'paper';
+export const groundOf = (entry) => (entry?.fields?.ground ?? '').trim().toLowerCase() || 'paper';
 
 export async function snap(root, id, arg) {
   if (id === 'sequences') return sequences(root);
@@ -286,6 +292,7 @@ export async function snap(root, id, arg) {
     return { ok: false, files: [], errors: [`${id}.js failed to load: ${e?.message ?? e}`] };
   }
   if (typeof scene?.draw !== 'function') return { ok: false, files: [], errors: [`${id}.js has no default export with draw(t)`] };
+  scene = await preparedScene(root, scene, target.entry.duration); // as mount.mjs draws it for the render
   const quota = takeCall(root, id);
   if (quota.error) return { ok: false, files: [], errors: [quota.error], left: 0 };
   const ground = scene.ground ?? groundOf(target.entry);
@@ -314,6 +321,7 @@ export async function sequences(root) {
     let scene;
     try {
       scene = (await import(`${pathToFileURL(file).href}?seq${Date.now()}`)).default;
+      if (typeof scene?.draw === 'function') scene = await preparedScene(root, scene, entry.duration); // as mount.mjs draws it
     } catch (e) {
       errors.push(`${entry.id}.js failed to load: ${e?.message ?? e}`);
       continue;

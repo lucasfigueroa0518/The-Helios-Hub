@@ -19,7 +19,7 @@ import { T, el, g, id, TONES } from './draw.js';
 
 // Every color is a palette token (V-T1); the hx-4 tokens fall back to their own values while an
 // older core.js is loaded.
-const FALLBACK = { canvas: '#FFFFFF', 'paper-lit': '#FEF9F3', 'paper-shade': '#DCD5C9', 'paper-dark': '#CAC1B3', ink: '#1F1915', 'ink-lit': '#322D29', 'ink-shade': '#150E08', 'ink-dark': '#0B0401', 'text-secondary': '#525252', 'text-tertiary': '#737373', 'shadow-warm': '#3B2A16' };
+const FALLBACK = { canvas: '#FFFFFF', 'paper-lit': '#FBFAF6', 'paper-shade': '#E2DACB', 'paper-dark': '#CFC5B3', ink: '#171717', 'ink-lit': '#2B2926', 'ink-shade': '#101010', 'ink-dark': '#0A0A0A', 'text-secondary': '#525252', 'text-tertiary': '#737373', 'shadow-warm': '#3B2A16' };
 const tk = (name) => T?.[name] ?? FALLBACK[name];
 
 // ── Palette ramps ─────────────────────────────────────────────────────────────────────────
@@ -27,19 +27,21 @@ const tk = (name) => T?.[name] ?? FALLBACK[name];
 export const PALETTE = ['paper', 'white', 'ink', 'orange', 'green', 'yellow', 'blue', 'teal', 'lilac'];
 
 // The spec's hexes (VISUAL_SYSTEM_4 §core.js), used until draw.js TONES carries the 4-step ramps.
+// hx-6: the approved palette's values (VISUAL_SYSTEM_6 §2; lilac draws as slate). Outfits are no
+// longer drawn on a critter (cast.js translates them to a role); these ramps serve the helpers.
 const SPEC_RAMPS = {
-  paper: { lit: '#FFFFFF', base: '#FEF9F3', shade: '#DCD5C9', dark: '#CAC1B3' },
-  white: { lit: '#FFFFFF', base: '#FFFFFF', shade: '#DCD5C9', dark: '#CAC1B3' },
-  ink: { lit: '#525252', base: '#322D29', shade: '#1F1915', dark: '#150E08' },
+  paper: { lit: '#FFFFFF', base: '#FBFAF6', shade: '#E2DACB', dark: '#CFC5B3' },
+  white: { lit: '#FFFFFF', base: '#FFFFFF', shade: '#E2DACB', dark: '#CFC5B3' },
+  ink: { lit: '#525252', base: '#2B2926', shade: '#171717', dark: '#101010' },
   orange: { lit: '#FF9462', base: '#FF5E1A', shade: '#E24213', dark: '#A02B02' },
   green: { lit: '#5D9831', base: '#138510', shade: '#036A29', dark: '#013D1F' },
-  yellow: { lit: '#FFDFB2', base: '#F1C45E', shade: '#CFAE45', dark: '#99862B' },
-  blue: { lit: '#82AFDF', base: '#5A98CB', shade: '#3E81AF', dark: '#17597B' },
-  teal: { lit: '#80C7BF', base: '#57AFAF', shade: '#3D959B', dark: '#1D6972' },
-  lilac: { lit: '#BF9BCE', base: '#A482BE', shade: '#886BA6', dark: '#5B4778' },
+  yellow: { lit: '#F3C65E', base: '#E0AB3E', shade: '#C38F29', dark: '#8F6418' },
+  blue: { lit: '#86A1C8', base: '#6684B0', shade: '#4F6B94', dark: '#34496A' },
+  teal: { lit: '#5DB5AE', base: '#46978F', shade: '#357A74', dark: '#24534F' },
+  lilac: { lit: '#86A1C8', base: '#6684B0', shade: '#4F6B94', dark: '#34496A' },
 };
 /** Metal (stethoscope, watch, whistle, buckle, tray): a material, not a garment color. */
-const STEEL = { lit: '#FFFFFF', base: '#DCD5C9', shade: '#CAC1B3', dark: '#737373' };
+const STEEL = { lit: '#FFFFFF', base: '#E2DACB', shade: '#CFC5B3', dark: '#737373' };
 
 // While outfitColors() draws an outfit, every palette name a garment, item or head asks for.
 let COLLECT = null;
@@ -1027,7 +1029,7 @@ export function outfitBack(C, outfit) {
  * and the custom garment. Returns { behind, front, glasses, shapes } with shapes = the silhouettes
  * ({ part, pts } fills and { part, line, w } strokes) for the keep-out test.
  */
-export function outfitLayers(C, outfit, { face = '#1F1915' } = {}) {
+export function outfitLayers(C, outfit, { face = '#171717' } = {}) {
   const o = typeof outfit?.top === 'object' && outfit.sleeveLen ? outfit : normalizeOutfit(outfit);
   if (!o) return { behind: '', front: '', head: '', glasses: '', shapes: [], o: null };
   const top = drawTop(C, o);

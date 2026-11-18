@@ -273,8 +273,8 @@ export function reelTestMarkdown(input: { storyboard: string; script: string; te
       const subjects = (parseShots(list.join('\n')) as { subject: string }[]).map((s) => viewerNouns(viewerSceneLine(s.subject).text, entities, { whole: true })).filter(Boolean);
       if (subjects.length) out.push(`Shots: ${subjects.map(say).join('; ')}`);
     }
-    if (n === 1) out.push('Words on screen: "AI BRAIN BREAK".');
-    if (n === 3) out.push(`Words on screen: a card that reads "today's AI Brain Break: ${shown}".`);
+    if (n === 1) out.push('Words on screen: "AI 101".');
+    if (n === 3) out.push(`Words on screen: a card that reads "today's AI Lesson: ${shown}".`);
     const definition = blockField(block, 'definition');
     if (definition) {
       const pos = blockField(block, 'part_of_speech');

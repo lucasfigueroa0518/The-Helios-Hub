@@ -1,7 +1,7 @@
 // Paper Plane: a paper plane loops in from off-screen, straight at the camera, and smacks into the
-// glass. It sticks, unfolds flat into a sheet with "AI BRAIN BREAK" on it, then peels off and falls
+// glass. It sticks, unfolds flat into a sheet with "AI 101" on it, then peels off and falls
 // away, leaving the hook.
-import { T, g, el, defs, seg, lerp, E, scene, title, wordmark, shake, shaken, burst, softShape, card } from './common.js';
+import { T, g, el, defs, seg, lerp, E, scene, title, wordmark, shake, shaken, burst, softShape, card, silentMark } from './common.js';
 
 const B = [[-260, 1560], [520, 1820], [1240, 560], [540, 900]];
 function bez(u) {
@@ -30,7 +30,8 @@ function sheet() {
 
 export default function draw(t, ctx) {
   const { breakAt: SMACK, unfold, peel } = ctx.M;
-  const parts = [shaken(shake(t, SMACK, 30, 0.35), scene(ctx, t)), defs()];
+  // over the AI 101 card: plain paper until the sheet peels away to show it (one AI 101 at a time)
+  const parts = [shaken(shake(t, SMACK, 30, 0.35), scene(ctx, t, { bare: t < peel[0] })), defs()];
   if (t < SMACK) {
     const u = seg(t, 0, SMACK, E.in);
     const [x, y] = bez(u);
@@ -50,6 +51,7 @@ export default function draw(t, ctx) {
     if (p < 1) parts.push(g({ transform: `translate(${(540 + 260 * p).toFixed(1)} ${(940 + slide + 1700 * p).toFixed(1)}) rotate(${(-2 + 34 * p).toFixed(2)})` }, sheet()));
   }
   parts.push(burst(540, 920, seg(t, SMACK, SMACK + 0.35, (x) => x), 4));
+  parts.push(silentMark(t, ctx));
   parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

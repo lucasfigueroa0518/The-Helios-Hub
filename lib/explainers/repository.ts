@@ -255,6 +255,92 @@ export async function recordCost(db: Queryable, event: CostEventInput): Promise<
   );
 }
 
+export type CostBreakdownRow = {
+  jobId: string;
+  component: string;
+  model?: string | null;
+  turns?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  usd: number;
+  wallMs?: number;
+  detail?: Record<string, unknown>;
+};
+
+/**
+ * Session B telemetry rows (explainers.cost_breakdown): an attribution of spend that cost_events
+ * already holds, so this never touches cost_events or jobs.spend_usd (no double counting).
+ */
+export async function recordCostBreakdown(db: Queryable, rows: readonly CostBreakdownRow[]): Promise<void> {
+  for (const r of rows) {
+    await db.query(
+      `INSERT INTO explainers.cost_breakdown
+         (job_id, component, model, turns, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, usd, wall_ms, detail)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [r.jobId, r.component, r.model ?? null, r.turns ?? 0, r.inputTokens ?? 0, r.outputTokens ?? 0, r.cacheReadTokens ?? 0, r.cacheWriteTokens ?? 0, Number.isFinite(r.usd) ? r.usd : 0, Math.round(r.wallMs ?? 0), JSON.stringify(r.detail ?? {})],
+    );
+  }
+}
+
+/** A render's first-try log rows (explainers.first_try_log), as the injection ledger reads them. */
+export type FirstTryContext = {
+  label: string;
+  role: string;
+  look: string;
+  frame: string | null;
+  injected: string[];
+  scores: Record<string, number>;
+  misses: string[];
+  firstTry: string[] | null;
+  lessons?: string[];
+};
+
+/** Save one render's first-try log, replacing any rows the job already has (the repair pass). */
+export async function saveFirstTryLog(db: ExplainersDb, render: { jobId: string; at: string; contexts: readonly FirstTryContext[] }): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.query(`DELETE FROM explainers.first_try_log WHERE job_id = $1`, [render.jobId]);
+    for (const c of render.contexts) {
+      await tx.query(
+        `INSERT INTO explainers.first_try_log (job_id, render_at, label, role, look, frame, injected, scores, misses, lessons, first_try)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [render.jobId, render.at, c.label, c.role, c.look, c.frame, c.injected, JSON.stringify(c.scores ?? {}), c.misses, c.lessons ?? [], c.firstTry === null ? null : JSON.stringify(c.firstTry)],
+      );
+    }
+  });
+}
+
+/** The last `limit` renders' first-try logs, oldest first (the ledger's history). */
+export async function loadFirstTryLog(db: Queryable, limit = 20): Promise<{ jobId: string; at: string; contexts: FirstTryContext[] }[]> {
+  const { rows } = await db.query<{ job_id: string; render_at: Date | string; label: string; role: string; look: string; frame: string | null; injected: string[]; scores: Record<string, number>; misses: string[]; lessons: string[]; first_try: string[] | null }>(
+    `SELECT job_id, render_at, label, role, look, frame, injected, scores, misses, lessons, first_try
+       FROM explainers.first_try_log
+      WHERE job_id IN (SELECT job_id FROM explainers.first_try_log GROUP BY job_id ORDER BY max(render_at) DESC LIMIT $1)
+      ORDER BY render_at, created_at`,
+    [limit],
+  );
+  const renders = new Map<string, { jobId: string; at: string; contexts: FirstTryContext[] }>();
+  for (const r of rows) {
+    const at = r.render_at instanceof Date ? r.render_at.toISOString() : String(r.render_at);
+    if (!renders.has(r.job_id)) renders.set(r.job_id, { jobId: r.job_id, at, contexts: [] });
+    renders.get(r.job_id)!.contexts.push({ label: r.label, role: r.role, look: r.look, frame: r.frame, injected: r.injected ?? [], scores: r.scores ?? {}, misses: r.misses ?? [], lessons: r.lessons ?? [], firstTry: r.first_try });
+  }
+  return [...renders.values()].sort((a, b) => a.at.localeCompare(b.at));
+}
+
+/**
+ * Replace one job's session B breakdown rows (component `session_b:%`) in one transaction: delete,
+ * then insert. Used when the summary is rewritten after the repair pass, so nothing double counts.
+ * Like recordCostBreakdown, it never touches cost_events or jobs.spend_usd.
+ */
+export async function replaceCostBreakdown(db: ExplainersDb, jobId: string, rows: readonly CostBreakdownRow[]): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.query(`DELETE FROM explainers.cost_breakdown WHERE job_id = $1 AND component LIKE 'session\\_b:%'`, [jobId]);
+    await recordCostBreakdown(tx, rows.filter((r) => r.jobId === jobId));
+  });
+}
+
 /**
  * Production spend counted against one Eastern-time day: renders plus the idea pipeline (A-4). Lead time (Bald-Eagle
  * D4, D8): a cost counts against the date its render was made FOR (`target_date`), or its idea cycle's date (the date

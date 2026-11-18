@@ -58,8 +58,8 @@ test('schema applies and re-applies cleanly', async () => {
   const { rows } = await pg.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = 'explainers'`,
   );
-  // 10 product tables + posting_schedule, publish_attempts, media_insights (docs/social-overnight.md).
-  assert.equal(rows[0].n, 13);
+  // 10 product tables + posting_schedule, publish_attempts, media_insights (docs/social-overnight.md), cost_breakdown (session B telemetry), first_try_log (first-try lessons).
+  assert.equal(rows[0].n, 15);
 });
 
 test('a database created before the seq columns upgrades in place', async () => {
@@ -91,6 +91,15 @@ test('seeded settings equal the kickoff defaults', async () => {
   assert.equal(DEFAULT_SETTINGS.daily_render_cap, 2);
   assert.equal(DEFAULT_SETTINGS.daily_spend_cap_usd, 10);
   assert.equal(DEFAULT_SETTINGS.per_reel_cap_usd, 8);
+});
+
+test('opener_voice (EX6-14): silent by default, spoken brings the line back, nothing else is accepted', async () => {
+  const { db } = await scratchExplainersDb();
+  assert.equal(DEFAULT_SETTINGS.opener_voice, 'silent');
+  assert.equal((await loadSettings(db)).opener_voice, 'silent');
+  assert.equal(await saveSetting(db, 'opener_voice', 'spoken'), 'spoken');
+  assert.equal((await loadSettings(db)).opener_voice, 'spoken');
+  await assert.rejects(saveSetting(db, 'opener_voice', 'loud'), /opener_voice must be silent or spoken/);
 });
 
 test('theme brief v1 is the E-14 text verbatim', async () => {

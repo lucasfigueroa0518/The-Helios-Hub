@@ -12,6 +12,8 @@
 // setting, and nothing in `not` describes it (EX3-112). Bank assets carry the same tags in their
 // own files (props/bank/*.json).
 
+import { TAGS_MORE } from './tags-more.js';
+
 export const TAGS = {
   backpack: {
     is: 'a canvas school or day backpack with a front pocket, top grab handle and one shoulder strap',
@@ -342,6 +344,7 @@ export const TAGS = {
     parts: ['ribbed cargo box', 'cab with windshield', 'three visible wheels'],
     not: ['car', 'van', 'bus', 'fire truck', 'tanker', 'pickup truck', 'garbage truck'],
   },
+  ...TAGS_MORE,
 };
 
 /** The fields every asset's tags must have (EX3-113). */

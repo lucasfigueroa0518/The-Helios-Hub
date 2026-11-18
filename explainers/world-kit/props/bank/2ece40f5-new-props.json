@@ -1,0 +1,97 @@
+{
+ "file": "2ece40f5-new-props.js",
+ "job": "2ece40f5-e8a9-4331-ad16-dae575de0030",
+ "topic": "System 1 model",
+ "added_at": "2026-11-17T02:00:18.384Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "yellow-rimmed answer speech bubble": {
+   "source_name": "yellow-rimmed answer speech bubble",
+   "tags": {
+    "is": "a white speech bubble with a thick yellow rim and a short tail at its lower left, holding one short answer in big bold type",
+    "setting": [
+     "a student answering out loud",
+     "an instant answer",
+     "a chat reply"
+    ],
+    "material": "flat white graphic with a yellow rim",
+    "parts": [
+     "rounded white body",
+     "yellow rim",
+     "tail at lower left",
+     "the answer in bold type"
+    ],
+    "not": [
+     "thought cloud",
+     "chat app bubble",
+     "sticky note",
+     "sign",
+     "button",
+     "tooltip"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "teal-ruled scratch paper sheet": {
+   "source_name": "teal-ruled scratch paper sheet",
+   "tags": {
+    "is": "a sheet of scratch paper ruled in pale teal, filling with a long multiplication in pencil, 487 times 36 worked out to 17,532",
+    "setting": [
+     "a classroom desk",
+     "working a sum out by hand",
+     "step-by-step working"
+    ],
+    "material": "paper, pencil graphite",
+    "parts": [
+     "white sheet",
+     "teal rules",
+     "teal margin line",
+     "pencil working",
+     "underlines"
+    ],
+    "not": [
+     "printed document",
+     "receipt",
+     "spreadsheet",
+     "notebook cover",
+     "sticky note",
+     "form"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "worn times-table flash card stack": {
+   "source_name": "worn times-table flash card stack",
+   "tags": {
+    "is": "a small worn stack of white times-table flash cards held with a red rubber band, the top card reading 7 x 8",
+    "setting": [
+     "a student desk",
+     "practising times tables",
+     "drilled memory"
+    ],
+    "material": "card stock, rubber band",
+    "parts": [
+     "stack of cards",
+     "top card with 7 x 8",
+     "red rubber band",
+     "worn offset edges"
+    ],
+    "not": [
+     "playing cards",
+     "business cards",
+     "credit card",
+     "book",
+     "envelope",
+     "index box"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

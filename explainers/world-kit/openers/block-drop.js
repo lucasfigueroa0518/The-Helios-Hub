@@ -1,15 +1,14 @@
 // Block Drop: wooden letter blocks drop from the top and land with heavy thuds, in rhythm,
-// building BREAK, then BRAIN on it, then AI on top. The stack wobbles, creaks, and topples
+// building 101, then AI on top (hx-6: AI 101). The stack wobbles, creaks, and topples
 // off-screen, and the hook is behind it. The voice runs over the drops.
 import { shadow } from '../draw.js';
-import { T, g, el, ref, defs, seg, lerp, E, scene, title, fill, shake, shaken, softShape, gloss, roundRect } from './common.js';
+import { T, g, el, ref, defs, seg, lerp, E, scene, title, fill, shake, shaken, softShape, gloss, roundRect, silentMark } from './common.js';
 
 const SZ = 190;
 const GAP = 10;
 const FLOOR = 1260;
 const ROWS = [
-  { word: 'BREAK', fill: T.orange, ink: T['paper-lit'] },
-  { word: 'BRAIN', fill: T['paper-lit'], ink: T.ink },
+  { word: '101', fill: T.orange, ink: T['paper-lit'] },
   { word: 'AI', fill: T.ink, ink: T.orange },
 ];
 const BLOCKS = [];
@@ -64,6 +63,7 @@ export default function draw(t, ctx) {
       parts.push(g({ transform: `translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)} ${b.x + SZ / 2} ${b.y + SZ / 2})` }, block(b)));
     });
   }
+  parts.push(silentMark(t, ctx));
   parts.push(title(ctx, t, ctx.M.titleAt));
   return parts.join('');
 }

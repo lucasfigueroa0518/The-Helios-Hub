@@ -1,0 +1,41 @@
+{
+ "file": "0a363b52-new-props.js",
+ "job": "0a363b52-42a9-4e1e-9509-55aeb573777c",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.378Z",
+ "from": "assets/world/new-props.js",
+ "props": {
+  "tall wooden pantry door with a round knob and hinges": {
+   "source_name": "a tall wooden pantry door with a round knob and hinges",
+   "tags": {
+    "is": "a tall wooden kitchen pantry door in a plain casing, two inset panels, a round knob and two hinges; open, it swings out to show a dark cupboard with three shelves of white salt sacks",
+    "setting": [
+     "home kitchen",
+     "restaurant kitchen",
+     "hallway end"
+    ],
+    "material": "painted wood, burlap sacks",
+    "parts": [
+     "door casing and lintel",
+     "two inset panels",
+     "round knob on a plate",
+     "two hinges",
+     "three shelves of sacks when open",
+     "sacks marked with salt grains"
+    ],
+    "not": [
+     "front door",
+     "wardrobe",
+     "refrigerator",
+     "office door",
+     "bank vault",
+     "barn door",
+     "closet with clothes"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

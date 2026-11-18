@@ -1,0 +1,72 @@
+{
+ "file": "1fe1adeb-03-define-props.js",
+ "job": "1fe1adeb-2d16-4277-9965-00a5ac95795d",
+ "topic": "cache",
+ "added_at": "2026-11-17T02:00:18.382Z",
+ "from": "assets/frames/03-define.props.js",
+ "props": {
+  "upright smartphone on a small desk stand showing an app screen": {
+   "source_name": "upright smartphone on a small desk stand showing an app screen",
+   "tags": {
+    "is": "a modern smartphone standing upright on a small flat stand, its lit screen showing an app with a picture tile and text lines",
+    "setting": [
+     "desk",
+     "tech explainer",
+     "software scene"
+    ],
+    "material": "dark glass-and-metal slab, riso-grained paper tones",
+    "parts": [
+     "thin dark slab body",
+     "lit screen",
+     "header bar",
+     "picture tile",
+     "text lines",
+     "home bar",
+     "flat stand"
+    ],
+    "not": [
+     "tablet",
+     "laptop",
+     "remote control",
+     "calculator",
+     "walkie-talkie",
+     "book"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  },
+  "tall server rack with three drive units and status lights": {
+   "source_name": "tall server rack with three drive units and status lights",
+   "tags": {
+    "is": "a tall server cabinet on a dark plinth with three stacked drive units, each with slots and a light, and vent slits down its side",
+    "setting": [
+     "data center",
+     "server room",
+     "tech explainer",
+     "software scene"
+    ],
+    "material": "painted metal cabinet, riso-grained paper tones",
+    "parts": [
+     "dark plinth",
+     "three drive units",
+     "slot lines",
+     "status lights",
+     "side vent slits"
+    ],
+    "not": [
+     "refrigerator",
+     "wardrobe",
+     "vending machine",
+     "safe",
+     "locker",
+     "filing cabinet"
+    ]
+   },
+   "meant": null,
+   "seen": null,
+   "reviewed": "by eye, hand harvest 2026-11-16"
+  }
+ }
+}

@@ -51,7 +51,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { HOOK_ID, isBankOpener, isClose, projectFrames } from './frames.mjs';
+import { HOOK_ID, isBankOpener, isClose, isLessonHook, projectFrames } from './frames.mjs';
+import { frameActionText, handBeats } from './layout-checks.mjs';
 import { storyboardHeroKind } from './openers/bank.js';
 import { eventProblems } from './sound.mjs';
 
@@ -107,11 +108,14 @@ export const CHECKS = {
   hook: "the opener's hook breaks its contract (its hero, hidden on hideHero, no title card)",
   shots: 'a shot list that cannot play (order, an unknown kind or move, a camera with no position, a subject outside its cast)',
   jump_cut: 'the same subject across a cut changes size less than 2x (or more than 1/2)',
-  cast: 'a critter drawn twice at one moment, or vanishing mid-shot and coming back',
+  cast: 'a critter drawn twice at one moment, vanishing mid-shot and coming back, or left out of a later shot of the place it is in',
+  hands: 'a thing a critter lets go of travelling on by itself, with no hand on it',
   identity: 'one look per concept: a CAST critter drawn another way, two critters alike, a concept off identity.js',
   layers: 'draw order losing depth: two overlapping things swapping in front and back, or an item taken from under the stack it lies in',
   rig: "a critter's rig breaks: a hand or a held prop over the face, a face that does not draw",
   outfit: 'something worn over the eyes or mouth, or an outfit the kit cannot draw',
+  wear: "a critter's role, head piece or hand prop the kit does not draw (wear.js ROLES, HEADS, HANDS), or its wear breaking wear.js wearProblems (a hand prop held into a beat that uses the hands)",
+  orange: "orange anywhere but the hero and at most one more thing (a UI's one action, or the mechanism's one active thing)",
   face_cut: 'a face cut by the frame edge or by a nearer set piece',
   occlusion: "a critter mostly hidden behind a nearer one, or the shot's subject more than 40% hidden by a thing in front of it",
   shot_timing: 'a shot under 0.8 s, or a cut within 0.5 s of the frame\'s start or end',
@@ -899,8 +903,109 @@ export function castProblems(samples, castAt = null) {
   return errors;
 }
 
-/** The grounds (hx-4): paper, stage, white; night and forest are old names for stage. */
-export const GROUND_NAMES = ['paper', 'stage', 'white'];
+/** How long after a critter lets go a thing near its hand may not travel on alone (s), how far
+ *  its screen box must shift between two samples to count as moving, and how near a hand must be. */
+const RELEASE_WINDOW = 1.0;
+const MOVE_PX = 6;
+const NEAR_PX = 40;
+const numsOf = (s) => String(s ?? '').trim().split(/\s+/).map(Number);
+/** One sample's critters { who → { hands: [[x, y], [x, y]], holds: Set } } and entities { id → box }. */
+function handScene(svg) {
+  const critters = new Map();
+  for (const m of String(svg).matchAll(/<g\b[^>]*\bdata-who="([^"]+)"[^>]*>/g)) {
+    if (critters.has(m[1])) continue;
+    const h = numsOf(m[0].match(/\bdata-hands="([^"]+)"/)?.[1]);
+    if (h.length !== 4 || !h.every(Number.isFinite)) continue;
+    const holds = new Set((m[0].match(/\bdata-holds="([^"]*)"/)?.[1] ?? '').split(/\s+/).filter(Boolean));
+    critters.set(m[1], { hands: [[h[0], h[1]], [h[2], h[3]]], holds });
+  }
+  const things = new Map();
+  for (const m of String(svg).matchAll(/<g\b[^>]*\bdata-frame-kind="entity"[^>]*>/g)) {
+    const id = m[0].match(/\bdata-frame-who="([^"]+)"/)?.[1];
+    const b = numsOf(m[0].match(/\bdata-frame-box="([^"]+)"/)?.[1]);
+    if (id && b.length === 4 && b.every(Number.isFinite) && !things.has(id)) things.set(id, b);
+  }
+  return { critters, things };
+}
+/** The hand's screen point for a side ('l', 'r' or 'both') in one sample's critter. */
+const handOf = (c, sd) => (sd === 'l' ? c.hands[0] : sd === 'r' ? c.hands[1] : [(c.hands[0][0] + c.hands[1][0]) / 2, (c.hands[0][1] + c.hands[1][1]) / 2]);
+/**
+ * A toss (handPlace out of reach, Lucas 2026-11-17): the hand was swinging toward where the thing
+ * then flies. Its motion over the samples just before the release (up to TOSS_LOOK s) must be at
+ * least TOSS_PX long and point within ~60° of the thing's first move. A hand going elsewhere (the
+ * magnet case: straight up, the magnet off to the side) is not a toss.
+ */
+const TOSS_LOOK = 0.3;
+const TOSS_PX = 8;
+function tossed(S, k, who, sd, box, q) {
+  const A = S[k - 1];
+  // the earliest sample of the same shot within TOSS_LOOK s before A
+  let i = k - 1;
+  while (i - 1 >= 0 && S[i - 1].shot === A.shot && A.t - S[i - 1].t <= TOSS_LOOK + 1e-9) i--;
+  if (i === k - 1) return false;
+  const c0 = S[i].critters.get(who);
+  const c1 = A.critters.get(who);
+  if (!c0 || !c1) return false;
+  const h0 = handOf(c0, sd);
+  const h1 = handOf(c1, sd);
+  const vh = [h1[0] - h0[0], h1[1] - h0[1]];
+  const vt = [(q[0] + q[2]) / 2 - (box[0] + box[2]) / 2, (q[1] + q[3]) / 2 - (box[1] + box[3]) / 2];
+  const nh = Math.hypot(...vh);
+  const nt = Math.hypot(...vt);
+  if (nh < TOSS_PX || nt < 1) return false;
+  return (vh[0] * vt[0] + vh[1] * vt[1]) / (nh * nt) >= 0.5;
+}
+const nearBox = ([x, y], b, pad) => x >= b[0] - pad && x <= b[2] + pad && y >= b[1] - pad && y <= b[3] + pad;
+
+/**
+ * Things placed by magic (hx-6): when a critter lets go of what a hand held (its data-holds loses
+ * that side), a thing (an entity) at that hand must not travel on by itself in the same shot: for
+ * RELEASE_WINDOW s, a move of its screen box with no critter's hand on it is an error (a straight
+ * drop is gravity, not an error). A placed thing rides in the hand to its spot and is let go there.
+ * `shotAt(t)` gives the shot index (cuts end the watch); null treats the frame as one shot.
+ * @param {Array<{ t: number, svg: string }>} samples @param {((t: number) => number) | null} [shotAt]
+ */
+export function handProblems(samples, shotAt = null) {
+  const out = [];
+  const reported = new Set();
+  const S = samples.map(({ t, svg }) => ({ t, shot: typeof shotAt === 'function' ? shotAt(t) : 0, ...handScene(svg) }));
+  for (let k = 1; k < S.length; k++) {
+    const A = S[k - 1];
+    const B = S[k];
+    if (A.shot !== B.shot) continue;
+    for (const [who, a] of A.critters) {
+      const b = B.critters.get(who);
+      if (!b || !a.holds.size) continue;
+      const let_ = [...a.holds].filter((sd) => !b.holds.has(sd) && !(sd !== 'both' && b.holds.has('both')));
+      for (const sd of let_) {
+        const hand = sd === 'l' ? a.hands[0] : sd === 'r' ? a.hands[1] : [(a.hands[0][0] + a.hands[1][0]) / 2, (a.hands[0][1] + a.hands[1][1]) / 2];
+        for (const [id, box] of A.things) {
+          if (reported.has(id) || !nearBox(hand, box, NEAR_PX)) continue;
+          for (let j = k + 1; j < S.length && S[j].shot === B.shot && S[j].t - B.t <= RELEASE_WINDOW + 1e-9; j++) {
+            const p = S[j - 1].things.get(id);
+            const q = S[j].things.get(id);
+            if (!p || !q) break;
+            const d = [0, 1, 2, 3].map((i) => q[i] - p[i]);
+            if (Math.max(...d.map(Math.abs)) <= MOVE_PX) continue;
+            const drop = Math.abs(d[0]) <= 2 && Math.abs(d[2]) <= 2 && d[1] >= 0 && d[3] >= 0;
+            if (drop) continue;
+            const held = [...S[j].critters.values()].some((c) => c.hands.some((h) => nearBox(h, q, NEAR_PX)));
+            if (held) continue;
+            if (tossed(S, k, who, sd, box, q)) break;
+            reported.add(id);
+            out.push(`"${who}" lets go at ${B.t.toFixed(2)}s, then "${id}" moves on by itself at ${S[j].t.toFixed(2)}s with no hand on it: a placed thing travels in the hand to its spot and is let go there (handPlace in cast.js: stand the critter within reach, reachSpot)`);
+            break;
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** The grounds (hx-4): paper, stage, white, and hx-6's room (analogy frames only, as mount.mjs);
+ *  night and forest are old names for stage. */
+export const GROUND_NAMES = ['paper', 'stage', 'white', 'room'];
 export const GROUND_ALIASES = { night: 'stage', forest: 'stage' };
 /** A ground name as the kit draws it (an alias resolved), or null when it is no ground. */
 export function resolveGround(name) {
@@ -986,7 +1091,7 @@ export function castShapeProblems(cast, { orange: oneOrange = true } = {}) {
   }
   const errors = [];
   for (const [id, look] of Object.entries(cast)) {
-    if (!['ink', 'paper', 'orange'].includes(look?.body ?? 'ink')) errors.push(`CAST.${id}.body "${look?.body}" must be ink, paper or orange`);
+    if (!CRITTER_BODIES.includes(look?.body ?? 'ink')) errors.push(`CAST.${id}.body "${look?.body}" must be one of ${CRITTER_BODIES.join(', ')} (critter D, hx-6; paper draws as white)`);
     if (look?.wear !== undefined && !Array.isArray(look.wear)) errors.push(`CAST.${id}.wear must be a list`);
     if (look?.outfit !== undefined && look.outfit !== null && (typeof look.outfit !== 'object' || Array.isArray(look.outfit))) {
       errors.push(`CAST.${id}.outfit must be an object ({ top, sleeves, pants, shoes, head, items, custom }), or omitted or null for a role with no costume`);
@@ -1429,7 +1534,7 @@ export function outfitColorProblems(cast, kit = null) {
     } catch {
       continue; // outfitProblems names a bad outfit
     }
-    if (colors?.has?.('orange')) errors.push(`CAST.${id}.outfit draws orange (a garment or an item): orange is only the hero's and the focal's (EX3-139); give it another palette color`);
+    if (colors?.has?.('orange')) errors.push(`CAST.${id}.outfit draws orange (a garment or an item): nothing a critter wears or holds is orange (EX3-139; critter roles); give it another palette color`);
   }
   return errors;
 }
@@ -1507,6 +1612,160 @@ export async function lensWorldProblems(mod) {
   return errors;
 }
 
+
+// ── hx-6 (VISUAL_SYSTEM_6.md § 2, § 4, § 6): critter D's bodies, roles (wear) and the orange rule ──
+
+/** Critter D's bodies (VISUAL_SYSTEM_6.md § 3): orange is the hero's; `paper` (main's name) is
+ *  accepted and drawn as white. */
+export const CRITTER_BODIES = ['orange', 'green', 'ink', 'white', 'paper'];
+/** The contract's orange hexes, used when core.js TOKENS lack the family (an older kit). */
+const FAMILY_HEX = { orange: ['#FF5E1A', '#FF9462', '#E24213', '#A02B02'] };
+
+/** The hex colours of a token family (`<family>`, `<family>-lit`, `-shade`, `-dark`) in `tokens`
+ *  (core.js TOKENS), upper case; the contract's values when `tokens` has none of them. */
+export function familyHexes(family, tokens = null) {
+  const hex = (v) => (typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : null);
+  const own = Object.entries(tokens ?? {}).filter(([k]) => k === family || k.startsWith(`${family}-`)).map(([, v]) => hex(v)).filter(Boolean);
+  return new Set(own.length ? own : FAMILY_HEX[family] ?? []);
+}
+
+/** The fill and stroke colours an element's attributes paint (attributes and inline style), upper case. */
+function paints(attrs) {
+  const out = [];
+  for (const k of ['fill', 'stroke']) {
+    const v = attr(attrs, k) ?? new RegExp(`(?:^|;)\\s*${k}\\s*:\\s*([^;"]+)`).exec(attr(attrs, 'style') ?? '')?.[1];
+    if (v && /^#[0-9a-f]{6}$/i.test(v.trim())) out.push(v.trim().toUpperCase());
+  }
+  return out;
+}
+
+/** Attributes that make a group one thing for the orange count (an action, an object, a focal). */
+const THING_ATTRS = ['data-who', 'data-ui', 'data-object', 'data-entity', 'data-concept', 'data-id', 'data-action', 'data-label'];
+
+/**
+ * The orange check (VISUAL_SYSTEM_6.md § 6 `orange`, every builder frame): orange is the hero's and at most
+ * one more thing (a UI's one action, or the mechanism's one active thing). Per sample, every drawn element painted in the orange family (`orange`: its hexes,
+ * familyHexes) is assigned to the thing it belongs to: a critter (data-who), else the outermost group
+ * naming a thing (THING_ATTRS, a lens focal, or a kit solid tagged data-tone="orange"), else its
+ * innermost group, else itself.
+ * Orange on a critter other than the hero (`heroIds`: CAST's orange critter, or the storyboard's
+ * object hero, whose own group is exempt) is an error; so is orange on more than one thing outside
+ * the hero. Code's cards (the title and dictionary cards) are skipped.
+ * Reported once per kind per frame.
+ */
+/** @param {{ t?: number, svg: string }[]} samples @param {{ orange?: Iterable<string>, heroIds?: string[] }} [opts] @returns {string[]} */
+export function strayOrangeProblems(samples, { orange = FAMILY_HEX.orange, heroIds = /** @type {string[]} */ ([]) } = {}) {
+  const HERO = Symbol('hero');
+  const hexes = new Set([...orange].map((h) => h.toUpperCase()));
+  const heroes = new Set(heroIds);
+  const out = [];
+  const seen = new Set();
+  for (const { t, svg } of samples ?? []) {
+    const s = String(svg ?? '');
+    const at = typeof t === 'number' ? ` at ${t.toFixed(2)}s` : '';
+    const stack = [{ thing: null, group: null, who: null, card: false, hidden: false }];
+    const critters = new Set();
+    const things = new Set();
+    let seq = 0;
+    for (const m of s.matchAll(/<(\/?)([a-zA-Z][\w:-]*)\b([^>]*?)(\/?)>/g)) {
+      const [, close, tag, attrs, self] = m;
+      const top = stack[stack.length - 1];
+      if (close) {
+        if (stack.length > 1) stack.pop();
+        continue;
+      }
+      const hidden = top.hidden || NOT_DRAWN.has(tag) || attr(attrs, 'display') === 'none' || attr(attrs, 'opacity') === '0';
+      const role = attr(attrs, 'data-role');
+      const card = top.card || role === 'title' || role === 'definition';
+      const who = top.who ?? attr(attrs, 'data-who') ?? null;
+      const names = THING_ATTRS.some((k) => attr(attrs, k) !== undefined) || attr(attrs, 'data-k') === 'focus' || attr(attrs, 'data-tone') === 'orange';
+      // an object hero (the storyboard's `hero: <id> — object`) wears the orange as a hero critter does
+      const heroThing = THING_ATTRS.some((k) => heroes.has(attr(attrs, k) ?? ''));
+      const thing = top.thing ?? (heroThing ? HERO : names ? `${tag}#${++seq}` : null);
+      if (!hidden && !card && paints(attrs).some((c) => hexes.has(c))) {
+        if (who) critters.add(who);
+        else if (thing !== HERO) things.add(thing ?? top.group ?? `${tag}#${++seq}`);
+      }
+      // an unnamed group (a button's shape and its words) counts as one thing
+      if (!self) stack.push({ thing, group: tag === 'g' ? `g#${++seq}` : top.group, who, card, hidden });
+    }
+    const strays = [...critters].filter((w) => !heroes.has(w) && !heroes.has(w.replace(/-\d+$/, '')));
+    if (strays.length && !seen.has('critter')) {
+      seen.add('critter');
+      out.push(`${strays.map((w) => `"${w}"`).join(', ')} ${strays.length > 1 ? 'are' : 'is'} drawn with orange${at}: orange is only the hero's body, so no other critter and nothing it wears or holds is orange`);
+    }
+    if (things.size > 1 && !seen.has('things')) {
+      seen.add('things');
+      out.push(`${things.size} things outside the hero are orange${at}: orange is the hero's body and at most one action (a button, or the single chosen part of a mechanism); give the rest another role colour`);
+    }
+  }
+  return out;
+}
+
+/** A role name as ROLES spells it ('office worker', 'office-worker' and 'Office_Worker' alike), or null. */
+export function roleKey(roles, name) {
+  const norm = (x) => String(x ?? '').trim().toLowerCase().replace(/[\s_-]+/g, ' ');
+  const want = norm(name);
+  return Object.keys(roles ?? {}).find((k) => norm(k) === want) ?? null;
+}
+
+/**
+ * The wear check on CAST (VISUAL_SYSTEM_6.md § 4, § 6): each critter's role is one of wear.js
+ * ROLES (or 'bare', or none), its head piece one of HEADS and its hand prop one of HANDS, and its
+ * wear passes wear.js wearProblems against the storyboard's beats (`beatsOf(id)`: [{ frame,
+ * usesHands, putsDown }], layout-checks.mjs handBeats). `kit` is wear.js; null (an older kit) checks
+ * nothing.
+ */
+/** @param {any} cast @param {any} kit @param {(id: string) => { frame: number, usesHands: boolean, putsDown?: boolean }[]} [beatsOf] @returns {string[]} */
+export function wearCastProblems(cast, kit, beatsOf = () => []) {
+  if (!kit || !cast || typeof cast !== 'object') return [];
+  const roles = kit.ROLES ?? {};
+  const heads = new Set(kit.HEADS ?? []);
+  const hands = new Set(kit.HANDS ?? []);
+  const errors = [];
+  for (const [id, look] of Object.entries(cast)) {
+    const where = `CAST.${id}`;
+    let wear = { role: 'bare' };
+    const role = look?.role;
+    if (role !== undefined && role !== null && String(role).trim().toLowerCase() !== 'bare') {
+      const key = roleKey(roles, role);
+      if (!key) {
+        errors.push(`${where}.role "${role}" is not a role the kit draws: one of ${Object.keys(roles).join(', ')}, or bare`);
+        continue;
+      }
+      wear = { ...roles[key], role: key };
+    }
+    for (const k of ['head', 'hand', 'bowtie', 'headTone']) if (look?.[k] !== undefined) wear[k] = look[k];
+    if (wear.head != null && !heads.has(wear.head)) errors.push(`${where}.head "${wear.head}" is not a head piece the kit draws: one of ${[...heads].join(', ')}`);
+    if (wear.hand != null && !hands.has(wear.hand)) errors.push(`${where}.hand "${wear.hand}" is not a hand prop the kit draws: one of ${[...hands].join(', ')}`);
+    if (typeof kit.wearProblems === 'function') {
+      try {
+        for (const p of kit.wearProblems(wear, wear.hand ? beatsOf(id) : []) ?? []) errors.push(`${where}: ${p}`);
+      } catch (e) {
+        errors.push(`${where}: wear.js wearProblems threw: ${e?.message ?? e}`);
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * A critter's beats for the wear rule, read from the project's STORYBOARD.md (layout-checks.mjs
+ * frameActionText and handBeats: what each frame's scene and shot lines have it do), or [] when
+ * there is no storyboard.
+ */
+export function storyboardHandBeats(root, id) {
+  let board;
+  try {
+    board = readFileSync(join(root, 'STORYBOARD.md'), 'utf8');
+  } catch {
+    return [];
+  }
+  const frames = [];
+  for (const m of board.matchAll(/^##\s+Frame\s+(\d+)[^\n]*\n([\s\S]*?)(?=^##\s+|(?![\s\S]))/gim)) frames.push({ number: Number(m[1]), text: frameActionText(m[2]) });
+  return handBeats(frames, [id]);
+}
+
 /** The world's problems (records): CAST and outfits the kit can draw, SIZES, world.js's parts run once, the set and identity. */
 async function tryWorld(root) {
   const file = join(root, 'assets', 'world', 'world.js');
@@ -1516,6 +1775,7 @@ async function tryWorld(root) {
     if (!Object.keys(mod).length) return as('load', ['world.js exports nothing']);
     const found = as('world', castShapeProblems(mod.CAST, { orange: false }));
     if (!found.length) found.push(...as('outfit', outfitProblems(mod.CAST, await kitModule('cast.js'), { orange: false })));
+    if (!found.length) found.push(...as('wear', wearCastProblems(mod.CAST, await kitModule('wear.js'), (id) => storyboardHandBeats(root, id))));
     found.push(...as('world', sizeLedgerProblems(mod)));
     found.push(...as('world', await lensWorldProblems(mod)));
     gate41(found, await worldProblems41(root, mod));
@@ -1599,6 +1859,8 @@ export async function tryProps(root) {
 
 /** The hook contract (EX3-102): what the bank's openers need from 01-hook.js (records). */
 async function tryHook(root, duration) {
+  // hx-6: code's AI 101 card is no worker's hook; its contract is the kit's (tests), not checked here
+  if (isLessonHook(root)) return [];
   const file = join(root, 'assets', 'frames', `${HOOK_ID}.js`);
   if (!existsSync(file)) return as('load', [`assets/frames/${HOOK_ID}.js does not exist (frame 1's hook: the frame worker writes it; 01-opener.js is code's)`]);
   let mod;
@@ -1682,13 +1944,16 @@ async function tryFrame(root, id) {
   }
   if (typeof scene?.draw !== 'function') return as('load', [`${id}.js needs \`export default { ground, draw(t) { … } }\``]);
   if (scene.ground !== undefined && !resolveGround(scene.ground)) {
-    return as('ground', [`${id}.js: ground "${scene.ground}" must be paper, stage, or white`]);
+    return as('ground', [`${id}.js: ground "${scene.ground}" must be paper, stage, white, or room`]);
   }
   // Night and forest are old names for the stage (hx-4): compared as the kit draws them.
   const planned = (entry.fields.ground ?? '').trim().toLowerCase() || 'paper';
   if (resolveGround(scene.ground ?? 'paper') !== resolveGround(planned)) {
     return as('ground', [`${id}.js: ground "${scene.ground ?? 'paper'}" does not match the storyboard's ground "${planned}"`]);
   }
+  // the first-try fixes (scene-fit.js), as mount.mjs draws the frame for the render: the try checks
+  // what will be on screen
+  scene = await preparedScene(root, scene, entry.duration);
   const found = [];
   const eventsFile = join(root, 'assets', 'frames', `${id}.events.json`);
   if (!existsSync(eventsFile)) found.push(...as('events', [`assets/frames/${id}.events.json does not exist (every moment of motion needs a sound event)`]));
@@ -1751,13 +2016,21 @@ async function tryFrame(root, id) {
     drawErrors += bad.length;
     if (drawErrors >= 8) break;
   }
-  // 4.1 camera shots list their cast: a critter outside it is off screen on purpose
+  // 4.1 camera shots list their cast: a critter outside it has not entered the place yet, or left it
   const camShots = Array.isArray(scene.shots) && scene.shots.some((sh) => sh?.camera && Array.isArray(sh.cast)) ? scene.shots : null;
   const castAt = camShots && typeof S.shotAt === 'function' ? (t) => {
     const sh = S.shotAt(t, camShots)?.shot;
     return sh?.camera && Array.isArray(sh.cast) ? sh.cast : null;
   } : null;
   found.push(...as('cast', castProblems(samples, castAt)));
+  // a critter in a place stays in every later shot of it (a shot is a camera, EX3-90)
+  const CONT = camShots ? await kitModule('continuity.js') : null;
+  if (camShots && typeof CONT?.castContinuityProblems === 'function') {
+    const critters = new Set(samples.flatMap(({ svg }) => [...String(svg).matchAll(/data-who="([^"]+)"/g)].map((m) => m[1])));
+    found.push(...as('cast', CONT.castContinuityProblems(camShots, critters)));
+  }
+  const shotIndexAt = Array.isArray(scene.shots) && scene.shots.length && typeof S.shotAt === 'function' ? (t) => S.shotAt(t, scene.shots)?.i ?? 0 : null;
+  found.push(...as('hands', handProblems(samples, shotIndexAt)));
   found.push(...as('identity', twinProblems(samples)));
   found.push(...as('layers', orderFlickerProblems(samples)));
   found.push(...as('layers', pickNotTopProblems(samples)));
@@ -1884,6 +2157,21 @@ export function frame7Problems(entry, source, samples) {
   return [];
 }
 
+/**
+ * The frame's scene with scene-fit.js's first-try fixes (subject unblocked and framed, no pop-in
+ * after a cut, the place's dressing drawn), through the project's own kit (the frames' copy), so
+ * the fitted cameras reach the shotFrame the frame imports. A kit without scene-fit.js: unchanged.
+ */
+export async function preparedScene(root, scene, duration) {
+  try {
+    const own = join(root, 'assets', 'kit', 'scene-fit.js');
+    const fit = existsSync(own) ? await import(pathToFileURL(own).href) : await import('./scene-fit.js');
+    return fit.prepareScene(scene, { world: await loadWorld(root), duration });
+  } catch {
+    return scene;
+  }
+}
+
 /** world.js's exports, or null when the project has none or it fails to load (tryWorld reports it). */
 async function loadWorld(root) {
   const file = join(root, 'assets', 'world', 'world.js');
@@ -1908,6 +2196,8 @@ export async function frameProblems41(root, entry, file, scene, samplesIn, bank 
   let samples = samplesIn;
   let shots = Array.isArray(scene?.shots) ? scene.shots : null;
   let draw = (t) => scene.draw(t);
+  // hx-6: a frame 1 that lands on code's AI 101 card is all code's: no worker part to check
+  if (bank && isLessonHook(root)) return out;
   if (bank) {
     const hookFile = join(root, 'assets', 'frames', `${HOOK_ID}.js`);
     try {
@@ -1997,9 +2287,21 @@ export async function frameProblems41(root, entry, file, scene, samplesIn, bank 
           shotAt: (t) => shotAtIx(t).i,
           dressing: world.DRESSING,
           story: Array.isArray(world.STORY) ? world.STORY : [],
+          undressAt: (t) => [].concat(shotAtIx(t).shot?.undress ?? []),
         })));
       }
     }
+  }
+  // hx-6's orange rule (VISUAL_SYSTEM_6.md § 6), on analogy frames only (storyboard `ground: room`);
+  // everywhere else main's orange guidance applies unchanged: orange only on the hero and at most one more thing
+  if (entry.number !== 3 && entry.number !== 8 && (entry.fields?.ground ?? '').trim().toLowerCase() === 'room') {
+    const tokens = (await kitModule('core.js'))?.TOKENS ?? null;
+    const cast = (await loadWorld(root))?.CAST;
+    const heroIds = cast && typeof cast === 'object' ? Object.entries(cast).filter(([, l]) => l?.body === 'orange').map(([id]) => id) : [];
+    const board = existsSync(join(root, 'STORYBOARD.md')) ? readFileSync(join(root, 'STORYBOARD.md'), 'utf8') : '';
+    const objectHero = /^-\s*hero:\s*([\w-]+)\s*[—–-]+\s*object\b/im.exec(board)?.[1];
+    if (objectHero) heroIds.push(objectHero);
+    out.push(...as('orange', strayOrangeProblems(samples, { orange: familyHexes('orange', tokens), heroIds }), 'orange: '));
   }
   if (sceneLook(look)) {
     if (typeof S.labelProblems === 'function') {
@@ -2082,7 +2384,10 @@ export function jumpCuts(shotsIn, samples, duration, S, { look = null, carries =
   const list = [...(samples ?? [])].sort((x, y) => x.t - y.t);
   // each shot with its planned carry (the module's, else its storyboard line's) and the frame's look:
   // jumpCutProblems exempts a declared carry and a change of look
-  const shots = shotsIn.map((s, k) => ({ ...s, carry: s?.carry ?? carries[k] ?? null, look: s?.look ?? look }));
+  // the list as shotFrame draws it: snapCuts has already moved a same-picture or same-subject cut
+  // to 2× in or ½ out, so what is left here is what geometry could not fix
+  const drawn = typeof S.snapCuts === 'function' ? S.snapCuts(shotsIn) : shotsIn;
+  const shots = drawn.map((s, k) => ({ ...s, carry: s?.carry ?? carries[k] ?? null, look: s?.look ?? look }));
   for (let k = 1; k < shots.length; k++) {
     let [a, b] = [shots[k - 1], shots[k]];
     if (!a || !b) continue;
@@ -2090,19 +2395,23 @@ export function jumpCuts(shotsIn, samples, duration, S, { look = null, carries =
     if (!a.camera && !b.camera) {
       const before = list.filter((x) => x.t >= a.at && x.t < b.at).at(-1);
       const after = list.find((x) => x.t >= b.at && x.t < end);
-      if (camOf(before) === camOf(after)) {
+      // a shot that names its own composition (shot.picture) cuts to a new picture
+      if (camOf(before) === camOf(after) && (a.picture ?? null) === (b.picture ?? null)) {
         const len = b.at - a.at;
         const view = (s, local, l) => cropView(s, S.shotCamera(s, local, l).zoom, S.SUBJECT_AT);
         const [va, vb] = [view(a, len, len), view(b, 0, end - b.at)];
         const inter = boxArea([Math.max(va[0], vb[0]), Math.max(va[1], vb[1]), Math.min(va[2], vb[2]), Math.min(va[3], vb[3])]);
-        const same = inter / Math.max(1e-9, Math.min(boxArea(va), boxArea(vb))) >= SAME_PICTURE;
+        // the very same framing across the cut (shots.js sameFraming) jumps nothing: a new picture
+        const kept = typeof S.sameFraming === 'function' && S.sameFraming(a, b, len, end - b.at);
+        const same = !kept && inter / Math.max(1e-9, Math.min(boxArea(va), boxArea(vb))) >= SAME_PICTURE;
         [a, b] = [{ ...a, subject: PICTURE }, { ...b, subject: same ? PICTURE : `${PICTURE} 2` }];
       } else {
         [a, b] = [{ ...a, subject: a.subject ?? `${PICTURE} 1` }, { ...b, subject: b.subject ?? `${PICTURE} 2` }];
       }
     }
     const pair = S.jumpCutProblems([a, b], { samples: list, duration: end });
-    out.push(...pair.map((e) => e.replace(/^shots 1 and 2: /, `shots ${k} and ${k + 1}: `).replace(`the same subject "${PICTURE}"`, 'the same picture')));
+    const hint = a.subject === PICTURE ? ` (when shot ${k + 1} draws a composition of its own, name it: picture: '…')` : '';
+    out.push(...pair.map((e) => e.replace(/^shots 1 and 2: /, `shots ${k} and ${k + 1}: `).replace(`the same subject "${PICTURE}"`, 'the same picture') + hint));
   }
   return out;
 }

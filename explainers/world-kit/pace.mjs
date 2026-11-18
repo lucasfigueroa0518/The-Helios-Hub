@@ -32,8 +32,8 @@ import { pathToFileURL } from 'node:url';
 
 import { CLOSE } from './close-timing.js';
 import { CLOSE_FRAME, isClose, isHandoff, parseFrames, seconds, writeClose, writeHandoff, writeOpener } from './frames.mjs';
-import { openerByKey } from './openers/bank.js';
-import { ensureOpener } from './openers/sound.mjs';
+import { openerByKey, openerTiming } from './openers/bank.js';
+import { chosenOpener, ensureOpener, openerVoice } from './openers/sound.mjs';
 
 export { CLOSE_FRAME, isClose };
 
@@ -319,11 +319,22 @@ export function tightenVoices(root, meta, { detect = detectSilences, lead = 0 } 
 }
 
 /**
+ * Frame 1's length when the hook is silent (D124, D125): the bank opener's own (openerTiming with
+ * `silent`: its animation, then the wordmark readable WORDMARK_READ before the cut); null when frame 1
+ * speaks or the job chose no opener.
+ */
+export function silentOpenerDuration(root) {
+  const key = chosenOpener(root);
+  return key && openerVoice(root) === 'silent' ? openerTiming(key, 0, [], { silent: true }).duration : null;
+}
+
+/**
  * The storyboard with each voiced frame's `duration` = voice + hold and its `voice_end` set.
  * `voices`: audio_meta.json's voices ({ frame, duration_s }). The close (frame 8 with no
- * voiceover, EX3-95) becomes CLOSE_DURATION: all of it is hold.
+ * voiceover, EX3-95) becomes CLOSE_DURATION: all of it is hold. `silentOpener` (seconds): frame 1
+ * is the silent hook (D124) and lasts that long, all of it hold, whatever voice it has.
  */
-export function pacedStoryboard(storyboard, voices) {
+export function pacedStoryboard(storyboard, voices, { silentOpener = null } = {}) {
   const voiceByFrame = new Map((voices ?? []).filter((v) => v.frame != null && v.duration_s > 0).map((v) => [Number(v.frame), v.duration_s]));
   const lines = String(storyboard).split(/\r?\n/);
   const out = [];
@@ -341,7 +352,15 @@ export function pacedStoryboard(storyboard, voices) {
       flush();
       frame = heading ? Number(heading[1]) : null;
     }
-    if (frame != null && voiceByFrame.has(frame)) {
+    if (frame === OPENER_FRAME && silentOpener > 0) {
+      if (/^\s*-\s+voice_end\s*:/i.test(line)) continue;
+      const m = /^(\s*-\s+duration\s*:\s*).*/i.exec(line);
+      if (m) {
+        out.push(`${m[1]}${r3(silentOpener)}s`);
+        paced.push({ frame, voice: 0, hold: r3(silentOpener), duration: r3(silentOpener) });
+        continue;
+      }
+    } else if (frame != null && voiceByFrame.has(frame)) {
       if (/^\s*-\s+voice_end\s*:/i.test(line)) continue; // rewritten below
       const m = /^(\s*-\s+duration\s*:\s*).*/i.exec(line);
       if (m) {
@@ -377,15 +396,22 @@ export function pace(root, { tighten = true } = {}) {
   if (!existsSync(sbFile)) return { ok: false, errors: ['STORYBOARD.md is missing'], total: 0, frames: [], tightened: [] };
   if (!existsSync(metaFile)) return { ok: false, errors: ['audio_meta.json is missing (run audio.mjs first)'], total: 0, frames: [], tightened: [] };
   const meta = JSON.parse(readFileSync(metaFile, 'utf8'));
+  // A silent hook (D124): frame 1 has no line, so the voice track starts at frame 2; a frame-1 voice
+  // left in audio_meta.json (a script that still gave one) is dropped, never heard.
+  const silentOpener = silentOpenerDuration(root);
+  if (silentOpener && (meta.voices ?? []).some((v) => Number(v.frame) === OPENER_FRAME)) {
+    meta.voices = meta.voices.filter((v) => Number(v.frame) !== OPENER_FRAME);
+    if (!tighten) writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
+  }
   let tightened = [];
   if (tighten) {
     const key = ensureOpener(root);
-    const t = tightenVoices(root, meta, { lead: key ? openerByKey(key).voiceAt : 0 });
+    const t = tightenVoices(root, meta, { lead: key && !silentOpener ? openerByKey(key).voiceAt : 0 });
     tightened = t.removed;
     errors.push(...t.errors);
     writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);
   }
-  const { storyboard, paced } = pacedStoryboard(readFileSync(sbFile, 'utf8'), meta.voices);
+  const { storyboard, paced } = pacedStoryboard(readFileSync(sbFile, 'utf8'), meta.voices, { silentOpener });
   writeFileSync(sbFile, storyboard);
 
   const frames = parseFrames(storyboard);
