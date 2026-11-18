@@ -33,6 +33,14 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
   ─ This type only ─  (e.g. AI Drama's extra form, Stories series, AI Events cities)
   ```
 
+- **D9 (2026-11-18): The gear-button Settings drawer goes away; the pool's Settings tab is the only place.** User: "yes".
+- **D10 (2026-11-18): Settings that cover every type** (calendar template mode, publisher on/off) **stay on the Social Hub's main settings.** Each type's tab shows one line, "also affected by: …". User: "yes".
+- **Context from Lucas (text, 2026-11-18):** the retired Stories types "are no longer in the software at all". **Carousels is iced** but "has potential to make a comeback in the future". Lucas also on Live: "our 'live' button is a bit misleading … live now mean fr live, like [it's] getting posted", which agrees with D1.
+  Carousels today: `auto_run` off (switched off 2026-11-18 16:28 UTC), `publishing_live` still **on**, `require_approval` on, no future carousel slots on the spine. Nothing posts unless a person approves a carousel that's waiting in review.
+  Proposed, awaiting the user's answer: three type states, **Active / Paused / Retired**.
+  - Paused: the code stays, all four switches are off, and the type collapses to a "Paused" row in the hub with one "Bring back" button.
+  - Retired: the code is gone, the saved settings are switched off, and leftover pool rows are archived with reason `retired`. History is kept and nothing is deleted.
+
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
 | Type | Generate now | Newest pool refill | Verdict |
 |---|---|---|---|
