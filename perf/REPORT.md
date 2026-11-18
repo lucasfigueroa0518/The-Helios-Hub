@@ -4,6 +4,10 @@ Branch `claude/eloquent-ramanujan-po7kia` (the playbook's `perf/overhaul`; this 
 
 ## Verdict
 
+**Update 2026-11-18 (follow-up, approved changes): 95 of 95 measured routes now meet the warm budget.** `/trello` 1591 → 450 ms and `/api/content-type/run-today` 561 → 140 ms warm p95 (details in "Follow-up" below). Clicking Social Hub in the sidebar now shows its Content page fully in about 45 ms, down from about 530 ms.
+
+Original verdict:
+
 **93 of 95 measured routes now meet the 500 ms budget at warm p95, up from 89.** Every page streams its first paint within 150 ms TTFB (worst warm TTFB p95 is 110 ms). The two still over are documented exceptions with a plan: `/trello` (a 15.8 MB workspace document) and `/api/content-type/run-today` (a fresh full read before a spend decision).
 
 | | Baseline | Final |
@@ -169,6 +173,22 @@ What this corrects:
 - **`/trello`**: splitting the views cut first-load JS 249 → 229 KB, but `usePrefetchWhenIdle` fetches the other view chunks during the Lighthouse window, so script transfer is +24 KB and LCP and TBT don't move. Both are dominated by the 15.8 MB workspace document; see "Still over budget". The change is kept on its target metric (first-load JS) and because Trello's bundle budget (233 KB) relies on it.
 
 
+## Follow-up 2026-11-18: approved changes
+
+You approved loading Trello card details on demand and letting the run-today preview use 60-second-old data, confirmed the font license (D7) and the regions (D1), and set a goal: Social Hub must land in under 100 ms from the sidebar click.
+
+| Change | Commit | Measured effect |
+|---|---|---|
+| Trello: card details (checklists, attachments, comments, activity) load when a card opens; Activity and Profile read only the rows they show | `abcc54c`, `648b45e` | `/trello` warm p95 **1591 → 450 ms** (in budget), TTFB p95 108 → 29 ms, document **15.8 → 4.4 MB**, cold p95 1355 → 714 ms. Lighthouse A/B: LCP **10.5 → 4.2 s**, transfer 4.2 → 1.4 MB. |
+| run-today GET preview plans from the shared 60 s hub dataset (POST still plans fresh) | `feffb48` | warm p95 **561 → 140 ms** (in budget), 89 → 32 statements. **Cold p95 got worse, 988 → 1552 ms**: with an empty data cache the preview waits for the full hub dataset rebuild. On Vercel the data cache is shared, so that is mostly the first open after a deploy or right after a hub action. Running the rebuild's reads in parallel was tried and reverted (no gain; the 3-connection pool is the limit). |
+| Brand font as WOFF2 (lossless, 707/707 glyphs) | `f725c8a` | 250 KB → 79.5 KB file; transfer per page −26 KB (`/` 575 → 549 KB, `/dashboards` 456 → 429 KB). LCP flat (778 → 784, 653 → 653 ms). |
+| Social Hub: the sidebar link loads the full route when the hub is idle, and preloads its CSS and first images | `9858c59` | Click to fully loaded (images included): **p50 528 → ~45 ms, p95 618 → under 75 ms**. 75 clicks from 5 starting pages, with and without hover; worst 72.8 ms. Before, React held the page for the route CSS and then revealed it on its ~300 ms throttle. Cost: one `/social` render per hub page view, served from the 60 s cache. |
+
+Checks:
+- `perf/lib/trello-ab-check.mjs` drove the old and new builds side by side. For a seeded user with 2,092 events and 52 tracked cards, **18/18 screens were identical** (Home with the notification bell, Activity, Profile, My cards, Due this week, a board, and six opened cards with their comments and activity). For the perf user, every screen matched except the order of Activity events that share the exact same timestamp; the new build breaks those ties by id.
+- `tests/trello-card-details.test.ts` covers the badges, recent boards, feed merge and week tiles.
+- The story-frame images in the Social Hub timing were served by `perf/lib/storage-stub.mjs`, which signs and serves frames like Supabase Storage with a 60 ms delay; this machine has no real Storage. Raw results: `experiments/social-click-*.json`, `followup.json`, `experiments/lh-ab-followup.json`.
+
 ## Changes kept, with measured impact
 
 One commit per optimization; the numbers are also in each commit message. For frontend LCP and TBT, the A/B above supersedes the commit messages.
@@ -219,8 +239,8 @@ One commit per optimization; the numbers are also in each commit message. For fr
 
 | Route | Now (warm p95) | Root cause | Proposed plan |
 |---|---|---|---|
-| `/trello` (page) | TTFB 108 ms ✅, HTML 1591 ms ❌; LCP ~9.5 s | `loadWorkspace` sends the **entire** workspace as RSC props: every card with all comments, checklists, attachments, and all 30 000 activity rows (15.8 MB on the seed). The Home, Activity and Profile views compute from that client-side. | Send boards, lists and cards (titles, labels, members, counts) up front. Load a card's comments, checklist items and activity through a server action when it opens, and page the activity views. This changes the data flow of the Trello views, so it needs your OK. Expected document < 1 MB. |
-| `GET /api/content-type/run-today` | 561 ms ❌ | The "Run today" preview re-plans from a **fresh** read of every content type (89 statements). That's deliberate, because the POST spends money and must not plan from stale data. This branch already removed the ledger re-read (770 → 561 ms). | Let the GET preview use the 60 s cached hub reads, and keep the fresh read for the POST (which re-plans anyway). The preview could then be up to 60 s stale. That's a product call. |
+| `/trello` (page), **fixed 2026-11-18** (450 ms ✅; see Follow-up) | TTFB 108 ms ✅, HTML 1591 ms ❌; LCP ~9.5 s | `loadWorkspace` sends the **entire** workspace as RSC props: every card with all comments, checklists, attachments, and all 30 000 activity rows (15.8 MB on the seed). The Home, Activity and Profile views compute from that client-side. | Send boards, lists and cards (titles, labels, members, counts) up front. Load a card's comments, checklist items and activity through a server action when it opens, and page the activity views. This changes the data flow of the Trello views, so it needs your OK. Expected document < 1 MB. |
+| `GET /api/content-type/run-today`, **fixed 2026-11-18** (140 ms warm ✅; cold worse, see Follow-up) | 561 ms ❌ | The "Run today" preview re-plans from a **fresh** read of every content type (89 statements). That's deliberate, because the POST spends money and must not plan from stale data. This branch already removed the ledger re-read (770 → 561 ms). | Let the GET preview use the 60 s cached hub reads, and keep the fresh read for the POST (which re-plans anyway). The preview could then be up to 60 s stale. That's a product call. |
 | `GET /api/send-queue` (and `/hub/queue`) | 291 ms ✅ (server target 150 ❌); `/hub/queue` LCP ~17 s locally | A 9.4 MB JSON board (about 8 300 items across 22 days) that the queue page fetches client-side. Locally it's uncompressed (Vercel compresses it). | Return the visible week (or one day at a time) and drop unused per-item fields. Measure on production row counts first (D2): the seed fills optional text columns. |
 | `GET /api/analytics/summary`, `/drilldown` | 324 / 322 ms (server target 150 ❌) | 25 and 23 aggregate statements over leads, drafts and sends. The largest is the lead-spend facts (128 ms). | Pre-aggregate per day (a materialized view refreshed by the worker), or a 60 s shared cache keyed by filter (a freshness decision). |
 | `/social/content/library/music` (page) | 480 ms ✅; Lighthouse LCP 5.4 s, TBT 4.0 s (A/B) | 800 rows, each with a native `<audio controls>` (1.9 MB HTML). `content-visibility` already cut LCP by 19% and TBT by 25%. | Virtualize the list, or render a play button that mounts the `<audio>` element on tap. Both change the DOM and look, so a design call. |
