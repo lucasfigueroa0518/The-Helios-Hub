@@ -51,6 +51,14 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
 - **D12 (2026-11-18): Lucas replied "Yes to all"** to Tommy's text asking three things: switch off the retired series' settings, archive their 58 ideas, and drop `helios_social`. **Carousels' Live was not part of that text**, so it is still open.
   Correction from the full count: `helios_social` is **not** empty. `article_queue` has 1,000 rows of old v1 carousel stories (hooks, plans, copy, review status) and `image_cache` has 4. The other four tables are empty. There are no views, foreign keys or functions outside the schema that depend on it. The repo mentions it only in `docs/superpowers/specs/2026-10-08-social-storage.md` ("dropping it is Tommy's call") and in comments in `fixtures/social/example-post.ts`.
 
+- **D13 (2026-11-18): "Retired" is not a setting option.** User: "I don't want 'retired' to be a setting option." The type states are **Active / Paused** only. A retired type is removed from the software and has no switch.
+- **Done 2026-11-18 (DB, one transaction, approved by Tommy and Lucas):**
+  - In `stories.settings.series`, `free_vs_paid` and `guess_the_number` now have `auto` and `enabled` set to false. `updated_by` is "claude (Tommy request; Lucas approved)".
+  - 89 open `stories.pool` rows were archived with `archived_reason = 'series-removed'`: 28 Free vs Paid and 61 Guess the Number. The earlier "58" only counted rows refreshed in the last 10 days. Nothing was deleted.
+  - Carousels `social.settings.publishing_live` was set to false.
+  - To undo: set the series flags back, clear `archived_at` and `archived_reason` WHERE `archived_reason = 'series-removed'`, and set `publishing_live` back to true.
+  - Still to do: `helios_social` copy and drop.
+
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
 | Type | Generate now | Newest pool refill | Verdict |
 |---|---|---|---|
