@@ -1,0 +1,95 @@
+{
+  "user": "32b14be1-4695-44b0-afda-cd5d6f46623e",
+  "results": [
+    {
+      "label": "home (incl. notification bell)",
+      "same": true,
+      "chars": 750
+    },
+    {
+      "label": "activity view",
+      "same": true,
+      "chars": 21649
+    },
+    {
+      "label": "profile",
+      "same": true,
+      "chars": 2317
+    },
+    {
+      "label": "my cards",
+      "same": true,
+      "chars": 33736
+    },
+    {
+      "label": "due this week",
+      "same": true,
+      "chars": 130909
+    },
+    {
+      "label": "board",
+      "same": true,
+      "chars": 482
+    },
+    {
+      "label": "card \"Model data market reel signal.\": comments",
+      "same": true,
+      "chars": 1268
+    },
+    {
+      "label": "card \"Model data market reel signal.\": activity",
+      "same": true,
+      "chars": 679
+    },
+    {
+      "label": "card \"Content pine launch.\": comments",
+      "same": true,
+      "chars": 5047
+    },
+    {
+      "label": "card \"Content pine launch.\": activity",
+      "same": true,
+      "chars": 3898
+    },
+    {
+      "label": "card \"Design brand summit quartz launch pine o\": comments",
+      "same": true,
+      "chars": 939
+    },
+    {
+      "label": "card \"Design brand summit quartz launch pine o\": activity",
+      "same": true,
+      "chars": 692
+    },
+    {
+      "label": "card \"Board orbit weekly atlas.\": comments",
+      "same": true,
+      "chars": 1224
+    },
+    {
+      "label": "card \"Board orbit weekly atlas.\": activity",
+      "same": true,
+      "chars": 612
+    },
+    {
+      "label": "card \"Pipeline summit river helios cedar data \": comments",
+      "same": true,
+      "chars": 2430
+    },
+    {
+      "label": "card \"Pipeline summit river helios cedar data \": activity",
+      "same": true,
+      "chars": 1420
+    },
+    {
+      "label": "card \"Reel quartz river summit review quartz.\": comments",
+      "same": true,
+      "chars": 949
+    },
+    {
+      "label": "card \"Reel quartz river summit review quartz.\": activity",
+      "same": true,
+      "chars": 691
+    }
+  ]
+}

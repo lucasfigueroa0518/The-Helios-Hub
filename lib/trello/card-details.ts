@@ -121,7 +121,8 @@ export function mergeFeed(server: FeedRow[], local: FeedRow[], cardIds: Readonly
     seen.add(r.id);
     out.push(r);
   }
-  out.sort((a, b) => (a.at < b.at ? 1 : -1));
+  // Newest first; events with the same timestamp in a fixed order (by id), so a reload shows the same list.
+  out.sort((a, b) => (a.at === b.at ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.at < b.at ? 1 : -1));
   return out.slice(0, limit);
 }
 

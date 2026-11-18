@@ -1,0 +1,35 @@
+{
+  "user": "00000000-0000-4000-8000-00000000f001",
+  "results": [
+    {
+      "label": "home (incl. notification bell)",
+      "same": true,
+      "chars": 699
+    },
+    {
+      "label": "activity view",
+      "same": false,
+      "chars": 26089
+    },
+    {
+      "label": "profile",
+      "same": true,
+      "chars": 568
+    },
+    {
+      "label": "my cards",
+      "same": true,
+      "chars": 336
+    },
+    {
+      "label": "due this week",
+      "same": true,
+      "chars": 166384
+    },
+    {
+      "label": "board",
+      "same": true,
+      "chars": 586
+    }
+  ]
+}

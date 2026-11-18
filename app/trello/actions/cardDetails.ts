@@ -78,14 +78,14 @@ export async function loadActivityFeed(opts: { query?: string; authorId?: string
        (SELECT 'a' AS src, a.id, a.user_id, a.card_id, a.action_type, a.data, NULL::text AS body, a.created_at
           FROM boards.activity a
          WHERE a.card_id IN (SELECT id FROM vis) AND ($3::uuid IS NULL OR a.user_id = $3::uuid)
-         ORDER BY a.created_at DESC LIMIT $4)
+         ORDER BY a.created_at DESC, a.id LIMIT $4)
        UNION ALL
        (SELECT 'c' AS src, m.id, m.user_id, m.card_id, NULL, NULL, m.body, m.created_at
           FROM boards.comments m
          WHERE m.deleted_at IS NULL AND m.card_id IN (SELECT id FROM vis) AND ($3::uuid IS NULL OR m.user_id = $3::uuid)
-         ORDER BY m.created_at DESC LIMIT $4)
+         ORDER BY m.created_at DESC, m.id LIMIT $4)
      ) feed
-     ORDER BY created_at DESC
+     ORDER BY created_at DESC, card_id, id
      LIMIT $4`,
     [session.userId, query, opts.authorId ?? null, limit],
   );

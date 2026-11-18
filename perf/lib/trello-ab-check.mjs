@@ -42,60 +42,90 @@ for (const s of Object.values(sides)) for (let i = 0; i < 300 && (await ping(s.p
 const { chromium } = await import('playwright');
 const browser = await chromium.launch();
 const pages = {};
-for (const [name, s] of Object.entries(sides)) {
+const base = (name) => `http://127.0.0.1:${sides[name].port}`;
+// Views switch by URL (lib/trello/viewUrl.ts); each visit is a fresh load of the workspace.
+async function visit(page, name, url) {
+  const t0 = Date.now();
+  await page.goto(`${base(name)}${url}`, { waitUntil: 'networkidle', timeout: 180000 });
+  return Date.now() - t0;
+}
+for (const name of Object.keys(sides)) {
   const [k, ...v] = cookie.split('=');
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await ctx.addCookies([{ name: k, value: v.join('='), domain: '127.0.0.1', path: '/' }]);
   pages[name] = await ctx.newPage();
-  const t0 = Date.now();
-  await pages[name].goto(`http://127.0.0.1:${s.port}/trello`, { waitUntil: 'load', timeout: 120000 });
-  await pages[name].getByText('Views', { exact: true }).first().waitFor({ timeout: 120000 });
-  console.log(`${name}: /trello interactive in ${Date.now() - t0} ms`);
+  await visit(pages[name], name, '/trello'); // warm
+  console.log(`${name}: /trello loaded to network idle in ${await visit(pages[name], name, '/trello')} ms`);
 }
 
-const settle = async (page) => {
-  for (let i = 0; i < 100 && (await page.getByText('Loading…').count()) > 0; i += 1) await page.waitForTimeout(100);
-  await page.waitForTimeout(400);
+// Settled: no "Loading…" on screen and the text unchanged across 600 ms (hydration and
+// on-demand loads finish at different times on the two builds).
+const settle = async (page, sel = 'body') => {
+  let last = null;
+  for (let i = 0; i < 120; i += 1) {
+    await page.waitForTimeout(600);
+    const now = await page.locator(sel).first().innerText().catch(() => '');
+    if (now === last && !now.includes('Loading…')) return;
+    last = now;
+  }
 };
 const text = (page, sel = 'body') => page.locator(sel).first().innerText();
 const results = [];
-async function compare(label, act, sel) {
+async function compare(label, act, sel = 'body') {
   const out = {};
   for (const name of ['A', 'B']) {
     await act(pages[name]);
-    await settle(pages[name]);
+    await settle(pages[name], sel);
     out[name] = await text(pages[name], sel);
   }
   const same = out.A === out.B;
-  results.push({ label, same, chars: out.A.length });
-  console.log(`${same ? 'SAME' : 'DIFF'}  ${label} (${out.A.length} chars)`);
+  // Same lines in another order: rows with equal timestamps, whose order neither build fixes.
+  const sameLines = !same && out.A.split('\n').sort().join('\n') === out.B.split('\n').sort().join('\n');
+  results.push({ label, same, sameLines, chars: out.A.length });
+  console.log(`${same ? 'SAME' : sameLines ? 'SAME LINES, ORDER DIFFERS' : 'DIFF'}  ${label} (${out.A.length} chars)`);
   if (!same) {
+    const slug = label.replace(/[^a-z0-9]+/gi, '-').slice(0, 40);
+    for (const n of ['A', 'B']) fs.writeFileSync(path.join(PERF_DIR, '.local', `diff-${slug}-${n}.txt`), out[n]);
     const a = out.A.split('\n'), b = out.B.split('\n');
     for (let i = 0, shown = 0; i < Math.max(a.length, b.length) && shown < 8; i += 1) if (a[i] !== b[i]) { console.log(`   A: ${a[i]}\n   B: ${b[i]}`); shown += 1; }
   }
 }
 
-await compare('home', async () => {});
-await compare('activity view', (p) => p.getByText('Activity', { exact: true }).first().click());
-// The profile pill sits next to the Sign out button.
-await compare('profile', (p) => p.getByLabel('Sign out').locator('xpath=preceding-sibling::button[1]').click());
-await compare('home again', (p) => p.getByLabel('Go to workspace home').click());
+const go = (url) => async (p) => { await visit(p, p === pages.A ? 'A' : 'B', url); };
+await compare('home (incl. notification bell)', go('/trello'));
+await compare('activity view', go('/trello?view=activity'));
+await compare('profile', go('/trello?view=profile'));
+await compare('my cards', go('/trello?view=mine'));
+await compare('due this week', go('/trello?view=week'));
 // The first board on Home, then its card faces (badges: checklist, comments, attachments).
-await compare('board', (p) => p.locator('button[class*="h-[128px]"]').first().click());
-const titles = await pages.A.locator('h3').allInnerTexts();
+// Click until the board opens: the old build may still be hydrating its large document.
+await compare('board', async (p) => {
+  await go('/trello')(p);
+  for (let i = 0; i < 60 && !/board=/.test(p.url()); i += 1) {
+    await p.locator('button[class*="h-[128px]"]').first().click().catch(() => {});
+    await p.waitForTimeout(500);
+  }
+  await p.locator('h3').first().waitFor({ timeout: 60000 });
+});
+// Open cards from My cards (many boards): titles that appear exactly once, so both builds open the same card.
+for (const p of Object.values(pages)) { await go('/trello?view=mine')(p); await settle(p); }
+// CardRow (components/trello/views/CardRow.tsx) shows the title in a truncated font-medium div.
+const titles = (await pages.A.locator('li div.truncate.font-medium').allInnerTexts()).map((t) => t.trim()).filter(Boolean);
+console.log(`${titles.length} card rows in My cards`);
+const unique = titles.filter((t) => titles.indexOf(t) === titles.lastIndexOf(t));
 let opened = 0;
-for (const title of titles) {
-  if (opened >= CARDS || !title.trim()) continue;
-  const found = await pages.B.getByText(title, { exact: true }).count();
-  if (!found) continue;
-  await compare(`card "${title.slice(0, 40)}": comments`, (p) => p.getByText(title, { exact: true }).first().click(), '[role="dialog"]');
+for (const title of unique) {
+  if (opened >= CARDS) break;
+  if ((await pages.B.getByText(title, { exact: true }).count()) !== 1) continue;
+  await compare(`card "${title.slice(0, 40)}": comments`, (p) => p.getByText(title, { exact: true }).click(), '[role="dialog"]');
   await compare(`card "${title.slice(0, 40)}": activity`, (p) => p.locator('[role="dialog"] [role="tab"]', { hasText: 'Activity' }).click(), '[role="dialog"]');
-  for (const p of Object.values(pages)) { await p.keyboard.press('Escape'); await p.waitForTimeout(300); }
+  for (const p of Object.values(pages)) { await p.keyboard.press('Escape'); await p.waitForTimeout(400); }
   opened += 1;
 }
 await browser.close();
-const diffs = results.filter((r) => !r.same).length;
-console.log(`${results.length - diffs}/${results.length} screens identical`);
+const diffs = results.filter((r) => !r.same && !r.sameLines).length;
+const reordered = results.filter((r) => r.sameLines).length;
+console.log(`${results.length - diffs - reordered}/${results.length} screens identical, ${reordered} with the same lines in another order, ${diffs} different`);
 if (args.out) fs.writeFileSync(args.out, JSON.stringify({ user: user.id, results }, null, 2));
 stop();
 process.exit(diffs ? 1 : 0);
