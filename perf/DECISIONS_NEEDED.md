@@ -4,6 +4,8 @@ Items that need infra access, money, a product call, or a security call. Work co
 
 ## D1. Confirm the Vercel function region matches the Supabase region (Phase 5)
 
+**Resolved 2026-11-18: you confirmed they match.** No change needed.
+
 - **Why**: every query is a network round trip to the Supabase pooler. Same-region costs about 1–5 ms. Cross-region costs about 50–150 ms **per query**, and pages here issue 3–40 queries (see `perf/BOTTLENECKS.md`). That would swamp every code fix in this branch.
 - **What we know**: the workers run in GCP `us-west1-a`. Nothing in the repo pins the Vercel function region. Vercel's default is `iad1` (US East). The Supabase project region isn't in the repo.
 - **Ask**: in Vercel → Project → Settings → Functions, check the region. In Supabase → Project Settings → General, check the region. If they differ, either set the Vercel function region to the Supabase region (one line in `vercel.json`: `"regions": ["<region>"]`) or accept the cost. I didn't add `vercel.json`, because guessing the region could make things worse.
@@ -31,14 +33,19 @@ Not changed here, because the playbook forbids behavior changes in this branch. 
 - **Why**: at the baseline, JIT compiling was most of the time in the slowest statements. `loadSlates` spent 627 of 632 ms on it, outreach-stats 160 of 161 ms, and the campaign list 54 of 143 ms (`perf/slow-queries.md`). Upstream PostgreSQL has since changed the default to off.
 - **After this branch**: those statements were rewritten so their plans stay under the JIT threshold, and they now win whether JIT is on or off. Measured on the final build with `jit = off` (`perf/experiments/jit-off.json`, local only, reset afterwards), most routes are within noise. The ones that still gain are `/reels/analytics` 189 → 129 ms, `/api/analytics/summary` 324 → 295 ms, and `/social/analytics/cost` 369 → 329 ms.
 - **Ask**: run `psql "$DATABASE_URL" -X -c "BEGIN READ ONLY; SHOW jit; ROLLBACK;"`. If it says `on`, `ALTER DATABASE postgres SET jit = off;` is a small, reversible win (undo with `RESET`). It is database-wide, so it's your call. Low priority now.
+- **Who runs it (2026-11-18)**: you. This session has no production database credentials (none are in the environment, and the committed `.env.local.bak.*` from D4 was not opened), so it can't reach Supabase. The `ALTER DATABASE` is a production write in any case.
 
 ## D7. Serve the brand font as WOFF2 (licensing check)
+
+**Resolved 2026-11-18: you confirmed the license covers it, and it is done.** `app/fonts/PragmaticaExtended-Bold.woff2` is a lossless conversion (all 707 glyphs; every table byte-identical) and `app/layout.tsx` now loads it. The `.otf` stays in the repo as the source. Results are in `REPORT.md`.
 
 - **Why**: `app/fonts/PragmaticaExtended-Bold.otf` is 244 KB (about 105 KB gzipped on the wire), and `next/font` preloads it on **every** page for one title. A lossless WOFF2 conversion of the same file keeps all 707 glyphs and every table, and is **79 KB**. Turning the preload off instead is no good: LCP got worse by up to 476 ms (`perf/experiments/font-preload.json`), so the bytes are what has to shrink. A Latin-only subset would be smaller still.
 - **Why it's your call**: the font is ParaType's commercial Pragmatica. Its license URL is `paratype.com/eula`, and its embedding flags allow preview and print embedding only. Some desktop EULAs forbid format conversion or subsetting, and web use may need a web license. I didn't convert it.
 - **Ask**: confirm the Helios license covers web embedding and WOFF2 conversion (and subsetting, if wanted). If yes, the change is: convert with `fonttools` (`TTFont(...).flavor = 'woff2'; save`), add `app/fonts/PragmaticaExtended-Bold.woff2`, and point `localFont({ src })` in `app/layout.tsx` at it. About 165 KB less of the uncompressed file on each first visit.
 
 ## D8. Deploy steps after merging (I did not run these)
+
+You said you'll run these from your laptop. The 2026-11-18 follow-up (Trello on demand, the run-today preview, the WOFF2 font) changes no file the workers import, so nothing beyond the steps below is needed.
 
 1. **Index migration**: `psql "$DIRECT_DATABASE_URL" -v ON_ERROR_STOP=1 -f db/perf_2026_11_17_indexes.sql`. It is additive, `CREATE INDEX CONCURRENTLY`, so writes are not blocked. The rollback is `db/perf_2026_11_17_indexes_down.sql`. Without it, the campaign-list rewrite still returns the same rows, but its query stays near 127 ms instead of 56 ms.
 2. **Worker sync (CLAUDE.md)**: the workers import files changed here. `lib/db.ts` gets slow-query logging. `lib/campaigns.ts`, `lib/auto-campaigns/*` and `lib/inboxes/capacity.ts` give the same results, faster. `lib/reels/scoring/store.ts` and `lib/stories/storage.ts` give the same results, with the storage timeout defaulting to 60 s as before. Redeploy `helios-orch-worker` with `./scripts/gcp/deploy-worker-code.sh` and `helios-social-worker` with `./scripts/gcp/deploy-social-worker.sh` in the same session as the merge.
