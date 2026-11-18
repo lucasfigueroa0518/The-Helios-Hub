@@ -79,3 +79,7 @@ Reverted:
   - `reel-ai-drama-premortem-stage` (a file-level failure, which also causes the 3 cancelled tests).
   - The `# TODO` Stories gradient test, which is declared and waiting on Lucas.
 - The `tests/social-hub-scope.test.ts` dependency pin passes again, after the measurement tools moved out of `package.json`.
+- **Frontend A/B** (`perf/lib/lh-ab.mjs`, results in `perf/experiments/lh-ab.json`): the baseline and final builds served side by side, Lighthouse alternating between them, 5 runs each, 8 pages. The A/B replaces the single-run frontend figures above.
+  - Better: `/` (LCP −10%, TBT −31%), `/hub` (TBT −31%), music library (LCP −19%, TBT −25%).
+  - Flat: `/dashboards` LCP (667 → 661 ms). F5's 1141 → 657 ms was a noisy baseline run; the 112 KB saving holds. `/social`, `/carousels` and prospect are flat on LCP and TBT; prospect saves 23 KB of JS.
+  - `/trello`: script transfer is +24 KB because the idle prefetch runs inside the Lighthouse window. LCP and TBT are flat; the workspace document dominates both.

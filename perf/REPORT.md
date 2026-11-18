@@ -143,11 +143,35 @@ Routes within the warm budget: **89/95 → 93/95**.
 
 Single-run tails: the final run had fewer hub rebuilds (48 vs 131), but whichever route is sampled during one gets a slow p95 sample. `/social/calendar` (141.6 → 312.7 p95) and `/social/analytics/compare` (87 → 118) are that: re-measured alone on the final build they are 128.5 and 93.8 ms, with p50 unchanged (114 → 115, 69 → 72).
 
-<!-- AB -->
+## Frontend A/B (5 alternating Lighthouse runs per page)
+
+Single Lighthouse runs swing ±30%, so the frontend claims rest on an A/B instead. The baseline build (`/home/user/helios-base`, app code `f2bf691`) and the final build served side by side on the same data and DB proxy, and Lighthouse alternated between them (A, B, B, A, …) with the same mobile, Fast 4G and 4x CPU throttling. Medians of 5 runs each, all 5 completed on every page. CLS was 0 on both sides everywhere. Tool: [`lib/lh-ab.mjs`](lib/lh-ab.mjs). Raw results: [`experiments/lh-ab.json`](experiments/lh-ab.json).
+
+**This table supersedes the single-run LCP and TBT figures in individual commit messages.** It measures all the frontend changes together, not each commit alone.
+
+| Page | LCP (ms) | TBT (ms) | FCP (ms) | Script transfer (KB) | Total transfer (KB) | Read |
+|---|---|---|---|---|---|---|
+| `/` | 809 → **730** (−10%) | 208 → **143** (−31%) | 809 → 730 | 271 → 251 | 594 → 575 | Better |
+| `/hub` | 1915 → 1825 (−5%) | 272 → **188** (−31%) | 611 → 619 | 229 → 220 | 864 → **784** | TBT better, LCP within noise |
+| `/dashboards` | 667 → 661 (−1%) | 134 → 150 (+12%, 15 ms) | 666 → 661 | 170 → 163 | 568 → **456** | 112 KB less per visit; LCP and TBT flat |
+| `/social` | 1138 → 1144 (+1%) | 160 → 154 (−4%) | 717 → 687 | 194 → 187 | 576 → 571 | Flat |
+| `/carousels` | 1290 → 1276 (−1%) | 252 → 274 (+9%, 22 ms) | 743 → 783 | 238 → 232 | 589 → 583 | Flat (within noise) |
+| `/social/content/library/music` | 6679 → **5414** (−19%) | 5321 → **3977** (−25%) | 863 → 825 | 175 → 168 | 949 → 942 | Better, still heavy (see below) |
+| `/campaigns/[id]/prospect` | 665 → 671 (+1%) | 155 → 146 (−6%) | 665 → 671 | 195 → **172** | 610 → 587 | 23 KB less JS; LCP and TBT flat |
+| `/trello` | 9771 → 9845 (+1%) | 271 → 285 (+5%) | 8613 → 8561 | 256 → 280 | 4170 → 4194 | Flat. Idle prefetch adds JS inside the window (below) |
+
+What this corrects:
+
+- **`/dashboards` LCP did not improve.** The commit message for #18 claimed 1141 → 657 ms, but that came from a slow baseline run. The A/B shows LCP flat (667 → 661). The change is kept for the 112 KB it saves on every visit, its target metric.
+- **`/hub`**: the A/B shows TBT −31% and LCP −5% (within noise). The commit-time single runs (LCP 2169 → 1785, TBT 385 → 155) overstated it.
+- **Prospect TBT**: −6% (155 → 146), not the 168 → 99 from a single run. The 23 KB of JS saved is real.
+- **Music library**: LCP 6.7 → 5.4 s and TBT 5.3 → 4.0 s, smaller than the single-run figures (6222 → 4290, 4506 → 3102) but a solid gain in the same direction.
+- **`/trello`**: splitting the views cut first-load JS 249 → 229 KB, but `usePrefetchWhenIdle` fetches the other view chunks during the Lighthouse window, so script transfer is +24 KB and LCP and TBT don't move. Both are dominated by the 15.8 MB workspace document; see "Still over budget". The change is kept on its target metric (first-load JS) and because Trello's bundle budget (233 KB) relies on it.
+
 
 ## Changes kept, with measured impact
 
-One commit per optimization; the numbers are also in each commit message.
+One commit per optimization; the numbers are also in each commit message. For frontend LCP and TBT, the A/B above supersedes the commit messages.
 
 ### Backend and data (Phase 3)
 
@@ -171,12 +195,12 @@ One commit per optimization; the numbers are also in each commit message.
 
 | # | Change | Commit | Measured effect |
 |---|---|---|---|
-| 14 | Sidebar drawer: `LazyMotion` + `m` | `9308548` | **−27.5 KB gz initial JS on every page.** Pages within 150 KB: **0 → 40 of 55**. |
-| 15 | Anthropic SDK out of client bundles (pure helper split) | `d9115a1` | draft 179 → 163 KB, prospect 158 → 142 KB; prospect TBT 168 → 99 ms |
-| 16 | Trello views and dialogs on demand, prefetched when idle | `4ea4c54` | 255 → 229 KB (LCP unchanged: see "still over budget") |
-| 17 | Hub streams the campaign list from the server (no client waterfall) | `13e1e70` | `/hub` LCP **2169 → 1785 ms**, TBT 385 → 155 ms |
-| 18 | Dashboards reuse the `next/font` brand font (no second copy) | `44538d7` | −113 KB per visit; `/dashboards` LCP **1141 → 657 ms** |
-| 19 | `content-visibility: auto` on stacked hub table rows | `2972581` | Music library LCP **6222 → 4290 ms**, TBT 4506 → 3102 ms |
+| 14 | Sidebar drawer: `LazyMotion` + `m` | `9308548` | **−27.5 KB gz initial JS on every page.** Pages within 150 KB at this commit: 0 → 40 of 55. At the final build: **0 → 62 of all 82 app pages** (32 of the 45 measured). `/` TBT −31% in the A/B. |
+| 15 | Anthropic SDK out of client bundles (pure helper split) | `d9115a1` | draft 179 → 163 KB, prospect 158 → 142 KB. A/B: prospect script transfer −23 KB, TBT −6%, LCP flat. |
+| 16 | Trello views and dialogs on demand, prefetched when idle | `4ea4c54` | First-load JS 255 → 229 KB. A/B: LCP and TBT flat, script transfer +24 KB from the idle prefetch (see the A/B notes). |
+| 17 | Hub streams the campaign list from the server (no client waterfall) | `13e1e70` | A/B (with #14): `/hub` TBT **272 → 188 ms (−31%)**, LCP 1915 → 1825 ms (−5%, within noise), 80 KB less transfer. Warm HTML p95 rises 18 → 96 ms because the list is now in the document, still well within budget. |
+| 18 | Dashboards reuse the `next/font` brand font (no second copy) | `44538d7` | A/B: **−112 KB per visit**. LCP flat (667 → 661). The commit's 1141 → 657 ms was a noisy baseline run. |
+| 19 | `content-visibility: auto` on stacked hub table rows | `2972581` | A/B: music library LCP **6679 → 5414 ms (−19%)**, TBT **5321 → 3977 ms (−25%)**. `/social` and `/carousels` flat. |
 
 ### Guardrails (Phase 6)
 
@@ -199,7 +223,7 @@ One commit per optimization; the numbers are also in each commit message.
 | `GET /api/content-type/run-today` | 561 ms ❌ | The "Run today" preview re-plans from a **fresh** read of every content type (89 statements). That's deliberate, because the POST spends money and must not plan from stale data. This branch already removed the ledger re-read (770 → 561 ms). | Let the GET preview use the 60 s cached hub reads, and keep the fresh read for the POST (which re-plans anyway). The preview could then be up to 60 s stale. That's a product call. |
 | `GET /api/send-queue` (and `/hub/queue`) | 291 ms ✅ (server target 150 ❌); `/hub/queue` LCP ~17 s locally | A 9.4 MB JSON board (about 8 300 items across 22 days) that the queue page fetches client-side. Locally it's uncompressed (Vercel compresses it). | Return the visible week (or one day at a time) and drop unused per-item fields. Measure on production row counts first (D2): the seed fills optional text columns. |
 | `GET /api/analytics/summary`, `/drilldown` | 324 / 322 ms (server target 150 ❌) | 25 and 23 aggregate statements over leads, drafts and sends. The largest is the lead-spend facts (128 ms). | Pre-aggregate per day (a materialized view refreshed by the worker), or a 60 s shared cache keyed by filter (a freshness decision). |
-| `/social/content/library/music` (page) | 390 ms ✅; Lighthouse TBT ~3–4 s | 800 rows, each with a native `<audio controls>` (1.9 MB HTML). `content-visibility` already cut LCP and TBT by about 30%. | Virtualize the list, or render a play button that mounts the `<audio>` element on tap. Both change the DOM and look, so a design call. |
+| `/social/content/library/music` (page) | 480 ms ✅; Lighthouse LCP 5.4 s, TBT 4.0 s (A/B) | 800 rows, each with a native `<audio controls>` (1.9 MB HTML). `content-visibility` already cut LCP by 19% and TBT by 25%. | Virtualize the list, or render a play button that mounts the `<audio>` element on tap. Both change the DOM and look, so a design call. |
 | Content-type pages (`/carousels`, `/explainers`, `/field-notes`, …) JS | ~189 KB gz (budget 150) | The pool screen's drag-to-reorder (`@dnd-kit`, 17 KB) and the `TypeHub` panels ship with the page. | Load dnd-kit on first pointerdown on a queue card, and split the settings popover. |
 | `/trello` JS | 229 KB gz | Home itself uses dnd-kit and framer-motion. | Comes with the Trello data plan above. |
 | `/hub` JS | 153 KB gz | The campaign hub's create and edit dialogs ship with the list. | Load the dialogs on demand. |
