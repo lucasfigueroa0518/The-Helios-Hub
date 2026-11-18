@@ -60,6 +60,10 @@ sources).
    pronunciation guide or a broadcaster's guide that states it. Aim for how the person says the name to
    English speakers; when nothing records that, give the name as said in its own language, in English
    sounds. Add the page you used to `sources` like any other.
+   Respell each syllable by its sound in the source, vowel by vowel: a short unstressed "i" (IPA ɪ, as in
+   "bit") is "ih" or "iss", never "ee" ("Hassabis" ends "-biss", not "-bees"); "ee" only where the source
+   has a long ee (IPA i). Before you record a respelling, read it aloud syllable by syllable against the
+   source's IPA or recording; if any syllable differs, fix it.
 7. **Record the places** the story happens in, with an address and coordinates when the record gives
    them (for the maps), each place's role in the story, and the facts that put it there.
 8. **Record the relations** the record shows between the people and places: who works for, rivals,
