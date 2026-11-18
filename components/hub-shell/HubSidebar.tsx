@@ -165,7 +165,7 @@ export function HubSidebar({ email }: { email: string }) {
                 onMouseEnter={() => item.children && setHoverId(item.id)}
                 onMouseLeave={() => setHoverId((current) => (current === item.id ? null : current))}
               >
-                <MenuLink href={item.href} className="hub-nav-item__row">
+                <MenuLink href={item.href} className="hub-nav-item__row" eager={item.eager}>
                   <span className="hub-nav-item__icon">
                     <Icon size={16} aria-hidden="true" />
                   </span>

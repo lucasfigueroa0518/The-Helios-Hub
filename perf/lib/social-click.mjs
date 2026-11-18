@@ -47,13 +47,17 @@ for (let run = 0; run < RUNS + 1; run += 1) {
   await ctx.addCookies([{ name: k, value: v.join('='), domain: '127.0.0.1', path: '/' }]);
   const page = await ctx.newPage();
   await page.goto(`http://127.0.0.1:${PORT}${FROM}`, { waitUntil: 'networkidle', timeout: 120000 });
-  await page.waitForTimeout(1500); // the page as a person sees it before reaching for the menu
+  await page.waitForTimeout(Number(args.settle ?? 1500)); // the page as a person sees it before reaching for the menu
+  if (args.precss) await page.evaluate((hrefs) => Promise.all(hrefs.split(',').map((h) => new Promise((r) => { const l = document.createElement('link'); l.rel = args_mode(); l.as = 'style'; l.href = h; l.onload = l.onerror = r; document.head.appendChild(l); function args_mode() { return 'preload'; } }))), args.precss);
   const link = page.locator('a.hub-nav-item__row[href="/social"]').first();
   await link.hover();
   await page.waitForTimeout(HOVER);
   const ms = await page.evaluate(() => new Promise((resolve) => {
     const link = document.querySelector('a.hub-nav-item__row[href="/social"]');
     const t0 = performance.now();
+    window.__t0 = t0;
+    window.__long = [];
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__long.push([Math.round(e.startTime - t0), Math.round(e.duration)]); }).observe({ type: 'longtask' });
     const done = () => {
       if (location.pathname !== '/social') return false;
       if (!document.querySelector('#today-strip')) return false;
@@ -61,12 +65,26 @@ for (let run = 0; run < RUNS + 1; run += 1) {
       const imgs = [...document.querySelectorAll('.sh img')];
       return imgs.every((img) => img.complete);
     };
-    const tick = () => (done() ? resolve(performance.now() - t0) : requestAnimationFrame(tick));
+    const marks = {};
+    const mark = (k, ok) => { if (ok && marks[k] == null) marks[k] = Math.round(performance.now() - t0); };
+    const tick = () => {
+      mark('url', location.pathname === '/social');
+      mark('skeleton', Boolean(document.querySelector('.sh-page-loading')));
+      mark('shRoot', Boolean(document.querySelector('.sh')));
+      mark('strip', Boolean(document.querySelector('#today-strip')));
+      mark('notBusy', location.pathname === '/social' && !document.querySelector('[aria-busy="true"]'));
+      if (done()) { window.__marks = marks; resolve(performance.now() - t0); } else requestAnimationFrame(tick);
+    };
     link.click();
     requestAnimationFrame(tick);
   }));
   if (run > 0) results.push(ms); // first run warms the server's caches and code
-  console.log(`run ${run}${run ? '' : ' (warm-up)'}: ${ms.toFixed(1)} ms`);
+  const rsc = await page.evaluate((args_all) => performance.getEntriesByType('resource')
+    .filter((e) => args_all || e.name.includes('_rsc=') || e.name.includes('/api/hub/warm'))
+    .map((e) => `${new URL(e.name).pathname}${e.name.includes('_rsc') ? '?_rsc' : ''} start ${e.startTime.toFixed(0)} dur ${e.duration.toFixed(0)} ttfb ${(e.responseStart - e.requestStart).toFixed(0)} ${(e.transferSize / 1024).toFixed(0)}KB`), Boolean(args.all));
+  if (args.verbose) console.log('   marks', JSON.stringify(await page.evaluate(() => window.__marks)), 'longtasks', JSON.stringify(await page.evaluate(() => window.__long)));
+  if (args.verbose) console.log('   after click:', (await page.evaluate(() => performance.getEntriesByType('resource').filter((e) => e.startTime > window.__t0 - 5).map((e) => `${Math.round(e.startTime - window.__t0)}+${Math.round(e.duration)} ${new URL(e.name).pathname}${new URL(e.name).search.slice(0, 30)}`))).join('\n      '));
+  console.log(`run ${run}${run ? '' : ' (warm-up)'}: ${ms.toFixed(1)} ms${args.verbose ? `\n   ${rsc.join('\n   ')}` : ''}`);
   await ctx.close();
 }
 await browser.close();
