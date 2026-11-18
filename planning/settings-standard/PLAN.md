@@ -14,6 +14,10 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
 
 - **D3 (2026-11-18): Refill runs even when the day's quota is full.** User: "yes".
 - **D4 (2026-11-18): Retired series (Free vs Paid, Guess the Number) stop refilling as part of the build, not sooner.** User: "yes".
+  _Correction, same day:_ they have already stopped. The last refill was the 3:00 AM run on Nov 17, before the Stories-split merge (Nov 17 09:15) retired them in code, and nothing refilled them on Nov 18. Left over: `stories.settings.series` still says `auto: true, enabled: true` for both, and 58 old rows are still open in `stories.pool` (Free vs Paid 28, Guess the Number 30). Pending the user's call: proposed cleanup in the build.
+- **D5 (2026-11-18): Four switches per type, in lifecycle order: Refill → Generate → Approval → Live.** Quotas, caps and windows sit under their switch. User: "yes".
+- **D6 (2026-11-18): A missing setting counts as off for every type.** Text on Screen gets a saved "on" so its behavior doesn't change. User: "yes".
+- **D7 (2026-11-18): Stored setting names stay as they are.** Standardize only the UI and the spec, through the existing mapping in `lib/content-type/posting.ts`. User: "yes".
 - Out of scope: the committed `.env.local.bak.*` file. User: "Lucas is handling it".
 
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
