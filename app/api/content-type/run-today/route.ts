@@ -12,12 +12,15 @@ export const dynamic = 'force-dynamic';
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-/** What Run now would start today, with a spend ceiling. Reads only. */
+/**
+ * What Run now would start today, with a spend ceiling. Reads only. Posts, slots and quotas come from
+ * the shared hub dataset (up to 60 s old, cleared by every hub action); POST re-plans from a fresh read.
+ */
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    return NextResponse.json(await livePlan());
+    return NextResponse.json(await livePlan(new Date(), { cachedHub: true }));
   } catch (error) {
     return NextResponse.json({ error: message(error) }, { status: 500 });
   }

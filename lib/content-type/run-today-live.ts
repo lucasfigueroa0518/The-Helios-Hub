@@ -16,7 +16,7 @@ import { requestFinish, slateOnDayFor } from '@/lib/reels/visual/finish';
 import { liveHubQuery } from '@/lib/social-hub/db';
 import { isAiEventsDay, isFieldNotesDay, isLfdDay, slotPlan, storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadDataset } from '@/lib/social-hub/load';
-import { cachedCostPart } from '@/lib/social-hub/views/cached-dataset';
+import { cachedCostPart, loadHubDataset } from '@/lib/social-hub/views/cached-dataset';
 import { aiEventsDueToday, fieldNotesDueToday, lfdDueToday, planFrom, quotaCandidates, seriesDueToday, stepsFor, typeDay, type PlanStep, type RunInputs, type RunPlan } from '@/lib/social-hub/run-today';
 import { SERIES_OF_VERTICAL, STORY_VERTICALS, verticalOfSeries } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -123,14 +123,16 @@ async function liveFieldNotes(today: string, anyDay: boolean): Promise<{ day: Ru
 /**
  * `lfdAnyDay`: the Last Few Days page's own button may make a post on any day (spec §8 Run button).
  * `aiEventsAnyDay`: the same for AI Events' Generate. `fieldNotesAnyDay`: and for Field Notes'.
+ * `cachedHub`: read posts, slots and quotas from the hub pages' shared dataset (up to 60 s old, cleared
+ * by every hub action) instead of a fresh read. Only the GET preview uses it; a run always plans fresh.
  */
-export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean; fieldNotesAnyDay?: boolean } = {}): Promise<RunPlan> {
+export async function livePlan(now = new Date(), opts: { lfdAnyDay?: boolean; aiEventsAnyDay?: boolean; fieldNotesAnyDay?: boolean; cachedHub?: boolean } = {}): Promise<RunPlan> {
   const today = nyDateOf(now)!;
   const [lfd, aiEvents, fieldNotes] = await Promise.all([liveLfd(today, opts.lfdAnyDay === true), liveAiEvents(today, opts.aiEventsAnyDay === true, now), liveFieldNotes(today, opts.fieldNotesAnyDay === true)]);
   const [dataset, storyPostings, storySlots, reelsPending, building, slate, carouselRuns, carouselSettings, exDb] = await Promise.all([
     // The plan reads posts, slots and quotas, never the cost ledger, so it takes the cached cost
     // part the hub pages use instead of re-reading and re-allocating every ledger on each open.
-    loadDataset(liveHubQuery, now, cachedCostPart()),
+    opts.cachedHub ? loadHubDataset() : loadDataset(liveHubQuery, now, cachedCostPart()),
     // Each Stories-format type's own settings (SS-1); one that can't be read makes nothing today.
     Promise.all(STORY_VERTICALS.map((v) => readPosting(v as ContentType, now).catch(() => null))),
     storiesSlotsOn(liveHubQuery, today).catch(() => null),
