@@ -47,6 +47,9 @@ const withCues = () => {
   return root;
 };
 
+/** A voice screen that clears every catalog track (these fakes carry no voice). */
+const CLEAR_SCREEN = { sounds: {}, music: new Proxy({}, { get: () => ({ voice: 0 }) }) };
+
 test('readCues re-times anchored cues from the current storyboard and timing', () => {
   const root = withCues();
   // Frame 1 grows by 0.5s after a re-pace: every later anchor moves with it.
@@ -152,7 +155,7 @@ test('placeMusic lays designed sections and the envelope offline', { skip: !hasF
     const res = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', `sine=frequency=${f}:duration=16`, '-ac', '2', dest]);
     if (res.status !== 0) throw new Error(String(res.stderr));
   };
-  const r = await placeMusic(root, { search, download });
+  const r = await placeMusic(root, { search, download, screen: CLEAR_SCREEN });
   assert.ok(r.ok, r.errors.join('; '));
   assert.ok(r.choice);
   assert.equal(r.choice.designed, true);
