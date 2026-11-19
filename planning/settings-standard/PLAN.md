@@ -1,7 +1,7 @@
 # Standardize settings for all content types — living plan
 
 Trello card: "Standardize settings for all content types"
-Stage: **Align** (planning only; no code or prompt edits until the contract is approved)
+Stage: **Contract** (draft in `CONTRACT.md`, awaiting review; no code edits until approved)
 
 ## The card's questions
 - (a) Where do we control whether a content type is "live"?
