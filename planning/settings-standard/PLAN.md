@@ -15,12 +15,13 @@ Stage: **Contract** (draft in `CONTRACT.md`, awaiting review; no code edits unti
 
   | State | Pool refills | Posts get made | Approving a post | Posts go to Instagram |
   |---|---|---|---|---|
-  | **Paused** | yes | no | makes it ready in its slot | no |
+  | **Paused** | yes | no | marks it approved; it stays in the Made tab (D17) | no |
   | **Approval** | yes | yes, and they wait for review | makes it ready in its slot | no |
   | **Live** | yes | yes, and they wait for review | makes it ready in its slot | yes, at its slot time, approved posts only |
 
   Refill is not a control: it always runs, on its spend cap, including on days the quota is full (keeps D3). Approval is not a switch: every post needs a person (`require_approval` always true).
 - **D14 (2026-11-19): Refill $ caps default to $0.25 for Jev-only types and $0.50 for types that call Claude.** User: "yes".
+- **D17 (2026-11-19): A paused type holds no slots. Pausing takes its scheduled posts out of their slots and puts them back in the Made tab. A post whose slot passes without posting also goes back to Made.** User: "if it's paused, then it is paused, and posts get placed in the Made tab. If the slot passes the again its placed in the made tab". This settles D15: posts are unscheduled, not deleted.
 - **D15 (2026-11-19): Switching a type to Paused cancels its already-scheduled posts.** User: "yes". Because of D16, this needs re-checking: under the new model an approved post is "ready in its slot", so does pausing cancel ready posts too? Asked in chat.
 - **D1 (2026-11-18): "Live" means only "posts actually go to Instagram"** (`publishing_live`). Generating gets its own name, for example "making posts". User: "1 yes".
 - **D2 (2026-11-18): Pool refill is its own switch, separate from Generate**, with a small spend cap for each type. User: "2 yes".

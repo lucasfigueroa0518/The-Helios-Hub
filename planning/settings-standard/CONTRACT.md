@@ -8,7 +8,7 @@ Each type has **one state: Paused | Approval | Live**.
 
 | State | Pool refills | Posts get made | Approving a post | Posts go to Instagram |
 |---|---|---|---|---|
-| Paused | yes | no | makes it ready in its slot | no |
+| Paused | yes | no | marks it approved; it stays in the Made tab | no |
 | Approval | yes | yes, and they wait for review | makes it ready in its slot | no |
 | Live | yes | yes, and they wait for review | makes it ready in its slot | yes, at its slot time, approved posts only |
 
@@ -28,7 +28,7 @@ Posting windows (read-only) · days
 Also affected by: calendar template mode · publisher   (links to Social Hub settings, D10)
 ```
 - Moving to **Live** asks for confirmation: "Approved posts will go to Instagram at their slot times."
-- Moving to **Paused** asks for confirmation and says what it cancels (see §7, question 1).
+- Moving to **Paused** asks for confirmation and says how many scheduled posts will go back to the Made tab.
 
 ## 3. Storage (D7: no renames, no new state column)
 The state is read from and written to the keys each type already has:
@@ -49,8 +49,9 @@ The state is read from and written to the keys each type already has:
 ## 4. Worker rules (all on `helios-social-worker`)
 1. **Refill**: run on the type's cadence in every state, held to `pool_refill_cap_usd`. Hitting the cap ends the refill cleanly and logs `refill_capped`. The quota never stops a refill.
 2. **Make posts**: only in Approval or Live, and only up to `quota − placed`. This is today's daily-fill rule.
-3. **Approving a post** books or keeps its slot and marks it ready. This works in every state.
-4. **Post**: only in Live, and only approved posts, at their slot time. Today's lateness rules still cancel a slot that's too late.
+3. **Approving a post** in Approval or Live books or keeps its slot and marks it ready. In Paused it's marked approved and stays in the Made tab.
+4. **Post**: only in Live, and only approved posts, at their slot time.
+5. **Back to Made (D17)**: switching to Paused unschedules every scheduled post of that type (slot status `cancelled`, reason `paused`), and the post returns to the Made tab. A slot that passes without posting (the type isn't Live, or today's lateness rule) does the same with reason `slot-passed`. Nothing is deleted.
 
 Each type's refill must be split out from its make step. Today they're one gate:
 
@@ -76,5 +77,4 @@ Renaming stored keys (D7), global settings (D10), new content types, and any cha
 - **Verify:** Tommy clicks the Settings tab on each type. The next night's logs should show every type's pool refilling, Carousels included, with no `quota-filled` refill skips.
 
 ## 7. Open questions for Tommy
-1. **When a type is switched to Paused, do its approved posts keep their slots?** If they keep them, they'd post on their slots only after the type goes back to Live, otherwise they're cancelled. Proposed: they keep their slots and are marked ready but don't post while Paused. That matches "approving makes it ready in its slot".
-2. **A ready post whose slot passes while the type isn't Live:** should it move to the next open slot or drop back to review? Proposed: next open slot.
+1. **A post that went back to Made: is it still approved?** If it is, placing it in a new slot needs no second review. Proposed: it stays approved.
