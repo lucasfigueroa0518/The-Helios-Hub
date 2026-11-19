@@ -54,3 +54,13 @@ You said you'll run these from your laptop. The 2026-11-18 follow-up (Trello on 
 ## D5. Production APM
 
 - The app has structured logs and `Server-Timing`, but no tracing backend. Sentry Performance or Datadog would give real p95 per route in production, but both are paid. Vercel's built-in Speed Insights and Observability are the cheapest options. Your call.
+
+## D9. Follow-up 2026-11-18 (2): production slowness
+
+You reported pages taking several seconds, sometimes over 15 s, or failing. My local measurements don't reproduce that, so the cause is in production. These are the tools and changes for it:
+
+1. **Find the cause while it's slow.** Run `psql "$DATABASE_URL" -X -f perf/db/prod-diagnose.sql`. It is one read-only transaction and safe on the pooler. It shows the JIT setting, who holds database connections (website vs each worker), statements running over 1 s, table sizes and the slowest statements. After the next worker redeploy, each worker's connections carry its own name (`helios-social-worker`, `helios-stories-worker`, ...) instead of a shared `helios-node`.
+2. **If the workers hold most connections or long statements** (section 2 or 4): each of the 7 worker services may open up to 8 connections (`PG_POOL_MAX=8` in the worker env). The website gets 3 per Vercel instance, so it queues behind them in the Supabase pooler. Lower `PG_POOL_MAX` (for example to 3) for the heaviest services in the VM env and redeploy. That is a throughput trade-off for those workers, so it's your call.
+3. **JIT (D6):** if section 1 says `jit | on`, apply `db/perf_2026_11_18_jit_off.sql` (rollback: `db/perf_2026_11_18_jit_off_down.sql`).
+4. **Cold starts:** `/api/cron/warm` fills the shared Social Hub caches. `.github/workflows/warm.yml` calls it after each production deploy and every 10 minutes. To turn it on, set the `HUB_WARM_TOKEN` env var in Vercel (a random string of 32+ characters), then add the repository secrets `HUB_WARM_TOKEN` (the same value) and `HUB_URL` (`https://<your domain>`). Until both are set, the workflow skips. In Vercel, also check that Fluid compute is on (Project → Settings → Functions); it keeps instances warm between requests.
+5. **Data size:** the send-queue board no longer sends 11 item fields the page never reads (9.0 → 6.6 MB raw, 2.08 → 1.35 MB gzipped on the seed).
