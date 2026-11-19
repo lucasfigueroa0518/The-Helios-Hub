@@ -57,7 +57,7 @@ Stage: **Align** (planning only; no code or prompt edits until the contract is a
   - 89 open `stories.pool` rows were archived with `archived_reason = 'series-removed'`: 28 Free vs Paid and 61 Guess the Number. The earlier "58" only counted rows refreshed in the last 10 days. Nothing was deleted.
   - Carousels `social.settings.publishing_live` was set to false.
   - To undo: set the series flags back, clear `archived_at` and `archived_reason` WHERE `archived_reason = 'series-removed'`, and set `publishing_live` back to true.
-  - Still to do: `helios_social` copy and drop.
+  - **Done 2026-11-19: `helios_social` archived, then dropped.** All 1,004 rows (article_queue 1,000, image_cache 4; the other four tables were empty) are kept as JSON in `archive.helios_social_v1`. A row-count check ran inside the same transaction before the drop. Script: `db/archive_helios_social_v1.sql`.
 
 ## Pool check (read-only DB, 2026-11-18, Supabase `lucas-outreach-hub`)
 | Type | Generate now | Newest pool refill | Verdict |
