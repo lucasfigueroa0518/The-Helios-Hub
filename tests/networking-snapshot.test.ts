@@ -36,6 +36,7 @@ import {
   type PoolPick,
 } from '@/lib/networking/public-snapshot';
 import type { NetworkingQuery } from '@/lib/networking/repository';
+import { CALENDAR_URL, followRsvp } from '@/lib/networking/rsvp-tracking';
 import type { StoredNetworkingEvent } from '@/lib/networking/types';
 
 // Offline: pure mappers, a stubbed fetch for Storage and the deploy hook, and PGlite loaded with
@@ -564,6 +565,18 @@ test('publishSnapshot uploads the feed, records the hash, and throttles the depl
     assert.equal(feed.events[1].title, 'Data Driven NYC');
     assert.deepEqual(feed.events[1].pick, { rank: 1, week: '2026-W44' });
     assert.deepEqual(feed.events[1].hosts, ['Host Org']);
+    // RT-2: every RSVP link is a counted hub link; the real URL is stored for the redirect and followed once.
+    const id = feed.events[1].id as string;
+    assert.equal(feed.events[1].rsvpUrl, `https://www.heliosgroup.tech/api/public/go/rsvp/${id}`);
+    const link = await query<{ url: string; metro: string }>(`SELECT url, metro FROM networking.rsvp_links WHERE public_id = $1`, [id]);
+    assert.equal(link.rows[0]?.metro, 'nyc');
+    assert.match(link.rows[0]!.url, /^https?:\/\//);
+    assert.equal(await followRsvp(query, id, { userAgent: 'Mozilla/5.0 (iPhone)', referer: 'https://heliosgroup.ai/free-tools/ai-networking-events' }), link.rows[0]!.url);
+    assert.equal(await followRsvp(query, id, { userAgent: 'Slackbot-LinkExpanding 1.0', referer: null }), link.rows[0]!.url);
+    assert.equal(await followRsvp(query, 'not-an-id', { userAgent: 'Mozilla/5.0', referer: null }), CALENDAR_URL, 'an unknown id lands on the calendar, never an open redirect');
+    assert.equal(await followRsvp(query, '0123456789abcdef', { userAgent: 'Mozilla/5.0', referer: null }), CALENDAR_URL);
+    const clicks = await query<{ bot: boolean; referrer_host: string | null }>(`SELECT bot, referrer_host FROM networking.rsvp_clicks ORDER BY id`);
+    assert.deepEqual(clicks.rows, [{ bot: false, referrer_host: 'heliosgroup.ai' }, { bot: true, referrer_host: null }]);
     assert.ok(!upload.body!.includes('private bio') && !upload.body!.includes('/in/someone') && !upload.body!.includes('public rsvp url'));
 
     const state = await query<{ last_hash: string; last_published_at: Date; last_hook_status: string }>(

@@ -16,6 +16,8 @@
 .sh-list > .sh-item:first-child { border-top: 0; }
 .sh-group-label + .sh-list > .sh-item:first-child { border-top: 0; }
 .sh-item:hover { background: var(--color-surface-2); }
+/* The whole card opens the post (PostCard). */
+.sh-card-open { cursor: pointer; }
 .sh-item:not(:has(.sh-item__time)) { grid-template-columns: 48px minmax(0, 1fr) auto; }
 .sh-item__time { color: var(--color-text-muted); font-variant-numeric: tabular-nums; font-size: var(--sh-fs-small); white-space: nowrap; }
 .sh-item__thumb { display: block; line-height: 0; border-radius: 6px; }

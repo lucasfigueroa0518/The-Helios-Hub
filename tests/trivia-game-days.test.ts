@@ -79,11 +79,11 @@ test('dayToBuild: tomorrow after 3:30 once launched; today only when it is the l
   assert.equal(await dayToBuild(db, '2026-11-25', MORNING), null);
 });
 
-test('build: 5 questions, AI right on 3, easiest first, reserved from the story; a fact-check fail is archived', async () => {
+test('build: 5 questions aiming for the AI right on 4 (3 when a right one fails the check), easiest first, reserved from the story; a fact-check fail is archived', async () => {
   const { db, right, wrong } = await seeded();
   const write = checker(new Set(['t02a01']));
   const r = await buildGameDay(deps(db, write), LAUNCH, LAUNCH);
-  assert.deepEqual(r, { date: LAUNCH, dayNumber: 1, questions: 5, aiRight: 3, checks: 6, balanced: true });
+  assert.deepEqual(r, { date: LAUNCH, dayNumber: 1, questions: 5, aiRight: 3, checks: 6, balanced: false });
   const day = (await readDay(db, LAUNCH))!;
   assert.equal(day.status, 'draft');
   const keys = day.questions.map((q) => q.key);
@@ -96,7 +96,7 @@ test('build: 5 questions, AI right on 3, easiest first, reserved from the story;
   assert.deepEqual(used.rows.map((x) => x.key).sort(), [...keys].sort(), 'only the chosen five are reserved');
   const cost = await db.query<{ component: string }>(`SELECT DISTINCT component FROM stories.cost_events`);
   assert.deepEqual(cost.rows.map((x) => x.component), ['trivia-game-check'], 'costs count toward AI Trivia (trivia- prefix)');
-  // A second pass on a balanced day spends nothing.
+  // A second pass with no helpful candidate left spends nothing.
   const again = await buildGameDay(deps(db, write), LAUNCH, LAUNCH);
   assert.equal((again as { checks: number }).checks, 6);
   assert.equal(write.calls.length, 6);
@@ -123,7 +123,7 @@ test('lock: not before 11 pm the night before; then locked and exported in the c
     assert.match(q.id, /^d1-t\d\da\d\d-1$/);
   }
   assert.equal(new Set(d.questions.map((q) => q.id)).size, 5);
-  assert.equal(d.questions.filter((q) => q.ai.picked === q.correct).length, 3);
+  assert.equal(d.questions.filter((q) => q.ai.picked === q.correct).length, 4);
   assert.deepEqual((await exportDays(db, LAUNCH)).days, [], 'after= is exclusive');
   assert.equal((await exportDays(db, '2026-11-17')).days.length, 1);
   await assert.rejects(() => pullQuestion(db, LAUNCH, d.questions[0]!.id, null), /locked/);
@@ -133,7 +133,8 @@ test('lock: not before 11 pm the night before; then locked and exported in the c
 test('pull: the question is archived and leaves the pool; the next pass fills the gap', async () => {
   const { db } = await seeded();
   await addQ(db, 't08a01', 0.6, 'A');
-  await buildGameDay(deps(db, checker()), LAUNCH, LAUNCH);
+  const first = await buildGameDay(deps(db, checker()), LAUNCH, LAUNCH);
+  assert.equal((first as { aiRight: number }).aiRight, 4, 'all pass: the AI is right on 4 of 5');
   const day = (await readDay(db, LAUNCH))!;
   const gone = day.questions[2]!.key;
   const after = await pullQuestion(db, LAUNCH, gone, 'lucas@test');

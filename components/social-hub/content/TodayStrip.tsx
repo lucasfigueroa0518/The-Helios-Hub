@@ -6,6 +6,7 @@ import { stageLabel } from '@/lib/content-type/run-status';
 import { CardMedia } from '@/components/social-hub/content/CardMedia';
 import { MakeItButton } from '@/components/social-hub/content/MakeItButton';
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
+import { PostCard } from '@/components/social-hub/nav/PostCard';
 import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { StateBadge, TYPE_ICON, TypeMark, typeStyle } from '@/components/social-hub/ui/marks';
 import type { HubPost } from '@/lib/social-hub/types';
@@ -61,7 +62,7 @@ function Made({ post, o, now, run, controls }: { post: HubPost; o: Offerer; now:
   const offer = o.offer(post);
   const { primary, grid } = offer.card;
   return (
-    <li className="sh-panel sh-strip__card sh-gallery__card" style={{ listStyle: 'none' }}>
+    <PostCard id={post.id} className="sh-panel sh-strip__card sh-gallery__card" style={{ listStyle: 'none' }}>
       <CardMedia post={post} />
       <div className="sh-gallery__meta">
         <TypeMark vertical={post.vertical} />
@@ -75,7 +76,7 @@ function Made({ post, o, now, run, controls }: { post: HubPost; o: Offerer; now:
       {!run && (primary || grid.length) ? (
         <ActionBar menu={{ primary, secondary: grid, more: [], links: [], offNote: null }} variant="card" showOffNote={false} readOnly={!controls} />
       ) : null}
-    </li>
+    </PostCard>
   );
 }
 

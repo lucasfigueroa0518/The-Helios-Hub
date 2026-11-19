@@ -1,4 +1,5 @@
 import { ActionBar } from '@/components/social-hub/house/ActionBar';
+import { PostCard } from '@/components/social-hub/nav/PostCard';
 import { PostLink } from '@/components/social-hub/nav/PostLink';
 import { StateBadge, TypeMark } from '@/components/social-hub/ui/marks';
 import { Thumb } from '@/components/social-hub/ui/Thumb';
@@ -17,7 +18,7 @@ export function LineupItem({ post, o, showTime = true, compact = false, past = f
   const when = post.postedAt ?? post.publishAt;
   const metric = post.status === 'published' ? metricWithTypical(post, LEAD_METRIC[post.format], o.typical) : null;
   return (
-    <li className={`sh-item${past ? ' sh-item--past' : ''}${compact ? ' sh-item--compact' : ''}`}>
+    <PostCard id={post.id} className={`sh-item${past ? ' sh-item--past' : ''}${compact ? ' sh-item--compact' : ''}`}>
       {showTime ? <span className="sh-item__time">{when ? clock(when) : '—'}</span> : null}
       <PostLink id={post.id} className="sh-item__thumb" decorative>
         <Thumb post={post} />
@@ -37,6 +38,6 @@ export function LineupItem({ post, o, showTime = true, compact = false, past = f
         )}
       </div>
       {compact ? null : <div className="sh-item__actions"><ActionBar menu={menu} compact showOffNote={false} /></div>}
-    </li>
+    </PostCard>
   );
 }
