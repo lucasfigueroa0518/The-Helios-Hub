@@ -9,6 +9,19 @@ Stage: **Contract** (draft in `CONTRACT.md`, awaiting review; no code edits unti
 - (c) Why aren't idea pools refreshing for some content types?
 
 ## Decisions (user's words quoted)
+> **D16 replaces D2, D5 and D13's switch model.** Read D16 first. Earlier entries are kept as history.
+
+- **D16 (2026-11-19): Each type has one control with three states.** User: "In my mind, there were 3 states a content type could be in … approval and live being 2 of them"; "Paused should mean ideal pool still refills"; "approving a post should j make it ready to be posted in its slot."
+
+  | State | Pool refills | Posts get made | Approving a post | Posts go to Instagram |
+  |---|---|---|---|---|
+  | **Paused** | yes | no | makes it ready in its slot | no |
+  | **Approval** | yes | yes, and they wait for review | makes it ready in its slot | no |
+  | **Live** | yes | yes, and they wait for review | makes it ready in its slot | yes, at its slot time, approved posts only |
+
+  Refill is not a control: it always runs, on its spend cap, including on days the quota is full (keeps D3). Approval is not a switch: every post needs a person (`require_approval` always true).
+- **D14 (2026-11-19): Refill $ caps default to $0.25 for Jev-only types and $0.50 for types that call Claude.** User: "yes".
+- **D15 (2026-11-19): Switching a type to Paused cancels its already-scheduled posts.** User: "yes". Because of D16, this needs re-checking: under the new model an approved post is "ready in its slot", so does pausing cancel ready posts too? Asked in chat.
 - **D1 (2026-11-18): "Live" means only "posts actually go to Instagram"** (`publishing_live`). Generating gets its own name, for example "making posts". User: "1 yes".
 - **D2 (2026-11-18): Pool refill is its own switch, separate from Generate**, with a small spend cap for each type. User: "2 yes".
 
