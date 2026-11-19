@@ -569,7 +569,16 @@ if (isMainThread && import.meta.url === pathToFileURL(process.argv[1] ?? '').hre
   const from = args.filter((a, i) => !a.startsWith('--') && !valued.has(args[i - 1]));
   const opts = { from, jobs, dryRun: args.includes('--dry-run'), limit: Number(opt('--limit') ?? 0) || 0, store: opt('--store') };
   // (no top-level await: tsx loads this file for the tests)
-  (args.includes('--library') ? measureLibrary(SFX, { jobs }) : ingest(SFX, opts)).then((result) => {
+  (args.includes('--library') ? measureLibrary(SFX, { jobs }) : ingest(SFX, opts)).then(async (result) => {
+  // The voice screen (voice-screen.mjs): a new drop-in plays only once a Mac has screened it.
+  if (!opts.dryRun && !args.includes('--library')) {
+    try {
+      const { screenSounds } = await import('./voice-screen.mjs');
+      result = { ...result, voiceScreen: screenSounds() };
+    } catch (e) {
+      result = { ...result, voiceScreen: `not run (${e instanceof Error ? e.message : e}); new drop-ins stay out of reels until node explainers/design/sfx/tools/voice-screen.mjs runs on a Mac` };
+    }
+  }
   // thousands of rejections would bury the summary: counts, then the first 20 of each
   const brief = (list) => (Array.isArray(list) && list.length > 20 ? [...list.slice(0, 20), `… and ${list.length - 20} more`] : list);
   process.stdout.write(`${JSON.stringify({ ...result, ...(result.rejected ? { rejected: brief(result.rejected), rejectedCount: result.rejected.length } : {}), ...(result.duplicates ? { duplicates: brief(result.duplicates), duplicateCount: result.duplicates.length } : {}), ...(result.failed ? { failed: brief(result.failed) } : {}) }, null, 1)}\n`);

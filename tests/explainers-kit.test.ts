@@ -972,9 +972,14 @@ test('music: banned moods and repeats are dropped, a long track wins, a short on
   const { pickTrack, styleOrder, STYLES, BANNED } = await import('../explainers/world-kit/music.mjs');
   const t = (id: string, duration: number, description: string) => ({ id, duration, description, audio_url: `u/${id}` });
   const results = [t('a', 90, 'calm corporate piano'), t('b', 30, 'groovy funk bass'), t('c', 70, 'upbeat electronic synth'), t('d', 75, 'driving funk groove'), t('e', 80, 'funky groove')];
-  assert.deepEqual(pickTrack(results, { total: 60 }), { track: results[3], loop: false });
-  assert.deepEqual(pickTrack(results, { total: 60, avoid: ['d', 'e'] as never[] }), { track: results[1], loop: true });
-  assert.equal(pickTrack([t('x', 15, 'funk')], { total: 60 }), null);
+  const screen = { sounds: {}, music: Object.fromEntries(['a', 'b', 'c', 'd', 'e', 'x', 'v'].map((id) => [id, { voice: 0.1 }])) };
+  assert.deepEqual(pickTrack(results, { total: 60, screen }), { track: results[3], loop: false });
+  assert.deepEqual(pickTrack(results, { total: 60, avoid: ['d', 'e'] as never[], screen }), { track: results[1], loop: true });
+  assert.equal(pickTrack([t('x', 15, 'funk')], { total: 60, screen }), null);
+  // The voice screen (2026-11-19): a voiced or unscreened track never plays.
+  assert.equal(pickTrack([t('v', 90, 'driving funk with female vocals')], { total: 60, screen }), null);
+  assert.equal(pickTrack([t('d', 90, 'driving funk groove')], { total: 60, screen: { sounds: {}, music: { d: { voice: 0.6 } } } }), null);
+  assert.equal(pickTrack([t('new', 90, 'driving funk groove')], { total: 60, screen }), null);
   assert.ok(BANNED.test('upbeat electronic instrumental') && !BANNED.test('energetic upbeat rock instrumental'));
   assert.deepEqual(styleOrder(4).map((s: { key: string }) => s.key), ['indie', 'hiphop', 'funk']);
   assert.ok(STYLES.every((s: { query: string }) => /105-128 BPM/.test(s.query)));

@@ -28,6 +28,9 @@ const wish = (over: Partial<ShotWish>): ShotWish => ({ id: 'W1', person: null, w
 
 // ── Harvest: wishes (MD-139) ──────────────────────────────────────────────
 
+/** A voice screen that clears every catalog track (these fakes carry no voice). */
+const CLEAR_SCREEN = { sounds: {}, music: new Proxy({}, { get: () => ({ voice: 0 }) }) };
+
 test('an old wish keeps its head noun however many adjectives lead it', () => {
   const want = 'A real brick or stone residential fireplace with a mantel, front view, cut out';
   assert.equal(headNoun(want), 'fireplace');
@@ -351,21 +354,21 @@ test('history flows from one job to the next, through the workspace file and the
     assert.equal(spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'sine=frequency=300:duration=30', '-ac', '2', dest]).status, 0);
   };
   const measure = async () => null;
-  const first = await placeMusic(project('job-a'), { search, download, measure });
+  const first = await placeMusic(project('job-a'), { search, download, measure, screen: CLEAR_SCREEN });
   assert.ok(first.ok, first.errors.join(';'));
   assert.deepEqual(first.choice!.ids, ['t1']);
   assert.deepEqual(readMusicHistory(jobsRoot).reels, [{ job: 'job-a', ids: ['t1'] }], 'written the moment it chose');
-  const second = await placeMusic(project('job-b'), { search, download, measure });
+  const second = await placeMusic(project('job-b'), { search, download, measure, screen: CLEAR_SCREEN });
   assert.deepEqual(second.choice!.ids, ['t2'], 'the next job sees it');
   // A second run started before job-a chose still sees its pick: the ledger is read at pick time.
   const stale = project('job-c');
   fs.writeFileSync(path.join(stale, 'music-avoid.json'), JSON.stringify({ used: 0, recent: [], ledger: musicHistoryPath(jobsRoot), job: 'job-c' }));
-  const third = await placeMusic(stale, { search, download, measure });
+  const third = await placeMusic(stale, { search, download, measure, screen: CLEAR_SCREEN });
   assert.deepEqual(third.choice!.ids, ['t3']);
   assert.ok(!fs.existsSync(`${musicHistoryPath(jobsRoot)}.lock`));
   // Same job again: its own track stays open to it, and the reel still counts once.
   fs.rmSync(path.join(stale, 'assets'), { recursive: true });
-  const again = await placeMusic(stale, { search, download, measure });
+  const again = await placeMusic(stale, { search, download, measure, screen: CLEAR_SCREEN });
   assert.deepEqual(again.choice!.ids, ['t3']);
   assert.equal(readMusicHistory(jobsRoot).used, 3);
 });

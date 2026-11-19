@@ -29,7 +29,10 @@ format added later. A sound you drop here reaches all of them.
    per zip, for a trial. A machine without the store (the render VM until it is copied there)
    simply does not see those drop-ins; nothing breaks. `dropins/`, the originals in `inbox/` and
    `.ingest-cache.json` are git-ignored; `catalog-inbox.json` is the part to commit.
-3. That's it. The next reel of every format can reach the new sounds.
+3. That's it. The next reel of every format can reach the new sounds. The ingest ends with the
+   **voice screen** (`tools/voice-screen.mjs`, Mac only): every new sound is measured for speech and
+   singing, and one with a voice (or never measured) never plays in a reel. Commit
+   `voice-screen.json` with `catalog-inbox.json`.
 
 It is built for big drops (thousands of files): it walks the folders once, runs ffmpeg on every
 CPU core at once, prints progress with an ETA every 50 files, and saves its work every few
