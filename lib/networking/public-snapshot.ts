@@ -10,6 +10,7 @@ import {
   type PublicFeedStorageConfig,
 } from '@/lib/networking/public-feed-storage';
 import { listKeptEvents, liveNetworkingQuery, type NetworkingQuery } from '@/lib/networking/repository';
+import { rsvpOrigin, saveRsvpLinks, withTrackedRsvp } from '@/lib/networking/rsvp-tracking';
 import { isoWeekKey } from '@/lib/networking/schedule';
 import { METROS, type Metro, type StoredNetworkingEvent } from '@/lib/networking/types';
 
@@ -445,6 +446,8 @@ export async function publishSnapshot(input: {
   fetch?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   log?: SnapshotLog;
+  /** The hub origin for counted RSVP links (default: rsvpOrigin()). */
+  rsvpOrigin?: string;
 }): Promise<PublishSnapshotResult> {
   const q = input.q ?? liveNetworkingQuery;
   const now = input.now ?? new Date();
@@ -452,7 +455,9 @@ export async function publishSnapshot(input: {
   const storage = input.storage ?? livePublicFeedStorageConfig();
 
   const { rows, picks } = await loadPublicFeedInputs(q, now);
-  const feed = buildPublicFeed(rows, picks, now);
+  // RSVP links go out as counted hub links (RT-2); the real URLs are stored for the redirect before the feed ships.
+  const tracked = withTrackedRsvp(buildPublicFeed(rows, picks, now), input.rsvpOrigin ?? rsvpOrigin());
+  const feed = tracked.feed;
   const contentHash = feedContentHash(feed);
 
   const { rows: stateRows } = await q<{ last_hash: string | null }>(
@@ -464,6 +469,7 @@ export async function publishSnapshot(input: {
     throw new Error('refusing to publish an empty events feed over a published one (pass allowEmpty to force)');
   }
 
+  await saveRsvpLinks(q, tracked.links, now);
   await uploadPublicFeed(EVENTS_FEED_OBJECT, serializeFeed(feed), { ...storage, fetch: input.fetch ?? storage.fetch, sleep: input.sleep ?? storage.sleep });
   await q(
     `INSERT INTO networking.publish_state (id, last_hash, last_published_at)

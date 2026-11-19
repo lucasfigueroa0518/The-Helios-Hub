@@ -3,9 +3,10 @@
  * game day builder makes. No database and no model calls here; the builder (after the per-type engine split) feeds
  * these the pool questions that passed the fact-check, each with the opponent's stored answer.
  *
- *   choose   5 questions so the AI (GPT-5 nano) scores AI_RIGHT_TARGET (3) when the candidates allow: the best AI-right
+ *   choose   5 questions so the AI (GPT-5 nano) scores AI_RIGHT_TARGET (4) when the candidates allow: the best AI-right
  *            questions and the best AI-wrong ones by pool score. Never trades a question for a lower-scored one of
  *            the same kind. A question the opponent could not answer is not eligible (the site shows its pick).
+ *            The target is an aim, not a gate (RT-3): when the check budget runs out first, the day keeps 3 or 5.
  *   more     whether checking one more candidate could still improve the day (MAX_GAME_CHECKS fact-checks a day)
  *   order    easiest first: the higher fair-shot score first (tests 1 and 2, writer and Jev); on a tie, AI-right first
  */
@@ -13,8 +14,8 @@ import { aiRight } from './lean';
 import type { TriviaPoolPayload } from './types';
 
 export const GAME_SIZE = 5;
-/** The AI should usually score 3 of 5 (AT-79). */
-export const AI_RIGHT_TARGET = 3;
+/** The AI should usually score 4 of 5 (RT-3, 2026-11-19; was 3 under AT-79). */
+export const AI_RIGHT_TARGET = 4;
 /** Fact-checks the builder may spend on one game day. */
 export const MAX_GAME_CHECKS = 10;
 

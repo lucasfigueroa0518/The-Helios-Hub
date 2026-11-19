@@ -72,7 +72,7 @@ export const HUB_NAV: HubNavItem[] = [
     id: 'website',
     href: '/seo',
     label: 'Website Hub',
-    match: (path) => path.startsWith('/seo') || path.startsWith('/traffic'),
+    match: (path) => path.startsWith('/seo') || path.startsWith('/traffic') || path.startsWith('/resource-tracker'),
     children: [
       {
         href: '/seo',
@@ -83,6 +83,11 @@ export const HUB_NAV: HubNavItem[] = [
         href: '/traffic',
         label: 'Traffic',
         match: (path) => path.startsWith('/traffic'),
+      },
+      {
+        href: '/resource-tracker',
+        label: 'Resource Tracker',
+        match: (path) => path.startsWith('/resource-tracker'),
       },
     ],
   },

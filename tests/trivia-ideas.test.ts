@@ -327,7 +327,7 @@ test('asked lists (AT-78): the writer sees a cell\'s pooled, posted and archived
   assert.deepEqual(await askedOnTheme(db, 't03a03', { exceptKey: 'trivia:t03a03' }), []);
 });
 
-test('game day (AT-79): 5 questions with the AI right on 3 when it can be, best by score; easiest first', () => {
+test('game day (RT-3): 5 questions with the AI right on 4 when it can be, best by score; easiest first', () => {
   const p = (id: string, score: number, aiPick: 'A' | 'B' | null, fair = 0.5): TriviaPoolPayload => {
     const q = { ...question(id), writerScore: { clear: fair, real_guess: fair, point: 0.5, worth_knowing: 0.5 } };
     return { kind: 'trivia', q, jevScore: { clear: fair, real_guess: fair, point: score, worth_knowing: 0.5 }, score, writtenOn: DATE, ...(aiPick ? { opponent: { model: 'gpt-5-nano', label: 'GPT-5 nano', picked: aiPick } } : {}) };
@@ -340,12 +340,12 @@ test('game day (AT-79): 5 questions with the AI right on 3 when it can be, best 
   assert.equal(c.balanced, true);
   assert.equal(c.aiRight, AI_RIGHT_TARGET);
   assert.equal(c.chosen.length, GAME_SIZE);
-  assert.deepEqual(c.chosen.map((x) => x.q.cellId).sort(), ['t01a01', 't01a03', 't01a05', 't02a01', 't02a03'].sort(), 'best of each kind; no unanswered question');
+  assert.deepEqual(c.chosen.map((x) => x.q.cellId).sort(), ['t01a01', 't01a03', 't01a05', 't01a09', 't02a01'].sort(), 'best of each kind; no unanswered question');
   assert.equal(wantsMore(c, 3), false);
 
-  const short = chooseGameDay([...right, wrong[0]!]);
+  const short = chooseGameDay([...right, p('t01a11', 0.55, 'B')]);
   assert.equal(short.chosen.length, 5);
-  assert.equal(short.aiRight, 4, 'too few AI-wrong: filled with AI-right rather than run short');
+  assert.equal(short.aiRight, 5, 'too few AI-wrong: filled with AI-right rather than run short');
   assert.equal(short.balanced, false);
   assert.equal(wantsMore(short, 4), true);
   assert.equal(wantsMore(short, MAX_GAME_CHECKS), false, 'the check budget stops it');
