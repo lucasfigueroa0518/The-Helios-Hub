@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server';
 
+import { isTypeState, stateOf, type TypeState } from '@/lib/content-type/state';
 import { FIELD_NOTES_DEFAULT_SETTINGS, type FieldNotesSettings } from '@/lib/field-notes/types';
 
-/** The settings the panel shows and writes. runCapUsd and darkenCap are not set from the page. */
-export type PanelSettings = Pick<FieldNotesSettings, 'autoRun' | 'publishingLive' | 'requireApproval' | 'photoRestPosts' | 'maxPendingDrafts' | 'tipExpiryDays'>;
+/**
+ * The settings the panel shows and writes. runCapUsd and darkenCap are not set from the page. The type's one
+ * control is `state` (settings standard D16); autoRun / publishingLive are read-only, derived from it, and
+ * requireApproval is always true (there is no Auto-publish).
+ */
+export type PanelSettings = Pick<FieldNotesSettings, 'autoRun' | 'publishingLive' | 'requireApproval' | 'photoRestPosts' | 'maxPendingDrafts' | 'tipExpiryDays'> & {
+  state: TypeState;
+  /** auto_run off with publishing_live on: read as paused (contract §3). */
+  stateMismatch: boolean;
+};
 
 export const NUMBER_LIMITS = {
   photoRestPosts: { min: 0, max: 50, label: 'Photo rest' },
@@ -11,16 +20,13 @@ export const NUMBER_LIMITS = {
   tipExpiryDays: { min: 1, max: 365, label: 'Tip expiry' },
 } as const;
 
-export type SettingsPatch = Partial<PanelSettings>;
+export type SettingsPatch = Partial<Pick<PanelSettings, 'state' | 'photoRestPosts' | 'maxPendingDrafts' | 'tipExpiryDays'>>;
 
 export type SettingsEnv = {
   session: () => Promise<{ email: string } | null>;
   read: () => Promise<PanelSettings>;
-  /**
-   * The three switches, written through lib/content-type/posting.ts `writePosting('field_notes', ...)` the way
-   * the other types do: generate = auto_run, live = publishing_live, autoPublish = !require_approval.
-   */
-  writeSwitches: (patch: { generate?: boolean; live?: boolean; autoPublish?: boolean }, email: string) => Promise<void>;
+  /** The state, written through lib/content-type/posting.ts `writePosting('field_notes', { state })` like every type. */
+  writeState: (state: TypeState, email: string) => Promise<void>;
   /** An upsert into field_notes.settings for photo_rest_posts, max_pending_drafts or tip_expiry_days. */
   writeNumber: (key: 'photo_rest_posts' | 'max_pending_drafts' | 'tip_expiry_days', value: number) => Promise<void>;
 };
@@ -32,9 +38,12 @@ export function parsePatch(body: unknown): SettingsPatch | { error: string } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Expected a settings object.' };
   const out: SettingsPatch = {};
   for (const [k, v] of Object.entries(body)) {
-    if (k === 'autoRun' || k === 'publishingLive' || k === 'requireApproval') {
-      if (typeof v !== 'boolean') return { error: `${k} must be on or off.` };
-      out[k] = v;
+    if (k === 'state') {
+      if (!isTypeState(v)) return { error: 'The state is Paused, Approval or Live.' };
+      out.state = v;
+    } else if (k === 'autoRun' || k === 'publishingLive' || k === 'requireApproval') {
+      // D16: the three switches became one state; approval can't be turned off.
+      return { error: `${k} is no longer a setting: set the state (Paused, Approval or Live).` };
     } else if (k in NUMBER_LIMITS) {
       const key = k as keyof typeof NUMBER_LIMITS;
       const { min, max, label } = NUMBER_LIMITS[key];
@@ -56,10 +65,13 @@ export function parsePanelSettings(rows: ReadonlyArray<{ key: string; value: unk
     const n = Number(get(key));
     return get(key) != null && Number.isInteger(n) && n >= min ? n : fallback;
   };
+  const { state, mismatch } = stateOf(bool('auto_run', d.autoRun), bool('publishing_live', d.publishingLive));
   return {
-    autoRun: bool('auto_run', d.autoRun),
-    publishingLive: bool('publishing_live', d.publishingLive),
-    requireApproval: bool('require_approval', d.requireApproval),
+    state,
+    stateMismatch: mismatch,
+    autoRun: state !== 'paused',
+    publishingLive: state === 'live',
+    requireApproval: true,
     photoRestPosts: int('photo_rest_posts', d.photoRestPosts, 0),
     maxPendingDrafts: int('max_pending_drafts', d.maxPendingDrafts, 1),
     tipExpiryDays: int('tip_expiry_days', d.tipExpiryDays, 1),
@@ -81,11 +93,7 @@ export async function settingsPost(env: SettingsEnv, body: unknown): Promise<Nex
   const patch = parsePatch(body);
   if ('error' in patch) return NextResponse.json({ error: patch.error }, { status: 400 });
   try {
-    const switches: { generate?: boolean; live?: boolean; autoPublish?: boolean } = {};
-    if (patch.autoRun !== undefined) switches.generate = patch.autoRun;
-    if (patch.publishingLive !== undefined) switches.live = patch.publishingLive;
-    if (patch.requireApproval !== undefined) switches.autoPublish = !patch.requireApproval;
-    if (Object.keys(switches).length) await env.writeSwitches(switches, session.email);
+    if (patch.state !== undefined) await env.writeState(patch.state, session.email);
     for (const key of Object.keys(NUMBER_KEYS) as Array<keyof typeof NUMBER_KEYS>) {
       if (patch[key] !== undefined) await env.writeNumber(NUMBER_KEYS[key], patch[key]!);
     }

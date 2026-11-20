@@ -1,4 +1,5 @@
 import type { ExplainersDb, Queryable } from '@/lib/explainers/db';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { MODES, type Mode } from '@/lib/explainers/types';
 
 /**
@@ -16,6 +17,11 @@ export type ExplainersSettings = {
   /** Production only, renders plus the idea pipeline (A-4). */
   daily_spend_cap_usd: number;
   pool_size: number;
+  /**
+   * The spend cap of one idea refill (generation, scoring, dedupe into explainers.topics; settings standard D14).
+   * The refill runs in every state, so this, not auto_render, bounds its spend.
+   */
+  pool_refill_cap_usd: number;
   ideas_per_day: number;
   /** Duplicate history for the dedupe (ideas coverage, 2026-11-03: 120 days). */
   dedupe_lookback_days: number;
@@ -75,6 +81,8 @@ export const DEFAULT_SETTINGS: ExplainersSettings = {
   daily_render_cap: 2,
   daily_spend_cap_usd: 10,
   pool_size: 25,
+  // D14: refills that call Claude are capped at $0.50 by default.
+  pool_refill_cap_usd: REFILL_CAP_DEFAULT_USD.explainers,
   ideas_per_day: 3,
   // Ideas coverage (Lucas, 2026-11-03): dedupe against 120 days; the prompt carries 90.
   dedupe_lookback_days: 120,
@@ -142,6 +150,7 @@ const PARSERS: { [K in SettingKey]: Parser<K> } = {
   daily_render_cap: integer('daily_render_cap', 0),
   daily_spend_cap_usd: positiveNumber('daily_spend_cap_usd'),
   pool_size: integer('pool_size', 1),
+  pool_refill_cap_usd: positiveNumber('pool_refill_cap_usd'),
   ideas_per_day: integer('ideas_per_day', 1),
   dedupe_lookback_days: integer('dedupe_lookback_days', 0),
   prompt_history_days: integer('prompt_history_days', 0),

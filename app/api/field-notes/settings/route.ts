@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 const env: SettingsEnv = {
   session: getSession,
   read: async () => parsePanelSettings((await dbQuery<{ key: string; value: unknown }>(`SELECT key, value FROM field_notes.settings`)).rows),
-  writeSwitches: async (patch, email) => {
-    await writePosting('field_notes', patch, email);
+  writeState: async (state, email) => {
+    await writePosting('field_notes', { state }, email);
   },
   writeNumber: async (key, value) => {
     await dbQuery(
@@ -22,7 +22,7 @@ const env: SettingsEnv = {
   },
 };
 
-/** Field Notes' settings: the three switches (through lib/content-type/posting.ts) and the photo rest, pending draft cap and tip expiry. */
+/** Field Notes' settings: the state (through lib/content-type/posting.ts, D16) and the photo rest, pending draft cap and tip expiry. */
 export const GET = () => settingsGet(env);
 export async function POST(request: Request) {
   return settingsPost(env, await request.json().catch(() => null));

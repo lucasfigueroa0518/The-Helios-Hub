@@ -1,3 +1,4 @@
+import { refillCapUsd as refillCapOf } from '@/lib/content-type/state';
 import { dbQuery } from '@/lib/db';
 
 /** social.settings: the switches the worker and (later) the Social page share. */
@@ -19,9 +20,17 @@ export async function autoRunOn(): Promise<boolean> {
   return (await getSocialSetting<boolean>('auto_run')) === true;
 }
 
-/** A person approves every carousel before it posts (docs/social-overnight.md). On unless set to false. */
+/**
+ * A person approves every carousel before it posts. Always true (settings standard D16): there is no setting that
+ * skips approval, so the stored require_approval row is no longer read.
+ */
 export async function requireApproval(): Promise<boolean> {
-  return (await getSocialSetting<boolean>('require_approval')) !== false;
+  return true;
+}
+
+/** The spend cap of one Carousels pool refill (its intake share; D14): pool_refill_cap_usd, else the default. */
+export async function refillCapUsd(): Promise<number> {
+  return refillCapOf('carousels', await getSocialSetting<unknown>('pool_refill_cap_usd'));
 }
 
 /** Scheduling and auto-publishing. Off until a human turns it on. */
