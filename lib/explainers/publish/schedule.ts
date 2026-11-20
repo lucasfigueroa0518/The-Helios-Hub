@@ -1,6 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
-import { unslottedSql } from '@/lib/content-type/unslot';
+import { holdApprovedWhilePaused, unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -50,6 +50,16 @@ export async function explainersState(db: Queryable): Promise<TypeState> {
 /** Whether Explainers book slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
 export async function explainersHoldsSlots(db: Queryable): Promise<boolean> {
   return holdsSlots(await explainersState(db));
+}
+
+/**
+ * An approve while Explainers are Paused (D18, 2026-11-20): the render is held out of automatic placement
+ * (scheduleApproved, the night fill), so it goes into a slot only when a person places it. Nothing while Explainers
+ * hold slots: there Approve books as before. Used by the hub's Approve and the review page's (E-08).
+ */
+export async function holdApprovedRender(db: Queryable, jobId: string, now = new Date()): Promise<boolean> {
+  if (await explainersHoldsSlots(db)) return false;
+  return holdApprovedWhilePaused(spineOf(db), { vertical: 'explainers', itemId: await explainerItemId(db, jobId), now });
 }
 
 /**

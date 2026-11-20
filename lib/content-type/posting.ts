@@ -388,8 +388,8 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
   } else if (type === 'reels') {
     await run(order(() => setReelsSetting('auto_run', keys!.generate), () => setReelsSetting('publishing_live', keys!.live)));
     if (patch.state !== undefined && holdsSlots(patch.state)) {
-      // Approval or Live after the night already ran: today's selected reels take today's open windows (contract §4.3;
-      // the night's placing skips anything sent back to Made, D18).
+      // Approval or Live after the night already ran: the night's fresh picks take their days' open windows for review
+      // (contract §4.3). Never a reel approved while Paused or sent back to Made: a person places those (D18).
       const { scheduleLatestToday } = await import('@/lib/reels/publish/schedule');
       await scheduleLatestToday();
     }

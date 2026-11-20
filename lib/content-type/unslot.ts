@@ -38,6 +38,18 @@ export type UnslotQuery = (text: string, params?: unknown[]) => Promise<{ rows: 
 export const UNSLOT_REASONS: readonly UnslotReason[] = ['paused', 'slot-passed'];
 
 /**
+ * D18 (Tommy, 2026-11-20): a post approved while its type is Paused stays in Made and is never placed in a slot
+ * automatically, for every type, once the type is in Approval or Live again; only a person places it. Approve then
+ * writes a marker: a `cancelled` spine row with this reason (holdApprovedWhilePaused), so unslottedSql and every
+ * scheduler that already skips 'paused' / 'slot-passed' skips it too. Like those, it has no "approv" in it, so
+ * cancelNote shows it as written.
+ */
+export const APPROVED_PAUSED_REASON = 'paused-hold';
+
+/** What unslottedSql matches: the unslot reasons (D17) and the approved-while-Paused hold (D18). */
+export const HOLD_REASONS: readonly string[] = [...UNSLOT_REASONS, APPROVED_PAUSED_REASON];
+
+/**
  * The WHERE clause for the type's slots on the spine, its parameters starting at `$first`. A Stories-format type
  * matches by its series, as slotOfType does in lib/content-type/posting.ts: the slot id is the series (legacy) or
  * `t<minute>:<series>` (template mode, lib/stories/spine.ts), on any Stories vertical.
@@ -115,12 +127,40 @@ export async function cancelPassedSlots(query: UnslotQuery, verticals: readonly 
 }
 
 /**
- * SQL that is true when the content item went back to Made (D18): it has a slot cancelled for an unslot reason and
- * no slot that is waiting, posting or posted. Schedulers that book approved posts on their own add
+ * SQL that is true when the content item went back to Made (D18): it has a slot cancelled for an unslot reason, or
+ * the approved-while-Paused hold (HOLD_REASONS), and no slot that is waiting, posting or posted (a person placing it
+ * clears the hold). Schedulers that book approved posts on their own add
  * `AND NOT (<this>)` so they never re-slot one. `itemId` is the SQL expression for the item's id.
  */
 export function unslottedSql(itemId: string): string {
-  const reasons = UNSLOT_REASONS.map((r) => `'${r}'`).join(', ');
+  const reasons = HOLD_REASONS.map((r) => `'${r}'`).join(', ');
   return `(EXISTS (SELECT 1 FROM social_hub.schedule u WHERE u.content_item_id = ${itemId} AND u.status = 'cancelled' AND u.error IN (${reasons}))
     AND NOT EXISTS (SELECT 1 FROM social_hub.schedule w WHERE w.content_item_id = ${itemId} AND w.status IN ('scheduled', 'publishing', 'published')))`;
+}
+
+/**
+ * Approve while the type is Paused (D18, 2026-11-20): keep the post out of automatic placement once the type is in
+ * Approval or Live again. Writes one `cancelled` spine row with reason APPROVED_PAUSED_REASON: the day it was approved
+ * (New York), slot `t0000` (`t0000:<series>` for a Stories type, as typeSlotWhere reads it), never in a unique index
+ * (those cover scheduled / publishing / published only). Nothing is written when the item already has a live slot or
+ * already holds the marker. A Text on Screen reel also passes its idea, so the idea-level filter
+ * (reelIdeaUnslottedSql) sees it. Returns whether a marker was written.
+ */
+export async function holdApprovedWhilePaused(
+  query: UnslotQuery,
+  input: { vertical: Vertical; itemId: string | null; ideaRef?: string | null; now?: Date },
+): Promise<boolean> {
+  if (!input.itemId) return false;
+  const slot = isStoryVertical(input.vertical) ? `t0000:${SERIES_OF_VERTICAL[input.vertical]}` : 't0000';
+  const ideaRef = input.ideaRef ?? null;
+  const { rows } = await query(
+    `INSERT INTO social_hub.schedule (content_item_id, idea_ref, vertical, ny_date, slot, publish_at, status, source, error)
+     SELECT $1::uuid, $2::text, $3, ($4::timestamptz AT TIME ZONE 'America/New_York')::date, $5, $4::timestamptz, 'cancelled', 'user', $6
+      WHERE NOT EXISTS (SELECT 1 FROM social_hub.schedule w
+                         WHERE (w.content_item_id = $1::uuid OR ($2::text IS NOT NULL AND w.vertical = $3 AND w.idea_ref = $2::text))
+                           AND (w.status IN ('scheduled', 'publishing', 'published') OR (w.status = 'cancelled' AND w.error = $6)))
+     RETURNING id`,
+    [input.itemId, ideaRef, input.vertical, (input.now ?? new Date()).toISOString(), slot, APPROVED_PAUSED_REASON],
+  );
+  return rows.length > 0;
 }

@@ -115,6 +115,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       publishingLive: explainersSchedule.publishingLive,
       // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
       holdsSlots: explainersSchedule.explainersHoldsSlots,
+      // D18: approved while Paused, it is never placed automatically later.
+      holdApproved: (d, jobId) => explainersSchedule.holdApprovedRender(d, jobId),
       // Revision rows live where the social worker claims them (DATABASE_URL); only when explainers share that database.
       revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),
     }),
@@ -126,6 +128,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
       holdsSlots: () => reels.reelsHoldsSlots(),
       approveVideo: (videoJobId) => reelItems.approveReel(videoJobId, 'user'),
+      // D18: approved while Paused, it is never placed automatically later.
+      holdApproved: (postIdeaId, videoJobId) => reels.holdApprovedReel(postIdeaId, videoJobId),
       unscheduleIdea: reels.unscheduleIdea,
       query: reelItems.reelsSpine,
       itemId: reelItems.reelItemId,
@@ -202,6 +206,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       publishingLive: drama.dramaPublishingLive,
       // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
       holdsSlots: drama.dramaHoldsSlots,
+      // D18: approved while Paused, it is never placed automatically later.
+      holdApproved: (d, jobId) => drama.holdApprovedDrama(d, jobId),
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
       revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),

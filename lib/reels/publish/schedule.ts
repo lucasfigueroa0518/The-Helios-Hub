@@ -1,7 +1,7 @@
 import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
 import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
-import { UNSLOT_REASONS } from '@/lib/content-type/unslot';
+import { HOLD_REASONS, holdApprovedWhilePaused } from '@/lib/content-type/unslot';
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
 import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
@@ -347,10 +347,11 @@ export async function scheduleVideo(videoJobId: string, now = new Date()): Promi
 /**
  * unslottedSql (lib/content-type/unslot.ts) at the idea level: Text on Screen books by post idea, and its slots carry
  * the idea (idea_ref) with or without a video's content item. True when one of the idea's slots went back to Made
- * (reason paused / slot-passed) and none is waiting, posting or posted. `ideaId` is the SQL expression for the idea id.
+ * (reason paused / slot-passed), or its reel was approved while Paused (the D18 hold), and none is waiting, posting or
+ * posted. `ideaId` is the SQL expression for the idea id.
  */
 export function reelIdeaUnslottedSql(ideaId: string): string {
-  const reasons = UNSLOT_REASONS.map((r) => `'${r}'`).join(', ');
+  const reasons = HOLD_REASONS.map((r) => `'${r}'`).join(', ');
   const ofIdea = (a: string) =>
     `${a}.vertical = 'reels' AND (${a}.idea_ref = (${ideaId})::text
        OR ${a}.content_item_id IN (SELECT ci.id FROM social_hub.content_items ci WHERE ci.vertical = 'reels' AND ci.idea_ref = (${ideaId})::text))`;
@@ -385,8 +386,18 @@ export async function scheduleSelectedSlate(slateId: string, now = new Date()): 
 }
 
 /**
+ * Approve while Text on Screen is Paused (D18, 2026-11-20): the reel's video is approved (the hub verb's approveVideo)
+ * and held out of automatic placement, by its item and its idea, so scheduleSelectedSlate / scheduleLatestToday pass it
+ * over once the type is in Approval or Live. A person placing it clears the hold.
+ */
+export async function holdApprovedReel(postIdeaId: string, videoJobId: string, now = new Date()): Promise<boolean> {
+  return holdApprovedWhilePaused(reelsSpine, { vertical: 'reels', itemId: await reelItemId(videoJobId), ideaRef: postIdeaId, now });
+}
+
+/**
  * When Text on Screen leaves Paused (Approval or Live) after the night has already run: the latest slate of today and of every day
- * ahead (Text on Screen is made 2 days ahead, Bald-Eagle D4), each booked on its own day.
+ * ahead (Text on Screen is made 2 days ahead, Bald-Eagle D4), each booked on its own day. Only the night's fresh picks,
+ * placed for review: a reel approved while Paused, or sent back to Made, is passed over (reelIdeaUnslottedSql, D18).
  */
 export async function scheduleLatestToday(now = new Date()): Promise<{ scheduled: number }> {
   const { rows } = await dbQuery<{ id: string }>(

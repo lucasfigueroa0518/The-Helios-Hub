@@ -1,6 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
-import { unslottedSql } from '@/lib/content-type/unslot';
+import { holdApprovedWhilePaused, unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -41,6 +41,16 @@ export async function dramaPublishingLive(db: Queryable): Promise<boolean> {
 /** Whether AI Drama books slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
 export async function dramaHoldsSlots(db: Queryable): Promise<boolean> {
   return holdsSlots(await dramaState(db));
+}
+
+/**
+ * An approve while AI Drama is Paused (D18, 2026-11-20): the reel is held out of automatic placement
+ * (scheduleApprovedDrama, the night fill), so it goes into a slot only when a person places it. Nothing while AI Drama
+ * holds slots: there Approve books as before.
+ */
+export async function holdApprovedDrama(db: Queryable, jobId: string, now = new Date()): Promise<boolean> {
+  if (await dramaHoldsSlots(db)) return false;
+  return holdApprovedWhilePaused(spineOf(db), { vertical: 'reel_ai_drama', itemId: await dramaItemId(db, jobId), now });
 }
 
 /**

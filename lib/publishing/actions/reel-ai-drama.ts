@@ -69,6 +69,8 @@ export function reelAiDramaActions(deps: {
   publishingLive: typeof dramaPublishingLive;
   /** Whether AI Drama books slots: Approval or Live (holdsSlots, contract §4.3). */
   holdsSlots: typeof dramaHoldsSlots;
+  /** After a Paused approve: keep the reel out of automatic placement (D18; publish/schedule.ts holdApprovedDrama). */
+  holdApproved?: (db: DramaDb, jobId: string) => Promise<unknown>;
   placeItem: Place;
   rescheduleItem: Place;
   /** The database the social worker claims revision rows from, or null when drama is not on it (the Explainers rule). Absent: the drama handle. */
@@ -100,6 +102,8 @@ export function reelAiDramaActions(deps: {
       await deps.setVerdict(db, jobId, 'approved', by);
       // A paused type holds no slots (D17): approved, it stays in the Made tab.
       if (!(await deps.holdsSlots(db))) {
+        // D18: never placed automatically later (scheduleApprovedDrama, the night fill); only a person places it.
+        await deps.holdApproved?.(db, jobId);
         return { ok: true, note: 'Approved. AI Drama Reels are Paused, so it stays in the Made tab. Place it in a slot once they’re in Approval or Live (the Settings tab).' };
       }
       // B1: a system slot (source 'auto'). A reel the night made ahead keeps (or books) the slot of the date it was made

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { explainersDb } from '@/lib/explainers/connection';
+import { holdApprovedRender } from '@/lib/explainers/publish/schedule';
 import { getJob, saveFeedback } from '@/lib/explainers/repository';
 import { getSession } from '@/lib/session';
 
@@ -30,6 +31,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       return NextResponse.json({ error: 'This reel is still rendering.' }, { status: 409 });
     }
     const feedback = await saveFeedback(db, { jobId: id, verdict: body.verdict, tags, note, createdBy: session.email });
+    // D18: approved here while Explainers are Paused, it is never placed automatically later; a person places it.
+    if (body.verdict === 'approved') await holdApprovedRender(db, id);
     return NextResponse.json({ feedback });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

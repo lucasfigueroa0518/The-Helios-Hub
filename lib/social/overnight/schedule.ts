@@ -1,7 +1,7 @@
 import type { Query } from '@/lib/social/store/pg';
 
 import { holdsSlots, postsToInstagram } from '@/lib/content-type/state';
-import { unslottedSql } from '@/lib/content-type/unslot';
+import { holdApprovedWhilePaused, unslottedSql } from '@/lib/content-type/unslot';
 
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
@@ -207,6 +207,8 @@ export async function approvePost(query: Query, postId: string, now = new Date()
     const itemId = await carouselItemId(query, postId);
     if (!itemId) return { scheduled: false, note: 'The post is gone.' };
     await approveItem(query, itemId, 'user');
+    // D18: approved while Paused, never placed in a slot automatically later; only a person places it.
+    await holdApprovedWhilePaused(query, { vertical: 'carousels', itemId, now });
     return { scheduled: false, approved: true, note: CAROUSEL_APPROVED_PAUSED_NOTE };
   }
   return schedulePost(query, postId, 'user', now);

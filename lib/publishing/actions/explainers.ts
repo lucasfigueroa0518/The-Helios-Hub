@@ -63,6 +63,8 @@ export function explainerActions(deps: {
   publishingLive: (db: ExplainersDb) => Promise<boolean>;
   /** Whether Explainers book slots: Approval or Live (holdsSlots; schedule.ts explainersHoldsSlots). */
   holdsSlots: (db: ExplainersDb) => Promise<boolean>;
+  /** After a Paused approve: keep the render out of automatic placement (D18; schedule.ts holdApprovedRender). */
+  holdApproved?: (db: ExplainersDb, jobId: string) => Promise<unknown>;
   /**
    * Targeted Revisions: the database the social worker claims revision rows from (socialQuery,
    * DATABASE_URL), or null when Explainers keep a database of their own (EXPLAINERS_DATABASE_URL, or
@@ -97,8 +99,12 @@ export function explainerActions(deps: {
       const db = await deps.db();
       const jobId = need(t, 'jobId');
       await deps.setVerdict(db, jobId, 'approved', by);
-      // A paused type holds no slots (D17): approved, it stays in the Made tab.
-      if (!(await deps.holdsSlots(db))) return { ok: true, note: APPROVED_PAUSED_NOTE };
+      // A paused type holds no slots (D17): approved, it stays in the Made tab, and is never placed automatically
+      // later, not by scheduleApproved nor the night fill; only a person places it (D18).
+      if (!(await deps.holdsSlots(db))) {
+        await deps.holdApproved?.(db, jobId);
+        return { ok: true, note: APPROVED_PAUSED_NOTE };
+      }
       // B1: a system slot (source 'auto'). A render the night made ahead keeps (or books) the window of the date it was
       // made for, never today's leftover one (Bald-Eagle D4: scheduleJob reads its target date); a person's render:
       // today's next open window. A render that already has a slot keeps it. Booking only: the slot posts at its time,

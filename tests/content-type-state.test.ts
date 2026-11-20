@@ -129,9 +129,9 @@ test('cancelPassedSlots: due slots of the given not-Live types, reason slot-pass
   assert.deepEqual(calls[0]!.params, ['slot-passed', ['carousels', 'explainers']]);
 });
 
-test('unslottedSql: matches only the unslot reasons, and never an item that has a live slot again', () => {
+test('unslottedSql: matches only the unslot reasons and the approved-while-Paused hold (D18), and never an item that has a live slot again', () => {
   const sql = unslottedSql('ci.id');
-  assert.match(sql, /u\.error IN \('paused', 'slot-passed'\)/);
+  assert.match(sql, /u\.error IN \('paused', 'slot-passed', 'paused-hold'\)/);
   assert.match(sql, /NOT EXISTS .* w\.status IN \('scheduled', 'publishing', 'published'\)/s);
 });
 

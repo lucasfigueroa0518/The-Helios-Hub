@@ -21,6 +21,7 @@ import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/con
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import { isStoryVertical, SERIES_OF_VERTICAL, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { approvalNote as approvalNoteFor, openStorySlots, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
+import { holdApprovedSet } from '@/lib/stories/unslot';
 import { SERIES, loadSettings, saveSeriesSetting, saveTypeSetting, seriesTypeSettings, type TypeSettings } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
@@ -161,11 +162,12 @@ export async function approve(db: Queryable, id: string, now = new Date()): Prom
   const set = await guard(() => approveSet(db, id));
   let out: StorySet = set;
   let approvalNote = 'Approved.';
+  let state: TypeState | null = null;
   try {
     const settings = await loadSettings(db);
     const window = settings.series[set.series].window;
     // The type's state (D16): the series' auto switch with its type's publishing_live (SS-22). Approval and Live book.
-    const state: TypeState = stateOf(settings.series[set.series].auto, seriesTypeSettings(settings, set.series).publishingLive).state;
+    state = stateOf(settings.series[set.series].auto, seriesTypeSettings(settings, set.series).publishingLive).state;
     // A set with a slot (template mode) posts in [slot, slot + 15]; one without, in its series' window.
     approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, state);
     const minute = holdsSlots(state) && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
@@ -178,6 +180,9 @@ export async function approve(db: Queryable, id: string, now = new Date()): Prom
   } catch {
     // The note and the minute are conveniences: the approval already happened, and the worker books an approved set within 15 seconds.
   }
+  // D18: approved while Paused, the worker's step 3 never books it later; only a person places it. Not a convenience,
+  // so a failure here is not swallowed.
+  if (state && !holdsSlots(state)) await holdApprovedSet(db, set.id, now);
   return { ...out, approvalNote };
 }
 

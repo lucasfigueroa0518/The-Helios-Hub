@@ -43,6 +43,8 @@ export function reelActions(deps: {
   holdsSlots?: () => Promise<boolean>;
   /** Approve the reel's video without a slot (Paused, D17): lib/reels/publish/items.ts approveReel. */
   approveVideo?: (videoJobId: string) => Promise<void>;
+  /** After a Paused approve: keep the reel out of automatic placement (D18; lib/reels/publish/schedule.ts holdApprovedReel). */
+  holdApproved?: (postIdeaId: string, videoJobId: string) => Promise<unknown>;
 }): ContentActions {
   const placement =
     (fn: Place): ActionFn =>
@@ -60,6 +62,8 @@ export function reelActions(deps: {
       if (deps.holdsSlots && !(await deps.holdsSlots().catch(() => false))) {
         if (!t.videoJobId || !deps.approveVideo) return { ok: false, note: PAUSED_NO_VIDEO_NOTE, status: 409 };
         await deps.approveVideo(t.videoJobId);
+        // D18: approved while Paused, it is never placed automatically later; only a person places it.
+        await deps.holdApproved?.(postIdeaId, t.videoJobId);
         return { ok: true, note: APPROVED_PAUSED_NOTE };
       }
       const out = await deps.schedulePostIdea(postIdeaId, 'user', t.videoJobId ?? null);
