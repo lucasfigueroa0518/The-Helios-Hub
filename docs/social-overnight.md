@@ -57,9 +57,22 @@ At most two types per hour (night schedule v2, see the per-hour rule above), nev
 two video renderers, so the VM never renders two videos at once. All workers run on the social worker VM; outreach stays alone on
 `helios-orch-worker`.
 
+## Refill and the nightly total (D3, D16, D19)
+
+Refill is not a control: every type's idea pool refills on its cadence in
+**every** state (Paused included), even when the day's quota is full. Each refill
+is held to its `pool_refill_cap_usd` (`refill_capped` when the cap stops it), and
+all refills in one New York night share one total, `social_hub.settings`
+`refill_total_cap_usd` (default $5, editable on the Social Hub Cost page). The
+ledger is `social_hub.refill_spend` (`lib/content-type/refill-total.ts`): a refill
+reserves its cap, cut to what is left of the total, then settles at what it spent.
+No room left: the refill is skipped (`refill_total_capped`) and runs the next night.
+A person's own run is not held to the total. Making posts (drafting, renders) is
+never counted here; it keeps its own run caps.
+
 ## Daily fill (D54, D55)
 
-When a type is on, its night run fills that New York day's quota: Trial
+When a type makes posts (Approval or Live), its night run fills that New York day's quota: Trial
 Reels 3 (`PASSING_REELS_PER_NIGHT`), Explainers and Carousels their
 `posts_per_day`, the Stories-format types one set per type on each day it runs.
 In template mode the quota is that day's calendar slots instead of `posts_per_day`.
@@ -89,8 +102,14 @@ Each content type has, in its own schema:
    with the two single-row unique indexes from `reels.runs` (at most one running,
    at most one queued). The app queues a run by inserting `requested`; only the
    worker executes it.
-2. **`settings`** (key/value): `auto_run` and `publishing_live`, both default
-   off for a new type. Turning either on is a human decision.
+2. **`settings`** (key/value): the type's state, **Paused | Approval | Live**
+   (settings standard D16, `planning/settings-standard/CONTRACT.md`), stored in
+   its Generate key (`auto_run`) plus `publishing_live`: Paused = off/off,
+   Approval = on/off, Live = on/on. Generate off with Live on reads as Paused and
+   logs `state_mismatch`; a missing row is off. Set only in the type's Settings
+   tab (`lib/content-type/posting.ts`), never one key alone. Also
+   `pool_refill_cap_usd` (the most one refill may spend, D19). A new type ships
+   Paused; changing the state is a human decision.
 3. **`posting_schedule`**: copy of `reels.posting_schedule` (`ny_date`, `slot`,
    `publish_at`, `status scheduled|publishing|published|cancelled|failed`,
    `source auto|user`, `publish_attempt_id`) with the same unique indexes.
@@ -136,23 +155,26 @@ Trial Reels' Regenerate rebuilds only today's video for an idea (D52).
 
 ## Approval
 
-Nothing posts without a person's approval (Tommy, 2026-10-08). Every
-`publishing_live` ships off. Trial Reels posts only from the Approve / Force
-buttons while it is off; Explainers schedules only reels with an `approved`
-verdict in `explainers.feedback`; Carousels are approved in the Social Hub
-(a slot the run placed, or a carousel in review, which approving places in
-the earliest open window); IG Stories post only a set someone approved
-(Approve / Publish now on `/stories`).
+Nothing posts without a person's approval (Tommy, 2026-10-08; settings standard
+D16). There is no setting to turn it off: `require_approval` is written `true`
+for every type and is never read as false. Explainers need the `approved`
+verdict; Stories never auto-approve a set; Carousels, Trial Reels and the rest
+need their approval row. A rejected item never posts.
 
-Each type has a `require_approval` setting, on (and treated as on when the row
-is missing). With it on, an auto-scheduled Trial Reel or Carousel slot posts
-only once a person approves it (Trial Reels: the slot's
-`social_hub.schedule.approved_at`, carried to the video's item when it posts;
-Carousels: the item's `social_hub.approvals` row, so approved content stays
-approved wherever it is placed); an unapproved slot that comes due is
-cancelled with the reason, never posted late. A rejected item never posts. Explainers
-need the `approved` verdict; Stories never auto-approve a set. Tommy turns
-these off himself.
+What approving does depends on the type's state (CONTRACT.md §1, §4):
+
+| State | Approving a post | Posts to Instagram |
+|---|---|---|
+| Paused | marks it approved; it stays in the Made tab | no |
+| Approval | books or keeps its slot | no |
+| Live | books or keeps its slot | yes, at its slot time |
+
+Back to Made (D17, D18): switching a type to Paused takes its scheduled posts out
+of their slots (`social_hub.schedule` status `cancelled`, reason `paused`), and a
+slot that passes without posting (the type isn't Live, or the lateness rule) does
+the same with reason `slot-passed`. Nothing is deleted. The post stays approved
+and is never re-slotted automatically: it posts only after a person places it in a
+slot while the type is Live.
 
 Shared code lives in `lib/instagram/` (clock, posting windows, the Graph
 transport and container calls, insights client and rules) and

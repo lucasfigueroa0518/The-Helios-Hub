@@ -1,7 +1,7 @@
 # Standardize settings for all content types — living plan
 
 Trello card: "Standardize settings for all content types"
-Stage: **Contract** (v2 in `CONTRACT.md`, no open questions; awaiting Tommy's approval to build)
+Stage: **Review done, awaiting ship approval** (2026-11-20). Built by A–D plus review fixes, offline tests and typecheck green apart from failures that also fail before the build. Not shipped: the migration `db/settings_standard_states.sql` is not applied and the social worker is not redeployed; both wait for Tommy's go-ahead.
 
 ## The card's questions
 - (a) Where do we control whether a content type is "live"?
