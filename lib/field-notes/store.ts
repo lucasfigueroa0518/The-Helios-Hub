@@ -16,8 +16,11 @@ import { CONTENT_LEAVES, KNOW_HOW_TIERS, PURPOSES, TIP_SOURCE_KINDS, TIP_STATUSE
 export type RunTrigger = 'scheduled' | 'manual';
 export type RunKind = 'build' | 'rebuild';
 
-/** `nyDate`: the date the run's post is FOR when the clock set it at request time (Bald-Eagle D4); null for a person's Generate. */
-export type ClaimedRun = { id: string; trigger: RunTrigger; kind: RunKind; requestedBy: string | null; seedTipId: string | null; nyDate?: string | null };
+/**
+ * `nyDate`: the date the run's post is FOR when the clock set it at request time (Bald-Eagle D4); null for a person's Generate.
+ * `refillOnly`: the clock's refill night (D16): the run finds and scores new tips and makes no post.
+ */
+export type ClaimedRun = { id: string; trigger: RunTrigger; kind: RunKind; requestedBy: string | null; seedTipId: string | null; nyDate?: string | null; refillOnly?: boolean };
 
 /**
  * Hang guard only; long runs are normal (CI decision 2026-11-10). A run still 'running' after RUN_HANG_BACKSTOP_INTERVAL
@@ -53,9 +56,10 @@ export async function requestRun(
   q: HubQuery,
   trigger: RunTrigger,
   capUsd: number,
-  o: { kind?: RunKind; requestedBy?: string | null; seedTipId?: string | null; nyDate?: string | null } = {},
+  o: { kind?: RunKind; requestedBy?: string | null; seedTipId?: string | null; nyDate?: string | null; refillOnly?: boolean } = {},
 ): Promise<string | null> {
-  const record = o.seedTipId ? { seedTipId: o.seedTipId } : {};
+  // The refill-only mark rides in the record too (kind's CHECK allows only build and rebuild; no migration).
+  const record = { ...(o.seedTipId ? { seedTipId: o.seedTipId } : {}), ...(o.refillOnly ? { refillOnly: true } : {}) };
   // `nyDate`: the clock's target date (Bald-Eagle D4), the date the run's post is for; a person's Generate leaves it to the run.
   const { rows } = await q<{ id: string }>(
     `INSERT INTO field_notes.runs (trigger, kind, status, cap_usd, requested_by, record, ny_date)
@@ -106,7 +110,7 @@ export async function fieldNotesFilledDates(q: HubQuery, dates: readonly string[
 export async function claimRun(q: HubQuery, now = new Date()): Promise<ClaimedRun | null> {
   await q(ABANDON_SQL);
   try {
-    const { rows } = await q<{ id: string; trigger: RunTrigger; kind: RunKind; requested_by: string | null; seed: string | null; ny_date: string | null }>(
+    const { rows } = await q<{ id: string; trigger: RunTrigger; kind: RunKind; requested_by: string | null; seed: string | null; ny_date: string | null; refill_only: string | null }>(
       `UPDATE field_notes.runs SET status = 'running', started_at = $1::timestamptz
         WHERE id = (
           SELECT id FROM field_notes.runs
@@ -115,11 +119,13 @@ export async function claimRun(q: HubQuery, now = new Date()): Promise<ClaimedRu
            ORDER BY requested_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1)
-        RETURNING id::text AS id, trigger, kind, requested_by, record->>'seedTipId' AS seed, ny_date::text AS ny_date`,
+        RETURNING id::text AS id, trigger, kind, requested_by, record->>'seedTipId' AS seed, ny_date::text AS ny_date, record->>'refillOnly' AS refill_only`,
       [now.toISOString()],
     );
     const r = rows[0];
-    return r ? { id: r.id, trigger: r.trigger, kind: r.kind, requestedBy: r.requested_by, seedTipId: r.seed && UUID.test(r.seed) ? r.seed : null, nyDate: r.ny_date ? r.ny_date.slice(0, 10) : null } : null;
+    return r
+      ? { id: r.id, trigger: r.trigger, kind: r.kind, requestedBy: r.requested_by, seedTipId: r.seed && UUID.test(r.seed) ? r.seed : null, nyDate: r.ny_date ? r.ny_date.slice(0, 10) : null, ...(r.refill_only === 'true' ? { refillOnly: true } : {}) }
+      : null;
   } catch (err) {
     if ((err as { code?: string }).code === '23505') return null;
     throw err;

@@ -37,6 +37,13 @@
  *
  * The engine never finishes the run row: the worker (worker.ts) puts the post on the spine and
  * records the outcome and its spend.
+ *
+ * Refill split (settings standard D3, D16; CONTRACT.md §4): finding and scoring new tips into field_notes.tips is the
+ * type's refill. It is its own step (refillTips), run first on every run while the scoring questions are approved,
+ * before the seeds, the photo check or anything that could end the run, and held to its own budget when the caller
+ * gives a refill cap (`refillCapUsd`; the run's budget otherwise). A `refillOnly` run stops after it: the clock queues
+ * one on a Field Notes night when no post is being made (paused, or the days already filled). Making the post (the
+ * Writer, photos, render) is the make step.
  */
 import type { FieldNotesBudget } from './budget';
 import { createFieldNotesBudget, FieldNotesBudgetExhausted } from './budget';
@@ -152,6 +159,10 @@ export type FieldNotesRunInput = {
    * (readNightQueue); a caller may pass one (tests). Absent: read here.
    */
   queue?: SelectQueue;
+  /** The refill's own cap (D14, pool_refill_cap_usd). Absent: the refill spends from the run's cap, as before the split. */
+  refillCapUsd?: number;
+  /** Only the refill: find and score new tips, make no post (D16: the clock's refill night). */
+  refillOnly?: boolean;
 };
 
 /** The hub's idea id for a tip is `field_notes:tip:<tip id>` (lib/social-hub/adapters/field-notes.ts). */
@@ -206,9 +217,13 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
   const night = input.queue ? { ...input.queue, readAt: d.now } : await readNightQueue(movesQ, 'field_notes', FIELD_NOTES_TIP_IDEA);
   input = { ...input, queue: night };
   const budget: FieldNotesBudget = createFieldNotesBudget({ capUsd: input.capUsd });
+  // The refill's budget (D14): its own cap when given, else the run's (one meter, as before the split).
+  const refillBudget: FieldNotesBudget = input.refillCapUsd != null ? createFieldNotesBudget({ capUsd: input.refillCapUsd }) : budget;
+  const meters = refillBudget === budget ? [budget] : [budget, refillBudget];
   const record: FieldNotesRunRecord = { kind: input.kind, seedTipId: input.seedTipId };
-  const spend = (): Spend => ({ claudeUsd: budget.claudeUsd(), jevUsd: budget.jevUsd() });
-  const finalRecord = () => ({ ...record, spend: { ...spend(), totalUsd: budget.spent(), capUsd: budget.capUsd, calls: budget.calls() } });
+  const sum = (f: (b: FieldNotesBudget) => number) => meters.reduce((n, b) => n + f(b), 0);
+  const spend = (): Spend => ({ claudeUsd: sum((b) => b.claudeUsd()), jevUsd: sum((b) => b.jevUsd()) });
+  const finalRecord = () => ({ ...record, spend: { ...spend(), totalUsd: sum((b) => b.spent()), capUsd: budget.capUsd, calls: meters.flatMap((b) => b.calls()) } });
   const skipped = (stopReason: string, note: string): FieldNotesRunResult => ({ ok: true, outcome: 'skipped', stopReason: `${stopReason}: ${note}`, note, record: finalRecord(), ...spend() });
   const failed = (error: string, stopReason?: string): FieldNotesRunResult => ({ ok: false, error, ...(stopReason ? { stopReason } : {}), record: finalRecord(), ...spend() });
   // The date the post is FOR (Bald-Eagle D4: the clock's target, 2 days ahead); today when none is given.
@@ -248,10 +263,22 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // 2. Unused tips older than the expiry go (housekeeping on the type's own candidates).
     record.expiredTips = await expireOldTips(q, d.now, input.settings.tipExpiryDays);
 
-    // 3. The tips: a person's seeded tip first, other unused seeds next (oldest first), then (scoring approved) new
-    // candidates. Seeds obey the post rules too: distinct subjects and at most maxPerWant(post size) of one want; a seed that
-    // does not fit waits for a later post. A post needs TIP_SLIDES_MIN and takes up to TIP_SLIDES_MAX.
+    // 2b. The refill (D3, D16): new tips into the pool, before anything that could end the run, under its own cap.
+    // Nothing found is saved unscored, so it waits for the scoring questions to be approved.
     const config = d.config ?? FIELD_NOTES_SOURCES_CONFIG;
+    if (config.questionsApproved) {
+      const refill = await refillTips(d, refillBudget, record);
+      record.refill = { capUsd: refillBudget.capUsd, spentUsd: Number(refillBudget.spent().toFixed(6)), capped: refill.capped };
+    }
+    if (input.refillOnly) {
+      return config.questionsApproved
+        ? skipped('refill-only', 'the night refilled the tip pool and made no post.')
+        : skipped('refill-only', 'nothing was refilled: the scoring questions are not approved yet, so no found tip can be saved.');
+    }
+
+    // 3. The tips: a person's seeded tip first, other unused seeds next (oldest first), then (scoring approved) the best
+    // stored scored tips. Seeds obey the post rules too: distinct subjects and at most maxPerWant(post size) of one want; a seed that
+    // does not fit waits for a later post. A post needs TIP_SLIDES_MIN and takes up to TIP_SLIDES_MAX.
     const seeds: StoredTip[] = [];
     if (input.seedTipId) {
       const seed = await getTip(q, input.seedTipId);
@@ -317,7 +344,8 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
       }
     }
     if (config.questionsApproved && tips.length < maxTips) {
-      tips.push(...(await pickScoredTips(d, input, budget, record, { count: maxTips - tips.length, taken: tips })));
+      const recentWants = ((record.found as { recentWants?: Want[] } | undefined)?.recentWants) ?? (await recentPostWants(q));
+      tips.push(...(await selectStoredTips(d, input, { count: maxTips - tips.length, taken: tips, recentWants, budget, record })));
     }
     if (tips.length < TIP_SLIDES_MIN) {
       return skipped(
@@ -533,27 +561,21 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
 }
 
 /**
- * Find new candidates and score the ones not stored yet (CLAUDE.md Rule 2: never a row an earlier run left), then
- * select up to `count` with distinct subjects (not already on the post) from the scored candidates.
+ * The refill (D16): find new candidates and score the ones not stored yet (CLAUDE.md Rule 2: never a row an earlier
+ * run left), saving each only once scored. Selection is the make step's (selectStoredTips).
  *
  * Collect (thin) -> drop links already stored (one lookup) -> at most MAX_CANDIDATES_PER_SOURCE per source -> the
  * MAX_SCORED_PER_RUN slots round-robin across sources in registry order -> only those slots enriched -> each slot
  * scored, then saved with its score and tags. A candidate that is not scored (no slot, the cap, a failed call) is NOT saved, so a later run finds
- * it again. Spend stops at the cap.
+ * it again. Spend stops at the refill's cap: `capped` says the cap left scoring slots unscored.
  *
  * Intake mode (Central Intake Phase 2, `d.intake` says 'intake'): no collect, no enrich, no scoring here; the order's
- * scored stories not yet stored are saved as candidates (intake.ts saveIntakeTips), then the same selection.
+ * scored stories not yet stored are saved as candidates (intake.ts saveIntakeTips).
  */
-async function pickScoredTips(
-  d: FieldNotesEngineDeps,
-  input: FieldNotesRunInput,
-  budget: FieldNotesBudget,
-  record: FieldNotesRunRecord,
-  o: { count: number; taken: Tip[] },
-): Promise<Tip[]> {
+async function refillTips(d: FieldNotesEngineDeps, budget: FieldNotesBudget, record: FieldNotesRunRecord): Promise<{ capped: boolean }> {
   const q = d.query;
-  // Intake mode: the intake already fetched and scored Field Notes' sources; save what is new to field_notes.tips and
-  // select. A failed intake read falls back to the legacy path below (contract: switch + fallback).
+  // Intake mode: the intake already fetched and scored Field Notes' sources; save what is new to field_notes.tips.
+  // A failed intake read falls back to the legacy path below (contract: switch + fallback).
   const mode: FieldNotesIntakeMode = d.intake ? await d.intake.readConsumerMode(asIntakeQuery(q), 'field-notes', d.now).catch(() => 'legacy' as const) : 'legacy';
   if (mode === 'intake') {
     const fromIntake = await saveIntakeTips(q, d.intake!, d.now).catch((error: unknown) => {
@@ -562,9 +584,8 @@ async function pickScoredTips(
     });
     if (fromIntake) {
       record.intake = { mode };
-      const recentWants = await recentPostWants(q);
-      record.found = { ...fromIntake, recentWants };
-      return selectStoredTips(d, input, { count: o.count, taken: o.taken, recentWants, budget, record });
+      record.found = { ...fromIntake, recentWants: await recentPostWants(q) };
+      return { capped: false };
     }
   } else if (mode === 'stale-fallback') record.intake = { mode };
   const config = d.config ?? FIELD_NOTES_SOURCES_CONFIG;
@@ -582,22 +603,28 @@ async function pickScoredTips(
   const failures: Array<{ sourceUrl: string; error: string }> = [];
   let scored = 0;
   let added = 0;
+  let capped = false;
   if (d.jev) {
     const jev = budget.guardJev(d.jev);
     for (const c of queue) {
-      if (!budget.canSpend()) break;
+      if (!budget.canSpend()) {
+        capped = true;
+        break;
+      }
       try {
         const r = await scoreCandidate(c, { transport: jev, today, config });
         scored += 1;
         // Saved only now, with its score and tags (found tips are never seeds). A link another writer saved meanwhile is skipped.
         if (await saveCandidateTip(q, c, r.score, r)) added += 1;
       } catch (error) {
-        if (error instanceof FieldNotesBudgetExhausted) break;
+        if (error instanceof FieldNotesBudgetExhausted) {
+          capped = true;
+          break;
+        }
         failures.push({ sourceUrl: c.sourceUrl, error: errorText(error) });
       }
     }
   }
-  const recentWants = await recentPostWants(q);
   record.found = {
     collected: found.length,
     alreadyStored: found.length - fresh.length,
@@ -607,9 +634,9 @@ async function pickScoredTips(
     added,
     leftForLater: fresh.length - added,
     failures: failures.slice(0, 10),
-    recentWants,
+    recentWants: await recentPostWants(q),
   };
-  return selectStoredTips(d, input, { count: o.count, taken: o.taken, recentWants, budget, record });
+  return { capped };
 }
 
 /**

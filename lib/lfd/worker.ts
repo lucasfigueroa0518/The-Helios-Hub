@@ -1,14 +1,21 @@
 // lib/lfd/worker.ts
 /**
  * The helios-social worker's Last Few Days step (spec §7.3): carry out a
- * claimed run, then put its post on the spine and, while lfd publishing_live
- * is on, into its own day's 9:00–10:00 AM window. The worker runs this in the
+ * claimed run, then put its post on the spine and, only while Last Few Days is
+ * Live, into its own day's 9:00–10:00 AM window. The worker runs this in the
  * same loop as the carousel run, so the two never overlap.
+ *
+ * Refill split (settings standard D16, CONTRACT.md §4): Last Few Days' pool is
+ * the central intake's 'lfd' order, open every night in every state
+ * (lib/intake/orders.ts), so this run is only the make step: a scheduled run
+ * makes a post while makesPosts(state) and the day's quota allows; booking
+ * follows postsToInstagram(state). A person's "Make now" runs in every state.
  */
 import { withHangGuard } from '@/lib/content-runs/hang-guard';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { dailyFill, quotaFilledNote } from '@/lib/social-hub/fill';
+import { typeGate } from '@/lib/social/refill';
 
 import { lfdItemId } from './items';
 import { runLastFewDays, type LfdRunDeps } from './run';
@@ -50,6 +57,16 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
       w.log('lfd_run_failed', { runId: claimed.id, error });
       return { runId: claimed.id, status: 'failed', note: error };
     }
+    // The state (D16), read from the stored pair; Generate off with Live on reads as paused and logs state_mismatch.
+    const gate = typeGate('last_few_days', { generate: settings.autoRun, live: settings.publishingLive }, w.log);
+    if (claimed.trigger === 'scheduled' && !gate.makes) {
+      const note = `Last Few Days is ${gate.state}: the scheduled run makes no post (its pool still refills through the intake).`;
+      if (!(await finishRun(w.query, claimed.id, { status: 'skipped', stopReason: `paused: ${note}`, claudeUsd: 0, jevUsd: 0, record: { state: gate.state } }))) {
+        w.log('lfd_run_finish_ignored', { runId: claimed.id, status: 'skipped' });
+      }
+      w.log('lfd_run_skipped', { runId: claimed.id, reason: 'paused', note });
+      return { runId: claimed.id, status: 'skipped', note };
+    }
     if (claimed.trigger === 'scheduled') {
       // Daily fill (§7.4, D54): a post a person already placed for today is today's post. A manual run is never skipped.
       const fill = await dailyFill(w.query, 'last_few_days', nyDate, 1);
@@ -83,7 +100,7 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
     }
     await lfdItemId(w.query, res.postId);
     let scheduled: string | null = null;
-    if (settings.publishingLive) {
+    if (gate.posts) {
       // A fresh clock: the run took time, and a window that closed while it ran must not be booked in the past.
       // throughDate stays the run's own day.
       const out = await scheduleLfdPost(w.query, res.postId, 'auto', w.now(), nyDate);

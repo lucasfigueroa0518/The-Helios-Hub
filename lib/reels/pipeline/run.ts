@@ -34,6 +34,8 @@ import {
   type RunRow,
 } from '@/lib/reels/repository';
 import { errorText } from '@/lib/reels/pipeline/guard';
+import { readReelsNightGate, type ReelsNightGate } from '@/lib/reels/pipeline/night-gate';
+import { CappedJevRunner, RefillBudget, isRefillCapped, withoutCapped } from '@/lib/reels/refill-budget';
 import { loadSourceActivity, quietSources, quietSourcesNote } from '@/lib/reels/pipeline/source-health';
 import type { Adapter, AdapterItem, RunStats, RunStatus, RunTrigger, SourceResult } from '@/lib/reels/types';
 
@@ -51,6 +53,10 @@ export type RunDeps = IngestDeps & {
   copyClient?: CopyClient;
   /** Central intake (Phase 2): the 'reels' switch, the intake reads and the deposit run. Live by default. */
   intake?: Partial<IntakeRunDeps>;
+  /** The state gate (D16); read from reels.settings when absent. */
+  gate?: ReelsNightGate;
+  /** What the run has spent so far (the refill cap's ledger); runCostUsd(run.id) when absent. */
+  runSpend?: () => Promise<number>;
 };
 
 function log(message: string, fields: Record<string, unknown> = {}): void {
@@ -115,14 +121,22 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
     return { runId: run.id, status: 'skipped', note, sourceResults: [], stats: {} };
   }
 
-  const jev: JevRunner = deps?.jev ?? createLiveJevRunner();
+  // Refill split (D16, D3): the refill (ingest, grouping, scoring) runs in every state on its own cap; the make step
+  // (copy, render, booking) follows the state. Every refill Jev call goes through the capped runner.
+  const gate = deps?.gate ?? (await readReelsNightGate(run.trigger));
+  if (gate.mismatch) log('state_mismatch', { vertical: 'reels', runId: run.id, state: gate.state });
+  const makeJev: JevRunner = deps?.jev ?? createLiveJevRunner();
+  const budget = new RefillBudget(gate.refillCapUsd, deps?.runSpend ?? (() => runCostUsd(run.id)), (fields) =>
+    log('refill_capped', { vertical: 'reels', runId: run.id, ...fields }),
+  );
+  const jev: JevRunner = new CappedJevRunner(makeJev, budget);
   const ingestDeps: IngestDeps = { jev, fetchPage: deps?.fetchPage };
   const primary = deps?.adapters?.primary ?? primaryAdapters();
   const derived = deps?.adapters?.derived ?? derivedAdapters();
 
   const runStartedAt = new Date(run.started_at ?? run.requested_at);
   const now = new Date();
-  const night: Night = { run, deps, jev, ingestDeps, primary, derived, runStartedAt, now, scored: new Map() };
+  const night: Night = { run, deps, jev, makeJev, gate, budget, ingestDeps, primary, derived, runStartedAt, now, scored: new Map() };
 
   const intake = intakeRunDeps(deps?.intake);
   const mode = await intake.readMode(intake.query, 'reels', now).catch(() => 'legacy' as const);
@@ -159,7 +173,12 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
 type Night = {
   run: RunRow;
   deps?: Partial<RunDeps>;
+  /** The refill's Jev runner: refuses once the refill cap is reached. */
   jev: JevRunner;
+  /** The make step's Jev runner (copy): not held to the refill cap. */
+  makeJev: JevRunner;
+  gate: ReelsNightGate;
+  budget: RefillBudget;
   ingestDeps: IngestDeps;
   primary: Adapter[];
   derived: Adapter[];
@@ -218,6 +237,11 @@ async function executeLegacyNight(
 
   try {
     for (const adapter of [...primary, ...derived]) {
+      // The refill cap ends the refill cleanly: the sources left wait for the next night (their watermark is unchanged).
+      if (await night.budget.reached()) {
+        sourceResults.push(cappedSource(adapter));
+        continue;
+      }
       const result = await ingestAdapter(adapter, ingestDeps, {
         runId: run.id,
         runStartedAt,
@@ -229,12 +253,13 @@ async function executeLegacyNight(
         result.status = 'skipped';
         result.error = 'Prompt P-01 is not approved yet.';
       }
+      capOutcome(result);
       sourceResults.push(result);
       log('adapter_done', { adapter: adapter.id, ...result });
     }
 
     const grouping = await groupRun(run.id, runStartedAt, { jev });
-    const groupingNote = failureNote('Grouping failed for', grouping.failures);
+    const groupingNote = failureNote('Grouping failed for', withoutCapped(grouping.failures));
 
     const slate = await makeTargets(night, await nightTargets(run.trigger, nyDateKey(runStartedAt), now));
 
@@ -261,7 +286,7 @@ async function executeLegacyNight(
     };
 
     const failed = sourceResults.filter((result) => result.status === 'failed');
-    const itemErrors = sourceResults.flatMap((result) => result.itemErrors ?? []);
+    const itemErrors = withoutCapped(sourceResults.flatMap((result) => result.itemErrors ?? []));
     const itemNote = failureNote('Ingest failed for', itemErrors);
     // D-264. A watched source with nothing kept for days is called out.
     const watched = primary.filter((adapter) => adapter.quietAfterDays != null);
@@ -270,7 +295,7 @@ async function executeLegacyNight(
       .catch((error) => `Source health check failed: ${errorText(error)}`);
     const status: RunStatus =
       failed.length === 0 && !slate.scoringNote && !slate.copyNote && !groupingNote && !itemNote && !quietNote ? 'ok' : 'partial';
-    const note = [fallback?.note, failed.length === 0
+    const note = [fallback?.note, refillCapNote(night), failed.length === 0
       ? undefined
       : `${failed.length} source(s) failed: ${failed.map((result) => result.name).join(', ')}.`,
       itemNote,
@@ -328,14 +353,14 @@ async function makeTargets(night: Night, targets: readonly Target[], firstPlan?:
 
 /** Score one target's slate, then fill, copy and schedule it on its date (everything after the slate is the same on both paths). */
 async function scoreAndMake(night: Night, target: Target, plan?: CandidatePlan): Promise<SlateOutcome> {
-  const { run, deps, jev, runStartedAt } = night;
+  const { run, deps, jev, makeJev, gate, budget, runStartedAt } = night;
   const out: SlateOutcome = { scored: 0, selected: 0, copyWritten: 0 };
   const sameDay = target.lead === 0;
   try {
     const scoring = await scoreRun(run.id, runStartedAt, jev, night.intakeSource, plan, target.nyDate, night.scored);
     out.scored = scoring.scored;
     out.selected = scoring.selected;
-    out.scoringNote = failureNote('Scoring failed for', scoring.failures);
+    out.scoringNote = failureNote('Scoring failed for', withoutCapped(scoring.failures));
     log('run_scored', { ...scoring, nyDate: target.nyDate });
 
     if (scoring.slateId) {
@@ -354,7 +379,12 @@ async function scoreAndMake(night: Night, target: Target, plan?: CandidatePlan):
         const count = reelsTonight(openWindows, fill);
         reportFill(fill, log, { runId: run.id, openWindows, count });
         const carry = sameDay ? 'the ideas carry to tomorrow' : 'the ideas carry to the next slate';
-        if (count < 1 && fill.making < 1) {
+        if (!gate.makes) {
+          // Paused (D16): the pool refilled and was scored; nothing is written, rendered or booked.
+          await unselect();
+          out.fillNote = `Text on Screen is paused, so no reel was written or rendered; ${carry}.`;
+          log('make_skipped', { vertical: 'reels', runId: run.id, nyDate: target.nyDate, state: gate.state });
+        } else if (count < 1 && fill.making < 1) {
           await unselect();
           // Not a failure: the day is already filled. The ideas carry as on a day with no window left.
           out.fillNote = `${quotaFilledNote(fill, 'reel')} No reel was written or rendered; ${carry}.`;
@@ -364,15 +394,18 @@ async function scoreAndMake(night: Night, target: Target, plan?: CandidatePlan):
             ? 'No posting window is still open today, so no reel was rendered. The ideas carry to tomorrow.'
             : `No posting window is open on ${target.nyDate}, so no reel was rendered. The ideas carry to the next slate.`;
         } else {
-          const copy = await generatePassingReels({
-            runId: run.id,
-            slateId,
-            count,
-            client: deps?.copyClient,
-            signal: deps?.signal,
-            jev,
-            dailyFill: true,
-          });
+          // The make step's spend shares the run's ledger; it is not counted against the refill cap.
+          const copy = await budget.outside(() =>
+            generatePassingReels({
+              runId: run.id,
+              slateId,
+              count,
+              client: deps?.copyClient,
+              signal: deps?.signal,
+              jev: makeJev,
+              dailyFill: true,
+            }),
+          );
           out.copyWritten = copy.filled.filter((slot) => !slot.locked && !slot.reused).length;
           out.selected = copy.filled.length;
           const notes = [
@@ -385,10 +418,13 @@ async function scoreAndMake(night: Night, target: Target, plan?: CandidatePlan):
           ].filter((note): note is string => note != null);
           if (notes.length > 0) out.copyNote = notes.join(' ');
           log('run_copy', { ...copy, nyDate: target.nyDate });
-          const scheduled = await scheduleSelectedSlate(slateId).catch((error) => {
-            log('schedule_failed', { error: errorText(error), nyDate: target.nyDate });
-            return { scheduled: 0 };
-          });
+          // Booked only while Text on Screen is Live (D16).
+          const scheduled = !gate.books
+            ? { scheduled: 0 }
+            : await scheduleSelectedSlate(slateId).catch((error) => {
+                log('schedule_failed', { error: errorText(error), nyDate: target.nyDate });
+                return { scheduled: 0 };
+              });
           if (scheduled.scheduled > 0) log('run_scheduled', { ...scheduled, nyDate: target.nyDate });
         }
       } catch (error) {
@@ -445,6 +481,11 @@ async function executeIntakeNight(
   try {
     try {
       for (const adapter of derived) {
+        if (await night.budget.reached()) {
+          sourceResults.push(cappedSource(adapter));
+          fetched.set(adapter.id, { items: [] });
+          continue;
+        }
         const { result, items } = await fetchDerivedForIntake(adapter, ingestDeps, {
           runId: run.id,
           runStartedAt,
@@ -456,6 +497,7 @@ async function executeIntakeNight(
           result.status = 'skipped';
           result.error = 'Prompt P-01 is not approved yet.';
         }
+        capOutcome(result);
         sourceResults.push(result);
         log('adapter_done', { adapter: adapter.id, intake: true, ...result });
       }
@@ -510,6 +552,7 @@ async function executeIntakeNight(
     // Source health for the primary adapters is the intake's now (Reels no longer fetches them).
     const status: RunStatus = failed.length === 0 && !slate.scoringNote && !slate.copyNote ? 'ok' : 'partial';
     const note = [
+      refillCapNote(night),
       failed.length === 0
         ? undefined
         : `${failed.length} source(s) failed: ${failed.map((result) => result.name).join(', ')}.`,
@@ -533,6 +576,24 @@ function failureNote(label: string, failures: string[]): string | undefined {
   const shown = failures.slice(0, 5).join('; ');
   const more = failures.length > 5 ? ` (+${failures.length - 5} more)` : '';
   return `${label} ${failures.length} item(s): ${shown}${more}`;
+}
+
+/** A source the refill cap kept from running tonight: skipped, not failed. */
+function cappedSource(adapter: Adapter): SourceResult {
+  return { adapterId: adapter.id, name: adapter.name, status: 'skipped', fetched: 0, ingested: 0, dropped: 0, refreshed: 0, error: 'Refill cap reached; this source waits for the next night.' } as SourceResult;
+}
+
+/** A source the cap stopped partway is skipped, not failed; its items the cap stopped are not item errors. */
+function capOutcome(result: SourceResult): void {
+  if (result.status === 'failed' && isRefillCapped(result.error)) {
+    result.status = 'skipped';
+    result.error = 'Refill cap reached; this source waits for the next night.';
+  }
+  if (result.itemErrors) result.itemErrors = withoutCapped(result.itemErrors);
+}
+
+function refillCapNote(night: Night): string | undefined {
+  return night.budget.capped ? `The refill reached its $${(night.budget.capUsd ?? 0).toFixed(2)} cap; the rest waits for the next night.` : undefined;
 }
 
 function isNotApproved(error: string | undefined): boolean {

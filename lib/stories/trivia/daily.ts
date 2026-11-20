@@ -23,7 +23,9 @@
  *   cap        after both calls, the pool cap (TRIVIA_POOL_CAP, 40)
  *
  * Runs once per pool day (the record in stories.settings 'trivia_daily'); a
- * second call the same day does nothing unless forced. Nothing in the
+ * second call the same day does nothing unless forced. It is AI Trivia's pool refill (settings standard D16): it runs
+ * in every state, held to the type's refill cap (`refill`, D14): no writer call starts once the cap is spent, and the
+ * record says `capped`. Nothing in the
  * database is swept: the only rows read are the cell table, the pool and one
  * bounded window of the intake order's own stories.
  */
@@ -62,7 +64,12 @@ export type TriviaDailyDeps = {
   force?: boolean;
   /** The central intake (SS-30, SS-33): the db defaults to `db`, the reads and the deposit to the live ones. Tests stub them. */
   intake?: TriviaIntakeDeps;
+  /** The refill cap (D14): asked before each writer call. Absent: no refill cap (the worker's daily and monthly caps still hold). */
+  refill?: RefillBudget;
 };
+
+/** A refill's spend check (settings standard D14): whether one more paid step may start. */
+export type RefillBudget = { capUsd: number; canSpend: () => Promise<boolean> };
 
 export type TriviaDailyRecord = {
   day: string;
@@ -78,6 +85,8 @@ export type TriviaDailyRecord = {
   retired: string[];
   /** SS-30/SS-33: the path the writer took, how many research items it got, and the deposit of its cited pages. */
   intake?: { mode: TriviaResearchMode; research: number; deposited: number; created: number; failed: number; depositError?: string };
+  /** The refill cap stopped the day before its last writer call (D14). */
+  capped?: boolean;
   error?: string;
 };
 
@@ -117,6 +126,10 @@ export async function runTriviaDaily(deps: TriviaDailyDeps): Promise<TriviaDaily
     // Cells used by a valid question today, across both calls.
     const taken = new Set<string>();
     for (let call = 0; call < WRITER_CALLS; call++) {
+      if (deps.refill && !(await deps.refill.canSpend())) {
+        rec.capped = true;
+        break;
+      }
       const cells = await sampleOpenCells(db, CELLS_PER_CALL, deps.rand, new Set(rec.offered));
       if (!cells.length) {
         if (!rec.offered.length) rec.error = 'no open cells';

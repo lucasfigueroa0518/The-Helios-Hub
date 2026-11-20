@@ -5,9 +5,15 @@
  * The post is dated with the run's target date (Bald-Eagle D4): the date the 2:00 AM clock queued it for
  * (clock.ts, 2 days ahead), or today for a person's Generate, which has none.
  * The worker runs this in the same loop as the other types, so no two runs ever overlap.
+ *
+ * Refill split (settings standard D3, D14, D16): every run finds and scores new tips first, held to
+ * pool_refill_cap_usd (run.ts refillTips), and logs `refill_capped` when that cap stops it. A refill-only run (the
+ * clock's refill night, clock.ts refillNight) stops there and makes no post. A person's Generate or Make it runs in
+ * every state, as before.
  */
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import type { HubQuery } from '@/lib/social-hub/db';
+import { logRefillCapped, readTypeGate } from '@/lib/social/refill';
 
 import { fieldNotesItemId } from './items';
 import { runFieldNotes, type FieldNotesEngineDeps, type FieldNotesRunInput, type FieldNotesRunResult } from './run';
@@ -44,7 +50,11 @@ export async function carryOutFieldNotesRun(w: CarryOutDeps, claimed: ClaimedRun
   };
   try {
     const settings = await readFieldNotesSettings(w.query);
-    const cap = settings.runCapUsd;
+    // The state and the refill cap (D14, D16); reading them logs state_mismatch.
+    const gate = await readTypeGate(w.query, 'field_notes', w.log);
+    const refillOnly = claimed.refillOnly === true;
+    // A refill-only run spends only the refill cap; it does not need a usable run cap.
+    const cap = refillOnly ? gate.refillCapUsd : settings.runCapUsd;
     if (cap == null) {
       const error = `field_notes.settings.run_cap_usd is not a positive number (got ${JSON.stringify(settings.runCapRaw)}); refusing to run`;
       await finish({ status: 'failed', error, claudeUsd: 0, jevUsd: 0, record: {} });
@@ -58,7 +68,7 @@ export async function carryOutFieldNotesRun(w: CarryOutDeps, claimed: ClaimedRun
     }
     await adoptRun(w.query, claimed.id, { capUsd: cap, nyDate });
 
-    w.log('field_notes_run_started', { runId: claimed.id, trigger: claimed.trigger, seedTipId: claimed.seedTipId, capUsd: cap });
+    w.log('field_notes_run_started', { runId: claimed.id, trigger: claimed.trigger, seedTipId: claimed.seedTipId, capUsd: cap, refillCapUsd: gate.refillCapUsd, ...(refillOnly ? { refillOnly: true } : {}) });
     const deps = await w.engine(claimed, cap);
     const res = await (w.run ?? runFieldNotes)(
       { ...deps, now },
@@ -67,10 +77,15 @@ export async function carryOutFieldNotesRun(w: CarryOutDeps, claimed: ClaimedRun
         kind: claimed.kind,
         seedTipId: claimed.seedTipId,
         capUsd: cap,
+        refillCapUsd: gate.refillCapUsd,
+        ...(refillOnly ? { refillOnly: true } : {}),
         nyDate,
         settings: { photoRestPosts: settings.photoRestPosts, maxPendingDrafts: settings.maxPendingDrafts, tipExpiryDays: settings.tipExpiryDays, darkenCap: settings.darkenCap },
       },
     );
+
+    const refill = (res.record as { refill?: { capped?: boolean; spentUsd?: number } }).refill;
+    if (refill?.capped) logRefillCapped(w.log, 'field_notes', { capUsd: gate.refillCapUsd, spentUsd: refill.spentUsd, step: 'tip-scoring', runId: claimed.id });
 
     if (!res.ok) {
       await finish({ status: 'failed', stopReason: res.stopReason, error: res.error, claudeUsd: res.claudeUsd, jevUsd: res.jevUsd, record: res.record });

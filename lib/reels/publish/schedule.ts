@@ -1,5 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
 import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
@@ -120,17 +121,21 @@ async function outcome(schedule: StoredSchedule): Promise<ScheduleOutcome> {
   return { scheduled: true, schedule: withMode, note: scheduleNote(withMode) };
 }
 
-/** Live is the switch for the nightly auto-schedule. Off until it is turned on. */
+/**
+ * Whether Text on Screen is Live (D16): posts go to Instagram only in the Live state. Generate off with Live on reads
+ * as paused (stateOf), so it books nothing. Off until it is turned on.
+ */
 export async function publishingLive(): Promise<boolean> {
-  return (await getSetting<boolean>('publishing_live')) === true;
+  const [generate, live] = await Promise.all([getSetting<unknown>('auto_run'), getSetting<unknown>('publishing_live')]);
+  return postsToInstagram(stateOf(generate === true, live === true).state);
 }
 
 /**
- * Every content type needs a person's approval before it posts (docs/social-overnight.md).
- * On unless the setting says false. An auto-scheduled reel then posts only once approved.
+ * Every post needs a person's approval (settings standard D16: require_approval is always true and is never read
+ * as false). An auto-scheduled reel posts only once approved. Kept async for its callers.
  */
 export async function requireApproval(): Promise<boolean> {
-  return (await getSetting<boolean>('require_approval')) !== false;
+  return true;
 }
 
 export const NOT_APPROVED_NOTE = 'Nobody approved this reel before its slot, so it was not posted.';

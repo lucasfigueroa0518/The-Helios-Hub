@@ -1,4 +1,5 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -27,16 +28,24 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
 }
 
-/** The `publishing_live` row of explainers.settings (the typed settings loader ignores it). */
+/**
+ * Whether Explainers are Live (D16): approved reels go to Instagram only in the Live state. Read from the
+ * `auto_render` and `publishing_live` rows; Generate off with Live on reads as paused (stateOf), so nothing is placed.
+ */
 export async function publishingLive(db: Queryable): Promise<boolean> {
-  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'publishing_live'`);
-  return rows[0]?.value === true;
+  const { rows } = await db.query<{ key: string; value: unknown }>(
+    `SELECT key, value FROM explainers.settings WHERE key IN ('auto_render', 'publishing_live')`,
+  );
+  const on = (key: string) => rows.some((row) => row.key === key && row.value === true);
+  return postsToInstagram(stateOf(on('auto_render'), on('publishing_live')).state);
 }
 
-/** The `require_approval` row: on unless set to false (docs/social-overnight.md). */
-export async function requireApproval(db: Queryable): Promise<boolean> {
-  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'require_approval'`);
-  return rows[0]?.value !== false;
+/**
+ * Every post needs a person's approval (settings standard D16): `require_approval` is always true and is never read
+ * as false. Kept async with its db argument for its callers.
+ */
+export async function requireApproval(_db: Queryable): Promise<boolean> {
+  return true;
 }
 
 /** `posts_per_day` from explainers.settings (SH-48), else the default. */

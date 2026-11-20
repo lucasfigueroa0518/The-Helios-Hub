@@ -472,7 +472,9 @@ async function setSwitches(db: Awaited<ReturnType<typeof harnessDb>>['db'], s: {
   }
 }
 
-test('worker (approval off, publishing live): auto request at 3 AM → build → self-approve → schedule → publish in order → history, no photos, insights, cell stays open (AT-78)', async () => {
+// Settings standard (D16): every post needs a person's approval, so the old "approval off → self-approve" expectation
+// contradicts the contract; the set now waits at ready, a person approves it, and a Live type schedules it.
+test('worker (Live, approval stored off): auto request at 3 AM → build → waits for Approve → schedule → publish in order → history, no photos, insights, cell stays open (AT-78)', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   await setSwitches(db, { requireApproval: false, publishingLive: true });
@@ -507,9 +509,13 @@ test('worker (approval off, publishing live): auto request at 3 AM → build →
     insights: () => ({ storyInsights: async () => ({ metrics: { reach: 50, taps_forward: 40 }, raw: [], notEnoughViewers: false }) }),
   };
   const first = await tick(deps);
-  assert.deepEqual(first, { built: 1, scheduled: 1, published: 0, insights: 0 });
+  assert.deepEqual(first, { built: 1, scheduled: 0, published: 0, insights: 0 });
   assert.equal(daily.length, 1, 'the daily writer runs at the 3:00 refresh');
   assert.equal(renderer.renders, 0, 'AI Trivia never goes through the image renderer');
+  const [built] = await listSets(db, { series: 'ai_trivia' });
+  assert.equal(built!.status, 'ready', 'require_approval stored off is never read: the set waits for a person');
+  await (await import('@/lib/stories/repository')).approveSet(db, built!.id);
+  assert.equal((await tick(deps)).scheduled, 1);
   const [set] = await listSets(db, { series: 'ai_trivia' });
   assert.deepEqual(st.uploads, ['01-question.mp4', '01-question.jpg', '02-answer.mp4', '02-answer.jpg'].map((n) => `sets/${set!.id}/${n}`));
   assert.deepEqual(triviaRender.calls.map((c) => c.roles), [['question', 'answer']]);
@@ -543,7 +549,7 @@ test('worker (approval off, publishing live): auto request at 3 AM → build →
 const MD_FRAMES = [{ seq: 1, role: 'opener' as const, backdrop: 'black' as const, copy: { role: 'opener' as const, date: 'Thursday, October 8', storyCount: 1 } }];
 const noDaily = async () => null;
 
-test('worker: a flagged auto set is not self-approved even with approval off', async () => {
+test('worker: a flagged auto set is not self-approved (no set ever is, D16)', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'morning_download', { auto: true });
   await setSwitches(db, { requireApproval: false, publishingLive: true });

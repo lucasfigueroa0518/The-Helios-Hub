@@ -1,4 +1,5 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -13,7 +14,7 @@ import { dramaQueuePublish } from './publish';
 /**
  * AI Drama reels on the calendar (mirrors lib/explainers/publish/schedule.ts): the weekly slot template when
  * there is one, else the legacy evening window × posts_per_day. Slots live on the lifecycle spine
- * (social_hub.schedule, vertical 'reel_ai_drama'). Nothing is booked while publishing_live is off.
+ * (social_hub.schedule, vertical 'reel_ai_drama'). Nothing is booked unless the type is Live (D16).
  */
 
 function isUniqueViolation(error: unknown): boolean {
@@ -25,14 +26,21 @@ async function settingValue(db: Queryable, key: string): Promise<unknown> {
   return rows[0]?.value;
 }
 
-/** The master switch: true only when stored true. */
+/**
+ * Whether AI Drama is Live (D16): reels are booked and posted only in the Live state. Generate (`auto`) off with
+ * `publishing_live` on reads as paused (stateOf), so nothing is booked.
+ */
 export async function dramaPublishingLive(db: Queryable): Promise<boolean> {
-  return (await settingValue(db, 'publishing_live')) === true;
+  const [generate, live] = await Promise.all([settingValue(db, 'auto'), settingValue(db, 'publishing_live')]);
+  return postsToInstagram(stateOf(generate === true, live === true).state);
 }
 
-/** On unless stored false. */
-export async function dramaRequireApproval(db: Queryable): Promise<boolean> {
-  return (await settingValue(db, 'require_approval')) !== false;
+/**
+ * Every post needs a person's approval (settings standard D16): `require_approval` is always true and is never read
+ * as false. Kept async with its db argument for its callers.
+ */
+export async function dramaRequireApproval(_db: Queryable): Promise<boolean> {
+  return true;
 }
 
 /** posts_per_day within 1..DRAMA_WINDOWS.length; a bad row reads as the default. */

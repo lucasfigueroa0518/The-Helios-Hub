@@ -1,4 +1,4 @@
-/** Intake orders open only from their own type's settings and queue (Owner B). A fake query records every table read. */
+/** Intake orders: every order of a type that is not retired is open on every run (settings standard D16). A fake query records every table read. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -37,42 +37,29 @@ function fake(w: World): { q: IntakeQuery; reads: string[] } {
 
 const ids = async (w: World) => (await openOrders(fake(w).q, NOW)).map((o) => o.id);
 
-test('each order opens only from its own settings', async () => {
-  // AI Trivia is on by default and its order opens with it (SS-30): it costs nothing (deposit-only, no scorecard).
-  const T = ['trivia'];
-  assert.deepEqual(await ids({}), T);
-  assert.deepEqual(await ids({ lfdAuto: true }), ['lfd', ...T]);
-  assert.deepEqual(await ids({ lfdRun: true }), ['lfd', ...T]);
-  assert.deepEqual(await ids({ lfdSeed: true }), ['lfd', ...T]);
-  assert.deepEqual(await ids({ series: { morning_download: { auto: true } } }), ['md', ...T]);
-  assert.deepEqual(await ids({ series: { morning_download: { auto: true, enabled: false } } }), T);
-  // Guess the Number's order is gone with the series (AT-14); Free vs. Paid's too (SS-31): neither opens anything.
-  assert.deepEqual(await ids({ series: { guess_the_number: { auto: true }, ai_trivia: { enabled: false } } }), []);
-  assert.deepEqual(await ids({ series: { free_vs_paid: { auto: true }, ai_trivia: { enabled: false } } }), []);
-  // Real or AI? has no order: its scrapes are photo requests (SS-30).
-  assert.deepEqual(await ids({ series: { real_or_ai: { auto: true }, ai_trivia: { enabled: false } } }), []);
-  assert.deepEqual(await ids({ pendingSet: 'real_or_ai' }), T);
-  assert.deepEqual(await ids({ pendingSet: 'morning_download', lfdAuto: true }), ['lfd', 'md', ...T]);
+const ALL = ['lfd', 'md', 'reels', 'carousel', 'field-notes', 'trivia'];
+
+// Settings standard (D16, CONTRACT.md §4): the intake is the refill and refill runs in every state, so every order of a
+// type that is not retired is open on every run. The old expectations (an order opens only from its type's Generate
+// switch, queue or seeds) contradict the contract and were replaced.
+test('every order is open in every state: Generate off, on, a queue or none (D16)', async () => {
+  assert.deepEqual(await ids({}), ALL, 'nothing switched on: every order still refills');
+  assert.deepEqual(await ids({ lfdAuto: true }), ALL);
+  assert.deepEqual(await ids({ lfdRun: true, lfdSeed: true }), ALL);
+  assert.deepEqual(await ids({ series: { morning_download: { auto: false, enabled: false }, ai_trivia: { enabled: false } } }), ALL);
+  assert.deepEqual(await ids({ series: { morning_download: { auto: true }, ai_trivia: { enabled: true, auto: true } }, pendingSet: 'morning_download' }), ALL);
 });
 
-test('the trivia order opens and closes with the ai_trivia series (SS-30)', async () => {
-  assert.deepEqual(await ids({ series: { ai_trivia: { enabled: true, auto: true } } }), ['trivia']);
-  assert.deepEqual(await ids({ series: { ai_trivia: { enabled: false, auto: true } } }), [], 'disabled: closed');
-  assert.deepEqual(await ids({ series: { ai_trivia: { enabled: true, auto: false } } }), ['trivia'], 'auto off: still open, its daily writer runs on enabled alone');
-  assert.deepEqual(await ids({ series: { ai_trivia: { enabled: false } }, pendingSet: 'ai_trivia' }), ['trivia'], 'a set waiting to build opens it even when off');
-  assert.deepEqual(await ids({ series: { ai_trivia: { auto: true }, morning_download: { auto: true } } }), ['md', 'trivia']);
-  // Its own settings only: another type being on never opens it.
-  assert.deepEqual(await ids({ lfdAuto: true, series: { morning_download: { auto: true }, ai_trivia: { enabled: false } } }), ['lfd', 'md']);
+test('retired series have no order, so they never refill (SS-31, AT-14); Real or AI? has none either (SS-30)', async () => {
+  const open = await ids({ series: { guess_the_number: { auto: true, enabled: true }, free_vs_paid: { auto: true, enabled: true }, real_or_ai: { auto: true } } });
+  for (const gone of ['fvp', 'gtn', 'guess_the_number', 'free_vs_paid', 'real_or_ai']) assert.ok(!(open as string[]).includes(gone), gone);
 });
 
-test('isOpen reads only its own type’s tables', async () => {
-  const lfd = fake({});
-  await LFD_ORDER.isOpen(lfd.q, NOW);
-  assert.ok(lfd.reads.every((r) => r.startsWith('lfd.')), lfd.reads.join(','));
-  for (const o of [MD_ORDER, TRIVIA_ORDER]) {
+test('isOpen reads nothing: no order depends on its type’s settings any more', async () => {
+  for (const o of [LFD_ORDER, MD_ORDER, TRIVIA_ORDER, ...INTAKE_ORDERS]) {
     const f = fake({});
-    await o.isOpen(f.q, NOW);
-    assert.ok(f.reads.every((r) => r.startsWith('stories.')), `${o.id}: ${f.reads.join(',')}`);
+    assert.equal(await o.isOpen(f.q, NOW), true, o.id);
+    assert.deepEqual(f.reads, [], o.id);
   }
 });
 

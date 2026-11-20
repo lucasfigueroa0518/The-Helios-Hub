@@ -15,6 +15,9 @@
  * holds, and every pooled candidate is offered to the photo bank (intake.ts bankOffer). The switch, the ledger and the
  * bank live in the shared database (`sourceDb`, default `db`).
  *
+ * Real or AI?'s pool refill (settings standard D16): it runs in every state, held to the type's refill cap (`refill`,
+ * D14): the writer call and each spec's images start only while the cap has room, and the record says `capped`.
+ *
  * Runs once per pool day (the record in stories.settings 'roa_daily', written in
  * a `finally` so a broken day is not retried and paid for on every worker
  * pass); a second call the same day does nothing unless forced. Nothing in the
@@ -28,6 +31,7 @@ import { capRoaPool, poolDay } from '@/lib/stories/pool';
 import { material } from '@/lib/stories/prompts';
 import type { StoriesSettings } from '@/lib/stories/settings';
 import { createStoriesStorage, type StoriesStorage } from '@/lib/stories/storage';
+import type { RefillBudget } from '@/lib/stories/trivia/daily';
 import { writeStructured, type WriterCreate } from '@/lib/stories/writer';
 
 import { generateAiImage, liveImageGen, type RoaImageGen } from './generate';
@@ -72,6 +76,8 @@ export type RoaDailyDeps = {
    * (nothing is stored while the bank's `capture` switch is off). Null: nothing is offered.
    */
   photoBank?: (Pick<FullPhotoBank, 'offerHeld'> & { drain?: (ms: number) => Promise<void> }) | null;
+  /** The refill cap (D14): asked before the writer call and before each spec's images. Absent: no refill cap. */
+  refill?: RefillBudget;
 };
 
 /** How long the run waits at its end for the photo bank's stores. */
@@ -87,6 +93,8 @@ export type RoaDailyRecord = {
   dropped: string[];
   imageUsd: number;
   notes: string[];
+  /** The refill cap stopped the day before every spec was made (D14). */
+  capped?: boolean;
   error?: string;
 };
 
@@ -136,7 +144,11 @@ export async function runRoaDaily(deps: RoaDailyDeps): Promise<RoaDailyResult> {
       photoBank = createPhotoBank({ query, http: fetchFn, log: (m) => rec.notes.push(`bank: ${m}`) });
     }
 
-    // 2. One writer call; code keeps the balance.
+    // 2. One writer call; code keeps the balance. Nothing starts once the refill cap is spent.
+    if (deps.refill && !(await deps.refill.canSpend())) {
+      rec.capped = true;
+      return { ran: true, ...rec };
+    }
     const mat: RoaWriteMaterial = { today: day, thin_subjects: thinSubjects(mix), pool: mix, recent: known.recent };
     const out = (await writeStructured<RoaWriteOut>({
       create: deps.write, db, setId: null, component: 'roa-write', model: deps.settings.models.copy,
@@ -196,6 +208,11 @@ export async function runRoaDaily(deps: RoaDailyDeps): Promise<RoaDailyResult> {
 
     for (const s of specs) {
       const cell = `${s.subject}.${s.trap}`;
+      if (deps.refill && !(await deps.refill.canSpend())) {
+        rec.capped = true;
+        rec.notes.push(`refill cap $${deps.refill.capUsd} reached before ${cell}`);
+        break;
+      }
       try {
         if (s.trap === 'twin') {
           const photo = await real(s);

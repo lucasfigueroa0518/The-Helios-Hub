@@ -1,8 +1,8 @@
 /**
  * Explainer Reels worker (BUILD_PLAN §4–§6, docs/social-overnight.md). Claims
- * one queued render at a time and runs it; while auto_render is on, also runs
- * the daily idea cycle at 2:00 AM New York, which fills the day's
- * posts_per_day less what people placed (daily fill, D54). While publishing_live is on,
+ * one queued render at a time and runs it; every night, in every state, also runs
+ * the daily idea cycle at 2:00 AM New York: its refill always (on pool_refill_cap_usd, D16), and while the type
+ * makes posts it fills the day's posts_per_day less what people placed (daily fill, D54). While Live,
  * approved renders are scheduled into the 1:00–2:30 PM and 3:30–5:00 PM
  * windows and published (by the single publisher once publisher_mode is live).
  * Insights: every 30 minutes while a reel is fresh, and a 5:15 AM sweep.
@@ -74,7 +74,6 @@ async function main(): Promise<void> {
   const { createExplainerInsightsClient, pollExplainerInsights } = await import('@/lib/explainers/publish/insights');
   const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const { nextRunAt } = await import('@/lib/instagram/clock');
-  const { loadSettings } = await import('@/lib/explainers/settings');
   const { runIdeaCycle } = await import('@/lib/explainers/ideas/cycle');
   const { clearIdeaCycleRequest, pendingIdeaCycleRequest } = await import('@/lib/explainers/ideas/cycle-request');
   const { nextCycleTry } = await import('@/lib/explainers/ideas/retry');
@@ -223,17 +222,18 @@ async function main(): Promise<void> {
   log('started', { pollMs: POLL_MS, jobsRoot, ideaCycleHourNy: IDEA_CYCLE_HOUR_NY, nextInsightsAt: sweepAt.toISOString(), storage: process.env.EXPLAINERS_STORAGE ?? 'local' });
   while (!stopping) {
     try {
-      const settings = await loadSettings(db);
       const now = new Date();
       const hourNy = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false }).format(now));
       const today = nyDate(now);
-      if (settings.auto_render && hourNy >= IDEA_CYCLE_HOUR_NY && lastCycleDay !== today && Date.now() >= cycleRetryAt) {
+      // Refill split (settings standard D16, D3): the 2 AM cycle runs every night in every state. Its refill (ideas,
+      // scoring, dedupe) is held to pool_refill_cap_usd; rendering follows the state and placing needs Live (lib/explainers/ideas/gate.ts).
+      if (hourNy >= IDEA_CYCLE_HOUR_NY && lastCycleDay !== today && Date.now() >= cycleRetryAt) {
         lastCycleDay = today;
         if (cycleAttempts.day !== today) cycleAttempts = { day: today, n: 0 };
         cycleAttempts.n += 1;
         let cycle: Awaited<ReturnType<typeof runIdeaCycle>> | null = null;
         try {
-          cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log, moves: (text, params) => dbQuery(text, params) });
+          cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log, event: log, moves: (text, params) => dbQuery(text, params) });
         } catch (error) {
           log('idea_cycle_threw', { error: errorText(error), attempt: cycleAttempts.n });
         }
@@ -252,10 +252,11 @@ async function main(): Promise<void> {
             // Daily fill (D54): the day's quota, what people placed, what the night rendered or placed instead.
             ...('fill' in cycle ? { fill: cycle.fill } : {}),
             ...(cycle.status === 'ok' ? { renders: cycle.renders, allocated: cycle.allocated.map((a) => ({ topicId: a.topicId, jobId: a.jobId, scheduled: a.scheduled })) } : {}),
+            ...(cycle.status === 'refilled' || cycle.status === 'ok' ? { evaluated: cycle.evaluations.length, refillCapped: cycle.refillCapped === true } : {}),
           });
         }
       }
-      // A person's "Run the idea cycle now" (cycle-request.ts): once, even while auto_render is off. force bypasses only
+      // A person's "Run the idea cycle now" (cycle-request.ts): once, in every state. force bypasses only
       // that gate (the one-cycle-per-day index and the spend caps stay). The request is cleared after the run, whatever it did.
       const asked = await pendingIdeaCycleRequest(db).catch((error) => {
         log('idea_cycle_request_read_failed', { error: errorText(error) });
@@ -266,7 +267,7 @@ async function main(): Promise<void> {
           if (nyDate(new Date(asked.at)) !== today) {
             log('idea_cycle_request_expired', { at: asked.at, by: asked.by });
           } else {
-            const cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log, moves: (text, params) => dbQuery(text, params), force: true });
+            const cycle = await runIdeaCycle({ db, ideaModel: anthropicIdeaModel(anthropic), jevTransport: liveJevTransport, log, event: log, moves: (text, params) => dbQuery(text, params), force: true });
             log('idea_cycle_requested', {
               by: asked.by,
               status: cycle.status,

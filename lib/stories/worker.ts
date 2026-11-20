@@ -16,14 +16,21 @@
  *      lib/social-hub/lead.ts);
  *      in template mode one set per Stories slot (a series may post twice)
  *   2. build: claim one `requested` set → build, render, review → `ready`;
- *      an auto set approves itself only when require_approval is off and the
- *      review did not flag it (S-05, S-33); otherwise it waits for Approve
+ *      every set waits for a person's Approve (D16: approval is always
+ *      required; require_approval is never read as off)
  *   3. schedule: each approved set gets a minute in its window (S-20), or in
  *      [slot, slot + 15] when it has a slot
  *   4. publish: each due set posts its frames in order (S-59); on success the
  *      history (repeat checks) and Tommy's used-photo log are written (S-24),
  *      and an AI Trivia set's content-map cell is closed
- *      Steps 3 and 4 run only while publishing_live is on.
+ *      Steps 3 and 4 run only for a type that is Live.
+ *
+ * Refill split (settings standard D3, D14, D16; CONTRACT.md §4): step 0 is the refill. The pool refresh,
+ * runTriviaDaily and runRoaDaily run in every state (Paused, Approval, Live), each held to its type's refill cap
+ * (stories.settings.types[<type>].refill_cap_usd), logging `refill_capped` when the cap stops it. Only the three
+ * active series refill; the retired ones (Free vs. Paid, Guess the Number) never do. Step 1 (auto sets) is the make
+ * step and follows makesPosts(state): the series' auto switch with its type's publishing_live (stateOf, which logs
+ * `state_mismatch`). Steps 3 and 4 follow postsToInstagram(state). A person's Generate builds in every state.
  *   5. insights: poll published frames every 2 hours until the final capture
  */
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
@@ -36,7 +43,6 @@ import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
 import { publishSet } from '@/lib/stories/publish/publish';
 import type { Series } from '@/lib/stories/render/types';
 import {
-  approveSet,
   claimNextRequested,
   monthSpendUsd,
   releaseStaleBuilds,
@@ -58,8 +64,8 @@ import type { IntakeJev } from '@/lib/intake/types';
 import { poolDay, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
 import { storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
-import { loadSettings, seriesTypeSettings, typeSettings, type StoriesSettings } from '@/lib/stories/settings';
-import { STORY_VERTICALS, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
+import { loadSettings, typeSettings, type StoriesSettings } from '@/lib/stories/settings';
+import { SERIES_OF_VERTICAL, STORY_VERTICALS, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { isBrandAsset } from '@/lib/photos/used';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
 import { accountBusy } from '@/lib/stories/spine';
@@ -68,6 +74,9 @@ import { runTriviaDaily } from '@/lib/stories/trivia/daily';
 import { runRoaDaily } from '@/lib/stories/roa/daily';
 import { buildGameDay, dayToBuild, lockDue, readLaunch } from '@/lib/stories/trivia/game-days';
 import { createBankReader } from '@/lib/media-library/reader';
+import type { IntakeJevHandle } from '@/lib/intake/jev';
+import { logRefillCapped, readStoriesRefillCap, typeGate, type RefillLog, type TypeGate } from '@/lib/social/refill';
+import type { RefillBudget } from '@/lib/stories/trivia/daily';
 
 /** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md, night schedule v2). */
 export const AUTO_REQUEST_AFTER = '03:00';
@@ -87,14 +96,17 @@ export type WorkerDeps = {
   log?: (line: string) => void;
   /** Tests stub the pool's source reads. */
   poolReads?: (now: Date) => PoolReads;
-  /** The central intake for series on it: the posted check's Jev (its own cost bucket) and the mode read. */
-  intake?: { jev?: () => IntakeJev; readMode?: ReadConsumerMode };
-  /** AI Trivia's daily writer run; tests stub it. Default: runTriviaDaily with the builder's live clients. */
-  triviaDaily?: (now: Date, settings: StoriesSettings) => Promise<unknown>;
+  /**
+   * The central intake for series on it: the posted check's Jev (its own cost bucket) and the mode read. `capUsd`: the
+   * Morning Download refill cap the pool refresh is held to (D14); the caller keeps its own cap when it is lower.
+   */
+  intake?: { jev?: (capUsd?: number) => IntakeJev; readMode?: ReadConsumerMode };
+  /** AI Trivia's daily writer run; tests stub it. Default: runTriviaDaily with the builder's live clients. `refill`: its refill cap (D14). */
+  triviaDaily?: (now: Date, settings: StoriesSettings, refill?: RefillBudget) => Promise<unknown>;
   /** The web game's day builder; tests stub it. Default: buildGameDay with the builder's live clients. */
   triviaGame?: (now: Date, settings: StoriesSettings, date: string, launch: string) => Promise<unknown>;
-  /** Real or AI?'s daily candidate run; tests stub it. Default: runRoaDaily with the builder's live clients. */
-  roaDaily?: (now: Date, settings: StoriesSettings) => Promise<unknown>;
+  /** Real or AI?'s daily candidate run; tests stub it. Default: runRoaDaily with the builder's live clients. `refill`: its refill cap (D14). */
+  roaDaily?: (now: Date, settings: StoriesSettings, refill?: RefillBudget) => Promise<unknown>;
   /** Fetches a published photo to hash it for the used-photo ledger (tests stub it). */
   photoHttp?: typeof fetch;
 };
@@ -111,13 +123,24 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   const log = deps.log ?? (() => {});
   const settings = await loadSettings(deps.db);
   const out = { built: 0, scheduled: 0, published: 0, insights: 0 };
+  const event = eventLog(log);
+  // Each type's state (D16): its series' auto switch with the type's publishing_live. Reading it logs state_mismatch.
+  const gates = Object.fromEntries(
+    STORY_VERTICALS.map((v) => [v, typeGate(v, { generate: settings.series[SERIES_OF_VERTICAL[v]].auto, live: typeSettings(settings, v).publishingLive }, event)]),
+  ) as Record<StoryVertical, TypeGate>;
 
-  // 0. The pool, once per pool day, before any auto set is requested or built.
+  // 0. The refill, once per pool day, in every state (D3, D16), before any auto set is requested or built.
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     try {
-      const reads = deps.poolReads ?? ((at) => storiesPoolReads(deps.sourceDb, at, { readMode: deps.intake?.readMode, intake: { jev: deps.intake?.jev } }));
+      // The pool refresh is Morning Download's refill: its one paid step (the intake's posted check) is held to the refill cap.
+      const capUsd = await readStoriesRefillCap(storiesQuery(deps), 'stories');
+      let poolJev: IntakeJev | null = null;
+      const jev = deps.intake?.jev ? () => (poolJev = deps.intake!.jev!(capUsd)) : undefined;
+      const reads = deps.poolReads ?? ((at) => storiesPoolReads(deps.sourceDb, at, { readMode: deps.intake?.readMode, intake: { jev } }));
       const r = await refreshPoolIfDue(deps.db, () => reads(now), now);
       if (r) log(`pool: refreshed (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''}${r.intake ? `; sources ${JSON.stringify(r.intake)}` : ''})`);
+      const handle = poolJev as Partial<IntakeJevHandle> | null;
+      if (handle?.capHit) logRefillCapped(event, 'stories', { capUsd, spentUsd: (poolJev as IntakeJev | null)?.usd, step: 'pool-refresh' });
     } catch (err) {
       log(`pool: refresh failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -137,6 +160,7 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
       if (!read.has(date)) read.set(date, storiesSlotsOn((t, p) => deps.db.query(t, p), date).catch(() => null));
       return read.get(date)!;
     };
+    // The make step (D16): requestAutoSets asks only for series whose auto switch is on, i.e. makesPosts(state).
     const requested = await requestAutoSets(deps.db, settings, now, { log: (message, fields) => log(`${message} ${JSON.stringify(fields)}`), slotsFor });
     if (requested.length) log(`auto: requested ${requested.join(', ')}`);
   }
@@ -151,13 +175,12 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
     const r = await buildSet({ log, ...b }, claimed.id);
     out.built++;
     log(`build ${claimed.series} ${claimed.ny_date}: ${r.status}${r.flagged ? ' (flagged)' : ''} ${r.detail.slice(0, 200)}`);
-    // Approval is the set's type's switch (SS-22).
-    if (r.status === 'ready' && claimed.trigger === 'auto' && settings.series[claimed.series].auto && !r.flagged && !seriesTypeSettings(settings, claimed.series).requireApproval) await approveSet(deps.db, claimed.id);
+    // Every set waits for a person's Approve (D16): an auto set never approves itself.
   }
 
-  // 3–4 post nothing for a type whose master switch is off (SS-22: each Stories-format type has its own).
-  const live = (series: Series) => seriesTypeSettings(settings, series).publishingLive;
-  if (!STORY_VERTICALS.some((v) => typeSettings(settings, v).publishingLive)) {
+  // 3–4 post nothing for a type that is not Live (D16; each Stories-format type has its own state, SS-22).
+  const live = (series: Series) => gates[verticalOfSeries(series)].posts;
+  if (!STORY_VERTICALS.some((v) => gates[v].posts)) {
     await pollInsights(deps, now, out);
     return out;
   }
@@ -253,7 +276,7 @@ async function publishOne(deps: WorkerDeps, setId: string, series: Series): Prom
  */
 async function triviaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: Date): Promise<void> {
   const log = deps.log ?? (() => {});
-  if (!settings.series.ai_trivia.enabled) return;
+  // Refill runs in every state (D16): neither the series' auto switch nor its type's state holds it.
   try {
     const { rows } = await deps.db.query<{ value: { day?: string } | null }>(`SELECT value FROM stories.settings WHERE key = $1`, [TRIVIA_DAILY_KEY]);
     if (rows[0]?.value?.day === poolDay(now)) return;
@@ -262,12 +285,14 @@ async function triviaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now
       once(`${poolDay(now)}:${held}`, () => log(`trivia: daily writer held (${held})`));
       return;
     }
-    const run = deps.triviaDaily ?? (async (at: Date, s: StoriesSettings) => {
+    const refill = await refillBudget(deps, 'ai_trivia', now);
+    const run = deps.triviaDaily ?? (async (at: Date, s: StoriesSettings, r?: RefillBudget) => {
       const b = await deps.builder();
-      return runTriviaDaily({ db: b.db, write: b.write, jev: createStoriesJev(b.jevTransport, b.db), settings: s, now: at });
+      return runTriviaDaily({ db: b.db, write: b.write, jev: createStoriesJev(b.jevTransport, b.db), settings: s, now: at, ...(r ? { refill: r } : {}) });
     });
-    const result = await run(now, settings);
+    const result = await run(now, settings, refill);
     log(`trivia: daily writer ${JSON.stringify(result ?? null).slice(0, 300)}`);
+    if ((result as { capped?: boolean } | null)?.capped) logRefillCapped(eventLog(log), 'ai_trivia', { capUsd: refill.capUsd, spentUsd: await refill.spent(), step: 'daily-writer' });
   } catch (err) {
     log(`trivia: daily writer failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -313,7 +338,7 @@ async function triviaGameIfDue(deps: WorkerDeps, settings: StoriesSettings, now:
  */
 async function roaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: Date): Promise<void> {
   const log = deps.log ?? (() => {});
-  if (!settings.series.real_or_ai.enabled) return;
+  // Refill runs in every state (D16): neither the series' auto switch nor its type's state holds it.
   try {
     const { rows } = await deps.db.query<{ value: { day?: string } | null }>(`SELECT value FROM stories.settings WHERE key = $1`, [ROA_DAILY_KEY]);
     if (rows[0]?.value?.day === poolDay(now)) return;
@@ -322,16 +347,18 @@ async function roaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: D
       once(`roa:${poolDay(now)}:${held}`, () => log(`roa: daily candidates held (${held})`));
       return;
     }
-    const run = deps.roaDaily ?? (async (at: Date, s: StoriesSettings) => {
+    const refill = await refillBudget(deps, 'real_or_ai', now);
+    const run = deps.roaDaily ?? (async (at: Date, s: StoriesSettings, r?: RefillBudget) => {
       const b = await deps.builder();
       // Real photos: the photo bank in the shared database first (read only; off while its switch is off), then
       // Commons and NASA. Jev vision, gpt-image-2 and those reads are runRoaDaily's own live defaults.
       const bank = createBankReader({ query: (text, params) => b.sourceDb.query(text, params) as never });
       // The photo_finders switch, the used-photo ledger and the bank live in the shared database (SS-28).
-      return runRoaDaily({ db: b.db, sourceDb: b.sourceDb, write: b.write, storage: b.storage, bank, settings: s, now: at });
+      return runRoaDaily({ db: b.db, sourceDb: b.sourceDb, write: b.write, storage: b.storage, bank, settings: s, now: at, ...(r ? { refill: r } : {}) });
     });
-    const result = await run(now, settings);
+    const result = await run(now, settings, refill);
     log(`roa: daily candidates ${JSON.stringify(result ?? null).slice(0, 300)}`);
+    if ((result as { capped?: boolean } | null)?.capped) logRefillCapped(eventLog(log), 'real_or_ai', { capUsd: refill.capUsd, spentUsd: await refill.spent(), step: 'daily-candidates' });
   } catch (err) {
     log(`roa: daily candidates failed: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -345,6 +372,23 @@ async function spendHeld(deps: WorkerDeps, settings: StoriesSettings, vertical: 
   if ((await monthSpendUsd(deps.db, now)) >= settings.monthlyWatchUsd) return 'monthly watch reached';
   if ((await typeDaySpendUsd(deps.db, vertical, now)) >= typeSettings(settings, vertical).dailyCapUsd) return 'daily cap reached';
   return null;
+}
+
+/** The worker's line log as an event log (`refill_capped {...}`, `state_mismatch {...}`). */
+const eventLog = (log: (line: string) => void): RefillLog => (message, fields) => log(`${message} ${JSON.stringify(fields ?? {})}`);
+
+/** The stories database as a plain query function (lib/social/refill reads). */
+const storiesQuery = (deps: WorkerDeps) => (text: string, params?: unknown[]) => deps.db.query(text, params) as Promise<{ rows: any[] }>;
+
+/**
+ * A daily refill's budget (D14): its type's refill cap against what the type spent since the run began (the
+ * cost events of the New York day; the worker runs one thing at a time, so the difference is this run's).
+ */
+async function refillBudget(deps: WorkerDeps, vertical: StoryVertical, now: Date): Promise<RefillBudget & { spent: () => Promise<number> }> {
+  const capUsd = await readStoriesRefillCap(storiesQuery(deps), vertical);
+  const base = await typeDaySpendUsd(deps.db, vertical, now);
+  const spent = async () => Math.max(0, (await typeDaySpendUsd(deps.db, vertical, now)) - base);
+  return { capUsd, spent, canSpend: async () => (await spent()) < capUsd };
 }
 
 const logged = new Set<string>();

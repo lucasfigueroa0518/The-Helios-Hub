@@ -287,7 +287,7 @@ export async function readConsumerMode(q: IntakeQuery, order: OrderId, now: Date
     if (!main) return 'stale-fallback';
     if (now.getTime() - main.startedAt.getTime() > INTAKE_FRESH_HOURS * 3_600_000) return 'stale-fallback';
     // Per order (Phase 2): the order's own sources were fetched by a successful run in the window. An order closed at
-    // midnight (Field Notes with auto_run off) has nothing fresh, so a later manual build takes the legacy path.
+    // midnight has nothing fresh, so a later manual build takes the legacy path (every order is open since D16).
     return (await orderFetchedSince(q, order, new Date(now.getTime() - INTAKE_FRESH_HOURS * 3_600_000))) ? 'intake' : 'stale-fallback';
   } catch {
     return 'legacy';

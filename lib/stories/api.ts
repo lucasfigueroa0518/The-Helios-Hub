@@ -17,6 +17,7 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import { isStoryVertical, SERIES_OF_VERTICAL, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { approvalNote as approvalNoteFor, openStorySlots, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
@@ -161,8 +162,8 @@ export async function approve(db: Queryable, id: string, now = new Date()): Prom
   try {
     const settings = await loadSettings(db);
     const window = settings.series[set.series].window;
-    // Publishing-live is the set's type's switch (SS-22).
-    const live = seriesTypeSettings(settings, set.series).publishingLive;
+    // Only a Live type schedules (D16): the series' auto switch with its type's publishing_live (SS-22).
+    const live = postsToInstagram(stateOf(settings.series[set.series].auto, seriesTypeSettings(settings, set.series).publishingLive).state);
     // A set with a slot (template mode) posts in [slot, slot + 15]; one without, in its series' window.
     approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, live);
     const minute = live && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
@@ -222,7 +223,9 @@ export async function updateSeries(
     patch.auto = body.auto;
   }
   const type: Partial<TypeSettings> = {};
-  if (typeof body.requireApproval === 'boolean') type.requireApproval = body.requireApproval;
+  // Every post needs a person's approval (D16): approval is never turned off.
+  if (body.requireApproval === false) throw new ApiError(400, 'Every post needs a person’s approval; it cannot be turned off.');
+  if (body.requireApproval === true) type.requireApproval = true;
   if (typeof body.publishingLive === 'boolean') type.publishingLive = body.publishingLive;
   if (body.dailyCapUsd !== undefined) {
     if (!(typeof body.dailyCapUsd === 'number' && Number.isFinite(body.dailyCapUsd) && body.dailyCapUsd > 0)) throw new ApiError(400, 'A daily cap is a dollar amount above zero.');

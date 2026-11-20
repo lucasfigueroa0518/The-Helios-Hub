@@ -32,18 +32,21 @@ test('the clock wakes at 12:00 PM New York, across the DST change', () => {
   assert.equal(nextAiEventsRunAt(new Date('2026-11-01T12:00:00Z')).toISOString(), '2026-11-01T17:00:00.000Z', 'noon EST after the change');
 });
 
-test('noon queues a run on Sunday only, with auto_run on and a usable cap', () => {
+test('noon queues a run on Sunday only, in every state: it renders only with auto_run on and a usable cap (D16)', () => {
   const sunday = new Date('2026-10-25T16:00:00Z');
-  assert.deepEqual(noonQueue(sunday, on), { queue: true, reason: 'an AI Events day' });
+  assert.deepEqual(noonQueue(sunday, on), { queue: true, make: true, reason: 'an AI Events day' });
   for (const day of ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31']) {
     const at = new Date(`${day}T16:00:00Z`);
     assert.equal(noonQueue(at, on).queue, false, day);
     assert.match(noonQueue(at, on).reason, /not an AI Events day/);
   }
-  assert.match(noonQueue(sunday, parseAiEventsSettings([])).reason, /auto_run is off/);
+  // Paused: the week is still ranked (the refill), nothing is rendered.
+  const paused = noonQueue(sunday, parseAiEventsSettings([]));
+  assert.deepEqual([paused.queue, paused.make], [true, false]);
+  assert.match(paused.reason, /paused, so the run only ranks the week \(refill\)/);
   assert.match(noonQueue(sunday, null).reason, /could not be read/);
   const badCap = noonQueue(sunday, parseAiEventsSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }]));
-  assert.equal(badCap.queue, false);
+  assert.deepEqual([badCap.queue, badCap.make], [true, false]);
   assert.match(badCap.reason, /run_cap_usd/);
   // Saturday 11 PM ET is Sunday in UTC: the New York date decides.
   assert.equal(noonQueue(new Date('2026-10-25T03:00:00Z'), on).queue, false);

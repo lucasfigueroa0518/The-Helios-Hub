@@ -42,10 +42,9 @@ async function main(): Promise<void> {
   const { claimAndRenderVideo } = await import('@/lib/reels/visual/video-run');
   const { nextRunAt } = await import('@/lib/reels/schedule');
   const { runSongIngest } = await import('@/lib/reels/music/ingest');
-  const { getSetting } = await import('@/lib/reels/music/store');
   const { claimAndPickSong } = await import('@/lib/reels/music/pick');
   const { claimAndPublish } = await import('@/lib/reels/music/publish');
-  const { releaseDueSchedules } = await import('@/lib/reels/publish/schedule');
+  const { publishingLive, releaseDueSchedules } = await import('@/lib/reels/publish/schedule');
   const { publisherOwnsPublishing } = await import('@/lib/publishing/publisher');
   const { dbQuery } = await import('@/lib/db');
   /** With publisher_mode 'live' and its heartbeat listing Trial Reels, the single publisher releases and posts (D40, D41). */
@@ -98,12 +97,8 @@ async function main(): Promise<void> {
 
       // Two ways in: the 1 AM schedule, and whatever the page queued.
       if (Date.now() >= scheduledFor.getTime()) {
-        // Generate is a switch (reels.settings auto_run, on unless set to false); Run now still works.
-        if ((await getSetting<boolean>('auto_run').catch(() => null)) === false) {
-          log('run_skipped', { reason: 'auto_run is off' });
-          scheduledFor = nextRunAt(new Date());
-          continue;
-        }
+        // Refill split (settings standard D16, D3): the night runs in every state. Its refill (ingest, grouping,
+        // scoring) is held to pool_refill_cap_usd; copy, renders and booking follow the state (lib/reels/pipeline/night-gate.ts).
         const outcome = await runReelsNight('scheduled');
         log('run_complete', { trigger: 'scheduled', status: outcome.status, runId: outcome.runId });
         scheduledFor = nextRunAt(new Date());
@@ -180,13 +175,15 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const due = (await standDown()) ? 0 : await releaseDueSchedules().catch((error) => {
+      // Posting only while Text on Screen is Live (D16; Generate off with Live on reads as paused).
+      const live = await publishingLive().catch(() => false);
+      const due = !live || (await standDown()) ? 0 : await releaseDueSchedules().catch((error) => {
         log('schedule_release_failed', { error: error instanceof Error ? error.message : String(error) });
         return 0;
       });
       if (due > 0) log('schedule_due', { released: due });
 
-      const published = (await standDown()) ? null : await claimAndPublish().catch((error) => {
+      const published = !live || (await standDown()) ? null : await claimAndPublish().catch((error) => {
         log('publish_failed', { error: error instanceof Error ? error.message : String(error) });
         return null;
       });
