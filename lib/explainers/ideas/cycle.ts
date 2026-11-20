@@ -67,7 +67,7 @@ export const EXPLAINER_GONE = 'It isn’t in the explainers pool any more (rende
 export type Allocation = {
   topicId: string;
   jobId: string;
-  /** Its slot, when publishing is live; null while it is off (scheduleApproved places it once it is on). */
+  /** Its slot in Approval or Live (holdsSlots); null while Paused (scheduleApproved places it once it holds slots again). */
   scheduled: ScheduleOutcome | null;
 };
 
@@ -527,8 +527,9 @@ async function runCycleFor(deps: IdeaCycleDeps, st: RunState, day: string, lead:
     const chosen = candidates.slice(0, fill.making);
     const handMoved = new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => m.ideaId));
     const renderCap = Math.max(1, settings.daily_render_cap);
-    // Placed on the calendar only while Live (D16; the gate reads Generate and Live together).
-    const live = st.gate.books;
+    // Placed on the calendar in Approval and Live (holdsSlots, contract §4.3; the gate reads Generate and Live
+    // together). Only Live posts them. fillCandidates never offers a render sent back to Made (D18).
+    const books = st.gate.books;
     const renders: string[] = [];
     const allocated: Allocation[] = [];
     let best: string | null = null;
@@ -538,7 +539,7 @@ async function runCycleFor(deps: IdeaCycleDeps, st: RunState, day: string, lead:
       if (candidate.jobId) {
         // A surviving render is placed on the date this cycle fills (lead time); a forced run books as before.
         const now = deps.now ?? new Date();
-        const scheduled = live ? await (lead > 0 ? scheduleJob(db, candidate.jobId, 'auto', now, day, undefined, day) : scheduleJob(db, candidate.jobId, 'auto', now)) : null;
+        const scheduled = books ? await (lead > 0 ? scheduleJob(db, candidate.jobId, 'auto', now, day, undefined, day) : scheduleJob(db, candidate.jobId, 'auto', now)) : null;
         st.placedJobs.add(candidate.jobId);
         allocated.push({ topicId: candidate.topicId, jobId: candidate.jobId, scheduled });
         if (handMoved.has(ideaOfTopic(candidate.topicId))) await markPromoteUsed(movesQ, 'explainers', ideaOfTopic(candidate.topicId));

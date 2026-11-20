@@ -11,13 +11,13 @@ type Queued = { queued: boolean; note?: string };
 type Place = (q: Query, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 const REJECTED_NOTE = 'This post was rejected, so it can’t be approved, published or rebuilt. Generate makes a new one.';
-const PUBLISHING_OFF_NOTE = 'Field Notes publishing is off. Turn it on before publishing.';
+const PUBLISHING_OFF_NOTE = 'Field Notes isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 const PUBLISHED_NOTE = 'This post is already published, so it isn’t rebuilt.';
 
 /**
  * Field Notes (lib/field-notes/schedule.ts): approve (approved, and booked in the afternoon window
- * while field_notes publishing_live is on; otherwise approved without a slot), reject, Publish now
- * (refused while publishing is off), unschedule, delete, place or move on the calendar (D50), and
+ * in Approval or Live, contract §4.3; Paused: approved without a slot), reject, Publish now
+ * (refused unless Live, D16), unschedule, delete, place or move on the calendar (D50), and
  * regenerate, which is Rebuild post: a queued re-render of the post from its saved copy and photos
  * (no model call). The social worker carries it out. A rejected post is refused by approve,
  * Publish now and Rebuild.
@@ -27,7 +27,7 @@ export function fieldNotesActions(deps: {
   approvePost: (q: Query, postId: string) => Promise<Placed>;
   rejectPost: (q: Query, postId: string, by: string | null) => Promise<boolean>;
   hardPublishPost: (q: Query, postId: string) => Promise<Queued>;
-  /** field_notes.settings publishing_live: Publish now is refused while it is off. */
+  /** Whether Field Notes is Live (D16, stateOf): Publish now is refused otherwise. */
   publishingLive: (q: Query) => Promise<boolean>;
   unschedulePost: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   /** Queue a rebuild (lib/field-notes/manual.ts queueFieldNotesRun with kind 'rebuild'). */

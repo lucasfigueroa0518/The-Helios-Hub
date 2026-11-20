@@ -1,6 +1,6 @@
 /**
  * The helios-social worker's AI Events step (plan M4): carry out a claimed run, put its post on
- * the spine and, while ai_events publishing_live is on, into its Sunday's 6:00–7:00 PM window;
+ * the spine and, while AI Events holds slots (Approval or Live, D16), into its Sunday's 6:00–7:00 PM window;
  * then publish the public calendar snapshot (now with the week's picks) and record the outcome
  * and its spend on the run. The worker runs this in the same loop as Carousels and Last Few
  * Days, so no two runs ever overlap. scripts/ai_events_once.ts runs the same function by hand.
@@ -9,7 +9,7 @@
  * type's refill and runs in every state. A scheduled build while AI Events is paused, or for a week whose posts
  * already exist (the quota), only ranks the week, held to pool_refill_cap_usd (`refill_capped` when the cap stops
  * it), renders nothing and publishes no snapshot. Rendering is the make step (makesPosts); booking a slot at run
- * time follows postsToInstagram. A person's Generate and Rebuild post run in every state, as before.
+ * time follows holdsSlots (contract §4.3); posting follows postsToInstagram. A person's Generate and Rebuild post run in every state, as before.
  */
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { beginRefill, settleRefill } from '@/lib/content-type/refill-total';
@@ -118,13 +118,14 @@ export async function carryOutAiEventsRun(w: CarryOutDeps, claimed: ClaimedRun):
       return { runId: claimed.id, status: 'skipped', note: res.note };
     }
 
-    // Each city's post on the spine and, only while AI Events is Live (D16), in its own window (Miami first).
+    // Each city's post on the spine and, while AI Events holds slots (Approval or Live, contract §4.3), in its own
+    // window (Miami first). Only Live posts it: the release is gated on Live.
     const booked: Array<{ metro: string; postId: string; scheduled: string | null; note: string | null }> = [];
     for (const p of res.posts) {
       await aiEventsItemId(w.query, p.postId);
       let scheduled: string | null = null;
       let note: string | null = null;
-      if (gate.posts) {
+      if (gate.holds) {
         // A fresh clock (the run took time); throughDate is the post's own Sunday, so it never books another week.
         const out = await scheduleAiEventsPost(w.query, p.postId, 'auto', w.now(), postDateFor(weekKey));
         scheduled = out.scheduled ? out.publishAt : null;

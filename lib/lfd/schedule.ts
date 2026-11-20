@@ -5,6 +5,7 @@
  * post. Approve, reject, unschedule, Hard publish and the due-slot release use
  * the same spine helpers as Carousels (lib/social/overnight/schedule.ts).
  */
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -91,9 +92,9 @@ export async function scheduleLfdPost(
   return { scheduled: false, note: 'That window was just taken.' };
 }
 
-export const LFD_APPROVED_OFF_NOTE = 'Approved. It will be scheduled when Last Few Days publishing is on.';
+export const LFD_APPROVED_OFF_NOTE = 'Approved. Last Few Days is Paused, so it stays in the Made tab. Place it in a slot once it’s in Approval or Live (its Settings tab).';
 export const LFD_DAY_PASSED_NOTE = 'Its day has passed; use Place to pick a day with a Last Few Days slot.';
-export const LFD_PUBLISHING_OFF_NOTE = 'Last Few Days publishing is off. Turn it on before publishing.';
+export const LFD_PUBLISHING_OFF_NOTE = 'Last Few Days isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 export const LFD_MISSED_NOTE = 'Missed its window; place it again to post.';
 /** A due LFD slot later than this is cancelled, not posted late. */
 export const LFD_MISSED_AFTER_MINUTES = 60;
@@ -101,18 +102,21 @@ export const LFD_MISSED_AFTER_MINUTES = 60;
 /** Approve's outcome: booked, approved without a slot (with why), or refused. */
 export type LfdApproveOutcome = ScheduleOutcome | { scheduled: false; approved: true; note: string };
 
-const publishingLive = (query: Query) => readLfdSettings(query).then((s) => s.publishingLive).catch(() => false);
+/** The type's state (D16): stateOf(auto_run, publishing_live), never the raw Live key. Unreadable: paused. */
+const lfdState = (query: Query): Promise<TypeState> =>
+  readLfdSettings(query).then((s) => stateOf(s.autoRun, s.publishingLive).state).catch(() => 'paused' as const);
 
 /**
- * A person approves a post. While lfd publishing_live is on it is booked in
- * its own day's 9–10 AM window only (lfd.posts.ny_date); when that window has
- * passed or is taken it is approved without a slot (Place picks another day).
- * While publishing is off it is approved and nothing is booked.
+ * A person approves a post. In Approval or Live (holdsSlots, contract §4.3) it
+ * is booked in its own day's 9–10 AM window only (lfd.posts.ny_date); when that
+ * window has passed or is taken it is approved without a slot (Place picks
+ * another day). Only Live posts it. Paused: it is approved and stays in the
+ * Made tab (D17).
  */
 export async function approveLfdPost(query: Query, postId: string, now = new Date()): Promise<LfdApproveOutcome> {
   const itemId = await lfdItemId(query, postId);
   if (!itemId) return { scheduled: false, note: 'The post is gone.' };
-  if (!(await publishingLive(query))) {
+  if (!holdsSlots(await lfdState(query))) {
     await approveItem(query, itemId, 'user');
     return { scheduled: false, approved: true, note: LFD_APPROVED_OFF_NOTE };
   }
@@ -143,8 +147,8 @@ export async function unscheduleLfdPost(query: Query, postId: string): Promise<{
 
 /** Hard publish (SH-15/SH-17): approved by the click, its waiting slot closed, a force attempt queued. */
 export async function hardPublishLfdPost(query: Query, postId: string): Promise<Queued> {
-  // While lfd publishing_live is off nothing is approved, closed or queued: a force attempt would wait unclaimed.
-  if (!(await publishingLive(query))) return { queued: false, note: LFD_PUBLISHING_OFF_NOTE, terminal: true };
+  // Only Live posts (D16): otherwise nothing is approved, closed or queued; a force attempt would wait unclaimed.
+  if (!postsToInstagram(await lfdState(query))) return { queued: false, note: LFD_PUBLISHING_OFF_NOTE, terminal: true };
   const itemId = await lfdItemId(query, postId);
   if (itemId) await forceApproveItem(query, itemId, LFD_HARD_PUBLISH_NOTE);
   return queueLfdPublish(query, postId, 'force');

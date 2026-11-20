@@ -4,14 +4,15 @@
  *  - Refill runs in every state, on the type's cadence, and a full quota never stops it (D3).
  *  - Each refill is held to its own cap (D14, `pool_refill_cap_usd`; Stories types `types[<type>].refill_cap_usd`).
  *    A refill that stops for the cap logs `refill_capped`.
- *  - Making posts follows makesPosts(state); scheduling and posting follow postsToInstagram(state).
+ *  - Making posts follows makesPosts(state). Booking slots follows holdsSlots(state) (Approval and Live, contract
+ *    §4.3); posting follows postsToInstagram(state) (Live only, §4.4).
  *  - The state is read with stateOf(generate, publishing_live); Generate off with Live on reads as paused and logs
  *    `state_mismatch`.
  *
  * The workers read the stored keys themselves (SELECT only), so a worker never waits on the hub's posting read.
  * require_approval is not read here at all: every post needs a person (D16).
  */
-import { makesPosts, postsToInstagram, refillCapUsd, stateOf, type TypeState } from '@/lib/content-type/state';
+import { holdsSlots, makesPosts, postsToInstagram, refillCapUsd, stateOf, type TypeState } from '@/lib/content-type/state';
 import type { Vertical } from '@/lib/social-hub/types';
 
 export type RefillLog = (message: string, fields?: Record<string, unknown>) => void;
@@ -26,7 +27,9 @@ export type TypeGate = {
   refillCapUsd: number;
   /** makesPosts(state): the night may make posts (the quota still applies). */
   makes: boolean;
-  /** postsToInstagram(state): approved posts may be scheduled and posted. */
+  /** holdsSlots(state): approved posts may be booked into slots (Approval and Live; contract §4.3, D17). */
+  holds: boolean;
+  /** postsToInstagram(state): due approved posts may be released and posted (Live only). */
   posts: boolean;
 };
 
@@ -46,7 +49,7 @@ export function typeGate(type: Vertical, stored: { generate: unknown; live: unkn
       log('state_mismatch', { type, generate: false, publishingLive: true, readsAs: state });
     }
   }
-  return { type, state, mismatch, refillCapUsd: refillCapUsd(type, stored.refillCap), makes: makesPosts(state), posts: postsToInstagram(state) };
+  return { type, state, mismatch, refillCapUsd: refillCapUsd(type, stored.refillCap), makes: makesPosts(state), holds: holdsSlots(state), posts: postsToInstagram(state) };
 }
 
 /** Forget the mismatch log times (tests). */

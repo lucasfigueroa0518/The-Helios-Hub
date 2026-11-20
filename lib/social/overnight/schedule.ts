@@ -1,5 +1,8 @@
 import type { Query } from '@/lib/social/store/pg';
 
+import { holdsSlots, postsToInstagram } from '@/lib/content-type/state';
+import { unslottedSql } from '@/lib/content-type/unslot';
+
 import { calendarDateKey } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { slotTakenKey } from '@/lib/instagram/window';
@@ -8,6 +11,7 @@ import { quotaFromSlots, slotPlan } from '@/lib/social-hub/slots';
 import { chooseTemplateSlot } from '@/lib/social-hub/slots/scheduler';
 import type { SlotSource } from '@/lib/social-hub/slots/types';
 import { approveItem, bookSlot, rejectItem } from '@/lib/social-hub/spine';
+import { readTypeGate } from '@/lib/social/refill';
 import { datesByWeekday } from '@/lib/lfd/days';
 import { carouselOffDays } from '@/lib/lfd/settings';
 import { CAROUSEL_SLOTS, DEFAULT_POSTS_PER_DAY, SOCIAL_TIMEZONE } from './config';
@@ -18,8 +22,9 @@ import { chooseCarouselSlots, uniformIndex } from './slots';
 /**
  * Up to `posts_per_day` carousels per Eastern day (default 2), one per
  * window (9:00–10:00 AM, 2:30–3:30 PM), each ≥ 30 minutes from any other
- * feed post (SH-46 – SH-48). The 3:00 AM run fills today's windows only while
- * publishing is live; a due slot becomes a normal publish attempt.
+ * feed post (SH-46 – SH-48). The 3:00 AM run fills today's windows while
+ * Carousels holds slots (Approval or Live, contract §4.3); a due slot becomes a
+ * publish attempt only while it is Live (D16).
  *
  * Slots live on the lifecycle spine (social_hub.schedule, vertical
  * 'carousels'); approval is the item's (social_hub.approvals), so content a
@@ -145,6 +150,8 @@ WHERE r.id = $1 AND p.status = 'review' AND p.origin = 'pipeline' AND p.slide_ob
   -- A reused post already waiting in a slot keeps it; it does not take one of today's windows (D41).
   AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id
                    WHERE ci.vertical = 'carousels' AND ci.native_ref = p.id::text AND s.status IN ('scheduled', 'publishing'))
+  -- Back in Made (D17, D18): a post unslotted by Pause or a passed slot stays approved and is never re-slotted here.
+  AND NOT ${unslottedSql(`(SELECT ci.id FROM social_hub.content_items ci WHERE ci.vertical = 'carousels' AND ci.native_ref = p.id::text LIMIT 1)`)}
 ORDER BY o.n
 LIMIT $2`;
 
@@ -153,7 +160,8 @@ LIMIT $2`;
  * into today's windows, up to `posts_per_day` (SH-48: the top two by
  * default) less what people placed for today (daily fill, D54). A story
  * whose finished post was reused (SH-60) is in the ship list at its rank, so
- * its stored post takes the slot. The caller checks publishing_live first.
+ * its stored post takes the slot. The caller checks that Carousels holds slots
+ * (Approval or Live, holdsSlots) first.
  */
 export async function scheduleRunPosts(query: Query, runId: string, now = new Date(), rng?: (count: number) => number): Promise<ScheduleOutcome[]> {
   const fill = await carouselFill(query, now);
@@ -186,12 +194,21 @@ export async function approveSchedule(query: Query, scheduleId: string): Promise
   return true;
 }
 
+export const CAROUSEL_APPROVED_PAUSED_NOTE = 'Approved. Carousels is Paused, so it stays in the Made tab. Place it in a slot once it’s in Approval or Live (its Settings tab).';
+export const CAROUSEL_NOT_LIVE_NOTE = 'Carousels isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
+
 /**
- * A person approves a carousel that has no slot yet (Content ready, P2-M4):
- * it is approved and placed in the earliest open window. One already
- * waiting in a slot is approved there.
+ * A person approves a carousel that has no slot yet (Content ready, P2-M4). In Approval or Live (holdsSlots,
+ * contract §4.3) it is approved and placed in the earliest open window; one already waiting in a slot is approved
+ * there. Only Live posts it. Paused: it is approved and stays in the Made tab (D17).
  */
-export async function approvePost(query: Query, postId: string, now = new Date()): Promise<ScheduleOutcome> {
+export async function approvePost(query: Query, postId: string, now = new Date()): Promise<ScheduleOutcome | { scheduled: false; approved: true; note: string }> {
+  if (!(await readTypeGate(query, 'carousels')).holds) {
+    const itemId = await carouselItemId(query, postId);
+    if (!itemId) return { scheduled: false, note: 'The post is gone.' };
+    await approveItem(query, itemId, 'user');
+    return { scheduled: false, approved: true, note: CAROUSEL_APPROVED_PAUSED_NOTE };
+  }
   return schedulePost(query, postId, 'user', now);
 }
 
@@ -307,9 +324,11 @@ export const HARD_PUBLISH_NOTE = 'Hard published from the Social Hub (posted now
  * Hard publish (Social Hub, SH-15/SH-17): post this carousel now. A person's
  * click is its approval, so the post's waiting slot is approved and closed
  * (cancelled with the reason) before the force attempt is queued; the slot
- * can then never post it a second time.
+ * can then never post it a second time. Refused unless Carousels is Live (D16): nothing is approved, closed or
+ * queued then, since a force attempt would wait unclaimed.
  */
-export async function hardPublishPost(query: Query, postId: string) {
+export async function hardPublishPost(query: Query, postId: string): Promise<Queued> {
+  if (!postsToInstagram((await readTypeGate(query, 'carousels')).state)) return { queued: false, note: CAROUSEL_NOT_LIVE_NOTE, terminal: true };
   const itemId = await carouselItemId(query, postId);
   if (itemId) await forceApproveItem(query, itemId, HARD_PUBLISH_NOTE);
   return queuePublish(query, postId, 'force');

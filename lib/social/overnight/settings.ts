@@ -1,4 +1,4 @@
-import { refillCapUsd as refillCapOf } from '@/lib/content-type/state';
+import { postsToInstagram, refillCapUsd as refillCapOf, stateOf } from '@/lib/content-type/state';
 import { dbQuery } from '@/lib/db';
 
 /** social.settings: the switches the worker and (later) the Social page share. */
@@ -33,7 +33,11 @@ export async function refillCapUsd(): Promise<number> {
   return refillCapOf('carousels', await getSocialSetting<unknown>('pool_refill_cap_usd'));
 }
 
-/** Scheduling and auto-publishing. Off until a human turns it on. */
+/**
+ * Whether Carousels is Live (D16): stateOf(auto_run, publishing_live), never the raw Live key, so Generate off with
+ * Live on reads as paused. Only Live posts to Instagram.
+ */
 export async function publishingLive(): Promise<boolean> {
-  return (await getSocialSetting<boolean>('publishing_live')) === true;
+  const [generate, live] = await Promise.all([getSocialSetting<unknown>('auto_run'), getSocialSetting<unknown>('publishing_live')]);
+  return postsToInstagram(stateOf(generate === true, live === true).state);
 }

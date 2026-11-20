@@ -1,4 +1,5 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { CAPTION_MAX_CHARS, stampCaption, stripEpisodePrefix } from '@/lib/explainers/caption-format';
 import { checkAccountQuota } from '@/lib/instagram/account-gate';
 import { TRIAL_GRADUATION_STRATEGY } from '@/lib/reels/config';
@@ -259,12 +260,21 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
  * Hard publish (Social Hub, SH-15/SH-17): post this render now. A person's
  * click counts as approval: an unreviewed render is recorded `approved`
  * (note says so); a rejected one is refused. Its waiting slot is closed so
- * it cannot post twice.
+ * it cannot post twice. Refused unless Explainers are Live (D16), before
+ * anything is recorded.
  */
+export const EXPLAINERS_NOT_LIVE_NOTE = 'Explainers aren’t Live, so nothing posts to Instagram. Set them to Live in the Settings tab first.';
+
 export async function hardPublishJob(db: Queryable, jobId: string, by: string): Promise<Queued> {
   const { rows } = await db.query<{ verdict: string | null }>(`SELECT verdict FROM explainers.feedback WHERE job_id = $1`, [jobId]);
   const verdict = rows[0]?.verdict ?? null;
   if (verdict === 'rejected') return { queued: false, note: 'This render was rejected in review.', terminal: true };
+  // Live only (D16; stateOf: Generate off with Live on reads as paused). Read here, not from schedule.ts, which imports this file.
+  const { rows: keys } = await db.query<{ key: string; value: unknown }>(
+    `SELECT key, value FROM explainers.settings WHERE key IN ('auto_render', 'publishing_live')`,
+  );
+  const on = (key: string) => keys.some((row) => row.key === key && row.value === true);
+  if (!postsToInstagram(stateOf(on('auto_render'), on('publishing_live')).state)) return { queued: false, note: EXPLAINERS_NOT_LIVE_NOTE, terminal: false };
   if (verdict == null) {
     await db.query(
       `INSERT INTO explainers.feedback (job_id, verdict, tags, note, created_by)

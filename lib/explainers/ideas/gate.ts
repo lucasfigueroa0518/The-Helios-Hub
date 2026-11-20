@@ -1,11 +1,11 @@
 /**
  * Explainers' 2 AM night, split into refill and make (settings standard D16, D3; CONTRACT.md §4). The refill (idea
  * generation, scoring and dedupe into explainers.topics) runs every night in every state and on a quota-full day,
- * held to `pool_refill_cap_usd` (D14). Rendering follows `makesPosts`, placing on the calendar `postsToInstagram`,
- * both under the day's quota. Pure apart from `readExplainersGate`.
+ * held to `pool_refill_cap_usd` (D14). Rendering follows `makesPosts`, placing on the calendar `holdsSlots` (Approval
+ * and Live, contract §4.3), both under the day's quota. Posting follows `postsToInstagram` (Live only). Pure apart from `readExplainersGate`.
  */
 import type { Queryable } from '@/lib/explainers/db';
-import { makesPosts, postsToInstagram, refillCapUsd, stateOf, type TypeState } from '@/lib/content-type/state';
+import { holdsSlots, makesPosts, postsToInstagram, refillCapUsd, stateOf, type TypeState } from '@/lib/content-type/state';
 
 export type ExplainersGate = {
   state: TypeState;
@@ -13,8 +13,10 @@ export type ExplainersGate = {
   mismatch: boolean;
   /** Render pool topics tonight (the quota and render caps still apply). */
   makes: boolean;
-  /** Place renders on the calendar. */
+  /** Place renders on the calendar: holdsSlots (Approval and Live, contract §4.3). */
   books: boolean;
+  /** Post due renders to Instagram: postsToInstagram (Live only, D16). */
+  posts: boolean;
   /** The refill's cap in USD; null for a person's "Run the idea cycle now" (their click is the go-ahead, as before). */
   refillCapUsd: number | null;
 };
@@ -28,7 +30,8 @@ export function explainersGate(stored: ExplainersStoredState, force = false): Ex
     state,
     mismatch,
     makes: force || makesPosts(state),
-    books: postsToInstagram(state),
+    books: holdsSlots(state),
+    posts: postsToInstagram(state),
     refillCapUsd: force ? null : refillCapUsd('explainers', stored.refillCap),
   };
 }

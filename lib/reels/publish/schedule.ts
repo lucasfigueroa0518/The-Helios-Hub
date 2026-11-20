@@ -1,6 +1,6 @@
 import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
-import { postsToInstagram, stateOf } from '@/lib/content-type/state';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
 import { UNSLOT_REASONS } from '@/lib/content-type/unslot';
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
@@ -27,8 +27,9 @@ import {
 
 /**
  * One reel per posting slot per Eastern day. The nightly run fills the slots
- * only while publishing is live. A person can schedule a reel into the next
- * open slot either way. Force post does not use a slot.
+ * while Text on Screen holds slots (Approval or Live, contract §4.3); only Live
+ * posts them (D16). A person can schedule a reel into the next open slot either
+ * way. Force post does not use a slot.
  *
  * Slots live on the lifecycle spine (social_hub.schedule, vertical 'reels',
  * D39). A slot belongs to the post idea (idea_ref) and gets its video's item
@@ -127,8 +128,18 @@ async function outcome(schedule: StoredSchedule): Promise<ScheduleOutcome> {
  * as paused (stateOf), so it books nothing. Off until it is turned on.
  */
 export async function publishingLive(): Promise<boolean> {
+  return postsToInstagram(await reelsState());
+}
+
+/** Text on Screen's state (D16): stateOf(auto_run, publishing_live). */
+export async function reelsState(): Promise<TypeState> {
   const [generate, live] = await Promise.all([getSetting<unknown>('auto_run'), getSetting<unknown>('publishing_live')]);
-  return postsToInstagram(stateOf(generate === true, live === true).state);
+  return stateOf(generate === true, live === true).state;
+}
+
+/** Whether Text on Screen books slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
+export async function reelsHoldsSlots(): Promise<boolean> {
+  return holdsSlots(await reelsState());
 }
 
 /**
@@ -331,7 +342,7 @@ export async function scheduleVideo(videoJobId: string, now = new Date()): Promi
  * The reels selected for this slate, best rank first, one per window still
  * open on that slate's Eastern day (its posting date: a slate made ahead
  * books only that day, Bald-Eagle D4). A later reel is not scheduled once the
- * day has no window left. Does nothing while publishing is not live.
+ * day has no window left. Does nothing while Text on Screen is Paused (holdsSlots, D17).
  */
 /**
  * unslottedSql (lib/content-type/unslot.ts) at the idea level: Text on Screen books by post idea, and its slots carry
@@ -348,7 +359,7 @@ export function reelIdeaUnslottedSql(ideaId: string): string {
 }
 
 export async function scheduleSelectedSlate(slateId: string, now = new Date()): Promise<{ scheduled: number }> {
-  if (!(await publishingLive())) return { scheduled: 0 };
+  if (!(await reelsHoldsSlots())) return { scheduled: 0 };
   const { rows } = await dbQuery<{ post_idea_id: string; ny_date: string }>(
     `SELECT s.post_idea_id, sl.ny_date::text AS ny_date
        FROM reels.idea_scores s
@@ -374,7 +385,7 @@ export async function scheduleSelectedSlate(slateId: string, now = new Date()): 
 }
 
 /**
- * When Live is switched on after the night has already run: the latest slate of today and of every day
+ * When Text on Screen leaves Paused (Approval or Live) after the night has already run: the latest slate of today and of every day
  * ahead (Text on Screen is made 2 days ahead, Bald-Eagle D4), each booked on its own day.
  */
 export async function scheduleLatestToday(now = new Date()): Promise<{ scheduled: number }> {
@@ -665,9 +676,13 @@ export async function loadSchedulesForIdeas(postIdeaIds: string[]): Promise<Reco
 /**
  * Force post (the /reels Force button, also the Social Hub's Hard publish):
  * post now as a trial reel, skipping the slot. The same three steps as the
- * force branch of POST /api/reels/publish, in one place.
+ * force branch of POST /api/reels/publish, in one place. Refused unless Text
+ * on Screen is Live (D16), before anything is recorded.
  */
+export const REELS_NOT_LIVE_NOTE = 'Text on Screen isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
+
 export async function forcePost(videoJobId: string): Promise<{ queued: true; id: string; note: string } | { queued: false; status: number; note: string }> {
+  if (!(await publishingLive())) return { queued: false, status: 409, note: REELS_NOT_LIVE_NOTE };
   const ready = await publishReadiness(videoJobId, { trigger: 'force' });
   if (!ready.ok) return { queued: false, status: ready.status, note: ready.note };
   await cancelScheduledPost(ready.postIdeaId);

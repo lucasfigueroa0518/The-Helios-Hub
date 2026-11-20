@@ -11,7 +11,8 @@
  * when people already placed the day's quota (D3). Those nights the run makes no
  * story (`--stories 0`) and is held to pool_refill_cap_usd; it ends with
  * `refill_capped` when the cap stops it. Making posts follows makesPosts(state)
- * and the quota; scheduling and posting follow postsToInstagram(state).
+ * and the quota; booking slots follows holdsSlots(state) (Approval and Live) and
+ * posting follows postsToInstagram(state) (Live only).
  * A queued run (3 AM or manual) is carried out by scripts/social_daily.ts in a
  * child process (--run-id), so a Chromium crash or memory spike ends the
  * child, not the worker. After it: each shipped post's slides are rendered to
@@ -30,7 +31,7 @@
  * (lfd.settings.days, Tue/Fri) with its auto_run on, a Last Few Days run is
  * queued instead of the carousel run. Its runs (3:00, or the hub's "Make Last
  * Few Days now") are claimed in this loop, so they never overlap a carousel
- * run; a finished post joins the spine and, while lfd publishing_live is on,
+ * run; a finished post joins the spine and, in Approval or Live (holdsSlots),
  * takes its day's 9:00–10:00 AM window. Its posts publish and its insights are
  * read here like carousels until the single publisher drives the type.
  *
@@ -38,7 +39,7 @@
  * process too: at 12:00 PM on its days (ai_events.settings.days, Sunday), in
  * every state, a run is queued that ranks the coming week's events (Jev
  * event-pick@1; the refill, D16) and, while AI Events makes posts, renders the
- * carousel (capped at run_cap_usd) and, only while Live, books the Sunday
+ * carousel (capped at run_cap_usd) and, in Approval or Live, books the Sunday
  * 6:00–7:00 PM window; paused, it only ranks, under pool_refill_cap_usd. Its
  * runs (the clock, the hub's Generate or Rebuild post) are claimed after Last
  * Few Days', under the same 30-minute timeout. Its posts publish and their
@@ -47,16 +48,17 @@
  * Field Notes (planning/Field Notes/CONTRACT.md) shares this process the same way: at 2:00 AM, while it
  * makes posts (auto_run on), a run is queued for its next unfilled day that refills the tip pool and picks the tips,
  * writes the slides (live Claude and Jev, capped at run_cap_usd) and renders the carousel on the photo
- * pool; otherwise a Field Notes day (Tuesday, Friday) queues a refill-only run in every state (D16). Only
- * while Live does an approved post book the afternoon 2:30–3:30 PM window. Its runs (the clock, the hub's Generate or Rebuild post) are claimed after AI Events', under
+ * pool; otherwise a Field Notes day (Tuesday, Friday) queues a refill-only run in every state (D16). In
+ * Approval or Live an approved post books the afternoon 2:30–3:30 PM window. Its runs (the clock, the hub's Generate or Rebuild post) are claimed after AI Events', under
  * the same 30-minute timeout. Its posts publish and their insights are read here until the single
  * publisher drives the type. Each poll also runs Field Notes' face check on new uploads (Vercel has no
  * Chromium): up to 10 photos queued 'pending' at upload, one shared headless browser per batch, no model
  * call (lib/field-notes/photos/faces-worker.ts).
  *
- * Nothing is scheduled or published unless the type's state is Live (stateOf
- * auto_run + publishing_live; Generate off with Live on reads as paused and logs
- * state_mismatch). Every post needs a person's approval: require_approval is never
+ * Slots are booked in Approval and Live (contract §4.3); nothing is published
+ * unless the type's state is Live (stateOf auto_run + publishing_live; Generate
+ * off with Live on reads as paused and logs state_mismatch). A slot that passes
+ * unposted goes back to Made (publisher sweep, D17). Every post needs a person's approval: require_approval is never
  * read as off (D16). Insights: every 30 minutes while a carousel is fresh, and a 5:30 AM sweep.
  * Once social_hub.settings publisher_mode is 'live', releasing, posting and
  * the 30-minute insights reads belong to the single publisher (D40).
@@ -378,8 +380,9 @@ async function main(): Promise<void> {
       }
     }
 
-    // A rerun's new version waits in Content ready for a person; only the nightly run fills today's windows, and only while Live (D16).
-    if (!rerun && (await readTypeGate(lfdQuery, 'carousels', log)).posts) {
+    // A rerun's new version waits in Content ready for a person; only the nightly run fills today's windows, in Approval or
+    // Live (holdsSlots, contract §4.3). Only Live posts them: the release below is gated on Live (D16).
+    if (!rerun && (await readTypeGate(lfdQuery, 'carousels', log)).holds) {
       for (const scheduled of await scheduleRunPosts(query, run.id)) {
         log('schedule', scheduled.scheduled ? { runId: run.id, publishAt: scheduled.publishAt } : { runId: run.id, note: scheduled.note });
       }

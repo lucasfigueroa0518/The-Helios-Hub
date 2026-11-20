@@ -23,14 +23,15 @@
  *   4. publish: each due set posts its frames in order (S-59); on success the
  *      history (repeat checks) and Tommy's used-photo log are written (S-24),
  *      and an AI Trivia set's content-map cell is closed
- *      Steps 3 and 4 run only for a type that is Live.
+ *      Step 3 runs for a type in Approval or Live (holdsSlots, contract §4.3); step 4 only for a Live type.
  *
  * Refill split (settings standard D3, D14, D16; CONTRACT.md §4): step 0 is the refill. The pool refresh,
  * runTriviaDaily and runRoaDaily run in every state (Paused, Approval, Live), each held to its type's refill cap
  * (stories.settings.types[<type>].refill_cap_usd), logging `refill_capped` when the cap stops it. Only the three
  * active series refill; the retired ones (Free vs. Paid, Guess the Number) never do. Step 1 (auto sets) is the make
  * step and follows makesPosts(state): the series' auto switch with its type's publishing_live (stateOf, which logs
- * `state_mismatch`). Steps 3 and 4 follow postsToInstagram(state). A person's Generate builds in every state.
+ * `state_mismatch`). Step 3 follows holdsSlots(state) and step 4 postsToInstagram(state). A person's Generate builds
+ * in every state.
  *   5. insights: poll published frames every 2 hours until the final capture
  */
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
@@ -183,13 +184,15 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
     // Every set waits for a person's Approve (D16): an auto set never approves itself.
   }
 
-  // 3–4 post nothing for a type that is not Live (D16; each Stories-format type has its own state, SS-22).
+  // Step 3 books only for a type in Approval or Live (holdsSlots, contract §4.3); step 4 posts only for a Live type (D16).
+  // Each Stories-format type has its own state (SS-22).
+  const holds = (series: Series) => gates[verticalOfSeries(series)].holds;
   const live = (series: Series) => gates[verticalOfSeries(series)].posts;
   // Back to Made (D17): a set whose minute passed while its type is not Live returns to approved, its slot cancelled 'slot-passed'.
   const notLive = SERIES.filter((s) => !live(s));
   const returned = await returnPassedSets(deps.db, notLive, now).catch((err) => (log(`slot-passed: ${err instanceof Error ? err.message : String(err)}`), []));
   if (returned.length) log(`slot-passed: ${returned.length} set(s) back to Made (${returned.join(', ')})`);
-  if (!STORY_VERTICALS.some((v) => gates[v].posts)) {
+  if (!STORY_VERTICALS.some((v) => gates[v].holds)) {
     await pollInsights(deps, now, out);
     return out;
   }
@@ -198,7 +201,7 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   const approved = await listSets(deps.db, { statuses: ['approved'] });
   const unslotted = await unslottedSetIds(deps.db, approved.map((s) => s.id));
   for (const s of approved) {
-    if (!live(s.series) || unslotted.has(s.id)) continue;
+    if (!holds(s.series) || unslotted.has(s.id)) continue;
     // A set with a slot (template mode) books in [slot, slot + 15]; one without, in its series' window.
     const at = pickSetPublishAt(settings.series[s.series].window, s, now);
     if (!at) continue; // window passed: the Hub offers Publish now or reject

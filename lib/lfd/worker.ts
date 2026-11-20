@@ -1,15 +1,15 @@
 // lib/lfd/worker.ts
 /**
  * The helios-social worker's Last Few Days step (spec §7.3): carry out a
- * claimed run, then put its post on the spine and, only while Last Few Days is
- * Live, into its own day's 9:00–10:00 AM window. The worker runs this in the
+ * claimed run, then put its post on the spine and, while Last Few Days holds
+ * slots (Approval or Live, D16), into its own day's 9:00–10:00 AM window. The worker runs this in the
  * same loop as the carousel run, so the two never overlap.
  *
  * Refill split (settings standard D16, CONTRACT.md §4): Last Few Days' pool is
  * the central intake's 'lfd' order, open every night in every state
  * (lib/intake/orders.ts), so this run is only the make step: a scheduled run
  * makes a post while makesPosts(state) and the day's quota allows; booking
- * follows postsToInstagram(state). A person's "Make now" runs in every state.
+ * follows holdsSlots(state) (contract §4.3) and posting postsToInstagram(state). A person's "Make now" runs in every state.
  */
 import { withHangGuard } from '@/lib/content-runs/hang-guard';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
@@ -100,7 +100,8 @@ export async function carryOutLfdRun(w: CarryOutDeps, claimed: ClaimedRun): Prom
     }
     await lfdItemId(w.query, res.postId);
     let scheduled: string | null = null;
-    if (gate.posts) {
+    // Booked in Approval and Live (holdsSlots, contract §4.3); only Live posts it (the release is gated on Live).
+    if (gate.holds) {
       // A fresh clock: the run took time, and a window that closed while it ran must not be booked in the past.
       // throughDate stays the run's own day.
       const out = await scheduleLfdPost(w.query, res.postId, 'auto', w.now(), nyDate);

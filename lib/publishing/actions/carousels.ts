@@ -6,12 +6,15 @@ import { deleteVerb } from './delete';
 import { need, needPlacement, type ActionOutcome, type ContentActions } from './types';
 
 type Queued = { queued: boolean; note?: string; status?: number };
-type Placed = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string };
+type Placed = { scheduled: true; id: string; publishAt: string } | { scheduled: false; note: string; approved?: true };
+
+const NOT_LIVE_NOTE = 'Carousels isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 type Place = (q: Query, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 /**
- * Carousels (lib/social/overnight): approve a slot or a post in review, reject,
- * Hard publish, place or move on the calendar (D50), and regenerate: a
+ * Carousels (lib/social/overnight): approve a slot or a post in review (booked in
+ * Approval or Live, contract §4.3; Paused: approved, it stays in the Made tab),
+ * reject, Hard publish (refused unless Live, D16), place or move on the calendar (D50), and regenerate: a
  * one-story rerun the helios-social worker carries out (D51).
  */
 export function carouselActions(deps: {
@@ -25,6 +28,8 @@ export function carouselActions(deps: {
   rescheduleItem: Place;
   unschedulePost: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   requestRerun: (q: Query, postId: string, by: string) => Promise<{ queued: true; id: string } | { queued: false; note: string }>;
+  /** Whether Carousels is Live (D16, stateOf): Publish now is refused otherwise. Absent: hardPublishPost checks it. */
+  publishingLive?: (q: Query) => Promise<boolean>;
 }): ContentActions {
   async function placement(t: Parameters<typeof need>[0], input: Parameters<typeof needPlacement>[0], fn: Place, by?: string): Promise<ActionOutcome> {
     const at = needPlacement(input);
@@ -42,13 +47,17 @@ export function carouselActions(deps: {
         return (await deps.approveSchedule(q, t.scheduleId)) ? { ok: true, note: 'Approved.' } : { ok: false, note: 'That slot is no longer scheduled.' };
       }
       const placed = await deps.approvePost(q, need(t, 'postId'));
-      return placed.scheduled ? { ok: true, note: `Approved and scheduled for ${placed.publishAt}.` } : { ok: false, note: placed.note };
+      if (placed.scheduled) return { ok: true, note: `Approved and scheduled for ${placed.publishAt}.` };
+      return placed.approved ? { ok: true, note: placed.note } : { ok: false, note: placed.note };
     },
     async reject(t, by) {
       return (await deps.rejectPost(await deps.query(), need(t, 'postId'), by)) ? { ok: true, note: 'Rejected. It will not post.' } : { ok: false, note: 'The post is gone.' };
     },
     async publishNow(t) {
-      const out = await deps.hardPublishPost(await deps.query(), need(t, 'postId'));
+      const q = await deps.query();
+      // Posts go to Instagram only in the Live state (D16).
+      if (deps.publishingLive && !(await deps.publishingLive(q).catch(() => false))) return { ok: false, note: NOT_LIVE_NOTE, status: 409 };
+      const out = await deps.hardPublishPost(q, need(t, 'postId'));
       return out.queued ? { ok: true, note: 'Queued to publish now.' } : { ok: false, note: out.note ?? 'Not queued.', status: out.status };
     },
     async regenerate(t, by) {

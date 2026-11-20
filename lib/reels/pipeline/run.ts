@@ -436,7 +436,7 @@ async function scoreAndMake(night: Night, target: Target, plan?: CandidatePlan):
           ].filter((note): note is string => note != null);
           if (notes.length > 0) out.copyNote = notes.join(' ');
           log('run_copy', { ...copy, nyDate: target.nyDate });
-          // Booked only while Text on Screen is Live (D16).
+          // Booked in Approval and Live (holdsSlots, contract §4.3); only Live posts them (D16).
           const scheduled = !gate.books
             ? { scheduled: 0 }
             : await scheduleSelectedSlate(slateId).catch((error) => {

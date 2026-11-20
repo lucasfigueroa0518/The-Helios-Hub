@@ -68,7 +68,7 @@ async function main(): Promise<void> {
   const { loadAgentQuery } = await import('@/lib/explainers/render/agent');
   const { artifactStoreFromEnv, signArtifact } = await import('@/lib/explainers/storage');
   const { IDEA_CYCLE_HOUR_NY, EXPLAINERS_INSIGHTS_HOUR_NY, EXPLAINERS_INSIGHTS_MINUTE_NY } = await import('@/lib/explainers/publish/config');
-  const { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved } = await import('@/lib/explainers/publish/schedule');
+  const { bookFinishedRender, explainersHoldsSlots, publishingLive, releaseDueSchedules, scheduleApproved } = await import('@/lib/explainers/publish/schedule');
   const { claimAndPublish } = await import('@/lib/explainers/publish/publish');
   const { createLiveReelClient, metaConfigured } = await import('@/lib/explainers/publish/meta');
   const { createExplainerInsightsClient, pollExplainerInsights } = await import('@/lib/explainers/publish/insights');
@@ -193,11 +193,15 @@ async function main(): Promise<void> {
   /** With publisher_mode 'live' the single publisher releases, posts and reads insights (D40). */
   const standDown = () => publisherOwnsPublishing((text, params) => db.query(text, params) as never, 'explainers');
 
-  /** Approved reels onto the clock, due slots into attempts, one attempt to Instagram. Only while publishing_live is on. */
+  /**
+   * Approved reels onto the clock in Approval and Live (holdsSlots, contract §4.3; never one sent back to Made, D18);
+   * due slots into attempts and one attempt to Instagram only while Live (D16).
+   */
   const publishStep = async (): Promise<void> => {
-    if (!(await publishingLive(db))) return;
+    if (!(await explainersHoldsSlots(db))) return;
     const scheduled = await scheduleApproved(db);
     if (scheduled > 0) log('scheduled_approved', { count: scheduled });
+    if (!(await publishingLive(db))) return;
     if (await standDown()) return;
     const released = await releaseDueSchedules(db);
     if (released > 0) log('schedule_due', { released });

@@ -22,7 +22,7 @@ import type { HubPost } from '@/lib/social-hub/types';
 import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
 import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
 import { DRAMA_WINDOWS, readDramaPosting, writeDramaPosting } from '@/lib/reel-ai-drama/hub';
-import { isTypeState, keysOf, refillCapUsd, stateOf, type TypeState } from '@/lib/content-type/state';
+import { holdsSlots, isTypeState, keysOf, refillCapUsd, stateOf, type TypeState } from '@/lib/content-type/state';
 import { scheduledAhead, unslotType, type UnslotQuery } from '@/lib/content-type/unslot';
 
 /**
@@ -387,8 +387,9 @@ export async function writePosting(type: ContentType, patch: PostingPatch, by: s
     }
   } else if (type === 'reels') {
     await run(order(() => setReelsSetting('auto_run', keys!.generate), () => setReelsSetting('publishing_live', keys!.live)));
-    if (keys?.live) {
-      // Live after the night already ran: today's selected reels take today's open windows (as /api/reels/settings does).
+    if (patch.state !== undefined && holdsSlots(patch.state)) {
+      // Approval or Live after the night already ran: today's selected reels take today's open windows (contract §4.3;
+      // the night's placing skips anything sent back to Made, D18).
       const { scheduleLatestToday } = await import('@/lib/reels/publish/schedule');
       await scheduleLatestToday();
     }

@@ -11,6 +11,9 @@ import { need, needPlacement, type ActionFn, type ContentActions } from './types
 type Queued = { queued: boolean; note?: string; status?: number };
 type Place = (q: SpineQuery, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
+const NOT_LIVE_NOTE = 'Explainers aren’t Live, so nothing posts to Instagram. Set them to Live in the Settings tab first.';
+const APPROVED_PAUSED_NOTE = 'Approved. Explainers are Paused, so it stays in the Made tab. Place it in a slot once they’re in Approval or Live (the Settings tab).';
+
 const REFUSAL: Record<string, string> = {
   daily_render_cap: 'Today’s explainer render cap is used up.',
   daily_spend_cap: 'Today’s explainer spend cap is used up.',
@@ -21,9 +24,10 @@ const REFUSAL: Record<string, string> = {
 };
 
 /**
- * Explainers (lib/explainers): approve sets the review verdict and books today's next open window (B1); reject sets it too
+ * Explainers (lib/explainers): approve sets the review verdict and, in Approval or Live (contract §4.3), books today's
+ * next open window (B1); Paused: approved, it stays in the Made tab (D17). Reject sets the verdict too
  * (mirrored onto the spine; a hub Reject may carry the review page's tags and
- * a note, D53), Hard publish counts as approval (SH-17), regenerate queues a
+ * a note, D53), Hard publish counts as approval (SH-17) and is refused unless Live (D16), regenerate queues a
  * rerender under the caps, place and reschedule put the render on the
  * calendar (D50). The explainers handle may be its own database, so its
  * spine rows are reached through it.
@@ -55,7 +59,10 @@ export function explainerActions(deps: {
     now: Date,
     throughDate: string,
   ) => Promise<{ scheduled: true; publishAt: string } | { scheduled: false; note: string }>;
+  /** Whether Explainers are Live (D16): only then does a slot post, and Publish now is refused otherwise. */
   publishingLive: (db: ExplainersDb) => Promise<boolean>;
+  /** Whether Explainers book slots: Approval or Live (holdsSlots; schedule.ts explainersHoldsSlots). */
+  holdsSlots: (db: ExplainersDb) => Promise<boolean>;
   /**
    * Targeted Revisions: the database the social worker claims revision rows from (socialQuery,
    * DATABASE_URL), or null when Explainers keep a database of their own (EXPLAINERS_DATABASE_URL, or
@@ -90,18 +97,22 @@ export function explainerActions(deps: {
       const db = await deps.db();
       const jobId = need(t, 'jobId');
       await deps.setVerdict(db, jobId, 'approved', by);
-      // Never while publishing is off: a slot booked then would post late once it is switched back on.
-      if (!(await deps.publishingLive(db))) {
-        return { ok: true, note: 'Approved. Publishing is switched off, so it gets a time once publishing is back on.' };
-      }
+      // A paused type holds no slots (D17): approved, it stays in the Made tab.
+      if (!(await deps.holdsSlots(db))) return { ok: true, note: APPROVED_PAUSED_NOTE };
       // B1: a system slot (source 'auto'). A render the night made ahead keeps (or books) the window of the date it was
       // made for, never today's leftover one (Bald-Eagle D4: scheduleJob reads its target date); a person's render:
-      // today's next open window. A render that already has a slot keeps it. Booking only: the slot posts at its time.
+      // today's next open window. A render that already has a slot keeps it. Booking only: the slot posts at its time,
+      // and only while Live (D16); in Approval a passed slot goes back to Made (D17).
       const now = deps.now?.() ?? new Date();
       const booked = await deps.scheduleJob(db, jobId, 'auto', now, nyDateOf(now)!);
-      return booked.scheduled
-        ? { ok: true, note: `Approved. It posts ${formatPlacement(new Date(booked.publishAt))}.` }
-        : { ok: true, note: 'Approved. No window is left on its day, so it takes the next open window after that; Post now can still post it today.' };
+      const live = await deps.publishingLive(db).catch(() => false);
+      if (!booked.scheduled) {
+        return { ok: true, note: 'Approved. No window is left on its day, so it takes the next open window after that; Post now can still post it today.' };
+      }
+      const when = formatPlacement(new Date(booked.publishAt));
+      return live
+        ? { ok: true, note: `Approved. It posts ${when}.` }
+        : { ok: true, note: `Approved. It holds its slot ${when}, but nothing posts until Explainers are Live (the Settings tab).` };
     },
     async reject(t, by, input) {
       const review = {
@@ -116,7 +127,10 @@ export function explainerActions(deps: {
       return { ok: true, note: 'Rejected. It will not post.' };
     },
     async publishNow(t, by) {
-      const out = await deps.hardPublishJob(await deps.db(), need(t, 'jobId'), by);
+      const db = await deps.db();
+      // Posts go to Instagram only in the Live state (D16).
+      if (!(await deps.publishingLive(db).catch(() => false))) return { ok: false, note: NOT_LIVE_NOTE, status: 409 };
+      const out = await deps.hardPublishJob(db, need(t, 'jobId'), by);
       return out.queued ? { ok: true, note: 'Queued to publish now.' } : { ok: false, note: out.note ?? 'Not queued.', status: out.status };
     },
     async regenerate(t) {

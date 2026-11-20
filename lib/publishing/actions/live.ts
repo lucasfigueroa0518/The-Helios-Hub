@@ -48,6 +48,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     fnSettings,
     fnManual,
     drama,
+    carouselRefill,
   ] = await Promise.all([
     import('@/lib/social/store'),
     import('@/lib/social/overnight/schedule'),
@@ -79,6 +80,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     import('@/lib/field-notes/settings'),
     import('@/lib/field-notes/manual'),
     import('@/lib/reel-ai-drama/hub'),
+    import('@/lib/social/refill'),
   ]);
   const db = storiesDb.liveStoriesDb;
   const storiesSpine = (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
@@ -94,6 +96,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       rescheduleItem: placement.rescheduleItem,
       unschedulePost: carousel.unschedulePost,
       requestRerun: carouselRuns.requestRerun,
+      // Live only (D16): stateOf(auto_run, publishing_live); a failed read reads as paused.
+      publishingLive: async (q) => (await carouselRefill.readTypeGate(q, 'carousels')).posts,
     }),
     explainers: explainerActions({
       db: explainersConn.explainersDb,
@@ -109,6 +113,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       rescheduleItem: placement.rescheduleItem,
       scheduleJob: (d, jobId, source, now, through) => explainersSchedule.scheduleJob(d, jobId, source, now, through),
       publishingLive: explainersSchedule.publishingLive,
+      // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
+      holdsSlots: explainersSchedule.explainersHoldsSlots,
       // Revision rows live where the social worker claims them (DATABASE_URL); only when explainers share that database.
       revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),
     }),
@@ -117,6 +123,9 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       rejectReel: reels.rejectReel,
       forcePost: reels.forcePost,
       publishingLive: () => reels.publishingLive(),
+      // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
+      holdsSlots: () => reels.reelsHoldsSlots(),
+      approveVideo: (videoJobId) => reelItems.approveReel(videoJobId, 'user'),
       unscheduleIdea: reels.unscheduleIdea,
       query: reelItems.reelsSpine,
       itemId: reelItems.reelItemId,
