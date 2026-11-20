@@ -26,12 +26,16 @@ function isPublicPath(pathname: string): boolean {
   if (pathname.startsWith('/api/dashboards/deck/')) return true;
   if (pathname.startsWith('/api/auth')) return true;
   if (pathname === '/api/health') return true;
+  // Keep-warm calls from GitHub Actions: Bearer HUB_WARM_TOKEN, checked in the route.
+  if (pathname === '/api/cron/warm') return true;
   if (pathname === '/api/webhooks/resend') return true;
   if (pathname === '/api/webhooks/agentmail') return true;
   if (pathname === '/api/webhooks/gcp-billing') return true;
   if (pathname.startsWith('/api/public/sender-headshots/')) return true;
   // The web game export: Bearer HUB_GAME_EXPORT_TOKEN, checked in the route.
   if (pathname === '/api/public/trivia-game/days') return true;
+  // Counted RSVP redirect for the public events calendar (Resource Tracker RT-2): no session, ever.
+  if (pathname.startsWith('/api/public/go/rsvp/')) return true;
   // Private reel review. The token in the path is the gate. No Auth.js session.
   if (pathname.startsWith('/watch/')) return true;
   if (pathname.startsWith('/api/watch/')) return true;

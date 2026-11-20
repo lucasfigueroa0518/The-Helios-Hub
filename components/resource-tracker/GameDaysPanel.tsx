@@ -8,9 +8,10 @@ type View = { launch: string | null; today: string; days: Day[] };
 
 /**
  * "Are you Smarter Than AI?" web game (HUB-PLAN.md): the launch date (Day 1), tomorrow's draft with Pull until it
- * locks at 11 pm New York, and the locked days the website imports.
+ * locks at 11 pm New York, and the locked days the website imports. Lives in the Resource Tracker's game view
+ * (moved off the content page, 2026-11-19).
  */
-export function GameDayPanel() {
+export function GameDaysPanel() {
   const [view, setView] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,36 +38,40 @@ export function GameDayPanel() {
   };
 
   return (
-    <section className="rh-card" style={{ margin: '16px 0', padding: 16 }} aria-labelledby="game-days-title">
-      <h2 id="game-days-title" style={{ margin: '0 0 8px' }}>Web game</h2>
-      <p className="rh-muted" style={{ margin: '0 0 12px' }}>
-        Five questions a day for the website. Tomorrow&apos;s day is built after 3:30 am; pull any question until it locks at 11 pm New York.
-      </p>
-      <form style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}
+    <section className="rt-panel" aria-labelledby="game-days-title">
+      <header className="rt-panel__head">
+        <div>
+          <h3 id="game-days-title" className="rt-chart__title">Today and tomorrow</h3>
+          <p className="rt-chart__sub">Tomorrow&apos;s game is built after 3:30 am. Pull any question until it locks at 11 pm New York; the builder swaps in the next one.</p>
+        </div>
+      </header>
+      <form className="rt-launch"
         onSubmit={(e) => { e.preventDefault(); void post({ action: 'launch', date: launch || null }, 'Change the launch date? Drafts are rebuilt from it.'); }}>
         <label htmlFor="game-launch">Day 1 (launch date)</label>
-        <input id="game-launch" type="date" value={launch} onChange={(e) => setLaunch(e.target.value)} disabled={busy} />
-        <button type="submit" className="rh-btn" disabled={busy || launch === (view?.launch ?? '')}>Save</button>
+        <input id="game-launch" className="helios-field-input" type="date" value={launch} onChange={(e) => setLaunch(e.target.value)} disabled={busy} />
+        <button type="submit" className="btn" disabled={busy || launch === (view?.launch ?? '')}>Save</button>
       </form>
-      {error ? <p className="rh-muted" role="alert" style={{ color: 'var(--rh-danger, #b42318)' }}>{error}</p> : null}
-      {!view ? <p className="rh-muted">Loading…</p> : !view.days.length ? <p className="rh-muted">{view.launch ? 'No game day built yet.' : 'No launch date set: the game is off.'}</p> : null}
+      {error ? <p className="field__error" role="alert">{error}</p> : null}
+      {!view ? <p className="rt-muted">Loading…</p> : !view.days.length ? <p className="rt-muted">{view.launch ? 'No game day built yet.' : 'No launch date set: the game is off.'}</p> : null}
       {view?.days.slice().reverse().map((d) => (
-        <div key={d.ny_date} style={{ borderTop: '1px solid var(--rh-line, #e5e5e5)', paddingTop: 12, marginTop: 12 }}>
-          <h3 style={{ margin: '0 0 8px', fontSize: 15 }}>
-            Day {d.day_number} · {d.ny_date} · {d.status === 'locked' ? 'locked' : `draft (${d.questions.length} of 5)`}
-          </h3>
-          <ol style={{ margin: 0, paddingLeft: 20 }}>
+        <div key={d.ny_date} className="rt-gameday">
+          <h4 className="rt-gameday__title">
+            Day {d.day_number} · {d.ny_date}
+            <span className={`rt-pill${d.status === 'locked' ? '' : ' rt-pill--draft'}`}>{d.status === 'locked' ? 'Locked' : `Draft · ${d.questions.length} of 5`}</span>
+            <span className="rt-pill rt-pill--ai">AI right on {d.questions.filter((q) => q.payload.opponent?.picked === q.payload.q.correct).length} of {d.questions.length}</span>
+          </h4>
+          <ol className="rt-qlist">
             {d.questions.map((q) => {
               const right = q.payload.opponent?.picked === q.payload.q.correct;
               return (
-                <li key={q.key} style={{ marginBottom: 8 }}>
-                  <div>{q.payload.q.question}</div>
-                  <div className="rh-muted" style={{ fontSize: 13 }}>
+                <li key={q.key}>
+                  <div className="rt-qlist__q">{q.payload.q.question}</div>
+                  <div className="rt-muted rt-qlist__opts">
                     {q.payload.q.options.map((o) => `${o.letter}. ${o.text}${o.letter === q.payload.q.correct ? ' ✓' : ''}`).join('   ')}
                     {q.payload.opponent ? ` · ${q.payload.opponent.label} picked ${q.payload.opponent.picked} (${right ? 'right' : 'wrong'})` : ''}
                   </div>
                   {d.status === 'draft' ? (
-                    <button type="button" className="rh-btn" style={{ marginTop: 4 }} disabled={busy}
+                    <button type="button" className="btn" disabled={busy}
                       onClick={() => void post({ action: 'pull', date: d.ny_date, key: q.key }, 'Pull this question? It is archived and the builder replaces it.')}>
                       Pull
                     </button>
@@ -75,7 +80,7 @@ export function GameDayPanel() {
               );
             })}
           </ol>
-          {d.log.length ? <p className="rh-muted" style={{ fontSize: 12, margin: '6px 0 0' }}>Last: {d.log[d.log.length - 1]!.detail}</p> : null}
+          {d.log.length ? <p className="rt-muted rt-small">Last: {d.log[d.log.length - 1]!.detail}</p> : null}
         </div>
       ))}
     </section>

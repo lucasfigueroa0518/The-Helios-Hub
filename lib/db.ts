@@ -108,11 +108,21 @@ export function dbPoolSettings(mode: 'session' | 'transaction', env: DbEnv = pro
   };
 }
 
-function applicationName(): string {
-  if (process.env.VERCEL) return 'helios-web';
-  const argv = process.argv.join(' ');
-  if (argv.includes('reels_worker')) return 'helios-reels';
-  if (argv.includes('orchestration_worker')) return 'helios-worker';
+/**
+ * The name each process's connections carry in pg_stat_activity, so a busy database
+ * shows which service holds them (perf/db/prod-diagnose.sql). Workers started with
+ * `npm run <script>` are named after the script (social:worker -> helios-social-worker).
+ */
+export function applicationName(env: DbEnv = process.env, argv: string[] = process.argv): string {
+  if (env.VERCEL) return 'helios-web';
+  const joined = argv.join(' ');
+  if (joined.includes('reels_worker')) return 'helios-reels';
+  if (joined.includes('orchestration_worker')) return 'helios-worker';
+  const script = env.npm_lifecycle_event;
+  if (script && script !== 'worker') return `helios-${script.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()}`.slice(0, 63);
+  if (script === 'worker') return 'helios-worker';
+  const file = argv.map((a) => a.match(/([a-z0-9_-]+_worker)\.[cm]?[jt]s$/i)?.[1]).find(Boolean);
+  if (file) return `helios-${file.replace(/_/g, '-').toLowerCase()}`;
   return 'helios-node';
 }
 

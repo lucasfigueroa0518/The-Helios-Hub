@@ -21,6 +21,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { loadVoiceScreen, soundVoiceFree } from './voice-screen.mjs';
+
+// The voice screen (voice-screen.mjs) travels with the library: every kit that links this module
+// reaches it here.
+export { loadVoiceScreen, mentionsVoice, MUSIC_SCREEN_HINT, MUSIC_VOICE_MAX, soundVoiceFree, trackVoiceFree, VOICE_MAX } from './voice-screen.mjs';
+
 export const SFX_DIR = dirname(fileURLToPath(import.meta.url));
 export const FILES = { bank: 'catalog.json', dropins: 'catalog-inbox.json', acoustics: 'acoustics.json', ambience: 'ambience-catalog.json' };
 /** The pack every drop-in carries. */
@@ -76,12 +82,22 @@ export function loadLibrary(dir = SFX_DIR, { dropins = true, ambience = false } 
     ...(dropins ? readJson(join(dir, FILES.dropins), []).filter((s) => typeof s?.file === 'string' && existsSync(join(dir, s.file))).map(withKindTags) : []),
     ...(ambience ? readJson(join(dir, FILES.ambience), []) : []),
   ].filter((s) => s && typeof s.id === 'string' && typeof s.file === 'string' && Array.isArray(s.tags));
-  return list.map((s) => (acoustics[s.file] ? { ...acoustics[s.file], ...s } : s));
+  return voiceFree(dir, list).map((s) => (acoustics[s.file] ? { ...acoustics[s.file], ...s } : s));
 }
 
-/** The ambience beds at `dir` (ambience-catalog.json). */
+/** The ambience beds at `dir` (ambience-catalog.json), voice-screened like every sound. */
 export function loadAmbience(dir = SFX_DIR) {
-  return readJson(join(dir, FILES.ambience), []);
+  return voiceFree(dir, readJson(join(dir, FILES.ambience), []));
+}
+
+/**
+ * The sounds of `list` that may play: screened and voice-free (voice-screen.mjs). A sound the
+ * screen has not measured is left out too, so a new drop-in never plays unheard. A folder with no
+ * screen at all (a test's fixture library) is not screened.
+ */
+function voiceFree(dir, list) {
+  const screen = loadVoiceScreen(dir);
+  return screen ? list.filter((s) => soundVoiceFree(screen, s?.file)) : list;
 }
 
 export const isDropin = (s) => s?.pack === DROPIN_PACK;

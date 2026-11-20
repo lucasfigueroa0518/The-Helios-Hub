@@ -43,6 +43,7 @@ import { pathToFileURL } from 'node:url';
 import { CLOSE } from './close-timing.js';
 import { isClose, musicCue, parseFrames } from './frames.mjs';
 import { frameClock, readCues, silenceWindows, speechIntervals } from './sound.mjs';
+import { loadVoiceScreen, MUSIC_SCREEN_HINT, trackVoiceFree } from './sfx-library.mjs';
 
 /** The rotation (RC-54): documentary tension beds, 80–100 BPM, instrumental. */
 export const STYLES = [
@@ -127,11 +128,12 @@ export const SILENCE_RAMP = 0.04;
 const r3 = (n) => Math.round(n * 1000) / 1000;
 const trackId = (t) => String(t.id ?? t.audio_id ?? t.name ?? t.audio_url ?? '');
 
-/** The acceptable tracks of `results` (ranked as given), avoiding `avoid` ids. */
-const acceptable = (results, avoid = []) =>
+/** The acceptable tracks of `results` (ranked as given), avoiding `avoid` ids; voice-screened. */
+const acceptable = (results, avoid = [], screen = loadVoiceScreen()) =>
   (results ?? []).filter((t) => {
     const text = `${t.name ?? ''} ${t.description ?? ''} ${(t.tags ?? []).join?.(' ') ?? ''}`;
-    return t.audio_url && !BANNED.test(text) && !avoid.includes(trackId(t));
+    // the voice screen (voice-screen.mjs): a track with a voice, or never screened, never plays
+    return t.audio_url && !BANNED.test(text) && !avoid.includes(trackId(t)) && trackVoiceFree(t, screen);
   });
 
 /** The styles in the order this reel tries them: the rotation's style first. */
@@ -744,8 +746,10 @@ export function sectionOf(plan, track) {
  * Choose, fetch, fit and lay the music. `search(query)` and `download(url, dest)` are injectable for
  * tests and the smoke run; by default they are HeyGen's catalog search and download. `measure(track,
  * section)` returns a track's fit behind speech (measureTrack by default), or null.
+ * @param {string} root
+ * @param {{ search?: any, download?: any, measure?: any, screen?: any }} [opts]
  */
-export async function placeMusic(root, { search, download, measure } = {}) {
+export async function placeMusic(root, { search, download, measure, screen = loadVoiceScreen() } = {}) {
   const errors = [];
   const frames = parseFrames(readFileSync(join(root, 'STORYBOARD.md'), 'utf8'));
   const total = r3(frames.reduce((n, f) => n + (f.duration > 0 ? f.duration : 0), 0));
@@ -811,7 +815,7 @@ export async function placeMusic(root, { search, download, measure } = {}) {
         errors.push(`search "${s.key}": ${e instanceof Error ? e.message : String(e)}`);
         continue;
       }
-      const ok = acceptable(results).filter((t) => Number(t.duration) >= Math.min(total + 1, MIN_LOOPABLE));
+      const ok = acceptable(results, [], screen).filter((t) => Number(t.duration) >= Math.min(total + 1, MIN_LOOPABLE));
       const fresh = ok.filter((t) => !recent.has(trackId(t))).slice(0, FRESH_CANDIDATES);
       const again = ok.filter((t) => recent.has(trackId(t))).slice(0, REPEAT_CANDIDATES);
       for (const track of [...fresh, ...again]) {
@@ -830,7 +834,7 @@ export async function placeMusic(root, { search, download, measure } = {}) {
       }
       if (fresh.length) break;
     }
-    if (!candidates.length) return { ok: false, errors: [...errors, `no track passed for act ${k + 1} of a ${total}s reel in any style`], choice: null };
+    if (!candidates.length) return { ok: false, errors: [...errors, `no track passed for act ${k + 1} of a ${total}s reel in any style (${MUSIC_SCREEN_HINT})`], choice: null };
     acts.push({ candidates });
   }
   writeCache(cacheFile, cache);

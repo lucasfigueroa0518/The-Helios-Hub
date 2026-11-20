@@ -251,3 +251,28 @@ CREATE TABLE IF NOT EXISTS networking.publish_state (
     last_hook_at       timestamptz,
     last_hook_status   text
 );
+
+-- ── RSVP click tracking (Resource Tracker RT-2, 2026-11-19) ─────────────────
+-- The published feed's rsvpUrl points at /api/public/go/rsvp/<public id>, which
+-- counts the click and redirects. rsvp_links maps a public id to its real URL
+-- (written at publish, so the redirect is never an open redirect); rsvp_clicks
+-- holds one row per click. bot = a crawler or link preview, kept but not counted.
+
+CREATE TABLE IF NOT EXISTS networking.rsvp_links (
+    public_id   text PRIMARY KEY,
+    url         text NOT NULL,
+    title       text NOT NULL,
+    metro       text NOT NULL,
+    start_at    timestamptz NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS networking.rsvp_clicks (
+    id             bigserial PRIMARY KEY,
+    public_id      text NOT NULL,
+    clicked_at     timestamptz NOT NULL DEFAULT now(),
+    bot            boolean NOT NULL DEFAULT false,
+    referrer_host  text
+);
+CREATE INDEX IF NOT EXISTS idx_rsvp_clicks_time ON networking.rsvp_clicks (clicked_at) WHERE NOT bot;
+CREATE INDEX IF NOT EXISTS idx_rsvp_clicks_event ON networking.rsvp_clicks (public_id);
