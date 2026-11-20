@@ -211,8 +211,12 @@ export async function runIdeaCycle(deps: IdeaCycleDeps): Promise<IdeaCycleResult
   const waiting = dates.find((d) => d.status === 'skipped' && d.reason === 'retry_wait');
   if (waiting) return strip(waiting);
 
-  // Refill (D3): no date refilled tonight (paused, or nothing to make), so the refill runs on its own.
-  if (!st.refilled) {
+  // Refill (D3): no date refilled tonight (paused, or nothing to make), so the refill runs on its own. Not for a
+  // person's forced run: it keeps its old rules (the one-cycle-a-day index and the spend caps stop it, refill included).
+  // Nor when a date stopped on a spend cap or its own retry rules: the refill would bypass them (a failed refill retries
+  // with its date, under retry.ts).
+  const held = dates.some((d) => d.status === 'skipped' && ['daily_spend_cap', 'retry_exhausted', 'render_already_requested'].includes(d.reason));
+  if (!st.refilled && !deps.force && !held) {
     const refill = await runRefillOnly(deps, st, runDay);
     if (refill.status === 'failed') return refill;
     return { ...refill, reason: gate.makes ? 'nothing_to_make' : 'paused', ...(dates.length ? { dates } : {}) };
@@ -417,8 +421,8 @@ async function runRefillOnly(
   const { db } = deps;
   st.refilled = true;
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('skipped', $1, $2::date) RETURNING id`,
-    [st.settings.mode, runDay],
+    `INSERT INTO explainers.idea_cycles (status, mode, ny_date, started_at) VALUES ('skipped', $1, $2::date, $3) RETURNING id`,
+    [st.settings.mode, runDay, (deps.now ?? new Date()).toISOString()],
   );
   const cycleId = rows[0]!.id;
   try {
@@ -469,11 +473,11 @@ async function runCycleFor(deps: IdeaCycleDeps, st: RunState, day: string, lead:
   if (!gate.run) return { status: 'skipped', reason: gate.reason };
 
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO explainers.idea_cycles (status, mode, ny_date)
-     VALUES ('running', $1, $2::date)
+    `INSERT INTO explainers.idea_cycles (status, mode, ny_date, started_at)
+     VALUES ('running', $1, $2::date, $3)
      ON CONFLICT DO NOTHING
      RETURNING id`,
-    [settings.mode, day],
+    [settings.mode, day, (deps.now ?? new Date()).toISOString()],
   );
   const cycleId = rows[0]?.id;
   if (!cycleId) return { status: 'skipped', reason: 'already_ran_today' };
