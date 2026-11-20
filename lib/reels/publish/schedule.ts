@@ -1,6 +1,7 @@
 import { dbQuery } from '@/lib/db';
 import { queuePublish, publishReadiness, type PublishTrigger } from '@/lib/reels/music/publish';
 import { postsToInstagram, stateOf } from '@/lib/content-type/state';
+import { UNSLOT_REASONS } from '@/lib/content-type/unslot';
 import { getSetting } from '@/lib/reels/music/store';
 import { calendarDateKey } from '@/lib/reels/schedule';
 import { REEL_SCHEDULE } from '@/lib/reels/spine-tables';
@@ -332,6 +333,20 @@ export async function scheduleVideo(videoJobId: string, now = new Date()): Promi
  * books only that day, Bald-Eagle D4). A later reel is not scheduled once the
  * day has no window left. Does nothing while publishing is not live.
  */
+/**
+ * unslottedSql (lib/content-type/unslot.ts) at the idea level: Text on Screen books by post idea, and its slots carry
+ * the idea (idea_ref) with or without a video's content item. True when one of the idea's slots went back to Made
+ * (reason paused / slot-passed) and none is waiting, posting or posted. `ideaId` is the SQL expression for the idea id.
+ */
+export function reelIdeaUnslottedSql(ideaId: string): string {
+  const reasons = UNSLOT_REASONS.map((r) => `'${r}'`).join(', ');
+  const ofIdea = (a: string) =>
+    `${a}.vertical = 'reels' AND (${a}.idea_ref = (${ideaId})::text
+       OR ${a}.content_item_id IN (SELECT ci.id FROM social_hub.content_items ci WHERE ci.vertical = 'reels' AND ci.idea_ref = (${ideaId})::text))`;
+  return `(EXISTS (SELECT 1 FROM social_hub.schedule u WHERE ${ofIdea('u')} AND u.status = 'cancelled' AND u.error IN (${reasons}))
+    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule w WHERE ${ofIdea('w')} AND w.status IN ('scheduled', 'publishing', 'published')))`;
+}
+
 export async function scheduleSelectedSlate(slateId: string, now = new Date()): Promise<{ scheduled: number }> {
   if (!(await publishingLive())) return { scheduled: 0 };
   const { rows } = await dbQuery<{ post_idea_id: string; ny_date: string }>(
@@ -344,6 +359,8 @@ export async function scheduleSelectedSlate(slateId: string, now = new Date()): 
           SELECT 1 FROM reels.published_status p
            WHERE p.post_idea_id = s.post_idea_id AND p.published
         )
+        -- Back in Made (D17, D18): an idea unslotted by Pause or a passed slot stays approved, never re-slotted here.
+        AND NOT ${reelIdeaUnslottedSql('s.post_idea_id')}
       ORDER BY s.rank NULLS LAST`,
     [slateId],
   );

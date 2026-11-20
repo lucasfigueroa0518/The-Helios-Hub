@@ -1,5 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { postsToInstagram, stateOf } from '@/lib/content-type/state';
+import { unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -196,7 +197,9 @@ SELECT j.id, j.pitch_id, f.created_at AS reviewed_at, j.finished_at
    AND NOT EXISTS (SELECT 1 FROM reel_ai_drama.jobs n WHERE n.pitch_id = j.pitch_id AND n.status = 'ok' AND n.seq > j.seq)
    AND (SELECT a.storage_location FROM reel_ai_drama.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' ORDER BY a.seq DESC LIMIT 1) = 'bucket'
    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
-   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))`;
+   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
+   -- Back in Made (D17, D18): a reel unslotted by Pause or a passed slot stays approved but is never re-slotted here.
+   AND NOT ${unslottedSql('ci.id')}`;
 
 /**
  * Approved (or, with approval off, unreviewed), unbooked reels with their video in Storage: booked, oldest approval

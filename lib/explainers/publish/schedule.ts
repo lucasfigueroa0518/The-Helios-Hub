@@ -1,5 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { postsToInstagram, stateOf } from '@/lib/content-type/state';
+import { unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -187,7 +188,9 @@ SELECT j.id, j.topic_id, f.created_at AS reviewed_at, j.finished_at
    AND f.verdict IS DISTINCT FROM 'rejected'
    AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
-   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))`;
+   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
+   -- Back in Made (D17, D18): a render unslotted by Pause or a passed slot stays approved but is never re-slotted here.
+   AND NOT ${unslottedSql('ci.id')}`;
 
 /**
  * Finished, unposted, unscheduled renders with their video in Storage: the

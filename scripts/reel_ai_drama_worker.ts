@@ -62,8 +62,9 @@ async function main(): Promise<void> {
   console.log(
     `Estimate: ${queued} queued job(s), each up to $${settings.per_reel_cap_usd.toFixed(2)} (≤ $${(queued * settings.per_reel_cap_usd).toFixed(2)} now). ` +
       (settings.auto
-        ? `Generate is on: up to ${settings.daily_render_cap} job(s) a day (≤ $${settings.daily_spend_cap_usd.toFixed(2)} a day) and one development session a week (≤ $${settings.weekly_dev_cap_usd.toFixed(2)}).`
-        : 'Generate is off: only queued jobs and clicks run.'),
+        ? `Generate is on: up to ${settings.daily_render_cap} job(s) a day (≤ $${settings.daily_spend_cap_usd.toFixed(2)} a day).`
+        : 'Paused: no night fill; only queued jobs and clicks make reels.') +
+      ' The pool refills in every state: one development session a week, on its refill cap (pool_refill_cap_usd).',
   );
   if (!process.argv.includes('--yes')) {
     console.log('Not run. Pass --yes to start the worker.');
