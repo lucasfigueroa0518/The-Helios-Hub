@@ -13,6 +13,12 @@ import { IDS, seedHubFixture } from './fixtures/social-hub/seed';
 async function db() {
   const { pg, query } = await openHubTestDb();
   await seedHubFixture(pg);
+  // Carousels and Explainers Live (D16): Hard publish posts only then (each core function refuses otherwise).
+  await pg.exec(`
+    INSERT INTO social.settings (key, value) VALUES ('auto_run', 'true'::jsonb), ('publishing_live', 'true'::jsonb)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    INSERT INTO explainers.settings (key, value) VALUES ('auto_render', 'true'::jsonb), ('publishing_live', 'true'::jsonb)
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`);
   const q = (text: string, params?: unknown[]) => query(text, params) as Promise<{ rows: any[] }>;
   const run = <T,>(text: string, params?: unknown[]) => query<T>(text, params);
   const explainers = {
@@ -58,6 +64,11 @@ test('carousel hard publish: the waiting slot is approved and closed with the re
 
 test('explainer hard publish: an unreviewed render is recorded approved; a rejected one is refused', async () => {
   const { pg, explainers } = await db();
+  // Not Live (Approval here): refused before anything is recorded (D16).
+  await pg.exec(`UPDATE explainers.settings SET value = 'false'::jsonb WHERE key = 'publishing_live'`);
+  assert.equal((await hardPublishJob(explainers as never, IDS.job2, 'tommy@helios.test')).queued, false);
+  assert.equal((await pg.query(`SELECT 1 FROM explainers.feedback WHERE job_id = '${IDS.job2}'`)).rows.length, 0, 'nothing recorded unless Live');
+  await pg.exec(`UPDATE explainers.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
   const out = await hardPublishJob(explainers as never, IDS.job2, 'tommy@helios.test');
   const fb = (await pg.query<{ verdict: string; note: string; created_by: string }>(`SELECT verdict, note, created_by FROM explainers.feedback WHERE job_id = '${IDS.job2}'`)).rows[0]!;
   assert.deepEqual([fb.verdict, fb.created_by], ['approved', 'tommy@helios.test']);
