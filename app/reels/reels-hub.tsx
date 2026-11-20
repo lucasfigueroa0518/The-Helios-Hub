@@ -17,7 +17,7 @@ import {
 
 import { BackToHub } from '@/components/content-type/BackToHub';
 import type { PoolPageData } from '@/components/content-type/pool/pool-data';
-import { PostingSettings, SettingsButton } from '@/components/content-type/TypeControls';
+import { SettingsTab } from '@/components/content-type/pool/SettingsTab';
 import { TypeHub } from '@/components/content-type/TypeHub';
 import { ReelVideo, Section } from '@/app/reels/ui';
 import { requestJson } from '@/lib/client-request';
@@ -320,9 +320,9 @@ function reelIndex(views: readonly DayView[]): Map<string, { reel: Reel; slateId
 const postIdeaIdOf = (id: string) => id.replace(/^reels:idea:/, '');
 
 /**
- * Text on Screen's page: the shared type page (TypeHub and its pool screen) over the hub's model of the reels pool,
- * with this page's own header (Show reels, Review link, Settings, Live) and its reel controls (Generate Reel, the song
- * pick, Schedule, Force post) inside the pool screen's idea and post panels. The reels overview is still read and
+ * Text on Screen's page: the shared type page (TypeHub and its pool screen, Settings tab included: D8, D9) over the
+ * hub's model of the reels pool, with this page's own header (Show reels, Review link) and its reel controls
+ * (Generate Reel, the song pick, Schedule, Force post) inside the pool screen's idea and post panels. The reels overview is still read and
  * polled here for those controls.
  */
 export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = null }: {
@@ -337,7 +337,6 @@ export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = nul
   const [data, setData] = useState<ReelsOverview>(initial);
   const [message, setMessage] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [confirmLive, setConfirmLive] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -387,14 +386,6 @@ export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = nul
     const timer = setTimeout(() => setMessage(null), 6_000);
     return () => clearTimeout(timer);
   }, [message]);
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setConfirmLive(false);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   async function generate(postIdeaId: string, slateId: string) {
     try {
@@ -457,27 +448,6 @@ export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = nul
     }
   }
 
-  async function setLive(value: boolean) {
-    try {
-      const result = await requestJson<{ publishingLive: boolean; scheduled?: number }>('/api/reels/settings', {
-        method: 'POST',
-        body: JSON.stringify({ publishing_live: value }),
-      });
-      const placed = result.scheduled ?? 0;
-      setMessage(
-        value
-          ? placed > 0
-            ? `Live is on. ${placed} of today's reels are on the clock.`
-            : "Live is on. Tonight's selected reels will be scheduled into the day's slots."
-          : 'Live is off. Reels already on the clock still post.',
-      );
-      await refresh();
-      void refreshHubPage(router);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : String(error));
-    }
-  }
-
   /** The reel's own controls and sections for a pool idea or a made post (nothing when the overview has no such reel). */
   const reelControls = (postIdeaId: string | null | undefined) => {
     const hit = postIdeaId ? reels.get(postIdeaIdOf(postIdeaId)) : undefined;
@@ -535,22 +505,6 @@ export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = nul
           </button>
         ) : null}
       </div>
-      <SettingsButton>
-        <PostingSettings type="reels" />
-      </SettingsButton>
-      <button
-        type="button"
-        className={`rh-live${data.music.publishingLive ? ' is-on' : ''}`}
-        aria-pressed={data.music.publishingLive}
-        title="When Live is on, each night's selected reels are scheduled into the day's posting slots and posted as trial reels."
-        onClick={() => {
-          if (data.music.publishingLive) void setLive(false);
-          else setConfirmLive(true);
-        }}
-      >
-        <span className="rh-live__lamp" aria-hidden="true" />
-        Live
-      </button>
     </>
   );
 
@@ -565,6 +519,7 @@ export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = nul
           fullPostBase="/social"
           ideaExtras={(idea) => reelControls(idea.id)}
           postExtras={(post) => reelControls(post.idea?.id)}
+          settings={<SettingsTab type="reels" lastRefill={pool?.lastRefill ?? null} nowIso={pool?.nowIso} />}
         />
       ) : (
         <div className="rh">
@@ -577,40 +532,8 @@ export function ReelsHub({ initial, reviewPath = '', model, pool, hubError = nul
               <div className="rh__head-actions">{headerActions}</div>
             </header>
             <p className="rh-empty">Could not load the pool: {hubError ?? 'the hub read failed.'}</p>
-          </div>
-        </div>
-      )}
-
-      {confirmLive && (
-        <div className="rh rh--scope">
-          <div className="rh-confirm" role="presentation" onClick={() => setConfirmLive(false)}>
-            <div
-              className="rh-confirm__card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="rh-live-title"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <h2 id="rh-live-title">Go live?</h2>
-              <p>
-                Today&apos;s selected reels will be scheduled into the windows still open and posted to Instagram. The rest of the pool stays off the clock.
-              </p>
-              <div className="rh-confirm__actions">
-                <button type="button" className="rh-btn" onClick={() => setConfirmLive(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="rh-btn rh-btn--primary"
-                  onClick={() => {
-                    setConfirmLive(false);
-                    void setLive(true);
-                  }}
-                >
-                  Go live
-                </button>
-              </div>
-            </div>
+            {/* Settings don't need the hub read, so they stay reachable when it fails. */}
+            <div className="pl"><SettingsTab type="reels" lastRefill={null} /></div>
           </div>
         </div>
       )}

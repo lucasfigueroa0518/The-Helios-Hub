@@ -4,6 +4,7 @@ import type { HubDataset } from '@/lib/social-hub/dataset';
 import { addDays, nyDateOf } from '@/lib/social-hub/time';
 import type { Vertical } from '@/lib/social-hub/types';
 import { offerer } from '@/lib/social-hub/views/offer';
+import { poolSummary } from '@/lib/social-hub/views/pools';
 import { thumbOf } from '@/components/social-hub/ui/Thumb';
 
 /**
@@ -19,6 +20,8 @@ export type PoolPageData = {
   nowIso: string;
   /** About what one more post of this type costs (posting.ts costPerPost); null when unknown. */
   costPerPostMicros: number | null;
+  /** When the pool last gained an idea (poolSummary, as the Content page's pool panel reads it), for the Settings tab; null when unknown. */
+  lastRefill?: string | null;
 };
 
 /** How far back the board's ‹ steps (days before today). The Made tab reaches back 30 days by when a post was made. */
@@ -46,5 +49,6 @@ export function poolPageData(dataset: HubDataset, vertical: Vertical, now: Date,
     cards,
     nowIso: now.toISOString(),
     costPerPostMicros,
+    lastRefill: poolSummary(dataset.ideas, vertical).lastRefill,
   };
 }
