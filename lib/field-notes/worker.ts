@@ -12,6 +12,7 @@
  * every state, as before.
  */
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
+import { beginRefill, settleRefill } from '@/lib/content-type/refill-total';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { logRefillCapped, readTypeGate } from '@/lib/social/refill';
 
@@ -66,26 +67,39 @@ export async function carryOutFieldNotesRun(w: CarryOutDeps, claimed: ClaimedRun
       await finish({ status: 'skipped', stopReason: `rebuild-unsupported: ${note}`, claudeUsd: 0, jevUsd: 0, record: { kind: claimed.kind } });
       return { runId: claimed.id, status: 'skipped', note };
     }
-    await adoptRun(w.query, claimed.id, { capUsd: cap, nyDate });
+    // The nightly total of all refills (D19), for the clock's runs only (a person's Generate is not held to it): the
+    // refill cap is cut to what is left of it. No room: a refill-only run is skipped; a make run makes without refilling.
+    const scheduled = claimed.trigger === 'scheduled';
+    const grant = scheduled ? await beginRefill(w.query, 'field_notes', gate.refillCapUsd, { ref: `run:${claimed.id}`, log: w.log, now }) : null;
+    if (scheduled && !grant && refillOnly) {
+      const note = "Tonight's refill total is used up; the tip pool refills next time.";
+      await finish({ status: 'skipped', stopReason: `refill-total-capped: ${note}`, claudeUsd: 0, jevUsd: 0, record: {} });
+      return { runId: claimed.id, status: 'skipped', note };
+    }
+    const refillCap = grant ? grant.capUsd : gate.refillCapUsd;
+    const runCap = refillOnly ? refillCap : cap;
+    await adoptRun(w.query, claimed.id, { capUsd: runCap, nyDate });
 
-    w.log('field_notes_run_started', { runId: claimed.id, trigger: claimed.trigger, seedTipId: claimed.seedTipId, capUsd: cap, refillCapUsd: gate.refillCapUsd, ...(refillOnly ? { refillOnly: true } : {}) });
-    const deps = await w.engine(claimed, cap);
+    w.log('field_notes_run_started', { runId: claimed.id, trigger: claimed.trigger, seedTipId: claimed.seedTipId, capUsd: runCap, refillCapUsd: refillCap, ...(refillOnly ? { refillOnly: true } : {}) });
+    const deps = await w.engine(claimed, runCap);
     const res = await (w.run ?? runFieldNotes)(
       { ...deps, now },
       {
         runId: claimed.id,
         kind: claimed.kind,
         seedTipId: claimed.seedTipId,
-        capUsd: cap,
-        refillCapUsd: gate.refillCapUsd,
+        capUsd: runCap,
+        refillCapUsd: refillCap,
         ...(refillOnly ? { refillOnly: true } : {}),
+        ...(scheduled && !grant ? { skipRefill: true } : {}),
         nyDate,
         settings: { photoRestPosts: settings.photoRestPosts, maxPendingDrafts: settings.maxPendingDrafts, tipExpiryDays: settings.tipExpiryDays, darkenCap: settings.darkenCap },
       },
     );
 
     const refill = (res.record as { refill?: { capped?: boolean; spentUsd?: number } }).refill;
-    if (refill?.capped) logRefillCapped(w.log, 'field_notes', { capUsd: gate.refillCapUsd, spentUsd: refill.spentUsd, step: 'tip-scoring', runId: claimed.id });
+    await settleRefill(w.query, grant, refill?.spentUsd ?? 0, w.log);
+    if (refill?.capped) logRefillCapped(w.log, 'field_notes', { capUsd: refillCap, spentUsd: refill.spentUsd, step: 'tip-scoring', runId: claimed.id });
 
     if (!res.ok) {
       await finish({ status: 'failed', stopReason: res.stopReason, error: res.error, claudeUsd: res.claudeUsd, jevUsd: res.jevUsd, record: res.record });

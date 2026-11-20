@@ -12,7 +12,7 @@ import { openHubTestDb } from './fixtures/social-hub/pglite';
 
 const NOW = new Date('2026-10-13T11:31:00Z');
 const posting = async (v: string): Promise<PostingState> =>
-  ({ type: v, live: true, generate: true, autoPublish: false, perDay: v === 'stories' ? null : 1, maxPerDay: 3, series: null }) as PostingState;
+  ({ type: v, state: 'live', stateMismatch: false, refillCapUsd: 1, scheduledAhead: 0, live: true, generate: true, perDay: v === 'stories' ? null : 1, maxPerDay: 3, series: null }) as PostingState;
 
 test('a reporter that throws does not break the night: that type reads as unknown', async () => {
   const { query } = await openHubTestDb();

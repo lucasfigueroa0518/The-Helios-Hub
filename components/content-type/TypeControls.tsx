@@ -38,7 +38,7 @@ export function CarouselRunButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   async function run() {
-    if (!confirm('Run carousels now? It makes the top story in today’s queue, with live model and web calls, up to the run cap set in Settings (about $2 by default).')) return;
+    if (!confirm('Run carousels now? It makes the top story in today’s queue, with live model and web calls, up to this type’s run cap (about $2 by default).')) return;
     setBusy(true);
     try {
       const out = await call<{ queued: boolean; note?: string }>('/api/carousels/run', {});
@@ -66,7 +66,7 @@ export function LfdRunButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   async function run() {
-    if (!confirm('Make Last Few Days now? It picks 5–6 stories, writes and fact-checks them and finds photos, with live model and web calls, up to the run cap in Settings ($1 by default). The post waits for your approval.')) return;
+    if (!confirm('Make Last Few Days now? It picks 5–6 stories, writes and fact-checks them and finds photos, with live model and web calls, up to this type’s run cap ($1 by default). The post waits for your approval.')) return;
     setBusy(true);
     try {
       const out = await call<{ queued: boolean; note?: string }>('/api/last-few-days/run', {});
@@ -95,7 +95,7 @@ export function AiEventsRunButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   async function run() {
-    if (!confirm('Generate this week’s AI Events post? It ranks the coming week’s events in Miami, Boston, NYC and SF with live Jev calls (about $0.02; capped by the run cap in Settings, $0.50 by default) and renders the carousel. No Claude calls. The post waits for your approval.')) return;
+    if (!confirm('Generate this week’s AI Events post? It ranks the coming week’s events in Miami, Boston, NYC and SF with live Jev calls (about $0.02; capped by this type’s run cap, $0.50 by default) and renders the carousel. No Claude calls. The post waits for your approval.')) return;
     setBusy(true);
     try {
       const out = await call<{ queued: boolean; note?: string }>('/api/ai-events/run', {});

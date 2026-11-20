@@ -1,3 +1,4 @@
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { STORY_VERTICALS, type StoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -10,6 +11,9 @@ import { aiEventsActions } from './ai-events';
 import { fieldNotesActions } from './field-notes';
 import { reelAiDramaActions } from './reel-ai-drama';
 import type { ContentActions } from './types';
+
+/** Whether a type's stored pair is the Live state (settings standard D16): posts go to Instagram only then. */
+const isLive = (s: { autoRun: boolean; publishingLive: boolean }): boolean => postsToInstagram(stateOf(s.autoRun, s.publishingLive).state);
 
 /** Every type's actions with their live functions (the hub's action routes use this). */
 export async function liveContentActions(): Promise<Record<Vertical, ContentActions>> {
@@ -112,6 +116,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       schedulePostIdea: reels.schedulePostIdea as never,
       rejectReel: reels.rejectReel,
       forcePost: reels.forcePost,
+      publishingLive: () => reels.publishingLive(),
       unscheduleIdea: reels.unscheduleIdea,
       query: reelItems.reelsSpine,
       itemId: reelItems.reelItemId,
@@ -141,7 +146,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       approvePost: (q, postId) => lfdSchedule.approveLfdPost(q, postId),
       rejectPost: lfdSchedule.rejectLfdPost,
       hardPublishPost: lfdSchedule.hardPublishLfdPost,
-      publishingLive: async (q) => (await lfdSettings.readLfdSettings(q)).publishingLive,
+      // Live only (D16): Generate (auto_run) and publishing_live both on; Generate off with Live on reads as paused.
+      publishingLive: async (q) => isLive(await lfdSettings.readLfdSettings(q)),
       unschedulePost: lfdSchedule.unscheduleLfdPost,
       itemId: lfdItems.lfdItemId,
       placeItem: placement.placeItem,
@@ -152,7 +158,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       approvePost: (q, postId) => aiSchedule.approveAiEventsPost(q, postId),
       rejectPost: aiSchedule.rejectAiEventsPost,
       hardPublishPost: aiSchedule.hardPublishAiEventsPost,
-      publishingLive: async (q) => (await aiSettings.readAiEventsSettings(q)).publishingLive,
+      // Live only (D16): Generate (auto_run) and publishing_live both on; Generate off with Live on reads as paused.
+      publishingLive: async (q) => isLive(await aiSettings.readAiEventsSettings(q)),
       unschedulePost: aiSchedule.unscheduleAiEventsPost,
       queueRebuild: (q, o) => aiManual.queueAiEventsRun(q, { kind: 'rebuild', requestedBy: o.requestedBy, weekKey: o.weekKey }),
       itemId: aiItems.aiEventsItemId,
@@ -164,7 +171,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       approvePost: (q, postId) => fnSchedule.approveFieldNotesPost(q, postId),
       rejectPost: fnSchedule.rejectFieldNotesPost,
       hardPublishPost: fnSchedule.hardPublishFieldNotesPost,
-      publishingLive: async (q) => (await fnSettings.readFieldNotesSettings(q)).publishingLive,
+      // Live only (D16): Generate (auto_run) and publishing_live both on; Generate off with Live on reads as paused.
+      publishingLive: async (q) => isLive(await fnSettings.readFieldNotesSettings(q)),
       unschedulePost: fnSchedule.unscheduleFieldNotesPost,
       queueRebuild: (q, o) => fnManual.queueFieldNotesRun(q, { kind: 'rebuild', requestedBy: o.requestedBy }),
       itemId: fnItems.fieldNotesItemId,

@@ -56,19 +56,33 @@ export const holdsSlots = (state: TypeState): boolean => state !== 'paused';
 /** The reason written on a slot taken back to the Made tab (D17). */
 export type UnslotReason = 'paused' | 'slot-passed';
 
-/** Default spend cap of one refill, in USD (D14): Jev-only refills $0.25, refills that call Claude $0.50. */
+/**
+ * Default spend cap of one refill, in USD (D19, replacing D14): each type's run budget from before the split, so
+ * no pool refills slower than it did. Text on Screen's web-search refill averaged ~$0.67 (max $1.36) over 30 days;
+ * AI Drama's refill is its weekly development session (its old weekly_dev_cap_usd). All refills together are also
+ * held to the nightly total (lib/content-type/refill-total.ts).
+ */
 export const REFILL_CAP_DEFAULT_USD: Record<Vertical, number> = {
-  reels: 0.25,
-  carousels: 0.25,
-  last_few_days: 0.25,
-  ai_events: 0.25,
-  stories: 0.25,
-  ai_trivia: 0.25,
-  real_or_ai: 0.25,
-  explainers: 0.5,
-  reel_ai_drama: 0.5,
+  reels: 1.5,
+  carousels: 2,
+  last_few_days: 1,
+  ai_events: 0.5,
+  stories: 2,
+  ai_trivia: 2,
+  real_or_ai: 2,
+  explainers: 1,
+  reel_ai_drama: 3,
   field_notes: 0.5,
 };
+
+/** Default total of all refills in one New York night, in USD (D19). Stored in social_hub.settings `refill_total_cap_usd`. */
+export const REFILL_TOTAL_DEFAULT_USD = 5;
+
+/** A stored nightly total, or the default when missing or not a positive number. */
+export function refillTotalUsd(stored: unknown): number {
+  const n = typeof stored === 'string' ? Number(stored) : stored;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : REFILL_TOTAL_DEFAULT_USD;
+}
 
 /** A stored refill cap, or the type's default when missing or not a positive number. */
 export function refillCapUsd(type: Vertical, stored: unknown): number {

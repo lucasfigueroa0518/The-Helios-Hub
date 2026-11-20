@@ -36,6 +36,8 @@ import {
 import { errorText } from '@/lib/reels/pipeline/guard';
 import { readReelsNightGate, type ReelsNightGate } from '@/lib/reels/pipeline/night-gate';
 import { CappedJevRunner, RefillBudget, isRefillCapped, withoutCapped } from '@/lib/reels/refill-budget';
+import { beginRefill, settleRefill, type RefillGrant, type TotalQuery } from '@/lib/content-type/refill-total';
+import { dbQuery } from '@/lib/db';
 import { loadSourceActivity, quietSources, quietSourcesNote } from '@/lib/reels/pipeline/source-health';
 import type { Adapter, AdapterItem, RunStats, RunStatus, RunTrigger, SourceResult } from '@/lib/reels/types';
 
@@ -57,6 +59,8 @@ export type RunDeps = IngestDeps & {
   gate?: ReelsNightGate;
   /** What the run has spent so far (the refill cap's ledger); runCostUsd(run.id) when absent. */
   runSpend?: () => Promise<number>;
+  /** The nightly refill total's ledger (D19); the main database when absent. */
+  totalQuery?: TotalQuery;
 };
 
 function log(message: string, fields: Record<string, unknown> = {}): void {
@@ -126,9 +130,23 @@ export async function executeRun(run: RunRow, deps?: Partial<RunDeps>): Promise<
   const gate = deps?.gate ?? (await readReelsNightGate(run.trigger));
   if (gate.mismatch) log('state_mismatch', { vertical: 'reels', runId: run.id, state: gate.state });
   const makeJev: JevRunner = deps?.jev ?? createLiveJevRunner();
-  const budget = new RefillBudget(gate.refillCapUsd, deps?.runSpend ?? (() => runCostUsd(run.id)), (fields) =>
+  // The nightly total of all refills (D19): a scheduled refill's cap is cut to what is left of it; nothing left caps
+  // the refill at $0 (the make step still runs from the pool as it is). A person's Run now (no cap) is not held to it.
+  const totalQuery: TotalQuery = deps?.totalQuery ?? ((t, p) => dbQuery(t, p as unknown[]) as Promise<{ rows: any[] }>);
+  const grant: RefillGrant | null =
+    gate.refillCapUsd == null ? null : await beginRefill(totalQuery, 'reels', gate.refillCapUsd, { ref: `run:${run.id}`, log });
+  const refillCap = gate.refillCapUsd == null ? null : (grant?.capUsd ?? 0);
+  const budget = new RefillBudget(refillCap, deps?.runSpend ?? (() => runCostUsd(run.id)), (fields) =>
     log('refill_capped', { vertical: 'reels', runId: run.id, ...fields }),
   );
+  try {
+    return await executeNight(run, deps, gate, makeJev, budget);
+  } finally {
+    await settleRefill(totalQuery, grant, await budget.spentUsd().catch(() => grant?.capUsd ?? 0), log);
+  }
+}
+
+async function executeNight(run: RunRow, deps: Partial<RunDeps> | undefined, gate: ReelsNightGate, makeJev: JevRunner, budget: RefillBudget): Promise<RunOutcome> {
   const jev: JevRunner = new CappedJevRunner(makeJev, budget);
   const ingestDeps: IngestDeps = { jev, fetchPage: deps?.fetchPage };
   const primary = deps?.adapters?.primary ?? primaryAdapters();

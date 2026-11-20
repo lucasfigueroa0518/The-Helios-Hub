@@ -77,6 +77,7 @@ import { createBankReader } from '@/lib/media-library/reader';
 import type { IntakeJevHandle } from '@/lib/intake/jev';
 import { logRefillCapped, readStoriesRefillCap, typeGate, type RefillLog, type TypeGate } from '@/lib/social/refill';
 import type { RefillBudget } from '@/lib/stories/trivia/daily';
+import { beginRefill, peekRefill, recordRefill, settleRefill, type RefillGrant } from '@/lib/content-type/refill-total';
 import { returnPassedSets, unslottedSetIds } from '@/lib/stories/unslot';
 
 /** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md, night schedule v2). */
@@ -134,13 +135,16 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
   if (nyClock(now) >= AUTO_REQUEST_AFTER) {
     try {
       // The pool refresh is Morning Download's refill: its one paid step (the intake's posted check) is held to the refill cap.
-      const capUsd = await readStoriesRefillCap(storiesQuery(deps), 'stories');
+      // The nightly total of all refills (D19): the cap is cut to what is left of it (no room: $0, the paid check is skipped).
+      const ownCap = await readStoriesRefillCap(storiesQuery(deps), 'stories');
+      const capUsd = (await peekRefill(sharedQuery(deps), 'stories', ownCap, { log: event, now })) ?? 0;
       let poolJev: IntakeJev | null = null;
       const jev = deps.intake?.jev ? () => (poolJev = deps.intake!.jev!(capUsd)) : undefined;
       const reads = deps.poolReads ?? ((at) => storiesPoolReads(deps.sourceDb, at, { readMode: deps.intake?.readMode, intake: { jev } }));
       const r = await refreshPoolIfDue(deps.db, () => reads(now), now);
       if (r) log(`pool: refreshed (${r.upserted} in, ${r.dropped} dropped${r.errors.length ? `; ${r.errors.join('; ')}` : ''}${r.intake ? `; sources ${JSON.stringify(r.intake)}` : ''})`);
       const handle = poolJev as Partial<IntakeJevHandle> | null;
+      if (poolJev) await recordRefill(sharedQuery(deps), 'stories', (poolJev as IntakeJev).usd ?? 0, { ref: 'pool-refresh', log: event, now });
       if (handle?.capHit) logRefillCapped(event, 'stories', { capUsd, spentUsd: (poolJev as IntakeJev | null)?.usd, step: 'pool-refresh' });
     } catch (err) {
       log(`pool: refresh failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -293,11 +297,17 @@ async function triviaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now
       return;
     }
     const refill = await refillBudget(deps, 'ai_trivia', now);
+    if (!refill) return; // tonight's refill total is used up (logged once); tomorrow's pool day tries again
     const run = deps.triviaDaily ?? (async (at: Date, s: StoriesSettings, r?: RefillBudget) => {
       const b = await deps.builder();
       return runTriviaDaily({ db: b.db, write: b.write, jev: createStoriesJev(b.jevTransport, b.db), settings: s, now: at, ...(r ? { refill: r } : {}) });
     });
-    const result = await run(now, settings, refill);
+    let result: unknown;
+    try {
+      result = await run(now, settings, refill);
+    } finally {
+      await refill.settle();
+    }
     log(`trivia: daily writer ${JSON.stringify(result ?? null).slice(0, 300)}`);
     if ((result as { capped?: boolean } | null)?.capped) logRefillCapped(eventLog(log), 'ai_trivia', { capUsd: refill.capUsd, spentUsd: await refill.spent(), step: 'daily-writer' });
   } catch (err) {
@@ -355,6 +365,7 @@ async function roaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: D
       return;
     }
     const refill = await refillBudget(deps, 'real_or_ai', now);
+    if (!refill) return; // tonight's refill total is used up (logged once); tomorrow's pool day tries again
     const run = deps.roaDaily ?? (async (at: Date, s: StoriesSettings, r?: RefillBudget) => {
       const b = await deps.builder();
       // Real photos: the photo bank in the shared database first (read only; off while its switch is off), then
@@ -363,7 +374,12 @@ async function roaDailyIfDue(deps: WorkerDeps, settings: StoriesSettings, now: D
       // The photo_finders switch, the used-photo ledger and the bank live in the shared database (SS-28).
       return runRoaDaily({ db: b.db, sourceDb: b.sourceDb, write: b.write, storage: b.storage, bank, settings: s, now: at, ...(r ? { refill: r } : {}) });
     });
-    const result = await run(now, settings, refill);
+    let result: unknown;
+    try {
+      result = await run(now, settings, refill);
+    } finally {
+      await refill.settle();
+    }
     log(`roa: daily candidates ${JSON.stringify(result ?? null).slice(0, 300)}`);
     if ((result as { capped?: boolean } | null)?.capped) logRefillCapped(eventLog(log), 'real_or_ai', { capUsd: refill.capUsd, spentUsd: await refill.spent(), step: 'daily-candidates' });
   } catch (err) {
@@ -391,12 +407,33 @@ const storiesQuery = (deps: WorkerDeps) => (text: string, params?: unknown[]) =>
  * A daily refill's budget (D14): its type's refill cap against what the type spent since the run began (the
  * cost events of the New York day; the worker runs one thing at a time, so the difference is this run's).
  */
-async function refillBudget(deps: WorkerDeps, vertical: StoryVertical, now: Date): Promise<RefillBudget & { spent: () => Promise<number> }> {
-  const capUsd = await readStoriesRefillCap(storiesQuery(deps), vertical);
+async function refillBudget(
+  deps: WorkerDeps,
+  vertical: StoryVertical,
+  now: Date,
+): Promise<(RefillBudget & { spent: () => Promise<number>; settle: () => Promise<void> }) | null> {
+  const ownCap = await readStoriesRefillCap(storiesQuery(deps), vertical);
+  // The nightly total of all refills (D19): the cap is cut to what is left of it; no room skips tonight's refill.
+  // Asked once per pool day per type, so the 15-second poll doesn't repeat it.
+  const key = `${vertical}:${poolDay(now)}`;
+  if (totalCapped.has(key)) return null;
+  const grant: RefillGrant | null = await beginRefill(sharedQuery(deps), vertical, ownCap, { ref: `daily:${poolDay(now)}`, log: eventLog(deps.log ?? (() => {})), now });
+  if (!grant) {
+    totalCapped.add(key);
+    return null;
+  }
+  const capUsd = grant.capUsd;
   const base = await typeDaySpendUsd(deps.db, vertical, now);
   const spent = async () => Math.max(0, (await typeDaySpendUsd(deps.db, vertical, now)) - base);
-  return { capUsd, spent, canSpend: async () => (await spent()) < capUsd };
+  const settle = async () => settleRefill(sharedQuery(deps), grant, await spent().catch(() => capUsd), eventLog(deps.log ?? (() => {})));
+  return { capUsd, spent, settle, canSpend: async () => (await spent()) < capUsd };
 }
+
+/** Types whose refill found tonight's total used up (key `<type>:<pool day>`). */
+const totalCapped = new Set<string>();
+
+/** The shared database, where social_hub.refill_spend lives (the nightly refill total, D19). */
+const sharedQuery = (deps: WorkerDeps) => (text: string, params?: unknown[]) => deps.sourceDb.query(text, params) as Promise<{ rows: any[] }>;
 
 const logged = new Set<string>();
 const once = (key: string, f: () => void) => {

@@ -23,6 +23,7 @@ import { FOLLOW_HAND_TEXT } from '@/lib/field-notes/render/layout';
 import { runFieldNotes } from '@/lib/field-notes/run';
 import { approveFieldNotesPost, hardPublishFieldNotesPost, rejectFieldNotesPost } from '@/lib/field-notes/schedule';
 import { parseFieldNotesSettings, readFieldNotesSettings } from '@/lib/field-notes/settings';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { claimRun, expireOldTips, getPost, getTip, insertPost, listSelectableTips, nextPostSeq, pendingDraftCount, recentPostWants, requestRun, saveCandidateTip, saveSeededLink, scheduledRunToday, setTipContent, fieldNotesFilledDates } from '@/lib/field-notes/store';
 import type { TipTags } from '@/lib/field-notes/sources/score';
 import { tipToCandidate } from '@/lib/field-notes/run';
@@ -1012,7 +1013,8 @@ test('the Field Notes check runs at 2:00 AM New York (night schedule v2)', () =>
 test('settings parse to the shipped defaults; a bad run cap refuses Generate', async () => {
   const { query } = await freshDb();
   const s = await readFieldNotesSettings(query);
-  assert.deepEqual({ ...s, runCapRaw: undefined }, { autoRun: false, publishingLive: false, requireApproval: true, runCapUsd: 0.5, runCapRaw: undefined, photoRestPosts: 8, maxPendingDrafts: 3, tipExpiryDays: 30, darkenCap: 0.45 });
+  assert.deepEqual({ ...s, runCapRaw: undefined }, { autoRun: false, publishingLive: false, requireApproval: true, runCapUsd: 0.5, runCapRaw: undefined, refillCapUsd: REFILL_CAP_DEFAULT_USD.field_notes, photoRestPosts: 8, maxPendingDrafts: 3, tipExpiryDays: 30, darkenCap: 0.45 });
+  assert.equal(parseFieldNotesSettings([{ key: 'require_approval', value: false }]).requireApproval, true, 'approval is always required (D16)');
   assert.equal(parseFieldNotesSettings([{ key: 'photo_rest_posts', value: 'x' }, { key: 'darken_cap', value: 7 }]).photoRestPosts, 8);
   await setSetting(query, 'run_cap_usd', 'free');
   const out = await queueManualFieldNotesRun(query, 'tommy');

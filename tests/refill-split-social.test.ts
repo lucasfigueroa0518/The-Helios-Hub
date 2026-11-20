@@ -43,6 +43,7 @@ import { addPool, freshDb, NOW as FN_NOW, setSetting, stubEngine as fieldNotesEn
 import { seedLfdPost } from './fixtures/lfd/seed';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { harnessDb, stubJev as storiesJev, stubWriter } from './stories-harness';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 
 // Rule 1: no network of any kind. The injected clients are the only transports.
 const realFetch = globalThis.fetch;
@@ -78,10 +79,10 @@ test('the gate: stateOf over the stored pair; Live is the only state that posts;
   assert.deepEqual(logs.map((l) => l.message), ['state_mismatch']);
   typeGate('carousels', { generate: false, live: true }, log, 2_000);
   assert.equal(logs.length, 1, 'repeated mismatches stay quiet for an hour (the loop reads every 15 seconds)');
-  // Refill caps (D14): stored when positive, else the type's default.
+  // Refill caps (D14, D19): stored when positive, else the type's default.
   assert.equal(typeGate('carousels', { generate: false, live: false, refillCap: 0.1 }).refillCapUsd, 0.1);
-  assert.equal(typeGate('carousels', { generate: false, live: false, refillCap: 0 }).refillCapUsd, 0.25);
-  assert.equal(typeGate('field_notes', { generate: false, live: false }).refillCapUsd, 0.5);
+  assert.equal(typeGate('carousels', { generate: false, live: false, refillCap: 0 }).refillCapUsd, REFILL_CAP_DEFAULT_USD.carousels);
+  assert.equal(typeGate('field_notes', { generate: false, live: false }).refillCapUsd, REFILL_CAP_DEFAULT_USD.field_notes);
 });
 
 test('readTypeGate reads the stored keys; an unreadable table reads as paused (refill still runs, nothing is made or posted)', async () => {
@@ -93,7 +94,7 @@ test('readTypeGate reads the stored keys; an unreadable table reads as paused (r
   assert.deepEqual([carousels.state, carousels.refillCapUsd], ['approval', 0.2]);
   const { logs, log } = recorder();
   const lfd = await readTypeGate(q, 'last_few_days', log);
-  assert.deepEqual([lfd.state, lfd.makes, lfd.posts, lfd.refillCapUsd], ['paused', false, false, 0.25]);
+  assert.deepEqual([lfd.state, lfd.makes, lfd.posts, lfd.refillCapUsd], ['paused', false, false, REFILL_CAP_DEFAULT_USD.last_few_days]);
   assert.ok(has(logs, 'state_read_failed'));
 });
 
@@ -381,7 +382,7 @@ test('stories: every type paused, the 3:00 pass still refreshes the pool and run
   const { deps, refills, lines } = storiesDeps(db, STORIES_3AM);
   const out = await tick(deps as never);
   assert.deepEqual(out, { built: 0, scheduled: 0, published: 0, insights: 0 });
-  assert.deepEqual(refills.map((r) => [r.type, r.budget?.capUsd]), [['ai_trivia', 0.25], ['real_or_ai', 0.25]]);
+  assert.deepEqual(refills.map((r) => [r.type, r.budget?.capUsd]), [['ai_trivia', REFILL_CAP_DEFAULT_USD.ai_trivia], ['real_or_ai', REFILL_CAP_DEFAULT_USD.real_or_ai]]);
   assert.ok(lines.some((l) => l.startsWith('pool: refreshed')), lines.join('\n'));
   assert.equal((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM stories.sets`)).rows[0]!.n, 0, 'no auto set while paused');
 });
@@ -393,7 +394,7 @@ test('stories: a refill that stops for its cap logs refill_capped; the stored ca
     [JSON.stringify({ ai_trivia: { refill_cap_usd: 0.1 } })],
   );
   assert.equal(await readStoriesRefillCap((t, p) => db.query(t, p), 'ai_trivia'), 0.1);
-  assert.equal(await readStoriesRefillCap((t, p) => db.query(t, p), 'real_or_ai'), 0.25);
+  assert.equal(await readStoriesRefillCap((t, p) => db.query(t, p), 'real_or_ai'), REFILL_CAP_DEFAULT_USD.real_or_ai);
   const { deps, refills, lines } = storiesDeps(db, STORIES_3AM, { capped: true });
   await tick(deps as never);
   assert.equal(refills[0]!.budget!.capUsd, 0.1);

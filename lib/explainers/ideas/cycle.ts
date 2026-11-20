@@ -7,6 +7,8 @@ import { cycleRetryGate } from '@/lib/explainers/ideas/retry';
 import { readExplainersGate, type ExplainersGate } from '@/lib/explainers/ideas/gate';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import { cappedJevTransport, isRefillCapped, RefillBudget } from '@/lib/reels/refill-budget';
+import { beginRefill, settleRefill, type TotalQuery } from '@/lib/content-type/refill-total';
+import { dbQuery } from '@/lib/db';
 import {
   addTopics,
   listPool,
@@ -54,6 +56,8 @@ export type IdeaCycleDeps = {
   gate?: ExplainersGate;
   /** Where `state_mismatch` / `refill_capped` go (default: a JSON line on stdout). */
   event?: (event: string, fields: Record<string, unknown>) => void;
+  /** The nightly refill total's ledger (D19); the main database when absent. */
+  totalQuery?: TotalQuery;
 };
 
 /** Why tonight's promoted topic wasn't made: it is no longer a pool topic or a placeable render. */
@@ -282,11 +286,25 @@ type RefillOutcome = { added: Array<{ id: string }>; evaluations: Evaluation[] }
  */
 async function refillPool(deps: IdeaCycleDeps, st: RunState, cycleId: string, moves: readonly IdeaAdjustment[]): Promise<RefillOutcome> {
   const { db } = deps;
-  const { settings } = st;
-  const budget = new RefillBudget(st.gate.refillCapUsd, () => cycleSpendUsd(db, cycleId), (fields) => {
+  // The nightly total of all refills (D19): the cap is cut to what is left of it; nothing left caps this refill at $0.
+  // A person's forced cycle (no cap) is not held to it.
+  const totalQuery: TotalQuery = deps.totalQuery ?? ((t, p) => dbQuery(t, p as unknown[]) as Promise<{ rows: any[] }>);
+  const totalLog = (message: string, fields: Record<string, unknown> = {}) => st.event(message, { vertical: 'explainers', ideaCycleId: cycleId, ...fields });
+  const grant = st.gate.refillCapUsd == null ? null : await beginRefill(totalQuery, 'explainers', st.gate.refillCapUsd, { ref: `idea_cycle:${cycleId}`, log: totalLog, now: deps.now });
+  const budget = new RefillBudget(st.gate.refillCapUsd == null ? null : (grant?.capUsd ?? 0), () => cycleSpendUsd(db, cycleId), (fields) => {
     st.refillCapped = true;
     st.event('refill_capped', { vertical: 'explainers', ideaCycleId: cycleId, ...fields });
   });
+  try {
+    return await refillPoolWithin(deps, st, cycleId, moves, budget);
+  } finally {
+    await settleRefill(totalQuery, grant, await budget.spentUsd().catch(() => grant?.capUsd ?? 0), totalLog);
+  }
+}
+
+async function refillPoolWithin(deps: IdeaCycleDeps, st: RunState, cycleId: string, moves: readonly IdeaAdjustment[], budget: RefillBudget): Promise<RefillOutcome> {
+  const { db } = deps;
+  const { settings } = st;
   const archived = await archivedTopics(db, moves);
   if (await budget.reached()) return { added: [], evaluations: [] };
   const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);

@@ -75,7 +75,9 @@ test('scheduleApprovedDrama books approved reels only while live; releaseDue: re
   await setDramaVerdict(db, approved.jobId, 'approved', 'lucas');
   assert.equal(await scheduleApprovedDrama(db, MONDAY), 0, 'nothing is booked while publishing is off');
   await setDrama(db, 'publishing_live', true);
-  assert.equal(await scheduleApprovedDrama(db, MONDAY), 1);
+  assert.equal(await scheduleApprovedDrama(db, MONDAY), 0, 'Generate off with Live on reads as paused (contract §3): nothing is booked');
+  await setDrama(db, 'auto', true);
+  assert.equal(await scheduleApprovedDrama(db, MONDAY), 1, 'the Live state (D16)');
   // The night's unapproved booking, and a rejected one.
   assert.equal((await scheduleDramaJob(db, unreviewed.jobId, 'auto', MONDAY)).scheduled, true);
   assert.equal((await scheduleDramaJob(db, rejected.jobId, 'auto', MONDAY)).scheduled, true);
@@ -90,19 +92,23 @@ test('scheduleApprovedDrama books approved reels only while live; releaseDue: re
   assert.deepEqual(rows.map((r) => r.trigger), ['auto']);
 });
 
-test('releaseDue with approval off queues an unreviewed reel', async () => {
+test('releaseDue with a stored require_approval false still cancels an unreviewed reel: approval is always required (D16)', async () => {
   const db = await dramaHubDb();
+  await setDrama(db, 'auto', true);
   await setDrama(db, 'publishing_live', true);
   await setDrama(db, 'require_approval', false);
   const { jobId } = await finishedJob(db);
   assert.equal((await scheduleDramaJob(db, jobId, 'auto', MONDAY)).scheduled, true);
   await db.query(`UPDATE social_hub.schedule SET publish_at = now() - interval '1 minute'`);
-  assert.equal(await dramaReleaseDue(db), 1);
+  assert.equal(await dramaReleaseDue(db), 0);
+  assert.match((await slotsOf(db, jobId))[0].error ?? '', /Nobody approved/);
+  const { rows } = await db.query(`SELECT 1 FROM social_hub.publish_attempts WHERE vertical = 'reel_ai_drama'`);
+  assert.equal(rows.length, 0, 'never queued');
 });
 
 test('runDramaNight: off, a request per quota under the caps, once a day; made 2 days ahead (Bald-Eagle D4, D8)', async () => {
   const db = await dramaHubDb();
-  assert.deepEqual(await runDramaNight({ db, now: MONDAY }), { status: 'skipped', reason: 'auto_off' });
+  assert.deepEqual(await runDramaNight({ db, now: MONDAY }), { status: 'skipped', reason: 'paused' }, 'paused: nothing is made (D16)');
   await setDrama(db, 'auto', true);
   assert.deepEqual(await runDramaNight({ db, now: MONDAY }), { status: 'skipped', reason: 'pool_empty' });
 
@@ -139,6 +145,8 @@ test('runDramaNight: off, a request per quota under the caps, once a day; made 2
 
 test('lead time: a night reel books on its target date when it finishes and when approved, never today (Bald-Eagle D4)', async () => {
   const db = await dramaHubDb();
+  // The Live state (D16): Generate (auto) and publishing_live both on.
+  await setDrama(db, 'auto', true);
   await setDrama(db, 'publishing_live', true);
   // Made Monday night for Wednesday. Monday's and Tuesday's evening windows are open, and it still books Wednesday.
   const { jobId } = await finishedJob(db, { nightDate: '2026-11-11' });

@@ -7,9 +7,11 @@
 --      keeping today's behavior: Text on Screen's auto_run is written TRUE only when absent (absent read as on until
 --      now); every other missing key is written false (absent already read as off). Stored values are never changed,
 --      so Carousels stays as it is today (auto_run false, publishing_live false = Paused).
---   3. pool_refill_cap_usd where absent, at REFILL_CAP_DEFAULT_USD (lib/content-type/state.ts, D14): $0.25 for
---      Text on Screen, Carousels, Last Few Days, AI Events and the Stories types; $0.50 for Explainers, AI Drama and
---      Field Notes. Stories: `types[<type>].refill_cap_usd`.
+--   3. pool_refill_cap_usd where absent, at REFILL_CAP_DEFAULT_USD (lib/content-type/state.ts, D19): $2 for
+--      Carousels and the Stories types, $1.50 Text on Screen, $1 Last Few Days and Explainers, $0.50 AI Events and
+--      Field Notes, $3 AI Drama (its weekly development session). Stories: `types[<type>].refill_cap_usd`.
+--   4. The nightly total of all refills (D19): social_hub.settings `refill_total_cap_usd` = 5 where absent, and the
+--      ledger social_hub.refill_spend that lib/content-type/refill-total.ts reserves and settles each refill in.
 --
 -- Idempotent: inserts are ON CONFLICT DO NOTHING, require_approval is set only where it isn't already true, and the
 -- JSON edits add only missing keys. A schema that isn't on this database (e.g. explainers / reel_ai_drama on their
@@ -52,12 +54,12 @@ BEGIN
   FOR r IN
     SELECT * FROM (VALUES
       -- table,                    Generate key,  Generate if absent, refill cap
-      ('social.settings',          'auto_run',    'false', 0.25),  -- Carousels: stays Paused
-      ('reels.settings',           'auto_run',    'true',  0.25),  -- Text on Screen: absent meant on (D6)
-      ('explainers.settings',      'auto_render', 'false', 0.50),
-      ('reel_ai_drama.settings',   'auto',        'false', 0.50),
-      ('lfd.settings',             'auto_run',    'false', 0.25),
-      ('ai_events.settings',       'auto_run',    'false', 0.25),
+      ('social.settings',          'auto_run',    'false', 2.00),  -- Carousels: stays Paused
+      ('reels.settings',           'auto_run',    'true',  1.50),  -- Text on Screen: absent meant on (D6)
+      ('explainers.settings',      'auto_render', 'false', 1.00),
+      ('reel_ai_drama.settings',   'auto',        'false', 3.00),  -- per weekly development session
+      ('lfd.settings',             'auto_run',    'false', 1.00),
+      ('ai_events.settings',       'auto_run',    'false', 0.50),
       ('field_notes.settings',     'auto_run',    'false', 0.50)
     ) AS t(tbl, gen_key, gen_if_absent, refill_cap)
   LOOP
@@ -123,7 +125,7 @@ BEGIN
     types_now := jsonb_set(
       types_now, ARRAY[v],
       -- Today's values first (stored, else the fallbacks), then approval on, then the refill cap only where absent.
-      jsonb_build_object('publishingLive', fallback_live, 'dailyCapUsd', fallback_cap, 'refill_cap_usd', 0.25)
+      jsonb_build_object('publishingLive', fallback_live, 'dailyCapUsd', fallback_cap, 'refill_cap_usd', 2)
         || CASE WHEN jsonb_typeof(types_now -> v) = 'object' THEN types_now -> v ELSE '{}'::jsonb END
         || jsonb_build_object('requireApproval', true),
       true);
@@ -133,5 +135,19 @@ BEGIN
   ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_by = excluded.updated_by, updated_at = now()
    WHERE s.value IS DISTINCT FROM excluded.value;
 END $$;
+
+-- The nightly total of all refills (D19) and its ledger.
+CREATE TABLE IF NOT EXISTS social_hub.refill_spend (
+    id            bigserial PRIMARY KEY,
+    ny_date       date NOT NULL,
+    vertical      text NOT NULL,
+    reserved_usd  numeric(10,6) NOT NULL CHECK (reserved_usd >= 0),
+    spent_usd     numeric(10,6) CHECK (spent_usd >= 0),
+    ref           text,
+    created_at    timestamptz NOT NULL DEFAULT now(),
+    settled_at    timestamptz
+);
+CREATE INDEX IF NOT EXISTS refill_spend_ny_date_idx ON social_hub.refill_spend (ny_date);
+INSERT INTO social_hub.settings (key, value, updated_at) VALUES ('refill_total_cap_usd', '5'::jsonb, now()) ON CONFLICT (key) DO NOTHING;
 
 COMMIT;

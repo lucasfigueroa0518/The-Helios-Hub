@@ -48,15 +48,12 @@ test('stateOf: Generate off with Live on reads as paused and flags the mismatch;
   assert.deepEqual(stateOf(true, null), { state: 'approval', mismatch: false });
 });
 
-test('refillCapUsd: stored positive numbers win; missing or bad falls back to the D14 default', () => {
-  assert.equal(REFILL_CAP_DEFAULT_USD.carousels, 0.25);
-  assert.equal(REFILL_CAP_DEFAULT_USD.explainers, 0.5);
-  assert.equal(REFILL_CAP_DEFAULT_USD.reel_ai_drama, 0.5);
-  assert.equal(REFILL_CAP_DEFAULT_USD.field_notes, 0.5);
-  for (const t of ['reels', 'last_few_days', 'ai_events', 'stories', 'ai_trivia', 'real_or_ai'] as const) assert.equal(REFILL_CAP_DEFAULT_USD[t], 0.25, t);
+test('refillCapUsd: stored positive numbers win; missing or bad falls back to the type default (D19)', () => {
+  // The defaults themselves are the lead's call (D19); here only that every type has a positive one.
+  for (const [t, v] of Object.entries(REFILL_CAP_DEFAULT_USD)) assert.ok(typeof v === 'number' && v > 0, t);
   assert.equal(refillCapUsd('carousels', 0.4), 0.4);
   assert.equal(refillCapUsd('carousels', '0.3'), 0.3);
-  for (const bad of [null, undefined, 0, -1, 'abc', true, Number.NaN]) assert.equal(refillCapUsd('explainers', bad), 0.5, String(bad));
+  for (const bad of [null, undefined, 0, -1, 'abc', true, Number.NaN]) assert.equal(refillCapUsd('explainers', bad), REFILL_CAP_DEFAULT_USD.explainers, String(bad));
 });
 
 // ── posting.ts ───────────────────────────────────────────────────────────────
@@ -70,7 +67,7 @@ test('fieldsOf: the stored pair becomes the state; live/generate are derived fro
   assert.equal(paused.live, false, 'a paused type posts nothing, even with publishing_live on');
   assert.equal(paused.generate, false);
   assert.equal(paused.scheduledAhead, 3);
-  assert.equal(paused.refillCapUsd, 0.25);
+  assert.equal(paused.refillCapUsd, REFILL_CAP_DEFAULT_USD.carousels);
   assert.ok(!('autoPublish' in paused), 'autoPublish is removed');
   const live = fieldsOf(stored({ generate: true, live: true, refill: 0.4 }), 0);
   assert.deepEqual([live.state, live.stateMismatch, live.live, live.generate, live.refillCapUsd], ['live', false, true, true, 0.4]);
@@ -198,9 +195,9 @@ test('settings readers: require_approval false is read as true; refill caps read
   assert.equal(parseLfdSettings(off).requireApproval, true);
   assert.equal(parseAiEventsSettings(off).requireApproval, true);
   assert.equal(parseFieldNotesSettings(off).requireApproval, true);
-  assert.equal(parseLfdSettings([]).refillCapUsd, 0.25);
+  assert.equal(parseLfdSettings([]).refillCapUsd, REFILL_CAP_DEFAULT_USD.last_few_days);
   assert.equal(parseAiEventsSettings([{ key: 'pool_refill_cap_usd', value: 0.1 }]).refillCapUsd, 0.1);
-  assert.equal(parseFieldNotesSettings([]).refillCapUsd, 0.5);
+  assert.equal(parseFieldNotesSettings([]).refillCapUsd, REFILL_CAP_DEFAULT_USD.field_notes);
 });
 
 test('Field Notes settings: the panel reads the state; the old switches are refused', () => {

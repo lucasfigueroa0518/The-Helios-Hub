@@ -79,6 +79,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { HubQuery } from '@/lib/social-hub/db';
+import { beginRefill, settleRefill, type RefillGrant } from '@/lib/content-type/refill-total';
 
 function loadEnvFile(envPath: string): void {
   if (!fs.existsSync(envPath)) return;
@@ -291,6 +292,7 @@ async function main(): Promise<void> {
     let capUsd = run.capUsd;
     /** Set when the run only refills the pool (D3, D16): it makes no story and is held to the refill cap. */
     let refillOnly: string | null = null;
+    let refillGrant: RefillGrant | null = null;
     let movesReadAt: Date | undefined;
     let moves: { pinIds: string[]; demoteIds: string[]; archiveIds: string[]; placed: Array<readonly [string, number]> } = { pinIds: [], demoteIds: [], archiveIds: [], placed: [] };
     if (!rerun && pinned.length) {
@@ -322,6 +324,17 @@ async function main(): Promise<void> {
       refillOnly = plan.refillOnly;
       if (refillOnly) {
         log('run_refill_only', { runId: run.id, reason: refillOnly, capUsd });
+        // The nightly total of all refills (D19), for the clock's runs: the cap is cut to what is left of it; no room
+        // skips tonight's refill (the pool refills next night).
+        if (run.trigger === 'scheduled') {
+          refillGrant = await beginRefill(lfdQuery, 'carousels', capUsd, { ref: `run:${run.id}`, log });
+          if (!refillGrant) {
+            await query(`UPDATE social.runs SET status = 'skipped', finished_at = now(), stop_reason = $2 WHERE id = $1 AND status = 'running'`, [run.id, `refill-total-capped: ${refillOnly}`.slice(0, 2000)]).catch((error) => log('run_note_failed', { runId: run.id, error: errorText(error) }));
+            log('run_refill_complete', { runId: run.id, status: 'skipped', stopReason: 'refill-total-capped' });
+            return;
+          }
+          capUsd = refillGrant.capUsd;
+        }
       } else if (run.trigger === 'scheduled') {
         // Shared queue: the 3 AM run makes tonight's carousel promote first and sinks demoted stories (a failed read: no moves).
         movesReadAt = new Date();
@@ -346,6 +359,8 @@ async function main(): Promise<void> {
       // The refill's spend stays on the run (status as the script left it, so the cost pages count it); its reason says why no story.
       if (done?.stop_reason === 'cost-cap') logRefillCapped(log, 'carousels', { capUsd, step: 'selection', runId: run.id });
       else if (status !== 'failed') await query(`UPDATE social.runs SET stop_reason = $2 WHERE id = $1`, [run.id, `refill-only: ${refillOnly}`.slice(0, 2000)]).catch((error) => log('run_note_failed', { runId: run.id, error: errorText(error) }));
+      const spent = Number((await query(`SELECT total_usd FROM social.runs WHERE id = $1`, [run.id]).catch(() => ({ rows: [] as any[] }))).rows[0]?.total_usd ?? capUsd);
+      await settleRefill(lfdQuery, refillGrant, Number.isFinite(spent) ? spent : capUsd, log);
       log('run_refill_complete', { runId: run.id, status, stopReason: done?.stop_reason ?? null });
       return;
     }

@@ -60,7 +60,7 @@ test('caption source: the newest post_caption, else composed from post_text; wit
   assert.equal(await dramaCaption(db, none), null);
 });
 
-test('queue readiness: finished, not rejected, approved (or approval off, or force), video in the bucket, a caption', async () => {
+test('queue readiness: finished, not rejected, approved (or force), video in the bucket, a caption; approval is always on (D16)', async () => {
   const db = await dramaHubDb();
   const unapproved = await finishedJob(db);
   const notReady = await dramaQueuePublish(db, unapproved.jobId, 'auto');
@@ -84,9 +84,18 @@ test('queue readiness: finished, not rejected, approved (or approval off, or for
   await setDramaVerdict(db, rejected.jobId, 'rejected', 'lucas');
   assert.equal((await dramaQueuePublish(db, rejected.jobId, 'force')).queued, false);
 
+  // A stored require_approval false is never read as false (D16): an unreviewed reel still waits for a person.
   await setDrama(db, 'require_approval', false);
-  assert.equal((await dramaQueuePublish(db, (await finishedJob(db)).jobId, 'auto')).queued, true);
+  const stillUnapproved = await dramaQueuePublish(db, (await finishedJob(db)).jobId, 'auto');
+  assert.equal(stillUnapproved.queued, false);
+  if (!stillUnapproved.queued) assert.match(stillUnapproved.note, /approved/);
 });
+
+/** The Live state (D16): Generate (auto) and publishing_live both on. */
+const live = async (db: Awaited<ReturnType<typeof dramaHubDb>>) => {
+  await setDrama(db, 'auto', true);
+  await setDrama(db, 'publishing_live', true);
+};
 
 test('hard publish refuses while publishing is off, and records nothing', async () => {
   const db = await dramaHubDb();
@@ -94,13 +103,16 @@ test('hard publish refuses while publishing is off, and records nothing', async 
   const out = await hardPublishDramaJob(db, jobId, 'lucas');
   assert.equal(out.queued, false);
   if (!out.queued) assert.match(out.note, /Publishing is switched off/);
+  // Generate off with Live on reads as paused (contract §3): still refused.
+  await setDrama(db, 'publishing_live', true);
+  assert.equal((await hardPublishDramaJob(db, jobId, 'lucas')).queued, false);
   const { rows } = await db.query(`SELECT 1 FROM reel_ai_drama.feedback WHERE job_id = $1`, [jobId]);
   assert.equal(rows.length, 0);
 });
 
 test('carry with a stub Meta client: container, poll, publish, permalink; the slot is marked', async () => {
   const db = await dramaHubDb();
-  await setDrama(db, 'publishing_live', true);
+  await live(db);
   const { jobId } = await finishedJob(db);
   const queued = await hardPublishDramaJob(db, jobId, 'lucas');
   assert.ok(queued.queued);
@@ -121,7 +133,7 @@ test('carry with a stub Meta client: container, poll, publish, permalink; the sl
 
 test('publisher off: the drama worker claims the oldest AI Drama attempt and carries it; nothing left, null', async () => {
   const db = await dramaHubDb();
-  await setDrama(db, 'publishing_live', true);
+  await live(db);
   const { jobId } = await finishedJob(db);
   const queued = await hardPublishDramaJob(db, jobId, 'lucas');
   assert.ok(queued.queued);
@@ -151,7 +163,7 @@ test('rejected after its slot opened: nothing is posted', async () => {
 
 test('stale attempts fail; insights write vertical reel_ai_drama', async () => {
   const db = await dramaHubDb();
-  await setDrama(db, 'publishing_live', true);
+  await live(db);
   const { jobId } = await finishedJob(db);
   const q = await hardPublishDramaJob(db, jobId, 'lucas');
   assert.ok(q.queued);

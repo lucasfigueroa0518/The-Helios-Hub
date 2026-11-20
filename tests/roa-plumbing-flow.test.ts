@@ -19,7 +19,7 @@ import { poolDay } from '@/lib/stories/pool';
 import type { StoriesMetaClient } from '@/lib/stories/publish/meta';
 import type { ReviewCall } from '@/lib/stories/render/review';
 import { SERIES_STYLE, VIDEO_SERIES } from '@/lib/stories/render/types';
-import { claimNextRequested, getSet, listSets, recentKeys, requestSet } from '@/lib/stories/repository';
+import { approveSet, claimNextRequested, getSet, listSets, recentKeys, requestSet } from '@/lib/stories/repository';
 import { DEFAULT_SETTINGS, SERIES, loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import { ROA_DAILY_KEY, tick } from '@/lib/stories/worker';
@@ -83,8 +83,10 @@ test('schema: real_or_ai rows, still roles, the openai cost vendor, archive and 
   assert.deepEqual(rows.map((r) => `${r.vertical}/${r.series}`), ['real_or_ai/real_or_ai']);
 });
 
-test('worker (approval off, publishing live): a real_or_ai set → stubbed build → still render → 4 image containers in order; the daily run once per pool day', async () => {
+test('worker (Live, approval always on): a real_or_ai set → stubbed build → waits for Approve → still render → 4 image containers in order; the daily run once per pool day', async () => {
   const { db } = await harnessDb();
+  // The Live state (D16): the series' auto (Generate) and publishing_live both on. A stored require_approval false is
+  // left in on purpose: it must never let a set post without a person's Approve.
   await saveSeriesSetting(db, 'real_or_ai', { auto: true });
   await setSwitches(db, { requireApproval: false, publishingLive: true });
   const renderer = await stubRenderer();
@@ -117,9 +119,13 @@ test('worker (approval off, publishing live): a real_or_ai set → stubbed build
     insights: () => ({ storyInsights: async () => ({ metrics: { reach: 50, taps_forward: 40 }, raw: [], notEnoughViewers: false }) }),
   };
   const first = await tick(deps);
-  assert.deepEqual(first, { built: 1, scheduled: 1, published: 0, insights: 0 });
+  assert.deepEqual(first, { built: 1, scheduled: 0, published: 0, insights: 0 }, 'built, then it waits for a person');
   assert.deepEqual(daily, ['ran'], 'the daily candidate run follows the 3:00 refresh');
   assert.equal(renderer.renders, 1, 'Real or AI? goes through the still renderer');
+  const [built] = await listSets(db, { series: 'real_or_ai' });
+  assert.equal(built!.status, 'ready', 'an auto set never approves itself');
+  await approveSet(db, built!.id);
+  assert.equal((await tick(deps)).scheduled, 1, 'approved: it books in its window');
   const [set] = await listSets(db, { series: 'real_or_ai' });
   assert.equal(set!.status, 'scheduled');
   assert.deepEqual(st.uploads, ['01-roa_question.jpg', '02-roa_reveal.jpg', '03-roa_question.jpg', '04-roa_reveal.jpg'].map((n) => `sets/${set!.id}/${n}`));
@@ -136,7 +142,7 @@ test('worker (approval off, publishing live): a real_or_ai set → stubbed build
   assert.equal(daily.length, 1, 'the roa_daily record holds for the pool day');
 });
 
-test('worker: the daily candidate run is held while Real or AI? is off', async () => {
+test('worker: the daily candidate run is the refill, so it runs while Real or AI? is paused (D3, D16)', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'real_or_ai', { enabled: false });
   assert.equal((await loadSettings(db)).series.real_or_ai.enabled, false);
@@ -147,7 +153,8 @@ test('worker: the daily candidate run is held while Real or AI? is off', async (
     meta: () => { throw new Error('not used'); }, storage: () => { throw new Error('not used'); }, insights: () => { throw new Error('not used'); },
     poolReads: () => { throw new Error('no pool in this test'); },
   });
-  assert.deepEqual(daily, []);
+  assert.deepEqual(daily, ['ran']);
+  assert.equal((await listSets(db, { series: 'real_or_ai' })).length, 0, 'paused: nothing is made');
 });
 
 test('Free vs. Paid: its published history still reads; a set still requested for it is skipped as retired', async () => {

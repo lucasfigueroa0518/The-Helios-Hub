@@ -52,22 +52,28 @@ test.after(() => {
 
 const dramaDb = () => ({ query: async (text: string, params?: unknown[]) => ({ rows: (await pg.query(text, params)).rows as never[] }) });
 
-test('posting: a bad patch is refused before any connection; Generate and Auto-publish write the drama settings', async () => {
+test('posting: a bad patch is refused before any connection; the state writes the drama Generate and Live keys (D16)', async () => {
   await assert.rejects(() => writePosting('reel_ai_drama', { perDay: 0 }, 't'), /from 1 to 1/);
   await assert.rejects(() => writePosting('reel_ai_drama', { perDay: 2 }, 't'), /from 1 to 1/);
-  await assert.rejects(() => writePosting('reel_ai_drama', { live: 'yes' as never }, 't'), /true or false/);
+  await assert.rejects(() => writePosting('reel_ai_drama', { state: 'yes' as never }, 't'), /Paused, Approval or Live/);
+  // live / generate / autoPublish are no longer settings: approval is always required.
+  await assert.rejects(() => writePosting('reel_ai_drama', { live: true } as never, 't'), /no longer a setting/);
+  await assert.rejects(() => writePosting('reel_ai_drama', { autoPublish: true } as never, 't'), /no longer a setting/);
   await assert.rejects(() => writePosting('reel_ai_drama', { cap: 4 }, 't'), /0 to 3/);
 
-  const state = await writePosting('reel_ai_drama', { generate: true, autoPublish: true }, 'lucas');
+  const state = await writePosting('reel_ai_drama', { state: 'approval' }, 'lucas');
   assert.equal(state.type, 'reel_ai_drama');
+  assert.equal(state.state, 'approval');
   assert.equal(state.generate, true);
-  assert.equal(state.autoPublish, true);
+  assert.equal(state.live, false);
+  assert.equal('autoPublish' in state, false, 'no Auto-publish: every post needs approval');
   assert.equal(state.maxPerDay, 1);
   assert.equal(state.series, null);
   const stored = await readDramaPosting(dramaDb());
   assert.equal(stored.generate, true);
-  assert.equal(stored.autoPublish, true);
-  assert.equal(stored.live, false, 'Live is untouched');
+  assert.equal(stored.live, false, 'Approval leaves Live off');
+  const { rows } = await pg.query<{ value: unknown }>(`SELECT value FROM reel_ai_drama.settings WHERE key = 'require_approval'`);
+  assert.notEqual(rows[0]?.value, false, 'require_approval is never written false');
 });
 
 const base: RunInputs = {

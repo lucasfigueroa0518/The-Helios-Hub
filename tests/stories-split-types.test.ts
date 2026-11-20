@@ -129,19 +129,22 @@ async function appDb() {
   return pg;
 }
 
-test('AI Trivia posting: the standard days-based switches, saved for its own type only (SS-24)', async () => {
+test('AI Trivia posting: the standard days-based state, saved for its own type only (SS-24, D16)', async () => {
   await appDb();
   const first = await readPosting('ai_trivia');
-  assert.deepEqual([first.live, first.generate, first.autoPublish, first.perDay, first.series], [false, false, false, null, null]);
+  assert.deepEqual([first.state, first.live, first.generate, first.perDay, first.series], ['paused', false, false, null, null]);
   assert.deepEqual(first.days, [0, 1, 4], 'Sun, Mon, Thu');
   assert.deepEqual((await readPosting('real_or_ai')).days, [2, 6], 'Tue, Sat');
 
-  assert.equal((await writePosting('ai_trivia', { generate: true }, 't')).generate, true);
-  assert.equal((await writePosting('ai_trivia', { autoPublish: true }, 't')).autoPublish, true);
-  assert.equal((await writePosting('ai_trivia', { live: true }, 't')).live, true);
+  const approval = await writePosting('ai_trivia', { state: 'approval' }, 't');
+  assert.deepEqual([approval.state, approval.generate, approval.live], ['approval', true, false]);
+  const live = await writePosting('ai_trivia', { state: 'live' }, 't');
+  assert.deepEqual([live.state, live.generate, live.live], ['live', true, true]);
+  // Approval is always required: there is no Auto-publish to set.
+  await assert.rejects(() => writePosting('ai_trivia', { autoPublish: true } as never, 't'), /no longer a setting/);
   const md = await readPosting('stories');
-  assert.deepEqual([md.live, md.generate, md.autoPublish], [false, false, false], 'Morning Download keeps its own');
-  assert.equal((await readPosting('real_or_ai')).live, false);
+  assert.deepEqual([md.state, md.live, md.generate], ['paused', false, false], 'Morning Download keeps its own');
+  assert.equal((await readPosting('real_or_ai')).state, 'paused');
 
   await assert.rejects(() => writePosting('ai_trivia', { series: { ai_trivia: { auto: true } } } as never, 't'), /Series settings moved/);
   await assert.rejects(() => writePosting('ai_trivia', { perDay: 1 }, 't'), /no daily quota/);

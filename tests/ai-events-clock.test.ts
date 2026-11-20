@@ -9,6 +9,7 @@ import { firstAiEventsCheckAt, nextAiEventsRunAt, noonQueue } from '@/lib/ai-eve
 import { AI_EVENTS_WINDOW } from '@/lib/ai-events/config';
 import { queueManualAiEventsRun, AI_EVENTS_ALREADY_QUEUED } from '@/lib/ai-events/manual';
 import { aiEventsDueOn, parseAiEventsSettings, readAiEventsSettings } from '@/lib/ai-events/settings';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 
 import { openAiEventsDb } from './fixtures/ai-events/seed';
 
@@ -17,9 +18,10 @@ const on = parseAiEventsSettings([{ key: 'auto_run', value: true }]);
 test('settings ship safe: Sunday only, approval on, publishing and the clock off, a $0.50 cap', async () => {
   const { query } = await openAiEventsDb();
   const s = await readAiEventsSettings(query);
-  assert.deepEqual(s, { autoRun: false, publishingLive: false, requireApproval: true, days: [0], runCapUsd: 0.5, runCapRaw: 0.5 });
+  assert.deepEqual(s, { autoRun: false, publishingLive: false, requireApproval: true, refillCapUsd: REFILL_CAP_DEFAULT_USD.ai_events, days: [0], runCapUsd: 0.5, runCapRaw: 0.5 });
   assert.deepEqual(parseAiEventsSettings([]).days, [0], 'no days row: Sunday');
-  assert.equal(parseAiEventsSettings([{ key: 'require_approval', value: 'no' }]).requireApproval, true, 'on unless literally false');
+  assert.equal(parseAiEventsSettings([{ key: 'require_approval', value: 'no' }]).requireApproval, true, 'always on (D16)');
+  assert.equal(parseAiEventsSettings([{ key: 'require_approval', value: false }]).requireApproval, true, 'a stored false is never read as false (D16)');
   assert.equal(parseAiEventsSettings([{ key: 'run_cap_usd', value: 'abc' }]).runCapUsd, null);
   assert.equal(parseAiEventsSettings([{ key: 'run_cap_usd', value: true }]).runCapUsd, null);
   assert.deepEqual(parseAiEventsSettings([{ key: 'days', value: [9] }]).days, [0], 'a bad days row falls back');

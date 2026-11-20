@@ -380,8 +380,8 @@ test('posting settings: cadence is refused in template mode and still works in l
   await assert.rejects(() => writePosting('carousels', { perDay: 2 }, 't'), /^Error: Cadence moved to the calendar\.$/);
   await assert.rejects(() => writePosting('stories', { perDay: 1 }, 't'), /no daily quota/);
   assert.equal((await pg.query<{ value: unknown }>(`SELECT value FROM social.settings WHERE key = 'posts_per_day'`)).rows[0]!.value, 1, 'nothing written');
-  // The switches still save.
-  assert.equal((await writePosting('carousels', { autoPublish: true }, 't')).autoPublish, true);
+  // The state still saves (D16).
+  assert.equal((await writePosting('carousels', { state: 'approval' }, 't')).state, 'approval');
 });
 
 test('the daily limit: read in template mode (null while legacy), written 0–10 through writeCaps', async () => {

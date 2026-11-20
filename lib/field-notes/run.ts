@@ -161,6 +161,8 @@ export type FieldNotesRunInput = {
   queue?: SelectQueue;
   /** The refill's own cap (D14, pool_refill_cap_usd). Absent: the refill spends from the run's cap, as before the split. */
   refillCapUsd?: number;
+  /** The nightly refill total had no room (D19): skip the refill step; a make run still makes from the pool. */
+  skipRefill?: boolean;
   /** Only the refill: find and score new tips, make no post (D16: the clock's refill night). */
   refillOnly?: boolean;
 };
@@ -266,7 +268,7 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
     // 2b. The refill (D3, D16): new tips into the pool, before anything that could end the run, under its own cap.
     // Nothing found is saved unscored, so it waits for the scoring questions to be approved.
     const config = d.config ?? FIELD_NOTES_SOURCES_CONFIG;
-    if (config.questionsApproved) {
+    if (config.questionsApproved && !input.skipRefill) {
       const refill = await refillTips(d, refillBudget, record);
       record.refill = { capUsd: refillBudget.capUsd, spentUsd: Number(refillBudget.spent().toFixed(6)), capped: refill.capped };
     }

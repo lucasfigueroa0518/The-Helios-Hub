@@ -239,7 +239,7 @@ async function madeReel(pg: PGlite, n: number, slateDay: string, opts: { live?: 
     VALUES ('${ids.video}', '${ids.idea}', '${ids.slate}', 'ok', now(), 'videos/${n}.mp4');
     INSERT INTO reels.song_picks (video_job_id, post_idea_id, status, finished_at, picked_audio_id, picked_title, picked_artist)
     VALUES ('${ids.video}', '${ids.idea}', 'ok', now(), 'aud-${n}', 'Song', 'Artist');
-    INSERT INTO reels.settings (key, value) VALUES ('publishing_live', '${opts.live === false ? 'false' : 'true'}'::jsonb), ('require_approval', 'true'::jsonb)
+    INSERT INTO reels.settings (key, value) VALUES ('auto_run', 'true'::jsonb), ('publishing_live', '${opts.live === false ? 'false' : 'true'}'::jsonb), ('require_approval', 'true'::jsonb)
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;`);
   return ids;
 }

@@ -10,6 +10,7 @@ import test from 'node:test';
 
 import { AI_EVENTS_NIGHT_WINDOW, AI_EVENTS_WINDOW, DEFAULT_AI_EVENTS_DAYS } from '@/lib/ai-events/config';
 import { isPostingType, writePosting, type PostingState } from '@/lib/content-type/posting';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { typeHubModel } from '@/lib/content-type/model';
 import { maxCapFor } from '@/lib/content-type/caps';
 import { EVENTS_FEED_STATE_ID as SNAPSHOT_STATE_ID } from '@/lib/networking/public-snapshot';
@@ -236,7 +237,7 @@ test('readDayQuotas asks for the Sunday posts only while auto_run is on', async 
   assert.equal((await readDayQuotas(query, Promise.resolve(query))).ai_events, 2, 'Miami and Boston');
 });
 
-const posting: PostingState = { type: 'ai_events', live: false, generate: true, autoPublish: false, perDay: null, maxPerDay: null, series: null, days: [0], schedule: null, nights: null, cap: null, costPerPostMicros: null };
+const posting: PostingState = { type: 'ai_events', state: 'approval', stateMismatch: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.ai_events, scheduledAhead: 0, live: false, generate: true, perDay: null, maxPerDay: null, series: null, days: [0], schedule: null, nights: null, cap: null, costPerPostMicros: null };
 
 test('health: Field Notes runs at 2 AM and is made 2 days ahead (Bald-Eagle D4), so night N asks about day N+2', () => {
   const fn: PostingState = { ...posting, type: 'field_notes', days: [2, 5] };
@@ -299,8 +300,9 @@ test('AI Events copy: Generate names its Jev spend and no Claude; the switches n
   // The switch's words live in the type's config entry (lib/content-type/config.ts).
   const config = readFileSync('lib/content-type/config.ts', 'utf8');
   assert.ok(config.includes('Make the AI Events post every Sunday at 12:00 PM? Each run ranks the coming week’s events with live Jev calls (about $0.02, up to the run cap). No Claude calls.'));
+  // The Generate / Live switches are gone from the hub: the one state lives in the type's Settings tab (D8, D16).
   const hub = readFileSync('components/social-hub/content/HubControls.tsx', 'utf8');
-  assert.ok(hub.includes('Makes the week’s carousel at 12:00 PM on Sundays.'));
+  assert.ok(!hub.includes('Nightly run'));
   for (const file of ['components/content-type/TypeControls.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/content-type/ContentTypePage.tsx', 'lib/content-type/config.ts']) {
     const strings = [...readFileSync(file, 'utf8').matchAll(/'([^'\n]*AI Events[^'\n]*)'/g)].map((m) => m[1]!);
     for (const s of strings) assert.doesNotMatch(s, /!/, `${file}: no exclamation marks in UI copy`);

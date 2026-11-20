@@ -197,7 +197,7 @@ export function SettingsTab({ type, lastRefill, typeOnly, nowIso }: {
           ) : null}
         </div>
         {capParsed && !capParsed.ok ? <p className="pl-set__error" role="alert">{capParsed.error}</p> : null}
-        <p className="pl-set__hint">The most one refill may spend. Refill runs in every state, even when the day’s quota is full.</p>
+        <p className="pl-set__hint">The most one refill may spend. Refill runs in every state, even when the day’s quota is full. All types’ refills also share a nightly total, set on the Social Hub Cost page.</p>
       </Block>
 
       <Block title="Posts">

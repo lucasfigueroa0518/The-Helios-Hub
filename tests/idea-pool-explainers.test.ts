@@ -101,13 +101,16 @@ test('a drag steers tonight, then expires: the idea competes by score again', as
   assert.deepEqual(await readMoves(q(db), 'explainers'), [], 'the placement is used up after the run');
 });
 
-test('a night that does not run (auto-render off) leaves hand moves in force', async () => {
+test('a paused night (auto-render off) only refills: it makes nothing and leaves hand moves in force (D16)', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', false);
   const c = await topic(db, 'C', 70);
   await placeIdea(q(db), 'explainers', idea(c), 95, null);
   await pinIdea(q(db), 'explainers', idea(await topic(db, 'D', 60)), null);
-  assert.deepEqual(await run(db), { status: 'skipped', reason: 'auto_render_off' });
+  const result = await run(db);
+  assert.equal(result.status, 'refilled');
+  if (result.status === 'refilled') assert.equal(result.reason, 'paused');
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0, 'nothing is made');
   assert.equal((await readMoves(q(db), 'explainers')).length, 2);
 });
 

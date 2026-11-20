@@ -9,6 +9,8 @@ type Outcome = { scheduled: boolean; note: string; status?: number };
 type Queued = { queued: boolean; note?: string; status?: number };
 type Place = (q: SpineQuery, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
+const NOT_LIVE_NOTE = 'Text on Screen isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
+
 /**
  * Text on Screen (lib/reels/publish): approve the idea's slot (it keeps, or books,
  * the reel's own posting day: Bald-Eagle D4), reject, Force post, place or move
@@ -32,6 +34,8 @@ export function reelActions(deps: {
   todaySlate: (postIdeaId: string) => Promise<string | null>;
   findReelLock: (slateId: string, postIdeaId: string) => Promise<{ nyDate: string } | null>;
   requestFinish: (postIdeaId: string, slateId: string) => Promise<{ status: 'active' | 'done' | 'failed'; note: string }>;
+  /** Whether Text on Screen is Live (D16; lib/reels/publish/schedule.ts publishingLive). Absent: not checked here. */
+  publishingLive?: () => Promise<boolean>;
 }): ContentActions {
   const placement =
     (fn: Place): ActionFn =>
@@ -52,6 +56,8 @@ export function reelActions(deps: {
       return { ok: out.rejected, note: out.note };
     },
     async publishNow(t) {
+      // Posts go to Instagram only in the Live state (D16): a forced reel would otherwise wait unposted.
+      if (deps.publishingLive && !(await deps.publishingLive().catch(() => false))) return { ok: false, note: NOT_LIVE_NOTE, status: 409 };
       const out = await deps.forcePost(need(t, 'videoJobId'));
       return out.queued ? { ok: true, note: 'Queued to publish now.' } : { ok: false, note: out.note ?? 'Not queued.', status: out.status };
     },

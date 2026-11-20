@@ -385,7 +385,7 @@ test('explainers: posts_per_day less the day’s placements is how many renders 
   assert.deepEqual(lines.map((l) => [l.message, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 1, 1]]);
 });
 
-test('explainers: people placed the whole day: the cycle is skipped before any idea call or render', async () => {
+test('explainers: people placed the whole day: nothing is made, and only the pool refill runs (D3: the quota never stops a refill)', async () => {
   const db = await explainersOn();
   const spine = spineOf(db);
   const a = await poolTopic(db, 'A', 90);
@@ -394,11 +394,14 @@ test('explainers: people placed the whole day: the cycle is skipped before any i
   const ideas = stubIdeas();
   const { log, lines } = capture();
   const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev(), now: CYCLE_AT, log });
-  assert.equal(result.status, 'skipped');
-  assert.equal(result.status === 'skipped' && result.reason, 'quota_filled');
-  assert.equal(ideas.calls, 0, 'no idea call: no spend');
-  assert.equal(await jobsFor(db, a), 0);
-  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.cost_events`)).rows[0]!.n), 0);
+  assert.equal(result.status, 'refilled');
+  if (result.status !== 'refilled') return;
+  assert.equal(result.reason, 'nothing_to_make');
+  assert.ok(result.dates?.some((d) => d.status === 'skipped' && d.reason === 'quota_filled'), 'the make step is skipped for the full day');
+  assert.ok(result.dates?.every((d) => d.status === 'skipped'), 'no date makes anything');
+  assert.equal(ideas.calls, 1, 'one idea call: the refill only');
+  assert.equal(await jobsFor(db, a), 0, 'nothing is rendered');
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0);
   assert.equal(lines[0]?.fields.making, 0);
 });
 

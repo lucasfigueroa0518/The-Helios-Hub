@@ -321,32 +321,38 @@ test('run: no session is a 401 before anything is queued; a failure is a 500 wit
 
 // ── settings ────────────────────────────────────────────────────────────────
 
-test('settings: shipped values read as auto_run off, publishing_live off, require_approval on, rest 8, cap 3, expiry 30', async () => {
+test('settings: shipped values read as paused (auto_run off, publishing_live off), require_approval on, rest 8, cap 3, expiry 30', async () => {
   const { pg } = await openDb();
   const rows = (await pg.query(`SELECT key, value FROM field_notes.settings`)).rows as Array<{ key: string; value: unknown }>;
-  assert.deepEqual(parsePanelSettings(rows), { autoRun: false, publishingLive: false, requireApproval: true, photoRestPosts: 8, maxPendingDrafts: 3, tipExpiryDays: 30 });
+  assert.deepEqual(parsePanelSettings(rows), { state: 'paused', stateMismatch: false, autoRun: false, publishingLive: false, requireApproval: true, photoRestPosts: 8, maxPendingDrafts: 3, tipExpiryDays: 30 });
   assert.deepEqual(parsePanelSettings([]), parsePanelSettings(rows));
+  // A stored require_approval false is never read as false (D16).
+  assert.equal(parsePanelSettings([{ key: 'require_approval', value: false }]).requireApproval, true);
+  // Generate off with Live on reads as paused, flagged (contract §3).
+  const mismatch = parsePanelSettings([{ key: 'auto_run', value: false }, { key: 'publishing_live', value: true }]);
+  assert.deepEqual([mismatch.state, mismatch.stateMismatch, mismatch.publishingLive], ['paused', true, false]);
 });
 
-test('settings: switches go through posting (generate, live, autoPublish), numbers through their own write; bad input is a 400', async () => {
+test('settings: the state goes through posting, numbers through their own write; the old switches and bad input are a 400', async () => {
   const calls: string[] = [];
   const env = {
     session: TOMMY,
     read: async () => parsePanelSettings([]),
-    writeSwitches: async (p: object, by: string) => void calls.push(`switches ${JSON.stringify(p)} by ${by}`),
+    writeState: async (state: string, by: string) => void calls.push(`state ${state} by ${by}`),
     writeNumber: async (k: string, v: number) => void calls.push(`${k}=${v}`),
   };
-  const ok = await settingsPost(env, { autoRun: true, requireApproval: false, publishingLive: true, photoRestPosts: 10, maxPendingDrafts: 2, tipExpiryDays: 14 });
+  const ok = await settingsPost(env, { state: 'live', photoRestPosts: 10, maxPendingDrafts: 2, tipExpiryDays: 14 });
   assert.equal(ok.status, 200);
-  assert.deepEqual(calls, [
-    'switches {"generate":true,"live":true,"autoPublish":true} by tommy@heliosmarketing.org',
-    'photo_rest_posts=10', 'max_pending_drafts=2', 'tip_expiry_days=14',
-  ]);
+  assert.deepEqual(calls, ['state live by tommy@heliosmarketing.org', 'photo_rest_posts=10', 'max_pending_drafts=2', 'tip_expiry_days=14']);
   calls.length = 0;
-  for (const bad of [{}, { photoRestPosts: -1 }, { maxPendingDrafts: 0 }, { tipExpiryDays: 1.5 }, { autoRun: 'yes' }, { runCapUsd: 5 }, null]) {
+  for (const bad of [
+    {}, { photoRestPosts: -1 }, { maxPendingDrafts: 0 }, { tipExpiryDays: 1.5 }, { state: 'yes' }, { runCapUsd: 5 }, null,
+    // D16: the old switches are gone, and approval can't be turned off.
+    { autoRun: true }, { publishingLive: true }, { requireApproval: false },
+  ]) {
     assert.equal((await settingsPost(env, bad)).status, 400, JSON.stringify(bad));
   }
-  assert.equal((await settingsPost({ ...env, session: NOBODY }, { autoRun: true })).status, 401);
+  assert.equal((await settingsPost({ ...env, session: NOBODY }, { state: 'approval' })).status, 401);
   assert.deepEqual(calls, []);
 });
 

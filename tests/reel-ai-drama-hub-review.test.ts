@@ -51,6 +51,8 @@ test('verdicts: tags and note kept, unknown tag is a 400, spine mirrors approve 
 
 test('hard publish: a click is approval (force), a rejection is terminal, the waiting slot is cancelled', async () => {
   const db = await dramaHubDb();
+  // The Live state (D16): Generate (auto) and publishing_live both on.
+  await setDrama(db, 'auto', true);
   await setDrama(db, 'publishing_live', true);
   const { jobId } = await finishedJob(db);
   const booked = await scheduleDramaJob(db, jobId, 'auto', new Date('2026-11-09T15:00:00Z'));
@@ -79,6 +81,8 @@ test('hard publish: a click is approval (force), a rejection is terminal, the wa
 
 test('unschedule: slot cancelled, approval withdrawn; refused while posting', async () => {
   const db = await dramaHubDb();
+  // The Live state (D16): Generate (auto) and publishing_live both on.
+  await setDrama(db, 'auto', true);
   await setDrama(db, 'publishing_live', true);
   const { jobId } = await finishedJob(db);
   await setDramaVerdict(db, jobId, 'approved', 'lucas');

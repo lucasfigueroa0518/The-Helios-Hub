@@ -184,21 +184,23 @@ test('settings: defaults, auto off for every series, overrides persist', async (
   assert.equal((await loadSettings(db)).series.ai_trivia.window.start, '08:30');
   // Every content type requires approval and ships with publishing off (docs/social-overnight.md), each on its own (SS-20).
   for (const v of ['stories', 'ai_trivia', 'real_or_ai'] as const) {
-    assert.deepEqual(typeSettings(s, v), { requireApproval: true, publishingLive: false, dailyCapUsd: 2 });
+    assert.deepEqual(typeSettings(s, v), { requireApproval: true, publishingLive: false, dailyCapUsd: 2, refillCapUsd: null });
   }
 });
 
-test('settings (SS-20): the old engine-wide rows are every type’s fallback; the first per-type save moves them into `types`', async () => {
+test('settings (SS-20): the old engine-wide rows are every type’s fallback (a stored require_approval false still reads as true, D16); the first per-type save moves them into `types`', async () => {
   const { db } = await openLocalStoriesDb();
   for (const [key, value] of [['require_approval', false], ['publishing_live', true], ['daily_cap_usd', 3]] as const) {
     await db.query(`INSERT INTO stories.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(value)]);
   }
   const old = await loadSettings(db);
-  for (const v of ['stories', 'ai_trivia', 'real_or_ai'] as const) assert.deepEqual(typeSettings(old, v), { requireApproval: false, publishingLive: true, dailyCapUsd: 3 });
+  for (const v of ['stories', 'ai_trivia', 'real_or_ai'] as const) assert.deepEqual(typeSettings(old, v), { requireApproval: true, publishingLive: true, dailyCapUsd: 3, refillCapUsd: null });
 
   const next = await saveTypeSetting(db, 'ai_trivia', { publishingLive: false, dailyCapUsd: 1 }, 'lucas');
-  assert.deepEqual(next.types.ai_trivia, { requireApproval: false, publishingLive: false, dailyCapUsd: 1 });
-  assert.deepEqual(next.types.stories, { requireApproval: false, publishingLive: true, dailyCapUsd: 3 });
+  assert.deepEqual(next.types.ai_trivia, { requireApproval: true, publishingLive: false, dailyCapUsd: 1, refillCapUsd: null });
+  assert.deepEqual(next.types.stories, { requireApproval: true, publishingLive: true, dailyCapUsd: 3, refillCapUsd: null });
+  // Approval can't be turned off (D16).
+  await assert.rejects(saveTypeSetting(db, 'ai_trivia', { requireApproval: false }), /approval/);
   assert.equal(seriesTypeSettings(next, 'guess_the_number').publishingLive, true, 'a retired series reads as Morning Download');
 
   // The global rows no longer reach any type once `types` holds them all.

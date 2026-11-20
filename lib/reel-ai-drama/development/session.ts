@@ -12,6 +12,8 @@ import { scoreDrama, scoreMaterial } from '@/lib/reel-ai-drama/development/score
 import { checkVisuals, type VisualsCheckDeps } from '@/lib/reel-ai-drama/development/visuals-check';
 import { DAY_MS, centralPlayerId, isoDate } from '@/lib/reel-ai-drama/development/util';
 import { cappedJevTransport, RefillBudget, withoutCapped } from '@/lib/reels/refill-budget';
+import { beginRefill, settleRefill, type TotalQuery } from '@/lib/content-type/refill-total';
+import { dbQuery } from '@/lib/db';
 
 /**
  * One development session (PROCESS.md D1–D7): pick cells → producer → dedupe → drama → material →
@@ -25,6 +27,8 @@ export const CELL_ESTIMATE_USD = 0.6;
 
 export type DevelopmentDeps = {
   db: Queryable;
+  /** The nightly refill total's ledger (D19); the main database when absent. */
+  totalQuery?: TotalQuery;
   /** The producer's send and prompt loader; the session supplies db, session id, model and count. */
   producer: Pick<ProducerDeps, 'create' | 'loadPrompt'>;
   /** Jev transport (live: `liveJevTransport`); the session wraps it in a RecordingDramaJevRunner. */
@@ -177,7 +181,32 @@ async function checkPitch(
   return 'pooled';
 }
 
+/**
+ * A development session. The weekly automatic one is AI Drama's pool refill: it is also held to the nightly total of
+ * all refills (D19): its cap is cut to what is left of tonight's total, and with nothing left it is skipped
+ * (`refill_total_capped`, status 'capped') and the next week's session tries again. A person's click is not held to it.
+ */
 export async function runDevelopmentSession(
+  deps: DevelopmentDeps,
+  opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number },
+): Promise<SessionSummary> {
+  if (opts.refillCapUsd == null) return runSession(deps, opts);
+  const log = deps.log ?? (() => {});
+  const totalQuery: TotalQuery = deps.totalQuery ?? ((t, p) => dbQuery(t, p as unknown[]) as Promise<{ rows: any[] }>);
+  const now = (deps.now ?? (() => new Date()))();
+  const grant = await beginRefill(totalQuery, 'reel_ai_drama', opts.refillCapUsd, { ref: 'development', log: (m, f) => log(m, { vertical: 'reel_ai_drama', ...f }), now });
+  let summary: SessionSummary | null = null;
+  try {
+    // Nothing left of the total: a $0 cap, so the session opens and closes at once with status 'capped'.
+    summary = await runSession(deps, { ...opts, refillCapUsd: grant?.capUsd ?? 0 });
+    return summary;
+  } finally {
+    const spent = summary ? await spendFor(deps.db, { sessionId: summary.sessionId }).catch(() => grant?.capUsd ?? 0) : (grant?.capUsd ?? 0);
+    await settleRefill(totalQuery, grant, spent, (m, f) => log(m, { vertical: 'reel_ai_drama', ...f }));
+  }
+}
+
+async function runSession(
   deps: DevelopmentDeps,
   /**
    * `refillCapUsd`: the weekly session is AI Drama's pool refill (settings standard D16), held to `pool_refill_cap_usd`

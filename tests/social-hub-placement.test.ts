@@ -573,8 +573,9 @@ test('Trial Reels regenerate: today’s slate for the idea, and its lock', async
   assert.deepEqual(await findReelLock(TODAY, IDEA), { nyDate: '2026-10-08', slot: 1 });
 });
 
+/** The Live state (D16): Generate (auto_render) and publishing_live both on. */
 const publishingOn = (pg: PGlite) =>
-  pg.query(`INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  pg.query(`INSERT INTO explainers.settings (key, value) VALUES ('auto_render', 'true'::jsonb), ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
 const explainerSlots = async (pg: PGlite) =>
   (await pg.query<{ id: string; ny_date: string; slot: string; source: string }>(
     `SELECT id::text AS id, ny_date::text AS ny_date, slot, source FROM social_hub.schedule WHERE vertical = 'explainers' AND status = 'scheduled'`,
@@ -607,6 +608,11 @@ test('explainers Approve with publishing off approves and books nothing (Review 
   const e = await explainer(pg);
   const out = await explainerLayer(pg).approve!({ jobId: e.job }, 'tommy', {});
   assert.deepEqual(out, { ok: true, note: 'Approved. Publishing is switched off, so it gets a time once publishing is back on.' });
+  assert.deepEqual(await explainerSlots(pg), []);
+  // Generate off with Live on is not Live (it reads as paused, contract §3): still nothing is booked.
+  await pg.query(`INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  const second = await explainer(pg);
+  assert.equal((await explainerLayer(pg).approve!({ jobId: second.job }, 'tommy', {})).ok, true);
   assert.deepEqual(await explainerSlots(pg), []);
 });
 

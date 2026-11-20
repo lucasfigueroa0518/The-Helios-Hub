@@ -113,15 +113,18 @@ test('the settings route: { values } batches, per-key and cross-field 400s, lega
   assert.equal((await settingsPostRoute(post({ values: { max_seconds: 'long' } }), ok(db))).status, 400);
 });
 
-test('posting: read and write map onto auto / require_approval / publishing_live / posts_per_day', async () => {
+test('posting: read and write map onto auto / publishing_live / posts_per_day; require_approval is never written false (D16)', async () => {
   const db = await dramaHubDb();
-  assert.deepEqual(await readDramaPosting(db), { generate: false, autoPublish: false, live: false, perDay: 1, maxPerDay: 1, dailyRenderCap: 2, dailySpendCapUsd: 20 });
-  const out = await writeDramaPosting(db, { generate: true, autoPublish: true, perDay: 1 });
+  assert.deepEqual(await readDramaPosting(db), { generate: false, live: false, perDay: 1, maxPerDay: 1, dailyRenderCap: 2, dailySpendCapUsd: 20 });
+  const out = await writeDramaPosting(db, { generate: true, perDay: 1 });
   assert.equal(out.generate, true);
-  assert.equal(out.autoPublish, true);
+  assert.equal('autoPublish' in out, false, 'no Auto-publish: every post needs approval');
   const s = await loadSettings(db);
   assert.equal(s.auto, true);
-  assert.equal(s.require_approval, false);
+  assert.equal(s.require_approval, true);
+  // An old caller's autoPublish is ignored: approval stays required.
+  await writeDramaPosting(db, { autoPublish: true } as never);
+  assert.equal((await loadSettings(db)).require_approval, true);
   await assert.rejects(writeDramaPosting(db, { perDay: 3 }), /1 to 1/);
   await assert.rejects(writeDramaPosting(db, { live: 'yes' as never }), /true or false/);
   assert.equal((await writeDramaPosting(db, { live: true })).live, true);

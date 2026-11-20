@@ -12,6 +12,7 @@
  * time follows postsToInstagram. A person's Generate and Rebuild post run in every state, as before.
  */
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
+import { beginRefill, settleRefill } from '@/lib/content-type/refill-total';
 import { rankWeek } from '@/lib/networking/pick/rank';
 import { comingWeek, weekFromKey } from '@/lib/networking/pick/week';
 import { logRefillCapped, readTypeGate } from '@/lib/social/refill';
@@ -170,6 +171,32 @@ async function refillWeek(
   claimed: ClaimedRun,
   o: { nyDate: string; weekKey: string; capUsd: number; why: string; finish: (f: Parameters<typeof finishRun>[2]) => Promise<void> },
 ): Promise<CarryOutResult> {
+  // The nightly total of all refills (D19): the cap is cut to what is left of it; no room skips the refill this week.
+  const grant = await beginRefill(w.query, 'ai_events', o.capUsd, { ref: `run:${claimed.id}`, log: w.log, now: w.now() });
+  if (!grant) {
+    const note = `${o.why} Tonight's refill total is used up, so the pool was not ranked; it refills next time.`;
+    await o.finish({ status: 'skipped', stopReason: `refill-total-capped: ${note}`, jevUsd: 0, record: { kind: claimed.kind, weekKey: o.weekKey, refillOnly: true } });
+    return { runId: claimed.id, status: 'skipped', note };
+  }
+  let settled = false;
+  const settle = async (usd: number) => {
+    settled = true;
+    await settleRefill(w.query, grant, usd, w.log);
+  };
+  try {
+    return await rankRefill(w, claimed, { ...o, capUsd: grant.capUsd }, settle);
+  } finally {
+    // The ranking threw before reporting its spend: settle at the reservation (the strict reading).
+    if (!settled) await settle(grant.capUsd);
+  }
+}
+
+async function rankRefill(
+  w: CarryOutDeps,
+  claimed: ClaimedRun,
+  o: { nyDate: string; weekKey: string; capUsd: number; why: string; finish: (f: Parameters<typeof finishRun>[2]) => Promise<void> },
+  settle: (usd: number) => Promise<void>,
+): Promise<CarryOutResult> {
   await adoptRun(w.query, claimed.id, { capUsd: o.capUsd, nyDate: o.nyDate, weekKey: o.weekKey });
   w.log('ai_events_refill_started', { runId: claimed.id, weekKey: o.weekKey, capUsd: o.capUsd, why: o.why });
   const deps = await w.engine(claimed, o.capUsd);
@@ -184,6 +211,7 @@ async function refillWeek(
     w.log('ai_events_run_failed', { runId: claimed.id, error: message });
     return { runId: claimed.id, status: 'failed', note: message };
   }
+  await settle(rank.jev.usd);
   const capped = rank.failures.some((f) => CAP_ERROR.test(f.error));
   if (capped) logRefillCapped(w.log, 'ai_events', { capUsd: o.capUsd, spentUsd: rank.jev.usd, step: 'ranking', runId: claimed.id });
   const record = { kind: claimed.kind, weekKey: o.weekKey, refillOnly: true, capped, scored: rank.scored, reused: rank.reused, failures: rank.failures.slice(0, 10), jev: rank.jev };

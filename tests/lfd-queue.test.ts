@@ -3,12 +3,13 @@ import test from 'node:test';
 
 import { datesByWeekday, weekdayOfDate } from '@/lib/lfd/days';
 import { carouselOffDays, parseLfdSettings, readLfdSettings } from '@/lib/lfd/settings';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { adoptRun, claimRun, failRun, requestRun } from '@/lib/lfd/store';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
 test('settings: defaults ship off, days fall back to Tue/Fri, a bad cap reads as null', () => {
-  assert.deepEqual(parseLfdSettings([]), { autoRun: false, publishingLive: false, requireApproval: true, days: [2, 5], runCapUsd: 1, runCapRaw: 1, memes: true, memesCapUsd: 1 });
+  assert.deepEqual(parseLfdSettings([]), { autoRun: false, publishingLive: false, requireApproval: true, refillCapUsd: REFILL_CAP_DEFAULT_USD.last_few_days, days: [2, 5], runCapUsd: 1, runCapRaw: 1, memes: true, memesCapUsd: 1 });
   assert.equal(parseLfdSettings([{ key: 'memes', value: false }]).memes, false, 'memes switch off only on an explicit false');
   assert.equal(parseLfdSettings([{ key: 'memes_cap_usd', value: 'abc' }]).memesCapUsd, 1, 'a bad meme cap falls back to the default');
   const s = parseLfdSettings([
@@ -17,7 +18,8 @@ test('settings: defaults ship off, days fall back to Tue/Fri, a bad cap reads as
     { key: 'run_cap_usd', value: '0.75' },
     { key: 'require_approval', value: false },
   ]);
-  assert.deepEqual([s.autoRun, s.days, s.runCapUsd, s.requireApproval], [true, [2, 5], 0.75, false]);
+  // A stored require_approval false is never read as false (D16).
+  assert.deepEqual([s.autoRun, s.days, s.runCapUsd, s.requireApproval], [true, [2, 5], 0.75, true]);
   assert.deepEqual(parseLfdSettings([{ key: 'days', value: [9] }]).days, [2, 5]);
   assert.deepEqual(parseLfdSettings([{ key: 'days', value: [] }]).days, [2, 5]);
   for (const bad of ['abc', 0, -1, null, true]) assert.equal(parseLfdSettings([{ key: 'run_cap_usd', value: bad }]).runCapUsd, null, String(bad));
