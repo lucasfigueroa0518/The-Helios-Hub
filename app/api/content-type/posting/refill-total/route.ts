@@ -1,4 +1,4 @@
-// app/api/social-hub/refill-total/route.ts
+// app/api/content-type/posting/refill-total/route.ts
 import { NextResponse } from 'next/server';
 
 import { dbQuery } from '@/lib/db';

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-const URL = '/api/social-hub/refill-total';
+const URL = '/api/content-type/posting/refill-total';
 
 /**
  * The nightly total of all idea-pool refills (settings standard D19): every type's refill shares it, on top of its
