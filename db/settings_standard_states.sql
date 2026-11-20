@@ -36,6 +36,9 @@
 --     UNION ALL SELECT 'stories',        key, value FROM stories.settings     WHERE key IN ('series','types','require_approval','publishing_live')
 --     ORDER BY 1, 2; ROLLBACK;"
 --
+-- Day one (read-only check 2026-11-20): Carousels, AI Trivia, Real or AI? = Paused; every other type = Live, as today.
+-- require_approval was already true everywhere, so approval doesn't change. Text on Screen had no auto_run row
+-- (read as on), so it gets auto_run = true.
 -- Expected after: every type has its Generate key, publishing_live, require_approval = true and pool_refill_cap_usd;
 -- Carousels auto_run false and publishing_live false; Text on Screen auto_run unchanged if it was stored, else true;
 -- stories `types` has requireApproval true and refill_cap_usd for stories, ai_trivia and real_or_ai.
@@ -129,6 +132,13 @@ BEGIN
         || CASE WHEN jsonb_typeof(types_now -> v) = 'object' THEN types_now -> v ELSE '{}'::jsonb END
         || jsonb_build_object('requireApproval', true),
       true);
+    -- A type whose series' auto (Generate) is off is Paused: write its Live off too, so it doesn't read as the
+    -- Generate-off / Live-on mismatch through the engine-wide fallback (2026-11-20 check: AI Trivia and Real or AI?
+    -- had auto unset with publishing_live on, and no set made in 30 days, so nothing changes in practice).
+    ser := CASE v WHEN 'stories' THEN 'morning_download' ELSE v END;
+    IF NOT coalesce((SELECT (value -> ser ->> 'auto')::boolean FROM stories.settings WHERE key = 'series'), false) THEN
+      types_now := jsonb_set(types_now, ARRAY[v, 'publishingLive'], 'false'::jsonb, true);
+    END IF;
   END LOOP;
   INSERT INTO stories.settings AS s (key, value, updated_by, updated_at)
   VALUES ('types', types_now, 'settings-standard migration', now())
