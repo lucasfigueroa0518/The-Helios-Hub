@@ -64,7 +64,7 @@ import type { IntakeJev } from '@/lib/intake/types';
 import { poolDay, refreshPoolIfDue, type PoolReads } from '@/lib/stories/pool';
 import { storiesPoolReads, type ReadConsumerMode } from '@/lib/stories/pool-intake';
 import { pickSetPublishAt, requestAutoSets } from '@/lib/stories/schedule';
-import { loadSettings, typeSettings, type StoriesSettings } from '@/lib/stories/settings';
+import { loadSettings, SERIES, typeSettings, type StoriesSettings } from '@/lib/stories/settings';
 import { SERIES_OF_VERTICAL, STORY_VERTICALS, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { isBrandAsset } from '@/lib/photos/used';
 import { recordPublishedPhoto } from '@/lib/stories/sources/carousel';
@@ -77,6 +77,7 @@ import { createBankReader } from '@/lib/media-library/reader';
 import type { IntakeJevHandle } from '@/lib/intake/jev';
 import { logRefillCapped, readStoriesRefillCap, typeGate, type RefillLog, type TypeGate } from '@/lib/social/refill';
 import type { RefillBudget } from '@/lib/stories/trivia/daily';
+import { returnPassedSets, unslottedSetIds } from '@/lib/stories/unslot';
 
 /** Auto sets are requested in the Stories hour of the night clock (docs/social-overnight.md, night schedule v2). */
 export const AUTO_REQUEST_AFTER = '03:00';
@@ -180,14 +181,20 @@ export async function tick(deps: WorkerDeps): Promise<{ built: number; scheduled
 
   // 3–4 post nothing for a type that is not Live (D16; each Stories-format type has its own state, SS-22).
   const live = (series: Series) => gates[verticalOfSeries(series)].posts;
+  // Back to Made (D17): a set whose minute passed while its type is not Live returns to approved, its slot cancelled 'slot-passed'.
+  const notLive = SERIES.filter((s) => !live(s));
+  const returned = await returnPassedSets(deps.db, notLive, now).catch((err) => (log(`slot-passed: ${err instanceof Error ? err.message : String(err)}`), []));
+  if (returned.length) log(`slot-passed: ${returned.length} set(s) back to Made (${returned.join(', ')})`);
   if (!STORY_VERTICALS.some((v) => gates[v].posts)) {
     await pollInsights(deps, now, out);
     return out;
   }
 
-  // 3. Schedule approved sets.
-  for (const s of await listSets(deps.db, { statuses: ['approved'] })) {
-    if (!live(s.series)) continue;
+  // 3. Schedule approved sets; a set that went back to Made (paused or slot passed) is never re-slotted (D18).
+  const approved = await listSets(deps.db, { statuses: ['approved'] });
+  const unslotted = await unslottedSetIds(deps.db, approved.map((s) => s.id));
+  for (const s of approved) {
+    if (!live(s.series) || unslotted.has(s.id)) continue;
     // A set with a slot (template mode) books in [slot, slot + 15]; one without, in its series' window.
     const at = pickSetPublishAt(settings.series[s.series].window, s, now);
     if (!at) continue; // window passed: the Hub offers Publish now or reject

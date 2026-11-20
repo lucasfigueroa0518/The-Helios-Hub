@@ -451,3 +451,64 @@ test('stories: approval is never turned off through the settings API', async () 
   const api = await import('@/lib/stories/api');
   await assert.rejects(api.updateSeries(db, { vertical: 'ai_trivia', requireApproval: false }, 'test'), /cannot be turned off/);
 });
+
+/* ── 7. Stories: back to Made (D17, D18) ─────────────────────────────── */
+
+async function scheduledTriviaSet(db: Awaited<ReturnType<typeof harnessDb>>['db'], at: Date) {
+  const repo = await import('@/lib/stories/repository');
+  const { set } = await requestSet(db, { series: 'ai_trivia', nyDate: '2026-10-08', trigger: 'click', style: DEFAULT_SETTINGS.series.ai_trivia.style });
+  await db.query(`UPDATE stories.sets SET status = 'approved' WHERE id = $1`, [set.id]);
+  await repo.scheduleSet(db, set.id, at);
+  return set.id;
+}
+
+const spineSlot = async (db: Awaited<ReturnType<typeof harnessDb>>['db'], setId: string) =>
+  (await db.query<{ status: string; error: string | null }>(
+    `SELECT s.status, s.error FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id WHERE ci.native_ref = $1 ORDER BY s.created_at DESC`,
+    [setId],
+  )).rows;
+
+test('stories: a set paused back to Made is never re-slotted by step 3 when the type is Live again (D18)', async () => {
+  const { db } = await harnessDb();
+  const before3 = new Date('2026-10-08T06:00:00Z');
+  // unslotType takes only slots still ahead of the real clock.
+  const id = await scheduledTriviaSet(db, new Date(Date.now() + 86_400_000));
+  const { unslotType } = await import('@/lib/content-type/unslot');
+  const out = await unslotType((t, p) => db.query(t, p) as never, 'ai_trivia', 'paused');
+  assert.equal(out.sets, 1);
+  assert.deepEqual((await spineSlot(db, id)).map((r) => [r.status, r.error]), [['cancelled', 'paused']]);
+  // Live again: Generate on, publishing_live on.
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveTypeSetting(db, 'ai_trivia', { publishingLive: true });
+  const { deps } = storiesDeps(db, before3);
+  assert.equal((await tick(deps as never)).scheduled, 0, 'it stays in the Made tab, approved');
+  const row = (await db.query<{ status: string; publish_at: string | null }>(`SELECT status, publish_at FROM stories.sets WHERE id = $1`, [id])).rows[0]!;
+  assert.deepEqual([row.status, row.publish_at], ['approved', null]);
+});
+
+test('stories: a set whose slot passes while its type is not Live goes back to approved, its slot cancelled slot-passed, and is not re-slotted', async () => {
+  const { db } = await harnessDb();
+  const id = await scheduledTriviaSet(db, new Date('2026-10-08T05:30:00Z'));
+  // Paused (the default): its minute passes.
+  const { deps, lines } = storiesDeps(db, new Date('2026-10-08T06:00:00Z'));
+  assert.deepEqual(await tick(deps as never), { built: 0, scheduled: 0, published: 0, insights: 0 });
+  const row = (await db.query<{ status: string; publish_at: string | null }>(`SELECT status, publish_at FROM stories.sets WHERE id = $1`, [id])).rows[0]!;
+  assert.deepEqual([row.status, row.publish_at], ['approved', null]);
+  assert.deepEqual((await spineSlot(db, id)).map((r) => [r.status, r.error]), [['cancelled', 'slot-passed']]);
+  assert.ok(lines.some((l) => l.startsWith('slot-passed: 1 set(s) back to Made')));
+  // Live later the same morning: still not re-slotted (D18).
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveTypeSetting(db, 'ai_trivia', { publishingLive: true });
+  const later = storiesDeps(db, new Date('2026-10-08T06:30:00Z'));
+  assert.equal((await tick(later.deps as never)).scheduled, 0);
+});
+
+test('stories: a Live type’s passed slot is left to the publish step, not sent back to Made', async () => {
+  const { db } = await harnessDb();
+  const id = await scheduledTriviaSet(db, new Date('2026-10-08T05:30:00Z'));
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveTypeSetting(db, 'ai_trivia', { publishingLive: true });
+  const { returnPassedSets } = await import('@/lib/stories/unslot');
+  assert.deepEqual(await returnPassedSets(db, ['morning_download', 'real_or_ai'], new Date('2026-10-08T06:00:00Z')), []);
+  assert.equal((await db.query<{ status: string }>(`SELECT status FROM stories.sets WHERE id = $1`, [id])).rows[0]!.status, 'scheduled');
+});

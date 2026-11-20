@@ -9,7 +9,7 @@ import test, { afterEach } from 'node:test';
 import { readPosting, writePosting } from '@/lib/content-type/posting';
 import { capSpendUsd } from '@/lib/stories/build/common';
 import { approveSet, listSets, recordCost, scheduleSet, typeDaySpendUsd } from '@/lib/stories/repository';
-import { loadSettings, saveTypeSetting, typeSettings } from '@/lib/stories/settings';
+import { loadSettings, saveSeriesSetting, saveTypeSetting, typeSettings } from '@/lib/stories/settings';
 import { tick } from '@/lib/stories/worker';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
@@ -88,6 +88,9 @@ test('publishing live is per type: only the live type’s approved set is schedu
   await approveSet(db, trivia);
   assert.equal((await tick(deps(db, THU_1AM))).scheduled, 0, 'every type off');
   await saveTypeSetting(db, 'ai_trivia', { publishingLive: true });
+  // Live is Generate on with publishing_live on (D16); publishing_live alone reads as paused.
+  assert.equal((await tick(deps(db, THU_1AM))).scheduled, 0, 'Generate off: paused');
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   assert.equal((await tick(deps(db, THU_1AM))).scheduled, 1);
   const status = Object.fromEntries((await listSets(db, {})).map((s) => [s.series, s.status]));
   assert.deepEqual(status, { ai_trivia: 'scheduled', morning_download: 'approved' });

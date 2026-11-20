@@ -61,8 +61,11 @@ test('storyActions.approve passes the note through, and keeps the old line when 
   assert.deepEqual(await plain.approve!({ setId: 's' }, 'tommy', {}), { ok: true, note: 'Approved. It posts in its window.' });
 });
 
+/** Live (settings standard D16): publishing_live on with each series' Generate (auto) on; Live with Generate off reads as paused. */
 async function publishingOn(db: Awaited<ReturnType<typeof ready>>['db']) {
   await db.query(`INSERT INTO stories.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  const on = { auto: true, enabled: true };
+  await db.query(`INSERT INTO stories.settings (key, value) VALUES ('series', $1::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify({ morning_download: on, ai_trivia: on, real_or_ai: on })]);
 }
 
 test('approve with publishing live books today’s window at once (B1); the spine slot follows the set', async () => {
