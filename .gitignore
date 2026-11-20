@@ -7,7 +7,7 @@ out/
 
 # env — never commit real secrets
 .env
-.env.local
+.env.local*
 .env.*.local
 scripts/gcp/worker.env
 scripts/gcp/higgsfield-session.json
