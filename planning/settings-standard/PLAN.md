@@ -20,7 +20,8 @@ Stage: **Contract** (v2 in `CONTRACT.md`, no open questions; awaiting Tommy's ap
   | **Live** | yes | yes, and they wait for review | makes it ready in its slot | yes, at its slot time, approved posts only |
 
   Refill is not a control: it always runs, on its spend cap, including on days the quota is full (keeps D3). Approval is not a switch: every post needs a person (`require_approval` always true).
-- **D14 (2026-11-19): Refill $ caps default to $0.25 for Jev-only types and $0.50 for types that call Claude.** User: "yes".
+- **D19 (2026-11-20): Refill caps are raised to each type's old run budget, with a ~$5 nightly total across all refills.** This replaces D14's $0.25/$0.50 defaults. User: "This new one seems too low"; then "all of them, yes, yes" (raise all types; base on the old run budget; add a nightly total). Proposed per-type numbers are awaiting confirmation in chat.
+- **D14 (2026-11-19, superseded by D19): Refill $ caps default to $0.25 for Jev-only types and $0.50 for types that call Claude.** User: "yes".
 - **D18 (2026-11-20): A post that goes back to Made stays approved but isn't posted.** It never moves itself into a new slot; it posts only after a person places it in a slot while the type is Live. User: "yes, stays approved but j doesnt get possted".
 - **D17 (2026-11-19): A paused type holds no slots. Pausing takes its scheduled posts out of their slots and puts them back in the Made tab. A post whose slot passes without posting also goes back to Made.** User: "if it's paused, then it is paused, and posts get placed in the Made tab. If the slot passes the again its placed in the made tab". This settles D15: posts are unscheduled, not deleted.
 - **D15 (2026-11-19): Switching a type to Paused cancels its already-scheduled posts.** User: "yes". Because of D16, this needs re-checking: under the new model an approved post is "ready in its slot", so does pausing cancel ready posts too? Asked in chat.
