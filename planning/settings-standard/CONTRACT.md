@@ -1,7 +1,7 @@
 # Contract — Standard settings for every content type
 
 Status: **draft v2 for Tommy's review** (2026-11-19). It replaces v1's four-switch model with D16's three states. Nothing is built until this is approved.
-Decisions: D1, D3, D6, D7, D8–D12, D14–D16 in `PLAN.md`.
+Decisions: D1, D3, D6, D7, D8–D12, D14–D18 in `PLAN.md`.
 
 ## 1. The model (D16)
 Each type has **one state: Paused | Approval | Live**.
@@ -51,7 +51,7 @@ The state is read from and written to the keys each type already has:
 2. **Make posts**: only in Approval or Live, and only up to `quota − placed`. This is today's daily-fill rule.
 3. **Approving a post** in Approval or Live books or keeps its slot and marks it ready. In Paused it's marked approved and stays in the Made tab.
 4. **Post**: only in Live, and only approved posts, at their slot time.
-5. **Back to Made (D17)**: switching to Paused unschedules every scheduled post of that type (slot status `cancelled`, reason `paused`), and the post returns to the Made tab. A slot that passes without posting (the type isn't Live, or today's lateness rule) does the same with reason `slot-passed`. Nothing is deleted.
+5. **Back to Made (D17)**: switching to Paused unschedules every scheduled post of that type (slot status `cancelled`, reason `paused`), and the post returns to the Made tab. A slot that passes without posting (the type isn't Live, or today's lateness rule) does the same with reason `slot-passed`. Nothing is deleted. The post **stays approved** but is never re-slotted automatically. It posts only after a person places it in a slot while the type is Live (D18).
 
 Each type's refill must be split out from its make step. Today they're one gate:
 
@@ -76,5 +76,5 @@ Renaming stored keys (D7), global settings (D10), new content types, and any cha
 - **Deploy:** apply the migration, then redeploy with `./scripts/gcp/deploy-social-worker.sh` in the same session. Update `docs/social-overnight.md` (contract item 2, Daily fill, Approval sections).
 - **Verify:** Tommy clicks the Settings tab on each type. The next night's logs should show every type's pool refilling, Carousels included, with no `quota-filled` refill skips.
 
-## 7. Open questions for Tommy
-1. **A post that went back to Made: is it still approved?** If it is, placing it in a new slot needs no second review. Proposed: it stays approved.
+## 7. Open questions
+None. Awaiting Tommy's approval to build.

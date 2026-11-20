@@ -1,7 +1,7 @@
 # Standardize settings for all content types — living plan
 
 Trello card: "Standardize settings for all content types"
-Stage: **Contract** (draft in `CONTRACT.md`, awaiting review; no code edits until approved)
+Stage: **Contract** (v2 in `CONTRACT.md`, no open questions; awaiting Tommy's approval to build)
 
 ## The card's questions
 - (a) Where do we control whether a content type is "live"?
@@ -21,6 +21,7 @@ Stage: **Contract** (draft in `CONTRACT.md`, awaiting review; no code edits unti
 
   Refill is not a control: it always runs, on its spend cap, including on days the quota is full (keeps D3). Approval is not a switch: every post needs a person (`require_approval` always true).
 - **D14 (2026-11-19): Refill $ caps default to $0.25 for Jev-only types and $0.50 for types that call Claude.** User: "yes".
+- **D18 (2026-11-20): A post that goes back to Made stays approved but isn't posted.** It never moves itself into a new slot; it posts only after a person places it in a slot while the type is Live. User: "yes, stays approved but j doesnt get possted".
 - **D17 (2026-11-19): A paused type holds no slots. Pausing takes its scheduled posts out of their slots and puts them back in the Made tab. A post whose slot passes without posting also goes back to Made.** User: "if it's paused, then it is paused, and posts get placed in the Made tab. If the slot passes the again its placed in the made tab". This settles D15: posts are unscheduled, not deleted.
 - **D15 (2026-11-19): Switching a type to Paused cancels its already-scheduled posts.** User: "yes". Because of D16, this needs re-checking: under the new model an approved post is "ready in its slot", so does pausing cancel ready posts too? Asked in chat.
 - **D1 (2026-11-18): "Live" means only "posts actually go to Instagram"** (`publishing_live`). Generating gets its own name, for example "making posts". User: "1 yes".
