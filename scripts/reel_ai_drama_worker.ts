@@ -2,8 +2,9 @@
  * Reel AI Drama worker (planning/AI Mini Docs/HUB-WIRING-CONTRACT.md §7.1 item 4). Every poll: run a person's queued
  * Develop / Calibrate click; the refill in every state (settings standard D16): once per New York day, tend the pool,
  * and once a week the development session on its refill cap; while the type makes posts (Approval or Live), the
- * nightly fill from DRAMA_NIGHT_HOUR_NY (lib/reel-ai-drama/night.ts); while it is Live, book approved reels; then the next production job, one at a time. A night job that finishes ok
- * books today's next open slot unapproved. Posting: while publishing is live and the shared publisher does not drive
+ * nightly fill from DRAMA_NIGHT_HOUR_NY (lib/reel-ai-drama/night.ts); in Approval or Live (holdsSlots, contract §4.3),
+ * book approved reels; then the next production job, one at a time. A night job that finishes ok books today's next
+ * open slot unapproved (Approval or Live). Posting: only while AI Drama is Live (D16) and the shared publisher does not drive
  * AI Drama (publisher_mode off or shadow), this worker releases due slots, posts one attempt at a time and reads
  * insights, as the explainers worker does; with publisher_mode live it stands down. Every job spends up to the
  * per-reel cap, so the worker runs only with --yes.
@@ -84,7 +85,7 @@ async function main(): Promise<void> {
   const { afterDramaJob, failStaleDramaRequests, runNextDramaRequest } = await import('@/lib/reel-ai-drama/requests');
   const { runDramaNight, tendPoolOncePerDay } = await import('@/lib/reel-ai-drama/night');
   const { DRAMA_NIGHT_HOUR_NY } = await import('@/lib/reel-ai-drama/publish/config');
-  const { dramaPublishingLive, dramaReleaseDue, scheduleApprovedDrama } = await import('@/lib/reel-ai-drama/publish/schedule');
+  const { dramaHoldsSlots, dramaPublishingLive, dramaReleaseDue, scheduleApprovedDrama } = await import('@/lib/reel-ai-drama/publish/schedule');
   const { claimAndCarryDrama } = await import('@/lib/reel-ai-drama/publish/publish');
   const { pollDramaInsights } = await import('@/lib/reel-ai-drama/publish/insights');
   const { DRAMA_INSIGHTS_HOUR_NY, DRAMA_INSIGHTS_MINUTE_NY } = await import('@/lib/reel-ai-drama/publish/config');
@@ -226,12 +227,14 @@ async function main(): Promise<void> {
       const tick = await weeklyTick(schedule, now);
       if (tick.development === 'ran' || tick.development === 'failed') log('weekly_tick', tick as unknown as Record<string, unknown>);
     });
-    // Approved reels onto the clock; then, unless the shared publisher drives AI Drama, due slots into attempts and one
-    // attempt to Instagram. Only while AI Drama is Live (D16; Generate off with Live on reads as paused).
+    // Approved reels onto the clock in Approval and Live (holdsSlots, contract §4.3; never one sent back to Made, D18);
+    // then, unless the shared publisher drives AI Drama, due slots into attempts and one attempt to Instagram, only while
+    // Live (D16; Generate off with Live on reads as paused).
     await step('publish', async () => {
-      if (!(await dramaPublishingLive(db))) return;
+      if (!(await dramaHoldsSlots(db))) return;
       const booked = await scheduleApprovedDrama(db, now);
       if (booked) log('approved_booked', { count: booked });
+      if (!(await dramaPublishingLive(db))) return;
       if (await standDown()) return;
       const released = await dramaReleaseDue(db);
       if (released) log('schedule_due', { released });

@@ -16,7 +16,7 @@ import { pollExplainerInsights, type ExplainerInsightsClient } from '@/lib/expla
 import { explainerItemId } from '@/lib/explainers/publish/items';
 import { productionSpendForDay, saveFeedback } from '@/lib/explainers/repository';
 import type { ReelMetaClient } from '@/lib/explainers/publish/meta';
-import { claimAndPublish, publishReadiness, queuePublish } from '@/lib/explainers/publish/publish';
+import { claimAndPublish, EXPLAINERS_NOT_LIVE_NOTE, hardPublishJob, publishReadiness, queuePublish } from '@/lib/explainers/publish/publish';
 import { bookFinishedRender, publishingLive, releaseDueSchedules, scheduleApproved, scheduleJob } from '@/lib/explainers/publish/schedule';
 import { bucketArtifactStore, localArtifactStore } from '@/lib/explainers/storage';
 
@@ -259,10 +259,10 @@ test('B2: a person’s render (Regenerate, Make it) is not booked at finish; App
   assert.deepEqual(await explainerSlots(db), []);
 });
 
-test('B2: nothing is booked while publishing is off, or once today’s windows are over (never tomorrow)', async () => {
+test('B2: nothing is booked while Paused (or a mismatch), or once today’s windows are over (never tomorrow)', async () => {
   const { db } = await scratchExplainersDb();
   const jobId = await renderedJob(db, { verdict: null, trigger: 'auto' });
-  assert.equal(await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0), null, 'publishing_live is off by default');
+  assert.equal(await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0), null, 'Paused by default (auto_render and publishing_live off)');
   // Generate off with Live on reads as paused (contract §3): nothing is booked either.
   await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('publishing_live', 'true'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   assert.equal(await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0), null, 'paused: no booking');
@@ -321,4 +321,18 @@ test('lead time: the daily spend cap counts a cost against its render’s target
   assert.equal(await productionSpendForDay(db, '2026-10-10'), 4);
   assert.equal(await productionSpendForDay(db, '2026-10-09'), 1);
   assert.equal(await productionSpendForDay(db, '2026-10-08'), 2.5);
+});
+
+test('B2 in Approval (Generate on, Live off): a night render books its window (contract §4.3); Hard publish is refused and records nothing (Live only)', async () => {
+  const { db } = await scratchExplainersDb();
+  await db.query(`INSERT INTO explainers.settings (key, value) VALUES ('auto_render', 'true'::jsonb), ('publishing_live', 'false'::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  const jobId = await renderedJob(db, { verdict: null, trigger: 'auto' });
+  const booked = await bookFinishedRender(db, { id: jobId, trigger: 'auto' }, FINISHED_3AM, () => 0);
+  assert.equal(booked?.scheduled, true);
+  assert.equal((await explainerSlots(db)).length, 1);
+  const refused = await hardPublishJob(db, jobId, 'tommy');
+  assert.deepEqual(refused, { queued: false, note: EXPLAINERS_NOT_LIVE_NOTE, terminal: false });
+  assert.equal((await db.query(`SELECT 1 FROM explainers.feedback WHERE job_id = $1`, [jobId])).rows.length, 0, 'no approval recorded');
+  assert.equal((await db.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0, 'nothing queued');
+  assert.equal((await explainerSlots(db)).length, 1, 'its slot stays');
 });

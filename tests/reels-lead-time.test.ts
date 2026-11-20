@@ -31,6 +31,7 @@ import { fillDates } from '@/lib/social-hub/lead';
 import { addDays } from '@/lib/social-hub/time';
 
 import { PAGE, reelsDb, stub } from './fixtures/reels-seed';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 delete process.env.ANTHROPIC_API_KEY; // nothing here may reach a live model
 
@@ -330,7 +331,7 @@ test('the night: cutover scores day+1 and day+2 slates; the next night only day+
     const run = (await startRun(trigger))!;
     for (let n = 1; n <= 4; n += 1) await idea(run.id, (made += 1));
     const { jev } = stub();
-    const outcome = await executeRun(run, { jev, copyClient: refusingCopy, adapters: { primary: [], derived: [] }, intake });
+    const outcome = await executeRun(run, { jev, copyClient: refusingCopy, adapters: { primary: [], derived: [] }, intake, totalQuery: fakeTotalLedger().q });
     assert.notEqual(outcome.status, 'failed', outcome.note);
     const day = nyDateKey(new Date(run.started_at ?? run.requested_at));
     const dates = (await pg.query<{ d: string }>(`SELECT ny_date::text AS d FROM reels.score_slates WHERE run_id = $1 ORDER BY ny_date`, [run.id])).rows.map((r) => r.d);

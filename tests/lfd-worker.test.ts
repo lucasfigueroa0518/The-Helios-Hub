@@ -75,7 +75,20 @@ test('a claimed run is carried out with the settings cap; its post joins the spi
   assert.deepEqual([slot.d, slot.slot, slot.source], ['2026-10-13', 'morning', 'auto']);
 });
 
-test('publishing off: the post joins the spine but books nothing', async () => {
+test('Approval (Generate on, Live off): the post joins the spine and takes today’s window (contract §4.3); only Live posts it', async () => {
+  const { query } = await openHubTestDb();
+  await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
+  await query(`UPDATE lfd.settings SET value = 'false'::jsonb WHERE key = 'publishing_live'`);
+  const { w } = worker(query);
+  const out = await carryOutLfdRun(w, await claimed(query, 'manual'));
+  assert.equal(out.status, 'ok');
+  assert.ok(out.scheduled, 'booked in Approval');
+  const slot = (await query<{ d: string; source: string }>(`SELECT ny_date::text AS d, source FROM social_hub.schedule`)).rows[0]!;
+  assert.deepEqual([slot.d, slot.source], ['2026-10-13', 'auto']);
+  assert.equal((await query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n, 0, 'booking only');
+});
+
+test('Paused (the default): the post joins the spine but books nothing', async () => {
   const { query } = await openHubTestDb();
   const { w } = worker(query);
   const out = await carryOutLfdRun(w, await claimed(query, 'manual'));

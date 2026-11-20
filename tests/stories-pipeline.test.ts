@@ -571,7 +571,7 @@ test('worker: a flagged auto set is not self-approved (no set ever is, D16)', as
   assert.equal(sets[0]!.flagged, true);
 });
 
-test('worker (defaults): nothing before 3 AM; an auto set waits at ready for Approve; an approved set is not scheduled while publishing is off', async () => {
+test('worker (Approval: auto on, Live off): nothing before 3 AM; an auto set waits at ready for Approve; an approved set takes its minute but never posts, and goes back to Made once it passes', async () => {
   const { db } = await harnessDb();
   await saveSeriesSetting(db, 'morning_download', { auto: true });
   const renderer = await stubRenderer();
@@ -593,8 +593,16 @@ test('worker (defaults): nothing before 3 AM; an auto set waits at ready for App
   const [set] = await repo.listSets(db, { series: 'morning_download' });
   assert.equal(set!.status, 'ready', 'require_approval is on by default');
   await repo.approveSet(db, set!.id);
-  assert.equal((await tick(deps)).scheduled, 0, 'publishing_live is off by default');
+  // Approval holds slots (contract §4.3): the approved set gets its minute; only Live posts (meta would throw).
+  const booked = await tick(deps);
+  assert.deepEqual([booked.scheduled, booked.published], [1, 0], 'publishing_live is off by default: Approval books, never posts');
+  assert.equal((await getSet(db, set!.id))!.set.status, 'scheduled');
+  // Its minute passes without posting: back to Made, still approved, never re-slotted (D17, D18).
+  clock = new Date('2026-10-08T15:00:00Z'); // 11:00 AM
+  const after = await tick(deps);
+  assert.deepEqual([after.scheduled, after.published], [0, 0]);
   assert.equal((await getSet(db, set!.id))!.set.status, 'approved');
+  assert.equal((await tick(deps)).scheduled, 0, 'never re-slotted by the worker');
 });
 
 test('insights: a frame gets its final capture at 23 hours, before it drops out at 24', async () => {

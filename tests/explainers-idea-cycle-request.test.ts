@@ -22,6 +22,7 @@ import { loadSettings, saveSetting } from '@/lib/explainers/settings';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const NOW = new Date('2026-11-08T15:00:00Z');
 const never = <T,>(name: string) =>
@@ -102,7 +103,7 @@ test('the estimate is the idea pipeline plus daily_render_cap renders at the per
 test('without force, auto_render off (paused) makes nothing: the night only refills, on its own cap (D16, D3)', async () => {
   const { db } = await scratchExplainersDb();
   const events: string[] = [];
-  const result = await runIdeaCycle({ db, ideaModel: stubPropose(), jevTransport: stubTransport(), now: NOW, event: (e) => events.push(e) });
+  const result = await runIdeaCycle({ db, ideaModel: stubPropose(), jevTransport: stubTransport(), now: NOW, event: (e) => events.push(e), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'refilled');
   if (result.status === 'refilled') assert.equal(result.reason, 'paused');
   assert.ok(events.includes('make_skipped'), 'the make step logs its skip');
@@ -113,14 +114,14 @@ test('force passes the auto_render gate only: the spend cap still stops it', asy
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'mode', 'production');
   await db.query(`INSERT INTO explainers.cost_events (mode, vendor, component, usd) VALUES ('production', 'anthropic', 'render', 1000)`);
-  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true });
+  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true, totalQuery: fakeTotalLedger().q });
   assert.deepEqual(result, { status: 'skipped', reason: 'daily_spend_cap' });
 });
 
 test('force passes the auto_render gate only: one cycle per day still holds', async () => {
   const { db } = await scratchExplainersDb();
   await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [nyDate(new Date())]);
-  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true });
+  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'skipped');
   assert.ok('reason' in result && ['already_ran_today', 'retry_exhausted'].includes(result.reason), JSON.stringify(result));
   assert.equal((await db.query(`SELECT 1 FROM explainers.settings WHERE key = $1`, [IDEA_CYCLE_REQUEST_KEY])).rows.length, 0);

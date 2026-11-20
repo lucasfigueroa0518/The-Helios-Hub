@@ -1274,7 +1274,7 @@ test('expiry: an old technique tip stays (evergreen); other old candidates expir
 // ── publish and schedule ───────────────────────────────────────────────────
 
 
-test('publishing_live off: nothing is queued, claimed, booked or sent to Instagram', async () => {
+test('Paused (the default): nothing is queued, claimed, booked or sent to Instagram; only Live queues (D16)', async () => {
   const { query } = await freshDb();
   await addPool(query, 6);
   const tipIds = await seedSet(query, 3);
@@ -1290,13 +1290,20 @@ test('publishing_live off: nothing is queued, claimed, booked or sent to Instagr
   assert.equal(q2.queued, false);
   const approved = await approveFieldNotesPost(query, postId, NOW, 'tommy');
   assert.equal(approved.scheduled, false);
-  assert.match(approved.note, /scheduled when Field Notes publishing is on/);
+  assert.match(approved.note, /Field Notes is Paused, so it stays in the Made tab/);
   assert.equal((await query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0);
   assert.equal((await query(`SELECT 1 FROM social_hub.schedule`)).rows.length, 0);
   assert.equal((await query(`SELECT 1 FROM social_hub.approvals WHERE decision = 'approved'`)).rows.length, 1, 'the person approved; that is all that happened');
   assert.equal((await query<{ approved_by: string }>(`SELECT approved_by FROM field_notes.posts`)).rows[0]!.approved_by, 'tommy');
   for (const id of tipIds) assert.equal(await tipStatus(query, id), 'approved');
-  // Turned on, a post in review queues an attempt (still no Meta call: only the worker's claim reaches it).
+  // Live with Generate off is a mismatch (reads as paused), and Approval never posts: still nothing queued.
+  await setSetting(query, 'publishing_live', true);
+  assert.equal((await queueFieldNotesPublish(query, postId, 'approve')).queued, false, 'mismatch');
+  await setSetting(query, 'auto_run', true);
+  await setSetting(query, 'publishing_live', false);
+  assert.equal((await queueFieldNotesPublish(query, postId, 'approve')).queued, false, 'Approval');
+  assert.equal(await claimAndPublishFieldNotes(deps), null, 'Approval claims nothing');
+  // Live: a post in review queues an attempt (still no Meta call: only the worker's claim reaches it).
   await setSetting(query, 'publishing_live', true);
   const q3 = await queueFieldNotesPublish(query, postId, 'approve');
   assert.equal(q3.queued, true);

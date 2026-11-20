@@ -3,8 +3,10 @@
  * CONTRACT.md §4), offline: the real schemas on PGlite, stubbed Jev transports, a stubbed idea model and a copy client
  * that counts and refuses. No live Claude, web_search, Jev, Meta or HTTP call.
  *
- * Per type: the refill runs when paused and on a quota-full day; the make step is skipped when paused; nothing is
- * booked unless Live; the refill cap stops the refill. Also: posts that went back to Made are never re-slotted (D18).
+ * Per type: the refill runs when paused and on a quota-full day; the make step is skipped when paused; slots are booked
+ * in Approval and Live (holdsSlots, contract §4.3) and posted only when Live; the refill cap stops the refill, and so
+ * does a nightly total with no room left (D19). Also: posts that went back to Made are never re-slotted (D18).
+ * The nightly total's ledger is an in-memory fake (tests/helpers/refill-total-fake.ts), never a database.
  */
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -20,7 +22,7 @@ import { runIdeaCycle } from '@/lib/explainers/ideas/cycle';
 import { explainersGate } from '@/lib/explainers/ideas/gate';
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import { explainerItemId, spineOf } from '@/lib/explainers/publish/items';
-import { publishingLive as explainersLive, scheduleApproved } from '@/lib/explainers/publish/schedule';
+import { explainersHoldsSlots, publishingLive as explainersLive, scheduleApproved } from '@/lib/explainers/publish/schedule';
 import { saveFeedback } from '@/lib/explainers/repository';
 import { saveSetting } from '@/lib/explainers/settings';
 import { runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
@@ -28,16 +30,18 @@ import { dramaGate } from '@/lib/reel-ai-drama/gate';
 import { runDramaNight } from '@/lib/reel-ai-drama/night';
 import { weeklyTick } from '@/lib/reel-ai-drama/production/schedule';
 import { dramaItemId } from '@/lib/reel-ai-drama/publish/items';
-import { dramaPublishingLive, scheduleApprovedDrama, scheduleDramaJob, setDramaVerdict } from '@/lib/reel-ai-drama/hub';
+import { dramaHoldsSlots, dramaPublishingLive, scheduleApprovedDrama, scheduleDramaJob, setDramaVerdict } from '@/lib/reel-ai-drama/hub';
 import type { JevRequest, JevRunner, JevTransport } from '@/lib/reels/jev/runner';
 import { reelsNightGate, type ReelsNightGate } from '@/lib/reels/pipeline/night-gate';
 import { executeRun } from '@/lib/reels/pipeline/run';
-import { publishingLive as reelsLive, reelIdeaUnslottedSql, scheduleSelectedSlate } from '@/lib/reels/publish/schedule';
+import { publishingLive as reelsLive, reelIdeaUnslottedSql, reelsHoldsSlots, scheduleSelectedSlate } from '@/lib/reels/publish/schedule';
+import { reelActions } from '@/lib/publishing/actions/reels';
 import { CappedJevRunner, RefillBudget, RefillCappedError, isRefillCapped, withoutCapped } from '@/lib/reels/refill-budget';
 import { createPostIdea, insertSource, startRun } from '@/lib/reels/repository';
 import { bookSlot, ensureContentItem } from '@/lib/social-hub/spine';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 import { NEW_SLATE, NORMAL, PAGE, reelsDb, stub } from './fixtures/reels-seed';
 import { dramaHubDb, finishedJob, pitch, setDrama } from './reel-ai-drama-hub-fixture';
 
@@ -70,24 +74,38 @@ async function captureConsole<T>(work: () => Promise<T>): Promise<{ out: T; mess
 
 // ── Pure gates ──────────────────────────────────────────────────────────────
 
-test('gates: refill on its cap in every state; make by makesPosts; book only Live; mismatch reads as paused', () => {
+test('gates: refill on its cap in every state; make by makesPosts; book in Approval and Live; post only Live; mismatch reads as paused', () => {
   const paused = reelsNightGate('scheduled', { autoRun: false, publishingLive: false, refillCap: null });
-  assert.deepEqual(paused, { state: 'paused', mismatch: false, makes: false, books: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.reels });
+  assert.deepEqual(paused, { state: 'paused', mismatch: false, makes: false, books: false, posts: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.reels });
   assert.equal(reelsNightGate('scheduled', { autoRun: null, publishingLive: null, refillCap: null }).state, 'paused', 'a missing auto_run is off (D6)');
-  assert.deepEqual(reelsNightGate('scheduled', { autoRun: true, publishingLive: false, refillCap: '0.4' }), { state: 'approval', mismatch: false, makes: true, books: false, refillCapUsd: 0.4 });
-  assert.equal(reelsNightGate('scheduled', { autoRun: true, publishingLive: true, refillCap: 1 }).books, true);
+  assert.deepEqual(
+    reelsNightGate('scheduled', { autoRun: true, publishingLive: false, refillCap: '0.4' }),
+    { state: 'approval', mismatch: false, makes: true, books: true, posts: false, refillCapUsd: 0.4 },
+    'Approval books its slots (contract §4.3) but posts nothing',
+  );
+  const live = reelsNightGate('scheduled', { autoRun: true, publishingLive: true, refillCap: 1 });
+  assert.deepEqual([live.books, live.posts], [true, true]);
   const mismatch = reelsNightGate('scheduled', { autoRun: false, publishingLive: true, refillCap: null });
-  assert.deepEqual([mismatch.state, mismatch.mismatch, mismatch.makes, mismatch.books], ['paused', true, false, false]);
+  assert.deepEqual([mismatch.state, mismatch.mismatch, mismatch.makes, mismatch.books, mismatch.posts], ['paused', true, false, false, false], 'a mismatch never books or posts');
   const runNow = reelsNightGate('manual', { autoRun: false, publishingLive: true, refillCap: null });
-  assert.deepEqual([runNow.makes, runNow.books, runNow.refillCapUsd], [true, false, null], 'Run now makes in every state, books only when Live');
+  assert.deepEqual([runNow.makes, runNow.books, runNow.posts, runNow.refillCapUsd], [true, false, false, null], 'Run now makes in every state, books only outside Paused');
 
-  assert.deepEqual(explainersGate({ autoRender: false, publishingLive: false, refillCap: null }), { state: 'paused', mismatch: false, makes: false, books: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.explainers });
+  assert.deepEqual(explainersGate({ autoRender: false, publishingLive: false, refillCap: null }), { state: 'paused', mismatch: false, makes: false, books: false, posts: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.explainers });
+  assert.deepEqual(
+    [explainersGate({ autoRender: true, publishingLive: false, refillCap: null }).books, explainersGate({ autoRender: true, publishingLive: false, refillCap: null }).posts],
+    [true, false],
+    'Approval places renders but posts nothing',
+  );
   assert.deepEqual(explainersGate({ autoRender: false, publishingLive: false, refillCap: null }, true).makes, true, 'Run the idea cycle now makes while paused');
   assert.equal(explainersGate({ autoRender: true, publishingLive: true, refillCap: 0 }).refillCapUsd, REFILL_CAP_DEFAULT_USD.explainers, 'a non-positive cap reads as the default');
-  assert.equal(explainersGate({ autoRender: false, publishingLive: true, refillCap: null }).mismatch, true);
+  const exMismatch = explainersGate({ autoRender: false, publishingLive: true, refillCap: null });
+  assert.deepEqual([exMismatch.mismatch, exMismatch.books, exMismatch.posts], [true, false, false]);
 
-  assert.deepEqual(dramaGate({ auto: false, publishingLive: false, refillCap: null }), { state: 'paused', mismatch: false, makes: false, books: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.reel_ai_drama });
-  assert.deepEqual(dramaGate({ auto: true, publishingLive: true, refillCap: 0.75 }), { state: 'live', mismatch: false, makes: true, books: true, refillCapUsd: 0.75 });
+  assert.deepEqual(dramaGate({ auto: false, publishingLive: false, refillCap: null }), { state: 'paused', mismatch: false, makes: false, books: false, posts: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.reel_ai_drama });
+  assert.deepEqual(dramaGate({ auto: true, publishingLive: false, refillCap: 0.75 }), { state: 'approval', mismatch: false, makes: true, books: true, posts: false, refillCapUsd: 0.75 });
+  assert.deepEqual(dramaGate({ auto: true, publishingLive: true, refillCap: 0.75 }), { state: 'live', mismatch: false, makes: true, books: true, posts: true, refillCapUsd: 0.75 });
+  const drMismatch = dramaGate({ auto: false, publishingLive: true, refillCap: null });
+  assert.deepEqual([drMismatch.state, drMismatch.books, drMismatch.posts], ['paused', false, false]);
 });
 
 // ── The shared refill budget ────────────────────────────────────────────────
@@ -137,7 +155,7 @@ async function reelsNight(n: number) {
   return { pg, run };
 }
 
-const reelsGate = (over: Partial<ReelsNightGate>): ReelsNightGate => ({ state: 'approval', mismatch: false, makes: true, books: false, refillCapUsd: 0.25, ...over });
+const reelsGate = (over: Partial<ReelsNightGate>): ReelsNightGate => ({ state: 'approval', mismatch: false, makes: true, books: true, posts: false, refillCapUsd: 0.25, ...over });
 const scoredOn = async (runId: string) =>
   Number((await dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM reels.idea_scores s JOIN reels.score_slates sl ON sl.id = s.slate_id WHERE sl.run_id = $1`, [runId])).rows[0]!.n);
 const reelSlots = async () => Number((await dbQuery<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.schedule WHERE vertical = 'reels' AND status = 'scheduled'`)).rows[0]!.n);
@@ -146,7 +164,7 @@ test('Text on Screen paused: the refill scores the ideas; no copy is written, no
   const { run } = await reelsNight(3);
   const { jev, calls } = stub();
   const copy = { n: 0 };
-  const outcome = await executeRun(run, { jev, copyClient: refusingCopy(copy), adapters: { primary: [], derived: [] }, intake: legacy, gate: reelsGate({ state: 'paused', makes: false }) });
+  const outcome = await executeRun(run, { jev, copyClient: refusingCopy(copy), adapters: { primary: [], derived: [] }, intake: legacy, gate: reelsGate({ state: 'paused', makes: false, books: false }), totalQuery: fakeTotalLedger().q });
   assert.notEqual(outcome.status, 'failed', outcome.note);
   assert.ok(calls.n > 0, 'Jev scored tonight’s ideas');
   assert.ok((await scoredOn(run.id)) >= 1, 'the slate holds tonight’s scored ideas (grouping may merge look-alikes)');
@@ -164,7 +182,7 @@ test('Text on Screen quota-full day: the refill still scores; nothing new is mad
   }
   const { jev, calls } = stub();
   const copy = { n: 0 };
-  const outcome = await executeRun(run, { jev, copyClient: refusingCopy(copy), adapters: { primary: [], derived: [] }, intake: legacy, gate: reelsGate({}) });
+  const outcome = await executeRun(run, { jev, copyClient: refusingCopy(copy), adapters: { primary: [], derived: [] }, intake: legacy, gate: reelsGate({}), totalQuery: fakeTotalLedger().q });
   assert.notEqual(outcome.status, 'failed', outcome.note);
   assert.ok(calls.n > 0);
   assert.ok((await scoredOn(run.id)) >= 1, 'scored even with the quota filled (D3)');
@@ -175,7 +193,7 @@ test('Text on Screen refill cap: once reached, no Jev call starts, refill_capped
   const { run } = await reelsNight(3);
   const { jev, calls } = stub();
   const { out, messages } = await captureConsole(() =>
-    executeRun(run, { jev, copyClient: refusingCopy({ n: 0 }), adapters: { primary: [], derived: [] }, intake: legacy, gate: reelsGate({ refillCapUsd: 0.25 }), runSpend: async () => 0.25 }),
+    executeRun(run, { jev, copyClient: refusingCopy({ n: 0 }), adapters: { primary: [], derived: [] }, intake: legacy, gate: reelsGate({ refillCapUsd: 0.25 }), runSpend: async () => 0.25, totalQuery: fakeTotalLedger().q }),
   );
   assert.notEqual(out.status, 'failed', out.note);
   assert.equal(calls.n, 0, 'no paid call past the cap');
@@ -184,17 +202,18 @@ test('Text on Screen refill cap: once reached, no Jev call starts, refill_capped
   assert.doesNotMatch(out.note ?? '', /Scoring failed/, 'the cap is not a scoring failure');
 });
 
-test('Text on Screen books only when Live: publishingLive reads Generate and Live together', async () => {
+test('Text on Screen books in Approval and Live, posts only when Live: both read Generate and Live together', async () => {
   await reelsDb({ withSlate: false });
   const set = (key: string, value: unknown) => dbQuery(`INSERT INTO reels.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(value)]);
+  const both = async () => [await reelsHoldsSlots(), await reelsLive()];
   await set('publishing_live', true);
-  assert.equal(await reelsLive(), false, 'Live with no auto_run (missing is off, D6): paused, nothing books');
+  assert.deepEqual(await both(), [false, false], 'Live with no auto_run (missing is off, D6): paused, nothing books or posts');
   await set('auto_run', false);
-  assert.equal(await reelsLive(), false, 'Generate off + Live on is a mismatch: paused');
+  assert.deepEqual(await both(), [false, false], 'Generate off + Live on is a mismatch: paused');
   await set('auto_run', true);
-  assert.equal(await reelsLive(), true);
+  assert.deepEqual(await both(), [true, true], 'Live books and posts');
   await set('publishing_live', false);
-  assert.equal(await reelsLive(), false, 'Approval books nothing');
+  assert.deepEqual(await both(), [true, false], 'Approval books its slots but posts nothing');
 });
 
 test('Text on Screen (D18): an idea that went back to Made is never re-slotted by scheduleSelectedSlate / scheduleLatestToday', async () => {
@@ -222,6 +241,43 @@ test('Text on Screen (D18): an idea that went back to Made is never re-slotted b
   // A person places it again: it is no longer "back in Made".
   await bookSlot(dbQuery as never, { vertical: 'reels', itemId: null, ideaRef: NORMAL, nyDate: '2026-12-01', slot: 't0602', publishAt: new Date('2026-12-01T15:00:00Z'), source: 'user' });
   assert.equal(await unslotted(), false);
+});
+
+test('Text on Screen Approve (hub verb): Paused approves the reel without a slot (D17); Approval and Live book it; Publish now only when Live', async () => {
+  const calls: string[] = [];
+  const verbs = (state: 'paused' | 'approval' | 'live') =>
+    reelActions({
+      schedulePostIdea: async (idea) => (calls.push(`book ${idea}`), { scheduled: true, note: 'Booked.' }),
+      rejectReel: async () => ({ rejected: true, note: '' }),
+      forcePost: async (video) => (calls.push(`force ${video}`), { queued: true }),
+      unscheduleIdea: async () => ({ ok: true, note: '' }),
+      query: (async () => ({ rows: [] })) as never,
+      itemId: async () => null,
+      placeItem: async () => ({ ok: true, note: '' }) as never,
+      rescheduleItem: async () => ({ ok: true, note: '' }) as never,
+      todaySlate: async () => null,
+      findReelLock: async () => null,
+      requestFinish: async () => ({ status: 'done', note: '' }),
+      publishingLive: async () => state === 'live',
+      holdsSlots: async () => state !== 'paused',
+      approveVideo: async (video) => void calls.push(`approve ${video}`),
+    });
+  const paused = await verbs('paused').approve!({ postIdeaId: 'idea-1', videoJobId: 'video-1' }, 'tommy', {});
+  assert.equal(paused.ok, true);
+  assert.match(paused.note, /Text on Screen is Paused, so it stays in the Made tab/);
+  assert.deepEqual(calls.splice(0), ['approve video-1'], 'approved, nothing booked');
+  const noVideo = await verbs('paused').approve!({ postIdeaId: 'idea-1' }, 'tommy', {});
+  assert.deepEqual([noVideo.ok, noVideo.status], [false, 409]);
+  assert.deepEqual(calls.splice(0), []);
+  for (const state of ['approval', 'live'] as const) {
+    assert.equal((await verbs(state).approve!({ postIdeaId: 'idea-1', videoJobId: 'video-1' }, 'tommy', {})).ok, true, state);
+    assert.deepEqual(calls.splice(0), ['book idea-1'], state);
+  }
+  const refused = await verbs('approval').publishNow!({ postIdeaId: 'idea-1', videoJobId: 'video-1' }, 'tommy', {});
+  assert.deepEqual([refused.ok, refused.status], [false, 409]);
+  assert.match(refused.note, /isn’t Live.*Settings tab/);
+  assert.equal((await verbs('live').publishNow!({ postIdeaId: 'idea-1', videoJobId: 'video-1' }, 'tommy', {})).ok, true);
+  assert.deepEqual(calls.splice(0), ['force video-1']);
 });
 
 // ── Explainers ──────────────────────────────────────────────────────────────
@@ -278,7 +334,7 @@ test('Explainers paused: the 2 AM refill generates and scores into the pool; no 
   const ideas = stubIdeas();
   const jev = stubJev();
   const ev = events();
-  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: jev, now: CYCLE_AT, event: ev.log });
+  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: jev, now: CYCLE_AT, event: ev.log, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'refilled', JSON.stringify(result));
   assert.equal(result.status === 'refilled' && result.reason, 'paused');
   assert.equal(ideas.calls, 1);
@@ -287,7 +343,7 @@ test('Explainers paused: the 2 AM refill generates and scores into the pool; no 
   assert.equal(await count(db, `SELECT count(*)::int AS n FROM explainers.idea_cycles WHERE status = 'skipped' AND ideas_generated = 3`), 1, 'the refill is recorded');
   assert.ok(ev.names().includes('make_skipped'));
   // Once a night: a worker restart the same night does not refill again.
-  const again = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: jev, now: CYCLE_AT, event: ev.log });
+  const again = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: jev, now: CYCLE_AT, event: ev.log, totalQuery: fakeTotalLedger().q });
   assert.notEqual(again.status, 'refilled');
   assert.equal(ideas.calls, 1);
 });
@@ -301,7 +357,7 @@ test('Explainers quota-full day: the refill still runs; nothing is rendered', as
   }
   const a = await poolTopic(db, 'A', 90);
   const ideas = stubIdeas();
-  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev(), now: CYCLE_AT, event: events().log });
+  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev(), now: CYCLE_AT, event: events().log, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'refilled', JSON.stringify(result));
   assert.equal(result.status === 'refilled' && result.reason, 'nothing_to_make');
   assert.equal(ideas.calls, 1, 'the idea call ran on a quota-full day (D3)');
@@ -315,22 +371,25 @@ test('Explainers refill cap: no topic is scored past it, refill_capped is logged
   const ideas = stubIdeas(2_000_000);
   const jev = stubJev();
   const ev = events();
-  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: jev, now: CYCLE_AT, event: ev.log });
+  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: jev, now: CYCLE_AT, event: ev.log, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'refilled', JSON.stringify(result));
   assert.equal(result.status === 'refilled' && result.refillCapped, true);
   assert.equal(jev.calls, 0, 'no Jev scoring past the cap');
   assert.ok(ev.names().includes('refill_capped'));
 });
 
-test('Explainers books only when Live; Run the idea cycle now still makes while paused', async () => {
+test('Explainers book in Approval and Live, post only when Live; Run the idea cycle now still makes while paused', async () => {
   const db = await explainersDb({ autoRender: false, live: true });
-  assert.equal(await explainersLive(db), false, 'Generate off + Live on: paused, nothing placed');
+  const both = async () => [await explainersHoldsSlots(db), await explainersLive(db)];
+  assert.deepEqual(await both(), [false, false], 'Generate off + Live on: paused, nothing placed or posted');
   await saveSetting(db, 'auto_render', true);
-  assert.equal(await explainersLive(db), true);
+  assert.deepEqual(await both(), [true, true]);
+  await db.query(`UPDATE explainers.settings SET value = 'false'::jsonb WHERE key = 'publishing_live'`);
+  assert.deepEqual(await both(), [true, false], 'Approval places renders but posts nothing');
 
   const paused = await explainersDb({ autoRender: false });
   const a = await poolTopic(paused, 'A', 90);
-  const forced = await runIdeaCycle({ db: paused, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, force: true, event: events().log });
+  const forced = await runIdeaCycle({ db: paused, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, force: true, event: events().log, totalQuery: fakeTotalLedger().q });
   assert.equal(forced.status, 'ok', JSON.stringify(forced));
   assert.equal(await count(paused, `SELECT count(*)::int AS n FROM explainers.jobs WHERE topic_id = '${a}'`), 1, 'the person’s click renders');
   assert.equal(forced.status === 'ok' && forced.allocated.every((x) => x.scheduled === null), true);
@@ -431,6 +490,7 @@ test('AI Drama refill cap: the development session stops starting paid work once
       visuals: {} as never,
       now: () => MONDAY,
       log: ev.log,
+      totalQuery: fakeTotalLedger().q,
     },
     { trigger: 'calibration', refillCapUsd: 0.25 },
   );
@@ -442,15 +502,15 @@ test('AI Drama refill cap: the development session stops starting paid work once
   assert.ok(left >= 2, 'the pitches the cap stopped stay new for the next session');
 });
 
-test('AI Drama books only when Live; a reel that went back to Made is not re-slotted (D18)', async () => {
+test('AI Drama books in Approval (posts only when Live); a mismatch books nothing; a reel that went back to Made is not re-slotted (D18)', async () => {
   const db = await dramaHubDb();
   const back = await finishedJob(db);
   const fresh = await finishedJob(db);
   await setDramaVerdict(db, back.jobId, 'approved', 'lucas');
   await setDramaVerdict(db, fresh.jobId, 'approved', 'lucas');
   await setDrama(db, 'publishing_live', true);
-  assert.equal(await dramaPublishingLive(db), false, 'Live with Generate off: paused');
-  assert.equal(await scheduleApprovedDrama(db, MONDAY), 0, 'nothing booked unless Live');
+  assert.deepEqual([await dramaHoldsSlots(db), await dramaPublishingLive(db)], [false, false], 'Live with Generate off: paused');
+  assert.equal(await scheduleApprovedDrama(db, MONDAY), 0, 'a mismatch books nothing');
 
   const itemId = await dramaItemId(db, back.jobId);
   await db.query(
@@ -458,9 +518,11 @@ test('AI Drama books only when Live; a reel that went back to Made is not re-slo
      VALUES ($1, 'reel_ai_drama', '2026-11-08', 'evening', '2026-11-09T01:00:00Z', 'cancelled', 'auto', 'paused')`,
     [itemId],
   );
+  // Approval: Generate on, Live off. The approved reel books its slot (contract §4.3); nothing posts.
   await setDrama(db, 'auto', true);
-  assert.equal(await dramaPublishingLive(db), true);
-  assert.equal(await scheduleApprovedDrama(db, MONDAY), 1, 'only the fresh reel books');
+  await setDrama(db, 'publishing_live', false);
+  assert.deepEqual([await dramaHoldsSlots(db), await dramaPublishingLive(db)], [true, false]);
+  assert.equal(await scheduleApprovedDrama(db, MONDAY), 1, 'only the fresh reel books, in Approval');
   const scheduledFor = async (jobId: string) =>
     Number((await db.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM social_hub.schedule s JOIN social_hub.content_items ci ON ci.id = s.content_item_id WHERE ci.native_ref = $1 AND s.status = 'scheduled'`,
@@ -470,3 +532,64 @@ test('AI Drama books only when Live; a reel that went back to Made is not re-slo
   assert.equal(await scheduledFor(fresh.jobId), 1);
 });
 
+// ── The nightly refill total (D19): no room left caps each refill ─────────────
+
+test('Text on Screen refill with no room left in the nightly total: no Jev call, refill_total_capped, the run does not fail', async () => {
+  const { run } = await reelsNight(3);
+  const { jev, calls } = stub();
+  const ledger = fakeTotalLedger({ total: 1, spentUsd: 1 });
+  const { out, messages } = await captureConsole(() =>
+    executeRun(run, { jev, copyClient: refusingCopy({ n: 0 }), adapters: { primary: [], derived: [] }, intake: legacy, gate: reelsGate({ state: 'paused', makes: false, books: false, refillCapUsd: 1.5 }), runSpend: async () => 0, totalQuery: ledger.q }),
+  );
+  assert.notEqual(out.status, 'failed', out.note);
+  assert.equal(calls.n, 0, 'no Jev call: the refill is capped at $0');
+  assert.ok(messages.includes('refill_total_capped'));
+  assert.equal(ledger.written().length, 0, 'nothing reserved when the total has no room');
+});
+
+test('Explainers refill with no room left in the nightly total: no idea call, refill_total_capped', async () => {
+  const db = await explainersDb({ autoRender: false });
+  const ideas = stubIdeas();
+  const jev = stubJev();
+  const ev = events();
+  const ledger = fakeTotalLedger({ total: 1, spentUsd: 1 });
+  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: jev, now: CYCLE_AT, event: ev.log, totalQuery: ledger.q });
+  assert.notEqual(result.status, 'failed', JSON.stringify(result));
+  assert.equal(ideas.calls, 0, 'no idea call');
+  assert.equal(jev.calls, 0, 'no Jev scoring');
+  assert.ok(ev.names().includes('refill_total_capped'));
+  assert.equal(ledger.written().length, 0);
+});
+
+test('AI Drama weekly session with no room left in the nightly total: status capped, no paid call', async () => {
+  const db = await dramaHubDb();
+  await db.query(
+    `INSERT INTO reel_ai_drama.pitches (title, pitch, event_key, status) VALUES ('Pending', $1::jsonb, 'pending:total', 'new')`,
+    [JSON.stringify({ title: 'Pending', brief: 'b', story_type: 'deal', era: 'race', cast: [], sources: [] })],
+  );
+  let calls = 0;
+  const jev: JevTransport = {
+    async systemOne() {
+      calls += 1;
+      throw new Error('stub: no Jev call expected');
+    },
+  };
+  const ev = events();
+  const ledger = fakeTotalLedger({ total: 2, spentUsd: 2 });
+  const summary = await runDevelopmentSession(
+    {
+      db,
+      producer: { create: async () => { throw new Error('stub: producer not called'); }, loadPrompt: () => '' } as never,
+      jevTransport: jev,
+      visuals: {} as never,
+      now: () => MONDAY,
+      log: ev.log,
+      totalQuery: ledger.q,
+    },
+    { trigger: 'auto', refillCapUsd: 3 },
+  );
+  assert.equal(summary.status, 'capped', JSON.stringify(summary));
+  assert.equal(calls, 0);
+  assert.ok(ev.names().includes('refill_total_capped'));
+  assert.equal(ledger.written().length, 0);
+});

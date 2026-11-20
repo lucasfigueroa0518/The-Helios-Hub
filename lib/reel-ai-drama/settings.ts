@@ -12,9 +12,9 @@ export type ReelAiDramaSettings = {
   auto: boolean;
   /** Retired (HUB-WIRING-CONTRACT.md §1.1): no longer editable, and the weekly tick requests no production from it. */
   per_week: number;
-  /** Off = auto-publish (written only by writeDramaPosting). */
+  /** Always true: every post needs a person's approval (D16); never read as false (written only by writeDramaPosting). */
   require_approval: boolean;
-  /** Master switch: nothing is booked or posted while it is off (written only by writeDramaPosting). */
+  /** The Live key: with `auto` it is the state (D16). Approval and Live book slots; only Live posts (written only by writeDramaPosting). */
   publishing_live: boolean;
   /** Legacy quota (1 – DRAMA_WINDOWS.length) while the calendar has no template. */
   posts_per_day: number;

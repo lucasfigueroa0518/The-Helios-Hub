@@ -1,5 +1,5 @@
 import type { Queryable } from '@/lib/explainers/db';
-import { postsToInstagram, stateOf } from '@/lib/content-type/state';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
 import { unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
@@ -27,13 +27,20 @@ async function settingValue(db: Queryable, key: string): Promise<unknown> {
   return rows[0]?.value;
 }
 
-/**
- * Whether AI Drama is Live (D16): reels are booked and posted only in the Live state. Generate (`auto`) off with
- * `publishing_live` on reads as paused (stateOf), so nothing is booked.
- */
-export async function dramaPublishingLive(db: Queryable): Promise<boolean> {
+/** AI Drama's state (D16): stateOf(auto, publishing_live). Generate off with Live on reads as paused. */
+export async function dramaState(db: Queryable): Promise<TypeState> {
   const [generate, live] = await Promise.all([settingValue(db, 'auto'), settingValue(db, 'publishing_live')]);
-  return postsToInstagram(stateOf(generate === true, live === true).state);
+  return stateOf(generate === true, live === true).state;
+}
+
+/** Whether AI Drama is Live (D16): reels are posted only in the Live state. */
+export async function dramaPublishingLive(db: Queryable): Promise<boolean> {
+  return postsToInstagram(await dramaState(db));
+}
+
+/** Whether AI Drama books slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
+export async function dramaHoldsSlots(db: Queryable): Promise<boolean> {
+  return holdsSlots(await dramaState(db));
 }
 
 /**
@@ -161,7 +168,7 @@ export async function scheduleDramaJob(
 /**
  * When the night's job (trigger 'auto') finishes, it takes a slot on the date it was made for, unapproved (B2;
  * Bald-Eagle D4: two days ahead, never today's leftover slot): it still needs Approve, and without one dramaReleaseDue
- * cancels it at its time. A person's job waits for Approve. Only while live.
+ * cancels it at its time. A person's job waits for Approve. Only in Approval or Live (holdsSlots, contract §4.3).
  */
 export async function bookFinishedDrama(
   db: Queryable,
@@ -170,7 +177,7 @@ export async function bookFinishedDrama(
   rng?: (count: number) => number,
 ): Promise<DramaScheduleOutcome | null> {
   if (job.trigger !== 'auto') return null;
-  if (!(await dramaPublishingLive(db))) return null;
+  if (!(await dramaHoldsSlots(db))) return null;
   return scheduleDramaJob(db, job.id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
 }
 
@@ -203,10 +210,11 @@ SELECT j.id, j.pitch_id, f.created_at AS reviewed_at, j.finished_at
 
 /**
  * Approved (or, with approval off, unreviewed), unbooked reels with their video in Storage: booked, oldest approval
- * first. Only while live. A reel made for a date still ahead books on that date or later (dramaBookingDays).
+ * first. Only in Approval or Live (holdsSlots, contract §4.3); never a reel sent back to Made (D18). A reel made for a
+ * date still ahead books on that date or later (dramaBookingDays).
  */
 export async function scheduleApprovedDrama(db: Queryable, now = new Date(), rng?: (count: number) => number): Promise<number> {
-  if (!(await dramaPublishingLive(db))) return 0;
+  if (!(await dramaHoldsSlots(db))) return 0;
   const approvalNeeded = await dramaRequireApproval(db);
   const { rows } = await db.query<{ id: string }>(
     `SELECT r.id FROM (${DRAMA_PLACEABLE_RENDERS}) r ORDER BY r.reviewed_at NULLS LAST, r.finished_at`,

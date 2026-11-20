@@ -2,9 +2,10 @@
  * Explainer Reels worker (BUILD_PLAN §4–§6, docs/social-overnight.md). Claims
  * one queued render at a time and runs it; every night, in every state, also runs
  * the daily idea cycle at 2:00 AM New York: its refill always (on pool_refill_cap_usd, D16), and while the type
- * makes posts it fills the day's posts_per_day less what people placed (daily fill, D54). While Live,
- * approved renders are scheduled into the 1:00–2:30 PM and 3:30–5:00 PM
- * windows and published (by the single publisher once publisher_mode is live).
+ * makes posts it fills the day's posts_per_day less what people placed (daily fill, D54). In Approval
+ * and Live (holdsSlots, contract §4.3) approved renders are scheduled into the 1:00–2:30 PM and
+ * 3:30–5:00 PM windows; only while Live are they published (by the single publisher once publisher_mode
+ * is live).
  * Insights: every 30 minutes while a reel is fresh, and a 5:15 AM sweep.
  *
  *   npm run explainers:worker          # loop: poll every 15s

@@ -14,7 +14,7 @@ import type { PGlite } from '@electric-sql/pglite';
 import { reusableVideos } from '@/lib/reels/pipeline/fill';
 import type { MetaClient } from '@/lib/reels/music/meta';
 import { claimAndPublish } from '@/lib/reels/music/publish';
-import { releaseDueSchedules, retryFailedSlots, retryableError, scheduleSelectedSlate } from '@/lib/reels/publish/schedule';
+import { forcePost, publishingLive, releaseDueSchedules, REELS_NOT_LIVE_NOTE, retryFailedSlots, retryableError, scheduleSelectedSlate } from '@/lib/reels/publish/schedule';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -106,7 +106,7 @@ test('Live: a selected reel gets an auto slot in the first open window; with no 
   assert.equal((await pg.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0);
 });
 
-test('not Live: the nightly run books nothing (publishing off, or Generate off with publishing on)', async () => {
+test('Paused: the nightly run books nothing (no settings, or Generate off with publishing on); a paused type holds no slots (D17)', async () => {
   const pg = await db();
   await seed(pg, { settings: false });
   assert.deepEqual(await scheduleSelectedSlate(SLATE, ONE_AM), { scheduled: 0 });
@@ -114,6 +114,18 @@ test('not Live: the nightly run books nothing (publishing off, or Generate off w
   await pg.exec(`INSERT INTO reels.settings (key, value) VALUES ('auto_run', 'false'::jsonb), ('publishing_live', 'true'::jsonb)
                  ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
   assert.deepEqual(await scheduleSelectedSlate(SLATE, ONE_AM), { scheduled: 0 });
+});
+
+test('Approval: the nightly run books the selected reel’s slot (contract §4.3), but nothing posts and Force is refused (Live only)', async () => {
+  const pg = await db();
+  await seed(pg, { settings: false });
+  await pg.exec(`INSERT INTO reels.settings (key, value) VALUES ('auto_run', 'true'::jsonb), ('publishing_live', 'false'::jsonb)
+                 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
+  assert.deepEqual(await scheduleSelectedSlate(SLATE, ONE_AM), { scheduled: 1 });
+  assert.equal(await publishingLive(), false, 'the worker releases and posts only while Live');
+  assert.deepEqual(await forcePost(VIDEO), { queued: false, status: 409, note: REELS_NOT_LIVE_NOTE });
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0, 'nothing queued');
+  assert.equal((await pg.query(`SELECT 1 FROM social_hub.approvals`)).rows.length, 0, 'a refused Force approves nothing');
 });
 
 async function failedSlot(pg: PGlite, failedMinutesBefore: number, overrides: { containerId?: string; error?: string } = {}): Promise<void> {

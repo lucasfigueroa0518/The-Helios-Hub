@@ -37,7 +37,7 @@ export type TypeConfig = {
   maxCap: number;
   /** Whether the pool has a "Seed an idea" path. */
   seedable: boolean;
-  /** What a post of this type is called in settings sentences ("Auto-publish: <noun> are scheduled…"). */
+  /** What a post of this type is called in settings sentences ("<noun> are scheduled…"). */
   postsNoun: string;
   /** The settings switch's words when the type's generate differs from "every morning"; null = the default, built from `postsNoun`. */
   generate: GenerateCopy | null;
@@ -189,7 +189,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     generate: {
       label: 'Generate on Sundays',
       confirm: 'Make the AI Events post every Sunday at 12:00 PM? Each run ranks the coming week’s events with live Jev calls (about $0.02, up to the run cap). No Claude calls.',
-      hint: 'Ranks the coming week’s events and renders the carousel at 12:00 PM on Sundays, for the 6:00–7:00 PM slot. It waits for your approval unless auto-publish is on.',
+      hint: 'Ranks the coming week’s events and renders the carousel at 12:00 PM on Sundays, for the 6:00–7:00 PM slot. Every post waits for your approval.',
     },
     perDayMin: 0,
     capPerSeries: false,
@@ -209,7 +209,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
       label: 'Generate on its days',
       confirm:
         'Make a Field Notes post at 2:00 AM on its days? Each run writes one post with live Claude and Jev calls (up to the run cap, $0.50 by default). It waits for your approval.',
-      hint: 'Picks the next tip and renders the carousel at 2:00 AM on its days (one or two a week), for the 2:30–3:30 PM slot. It waits for your approval unless auto-publish is on.',
+      hint: 'Picks the next tip and renders the carousel at 2:00 AM on its days (one or two a week), for the 2:30–3:30 PM slot. Every post waits for your approval.',
     },
     perDayMin: 0,
     capPerSeries: false,
@@ -229,7 +229,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
       label: 'Generate every night',
       confirm:
         'Make AI Drama reels every night at 12:00 AM for the day’s slots, and run the weekly development session on Mondays? Each makes live model, search, voice and video calls, up to the daily render and spend caps.',
-      hint: 'At 12:00 AM the night makes the best pitches for the day’s slots; a development session refills the pitch pool on Mondays. Reels wait for your approval unless auto-publish is on.',
+      hint: 'At 12:00 AM the night makes the best pitches for the day’s slots; a development session refills the pitch pool on Mondays. Every reel waits for your approval.',
     },
     perDayMin: 1,
     capPerSeries: false,

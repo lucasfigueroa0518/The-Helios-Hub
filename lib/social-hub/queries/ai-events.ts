@@ -1,3 +1,4 @@
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { SHOWN_POOL_WEEK_SQL } from '@/lib/ai-events/pool-week';
 import { EVENT_PICK_VERSION } from '@/lib/networking/pick/score';
 import { comingWeek, weekFromKey } from '@/lib/networking/pick/week';
@@ -189,7 +190,7 @@ SELECT p.event_id::text AS event_id, p.metro, p.rank, p.score::float8 AS score, 
  WHERE p.week_key = $1
  ORDER BY p.metro, p.rank NULLS LAST, p.score DESC NULLS LAST, e.start_at`;
 
-export const AI_EVENTS_SETTINGS_SQL = `SELECT key, value FROM ai_events.settings WHERE key IN ('require_approval', 'publishing_live')`;
+export const AI_EVENTS_SETTINGS_SQL = `SELECT key, value FROM ai_events.settings WHERE key IN ('require_approval', 'auto_run', 'publishing_live')`;
 
 export async function readAiEvents(q: HubQuery, spine: SpineRead, now = new Date()): Promise<AiEventsRead> {
   const coming = comingWeek(now);
@@ -220,7 +221,7 @@ export async function readAiEvents(q: HubQuery, spine: SpineRead, now = new Date
     week: { weekKey, startDate: shown.startDate, endDate: shown.endDate, editable: weekKey === coming.weekKey },
     latestRun: run.rows[0] ?? null,
     requireApproval: settingIsOn(setting('require_approval')),
-    // Off unless it is literally true (lib/ai-events/settings.ts).
-    publishingLive: setting('publishing_live')[0]?.value === true,
+    // Live is the state (D16): stateOf(auto_run, publishing_live), each off unless literally true; a mismatch reads as paused.
+    publishingLive: postsToInstagram(stateOf(setting('auto_run')[0]?.value === true, setting('publishing_live')[0]?.value === true).state),
   };
 }

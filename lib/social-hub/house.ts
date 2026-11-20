@@ -163,8 +163,8 @@ function hasContent(post: HubPost): boolean {
 
 /**
  * The actions a post offers in Content House, with the reason one is unavailable.
- * `lfdPublishingLive`: lfd.settings publishing_live. Last Few Days offers Hard
- * publish only while it is on (unknown counts as off). `aiEventsPublishingLive`
+ * `lfdPublishingLive`: whether Last Few Days is Live (D16, stateOf over auto_run and
+ * publishing_live). It offers Hard publish only then (unknown counts as off). `aiEventsPublishingLive`
  * is the same for AI Events (ai_events.settings), and `fieldNotesPublishingLive` for Field Notes (field_notes.settings).
  */
 export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCostLabel: string | null; lfdPublishingLive?: boolean; aiEventsPublishingLive?: boolean; fieldNotesPublishingLive?: boolean; archive?: { ideaId: string | null } }): ActionPlan[] {
@@ -280,7 +280,7 @@ export function actionsFor(post: HubPost, ctx: { quota: Quota | null; typicalCos
   }
 
   // A rejected LFD post already returned its stories to the pool: Hard publish is not offered for it,
-  // and none is offered while Last Few Days publishing is off (the attempt would wait unclaimed).
+  // and none is offered unless Last Few Days is Live (D16: stateOf; the attempt would wait unclaimed).
   // AI Events follows the same rule with its own publishing_live.
   if (live && !(post.vertical === 'last_few_days' && (rejected || ctx.lfdPublishingLive !== true)) && !(post.vertical === 'ai_events' && (rejected || ctx.aiEventsPublishingLive !== true)) && !(post.vertical === 'field_notes' && (rejected || ctx.fieldNotesPublishingLive !== true))) {
     const noContent = hasContent(post) ? null : 'Nothing to publish yet. Regenerate first.';

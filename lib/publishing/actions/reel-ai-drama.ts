@@ -1,4 +1,5 @@
 import type {
+  dramaHoldsSlots,
   dramaItemId,
   dramaPublishingLive,
   dramaVerdictOf,
@@ -64,7 +65,10 @@ export function reelAiDramaActions(deps: {
   latestJobId: typeof latestDramaJobId;
   verdictOf: typeof dramaVerdictOf;
   scheduleJob: typeof scheduleDramaJob;
+  /** Whether AI Drama is Live (D16): only then does a slot post. */
   publishingLive: typeof dramaPublishingLive;
+  /** Whether AI Drama books slots: Approval or Live (holdsSlots, contract §4.3). */
+  holdsSlots: typeof dramaHoldsSlots;
   placeItem: Place;
   rescheduleItem: Place;
   /** The database the social worker claims revision rows from, or null when drama is not on it (the Explainers rule). Absent: the drama handle. */
@@ -94,18 +98,22 @@ export function reelAiDramaActions(deps: {
       const db = await deps.db();
       const jobId = need(t, 'jobId');
       await deps.setVerdict(db, jobId, 'approved', by);
-      // Never while publishing is off: a slot booked then would post late once it is switched back on.
-      if (!(await deps.publishingLive(db))) {
-        return { ok: true, note: 'Approved. Publishing is switched off, so it gets a time once publishing is back on.' };
+      // A paused type holds no slots (D17): approved, it stays in the Made tab.
+      if (!(await deps.holdsSlots(db))) {
+        return { ok: true, note: 'Approved. AI Drama Reels are Paused, so it stays in the Made tab. Place it in a slot once they’re in Approval or Live (the Settings tab).' };
       }
       // B1: a system slot (source 'auto'). A reel the night made ahead keeps (or books) the slot of the date it was made
       // for, never today's leftover one (Bald-Eagle D4: scheduleDramaJob reads its target date); a person's reel: today's
-      // next open slot. A reel that already has a slot keeps it.
+      // next open slot. A reel that already has a slot keeps it. It posts at its time only while Live (D16).
       const now = deps.now?.() ?? new Date();
       const booked = await deps.scheduleJob(db, jobId, 'auto', now, nyDateOf(now)!);
-      return booked.scheduled
-        ? { ok: true, note: `Approved. It posts ${formatPlacement(new Date(booked.publishAt))}.` }
-        : { ok: true, note: 'Approved. No slot is left on its day, so it takes the next open slot after that; Post now can still post it today.' };
+      if (!booked.scheduled) {
+        return { ok: true, note: 'Approved. No slot is left on its day, so it takes the next open slot after that; Post now can still post it today.' };
+      }
+      const when = formatPlacement(new Date(booked.publishAt));
+      return (await deps.publishingLive(db))
+        ? { ok: true, note: `Approved. It posts ${when}.` }
+        : { ok: true, note: `Approved. It holds its slot ${when}, but nothing posts until AI Drama Reels are Live (the Settings tab).` };
     },
     async reject(t, by, input) {
       const review = {

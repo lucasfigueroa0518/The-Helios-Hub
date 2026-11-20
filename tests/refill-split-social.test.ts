@@ -29,6 +29,7 @@ import { EMPTY_LEDGER } from '@/lib/photos/used';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { carouselNight, threeAmRequests } from '@/lib/social/overnight/night';
 import { readStoriesRefillCap, readTypeGate, resetMismatchLog, typeGate } from '@/lib/social/refill';
+import { publishNow } from '@/lib/stories/api';
 import { createStoriesJev } from '@/lib/stories/jev';
 import { gatherPool, POOL_SERIES } from '@/lib/stories/pool';
 import { requestSet } from '@/lib/stories/repository';
@@ -65,17 +66,17 @@ const has = (logs: Logged, message: string) => logs.some((l) => l.message === me
 
 /* ── The shared gate ─────────────────────────────────────────────────── */
 
-test('the gate: stateOf over the stored pair; Live is the only state that posts; Generate off + Live on reads as paused and logs state_mismatch', () => {
+test('the gate: stateOf over the stored pair; Approval and Live hold slots; Live is the only state that posts; Generate off + Live on reads as paused and logs state_mismatch', () => {
   resetMismatchLog();
   const { logs, log } = recorder();
   const paused = typeGate('carousels', { generate: false, live: false }, log);
-  assert.deepEqual([paused.state, paused.makes, paused.posts, paused.mismatch], ['paused', false, false, false]);
+  assert.deepEqual([paused.state, paused.makes, paused.holds, paused.posts, paused.mismatch], ['paused', false, false, false, false]);
   const approval = typeGate('carousels', { generate: 'true', live: null }, log);
-  assert.deepEqual([approval.state, approval.makes, approval.posts], ['approval', true, false]);
+  assert.deepEqual([approval.state, approval.makes, approval.holds, approval.posts], ['approval', true, true, false], 'Approval books slots (contract §4.3), posts nothing');
   const live = typeGate('carousels', { generate: true, live: true }, log);
-  assert.deepEqual([live.state, live.makes, live.posts], ['live', true, true]);
+  assert.deepEqual([live.state, live.makes, live.holds, live.posts], ['live', true, true, true]);
   const mismatch = typeGate('carousels', { generate: false, live: true }, log, 1_000);
-  assert.deepEqual([mismatch.state, mismatch.mismatch, mismatch.makes, mismatch.posts], ['paused', true, false, false]);
+  assert.deepEqual([mismatch.state, mismatch.mismatch, mismatch.makes, mismatch.holds, mismatch.posts], ['paused', true, false, false, false], 'a mismatch never books or posts');
   assert.deepEqual(logs.map((l) => l.message), ['state_mismatch']);
   typeGate('carousels', { generate: false, live: true }, log, 2_000);
   assert.equal(logs.length, 1, 'repeated mismatches stay quiet for an hour (the loop reads every 15 seconds)');
@@ -151,13 +152,13 @@ test('carousels: a full quota never skips the run; it refills (no story) under m
   assert.equal(carouselNight({ slot: null, fill: { stories: 0, note: 'full' }, runStories: 2, runCapUsd: 2, refillCapUsd: 0.1 }).capUsd, 0.1);
 });
 
-test('carousels: the worker never skips for the quota, schedules only while Live, and never reads approval as off', () => {
+test('carousels: the worker never skips for the quota, books in Approval and Live, posts only while Live, and never reads approval as off', () => {
   const text = readFileSync(path.join(process.cwd(), 'scripts/social_worker.ts'), 'utf8');
   assert.doesNotMatch(text, /skipRun\(/, 'no quota-filled skip');
   assert.doesNotMatch(text, /requireApproval\(\)|\.requireApproval\b/, 'require_approval is never read');
   assert.doesNotMatch(text, /publishingLive\(\)|\?\.publishingLive/, 'publishing follows the state, not publishing_live alone');
-  assert.match(text, /if \(!rerun && \(await readTypeGate\(lfdQuery, 'carousels', log\)\)\.posts\)/);
-  assert.match(text, /\(await standDown\(\)\) && \(await readTypeGate\(lfdQuery, 'carousels', log\)\)\.posts/);
+  assert.match(text, /if \(!rerun && \(await readTypeGate\(lfdQuery, 'carousels', log\)\)\.holds\)/, 'the night books by holdsSlots');
+  assert.match(text, /\(await standDown\(\)\) && \(await readTypeGate\(lfdQuery, 'carousels', log\)\)\.posts/, 'the release posts by postsToInstagram');
   assert.match(text, /logRefillCapped\(log, 'carousels'/);
   // A refill-only run uses no hand placements: they stay for the next night that makes stories.
   assert.ok(text.indexOf("log('run_refill_complete'") < text.indexOf('await finishNightPlacements(query'));
@@ -250,7 +251,7 @@ test('ai events: paused, the scheduled run ranks the pool (refill) and renders, 
   assert.ok(row.jev_usd > 0 && row.record.refillOnly);
   assert.ok(has(logs, 'state_mismatch'), 'Live with Generate off reads as paused');
 
-  // A person's Generate makes posts in every state; while not Live it books nothing.
+  // A person's Generate makes posts in every state; while Paused (here a mismatch) it books nothing (D17).
   await requestAiEventsRun(query, 'manual', 0.5);
   const made = await carryOutAiEventsRun(w, (await claimAiEventsRun(query, SUN_NOON))!);
   assert.equal(made.status, 'ok', made.note);
@@ -445,6 +446,20 @@ test('stories: an approved set is scheduled only while its type is Live; Live wi
   await saveSeriesSetting(db, 'ai_trivia', { auto: true });
   const b = storiesDeps(db, before3);
   assert.equal((await tick(b.deps as never)).scheduled, 1, 'Live: the approved set takes its window');
+});
+
+test('stories: in Approval (auto on, Live off) an approved set takes its minute (contract §4.3) but never posts; Publish now is refused', async () => {
+  const { db } = await harnessDb();
+  const before3 = new Date('2026-10-08T06:00:00Z'); // 2:00 AM New York: only steps 3–5
+  const { set } = await requestSet(db, { series: 'ai_trivia', nyDate: '2026-10-08', trigger: 'click', style: DEFAULT_SETTINGS.series.ai_trivia.style });
+  await db.query(`UPDATE stories.sets SET status = 'approved' WHERE id = $1`, [set.id]);
+  await saveSeriesSetting(db, 'ai_trivia', { auto: true });
+  await saveTypeSetting(db, 'ai_trivia', { publishingLive: false });
+  const a = storiesDeps(db, before3);
+  const out = await tick(a.deps as never);
+  assert.deepEqual([out.scheduled, out.published], [1, 0]);
+  await assert.rejects(publishNow(db, set.id, before3), (e: unknown) => (e as { status?: number }).status === 409 && /isn’t Live.*Settings tab/.test(String((e as Error).message)));
+  assert.equal((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n, 0);
 });
 
 test('stories: approval is never turned off through the settings API', async () => {

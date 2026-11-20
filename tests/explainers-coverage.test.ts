@@ -19,6 +19,7 @@ import type { TopicRow } from '@/lib/explainers/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const FRAME: LessonFrame = { bucket: 'web-and-apis', payload: 'The one thing.', altitude: 'unfamiliar', map_position: 'Where it sits.' };
 
@@ -188,7 +189,7 @@ test("the generator request carries only tonight's buckets' renders from the las
     await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [d]);
   }
   const model = ideas();
-  const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev() });
+  const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   const [request] = model.proposals;
   assert.deepEqual(request!.buckets.map((b) => b.id), ['reliability-and-safety', 'retrieval-and-memory', 'data-and-databases']);

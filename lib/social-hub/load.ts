@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { explainersHubQuery, liveHubQuery, type HubQuery } from '@/lib/social-hub/db';
 import { buildCostPart, buildDataset, type CostPart, type HubDataset, type VerticalReads } from '@/lib/social-hub/dataset';
 import { readCarousels } from '@/lib/social-hub/queries/carousels';
@@ -143,8 +144,8 @@ export async function loadDataset(q: HubQuery = liveHubQuery, now = new Date(), 
     readDayQuotas(q, explainersQ, now).catch(() => null),
     // Before the column exists (or if the read fails) nothing is hidden, so the hub never fails on it.
     readDeleted(q).catch(() => []),
-    // SELECT only (lib/lfd/settings.ts); an unreadable lfd schema reads as off.
-    readLfdSettings(q).then((s) => s.publishingLive).catch(() => false),
+    // SELECT only (lib/lfd/settings.ts): Live is the state (D16, stateOf), never the raw key; unreadable reads as off.
+    readLfdSettings(q).then((s) => postsToInstagram(stateOf(s.autoRun, s.publishingLive).state)).catch(() => false),
     readRejected(q).catch(() => []),
   ]);
   // The sweep's snapshot wins over a publisher's refusal message when it is newer.

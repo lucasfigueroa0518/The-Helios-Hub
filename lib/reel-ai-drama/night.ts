@@ -1,7 +1,7 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { recentPlayers } from '@/lib/reel-ai-drama/development/pool';
 import { spineOf } from '@/lib/reel-ai-drama/publish/items';
-import { DRAMA_PLACEABLE_RENDERS, dramaPostsPerDay, dramaPublishingLive, dramaRequireApproval, scheduleDramaJob, type DramaScheduleOutcome } from '@/lib/reel-ai-drama/publish/schedule';
+import { DRAMA_PLACEABLE_RENDERS, dramaHoldsSlots, dramaPostsPerDay, dramaRequireApproval, scheduleDramaJob, type DramaScheduleOutcome } from '@/lib/reel-ai-drama/publish/schedule';
 import { dramaSpendOn, nyDateOf, requestDramaJob } from '@/lib/reel-ai-drama/requests';
 import { readDramaGate, type DramaGate } from '@/lib/reel-ai-drama/gate';
 import { loadSettings } from '@/lib/reel-ai-drama/settings';
@@ -172,7 +172,8 @@ async function fillDate(st: RunState, day: string): Promise<DramaNightDate> {
       }
     }
     const handMoved = new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => m.ideaId));
-    const live = await dramaPublishingLive(db);
+    // Booked in Approval and Live (holdsSlots, contract §4.3); only Live posts them (D16).
+    const books = await dramaHoldsSlots(db);
     const requested: string[] = [];
     const allocated: DramaAllocation[] = [];
     let capped = false;
@@ -181,7 +182,7 @@ async function fillDate(st: RunState, day: string): Promise<DramaNightDate> {
       if (c.player) st.players.add(c.player);
       if (c.jobId) {
         // A surviving render is booked on the date this run fills, not the earliest open slot.
-        const scheduled = live ? await scheduleDramaJob(db, c.jobId, 'auto', now, day, undefined, day) : null;
+        const scheduled = books ? await scheduleDramaJob(db, c.jobId, 'auto', now, day, undefined, day) : null;
         st.placedJobs.add(c.jobId);
         allocated.push({ pitchId: c.pitchId, jobId: c.jobId, scheduled });
         if (handMoved.has(idea)) await markPromoteUsed(movesQ, 'reel_ai_drama', idea).catch(() => false);
@@ -214,8 +215,8 @@ async function fillDate(st: RunState, day: string): Promise<DramaNightDate> {
 }
 
 /**
- * The make step (D16): runs only while the type makes posts (Approval or Live); it books only while Live
- * (dramaPublishingLive). The pool's refill (tending, weekly development) runs apart from it, in every state.
+ * The make step (D16): runs only while the type makes posts (Approval or Live), and books in those states too
+ * (dramaHoldsSlots, contract §4.3); only Live posts. The pool's refill (tending, weekly development) runs apart from it, in every state.
  */
 export async function runDramaNight(deps: { db: Queryable; moves?: MovesQuery; now?: Date; log?: (e: string, f?: Record<string, unknown>) => void; gate?: DramaGate }): Promise<DramaNightResult> {
   const { db } = deps;

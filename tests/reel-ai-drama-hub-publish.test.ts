@@ -97,14 +97,18 @@ const live = async (db: Awaited<ReturnType<typeof dramaHubDb>>) => {
   await setDrama(db, 'publishing_live', true);
 };
 
-test('hard publish refuses while publishing is off, and records nothing', async () => {
+test('hard publish refuses unless Live (Paused, mismatch, Approval), and records nothing', async () => {
   const db = await dramaHubDb();
   const { jobId } = await finishedJob(db);
   const out = await hardPublishDramaJob(db, jobId, 'lucas');
   assert.equal(out.queued, false);
-  if (!out.queued) assert.match(out.note, /Publishing is switched off/);
+  if (!out.queued) assert.match(out.note, /AI Drama Reels aren’t Live.*Settings tab/);
   // Generate off with Live on reads as paused (contract §3): still refused.
   await setDrama(db, 'publishing_live', true);
+  assert.equal((await hardPublishDramaJob(db, jobId, 'lucas')).queued, false);
+  // Approval (Generate on, Live off) never posts: still refused.
+  await setDrama(db, 'auto', true);
+  await setDrama(db, 'publishing_live', false);
   assert.equal((await hardPublishDramaJob(db, jobId, 'lucas')).queued, false);
   const { rows } = await db.query(`SELECT 1 FROM reel_ai_drama.feedback WHERE job_id = $1`, [jobId]);
   assert.equal(rows.length, 0);

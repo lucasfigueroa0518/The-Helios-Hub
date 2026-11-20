@@ -30,7 +30,10 @@ test('approvalNote: before and inside the window it posts; after, it will not', 
   assert.match(late, /will not post unless you press Publish now/);
   assert.match(approvalNote(W, '2026-10-11', at('2026-10-13T08:10:00Z')), /will not post unless you press Publish now/, 'a stale day');
   assert.match(approvalNote(W, '2026-10-14', at('2026-10-13T08:10:00Z')), /posts at a random minute/, 'a future day');
-  assert.match(approvalNote(W, '2026-10-13', at('2026-10-13T08:10:00Z'), false), /Publishing is switched off/);
+  // The state (D16): Paused holds no slot (D17); Approval takes its minute but posts nothing until Live.
+  assert.match(approvalNote(W, '2026-10-13', at('2026-10-13T08:10:00Z'), 'paused'), /Paused, so it stays in the Made tab/);
+  assert.match(approvalNote(W, '2026-10-13', at('2026-10-13T08:10:00Z'), 'approval'), /nothing posts until this type is Live/);
+  assert.match(approvalNote(W, '2026-10-13', at('2026-10-13T08:10:00Z'), 'live'), /posts at a random minute/);
 });
 
 async function ready(nyNow: Date) {
@@ -90,9 +93,21 @@ test('approve after the window, or with publishing off, approves without a minut
   assert.equal(lateDone.publish_at, null);
   assert.match(lateDone.approvalNote, /window has passed/);
 
+  // The harness's default is Paused (series auto off): approved, no minute, it stays in Made (D17).
   const off = await ready(at('2026-10-10T08:00:00Z'));
   const offDone = await approve(off.db, off.id, at('2026-10-10T12:00:00Z'));
   assert.equal(offDone.status, 'approved');
   assert.equal(offDone.publish_at, null);
-  assert.match(offDone.approvalNote, /Publishing is switched off/);
+  assert.match(offDone.approvalNote, /Paused, so it stays in the Made tab/);
+});
+
+test('approve in Approval (Generate on, Live off) books today’s window (contract §4.3) and says nothing posts until Live', async () => {
+  const s = await ready(at('2026-10-10T08:00:00Z'));
+  await publishingOn(s.db);
+  await s.db.query(`UPDATE stories.settings SET value = 'false'::jsonb WHERE key = 'publishing_live'`);
+  await s.db.query(`DELETE FROM stories.settings WHERE key = 'types'`);
+  const done = await approve(s.db, s.id, at('2026-10-10T12:00:00Z')); // 8:00 AM NY
+  assert.equal(done.status, 'scheduled', done.approvalNote);
+  assert.match(done.approvalNote, /^Approved\. It holds its \d{1,2}:\d{2} AM slot, but nothing posts until this type is Live/);
+  assert.equal((await s.db.query<{ n: number }>(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0]!.n, 0, 'nothing is queued');
 });

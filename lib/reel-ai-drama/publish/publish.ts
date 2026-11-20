@@ -270,7 +270,7 @@ export async function dramaCarryAttempt(deps: DramaPublishDeps, id: string): Pro
 }
 
 /**
- * Hard publish: post now, only while publishing is on and the reel is ready (checked first). A click counts as approval (an unreviewed reel is recorded approved, note says so); a
+ * Hard publish: post now, only while AI Drama is Live (D16) and the reel is ready (checked first). A click counts as approval (an unreviewed reel is recorded approved, note says so); a
  * rejected reel is refused (terminal). Its waiting slot is cancelled so it can't post twice. Queues trigger 'force'.
  */
 export async function hardPublishDramaJob(db: Queryable, jobId: string, by: string): Promise<DramaQueued> {
@@ -287,7 +287,7 @@ export async function hardPublishDramaJob(db: Queryable, jobId: string, by: stri
   );
   const on = (key: string) => state.some((row) => row.key === key && row.value === true);
   if (!postsToInstagram(stateOf(on('auto'), on('publishing_live')).state)) {
-    return { queued: false, note: 'Publishing is switched off for AI Drama Reels. Turn on Live at the top of the AI Drama Reels page, then post it.', terminal: false, status: 409 };
+    return { queued: false, note: 'AI Drama Reels aren’t Live, so nothing posts to Instagram. Set them to Live in the Settings tab first, then post it.', terminal: false, status: 409 };
   }
   const ready = await dramaPublishReadiness(db, jobId, 'force');
   if (!ready.ok) return { queued: false, note: ready.note, terminal: true, status: 409, ...(ready.alreadyPublished ? { alreadyPublished: true } : {}) };

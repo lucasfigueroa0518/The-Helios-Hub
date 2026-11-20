@@ -1,3 +1,4 @@
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import type { HubQuery } from '@/lib/social-hub/db';
 import { settingIsOn, type InsightRow } from '@/lib/social-hub/queries/reels';
 import { forVertical, insightRows, type SpineRead } from '@/lib/social-hub/queries/spine';
@@ -151,7 +152,7 @@ SELECT t.id::text AS tip_id, t.created_at::text AS created_at, t.updated_at::tex
   FROM field_notes.tips t
  ORDER BY t.created_at DESC`;
 
-export const FIELD_NOTES_SETTINGS_SQL = `SELECT key, value FROM field_notes.settings WHERE key IN ('require_approval', 'publishing_live')`;
+export const FIELD_NOTES_SETTINGS_SQL = `SELECT key, value FROM field_notes.settings WHERE key IN ('require_approval', 'auto_run', 'publishing_live')`;
 
 export async function readFieldNotes(q: HubQuery, spine: SpineRead): Promise<FieldNotesRead> {
   const [posts, run, tips, settings] = await Promise.all([
@@ -177,7 +178,7 @@ export async function readFieldNotes(q: HubQuery, spine: SpineRead): Promise<Fie
     tips: tips.rows,
     latestRun: run.rows[0] ?? null,
     requireApproval: settingIsOn(setting('require_approval')),
-    // Off unless it is literally true (lib/field-notes/settings.ts).
-    publishingLive: setting('publishing_live')[0]?.value === true,
+    // Live is the state (D16): stateOf(auto_run, publishing_live), each off unless literally true; a mismatch reads as paused.
+    publishingLive: postsToInstagram(stateOf(setting('auto_run')[0]?.value === true, setting('publishing_live')[0]?.value === true).state),
   };
 }

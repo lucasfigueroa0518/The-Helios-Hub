@@ -20,6 +20,7 @@ import type { JevTransport } from '@/lib/reels/jev/runner';
 import type { MovesQuery } from '@/lib/social-hub/moves-store';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const CYCLE_AT = new Date('2026-10-08T06:00:00Z'); // 2:00 AM New York
 
@@ -92,7 +93,7 @@ test('Review Focus 5: tonight’s promoted topic is rendered first even below th
   const p = await topic(db, 'P', 10);
   await addMove(db, `explainers:topic:${p}`, 'promote', '2026-10-07T20:00:00Z');
   await addMove(db, `explainers:topic:${a}`, 'demote', '2026-10-07T20:05:00Z');
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db) });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.renders, [p, b], 'the promote first, then the best topic not demoted');
@@ -116,7 +117,7 @@ test('a promoted topic that is no longer in the pool is skipped with why; the ni
   const b = await topic(db, 'B', 80);
   const gone = await topic(db, 'Gone', 95, 'displaced');
   await addMove(db, `explainers:topic:${gone}`, 'promote', '2026-10-07T20:00:00Z');
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db) });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.renders, [a, b]);
@@ -132,7 +133,7 @@ test('Review Focus 3: a moves read that fails leaves the night exactly as before
   const broken: MovesQuery = async () => {
     throw new Error('relation "social_hub.idea_adjustments" does not exist');
   };
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: broken });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: broken, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.renders, [a, b]);
@@ -147,7 +148,7 @@ test('step aside in the same run: an older promote that is gone is skipped, the 
   const gone = await topic(db, 'Gone', 95, 'displaced');
   await addMove(db, `explainers:topic:${gone}`, 'promote', '2026-10-07T20:00:00Z');
   await addMove(db, `explainers:topic:${p}`, 'promote', '2026-10-07T20:05:00Z');
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db) });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.renders, [p, a], 'the newer promote leads, then the best of the rest');
@@ -170,7 +171,7 @@ test('a promote whose render does not start tonight is transient: no skip is rec
   );
   const p = await topic(db, 'P', 10);
   await addMove(db, `explainers:topic:${p}`, 'promote', '2026-10-07T20:00:00Z');
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db) });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, moves: movesOf(db), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   assert.deepEqual(await moveRow(db, `explainers:topic:${p}`), { used: false, skip_reason: null });
 });

@@ -200,6 +200,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       verdictOf: drama.dramaVerdictOf,
       scheduleJob: drama.scheduleDramaJob,
       publishingLive: drama.dramaPublishingLive,
+      // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
+      holdsSlots: drama.dramaHoldsSlots,
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
       revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),

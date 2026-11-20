@@ -28,7 +28,8 @@ export class DramaPostingError extends Error {
 
 /**
  * One transaction: generate → auto, live → publishing_live, perDay (1..max) also raises daily_render_cap to at least
- * perDay. require_approval is not writable (always true, D16). Turning live on then books the approved reels (scheduleApprovedDrama).
+ * perDay. require_approval is not writable (always true, D16). Turning Generate or Live on (Approval or Live) then books
+ * the approved reels (scheduleApprovedDrama; contract §4.3, never one sent back to Made, D18).
  */
 export async function writeDramaPosting(db: Queryable, patch: { generate?: boolean; live?: boolean; perDay?: number }): Promise<DramaPosting> {
   const writes: Array<[string, unknown]> = [];
@@ -58,6 +59,6 @@ export async function writeDramaPosting(db: Queryable, patch: { generate?: boole
       }
     });
   }
-  if (patch.live === true) await scheduleApprovedDrama(db);
+  if (patch.generate === true || patch.live === true) await scheduleApprovedDrama(db);
   return readDramaPosting(db);
 }
