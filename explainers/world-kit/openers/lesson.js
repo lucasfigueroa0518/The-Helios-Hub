@@ -148,10 +148,9 @@ export const OPENER_ICON = {
   'big-bang': 'chalkboard',
   unboxing: 'books',
   'paper-plane': 'worksheet',
-  'knock-knock': 'scholar',
+  'knock-knock': 'books',
   'eye-zoom': 'scholar',
   scissors: 'gradcap-cutout',
-  'record-scratch': 'scholar',
 };
 
 /** The scholar's size on the card, and the card's layout. */

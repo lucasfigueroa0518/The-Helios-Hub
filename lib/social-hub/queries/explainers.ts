@@ -65,6 +65,10 @@ export type ExplainerScheduleRow = {
 export type ExplainerTopicRow = {
   topic_id: string;
   title: string;
+  /** The concept the reel defines (EX3-86); null on topics written before terms. */
+  term?: string | null;
+  /** Its place in the syllabus (curriculum, 2026-11-21); null off the syllabus or written before it. */
+  syllabus_rank?: number | null;
   scope: string | null;
   status: string;
   origin: string;
@@ -125,7 +129,7 @@ SELECT j.id AS job_id, j.topic_id, j.status, j.trigger, j.mode, j.spend_usd,
 
 /** The topic pool (spec §7 Ideas): every live topic with its score and content stock. */
 export const EXPLAINER_TOPICS_SQL = `
-SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
+SELECT t.id AS topic_id, t.title, t.term, t.scope, t.status, t.origin, t.weighted_score, t.syllabus_rank,
        t.audience_fit, t.teachability_45s, t.analogy_potential, t.visual_potential,
        t.accuracy_under_simplification, t.hook_strength,
        (t.jev_notes->>'ai_focus')::numeric AS ai_focus,
@@ -153,7 +157,7 @@ SELECT t.id AS topic_id, t.title, t.scope, t.status, t.origin, t.weighted_score,
      LIMIT 1
   ) latest ON true
  WHERE t.status IN ('pool', 'promoted', 'queued', 'rendered', 'proposed')
- ORDER BY t.weighted_score DESC NULLS LAST, t.created_at DESC
+ ORDER BY t.syllabus_rank ASC NULLS LAST, t.weighted_score DESC NULLS LAST, t.created_at DESC
  LIMIT 200`;
 
 export const EXPLAINER_REQUIRE_APPROVAL_SQL = `SELECT value FROM explainers.settings WHERE key = 'require_approval'`;

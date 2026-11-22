@@ -1,15 +1,14 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { bucketCoverage, conceptsToTeach, pickBuckets, topicBucket } from '@/lib/explainers/ideas/coverage';
+import { matchAssigned, nextSyllabusTopics } from '@/lib/explainers/ideas/curriculum';
 import { evaluateTopic, topicRef, trimPool, type Evaluation } from '@/lib/explainers/ideas/evaluate';
 import { getTopic } from '@/lib/explainers/repository';
-import { AI_IDEAS_PER_CALL, IDEAS_PER_CALL, ideaUsd, type IdeaModel, type PickedBucket } from '@/lib/explainers/ideas/generator';
+import { IDEAS_PER_CALL, ideaUsd, type IdeaModel, type IdeaResponse } from '@/lib/explainers/ideas/generator';
 import { cycleRetryGate } from '@/lib/explainers/ideas/retry';
 import { RecordingExplainersJevRunner } from '@/lib/explainers/jev/runner';
 import {
   addTopics,
   listPool,
-  listRecentlyRendered,
-  listRendered,
+  listTopicTerms,
   nyDate,
   productionSpendForDay,
   recordCost,
@@ -116,16 +115,19 @@ async function readPoolMoves(q: MovesQuery): Promise<IdeaAdjustment[]> {
 const heldTopicIds = (moves: readonly IdeaAdjustment[]): Set<string> =>
   new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => topicOfIdea(m.ideaId)));
 
-/** Topics a person archived, as history: the machine does not bring them back. */
+/**
+ * Syllabus ideas a person archived, as history: the machine does not bring them back. An idea from before the
+ * curriculum (no syllabus_rank) is left out, so old history never blocks a syllabus topic (2026-11-22).
+ */
 async function archivedTopics(db: ExplainersDb, moves: readonly IdeaAdjustment[]) {
   const found = await Promise.all(moves.filter((m) => m.kind === 'archive').map((m) => getTopic(db, topicOfIdea(m.ideaId)).catch(() => null)));
-  return found.filter((t): t is NonNullable<typeof t> => t != null);
+  return found.filter((t): t is NonNullable<typeof t> => t != null && t.syllabus_rank != null);
 }
 
 /**
- * E-16 daily lifecycle. Runs only while auto_render is on (A-5, A-7): generate
- * three ideas in one call, dedupe and score each (E-15, A-3), trim the pool to
- * pool_size, then promote the best and queue its render. In production the
+ * E-16 daily lifecycle. Runs only while auto_render is on (A-5, A-7): the curriculum assigns the next three
+ * syllabus topics (curriculum.ts) and one call writes an idea for each; dedupe and score each (E-15, A-3), trim the
+ * pool to pool_size, then promote the best and queue its render. In production the
  * day's spend so far, including earlier idea runs, must be under the cap (A-4).
  *
  * Lead time (Bald-Eagle D4, D8; lib/social-hub/lead.ts): the night fills the dates it makes ahead,
@@ -253,52 +255,47 @@ async function runCycleFor(deps: IdeaCycleDeps, st: RunState, day: string, lead:
     const archived = await archivedTopics(db, moves);
     const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);
     const pool = await listPool(db);
-    // Ideas coverage (2026-11-03): tonight's buckets, least covered first (2 AI : 1 CS). The prompt carries only their
-    // renders from the last prompt_history_days, the archived topics in them (or with no bucket) and the whole pool.
-    const everRendered = await listRendered(db);
-    const picked = pickBuckets(bucketCoverage(everRendered, deps.now ?? new Date(), settings.dedupe_lookback_days), {
-      ai: AI_IDEAS_PER_CALL,
-      cs: IDEAS_PER_CALL - AI_IDEAS_PER_CALL,
-    });
-    const pickedIds = new Set(picked.map((b) => b.id));
-    const recent = await listRecentlyRendered(db, settings.prompt_history_days, deps.now);
-    const tonight: PickedBucket[] = picked.map((b) => ({
-      id: b.id,
-      name: b.name,
-      kind: b.kind,
-      concepts_to_teach: conceptsToTeach(b, everRendered),
-      rendered: recent.filter((t) => topicBucket(t) === b.id).map(topicRef),
-    }));
-    const archivedHere = archived.filter((t) => {
-      const own = topicBucket(t);
-      return !own || pickedIds.has(own);
-    });
+    // Curriculum (2026-11-21): the syllabus assigns tonight's topics, the first untaken in teaching order; a term
+    // that failed MAX_FAILED_TRIES times is passed over. The prompt carries them, the archived topics and the pool.
+    const next = nextSyllabusTopics(await listTopicTerms(db), IDEAS_PER_CALL);
+    if (next.skipped.length) {
+      console.info(`[explainers] syllabus: passed over after repeated failed tries: ${next.skipped.map((t) => t.term).join(', ')}`);
+    }
 
-    const response = await deps.ideaModel.propose({
-      model: settings.idea_model,
-      themeBrief,
-      buckets: tonight,
-      pool: pool.map(topicRef),
-      rendered: [...tonight.flatMap((b) => b.rendered), ...archivedHere.map(topicRef)],
-      archived: archivedHere.map(topicRef),
-      historyDays: settings.prompt_history_days,
-    });
-    const buckets = response.usage;
-    await recordCost(db, {
-      ideaCycleId: cycleId,
-      mode: settings.mode,
-      vendor: 'anthropic',
-      component: 'idea_generator',
-      inputTokens: Number(buckets.input_tokens ?? 0),
-      outputTokens: Number(buckets.output_tokens ?? 0),
-      cacheReadTokens: Number(buckets.cache_read_input_tokens ?? 0),
-      cacheWriteTokens: Number(buckets.cache_creation_input_tokens ?? 0),
-      usd: ideaUsd(response),
-    });
+    let ideas: IdeaResponse['ideas'] = [];
+    if (next.topics.length > 0) {
+      const response = await deps.ideaModel.propose({
+        model: settings.idea_model,
+        themeBrief,
+        topics: next.topics,
+        pool: pool.map(topicRef),
+        archived: archived.map(topicRef),
+      });
+      const usage = response.usage;
+      await recordCost(db, {
+        ideaCycleId: cycleId,
+        mode: settings.mode,
+        vendor: 'anthropic',
+        component: 'idea_generator',
+        inputTokens: Number(usage.input_tokens ?? 0),
+        outputTokens: Number(usage.output_tokens ?? 0),
+        cacheReadTokens: Number(usage.cache_read_input_tokens ?? 0),
+        cacheWriteTokens: Number(usage.cache_creation_input_tokens ?? 0),
+        usd: ideaUsd(response),
+      });
+      // Held to the assignment in code: an idea that names no assigned topic is dropped; its topic stays untaken.
+      const { kept, dropped } = matchAssigned(response.ideas, next.topics);
+      if (dropped.length) {
+        console.info(`[explainers] idea generator: dropped ${dropped.length} idea(s) off the assigned terms (${dropped.map((d) => JSON.stringify(d.term)).join(', ')})`);
+      }
+      ideas = kept;
+    } else {
+      console.info('[explainers] syllabus: every topic is taken; no ideas tonight');
+    }
 
     const added = await addTopics(
       db,
-      response.ideas.map((idea) => ({
+      ideas.map((idea) => ({
         title: idea.topic_title,
         scope: idea.topic_scope,
         term: idea.term,

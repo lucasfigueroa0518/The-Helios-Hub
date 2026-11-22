@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import type Anthropic from '@anthropic-ai/sdk';
 import sharp from 'sharp';
 
-import { anchorScore, faceCount, needsSketch, pickAnchor, sketchReference, type CastCand } from '@/lib/reel-ai-drama/harvest/cast';
+import { anchorScore, cutoutSource, faceCount, needsSketch, pickAnchor, sketchReference, type CastCand } from '@/lib/reel-ai-drama/harvest/cast';
 import { fileFaceDetector, mainFace, parseFaceBoxes } from '@/lib/reel-ai-drama/harvest/faces';
 import { downloadImage } from '@/lib/reel-ai-drama/harvest/fetch';
 import { identityVerdict, nameInUrl, parseIptc, readImageMeta, type Look } from '@/lib/reel-ai-drama/harvest/filters';
@@ -159,6 +159,19 @@ test('anchor: a banked cutout wins; else the best confirmed solo portrait; never
   assert.equal(pickAnchor([probable, bigGroup], 'Greg Brockman'), null, 'no confirmed solo picture: no anchor');
   // The detector missing a small face does not hide the look's count.
   assert.equal(faceCount(cand({ faces: [], look: look({ faces: 1 }) })), 1);
+});
+
+test('anchor and cut source: only a solo photograph; a look that saw a second face or no photograph overrules the detector', () => {
+  const photo = cand({ order: 1, width: 1000, height: 1200 });
+  // The detector boxed one face, the look saw two: a group picture, whatever the detector found.
+  const lookSawTwo = cand({ order: 2, width: 3000, height: 3000, flags: ['identity:verified', 'group_photo:2_faces'] });
+  const graphic = cand({ order: 3, width: 3000, height: 3000, flags: ['identity:verified', 'not_photo'] });
+  for (const c of [lookSawTwo, graphic]) assert.equal(anchorScore(c, 'Greg Brockman'), null);
+  assert.equal(pickAnchor([lookSawTwo, graphic, photo], 'Greg Brockman'), photo);
+  assert.equal(cutoutSource([lookSawTwo, graphic], 'Greg Brockman'), null, 'no solo photograph: nothing is cut');
+  const parsed = parseLooks({ tiles: [{ tile: 1, shows: 'x', faces: 1, photograph: false }, { tile: 2, shows: 'y', faces: 1 }] }, 2);
+  assert.deepEqual([parsed.get(0)!.photograph, parsed.get(1)!.photograph], [false, true]);
+  assert.ok((SUBMIT_LOOKS_TOOL.input_schema.properties.tiles.items.required as readonly string[]).includes('photograph'));
 });
 
 test('sketch reference: any solo picture that names them, usable or rejected for a non-identity reason; never a group or an identity reject', () => {
@@ -753,4 +766,44 @@ test('wish search: a copy of an inventory picture is not new; past twelve wishes
   assert.equal(result.problems.filter((p) => /^W\d+: nothing found/.test(p)).length, MAX_WISHES - 1);
   // An unknown wish id in a candidate never matches; a taken candidate is not picked twice.
   assert.equal(pickForWish([], wishes[0]), null);
+});
+
+test('secondary person: framed close on their face in the named third, or the picture stops standing for them', async () => {
+  const { subjectFace, subjectCrop, frameSubject, MIN_SUBJECT_CROP_PX } = await import('@/lib/reel-ai-drama/harvest/subject');
+  const front = { x: 0.15, y: 0.2, w: 0.3, h: 0.35, score: 0.95 };
+  const behind = { x: 0.62, y: 0.15, w: 0.14, h: 0.16, score: 0.8 };
+  // their face is the one in the named third that isn't the main face
+  assert.deepEqual(subjectFace([front, behind], front, 'right'), behind);
+  assert.equal(subjectFace([front, behind], front, 'left'), null, 'the main face is never theirs');
+  assert.equal(subjectFace([front, behind], front, 'none'), null);
+  const crop = subjectCrop(behind, 2000, 1600)!;
+  assert.ok(crop.left <= behind.x * 2000 && crop.left + crop.width >= (behind.x + behind.w) * 2000, 'the crop holds their face');
+  assert.equal(subjectCrop(behind, 400, 300), null, `a crop under ${MIN_SUBJECT_CROP_PX}px is refused`);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rad-subject-'));
+  const file = path.join(dir, 'two.png');
+  await sharp({ create: { width: 2000, height: 1600, channels: 3, background: '#888' } }).png().toFile(file);
+  const base = () => ({ file, bytes: null, phash: null, width: 2000, height: 1600, people: ['Ada Lovelace'], flags: ['identity:verified', 'group_photo:2_faces'], faces: [front, behind], face: { x: front.x, y: front.y, w: front.w, h: front.h } });
+  const deps = { out: () => path.join(dir, `crop-${Math.random()}.png`), phash: async () => 'p' };
+  const cropped = { ...base(), look: { shows: 'Two people at a gala.', faces: 2, named_role: 'secondary' as const, named_side: 'right' as const } };
+  await frameSubject(cropped, deps);
+  assert.ok(cropped.flags.includes('subject:cropped'));
+  assert.deepEqual([cropped.width, cropped.height], [crop.width, crop.height]);
+  assert.equal(cropped.faces.length, 1, 'only their face is left to frame on');
+  assert.match(cropped.look.shows, /^Ada Lovelace, cropped close/);
+  await frameSubject(cropped, deps);
+  assert.equal(cropped.flags.filter((f) => f.startsWith('subject:')).length, 1, 'framed once');
+  // not found where the look says: the picture names nobody
+  const lost = { ...base(), look: { shows: 'x', faces: 2, named_role: 'secondary' as const, named_side: 'left' as const } };
+  await frameSubject(lost, deps);
+  assert.deepEqual([lost.people, lost.flags.includes('subject:secondary'), lost.file], [[], true, file]);
+  const unclear = { ...base(), look: { shows: 'x', faces: 2, named_role: 'unclear' as const, named_side: 'none' as const } };
+  await frameSubject(unclear, deps);
+  assert.deepEqual(unclear.people, []);
+  // a lead stays as it is, and a framed or dropped picture is never an anchor
+  const lead = { ...base(), look: { shows: 'x', faces: 2, named_role: 'lead' as const, named_side: 'none' as const } };
+  await frameSubject(lead, deps);
+  assert.deepEqual(lead.people, ['Ada Lovelace']);
+  assert.equal(anchorScore(cand({ flags: ['identity:verified', 'subject:cropped'], people: ['Greg Brockman'] }), 'Greg Brockman'), null);
+  assert.equal(parseLooks({ tiles: [{ tile: 1, shows: 'x', faces: 2, named_role: 'secondary', named_side: 'right' }] }, 1).get(0)!.named_side, 'right');
 });

@@ -21,6 +21,10 @@ For every tile, report:
 - `tv_logo` — `true` for a TV channel or news-network logo or bug anywhere on the frame.
 - `ai_generated` — `true` when the picture shows signs of being AI-generated: warped hands or
   lettering, melted details, an impossible scene, the glossy synthetic look.
+- `photograph` — `true` when the picture is a photograph: what a camera caught of real people, places
+  or things, edited lightly if at all. `false` for a drawing, painting, cartoon, illustration, graphic,
+  poster or collage, and for a photo reworked until it reads as artwork (recoloured, posterised, cut up
+  or layered with other pictures).
 - `faces` — how many faces are clearly visible.
 - `text_heavy` — `true` when readable text fills most of the picture (a page, a post, a document,
   a slide).
@@ -32,6 +36,13 @@ For every tile, report:
   turned roughly toward the camera, no other face competes with it, and nothing is drawn or printed
   over it. A calm or neutral expression counts; a mid-word grimace, a blurred face or a face lost in a
   crowd does not.
+- `named_role` — how the person the tile line or caption names sits in the picture, told apart by what the cast
+  line says of who they are: `lead` when they are the picture's clear main subject; `secondary` when someone
+  else leads it and they stand behind, beside or past that person, smaller, partly hidden or out of focus;
+  `unclear` when several people show and nothing visible tells which one they are; `none` when the line names
+  no one or no person shows.
+- `named_side` — for `secondary`, the third of the picture they stand in: `left`, `middle` or `right`;
+  `none` otherwise.
 - `expression` — in a few plain words, what a person's face and body show (their feeling or manner); `null` when no one's face can be read.
 - `garbled` — `true` when the file itself is broken: blocks of the picture shuffled or out of place,
   rectangles of black, grey or wrong pixels, a half-loaded or smeared picture. A blurry, dark or

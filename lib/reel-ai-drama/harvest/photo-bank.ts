@@ -117,7 +117,8 @@ export function offerItems(
   const wantById = new Map(wants.map((w) => [w.id, w]));
   const items: DramaOfferItem[] = [];
   for (const { c, slide, outcome } of kept) {
-    if (!c.url || c.made || !OFFERABLE.has(c.source) || !BANKABLE.has(c.kind)) continue;
+    // a photo framed on a secondary person, or no longer standing for one (subject.ts), isn't banked as found
+    if (!c.url || c.made || !OFFERABLE.has(c.source) || !BANKABLE.has(c.kind) || c.flags.some((f) => f.startsWith('subject:'))) continue;
     const verified = c.flags.includes('identity:verified')
       ? c.people.map((name) => ({ name, qid: (c.people.length === 1 && c.qids.length === 1 ? c.qids[0] : null) ?? qidOf.get(name) ?? null }))
       : [];

@@ -1,26 +1,16 @@
-// What every opener in the bank draws with (EX3-102). An opener never knows the reel: it gets
-// the reel's hook scene (assets/frames/01-hook.js, written by the frame worker) through `ctx`:
+// What every opener in the bank draws with (EX3-102). An opener never knows the reel's story:
 //
-//   ctx.hook   { ground, shots, hero, draw(t, { hideHero, heroPose }) }: the hook in motion,
-//              framed by its own shots (a 2D crop and push: the hook's lens itself never moves);
-//              `hero` is its critter, as the frame shows it at t = 0 before any shot's crop:
-//                at: [x, y]        its feet on the page (through the hook's lens, if it has one)
-//                s                 its screen scale there
-//                box?: [x0, y0, x1, y1]   its screen box there (lens.js critterAt returns it)
-//                critter           its CAST look ({ body, outfit, … })
-//                lens?: { P, at: [x, y, z], rig }   the hook's lens, the hero's world feet and
-//                                  the shot's light rig: the opener then draws the hero lit
-//                                  exactly as the frame does (critterAt), and at/s/box can be
-//                                  left out (they are projected from it)
-//                draw?(pose)       or the hero drawn by the hook itself at its layout spot
-//   ctx.M      the opener's timing (bank.js openerTiming): voiceAt, voice, duration, its moments
-//   ctx.term   the storyboard's term (4.3: unused by the openers; the card moved to frame 3)
+//   ctx.key    the opener's key (its card's layout and icon: lesson.js lessonLayout(ctx.key))
+//   ctx.hook   the AI 101 card (lesson.js lessonScene): { ground, hero, draw(t, { hideHero, hideTitle, bare }) }:
+//              paper, "AI 101" and the opener's education icon, or the house scholar as its `hero`
+//   ctx.next   frame 2, the definition beat ({ ground, draw(t) }), or null; nextBeat(ctx) is its first
+//              picture, what the opener uncovers as it takes the card away
+//   ctx.M      the opener's timing (bank.js openerTiming): cardIn, exitAt, end (= duration) and its beats
 //
-// hx-6 (Lucas, 2026-11-16): there is no teaser scene. `ctx.hook` is code's AI 101 card
-// (lesson.js lessonScene: "AI 101" with the opener's education icon, or the house scholar as its
-// hero), so every opener lands on it and frame 2 (the definition) follows. The first text an opener
-// shows is "AI 101" alone; the card with the term ("today's AI Lesson: <term>") is frame 3's
-// hand-off (handoff.js).
+// Lucas, 2026-11-21: the opener is everything before the voice. "AI 101" and its icon are on screen in
+// its first frames (built by the opener's own action: typed, written, dropped, printed…), whole from
+// cardIn to exitAt, then the opener's action takes them away and uncovers frame 2. "AI 101" appears
+// once: the opener never lands on it a second time. The card with the term is frame 3's hand-off.
 
 import { T, g, el, ref, handwrite, handwriteWidth, shock, softShape, gloss } from '../draw.js';
 import { soften } from '../props/kit.js';
@@ -35,6 +25,11 @@ export { T, g, el, ref, handwrite, handwriteWidth, shock, seg, lerp, clamp01, E,
 /** An opener's own drawing in the soft style (hx-4): ink outlines become soft edges, flat fills
  *  soft gradients (props/kit.js soften). Never wrap the hook scene or a critter in it. */
 export const soft = (svg) => soften(Array.isArray(svg) ? svg.join('') : svg);
+
+/** Frame 2's first picture (the definition beat), what an opener uncovers; plain paper when there is no frame 2. */
+export function nextBeat(ctx) {
+  return ctx.next ? ctx.next.draw(0) : fill(T.paper);
+}
 
 /** A rounded rectangle as a path. */
 export const roundRect = (x, y, w, h, r) =>

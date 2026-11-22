@@ -233,7 +233,8 @@ function stubIdeas(
       const next = batches.shift();
       if (!next) throw new Error('no canned ideas left');
       return {
-        ideas: next.map(([topic_title, topic_scope]) => ({ topic_title, topic_scope, term: topic_title.toLowerCase(), ...STUB_FRAME })),
+        // Each canned idea takes its assigned syllabus term, in order, as the generator is told to (curriculum).
+        ideas: next.map(([topic_title, topic_scope], i) => ({ topic_title, topic_scope, term: request.topics[i]?.term ?? topic_title.toLowerCase(), ...STUB_FRAME })),
         usage: { input_tokens: 200, output_tokens: 150, cache_read_input_tokens: 1200 },
         model: 'claude-sonnet-5-5',
       };
@@ -303,7 +304,8 @@ test('generator output must be exactly three distinct ideas', () => {
   assert.deepEqual(ok.map((i) => i.term), ['ta', 'tb', 'tc']);
   assert.deepEqual(ok.map((i) => i.altitude), ['unfamiliar', 'unfamiliar', 'unfamiliar']);
   const framed = (b: string) => [1, 2, 3].map((n) => ({ topic_title: `t${n}`, topic_scope: 's', term: `t${n}`, ...STUB_FRAME, bucket: b }));
-  assert.throws(() => parseIdeas({ ideas: framed('how-llms-work') }, ['web-and-apis']), /bucket outside/);
+  assert.throws(() => parseIdeas({ ideas: framed('not-a-bucket') }), /bucket outside/);
+  assert.throws(() => parseIdeas({ ideas: framed('how-llms-work') }, 2), /exactly 2/, 'one idea per assigned topic');
   assert.throws(() => parseIdeas({ ideas: framed('how-llms-work').map((i) => ({ ...i, altitude: 'high' })) }), /altitude/);
   assert.throws(() => parseIdeas({ ideas: framed('how-llms-work').map((i) => ({ ...i, payload: ' ' })) }), /payload or map position/);
   assert.throws(() => parseIdeas({ ideas: [{ topic_title: 'a', topic_scope: 'x' }, { topic_title: 'b', topic_scope: 'y', term: 'tb' }, { topic_title: 'c', topic_scope: 'z', term: 'tc' }] }), /title, scope, or term/);
@@ -319,10 +321,9 @@ test('both calls use structured outputs, never forced tool use, and cache the st
   const idea = ideaGeneratorParams({
     model: 'claude-sonnet-5-5',
     themeBrief: 'BRIEF',
-    buckets: [{ id: 'how-llms-work', name: 'How LLMs work', kind: 'ai', concepts_to_teach: ['inference'], rendered: [{ topic_title: 'r', topic_scope: 'rs' }] }],
+    topics: [{ term: 'inference', kind: 'ai', angle: 'Why is answering cheaper than training?', level: 1, levelName: 'What AI is', unitName: 'What AI is', requires: ['model training'] }],
     pool: [{ topic_title: 'p', topic_scope: 'ps' }],
-    rendered: [{ topic_title: 'r', topic_scope: 'rs' }],
-    historyDays: 90,
+    archived: [{ topic_title: 'r', topic_scope: 'rs' }],
   });
   const scope = scopeWriterParams({ model: 'claude-sonnet-5-5', themeBrief: 'BRIEF', titles: ['A', 'B'] });
   for (const params of [idea, scope]) {
@@ -340,8 +341,10 @@ test('both calls use structured outputs, never forced tool use, and cache the st
   const system = idea.system as { text: string }[];
   assert.ok(system[0].text.startsWith(IDEA_GENERATOR_INSTRUCTIONS));
   assert.ok(!system[0].text.includes('"p"'), 'pool is not in the cached prefix');
-  assert.ok(!system[0].text.includes('how-llms-work ('), "tonight's buckets are not in the cached prefix");
-  assert.match(idea.messages[0].content as string, /how-llms-work \(How LLMs work, AI\)[\s\S]*"inference"[\s\S]*last 90 days[\s\S]*"topic_title":"r"/);
+  assert.ok(!system[0].text.includes('"inference"'), "tonight's syllabus topics are not in the cached prefix");
+  assert.match(idea.messages[0].content as string, /1\. term: "inference" \(AI\)\n   Level 1 of \d+: What AI is\. Unit: What AI is\.\n   Builds on \(taught earlier\): \["model training"\]\n   Angle \(the question the reel answers\): "Why is answering cheaper than training\?"[\s\S]*"topic_title":"r"/);
+  assert.ok(!system[0].text.includes('Why is answering cheaper'), 'the angle is per-request, not in the cached prefix');
+  assert.match(idea.messages[0].content as string, /Write one idea per topic, 1 in all, in this order\./);
   assert.ok((idea.messages[0].content as string).includes('"topic_title":"p"'));
   assert.ok((scope.messages[0].content as string).includes('["A","B"]'));
 });
@@ -367,7 +370,8 @@ test('hand-added topics are scored, gated, and ranked', async () => {
     ['Everything about agents', BROAD],
   ]);
   assert.deepEqual(results.map((r) => r.evaluation.outcome), ['entered_pool', 'entered_pool', 'rejected_gates']);
-  assert.deepEqual((await listPool(db)).map((t) => t.title), ['API call', 'React']);
+  // React is a syllabus topic, so it leads the pool (POOL_ORDER_BY: syllabus first); API call is off the syllabus.
+  assert.deepEqual((await listPool(db)).map((t) => [t.title, t.syllabus_rank != null]), [['React', true], ['API call', false]]);
   const broad = (await listTopics(db, ['rejected']))[0];
   assert.match(broad.reject_reason ?? '', /teachability_45s, accuracy_under_simplification/);
 });
@@ -1027,12 +1031,15 @@ test('a writer call that fails is a failed candidate; a failed pass is recorded 
   assert.equal(topicAnalogy(topic), null, 'the render runs the pass again (EX3-31)');
 });
 
-test('the idea generator skews to AI and still asks for CS or tech (EX3-73); both write the term (EX3-86)', () => {
-  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v6');
+test('the idea generator writes one idea per assigned syllabus topic (curriculum); both write the term (EX3-86)', () => {
+  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v8');
   assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v6');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) assert.ok(prompt.includes(TERM_RULE));
-  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Exactly 2 of the 3 ideas teach an AI concept/);
-  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /The other idea teaches a computer-science or tech concept/);
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /exactly one idea for each syllabus topic in the user message, in the same order/);
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /The term is the assigned topic's term, copied exactly/);
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Deliver the angle: the scope and the payload answer it/);
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /never a restatement of the term's own words/);
+  assert.doesNotMatch(IDEA_GENERATOR_INSTRUCTIONS, /tonight's buckets|Skew toward AI|Exactly 2 of the 3/, 'no bucket pick or per-call AI skew left');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) {
     assert.match(prompt, /one minute|one-minute/);
     assert.doesNotMatch(prompt, /45/);

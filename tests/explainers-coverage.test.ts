@@ -1,7 +1,7 @@
 /**
  * Ideas coverage (planning/Explainer Reels/ideas-coverage/PLAN.md, 2026-11-03), offline on PGlite with the real schema
  * and a stubbed idea model and Jev (no live calls): the bucket pick, the free term check, seeds that auto-win or are
- * blocked, a generator request that carries only tonight's buckets' history, and the altitude check's one rewrite.
+ * blocked, the curriculum's assigned topics in the generator request (2026-11-21), and the altitude check's one rewrite.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -9,11 +9,14 @@ import test from 'node:test';
 import type { EntryType, Questions, SystemOneResult } from '@typesafe-ai/sdk';
 
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { BUCKETS, BUCKET_IDS, RENDERED_BUCKETS, bucketCoverage, normalizeTerm, pickBuckets, topicBucket } from '@/lib/explainers/ideas/coverage';
+import { BUCKETS, BUCKET_IDS, RENDERED_BUCKETS, normalizeTerm, topicBucket } from '@/lib/explainers/ideas/coverage';
 import { addAndEvaluateTopics, frameMissingPoolTopics, runIdeaCycle } from '@/lib/explainers/ideas/cycle';
+import { CURRICULUM } from '@/lib/explainers/ideas/curriculum';
+import { SYLLABUS } from '@/lib/explainers/ideas/syllabus';
 import { sameTermTopic } from '@/lib/explainers/ideas/evaluate';
 import type { IdeaModel, IdeaRequest, LessonFrame, PayloadRequest } from '@/lib/explainers/ideas/generator';
-import { getTopic } from '@/lib/explainers/repository';
+import { fillCandidates } from '@/lib/explainers/publish/schedule';
+import { getTopic, listPool } from '@/lib/explainers/repository';
 import { DEFAULT_SETTINGS, saveSetting } from '@/lib/explainers/settings';
 import type { TopicRow } from '@/lib/explainers/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
@@ -44,7 +47,7 @@ function jev(duplicate = 0.1, familiar = 0.1): JevTransport & { keys: string[][]
   };
 }
 
-function ideas(frame: LessonFrame = FRAME): IdeaModel & { payloadCalls: PayloadRequest[]; proposals: IdeaRequest[]; scopeCalls: string[][] } {
+function ideas(frame: LessonFrame = FRAME, terms?: (request: IdeaRequest) => string[]): IdeaModel & { payloadCalls: PayloadRequest[]; proposals: IdeaRequest[]; scopeCalls: string[][] } {
   const payloadCalls: PayloadRequest[] = [];
   const proposals: IdeaRequest[] = [];
   const scopeCalls: string[][] = [];
@@ -59,8 +62,9 @@ function ideas(frame: LessonFrame = FRAME): IdeaModel & { payloadCalls: PayloadR
     },
     async propose(request) {
       proposals.push(request);
-      const ids = request.buckets.map((b) => b.id);
-      return { ideas: ids.map((id, n) => ({ topic_title: `Idea ${n}`, topic_scope: 'Explain it.', term: `idea ${n}`, ...frame, bucket: id })), usage, model: 'claude-sonnet-5-5' };
+      // By default each idea takes its assigned term, as the generator is told to; `terms` lets a test answer otherwise.
+      const written = terms ? terms(request) : request.topics.map((t) => t.term);
+      return { ideas: written.map((term, n) => ({ topic_title: `Idea ${n}`, topic_scope: 'Explain it.', term, ...frame })), usage, model: 'claude-sonnet-5-5' };
     },
     async rewritePayload(request) {
       payloadCalls.push(request);
@@ -75,12 +79,12 @@ function ideas(frame: LessonFrame = FRAME): IdeaModel & { payloadCalls: PayloadR
   };
 }
 
-async function topic(db: ExplainersDb, fields: { title: string; term?: string; bucket?: string | null; status: string; daysAgo?: number }): Promise<string> {
+async function topic(db: ExplainersDb, fields: { title: string; term?: string; bucket?: string | null; status: string; daysAgo?: number; rank?: number; score?: number }): Promise<string> {
   const { rows } = await db.query<{ id: string }>(
-    `INSERT INTO explainers.topics (title, term, bucket, origin, status, scope, weighted_score, rendered_at)
-     VALUES ($1, $2, $3, 'generated', $4, 'S', 60, CASE WHEN $5::int IS NULL THEN NULL ELSE now() - make_interval(days => $5::int) END)
+    `INSERT INTO explainers.topics (title, term, bucket, origin, status, scope, weighted_score, rendered_at, syllabus_rank)
+     VALUES ($1, $2, $3, 'generated', $4, 'S', $6, CASE WHEN $5::int IS NULL THEN NULL ELSE now() - make_interval(days => $5::int) END, $7)
      RETURNING id`,
-    [fields.title, fields.term ?? null, fields.bucket ?? null, fields.status, fields.daysAgo ?? null],
+    [fields.title, fields.term ?? null, fields.bucket ?? null, fields.status, fields.daysAgo ?? null, fields.score ?? 60, fields.rank ?? null],
   );
   return rows[0]!.id;
 }
@@ -97,24 +101,6 @@ test('thirteen buckets, seven AI and six CS; every rendered term maps to a real 
   assert.equal(RENDERED_BUCKETS['what is a context window?'], 'prompts-and-context');
   assert.equal(DEFAULT_SETTINGS.dedupe_lookback_days, 120);
   assert.equal(DEFAULT_SETTINGS.prompt_history_days, 90);
-});
-
-test('pickBuckets: least renders in the window first, then the oldest last render; 2 AI then 1 CS', () => {
-  const now = new Date('2026-11-03T12:00:00Z');
-  const at = (days: number) => new Date(now.getTime() - days * 86_400_000).toISOString();
-  const rendered = [
-    // Every AI bucket but two has a recent render; those two are covered only long ago, one older than the other.
-    ...BUCKETS.filter((b) => b.kind === 'ai' && b.id !== 'running-models' && b.id !== 'training-and-tuning').map((b) => ({ bucket: b.id, term: null, title: b.name, rendered_at: at(10) })),
-    { bucket: 'running-models', term: null, title: 'x', rendered_at: at(200) },
-    { bucket: 'training-and-tuning', term: null, title: 'y', rendered_at: at(300) },
-    // CS: every bucket but one has a render in the window; by term through the one-time map.
-    ...BUCKETS.filter((b) => b.kind === 'cs' && b.id !== 'how-software-is-built').map((b) => ({ bucket: b.id, term: null, title: b.name, rendered_at: at(5) })),
-    { bucket: null, term: 'Webhook', title: 'Webhooks?', rendered_at: at(1) },
-  ];
-  const coverage = bucketCoverage(rendered, now);
-  assert.equal(coverage['web-and-apis'].renders, 2, 'mapped by term when the bucket column is empty');
-  assert.equal(coverage['running-models'].renders, 0, 'outside the 120-day window');
-  assert.deepEqual(pickBuckets(coverage, { ai: 2, cs: 1 }).map((b) => b.id), ['training-and-tuning', 'running-models', 'how-software-is-built']);
 });
 
 test('term normalization and the free match: case, punctuation and simple plurals', () => {
@@ -171,33 +157,48 @@ test('a seed that repeats a render from the last 120 days is blocked, naming the
 
 // ── The generator request ───────────────────────────────────────────────────
 
-test("the generator request carries only tonight's buckets' renders from the last 90 days, plus the pool", async () => {
+test('the curriculum assigns tonight\'s topics: the first untaken syllabus terms with level, unit and prerequisites; ideas off them are dropped', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
-  // Covered recently, so not picked tonight.
-  for (const b of BUCKETS.filter((x) => x.id !== 'retrieval-and-memory' && x.id !== 'reliability-and-safety' && x.id !== 'data-and-databases')) {
-    await topic(db, { title: `Recent ${b.id}`, bucket: b.id, status: 'rendered', daysAgo: 3 });
-  }
-  // Tonight's buckets: one render each long enough ago to sort them, one inside 90 days and one outside it.
-  await topic(db, { title: 'Old retrieval', bucket: 'retrieval-and-memory', status: 'rendered', daysAgo: 100 });
-  await topic(db, { title: 'Older safety', bucket: 'reliability-and-safety', status: 'rendered', daysAgo: 150 });
-  await topic(db, { title: 'Pool one', bucket: 'how-llms-work', status: 'pool' });
+  // Passed over: the first syllabus term, rejected twice. Taken: an aka of the second, rendered. The third failed once only.
+  await topic(db, { title: 'What is AI?', term: 'AI', status: 'rendered', daysAgo: 200 });
+  for (const n of [1, 2]) await topic(db, { title: `Algorithms ${n}`, term: 'algorithm', status: 'rejected' });
+  await topic(db, { title: 'Rules', term: 'rule-based system', status: 'rejected' });
+  await topic(db, { title: 'Pool one', status: 'pool' });
+  // the failed tries were syllabus ideas (they carry a rank); only those count
+  await db.query(`UPDATE explainers.topics SET syllabus_rank = 0 WHERE status = 'rejected'`);
   // Lead time (Bald-Eagle D4, D8): earlier nights filled today and tomorrow, so this night runs one cycle (for day+2).
   for (const n of [0, 1]) {
     const d = new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [d]);
   }
-  const model = ideas();
+  // The stub answers the first topic in other spacing and case, the second by its aka, the third off the syllabus.
+  const model = ideas(FRAME, () => ['Rule-Based  System', 'ML', 'blockchain']);
   const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev() });
-  assert.equal(result.status, 'ok');
+  assert.equal(result.status, 'ok', result.status === 'failed' ? result.error : '');
   const [request] = model.proposals;
-  assert.deepEqual(request!.buckets.map((b) => b.id), ['reliability-and-safety', 'retrieval-and-memory', 'data-and-databases']);
-  assert.deepEqual(request!.rendered, [], 'nothing from other buckets, nothing older than 90 days');
+  assert.deepEqual(request!.topics.map((t) => t.term), ['rule-based system', 'binary', 'machine learning']);
+  const first = request!.topics[0]!;
+  assert.deepEqual([first.level, first.levelName, first.unitName, first.requires], [1, SYLLABUS[0]!.name, 'What AI is', ['artificial intelligence', 'algorithm']]);
+  assert.equal(first.angle, CURRICULUM[2]!.angle, 'each assigned topic carries its angle');
   assert.deepEqual(request!.pool.map((p) => p.topic_title), ['Pool one']);
-  assert.equal(request!.historyDays, 90);
-  const added = await db.query<{ bucket: string; lesson_altitude: string }>(`SELECT bucket, lesson_altitude FROM explainers.topics WHERE title LIKE 'Idea %' ORDER BY title`);
-  assert.deepEqual(added.rows.map((r) => r.bucket), ['reliability-and-safety', 'retrieval-and-memory', 'data-and-databases']);
-  assert.ok(added.rows.every((r) => r.lesson_altitude === 'unfamiliar'));
+  const added = await db.query<{ term: string; syllabus_rank: number; bucket: string }>(
+    `SELECT term, syllabus_rank, bucket FROM explainers.topics WHERE title LIKE 'Idea %' ORDER BY syllabus_rank`,
+  );
+  assert.deepEqual(added.rows.map((r) => [r.term, r.syllabus_rank]), [['rule-based system', 2], ['machine learning', 4]], 'exact assigned terms; the stray idea is dropped');
+  assert.ok(added.rows.every((r) => r.bucket === FRAME.bucket), 'each idea still labels its bucket');
+  if (result.status === 'ok') assert.equal((await getTopic(db, result.promotedTopicId!))?.term, 'rule-based system', 'the night makes the earliest syllabus topic');
+  const { rows: [cycle] } = await db.query<{ ideas_generated: number }>(`SELECT ideas_generated FROM explainers.idea_cycles WHERE status = 'ok' ORDER BY started_at DESC LIMIT 1`);
+  assert.equal(cycle!.ideas_generated, 2);
+});
+
+test('the night fill follows the syllabus first, then the score; topics off the syllabus come last', async () => {
+  const { db } = await scratchExplainersDb();
+  const late = await topic(db, { title: 'Late', status: 'pool', rank: 40, score: 50 });
+  const early = await topic(db, { title: 'Early', status: 'pool', rank: 1, score: 40 });
+  const off = await topic(db, { title: 'Off the syllabus', status: 'pool', score: 99 });
+  assert.deepEqual((await fillCandidates(db, false)).map((c) => c.topicId), [early, late, off]);
+  assert.deepEqual((await listPool(db)).map((t) => t.id), [early, late, off], 'POOL_ORDER_BY agrees');
 });
 
 // ── The altitude check ──────────────────────────────────────────────────────

@@ -213,13 +213,13 @@ export type FillCandidate = { topicId: string; title: string; /** The surviving 
  * render instead of rendering its topic again.
  */
 export async function fillCandidates(db: Queryable, approvalNeeded: boolean, moves: readonly IdeaAdjustment[] = []): Promise<FillCandidate[]> {
-  const { rows } = await db.query<{ topic_id: string; title: string; job_id: string | null; score: string | null; below_gate: boolean }>(
+  const { rows } = await db.query<{ topic_id: string; title: string; job_id: string | null; score: string | null; syllabus_rank: number | null; below_gate: boolean }>(
     `WITH placeable AS (${PLACEABLE_RENDERS}),
      newest AS (
        SELECT DISTINCT ON (topic_id) id, topic_id FROM explainers.jobs
         WHERE status = 'ok'
         ORDER BY topic_id, finished_at DESC NULLS LAST, seq DESC)
-     SELECT c.id::text AS topic_id, c.title, c.job_id, c.weighted_score::text AS score,
+     SELECT c.id::text AS topic_id, c.title, c.job_id, c.weighted_score::text AS score, c.syllabus_rank,
             COALESCE(c.jev_notes->'seed_flags' @> '"below_gate"'::jsonb, false) AS below_gate FROM (
        SELECT t.*, n.id::text AS job_id
          FROM explainers.topics t
@@ -237,8 +237,11 @@ export async function fillCandidates(db: Queryable, approvalNeeded: boolean, mov
   // The queue decides (pool standard, 2026-10-21): pinned topics first, then by score or where a drag left them,
   // archived ones gone. The query's order (POOL_ORDER_BY) breaks ties.
   const items = rows.map((r) => ({ id: `explainers:topic:${r.topic_id}`, score: r.score == null ? null : Number(r.score), row: r }));
+  // Curriculum (2026-11-21): syllabus topics lead the unpinned queue in the query's order (syllabus first, as
+  // POOL_ORDER_BY), above the topics off the syllabus, which still go by score. Pins, drags and archives win as before.
+  const syllabusLead = items.filter((i) => i.row.syllabus_rank != null).map((i) => i.id);
   // A seed that fell below a quality gate is the person's to make (Make it, or a pin): the night skips it unless it is pinned.
-  return queueOrder(items, moves.filter((m) => m.vertical === 'explainers'))
+  return queueOrder(items, moves.filter((m) => m.vertical === 'explainers'), syllabusLead)
     .filter((q) => !q.item.row.below_gate || q.pinned)
     .map((q) => ({ topicId: q.item.row.topic_id, title: q.item.row.title, jobId: q.item.row.job_id }));
 }

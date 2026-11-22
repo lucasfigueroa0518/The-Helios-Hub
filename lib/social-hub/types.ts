@@ -151,6 +151,8 @@ export type ScoreBreakdown = { formula: string; parts: ScorePart[]; note?: strin
 export type IdeaState ='idea_only' | 'content_ready' | 'on_deck' | 'published' | 'retired' | 'skipped';
 
 export type HubIdea = {
+  /** Teaching order on a curriculum (Explainers' syllabus rank), when the vertical has one: it outranks the score. */
+  curriculumRank?: number | null;
   id: string;
   vertical: Vertical;
   title: string;

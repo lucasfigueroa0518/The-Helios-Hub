@@ -33,7 +33,7 @@ import { pathToFileURL } from 'node:url';
 
 import { driver, findChrome } from './bounds.mjs';
 import { HOOK_ID, isBankOpener, isClose, projectFrames } from './frames.mjs';
-import { HOOK_REVEAL } from './openers/bank.js';
+import { hookRevealAt } from './openers/bank.js';
 import { chosenOpener } from './openers/sound.mjs';
 import { FONTS } from './mount.mjs';
 import { frameKind, frameLook, preparedScene } from './try.mjs'; // also registers the hooks that let frame modules load in Node
@@ -330,7 +330,7 @@ export async function sequences(root) {
     const sourceFile = isBankOpener(root, entry) && existsSync(join(root, 'assets', 'frames', `${HOOK_ID}.js`)) ? join(root, 'assets', 'frames', `${HOOK_ID}.js`) : file;
     const shots = Array.isArray(scene?.shots) ? scene.shots : null;
     // frame 1 from the bank: its first still waits until the opener has uncovered the hook for good
-    const reveal = isBankOpener(root, entry) ? HOOK_REVEAL[scene?.opener ?? chosenOpener(root)] ?? 0 : 0;
+    const reveal = isBankOpener(root, entry) ? hookRevealAt(scene?.opener ?? chosenOpener(root)) : 0;
     const times = sequenceTimes(shots, entry.duration, reveal);
     const ground = scene?.ground ?? groundOf(entry);
     const stills = times.map((t) => ({ t, shot: shotNumberAt(shots, t), file: join('.hyperframes', 'sequences', `${entry.id}-${t.toFixed(2)}.png`) }));
