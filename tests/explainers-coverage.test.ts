@@ -165,6 +165,8 @@ test('the curriculum assigns tonight\'s topics: the first untaken syllabus terms
   for (const n of [1, 2]) await topic(db, { title: `Algorithms ${n}`, term: 'algorithm', status: 'rejected' });
   await topic(db, { title: 'Rules', term: 'rule-based system', status: 'rejected' });
   await topic(db, { title: 'Pool one', status: 'pool' });
+  // the failed tries were syllabus ideas (they carry a rank); only those count
+  await db.query(`UPDATE explainers.topics SET syllabus_rank = 0 WHERE status = 'rejected'`);
   // Lead time (Bald-Eagle D4, D8): earlier nights filled today and tomorrow, so this night runs one cycle (for day+2).
   for (const n of [0, 1]) {
     const d = new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });

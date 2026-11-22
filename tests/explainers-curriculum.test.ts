@@ -66,12 +66,12 @@ test('nextSyllabusTopics: the first untaken in file order; a term is passed over
   const { topics, skipped } = nextSyllabusTopics(
     [
       { term: t0!.aka?.[0] ?? t0!.term, status: 'rendered' }, // taken, by its aka
-      { term: t1!.term, status: 'rejected' },
-      { term: t1!.term, status: 'displaced', duplicateOf: 'x' }, // two failed tries: passed over
-      { term: t2!.term, status: 'rejected' }, // one failed try: still assigned
-      { term: t3!.term, status: 'archived' }, // a person archived it: taken
-      { term: t4!.term, status: 'displaced', duplicateOf: null }, // only the pool cut: free again, and not a failure
-      { term: t4!.term, status: 'displaced', duplicateOf: null },
+      { term: t1!.term, status: 'rejected', syllabusRank: t1!.rank },
+      { term: t1!.term, status: 'displaced', duplicateOf: 'x', syllabusRank: t1!.rank }, // two failed tries: passed over
+      { term: t2!.term, status: 'rejected', syllabusRank: t2!.rank }, // one failed try: still assigned
+      { term: t3!.term, status: 'archived', syllabusRank: t3!.rank }, // a person archived it: taken
+      { term: t4!.term, status: 'displaced', duplicateOf: null, syllabusRank: t4!.rank }, // only the pool cut: free again, and not a failure
+      { term: t4!.term, status: 'displaced', duplicateOf: null, syllabusRank: t4!.rank },
       { term: 'off the syllabus', status: 'pool' },
     ],
     3,
@@ -80,11 +80,16 @@ test('nextSyllabusTopics: the first untaken in file order; a term is passed over
   assert.deepEqual(topics.map((t) => t.rank), [t2!.rank, t4!.rank, t5!.rank]);
   assert.deepEqual(skipped.map((t) => t.term), [t1!.term]);
   // A term held by a live topic is taken whatever its failures.
-  assert.deepEqual(nextSyllabusTopics([{ term: t0!.term, status: 'rejected' }, { term: t0!.term, status: 'pool' }], 1).topics.map((t) => t.rank), [1]);
-  // Every status but rejected and displaced takes the term.
+  assert.deepEqual(nextSyllabusTopics([{ term: t0!.term, status: 'rejected', syllabusRank: 0 }, { term: t0!.term, status: 'pool', syllabusRank: 0 }], 1).topics.map((t) => t.rank), [1]);
+  // Every status but rejected and displaced takes the term, for a syllabus idea.
   for (const status of ['proposed', 'pool', 'promoted', 'queued', 'rendered', 'retired', 'archived']) {
-    assert.equal(nextSyllabusTopics([{ term: t0!.term, status }], 1).topics[0]!.rank, 1, status);
+    assert.equal(nextSyllabusTopics([{ term: t0!.term, status, syllabusRank: 0 }], 1).topics[0]!.rank, 1, status);
   }
+  // An idea from before the curriculum (no rank) takes nothing unless it was made; nor do its old failures count.
+  for (const status of ['proposed', 'pool', 'queued', 'archived', 'rejected']) {
+    assert.equal(nextSyllabusTopics([{ term: t0!.term, status }, { term: t0!.term, status: 'rejected' }], 1).topics[0]!.rank, 0, status);
+  }
+  assert.equal(nextSyllabusTopics([{ term: t0!.term, status: 'rendered' }], 1).topics[0]!.rank, 1);
   // The end of the syllabus: fewer than n, then none.
   const all = CURRICULUM.map((t) => ({ term: t.term, status: 'rendered' }));
   assert.deepEqual(nextSyllabusTopics(all.slice(0, -1), 3).topics.map((t) => t.rank), [CURRICULUM.length - 1]);

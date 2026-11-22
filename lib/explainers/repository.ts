@@ -142,11 +142,11 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
 }
 
 /** Every topic's term and status, for the curriculum's "taken" check (nextSyllabusTopics). */
-export async function listTopicTerms(db: Queryable): Promise<{ term: string; status: string; duplicateOf: string | null }[]> {
-  const { rows } = await db.query<{ term: string; status: string; duplicate_of: string | null }>(
-    `SELECT term, status, duplicate_of::text AS duplicate_of FROM explainers.topics WHERE term IS NOT NULL`,
+export async function listTopicTerms(db: Queryable): Promise<{ term: string; status: string; duplicateOf: string | null; syllabusRank: number | null }[]> {
+  const { rows } = await db.query<{ term: string; status: string; duplicate_of: string | null; syllabus_rank: number | null }>(
+    `SELECT term, status, duplicate_of::text AS duplicate_of, syllabus_rank FROM explainers.topics WHERE term IS NOT NULL`,
   );
-  return rows.map((r) => ({ term: r.term, status: r.status, duplicateOf: r.duplicate_of }));
+  return rows.map((r) => ({ term: r.term, status: r.status, duplicateOf: r.duplicate_of, syllabusRank: r.syllabus_rank }));
 }
 
 export async function getTopic(db: Queryable, id: string): Promise<TopicRow | null> {

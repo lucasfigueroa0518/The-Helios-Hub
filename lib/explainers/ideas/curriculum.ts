@@ -101,7 +101,7 @@ export function levelOfRank(rank: number | null | undefined): number | null {
 }
 
 /** One existing explainers topic as the curriculum sees it. */
-export type TopicTermState = { term: string | null; status: string; duplicateOf?: string | null };
+export type TopicTermState = { term: string | null; status: string; duplicateOf?: string | null; syllabusRank?: number | null };
 
 /** After this many failed tries a term is passed over, so one topic that keeps failing the gates can't stall the curriculum. */
 export const MAX_FAILED_TRIES = 2;
@@ -115,9 +115,9 @@ function failedTry(t: TopicTermState): boolean {
 }
 
 /**
- * The first `n` syllabus topics, in file order, that are not taken. A term is taken when an existing topic has it (or
- * an aka) in any status but rejected or displaced, or when it has failed MAX_FAILED_TRIES times; `skipped` is the
- * latter, for the cycle to log.
+ * The first `n` syllabus topics, in file order, that are not taken. A term is taken when a syllabus idea (one with a
+ * syllabus_rank) has it (or an aka) in any status but rejected or displaced, when a made reel has it, or when syllabus
+ * ideas for it have failed MAX_FAILED_TRIES times; `skipped` is the latter, for the cycle to log.
  */
 export function nextSyllabusTopics(
   state: readonly TopicTermState[],
@@ -128,6 +128,10 @@ export function nextSyllabusTopics(
   for (const t of state) {
     const entry = syllabusEntry(t.term);
     if (!entry) continue;
+    // Only syllabus ideas (they carry a rank) and made reels count (Lucas, 2026-11-22: the whole content type runs on
+    // the syllabus). An idea from before the curriculum, unmade, takes nothing: it is archived, and the syllabus
+    // writes the topic fresh with its angle. A made reel still takes its topic, so no concept is taught twice.
+    if (t.syllabusRank == null && t.status !== 'rendered') continue;
     if (t.status === 'rejected' || t.status === 'displaced') {
       if (failedTry(t)) failures.set(entry.rank, (failures.get(entry.rank) ?? 0) + 1);
     } else live.add(entry.rank);

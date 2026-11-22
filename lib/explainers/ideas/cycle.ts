@@ -115,10 +115,13 @@ async function readPoolMoves(q: MovesQuery): Promise<IdeaAdjustment[]> {
 const heldTopicIds = (moves: readonly IdeaAdjustment[]): Set<string> =>
   new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => topicOfIdea(m.ideaId)));
 
-/** Topics a person archived, as history: the machine does not bring them back. */
+/**
+ * Syllabus ideas a person archived, as history: the machine does not bring them back. An idea from before the
+ * curriculum (no syllabus_rank) is left out, so old history never blocks a syllabus topic (2026-11-22).
+ */
 async function archivedTopics(db: ExplainersDb, moves: readonly IdeaAdjustment[]) {
   const found = await Promise.all(moves.filter((m) => m.kind === 'archive').map((m) => getTopic(db, topicOfIdea(m.ideaId)).catch(() => null)));
-  return found.filter((t): t is NonNullable<typeof t> => t != null);
+  return found.filter((t): t is NonNullable<typeof t> => t != null && t.syllabus_rank != null);
 }
 
 /**
