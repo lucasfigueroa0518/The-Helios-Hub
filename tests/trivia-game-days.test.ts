@@ -42,8 +42,10 @@ async function addQ(db: Db, cellId: string, score: number, picked: Letter | null
 
 const checker = (fail: Set<string> = new Set()) => stubWriter({
   submit_check: (params) => {
+    // The question under check only (the material's asked list names other questions too).
     const text = String((params.messages as Array<{ content: string }>)[0]!.content);
-    const bad = [...fail].some((c) => text.includes(`Question ${c}?`));
+    const m = JSON.parse(/<material>\n([\s\S]*)\n<\/material>/.exec(text)![1]!) as { question: string };
+    const bad = [...fail].some((c) => m.question === `Question ${c}?`);
     return bad ? { verdict: 'fail', problems: ['wrong fact'], sources: [] } : { verdict: 'pass', problems: [], sources: ['https://check.test/x'] };
   },
 });
@@ -196,4 +198,47 @@ test('served: once a locked day has passed, its questions go back to the IG pool
   await buildGameDay(deps(db, checker()), '2026-11-20', LAUNCH);
   const next = (await db.query<{ k: string }>(`SELECT q->>'key' AS k FROM stories.trivia_game_days d, jsonb_array_elements(d.questions) q WHERE d.ny_date = '2026-11-20'`)).rows.map((r) => r.k);
   assert.ok(next.every((k) => !keys.includes(k)), 'no served question is served again');
+});
+
+test('one fact, one question: a draft question repeating a served one is dropped and refilled; a repeat candidate is archived without a fact-check; old verdicts are checked again once', async () => {
+  const { db, right } = await seeded();
+  // A past locked day served the ELIZA question (handed back to the pool, open again).
+  const eliza = await addQ(db, 't12a01', 0.99, 'B');
+  const served = (await db.query<{ payload: TriviaPoolPayload }>(`SELECT payload FROM stories.pool WHERE key = $1`, [eliza])).rows[0]!.payload;
+  served.q.question = 'The first chatbot, ELIZA, was built at MIT. In which decade?';
+  served.q.options = [{ letter: 'A', text: '1950s' }, { letter: 'B', text: '1960s' }, { letter: 'C', text: '1980s' }];
+  await db.query(`UPDATE stories.pool SET payload = $2::jsonb WHERE key = $1`, [eliza, JSON.stringify(served)]);
+  await db.query(`INSERT INTO stories.trivia_game_days (day_number, ny_date, status, questions, log) VALUES (99, '2026-11-10', 'locked', $1::jsonb, '[]'::jsonb)`, [JSON.stringify([{ key: eliza, payload: served, factCheck: { verdict: 'pass', problems: [], sources: [] } }])]);
+  // Two rewordings on other themes: one already in the draft (checked under the old lists), one waiting in the pool.
+  const reword = async (cellId: string, text: string, score: number) => {
+    const key = await addQ(db, cellId, score, 'B');
+    const p = (await db.query<{ payload: TriviaPoolPayload }>(`SELECT payload FROM stories.pool WHERE key = $1`, [key])).rows[0]!.payload;
+    p.q.question = text;
+    p.q.options = served.q.options;
+    await db.query(`UPDATE stories.pool SET payload = $2::jsonb WHERE key = $1`, [key, JSON.stringify(p)]);
+    return { key, p };
+  };
+  const inDraft = await reword('t19a14', 'The first chatbot that held typed conversations with people was built in which decade?', 0.98);
+  const waiting = await reword('t09a02', 'In which decade was the first chatbot built, at MIT?', 0.97);
+  const old = { verdict: 'pass', problems: [], sources: [] };
+  const draft = [inDraft, { key: right[0]!, p: (await db.query<{ payload: TriviaPoolPayload }>(`SELECT payload FROM stories.pool WHERE key = $1`, [right[0]])).rows[0]!.payload }];
+  await db.query(`INSERT INTO stories.trivia_game_days (day_number, ny_date, status, questions, log) VALUES (1, $1::date, 'draft', $2::jsonb, '[]'::jsonb)`, [LAUNCH, JSON.stringify(draft.map((d) => ({ key: d.key, payload: d.p, factCheck: old })))]);
+  await db.query(`UPDATE stories.pool SET used_at = now() WHERE key = ANY($1::text[])`, [draft.map((d) => d.key)]);
+
+  const write = checker();
+  const r = await buildGameDay(deps(db, write), LAUNCH, LAUNCH);
+  assert.ok('questions' in r && r.questions === 5);
+  const day = (await readDay(db, LAUNCH))!;
+  const keys = day.questions.map((q) => q.key);
+  assert.ok(!keys.includes(inDraft.key) && !keys.includes(waiting.key) && !keys.includes(eliza), 'no ELIZA repeat is played');
+  const arch = (await db.query<{ key: string; reason: string }>(`SELECT key, reason FROM stories.trivia_archive ORDER BY key`)).rows;
+  assert.deepEqual(arch.map((a) => a.key).sort(), [inDraft.key, waiting.key].sort());
+  assert.ok(arch.every((a) => a.reason.includes('repeat: the same fact as trivia:')), JSON.stringify(arch));
+  const checkedKeys = day.log.filter((l) => l.kind === 'check').map((l) => l.key);
+  assert.ok(!checkedKeys.includes(inDraft.key) && !checkedKeys.includes(waiting.key), 'code repeats spend no fact-check');
+  assert.ok(day.log.some((l) => l.kind === 'check' && l.key === right[0] && l.detail.startsWith('recheck pass')), 'the old verdict was checked again');
+  assert.ok(day.questions.every((q) => q.factCheck.repeats === 2), 'every verdict is under the current repeat check');
+  const calls = write.calls.length;
+  await buildGameDay(deps(db, write), LAUNCH, LAUNCH);
+  assert.equal(write.calls.length, calls, 'a full day is not checked again');
 });

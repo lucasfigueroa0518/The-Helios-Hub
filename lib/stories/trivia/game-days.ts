@@ -7,6 +7,10 @@
  *            still needs (a fail archives the question); at most MAX_GAME_CHECKS fact-checks a day. Chosen questions
  *            are reserved (pool used_at) so the IG story never takes them; a question swapped out is released.
  *            A question any locked day already holds is never chosen again (the game serves each question once).
+ *            One fact, one question (repeats.ts): each candidate is checked in code against every question written
+ *            before it, on every theme, before a fact-check is spent; a code repeat is archived without one. The
+ *            fact-check reads the same list. The day's own questions are checked again on every pass (in code), and
+ *            once by the model when their verdict predates the current repeat check.
  *   serve    once a locked day's date has passed, its questions are released to the pool (once, logged 'served'),
  *            so later IG stories can use what the game already served and the pool keeps growing.
  *   lock     a full day locks at 11 pm New York the night before (a day already under way locks as soon as it is full).
@@ -23,7 +27,7 @@ import type { StoriesSettings } from '@/lib/stories/settings';
 import type { WriterCreate } from '@/lib/stories/writer';
 import { writeStructured } from '@/lib/stories/writer';
 
-import { askedItem, askedOnTheme } from './asked';
+import { checkRepeat, loadEarlier, REPEAT_CHECK_VERSION, repeatFail } from './repeats';
 import { chooseGameDay, GAME_SIZE, AI_RIGHT_TARGET, MAX_GAME_CHECKS, orderEasiestFirst, wantsMore } from './game';
 import { aiRight, opponentFor } from './lean';
 import { OPPONENT_TAG, type OpponentClient } from './opponent';
@@ -121,6 +125,12 @@ async function saveDay(db: Queryable, d: Pick<GameDayRow, 'day_number' | 'ny_dat
   );
 }
 
+/** A reserved question that failed: handed back to the pool first, so the archive move takes its row. */
+async function retire(db: StoriesDb, p: TriviaPoolPayload, fc: FactCheck): Promise<void> {
+  await release(db, [poolKeyOf(p.q)]);
+  await archiveTrivia({ db }, p, fc);
+}
+
 /** Reserve: chosen game questions are used, so the IG story and the writer's repeat check treat them as posted. */
 async function reserve(db: Queryable, keys: string[], at: Date): Promise<void> {
   if (keys.length) await db.query(`UPDATE stories.pool SET used_at = $3::timestamptz WHERE series = $1 AND key = ANY($2::text[]) AND used_at IS NULL`, [TRIVIA_SERIES, keys, at.toISOString()]);
@@ -197,13 +207,55 @@ export async function buildGameDay(deps: GameBuildDeps, date: string, launch: st
   // Passed questions so far: the day's own, then its bench while those are still open in the pool.
   const open = (await openPool(db, TRIVIA_SERIES)).trivia ?? [];
   const openKeys = new Set(open.map((p) => poolKeyOf(p.q)));
-  const passed: TriviaPoolPayload[] = [
-    ...(existing?.questions ?? []).map((g) => g.payload),
-    ...(existing?.bench ?? []).filter((g) => openKeys.has(g.key)).map((g) => g.payload),
-  ];
+  const held: GameQuestion[] = [...(existing?.questions ?? []), ...(existing?.bench ?? []).filter((g) => openKeys.has(g.key))];
   const served = await gameKeys(db, date);
-  const seen = new Set([...served, ...passed.map((p) => poolKeyOf(p.q)), ...log.filter((l) => l.kind === 'skip' || l.kind === 'check').map((l) => l.key!).filter(Boolean)]);
+  const seen = new Set([...served, ...held.map((g) => g.key), ...log.filter((l) => l.kind === 'skip' || l.kind === 'check').map((l) => l.key!).filter(Boolean)]);
   let checks = checksOf(log);
+  const earlier = await loadEarlier(db);
+
+  // The model check: trivia-check@5 with the repeat list; null on an API error (logged; the question is not used).
+  const factCheck = async (key: string, p: TriviaPoolPayload, asked: TriviaCheckMaterial['asked'], again: boolean): Promise<FactCheck | null> => {
+    const mat: TriviaCheckMaterial = { question: p.q.question, options: p.q.options, correct: p.q.correct, answer_line: p.q.answerLine, sources: p.q.sources, asked };
+    checks++;
+    const tag = again ? 'recheck ' : '';
+    try {
+      const out = (await writeStructured<TriviaCheckOut>({
+        create: deps.write, db, setId: null, component: 'trivia-game-check', model: deps.settings.models.copy,
+        system: TRIVIA_CHECK.system, tool: TRIVIA_CHECK.tool, user: material(mat), webSearch: { maxUses: TRIVIA_CHECK_SEARCHES },
+      })).value;
+      const fc: FactCheck = { ...toFactCheck(out), repeats: REPEAT_CHECK_VERSION };
+      log.push({ at: stamp(), kind: 'check', key, detail: `${tag}${fc.verdict === 'pass' ? `pass (AI ${kindOf(p)})` : `fail: ${fc.problems.join('; ').slice(0, 300)}`}` });
+      return fc;
+    } catch (err) {
+      log.push({ at: stamp(), kind: 'check', key, detail: `${tag}error: ${err instanceof Error ? err.message.slice(0, 200) : String(err)}` });
+      return null;
+    }
+  };
+
+  // The day's own questions, checked again in order: in code on every pass; by the model once, when their verdict
+  // predates the current repeat check (while the day's checks last). Each is checked against the questions written
+  // before it outside the day and the day's questions kept ahead of it.
+  const dayKeys = new Set(held.map((g) => g.key));
+  const outside = earlier.filter((e) => !dayKeys.has(e.key));
+  const passed: TriviaPoolPayload[] = [];
+  for (const g of held) {
+    const r = checkRepeat(outside, g.payload, passed);
+    if (r.repeat) {
+      const fc = repeatFail(r.repeat);
+      log.push({ at: stamp(), kind: 'skip', key: g.key, detail: `dropped: ${fc.problems[0]}` });
+      await retire(db, g.payload, fc);
+      continue;
+    }
+    if (g.factCheck?.repeats !== REPEAT_CHECK_VERSION && checks < MAX_GAME_CHECKS) {
+      const fc = await factCheck(g.key, g.payload, r.asked, true);
+      if (fc?.verdict === 'fail') {
+        await retire(db, g.payload, fc);
+        continue;
+      }
+      if (fc) factChecks.set(g.key, fc);
+    }
+    passed.push(g.payload);
+  }
 
   for (const cand of open) {
     const choice = chooseGameDay(passed);
@@ -228,21 +280,16 @@ export async function buildGameDay(deps: GameBuildDeps, date: string, launch: st
       seen.delete(key); // not tried: may help on a later pass
       continue;
     }
-    const asked = await askedOnTheme(db, p.q.cellId, { exceptKey: key, alongside: passed.map((x) => askedItem(x.q)) });
-    const mat: TriviaCheckMaterial = { question: p.q.question, options: p.q.options, correct: p.q.correct, answer_line: p.q.answerLine, sources: p.q.sources, asked };
-    checks++;
-    let fc: FactCheck;
-    try {
-      const out = (await writeStructured<TriviaCheckOut>({
-        create: deps.write, db, setId: null, component: 'trivia-game-check', model: deps.settings.models.copy,
-        system: TRIVIA_CHECK.system, tool: TRIVIA_CHECK.tool, user: material(mat), webSearch: { maxUses: TRIVIA_CHECK_SEARCHES },
-      })).value;
-      fc = toFactCheck(out);
-    } catch (err) {
-      log.push({ at: stamp(), kind: 'check', key, detail: `error: ${err instanceof Error ? err.message.slice(0, 200) : String(err)}` });
+    // One fact, one question: a repeat code can see is archived without spending a fact-check.
+    const r = checkRepeat(earlier, p, passed);
+    if (r.repeat) {
+      const fc = repeatFail(r.repeat);
+      log.push({ at: stamp(), kind: 'skip', key, detail: fc.problems[0]! });
+      await archiveTrivia({ db }, p, fc);
       continue;
     }
-    log.push({ at: stamp(), kind: 'check', key, detail: fc.verdict === 'pass' ? `pass (AI ${kindOf(p)})` : `fail: ${fc.problems.join('; ').slice(0, 300)}` });
+    const fc = await factCheck(key, p, r.asked, false);
+    if (!fc) continue;
     if (fc.verdict === 'pass') {
       factChecks.set(key, fc);
       passed.push(p);

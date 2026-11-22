@@ -1,8 +1,8 @@
 /**
- * "Are you smarter than AI?" prompts (series key ai_trivia): trivia-write@5
+ * "Are you smarter than AI?" prompts (series key ai_trivia): trivia-write@6
  * (the daily writer, AT-7, AT-8, AT-48, AT-54 to AT-57, AT-78), trivia-shorten@1
  * (one try at a question that broke only a length limit, AT-58) and
- * trivia-check@4 (the fact-check and repeat check at pick, AT-2, AT-57, AT-78). Bump the id's
+ * trivia-check@5 (the fact-check and repeat check at pick, AT-2, AT-57, AT-78). Bump the id's
  * version on any change.
  *
  * Each system prompt is stable text so it caches (writeStructured caches the
@@ -58,10 +58,10 @@ const submitTriviaWrite = {
   input_schema: obj({ questions: { type: 'array', items: question }, spent_cells: { type: 'array', items: { type: 'string' } } }),
 };
 
-/* ── trivia-write@5: the count of questions the material asks for, each in its own open cell ── */
+/* ── trivia-write@6: the count of questions the material asks for, each in its own open cell ── */
 
 export const TRIVIA_WRITE = {
-  id: 'trivia-write@5',
+  id: 'trivia-write@6',
   system: `${FORMAT} You write its questions.
 
 Who plays. ${TRIVIA_AUDIENCE}
@@ -70,7 +70,7 @@ Your task: write the number of multiple-choice questions about AI the material a
 
 ${QUALITY_TEXT}
 
-Never repeat a fact. Each cell in the material lists, under asked, the questions already written in it, each with its answer. A question you anchor to a cell must not repeat any of them. ${REPEAT_RULE}
+Never repeat a fact. The material lists, under asked, every question the series has already written on each offered theme (posted, played in the game, waiting to post, or set aside), each with its answer. A question must not repeat any question listed under its cell's theme, and no two of your questions may repeat each other. ${REPEAT_RULE}
 
 Cells. The material lists open cells from the series' content map. A cell is a theme crossed with an angle: the theme is what the question is about, the angle is the kind of fact it turns on. A cell holds many questions over time. These rules are required:
 - Anchor every question to one cell from the list and give its cell_id. The question fits both the cell's theme and its angle.
@@ -117,13 +117,14 @@ export type TriviaWriteOut = { questions: TriviaWriteItem[]; spent_cells?: strin
 export type AskedItem = { question: string; answer: string };
 /**
  * `research` (SS-33, SS-34): in intake mode, pages earlier writer calls cited, from the central intake (research.ts). Optional
- * and absent in legacy mode; trivia-write@5 tells the writer to use it as leads, still confirmed with web search.
- * `count`: how many questions to write. Each cell's `asked`: the questions already written in it (asked.ts).
+ * and absent in legacy mode; trivia-write@6 tells the writer to use it as leads, still confirmed with web search.
+ * `count`: how many questions to write. `asked`: per offered theme, every question already written on it (repeats.ts).
  */
 export type TriviaWriteMaterial = {
   today: string;
   count: number;
-  cells: Array<{ cell_id: string; theme: string; angle: string; asked: AskedItem[] }>;
+  cells: Array<{ cell_id: string; theme: string; angle: string }>;
+  asked: Array<{ theme: string; questions: AskedItem[] }>;
   research?: Array<{ url: string; title: string; quote: string }>;
 };
 
@@ -156,10 +157,10 @@ ${HUMANIZER_TEXT}
 };
 export type TriviaShortenMaterial = { questions: Array<{ question: TriviaWriteItem; problems: string[] }> };
 
-/* ── trivia-check@4: the fact-check and repeat check before a question becomes content ── */
+/* ── trivia-check@5: the fact-check and repeat check before a question becomes content ── */
 
 export const TRIVIA_CHECK = {
-  id: 'trivia-check@4',
+  id: 'trivia-check@5',
   system: `${FORMAT} You check one of its questions before it posts. The material holds the question, its options, the letter marked correct, the answer line shown after the reveal, the writer's sources, and the earlier questions it must not repeat.
 
 Check the facts with web search; never judge from memory alone. The writer's sources are a lead, not proof.
@@ -168,7 +169,7 @@ The verdict is pass only when all four hold:
 1. The fact is true: the option marked correct is the true answer to the question as worded, today.
 2. Exactly one option is right: every other option is wrong as the question is worded, and no reasonable reading of the question makes another option right.
 3. The answer line holds: every claim in it is true.
-4. It is not a repeat. The material lists, under asked, the questions the series has posted on the same theme and any questions already chosen to post alongside this one, each with its answer. It repeats none of them. ${REPEAT_RULE}
+4. It is not a repeat. The material lists, under asked, the earlier questions it must not repeat, each with its answer: the series' questions on the same theme, any from other themes that look close, and any already chosen to post alongside this one. It repeats none of them. ${REPEAT_RULE}
 Anything else is fail, including a claim you cannot confirm and a doubt you cannot settle.
 
 problems: on a fail, each problem as one plain line; on a pass, an empty list.

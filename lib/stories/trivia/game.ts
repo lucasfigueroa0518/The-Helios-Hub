@@ -16,8 +16,8 @@ import type { TriviaPoolPayload } from './types';
 export const GAME_SIZE = 5;
 /** The AI should usually score 4 of 5 (RT-3, 2026-11-19; was 3 under AT-79). */
 export const AI_RIGHT_TARGET = 4;
-/** Fact-checks the builder may spend on one game day. */
-export const MAX_GAME_CHECKS = 10;
+/** Fact-checks the builder may spend on one game day (15 since 2026-11-22: about a third fail, and a day must not run short). */
+export const MAX_GAME_CHECKS = 15;
 
 export type GameChoice = {
   /** In pool score order within each kind; not yet in play order (orderEasiestFirst). */
