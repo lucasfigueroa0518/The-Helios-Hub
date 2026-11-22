@@ -27,7 +27,8 @@ const label = (key: string) => {
 const HELP: Record<string, string> = {
   daily_render_cap: 'Most reels made in one day, clicks and the night together.',
   daily_spend_cap_usd: 'Most production spend in one day. A reel that would pass it is not started.',
-  weekly_dev_cap_usd: 'Most a week of development sessions (new pitches) may spend.',
+  nightly_dev_cap_usd: 'Most development (new pitches) may spend per night, 10 PM to 10 PM New York, refill and clicks together.',
+  pool_refill_below: 'The 10 PM refill runs only while fewer makeable pitches than this are pooled.',
   cells_per_session: 'How many player-and-era cells one development session searches.',
   pitches_per_cell: 'Pitches the producer writes for each searched cell.',
   cell_due_days: 'Days before a searched cell is searched again.',

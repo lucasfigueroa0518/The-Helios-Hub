@@ -11,6 +11,9 @@ export const DRAMA_WINDOWS: readonly PostingWindow[] = [{ id: 'evening', label: 
 /** The nightly fill requests the New York day's production jobs from 00:00, once per day. */
 export const DRAMA_NIGHT_HOUR_NY = 0 as const;
 
+/** The nightly pool refill (MD-156) may start from 22:00 until the 00:00 fill, so its pitches are ready for that fill. */
+export const DRAMA_REFILL_HOUR_NY = 22 as const;
+
 /** The nightly insights sweep (explainers 5:15, carousels 5:30). */
 export const DRAMA_INSIGHTS_HOUR_NY = 5 as const;
 export const DRAMA_INSIGHTS_MINUTE_NY = 30 as const;

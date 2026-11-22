@@ -18,22 +18,22 @@ async function main(): Promise<void> {
   const { ensureReelAiDramaSchema } = await import('@/lib/reel-ai-drama/schema');
   const { loadSettings } = await import('@/lib/reel-ai-drama/settings');
   const { developmentSpendSince } = await import('@/lib/reel-ai-drama/cost');
-  const { weekStart } = await import('@/lib/reel-ai-drama/production/schedule');
+  const { refillNightStart } = await import('@/lib/reel-ai-drama/production/schedule');
   const db = await explainersDb();
   await ensureReelAiDramaSchema(db);
   const settings = await loadSettings(db);
-  const spent = await developmentSpendSince(db, weekStart(new Date()));
+  const spent = await developmentSpendSince(db, refillNightStart(new Date()));
   console.log(
-    `Estimate: one development session, ${settings.cells_per_session} cells × ${settings.pitches_per_cell} pitches, about $1–3 ` +
+    `Estimate: one development session, ${settings.cells_per_session} cells × ${settings.pitches_per_cell} pitches, about $0.25–0.35 a cell ` +
       `(Sonnet + web search per cell, Jev scores, visuals checks ≤ $${settings.visuals_check_cap_usd} each). ` +
-      `This week: $${spent.toFixed(2)} of $${settings.weekly_dev_cap_usd.toFixed(2)}.`,
+      `Since 10 PM New York: $${spent.toFixed(2)} of $${settings.nightly_dev_cap_usd.toFixed(2)}.`,
   );
   if (!process.argv.includes('--yes')) {
     console.log('Not run. Pass --yes to run it.');
     return;
   }
-  if (spent >= settings.weekly_dev_cap_usd) {
-    console.log("This week's development budget is spent. Not run.");
+  if (spent >= settings.nightly_dev_cap_usd) {
+    console.log("Tonight's development budget is spent. Not run.");
     return;
   }
   const { runLiveDevelopment } = await import('@/lib/reel-ai-drama/production/live');

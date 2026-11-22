@@ -1,7 +1,7 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { developmentSpendSince } from '@/lib/reel-ai-drama/cost';
 import { labData, LabError, reelAiDramaRoute } from '@/lib/reel-ai-drama/lab';
-import { weekStart } from '@/lib/reel-ai-drama/production/schedule';
+import { refillNightStart } from '@/lib/reel-ai-drama/production/schedule';
 import {
   cancelDramaJob,
   DRAMA_REFUSAL_TEXT,
@@ -56,9 +56,9 @@ async function queueRoute(kind: DramaRequestKind, opts: RouteOpts) {
   return reelAiDramaRoute(async ({ db, by }) => {
     if (kind === 'develop') {
       const settings = await loadSettings(db);
-      const spent = await developmentSpendSince(db, weekStart(opts.now?.() ?? new Date()));
-      if (spent >= settings.weekly_dev_cap_usd) {
-        throw new LabError(`This week's development budget is spent ($${spent.toFixed(2)} of $${settings.weekly_dev_cap_usd.toFixed(2)}).`, 409);
+      const spent = await developmentSpendSince(db, refillNightStart(opts.now?.() ?? new Date()));
+      if (spent >= settings.nightly_dev_cap_usd) {
+        throw new LabError(`Tonight's development budget is spent ($${spent.toFixed(2)} of $${settings.nightly_dev_cap_usd.toFixed(2)} since 10 PM New York).`, 409);
       }
     }
     const queued = await queueDramaRequest(db, kind, by);

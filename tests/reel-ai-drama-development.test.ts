@@ -503,7 +503,7 @@ test('a stubbed development session fills the pool and writes sessions, searches
       producer: { create, loadPrompt: () => 'stub' },
       jevTransport: titleJev(),
       visuals: visualsDeps(),
-      settings: { ...DEFAULT_SETTINGS, cells_per_session: 3, pitches_per_cell: 2 },
+      settings: { ...DEFAULT_SETTINGS, cells_per_session: 3, pitches_per_cell: 2, nightly_dev_cap_usd: 3 },
       random: () => 0.5,
       news: async () => [],
       totalQuery: fakeTotalLedger().q,
@@ -531,7 +531,7 @@ test('a stubbed development session fills the pool and writes sessions, searches
   assert.ok((await nextForProduction(db, DEFAULT_SETTINGS, new Date())) !== null);
 });
 
-test('the session respects the weekly development cap', async () => {
+test('the session respects the nightly development cap', async () => {
   const db = await freshDb();
   await recordCost(db, { mode: 'development', vendor: 'anthropic', component: 'producer', usd: 3.2 });
   let called = 0;
@@ -554,7 +554,7 @@ test('the session respects the weekly development cap', async () => {
     return message([{ type: 'tool_use', id: 't', name: 'submit_pitches', input: { candidates: [] } }], 'tool_use', { input_tokens: 5_000_000, output_tokens: 100_000 });
   }) as CreateMessage;
   const capped = await runDevelopmentSession(
-    { db: db2, producer: { create: pricey, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: { ...DEFAULT_SETTINGS, cells_per_session: 4, weekly_dev_cap_usd: CELL_ESTIMATE_USD * 1.5 }, random: () => 0.5, totalQuery: fakeTotalLedger().q },
+    { db: db2, producer: { create: pricey, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: { ...DEFAULT_SETTINGS, cells_per_session: 4, nightly_dev_cap_usd: CELL_ESTIMATE_USD * 1.5 }, random: () => 0.5, totalQuery: fakeTotalLedger().q },
     { trigger: 'click' },
   );
   assert.equal(capped.status, 'capped');

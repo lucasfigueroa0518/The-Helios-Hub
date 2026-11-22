@@ -22,8 +22,10 @@ export type ReelAiDramaSettings = {
   daily_render_cap: number;
   /** Production spend per New York day. */
   daily_spend_cap_usd: number;
-  /** Development budget per week (MD-28). */
-  weekly_dev_cap_usd: number;
+  /** Development budget per refill night, 22:00 to 22:00 New York (MD-156; was $3 a week, MD-28). */
+  nightly_dev_cap_usd: number;
+  /** The nightly refill runs only while fewer makeable pitches than this are pooled (MD-156). */
+  pool_refill_below: number;
   /** Cells the producer explores per development session. */
   cells_per_session: number;
   /** Candidate pitches the producer returns per cell (research 05). */
@@ -90,8 +92,9 @@ export const DEFAULT_SETTINGS: ReelAiDramaSettings = {
   posts_per_day: 1,
   daily_render_cap: 2,
   daily_spend_cap_usd: 20,
-  weekly_dev_cap_usd: 3,
-  cells_per_session: 4,
+  nightly_dev_cap_usd: 1,
+  pool_refill_below: 5,
+  cells_per_session: 2,
   pitches_per_cell: 5,
   cell_due_days: 120,
   visuals_check_cap_usd: 0.35,
@@ -150,7 +153,8 @@ const PARSERS: { [K in ReelAiDramaSettingKey]: (v: unknown) => ReelAiDramaSettin
   },
   daily_render_cap: int('daily_render_cap', 1),
   daily_spend_cap_usd: num('daily_spend_cap_usd', 0),
-  weekly_dev_cap_usd: num('weekly_dev_cap_usd', 0),
+  nightly_dev_cap_usd: num('nightly_dev_cap_usd', 0),
+  pool_refill_below: int('pool_refill_below', 0),
   cells_per_session: int('cells_per_session', 1),
   pitches_per_cell: int('pitches_per_cell', 1),
   cell_due_days: int('cell_due_days', 1),

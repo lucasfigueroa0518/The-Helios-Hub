@@ -109,6 +109,12 @@ export async function nextForProduction(db: Queryable, settings: ReelAiDramaSett
   return null;
 }
 
+/** Pooled pitches the nightly fill could make now: their central player was not made or picked within `spread_days`. */
+export async function makeableCount(db: Queryable, settings: Pick<ReelAiDramaSettings, 'spread_days'>, now: Date): Promise<number> {
+  const blocked = await recentPlayers(db, settings.spread_days, now);
+  return (await pooledPitches(db)).filter((r) => !(r.central_player_id && blocked.has(r.central_player_id))).length;
+}
+
 /**
  * Tend the pool: re-rank every pooled pitch for today (`rechecked`), count the news that has faded
  * past its window without a why-now (`faded`), and retire it once it is RETIRE_WINDOWS windows old,

@@ -6,7 +6,7 @@ import { NextResponse } from 'next/server';
 import type { Queryable } from '@/lib/explainers/db';
 import { developmentSpendSince } from '@/lib/reel-ai-drama/cost';
 import { iso, listJobs, pitchRow } from '@/lib/reel-ai-drama/production/jobs';
-import { weekStart } from '@/lib/reel-ai-drama/production/schedule';
+import { refillNightStart, weekStart } from '@/lib/reel-ai-drama/production/schedule';
 import { latestCalibration, listDramaRequests } from '@/lib/reel-ai-drama/requests';
 import { ensureReelAiDramaSchema, SchemaNotAppliedError } from '@/lib/reel-ai-drama/schema';
 import { loadSettingsReport, SettingsError } from '@/lib/reel-ai-drama/settings';
@@ -184,7 +184,7 @@ export async function labData(db: Queryable, opts: { now?: Date } = {}) {
   for (const a of artifactRows) latest.set(`${a.job_id}:${a.kind}`, { id: String(a.id), content: (a.content as string) ?? null });
   const art = (jobId: string, kind: string) => latest.get(`${jobId}:${kind}`) ?? null;
 
-  const devWeekUsd = await developmentSpendSince(db, start);
+  const devNightUsd = await developmentSpendSince(db, refillNightStart(now));
   const { rows: prodWeek } = await db.query<{ usd: unknown }>(
     'SELECT COALESCE(sum(usd), 0) AS usd FROM reel_ai_drama.cost_events WHERE job_id IS NOT NULL AND created_at >= $1',
     [start.toISOString()],
@@ -254,8 +254,8 @@ export async function labData(db: Queryable, opts: { now?: Date } = {}) {
     })),
     jobs: labJobs,
     costs: {
-      devWeekUsd,
-      devCapUsd: settings.weekly_dev_cap_usd,
+      devNightUsd,
+      devCapUsd: settings.nightly_dev_cap_usd,
       productionWeekUsd: Number(prodWeek[0]?.usd ?? 0),
       perReelCapUsd: settings.per_reel_cap_usd,
       perJob: labJobs.map((j) => ({ jobId: j.id, title: j.title, usd: j.spendUsd, capUsd: j.capUsd, capped: j.capped })),

@@ -28,7 +28,7 @@ import { saveSetting } from '@/lib/explainers/settings';
 import { runDevelopmentSession } from '@/lib/reel-ai-drama/development/session';
 import { dramaGate } from '@/lib/reel-ai-drama/gate';
 import { runDramaNight } from '@/lib/reel-ai-drama/night';
-import { weeklyTick } from '@/lib/reel-ai-drama/production/schedule';
+import { nightlyTick } from '@/lib/reel-ai-drama/production/schedule';
 import { dramaItemId } from '@/lib/reel-ai-drama/publish/items';
 import { dramaHoldsSlots, dramaPublishingLive, scheduleApprovedDrama, scheduleDramaJob, setDramaVerdict } from '@/lib/reel-ai-drama/hub';
 import type { JevRequest, JevRunner, JevTransport } from '@/lib/reels/jev/runner';
@@ -426,16 +426,17 @@ test('Explainers (D18): an approved render that went back to Made is not re-slot
 // ── AI Drama ────────────────────────────────────────────────────────────────
 
 const MONDAY = new Date('2026-11-09T15:00:00Z'); // Monday 10:00 New York
+const MONDAY_REFILL = new Date('2026-11-10T03:30:00Z'); // Monday 22:30 New York, inside the nightly refill window (MD-156)
 const dramaJobs = async (db: ExplainersDb, trigger = 'auto') => Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM reel_ai_drama.jobs WHERE trigger = $1`, [trigger])).rows[0]!.n);
 
-test('AI Drama paused: the weekly development (refill) runs on its cap; the night fill makes nothing', async () => {
+test('AI Drama paused: the nightly development (refill) runs on its cap; the night fill makes nothing', async () => {
   const db = await dramaHubDb();
   await setDrama(db, 'auto', false);
   await pitch(db, { title: 'Pooled one', status: 'pooled', rank: 0.9 });
   const asked: Array<{ trigger: string; refillCapUsd?: number }> = [];
-  const tick = await weeklyTick(
+  const tick = await nightlyTick(
     { db, runDevelopmentSession: async (opts) => { asked.push(opts); }, nextForProduction: async () => null, tendPool: async () => ({ faded: 0, rechecked: 0 }) },
-    MONDAY,
+    MONDAY_REFILL,
   );
   assert.equal(tick.development, 'ran', 'the refill runs while paused');
   assert.deepEqual(asked, [{ trigger: 'auto', refillCapUsd: REFILL_CAP_DEFAULT_USD.reel_ai_drama }], 'held to the default refill cap (D14/D19)');
@@ -444,7 +445,7 @@ test('AI Drama paused: the weekly development (refill) runs on its cap; the nigh
   assert.equal(await dramaJobs(db), 0, 'no reel requested while paused');
 });
 
-test('AI Drama quota-full day: the night makes nothing; the weekly refill still runs', async () => {
+test('AI Drama quota-full day: the night makes nothing; the nightly refill still runs', async () => {
   const db = await dramaHubDb();
   await setDrama(db, 'auto', true);
   await setDrama(db, 'pool_refill_cap_usd', 0.3);
@@ -459,7 +460,7 @@ test('AI Drama quota-full day: the night makes nothing; the weekly refill still 
   assert.notEqual(night.status, 'ok');
   assert.equal(await dramaJobs(db), 0);
   const asked: Array<{ refillCapUsd?: number }> = [];
-  const tick = await weeklyTick({ db, runDevelopmentSession: async (opts) => { asked.push(opts); }, nextForProduction: async () => null, tendPool: async () => ({ faded: 0, rechecked: 0 }) }, MONDAY);
+  const tick = await nightlyTick({ db, runDevelopmentSession: async (opts) => { asked.push(opts); }, nextForProduction: async () => null, tendPool: async () => ({ faded: 0, rechecked: 0 }) }, MONDAY_REFILL);
   assert.equal(tick.development, 'ran');
   assert.equal(asked[0]?.refillCapUsd, 0.3, 'the stored cap is read');
 });

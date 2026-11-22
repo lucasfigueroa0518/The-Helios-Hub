@@ -14,7 +14,7 @@ import { cutLines, draftProblems, reconcilePlan } from '@/lib/reel-ai-drama/prod
 import { addArtifact, addFlag, claimNextJob, failStaleJobs, finishJob, getJob, getPitch, listArtifacts, requestJob, setStage } from '@/lib/reel-ai-drama/production/jobs';
 import { calibrateRoute, developRoute, labRoute, makeRoute, settingsPostRoute } from '@/lib/reel-ai-drama/production/routes';
 import { CAP_BACKSTOP, firstViewerRouting, runJob, type ProductionDeps } from '@/lib/reel-ai-drama/production/run';
-import { slotsOpen, weekStart, weeklyTick } from '@/lib/reel-ai-drama/production/schedule';
+import { nightlyTick, refillNightStart, slotsOpen, weekStart } from '@/lib/reel-ai-drama/production/schedule';
 import type { VoiceInput } from '@/lib/reel-ai-drama/render/voice';
 import { ensureReelAiDramaSchema } from '@/lib/reel-ai-drama/schema';
 import { DEFAULT_SETTINGS, saveSetting } from '@/lib/reel-ai-drama/settings';
@@ -538,7 +538,7 @@ test('the cut keeps the script valid, and an empty script is refused', () => {
   assert.deepEqual(plan.frames.map((f) => f.line_ids), [['L2'], ['L3'], []]);
 });
 
-// ── The weekly clock ───────────────────────────────────────────────────────
+// ── The nightly refill clock ───────────────────────────────────────────────────────
 
 function scheduleDeps(db: Queryable) {
   const log: string[] = [];
@@ -569,46 +569,73 @@ test('weekStart is Monday midnight in New York, and slots spread over the week',
   assert.equal(slotsOpen(0, start, start), 0);
 });
 
-test('weeklyTick refills while paused (auto off): the weekly development session still runs, and nothing is requested (D16, D3)', async () => {
+test('refillNightStart is the last 22:00 New York, across the DST change', () => {
+  // Wed 11:00 EDT → Tue 22:00 EDT
+  assert.equal(refillNightStart(new Date('2026-10-28T15:00:00Z')).toISOString(), '2026-10-28T02:00:00.000Z');
+  // Sat 22:30 EDT, the night before DST ends → that same 22:00 EDT
+  assert.equal(refillNightStart(new Date('2026-11-01T02:30:00Z')).toISOString(), '2026-11-01T02:00:00.000Z');
+  // Tue 23:00 EST, after DST ends → 22:00 EST
+  assert.equal(refillNightStart(new Date('2026-11-04T04:00:00Z')).toISOString(), '2026-11-04T03:00:00.000Z');
+  // exactly 22:00 counts as the new night
+  assert.equal(refillNightStart(new Date('2026-11-04T03:00:00Z')).toISOString(), '2026-11-04T03:00:00.000Z');
+});
+
+const TUE_2230_NY = new Date('2026-11-04T03:30:00Z'); // Tue 22:30 EST
+
+test('nightlyTick refills while paused (auto off): the nightly development session still runs, and nothing is made (D16, D3)', async () => {
   const db = await freshDb();
-  await insertPitch(db);
   const { deps, log } = scheduleDeps(db);
-  const out = await weeklyTick(deps, new Date('2026-10-28T15:00:00Z'));
+  const out = await nightlyTick(deps, TUE_2230_NY);
   assert.equal(out.auto, false);
   assert.equal(out.development, 'ran');
   assert.deepEqual(log, ['develop']);
-  assert.deepEqual(out.requested, []);
   const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM reel_ai_drama.jobs`);
   assert.equal(rows[0].n, 0, 'paused: nothing is made');
 });
 
-test('weeklyTick: one development session a week under the cap; it never requests production (per_week is retired)', async () => {
+test('nightlyTick: one refill a night from 22:00 to the 00:00 fill; it never requests production', async () => {
   const db = await freshDb();
   await saveSetting(db, 'auto', true);
-  for (const [i, t] of ['A', 'B', 'C', 'D'].entries()) await insertPitch(db, t, 'pooled', 1 - i / 10);
+  for (const [i, t] of ['A', 'B'].entries()) await insertPitch(db, t, 'pooled', 1 - i / 10);
   const { deps, log } = scheduleDeps(db);
-  const monday = new Date('2026-10-26T05:00:00Z'); // Monday 01:00 New York
 
-  const first = await weeklyTick(deps, monday);
+  const afternoon = await nightlyTick(deps, new Date('2026-11-03T20:00:00Z')); // Tue 15:00 EST
+  assert.equal(afternoon.development, 'not_yet');
+  assert.deepEqual(log, []);
+
+  const first = await nightlyTick(deps, TUE_2230_NY);
   assert.equal(first.development, 'ran');
+  assert.equal(first.makeable, 2);
   assert.deepEqual(log, ['develop']);
-  assert.equal(first.requested.length, 0);
-  const again = await weeklyTick(deps, new Date(monday.getTime() + 5 * 86_400_000));
+  const again = await nightlyTick(deps, new Date('2026-11-04T04:45:00Z')); // Tue 23:45 EST
   assert.equal(again.development, 'already_ran');
-  assert.equal(again.requested.length, 0);
+  const nextMorning = await nightlyTick(deps, new Date('2026-11-04T06:00:00Z')); // Wed 01:00 EST
+  assert.equal(nextMorning.development, 'not_yet');
+  assert.deepEqual(log, ['develop']);
   const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM reel_ai_drama.jobs`);
   assert.equal(rows[0].n, 0);
 });
 
-test('weeklyTick skips development once the week is spent', async () => {
+test('nightlyTick skips the night while the pool holds enough makeable pitches', async () => {
   const db = await freshDb();
   await saveSetting(db, 'auto', true);
-  await recordCost(db, { mode: 'development', vendor: 'anthropic', component: 'producer', usd: 3.2 });
+  for (const t of ['A', 'B', 'C', 'D', 'E']) await insertPitch(db, t, 'pooled');
   const { deps, log } = scheduleDeps(db);
-  const out = await weeklyTick(deps, new Date());
+  const out = await nightlyTick(deps, TUE_2230_NY);
+  assert.equal(out.development, 'pool_stocked');
+  assert.equal(out.makeable, 5);
+  assert.deepEqual(log, []);
+});
+
+test('nightlyTick skips development once the night is spent', async () => {
+  const db = await freshDb();
+  await saveSetting(db, 'auto', true);
+  await recordCost(db, { mode: 'development', vendor: 'anthropic', component: 'producer', usd: 1.2 });
+  await db.query(`UPDATE reel_ai_drama.cost_events SET created_at = $1`, ['2026-11-04T03:10:00Z']); // Tue 22:10 EST, from a click
+  const { deps, log } = scheduleDeps(db);
+  const out = await nightlyTick(deps, TUE_2230_NY);
   assert.equal(out.development, 'capped');
   assert.deepEqual(log, []);
-  assert.equal(out.jobsDue, 0);
 });
 
 // ── The lab and its routes ─────────────────────────────────────────────────
@@ -636,7 +663,7 @@ test('labData shows the ranked pool, the ledger, jobs, costs, deliveries, reques
   assert.equal(lab.ledger.total, 1);
   assert.equal(lab.ledger.cells[0].playerId, 'openai');
   assert.equal(lab.sessions[0].usd, 0.5);
-  assert.equal(lab.costs.devWeekUsd, 0.5);
+  assert.equal(lab.costs.devNightUsd, 0.5);
   assert.equal(lab.jobs[0].status, 'ok');
   assert.ok(lab.jobs[0].videoId);
   assert.equal(lab.jobs[0].verdict, null);

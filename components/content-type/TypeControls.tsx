@@ -249,8 +249,8 @@ export function DramaDevelopButton() {
   async function run() {
     setBusy(true);
     try {
-      const { settings } = await call<{ settings: { weekly_dev_cap_usd?: number } }>('/api/reel-ai-drama/settings');
-      const cap = typeof settings?.weekly_dev_cap_usd === 'number' ? usd(settings.weekly_dev_cap_usd) : 'the weekly development cap';
+      const { settings } = await call<{ settings: { nightly_dev_cap_usd?: number } }>('/api/reel-ai-drama/settings');
+      const cap = typeof settings?.nightly_dev_cap_usd === 'number' ? usd(settings.nightly_dev_cap_usd) : 'the nightly development cap';
       if (!confirm(`Develop new AI Drama pitches now? This queues one development session, up to ${cap}, with live model and web calls. The drama worker runs it; nothing runs in this page.`)) return;
       await call<{ requestId: string; status: string }>('/api/reel-ai-drama/develop', {});
       window.dispatchEvent(new Event(PROGRESS_EVENT));

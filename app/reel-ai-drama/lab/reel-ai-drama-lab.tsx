@@ -404,8 +404,8 @@ export function ReelAiDramaLab() {
   };
   const develop = () => {
     if (!data) return;
-    const left = data.costs.devCapUsd - data.costs.devWeekUsd;
-    if (!window.confirm(`Run one development session? About $1–3; ${usd(Math.max(0, left))} left of this week's ${usd(data.costs.devCapUsd)}. The worker runs it.`)) return;
+    const left = data.costs.devCapUsd - data.costs.devNightUsd;
+    if (!window.confirm(`Run one development session? About $0.25–0.35 a cell; ${usd(Math.max(0, left))} left of tonight's ${usd(data.costs.devCapUsd)} (resets 10 PM New York). The worker runs it.`)) return;
     void act('/api/reel-ai-drama/develop', {}, () => 'Queued. The worker runs the development session on its next poll.');
   };
   const calibrate = () => {
@@ -432,7 +432,7 @@ export function ReelAiDramaLab() {
               Generate: <b>{data.settings.auto ? 'on' : 'off'}</b> · {data.settings.posts_per_day} a day · up to {data.settings.daily_render_cap} renders a day · mode {data.settings.mode}
             </span>
             <span>
-              Development this week: <b>{usd(data.costs.devWeekUsd)}</b> of {usd(data.costs.devCapUsd)}
+              Development since 10 PM: <b>{usd(data.costs.devNightUsd)}</b> of {usd(data.costs.devCapUsd)}
             </span>
             <span>
               Production this week: <b>{usd(data.costs.productionWeekUsd)}</b> (cap {usd(data.costs.perReelCapUsd)} a reel)
@@ -482,7 +482,7 @@ export function ReelAiDramaLab() {
               {data.ledger.total} cells · {data.ledger.searched} searched · {data.ledger.due} due · {data.ledger.reopened} reopened by news · {data.ledger.pitches} pitches made
             </p>
             <div className="rad-actions">
-              <button type="button" className="rad-primary" disabled={busy || developLive || data.costs.devWeekUsd >= data.costs.devCapUsd} onClick={develop}>
+              <button type="button" className="rad-primary" disabled={busy || developLive || data.costs.devNightUsd >= data.costs.devCapUsd} onClick={develop}>
                 Run a development session (~$1–3)
               </button>
               <RequestChip r={developReq} />

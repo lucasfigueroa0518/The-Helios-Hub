@@ -1,5 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { developmentSpendSince, recordCost, spendFor } from '@/lib/reel-ai-drama/cost';
+import { refillNightStart } from '@/lib/reel-ai-drama/production/schedule';
 import { RecordingDramaJevRunner, type DramaJevRunner } from '@/lib/reel-ai-drama/jev';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { Pitch, PitchRow } from '@/lib/reel-ai-drama/types';
@@ -18,12 +19,12 @@ import { dbQuery } from '@/lib/db';
 /**
  * One development session (PROCESS.md D1–D7): pick cells → producer → dedupe → drama → material →
  * visuals check (only for pitches clearing both bars) → pool. Pending seed pitches (status `new`) go
- * through the same checks first. It stops starting new work once the week's development spend reaches
- * `weekly_dev_cap_usd` (MD-28); a step already started finishes.
+ * through the same checks first. It stops starting new work once the night's development spend (since the
+ * last 22:00 New York) reaches `nightly_dev_cap_usd` (MD-156); a step already started finishes.
  */
 
-/** A producer cell's usual cost with margin (iteration 5 measured about $0.36), for launching cells in parallel. */
-export const CELL_ESTIMATE_USD = 0.6;
+/** A producer cell's usual cost with margin (iteration 5 measured about $0.36; Nov 2026 sessions $0.21–0.34 a cell), for launching cells in parallel. */
+export const CELL_ESTIMATE_USD = 0.4;
 
 export type DevelopmentDeps = {
   db: Queryable;
@@ -53,14 +54,13 @@ export type SessionSummary = {
   duplicates: number;
   rejected: number;
   usd: number;
-  weekSpendBefore: number;
+  nightSpendBefore: number;
   errors: string[];
 };
 
 /** News this recent can reopen a searched cell of its player. */
 export const NEWS_REOPEN_DAYS = 7;
 
-const WEEK_MS = 7 * DAY_MS;
 
 const REVIVE = {
   drama: 'new reporting shows a central figure whose want drives the events',
@@ -209,7 +209,7 @@ export async function runDevelopmentSession(
 async function runSession(
   deps: DevelopmentDeps,
   /**
-   * `refillCapUsd`: the weekly session is AI Drama's pool refill (settings standard D16), held to `pool_refill_cap_usd`
+   * `refillCapUsd`: the nightly session is AI Drama's pool refill (settings standard D16), held to `pool_refill_cap_usd`
    * (D14) on top of the weekly development cap. Absent (a person's click, calibration): only the weekly cap, as before.
    */
   opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number },
@@ -218,8 +218,8 @@ async function runSession(
   const now = (deps.now ?? (() => new Date()))();
   const settings = deps.settings ?? (await loadSettings(db));
   const log = deps.log ?? (() => {});
-  const weekStart = new Date(now.getTime() - WEEK_MS);
-  const weekSpendBefore = await developmentSpendSince(db, weekStart);
+  const nightStart = refillNightStart(now);
+  const nightSpendBefore = await developmentSpendSince(db, nightStart);
 
   const { rows: [session] } = await db.query<{ id: string }>(
     `INSERT INTO reel_ai_drama.sessions (status, mode, trigger, started_at) VALUES ('running', 'development', $1, $2) RETURNING id`,
@@ -236,14 +236,15 @@ async function runSession(
     duplicates: 0,
     rejected: 0,
     usd: 0,
-    weekSpendBefore,
+    nightSpendBefore,
     errors: [],
   };
   // The refill cap counts this session's own cost_events; it logs refill_capped once when reached.
   const refill = new RefillBudget(opts.refillCapUsd ?? null, () => spendFor(db, { sessionId }), (fields) =>
     log('refill_capped', { vertical: 'reel_ai_drama', sessionId, ...fields }),
   );
-  const capReached = async () => (await developmentSpendSince(db, weekStart)) >= settings.weekly_dev_cap_usd || (await refill.reached());
+  // The refill cap first, so reaching it always logs refill_capped (D14).
+  const capReached = async () => (await refill.reached()) || (await developmentSpendSince(db, nightStart)) >= settings.nightly_dev_cap_usd;
   // Jev calls refuse once the refill cap is reached (a pitch they stop stays `new` for the next session).
   const jev = new RecordingDramaJevRunner(cappedJevTransport(deps.jevTransport, refill), db, { mode: 'development', sessionId });
   const ctx = { db, jev, deps, settings, sessionId, now, capped: () => refill.reached() };
@@ -340,8 +341,8 @@ async function runSession(
       };
       // In parallel the cap can't stop a later cell after an expensive one, so launch only the cells the
       // budget left can cover at a cell's usual cost; the rest wait for the next session.
-      const weeklyLeft = settings.weekly_dev_cap_usd - (await developmentSpendSince(db, weekStart));
-      const left = refill.capUsd == null ? weeklyLeft : Math.min(weeklyLeft, refill.capUsd - (await refill.spentUsd()));
+      const nightlyLeft = settings.nightly_dev_cap_usd - (await developmentSpendSince(db, nightStart));
+      const left = refill.capUsd == null ? nightlyLeft : Math.min(nightlyLeft, refill.capUsd - (await refill.spentUsd()));
       const launch = cells.slice(0, Math.max(1, Math.floor(left / CELL_ESTIMATE_USD)));
       if (launch.length < cells.length) summary.status = 'capped';
       await Promise.all(launch.map(runCell));

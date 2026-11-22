@@ -65,7 +65,7 @@ async function main(): Promise<void> {
       (settings.auto
         ? `Generate is on: up to ${settings.daily_render_cap} job(s) a day (≤ $${settings.daily_spend_cap_usd.toFixed(2)} a day).`
         : 'Paused: no night fill; only queued jobs and clicks make reels.') +
-      ' The pool refills in every state: one development session a week, on its refill cap (pool_refill_cap_usd).',
+      ` The pool refills in every state: a 10 PM development session while fewer than ${settings.pool_refill_below} makeable pitches are pooled (≤ $${settings.nightly_dev_cap_usd.toFixed(2)} a night, on its refill cap pool_refill_cap_usd).`,
   );
   if (!process.argv.includes('--yes')) {
     console.log('Not run. Pass --yes to start the worker.');
@@ -80,7 +80,7 @@ async function main(): Promise<void> {
   const { artifactStoreFromEnv } = await import('@/lib/explainers/storage');
   const { claimNextJob, failStaleJobs, harnessFailureStreak, requeueJob } = await import('@/lib/reel-ai-drama/production/jobs');
   const { runJob } = await import('@/lib/reel-ai-drama/production/run');
-  const { weeklyTick } = await import('@/lib/reel-ai-drama/production/schedule');
+  const { nightlyTick } = await import('@/lib/reel-ai-drama/production/schedule');
   const { liveProductionDeps, liveScheduleDeps, runLiveCalibration, runLiveDevelopment } = await import('@/lib/reel-ai-drama/production/live');
   const { afterDramaJob, failStaleDramaRequests, runNextDramaRequest } = await import('@/lib/reel-ai-drama/requests');
   const { runDramaNight, tendPoolOncePerDay } = await import('@/lib/reel-ai-drama/night');
@@ -178,6 +178,7 @@ async function main(): Promise<void> {
   let nightCheckedAt = 0;
   let lastNight = '';
   let mismatchDay = '';
+  let lastRefill = '';
   const schedule = liveScheduleDeps(db, (event, fields) => log(event, fields));
   /** With publisher_mode 'live' (and its heartbeat naming AI Drama) the shared publisher releases, posts and reads insights. */
   const standDown = () => publisherOwnsPublishing((text, params) => db.query(text, params) as never, 'reel_ai_drama');
@@ -222,10 +223,14 @@ async function main(): Promise<void> {
         });
       }
     }
-    await step('weekly', async () => {
-      // The weekly development session is the refill: every state, on its refill cap (D14).
-      const tick = await weeklyTick(schedule, now);
-      if (tick.development === 'ran' || tick.development === 'failed') log('weekly_tick', tick as unknown as Record<string, unknown>);
+    await step('refill', async () => {
+      // The nightly development session is the refill: every state, on its refill cap (D14, D16; MD-156).
+      const tick = await nightlyTick(schedule, now);
+      // One line a night: the run, or why tonight's refill was skipped (repeat polls in the window stay quiet).
+      if (tick.development === 'not_yet' || tick.development === 'already_ran') return;
+      const key = `${tick.nightStart}:${tick.development}`;
+      if (key !== lastRefill) log('refill_tick', tick as unknown as Record<string, unknown>);
+      lastRefill = key;
     });
     // Approved reels onto the clock in Approval and Live (holdsSlots, contract §4.3; never one sent back to Made, D18);
     // then, unless the shared publisher drives AI Drama, due slots into attempts and one attempt to Instagram, only while

@@ -14,7 +14,7 @@ void (async () => {
   const spent = await developmentSpendSince(db, weekStart(new Date()));
   const cap = 12.57; // This week's spend before the first run, plus the $3 Lucas approved.
   console.log(JSON.stringify({ spentBefore: spent, capThisRun: cap }));
-  console.log(JSON.stringify(await runLiveDevelopment(db, 'click', { weekly_dev_cap_usd: cap, cells_per_session: 4, pitches_per_cell: 5 }), null, 1));
+  console.log(JSON.stringify(await runLiveDevelopment(db, 'click', { nightly_dev_cap_usd: cap, cells_per_session: 4, pitches_per_cell: 5 }), null, 1));
   console.log(JSON.stringify({ spentAfter: await developmentSpendSince(db, weekStart(new Date())) }));
   process.exit(0);
 })();

@@ -59,7 +59,7 @@ export type UnslotReason = 'paused' | 'slot-passed';
 /**
  * Default spend cap of one refill, in USD (D19, replacing D14): each type's run budget from before the split, so
  * no pool refills slower than it did. Text on Screen's web-search refill averaged ~$0.67 (max $1.36) over 30 days;
- * AI Drama's refill is its weekly development session (its old weekly_dev_cap_usd). All refills together are also
+ * AI Drama's refill is its nightly development session (MD-156; also held to nightly_dev_cap_usd). All refills together are also
  * held to the nightly total (lib/content-type/refill-total.ts).
  */
 export const REFILL_CAP_DEFAULT_USD: Record<Vertical, number> = {
