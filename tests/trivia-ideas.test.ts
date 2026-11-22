@@ -12,17 +12,17 @@ import test from 'node:test';
 import type { BuildDeps } from '@/lib/stories/build/common';
 import { buildAiTrivia, MAX_CHECKS, toFactCheck } from '@/lib/stories/build/ai-trivia';
 import { createStoriesJev } from '@/lib/stories/jev';
-import { openPool, TRIVIA_POOL_CAP, writePool } from '@/lib/stories/pool';
+import { capTriviaPool, openPool, TRIVIA_POOL_CAP, TRIVIA_SERVED_CAP, unusedTriviaCount, writePool } from '@/lib/stories/pool';
 import { STORIES_PROMPTS } from '@/lib/stories/prompts';
 import { STORIES_QUESTION_SETS } from '@/lib/stories/questions';
 import { claimNextRequested, requestSet } from '@/lib/stories/repository';
 import { schemaSql } from '@/lib/stories/local-db';
 import { DEFAULT_SETTINGS } from '@/lib/stories/settings';
-import { askedInCells, askedOnTheme } from '@/lib/stories/trivia/asked';
+import { checkRepeat, loadEarlier, sameFact } from '@/lib/stories/trivia/repeats';
 import { cellState, claimQuestionNumber, ensureCells, reportSpent, sampleOpenCells } from '@/lib/stories/trivia/cells';
 import { AI_RIGHT_TARGET, chooseGameDay, fairShot, GAME_SIZE, MAX_GAME_CHECKS, orderEasiestFirst, wantsMore } from '@/lib/stories/trivia/game';
 import { TRIVIA_AUDIENCE } from '@/lib/stories/trivia/audience';
-import { runTriviaDaily } from '@/lib/stories/trivia/daily';
+import { DAILY_TARGET, MAX_WRITER_CALLS, runTriviaDaily } from '@/lib/stories/trivia/daily';
 import { QUALITY_TESTS, REPEAT_RULE, QUALITY_TEXT, RANK_KEYS } from '@/lib/stories/trivia/quality';
 import { allCells, ANGLES, cellOf, isActive, RETIRED_ANGLES, RETIRED_THEMES, THEMES } from '@/lib/stories/trivia/map';
 import { TRIVIA_CHECK, TRIVIA_SHORTEN, TRIVIA_WRITE, type TriviaWriteItem } from '@/lib/stories/trivia/prompts';
@@ -36,6 +36,8 @@ import { harnessDb, stubJev, stubPhotos, stubWriter } from './stories-harness';
 type Db = Awaited<ReturnType<typeof harnessDb>>['db'];
 
 const NOW = new Date('2026-11-10T08:30:00Z'); // 3:30 AM New York
+/** The tests written for two writer calls a day keep them. */
+const TWO_CALLS = { target: DAILY_TARGET, maxCalls: 2 };
 const DATE = '2026-11-10';
 
 const materialOf = (params: Record<string, unknown>) => {
@@ -150,8 +152,8 @@ test('validator: exactly 3 options; no !, no emoji, limits, known open cell; len
 
 test('prompts: registered at @3, GTN gone, one quality definition shared by writer, shortener and Jev, no photos, no tap line', () => {
   const ids = STORIES_PROMPTS.map((p) => p.id);
-  assert.ok(ids.includes('trivia-write@5') && ids.includes('trivia-check@4') && ids.includes('trivia-shorten@1'));
-  assert.ok(!ids.includes('trivia-write@4') && !ids.includes('trivia-check@3'));
+  assert.ok(ids.includes('trivia-write@6') && ids.includes('trivia-check@5') && ids.includes('trivia-shorten@1'));
+  assert.ok(!ids.includes('trivia-write@5') && !ids.includes('trivia-check@4'));
   assert.ok(!ids.some((id) => id.startsWith('gtn-')));
   const sets = STORIES_QUESTION_SETS.map((s) => s.version);
   assert.ok(sets.includes('trivia-score@3') && !sets.includes('trivia-score@2'));
@@ -163,8 +165,9 @@ test('prompts: registered at @3, GTN gone, one quality definition shared by writ
   assert.equal(TRIVIA_SHORTEN.system.split(QUALITY_TEXT).length, 2, 'and once in the shortener');
   assert.ok(TRIVIA_WRITE.system.includes(REPEAT_RULE) && TRIVIA_CHECK.system.includes(REPEAT_RULE), 'one repeat definition, read by the writer and the check');
   assert.equal(TRIVIA_WRITE.system.split(REPEAT_RULE).length, 2);
-  assert.match(TRIVIA_WRITE.system, /Each cell in the material lists, under asked, the questions already written in it/);
-  assert.match(TRIVIA_CHECK.system, /posted on the same theme and any questions already chosen to post alongside this one/);
+  assert.match(TRIVIA_WRITE.system, /under asked, every question the series has already written on each offered theme/);
+  assert.match(TRIVIA_CHECK.system, /the series' questions on the same theme, any from other themes that look close, and any already chosen to post alongside this one/);
+  assert.match(REPEAT_RULE, /a reworded, shorter or narrower version of an earlier question/);
   assert.match(TRIVIA_WRITE.system, /the material asks for \(count\)/);
   assert.ok(!/three/i.test(TRIVIA_WRITE.system.split('<humanizer>')[0]!), 'the count comes from the material');
   const writeSchema = TRIVIA_WRITE.tool.input_schema as { required: string[] };
@@ -188,7 +191,7 @@ test('prompts: registered at @3, GTN gone, one quality definition shared by writ
 
 /* ── Daily writer ─────────────────────────────────────────────────── */
 
-test('runTriviaDaily (AT-78): two writer calls of 10 cells, 4 questions each; each cell lists its own asked; numbered keys; spent cells', async () => {
+test('runTriviaDaily (AT-78): writer calls of 10 cells, 4 questions each; each offered theme lists its questions; numbered keys; spent cells', async () => {
   const { db } = await harnessDb();
   await ensureCells(db);
   await db.query(`UPDATE stories.trivia_cells SET state = 'retired' WHERE cell_id = 't01a01'`); // a retired cell is never offered
@@ -203,7 +206,7 @@ test('runTriviaDaily (AT-78): two writer calls of 10 cells, 4 questions each; ea
         const [a, b, c, d, e, f] = ids;
         return {
           questions: [
-            item(a!),
+            item(a!, { question: `A new fact for ${a}?` }),
             item(b!, { question: 'Can you believe this!' }),
             item(c!, { answer_line: 'Wild 🤯' }),
             item(d!, { options: [{ letter: 'A', text: 'One' }, { letter: 'B', text: 'Two' }] }),
@@ -218,7 +221,7 @@ test('runTriviaDaily (AT-78): two writer calls of 10 cells, 4 questions each; ea
     },
   });
   const jevStub = stubJev((k) => ({ clear: 0.9, real_guess: 0.7, point: 0.3, worth_knowing: 0.6 })[k] ?? 0);
-  const r = await runTriviaDaily({ db, jev: createStoriesJev(jevStub, db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42 });
+  const r = await runTriviaDaily({ db, jev: createStoriesJev(jevStub, db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42, fill: TWO_CALLS });
   assert.equal(r.ran, true);
   if (!r.ran) return;
 
@@ -228,25 +231,33 @@ test('runTriviaDaily (AT-78): two writer calls of 10 cells, 4 questions each; ea
     assert.equal(call.model, DEFAULT_SETTINGS.models.copy);
     assert.deepEqual((call.tools as Array<{ name: string; max_uses?: number }>).find((t) => t.name === 'web_search')?.max_uses, 5);
   }
-  const offered1 = (mats[0]!.cells as Array<{ cell_id: string; asked: unknown[] }>);
-  const offered2 = (mats[1]!.cells as Array<{ cell_id: string; asked: unknown[] }>);
+  const offered1 = (mats[0]!.cells as Array<{ cell_id: string; theme: string }>);
+  const offered2 = (mats[1]!.cells as Array<{ cell_id: string; theme: string }>);
   assert.equal(offered1.length, 10);
   assert.equal(offered2.length, 10);
   assert.deepEqual([mats[0]!.count, mats[1]!.count], [4, 4]);
-  assert.ok(!('asked' in mats[0]!), 'no global asked list');
+  assert.ok(!('asked' in offered1[0]!), 'the lists are per theme, not per cell');
+  const asked1 = mats[0]!.asked as Array<{ theme: string; questions: unknown[] }>;
+  assert.deepEqual(asked1.map((a) => a.theme).sort(), [...new Set(offered1.map((c) => c.theme))].sort(), 'one list per offered theme');
   const all = [...offered1, ...offered2].map((c) => c.cell_id);
   assert.equal(new Set(all).size, 20, 'the second call never gets a cell the first was offered');
   assert.deepEqual(r.offered, all);
   assert.ok(!all.includes('t01a01'));
   assert.ok(all.every((c) => isActive(cellOf(c)!)));
-  const withAsked = offered1.find((c) => c.cell_id === 't01a03');
-  assert.deepEqual(withAsked?.asked, [{ question: 'Question for t01a03?', answer: 'Two' }]);
-  assert.ok(offered1.filter((c) => c.cell_id !== 't01a03').every((c) => c.asked.length === 0));
+  assert.ok(offered1.some((c) => c.cell_id === 't01a03'));
+  const theme1 = cellOf('t01a03')!.themeText;
+  assert.deepEqual(asked1.find((a) => a.theme === theme1)?.questions, [{ question: 'Question for t01a03?', answer: 'Two' }], 'the theme lists the question in t01a03');
+  assert.ok(asked1.filter((a) => a.theme !== theme1).every((a) => a.questions.length === 0));
+  // The second call's lists carry the first call's new questions on its themes.
+  const firstNew = [[offered1[0]!, `A new fact for ${offered1[0]!.cell_id}?`], [offered1[4]!, `Question for ${offered1[4]!.cell_id}?`]] as const;
+  for (const a of mats[1]!.asked as Array<{ theme: string; questions: Array<{ question: string }> }>) {
+    for (const [c, text] of firstNew) if (c.theme === a.theme) assert.ok(a.questions.some((q) => q.question === text));
+  }
   assert.ok(!JSON.stringify(write.calls[0]!.system).includes(all[0]!), 'per-day cells stay out of the cached system prompt');
 
   const ids1 = offered1.map((c) => c.cell_id);
   const ids2 = offered2.map((c) => c.cell_id);
-  assert.equal(r.pooled.length, 3 + 4);
+  assert.equal(r.pooled.length, 3 + 4, JSON.stringify(r.rejected));
   assert.deepEqual(r.rejected.map((x) => x.cellId), [ids1[1], ids1[2], ids1[3], ids2[4]]);
   assert.match(r.rejected[0]!.problems.join(), /exclamation/);
   assert.match(r.rejected[1]!.problems.join(), /emoji/);
@@ -311,20 +322,54 @@ test('cells (AT-78): weighted toward fewer questions, exclude honoured, numbers 
   assert.ok(!(await sampleOpenCells(db, 216, rand)).some((c) => c.cellId === active[0]), 'and is never offered');
 });
 
-test('asked lists (AT-78): the writer sees a cell\'s pooled, posted and archived questions; the check sees posts on the same theme plus the day', async () => {
+test('repeats: one list from the pool, the archive and every game day; the first of two on one fact is kept; close questions from other themes are shown', async () => {
   const { db } = await harnessDb();
   await ensureCells(db);
-  await poolRow(db, 't03a01', 0.5); // waiting
-  await poolRow(db, 't03a03', 0.5); // posted, same theme (3)
-  await poolRow(db, 't04a01', 0.5); // posted, other theme
-  await db.query(`UPDATE stories.pool SET used_at = now() WHERE key IN ('trivia:t03a03', 'trivia:t04a01')`);
-  await db.query(`INSERT INTO stories.trivia_archive (key, cell_id, payload, reason) VALUES ('trivia:t03a01:2', 't03a01', $1::jsonb, 'fact-check: wrong')`, [JSON.stringify({ q: { ...question('t03a01'), question: 'Archived for t03a01?' } })]);
-  const inCells = await askedInCells(db, ['t03a01', 't03a05']);
-  assert.deepEqual(inCells.get('t03a01')!.map((a) => a.question), ['Question for t03a01?', 'Archived for t03a01?']);
-  assert.deepEqual(inCells.get('t03a05'), []);
-  const day = [{ question: 'Already in the day?', answer: 'Yes' }];
-  assert.deepEqual((await askedOnTheme(db, 't03a05', { alongside: day })).map((a) => a.question), ['Question for t03a03?', 'Already in the day?']);
-  assert.deepEqual(await askedOnTheme(db, 't03a03', { exceptKey: 'trivia:t03a03' }), []);
+  const at = (cellId: string, text: string, answer: string, writtenOn: string): TriviaPoolPayload => ({
+    kind: 'trivia', score: 0.5, writtenOn, jevScore: { clear: 0.5, real_guess: 0.5, point: 0.5, worth_knowing: 0.5 },
+    q: { ...question(cellId), question: text, options: [{ letter: 'A', text: 'Other' }, { letter: 'B', text: answer }, { letter: 'C', text: 'Else' }] },
+  });
+  const put = (p: TriviaPoolPayload, used = false) => db.query(`INSERT INTO stories.pool (series, key, origin, ref, title, payload, score, used_at) VALUES ('ai_trivia', $1, 'model', $2, $3, $4::jsonb, 0.5, $5)`, [`trivia:${p.q.cellId}`, p.q.cellId, p.q.question, JSON.stringify(p), used ? '2026-11-01T00:00:00Z' : null]);
+  // Served by the game and handed back to the pool (open again): still counts, on any theme.
+  const eliza = at('t04a01', 'The first chatbot, ELIZA, was built at MIT. In which decade?', '1960s', '2026-11-10');
+  await put(eliza);
+  await db.query(`INSERT INTO stories.trivia_game_days (day_number, ny_date, status, questions) VALUES (1, '2026-11-11', 'locked', $1::jsonb)`, [JSON.stringify([{ key: 'trivia:t04a01', payload: eliza, factCheck: { verdict: 'pass', problems: [], sources: [] } }])]);
+  // Archived (a failed check), on theme 3, written before the open one below.
+  const netflixOld = at('t03a18', 'On Netflix, about how much of the viewing time comes from its recommendations rather than search?', 'About 80 percent', '2026-11-12');
+  await db.query(`INSERT INTO stories.trivia_archive (key, cell_id, payload, reason) VALUES ('trivia:t03a18', 't03a18', $1::jsonb, 'fact-check: dated')`, [JSON.stringify(netflixOld)]);
+  const netflixNew = at('t03a15', 'On Netflix, about how much of what people watch comes from its AI recommendations rather than search?', 'Over three quarters', '2026-11-20');
+  await put(netflixNew);
+
+  const all = await loadEarlier(db);
+  assert.deepEqual(all.map((e) => [e.key, e.spent]), [['trivia:t04a01', true], ['trivia:t03a18', false], ['trivia:t03a15', false]]);
+
+  // A reworded ELIZA question on another theme (19) is caught in code.
+  const again = at('t19a14', 'The first chatbot that held typed conversations with people was built in which decade?', 'The 1960s', '2026-11-21');
+  assert.equal(checkRepeat(all, again).repeat?.key, 'trivia:t04a01');
+  // The newer Netflix question is shown the older one (same theme) for the model; the older is never shown the newer.
+  const newer = checkRepeat(all, netflixNew);
+  assert.ok(newer.asked.some((a) => a.answer === 'About 80 percent'));
+  assert.ok(!newer.asked.some((a) => a.question === netflixNew.q.question), 'never itself');
+  assert.ok(!checkRepeat(all, netflixOld).asked.some((a) => a.answer === 'Over three quarters'), 'an unposted later question does not count against an earlier one');
+  // A spent question counts whenever it was written; `alongside` counts too.
+  const early = at('t04a09', 'In which decade was the term "artificial intelligence" coined?', '1950s', '2026-11-01');
+  assert.ok(checkRepeat(all, early).asked.some((a) => a.answer === '1960s'), 'served questions on the theme are shown to an older question');
+  assert.ok(checkRepeat(all, early, [again]).asked.some((a) => a.answer === 'The 1960s'));
+  // Of two played copies of one fact, the older stays usable (an IG story may still post it); the newer does not.
+  const playedLater = at('t04a05', 'In which decade was the first chatbot built, at MIT?', '1960s', '2026-11-15');
+  await put(playedLater, true);
+  const now2 = await loadEarlier(db);
+  assert.equal(checkRepeat(now2, playedLater).repeat?.key, 'trivia:t04a01');
+  assert.equal(checkRepeat(now2, eliza).repeat, null);
+});
+
+test('sameFact: a reworded or shorter version of a question is a repeat; another fact on the same subject is not', () => {
+  const q = (question: string, answer: string) => ({ question, answer });
+  assert.ok(sameFact(q('The first chatbot, ELIZA, was built at MIT. In which decade?', '1960s'), q('In which decade was the first chatbot built, at MIT?', '1960s')));
+  assert.ok(sameFact(q('In which decade was the first chatbot built, at MIT?', '1960s'), q('The first chatbot that held typed conversations with people was built in which decade?', 'The 1960s')));
+  assert.ok(sameFact(q('Which company built the chess computer Deep Blue that beat Kasparov in 1997?', 'IBM'), q('Who built Deep Blue?', 'IBM')), 'a shorter version');
+  assert.ok(!sameFact(q('After its November 2022 launch, how long did ChatGPT take to reach 1 million users?', '5 days'), q('After launch, how long did ChatGPT take to reach an estimated 100 million users?', 'About two months')));
+  assert.ok(!sameFact(q('In a 2024 Pew survey, about what share of US teens said they used ChatGPT for schoolwork?', 'About 26%'), q('Which medical field has the most FDA-cleared AI tools?', 'Radiology')));
 });
 
 test('game day (RT-3): 5 questions with the AI right on 4 when it can be, best by score; easiest first', () => {
@@ -368,7 +413,7 @@ test('runTriviaDaily: no score gates (AT-62). Low scores on tests 1 and 2 still 
     },
   });
   const jevStub = stubJev((k, state) => (k === 'point' ? (String((state as { question?: string }).question).includes(offered[0]!) ? 0.9 : 0.3) : 0.1));
-  const r = await runTriviaDaily({ db, jev: createStoriesJev(jevStub, db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42 });
+  const r = await runTriviaDaily({ db, jev: createStoriesJev(jevStub, db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42, fill: TWO_CALLS });
   assert.equal(r.ran, true);
   if (!r.ran) return;
   assert.deepEqual(r.pooled, [{ key: triviaPoolKey(offered[0]!, 1), score: 0.7 }, { key: triviaPoolKey(offered[1]!, 1), score: 0.4 }]);
@@ -393,7 +438,7 @@ test('runTriviaDaily: a length-only failure gets one shortening try; the rewrite
     },
   });
   const jevStub = stubJev(() => 0.8);
-  const r = await runTriviaDaily({ db, jev: createStoriesJev(jevStub, db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42 });
+  const r = await runTriviaDaily({ db, jev: createStoriesJev(jevStub, db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42, fill: TWO_CALLS });
   assert.equal(r.ran, true);
   if (!r.ran) return;
   assert.equal(write.calls.length, 3, 'the writer, one shortening call, then the second writer call');
@@ -463,7 +508,7 @@ test('runTriviaDaily (SS-30): each page the writer cited goes into the intake on
     item(cells[1]!, { sources: ['https://arxiv.test/attention/', 'not a url'] }),
     item(cells[2]!, { question: 'Nope!', sources: ['https://blog.test/rejected-but-cited'] }),
   ]);
-  const r = await runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42 });
+  const r = await runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42, fill: TWO_CALLS });
   assert.equal(r.ran, true);
   if (!r.ran) return;
   assert.equal(r.pooled.length, 2, 'question writing is unchanged');
@@ -485,7 +530,7 @@ test('runTriviaDaily (SS-30): each page the writer cited goes into the intake on
   assert.equal(byUrl('blog.test').headline, 'https://blog.test/rejected-but-cited', 'no title: the URL');
 
   // A second run the same day (forced) bumps the same pages instead of adding rows.
-  const again = await runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42, force: true });
+  const again = await runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42, fill: TWO_CALLS, force: true });
   assert.ok(again.ran && again.intake?.deposited === 3 && again.intake.created === 0);
   assert.equal((await db.query(`SELECT 1 FROM intake.items`)).rows.length, 3);
 });
@@ -493,7 +538,7 @@ test('runTriviaDaily (SS-30): each page the writer cited goes into the intake on
 test('runTriviaDaily (SS-30): a failed deposit never stops the day; it is recorded', async () => {
   const { db } = await harnessDb(); // no intake schema at all
   const { write } = searchingWriter((cells) => [item(cells[0]!, { sources: ['https://arxiv.test/attention'] })]);
-  const r = await runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42 });
+  const r = await runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.42, fill: TWO_CALLS });
   assert.ok(r.ran);
   if (!r.ran) return;
   assert.equal(r.pooled.length, 1);
@@ -520,7 +565,7 @@ test('runTriviaDaily (SS-33): intake mode hands the writer the order\'s research
 
   const { write, materials } = searchingWriter((cells) => [item(cells[0]!)]);
   const run = (now = NOW, intake?: Parameters<typeof runTriviaDaily>[0]['intake']) =>
-    runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now, rand: () => 0.42, force: true, intake });
+    runTriviaDaily({ db, jev: createStoriesJev(stubJev(() => 0.8), db), write, settings: DEFAULT_SETTINGS, now, rand: () => 0.42, fill: TWO_CALLS, force: true, intake });
 
   const r = await run();
   assert.ok(r.ran && r.intake?.mode === 'intake' && r.intake.research === 1);
@@ -536,7 +581,7 @@ test('runTriviaDaily (SS-33): intake mode hands the writer the order\'s research
 
   // The intake read fails → error-fallback, no research; the day still pools.
   const broken = await run(NOW, { listOrderStories: async () => { throw new Error('intake.stories is missing'); } });
-  assert.ok(broken.ran && broken.intake?.mode === 'error-fallback' && broken.pooled.length === 1);
+  assert.ok(broken.ran && stale.ran && broken.intake?.mode === 'error-fallback' && broken.pooled.length > stale.pooled.length, 'a top-up adds to the day');
   assert.ok(!('research' in materials[4]!));
 });
 
@@ -556,25 +601,83 @@ test('citedSources: http(s) only, once per page, the first quotes joined, capped
 
 /* ── Pool ─────────────────────────────────────────────────────────── */
 
-test('pool cap: 41 trivia rows → 40; the lowest goes to the archive; no stale or not-returned drop', async () => {
+test('pool cap: the unused bank holds 50 and served questions 40, apart; the lowest of each go to the archive; no stale or not-returned drop', async () => {
   const { db } = await harnessDb();
-  const cells = allCells().slice(0, 41).map((c) => c.cellId);
-  for (const [i, c] of cells.entries()) await poolRow(db, c, Number((0.5 + i / 100).toFixed(2)));
-  assert.equal(TRIVIA_POOL_CAP, 40);
+  assert.equal(TRIVIA_POOL_CAP, 50);
+  assert.equal(TRIVIA_SERVED_CAP, 40);
+  const cells = allCells().slice(0, 51 + 42).map((c) => c.cellId);
+  const unused = cells.slice(0, 51);
+  const served = cells.slice(51);
+  for (const [i, c] of unused.entries()) await poolRow(db, c, Number((0.3 + i / 100).toFixed(2)));
+  // Served questions score higher, so a cap on all open rows would push the bank out.
+  for (const [i, c] of served.entries()) await poolRow(db, c, Number((0.9 + i / 1000).toFixed(3)));
+  await db.query(`INSERT INTO stories.trivia_game_days (day_number, ny_date, status, questions) VALUES (1, '2026-11-11', 'locked', $1::jsonb)`, [JSON.stringify(served.map((c) => ({ key: `trivia:${c}` })))]);
+  assert.equal(await unusedTriviaCount(db), 51);
   // A refresh far in the future that read every series: AI Trivia's rows are neither stale nor "not returned".
   const r = await writePool(db, { items: [], refreshed: ['morning_download', 'free_vs_paid', 'ai_trivia'] }, new Date('2027-06-01T12:00:00Z'));
-  assert.equal(r.dropped, 1);
-  const { rows } = await db.query<{ key: string }>(`SELECT key FROM stories.pool WHERE series = 'ai_trivia'`);
-  assert.equal(rows.length, TRIVIA_POOL_CAP);
-  assert.ok(!rows.some((x) => x.key === `trivia:${cells[0]}`), 'the lowest-scored row is the one dropped');
-  const { rows: arch } = await db.query<{ key: string; reason: string }>(`SELECT key, reason FROM stories.trivia_archive`);
-  assert.deepEqual(arch, [{ key: `trivia:${cells[0]}`, reason: 'cap' }]);
+  assert.equal(r.dropped, 3);
+  assert.equal(await unusedTriviaCount(db), TRIVIA_POOL_CAP);
+  const { rows: arch } = await db.query<{ key: string; reason: string }>(`SELECT key, reason FROM stories.trivia_archive ORDER BY key`);
+  assert.deepEqual(arch, [unused[0], served[0], served[1]].map((c) => ({ key: `trivia:${c}`, reason: 'cap' })).sort((a, b) => a.key.localeCompare(b.key)), 'the lowest of each group');
   const pool = await openPool(db, 'ai_trivia');
-  assert.equal(pool.trivia!.length, 40);
-  assert.equal(pool.trivia![0]!.q.cellId, cells[40]);
+  assert.equal(pool.trivia!.length, 90);
+  assert.deepEqual(await capTriviaPool(db), [], 'nothing more to drop');
+});
+
+test('runTriviaDaily: calls until the day pools DAILY_TARGET, at most MAX_WRITER_CALLS, and none once the bank is full; a code repeat is dropped', async () => {
+  assert.ok(DAILY_TARGET > GAME_SIZE, 'production stays ahead of the game');
+  const { db } = await harnessDb();
+  await ensureCells(db);
+  await poolRow(db, 't02a01', 0.5);
+  let n = 0;
+  const write = stubWriter({
+    submit_trivia: (params) => {
+      const ids = (materialOf(params).cells as Array<{ cell_id: string }>).map((c) => c.cell_id);
+      n++;
+      // 3 new questions a call, plus a reworded copy of the pooled one (anchored to another cell): dropped in code.
+      return {
+        questions: [
+          ...ids.slice(0, 3).map((c) => item(c, { question: `Distinct fact number ${n}${c} about something else?`, options: [{ letter: 'A', text: `x${n}${c}` }, { letter: 'B', text: `y${n}${c}` }, { letter: 'C', text: `z${n}${c}` }] })),
+          item(ids[3]!, { question: 'Question for t02a01 again?' }),
+        ],
+        spent_cells: [],
+      };
+    },
+  });
+  const jev = createStoriesJev(stubJev(() => 0.6), db);
+  const r = await runTriviaDaily({ db, jev, write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.3 });
+  assert.equal(r.ran, true);
+  if (!r.ran) return;
+  assert.equal(r.calls, 4, `3 a call: ${DAILY_TARGET} takes 4 calls`);
+  assert.ok(MAX_WRITER_CALLS >= r.calls!);
+  assert.equal(r.pooled.length, 12);
+  assert.equal(r.rejected.filter((x) => /repeat: the same fact as trivia:t02a01/.test(x.problems.join())).length, 4);
+  assert.deepEqual(r.bank, { before: 1, after: 13 });
+
+  // A top-up the same day adds to the record; the bank cap stops it.
+  await db.query(`UPDATE stories.pool SET score = 0.5`);
+  const top = await runTriviaDaily({ db, jev, write, settings: DEFAULT_SETTINGS, now: NOW, rand: () => 0.3, force: true, fill: { target: 100, maxCalls: 30 } });
+  assert.equal(top.ran, true);
+  if (!top.ran) return;
+  assert.equal(top.pooled.length, 12 + 39, 'the earlier run stays on the record');
+  assert.equal(top.bank!.after, TRIVIA_POOL_CAP, 'stops at the cap (the last call may overshoot; the cap trims it)');
+  assert.equal(top.calls, 13);
 });
 
 /* ── Builder ──────────────────────────────────────────────────────── */
+
+test('buildAiTrivia: questions the game already served go first, so the story leaves the unused bank to the game', async () => {
+  const { db } = await harnessDb();
+  await poolRow(db, 't03a05', 0.9); // unused, higher score
+  const served = await poolRow(db, 't04a02', 0.5);
+  await db.query(`INSERT INTO stories.trivia_game_days (day_number, ny_date, status, questions) VALUES (1, '2026-11-01', 'locked', $1::jsonb)`, [JSON.stringify([{ key: 'trivia:t04a02', payload: served, factCheck: { verdict: 'pass', problems: [], sources: [] } }])]);
+  const checked: string[] = [];
+  const write = stubWriter({ submit_check: (params) => (checked.push(String(materialOf(params).question)), { verdict: 'pass', problems: [], sources: [] }) });
+  const r = await buildAiTrivia(await trivDeps(db, write));
+  assert.equal(r.ok, true);
+  assert.deepEqual(checked, ['Question for t04a02?']);
+  assert.equal(await unusedTriviaCount(db), 1, 'the bank keeps its question');
+});
 
 test('buildAiTrivia: a failed fact-check archives the top row; the next passes → 2 copy-only frames', async () => {
   const { db } = await harnessDb();

@@ -1,7 +1,7 @@
 /**
  * What a good "Are you smarter than AI?" question is (AT-55 to AT-57). The one owner of this text:
- * the writer (trivia-write@4) writes to it, the shortener (trivia-shorten@1) keeps to it, Jev
- * (trivia-score@3) scores tests 1 to 4 from it, test 3 ranks the pool (AT-61; no score gates, AT-62), and the fact-check (trivia-check@3) enforces the repeat rule. No examples anywhere: principles only.
+ * the writer (trivia-write@6) writes to it, the shortener (trivia-shorten@1) keeps to it, Jev
+ * (trivia-score@3) scores tests 1 to 4 from it, test 3 ranks the pool (AT-61; no score gates, AT-62), and the fact-check (trivia-check@5) enforces the repeat rule. No examples anywhere: principles only.
  */
 
 export type QualityKey = 'clear' | 'real_guess' | 'point' | 'worth_knowing';
@@ -56,8 +56,8 @@ Worth playing:
 4. ${QUALITY_TESTS.worth_knowing.name}. ${QUALITY_TESTS.worth_knowing.rule}
 5. ${PAYOFF.name}. ${PAYOFF.rule}`;
 
-/** AT-57, AT-78: the definition of a repeat (the same fact, not the same subject). Each prompt says which list it checks. */
-export const REPEAT_RULE = 'A question repeats an earlier one when its answer turns on the same fact. A different question about the same subject is fine.';
+/** AT-57, AT-78, one fact one question (2026-11-22): the definition of a repeat (the same fact, not the same subject). Each prompt says which list it checks. */
+export const REPEAT_RULE = 'A question repeats an earlier one when its answer turns on the same fact, however it is worded: a reworded, shorter or narrower version of an earlier question, or the same fact asked from another side, is a repeat. A question about the same subject that turns on a different fact is fine.';
 
 /** Tests 1 to 4 as scoring questions, for the writer's own scorecard. */
 export const SCORECARD_TEXT = QUALITY_KEYS.map((k) => `- ${k} (test ${QUALITY_KEYS.indexOf(k) + 1}): ${QUALITY_TESTS[k].check} Yes: ${QUALITY_TESTS[k].yes} No: ${QUALITY_TESTS[k].no}`).join('\n');
