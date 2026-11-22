@@ -8,13 +8,13 @@ import test from 'node:test';
 
 import {
   ALSO_AFFECTED,
-  CALENDAR_HREF,
   LIVE_CONFIRM,
+  capMax,
   daysLabel,
   parseCapUsd,
   pauseConfirm,
   refillLine,
-  scheduleLine,
+  settingsLayout,
   stateAsk,
   stateLine,
   windowsLine,
@@ -78,31 +78,29 @@ test('days and windows read only', () => {
   assert.match(windowsLine('carousels'), /^No set windows/);
 });
 
-const base = { days: null, schedule: null } as const;
-const day = (nyDate: string, count: number) => ({ nyDate, count, trial: 0, main: count, series: [], override: false });
+const base = { perDay: null, maxPerDay: null, days: null, schedule: null, cap: null } as const;
 
-test('the Schedule line says what the Calendar set and nothing more (D20)', () => {
-  // Explainers this week: Mon Nov 16 and Thu Nov 19, once each.
-  const week = [day('2026-11-16', 1), day('2026-11-17', 0), day('2026-11-19', 1)];
-  assert.equal(scheduleLine({ ...base, type: 'explainers', schedule: week }), 'Posts once a day, Mon, Thu');
-  assert.equal(scheduleLine({ ...base, type: 'reels', schedule: [day('2026-11-16', 2), day('2026-11-18', 2)] }), 'Posts twice a day, Mon, Wed');
-  assert.equal(scheduleLine({ ...base, type: 'reels', schedule: [day('2026-11-16', 3), day('2026-11-20', 2)] }), 'Posts 5 times this week, Mon, Fri');
-  const everyDay = ['2026-11-16', '2026-11-17', '2026-11-18', '2026-11-19', '2026-11-20', '2026-11-21', '2026-11-22'].map((d) => day(d, 1));
-  assert.equal(scheduleLine({ ...base, type: 'stories', schedule: everyDay }), 'Posts once a day, every day');
-  assert.equal(scheduleLine({ ...base, type: 'carousels', schedule: [day('2026-11-16', 0)] }), 'No times on the Calendar this week.');
-  // Without the calendar (legacy): the plan's windows and days.
-  assert.equal(scheduleLine({ ...base, type: 'last_few_days', days: [2, 5] }), `${windowsLine('last_few_days')} · Tue, Fri`);
-  assert.equal(CALENDAR_HREF, '/social/calendar?view=week');
+test('which blocks show per type: daily limit in template mode, posts per day in legacy, days for days-based types', () => {
+  // Template mode: the calendar strip and the daily limit.
+  const week = [{ nyDate: '2026-11-16', count: 1 }] as never;
+  assert.deepEqual(settingsLayout({ ...base, type: 'reels', schedule: week, cap: 2, perDay: 3, maxPerDay: 3 }), { posts: 'limit', days: null, windows: 'calendar', capsInTypeForm: false });
+  // Legacy: the posts-per-day stepper and the plan's windows.
+  assert.deepEqual(settingsLayout({ ...base, type: 'explainers', perDay: 1, maxPerDay: 2 }), { posts: 'perDay', days: null, windows: 'plan', capsInTypeForm: true });
+  // A days-based type: its days, no count.
+  assert.deepEqual(settingsLayout({ ...base, type: 'last_few_days', days: [2, 5] }), { posts: null, days: [2, 5], windows: 'plan', capsInTypeForm: false });
+  // Days from the plan when the posting state has none.
+  assert.deepEqual(settingsLayout({ ...base, type: 'ai_trivia' }).days, [0, 1, 4]);
+  assert.equal(settingsLayout({ ...base, type: 'reel_ai_drama' }).capsInTypeForm, true);
 });
 
-test('the Settings tab has no daily limit, posts-per-day stepper or week strip (D20)', () => {
-  const src = readFileSync('components/content-type/pool/SettingsTab.tsx', 'utf8');
-  for (const gone of ['Daily limit', 'Posts per day', 'ScheduleStrip', 'Posting windows']) assert.ok(!src.includes(gone), gone);
-  assert.match(src, /Edit in Calendar/);
+test('daily limit bounds: Trivia and Real or AI? once a day, Morning Download by its config', () => {
+  assert.equal(capMax('ai_trivia'), 1);
+  assert.equal(capMax('real_or_ai'), 1);
+  assert.ok(capMax('stories') >= 2);
 });
 
-test('also affected by: publisher (D10; the Schedule line links the Calendar)', () => {
-  assert.deepEqual(ALSO_AFFECTED.map((a) => a.label), ['publisher']);
+test('also affected by: calendar template mode · publisher (D10)', () => {
+  assert.deepEqual(ALSO_AFFECTED.map((a) => a.label), ['calendar template mode', 'publisher']);
   for (const a of ALSO_AFFECTED) assert.match(a.href, /^\/social\//);
 });
 

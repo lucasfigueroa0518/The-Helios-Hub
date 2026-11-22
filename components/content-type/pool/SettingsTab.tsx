@@ -3,16 +3,20 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { ScheduleStrip } from '@/components/content-type/ScheduleStrip';
 import {
   ALSO_AFFECTED,
-  CALENDAR_HREF,
+  capMax,
+  daysLabel,
   parseCapUsd,
   refillLine,
-  scheduleLine,
+  settingsLayout,
   stateAsk,
   stateLine,
+  windowsLine,
   type StateAsk,
 } from '@/components/content-type/pool/settings-tab';
+import { TYPE_CONFIG } from '@/lib/content-type/config';
 import type { PostingPatch, PostingState } from '@/lib/content-type/posting';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { STATE_COPY, TYPE_STATES, type TypeState } from '@/lib/content-type/state';
@@ -23,8 +27,7 @@ import { when } from '@/lib/social-hub/views/format';
 /**
  * A pool's Settings tab (settings standard D8, D9; CONTRACT.md §2): the one place a type's settings live, the same on
  * every type. The State control (Paused | Approval | Live, D16), the Pool block (refill cadence, last refill, refill $
- * cap), one Schedule line that links to the Calendar (which owns when and how many, D20), the type's own form
- * ("This type only") and the one line naming
+ * cap), the Posts block, the read-only posting windows, the type's own form ("This type only") and the one line naming
  * the settings that cover every type (D10). There is no Auto-publish or approval control: every post needs a person.
  *
  * Reads GET /api/content-type/posting and writes a PostingPatch to POST /api/content-type/posting, then refreshes the
@@ -50,6 +53,18 @@ function Block({ title, children }: { title: string; children: ReactNode }) {
       <h3 className="pl-set__label">{title}</h3>
       <div className="pl-set__body">{children}</div>
     </section>
+  );
+}
+
+/** A − n + stepper that saves each step at once (the daily limit and posts per day, as the old drawer had them). */
+function Stepper({ label, n, min, max, onSave, busy, fewer, more }: { label: string; n: number; min: number; max: number; onSave: (n: number) => void; busy: boolean; fewer: string; more: string }) {
+  return (
+    <div className="pl-set__step">
+      <span className="pl-set__step-label">{label}</span>
+      <button type="button" className="pl-btn pl-btn--sm" disabled={busy || n <= min} onClick={() => onSave(n - 1)} aria-label={fewer}>−</button>
+      <strong className="pl-set__n">{n}</strong>
+      <button type="button" className="pl-btn pl-btn--sm" disabled={busy || n >= max} onClick={() => onSave(n + 1)} aria-label={more}>+</button>
+    </div>
   );
 }
 
@@ -128,6 +143,8 @@ export function SettingsTab({ type, lastRefill, typeOnly, nowIso }: {
   if (error) return <div className="pl-set"><p className="pl-set__error" role="alert">Could not load settings: {error}</p></div>;
   if (!data) return <div className="pl-set" aria-busy="true"><p className="pl-note">Loading settings…</p></div>;
 
+  const noun = TYPE_CONFIG[type].postsNoun;
+  const layout = settingsLayout(data);
   const capParsed = capDraft === null ? null : parseCapUsd(capDraft);
   const saveCap = () => {
     if (!capParsed?.ok) return;
@@ -183,8 +200,32 @@ export function SettingsTab({ type, lastRefill, typeOnly, nowIso }: {
         <p className="pl-set__hint">The most one refill may spend. Refill runs in every state, even when the day’s quota is full. All types’ refills also share a nightly total, set on the Social Hub Cost page.</p>
       </Block>
 
-      <Block title="Schedule">
-        <p className="pl-set__line">{scheduleLine(data)} · <a href={CALENDAR_HREF}>Edit in Calendar</a></p>
+      <Block title="Posts">
+        {layout.posts === 'limit' && data.cap !== null ? (
+          <>
+            <Stepper label="Daily limit" n={data.cap} min={0} max={capMax(type)} busy={busy} fewer="One fewer a night" more="One more a night" onSave={(cap) => void save({ cap }, 'Daily limit saved.')} />
+            <p className="pl-set__hint">The most {noun} the overnight run makes a day{TYPE_CONFIG[type].capPerSeries ? ', per series' : ''}, however many slots the calendar has.</p>
+            {data.costPerPostMicros != null ? <p className="pl-set__hint">One more a night costs about {formatUsd(data.costPerPostMicros)}.</p> : null}
+          </>
+        ) : layout.posts === 'perDay' && data.perDay !== null && data.maxPerDay !== null ? (
+          <>
+            <Stepper label="Posts per day" n={data.perDay} min={TYPE_CONFIG[type].perDayMin} max={data.maxPerDay} busy={busy} fewer="One fewer a day" more="One more a day" onSave={(perDay) => void save({ perDay }, 'Posts per day saved.')} />
+            <p className="pl-set__hint">How many {noun} are made each day. Up to {data.maxPerDay}: one per posting window.</p>
+          </>
+        ) : layout.days ? (
+          <p className="pl-set__line">Posts on {daysLabel(layout.days)}.</p>
+        ) : (
+          <p className="pl-set__line">No daily count to set for this type.</p>
+        )}
+        {layout.capsInTypeForm ? <p className="pl-set__hint">The run $ cap and render cap are in “This type only” below.</p> : null}
+      </Block>
+
+      <Block title="Posting windows">
+        {layout.windows === 'calendar' && data.schedule ? (
+          <ScheduleStrip type={type} days={data.schedule} />
+        ) : (
+          <p className="pl-set__line">{windowsLine(type)}{layout.days ? ` · ${daysLabel(layout.days)}` : ''}</p>
+        )}
       </Block>
 
       {typeOnly ? (

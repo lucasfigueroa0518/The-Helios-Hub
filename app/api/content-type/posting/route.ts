@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 }
 
 /**
- * Body: `{ type, ...patch }` where the patch is state (Paused | Approval | Live, D16), perDay (cap is refused since D20: the Calendar sets how many a day)
+ * Body: `{ type, ...patch }` where the patch is state (Paused | Approval | Live, D16), perDay, cap (the daily limit)
  * or refillCapUsd (D14). live, generate and autoPublish are refused: the state replaces them and approval is always
  * required. Pausing also sends the type's scheduled posts back to the Made tab (D17). A person's click is the decision.
  */

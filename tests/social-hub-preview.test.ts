@@ -104,7 +104,7 @@ test('the Schedules form renders its times, Monday-first days, the merge notice 
   assert.match(html, /1:00 PM is Trial on some days and Main on others\. Pick one\./);
   const days = [...html.matchAll(/aria-pressed="(?:true|false)">(Mon|Tue|Wed|Thu|Fri|Sat|Sun)</g)].map((m) => m[1]);
   assert.deepEqual(days, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
-  assert.match(html, /Explainers can post at most 3 a day\./, 'three times at a ceiling of 3: Add a time is off with the note');
+  assert.match(html, /Explainers can post 3 a day\. Raise the daily limit on the Explainers page to add more\./, 'three times at a cap of 3: Add a time is off with the note');
   assert.match(html, /disabled="">.*?Add a time/);
   const locked = render(false, 'The calendar is showing today’s settings. It starts deciding when you switch it on.');
   assert.match(locked, /It starts deciding when you switch it on\./);

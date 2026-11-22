@@ -163,22 +163,18 @@ test('edited is true only when the date has a person\'s own edit; a system pin o
   assert.ok(m.cards.filter((c) => c.day !== 3).every((c) => !c.mine));
 });
 
-// A type's ceiling is its fixed maximum (D20); these pass a low one so the over-ceiling path stays covered.
-const LOW_CAPS = { ...DEFAULT_CAPS, explainers: 3, stories: 2 };
-
-test('a slot past the ceiling is over; each Stories-format type counts on its own (SS-1)', () => {
+test('a 4th explainer is over the daily cap; each Stories-format type counts on its own (SS-1)', () => {
   const days = week();
   days[2]!.slots = [slot('explainers', 780), slot('explainers', 840), slot('explainers', 930), slot('explainers', 1000)];
-  assert.deepEqual(boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 2).map((c) => c.overCap), [false, false, false, false], 'D20: every slot under the fixed maximum is made');
-  const m = boardModel({ days, posts: [], now: NOW, caps: LOW_CAPS });
+  const m = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS });
   assert.deepEqual(m.cards.filter((c) => c.day === 2).map((c) => c.overCap), [false, false, false, true]);
   assert.equal(m.cards.find((c) => c.day === 2 && c.overCap)!.statusText, 'Over today’s limit, so nothing is made for this slot.');
   days[3]!.slots = [
     slot('stories', 510, { series: 'morning_download' }), slot('ai_trivia', 540, { series: 'ai_trivia' }),
     slot('stories', 600, { series: 'morning_download' }), slot('stories', 630, { series: 'morning_download' }),
   ];
-  const s = boardModel({ days, posts: [], now: NOW, caps: LOW_CAPS }).cards.filter((c) => c.day === 3);
-  // Morning Download at a ceiling of 2; Trivia's slot counts against its own.
+  const s = boardModel({ days, posts: [], now: NOW, caps: DEFAULT_CAPS }).cards.filter((c) => c.day === 3);
+  // Morning Download posts twice a day (R25); Trivia's slot counts against its own limit.
   assert.deepEqual(s.map((c) => [c.vertical, c.overCap]), [['stories', false], ['ai_trivia', false], ['stories', false], ['stories', true]]);
 });
 
@@ -333,12 +329,12 @@ test('drop: Last Few Days onto a Carousel day asks first', () => {
   assert.equal(d.confirm, 'remove-carousels');
 });
 
-test('drop: a day at the type\'s ceiling says so but still allows the drop', () => {
+test('drop: a day at its cap says "At the daily limit" but still allows the drop', () => {
   const s = state();
   s.days[WED]!.slots.push(slot('explainers', 1020, { feedMode: 'main' }));
-  const d = dropState({ ctx: dayCtx(s, WED, CLOCK), vertical: 'explainers', series: null, raw: 720, caps: LOW_CAPS });
+  const d = dropState({ ctx: dayCtx(s, WED, CLOCK), vertical: 'explainers', series: null, raw: 720, caps: DEFAULT_CAPS });
   assert.equal(d.tone, 'cap');
-  assert.equal(d.tag, '12:00 PM · Explainers can post at most 3 a day');
+  assert.equal(d.tag, '12:00 PM · At the daily limit for Explainers (3)');
 });
 
 test('drop: a time already passed today lands on the next 15-minute mark', () => {

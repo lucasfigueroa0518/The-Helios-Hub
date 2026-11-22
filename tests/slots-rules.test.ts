@@ -124,10 +124,9 @@ test('gapsFor: a dragged-in carousel has no usual window to be outside of', () =
   assert.ok(!kinds.includes('outside-usual'));
 });
 
-test('gapsFor: over the type\'s ceiling (none under the fixed maximum, D20)', () => {
+test('gapsFor: over the daily cap', () => {
   const slots = [S('explainers', 780), S('explainers', 810), S('explainers', 930), S('explainers', 960)];
-  assert.deepEqual(gapsFor(day(slots), slots, DEFAULT_CAPS).filter((g) => g.kind === 'over-cap'), []);
-  const over = gapsFor(day(slots), slots, { ...DEFAULT_CAPS, explainers: 3 }).filter((g) => g.kind === 'over-cap');
+  const over = gapsFor(day(slots), slots, DEFAULT_CAPS).filter((g) => g.kind === 'over-cap');
   assert.deepEqual(over.map((g) => g.text), ['Wed has 4 Explainers; only 3 will be made.']);
 });
 

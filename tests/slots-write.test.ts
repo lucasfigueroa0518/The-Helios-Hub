@@ -14,7 +14,7 @@ import { ALREADY_STARTED, PAST_DAY } from '@/lib/social-hub/slots/rules';
 import { DEFAULT_SEED_INPUTS, seedTemplate, type SeedInputs } from '@/lib/social-hub/slots/seed';
 import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 import { legacyKey } from '@/lib/social-hub/slots/legacy';
-import { applySlotChanges, parseChanges, setSlotSource, type SlotChange } from '@/lib/social-hub/slots/write';
+import { applySlotChanges, parseChanges, setSlotSource, writeCaps, type SlotChange } from '@/lib/social-hub/slots/write';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 
@@ -499,11 +499,17 @@ test('a no-op "Every Tuesday" edit on a started slot writes no hold for today', 
 
 // ── Caps ──
 
-test('readCaps is each type\'s fixed maximum (D20): Trivia, Real or AI?, LFD, Field Notes 1; AI Events 2; AI Drama 3', async () => {
+test('readCaps returns the defaults; writeCaps merges and validates 0–10', async () => {
   const { q } = await seeded();
   assert.deepEqual(await readCaps(q), DEFAULT_CAPS);
-  assert.deepEqual([DEFAULT_CAPS.ai_trivia, DEFAULT_CAPS.real_or_ai, DEFAULT_CAPS.last_few_days, DEFAULT_CAPS.field_notes, DEFAULT_CAPS.ai_events, DEFAULT_CAPS.reel_ai_drama], [1, 1, 1, 1, 2, 3]);
-  assert.equal(DEFAULT_CAPS.explainers, 10);
+  await writeCaps(q, { explainers: 4 });
+  assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, explainers: 4 });
+  await writeCaps(q, { stories: 1 });
+  assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, explainers: 4, stories: 1 });
+  await assert.rejects(() => writeCaps(q, { explainers: 11 }));
+  await assert.rejects(() => writeCaps(q, { explainers: 1.5 }));
+  await assert.rejects(() => writeCaps(q, { nope: 2 } as never));
+  assert.equal((await readCaps(q)).explainers, 4);
 });
 
 // ── Parsing ──

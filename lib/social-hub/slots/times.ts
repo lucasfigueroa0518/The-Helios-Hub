@@ -1,5 +1,4 @@
 // lib/social-hub/slots/times.ts
-import { maxCapFor } from '@/lib/content-type/caps';
 import { SOCIAL_TIMEZONE, zoneOffsetMinutes } from '@/lib/instagram/clock';
 import { isStoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -62,16 +61,8 @@ export const DEFAULT_TIMES: Record<Vertical, readonly number[]> = {
   reel_ai_drama: [1200],
 };
 
-/**
- * The most slots a day each type may have: its fixed maximum (lib/content-type/config.ts maxCap). The calendar's
- * slots are the count the night makes (settings standard D20); this only bounds how many times the Calendar lets
- * a person set, so there is no separate daily limit to set. Each Stories-format type has its own (SS-1).
- */
-export const DEFAULT_CAPS: Record<Vertical, number> = {
-  reels: maxCapFor('reels'), explainers: maxCapFor('explainers'), carousels: maxCapFor('carousels'), last_few_days: maxCapFor('last_few_days'),
-  stories: maxCapFor('stories'), ai_trivia: maxCapFor('ai_trivia'), real_or_ai: maxCapFor('real_or_ai'), ai_events: maxCapFor('ai_events'),
-  field_notes: maxCapFor('field_notes'), reel_ai_drama: maxCapFor('reel_ai_drama'),
-};
+/** The hidden safety cap per day the overnight runs never exceed (each Stories-format type has its own, SS-1). */
+export const DEFAULT_CAPS: Record<Vertical, number> = { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_trivia: 1, real_or_ai: 1, ai_events: 2, field_notes: 1, reel_ai_drama: 1 };
 
 /** When each type's run makes the day's posts (overnight; AI Events at Sunday noon, AE-08; Field Notes at 2 AM on its days). */
 export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_trivia: '4 AM', real_or_ai: '4 AM', ai_events: '12 PM', field_notes: '2 AM', reel_ai_drama: '12 AM' };
@@ -79,7 +70,7 @@ export const RUN_HOUR_LABEL: Record<Vertical, string> = { reels: '1 AM', explain
 /** Default Trial / Main feed for a new slot of a type (reels Trial, Explainers Main, the rest none). */
 export const DEFAULT_FEED_MODE: Record<Vertical, FeedMode | null> = { reels: 'trial', explainers: 'main', carousels: null, last_few_days: null, stories: null, ai_trivia: null, real_or_ai: null, ai_events: null, field_notes: null, reel_ai_drama: 'main' };
 
-/** Names for board copy ("{Day} has {n} {Type}s…", "{Type}s can post at most {cap} a day"). */
+/** Names for board copy ("{Day} has {n} {Type}s…", "At the daily limit for {Type}s ({cap})"). */
 export const TYPE_NAME: Record<Vertical, { one: string; many: string }> = {
   reels: { one: 'Text on Screen', many: 'Text on Screen reels' },
   explainers: { one: 'Explainer', many: 'Explainers' },

@@ -1,3 +1,4 @@
+import { maxCapFor } from '@/lib/content-type/caps';
 import { generateCopy } from '@/lib/content-type/config';
 import type { PostingState } from '@/lib/content-type/posting';
 import { STATE_COPY, type TypeState } from '@/lib/content-type/state';
@@ -79,37 +80,34 @@ export function planDays(type: Vertical): number[] | null {
   return set.length && set.length < 7 ? set : null;
 }
 
-const TIMES_A_DAY = ['', 'once', 'twice'];
+/** What the Posts and Posting windows blocks draw for one type. */
+export type SettingsLayout = {
+  /** The daily count control: the calendar's daily limit (template mode), the legacy posts-per-day stepper, or none. */
+  posts: 'limit' | 'perDay' | null;
+  /** The weekdays the type posts (read only, legacy mode), or null when every day. */
+  days: number[] | null;
+  /** Posting windows: the calendar's week strip (template mode) or the plan's windows line. */
+  windows: 'calendar' | 'plan';
+  /** The run and render caps live in this type's own form ("This type only"), so the Posts block points there. */
+  capsInTypeForm: boolean;
+};
 
-/** The weekday (0 = Sunday) of a New York date "YYYY-MM-DD". */
-const weekdayOf = (nyDate: string): number => new Date(`${nyDate}T12:00:00Z`).getUTCDay();
+/** Types whose run $ cap and render cap are edited in their own settings form (the Explainers and AI Drama forms). */
+const CAPS_IN_FORM: ReadonlySet<Vertical> = new Set(['explainers', 'reel_ai_drama']);
 
-/**
- * The Schedule block's one line (D20): the Calendar owns when and how many, so Settings only says what it set and
- * links there. From this week's slots: "Posts once a day, Mon, Thu"; uneven days: "Posts 5 times this week, Mon, Tue, Fri".
- * Without the calendar (legacy) it falls back to the plan's windows and days.
- */
-export function scheduleLine(posting: Pick<PostingState, 'type' | 'days' | 'schedule'>): string {
-  if (!posting.schedule) {
-    const days = posting.days?.length ? [...posting.days] : planDays(posting.type);
-    return `${windowsLine(posting.type)}${days ? ` · ${daysLabel(days)}` : ''}`;
-  }
-  const on = posting.schedule.filter((d) => d.count > 0);
-  if (!on.length) return 'No times on the Calendar this week.';
-  const label = daysLabel(on.map((d) => weekdayOf(d.nyDate)));
-  const days = label === 'Every day' ? 'every day' : label;
-  const counts = new Set(on.map((d) => d.count));
-  if (counts.size === 1) {
-    const n = on[0].count;
-    return `Posts ${TIMES_A_DAY[n] ?? `${n} times`} a day, ${days}`;
-  }
-  return `Posts ${on.reduce((a, d) => a + d.count, 0)} times this week, ${days}`;
+export function settingsLayout(posting: Pick<PostingState, 'type' | 'perDay' | 'maxPerDay' | 'days' | 'schedule' | 'cap'>): SettingsLayout {
+  const calendar = posting.schedule != null;
+  const posts = calendar ? (posting.cap !== null ? 'limit' : null) : posting.perDay !== null && posting.maxPerDay !== null ? 'perDay' : null;
+  // With the calendar, its week strip already says which days have slots.
+  const days = calendar ? null : posting.days?.length ? [...posting.days] : planDays(posting.type);
+  return { posts, days, windows: calendar ? 'calendar' : 'plan', capsInTypeForm: CAPS_IN_FORM.has(posting.type) };
 }
 
-/** Where the Schedule line's link goes: the Calendar, where times and days are set. */
-export const CALENDAR_HREF = '/social/calendar?view=week';
+/** The most a daily limit can be, from the type's config: AI Trivia and Real or AI? once a day (SS-24), Morning Download two (R25). */
+export const capMax = (type: Vertical): number => maxCapFor(type);
 
 /** The one line of settings that cover every type (D10). */
 export const ALSO_AFFECTED = [
+  { label: 'calendar template mode', href: '/social/calendar?view=week' },
   { label: 'publisher', href: '/social/health' },
 ] as const;

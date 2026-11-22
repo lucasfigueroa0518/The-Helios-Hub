@@ -452,11 +452,11 @@ test('real unschedules: Carousels and Last Few Days (unscheduleItem), Explainers
   assert.equal((await pg.query<{ status: string }>(`SELECT status FROM social_hub.schedule WHERE vertical = 'stories'`)).rows[0]!.status, 'cancelled');
 });
 
-test('over the type\'s fixed maximum is refused (AI Drama posts at most 3 a day, D20)', async () => {
+test('over cap is refused', async () => {
   const { pg, q } = await seeded();
-  const out = await saveSchedule(body(sched('reel_ai_drama', [[600, 'main'], [720, 'main'], [840, 'main'], [960, 'main']], EVERY_DAY)), deps(pg, q));
+  const out = await saveSchedule(body(sched('explainers', [[780, 'main'], [840, 'main'], [930, 'main'], [1020, 'main']], EVERY_DAY)), deps(pg, q));
   assert.equal(out.status, 422);
-  assert.ok((out.body.errors as string[]).some((e) => /can post at most 3 a day\./.test(e)), JSON.stringify(out.body.errors));
+  assert.deepEqual(out.body.errors, ['Explainers can post 3 a day. Raise the daily limit on the Explainers page to add more.']);
 });
 
 test('legacy refuses', async () => {

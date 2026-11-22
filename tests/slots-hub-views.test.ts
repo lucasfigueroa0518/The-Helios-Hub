@@ -11,12 +11,11 @@ import { openSlots, placeItem, planPlacement, rescheduleItem } from '@/lib/socia
 import { readDayQuotas } from '@/lib/social-hub/queries/day';
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import { loadSlots, readCaps } from '@/lib/social-hub/slots/load';
-import { DEFAULT_CAPS } from '@/lib/social-hub/slots/times';
 import { resolveDay } from '@/lib/social-hub/slots/resolve';
 import { DEFAULT_SEED_INPUTS, seedTemplate } from '@/lib/social-hub/slots/seed';
 import { seedWithCarousels } from './helpers/seed-with-carousels';
 import type { OverrideRow, SlotsByDate } from '@/lib/social-hub/slots/types';
-import { applySlotChanges, setSlotSource } from '@/lib/social-hub/slots/write';
+import { applySlotChanges, setSlotSource, writeCaps } from '@/lib/social-hub/slots/write';
 import type { HubPost } from '@/lib/social-hub/types';
 import { capacityWindows, dayPlan, windowsOn } from '@/lib/social-hub/views/plan';
 import { storyActions } from '@/lib/publishing/actions/stories';
@@ -131,9 +130,9 @@ test('readDayQuotas: today\'s slot counts under the daily limit and the slot map
   assert.deepEqual([q.reels, q.carousels, q.explainers, q.last_few_days, q.lfdDays], [2, 0, 2, 1, []]);
   assert.equal(Object.keys(q.slots!).length, 29);
   assert.ok(q.slots!['2026-10-13'] && q.slots!['2026-11-10'], 'today − 7 … today + 21');
-  // D20: a stale daily limit trims nothing; the slots are the count.
-  await query(`INSERT INTO social_hub.settings (key, value, updated_at) VALUES ('daily_caps', '{"explainers":1}'::jsonb, now()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`);
-  assert.equal((await readDayQuotas(query, Promise.resolve(query), now)).explainers, 2);
+  // Over the daily limit: only the limit counts.
+  await writeCaps(query as never, { explainers: 1 });
+  assert.equal((await readDayQuotas(query, Promise.resolve(query), now)).explainers, 1);
 });
 
 // ── Placement on free times ──
@@ -385,17 +384,26 @@ test('posting settings: cadence is refused in template mode and still works in l
   assert.equal((await writePosting('carousels', { state: 'approval' }, 't')).state, 'approval');
 });
 
-test('no daily limit to set (D20): cap reads the fixed maximum, a write is refused, perDay is today\'s slots', async () => {
+test('the daily limit: read in template mode (null while legacy), written 0–10 through writeCaps', async () => {
   const { query } = await appDb();
   const q = query as never;
   assert.equal((await readPosting('explainers')).cap, null);
+  await assert.rejects(() => writePosting('explainers', { cap: 4 }, 't'), /calendar/);
   await setSlotSource(q, 'template', 't');
-  assert.equal((await readPosting('explainers')).cap, 10);
-  assert.equal((await readPosting('ai_trivia')).cap, 1, 'AI Trivia posts at most once a day (SS-24)');
-  await assert.rejects(() => writePosting('explainers', { cap: 4 }, 't'), /Calendar sets how many a day/);
-  assert.deepEqual(await readCaps(q), DEFAULT_CAPS, 'a refused change writes nothing');
-  // Today's perDay is every slot the calendar has (Tuesday Oct 20 seeds three reels slots).
-  assert.equal((await readPosting('reels', new Date('2026-10-20T14:00:00Z'))).perDay, 3);
+  assert.equal((await readPosting('explainers')).cap, 3);
+  assert.equal((await readPosting('stories')).cap, 2, 'Morning Download keeps its two a day (R25)');
+  assert.equal((await readPosting('ai_trivia')).cap, 1, 'AI Trivia posts once a day (SS-24)');
+  const saved = await writePosting('explainers', { cap: 4 }, 't');
+  assert.equal(saved.cap, 4);
+  assert.equal((await readCaps(q)).explainers, 4);
+  assert.equal((await readCaps(q)).reels, 5, 'the other types keep theirs');
+  await assert.rejects(() => writePosting('explainers', { cap: 11 }, 't'), /from 0 to 10/);
+  await assert.rejects(() => writePosting('explainers', { cap: 1.5 }, 't'), /from 0 to 10/);
+  await assert.rejects(() => writePosting('last_few_days', { cap: 2 }, 't'), /once a day/);
+  assert.equal((await readCaps(q)).explainers, 4, 'a refused change writes nothing');
+  // Today's perDay is the slots under the limit.
+  await writePosting('reels', { cap: 2 }, 't');
+  assert.equal((await readPosting('reels', new Date('2026-10-20T14:00:00Z'))).perDay, 2);
 });
 
 test('costPerPost: the average cost of a type\'s posts over the last 14 days, each item once; null with none', () => {
