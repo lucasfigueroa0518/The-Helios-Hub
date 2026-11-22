@@ -114,13 +114,18 @@ test('a night that does not run (auto-render off) leaves hand moves in force', a
 test('an archived topic is never made, and its title is history the proposer is told about', async () => {
   const db = await explainersOn();
   const a = await topic(db, 'Archived one', 99);
+  const old = await topic(db, 'Archived before the syllabus', 98);
   const b = await topic(db, 'B', 80);
+  // a syllabus idea carries its rank; the pre-syllabus one does not, so it is no history (2026-11-22)
+  await db.query('UPDATE explainers.topics SET syllabus_rank = 5 WHERE id = $1', [a]);
   await archiveIdea(q(db), 'explainers', idea(a), 'tommy');
+  await archiveIdea(q(db), 'explainers', idea(old), 'tommy');
   assert.deepEqual((await fillCandidates(db, false, await readMoves(q(db), 'explainers'))).map((c) => c.topicId), [b]);
   let history: string[] = [];
   const spy = { ...stubIdeas(), propose: async (req: { archived: Array<{ topic_title: string }> }) => { history = req.archived.map((r) => r.topic_title); return (stubIdeas() as never as { propose: () => Promise<unknown> }).propose(); } } as unknown as IdeaModel;
   await runIdeaCycle({ db, ideaModel: spy, jevTransport: stubJev(), now: CYCLE_AT });
   assert.ok(history.includes('Archived one'));
+  assert.ok(!history.includes('Archived before the syllabus'));
   assert.notEqual((await run(db)).status, 'failed');
 });
 
