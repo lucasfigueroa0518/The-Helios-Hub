@@ -52,13 +52,13 @@ New typed keys. The defaults hold the launch decisions.
 
 | Key | Default | Parser | Meaning (mirrors explainers) |
 |---|---|---|---|
-| `auto` (existing) | `false` | bool | Generate switch: nightly fill + weekly development. Hub "Generate" maps here (explainers: `auto_render`). |
+| `auto` (existing) | `false` | bool | Generate switch: nightly fill + nightly pool refill (MD-156). Hub "Generate" maps here (explainers: `auto_render`). |
 | `require_approval` | `true` | bool | Off = auto-publish. |
 | `publishing_live` | `false` | bool | Master switch. Nothing is booked or posted while it is off. |
 | `posts_per_day` | `1` | int 1–`DRAMA_WINDOWS.length` | Legacy quota. |
 | `daily_render_cap` | `2` | int ≥ 1 | Jobs requested per NY day (night + clicks). |
 | `daily_spend_cap_usd` | `20` | num ≥ 0 | Production spend per NY day. |
-| `per_week` (existing) | — | — | **Retired**: no longer editable, and `weeklyTick` stops requesting production jobs. Production comes only from the nightly fill or clicks. Weekly development stays. |
+| `per_week` (existing) | — | — | **Retired**: no longer editable, and `weeklyTick` stops requesting production jobs. Production comes only from the nightly fill or clicks. Development is the 22:00 nightly refill (MD-156). |
 
 `EDITABLE_KEYS` covers every typed key **except** `mode`, `per_week`, `publishing_live` and `require_approval`.
 The last two are written only by `writeDramaPosting`.
@@ -532,7 +532,7 @@ Progress: `AllProgress` gains `reel_ai_drama` (from `readDramaProgress`, with `t
 
 Type page and controls:
 - `ContentTypePage` drama branch: `generate` is `<DramaDevelopButton />` (POST `/api/reel-ai-drama/develop`, with a confirm showing
-  "one development session, up to $<weekly_dev_cap_usd>") plus a `Lab` link to `/reel-ai-drama/lab`.
+  "one development session, up to $<nightly_dev_cap_usd>") plus a `Lab` link to `/reel-ai-drama/lab`.
 - `settings` is `<PostingSettings type="reel_ai_drama" />` plus `<h3>Rendering</h3><ReelAiDramaSettingsForm />`. The form uses
   GET/POST `/api/reel-ai-drama/settings`, shows only `editable` keys, and reports `fields` errors inline. An empty number
   field is a validation error and is never sent as 0. Drama uses `TypeHub`.
@@ -677,7 +677,7 @@ until a host is picked.
 
 **Builder B (2026-11-08)**
 - Beyond the listed records, drama was added to `slots/schedule.ts SCHEDULE_ENTRIES`, the WeekBoard tray, `views/day-rank.ts DAY_TYPES` (today's cards) and `run-misses.ts` (failed pitch job today → that idea's card). Without them drama would have no calendar row or Content-page card.
-- Type page: an extra `components/content-type/ReelAiDramaHub.tsx` wraps `TypeHub` so a bench card gets a "Make it" button (`POST /api/reel-ai-drama/make {pitchId}`), the Explainers bench-action pattern. Generate is the Develop button (confirms the `weekly_dev_cap_usd` ceiling) plus a Lab link.
+- Type page: an extra `components/content-type/ReelAiDramaHub.tsx` wraps `TypeHub` so a bench card gets a "Make it" button (`POST /api/reel-ai-drama/make {pitchId}`), the Explainers bench-action pattern. Generate is the Develop button (confirms the `nightly_dev_cap_usd` ceiling) plus a Lab link.
 - `ReelAiDramaSettingsForm` hides `auto` and `posts_per_day`; the Posting panel above owns them (through `writeDramaPosting`).
 - Review tags are checked per vertical in `content-action.ts`: drama → `DRAMA_REVIEW_TAGS`, everything else → the old `FAILURE_TAGS` (Explainers unchanged).
 - The hub read skips drama (an empty read, no error) while `dramaSchemaReady` is false, so an unapplied schema doesn't mark the whole hub as partial. Waste and caching reads of drama are wrapped and fall back to nothing.
