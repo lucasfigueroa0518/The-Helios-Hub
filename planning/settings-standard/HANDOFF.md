@@ -13,6 +13,10 @@ Read first: `CLAUDE.md`, then `PLAN.md` (decisions D1–D19), `CONTRACT.md`, `BU
 - **Tests:** typecheck 0 errors; affected suites green; the only failures also fail before the build
   (explainers-render, reel-ai-drama-writing, revisions-explainers start-up recovery, a few that need local tools).
 
+- **D20 built (2026-11-22):** Settings covers nothing the Calendar covers: no daily limit (the calendar's slots are the
+  count, bounded by each type's fixed maximum), one Schedule line + "Edit in Calendar". Needs a social worker redeploy
+  (the slot scheduler reads the ceilings).
+
 ## To do (in order)
 1. ~~**Deploy the social worker**~~ — **done 2026-11-22 03:29 UTC**: all six units active, no restarts, no warnings. (All content-type workers + publisher run on `helios-social-worker`; the orchestration
    VM runs none of the changed code): on `main-l2xadw`, clean tree, gcloud logged in, `.env.local` present:

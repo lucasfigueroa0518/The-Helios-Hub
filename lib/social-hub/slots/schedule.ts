@@ -111,7 +111,7 @@ export function checkSchedule(
     seen.add(t.minute);
   }
   if (s.times.length > ctx.cap) {
-    add(errors, `${label} can post ${ctx.cap} a day. Raise the daily limit on the ${label} page to add more.`);
+    add(errors, `${label} can post at most ${ctx.cap} a day.`);
   }
   if (s.entry.vertical === 'last_few_days' && s.times.length > 1) add(errors, LFD_ONCE);
 
@@ -152,7 +152,7 @@ export function checkSchedule(
 /** The day chips' order: Monday first (days are 0 = Sunday). */
 export const DAY_ORDER: readonly number[] = [1, 2, 3, 4, 5, 6, 0];
 
-/** "Add a time" stays on below the type's daily cap; Last Few Days takes one time whatever its cap. */
+/** "Add a time" stays on below the type's fixed maximum (D20); Last Few Days takes one time whatever its cap. */
 export function canAddTime(s: TypeSchedule, cap: number): boolean {
   const most = s.entry.vertical === 'last_few_days' ? Math.min(1, cap) : cap;
   return s.times.length < most;

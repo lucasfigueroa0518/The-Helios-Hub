@@ -58,13 +58,11 @@ test('template: a plan covers 14 days and applies overrides at free minutes', as
   assert.deepEqual(loaded.get('2026-10-19')!.slice(0, 3).map((s) => [s.vertical, s.startMinute]), [['ai_trivia', 510], ['stories', 510], ['reels', 525]], 'a day reads in time order');
 });
 
-test('readCaps: the defaults, the stored values, and defaults on a bad value or a read error', async () => {
+test('readCaps: the fixed maxima, whatever the old daily_caps row holds (D20)', async () => {
   const { pg, q } = await db('template');
   assert.deepEqual(await readCaps(q), DEFAULT_CAPS);
   await pg.query(`UPDATE social_hub.settings SET value = '{"reels":2,"explainers":"lots","carousels":99}'::jsonb WHERE key = 'daily_caps'`);
-  assert.deepEqual(await readCaps(q), { ...DEFAULT_CAPS, reels: 2 });
-  await pg.query(`DELETE FROM social_hub.settings WHERE key = 'daily_caps'`);
-  assert.deepEqual(await readCaps(q), DEFAULT_CAPS);
+  assert.deepEqual(await readCaps(q), DEFAULT_CAPS, 'the stored limit is not read');
   assert.deepEqual(await readCaps(broken), DEFAULT_CAPS);
 });
 
@@ -79,24 +77,25 @@ test('readSeedInputs reads LFD and Stories days, defaults on missing rows', asyn
   assert.deepEqual(got.storyDays.ai_trivia, DEFAULT_SEED_INPUTS.storyDays.ai_trivia);
 });
 
-test('quotaFromSlots: null while legacy; template gives min(count, cap), following daily_caps', async () => {
+test('quotaFromSlots: null while legacy; template gives the slot count (D20: the old daily_caps row is not read)', async () => {
   const legacy = await db('legacy');
   assert.equal(await quotaFromSlots(legacy.q, 'reels', '2026-10-20'), null);
   assert.equal(await storiesSlotsOn(legacy.q, '2026-10-20'), null);
   const { pg, q } = await db('template');
-  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 3); // 3 slots, cap 5
+  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 3); // 3 slots
   await pg.query(`UPDATE social_hub.settings SET value = '{"reels":2}'::jsonb WHERE key = 'daily_caps'`);
-  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 2);
+  assert.equal(await quotaFromSlots(q, 'reels', '2026-10-20'), 3, 'a stale daily limit trims nothing');
   assert.equal(await quotaFromSlots(q, 'explainers', '2026-10-20'), 2);
 });
 
-test('storiesSlotsOn: every Stories-format type\'s slots on the date, each capped at its own limit (Morning Download 2, R25; the others 1, SS-24)', async () => {
+test('storiesSlotsOn: every Stories-format type\'s slots on the date, each within its own fixed maximum (Morning Download 10; Trivia and Real or AI? 1, SS-24; D20)', async () => {
   const { pg, q } = await db('template');
   const base = (await storiesSlotsOn(q, '2026-10-20'))!;
   await pg.query(`INSERT INTO social_hub.slot_override (ny_date, vertical, start_minute, series, action, feed_mode) VALUES
     ('2026-10-20', 'stories', 900, 'morning_download', 'add', NULL), ('2026-10-20', 'stories', 960, 'morning_download', 'add', NULL), ('2026-10-20', 'stories', 1020, 'morning_download', 'add', NULL)`);
   const got = (await storiesSlotsOn(q, '2026-10-20'))!;
-  assert.equal(got.filter((s) => s.series === 'morning_download').length, 2);
-  assert.equal(got.length, base.filter((s) => s.series !== 'morning_download').length + 2);
+  // D20: Morning Download's ceiling is its fixed maximum (10), so its 1 seeded slot and the 3 added are all made.
+  assert.equal(got.filter((s) => s.series === 'morning_download').length, 4);
+  assert.equal(got.length, base.filter((s) => s.series !== 'morning_download').length + 4);
   assert.ok(got.filter((s) => s.series !== 'morning_download').every((s) => s.vertical === s.series), 'Trivia and Real or AI? under their own types');
 });

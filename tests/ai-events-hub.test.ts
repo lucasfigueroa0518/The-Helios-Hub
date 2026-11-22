@@ -286,7 +286,7 @@ test('health: the public calendar snapshot is flagged stale after 8 days, on any
 test('posting: AI Events is a posting type with no daily quota; its pool goes stale after eight days, not three', async () => {
   assert.equal(isPostingType('ai_events'), true);
   await assert.rejects(() => writePosting('ai_events', { perDay: 1 }, 't'), /no daily quota/);
-  await assert.rejects(() => writePosting('ai_events', { cap: 3 }, 't'), /AI Events posts Miami and Boston, so its daily limit is 0 to 2/);
+  await assert.rejects(() => writePosting('ai_events', { cap: 3 }, 't'), /Calendar sets how many a day/);
   const sevenDaysAgo = new Date(SUN_NOON.getTime() - 7 * 86_400_000).toISOString();
   assert.equal(poolStale(sevenDaysAgo, SUN_NOON), true);
   assert.equal(poolStale(sevenDaysAgo, SUN_NOON, 'ai_events'), false);

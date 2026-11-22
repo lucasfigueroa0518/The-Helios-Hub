@@ -189,7 +189,7 @@ export function dropState(input: {
   const count = ctx.slots.filter((s) => s.vertical === vertical && (!isStoryVertical(vertical) || s.series === series) && !(input.ignore && sameSlotKey(s, input.ignore))).length;
   const fills = input.ready && ctx.slots.some((s) => sameSlotKey(s, { vertical, startMinute: minute, series }));
   const snappedTo = minute === snap.minute ? snap.snappedTo : null;
-  if (!fills && count >= cap) return { minute, snappedTo, tone: 'cap', tag: `${time} · At the daily limit for ${capName(vertical, series)} (${cap})`, reason: null };
+  if (!fills && count >= cap) return { minute, snappedTo, tone: 'cap', tag: `${time} · ${capName(vertical, series)} can post at most ${cap} a day`, reason: null };
   if (!isUsual(vertical, minute)) return { minute, snappedTo, tone: 'outside', tag: `${time} · outside usual window`, reason: null };
   return { minute, snappedTo, tone: 'usual', tag: snappedTo ? `${time} · usual ${snappedTo.toLowerCase()}` : time, reason: null };
 }

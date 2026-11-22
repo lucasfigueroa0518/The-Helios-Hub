@@ -54,21 +54,11 @@ export async function loadSlots(q: SlotQuery, from: string, to: string): Promise
   return out;
 }
 
-const isCap = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 10;
-
 /**
- * Each type's daily safety cap (spec §Safety cap), from social_hub.settings
- * 'daily_caps'. A missing row, a bad value or any read error gives that
- * type's default (times.ts DEFAULT_CAPS). Each Stories-format type has its own (SS-1).
+ * Each type's ceiling on slots a day: its fixed maximum (times.ts DEFAULT_CAPS). Since D20 the calendar's slots are
+ * the count, so the old adjustable limit (social_hub.settings 'daily_caps') is no longer read. Async and given the
+ * query so every caller stays as it was.
  */
-export async function readCaps(q: SlotQuery): Promise<Record<Vertical, number>> {
-  const out = { ...DEFAULT_CAPS };
-  try {
-    const { rows } = await q(`SELECT value FROM social_hub.settings WHERE key = 'daily_caps'`);
-    const stored = rows[0]?.value as Partial<Record<Vertical, unknown>> | undefined;
-    if (stored && typeof stored === 'object') {
-      for (const v of Object.keys(out) as Vertical[]) if (isCap(stored[v])) out[v] = stored[v] as number;
-    }
-  } catch { /* defaults */ }
-  return out;
+export async function readCaps(_q: SlotQuery): Promise<Record<Vertical, number>> {
+  return { ...DEFAULT_CAPS };
 }
