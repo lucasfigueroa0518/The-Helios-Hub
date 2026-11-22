@@ -215,6 +215,8 @@ export type TopicRow = {
   lesson_altitude: LessonAltitude | null;
   /** One sentence placing the concept in the system it belongs to. */
   lesson_map: string | null;
+  /** Its place in the syllabus (lib/explainers/ideas/curriculum.ts), set from the term on insert; null off the syllabus. */
+  syllabus_rank: number | null;
   source_url: string | null;
   source_text: string | null;
   origin: TopicOrigin;

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { CLOSE_EVENTS } from './close-timing.js';
 import { openerByKey } from './openers/bank.js';
 import { HANDOFF_FRAME, handoffByKey, handoffEvents } from './handoff-bank.js';
-import { chosenOpener, openerLine, openerVoice } from './openers/sound.mjs';
+import { chosenOpener } from './openers/sound.mjs';
 
 /** `- key: value` fields of one frame block, keys lowercased. */
 export function blockFields(block) {
@@ -109,30 +109,27 @@ export function storyboardTerm(root) {
 export const isBankOpener = (root, f) => Boolean(f) && f.number === OPENER_FRAME && Boolean(chosenOpener(root));
 
 /**
- * Write frame 1's module (one call into the bank, with the line's length and word times baked in)
- * and its sound events (none: the opener's stem carries its sound) for storyboard frame `f`.
- * Returns the opener's key, or null when the job chose none (frame 1 is then the worker's own).
+ * Write frame 1's module (one call into the bank) and its sound events (none: the opener's stem
+ * carries its sound) for storyboard frame `f`. Frame 1 is the whole hook before the voice (Lucas,
+ * 2026-11-21): the opener shows the AI 101 card (01-hook.js) and lands on frame 2, which it imports
+ * to uncover its first picture. Returns the opener's key, or null when the job chose none (frame 1 is
+ * then the worker's own).
  */
 export function writeOpener(root, f) {
   const key = chosenOpener(root);
   if (!key || !f?.id) return null;
-  // a silent hook (D124): no line, and the opener holds its wordmark to the cut
-  const silent = openerVoice(root) === 'silent';
-  const metaFile = join(root, 'audio_meta.json');
-  const line = !silent && existsSync(metaFile) ? openerLine(JSON.parse(readFileSync(metaFile, 'utf8'))) : null;
-  const voice = silent ? 0 : line?.voice > 0 ? line.voice : 3.8;
-  const words = (line?.words ?? []).map((w) => ({ text: String(w.text ?? '').trim(), start: w.start, end: w.end }));
   const dir = join(root, 'assets', 'frames');
   mkdirSync(dir, { recursive: true });
-  // hx-6: no teaser scene; the opener lands on the AI 101 card, which code writes as the hook
   writeFileSync(join(dir, `${HOOK_ID}.js`), lessonModule(key));
+  const next = projectFrames(root).find((x) => x.number === f.number + 1)?.id ?? null;
   const module = [
-    `// Frame 1 (EX3-102): the bank's "${openerByKey(key).name}" opener, landing on the AI 101 card (${HOOK_ID}.js).`,
+    `// Frame 1 (EX3-102): the bank's "${openerByKey(key).name}" opener: the AI 101 card (${HOOK_ID}.js), taken away onto frame 2${next ? ` (${next}.js)` : ''}.`,
     '// Written by code from assets/opener.json; never edit. Nobody builds frame 1.',
     `import * as hook from './${HOOK_ID}.js';`,
+    ...(next ? [`import * as next from './${next}.js';`] : []),
     "import { openerFrame } from '../kit/openers/index.js';",
     '',
-    `export default openerFrame(${JSON.stringify(key)}, { hook, voice: ${voice}, words: ${JSON.stringify(words)}, term: ${JSON.stringify(storyboardTerm(root))}${silent ? ', silent: true' : ''} });`,
+    `export default openerFrame(${JSON.stringify(key)}, { hook${next ? ', next' : ''}, term: ${JSON.stringify(storyboardTerm(root))} });`,
     '',
   ].join('\n');
   writeFileSync(join(dir, `${f.id}.js`), module);

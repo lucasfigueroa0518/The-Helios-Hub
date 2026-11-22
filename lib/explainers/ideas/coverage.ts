@@ -2,9 +2,9 @@ import type { TopicRow } from '@/lib/explainers/types';
 
 /**
  * The coverage map (planning/Explainer Reels/ideas-coverage/PLAN.md, approved 2026-11-03). Thirteen buckets of
- * idea categories, seven AI and six computer-science, each with the concepts it still has to teach. Code picks
- * tonight's buckets (least covered first, 2 AI : 1 CS) and the generator proposes inside them; dedupe looks at a
- * candidate's own bucket. Concept lists are guidance: an idea may fit a bucket without being on its list.
+ * idea categories, seven AI and six computer-science. Since the curriculum (2026-11-21) the syllabus (curriculum.ts)
+ * assigns tonight's topics and sets the AI/CS mix; each idea still labels its bucket, and dedupe looks at a
+ * candidate's own bucket. Concept lists are guidance only.
  */
 
 export type Bucket = { id: string; name: string; kind: 'ai' | 'cs'; concepts: readonly string[] };
@@ -99,51 +99,4 @@ export function topicBucket(topic: Pick<TopicRow, 'bucket' | 'term' | 'title'>):
   if (topic.bucket && bucketById(topic.bucket)) return topic.bucket;
   const byTerm = topic.term ? RENDERED_BUCKETS[topic.term.trim().toLowerCase()] : undefined;
   return byTerm ?? RENDERED_BUCKETS[topic.title.trim().toLowerCase()] ?? null;
-}
-
-/** How covered each bucket is: renders inside the coverage window, and the last render ever (ISO, null if none). */
-export type BucketCoverage = Record<string, { renders: number; lastRenderedAt: string | null }>;
-
-/** Coverage from rendered topics (any age): `windowDays` counts renders, the newest render breaks ties. */
-export function bucketCoverage(
-  rendered: readonly Pick<TopicRow, 'bucket' | 'term' | 'title' | 'rendered_at'>[],
-  now: Date = new Date(),
-  windowDays = 120,
-): BucketCoverage {
-  const coverage: BucketCoverage = Object.fromEntries(BUCKET_IDS.map((id) => [id, { renders: 0, lastRenderedAt: null }]));
-  const since = now.getTime() - windowDays * 86_400_000;
-  for (const topic of rendered) {
-    const id = topicBucket(topic);
-    if (!id || !topic.rendered_at) continue;
-    const at = new Date(topic.rendered_at);
-    const entry = coverage[id];
-    if (at.getTime() >= since) entry.renders += 1;
-    if (!entry.lastRenderedAt || at.getTime() > new Date(entry.lastRenderedAt).getTime()) entry.lastRenderedAt = at.toISOString();
-  }
-  return coverage;
-}
-
-/**
- * Tonight's buckets: least renders in the window first, then the oldest last render (never rendered first), then
- * the map's order; `ai` AI buckets then `cs` CS ones.
- */
-export function pickBuckets(coverage: BucketCoverage, counts: { ai: number; cs: number } = { ai: 2, cs: 1 }): Bucket[] {
-  const of = (id: string) => coverage[id] ?? { renders: 0, lastRenderedAt: null };
-  const last = (id: string) => {
-    const at = of(id).lastRenderedAt;
-    return at ? new Date(at).getTime() : -Infinity;
-  };
-  const ranked = BUCKETS.map((b, i) => ({ b, i })).sort(
-    (x, y) => of(x.b.id).renders - of(y.b.id).renders || last(x.b.id) - last(y.b.id) || x.i - y.i,
-  );
-  return [
-    ...ranked.filter((r) => r.b.kind === 'ai').slice(0, counts.ai),
-    ...ranked.filter((r) => r.b.kind === 'cs').slice(0, counts.cs),
-  ].map((r) => r.b);
-}
-
-/** A bucket's concepts no rendered topic has taught yet (compared as normalized terms). */
-export function conceptsToTeach(bucket: Bucket, rendered: readonly Pick<TopicRow, 'term' | 'title'>[]): string[] {
-  const taught = new Set(rendered.flatMap((t) => [normalizeTerm(t.term), normalizeTerm(t.title)]));
-  return bucket.concepts.filter((c) => !taught.has(normalizeTerm(c)));
 }

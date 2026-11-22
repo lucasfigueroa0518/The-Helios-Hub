@@ -214,10 +214,10 @@ test('openers and the close draw with no wobble filter', async () => {
   const { openerTiming } = await import('../explainers/world-kit/openers/bank.js');
   const hook = { ground: 'paper', shots: [], hero: null, draw: () => '' };
   for (const [key, draw] of Object.entries(DRAW as Record<string, (t: number, ctx: unknown) => string>)) {
-    const M = openerTiming(key, 3, [{ text: 'this', start: 1.36 }]);
-    for (const t of [0.1, M.breakAt - 0.05, M.breakAt + 0.3]) {
+    const M = openerTiming(key);
+    for (const t of [0.1, M.exitAt - 0.05, M.exitAt + 0.1]) {
       D.scope('f01-', 'paper');
-      const svg = draw(t, { hook, M, term: 'prompt caching' });
+      const svg = draw(t, { key, hook, next: null, M, term: 'prompt caching' });
       assert.ok(!/NaN|undefined/.test(svg), `${key} ${t}`);
       assert.doesNotMatch(svg, /url\(#f01-wobble\)/, `${key} ${t}`);
     }
@@ -234,13 +234,12 @@ test('no opener in the bank draws the title card (4.3: the visual hook owns the 
   const heroes = [null, { at: [600, 1400], s: 1.4, who: 'hero', critter: { body: 'orange' } }];
   assert.deepEqual(Object.keys(DRAW).sort(), OPENERS.map((o: { key: string }) => o.key).sort());
   for (const { key } of OPENERS as { key: string }[]) {
-    const M = openerTiming(key, 3.2, [{ text: 'this', start: 1.2 }]);
-    assert.ok(M.titleAt >= M.breakAt, `${key}: its timing is unchanged`);
+    const M = openerTiming(key);
     for (const hero of heroes) {
       const hook = { ground: 'paper', shots: [], hero, draw: () => '' };
-      for (const t of [0.2, M.titleAt + 0.3, M.duration - 0.05]) {
+      for (const t of [0.2, M.cardIn + 0.1, M.duration - 0.05]) {
         D.scope('f01-', 'paper');
-        const svg = (DRAW as Record<string, (t: number, ctx: unknown) => string>)[key](t, { hook, M, term });
+        const svg = (DRAW as Record<string, (t: number, ctx: unknown) => string>)[key](t, { key, hook, next: null, M, term });
         assert.doesNotMatch(svg, /data-role="title"/, `${key}: a title card at ${t}s`);
         assert.ok(!svg.includes(`data-text="${term}"`), `${key}: the term at ${t}s`);
       }

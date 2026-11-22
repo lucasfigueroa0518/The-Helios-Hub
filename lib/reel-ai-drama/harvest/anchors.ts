@@ -17,11 +17,24 @@ export function garbledAssetIds(problems: readonly { asset_id: string; why: stri
 
 export const isGarbledAsset = (a: Pick<Asset, 'flags'>) => a.flags.some((f) => f === 'garbled' || f.startsWith('garbled:'));
 
+/** The look's flag for a picture that isn't a photograph (a drawing, a graphic, a photo reworked into artwork). */
+export const NOT_PHOTO = 'not_photo';
+
+/**
+ * A picture a person can be anchored on or cut out of: a photograph, with no sign of a second face. The face
+ * detector and the look count faces separately; a `group_photo` flag means the look saw more than one, and the
+ * picture counts as a group however few faces the detector boxed. A picture framed on a secondary person, or no
+ * longer standing for one (`subject:`, subject.ts), is never solo either.
+ */
+export function isSoloPhoto(a: { flags: readonly string[] }): boolean {
+  return !a.flags.includes(NOT_PHOTO) && !a.flags.some((f) => /^(group_photo|subject):/.test(f));
+}
+
 const PORTRAIT_KINDS = new Set<Asset['kind']>(['person_photo', 'event_photo', 'archival', 'video_frame']);
 
 /**
- * How good a replacement anchor `a` is for `name`, or null: a verified solo picture of them that isn't
- * garbled or text-heavy. A cutout first (banked or cut), then a photo with a face box, then size; a sketch last.
+ * How good a replacement anchor `a` is for `name`, or null: a verified solo photograph of them that isn't
+ * garbled or text-heavy (`isSoloPhoto`). A cutout first (banked or cut), then a photo with a face box, then size; a sketch last.
  */
 export function assetAnchorScore(a: Asset, name: string): number | null {
   if (isGarbledAsset(a) || !PORTRAIT_KINDS.has(a.kind) || a.people.length !== 1 || a.people[0] !== name) return null;
@@ -30,7 +43,7 @@ export function assetAnchorScore(a: Asset, name: string): number | null {
   if (a.made) return null;
   const cutout = a.flags.includes('cutout');
   if (!cutout && !a.flags.includes('identity:verified')) return null;
-  if (a.flags.some((f) => /^group_photo:/.test(f))) return null;
+  if (!isSoloPhoto(a)) return null;
   let s = cutout ? 100 : 1;
   if (a.face) s += 2;
   s += Math.min(Math.min(a.width, a.height), 1600) / 800;

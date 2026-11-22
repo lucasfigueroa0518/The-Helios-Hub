@@ -1,198 +1,119 @@
-// The opener bank (EX3-102): the animated intros Lucas kept from the two review batches of
-// 2026-10-19 (planning/Explainer Reels/intros/INTROS.md). Every reel opens on one of them, drawn
-// at random, never one of the last HISTORY reels' openers.
+// The opener bank (EX3-102): the animated intros every reel opens on, drawn at random, never one
+// of the last HISTORY reels' openers.
+//
+// The opener is everything before the voice (Lucas, 2026-11-21). It shows "AI 101" with its
+// education icon (lesson.js, the opener's own card) in its first frames, holds the whole card for
+// at least CARD_HOLD, then its action takes the card away (a tear, a pull, a pop) and lands on frame
+// 2, the definition beat, where the voice starts. The opener never lands on "AI 101" a second time.
+// The whole hook lasts OPENER_BASE (0.8 s); a few run to OPENER_MAX (1.0 s). It is always silent: no voice line plays over it.
 //
 // This file is plain data and arithmetic (no imports), so Node (pace, the sound stem, the
-// worker's pick) and the browser (the frames) read the same timings. Every time is on the
-// opener's own clock (frame 1, from 0). `voiceAt` is when the opener line starts: pace.mjs puts
-// that much silence before frame 1's voice. `timing(voice, words)` gives the moments the picture
-// and the sound share, for a line of `voice` seconds whose words are `words` ([{ text, start }],
-// from the line's own start).
+// worker's pick) and the browser (the frames) read the same timings. Every time is on frame 1's
+// clock, from 0. Each opener's `timing()` gives its moments; three are shared by every opener:
+//   cardIn   "AI 101" and its icon are whole on screen
+//   exitAt   the action that takes the card away starts (at least CARD_HOLD after cardIn)
+//   end      frame 2 is uncovered: frame 1 ends here (at most OPENER_MAX)
+// The rest are the opener's own beats, which its drawing and its score share.
 
 /** How many of the latest reels' openers the next reel may not repeat (Lucas, 2026-10-19). */
 export const HISTORY = 8;
 
-/** Frame 1's hold after the line (pace.mjs HOLD). */
-const HOLD = 0.15;
-/** A silent hook (D125, `opener_voice: 'silent'`): the AI 101 wordmark stays readable this
- *  long before the cut, once fully on screen. */
-export const WORDMARK_READ = 1.5;
-/** A silent hook never runs shorter than this (D125: about 3–4 s, long enough to draw the viewer in). */
-export const SILENT_MIN = 3.0;
-/** A silent opener with no wordmark keeps its last picture this long after its animation. */
-export const NO_MARK_TAIL = 0.6;
-/** slamMark (common.js) is fully on screen this long after its `at`. */
-export const SLAM_IN = 0.24;
+/**
+ * The whole hook before the voice, at most. Lucas, 2026-11-21: 0.8 s; 2026-11-22: the critter, balloon,
+ * blocks and paper-plane openers read better 0.2 s longer (STRETCHED), so the cap is 1.0 s for those.
+ */
+export const OPENER_MAX = 1.0;
+/** The usual length of an opener; only the ones Lucas lengthened run past it (2026-11-22). */
+export const OPENER_BASE = 0.8;
+/** "AI 101" with its icon stays whole on screen at least this long (Lucas, 2026-11-21). */
+export const CARD_HOLD = 0.4;
 const r3 = (n) => Math.round(n * 1000) / 1000;
 
-/** When the opener line's first "this" starts (the template's slot word), from the line's start. */
-function thisAt(words, fallback = 1.36) {
-  const w = (words ?? []).find((x) => /^this\b/i.test(String(x.text ?? '').trim()));
-  return Number.isFinite(w?.start) ? w.start : fallback;
-}
-
-/** Beats in a row (the letters of AI 101, the blocks, the snips…). */
+/** Beats in a row (the letters of AI 101, the blocks…). */
 const beats = (n, first, every) => Array.from({ length: n }, (_, i) => r3(first + i * every));
+
+/** Every moment of `M` played `k` times slower (an opener stretched as a whole, its feel kept). */
+const slower = (k, M) => JSON.parse(JSON.stringify(M), (_, v) => (typeof v === 'number' ? r3(v * k) : v));
+/** Lucas, 2026-11-22: these play 0.2 s longer than OPENER_BASE (0.8 → 1.0 s), evenly. */
+const STRETCHED = 1.25;
 
 export const OPENERS = [
   {
     key: 'paper-rip',
     name: 'Paper Rip',
-    voiceAt: 0.4,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.breakAt + 0.25,
-    end: (m) => m.breakAt + 0.55,
-    slamAt: (m) => m.breakAt + 0.3,
-    timing: () => ({ breakAt: 0.4 }),
-  },
-  {
-    key: 'record-scratch',
-    name: 'Record Scratch Freeze',
-    voiceAt: 1.0,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.unfreezeAt + 0.15,
-    end: (m) => m.unfreezeAt + 0.35,
-    wordmarkAt: (m) => m.voiceAt + 0.16,
-    // silent (no line, so no "this"): it unfreezes 1s after the sticker
-    timing: (voice, words, silent) => ({ breakAt: 0.7, unfreezeAt: silent ? 2.0 : r3(1.0 + thisAt(words)) }),
+    // the sheet with AI 101 and the pencil; the pencil taps down, the sheet strains, rips, its halves fly off
+    timing: () => ({ cardIn: 0.12, strainAt: 0.34, exitAt: 0.56, end: 0.8 }),
   },
   {
     key: 'typewriter',
     name: 'Typewriter',
-    voiceAt: 0,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.zipEnd,
-    end: (m) => m.zipEnd,
-    slamAt: (m) => m.zipEnd - 0.1,
+    // AI 101 typed on the ruled sheet, the books drop onto it, a ding, the sheet is pulled up
     timing: () => {
-      // the five letters of AI 101 (hx-6; was the twelve of AI BRAIN BREAK)
-      const keys = beats(5, 0.08, 0.15);
-      const ding = r3(keys[keys.length - 1] + 0.1);
-      return { breakAt: ding, keys, dropAt: r3(ding + 0.04), zipEnd: r3(ding + 0.36) };
+      const keys = beats(5, 0.02, 0.03);
+      return { keys, books: [0.14, 0.26], cardIn: 0.26, ding: 0.3, exitAt: 0.66, end: 0.8 };
     },
-  },
-  {
-    key: 'big-bang',
-    name: 'Big Bang',
-    voiceAt: 0.6,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.breakAt + 1.1,
-    end: (m) => m.breakAt + 0.76,
-    wordmarkAt: (m) => m.breakAt + SLAM_IN,
-    timing: () => ({ breakAt: 0.6 }),
   },
   {
     key: 'knock-knock',
     name: 'Knock Knock',
-    voiceAt: 0.62,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.duck[1] + 0.1,
-    end: (m) => m.duck[1] + 0.1,
-    wordmarkAt: (m) => m.writeAt[1],
-    timing: () => ({ breakAt: 0.32, knocks: [0.32, 0.52], point: 0.66, writeAt: [0.68, 1.15], duck: [1.18, 1.42] }),
+    // the scholar knocks on the screen while AI 101 and its icon write out at the top; the sheet drops away
+    timing: () => slower(STRETCHED, { write: [0, 0.22], knocks: [0.06, 0.24, 0.42], cardIn: 0.24, exitAt: 0.66, end: 0.8 }),
+  },
+  {
+    key: 'big-bang',
+    name: 'Big Bang',
+    // the card slams in, trembles as the charge builds, and blows apart
+    timing: () => ({ slam: [0, 0.12], cardIn: 0.14, exitAt: 0.58, end: 0.8 }),
   },
   {
     key: 'eye-zoom',
-    name: 'Eye Zoom-Out',
-    voiceAt: 0.5,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.landAt + 1.15,
-    end: (m) => m.landAt + 0.4,
-    wordmarkAt: (m) => m.landAt + SLAM_IN,
-    timing: () => ({ breakAt: 0.5, blink: [0.34, 0.46], zoom: [0.5, 0.92], landAt: 0.92 }),
+    name: 'Eye Zoom',
+    // AI 101 writes beside the scholar, who blinks; the camera dives into its eye, frame 2 inside the pupil
+    timing: () => slower(STRETCHED, { write: [0, 0.2], cardIn: 0.2, blink: [0.42, 0.52], exitAt: 0.6, end: 0.8 }),
   },
   {
     key: 'balloon-pop',
     name: 'Balloon Pop',
-    voiceAt: 0.72,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.breakAt + 0.25,
-    end: (m) => m.breakAt + 0.9,
-    slamAt: (m) => m.breakAt + 0.3,
-    timing: () => ({ breakAt: 0.72, gulps: [[0, 0.22, 0.45], [0.24, 0.44, 0.75], [0.46, 0.68, 1.12]] }),
+    // a balloon printed with AI 101 and its icon puffs up in three gulps, swells, and pops
+    timing: () => slower(STRETCHED, { gulps: [[0, 0.07], [0.08, 0.15], [0.16, 0.24]], cardIn: 0.24, exitAt: 0.64, end: 0.8 }),
   },
   {
     key: 'block-drop',
     name: 'Block Drop',
-    voiceAt: 0,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.breakAt + 0.3,
-    end: (m) => m.breakAt + 0.9,
-    slamAt: (m) => m.breakAt + 0.35,
-    timing: () => {
-      // five blocks: 1 0 1, then A I on top (hx-6)
-      const lands = beats(5, 0.1, 0.16);
-      const last = lands[lands.length - 1];
-      const wobble = [r3(last + 0.12), r3(last + 0.42)];
-      return { breakAt: wobble[1], lands, fall: 0.13, wobble };
-    },
+    // five blocks drop in as AI 101, the apple block last; the floor gives and they tumble out of frame
+    timing: () => slower(STRETCHED, { lands: beats(6, 0, 0.04), cardIn: 0.24, exitAt: 0.64, end: 0.8 }),
   },
   {
     key: 'unboxing',
     name: 'Unboxing',
-    voiceAt: 0.48,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.dive[1],
-    end: (m) => m.dive[1] + 0.3,
-    slamAt: (m) => m.dive[1],
-    timing: () => ({ breakAt: 0.48, cut: [0.1, 0.42], open: [0.48, 0.66], short: [0.56, 0.76], dive: [0.82, 1.22] }),
+    // a box labelled AI 101 with its icon lands; a knife slits the tape, the flaps open, the camera dives in
+    timing: () => ({ land: [0, 0.14], cardIn: 0.16, exitAt: 0.56, open: [0.56, 0.66], dive: [0.66, 0.8], end: 0.8 }),
   },
   {
     key: 'paper-plane',
     name: 'Paper Plane',
-    voiceAt: 0.46,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.peel[0] + 0.2,
-    end: (m) => m.peel[1],
-    slamAt: (m) => m.peel[1] - 0.1,
-    timing: () => ({ breakAt: 0.46, unfold: [0.74, 0.98], peel: [1.42, 1.8] }),
+    // the sheet with AI 101 and its icon slides in, folds into a plane and flies off; the fold and the
+    // flight get 0.2 s more so the plane reads as a plane (Lucas, 2026-11-22)
+    timing: () => ({ slide: [0, 0.12], cardIn: 0.14, exitAt: 0.56, fold: [0.56, 0.76], fly: [0.76, 1.0], end: 1.0 }),
   },
   {
     key: 'scissors',
     name: 'Scissors Cut-Out',
-    voiceAt: 0.08,
-    /** When the title card starts (it lands TITLE_LANDS later, with the term): after the break. */
-    title: (m) => m.drop[1] - 0.1,
-    end: (m) => m.drop[1] + 0.35,
-    wordmarkAt: () => null,
-    timing: () => ({ breakAt: 0.86, snips: beats(8, 0.1, 0.095), lift: [0.86, 1.0], fall: [0.92, 1.3], drop: [1.02, 1.42] }),
+    // scissors snip round the printed card, then the cut-out lifts away
+    timing: () => ({ cardIn: 0.06, snips: beats(8, 0.08, 0.055), exitAt: 0.56, end: 0.8 }),
   },
 ];
 
+/** Openers taken out of the bank, kept in openers/archive/ (Record Scratch: its frozen-critter hook no longer fits, Lucas 2026-11-21). */
+export const ARCHIVED_OPENERS = ['record-scratch'];
+
 export const OPENER_KEYS = OPENERS.map((o) => o.key);
 
-/**
- * The openers an object-led reel draws from (EX3-111; Lucas, 2026-10-22): the seven that never cut
- * out, freeze on, or zoom into the hook's critter (Eye Zoom-Out, Knock Knock, Record Scratch and
- * Scissors do), so they work over a hook whose hero is an object.
- */
-export const OBJECT_HERO_OPENERS = ['paper-rip', 'typewriter', 'big-bang', 'balloon-pop', 'block-drop', 'unboxing', 'paper-plane'];
+/** Every opener now works over any reel (none touches the reel's hero); kept for the sound's pick. */
+export const OBJECT_HERO_OPENERS = OPENER_KEYS;
 
 /** The bank entry for `key`, or null. */
 export const openerByKey = (key) => OPENERS.find((o) => o.key === key) ?? null;
-
-/**
- * When each opener uncovers the hook for good, in seconds from frame 1's start (Explainers 4.1,
- * round 2): the opener over a hook that paints the whole frame, rendered in headless Chrome every
- * 0.1s; the first moment from which at least 60% of the safe area shows the hook to the end of the
- * frame (an opener may flash the hook first and cover it again: record-scratch, paper-plane).
- * Measured 2026-10-27 with a 3.8s opener line (the openers' choreography before the line does not
- * depend on it). The hook's own first change is judged from here, and the picture check's first
- * frame-1 still waits for it (snap.mjs sequences). Re-measure when an opener's timing changes.
- */
-export const HOOK_REVEAL = Object.freeze({
-  'paper-rip': 0.5,
-  'record-scratch': 2.4,
-  typewriter: 1.3,
-  'big-bang': 0.7,
-  'knock-knock': 1.4,
-  'eye-zoom': 0.5,
-  'balloon-pop': 0.8,
-  'block-drop': 1.6,
-  unboxing: 0.6,
-  'paper-plane': 1.7,
-  scissors: 1.3,
-});
 
 /**
  * The hero's kind from STORYBOARD.md's `## Anchor scene` (`- hero: <entity id> — critter | object`,
@@ -205,36 +126,20 @@ export function storyboardHeroKind(storyboard) {
 }
 
 /**
- * The full timing of opener `key` for a line of `voice` seconds: every moment from its
- * timing(), plus `voiceAt`, `voice` (the line's length), `duration` (frame 1's length, as
- * pace.mjs makes it: the lead, the line, the hold) and `titleAt` (when the title card with the
- * term starts, after the break; it lands cards.js TITLE_LANDS later).
- *
- * `silent` (D124, D125; settings `opener_voice: 'silent'`): frame 1 has no line. `voice` is 0, and
- * frame 1 lasts the opener's animation (`end`), or the wordmark fully on screen (`wordmarkAt`) plus
- * WORDMARK_READ, whichever is later, plus HOLD; an opener with no wordmark lasts its `end` plus
- * NO_MARK_TAIL. An opener whose own wordmark leaves before the end (paper-rip, typewriter…) declares
- * `slamAt`: it slams the wordmark over the hook there (common.js silentMark), held to the cut, and
- * its `wordmarkAt` is slamAt + SLAM_IN. M then also carries `silent`, `end`, `wordmarkAt`, `slamAt`.
+ * The full timing of opener `key`: its moments, plus `duration` (frame 1's length: its `end`),
+ * `silent` (always) and `voice` 0. The voice arguments of earlier versions are accepted and ignored:
+ * frame 1 never speaks.
  */
-/** @returns {{ key: string, voiceAt: number, voice: number, duration: number, breakAt: number, titleAt: number, [moment: string]: any }} */
-export function openerTiming(key, voice, words = [], { silent = false } = {}) {
+/** @returns {{ key: string, voice: 0, voiceAt: 0, silent: true, duration: number, cardIn: number, exitAt: number, end: number, [moment: string]: any }} */
+export function openerTiming(key, _voice = 0, _words = [], _opts = {}) {
   const o = openerByKey(key);
   if (!o) throw new Error(`no opener "${key}" in the bank (${OPENER_KEYS.join(', ')})`);
-  if (silent) {
-    const base = { key, voiceAt: o.voiceAt, voice: 0, ...o.timing(0, [], true) };
-    const end = r3(o.end(base));
-    const slamAt = o.slamAt ? r3(o.slamAt(base)) : null;
-    const markAt = slamAt !== null ? r3(slamAt + SLAM_IN) : o.wordmarkAt(base);
-    const wordmarkAt = Number.isFinite(markAt) ? r3(markAt) : null;
-    const duration = r3(Math.max(SILENT_MIN, wordmarkAt !== null ? Math.max(end, wordmarkAt + WORDMARK_READ) + HOLD : end + NO_MARK_TAIL));
-    const M = { ...base, duration, silent: true, end, wordmarkAt, slamAt };
-    return { ...M, titleAt: r3(o.title(M)) };
-  }
-  const M = { key, voiceAt: o.voiceAt, voice: r3(voice), duration: r3(o.voiceAt + voice + HOLD), ...o.timing(voice, words) };
-  // every opener ends on the title card with the term (EX3-102): `titleAt` is when it starts
-  return { ...M, titleAt: r3(o.title(M)) };
+  const M = o.timing();
+  return { key, voice: 0, voiceAt: 0, silent: true, ...M, duration: r3(M.end) };
 }
+
+/** When frame 1's card is whole, from frame 1's start: the picture check's first frame-1 still waits for it (snap.mjs). */
+export const hookRevealAt = (key) => openerTiming(key).cardIn;
 
 /**
  * The next reel's opener: a random one of `pool` that none of the `recent` reels used (newest

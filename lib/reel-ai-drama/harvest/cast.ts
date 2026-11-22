@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import type { VisualKind } from '@/lib/reel-ai-drama/types';
 
+import { isSoloPhoto } from './anchors';
 import { namesIn, type Look } from './filters';
 import type { CastPerson } from './plan';
 import type { FaceBox, SourceName } from './types';
@@ -60,7 +61,7 @@ export function showsPerson(c: CastCand, name: string): boolean {
 
 /**
  * How good an anchor this picture is for `name`, or null when it can't be one. An anchor is a confirmed
- * solo picture of them: identity verified, one person, one face, not a page of text. A banked cutout is
+ * solo photograph of them: identity verified, one person, one face by every count (`isSoloPhoto`), not a page of text. A banked cutout is
  * their approved character image and always wins (MD-41). Otherwise: a clean portrait, a face of a
  * useful size near the middle, resolution, a person shot over an event shot, recency.
  */
@@ -68,7 +69,7 @@ export function anchorScore(c: CastCand, name: string): number | null {
   if (!showsPerson(c, name) || !isVerified(c) || c.people.length !== 1 || c.look?.text_heavy || c.look?.garbled || isGarbled(c)) return null;
   if (c.made_kind === 'sketch') return 0;
   if (isCutout(c)) return 100;
-  if (faceCount(c) !== 1) return null;
+  if (faceCount(c) !== 1 || !isSoloPhoto(c)) return null;
   let score = 0;
   if (c.look?.portrait) score += 3;
   if (c.face) {
@@ -104,7 +105,7 @@ function namesPerson(c: CastCand, name: string): boolean {
 
 /**
  * The best photo to trace a sketch of `name` from: any picture that names them and shows a face, usable
- * or rejected for a reason unrelated to identity (a watermark doesn't change who is in it). Solo pictures
+ * or rejected for a reason unrelated to identity (a watermark doesn't change who is in it). Solo photographs
  * only; a counted face first, then usable over rejected, then size. Never an AI-made picture.
  */
 export function sketchReference<T extends CastCand>(cands: readonly T[], name: string): T | null {
@@ -114,8 +115,8 @@ export function sketchReference<T extends CastCand>(cands: readonly T[], name: s
     if (c.reject && !TRACEABLE.test(c.reject)) continue;
     if (!namesPerson(c, name)) continue;
     const faces = faceCount(c);
-    // A group photo can't say which face is theirs: trace solo pictures only.
-    if (faces !== null && faces !== 1) continue;
+    // A group photo can't say which face is theirs, and a graphic traces as one: solo photographs only.
+    if ((faces !== null && faces !== 1) || !isSoloPhoto(c)) continue;
     if (!fs.existsSync(c.file)) continue;
     const s = (faces === 1 ? 4 : 0) + (c.people.length === 1 ? 1 : 0) + (c.reject ? 0 : 2) + (c.flags.includes('identity:verified') ? 1 : 0) + Math.min(Math.min(c.width ?? 0, c.height ?? 0), 1200) / 1200;
     if (!best || s > best.s) best = { c, s };

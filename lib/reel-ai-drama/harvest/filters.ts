@@ -1,5 +1,6 @@
 import sharp from 'sharp';
 
+import type { NamedRole, NamedSide } from './subject';
 import { hamming, NEAR_DUPLICATE } from '@/lib/photos/hash-distance';
 
 import { siteOf } from '@/lib/reel-ai-drama/reporting/validate';
@@ -157,6 +158,11 @@ export type Look = {
   text_heavy: boolean;
   about_story: boolean;
   key_moment: boolean;
+  /** A camera's picture, not a drawing, a graphic or a photo reworked into artwork; absent (older looks) counts as a photograph. */
+  photograph?: boolean;
+  /** How the named person sits in the picture, and the third they stand in when someone else leads it (subject.ts). */
+  named_role?: NamedRole;
+  named_side?: NamedSide;
   /** One person's face is the clean, clear subject (anchor material, MD-60). */
   portrait?: boolean;
   /** The file is broken: shuffled or misplaced tiles, blocks of wrong or missing pixels, a half-decoded picture. */
