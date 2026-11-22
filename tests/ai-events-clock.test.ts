@@ -9,6 +9,7 @@ import { firstAiEventsCheckAt, nextAiEventsRunAt, noonQueue } from '@/lib/ai-eve
 import { AI_EVENTS_WINDOW } from '@/lib/ai-events/config';
 import { queueManualAiEventsRun, AI_EVENTS_ALREADY_QUEUED } from '@/lib/ai-events/manual';
 import { aiEventsDueOn, parseAiEventsSettings, readAiEventsSettings } from '@/lib/ai-events/settings';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 
 import { openAiEventsDb } from './fixtures/ai-events/seed';
 
@@ -17,9 +18,10 @@ const on = parseAiEventsSettings([{ key: 'auto_run', value: true }]);
 test('settings ship safe: Sunday only, approval on, publishing and the clock off, a $0.50 cap', async () => {
   const { query } = await openAiEventsDb();
   const s = await readAiEventsSettings(query);
-  assert.deepEqual(s, { autoRun: false, publishingLive: false, requireApproval: true, days: [0], runCapUsd: 0.5, runCapRaw: 0.5 });
+  assert.deepEqual(s, { autoRun: false, publishingLive: false, requireApproval: true, refillCapUsd: REFILL_CAP_DEFAULT_USD.ai_events, days: [0], runCapUsd: 0.5, runCapRaw: 0.5 });
   assert.deepEqual(parseAiEventsSettings([]).days, [0], 'no days row: Sunday');
-  assert.equal(parseAiEventsSettings([{ key: 'require_approval', value: 'no' }]).requireApproval, true, 'on unless literally false');
+  assert.equal(parseAiEventsSettings([{ key: 'require_approval', value: 'no' }]).requireApproval, true, 'always on (D16)');
+  assert.equal(parseAiEventsSettings([{ key: 'require_approval', value: false }]).requireApproval, true, 'a stored false is never read as false (D16)');
   assert.equal(parseAiEventsSettings([{ key: 'run_cap_usd', value: 'abc' }]).runCapUsd, null);
   assert.equal(parseAiEventsSettings([{ key: 'run_cap_usd', value: true }]).runCapUsd, null);
   assert.deepEqual(parseAiEventsSettings([{ key: 'days', value: [9] }]).days, [0], 'a bad days row falls back');
@@ -32,18 +34,21 @@ test('the clock wakes at 12:00 PM New York, across the DST change', () => {
   assert.equal(nextAiEventsRunAt(new Date('2026-11-01T12:00:00Z')).toISOString(), '2026-11-01T17:00:00.000Z', 'noon EST after the change');
 });
 
-test('noon queues a run on Sunday only, with auto_run on and a usable cap', () => {
+test('noon queues a run on Sunday only, in every state: it renders only with auto_run on and a usable cap (D16)', () => {
   const sunday = new Date('2026-10-25T16:00:00Z');
-  assert.deepEqual(noonQueue(sunday, on), { queue: true, reason: 'an AI Events day' });
+  assert.deepEqual(noonQueue(sunday, on), { queue: true, make: true, reason: 'an AI Events day' });
   for (const day of ['2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31']) {
     const at = new Date(`${day}T16:00:00Z`);
     assert.equal(noonQueue(at, on).queue, false, day);
     assert.match(noonQueue(at, on).reason, /not an AI Events day/);
   }
-  assert.match(noonQueue(sunday, parseAiEventsSettings([])).reason, /auto_run is off/);
+  // Paused: the week is still ranked (the refill), nothing is rendered.
+  const paused = noonQueue(sunday, parseAiEventsSettings([]));
+  assert.deepEqual([paused.queue, paused.make], [true, false]);
+  assert.match(paused.reason, /paused, so the run only ranks the week \(refill\)/);
   assert.match(noonQueue(sunday, null).reason, /could not be read/);
   const badCap = noonQueue(sunday, parseAiEventsSettings([{ key: 'auto_run', value: true }, { key: 'run_cap_usd', value: 0 }]));
-  assert.equal(badCap.queue, false);
+  assert.deepEqual([badCap.queue, badCap.make], [true, false]);
   assert.match(badCap.reason, /run_cap_usd/);
   // Saturday 11 PM ET is Sunday in UTC: the New York date decides.
   assert.equal(noonQueue(new Date('2026-10-25T03:00:00Z'), on).queue, false);

@@ -1,18 +1,19 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { developmentSpendSince } from '@/lib/reel-ai-drama/cost';
+import { readDramaGate } from '@/lib/reel-ai-drama/gate';
 import { loadSettings, type ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import type { PitchRow } from '@/lib/reel-ai-drama/types';
 
 /**
- * The weekly clock (MD-28). Off unless `settings.auto`. Once a week, under the weekly development cap: one
- * development session. Production no longer comes from here (HUB-WIRING-CONTRACT.md §1.1: `per_week` is retired):
+ * The weekly clock (MD-28). The development session is AI Drama's pool refill (settings standard D16, D3): it runs
+ * once a week in every state, under the weekly development cap and the refill cap (`pool_refill_cap_usd`, D14). Production no longer comes from here (HUB-WIRING-CONTRACT.md §1.1: `per_week` is retired):
  * it comes only from the nightly fill (lib/reel-ai-drama/night.ts) or a person's click, and the worker tends the pool
  * once a day on its own. Safe to call on every worker poll.
  */
 
 export type ScheduleDeps = {
   db: Queryable;
-  runDevelopmentSession(opts: { trigger: 'auto' }): Promise<unknown>;
+  runDevelopmentSession(opts: { trigger: 'auto'; refillCapUsd?: number }): Promise<unknown>;
   nextForProduction(db: Queryable, settings: ReelAiDramaSettings, now: Date): Promise<PitchRow | null>;
   tendPool(db: Queryable, settings: ReelAiDramaSettings, now: Date): Promise<{ faded: number; rechecked: number }>;
   log?: (event: string, fields?: Record<string, unknown>) => void;
@@ -60,9 +61,10 @@ export async function weeklyTick(deps: ScheduleDeps, now: Date): Promise<TickRes
   const { db } = deps;
   const log = deps.log ?? (() => undefined);
   const settings = await loadSettings(db);
+  const gate = await readDramaGate(db);
   const start = weekStart(now);
+  // `auto` reports Generate; the refill runs whatever it says ('off' is no longer returned).
   const result: TickResult = { auto: settings.auto, weekStart: start.toISOString(), development: 'off', tended: null, jobsDue: 0, jobsThisWeek: 0, requested: [] };
-  if (!settings.auto) return result;
 
   // Development: once a week, under the cap (MD-28).
   const { rows: ran } = await db.query("SELECT 1 FROM reel_ai_drama.sessions WHERE trigger = 'auto' AND started_at >= $1 LIMIT 1", [start.toISOString()]);
@@ -72,7 +74,7 @@ export async function weeklyTick(deps: ScheduleDeps, now: Date): Promise<TickRes
     result.development = 'capped';
   } else {
     try {
-      await deps.runDevelopmentSession({ trigger: 'auto' });
+      await deps.runDevelopmentSession({ trigger: 'auto', refillCapUsd: gate.refillCapUsd });
       result.development = 'ran';
     } catch (error) {
       result.development = 'failed';

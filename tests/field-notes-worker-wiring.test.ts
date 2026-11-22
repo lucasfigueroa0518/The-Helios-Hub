@@ -21,9 +21,11 @@ test('the social worker runs Field Notes in its own loop: the noon clock, claims
   assert.match(text, /withHangGuard\(\s*carryOutFieldNotesRun\(/);
   assert.match(text, /fieldNotesStore\.failRun\(lfdQuery, fnClaimed\.id, reason\)/);
   assert.match(text, /engine: \(_run, capUsd\) => liveFieldNotesDeps\(lfdQuery, \{ capUsd \}\)/);
-  // Release and publish only while the single publisher doesn't drive the type.
-  assert.match(text, /fnNow\?\.publishingLive && !\(await publisherOwnsPublishing\(query, FIELD_NOTES_SPINE_VERTICAL\)\)/);
-  assert.match(text, /releaseDueFieldNotes\(query, \{ requireApproval: fnNow\.requireApproval \}\)/);
+  // A Field Notes day with no post run still refills its tip pool (D3, D16).
+  assert.match(text, /fieldNotesStore\.requestRun\(lfdQuery, 'scheduled', fnGate\.refillCapUsd, \{ refillOnly: true \}\)/);
+  // Release and publish only while Live (D16) and the single publisher doesn't drive the type; approval is never read as off.
+  assert.match(text, /\(await readTypeGate\(lfdQuery, 'field_notes', log\)\)\.posts && !\(await publisherOwnsPublishing\(query, FIELD_NOTES_SPINE_VERTICAL\)\)/);
+  assert.match(text, /releaseDueFieldNotes\(query, \{ requireApproval: true \}\)/);
   assert.match(text, /claimAndPublishFieldNotes\(/);
   assert.match(text, /pollCarouselInsights\(query, client, new Date\(\), 200, 'field_notes'\)/);
 });

@@ -140,37 +140,21 @@ function fakeTables(tables: Record<string, unknown[]>): { q: IntakeQuery; reads:
   };
 }
 
-test('reels order: open unless reels auto_run is false, or when a reels run is queued; a missing table is closed; reads only reels.*', async () => {
-  assert.equal(await REELS_ORDER.isOpen(fakeTables({}).q, NOW), false, 'missing tables');
-  assert.equal(await REELS_ORDER.isOpen(fakeTables({ 'reels.settings': [], 'reels.runs': [] }).q, NOW), true, 'no row = on (as the reels worker reads it)');
-  assert.equal(await REELS_ORDER.isOpen(fakeTables({ 'reels.settings': [{ value: false }], 'reels.runs': [] }).q, NOW), false);
-  const f = fakeTables({ 'reels.settings': [{ value: false }], 'reels.runs': [{ x: 1 }] });
-  assert.equal(await REELS_ORDER.isOpen(f.q, NOW), true, 'a queued run');
-  assert.ok(f.reads.every((r) => r.startsWith('reels.')), f.reads.join(','));
+// Settings standard (D16, CONTRACT.md §4): refill runs in every state, so each Phase 2 order is open on every run and
+// reads no table. The old per-type open rules (auto_run, a queued run, a seed) contradict the contract and were replaced.
+test('reels, carousel and field-notes orders: open in every state, reading nothing (D16)', async () => {
+  for (const order of [REELS_ORDER, CAROUSEL_ORDER, FIELD_NOTES_ORDER]) {
+    const f = fakeTables({});
+    assert.equal(await order.isOpen(f.q, NOW), true, order.id);
+    assert.deepEqual(f.reads, [], order.id);
+    const off = fakeTables({ 'reels.settings': [{ value: false }], 'social.settings': [{ value: false }], 'field_notes.settings': [{ value: false }] });
+    assert.equal(await order.isOpen(off.q, NOW), true, `${order.id}: Generate off still refills`);
+  }
   assert.deepEqual([REELS_ORDER.sources, REELS_ORDER.lookbackDays, REELS_ORDER.scorecards], [['reels:*'], 14, ['reels-screen', 'reels-score']]);
-});
-
-test('carousel order: social auto_run true or a queued/running social run; reads only social.*', async () => {
-  assert.equal(await CAROUSEL_ORDER.isOpen(fakeTables({}).q, NOW), false);
-  assert.equal(await CAROUSEL_ORDER.isOpen(fakeTables({ 'social.settings': [], 'social.runs': [] }).q, NOW), false, 'off unless set');
-  assert.equal(await CAROUSEL_ORDER.isOpen(fakeTables({ 'social.settings': [{ value: true }] }).q, NOW), true);
-  const f = fakeTables({ 'social.settings': [{ value: false }], 'social.runs': [{ x: 1 }] });
-  assert.equal(await CAROUSEL_ORDER.isOpen(f.q, NOW), true);
-  assert.ok(f.reads.every((r) => r.startsWith('social.')), f.reads.join(','));
   assert.deepEqual([CAROUSEL_ORDER.sources, CAROUSEL_ORDER.lookbackDays, CAROUSEL_ORDER.scorecards], [['feeds:*', 'reels:*'], 2, ['story-scoring']]);
-});
-
-test('field-notes order: field_notes auto_run on or a requested Field Notes run; reads only field_notes.*', async () => {
-  assert.equal(await FIELD_NOTES_ORDER.isOpen(fakeTables({}).q, NOW), false);
-  assert.equal(await FIELD_NOTES_ORDER.isOpen(fakeTables({ 'field_notes.settings': [{ value: false }], 'field_notes.runs': [] }).q, NOW), false);
-  assert.equal(await FIELD_NOTES_ORDER.isOpen(fakeTables({ 'field_notes.settings': [{ value: true }] }).q, NOW), true);
-  const f = fakeTables({ 'field_notes.settings': [{ value: false }], 'field_notes.runs': [{ x: 1 }] });
-  assert.equal(await FIELD_NOTES_ORDER.isOpen(f.q, NOW), true);
-  assert.ok(f.reads.every((r) => r.startsWith('field_notes.')), f.reads.join(','));
   assert.deepEqual([FIELD_NOTES_ORDER.sources, FIELD_NOTES_ORDER.lookbackDays, FIELD_NOTES_ORDER.scorecards], [['field-notes:*'], 45, ['field-notes-score']]);
-  // Each opens alone.
-  const open = await openOrders(fakeTables({ 'field_notes.settings': [{ value: true }] }).q, NOW);
-  assert.deepEqual(open.map((o) => o.id), ['field-notes']);
+  const open = await openOrders(fakeTables({}).q, NOW);
+  assert.deepEqual(open.map((o) => o.id), ['lfd', 'md', 'reels', 'carousel', 'field-notes', 'trivia']);
 });
 
 test('planSources: the new orders’ sources; Field Notes’ 45 days never widen the reels window', () => {
@@ -592,38 +576,6 @@ test('previousUnscored carries the last fetching run’s orphans through deposit
   assert.deepEqual((await previousUnscored(q, uid(99))).sort(), [uid(1), uid(2)]);
   await run('topup', 'ok', 4, [uid(3)]);
   assert.deepEqual(await previousUnscored(q, uid(99)), [uid(3)], 'the next fetching run took them on');
-});
-
-test('reels order opens on a pending Reels seed (intake or legacy); a made, published or old seed does not open it', async () => {
-  const db = await newDb(`
-    CREATE SCHEMA reels;
-    CREATE TABLE reels.settings (key text PRIMARY KEY, value jsonb);
-    CREATE TABLE reels.runs (id uuid, status text);
-    CREATE TABLE reels.video_jobs (post_idea_id uuid, status text);
-    CREATE TABLE reels.published_status (post_idea_id uuid, published boolean);
-    CREATE TABLE reels.sources (id uuid, adapter_id text, drop_reason text, ingest_time timestamptz);
-    CREATE TABLE reels.post_idea_members (source_id uuid, post_idea_id uuid);
-    INSERT INTO reels.settings VALUES ('auto_run', 'false');`);
-  try {
-    const open = () => REELS_ORDER.isOpen(db.q, NOW);
-    assert.equal(await open(), false);
-    await db.pg.query(`INSERT INTO intake.stories (id, representative_key, headline) VALUES ($1, 'k', 'A seed')`, [uid(1)]);
-    await db.pg.query(
-      `INSERT INTO intake.items (key, family, source_id, source_name, source_type, headline, url, story_id, role, seeded_by, seed_order)
-       VALUES ('https://example.com/seed', 'seed', 'seed:reels', 'Lucas', 'seed', 'A seed', 'https://example.com/seed', $1, 'primary', 'lucas', 'reels')`,
-      [uid(1)],
-    );
-    assert.equal(await open(), true, 'an intake Reels seed waiting');
-    await db.pg.query(`INSERT INTO reels.video_jobs VALUES ($1, 'ok')`, [uid(1)]);
-    assert.equal(await open(), false, 'made');
-    await db.pg.query(`INSERT INTO reels.sources VALUES ($1, 'seed', 'seed', now() - interval '1 day'), ($2, 'seed', 'seed', now() - interval '8 days')`, [uid(2), uid(3)]);
-    await db.pg.query(`INSERT INTO reels.post_idea_members VALUES ($1, $3), ($2, $4)`, [uid(2), uid(3), uid(12), uid(13)]);
-    assert.equal(await open(), true, 'a legacy seed waiting');
-    await db.pg.query(`INSERT INTO reels.published_status VALUES ($1, true)`, [uid(12)]);
-    assert.equal(await open(), false, 'published; the other is over a week old');
-  } finally {
-    await db.pg.close();
-  }
 });
 
 test('lastSuccessfulMainStart: the newest ok/partial main whose scoring ran', async () => {

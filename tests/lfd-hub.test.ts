@@ -4,6 +4,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { isPostingType, writePosting, type PostingState } from '@/lib/content-type/posting';
+import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { DEFAULT_LFD_DAYS, LFD_WINDOW } from '@/lib/lfd/config';
 import { buildDataset } from '@/lib/social-hub/dataset';
 import { reportLastFewDays } from '@/lib/social-hub/health/reporters/last-few-days';
@@ -100,7 +101,7 @@ test('the health report counts its scheduled runs; its quota is one on its days 
   const { query } = await openHubTestDb();
   await query(`INSERT INTO lfd.runs (trigger, status, requested_at, started_at, finished_at, total_usd, cap_usd, error)
                VALUES ('scheduled', 'failed', '2026-10-13T07:00:00Z', '2026-10-13T07:00:05Z', '2026-10-13T07:10:00Z', 0.3, 1, 'writing failed: refusal')`);
-  const posting: PostingState = { type: 'last_few_days', live: false, generate: true, autoPublish: false, perDay: null, maxPerDay: null, series: null, days: [2, 5], schedule: null, nights: null, cap: null, costPerPostMicros: null };
+  const posting: PostingState = { type: 'last_few_days', state: 'approval', stateMismatch: false, refillCapUsd: REFILL_CAP_DEFAULT_USD.last_few_days, scheduledAhead: 0, live: false, generate: true, perDay: null, maxPerDay: null, series: null, days: [2, 5], schedule: null, nights: null, cap: null, costPerPostMicros: null };
   const tue = await reportLastFewDays(query, { night: '2026-10-13', posting, now: TUE_8 });
   assert.deepEqual([tue.vertical, tue.due, tue.ran, tue.made, tue.needed, tue.failures.length, tue.failures[0]!.stage], ['last_few_days', true, true, 0, 1, 1, 'run']);
   const wed = await reportLastFewDays(query, { night: '2026-10-14', posting, now: new Date('2026-10-14T12:00:00Z') });
@@ -115,11 +116,12 @@ test('posting: Last Few Days is a posting type with no daily quota; its pool goe
   assert.equal(poolStale(fourDaysAgo, TUE_8, 'last_few_days'), false);
 });
 
-test('Last Few Days copy: the nightly switch names its days and its 3:00 AM run', async () => {
+test('Last Few Days copy: its days and 3:00 AM run are named; the hub has no nightly switch (D16: the Settings tab state)', async () => {
   const { readFileSync } = await import('node:fs');
-  // The switch's words live in the type's config entry (lib/content-type/config.ts).
+  // The type's words live in its config entry (lib/content-type/config.ts).
   const type = readFileSync('lib/content-type/config.ts', 'utf8');
   assert.ok(type.includes('Make Last Few Days posts on Tuesdays and Fridays at 3:00 AM? Each run makes live model and web calls (up to the run cap).'));
+  // The Generate / Live switches are gone from the hub: the one state lives in the type's Settings tab (D8, D16).
   const hub = readFileSync('components/social-hub/content/HubControls.tsx', 'utf8');
-  assert.ok(hub.includes('Makes one recap at 3:00 AM on its days (Tue/Fri).'));
+  assert.ok(!hub.includes('Nightly run'));
 });

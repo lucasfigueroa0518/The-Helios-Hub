@@ -21,6 +21,7 @@
  */
 import { randomInt } from 'node:crypto';
 
+import type { TypeState } from '@/lib/content-type/state';
 import { zonedTime } from '@/lib/reels/schedule';
 import { bookedOn, consoleFillLog, remainingQuota, reportFill, userPlaced, type DailyFill, type FillLog } from '@/lib/social-hub/fill';
 import { fillDates, leadDaysFor } from '@/lib/social-hub/lead';
@@ -107,12 +108,14 @@ export function windowLabel(w: PostingWindow): string {
  * (worker.ts: a passed window is skipped), so after the window only
  * Publish now moves it.
  */
-export function approvalNote(w: PostingWindow, date: string, now: Date, publishingLive = true): string {
+export function approvalNote(w: PostingWindow, date: string, now: Date, state: TypeState = 'live'): string {
   const label = windowLabel(w);
   if (pickPublishAt(w, date, now, () => 0) === null) {
     return `Approved, but the ${label} window has passed for ${date}, so this will not be scheduled and will not post unless you press Publish now.`;
   }
-  if (!publishingLive) return `Approved. Publishing is switched off in Settings, so it will wait there and is only scheduled once publishing is back on (the ${label} window still has to be open).`;
+  // D16, D17: Paused holds no slots; Approval books the slot but only Live posts.
+  if (state === 'paused') return `Approved. This type is Paused, so it stays in the Made tab and is not scheduled (its Settings tab).`;
+  if (state === 'approval') return `Approved. It takes a minute in its ${label} window, but nothing posts until this type is Live (its Settings tab).`;
   return `Approved. It posts at a random minute in its ${label} window.`;
 }
 

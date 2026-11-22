@@ -19,8 +19,8 @@ import { REEL_ATTEMPTS } from '@/lib/reels/spine-tables';
 import { signFrameObject } from '@/lib/reels/visual/storage';
 
 /**
- * Stage 5 (D-153, D-155 to D-159, D-162, D-167). Approve (or auto-publish)
- * queues an attempt; the worker creates the Reels container with the song
+ * Stage 5 (D-153, D-155 to D-159, D-162, D-167). An approved reel's due slot
+ * (Live only, settings standard D16) queues an attempt; the worker creates the Reels container with the song
  * attached by audio_id, waits for FINISHED, and publishes it as a trial reel
  * (unless its slot is Main feed). Success also marks the post idea published
  * (D-005, D-061).

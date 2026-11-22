@@ -12,7 +12,7 @@ import { openHubTestDb } from './fixtures/social-hub/pglite';
 
 const NOW = new Date('2026-10-13T11:31:00Z');
 const posting = async (v: string): Promise<PostingState> =>
-  ({ type: v, live: true, generate: true, autoPublish: false, perDay: v === 'stories' ? null : 1, maxPerDay: 3, series: null }) as PostingState;
+  ({ type: v, state: 'live', stateMismatch: false, refillCapUsd: 1, scheduledAhead: 0, live: true, generate: true, perDay: v === 'stories' ? null : 1, maxPerDay: 3, series: null }) as PostingState;
 
 test('a reporter that throws does not break the night: that type reads as unknown', async () => {
   const { query } = await openHubTestDb();
@@ -111,12 +111,12 @@ test('readiness card: counts, trend vs the previous 30 days, distance to the bar
   assert.equal(card.title, 'Carousels · last 30 days');
   assert.equal(card.rate, '82%');
   assert.deepEqual(card.lines, [['Approved as-is', '27'], ['Rejected', '6'], ['Previous 30 days', '74% ▲ 8 pts']]);
-  assert.equal(card.note, '13 pts below the 95% auto-publish bar');
+  assert.equal(card.note, '13 pts below the 95% publish-readiness bar');
   assert.equal(card.meets, false);
 
   const top = readinessCard({ vertical: 'reels', approved: 46, rejected: 2, rate: 46 / 48, previous: { approved: 0, rejected: 0, rate: null } });
   assert.deepEqual(top.lines[2], ['Previous 30 days', 'No decisions']);
-  assert.equal(top.note, 'At or above the 95% auto-publish bar');
+  assert.equal(top.note, 'At or above the 95% publish-readiness bar');
   assert.equal(top.meets, true);
 
   const flat = readinessCard({ vertical: 'stories', approved: 9, rejected: 1, rate: 0.9, previous: { approved: 18, rejected: 2, rate: 0.9 } });

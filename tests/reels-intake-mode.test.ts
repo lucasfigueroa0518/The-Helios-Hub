@@ -24,6 +24,7 @@ import { addReelSeed, isUnscoredSeed, readOpenSeeds, type ReelSeedOutcome } from
 import type { Adapter, AdapterItem } from '@/lib/reels/types';
 
 import { NEW_SLATE, PAGE, reelsDb, stub } from './fixtures/reels-seed';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 delete process.env.ANTHROPIC_API_KEY; // belt and braces: nothing here may reach a live model
 
@@ -160,6 +161,7 @@ test('intake night: no primary fetch, derived finds deposit (no reels.sources), 
       derived: [derivedStub('awesome-lists', find(1, 'A4'), 'a4', seen), derivedStub('claude-web-search', find(2, 'B6'), 'b6', seen)],
     },
     intake,
+    totalQuery: fakeTotalLedger().q,
   });
 
   assert.notEqual(outcome.status, 'failed', outcome.note);
@@ -309,6 +311,7 @@ test('stale-fallback and legacy run the legacy path: primary adapters fetched, n
         derived: [{ id: 'claude-web-search', name: 'B6', type: 'B6', bucket: 'B', kind: 'generated', phase: 'derived', async fetchItems() { fetched.push('b6'); return []; } } as unknown as Adapter],
       },
       intake,
+      totalQuery: fakeTotalLedger().q,
     });
     assert.notEqual(outcome.status, 'failed', outcome.note);
     assert.deepEqual(fetched, ['rss', 'b6'], mode);
@@ -333,6 +336,7 @@ test('an intake read that throws sends the night to the legacy path before any d
       derived: [{ id: 'claude-web-search', name: 'B6', type: 'B6', bucket: 'B', kind: 'generated', phase: 'derived', async fetchItems() { fetched.push('b6'); return []; } } as unknown as Adapter],
     },
     intake,
+    totalQuery: fakeTotalLedger().q,
   });
   assert.deepEqual(fetched, ['rss', 'b6'], 'B6 fetched once, by the legacy path');
   assert.equal(intake.deposits.n, 0);
@@ -399,7 +403,7 @@ test("no successful main intake run tonight: the stale (legacy) path before any 
     const intake = intakeDeps(q, { lastMainStart: async () => (last == null ? null : new Date(Date.now() - last * HOUR)) });
     const run = (await startRun('scheduled'))!;
     const { jev } = stub();
-    const outcome = await executeRun(run, { jev, copyClient: refusingCopy, adapters: { primary: [primaryStub(fetched)], derived: [b6Stub(fetched)] }, intake });
+    const outcome = await executeRun(run, { jev, copyClient: refusingCopy, adapters: { primary: [primaryStub(fetched)], derived: [b6Stub(fetched)] }, intake, totalQuery: fakeTotalLedger().q });
     assert.notEqual(outcome.status, 'failed', outcome.note);
     assert.deepEqual(fetched, ['rss', 'b6'], 'B6 fetched once, by the legacy path');
     assert.equal(intake.deposits.n, 0);
@@ -432,6 +436,7 @@ test('an intake read that throws inside the slate reads falls back to the legacy
     copyClient: refusingCopy,
     adapters: { primary: [primaryStub(fetched)], derived: [derivedStub('claude-web-search', find(3, 'B6'), 'b6', seen)] },
     intake,
+    totalQuery: fakeTotalLedger().q,
   });
   assert.equal(seen.length, 1, 'B6 fetched once (intake night); the legacy path replays its finds');
   assert.deepEqual(fetched, ['rss'], 'the legacy path fetched the primary adapters');

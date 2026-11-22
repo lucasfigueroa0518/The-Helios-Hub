@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ArrowRight, ImageIcon, Loader2, Music2, TriangleAlert } from 'lucide-react';
 
 import { RunsRefresh } from '@/components/social-hub/content/RunsRefresh';
-import { HubSettingsButton, RunTodayButton } from '@/components/social-hub/content/HubControls';
+import { RunTodayButton } from '@/components/social-hub/content/HubControls';
 import { TodayStrip } from '@/components/social-hub/content/TodayStrip';
 import { DataNotes } from '@/components/social-hub/DataNotes';
 import { HubLink } from '@/components/social-hub/nav/HubNav';
@@ -67,7 +67,7 @@ export function ContentScreen({ dataset, base, now, libraries, progress, misses,
       <PageHead
         title={dayName}
         aside={todayLabel}
-        actions={controls ? <><HubSettingsButton />{later ? null : <RunTodayButton />}</> : undefined}
+        actions={controls && !later ? <RunTodayButton /> : undefined}
         meta={(
           <>
             {later ? <><strong>{booked}</strong> of {today.length} slots booked</> : <><strong>{m.plan.filled}</strong> of {m.plan.slots} slots filled</>}

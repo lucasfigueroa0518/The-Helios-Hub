@@ -6,6 +6,7 @@ import { BackToHub } from '@/components/content-type/BackToHub';
 import { SeedButton } from '@/components/content-type/SeedButton';
 import type { PoolPageData } from '@/components/content-type/pool/pool-data';
 import { PoolScreen } from '@/components/content-type/pool/PoolScreen';
+import type { PoolTab } from '@/components/content-type/pool/PoolTabs';
 import { TYPE_CONFIG } from '@/lib/content-type/config';
 import type { TypeHubModel } from '@/lib/content-type/model';
 import type { GenerateIdea } from '@/lib/content-type/queue-client';
@@ -13,14 +14,14 @@ import type { HubIdea, HubPost } from '@/lib/social-hub/types';
 import { verticalInfo } from '@/lib/social-hub/verticals';
 
 /**
- * A content type's page: the title with the type's dot and its header controls (Settings, Run, Live), then the
- * standard pool screen (components/content-type/pool/PoolScreen.tsx): the next three days, Ideas | Made, the list and
- * the idea and post panels. Every type draws the same screen; TYPE_CONFIG[type].pool is all that differs.
+ * A content type's page: the title with the type's dot and its header buttons (Run and the type's own), then the
+ * standard pool screen (components/content-type/pool/PoolScreen.tsx): the next three days, Ideas | Made | Settings,
+ * the list and the idea and post panels. Every type draws the same screen; TYPE_CONFIG[type].pool is all that differs.
  *
- * Pure display: the writes that cost (Live, Run now, Make it) arrive from outside the read-only hub code, as
- * `headerActions` and `make`.
+ * Pure display: the writes (Run now, Make it, the Settings tab) arrive from outside the read-only hub code, as
+ * `headerActions`, `make` and `settings`.
  */
-export function TypeHub({ model, title, headerActions, progress, nav, make, generate, pool, readOnly = false, postExtras, ideaExtras, fullPostBase = '/social' }: {
+export function TypeHub({ model, title, headerActions, progress, nav, make, generate, pool, readOnly = false, postExtras, ideaExtras, settings, initialTab, fullPostBase = '/social' }: {
   model: TypeHubModel;
   title: string;
   headerActions?: ReactNode;
@@ -39,6 +40,10 @@ export function TypeHub({ model, title, headerActions, progress, nav, make, gene
   postExtras?: (post: HubPost) => ReactNode;
   /** A type's own controls in the idea panel (Text on Screen). */
   ideaExtras?: (idea: HubIdea) => ReactNode;
+  /** The pool's Settings tab (SettingsTab), built by the type page because it writes (D8, D9). None: Ideas | Made. */
+  settings?: ReactNode;
+  /** The pool tab shown first (`?tab=settings`). */
+  initialTab?: PoolTab;
   /** Where "Open the full post" goes: the hub (live) or its preview mirror. */
   fullPostBase?: string;
 }) {
@@ -71,6 +76,8 @@ export function TypeHub({ model, title, headerActions, progress, nav, make, gene
           postExtras={postExtras}
           ideaExtras={ideaExtras}
           progress={progress}
+          settings={readOnly ? undefined : settings}
+          initialTab={initialTab}
           fullPostBase={fullPostBase}
           fromPath={info.href}
         />

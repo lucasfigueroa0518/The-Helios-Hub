@@ -500,14 +500,28 @@ test('the pool never cuts a person’s own topics, and a pool_size above the sta
 
 // ── The daily cycle ─────────────────────────────────────────────────────────
 
-test('the daily cycle does nothing while auto_render is off', async () => {
+test('while paused (auto_render off) the daily cycle still refills the pool, once a night, and makes nothing (D16, D3)', async () => {
   const { db } = await scratchExplainersDb();
-  const ideas = stubIdeas([]);
-  const { transport, calls } = stubJev({});
+  const ideas = stubIdeas([[
+    ['APIs', 'Explain an API call.'],
+    ['Primary keys', 'Explain a primary key.'],
+    ['Learn Python in 45 seconds', 'Explain Python.'],
+  ]]);
+  const { transport } = stubJev({ APIs: STRONG, 'Primary keys': GOOD, 'Learn Python in 45 seconds': BROAD });
   const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: transport });
-  assert.deepEqual(result, { status: 'skipped', reason: 'auto_render_off' });
-  assert.equal(ideas.requests.length, 0);
-  assert.equal(calls.length, 0);
+  assert.equal(result.status, 'refilled');
+  if (result.status !== 'refilled') return;
+  assert.equal(result.reason, 'paused');
+  assert.equal(ideas.requests.length, 1, 'the refill generates ideas');
+  assert.ok(result.evaluations.some((e) => e.outcome === 'entered_pool'), 'the pool gains an idea');
+  assert.deepEqual((await listPool(db)).map((t) => t.status), (await listPool(db)).map(() => 'pool'), 'nothing is promoted');
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0, 'nothing is rendered');
+
+  // One refill a night: a restart the same night does not refill again.
+  const again = stubIdeas([]);
+  const second = await runIdeaCycle({ db, ideaModel: again, jevTransport: transport });
+  assert.equal(again.requests.length, 0);
+  assert.notEqual(second.status, 'refilled');
 });
 
 test('the daily cycle generates, dedupes, promotes, queues, and logs telemetry once a day', async () => {
@@ -602,7 +616,8 @@ test('lead time (Bald-Eagle D4, D8): the cutover night fills day+1 and day+2, ea
   assert.equal(cutover.status, 'ok');
   if (cutover.status !== 'ok') return;
   assert.deepEqual(cutover.dates?.map((d) => [d.nyDate, d.status]), DATES.map((d) => [d, 'ok']));
-  assert.equal(ideas.requests.length, DATES.length, 'one idea call per date filled');
+  // One refill a night (D3): it runs in the first date the night fills, not once per date.
+  assert.equal(ideas.requests.length, 1, 'one idea call a night');
   const cycles = async () => (await db.query<{ d: string; status: string }>(`SELECT ny_date::text AS d, status FROM explainers.idea_cycles ORDER BY ny_date`)).rows;
   assert.deepEqual(await cycles(), DATES.map((d) => ({ d, status: 'ok' })));
   // Every night render carries one of the dates filled.

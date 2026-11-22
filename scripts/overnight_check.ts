@@ -6,7 +6,7 @@
  *
  *   npx tsx scripts/overnight_check.ts
  *
- * Run it the night before (are the switches right? is anything approved and
+ * Run it the night before (are the states right? is anything approved and
  * scheduled for tomorrow?) and at about 7:30 AM (did the 1/2/3/4 AM runs
  * work? what still needs an approval before the 8:30 AM windows?).
  * Each line starts with ✔ (fine), ⚠ (look at this) or ✖ (this will stop a post).
@@ -37,6 +37,7 @@ const ago = (d: Date | string | null) => {
 async function main() {
   const { dbQuery, closeDbPool } = await import('@/lib/db');
   const { readPosting } = await import('@/lib/content-type/posting');
+  const { STATE_COPY } = await import('@/lib/content-type/state');
   const { loadDataset } = await import('@/lib/social-hub/load');
   const { offerer } = await import('@/lib/social-hub/views/offer');
   const rows = async (sql: string) => {
@@ -64,14 +65,14 @@ async function main() {
   ok(`publisher_mode is "${mode}" (each type's own worker posts while it is not "live")`);
 
   // ── Switches ───────────────────────────────────────────────────────────────
-  console.log('\nSwitches (what a person can change in each page\'s Settings)');
+  // One state per type (settings standard D16); every post needs a person's approval, so there is no Auto-publish.
+  console.log('\nStates (what a person can change in each type\'s Settings tab)');
   for (const t of TYPES) {
     const p = await readPosting(t);
-    const parts = `Live ${p.live ? 'on' : 'OFF'} · Generate ${p.generate ? 'on' : 'OFF'} · Auto-publish ${p.autoPublish ? 'ON' : 'off (needs your approval)'}${p.perDay != null ? ` · ${p.perDay}/day` : ''}`;
+    const parts = `${STATE_COPY[p.state].label} · refill cap $${p.refillCapUsd.toFixed(2)} · ${p.scheduledAhead} scheduled ahead${p.perDay != null ? ` · ${p.perDay}/day` : ''}`;
     console.log(`  ${LABEL[t]}: ${parts}`);
-    if (!p.live) bad(`${LABEL[t]}: Live is off, so nothing is scheduled or posted automatically`);
-    if (p.generate === false) warn(`${LABEL[t]}: Generate every morning is off, so no overnight run will make content`);
-    if (p.autoPublish) warn(`${LABEL[t]}: Auto-publish is ON: what is made posts without review`);
+    if (p.stateMismatch) bad(`${LABEL[t]}: Generate is off while Live is on (state_mismatch): read as Paused, so nothing is made or posted`);
+    if (p.state === 'paused') warn(`${LABEL[t]}: Paused, so its pool refills but nothing is made or posted`);
   }
 
   // ── Last runs ──────────────────────────────────────────────────────────────
@@ -99,7 +100,8 @@ async function main() {
     const mine = data.posts.filter((p) => p.vertical === t);
     const waiting = mine.filter((p) => (p.status === 'ready' || (p.status === 'scheduled' && !p.approval.approvedAt)) && o.offer(p).state.tone === 'needs');
     const goingOut = mine.filter((p) => p.status === 'scheduled' && (p.nyDate === today || p.nyDate === tomorrow));
-    const approvedOut = goingOut.filter((p) => p.approval.approvedAt || !p.approval.required);
+    // Every post needs a person's approval (D16): only an approved post goes out.
+    const approvedOut = goingOut.filter((p) => p.approval.approvedAt);
     console.log(`  ${LABEL[t]}: ${approvedOut.length} approved and scheduled · ${waiting.length} waiting on you · first window ${FIRST_WINDOW[t]}`);
     for (const p of approvedOut) ok(`${ny(p.publishAt)}  ${p.name.slice(0, 70)}`);
     for (const p of goingOut.filter((x) => !approvedOut.includes(x))) bad(`${ny(p.publishAt)}  NOT approved, will be cancelled at its slot: ${p.name.slice(0, 55)}`);

@@ -1,10 +1,11 @@
 /**
  * Field Notes on the calendar: one post a day at most, in the 'afternoon' window (the spine's
  * schedule CHECK allows only that window for field_notes), at least 30 minutes from every other
- * feed post. Nothing is booked until a person approves, and nothing while publishing is off.
+ * feed post. Nothing is booked until a person approves, and nothing while the type is Paused (D16, D17).
  * Approve, reject, unschedule, Hard publish and the due-slot release use the same spine helpers as
  * the other feed types (lib/social/overnight/schedule.ts).
  */
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -32,14 +33,16 @@ import { POST_TIP_IDS_SQL } from './store';
 export const FIELD_NOTES_NOT_APPROVED_NOTE = 'Nobody approved this Field Notes post before its slot, so it was not posted.';
 export const FIELD_NOTES_REJECTED_NOTE = 'This Field Notes post was rejected, so it was not posted.';
 export const FIELD_NOTES_HARD_PUBLISH_NOTE = 'Hard published from the Social Hub (posted now, outside its slot).';
-export const FIELD_NOTES_APPROVED_OFF_NOTE = 'Approved. It will be scheduled when Field Notes publishing is on.';
+export const FIELD_NOTES_APPROVED_OFF_NOTE = 'Approved. Field Notes is Paused, so it stays in the Made tab. Place it in a slot once it’s in Approval or Live (its Settings tab).';
 export const FIELD_NOTES_NO_WINDOW_NOTE = 'No Field Notes window is open in the next two weeks.';
-export const FIELD_NOTES_PUBLISHING_OFF_NOTE = 'Field Notes publishing is off. Turn it on before publishing.';
+export const FIELD_NOTES_PUBLISHING_OFF_NOTE = 'Field Notes isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 export const FIELD_NOTES_MISSED_NOTE = 'Missed its window; place it again to post.';
 
 const isUniqueViolation = (error: unknown) => (error as { code?: string } | null)?.code === '23505';
 
-const publishingLive = (query: Query) => readFieldNotesSettings(query).then((s) => s.publishingLive).catch(() => false);
+/** The type's state (D16): stateOf(auto_run, publishing_live), never the raw Live key. Unreadable: paused. */
+const fieldNotesState = (query: Query): Promise<TypeState> =>
+  readFieldNotesSettings(query).then((s) => stateOf(s.autoRun, s.publishingLive).state).catch(() => 'paused' as const);
 
 /** Booked Field Notes windows from `fromDate` (one post a day) and the instants of every booked post of this type. */
 async function ownBookings(query: Query, fromDate: string): Promise<{ taken: Set<string>; times: Date[] }> {
@@ -116,8 +119,8 @@ export async function scheduleFieldNotesPost(
 export type FieldNotesApproveOutcome = ScheduleOutcome | { scheduled: false; approved: true; note: string };
 
 /**
- * A person approves a post. The tip is approved with it. While field_notes publishing_live is on
- * it is booked in the earliest open window; while publishing is off it is approved and nothing is booked.
+ * A person approves a post. The tip is approved with it. In Approval or Live (holdsSlots, contract §4.3) it is
+ * booked in the earliest open window; only Live posts it. Paused: it is approved and stays in the Made tab (D17).
  */
 export async function approveFieldNotesPost(query: Query, postId: string, now = new Date(), by: string | null = null): Promise<FieldNotesApproveOutcome> {
   const itemId = await fieldNotesItemId(query, postId);
@@ -130,7 +133,7 @@ export async function approveFieldNotesPost(query: Query, postId: string, now = 
     `UPDATE field_notes.tips SET status = 'approved', updated_at = now() WHERE id IN (${POST_TIP_IDS_SQL}) AND status = 'drafted'`,
     [postId],
   );
-  if (!(await publishingLive(query))) {
+  if (!holdsSlots(await fieldNotesState(query))) {
     await approveItem(query, itemId, 'user', by);
     return { scheduled: false, approved: true, note: FIELD_NOTES_APPROVED_OFF_NOTE };
   }
@@ -160,10 +163,10 @@ export async function unscheduleFieldNotesPost(query: Query, postId: string): Pr
   return unscheduleItem(query, itemId);
 }
 
-/** Hard publish: approved by the click, its waiting slot closed, a force attempt queued. Refused while publishing is off. */
+/** Hard publish: approved by the click, its waiting slot closed, a force attempt queued. Refused unless Live (D16). */
 export async function hardPublishFieldNotesPost(query: Query, postId: string): Promise<Queued> {
-  // While publishing_live is off nothing is approved, closed or queued: a force attempt would wait unclaimed.
-  if (!(await publishingLive(query))) return { queued: false, note: FIELD_NOTES_PUBLISHING_OFF_NOTE, terminal: true };
+  // Only Live posts (D16): otherwise nothing is approved, closed or queued; a force attempt would wait unclaimed.
+  if (!postsToInstagram(await fieldNotesState(query))) return { queued: false, note: FIELD_NOTES_PUBLISHING_OFF_NOTE, terminal: true };
   const itemId = await fieldNotesItemId(query, postId);
   if (itemId) await forceApproveItem(query, itemId, FIELD_NOTES_HARD_PUBLISH_NOTE);
   return queueFieldNotesPublish(query, postId, 'force');

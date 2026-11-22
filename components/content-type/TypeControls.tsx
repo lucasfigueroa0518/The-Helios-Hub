@@ -1,24 +1,20 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Settings } from 'lucide-react';
+import { useState } from 'react';
 
 import type { GenerateOutcome } from '@/lib/content-type/queue-client';
 import { PROGRESS_EVENT } from '@/components/content-type/GenerationProgress';
-import { Drawer } from '@/app/reels/ui';
-import { isStoryVertical, STORY_TYPE_LABEL, type StoryVertical } from '@/lib/social-hub/story-types';
+import { STORY_TYPE_LABEL, type StoryVertical } from '@/lib/social-hub/story-types';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
-import { ScheduleStrip } from '@/components/content-type/ScheduleStrip';
-import type { ScheduleDay } from '@/lib/content-type/posting';
-import { maxCapFor } from '@/lib/content-type/caps';
-import { TYPE_CONFIG, generateCopy, type ContentTypeId, type PageVertical } from '@/lib/content-type/config';
-import { formatUsd } from '@/lib/social-hub/cost';
 
 /**
- * The per-type generate buttons and settings panels on a content type's page.
- * Each posts to the type's own API; the click is the approval for any live
- * model or web spend, so each one says what it will cost first.
+ * The per-type generate buttons on a content type's page. Each posts to the
+ * type's own API; the click is the approval for any live model or web spend,
+ * so each one says what it will cost first. Settings are not here: they live
+ * in the pool's Settings tab (components/content-type/pool/SettingsTab.tsx,
+ * settings standard D8, D9), which replaced the gear-button drawer and the
+ * header Live switch.
  */
 
 async function call<T>(path: string, body?: unknown): Promise<T> {
@@ -31,14 +27,6 @@ async function call<T>(path: string, body?: unknown): Promise<T> {
 const usd = (n: number) => `$${n < 1 ? n.toFixed(3) : n.toFixed(2)}`;
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-function useLoaded<T>(path: string) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const reload = useCallback(() => call<T>(path).then((d) => (setData(d), setError(null))).catch((e) => setError(msg(e))), [path]);
-  useEffect(() => { void reload(); }, [reload]);
-  return { data, error, reload };
-}
-
 function Note({ text }: { text: string | null }) {
   return text ? <p className="rh-muted" role="status">{text}</p> : null;
 }
@@ -50,7 +38,7 @@ export function CarouselRunButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   async function run() {
-    if (!confirm('Run carousels now? It makes the top story in today’s queue, with live model and web calls, up to the run cap set in Settings (about $2 by default).')) return;
+    if (!confirm('Run carousels now? It makes the top story in today’s queue, with live model and web calls, up to this type’s run cap (about $2 by default).')) return;
     setBusy(true);
     try {
       const out = await call<{ queued: boolean; note?: string }>('/api/carousels/run', {});
@@ -78,7 +66,7 @@ export function LfdRunButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   async function run() {
-    if (!confirm('Make Last Few Days now? It picks 5–6 stories, writes and fact-checks them and finds photos, with live model and web calls, up to the run cap in Settings ($1 by default). The post waits for your approval.')) return;
+    if (!confirm('Make Last Few Days now? It picks 5–6 stories, writes and fact-checks them and finds photos, with live model and web calls, up to this type’s run cap ($1 by default). The post waits for your approval.')) return;
     setBusy(true);
     try {
       const out = await call<{ queued: boolean; note?: string }>('/api/last-few-days/run', {});
@@ -107,7 +95,7 @@ export function AiEventsRunButton() {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   async function run() {
-    if (!confirm('Generate this week’s AI Events post? It ranks the coming week’s events in Miami, Boston, NYC and SF with live Jev calls (about $0.02; capped by the run cap in Settings, $0.50 by default) and renders the carousel. No Claude calls. The post waits for your approval.')) return;
+    if (!confirm('Generate this week’s AI Events post? It ranks the coming week’s events in Miami, Boston, NYC and SF with live Jev calls (about $0.02; capped by this type’s run cap, $0.50 by default) and renders the carousel. No Claude calls. The post waits for your approval.')) return;
     setBusy(true);
     try {
       const out = await call<{ queued: boolean; note?: string }>('/api/ai-events/run', {});
@@ -158,52 +146,6 @@ export function StoriesGenerate({ type = 'stories' }: { type?: StoryVertical }) 
   );
 }
 
-// ── Header: the Live switch, shared by every type ───────────────────────────
-
-/** Live: while on, the type schedules and posts on its own. Turning it on asks first. */
-export function LiveToggle({ type, initial }: { type: PageVertical; initial: boolean }) {
-  const router = useRouter();
-  const [on, setOn] = useState(initial);
-  const [asking, setAsking] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  async function set(value: boolean) {
-    try {
-      const out = await call<{ live: boolean }>('/api/content-type/posting', { type, live: value });
-      setOn(out.live);
-      setNote(out.live ? 'Live is on.' : 'Live is off. Posts already on the clock still go out.');
-      void refreshHubPage(router);
-    } catch (e) {
-      setNote(msg(e));
-    }
-  }
-  useEffect(() => {
-    if (!note) return undefined;
-    const t = setTimeout(() => setNote(null), 6000);
-    return () => clearTimeout(t);
-  }, [note]);
-  return (
-    <>
-      <button type="button" className={`rh-live${on ? ' is-on' : ''}`} aria-pressed={on} title="When Live is on, this type's content is scheduled into its posting windows and posted to Instagram." onClick={() => (on ? void set(false) : setAsking(true))}>
-        <span className="rh-live__lamp" aria-hidden="true" />
-        Live
-      </button>
-      {asking ? (
-        <div className="rh-confirm" role="presentation" onClick={() => setAsking(false)}>
-          <div className="rh-confirm__card" role="dialog" aria-modal="true" aria-labelledby="rh-live-title" onClick={(e) => e.stopPropagation()}>
-            <h2 id="rh-live-title">Go live?</h2>
-            <p>Content is scheduled into its posting windows and posted to Instagram. Anything that needs your approval still waits for it.</p>
-            <div className="rh-confirm__actions">
-              <button type="button" className="rh-btn" onClick={() => setAsking(false)}>Cancel</button>
-              <button type="button" className="rh-btn rh-btn--primary" onClick={() => { setAsking(false); void set(true); }}>Go live</button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {note ? <p className="rh-toast" role="status">{note}</p> : null}
-    </>
-  );
-}
-
 // ── Explainers: generate from a bench idea ──────────────────────────────────
 
 /** Generate one explainer topic. The cap question comes back as `ask: 'over_cap'`; the progress strip is told a render was queued. */
@@ -217,158 +159,6 @@ export async function explainerGenerate(ideaId: string, overrideCaps: boolean): 
   }
   if (json.ask === 'over_cap') return { ok: false, ask: 'over_cap', message: json.error ?? 'A daily cap is used up.', costUsd: json.costUsd ?? 0 };
   return { ok: false, message: json.error ?? `Request failed (${res.status})` };
-}
-
-// ── Carousels: seed a story ─────────────────────────────────────────────────
-
-// ── Stories: seed an idea ───────────────────────────────────────────────────
-
-// ── Header buttons that open a drawer ───────────────────────────────────────
-
-/** Settings: the type's switches and caps, in a drawer so the page itself stays the Text on Screen format. */
-export function SettingsButton({ children, defaultOpen = false }: { children: ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <>
-      <button type="button" className="rh-btn" onClick={() => setOpen(true)}>
-        <Settings size={15} /> Settings
-      </button>
-      {open ? <Drawer label="Settings" wide onClose={() => setOpen(false)}>{children}</Drawer> : null}
-    </>
-  );
-}
-
-// ── Settings: generate, auto-publish and the daily quota, the same on every type ──
-
-type Posting = {
-  type: ContentTypeId;
-  live: boolean;
-  generate: boolean | null;
-  autoPublish: boolean;
-  perDay: number | null;
-  maxPerDay: number | null;
-  /** The days-based types (Last Few Days, AI Events, the Stories-format types): the weekdays it posts. */
-  days?: number[] | null;
-  /** The calendar's week for this type (template mode); null while each type sets its own cadence. */
-  schedule: ScheduleDay[] | null;
-  /** The daily limit (template mode); null while legacy. */
-  cap: number | null;
-  /** About what one more post a night costs; null when unknown. */
-  costPerPostMicros: number | null;
-};
-
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-/** The most a daily limit can be: AI Trivia and Real or AI? post once a day (SS-24); Morning Download (two a day, R25) and the rest by their config. */
-const capMax = (type: Posting['type']) => (isStoryVertical(type) && type !== 'stories' ? Math.min(1, maxCapFor(type)) : maxCapFor(type));
-
-function Switch({ checked, onChange, children, hint }: { checked: boolean; onChange: (on: boolean) => void; children: ReactNode; hint?: string }) {
-  return (
-    <div>
-      <label className="rh-switch">
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <span className="rh-switch__track" aria-hidden="true" />
-        {children}
-      </label>
-      {hint ? <p className="rh-settings__note">{hint}</p> : null}
-    </div>
-  );
-}
-
-/**
- * The daily limit (week board spec §Safety cap): the most the overnight run
- * makes a day, whatever the calendar holds. A person's decision; each step
- * saves at once.
- */
-function DailyLimit({ type, cap, costMicros, onSave }: { type: Posting['type']; cap: number; costMicros: number | null; onSave: (cap: number) => void }) {
-  const noun = TYPE_CONFIG[type].postsNoun;
-  return (
-    <div>
-      <div className="rh-quota">
-        <span className="rh-quota__label">Daily limit</span>
-        <button type="button" className="rh-btn rh-btn--xs" disabled={cap <= 0} onClick={() => onSave(cap - 1)} aria-label="One fewer a night">−</button>
-        <strong className="rh-quota__n">{cap}</strong>
-        <button type="button" className="rh-btn rh-btn--xs" disabled={cap >= capMax(type)} onClick={() => onSave(cap + 1)} aria-label="One more a night">+</button>
-      </div>
-      <p className="rh-settings__note">The most {noun} the overnight run makes a day{TYPE_CONFIG[type].capPerSeries ? ', per series' : ''}, however many slots the calendar has.</p>
-      {costMicros != null ? <p className="rh-settings__note">One more a night costs about {formatUsd(costMicros)}.</p> : null}
-    </div>
-  );
-}
-
-/**
- * How this type makes and posts. Generate makes content every morning to fill
- * the day's quota. Auto-publish decides what happens next: off, a post goes
- * out only when a person approves it; on, it is scheduled and posted without
- * waiting. Live (the header button) is the master switch for all posting.
- */
-export function PostingSettings({ type }: { type: Posting['type'] }) {
-  const { data, error, reload } = useLoaded<Posting>(`/api/content-type/posting?type=${type}`);
-  const [note, setNote] = useState<string | null>(null);
-  async function save(patch: Record<string, unknown>) {
-    try {
-      await call('/api/content-type/posting', { type, ...patch });
-      setNote('Saved.');
-      await reload();
-    } catch (e) {
-      setNote(msg(e));
-    }
-  }
-  if (error) return <p className="rh-empty">{error}</p>;
-  if (!data) return <p className="rh-muted">Loading…</p>;
-  const noun = TYPE_CONFIG[type].postsNoun;
-  // With the calendar, when a type posts is set there: the quota gives way to its week, read only.
-  const calendar = data.schedule ?? null;
-  return (
-    <div className="rh-settings">
-      {!data.live ? (
-        <p className="rh-settings__note"><strong>Live is off</strong>, so nothing is scheduled or posted yet, even approved {noun}. Turn Live on in the header when you are ready.</p>
-      ) : null}
-      {type === 'reel_ai_drama' ? (
-        <p className="rh-settings__note">Only the shared publisher posts {noun}, and only while its mode is <strong>live</strong>; until then nothing is posted, even with Live on here.</p>
-      ) : null}
-      {data.generate !== null ? (
-        <Switch
-          checked={data.generate}
-          onChange={(on) => {
-            const ask = generateCopy(type).confirm;
-            if (on && !confirm(ask)) return;
-            void save({ generate: on });
-          }}
-          hint={generateCopy(type).hint}
-        >
-          {generateCopy(type).label}
-        </Switch>
-      ) : null}
-      <Switch
-        checked={data.autoPublish}
-        onChange={(on) => {
-          if (on && !confirm(`Turn on auto-publish? ${noun[0]!.toUpperCase()}${noun.slice(1)} will be scheduled and posted without waiting for your approval.`)) return;
-          void save({ autoPublish: on });
-        }}
-        hint={data.autoPublish ? `On: ${noun} are scheduled and posted as soon as they are made.` : `Off: ${noun} are made but only go out once you approve them.`}
-      >
-        Auto-publish
-      </Switch>
-      {calendar ? <ScheduleStrip type={type} days={calendar} /> : null}
-      {calendar && data.cap !== null ? <DailyLimit type={type} cap={data.cap} costMicros={data.costPerPostMicros} onSave={(cap) => void save({ cap })} /> : null}
-      {!calendar && data.perDay !== null && data.maxPerDay !== null ? (
-        <div>
-          <div className="rh-quota">
-            <span className="rh-quota__label">Posts per day</span>
-            <button type="button" className="rh-btn rh-btn--xs" disabled={data.perDay <= TYPE_CONFIG[type].perDayMin} onClick={() => void save({ perDay: data.perDay! - 1 })} aria-label="One fewer a day">−</button>
-            <strong className="rh-quota__n">{data.perDay}</strong>
-            <button type="button" className="rh-btn rh-btn--xs" disabled={data.perDay >= data.maxPerDay} onClick={() => void save({ perDay: data.perDay! + 1 })} aria-label="One more a day">+</button>
-          </div>
-          <p className="rh-settings__note">How many {noun} are made, scheduled and posted each day. Up to {data.maxPerDay}: one per posting window.</p>
-        </div>
-      ) : null}
-      {!calendar && isStoryVertical(type) && data.days?.length ? (
-        <p className="rh-settings__note">Posts on {data.days.map((d) => DAY_NAMES[d]).join(', ')}.</p>
-      ) : null}
-      <Note text={note} />
-    </div>
-  );
 }
 
 // ── Explainers: run today's idea cycle now (C serves POST /api/explainers/idea-cycle) ──

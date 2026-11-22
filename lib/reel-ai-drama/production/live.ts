@@ -181,7 +181,13 @@ export async function liveProductionDeps(input: {
 }
 
 /** One development session (B1), live: the producer, Jev, the visuals check and news touching a player. */
-export async function runLiveDevelopment(db: Queryable, trigger: 'auto' | 'click', overrides: Partial<ReelAiDramaSettings> = {}): Promise<unknown> {
+export async function runLiveDevelopment(
+  db: Queryable,
+  trigger: 'auto' | 'click',
+  overrides: Partial<ReelAiDramaSettings> = {},
+  /** The weekly session's refill cap (D14); a person's click has none. */
+  refillCapUsd?: number,
+): Promise<unknown> {
   // `overrides` is for a one-off run Lucas asks for (e.g. a bigger round past the weekly cap); never saved.
   const settings = { ...(await loadSettings(db)), ...overrides };
   return runDevelopmentSession(
@@ -195,7 +201,7 @@ export async function runLiveDevelopment(db: Queryable, trigger: 'auto' | 'click
       // (no shared DB locally) means no news reopens this session, never a failed session.
       news: (now, days) => newsTouching(liveStoriesDb, now, days).catch(() => []),
     },
-    { trigger },
+    { trigger, ...(refillCapUsd != null ? { refillCapUsd } : {}) },
   );
 }
 
@@ -206,5 +212,5 @@ export async function runLiveCalibration(db: Queryable): Promise<unknown> {
 }
 
 export function liveScheduleDeps(db: Queryable, log?: ScheduleDeps['log']): ScheduleDeps {
-  return { db, runDevelopmentSession: ({ trigger }) => runLiveDevelopment(db, trigger), nextForProduction, tendPool, log };
+  return { db, runDevelopmentSession: ({ trigger, refillCapUsd }) => runLiveDevelopment(db, trigger, {}, refillCapUsd), nextForProduction, tendPool, log };
 }

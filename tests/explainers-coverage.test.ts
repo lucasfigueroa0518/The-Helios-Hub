@@ -22,6 +22,7 @@ import type { TopicRow } from '@/lib/explainers/types';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const FRAME: LessonFrame = { bucket: 'web-and-apis', payload: 'The one thing.', altitude: 'unfamiliar', map_position: 'Where it sits.' };
 
@@ -174,7 +175,7 @@ test('the curriculum assigns tonight\'s topics: the first untaken syllabus terms
   }
   // The stub answers the first topic in other spacing and case, the second by its aka, the third off the syllabus.
   const model = ideas(FRAME, () => ['Rule-Based  System', 'ML', 'blockchain']);
-  const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev() });
+  const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok', result.status === 'failed' ? result.error : '');
   const [request] = model.proposals;
   assert.deepEqual(request!.topics.map((t) => t.term), ['rule-based system', 'binary', 'machine learning']);

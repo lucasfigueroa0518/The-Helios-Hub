@@ -21,6 +21,7 @@ import { pitchCentral, type Pitch, type PitchRow } from '@/lib/reel-ai-drama/typ
 import type { JevTransport } from '@/lib/reels/jev/runner';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 async function freshDb(): Promise<Queryable> {
   const { db } = await scratchExplainersDb();
@@ -505,6 +506,7 @@ test('a stubbed development session fills the pool and writes sessions, searches
       settings: { ...DEFAULT_SETTINGS, cells_per_session: 3, pitches_per_cell: 2 },
       random: () => 0.5,
       news: async () => [],
+      totalQuery: fakeTotalLedger().q,
     },
     { trigger: 'click' },
   );
@@ -538,7 +540,7 @@ test('the session respects the weekly development cap', async () => {
     throw new Error('should not be called');
   }) as CreateMessage;
   const summary = await runDevelopmentSession(
-    { db, producer: { create, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: DEFAULT_SETTINGS },
+    { db, producer: { create, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: DEFAULT_SETTINGS, totalQuery: fakeTotalLedger().q },
     { trigger: 'auto' },
   );
   assert.equal(summary.status, 'capped');
@@ -552,7 +554,7 @@ test('the session respects the weekly development cap', async () => {
     return message([{ type: 'tool_use', id: 't', name: 'submit_pitches', input: { candidates: [] } }], 'tool_use', { input_tokens: 5_000_000, output_tokens: 100_000 });
   }) as CreateMessage;
   const capped = await runDevelopmentSession(
-    { db: db2, producer: { create: pricey, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: { ...DEFAULT_SETTINGS, cells_per_session: 4, weekly_dev_cap_usd: CELL_ESTIMATE_USD * 1.5 }, random: () => 0.5 },
+    { db: db2, producer: { create: pricey, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: { ...DEFAULT_SETTINGS, cells_per_session: 4, weekly_dev_cap_usd: CELL_ESTIMATE_USD * 1.5 }, random: () => 0.5, totalQuery: fakeTotalLedger().q },
     { trigger: 'click' },
   );
   assert.equal(capped.status, 'capped');
@@ -609,7 +611,7 @@ test('seedCalibrationPitches inserts the 12 as new seed pitches, once', async ()
 
   // A calibration-trigger session runs the seeds through the normal checks and searches no cells.
   const summary = await runDevelopmentSession(
-    { db, producer: { create: (async () => { throw new Error('no producer'); }) as CreateMessage, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: DEFAULT_SETTINGS },
+    { db, producer: { create: (async () => { throw new Error('no producer'); }) as CreateMessage, loadPrompt: () => 'stub' }, jevTransport: titleJev(), visuals: visualsDeps(), settings: DEFAULT_SETTINGS, totalQuery: fakeTotalLedger().q },
     { trigger: 'calibration' },
   );
   assert.equal(summary.cellsSearched, 0);

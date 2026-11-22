@@ -49,6 +49,7 @@ import { loadSettings, saveSeriesSetting } from '@/lib/stories/settings';
 import { scratchExplainersDb } from './explainers-pglite';
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { harnessDb } from './stories-harness';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const TODAY = '2026-10-08';
 const TOMORROW = '2026-10-09';
@@ -375,7 +376,7 @@ test('explainers: posts_per_day less the day’s placements is how many renders 
   await slot(spine, { vertical: 'carousels', nyDate: TODAY, slot: 'morning', source: 'user' });
 
   const { log, lines } = capture();
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, log });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, log, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual([result.fill.quota, result.fill.userPlaced, result.fill.making], [2, 1, 1]);
@@ -385,7 +386,7 @@ test('explainers: posts_per_day less the day’s placements is how many renders 
   assert.deepEqual(lines.map((l) => [l.message, l.fields.userPlaced, l.fields.making]), [['fill_reduced', 1, 1]]);
 });
 
-test('explainers: people placed the whole day: the cycle is skipped before any idea call or render', async () => {
+test('explainers: people placed the whole day: nothing is made, and only the pool refill runs (D3: the quota never stops a refill)', async () => {
   const db = await explainersOn();
   const spine = spineOf(db);
   const a = await poolTopic(db, 'A', 90);
@@ -393,12 +394,15 @@ test('explainers: people placed the whole day: the cycle is skipped before any i
   await slot(spine, { vertical: 'explainers', nyDate: TODAY, slot: 'late', source: 'user', status: 'published' });
   const ideas = stubIdeas();
   const { log, lines } = capture();
-  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev(), now: CYCLE_AT, log });
-  assert.equal(result.status, 'skipped');
-  assert.equal(result.status === 'skipped' && result.reason, 'quota_filled');
-  assert.equal(ideas.calls, 0, 'no idea call: no spend');
-  assert.equal(await jobsFor(db, a), 0);
-  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.cost_events`)).rows[0]!.n), 0);
+  const result = await runIdeaCycle({ db, ideaModel: ideas, jevTransport: stubJev(), now: CYCLE_AT, log, totalQuery: fakeTotalLedger().q });
+  assert.equal(result.status, 'refilled');
+  if (result.status !== 'refilled') return;
+  assert.equal(result.reason, 'nothing_to_make');
+  assert.ok(result.dates?.some((d) => d.status === 'skipped' && d.reason === 'quota_filled'), 'the make step is skipped for the full day');
+  assert.ok(result.dates?.every((d) => d.status === 'skipped'), 'no date makes anything');
+  assert.equal(ideas.calls, 1, 'one idea call: the refill only');
+  assert.equal(await jobsFor(db, a), 0, 'nothing is rendered');
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0);
   assert.equal(lines[0]?.fields.making, 0);
 });
 
@@ -414,7 +418,7 @@ test('explainers: an approved, unposted render whose topic ranks first is placed
   const ranked = await fillCandidates(db, true);
   assert.deepEqual(ranked.map((c) => [c.title, c.jobId ? 'render' : 'topic']), [['Survivor', 'render'], ['A', 'topic'], ['B', 'topic']], 'one ranking; rejected and unreviewed renders never compete');
 
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.allocated.map((x) => x.jobId), [survivor.jobId]);
@@ -430,12 +434,12 @@ test('explainers: an approved, unposted render whose topic ranks first is placed
   assert.deepEqual([placed.source, placed.ny_date], ['auto', TODAY]);
 });
 
-test('explainers: a surviving render below the cut is not placed by the night; publishing off, a ranked one counts without a slot', async () => {
+test('explainers: a surviving render below the cut is not placed by the night; in Approval, a ranked one takes its slot (contract §4.3)', async () => {
   const db = await explainersOn();
   const survivor = await renderedTopic(db, 'Survivor', 50);
   const a = await poolTopic(db, 'A', 90);
   const b = await poolTopic(db, 'B', 80);
-  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT });
+  const result = await runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok');
   if (result.status !== 'ok') return;
   assert.deepEqual(result.allocated, []);
@@ -443,18 +447,21 @@ test('explainers: a surviving render below the cut is not placed by the night; p
   assert.equal(await jobsFor(db, survivor.topicId), 1, 'below the cut: neither placed nor rendered again');
   assert.equal((await db.query(`SELECT 1 FROM social_hub.schedule`)).rows.length, 0, 'the night placed nothing');
 
-  // Next night, ranked first while publishing is off: it takes a place, gets no render, and no slot yet.
+  // Next night, ranked first in Approval (Generate on, Live off): it takes a place and its slot, gets no render, and
+  // nothing posts (only Live releases a due slot, D16).
   const db2 = await explainersOn();
   const top = await renderedTopic(db2, 'Top', 95);
   const c = await poolTopic(db2, 'C', 90);
-  const second = await runIdeaCycle({ db: db2, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT });
+  const second = await runIdeaCycle({ db: db2, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
   assert.equal(second.status, 'ok');
   if (second.status !== 'ok') return;
-  assert.deepEqual(second.allocated.map((x) => [x.jobId, x.scheduled]), [[top.jobId, null]]);
+  assert.deepEqual(second.allocated.map((x) => [x.jobId, x.scheduled?.scheduled]), [[top.jobId, true]]);
   assert.deepEqual(second.renders, [c]);
   assert.equal(await jobsFor(db2, top.topicId), 1);
-  // scheduleApproved (the regular path, once publishing is on) still places it.
-  assert.equal(await scheduleApproved(db2, new Date('2026-10-08T12:00:00Z'), () => 0), 1);
+  assert.equal((await db2.query(`SELECT 1 FROM social_hub.schedule WHERE status = 'scheduled'`)).rows.length, 1, 'the night placed it');
+  assert.equal((await db2.query(`SELECT 1 FROM social_hub.publish_attempts`)).rows.length, 0, 'booking only');
+  // scheduleApproved (the regular path) has nothing left to place.
+  assert.equal(await scheduleApproved(db2, new Date('2026-10-08T12:00:00Z'), () => 0), 0);
 });
 
 // ── Trial Reels (the 1 AM run) ──────────────────────────────────────────────

@@ -1,4 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
+import { holdApprovedWhilePaused, unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -13,7 +15,7 @@ import { dramaQueuePublish } from './publish';
 /**
  * AI Drama reels on the calendar (mirrors lib/explainers/publish/schedule.ts): the weekly slot template when
  * there is one, else the legacy evening window × posts_per_day. Slots live on the lifecycle spine
- * (social_hub.schedule, vertical 'reel_ai_drama'). Nothing is booked while publishing_live is off.
+ * (social_hub.schedule, vertical 'reel_ai_drama'). Nothing is booked unless the type is Live (D16).
  */
 
 function isUniqueViolation(error: unknown): boolean {
@@ -25,14 +27,38 @@ async function settingValue(db: Queryable, key: string): Promise<unknown> {
   return rows[0]?.value;
 }
 
-/** The master switch: true only when stored true. */
-export async function dramaPublishingLive(db: Queryable): Promise<boolean> {
-  return (await settingValue(db, 'publishing_live')) === true;
+/** AI Drama's state (D16): stateOf(auto, publishing_live). Generate off with Live on reads as paused. */
+export async function dramaState(db: Queryable): Promise<TypeState> {
+  const [generate, live] = await Promise.all([settingValue(db, 'auto'), settingValue(db, 'publishing_live')]);
+  return stateOf(generate === true, live === true).state;
 }
 
-/** On unless stored false. */
-export async function dramaRequireApproval(db: Queryable): Promise<boolean> {
-  return (await settingValue(db, 'require_approval')) !== false;
+/** Whether AI Drama is Live (D16): reels are posted only in the Live state. */
+export async function dramaPublishingLive(db: Queryable): Promise<boolean> {
+  return postsToInstagram(await dramaState(db));
+}
+
+/** Whether AI Drama books slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
+export async function dramaHoldsSlots(db: Queryable): Promise<boolean> {
+  return holdsSlots(await dramaState(db));
+}
+
+/**
+ * An approve while AI Drama is Paused (D18, 2026-11-20): the reel is held out of automatic placement
+ * (scheduleApprovedDrama, the night fill), so it goes into a slot only when a person places it. Nothing while AI Drama
+ * holds slots: there Approve books as before.
+ */
+export async function holdApprovedDrama(db: Queryable, jobId: string, now = new Date()): Promise<boolean> {
+  if (await dramaHoldsSlots(db)) return false;
+  return holdApprovedWhilePaused(spineOf(db), { vertical: 'reel_ai_drama', itemId: await dramaItemId(db, jobId), now });
+}
+
+/**
+ * Every post needs a person's approval (settings standard D16): `require_approval` is always true and is never read
+ * as false. Kept async with its db argument for its callers.
+ */
+export async function dramaRequireApproval(_db: Queryable): Promise<boolean> {
+  return true;
 }
 
 /** posts_per_day within 1..DRAMA_WINDOWS.length; a bad row reads as the default. */
@@ -152,7 +178,7 @@ export async function scheduleDramaJob(
 /**
  * When the night's job (trigger 'auto') finishes, it takes a slot on the date it was made for, unapproved (B2;
  * Bald-Eagle D4: two days ahead, never today's leftover slot): it still needs Approve, and without one dramaReleaseDue
- * cancels it at its time. A person's job waits for Approve. Only while live.
+ * cancels it at its time. A person's job waits for Approve. Only in Approval or Live (holdsSlots, contract §4.3).
  */
 export async function bookFinishedDrama(
   db: Queryable,
@@ -161,7 +187,7 @@ export async function bookFinishedDrama(
   rng?: (count: number) => number,
 ): Promise<DramaScheduleOutcome | null> {
   if (job.trigger !== 'auto') return null;
-  if (!(await dramaPublishingLive(db))) return null;
+  if (!(await dramaHoldsSlots(db))) return null;
   return scheduleDramaJob(db, job.id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
 }
 
@@ -188,14 +214,17 @@ SELECT j.id, j.pitch_id, f.created_at AS reviewed_at, j.finished_at
    AND NOT EXISTS (SELECT 1 FROM reel_ai_drama.jobs n WHERE n.pitch_id = j.pitch_id AND n.status = 'ok' AND n.seq > j.seq)
    AND (SELECT a.storage_location FROM reel_ai_drama.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' ORDER BY a.seq DESC LIMIT 1) = 'bucket'
    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
-   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))`;
+   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
+   -- Back in Made (D17, D18): a reel unslotted by Pause or a passed slot stays approved but is never re-slotted here.
+   AND NOT ${unslottedSql('ci.id')}`;
 
 /**
  * Approved (or, with approval off, unreviewed), unbooked reels with their video in Storage: booked, oldest approval
- * first. Only while live. A reel made for a date still ahead books on that date or later (dramaBookingDays).
+ * first. Only in Approval or Live (holdsSlots, contract §4.3); never a reel sent back to Made (D18). A reel made for a
+ * date still ahead books on that date or later (dramaBookingDays).
  */
 export async function scheduleApprovedDrama(db: Queryable, now = new Date(), rng?: (count: number) => number): Promise<number> {
-  if (!(await dramaPublishingLive(db))) return 0;
+  if (!(await dramaHoldsSlots(db))) return 0;
   const approvalNeeded = await dramaRequireApproval(db);
   const { rows } = await db.query<{ id: string }>(
     `SELECT r.id FROM (${DRAMA_PLACEABLE_RENDERS}) r ORDER BY r.reviewed_at NULLS LAST, r.finished_at`,

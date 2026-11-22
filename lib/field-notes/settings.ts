@@ -4,6 +4,7 @@
  */
 import { DEFAULT_FIELD_NOTES_RUN_CAP_USD, FIELD_NOTES_AUTO_DAYS } from './config';
 import { FIELD_NOTES_DEFAULT_SETTINGS, type FieldNotesSettings } from './types';
+import { refillCapUsd } from '@/lib/content-type/state';
 
 /** Any handle that runs SQL (HubQuery, SpineQuery, the social store's Query). */
 export type FieldNotesQuery = (text: string, params?: unknown[]) => Promise<{ rows: any[] }>;
@@ -12,6 +13,8 @@ export type ParsedFieldNotesSettings = Omit<FieldNotesSettings, 'runCapUsd'> & {
   /** The run cap, or null when the stored value is not a positive number: a run then refuses to start. */
   runCapUsd: number | null;
   runCapRaw: unknown;
+  /** The spend cap of one tip refill (D14): pool_refill_cap_usd, else the type's default. */
+  refillCapUsd: number;
 };
 
 const D = FIELD_NOTES_DEFAULT_SETTINGS;
@@ -31,9 +34,11 @@ export function parseFieldNotesSettings(rows: ReadonlyArray<{ key: string; value
   return {
     autoRun: get('auto_run') === true,
     publishingLive: get('publishing_live') === true,
-    requireApproval: get('require_approval') !== false,
+    // Every post needs a person's approval (settings standard D16): a stored false is ignored.
+    requireApproval: true,
     runCapUsd: cap !== null && cap > 0 ? cap : null,
     runCapRaw: rawCap,
+    refillCapUsd: refillCapUsd('field_notes', get('pool_refill_cap_usd')),
     photoRestPosts: int('photo_rest_posts', 0, D.photoRestPosts),
     maxPendingDrafts: int('max_pending_drafts', 0, D.maxPendingDrafts),
     tipExpiryDays: int('tip_expiry_days', 1, D.tipExpiryDays),

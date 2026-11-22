@@ -29,9 +29,14 @@ const TUE_330 = new Date('2026-10-13T07:30:00Z');
 /** Wednesday 2026-10-14, 8:00 AM New York. */
 const WED_8 = new Date('2026-10-14T12:00:00Z');
 
-async function db(o: { publishingLive?: boolean } = { publishingLive: true }) {
+/** The type's state (D16) as its two stored keys: Generate (auto_run) and publishing_live. Default Live. */
+async function db(o: { state?: 'paused' | 'approval' | 'live' | 'mismatch' } = {}) {
   const { query } = await openHubTestDb();
-  if (o.publishingLive) await query(`UPDATE lfd.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  const state = o.state ?? 'live';
+  const set = (key: string, on: boolean) =>
+    query(`INSERT INTO lfd.settings (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [key, JSON.stringify(on)]);
+  await set('auto_run', state === 'approval' || state === 'live');
+  await set('publishing_live', state === 'live' || state === 'mismatch');
   return { query, q: query as unknown as Query };
 }
 
@@ -87,26 +92,39 @@ test('approving when its day\'s window is already taken approves without booking
   assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 1);
 });
 
-test('with Last Few Days publishing off, Approve approves without booking a slot', async () => {
-  const { query, q } = await db({ publishingLive: false });
+test('Paused (and a Generate off + Live on mismatch): Approve approves without booking a slot; it stays in Made (D17)', async () => {
+  for (const state of ['paused', 'mismatch'] as const) {
+    const { query, q } = await db({ state });
+    const id = await seedLfdPost(query);
+    const out = await approveLfdPost(q, id, TUE_330);
+    assert.deepEqual(out, { scheduled: false, approved: true, note: LFD_APPROVED_OFF_NOTE }, state);
+    assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0, state);
+    assert.equal((await q(`SELECT decision FROM social_hub.approvals`)).rows[0].decision, 'approved', state);
+  }
+  assert.equal(LFD_APPROVED_OFF_NOTE, 'Approved. Last Few Days is Paused, so it stays in the Made tab. Place it in a slot once it’s in Approval or Live (its Settings tab).');
+});
+
+test('Approval: Approve books its own day’s slot (contract §4.3); it posts only once Live', async () => {
+  const { query, q } = await db({ state: 'approval' });
   const id = await seedLfdPost(query);
   const out = await approveLfdPost(q, id, TUE_330);
-  assert.deepEqual(out, { scheduled: false, approved: true, note: LFD_APPROVED_OFF_NOTE });
-  assert.equal(LFD_APPROVED_OFF_NOTE, 'Approved. It will be scheduled when Last Few Days publishing is on.');
-  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.schedule`)).rows[0].n, 0);
+  assert.equal(out.scheduled, true, JSON.stringify(out));
+  assert.equal((await q(`SELECT ny_date::text AS d FROM social_hub.schedule WHERE status = 'scheduled'`)).rows[0].d, '2026-10-13');
   assert.equal((await q(`SELECT decision FROM social_hub.approvals`)).rows[0].decision, 'approved');
 });
 
-test('with Last Few Days publishing off, Hard publish refuses: no approval, no attempt, the slot stays', async () => {
-  const { query, q } = await db({ publishingLive: false });
-  const id = await seedLfdPost(query);
-  await scheduleLfdPost(q, id, 'auto', TUE_330, '2026-10-13', () => 0);
-  const out = await hardPublishLfdPost(q, id);
-  assert.deepEqual(out, { queued: false, note: LFD_PUBLISHING_OFF_NOTE, terminal: true });
-  assert.equal(LFD_PUBLISHING_OFF_NOTE, 'Last Few Days publishing is off. Turn it on before publishing.');
-  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0);
-  assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.approvals`)).rows[0].n, 0);
-  assert.equal((await q(`SELECT status FROM social_hub.schedule`)).rows[0].status, 'scheduled');
+test('not Live (Paused, Approval, mismatch): Hard publish refuses: no approval, no attempt, the slot stays', async () => {
+  for (const state of ['paused', 'approval', 'mismatch'] as const) {
+    const { query, q } = await db({ state });
+    const id = await seedLfdPost(query);
+    await scheduleLfdPost(q, id, 'auto', TUE_330, '2026-10-13', () => 0);
+    const out = await hardPublishLfdPost(q, id);
+    assert.deepEqual(out, { queued: false, note: LFD_PUBLISHING_OFF_NOTE, terminal: true }, state);
+    assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.publish_attempts`)).rows[0].n, 0, state);
+    assert.equal((await q(`SELECT count(*)::int AS n FROM social_hub.approvals`)).rows[0].n, 0, state);
+    assert.equal((await q(`SELECT status FROM social_hub.schedule`)).rows[0].status, 'scheduled', state);
+  }
+  assert.equal(LFD_PUBLISHING_OFF_NOTE, 'Last Few Days isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.');
 });
 
 test('a due LFD slot more than 60 minutes late is cancelled, not released; a fresh one still goes out', async () => {

@@ -60,11 +60,11 @@ export type HubDataset = {
   adjustments?: IdeaAdjustment[];
   /** Each type's posts per day, for its quota candidates. */
   dayQuotas?: DayQuotas | null;
-  /** lfd.settings publishing_live (false when unreadable): Last Few Days offers Hard publish only while it is on. */
+  /** Whether Last Few Days is Live (D16: stateOf(auto_run, publishing_live); false when unreadable): Hard publish only then. */
   lfdPublishingLive?: boolean;
-  /** ai_events.settings publishing_live (false when unreadable): AI Events offers Hard publish only while it is on. */
+  /** Whether AI Events is Live (D16: stateOf(auto_run, publishing_live); false when unreadable): Hard publish only then. */
   aiEventsPublishingLive?: boolean;
-  /** field_notes.settings publishing_live (false when unreadable): Field Notes offers Hard publish only while it is on. */
+  /** Whether Field Notes is Live (D16: stateOf(auto_run, publishing_live); false when unreadable): Hard publish only then. */
   fieldNotesPublishingLive?: boolean;
   /** The week the AI Events pool shows, and whether Pin / Exclude still change it; null when unread. */
   aiEventsWeek?: AiEventsWeek | null;

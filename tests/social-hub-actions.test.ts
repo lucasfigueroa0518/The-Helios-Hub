@@ -69,7 +69,7 @@ function registry(o: {
   approveSchedule?: unknown; approvePost?: unknown; rejectPost?: unknown; hardPublishPost?: unknown;
   carouselItemId?: unknown; requestRerun?: unknown;
   setVerdict?: unknown; hardPublishJob?: unknown; loadSettings?: unknown; requestRerender?: unknown;
-  explainerItemId?: unknown; verdictOf?: unknown; scheduleJob?: unknown; publishingLive?: unknown;
+  explainerItemId?: unknown; verdictOf?: unknown; scheduleJob?: unknown; publishingLive?: unknown; holdsSlots?: unknown;
   schedulePostIdea?: unknown; rejectReel?: unknown; forcePost?: unknown;
   reelItemId?: unknown; todaySlate?: unknown; findReelLock?: unknown; requestFinish?: unknown;
   storyApprove?: unknown; storyReject?: unknown; storyPublishNow?: unknown; storyRegenerate?: unknown;
@@ -93,7 +93,7 @@ function registry(o: {
       loadSettings: pick(o.loadSettings, 'loadSettings'), requestRerender: pick(o.requestRerender, 'requestRerender'),
       itemId: pick(o.explainerItemId, 'explainerItemId'), verdictOf: pick(o.verdictOf, 'verdictOf'), unscheduleJob: pick(o.unscheduleJob, 'unscheduleJob'),
       placeItem: pick(o.placeItem, 'placeItem'), rescheduleItem: pick(o.rescheduleItem, 'rescheduleItem'),
-      scheduleJob: pick(o.scheduleJob, 'scheduleJob'), publishingLive: pick(o.publishingLive, 'publishingLive'),
+      scheduleJob: pick(o.scheduleJob, 'scheduleJob'), publishingLive: pick(o.publishingLive, 'publishingLive'), holdsSlots: pick(o.holdsSlots, 'holdsSlots'),
     }),
     reels: reelActions({
       schedulePostIdea: pick(o.schedulePostIdea, 'schedulePostIdea'), rejectReel: pick(o.rejectReel, 'rejectReel'), forcePost: pick(o.forcePost, 'forcePost'),
@@ -176,7 +176,8 @@ test('hard publish: each type\'s own function with the right arguments', async (
   const hardPublishPost = spy<[unknown, string], { queued: boolean }>({ queued: true });
   const hardPublishJob = spy<[unknown, string, string], { queued: boolean; note: string }>({ queued: false, note: 'This render was rejected in review.' });
   const storyPublishNow = spy<[string], unknown>({});
-  const POST = actionRoute(hardPublish(registry({ forcePost, hardPublishPost, hardPublishJob, storyPublishNow })), on());
+  // Explainers are Live here (D16): Publish now is refused otherwise, before the pipeline is asked.
+  const POST = actionRoute(hardPublish(registry({ forcePost, hardPublishPost, hardPublishJob, storyPublishNow, publishingLive: async () => true })), on());
   assert.equal((await POST(req({ vertical: 'reels', ref: V }))).status, 200);
   assert.equal((await POST(req({ vertical: 'carousels', ref: U }))).status, 200);
   const exp = await POST(req({ vertical: 'explainers', ref: V }));
@@ -188,6 +189,13 @@ test('hard publish: each type\'s own function with the right arguments', async (
   assert.deepEqual(hardPublishJob.calls, [['explainers-db', V, 'tommy@helios.test']]);
   assert.deepEqual(storyPublishNow.calls, [[U]]);
   assert.equal((await POST(req({ vertical: 'nope', ref: U }))).status, 400);
+  // Not Live (Paused, Approval or a mismatch): refused with 409 and the Settings-tab note; the pipeline is never asked.
+  const notLive = spy<[unknown, string, string], { queued: boolean }>({ queued: true });
+  const OFF = actionRoute(hardPublish(registry({ hardPublishJob: notLive, publishingLive: async () => false })), on());
+  const refused = await OFF(req({ vertical: 'explainers', ref: V }));
+  assert.equal(refused.status, 409);
+  assert.match((await refused.json()).note, /Explainers aren’t Live.*Settings tab/);
+  assert.deepEqual(notLive.calls, []);
 });
 
 test('hard regenerate: explainers requestRerender with loaded settings, refusals returned; stories regenerate; carousels and trial reels too (D51, D52)', async () => {

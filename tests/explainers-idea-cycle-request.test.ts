@@ -6,6 +6,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import type { EntryType, Questions, SystemOneResult } from '@typesafe-ai/sdk';
+
 import type { IdeaModel } from '@/lib/explainers/ideas/generator';
 import { runIdeaCycle } from '@/lib/explainers/ideas/cycle';
 import {
@@ -20,12 +22,35 @@ import { loadSettings, saveSetting } from '@/lib/explainers/settings';
 import type { JevTransport } from '@/lib/reels/jev/runner';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const NOW = new Date('2026-11-08T15:00:00Z');
 const never = <T,>(name: string) =>
   new Proxy({}, { get: (_t, key) => (key === 'then' ? undefined : () => { throw new Error(`${name}.${String(key)} must not be called`); }) }) as T;
 const ideaModel = never<IdeaModel>('ideaModel');
 const jevTransport = never<JevTransport>('jevTransport');
+
+/** Canned stand-ins for the refill's model calls (no live calls): three ideas, every Jev answer a middling score. */
+function stubPropose(): IdeaModel {
+  return {
+    async writeScopes(request: { titles: string[] }) {
+      return { scopes: request.titles.map((t) => `Explain ${t}.`), usage: { input_tokens: 1, output_tokens: 1 }, model: 'stub' };
+    },
+    async propose() {
+      return { ideas: [1, 2, 3].map((n) => ({ topic_title: `Generated ${n}`, topic_scope: 'Scope.' })), usage: { input_tokens: 10, output_tokens: 10 }, model: 'stub' };
+    },
+  } as unknown as IdeaModel;
+}
+function stubTransport(): JevTransport {
+  return {
+    async systemOne<const Q extends Questions>(_state: EntryType, questions: Q) {
+      const keys = Object.keys(questions);
+      const answers: Record<string, unknown> = {};
+      for (const key of keys) answers[key] = keys[0] === 'duplicate_of_existing_topic' || key.startsWith('pair_') ? { type: 'noul', noul: 0.1 } : { type: 'score', score: 2, confidence: 1 };
+      return { model: 'jev-stub', answers, usage: { input_tokens: 10, output_tokens: 0 } } as unknown as SystemOneResult<Q>;
+    },
+  };
+}
 
 test('a request is stored, read back, refused while waiting, and cleared', async () => {
   const { db } = await scratchExplainersDb();
@@ -75,23 +100,28 @@ test('the estimate is the idea pipeline plus daily_render_cap renders at the per
   assert.equal((await ideaCycleStatus(db, NOW)).estimateUsd, Math.round((0.1 + s.daily_render_cap * s.per_reel_cap_usd) * 100) / 100);
 });
 
-test('without force, auto_render off still skips (the old behavior)', async () => {
+test('without force, auto_render off (paused) makes nothing: the night only refills, on its own cap (D16, D3)', async () => {
   const { db } = await scratchExplainersDb();
-  assert.deepEqual(await runIdeaCycle({ db, ideaModel, jevTransport, now: NOW }), { status: 'skipped', reason: 'auto_render_off' });
+  const events: string[] = [];
+  const result = await runIdeaCycle({ db, ideaModel: stubPropose(), jevTransport: stubTransport(), now: NOW, event: (e) => events.push(e), totalQuery: fakeTotalLedger().q });
+  assert.equal(result.status, 'refilled');
+  if (result.status === 'refilled') assert.equal(result.reason, 'paused');
+  assert.ok(events.includes('make_skipped'), 'the make step logs its skip');
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0, 'nothing is rendered');
 });
 
 test('force passes the auto_render gate only: the spend cap still stops it', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'mode', 'production');
   await db.query(`INSERT INTO explainers.cost_events (mode, vendor, component, usd) VALUES ('production', 'anthropic', 'render', 1000)`);
-  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true });
+  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true, totalQuery: fakeTotalLedger().q });
   assert.deepEqual(result, { status: 'skipped', reason: 'daily_spend_cap' });
 });
 
 test('force passes the auto_render gate only: one cycle per day still holds', async () => {
   const { db } = await scratchExplainersDb();
   await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [nyDate(new Date())]);
-  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true });
+  const result = await runIdeaCycle({ db, ideaModel, jevTransport, force: true, totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'skipped');
   assert.ok('reason' in result && ['already_ran_today', 'retry_exhausted'].includes(result.reason), JSON.stringify(result));
   assert.equal((await db.query(`SELECT 1 FROM explainers.settings WHERE key = $1`, [IDEA_CYCLE_REQUEST_KEY])).rows.length, 0);

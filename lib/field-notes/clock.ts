@@ -93,3 +93,21 @@ export function noonQueue(
   }
   return { queue: true, target, reason: `${target} is ${calendar ? 'a Field Notes slot on the calendar' : 'a Field Notes day'}` };
 }
+
+/**
+ * The refill night (settings standard D3, D16; CONTRACT.md §4): finding and scoring new tips is Field Notes' refill and
+ * runs in every state, on its Tue/Fri cadence: the 2:00 AM check of a Field Notes day (a calendar slot in template mode,
+ * Tuesday or Friday in legacy mode) queues a refill-only run when noonQueue queued no post run that night (paused, or
+ * the days ahead already filled: the quota never stops a refill). A post run refills first itself, so a night never
+ * gets both. The same guards as noonQueue: never twice a night, catch-up only within 2 h, unreadable settings queue
+ * nothing.
+ */
+export function refillNight(now: Date, s: ParsedFieldNotesSettings | null, scheduledToday: boolean | null = null, calendar: ((nyDate: string) => boolean) | null = null): NoonDecision {
+  const nyDate = calendarDateKey(now, SOCIAL_TIMEZONE);
+  if (scheduledToday) return { queue: false, reason: `a scheduled Field Notes run was already queued on ${nyDate}` };
+  const late = now.getTime() - lastFieldNotesCheckAt(now).getTime();
+  if (late > FIELD_NOTES_CATCH_UP_MS) return { queue: false, reason: `the 2:00 AM check is ${Math.round(late / 60_000)} min past; no Field Notes refill` };
+  if (!s) return { queue: false, reason: 'the Field Notes settings could not be read; no Field Notes refill' };
+  if (!(calendar ?? isAutoFieldNotesDay)(nyDate)) return { queue: false, reason: `${nyDate} is not a Field Notes day; no refill tonight` };
+  return { queue: true, reason: `${nyDate} is a Field Notes day: the tip pool refills` };
+}

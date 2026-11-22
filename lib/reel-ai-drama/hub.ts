@@ -17,6 +17,8 @@ export { latestDramaJobId, dramaVerdictOf, setDramaVerdict, DRAMA_REVIEW_TAGS, t
 
 // §4.2 Scheduling and publishing
 export {
+  dramaHoldsSlots,
+  holdApprovedDrama,
   dramaPublishingLive,
   dramaRequireApproval,
   scheduleDramaJob,

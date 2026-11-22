@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 /**
  * AI Drama Reels' rendering settings on the type page (GET / POST /api/reel-ai-drama/settings).
- * Only the keys the route calls editable are shown, minus the two the Posting panel above already
- * owns (Generate = `auto`, Posts per day = `posts_per_day`). One Save sends every changed key in one
+ * Only the keys the route calls editable are shown, minus the ones the Settings tab's shared blocks already
+ * own (the state's Generate key `auto`, Posts per day `posts_per_day`, the refill cap `pool_refill_cap_usd`; D16).
+ * It is AI Drama's "This type only" block in that tab (D8). One Save sends every changed key in one
  * batch; the route validates the lot (per key and across keys) and saves nothing on a 400, whose
  * `fields` errors show beside their inputs. An empty number field is an error here and is never sent as 0.
  */
@@ -14,8 +15,8 @@ type Value = boolean | number | string;
 type SettingProblem = { key: string; stored: unknown; error: string };
 type Loaded = { settings: Record<string, unknown>; editable: string[]; problems: SettingProblem[] };
 
-/** Owned by PostingSettings (lib/content-type/posting.ts maps them through writeDramaPosting). */
-const SHOWN_ABOVE: ReadonlySet<string> = new Set(['auto', 'posts_per_day']);
+/** Owned by the Settings tab's shared blocks (lib/content-type/posting.ts maps them through writeDramaPosting). */
+const SHOWN_ABOVE: ReadonlySet<string> = new Set(['auto', 'posts_per_day', 'pool_refill_cap_usd']);
 
 const label = (key: string) => {
   const words = key.replace(/_usd$/, ' (USD)').replace(/_/g, ' ');

@@ -18,9 +18,9 @@ import type { LoadedPage } from '@/lib/social-hub/live';
 
 /**
  * The parts of a content type's page that are components, not data: the buttons in the header and the one extra
- * section in the settings drawer (the data half is lib/content-type/config.ts). Every type gets the same page; this
- * is the only place a type adds to it. A type can add buttons and one settings section, and a panel above the bench
- * (the page's `top` slot); nothing else.
+ * section in the pool's Settings tab, its "This type only" block (settings standard D8; the data half is
+ * lib/content-type/config.ts). Every type gets the same page; this is the only place a type adds to it. A type can add
+ * buttons and one settings section, and a panel above the bench (the page's `top` slot); nothing else.
  */
 
 export type TypeParts<D = undefined> = {
@@ -28,7 +28,7 @@ export type TypeParts<D = undefined> = {
   load?: () => Promise<D>;
   /** The header buttons that make content (Seed sits beside the pool's tabs, drawn by TypeHub). */
   actions: (page: LoadedPage) => ReactNode;
-  /** The one extra section under the common settings. */
+  /** The Settings tab's "This type only" block, only where a type truly can't share (the Explainers and AI Drama forms). */
   settingsSection?: (data: D) => ReactNode;
   /** A thin client wrapper of TypeHub that hands in the type's Make it (functions can't cross to the client). Default: TypeHub. */
   hub?: typeof TypeHub;

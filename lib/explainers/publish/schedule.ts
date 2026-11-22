@@ -1,4 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
+import { holdApprovedWhilePaused, unslottedSql } from '@/lib/content-type/unslot';
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
 import { busyFeedTimes, ownFeedTimes } from '@/lib/instagram/feed-spacing';
 import { chooseFromWindows, slotTakenKey, uniformIndex } from '@/lib/instagram/window';
@@ -18,8 +20,9 @@ import { queuePublish } from './publish';
  * Up to `posts_per_day` explainers per Eastern day (default 2), one per
  * window (1:00–2:30 PM, 3:30–5:00 PM), each ≥ 30 minutes from any other
  * feed post (SH-46 – SH-48), on the lifecycle spine (D38). While
- * publishing is live, every approved, unposted render gets the next free
- * window; a due slot becomes a publish attempt. Slots live on the lifecycle
+ * Explainers hold slots (Approval or Live, contract §4.3), every approved,
+ * unposted render gets the next free window; a due slot becomes a publish
+ * attempt only while Live (D16). Slots live on the lifecycle
  * spine (social_hub.schedule, vertical 'explainers', D36).
  */
 
@@ -27,16 +30,44 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
 }
 
-/** The `publishing_live` row of explainers.settings (the typed settings loader ignores it). */
+/**
+ * Whether Explainers are Live (D16): approved reels go to Instagram only in the Live state. Read from the
+ * `auto_render` and `publishing_live` rows; Generate off with Live on reads as paused (stateOf), so nothing is placed.
+ */
 export async function publishingLive(db: Queryable): Promise<boolean> {
-  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'publishing_live'`);
-  return rows[0]?.value === true;
+  return postsToInstagram(await explainersState(db));
 }
 
-/** The `require_approval` row: on unless set to false (docs/social-overnight.md). */
-export async function requireApproval(db: Queryable): Promise<boolean> {
-  const { rows } = await db.query<{ value: unknown }>(`SELECT value FROM explainers.settings WHERE key = 'require_approval'`);
-  return rows[0]?.value !== false;
+/** Explainers' state (D16): stateOf(auto_render, publishing_live). */
+export async function explainersState(db: Queryable): Promise<TypeState> {
+  const { rows } = await db.query<{ key: string; value: unknown }>(
+    `SELECT key, value FROM explainers.settings WHERE key IN ('auto_render', 'publishing_live')`,
+  );
+  const on = (key: string) => rows.some((row) => row.key === key && row.value === true);
+  return stateOf(on('auto_render'), on('publishing_live')).state;
+}
+
+/** Whether Explainers book slots (contract §4.3): Approval and Live. A paused type holds none (D17). */
+export async function explainersHoldsSlots(db: Queryable): Promise<boolean> {
+  return holdsSlots(await explainersState(db));
+}
+
+/**
+ * An approve while Explainers are Paused (D18, 2026-11-20): the render is held out of automatic placement
+ * (scheduleApproved, the night fill), so it goes into a slot only when a person places it. Nothing while Explainers
+ * hold slots: there Approve books as before. Used by the hub's Approve and the review page's (E-08).
+ */
+export async function holdApprovedRender(db: Queryable, jobId: string, now = new Date()): Promise<boolean> {
+  if (await explainersHoldsSlots(db)) return false;
+  return holdApprovedWhilePaused(spineOf(db), { vertical: 'explainers', itemId: await explainerItemId(db, jobId), now });
+}
+
+/**
+ * Every post needs a person's approval (settings standard D16): `require_approval` is always true and is never read
+ * as false. Kept async with its db argument for its callers.
+ */
+export async function requireApproval(_db: Queryable): Promise<boolean> {
+  return true;
 }
 
 /** `posts_per_day` from explainers.settings (SH-48), else the default. */
@@ -145,8 +176,8 @@ export async function scheduleJob(
  * needs Approve, and without one releaseDueSchedules cancels it at its time.
  * That date only (a render with no target date: today only); nothing left
  * there books nothing. A person's render
- * (Regenerate, Make it) waits for Approve, which books it. Only while
- * publishing is live, like every other booking. Booking only, never
+ * (Regenerate, Make it) waits for Approve, which books it. Only in Approval
+ * or Live (holdsSlots), like every other booking. Booking only, never
  * queuePublish. Null: not booked by rule.
  */
 export async function bookFinishedRender(
@@ -156,7 +187,7 @@ export async function bookFinishedRender(
   rng?: (count: number) => number,
 ): Promise<ScheduleOutcome | null> {
   if (job.trigger !== 'auto') return null;
-  if (!(await publishingLive(db))) return null;
+  if (!(await explainersHoldsSlots(db))) return null;
   return scheduleJob(db, job.id, 'auto', now, calendarDateKey(now, SOCIAL_TIMEZONE), rng);
 }
 
@@ -178,7 +209,9 @@ SELECT j.id, j.topic_id, f.created_at AS reviewed_at, j.finished_at
    AND f.verdict IS DISTINCT FROM 'rejected'
    AND EXISTS (SELECT 1 FROM explainers.artifacts a WHERE a.job_id = j.id AND a.kind = 'video' AND a.storage_location = 'bucket')
    AND NOT EXISTS (SELECT 1 FROM social_hub.schedule s WHERE s.content_item_id = ci.id AND s.status IN ('scheduled', 'publishing', 'published'))
-   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))`;
+   AND NOT EXISTS (SELECT 1 FROM social_hub.publish_attempts p WHERE p.content_item_id = ci.id AND p.status IN ('requested', 'creating', 'processing', 'publishing', 'published'))
+   -- Back in Made (D17, D18): a render unslotted by Pause or a passed slot stays approved but is never re-slotted here.
+   AND NOT ${unslottedSql('ci.id')}`;
 
 /**
  * Finished, unposted, unscheduled renders with their video in Storage: the

@@ -13,7 +13,10 @@
  * always read from the shared database.
  *
  * Building a set makes live Claude, Jev and web calls: only for a set Lucas
- * requested (Generate, --request) or a series he switched to auto (rule 0.1).
+ * requested (Generate, --request) or a series whose type makes posts (auto on:
+ * Approval or Live, D16; rule 0.1). The refill (the 3:00 pool refresh, AI
+ * Trivia's daily writer, Real or AI?'s daily candidates) runs in every state,
+ * each held to its type's refill cap (stories.settings.types[<type>].refill_cap_usd).
  *
  * Photo bank (DECISIONS_LOG D49): the finder offers its vetted photos to the
  * bank in the shared database (nothing happens while its `capture` switch is
@@ -109,8 +112,9 @@ async function main() {
     meta: () => createLiveStoriesMetaClient(),
     insights: () => createLiveStoryInsightsClient(),
     storage: () => createStoriesStorage(),
-    // A series on the central intake: the pool refresh's posted check asks Jev in the intake's own cost bucket.
-    intake: { jev: () => createIntakeJev(liveJevTransport, sourceDb, null, INTAKE_TOPUP_CAP_USD) },
+    // A series on the central intake: the pool refresh's posted check asks Jev in the intake's own cost bucket, held to
+    // Morning Download's refill cap (D14) or the top-up cap, whichever is lower.
+    intake: { jev: (capUsd?: number) => createIntakeJev(liveJevTransport, sourceDb, null, Math.min(INTAKE_TOPUP_CAP_USD, capUsd ?? INTAKE_TOPUP_CAP_USD)) },
     log,
   };
 

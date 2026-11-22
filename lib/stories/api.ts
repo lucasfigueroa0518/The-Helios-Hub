@@ -17,9 +17,11 @@ import {
   type SetStatus,
   type StorySet,
 } from '@/lib/stories/repository';
+import { holdsSlots, postsToInstagram, stateOf, type TypeState } from '@/lib/content-type/state';
 import { storiesSlotsOn } from '@/lib/social-hub/slots';
 import { isStoryVertical, SERIES_OF_VERTICAL, verticalOfSeries, type StoryVertical } from '@/lib/social-hub/story-types';
 import { approvalNote as approvalNoteFor, openStorySlots, pickSetPublishAt, setWindow } from '@/lib/stories/schedule';
+import { holdApprovedSet } from '@/lib/stories/unslot';
 import { SERIES, loadSettings, saveSeriesSetting, saveTypeSetting, seriesTypeSettings, type TypeSettings } from '@/lib/stories/settings';
 
 export class ApiError extends Error {
@@ -147,32 +149,40 @@ const guard = async <T>(fn: () => Promise<T>): Promise<T> => {
 const NY_TIME = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
 
 /**
- * Approve. While publishing is live and the set is today's with its window
- * still open, it gets its minute now (B1), the same draw the worker makes
- * (worker.ts step 3), so the Content page shows its time at once. The
- * returned set carries `approvalNote`: when it posts, or why it won't (the
- * window has passed: only Publish now posts it; publishing is off: it waits).
+ * Approve. While the type holds slots (Approval or Live, contract §4.3) and the
+ * set is today's with its window still open, it gets its minute now (B1), the
+ * same draw the worker makes (worker.ts step 3), so the Content page shows its
+ * time at once. Only Live posts it. The returned set carries `approvalNote`:
+ * when it posts, or why it won't (the window has passed: only Publish now posts
+ * it; Paused: it stays in the Made tab; Approval: it holds its slot but posts
+ * only once Live).
  * The spine slot's source follows the set's trigger (spine.ts projectSet).
  */
 export async function approve(db: Queryable, id: string, now = new Date()): Promise<StorySet & { approvalNote: string }> {
   const set = await guard(() => approveSet(db, id));
   let out: StorySet = set;
   let approvalNote = 'Approved.';
+  let state: TypeState | null = null;
   try {
     const settings = await loadSettings(db);
     const window = settings.series[set.series].window;
-    // Publishing-live is the set's type's switch (SS-22).
-    const live = seriesTypeSettings(settings, set.series).publishingLive;
+    // The type's state (D16): the series' auto switch with its type's publishing_live (SS-22). Approval and Live book.
+    state = stateOf(settings.series[set.series].auto, seriesTypeSettings(settings, set.series).publishingLive).state;
     // A set with a slot (template mode) posts in [slot, slot + 15]; one without, in its series' window.
-    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, live);
-    const minute = live && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
+    approvalNote = approvalNoteFor(setWindow(window, set.slot_minute), set.ny_date, now, state);
+    const minute = holdsSlots(state) && set.ny_date === nyDate(now) ? pickSetPublishAt(window, set, now) : null;
     if (minute) {
       out = await scheduleSet(db, id, minute);
-      approvalNote = `Approved. It posts at ${NY_TIME.format(minute)}.`;
+      approvalNote = postsToInstagram(state)
+        ? `Approved. It posts at ${NY_TIME.format(minute)}.`
+        : `Approved. It holds its ${NY_TIME.format(minute)} slot, but nothing posts until this type is Live (its Settings tab). If the slot passes first, it goes back to the Made tab.`;
     }
   } catch {
     // The note and the minute are conveniences: the approval already happened, and the worker books an approved set within 15 seconds.
   }
+  // D18: approved while Paused, the worker's step 3 never books it later; only a person places it. Not a convenience,
+  // so a failure here is not swallowed.
+  if (state && !holdsSlots(state)) await holdApprovedSet(db, set.id, now);
   return { ...out, approvalNote };
 }
 
@@ -196,10 +206,20 @@ export async function regenerate(db: StoriesDb, id: string, by: string) {
   return requestSet(db, { series: got.set.series, nyDate: got.set.ny_date, trigger: 'click', style: got.set.style, requestedBy: by, slotMinute: got.set.slot_minute ?? null });
 }
 
-/** Publish now: approve if needed, and post at the next minute (the worker is the clock). */
+/**
+ * Publish now: approve if needed, and post at the next minute (the worker is the clock). Refused unless the set's type
+ * is Live (D16): only Live posts, and a minute booked otherwise would only go back to the Made tab (D17).
+ */
 export async function publishNow(db: Queryable, id: string, now = new Date()) {
   const got = await getSet(db, id);
   if (!got) throw new ApiError(404, 'No such set.');
+  if (isSeries(got.set.series)) {
+    const settings = await loadSettings(db);
+    const series = got.set.series;
+    if (!postsToInstagram(stateOf(settings.series[series].auto, seriesTypeSettings(settings, series).publishingLive).state)) {
+      throw new ApiError(409, 'This type isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.');
+    }
+  }
   if (got.set.status === 'ready') await approve(db, id);
   else if (!['approved', 'scheduled'].includes(got.set.status)) throw new ApiError(409, `A ${got.set.status} set can't be published.`);
   return guard(() => scheduleSet(db, id, now));
@@ -222,7 +242,9 @@ export async function updateSeries(
     patch.auto = body.auto;
   }
   const type: Partial<TypeSettings> = {};
-  if (typeof body.requireApproval === 'boolean') type.requireApproval = body.requireApproval;
+  // Every post needs a person's approval (D16): approval is never turned off.
+  if (body.requireApproval === false) throw new ApiError(400, 'Every post needs a person’s approval; it cannot be turned off.');
+  if (body.requireApproval === true) type.requireApproval = true;
   if (typeof body.publishingLive === 'boolean') type.publishingLive = body.publishingLive;
   if (body.dailyCapUsd !== undefined) {
     if (!(typeof body.dailyCapUsd === 'number' && Number.isFinite(body.dailyCapUsd) && body.dailyCapUsd > 0)) throw new ApiError(400, 'A daily cap is a dollar amount above zero.');

@@ -8,7 +8,7 @@ import test from 'node:test';
 import { ApiError, approve, generate, listView, monthOverview, publishNow, regenerate, reject, setDetail, updateSeries } from '@/lib/stories/api';
 import { claimNextRequested, markReady, recordCost, recordFramePublished, recordInsights, saveBuild } from '@/lib/stories/repository';
 import { storiesRoute } from '@/lib/stories/route';
-import { loadSettings } from '@/lib/stories/settings';
+import { loadSettings, saveSeriesSetting, saveTypeSetting } from '@/lib/stories/settings';
 
 import { harnessDb } from './stories-harness';
 
@@ -55,6 +55,11 @@ test('Approve, Reject with tags, Regenerate, Publish now', async () => {
   const detail = await setDetail(db, id);
   assert.equal(detail.candidates.length, 1);
 
+  // Publish now posts only for a Live type (D16): refused, and nothing changes, until Real or AI? is Live.
+  await assert.rejects(publishNow(db, id, NOW), (e: ApiError) => e.status === 409 && /isn’t Live/.test(e.message));
+  assert.equal((await setDetail(db, id)).set.status, 'ready');
+  await saveSeriesSetting(db, 'real_or_ai', { auto: true });
+  await saveTypeSetting(db, 'real_or_ai', { publishingLive: true });
   const s = await publishNow(db, id, NOW);
   assert.equal(s.status, 'scheduled');
   assert.equal(new Date(s.publish_at!).toISOString(), NOW.toISOString());

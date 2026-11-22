@@ -3,9 +3,10 @@
  * other feed types (lib/social/overnight/publish.ts carryFeedAttempt). Its own steps: the queue
  * rule (a field_notes.posts row in review with 2 to 10 slides), and marking the post published.
  *
- * `publishing_live` is checked here as well as by the worker: while it is off, nothing is queued
- * and nothing is claimed, so `deps.meta` (Instagram) is never touched.
+ * The Live state (D16: stateOf(auto_run, publishing_live)) is checked here as well as by the worker: unless the
+ * type is Live, nothing is queued and nothing is claimed, so `deps.meta` (Instagram) is never touched.
  */
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import {
   carryFeedAttempt,
   checkFeedPayload,
@@ -25,9 +26,11 @@ import { fieldNotesItemId } from './items';
 import { readFieldNotesSettings } from './settings';
 import { POST_TIP_IDS_SQL } from './store';
 
-export const FIELD_NOTES_PUBLISHING_OFF_NOTE = 'Field Notes publishing is off. Turn it on before publishing.';
+export const FIELD_NOTES_PUBLISHING_OFF_NOTE = 'Field Notes isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 
-const publishingLive = (query: Query) => readFieldNotesSettings(query).then((s) => s.publishingLive).catch(() => false);
+/** Live only (D16): Generate off with Live on reads as paused. Unreadable: not Live. */
+const publishingLive = (query: Query) =>
+  readFieldNotesSettings(query).then((s) => postsToInstagram(stateOf(s.autoRun, s.publishingLive).state)).catch(() => false);
 
 export async function queueFieldNotesPublish(query: Query, postId: string, trigger: PublishTrigger): Promise<Queued> {
   if (!(await publishingLive(query))) return { queued: false, note: FIELD_NOTES_PUBLISHING_OFF_NOTE, terminal: false };
@@ -63,7 +66,7 @@ export function carryFieldNotesAttempt(deps: PublishDeps, id: string): Promise<{
   return carryFeedAttempt(deps, id, { vertical: FIELD_NOTES_FEED_VERTICAL, onPublished: markFieldNotesPublished });
 }
 
-/** Claim one queued Field Notes post and carry it to Instagram. Null while publishing is off, or when nothing is queued. */
+/** Claim one queued Field Notes post and carry it to Instagram. Null unless Field Notes is Live, or when nothing is queued. */
 export async function claimAndPublishFieldNotes(deps: PublishDeps): Promise<{ id: string; status: 'published' | 'failed' } | null> {
   if (!(await publishingLive(deps.query))) return null;
   const id = await claimFeedAttempt(deps.query, FIELD_NOTES_FEED_VERTICAL);

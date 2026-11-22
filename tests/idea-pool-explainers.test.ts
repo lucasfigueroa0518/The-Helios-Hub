@@ -21,6 +21,7 @@ import { readMoves } from '@/lib/social-hub/moves-store';
 import { archiveIdea, pinIdea, placeIdea } from '@/lib/social-hub/queue-store';
 
 import { scratchExplainersDb } from './explainers-pglite';
+import { fakeTotalLedger } from './helpers/refill-total-fake';
 
 const CYCLE_AT = new Date('2026-10-08T06:00:00Z'); // 2:00 AM New York
 const BROAD: Record<ScoreKey, number> = { audience_fit: 4, teachability_45s: 0, analogy_potential: 4, visual_potential: 4, accuracy_under_simplification: 1, hook_strength: 3 };
@@ -69,7 +70,7 @@ async function topic(db: ExplainersDb, title: string, score: number, origin = 'g
 const q = (db: ExplainersDb) => (text: string, params?: unknown[]) => db.query(text, params as never) as never;
 const idea = (id: string) => `explainers:topic:${id}`;
 const statusOf = async (db: ExplainersDb, id: string) => (await db.query<{ status: string }>(`SELECT status FROM explainers.topics WHERE id = $1`, [id])).rows[0]!.status;
-const run = (db: ExplainersDb) => runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT });
+const run = (db: ExplainersDb) => runIdeaCycle({ db, ideaModel: stubIdeas(), jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
 const okOrWhy = (r: Awaited<ReturnType<typeof run>>) => (r.status === 'failed' ? `failed: ${r.error}` : r.status);
 
 test('pins are made first, in the order pinned, even below the pool cut; a made pin is used up', async () => {
@@ -101,13 +102,16 @@ test('a drag steers tonight, then expires: the idea competes by score again', as
   assert.deepEqual(await readMoves(q(db), 'explainers'), [], 'the placement is used up after the run');
 });
 
-test('a night that does not run (auto-render off) leaves hand moves in force', async () => {
+test('a paused night (auto-render off) only refills: it makes nothing and leaves hand moves in force (D16)', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', false);
   const c = await topic(db, 'C', 70);
   await placeIdea(q(db), 'explainers', idea(c), 95, null);
   await pinIdea(q(db), 'explainers', idea(await topic(db, 'D', 60)), null);
-  assert.deepEqual(await run(db), { status: 'skipped', reason: 'auto_render_off' });
+  const result = await run(db);
+  assert.equal(result.status, 'refilled');
+  if (result.status === 'refilled') assert.equal(result.reason, 'paused');
+  assert.equal(Number((await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM explainers.jobs`)).rows[0]!.n), 0, 'nothing is made');
   assert.equal((await readMoves(q(db), 'explainers')).length, 2);
 });
 
@@ -123,7 +127,7 @@ test('an archived topic is never made, and its title is history the proposer is 
   assert.deepEqual((await fillCandidates(db, false, await readMoves(q(db), 'explainers'))).map((c) => c.topicId), [b]);
   let history: string[] = [];
   const spy = { ...stubIdeas(), propose: async (req: { archived: Array<{ topic_title: string }> }) => { history = req.archived.map((r) => r.topic_title); return (stubIdeas() as never as { propose: () => Promise<unknown> }).propose(); } } as unknown as IdeaModel;
-  await runIdeaCycle({ db, ideaModel: spy, jevTransport: stubJev(), now: CYCLE_AT });
+  await runIdeaCycle({ db, ideaModel: spy, jevTransport: stubJev(), now: CYCLE_AT, totalQuery: fakeTotalLedger().q });
   assert.ok(history.includes('Archived one'));
   assert.ok(!history.includes('Archived before the syllabus'));
   assert.notEqual((await run(db)).status, 'failed');

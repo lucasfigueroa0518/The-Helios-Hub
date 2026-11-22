@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Play, Settings, X } from 'lucide-react';
+import { Play } from 'lucide-react';
 
 import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
-import { isStoryVertical } from '@/lib/social-hub/story-types';
 
 /** Mark the shared hub read stale, then re-render (see POST /api/content-type/progress). */
 async function refreshHubPage(refresh: () => void): Promise<void> {
@@ -13,10 +12,11 @@ async function refreshHubPage(refresh: () => void): Promise<void> {
 }
 
 /**
- * The Content page's two controls: Run now (complete today's runs across
- * every type) and Settings (each type's Live and nightly-run switches).
- * Writes go only to /api/content-type/* (tests/social-hub-scope.test.ts):
- * the posting switches every type page already uses, and Run now.
+ * The Content page's control: Run now (complete today's runs across every
+ * type). Its Settings dialog (each type's Live and nightly-run switches) is
+ * gone: a type's settings live only in its pool's Settings tab (settings
+ * standard D8, D9). Writes go only to /api/content-type/*
+ * (tests/social-hub-scope.test.ts).
  */
 
 type Step = { vertical: string; label: string; quota: number; held: number; needed: number; action: string; note: string; estimateUsd: number };
@@ -38,7 +38,6 @@ async function postJson<T>(url: string, payload: unknown): Promise<T> {
 }
 
 const RUN_TODAY = '/api/content-type/run-today';
-const POSTING = '/api/content-type/posting';
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -127,130 +126,6 @@ export function RunTodayButton() {
               {busy || pending ? 'Starting…' : `Run (up to ${usd(plan.estimateUsd)})`}
             </button>
           ) : null}
-        </div>
-      </dialog>
-    </>
-  );
-}
-
-// ── Settings ────────────────────────────────────────────────────────────────
-
-type Series = { id: string; label: string; enabled: boolean; generate: boolean; days: number[] };
-type Posting = { type: string; live: boolean; generate: boolean | null; autoPublish: boolean; perDay: number | null; maxPerDay: number | null; series: Series[] | null };
-
-const TYPES: Array<{ id: string; label: string; min: number }> = [
-  { id: 'reels', label: 'Text on Screen', min: 0 },
-  { id: 'carousels', label: 'Carousels', min: 0 },
-  { id: 'explainers', label: 'Explainer Reels', min: 1 },
-  { id: 'stories', label: 'Morning Download', min: 0 },
-  // SS-1: the Stories split's two types of their own.
-  { id: 'ai_trivia', label: 'AI Trivia', min: 0 },
-  { id: 'real_or_ai', label: 'Real or AI?', min: 0 },
-  { id: 'last_few_days', label: 'Last Few Days', min: 0 },
-  { id: 'ai_events', label: 'AI Events This Week', min: 0 },
-  { id: 'field_notes', label: 'Field Notes', min: 0 },
-  { id: 'reel_ai_drama', label: 'AI Drama Reels', min: 1 },
-];
-
-function Switch({ on, label, hint, onChange, disabled }: { on: boolean; label: string; hint: string; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button type="button" role="switch" aria-checked={on} className={`sh-switch${on ? ' is-on' : ''}`} disabled={disabled} onClick={() => onChange(!on)} title={hint}>
-      <span className="sh-switch__track" aria-hidden="true"><span className="sh-switch__knob" /></span>
-      <span className="sh-switch__text">
-        <span>{label}</span>
-        <span className="sh-muted">{hint}</span>
-      </span>
-    </button>
-  );
-}
-
-export function HubSettingsButton() {
-  const { pending, refresh } = useHubRefresh();
-  const [open, setOpen] = useState(false);
-  const [state, setState] = useState<Record<string, Posting>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
-  const ref = useDialog(open);
-
-  async function load() {
-    setError(null);
-    try {
-      const all = await Promise.all(TYPES.map((t) => getJson<Posting>(`${POSTING}?type=${t.id}`)));
-      setState(Object.fromEntries(all.map((p) => [p.type, p])));
-    } catch (e) {
-      setError(msg(e));
-    }
-  }
-
-  async function save(type: string, patch: Record<string, unknown>) {
-    setSaving(type);
-    setError(null);
-    try {
-      const next = await postJson<Posting>(POSTING, { type, ...patch });
-      setState((s) => ({ ...s, [type]: next }));
-      void refreshHubPage(refresh);
-    } catch (e) {
-      setError(msg(e));
-    } finally {
-      setSaving(null);
-    }
-  }
-
-  function setLive(type: string, label: string, on: boolean) {
-    if (on && !window.confirm(`Turn Live on for ${label}? Its content is scheduled into its posting windows and posted to Instagram. Anything that needs approval still waits for it.`)) return;
-    void save(type, { live: on });
-  }
-
-  function setNightly(type: string, label: string, on: boolean) {
-    const when = type === 'last_few_days' ? 'on Tuesdays and Fridays at 3:00 AM' : type === 'ai_events' ? 'on Sundays at 12:00 PM' : type === 'field_notes' ? 'at 12:00 PM on its days' : type === 'reel_ai_drama' ? 'every night at 12:00 AM (plus a development session on Mondays)' : 'every night';
-    const cost = type === 'ai_events' ? 'Each run ranks the coming week’s events with live Jev calls (about $0.02, capped).' : type === 'field_notes' ? 'Each run writes one post with live Claude and Jev calls (capped by its run cap, $0.50 by default).' : 'Each run makes live model calls to fill the day’s quota.';
-    if (on && !window.confirm(`Run ${label} automatically ${when}? ${cost}`)) return;
-    void save(type, { generate: on });
-  }
-
-  return (
-    <>
-      <button type="button" className="sh-btn" onClick={() => { setOpen(true); void load(); }}>
-        <Settings size={14} aria-hidden="true" /> Settings
-      </button>
-      <dialog ref={ref} className="sh-drawer sh-drawer--narrow" aria-labelledby="sh-settings-title" onClose={() => setOpen(false)}>
-        <div className="sh-drawer__panel">
-          <div className="sh-drawer__bar">
-            <h2 id="sh-settings-title" className="sh-title">Content settings</h2>
-            <button type="button" className="sh-btn sh-btn--quiet sh-btn--icon" aria-label="Close" onClick={() => setOpen(false)}><X size={16} /></button>
-          </div>
-          <div className="sh-drawer__body">
-            <p className="sh-muted">Live posts a type’s content to Instagram in its windows. The nightly run fills each day’s quota on its own. Posts that need approval always wait for it.</p>
-            {error ? <p className="sh-run__error" role="alert">{error}</p> : null}
-            {TYPES.map((t) => {
-              const p = state[t.id];
-              return (
-                <section key={t.id} className="sh-setting">
-                  <h3 className="sh-setting__title">{t.label}{saving === t.id || pending ? <span className="sh-muted"> · saving…</span> : null}</h3>
-                  {!p ? (
-                    <p className="sh-muted">{error ? 'Not loaded.' : 'Loading…'}</p>
-                  ) : (
-                    <>
-                      <Switch on={p.live} label="Live" hint={p.live ? 'Scheduling and posting to Instagram.' : 'Off: nothing is scheduled or posted.'} disabled={saving === t.id || pending} onChange={(v) => setLive(t.id, t.label, v)} />
-                      {p.generate != null ? (
-                        <Switch on={p.generate} label="Nightly run" hint={p.generate ? (t.id === 'last_few_days' ? 'Makes one recap at 3:00 AM on its days (Tue/Fri).' : t.id === 'ai_events' ? 'Makes the week’s carousel at 12:00 PM on Sundays.' : t.id === 'field_notes' ? 'Makes one post at 12:00 PM on its days (1–2 a week).' : t.id === 'reel_ai_drama' ? 'Fills the day’s slots at 12:00 AM; develops pitches on Mondays.' : isStoryVertical(t.id) ? 'Makes a set at 4:00 AM on its days.' : 'Fills the day’s quota every night.') : 'Off: runs only when you click Run now.'} disabled={saving === t.id || pending} onChange={(v) => setNightly(t.id, t.label, v)} />
-                      ) : null}
-                      {p.perDay != null && p.maxPerDay != null ? (
-                        <div className="sh-setting__quota">
-                          <span>Posts per day</span>
-                          <div className="segmented" role="group" aria-label={`${t.label} posts per day`}>
-                            {Array.from({ length: p.maxPerDay - t.min + 1 }, (_, i) => t.min + i).map((n) => (
-                              <button key={n} type="button" className={`segmented__item${p.perDay === n ? ' segmented__item--active' : ''}`} aria-pressed={p.perDay === n} disabled={saving === t.id || pending} onClick={() => void save(t.id, { perDay: n })}>{n}</button>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-                </section>
-              );
-            })}
-          </div>
         </div>
       </dialog>
     </>

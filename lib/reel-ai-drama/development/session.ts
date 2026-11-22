@@ -11,6 +11,9 @@ import { producePitches, ProducerError, MAX_NEAREST, type ProducerDeps } from '@
 import { scoreDrama, scoreMaterial } from '@/lib/reel-ai-drama/development/scores';
 import { checkVisuals, type VisualsCheckDeps } from '@/lib/reel-ai-drama/development/visuals-check';
 import { DAY_MS, centralPlayerId, isoDate } from '@/lib/reel-ai-drama/development/util';
+import { cappedJevTransport, RefillBudget, withoutCapped } from '@/lib/reels/refill-budget';
+import { beginRefill, settleRefill, type TotalQuery } from '@/lib/content-type/refill-total';
+import { dbQuery } from '@/lib/db';
 
 /**
  * One development session (PROCESS.md D1–D7): pick cells → producer → dedupe → drama → material →
@@ -24,6 +27,8 @@ export const CELL_ESTIMATE_USD = 0.6;
 
 export type DevelopmentDeps = {
   db: Queryable;
+  /** The nightly refill total's ledger (D19); the main database when absent. */
+  totalQuery?: TotalQuery;
   /** The producer's send and prompt loader; the session supplies db, session id, model and count. */
   producer: Pick<ProducerDeps, 'create' | 'loadPrompt'>;
   /** Jev transport (live: `liveJevTransport`); the session wraps it in a RecordingDramaJevRunner. */
@@ -105,11 +110,12 @@ async function setStatus(
   ]);
 }
 
-type Outcome = 'duplicate' | 'rejected' | 'pooled';
+/** `held`: the refill cap was reached before the visuals check; the pitch stays `new` for the next session. */
+type Outcome = 'duplicate' | 'rejected' | 'pooled' | 'held';
 
 /** Dedupe → drama → material → visuals → pool, for one pitch already saved as `new`. */
 async function checkPitch(
-  ctx: { db: Queryable; jev: DramaJevRunner; deps: DevelopmentDeps; settings: ReelAiDramaSettings; sessionId: string; now: Date },
+  ctx: { db: Queryable; jev: DramaJevRunner; deps: DevelopmentDeps; settings: ReelAiDramaSettings; sessionId: string; now: Date; capped?: () => Promise<boolean> },
   id: string,
   p: Pitch,
 ): Promise<Outcome> {
@@ -131,6 +137,8 @@ async function checkPitch(
     await setStatus(db, id, now, { status: 'rejected', reject_reason: `material ${material.score} under the bar ${settings.material_bar}`, revive_when: REVIVE.material });
     return 'rejected';
   }
+  // The visuals check is the paid step: none starts once the refill cap is reached (D14).
+  if (ctx.capped && (await ctx.capped())) return 'held';
   const card = await checkVisuals(
     {
       ...ctx.deps.visuals,
@@ -173,9 +181,38 @@ async function checkPitch(
   return 'pooled';
 }
 
+/**
+ * A development session. The weekly automatic one is AI Drama's pool refill: it is also held to the nightly total of
+ * all refills (D19): its cap is cut to what is left of tonight's total, and with nothing left it is skipped
+ * (`refill_total_capped`, status 'capped') and the next week's session tries again. A person's click is not held to it.
+ */
 export async function runDevelopmentSession(
   deps: DevelopmentDeps,
-  opts: { trigger: 'auto' | 'click' | 'calibration' },
+  opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number },
+): Promise<SessionSummary> {
+  if (opts.refillCapUsd == null) return runSession(deps, opts);
+  const log = deps.log ?? (() => {});
+  const totalQuery: TotalQuery = deps.totalQuery ?? ((t, p) => dbQuery(t, p as unknown[]) as Promise<{ rows: any[] }>);
+  const now = (deps.now ?? (() => new Date()))();
+  const grant = await beginRefill(totalQuery, 'reel_ai_drama', opts.refillCapUsd, { ref: 'development', log: (m, f) => log(m, { vertical: 'reel_ai_drama', ...f }), now });
+  let summary: SessionSummary | null = null;
+  try {
+    // Nothing left of the total: a $0 cap, so the session opens and closes at once with status 'capped'.
+    summary = await runSession(deps, { ...opts, refillCapUsd: grant?.capUsd ?? 0 });
+    return summary;
+  } finally {
+    const spent = summary ? await spendFor(deps.db, { sessionId: summary.sessionId }).catch(() => grant?.capUsd ?? 0) : (grant?.capUsd ?? 0);
+    await settleRefill(totalQuery, grant, spent, (m, f) => log(m, { vertical: 'reel_ai_drama', ...f }));
+  }
+}
+
+async function runSession(
+  deps: DevelopmentDeps,
+  /**
+   * `refillCapUsd`: the weekly session is AI Drama's pool refill (settings standard D16), held to `pool_refill_cap_usd`
+   * (D14) on top of the weekly development cap. Absent (a person's click, calibration): only the weekly cap, as before.
+   */
+  opts: { trigger: 'auto' | 'click' | 'calibration'; refillCapUsd?: number },
 ): Promise<SessionSummary> {
   const { db } = deps;
   const now = (deps.now ?? (() => new Date()))();
@@ -202,10 +239,16 @@ export async function runDevelopmentSession(
     weekSpendBefore,
     errors: [],
   };
-  const capReached = async () => (await developmentSpendSince(db, weekStart)) >= settings.weekly_dev_cap_usd;
-  const jev = new RecordingDramaJevRunner(deps.jevTransport, db, { mode: 'development', sessionId });
-  const ctx = { db, jev, deps, settings, sessionId, now };
+  // The refill cap counts this session's own cost_events; it logs refill_capped once when reached.
+  const refill = new RefillBudget(opts.refillCapUsd ?? null, () => spendFor(db, { sessionId }), (fields) =>
+    log('refill_capped', { vertical: 'reel_ai_drama', sessionId, ...fields }),
+  );
+  const capReached = async () => (await developmentSpendSince(db, weekStart)) >= settings.weekly_dev_cap_usd || (await refill.reached());
+  // Jev calls refuse once the refill cap is reached (a pitch they stop stays `new` for the next session).
+  const jev = new RecordingDramaJevRunner(cappedJevTransport(deps.jevTransport, refill), db, { mode: 'development', sessionId });
+  const ctx = { db, jev, deps, settings, sessionId, now, capped: () => refill.reached() };
   const tally = (o: Outcome) => {
+    if (o === 'held') return;
     if (o === 'pooled') summary.pitchesPooled += 1;
     else if (o === 'duplicate') summary.duplicates += 1;
     else summary.rejected += 1;
@@ -279,24 +322,26 @@ export async function runDevelopmentSession(
         summary.pitchesMade += pitches.length;
         await markSearched(db, cell.id, { pitchesMade: pitches.length, now, dueDays: settings.cell_due_days });
 
-        await Promise.all(
-          pitches.map(async (p) => {
-            const id = await insertPitch(db, p, { sessionId, searchId: search.id, cellId: cell.id });
-            if (await capReached()) {
-              summary.status = 'capped';
-              return; // saved as `new`: the next session checks it
-            }
-            try {
-              tally(await checkPitch(ctx, id, p));
-            } catch (e) {
-              summary.errors.push(`pitch ${p.title}: ${e instanceof Error ? e.message : String(e)}`);
-            }
-          }),
-        );
+        const checkOne = async (p: Pitch) => {
+          const id = await insertPitch(db, p, { sessionId, searchId: search.id, cellId: cell.id });
+          if (await capReached()) {
+            summary.status = 'capped';
+            return; // saved as `new`: the next session checks it
+          }
+          try {
+            tally(await checkPitch(ctx, id, p));
+          } catch (e) {
+            summary.errors.push(`pitch ${p.title}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        };
+        // Under a refill cap the checks run one at a time, so the cap can stop the next paid visuals check.
+        if (refill.capUsd != null) for (const p of pitches) await checkOne(p);
+        else await Promise.all(pitches.map(checkOne));
       };
       // In parallel the cap can't stop a later cell after an expensive one, so launch only the cells the
       // budget left can cover at a cell's usual cost; the rest wait for the next session.
-      const left = settings.weekly_dev_cap_usd - (await developmentSpendSince(db, weekStart));
+      const weeklyLeft = settings.weekly_dev_cap_usd - (await developmentSpendSince(db, weekStart));
+      const left = refill.capUsd == null ? weeklyLeft : Math.min(weeklyLeft, refill.capUsd - (await refill.spentUsd()));
       const launch = cells.slice(0, Math.max(1, Math.floor(left / CELL_ESTIMATE_USD)));
       if (launch.length < cells.length) summary.status = 'capped';
       await Promise.all(launch.map(runCell));
@@ -307,6 +352,8 @@ export async function runDevelopmentSession(
     summary.errors.push(e instanceof Error ? e.message : String(e));
   }
 
+  if (refill.capped && summary.status === 'ok') summary.status = 'capped';
+  summary.errors = withoutCapped(summary.errors);
   summary.usd = await spendFor(db, { sessionId });
   await db.query(
     `UPDATE reel_ai_drama.sessions SET status = $2, cells_searched = $3, pitches_made = $4, pitches_pooled = $5, error = $6, finished_at = $7 WHERE id = $1`,

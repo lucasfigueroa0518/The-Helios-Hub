@@ -31,7 +31,7 @@ import type { HubIdea, HubPost } from '@/lib/social-hub/types';
 
 /**
  * The pool screen (pool UI contract §5, mock docs/superpowers/specs/mocks/2026-11-15-pool-screen.html): the header
- * line and runway, the next three days, Ideas | Made, the list with its Up next band, and the idea and post panels.
+ * line and runway, the next three days, Ideas | Made | Settings, the list with its Up next band, and the idea and post panels.
  * Every type page draws its pool with it; the type's settings (TYPE_CONFIG[type].pool) are all that differ.
  *
  * Its writes go only through the existing routes: Pin, Unpin, Archive and the drag through the idea queue
@@ -69,7 +69,7 @@ function applySeen(bench: readonly TypeBenchItem[], seen: readonly string[] | nu
   return bench.map((b) => (inSeen.has(b.idea.id) ? queue[k++] ?? b : b));
 }
 
-export function PoolScreen({ model, data, readOnly = false, make, generate, seed, postExtras, ideaExtras, progress, fullPostBase, fromPath }: {
+export function PoolScreen({ model, data, readOnly = false, make, generate, seed, postExtras, ideaExtras, progress, settings, initialTab = 'ideas', fullPostBase, fromPath }: {
   model: TypeHubModel;
   /** The dataset's pieces (posts, slots, moves), each post's card, and the one `now`. Missing: the model alone, drawn now. */
   data?: PoolPageData | null;
@@ -87,6 +87,13 @@ export function PoolScreen({ model, data, readOnly = false, make, generate, seed
   ideaExtras?: (idea: HubIdea) => ReactNode;
   /** The run-progress strip, under the runway. */
   progress?: ReactNode;
+  /**
+   * The Settings tab (settings standard D8, D9: components/content-type/pool/SettingsTab.tsx), built by the type page
+   * outside the read-only hub code because it writes. None (the preview): the tabs are Ideas | Made.
+   */
+  settings?: ReactNode;
+  /** The tab shown first (`?tab=settings` opens Settings). */
+  initialTab?: PoolTab;
   fullPostBase: string;
   fromPath: string;
 }) {
@@ -110,7 +117,7 @@ export function PoolScreen({ model, data, readOnly = false, make, generate, seed
   const source = data?.source;
   const cards = useMemo(() => data?.cards ?? {}, [data]);
 
-  const [tab, setTab] = useState<PoolTab>('ideas');
+  const [tab, setTab] = useState<PoolTab>(initialTab === 'settings' && !settings ? 'ideas' : initialTab);
   const [startDay, setStartDay] = useState(model.today);
   const [group, setGroup] = useState<string | null>(null);
   const [open, setOpen] = useState<Open>(null);
@@ -392,11 +399,12 @@ export function PoolScreen({ model, data, readOnly = false, make, generate, seed
         onTab={setTab}
         ideas={rows.length}
         made={madeRows.length}
+        settings={settings != null}
         seed={!readOnly && seed ? seed({ disabled: full }) : undefined}
         seedOff={full ? `The pool holds ${POOL_CAP} ${many}, counting ones already made. Archive one to seed another.` : null}
       />
 
-      {tab === 'ideas' ? (
+      {tab === 'settings' ? null : tab === 'ideas' ? (
         <>
           <p className="pl-note">{ideasNote}</p>
           {groupTabs.length ? (
@@ -410,69 +418,73 @@ export function PoolScreen({ model, data, readOnly = false, make, generate, seed
         </>
       ) : <p className="pl-note">{madeNote}</p>}
 
-      <div className="pl-panel" id="pl-list" role="tabpanel" aria-labelledby={`pl-tab-${tab}`} aria-live="polite">
-        {tab === 'made' ? (
-          madeRows.length ? (
-            <ol className="pl-list">
-              {madeRows.map((row) => (
-                <MadeRow key={row.post.id} row={row} card={allCards.get(row.post.id) ?? null} flash={flashes[row.post.id]} onOpen={() => { setVersionId(null); setOpen({ kind: 'post', id: row.post.id }); }} />
-              ))}
-            </ol>
+      {tab === 'settings' ? (
+        <div id="pl-list" role="tabpanel" aria-labelledby="pl-tab-settings">{settings}</div>
+      ) : (
+        <div className="pl-panel" id="pl-list" role="tabpanel" aria-labelledby={`pl-tab-${tab}`} aria-live="polite">
+          {tab === 'made' ? (
+            madeRows.length ? (
+              <ol className="pl-list">
+                {madeRows.map((row) => (
+                  <MadeRow key={row.post.id} row={row} card={allCards.get(row.post.id) ?? null} flash={flashes[row.post.id]} onOpen={() => { setVersionId(null); setOpen({ kind: 'post', id: row.post.id }); }} />
+                ))}
+              </ol>
+            ) : (
+              <div className="pl-empty"><h3>Nothing made in the last 30 days</h3><p>Made posts show here for 30 days, then they are archived.</p></div>
+            )
+          ) : shown.length === 0 ? (
+            <div className="pl-empty">
+              <h3>No {many} waiting{group ? ` in ${group}` : ''}</h3>
+              <p>{vertical === 'ai_events' ? 'The pool is empty until the Sunday run ranks the coming week.' : config.seedable ? `The nights have nothing to make from this pool. Seed ${article(noun.one)} ${noun.one}, or the next refill adds new ones.` : 'The nights have nothing to make from this pool until the next refill adds new ones.'}</p>
+              {!readOnly && seed && !group ? seed({ disabled: full }) : null}
+            </div>
           ) : (
-            <div className="pl-empty"><h3>Nothing made in the last 30 days</h3><p>Made posts show here for 30 days, then they are archived.</p></div>
-          )
-        ) : shown.length === 0 ? (
-          <div className="pl-empty">
-            <h3>No {many} waiting{group ? ` in ${group}` : ''}</h3>
-            <p>{vertical === 'ai_events' ? 'The pool is empty until the Sunday run ranks the coming week.' : config.seedable ? `The nights have nothing to make from this pool. Seed ${article(noun.one)} ${noun.one}, or the next refill adds new ones.` : 'The nights have nothing to make from this pool until the next refill adds new ones.'}</p>
-            {!readOnly && seed && !group ? seed({ disabled: full }) : null}
-          </div>
-        ) : (
-          <>
-            {upShown.length ? (
-              <div className="pl-band pl-band--up"><i className="pl-band__live" aria-hidden="true" />Up next <span>{wholeList ? 'First in line for the next post' : upDays.length ? `Fills the open slots on ${upDays.join(', ')}` : 'No open slot in the next three weeks takes them yet'}</span></div>
-            ) : null}
-            <PoolQueue
-              vertical={vertical}
-              rows={queueRows}
-              onOrder={onOrder}
-              topN={model.slots.length}
-              generate={moves.make ? askWith : undefined}
-              enabled={dragOn}
-              classes={{ list: 'pl-list', zone: 'pl-pinzone', grip: 'pl-grip' }}
-              renderRow={(id, handle) => {
-                const found = rowById.get(id);
-                if (!found) return null;
-                const row = liveRow(found);
-                const later = id === laterId ? <div className="pl-band pl-band--later">Later <span>{shown.length - upShown.length} {shown.length - upShown.length === 1 ? noun.one : many}</span></div> : null;
-                return (
-                  <IdeaRow
-                    row={row}
-                    state={stateOf(row)}
-                    pinned={pinnedOf(row)}
-                    handle={handle}
-                    moves={moves}
-                    readOnly={readOnly}
-                    confirming={confirming === id}
-                    costText={costText}
-                    busy={busy === id}
-                    flash={flashes[id]}
-                    pop={pops[id] === true}
-                    leaving={leaving === id}
-                    laterBand={later}
-                    onOpen={() => setOpen({ kind: 'idea', id })}
-                    onPin={() => void pin(row)}
-                    onArchive={() => archive(row)}
-                    onMake={() => setConfirming((c) => (c === id ? null : id))}
-                    onMakeYes={() => void makeIt(row)}
-                    onMakeNo={() => setConfirming(null)}
-                  />
-                );
-              }}
-            />
-          </>
-        )}
-      </div>
+            <>
+              {upShown.length ? (
+                <div className="pl-band pl-band--up"><i className="pl-band__live" aria-hidden="true" />Up next <span>{wholeList ? 'First in line for the next post' : upDays.length ? `Fills the open slots on ${upDays.join(', ')}` : 'No open slot in the next three weeks takes them yet'}</span></div>
+              ) : null}
+              <PoolQueue
+                vertical={vertical}
+                rows={queueRows}
+                onOrder={onOrder}
+                topN={model.slots.length}
+                generate={moves.make ? askWith : undefined}
+                enabled={dragOn}
+                classes={{ list: 'pl-list', zone: 'pl-pinzone', grip: 'pl-grip' }}
+                renderRow={(id, handle) => {
+                  const found = rowById.get(id);
+                  if (!found) return null;
+                  const row = liveRow(found);
+                  const later = id === laterId ? <div className="pl-band pl-band--later">Later <span>{shown.length - upShown.length} {shown.length - upShown.length === 1 ? noun.one : many}</span></div> : null;
+                  return (
+                    <IdeaRow
+                      row={row}
+                      state={stateOf(row)}
+                      pinned={pinnedOf(row)}
+                      handle={handle}
+                      moves={moves}
+                      readOnly={readOnly}
+                      confirming={confirming === id}
+                      costText={costText}
+                      busy={busy === id}
+                      flash={flashes[id]}
+                      pop={pops[id] === true}
+                      leaving={leaving === id}
+                      laterBand={later}
+                      onOpen={() => setOpen({ kind: 'idea', id })}
+                      onPin={() => void pin(row)}
+                      onArchive={() => archive(row)}
+                      onMake={() => setConfirming((c) => (c === id ? null : id))}
+                      onMakeYes={() => void makeIt(row)}
+                      onMakeNo={() => setConfirming(null)}
+                    />
+                  );
+                }}
+              />
+            </>
+          )}
+        </div>
+      )}
 
       {openedIdea ? (
         <IdeaPanel

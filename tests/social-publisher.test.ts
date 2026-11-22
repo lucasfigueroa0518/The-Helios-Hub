@@ -117,7 +117,8 @@ test('publisher live end to end: an approved carousel slot is released, gated, a
   const q = query as never;
   await pg.exec(`
     UPDATE social_hub.settings SET value = '"live"'::jsonb WHERE key = 'publisher_mode';
-    UPDATE social.settings SET value = 'true'::jsonb WHERE key = 'publishing_live';
+    -- The Live state (D16): Generate (auto_run) and publishing_live both on.
+    UPDATE social.settings SET value = 'true'::jsonb WHERE key IN ('auto_run', 'publishing_live');
     INSERT INTO social.posts (id, slug, story_id, title, status, render, origin, slide_objects)
     VALUES ('40000000-0000-4000-8000-000000000001', 'pub-1', 's1', 't', 'review', '{"caption": "Hello.", "slides": []}', 'pipeline', '["a.jpg","b.jpg"]');`);
   const placed = await schedulePost(q, '40000000-0000-4000-8000-000000000001', 'user', new Date('2026-10-08T11:00:00Z'), undefined, () => 0);
@@ -166,4 +167,22 @@ test('one type\'s attempt stuck past the stale limit does not block every type\'
   await pg.exec(`UPDATE social_hub.publish_attempts SET started_at = now() - interval '45 minutes' WHERE id = '${stuck}'`);
   const next = await seedAttempt(pg, 'carousels', 'p-next', '2026-10-08T11:00:00Z');
   assert.deepEqual(await claimNextAttempt(q, ['carousels']), { id: next, vertical: 'carousels' });
+});
+
+test('the Carousels driver is live only in the Live state (D16), and approval is always required', async () => {
+  const stored: Record<string, unknown> = {};
+  const q = (async (_text: string, params?: unknown[]) => {
+    const key = String(params?.[0]);
+    return { rows: key in stored ? [{ value: stored[key] }] : [] };
+  }) as never;
+  const driver = carouselsDriver({ query: q, meta: () => { throw new Error('not used'); }, signImage: async (p) => p, token: () => 't' });
+  assert.equal(await driver.live(), false, 'nothing stored is paused (D6)');
+  stored.publishing_live = true;
+  assert.equal(await driver.live(), false, 'Generate off with Live on reads as paused (contract §3)');
+  stored.auto_run = true;
+  assert.equal(await driver.live(), true, 'Live');
+  stored.publishing_live = false;
+  assert.equal(await driver.live(), false, 'Approval: nothing posts');
+  stored.require_approval = false;
+  assert.equal(await driver.requireApproval(), true, 'a stored false is never read as false');
 });

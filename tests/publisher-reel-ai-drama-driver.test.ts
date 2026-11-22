@@ -50,11 +50,15 @@ test('the driver is reel_ai_drama and cancels an unapproved slot at release', ()
   assert.deepEqual(made, { meta: 0, token: 0 });
 });
 
-test('live and requireApproval read reel_ai_drama.settings: off and required unless stored otherwise', async () => {
+test('live means the Live state (auto and publishing_live, D16); approval is always required', async () => {
   assert.equal(await build(fakeDb({})).driver.live(), false);
-  assert.equal(await build(fakeDb({ publishing_live: true })).driver.live(), true);
+  assert.equal(await build(fakeDb({ auto: true, publishing_live: false })).driver.live(), false, 'Approval: nothing posts');
+  assert.equal(await build(fakeDb({ auto: true, publishing_live: true })).driver.live(), true, 'Live');
+  // Generate off with Live on is not a state: it reads as paused, so nothing posts (contract §3).
+  assert.equal(await build(fakeDb({ auto: false, publishing_live: true })).driver.live(), false);
+  assert.equal(await build(fakeDb({ publishing_live: true })).driver.live(), false, 'a missing auto is off (D6)');
   assert.equal(await build(fakeDb({})).driver.requireApproval(), true);
-  assert.equal(await build(fakeDb({ require_approval: false })).driver.requireApproval(), false);
+  assert.equal(await build(fakeDb({ require_approval: false })).driver.requireApproval(), true, 'never read as false');
 });
 
 test('failStale and releaseDue run against the spine for drama only', async () => {

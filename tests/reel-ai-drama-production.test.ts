@@ -569,14 +569,17 @@ test('weekStart is Monday midnight in New York, and slots spread over the week',
   assert.equal(slotsOpen(0, start, start), 0);
 });
 
-test('weeklyTick does nothing while auto is off', async () => {
+test('weeklyTick refills while paused (auto off): the weekly development session still runs, and nothing is requested (D16, D3)', async () => {
   const db = await freshDb();
   await insertPitch(db);
   const { deps, log } = scheduleDeps(db);
   const out = await weeklyTick(deps, new Date('2026-10-28T15:00:00Z'));
   assert.equal(out.auto, false);
-  assert.deepEqual(log, []);
+  assert.equal(out.development, 'ran');
+  assert.deepEqual(log, ['develop']);
   assert.deepEqual(out.requested, []);
+  const { rows } = await db.query<{ n: number }>(`SELECT count(*)::int AS n FROM reel_ai_drama.jobs`);
+  assert.equal(rows[0].n, 0, 'paused: nothing is made');
 });
 
 test('weeklyTick: one development session a week under the cap; it never requests production (per_week is retired)', async () => {

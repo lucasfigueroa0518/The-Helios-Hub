@@ -1,9 +1,10 @@
 /**
  * Reel AI Drama worker (planning/AI Mini Docs/HUB-WIRING-CONTRACT.md §7.1 item 4). Every poll: run a person's queued
- * Develop / Calibrate click; once per New York day, tend the pool (whatever `auto` says); while `auto` is on, the
- * nightly fill from DRAMA_NIGHT_HOUR_NY (lib/reel-ai-drama/night.ts) and the weekly development session; while
- * publishing is live, book approved reels; then the next production job, one at a time. A night job that finishes ok
- * books today's next open slot unapproved. Posting: while publishing is live and the shared publisher does not drive
+ * Develop / Calibrate click; the refill in every state (settings standard D16): once per New York day, tend the pool,
+ * and once a week the development session on its refill cap; while the type makes posts (Approval or Live), the
+ * nightly fill from DRAMA_NIGHT_HOUR_NY (lib/reel-ai-drama/night.ts); in Approval or Live (holdsSlots, contract §4.3),
+ * book approved reels; then the next production job, one at a time. A night job that finishes ok books today's next
+ * open slot unapproved (Approval or Live). Posting: only while AI Drama is Live (D16) and the shared publisher does not drive
  * AI Drama (publisher_mode off or shadow), this worker releases due slots, posts one attempt at a time and reads
  * insights, as the explainers worker does; with publisher_mode live it stands down. Every job spends up to the
  * per-reel cap, so the worker runs only with --yes.
@@ -62,8 +63,9 @@ async function main(): Promise<void> {
   console.log(
     `Estimate: ${queued} queued job(s), each up to $${settings.per_reel_cap_usd.toFixed(2)} (≤ $${(queued * settings.per_reel_cap_usd).toFixed(2)} now). ` +
       (settings.auto
-        ? `Generate is on: up to ${settings.daily_render_cap} job(s) a day (≤ $${settings.daily_spend_cap_usd.toFixed(2)} a day) and one development session a week (≤ $${settings.weekly_dev_cap_usd.toFixed(2)}).`
-        : 'Generate is off: only queued jobs and clicks run.'),
+        ? `Generate is on: up to ${settings.daily_render_cap} job(s) a day (≤ $${settings.daily_spend_cap_usd.toFixed(2)} a day).`
+        : 'Paused: no night fill; only queued jobs and clicks make reels.') +
+      ' The pool refills in every state: one development session a week, on its refill cap (pool_refill_cap_usd).',
   );
   if (!process.argv.includes('--yes')) {
     console.log('Not run. Pass --yes to start the worker.');
@@ -83,7 +85,7 @@ async function main(): Promise<void> {
   const { afterDramaJob, failStaleDramaRequests, runNextDramaRequest } = await import('@/lib/reel-ai-drama/requests');
   const { runDramaNight, tendPoolOncePerDay } = await import('@/lib/reel-ai-drama/night');
   const { DRAMA_NIGHT_HOUR_NY } = await import('@/lib/reel-ai-drama/publish/config');
-  const { dramaPublishingLive, dramaReleaseDue, scheduleApprovedDrama } = await import('@/lib/reel-ai-drama/publish/schedule');
+  const { dramaHoldsSlots, dramaPublishingLive, dramaReleaseDue, scheduleApprovedDrama } = await import('@/lib/reel-ai-drama/publish/schedule');
   const { claimAndCarryDrama } = await import('@/lib/reel-ai-drama/publish/publish');
   const { pollDramaInsights } = await import('@/lib/reel-ai-drama/publish/insights');
   const { DRAMA_INSIGHTS_HOUR_NY, DRAMA_INSIGHTS_MINUTE_NY } = await import('@/lib/reel-ai-drama/publish/config');
@@ -93,6 +95,7 @@ async function main(): Promise<void> {
   const { signArtifact } = await import('@/lib/explainers/storage');
   const { nextRunAt } = await import('@/lib/instagram/clock');
   const { tendPool } = await import('@/lib/reel-ai-drama/development/pool');
+  const { readDramaGate } = await import('@/lib/reel-ai-drama/gate');
 
   const storage = process.env.EXPLAINERS_STORAGE?.trim() === 'bucket' ? 'bucket' : 'local';
   log('storage', { storage, localDir: dramaLocalDir(), jobsDir: dramaJobsDir() });
@@ -174,6 +177,7 @@ async function main(): Promise<void> {
   const nyHour = (at: Date) => Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hour12: false }).format(at)) % 24;
   let nightCheckedAt = 0;
   let lastNight = '';
+  let mismatchDay = '';
   const schedule = liveScheduleDeps(db, (event, fields) => log(event, fields));
   /** With publisher_mode 'live' (and its heartbeat naming AI Drama) the shared publisher releases, posts and reads insights. */
   const standDown = () => publisherOwnsPublishing((text, params) => db.query(text, params) as never, 'reel_ai_drama');
@@ -199,26 +203,38 @@ async function main(): Promise<void> {
       const tended = await tendPoolOncePerDay(db, async () => tendPool(db, await loadSettings(db), now), now);
       if (tended) log('pool_tended', tended);
     });
-    const current = await loadSettings(db).catch(() => settings);
-    if (current.auto && nyHour(now) >= DRAMA_NIGHT_HOUR_NY && Date.now() - nightCheckedAt >= NIGHT_EVERY_MS) {
+    // The make step follows the state (D16): the night fill runs only in Approval or Live.
+    const gate = await readDramaGate(db).catch(() => null);
+    if (gate && nyHour(now) >= DRAMA_NIGHT_HOUR_NY && Date.now() - nightCheckedAt >= NIGHT_EVERY_MS) {
       nightCheckedAt = Date.now();
-      await step('night', async () => {
-        const night = await runDramaNight({ db, now, log: (event, fields) => log(event, fields) });
-        const key = JSON.stringify(night.status === 'skipped' ? night : { status: night.status });
-        if (key !== lastNight || night.status !== 'skipped') log('night', night as unknown as Record<string, unknown>);
-        lastNight = key;
-      });
+      // Once a New York day, so the log names it without repeating every check.
+      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(now);
+      if (gate.mismatch && mismatchDay !== day) {
+        mismatchDay = day;
+        log('state_mismatch', { vertical: 'reel_ai_drama', state: gate.state });
+      }
+      if (gate.makes) {
+        await step('night', async () => {
+          const night = await runDramaNight({ db, now, gate, log: (event, fields) => log(event, fields) });
+          const key = JSON.stringify(night.status === 'skipped' ? night : { status: night.status });
+          if (key !== lastNight || night.status !== 'skipped') log('night', night as unknown as Record<string, unknown>);
+          lastNight = key;
+        });
+      }
     }
     await step('weekly', async () => {
+      // The weekly development session is the refill: every state, on its refill cap (D14).
       const tick = await weeklyTick(schedule, now);
-      if (tick.auto && (tick.development === 'ran' || tick.development === 'failed')) log('weekly_tick', tick as unknown as Record<string, unknown>);
+      if (tick.development === 'ran' || tick.development === 'failed') log('weekly_tick', tick as unknown as Record<string, unknown>);
     });
-    // Approved reels onto the clock; then, unless the shared publisher drives AI Drama, due slots into attempts and one
-    // attempt to Instagram. Only while publishing_live is on.
+    // Approved reels onto the clock in Approval and Live (holdsSlots, contract §4.3; never one sent back to Made, D18);
+    // then, unless the shared publisher drives AI Drama, due slots into attempts and one attempt to Instagram, only while
+    // Live (D16; Generate off with Live on reads as paused).
     await step('publish', async () => {
-      if (!(await dramaPublishingLive(db))) return;
+      if (!(await dramaHoldsSlots(db))) return;
       const booked = await scheduleApprovedDrama(db, now);
       if (booked) log('approved_booked', { count: booked });
+      if (!(await dramaPublishingLive(db))) return;
       if (await standDown()) return;
       const released = await dramaReleaseDue(db);
       if (released) log('schedule_due', { released });

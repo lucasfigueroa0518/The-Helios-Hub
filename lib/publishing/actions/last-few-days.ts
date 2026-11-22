@@ -11,12 +11,12 @@ type Queued = { queued: boolean; note?: string };
 type Place = (q: Query, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
 const REJECTED_NOTE = 'This post was rejected, so it can’t be approved or published. Its stories are back in the pool.';
-const PUBLISHING_OFF_NOTE = 'Last Few Days publishing is off. Turn it on before publishing.';
+const PUBLISHING_OFF_NOTE = 'Last Few Days isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
 
 /**
  * Last Few Days (lib/lfd/schedule.ts): approve (approved, and booked in its own
- * day's window while lfd publishing_live is on; otherwise approved without a
- * slot), reject, Publish now (refused while publishing is off), unschedule, delete, and
+ * day's window in Approval or Live, contract §4.3; Paused: approved without a
+ * slot), reject, Publish now (refused unless Live, D16), unschedule, delete, and
  * place or move on the calendar (D50). No regenerate: a post is a whole run's
  * work; the type page's "Make Last Few Days now" makes a new one. A rejected
  * post (lfd.posts.status 'rejected') is refused by approve and Publish now.
@@ -26,7 +26,7 @@ export function lastFewDaysActions(deps: {
   approvePost: (q: Query, postId: string) => Promise<Placed>;
   rejectPost: (q: Query, postId: string, by: string | null) => Promise<boolean>;
   hardPublishPost: (q: Query, postId: string) => Promise<Queued>;
-  /** lfd.settings publishing_live: Publish now is refused while it is off. */
+  /** Whether Last Few Days is Live (D16, stateOf): Publish now is refused otherwise. */
   publishingLive: (q: Query) => Promise<boolean>;
   unschedulePost: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
   itemId: (q: Query, postId: string) => Promise<string | null>;

@@ -13,6 +13,9 @@
  *            can be compared with what the type workers actually did.
  *   live   – posts; the type workers stand down from releasing and posting.
  * Each type's own publishing_live still decides whether that type posts at all.
+ * In every mode but shadow, a due slot of a type that is not Live is cancelled with reason `slot-passed`
+ * (settings standard D17): it goes back to the Made tab still approved and is never posted late or re-slotted
+ * on its own (D18).
  * No Claude, no Jev: Instagram Graph and Supabase only, plus the website's deploy hook
  * (VERCEL_DEPLOY_HOOK_URL, when set) after an AI Events post refreshes the public calendar.
  */
@@ -39,6 +42,8 @@ const errorText = (error: unknown) => (error instanceof Error ? error.message : 
 
 const POLL_MS = 15_000;
 const INSIGHTS_EVERY_MS = 30 * 60_000;
+/** How often the slot-passed sweep runs (D17); a minute late is still never a late post, since it can't post. */
+const SWEEP_EVERY_MS = 60_000;
 
 async function main(): Promise<void> {
   const { socialQuery } = await import('@/lib/social/store');
@@ -59,6 +64,7 @@ async function main(): Promise<void> {
   const { reelsDriver } = await import('@/lib/publishing/drivers/reels');
   const { createLiveMetaClient } = await import('@/lib/reels/music/meta');
   const { publisherMode, publisherTick, recordHeartbeat } = await import('@/lib/publishing/publisher');
+  const { cancelPassedSlots } = await import('@/lib/content-type/unslot');
   type PublishDriver = import('@/lib/publishing/drivers/types').PublishDriver;
 
   const query = await socialQuery();
@@ -109,6 +115,17 @@ async function main(): Promise<void> {
   let lastShadow = '';
   let lastInsights = 0;
   let lastMode = '';
+  let lastSweep = 0;
+  /**
+   * D17: before this sweep a due slot of a type that isn't Live stayed `scheduled` (publisherTick and the type
+   * workers release only Live types), so it posted late the moment the type went Live. Read only in shadow mode.
+   */
+  const sweepPassedSlots = async () => {
+    const notLive: PublishDriver['vertical'][] = [];
+    for (const d of drivers) if (!(await d.live().catch(() => true))) notLive.push(d.vertical);
+    const passed = await cancelPassedSlots(query, notLive);
+    if (passed.length) log('slot_passed', { cancelled: passed.length, slots: passed });
+  };
   try {
     while (!stopping) {
       try {
@@ -119,6 +136,10 @@ async function main(): Promise<void> {
           // Tell the type workers which types this publisher drives (they stand down only for those).
           await recordHeartbeat(query, drivers.map((d) => d.vertical)).catch((error) => log('heartbeat_failed', { error: errorText(error) }));
           const result = await publisherTick(query, drivers);
+          if (result.mode !== 'shadow' && Date.now() - lastSweep >= SWEEP_EVERY_MS) {
+            lastSweep = Date.now();
+            await sweepPassedSlots().catch((error) => log('slot_passed_failed', { error: errorText(error) }));
+          }
           if (result.mode !== lastMode) log('mode', { mode: result.mode });
           lastMode = result.mode;
           if (result.mode === 'shadow') {

@@ -1,12 +1,21 @@
 /**
  * The helios-social worker's AI Events step (plan M4): carry out a claimed run, put its post on
- * the spine and, while ai_events publishing_live is on, into its Sunday's 6:00–7:00 PM window;
+ * the spine and, while AI Events holds slots (Approval or Live, D16), into its Sunday's 6:00–7:00 PM window;
  * then publish the public calendar snapshot (now with the week's picks) and record the outcome
  * and its spend on the run. The worker runs this in the same loop as Carousels and Last Few
  * Days, so no two runs ever overlap. scripts/ai_events_once.ts runs the same function by hand.
+ *
+ * Refill split (settings standard D3, D16; CONTRACT.md §4): the Sunday run's ranking into ai_events.pool is the
+ * type's refill and runs in every state. A scheduled build while AI Events is paused, or for a week whose posts
+ * already exist (the quota), only ranks the week, held to pool_refill_cap_usd (`refill_capped` when the cap stops
+ * it), renders nothing and publishes no snapshot. Rendering is the make step (makesPosts); booking a slot at run
+ * time follows holdsSlots (contract §4.3); posting follows postsToInstagram. A person's Generate and Rebuild post run in every state, as before.
  */
 import { calendarDateKey, SOCIAL_TIMEZONE } from '@/lib/instagram/clock';
+import { beginRefill, settleRefill } from '@/lib/content-type/refill-total';
+import { rankWeek } from '@/lib/networking/pick/rank';
 import { comingWeek, weekFromKey } from '@/lib/networking/pick/week';
+import { logRefillCapped, readTypeGate } from '@/lib/social/refill';
 import type { HubQuery } from '@/lib/social-hub/db';
 
 import { AI_EVENTS_POST_METROS, type AiEventsPostMetro } from './config';
@@ -59,6 +68,26 @@ export async function carryOutAiEventsRun(w: CarryOutDeps, claimed: ClaimedRun):
   };
   try {
     const settings = await readAiEventsSettings(w.query);
+    // The state (D16): reading it logs state_mismatch. require_approval is never read: every post waits for a person.
+    const gate = await readTypeGate(w.query, 'ai_events', w.log);
+    // A rebuild names its week; a build covers the coming Monday to Sunday.
+    const weekKey = claimed.weekKey ? weekFromKey(claimed.weekKey).weekKey : comingWeek(now).weekKey;
+
+    // The Sunday clock only makes the cities that have no post yet; Rebuild post redoes made ones.
+    const missing: AiEventsPostMetro[] = [];
+    for (const metro of AI_EVENTS_POST_METROS) if (!(await weekPost(w.query, weekKey, metro))) missing.push(metro);
+    if (claimed.trigger === 'scheduled' && claimed.kind === 'build') {
+      // Refill always runs (D3): paused, a bad run cap, or a week a person already made (Generate before noon) only ranks.
+      const why = !gate.makes
+        ? `paused: AI Events is ${gate.state}; the scheduled run ranked the ${weekKey} pool (refill) and made no post.`
+        : settings.runCapUsd == null
+          ? `bad-cap: ai_events.settings.run_cap_usd is not a positive number (got ${JSON.stringify(settings.runCapRaw)}); the scheduled run only ranked the ${weekKey} pool (refill).`
+          : !missing.length
+            ? `post-exists: The ${weekKey} posts already exist; the scheduled run made nothing new and ranked the pool (refill).`
+            : null;
+      if (why) return await refillWeek(w, claimed, { nyDate, weekKey, capUsd: gate.refillCapUsd, why, finish });
+    }
+
     const cap = settings.runCapUsd;
     if (cap == null) {
       const error = `ai_events.settings.run_cap_usd is not a positive number (got ${JSON.stringify(settings.runCapRaw)}); refusing to run`;
@@ -66,20 +95,7 @@ export async function carryOutAiEventsRun(w: CarryOutDeps, claimed: ClaimedRun):
       w.log('ai_events_run_failed', { runId: claimed.id, error });
       return { runId: claimed.id, status: 'failed', note: error };
     }
-    // A rebuild names its week; a build covers the coming Monday to Sunday.
-    const weekKey = claimed.weekKey ? weekFromKey(claimed.weekKey).weekKey : comingWeek(now).weekKey;
     await adoptRun(w.query, claimed.id, { capUsd: cap, nyDate, weekKey });
-
-    // The Sunday clock only makes the cities that have no post yet; Rebuild post redoes made ones.
-    const missing: AiEventsPostMetro[] = [];
-    for (const metro of AI_EVENTS_POST_METROS) if (!(await weekPost(w.query, weekKey, metro))) missing.push(metro);
-    if (claimed.trigger === 'scheduled' && !missing.length) {
-      // The Sunday clock never redoes a week a person already made (Generate before noon): Rebuild post does that.
-      const note = `The ${weekKey} posts already exist; the scheduled run made nothing new.`;
-      await finish({ status: 'skipped', stopReason: `post-exists: ${note}`, jevUsd: 0, record: { kind: claimed.kind, weekKey } });
-      w.log('ai_events_run_skipped', { runId: claimed.id, reason: 'post_exists', weekKey });
-      return { runId: claimed.id, status: 'skipped', note };
-    }
 
     w.log('ai_events_run_started', { runId: claimed.id, trigger: claimed.trigger, kind: claimed.kind, weekKey, capUsd: cap });
     const deps = await w.engine(claimed, cap);
@@ -102,13 +118,14 @@ export async function carryOutAiEventsRun(w: CarryOutDeps, claimed: ClaimedRun):
       return { runId: claimed.id, status: 'skipped', note: res.note };
     }
 
-    // Each city's post on the spine and, while publishing is live, in its own window (Miami first).
+    // Each city's post on the spine and, while AI Events holds slots (Approval or Live, contract §4.3), in its own
+    // window (Miami first). Only Live posts it: the release is gated on Live.
     const booked: Array<{ metro: string; postId: string; scheduled: string | null; note: string | null }> = [];
     for (const p of res.posts) {
       await aiEventsItemId(w.query, p.postId);
       let scheduled: string | null = null;
       let note: string | null = null;
-      if (settings.publishingLive) {
+      if (gate.holds) {
         // A fresh clock (the run took time); throughDate is the post's own Sunday, so it never books another week.
         const out = await scheduleAiEventsPost(w.query, p.postId, 'auto', w.now(), postDateFor(weekKey));
         scheduled = out.scheduled ? out.publishAt : null;
@@ -141,4 +158,65 @@ export async function carryOutAiEventsRun(w: CarryOutDeps, claimed: ClaimedRun):
     w.log('ai_events_run_failed', { runId: claimed.id, error: message });
     return { runId: claimed.id, status: 'failed', note: message };
   }
+}
+
+/** A spend-cap refusal from the networking Jev (lib/networking/pick/jev.ts JevSpendCapError). */
+const CAP_ERROR = /spend cap \$[\d.]+ reached/i;
+
+/**
+ * The refill alone: rank the week into ai_events.pool (Jev for events not scored yet, AE-05), held to the refill cap.
+ * Nothing is rendered, booked or published. The run ends `skipped` with `why`, its spend recorded.
+ */
+async function refillWeek(
+  w: CarryOutDeps,
+  claimed: ClaimedRun,
+  o: { nyDate: string; weekKey: string; capUsd: number; why: string; finish: (f: Parameters<typeof finishRun>[2]) => Promise<void> },
+): Promise<CarryOutResult> {
+  // The nightly total of all refills (D19): the cap is cut to what is left of it; no room skips the refill this week.
+  const grant = await beginRefill(w.query, 'ai_events', o.capUsd, { ref: `run:${claimed.id}`, log: w.log, now: w.now() });
+  if (!grant) {
+    const note = `${o.why} Tonight's refill total is used up, so the pool was not ranked; it refills next time.`;
+    await o.finish({ status: 'skipped', stopReason: `refill-total-capped: ${note}`, jevUsd: 0, record: { kind: claimed.kind, weekKey: o.weekKey, refillOnly: true } });
+    return { runId: claimed.id, status: 'skipped', note };
+  }
+  let settled = false;
+  const settle = async (usd: number) => {
+    settled = true;
+    await settleRefill(w.query, grant, usd, w.log);
+  };
+  try {
+    return await rankRefill(w, claimed, { ...o, capUsd: grant.capUsd }, settle);
+  } finally {
+    // The ranking threw before reporting its spend: settle at the reservation (the strict reading).
+    if (!settled) await settle(grant.capUsd);
+  }
+}
+
+async function rankRefill(
+  w: CarryOutDeps,
+  claimed: ClaimedRun,
+  o: { nyDate: string; weekKey: string; capUsd: number; why: string; finish: (f: Parameters<typeof finishRun>[2]) => Promise<void> },
+  settle: (usd: number) => Promise<void>,
+): Promise<CarryOutResult> {
+  await adoptRun(w.query, claimed.id, { capUsd: o.capUsd, nyDate: o.nyDate, weekKey: o.weekKey });
+  w.log('ai_events_refill_started', { runId: claimed.id, weekKey: o.weekKey, capUsd: o.capUsd, why: o.why });
+  const deps = await w.engine(claimed, o.capUsd);
+  let rank;
+  try {
+    rank = await (deps.rank ?? rankWeek)({ q: w.query, ask: deps.ask, weekKey: o.weekKey, runId: claimed.id, now: w.now(), capUsd: o.capUsd, scoreNew: true });
+  } catch (error) {
+    const message = `ranking failed: ${errorText(error)}`;
+    // Every call refused for the cap reads as a capped refill, not a broken one.
+    if (CAP_ERROR.test(message)) logRefillCapped(w.log, 'ai_events', { capUsd: o.capUsd, step: 'ranking', runId: claimed.id });
+    await o.finish({ status: 'failed', error: message, jevUsd: 0, record: { kind: claimed.kind, weekKey: o.weekKey, refillOnly: true } });
+    w.log('ai_events_run_failed', { runId: claimed.id, error: message });
+    return { runId: claimed.id, status: 'failed', note: message };
+  }
+  await settle(rank.jev.usd);
+  const capped = rank.failures.some((f) => CAP_ERROR.test(f.error));
+  if (capped) logRefillCapped(w.log, 'ai_events', { capUsd: o.capUsd, spentUsd: rank.jev.usd, step: 'ranking', runId: claimed.id });
+  const record = { kind: claimed.kind, weekKey: o.weekKey, refillOnly: true, capped, scored: rank.scored, reused: rank.reused, failures: rank.failures.slice(0, 10), jev: rank.jev };
+  await o.finish({ status: 'skipped', stopReason: o.why, jevUsd: rank.jev.usd, record });
+  w.log('ai_events_refill_complete', { runId: claimed.id, weekKey: o.weekKey, scored: rank.scored, reused: rank.reused, jevUsd: rank.jev.usd, capped });
+  return { runId: claimed.id, status: 'skipped', note: o.why };
 }

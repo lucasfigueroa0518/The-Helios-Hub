@@ -101,8 +101,10 @@ test('posting settings refuse bad input before writing anything', async () => {
   await assert.rejects(() => writePosting('stories', { series: { id: 'real_or_ai', days: [] } } as never, 't'), /Series settings moved/);
   await assert.rejects(() => writePosting('ai_trivia', { cap: 2 }, 't'), /0 or 1/);
   await assert.rejects(() => writePosting('real_or_ai', { perDay: 1 }, 't'), /no daily quota/);
-  await assert.rejects(() => writePosting('carousels', { live: 'yes' as never }, 't'), /true or false/);
-  await assert.rejects(() => writePosting('carousels', { autoPublish: 1 as never }, 't'), /true or false/);
+  // Settings standard (D16): one state replaces Generate, Auto-publish and Live.
+  await assert.rejects(() => writePosting('carousels', { live: 'yes' } as never, 't'), /no longer a setting/);
+  await assert.rejects(() => writePosting('carousels', { autoPublish: 1 } as never, 't'), /no longer a setting/);
+  await assert.rejects(() => writePosting('carousels', { state: 'yes' as never }, 't'), /Paused, Approval or Live/);
   // The daily limit: a whole number from 0 to 10; Last Few Days runs once a day.
   await assert.rejects(() => writePosting('explainers', { cap: 11 }, 't'), /whole number from 0 to 10/);
   await assert.rejects(() => writePosting('explainers', { cap: -1 }, 't'), /whole number from 0 to 10/);

@@ -9,9 +9,14 @@ type Outcome = { scheduled: boolean; note: string; status?: number };
 type Queued = { queued: boolean; note?: string; status?: number };
 type Place = (q: SpineQuery, input: PlacementTarget & Placement & { by?: string }) => Promise<PlacementOutcome>;
 
+const NOT_LIVE_NOTE = 'Text on Screen isn’t Live, so nothing posts to Instagram. Set it to Live in its Settings tab first.';
+const APPROVED_PAUSED_NOTE = 'Approved. Text on Screen is Paused, so it stays in the Made tab. Place it in a slot once it’s in Approval or Live (its Settings tab).';
+const PAUSED_NO_VIDEO_NOTE = 'Text on Screen is Paused and this idea has no reel yet, so there is nothing to approve. Its slot is booked once it’s in Approval or Live.';
+
 /**
  * Text on Screen (lib/reels/publish): approve the idea's slot (it keeps, or books,
- * the reel's own posting day: Bald-Eagle D4), reject, Force post, place or move
+ * the reel's own posting day: Bald-Eagle D4; in Approval or Live, contract §4.3;
+ * Paused: the reel is approved and stays in the Made tab, D17), reject, Force post, place or move
  * the idea's slot (D50: slots belong to the idea; a move keeps the slot's
  * approval), and regenerate: the idea's video is built again on its own slate
  * (copy → frame → video, `requestFinish`, D52) while that slate's posting day
@@ -32,6 +37,14 @@ export function reelActions(deps: {
   todaySlate: (postIdeaId: string) => Promise<string | null>;
   findReelLock: (slateId: string, postIdeaId: string) => Promise<{ nyDate: string } | null>;
   requestFinish: (postIdeaId: string, slateId: string) => Promise<{ status: 'active' | 'done' | 'failed'; note: string }>;
+  /** Whether Text on Screen is Live (D16; lib/reels/publish/schedule.ts publishingLive). Absent: not checked here. */
+  publishingLive?: () => Promise<boolean>;
+  /** Whether Text on Screen books slots: Approval or Live (holdsSlots; schedule.ts reelsHoldsSlots). Absent: not checked here. */
+  holdsSlots?: () => Promise<boolean>;
+  /** Approve the reel's video without a slot (Paused, D17): lib/reels/publish/items.ts approveReel. */
+  approveVideo?: (videoJobId: string) => Promise<void>;
+  /** After a Paused approve: keep the reel out of automatic placement (D18; lib/reels/publish/schedule.ts holdApprovedReel). */
+  holdApproved?: (postIdeaId: string, videoJobId: string) => Promise<unknown>;
 }): ContentActions {
   const placement =
     (fn: Place): ActionFn =>
@@ -44,7 +57,16 @@ export function reelActions(deps: {
   return {
     vertical: 'reels',
     async approve(t) {
-      const out = await deps.schedulePostIdea(need(t, 'postIdeaId'), 'user', t.videoJobId ?? null);
+      const postIdeaId = need(t, 'postIdeaId');
+      // A paused type holds no slots (D17): the reel is approved and stays in the Made tab.
+      if (deps.holdsSlots && !(await deps.holdsSlots().catch(() => false))) {
+        if (!t.videoJobId || !deps.approveVideo) return { ok: false, note: PAUSED_NO_VIDEO_NOTE, status: 409 };
+        await deps.approveVideo(t.videoJobId);
+        // D18: approved while Paused, it is never placed automatically later; only a person places it.
+        await deps.holdApproved?.(postIdeaId, t.videoJobId);
+        return { ok: true, note: APPROVED_PAUSED_NOTE };
+      }
+      const out = await deps.schedulePostIdea(postIdeaId, 'user', t.videoJobId ?? null);
       return out.scheduled ? { ok: true, note: out.note } : { ok: false, note: out.note, status: out.status };
     },
     async reject(t, by) {
@@ -52,6 +74,8 @@ export function reelActions(deps: {
       return { ok: out.rejected, note: out.note };
     },
     async publishNow(t) {
+      // Posts go to Instagram only in the Live state (D16): a forced reel would otherwise wait unposted.
+      if (deps.publishingLive && !(await deps.publishingLive().catch(() => false))) return { ok: false, note: NOT_LIVE_NOTE, status: 409 };
       const out = await deps.forcePost(need(t, 'videoJobId'));
       return out.queued ? { ok: true, note: 'Queued to publish now.' } : { ok: false, note: out.note ?? 'Not queued.', status: out.status };
     },

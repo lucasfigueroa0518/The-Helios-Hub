@@ -1,3 +1,4 @@
+import { postsToInstagram, stateOf } from '@/lib/content-type/state';
 import { STORY_VERTICALS, type StoryVertical } from '@/lib/social-hub/story-types';
 import type { Vertical } from '@/lib/social-hub/types';
 
@@ -10,6 +11,9 @@ import { aiEventsActions } from './ai-events';
 import { fieldNotesActions } from './field-notes';
 import { reelAiDramaActions } from './reel-ai-drama';
 import type { ContentActions } from './types';
+
+/** Whether a type's stored pair is the Live state (settings standard D16): posts go to Instagram only then. */
+const isLive = (s: { autoRun: boolean; publishingLive: boolean }): boolean => postsToInstagram(stateOf(s.autoRun, s.publishingLive).state);
 
 /** Every type's actions with their live functions (the hub's action routes use this). */
 export async function liveContentActions(): Promise<Record<Vertical, ContentActions>> {
@@ -44,6 +48,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     fnSettings,
     fnManual,
     drama,
+    carouselRefill,
   ] = await Promise.all([
     import('@/lib/social/store'),
     import('@/lib/social/overnight/schedule'),
@@ -75,6 +80,7 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
     import('@/lib/field-notes/settings'),
     import('@/lib/field-notes/manual'),
     import('@/lib/reel-ai-drama/hub'),
+    import('@/lib/social/refill'),
   ]);
   const db = storiesDb.liveStoriesDb;
   const storiesSpine = (text: string, params?: unknown[]) => db.query(text, params) as Promise<{ rows: any[] }>;
@@ -90,6 +96,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       rescheduleItem: placement.rescheduleItem,
       unschedulePost: carousel.unschedulePost,
       requestRerun: carouselRuns.requestRerun,
+      // Live only (D16): stateOf(auto_run, publishing_live); a failed read reads as paused.
+      publishingLive: async (q) => (await carouselRefill.readTypeGate(q, 'carousels')).posts,
     }),
     explainers: explainerActions({
       db: explainersConn.explainersDb,
@@ -105,6 +113,10 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       rescheduleItem: placement.rescheduleItem,
       scheduleJob: (d, jobId, source, now, through) => explainersSchedule.scheduleJob(d, jobId, source, now, through),
       publishingLive: explainersSchedule.publishingLive,
+      // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
+      holdsSlots: explainersSchedule.explainersHoldsSlots,
+      // D18: approved while Paused, it is never placed automatically later.
+      holdApproved: (d, jobId) => explainersSchedule.holdApprovedRender(d, jobId),
       // Revision rows live where the social worker claims them (DATABASE_URL); only when explainers share that database.
       revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),
     }),
@@ -112,6 +124,12 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       schedulePostIdea: reels.schedulePostIdea as never,
       rejectReel: reels.rejectReel,
       forcePost: reels.forcePost,
+      publishingLive: () => reels.publishingLive(),
+      // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
+      holdsSlots: () => reels.reelsHoldsSlots(),
+      approveVideo: (videoJobId) => reelItems.approveReel(videoJobId, 'user'),
+      // D18: approved while Paused, it is never placed automatically later.
+      holdApproved: (postIdeaId, videoJobId) => reels.holdApprovedReel(postIdeaId, videoJobId),
       unscheduleIdea: reels.unscheduleIdea,
       query: reelItems.reelsSpine,
       itemId: reelItems.reelItemId,
@@ -141,7 +159,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       approvePost: (q, postId) => lfdSchedule.approveLfdPost(q, postId),
       rejectPost: lfdSchedule.rejectLfdPost,
       hardPublishPost: lfdSchedule.hardPublishLfdPost,
-      publishingLive: async (q) => (await lfdSettings.readLfdSettings(q)).publishingLive,
+      // Live only (D16): Generate (auto_run) and publishing_live both on; Generate off with Live on reads as paused.
+      publishingLive: async (q) => isLive(await lfdSettings.readLfdSettings(q)),
       unschedulePost: lfdSchedule.unscheduleLfdPost,
       itemId: lfdItems.lfdItemId,
       placeItem: placement.placeItem,
@@ -152,7 +171,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       approvePost: (q, postId) => aiSchedule.approveAiEventsPost(q, postId),
       rejectPost: aiSchedule.rejectAiEventsPost,
       hardPublishPost: aiSchedule.hardPublishAiEventsPost,
-      publishingLive: async (q) => (await aiSettings.readAiEventsSettings(q)).publishingLive,
+      // Live only (D16): Generate (auto_run) and publishing_live both on; Generate off with Live on reads as paused.
+      publishingLive: async (q) => isLive(await aiSettings.readAiEventsSettings(q)),
       unschedulePost: aiSchedule.unscheduleAiEventsPost,
       queueRebuild: (q, o) => aiManual.queueAiEventsRun(q, { kind: 'rebuild', requestedBy: o.requestedBy, weekKey: o.weekKey }),
       itemId: aiItems.aiEventsItemId,
@@ -164,7 +184,8 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       approvePost: (q, postId) => fnSchedule.approveFieldNotesPost(q, postId),
       rejectPost: fnSchedule.rejectFieldNotesPost,
       hardPublishPost: fnSchedule.hardPublishFieldNotesPost,
-      publishingLive: async (q) => (await fnSettings.readFieldNotesSettings(q)).publishingLive,
+      // Live only (D16): Generate (auto_run) and publishing_live both on; Generate off with Live on reads as paused.
+      publishingLive: async (q) => isLive(await fnSettings.readFieldNotesSettings(q)),
       unschedulePost: fnSchedule.unscheduleFieldNotesPost,
       queueRebuild: (q, o) => fnManual.queueFieldNotesRun(q, { kind: 'rebuild', requestedBy: o.requestedBy }),
       itemId: fnItems.fieldNotesItemId,
@@ -183,6 +204,10 @@ export async function liveContentActions(): Promise<Record<Vertical, ContentActi
       verdictOf: drama.dramaVerdictOf,
       scheduleJob: drama.scheduleDramaJob,
       publishingLive: drama.dramaPublishingLive,
+      // Approval or Live books (contract §4.3); Paused approves without a slot (D17).
+      holdsSlots: drama.dramaHoldsSlots,
+      // D18: approved while Paused, it is never placed automatically later.
+      holdApproved: (d, jobId) => drama.holdApprovedDrama(d, jobId),
       placeItem: placement.placeItem,
       rescheduleItem: placement.rescheduleItem,
       revisionsQuery: async () => (process.env.EXPLAINERS_DB === 'supabase' && !process.env.EXPLAINERS_DATABASE_URL?.trim() ? socialQuery() : null),

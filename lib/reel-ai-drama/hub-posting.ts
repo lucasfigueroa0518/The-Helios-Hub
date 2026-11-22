@@ -3,16 +3,17 @@ import { DRAMA_WINDOWS } from '@/lib/reel-ai-drama/publish/config';
 import { scheduleApprovedDrama } from '@/lib/reel-ai-drama/publish/schedule';
 import { inTransaction, loadSettings } from '@/lib/reel-ai-drama/settings';
 
-/** AI Drama posting settings, read and written for lib/content-type/posting.ts (HUB-WIRING-CONTRACT.md §4.4). */
-
-
-export type DramaPosting = { generate: boolean; autoPublish: boolean; live: boolean; perDay: number; maxPerDay: number; dailyRenderCap: number; dailySpendCapUsd: number };
+/**
+ * AI Drama posting settings, read and written for lib/content-type/posting.ts (HUB-WIRING-CONTRACT.md §4.4). The
+ * state is the pair `auto` + `publishing_live` (settings standard D16). Every post needs a person's approval, so there
+ * is no Auto-publish: require_approval is never read here and never written false.
+ */
+export type DramaPosting = { generate: boolean; live: boolean; perDay: number; maxPerDay: number; dailyRenderCap: number; dailySpendCapUsd: number };
 
 export async function readDramaPosting(db: Queryable): Promise<DramaPosting> {
   const s = await loadSettings(db);
   return {
     generate: s.auto,
-    autoPublish: !s.require_approval,
     live: s.publishing_live,
     perDay: s.posts_per_day,
     maxPerDay: DRAMA_WINDOWS.length,
@@ -26,17 +27,17 @@ export class DramaPostingError extends Error {
 }
 
 /**
- * One transaction: generate → auto, autoPublish → require_approval = !v, live → publishing_live, perDay (1..max) also
- * raises daily_render_cap to at least perDay. Turning live on then books the approved reels (scheduleApprovedDrama).
+ * One transaction: generate → auto, live → publishing_live, perDay (1..max) also raises daily_render_cap to at least
+ * perDay. require_approval is not writable (always true, D16). Turning Generate or Live on (Approval or Live) then books
+ * the approved reels (scheduleApprovedDrama; contract §4.3, never one sent back to Made, D18).
  */
-export async function writeDramaPosting(db: Queryable, patch: { generate?: boolean; autoPublish?: boolean; live?: boolean; perDay?: number }): Promise<DramaPosting> {
+export async function writeDramaPosting(db: Queryable, patch: { generate?: boolean; live?: boolean; perDay?: number }): Promise<DramaPosting> {
   const writes: Array<[string, unknown]> = [];
   const bool = (name: string, v: unknown) => {
     if (typeof v !== 'boolean') throw new DramaPostingError(`${name} must be true or false.`);
     return v;
   };
   if (patch.generate !== undefined) writes.push(['auto', bool('generate', patch.generate)]);
-  if (patch.autoPublish !== undefined) writes.push(['require_approval', !bool('autoPublish', patch.autoPublish)]);
   if (patch.live !== undefined) writes.push(['publishing_live', bool('live', patch.live)]);
   if (patch.perDay !== undefined) {
     const n = patch.perDay;
@@ -58,6 +59,6 @@ export async function writeDramaPosting(db: Queryable, patch: { generate?: boole
       }
     });
   }
-  if (patch.live === true) await scheduleApprovedDrama(db);
+  if (patch.generate === true || patch.live === true) await scheduleApprovedDrama(db);
   return readDramaPosting(db);
 }

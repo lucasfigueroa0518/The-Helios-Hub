@@ -41,6 +41,8 @@ function driverFor(q: Query, snapshots: string[] = []) {
 test('the publisher releases an approved due AI Events post, carries it, and republishes the calendar', async () => {
   const { query } = await openAiEventsDb({ publishingLive: true });
   const q = query as unknown as Query;
+  // The Live state (D16): Generate (auto_run) and publishing_live both on.
+  await q(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
   await q(`INSERT INTO social_hub.settings (key, value) VALUES ('publisher_mode', '"live"'::jsonb) ON CONFLICT (key) DO UPDATE SET value = excluded.value`);
   const id = await seedAiEventsPost(query);
   assert.equal((await approveAiEventsPost(q, id, new Date('2026-10-25T16:30:00Z'))).scheduled, true);
@@ -57,10 +59,18 @@ test('the publisher releases an approved due AI Events post, carries it, and rep
   assert.deepEqual(snapshots, ['ai_events published']);
 });
 
-test('the driver is off while publishing_live is off, and when the ai_events schema is missing', async () => {
+test('the driver is live only in the Live state (D16), and off when the ai_events schema is missing', async () => {
   const { query } = await openAiEventsDb();
   const q = query as unknown as Query;
   assert.equal(await driverFor(q).live(), false);
+  assert.equal(await driverFor(q).requireApproval(), true);
+  // Generate off with Live on reads as paused (contract §3): nothing posts.
+  await q(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'publishing_live'`);
+  assert.equal(await driverFor(q).live(), false);
+  await q(`UPDATE ai_events.settings SET value = 'true'::jsonb WHERE key = 'auto_run'`);
+  assert.equal(await driverFor(q).live(), true);
+  // Approval is always required: a stored false is never read (D16).
+  await q(`UPDATE ai_events.settings SET value = 'false'::jsonb WHERE key = 'require_approval'`);
   assert.equal(await driverFor(q).requireApproval(), true);
   const broken: Query = async (text) => {
     if (/ai_events\./.test(text)) throw new Error('relation "ai_events.settings" does not exist');

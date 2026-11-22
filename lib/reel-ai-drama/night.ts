@@ -1,8 +1,9 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { recentPlayers } from '@/lib/reel-ai-drama/development/pool';
 import { spineOf } from '@/lib/reel-ai-drama/publish/items';
-import { DRAMA_PLACEABLE_RENDERS, dramaPostsPerDay, dramaPublishingLive, dramaRequireApproval, scheduleDramaJob, type DramaScheduleOutcome } from '@/lib/reel-ai-drama/publish/schedule';
+import { DRAMA_PLACEABLE_RENDERS, dramaHoldsSlots, dramaPostsPerDay, dramaRequireApproval, scheduleDramaJob, type DramaScheduleOutcome } from '@/lib/reel-ai-drama/publish/schedule';
 import { dramaSpendOn, nyDateOf, requestDramaJob } from '@/lib/reel-ai-drama/requests';
+import { readDramaGate, type DramaGate } from '@/lib/reel-ai-drama/gate';
 import { loadSettings } from '@/lib/reel-ai-drama/settings';
 import { dailyFillOrQuota } from '@/lib/social-hub/fill';
 import { fillDates, leadDaysFor } from '@/lib/social-hub/lead';
@@ -14,7 +15,7 @@ import { tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves'
 
 /**
  * The nightly fill for AI Drama reels (HUB-WIRING-CONTRACT.md §4.6; mirrors runIdeaCycle's fill). From
- * DRAMA_NIGHT_HOUR_NY, while `auto` is on, the night fills the dates it makes ahead (Bald-Eagle D4, D8;
+ * DRAMA_NIGHT_HOUR_NY, while the type makes posts (Approval or Live, D16), the night fills the dates it makes ahead (Bald-Eagle D4, D8;
  * lib/social-hub/lead.ts): `fillDates(runDay, 2)`, the run day through day+2. Each date is filled once (a `reel_ai_drama.nights`
  * row per TARGET date, see below), with that date's quota less every booking already on it; surviving approved renders
  * are booked on that date (never made again), pooled pitches are requested (trigger 'auto', stamped with the date in
@@ -27,7 +28,8 @@ import { tonightMoves, type IdeaAdjustment } from '@/lib/social-hub/views/moves'
  * by the two nights before and fills only day+2. Freshness (the spread rule) is measured from the run time.
  */
 
-export type DramaNightSkip = 'auto_off' | 'already_ran_today' | 'quota_filled' | 'daily_spend_cap' | 'pool_empty';
+/** `paused`: the type makes no posts (D16); `auto_off` is its older name, no longer returned. */
+export type DramaNightSkip = 'paused' | 'auto_off' | 'already_ran_today' | 'quota_filled' | 'daily_spend_cap' | 'pool_empty';
 
 /** What the run did for one date it fills. `already_ran_today`: that date was already filled (by an earlier night). */
 export type DramaNightDate =
@@ -170,7 +172,8 @@ async function fillDate(st: RunState, day: string): Promise<DramaNightDate> {
       }
     }
     const handMoved = new Set(moves.filter((m) => m.kind === 'pin' || m.kind === 'promote' || m.kind === 'place').map((m) => m.ideaId));
-    const live = await dramaPublishingLive(db);
+    // Booked in Approval and Live (holdsSlots, contract §4.3); only Live posts them (D16).
+    const books = await dramaHoldsSlots(db);
     const requested: string[] = [];
     const allocated: DramaAllocation[] = [];
     let capped = false;
@@ -179,7 +182,7 @@ async function fillDate(st: RunState, day: string): Promise<DramaNightDate> {
       if (c.player) st.players.add(c.player);
       if (c.jobId) {
         // A surviving render is booked on the date this run fills, not the earliest open slot.
-        const scheduled = live ? await scheduleDramaJob(db, c.jobId, 'auto', now, day, undefined, day) : null;
+        const scheduled = books ? await scheduleDramaJob(db, c.jobId, 'auto', now, day, undefined, day) : null;
         st.placedJobs.add(c.jobId);
         allocated.push({ pitchId: c.pitchId, jobId: c.jobId, scheduled });
         if (handMoved.has(idea)) await markPromoteUsed(movesQ, 'reel_ai_drama', idea).catch(() => false);
@@ -211,14 +214,20 @@ async function fillDate(st: RunState, day: string): Promise<DramaNightDate> {
   }
 }
 
-export async function runDramaNight(deps: { db: Queryable; moves?: MovesQuery; now?: Date; log?: (e: string, f?: Record<string, unknown>) => void }): Promise<DramaNightResult> {
+/**
+ * The make step (D16): runs only while the type makes posts (Approval or Live), and books in those states too
+ * (dramaHoldsSlots, contract §4.3); only Live posts. The pool's refill (tending, weekly development) runs apart from it, in every state.
+ */
+export async function runDramaNight(deps: { db: Queryable; moves?: MovesQuery; now?: Date; log?: (e: string, f?: Record<string, unknown>) => void; gate?: DramaGate }): Promise<DramaNightResult> {
   const { db } = deps;
   const now = deps.now ?? new Date();
   const log = deps.log ?? (() => undefined);
   const movesQ: MovesQuery = deps.moves ?? ((text, params) => db.query(text, params as never) as never);
   const movesReadAt = new Date();
   const settings = await loadSettings(db);
-  if (!settings.auto) return { status: 'skipped', reason: 'auto_off' };
+  const gate = deps.gate ?? (await readDramaGate(db));
+  if (gate.mismatch) log('state_mismatch', { vertical: 'reel_ai_drama', state: gate.state });
+  if (!gate.makes) return { status: 'skipped', reason: 'paused' };
 
   const st: RunState = { db, now, log, movesQ, settings, moves: null, placedJobs: new Set(), players: new Set(), pinsChecked: false, capped: false };
   const dates: DramaNightDate[] = [];

@@ -30,6 +30,7 @@ function actions(over: Record<string, unknown> = {}) {
     verdictOf: async () => null,
     scheduleJob: async () => ({ scheduled: true, publishAt: '2026-11-09T01:10:00Z' }),
     publishingLive: async () => true,
+    holdsSlots: async () => true,
     placeItem: async (_q: unknown, input: unknown) => { calls.push(['place', input]); return { ok: true, note: 'Placed.' }; },
     rescheduleItem: async () => ({ ok: true, note: 'Moved.' }),
     revisionsQuery: async () => null,
@@ -39,14 +40,19 @@ function actions(over: Record<string, unknown> = {}) {
   return { a: reelAiDramaActions(deps as never), calls };
 }
 
-test('approve books a slot while publishing is live, and holds off while it is off', async () => {
+test('approve books a slot in Live and in Approval (contract §4.3; only Live posts), and books nothing while Paused', async () => {
   const { a, calls } = actions();
   const out = await a.approve!(T, 'lucas');
   assert.equal(out.ok, true);
   assert.match(out.note, /^Approved\. It posts /);
   assert.deepEqual(calls[0], ['setVerdict', JOB, 'approved', 'lucas']);
-  const off = await actions({ publishingLive: async () => false }).a.approve!(T, 'lucas');
-  assert.match(off.note, /Publishing is switched off/);
+  let booked = 0;
+  const approval = await actions({ publishingLive: async () => false, scheduleJob: async () => (booked += 1, { scheduled: true, publishAt: '2026-11-09T01:10:00Z' }) }).a.approve!(T, 'lucas');
+  assert.equal(booked, 1, 'Approval books the slot');
+  assert.match(approval.note, /^Approved\. It holds its slot .*nothing posts until AI Drama Reels are Live/);
+  const paused = await actions({ publishingLive: async () => false, holdsSlots: async () => false, scheduleJob: async () => assert.fail('Paused books nothing') }).a.approve!(T, 'lucas');
+  assert.equal(paused.ok, true);
+  assert.match(paused.note, /AI Drama Reels are Paused, so it stays in the Made tab/);
   const full = await actions({ scheduleJob: async () => ({ scheduled: false }) }).a.approve!(T, 'lucas');
   assert.match(full.note, /No slot is left on its day/);
 });

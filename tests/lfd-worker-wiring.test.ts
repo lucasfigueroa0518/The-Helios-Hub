@@ -8,7 +8,8 @@ const read = (file: string) => readFileSync(path.join(process.cwd(), file), 'utf
 
 test('the social worker runs Last Few Days in its own loop: the 3:00 slot, claims, publishing, insights', () => {
   const text = read('scripts/social_worker.ts');
-  assert.match(text, /threeAmQueue\(today, lfd, await autoRunOn\(\)\.catch\(\(\) => false\), plan \? isLfdDay\(plan, today\) : null\)/);
+  // The 3:00 slot reads each type's state (D16): Carousels make posts only while makesPosts.
+  assert.match(text, /threeAmQueue\(today, lfd, carousel\.makes, plan \? isLfdDay\(plan, today\) : null\)/);
   assert.match(text, /lfdStore\.requestRun\(lfdQuery, 'scheduled'/);
   assert.match(text, /lfdStore\.claimRun\(lfdQuery\)/);
   assert.match(text, /carryOutLfdRun\(/);
@@ -22,8 +23,12 @@ test('the social worker runs Last Few Days in its own loop: the 3:00 slot, claim
   assert.match(text, /publisherOwnsPublishing\(query, 'last_few_days'\)/);
   assert.match(text, /claimAndPublishLfd\(/);
   assert.match(text, /pollCarouselInsights\(query, client, new Date\(\), 200, 'last_few_days'\)/);
-  // The carousel run is queued only when the slot belongs to it.
-  assert.match(text, /else if \(slot\.queue === 'carousels'\)/);
+  // The carousel run is queued every night (refill, D3/D16); it makes stories only when the slot belongs to it.
+  assert.match(text, /const making = slot\.queue === 'carousels';/);
+  assert.match(text, /const plan = carouselNight\(\{\s*slot: night\?\.slot \?\? null,/);
+  // Posting only while Live, and never with approval read as off.
+  assert.match(text, /\(await readTypeGate\(lfdQuery, 'last_few_days', log\)\)\.posts && !\(await publisherOwnsPublishing\(query, 'last_few_days'\)\)/);
+  assert.match(text, /releaseDueLfd\(query, \{ requireApproval: true \}\)/);
 });
 
 test('a deploy waits for a running Last Few Days run', () => {

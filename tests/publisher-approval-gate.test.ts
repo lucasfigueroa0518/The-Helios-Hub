@@ -191,16 +191,20 @@ test('explainers: a slot rejected on the review page only (spine still approved,
   assert.equal(await explainerAttempts(db), 0);
 });
 
-test('explainers: an approved due slot is still released; with require_approval off an unreviewed one is too', async () => {
+test('explainers: an approved due slot is still released; a stored require_approval false never lets an unreviewed one go (D16)', async () => {
   const { db } = await scratchExplainersDb();
   await dueExplainerSlot(db, await explainerRender(db, 'approved'));
   assert.equal(await releaseExplainers(db), 1);
   assert.equal(await explainerAttempts(db), 1);
 
+  // Every post needs a person's approval: the stored row is never read as false.
   const off = (await scratchExplainersDb()).db;
   await off.query(`UPDATE explainers.settings SET value = 'false'::jsonb WHERE key = 'require_approval'`);
   await dueExplainerSlot(off, await explainerRender(off, null));
-  assert.equal(await releaseExplainers(off), 1);
+  assert.equal(await releaseExplainers(off), 0);
+  const slot = await explainerSlot(off);
+  assert.deepEqual([slot.status, slot.error], ['cancelled', EXPLAINER_NOT_APPROVED]);
+  assert.equal(await explainerAttempts(off), 0);
 });
 
 // ── Stories ─────────────────────────────────────────────────────────────────
