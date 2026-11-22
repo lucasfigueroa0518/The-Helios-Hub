@@ -14,14 +14,14 @@ Read first: `CLAUDE.md`, then `PLAN.md` (decisions D1–D19), `CONTRACT.md`, `BU
   (explainers-render, reel-ai-drama-writing, revisions-explainers start-up recovery, a few that need local tools).
 
 ## To do (in order)
-1. **Deploy the social worker** (all content-type workers + publisher run on `helios-social-worker`; the orchestration
+1. ~~**Deploy the social worker**~~ — **done 2026-11-22 03:29 UTC**: all six units active, no restarts, no warnings. (All content-type workers + publisher run on `helios-social-worker`; the orchestration
    VM runs none of the changed code): on `main-l2xadw`, clean tree, gcloud logged in, `.env.local` present:
    `./scripts/gcp/deploy-social-worker.sh`. Don't force past its guards (run in flight / dirty tree). Check its output.
 2. **Merge to main** (Lucas) so the Settings tab and Cost page control reach Vercel. Never merge to main yourself.
 3. **Tommy clicks through** every type's Settings tab. Next night: check logs — every pool refills (Carousels included),
    no `quota-filled` refill skips, total refill spend ≤ $5 (`social_hub.refill_spend`).
-4. **Open question for Tommy:** rename the "Auto-publish readiness" label (Health rings, Cost page) to
-   "Publish readiness"? Label only.
+4. ~~**Rename "Auto-publish readiness"**~~ — **done**, Tommy said yes: Health rings label, ring hover card
+   ("publish-readiness bar") and Cost page note now say publish readiness. Code constant `AUTO_PUBLISH_BAR` unchanged.
 5. Optional polish: the `paused-hold` marker shows as a cancelled entry in a post's history; a `cancelNote` mapping
    could label it nicely.
 

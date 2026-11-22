@@ -223,7 +223,7 @@ export function CostScreen({ model, params, posts, base }: { model: CostModel; p
                 <span className="sh-ops-num">{r.rate === null ? '—' : `${Math.round(r.rate * 100)}%`}</span>
               </div>
             ))}
-            <p className="sh-ops-meta sh-cost-rej__note">Lower is closer to auto-publish. The same number feeds the readiness ring on Health.</p>
+            <p className="sh-ops-meta sh-cost-rej__note">Lower is closer to publish-ready. The same number feeds the readiness ring on Health.</p>
           </div>
         </div>
       </section>
