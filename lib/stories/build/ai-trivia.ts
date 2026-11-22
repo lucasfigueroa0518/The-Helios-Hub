@@ -5,7 +5,11 @@
  *   lean        the opponent answers the top 3 (each question only ever once, stored on its row); the last 6 sets
  *               decide whether one it missed or one it got right goes first, so it wins about half (AT-75)
  *   pick        the pool's top open question (queue order when the build hands one in), after the lean
- *   fact-check  trivia-check@4 (≤3 web searches; also fails a repeat of a fact posted on the same theme, AT-57, AT-78).
+ *   order       questions the game already served first, then the unused bank, so the story never eats into what the
+ *               game can still play (2026-11-22)
+ *   repeats     one fact, one question (lib/stories/trivia/repeats.ts): a question code finds repeats an earlier one is
+ *               archived without a fact-check
+ *   fact-check  trivia-check@5 (≤3 web searches; also fails a repeat of an earlier fact on the list repeats.ts gives, AT-57, AT-78).
  *               Anything short of a clean pass archives the question (stories.trivia_archive) and
  *               drops its pool row; the next one is tried, up to 5.
  *               None passes → the day is skipped, the record lands on the set
@@ -14,10 +18,10 @@
  *               only (no photo, no music: CONTRACT-2 §3); the renderer adds
  *               the fixed copy, the motion and the one fixed sound
  */
-import { openPool } from '@/lib/stories/pool';
+import { openPool, servedTriviaKeys } from '@/lib/stories/pool';
 import { material } from '@/lib/stories/prompts';
 import type { NewCandidate, NewFrame } from '@/lib/stories/repository';
-import { askedOnTheme } from '@/lib/stories/trivia/asked';
+import { checkRepeat, loadEarlier, REPEAT_CHECK_VERSION, repeatFail } from '@/lib/stories/trivia/repeats';
 import { answerTop, LEAN_TOP, leanFrom, leanOrder, opponentFor, recentAiResults, type Lean } from '@/lib/stories/trivia/lean';
 import type { Opponent } from '@/lib/stories/trivia/opponent';
 import { TRIVIA_CHECK, TRIVIA_CHECK_SEARCHES, type TriviaCheckMaterial, type TriviaCheckOut } from '@/lib/stories/trivia/prompts';
@@ -63,7 +67,11 @@ async function recordTriviaSkip(deps: BuildDeps, rec: TriviaSkipRecord): Promise
 
 export async function buildAiTrivia(deps: BuildDeps): Promise<BuildResult> {
   const log: string[] = [];
-  const scored = deps.pool?.trivia ?? (await openPool(deps.db, TRIVIA_SERIES)).trivia ?? [];
+  const open = deps.pool?.trivia ?? (await openPool(deps.db, TRIVIA_SERIES)).trivia ?? [];
+  // Served questions first (each group keeps its order): the unused bank is the game's.
+  const servedKeys = await servedTriviaKeys(deps.db);
+  const scored = [...open.filter((p) => servedKeys.has(poolKeyOf(p.q))), ...open.filter((p) => !servedKeys.has(poolKeyOf(p.q)))];
+  const earlier = await loadEarlier(deps.db);
   // 0. The opponent lean (AT-75): the opponent answers the top questions (each only ever once), and the last
   //    sets decide whether a question it missed or one it got right goes first, so it wins about half the time.
   let pool = scored;
@@ -91,15 +99,22 @@ export async function buildAiTrivia(deps: BuildDeps): Promise<BuildResult> {
     const q = p.q;
     const key = poolKeyOf(q);
     const base = { key, cellId: q.cellId, question: q.question, score: p.score };
-    const asked = await askedOnTheme(deps.db, q.cellId, { exceptKey: key });
-    const mat: TriviaCheckMaterial = { question: q.question, options: q.options, correct: q.correct, answer_line: q.answerLine, sources: q.sources, asked };
+    const r = checkRepeat(earlier, p);
+    if (r.repeat) {
+      const fc = repeatFail(r.repeat);
+      candidates.push({ origin: 'model', ref: key, payload: { q, factCheck: fc }, jev: p.jevScore, score: p.score, chosen: false, reason: 'repeat' });
+      log.push(`${key}: ${fc.problems[0]}`);
+      await archiveTrivia(deps, p, fc);
+      continue;
+    }
+    const mat: TriviaCheckMaterial = { question: q.question, options: q.options, correct: q.correct, answer_line: q.answerLine, sources: q.sources, asked: r.asked };
     let fc: FactCheck;
     try {
       const out = (await writeStructured<TriviaCheckOut>({
         create: deps.write, db: deps.db, setId: deps.setId, component: 'trivia-check', model: deps.settings.models.copy,
         system: TRIVIA_CHECK.system, tool: TRIVIA_CHECK.tool, user: material(mat), webSearch: { maxUses: TRIVIA_CHECK_SEARCHES },
       })).value;
-      fc = toFactCheck(out);
+      fc = { ...toFactCheck(out), repeats: REPEAT_CHECK_VERSION };
     } catch (err) {
       // No verdict (an API error): the question stays in the pool for another day.
       const msg = err instanceof Error ? err.message : String(err);

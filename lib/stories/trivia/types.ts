@@ -35,8 +35,8 @@ export type TriviaPoolPayload = {
   opponent?: import('./opponent').Opponent;
 };
 
-/** pass = clean, problems empty. */
-export type FactCheck = { verdict: 'pass' | 'fail'; problems: string[]; sources: string[] };
+/** pass = clean, problems empty. `repeats`: the repeat check's version it was given under (repeats.ts REPEAT_CHECK_VERSION). */
+export type FactCheck = { verdict: 'pass' | 'fail'; problems: string[]; sources: string[]; repeats?: number };
 
 /** Always three options (AT-54). */
 export const OPTION_COUNT = 3;

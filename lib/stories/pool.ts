@@ -6,7 +6,7 @@
  *   Free vs. Paid      Ball Knowledge ideas and GitHub Trending (optional hints)
  *   AI Trivia          no refresh: the daily writer (lib/stories/trivia/daily.ts) adds its
  *                      questions itself. `trivia:` rows never leave for not being returned
- *                      or for age; the series holds TRIVIA_POOL_CAP (40) and a row the cap
+ *                      or for age; the unused bank holds TRIVIA_POOL_CAP (50), served questions TRIVIA_SERVED_CAP (40), and a row the cap
  *                      drops frees its content-map cell (AT-11)
  *   Real or AI?        no refresh: the daily run (lib/stories/roa/daily.ts) adds its images
  *                      itself. `roa:` rows never leave for not being returned or for age; the
@@ -71,8 +71,31 @@ export const FRESH_MS: Record<Series, number> = {
   real_or_ai: 365 * 86_400_000,
 };
 
-/** AI Trivia's pool holds at most this many open questions (AT-11); the other series hold POOL_CAP. */
-export const TRIVIA_POOL_CAP = 40;
+/**
+ * AI Trivia's unused bank holds at most this many questions (AT-11; 50 since 2026-11-22): open pool questions no game
+ * day holds, the ones the game can still play. The other series hold POOL_CAP.
+ */
+export const TRIVIA_POOL_CAP = 50;
+/** Open questions the game already served (a past locked day's, handed back to the IG story): held apart, at most this many. */
+export const TRIVIA_SERVED_CAP = 40;
+
+/** Keys a locked game day holds: the game has served them or will on that date. */
+const TRIVIA_GAME_KEYS = `SELECT q->>'key' FROM stories.trivia_game_days d, jsonb_array_elements(d.questions) q WHERE d.status = 'locked'`;
+
+/** Keys of the questions a locked game day holds (the game served them or will on that date). */
+export async function servedTriviaKeys(db: Queryable): Promise<Set<string>> {
+  const { rows } = await db.query<{ key: string | null }>(`SELECT DISTINCT k AS key FROM (${TRIVIA_GAME_KEYS}) AS g(k)`);
+  return new Set(rows.map((r) => r.key).filter((k): k is string => !!k));
+}
+
+/** The unused bank: open AI Trivia pool questions that no locked game day holds (a draft's questions are reserved, so not open). */
+export async function unusedTriviaCount(db: Queryable): Promise<number> {
+  const live = (await hasArchiveColumn(db)) ? 'AND archived_at IS NULL' : '';
+  const { rows } = await db.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM stories.pool WHERE series = 'ai_trivia' AND used_at IS NULL ${live} AND key NOT IN (${TRIVIA_GAME_KEYS})`,
+  );
+  return rows[0]?.n ?? 0;
+}
 
 /** The pool turns over at 3:00 AM New York (the Stories hour, night schedule v2: after the 2:40 intake top-up). */
 export const POOL_DAY_STARTS_HOUR = 3;
@@ -210,22 +233,36 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
 }
 
 /**
- * Hold AI Trivia to TRIVIA_POOL_CAP (AT-11, whether or not the shared queue is live): every question it drops goes to
- * stories.trivia_archive (reason 'cap'), where the writer still sees it in its cell's asked list. Returns the dropped keys. Without the moves
- * table it caps on score alone.
+ * Hold AI Trivia's open questions to two caps (AT-11, whether or not the shared queue is live), each by score: the unused
+ * bank to TRIVIA_POOL_CAP and the questions the game already served to TRIVIA_SERVED_CAP, so served questions never
+ * crowd out the ones the game can still play. Every question dropped goes to stories.trivia_archive (reason 'cap'), where
+ * the repeat check still sees it. Returns the dropped keys. Without the moves table it caps on score alone.
  */
 export async function capTriviaPool(db: Queryable, now: Date = new Date()): Promise<string[]> {
+  const ranked = (exempt: string) => `
+    SELECT r.id FROM (
+      SELECT p2.id, (p2.key IN (${TRIVIA_GAME_KEYS})) AS served,
+             row_number() OVER (PARTITION BY (p2.key IN (${TRIVIA_GAME_KEYS})) ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
+        FROM stories.pool p2
+       WHERE p2.series = 'ai_trivia' AND p2.used_at IS NULL ${exempt}
+    ) r WHERE r.n > CASE WHEN r.served THEN $2::int ELSE $1::int END`;
   let dropped: Dropped[];
   try {
-    dropped = await capDeleting(db, 'ai_trivia', TRIVIA_POOL_CAP);
-  } catch {
     const { rows } = await db.query<Dropped>(
       `DELETE FROM stories.pool p
-        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL
-          AND p.id IN (SELECT r.id FROM (SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
-                         FROM stories.pool p2 WHERE p2.series = 'ai_trivia' AND p2.used_at IS NULL) r WHERE r.n > $1)
+        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
+          AND p.id IN (${ranked(`AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = $3 AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)`)})
+          AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
+                           WHERE a.vertical = $3 AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
+                             AND a.idea_id = 'stories:pool:' || p.series || ':' || p.key)
         RETURNING p.key, p.payload`,
-      [TRIVIA_POOL_CAP],
+      [TRIVIA_POOL_CAP, TRIVIA_SERVED_CAP, verticalOfSeries('ai_trivia')],
+    );
+    dropped = rows;
+  } catch {
+    const { rows } = await db.query<Dropped>(
+      `DELETE FROM stories.pool p WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.id IN (${ranked('')}) RETURNING p.key, p.payload`,
+      [TRIVIA_POOL_CAP, TRIVIA_SERVED_CAP],
     );
     dropped = rows;
   }

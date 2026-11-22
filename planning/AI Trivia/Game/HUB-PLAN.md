@@ -36,7 +36,7 @@ gets a fresh, fact-checked 5-question game every day. Decisions are logged in `.
 3. Fact-check from the top with `trivia-check` (same check and bar as the IG story; a fail archives the question as
    today). The repeat test sees every question posted on the same theme, plus the questions already in this day.
 4. The opponent answers each passing question once (`askOpponent`, the answer stored on its pool row).
-5. Choose the 5 so the AI scores **4** when possible (RT-3, 2026-11-19; was 3), an aim rather than a gate: keep checking further candidates (at most 10 fact-checks a day)
+5. Choose the 5 so the AI scores **4** when possible (RT-3, 2026-11-19; was 3), an aim rather than a gate: keep checking further candidates (at most 15 fact-checks a day, since 2026-11-22)
    to swap a question of the over-represented kind (AI right / AI wrong) for one of the other kind. Never trade a
    question for a lower-scored one of the same kind.
 6. Order: easiest first (higher fair-shot score first, the mean of the writer's and Jev's scores on tests 1 and 2;
