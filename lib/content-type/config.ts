@@ -33,7 +33,7 @@ export type TypeConfig = {
   title: string;
   /** The sentence under "The bench"; null where the type has its own page. */
   benchNote: string | null;
-  /** The most a daily limit may be set to (week board spec §Safety cap). */
+  /** The most slots a day the Calendar allows this type (D20). */
   maxCap: number;
   /** Whether the pool has a "Seed an idea" path. */
   seedable: boolean;

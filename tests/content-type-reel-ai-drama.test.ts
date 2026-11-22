@@ -59,7 +59,7 @@ test('posting: a bad patch is refused before any connection; the state writes th
   // live / generate / autoPublish are no longer settings: approval is always required.
   await assert.rejects(() => writePosting('reel_ai_drama', { live: true } as never, 't'), /no longer a setting/);
   await assert.rejects(() => writePosting('reel_ai_drama', { autoPublish: true } as never, 't'), /no longer a setting/);
-  await assert.rejects(() => writePosting('reel_ai_drama', { cap: 4 }, 't'), /0 to 3/);
+  await assert.rejects(() => writePosting('reel_ai_drama', { cap: 4 }, 't'), /Calendar sets how many a day/);
 
   const state = await writePosting('reel_ai_drama', { state: 'approval' }, 'lucas');
   assert.equal(state.type, 'reel_ai_drama');

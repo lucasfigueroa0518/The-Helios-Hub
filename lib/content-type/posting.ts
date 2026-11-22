@@ -17,10 +17,8 @@ import { readFieldNotesSettings } from '@/lib/field-notes/settings';
 import { slotPlan, slotsWithinCap, type SlotPlan } from '@/lib/social-hub/slots';
 import { readCaps, readSlotSource } from '@/lib/social-hub/slots/load';
 import type { ResolvedSlot, SlotQuery } from '@/lib/social-hub/slots/types';
-import { writeCaps } from '@/lib/social-hub/slots/write';
 import type { HubPost } from '@/lib/social-hub/types';
 import { addDays, nyDateOf, weekdayOf } from '@/lib/social-hub/time';
-import { MAX_CAP, maxCapFor } from '@/lib/content-type/caps';
 import { DRAMA_WINDOWS, readDramaPosting, writeDramaPosting } from '@/lib/reel-ai-drama/hub';
 import { holdsSlots, isTypeState, keysOf, refillCapUsd, stateOf, type TypeState } from '@/lib/content-type/state';
 import { scheduledAhead, unslotType, type UnslotQuery } from '@/lib/content-type/unslot';
@@ -43,7 +41,7 @@ import { scheduledAhead, unslotType, type UnslotQuery } from '@/lib/content-type
  * (Last Few Days, AI Events, Field Notes and the three Stories-format types) have no quota: they post on their days.
  * With the calendar (slot_source 'template') the calendar owns when: the quota can't be set here, `schedule` shows
  * this week's slots for the type instead, and perDay / days are read from those slots so older readers keep working.
- * The type's daily limit (`cap`, week board spec §Safety cap) is set here, a person's decision, never automatic.
+ * There is no daily limit to set (D20): the calendar's slots are the count, bounded by the type's fixed maximum (`cap`).
  */
 export type ContentType = 'reels' | 'carousels' | 'explainers' | 'stories' | 'ai_trivia' | 'real_or_ai' | 'last_few_days' | 'ai_events' | 'field_notes' | 'reel_ai_drama';
 
@@ -84,7 +82,7 @@ export type PostingState = {
    * backfill) check each night against its own day. Null while legacy.
    */
   nights: ScheduleDay[] | null;
-  /** Template mode: the daily limit, the most the overnight run makes a day. Null while legacy. */
+  /** Template mode: the most slots a day the Calendar allows this type (its fixed maximum, D20). Null while legacy. */
   cap: number | null;
   /** What one more post a night costs: the average cost of the type's posts over the last COST_DAYS days; null when unknown. */
   costPerPostMicros: number | null;
@@ -105,7 +103,7 @@ export type PostingPatch = {
   /** Writes both stored keys (keysOf). 'paused' also unslots the type's scheduled posts (D17). */
   state?: TypeState;
   perDay?: number;
-  /** The daily limit (template mode), a whole number from 0 to 10 (Last Few Days, Field Notes and the Stories-format types 0–1). */
+  /** No longer settable (D20): the calendar's slots are the count. Kept in the type so an old caller gets a clear refusal. */
   cap?: number;
   /** The refill spend cap in USD (D14), above zero and at most MAX_REFILL_CAP_USD. */
   refillCapUsd?: number;
@@ -289,9 +287,6 @@ async function readStored(type: ContentType): Promise<Stored> {
   return { type, generate: series.auto, live: own.publishingLive, refill: own.refillCapUsd, perDay: null, maxPerDay: null, series: null, days: [...series.window.days].sort((a, b) => a - b) };
 }
 
-/** AI Trivia and Real or AI? post at most once a day (SS-24); Morning Download keeps its two-a-day slots (R25). */
-const STORY_MAX_CAP = 1;
-
 function quota(patch: PostingPatch, max: number | null, min: number): number | null {
   if (patch.perDay === undefined) return null;
   const n = patch.perDay;
@@ -319,13 +314,8 @@ function validate(type: ContentType, patch: PostingPatch): void {
     else quota(patch, type === 'carousels' ? carouselCfg.CAROUSEL_SLOTS.length : type === 'explainers' ? EXPLAINER_WINDOWS.length : windows('reels'), type === 'explainers' ? 1 : 0);
   }
   if ('series' in (patch as Record<string, unknown>)) throw new Error('Series settings moved: each Stories-format type has its own state.');
-  if (patch.cap !== undefined) {
-    if (!Number.isInteger(patch.cap) || patch.cap < 0 || patch.cap > MAX_CAP) throw new Error(`A daily limit is a whole number from 0 to ${MAX_CAP}.`);
-    if (isStoryVertical(type) && type !== 'stories' && patch.cap > STORY_MAX_CAP) throw new Error('This type posts once a day, so its daily limit is 0 or 1.');
-    if (patch.cap > maxCapFor(type)) {
-      throw new Error(type === 'ai_events' ? 'AI Events posts Miami and Boston, so its daily limit is 0 to 2.' : type === 'field_notes' ? 'Field Notes posts once a day, so its daily limit is 0 or 1.' : type === 'reel_ai_drama' ? 'AI Drama reels are costly to make, so the daily limit is 0 to 3.' : 'Last Few Days runs once a day, so its daily limit is 0 or 1.');
-    }
-  }
+  // D20: the calendar's slots are the count, so there is no daily limit to set.
+  if (patch.cap !== undefined) throw new Error('The Calendar sets how many a day: add or remove times there.');
 }
 
 /**
@@ -335,13 +325,7 @@ function validate(type: ContentType, patch: PostingPatch): void {
 export async function writePosting(type: ContentType, patch: PostingPatch, by: string): Promise<PostingState> {
   validate(type, patch);
   // The calendar owns when in template mode; legacy keeps these controls, since they still drive the workers.
-  if (patch.perDay !== undefined || patch.cap !== undefined) {
-    const template = (await readSlotSource(appQuery)) === 'template';
-    if (template && patch.perDay !== undefined) throw new Error('Cadence moved to the calendar.');
-    // The daily limit caps the calendar's slots, so it means something only once the calendar is on.
-    if (!template && patch.cap !== undefined) throw new Error('The daily limit applies once the calendar is on.');
-  }
-  if (patch.cap !== undefined) await writeCaps(appQuery, { [type]: patch.cap });
+  if (patch.perDay !== undefined && (await readSlotSource(appQuery)) === 'template') throw new Error('Cadence moved to the calendar.');
   const keys = patch.state !== undefined ? keysOf(patch.state) : null;
   // Live off before Generate off; Generate on before Live on.
   const order = (generate: () => Promise<unknown>, live: () => Promise<unknown>) => (keys ? (keys.live ? [generate, live] : [live, generate]) : []);

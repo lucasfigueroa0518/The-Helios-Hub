@@ -12,7 +12,8 @@ test('constants carry the spec values', () => {
   assert.equal(GRID, 15); assert.equal(MAGNET, 20); assert.equal(DRIFT, 15); assert.equal(FEED_GAP, 30);
   assert.equal(DAY_START, 480); assert.equal(LAST_START, 1245);
   assert.deepEqual(DEFAULT_TIMES, { reels: [525, 675, 1080], explainers: [780, 930], carousels: [], last_few_days: [540], stories: [510], ai_trivia: [510], real_or_ai: [510], ai_events: [1080, 1140], field_notes: [870], reel_ai_drama: [1200] });
-  assert.deepEqual(DEFAULT_CAPS, { reels: 5, explainers: 3, carousels: 3, last_few_days: 1, stories: 2, ai_trivia: 1, real_or_ai: 1, ai_events: 2, field_notes: 1, reel_ai_drama: 1 });
+  // D20: each type's fixed maximum (config maxCap); the calendar's slots are the count.
+  assert.deepEqual(DEFAULT_CAPS, { reels: 10, explainers: 10, carousels: 10, last_few_days: 1, stories: 10, ai_trivia: 1, real_or_ai: 1, ai_events: 2, field_notes: 1, reel_ai_drama: 3 });
   assert.deepEqual(RUN_HOUR_LABEL, { reels: '1 AM', explainers: '2 AM', carousels: '3 AM', last_few_days: '3 AM', stories: '4 AM', ai_trivia: '4 AM', real_or_ai: '4 AM', ai_events: '12 PM', field_notes: '2 AM', reel_ai_drama: '12 AM' });
   assert.deepEqual(USUAL.field_notes.map((w) => [w.start, w.end]), [[870, 930]]);
   assert.deepEqual(USUAL.reels.map((w) => [w.start, w.end]), [[525, 600], [675, 750], [1080, 1260]]);

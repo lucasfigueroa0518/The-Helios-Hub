@@ -39,7 +39,7 @@ test('Trial on one day and Main on another is a problem', () => {
 
 test('checks: limit, duplicate, grid, bounds, LFD once', () => {
   const ex = (m: number[]) => checkSchedule(sched('Explainers', m, all, 'trial'), { cap: 3, others: [] });
-  assert.deepEqual(ex([600, 660, 720, 780]).errors, ['Explainers can post 3 a day. Raise the daily limit on the Explainers page to add more.']);
+  assert.deepEqual(ex([600, 660, 720, 780]).errors, ['Explainers can post at most 3 a day.']);
   assert.deepEqual(ex([690, 690]).errors, ['11:30 AM is already in the list.']);
   assert.deepEqual(ex([695]).errors, [OFF_GRID]);
   assert.deepEqual(ex([1260]).errors, [OUTSIDE_DAY]);
