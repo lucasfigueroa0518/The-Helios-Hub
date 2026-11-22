@@ -670,3 +670,9 @@ CREATE TABLE IF NOT EXISTS explainers.first_try_log (
 );
 CREATE INDEX IF NOT EXISTS idx_explainers_first_try_log_job ON explainers.first_try_log (job_id);
 CREATE INDEX IF NOT EXISTS idx_explainers_first_try_log_render_at ON explainers.first_try_log (render_at DESC);
+
+-- ── Curriculum (2026-11-21, lib/explainers/ideas/curriculum.ts) ─────────────────────────────────
+-- Each topic's place in the fixed syllabus (lib/explainers/ideas/syllabus.ts, file order, 0-based), set from its term
+-- when the topic is inserted. The pool orders by it first (POOL_ORDER_BY, NULLS LAST), then by score. Topics written
+-- before the curriculum stay null: no backfill here (Lucas decides on one).
+ALTER TABLE explainers.topics ADD COLUMN IF NOT EXISTS syllabus_rank integer;

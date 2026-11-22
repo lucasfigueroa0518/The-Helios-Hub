@@ -1,4 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { NAMED_ROLES, NAMED_SIDES } from './subject';
 import sharp from 'sharp';
 
 import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
@@ -50,11 +51,14 @@ export const SUBMIT_LOOKS_TOOL = {
         watermark: { type: 'boolean' },
         tv_logo: { type: 'boolean' },
         ai_generated: { type: 'boolean' },
+        photograph: { type: 'boolean' },
         faces: { type: 'integer' },
         text_heavy: { type: 'boolean' },
         about_story: { type: 'boolean' },
         key_moment: { type: 'boolean' },
         portrait: { type: 'boolean' },
+        named_role: { type: 'string', enum: [...NAMED_ROLES] },
+        named_side: { type: 'string', enum: [...NAMED_SIDES] },
         garbled: { type: 'boolean' },
         fits: { type: 'boolean' },
         namesake: { type: 'boolean' },
@@ -124,11 +128,14 @@ export function parseLooks(input: unknown, n: number): Map<number, SeenLook> {
       watermark: t.watermark === true,
       tv_logo: t.tv_logo === true,
       ai_generated: t.ai_generated === true,
+      photograph: t.photograph !== false,
       faces: Math.max(0, Math.round(Number(t.faces ?? 0))),
       text_heavy: t.text_heavy === true,
       about_story: t.about_story !== false,
       key_moment: t.key_moment === true,
       portrait: t.portrait === true,
+      ...((NAMED_ROLES as readonly unknown[]).includes(t.named_role) ? { named_role: t.named_role } : {}),
+      ...((NAMED_SIDES as readonly unknown[]).includes(t.named_side) ? { named_side: t.named_side } : {}),
       garbled: t.garbled === true,
       fits: t.fits !== false,
       namesake: t.namesake === true,

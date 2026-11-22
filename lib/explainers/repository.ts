@@ -1,4 +1,5 @@
 import type { ExplainersDb, Queryable } from '@/lib/explainers/db';
+import { syllabusRank } from '@/lib/explainers/ideas/curriculum';
 import { jobDaySql, jobsHaveTargetDate, jobTargetSql } from '@/lib/explainers/lead';
 import type { ExplainersSettings } from '@/lib/explainers/settings';
 import { syncExplainerApproval } from '@/lib/explainers/publish/items';
@@ -57,11 +58,12 @@ export function normalizeFailureTags(tags: readonly string[]): FailureTag[] {
 }
 
 /**
- * Pool ranking: weighted score, then the E-15 tie-breaks (teachability,
- * accuracy, audience, visual, hook), then the deterministic system field. The
- * older row wins an exact tie, which is E-16's "retain incumbent".
+ * Pool ranking: the syllabus first (curriculum, 2026-11-21: fundamentals before depth; topics off the syllabus last),
+ * then the weighted score and the E-15 tie-breaks (teachability, accuracy, audience, visual, hook), then the
+ * deterministic system field. The older row wins an exact tie, which is E-16's "retain incumbent". Scores stay gates.
  */
-export const POOL_ORDER_BY = `weighted_score DESC NULLS LAST,
+export const POOL_ORDER_BY = `syllabus_rank ASC NULLS LAST,
+  weighted_score DESC NULLS LAST,
   teachability_45s DESC NULLS LAST,
   accuracy_under_simplification DESC NULLS LAST,
   audience_fit DESC NULLS LAST,
@@ -116,8 +118,8 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
       if (!title) throw new Error('topic title is empty');
       const { rows } = await tx.query<Record<string, unknown>>(
         `INSERT INTO explainers.topics
-           (title, scope, term, source_url, source_text, origin, bucket, lesson_payload, lesson_altitude, lesson_map)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           (title, scope, term, source_url, source_text, origin, bucket, lesson_payload, lesson_altitude, lesson_map, syllabus_rank)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
         [
           title,
@@ -130,12 +132,21 @@ export async function addTopics(db: ExplainersDb, topics: NewTopic[]): Promise<T
           topic.lessonPayload?.trim() || null,
           topic.lessonAltitude ?? null,
           topic.lessonMap?.trim() || null,
+          syllabusRank(topic.term),
         ],
       );
       added.push(toTopic(rows[0]));
     }
     return added;
   });
+}
+
+/** Every topic's term and status, for the curriculum's "taken" check (nextSyllabusTopics). */
+export async function listTopicTerms(db: Queryable): Promise<{ term: string; status: string; duplicateOf: string | null }[]> {
+  const { rows } = await db.query<{ term: string; status: string; duplicate_of: string | null }>(
+    `SELECT term, status, duplicate_of::text AS duplicate_of FROM explainers.topics WHERE term IS NOT NULL`,
+  );
+  return rows.map((r) => ({ term: r.term, status: r.status, duplicateOf: r.duplicate_of }));
 }
 
 export async function getTopic(db: Queryable, id: string): Promise<TopicRow | null> {

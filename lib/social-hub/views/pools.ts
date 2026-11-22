@@ -48,8 +48,11 @@ export type PoolSummary = {
 /** Open ideas with content already made lead the pool, whatever their score (a made idea must not sink to the bottom). */
 const madeOpen = (i: HubIdea) => (i.hasContent && OPEN.has(i.state) ? 1 : 0);
 
+/** Curriculum order first (fundamentals before depth), ideas off the curriculum after it. */
+const rankOf = (i: HubIdea) => i.curriculumRank ?? Infinity;
+
 export function rankIdeas(ideas: readonly HubIdea[]): HubIdea[] {
-  return [...ideas].sort((a, b) => madeOpen(b) - madeOpen(a) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title));
+  return [...ideas].sort((a, b) => madeOpen(b) - madeOpen(a) || rankOf(a) - rankOf(b) || (b.score ?? -Infinity) - (a.score ?? -Infinity) || a.title.localeCompare(b.title));
 }
 
 export function poolSummary(ideas: readonly HubIdea[], vertical: Vertical): PoolSummary {

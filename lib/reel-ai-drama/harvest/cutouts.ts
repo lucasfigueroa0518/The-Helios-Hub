@@ -4,7 +4,7 @@ import path from 'node:path';
 import type { Queryable } from '@/lib/explainers/db';
 import { mapBlueprintAssets, type Asset, type CastMember, type DirectorPlan, type ShotWish, type StoryboardFrame, type VisualsInventory } from '@/lib/reel-ai-drama/types';
 
-import { assetAnchorScore, isGarbledAsset } from './anchors';
+import { assetAnchorScore, isGarbledAsset, isSoloPhoto, NOT_PHOTO } from './anchors';
 import { mainFace } from './faces';
 import { phash } from './filters';
 import { normaliseImage } from './media';
@@ -163,15 +163,17 @@ export function wishCutoutRequests(plan: DirectorPlan, found: readonly { wish: S
   for (const { wish, asset_id } of found) {
     if (out.some((r) => r.source_id === asset_id)) continue;
     const a = inventory.assets.find((x) => x.id === asset_id);
-    if (!a || a.made || a.flags.includes('cutout') || isGarbledAsset(a)) continue;
+    // Only a photograph is cut out, and a person only from a solo one (`isSoloPhoto`).
+    if (!a || a.made || a.flags.includes('cutout') || isGarbledAsset(a) || a.flags.includes(NOT_PHOTO)) continue;
     if (wantsCutout(wish)) {
       if (!CUTTABLE_KINDS.has(a.kind)) continue;
       const person = Boolean(wish.person?.trim());
+      if (person && !isSoloPhoto(a)) continue;
       const frames = plan.frames.filter((f) => frameUses(f, asset_id)).map((f) => f.n);
       out.push({ name: person ? wish.person!.trim() : thingName(wish.want), source_id: asset_id, anchor: false, frames, person, shows: wish.want.trim(), wish: wish.id });
       continue;
     }
-    if (!wish.person) continue;
+    if (!wish.person || !isSoloPhoto(a)) continue;
     const frames = plan.frames.filter((f) => cutoutFrame(f, asset_id)).map((f) => f.n);
     if (frames.length) out.push({ name: wish.person, source_id: asset_id, anchor: false, frames });
   }
@@ -183,7 +185,7 @@ export const STAGE_TREATMENTS: ReadonlySet<string> = new Set(['collision', 'tabl
 
 /**
  * Every person on a stage is a real cutout: an uncut one-person picture in a stage frame swaps to a cutout the inventory
- * already has of it, else one is asked for (local rembg, no spend). `character_image` isn't trusted: only a cut that exists
+ * already has of it, else one is asked for (local rembg, no spend) when it is a solo photograph (`isSoloPhoto`). `character_image` isn't trusted: only a cut that exists
  * counts. What can't be cut stays a framed print, which `nk.stage` shows. Pure.
  */
 export function stageCutoutRequests(plan: DirectorPlan, inventory: VisualsInventory): { requests: CutoutRequest[]; swaps: { from: string; to: string; frames: number[] }[] } {
@@ -205,7 +207,7 @@ export function stageCutoutRequests(plan: DirectorPlan, inventory: VisualsInvent
       if (from) swaps.push({ from: id, to: from.id, frames });
       continue;
     }
-    if (!a || a.made || cut(a) || a.people.length !== 1 || !CUTTABLE_KINDS.has(a.kind) || isGarbledAsset(a)) continue;
+    if (!a || a.made || cut(a) || a.people.length !== 1 || !CUTTABLE_KINDS.has(a.kind) || isGarbledAsset(a) || !isSoloPhoto(a)) continue;
     const own = inventory.assets.find((x) => x.flags.includes(`cutout_of:${id}`) && !isGarbledAsset(x));
     // Its own cut only: another photo's cut would turn different pictures of a person into one.
     if (own) swaps.push({ from: id, to: own.id, frames });

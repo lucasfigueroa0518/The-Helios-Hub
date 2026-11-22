@@ -32,7 +32,7 @@ import { pathToFileURL } from 'node:url';
 
 import { CLOSE } from './close-timing.js';
 import { CLOSE_FRAME, isClose, isHandoff, parseFrames, seconds, writeClose, writeHandoff, writeOpener } from './frames.mjs';
-import { openerByKey, openerTiming } from './openers/bank.js';
+import { openerTiming } from './openers/bank.js';
 import { chosenOpener, ensureOpener, openerVoice } from './openers/sound.mjs';
 
 export { CLOSE_FRAME, isClose };
@@ -325,7 +325,7 @@ export function tightenVoices(root, meta, { detect = detectSilences, lead = 0 } 
  */
 export function silentOpenerDuration(root) {
   const key = chosenOpener(root);
-  return key && openerVoice(root) === 'silent' ? openerTiming(key, 0, [], { silent: true }).duration : null;
+  return key && openerVoice(root) === 'silent' ? openerTiming(key).duration : null;
 }
 
 /**
@@ -406,7 +406,7 @@ export function pace(root, { tighten = true } = {}) {
   let tightened = [];
   if (tighten) {
     const key = ensureOpener(root);
-    const t = tightenVoices(root, meta, { lead: key && !silentOpener ? openerByKey(key).voiceAt : 0 });
+    const t = tightenVoices(root, meta, { lead: 0 });
     tightened = t.removed;
     errors.push(...t.errors);
     writeFileSync(metaFile, `${JSON.stringify(meta, null, 1)}\n`);

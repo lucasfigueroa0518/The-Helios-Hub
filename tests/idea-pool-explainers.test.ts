@@ -118,7 +118,7 @@ test('an archived topic is never made, and its title is history the proposer is 
   await archiveIdea(q(db), 'explainers', idea(a), 'tommy');
   assert.deepEqual((await fillCandidates(db, false, await readMoves(q(db), 'explainers'))).map((c) => c.topicId), [b]);
   let history: string[] = [];
-  const spy = { ...stubIdeas(), propose: async (req: { rendered: Array<{ topic_title: string }> }) => { history = req.rendered.map((r) => r.topic_title); return (stubIdeas() as never as { propose: () => Promise<unknown> }).propose(); } } as unknown as IdeaModel;
+  const spy = { ...stubIdeas(), propose: async (req: { archived: Array<{ topic_title: string }> }) => { history = req.archived.map((r) => r.topic_title); return (stubIdeas() as never as { propose: () => Promise<unknown> }).propose(); } } as unknown as IdeaModel;
   await runIdeaCycle({ db, ideaModel: spy, jevTransport: stubJev(), now: CYCLE_AT });
   assert.ok(history.includes('Archived one'));
   assert.notEqual((await run(db)).status, 'failed');

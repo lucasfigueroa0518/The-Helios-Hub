@@ -24,14 +24,16 @@ import { scratchExplainersDb } from './explainers-pglite';
 const KIT = path.join(process.cwd(), 'explainers', 'world-kit');
 const SFX = path.join(process.cwd(), 'explainers', 'design', 'sfx');
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
+const STORYBOARD_FILE = 'STORYBOARD.md';
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'explainers-openers-'));
 
 // ── The pick (Lucas, 2026-10-19: never one of the last 8 reels' openers) ─────────────────────
 
-test('the bank holds the eleven openers Lucas kept, each with a score', () => {
-  assert.deepEqual(OPENER_KEYS, ['paper-rip', 'record-scratch', 'typewriter', 'big-bang', 'knock-knock', 'eye-zoom', 'balloon-pop', 'block-drop', 'unboxing', 'paper-plane', 'scissors']);
+test('the bank holds the ten openers Lucas kept, each with a score; Record Scratch is archived', () => {
+  assert.deepEqual(OPENER_KEYS, ['paper-rip', 'typewriter', 'knock-knock', 'big-bang', 'eye-zoom', 'balloon-pop', 'block-drop', 'unboxing', 'paper-plane', 'scissors']);
   assert.equal(HISTORY, 8);
   for (const key of OPENER_KEYS) assert.ok((SCORES as Record<string, unknown>)[key], `${key} has a score`);
+  assert.ok(!('record-scratch' in SCORES));
 });
 
 test('a pick never repeats one of the last 8 openers, and every other opener can come up', () => {
@@ -44,7 +46,7 @@ test('a pick never repeats one of the last 8 openers, and every other opener can
   }
   assert.deepEqual([...seen].sort(), OPENER_KEYS.slice(8).sort());
   // only the newest 8 count: the 9th-newest may come back
-  assert.equal(pickOpener(['paper-rip', 'record-scratch', 'big-bang', 'knock-knock', 'eye-zoom', 'balloon-pop', 'block-drop', 'unboxing', 'typewriter'], { rand: () => 0.99, pool: ['typewriter', 'unboxing'] }), 'typewriter');
+  assert.equal(pickOpener(['paper-rip', 'scissors', 'big-bang', 'knock-knock', 'eye-zoom', 'balloon-pop', 'block-drop', 'unboxing', 'typewriter'], { rand: () => 0.99, pool: ['typewriter', 'unboxing'] }), 'typewriter');
 });
 
 test('a run of picks with the history never repeats inside any 8 in a row', () => {
@@ -64,20 +66,7 @@ test('when the pool is smaller than the history, the opener used longest ago com
   assert.throws(() => pickOpener([], { pool: ['nope'] }), /pool is empty/);
 });
 
-test("an opener's timing: its lead, the line, the hold; the freeze lifts on the line's \"this\"", () => {
-  const words = [{ text: 'In', start: 0 }, { text: 'this', start: 1.4 }];
-  const M = openerTiming('record-scratch', 3.8, words);
-  assert.equal(M.voiceAt, 1);
-  assert.equal(M.duration, 4.95);
-  assert.equal(M.unfreezeAt, 2.4);
-  assert.equal(openerTiming('typewriter', 3.8).keys.length, 5, 'one strike per letter of AI 101');
-  assert.equal(openerTiming('block-drop', 3.8).lands.length, 5, 'one block per letter');
-  assert.throws(() => openerTiming('nope', 3), /no opener "nope"/);
-  for (const o of OPENERS) {
-    const { bedAt } = openerScore(o.key, openerTiming(o.key, 3.8, words));
-    assert.ok(bedAt >= 0 && bedAt <= openerTiming(o.key, 3.8, words).duration, `${o.key}: the bed comes in during the opener`);
-  }
-});
+
 
 // ── Frame 1 in a project ────────────────────────────────────────────────────
 
@@ -121,7 +110,7 @@ function project(key: string | null) {
   return root;
 }
 
-test('code writes frame 1: the chosen opener over the hook, with the line baked in and no events', () => {
+test('code writes frame 1: the chosen opener over the hook, no line and no events', () => {
   const root = project('scissors');
   const f = { number: 1, id: '01-opener', fields: {} };
   assert.ok(isBankOpener(root, f));
@@ -129,7 +118,7 @@ test('code writes frame 1: the chosen opener over the hook, with the line baked 
   assert.equal(writeOpener(root, f), 'scissors');
   const module = fs.readFileSync(path.join(root, 'assets', 'frames', '01-opener.js'), 'utf8');
   assert.match(module, /import \* as hook from '\.\/01-hook\.js'/);
-  assert.match(module, /openerFrame\("scissors", \{ hook, voice: 3\.8, words: \[.*"this".*\], term: "agent loop" \}\)/);
+  assert.match(module, /openerFrame\("scissors", \{ hook, term: "agent loop" \}\)/);
   assert.equal(fs.readFileSync(path.join(root, 'assets', 'frames', '01-opener.events.json'), 'utf8').trim(), '[]');
   // no choice: frame 1 stays the worker's own (a job from before the bank)
   const legacy = project(null);
@@ -138,35 +127,20 @@ test('code writes frame 1: the chosen opener over the hook, with the line baked 
 });
 
 for (const key of OPENER_KEYS) {
-  test(`${key}: draws over any hook, passes try.mjs, and its first text is "AI 101" alone`, () => {
+  test(`${key}: draws over any hook and passes try.mjs`, () => {
     const root = project(key);
-    const M = openerTiming(key, 3.8, [{ text: 'this', start: 1.36 }]);
-    fs.writeFileSync(path.join(root, 'STORYBOARD.md'), STORYBOARD.replace('- duration: 4.95s', `- duration: ${M.duration}s`));
+    const M = openerTiming(key);
+    fs.writeFileSync(path.join(root, STORYBOARD_FILE), STORYBOARD.replace('- duration: 4.95s', `- duration: ${M.duration}s`));
     writeOpener(root, { number: 1, id: '01-opener' });
     const r = spawnSync('node', ['assets/kit/try.mjs', 'frame', '01-opener'], { cwd: root, encoding: 'utf8' });
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    // the term never shows before the break is over: only in the title card, after it
-    const probe = `
-      await import('./assets/kit/try.mjs').catch(() => {});
-      const scene = (await import('./assets/frames/01-opener.js')).default;
-      const out = [];
-      for (let t = 0; t < ${M.breakAt}; t += 0.05) out.push(String(scene.draw(t)).includes('data-role="title"'));
-      console.log(JSON.stringify(out));`;
-    const p = spawnSync('node', ['--input-type=module', '-e', probe], { cwd: root, encoding: 'utf8' });
-    const titles = JSON.parse(p.stdout.trim().split('\n').pop() || '[]') as boolean[];
-    assert.ok(titles.length > 0 || M.breakAt === 0, p.stderr);
-    assert.ok(titles.every((x) => !x), `${key}: the title card (with the term) is up before the break`);
   });
 }
 
 test('an object-led reel: the hook needs no critter hero, and its openers never touch one (EX3-111)', async () => {
   const { OBJECT_HERO_OPENERS, OPENER_KEYS } = await import('../explainers/world-kit/openers/bank.js');
-  assert.deepEqual([...OBJECT_HERO_OPENERS].sort(), ['balloon-pop', 'big-bang', 'block-drop', 'paper-plane', 'paper-rip', 'typewriter', 'unboxing']);
-  for (const key of OBJECT_HERO_OPENERS) {
-    assert.ok(OPENER_KEYS.includes(key), key);
-    const src = fs.readFileSync(path.join(KIT, 'openers', `${key}.js`), 'utf8');
-    assert.doesNotMatch(src, /heroAt|heroCritter/, `${key} uses the hero`);
-  }
+  // every opener draws over its own AI 101 card (its scholar, when it has one), never the reel's hero
+  assert.deepEqual([...OBJECT_HERO_OPENERS].sort(), [...OPENER_KEYS].sort());
   const root = project('paper-rip');
   fs.writeFileSync(path.join(root, CHOICE), JSON.stringify({ key: 'paper-rip', name: 'Paper Rip', hero: 'object' }));
   writeOpener(root, { number: 1, id: '01-opener' });
@@ -205,7 +179,7 @@ function tone(root: string, file: string, seconds = 3.8) {
 const probe = (file: string) => Number(spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], { encoding: 'utf8' }).stdout);
 
 test("the opener's lead is silence before frame 1's line; its words move with it, once", { skip: !hasFfmpeg && 'ffmpeg is not installed' }, () => {
-  const root = project('record-scratch');
+  const root = project('paper-rip');
   tone(root, 'assets/voice/01.wav');
   const meta = JSON.parse(fs.readFileSync(path.join(root, 'audio_meta.json'), 'utf8'));
   const v = meta.voices[0];
@@ -219,33 +193,30 @@ test("the opener's lead is silence before frame 1's line; its words move with it
   assert.deepEqual(openerLine({ voices: [v] })?.words[1], { text: 'this', start: 1.36, end: 1.5 });
 });
 
-test("the opener's sound: one stem on frame 1, the bed silent until the drop, the hit on the cut", { skip: !hasFfmpeg && 'ffmpeg is not installed' }, () => {
-  const root = project('record-scratch');
+test("the opener's sound: one stem on frame 1, the bed silent until the take-away, a sweep into the cut", { skip: !hasFfmpeg && 'ffmpeg is not installed' }, () => {
+  const root = project('paper-rip');
+  const M = openerTiming('paper-rip');
+  fs.writeFileSync(path.join(root, STORYBOARD_FILE), STORYBOARD.replace('- duration: 4.95s', `- duration: ${M.duration}s`));
   tone(root, 'assets/bgm/track.mp3', 12);
-  const meta = JSON.parse(fs.readFileSync(path.join(root, 'audio_meta.json'), 'utf8'));
-  meta.bgm = { path: 'assets/bgm/track.mp3', volume: 0.16 };
-  meta.voices[0].lead_s = 1;
-  meta.voices[0].duration_s = 4.8;
-  meta.voices[0].words = meta.voices[0].words.map((w: { start: number; end: number }) => ({ ...w, start: w.start + 1, end: w.end + 1 }));
-  fs.writeFileSync(path.join(root, 'audio_meta.json'), JSON.stringify(meta));
+  fs.writeFileSync(path.join(root, 'audio_meta.json'), JSON.stringify({ bgm: { path: 'assets/bgm/track.mp3', volume: 0.16 }, voices: [], sfx: [] }));
   const result = placeOpenerSfx(root);
   assert.equal(result.ok, true, result.errors.join('; '));
   const after = JSON.parse(fs.readFileSync(path.join(root, 'audio_meta.json'), 'utf8'));
   assert.ok(hasOpenerSfx(after));
   assert.deepEqual(after.sfx.map((s: { role: string }) => s.role), ['opener-stem', 'opener-hit']);
   assert.equal(after.sfx[0].file, STEM);
-  // the cut is a sweep that rushes into the 1→2 cut (never a second hit), starting at most 0.5 s before it
-  assert.ok(after.sfx[1].offset_s < 4.95 && after.sfx[1].offset_s >= 4.45 - 1e-9, `sweep offset ${after.sfx[1].offset_s}`);
+  // the cut is a sweep that rushes into the 1→2 cut (never a second hit)
+  assert.ok(after.sfx[1].offset_s < M.duration && after.sfx[1].offset_s >= M.duration - 0.5 - 1e-9, `sweep offset ${after.sfx[1].offset_s}`);
   assert.equal(after.bgm.path, OPENED_BED);
   assert.equal(after.bgm.source_path, 'assets/bgm/track.mp3');
-  assert.ok(Math.abs(probe(path.join(root, STEM)) - 4.95) < 0.05);
-  // the bed is silent before the drop (the freeze lifts on "this": 1 + 1.36s) and plays after it
+  assert.ok(Math.abs(probe(path.join(root, STEM)) - M.duration) < 0.05);
+  // the bed is silent before the take-away and plays after it
   const level = (from: number, len: number) => {
     const out = spawnSync('ffmpeg', ['-v', 'info', '-ss', String(from), '-t', String(len), '-i', path.join(root, OPENED_BED), '-af', 'volumedetect', '-f', 'null', '-'], { encoding: 'utf8' }).stderr;
     return Number(/max_volume: (-?[\d.]+|-inf) dB/.exec(out)?.[1] ?? -Infinity);
   };
-  assert.ok(level(0.2, 1.5) < -60, 'silent before the drop');
-  assert.ok(level(3, 1) > -30, 'playing after it');
+  assert.ok(level(0, M.exitAt - 0.05) < -60, 'silent before the take-away');
+  assert.ok(level(2, 1) > -30, 'playing after it');
   // run again: the same result, built from the original bed
   assert.equal(placeOpenerSfx(root).ok, true);
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, 'audio_meta.json'), 'utf8')).bgm.source_path, 'assets/bgm/track.mp3');
@@ -265,7 +236,7 @@ test('a render job draws an opener none of the last 8 reels used, records it, an
     return rows[0].id;
   };
   // nine earlier reels, newest last; a failed one never became a video and does not count
-  const earlier = ['typewriter', 'paper-rip', 'record-scratch', 'big-bang', 'knock-knock', 'eye-zoom', 'balloon-pop', 'block-drop', 'unboxing'];
+  const earlier = ['typewriter', 'paper-rip', 'paper-plane', 'big-bang', 'knock-knock', 'eye-zoom', 'balloon-pop', 'block-drop', 'unboxing'];
   for (const key of earlier) await setJobOpener(db, await newJob(), key);
   await setJobOpener(db, await newJob('failed'), 'scissors');
   const id = await newJob('running');
@@ -326,21 +297,16 @@ test('a database without the opener column still gets an opener (drawn without t
   assert.equal(await assignOpener(db, rows[0].id, ws, { resuming: true, random: () => 0.99 }), 'paper-rip');
 });
 
-test("the hook's shots run on frame 1's voice clock: after the drop every opener draws the hook at the frame's own t", async () => {
-  const { openerFrame } = await import('../explainers/world-kit/openers/index.js');
-  for (const key of OPENER_KEYS) {
-    const seen: number[] = [];
-    const hook = { default: { ground: 'paper', shots: [{ at: 0, kind: 'medium', on: [540, 1000] }], draw: (t: number) => { seen.push(t); return '<g data-hook=""></g>'; } }, hero: null };
-    const f = openerFrame(key, { hook, voice: 3, words: [{ word: 'this', start: 0.4, end: 0.7 }] as never[], term: 'MCP' });
-    const T = 5;
-    seen.length = 0;
-    try { f.draw(T); } catch { /* an opener that needs a critter hero is covered elsewhere */ }
-    if (!seen.length) continue;
-    assert.ok(seen.includes(T), `${key} drew the hook at ${seen.join(', ')} for frame time ${T}`);
-  }
-});
+/** A frame 2 stand-in that records the times it is drawn at. */
+const stubNext = (seen: number[] = []) => ({ default: { ground: 'paper', shots: [], draw: (t: number) => { seen.push(t); return '<g data-next=""></g>'; } } });
+const cardHook = async (key: string) => {
+  const { lessonScene } = await import('../explainers/world-kit/openers/lesson.js');
+  const scene = lessonScene(key);
+  return { default: scene, hero: scene.hero };
+};
+const aiCount = (svg: string) => svg.split('data-text="AI 101"').length - 1;
 
-// ── The silent hook (EX6-14: D124, D125) ─────────────────────────────────────────────────────
+// ── The hook before the voice (Lucas, 2026-11-21) ───────────────────────────────────────────
 
 /** Whether "AI 101" is drawn in `svg` with no enclosing group faded below 0.99 opacity. */
 function wordmarkShown(svg: string): boolean {
@@ -354,61 +320,67 @@ function wordmarkShown(svg: string): boolean {
   return open.every((tag) => !/opacity="([\d.]+)"/.test(tag) || Number(/opacity="([\d.]+)"/.exec(tag)![1]) >= 0.99);
 }
 
-test('silent hook: frame 1 lasts the animation, then the wordmark readable WORDMARK_READ before the cut', async () => {
-  const { WORDMARK_READ, NO_MARK_TAIL, SILENT_MIN } = await import('../explainers/world-kit/openers/bank.js');
-  assert.equal(WORDMARK_READ, 1.5);
-  assert.equal(SILENT_MIN, 3.0);
+test('the hook: AI 101 and its icon whole for at least CARD_HOLD, the whole hook at most OPENER_MAX, always silent', async () => {
+  const { OPENER_MAX, CARD_HOLD, ARCHIVED_OPENERS, hookRevealAt } = await import('../explainers/world-kit/openers/bank.js');
+  assert.equal(OPENER_MAX, 1.0);
+  assert.equal(CARD_HOLD, 0.4);
+  assert.deepEqual(ARCHIVED_OPENERS, ['record-scratch']);
   for (const o of OPENERS) {
-    assert.ok(typeof o.end === 'function', `${o.key} declares its animation end`);
-    assert.ok(typeof o.wordmarkAt === 'function' || typeof o.slamAt === 'function', `${o.key} declares when its wordmark is on screen`);
-    const M = openerTiming(o.key, 0, [], { silent: true });
+    const M = openerTiming(o.key);
     assert.equal(M.silent, true);
     assert.equal(M.voice, 0);
-    assert.ok(M.duration >= M.end, `${o.key}: the animation plays out`);
-    if (M.wordmarkAt === null) assert.equal(M.duration, Math.round(Math.max(SILENT_MIN, M.end + NO_MARK_TAIL) * 1000) / 1000, `${o.key}: no wordmark, its end + ${NO_MARK_TAIL}s`);
-    else assert.ok(M.duration >= M.wordmarkAt + WORDMARK_READ - 1e-9, `${o.key}: the wordmark reads ${WORDMARK_READ}s (${M.wordmarkAt} → ${M.duration})`);
-    assert.ok(M.duration >= SILENT_MIN && M.duration <= 4, `${o.key}: ${M.duration}s`);
-    // the spoken timing is untouched
-    const spoken = openerTiming(o.key, 3.8, [{ text: 'this', start: 1.36 }]);
-    assert.equal(spoken.silent, undefined);
-    assert.equal(spoken.duration, Math.round((o.voiceAt + 3.8 + 0.15) * 1000) / 1000);
+    assert.ok(M.cardIn >= 0 && M.cardIn < M.exitAt && M.exitAt < M.end, `${o.key}: cardIn < exitAt < end`);
+    assert.ok(M.exitAt - M.cardIn >= CARD_HOLD - 1e-9, `${o.key}: the card holds ${(M.exitAt - M.cardIn).toFixed(2)}s`);
+    assert.ok(M.end <= OPENER_MAX + 1e-9, `${o.key}: ${M.end}s`);
+    assert.equal(M.duration, M.end);
+    assert.equal(hookRevealAt(o.key), M.cardIn);
+    // the score is on the same clock: every cue inside frame 1, the bed in on the take-away
+    const { clips, bedAt } = openerScore(o.key, M);
+    assert.ok(clips.every((c: { at: number }) => c.at >= 0 && c.at < M.duration), `${o.key}: a cue outside frame 1`);
+    assert.ok(bedAt >= M.cardIn && bedAt < M.duration, `${o.key}: the bed comes in at ${bedAt}`);
   }
-  assert.equal(openerTiming('scissors', 0, [], { silent: true }).wordmarkAt, null, 'Scissors has no wordmark');
+  assert.equal(openerTiming('typewriter').keys.length, 5, 'one strike per letter of AI 101');
+  assert.throws(() => openerTiming('nope'), /no opener "nope"/);
 });
 
-test('silent hook: every opener with a wordmark shows it, fully, from wordmarkAt to the cut', async () => {
+test('the hook: AI 101 shows once, whole from cardIn to exitAt, and the opener lands on frame 2 at its own start', async () => {
   const { openerFrame } = await import('../explainers/world-kit/openers/index.js');
-  const hook = { default: { ground: 'paper', shots: [], draw: () => '<g data-hook=""></g>' }, hero: null };
   for (const key of OPENER_KEYS) {
-    const f = openerFrame(key, { hook, voice: 0, words: [], term: 'MCP', silent: true });
-    const M = openerTiming(key, 0, [], { silent: true });
-    if (M.wordmarkAt === null) continue;
-    for (const t of [M.wordmarkAt, M.wordmarkAt + 0.5, M.duration - 0.05]) {
+    const seen: number[] = [];
+    const f = openerFrame(key, { hook: await cardHook(key), next: stubNext(seen) as never, term: 'MCP' });
+    const M = openerTiming(key);
+    for (let t = 0; t < M.duration; t += 1 / 30) {
       const svg = String(f.draw(t));
-      assert.ok(!/NaN|undefined/.test(svg), `${key} at ${t}`);
-      assert.ok(wordmarkShown(svg), `${key}: AI 101 is not fully shown at ${t.toFixed(2)}s (duration ${M.duration}s)`);
+      assert.ok(!/NaN|undefined/.test(svg), `${key} at ${t.toFixed(2)}`);
+      // once until the take-away; after it AI 101 is only the departing object (a torn sheet's two halves)
+      if (t < M.exitAt) assert.ok(aiCount(svg) <= 1, `${key}: AI 101 drawn twice at ${t.toFixed(2)}s`);
+      if (t >= M.cardIn && t < M.exitAt - 1e-6) assert.ok(wordmarkShown(svg), `${key}: AI 101 not whole at ${t.toFixed(2)}s`);
     }
+    seen.length = 0;
+    assert.match(String(f.draw(M.duration - 1 / 30)), /data-next=""/, `${key}: frame 2 is not under the last picture`);
+    assert.ok(seen.length && seen.every((t) => t === 0), `${key}: frame 2 drawn at ${seen.join(', ')}`);
+    // with no frame 2 it uncovers plain paper
+    const bare = openerFrame(key, { hook: await cardHook(key), term: 'MCP' });
+    assert.ok(!/NaN|undefined/.test(String(bare.draw(M.duration - 1 / 30))), key);
   }
 });
 
-test('silent hook: code writes frame 1 with no line, and pace times it from the opener, the voice from frame 2', async () => {
+test('the hook: code writes frame 1 over frame 2 with no line, and pace times it from the opener, the voice from frame 2', async () => {
   const { pace } = await import('../explainers/world-kit/pace.mjs');
   const root = project('big-bang');
-  fs.writeFileSync(path.join(root, CHOICE), JSON.stringify({ key: 'big-bang', name: 'Big Bang', hero: 'critter', voice: 'silent' }));
+  fs.writeFileSync(path.join(root, STORYBOARD_FILE), fs.readFileSync(path.join(root, STORYBOARD_FILE), 'utf8') + ['', '## Frame 2 — Define', '', '- duration: 3s', '- src: compositions/frames/02-define.html', '- ground: paper', ''].join('\n'));
+  fs.writeFileSync(path.join(root, 'assets', 'frames', '02-define.js'), "export default { ground: 'paper', shots: [], draw: () => '<g></g>' };\n");
   writeOpener(root, { number: 1, id: '01-opener' });
   const module = fs.readFileSync(path.join(root, 'assets', 'frames', '01-opener.js'), 'utf8');
-  assert.match(module, /openerFrame\("big-bang", \{ hook, voice: 0, words: \[\], term: "agent loop", silent: true \}\)/);
+  assert.match(module, /import \* as next from '\.\/02-define\.js'/);
+  assert.match(module, /openerFrame\("big-bang", \{ hook, next, term: "agent loop" \}\)/);
   // a frame-1 voice left over is dropped; frame 1 is the opener's own length, all of it hold
   const result = pace(root, { tighten: false });
-  const M = openerTiming('big-bang', 0, [], { silent: true });
+  const M = openerTiming('big-bang');
   assert.deepEqual(result.frames.find((p: { frame: number }) => p.frame === 1), { frame: 1, voice: 0, hold: M.duration, duration: M.duration });
-  assert.match(fs.readFileSync(path.join(root, 'STORYBOARD.md'), 'utf8'), new RegExp(`- duration: ${M.duration}s`));
+  assert.match(fs.readFileSync(path.join(root, STORYBOARD_FILE), 'utf8'), new RegExp(`- duration: ${M.duration}s`));
   const meta = JSON.parse(fs.readFileSync(path.join(root, 'audio_meta.json'), 'utf8'));
   assert.ok(!meta.voices.some((v: { frame: number }) => v.frame === 1), 'no voice on frame 1');
-  // spoken (or a choice from before EX6-14): the line stays, as before
-  const spoken = project('big-bang');
-  writeOpener(spoken, { number: 1, id: '01-opener' });
-  assert.match(fs.readFileSync(path.join(spoken, 'assets', 'frames', '01-opener.js'), 'utf8'), /voice: 3\.8, words: \[.*"this".*\], term: "agent loop" \}\)/);
 });
 
 test('silent hook: the opener stem mixes to the silent length with no frame-1 voice', { skip: !hasFfmpeg }, () => {

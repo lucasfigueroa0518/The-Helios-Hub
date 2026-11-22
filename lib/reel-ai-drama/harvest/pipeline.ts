@@ -4,8 +4,10 @@ import path from 'node:path';
 import type { ReelAiDramaSettings } from '@/lib/reel-ai-drama/settings';
 import { pitchBrief, type Asset, type Mode, type Pitch } from '@/lib/reel-ai-drama/types';
 
+import { NOT_PHOTO } from './anchors';
 import { PORTRAIT_KINDS } from './cast';
 import { mainFace } from './faces';
+import { frameSubject } from './subject';
 import { downloadImage, mapLimit } from './fetch';
 import {
   dedupeByHash,
@@ -332,6 +334,7 @@ export function makePipeline(ctx: PipelineCtx): Pipeline {
           continue;
         }
         if (c.look.text_heavy) c.flags.push('text_heavy');
+        if (c.look.photograph === false) c.flags.push(NOT_PHOTO);
       }
       // A picture that also serves a non-person want is judged as that: an unnamed person is dropped, not fatal.
       const other = c.kind === 'person_photo' ? c.wants.map((w) => wantById.get(w)).find((w) => w && w.kind !== 'person_photo') : undefined;
@@ -410,6 +413,8 @@ export function makePipeline(ctx: PipelineCtx): Pipeline {
           c.face = mainFace(c.faces);
           if (c.faces) c.flags.push(`faces:${c.faces.length}`);
         }
+        // a person the look calls secondary is framed close on, or the picture stops standing for them (subject.ts)
+        for (const c of faceable) await frameSubject(c, { out: () => run.nextName('png'), phash });
       } catch (error) {
         run.notes.push(`faces: detector failed (${error instanceof Error ? error.message.slice(0, 120) : String(error)}); no face boxes`);
       }

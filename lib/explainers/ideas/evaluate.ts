@@ -207,13 +207,17 @@ const TIE_BREAKS: ScoreKey[] = [
   'hook_strength',
 ];
 
-type Ranked = Pick<TopicRow, 'weighted_score' | ScoreKey>;
+type Ranked = Pick<TopicRow, 'weighted_score' | ScoreKey> & Partial<Pick<TopicRow, 'syllabus_rank'>>;
 
 /**
- * Positive when `challenger` outranks `incumbent`. An exact tie on the score
- * and every tie-break keeps the incumbent (E-16 exact_tie_rule).
+ * Positive when `challenger` outranks `incumbent`. The syllabus comes first, as in POOL_ORDER_BY: the earlier
+ * syllabus topic wins, and one on the syllabus beats one off it. Then the score and its tie-breaks; an exact tie
+ * on all of them keeps the incumbent (E-16 exact_tie_rule).
  */
 export function challengerWins(challenger: Ranked, incumbent: Ranked): boolean {
+  const a = challenger.syllabus_rank ?? Infinity;
+  const b = incumbent.syllabus_rank ?? Infinity;
+  if (a !== b) return a < b;
   const order: (keyof Ranked)[] = ['weighted_score', ...TIE_BREAKS];
   for (const key of order) {
     const a = challenger[key] ?? -1;

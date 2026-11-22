@@ -567,9 +567,10 @@ test('P6: text moving across the edge, or pushed off the frame by a crop, is not
 test('P3 and P5: frame 1 is sampled once the opener has uncovered the hook; every opener has a measured reveal', async () => {
   const S = await import('../explainers/world-kit/snap.mjs');
   const B: any = await import('../explainers/world-kit/openers/bank.js');
-  assert.deepEqual(Object.keys(B.HOOK_REVEAL).sort(), [...B.OPENER_KEYS].sort());
-  assert.equal(B.HOOK_REVEAL.typewriter, 1.3);
-  assert.deepEqual(S.sequenceTimes([{ at: 0 }, { at: 2.5 }], 4.5, B.HOOK_REVEAL.typewriter), [1.45, 2.65, 4.47]);
+  // the first frame-1 still waits for the whole AI 101 card (Lucas, 2026-11-21: cardIn)
+  for (const key of B.OPENER_KEYS) assert.equal(B.hookRevealAt(key), B.openerTiming(key).cardIn, key);
+  assert.equal(B.hookRevealAt('typewriter'), 0.26);
+  assert.deepEqual(S.sequenceTimes([{ at: 0 }, { at: 2.5 }], 4.5, B.hookRevealAt('typewriter')), [0.41, 2.65, 4.47]);
   assert.deepEqual(S.sequenceTimes([{ at: 0 }], 4.5), [0.15, 4.47], 'other frames keep 0.15s');
 });
 

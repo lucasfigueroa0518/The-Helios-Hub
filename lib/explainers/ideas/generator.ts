@@ -3,7 +3,8 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { cachedSystemText } from '@/lib/anthropic-cache';
 import { priceAnthropicUsage, usageBucketsFromMessage, type MessageUsageLike } from '@/lib/anthropic-pricing';
 import type { TopicRef } from '@/lib/explainers/ideas/evaluate';
-import { BUCKET_IDS, type Bucket } from '@/lib/explainers/ideas/coverage';
+import { BUCKET_IDS } from '@/lib/explainers/ideas/coverage';
+import { LEVEL_COUNT, type CurriculumTopic } from '@/lib/explainers/ideas/curriculum';
 import { LESSON_ALTITUDES, type AnalogyCandidate, type AnalogyMapping, type GapCandidate, type LessonAltitude } from '@/lib/explainers/types';
 
 /**
@@ -22,6 +23,7 @@ import { LESSON_ALTITUDES, type AnalogyCandidate, type AnalogyMapping, type GapC
  * goes in the user message after it.
  */
 
+/** Syllabus topics assigned per night, one idea each (fewer only when the syllabus runs out). */
 export const IDEAS_PER_CALL = 3;
 
 // ── Idea generator (E-16) ───────────────────────────────────────────────────
@@ -32,9 +34,13 @@ export const IDEAS_PER_CALL = 3;
 // Nothing calls this until auto_render is on (A-7). v5 (3.9, EX3-123): the reel shape's analogy is
 // a well-known one whose defining trait is the concept, as theme brief v4 says. v6 (ideas coverage,
 // 2026-11-03): ideas come from tonight's buckets, each with its bucket and lesson frame; the user message
-// carries the picked buckets' recent renders and the pool instead of all history.
+// carries the picked buckets' recent renders and the pool instead of all history. v7 (curriculum, 2026-11-21): the
+// syllabus assigns the topics (curriculum.ts, next untaken in teaching order); the generator writes one idea per
+// assigned topic with its exact term, pitched at its level. No bucket pick and no AI skew per call any more; each
+// idea still labels its bucket (any of the thirteen) for dedupe. v8 (syllabus angles, 2026-11-21): each assigned topic
+// carries its angle, the question the reel answers; the idea delivers it, and the definition states the non-obvious part.
 
-export const IDEA_GENERATOR_VERSION = 'idea-generator-v6';
+export const IDEA_GENERATOR_VERSION = 'idea-generator-v8';
 
 /** The reel shape every topic must fit (EX3-10; 3.9, EX3-123), shared by the prompts and theme brief v4. */
 export const REEL_SHAPE =
@@ -49,26 +55,23 @@ export const LESSON_FRAME_RULE = `payload, altitude, map_position: the lesson fr
    - payload: one sentence, the one thing the viewer leaves with, at the depth the altitude calls for. For a familiar word the payload goes past the definition, to the mechanism, cause or failure behind it.
    - map_position: one sentence placing the concept in the system it belongs to: what it does there, and what comes before and after it.`;
 
-/** The AI skew per call (EX3-73). */
-export const AI_IDEAS_PER_CALL = 2;
-
 /** What a topic's term is, shared by the idea generator and the scope writer (EX3-86). */
 export const TERM_RULE =
   'term: the exact name of the one concept the reel defines, as a viewer would search for it, 1 to 4 words, lowercase unless it is an acronym or a proper name. The title, the term and the scope agree: the reel defines this term, not a broader concept it belongs to and not a narrower part of it. The scope says what the reel covers and stops short of.';
 
-export const IDEA_GENERATOR_INSTRUCTIONS = `You propose topics for Helios Explainer Reels: one-minute, 9:16 animated reels that each teach one computer-science, software, or AI concept to a broad business audience. The theme brief below defines the audience, the topic areas, the tone, the banned topics, and what counts as a duplicate. It is binding.
+export const IDEA_GENERATOR_INSTRUCTIONS = `You write the ideas for Helios Explainer Reels: one-minute, 9:16 animated reels that each teach one computer-science, software, or AI concept to a broad business audience. The theme brief below defines the audience, the tone, the banned angles, and what counts as a duplicate. It is binding.
 
 HARD CONSTRAINTS. Every one is required.
-1. Return exactly ${IDEAS_PER_CALL} ideas as JSON matching the response schema. No other output.
+1. Return exactly one idea for each syllabus topic in the user message, in the same order, as JSON matching the response schema. No other output.
 2. Each idea teaches exactly one complete thought that fits one minute with ${REEL_SHAPE}.
-3. Skew toward AI, inside tonight's buckets. The user message lists tonight's ${AI_IDEAS_PER_CALL} AI buckets and one computer-science bucket. Exactly ${AI_IDEAS_PER_CALL} of the ${IDEAS_PER_CALL} ideas teach an AI concept (how models, agents, context, tokens, training, retrieval, or other parts of artificial intelligence work), one in each AI bucket. The other idea teaches a computer-science or tech concept in the computer-science bucket: those are still part of the curriculum, and they matter most when they help someone understand AI.
-   bucket: the id of the bucket the idea belongs to, one of tonight's. A bucket's concepts to teach are guidance: an idea may fit its bucket without being on that list.
+3. Teach the assigned syllabus topics. The syllabus is a fixed curriculum that runs from fundamentals to depth, and it has already chosen and ordered tonight's topics, so the brief's guidance on which topics to pick is met by it. The user message lists each topic with its level, its unit, the earlier topics it builds on, and its angle: the question the reel answers, in the viewer's words. Pitch each idea at its level: the viewer has already met the topics it builds on, so the reel can use them without teaching them again. Deliver the angle: the scope and the payload answer it, and the plain definition the reel teaches states the non-obvious part the angle points at (for a practical topic, the rule behind the how), never a restatement of the term's own words.
+   bucket: the id of the coverage bucket the concept belongs to, from the response schema's list.
 4. topic_title: the viewer-facing title or question, 12 words or fewer.
 5. topic_scope: one sentence that states the exact learning objective, beginning with "Explain".
-6. ${TERM_RULE}
+6. ${TERM_RULE} The term is the assigned topic's term, copied exactly.
 7. ${LESSON_FRAME_RULE}
-8. The ${IDEAS_PER_CALL} ideas are mutually distinct, and each is distinct from every topic in the current pool and the recent renders in the user message. Two ideas are duplicates when the viewer would learn essentially the same core concept or leave with the same primary takeaway, even if the title, hook, analogy, or example differs.
-9. Never propose a banned topic or angle from the brief.
+8. Each idea teaches only its own topic. It does not re-teach a topic it builds on, a topic in the current pool, or an archived topic in the user message.
+9. Never take an angle the brief bans.
 10. Do not write hooks, analogies, scripts, scores, or reasoning. Titles, terms, scopes, buckets and lesson frames only.`;
 
 export function ideaGeneratorSystem(themeBrief: string): string {
@@ -109,42 +112,38 @@ export const IDEAS_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-/** One of tonight's buckets as the generator sees it: its concepts no render has taught yet, and its recent renders. */
-export type PickedBucket = Pick<Bucket, 'id' | 'name' | 'kind'> & { concepts_to_teach: readonly string[]; rendered: readonly TopicRef[] };
+/** One assigned topic as the generator sees it: term, kind, level, unit, the earlier topics it builds on, and its angle. */
+export type AssignedTopic = Pick<CurriculumTopic, 'term' | 'kind' | 'angle' | 'level' | 'levelName' | 'unitName' | 'requires'>;
 
-/** Everything that changes per night, after the cached prefix: tonight's buckets with their renders, then the pool. */
+/** Everything that changes per night, after the cached prefix: tonight's syllabus topics, then the archive and the pool. */
 export function ideaGeneratorUserMessage(
-  buckets: readonly PickedBucket[],
+  topics: readonly AssignedTopic[],
   pool: readonly TopicRef[],
-  historyDays?: number,
   archived: readonly TopicRef[] = [],
 ): string {
-  const window = historyDays ? `in the last ${historyDays} days` : 'recently';
-  const lines = ["Tonight's buckets:"];
-  for (const b of buckets) {
+  const lines = ["Tonight's syllabus topics, in teaching order:"];
+  topics.forEach((t, i) => {
     lines.push(
       '',
-      `${b.id} (${b.name}, ${b.kind === 'ai' ? 'AI' : 'computer science'})`,
-      `Concepts to teach: ${JSON.stringify(b.concepts_to_teach)}`,
-      `Rendered ${window} (do not duplicate): ${JSON.stringify(b.rendered)}`,
+      `${i + 1}. term: ${JSON.stringify(t.term)} (${t.kind === 'ai' ? 'AI' : 'computer science'})`,
+      `   Level ${t.level} of ${LEVEL_COUNT}: ${t.levelName}. Unit: ${t.unitName}.`,
+      `   Builds on (taught earlier): ${t.requires.length ? JSON.stringify(t.requires) : 'none'}`,
+      `   Angle (the question the reel answers): ${JSON.stringify(t.angle)}`,
     );
-  }
+  });
   if (archived.length > 0) lines.push('', 'Archived by a person (do not bring back):', JSON.stringify(archived));
-  lines.push('', 'Current candidate pool, all buckets (do not duplicate):', JSON.stringify(pool), '', `Propose exactly ${IDEAS_PER_CALL} new ideas.`);
+  lines.push('', 'Current candidate pool (do not duplicate):', JSON.stringify(pool), '', `Write one idea per topic, ${topics.length} in all, in this order.`);
   return lines.join('\n');
 }
 
 export type IdeaRequest = {
   model: string;
   themeBrief: string;
-  /** Tonight's buckets (pickBuckets), each with its renders from the last `historyDays`. */
-  buckets: readonly PickedBucket[];
+  /** Tonight's syllabus topics (nextSyllabusTopics), in teaching order: one idea each. */
+  topics: readonly AssignedTopic[];
   pool: readonly TopicRef[];
-  /** Every render the request carries, all buckets together (the picked buckets' renders plus archived topics). */
-  rendered: readonly TopicRef[];
-  /** Topics a person archived in tonight's buckets or with no bucket: the machine must not bring them back. */
+  /** Topics a person archived: the machine must not bring them back. */
   archived?: readonly TopicRef[];
-  historyDays?: number;
 };
 
 /** A topic's lesson frame (ideas-coverage PLAN.md, Contract). */
@@ -493,7 +492,7 @@ export function ideaGeneratorParams(request: IdeaRequest): StructuredParams {
     model: request.model,
     max_tokens: MAX_TOKENS,
     system: cachedSystemText(ideaGeneratorSystem(request.themeBrief)),
-    messages: [{ role: 'user', content: ideaGeneratorUserMessage(request.buckets, request.pool, request.historyDays, request.archived) }],
+    messages: [{ role: 'user', content: ideaGeneratorUserMessage(request.topics, request.pool, request.archived) }],
     output_config: { format: { type: 'json_schema', schema: IDEAS_SCHEMA } },
   };
 }
@@ -562,7 +561,7 @@ export function structuredJson(message: Pick<Anthropic.Message, 'content' | 'sto
   }
 }
 
-/** A bucket and lesson frame, trimmed and checked; `buckets` narrows the allowed ids (tonight's picks). */
+/** A bucket and lesson frame, trimmed and checked; `buckets` narrows the allowed ids. */
 export function parseFrame(raw: unknown, label: string, buckets: readonly string[] = BUCKET_IDS): LessonFrame {
   const f = (raw ?? {}) as Record<string, unknown>;
   const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
@@ -573,11 +572,14 @@ export function parseFrame(raw: unknown, label: string, buckets: readonly string
   return frame;
 }
 
-/** Exactly three non-empty, distinct ideas, each with its bucket (one of `buckets`, tonight's picks) and frame. */
-export function parseIdeas(input: unknown, buckets: readonly string[] = BUCKET_IDS): GeneratedIdea[] {
+/**
+ * Exactly `count` (one per assigned topic) non-empty, distinct ideas, each with its bucket and frame. Whether each
+ * names its assigned topic is checked by the cycle (matchAssigned, curriculum.ts), which drops the ones that don't.
+ */
+export function parseIdeas(input: unknown, count: number = IDEAS_PER_CALL): GeneratedIdea[] {
   const ideas = (input as { ideas?: unknown })?.ideas;
-  if (!Array.isArray(ideas) || ideas.length !== IDEAS_PER_CALL) {
-    throw new Error(`idea generator must return exactly ${IDEAS_PER_CALL} ideas`);
+  if (!Array.isArray(ideas) || ideas.length !== count) {
+    throw new Error(`idea generator must return exactly ${count} ideas`);
   }
   const seen = new Set<string>();
   return ideas.map((raw, i) => {
@@ -589,7 +591,7 @@ export function parseIdeas(input: unknown, buckets: readonly string[] = BUCKET_I
     const key = title.toLowerCase();
     if (seen.has(key)) throw new Error(`idea generator repeated the title "${title}"`);
     seen.add(key);
-    return { topic_title: title, topic_scope: scope, term, ...parseFrame(raw, `idea ${i + 1}`, buckets) };
+    return { topic_title: title, topic_scope: scope, term, ...parseFrame(raw, `idea ${i + 1}`) };
   });
 }
 
@@ -682,7 +684,7 @@ export function anthropicIdeaModel(client: Anthropic): IdeaModel {
   return {
     async propose(request) {
       const message = await client.messages.create(ideaGeneratorParams(request));
-      const ideas = parseIdeas(structuredJson(message, 'idea generator'), request.buckets.map((b) => b.id));
+      const ideas = parseIdeas(structuredJson(message, 'idea generator'), request.topics.length);
       return { ideas, usage: message.usage, model: message.model };
     },
     async writeScopes(request) {
