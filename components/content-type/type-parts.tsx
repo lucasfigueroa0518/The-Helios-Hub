@@ -14,13 +14,16 @@ import type { PageVertical } from '@/lib/content-type/config';
 import { aiEventsRebuildRefusal } from '@/lib/content-type/model';
 import { explainersDb } from '@/lib/explainers/connection';
 import { loadSettingsView } from '@/lib/explainers/overview';
+import { FIELD_NOTES_PHOTOS_HREF } from '@/lib/social-hub/links';
 import type { LoadedPage } from '@/lib/social-hub/live';
 
 /**
  * The parts of a content type's page that are components, not data: the buttons in the header and the one extra
  * section in the pool's Settings tab, its "This type only" block (settings standard D8; the data half is
  * lib/content-type/config.ts). Every type gets the same page; this is the only place a type adds to it. A type can add
- * buttons and one settings section, and a panel above the bench (the page's `top` slot); nothing else.
+ * buttons and one settings section; nothing else (no type has a panel above the pool any more: Field Notes' photos moved
+ * to the Photo Bank, UI-REWORK-PLAN D1/D2). A type's own bits on a post or idea go through TypeHub's `postExtras` /
+ * `ideaExtras`, in the type's `hub` wrapper.
  */
 
 export type TypeParts<D = undefined> = {
@@ -62,7 +65,8 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
     ),
   }),
   // Generate picks the next tip and renders its carousel on the pool's photos; Make it on a row makes that tip. Each click approves that run's capped spend.
-  field_notes: defineParts({ actions: () => <FieldNotesRunButton />, hub: FieldNotesHub }),
+  // Photos opens the Photo Bank's Field Notes section, where the photos are uploaded and kept (UI-REWORK-PLAN D6).
+  field_notes: defineParts({ actions: () => <><FieldNotesRunButton /><Link className="rh-btn" href={FIELD_NOTES_PHOTOS_HREF}>Photos</Link></>, hub: FieldNotesHub }),
   explainers: defineParts<RenderingView>({
     load: () => explainersDb().then(loadSettingsView).catch((error: unknown) => ({ error: message(error) })),
     actions: () => <IdeaCycleButton />,

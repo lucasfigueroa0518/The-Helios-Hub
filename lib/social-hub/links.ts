@@ -10,6 +10,9 @@ export function hubBaseOf(pathname: string): string {
   return pathname === PREVIEW_BASE || pathname.startsWith(`${PREVIEW_BASE}/`) ? PREVIEW_BASE : HUB_BASE;
 }
 
+/** The Photo Bank's Field Notes section (UI-REWORK-CONTRACT C1): where our own photos are uploaded and kept. */
+export const FIELD_NOTES_PHOTOS_HREF = `${HUB_BASE}/content/library/photos?section=field-notes`;
+
 export type HubParams = Record<string, string | undefined>;
 
 /** Build a hub href, dropping empty params so links stay short. */

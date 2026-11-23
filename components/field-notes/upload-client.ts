@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * The upload box's logic, apart from React: which files to send, one at a time, and what each answer
  * means in words. A file goes browser -> signed URL -> private storage, then a finalize request does the

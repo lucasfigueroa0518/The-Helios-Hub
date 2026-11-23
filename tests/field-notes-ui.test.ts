@@ -14,7 +14,6 @@ import { fieldNotesRunRoute } from '@/app/api/field-notes/run/handler';
 import { LEAF_REQUIRED, WANT_REQUIRED, guessSubject, seedRoute, normalizeSourceUrl } from '@/app/api/field-notes/seed/handler';
 import { parsePanelSettings, settingsPost } from '@/app/api/field-notes/settings/handler';
 import { slideResponse } from '@/app/api/field-notes/slides/[postId]/[n]/handler';
-import { loadPanelData } from '@/components/field-notes/load';
 import { ingestPhoto } from '@/lib/field-notes/photos/ingest';
 import { listPool, restorePhotoToPool, retirePhoto, setPhotoTags } from '@/lib/field-notes/photos/store';
 import { SOURCE_REGISTRY } from '@/lib/field-notes/sources/registry';
@@ -144,8 +143,8 @@ test('pool: a photo not checked yet shows "Checking for faces…"; once the work
   const { PoolGrid } = await import('@/components/field-notes/PoolGrid');
   const router = { push() {}, replace() {}, refresh() {}, prefetch() {}, back() {}, forward() {}, hmrRefresh() {} };
   const render = async () => {
-    // Through the page loader, so the face check reaches the grid the way the page passes it.
-    const { pool } = await loadPanelData(db);
+    // Through the store's listPool, as the Photo Bank's Field Notes section loads it, so the face check reaches the grid.
+    const pool = await listPool(db);
     const html = renderToStaticMarkup(React.createElement(AppRouterContext.Provider, { value: router as never }, React.createElement(PoolGrid, { pool })));
     const card = (id: string) => html.split('<li').find((li) => li.includes(id)) ?? '';
     return { fresh: card(fresh.photoId), older: card(older.photoId) };
@@ -394,39 +393,38 @@ async function seedReviewPost(pg: PGlite) {
   return post.id;
 }
 
-test('panel data: the pool and the posts in review, each with its tip, notes and problems', async () => {
-  const { pg, db } = await openDb();
+/** The post's tip notes the way the hub reads them: FIELD_NOTES_POSTS_SQL, then the adapter. */
+async function tipNotesFor(pg: PGlite, id: string) {
+  const { FIELD_NOTES_POSTS_SQL } = await import('@/lib/social-hub/queries/field-notes');
+  const { fieldNotesTipNotes } = await import('@/lib/social-hub/adapters/field-notes');
+  const row = (await pg.query(FIELD_NOTES_POSTS_SQL)).rows.find((r) => (r as { post_id: string }).post_id === id);
+  if (!row) throw new Error('post not read');
+  return fieldNotesTipNotes(row as never);
+}
+
+test('post tip notes: the hub read carries every tip in slide order with its kind, want and know-how as plain labels', async () => {
+  const { pg } = await openDb();
   const id = await seedReviewPost(pg);
-  const data = await loadPanelData(db);
-  assert.equal(data.pool.length, 0);
-  assert.equal(data.posts.length, 1);
-  const p = data.posts[0]!;
-  assert.equal(p.id, id);
-  assert.deepEqual(p.slideHeadlines, ['3 AI tips to try', 'Acme Shortcuts', 'Beta Loop', 'Gamma Sweep', 'Follow Helios']);
-  assert.equal(p.hasSlides, true);
-  assert.deepEqual(p.softNotes, ['slide 2 headline is not Title Case']);
-  assert.deepEqual(p.fitProblems, ['slide 1 too_long: text does not fit']);
-  assert.deepEqual(p.tips.map((t) => t.subject), ['Acme Shortcuts', 'Beta Loop', 'Gamma Sweep'], 'every tip, in slide order');
-  assert.deepEqual(p.tips.map((t) => t.sourceUrl), ['https://docs.acme.dev/x', 'https://docs.beta.dev/y', 'https://docs.gamma.dev/z']);
-  assert.deepEqual(p.tips.map((t) => [t.leaf, t.want, t.tier]), [['repo_free_alternative', 'cheaper', 'middle'], ['coding_agent_feature', 'faster', 'higher'], [null, null, null]]);
+  const notes = await tipNotesFor(pg, id);
+  assert.deepEqual(notes.map((t) => t.subject), ['Acme Shortcuts', 'Beta Loop', 'Gamma Sweep'], 'every tip, in slide order');
+  assert.deepEqual(notes.map((t) => [t.kind, t.want, t.knowHow]), [['Free alternative to a paid tool', 'Cheaper', 'Middle know-how'], ['Coding agent feature', 'Faster', 'Higher know-how'], [null, null, null]]);
 });
 
-test('review panel: each tip slide shows its leaf, want and tier as plain labels, and an untagged tip says so', async () => {
+test('post panel tip notes: each tip shows its tags in plain words, and an untagged tip says so', async () => {
   const React = await import('react');
   (globalThis as { React?: unknown }).React = React;
   const { renderToStaticMarkup } = await import('react-dom/server');
-  const { AppRouterContext } = await import('next/dist/shared/lib/app-router-context.shared-runtime');
-  const router = { push() {}, replace() {}, refresh() {}, prefetch() {}, back() {}, forward() {}, hmrRefresh() {} };
-  const { pg, db } = await openDb();
-  await seedReviewPost(pg);
-  const { FieldNotesReviewPanel } = await import('@/components/field-notes/FieldNotesReviewPanel');
-  const html = renderToStaticMarkup(React.createElement(AppRouterContext.Provider, { value: router as never }, React.createElement(FieldNotesReviewPanel, { posts: (await loadPanelData(db)).posts })));
-  const tips = html.split('<li>').slice(1).map((li) => li.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '));
+  const { pg } = await openDb();
+  const id = await seedReviewPost(pg);
+  const { TipNotes } = await import('@/components/field-notes/TipNotes');
+  const html = renderToStaticMarkup(React.createElement(TipNotes, { notes: await tipNotesFor(pg, id) }));
+  const tips = html.split('<li').slice(1).map((li) => li.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' '));
   assert.equal(tips.length, 3);
   for (const label of ['Acme Shortcuts', 'Free alternative to a paid tool', 'Cheaper', 'Middle know-how']) assert.ok(tips[0]!.includes(label), label);
   for (const label of ['Beta Loop', 'Coding agent feature', 'Faster', 'Higher know-how']) assert.ok(tips[1]!.includes(label), label);
   for (const label of ['Gamma Sweep', 'Kind not tagged', 'Want not tagged', 'Know-how not tagged']) assert.ok(tips[2]!.includes(label), label);
   assert.doesNotMatch(html, /repo_free_alternative|coding_agent_feature|newly_possible|Open source repo|Paid tool feature/, 'labels are plain words, never raw values or the retired branches');
+  assert.equal(renderToStaticMarkup(React.createElement(TipNotes, { notes: [] })), '', 'a post with no tips shows nothing');
 });
 
 test('seed form: required leaf and want selects list every leaf and want in plain words', async () => {
@@ -458,28 +456,27 @@ test('registry: every source names known leaves and carries verifiedOn, a read n
   for (const [vendor, n] of byVendor) assert.ok(n <= SOURCE_REGISTRY.length / 3, `${vendor} is at most a third of the entries`);
 });
 
-test('components render without throwing: upload box, pool, review panel, seed form, run button, settings, and no emoji or exclamation marks', async () => {
+test('components render without throwing: Photo Bank Field Notes section, seed form, run button, settings, and no emoji or exclamation marks', async () => {
   const React = await import('react');
   (globalThis as { React?: unknown }).React = React;
   const { renderToStaticMarkup } = await import('react-dom/server');
   const { AppRouterContext } = await import('next/dist/shared/lib/app-router-context.shared-runtime');
   const router = { push() {}, replace() {}, refresh() {}, prefetch() {}, back() {}, forward() {}, hmrRefresh() {} };
   const wrap = (el: React.ReactElement) => renderToStaticMarkup(React.createElement(AppRouterContext.Provider, { value: router as never }, el));
-  const { pg, db } = await openDb();
-  await seedReviewPost(pg);
+  const { db } = await openDb();
   const bucket = memoryBucket();
   await ingestPhoto({ db, bucket }, { bytes: await picture(11), mime: 'image/jpeg', uploadedBy: 'tommy@heliosmarketing.org' });
   const rejected = await ingestPhoto({ db, bucket }, { bytes: await picture(12), mime: 'image/jpeg', uploadedBy: 'lucas@heliosmarketing.org' });
   if (rejected.kind !== 'stored') throw new Error('not stored');
   await retirePhoto(db, rejected.photoId, 'a stranger in frame');
-  const data = await loadPanelData(db);
+  const pool = await listPool(db);
 
-  const { FieldNotesTopView } = await import('@/components/field-notes/FieldNotesTopView');
+  const { FieldNotesPhotosSection } = await import('@/components/social-hub/library/FieldNotesPhotosSection');
   const { FieldNotesSeedForm } = await import('@/components/field-notes/FieldNotesSeedForm');
   const { FieldNotesRunButton } = await import('@/components/field-notes/FieldNotesRunButton');
   const { FieldNotesSettingsPanel } = await import('@/components/field-notes/FieldNotesSettingsPanel');
 
-  const top = wrap(React.createElement(FieldNotesTopView, { data, restPosts: 8 }));
+  const top = wrap(React.createElement(FieldNotesPhotosSection, { pool, error: null, readOnly: false }));
   assert.match(top, /Add photos/);
   assert.match(top, /HEIC, HEIF, JPEG, PNG or WebP/);
   assert.match(top, /1 of about 25 live/);
@@ -498,18 +495,11 @@ test('components render without throwing: upload box, pool, review panel, seed f
   assert.match(top, /Rejected: a stranger in frame/);
   assert.match(top, /Restore/);
   assert.match(top, />Reject</);
-  assert.match(top, /Waiting for review/);
-  assert.match(top, /\/api\/field-notes\/slides\/[0-9a-f-]{36}\/1\?v=1/);
-  for (const url of ['https://docs.acme.dev/x', 'https://docs.beta.dev/y', 'https://docs.gamma.dev/z']) assert.ok(top.includes(`href="${url}"`), `the review panel links ${url}`);
-  assert.match(top, />Approve</);
-  assert.doesNotMatch(top, />Rebuild</, "Field Notes has no Rebuild control");
-  assert.match(top, /Fit problems/);
   assert.match(top, /Tommy|Lucas/);
 
-  const empty = wrap(React.createElement(FieldNotesTopView, { data: { pool: [], posts: [] } }));
+  const empty = wrap(React.createElement(FieldNotesPhotosSection, { pool: [], error: null, readOnly: false }));
   assert.match(empty, /No photos yet/);
-  assert.doesNotMatch(empty, /Waiting for review/);
-  assert.match(wrap(React.createElement(FieldNotesTopView, { data: null, error: 'relation does not exist' })), /Could not load the photo pool/);
+  assert.match(wrap(React.createElement(FieldNotesPhotosSection, { pool: null, error: 'relation does not exist', readOnly: false })), /Could not load the Field Notes photos/);
 
   const seed = wrap(React.createElement(FieldNotesSeedForm, { done() {} }));
   assert.match(seed, /Seed a Field Notes tip/);

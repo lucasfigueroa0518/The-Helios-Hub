@@ -11,6 +11,7 @@ import type { ExplainersRead } from '@/lib/social-hub/queries/explainers';
 import type { InsightRow, ReelsRead } from '@/lib/social-hub/queries/reels';
 import type { StoriesRead } from '@/lib/social-hub/queries/stories';
 import type { AiEventsPoolRow, AiEventsRead } from '@/lib/social-hub/queries/ai-events';
+import type { FieldNotesRead } from '@/lib/social-hub/queries/field-notes';
 import { addDays, nyDayStart } from '@/lib/social-hub/time';
 
 /** The preview's "now": Thursday 2026-10-08, 3:00 PM New York. */
@@ -472,4 +473,54 @@ export function previewDatasetWithAiEvents(): HubDataset {
   counter = saved;
   cachedAiEvents = { ...base, posts: [...base.posts, ...ai.posts], ideas: [...base.ideas, ...ai.ideas], aiEventsWeek: ai.aiEventsWeek, aiEventsPublishingLive: false };
   return cachedAiEvents;
+}
+
+// ── Field Notes (its own preview dataset, like AI Events, so the other screens' counts stay put) ──
+
+/** One Field Notes post in review with three tips (the last untagged), and those tips, for the /social/preview/type/field_notes mirror. */
+function fieldNotesRead(): FieldNotesRead {
+  const tips = [
+    { subject: 'Claude Code slash commands', leaf: 'coding_agent_feature', want: 'faster', tier: 'middle', name: 'Claude Code', tryIt: 'Type /help in a session to list every command.' },
+    { subject: 'Free OCR for scanned PDFs', leaf: 'repo_free_alternative', want: 'cheaper', tier: 'higher', name: 'OCRmyPDF', tryIt: 'pip install ocrmypdf, then ocrmypdf in.pdf out.pdf' },
+    { subject: 'Ask for the plan before the code', leaf: null, want: null, tier: null, name: 'Any chat app', tryIt: 'Start with: plan this first, no code yet.' },
+  ].map((t) => ({ ...t, tip_id: uuid(8) }));
+  const postId = uuid(8);
+  const caption = ['Three small things that saved us hours this week.', '', 'How to try:', ...tips.map((t, i) => `${i + 1}. ${t.name}: ${t.tryIt}`), '', 'Follow @heliosgroup.ai for more AI field notes from the Helios team.'].join('\n');
+  const slides = [{ kind: 'hook', headline: '3 AI Tips To Try', body: 'Field notes from the Helios team' }, ...tips.map((t) => ({ kind: 'tip', headline: t.subject, body: t.tryIt })), { kind: 'follow', headline: 'Follow Helios', body: '@heliosgroup.ai' }];
+  return {
+    posts: [{
+      post_id: postId, run_id: null, tip_id: tips[0]!.tip_id, tip_ids: tips.map((t) => t.tip_id),
+      tips: tips.map((t) => ({ tip_id: t.tip_id, subject: t.subject, source_url: null, source_label: null, leaf: t.leaf, want: t.want, tier: t.tier })),
+      seq: 1, slug: 'field-notes-preview', ny_date: TODAY, status: 'review', caption, created_at: '2026-10-08T06:00:00Z', updated_at: '2026-10-08T06:00:00Z',
+      published_at: null, approved_by: null, subject: tips[0]!.subject, branch: tips[0]!.leaf, source_url: null, source_label: null,
+      render: { slides }, render_version: 1, slide_count: slides.length, has_slide_objects: false, fit_problems: [], render_problems: [],
+    }],
+    attempts: [], schedules: [], insights: [],
+    // The three tips on the post are drafted (made, in review); two more wait in the pool as candidates.
+    tips: [
+      ...tips.map((t, i) => ({
+        tip_id: t.tip_id, created_at: '2026-10-07T12:00:00Z', updated_at: '2026-10-07T12:00:00Z', source_kind: 'seed', source_url: null, source_label: null,
+        subject: t.subject, branch: t.leaf ?? 'technique', use_with_result: t.tryIt, score: 0.8 - i * 0.1, status: 'drafted', post_id: postId,
+      })),
+      ...[['Cursor background agents', 'coding_agent_feature', 0.74], ['Whisper for meeting notes', 'repo_free_alternative', 0.66]].map(([subject, leaf, score]) => ({
+        tip_id: uuid(8), created_at: '2026-10-08T09:00:00Z', updated_at: '2026-10-08T09:00:00Z', source_kind: 'seed', source_url: null, source_label: null,
+        subject: subject as string, branch: leaf as string, use_with_result: '', score: score as number, status: 'candidate', post_id: null,
+      })),
+    ],
+    latestRun: null, requireApproval: true, publishingLive: false,
+  };
+}
+
+let cachedFieldNotes: HubDataset | null = null;
+
+/** The preview dataset with one Field Notes post in review and its tips. */
+export function previewDatasetWithFieldNotes(): HubDataset {
+  if (cachedFieldNotes) return cachedFieldNotes;
+  const base = previewDataset();
+  const saved = counter;
+  counter = 9500;
+  const fn = buildDataset({ reels: new Error('n/a'), explainers: new Error('n/a'), carousels: new Error('n/a'), stories: new Error('n/a'), field_notes: fieldNotesRead() }, null, FIXTURE_NOW);
+  counter = saved;
+  cachedFieldNotes = { ...base, posts: [...base.posts, ...fn.posts], ideas: [...base.ideas, ...fn.ideas] };
+  return cachedFieldNotes;
 }

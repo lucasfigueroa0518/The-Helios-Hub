@@ -4,13 +4,16 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { poolVariety } from '@/lib/field-notes/photos/pool';
-import type { FaceCheckState } from '@/lib/field-notes/photos/store';
+import type { FaceCheckState } from '@/lib/field-notes/photos/read';
 import { PHOTO_KINDS, type PoolPhoto } from '@/lib/field-notes/types';
 
 import { FACES_AUTO_LABEL, FACES_CHECKING_LABEL, PHOTO_KIND_LABEL, UPLOAD_KINDS } from '@/app/api/field-notes/photos/rules';
 
-/** A pool photo with its face check when the loader read it (lib/field-notes/photos/store.ts listPool). */
-type GridPhoto = PoolPhoto & { facesCheck?: FaceCheckState };
+/**
+ * A pool photo with its face check when the loader read it (lib/field-notes/photos/store.ts listPool). `thumbUrl`
+ * replaces the thumbnail route only for fixture photos (the development preview, which has no bucket).
+ */
+export type GridPhoto = PoolPhoto & { facesCheck?: FaceCheckState; thumbUrl?: string };
 
 import { POOL_TARGET, THUMB, nameOf } from './constants';
 
@@ -23,7 +26,7 @@ async function post(body: Record<string, unknown>): Promise<string> {
   return json.note ?? 'Saved.';
 }
 
-function PhotoCard({ photo, restPosts }: { photo: GridPhoto; restPosts: number | null }) {
+function PhotoCard({ photo, restPosts, readOnly }: { photo: GridPhoto; restPosts: number | null; readOnly: boolean }) {
   const router = useRouter();
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState('');
@@ -46,13 +49,15 @@ function PhotoCard({ photo, restPosts }: { photo: GridPhoto; restPosts: number |
   return (
     <li className={`fn-photo fn-photo--${photo.status}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="fn-photo__img" src={THUMB(photo.photoId)} alt={`Pool photo uploaded by ${nameOf(photo.uploadedBy)}`} loading="lazy" />
+      <img className="fn-photo__img" src={photo.thumbUrl ?? THUMB(photo.photoId)} alt={`Pool photo uploaded by ${nameOf(photo.uploadedBy)}`} loading="lazy" />
       <div className="fn-photo__meta">
         <span className={`rh-chip fn-chip--${photo.status}`}>{STATUS_LABEL[photo.status]}</span>
         <span className="rh-muted">{nameOf(photo.uploadedBy)}</span>
       </div>
       <div className="fn-photo__tags">
-        {photo.kind === 'people' ? (
+        {readOnly ? (
+          <span className="rh-chip fn-kind is-on">{photo.kind === 'people' ? FACES_AUTO_LABEL : PHOTO_KIND_LABEL[photo.kind]}</span>
+        ) : photo.kind === 'people' ? (
           <>
             <span className="rh-chip fn-kind is-on" title="Tagged automatically: a clear face was found, so this photo can be the first slide">{FACES_AUTO_LABEL}</span>
             {/* One click undoes a wrong Faces tag: back to Working, off the cover list. */}
@@ -72,7 +77,7 @@ function PhotoCard({ photo, restPosts }: { photo: GridPhoto; restPosts: number |
       </div>
       {photo.status === 'resting' && restPosts !== null && photo.lastUsedPostSeq !== null ? <p className="rh-muted fn-photo__line">Used in post {photo.lastUsedPostSeq}; rests for {restPosts} posts.</p> : null}
       {photo.status === 'retired' && photo.rejectReason ? <p className="rh-muted fn-photo__line">Rejected: {photo.rejectReason}</p> : null}
-      {photo.status === 'retired' ? (
+      {readOnly ? null : photo.status === 'retired' ? (
         <button type="button" className="rh-btn rh-btn--xs" disabled={busy} onClick={() => void act({ action: 'restore' })}>Restore</button>
       ) : asking ? (
         <form className="fn-reject" onSubmit={(e) => { e.preventDefault(); void act({ action: 'reject', reason }); }}>
@@ -95,20 +100,23 @@ function PhotoCard({ photo, restPosts }: { photo: GridPhoto; restPosts: number |
  * The pool as thumbnails: status, who added it, its kind, the count against the target, and a manual Reject (with a
  * reason) and Restore. Faces are tagged automatically shortly after upload (the worker's face check): a photo not
  * checked yet shows "Checking for faces…", a tagged one "Faces (auto)"; one click ("Not faces") removes a wrong tag.
- * Other photos can switch between working, scenery and event.
+ * Other photos can switch between working, scenery and event. `readOnly` (the development preview) shows the same
+ * cards with no buttons or menus; `head={false}` drops the title and counts when the page already shows them.
  */
-export function PoolGrid({ pool, restPosts = null }: { pool: GridPhoto[]; restPosts?: number | null }) {
+export function PoolGrid({ pool, restPosts = null, readOnly = false, head = true }: { pool: GridPhoto[]; restPosts?: number | null; readOnly?: boolean; head?: boolean }) {
   const live = pool.filter((p) => p.status === 'live').length;
   const resting = pool.filter((p) => p.status === 'resting').length;
   const retired = pool.filter((p) => p.status === 'retired').length;
   const variety = poolVariety(pool);
   return (
     <section className="fn-pool" aria-label="Photo pool">
-      <div className="fn-pool__head">
-        <h3 className="rh-card__title rh-card__title--flush">Photo pool</h3>
-        <span className="rh-chip rh-chip--quota">{live} of about {POOL_TARGET} live</span>
-        <span className="rh-muted fn-pool__counts">{resting} resting, {retired} retired</span>
-      </div>
+      {head ? (
+        <div className="fn-pool__head">
+          <h3 className="rh-card__title rh-card__title--flush">Photo pool</h3>
+          <span className="rh-chip rh-chip--quota">{live} of about {POOL_TARGET} live</span>
+          <span className="rh-muted fn-pool__counts">{resting} resting, {retired} retired</span>
+        </div>
+      ) : null}
       {pool.length > 0 ? (
         <p className="rh-muted fn-pool__variety">
           Live by kind: {PHOTO_KINDS.map((k) => `${k === 'people' ? FACES_AUTO_LABEL : PHOTO_KIND_LABEL[k]} ${variety.counts[k]}`).join(', ')}.
@@ -116,10 +124,10 @@ export function PoolGrid({ pool, restPosts = null }: { pool: GridPhoto[]; restPo
       ) : null}
       {variety.warnings.map((w) => <p key={w} className="rh-empty fn-pool__warn" role="status">{w}</p>)}
       {pool.length === 0 ? (
-        <p className="rh-empty">No photos yet. Add some above; a post needs real photos to be made.</p>
+        <p className="rh-empty">{readOnly ? 'No photos yet.' : 'No photos yet. Add some above; a post needs real photos to be made.'}</p>
       ) : (
         <ul className="fn-grid">
-          {pool.map((p) => <PhotoCard key={p.photoId} photo={p} restPosts={restPosts} />)}
+          {pool.map((p) => <PhotoCard key={p.photoId} photo={p} restPosts={restPosts} readOnly={readOnly} />)}
         </ul>
       )}
     </section>

@@ -439,17 +439,16 @@ test('caption: the Writer text, then verbatim how-to-try lines from each slide, 
   assert.equal(buildFieldNotesCaption('Try these.'), `Try these.\n\n${FIELD_NOTES_FOLLOW_LINE}\n\n${FIELD_NOTES_HASHTAGS.join(' ')}`);
 });
 
-test('review data: each tip gets its name and tryIt from the caption\'s how-to-try line, in slide order', async () => {
-  const { toReviewPost } = await import('@/components/field-notes/load');
+test('post panel tip notes: each tip gets its name and tryIt from the caption\'s how-to-try line, in slide order', async () => {
+  const { fieldNotesTipNotes } = await import('@/lib/social-hub/adapters/field-notes');
   const row = {
-    id: 'p', slug: 's', status: 'review', caption: buildFieldNotesCaption(draft.caption, draft.slides), render_version: 1, slides: [], slide_objects: [],
-    fit_problems: [], render_problems: [], soft_notes: [],
-    tips: draft.slides.map((s) => ({ id: s.tipId, subject: s.headline, leaf: null, want: null, tier: null, source_url: null, source_label: null, use: '' })),
+    caption: buildFieldNotesCaption(draft.caption, draft.slides),
+    tips: draft.slides.map((s) => ({ tip_id: s.tipId, subject: s.headline, source_url: null, source_label: null, leaf: null, want: null, tier: null })),
   };
-  const post = toReviewPost(row);
-  assert.deepEqual(post.tips.map((t) => [t.name, t.tryIt]), draft.slides.map((s) => [s.name, s.tryIt]));
-  const old = toReviewPost({ ...row, caption: 'An older caption with no how-to-try lines.' });
-  assert.deepEqual(old.tips.map((t) => [t.name, t.tryIt]), draft.slides.map(() => [null, null]));
+  const notes = fieldNotesTipNotes(row as never);
+  assert.deepEqual(notes.map((t) => [t.name, t.tryIt]), draft.slides.map((s) => [s.name, s.tryIt]));
+  const old = fieldNotesTipNotes({ ...row, caption: 'An older caption with no how-to-try lines.' } as never);
+  assert.deepEqual(old.map((t) => [t.name, t.tryIt]), draft.slides.map(() => [null, null]));
 });
 
 test('slide payload: the render inputs carry headline and body only, never name or tryIt', () => {
