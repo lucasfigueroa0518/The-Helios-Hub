@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader, RotateCcw, Undo2 } from 'lucide-react';
+import { CircleAlert, CircleCheck, Loader, MessageCircleQuestion, Pause, RotateCcw, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 
 import { useHubRefresh } from '@/components/social-hub/nav/useHubRefresh';
@@ -125,8 +125,10 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
     try {
       const res = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ vertical, refs, ...body }) });
       const out = (await res.json().catch(() => ({}))) as { note?: string };
-      // Route notes can carry raw errors (a failed restore): the same plain treatment as the rows' notes.
-      setNote({ ok: res.ok, text: plainPostNote(res.ok, out.note) });
+      // A started request is shown by the status panel ("Revising…"), so its "ok" note would only linger under the box.
+      // Failures and undo / restore results are shown; route notes can carry raw errors, so they get the rows' plain treatment.
+      const startedOne = res.ok && (kind === 'submit' || kind === 'reply' || kind === 'continue');
+      setNote(startedOne ? null : { ok: res.ok, text: plainPostNote(res.ok, out.note) });
       return res.ok;
     } catch {
       setNote({ ok: false, text: 'Couldn’t reach the hub. Check your connection and try again.' });
@@ -191,7 +193,10 @@ export function RevisionBox({ vertical, refs, lock, initialRows = null }: { vert
       amount={amount}
       armed={armed}
       onArm={setArmed}
-      onText={setText}
+      onText={(v) => {
+        setNote(null);
+        setText(v);
+      }}
       onReply={setReply}
       onAmount={setAmount}
       onSubmit={() => void submit()}
@@ -218,6 +223,7 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
   const id = useId();
   const textId = `${id}-text`;
   const countId = `${id}-count`;
+  const canId = `${id}-can`;
   const replyId = `${id}-reply`;
   const amountId = `${id}-amount`;
   const cur = state.current;
@@ -229,14 +235,15 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
   if (cur?.kind === 'revising') {
     status = (
       <div className="sh-revise__status" data-state="revising">
-        <p className="sh-revise__line"><Loader size={14} aria-hidden="true" className="sh-spin" /> <strong>Revising…</strong> “{cur.instruction}”</p>
+        <p className="sh-revise__line"><Loader size={16} aria-hidden="true" className="sh-revise__icon sh-spin" /><span><strong>Revising…</strong> “{cur.instruction}”</span></p>
         <p className="sh-revise__hint">{cur.hint}</p>
       </div>
     );
   } else if (cur?.kind === 'asking') {
     status = (
       <div className="sh-revise__status" data-state="asking">
-        <p className="sh-revise__line"><strong>One question first.</strong> {cur.question}</p>
+        <p className="sh-revise__line"><MessageCircleQuestion size={16} aria-hidden="true" className="sh-revise__icon" /><span><strong>One question first.</strong> {cur.question}</span></p>
+        <p className="sh-revise__hint">You asked: “{cur.instruction}”</p>
         <label className="sh-revise__label" htmlFor={replyId}>Your answer</label>
         <div className="sh-revise__inline">
           <input
@@ -263,19 +270,19 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
   } else if (cur?.kind === 'applied') {
     status = (
       <div className="sh-revise__status sh-revise__status--done" data-state="applied">
-        <p className="sh-revise__line">{cur.summary}</p>
+        <p className="sh-revise__line"><CircleCheck size={16} aria-hidden="true" className="sh-revise__icon" /><span>{cur.summary}</span></p>
       </div>
     );
   } else if (cur?.kind === 'blocked' || cur?.kind === 'failed') {
     status = (
       <div className="sh-revise__status sh-revise__status--failed" data-state={cur.kind}>
-        <p className="sh-revise__line">{cur.note}</p>
+        <p className="sh-revise__line"><CircleAlert size={16} aria-hidden="true" className="sh-revise__icon" /><span>{cur.note}</span></p>
       </div>
     );
   } else if (cur?.kind === 'paused') {
     status = (
       <div className="sh-revise__status sh-revise__status--paused" data-state={`paused-${cur.at}`}>
-        <p className="sh-revise__line">{cur.note}</p>
+        <p className="sh-revise__line"><Pause size={16} aria-hidden="true" className="sh-revise__icon" /><span>{cur.note}</span></p>
         {cur.notified ? <p className="sh-revise__hint">A notification was sent.</p> : null}
         <label className="sh-revise__label" htmlFor={amountId}>{cur.needsAmount ? 'To keep going, allow up to (US dollars)' : 'Allow up to (US dollars)'}</label>
         <div className="sh-revise__inline">
@@ -330,13 +337,14 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
                 rows={3}
                 maxLength={INSTRUCTION_MAX_CHARS}
                 value={p.text}
-                placeholder="For example: slide 3’s headline is too long"
-                aria-describedby={countId}
+                placeholder={`For example: ${state.example}`}
+                aria-describedby={`${canId} ${countId}`}
                 onChange={(e) => p.onText(e.target.value)}
                 onKeyDown={sendOnModEnter(p.onSubmit)}
                 disabled={busy != null}
               />
               <div className="sh-revise__bar">
+                <span className="sh-revise__can" id={canId}>You can change {state.canChange}.</span>
                 <span className="sh-revise__count" id={countId} aria-live="off">{p.text.length}/{INSTRUCTION_MAX_CHARS}</span>
                 <button type="submit" className="sh-btn sh-btn--primary" disabled={busy != null || !p.text.trim()} data-busy={busy === 'submit' ? '' : undefined}>
                   {busy === 'submit' ? <Loader size={14} aria-hidden="true" /> : null}
@@ -346,14 +354,19 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
             </form>
           ) : null}
           {state.parts.length ? (
+            <div className="sh-revise__changes">
+            <h4 className="sh-revise__sub">Changes made</h4>
             <ul className="sh-revise__parts" aria-label="Changes in place">
               {state.parts.map((part) => {
                 const key = `${part.part.kind}:${part.part.key}`;
                 return (
                   <li key={key} className="sh-revise__part">
                     <span className="sh-revise__part-name">
-                      <strong>{part.label[0]!.toUpperCase() + part.label.slice(1)}</strong>
-                      <span className="sh-subtle"> · {part.applied === 1 ? '1 change' : `${part.applied} changes`}, last: “{part.latest.instruction}”</span>
+                      <CircleCheck size={14} aria-hidden="true" className="sh-revise__tick" />
+                      <span className="sh-revise__part-text">
+                        <strong>{part.label[0]!.toUpperCase() + part.label.slice(1)}</strong>
+                        <span className="sh-revise__part-last">{part.applied === 1 ? '1 change' : `${part.applied} changes`}, last: “{part.latest.instruction}”</span>
+                      </span>
                     </span>
                     <span className="sh-revise__part-tools">
                       <button type="button" className="sh-btn sh-btn--quiet" onClick={() => p.onUndo(part, false)} disabled={busy != null} data-busy={busy === `undo:${key}` ? '' : undefined}>
@@ -384,6 +397,7 @@ export function RevisionBoxView(p: RevisionBoxViewProps) {
                 );
               })}
             </ul>
+            </div>
           ) : null}
         </>
       )}
