@@ -64,7 +64,10 @@ async function readJson<T>(res: Response): Promise<T & { error?: string; fields?
   return (await res.json().catch(() => ({}))) as T & { error?: string; fields?: Record<string, string> };
 }
 
-export function ReelAiDramaSettingsForm() {
+/** What AI Drama's Settings tab shows: its spend limits. Everything else is on the Lab's Settings tab (/reel-ai-drama/lab?tab=settings). */
+export const RAD_TAB_KEYS: readonly string[] = ['per_reel_cap_usd', 'daily_spend_cap_usd', 'nightly_dev_cap_usd'];
+
+export function ReelAiDramaSettingsForm({ only }: { /** Show only these keys, in this order (the Settings tab's short list). */ only?: readonly string[] } = {}) {
   const [data, setData] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string | boolean>>({});
@@ -87,8 +90,12 @@ export function ReelAiDramaSettingsForm() {
   useEffect(() => { void load(); }, [load]);
 
   const keys = useMemo(
-    () => (data ? data.editable.filter((k) => !SHOWN_ABOVE.has(k) && ['boolean', 'number', 'string'].includes(typeof data.settings[k])) : []),
-    [data],
+    () => {
+      if (!data) return [];
+      const usable = data.editable.filter((k) => !SHOWN_ABOVE.has(k) && ['boolean', 'number', 'string'].includes(typeof data.settings[k]));
+      return only ? only.filter((k) => usable.includes(k)) : usable;
+    },
+    [data, only],
   );
 
   if (loadError) return <p className="rh-empty" role="alert">{loadError}</p>;

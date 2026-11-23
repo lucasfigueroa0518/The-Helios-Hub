@@ -17,6 +17,9 @@ Read first: `CLAUDE.md`, then `PLAN.md` (decisions D1–D19), `CONTRACT.md`, `BU
   count, bounded by each type's fixed maximum), one Schedule line + "Edit in Calendar". Needs a social worker redeploy
   (the slot scheduler reads the ceilings).
 
+- **D21 built (2026-11-23):** Explainers and AI Drama Settings show a short list plus "Advanced settings"; Explainers'
+  daily spend cap applies in every mode. Needs a social worker redeploy (the Explainers night and render request read it).
+
 ## To do (in order)
 1. ~~**Deploy the social worker**~~ — **done 2026-11-22 03:29 UTC**: all six units active, no restarts, no warnings. (All content-type workers + publisher run on `helios-social-worker`; the orchestration
    VM runs none of the changed code): on `main-l2xadw`, clean tree, gcloud logged in, `.env.local` present:

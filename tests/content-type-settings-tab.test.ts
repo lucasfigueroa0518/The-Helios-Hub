@@ -125,6 +125,23 @@ test('wiring: no Auto-publish or approval control, no gear drawer, every pool ge
   assert.match(tabs, /segment\('settings', 'Settings', null\)/);
 });
 
+test('Explainers and AI Drama Settings show a short list; the rest is behind Advanced settings', () => {
+  const parts = readFileSync('components/content-type/type-parts.tsx', 'utf8');
+  assert.match(parts, /<SettingsForm initial=\{view\.settings\} only=\{EXPLAINERS_TAB_KEYS\} \/>/);
+  assert.match(parts, /<ReelAiDramaSettingsForm only=\{RAD_TAB_KEYS\} \/>/);
+  assert.match(parts, /href="\/explainers\/settings">Advanced settings/);
+  assert.match(parts, /href="\/reel-ai-drama\/lab\?tab=settings">Advanced settings/);
+  const form = readFileSync('app/explainers/settings/settings-form.tsx', 'utf8');
+  assert.match(form, /TAB_KEYS: readonly SettingKey\[\] = \['music_enabled', 'sfx_enabled', 'opener_voice', 'per_reel_cap_usd', 'daily_spend_cap_usd'\]/);
+  const rad = readFileSync('components/content-type/ReelAiDramaSettingsForm.tsx', 'utf8');
+  assert.match(rad, /RAD_TAB_KEYS: readonly string\[\] = \['per_reel_cap_usd', 'daily_spend_cap_usd', 'nightly_dev_cap_usd'\]/);
+  // The Advanced pages: Explainers' own page (not a redirect), and the Lab opening on its Settings tab.
+  const advanced = readFileSync('app/explainers/settings/page.tsx', 'utf8');
+  assert.doesNotMatch(advanced, /redirect\('\/explainers\?tab=settings'\)/);
+  assert.match(advanced, /hide=\{\[\.\.\.TAB_KEYS, 'auto_render', 'daily_render_cap'\]\}/);
+  assert.match(readFileSync('app/reel-ai-drama/lab/page.tsx', 'utf8'), /<ReelAiDramaLab initialTab=\{tab\} \/>/);
+});
+
 test('every type has a refill line and a windows line', () => {
   const types: Vertical[] = ['reels', 'explainers', 'carousels', 'stories', 'ai_trivia', 'real_or_ai', 'last_few_days', 'ai_events', 'field_notes', 'reel_ai_drama'];
   for (const t of types) {

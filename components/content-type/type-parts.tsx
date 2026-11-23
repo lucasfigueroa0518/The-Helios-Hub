@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
-import { SettingsForm } from '@/app/explainers/settings/settings-form';
+import { SettingsForm, TAB_KEYS as EXPLAINERS_TAB_KEYS } from '@/app/explainers/settings/settings-form';
 import { RebuildPostButton } from '@/components/content-type/AiEventsPoolButtons';
 import { AiEventsRunButton, CarouselRunButton, DramaDevelopButton, IdeaCycleButton, LfdRunButton, StoriesGenerate } from '@/components/content-type/TypeControls';
 import { ExplainersHub } from '@/components/content-type/ExplainersHub';
 import { FieldNotesHub } from '@/components/content-type/FieldNotesHub';
 import { ReelAiDramaHub } from '@/components/content-type/ReelAiDramaHub';
-import { ReelAiDramaSettingsForm } from '@/components/content-type/ReelAiDramaSettingsForm';
+import { RAD_TAB_KEYS, ReelAiDramaSettingsForm } from '@/components/content-type/ReelAiDramaSettingsForm';
 import type { TypeHub } from '@/components/content-type/TypeHub';
 import { FieldNotesRunButton } from '@/components/field-notes/FieldNotesRunButton';
 import type { PageVertical } from '@/lib/content-type/config';
@@ -72,8 +72,8 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
         <p className="rh-empty">Could not load settings: {view.error}</p>
       ) : (
         <>
-          <h3 className="rh-rest__title">Rendering</h3>
-          <SettingsForm initial={view.settings} hide={['auto_render', 'daily_render_cap']} />
+          <SettingsForm initial={view.settings} only={EXPLAINERS_TAB_KEYS} />
+          <p className="pl-set__line"><Link href="/explainers/settings">Advanced settings</Link> · models, voice, pool size, ideas</p>
         </>
       ),
   }),
@@ -82,8 +82,8 @@ export const TYPE_PARTS: Record<PageVertical, AnyParts> = {
     actions: () => <><DramaDevelopButton /><Link className="rh-btn" href="/reel-ai-drama/lab">Lab</Link></>,
     settingsSection: () => (
       <>
-        <h3 className="rh-rest__title">Rendering</h3>
-        <ReelAiDramaSettingsForm />
+        <ReelAiDramaSettingsForm only={RAD_TAB_KEYS} />
+        <p className="pl-set__line"><Link href="/reel-ai-drama/lab?tab=settings">Advanced settings</Link> · models, scoring, timing, development</p>
       </>
     ),
     hub: ReelAiDramaHub,
