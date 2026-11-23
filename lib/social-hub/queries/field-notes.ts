@@ -10,6 +10,17 @@ import { forVertical, insightRows, type SpineRead } from '@/lib/social-hub/queri
  * from the shared spine read (queries/spine.ts, D48). Nothing is scored or ranked on a page view.
  */
 
+/** One tip on a post, as the posts query reads it. leaf, want and tier are the stored values (null: not tagged). */
+export type FieldNotesPostTip = {
+  tip_id: string;
+  subject: string | null;
+  source_url: string | null;
+  source_label: string | null;
+  leaf?: string | null;
+  want?: string | null;
+  tier?: string | null;
+};
+
 export type FieldNotesPostRow = {
   post_id: string;
   run_id: string | null;
@@ -17,8 +28,8 @@ export type FieldNotesPostRow = {
   tip_id: string | null;
   /** Every tip on the post, in slide order. */
   tip_ids: string[];
-  /** Each tip's subject and source, in slide order, for the review screen's source links. */
-  tips: Array<{ tip_id: string; subject: string | null; source_url: string | null; source_label: string | null }>;
+  /** Each tip's subject, source and tags (null: not tagged), in slide order, for the review screen's source links and tip notes. */
+  tips: FieldNotesPostTip[];
   seq: number;
   slug: string;
   ny_date: string;
@@ -115,7 +126,7 @@ export type FieldNotesRead = {
 export const FIELD_NOTES_POSTS_SQL = `
 SELECT p.id::text AS post_id, p.run_id::text AS run_id, p.tip_id::text AS tip_id,
        (CASE WHEN cardinality(p.tip_ids) > 0 THEN p.tip_ids::text[] WHEN p.tip_id IS NOT NULL THEN ARRAY[p.tip_id::text] ELSE '{}'::text[] END) AS tip_ids,
-       (SELECT COALESCE(jsonb_agg(jsonb_build_object('tip_id', pt.id::text, 'subject', pt.subject, 'source_url', pt.source_url, 'source_label', pt.source_label) ORDER BY u.ord), '[]'::jsonb)
+       (SELECT COALESCE(jsonb_agg(jsonb_build_object('tip_id', pt.id::text, 'subject', pt.subject, 'source_url', pt.source_url, 'source_label', pt.source_label, 'leaf', pt.leaf, 'want', pt.want, 'tier', pt.tier) ORDER BY u.ord), '[]'::jsonb)
           FROM unnest(CASE WHEN cardinality(p.tip_ids) > 0 THEN p.tip_ids WHEN p.tip_id IS NOT NULL THEN ARRAY[p.tip_id] ELSE '{}'::uuid[] END) WITH ORDINALITY AS u(id, ord)
           JOIN field_notes.tips pt ON pt.id = u.id) AS tips,
        p.seq, p.slug, p.ny_date::text AS ny_date, p.status,

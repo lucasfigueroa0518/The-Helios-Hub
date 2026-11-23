@@ -4914,14 +4914,13 @@
     "sideEffects": "db-write",
     "dataSources": [
       "lib/social-hub/live loadForPage",
-      "unstable_cache social-hub dataset (all pipeline schemas)",
-      "components/field-notes FieldNotesTop loadPanelData"
+      "unstable_cache social-hub dataset (all pipeline schemas)"
     ],
     "measure": true,
     "sample": {
       "path": "/field-notes"
     },
-    "notes": "force-dynamic; NOT in middleware matcher (page-level getSession redirect); FieldNotesTop server component does an extra loadPanelData DB read + ContentTypePage full hub dataset (unstable_cache); consumeMoves housekeeping only"
+    "notes": "force-dynamic; NOT in middleware matcher (page-level getSession redirect); ContentTypePage full hub dataset (unstable_cache); consumeMoves housekeeping only"
   },
   {
     "id": "page:/hub/analytics",

@@ -2,6 +2,8 @@
  * Fixture libraries for the development-only preview (/social/preview): the
  * music pool and photo bank as the hub reads them. No database.
  */
+import type { FaceCheckState } from '@/lib/field-notes/photos/read';
+import type { PhotoKind, PoolPhoto, PoolStatus } from '@/lib/field-notes/types';
 import type { LibraryItem, LibraryPage, LibrarySummary } from '@/lib/media-library/read';
 import type { MusicSong } from '@/lib/social-hub/queries/music';
 import type { LibrariesModel } from '@/lib/social-hub/views/libraries';
@@ -67,7 +69,7 @@ const SUBJECTS: Array<[string, string, string[], string[]]> = [
 function swatch(i: number, label: string): string {
   const hues = [200, 220, 140, 280, 30, 0, 260, 180];
   const h = hues[i % hues.length];
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${h},28%,78%)'/><stop offset='1' stop-color='hsl(${h},32%,52%)'/></linearGradient></defs><rect width='400' height='300' fill='url(#g)'/><text x='20' y='280' font-family='sans-serif' font-size='18' fill='white' opacity='0.85'>${label}</text></svg>`;
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${h},28%,78%)'/><stop offset='1' stop-color='hsl(${h},32%,52%)'/></linearGradient></defs><rect width='400' height='300' fill='url(#g)'/><text x='200' y='280' text-anchor='middle' font-family='sans-serif' font-size='18' fill='white' opacity='0.85'>${label}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
@@ -108,4 +110,31 @@ export function previewPhotos(filters: PreviewPhotoFilters = {}): { page: Librar
     page: { items, total: items.length, page: 1, pageSize: 48, facets: { lanes: count((i) => i.lanes), sources: count((i) => i.sources), licences: count((i) => [i.licence]), tags: count((i) => i.tags) } },
     summary: { stored: 1240, reusable: 812, addedLast7d: 38, lastAddedAt: '2026-10-08T07:12:00Z', bySource: { commons: 520, stock: 480, official: 240 } },
   };
+}
+
+const FIELD_NOTES_POOL: Array<[string, PhotoKind, PoolStatus, FaceCheckState]> = [
+  ['Laptop at the desk', 'working', 'live', 'none'],
+  ['Whiteboard sketch', 'working', 'live', 'none'],
+  ['Team at lunch', 'people', 'live', 'faces'],
+  ['Office window', 'scenery', 'live', 'none'],
+  ['Meetup stage', 'event', 'live', 'pending'],
+  ['Terminal close-up', 'working', 'resting', 'none'],
+  ['Coffee and notes', 'scenery', 'resting', 'none'],
+  ['Screen with a client name', 'working', 'retired', 'none'],
+];
+
+/** Field Notes pool photos for the Photo Bank's Field Notes section in preview (read-only, swatch thumbnails). */
+export function previewFieldNotesPool(): Array<PoolPhoto & { facesCheck: FaceCheckState; thumbUrl: string }> {
+  return FIELD_NOTES_POOL.map(([label, kind, status, facesCheck], i) => ({
+    photoId: `0000000f-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+    uploadedBy: i % 2 ? 'lucas@heliosmarketing.org' : 'tommy@heliosmarketing.org',
+    uploadedAt: `2026-10-0${8 - (i % 7)}T09:00:00.000Z`,
+    status,
+    lastUsedPostSeq: status === 'resting' ? 12 : null,
+    rejectReason: status === 'retired' ? 'A readable private screen' : null,
+    kind,
+    opener: kind === 'people',
+    facesCheck,
+    thumbUrl: swatch(i, label),
+  }));
 }

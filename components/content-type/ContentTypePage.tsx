@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import type { ReactNode } from 'react';
 
 import { TYPE_PARTS } from '@/components/content-type/type-parts';
 import { GenerationProgress } from '@/components/content-type/GenerationProgress';
@@ -28,7 +27,7 @@ import './pool/pool.css';
  * form. The run buttons and the Settings tab write, so they are built here, outside the read-only hub code.
  * `openSettings` (`?tab=settings`) opens on the Settings tab.
  */
-export async function ContentTypePage({ vertical, top, openSettings = false }: { vertical: PageVertical; top?: ReactNode; openSettings?: boolean }) {
+export async function ContentTypePage({ vertical, openSettings = false }: { vertical: PageVertical; openSettings?: boolean }) {
   const session = await getSession();
   if (!session) redirect('/');
   const parts = TYPE_PARTS[vertical];
@@ -45,7 +44,6 @@ export async function ContentTypePage({ vertical, top, openSettings = false }: {
   const Hub = parts.hub ?? TypeHub;
   return (
     <RunProgressProvider type={vertical}>
-      {top}
       <Hub
         model={model}
         title={config.title}
