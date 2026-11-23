@@ -13,7 +13,7 @@ import { BUCKETS, BUCKET_IDS, RENDERED_BUCKETS, normalizeTerm, topicBucket } fro
 import { addAndEvaluateTopics, frameMissingPoolTopics, runIdeaCycle } from '@/lib/explainers/ideas/cycle';
 import { CURRICULUM } from '@/lib/explainers/ideas/curriculum';
 import { SYLLABUS } from '@/lib/explainers/ideas/syllabus';
-import { sameTermTopic } from '@/lib/explainers/ideas/evaluate';
+import { sameTermTopic, trimPool } from '@/lib/explainers/ideas/evaluate';
 import type { IdeaModel, IdeaRequest, LessonFrame, PayloadRequest } from '@/lib/explainers/ideas/generator';
 import { fillCandidates } from '@/lib/explainers/publish/schedule';
 import { getTopic, listPool } from '@/lib/explainers/repository';
@@ -191,6 +191,48 @@ test('the curriculum assigns tonight\'s topics: the first untaken syllabus terms
   if (result.status === 'ok') assert.equal((await getTopic(db, result.promotedTopicId!))?.term, 'rule-based system', 'the night makes the earliest syllabus topic');
   const { rows: [cycle] } = await db.query<{ ideas_generated: number }>(`SELECT ideas_generated FROM explainers.idea_cycles WHERE status = 'ok' ORDER BY started_at DESC LIMIT 1`);
   assert.equal(cycle!.ideas_generated, 2);
+});
+
+test('top-up: the refill writes only what the pool is short of five; unscored syllabus leftovers are scored first and count', async () => {
+  const lead = async (db: ExplainersDb) => {
+    await saveSetting(db, 'auto_render', true);
+    for (const n of [0, 1]) {
+      const d = new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+      await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [d]);
+    }
+  };
+  // Three waiting in the pool and one leftover a capped refill never scored: the pool is one short, so one topic.
+  {
+    const { db } = await scratchExplainersDb();
+    await lead(db);
+    for (const n of [10, 11, 12]) await topic(db, { title: `Waiting ${n}`, term: CURRICULUM[n]!.term, status: 'pool', rank: n });
+    const leftover = await topic(db, { title: 'Leftover', term: CURRICULUM[13]!.term, status: 'proposed', rank: 13 });
+    const model = ideas(FRAME, (r) => r.topics.map((t) => t.term));
+    const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
+    assert.equal(result.status, 'ok', result.status === 'failed' ? result.error : '');
+    assert.deepEqual(model.proposals.map((p) => p.topics.map((t) => t.term)), [[CURRICULUM[0]!.term]], 'one topic, the first untaken');
+    assert.notEqual((await getTopic(db, leftover))?.status, 'proposed', 'the leftover was scored');
+  }
+  // Five waiting: no idea call at all.
+  {
+    const { db } = await scratchExplainersDb();
+    await lead(db);
+    for (const n of [10, 11, 12, 13, 14]) await topic(db, { title: `Waiting ${n}`, term: CURRICULUM[n]!.term, status: 'pool', rank: n });
+    const model = ideas();
+    const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
+    assert.notEqual(result.status, 'failed', result.status === 'failed' ? result.error : '');
+    assert.equal(model.proposals.length, 0);
+  }
+});
+
+test('the pool trim never cuts a syllabus idea; only ideas off the syllabus go', async () => {
+  const { db } = await scratchExplainersDb();
+  const ranked = [];
+  for (const n of [1, 2, 3]) ranked.push(await topic(db, { title: `Syllabus ${n}`, status: 'pool', rank: n, score: 10 }));
+  const off = await topic(db, { title: 'Off', status: 'pool', score: 99 });
+  assert.equal(await trimPool(db, 2), 1);
+  assert.equal((await getTopic(db, off))?.status, 'displaced');
+  for (const id of ranked) assert.equal((await getTopic(db, id))?.status, 'pool');
 });
 
 test('the night fill follows the syllabus first, then the score; topics off the syllabus come last', async () => {

@@ -1,5 +1,5 @@
 import type { ExplainersDb } from '@/lib/explainers/db';
-import { matchAssigned, nextSyllabusTopics } from '@/lib/explainers/ideas/curriculum';
+import { matchAssigned, nextSyllabusTopics, refillCount } from '@/lib/explainers/ideas/curriculum';
 import { evaluateTopic, topicRef, trimPool, type Evaluation } from '@/lib/explainers/ideas/evaluate';
 import { getTopic } from '@/lib/explainers/repository';
 import { IDEAS_PER_CALL, ideaUsd, type IdeaModel, type IdeaResponse } from '@/lib/explainers/ideas/generator';
@@ -13,6 +13,7 @@ import {
   addTopics,
   listPool,
   listTopicTerms,
+  listUnscoredSyllabusIdeas,
   nyDate,
   productionSpendForDay,
   recordCost,
@@ -312,9 +313,13 @@ async function refillPoolWithin(deps: IdeaCycleDeps, st: RunState, cycleId: stri
   if (await budget.reached()) return { added: [], evaluations: [] };
   const themeBrief = await loadThemeBrief(db, settings.theme_brief_version);
   const pool = await listPool(db);
+  // Syllabus ideas an earlier refill wrote but its cap left unscored: scored first tonight, and they count as waiting.
+  const leftovers = await listUnscoredSyllabusIdeas(db);
+  // Top-up (Lucas, 2026-11-23): write only what the pool is short of POOL_TARGET, so no idea is written to be cut.
+  const want = refillCount(pool.length + leftovers.length, IDEAS_PER_CALL);
   // Curriculum (2026-11-21): the syllabus assigns tonight's topics, the first untaken in teaching order; a term
   // that failed MAX_FAILED_TRIES times is passed over. The prompt carries them, the archived topics and the pool.
-  const next = nextSyllabusTopics(await listTopicTerms(db), IDEAS_PER_CALL);
+  const next = nextSyllabusTopics(await listTopicTerms(db), want);
   if (next.skipped.length) {
     console.info(`[explainers] syllabus: passed over after repeated failed tries: ${next.skipped.map((t) => t.term).join(', ')}`);
   }
@@ -345,6 +350,8 @@ async function refillPoolWithin(deps: IdeaCycleDeps, st: RunState, cycleId: stri
       console.info(`[explainers] idea generator: dropped ${dropped.length} idea(s) off the assigned terms (${dropped.map((d) => JSON.stringify(d.term)).join(', ')})`);
     }
     ideas = kept;
+  } else if (want === 0) {
+    console.info(`[explainers] pool: ${pool.length + leftovers.length} ideas waiting, the target or more; no new ideas tonight`);
   } else {
     console.info('[explainers] syllabus: every topic is taken; no ideas tonight');
   }
@@ -373,7 +380,7 @@ async function refillPoolWithin(deps: IdeaCycleDeps, st: RunState, cycleId: stri
     ideaCycleId: cycleId,
   });
   const evaluations: Evaluation[] = [];
-  for (const topic of added) {
+  for (const topic of [...leftovers, ...added]) {
     if (await budget.reached()) break;
     try {
       evaluations.push(

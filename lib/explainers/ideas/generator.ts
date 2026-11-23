@@ -27,7 +27,7 @@ import { LESSON_ALTITUDES, type AnalogyCandidate, type AnalogyMapping, type GapC
 export const IDEAS_PER_CALL = 3;
 
 // ── Idea generator (E-16) ───────────────────────────────────────────────────
-// One call returns exactly three {topic_title, topic_scope, term}. Version
+// One call returns one {topic_title, topic_scope, term} per assigned topic (at most three). Version
 // idea-generator-v4 (Explainers 3.2, EX3-86): v3's one-minute reel and AI skew
 // (two AI ideas and one computer-science or tech idea per call, EX3-73), plus
 // the term each reel defines. Approved in the 3.2 plan (Lucas, 2026-10-13).

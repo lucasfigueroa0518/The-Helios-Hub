@@ -171,6 +171,17 @@ export async function listTopics(
 }
 
 /** The candidate pool, best first. */
+/**
+ * Syllabus ideas a refill wrote but never scored (its cap stopped it): they still hold their topics, so the next
+ * refill scores them before it writes anything new. Syllabus order.
+ */
+export async function listUnscoredSyllabusIdeas(db: Queryable): Promise<TopicRow[]> {
+  const { rows } = await db.query<Record<string, unknown>>(
+    `SELECT * FROM explainers.topics WHERE status = 'proposed' AND origin = 'generated' AND syllabus_rank IS NOT NULL ORDER BY syllabus_rank`,
+  );
+  return rows.map(toTopic);
+}
+
 export async function listPool(db: Queryable): Promise<TopicRow[]> {
   const { rows } = await db.query<Record<string, unknown>>(
     `SELECT * FROM explainers.topics WHERE status = 'pool' ORDER BY ${POOL_ORDER_BY}`,
