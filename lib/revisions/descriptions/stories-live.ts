@@ -139,6 +139,14 @@ export const liveStoriesDeps: StoriesDeps = {
     return photo;
   },
 
+  async agentCreate(req, m) {
+    const { newAnthropic } = await import('@/lib/anthropic-client');
+    const client = newAnthropic();
+    // Charged at Stories' own prices per answer, and refused before paying once the meter has stopped.
+    const create = await meteredStoriesCreate((p: Parameters<typeof client.messages.create>[0]) => client.messages.create(p as never) as never, m);
+    return (await create(req as never)) as never;
+  },
+
   async photoSize(url) {
     const { createSizeProbe } = await import('@/lib/social/photos/size');
     return createSizeProbe()(url);

@@ -686,3 +686,121 @@ test('a photo turned down in an applied revision (revisions log) is excluded eve
   assert.ok(calls.finds[0]!.exclude.has(TURNED_DOWN));
   assert.equal(srcOf((await framesOf(s.q, s.setId))[3]!), FRESH.src);
 });
+
+// ---- the photo agent (stories-photo-agent.ts) wired into the photo fix ----
+
+type AgentStep = Array<{ name: string; input: Record<string, unknown> }>;
+
+/** A scripted agentCreate: each call answers with the next tool calls and records the request. Spends $0.001 per answer. */
+function scriptedAgent(steps: AgentStep[]) {
+  const requests: Array<{ messages: unknown }> = [];
+  let n = 0;
+  const agentCreate: NonNullable<StoriesDeps['agentCreate']> = async (req, m) => {
+    if (m.stopped()) m.halt();
+    requests.push({ messages: JSON.parse(JSON.stringify(req.messages)) });
+    m.spend(0.001);
+    const step = steps[n++] ?? [{ name: 'give_up', input: { reason: 'out of script' } }];
+    return { content: step.map((b, i) => ({ type: 'tool_use', id: `tu${n}_${i}`, name: b.name, input: b.input })), usage: { input_tokens: 1, output_tokens: 1 } } as never;
+  };
+  return { agentCreate, requests, get calls() { return n; } };
+}
+
+test('photo agent: it searches, accepts, and only frame 3 changes; the log records the searches', async () => {
+  const s = await seed();
+  const agent = scriptedAgent([[{ name: 'search_photo', input: { kind: 'person', query: 'Dario Amodei' } }], [{ name: 'accept_photo', input: { id: 1 } }]]);
+  const { desc, calls } = setup({ finds: [FRESH], deps: { agentCreate: agent.agentCreate } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'photo', { hint: 'Dario Amodei' }), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(calls.finds.length, 1);
+  assert.equal(calls.finds[0]!.kind, 'person');
+  assert.deepEqual(calls.finds[0]!.subjects, [{ name: 'Dario Amodei', type: 'person' }]);
+  for (const u of [DARIO.src, OPENAI.src, NVIDIA.src, HELD]) assert.ok(calls.finds[0]!.exclude.has(u), u);
+  const after = await framesOf(s.q, s.setId);
+  assert.equal(srcOf(after[2]!), FRESH.src);
+  assert.deepEqual(after.filter((f) => f.seq !== 3), s.frames.filter((f) => f.seq !== 3));
+  const log = (await payloadOf(s.q, s.setId)).photo_log as typeof PHOTO_LOG;
+  assert.ok(log[2]!.steps.some((x) => /revision: replaced .* \(a person asked for a different photo; searches: person "Dario Amodei" \(found #1\)\)/.test(x)), JSON.stringify(log[2]));
+});
+
+test('photo agent: a company search carries the company as an organization subject, and a photo already shown is not offered again', async () => {
+  const s = await seed();
+  const agent = scriptedAgent([[{ name: 'search_photo', input: { kind: 'company', query: 'OpenAI' } }], [{ name: 'search_photo', input: { kind: 'thematic', query: 'London office' } }], [{ name: 'accept_photo', input: { id: 2 } }]]);
+  const { desc, calls } = setup({ finds: [OPENAI_HQ, FRESH], deps: { agentCreate: agent.agentCreate } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(2), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.deepEqual(calls.finds[0]!.subjects, [{ name: 'OpenAI', type: 'organization' }]);
+  assert.equal(calls.finds[0]!.exclude.has(OPENAI_HQ.src), false);
+  assert.equal(calls.finds[1]!.exclude.has(OPENAI_HQ.src), true, 'the photo shown by the first search is excluded from the second');
+});
+const OPENAI_HQ: Photo = { src: 'https://img.test/openai-hq.jpg', credit: 'Photo: Someone · CC BY 4.0', kind: 'scene' };
+
+test('photo agent: when it gives up, the note says why and what it tried, nothing is drawn or written', async () => {
+  const s = await seed();
+  const agent = scriptedAgent([[{ name: 'search_photo', input: { kind: 'person', query: 'Sam Altman' } }], [{ name: 'give_up', input: { reason: 'Every photo I found was already on another frame' } }]]);
+  const { desc, calls } = setup({ finds: [null], deps: { agentCreate: agent.agentCreate } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, false);
+  if (!res.ok) {
+    assert.equal(res.reason, 'failed');
+    assert.match(res.note, /person "Sam Altman" \(nothing usable\)/);
+    assert.match(res.note, /Every photo I found was already on another frame\./);
+    assert.match(res.note, /original was kept/);
+  }
+  assert.equal(calls.rendered.length, 0);
+  assert.deepEqual(await framesOf(s.q, s.setId), s.frames);
+  assert.deepEqual(await payloadOf(s.q, s.setId), s.payload);
+});
+
+test('photo agent: if the model call itself fails (an outage), the fixed search plan runs instead', async () => {
+  const s = await seed();
+  const { desc, calls } = setup({
+    finds: [FRESH],
+    deps: { agentCreate: async () => { throw new Error('529 overloaded'); } },
+  });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'photo', { hint: 'Dario Amodei at a desk' }), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(calls.finds[0]!.query, 'Dario Amodei at a desk', 'the fixed plan\'s first search is the hint');
+  assert.equal(srcOf((await framesOf(s.q, s.setId))[2]!), FRESH.src);
+  const log = (await payloadOf(s.q, s.setId)).photo_log as typeof PHOTO_LOG;
+  assert.ok(log[2]!.steps.some((x) => /the photo helper could not run, so the fixed search plan ran/.test(x)), 'the fallback is recorded in the photo log');
+  assert.ok(!log[2]!.steps.some((x) => /overloaded|529/.test(x)), 'the raw error is not written to the log');
+});
+
+test('photo agent: the opener\'s cover rules still apply: a logo and a small photo are refused before the agent can accept them', async () => {
+  const s = await seed();
+  const agent = scriptedAgent([
+    [{ name: 'search_photo', input: { kind: 'logo', query: 'Nvidia' } }],
+    [{ name: 'search_photo', input: { kind: 'thematic', query: 'small photo' } }],
+    [{ name: 'accept_photo', input: { id: 1 } }],
+    [{ name: 'give_up', input: { reason: 'Only a logo and a tiny photo came back' } }],
+  ]);
+  const TINY: Photo = { src: 'https://img.test/tiny.jpg', credit: 'Photo: Tiny', kind: 'scene' };
+  const { desc, calls } = setup({ finds: [{ ...NVIDIA, src: 'https://img.test/nvidia-logo-2.png' }, TINY], sizes: { [TINY.src]: { w: 300, h: 200 } }, deps: { agentCreate: agent.agentCreate } });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(1), 'photo'), meter: meter() });
+  assert.equal(res.ok, false);
+  assert.equal(calls.finds.length, 2);
+  assert.ok(calls.finds.every((r) => r.cover === true));
+  const tool = JSON.stringify(agent.requests[1]!.messages);
+  assert.match(tool, /the opening frame never shows a logo/);
+  assert.match(JSON.stringify(agent.requests[2]!.messages), /too small for the opening frame/);
+  assert.equal(calls.rendered.length, 0);
+});
+
+test('photo agent: after the ceiling no further model call or search happens', async () => {
+  const s = await seed();
+  const agent = scriptedAgent([[{ name: 'search_photo', input: { kind: 'person', query: 'a' } }], [{ name: 'search_photo', input: { kind: 'person', query: 'b' } }], [{ name: 'accept_photo', input: { id: 1 } }]]);
+  const { desc, calls } = setup({
+    finds: [null],
+    deps: {
+      agentCreate: agent.agentCreate,
+      async findPhoto(_i, m) { calls_find++; m.spend(0.2); return null; },
+    },
+  });
+  let calls_find = 0;
+  void calls;
+  // The first search spends $0.2 against a $0.15 ceiling: the loop ends there.
+  await assert.rejects(desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'photo'), meter: createCostMeter(0.15) }), CeilingReached);
+  assert.equal(calls_find, 1);
+  assert.equal(agent.calls, 1, 'no model call after the search crossed the ceiling');
+  assert.deepEqual(await framesOf(s.q, s.setId), s.frames);
+});

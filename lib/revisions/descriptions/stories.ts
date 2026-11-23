@@ -20,13 +20,16 @@
  *            (bar 0.6) over the frame's words; a miss gets ONE Sonnet md-headlines rewrite, which must
  *            ground again (the build's rule). Guess the Number and Free vs. Paid words came through gates
  *            this path can't re-run (source page checks, the pair score), so they are refused.
- *   photo    one finder search (createLivePhotoFinder().find) per request, at most two requests, never a
- *            photo another frame of the set shows (the opener counts), the replaced photo, or one in
- *            the 7-day used set
+ *   photo    a short agent loop (stories-photo-agent.ts: Haiku 5.5, up to 3 finder searches, it looks at what
+ *            comes back and tries different searches); without the agent dep, the fixed plan (the hint, then
+ *            the build's own search, at most two). Either way never a photo another frame of the set shows
+ *            (the opener counts), the replaced photo, or one in the 7-day used set, and the opener's cover rules
  *
  * Parts: `{ kind: 'frame', key: '<seq>' }` (the frame's real seq, 1-based).
  */
 import { randomUUID } from 'node:crypto';
+
+import type Anthropic from '@anthropic-ai/sdk';
 
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Query } from '@/lib/social/store/pg';
@@ -39,6 +42,7 @@ import type { ContentTypeDescription, FixKind, PartState, PostSnapshot } from '.
 
 import type { Metered } from './carousels';
 import { liveStoriesDeps } from './stories-live';
+import { runPhotoAgent, type PhotoAsk } from './stories-photo-agent';
 
 export type { Metered };
 
@@ -54,11 +58,13 @@ export const STORIES_STAGE_TAGS = ['pick', 'write', 'ground', 'photo', 'backdrop
 export const STORIES_WORDING_ESTIMATE_USD = 0.05;
 
 /**
- * A photo swap: at most two finder searches (Jev picks + Haiku 5.5 photo vision, priced by
- * lib/stories/cost.ts). No constant exists for one search; Carousels and Last Few Days price one
- * photo search at $0.05, so two are $0.10. NEEDS TOMMY'S CONFIRMATION before caps are approved.
+ * A photo swap: the photo agent (stories-photo-agent.ts) makes at most PHOTO_AGENT_MAX_SEARCHES (3) finder
+ * searches (Jev picks + Haiku 5.5 photo vision, priced by lib/stories/cost.ts) and at most 7 Haiku 5.5
+ * turns (a few tenths of a cent each, with the prompt cached). No constant exists for one search;
+ * Carousels and Last Few Days price one photo search at $0.05, so three are $0.15.
+ * NEEDS TOMMY'S CONFIRMATION (the approved photo cap is $0.20, ceiling $0.50).
  */
-export const STORIES_PHOTO_SWAP_ESTIMATE_USD = 0.1;
+export const STORIES_PHOTO_SWAP_ESTIMATE_USD = 0.15;
 
 /** The build's headline rule (lib/stories/build/morning-download.ts `ok`): at most 260 characters, one or two sentences. */
 const HEADLINE_MAX = 260;
@@ -105,6 +111,11 @@ export type StoriesDeps = {
   ) => Promise<{ headline: string } | null>;
   /** ONE finder search (createLivePhotoFinder().find) for `request`, or null. Charges `meter` as it pays. */
   findPhoto: (input: { setId: string; request: PhotoRequest }, meter: Metered) => Promise<Photo | null>;
+  /**
+   * ONE Claude Messages call for the photo agent (stories-photo-agent.ts), refused before paying once
+   * `meter` has stopped and charged to it after. Absent: a photo fix runs the fixed search plan instead.
+   */
+  agentCreate?: (req: Anthropic.MessageCreateParamsNonStreaming, meter: Metered) => Promise<Anthropic.Message>;
   /**
    * A photo's pixel size (the finder's own size probe, lib/social/photos/size.ts createSizeProbe), or
    * null when it can't be read. Free (an HTTP read, no model). Used for the opener's cover floor.
@@ -336,7 +347,7 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
       color: 'args.backdrop is the frame\'s new background color: one of black, white, orange or green.',
       layout:
         'args.crop is where the frame\'s photo is cropped to: one of top, center, bottom, left or right. For a Guess the Number question or answer frame, args.family may instead be photo, marquee or type.',
-      photo: 'No args are needed; args.hint is an optional short description of the photo wanted (for example "Dario Amodei on stage").',
+      photo: 'No args are needed. args.hint is optional: name the subject or scene the person wants in a few words (for example "Dario Amodei on stage"); leave it out when they only asked for a different photo. Never write a sentence about the change as the hint.',
     },
 
     async load(q, refs) {
@@ -481,10 +492,67 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
         const words = row.copy.role === 'story' ? row.copy.headline : row.copy.role === 'opener' ? (stories[0]?.headline ?? wordsOf(row.copy)) : wordsOf(row.copy);
         const fallback = { kind: 'thematic', query: words.slice(0, 200) };
         const hint = args.hint?.trim();
-        const asks = hint ? [{ kind: 'thematic', query: hint }, loggedAsk(set, label) ?? fallback] : [loggedAsk(set, label) ?? fallback, fallback];
-        const unique = asks.filter((a, i) => asks.findIndex((b) => b.kind === a.kind && b.query === a.query) === i).slice(0, 2);
         const tried: string[] = [];
         let found: Photo | null = null;
+        let agentReason: string | null = null;
+        let agentRan = false;
+        let agentFailed = false;
+        // What the code refuses on every candidate, whoever found it: a photo already used (or turned down), and the opener's cover rules.
+        const vetPhoto = async (photo: Photo): Promise<string | null> => {
+          if (exclude.has(photo.src)) return 'it is already on another frame, was turned down before, or was used in the last 7 days';
+          if (row.role === 'opener') {
+            if (photo.kind === 'logo') return 'the opening frame never shows a logo';
+            const { COVER_MIN_SHORT_SIDE, clearsFloor } = await import('@/lib/social/photos/size');
+            const floor = await clearsFloor({ url: photo.src, width: null, height: null }, COVER_MIN_SHORT_SIDE, deps.photoSize);
+            if (!floor.ok) return `it is too small for the opening frame (${floor.size}; it needs ${COVER_MIN_SHORT_SIDE})`;
+          }
+          return null;
+        };
+        if (deps.agentCreate) {
+          const create = deps.agentCreate;
+          // Photos the agent has been shown: the finder never offers them again.
+          const shown = new Set<string>();
+          const requestFor = (ask: PhotoAsk): PhotoRequest => ({
+            kind: ask.kind,
+            query: ask.query,
+            subjects: ask.kind === 'person' ? [{ name: ask.query, type: 'person' }] : ask.kind === 'company' || ask.kind === 'product' ? [{ name: ask.query, type: 'organization' }] : [],
+            storyDate: set.ny_date,
+            sourceUrls: url ? [url] : [],
+            exclude: new Set([...exclude, ...shown]),
+            copy: words,
+            ...(row.role === 'opener' ? { cover: true } : {}),
+          });
+          try {
+            const out = await runPhotoAgent({
+              create: (req) => create(req, m),
+              m,
+              frame: { seq, role: row.role, words, current: cur?.src ? { credit: cur.credit, kind: cur.kind ?? 'scene' } : null },
+              instruction: it.instruction,
+              ...(hint ? { hint } : {}),
+              built: { ask: loggedAsk(set, label), notes: (logOf(set, label)?.steps ?? []).slice(0, 10) },
+              others: rows.filter((r) => r.id !== row.id).flatMap((r) => (framePhoto(r.copy)?.credit ? [framePhoto(r.copy)!.credit] : [])),
+              async search(ask) {
+                const photo = await deps.findPhoto({ setId: set.id, request: requestFor(ask) }, m);
+                if (photo?.src) shown.add(photo.src);
+                return photo;
+              },
+              vet: vetPhoto,
+            });
+            agentRan = true;
+            tried.push(...out.tried);
+            if (out.photo) found = { src: out.photo.src, credit: out.photo.credit, kind: out.photo.kind };
+            else agentReason = out.reason;
+          } catch (e) {
+            // A stopped meter (the ceiling) ends the whole revision; any other error (a model outage, say) falls back to the fixed plan below, and the log says so.
+            if (m.stopped()) m.halt();
+            agentFailed = true;
+            void e;
+            tried.push('the photo helper could not run, so the fixed search plan ran');
+          }
+        }
+        // The fixed plan (no agent, or the agent could not run): the hint, then the build's own search, at most two searches.
+        const asks = hint ? [{ kind: 'thematic', query: hint }, loggedAsk(set, label) ?? fallback] : [loggedAsk(set, label) ?? fallback, fallback];
+        const unique = agentRan ? [] : asks.filter((a, i) => asks.findIndex((b) => b.kind === a.kind && b.query === a.query) === i).slice(0, 2);
         for (const ask of unique) {
           m.check();
           const request: PhotoRequest = {
@@ -533,11 +601,16 @@ export function createStoriesDescription(deps: StoriesDeps): ContentTypeDescript
           break;
         }
         if (!found) {
+          if (agentRan) {
+            const why = (agentReason ?? 'Nothing I found fit this frame.').replace(/[.!?\s]*$/, '.');
+            return failed(`I searched for another photo for frame ${seq} (${tried.join('; ') || 'no searches ran'}). ${why} The original was kept.`);
+          }
           return failed(`I searched for another photo for frame ${seq} (${tried.join('; ')}) and couldn't find a different usable one (not shown on another frame of this set, turned down before, or used in the last 7 days), so the original was kept.`);
         }
         copy = withPhoto(row.copy, found);
         const old = logOf(set, label)?.steps ?? [];
-        logSteps = { label, steps: [...old, `revision: replaced ${cur?.src ?? 'no photo'} with ${found.src} (a person asked for a different photo)`] };
+        const searched = (agentRan || agentFailed) && tried.length ? `; searches: ${tried.join('; ')}` : '';
+        logSteps = { label, steps: [...old, `revision: replaced ${cur?.src ?? 'no photo'} with ${found.src} (a person asked for a different photo${searched})`] };
       } else {
         return blocked(`${it.fixKind} fixes are not available for Stories.`);
       }
