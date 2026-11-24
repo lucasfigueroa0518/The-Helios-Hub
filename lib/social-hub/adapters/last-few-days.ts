@@ -36,6 +36,7 @@ export function lfdReviewNotes(row: LfdPostRow): string[] {
     ...(row.short ? [`Short post: only ${n} ${n === 1 ? 'story' : 'stories'}.`] : []),
     ...listOf(row.fit_problems).map((p) => `Text fit: ${p}`),
     ...listOf(row.render_problems).map((p) => `Render: ${p}`),
+    ...(row.cover_fallback ? [`Cover: no AI image (${row.cover_fallback}); today's cover was used.`] : []),
   ];
 }
 

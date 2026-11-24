@@ -17,6 +17,8 @@
  * Story photos come from the news photo finder (lib/news-photos findStoryPhoto, wiring contract 2026-11-24): its
  * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The Stories finder
  * above is still built for the type only; the run no longer calls it.
+ *
+ * The AI cover (lib/lfd/cover) uses the run's Jev and budget-guarded create, and HiggsfieldClient for the image.
  */
 import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -149,11 +151,27 @@ export async function liveLfdDeps(
       cutouts: [],
     },
   };
+  // The AI cover (PLAN.md C7): Higgsfield's MCP (GPT Image 2.6), connected on first use. A failed login (the known
+  // issuer mismatch, client.ts) only makes the cover fall back; the run record says why.
+  const { HiggsfieldClient } = await import('@/lib/reels/visual/higgsfield/client');
+  const hf = new HiggsfieldClient();
+  let hfReady: Promise<void> | null = null;
+  const aiCover: LfdRunDeps['aiCover'] = {
+    higgsfield: {
+      callTool: async (name, args) => {
+        hfReady ??= hf.connect();
+        await hfReady;
+        return hf.callTool(name, args);
+      },
+    },
+    fetch: (input, init) => fetch(input, init),
+  };
   return {
     deps: {
       query,
       jev,
       create,
+      aiCover,
       photos,
       harvest,
       // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.

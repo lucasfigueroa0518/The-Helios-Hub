@@ -324,8 +324,10 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       const parts: Array<PostSnapshot['parts'][number]> = [
         {
           ref: { kind: 'story', key: 'cover' },
-          text: `Cover: the fixed "Do you realize what just happened in AI" hook, over ${cover?.lfdCover?.meme ? 'a meme' : 'a mosaic of the story photos'}.`,
-          layout: cover?.lfdCover?.meme ? 'meme cover' : 'photo mosaic',
+          text: cover?.lfdCover?.image
+            ? `Cover: the hook "${cover.lfdCover.hook?.text ?? ''}", under an AI-made image.`
+            : `Cover: the fixed "Do you realize what just happened in AI" hook, over ${cover?.lfdCover?.meme ? 'a meme' : 'a mosaic of the story photos'}.`,
+          layout: cover?.lfdCover?.image ? 'ai image' : cover?.lfdCover?.meme ? 'meme cover' : 'photo mosaic',
         },
       ];
       post.stories.forEach((s, i) => {
@@ -449,7 +451,8 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       const caption = built.caption.caption;
       const id = newId();
       const want = [{ slide: i + 2, key: slideKey(post.slug, i + 2, id) }];
-      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme) want.unshift({ slide: 1, key: slideKey(post.slug, 1, id) });
+      // An AI cover does not show the story photos, so a photo change leaves it as it is.
+      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme && !coverOf(built.render)?.lfdCover?.image) want.unshift({ slide: 1, key: slideKey(post.slug, 1, id) });
       let out: RenderedSlide[];
       try {
         out = await deps.renderSlides({ slug: post.slug, post: built.render, slides: want });
@@ -505,7 +508,7 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
       const objects = [...(post.slide_objects ?? [])];
       if (s.files[0]) objects[i + 1] = s.files[0];
       const tiles = coverOf(built.render)?.lfdCover?.photos ?? null;
-      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme) {
+      if (built.coverChanged && !coverOf(built.render)?.lfdCover?.meme && !coverOf(built.render)?.lfdCover?.image) {
         if (s.files[1] && same(tiles, s.derived?.coverTiles)) objects[0] = s.files[1];
         else {
           // No saved cover image shows this mix of photos: draw the cover alone (a render, no model call, no cost).
