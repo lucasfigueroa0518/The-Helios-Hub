@@ -35,6 +35,8 @@ import {
   IDEAS_SCHEMA,
   IDEA_GENERATOR_INSTRUCTIONS,
   PLAIN_WORDS_RULE,
+  WHAT_IT_DOES_RULE,
+  PAYLOAD_REWRITER_INSTRUCTIONS,
   IDEA_GENERATOR_VERSION,
   SCOPE_WRITER_VERSION,
   REEL_SHAPE,
@@ -764,7 +766,7 @@ test('the worker retries a failed or thrown night after the delay, at most twice
 const registerText = () => fs.readFileSync(path.join(process.cwd(), 'planning', 'Explainer Reels', 'DECISIONS.md'), 'utf8');
 
 test('analogy writer v8 is the golden-set prompt, with the no-real-names line and JSON output (EX3-123)', () => {
-  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v10');
+  assert.equal(ANALOGY_WRITER_VERSION, 'analogy-writer-v11');
   assert.equal(ANALOGY_CALLS, 2);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /^You write the analogy at the heart of a one-minute "AI 101" reel/);
   assert.match(ANALOGY_WRITER_INSTRUCTIONS, /Your goal is the highest-retention analogy for the concept: one a viewer gets at once, remembers a week later, and repeats to a friend\./);
@@ -893,7 +895,7 @@ test("a topic that makes the pool gets its named analogy from two Opus calls and
   const webhooks = (await getTopic(db, results[0].topicId))!;
   const note = await noteOf(db, results[0].topicId);
   assert.ok('pick' in note);
-  assert.equal(note.version, 'analogy-writer-v10');
+  assert.equal(note.version, 'analogy-writer-v11');
   assert.deepEqual(note.golden_hidden, ['webhook']);
   assert.equal(note.candidates.length, 2);
   assert.equal(note.pick, 1);
@@ -1048,7 +1050,7 @@ test('a writer call that fails is a failed candidate; a failed pass is recorded 
 });
 
 test('the idea generator writes one idea per assigned syllabus topic (curriculum); both write the term (EX3-86)', () => {
-  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v9');
+  assert.equal(IDEA_GENERATOR_VERSION, 'idea-generator-v10');
   assert.equal(SCOPE_WRITER_VERSION, 'scope-writer-v6');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) assert.ok(prompt.includes(TERM_RULE));
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /exactly one idea for each syllabus topic in the user message, in the same order/);
@@ -1057,6 +1059,10 @@ test('the idea generator writes one idea per assigned syllabus topic (curriculum
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /Every reel stands alone/);
   assert.ok(!/already met/.test(IDEA_GENERATOR_INSTRUCTIONS), 'the generator never assumes the viewer saw earlier reels');
   assert.ok(IDEA_GENERATOR_INSTRUCTIONS.includes(PLAIN_WORDS_RULE) && ANALOGY_WRITER_INSTRUCTIONS.includes(PLAIN_WORDS_RULE), 'plain words bind the idea and the analogy');
+  assert.ok(IDEA_GENERATOR_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE) && PAYLOAD_REWRITER_INSTRUCTIONS.includes(WHAT_IT_DOES_RULE), 'the payload says what the concept does, never what it is not');
+  assert.match(IDEA_GENERATOR_INSTRUCTIONS, /the payload delivers that mechanism at any altitude/);
+  assert.match(ANALOGY_WRITER_INSTRUCTIONS, /never set the concept against a different thing or a rival method/);
+  assert.ok(!/often holds a contrast/.test(ANALOGY_WRITER_INSTRUCTIONS), 'no nudge toward a two-thing contrast');
   assert.match(IDEA_GENERATOR_INSTRUCTIONS, /never a restatement of the term's own words/);
   assert.doesNotMatch(IDEA_GENERATOR_INSTRUCTIONS, /tonight's buckets|Skew toward AI|Exactly 2 of the 3/, 'no bucket pick or per-call AI skew left');
   for (const prompt of [IDEA_GENERATOR_INSTRUCTIONS, SCOPE_WRITER_INSTRUCTIONS]) {
