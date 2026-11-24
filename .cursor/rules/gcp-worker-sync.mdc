@@ -11,7 +11,8 @@ always-on GCP VM `helios-orch-worker` (`us-west1-a`, project
 
 Social workers do **not** run on that VM. Trial Reels (`helios-reels`), and
 later Carousels, Explainers, and IG Stories, run on **`helios-social-worker`**
-(e2-medium, same zone and project) from `/opt/helios-social/app` with
+(e2-standard-4, zone `northamerica-northeast1-a` in Montreal next to the
+database; same project) from `/opt/helios-social/app` with
 `/opt/helios-social/worker.env`. Ship them with
 `./scripts/gcp/deploy-social-worker.sh`; the night clock and per-type contract
 are in `docs/social-overnight.md`.

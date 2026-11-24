@@ -28,10 +28,10 @@ RestartSec=15
 KillSignal=SIGTERM
 # A job in flight is failed on restart (Worker restarted…) and can be retried from the lab; give it time to wind down.
 TimeoutStopSec=120
-# PROVISIONAL: copied from helios-explainers, not measured for AI Drama renders (HeyGen, ffmpeg, rembg, the
-# HyperFrames/Chrome kit). Replace after the first measured run on the chosen host.
-MemoryHigh=2000M
-MemoryMax=2500M
+# Sized for e2-standard-4 (16 GB + 4 GB swap) on 2026-11-24, level with helios-explainers;
+# the two can render at the same time.
+MemoryHigh=5G
+MemoryMax=6G
 Nice=10
 
 [Install]

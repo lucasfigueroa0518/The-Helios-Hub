@@ -26,7 +26,8 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
-ZONE="${GCP_ZONE:-us-west1-a}"
+# Both worker VMs live in Montreal next to the Supabase database (ca-central-1) since 2026-11-24.
+ZONE="${SOCIAL_ZONE:-${GCP_ZONE:-northamerica-northeast1-a}}"
 INSTANCE="${SOCIAL_INSTANCE:-helios-social-worker}"
 UNITS="${SOCIAL_UNITS:-helios-reels helios-social helios-explainers helios-stories helios-publisher helios-reel-ai-drama}"
 ENV_FILE="${SOCIAL_WORKER_ENV_FILE:-}"

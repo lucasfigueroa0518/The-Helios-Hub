@@ -55,7 +55,7 @@ npm run db:reels                        # create the reels schema
 Verify:
 
 ```bash
-gcloud compute ssh helios-social-worker --zone=us-west1-a \
+gcloud compute ssh helios-social-worker --zone=northamerica-northeast1-a \
   --command='sudo systemctl status helios-reels --no-pager'
 ```
 
