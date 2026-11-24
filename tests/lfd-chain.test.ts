@@ -95,7 +95,6 @@ async function run(stories: number, noMedia: string[] = [], o: { headline?: (i: 
     query,
     jev: o.jev ?? (async () => ({ answers: { same_event: { noul: 0.1 } }, usage: { input_tokens: 1, output_tokens: 0 }, model: 's' })),
     create,
-    photos: { usd: 0, find: async () => null },
     news: c.news,
     fetchFeeds: async () => [],
     fetchBody: async () => null,

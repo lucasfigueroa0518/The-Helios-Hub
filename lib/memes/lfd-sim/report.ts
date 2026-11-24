@@ -43,21 +43,6 @@ export function tap(deps: LfdRunDeps, emit: (p: Progress) => void, spent: () => 
       say(tool === 'submit_rundown' ? 'Writing the stories (Claude)' : tool === 'submit_verdict' ? 'Checking each slide\'s photo (vision)' : 'Claude call');
       return deps.create(p);
     }) as LfdRunDeps['create'],
-    photos: {
-      ...deps.photos,
-      find: async (...a: Parameters<LfdRunDeps['photos']['find']>) => {
-        say('Finding photos');
-        return deps.photos.find(...a);
-      },
-      ...(deps.photos.findSet
-        ? {
-            findSet: async (...a: Parameters<NonNullable<LfdRunDeps['photos']['findSet']>>) => {
-              say('Finding photos');
-              return deps.photos.findSet!(...a);
-            },
-          }
-        : {}),
-    } as LfdRunDeps['photos'],
     fetchFeeds: async () => {
       say('Reading the fresh-article feeds');
       return deps.fetchFeeds();

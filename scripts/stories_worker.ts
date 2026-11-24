@@ -18,10 +18,8 @@
  * Trivia's daily writer, Real or AI?'s daily candidates) runs in every state,
  * each held to its type's refill cap (stories.settings.types[<type>].refill_cap_usd).
  *
- * Photo bank (DECISIONS_LOG D49): the finder offers its vetted photos to the
- * bank in the shared database (nothing happens while its `capture` switch is
- * off); the worker drains the bank's queue after a pass that built or
- * published, and before it exits.
+ * Photo bank (DECISIONS_LOG D49): nothing here offers photos to it any more. The old Stories finder that did is gone
+ * (no series called it), so the worker no longer builds or drains a bank.
  */
 import './stories_env';
 import fs from 'node:fs';
@@ -35,11 +33,6 @@ import { createJevAsk } from '@/lib/social/jev/client';
 import type { NewsChainDeps } from '@/lib/stories/build/common';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
-import { createPhotoBank } from '@/lib/media-library/bank';
-import { buildAiTrivia } from '@/lib/stories/build/ai-trivia';
-import { buildMorningDownload } from '@/lib/stories/build/morning-download';
-import { createLivePhotoFinder } from '@/lib/stories/photos';
-import { sharedSeriesBuilders } from '@/lib/stories/photos-shared';
 import { createLiveStoryInsightsClient } from '@/lib/stories/publish/insights';
 import { createLiveStoriesMetaClient } from '@/lib/stories/publish/meta';
 import { openRenderer, type Renderer } from '@/lib/stories/render/render';
@@ -48,7 +41,6 @@ import type { Series } from '@/lib/stories/render/types';
 import { nyDate, releaseBuildsAtStartup, requestSet } from '@/lib/stories/repository';
 import { loadSettings } from '@/lib/stories/settings';
 import { createStoriesStorage } from '@/lib/stories/storage';
-import { recentPhotoLedger } from '@/lib/stories/sources/carousel';
 import { tick } from '@/lib/stories/worker';
 import { liveWriterCreate } from '@/lib/stories/writer';
 
@@ -84,7 +76,6 @@ async function main() {
   const db: StoriesDb = process.env.STORIES_DB === 'local' ? (await openLocalStoriesDb(DEFAULT_LOCAL_DIR)).db : liveStoriesDb;
   const sourceDb = liveStoriesDb;
   const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
-  const bank = createPhotoBank({ query: (text, params) => sourceDb.query(text, params), log: (line) => log(`photo bank: ${line}`) });
 
   if (requestArg > 0) {
     const series = process.argv[requestArg + 1] as Series;
@@ -113,13 +104,8 @@ async function main() {
       renderer ??= await openRenderer();
       const settings = await loadSettings(db);
       const client = newAnthropic();
-      // Once per build: series on the shared photo finder get wrapped builders; none, and today's deps are unchanged.
-      const builders = await sharedSeriesBuilders({
-        query: sourceDb,
-        // Free vs. Paid is retired (Real or AI? replaces it, and makes its own images): neither is here.
-        builders: { morning_download: buildMorningDownload, ai_trivia: (d) => buildAiTrivia(d) },
-        log: (line) => log(`photo finder: ${line}`),
-      });
+      // No series uses the old Stories photo finder any more (Morning Download has the news chain's finder, AI Trivia
+      // and Real or AI? draw no finder photo), so it and the shared-finder builders that wrapped it are not built.
       return {
         db,
         sourceDb,
@@ -127,13 +113,9 @@ async function main() {
         write: liveWriterCreate(),
         // AI Trivia's opponent (AT-74/75): GPT-5 nano (OPENAI_API_KEY), Llama 3.1 8B on fal (FAL_API_KEY) if it is retired.
         opponent: liveOpponentClient(),
-        // CI-32: each pick's picture is checked against the used-photo ledger (read once per finder).
-        // A trivia build's picks are logged under its own run kind (SS-28).
-        photos: createLivePhotoFinder({ create: (p) => client.messages.create(p), bank, used: () => recentPhotoLedger(sourceDb, new Date()), ...(series === 'ai_trivia' ? { runKind: 'ai_trivia' as const } : {}) }),
         renderer,
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
-        ...(builders ? { builders } : {}),
         // Morning Download's news chain (WIRING-CONTRACT Owner D): Jev shortlist, Opus rerank, the news photo finder
         // (Serper only when its key is set), the band upscaler when installed, the W12 writer.
         ...(series === 'morning_download' ? { news: await newsChain(client) } : {}),
@@ -160,7 +142,6 @@ async function main() {
       try {
         const r = await tick(deps);
         if (r.built || r.scheduled || r.published || r.insights) log(`pass: ${JSON.stringify(r)}`);
-        if (r.built || r.published) await bank.drain(15_000);
       } catch (err) {
         log(`pass failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
       }
@@ -168,7 +149,6 @@ async function main() {
       await new Promise((r) => setTimeout(r, POLL_MS));
     } while (!stopping);
   } finally {
-    await bank.drain(30_000);
     await (renderer as Renderer | null)?.close();
   }
 }

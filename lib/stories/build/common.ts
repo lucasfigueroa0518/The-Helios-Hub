@@ -21,7 +21,8 @@ export type BuildDeps = {
   write: WriterCreate;
   /** AI Trivia's opponent (AT-74/75, lib/stories/trivia/opponent.ts): OpenAI and fal. Absent (tests): the set has no opponent. */
   opponent?: import('@/lib/stories/trivia/opponent').OpponentClient;
-  photos: PhotoFinder;
+  /** The old Stories photo finder: only the retired Free vs. Paid builder used it. Absent (the worker): no finder photos. */
+  photos?: PhotoFinder;
   settings: StoriesSettings;
   now: Date;
   setId: string;
@@ -142,7 +143,8 @@ export function toFrames(data: FrameData[], backdrop: Backdrop, template: (d: Fr
 }
 
 /** Ask the finder, never failing the build over a photo (a type-led frame is fine). */
-export async function findPhoto(photos: PhotoFinder, req: PhotoRequest, log: string[]): Promise<Photo | null> {
+export async function findPhoto(photos: PhotoFinder | undefined, req: PhotoRequest, log: string[]): Promise<Photo | null> {
+  if (!photos) return null;
   try {
     return await photos.find(req);
   } catch (err) {

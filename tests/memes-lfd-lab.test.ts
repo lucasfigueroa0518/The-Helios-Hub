@@ -333,7 +333,6 @@ test('a simulation runs the engine with local writes, gates on the graded eviden
   const lfdDeps = async (o: { capUsd: number; now: Date }): Promise<{ deps: LfdRunDeps; spentUsd: () => number }> => ({
     deps: {
       query: hub, jev: simJev, create: vision(),
-      photos: { usd: 0, find: async () => null },
       news: stubNewsChain().news,
       fetchFeeds: async () => [], fetchBody: async () => 'b'.repeat(1200), readPage: async (url) => ({ ok: false, url, error: 'stub' }),
       fitCheck, upload: async () => undefined,

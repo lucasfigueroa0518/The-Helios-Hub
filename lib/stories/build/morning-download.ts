@@ -38,7 +38,7 @@ import { findSpinOffs } from '@/lib/news-ranker/repeats';
 import { shortlist, SHORTLIST_ID, SHORTLIST_TOP, type ChainStory } from '@/lib/news-ranker/shortlist';
 import { keepWithMedia, mdMedia, type MdMedia } from '@/lib/news-ranker/media-ladder';
 import { leadOf, MAJOR_NEWS_BAR } from '@/lib/news-ranker/scores';
-import { fitToBand, findStoryPhoto, type Candidate, type GradedPhoto, type PhotoResult } from '@/lib/news-photos';
+import { fitToBand, findStoryPhoto, type BandFit, type Candidate, type GradedPhoto, type PhotoResult } from '@/lib/news-photos';
 import { WRITER_ID, WRITER_MODEL, writeStories } from '@/lib/news-writer';
 import { nextOpenerPromise } from '@/lib/stories/render/copy';
 import type { FrameData, Photo, StoryData } from '@/lib/stories/render/types';
@@ -62,6 +62,34 @@ const BODY_CHARS = 9000; // ~1,500 words (plan §5.1)
 const PHOTO_CONCURRENCY = 4;
 /** The band photo's signed URL lives this long (the render reads it; the frame's own JPEG replaces it after). */
 const PHOTO_URL_SEC = 7 * 86_400;
+
+/** What bandPhotoFor needs: the original's fetcher, the band's Jev, the upscaler, a temp dir and the stories bucket. */
+export type BandPhotoDeps = {
+  fetchImage: (url: string) => Promise<Buffer | null>;
+  jev: import('@/lib/news-photos').PhotoJev;
+  upscaler: import('@/lib/news-photos/band').PhotoUpscaler | null;
+  tmpDir: string;
+  storage: Pick<import('@/lib/stories/storage').StoriesStorage, 'upload' | 'sign'>;
+};
+
+/**
+ * The band photo (D24 revised, WC11) for a picked photo: the original (else the graded JPEG) fitted with fitToBand
+ * (decideBand), stored under the set and signed; `contained` for the renderer's CONTAINED_FADE. `onFit` sees the fit
+ * (its Jev cost) before the upload. Shared by the build and the Social Hub's photo swap. Throws on a failure.
+ */
+export async function bandPhotoFor(pick: Pick<GradedPhoto, 'src' | 'credit' | 'jpeg'>, d: BandPhotoDeps, setId: string, storyKey: string, onFit?: (fit: BandFit) => Promise<unknown> | void): Promise<{ photo: Photo; step: string }> {
+  const original = await d.fetchImage(pick.src).catch(() => null);
+  const fit = await fitToBand(original ?? pick.jpeg, { jev: d.jev, upscaler: d.upscaler, tmpDir: d.tmpDir });
+  await onFit?.(fit);
+  const slug = crypto.createHash('sha1').update(`${storyKey} ${pick.src}`).digest('hex').slice(0, 12);
+  const path = `sets/${setId}/photos/${slug}.jpg`;
+  await d.storage.upload(path, fit.jpeg, 'image/jpeg');
+  const src = await d.storage.sign(path, PHOTO_URL_SEC);
+  return {
+    photo: { src, sourceUrl: pick.src, credit: pick.credit, kind: 'scene', ...(fit.contained ? { contained: true } : {}) },
+    step: `band: ${fit.contained ? 'contained' : 'cover'}${fit.upscaled ? ', upscaled' : ''}${fit.note ? ` (${fit.note})` : ''}`,
+  };
+}
 
 export type Sources = { reels: () => Promise<StoryCandidate[]>; carousel: () => Promise<StoryCandidate[]> };
 
@@ -355,15 +383,10 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   // The band photo (D24 revised, WC11): fitted, stored, `contained` for the renderer's CONTAINED_FADE.
   const bandPhoto = async (id: string, pick: GradedPhoto, steps: string[]): Promise<Photo | null> => {
     try {
-      const original = await news.photo.fetchImage(pick.src).catch(() => null);
-      const fit = await fitToBand(original ?? pick.jpeg, { jev: news.photo.jev, upscaler: news.upscaler, tmpDir: news.tmpDir });
-      await cost('jev', 'news-photos-band', fit.costUsd);
-      const slug = crypto.createHash('sha1').update(`${byId.get(id)!.key} ${pick.src}`).digest('hex').slice(0, 12);
-      const path = `sets/${deps.setId}/photos/${slug}.jpg`;
-      await news.storage.upload(path, fit.jpeg, 'image/jpeg');
-      const src = await news.storage.sign(path, PHOTO_URL_SEC);
-      steps.push(`band: ${fit.contained ? 'contained' : 'cover'}${fit.upscaled ? ', upscaled' : ''}${fit.note ? ` (${fit.note})` : ''}`);
-      return { src, sourceUrl: pick.src, credit: pick.credit, kind: 'scene', ...(fit.contained ? { contained: true } : {}) };
+      const band = { fetchImage: news.photo.fetchImage, jev: news.photo.jev, upscaler: news.upscaler, tmpDir: news.tmpDir, storage: news.storage };
+      const { photo, step } = await bandPhotoFor(pick, band, deps.setId, byId.get(id)!.key, (fit) => cost('jev', 'news-photos-band', fit.costUsd));
+      steps.push(step);
+      return photo;
     } catch (err) {
       steps.push(`band fit failed (${err instanceof Error ? err.message : String(err)}); no photo`);
       return null;

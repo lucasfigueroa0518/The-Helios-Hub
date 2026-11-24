@@ -199,7 +199,6 @@ async function intakeDeps(stories: ScoredStory[], over: Partial<LfdRunDeps> = {}
     query,
     jev: j.jev,
     create: writer() as LfdRunDeps['create'],
-    photos: { usd: 0, find: async () => null },
     news: f.news,
     fetchFeeds: async () => { throw new Error('intake mode never fetches feeds'); },
     fetchBody: async () => null,

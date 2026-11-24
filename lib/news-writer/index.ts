@@ -10,6 +10,8 @@
  * A story missing from write_stories is dropped. Errors (no tool call) throw; the caller decides on a retry.
  *
  * Prompt text and tools are LOCKED (W12) and live in ./prompts. The client is injected (`deps.create`).
+ * Revisions (the Social Hub's manual fixes): `o.instruction` adds one text block after the reveal, never a change to
+ * the locked text; checkFacts runs step 3 alone on copy written elsewhere (a person's own words).
  */
 import type Anthropic from '@anthropic-ai/sdk';
 
@@ -32,7 +34,7 @@ export type WriterStory = { key: string; headline: string; text: string; weAlrea
 export type Written = { key: string; chosen: 'mine' | 'editor'; angle: string; headline: string; body: string; highlight: string; names: string[] };
 
 type Raw = { key: string; chosen: 'mine' | 'editor'; angle: string; headline: string; body: string; highlight?: string };
-type Claim = { key: string; claim: string; supported: boolean; evidence: string };
+export type Claim = { key: string; claim: string; supported: boolean; evidence: string };
 
 const toolUse = (m: Anthropic.Message, name: string): Anthropic.ToolUseBlock => {
   const b = m.content.find((x): x is Anthropic.ToolUseBlock => x.type === 'tool_use' && x.name === name);
@@ -67,11 +69,37 @@ export function namesFor(headline: string, body: string): string[] {
   return [...namesIn(copy)].filter((w) => copy.includes(w));
 }
 
+/** The Haiku fact check's request (cached system + tool) over written copy, as writeStories sends it. */
+function factCheckRequest(checked: WriterStory[], written: Array<{ key: string; headline: string; body: string }>): Record<string, unknown> {
+  return { system: cachedSystemText(FACT_CHECK_SYSTEM), tools: [withToolCache(checkTool)],
+    messages: [{ role: 'user', content: `${material(checked)}\n<written>\n${JSON.stringify(written.map((w) => ({ key: w.key, headline: w.headline, body: w.body })), null, 1)}\n</written>\nCheck every claim with check_facts.` }] };
+}
+
+function claimsOf(m: Anthropic.Message): Claim[] {
+  const claims = (toolUse(m, 'check_facts').input as { claims?: Claim[] }).claims;
+  if (!Array.isArray(claims)) throw new Error('fact check returned no claim list');
+  return claims;
+}
+
+/**
+ * The writer's fact check alone (one Haiku call, the request writeStories makes) over copy written elsewhere, such as
+ * a person's own words in a revision. Returns the claims that fail; errors (no tool call) throw.
+ */
+export async function checkFacts(
+  stories: WriterStory[],
+  written: Array<{ key: string; headline: string; body: string }>,
+  deps: { create: WriterCreate },
+): Promise<{ failed: Claim[]; costUsd: number }> {
+  const m = await deps.create({ model: CHECK_MODEL, max_tokens: MAX_TOKENS, ...factCheckRequest(stories, written) });
+  return { failed: failedClaims(stories, claimsOf(m)), costUsd: Number(priceAnthropicMessages([m], { modelId: CHECK_MODEL }).costUsd) };
+}
+
 export async function writeStories(
   f: Format,
   stories: WriterStory[],
   editorAngles: Record<string, string>,
   deps: { create: WriterCreate },
+  o: { instruction?: string } = {},
 ): Promise<{ written: Written[]; dropped: Array<{ key: string; reason: string }>; over: string[]; costUsd: number; log: string[] }> {
   const spent: Record<string, Anthropic.Message[]> = { [WRITER_MODEL]: [], [CHECK_MODEL]: [] };
   const log: string[] = [];
@@ -83,13 +111,8 @@ export async function writeStories(
   const cost = () => Object.entries(spent).reduce((sum, [model, ms]) => sum + (ms.length ? Number(priceAnthropicMessages(ms, { modelId: model }).costUsd) : 0), 0);
   if (!stories.length) return { written: [], dropped: [], over: [], costUsd: 0, log: ['no stories'] };
 
-  const factCheck = async (checked: WriterStory[], written: Raw[]): Promise<Claim[]> => {
-    const m = await call(CHECK_MODEL, { system: cachedSystemText(FACT_CHECK_SYSTEM), tools: [withToolCache(checkTool)],
-      messages: [{ role: 'user', content: `${material(checked)}\n<written>\n${JSON.stringify(written.map((w) => ({ key: w.key, headline: w.headline, body: w.body })), null, 1)}\n</written>\nCheck every claim with check_facts.` }] });
-    const claims = (toolUse(m, 'check_facts').input as { claims?: Claim[] }).claims;
-    if (!Array.isArray(claims)) throw new Error('fact check returned no claim list');
-    return failedClaims(checked, claims);
-  };
+  const factCheck = async (checked: WriterStory[], written: Raw[]): Promise<Claim[]> =>
+    failedClaims(checked, claimsOf(await call(CHECK_MODEL, factCheckRequest(checked, written))));
 
   const caps = FORMATS[f].caps;
   const overOf = (w: Raw) => [
@@ -106,6 +129,8 @@ export async function writeStories(
   msgs.push({ role: 'assistant', content: t1.content }, { role: 'user', content: [
     { type: 'tool_result', tool_use_id: t1use.id, content: 'Received.' },
     { type: 'text', text: `Here are the editor's angles, written without seeing yours:\n${JSON.stringify(stories.map((s) => ({ key: s.key, angle: editorAngles[s.key] || '(none)' })), null, 1)}\nPick one per story, then write.` },
+    // A revision's request: one added block after the locked text (absent for the builds).
+    ...(o.instruction?.trim() ? [{ type: 'text' as const, text: o.instruction.trim() }] : []),
   ] });
   const t2 = await call(WRITER_MODEL, { system, tools, messages: withConversationCache(msgs) });
   const t2use = toolUse(t2, 'write_stories');

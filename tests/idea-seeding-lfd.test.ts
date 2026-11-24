@@ -78,7 +78,6 @@ function runDeps(query: HubQuery, over: Partial<LfdRunDeps> = {}): LfdRunDeps & 
     jev: (req, meta) => (jevCalls += 1, j(req, meta)),
     jevCount: () => jevCalls,
     create,
-    photos: { usd: 0, find: async () => null },
     news: stubNewsChain({ noPhoto: /NoPhoto/ }).news,
     fetchFeeds: async () => [],
     fetchBody: async () => null,
