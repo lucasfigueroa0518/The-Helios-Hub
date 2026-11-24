@@ -1,13 +1,14 @@
 /**
  * Instagram caption shape for Explainer Reels (caption voice, 2026-11-24).
  *
- * The writer stores its text and hashtags; code puts the Helios line (helios-line.ts) between them
- * (`withHeliosLine`). There is no episode line any more: Lucas dropped "AI 101 Episode N:" as too hard to
+ * The writer stores a short explanation and hashtags, plus the parts of a learn-more prompt; code
+ * assembles the prompt after the explanation (`learnMoreBlock`, `withLearnMore`, caption v15), then puts
+ * the Helios line (helios-line.ts) before the hashtags (`withHeliosLine`). There is no episode line any more: Lucas dropped "AI 101 Episode N:" as too hard to
  * track. `stripEpisodePrefix` still removes one from captions written before.
  */
 
 import { CAPTION_EMOJI_MAX, countEmoji } from '@/lib/social/captions/emoji';
-import { heliosLine, heliosLines, longestHeliosLine } from '@/lib/social/captions/helios-line';
+import { hash, heliosLine, heliosLines, longestHeliosLine } from '@/lib/social/captions/helios-line';
 
 export const CAPTION_MAX_CHARS = 2200;
 /** Room the writer leaves for the Helios line code adds (the longest one, plus its blank line). */
@@ -19,6 +20,78 @@ export const CAPTION_HOOK_PREVIEW = 125;
 export const CAPTION_MIN_PARAGRAPHS = 2;
 export const CAPTION_MIN_TAGS = 3;
 export const CAPTION_MAX_TAGS = 5;
+
+/**
+ * v15 (Lucas, 2026-11-24): the explanation stays but is short, "because we're pointing them to a treasure trove of
+ * additional knowledge": a "want to learn more?" line and a prompt the viewer gives their own AI, naming the ideas
+ * around the reel's term. The writer's text before the hashtags stays within this.
+ */
+export const CAPTION_BODY_MAX_CHARS = 450;
+export const LEARN_MORE_TOPICS_MIN = 3;
+export const LEARN_MORE_TOPICS_MAX = 5;
+export const LEARN_MORE_TOPIC_MAX_CHARS = 40;
+export const LEARN_MORE_SO_I_MAX_CHARS = 160;
+export const LEARN_MORE_OPENERS: readonly string[] = ['Want to learn more?', 'Want to go deeper?', 'Curious to learn more?'];
+export const LEARN_MORE_HANDOFFS: readonly string[] = ['Screenshot this prompt for your AI:', 'Give this prompt to your AI:'];
+
+/** The writer's parts of the prompt: "Teach me about {topic}. Dive into {diveInto}, so I {soI}." */
+export type LearnMore = { topic: string; diveInto: string[]; soI: string };
+
+function promptPart(value: unknown, field: string, max: number): string {
+  const text = (typeof value === 'string' ? value : '').replace(/\s+/g, ' ').trim().replace(/[.,;:!]+$/, '');
+  if (!text) throw new Error(`The prompt's ${field} is empty.`);
+  if (text.length > max) throw new Error(`The prompt's ${field} "${text}" is over ${max} characters.`);
+  if (/["“”#]|https?:\/\//i.test(text)) throw new Error(`The prompt's ${field} "${text}" has a quote mark, a hashtag or a URL.`);
+  if (countEmoji(text) > 0) throw new Error(`The prompt's ${field} "${text}" has an emoji.`);
+  return text;
+}
+
+/**
+ * The writer's prompt parts, cleaned, or a throw the retry can use. `names` are the reel's term and its other
+ * names (empty when the term is unknown); "Teach me about" must name one of them.
+ */
+export function parseLearnMore(raw: { topic: unknown; diveInto: unknown; soI: unknown }, names: readonly string[]): LearnMore {
+  const topic = promptPart(raw.topic, 'teach_me_about', LEARN_MORE_TOPIC_MAX_CHARS);
+  const said = names.map((name) => name.trim().toLowerCase()).filter(Boolean);
+  if (said.length && !said.some((name) => topic.toLowerCase().includes(name))) {
+    throw new Error(`teach_me_about is "${topic}"; it must name the reel's term, ${names[0]}.`);
+  }
+  const list = Array.isArray(raw.diveInto) ? raw.diveInto : [];
+  if (list.length < LEARN_MORE_TOPICS_MIN || list.length > LEARN_MORE_TOPICS_MAX) {
+    throw new Error(`dive_into has ${list.length} topics; give ${LEARN_MORE_TOPICS_MIN} to ${LEARN_MORE_TOPICS_MAX}.`);
+  }
+  const diveInto = list.map((item) => promptPart(item, 'dive_into topic', LEARN_MORE_TOPIC_MAX_CHARS));
+  const keys = diveInto.map((item) => item.toLowerCase());
+  if (new Set(keys).size !== keys.length) throw new Error('dive_into names the same topic twice.');
+  if (keys.some((key) => key === topic.toLowerCase() || said.includes(key))) throw new Error("dive_into repeats the reel's own term; name the ideas around it.");
+  const soI = promptPart(String(raw.soI ?? '').replace(/^\s*so\s+I\s+/i, ''), 'so_i', LEARN_MORE_SO_I_MAX_CHARS);
+  return { topic, diveInto, soI };
+}
+
+function joinList(items: readonly string[]): string {
+  return items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+/** The learn-more paragraphs code writes: an opener and a hand-off line, then the quoted prompt. `seed` picks the wording. */
+export function learnMoreBlock(learn: LearnMore, seed: string): string {
+  const opener = LEARN_MORE_OPENERS[hash(`learn-more:${seed}`) % LEARN_MORE_OPENERS.length]!;
+  const handoff = LEARN_MORE_HANDOFFS[hash(`handoff:${seed}`) % LEARN_MORE_HANDOFFS.length]!;
+  const prompt = `"Teach me about ${learn.topic}. Dive into ${joinList(learn.diveInto)}, so I ${learn.soI}."`;
+  return `${opener}\n${handoff}\n\n${prompt}`;
+}
+
+/** The writer's text before its hashtags. */
+export function captionBody(text: string): string {
+  const at = text.search(/#[\p{L}\p{N}_]/u);
+  return (at >= 0 ? text.slice(0, at) : text).trim();
+}
+
+/** The writer's text with the learn-more block placed after the explanation, before the hashtags. */
+export function withLearnMore(text: string, block: string): string {
+  const at = text.search(/#[\p{L}\p{N}_]/u);
+  const tags = at >= 0 ? text.slice(at).trim() : '';
+  return [captionBody(text), block, tags].filter(Boolean).join('\n\n');
+}
 
 const EPISODE_PREFIX =
   /^(?:AI BRAIN BREAK\s*[-–—]?\s*EPISODE\s+\d+:|AI Brain Break Episode\s+\d+:|AI 101 Episode\s+\d+:|AI 101 Episode\s+—:)\s*/i;

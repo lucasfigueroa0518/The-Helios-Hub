@@ -2,12 +2,27 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { cachedSystemText } from '@/lib/anthropic-cache';
 import { priceAnthropicUsage, usageBucketsFromMessage, type MessageUsageLike } from '@/lib/anthropic-pricing';
-import { CAPTION_HOOK_PREVIEW, CAPTION_WRITER_MAX_CHARS, parseCaption } from '@/lib/explainers/caption-format';
+import {
+  CAPTION_BODY_MAX_CHARS,
+  CAPTION_HOOK_PREVIEW,
+  CAPTION_WRITER_MAX_CHARS,
+  LEARN_MORE_SO_I_MAX_CHARS,
+  LEARN_MORE_TOPIC_MAX_CHARS,
+  LEARN_MORE_TOPICS_MAX,
+  LEARN_MORE_TOPICS_MIN,
+  captionBody,
+  learnMoreBlock,
+  parseCaption,
+  parseLearnMore,
+  withLearnMore,
+} from '@/lib/explainers/caption-format';
+import { CURRICULUM, syllabusEntry } from '@/lib/explainers/ideas/curriculum';
 import { structuredJson, type StructuredParams } from '@/lib/explainers/ideas/generator';
 import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
 import { readHeliosVoice } from '@/lib/social/voice/voice';
 
 export {
+  CAPTION_BODY_MAX_CHARS,
   CAPTION_HOOK_PREVIEW,
   CAPTION_MAX_CHARS,
   CAPTION_MIN_BODY_CHARS,
@@ -22,7 +37,8 @@ export {
  * Tracks `.cursor/skills/explainer-caption/SKILL.md`. The burned-in
  * `caption_groups.json` is a different artifact (`captions`).
  *
- * The writer returns its text and hashtags; the render job adds the Helios line between them
+ * The writer returns a short text and hashtags, plus the parts of a learn-more prompt; code assembles the
+ * prompt after the text (v15), and the render job adds the Helios line before the hashtags
  * (caption-format.ts withHeliosLine). There is no episode line (caption voice, 2026-11-24).
  * The system prompt (shared voice, then these instructions) is the stable prefix and carries the cache breakpoint.
  */
@@ -61,24 +77,33 @@ export {
 // opener and a re-explanation from a new angle; if it is easy, the most surprising of where it gets serious, where it
 // breaks, or what it unlocks. No save ask and no episode line (Lucas: "drop the save this"; "AI 101 Episode N" is too
 // hard to track). Code adds a generic Helios line before the hashtags.
-export const CAPTION_VERSION = 'explainer-caption-v14';
+// v15 (2026-11-24): Lucas, the caption should lead into "want to learn more?" and a prompt the viewer gives their AI:
+// "Teach me about [topic]. Dive into [adjacent topics], so that builders can have a real understanding of the world of
+// knowledge that surrounds the topic." The explanation stays but shortens: "Less is necessary because we're pointing
+// them to a treasure trove of additional knowledge." The writer picks the topics (the syllabus neighbors are offered
+// as candidates); code writes the learn-more line and the prompt's frame, so its shape never drifts.
+export const CAPTION_VERSION = 'explainer-caption-v15';
 
-export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished AI 101 reel, which teaches one AI or software concept to a broad audience. You get the reel's final script: the words the viewer just heard. The caption is where the viewer goes to understand: it answers the question this script most likely leaves them with.
+export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished AI 101 reel, which teaches one AI or software concept to a broad audience. You get the reel's final script (the words the viewer just heard) and the reel's term. The caption does two jobs: a short answer to the question this script most likely leaves the viewer with, then a prompt the viewer can give their own AI to learn the world around this concept.
 
-Code adds a line about the page after your text, before your hashtags. Do not write it, and do not write an episode title or number.
+Code assembles the caption in this order: your short text, a "want to learn more?" line with the prompt built from your three prompt fields, a line about the page, then your hashtags. Do not write the learn-more line, the prompt or the page line in your caption field, and do not write an episode title or number.
 
 HARD CONSTRAINTS. Every one is required.
-1. Return JSON matching the schema. The caption field is your text, then your hashtags, nothing else.
+1. Return JSON matching the schema. The caption field is your short text, then your hashtags, nothing else.
 2. Before you write, decide which question the average viewer is most likely left with after this script, and answer it.
-   a. If the concept may still be unclear after one watch, the question is "wait, what is it?". Open by meeting the viewer where they are: one short line that admits they may not have it yet, worded fresh for this concept. Then explain it again from a different angle than the script, in plainer words, and give one sentence that captures it, worth keeping.
-   b. If the script makes the concept easy to get, the question is "so what?". Pick the one this concept has the most surprising answer for: where it gets serious (a high-stakes use where it matters), where it breaks (the common misunderstanding, or its limit), or what it unlocks (the next idea it is a building block of). Open on it and go one level deeper.
+   a. If the concept may still be unclear after one watch, the question is "wait, what is it?". Open by meeting the viewer where they are: one short line that admits they may not have it yet, worded fresh for this concept. Then explain it again from a different angle than the script, in plainer words.
+   b. If the script makes the concept easy to get, the question is "so what?". Pick the one this concept has the most surprising answer for: where it gets serious (a high-stakes use where it matters), where it breaks (the common misunderstanding, or its limit), or what it unlocks (the next idea it is a building block of). Open on it and give the one point that matters most.
 3. The opening line hooks on its own, in under ${CAPTION_HOOK_PREVIEW} characters: it is all that shows before "more".
-4. Write for reading on a phone: one thought per line or per short paragraph of one or two sentences, a blank line between them. Stop as soon as the question is answered.
+4. Keep it short: the hook and one or two short paragraphs of one or two sentences each, a blank line between them, at most ${CAPTION_BODY_MAX_CHARS} characters before the hashtags. Stop as soon as the question is answered; the prompt after it does the deep teaching.
 5. No dashes for drama, no "not X, but Y", no lists of three for rhythm, and no closing line that repeats the one before it.
 6. What the script says stays as the script says it. What you add beyond it is well established, stated plainly and accurately. Never invent a number, study, quote, product, or anecdote.
-7. No ask of the viewer: no "save this", no question, no call to action. Code's page line closes the caption.
-8. End with 3 to 5 hashtags, only at the end, each with a reason in the post. At most two emoji, none required, none in the hashtags. No URLs. Never "I". Never name Helios or any author. Plain words a reader at about a sixth-grade level gets on one read. Name a character from the reel by its role; never call it a "critter".
-9. Your caption, the hashtags included, stays within ${CAPTION_WRITER_MAX_CHARS} characters.`;
+7. No ask of your own: no "save this", no question, no other call to action. Code's learn-more line is the caption's only ask.
+8. End with 3 to 5 hashtags, only at the end, each with a reason in the post. At most two emoji, none required, none in the hashtags. No URLs. Never "I" in the caption field. Never name Helios or any author. Plain words a reader at about a sixth-grade level gets on one read. Name a character from the reel by its role; never call it a "critter".
+9. The prompt, which the viewer screenshots and gives a chatbot. Code writes it as: Teach me about <teach_me_about>. Dive into <dive_into, joined with commas and "and">, so I <so_i>.
+   a. teach_me_about: the reel's term as it reads after "Teach me about", made plural only when the sentence needs it.
+   b. dive_into: ${LEARN_MORE_TOPICS_MIN} to ${LEARN_MORE_TOPICS_MAX} ideas around this concept that a builder needs for a real understanding of its world: what it rests on, what it works with, what it makes possible, and where it breaks. The nearby syllabus topics you are given are good candidates; any other well-established idea is fine. Use each idea's real name, the words a chatbot knows it by (the sixth-grade rule is for your caption text), at most ${LEARN_MORE_TOPIC_MAX_CHARS} characters each, never the term itself, most foundational first.
+   c. so_i: the rest of the sentence after "so I": what the viewer will understand once they learn these, about how the concept fits with them and what it means for what they build. At most ${LEARN_MORE_SO_I_MAX_CHARS} characters, no period at the end.
+   d. The prompt speaks as the viewer, so "I", "me" and "my" are fine in its fields. No quote marks, hashtags, emoji or URLs in them.`;
 
 /** The cached system prefix: the shared voice, then this caption's structure. */
 export function captionSystem(root?: string): string {
@@ -90,15 +115,24 @@ const CAPTION_SCHEMA = {
   properties: {
     caption: {
       type: 'string',
-      description: 'Your caption text, then 3 to 5 hashtags. No episode line, no ask, no line about the page.',
+      description: 'Your short caption text, then 3 to 5 hashtags. No episode line, no ask, no learn-more prompt, no line about the page.',
     },
+    teach_me_about: { type: 'string', description: 'The reel\'s term as it reads after "Teach me about".' },
+    dive_into: {
+      type: 'array',
+      items: { type: 'string' },
+      description: `${LEARN_MORE_TOPICS_MIN} to ${LEARN_MORE_TOPICS_MAX} ideas around the concept a builder needs, most foundational first.`,
+    },
+    so_i: { type: 'string', description: 'The rest of the prompt after "so I", no period at the end.' },
   },
-  required: ['caption'],
+  required: ['caption', 'teach_me_about', 'dive_into', 'so_i'],
   additionalProperties: false,
 } as const;
 
 export type CaptionFacts = {
   title: string;
+  /** The reel's term (topics.term, else the storyboard's); the prompt teaches it. Null when neither names one. */
+  term?: string | null;
   scope: string | null;
   /** The picked analogy's name (EX3-123); null on a reel without one. */
   analogy?: string | null;
@@ -138,9 +172,30 @@ function clip(value: string | null, max: number): string {
  */
 export type CaptionOptions = { retryReason?: string };
 
+/** The reel's term and its other names, for the prompt's "Teach me about" check. */
+export function termNames(term: string | null | undefined): string[] {
+  const clean = term?.trim();
+  if (!clean) return [];
+  return [...new Set([clean, ...(syllabusEntry(clean)?.aka ?? [])])];
+}
+
+/** The term's syllabus neighbors: what it requires, then the topics that require it. Candidates for dive_into. */
+export function syllabusNeighbors(term: string | null | undefined): string[] {
+  const entry = syllabusEntry(term);
+  if (!entry) return [];
+  const key = entry.term.toLowerCase();
+  const later = CURRICULUM.filter((topic) => topic.requires.some((name) => name.toLowerCase() === key)).map((topic) => topic.term);
+  return [...new Set([...entry.requires, ...later])].slice(0, 12);
+}
+
 export function captionUserMessage(facts: CaptionFacts, opts: CaptionOptions): string {
+  const term = facts.term?.trim() || facts.title;
+  const neighbors = syllabusNeighbors(facts.term);
   return [
     'Write the Instagram caption for this reel.',
+    '',
+    `The reel's term: ${term}`,
+    ...(neighbors.length ? [`Nearby syllabus topics: ${neighbors.join('; ')}`] : []),
     '',
     'The final script (SCRIPT.md):',
     clip(facts.script, 12_000),
@@ -196,8 +251,14 @@ export async function writeExplainerCaption(
   const priced = draftFrom(message as Anthropic.Message, '');
   let text: string;
   try {
-    const body = structuredJson(message as Anthropic.Message, 'explainer caption') as { caption?: unknown };
-    text = parseCaption(body.caption);
+    const body = structuredJson(message as Anthropic.Message, 'explainer caption') as { caption?: unknown; teach_me_about?: unknown; dive_into?: unknown; so_i?: unknown };
+    const written = parseCaption(body.caption);
+    const short = captionBody(written).length;
+    if (short > CAPTION_BODY_MAX_CHARS) {
+      throw new Error(`The caption text is ${short} characters before the hashtags; keep it within ${CAPTION_BODY_MAX_CHARS}: the hook and one or two short paragraphs, since the prompt after it does the deep teaching.`);
+    }
+    const learn = parseLearnMore({ topic: body.teach_me_about, diveInto: body.dive_into, soI: body.so_i }, termNames(facts.term));
+    text = parseCaption(withLearnMore(written, learnMoreBlock(learn, facts.term?.trim() || facts.title)));
     if (text.length > CAPTION_WRITER_MAX_CHARS) throw new Error(`The caption is ${text.length} characters; keep it within ${CAPTION_WRITER_MAX_CHARS}.`);
     if (HELIOS_NAME.test(text)) throw new Error('The caption names Helios. Remove it; code adds the line about the page.');
     checkNoCritter(text);

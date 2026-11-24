@@ -26,7 +26,7 @@ export const HELIOS_LINE_VALUES: Readonly<Record<HeliosLineType, readonly string
 };
 
 /** FNV-1a: small, stable across runtimes, good enough to spread seeds over a few combos. */
-function hash(text: string): number {
+export function hash(text: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);
