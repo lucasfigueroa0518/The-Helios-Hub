@@ -193,7 +193,8 @@ export function storiesCandidate(set: { id: string; series: string; built_at: un
   if (set.series !== 'free_vs_paid') {
     for (const f of ordered) {
       const photo = obj(f.photo);
-      const raw = str(photo.src);
+      // WC12: a band-fitted Morning Download photo's src is our storage copy; it is recorded and held by its source.
+      const raw = str(photo.sourceUrl) ?? str(photo.src);
       if (!raw || isBrandAsset(str(photo.kind))) continue;
       const src = vertical === 'real_or_ai' ? stableStorageKey(raw) : raw;
       if (vertical === 'real_or_ai' && photos.some((p) => p.url === src)) continue;

@@ -7,14 +7,13 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import type { IntakeItem, IntakeJev, ScoredStory } from '@/lib/intake/types';
 import { BUILDER_HARVEST_CAP_USD, harvestBuilderPhoto, type BuilderHarvest, type HarvestBudget } from '@/lib/lfd/photos';
-import { runLastFewDays, type LfdRunDeps } from '@/lib/lfd/run';
+import { runLastFewDays, type LfdNewsChain, type LfdRunDeps } from '@/lib/lfd/run';
 import type { Pick, StoryCopy } from '@/lib/lfd/types';
 import type { HarvestInput, HarvestResult } from '@/lib/reel-ai-drama/harvest/harvest';
 import type { HarvestDeps } from '@/lib/reel-ai-drama/harvest/types';
 import type { Asset } from '@/lib/reel-ai-drama/types';
 import type { InterpretedScore } from '@/lib/reels/scoring/interpret';
 import type { JevAsk, JevResult } from '@/lib/social/jev/client';
-import type { PhotoFinder } from '@/lib/stories/photos';
 
 import { openHubTestDb } from './fixtures/social-hub/pglite';
 import { resetSeed, seedReelsIdea, seedScore } from './fixtures/lfd/seed';
@@ -153,22 +152,11 @@ function scored(headline: string, o: { net: number; major?: number; builder?: nu
   };
 }
 
-/** Writer stub: valid copy for every story; builder stories name a person in the photo ask. Caption → template. */
+/** Claude stub: vision passes every slide; the caption call fails (template caption). The writer is the news stub. */
 function writer(): (p: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message> {
   return async (p) => {
     if ((p as { output_config?: { format?: unknown } }).output_config?.format) throw new Error('no caption in this test');
-    if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'submit_verdict') {
-      return { id: 'v', type: 'message', role: 'assistant', model: 'h', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input: { shows_story_subject: true, generic_stock: false, reason: 'ok' } }] } as unknown as Anthropic.Message;
-    }
-    const user = String((p.messages.at(-1) as { content: unknown }).content);
-    const material = JSON.parse(user.slice(user.indexOf('<material>') + 10, user.indexOf('</material>'))) as { stories: Array<{ key: string; headline: string }> };
-    const stories = material.stories.map((s) => ({
-      key: s.key, setup: '', headline: `Story ${s.headline.slice(0, 40)}`, highlight: '', names: [], body: 'It happened this week. More is coming',
-      photo: s.headline.includes('Builds')
-        ? { kind: 'person', query: 'Maya Chen app', subjects: [{ name: 'Maya Chen', type: 'person' }], alts: [] }
-        : { kind: 'company', query: s.headline, subjects: [], alts: [] },
-    }));
-    return { id: 'm', type: 'message', role: 'assistant', model: 's', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }, content: [{ type: 'tool_use', id: 't', name: 'submit_rundown', input: { stories } }] } as unknown as Anthropic.Message;
+    return { id: 'v', type: 'message', role: 'assistant', model: 'h', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 1, output_tokens: 1 }, content: [{ type: 'tool_use', id: 'v', name: 'submit_verdict', input: { shows_story_subject: true, generic_stock: false, reason: 'ok' } }] } as unknown as Anthropic.Message;
   };
 }
 
@@ -184,17 +172,21 @@ function counting() {
   return { jev, versions };
 }
 
+/** The news chain stubbed: the builder story ranks first, then input order, the writer echoes, the photo finder takes the first extra candidate (lead image, then harvest), else a search photo. */
 function finder() {
-  const asked: string[] = [];
-  const photos: PhotoFinder = {
-    usd: 0,
-    find: async () => null,
-    findSet: async (reqs) => {
-      asked.push(...reqs.map((r) => r.sourceUrls[0]!));
-      return reqs.map((r, i) => ({ src: `https://finder/${i}-${encodeURIComponent(r.sourceUrls[0]!)}.jpg`, credit: 'F', kind: 'scene' as const }));
+  const asked: Array<{ url: string; extra: string[] }> = [];
+  const news: LfdNewsChain = {
+    shortlist: async (stories) => ({ ranked: stories.map((s, i) => ({ ...s, cool: 0, value: 0, final: (s.headline.includes('Builds') ? 200 : 100) - i })).sort((a, b) => b.final - a.final), costUsd: 0 }),
+    rerank: async (items) => ({ graded: items.map((s) => ({ ...s, grade: { cool: 5, value: 5, duplicate_of: null, top_tier: false, crowds: [], angle: '' } })), costUsd: 0 }),
+    write: async (_f, stories) => ({ written: stories.map((s) => ({ key: s.key, chosen: 'mine' as const, angle: '', headline: `Story ${s.headline.slice(0, 40)}`, body: 'It happened this week. More is coming.', highlight: '', names: [] })), dropped: [], over: [], costUsd: 0, log: [] }),
+    findPhoto: async (s, o) => {
+      asked.push({ url: s.url, extra: o.extra.map((c) => c.src) });
+      const first = o.extra[0];
+      const src = first?.src ?? `https://finder/${encodeURIComponent(s.url)}.jpg`;
+      return { id: s.id, tier: 'good', pick: { src, source: first ? 'extra' : 'search', credit: first?.credit ?? 'F', tier: 'good', clarity: 8, jpeg: Buffer.alloc(0), width: 1200, height: 800 }, brief: null, costUsd: 0, log: [] };
     },
   };
-  return { photos, asked };
+  return { news, asked };
 }
 
 async function intakeDeps(stories: ScoredStory[], over: Partial<LfdRunDeps> = {}) {
@@ -207,7 +199,8 @@ async function intakeDeps(stories: ScoredStory[], over: Partial<LfdRunDeps> = {}
     query,
     jev: j.jev,
     create: writer() as LfdRunDeps['create'],
-    photos: f.photos,
+    photos: { usd: 0, find: async () => null },
+    news: f.news,
     fetchFeeds: async () => { throw new Error('intake mode never fetches feeds'); },
     fetchBody: async () => null,
     readPage: async (url) => ({ ok: false, url, error: 'stub' }),
@@ -257,22 +250,24 @@ test('intake mode: lanes come from the intake, no major-news Jev, a manual run t
   assert.equal(rec.photoHarvest.usd, 0.04);
 });
 
-test('photo slice: builder slide → lead image first, else the harvest; non-builder slides never call the harvest', async () => {
+test('photo slice: a builder slide offers the lead image and the harvest to the photo finder; non-builder slides never call the harvest', async () => {
   const e = engine([asset({ id: 'V1', people: ['Maya Chen'] })]);
   const { d, f } = await intakeDeps(lineup(), { harvest: { deps: harvestDeps, run: e.run } });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
   assert.equal(e.calls.length, 1, 'only the builder slide asks the harvest');
-  assert.deepEqual(e.calls[0]!.input.pitch.cast.map((c) => c.name), ['Maya Chen']);
+  // The harvest runs before any copy is written: the pitch is the article's (no writer photo request, so no cast).
+  assert.equal(e.calls[0]!.input.pitch.title, 'Maya Chen Builds Her Own Reading App');
   const { rows } = await d.query<{ stories: Array<{ lane: string; url: string; photo: { src: string }; photoSource: string; builder?: number }> }>(`SELECT stories FROM lfd.posts`);
   const b = rows[0]!.stories.find((s) => s.lane === 'builder')!;
   assert.equal(b.photoSource, 'harvest');
   assert.equal(b.photo.src, 'https://img.example/V1.jpg');
   assert.equal(b.builder, 0.9);
-  assert.ok(!f.asked.includes(b.url), 'the finder is not asked for the harvested builder');
+  assert.deepEqual(f.asked.find((x) => x.url === b.url)?.extra, ['https://img.example/V1.jpg'], 'the harvest pick is an extra candidate for the photo finder');
+  assert.ok(f.asked.filter((x) => x.url !== b.url).every((x) => x.extra.length === 0), 'non-builder slides get no harvest');
   assert.ok(rows[0]!.stories.filter((s) => s.lane !== 'builder').every((s) => s.photoSource === 'finder'));
 
-  // With an article lead image, the builder slide takes it and the harvest is never called.
+  // With an article lead image, both the lead image and the harvest go to the photo finder; it picks the lead here.
   const e2 = engine([asset({ id: 'V1', people: ['Maya Chen'] })]);
   const stories = lineup();
   const builderUrl = stories[0]!.members[0]!.url;
@@ -283,17 +278,20 @@ test('photo slice: builder slide → lead image first, else the harvest; non-bui
       : { ok: false, url, error: 'stub' }),
   });
   assert.ok((await runLastFewDays(d2)).ok);
-  assert.equal(e2.calls.length, 0);
+  assert.equal(e2.calls.length, 1);
+  const { rows: rows2 } = await d2.query<{ stories: Array<{ url: string; photoSource: string; photo: { src: string } }> }>(`SELECT stories FROM lfd.posts`);
+  const b2 = rows2[0]!.stories.find((s) => s.url === builderUrl)!;
+  assert.deepEqual([b2.photoSource, b2.photo.src], ['lead', `${builderUrl}/lead.jpg`]);
 });
 
-test('photo slice: nothing from the harvest → today\'s finder, with the harvest trail kept', async () => {
+test('photo slice: nothing from the harvest → the photo finder alone, with the harvest trail kept', async () => {
   const e = engine([]);
   const { d, f } = await intakeDeps(lineup(), { harvest: { deps: harvestDeps, run: e.run } });
   assert.ok((await runLastFewDays(d)).ok);
   const { rows } = await d.query<{ stories: Array<{ lane: string; url: string; photoSource: string; photoTrace: string[] }> }>(`SELECT stories FROM lfd.posts`);
   const b = rows[0]!.stories.find((s) => s.lane === 'builder')!;
   assert.equal(b.photoSource, 'finder');
-  assert.ok(f.asked.includes(b.url));
+  assert.ok(f.asked.some((x) => x.url === b.url));
   assert.ok(b.photoTrace.some((t) => t.includes('finder takes over')));
 });
 

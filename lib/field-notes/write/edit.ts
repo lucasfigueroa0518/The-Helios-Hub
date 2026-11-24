@@ -46,7 +46,7 @@ const CUTTABLE = ['headline', 'body', 'tryIt'] as const;
 
 /**
  * Slides are matched by tipId, never by position. For each input slide the Editor's version of the
- * same tip is used only where it is a pure cut (headline, body, tryIt, caption); anything else, a missing
+ * same tip is used only where it is a pure cut (headline, body, tryIt); anything else, a missing
  * slide, an emptied field, a changed name or an added slide, falls back to the input.
  */
 export function enforceCutOnly(input: PostDraft, proposed: PostDraft): CutResult {
@@ -69,7 +69,5 @@ export function enforceCutOnly(input: PostDraft, proposed: PostDraft): CutResult
   // Only input slides are iterated, so a slide the Editor added or reordered never carries over; slides are never deleted.
   if (proposed.slides.some((p) => !input.slides.some((s) => s.tipId === p.tipId))) notes.push('slides the Editor added were discarded');
 
-  const caption = proposed.caption && validCut(proposed.caption, input.caption) ? proposed.caption : input.caption;
-  if (caption === input.caption && proposed.caption !== input.caption) notes.push('caption was not a pure cut; kept as written');
-  return { draft: { slides: out, caption }, notes };
+  return { draft: { slides: out }, notes };
 }

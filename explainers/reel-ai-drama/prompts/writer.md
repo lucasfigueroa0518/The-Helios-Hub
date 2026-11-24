@@ -52,10 +52,6 @@ CONSTRAINTS on every script.
 - `close_question` — the question over the brand close (must 5).
 - `central` — the people central to the story, named exactly as in the facts' "Who's who" list: the ones the viewer
   must recognize on sight.
-- `pronounce` — `[{ word, say }]` for each other name or term the voice would likely get wrong: `word` exactly as
-  written in the lines, `say` a plain English respelling, syllables joined by hyphens with the stressed one in
-  capitals. A cast name with a "Said:" in Who's who was researched and is always voiced that way, so leave its words
-  out. It changes only what the voice says. Empty when nothing needs it.
 
 ## HARD CONSTRAINTS (output)
 

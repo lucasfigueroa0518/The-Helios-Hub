@@ -41,10 +41,9 @@ export function parseDraft(input: unknown): ParseResult {
   const obj = rec(input);
   const rawSlides = Array.isArray(obj.slides) ? obj.slides : null;
   if (!rawSlides) problems.push('slides must be an array');
-  if (typeof obj.caption !== 'string') problems.push('caption must be a string');
   const slides = readSlides(rawSlides ?? [], problems);
   if (problems.length) return { ok: false, problems };
-  return { ok: true, draft: { slides, caption: (obj.caption as string).trim() } };
+  return { ok: true, draft: { slides } };
 }
 
 export type WriterParse =
@@ -66,7 +65,6 @@ export function parseWriterOutput(input: unknown, tipIds: string[]): WriterParse
   if (!rawSlides) problems.push('slides must be an array');
   const rawSkipped = obj.skipped === undefined ? [] : Array.isArray(obj.skipped) ? obj.skipped : null;
   if (!rawSkipped) problems.push('skipped must be an array');
-  if (obj.caption !== undefined && typeof obj.caption !== 'string') problems.push('caption must be a string');
   const slides = readSlides(rawSlides ?? [], problems);
   const known = new Set(tipIds);
   for (const s of slides) if (!known.has(s.tipId)) problems.push(`slide for unknown tip ${s.tipId}`);
@@ -87,7 +85,5 @@ export function parseWriterOutput(input: unknown, tipIds: string[]): WriterParse
       skipped.push({ tipId: id, missing: 'the Writer did not write a slide for this tip' });
     }
   }
-  const caption = typeof obj.caption === 'string' ? obj.caption.trim() : '';
-  if (slides.length > 0 && !caption) return { ok: false, problems: ['caption must not be empty when slides are written'] };
-  return { ok: true, draft: { slides, caption }, skipped };
+  return { ok: true, draft: { slides }, skipped };
 }

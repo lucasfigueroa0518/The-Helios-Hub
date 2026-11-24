@@ -654,6 +654,20 @@ export async function finishJob(
  */
 export const REVISION_STAGE = 'revision';
 
+/**
+ * Resume a failed render under its own id (2026-11-24): back to 'requested' with its place in the queue (its
+ * requested_at), its spend and its job folder kept. The worker resumes it from what is on disk (render/job.ts
+ * resumePoint): a finished build is not rebuilt. False when the job is not failed.
+ */
+export async function resumeRenderJob(db: Queryable, id: string): Promise<boolean> {
+  const { rows } = await db.query<{ id: string }>(
+    `UPDATE explainers.jobs SET status = 'requested', error = NULL, finished_at = NULL, started_at = NULL, capped = false
+      WHERE id = $1 AND status = 'failed' RETURNING id`,
+    [id],
+  );
+  return rows.length > 0;
+}
+
 export async function failStaleRunningJobs(db: Queryable, reason: string): Promise<number> {
   const { rows } = await db.query(
     `UPDATE explainers.jobs
@@ -703,9 +717,12 @@ export async function addLintViolations(
   if (violations.length === 0) return;
   await db.transaction(async (tx) => {
     for (const v of violations) {
+      // A resumed job runs its checks again: the same finding is never written twice (resumeRenderJob).
       await tx.query(
         `INSERT INTO explainers.lint_violations (job_id, source, rule, frame, severity, detail)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+         SELECT $1, $2, $3, $4, $5, $6
+          WHERE NOT EXISTS (SELECT 1 FROM explainers.lint_violations
+                             WHERE job_id = $1 AND source = $2 AND rule = $3 AND frame IS NOT DISTINCT FROM $4 AND severity = $5 AND detail = $6)`,
         [jobId, v.source, v.rule, v.frame, v.severity, v.detail],
       );
     }

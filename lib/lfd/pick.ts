@@ -1,6 +1,11 @@
 // lib/lfd/pick.ts
 /**
- * Picking (spec §3.2–3.4; builder lane, central intake Phase 1). Seeds first;
+ * Picking. Production (wiring contract 2026-11-24, WC2): the run walks the news reranker's order with LineupWalk;
+ * candidates come from the lanes below (judgedPool, the rundown pool, withoutUsed), the last post's events are
+ * excluded with coveredBy, and the hub queue applies through applyLfdQueue. The Selector below is the old lane
+ * picker, kept for the intake replay (scripts/intake/replay.ts).
+ *
+ * Old lane picking (spec §3.2–3.4; builder lane, central intake Phase 1). Seeds first;
  * then the lead queue, ordered by leadOf margin: major headlines (major-news,
  * bar 0.55) take at most 3 slots, builder stories (story-builder@2, event in the
  * last 7 days) are uncapped; the rundown fills the rest from the reels pool.
@@ -9,10 +14,12 @@
  * queue, then the rundown. With no builder scores (legacy lanes) the lead queue
  * is exactly today's major queue, so the lineup is unchanged.
  */
-import { mapPool } from '@/lib/async-pool';
-import { majorNewsScore, namesIn, SAME_EVENT_BAR } from '@/lib/stories/build/morning-download';
-import { MAJOR_NEWS, SAME_EVENT } from '@/lib/stories/questions';
-import { leadOf } from '@/lib/stories/scores';
+import { fillInOrder, type MediaVerdict } from '@/lib/news-ranker/posts';
+import type { Graded } from '@/lib/news-ranker/rerank';
+import { askMajorNews } from '@/lib/news-ranker/major';
+import { SAME_EVENT } from '@/lib/news-ranker/questions';
+import { findSpinOffs } from '@/lib/news-ranker/repeats';
+import { leadOf, namesIn, SAME_EVENT_BAR } from '@/lib/news-ranker/scores';
 import { companyKey } from '@/lib/social/ingest/select/companies';
 import type { JevAsk } from '@/lib/social/jev/client';
 import { orderForNight, type NightQueue } from '@/lib/social-hub/queue';
@@ -29,7 +36,6 @@ export const PER_COMPANY = 2;
 export const JUDGED_MAX = 60;
 export const RUNDOWN_POOL = 20;
 const REELS_PER_NIGHT = 10;
-const BODY_CHARS = 9000;
 const MERGE_BODY_CHARS = 1200;
 
 /** The candidate's lead lane and margin (lib/stories/scores leadOf), or null: it is not a lead. */
@@ -74,25 +80,6 @@ export function withoutUsed(list: LfdCandidate[], used: Set<string>): LfdCandida
   return list.filter((c) => !used.has(c.key) && !c.refs.some((r) => used.has(r)));
 }
 
-export const JEV_CONCURRENCY = 8;
-
-/**
- * major-news@2 for each candidate, up to 8 at once, in input order. `known`
- * holds scores already judged this run (the safety net's re-gather) so a
- * story is never judged twice.
- */
-export async function scoreMajor(list: LfdCandidate[], jev: JevAsk, known: ReadonlyMap<string, number> = new Map()): Promise<LfdCandidate[]> {
-  return mapPool(list, JEV_CONCURRENCY, async (c) => {
-    const hit = known.get(c.key);
-    if (hit !== undefined) return { ...c, major: hit };
-    const res = await jev(
-      { state: { headline: c.headline, outlets: [c.sourceName, ...c.alsoFrom], published: c.publishedAt, story: { untrusted_content: c.body.slice(0, BODY_CHARS) } }, questions: MAJOR_NEWS.questions },
-      { version: MAJOR_NEWS.version, subjectId: c.key },
-    );
-    return { ...c, major: majorNewsScore(res.answers as Record<string, { noul: number }>) };
-  });
-}
-
 /** Title-Case headline words that are not names: sharing only these never makes two stories a same-event pair. */
 const COMMON_HEADLINE_WORDS = new Set([
   'Launches', 'Launch', 'Model', 'Models', 'Says', 'Said', 'New', 'Just', 'Now', 'Will', 'Is', 'Here', 'Releases', 'Release',
@@ -100,7 +87,7 @@ const COMMON_HEADLINE_WORDS = new Set([
 ]);
 
 /** Proper names in a headline that can pair two stories (namesIn minus common headline words). */
-function pairNames(headline: string): Set<string> {
+export function pairNames(headline: string): Set<string> {
   return new Set([...namesIn(headline)].filter((n) => !COMMON_HEADLINE_WORDS.has(n)));
 }
 
@@ -151,14 +138,6 @@ export async function mergeSameEvent(list: LfdCandidate[], jev: JevAsk): Promise
     if (!folded) kept.push(c);
   }
   return kept;
-}
-
-/** Leads (majors and builders) by margin, then the rundown in rank order (spec §4.2: slides in rank order). */
-export function slideOrder(picks: Pick[], now: Date = new Date()): Pick[] {
-  const margin = (p: Pick) => leadFor(p, now)?.margin ?? (p.lane === 'major' ? (p.major ?? 0) - 1 : -1);
-  const leads = picks.filter((p) => p.lane !== 'rundown').sort((a, b) => margin(b) - margin(a));
-  const rundown = picks.filter((p) => p.lane === 'rundown').sort(rundownOrder);
-  return [...leads, ...rundown];
 }
 
 export type LeadEntry = { c: LfdCandidate; lane: 'major' | 'builder'; margin: number };
@@ -356,10 +335,81 @@ export class Selector {
     return this.picks.filter((p) => companyKey(p.headline) === company).length >= PER_COMPANY;
   }
 
-  private async coveredLastTime(c: LfdCandidate): Promise<boolean> {
-    for (const prev of this.previous) {
-      if (await sameEvent(this.jev, prev, c, `prev|${c.key}`)) return true;
+  private coveredLastTime(c: LfdCandidate): Promise<boolean> {
+    return coveredBy(this.jev, this.previous, c);
+  }
+}
+
+/** A seed's text for its major-news call (the old scoreMajor's BODY_CHARS). */
+const SEED_BODY_CHARS = 9000;
+
+/**
+ * A seed with no stored score gets one major-news call (lib/news-ranker/major), so the lane bar (leadFor) decides its
+ * lane as before. A seed that carries a score (intake) makes no call. A failed call leaves it unscored (rundown).
+ */
+export async function scoreUnscoredSeeds(jev: JevAsk, seeds: LfdCandidate[], onError: (key: string, err: unknown) => void = () => {}): Promise<LfdCandidate[]> {
+  return Promise.all(seeds.map(async (s) => {
+    if (s.major !== null) return s;
+    try {
+      const r = await askMajorNews(jev, { key: s.key, headline: s.headline, text: s.body.slice(0, SEED_BODY_CHARS), outlets: [s.sourceName, ...s.alsoFrom], published: s.publishedAt });
+      return { ...s, major: r.major };
+    } catch (err) {
+      onError(s.key, err);
+      return s;
     }
-    return false;
+  }));
+}
+
+/** The last post already covered this story's event (spec §3.4, own-repeat exclusion; WC6). */
+export async function coveredBy(jev: JevAsk, previous: Array<{ headline: string; body: string }>, c: LfdCandidate): Promise<boolean> {
+  const { hits } = await findSpinOffs([{ id: c.key, headline: c.headline, text: c.body }], previous, { jev, component: 'prev', names: pairNames, bodyChars: MERGE_BODY_CHARS, concurrency: 1 });
+  return hits.size > 0;
+}
+
+/**
+ * WC2 (Last Few Days): walk the reranker's order, resolving each story's media `need` at a time (up to
+ * `concurrency` at once), and keep the ones with media in rank order (fillInOrder). A story without usable media is
+ * skipped and its slot is filled from further down the list. `claim` takes a story out of the walk (the meme scan).
+ */
+export class LineupWalk {
+  private next = 0;
+  private readonly claimed = new Set<string>();
+  readonly verdicts = new Map<string, MediaVerdict>();
+
+  constructor(
+    private readonly order: Graded[],
+    private readonly resolve: (g: Graded) => Promise<MediaVerdict>,
+    private readonly concurrency = 3,
+  ) {}
+
+  /** Up to `need` more story ids with media, best ranked first. Empty: the list is spent. */
+  async take(need: number): Promise<string[]> {
+    const out: string[] = [];
+    while (out.length < need && this.next < this.order.length) {
+      const batch: Graded[] = [];
+      while (batch.length < need - out.length && this.next < this.order.length) {
+        const g = this.order[this.next++]!;
+        if (!this.claimed.has(g.id)) batch.push(g);
+      }
+      let at = 0;
+      const worker = async () => {
+        while (at < batch.length) {
+          const g = batch[at++]!;
+          this.verdicts.set(g.id, await this.resolve(g));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.max(1, Math.min(this.concurrency, batch.length)) }, worker));
+      out.push(...fillInOrder(batch, (id) => this.verdicts.get(id) ?? 'none', { min: MIN_STORIES, max: need - out.length }));
+    }
+    return out;
+  }
+
+  /** The next `n` stories the walk has not reached, in rank order. */
+  upcoming(n: number): Graded[] {
+    return this.order.slice(this.next).filter((g) => !this.claimed.has(g.id)).slice(0, n);
+  }
+
+  claim(id: string): void {
+    this.claimed.add(id);
   }
 }

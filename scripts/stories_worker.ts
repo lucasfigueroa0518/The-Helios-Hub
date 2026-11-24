@@ -24,9 +24,15 @@
  * published, and before it exits.
  */
 import './stories_env';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { createIntakeJev } from '@/lib/intake/jev';
 import { INTAKE_TOPUP_CAP_USD } from '@/lib/intake/types';
 import { liveJevTransport } from '@/lib/reels/jev/client';
+import { createJevAsk } from '@/lib/social/jev/client';
+import type { NewsChainDeps } from '@/lib/stories/build/common';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
 import { createPhotoBank } from '@/lib/media-library/bank';
@@ -50,6 +56,27 @@ import { newAnthropic } from '@/lib/anthropic-client';
 import { liveOpponentClient } from '@/lib/stories/trivia/opponent';
 
 const POLL_MS = 15_000;
+
+/** The news chain's live clients for one Morning Download build. */
+async function newsChain(client: ReturnType<typeof newAnthropic>): Promise<NewsChainDeps> {
+  const { TypeSafeClient } = await import('@typesafe-ai/sdk');
+  const { fetchImageLive, readPageImages, serperImages } = await import('@/lib/news-photos');
+  const { findPhotoUpscaler } = await import('@/lib/news-photos/band');
+  const key = process.env.SERPER_API_KEY;
+  return {
+    create: (p) => client.messages.create(p as never) as never,
+    jevAsk: createJevAsk(),
+    photo: {
+      jev: new TypeSafeClient({ defaultHeaders: { 'TypeSafe-Danger-Zone-Images': 'true' } }),
+      readPage: readPageImages(),
+      serper: key ? serperImages(key) : null,
+      fetchImage: fetchImageLive(),
+    },
+    upscaler: findPhotoUpscaler(),
+    tmpDir: fs.mkdtempSync(path.join(os.tmpdir(), 'md-band-')),
+    storage: createStoriesStorage(),
+  };
+}
 const once = process.argv.includes('--once');
 const requestArg = process.argv.indexOf('--request');
 
@@ -107,6 +134,16 @@ async function main() {
         review: createReviewCall({ create: (p) => client.messages.create(p), model: settings.models.review }),
         storage: createStoriesStorage(),
         ...(builders ? { builders } : {}),
+        // Morning Download's news chain (WIRING-CONTRACT Owner D): Jev shortlist, Opus rerank, the news photo finder
+        // (Serper only when its key is set), the band upscaler when installed, the W12 writer.
+        ...(series === 'morning_download' ? { news: await newsChain(client) } : {}),
+        // Morning Download video (MD-LFD D16–D19): on where yt-dlp, ffmpeg and the Serper and Jev keys are present.
+        video: async (setId: string) => {
+          const { liveStoryVideo, videoAvailable } = await import('@/lib/stories/video');
+          const can = videoAvailable();
+          if (!can.ok) { log(`video: off (${can.why})`); return null; }
+          return liveStoryVideo({ setId, storage: createStoriesStorage(), anthropic: client as never, log: (line) => log(line) });
+        },
       };
     },
     meta: () => createLiveStoriesMetaClient(),

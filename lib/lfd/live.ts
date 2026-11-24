@@ -14,9 +14,9 @@
  * database, a bank that can't be reached or built, or the switches off, and
  * the finder works exactly as without it.
  *
- * The shared photo finder (central intake Phase 3): the `photo_finders` switch is read once per run, here. 'shared'
- * adds `sharedPhotos` (every slide tries it first); 'legacy', a read error, or deps that can't be built leave it
- * out, and the run is today's.
+ * Story photos come from the news photo finder (lib/news-photos findStoryPhoto, wiring contract 2026-11-24): its
+ * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The Stories finder
+ * above is still built for the type only; the run no longer calls it.
  */
 import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -52,22 +52,6 @@ export async function lfdPhotoFinder(
   return { photos: newFinder({ jev: o.jev, create: o.create, runRef: o.runRef, used, ...(bank ? { bank } : {}) }), bank };
 }
 
-/** The run's shared-finder wiring when the 'lfd' switch reads 'shared' (read once); undefined otherwise. Never throws. `make` is for tests. */
-export async function lfdSharedPhotos(
-  query: HubQuery,
-  make?: import('@/lib/stories/photos-shared').SharedMake,
-  log: (line: string) => void = (line) => console.log(`lfd: ${line}`),
-): Promise<LfdRunDeps['sharedPhotos']> {
-  try {
-    const { sharedPhotoSetup } = await import('@/lib/stories/photos-shared');
-    const setup = await sharedPhotoSetup({ query: (text, params) => query(text, params) }, 'lfd', make, log);
-    return setup ?? undefined;
-  } catch (err) {
-    log(`shared photo finder not wired (${err instanceof Error ? err.message : String(err)}); today's finder`);
-    return undefined;
-  }
-}
-
 export async function liveLfdDeps(
   query: HubQuery,
   o: { capUsd: number; trigger: 'scheduled' | 'manual'; runId?: string; now?: Date },
@@ -91,7 +75,9 @@ export async function liveLfdDeps(
   const tally = createJevTally();
   const jev = capped(tallied(createJevAsk(), tally), tally, o.capUsd);
   const budget = createRunBudget({ capUsd: o.capUsd, otherSpendUsd: () => tally.costUsd });
-  const create = budget.guard(liveMessagesCreate(newAnthropic()));
+  // One Anthropic client for the run: the writer and checks (through the run budget) and the video finder.
+  const anthropic = newAnthropic();
+  const create = budget.guard(liveMessagesCreate(anthropic));
   const bucket = mediaBucket(SLIDE_BUCKET);
   const { photos, bank } = await lfdPhotoFinder(query, { jev, create, runRef: `lfd:${o.runId ?? now.toISOString()}` });
   const { readLfdSettings } = await import('./settings');
@@ -126,7 +112,29 @@ export async function liveLfdDeps(
   } catch (err) {
     console.log(`lfd: intake not wired (${err instanceof Error ? err.message : String(err)}); today's lanes`);
   }
-  const sharedPhotos = await lfdSharedPhotos(query);
+  // The news photo finder (findStoryPhoto): its own Haiku create, so its whole spend (Haiku, Jev grades, Serper) is
+  // added to the run total once (lib/lfd/run.ts photoRecord), as the harvest's is.
+  const { TypeSafeClient } = await import('@typesafe-ai/sdk');
+  const { fetchImageLive, serperImages } = await import('@/lib/news-photos');
+  const serperKey = process.env.SERPER_API_KEY;
+  const photoCreate = liveMessagesCreate(anthropic);
+  const newsPhotos: LfdRunDeps['newsPhotos'] = {
+    jev: new TypeSafeClient({ defaultHeaders: { 'TypeSafe-Danger-Zone-Images': 'true' } }) as never,
+    serper: serperKey ? serperImages(serperKey) : null,
+    fetchImage: fetchImageLive(),
+    create: (p) => photoCreate(p as never),
+  };
+  // Real footage on story slides (MD-LFD D16–D19): on only where the finder can run (yt-dlp and ffmpeg on PATH,
+  // SERPER_API_KEY and TYPESAFE_API_KEY set); off, the run is photos and memes as before. Never fails the run.
+  let video: LfdRunDeps['video'];
+  try {
+    const [{ liveLfdVideo }, { DEFAULT_LFD_VIDEO_CAP_USD }] = await Promise.all([import('./video'), import('./config')]);
+    const got = await liveLfdVideo({ anthropic, capUsd: DEFAULT_LFD_VIDEO_CAP_USD });
+    if (got.video) video = got.video;
+    else console.log(`lfd: video off (${got.why}); photos and memes only`);
+  } catch (err) {
+    console.log(`lfd: video off (${err instanceof Error ? err.message : String(err)}); photos and memes only`);
+  }
   // Builder slides' photos (Phase 1 photo slice): AI Drama's harvest engine, capped at $0.15 a post inside the run.
   const { streamingCreate } = await import('@/lib/reel-ai-drama/reporting/llm');
   const { loadPrompt } = await import('@/lib/reel-ai-drama/prompts');
@@ -150,7 +158,7 @@ export async function liveLfdDeps(
       harvest,
       // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.
       usedPhotos: { http: fetch },
-      ...(sharedPhotos ? { sharedPhotos } : {}),
+      newsPhotos,
       ...(intake ? { intake } : {}),
       fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
       fetchBody: fetchBodyLive,
@@ -164,6 +172,7 @@ export async function liveLfdDeps(
       closings: closingsLog(query, 'lfd'),
       ...(o.runId ? { runId: o.runId } : {}),
       ...(memes ? { memes } : {}),
+      ...(video ? { video } : {}),
     },
     spentUsd: () => budget.spent(),
     // Waits (at most `ms`) for the bank's queued writes and ingest; a one-shot CLI run calls it before exiting.

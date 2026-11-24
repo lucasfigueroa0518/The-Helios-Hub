@@ -1,6 +1,6 @@
 import type { Queryable } from '@/lib/explainers/db';
 import { postsToInstagram, stateOf } from '@/lib/content-type/state';
-import { CAPTION_MAX_CHARS, stampCaption, stripEpisodePrefix } from '@/lib/explainers/caption-format';
+import { CAPTION_MAX_CHARS, stripEpisodePrefix } from '@/lib/explainers/caption-format';
 import { checkAccountQuota } from '@/lib/instagram/account-gate';
 import { TRIAL_GRADUATION_STRATEGY } from '@/lib/reels/config';
 import { bookingFeedMode } from '@/lib/social-hub/slots';
@@ -98,7 +98,7 @@ export async function publishReadiness(
   if (job.location !== 'bucket') return { ok: false, note: 'The video is only on the machine that rendered it, not in Storage.' };
   const caption = stripEpisodePrefix(job.caption ?? '');
   if (!caption) return { ok: false, note: 'The render has no post caption.' };
-  if (stampCaption(caption, 999).length > CAPTION_MAX_CHARS) {
+  if (caption.length > CAPTION_MAX_CHARS) {
     return { ok: false, note: `The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.` };
   }
   return { ok: true, videoObject: job.video, caption };
@@ -221,8 +221,8 @@ export async function carryAttempt(deps: PublishDeps, id: string): Promise<{ id:
     if (!gate.ok) throw new Error(gate.message);
 
     const videoUrl = await deps.signVideo(attempt.video_object, PUBLISH_VIDEO_URL_SECONDS);
-    const episode = await nextPublishedEpisode(db, meta);
-    const caption = stampCaption(attempt.caption, episode);
+    // No episode line any more (caption voice, 2026-11-24); an older caption's baked-in one is dropped.
+    const caption = stripEpisodePrefix(attempt.caption);
     if (caption.length > CAPTION_MAX_CHARS) {
       throw new Error(`The caption is ${caption.length} characters; Instagram takes ${CAPTION_MAX_CHARS}.`);
     }

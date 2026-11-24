@@ -2,26 +2,19 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { cachedSystemText } from '@/lib/anthropic-cache';
 import { priceAnthropicUsage, usageBucketsFromMessage, type MessageUsageLike } from '@/lib/anthropic-pricing';
-import {
-  CAPTION_HOOK_PREVIEW,
-  CAPTION_MAX_CHARS,
-  CAPTION_MIN_BODY_CHARS,
-  hookPreviewLimit,
-  parseCaption,
-} from '@/lib/explainers/caption-format';
+import { CAPTION_HOOK_PREVIEW, CAPTION_WRITER_MAX_CHARS, parseCaption } from '@/lib/explainers/caption-format';
 import { structuredJson, type StructuredParams } from '@/lib/explainers/ideas/generator';
 import { HELIOS_NAME } from '@/lib/social/captions/helios-context';
+import { readHeliosVoice } from '@/lib/social/voice/voice';
 
 export {
   CAPTION_HOOK_PREVIEW,
   CAPTION_MAX_CHARS,
   CAPTION_MIN_BODY_CHARS,
-  episodeLine,
-  hookPreviewLimit,
   parseCaption,
   reviewCaption,
-  stampCaption,
   stripEpisodePrefix,
+  withHeliosLine,
 } from '@/lib/explainers/caption-format';
 
 /**
@@ -29,9 +22,9 @@ export {
  * Tracks `.cursor/skills/explainer-caption/SKILL.md`. The burned-in
  * `caption_groups.json` is a different artifact (`captions`).
  *
- * The writer returns the body only. Code stamps
- * `AI 101 Episode N:` at publish time from the published count.
- * The system prompt is the stable prefix and carries the cache breakpoint.
+ * The writer returns its text and hashtags; the render job adds the Helios line between them
+ * (caption-format.ts withHeliosLine). There is no episode line (caption voice, 2026-11-24).
+ * The system prompt (shared voice, then these instructions) is the stable prefix and carries the cache breakpoint.
  */
 
 // v3 (Explainers 3.0): rule 4 and the shape follow the eight-beat reel. Drafted 2026-10-13,
@@ -63,29 +56,41 @@ export {
 // v11-v12 (same day) took the industry and the claims about how Helios works out of the Helios line. v13 (same day)
 // removes the line: Lucas, "it may be best to just not do this section of the caption at all. Do that." Common advice
 // passed off as a finding looks foolish. So no Helios context, shared Helios rules, closings or build-fit call here.
-export const CAPTION_VERSION = 'explainer-caption-v13';
+// v14 (caption voice, 2026-11-24; planning/Caption Voice/PLAN.md): the shared Helios voice leads the prompt. The caption
+// answers the viewer's most likely next question: if the concept may still be unclear, a fresh "still with us?" kind of
+// opener and a re-explanation from a new angle; if it is easy, the most surprising of where it gets serious, where it
+// breaks, or what it unlocks. No save ask and no episode line (Lucas: "drop the save this"; "AI 101 Episode N" is too
+// hard to track). Code adds a generic Helios line before the hashtags.
+export const CAPTION_VERSION = 'explainer-caption-v14';
 
-export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished AI 101 reel, which teaches one AI or software concept to a broad audience. You get the reel's final script: the words the viewer just heard. The caption is the reel's second half, the place the viewer goes for what the video left them wanting to know.
+export const CAPTION_INSTRUCTIONS = `You write the Instagram caption for one finished AI 101 reel, which teaches one AI or software concept to a broad audience. You get the reel's final script: the words the viewer just heard. The caption is where the viewer goes to understand: it answers the question this script most likely leaves them with.
 
-Do not write an episode title or an episode number. Code adds the line "AI 101 Episode N:" when the reel publishes.
+Code adds a line about the page after your text, before your hashtags. Do not write it, and do not write an episode title or number.
 
 HARD CONSTRAINTS. Every one is required.
-1. Return JSON matching the schema. The caption field is the body of the post, nothing else.
-2. The opening is one or two short sentences that pick up where the video left off and promise the viewer that what they want to know next is right here in the caption. Keep it under ${hookPreviewLimit()} characters.
-3. Before you write, decide what the average viewer would most want to know after this script. It is one or two of these, whichever this script leaves most open: a zoom-out that shows where the concept fits among the things around it; a plainer restatement of what the video moved through fast; the next level down, how it works more specifically or technically; or a tie to tools and situations the viewer already knows. The body delivers that. It never re-narrates the script.
-4. Write for reading on a phone: one thought per line or per short paragraph of one or two sentences, a blank line between them, plenty of white space. Every line earns its place; cut a secondary detail rather than add a sentence. It reads like a social post from someone who knows the subject well, never like a paper or a textbook.
-5. Write like a person: no dashes for drama, no "not X, but Y", no lists of three for rhythm, no hype or filler words, no staged reveal or run-up phrase, no hedging that adds nothing, and no closing line that repeats the one before it.
-6. What the script says stays as the script says it. What you add beyond it is well-established, stated plainly and accurately. Never invent a number, study, quote, product, or anecdote.
-7. The body ends on one short line that asks for one thing specific to this concept: save it for a named situation, or a short question the viewer can answer from their own work. No "what do you think?", no engagement bait.
-8. Then 3 to 5 hashtags, only at the end, each with a reason in the post. At most two emoji, none required, none in the hashtags. No URLs. Never "I". Never name Helios or any author, and give no advice in anyone's voice. Plain words a reader at about a sixth-grade level gets on one read, without talking down. Name a character from the reel by its role; never call it a "critter".
-9. The whole caption, the hashtags included, stays within ${CAPTION_MAX_CHARS} characters.`;
+1. Return JSON matching the schema. The caption field is your text, then your hashtags, nothing else.
+2. Before you write, decide which question the average viewer is most likely left with after this script, and answer it.
+   a. If the concept may still be unclear after one watch, the question is "wait, what is it?". Open by meeting the viewer where they are: one short line that admits they may not have it yet, worded fresh for this concept. Then explain it again from a different angle than the script, in plainer words, and give one sentence that captures it, worth keeping.
+   b. If the script makes the concept easy to get, the question is "so what?". Pick the one this concept has the most surprising answer for: where it gets serious (a high-stakes use where it matters), where it breaks (the common misunderstanding, or its limit), or what it unlocks (the next idea it is a building block of). Open on it and go one level deeper.
+3. The opening line hooks on its own, in under ${CAPTION_HOOK_PREVIEW} characters: it is all that shows before "more".
+4. Write for reading on a phone: one thought per line or per short paragraph of one or two sentences, a blank line between them. Stop as soon as the question is answered.
+5. No dashes for drama, no "not X, but Y", no lists of three for rhythm, and no closing line that repeats the one before it.
+6. What the script says stays as the script says it. What you add beyond it is well established, stated plainly and accurately. Never invent a number, study, quote, product, or anecdote.
+7. No ask of the viewer: no "save this", no question, no call to action. Code's page line closes the caption.
+8. End with 3 to 5 hashtags, only at the end, each with a reason in the post. At most two emoji, none required, none in the hashtags. No URLs. Never "I". Never name Helios or any author. Plain words a reader at about a sixth-grade level gets on one read. Name a character from the reel by its role; never call it a "critter".
+9. Your caption, the hashtags included, stays within ${CAPTION_WRITER_MAX_CHARS} characters.`;
+
+/** The cached system prefix: the shared voice, then this caption's structure. */
+export function captionSystem(root?: string): string {
+  return `${readHeliosVoice(root)}\n\n# This caption\n\n${CAPTION_INSTRUCTIONS}\n\nVersion: ${CAPTION_VERSION}`;
+}
 
 const CAPTION_SCHEMA = {
   type: 'object',
   properties: {
     caption: {
       type: 'string',
-      description: 'The Instagram caption body only: hook, paragraphs, the save prompt or question, and hashtags. No episode line.',
+      description: 'Your caption text, then 3 to 5 hashtags. No episode line, no ask, no line about the page.',
     },
   },
   required: ['caption'],
@@ -135,7 +140,7 @@ export type CaptionOptions = { retryReason?: string };
 
 export function captionUserMessage(facts: CaptionFacts, opts: CaptionOptions): string {
   return [
-    'Write the Instagram caption body for this reel. Do not include an episode title or episode number.',
+    'Write the Instagram caption for this reel.',
     '',
     'The final script (SCRIPT.md):',
     clip(facts.script, 12_000),
@@ -147,7 +152,7 @@ export function captionParams(facts: CaptionFacts, model: string, opts: CaptionO
   return {
     model,
     max_tokens: 8000,
-    system: cachedSystemText(`${CAPTION_INSTRUCTIONS}\n\nVersion: ${CAPTION_VERSION}`),
+    system: cachedSystemText(captionSystem()),
     messages: [{ role: 'user', content: captionUserMessage(facts, opts) }],
     output_config: { format: { type: 'json_schema', schema: CAPTION_SCHEMA } },
   };
@@ -192,8 +197,9 @@ export async function writeExplainerCaption(
   let text: string;
   try {
     const body = structuredJson(message as Anthropic.Message, 'explainer caption') as { caption?: unknown };
-    text = parseCaption(body.caption, { heliosLine: false });
-    if (HELIOS_NAME.test(text)) throw new Error('The caption names Helios. Remove it; this caption has no Helios line.');
+    text = parseCaption(body.caption);
+    if (text.length > CAPTION_WRITER_MAX_CHARS) throw new Error(`The caption is ${text.length} characters; keep it within ${CAPTION_WRITER_MAX_CHARS}.`);
+    if (HELIOS_NAME.test(text)) throw new Error('The caption names Helios. Remove it; code adds the line about the page.');
     checkNoCritter(text);
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);

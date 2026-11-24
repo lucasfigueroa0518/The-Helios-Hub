@@ -93,10 +93,12 @@ test('fades: one source for the mask and the check; text-safe points are faded',
 
 test('every photo is a bleed fade (S-44), and no frame draws a pill cue (S-47)', async () => {
   const html = await framesHtml(allFrames('orange'));
-  const photos = ALL.filter((d) => framePhoto(d) && d.role !== 'paid' && d.role !== 'free').length;
+  // The opener draws no bleed photo (MC14): its story peeks are blurred cards.
+  const photos = ALL.filter((d) => framePhoto(d) && d.role !== 'paid' && d.role !== 'free' && d.role !== 'opener').length;
   assert.equal((html.match(/data-fade=/g) ?? []).length, photos);
   assert.doesNotMatch(html, /st-card/);
-  assert.ok((html.match(/class="st-cue /g) ?? []).length >= 4);
+  // The Morning Download cover's next-frame prompt is its long arrow (MC7), not a cue.
+  assert.ok((html.match(/class="st-cue /g) ?? []).length + (html.match(/class="st-opener__arrow"/g) ?? []).length >= 4);
   // A cue is type and an arrow, right-aligned: no background, no rounded shape.
   const css = readFileSync('lib/stories/render/stories.css', 'utf8');
   const cue = /\n\.st-cue \{([^}]*)\}/.exec(css)?.[1] ?? '';
@@ -129,4 +131,31 @@ test('pen strokes are seeded: same text, same stroke', async () => {
   assert.deepEqual(arrowPaths(170, 90, seedOf('tap to play')), arrowPaths(170, 90, seedOf('tap to play')));
   assert.notDeepEqual(arrowPaths(170, 90, seedOf('tap to play')), arrowPaths(170, 90, seedOf('tap for the free one')));
   assert.match(strikePath(200, 60, 7), /^M/);
+});
+
+test('Morning Download cover (MC14): series, promise, one blurred card per story, count and arrow; no photo credit', async () => {
+  const peek = [{ src: 'lib/stories/render/fixtures/photos/amodei.jpg', credit: 'Credit A', kind: 'person' as const }, null, { src: 'lib/stories/render/fixtures/photos/datacenter.jpg', credit: 'Credit C', kind: 'scene' as const }];
+  const html = await framesHtml(asSet('morning_download', 'green', [{ role: 'opener', date: 'Friday, November 13', storyCount: 3, peek }]));
+  assert.match(html, /What you<\/span><span class="st-opener__line">need to know<\/span><span class="st-opener__line st-accent-text">in AI today/);
+  assert.match(html, /st-opener__series"[^>]*>Morning(<!-- -->)? <span class="st-accent-text">Download/);
+  assert.equal((html.match(/class="st-opener__card[ "]/g) ?? []).length, 3);
+  assert.equal((html.match(/class="st-opener__peek"/g) ?? []).length, 2, 'a story without a photo is a plain card');
+  assert.equal((html.match(/class="st-opener__q">\?</g) ?? []).length, 3);
+  assert.match(html, /3 stories · 1 minute/);
+  assert.doesNotMatch(html, /Credit A|Credit C/);
+});
+
+test('cover headlines rotate in order, never repeat the last, and skip one-minute lines on a longer set (MC16)', async () => {
+  const { OPENER_PROMISES, nextOpenerPromise } = await import('@/lib/stories/render/copy');
+  assert.equal(OPENER_PROMISES.length, 6);
+  const first = OPENER_PROMISES[0]!.lines;
+  assert.deepEqual(nextOpenerPromise(null, 4), [...first]);
+  assert.deepEqual(nextOpenerPromise(first, 4), [...OPENER_PROMISES[1]!.lines]);
+  assert.deepEqual(nextOpenerPromise(OPENER_PROMISES[5]!.lines, 4), [...first]);
+  assert.deepEqual(nextOpenerPromise(['not', 'in', 'library'], 4), [...first]);
+  // Ten stories take more than a minute: "worth your next minute" is skipped.
+  assert.deepEqual(nextOpenerPromise(first, 10), [...OPENER_PROMISES[2]!.lines]);
+  const html = await framesHtml(asSet('morning_download', 'black', [{ role: 'opener', date: 'Friday, November 13', storyCount: 4, promise: OPENER_PROMISES[5]!.lines }]));
+  assert.match(html, /Skip the feed\.<\/span><span class="st-opener__line">Here’s what<\/span><span class="st-opener__line st-accent-text">matters in AI/);
+  assert.match(html, /class="st-opener__title" data-fit-min="64"/);
 });

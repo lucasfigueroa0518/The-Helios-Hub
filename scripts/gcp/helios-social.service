@@ -20,11 +20,11 @@ RestartSec=15
 KillSignal=SIGTERM
 # A run in flight is a child process; give it time to wind down.
 TimeoutStopSec=120
-# Runs on helios-social-worker (e2-medium, 4 GB + 4 GB swap). The 3 AM run
+# Runs on helios-social-worker (e2-standard-4, 16 GB + 4 GB swap). The 3 AM run
 # renders with headless Chromium; the other social workers run at other hours
 # (docs/social-overnight.md).
-MemoryMax=2000M
-MemoryHigh=1600M
+MemoryMax=4G
+MemoryHigh=3G
 Nice=10
 
 [Install]

@@ -285,12 +285,13 @@ test('reviseScript merges the replacements; directReel validates the plan; write
   const inv = { ...INVENTORY, assets: [asset('V1'), asset('V2', { credit: 'Photo V1' }), asset('V3', { credit: 'Agency' })] };
   assert.deepEqual(creditsFor(inv, ['V3', 'V1', 'V2', 'V3']), ['Agency', 'Photo V1']);
   const post = await writePost(
-    { create: stubSend([toolMessage('submit_caption', { caption: 'A bet, a loss, a launch. #history' })]), db, mode: 'production' },
+    { create: stubSend([toolMessage('submit_caption', { caption: 'A bet, a loss, a launch.', hashtags: ['#history'] })]), db, mode: 'production' },
     { draft, facts: FACTS, inventory: inv, usedAssetIds: ['V1', 'V3'] },
   );
   assert.equal(post.question, draft.close_question);
   assert.deepEqual(post.credits, ['Photo V1', 'Agency']);
-  assert.equal(post.caption, 'A bet, a loss, a launch. #history');
+  assert.equal(post.caption, 'A bet, a loss, a launch.');
+  assert.deepEqual(post.hashtags, ['#history']);
 });
 
 // ── Checks (stubbed) ───────────────────────────────────────────────────────

@@ -14,7 +14,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 PROJECT="${GCP_PROJECT:-helios-influencer-network}"
-ZONE="${GCP_ZONE:-us-west1-a}"
+ZONE="${GCP_ZONE:-northamerica-northeast1-a}"
 OLD="${GCP_INSTANCE:-helios-orch-worker}"
 NEW="${SOCIAL_INSTANCE:-helios-social-worker}"
 

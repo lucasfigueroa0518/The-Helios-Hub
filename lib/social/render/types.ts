@@ -234,6 +234,10 @@ export type SlideCopy = {
     photos: Array<{ url: string; kind?: 'person' | 'scene' | 'logo'; focus?: { x: number; y: number } }>;
     /** A meme as the whole cover, the hook banner below it (the meme lab's LFD simulation; photos are then not drawn). */
     meme?: { url: string; aspect?: number };
+    /** An AI-made cover image (draft 2026-11-23): drawn above a big hook block; photos and meme are then not drawn. */
+    image?: { url: string };
+    /** The rotating hook for an AI cover; `accent` is a phrase of `text` drawn in the accent colour. */
+    hook?: { text: string; accent?: string };
   };
   /** Last Few Days story slide (spec §6). `headline` has no dash; the slide adds "– ". */
   lfdStory?: { setup: string; headline: string; highlight: string; names: string[]; body: string };
