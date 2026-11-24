@@ -26,6 +26,7 @@ import { approveFieldNotesPost, hardPublishFieldNotesPost, rejectFieldNotesPost 
 import { parseFieldNotesSettings, readFieldNotesSettings } from '@/lib/field-notes/settings';
 import { REFILL_CAP_DEFAULT_USD } from '@/lib/content-type/state';
 import { claimRun, expireOldTips, getPost, getTip, insertPost, listSelectableTips, nextPostSeq, pendingDraftCount, recentPostWants, requestRun, saveCandidateTip, saveSeededLink, scheduledRunToday, setTipContent, fieldNotesFilledDates } from '@/lib/field-notes/store';
+import { POOL_TRIM_REASON } from '@/lib/field-notes/tip-pool';
 import type { TipTags } from '@/lib/field-notes/sources/score';
 import { tipToCandidate } from '@/lib/field-notes/run';
 import type { Want } from '@/lib/field-notes/types';
@@ -837,7 +838,7 @@ test('a scored run: a non-AI tip scores 0 and is never picked; at most two repo 
     `SELECT id::text AS id, source_url, leaf, score, status FROM field_notes.tips`)).rows;
   const notAi = tips.find((t) => t.source_url.endsWith('/notai'))!;
   assert.equal(Number(notAi.score), 0, 'the AI gate zeroes it');
-  assert.equal(notAi.status, 'candidate', 'stored as found, never drafted');
+  assert.equal(notAi.status, 'expired', 'stored as found (so never scored again), never drafted; a 0 tip leaves the best-30 pool');
   const [post] = await posts(query);
   const onPost = post!.tip_ids.map((id) => tips.find((t) => t.id === id)!);
   assert.ok(!onPost.some((t) => t.id === notAi.id), 'the non-AI tip is not on the post');
@@ -1119,7 +1120,8 @@ test('Rule 2: a run scores only candidates it just found that are not stored, ne
   assert.equal(r.status, 'ok', r.note);
   assert.equal(engine.jevStub.calls, 3, 'the three new tips only');
   const left = (await getTip(query, leftover))!;
-  assert.deepEqual([left.score, left.leaf, left.status], [null, null, 'candidate'], 'the earlier candidate is untouched');
+  assert.deepEqual([left.score, left.leaf], [null, null], 'the earlier candidate is never scored');
+  assert.equal(left.status, 'expired', 'unpickable (no score), so the best-30 pool lets it go: a status change only');
 });
 
 // ── ingestion and dedup over many runs (F1, 2026-11-06) ────────────────────
@@ -1417,7 +1419,14 @@ test('score_version: a tip scored by an older question set (or with no version) 
   assert.equal(engine.jevStub.calls, 3, 'only the new finds are scored; the old rows are never re-scored');
   const [post] = await posts(query);
   assert.ok(post!.tip_ids.every((id) => !old.includes(id)), 'no old-version tip on the post');
-  assert.deepEqual(await snapshot(), before, 'the old rows are untouched (no re-score, no rewrite)');
+  // The best-30 pool (tip-pool.ts) expires them (selection can never pick them): status and reason only, nothing re-scored or rewritten.
+  const strip = (rows: Array<{ j: unknown }>) => rows.map((x) => {
+    const { status, reject_reason, updated_at, ...rest } = JSON.parse(String(x.j));
+    return { rest, status, reject_reason };
+  });
+  const afterRows = strip(await snapshot());
+  assert.deepEqual(afterRows.map((x) => x.rest), strip(before).map((x) => x.rest), 'the old rows are not re-scored or rewritten');
+  assert.ok(afterRows.every((x) => x.status === 'expired' && x.reject_reason === POOL_TRIM_REASON), 'they leave the pool by status only');
   const saved = (await query<{ score_version: string | null }>(`SELECT score_version FROM field_notes.tips WHERE id <> ALL($1::uuid[])`, [old])).rows;
   assert.equal(saved.length, 3);
   assert.ok(saved.every((t) => t.score_version === FIELD_NOTES_SCORE.version), 'each new tip records the version that scored it');
