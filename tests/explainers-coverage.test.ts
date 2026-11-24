@@ -161,8 +161,8 @@ test('a seed that repeats a render from the last 120 days is blocked, naming the
 test('the curriculum assigns tonight\'s topics: the first untaken syllabus terms with level, unit and prerequisites; ideas off them are dropped', async () => {
   const { db } = await scratchExplainersDb();
   await saveSetting(db, 'auto_render', true);
-  // Passed over: the first syllabus term, rejected twice. Taken: an aka of the second, rendered. The third failed once only.
-  await topic(db, { title: 'What is AI?', term: 'AI', status: 'rendered', daysAgo: 200 });
+  // Passed over: the first syllabus term, rejected twice. The second failed once only. Taken: an aka of the fourth, rendered.
+  await topic(db, { title: 'What are bits?', term: 'bits and bytes', status: 'rendered', daysAgo: 200 });
   for (const n of [1, 2]) await topic(db, { title: `Algorithms ${n}`, term: 'algorithm', status: 'rejected' });
   await topic(db, { title: 'Rules', term: 'rule-based system', status: 'rejected' });
   await topic(db, { title: 'Pool one', status: 'pool' });
@@ -178,15 +178,15 @@ test('the curriculum assigns tonight\'s topics: the first untaken syllabus terms
   const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
   assert.equal(result.status, 'ok', result.status === 'failed' ? result.error : '');
   const [request] = model.proposals;
-  assert.deepEqual(request!.topics.map((t) => t.term), ['rule-based system', 'binary', 'machine learning']);
+  assert.deepEqual(request!.topics.map((t) => t.term), ['rule-based system', 'machine learning', 'AI model']);
   const first = request!.topics[0]!;
-  assert.deepEqual([first.level, first.levelName, first.unitName, first.requires], [1, SYLLABUS[0]!.name, 'What AI is', ['artificial intelligence', 'algorithm']]);
-  assert.equal(first.angle, CURRICULUM[2]!.angle, 'each assigned topic carries its angle');
+  assert.deepEqual([first.level, first.levelName, first.unitName, first.requires], [1, SYLLABUS[0]!.name, 'What AI is', ['algorithm']]);
+  assert.equal(first.angle, CURRICULUM[1]!.angle, 'each assigned topic carries its angle');
   assert.deepEqual(request!.pool.map((p) => p.topic_title), ['Pool one']);
   const added = await db.query<{ term: string; syllabus_rank: number; bucket: string }>(
     `SELECT term, syllabus_rank, bucket FROM explainers.topics WHERE title LIKE 'Idea %' ORDER BY syllabus_rank`,
   );
-  assert.deepEqual(added.rows.map((r) => [r.term, r.syllabus_rank]), [['rule-based system', 2], ['machine learning', 4]], 'exact assigned terms; the stray idea is dropped');
+  assert.deepEqual(added.rows.map((r) => [r.term, r.syllabus_rank]), [['rule-based system', 1], ['machine learning', 2]], 'exact assigned terms; the stray idea is dropped');
   assert.ok(added.rows.every((r) => r.bucket === FRAME.bucket), 'each idea still labels its bucket');
   if (result.status === 'ok') assert.equal((await getTopic(db, result.promotedTopicId!))?.term, 'rule-based system', 'the night makes the earliest syllabus topic');
   const { rows: [cycle] } = await db.query<{ ideas_generated: number }>(`SELECT ideas_generated FROM explainers.idea_cycles WHERE status = 'ok' ORDER BY started_at DESC LIMIT 1`);
