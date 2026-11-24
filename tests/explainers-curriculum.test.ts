@@ -121,7 +121,8 @@ test('the hub shows a syllabus topic\'s level; topics off the syllabus show none
   assert.doesNotMatch(explainerIdeas([row(null)])[0]!.detail ?? '', /Level/);
 });
 
-test('refillCount tops the pool up to five, one call at most, never below zero', () => {
-  assert.equal(POOL_TARGET, 5);
-  assert.deepEqual([0, 2, 3, 4, 5, 9].map((waiting) => refillCount(waiting, 3)), [3, 3, 2, 1, 0, 0]);
+test('refillCount tops the pool up to ten, never below zero', () => {
+  assert.equal(POOL_TARGET, 10);
+  assert.deepEqual([0, 1, 4, 9, 10, 14].map((waiting) => refillCount(waiting)), [10, 9, 6, 1, 0, 0]);
+  assert.equal(refillCount(0, 3), 3);
 });

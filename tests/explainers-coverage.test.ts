@@ -193,7 +193,7 @@ test('the curriculum assigns tonight\'s topics: the first untaken syllabus terms
   assert.equal(cycle!.ideas_generated, 2);
 });
 
-test('top-up: the refill writes only what the pool is short of five; unscored syllabus leftovers are scored first and count', async () => {
+test('top-up: the refill writes what the pool is short of ten, three per call; unscored syllabus leftovers are scored first and count', async () => {
   const lead = async (db: ExplainersDb) => {
     await saveSetting(db, 'auto_render', true);
     for (const n of [0, 1]) {
@@ -201,7 +201,7 @@ test('top-up: the refill writes only what the pool is short of five; unscored sy
       await db.query(`INSERT INTO explainers.idea_cycles (status, mode, ny_date) VALUES ('ok', 'development', $1::date)`, [d]);
     }
   };
-  // Three waiting in the pool and one leftover a capped refill never scored: the pool is one short, so one topic.
+  // Three waiting in the pool and one leftover a capped refill never scored: the pool is six short, so two calls.
   {
     const { db } = await scratchExplainersDb();
     await lead(db);
@@ -210,14 +210,15 @@ test('top-up: the refill writes only what the pool is short of five; unscored sy
     const model = ideas(FRAME, (r) => r.topics.map((t) => t.term));
     const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
     assert.equal(result.status, 'ok', result.status === 'failed' ? result.error : '');
-    assert.deepEqual(model.proposals.map((p) => p.topics.map((t) => t.term)), [[CURRICULUM[0]!.term]], 'one topic, the first untaken');
+    const first = CURRICULUM.slice(0, 9).map((t) => t.term).filter((t) => ![10, 11, 12, 13].some((n) => CURRICULUM[n]!.term === t));
+    assert.deepEqual(model.proposals.map((p) => p.topics.map((t) => t.term)), [first.slice(0, 3), first.slice(3, 6)], 'six topics, the first untaken, three per call');
     assert.notEqual((await getTopic(db, leftover))?.status, 'proposed', 'the leftover was scored');
   }
-  // Five waiting: no idea call at all.
+  // Ten waiting: no idea call at all.
   {
     const { db } = await scratchExplainersDb();
     await lead(db);
-    for (const n of [10, 11, 12, 13, 14]) await topic(db, { title: `Waiting ${n}`, term: CURRICULUM[n]!.term, status: 'pool', rank: n });
+    for (const n of [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]) await topic(db, { title: `Waiting ${n}`, term: CURRICULUM[n]!.term, status: 'pool', rank: n });
     const model = ideas();
     const result = await runIdeaCycle({ db, ideaModel: model, jevTransport: jev(), totalQuery: fakeTotalLedger().q });
     assert.notEqual(result.status, 'failed', result.status === 'failed' ? result.error : '');
