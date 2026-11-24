@@ -997,7 +997,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     let coverImage: { url: string } | undefined;
     const renderAndStore = async (final: Ready[], replaceBroken: boolean, coverMeme?: { url: string }) => {
       const coverHook = nextLfdCoverHook(prevHook, final.length);
-      const render = buildPost(final, d.now, undefined, { ...(coverMeme ? { coverMeme } : {}), canvas, coverHook, ...(coverImage && !coverMeme ? { coverImage } : {}) });
+      const render = buildPost(final, d.now, undefined, { ...(coverMeme && !coverImage ? { coverMeme } : {}), canvas, coverHook, ...(coverImage ? { coverImage } : {}) });
       let fit: FitResult | null = null;
       const visionProblems: string[] = [];
       const slideObjects = await storeSlideJpegs(slug, render, {
@@ -1119,12 +1119,10 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       }
     }
 
-    // The AI cover (C7), once, now that the stories are final. A meme cover stays (meme placement rule); any failure
-    // keeps today's cover and records why. With an image, the post renders once more to draw it.
+    // The AI cover (C7), once, now that the stories are final. It replaces a meme cover too (the meme keeps its own
+    // story slide); any failure keeps today's cover (meme or mosaic) and records why. With an image, the post renders once more.
     let aiCover: LfdAiCoverResult;
-    if (placed.coverMeme) {
-      aiCover = { hook: nextLfdCoverHook(prevHook, final.length), costUsd: 0, imageUsd: 0, fallback: 'the cover is a meme' };
-    } else {
+    {
       aiCover = await makeLfdAiCover(
         {
           jev,

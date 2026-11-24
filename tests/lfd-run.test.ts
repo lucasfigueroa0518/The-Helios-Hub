@@ -839,6 +839,20 @@ test('the AI cover: drawn on the final render, stored, recorded, its image cost 
   assert.match(rec2.cover.hook, /^\d+ things happened in AI you need to know\.$/);
 });
 
+test('a lineup with a meme still gets the AI cover; the meme keeps its own story slide', async () => {
+  const s = await aiCoverStub();
+  const base = await deps();
+  const d = await deps({ query: base.query, create: s.withWriter(createStub().create), aiCover: s.aiCover, memes: memesHook({ clears: (h) => h.includes('Niche Thing 0') }) });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = (await recordOf(d, res.runId)) as unknown as { cover: { image: string | null; fallback: string | null } };
+  assert.equal(rec.cover.fallback, null);
+  assert.match(rec.cover.image ?? '', /^storage:/);
+  const { rows } = await d.query<{ render: { slides: Array<{ lfdCover?: { image?: { url: string }; meme?: unknown } }> } }>(`SELECT render FROM lfd.posts`);
+  assert.ok(rows[0]!.render.slides[0]!.lfdCover!.image, 'the cover is the AI image');
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.meme, undefined, 'no meme on the cover');
+});
+
 test('without the AI cover wired the post keeps today’s cover, with the rotated hook and the reason recorded', async () => {
   const d = await deps();
   const res = await runLastFewDays(d);
