@@ -85,13 +85,13 @@ export async function carouselLane(q: HubQuery, sinceIso: string, untilIso?: str
   // untilIso: a replay in the meme lab's LFD simulation sees only runs finished by then.
   const { rows } = await q<{ shortlist: ShortlistEntry[] | null }>(
     untilIso
-      ? `SELECT record->'selection'->'shortlist' AS shortlist FROM social.runs
+      ? `SELECT shortlist FROM social.runs
       WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial') AND finished_at > $1::timestamptz AND finished_at <= $2::timestamptz
-        AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
+        AND shortlist IS NOT NULL
       ORDER BY finished_at DESC`
-      : `SELECT record->'selection'->'shortlist' AS shortlist FROM social.runs
+      : `SELECT shortlist FROM social.runs
       WHERE kind = 'daily' AND trigger <> 'cli' AND status IN ('ok', 'partial') AND finished_at > $1::timestamptz
-        AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
+        AND shortlist IS NOT NULL
       ORDER BY finished_at DESC`,
     untilIso ? [sinceIso, untilIso] : [sinceIso],
   );
