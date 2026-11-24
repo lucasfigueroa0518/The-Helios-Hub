@@ -100,3 +100,12 @@ function priceFor(res: Anthropic.Message, requested: string): CallUsage {
     return priceCall(requested, res.usage);
   }
 }
+
+/**
+ * What one response cost, as writeStructured records it in stories.cost_events: the tokens priced by the model that
+ * answered, plus WEB_SEARCH_USD per search. A one-box seed adds it to its ledger.
+ */
+export function responseCostUsd(res: Anthropic.Message, requested: string): number {
+  const searches = Number((res.usage as { server_tool_use?: { web_search_requests?: number } }).server_tool_use?.web_search_requests ?? 0);
+  return priceFor(res, requested).usd + searches * WEB_SEARCH_USD;
+}

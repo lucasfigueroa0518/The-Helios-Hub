@@ -44,7 +44,7 @@ import { writeStructured, type WriterCreate } from '@/lib/stories/writer';
 
 import { claimQuestionNumber, ensureCells, openCellIds, reportSpent, sampleOpenCells } from './cells';
 import { cellOf, type Cell } from './map';
-import { TRIVIA_SHORTEN, TRIVIA_WRITE, TRIVIA_WRITE_SEARCHES, type TriviaShortenMaterial, type TriviaWriteItem, type TriviaWriteMaterial, type TriviaWriteOut } from './prompts';
+import { TRIVIA_SEED, TRIVIA_SEED_SEARCHES, TRIVIA_SHORTEN, TRIVIA_WRITE, TRIVIA_WRITE_SEARCHES, type TriviaSeedMaterial, type TriviaShortenMaterial, type TriviaWriteItem, type TriviaWriteMaterial, type TriviaWriteOut } from './prompts';
 import { TRIVIA_SCORE } from './questions';
 import { poolKeyOf, SCORECARD_KEYS, TRIVIA_SERIES, triviaScore, type Scorecard, type TriviaPoolPayload, type TriviaQuestion } from './types';
 import { validateQuestion } from './validate';
@@ -162,7 +162,7 @@ export async function runTriviaDaily(deps: TriviaDailyDeps): Promise<TriviaDaily
       }
       rec.offered.push(...cells.map((c) => c.cellId));
       const had = rec.pooled.length;
-      await writerCall(deps, rec, { cells, research, iq, taken, earlier, fresh });
+      await writeTriviaBatch(deps, rec, { cells, research, iq, taken, earlier, fresh });
       pooled += rec.pooled.length - had;
       rec.calls = ++calls;
     }
@@ -180,7 +180,10 @@ export async function runTriviaDaily(deps: TriviaDailyDeps): Promise<TriviaDaily
   }
 }
 
-type CallInput = {
+/** The output budget of a seed's calls (one-box seeding v2): the ledger prices the writer's worst case at it. */
+export const SEED_MAX_TOKENS = 4000;
+
+export type CallInput = {
   cells: Cell[];
   research: NonNullable<TriviaWriteMaterial['research']>;
   iq: IntakeQuery;
@@ -188,19 +191,35 @@ type CallInput = {
   /** Every question written before this run (repeats.ts), and the ones this run has accepted so far. */
   earlier: Earlier[];
   fresh: Earlier[];
+  /**
+   * A person's one-box seed (one-box seeding v2). Absent on the daily path, which is unchanged. With `seed`: trivia-seed@1
+   * with `topic` in the material, at most TRIVIA_SEED_SEARCHES searches and SEED_MAX_TOKENS output, `count` questions
+   * (default QUESTIONS_PER_CALL), every pooled payload carries `seed: true`, and no cell is reported spent.
+   */
+  topic?: string;
+  count?: number;
+  seed?: boolean;
+  /** Seed only: asked before the shortening call; false skips it (the length-only questions are rejected). */
+  canShorten?: () => boolean;
 };
 
-/** One writer call (AT-78): write, deposit, validate, shorten, number, score and pool its questions, then the spent report. */
-async function writerCall(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: CallInput): Promise<void> {
+/**
+ * One writer call (AT-78): write, deposit, validate, shorten, number, score and pool its questions, then the spent report.
+ * The daily run calls it per batch of cells; a one-box seed calls it once with `seed` set (see CallInput).
+ */
+export async function writeTriviaBatch(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: CallInput): Promise<void> {
   const { db, now } = deps;
   const day = rec.day;
+  const perCall = c.count ?? QUESTIONS_PER_CALL;
+  const prompt = c.seed ? TRIVIA_SEED : TRIVIA_WRITE;
 
   // 1. The writer; in intake mode its material carries the research the intake holds (SS-33). Each offered theme lists
   //    every question written on it, today's included (one fact, one question).
   const themes = [...new Map(c.cells.map((x) => [x.theme, x.themeText])).entries()];
-  const mat: TriviaWriteMaterial = {
+  const mat: TriviaWriteMaterial | TriviaSeedMaterial = {
+    ...(c.seed ? { topic: c.topic ?? '' } : {}),
     today: day,
-    count: QUESTIONS_PER_CALL,
+    count: perCall,
     cells: c.cells.map((x) => ({ cell_id: x.cellId, theme: x.themeText, angle: x.angleText })),
     asked: themes.map(([theme, text]) => ({ theme: text, questions: asAsked([...onTheme(c.earlier, theme), ...onTheme(c.fresh, theme)]) })),
   };
@@ -213,8 +232,9 @@ async function writerCall(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: Call
       responses.push(res);
       return res;
     },
-    db, setId: null, component: 'trivia-write', model: deps.settings.models.copy,
-    system: TRIVIA_WRITE.system, tool: TRIVIA_WRITE.tool, user: material(mat), webSearch: { maxUses: TRIVIA_WRITE_SEARCHES },
+    db, setId: null, component: c.seed ? 'trivia-seed' : 'trivia-write', model: deps.settings.models.copy,
+    system: prompt.system, tool: prompt.tool, user: material(mat), webSearch: { maxUses: c.seed ? TRIVIA_SEED_SEARCHES : TRIVIA_WRITE_SEARCHES },
+    ...(c.seed ? { maxTokens: SEED_MAX_TOKENS } : {}),
   })).value;
 
   // 1b. SS-30: the pages it cited go into the central intake (never breaks the day).
@@ -222,7 +242,7 @@ async function writerCall(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: Call
   const prev = rec.intake!;
   rec.intake = { ...prev, deposited: prev.deposited + dep.deposited, created: prev.created + dep.created, failed: prev.failed + dep.failed, ...(dep.error ? { depositError: dep.error } : {}) };
 
-  // 2. Validate in code; at most QUESTIONS_PER_CALL valid questions go on.
+  // 2. Validate in code; at most perCall (QUESTIONS_PER_CALL on the daily path) valid questions go on.
   const offered = new Set(c.cells.map((x) => x.cellId));
   const open = await openCellIds(db);
   const valid: TriviaQuestion[] = [];
@@ -232,7 +252,7 @@ async function writerCall(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: Call
     if (!v.ok) return v;
     const repeat = findRepeat(askedItem(v.q), [...c.earlier, ...c.fresh]);
     if (repeat) return { cellId: v.q.cellId, problems: [`repeat: the same fact as ${repeat.key} ("${repeat.question}")`], lengthOnly: false };
-    if (valid.length >= QUESTIONS_PER_CALL) return { cellId: v.q.cellId, problems: [`over the ${QUESTIONS_PER_CALL} a call`], lengthOnly: false };
+    if (valid.length >= perCall) return { cellId: v.q.cellId, problems: [`over the ${perCall} a call`], lengthOnly: false };
     c.taken.add(v.q.cellId);
     valid.push(v.q);
     c.fresh.push({ ...askedItem(v.q), key: `new:${v.q.cellId}`, theme: cellTheme(v.q.cellId), spent: false, writtenOn: day });
@@ -245,14 +265,17 @@ async function writerCall(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: Call
   }
 
   // 2b. AT-58: one shortening try for questions that broke only a length limit, while the call has room.
-  const room = QUESTIONS_PER_CALL - valid.length;
-  if (tooLong.length && room > 0) {
+  const room = perCall - valid.length;
+  if (tooLong.length && room > 0 && c.canShorten && !c.canShorten()) {
+    for (const t of tooLong) rec.rejected.push({ cellId: t.question.cell_id, problems: [...t.problems, 'no budget left to shorten'] });
+  } else if (tooLong.length && room > 0) {
     const tries = tooLong.slice(0, room);
     for (const t of tooLong.slice(room)) rec.rejected.push({ cellId: t.question.cell_id, problems: t.problems });
     try {
       const short = (await writeStructured<TriviaWriteOut>({
         create: deps.write, db, setId: null, component: 'trivia-shorten', model: deps.settings.models.copy,
         system: TRIVIA_SHORTEN.system, tool: TRIVIA_SHORTEN.tool, user: material({ questions: tries } satisfies TriviaShortenMaterial),
+        ...(c.seed ? { maxTokens: SEED_MAX_TOKENS } : {}),
       })).value;
       const wanted = new Set(tries.map((t) => t.question.cell_id));
       for (const item of Array.isArray(short?.questions) ? short.questions : []) {
@@ -290,8 +313,10 @@ async function writerCall(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: Call
       continue;
     }
     const score = triviaScore(q.writerScore, jevScore);
-    const payload: TriviaPoolPayload & { story_key: null; source: string; url: string | null; breakdown: null } = {
+    const payload: TriviaPoolPayload & { story_key: null; source: string; url: string | null; breakdown: null; seed?: true } = {
       kind: 'trivia', q, jevScore, score, writtenOn: day, story_key: null, source: 'AI Trivia writer', url: q.sources[0] ?? null, breakdown: null,
+      // A person's seed is Yours and no cap cuts it (one-box seeding v2, lib/stories/pool.ts).
+      ...(c.seed ? { seed: true as const } : {}),
     };
     const { rows } = await db.query<{ id: string }>(
       `INSERT INTO stories.pool (series, key, origin, ref, title, payload, score, refreshed_at)
@@ -307,7 +332,9 @@ async function writerCall(deps: TriviaDailyDeps, rec: TriviaDailyRecord, c: Call
     rec.pooled.push({ key, score });
   }
 
-  // 4. AT-78: the cells the writer reported spent (offered ones only); the second report retires a cell.
+  // 4. AT-78: the cells the writer reported spent (offered ones only); the second report retires a cell. A seed offers every
+  //    open cell for one topic, so its view of which cells are spent is not a judgment of the cell: it reports none.
+  if (c.seed) return;
   const spent = [...new Set(Array.isArray(out?.spent_cells) ? out.spent_cells.filter((x): x is string => typeof x === 'string' && offered.has(x)) : [])];
   rec.spent.push(...spent);
   rec.retired.push(...(await reportSpent(db, spent)));
