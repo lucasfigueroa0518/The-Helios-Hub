@@ -49,6 +49,7 @@ function fileDeps(over: Partial<FileDeps> = {}) {
     lfd: async (a) => (filed.push(a), { id: 'k', title: a.headline }),
     story: async (a) => (filed.push(a), { key: 'seed:1', title: 'T' }),
     explainer: async (a) => (filed.push(a), { topicId: 'e1', title: a.title }),
+    fieldNote: async () => ({ id: 'tip1', title: 't' }),
     headlines: async () => ['Existing headline'],
     existing: async () => null,
     ...over,

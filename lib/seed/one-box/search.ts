@@ -43,7 +43,7 @@ async function linkHint(link: string, readPage: (url: string) => Promise<string 
   }
 }
 
-const FIELDS: EntryField[] = ['headline', 'url', 'title', 'sourceUrl', 'value', 'fact', 'storyHeadline', 'toolName', 'description'];
+const FIELDS: EntryField[] = ['headline', 'url', 'title', 'sourceUrl', 'value', 'fact', 'storyHeadline', 'toolName', 'description', 'leaf', 'want'];
 
 function parseFinding(message: Anthropic.Message): Finding {
   const block = message.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'report_finding');

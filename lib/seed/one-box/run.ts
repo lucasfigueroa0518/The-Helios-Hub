@@ -1,7 +1,8 @@
 import type { Query } from '@/lib/social/store/pg';
 
+import { classifyLeafWant } from './classify';
 import { Ledger, limitReason, limitText } from './budget';
-import { fileIdea, type FileDeps } from './file';
+import { fileFieldNote, fileIdea, type FileDeps, type FileResult } from './file';
 import { entryTitle, entryUrl, missingFields, shapeOf } from './shape';
 import { doneRequest, failRequest, setStage } from './requests';
 import { runSearch, type Client, type CostRecorder } from './search';
@@ -27,7 +28,21 @@ export async function runOneBox(i: {
   const ledger = new Ledger(i.input.vertical);
   const at = () => i.now ?? new Date();
   const fail = (message: string) => failRequest(i.q, i.id, message, ledger.spent);
+  const finish = async (filed: FileResult) => {
+    if (filed.status === 'added') return await doneRequest(i.q, i.id, filed.ideaId, ledger.spent);
+    if (filed.status === 'duplicate') return await fail(`That story is already in the queue: “${filed.existing}”. Nothing was added.`);
+    return await fail(/nothing was added/i.test(filed.reason) ? filed.reason : `${filed.reason} Nothing was added.`);
+  };
   try {
+    if (i.input.vertical === 'field_notes' && i.input.link) {
+      // Free with a link (design: Field Notes): no search, no page read, no verifier; one small call sorts the person's words.
+      await setStage(i.q, i.id, 'checking', 0, at());
+      const kind = await classifyLeafWant({ client: i.client, ledger, blurb: i.input.blurb, recordCost: i.recordCost });
+      if ('error' in kind) return await fail(kind.error === 'budget' ? limitText('field_notes') : kind.error);
+      await setStage(i.q, i.id, 'filing', ledger.spent, at());
+      const filed = await fileFieldNote({ deps: i.fileDeps, sourceUrl: i.input.link, leaf: kind.leaf, want: kind.want, note: i.input.blurb });
+      return await finish(filed);
+    }
     await setStage(i.q, i.id, 'searching', 0, at());
     const poolHeadlines = await i.fileDeps.headlines(i.input.vertical).catch(() => []);
     const searched = await runSearch({ client: i.client, ledger, input: i.input, poolHeadlines, readPage: i.readPage, recordCost: i.recordCost });
@@ -48,10 +63,7 @@ export async function runOneBox(i: {
     if (!verdict.ok) return await fail(verdict.reason === limitReason(i.input.vertical) ? limitText(i.input.vertical) : `${verdict.reason} Nothing was added.`);
 
     await setStage(i.q, i.id, 'filing', ledger.spent, at());
-    const filed = await fileIdea({ input: i.input, verified: verdict.verified, deps: i.fileDeps });
-    if (filed.status === 'added') return await doneRequest(i.q, i.id, filed.ideaId, ledger.spent);
-    if (filed.status === 'duplicate') return await fail(`That story is already in the queue: “${filed.existing}”. Nothing was added.`);
-    return await fail(`${filed.reason} Nothing was added.`);
+    return await finish(await fileIdea({ input: i.input, verified: verdict.verified, deps: i.fileDeps }));
   } catch (error) {
     console.error(JSON.stringify({ ts: new Date().toISOString(), component: 'one-box-seed', message: 'run_failed', id: i.id, error: error instanceof Error ? error.message : String(error) }));
     await fail('Something went wrong; nothing was added.').catch(() => undefined);

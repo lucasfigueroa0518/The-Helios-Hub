@@ -13,6 +13,10 @@ import { addCarouselSeed, readOpenSeeds as readOpenCarouselSeeds } from '@/lib/s
 import { seedIdea } from '@/lib/stories/seed';
 import { liveStoriesDb } from '@/lib/stories/db';
 
+import { guessSubject, normalizeSourceUrl } from '@/app/api/field-notes/seed/handler';
+import { saveSeededLink } from '@/lib/field-notes/store';
+import { canonicalSourceUrl } from '@/lib/field-notes/sources/candidate';
+
 import type { FileDeps } from './file';
 
 /**
@@ -45,6 +49,14 @@ export function liveFileDeps(): FileDeps {
       const [r] = await addAndEvaluateTopics({ db, jevTransport: liveJevTransport, ideaModel: anthropicIdeaModel(anthropic), moves: query as never }, [t]);
       return { topicId: r!.topicId, title: r!.title };
     },
+    fieldNote: async (a) => {
+      const link = normalizeSourceUrl(a.sourceUrl);
+      if ('error' in link) throw new Error(link.error);
+      const { subject, label } = guessSubject(canonicalSourceUrl(link.url));
+      // seededBy 'one-box': the request table stores no user id (v1 design). The person's words are the note.
+      const out = await saveSeededLink(query as never, { sourceUrl: link.url, sourceLabel: label, subject, leaf: a.leaf, want: a.want, useWithResult: a.note, seededBy: 'one-box' });
+      return out.kind === 'duplicate' ? { duplicate: out.subject || out.sourceUrl } : { id: out.tipId, title: out.subject };
+    },
     headlines: async (vertical) => {
       switch (vertical) {
         case 'reels': {
@@ -70,8 +82,10 @@ export function liveFileDeps(): FileDeps {
           return uniq(await rows(`SELECT title AS h FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST LIMIT ${MAX_HEADLINES}`, ['morning_download']));
         case 'explainers':
           return uniq(await rows(`SELECT title AS h FROM explainers.topics WHERE status = 'pool' ORDER BY created_at DESC LIMIT ${MAX_HEADLINES}`));
+        case 'field_notes':
+          return uniq(await rows(`SELECT subject AS h FROM field_notes.tips WHERE status = 'candidate' ORDER BY created_at DESC LIMIT ${MAX_HEADLINES}`));
         default:
-          return []; // Field Notes and the worker-run types read their own pools in later tasks
+          return []; // The the worker-run types read their own pools in later tasks
       }
     },
     existing: async (vertical, url, headline) => {

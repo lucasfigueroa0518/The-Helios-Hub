@@ -17,7 +17,7 @@ export type OneBoxInput = {
 };
 
 /** The fields a pool's existing add function takes (design: the agent returns exactly these). Every field is a plain string. */
-export type EntryField = 'headline' | 'url' | 'title' | 'sourceUrl' | 'value' | 'fact' | 'storyHeadline' | 'toolName' | 'description';
+export type EntryField = 'headline' | 'url' | 'title' | 'sourceUrl' | 'value' | 'fact' | 'storyHeadline' | 'toolName' | 'description' | 'leaf' | 'want';
 export type Entry = Partial<Record<EntryField, string>>;
 
 /** What the search call reports (design section 3): up to three candidate entries, best first, each in the pool's own fields. */

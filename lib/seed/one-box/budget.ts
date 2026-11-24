@@ -86,6 +86,26 @@ export function verifyWorstCaseUsd(): number {
   return money(Number(priced.costUsd));
 }
 
+export const CLASSIFY_MAX_OUTPUT_TOKENS = 200;
+const CLASSIFY_INPUT_ALLOWANCE_TOKENS = 1_500;
+const CLASSIFY_PREFIX_TOKENS = 800;
+
+/** Field Notes with a link: one tiny Haiku call that picks the kind and the want. */
+export function classifyWorstCaseUsd(): number {
+  const priced = priceAnthropicUsage(
+    {
+      uncachedInputTokens: CLASSIFY_INPUT_ALLOWANCE_TOKENS,
+      cacheReadInputTokens: 0,
+      cacheCreation5mInputTokens: 0,
+      cacheCreation1hInputTokens: CLASSIFY_PREFIX_TOKENS,
+      outputTokens: CLASSIFY_MAX_OUTPUT_TOKENS,
+      webSearchRequests: 0,
+    },
+    { modelId: ONE_BOX_VERIFY_MODEL },
+  );
+  return money(Number(priced.costUsd));
+}
+
 /** The per-search fee, exported so a test can show it is the one in the cost snapshot. */
 export const SEARCH_FEE_USD = DRAFTING_PRICE_SNAPSHOT.webSearchPerSearchUsd;
 

@@ -14,7 +14,7 @@ export const SHAPES = {
   last_few_days: { label: 'Last Few Days', required: ['url', 'headline'], optional: [], urlField: 'url' },
   stories: { label: 'Stories, Morning Download', required: ['headline', 'url'], optional: [], urlField: 'url' },
   explainers: { label: 'Explainers', required: ['title', 'sourceUrl'], optional: [], urlField: 'sourceUrl' },
-  field_notes: { label: 'Field Notes', required: ['headline', 'url'], optional: [], urlField: 'url' },
+  field_notes: { label: 'Field Notes', required: ['url'], optional: ['leaf', 'want'], urlField: 'url' },
 } as const satisfies Record<string, Shape>;
 
 export type ShapeKey = keyof typeof SHAPES;

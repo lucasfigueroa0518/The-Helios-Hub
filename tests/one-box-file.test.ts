@@ -18,6 +18,7 @@ function deps() {
     lfd: async (a) => (seen.lfd!.push(a), { id: 'k', title: a.headline }),
     story: async (a) => (seen.story!.push(a), { key: 'seed:1', title: 'T' }),
     explainer: async (a) => (seen.explainer!.push(a), { topicId: 'e1', title: a.title }),
+    fieldNote: async () => ({ id: 'tip1', title: 't' }),
     headlines: async () => [],
     existing: async () => null,
   };
