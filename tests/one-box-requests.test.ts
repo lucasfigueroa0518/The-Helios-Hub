@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { PGlite } from '@electric-sql/pglite';
 
-import { cancelRequest, claimRequest, createRequest, dismissRequest, doneRequest, failRequest, listCards, setStage } from '@/lib/seed/one-box/requests';
+import { cancelOrDismiss, cancelRequest, claimRequest, createRequest, dismissRequest, doneRequest, failRequest, listCards, setStage } from '@/lib/seed/one-box/requests';
 import type { OneBoxInput } from '@/lib/seed/one-box/types';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -135,7 +135,8 @@ test('a claimed request untouched for 7 minutes reads may-have-been-added when i
   assert.equal(t[0]!.message, 'This may have been added; check the queue.');
   assert.equal((await listCards(q, 'real_or_ai', minutes(7)))[0]!.status, 'working');
   assert.equal((await listCards(q, 'real_or_ai', minutes(11)))[0]!.status, 'failed');
-  assert.ok(r.id);
+  await setStage(q, r.id, 'filing', 0.1, minutes(8));
+  assert.equal((await listCards(q, 'real_or_ai', minutes(17)))[0]!.status, 'working', 'a touch at minute 8 restarts the 10-minute clock');
 });
 
 test('cancelRequest works only while queued', async () => {
@@ -159,4 +160,27 @@ test('listCards shows the 1-minute and 120-minute queued wording', async () => {
   assert.equal((await msg(2)).message, "Waiting: the worker is busy with tonight's run");
   assert.equal((await msg(119)).status, 'working');
   assert.deepEqual([(await msg(121)).status, (await msg(121)).message], ['failed', "The worker didn't pick this up; nothing was spent."]);
+});
+
+test('cancelOrDismiss (the DELETE route): stale row dismissed, fresh running row refused, queued row cancelled', async () => {
+  const q = await db();
+  const stale = await createRequest(q, input('stale'), NOW);
+  assert.equal(await cancelOrDismiss(q, stale.id, minutes(7)), 'dismissed');
+  assert.equal((await listCards(q, 'reels', minutes(7))).length, 0);
+  const fresh = await createRequest(q, input('fresh'), minutes(8));
+  await setStage(q, fresh.id, 'searching', 0, minutes(8));
+  assert.equal(await cancelOrDismiss(q, fresh.id, minutes(9)), 'running');
+  const roa = await createRequest(q, { vertical: 'real_or_ai', blurb: 'roa' }, NOW);
+  await claimRequest(q, 'stories', NOW);
+  assert.equal(await cancelOrDismiss(q, roa.id, minutes(8)), 'running', 'real_or_ai is still fresh at 8 minutes');
+  assert.equal(await cancelOrDismiss(q, roa.id, minutes(11)), 'dismissed');
+  const q2 = await db();
+  const queued = await createRequest(q2, { vertical: 'ai_trivia', blurb: 'q' }, NOW);
+  assert.equal(await cancelOrDismiss(q2, queued.id, minutes(60)), 'cancelled');
+  const old = await createRequest(q2, { vertical: 'ai_trivia', blurb: 'old' }, NOW);
+  assert.equal(await cancelOrDismiss(q2, old.id, minutes(130)), 'dismissed');
+  const failed = await createRequest(q2, input('failed'), NOW);
+  await failRequest(q2, failed.id, 'x', 0);
+  assert.equal(await cancelOrDismiss(q2, failed.id, minutes(1)), 'dismissed');
+  assert.equal(await cancelOrDismiss(q, '00000000-0000-4000-8000-000000000000'), 'missing');
 });

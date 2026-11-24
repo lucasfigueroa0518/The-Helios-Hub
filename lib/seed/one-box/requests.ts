@@ -106,6 +106,36 @@ export async function dismissRequest(q: Query, id: string): Promise<void> {
   await q(`UPDATE social_hub.seed_requests SET dismissed_at = now() WHERE id = $1::uuid`, [id]);
 }
 
+type Row = { status: string; stage: string; runner: string; vertical: string; message: string | null; created_ts: string | Date; updated_at: string | Date };
+
+/** What a request looks like right now. The one place that decides "still running?", shared by the cards and by cancel/dismiss. */
+export function cardState(r: Row, now: Date): { status: 'working' | 'failed'; message: string | null; running: boolean } {
+  if (r.status === 'working' && r.stage === 'queued' && r.runner !== 'vercel') {
+    const waited = now.getTime() - new Date(r.created_ts).getTime();
+    if (waited > QUEUED_MAX_MINUTES * 60_000) return { status: 'failed', message: "The worker didn't pick this up; nothing was spent.", running: false };
+    return { status: 'working', message: waited > WAITING_BUSY_MINUTES * 60_000 ? "Waiting: the worker is busy with tonight's run" : 'Waiting for the worker', running: true };
+  }
+  const stale = r.status === 'working' && new Date(r.updated_at).getTime() <= now.getTime() - staleMinutesFor(r.vertical) * 60_000;
+  if (stale) return { status: 'failed', message: r.stage === 'filing' ? 'This may have been added; check the queue.' : 'Timed out; nothing was added.', running: false };
+  return { status: r.status as 'working' | 'failed', message: r.message, running: r.status === 'working' };
+}
+
+/** The Dismiss / Cancel button: cancels a request still queued for a worker, dismisses one that has stopped, refuses one genuinely running. */
+export async function cancelOrDismiss(q: Query, id: string, now = new Date()): Promise<'cancelled' | 'dismissed' | 'running' | 'missing'> {
+  const { rows } = await q(
+    `SELECT status, stage, runner, vertical, message, created_at AS created_ts, updated_at FROM social_hub.seed_requests WHERE id = $1::uuid`,
+    [id],
+  );
+  if (!rows[0]) return 'missing';
+  const state = cardState(rows[0] as Row, now);
+  if (state.running) {
+    if (await cancelRequest(q, id, now)) return 'cancelled';
+    return 'running';
+  }
+  await dismissRequest(q, id);
+  return 'dismissed';
+}
+
 /** The placeholder cards for one pool: running requests, and failed (or stale) ones nobody has dismissed. */
 export async function listCards(q: Query, vertical: string, now = new Date()): Promise<Card[]> {
   const { rows } = await q(
@@ -116,16 +146,7 @@ export async function listCards(q: Query, vertical: string, now = new Date()): P
     [vertical],
   );
   return rows.map((r): Card => {
-    const base = { id: r.id as string, vertical: r.vertical as string, blurb: r.blurb as string, stage: r.stage as string, createdAt: r.created_at as string };
-    if (r.status === 'working' && r.stage === 'queued' && r.runner !== 'vercel') {
-      const waited = now.getTime() - new Date(r.created_ts).getTime();
-      if (waited > QUEUED_MAX_MINUTES * 60_000) return { ...base, status: 'failed', message: "The worker didn't pick this up; nothing was spent." };
-      const message = waited > WAITING_BUSY_MINUTES * 60_000 ? "Waiting: the worker is busy with tonight's run" : 'Waiting for the worker';
-      return { ...base, status: 'working', message };
-    }
-    const stale = r.status === 'working' && new Date(r.updated_at).getTime() <= now.getTime() - staleMinutesFor(r.vertical as string) * 60_000;
-    const status = stale ? 'failed' : (r.status as 'working' | 'failed');
-    const message = stale ? (r.stage === 'filing' ? 'This may have been added; check the queue.' : 'Timed out; nothing was added.') : (r.message as string | null);
-    return { ...base, status, message };
+    const { status, message } = cardState(r as Row, now);
+    return { id: r.id as string, vertical: r.vertical as string, blurb: r.blurb as string, stage: r.stage as string, createdAt: r.created_at as string, status, message };
   });
 }
