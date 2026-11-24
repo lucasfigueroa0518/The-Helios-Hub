@@ -169,7 +169,7 @@ function storyItem(series: Series, c: StoryCandidate, key: string, score: number
  *   2. anything stories.history has shown is used (not Morning Download, for the same reason)
  *   3. a fully read series archives its unused rows the refresh did not return
  *   4. any unused row past its series' freshness window is archived
- *      (a person's own seeds, keyed `seed:`, are never archived by 3, 4 or 5; AI Trivia's `trivia:` and Real or AI?'s `roa:`
+ *      (a person's own seeds, keyed `seed:` or carrying payload.seed = true, are never archived by 3, 4 or 5; AI Trivia's `trivia:` and Real or AI?'s `roa:`
  *      rows never by 3 or 4)
  *   5. an unused series holds at most POOL_CAP open ideas (idea pool standard, 2026-10-21): the lowest-scored are archived,
  *      except AI Trivia (TRIVIA_POOL_CAP) and Real or AI? (ROA_POOL_CAP), whose over-cap rows move to their own archive tables;
@@ -213,6 +213,7 @@ export async function writePool(db: Queryable, gathered: { items: PoolItem[]; re
     const keys = refreshed.includes(series) ? items.filter((i) => i.series === series).map((i) => i.key) : null;
     const stale = `series = $1 AND used_at IS NULL
           AND key NOT LIKE 'seed:%' AND key NOT LIKE 'trivia:%' AND key NOT LIKE 'roa:%'
+          AND COALESCE((payload->>'seed')::boolean, false) = false
           AND (refreshed_at < $2::timestamptz OR ($3::text[] IS NOT NULL AND NOT (key = ANY($3::text[]))))`;
     const { rows } = archive
       ? await db.query<{ id: string }>(
@@ -250,7 +251,7 @@ export async function capTriviaPool(db: Queryable, now: Date = new Date()): Prom
   try {
     const { rows } = await db.query<Dropped>(
       `DELETE FROM stories.pool p
-        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
+        WHERE p.series = 'ai_trivia' AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE((p.payload->>'seed')::boolean, false) = false
           AND p.id IN (${ranked(`AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a WHERE a.vertical = $3 AND a.kind = 'archive' AND a.idea_id = 'stories:pool:' || p2.series || ':' || p2.key)`)})
           AND NOT EXISTS (SELECT 1 FROM social_hub.idea_adjustments a
                            WHERE a.vertical = $3 AND a.consumed_at IS NULL AND a.kind IN ('pin', 'promote', 'place')
@@ -317,7 +318,7 @@ async function capDeleting(db: Queryable, series: Series, cap: number): Promise<
   const vertical = verticalOfSeries(series);
   const { rows } = await db.query<Dropped>(
     `DELETE FROM stories.pool p
-      WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
+      WHERE p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE((p.payload->>'seed')::boolean, false) = false
         AND p.id IN (
           SELECT r.id FROM (
             SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n
@@ -359,7 +360,7 @@ async function capSeries(db: Queryable, series: Series, archiveAt: Date | null):
   const vertical = verticalOfSeries(series);
   const live = archiveAt ? 'AND p2.archived_at IS NULL' : '';
   const v = archiveAt ? '$4' : '$3';
-  const over = `p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%'
+  const over = `p.series = $1 AND p.used_at IS NULL AND p.key NOT LIKE 'seed:%' AND COALESCE((p.payload->>'seed')::boolean, false) = false
           AND p.id IN (
             SELECT r.id FROM (
               SELECT p2.id, row_number() OVER (ORDER BY p2.score DESC NULLS LAST, p2.title) AS n

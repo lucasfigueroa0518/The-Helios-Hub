@@ -77,6 +77,8 @@ export type StoryPoolRow = {
   breakdown?: ScoreBreakdown | null;
   /** The story a Morning Download row carries, to score rows that predate the breakdown. */
   story?: { origin?: string; headline?: string; publishedAt?: string | null; blockbuster?: number } | null;
+  /** payload.seed: a person typed this one in. Yours, and never cut by the caps. */
+  seed?: boolean | null;
 };
 
 export type StoriesRead = {
@@ -132,7 +134,8 @@ SELECT i.frame_id, i.captured_at::text AS captured_at, i.final, i.reach, i.views
 const storyPoolSql = (live: string) => `
 SELECT p.id AS pool_id, p.series, p.key, p.origin, p.ref, p.title, p.payload->>'source' AS source,
        p.score, p.refreshed_at::text AS refreshed_at, p.payload->'breakdown' AS breakdown,
-       CASE WHEN p.series = 'morning_download' THEN p.payload->'story' END AS story
+       CASE WHEN p.series = 'morning_download' THEN p.payload->'story' END AS story,
+       COALESCE(p.payload->>'seed' = 'true', false) AS seed
   FROM stories.pool p
  WHERE p.used_at IS NULL${live}
  ORDER BY p.series, p.score DESC NULLS LAST, p.title

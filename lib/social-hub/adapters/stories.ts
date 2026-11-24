@@ -231,6 +231,11 @@ export function storyPosts(read: StoriesRead): HubPost[] {
 }
 
 /** A Morning Download row from before the news score: score it now, as of its refresh, the way the refresh would have. */
+/** A person typed this one in: a `seed:` key (Morning Download) or payload.seed (Trivia, Real or AI?). */
+function isSeeded(row: StoryPoolRow): boolean {
+  return row.key.startsWith('seed:') || row.seed === true;
+}
+
 function morningScore(row: StoryPoolRow): { score: number; breakdown: ScoreBreakdown } | null {
   const story = row.story;
   if (row.series !== 'morning_download' || row.breakdown || !story?.headline) return null;
@@ -261,8 +266,8 @@ export function storyIdeas(rows: readonly StoryPoolRow[]): HubIdea[] {
       versionCount: 0,
       generatedAt: null,
       createdAt: iso(row.refreshed_at),
-      detail: row.key.startsWith('seed:') ? 'You typed this in' : [ORIGIN_LABEL[row.origin] ?? row.origin, row.source && row.source !== (ORIGIN_LABEL[row.origin] ?? row.origin) ? row.source : null].filter(Boolean).join(' · '),
-      yours: row.key.startsWith('seed:'),
+      detail: isSeeded(row) ? 'You typed this in' : [ORIGIN_LABEL[row.origin] ?? row.origin, row.source && row.source !== (ORIGIN_LABEL[row.origin] ?? row.origin) ? row.source : null].filter(Boolean).join(' · '),
+      yours: isSeeded(row),
       group: SERIES[row.series] ?? row.series,
     };
   });
