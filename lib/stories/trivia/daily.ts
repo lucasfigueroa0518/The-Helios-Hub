@@ -186,7 +186,7 @@ export const SEED_MAX_TOKENS = 4000;
  * A seed's material lists at most this many questions per offered theme (the most recent), so its input stops growing
  * with the series' history. The repeat check in code (findRepeat) still reads every question ever written.
  */
-export const SEED_ASKED_PER_THEME = 30;
+export const SEED_ASKED_PER_THEME = 10;
 
 export type CallInput = {
   cells: Cell[];
@@ -210,6 +210,17 @@ export type CallInput = {
   beforeWrite?: (p: { system: string; user: string; tool: unknown }) => void;
 };
 
+/** The seed's cells, once each: themes and angles by their two-digit number, and the open cell ids (t<theme>a<angle>). */
+function compactCells(cells: Cell[]): Pick<TriviaSeedMaterial, 'themes' | 'angles' | 'open_cells'> {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const sorted = [...cells].sort((a, b) => a.cellId.localeCompare(b.cellId));
+  return {
+    themes: Object.fromEntries(sorted.map((x) => [pad(x.theme), x.themeText])),
+    angles: Object.fromEntries([...sorted].sort((a, b) => a.angle - b.angle).map((x) => [pad(x.angle), x.angleText])),
+    open_cells: sorted.map((x) => x.cellId),
+  };
+}
+
 /**
  * One writer call (AT-78): write, deposit, validate, shorten, number, score and pool its questions, then the spent report.
  * The daily run calls it per batch of cells; a one-box seed calls it once with `seed` set (see CallInput).
@@ -223,18 +234,16 @@ export async function writeTriviaBatch(deps: TriviaDailyDeps, rec: TriviaDailyRe
   // 1. The writer; in intake mode its material carries the research the intake holds (SS-33). Each offered theme lists
   //    every question written on it, today's included (one fact, one question).
   const themes = [...new Map(c.cells.map((x) => [x.theme, x.themeText])).entries()];
-  const mat: TriviaWriteMaterial | TriviaSeedMaterial = {
-    ...(c.seed ? { topic: c.topic ?? '' } : {}),
-    today: day,
-    count: perCall,
-    cells: c.cells.map((x) => ({ cell_id: x.cellId, theme: x.themeText, angle: x.angleText })),
-    asked: themes.map(([theme, text]) => {
-      const all = [...onTheme(c.earlier, theme), ...onTheme(c.fresh, theme)];
-      return { theme: text, questions: asAsked(c.seed ? all.slice(-SEED_ASKED_PER_THEME) : all) };
-    }),
-  };
+  const asked = themes.map(([theme, text]) => {
+    const all = [...onTheme(c.earlier, theme), ...onTheme(c.fresh, theme)];
+    return { theme: text, questions: asAsked(c.seed ? all.slice(-SEED_ASKED_PER_THEME) : all) };
+  });
+  const mat: TriviaWriteMaterial | TriviaSeedMaterial = c.seed
+    ? { topic: c.topic ?? '', today: day, count: perCall, ...compactCells(c.cells), asked }
+    : { today: day, count: perCall, cells: c.cells.map((x) => ({ cell_id: x.cellId, theme: x.themeText, angle: x.angleText })), asked };
   if (c.research.length) mat.research = c.research;
-  const user = material(mat);
+  // A seed's material is compact JSON (it offers every open cell); the daily material is unchanged.
+  const user = c.seed ? `<material>\n${JSON.stringify(mat)}\n</material>` : material(mat);
   c.beforeWrite?.({ system: prompt.system, user, tool: prompt.tool });
   // The raw responses are kept for the deposit: the quoted lines live in their search results and citations.
   const responses: unknown[] = [];
