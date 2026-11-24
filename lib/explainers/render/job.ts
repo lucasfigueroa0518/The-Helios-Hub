@@ -1882,11 +1882,13 @@ export async function runRenderJob(deps: RenderDeps, job: JobRow): Promise<Rende
     }
 
     await stage('caption');
+    const boardText = read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard;
     const facts: CaptionFacts = {
       title: topic.title,
+      term: topic.term?.trim() || (boardText ? storyboardTerm(boardText) : null),
       scope: topic.scope,
       analogy: analogy.name,
-      storyboard: read(path.join(ws.projectDir, 'STORYBOARD.md')) ?? storyboard,
+      storyboard: boardText,
       script: read(path.join(ws.projectDir, 'SCRIPT.md')) ?? script,
       source: topic.source_text,
     };
