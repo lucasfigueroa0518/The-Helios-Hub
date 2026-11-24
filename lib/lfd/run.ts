@@ -40,11 +40,13 @@ import { writeStories, type WriterStory, type Written } from '@/lib/news-writer'
 import type { VideoFind } from '@/lib/video-finder/find';
 
 import { LFD_CAPTION_VERSION, writeLfdCaptionLines } from './caption-lines';
+import { makeLfdAiCover, type LfdAiCoverResult } from './cover';
+import type { FalImage, FalWait } from './cover/fal-image';
 import { MEME_POOL_SCAN } from './config';
 import { leadImage } from './lead-image';
 import { articleCopy, BUILDER_HARVEST_CAP_USD, harvestBuilderPhoto, NO_PHOTO_REQUEST, type BuilderHarvest, type HarvestBudget } from './photos';
 import { applyLfdQueue, coveredBy, type LfdQueue, judgedPool, leadFor, LineupWalk, MAX_SEEDS, MAX_STORIES, MIN_STORIES, pairNames, RUNDOWN_POOL, rundownOrder, scoreUnscoredSeeds, withoutUsed } from './pick';
-import { arrangeMemes, buildPost, composeCaption, coverMemeOf, nextLfdCanvas } from './post';
+import { arrangeMemes, buildPost, composeCaption, coverMemeOf, nextLfdCanvas, nextLfdCoverHook } from './post';
 import { readArchivedKeys, readOpenSeeds, recordSeedOutcomes, seedCandidate, type LfdSeed } from './seeds';
 import { carouselLane, freshFeedLane, lastCarouselRunAt, reelsLane } from './sources';
 import { adoptRun, finishRun, insertPost, previousPosts, recentPhotoLedger, startRun, usedIdeaIds } from './store';
@@ -149,6 +151,11 @@ export type LfdRunDeps = {
   newsPhotos?: { jev: PhotoJev; serper: ((q: string) => Promise<string[]>) | null; fetchImage: (url: string) => Promise<Buffer | null>; create?: WriterCreate; minShortSide?: number };
   /** The news chain's steps; tests stub them. Defaults: lib/news-ranker shortlist/rerank, lib/news-writer writeStories, findStoryPhoto. */
   news?: LfdNewsChain;
+  /**
+   * The AI cover (PLAN.md C7, lib/lfd/cover): fal (GPT Image 2.6 edit) and the fetch for reference photos and the result.
+   * Absent: no AI image (the hook still rotates and the cover draws as before). The writer uses the run's `create`.
+   */
+  aiCover?: { fal: FalImage | null; fetch: (input: string, init?: RequestInit) => Promise<Response>; wait?: FalWait };
 };
 
 /** The chain steps a run calls; each defaults to the shared module. `findPhoto` gets the run's ledger check as `usedReason`. */
@@ -479,6 +486,8 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
   const photoRecord: { usd: number; stories: Array<{ key: string; tier: MediaVerdict; source: string | null }> } = { usd: 0, stories: [] };
   // Builder-slide harvests share one budget per post (round 3: $0.15).
   const harvestBudget: HarvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };
+  // The AI cover's fal image spend: outside the run budget's tally (its Jev and writer calls go through the run's).
+  let coverImageUsd = 0;
   let jevCalls = 0;
   const jev: JevAsk = (req, meta) => {
     jevCalls += 1;
@@ -975,16 +984,20 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
      * vision check rejected throws before anything is uploaded; without it, vision rejections are only recorded
      * (a failed image always throws, from storeSlideJpegs; see renderClean).
      */
-    // Design profile: the one after the last kept post's (lib/lfd/post.ts LFD_CANVASES).
+    // Design profile and hook: the ones after the last kept post's (lib/lfd/post.ts LFD_CANVASES, LFD_COVER_HOOKS).
     const prevPost = (
-      await d.query<{ canvas: string | null }>(
-        `SELECT render->'slides'->0->>'canvas' AS canvas FROM lfd.posts WHERE status <> 'rejected' AND slug <> $1 ORDER BY ny_date DESC, created_at DESC LIMIT 1`,
+      await d.query<{ canvas: string | null; hook: string | null }>(
+        `SELECT render->'slides'->0->>'canvas' AS canvas, render->'slides'->0->'lfdCover'->'hook'->>'text' AS hook FROM lfd.posts WHERE status <> 'rejected' AND slug <> $1 ORDER BY ny_date DESC, created_at DESC LIMIT 1`,
         [slug],
       )
     ).rows[0];
     const canvas = nextLfdCanvas(prevPost?.canvas ?? null, !!prevPost);
+    const prevHook = prevPost?.hook ?? null;
+    // The AI cover's image once it is made (after the stories are final); every render before that draws today's cover.
+    let coverImage: { url: string } | undefined;
     const renderAndStore = async (final: Ready[], replaceBroken: boolean, coverMeme?: { url: string }) => {
-      const render = buildPost(final, d.now, undefined, { ...(coverMeme ? { coverMeme } : {}), canvas });
+      const coverHook = nextLfdCoverHook(prevHook, final.length);
+      const render = buildPost(final, d.now, undefined, { ...(coverMeme && !coverImage ? { coverMeme } : {}), canvas, coverHook, ...(coverImage ? { coverImage } : {}) });
       let fit: FitResult | null = null;
       const visionProblems: string[] = [];
       const slideObjects = await storeSlideJpegs(slug, render, {
@@ -1106,6 +1119,54 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       }
     }
 
+    // The AI cover (C7), once, now that the stories are final. It replaces a meme cover too (the meme keeps its own
+    // story slide); any failure keeps today's cover (meme or mosaic) and records why. With an image, the post renders once more.
+    let aiCover: LfdAiCoverResult;
+    {
+      aiCover = await makeLfdAiCover(
+        {
+          jev,
+          create: d.create,
+          fal: d.aiCover?.fal ?? null,
+          fetch: d.aiCover?.fetch ?? ((input, init) => fetch(input, init)),
+          upload: d.upload,
+          remainingUsd: () => {
+            const s = d.spend();
+            return d.capUsd - s.claudeUsd - s.jevUsd - coverImageUsd;
+          },
+          ...(d.aiCover?.wait ? { wait: d.aiCover.wait } : {}),
+        },
+        {
+          stories: final.map((r) => ({ headline: r.copy.headline, body: r.copy.body })),
+          photos: final.filter((r) => r.photoSource !== 'meme').map((r) => ({ url: r.photo.src, headline: r.copy.headline, kind: r.photo.kind })),
+          prevHook,
+          storyCount: final.length,
+          objectPath: `lfd/${slug}/cover-ai-${runId.slice(0, 8)}.jpg`,
+        },
+      );
+      coverImageUsd += aiCover.imageUsd;
+      if (aiCover.image) {
+        coverImage = { url: aiCover.image.url };
+        try {
+          rendered = await renderClean(false);
+        } catch (err) {
+          coverImage = undefined;
+          aiCover = { ...aiCover, image: undefined, fallback: `the AI cover did not render: ${err instanceof Error ? err.message : String(err)}` };
+          rendered = await renderClean(false);
+        }
+      }
+    }
+    record.cover = {
+      hook: aiCover.hook.text,
+      direction: aiCover.direction ?? null,
+      prompt: aiCover.prompt ?? null,
+      references: aiCover.references ?? null,
+      image: aiCover.image ? `storage:${aiCover.image.object}` : null,
+      fallback: aiCover.fallback ?? null,
+      usd: aiCover.costUsd,
+      imageUsd: aiCover.imageUsd,
+    };
+
     const { slideObjects, fit, visionProblems } = rendered;
     // The caption is on no slide, so it is written once, for the stories that made the final render.
     // Any failure ships the template caption. The call goes through d.create, so the run budget prices it.
@@ -1118,6 +1179,9 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       : { by: 'template', usd: caption.costUsd, reason: caption.reason ?? 'the model caption did not fit the limit' };
     if (shipped.by === 'model' && caption.lines) await d.closings?.record(runId, caption.lines.question, false);
     const render = { ...rendered.render, caption: shipped.caption };
+    // The post row keeps the stored cover image, never the data URL the render drew.
+    const coverSlide = render.slides[0];
+    if (aiCover.image && coverSlide?.lfdCover?.image) coverSlide.lfdCover.image = { url: `storage:${aiCover.image.object}` };
     await persistEngineMemes(final, slug, render, d.upload);
     const savedVideos = await persistVideos(final, slug, render, slideObjects, (r) => composed.get(composeKey(r)), d.upload, videoRecord.slides);
     const short = final.length < MIN_STORIES;
@@ -1184,14 +1248,14 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     videoRecord.costUsd = videoSpend.usd;
     // recorded false: the run row was no longer running (the worker timed it out); it stays failed.
     // Harvest and photo-finder spend (Serper, Haiku, Jev grades) is outside the run budget's tally: added here so the run total is whole.
-    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd + harvestBudget.usd + photoRecord.usd + (videoSpend.usd - videoSpend.jevUsd), jevUsd: spend.jevUsd + videoSpend.jevUsd, record });
+    const recorded = await finishRun(d.query, runId, { status: short ? 'partial' : 'ok', stopReason: short ? `short post: only ${final.length} stories` : undefined, claudeUsd: spend.claudeUsd + harvestBudget.usd + photoRecord.usd + coverImageUsd + (videoSpend.usd - videoSpend.jevUsd), jevUsd: spend.jevUsd + videoSpend.jevUsd, record });
     return { ok: true, runId, postId, stories: final.length, short, recorded };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     try {
       const spend = d.spend();
       const videoSpend = d.video?.spent() ?? { usd: 0, jevUsd: 0 };
-      await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd + harvestBudget.usd + photoRecord.usd + (videoSpend.usd - videoSpend.jevUsd), jevUsd: spend.jevUsd + videoSpend.jevUsd, record });
+      await finishRun(d.query, runId, { status: 'failed', error, claudeUsd: spend.claudeUsd + harvestBudget.usd + photoRecord.usd + coverImageUsd + (videoSpend.usd - videoSpend.jevUsd), jevUsd: spend.jevUsd + videoSpend.jevUsd, record });
     } catch (finishErr) {
       return { ok: false, runId, error: `${error} (recording the failure also failed: ${finishErr instanceof Error ? finishErr.message : String(finishErr)})` };
     }

@@ -780,3 +780,89 @@ test('video: no video dep leaves the run record without a video section', async 
   assert.ok(res.ok, JSON.stringify(res));
   assert.equal((await recordOf(d, res.runId) as VideoRec).video, undefined);
 });
+
+/** The AI cover's fal fetch stub (no network): one queued image that completes on the first poll. */
+async function aiCoverStub() {
+  const sharp = (await import('sharp')).default;
+  const png = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 0, g: 90, b: 200 } } }).png().toBuffer();
+  const photo = await sharp({ create: { width: 64, height: 48, channels: 3, background: { r: 90, g: 90, b: 90 } } }).jpeg().toBuffer();
+  const queue = 'https://queue.fal.run/openai/gpt-image-2.6/flare/edit';
+  const tools: string[] = [];
+  const json = (v: unknown) => new Response(JSON.stringify(v), { headers: { 'content-type': 'application/json' } });
+  const fetchImpl = async (url: string) => {
+    if (url === queue) { tools.push('submit'); return json({ request_id: 'r1', status_url: `${queue}/requests/r1/status`, response_url: `${queue}/requests/r1` }); }
+    if (url.endsWith('/requests/r1/status')) { tools.push('status'); return json({ status: 'COMPLETED' }); }
+    if (url.endsWith('/requests/r1')) { tools.push('result'); return json({ images: [{ url: 'https://fal.test/cover.png', width: 1536, height: 1152 }] }); }
+    if (url === 'https://fal.test/cover.png') return new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png' } });
+    return new Response(new Uint8Array(photo), { headers: { 'content-type': 'image/jpeg' } });
+  };
+  /** The run's create, plus the cover writer's write_cover_prompt call. */
+  const withWriter = (create: LfdRunDeps['create']): LfdRunDeps['create'] => async (p) => {
+    if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'write_cover_prompt') {
+      return { id: 'w', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'tool_use', stop_sequence: null, usage: { input_tokens: 800, output_tokens: 300, cache_creation_input_tokens: 0, cache_read_input_tokens: 2000 }, content: [{ type: 'tool_use', id: 't', name: 'write_cover_prompt', input: { prompt: '1. Capture: 35mm', references: [1, 2] } }] } as unknown as Anthropic.Message;
+    }
+    return create(p);
+  };
+  return { aiCover: { fal: { apiKey: 'test-key', fetch: fetchImpl }, fetch: fetchImpl, wait: { sleep: async () => {} } }, tools, withWriter };
+}
+
+test('the AI cover: drawn on the final render, stored, recorded, its image cost in the run spend; the next post rotates the hook', async () => {
+  const s = await aiCoverStub();
+  const drawn: Array<string | undefined> = [];
+  const base = await deps();
+  const d = await deps({
+    query: base.query,
+    create: s.withWriter(createStub().create),
+    aiCover: s.aiCover,
+    fitCheck: async (p, opts) => {
+      drawn.push(p.slides[0]!.lfdCover?.image?.url);
+      return base.fitCheck(p, opts);
+    },
+  });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  assert.deepEqual(s.tools, ['submit', 'status', 'result']);
+  assert.match(drawn.at(-1) ?? '', /^data:image\/jpeg;base64,/, 'the last render draws the AI image');
+  const rec = (await recordOf(d, res.runId)) as unknown as { cover: { hook: string; direction: string; prompt: string; image: string; fallback: string | null; imageUsd: number } };
+  assert.equal(rec.cover.direction, 'Unaware', 'no two_sides answer counts as no');
+  assert.equal(rec.cover.hook, 'Do you realize what just happened in AI in the last few days?');
+  assert.equal(rec.cover.fallback, null);
+  assert.match(rec.cover.image, /^storage:lfd\/lfd-2026-10-13\/cover-ai-/);
+  const { rows } = await d.query<{ render: { slides: Array<{ altText: string; lfdCover?: { image?: { url: string }; hook?: { text: string } } }> } }>(`SELECT render FROM lfd.posts`);
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.image!.url, rec.cover.image, 'the post row keeps the stored image, not a data URL');
+  assert.match(rows[0]!.render.slides[0]!.altText, /^Do you realize what just happened in AI in the last few days\?/);
+  const run = (await d.query<{ claude_usd: string }>(`SELECT claude_usd::text FROM lfd.runs WHERE id = $1`, [res.runId])).rows[0]!;
+  assert.ok(Math.abs(Number(run.claude_usd) - (0.1 + rec.cover.imageUsd)) < 1e-6, `claude ${run.claude_usd}`);
+
+  // The next day's post takes the next hook.
+  const next = await runLastFewDays({ ...d, now: new Date(NOW.getTime() + 86_400_000) });
+  assert.ok(next.ok, JSON.stringify(next));
+  const rec2 = (await recordOf(d, next.runId)) as unknown as { cover: { hook: string } };
+  assert.match(rec2.cover.hook, /^\d+ things happened in AI you need to know\.$/);
+});
+
+test('a lineup with a meme still gets the AI cover; the meme keeps its own story slide', async () => {
+  const s = await aiCoverStub();
+  const base = await deps();
+  const d = await deps({ query: base.query, create: s.withWriter(createStub().create), aiCover: s.aiCover, memes: memesHook({ clears: (h) => h.includes('Niche Thing 0') }) });
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = (await recordOf(d, res.runId)) as unknown as { cover: { image: string | null; fallback: string | null } };
+  assert.equal(rec.cover.fallback, null);
+  assert.match(rec.cover.image ?? '', /^storage:/);
+  const { rows } = await d.query<{ render: { slides: Array<{ lfdCover?: { image?: { url: string }; meme?: unknown } }> } }>(`SELECT render FROM lfd.posts`);
+  assert.ok(rows[0]!.render.slides[0]!.lfdCover!.image, 'the cover is the AI image');
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.meme, undefined, 'no meme on the cover');
+});
+
+test('without the AI cover wired the post keeps today’s cover, with the rotated hook and the reason recorded', async () => {
+  const d = await deps();
+  const res = await runLastFewDays(d);
+  assert.ok(res.ok, JSON.stringify(res));
+  const rec = (await recordOf(d, res.runId)) as unknown as { cover: { fallback: string; image: string | null } };
+  assert.match(rec.cover.fallback, /not wired/);
+  assert.equal(rec.cover.image, null);
+  const { rows } = await d.query<{ render: { slides: Array<{ lfdCover?: { image?: unknown; hook?: { text: string } } }> } }>(`SELECT render FROM lfd.posts`);
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.image, undefined);
+  assert.equal(rows[0]!.render.slides[0]!.lfdCover!.hook!.text, 'Do you realize what just happened in AI in the last few days?');
+});

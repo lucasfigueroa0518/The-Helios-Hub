@@ -63,6 +63,7 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     for (const sl of draw.slides) {
       if (sl.photoUrl) sl.photoUrl = (await resolve(sl.photoUrl))!;
       if (sl.lfdCover?.meme) sl.lfdCover.meme.url = (await resolve(sl.lfdCover.meme.url))!;
+      if (sl.lfdCover?.image) sl.lfdCover.image.url = (await resolve(sl.lfdCover.image.url))!;
       for (const t of sl.lfdCover?.photos ?? []) t.url = (await resolve(t.url))!;
     }
     const wanted = new Map(slides.map((s) => [s.slide, s.key]));

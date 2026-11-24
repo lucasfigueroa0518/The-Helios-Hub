@@ -152,16 +152,27 @@ export function captionFor(ready: Ready[], lines?: LfdCaptionLines | null): stri
   return composeCaption(ready, lines).caption;
 }
 
-export function buildPost(ready: Ready[], now: Date, lines?: LfdCaptionLines | null, opts?: { coverMeme?: { url: string; aspect?: number }; canvas?: SlideCanvas }): RenderPost {
+/**
+ * `coverHook` is the rotated hook (nextLfdCoverHook): it goes in the alt text and on `lfdCover.hook`. `coverImage`
+ * is the AI cover (lib/lfd/cover), drawn above the hook. Without an image the cover draws as before (mosaic or meme).
+ */
+export function buildPost(
+  ready: Ready[],
+  now: Date,
+  lines?: LfdCaptionLines | null,
+  opts?: { coverMeme?: { url: string; aspect?: number }; canvas?: SlideCanvas; coverHook?: { text: string; accent: string }; coverImage?: { url: string } },
+): RenderPost {
   // Cover is a single meme, or a collage of non-meme photos. Never mix them.
   const mosaic = ready.filter((r) => r.photoSource !== 'meme');
   const cover: SlideCopy = {
     position: 0,
     layoutVariant: 'lfd_cover',
-    altText: `${LFD_HOOK_LINES.join(' ')} ${LFD_KICKER}.`,
+    altText: `${opts?.coverHook?.text ?? LFD_HOOK_LINES.join(' ')} ${LFD_KICKER}.`,
     lfdCover: {
       photos: mosaic.map((r) => ({ url: r.photo.src, kind: r.photo.kind, ...(r.photo.focus ? { focus: r.photo.focus } : {}) })),
       ...(opts?.coverMeme ? { meme: opts.coverMeme } : {}),
+      ...(opts?.coverImage ? { image: { url: opts.coverImage.url } } : {}),
+      ...(opts?.coverHook ? { hook: { text: opts.coverHook.text, accent: opts.coverHook.accent } } : {}),
     },
   };
   const stories: SlideCopy[] = ready.map((r, i) => ({

@@ -17,6 +17,8 @@
  * Story photos come from the news photo finder (lib/news-photos findStoryPhoto, wiring contract 2026-11-24): its
  * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The Stories finder
  * above is still built for the type only; the run no longer calls it.
+ *
+ * The AI cover (lib/lfd/cover) uses the run's Jev and budget-guarded create, and fal (FAL_API_KEY) for the image.
  */
 import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -149,11 +151,18 @@ export async function liveLfdDeps(
       cutouts: [],
     },
   };
+  // The AI cover (PLAN.md C7): GPT Image 2.6 edit on fal, wired only when FAL_API_KEY is set (else it falls back).
+  const falKey = process.env.FAL_API_KEY?.trim();
+  const aiCover: LfdRunDeps['aiCover'] = {
+    fal: falKey ? { apiKey: falKey, fetch: (input, init) => fetch(input, init) } : null,
+    fetch: (input, init) => fetch(input, init),
+  };
   return {
     deps: {
       query,
       jev,
       create,
+      aiCover,
       photos,
       harvest,
       // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.
