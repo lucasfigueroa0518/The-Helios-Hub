@@ -45,7 +45,7 @@ export function liveFileDeps(): FileDeps {
       const [r] = await addAndEvaluateTopics({ db, jevTransport: liveJevTransport, ideaModel: anthropicIdeaModel(anthropic), moves: query as never }, [t]);
       return { topicId: r!.topicId, title: r!.title };
     },
-    headlines: async (vertical, series) => {
+    headlines: async (vertical) => {
       switch (vertical) {
         case 'reels': {
           const open = (await readOpenReelSeeds().catch(() => [])).map((s) => s.headline);
@@ -67,9 +67,11 @@ export function liveFileDeps(): FileDeps {
           return uniq(open);
         }
         case 'stories':
-          return uniq(await rows(`SELECT title AS h FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST LIMIT ${MAX_HEADLINES}`, [series ?? 'morning_download']));
+          return uniq(await rows(`SELECT title AS h FROM stories.pool WHERE series = $1 AND used_at IS NULL ORDER BY score DESC NULLS LAST LIMIT ${MAX_HEADLINES}`, ['morning_download']));
         case 'explainers':
           return uniq(await rows(`SELECT title AS h FROM explainers.topics WHERE status = 'pool' ORDER BY created_at DESC LIMIT ${MAX_HEADLINES}`));
+        default:
+          return []; // Field Notes and the worker-run types read their own pools in later tasks
       }
     },
     existing: async (vertical, url, headline) => {

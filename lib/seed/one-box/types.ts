@@ -1,12 +1,17 @@
 /** Shared types for one-box seeding (design 2026-11-04-one-box-seeding-design). */
 
-export type SeedVerticalKey = 'reels' | 'carousels' | 'last_few_days' | 'stories' | 'explainers';
-export type StorySeries = 'morning_download' | 'guess_the_number' | 'free_vs_paid';
+export type SeedVerticalKey =
+  | 'reels' | 'carousels' | 'last_few_days' | 'stories' | 'explainers' | 'field_notes' | 'ai_trivia' | 'real_or_ai' | 'reel_ai_drama';
+/** Who does the work after the click: Vercel (`after`) or a social-worker runner that claims the queued request. */
+export type Runner = 'vercel' | 'stories' | 'drama';
+export const RUNNER: Record<SeedVerticalKey, Runner> = {
+  reels: 'vercel', carousels: 'vercel', last_few_days: 'vercel', stories: 'vercel', explainers: 'vercel', field_notes: 'vercel',
+  ai_trivia: 'stories', real_or_ai: 'stories', reel_ai_drama: 'drama',
+};
 export type Stage = 'queued' | 'searching' | 'reading' | 'checking' | 'filing';
 
 export type OneBoxInput = {
   vertical: SeedVerticalKey;
-  series?: StorySeries;
   blurb: string;
   link?: string;
 };

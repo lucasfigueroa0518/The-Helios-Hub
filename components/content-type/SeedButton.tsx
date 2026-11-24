@@ -1,19 +1,13 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus } from 'lucide-react';
 
 import { Drawer } from '@/app/reels/ui';
-import { CarouselSeedForm } from '@/components/content-type/CarouselSeedForm';
-import { ExplainerSeedForm } from '@/components/content-type/ExplainerSeedForm';
 import { OneBoxSeedForm } from '@/components/content-type/OneBoxSeedForm';
 import { SeedRequestCards, useOneBox } from '@/components/content-type/SeedRequestCards';
-import { FieldNotesSeedForm } from '@/components/field-notes/FieldNotesSeedForm';
-import { LfdSeedForm } from '@/components/content-type/LfdSeedForm';
-import { ReelSeedForm } from '@/components/content-type/ReelSeedForm';
-import { StorySeedForm } from '@/components/content-type/StorySeedForm';
 import { refreshHubPage } from '@/lib/content-type/refresh-client';
 import { SEED_BUTTON, isSeedable, type SeedVertical } from '@/lib/content-type/seed-verticals';
 import type { Vertical } from '@/lib/social-hub/types';
@@ -21,19 +15,9 @@ import type { Vertical } from '@/lib/social-hub/types';
 /** What a seed form tells the button when it is finished: close the drawer, show the note (if any), refresh the page. */
 export type SeedFormProps = { done: (note?: string) => void };
 
-/** Each pool's form. The record is exhaustive over SeedVertical, so a pool added to the seed list without a form will not compile. */
-const FORMS: Record<SeedVertical, ComponentType<SeedFormProps>> = {
-  reels: ReelSeedForm,
-  carousels: CarouselSeedForm,
-  last_few_days: LfdSeedForm,
-  stories: StorySeedForm,
-  explainers: ExplainerSeedForm,
-  field_notes: FieldNotesSeedForm,
-};
-
 /**
  * "Seed an idea": the one button every idea pool shows, with the same label, drawer, title and result note everywhere.
- * Only the form inside the drawer differs by type (what that type needs and what it costs). Nothing is made by a seed.
+ * The form inside the drawer is the one box for every pool. Nothing is made by a seed.
  * Renders nothing for a pool with no seed path (AI Events).
  */
 export function SeedButton({ vertical, label = SEED_BUTTON.label, disabled = false, buttonClass = 'rh-btn' }: {
@@ -52,7 +36,6 @@ export function SeedButton({ vertical, label = SEED_BUTTON.label, disabled = fal
   useEffect(() => setMounted(true), []);
   const oneBox = useOneBox(vertical, !isSeedable(vertical));
   if (!isSeedable(vertical)) return null;
-  const Form = FORMS[vertical];
   const done = (text?: string) => {
     setOpen(false);
     if (text) {
@@ -63,7 +46,7 @@ export function SeedButton({ vertical, label = SEED_BUTTON.label, disabled = fal
   };
   return (
     <>
-      {oneBox.enabled ? <SeedRequestCards cards={oneBox.cards} reload={oneBox.reload} /> : null}
+      <SeedRequestCards cards={oneBox.cards} reload={oneBox.reload} />
       <span className="rh rh--scope">
         <button type="button" className={buttonClass} disabled={disabled} onClick={() => setOpen(true)}>
           <Plus size={15} /> {label}
@@ -74,7 +57,7 @@ export function SeedButton({ vertical, label = SEED_BUTTON.label, disabled = fal
             <div className="rh rh--scope">
               {open ? (
                 <Drawer label={SEED_BUTTON.title} onClose={() => setOpen(false)}>
-                  {!oneBox.loaded ? <p className="rh-muted">Loading…</p> : oneBox.enabled ? <OneBoxSeedForm vertical={vertical} done={done} /> : <Form done={done} />}
+                  <OneBoxSeedForm vertical={vertical} done={done} />
                 </Drawer>
               ) : null}
               {note ? <p className="rh-toast" role="status">{note}</p> : null}

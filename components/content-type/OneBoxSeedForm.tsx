@@ -4,7 +4,6 @@ import { useState } from 'react';
 
 import type { SeedFormProps } from '@/components/content-type/SeedButton';
 import { SEED_BUTTON, type SeedVertical } from '@/lib/content-type/seed-verticals';
-import { SERIES_LABEL } from '@/lib/content-type/story-series';
 
 /**
  * One-box seeding (design 2026-11-04-one-box-seeding-design): a sentence or two, an optional link. The click opens a request;
@@ -13,21 +12,22 @@ import { SERIES_LABEL } from '@/lib/content-type/story-series';
 
 export const MAX_BLURB = 600;
 export const ONE_BOX_SUBMIT = 'Find source and add, about 12¢ (35¢ limit)';
-const SERIES = ['morning_download', 'guess_the_number', 'free_vs_paid'] as const;
 const PLACEHOLDER: Record<SeedVertical, string> = {
   reels: 'In a sentence or two, what is the story? e.g. what happened and why it matters.',
   carousels: 'In a sentence or two, what is the story? e.g. what happened and why it matters.',
   last_few_days: 'In a sentence or two, what is the story? e.g. what happened and why it matters.',
-  stories: 'In a sentence or two, describe the story, the number, or the tool.',
+  stories: 'In a sentence or two, what is the story? e.g. what happened and why it matters.',
   explainers: 'A concept or a sentence on it, e.g. AI hallucinations.',
   field_notes: 'The tool, skill or repo, and what someone gets from it.',
+  ai_trivia: 'In a sentence or two, what is the question about?',
+  real_or_ai: 'In a sentence or two, what is the photo of?',
+  reel_ai_drama: 'In a sentence or two, what is the story of the reel?',
 };
 
 export function OneBoxSeedForm({ vertical, done }: SeedFormProps & { vertical: SeedVertical }) {
   const [blurb, setBlurb] = useState('');
   const [link, setLink] = useState('');
   const [showLink, setShowLink] = useState(false);
-  const [series, setSeries] = useState<(typeof SERIES)[number]>('morning_download');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function submit() {
@@ -38,7 +38,7 @@ export function OneBoxSeedForm({ vertical, done }: SeedFormProps & { vertical: S
       const res = await fetch('/api/seed/one-box', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ vertical, blurb, ...(vertical === 'stories' ? { series } : {}), ...(showLink && link.trim() ? { link } : {}) }),
+        body: JSON.stringify({ vertical, blurb, ...(showLink && link.trim() ? { link } : {}) }),
       });
       const out = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) throw new Error(out.error ?? `Request failed (${res.status})`);
@@ -52,14 +52,6 @@ export function OneBoxSeedForm({ vertical, done }: SeedFormProps & { vertical: S
   return (
     <form className="ex-form rh-seed-form" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <h2 className="rh-detail__archetype">{SEED_BUTTON.title}</h2>
-      {vertical === 'stories' ? (
-        <fieldset className="rh-seed-form__series">
-          <legend className="rh-muted">Series</legend>
-          {SERIES.map((s) => (
-            <label key={s}><input type="radio" name="series" checked={series === s} onChange={() => setSeries(s)} /> {SERIES_LABEL[s]}</label>
-          ))}
-        </fieldset>
-      ) : null}
       <textarea className="ex-textarea" rows={4} placeholder={PLACEHOLDER[vertical]} maxLength={MAX_BLURB + 200} value={blurb} onChange={(e) => setBlurb(e.target.value)} aria-label="Your idea" />
       <p className="rh-muted">{blurb.length} of {MAX_BLURB} characters.</p>
       {showLink ? (

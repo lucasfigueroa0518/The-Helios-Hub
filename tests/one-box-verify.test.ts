@@ -28,7 +28,6 @@ const e = (n: number): Entry => ({ headline: `Headline ${n}`, url: `https://news
 const finding = (entries: Entry[] = [e(1), e(2)]): Finding => ({ found: true, entries });
 const base = { input: { vertical: 'reels' } as OneBoxInput & { vertical: 'reels' }, recordCost: async () => undefined };
 const reader = async (url: string) => PAGE(url.includes('/1') ? 'alpha' : 'beta');
-const stories = (series: 'guess_the_number' | 'free_vs_paid'): OneBoxInput => ({ vertical: 'stories', series, blurb: 'b' });
 
 test('first entry rejected, second accepted: the second is primary', async () => {
   const { client } = stub([false, true]);
@@ -60,23 +59,6 @@ test('an unreadable page and a private host are skipped without a verifier call'
   const r2 = await verifyFinding({ ...base, input: { vertical: 'reels', blurb: 'b' }, client, ledger: new Ledger('reels'), finding: finding([{ headline: 'h', url: 'http://10.0.0.1/x' }]), readPage: reader });
   assert.ok(!r1.ok && !r2.ok);
   assert.equal(calls.length, 0);
-});
-
-test('Guess the Number: the figure must be on the page', async () => {
-  const num: Entry = { value: '73%', fact: 'of x', url: 'https://news.test/1' };
-  const bad = await verifyFinding({ ...base, input: stories('guess_the_number'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([num]), readPage: reader });
-  assert.ok(!bad.ok);
-  assert.match(bad.reason, /73%/);
-  const good = await verifyFinding({ ...base, input: stories('guess_the_number'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([num]), readPage: async () => `${PAGE('alpha')} the figure was 73% overall` });
-  assert.ok(good.ok);
-});
-
-test('Free vs. Paid: the tool’s page must mention its name', async () => {
-  const tool: Entry = { toolName: 'Acme Studio', url: 'https://acme.test', description: 'd' };
-  const bad = await verifyFinding({ ...base, input: stories('free_vs_paid'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([tool]), readPage: reader });
-  assert.ok(!bad.ok);
-  const good = await verifyFinding({ ...base, input: stories('free_vs_paid'), client: stub([true]).client, ledger: new Ledger('stories'), finding: finding([tool]), readPage: async () => `${PAGE('alpha')} welcome to acme studio` });
-  assert.ok(good.ok);
 });
 
 test('Explainers keeps every page that passes as source material', async () => {

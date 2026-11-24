@@ -5,13 +5,8 @@ import { VERTICAL_IDS } from '@/lib/social-hub/verticals';
 /** The one button every idea pool shows. Same words everywhere; only the form inside the drawer differs by type. */
 export const SEED_BUTTON = { label: 'Seed an idea', title: 'Seed an idea' } as const;
 
-/**
- * Idea pools with a seed path. AI Events has none yet (decided 2026-11-02: not built); AI Drama pitches come from development
- * sessions. Field Notes' is a source link and an optional note, with no model call and no page read at seed time (the page is
- * read when someone presses Generate). Trivia and Real or AI? are made from their own research and photos on their days, with
- * no seed (SS-1); the Morning Download form stays Stories' only seed.
- */
-export type SeedVertical = Exclude<Vertical, 'ai_events' | 'reel_ai_drama' | 'ai_trivia' | 'real_or_ai'>;
+/** Idea pools with a seed path: every pool except AI Events (decided 2026-11-02: not built). All of them take a seed through the one box. */
+export type SeedVertical = Exclude<Vertical, 'ai_events'>;
 
 export const isSeedable = (vertical: Vertical): vertical is SeedVertical => TYPE_CONFIG[vertical].seedable;
 

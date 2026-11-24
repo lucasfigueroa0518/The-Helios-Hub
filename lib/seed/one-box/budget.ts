@@ -20,6 +20,10 @@ export const RESERVE_USD: Record<SeedVerticalKey, number> = {
   last_few_days: 0.02,
   stories: 0.02,
   explainers: 0.08,
+  field_notes: 0.02,
+  ai_trivia: 0.06,
+  real_or_ai: 0.08,
+  reel_ai_drama: 0,
 };
 
 /** The search call's caps. They bound its cost together with the per-search fee. */

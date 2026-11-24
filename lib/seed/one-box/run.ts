@@ -31,7 +31,7 @@ export async function runOneBox(i: {
   const fail = (message: string) => failRequest(i.q, i.id, message, ledger.spent);
   try {
     await setStage(i.q, i.id, 'searching', 0, at());
-    const poolHeadlines = await i.fileDeps.headlines(i.input.vertical, i.input.series).catch(() => []);
+    const poolHeadlines = await i.fileDeps.headlines(i.input.vertical).catch(() => []);
     const searched = await runSearch({ client: i.client, ledger, input: i.input, poolHeadlines, readPage: i.readPage, recordCost: i.recordCost });
     if ('stopped' in searched) return await fail(LIMIT);
     const { finding } = searched;

@@ -12,19 +12,20 @@ export const SHAPES = {
   reels: { label: 'Text on Screen', required: ['headline', 'url'], optional: [], urlField: 'url' },
   carousels: { label: 'Carousels', required: ['url', 'headline'], optional: [], urlField: 'url' },
   last_few_days: { label: 'Last Few Days', required: ['url', 'headline'], optional: [], urlField: 'url' },
-  morning_download: { label: 'Stories, Morning Download', required: ['headline', 'url'], optional: [], urlField: 'url' },
-  guess_the_number: { label: 'Stories, Guess the Number', required: ['value', 'fact', 'url'], optional: ['storyHeadline'], urlField: 'url' },
-  free_vs_paid: { label: 'Stories, Free vs. Paid', required: ['toolName', 'url'], optional: ['description'], urlField: 'url' },
+  stories: { label: 'Stories, Morning Download', required: ['headline', 'url'], optional: [], urlField: 'url' },
   explainers: { label: 'Explainers', required: ['title', 'sourceUrl'], optional: [], urlField: 'sourceUrl' },
+  field_notes: { label: 'Field Notes', required: ['headline', 'url'], optional: [], urlField: 'url' },
 } as const satisfies Record<string, Shape>;
 
 export type ShapeKey = keyof typeof SHAPES;
 
-export function shapeKey(input: Pick<OneBoxInput, 'vertical' | 'series'>): ShapeKey {
-  return input.vertical === 'stories' ? (input.series ?? 'morning_download') : input.vertical;
+/** Trivia, Real or AI? and AI Drama are filed by their own runners, not by the source search, so they have no shape here. */
+export function shapeKey(input: Pick<OneBoxInput, 'vertical'>): ShapeKey {
+  if (!(input.vertical in SHAPES)) throw new Error(`${input.vertical} has no search shape; its runner files it.`);
+  return input.vertical as ShapeKey;
 }
 
-export const shapeOf = (input: Pick<OneBoxInput, 'vertical' | 'series'>): Shape => SHAPES[shapeKey(input)];
+export const shapeOf = (input: Pick<OneBoxInput, 'vertical'>): Shape => SHAPES[shapeKey(input)];
 
 /** The fields that are missing or blank (empty when the entry is complete). */
 export function missingFields(shape: Shape, entry: Entry): EntryField[] {

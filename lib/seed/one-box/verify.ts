@@ -36,7 +36,7 @@ async function judge(i: { client: Client; ledger: Ledger; input: OneBoxInput; pa
     system: cachedSystemText(verifySystemFor(shapeKey(i.input))),
     tools: [withToolCache(VERDICT_TOOL as Anthropic.Tool)],
     tool_choice: { type: 'tool', name: VERDICT_TOOL.name },
-    messages: [{ role: 'user', content: buildVerifyUserTurn({ vertical: i.input.vertical, series: i.input.series, blurb: i.input.blurb, pageText: i.pageText }) }],
+    messages: [{ role: 'user', content: buildVerifyUserTurn({ vertical: i.input.vertical, blurb: i.input.blurb, pageText: i.pageText }) }],
   });
   const priced = priceAnthropicMessages([message], { modelId: ONE_BOX_VERIFY_MODEL, fallbackCacheTtl: '1h' });
   const usd = Number(priced.costUsd);

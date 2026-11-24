@@ -90,7 +90,7 @@ export async function runSearch(i: {
     max_tokens: SEARCH_MAX_OUTPUT_TOKENS,
     system: cachedSystemText(searchSystemFor(shapeKey(i.input))),
     tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: SEARCH_MAX_USES }, withToolCache(reportFindingToolFor(shapeKey(i.input)) as Anthropic.Tool)],
-    messages: [{ role: 'user', content: buildSearchUserTurn({ vertical: i.input.vertical, series: i.input.series, blurb: i.input.blurb, linkHint: hint, poolHeadlines: i.poolHeadlines }) }],
+    messages: [{ role: 'user', content: buildSearchUserTurn({ vertical: i.input.vertical, blurb: i.input.blurb, linkHint: hint, poolHeadlines: i.poolHeadlines }) }],
   });
   const priced = priceAnthropicMessages([message], { modelId: B6_MODEL, fallbackCacheTtl: '1h' });
   const usd = Number(priced.costUsd);

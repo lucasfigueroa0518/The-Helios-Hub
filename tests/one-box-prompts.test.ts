@@ -1,4 +1,4 @@
-/** One-box seeding: per-pool prompts, tool schemas and the approval gate (offline, pure). */
+/** One-box seeding: per-pool prompts, tool schemas and (offline, pure). */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
@@ -8,7 +8,6 @@ import {
   VERDICT_TOOL,
   buildSearchUserTurn,
   buildVerifyUserTurn,
-  oneBoxApproved,
   reportFindingToolFor,
   searchSystemFor,
   verifySystemFor,
@@ -29,10 +28,9 @@ test('each pool’s report tool carries exactly that pool’s fields, and requir
 
 test('each pool’s search prompt names its own fields and none of the other pools’ section text', () => {
   assert.match(searchSystemFor('carousels'), /exactly these fields: url, headline/);
-  assert.match(searchSystemFor('guess_the_number'), /value, fact, url, and optionally storyHeadline/);
-  assert.match(searchSystemFor('free_vs_paid'), /toolName, url, and optionally description/);
+  assert.match(searchSystemFor('stories'), /exactly these fields: headline, url/);
   assert.match(searchSystemFor('explainers'), /title, sourceUrl/);
-  assert.ok(!searchSystemFor('carousels').includes('Guess the Number'));
+  assert.ok(!searchSystemFor('carousels').includes('Morning Download'));
   assert.ok(!searchSystemFor('reels').includes('teachable concept'));
   assert.ok(searchSystemFor('explainers').includes('news event with no teachable concept'));
 });
@@ -54,10 +52,10 @@ test('prompts are stable per pool and differ between pools', () => {
 
 test('the blurb, link hint and pool headlines appear only in the user turn', () => {
   const turn = buildSearchUserTurn({
-    vertical: 'stories', series: 'guess_the_number', blurb: 'BLURB-ALPHA', poolHeadlines: ['HEADLINE-ONE'],
+    vertical: 'stories', blurb: 'BLURB-ALPHA', poolHeadlines: ['HEADLINE-ONE'],
     linkHint: { url: 'https://x.test/a', headline: 'HINT-HEADLINE', excerpt: 'HINT-EXCERPT' },
   });
-  for (const needle of ['BLURB-ALPHA', 'HEADLINE-ONE', 'HINT-HEADLINE', 'HINT-EXCERPT', 'https://x.test/a', 'Guess the Number']) {
+  for (const needle of ['BLURB-ALPHA', 'HEADLINE-ONE', 'HINT-HEADLINE', 'HINT-EXCERPT', 'https://x.test/a', 'Morning Download']) {
     assert.ok(turn.includes(needle), needle);
   }
   for (const key of KEYS) {
@@ -72,27 +70,14 @@ test('an unreadable link is described as such in the user turn', () => {
   assert.match(turn, /could not be read/i);
 });
 
-test('the verifier prompt differs for Explainers, figures and tools; the user turn clips the page to 3000 characters', () => {
+test('the verifier prompt differs for Explainers; the user turn clips the page to 3000 characters', () => {
   assert.match(verifySystemFor('explainers'), /about the concept/);
-  assert.match(verifySystemFor('guess_the_number'), /states the figure/);
-  assert.match(verifySystemFor('free_vs_paid'), /official page of the tool/);
   assert.equal(VERDICT_TOOL.name, 'report_verdict');
   const turn = buildVerifyUserTurn({ vertical: 'reels', blurb: 'b', pageText: 'x'.repeat(10_000) });
   assert.ok(!turn.includes('x'.repeat(3001)) && turn.includes('x'.repeat(3000)));
 });
 
-test('both prompt versions are drafts and the gate needs the exact env value', () => {
+test('both prompt versions are drafts', () => {
   assert.match(ONE_BOX_SEED_PROMPT_VERSION, /-draft$/);
   assert.match(ONE_BOX_VERIFY_PROMPT_VERSION, /-draft$/);
-  const saved = process.env.ONE_BOX_SEED_PROMPT_APPROVED;
-  try {
-    delete process.env.ONE_BOX_SEED_PROMPT_APPROVED;
-    assert.equal(oneBoxApproved(), false);
-    process.env.ONE_BOX_SEED_PROMPT_APPROVED = 'yes';
-    assert.equal(oneBoxApproved(), false);
-    process.env.ONE_BOX_SEED_PROMPT_APPROVED = 'true';
-    assert.equal(oneBoxApproved(), true);
-  } finally {
-    if (saved === undefined) delete process.env.ONE_BOX_SEED_PROMPT_APPROVED; else process.env.ONE_BOX_SEED_PROMPT_APPROVED = saved;
-  }
 });

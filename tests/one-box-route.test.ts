@@ -15,21 +15,40 @@ async function setup(over: Partial<PostDeps> = {}) {
   await pg.exec(schemaSql('social_hub_schema.sql'));
   const q: Query = async (text, params) => ({ rows: (await pg.query(text, params)).rows as any[] });
   const scheduled: string[] = [];
-  const deps: PostDeps = { q, approved: () => true, hasKey: () => true, openCount: async () => 0, schedule: (id) => void scheduled.push(id), ...over };
+  const deps: PostDeps = { q, hasKey: () => true, openCount: async () => 0, schedule: (id) => void scheduled.push(id), ...over };
   const count = async () => Number((await q(`SELECT count(*)::int AS n FROM social_hub.seed_requests`)).rows[0].n);
   return { deps, scheduled, count };
 }
 const ok = { vertical: 'reels', blurb: 'OpenAI shipped a thing' };
 
-test('an unapproved prompt returns 403 and inserts nothing', async () => {
-  const { deps, count } = await setup({ approved: () => false });
-  const r = await handlePost(ok, deps);
-  assert.equal(r.status, 403);
-  assert.equal(await count(), 0);
-});
-test('ai_events and unknown verticals return 400', async () => {
+const NINE = ['reels', 'carousels', 'last_few_days', 'stories', 'explainers', 'field_notes', 'ai_trivia', 'real_or_ai', 'reel_ai_drama'];
+test('accepts every seedable type and refuses ai_events', async () => {
+  for (const [i, vertical] of NINE.entries()) {
+    const { deps } = await setup();
+    assert.equal((await handlePost({ ...ok, vertical, blurb: `idea ${i}` }, deps)).status, 200, vertical);
+  }
   const { deps } = await setup();
-  assert.equal((await handlePost({ ...ok, vertical: 'ai_events' }, deps)).status, 400);
+  const r = await handlePost({ ...ok, vertical: 'ai_events' }, deps);
+  assert.equal(r.status, 400);
+  assert.deepEqual(r.body, { error: 'Choose a pool that takes seeds.' });
+});
+test('schedules only vercel types', async () => {
+  const { deps, scheduled } = await setup();
+  for (const vertical of ['reels', 'field_notes']) assert.equal((await handlePost({ vertical, blurb: `a ${vertical}` }, deps)).status, 200);
+  assert.equal(scheduled.length, 2);
+  const other = await setup();
+  for (const vertical of ['ai_trivia', 'real_or_ai', 'reel_ai_drama']) assert.equal((await handlePost({ vertical, blurb: `a ${vertical}` }, other.deps)).status, 200);
+  assert.deepEqual(other.scheduled, []);
+});
+test('ignores a series field', async () => {
+  let seen: unknown;
+  const { deps } = await setup({ schedule: (_id, input) => void (seen = input) });
+  const r = await handlePost({ vertical: 'stories', blurb: 'a story', series: 'guess_the_number' }, deps);
+  assert.equal(r.status, 200);
+  assert.deepEqual(seen, { vertical: 'stories', blurb: 'a story' });
+});
+test('unknown verticals return 400', async () => {
+  const { deps } = await setup();
   assert.equal((await handlePost({ ...ok, vertical: 'nope' }, deps)).status, 400);
 });
 test('an empty blurb, or one over 600 characters, returns 400', async () => {
@@ -37,9 +56,8 @@ test('an empty blurb, or one over 600 characters, returns 400', async () => {
   assert.equal((await handlePost({ ...ok, blurb: '   ' }, deps)).status, 400);
   assert.equal((await handlePost({ ...ok, blurb: 'x'.repeat(601) }, deps)).status, 400);
 });
-test('Stories needs a series; a bad link scheme returns 400', async () => {
+test('a bad link scheme returns 400', async () => {
   const { deps } = await setup();
-  assert.equal((await handlePost({ ...ok, vertical: 'stories' }, deps)).status, 400);
   assert.equal((await handlePost({ ...ok, link: 'ftp://x.test' }, deps)).status, 400);
 });
 test('a valid body inserts one working row and schedules the run once', async () => {

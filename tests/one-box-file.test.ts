@@ -39,25 +39,10 @@ test('Carousels and Last Few Days: url and headline', async () => {
   assert.deepEqual(seen.carousel, [{ url: 'https://news.test/1', headline: 'Headline 1' }]);
   assert.deepEqual(seen.lfd, [{ url: 'https://news.test/1', headline: 'Headline 1' }]);
 });
-test('Stories Morning Download: series, headline, url, and the blurb as notes', async () => {
+test('Stories (always Morning Download): series, headline, url, and the blurb as notes', async () => {
   const { d, seen } = deps();
-  await run({ vertical: 'stories', series: 'morning_download', blurb: 'my words' }, verified(news), d);
+  await run({ vertical: 'stories', blurb: 'my words' }, verified(news), d);
   assert.deepEqual(seen.story, [{ series: 'morning_download', headline: 'Headline 1', url: 'https://news.test/1', notes: 'my words' }]);
-});
-test('Stories Guess the Number: value, fact, story headline, url', async () => {
-  const { d, seen } = deps();
-  await run({ vertical: 'stories', series: 'guess_the_number', blurb: 'b' }, verified({ value: '73%', fact: 'of x', storyHeadline: 'S', url: 'https://news.test/1' }), d);
-  assert.deepEqual(seen.story, [{ series: 'guess_the_number', value: '73%', fact: 'of x', storyHeadline: 'S', url: 'https://news.test/1' }]);
-});
-test('Guess the Number without a story headline uses the fact', async () => {
-  const { d, seen } = deps();
-  await run({ vertical: 'stories', series: 'guess_the_number', blurb: 'b' }, verified({ value: '73%', fact: 'of x', url: 'https://news.test/1' }), d);
-  assert.equal((seen.story![0] as { storyHeadline: string }).storyHeadline, 'of x');
-});
-test('Stories Free vs. Paid: tool name, url, description', async () => {
-  const { d, seen } = deps();
-  await run({ vertical: 'stories', series: 'free_vs_paid', blurb: 'b' }, verified({ toolName: 'Acme', url: 'https://acme.test', description: 'does x' }), d);
-  assert.deepEqual(seen.story, [{ series: 'free_vs_paid', toolName: 'Acme', url: 'https://acme.test', description: 'does x' }]);
 });
 test('Explainers: title, manual origin, sourceUrl, sourceText from the passed pages clipped to 20000', async () => {
   const { d, seen } = deps();

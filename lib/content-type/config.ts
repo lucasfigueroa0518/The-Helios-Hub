@@ -126,7 +126,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'Are you smarter than AI?',
     benchNote: 'The questions written for “Are you smarter than AI?”. Hold and drag a question to move it.',
     maxCap: 1, // SS-24: a Stories-format type posts at most once a day
-    seedable: false,
+    seedable: true,
     postsNoun: 'Are you smarter than AI? sets',
     generate: {
       label: 'Generate on its days',
@@ -144,7 +144,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     title: 'Real or AI?',
     benchNote: 'Rounds of a real photo and an AI image, from the pool the engine screens. Hold and drag a round to move it.',
     maxCap: 1, // SS-24: a Stories-format type posts at most once a day
-    seedable: false,
+    seedable: true,
     postsNoun: 'Real or AI? sets',
     generate: {
       label: 'Generate on its days',
@@ -218,12 +218,12 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     dragNeedsGroup: false,
     pool: { noun: { one: 'tip', many: 'tips' }, order: 'score', moves: liveMoves(true) },
   },
-  // Pitches come from weekly development sessions, not seeds; the night makes up to three a day.
+  // Pitches come from weekly development sessions and from the one box; the night makes up to three a day.
   reel_ai_drama: {
     title: 'AI Drama Reels',
     benchNote: 'Story pitches waiting to be made, best rank first. Make it produces one reel. Hold and drag any pitch to move it.',
     maxCap: 3,
-    seedable: false,
+    seedable: true,
     postsNoun: 'AI Drama reels',
     generate: {
       label: 'Generate every night',

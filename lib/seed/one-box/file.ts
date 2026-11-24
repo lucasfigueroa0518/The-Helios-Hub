@@ -1,4 +1,4 @@
-import type { OneBoxInput, SeedVerticalKey, StorySeries, Verified } from './types';
+import type { OneBoxInput, SeedVerticalKey, Verified } from './types';
 
 /**
  * Filing a verified finding (design section 6): the one-box builds exactly the fields each type's existing add function takes,
@@ -15,7 +15,7 @@ export type FileDeps = {
   story: (body: Record<string, unknown>) => Promise<{ key: string; title: string }>;
   explainer: (t: { title: string; origin: 'manual'; sourceUrl: string; sourceText: string }) => Promise<{ topicId: string; title: string }>;
   /** Headlines already in a pool (read-only, at most 40), for the agent's duplicate check. */
-  headlines: (vertical: SeedVerticalKey, series?: StorySeries) => Promise<string[]>;
+  headlines: (vertical: SeedVerticalKey) => Promise<string[]>;
   /** The free duplicate check on the found URL: the existing idea's headline, or null. */
   existing: (vertical: SeedVerticalKey, url: string, headline: string) => Promise<string | null>;
 };
@@ -51,13 +51,7 @@ export async function fileIdea(i: { input: OneBoxInput; verified: Verified; deps
         return { status: 'added', ideaId: out.id, title: out.title };
       }
       case 'stories': {
-        const series = input.series ?? 'morning_download';
-        const body: Record<string, unknown> =
-          series === 'guess_the_number'
-            ? { series, value: e.value, fact: e.fact, storyHeadline: e.storyHeadline ?? e.fact, url: e.url }
-            : series === 'free_vs_paid'
-              ? { series, toolName: e.toolName, url: e.url, description: e.description ?? '' }
-              : { series, headline: e.headline, url: e.url, notes: input.blurb };
+        const body: Record<string, unknown> = { series: 'morning_download', headline: e.headline, url: e.url, notes: input.blurb };
         const out = await deps.story(body);
         return { status: 'added', ideaId: out.key, title: out.title };
       }
@@ -65,6 +59,8 @@ export async function fileIdea(i: { input: OneBoxInput; verified: Verified; deps
         const out = await deps.explainer({ title: e.title!, origin: 'manual', sourceUrl: e.sourceUrl!, sourceText: sourceText(v) });
         return { status: 'added', ideaId: out.topicId, title: out.title };
       }
+      default:
+        return { status: 'refused', reason: `${input.vertical} is not filed by this runner.` };
     }
   } catch (error) {
     return { status: 'refused', reason: error instanceof Error ? error.message : String(error) };
