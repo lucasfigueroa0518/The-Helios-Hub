@@ -152,7 +152,7 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     });
     if (harvestBudget.usd > 0) m.spend(harvestBudget.usd);
     if (m.stopped()) m.halt();
-    return { photo: rung.photo ?? null, trace: rung.trace, ...(rung.source ? { source: rung.source } : {}) };
+    return { photo: rung.photo ?? null, trace: rung.trace, ...(rung.source ? { source: rung.source } : {}), result: rung.result };
   },
 
   async vision(png, story, m) {
@@ -160,6 +160,11 @@ export const liveLastFewDaysDeps: LastFewDaysDeps = {
     const v = await checkSlide(await meteredClaude(m), png, story);
     if (m.stopped()) m.halt();
     return v;
+  },
+
+  async photoBank() {
+    const { liveNewsPhotoBank } = await import('@/lib/news-photos/bank-live');
+    return liveNewsPhotoBank();
   },
 
   async unschedule(q, postId) {

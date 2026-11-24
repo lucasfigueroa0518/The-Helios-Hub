@@ -9,7 +9,8 @@
  *
  * Story photos come from the news photo finder (lib/news-photos findStoryPhoto, wiring contract 2026-11-24): its
  * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The old Stories finder
- * and the photo bank it carried (lfdPhotoFinder) are gone: the run had stopped calling them.
+ * and the photo bank it carried (lfdPhotoFinder) are gone: the run had stopped calling them. The run offers the news
+ * finder's photos to the bank itself (LfdRunDeps.bank, lib/news-photos/bank-offer.ts); drainBank waits for it.
  *
  * The AI cover (lib/lfd/cover) uses the run's Jev and budget-guarded create, and fal (FAL_API_KEY) for the image.
  */
@@ -41,7 +42,7 @@ export async function liveBuilderHarvest(): Promise<BuilderHarvest> {
 export async function liveLfdDeps(
   query: HubQuery,
   o: { capUsd: number; trigger: 'scheduled' | 'manual'; runId?: string; now?: Date },
-): Promise<{ deps: LfdRunDeps; spentUsd: () => number }> {
+): Promise<{ deps: LfdRunDeps; spentUsd: () => number; drainBank: (ms: number) => Promise<void> }> {
   // A NaN or Infinity cap would silently switch off both the run budget and the Jev cap: refuse it before anything is built.
   if (!Number.isFinite(o.capUsd) || o.capUsd <= 0) throw new Error(`Last Few Days run cap must be a positive number (got ${String(o.capUsd)})`);
   const { mediaBucket } = await import('@/lib/media-bucket');
@@ -120,6 +121,15 @@ export async function liveLfdDeps(
   } catch (err) {
     console.log(`lfd: video off (${err instanceof Error ? err.message : String(err)}); photos and memes only`);
   }
+  // The photo bank (D49): the run offers its finder photos (lib/news-photos/bank-offer.ts); the bank lives in the hub's
+  // Supabase (this query). Built without it if it can't be built; a one-shot run drains it before exiting.
+  let bank: import('@/lib/media-library/bank').FullPhotoBank | null = null;
+  try {
+    const { createPhotoBank } = await import('@/lib/media-library/bank');
+    bank = createPhotoBank({ query: (text, params) => query(text, params), log: (line) => console.log(`photo bank: ${line}`) });
+  } catch (err) {
+    console.log(`lfd: photo bank not built (${err instanceof Error ? err.message : String(err)})`);
+  }
   // Builder slides' photos: AI Drama's harvest engine, capped at $0.15 a post inside the run.
   const harvest = await liveBuilderHarvest();
   // The AI cover (PLAN.md C7): GPT Image 2.6 edit on fal, wired only when FAL_API_KEY is set (else it falls back).
@@ -138,6 +148,7 @@ export async function liveLfdDeps(
       // CI-32: a lead image is downloaded and hashed to check it against the used-photo ledger's pictures.
       usedPhotos: { http: fetch },
       newsPhotos,
+      ...(bank ? { bank } : {}),
       ...(intake ? { intake } : {}),
       fetchFeeds: () => fetchAllFeeds(HELIOS_SOCIAL_FEEDS),
       fetchBody: fetchBodyLive,
@@ -154,5 +165,9 @@ export async function liveLfdDeps(
       ...(video ? { video } : {}),
     },
     spentUsd: () => budget.spent(),
+    // Waits (at most `ms`) for the bank's queued writes; a one-shot CLI run calls it before exiting. Never throws.
+    drainBank: async (ms) => {
+      await bank?.drain(ms).catch(() => undefined);
+    },
   };
 }

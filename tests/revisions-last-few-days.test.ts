@@ -15,6 +15,7 @@ import {
 } from '@/lib/revisions/descriptions/last-few-days';
 import { descriptionFor } from '@/lib/revisions/registry';
 import { CeilingReached, createCostMeter } from '@/lib/revisions/caps';
+import type { HeldOfferInput } from '@/lib/media-library/held';
 import type { Interpretation, PartRef } from '@/lib/revisions/types';
 import type { Post as RenderPost } from '@/lib/social/render/types';
 import type { Query } from '@/lib/social/store/pg';
@@ -614,4 +615,45 @@ test('a photo swap that would push a model caption over 2200 characters fails an
   if (!res.ok) { assert.equal(res.reason, 'failed'); assert.match(res.note, /2200/); }
   assert.equal(calls.rendered.length, 0);
   assert.equal((await row(q, p.id)).caption, p.caption);
+});
+
+/* ── the photo bank (D49): a photo revision offers what the news photo finder found ── */
+
+const NEW_PHOTO = { src: 'https://img.test/new.jpg', credit: 'Reuters / CC BY 4.0', kind: 'scene' as const };
+const lfdResult = (): NonNullable<Awaited<ReturnType<LastFewDaysDeps['findPhoto']>>['result']> => ({
+  id: 'k3', tier: 'good', brief: { kind: 'object', subject: 'Nvidia GPUs', good_if: 'it shows them' }, costUsd: 0, log: [],
+  pick: { src: NEW_PHOTO.src, source: 'article', credit: NEW_PHOTO.credit, tier: 'good', clarity: 8, jpeg: Buffer.from('jpg'), width: 1200, height: 800 },
+  passed: [{ src: 'https://img.test/runner-up.jpg', source: 'other_outlet', credit: 'Photo: Wire', tier: 'usable', clarity: 6, jpeg: Buffer.from('jpg2'), width: 1200, height: 800 }],
+});
+
+test('photo bank: an LFD photo revision offers the pick as picked at the story\'s slide and its runner-up as passed', async () => {
+  const q = await db();
+  const p = await seed(q);
+  const offers: HeldOfferInput[] = [];
+  const { desc } = setup({
+    deps: {
+      async findPhoto(_input, m) { m.spend(0.02); return { photo: NEW_PHOTO, trace: ['finder: stub'], result: lfdResult() }; },
+      photoBank: async () => ({ offerHeld: (input) => void offers.push(input) }),
+    },
+  });
+  const res = await desc.revise({ q, refs: refsOf(p.id), interpretation: interp(story(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0]!.runKind, 'story');
+  assert.ok(offers[0]!.runRef.startsWith('lfd-revision:k3:2'), offers[0]!.runRef);
+  assert.deepEqual(offers[0]!.items.map((i) => [i.url, i.outcome, i.slide]), [[NEW_PHOTO.src, 'picked', 4], ['https://img.test/runner-up.jpg', 'passed', 4]]);
+});
+
+test('photo bank: a throwing bank never fails an LFD photo revision', async () => {
+  const q = await db();
+  const p = await seed(q);
+  const { desc } = setup({
+    deps: {
+      async findPhoto(_input, m) { m.spend(0.02); return { photo: NEW_PHOTO, trace: ['finder: stub'], result: lfdResult() }; },
+      photoBank: async () => ({ offerHeld: () => { throw new Error('bank down'); } }),
+    },
+  });
+  const res = await desc.revise({ q, refs: refsOf(p.id), interpretation: interp(story(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal((await row(q, p.id)).stories[2]!.photo.src, NEW_PHOTO.src);
 });

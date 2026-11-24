@@ -107,15 +107,20 @@ export const liveStoriesDeps: StoriesDeps = {
     const res = await np.findStoryPhoto(story, { create, jev, readPage: np.readPageImages(), serper, fetchImage, usedReason }, { extra });
     if (m.stopped()) m.halt();
     const log = [...res.log];
-    if (!res.pick || res.tier === 'none') return { photo: null, log };
+    if (!res.pick || res.tier === 'none') return { photo: null, log, result: res };
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'md-band-rev-'));
     try {
       const band = await bandPhotoFor(res.pick, { fetchImage, jev, upscaler: findPhotoUpscaler(), tmpDir, storage: createStoriesStorage() }, setId, story.id);
       if (m.stopped()) m.halt();
-      return { photo: band.photo, log: [...log, band.step] };
+      return { photo: band.photo, log: [...log, band.step], result: res };
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
+  },
+
+  async photoBank() {
+    const { liveNewsPhotoBank } = await import('@/lib/news-photos/bank-live');
+    return liveNewsPhotoBank();
   },
 
   async unschedule(q, setId) {

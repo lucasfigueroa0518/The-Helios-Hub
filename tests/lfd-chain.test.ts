@@ -12,6 +12,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { leadFor, LineupWalk, scoreUnscoredSeeds } from '@/lib/lfd/pick';
 import { seedCandidate } from '@/lib/lfd/seeds';
 import { runLastFewDays, windowLabel, type LfdNewsChain, type LfdRunDeps } from '@/lib/lfd/run';
+import type { HeldOfferInput } from '@/lib/media-library/held';
 import type { MediaVerdict } from '@/lib/news-ranker/posts';
 import { MAJOR_NEWS, SAME_EVENT } from '@/lib/news-ranker/questions';
 import type { Graded } from '@/lib/news-ranker/rerank';
@@ -78,12 +79,13 @@ function chain(noMedia: Set<string>) {
     },
     findPhoto: async (s) => (noMedia.has(s.headline)
       ? { id: s.id, tier: 'none', pick: null, brief: null, costUsd: 0, log: ['no candidate cleared'] }
-      : { id: s.id, tier: 'good', pick: { src: `https://p/${encodeURIComponent(s.url)}.jpg`, source: 'search', credit: 'C', tier: 'good', clarity: 8, jpeg: Buffer.alloc(0), width: 1200, height: 800 }, brief: null, costUsd: 0, log: [] }),
+      : { id: s.id, tier: 'good', pick: { src: `https://p/${encodeURIComponent(s.url)}.jpg`, source: 'search', credit: 'C', tier: 'good', clarity: 8, jpeg: Buffer.from('jpg'), width: 1200, height: 800 }, brief: { kind: 'object', subject: s.headline, good_if: 'it shows it' }, costUsd: 0, log: [],
+        passed: [{ src: `https://p/${encodeURIComponent(s.url)}-2.jpg`, source: 'article', credit: 'Photo: Wire', tier: 'usable', clarity: 6, jpeg: Buffer.from('jpg2'), width: 1200, height: 800 }] }),
   };
   return { news, seen };
 }
 
-async function run(stories: number, noMedia: string[] = [], o: { headline?: (i: number) => string; before?: (q: HubQuery) => Promise<void>; jev?: LfdRunDeps['jev'] } = {}) {
+async function run(stories: number, noMedia: string[] = [], o: { headline?: (i: number) => string; before?: (q: HubQuery) => Promise<void>; jev?: LfdRunDeps['jev']; bank?: LfdRunDeps['bank'] } = {}) {
   const { query } = await openHubTestDb();
   await o.before?.(query);
   for (let i = 0; i < stories; i++) {
@@ -115,12 +117,13 @@ async function run(stories: number, noMedia: string[] = [], o: { headline?: (i: 
     trigger: 'manual',
     capUsd: 1,
     spend: () => ({ claudeUsd: 0, jevUsd: 0 }),
+    ...(o.bank !== undefined ? { bank: o.bank } : {}),
   };
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
   const post = (await query<{ stories: Array<{ headline: string; photoSource: string }>; short: boolean }>(`SELECT stories, short FROM lfd.posts WHERE run_id = $1`, [res.runId])).rows[0]!;
   const record = (await query<{ record: { drops: Array<{ headline: string; reason: string }>; rerank: { repeats?: Array<{ key: string; headline: string; covered: string }> } } }>(`SELECT record FROM lfd.runs WHERE id = $1`, [res.runId])).rows[0]!.record;
-  return { post, record, seen: c.seen };
+  return { post, record, seen: c.seen, runId: res.runId };
 }
 
 test('the post follows the rerank order (not the shortlist order) and keeps 6 of 10', async () => {
@@ -175,4 +178,28 @@ test('a seed with no stored score gets one major-news call and its lane from the
   assert.equal(leadFor(a!, now)?.lane, 'major');
   assert.equal(b!.major, 0.2);
   assert.equal(leadFor(b!, now), null);
+});
+
+/* ── the photo bank (D49): the run offers its news-finder photos ── */
+
+test('LFD photo bank: each slide\'s pick is offered as picked at its slide with its runner-ups; a skipped story offers nothing', async () => {
+  const offers: HeldOfferInput[] = [];
+  const { post, runId } = await run(7, ['Story 5'], { bank: { offerHeld: (input) => void offers.push(input) } });
+  assert.deepEqual(post.stories.map((s) => s.headline), ['Story 6', 'Story 4', 'Story 3', 'Story 2', 'Story 1', 'Story 0']);
+  assert.ok(offers.every((o) => o.runKind === 'story' && o.runRef === `lfd:${runId}`));
+  const picked = offers.flatMap((o) => o.items.filter((i) => i.outcome === 'picked'));
+  assert.deepEqual(picked.map((i) => [i.slide, i.title]), post.stories.map((s, i) => [i + 2, s.headline]));
+  const passed = offers.flatMap((o) => o.items.filter((i) => i.outcome === 'passed'));
+  assert.equal(passed.length, 6);
+  assert.ok(passed.every((i) => i.url.endsWith('-2.jpg') && i.licence === 'unknown' && !i.reuseOk));
+  // The pick's request is the brief's subject; Story 5 had no photo, so nothing of it reached the bank.
+  assert.equal(picked[0]!.request, 'Story 6');
+  assert.ok(!offers.some((o) => o.items.some((i) => i.title === 'Story 5')));
+});
+
+test('LFD photo bank: no bank changes nothing, and a throwing bank never fails the run', async () => {
+  const plain = await run(5);
+  resetSeed();
+  const throwing = await run(5, [], { bank: { offerHeld: () => { throw new Error('bank down'); } } });
+  assert.deepEqual(throwing.post.stories.map((s) => s.headline), plain.post.stories.map((s) => s.headline));
 });

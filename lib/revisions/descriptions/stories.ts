@@ -37,6 +37,8 @@ import { randomUUID } from 'node:crypto';
 
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Query } from '@/lib/social/store/pg';
+import type { PhotoResult } from '@/lib/news-photos';
+import type { PhotoBankSink } from '@/lib/news-photos/bank-offer';
 import type { PhotoStory } from '@/lib/news-photos/candidates';
 import type { Queryable } from '@/lib/stories/db';
 import { BACKDROPS, MAX_JPEG_BYTES, VIDEO_SERIES, framePhoto, type Backdrop, type Frame, type FrameData, type Photo, type Series, type Style } from '@/lib/stories/render/types';
@@ -121,7 +123,13 @@ export type StoriesDeps = {
    * image search adds extra candidates. The pick is band-fitted and stored as the build does (bandPhotoFor): `src` is
    * the stored copy, `sourceUrl` the original. `photo` is null when nothing usable was found. Charges `meter`.
    */
-  findPhoto: (input: { setId: string; story: PhotoStory; hint?: string; exclude: ReadonlySet<string> }, meter: Metered) => Promise<{ photo: Photo | null; log: string[] }>;
+  findPhoto: (input: { setId: string; story: PhotoStory; hint?: string; exclude: ReadonlySet<string> }, meter: Metered) => Promise<{ photo: Photo | null; log: string[]; result?: PhotoResult | null }>;
+  /**
+   * The photo bank (D49): the finder's `result` (pick and runner-ups) is offered with run ref
+   * `stories-revision:<set>:<iso>` at the frame's slide (lib/news-photos/bank-offer.ts). Absent, or null: nothing is
+   * offered. Never fails a revision.
+   */
+  photoBank?: () => Promise<PhotoBankSink | null>;
   /** The type's own un-approve: repository unscheduleSet (the set goes back to ready, its slot cancelled). */
   unschedule: (q: Query, setId: string) => Promise<{ ok: boolean; note: string }>;
   /** A short id for the revision's storage key. Default: random. */
@@ -493,12 +501,22 @@ export function createStoriesDescription(deps: StoriesDeps, vertical: StoryVerti
         const photoStory: PhotoStory = { id: story.key, headline: article?.headline ?? row.copy.headline, text: (article?.text ?? row.copy.headline).slice(0, STORIES_BODY_CHARS), url: story.url, duplicateUrls: [] };
         const hint = args.hint?.trim();
         m.check();
-        let got: { photo: Photo | null; log: string[] };
+        let got: { photo: Photo | null; log: string[]; result?: PhotoResult | null };
         try {
           got = await deps.findPhoto({ setId: set.id, story: photoStory, ...(hint ? { hint } : {}), exclude }, m);
         } catch (e) {
           m.check();
           return failed(`I couldn't search for another photo for frame ${seq} (${errText(e)}), so the original was kept.`);
+        }
+        // The photo bank (D49): what the finder found, the swapped-in pick as `picked` at this frame. Best effort.
+        if (got.result && deps.photoBank) {
+          try {
+            const [bank, { offerToBank }] = await Promise.all([deps.photoBank(), import('@/lib/news-photos/bank-offer')]);
+            const at = new Date();
+            offerToBank(bank, got.result, { runRef: `stories-revision:${set.id}:${at.toISOString()}`, slide: seq, posted: Boolean(got.photo), headline: photoStory.headline, at });
+          } catch {
+            /* the bank never fails a revision */
+          }
         }
         m.check();
         const photo = got.photo;

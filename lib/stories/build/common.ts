@@ -51,6 +51,11 @@ export type NewsChainDeps = {
   tmpDir: string;
   /** Where the band photo is stored (the stories bucket). */
   storage: Pick<import('@/lib/stories/storage').StoriesStorage, 'upload' | 'sign'>;
+  /**
+   * The photo bank (D49): every story's pick and runner-ups are offered (lib/news-photos/bank-offer.ts); the worker
+   * drains it after the build. Absent or null (tests): nothing is offered.
+   */
+  bank?: import('@/lib/news-photos/bank-offer').PhotoBankSink | null;
 };
 
 /**
