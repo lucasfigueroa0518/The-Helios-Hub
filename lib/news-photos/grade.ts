@@ -9,6 +9,7 @@ import { jevCostUsd } from '@/lib/social/jev/client';
 
 import type { PhotoBrief } from './brief';
 import type { Candidate } from './candidates';
+import { visionImage } from './vision-bytes';
 
 import type { MediaVerdict } from '@/lib/news-ranker/posts';
 export type { MediaVerdict };
@@ -62,10 +63,11 @@ export function gradeQuestions(): Questions {
 /** Grade one candidate; two attempts, then `none` (as the lab). */
 export async function gradePhoto(c: FetchedCandidate, headline: string, b: PhotoBrief, jev: PhotoJev): Promise<GradeOutcome> {
   const qs = gradeQuestions();
+  const picture = image((await visionImage(c.jpeg)).bytes);
   let costUsd = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await jev.systemOne({ state: { context: `Story headline: ${headline}\nPhoto brief: ${b.subject} (${b.good_if})`, picture: image(c.jpeg) }, questions: qs });
+      const res = await jev.systemOne({ state: { context: `Story headline: ${headline}\nPhoto brief: ${b.subject} (${b.good_if})`, picture }, questions: qs });
       costUsd += jevCostUsd({ input_tokens: res.usage?.input_tokens ?? 0, output_tokens: res.usage?.output_tokens ?? 0 });
       const r = res.answers as Record<string, { noul?: number; probabilities?: Record<string, number> }>;
       let tot = 0, ev = 0;

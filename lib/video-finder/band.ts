@@ -61,8 +61,27 @@ export async function fitClip(src: string, aspect: number, boxSubject: BoxSubjec
   return { fit: decideVideoFit(p.width, p.height, shots, boxes, aspect), w: p.width, h: p.height, duration: p.duration, usd };
 }
 
+/**
+ * Where in the W×H clip the picture sits: rows `top` to `bottom`, full width, over a blurred, darkened copy of itself
+ * (MD: the contained photo's place between the masthead and the copy, so the masthead never sits on the clip).
+ * `fit` must then be decided for that region's aspect, W / (bottom − top).
+ */
+export type BandPlace = { top: number; bottom: number };
+
 /** The ffmpeg graph that turns the source into a W×H clip by `fit` (input 0 → [v]). Pure; tested offline. */
-export function bandGraph(fit: VideoFit, w: number, h: number, W: number, H: number): string {
+export function bandGraph(fit: VideoFit, w: number, h: number, W: number, H: number, place?: BandPlace): string {
+  if (place) {
+    const even = (n: number) => Math.round(n / 2) * 2;
+    const top = even(place.top), rh = even(place.bottom - place.top);
+    const bw = even(W / 4), bh = even(H / 4);
+    const bg = `[a]scale=${bw}:${bh}:force_original_aspect_ratio=increase,crop=${bw}:${bh},boxblur=10:2,scale=${W}:${H},colorchannelmixer=rr=.7:gg=.7:bb=.7,setsar=1[bg]`;
+    // A clip narrower than the region (vertical) is shown whole, like a blur fit: no subject box was checked
+    // against cutting its top and bottom.
+    const fg = fit.mode !== 'crop'
+      ? `[b]scale=${W}:${rh}:force_original_aspect_ratio=decrease:flags=lanczos,setsar=1[fg];[bg][fg]overlay=(W-w)/2:${top}+(${rh}-h)/2[v]`
+      : `[b]crop=${even(fit.win * w)}:${h}:'${cropExpr(fit, w)}':0,scale=${W}:${rh}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${rh},setsar=1[fg];[bg][fg]overlay=0:${top}[v]`;
+    return `[0:v]split[a][b];${bg};${fg}`;
+  }
   if (fit.mode === 'blur') {
     const bw = Math.round(W / 4 / 2) * 2, bh = Math.round(H / 4 / 2) * 2;
     return `[0:v]split[a][b];[a]scale=${bw}:${bh}:force_original_aspect_ratio=increase,crop=${bw}:${bh},boxblur=10:2,scale=${W}:${H},colorchannelmixer=rr=.7:gg=.7:bb=.7,setsar=1[bg];`
@@ -72,9 +91,9 @@ export function bandGraph(fit: VideoFit, w: number, h: number, W: number, H: num
   return `[0:v]${region}scale=${W}:${H}:force_original_aspect_ratio=increase:flags=lanczos,crop=${W}:${H},setsar=1[v]`;
 }
 
-/** Render the W×H band clip (sound kept when the clip has it) and its poster JPEG (the frame at 1 s). */
-export async function renderBand(src: string, fit: BandFit, W: number, H: number, out: string, poster: string): Promise<void> {
-  await run('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-filter_complex', bandGraph(fit.fit, fit.w, fit.h, W, H), '-map', '[v]', '-map', '0:a?',
+/** Render the W×H band clip, its picture at `place` when given (sound kept when the clip has it) and its poster JPEG (the frame at 1 s). */
+export async function renderBand(src: string, fit: BandFit, W: number, H: number, out: string, poster: string, place?: BandPlace): Promise<void> {
+  await run('ffmpeg', ['-y', '-loglevel', 'error', '-i', src, '-filter_complex', bandGraph(fit.fit, fit.w, fit.h, W, H, place), '-map', '[v]', '-map', '0:a?',
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', out], { timeout: 300_000 });
   await run('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(Math.min(1, fit.duration / 2)), '-i', out, '-frames:v', '1', '-q:v', '2', poster], { timeout: 30_000 });
 }

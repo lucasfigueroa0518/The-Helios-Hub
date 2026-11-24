@@ -9,12 +9,25 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { BAND_H, BAND_W, CONTAINED_BOTTOM, CONTAINED_TOP } from '@/lib/news-photos/band';
 import type { Photo, StoryVideo } from '@/lib/stories/render/types';
 import type { StoriesStorage } from '@/lib/stories/storage';
 import type { FinderDeps, FoundClip, VideoFind, VideoStory } from '@/lib/video-finder/find';
 
 /** The story frame's photo band (stories.css .st-story__photo: 1080 wide, 1180 tall). */
-export const MD_BAND = { w: 1080, h: 1180 } as const;
+export const MD_BAND = { w: BAND_W, h: BAND_H } as const;
+/**
+ * Where the clip plays inside the band: a contained photo's place (decideBand), between the masthead and the copy,
+ * over the clip's own blur fill. A full-bleed clip put the masthead on the video (set d61efd39). The clip is fitted
+ * (crop or blur) for this region's shape, and its poster, a still of the band clip, is contained like such a photo.
+ */
+export const MD_VIDEO_PLACE = { top: CONTAINED_TOP, bottom: CONTAINED_BOTTOM } as const;
+export const MD_VIDEO_ASPECT = MD_BAND.w / (MD_VIDEO_PLACE.bottom - MD_VIDEO_PLACE.top);
+
+/** The poster a stored band clip carries: always contained (CONTAINED_FADE), since the clip sits at MD_VIDEO_PLACE. */
+export function videoPoster(src: string, credit: string): Photo {
+  return { src, credit, kind: 'scene', contained: true };
+}
 /** Spend cap for one Morning Download build's video checks (about $0.02 a story in the lab, 8–10 stories a day). */
 export const MD_VIDEO_CAP_USD = 0.5;
 /** Stories checked at once (each runs its own waves of 4 candidates). */
@@ -70,12 +83,12 @@ export async function liveStoryVideo(o: { setId: string; storage: StoriesStorage
     async store(clip, tier, key) {
       const dir = fs.mkdtempSync(path.join(workDir, 'band-'));
       try {
-        const fit = await fitClip(clip.file, MD_BAND.w / MD_BAND.h, boxSubject, dir);
+        const fit = await fitClip(clip.file, MD_VIDEO_ASPECT, boxSubject, dir);
         if (!fit) return null;
         bandUsd += fit.usd;
         const out = path.join(dir, 'band.mp4');
         const poster = path.join(dir, 'band.jpg');
-        await renderBand(clip.file, fit, MD_BAND.w, MD_BAND.h, out, poster);
+        await renderBand(clip.file, fit, MD_BAND.w, MD_BAND.h, out, poster, MD_VIDEO_PLACE);
         const slug = crypto.createHash('sha1').update(key).digest('hex').slice(0, 12);
         const bandPath = `sets/${o.setId}/video/${slug}.mp4`;
         const posterPath = `sets/${o.setId}/video/${slug}.jpg`;
@@ -84,7 +97,7 @@ export async function liveStoryVideo(o: { setId: string; storage: StoriesStorage
         const src = await o.storage.sign(posterPath, POSTER_URL_SEC);
         return {
           video: { path: bandPath, seconds: Math.round(Math.min(fit.duration, clip.len) * 10) / 10, tier, sourceUrl: clip.sourceUrl, fit: fit.fit.mode },
-          poster: { src, credit: clipCredit(clip), kind: 'scene', ...(fit.fit.mode === 'blur' ? { contained: true } : {}) },
+          poster: videoPoster(src, clipCredit(clip)),
           usd: fit.usd,
         };
       } finally {
