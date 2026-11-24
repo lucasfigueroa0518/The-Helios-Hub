@@ -38,6 +38,8 @@ import { preparedScene } from './try.mjs'; // also registers the hooks that let 
 export const STEP = 0.2;
 /** The keep-outs for readable text (frame.md), in screen px. */
 export const KEEP_OUT = { top: 570, bottom: 1600, right: 940 };
+/** A depth-of-field blur (px, lens.js data-blur) at which text is background, like set text. */
+export const BACKGROUND_BLUR = 3;
 /** Roles allowed in the keep-outs: the cards designed for the top band. */
 export const EXEMPT_ROLES = new Set(['title', 'definition']);
 /** How far text may cross a line before it counts (px). */
@@ -124,7 +126,8 @@ function measure(svgs) {
         role: el.closest('[data-role]')?.getAttribute('data-role') ?? null,
         rect: [r.left, r.top, r.right, r.bottom],
         box: b ? [b.left, b.top, b.right, b.bottom] : null,
-        set: !!el.closest('[data-set]') && !el.closest('[data-k="focus"]'),
+        // set text, or text the lens blurs by BACKGROUND_BLUR (3 px; inlined: this runs in the page)
+        set: (!!el.closest('[data-set]') || parseFloat(el.closest('[data-blur]')?.getAttribute('data-blur') ?? '0') >= 3) && !el.closest('[data-k="focus"]'),
       });
     }
     for (const f of host.querySelectorAll('[data-k="focus"]')) {

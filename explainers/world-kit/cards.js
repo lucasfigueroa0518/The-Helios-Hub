@@ -287,6 +287,41 @@ export function textBox(text, x, y, o = {}) {
   };
 }
 
+/**
+ * A one-line readout in a window: a calculator's display, a scoreboard, a counter, a screen's line
+ * (2026-11-24: job 88's calculator set "4817×263" by hand at a fixed size and it filled its window
+ * edge to edge). `box` { x, y, w, h } is the window in the drawing's own units (px, or cm inside a
+ * prop's face art); the text is sized to fit it with `pad` (a share of the height) on every side, at
+ * most `size` (default 0.6 of the height). `fitTo` lists every text this readout will show (the
+ * typed sum and its result): all are set at the one size that fits the longest, so the digits never
+ * jump size between states or shots. `chars` shows only the first n characters (typing), placed as
+ * the whole line will sit. Marked as a textbox (data-k), so bounds.mjs checks it stays inside.
+ * @param {string} text
+ * @param {{ x: number, y: number, w: number, h: number }} box
+ * @param {{ face?: string, fill?: string, align?: 'start' | 'middle' | 'end', pad?: number, size?: number,
+ *           fitTo?: string[], chars?: number, tracking?: number }} [o]
+ */
+export function readout(text, box, o = {}) {
+  const { face = 'pragmatica-700', fill = ink(), align = 'end', pad = 0.16, tracking = 0 } = o;
+  const str = String(text ?? '');
+  const padPx = box.h * pad;
+  const innerW = Math.max(1, box.w - padPx * 2);
+  const all = [str, ...(o.fitTo ?? [])].filter(Boolean);
+  const per1 = Math.max(...all.map((s) => textWidth(s, 1, face) + tracking * [...s].length), 1e-6);
+  const size = Math.min(o.size ?? box.h * 0.6, box.h - padPx * 2, innerW / per1);
+  const shown = o.chars == null ? str : [...str].slice(0, Math.max(0, Math.round(o.chars))).join('');
+  const full = textWidth(str, size, face) + tracking * size * [...str].length;
+  // the line's start as the whole line sits, so typing grows it in place (right-aligned digits shift)
+  const x0 = align === 'start' ? box.x + padPx : align === 'middle' ? box.x + box.w / 2 - full / 2 : box.x + box.w - padPx - full;
+  const xs = align === 'end' && o.chars != null ? box.x + box.w - padPx - (textWidth(shown, size, face) + tracking * size * [...shown].length) : x0;
+  const base = box.y + box.h / 2 + size * 0.36;
+  const shape = el('rect', { 'data-k': 'shape', x: box.x, y: box.y, width: box.w, height: box.h, fill: 'none' });
+  const body = shown
+    ? el('text', { 'data-k': 'text', 'data-text': escapeXml(shown), x: +xs.toFixed(2), y: +base.toFixed(2), 'font-size': +size.toFixed(2), 'font-family': FAMILY[face] ?? 'Roboto', 'font-weight': face.endsWith('700') ? 700 : 500, ...(tracking ? { 'letter-spacing': +(tracking * size).toFixed(2) } : {}), fill }, escapeXml(shown))
+    : '';
+  return g({ 'data-k': 'textbox', 'data-ui': 'readout' }, shape + body);
+}
+
 /** Greedy word wrap with a width function. */
 function wrap(words, width, widthOf) {
   const rows = [];
