@@ -2,13 +2,12 @@
  * The comment bot, as the lab runs it. Nothing posts and nothing is stored. Every model call starts from a person's click in
  * the lab (CLAUDE.md Rule 1), and tests hand it a stubbed `create`.
  */
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 
 import type Anthropic from '@anthropic-ai/sdk';
 
 import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
 import { priceAnthropicMessages } from '@/lib/anthropic-pricing';
+import { readHeliosVoice } from '@/lib/social/voice/voice';
 import {
   CORRECTION_TOOL, REPLY_CAPS, REPLY_RULES, REPLY_TOOL, ROUTER_MODEL, ROUTER_SYSTEM, ROUTER_TOOL, SEARCH_ROUTES, SILENT_ROUTES, WEB_SEARCH_TOOL, WRITER_MODEL,
   type Depth, type Energy, type Route,
@@ -22,7 +21,7 @@ export type CommentResult = { decision: Decision; fields: Record<string, string>
 
 /** Read on every call so the voice can be edited and re-tried with no rebuild. */
 export function readSoul(): string {
-  return readFileSync(path.join(process.cwd(), 'lib/personality/helios.soul.md'), 'utf8');
+  return readHeliosVoice();
 }
 
 const toolInput = (message: Anthropic.Message, tool: string): Record<string, unknown> | null => {

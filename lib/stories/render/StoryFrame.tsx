@@ -3,8 +3,8 @@ import { ArrowRight, CircleCheck } from 'lucide-react';
 
 import { RoaSlide } from '@/lib/stories/roa/render/RoaSlide';
 
-import { CLOSER, FVP, OPENER, SERIES_LABEL } from './copy';
-import { fadeMask, fadeStops } from './fades';
+import { CLOSER, FVP, OPENER, OPENER_PROMISES, SERIES_LABEL } from './copy';
+import { CONTAINED_FADE, fadeMask, fadeStops } from './fades';
 import { framePhoto, VIDEO_SERIES, type Backdrop, type Frame, type FreeData, type OpenerData, type PaidData, type Photo, type SourceTag, type StoryData } from './types';
 
 /**
@@ -36,12 +36,13 @@ export function StoryFrame({ frame, logoSrc }: { frame: Frame; logoSrc: string }
   if (data.role === 'intro' && frame.series === 'morning_download') throw new Error('Morning Download has no intro frame (its opener is the intro)');
   // AI Trivia's question and answer are videos (lib/stories/trivia/render); Guess the Number is retired (AT-14).
   if (data.role === 'question' || data.role === 'answer' || VIDEO_SERIES.has(frame.series)) throw new Error(`a ${data.role} frame of ${frame.series} is not an image frame`);
-  const photo = framePhoto(data);
-  const variant = data.role === 'story' || data.role === 'opener' ? (data.photo ? 'photo' : 'type') : 'base';
+  // The opener draws no photo of its own (its peek cards are the story frames' photos, credited there).
+  const photo = data.role === 'opener' ? undefined : framePhoto(data);
+  const variant = data.role === 'story' ? (data.photo ? 'photo' : 'type') : data.role === 'opener' ? 'peek' : 'base';
   return (
     <div className={`st-frame st-bd-${frame.backdrop} st-role-${data.role} st-v-${variant}`} data-role={data.role} data-backdrop={frame.backdrop} data-variant={variant}>
       <div className="st-bg" data-decor="true" aria-hidden="true" />
-      {data.role === 'opener' && <Opener frame={frame} data={data} logoSrc={logoSrc} />}
+      {data.role === 'opener' && <Opener data={data} logoSrc={logoSrc} />}
       {data.role === 'story' && <Story frame={frame} data={data} logoSrc={logoSrc} />}
       {data.role === 'closer' && <Closer logoSrc={logoSrc} />}
       {data.role === 'intro' && frame.series === 'free_vs_paid' && <FvpIntro frame={frame} logoSrc={logoSrc} />}
@@ -127,7 +128,7 @@ function objectPosition(photo: Photo): CSSProperties {
 
 /** A bleed photo (S-44). Position and height come from the layout's CSS class. */
 function Bleed({ photo, mode, backdrop, className }: { photo: Photo; mode: 'top' | 'window'; backdrop: Backdrop; className: string }) {
-  const stops = fadeStops(mode, backdrop);
+  const stops = photo.contained ? CONTAINED_FADE : fadeStops(mode, backdrop);
   const mask = fadeMask(stops);
   return (
     <div className={`st-bleed st-bleed--${mode} ${className}`} data-decor="true" data-fade={JSON.stringify(stops)}>
@@ -169,22 +170,48 @@ function Dots() {
 
 /* ── Morning Download ─────────────────────────────────────────────── */
 
-function Opener({ frame, data, logoSrc }: { frame: Frame; data: OpenerData; logoSrc: string }) {
+function Opener({ data, logoSrc }: { data: OpenerData; logoSrc: string }) {
+  // Every story waits behind a blurred card and a question mark; the cards, count and arrow share one width.
+  const cards = Array.from({ length: data.storyCount }, (_, i) => data.peek?.[i] ?? null);
+  const promise = data.promise?.length === 3 ? data.promise : OPENER_PROMISES[0]!.lines;
   return (
-    <div className={`st-opener${data.photo ? '' : ' st-opener--type'}`}>
-      {data.photo && <Bleed photo={data.photo} mode="window" backdrop={frame.backdrop} className="st-opener__photo" />}
-      <div className="st-opener__head">
-        <Logo src={logoSrc} size={data.photo ? 168 : 232} className="st-opener__logo" />
-        <Eyebrow className="st-opener__date">{data.date}</Eyebrow>
-        <h1 className="st-opener__title" data-safe="true">
-          <span className="st-opener__line">{OPENER.title[0]}</span>
-          <span className="st-opener__line st-accent-text">{OPENER.title[1]}</span>
-        </h1>
-        <Fit as="p" className="st-opener__tagline" min={MIN.body}>
-          {OPENER.tagline}
+    <div className="st-opener">
+      <div className="st-opener__col">
+        <div className="st-opener__brand">
+          <Logo src={logoSrc} size={144} className="st-opener__logo" />
+          <p className="st-opener__series" data-safe="true">
+            {OPENER.series[0]} <span className="st-accent-text">{OPENER.series[1]}</span>
+          </p>
+          <Eyebrow className="st-opener__date">{data.date}</Eyebrow>
+        </div>
+        <Fit as="h1" className="st-opener__title" min={MIN.title}>
+          <span className="st-opener__line">{promise[0]}</span>
+          <span className="st-opener__line">{promise[1]}</span>
+          <span className="st-opener__line st-accent-text">{promise[2]}</span>
         </Fit>
+        <div className="st-opener__stories" data-safe="true">
+          <div className="st-opener__cards">
+            {cards.map((p, i) => (
+              <div key={i} className={`st-opener__card${i === 0 ? ' st-opener__card--lead' : ''}`}>
+                {p && <img className="st-opener__peek" src={p.src} alt="" style={objectPosition(p)} data-photo-kind={p.kind} />}
+                <span className="st-opener__num">{pad(i + 1)}</span>
+                <span className="st-opener__q">?</span>
+              </div>
+            ))}
+          </div>
+          <p className="st-opener__quick">{OPENER.quick(data.storyCount)}</p>
+          <svg className="st-opener__arrow" width="784" height="48" viewBox="0 0 784 48" aria-hidden="true">
+            <defs>
+              <linearGradient id="st-opener-arrow" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stopColor="#FF8A4F" />
+                <stop offset="0.52" stopColor="#FF5E1A" />
+                <stop offset="1" stopColor="#E63946" />
+              </linearGradient>
+            </defs>
+            <path d="M4 24H774M748 4l26 20-26 20" fill="none" strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
-      <Cue text={OPENER.cue(data.storyCount)} className="st-opener__cue" />
     </div>
   );
 }

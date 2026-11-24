@@ -23,12 +23,11 @@ RestartSec=15
 KillSignal=SIGTERM
 # A render in flight is failed on restart and retried by Lucas's click; give it time to wind down.
 TimeoutStopSec=120
-# PROVISIONAL (E-21, A-6). Not measured on the VM yet. The M4 fixture render on a Mac
-# peaked near 1 GB for the CLI process alone, before Chrome workers and the Claude Code
-# agent processes. Replace all three values from the E-21 protocol after the first live
-# run. The VM is an e2-medium (4 GB + 4 GB swap); renders run at 2 AM, alone.
-MemoryHigh=2000M
-MemoryMax=2500M
+# Sized for e2-standard-4 (16 GB + 4 GB swap) on 2026-11-24. The old 2 GB MemoryHigh
+# throttled renders (HyperFrames runs --workers auto, one Chrome per core). Explainers
+# and AI Drama can render at the same time, so each stays well under half the RAM.
+MemoryHigh=5G
+MemoryMax=6G
 # Above helios-worker (5) and level with helios-reels (10): renders yield to outreach.
 Nice=10
 

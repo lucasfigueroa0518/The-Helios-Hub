@@ -6,18 +6,19 @@ import type Anthropic from '@anthropic-ai/sdk';
 
 import { createFieldNotesBudget } from '@/lib/field-notes/budget';
 import {
-  CAPTION_CAP, NO_WANT, TIP_BODY_TARGET_WORDS, TIP_HEADLINE_TARGET_CHARS, TIP_SLIDE_CAPS, UNTRUSTED_TAG, WANT_SHAPES, WRITER_CAPTION_CAP, buildEditorRequest, buildFactCheckRequest, buildWriterRequest, coverHeadline, editDraft,
+  CAPTION_CAP, NO_WANT, TIP_BODY_TARGET_WORDS, TIP_HEADLINE_TARGET_CHARS, TIP_SLIDE_CAPS, UNTRUSTED_TAG, WANT_SHAPES, buildEditorRequest, buildFactCheckRequest, buildWriterRequest, coverHeadline, editDraft,
   enforceCutOnly, modelFactCheck, parseDraft, parseWriterOutput, runGates, tipsSourceText, writeDraft, writePost,
   type FieldNotesClient, type PostDraft,
 } from '@/lib/field-notes/write';
 import * as writeApi from '@/lib/field-notes/write';
 import { EDITOR_SYSTEM, FACT_CHECK_SYSTEM, WRITER_SYSTEM } from '@/lib/field-notes/write/prompts';
 import { FIELD_NOTES_CAPS } from '@/lib/field-notes/caps';
-import { assembleFieldNotesCaption, buildFieldNotesCaption, withSourceLinks, FIELD_NOTES_FOLLOW_LINE, FIELD_NOTES_HASHTAGS, HOW_TO_TRY_HEADING, parseHowToTry } from '@/lib/field-notes/caption';
+import { assembleFieldNotesCaption, buildFieldNotesCaption, withSourceLinks, FIELD_NOTES_HASHTAGS, HOW_TO_TRY_HEADING, parseHowToTry, SOURCE_LINK_LABEL } from '@/lib/field-notes/caption';
+import { heliosLine, longestHeliosLine } from '@/lib/social/captions/helios-line';
 import { draftToSlideInputs } from '@/lib/field-notes/post';
 import { TIP_SLIDES_MAX, WANTS, type Tip, type Want } from '@/lib/field-notes/types';
 
-type WriterOut = { slides: PostDraft['slides'] extends Array<infer S> ? Array<Omit<S & object, 'kind'>> : never; skipped: Array<{ tipId: string; missing: string }>; caption: string };
+type WriterOut = { slides: PostDraft['slides'] extends Array<infer S> ? Array<Omit<S & object, 'kind'>> : never; skipped: Array<{ tipId: string; missing: string }> };
 const canned = JSON.parse(readFileSync('tests/fixtures/field-notes/write/writer-response.json', 'utf8')) as WriterOut;
 const thin = JSON.parse(readFileSync('tests/fixtures/field-notes/write/writer-response-thin.json', 'utf8')) as WriterOut;
 
@@ -39,7 +40,8 @@ const tips: Tip[] = [
 ];
 const ids = tips.map((t) => t.id);
 
-const asDraft = (w: WriterOut): PostDraft => ({ slides: w.slides.map((s) => ({ kind: 'tip' as const, ...s })), caption: w.caption });
+const asDraft = (w: WriterOut): PostDraft => ({ slides: w.slides.map((s) => ({ kind: 'tip' as const, ...s })) });
+const unticked = (t: string) => t.replace(/`/g, '');
 const draft = asDraft(canned);
 
 const msg = (tool: string, input: unknown, usage: Partial<Anthropic.Usage> = {}): Anthropic.Message => ({
@@ -70,7 +72,8 @@ test('one Writer call for several tips: slides carry tipId, skipped tips get no 
   assert.equal((calls[0]!.tools![0] as { name: string }).name, 'submit_field_note');
   assert.equal(calls[0]!.max_tokens, 20_000);
   const tool = (calls[0]!.tools as Array<{ input_schema: { properties: Record<string, any>; required: string[] } }>)[0]!;
-  assert.deepEqual(tool.input_schema.required, ['slides', 'skipped', 'caption']);
+  assert.deepEqual(tool.input_schema.required, ['slides', 'skipped']);
+  assert.equal(tool.input_schema.properties.caption, undefined, 'the Writer writes no caption');
   assert.deepEqual(Object.keys(tool.input_schema.properties.slides.items.properties), ['tipId', 'headline', 'body', 'name', 'tryIt']);
   assert.deepEqual(tool.input_schema.properties.slides.items.required, ['tipId', 'headline', 'body', 'name', 'tryIt']);
   assert.ok(!/emphasis/i.test(JSON.stringify(calls[0]!.tools)), 'no emphasis anywhere in the tool schema');
@@ -93,7 +96,7 @@ test('six tips: one Writer call takes them all; the prompt, parser, cover and re
   const six = [...tips.slice(0, 3), ...[4, 5, 6].map((n) => ({ ...base, id: `t${n}`, subject: `Helper ${n}` }))];
   const sixIds = six.map((t) => t.id);
   const slides = six.map((t, i) => ({ tipId: t.id, headline: `Value line number ${i + 1} for you`, body: `Plain words about helper ${i + 1}.`, name: `Helper ${i + 1}`, tryIt: '' }));
-  const { client, calls } = stub(msg('submit_field_note', { slides, skipped: [], caption: 'Save these.' }));
+  const { client, calls } = stub(msg('submit_field_note', { slides, skipped: [] }));
   const r = await writeDraft(client, six);
   assert.ok(r.ok, JSON.stringify(r));
   assert.equal(calls.length, 1);
@@ -105,32 +108,33 @@ test('six tips: one Writer call takes them all; the prompt, parser, cover and re
   assert.match(WRITER_SYSTEM, /Write at most 6 slides\./);
   assert.ok(!/at most 4 slides|3 to 4/.test(WRITER_SYSTEM));
   // A seventh slide is a structure problem, never silently cut.
-  const seven = parseWriterOutput({ slides: [...slides, { ...slides[0]!, tipId: 't7' }], skipped: [], caption: 'x' }, [...sixIds, 't7']);
+  const seven = parseWriterOutput({ slides: [...slides, { ...slides[0]!, tipId: 't7' }], skipped: [] }, [...sixIds, 't7']);
   assert.equal(seven.ok, false);
   assert.ok(JSON.stringify(seven).includes('at most 6 tip slides'));
   assert.equal(coverHeadline(6), '6 AI tips to try');
   assert.equal(coverHeadline(5), '5 AI tips to try');
 });
 
-test('caption with six how-to-try lines at their caps still fits 2,200 with the hashtags; past that the hashtags go first', () => {
+test('caption with six how-to-try lines at their caps and the longest Helios line still fits 2,200 with the hashtags; past that the hashtags go first', () => {
   const line = (i: number) => ({ name: `N${i}`.padEnd(TIP_SLIDE_CAPS.name, 'n'), tryIt: `T${i}`.padEnd(TIP_SLIDE_CAPS.tryIt, 't') });
   const six = Array.from({ length: TIP_SLIDES_MAX }, (_, i) => line(i + 1));
-  const writer = 'w'.repeat(WRITER_CAPTION_CAP - 1) + '.';
-  const full = assembleFieldNotesCaption(writer, six);
+  const helios = longestHeliosLine('field_notes');
+  const full = assembleFieldNotesCaption(six, helios);
   assert.equal(full.droppedHashtags, false, `${full.caption.length} characters`);
   assert.equal(full.over, 0);
-  assert.ok(full.caption.length <= CAPTION_CAP && full.caption.length > 2000, `${full.caption.length}`);
+  assert.ok(full.caption.length <= CAPTION_CAP && full.caption.length > 1800, `${full.caption.length}`);
   assert.equal(parseHowToTry(full.caption).length, 6);
+  assert.ok(full.caption.endsWith(`${helios}\n\n${FIELD_NOTES_HASHTAGS.join(' ')}`));
   // Longer usage lines (a soft overrun of tryIt) push it past the cap: the hashtags are dropped first.
-  const longer = six.map((l) => ({ ...l, tryIt: l.tryIt + 't'.repeat(10) }));
-  const tight = assembleFieldNotesCaption(writer, longer);
+  const longer = six.map((l) => ({ ...l, tryIt: l.tryIt + 't'.repeat(55) }));
+  const tight = assembleFieldNotesCaption(longer, helios);
   assert.equal(tight.droppedHashtags, true);
   assert.equal(tight.over, 0);
-  assert.ok(tight.caption.endsWith(FIELD_NOTES_FOLLOW_LINE) && parseHowToTry(tight.caption).length === 6);
+  assert.ok(tight.caption.endsWith(helios) && parseHowToTry(tight.caption).length === 6);
 });
 
 test('parse: structure and tip ids only, never style; unaddressed tips become skipped, never padded', () => {
-  assert.equal(parseWriterOutput({ slides: [], skipped: [], caption: '' }, ids).ok, true);
+  assert.equal(parseWriterOutput({ slides: [], skipped: [] }, ids).ok, true);
   const shouty = clone(canned); shouty.slides[0]!.headline = 'ALL CAPS!!';
   assert.equal(parseWriterOutput(shouty, ids).ok, true);
   const unknown = clone(canned); unknown.slides[0]!.tipId = 'zzz';
@@ -144,13 +148,13 @@ test('parse: structure and tip ids only, never style; unaddressed tips become sk
     assert.equal(r.ok, false, field);
     assert.match(!r.ok ? r.problems.join(' ') : '', new RegExp(`${field} must be a string`));
     const wrongType = clone(canned) as any; wrongType.slides[1][field] = 7;
-    assert.equal(parseDraft({ slides: wrongType.slides, caption: 'c' }).ok, false, `${field} for the Editor parse too`);
+    assert.equal(parseDraft({ slides: wrongType.slides }).ok, false, `${field} for the Editor parse too`);
   }
   const noTry = clone(canned) as any; delete noTry.slides[0].tryIt;
   const nt = parseWriterOutput(noTry, ids);
   assert.ok(nt.ok && nt.draft.slides[0]!.tryIt === '');
   const badTry = clone(canned) as any; badTry.slides[1].tryIt = 7;
-  assert.equal(parseDraft({ slides: badTry.slides, caption: 'c' }).ok, false, 'a non-string tryIt is refused');
+  assert.equal(parseDraft({ slides: badTry.slides }).ok, false, 'a non-string tryIt is refused');
   // The old three-piece shape is refused.
   assert.equal(parseWriterOutput({ ...clone(canned), slides: [{ tipId: 't1', headline: 'h', solves: 's', how: 'w' }] }, ids).ok, false);
   const forgot = parseWriterOutput({ ...clone(canned), skipped: [] }, ids);
@@ -159,9 +163,13 @@ test('parse: structure and tip ids only, never style; unaddressed tips become sk
   for (const id of ['t4', 't5', 't6', 't7']) seven.slides.push({ tipId: id, headline: `x ${id}`, body: `y ${id}`, name: 'n', tryIt: 'z' } as any);
   assert.equal(seven.slides.length, TIP_SLIDES_MAX + 1);
   assert.equal(parseWriterOutput(seven, [...ids, 't5', 't6', 't7']).ok, false, 'more than TIP_SLIDES_MAX slides');
-  assert.equal(parseWriterOutput({ ...clone(canned), caption: '  ' }, ids).ok, false, 'slides need a caption');
+  // The Writer writes no caption: a stray one is ignored and never reaches the draft.
+  const stray = parseWriterOutput({ ...clone(canned), caption: 'Save this.' }, ids);
+  assert.ok(stray.ok && !('caption' in stray.draft));
+  const strayEd = parseDraft({ slides: clone(canned).slides, caption: 'Save this.' });
+  assert.ok(strayEd.ok && !('caption' in strayEd.draft), 'the Editor parse ignores it too');
   const one = { tipId: 'a', headline: 'h', body: 'b', name: 'n', tryIt: 't' };
-  assert.equal(parseDraft({ slides: [one, one], caption: 'c' }).ok, false);
+  assert.equal(parseDraft({ slides: [one, one] }).ok, false);
 });
 
 test('parse: a stray emphasis field (or any extra field) is ignored and never reaches the draft', () => {
@@ -172,7 +180,7 @@ test('parse: a stray emphasis field (or any extra field) is ignored and never re
   const r = parseWriterOutput(w, ids);
   assert.ok(r.ok);
   for (const sl of r.draft.slides) assert.deepEqual(Object.keys(sl).sort(), ['body', 'headline', 'kind', 'name', 'tipId', 'tryIt']);
-  const e = parseDraft({ slides: [{ tipId: 't1', headline: 'h', body: 'b', name: 'n', tryIt: 't', emphasis: ['s'] }], caption: 'c' });
+  const e = parseDraft({ slides: [{ tipId: 't1', headline: 'h', body: 'b', name: 'n', tryIt: 't', emphasis: ['s'] }] });
   assert.ok(e.ok && !('emphasis' in e.draft.slides[0]!), 'the Editor parse ignores it too');
 });
 
@@ -225,9 +233,9 @@ test('a slide with an empty or absent tryIt parses, passes the gates, and its ca
   const linked = tips.map((t) => (t.id === 't3' ? { ...t, sourceUrl: 'https://example.test/snapshot' } : t));
   const g = await runGates(parsed.draft, linked, okCheck);
   assert.equal(g.hard.length, 0, JSON.stringify(g.hard));
-  const caption = buildFieldNotesCaption(parsed.draft.caption, withSourceLinks(parsed.draft.slides, linked));
-  assert.ok(caption.includes(`3. ${noTry.slides[2]!.name}: https://example.test/snapshot`), caption);
-  assert.ok(caption.includes(`1. ${noTry.slides[0]!.name}: ${noTry.slides[0]!.tryIt}`), 'a slide with tryIt keeps it');
+  const caption = buildFieldNotesCaption(withSourceLinks(parsed.draft.slides, linked), 'slug');
+  assert.ok(caption.includes(`3. ${unticked(noTry.slides[2]!.name)}: ${SOURCE_LINK_LABEL} https://example.test/snapshot`), caption);
+  assert.ok(caption.includes(`1. ${unticked(noTry.slides[0]!.name)}: ${unticked(noTry.slides[0]!.tryIt)}`), 'a slide with tryIt keeps it, minus backticks');
   // The Editor keeps an empty tryIt empty.
   const cut = enforceCutOnly(parsed.draft, { ...parsed.draft, slides: parsed.draft.slides.map((sl, i) => (i === 2 ? { ...sl, tryIt: 'invented' } : sl)) });
   assert.equal(cut.draft.slides[2]!.tryIt, '');
@@ -256,11 +264,10 @@ test('Editor cannot add: additions are discarded, output never grows, slides mat
   grown.slides[1]!.body = 'Long threads now slow replies down a lot.';
   grown.slides[2]!.tryIt = 'Pass `--snapshot` always.';
   grown.slides.push({ kind: 'tip', tipId: 't9', headline: 'Invented', body: 'Invented.', name: 'Invented', tryIt: 'Invented.' });
-  grown.caption += ' Extra sentence.';
   const { draft: out, notes } = enforceCutOnly(draft, grown);
   assert.deepEqual(out, draft);
   assert.ok(notes.some((n) => /added were discarded/.test(n)));
-  const total = (d: PostDraft) => d.slides.reduce((n, s) => n + s.headline.length + s.body.length + s.name.length + s.tryIt.length, d.caption.length);
+  const total = (d: PostDraft) => d.slides.reduce((n, s) => n + s.headline.length + s.body.length + s.name.length + s.tryIt.length, 0);
   assert.ok(total(out) <= total(draft));
   // A reordered answer still lines up by tipId.
   const swapped = clone(draft); swapped.slides.reverse();
@@ -272,18 +279,18 @@ test('Editor cannot add: additions are discarded, output never grows, slides mat
   assert.ok(m.notes.some((n) => /missing from the Editor output/.test(n)));
 });
 
-test('Editor cuts are kept: dropped words and a trimmed caption', async () => {
+test('Editor cuts are kept: dropped words; a stray caption in its answer is ignored', async () => {
   const cut = clone(draft);
   cut.slides[0]!.headline = 'Catch slips before you rely on results';
   cut.slides[0]!.body = 'A built-in setting called the review option gives each run a second pass before it finishes.';
   cut.slides[1]!.tryIt = 'Type `/trim 20` and press Enter.';
-  cut.caption = 'Three small settings that make long runs easier.';
   // A stray emphasis field in the Editor's answer is ignored.
-  const { client, calls } = stub(msg('submit_cut_field_note', { slides: cut.slides.map(({ tipId, headline, body, name, tryIt }) => ({ tipId, headline, body, name, tryIt, emphasis: ['x'] })), caption: cut.caption, cut_notes: ['Trimmed the caption.'] }));
+  const { client, calls } = stub(msg('submit_cut_field_note', { slides: cut.slides.map(({ tipId, headline, body, name, tryIt }) => ({ tipId, headline, body, name, tryIt, emphasis: ['x'] })), caption: 'Three small settings.', cut_notes: ['Trimmed slide 1.'] }));
   const r = await editDraft(client, draft);
   assert.ok(r.ok);
   assert.deepEqual(r.draft, cut);
-  assert.ok(r.notes.includes('Trimmed the caption.'));
+  assert.ok(r.notes.includes('Trimmed slide 1.'));
+  assert.ok(!('caption' in r.draft), 'the Editor cuts no caption');
   assert.equal(calls.length, 1);
   const tool = (calls[0]!.tools as Array<{ input_schema: { properties: { slides: { items: { properties: Record<string, unknown> } } } } }>)[0]!;
   assert.deepEqual(Object.keys(tool.input_schema.properties.slides.items.properties), ['tipId', 'headline', 'body', 'name', 'tryIt']);
@@ -383,71 +390,66 @@ test('hard gate: more than 50 percent over a cap; mild overrun is only a note', 
   }
   const noTry = clone(draft); noTry.slides[0]!.tryIt = '';
   assert.equal((await runGates(noTry, tips, okCheck)).hard.length, 0, 'an empty tryIt is no failure');
-  // The Writer's caption text has its own cap.
-  const big = clone(draft); big.caption = 'y'.repeat(Math.floor(WRITER_CAPTION_CAP * 1.5) + 1);
-  assert.ok((await runGates(big, tips, okCheck)).hard.some((h) => h.gate === 'overrun' && /caption/.test(h.detail)));
 });
 
-test('caption cap is on the assembled caption: hashtags are dropped first (a note), still over is a hard gate', async () => {
-  const fits = assembleFieldNotesCaption(draft.caption, draft.slides);
+test('caption cap is on the assembled caption with the longest Helios line: hashtags are dropped first (a note), still over is a hard gate', async () => {
+  const helios = longestHeliosLine('field_notes');
+  const fits = assembleFieldNotesCaption(draft.slides, helios);
   assert.equal(fits.droppedHashtags, false);
   assert.ok(fits.caption.length <= CAPTION_CAP);
-  // A caption that lands just past the cap with the hashtags on.
-  const tight = clone(draft);
+  // A slide with an empty tryIt carries its source link; a long link lands the caption just past the cap with the hashtags on.
+  const tight = clone(draft); tight.slides[0]!.tryIt = '';
   const tags = FIELD_NOTES_HASHTAGS.join(' ').length;
-  const pad = (n: number) => 'x'.repeat(n);
-  const base3 = assembleFieldNotesCaption(tight.caption, tight.slides).caption.length;
+  const linked = (n: number) => tips.map((t) => (t.id === tight.slides[0]!.tipId ? { ...t, sourceUrl: `https://example.test/${'x'.repeat(n)}` } : t));
+  const base3 = assembleFieldNotesCaption(withSourceLinks(tight.slides, linked(0)), helios).caption.length;
   const extra = CAPTION_CAP - base3 + Math.ceil(tags / 2);
-  tight.caption = `${tight.caption} ${pad(extra - 1)}`;
-  const t = assembleFieldNotesCaption(tight.caption, tight.slides);
+  const t = assembleFieldNotesCaption(withSourceLinks(tight.slides, linked(extra)), helios);
   assert.equal(t.droppedHashtags, true);
   assert.equal(t.over, 0);
-  assert.ok(!t.caption.includes('#FieldNotes') && t.caption.includes(FIELD_NOTES_FOLLOW_LINE));
-  const g = await runGates(tight, tips, okCheck);
-  assert.ok(g.notes.some((n) => /hashtags were left off/.test(n)));
+  assert.ok(!t.caption.includes('#FieldNotes') && t.caption.endsWith(helios));
+  const g = await runGates(tight, linked(extra), okCheck);
+  assert.ok(g.notes.some((n) => /hashtags were left off/.test(n)), JSON.stringify(g.notes));
   assert.ok(!g.hard.some((h) => /assembled caption/.test(h.detail)));
   // Far over: a hard gate; nothing is trimmed silently.
-  const over = clone(draft);
-  over.caption = 'y'.repeat(CAPTION_CAP + 10);
-  const o = await runGates(over, tips, okCheck);
+  const o = await runGates(tight, linked(CAPTION_CAP), okCheck);
   assert.ok(o.hard.some((h) => h.gate === 'overrun' && /assembled caption is \d+ characters over 2200/.test(h.detail)), JSON.stringify(o.hard));
 });
 
 // ── caption: how to try ─────────────────────────────────────────────────────
 
-test('caption: the Writer text, then verbatim how-to-try lines from each slide, then the follow line and hashtags', () => {
-  const c = buildFieldNotesCaption(draft.caption, draft.slides);
+test('caption: how-to-try lines from each slide (backticks removed), then the Helios line and hashtags', () => {
+  const c = buildFieldNotesCaption(draft.slides, 'slug-1');
   const parts = c.split('\n\n');
-  assert.equal(parts[0], draft.caption);
-  assert.equal(parts[1], [HOW_TO_TRY_HEADING, ...draft.slides.map((s, i) => `${i + 1}. ${s.name}: ${s.tryIt}`)].join('\n'));
-  assert.equal(parts[2], FIELD_NOTES_FOLLOW_LINE);
-  assert.equal(parts[3], FIELD_NOTES_HASHTAGS.join(' '));
-  // Verbatim: backticks and characters untouched, even an exclamation mark in a command.
+  assert.equal(parts.length, 3);
+  assert.equal(parts[0], [HOW_TO_TRY_HEADING, ...draft.slides.map((s, i) => `${i + 1}. ${unticked(s.name)}: ${unticked(s.tryIt)}`)].join('\n'));
+  assert.equal(parts[1], heliosLine('field_notes', 'slug-1'));
+  assert.equal(parts[2], FIELD_NOTES_HASHTAGS.join(' '));
+  assert.equal(buildFieldNotesCaption(draft.slides, 'slug-1'), c, 'the seed keeps the Helios line');
+  // Instagram shows backticks literally, so they go; every other character stays, even an exclamation mark in a command.
   const bang = clone(draft); bang.slides[1]!.tryIt = 'Run `npx thing!` once.';
-  assert.ok(buildFieldNotesCaption(bang.caption, bang.slides).includes('2. /trim: Run `npx thing!` once.'));
-  assert.ok(c.includes('`/trim 20`') && c.includes('`--snapshot`'));
+  assert.ok(buildFieldNotesCaption(bang.slides, 's').includes(`2. ${unticked(bang.slides[1]!.name)}: Run npx thing! once.`));
+  assert.ok(!c.includes('`') && c.includes('/trim 20') && c.includes('--snapshot'));
   // The review panel reads the lines back.
-  assert.deepEqual(parseHowToTry(c), draft.slides.map(({ name, tryIt }) => ({ name, tryIt })));
+  assert.deepEqual(parseHowToTry(c), draft.slides.map(({ name, tryIt }) => ({ name: unticked(name), tryIt: unticked(tryIt) })));
   assert.deepEqual(parseHowToTry('Just a caption.'), []);
-  // An empty tryIt falls back to the source link; with neither, the slide gets no line.
-  const linkOnly = buildFieldNotesCaption(draft.caption, [{ name: 'A', tryIt: '', sourceUrl: 'https://example.test/a' }, { name: 'B', tryIt: '', sourceUrl: null }, { name: 'C', tryIt: 'Run it.' }]);
-  assert.ok(linkOnly.includes(`${HOW_TO_TRY_HEADING}\n1. A: https://example.test/a\n2. C: Run it.`), linkOnly);
-  assert.deepEqual(parseHowToTry(linkOnly), [{ name: 'A', tryIt: 'https://example.test/a' }, { name: 'C', tryIt: 'Run it.' }]);
-  // The Writer's caption keeps at most one exclamation mark.
-  assert.ok(buildFieldNotesCaption('Try it now! Save this! Go!').startsWith('Try it now! Save this. Go.'));
-  // No slides: the old shape (writer text, follow line, hashtags).
-  assert.equal(buildFieldNotesCaption('Try these.'), `Try these.\n\n${FIELD_NOTES_FOLLOW_LINE}\n\n${FIELD_NOTES_HASHTAGS.join(' ')}`);
+  // An empty tryIt falls back to the labelled source link; with neither, the slide gets no line.
+  const linkOnly = buildFieldNotesCaption([{ name: 'A', tryIt: '', sourceUrl: 'https://example.test/a' }, { name: 'B', tryIt: '', sourceUrl: null }, { name: 'C', tryIt: 'Run it.' }], 's');
+  assert.equal(SOURCE_LINK_LABEL, 'steps at');
+  assert.ok(linkOnly.includes(`${HOW_TO_TRY_HEADING}\n1. A: steps at https://example.test/a\n2. C: Run it.`), linkOnly);
+  assert.deepEqual(parseHowToTry(linkOnly), [{ name: 'A', tryIt: 'steps at https://example.test/a' }, { name: 'C', tryIt: 'Run it.' }]);
+  // No slides: the Helios line and hashtags only.
+  assert.equal(buildFieldNotesCaption([], 's'), `${heliosLine('field_notes', 's')}\n\n${FIELD_NOTES_HASHTAGS.join(' ')}`);
 });
 
 test('review data: each tip gets its name and tryIt from the caption\'s how-to-try line, in slide order', async () => {
   const { toReviewPost } = await import('@/components/field-notes/load');
   const row = {
-    id: 'p', slug: 's', status: 'review', caption: buildFieldNotesCaption(draft.caption, draft.slides), render_version: 1, slides: [], slide_objects: [],
+    id: 'p', slug: 's', status: 'review', caption: buildFieldNotesCaption(draft.slides, 's'), render_version: 1, slides: [], slide_objects: [],
     fit_problems: [], render_problems: [], soft_notes: [],
     tips: draft.slides.map((s) => ({ id: s.tipId, subject: s.headline, leaf: null, want: null, tier: null, source_url: null, source_label: null, use: '' })),
   };
   const post = toReviewPost(row);
-  assert.deepEqual(post.tips.map((t) => [t.name, t.tryIt]), draft.slides.map((s) => [s.name, s.tryIt]));
+  assert.deepEqual(post.tips.map((t) => [t.name, t.tryIt]), draft.slides.map((s) => [unticked(s.name), unticked(s.tryIt)]));
   const old = toReviewPost({ ...row, caption: 'An older caption with no how-to-try lines.' });
   assert.deepEqual(old.tips.map((t) => [t.name, t.tryIt]), draft.slides.map(() => [null, null]));
 });
@@ -468,7 +470,7 @@ test('style issues produce notes and never reject', async () => {
   const loud = clone(draft);
   loud.slides[0]!.headline = 'Use the review option for amazing results!';
   loud.slides[1]!.body = 'Type `/trim 20` to trim!';
-  loud.caption = 'An amazing guide! \u{1F680}';
+  loud.slides[2]!.headline = 'Save every run! \u{1F680}';
   const r = await runGates(loud, tips, okCheck);
   assert.equal(r.hard.length, 0);
   const text = r.notes.join('\n');
@@ -478,7 +480,7 @@ test('style issues produce notes and never reject', async () => {
   assert.match(text, /marketing/);
   assert.match(text, /slide 1 headline: names the tool/);
   assert.match(text, /slide 2 body: contains code/);
-  // One exclamation mark, in a headline or the caption, is allowed.
+  // One exclamation mark, in a headline, is allowed.
   const one = clone(draft); one.slides[0]!.headline = 'Catch small slips before they cost you!';
   assert.ok(!(await runGates(one, tips, okCheck)).notes.some((n) => /exclamation/.test(n)));
 });
@@ -607,13 +609,6 @@ test('free check attribution: a bad numeral on one slide drops that slide; the m
   // The offline default attributes too.
   const off = await runGates(bad, tips4);
   assert.deepEqual(off.dropped.map((d) => d.tipId), ['t2']);
-  // A bad numeral in the caption: hard, and nothing is paid.
-  const cap = clone(draft4); cap.caption = 'Four settings, 900 ways to save time.';
-  const c2 = stub();
-  const rc = await modelFactCheck(c2.client)({ draft: cap, sourceText: src4 });
-  assert.deepEqual(rc.caption!.length, 1);
-  assert.equal(c2.calls.length, 0);
-  assert.equal((await runGates(cap, tips4, async () => rc)).hard[0]!.gate, 'fact_check');
 });
 
 test('fact check: an invented quote, an empty list and a malformed answer all fail', async () => {
@@ -728,11 +723,12 @@ test('credibility is for hard facts only: the scope and quantity rule is gone, t
   for (const p of [WRITER_SYSTEM, FACT_CHECK_SYSTEM]) {
     assert.ok(!/Scope and quantity words|Saying which things is not saying how many|each assert a scope|widen or shrink|widens or shrinks/i.test(p), 'the scope and quantity rule is gone');
   }
-  assert.match(FACT_CHECK_SYSTEM, /Give each claim the tipId of the slide it is on, exactly as the draft gives it, or caption for a claim in the caption/);
+  assert.match(FACT_CHECK_SYSTEM, /Give each claim the tipId of the slide it is on, exactly as the draft gives it\. A claim/);
+  assert.doesNotMatch(FACT_CHECK_SYSTEM, /claim in the caption|caption claim/i, 'no caption claims: the caption is code\'s');
   const tool = (buildFactCheckRequest({ draft, sourceText: src }).tools as Array<{ input_schema: { properties: { claims: { items: { properties: Record<string, { description?: string }>; required: string[] } } } } }>)[0]!;
   const item = tool.input_schema.properties.claims.items;
   assert.ok(item.required.includes('tipId'));
-  assert.match(item.properties.tipId!.description ?? '', /or caption for a claim in the caption/);
+  assert.equal(item.properties.tipId!.description, 'The tipId of the slide the claim is on, exactly as the draft gives it.');
 });
 
 test('fact check prompt: judges hard facts only, accepts reasonable comparative framing, still rejects invented numbers, prices and features', () => {
@@ -748,7 +744,7 @@ test('fact check prompt: judges hard facts only, accepts reasonable comparative 
 test('Writer voice has flair, with at most one exclamation mark per post and never in a body', () => {
   assert.match(WRITER_SYSTEM, /Voice \(guidance\)\nConfident, vivid and conversational, with flair/);
   assert.match(WRITER_SYSTEM, /value framing and comparisons that follow from what the thing does are welcome/);
-  assert.match(WRITER_SYSTEM, /At most one exclamation mark in the whole post, in a headline or the caption, never in a body\./);
+  assert.match(WRITER_SYSTEM, /At most one exclamation mark in the whole post, in a headline, never in a body\./);
   assert.match(WRITER_SYSTEM, /No emoji and no hashtags in slide text\./);
   assert.ok(!/no hype|no exclamation marks|No corporate or marketing tone|Plain, warm and direct/.test(WRITER_SYSTEM), 'the buttoned-up voice is gone');
   assert.equal((WRITER_SYSTEM.match(/exclamation/g) ?? []).length, 1, 'the exclamation rule lives once');
@@ -760,7 +756,6 @@ test('caps: the contract names and numbers; the old ones are gone', () => {
   assert.deepEqual(TIP_SLIDE_CAPS, { headline: 70, headlineWords: 8, body: 210, bodyWords: 40, name: 40, tryIt: 240 });
   assert.equal(TIP_HEADLINE_TARGET_CHARS, 60);
   assert.equal(TIP_BODY_TARGET_WORDS, 30);
-  assert.equal(WRITER_CAPTION_CAP, 300);
   assert.equal(CAPTION_CAP, 2200, 'the cap is on the assembled caption: Instagram\'s limit');
   assert.equal(FIELD_NOTES_CAPS.tipSlide, TIP_SLIDE_CAPS, 'the adapter reads the one source');
   assert.equal(coverHeadline(3), '3 AI tips to try');
@@ -770,7 +765,8 @@ test('caps: the contract names and numbers; the old ones are gone', () => {
   assert.match(WRITER_SYSTEM, new RegExp(`Body: about ${TIP_BODY_TARGET_WORDS} words, never more than ${TIP_SLIDE_CAPS.bodyWords} words, up to ${TIP_SLIDE_CAPS.body} characters`));
   assert.match(WRITER_SYSTEM, new RegExp(`Name: up to ${TIP_SLIDE_CAPS.name} characters`));
   assert.match(WRITER_SYSTEM, new RegExp(`TryIt: up to ${TIP_SLIDE_CAPS.tryIt} characters`));
-  assert.match(WRITER_SYSTEM, new RegExp(`Caption \\(your text only\\): up to ${WRITER_CAPTION_CAP} characters`));
+  assert.ok(!/Caption \(guidance\)|Caption \(your text only\)/.test(WRITER_SYSTEM), 'the Writer has no caption section or cap');
+  assert.equal((writeApi as Record<string, unknown>).WRITER_CAPTION_CAP, undefined);
   assert.match(EDITOR_SYSTEM, new RegExp(`Headline: at most ${TIP_SLIDE_CAPS.headlineWords} words`), 'the Editor cuts to the same caps');
   for (const gone of ['COVER_EYEBROW', 'FOLLOW_SLIDE_HEADLINE', 'FOLLOW_TEXT']) assert.equal((writeApi as Record<string, unknown>)[gone], undefined, gone);
 });
@@ -819,7 +815,7 @@ test('prompt lens: facts and skipping are required; value headline and plain bod
   assert.match(WRITER_SYSTEM, /Code belongs only in tryIt/);
   assert.match(WRITER_SYSTEM, /any AI tool, skill, repo or technique/);
   assert.match(WRITER_SYSTEM, /do not know the account that publishes this post/);
-  assert.match(WRITER_SYSTEM, /code adds a how-to-try line per slide/);
+  assert.match(WRITER_SYSTEM, /Code puts the name and tryIt in the caption\./);
   // Retired rules are gone everywhere (no contradictions).
   for (const p of [WRITER_SYSTEM, EDITOR_SYSTEM, FACT_CHECK_SYSTEM]) {
     assert.ok(!/past the basics/i.test(p), 'the old reader is gone');

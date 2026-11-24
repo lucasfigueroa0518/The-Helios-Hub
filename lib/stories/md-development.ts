@@ -21,6 +21,10 @@
  *                  articles: blocked, no Jev call.
  *   spin-offs      an intake story the SAME_EVENT check ties to a story we ran
  *                  goes through the same test with that story's headline.
+ *
+ * TODO(News Ranker, CONTRACT.md D2/D11): production still uses md-development@1 ≥ DEVELOPMENT_BAR. The shared
+ * replacement is lib/news-ranker/memory.ts (readSaid + repeatVerdict, news-massive-development@1 ≥ MASSIVE_BAR);
+ * rewire here once the lab (/news-ranker/lab) has calibrated MASSIVE_BAR on Lucas-tagged repeats.
  */
 import { MD_DEVELOPMENT } from '@/lib/stories/questions';
 import type { Queryable } from '@/lib/stories/db';

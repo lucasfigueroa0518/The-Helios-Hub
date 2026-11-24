@@ -586,7 +586,8 @@ export type CheckId = (typeof CHECK_IDS)[number];
 /** A visible warning on a delivered reel (checks fail open, MD-39). */
 export type JobFlag = { at: string; check: CheckId | 'harvest' | 'reporting' | 'voice' | 'render' | 'cost'; detail: string };
 
-export type PostText = { caption: string; credits: string[]; question: string };
+/** `hashtags` is absent on post text written before the caption voice (2026-11-24), whose caption carries its own tags. */
+export type PostText = { caption: string; credits: string[]; question: string; hashtags?: string[] };
 
 export type DeliveryReport = {
   job_id: string;

@@ -1,6 +1,6 @@
 /** Fact check (spec §4.4): Morning Download's md-grounding@1, bar 0.6, over the whole slide's words. */
-import { GROUNDING_BAR } from '@/lib/stories/build/morning-download';
-import { MD_GROUNDING } from '@/lib/stories/questions';
+import { MD_GROUNDING } from '@/lib/news-ranker/questions';
+import { GROUNDING_BAR } from '@/lib/news-ranker/scores';
 import type { JevAsk } from '@/lib/social/jev/client';
 
 import type { StoryCopy } from './types';

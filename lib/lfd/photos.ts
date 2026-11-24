@@ -22,7 +22,18 @@ import { usedMatch, type UsedLedger } from '@/lib/photos/used';
 import { findSetOrEach, type PhotoFinder, type PhotoRequest } from '@/lib/stories/photos';
 import type { Photo } from '@/lib/stories/render/types';
 
-import type { Pick, StoryCopy } from './types';
+import type { Pick, StoryCopy, StoryPhotoRequest } from './types';
+
+/** No writer photo request: the news writer writes none (the shared Haiku photo brief owns photos, D17–D19). */
+export const NO_PHOTO_REQUEST: StoryPhotoRequest = { kind: 'scene', query: '', subjects: [], alts: [] };
+
+/**
+ * The slide as the harvest sees it before any copy is written (the news chain looks for media first, then writes):
+ * the article's headline and text, no setup, no photo request. builderPitch then briefs from the article.
+ */
+export function articleCopy(pick: Pick): StoryCopy {
+  return { key: pick.key, setup: '', headline: pick.headline, highlight: '', names: [], body: '', photo: NO_PHOTO_REQUEST };
+}
 
 export function requestFor(pick: Pick, copy: StoryCopy, exclude: Set<string>): PhotoRequest {
   return {

@@ -46,6 +46,11 @@ function isPublicPath(pathname: string): boolean {
     process.env.NODE_ENV === 'development'
     && (pathname === '/memes' || pathname.startsWith('/memes/') || pathname.startsWith('/api/memes'))
   ) return true;
+  // Local News Ranker lab (planning/MD-LFD Revisions), the same rule. Production requires a session.
+  if (
+    process.env.NODE_ENV === 'development'
+    && (pathname === '/news-ranker' || pathname.startsWith('/news-ranker/') || pathname.startsWith('/api/news-ranker'))
+  ) return true;
   // Local Real Case lab (planning/Real Case Reels RC-10), the same rule. Production requires a session.
   if (
     process.env.NODE_ENV === 'development'

@@ -30,6 +30,26 @@ export type BuildDeps = {
   pool?: OpenPool | null;
   /** The series reads the central intake (consumer switch 'intake'): Morning Download ranks by the stored scores and the lead queue. */
   intake?: boolean;
+  /** Morning Download's video finder (MD-LFD D16–D19, lib/stories/video.ts). Absent (tests, replays, no yt-dlp): photos only. */
+  video?: import('@/lib/stories/video').StoryVideoDeps;
+  /** Morning Download's news chain clients (WIRING-CONTRACT Owner D). Absent: Morning Download skips the set. */
+  news?: NewsChainDeps;
+};
+
+/**
+ * The clients of the locked news chain for one Morning Download build: the shortlist's Jev, one Anthropic create for
+ * the rerank, the photo brief and AI check and the writer, the photo finder's readers, the band upscaler and storage.
+ */
+export type NewsChainDeps = {
+  create: WriterCreate;
+  jevAsk: import('@/lib/social/jev/client').JevAsk;
+  /** lib/news-photos PhotoDeps without the per-story parts (create, usedReason): the image Jev, page reader, Serper, fetch. */
+  photo: Omit<import('@/lib/news-photos').PhotoDeps, 'create' | 'usedReason'>;
+  /** The photo upscaler (lib/news-photos/band.ts findPhotoUpscaler) or null: band frames are then not upscaled, and say so. */
+  upscaler: import('@/lib/news-photos/band').PhotoUpscaler | null;
+  tmpDir: string;
+  /** Where the band photo is stored (the stories bucket). */
+  storage: Pick<import('@/lib/stories/storage').StoriesStorage, 'upload' | 'sign'>;
 };
 
 /**
@@ -102,6 +122,18 @@ export async function nextBackdrop(db: StoriesDb, series: Series, setId: string)
   );
   const last = rows[0]?.backdrop;
   return last ? BACKDROPS[(BACKDROPS.indexOf(last) + 1) % BACKDROPS.length]! : BACKDROPS[0];
+}
+
+/** The last Morning Download set's cover headline (its opener's `promise`), so the next set can rotate on. */
+export async function lastOpenerPromise(db: StoriesDb, setId: string): Promise<string[] | null> {
+  const { rows } = await db.query<{ promise: string[] | null }>(
+    `SELECT f.copy->'promise' AS promise FROM stories.sets s JOIN stories.frames f ON f.set_id = s.id AND f.seq = 1
+      WHERE s.series = 'morning_download' AND s.id <> $1 AND s.status IN ('ready', 'approved', 'scheduled', 'publishing', 'published')
+      ORDER BY s.ny_date DESC, s.created_at DESC LIMIT 1`,
+    [setId],
+  );
+  const p = rows[0]?.promise;
+  return Array.isArray(p) ? p.map(String) : null;
 }
 
 /** Turn a frame list into numbered rows. */

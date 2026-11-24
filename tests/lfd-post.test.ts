@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { markRuns } from '@/lib/lfd/marks';
-import { arrangeMemes, buildPost, captionFor, composeCaption, coverMemeOf, LFD_HOOK_LINES } from '@/lib/lfd/post';
+import { arrangeMemes, buildPost, captionFor, composeCaption, coverMemeOf, creditsFor, LFD_HOOK_LINES, lfdHeliosLine, nextLfdCanvas, outletOf, recreditCaption } from '@/lib/lfd/post';
 import type { Ready } from '@/lib/lfd/types';
+import { heliosLines } from '@/lib/social/captions/helios-line';
 
 const ready = (i: number): Ready => ({
   pick: { key: `k${i}`, refs: [`r${i}`], origin: 'reels', headline: `H${i}`, sourceName: `Outlet ${i}`, url: `https://o${i}.com/a`, body: '', publishedAt: '2026-10-12T00:00:00Z', net: 1, blockbuster: 0, firstSeen: null, alsoFrom: [], major: null, builder: null, eventDate: null, lane: i === 0 ? 'major' : 'rundown' },
@@ -31,24 +32,26 @@ test('the post is cover, one story slide per story, then Follow', () => {
   assert.equal(LFD_HOOK_LINES.join(' ').toUpperCase(), 'DO YOU REALIZE WHAT JUST HAPPENED IN AI IN THE LAST FEW DAYS?');
 });
 
-test('the caption opens with the hook, lists each headline, ends with follow + credits, no hashtags', () => {
-  const caption = captionFor([0, 1].map(ready));
+test('the template caption opens with the hook, lists each headline, ends with the Helios line + credits, no hashtags', () => {
+  const items = [0, 1].map(ready);
+  const caption = captionFor(items);
   assert.match(caption, /^Do you realize what just happened in AI in the last few days\? Swipe ⬅️ to catch up\./);
   assert.match(caption, /Story 0 Just Dropped/);
-  assert.match(caption, /Follow Helios/);
+  assert.ok(caption.includes(`\n\n${lfdHeliosLine(items)}\n\nSources:`), 'the Helios line sits right before the credits');
+  assert.doesNotMatch(caption, /Follow Helios/);
   assert.match(caption, /Sources: Outlet 0, Outlet 1/);
   assert.match(caption, /Photos: Credit 0; Credit 1/);
   assert.doesNotMatch(caption, /#/);
   assert.ok(caption.length <= 2200);
 });
 
-test('an over-long caption drops lowest-ranked headlines and keeps hook, follow and credits whole', () => {
+test('an over-long caption drops lowest-ranked headlines and keeps hook, Helios line and credits whole', () => {
   const items = [0, 1, 2, 3, 4, 5].map(ready);
   for (const r of items) r.copy.headline = `${'Very Long Headline '.repeat(20)}${r.copy.key}`;
   const caption = captionFor(items);
   assert.ok(caption.length <= 2200);
   assert.match(caption, /^Do you realize what just happened/);
-  assert.match(caption, /Follow Helios/);
+  assert.ok(caption.includes(lfdHeliosLine(items)));
   assert.match(caption, /Photos: Credit 0; Credit 1; Credit 2; Credit 3; Credit 4; Credit 5$/);
   assert.match(caption, /k0/);
   assert.doesNotMatch(caption, /k5/);
@@ -116,21 +119,27 @@ test('the cover mosaic has a layout for every story count from 1 to 6', async ()
 });
 
 const LINES = {
-  opener: '⬅️ Swipe for a laundry robot, a new Claude model and a chip fight.',
-  body: 'A robot folded a full load of laundry this week.\n\nAnthropic put out a new Claude model.\n\nAnd two chip makers went to court.',
+  opener: '⬅️ Swipe for a laundry robot and a new Claude model.',
+  body: 'A robot folded a full load of laundry this week.\nAnthropic put out a new Claude model.',
   question: 'Which one caught your attention? 👇',
-  heliosLine: 'For a med spa, faster replies to booking questions is the part we at Helios would build first.',
 };
 
-test('captionFor with lines uses opener and heliosLine, not the template hook or FOLLOW_LINE', () => {
-  const caption = captionFor([0, 1].map(ready), LINES);
+test('captionFor with lines: opener, recap lines, question, the code Helios line, credits', () => {
+  const items = [0, 1].map(ready);
+  const caption = captionFor(items, LINES);
   assert.equal(
     caption,
-    [LINES.opener, LINES.body, LINES.question, LINES.heliosLine, 'Sources: Outlet 0, Outlet 1\nPhotos: Credit 0; Credit 1'].join('\n\n'),
+    [LINES.opener, LINES.body, LINES.question, lfdHeliosLine(items), 'Sources: Outlet 0, Outlet 1\nPhotos: Credit 0; Credit 1'].join('\n\n'),
   );
   assert.doesNotMatch(caption, /Do you realize what just happened/);
   assert.doesNotMatch(caption, /Follow Helios/);
   assert.doesNotMatch(caption, /– Story 0/);
+});
+
+test('lfdHeliosLine is one of the 16 LFD lines and ignores story order', () => {
+  const items = [0, 1, 2].map(ready);
+  assert.ok(heliosLines('lfd').includes(lfdHeliosLine(items)));
+  assert.equal(lfdHeliosLine(items), lfdHeliosLine([...items].reverse()));
 });
 
 test('falls back to template when lines is null', () => {
@@ -141,18 +150,18 @@ test('falls back to template when lines is null', () => {
   assert.equal(buildPost(items, new Date('2026-10-13T07:00:00Z'), LINES).caption, captionFor(items, LINES));
 });
 
-test('an over-long model caption trims body paragraphs from the end, never the question or the Helios line', () => {
-  const items = [0, 1].map(ready);
-  const para = (n: number) => `Paragraph ${n} ${'word '.repeat(150)}`.trim();
-  const lines = { ...LINES, body: [para(1), para(2), para(3)].join('\n\n') };
+test('an over-long model caption drops recap lines from the end, never the question or the Helios line', () => {
+  const items = [0, 1, 2].map(ready);
+  const line = (n: number) => `Recap ${n} ${'word '.repeat(150)}`.trim();
+  const lines = { ...LINES, body: [line(1), line(2), line(3)].join('\n') };
   const caption = captionFor(items, lines);
   assert.ok(caption.length <= 2200, String(caption.length));
-  assert.match(caption, /Paragraph 1/);
-  assert.doesNotMatch(caption, /Paragraph 3/);
-  assert.ok(caption.includes(`${LINES.question}\n\n${LINES.heliosLine}\n\nSources:`));
+  assert.match(caption, /Recap 1/);
+  assert.doesNotMatch(caption, /Recap 3/);
+  assert.ok(caption.includes(`${LINES.question}\n\n${lfdHeliosLine(items)}\n\nSources:`));
 });
 
-test('a model caption that cannot fit even with one body paragraph falls back to the template', () => {
+test('a model caption that cannot fit even with one recap line falls back to the template', () => {
   const items = [0, 1].map(ready);
   const caption = captionFor(items, { ...LINES, body: 'x'.repeat(2200) });
   assert.equal(caption, captionFor(items));
@@ -165,4 +174,63 @@ test('composeCaption reports the path that shipped', () => {
   const tooLong = composeCaption(items, { ...LINES, body: 'x'.repeat(2200) });
   assert.equal(tooLong.by, 'template');
   assert.equal(tooLong.caption, captionFor(items));
+});
+
+test('outletOf: a "Feed" source name is replaced by the link host without www', () => {
+  const r = ready(0);
+  assert.equal(outletOf(r), 'Outlet 0');
+  r.pick.sourceName = 'Feed: AI headlines';
+  r.pick.url = 'https://www.theverge.com/ai/1';
+  assert.equal(outletOf(r), 'theverge.com');
+  r.pick.sourceName = 'Feedly Weekly';
+  assert.equal(outletOf(r), 'Feedly Weekly', 'only the word Feed, not a name starting with it');
+  r.pick.sourceName = '';
+  assert.equal(outletOf(r), 'theverge.com');
+  assert.match(creditsFor([r, ready(1)]), /^Sources: theverge\.com, Outlet 1$/m);
+});
+
+test('recreditCaption: a model caption keeps its head and swaps only the credits', () => {
+  const from = [0, 1].map(ready);
+  const to = [ready(1), { ...ready(0), photo: { src: 'data:image/png;base64,m', credit: 'Meme', kind: 'scene' as const } }];
+  const caption = captionFor(from, LINES);
+  const next = recreditCaption(caption, from, to);
+  const head = caption.slice(0, -(creditsFor(from).length + 2));
+  assert.equal(next, `${head}\n\n${creditsFor(to)}`);
+  assert.match(next!, /Photos: Credit 1; Meme$/);
+  assert.ok(next!.startsWith(LINES.opener));
+  assert.equal(recreditCaption(caption, from, from), caption, 'same credits: unchanged');
+});
+
+test('recreditCaption: null when the caption does not end with its credits', () => {
+  const from = [0, 1].map(ready);
+  const to = [ready(0), { ...ready(1), photo: { src: 'x', credit: 'Other', kind: 'scene' as const } }];
+  assert.equal(recreditCaption(`${captionFor(from, LINES)}\n\nAn edit after the credits.`, from, to), null);
+  assert.equal(recreditCaption('A hand-written caption with no credits.', from, to), null);
+});
+
+test('recreditCaption: the template caption is rebuilt whole for the new order', () => {
+  const from = [0, 1, 2].map(ready);
+  const to = [from[2]!, from[0]!, from[1]!];
+  assert.equal(recreditCaption(captionFor(from), from, to), captionFor(to));
+  assert.match(recreditCaption(captionFor(from), from, to)!, /– Story 2 Just Dropped\n– Story 0 Just Dropped/);
+});
+
+test('design profiles rotate evenly from black, and every slide carries the post profile', () => {
+  assert.equal(nextLfdCanvas(null, false), 'black');
+  assert.equal(nextLfdCanvas(null, true), 'green'); // a post from before profiles counts as black
+  assert.deepEqual(['black', 'green', 'orange', 'white'].map((c) => nextLfdCanvas(c, true)), ['green', 'orange', 'white', 'black']);
+  const post = buildPost([0, 1].map(ready), new Date('2026-10-13T07:00:00Z'), null, { canvas: 'orange' });
+  assert.ok(post.slides.every((s) => s.canvas === 'orange'));
+  assert.ok(buildPost([0].map(ready), new Date('2026-10-13T07:00:00Z')).slides.every((s) => s.canvas === undefined));
+});
+
+test('cover hooks rotate through the library and fill in the story count', async () => {
+  const { LFD_COVER_HOOKS, nextLfdCoverHook } = await import('@/lib/lfd/post');
+  assert.equal(LFD_COVER_HOOKS.length, 7);
+  for (const h of LFD_COVER_HOOKS) assert.ok(h.text.includes(h.accent), h.text);
+  assert.equal(nextLfdCoverHook(null, 5).text, LFD_COVER_HOOKS[0]!.text);
+  const second = nextLfdCoverHook(LFD_COVER_HOOKS[0]!.text, 6);
+  assert.deepEqual(second, { text: '6 things happened in AI you need to know.', accent: '6 things' });
+  assert.equal(nextLfdCoverHook(second.text, 6).text, LFD_COVER_HOOKS[2]!.text);
+  assert.equal(nextLfdCoverHook(LFD_COVER_HOOKS[6]!.text, 4).text, LFD_COVER_HOOKS[0]!.text);
 });

@@ -29,6 +29,11 @@ import type { CarouselMetaClient } from './meta';
 
 export type PublishTrigger = 'approve' | 'auto' | 'force';
 
+/** A carousel child that is a video (an MP4 in the slide bucket, Last Few Days video slides, MD-LFD D19). */
+export const isVideoObject = (objectPath: string): boolean => /\.mp4$/i.test(objectPath);
+/** A video child's status poll and its signed URL's life (lib/stories/publish/publish.ts VIDEO_POLL, the same cadence). */
+export const VIDEO_ITEM_POLL = { everyMs: 10_000, maxPolls: 60, signSeconds: 7200 } as const;
+
 /** The spine verticals that post an image set as a feed carousel. */
 export type FeedVertical = 'carousels' | 'last_few_days' | 'ai_events' | 'field_notes';
 
@@ -228,10 +233,29 @@ export async function carryFeedAttempt(deps: PublishDeps, id: string, hooks: Fee
     if (!gate.ok) throw new Error(gate.message);
 
     const children: string[] = [];
+    const videos: string[] = [];
     for (const objectPath of attempt.image_objects) {
-      children.push(await meta.createImageItem(await deps.signImage(objectPath, PUBLISH_IMAGE_URL_SECONDS)));
+      if (isVideoObject(objectPath)) {
+        if (!meta.createVideoItem) throw new Error(`This ${noun} has a video slide and the Instagram client cannot post one.`);
+        const child = await meta.createVideoItem(await deps.signImage(objectPath, VIDEO_ITEM_POLL.signSeconds));
+        children.push(child);
+        videos.push(child);
+      } else children.push(await meta.createImageItem(await deps.signImage(objectPath, PUBLISH_IMAGE_URL_SECONDS)));
     }
     await update(query, id, { child_container_ids: JSON.stringify(children) });
+    // A video child is processed by Instagram before the parent can take it (Last Few Days video slides, MD-LFD D19).
+    for (const child of videos) {
+      for (let poll = 1; ; poll += 1) {
+        const status = await meta.containerStatus(child);
+        statusLog.push({ at: new Date(now()).toISOString(), ...status, statusCode: `CHILD_${status.statusCode}` });
+        if (status.statusCode === 'FINISHED') break;
+        if (status.statusCode === 'ERROR' || status.statusCode === 'EXPIRED') {
+          throw new Error(`Instagram could not process a video slide of the ${noun} (${status.statusCode}): ${status.status ?? 'no detail'}`);
+        }
+        if (poll >= VIDEO_ITEM_POLL.maxPolls) throw new Error(`A video slide was still ${status.statusCode} after ${VIDEO_ITEM_POLL.maxPolls} checks.`);
+        await sleep(VIDEO_ITEM_POLL.everyMs);
+      }
+    }
     const containerId = await meta.createCarousel(children, attempt.caption, attempt.location_id ?? undefined);
     await update(query, id, { status: 'processing', container_id: containerId });
 
