@@ -18,8 +18,9 @@
  * Trivia's daily writer, Real or AI?'s daily candidates) runs in every state,
  * each held to its type's refill cap (stories.settings.types[<type>].refill_cap_usd).
  *
- * Photo bank (DECISIONS_LOG D49): nothing here offers photos to it any more. The old Stories finder that did is gone
- * (no series called it), so the worker no longer builds or drains a bank.
+ * Photo bank (DECISIONS_LOG D49): a Morning Download build offers its news-finder photos (picks and runner-ups,
+ * lib/news-photos/bank-offer.ts) to the bank built here on the source database; the worker drains it after a pass
+ * that built (15 s) and before it exits (30 s). Never blocking: a bank failure never fails a build.
  */
 import './stories_env';
 import fs from 'node:fs';
@@ -30,6 +31,7 @@ import { createIntakeJev } from '@/lib/intake/jev';
 import { INTAKE_TOPUP_CAP_USD } from '@/lib/intake/types';
 import { liveJevTransport } from '@/lib/reels/jev/client';
 import { createJevAsk } from '@/lib/social/jev/client';
+import { drainBank } from '@/lib/news-photos/bank-offer';
 import type { NewsChainDeps } from '@/lib/stories/build/common';
 import { liveStoriesDb, type StoriesDb } from '@/lib/stories/db';
 import { DEFAULT_LOCAL_DIR, openLocalStoriesDb } from '@/lib/stories/local-db';
@@ -50,7 +52,7 @@ import { liveOpponentClient } from '@/lib/stories/trivia/opponent';
 const POLL_MS = 15_000;
 
 /** The news chain's live clients for one Morning Download build. */
-async function newsChain(client: ReturnType<typeof newAnthropic>): Promise<NewsChainDeps> {
+async function newsChain(client: ReturnType<typeof newAnthropic>, bank: NewsChainDeps['bank']): Promise<NewsChainDeps> {
   const { TypeSafeClient } = await import('@typesafe-ai/sdk');
   const { fetchImageLive, readPageImages, serperImages } = await import('@/lib/news-photos');
   const { findPhotoUpscaler } = await import('@/lib/news-photos/band');
@@ -67,6 +69,7 @@ async function newsChain(client: ReturnType<typeof newAnthropic>): Promise<NewsC
     upscaler: findPhotoUpscaler(),
     tmpDir: fs.mkdtempSync(path.join(os.tmpdir(), 'md-band-')),
     storage: createStoriesStorage(),
+    ...(bank ? { bank } : {}),
   };
 }
 const once = process.argv.includes('--once');
@@ -76,6 +79,14 @@ async function main() {
   const db: StoriesDb = process.env.STORIES_DB === 'local' ? (await openLocalStoriesDb(DEFAULT_LOCAL_DIR)).db : liveStoriesDb;
   const sourceDb = liveStoriesDb;
   const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
+  // The photo bank (D49) lives in the hub's Supabase (the source database). Not built: builds run without it.
+  let bank: NewsChainDeps['bank'] = null;
+  try {
+    const { createPhotoBank } = await import('@/lib/media-library/bank');
+    bank = createPhotoBank({ query: (text, params) => sourceDb.query(text, params), log: (line) => log(`photo bank: ${line}`) });
+  } catch (err) {
+    log(`photo bank not built: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   if (requestArg > 0) {
     const series = process.argv[requestArg + 1] as Series;
@@ -118,7 +129,7 @@ async function main() {
         storage: createStoriesStorage(),
         // Morning Download's news chain (WIRING-CONTRACT Owner D): Jev shortlist, Opus rerank, the news photo finder
         // (Serper only when its key is set), the band upscaler when installed, the W12 writer.
-        ...(series === 'morning_download' ? { news: await newsChain(client) } : {}),
+        ...(series === 'morning_download' ? { news: await newsChain(client, bank) } : {}),
         // Morning Download video (MD-LFD D16–D19): on where yt-dlp, ffmpeg and the Serper and Jev keys are present.
         video: async (setId: string) => {
           const { liveStoryVideo, videoAvailable } = await import('@/lib/stories/video');
@@ -142,6 +153,7 @@ async function main() {
       try {
         const r = await tick(deps);
         if (r.built || r.scheduled || r.published || r.insights) log(`pass: ${JSON.stringify(r)}`);
+        if (r.built) await drainBank(bank, 15_000);
       } catch (err) {
         log(`pass failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
       }
@@ -149,6 +161,7 @@ async function main() {
       await new Promise((r) => setTimeout(r, POLL_MS));
     } while (!stopping);
   } finally {
+    await drainBank(bank, 30_000);
     await (renderer as Renderer | null)?.close();
   }
 }

@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import type { HeldOfferInput } from '@/lib/media-library/held';
 import type { BuildDeps } from '@/lib/stories/build/common';
 import { buildMorningDownload, frameCopy, mdVerdict } from '@/lib/stories/build/morning-download';
 import { SAME_EVENT } from '@/lib/news-ranker/questions';
@@ -26,8 +27,9 @@ type Script = NewsScript & { url?: string };
 
 const urlOf = (s: Script) => s.url ?? `https://news.test/${slug(s.headline)}`;
 
-async function chain(scripts: Script[]) {
+async function chain(scripts: Script[], o: { bank?: NonNullable<BuildDeps['news']>['bank'] } = {}) {
   const { news, video, calls } = await newsStubs(scripts);
+  if (o.bank !== undefined) news.bank = o.bank;
 
   const { db } = await harnessDb();
   const { set } = await requestSet(db, { series: 'morning_download', nyDate: DATE, trigger: 'click', style: DEFAULT_SETTINGS.series.morning_download.style });
@@ -175,4 +177,45 @@ test('MD spin-off: a different article about a story we ran is blocked unless it
   assert.ok(back.keys.includes('x.test/1'), 'a real development posts');
   const story = (back.r.ok ? (back.r.payload.stories as Array<{ key: string; we_already_said?: { headline: string } }>) : []).find((s) => s.key === 'x.test/1')!;
   assert.equal(story.we_already_said?.headline, 'Acme ships its Rocket');
+});
+
+/* ── the photo bank (D49): the build offers its news-finder photos ── */
+
+const BANK_SCRIPTS: Script[] = [
+  { headline: 'OpenAI ships GPT-6', top: true, photo: 'good' },
+  { headline: 'Nvidia earnings beat', top: true, photo: 'none' },
+  { headline: 'Google trims Gemini prices', top: true, photo: 'usable' },
+];
+
+test('MD photo bank: each posted story\'s pick is offered as picked at its slide; a story with nothing is not offered', async () => {
+  const offers: HeldOfferInput[] = [];
+  const { r, posted } = await chain(BANK_SCRIPTS, { bank: { offerHeld: (input) => void offers.push(input) } });
+  assert.equal(r.ok, true, r.ok ? '' : r.skip);
+  assert.deepEqual(posted, ['OpenAI ships GPT-6', 'Google trims Gemini prices']);
+  assert.equal(offers.length, 2);
+  assert.ok(offers.every((o) => o.runKind === 'story' && o.runRef === `stories-build:${NOW.toISOString()}`));
+  const picked = offers.flatMap((o) => o.items.filter((i) => i.outcome === 'picked'));
+  assert.deepEqual(picked.map((i) => [i.slide, i.url]), [
+    [2, 'https://news.test/openai-ships-gpt-6/photo.jpg'],
+    [3, 'https://news.test/google-trims-gemini-prices/photo.jpg'],
+  ]);
+  for (const i of picked) {
+    assert.ok(i.bytes.length > 0);
+    assert.equal(i.credit, 'Photo: Wire');
+    // A news photo's credit is not a licence: stored as unknown, never reusable (policy.ts storedLicence).
+    assert.equal(i.licence, 'unknown');
+    assert.equal(i.reuseOk, false);
+    assert.equal(i.lane, 'news-photos');
+  }
+  assert.equal(picked[0]!.title, 'OpenAI ships GPT-6');
+  assert.ok(!offers.some((o) => o.items.some((i) => i.url.includes('nvidia'))));
+});
+
+test('MD photo bank: no bank changes nothing, and a throwing bank never fails the build', async () => {
+  const plain = await chain(BANK_SCRIPTS);
+  const throwing = await chain(BANK_SCRIPTS, { bank: { offerHeld: () => { throw new Error('bank down'); } } });
+  assert.equal(plain.r.ok, true);
+  assert.equal(throwing.r.ok, true);
+  assert.deepEqual(throwing.posted, plain.posted);
+  assert.deepEqual(throwing.stories.map((f) => f.photo?.credit), plain.stories.map((f) => f.photo?.credit));
 });

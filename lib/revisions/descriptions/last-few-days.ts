@@ -39,6 +39,8 @@ import type { SavedStory } from '@/lib/memes/lfd-sim/post';
 import type { ActionTarget } from '@/lib/publishing/actions/types';
 import type { Post as RenderPost, SlideCopy } from '@/lib/social/render/types';
 import type { Query } from '@/lib/social/store/pg';
+import type { PhotoResult } from '@/lib/news-photos';
+import type { PhotoBankSink } from '@/lib/news-photos/bank-offer';
 import type { Photo } from '@/lib/stories/render/types';
 
 import type { ContentTypeDescription, FixKind, PartRef, PartState, PostSnapshot } from '../types';
@@ -110,7 +112,13 @@ export type LastFewDaysDeps = {
    * builder story, the harvest), never a URL in `exclude` nor one `ledger` names; `hint` adds one image search's
    * results as candidates. Charges `meter`.
    */
-  findPhoto: (input: { pick: LfdPick; exclude: ReadonlySet<string>; ledger: UsedLedger; hint?: string }, meter: Metered) => Promise<{ photo: Photo | null; trace: string[]; source?: 'lead' | 'harvest' | 'finder' }>;
+  findPhoto: (input: { pick: LfdPick; exclude: ReadonlySet<string>; ledger: UsedLedger; hint?: string }, meter: Metered) => Promise<{ photo: Photo | null; trace: string[]; source?: 'lead' | 'harvest' | 'finder'; result?: PhotoResult | null }>;
+  /**
+   * The photo bank (D49): the finder's `result` (pick and runner-ups) is offered with run ref
+   * `lfd-revision:<story key>:<iso>` at the story's slide (lib/news-photos/bank-offer.ts). Absent, or null: nothing
+   * is offered. Never fails a revision.
+   */
+  photoBank?: () => Promise<PhotoBankSink | null>;
   /** The run's Haiku vision check (lib/lfd/vision.ts checkSlide) on the rendered story slide. Charges `meter`. */
   vision: (png: Buffer, story: SlideStory, meter: Metered) => Promise<SlideVerdict>;
   unschedule: (q: Query, postId: string) => Promise<{ ok: boolean; note: string }>;
@@ -455,6 +463,16 @@ export function createLastFewDaysDescription(deps: LastFewDaysDeps): ContentType
         const text = (await deps.sourceText({ url: cur.url, body: cur.body })) ?? cur.body;
         const hint = args.hint?.trim();
         const found = await deps.findPhoto({ pick: { ...ready.pick, body: text }, exclude, ledger, ...(hint ? { hint } : {}) }, m);
+        // The photo bank (D49): what the finder found, the swapped-in pick as `picked` at this story's slide. Best effort.
+        if (found.result && deps.photoBank) {
+          try {
+            const [bank, { offerToBank }] = await Promise.all([deps.photoBank(), import('@/lib/news-photos/bank-offer')]);
+            const at = new Date();
+            offerToBank(bank, found.result, { runRef: `lfd-revision:${ready.pick.key}:${at.toISOString()}`, slide: i + 2, posted: Boolean(found.photo && found.result.pick && found.photo.src === found.result.pick.src), headline: ready.pick.headline, at });
+          } catch {
+            /* the bank never fails a revision */
+          }
+        }
         m.check();
         const photo = found.photo;
         if (!photo || !photo.src || exclude.has(photo.src) || !photo.credit?.trim()) {

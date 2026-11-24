@@ -34,6 +34,7 @@ import { findSpinOffs } from '@/lib/news-ranker/repeats';
 import { cleanup, type MediaVerdict } from '@/lib/news-ranker/posts';
 import { rerank, type Graded } from '@/lib/news-ranker/rerank';
 import { shortlist, SHORTLIST_TOP, type ChainStory } from '@/lib/news-ranker/shortlist';
+import { offerToBank } from '@/lib/news-photos/bank-offer';
 import { findStoryPhoto, readPageImages, type Candidate, type PhotoJev, type PhotoResult, type PhotoStory } from '@/lib/news-photos';
 import { writeStories, type WriterStory, type Written } from '@/lib/news-writer';
 import type { VideoFind } from '@/lib/video-finder/find';
@@ -124,6 +125,12 @@ export type LfdRunDeps = {
   };
   /** Builder slides' photos: AI Drama's harvest after the article lead image, before the finder. Absent: the finder only. */
   harvest?: BuilderHarvest;
+  /**
+   * The photo bank (D49): every photo-finder result's pick and runner-ups are offered once the post is saved
+   * (lib/news-photos/bank-offer.ts, run ref `lfd:<run id>`). Absent or null (tests): nothing is offered. The caller
+   * drains it (liveLfdDeps drainBank) before a one-shot run exits.
+   */
+  bank?: import('@/lib/news-photos/bank-offer').PhotoBankSink | null;
   /**
    * How the used-photo guard (CI-32, lib/photos/used-guard.ts) downloads and hashes a lead image to check it against
    * the ledger's published pictures. Absent (tests, replays): the lead image's URL is checked only.
@@ -501,6 +508,22 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
   const record: Record<string, unknown> = {};
   // The news photo finder's spend for this post (Haiku brief + AI check, Jev grades, Serper): outside the run budget's tally.
   const photoRecord: { usd: number; stories: Array<{ key: string; tier: MediaVerdict; source: string | null }> } = { usd: 0, stories: [] };
+  /** Every finder result by story key (the latest), for the photo bank at the end of the run. */
+  const photoResults = new Map<string, { result: PhotoResult; headline: string }>();
+  let bankOffered = false;
+  /**
+   * The photo bank (D49): a slide's own finder photo as `picked` at its slide (story i is slide i + 2), runner-ups and
+   * the finds of stories that did not post (or of a run that failed) as `passed`. Synchronous, best effort, never throws.
+   */
+  const offerPhotos = (final: ReadonlyArray<{ pick: { key: string }; photo?: { src?: string } | null }>) => {
+    if (!d.bank || bankOffered) return;
+    bankOffered = true;
+    const slideOf = new Map(final.map((r, i) => [r.pick.key, { slide: i + 2, src: r.photo?.src }] as const));
+    for (const [key, { result, headline }] of photoResults) {
+      const at = slideOf.get(key);
+      offerToBank(d.bank, result, { runRef: `lfd:${runId}`, slide: at?.slide ?? 0, posted: Boolean(at && result.pick && at.src === result.pick.src), headline, at: d.now });
+    }
+  };
   // Builder-slide harvests share one budget per post (round 3: $0.15).
   const harvestBudget: HarvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };
   // The AI cover's fal image spend: outside the run budget's tally (its Jev and writer calls go through the run's).
@@ -755,6 +778,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       const trace = [...why, ...rung.trace];
       const res = rung.result;
       if (!res) return { photo: null, trace };
+      photoResults.set(pick.key, { result: res, headline: pick.headline });
       photoRecord.usd += res.costUsd;
       photoRecord.stories.push({ key: pick.key, tier: res.tier, source: res.pick?.source ?? null });
       if (!res.pick || res.tier === 'none' || !rung.photo) return { photo: null, trace };
@@ -1213,6 +1237,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
       renderProblems: [...renderProblemsOf(fit), ...visionProblems],
       short,
     });
+    offerPhotos(final);
     if (seedList.length) {
       const inPost = new Set(final.map((r) => r.pick.key));
       const outcomes = seedList.map((s) => {
@@ -1252,6 +1277,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
     return { ok: true, runId, postId, stories: final.length, short, recorded };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
+    offerPhotos([]);
     try {
       const spend = d.spend();
       const videoSpend = d.video?.spent() ?? { usd: 0, jevUsd: 0 };

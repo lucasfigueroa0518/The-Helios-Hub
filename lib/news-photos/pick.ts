@@ -31,20 +31,21 @@ export async function blatantlyAi(jpeg: Buffer, create: WriterCreate): Promise<{
  * The first candidate in pick order that isn't blatantly AI. A failed check keeps the photo (the check is lenient by
  * design: "when in doubt, answer no") and says so in the log.
  */
-export async function pickPhoto(graded: GradedPhoto[], create: WriterCreate): Promise<{ pick: GradedPhoto | null; messages: Anthropic.Message[]; log: string[] }> {
+export async function pickPhoto(graded: GradedPhoto[], create: WriterCreate): Promise<{ pick: GradedPhoto | null; messages: Anthropic.Message[]; log: string[]; aiRejected: string[] }> {
   const messages: Anthropic.Message[] = [];
   const log: string[] = [];
+  const aiRejected: string[] = [];
   for (const c of pickOrder(graded)) {
     try {
       const r = await blatantlyAi(c.jpeg, create);
       messages.push(r.message);
-      if (r.ai) { log.push(`AI check: blatantly AI → next (${c.src})`); continue; }
+      if (r.ai) { aiRejected.push(c.src); log.push(`AI check: blatantly AI → next (${c.src})`); continue; }
     } catch (e) {
       log.push(`AI check failed (${e instanceof Error ? e.message : String(e)}) → kept (${c.src})`);
     }
     log.push(`pick: ${c.tier}, clarity ${c.clarity.toFixed(1)}, ${c.source} ${c.src}`);
-    return { pick: c, messages, log };
+    return { pick: c, messages, log, aiRejected };
   }
   log.push('pick: none');
-  return { pick: null, messages, log };
+  return { pick: null, messages, log, aiRejected };
 }

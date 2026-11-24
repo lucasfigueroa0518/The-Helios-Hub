@@ -12,7 +12,7 @@ import type { WriterCreate } from '@/lib/stories/writer';
 import { PHOTO_HAIKU, writeBrief, type PhotoBrief } from './brief';
 import { gatherCandidates, SERPER_USD, type Candidate, type CandidateDeps, type PhotoStory } from './candidates';
 import { gradePhoto, type GradedPhoto, type MediaVerdict, type PhotoJev } from './grade';
-import { pickPhoto } from './pick';
+import { pickOrder, pickPhoto } from './pick';
 
 export * from './brief';
 export * from './candidates';
@@ -20,7 +20,19 @@ export * from './grade';
 export * from './pick';
 export * from './band';
 
-export type PhotoResult = { id: string; tier: MediaVerdict; pick: GradedPhoto | null; brief: PhotoBrief | null; costUsd: number; log: string[] };
+export type PhotoResult = {
+  id: string;
+  tier: MediaVerdict;
+  pick: GradedPhoto | null;
+  brief: PhotoBrief | null;
+  costUsd: number;
+  log: string[];
+  /**
+   * The runner-ups: every other good or usable candidate in pick order, minus any the AI check turned down. The photo
+   * bank stores them as `passed` (lib/news-photos/bank-offer.ts). Absent on a result made outside the finder.
+   */
+  passed?: GradedPhoto[];
+};
 export type PhotoDeps = CandidateDeps & {
   /** Haiku brief + AI check (claude-haiku-5-5). */
   create: WriterCreate;
@@ -33,7 +45,7 @@ export async function findStoryPhoto(s: PhotoStory, deps: PhotoDeps, o: { extra?
   const log: string[] = [];
   let jevUsd = 0, serperUsd = 0;
   const cost = () => (msgs.length ? Number(priceAnthropicMessages(msgs, { modelId: PHOTO_HAIKU }).costUsd) : 0) + jevUsd + serperUsd;
-  const done = (tier: MediaVerdict, pick: GradedPhoto | null, brief: PhotoBrief | null): PhotoResult => ({ id: s.id, tier, pick, brief, costUsd: cost(), log });
+  const done = (tier: MediaVerdict, pick: GradedPhoto | null, brief: PhotoBrief | null, passed: GradedPhoto[] = []): PhotoResult => ({ id: s.id, tier, pick, brief, costUsd: cost(), log, passed });
 
   let brief: PhotoBrief | null = null;
   try {
@@ -59,5 +71,7 @@ export async function findStoryPhoto(s: PhotoStory, deps: PhotoDeps, o: { extra?
   const p = await pickPhoto(graded.map((g) => g.photo), deps.create);
   msgs.push(...p.messages);
   log.push(...p.log);
-  return done(p.pick?.tier ?? 'none', p.pick, brief);
+  const rejected = new Set(p.aiRejected);
+  const passed = pickOrder(graded.map((g) => g.photo)).filter((c) => c !== p.pick && !rejected.has(c.src));
+  return done(p.pick?.tier ?? 'none', p.pick, brief, passed);
 }

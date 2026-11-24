@@ -102,6 +102,10 @@ test('findStoryPhoto: ledger and floor skip candidates; the AI check falls throu
   assert.equal(r.brief?.subject, 'the robot arm');
   assert.ok(r.costUsd > 0);
   assert.equal(w.haikuCalls.length, 3, 'brief + two AI checks');
+  // The runner-ups for the photo bank: the other good/usable candidates in pick order, never the AI-rejected one.
+  assert.ok(r.passed!.length > 0);
+  assert.ok(!r.passed!.some((c) => c.src === r.pick?.src || /a2/.test(c.src)));
+  assert.ok(r.passed!.every((c) => c.tier === 'good' || c.tier === 'usable'));
 });
 
 test('findStoryPhoto: every good photo AI-rejected → the best usable one; page credit is kept', async () => {

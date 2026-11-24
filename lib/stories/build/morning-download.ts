@@ -38,6 +38,7 @@ import { findSpinOffs } from '@/lib/news-ranker/repeats';
 import { shortlist, SHORTLIST_ID, SHORTLIST_TOP, type ChainStory } from '@/lib/news-ranker/shortlist';
 import { keepWithMedia, mdMedia, type MdMedia } from '@/lib/news-ranker/media-ladder';
 import { leadOf, MAJOR_NEWS_BAR } from '@/lib/news-ranker/scores';
+import { offerToBank } from '@/lib/news-photos/bank-offer';
 import { fitToBand, findStoryPhoto, type BandFit, type Candidate, type GradedPhoto, type PhotoResult } from '@/lib/news-photos';
 import { WRITER_ID, WRITER_MODEL, writeStories } from '@/lib/news-writer';
 import { nextOpenerPromise } from '@/lib/stories/render/copy';
@@ -431,6 +432,19 @@ export async function buildMorningDownload(deps: BuildDeps, sources?: Sources): 
   const frames = keep.map((i) => storyFrames[i]!);
   const photoFrames = keep.map((i, n) => ({ ...photoLog[i]!, frame: `story ${n + 1}` }));
   for (const w of written) posted.add(w.key);
+
+  // The photo bank (D49): each posted story's shown pick as `picked` at its slide (cover 1, story k at k + 1), its
+  // runner-ups and every other checked story's finds as `passed`. Synchronous and best effort: never fails the build.
+  if (news.bank) {
+    const runRef = `stories-build:${deps.now.toISOString()}`;
+    const slideOf = new Map(written.map((w, n) => [w.key, n + 2] as const));
+    for (const g of window) {
+      const r = photoOf.get(g.id);
+      const slide = slideOf.get(g.id) ?? 0;
+      const shown = slide > 0 && Boolean(r?.pick) && photoFrames[slide - 2]?.picked === r!.pick!.src;
+      offerToBank(news.bank, r, { runRef, slide, posted: shown, headline: g.headline, at: deps.now }, (line) => log.push(line));
+    }
+  }
 
   // The cover shows every story's own photo, blurred under a question mark (MC14); it draws no opener photo.
   // Its headline rotates on from the last set's (MC16).

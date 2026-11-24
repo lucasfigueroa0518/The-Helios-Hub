@@ -15,6 +15,7 @@ import { createStoriesDescription, storiesDescription, STORIES_STAGE_TAGS, type 
 import { runRevision } from '@/lib/revisions/engine';
 import { descriptionFor, registerDescription, restoreRegistryForTest } from '@/lib/revisions/registry';
 import { claimNextRequested, createRequest, listForItem, markRunning } from '@/lib/revisions/store';
+import type { HeldOfferInput } from '@/lib/media-library/held';
 import type { Interpretation, PartRef } from '@/lib/revisions/types';
 import type { Query } from '@/lib/social/store/pg';
 import type { StoriesDb } from '@/lib/stories/db';
@@ -679,4 +680,45 @@ test('a photo turned down in an applied revision (revisions log) is excluded eve
   assert.equal(res.ok, true, JSON.stringify(res));
   assert.ok(calls.finds[0]!.exclude.has(TURNED_DOWN));
   assert.equal(srcOf((await framesOf(s.q, s.setId))[3]!), FRESH.src);
+});
+
+/* ── the photo bank (D49): a photo revision offers what the news photo finder found ── */
+
+const resultFor = (photo: Photo): NonNullable<Awaited<ReturnType<StoriesDeps['findPhoto']>>['result']> => ({
+  id: 'k', tier: 'good', brief: { kind: 'person', subject: 'Dario Amodei', good_if: 'it shows him' }, costUsd: 0, log: [],
+  pick: { src: photo.src, source: 'article', credit: photo.credit, tier: 'good', clarity: 8, jpeg: Buffer.from('jpg'), width: 1200, height: 800 },
+  passed: [{ src: 'https://img.test/runner-up.jpg', source: 'search', credit: 'Photo', tier: 'usable', clarity: 6, jpeg: Buffer.from('jpg2'), width: 1200, height: 800 }],
+});
+
+test('photo bank: a photo revision offers the pick as picked at the frame and its runner-up as passed', async () => {
+  const s = await seed();
+  const offers: HeldOfferInput[] = [];
+  const { desc } = setup({
+    deps: {
+      async findPhoto() { return { photo: FRESH, log: ['stub finder'], result: resultFor(FRESH) }; },
+      photoBank: async () => ({ offerHeld: (input) => void offers.push(input) }),
+    },
+  });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(offers.length, 1);
+  assert.equal(offers[0]!.runKind, 'story');
+  assert.ok(offers[0]!.runRef.startsWith(`stories-revision:${s.setId}:2`), offers[0]!.runRef);
+  assert.deepEqual(offers[0]!.items.map((i) => [i.url, i.outcome, i.slide]), [[FRESH.src, 'picked', 3], ['https://img.test/runner-up.jpg', 'passed', 3]]);
+  // A search hit credited only "Photo" carries no licence: stored as unknown, never reusable (policy.ts).
+  assert.equal(offers[0]!.items[1]!.licence, 'unknown');
+  assert.equal(offers[0]!.items[1]!.reuseOk, false);
+});
+
+test('photo bank: a throwing bank never fails a photo revision; no bank offers nothing', async () => {
+  const s = await seed();
+  const { desc } = setup({
+    deps: {
+      async findPhoto() { return { photo: FRESH, log: ['stub finder'], result: resultFor(FRESH) }; },
+      photoBank: async () => ({ offerHeld: () => { throw new Error('bank down'); } }),
+    },
+  });
+  const res = await desc.revise({ q: s.q, refs: refsOf(s.setId), interpretation: interp(frame(3), 'photo'), meter: meter() });
+  assert.equal(res.ok, true, JSON.stringify(res));
+  assert.equal(srcOf((await framesOf(s.q, s.setId))[2]!), FRESH.src);
 });
