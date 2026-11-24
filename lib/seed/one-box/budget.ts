@@ -5,14 +5,26 @@ import { B6_MODEL } from '@/lib/reels/config';
 import type { SeedVerticalKey } from './types';
 
 /**
- * The one-box spend ledger (design 2026-11-04-one-box-seeding-design, section 5). 35 cents is a hard stop: before each billable
+ * The one-box spend ledger (design 2026-11-04-one-box-seeding-design, section 5). each type's limit (LIMIT_USD) is a hard stop: before each billable
  * call the worst case is checked against what is left, and a call that might pass the cap is not made. The add functions run
  * their own small calls afterwards (Jev scoring; Explainers' scope writer), which this ledger cannot intercept, so they are
  * reserved out of the budget up front.
  */
 
-export const ONE_BOX_MAX_USD = 0.35;
 export const ONE_BOX_VERIFY_MODEL = 'claude-haiku-5-5';
+
+/** The most one seed of each type may spend. */
+export const LIMIT_USD: Record<SeedVerticalKey, number> = {
+  reels: 0.35,
+  carousels: 0.35,
+  last_few_days: 0.35,
+  stories: 0.35,
+  explainers: 0.35,
+  field_notes: 0.35,
+  ai_trivia: 0.35,
+  real_or_ai: 0.6,
+  reel_ai_drama: 0.5,
+};
 
 export const RESERVE_USD: Record<SeedVerticalKey, number> = {
   reels: 0.02,
@@ -30,7 +42,7 @@ export const RESERVE_USD: Record<SeedVerticalKey, number> = {
 export const SEARCH_MAX_USES = 3;
 export const SEARCH_MAX_OUTPUT_TOKENS = 1500;
 /**
- * An assumption, not a measurement, and the one place the 35-cent limit is not enforced by the API: a search turn re-bills its
+ * An assumption, not a measurement, and the one place the seed limit is not enforced by the API: a search turn re-bills its
  * results on each server-side step, so its real input is only known after the call. Retune this from the cost the first live
  * seeds record (reels.cost_events, component one-box-seed) before relying on the limit.
  */
@@ -77,12 +89,20 @@ export function verifyWorstCaseUsd(): number {
 /** The per-search fee, exported so a test can show it is the one in the cost snapshot. */
 export const SEARCH_FEE_USD = DRAFTING_PRICE_SNAPSHOT.webSearchPerSearchUsd;
 
+const cents = (v: SeedVerticalKey) => Math.round(LIMIT_USD[v] * 100);
+
+/** The verifier's reason when it stopped at the limit; run.ts matches on it. */
+export const limitReason = (v: SeedVerticalKey) => `Stopped at the ${cents(v)}-cent limit.`;
+
+/** What the request row says when a seed stops at its type's limit. */
+export const limitText = (v: SeedVerticalKey) => `Stopped at the ${cents(v)}-cent limit; nothing was added.`;
+
 export class Ledger {
   spent = 0;
   readonly usable: number;
 
   constructor(vertical: SeedVerticalKey) {
-    this.usable = money(ONE_BOX_MAX_USD - RESERVE_USD[vertical]);
+    this.usable = money(LIMIT_USD[vertical] - RESERVE_USD[vertical]);
   }
 
   /** True when a call whose cost could be `worstCase` still fits. */
@@ -92,6 +112,11 @@ export class Ledger {
 
   add(usd: number): void {
     this.spent = money(this.spent + (Number.isFinite(usd) && usd > 0 ? usd : 0));
+  }
+
+  /** What is left to spend, never below zero. */
+  remaining(): number {
+    return Math.max(0, money(this.usable - this.spent));
   }
 
   get exhausted(): boolean {

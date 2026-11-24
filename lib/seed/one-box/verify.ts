@@ -6,7 +6,7 @@ import { isPrivateHost } from '@/lib/net/private-host';
 import { recordCost as recordReelsCost } from '@/lib/reels/repository';
 import { MIN_BODY_CHARS, readPageText } from '@/lib/reels/seed-search';
 
-import { Ledger, ONE_BOX_VERIFY_MODEL, VERIFY_MAX_OUTPUT_TOKENS, verifyWorstCaseUsd } from './budget';
+import { Ledger, ONE_BOX_VERIFY_MODEL, VERIFY_MAX_OUTPUT_TOKENS, limitReason, verifyWorstCaseUsd } from './budget';
 import { VERDICT_TOOL, buildVerifyUserTurn, verifySystemFor } from './prompts';
 import type { Client, CostRecorder } from './search';
 import { entryTitle, entryUrl, missingFields, shapeKey, shapeOf } from './shape';
@@ -14,8 +14,6 @@ import type { Entry, Finding, OneBoxInput, PassedEntry, Verified } from './types
 
 export const defaultVerifyCost: CostRecorder = (usd, inputTokens, outputTokens) =>
   recordReelsCost({ runId: null, vendor: 'anthropic', component: 'one-box-verify', inputTokens, outputTokens, usd });
-
-const LIMIT_REASON = 'Stopped at the 35-cent limit.';
 
 async function readable(url: string, readPage: (u: string) => Promise<string | null>): Promise<string | null> {
   try {
@@ -98,7 +96,7 @@ export async function verifyFinding(i: {
     if (ok && i.input.vertical !== 'explainers') break;
   }
   if (passed.length === 0) {
-    if (stoppedAtLimit) return { ok: false, reason: LIMIT_REASON };
+    if (stoppedAtLimit) return { ok: false, reason: limitReason(i.input.vertical) };
     if (firstTried) return { ok: false, reason: `The closest source I found was “${entryTitle(firstTried.entry)}”, but it isn’t the same idea: ${firstTried.reason}` };
     return { ok: false, reason: 'None of the pages the search found could be opened and read.' };
   }
