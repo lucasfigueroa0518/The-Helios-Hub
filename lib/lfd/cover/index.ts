@@ -1,6 +1,6 @@
 /**
  * The LFD AI cover (PLAN.md C1–C7, COVER-PROMPT-WRITER.md): the rotating hook, a direction picked by Jev,
- * one cached prompt-writer call, and one Higgsfield GPT Image 2.6 image made from the referenced story
+ * one cached prompt-writer call, and one GPT Image 2.6 edit on fal made from the referenced story
  * photos, stored in the slide bucket. The hook is always returned. Any failure, or a spend the run's
  * remaining cap cannot cover, returns no image and a `fallback` reason: the post keeps today's cover.
  * Never throws.
@@ -10,11 +10,11 @@ import type { MessagesCreate } from '@/lib/social/reporter/reporter';
 
 import { nextLfdCoverHook } from '../post';
 
-import { HIGGSFIELD_IMAGE_USD, startImage, uploadReferences, waitForImage, type HiggsfieldTools, type ReferenceFile } from './higgsfield-image';
+import { FAL_COVER_IMAGE_USD, FAL_MAX_REFERENCES, referenceDataUri, submitImage, waitForImage, type FalImage, type FalWait } from './fal-image';
 import { LFD_COVER_DIRECTION, LFD_COVER_STANDOFF_BAR, type LfdCoverDirection } from './prompts';
 import { CoverWriterError, writeCoverPrompt, type CoverReference, type CoverStory } from './writer';
 
-export { HIGGSFIELD_IMAGE_USD, HIGGSFIELD_USD_PER_CREDIT } from './higgsfield-image';
+export { FAL_COVER_IMAGE_USD, FAL_COVER_MODEL, type FalImage } from './fal-image';
 export type { LfdCoverDirection } from './prompts';
 
 /** A generous ceiling for one writer call (Opus, ~3k tokens in, ~1k out), checked before anything is spent. */
@@ -27,16 +27,16 @@ export type LfdAiCoverDeps = {
   jev: JevAsk;
   /** The run's budget-guarded Messages create. */
   create: MessagesCreate;
-  /** Higgsfield MCP tools (HiggsfieldClient live). Null: the AI cover is off and nothing is called. */
-  higgsfield: HiggsfieldTools | null;
-  /** Reads story photos and the result image, and PUTs the reference uploads. */
+  /** fal's key and fetch (live: FAL_API_KEY). Null: the AI cover is off and nothing is called. */
+  fal: FalImage | null;
+  /** Reads story photos and downloads the result image (no fal key on these). */
   fetch: FetchLike;
   /** The slide bucket's upload (run.ts `upload`). */
   upload: (path: string, body: Buffer, contentType?: string) => Promise<void>;
   /** What the run may still spend (USD). */
   remainingUsd: () => number;
-  /** Test hooks for the job wait. */
-  wait?: { now?: () => number; sleep?: (ms: number) => Promise<void>; deadlineMs?: number };
+  /** Test hooks for the queue wait. */
+  wait?: FalWait;
 };
 
 export type LfdAiCoverInput = {
@@ -58,7 +58,7 @@ export type LfdAiCoverResult = {
   references?: number[];
   /** Everything this cover spent: Jev, the writer and the image. */
   costUsd: number;
-  /** The Higgsfield part only (outside the run budget's tally). */
+  /** The fal image part only (outside the run budget's tally). */
   imageUsd: number;
   /** Why the post keeps today's cover. */
   fallback?: string;
@@ -83,8 +83,6 @@ export async function pickCoverDirection(jev: JevAsk, stories: CoverStory[], sub
   }
 }
 
-const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
-
 /** A story photo's bytes: a data URL is decoded, an http(s) URL fetched. */
 async function readPhoto(fetchImpl: FetchLike, url: string): Promise<{ bytes: Buffer; contentType: string }> {
   const data = url.match(/^data:([^;,]+)(;base64)?,(.*)$/s);
@@ -100,10 +98,10 @@ export async function makeLfdAiCover(deps: LfdAiCoverDeps, input: LfdAiCoverInpu
   const hook = nextLfdCoverHook(input.prevHook, input.storyCount);
   const out: LfdAiCoverResult = { hook, costUsd: 0, imageUsd: 0 };
   const fail = (reason: string): LfdAiCoverResult => ({ ...out, fallback: reason });
-  if (!deps.higgsfield) return fail('the AI cover is not wired (no Higgsfield client)');
-  const refs: Array<CoverReference & { url: string }> = input.photos.filter((p) => readable(p.url)).slice(0, 6).map((p, i) => ({ n: i + 1, headline: p.headline, kind: p.kind ?? 'photo', url: p.url }));
+  if (!deps.fal) return fail('the AI cover is not wired (no FAL_API_KEY)');
+  const refs: Array<CoverReference & { url: string }> = input.photos.filter((p) => readable(p.url)).slice(0, FAL_MAX_REFERENCES).map((p, i) => ({ n: i + 1, headline: p.headline, kind: p.kind ?? 'photo', url: p.url }));
   if (!refs.length) return fail('no story photo can serve as a reference');
-  const need = LFD_COVER_WRITER_ESTIMATE_USD + HIGGSFIELD_IMAGE_USD;
+  const need = LFD_COVER_WRITER_ESTIMATE_USD + FAL_COVER_IMAGE_USD;
   if (deps.remainingUsd() < need) return fail(`the run cap leaves $${deps.remainingUsd().toFixed(2)}, under the $${need.toFixed(2)} a cover needs`);
 
   try {
@@ -122,30 +120,26 @@ export async function makeLfdAiCover(deps: LfdAiCoverDeps, input: LfdAiCoverInpu
     out.prompt = written.prompt;
     out.references = written.references;
 
-    if (deps.remainingUsd() < HIGGSFIELD_IMAGE_USD) return fail(`the run cap leaves $${deps.remainingUsd().toFixed(2)}, under the $${HIGGSFIELD_IMAGE_USD.toFixed(2)} image`);
+    if (deps.remainingUsd() < FAL_COVER_IMAGE_USD) return fail(`the run cap leaves $${deps.remainingUsd().toFixed(2)}, under the $${FAL_COVER_IMAGE_USD.toFixed(2)} image`);
 
-    // Only the photos the prompt names go up, in the order it numbered them.
+    // Only the photos the prompt names go in, in the order it numbered them, as ≤1024 px JPEG data URIs.
     const used = refs.filter((r) => written.references.includes(r.n));
-    let files: ReferenceFile[];
+    let imageUrls: string[];
     try {
-      files = await Promise.all(used.map(async (r) => {
-        const { bytes, contentType } = await readPhoto(deps.fetch, r.url);
-        return { filename: `lfd-ref-${r.n}.${EXT[contentType] ?? 'jpg'}`, bytes, contentType };
-      }));
+      imageUrls = await Promise.all(used.map(async (r) => referenceDataUri((await readPhoto(deps.fetch, r.url)).bytes)));
     } catch (err) {
       return fail(`reference photos: ${errText(err)}`);
     }
 
     let resultUrl: string;
     try {
-      const mediaIds = await uploadReferences(deps.higgsfield, deps.fetch, files);
-      const jobId = await startImage(deps.higgsfield, written.prompt, mediaIds);
-      // The job is started: Higgsfield charges for it whatever happens next.
-      out.imageUsd = HIGGSFIELD_IMAGE_USD;
-      out.costUsd += HIGGSFIELD_IMAGE_USD;
-      resultUrl = await waitForImage(deps.higgsfield, jobId, deps.wait);
+      const queued = await submitImage(deps.fal, written.prompt, imageUrls);
+      // The queue accepted it: fal bills it whatever happens next.
+      out.imageUsd = FAL_COVER_IMAGE_USD;
+      out.costUsd += FAL_COVER_IMAGE_USD;
+      resultUrl = await waitForImage(deps.fal, queued, deps.wait);
     } catch (err) {
-      return fail(`Higgsfield: ${errText(err)}`);
+      return fail(`fal: ${errText(err)}`);
     }
 
     try {

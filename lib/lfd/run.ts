@@ -41,7 +41,7 @@ import type { VideoFind } from '@/lib/video-finder/find';
 
 import { LFD_CAPTION_VERSION, writeLfdCaptionLines } from './caption-lines';
 import { makeLfdAiCover, type LfdAiCoverResult } from './cover';
-import type { HiggsfieldTools } from './cover/higgsfield-image';
+import type { FalImage, FalWait } from './cover/fal-image';
 import { MEME_POOL_SCAN } from './config';
 import { leadImage } from './lead-image';
 import { articleCopy, BUILDER_HARVEST_CAP_USD, harvestBuilderPhoto, NO_PHOTO_REQUEST, type BuilderHarvest, type HarvestBudget } from './photos';
@@ -152,10 +152,10 @@ export type LfdRunDeps = {
   /** The news chain's steps; tests stub them. Defaults: lib/news-ranker shortlist/rerank, lib/news-writer writeStories, findStoryPhoto. */
   news?: LfdNewsChain;
   /**
-   * The AI cover (PLAN.md C7, lib/lfd/cover): Higgsfield MCP tools and the fetch for reference photos and the result.
+   * The AI cover (PLAN.md C7, lib/lfd/cover): fal (GPT Image 2.6 edit) and the fetch for reference photos and the result.
    * Absent: no AI image (the hook still rotates and the cover draws as before). The writer uses the run's `create`.
    */
-  aiCover?: { higgsfield: HiggsfieldTools | null; fetch: (input: string, init?: RequestInit) => Promise<Response>; wait?: { now?: () => number; sleep?: (ms: number) => Promise<void>; deadlineMs?: number } };
+  aiCover?: { fal: FalImage | null; fetch: (input: string, init?: RequestInit) => Promise<Response>; wait?: FalWait };
 };
 
 /** The chain steps a run calls; each defaults to the shared module. `findPhoto` gets the run's ledger check as `usedReason`. */
@@ -486,7 +486,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
   const photoRecord: { usd: number; stories: Array<{ key: string; tier: MediaVerdict; source: string | null }> } = { usd: 0, stories: [] };
   // Builder-slide harvests share one budget per post (round 3: $0.15).
   const harvestBudget: HarvestBudget = { usd: 0, capUsd: BUILDER_HARVEST_CAP_USD };
-  // The AI cover's Higgsfield spend: outside the run budget's tally (its Jev and writer calls go through the run's).
+  // The AI cover's fal image spend: outside the run budget's tally (its Jev and writer calls go through the run's).
   let coverImageUsd = 0;
   let jevCalls = 0;
   const jev: JevAsk = (req, meta) => {
@@ -1127,7 +1127,7 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
         {
           jev,
           create: d.create,
-          higgsfield: d.aiCover?.higgsfield ?? null,
+          fal: d.aiCover?.fal ?? null,
           fetch: d.aiCover?.fetch ?? ((input, init) => fetch(input, init)),
           upload: d.upload,
           remainingUsd: () => {

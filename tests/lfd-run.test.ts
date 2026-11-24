@@ -781,19 +781,21 @@ test('video: no video dep leaves the run record without a video section', async 
   assert.equal((await recordOf(d, res.runId) as VideoRec).video, undefined);
 });
 
-/** The AI cover's Higgsfield and fetch stubs (no network): one image job that completes on the first wait. */
+/** The AI cover's fal fetch stub (no network): one queued image that completes on the first poll. */
 async function aiCoverStub() {
   const sharp = (await import('sharp')).default;
   const png = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 0, g: 90, b: 200 } } }).png().toBuffer();
+  const photo = await sharp({ create: { width: 64, height: 48, channels: 3, background: { r: 90, g: 90, b: 90 } } }).jpeg().toBuffer();
+  const queue = 'https://queue.fal.run/openai/gpt-image-2.6/flare/edit';
   const tools: string[] = [];
-  const callTool = async (name: string, args: Record<string, unknown>) => {
-    tools.push(name);
-    if (name === 'media_upload') return { uploads: (args.files as unknown[]).map((_, i) => ({ upload_url: `https://up.test/${i}`, media_id: `m${i}`, method: 'PUT', content_type: 'image/jpeg' })) };
-    if (name === 'media_confirm') return { results: (args.media_ids as string[]).map((media_id) => ({ media_id, status: 'uploaded' })) };
-    if (name === 'generate_image') return { results: [{ id: 'job-1', status: 'pending' }] };
-    return { results: [{ job_id: 'job-1', status: 'completed', result_url: 'https://cdn.test/cover.png' }] };
+  const json = (v: unknown) => new Response(JSON.stringify(v), { headers: { 'content-type': 'application/json' } });
+  const fetchImpl = async (url: string) => {
+    if (url === queue) { tools.push('submit'); return json({ request_id: 'r1', status_url: `${queue}/requests/r1/status`, response_url: `${queue}/requests/r1` }); }
+    if (url.endsWith('/requests/r1/status')) { tools.push('status'); return json({ status: 'COMPLETED' }); }
+    if (url.endsWith('/requests/r1')) { tools.push('result'); return json({ images: [{ url: 'https://fal.test/cover.png', width: 1536, height: 1152 }] }); }
+    if (url === 'https://fal.test/cover.png') return new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png' } });
+    return new Response(new Uint8Array(photo), { headers: { 'content-type': 'image/jpeg' } });
   };
-  const fetchImpl = async (url: string) => (url === 'https://cdn.test/cover.png' ? new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png' } }) : new Response(new Uint8Array(Buffer.from('jpeg')), { headers: { 'content-type': 'image/jpeg' } }));
   /** The run's create, plus the cover writer's write_cover_prompt call. */
   const withWriter = (create: LfdRunDeps['create']): LfdRunDeps['create'] => async (p) => {
     if ((p.tools?.[0] as { name?: string } | undefined)?.name === 'write_cover_prompt') {
@@ -801,7 +803,7 @@ async function aiCoverStub() {
     }
     return create(p);
   };
-  return { aiCover: { higgsfield: { callTool }, fetch: fetchImpl, wait: { sleep: async () => {} } }, tools, withWriter };
+  return { aiCover: { fal: { apiKey: 'test-key', fetch: fetchImpl }, fetch: fetchImpl, wait: { sleep: async () => {} } }, tools, withWriter };
 }
 
 test('the AI cover: drawn on the final render, stored, recorded, its image cost in the run spend; the next post rotates the hook', async () => {
@@ -819,7 +821,7 @@ test('the AI cover: drawn on the final render, stored, recorded, its image cost 
   });
   const res = await runLastFewDays(d);
   assert.ok(res.ok, JSON.stringify(res));
-  assert.deepEqual(s.tools, ['media_upload', 'media_confirm', 'generate_image', 'jobs_wait']);
+  assert.deepEqual(s.tools, ['submit', 'status', 'result']);
   assert.match(drawn.at(-1) ?? '', /^data:image\/jpeg;base64,/, 'the last render draws the AI image');
   const rec = (await recordOf(d, res.runId)) as unknown as { cover: { hook: string; direction: string; prompt: string; image: string; fallback: string | null; imageUsd: number } };
   assert.equal(rec.cover.direction, 'Unaware', 'no two_sides answer counts as no');

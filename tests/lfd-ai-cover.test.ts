@@ -1,6 +1,6 @@
 /**
- * The LFD AI cover (lib/lfd/cover): hook rotation, the Jev direction, the cached writer request, the Higgsfield
- * flow and every fallback. Jev, the writer and Higgsfield are stubs; no network, no spend (CLAUDE.md Rule 1).
+ * The LFD AI cover (lib/lfd/cover): hook rotation, the Jev direction, the cached writer request, the fal queue
+ * flow and every fallback. Jev, the writer and fal's fetch are stubs; no network, no spend (CLAUDE.md Rule 1).
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,8 +12,7 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import sharp from 'sharp';
 
-import { HIGGSFIELD_IMAGE_USD, makeLfdAiCover, pickCoverDirection, type LfdAiCoverDeps, type LfdAiCoverInput } from '@/lib/lfd/cover';
-import { toolJson } from '@/lib/lfd/cover/higgsfield-image';
+import { FAL_COVER_IMAGE_USD, makeLfdAiCover, pickCoverDirection, type LfdAiCoverDeps, type LfdAiCoverInput } from '@/lib/lfd/cover';
 import { LFD_COVER_SYSTEM } from '@/lib/lfd/cover/prompts';
 import { coverWriterRequest } from '@/lib/lfd/cover/writer';
 import { buildPost, LFD_COVER_HOOKS, nextLfdCoverHook } from '@/lib/lfd/post';
@@ -52,47 +51,42 @@ function writerStub(o: { references?: number[]; fail?: Error; noTool?: boolean }
   return { create, calls };
 }
 
-type Fail = 'media_upload' | 'put' | 'media_confirm' | 'generate_image' | 'jobs_wait' | 'timeout' | 'download' | 'store' | 'photo';
+type Fail = 'submit' | 'failed' | 'status_http' | 'timeout' | 'no_images' | 'download' | 'store' | 'photo';
 
-async function higgsStub(o: { fail?: Fail; asText?: boolean } = {}) {
+const QUEUE = 'https://queue.fal.run/openai/gpt-image-2.6/flare/edit';
+const RESULT = 'https://v3.fal.media/files/result.jpg';
+
+async function falStub(o: { fail?: Fail } = {}) {
   const png = await sharp({ create: { width: 40, height: 30, channels: 3, background: { r: 200, g: 50, b: 0 } } }).png().toBuffer();
-  const tools: Array<{ name: string; args: Record<string, unknown> }> = [];
-  const puts: Array<{ url: string; headers: Record<string, string> }> = [];
-  const fetched: string[] = [];
+  // A large story photo, so the ≤1024 px downscale shows.
+  const photo = await sharp({ create: { width: 2000, height: 1500, channels: 3, background: { r: 10, g: 120, b: 60 } } }).jpeg().toBuffer();
+  const calls: Array<{ url: string; method: string; headers: Record<string, string>; body?: Record<string, unknown> }> = [];
   const uploads: Array<{ path: string; type?: string; bytes: number }> = [];
-  let waits = 0;
-  const wrap = (v: unknown) => (o.asText ? { content: [{ type: 'text', text: JSON.stringify(v) }] } : v);
-  const callTool = async (name: string, args: Record<string, unknown>) => {
-    tools.push({ name, args });
-    if (o.fail === name) throw new Error(`${name} exploded`);
-    if (name === 'media_upload') {
-      const files = args.files as Array<{ filename: string }>;
-      return wrap({ uploads: files.map((f, i) => ({ upload_url: `https://up.test/${i}/${f.filename}`, media_id: `m${i}`, url: `https://cdn.test/m${i}`, method: 'PUT', content_type: 'image/jpeg' })) });
-    }
-    if (name === 'media_confirm') return wrap({ results: (args.media_ids as string[]).map((media_id) => ({ media_id, status: 'uploaded' })) });
-    if (name === 'generate_image') return wrap({ results: [{ id: 'job-1', status: 'pending' }] });
-    if (name === 'jobs_wait') {
-      waits += 1;
-      if (o.fail === 'timeout' || waits < 2) return wrap({ results: [{ job_id: 'job-1', status: 'in_progress' }] });
-      return wrap({ results: [{ job_id: 'job-1', status: 'completed', result_url: 'https://cdn.test/result.png' }] });
-    }
-    throw new Error(`unexpected tool ${name}`);
-  };
+  let polls = 0;
+  const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { 'content-type': 'application/json' } });
   const fetchImpl = async (url: string, init?: RequestInit) => {
-    if (init?.method === 'PUT') {
-      puts.push({ url, headers: init.headers as Record<string, string> });
-      return new Response(null, { status: o.fail === 'put' ? 400 : 200 });
+    calls.push({ url, method: init?.method ?? 'GET', headers: (init?.headers as Record<string, string>) ?? {}, ...(typeof init?.body === 'string' ? { body: JSON.parse(init.body) as Record<string, unknown> } : {}) });
+    if (url === QUEUE) {
+      if (o.fail === 'submit') return json({ detail: 'image_urls invalid' }, 422);
+      return json({ request_id: 'r1', status_url: `${QUEUE}/requests/r1/status`, response_url: `${QUEUE}/requests/r1` });
     }
-    fetched.push(url);
-    if (url === 'https://cdn.test/result.png') return o.fail === 'download' ? new Response('no', { status: 404 }) : new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png' } });
+    if (url === `${QUEUE}/requests/r1/status`) {
+      polls += 1;
+      if (o.fail === 'failed') return json({ status: 'FAILED', error: 'content policy' });
+      if (o.fail === 'status_http') return json({ detail: 'server error' }, 500);
+      if (o.fail === 'timeout' || polls < 2) return json({ status: 'IN_PROGRESS' });
+      return json({ status: 'COMPLETED' });
+    }
+    if (url === `${QUEUE}/requests/r1`) return json({ images: o.fail === 'no_images' ? [] : [{ url: RESULT, width: 1536, height: 1152 }] });
+    if (url === RESULT) return o.fail === 'download' ? new Response('no', { status: 404 }) : new Response(new Uint8Array(png), { headers: { 'content-type': 'image/png' } });
     if (o.fail === 'photo') return new Response('gone', { status: 404 });
-    return new Response(new Uint8Array(Buffer.from('jpegbytes')), { headers: { 'content-type': 'image/jpeg' } });
+    return new Response(new Uint8Array(photo), { headers: { 'content-type': 'image/jpeg' } });
   };
   let t = 0;
   const deps = (over: Partial<LfdAiCoverDeps> = {}): LfdAiCoverDeps => ({
     jev: jevSays(0.9),
     create: writerStub().create,
-    higgsfield: { callTool },
+    fal: { apiKey: 'test-key', fetch: fetchImpl },
     fetch: fetchImpl,
     upload: async (p, b, type) => {
       if (o.fail === 'store') throw new Error('bucket down');
@@ -102,7 +96,7 @@ async function higgsStub(o: { fail?: Fail; asText?: boolean } = {}) {
     wait: { now: () => (t += 10_000), sleep: async () => {}, deadlineMs: 60_000 },
     ...over,
   });
-  return { deps, tools, puts, fetched, uploads };
+  return { deps, calls, uploads };
 }
 
 test('the hook rotates from the previous post’s hook, with {N} filled in', () => {
@@ -144,64 +138,82 @@ test('the writer request caches the stable prefix (tools, then system) and keeps
   assert.doesNotMatch(LFD_COVER_SYSTEM, /Nvidia/);
 });
 
-test('only the referenced photos go up, each PUT carries If-None-Match: *, and the stored image comes back', async () => {
-  const h = await higgsStub({ asText: true });
+test('fal: the request goes to the GPT Image 2.6 edit queue with the Key header, only the referenced photos as data URIs, and the stored image comes back', async () => {
+  const h = await falStub();
   const w = writerStub({ references: [2, 3, 9] });
   const res = await makeLfdAiCover(h.deps({ create: w.create }), INPUT);
   assert.equal(res.fallback, undefined, res.fallback);
   assert.equal(res.direction, 'Standoff');
   assert.deepEqual(res.references, [2, 3], 'an unknown reference number is dropped');
   assert.equal(res.hook.text, '3 things happened in AI you need to know.');
-  assert.deepEqual(h.fetched.filter((u) => u.startsWith('https://img.test/')), ['https://img.test/b.jpg', 'https://img.test/c.jpg']);
-  assert.deepEqual((h.tools[0]!.args.files as Array<{ filename: string }>).map((f) => f.filename), ['lfd-ref-2.jpg', 'lfd-ref-3.jpg']);
-  assert.equal(h.puts.length, 2);
-  for (const p of h.puts) {
-    assert.equal(p.headers['If-None-Match'], '*');
-    assert.equal(p.headers['Content-Type'], 'image/jpeg');
+  assert.deepEqual(h.calls.filter((c) => c.url.startsWith('https://img.test/')).map((c) => c.url), ['https://img.test/b.jpg', 'https://img.test/c.jpg']);
+  // submit → status (twice) → result → download
+  assert.deepEqual(h.calls.filter((c) => !c.url.startsWith('https://img.test/')).map((c) => `${c.method} ${c.url}`), [
+    `POST ${QUEUE}`,
+    `GET ${QUEUE}/requests/r1/status`,
+    `GET ${QUEUE}/requests/r1/status`,
+    `GET ${QUEUE}/requests/r1`,
+    `GET ${RESULT}`,
+  ]);
+  for (const c of h.calls.filter((x) => x.url.startsWith('https://queue.fal.run/'))) assert.equal(c.headers.authorization, 'Key test-key', c.url);
+  for (const c of h.calls.filter((x) => !x.url.startsWith('https://queue.fal.run/'))) assert.equal(c.headers.authorization, undefined, `no fal key on ${c.url}`);
+  const body = h.calls[2]!.body!;
+  assert.equal(h.calls[2]!.url, QUEUE);
+  assert.equal(body.prompt, '1. Capture: 35mm\n2. Subjects: [1]');
+  assert.equal(body.image_size, 'landscape_4_3');
+  assert.equal(body.quality, 'medium');
+  assert.equal(body.output_format, 'jpeg');
+  assert.equal(body.num_images, 1);
+  const urls = body.image_urls as string[];
+  assert.equal(urls.length, 2, 'only the two referenced photos');
+  for (const u of urls) {
+    assert.match(u, /^data:image\/jpeg;base64,/);
+    const meta = await sharp(Buffer.from(u.split(',')[1]!, 'base64')).metadata();
+    assert.equal(meta.format, 'jpeg');
+    assert.equal(Math.max(meta.width!, meta.height!), 1024, 'downscaled to 1024 on the long side');
   }
-  assert.deepEqual(h.tools.map((t) => t.name), ['media_upload', 'media_confirm', 'generate_image', 'jobs_wait', 'jobs_wait']);
-  const params = h.tools[2]!.args.params as Record<string, unknown>;
-  assert.equal(params.model, 'gpt_image_2_6');
-  assert.equal(params.aspect_ratio, '4:3');
-  assert.deepEqual(params.medias, [{ value: 'm0', role: 'image_references' }, { value: 'm1', role: 'image_references' }]);
   assert.deepEqual(h.uploads.map((u) => [u.path, u.type]), [[INPUT.objectPath, 'image/jpeg']]);
   assert.match(res.image!.url, /^data:image\/jpeg;base64,/);
   assert.equal(res.image!.object, INPUT.objectPath);
-  assert.equal(res.imageUsd, HIGGSFIELD_IMAGE_USD);
-  assert.ok(res.costUsd > HIGGSFIELD_IMAGE_USD, 'writer and Jev spend count too');
+  assert.equal(res.imageUsd, FAL_COVER_IMAGE_USD);
+  assert.equal(FAL_COVER_IMAGE_USD, 0.1);
+  assert.ok(res.costUsd > FAL_COVER_IMAGE_USD, 'writer and Jev spend count too');
+});
+
+test('at most 6 references go to fal', async () => {
+  const h = await falStub();
+  const photos = Array.from({ length: 8 }, (_, i) => ({ url: `https://img.test/${i}.jpg`, headline: `S${i}` }));
+  const w = writerStub({ references: [1, 2, 3, 4, 5, 6, 7, 8] });
+  const res = await makeLfdAiCover(h.deps({ create: w.create }), { ...INPUT, photos });
+  assert.equal(res.fallback, undefined, res.fallback);
+  assert.equal((h.calls.find((c) => c.url === QUEUE)!.body!.image_urls as string[]).length, 6);
 });
 
 test('a failure at each stage falls back with its reason, keeps the hook, and never throws', async () => {
-  const cases: Array<{ name: string; reason: RegExp; image: boolean; over?: (h: Awaited<ReturnType<typeof higgsStub>>) => Partial<LfdAiCoverDeps>; fail?: Fail }> = [
-    { name: 'not wired', reason: /not wired/, image: false, over: () => ({ higgsfield: null }) },
+  const cases: Array<{ name: string; reason: RegExp; image: boolean; over?: () => Partial<LfdAiCoverDeps>; fail?: Fail }> = [
+    { name: 'not wired', reason: /not wired/, image: false, over: () => ({ fal: null }) },
     { name: 'cap', reason: /run cap/, image: false, over: () => ({ remainingUsd: () => 0.05 }) },
     { name: 'writer throws', reason: /prompt writer: overloaded/, image: false, over: () => ({ create: writerStub({ fail: new Error('overloaded') }).create }) },
     { name: 'writer no tool', reason: /no write_cover_prompt call/, image: false, over: () => ({ create: writerStub({ noTool: true }).create }) },
     { name: 'photo', reason: /reference photos/, image: false, fail: 'photo' },
-    { name: 'media_upload', reason: /Higgsfield: media_upload exploded/, image: false, fail: 'media_upload' },
-    { name: 'put', reason: /PUT failed \(400\)/, image: false, fail: 'put' },
-    { name: 'media_confirm', reason: /media_confirm exploded/, image: false, fail: 'media_confirm' },
-    { name: 'generate_image', reason: /generate_image exploded/, image: false, fail: 'generate_image' },
-    { name: 'jobs_wait', reason: /jobs_wait exploded/, image: true, fail: 'jobs_wait' },
+    { name: 'submit rejected', reason: /fal: fal rejected the image \(422\): image_urls invalid/, image: false, fail: 'submit' },
+    { name: 'FAILED status', reason: /fal: the image failed .*content policy/, image: true, fail: 'failed' },
+    { name: 'status http error', reason: /fal: the image failed \(500\)/, image: true, fail: 'status_http' },
     { name: 'timeout', reason: /did not finish/, image: true, fail: 'timeout' },
+    { name: 'no images', reason: /fal: fal returned no image/, image: true, fail: 'no_images' },
     { name: 'download', reason: /storing the image: download failed/, image: true, fail: 'download' },
     { name: 'store', reason: /storing the image: bucket down/, image: true, fail: 'store' },
   ];
   for (const c of cases) {
-    const h = await higgsStub({ fail: c.fail });
-    const res = await makeLfdAiCover(h.deps(c.over?.(h) ?? {}), INPUT);
+    const h = await falStub({ fail: c.fail });
+    const res = await makeLfdAiCover(h.deps(c.over?.() ?? {}), INPUT);
     assert.equal(res.image, undefined, c.name);
     assert.match(res.fallback ?? '', c.reason, `${c.name}: ${res.fallback}`);
     assert.equal(res.hook.text, '3 things happened in AI you need to know.', c.name);
-    // The image is charged once the job is started, so a failure after that still counts.
-    assert.equal(res.imageUsd, c.image ? HIGGSFIELD_IMAGE_USD : 0, c.name);
+    // The image is charged once the queue accepts it, so a failure after that still counts.
+    assert.equal(res.imageUsd, c.image ? FAL_COVER_IMAGE_USD : 0, c.name);
+    if (c.name === 'not wired') assert.equal(h.calls.length, 0, 'not wired calls nothing');
   }
-});
-
-test('an MCP result as text content or structuredContent parses; an isError result throws', () => {
-  assert.deepEqual(toolJson({ content: [{ type: 'text', text: '{"a":1}' }] }), { a: 1 });
-  assert.deepEqual(toolJson({ structuredContent: { b: 2 }, content: [] }), { b: 2 });
-  assert.throws(() => toolJson({ isError: true, content: [{ type: 'text', text: 'bad args' }] }), /bad args/);
 });
 
 // SlideTemplate is compiled with the classic JSX runtime (jsx: preserve), as fit-check.ts sets up.
@@ -233,6 +245,6 @@ test('buildPost: the hook is on the cover and in the alt text; with an image the
 test('the hub shows the cover fallback reason among the review notes', async () => {
   const { lfdReviewNotes } = await import('@/lib/social-hub/adapters/last-few-days');
   const row = { post_id: 'p', run_id: 'r', slug: 's', ny_date: '2026-11-24', status: 'review', caption: null, created_at: '', published_at: null, render: null, stories: [], slide_count: 0, has_slide_objects: false, fit_problems: [], render_problems: [], short: false };
-  assert.deepEqual(lfdReviewNotes({ ...row, cover_fallback: 'Higgsfield: login rejected' }), ['Cover: no AI image (Higgsfield: login rejected); today\'s cover was used.']);
+  assert.deepEqual(lfdReviewNotes({ ...row, cover_fallback: 'fal: the image failed (500)' }), ['Cover: no AI image (fal: the image failed (500)); today\'s cover was used.']);
   assert.deepEqual(lfdReviewNotes({ ...row, cover_fallback: null }), []);
 });

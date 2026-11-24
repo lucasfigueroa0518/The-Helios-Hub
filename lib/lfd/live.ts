@@ -18,7 +18,7 @@
  * TypeSafe image client, Serper image search and image fetcher are built here (`newsPhotos`). The Stories finder
  * above is still built for the type only; the run no longer calls it.
  *
- * The AI cover (lib/lfd/cover) uses the run's Jev and budget-guarded create, and HiggsfieldClient for the image.
+ * The AI cover (lib/lfd/cover) uses the run's Jev and budget-guarded create, and fal (FAL_API_KEY) for the image.
  */
 import type { createPhotoBank, PhotoBank } from '@/lib/media-library/bank';
 import type { HubQuery } from '@/lib/social-hub/db';
@@ -151,19 +151,10 @@ export async function liveLfdDeps(
       cutouts: [],
     },
   };
-  // The AI cover (PLAN.md C7): Higgsfield's MCP (GPT Image 2.6), connected on first use. A failed login (the known
-  // issuer mismatch, client.ts) only makes the cover fall back; the run record says why.
-  const { HiggsfieldClient } = await import('@/lib/reels/visual/higgsfield/client');
-  const hf = new HiggsfieldClient();
-  let hfReady: Promise<void> | null = null;
+  // The AI cover (PLAN.md C7): GPT Image 2.6 edit on fal, wired only when FAL_API_KEY is set (else it falls back).
+  const falKey = process.env.FAL_API_KEY?.trim();
   const aiCover: LfdRunDeps['aiCover'] = {
-    higgsfield: {
-      callTool: async (name, args) => {
-        hfReady ??= hf.connect();
-        await hfReady;
-        return hf.callTool(name, args);
-      },
-    },
+    fal: falKey ? { apiKey: falKey, fetch: (input, init) => fetch(input, init) } : null,
     fetch: (input, init) => fetch(input, init),
   };
   return {
