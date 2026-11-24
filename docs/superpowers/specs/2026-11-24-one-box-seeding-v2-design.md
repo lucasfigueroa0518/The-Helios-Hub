@@ -67,9 +67,8 @@ an agent (Rule 1: the first live seed of each type is Tommy or Lucas clicking in
 - the price line on the button: "Add · about N¢ (M¢ limit)", from that type's estimate and limit (section 5),
 - one line under the button saying what happens, in that type's words.
 
-Removed: the Stories series choice (retired series). The six old forms are deleted once the one-box is switched on for
-every type (v1's plan: they stay until the prompts are approved; **(my call)** the switch stays one flag for all types, so
-the front end never mixes old and new forms).
+Removed: the Stories series choice (retired series), and the six old forms, deleted in the same change, so the
+front end never mixes old and new forms.
 
 `seedable` becomes true for `ai_trivia`, `real_or_ai` and `reel_ai_drama`; `SeedVertical` excludes only `ai_events`.
 
@@ -97,8 +96,8 @@ Free pre-checks stay as v1 (open-seed cap per type, 3 working at once, same text
 - Prompt caching per CLAUDE.md: tools, then a static system prompt per type, then the user turn with the person's words
   and the pool's open headlines. The breakpoint sits on the stable prefix. A new or changed call without `cache_control`
   is a defect.
-- New prompt wording gets new version strings, marked draft and not approved, behind `ONE_BOX_SEED_PROMPT_APPROVED`
-  (v1). Every new or changed prompt below is draft until Tommy approves it.
+- New prompt wording gets new version strings. **No approval switch (Tommy, 2026-11-24: drop it).** Tommy approves the
+  wording in PR review, and v1's `ONE_BOX_SEED_PROMPT_APPROVED` flag and `oneBoxApproved()` are removed.
 - Spend goes through the v1 `Ledger` with that type's limit: each billable step's worst case is checked before it runs,
   actual cost is added after; a step that would cross the limit is not started and the seed fails with the amount spent.
 - The pool check (v1): the call sees the headlines or titles already open in that one pool and reports `duplicate_of`
@@ -168,11 +167,12 @@ AI? image 17¢ each, writer 1.5¢, reveal 5¢, screen ~0; AI Drama producer 22¢
 **(my call; the "about" figures are estimates to be replaced by measured averages after the first seeds.)** The image
 call's worst case is its known price (17¢), so the ledger refuses a second attempt that would cross 60¢.
 
-### 6. Switching on
+### 6. Going live (no switch)
 
-One env flag for all types, as v1. Before it is set: prompts approved by Tommy, both workers redeployed (both run on
-`helios-social-worker` as `helios-stories` and `helios-reel-ai-drama`: `./scripts/gcp/deploy-social-worker.sh`),
-migrations applied.
+The one box goes live for every type when the PR merges. In the same session: apply the migration before the merge,
+and redeploy both workers right after it (both run on `helios-social-worker` as `helios-stories` and
+`helios-reel-ai-drama`: `./scripts/gcp/deploy-social-worker.sh`). A Trivia, Real or AI? or AI Drama seed clicked before
+the workers are redeployed waits queued, and fails with nothing spent if that takes over 2 hours.
 
 ### 7. Builder-check answers (2026-11-24)
 
@@ -184,7 +184,8 @@ migrations applied.
 - **What the hard limit covers (my call, same as v1).** The ledger gates every step the seed runner starts itself: the
   seed writer or producer call, the search and verifier, each image attempt, and each `intakeCandidate` or `checkPitch`
   call. Calls inside those steps that the runner can't stop are reserved up front at their measured worst case: Jev ~0,
-  Real or AI? reveal 5¢, AI Drama visuals check 35¢ (its own cap), Trivia shorten 2¢. The photo finder's cost is
+  Real or AI? reveal 5¢, Trivia shorten 6¢, photo finder 2¢. AI Drama needs no reserve: the
+  visuals check already takes a spend cap, so the seed passes it what is left of the 50¢ (exact). The photo finder's cost is
   measured before the limit is set. No shared pipeline is changed to take a ledger. The limit is exact for the runner's
   own steps and holds overall as long as the reserves do, which is the same guarantee v1 made.
 - **A busy worker (my call; replaces the 10-minute queued rule above).** The claim runs between the worker's own steps,
