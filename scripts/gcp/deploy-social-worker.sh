@@ -105,7 +105,7 @@ trap 'rm -rf "${ARCHIVE}" "${UNIT_STAGE}"' EXIT
 # The local worktrees are whole repo copies the workers never use.
 # Local-only files under planning/ (review renders, audition clips) are not code: only tracked planning docs ship.
 PLANNING_EXCLUDES="$(mktemp)"
-{ git ls-files --others --directory -- planning; git ls-files --others --ignored --exclude-standard --directory -- planning; } 2>/dev/null \
+{ git ls-files --others --directory -- planning || true; git ls-files --others --ignored --exclude-standard --directory -- planning || true; } 2>/dev/null \
   | sed -e 's#/$##' -e 's#^#./#' | sort -u > "${PLANNING_EXCLUDES}"
 COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
   --exclude-from="${PLANNING_EXCLUDES}" \
