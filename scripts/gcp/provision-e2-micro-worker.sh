@@ -10,7 +10,7 @@ if [[ -f "$(dirname "$0")/.deploy-env" ]]; then
   # shellcheck disable=SC1091
   source "$(dirname "$0")/.deploy-env"
 fi
-ZONE="${GCP_ZONE:-us-west1-a}"
+ZONE="${GCP_ZONE:-northamerica-northeast1-a}"
 INSTANCE="${GCP_INSTANCE:-helios-orch-worker}"
 ENV_FILE="${WORKER_ENV_FILE:-scripts/gcp/worker.env}"
 
