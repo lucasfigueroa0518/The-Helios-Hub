@@ -2,7 +2,8 @@
 // visuals behind the captions"; he picked the white gradient over a halo or white text). Code, no
 // model: every voiced frame is drawn every STEP seconds, and only its caption band is measured.
 // Where the picture holds enough pixels the caption ink can't stand out against (dark lines, props,
-// screens on a paper frame; light things on a dark frame), that moment gets a window. The caption
+// screens on a paper frame; light things on a dark frame), or any drawn words lie under the band
+// (2026-11-24: a sign's text under a caption), that moment gets a window. The caption
 // skin fades a white gradient in over the top of the picture for each window and sets its text in ink.
 //
 //   node assets/kit/caption-scrim.mjs        (in the project root; build.ts runs it before captions.mjs)
@@ -85,6 +86,36 @@ async function pageClashShare([b64, ink, minContrast, step]) {
   }
   return n ? low / n : 0;
 }
+
+/**
+ * Whether drawn text (any `[data-k="text"]` or `<text>` showing, set text and signs included; not the
+ * title or dictionary cards, which live in the band) lies under the caption band: a caption over
+ * other words reads as two lines at once even when their contrast is fine (2026-11-24, job 88's quiz
+ * board "4,817 x 263" under the captions). Runs inside the page, where the frame is drawn at 1:1.
+ */
+function pageTextInBand([band, share]) {
+  const host = document.getElementById('w');
+  if (!host) return false;
+  for (const el of host.querySelectorAll('[data-k="text"], text')) {
+    if (el.parentElement?.closest('[data-k="text"]')) continue;
+    if (el.closest('[data-role="title"], [data-role="definition"]')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    let op = 1;
+    for (let n = el; n && n !== host; n = n.parentElement) {
+      const a = parseFloat(n.getAttribute('opacity') ?? '1');
+      if (Number.isFinite(a)) op *= a;
+    }
+    if (op < 0.15) continue;
+    const across = Math.min(r.right, band.x + band.width) - Math.max(r.left, band.x);
+    const down = Math.min(r.bottom, band.y + band.height) - Math.max(r.top, band.y);
+    if (across > 0 && down / r.height >= share) return true;
+  }
+  return false;
+}
+
+/** The share of a text's height inside the band that puts it under the captions. */
+export const TEXT_IN_BAND = 0.25;
 
 /** The moments of a frame that are measured, in seconds into the frame. */
 export function sampleTimes(duration) {
@@ -171,7 +202,8 @@ export async function captionScrim(root) {
         clip: BAND,
         take: async (buf, page) => {
           const share = await page.evaluate(pageClashShare, [Buffer.from(buf).toString('base64'), ink, CLASH_CONTRAST, SAMPLE_PX]);
-          if (share > CLASH_SHARE) rec.clash.push(t);
+          const words = share > CLASH_SHARE ? false : await page.evaluate(pageTextInBand, [BAND, TEXT_IN_BAND]);
+          if (share > CLASH_SHARE || words) rec.clash.push(t);
         },
       });
     }

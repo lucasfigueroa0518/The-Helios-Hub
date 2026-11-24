@@ -15,12 +15,13 @@
 //   dressing    the place's DRESSING is drawn in every camera shot (lens.js render, setlock.js)
 //
 // Each fix is computed once per shot from probe draws (pure: the same frame in, the same frame out,
-// whatever order times are drawn in). Opt-outs on a shot: `fit: false` (none of the camera fixes),
-// `fit: { orbit: false }` or `fit: { frame: false }`, `popIn: false`; `undress: [ids]` for a piece of
+// whatever order times are drawn in). Opt-outs on a shot: `fit: false` (no orbit, no resizing: the
+// builder's angle and size, but a subject over the safe area's edge is still backed off or slid
+// whole inside it), `fit: { orbit: false }` or `fit: { frame: false }` (that containment only), `popIn: false`; `undress: [ids]` for a piece of
 // dressing. Plumbing only: builders follow frame.md, not this file.
 
 import { snapCuts, isCameraShot, shotAt } from './shots.js';
-import { framedBoxes, lens, SAFE } from './lens.js';
+import { faceEdgeCut, framedBoxes, lens, SAFE } from './lens.js';
 import { setShotCamera, setProbeCamera } from './continuity.js';
 import { useWorld } from './setlock.js';
 
@@ -52,6 +53,11 @@ export function subjectBox(boxes, id) {
   const mine = (boxes ?? []).filter((b) => b.who === id);
   if (!mine.length) return null;
   return [Math.min(...mine.map((b) => b.box[0])), Math.min(...mine.map((b) => b.box[1])), Math.max(...mine.map((b) => b.box[2])), Math.max(...mine.map((b) => b.box[3]))];
+}
+
+/** How many probes show a critter's face cut by the frame's edge (lens.js faceEdgeCut, the check's own measure). */
+export function cutCritters(rows) {
+  return (rows ?? []).filter((r) => (r ?? []).some((x) => x.kind === 'critter' && faceEdgeCut(x, W, H))).length;
 }
 
 /** The share of `box` the `boxes` cover (a 20 px grid; layout-checks.mjs coveredShare). */
@@ -135,7 +141,7 @@ export function shiftCamera(cam, dx, dy) {
  * absent), or null when it is already whole inside the safe area at its kind's share: { zoom, dx,
  * dy }, zoom > 1 to dolly in, < 1 to back off, about `centre` (where the camera's target lands).
  */
-export function framePlan(boxes, kind, { centre = [W / 2, H / 2], safe = SAFE, margin = 10, slack = 2 } = {}) {
+export function framePlan(boxes, kind, { centre = [W / 2, H / 2], safe = SAFE, margin = 10, slack = 2, contain = false } = {}) {
   const bs = (boxes ?? []).filter(Boolean);
   if (!bs.length) return null;
   const X0 = safe.x0 + margin;
@@ -146,7 +152,8 @@ export function framePlan(boxes, kind, { centre = [W / 2, H / 2], safe = SAFE, m
   const over = Math.max(...bs.map((b) => Math.max((b[2] - b[0]) / (X1 - X0), (b[3] - b[1]) / (Y1 - Y0))));
   const share = area(bs[0]) / AREA;
   const outside = bs.some((b) => b[0] < safe.x0 - slack || b[2] > safe.x1 + slack || b[1] < safe.y0 - slack || b[3] > safe.y1 + slack);
-  const small = share < min;
+  // `contain` (a shot that opted out of the fit): only a subject over the safe area's edge is moved
+  const small = !contain && share < min;
   if (!outside && !small && over <= 1) return null;
   let zoom = 1;
   if (over > 1) zoom = 0.97 / over;
@@ -231,8 +238,12 @@ export function prepareScene(scene, { world = null, duration = null } = {}) {
     const list = snapCuts(shots);
     const shot = list[i];
     const id = subjectOf(shot);
-    if (!isCameraShot(shot) || shot.fit === false || !id) return;
-    const opts = typeof shot.fit === 'object' && shot.fit ? shot.fit : {};
+    if (!isCameraShot(shot) || !id) return;
+    // an opt-out keeps the builder's angle and size, never a cut subject (2026-11-24, jobs 87/88: three
+    // `fit: false` inserts left the calculator and the cheat sheet cut by the frame edge): `fit: false`
+    // and `fit: { frame: false }` still back off or slide so the subject is whole in the safe area
+    const fit = shot.fit === false ? { orbit: false, frame: false } : typeof shot.fit === 'object' && shot.fit ? shot.fit : {};
+    const opts = { ...fit, contain: fit.frame === false };
     const times = probeTimes(shot.at ?? 0, endOf(list, i));
     const look = (cam) => times.map((t) => {
       const svg = probe(t, i, cam);
@@ -269,7 +280,7 @@ export function prepareScene(scene, { world = null, duration = null } = {}) {
     };
     const frame = (passes, aim) => {
       for (let pass = 0; pass < passes; pass++) {
-        const plan = framePlan(rows.map((b) => (b ? subjectBox(b, id) : null)), shot.kind, { centre: [cam.cx ?? W / 2, cam.cy ?? H / 2] });
+        const plan = framePlan(rows.map((b) => (b ? subjectBox(b, id) : null)), shot.kind, { centre: [cam.cx ?? W / 2, cam.cy ?? H / 2], contain: opts.contain });
         if (!plan) return;
         const resize = Math.abs(plan.zoom - 1) >= 0.01;
         if (aim && pass === 0 && (resize || Math.abs(plan.dx) >= MAX_SHIFT || Math.abs(plan.dy) >= MAX_SHIFT)) {
@@ -284,10 +295,42 @@ export function prepareScene(scene, { world = null, duration = null } = {}) {
     // unblock, then frame; a reframe that walks back into a blocker turns once more around the
     // subject and only slides the picture after
     if (opts.orbit !== false) unblock(cam);
-    if (opts.frame !== false) frame(3, true);
+    frame(3, !opts.contain);
     if (opts.orbit !== false && hidden(rows) > OCCLUDED_OK) {
       unblock(cam);
-      if (opts.frame !== false) frame(2, false);
+      frame(2, false);
+    }
+    // a fix never cuts a face the builder's camera did not cut: slide on (either way) until the
+    // subject stays whole and no face is cut by the frame's edge, else keep the fix as it is
+    if (cam !== shot.camera && cutCritters(rows) > cutCritters(look(shot.camera))) {
+      const tries = [];
+      for (const k of [1, 1.15, 1.3]) for (let s = 60; s <= MAX_SHIFT + 60; s += 60) tries.push([k, s], [k, -s]);
+      const fine = (c, r) => !cutCritters(r) && !framePlan(r.map((b) => (b ? subjectBox(b, id) : null)), shot.kind, { centre: [c.cx ?? W / 2, c.cy ?? H / 2], contain: true });
+      let found = false;
+      for (const [k, s] of tries) {
+        const c = shiftCamera(k === 1 ? cam : dollyCamera(cam, 1 / k), s, 0);
+        const r = look(c);
+        if (!fine(c, r)) continue;
+        ({ cam, rows } = { cam: c, rows: r });
+        found = true;
+        break;
+      }
+      // no slide does it: turn around the subject (the orbits), contain it again, and look once more
+      if (!found) {
+        const pivot = pivotOf(cam, rows);
+        for (const [yaw, raise] of ORBITS) {
+          let c = orbitCamera(cam, yaw, raise, pivot);
+          let r = look(c);
+          const plan = framePlan(r.map((b) => (b ? subjectBox(b, id) : null)), shot.kind, { centre: [c.cx ?? W / 2, c.cy ?? H / 2], contain: true });
+          if (plan) {
+            c = shiftCamera(Math.abs(plan.zoom - 1) >= 0.01 ? dollyCamera(c, 1 / plan.zoom) : c, plan.dx, plan.dy);
+            r = look(c);
+          }
+          if (!fine(c, r)) continue;
+          ({ cam, rows } = { cam: c, rows: r });
+          break;
+        }
+      }
     }
     if (cam !== shot.camera) {
       setShotCamera(shots, i, cam);
