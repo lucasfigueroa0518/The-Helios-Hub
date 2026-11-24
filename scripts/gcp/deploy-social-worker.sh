@@ -213,6 +213,11 @@ gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" 
   command -v bwrap >/dev/null && command -v socat >/dev/null && command -v unzip >/dev/null || sudo apt-get install -y -qq bubblewrap socat unzip
   # IG Stories: color emoji for the homemade frames.
   fc-list | grep -qi 'Noto Color Emoji' || sudo apt-get install -y -qq fonts-noto-color-emoji
+  # Video finder (MD/LFD clips, MD-LFD D16): ffmpeg from apt; yt-dlp kept current in its own venv (YouTube changes
+  # often). yt-dlp solves YouTube's player JS with a runtime; Node is already here, so helios's config enables it.
+  command -v ffmpeg >/dev/null || sudo apt-get install -y -qq ffmpeg
+  sudo python3 -m venv /opt/helios-social/yt-dlp && sudo /opt/helios-social/yt-dlp/bin/pip install -q -U 'yt-dlp[default]' && sudo ln -sfn /opt/helios-social/yt-dlp/bin/yt-dlp /usr/local/bin/yt-dlp
+  \${AS_HELIOS} mkdir -p \${H}/.config/yt-dlp && echo '--js-runtimes node' | sudo -u helios tee \${H}/.config/yt-dlp/config >/dev/null
   (cd explainers/runtime && \${AS_HELIOS} npm ci --no-audit --no-fund && \${AS_HELIOS} npx --no-install hyperframes browser ensure || true)
   for unit in ${UNITS}; do
     sudo cp /tmp/${STAMP}-\${unit}.service /etc/systemd/system/\${unit}.service
