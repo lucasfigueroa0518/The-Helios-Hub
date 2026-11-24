@@ -18,6 +18,7 @@ import { upscaleDiff, UPSCALE_MAX_BLOCK_DIFF, UPSCALE_MAX_MEAN_DIFF } from '@/li
 import { jevCostUsd } from '@/lib/social/jev/client';
 
 import type { PhotoJev } from './grade';
+import { visionImage } from './vision-bytes';
 
 export const ESSENTIAL = 'The main subject: the smallest region that still shows what this picture is a picture of. Include every element a viewer needs to get it, such as each key person, product, screen or headline. Leave out background, scenery, extended limbs, props and corner badges that the picture can lose.';
 export const HAS_TEXT = 'Does the picture carry text a viewer must read in full to get it, such as a headline, title, caption, label or chart?';
@@ -192,10 +193,13 @@ export async function bandFrame(input: Buffer, plan: BandPlan, tmpDir: string, b
 
 export type BandFit = { jpeg: Buffer; contained: boolean; upscaled: boolean; costUsd: number; note?: string };
 
-/** Jev's essential box + has-text flag in one call, or nulls when the call fails (whole picture treated as the subject). */
+/**
+ * Jev's essential box + has-text flag in one call, or nulls when the call fails (whole picture treated as the subject).
+ * Jev gets a JPEG or PNG of the same size (visionImage): a WebP original failed this call outright (set d61efd39).
+ */
 export async function askBand(img: Buffer, jev: PhotoJev): Promise<{ essential: Box | null; hasText: boolean; costUsd: number; error?: string }> {
   try {
-    const res = await jev.systemOne({ state: image(img), questions: { essential: box(ESSENTIAL), text: noul(HAS_TEXT, { true: 'Text to read in full', false: 'No text that matters' }) } as unknown as Questions, model: BAND_JEV_MODEL });
+    const res = await jev.systemOne({ state: image((await visionImage(img)).bytes), questions: { essential: box(ESSENTIAL), text: noul(HAS_TEXT, { true: 'Text to read in full', false: 'No text that matters' }) } as unknown as Questions, model: BAND_JEV_MODEL });
     const costUsd = jevCostUsd({ input_tokens: res.usage?.input_tokens ?? 0, output_tokens: res.usage?.output_tokens ?? 0 });
     const a = res.answers as Record<string, { box?: Box; noul?: number }>;
     return { essential: a.essential?.box ?? null, hasText: (a.text?.noul ?? 0) >= 0.5, costUsd };

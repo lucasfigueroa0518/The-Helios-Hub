@@ -11,6 +11,7 @@ import { REAL_CHECK_SYSTEM } from '@/lib/video-finder/find';
 import { askHaiku } from './brief';
 import { SOURCE_RANK } from './candidates';
 import type { GradedPhoto, MediaVerdict } from './grade';
+import { visionImage } from './vision-bytes';
 
 export { REAL_CHECK_SYSTEM };
 
@@ -23,7 +24,8 @@ export function pickOrder(graded: GradedPhoto[]): GradedPhoto[] {
 }
 
 export async function blatantlyAi(jpeg: Buffer, create: WriterCreate): Promise<{ ai: boolean; message: Anthropic.Message }> {
-  const { input, message } = await askHaiku<{ blatantly_ai?: boolean }>(create, REAL_CHECK_SYSTEM, REAL_TOOL, [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: jpeg.toString('base64') } }], 1000);
+  const v = await visionImage(jpeg);
+  const { input, message } = await askHaiku<{ blatantly_ai?: boolean }>(create, REAL_CHECK_SYSTEM, REAL_TOOL, [{ type: 'image', source: { type: 'base64', media_type: v.mediaType, data: v.bytes.toString('base64') } }], 1000);
   return { ai: Boolean(input?.blatantly_ai), message };
 }
 

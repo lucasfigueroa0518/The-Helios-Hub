@@ -19,6 +19,7 @@ export * from './candidates';
 export * from './grade';
 export * from './pick';
 export * from './band';
+export * from './vision-bytes';
 
 export type PhotoResult = {
   id: string;
