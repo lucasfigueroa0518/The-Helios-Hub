@@ -218,7 +218,7 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     dragNeedsGroup: false,
     pool: { noun: { one: 'tip', many: 'tips' }, order: 'score', moves: liveMoves(true) },
   },
-  // Pitches come from weekly development sessions, not seeds; the night makes up to three a day.
+  // Pitches come from nightly development sessions (10 PM, while the pool is short), not seeds; the night makes up to three a day.
   reel_ai_drama: {
     title: 'AI Drama Reels',
     benchNote: 'Story pitches waiting to be made, best rank first. Make it produces one reel. Hold and drag any pitch to move it.',
@@ -228,8 +228,8 @@ export const TYPE_CONFIG: Record<Vertical, TypeConfig> = {
     generate: {
       label: 'Generate every night',
       confirm:
-        'Make AI Drama reels every night at 12:00 AM for the day’s slots, and run the weekly development session on Mondays? Each makes live model, search, voice and video calls, up to the daily render and spend caps.',
-      hint: 'At 12:00 AM the night makes the best pitches for the day’s slots; a development session refills the pitch pool on Mondays. Every reel waits for your approval.',
+        'Make AI Drama reels every night at 12:00 AM for the day’s slots, and refill the pitch pool at 10 PM while it runs short? Each makes live model, search, voice and video calls, up to the daily render and spend caps.',
+      hint: 'At 12:00 AM the night makes the best pitches for the day’s slots; at 10 PM a development session refills the pitch pool while fewer than five pitches wait. Every reel waits for your approval.',
     },
     perDayMin: 1,
     capPerSeries: false,

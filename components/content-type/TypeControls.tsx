@@ -240,7 +240,7 @@ export async function fieldNotesMake(ideaId: string): Promise<GenerateOutcome> {
 
 /**
  * Develop: one development session (new pitches for the pool), queued for the drama worker; nothing runs in the
- * request. The confirm names the weekly development cap from the drama settings.
+ * request. The confirm names the nightly development cap from the drama settings.
  */
 export function DramaDevelopButton() {
   const router = useRouter();
