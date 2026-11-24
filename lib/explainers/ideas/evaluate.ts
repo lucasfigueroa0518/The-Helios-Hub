@@ -509,7 +509,10 @@ export async function trimPool(db: ExplainersDb, poolSize: number, exempt: strin
   const pool = await listPool(db);
   const queued = pool.map((t, i) => ({ item: { id: t.id, score: t.weighted_score }, rank: i + 1, pinned: false, placed: false, effective: t.weighted_score }));
   const origin = new Map(pool.map((t) => [t.id, t.origin]));
-  const cut = capOverflow(queued, Math.min(poolSize, POOL_CAP), (q) => keep.has(q.item.id) || origin.get(q.item.id) === 'manual');
+  // A syllabus idea is never cut (2026-11-23): the refill tops the pool up to POOL_TARGET, so cutting one would only
+  // free its topic to be written again. Only ideas off the syllabus are cut.
+  const ranked = new Set(pool.filter((t) => t.syllabus_rank != null).map((t) => t.id));
+  const cut = capOverflow(queued, Math.min(poolSize, POOL_CAP), (q) => keep.has(q.item.id) || origin.get(q.item.id) === 'manual' || ranked.has(q.item.id));
   for (const topic of cut) {
     await db.query(
       `UPDATE explainers.topics
