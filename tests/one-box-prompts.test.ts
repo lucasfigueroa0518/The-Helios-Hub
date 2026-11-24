@@ -1,4 +1,4 @@
-/** One-box seeding: per-pool prompts, tool schemas and (offline, pure). */
+/** One-box seeding: prompts and tool schemas (offline, pure). */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

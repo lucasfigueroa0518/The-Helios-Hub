@@ -427,20 +427,6 @@ test('post panel tip notes: each tip shows its tags in plain words, and an untag
   assert.equal(renderToStaticMarkup(React.createElement(TipNotes, { notes: [] })), '', 'a post with no tips shows nothing');
 });
 
-test('seed form: required leaf and want selects list every leaf and want in plain words', async () => {
-  const React = await import('react');
-  const { renderToStaticMarkup } = await import('react-dom/server');
-  const { FieldNotesSeedForm } = await import('@/components/field-notes/FieldNotesSeedForm');
-  const { LEAF_LABEL, WANT_LABEL } = await import('@/components/field-notes/constants');
-  const html = renderToStaticMarkup(React.createElement(FieldNotesSeedForm, { done() {} }));
-  const selects = html.match(/<select[^>]*>/g) ?? [];
-  assert.equal(selects.length, 2);
-  for (const sel of selects) assert.match(sel, /required/);
-  for (const label of [...Object.values(LEAF_LABEL), ...Object.values(WANT_LABEL)]) assert.ok(html.includes(`>${label}</option>`), label);
-  assert.match(html, /What it points to/);
-  assert.match(html, /What the reader gets/);
-});
-
 test('registry: every source names known leaves and carries verifiedOn, a read note, a fetch note and a vendor', () => {
   for (const e of SOURCE_REGISTRY) {
     assert.ok(e.leaves && e.leaves.length > 0, `${e.id} has leaves`);
@@ -456,7 +442,7 @@ test('registry: every source names known leaves and carries verifiedOn, a read n
   for (const [vendor, n] of byVendor) assert.ok(n <= SOURCE_REGISTRY.length / 3, `${vendor} is at most a third of the entries`);
 });
 
-test('components render without throwing: Photo Bank Field Notes section, seed form, run button, settings, and no emoji or exclamation marks', async () => {
+test('components render without throwing: Photo Bank Field Notes section, run button, settings, and no emoji or exclamation marks', async () => {
   const React = await import('react');
   (globalThis as { React?: unknown }).React = React;
   const { renderToStaticMarkup } = await import('react-dom/server');
@@ -472,7 +458,6 @@ test('components render without throwing: Photo Bank Field Notes section, seed f
   const pool = await listPool(db);
 
   const { FieldNotesPhotosSection } = await import('@/components/social-hub/library/FieldNotesPhotosSection');
-  const { FieldNotesSeedForm } = await import('@/components/field-notes/FieldNotesSeedForm');
   const { FieldNotesRunButton } = await import('@/components/field-notes/FieldNotesRunButton');
   const { FieldNotesSettingsPanel } = await import('@/components/field-notes/FieldNotesSettingsPanel');
 
@@ -501,15 +486,13 @@ test('components render without throwing: Photo Bank Field Notes section, seed f
   assert.match(empty, /No photos yet/);
   assert.match(wrap(React.createElement(FieldNotesPhotosSection, { pool: null, error: 'relation does not exist', readOnly: false })), /Could not load the Field Notes photos/);
 
-  const seed = wrap(React.createElement(FieldNotesSeedForm, { done() {} }));
-  assert.match(seed, /Seed a Field Notes tip/);
   const run = wrap(React.createElement(FieldNotesRunButton));
   assert.match(run, />Generate</);
   const settings = wrap(React.createElement(FieldNotesSettingsPanel, { initial: parsePanelSettings([]) }));
   for (const label of ['Auto-run', 'Require approval', 'Publishing live', 'Photo rest', 'Pending draft cap', 'Tip expiry']) assert.match(settings, new RegExp(label));
 
   // Copy: plain voice, no exclamation marks and no emoji in anything the page says.
-  for (const html of [top, empty, seed, run, settings]) {
+  for (const html of [top, empty, run, settings]) {
     const text = html.replace(/<[^>]*>/g, ' ');
     assert.doesNotMatch(text, /!/);
     assert.doesNotMatch(text, /\p{Extended_Pictographic}/u);

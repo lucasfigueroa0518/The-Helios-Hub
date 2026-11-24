@@ -184,3 +184,28 @@ test('cancelOrDismiss (the DELETE route): stale row dismissed, fresh running row
   assert.equal(await cancelOrDismiss(q2, failed.id, minutes(1)), 'dismissed');
   assert.equal(await cancelOrDismiss(q, '00000000-0000-4000-8000-000000000000'), 'missing');
 });
+
+test('a done row with a message stays as a done card until dismissed; one without stays hidden', async () => {
+  const q = await db();
+  const a = await createRequest(q, input('real photo', 'real_or_ai'), NOW);
+  const b = await createRequest(q, input('plain'), NOW);
+  await doneRequest(q, a.id, 'roa:1', 0.3, "The real photo was added; the AI twin didn't pass.");
+  await doneRequest(q, b.id, 'reels:idea:1', 0.1);
+  const cards = await listCards(q, 'real_or_ai', minutes(1));
+  assert.equal(cards.length, 1);
+  assert.deepEqual([cards[0]!.status, cards[0]!.message], ['done', "The real photo was added; the AI twin didn't pass."]);
+  assert.equal((await listCards(q, 'reels', minutes(1))).length, 0);
+  assert.equal(await cancelOrDismiss(q, a.id, minutes(2)), 'dismissed');
+  assert.equal((await listCards(q, 'real_or_ai', minutes(2))).length, 0);
+});
+
+test('only a queued worker card can be cancelled from the card', async () => {
+  const q = await db();
+  const t = await createRequest(q, input('trivia', 'ai_trivia'), NOW);
+  const r = await createRequest(q, input('reel'), NOW);
+  assert.equal((await listCards(q, 'ai_trivia', minutes(1)))[0]!.cancellable, true);
+  assert.equal((await listCards(q, 'reels', minutes(1)))[0]!.cancellable, false);
+  await claimRequest(q, 'stories', minutes(1));
+  assert.equal((await listCards(q, 'ai_trivia', minutes(1)))[0]!.cancellable, false);
+  void t; void r;
+});

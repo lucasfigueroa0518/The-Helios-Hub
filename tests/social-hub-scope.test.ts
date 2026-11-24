@@ -183,14 +183,14 @@ const ACTION_BUTTONS = 'components/social-hub/house/ActionBar.tsx';
  * slot writes, the unschedule it offers on a booked slot, and Ready to place's place),
  * its Schedules dropdown (the schedule save and its Undo), and AI Events' pool buttons
  * (Pin / Exclude / Clear and Rebuild post, /api/ai-events/pool), and the post view's revision box (Targeted Revisions:
- * revise, undo, continue, and its poll of the post's revision rows), and the shared Seed an idea drawer's forms (one
- * file and one /seed endpoint each, 2026-11-02; Field Notes' is components/field-notes/FieldNotesSeedForm.tsx) with the refresh helper they share, and the Cost
+ * revise, undo, continue, and its poll of the post's revision rows), and the shared Seed an idea drawer's one form
+ * (components/content-type/OneBoxSeedForm.tsx, /api/seed/one-box) with the refresh helper they share, and the Cost
  * page's nightly refill total (settings standard D19, /api/content-type/posting/refill-total), and the Photo Bank's
  * Field Notes section (UI-REWORK D1, 2026-11-23): the pool grid's rest / retire / re-tag (/api/field-notes/pool) and the
  * upload box's sign and finalize (/api/field-notes/photos/{sign,finalize}). Client components
  * whose every fetch goes to those routes, which live outside the hub's read code. Checked below; their imports are still scanned.
  */
-const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/field-notes/FieldNotesSeedForm.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/social-hub/post/RevisionBox.tsx', 'components/content-type/ReelSeedForm.tsx', 'components/content-type/CarouselSeedForm.tsx', 'components/content-type/LfdSeedForm.tsx', 'components/content-type/StorySeedForm.tsx', 'components/content-type/ExplainerSeedForm.tsx', 'components/content-type/OneBoxSeedForm.tsx', 'components/content-type/SeedRequestCards.tsx', 'lib/content-type/refresh-client.ts', 'components/social-hub/cost/RefillTotal.tsx', 'components/field-notes/PoolGrid.tsx', 'components/field-notes/upload-client.ts']);
+const HUB_CONTROLS = new Set(['components/social-hub/content/HubControls.tsx', 'components/social-hub/content/RunsRefresh.tsx', 'components/social-hub/content/MakeItButton.tsx', 'components/content-type/run-progress.tsx', 'components/content-type/queue-post.ts', 'components/social-hub/calendar/WeekBoard.tsx', 'components/social-hub/calendar/SchedulesMenu.tsx', 'components/content-type/AiEventsPoolButtons.tsx', 'components/social-hub/post/RevisionBox.tsx', 'components/content-type/OneBoxSeedForm.tsx', 'components/content-type/SeedRequestCards.tsx', 'lib/content-type/refresh-client.ts', 'components/social-hub/cost/RefillTotal.tsx', 'components/field-notes/PoolGrid.tsx', 'components/field-notes/upload-client.ts']);
 const CONTROL_ENDPOINTS = /^(?:\/api\/(content-type\/(posting|run-today|progress|idea-queue)|social-hub\/(slots|actions\/(unschedule|place|revise|undo-revision|continue-revision|revisions))|ai-events\/pool|field-notes\/(pool|photos\/(sign|finalize))|(reels|carousels|last-few-days|stories|field-notes)\/seed|seed\/one-box)\b|\/api\/explainers\/topics$)/;
 
 /** First network call or foreign SQL write reachable from `start`, with the import chain, or null. */
@@ -319,6 +319,11 @@ test('every action route checks its flag before doing anything', () => {
 });
 
 // ── Flags ───────────────────────────────────────────────────────────────────
+
+test('the scope test lists only the one-box form among seed controls', () => {
+  const seedControls = [...HUB_CONTROLS].filter((f) => /Seed/.test(f)).sort();
+  assert.deepEqual(seedControls, ['components/content-type/OneBoxSeedForm.tsx', 'components/content-type/SeedRequestCards.tsx']);
+});
 
 test('hub controls are client components that only call their own routes', () => {
   for (const file of HUB_CONTROLS) {

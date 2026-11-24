@@ -20,7 +20,7 @@ const q = (text: string, params?: unknown[]) => dbQuery(text, params as never) a
 /**
  * One-box seed (design 2026-11-04-one-box-seeding-design): a sentence or two, an optional link. The click opens a request and
  * returns at once; a web-search Claude call then finds and verifies the source and files the idea in the pool's own format.
- * This click is the approval for that one seed's spend, at most 35 cents.
+ * This click is the approval for that one seed's spend, at most the type's limit.
  */
 export async function POST(request: Request) {
   const session = await getSession();

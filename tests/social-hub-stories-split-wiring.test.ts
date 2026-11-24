@@ -115,7 +115,7 @@ const MEANS_MORNING_DOWNLOAD = new Set([
   'components/social-hub/calendar/CalendarScreen.tsx',
 ]);
 /** Builder B's files (CONTRACT §3), checked by B's own tests. */
-const OTHER_OWNER = /^(lib\/content-type\/posting\.ts|components\/content-type\/(TypeControls|StorySeedForm|ScheduleStrip)\.tsx|app\/api\/stories\/|app\/memes\/)/;
+const OTHER_OWNER = /^(lib\/content-type\/posting\.ts|components\/content-type\/(TypeControls|ScheduleStrip)\.tsx|app\/api\/stories\/|app\/memes\/)/;
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

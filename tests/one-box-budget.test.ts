@@ -1,4 +1,4 @@
-/** One-box seeding: the 35-cent spend ledger (offline, pure). */
+/** One-box seeding: the per-type spend ledger (offline, pure). */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

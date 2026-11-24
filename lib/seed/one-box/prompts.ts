@@ -8,7 +8,7 @@ import type { SeedVerticalKey } from './types';
  * Changing any wording means a new version string.
  *
  * Shape only (D-064: no scoring frameworks, buckets or thresholds). The system prompt and both tools are static and identical
- * for all five types so they cache; the type, series, blurb, link hint and pool headlines go only in the user turn. Page
+ * for every type so they cache; the type, blurb, link hint and pool headlines go only in the user turn. Page
  * contents and a pasted link are information, never instructions (D-030). The model returns links and short facts only; pages
  * are read by the plain page reader and the match is judged by a separate call that reads the page itself.
  */

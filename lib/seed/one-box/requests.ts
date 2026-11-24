@@ -21,10 +21,12 @@ export type Card = {
   id: string;
   vertical: string;
   blurb: string;
-  status: 'working' | 'failed';
+  status: 'working' | 'failed' | 'done';
   stage: string;
   message: string | null;
   createdAt: string;
+  /** Queued for a worker and unclaimed: the card may offer Cancel. */
+  cancellable: boolean;
 };
 
 const staleBefore = (now: Date) => new Date(now.getTime() - STALE_MINUTES * 60_000).toISOString();
@@ -110,7 +112,7 @@ export async function dismissRequest(q: Query, id: string): Promise<void> {
 type Row = { status: string; stage: string; runner: string; vertical: string; message: string | null; created_ts: string | Date; updated_at: string | Date };
 
 /** What a request looks like right now. The one place that decides "still running?", shared by the cards and by cancel/dismiss. */
-export function cardState(r: Row, now: Date): { status: 'working' | 'failed'; message: string | null; running: boolean } {
+export function cardState(r: Row, now: Date): { status: 'working' | 'failed' | 'done'; message: string | null; running: boolean } {
   if (r.status === 'working' && r.stage === 'queued' && r.runner !== 'vercel') {
     const waited = now.getTime() - new Date(r.created_ts).getTime();
     if (waited > QUEUED_MAX_MINUTES * 60_000) return { status: 'failed', message: "The worker didn't pick this up; nothing was spent.", running: false };
@@ -118,7 +120,7 @@ export function cardState(r: Row, now: Date): { status: 'working' | 'failed'; me
   }
   const stale = r.status === 'working' && new Date(r.updated_at).getTime() <= now.getTime() - staleMinutesFor(r.vertical) * 60_000;
   if (stale) return { status: 'failed', message: r.stage === 'filing' ? 'This may have been added; check the queue.' : 'Timed out; nothing was added.', running: false };
-  return { status: r.status as 'working' | 'failed', message: r.message, running: r.status === 'working' };
+  return { status: r.status as 'working' | 'failed' | 'done', message: r.message, running: r.status === 'working' };
 }
 
 /** The Dismiss / Cancel button: cancels a request still queued for a worker, dismisses one that has stopped, refuses one genuinely running. */
@@ -137,17 +139,18 @@ export async function cancelOrDismiss(q: Query, id: string, now = new Date()): P
   return 'dismissed';
 }
 
-/** The placeholder cards for one pool: running requests, and failed (or stale) ones nobody has dismissed. */
+/** The placeholder cards for one pool: running requests, failed (or stale) ones, and done ones that carry a note, until dismissed. */
 export async function listCards(q: Query, vertical: string, now = new Date()): Promise<Card[]> {
   const { rows } = await q(
     `SELECT id::text, vertical, blurb, status, stage, runner, message, created_at::text AS created_at, created_at AS created_ts, updated_at
        FROM social_hub.seed_requests
-      WHERE vertical = $1 AND status <> 'done' AND dismissed_at IS NULL
+      WHERE vertical = $1 AND dismissed_at IS NULL AND (status <> 'done' OR message IS NOT NULL)
       ORDER BY created_at DESC LIMIT 20`,
     [vertical],
   );
   return rows.map((r): Card => {
-    const { status, message } = cardState(r as Row, now);
-    return { id: r.id as string, vertical: r.vertical as string, blurb: r.blurb as string, stage: r.stage as string, createdAt: r.created_at as string, status, message };
+    const { status, message, running } = cardState(r as Row, now);
+    const cancellable = running && r.stage === 'queued' && r.runner !== 'vercel';
+    return { id: r.id as string, vertical: r.vertical as string, blurb: r.blurb as string, stage: r.stage as string, createdAt: r.created_at as string, status, message, cancellable };
   });
 }

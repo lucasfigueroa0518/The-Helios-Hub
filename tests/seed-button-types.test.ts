@@ -1,6 +1,7 @@
 /**
  * The one shared "Seed an idea" button: which idea pools have a seed path. Every pool does except AI Events (decided
- * 2026-11-02: its seed is not built; see docs/superpowers/specs/2026-10-30-seeding-paths-by-content-type.md) Every other pool takes a seed through the one box.
+ * 2026-11-02: its seed is not built; see docs/superpowers/specs/2026-10-30-seeding-paths-by-content-type.md).
+ * Every other pool takes a seed through the one box.
  */
 import assert from 'node:assert/strict';
 import test from 'node:test';
