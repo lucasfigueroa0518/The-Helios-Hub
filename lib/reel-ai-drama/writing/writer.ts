@@ -141,14 +141,7 @@ export async function reviseScript(
     parse: (raw) => {
       const replacements = (raw as { replacements?: Replacement[] })?.replacements;
       if (!Array.isArray(replacements)) return { value: null, problems: ['replacements is missing'] };
-      const revised = applyRevision(input.draft, replacements, { notedLineIds, facts: input.facts, inventory: input.inventory, limits: settings }, raw as RevisionExtras);
-      // New respellings for the replacement lines join the draft's (an entry for the same word is replaced).
-      const added = ((raw as { pronounce?: { word: string; say: string }[] })?.pronounce ?? []).filter((p) => p?.word?.trim() && p?.say?.trim());
-      if (revised.value && added.length) {
-        const words = new Set(added.map((p) => p.word));
-        revised.value = { ...revised.value, pronounce: [...(revised.value.pronounce ?? []).filter((p) => !words.has(p.word)), ...added] };
-      }
-      return revised;
+      return applyRevision(input.draft, replacements, { notedLineIds, facts: input.facts, inventory: input.inventory, limits: settings }, raw as RevisionExtras);
     },
   });
   deps.onSpend?.('writer_revise', result.usd);

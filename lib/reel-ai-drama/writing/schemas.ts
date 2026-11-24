@@ -59,7 +59,6 @@ export const WISH_AS = ['photo', 'logo', 'product', 'object', 'place'] as const;
 const FRAME_SHOT = obj({ at: str, shows: str, asset_ids: strList, introduces: nullableStr });
 
 /** How the voice says names it would get wrong; captions keep the spelling. */
-const PRONOUNCE = { type: 'array', items: obj({ word: str, say: str }) } as const;
 
 /** A label's kind (MD-130): 'date' for a date label (`L1`'s always is), else null. */
 
@@ -94,7 +93,6 @@ export const SUBMIT_SCRIPT_TOOL: SubmitTool = {
     landing_rung_id: str,
     close_question: str,
     central: strList,
-    pronounce: PRONOUNCE,
   }),
 };
 
@@ -123,12 +121,11 @@ export const SUBMIT_REVISION_TOOL: SubmitTool = {
         type: 'array',
         items: obj({ line_id: str, cut: { type: 'boolean' }, text: str, on_screen: nullableStr, fact_ids: strList, must_show: nullableStr, pause_after: nullableNum }),
       },
-      pronounce: PRONOUNCE,
       // Optional: what a line change makes stale (a rung's purpose, the close question).
       close_question: nullableStr,
       purposes: { type: 'array', items: obj({ rung_id: str, purpose: str }) },
     },
-    required: ['replacements', 'pronounce'],
+    required: ['replacements'],
     additionalProperties: false,
   },
 };
