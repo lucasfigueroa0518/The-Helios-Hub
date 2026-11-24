@@ -450,7 +450,7 @@ test('the least-bad gap line: scored before refused, fewest misses, highest tota
 });
 
 test('the gap writer is v2 again (4.2, EX4-180), three candidates, and the no-quotation-marks check stays', () => {
-  assert.equal(GAP_WRITER_VERSION, 'gap-writer-v2');
+  assert.equal(GAP_WRITER_VERSION, 'gap-writer-v5');
   assert.equal(GAPS_PER_TOPIC, 3);
   const q = 'So how does the app know right away?';
   const line = `You pay at a shop and your phone buzzes a second later with a "receipt" from the bank, though nobody asked it to. ${q}`;
