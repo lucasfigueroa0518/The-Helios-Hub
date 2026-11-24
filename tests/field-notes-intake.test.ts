@@ -11,7 +11,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 
-import { fieldNotesSourceIdOf, storyToCandidate, type FieldNotesIntakeDeps, type FieldNotesIntakeMode } from '@/lib/field-notes/intake';
+import { fieldNotesSourceIdOf, saveIntakeTips, storyToCandidate, type FieldNotesIntakeDeps, type FieldNotesIntakeMode } from '@/lib/field-notes/intake';
+import { planTipPool, POOL_TRIM_REASON } from '@/lib/field-notes/tip-pool';
 import { claimRun, requestRun, saveCandidateTip } from '@/lib/field-notes/store';
 import type { TipCandidate } from '@/lib/field-notes/sources/candidate';
 import { carryOutFieldNotesRun, type CarryOutDeps } from '@/lib/field-notes/worker';
@@ -233,4 +234,49 @@ test("storyToCandidate takes published_at from the item's Field Notes metadata, 
   const noDate = { ...plain, fieldNotesMeta: { kind: 'changelog', label: 'Cursor changelog', item: {}, enrich: null, publishedAt: null } } as IntakeItem;
   assert.equal(storyToCandidate({ ...base, members: [noDate] })?.publishedAt, '2026-11-01T00:00:00.000Z', 'publish_time when the metadata has no date');
   assert.equal(storyToCandidate({ ...base, members: [plain] })?.publishedAt, '2026-11-01T00:00:00.000Z', 'no metadata: publish_time');
+});
+
+// The best-30 pool (lib/field-notes/tip-pool.ts, 2026-11-24).
+
+test('planTipPool keeps the best `target`: fills free room, a new tip displaces only a weaker one, ties keep the waiting tip, 0 never stays', () => {
+  const waiting = [{ key: 'w1', score: 0.8 }, { key: 'w2', score: 0.5 }, { key: 'w0', score: 0 }];
+  assert.deepEqual(planTipPool({ waiting, incoming: [{ key: 'a', score: 0.4 }], target: 4 }), { admit: ['a'], expire: ['w0'] }, 'room: admitted; a 0 tip always goes');
+  assert.deepEqual(planTipPool({ waiting, incoming: [{ key: 'a', score: 0.9 }, { key: 'b', score: 0.4 }], target: 2 }), { admit: ['a'], expire: ['w2', 'w0'] });
+  assert.deepEqual(planTipPool({ waiting, incoming: [{ key: 'a', score: 0.5 }], target: 2 }), { admit: [], expire: ['w0'] }, 'a tie keeps the waiting tip');
+  assert.deepEqual(planTipPool({ waiting: [], incoming: [{ key: 'z', score: 0 }], target: 30 }), { admit: [], expire: [] }, 'a 0 story is never saved');
+  const big = Array.from({ length: 40 }, (_, i) => ({ key: `t${i}`, score: (i + 1) / 100 }));
+  const trim = planTipPool({ waiting: big, incoming: [], target: 30 });
+  assert.equal(trim.expire.length, 10);
+  assert.deepEqual(trim.expire.sort(), big.slice(0, 10).map((b) => b.key).sort(), 'the ten weakest go');
+});
+
+test('intake refill tops the stored pool up to the target: the weakest waiting tip expires for a better story, a weaker story is left in the intake, pins are not counted', async () => {
+  const { query } = await db();
+  const version = { questionSetVersion: 'field-notes-score@3' };
+  const tags = { leaf: 'coding_agent_feature', want: 'faster', tier: 'middle', purposes: [] as string[], fresh: true, ...version };
+  const save = (url: string, score: number, t: Record<string, unknown> = tags) =>
+    saveCandidateTip(query, { sourceUrl: url, sourceKind: 'docs', sourceLabel: 'Old', publishedAt: null, item: {} as TipCandidate['item'], untrustedContent: `Old\n\n${BODY}` }, score, t as unknown as Parameters<typeof saveCandidateTip>[3]);
+  const ids: Record<string, string> = {};
+  ids.weak = (await save('https://docs.example.com/weak', 0.3))!;
+  ids.mid = (await save('https://docs.example.com/mid', 0.6))!;
+  ids.pinned = (await save('https://docs.example.com/pinned', 0.1))!;
+  ids.oldVersion = (await save('https://docs.example.com/old-version', 0.95, { ...tags, questionSetVersion: 'field-notes-score@2' }))!;
+  const list = await stories(query, [
+    { key: 'https://code.claude.com/docs/en/changelog#better', sourceId: 'claude-code-changelog', headline: 'Better one', score: 0.9 },
+    { key: 'https://code.claude.com/docs/en/changelog#weaker', sourceId: 'claude-code-changelog', headline: 'Weaker one', score: 0.2 },
+  ]);
+  const { deps } = intakeDeps('intake', async () => list);
+  const found = await saveIntakeTips(query, deps, NOW, undefined, { target: 2, protectedIds: new Set([ids.pinned]) });
+
+  assert.deepEqual({ added: found.added, belowPoolBar: found.belowPoolBar, trimmed: found.trimmed }, { added: 1, belowPoolBar: 1, trimmed: 2 });
+  const rows = (await query<{ source_url: string; status: string; reject_reason: string | null }>(`SELECT source_url, status, reject_reason FROM field_notes.tips ORDER BY source_url`)).rows;
+  const by = new Map(rows.map((r) => [r.source_url, r]));
+  assert.equal(by.get('https://code.claude.com/docs/en/changelog#better')?.status, 'candidate');
+  assert.ok(!by.has('https://code.claude.com/docs/en/changelog#weaker'), 'a story under the bar is not saved, so the intake offers it again');
+  assert.equal(by.get('https://docs.example.com/mid')?.status, 'candidate');
+  assert.equal(by.get('https://docs.example.com/pinned')?.status, 'candidate', 'a pinned tip is never trimmed');
+  for (const url of ['https://docs.example.com/weak', 'https://docs.example.com/old-version']) {
+    assert.equal(by.get(url)?.status, 'expired', url);
+    assert.equal(by.get(url)?.reject_reason, POOL_TRIM_REASON);
+  }
 });
