@@ -182,6 +182,11 @@ export async function runTriviaDaily(deps: TriviaDailyDeps): Promise<TriviaDaily
 
 /** The output budget of a seed's calls (one-box seeding v2): the ledger prices the writer's worst case at it. */
 export const SEED_MAX_TOKENS = 4000;
+/**
+ * A seed's material lists at most this many questions per offered theme (the most recent), so its input stops growing
+ * with the series' history. The repeat check in code (findRepeat) still reads every question ever written.
+ */
+export const SEED_ASKED_PER_THEME = 30;
 
 export type CallInput = {
   cells: Cell[];
@@ -201,6 +206,8 @@ export type CallInput = {
   seed?: boolean;
   /** Seed only: asked before the shortening call; false skips it (the length-only questions are rejected). */
   canShorten?: () => boolean;
+  /** Seed only: called with the writer's exact system and user turn before the call; it throws to stop the call (the ledger). */
+  beforeWrite?: (p: { system: string; user: string; tool: unknown }) => void;
 };
 
 /**
@@ -221,9 +228,14 @@ export async function writeTriviaBatch(deps: TriviaDailyDeps, rec: TriviaDailyRe
     today: day,
     count: perCall,
     cells: c.cells.map((x) => ({ cell_id: x.cellId, theme: x.themeText, angle: x.angleText })),
-    asked: themes.map(([theme, text]) => ({ theme: text, questions: asAsked([...onTheme(c.earlier, theme), ...onTheme(c.fresh, theme)]) })),
+    asked: themes.map(([theme, text]) => {
+      const all = [...onTheme(c.earlier, theme), ...onTheme(c.fresh, theme)];
+      return { theme: text, questions: asAsked(c.seed ? all.slice(-SEED_ASKED_PER_THEME) : all) };
+    }),
   };
   if (c.research.length) mat.research = c.research;
+  const user = material(mat);
+  c.beforeWrite?.({ system: prompt.system, user, tool: prompt.tool });
   // The raw responses are kept for the deposit: the quoted lines live in their search results and citations.
   const responses: unknown[] = [];
   const out = (await writeStructured<TriviaWriteOut>({
@@ -233,7 +245,7 @@ export async function writeTriviaBatch(deps: TriviaDailyDeps, rec: TriviaDailyRe
       return res;
     },
     db, setId: null, component: c.seed ? 'trivia-seed' : 'trivia-write', model: deps.settings.models.copy,
-    system: prompt.system, tool: prompt.tool, user: material(mat), webSearch: { maxUses: c.seed ? TRIVIA_SEED_SEARCHES : TRIVIA_WRITE_SEARCHES },
+    system: prompt.system, tool: prompt.tool, user, webSearch: { maxUses: c.seed ? TRIVIA_SEED_SEARCHES : TRIVIA_WRITE_SEARCHES },
     ...(c.seed ? { maxTokens: SEED_MAX_TOKENS } : {}),
   })).value;
 

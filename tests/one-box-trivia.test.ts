@@ -15,7 +15,7 @@ import type { Query } from '@/lib/social/store/pg';
 import { createStoriesJev } from '@/lib/stories/jev';
 import { DEFAULT_SETTINGS } from '@/lib/stories/settings';
 import { ensureCells } from '@/lib/stories/trivia/cells';
-import { DAILY_TARGET, runTriviaDaily, type TriviaDailyDeps } from '@/lib/stories/trivia/daily';
+import { DAILY_TARGET, runTriviaDaily, SEED_ASKED_PER_THEME, type TriviaDailyDeps } from '@/lib/stories/trivia/daily';
 import { cellOf, isActive } from '@/lib/stories/trivia/map';
 import { TRIVIA_SEED, TRIVIA_SEED_SEARCHES, TRIVIA_WRITE, type TriviaWriteItem } from '@/lib/stories/trivia/prompts';
 
@@ -101,6 +101,8 @@ test('two valid questions pool with seed true and the request is done', async ()
   assert.ok(JSON.stringify(call.system).includes('Write up to count questions about this topic'));
   assert.ok(!JSON.stringify(call.system).includes(TOPIC), 'the topic is not in the cached system prompt');
   assert.equal(mats[0]!.topic, TOPIC);
+  const worst = triviaSeedWorstCaseUsd({ prefixChars: TRIVIA_SEED.system.length + JSON.stringify(TRIVIA_SEED.tool).length, userChars: String((call.messages as Array<{ content: string }>)[0]!.content).length });
+  assert.ok(worst < 0.29, `a seed with no history fits (${worst})`);
   assert.equal(mats[0]!.count, 2);
   // Offered: every open, active cell.
   const offered = (mats[0]!.cells as Array<{ cell_id: string }>).map((c) => c.cell_id);
@@ -167,19 +169,101 @@ test('a Jev failure drops the question and its reason is on the failed request',
 
 test('the ledger refuses when the writer\'s worst case passes 0.29', async () => {
   const { db, q, id, input } = await setup();
-  const worst = triviaSeedWorstCaseUsd();
-  assert.ok(worst > 0.05 && worst < 0.29, `the worst case fits one fresh seed (${worst})`);
   const write = stubWriter({ submit_trivia: () => ({ questions: [item('t08a12')], spent_cells: [] }) });
   const ledger = new Ledger('ai_trivia');
-  ledger.add(0.29 - worst + 0.001);
-  const spentBefore = ledger.spent;
+  ledger.add(0.2);
   await runTriviaSeed({ q, id, input, deps: deps(db, write), ledger });
   assert.equal(write.calls.length, 0, 'no writer call');
-  assert.equal(ledger.spent, spentBefore, 'nothing spent');
+  assert.equal(ledger.spent, 0.2, 'nothing spent');
   const req = await requestRow(q, id);
   assert.equal(req.status, 'failed');
   assert.equal(req.message, limitText('ai_trivia'));
   assert.equal((await triviaRows(db)).length, 0);
+});
+
+test('the priced worst case reflects the material: four reads of each user token at the copy model\'s input price', () => {
+  const small = triviaSeedWorstCaseUsd({ prefixChars: 37_000, userChars: 30_000 });
+  const big = triviaSeedWorstCaseUsd({ prefixChars: 37_000, userChars: 65_000 });
+  assert.ok(big > small);
+  // 35,000 more characters = 10,000 tokens, read on 4 steps at $2 per million.
+  assert.ok(Math.abs(big - small - 0.08) < 1e-6, `${big} - ${small}`);
+  assert.ok(triviaSeedWorstCaseUsd({ prefixChars: 40_000, userChars: 30_000 }) > small, 'and the prefix');
+});
+
+/** `n` earlier questions on theme 8 (cells t08a*), one per day, every text the same length. */
+async function history(db: TriviaDailyDeps['db'], n: number) {
+  for (let k = 1; k <= n; k++) {
+    const num = String(k).padStart(3, '0');
+    const payload = {
+      kind: 'trivia', score: 0.5, writtenOn: `2026-0${1 + Math.floor(k / 28)}-${String(1 + (k % 28)).padStart(2, '0')}`,
+      q: { cellId: 't08a01', question: `History question number ${num} about a board game?`, options: [{ letter: 'A', text: `Answer ${num}` }, { letter: 'B', text: 'Other' }, { letter: 'C', text: 'Third' }], correct: 'A', answerLine: 'x', sources: [], writerScore: {} },
+      jevScore: {},
+    };
+    await db.query(`INSERT INTO stories.pool (series, key, origin, ref, title, payload, score, used_at) VALUES ('ai_trivia', $1, 'model', 't08a01', $2, $3::jsonb, 0.5, now())`, [`trivia:t08a01:${k}`, payload.q.question, JSON.stringify(payload)]);
+  }
+}
+
+test('a large history does not grow the priced worst case past the cap of 30 asked per theme', async () => {
+  const sizes: number[] = [];
+  for (const n of [SEED_ASKED_PER_THEME, 90]) {
+    const { db, q, id, input } = await setup();
+    await history(db, n);
+    const mats: Array<Record<string, unknown>> = [];
+    const write = stubWriter({ submit_trivia: (params) => { mats.push(materialOf(params)); return { questions: [item('t08a12')], spent_cells: [] }; } });
+    await runTriviaSeed({ q, id, input, deps: deps(db, write), ledger: new Ledger('ai_trivia') });
+    const games = (mats[0]!.asked as Array<{ theme: string; questions: Array<{ question: string }> }>).find((a) => a.theme === cellOf('t08a01')!.themeText)!;
+    assert.equal(games.questions.length, SEED_ASKED_PER_THEME);
+    assert.match(games.questions.at(-1)!.question, new RegExp(`number ${String(n).padStart(3, '0')}`), 'the most recent are kept');
+    const call = write.calls[0]!;
+    sizes.push(triviaSeedWorstCaseUsd({ prefixChars: TRIVIA_SEED.system.length + JSON.stringify(TRIVIA_SEED.tool).length, userChars: String((call.messages as Array<{ content: string }>)[0]!.content).length }));
+    assert.equal((await requestRow(q, id)).status, 'done');
+  }
+  assert.equal(sizes[0], sizes[1], 'the same priced worst case at 30 and at 90 earlier questions');
+});
+
+test('the code repeat check still sees questions the capped list leaves out', async () => {
+  const { db, q, id, input } = await setup();
+  await history(db, 60);
+  // A repeat of question 001, the oldest, which the material's 30 no longer show.
+  const write = stubWriter({ submit_trivia: () => ({ questions: [item('t08a12', { question: 'History question number 001 about a board game?', options: [{ letter: 'A', text: 'Answer 001' }, { letter: 'B', text: 'Other' }, { letter: 'C', text: 'Third' }] })], spent_cells: [] }) });
+  await runTriviaSeed({ q, id, input, deps: deps(db, write), ledger: new Ledger('ai_trivia') });
+  const req = await requestRow(q, id);
+  assert.equal(req.status, 'failed');
+  assert.match(req.message!, /repeat: the same fact as trivia:t08a01:1 /);
+});
+
+test('a pause_turn continuation is made only when one more turn fits; else the request fails with the spend so far', async () => {
+  const { db, q, id, input } = await setup();
+  const calls: Array<Record<string, unknown>> = [];
+  const write = (async (params: Record<string, unknown>) => {
+    calls.push(params);
+    // 60,000 uncached input tokens on Sonnet: $0.12.
+    return { id: 'm', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', stop_reason: 'pause_turn', stop_sequence: null, usage: { input_tokens: 60_000, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [] };
+  }) as unknown as TriviaDailyDeps['write'];
+  const ledger = new Ledger('ai_trivia');
+  ledger.add(0.02);
+  await runTriviaSeed({ q, id, input, deps: deps(db, write), ledger });
+  assert.equal(calls.length, 1, 'the second turn is not made');
+  const req = await requestRow(q, id);
+  assert.equal(req.status, 'failed');
+  assert.equal(req.message, limitText('ai_trivia'));
+  assert.ok(Math.abs(req.cost - 0.14) < 1e-4, `the spend so far (${req.cost})`);
+});
+
+test('a step that throws after a question pooled still finishes the seed with that question', async () => {
+  const { db, q, id, input } = await setup();
+  let numbered = 0;
+  const flaky = Object.assign(Object.create(db), {
+    query: (sql: string, params?: unknown[]) => {
+      if (/SET questions = questions \+ 1/.test(sql) && ++numbered === 2) return Promise.reject(new Error('connection lost'));
+      return db.query(sql, params as never);
+    },
+  }) as TriviaDailyDeps['db'];
+  const write = stubWriter({ submit_trivia: () => ({ questions: [item('t08a12', { question: 'Which machine beat Kasparov in 1997?' }), item('t04a14', { question: 'What year did a computer first beat the chess champion?' })], spent_cells: [] }) });
+  await runTriviaSeed({ q, id, input, deps: deps(flaky, write), ledger: new Ledger('ai_trivia') });
+  const req = await requestRow(q, id);
+  assert.equal(req.status, 'done');
+  assert.equal(req.idea_id, 'trivia:t08a12:1');
 });
 
 test('a writer error fails the request and never throws', async () => {
