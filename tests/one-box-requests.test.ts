@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { PGlite } from '@electric-sql/pglite';
 
-import { createRequest, dismissRequest, doneRequest, failRequest, listCards, setStage } from '@/lib/seed/one-box/requests';
+import { cancelRequest, claimRequest, createRequest, dismissRequest, doneRequest, failRequest, listCards, setStage } from '@/lib/seed/one-box/requests';
 import type { OneBoxInput } from '@/lib/seed/one-box/types';
 import type { Query } from '@/lib/social/store/pg';
 
@@ -82,4 +82,81 @@ test('a quick retry after a failure is a new request, and the same words in anot
   const s1 = await createRequest(q, { vertical: 'stories', blurb: 'story words' }, NOW);
   const s2 = await createRequest(q, { vertical: 'explainers', blurb: 'story words' }, NOW);
   assert.notEqual(s1.id, s2.id);
+});
+
+test('claimRequest returns the oldest queued request for its runner and nothing for the other runner', async () => {
+  const q = await db();
+  const a = await createRequest(q, { vertical: 'ai_trivia', blurb: 'first' }, NOW);
+  await createRequest(q, { vertical: 'real_or_ai', blurb: 'second', link: 'https://example.com/x' }, minutes(1));
+  await createRequest(q, { vertical: 'reel_ai_drama', blurb: 'drama one' }, minutes(1));
+  assert.equal(await claimRequest(q, 'drama', minutes(2)).then((c) => c?.input.vertical), 'reel_ai_drama');
+  const c = await claimRequest(q, 'stories', minutes(2));
+  assert.deepEqual(c, { id: a.id, input: { vertical: 'ai_trivia', blurb: 'first' } });
+  const d = await claimRequest(q, 'stories', minutes(2));
+  assert.deepEqual(d?.input, { vertical: 'real_or_ai', blurb: 'second', link: 'https://example.com/x' });
+  assert.equal(await claimRequest(q, 'stories', minutes(2)), null);
+  assert.equal(await claimRequest(q, 'drama', minutes(2)), null);
+  const { rows } = await q(`SELECT stage, status, claimed_at IS NOT NULL AS c FROM social_hub.seed_requests WHERE id = $1::uuid`, [a.id]);
+  assert.deepEqual(rows[0], { stage: 'claimed', status: 'working', c: true });
+});
+
+test('claimRequest skips a request queued 121 minutes ago', async () => {
+  const q = await db();
+  await createRequest(q, { vertical: 'ai_trivia', blurb: 'too old' }, NOW);
+  assert.equal(await claimRequest(q, 'stories', minutes(121)), null);
+  assert.ok(await claimRequest(q, 'stories', minutes(119)));
+});
+
+test('same text twice in 60 s on ai_trivia makes one request', async () => {
+  const q = await db();
+  const a = await createRequest(q, { vertical: 'ai_trivia', blurb: 'same' }, NOW);
+  const b = await createRequest(q, { vertical: 'ai_trivia', blurb: 'same' }, minutes(0.5));
+  assert.deepEqual([b.reused, b.id], [true, a.id]);
+});
+
+test('queued worker requests do not count toward the three-at-once limit; claimed ones do', async () => {
+  const q = await db();
+  for (const n of [1, 2, 3, 4]) await createRequest(q, { vertical: 'ai_trivia', blurb: `t${n}` }, NOW);
+  await createRequest(q, input('reel one'), NOW);
+  for (let i = 0; i < 3; i++) await claimRequest(q, 'stories', minutes(1));
+  await assert.rejects(createRequest(q, input('reel two'), minutes(1)), /Three seeds are already/);
+});
+
+test('a claimed request untouched for 7 minutes reads may-have-been-added when its stage is filing, timed out otherwise; real_or_ai waits 10', async () => {
+  const q = await db();
+  const a = await createRequest(q, { vertical: 'ai_trivia', blurb: 'trivia' }, NOW);
+  const r = await createRequest(q, { vertical: 'real_or_ai', blurb: 'roa' }, NOW);
+  await claimRequest(q, 'stories', NOW);
+  await claimRequest(q, 'stories', NOW);
+  let t = await listCards(q, 'ai_trivia', minutes(7));
+  assert.deepEqual([t[0]!.status, t[0]!.message], ['failed', 'Timed out; nothing was added.']);
+  await setStage(q, a.id, 'filing', 0.1, NOW);
+  t = await listCards(q, 'ai_trivia', minutes(7));
+  assert.equal(t[0]!.message, 'This may have been added; check the queue.');
+  assert.equal((await listCards(q, 'real_or_ai', minutes(7)))[0]!.status, 'working');
+  assert.equal((await listCards(q, 'real_or_ai', minutes(11)))[0]!.status, 'failed');
+  assert.ok(r.id);
+});
+
+test('cancelRequest works only while queued', async () => {
+  const q = await db();
+  const a = await createRequest(q, { vertical: 'ai_trivia', blurb: 'cancel me' }, NOW);
+  const b = await createRequest(q, { vertical: 'ai_trivia', blurb: 'claimed' }, NOW);
+  assert.equal(await cancelRequest(q, a.id), true);
+  assert.equal(await cancelRequest(q, a.id), false);
+  assert.equal(await claimRequest(q, 'stories', minutes(1)).then((c) => c?.id), b.id);
+  assert.equal(await cancelRequest(q, b.id), false);
+  const { rows } = await q(`SELECT status, message, dismissed_at IS NOT NULL AS d FROM social_hub.seed_requests WHERE id = $1::uuid`, [a.id]);
+  assert.deepEqual(rows[0], { status: 'failed', message: 'Cancelled; nothing was spent.', d: true });
+  assert.equal(await claimRequest(q, 'stories', minutes(1)), null);
+});
+
+test('listCards shows the 1-minute and 120-minute queued wording', async () => {
+  const q = await db();
+  await createRequest(q, { vertical: 'ai_trivia', blurb: 'waits' }, NOW);
+  const msg = async (m: number) => (await listCards(q, 'ai_trivia', minutes(m)))[0]!;
+  assert.deepEqual([(await msg(0.5)).status, (await msg(0.5)).message], ['working', 'Waiting for the worker']);
+  assert.equal((await msg(2)).message, "Waiting: the worker is busy with tonight's run");
+  assert.equal((await msg(119)).status, 'working');
+  assert.deepEqual([(await msg(121)).status, (await msg(121)).message], ['failed', "The worker didn't pick this up; nothing was spent."]);
 });

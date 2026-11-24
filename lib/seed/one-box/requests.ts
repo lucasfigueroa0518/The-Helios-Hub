@@ -1,6 +1,6 @@
 import type { Query } from '@/lib/social/store/pg';
 
-import type { OneBoxInput, Stage } from './types';
+import { RUNNER, type OneBoxInput, type SeedVerticalKey, type Stage } from './types';
 
 /**
  * The one-box seed requests (design 2026-11-04-one-box-seeding-design, section 2): one row per click, so a placeholder card can
@@ -11,6 +11,11 @@ import type { OneBoxInput, Stage } from './types';
 export const STALE_MINUTES = 6;
 export const MAX_WORKING = 3;
 export const SAME_BLURB_SECONDS = 60;
+export const QUEUED_MAX_MINUTES = 120;
+export const STALE_MINUTES_ROA = 10;
+const WAITING_BUSY_MINUTES = 1;
+
+const staleMinutesFor = (vertical: string) => (vertical === 'real_or_ai' ? STALE_MINUTES_ROA : STALE_MINUTES);
 
 export type Card = {
   id: string;
@@ -24,9 +29,13 @@ export type Card = {
 
 const staleBefore = (now: Date) => new Date(now.getTime() - STALE_MINUTES * 60_000).toISOString();
 
-/** How many requests are genuinely still running (stale ones do not count). */
+/** How many requests are genuinely still running (stale ones do not count; a request waiting in a worker's queue does not either). */
 export async function workingCount(q: Query, now = new Date()): Promise<number> {
-  const { rows } = await q(`SELECT count(*)::int AS n FROM social_hub.seed_requests WHERE status = 'working' AND updated_at > $1::timestamptz`, [staleBefore(now)]);
+  const { rows } = await q(
+    `SELECT count(*)::int AS n FROM social_hub.seed_requests
+      WHERE status = 'working' AND updated_at > $1::timestamptz AND (runner = 'vercel' OR stage <> 'queued')`,
+    [staleBefore(now)],
+  );
   return Number(rows[0]?.n ?? 0);
 }
 
@@ -42,9 +51,9 @@ export async function createRequest(q: Query, input: OneBoxInput, now = new Date
   if (again.rows[0]) return { id: again.rows[0].id as string, reused: true };
   if ((await workingCount(q, now)) >= MAX_WORKING) throw new Error('Three seeds are already being worked on; wait for one to finish.');
   const { rows } = await q(
-    `INSERT INTO social_hub.seed_requests (vertical, blurb, link, created_at, updated_at)
-     VALUES ($1, $2, $3, $4::timestamptz, $4::timestamptz) RETURNING id::text`,
-    [input.vertical, input.blurb, input.link ?? null, now.toISOString()],
+    `INSERT INTO social_hub.seed_requests (vertical, blurb, link, runner, created_at, updated_at)
+     VALUES ($1, $2, $3, $5, $4::timestamptz, $4::timestamptz) RETURNING id::text`,
+    [input.vertical, input.blurb, input.link ?? null, now.toISOString(), RUNNER[input.vertical]],
   );
   return { id: rows[0]!.id as string, reused: false };
 }
@@ -52,6 +61,37 @@ export async function createRequest(q: Query, input: OneBoxInput, now = new Date
 /** Move a running request to a stage, adding the spend so far. */
 export async function setStage(q: Query, id: string, stage: Stage, costUsd = 0, now = new Date()): Promise<void> {
   await q(`UPDATE social_hub.seed_requests SET stage = $2, cost_usd = $3, updated_at = $4::timestamptz WHERE id = $1::uuid AND status = 'working'`, [id, stage, costUsd, now.toISOString()]);
+}
+
+/**
+ * A worker takes the oldest queued request for its runner. A request that has waited longer than QUEUED_MAX_MINUTES is never
+ * returned (its card reads as failed). SKIP LOCKED lets two workers race without taking the same row.
+ */
+export async function claimRequest(q: Query, runner: 'stories' | 'drama', now = new Date()): Promise<{ id: string; input: OneBoxInput } | null> {
+  const oldest = new Date(now.getTime() - QUEUED_MAX_MINUTES * 60_000).toISOString();
+  const { rows } = await q(
+    `UPDATE social_hub.seed_requests SET stage = 'claimed', claimed_at = $3::timestamptz, updated_at = $3::timestamptz
+      WHERE id = (
+        SELECT id FROM social_hub.seed_requests
+         WHERE runner = $1 AND status = 'working' AND stage = 'queued' AND dismissed_at IS NULL AND created_at > $2::timestamptz
+         ORDER BY created_at ASC LIMIT 1 FOR UPDATE SKIP LOCKED)
+      RETURNING id::text, vertical, blurb, link`,
+    [runner, oldest, now.toISOString()],
+  );
+  const r = rows[0];
+  if (!r) return null;
+  const input: OneBoxInput = { vertical: r.vertical as SeedVerticalKey, blurb: r.blurb as string, ...(r.link ? { link: r.link as string } : {}) };
+  return { id: r.id as string, input };
+}
+
+/** Cancel a request nobody has claimed yet. False when it is no longer queued. */
+export async function cancelRequest(q: Query, id: string, now = new Date()): Promise<boolean> {
+  const { rows } = await q(
+    `UPDATE social_hub.seed_requests SET status = 'failed', message = 'Cancelled; nothing was spent.', dismissed_at = $2::timestamptz, updated_at = $2::timestamptz
+      WHERE id = $1::uuid AND status = 'working' AND stage = 'queued' AND runner <> 'vercel' RETURNING id`,
+    [id, now.toISOString()],
+  );
+  return rows.length > 0;
 }
 
 export async function failRequest(q: Query, id: string, message: string, costUsd: number): Promise<void> {
@@ -69,17 +109,23 @@ export async function dismissRequest(q: Query, id: string): Promise<void> {
 /** The placeholder cards for one pool: running requests, and failed (or stale) ones nobody has dismissed. */
 export async function listCards(q: Query, vertical: string, now = new Date()): Promise<Card[]> {
   const { rows } = await q(
-    `SELECT id::text, vertical, blurb, status, stage, message, created_at::text AS created_at, updated_at
+    `SELECT id::text, vertical, blurb, status, stage, runner, message, created_at::text AS created_at, created_at AS created_ts, updated_at
        FROM social_hub.seed_requests
       WHERE vertical = $1 AND status <> 'done' AND dismissed_at IS NULL
       ORDER BY created_at DESC LIMIT 20`,
     [vertical],
   );
-  const cutoff = now.getTime() - STALE_MINUTES * 60_000;
   return rows.map((r): Card => {
-    const stale = r.status === 'working' && new Date(r.updated_at).getTime() <= cutoff;
+    const base = { id: r.id as string, vertical: r.vertical as string, blurb: r.blurb as string, stage: r.stage as string, createdAt: r.created_at as string };
+    if (r.status === 'working' && r.stage === 'queued' && r.runner !== 'vercel') {
+      const waited = now.getTime() - new Date(r.created_ts).getTime();
+      if (waited > QUEUED_MAX_MINUTES * 60_000) return { ...base, status: 'failed', message: "The worker didn't pick this up; nothing was spent." };
+      const message = waited > WAITING_BUSY_MINUTES * 60_000 ? "Waiting: the worker is busy with tonight's run" : 'Waiting for the worker';
+      return { ...base, status: 'working', message };
+    }
+    const stale = r.status === 'working' && new Date(r.updated_at).getTime() <= now.getTime() - staleMinutesFor(r.vertical as string) * 60_000;
     const status = stale ? 'failed' : (r.status as 'working' | 'failed');
     const message = stale ? (r.stage === 'filing' ? 'This may have been added; check the queue.' : 'Timed out; nothing was added.') : (r.message as string | null);
-    return { id: r.id, vertical: r.vertical, blurb: r.blurb, status, stage: r.stage, message, createdAt: r.created_at };
+    return { ...base, status, message };
   });
 }

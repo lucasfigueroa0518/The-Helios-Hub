@@ -8,7 +8,7 @@ export const RUNNER: Record<SeedVerticalKey, Runner> = {
   reels: 'vercel', carousels: 'vercel', last_few_days: 'vercel', stories: 'vercel', explainers: 'vercel', field_notes: 'vercel',
   ai_trivia: 'stories', real_or_ai: 'stories', reel_ai_drama: 'drama',
 };
-export type Stage = 'queued' | 'searching' | 'reading' | 'checking' | 'filing';
+export type Stage = 'queued' | 'claimed' | 'searching' | 'reading' | 'checking' | 'filing' | 'writing' | 'making';
 
 export type OneBoxInput = {
   vertical: SeedVerticalKey;
