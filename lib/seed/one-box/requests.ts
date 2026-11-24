@@ -98,8 +98,9 @@ export async function failRequest(q: Query, id: string, message: string, costUsd
   await q(`UPDATE social_hub.seed_requests SET status = 'failed', message = $2, cost_usd = $3, updated_at = now() WHERE id = $1::uuid`, [id, message, costUsd]);
 }
 
-export async function doneRequest(q: Query, id: string, ideaId: string | null, costUsd: number): Promise<void> {
-  await q(`UPDATE social_hub.seed_requests SET status = 'done', idea_id = $2, cost_usd = $3, message = NULL, updated_at = now() WHERE id = $1::uuid`, [id, ideaId, costUsd]);
+/** Done. `message` (optional) says what the card should still note, e.g. half of a Real or AI? twin that did not pass. */
+export async function doneRequest(q: Query, id: string, ideaId: string | null, costUsd: number, message: string | null = null): Promise<void> {
+  await q(`UPDATE social_hub.seed_requests SET status = 'done', idea_id = $2, cost_usd = $3, message = $4, updated_at = now() WHERE id = $1::uuid`, [id, ideaId, costUsd, message]);
 }
 
 export async function dismissRequest(q: Query, id: string): Promise<void> {

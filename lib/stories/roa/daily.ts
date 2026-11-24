@@ -110,6 +110,164 @@ async function saveRecord(db: StoriesDb, rec: RoaDailyRecord): Promise<void> {
 
 const msg = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+/** The twin whose real photo was not found: skipped whole (the daily record's and the seed's reason). */
+export const NO_REAL_TWIN = 'twin: no real photo found';
+/** An AI image call the caller's `beforeImage` refused (a one-box seed at its limit). */
+export const IMAGE_REFUSED = 'image: not made (spend limit)';
+
+/** Where a spec's outcomes are recorded: the daily record, or a seed's own scratch record. */
+export type RoaSpecSink = Pick<RoaDailyRecord, 'pooled' | 'archived' | 'rejected' | 'notes' | 'imageUsd'>;
+
+/** Everything one spec's images and intake need, built once per run (openRoaRun). */
+export type RoaSpecCtx = {
+  db: StoriesDb;
+  now: Date;
+  image: RoaImageGen;
+  vision: RoaVisionTransport;
+  fetch: typeof fetch;
+  bank?: BankReader | null;
+  finder: 'legacy' | 'shared';
+  used: UsedLedger | null;
+  avoidKeys: Set<string>;
+  avoidUrls: Set<string>;
+  intake: IntakeDeps;
+  rec: RoaSpecSink;
+};
+
+export type RoaSpecOpts = {
+  /** Mark each pooled image's payload `seed: true` (a one-box seed: Yours, never cut by a cap). */
+  seed?: boolean;
+  /** Asked before each AI image call; false skips the call (the spec ends there). */
+  beforeImage?: () => boolean;
+  /** Told each AI image's actual cost right after it is made. */
+  onImageUsd?: (usd: number) => void;
+};
+
+/** What one spec added: the pooled keys (a twin's real photo first), its rejections, and its image spend. */
+export type RoaSpecResult = { pooled: string[]; rejected: { problems: string[] }[]; usd: number };
+
+export type RoaKnownRun = Awaited<ReturnType<typeof readRoaKnown>>;
+
+/**
+ * The run's shared setup: what is known (every image and URL seen, what has posted), the shared photo finder's switch, the
+ * used-photo ledger (once for the run) and the photo bank (SS-22..SS-24). Reads only this series' pool, archive and sets.
+ */
+export async function openRoaRun(deps: RoaDailyDeps, rec: RoaSpecSink, day: string): Promise<{ ctx: RoaSpecCtx; known: RoaKnownRun; photoBank: RoaDailyDeps['photoBank'] }> {
+  const { db, now } = deps;
+  const fetchFn = deps.fetch ?? fetch;
+  const src = deps.sourceDb ?? db;
+  const query = (text: string, params?: unknown[]) => src.query(text, params) as never;
+  const [known, history] = await Promise.all([readRoaKnown(db), readRoaHistory(db)]);
+  const avoidKeys = new Set([...known.keys, ...history.usedKeys]);
+  const avoidUrls = new Set(known.urls);
+
+  // The shared photo finder's switch, the used-photo ledger (once for the run) and the photo bank (SS-22..SS-24).
+  const finder = deps.finder ?? (await import('@/lib/photos/switch').then((m) => m.readPhotoFinderModes(src)).then((m) => m.roa, () => 'legacy' as const));
+  let used: UsedLedger | null = null;
+  try {
+    used = await (deps.used ?? (async () => (await import('@/lib/photos/used')).readUsedLedger(query, now)))();
+  } catch (err) {
+    rec.notes.push(`used-photo ledger not read (${msg(err)}): the series' own history only`);
+  }
+  let photoBank = deps.photoBank;
+  if (photoBank === undefined) {
+    const { createPhotoBank } = await import('@/lib/media-library/bank');
+    photoBank = createPhotoBank({ query, http: fetchFn, log: (m) => rec.notes.push(`bank: ${m}`) });
+  }
+  const vision = deps.vision ?? liveRoaVisionTransport;
+  const intake: IntakeDeps = { db, write: deps.write, settings: deps.settings, vision, storage: deps.storage ?? createStoriesStorage(), now, day, used: history.usedKeys, bank: photoBank ?? null, log: (m) => rec.notes.push(m) };
+  const ctx: RoaSpecCtx = { db, now, image: deps.image ?? liveImageGen, vision, fetch: fetchFn, bank: deps.bank, finder, used, avoidKeys, avoidUrls, intake, rec };
+  return { ctx, known, photoBank };
+}
+
+/**
+ * One spec's images and intake, the same for the daily run and a one-box seed. Real cells: the best of several found photos.
+ * AI cells: one image, and once more when the screen fails it (RA-22). Twin: the real photo, then (only when it pooled) the
+ * AI image from the same scene's prompt; no real photo skips the twin whole. A failure is recorded as a rejection, never thrown.
+ */
+export async function runRoaSpec(ctx: RoaSpecCtx, s: RoaSpec, opts: RoaSpecOpts = {}): Promise<RoaSpecResult> {
+  const { db, now, rec } = ctx;
+  const before = { pooled: rec.pooled.length, rejected: rec.rejected.length, usd: rec.imageUsd };
+  const seedFlag = opts.seed ? { seed: true as const } : {};
+  const take = async (item: IntakeItem): Promise<IntakeOutcome> => {
+    ctx.avoidKeys.add(item.imageKey);
+    if ('url' in item.provenance) ctx.avoidUrls.add(item.provenance.url);
+    const o = await intakeCandidate(ctx.intake, { ...item, ...seedFlag });
+    if (o.status === 'pooled') rec.pooled.push({ key: o.key, truth: o.truth, subject: o.subject, trap: o.trap, difficulty: o.difficulty ?? 0 });
+    else if (o.status === 'archived') rec.archived.push({ key: o.key, reason: 'screen', problems: o.problems });
+    else rec.rejected.push({ cell: `${o.subject}.${o.trap}`, problems: o.problems });
+    return o;
+  };
+  // Real cells: fetch several photos, screen them all (Jev is near-free), keep the one most viewers would call AI (R1).
+  const real = async () => {
+    const photos = await findRealPhotos({ fetch: ctx.fetch, bank: ctx.bank, avoidUrls: ctx.avoidUrls, avoidKeys: ctx.avoidKeys, log: (m) => rec.notes.push(m), finder: ctx.finder, used: ctx.used }, { subject: s.subject, words: s.searchWords });
+    if (!photos.length) return null;
+    const scored: Array<{ photo: (typeof photos)[number]; screened: ScreenResult }> = [];
+    for (const photo of photos) {
+      try {
+        scored.push({ photo, screened: await screenImage({ db, vision: ctx.vision }, { ...photo, truth: 'real' }) });
+      } catch (err) {
+        rec.notes.push(`real screen ${photo.imageKey}: ${msg(err)}`);
+      }
+    }
+    if (!scored.length) return null;
+    const rank = (x: (typeof scored)[number]) => (x.screened.pass ? 1 : 0) * 10 + x.screened.difficulty;
+    scored.sort((a, b) => rank(b) - rank(a));
+    const best = scored[0]!;
+    rec.notes.push(`real ${s.subject}.${s.trap}: screened ${scored.length}, kept ${best.screened.difficulty.toFixed(2)} (others ${scored.slice(1).map((x) => x.screened.difficulty.toFixed(2)).join(', ') || 'none'})`);
+    return { ...best.photo, screened: best.screened };
+  };
+  const ai = async () => {
+    if (opts.beforeImage && !opts.beforeImage()) return null;
+    const made = await generateAiImage({ db, image: ctx.image, now }, s.aiPrompt);
+    rec.imageUsd = Number((rec.imageUsd + made.usd).toFixed(4));
+    opts.onImageUsd?.(made.usd);
+    if (made.costNote) rec.notes.push(made.costNote);
+    return made;
+  };
+
+  // AI cells: one image, and once more when the screen fails it.
+  const aiCell = async (twinOf?: string) => {
+    for (let attempt = 1; attempt <= AI_ATTEMPTS; attempt++) {
+      const made = await ai();
+      if (!made) {
+        rec.rejected.push({ cell: `${s.subject}.${s.trap}`, problems: [IMAGE_REFUSED] });
+        return null;
+      }
+      const o = await take({ ...made, truth: 'ai', subject: s.subject, trap: s.trap, ...(twinOf ? { twinOf } : {}), specText: s.aiPrompt });
+      if (o.status !== 'archived' || attempt === AI_ATTEMPTS) return o;
+      rec.notes.push(`ai ${s.subject}.${s.trap}: screen failed (${o.problems.join(', ')}), made again`);
+    }
+    return null;
+  };
+
+  const cell = `${s.subject}.${s.trap}`;
+  try {
+    if (s.trap === 'twin') {
+      const photo = await real();
+      if (!photo) {
+        rec.rejected.push({ cell, problems: [NO_REAL_TWIN] });
+      } else {
+        const realOut = await take({ ...photo, truth: 'real', subject: s.subject, trap: 'twin', specText: s.searchWords });
+        if (realOut.status === 'pooled') await aiCell(photo.imageKey); // no twin for a photo that did not make the pool
+      }
+    } else if (TRAP_TRUTH[s.trap] === 'real') {
+      const photo = await real();
+      if (!photo) rec.rejected.push({ cell, problems: ['no real photo found'] });
+      else await take({ ...photo, truth: 'real', subject: s.subject, trap: s.trap, specText: s.searchWords });
+    } else {
+      await aiCell();
+    }
+  } catch (err) {
+    rec.rejected.push({ cell, problems: [msg(err)] });
+  }
+  return {
+    pooled: rec.pooled.slice(before.pooled).map((p) => p.key),
+    rejected: rec.rejected.slice(before.rejected).map((r) => ({ problems: r.problems })),
+    usd: Number((rec.imageUsd - before.usd).toFixed(4)),
+  };
+}
+
 export async function runRoaDaily(deps: RoaDailyDeps): Promise<RoaDailyResult> {
   const { db, now } = deps;
   const day = poolDay(now);
@@ -118,31 +276,9 @@ export async function runRoaDaily(deps: RoaDailyDeps): Promise<RoaDailyResult> {
     if (rows[0]?.value?.day === day) return { ran: false, reason: `already ran for ${day}` };
   }
   const rec: RoaDailyRecord = { day, at: now.toISOString(), specs: [], pooled: [], archived: [], rejected: [], dropped: [], imageUsd: 0, notes: [] };
-  const vision = deps.vision ?? liveRoaVisionTransport;
-  const image = deps.image ?? liveImageGen;
-  const fetchFn = deps.fetch ?? fetch;
-  const storage = deps.storage ?? createStoriesStorage();
-  const src = deps.sourceDb ?? db;
-  const query = (text: string, params?: unknown[]) => src.query(text, params) as never;
-  let photoBank = deps.photoBank;
   try {
-    // 1. What is known: the pool's mix, every image and URL seen, what has posted.
-    const [mix, known, history] = await Promise.all([readPoolMix(db), readRoaKnown(db), readRoaHistory(db)]);
-    const avoidKeys = new Set([...known.keys, ...history.usedKeys]);
-    const avoidUrls = new Set(known.urls);
-
-    // The shared photo finder's switch, the used-photo ledger (once for the run) and the photo bank (SS-22..SS-24).
-    const finder = deps.finder ?? (await import('@/lib/photos/switch').then((m) => m.readPhotoFinderModes(src)).then((m) => m.roa, () => 'legacy' as const));
-    let used: UsedLedger | null = null;
-    try {
-      used = await (deps.used ?? (async () => (await import('@/lib/photos/used')).readUsedLedger(query, now)))();
-    } catch (err) {
-      rec.notes.push(`used-photo ledger not read (${msg(err)}): the series' own history only`);
-    }
-    if (photoBank === undefined) {
-      const { createPhotoBank } = await import('@/lib/media-library/bank');
-      photoBank = createPhotoBank({ query, http: fetchFn, log: (m) => rec.notes.push(`bank: ${m}`) });
-    }
+    // 1. What is known: the pool's mix, every image and URL seen, what has posted; the shared finder, ledger and bank.
+    const [mix, { ctx, known, photoBank }] = await Promise.all([readPoolMix(db), openRoaRun(deps, rec, day)]);
 
     // 2. One writer call; code keeps the balance. Nothing starts once the refill cap is spent.
     if (deps.refill && !(await deps.refill.canSpend())) {
@@ -158,84 +294,14 @@ export async function runRoaDaily(deps: RoaDailyDeps): Promise<RoaDailyResult> {
     rec.rejected.push(...rejected);
     rec.specs = specs.map((s) => ({ subject: s.subject, trap: s.trap, words: s.searchWords, prompt: s.aiPrompt }));
 
-    // 3. Images, then intake one by one; a failing spec never stops the others.
-    const intake: IntakeDeps = { db, write: deps.write, settings: deps.settings, vision, storage, now, day, used: history.usedKeys, bank: photoBank ?? null, log: (m) => rec.notes.push(m) };
-    const take = async (item: IntakeItem): Promise<IntakeOutcome> => {
-      avoidKeys.add(item.imageKey);
-      if ('url' in item.provenance) avoidUrls.add(item.provenance.url);
-      const o = await intakeCandidate(intake, item);
-      if (o.status === 'pooled') rec.pooled.push({ key: o.key, truth: o.truth, subject: o.subject, trap: o.trap, difficulty: o.difficulty ?? 0 });
-      else if (o.status === 'archived') rec.archived.push({ key: o.key, reason: 'screen', problems: o.problems });
-      else rec.rejected.push({ cell: `${o.subject}.${o.trap}`, problems: o.problems });
-      return o;
-    };
-    // Real cells: fetch several photos, screen them all (Jev is near-free), keep the one most viewers would call AI (R1).
-    const real = async (s: RoaSpec) => {
-      const photos = await findRealPhotos({ fetch: fetchFn, bank: deps.bank, avoidUrls, avoidKeys, log: (m) => rec.notes.push(m), finder, used }, { subject: s.subject, words: s.searchWords });
-      if (!photos.length) return null;
-      const scored: Array<{ photo: (typeof photos)[number]; screened: ScreenResult }> = [];
-      for (const photo of photos) {
-        try {
-          scored.push({ photo, screened: await screenImage({ db, vision }, { ...photo, truth: 'real' }) });
-        } catch (err) {
-          rec.notes.push(`real screen ${photo.imageKey}: ${msg(err)}`);
-        }
-      }
-      if (!scored.length) return null;
-      const rank = (x: (typeof scored)[number]) => (x.screened.pass ? 1 : 0) * 10 + x.screened.difficulty;
-      scored.sort((a, b) => rank(b) - rank(a));
-      const best = scored[0]!;
-      rec.notes.push(`real ${s.subject}.${s.trap}: screened ${scored.length}, kept ${best.screened.difficulty.toFixed(2)} (others ${scored.slice(1).map((x) => x.screened.difficulty.toFixed(2)).join(', ') || 'none'})`);
-      return { ...best.photo, screened: best.screened };
-    };
-    const ai = async (s: RoaSpec) => {
-      const made = await generateAiImage({ db, image, now }, s.aiPrompt);
-      rec.imageUsd = Number((rec.imageUsd + made.usd).toFixed(4));
-      if (made.costNote) rec.notes.push(made.costNote);
-      return made;
-    };
-
-    // AI cells: one image, and once more when the screen fails it.
-    const aiCell = async (s: RoaSpec, twinOf?: string) => {
-      for (let attempt = 1; attempt <= AI_ATTEMPTS; attempt++) {
-        const made = await ai(s);
-        const o = await take({ ...made, truth: 'ai', subject: s.subject, trap: s.trap, ...(twinOf ? { twinOf } : {}), specText: s.aiPrompt });
-        if (o.status !== 'archived' || attempt === AI_ATTEMPTS) return o;
-        rec.notes.push(`ai ${s.subject}.${s.trap}: screen failed (${o.problems.join(', ')}), made again`);
-      }
-      return null;
-    };
-
+    // 3. Images, then intake one by one (runRoaSpec); a failing spec never stops the others.
     for (const s of specs) {
-      const cell = `${s.subject}.${s.trap}`;
       if (deps.refill && !(await deps.refill.canSpend())) {
         rec.capped = true;
-        rec.notes.push(`refill cap $${deps.refill.capUsd} reached before ${cell}`);
+        rec.notes.push(`refill cap $${deps.refill.capUsd} reached before ${s.subject}.${s.trap}`);
         break;
       }
-      try {
-        if (s.trap === 'twin') {
-          const photo = await real(s);
-          if (!photo) {
-            rec.rejected.push({ cell, problems: ['twin: no real photo found'] });
-            continue;
-          }
-          const realOut = await take({ ...photo, truth: 'real', subject: s.subject, trap: 'twin', specText: s.searchWords });
-          if (realOut.status !== 'pooled') continue; // no twin for a photo that did not make the pool
-          await aiCell(s, photo.imageKey);
-        } else if (TRAP_TRUTH[s.trap] === 'real') {
-          const photo = await real(s);
-          if (!photo) {
-            rec.rejected.push({ cell, problems: ['no real photo found'] });
-            continue;
-          }
-          await take({ ...photo, truth: 'real', subject: s.subject, trap: s.trap, specText: s.searchWords });
-        } else {
-          await aiCell(s);
-        }
-      } catch (err) {
-        rec.rejected.push({ cell, problems: [msg(err)] });
-      }
+      await runRoaSpec(ctx, s);
     }
 
     // 4. The cap: the ROA_POOL_CAP hardest stay.

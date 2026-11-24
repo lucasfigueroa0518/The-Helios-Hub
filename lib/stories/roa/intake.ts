@@ -66,6 +66,8 @@ export type IntakeItem = {
   specText?: string;
   /** A real photo's original download, before the 9:16 cut (findRealPhotos): what the photo bank stores (SS-24). */
   original?: Buffer;
+  /** A one-box seed's image: the pooled payload carries `seed: true` (Yours, never cut by a cap). */
+  seed?: boolean;
 };
 
 export type IntakeOutcome = {
@@ -144,7 +146,7 @@ export async function intakeCandidate(deps: IntakeDeps, item: IntakeItem): Promi
        payload = EXCLUDED.payload, score = EXCLUDED.score, refreshed_at = EXCLUDED.refreshed_at
      WHERE stories.pool.used_at IS NULL
      RETURNING id`,
-    [ROA_SERIES, key, item.imageKey, `${item.truth === 'real' ? 'Real' : 'AI'} · ${item.subject} · ${item.trap}`, JSON.stringify({ ...row(rv.line, finalScreen, rv.payoff), ...(rv.flags ? { revealFlags: rv.flags } : {}) }), finalScreen.difficulty, deps.now.toISOString()],
+    [ROA_SERIES, key, item.imageKey, `${item.truth === 'real' ? 'Real' : 'AI'} · ${item.subject} · ${item.trap}`, JSON.stringify({ ...row(rv.line, finalScreen, rv.payoff), ...(rv.flags ? { revealFlags: rv.flags } : {}), ...(item.seed ? { seed: true } : {}) }), finalScreen.difficulty, deps.now.toISOString()],
   );
   if (!rows.length) return { ...base, status: 'rejected', difficulty: finalScreen.difficulty, problems: ['pool key already used'] };
   if (deps.bank) {
