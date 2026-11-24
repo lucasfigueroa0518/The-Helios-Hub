@@ -1008,10 +1008,11 @@ export async function runLastFewDays(d: LfdRunDeps): Promise<{ ok: true; runId: 
      * vision check rejected throws before anything is uploaded; without it, vision rejections are only recorded
      * (a failed image always throws, from storeSlideJpegs; see renderClean).
      */
-    // Design profile and hook: the ones after the last kept post's (lib/lfd/post.ts LFD_CANVASES, LFD_COVER_HOOKS).
+    // Design profile and hook: the ones after the last made post's (lib/lfd/post.ts LFD_CANVASES, LFD_COVER_HOOKS).
+    // Rejected posts count too: skipping them made every render after a rejection repeat black and the first hook.
     const prevPost = (
       await d.query<{ canvas: string | null; hook: string | null }>(
-        `SELECT render->'slides'->0->>'canvas' AS canvas, render->'slides'->0->'lfdCover'->'hook'->>'text' AS hook FROM lfd.posts WHERE status <> 'rejected' AND slug <> $1 ORDER BY ny_date DESC, created_at DESC LIMIT 1`,
+        `SELECT render->'slides'->0->>'canvas' AS canvas, render->'slides'->0->'lfdCover'->'hook'->>'text' AS hook FROM lfd.posts WHERE slug <> $1 AND render->'slides'->0 ? 'canvas' ORDER BY created_at DESC LIMIT 1`,
         [slug],
       )
     ).rows[0];
