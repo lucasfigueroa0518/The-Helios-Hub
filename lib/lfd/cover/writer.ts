@@ -23,7 +23,7 @@ const BODY_CHARS = 400;
 export function coverUserTurn(direction: LfdCoverDirection, stories: CoverStory[], refs: CoverReference[]): string {
   const storyLines = stories.map((s, i) => `${i + 1}. ${s.headline}\n${s.body.trim().slice(0, BODY_CHARS)}`.trim());
   const refLines = refs.map((r) => `${r.n}. ${r.headline} (${r.kind})`);
-  return [`Direction: ${direction}`, `Stories:\n${storyLines.join('\n\n')}`, `Reference images:\n${refLines.join('\n')}`].join('\n\n');
+  return [`Direction: ${direction}`, `Stories:\n${storyLines.join('\n\n')}`, `Reference images:\n${refLines.join('\n')}`, `Answer by calling ${WRITE_COVER_PROMPT_TOOL.name} once.`].join('\n\n');
 }
 
 export function coverWriterRequest(direction: LfdCoverDirection, stories: CoverStory[], refs: CoverReference[]): Anthropic.MessageCreateParamsNonStreaming {
@@ -31,7 +31,8 @@ export function coverWriterRequest(direction: LfdCoverDirection, stories: CoverS
     model: LFD_COVER_MODEL,
     max_tokens: 2000,
     tools: [withToolCache(WRITE_COVER_PROMPT_TOOL)],
-    tool_choice: { type: 'tool', name: WRITE_COVER_PROMPT_TOOL.name },
+    // Opus 5.5 rejects a forced tool_choice (400), so the tool is offered with `auto` and the turn asks for it.
+    tool_choice: { type: 'auto' },
     system: cachedSystemText(LFD_COVER_SYSTEM),
     messages: [{ role: 'user', content: coverUserTurn(direction, stories, refs) }],
   };
