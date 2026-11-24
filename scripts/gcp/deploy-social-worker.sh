@@ -103,7 +103,12 @@ trap 'rm -rf "${ARCHIVE}" "${UNIT_STAGE}"' EXIT
 # com.apple.provenance). They start with NUL bytes; an explainer render that copied the kit read one and
 # failed (invalid byte sequence 0x00). COPYFILE_DISABLE stops them; the ._* exclude is for other tars.
 # The local worktrees are whole repo copies the workers never use.
+# Local-only files under planning/ (review renders, audition clips) are not code: only tracked planning docs ship.
+PLANNING_EXCLUDES="$(mktemp)"
+{ git ls-files --others --directory -- planning; git ls-files --others --ignored --exclude-standard --directory -- planning; } 2>/dev/null \
+  | sed -e 's#/$##' -e 's#^#./#' | sort -u > "${PLANNING_EXCLUDES}"
 COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
+  --exclude-from="${PLANNING_EXCLUDES}" \
   --exclude='._*' \
   --exclude='./.worktrees' \
   --exclude='./.claude/worktrees' \
@@ -117,6 +122,15 @@ COPYFILE_DISABLE=1 tar -czf "${ARCHIVE}" \
   --exclude='./runs' \
   --exclude='./Claude outputs' \
   --exclude='./.explainers-local' \
+  --exclude='./.stories-local' \
+  --exclude='./.memes-local' \
+  --exclude='./.venv-rembg' \
+  --exclude='./.tmp' \
+  --exclude='./.vercel' \
+  --exclude='./__MACOSX' \
+  --exclude='./Content Review *' \
+  --exclude='./outreach brain' \
+  --exclude='./exports/stories' \
   --exclude='./explainers/smoke/.out' \
   --exclude='./explainers/design/sfx/dropins' \
   .
@@ -152,6 +166,10 @@ fi
 
 gcloud compute ssh ${IAP} "${INSTANCE}" --zone="${ZONE}" --project="${PROJECT}" --command="
   set -euo pipefail
+  # One deploy at a time: each one deletes and re-unpacks the app folder, so two at once leave it half-built
+  # (2026-11-24: two sessions overlapped and every worker stopped with no package.json).
+  exec 9>/tmp/helios-social-deploy.lock
+  if ! flock -n 9; then echo 'ERROR: another deploy is running on the VM. Nothing was stopped or replaced; try again when it finishes.' >&2; exit 1; fi
   if [[ -f ${REMOTE_ENV} ]]; then
     sudo mv ${REMOTE_ENV} /opt/helios-social/worker.env
     sudo chmod 600 /opt/helios-social/worker.env
