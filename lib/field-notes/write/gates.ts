@@ -9,7 +9,8 @@
  * slides are clean; otherwise the whole draft fails, as before. A dropped slide never reaches the post.
  */
 import { assembleFieldNotesCaption, withSourceLinks } from '@/lib/field-notes/caption';
-import { CAPTION_CAP, OVERRUN_HARD_RATIO, TIP_SLIDE_CAPS, UNTRUSTED_EXCERPT_CAP, WRITER_CAPTION_CAP } from './caps';
+import { longestHeliosLine } from '@/lib/social/captions/helios-line';
+import { CAPTION_CAP, OVERRUN_HARD_RATIO, TIP_SLIDE_CAPS, UNTRUSTED_EXCERPT_CAP } from './caps';
 import { realUseWithResult } from './prompts';
 import type { DroppedSlide, FactChecker, FactCheckResult, GateReport, PostDraft } from './types';
 import { TIP_SLIDES_MIN, type Tip } from '@/lib/field-notes/types';
@@ -25,7 +26,6 @@ function fieldsOf(draft: PostDraft): Field[] {
     out.push({ where: `slide ${i + 1} name`, text: s.name, cap: TIP_SLIDE_CAPS.name, tipId: s.tipId });
     out.push({ where: `slide ${i + 1} tryIt`, text: s.tryIt, cap: TIP_SLIDE_CAPS.tryIt, tipId: s.tipId });
   });
-  out.push({ where: 'caption', text: draft.caption, cap: WRITER_CAPTION_CAP });
   return out;
 }
 
@@ -151,9 +151,9 @@ export async function runGates(input: PostDraft, tips: Tip[], factCheck: FactChe
     }
   });
 
-  // The assembled caption (Writer text, how-to-try lines, follow line, hashtags) against Instagram's limit:
+  // The assembled caption (how-to-try lines, Helios line, hashtags) against Instagram's limit:
   // hashtags are dropped first (a note); still over is hard, since nothing is trimmed silently.
-  const assembled = assembleFieldNotesCaption(draft.caption, withSourceLinks(draft.slides, tips));
+  const assembled = assembleFieldNotesCaption(withSourceLinks(draft.slides, tips), longestHeliosLine('field_notes'));
   if (assembled.over > 0) report.hard.push({ gate: 'overrun', detail: `the assembled caption is ${assembled.over} characters over ${CAPTION_CAP} even without hashtags` });
   else if (assembled.droppedHashtags) report.notes.push(`the hashtags were left off the caption to stay within ${CAPTION_CAP} characters`);
 
@@ -163,8 +163,8 @@ export async function runGates(input: PostDraft, tips: Tip[], factCheck: FactChe
     const hit = FLUFF.find((w) => f.text.toLowerCase().includes(w));
     if (hit) report.notes.push(`${f.where}: marketing wording ("${hit}")`);
   }
-  // Soft: at most one exclamation mark per post (a headline or the caption), never in a body.
-  const bangs = draft.slides.reduce((n, s) => n + (s.headline.match(/!/g) ?? []).length, 0) + (draft.caption.match(/!/g) ?? []).length;
+  // Soft: at most one exclamation mark per post (in a headline), never in a body.
+  const bangs = draft.slides.reduce((n, s) => n + (s.headline.match(/!/g) ?? []).length, 0);
   if (bangs > 1) report.notes.push(`${bangs} exclamation marks; at most one per post`);
   draft.slides.forEach((s, i) => {
     if (s.body.includes('!')) report.notes.push(`slide ${i + 1} body: contains an exclamation mark`);

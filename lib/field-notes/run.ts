@@ -533,7 +533,7 @@ export async function runFieldNotes(d: FieldNotesEngineDeps, input: FieldNotesRu
       nyDate,
       slides,
       photoIds,
-      caption: buildFieldNotesCaption(draft.caption, withSourceLinks(draft.slides, tips)),
+      caption: buildFieldNotesCaption(withSourceLinks(draft.slides, tips), slug),
       slideObjects,
       fitProblems: problems.fit,
       renderProblems: problems.render,

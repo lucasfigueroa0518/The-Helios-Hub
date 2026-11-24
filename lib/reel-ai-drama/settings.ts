@@ -103,7 +103,7 @@ export const DEFAULT_SETTINGS: ReelAiDramaSettings = {
   news_window_days: 90,
   fresh_days: 60,
   spread_days: 7,
-  per_reel_cap_usd: 8,
+  per_reel_cap_usd: 10,
   min_visuals: 15,
   reuse_days: 20,
   target_seconds: 60,

@@ -3,7 +3,7 @@ import { createGraph, type InstagramContainerOps } from '@/lib/instagram/graph';
 export { metaConfigured, type ContainerStatus, type PublishingLimit } from '@/lib/instagram/graph';
 
 /**
- * Instagram carousel publishing: one image container per slide
+ * Instagram carousel publishing: one image (or video) container per slide
  * (`is_carousel_item`), one CAROUSEL parent with the caption, then the shared
  * status poll and `media_publish` (lib/instagram/graph.ts).
  *
@@ -12,6 +12,8 @@ export { metaConfigured, type ContainerStatus, type PublishingLimit } from '@/li
  */
 export interface CarouselMetaClient extends InstagramContainerOps {
   createImageItem(imageUrl: string): Promise<string>;
+  /** A video slide (MD-LFD D19): `media_type=VIDEO` + `is_carousel_item`; the caller polls it to FINISHED before the parent. */
+  createVideoItem?(videoUrl: string): Promise<string>;
   createCarousel(children: string[], caption: string, locationId?: string): Promise<string>;
 }
 
@@ -22,6 +24,11 @@ export function createLiveCarouselClient(fetchImpl: typeof fetch = fetch): Carou
     async createImageItem(imageUrl) {
       const body = await call<{ id?: string }>('POST', `/${igUserId}/media`, { image_url: imageUrl, is_carousel_item: 'true' });
       if (!body.id) throw new Error('Meta created no carousel item id.');
+      return body.id;
+    },
+    async createVideoItem(videoUrl) {
+      const body = await call<{ id?: string }>('POST', `/${igUserId}/media`, { media_type: 'VIDEO', video_url: videoUrl, is_carousel_item: 'true' });
+      if (!body.id) throw new Error('Meta created no carousel video item id.');
       return body.id;
     },
     async createCarousel(children, caption, locationId) {

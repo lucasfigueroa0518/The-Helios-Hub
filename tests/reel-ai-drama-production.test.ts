@@ -246,7 +246,7 @@ test('job state transitions move the pitch with the job', async () => {
   const job = await claimNextJob(db);
   assert.equal(job?.status, 'running');
   assert.equal(job?.stage, 'pick');
-  assert.equal(job?.spend_cap_usd, 8);
+  assert.equal(job?.spend_cap_usd, DEFAULT_SETTINGS.per_reel_cap_usd);
   assert.equal(job?.models.orchestrator, DEFAULT_SETTINGS.orchestrator_model);
   assert.equal(await claimNextJob(db), null);
   await setStage(db, job!.id, 'writer');

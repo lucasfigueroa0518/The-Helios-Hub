@@ -1,5 +1,5 @@
 /**
- * The comment bot's operating rules: routing, length, facts. The voice lives in helios.soul.md and never here.
+ * The comment bot's operating rules: routing, length, facts. The voice lives in lib/social/voice/helios-voice.md (shared with every caption) and never here.
  * Static text only: each system prompt is a cached prefix, so everything per-request goes in the user message.
  */
 import type Anthropic from '@anthropic-ai/sdk';

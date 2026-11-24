@@ -11,6 +11,7 @@ import type { ReelMetaClient } from '@/lib/explainers/publish/meta';
 import { explainerPayloadFlags } from '@/lib/explainers/publish/publish';
 import { checkAccountQuota } from '@/lib/instagram/account-gate';
 import type { PostText } from '@/lib/reel-ai-drama/types';
+import { heliosLine } from '@/lib/social/captions/helios-line';
 
 import { dramaItemId, isUuid, syncDramaApproval } from './items';
 
@@ -28,14 +29,43 @@ function isUniqueViolation(error: unknown): boolean {
   return (error as { code?: string } | null)?.code === '23505';
 }
 
-/** caption, a blank line, question, a blank line, then the credits one per line; trimmed to fit Instagram's limit (credits go first). */
-export function composeDramaCaption(post: Partial<PostText> | null | undefined, max = CAPTION_MAX_CHARS): string | null {
+/**
+ * Lines that hold only an invisible character (U+2800), so Instagram keeps the gap that pushes the
+ * credits out of the way; it can collapse plain empty lines. Confirm on the first real post.
+ */
+export const CREDITS_GAP = Array.from({ length: 6 }, () => '\u2800').join('\n');
+
+/**
+ * One credit as it posts: a Helios drawing or sketch credits only the original it was drawn from (the
+ * nested "drawn from: … traced from: …" chain is flattened), Helios's own illustration needs no credit,
+ * and a photo someone handed us is credited to Helios. Null: no line.
+ */
+export function postedCredit(credit: string): string | null {
+  let c = credit.trim();
+  for (;;) {
+    const next = c.replace(/^(?:Illustration by Helios, drawn from|Line sketch by Helios, traced from):\s*/i, '');
+    if (next === c) break;
+    c = next.trim();
+  }
+  if (!c || /^Illustration:\s*Helios$/i.test(c)) return null;
+  if (/\bsupplied by\b/i.test(c)) return 'Photo: Helios';
+  return c;
+}
+
+/**
+ * caption, question, Helios line, hashtags, a gap, then the credits one per line (caption voice,
+ * 2026-11-24). Trimmed to fit Instagram's limit: credits go first. `seed` (the job id) picks the
+ * Helios line, so a re-compose keeps it.
+ */
+export function composeDramaCaption(post: Partial<PostText> | null | undefined, seed: string, max = CAPTION_MAX_CHARS): string | null {
   if (!post) return null;
   const caption = typeof post.caption === 'string' ? post.caption.trim() : '';
   const question = typeof post.question === 'string' ? post.question.trim() : '';
-  const credits = Array.isArray(post.credits) ? post.credits.filter((c): c is string => typeof c === 'string' && c.trim() !== '').map((c) => c.trim()) : [];
+  const hashtags = Array.isArray(post.hashtags) ? post.hashtags.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map((t) => t.trim()) : [];
+  const credits = [...new Set((Array.isArray(post.credits) ? post.credits : []).filter((c): c is string => typeof c === 'string').map(postedCredit).filter((c): c is string => c !== null))];
   if (!caption && !question) return null;
-  const build = (cr: readonly string[]) => [caption, question, cr.join('\n')].filter((part) => part !== '').join('\n\n');
+  const head = [caption, question, heliosLine('ai_drama', seed), hashtags.join(' ')].filter((part) => part !== '').join('\n\n');
+  const build = (cr: readonly string[]) => (cr.length ? `${head}\n${CREDITS_GAP}\n${cr.join('\n')}` : head);
   let kept = credits;
   let text = build(kept);
   while (text.length > max && kept.length) {
@@ -58,7 +88,7 @@ export async function dramaCaption(db: Queryable, jobId: string): Promise<string
   const text = rows.find((r) => r.kind === 'post_text')?.content;
   if (!text) return null;
   try {
-    return composeDramaCaption(JSON.parse(text) as PostText);
+    return composeDramaCaption(JSON.parse(text) as PostText, jobId);
   } catch {
     return null;
   }
@@ -72,7 +102,7 @@ export async function writeDramaPostCaption(db: Queryable, jobId: string): Promi
   );
   let caption: string | null = null;
   try {
-    caption = rows[0]?.content ? composeDramaCaption(JSON.parse(rows[0].content) as PostText) : null;
+    caption = rows[0]?.content ? composeDramaCaption(JSON.parse(rows[0].content) as PostText, jobId) : null;
   } catch {
     caption = null;
   }

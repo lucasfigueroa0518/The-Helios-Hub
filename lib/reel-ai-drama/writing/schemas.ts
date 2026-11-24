@@ -240,7 +240,7 @@ export const SUBMIT_CAPTION_TOOL: SubmitTool = {
   name: 'submit_caption',
   description: 'Submit the post caption, once.',
   strict: true,
-  input_schema: obj({ caption: str }),
+  input_schema: obj({ caption: str, hashtags: strList }),
 };
 
 export const SUBMIT_LOOKS_TOOL: SubmitTool = {

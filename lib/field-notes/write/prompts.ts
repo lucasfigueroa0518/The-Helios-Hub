@@ -28,8 +28,7 @@
  *     live once in WANT_SHAPES (the payload uses the same keys); what counts as a supported claim,
  *     hard facts only, lives in the fact-check prompt (and gates.ts for numerals
  *     and backtick spans); cutting lives in the Editor prompt; every length lives in caps.ts and is
- *     injected; the how-to-try caption lines are code's (caption.ts), so the Writer's caption only
- *     points at them.
+ *     injected; the whole caption is code's (caption.ts): how-to-try lines, the Helios line, hashtags.
  *  5. Strength matches intent: "must" marks what code checks (facts, structure, lengths, data not
  *     instructions, backtick wrapping); the want shape, reader and voice are direct guidance.
  *
@@ -44,7 +43,7 @@ import { cachedSystemText, withToolCache } from '@/lib/anthropic-cache';
 import { STAGE_MODELS, type StageModelConfig } from '@/lib/social/pipeline/models';
 import { TIP_SLIDES_MAX, TIP_SLIDES_MIN, WANTS, type Tip, type Want } from '@/lib/field-notes/types';
 import { PLACEHOLDER_USE } from '@/lib/field-notes/store';
-import { TIP_BODY_TARGET_WORDS, TIP_HEADLINE_TARGET_CHARS, TIP_SLIDE_CAPS, UNTRUSTED_EXCERPT_CAP, WRITER_CAPTION_CAP } from './caps';
+import { TIP_BODY_TARGET_WORDS, TIP_HEADLINE_TARGET_CHARS, TIP_SLIDE_CAPS, UNTRUSTED_EXCERPT_CAP } from './caps';
 import type { PostDraft } from './types';
 
 /** The repo's stage model settings (lib/social/pipeline/models.ts); no new ID here. */
@@ -59,7 +58,7 @@ export const UNTRUSTED_TAG = 'untrusted_source_data';
 
 export const FACT_CHECK_TOOL_NAME = 'report_claim_check';
 
-/** The tipId a fact-check claim carries when it sits in the caption rather than on a slide. */
+/** A fact-check claim filed under this tipId was in the old Writer caption; no draft carries a caption now (caption voice, 2026-11-24). */
 export const CAPTION_CLAIM_ID = 'caption';
 
 const slideProperties = {
@@ -79,7 +78,7 @@ const slideItem = {
 
 const writerTool: Anthropic.Tool = {
   name: WRITER_TOOL_NAME,
-  description: 'Submit one slide per supported tip, the tips the source cannot support, and the caption.',
+  description: 'Submit one slide per supported tip and the tips the source cannot support.',
   input_schema: {
     type: 'object',
     additionalProperties: false,
@@ -98,9 +97,8 @@ const writerTool: Anthropic.Tool = {
           required: ['tipId', 'missing'],
         },
       },
-      caption: { type: 'string', description: 'Your caption text (code adds the how-to-try lines after it). Empty only when no slide is written.' },
     },
-    required: ['slides', 'skipped', 'caption'],
+    required: ['slides', 'skipped'],
   },
 };
 
@@ -112,10 +110,9 @@ const editorTool: Anthropic.Tool = {
     additionalProperties: false,
     properties: {
       slides: { type: 'array', items: slideItem },
-      caption: { type: 'string' },
       cut_notes: { type: 'array', items: { type: 'string' } },
     },
-    required: ['slides', 'caption', 'cut_notes'],
+    required: ['slides', 'cut_notes'],
   },
 };
 
@@ -133,7 +130,7 @@ const factCheckTool: Anthropic.Tool = {
           additionalProperties: false,
           properties: {
             claim: { type: 'string', description: 'The claim, as the draft states it, in a few words.' },
-            tipId: { type: 'string', description: `The tipId of the slide the claim is on, exactly as the draft gives it, or ${CAPTION_CLAIM_ID} for a claim in the caption.` },
+            tipId: { type: 'string', description: 'The tipId of the slide the claim is on, exactly as the draft gives it.' },
             kind: { type: 'string', enum: ['name', 'command', 'flag', 'key', 'number', 'behavior', 'result', 'limit', 'experience', 'photo', 'other'] },
             supported: { type: 'boolean' },
             evidence: { type: 'string', description: 'When supported: a short verbatim quote from the source data that states it. When not: why it is not supported.' },
@@ -152,7 +149,6 @@ const capsBlock = (): string =>
     `Body: about ${TIP_BODY_TARGET_WORDS} words, never more than ${TIP_SLIDE_CAPS.bodyWords} words, up to ${TIP_SLIDE_CAPS.body} characters.`,
     `Name: up to ${TIP_SLIDE_CAPS.name} characters.`,
     `TryIt: up to ${TIP_SLIDE_CAPS.tryIt} characters, or empty.`,
-    `Caption (your text only): up to ${WRITER_CAPTION_CAP} characters.`,
   ].join('\n');
 
 /** Payload value for a tip with no primary want yet. */
@@ -177,7 +173,7 @@ const WANT_KEYS: Array<Want | typeof NO_WANT> = [...WANTS, NO_WANT];
 
 const wantShapesBlock = (): string => WANT_KEYS.map((w) => `- ${w}: ${WANT_SHAPES[w]}`).join('\n');
 
-export const WRITER_SYSTEM = `You write the text for one Field Notes post: a short carousel of real photos with words on them. Each tip slide tells a viewer about ONE AI tool, skill, repo or technique they can use today. You receive ${TIP_SLIDES_MIN} to ${TIP_SLIDES_MAX} tips in one request and answer through the ${WRITER_TOOL_NAME} tool with one slide per supported tip, the tips you could not support, and a caption. The cover and the closing follow slide are written by code; you write neither.
+export const WRITER_SYSTEM = `You write the text for one Field Notes post: a short carousel of real photos with words on them. Each tip slide tells a viewer about ONE AI tool, skill, repo or technique they can use today. You receive ${TIP_SLIDES_MIN} to ${TIP_SLIDES_MAX} tips in one request and answer through the ${WRITER_TOOL_NAME} tool with one slide per supported tip and the tips you could not support. Code builds the caption. The cover and the closing follow slide are written by code; you write neither.
 
 The reader
 The average person scrolling social media. They do not know what is being recommended, have most likely never heard of it, and do not know developer tools or technical vocabulary. They care about what a thing will do for them far more than what it is. Every slide must make sense to them on one read. They do not know the account that publishes this post: never mention it, its team or its other posts, and never write as if they follow it.
@@ -209,18 +205,15 @@ Slides follow the order the tips were given. Each tip appears at most once, eith
 ${capsBlock()}
 
 Code text (required)
-Code belongs only in tryIt. When tryIt is not empty, wrap every command, key name, flag, path, setting name and literal syntax in backticks, exactly as the source writes it, and never break a backticked span or alter its characters. The headline, the body and the caption carry no backticks and no code.
+Code belongs only in tryIt. When tryIt is not empty, wrap every command, key name, flag, path, setting name and literal syntax in backticks, exactly as the source writes it, and never break a backticked span or alter its characters. The headline and the body carry no backticks and no code.
 
 Voice (guidance)
-Confident, vivid and conversational, with flair: like a friend who just found something great and cannot wait to tell you why it is worth your time. Second person. Sentence case. Numbers as numerals. Lead with the payoff, use concrete verbs, and make the reader feel this recommendation is worth acting on; value framing and comparisons that follow from what the thing does are welcome. Plain words a general viewer follows, never stiff or corporate. No emoji and no hashtags in slide text. At most one exclamation mark in the whole post, in a headline or the caption, never in a body. If a sentence would fit any tool equally well, it says nothing and should be replaced by what this one does.
+Confident, vivid and conversational, with flair: like a friend who just found something great and cannot wait to tell you why it is worth your time. Second person. Sentence case. Numbers as numerals. Lead with the payoff, use concrete verbs, and make the reader feel this recommendation is worth acting on; value framing and comparisons that follow from what the thing does are welcome. Plain words a general viewer follows, never stiff or corporate. No emoji and no hashtags in slide text. At most one exclamation mark in the whole post, in a headline, never in a body. If a sentence would fit any tool equally well, it says nothing and should be replaced by what this one does.`;
 
-Caption (guidance)
-One to three short, lively sentences that sell what the reader can now try and invite them to save the post. Name no tool and give no command: code adds a how-to-try line per slide, with its name and its tryIt or source link, after your text. Do not repeat the slide text word for word. Never state how many tips the post has: a slide can be removed after you write.`;
-
-export const EDITOR_SYSTEM = `You are the Editor for a Field Notes post. You only cut. You receive finished tip slides (a tip_id, a headline, a body, a name and a tryIt each) and a caption, and return the same post, tighter, through the ${EDITOR_TOOL_NAME} tool.
+export const EDITOR_SYSTEM = `You are the Editor for a Field Notes post. You only cut. You receive finished tip slides (a tip_id, a headline, a body, a name and a tryIt each), and return the same post, tighter, through the ${EDITOR_TOOL_NAME} tool.
 
 What you may do
-Delete words or phrases from a headline, a body, a non-empty tryIt or the caption. An empty tryIt stays empty. A field over its length cap must be cut until it fits; the caps are listed below.
+Delete words or phrases from a headline, a body or a non-empty tryIt. An empty tryIt stays empty. A field over its length cap must be cut until it fits; the caps are listed below.
 
 What you may not do
 Add, replace or rephrase any word. Reorder anything. Change a name in any way: it stays exactly as given. Create a slide or a field, delete a slide, or change a slide's tip_id. What remains of every field must be words that were already there, in their original order. Text that is not already in the draft is discarded by the system.
@@ -245,7 +238,7 @@ The request holds a draft (JSON) and a source block inside <${UNTRUSTED_TAG}> ta
 
 What to list
 Every claim the draft makes that a reader could act on or be misled by: each name of a thing, command, flag, key, setting, number, price and limit; each feature or behavior the draft says the thing has; any claim that it is free; who it is for or when it works, when the draft states it as fact; any claim about what the authors tried or experienced. Treat each backticked span as a claim that it exists as written. An empty tryIt is no claim. Do not list connective wording, tone, value framing or advice that asserts nothing checkable.
-Give each claim the tipId of the slide it is on, exactly as the draft gives it, or ${CAPTION_CLAIM_ID} for a claim in the caption. A claim that appears in several places is listed once for each place.
+Give each claim the tipId of the slide it is on, exactly as the draft gives it. A claim that appears in several places is listed once for each place.
 
 How to judge
 You judge hard facts only: names, numbers, prices, commands, flags and keys, the features and behaviors the draft says exist, and whether it is free. A hard fact is supported when the source block states it, or states facts from which it follows directly. A paraphrase in plainer words is supported when it adds no new fact, and so is a few-word explanation of a technical term. An invented feature or behavior, a feature inferred from similar tools, a number or price the source does not give, a rounded or changed number, a claim that it is free the source does not make, and a command or flag spelled differently from the source are not supported.
@@ -287,9 +280,9 @@ export function tipPayload(tip: Tip): string {
 /** All tips of the request, in order, as numbered blocks. */
 export const tipsPayload = (tips: Tip[]): string => tips.map((t, i) => `=== tip ${i + 1} of ${tips.length} ===\n${tipPayload(t)}`).join('\n\n');
 
-/** The draft as a data payload: tipId and the four text fields of each slide, then the caption (the Writer's text). */
+/** The draft as a data payload: tipId and the four text fields of each slide. */
 export function draftPayload(draft: PostDraft): string {
-  return JSON.stringify({ slides: draft.slides.map(({ tipId, headline, body, name, tryIt }) => ({ tipId, headline, body, name, tryIt })), caption: draft.caption }, null, 2);
+  return JSON.stringify({ slides: draft.slides.map(({ tipId, headline, body, name, tryIt }) => ({ tipId, headline, body, name, tryIt })) }, null, 2);
 }
 
 type Params = Anthropic.MessageCreateParamsNonStreaming;
