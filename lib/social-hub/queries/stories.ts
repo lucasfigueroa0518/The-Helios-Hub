@@ -40,6 +40,10 @@ export type StoryFrameRow = {
   template: string | null;
   backdrop: string;
   storage_path: string | null;
+  /** A video frame's poster JPEG (null for an image frame or an older row). */
+  poster_path?: string | null;
+  /** 'video' for an MP4 frame; 'image' or null otherwise. */
+  media?: string | null;
   flagged: boolean;
   ig_media_id: string | null;
   published_at: string | null;
@@ -117,6 +121,7 @@ SELECT s.id AS set_id, s.series, s.ny_date::text AS ny_date, s.status, s.trigger
 
 export const STORY_FRAMES_SQL = `
 SELECT f.id AS frame_id, f.set_id, f.seq, f.role, f.template, f.backdrop, f.storage_path, f.flagged,
+       to_jsonb(f)->>'poster_path' AS poster_path, to_jsonb(f)->>'media' AS media,
        f.ig_media_id, f.published_at::text AS published_at
   FROM stories.frames f
   JOIN stories.sets s ON s.id = f.set_id

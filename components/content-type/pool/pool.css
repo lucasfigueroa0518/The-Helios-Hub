@@ -190,7 +190,7 @@
 .pl-notes svg { color: var(--pl-orange); margin-top: 3px; }
 .pl-meta { font-size: 12px; color: var(--pl-muted); margin: 8px 0 0; }
 .pl-video { display: block; width: 220px; max-width: 100%; aspect-ratio: 9 / 16; border-radius: var(--pl-r-md); background: #262626; object-fit: contain; }
-.pl-pager img { display: block; max-height: 420px; width: auto; max-width: 100%; border-radius: var(--pl-r-md); border: 1px solid var(--pl-hair); }
+.pl-pager img, .pl-pager video { display: block; max-height: 420px; width: auto; max-width: 100%; border-radius: var(--pl-r-md); border: 1px solid var(--pl-hair); }
 .pl-pager__bar { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12px; color: var(--pl-muted); font-variant-numeric: tabular-nums; }
 .pl-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
 .pl-extras { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--pl-hair); }
