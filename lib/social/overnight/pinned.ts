@@ -36,10 +36,10 @@ export async function loadPinnedCandidates(query: Query, storyIds: readonly stri
   const { rows } = await query(
     `SELECT u.c AS group_json
        FROM (SELECT c, r.started_at
-               FROM (SELECT record, started_at FROM social.runs
-                      WHERE kind = 'daily' AND jsonb_typeof(record->'selection'->'shortlist') = 'array'
+               FROM (SELECT shortlist, started_at FROM social.runs
+                      WHERE kind = 'daily' AND shortlist IS NOT NULL
                       ORDER BY started_at DESC NULLS LAST LIMIT $2) r,
-                    jsonb_array_elements(r.record->'selection'->'shortlist') c
+                    jsonb_array_elements(r.shortlist) c
              UNION ALL
              -- A person's seeded stories (lib/social/overnight/seeds.ts): as new as it gets, so a seed wins a tie.
              SELECT c, now() AS started_at

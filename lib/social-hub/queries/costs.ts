@@ -82,11 +82,12 @@ export const COST_SQL = {
   explainerRendered: `SELECT id AS job_id, ${day('finished_at')} AS ny_date, spend_usd::text AS spend_usd
                         FROM explainers.jobs WHERE status = 'ok' AND finished_at IS NOT NULL`,
   carouselRuns: `SELECT id, kind, (trigger <> 'cli') AS production, total_usd::text AS total_usd, claude_usd::text AS claude_usd,
-                        record->'jev'->>'costUsd' AS jev_usd,
+                        jev_usd::text AS jev_usd,
                         ${day('COALESCE(started_at, requested_at)')} AS ny_date,
-                        CASE WHEN jsonb_typeof(record->'result'->'posts') = 'array'
+                        -- post_summaries, not record: record is ~1 MB a row (db/perf_2026_11_24_social_runs_summary.sql).
+                        CASE WHEN post_summaries IS NOT NULL
                              THEN (SELECT jsonb_agg(jsonb_build_object('storyId', e->>'storyId', 'costUsd', (e->>'costUsd')::float8))
-                                     FROM jsonb_array_elements(record->'result'->'posts') e)
+                                     FROM jsonb_array_elements(post_summaries) e)
                         END AS posts
                    FROM social.runs WHERE status IN ('ok', 'partial', 'failed')`,
   storyEvents: `SELECT e.id, e.set_id, e.component, e.vendor, e.usd::text AS usd, ${day('e.created_at')} AS ny_date,

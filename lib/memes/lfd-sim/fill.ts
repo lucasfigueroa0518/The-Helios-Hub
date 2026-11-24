@@ -47,8 +47,8 @@ export async function fillStories(
       `SELECT DISTINCT ON (url) url, headline, body, source FROM (
          SELECT COALESCE(e->'representative'->>'sourceUrl', e->>'id') AS url, e->'representative'->>'headline' AS headline,
                 COALESCE(e->'representative'->>'body', e->>'body', '') AS body, e->'representative'->>'source' AS source, r.finished_at
-           FROM social.runs r, jsonb_array_elements(r.record->'selection'->'shortlist') e
-          WHERE r.kind = 'daily' AND jsonb_typeof(r.record->'selection'->'shortlist') = 'array') x
+           FROM social.runs r, jsonb_array_elements(r.shortlist) e
+          WHERE r.kind = 'daily' AND r.shortlist IS NOT NULL) x
         WHERE url = ANY($1::text[]) AND headline IS NOT NULL ORDER BY url, finished_at DESC`,
       [notReels],
     );
